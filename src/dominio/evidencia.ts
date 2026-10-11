@@ -65,6 +65,18 @@ export function evidenciasFaltando(ag: Agregado, ticket: Ticket): TipoEvidencia[
   }).map((c) => c.tipo);
 }
 
+/** C7 e C10: lança dizendo o que falta e o comando para submeter (F1 §7). */
+export function exigirEvidencias(ag: Agregado, ticket: Ticket): void {
+  const faltam = evidenciasFaltando(ag, ticket);
+  if (faltam.length === 0) return;
+  const t = rotuloTicket(ticket);
+  const comandos = faltam.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ");
+  throw new ErroDeRegra(
+    `${t} não pode concluir: falta a evidência ${faltam.join(", ")}`,
+    `o agente de ${t} submete com ${comandos}`,
+  );
+}
+
 /**
  * Pré-condições de C17. O F3 as confere antes de validar e guardar o conteúdo (F3 §5, passos 1 e 2), e C17 de novo
  * dentro da transação. Devolve o item do catálogo, com o produtor.

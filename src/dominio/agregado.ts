@@ -186,7 +186,12 @@ export type NomeComando =
   | "definirModeloTicket"
   | "iniciarConsulta"
   | "registrarEvidencia"
-  | "decidirRegistro";
+  | "decidirRegistro"
+  | "concluirTicket"
+  | "adicionarTicketDesenvolvimento"
+  | "editarTicket"
+  | "removerTicket"
+  | "decidirDesenho";
 
 export const rotuloIssue = (ag: Agregado): string => `I-${String(ag.issue.id)}`;
 

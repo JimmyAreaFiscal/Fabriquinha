@@ -18,8 +18,10 @@ import {
   terminarExecucao,
 } from "../dominio/execucao.ts";
 import { registrarEvidencia } from "../dominio/evidencia.ts";
-import { decidirRegistro } from "../dominio/gates.ts";
+import { concluirTicket } from "../dominio/conclusao.ts";
+import { decidirDesenho, decidirRegistro } from "../dominio/gates.ts";
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
+import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { abrir } from "./banco.ts";
 import { agregado, arquivarConcluidas, comIssue, registrarIssue } from "./issues.ts";
 import { registrarProjeto } from "./projetos.ts";
@@ -912,5 +914,74 @@ test("as constraints de evidencia e evidencia_arquivo valem no banco; apagar a e
   }, /FOREIGN KEY/);
   banco.exec("DELETE FROM evidencia WHERE id = 1");
   assert.equal(valor(banco, "SELECT count(*) FROM evidencia_arquivo"), 0);
+  banco.close();
+});
+
+test("gate de desenho pelo comIssue: C11, C17 e C7 do agente; C11 a C13 e C15 reprovado do Auditor apagam linhas", () => {
+  const banco = novoBanco();
+  const { issue, ticket } = emDesenho(banco);
+  const execucao = iniciar(banco, issue, ticket).execucoes[0]?.id ?? 0;
+  const agente: Ator = { tipo: "agente", execucao, ticket };
+  comIssue(banco, issue, "adicionarTicketDesenvolvimento", agente, (ag, ctx) =>
+    adicionarTicketDesenvolvimento(ag, { titulo: "Cache do login" }, agente, ctx),
+  );
+  for (const tipo of ["desenho_solucao", "relatorio_complexidade", "relatorio_impactos_arquitetura"]) {
+    comIssue(banco, issue, "registrarEvidencia", agente, (ag, ctx) =>
+      registrarEvidencia(ag, { ticket, tipo, dados: {}, arquivos: [] }, agente, ctx),
+    );
+  }
+  comIssue(banco, issue, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
+  );
+  const concluido = comIssue(banco, issue, "concluirTicket", fabriquinha, (ag, ctx) =>
+    concluirTicket(ag, { ticket }, fabriquinha, ctx),
+  );
+  assert.equal(concluido.issue.fase, "aprovacao_desenho");
+  assert.deepEqual(agregado(banco, issue), concluido);
+
+  const modelo = { provedor: "openai", modelo: "gpt-5" };
+  comIssue(banco, issue, "adicionarTicketDesenvolvimento", auditor, (ag, ctx) =>
+    adicionarTicketDesenvolvimento(ag, { titulo: "Índice", modelo }, auditor, ctx),
+  );
+  comIssue(banco, issue, "editarTicket", auditor, (ag) => editarTicket(ag, { ticket: 3, titulo: "Cache" }, auditor));
+  const ajustado = comIssue(banco, issue, "removerTicket", auditor, (ag) => removerTicket(ag, { ticket: 4 }, auditor));
+  assert.deepEqual(agregado(banco, issue), ajustado);
+  assert.deepEqual(
+    ajustado.tickets.map((t) => [t.id, t.etapa, t.status, t.titulo, t.origem, t.origemTicket]),
+    [
+      [1, "registro", "concluido", "Registrar a necessidade", "fabriquinha", undefined],
+      [2, "desenho", "concluido", "Ticket", "fabriquinha", undefined],
+      [3, "desenvolvimento", "aberto", "Cache", "agente", 2],
+    ],
+  );
+
+  const reprovado = comIssue(banco, issue, "decidirDesenho", auditor, (ag, ctx) =>
+    decidirDesenho(ag, { aprovado: false, motivo: "faltou o índice" }, auditor, ctx),
+  );
+  assert.deepEqual(agregado(banco, issue), reprovado);
+  assert.deepEqual(
+    todas(banco, "SELECT id, etapa, status, descricao FROM ticket ORDER BY id").map((l) => Object.values(l)),
+    [
+      [1, "registro", "concluido", ""],
+      [2, "desenho", "concluido", ""],
+      [5, "desenho", "aberto", "faltou o índice"],
+    ],
+  );
+  assert.deepEqual(
+    todas(banco, "SELECT ticket, gate, aprovado, motivo, por FROM decisao").map((l) => Object.values(l)),
+    [[2, "desenho", 0, "faltou o índice", "auditor"]],
+  );
+  // M3 (F6 §5.1): os ajustes do Auditor nos tickets propostos ficam em `comando`, na fase do gate.
+  assert.deepEqual(
+    todas(banco, "SELECT nome, ator, fase FROM comando WHERE fase = 'aprovacao_desenho' ORDER BY id").map((l) =>
+      Object.values(l),
+    ),
+    [
+      ["adicionarTicketDesenvolvimento", "auditor", "aprovacao_desenho"],
+      ["editarTicket", "auditor", "aprovacao_desenho"],
+      ["removerTicket", "auditor", "aprovacao_desenho"],
+      ["decidirDesenho", "auditor", "aprovacao_desenho"],
+    ],
+  );
   banco.close();
 });

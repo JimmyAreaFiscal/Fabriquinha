@@ -1,15 +1,56 @@
-// Gates do Auditor (F1 §5): C10 decidirRegistro.
+// Gates do Auditor (F1 §5): C10 decidirRegistro e C15 decidirDesenho.
 import { z } from "zod";
-import { type Agregado, type Ator, type Contexto, type Decisao, exigirAuditor, rotuloIssue } from "./agregado.ts";
+import {
+  type Agregado,
+  type Ator,
+  type Contexto,
+  type Decisao,
+  exigirAuditor,
+  rotuloIssue,
+  type Ticket,
+} from "./agregado.ts";
 import { ErroDeRegra } from "./erros.ts";
-import { evidenciasFaltando } from "./evidencia.ts";
-import { exigirSemExecucao, rotuloTicket } from "./execucao.ts";
+import { exigirEvidencias } from "./evidencia.ts";
+import { exigirSemExecucao, marcarConcluido, rotuloTicket } from "./execucao.ts";
 import { Motivo } from "./primitivos.ts";
 
 const EntradaDecisao = z.discriminatedUnion("aprovado", [
   z.object({ aprovado: z.literal(true), motivo: Motivo.optional() }),
   z.object({ aprovado: z.literal(false), motivo: Motivo }),
 ]);
+type EntradaDecisao = z.infer<typeof EntradaDecisao>;
+
+/** O agregado com a decisão do Auditor sobre o resultado de `ticket` acrescentada. */
+function comDecisao(
+  ag: Agregado,
+  ticket: Ticket,
+  gate: Decisao["gate"],
+  { aprovado, motivo }: EntradaDecisao,
+  ctx: Contexto,
+): Agregado {
+  const decisao: Decisao = {
+    id: ctx.novoId("decisao"),
+    issue: ag.issue.id,
+    ticket: ticket.id,
+    gate,
+    aprovado,
+    ...(motivo !== undefined && { motivo }),
+    por: "auditor",
+    em: ctx.agora,
+  };
+  return { ...ag, decisoes: [...ag.decisoes, decisao] };
+}
+
+const ticketDeDesenho = (ag: Agregado, ctx: Contexto, titulo: string, descricao: string): Ticket => ({
+  id: ctx.novoId("ticket"),
+  issue: ag.issue.id,
+  etapa: "desenho",
+  titulo,
+  descricao,
+  status: "aberto",
+  origem: "fabriquinha",
+  criadoEm: ctx.agora,
+});
 
 /**
  * C10: grava a decisão. Aprovado conclui o ticket de registro e leva a issue a `desenho` com um ticket de desenho
@@ -17,7 +58,7 @@ const EntradaDecisao = z.discriminatedUnion("aprovado", [
  */
 export function decidirRegistro(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   exigirAuditor(ator, "decidir o gate de registro");
-  const { aprovado, motivo } = EntradaDecisao.parse(entrada);
+  const decisao = EntradaDecisao.parse(entrada);
   const i = rotuloIssue(ag);
   if (ag.issue.fase !== "registro") {
     throw new ErroDeRegra(
@@ -27,55 +68,56 @@ export function decidirRegistro(ag: Agregado, entrada: unknown, ator: Ator, ctx:
   }
   const ticket = ag.tickets.find((t) => t.etapa === "registro" && t.status !== "concluido");
   if (!ticket) throw new ErroDeRegra(`a ${i} não tem ticket de registro aberto`, "registre a issue de novo");
-  const t = rotuloTicket(ticket);
   exigirSemExecucao(ag, ticket, "passar pelo gate");
 
-  if (aprovado) {
+  if (decisao.aprovado) {
     if (ag.issue.titulo === null || ag.issue.tipo === null) {
       throw new ErroDeRegra(
         `a ${i} não pode sair do registro sem título e tipo`,
-        `o agente de ${t} os preenche com fabriquinha issue editar ${i}`,
+        `o agente de ${rotuloTicket(ticket)} os preenche com fabriquinha issue editar ${i}`,
       );
     }
-    const faltam = evidenciasFaltando(ag, ticket);
-    if (faltam.length > 0) {
-      const comandos = faltam.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ");
-      throw new ErroDeRegra(
-        `${t} não pode concluir: falta a evidência ${faltam.join(", ")}`,
-        `o agente de ${t} submete com ${comandos}`,
-      );
-    }
+    exigirEvidencias(ag, ticket);
   }
 
-  const decisao: Decisao = {
-    id: ctx.novoId("decisao"),
-    issue: ag.issue.id,
-    ticket: ticket.id,
-    gate: "registro",
-    aprovado,
-    ...(motivo !== undefined && { motivo }),
-    por: "auditor",
-    em: ctx.agora,
-  };
-  const decidido = { ...ag, decisoes: [...ag.decisoes, decisao] };
-  if (!aprovado) return decidido;
+  const decidido = comDecisao(ag, ticket, "registro", decisao, ctx);
+  if (!decisao.aprovado) return decidido;
   return {
     ...decidido,
     issue: { ...ag.issue, fase: "desenho" },
-    tickets: [
-      ...ag.tickets.map((x) =>
-        x.id === ticket.id ? { ...x, status: "concluido" as const, concluidoEm: ctx.agora } : x,
-      ),
-      {
-        id: ctx.novoId("ticket"),
-        issue: ag.issue.id,
-        etapa: "desenho",
-        titulo: "Desenhar a solução",
-        descricao: "",
-        status: "aberto",
-        origem: "fabriquinha",
-        criadoEm: ctx.agora,
-      },
-    ],
+    tickets: [...marcarConcluido(ag, ticket, ctx.agora).tickets, ticketDeDesenho(ag, ctx, "Desenhar a solução", "")],
+  };
+}
+
+/**
+ * C15: grava a decisão sobre o último desenho concluído. Aprovado leva a issue a `desenvolvimento` com os tickets
+ * propostos; reprovado os descarta e volta a `desenho` com um ticket novo que traz o motivo na descrição.
+ */
+export function decidirDesenho(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
+  exigirAuditor(ator, "decidir o gate de desenho");
+  const decisao = EntradaDecisao.parse(entrada);
+  const i = rotuloIssue(ag);
+  if (ag.issue.fase !== "aprovacao_desenho") {
+    throw new ErroDeRegra(
+      `a ${i} está na fase ${ag.issue.fase}, não na aprovação do desenho`,
+      "o gate de desenho abre quando o ticket de desenho conclui",
+    );
+  }
+  const desenho = ag.tickets.findLast((t) => t.etapa === "desenho" && t.status === "concluido");
+  if (!desenho) throw new ErroDeRegra(`a ${i} não tem ticket de desenho concluído`, "conclua o desenho antes");
+  const proposto = (t: Ticket) => t.etapa === "desenvolvimento" && t.status === "aberto";
+  if (decisao.aprovado && !ag.tickets.some(proposto)) {
+    throw new ErroDeRegra(
+      `a ${i} não pode ir ao desenvolvimento sem ticket de desenvolvimento aberto`,
+      "crie um ticket ou reprove o desenho",
+    );
+  }
+
+  const decidido = comDecisao(ag, desenho, "desenho", decisao, ctx);
+  if (decisao.aprovado) return { ...decidido, issue: { ...ag.issue, fase: "desenvolvimento" } };
+  return {
+    ...decidido,
+    issue: { ...ag.issue, fase: "desenho" },
+    tickets: [...ag.tickets.filter((t) => !proposto(t)), ticketDeDesenho(ag, ctx, "Refazer o desenho", decisao.motivo)],
   };
 }

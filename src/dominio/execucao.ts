@@ -62,6 +62,10 @@ const trocarTicket = (ag: Agregado, ticket: Ticket): Agregado => ({
   tickets: ag.tickets.map((t) => (t.id === ticket.id ? ticket : t)),
 });
 
+/** C7 e C10: o agregado com `ticket` concluído agora. */
+export const marcarConcluido = (ag: Agregado, ticket: Ticket, agora: string): Agregado =>
+  trocarTicket(ag, { ...ticket, status: "concluido", concluidoEm: agora });
+
 function novaExecucao(ag: Agregado, ticket: Ticket, modo: ModoExecucao, sessaoPi: string, ctx: Contexto): Execucao {
   const modelo = modeloDaExecucao(ticket, ctx.projeto(ag.issue.projeto));
   return {

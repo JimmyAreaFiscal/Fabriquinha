@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import type { Agregado, Ator, Contexto, Evidencia, Issue, Ticket } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { decidirRegistro } from "./gates.ts";
+import { decidirDesenho, decidirRegistro } from "./gates.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const ANTES = "2026-10-11T11:00:00.000Z";
@@ -173,5 +173,97 @@ test("C10 é só do Auditor, na fase registro, sem execução em andamento, e va
   regra(
     () => decidir(rodando, { aprovado: false, motivo: "m" }),
     "T-34 não pode passar pelo gate: a execução E-6 ainda está em andamento (espere ela terminar)",
+  );
+});
+
+const doGate = (id: number, etapa: Ticket["etapa"], troca: Partial<Ticket> = {}): Ticket => ({
+  id,
+  issue: 1,
+  etapa,
+  titulo: `Ticket ${String(id)}`,
+  descricao: "",
+  status: "aberto",
+  origem: "fabriquinha",
+  criadoEm: ANTES,
+  ...troca,
+});
+const concluido = { status: "concluido", concluidoEm: ANTES } as const;
+
+/**
+ * I-1 no gate de desenho: um desenho antigo T-35 e o atual T-37, concluídos, e os tickets de desenvolvimento T-38,
+ * proposto pelo desenho, e T-39, pelo Auditor.
+ */
+const noGate = (): Agregado => ({
+  ...pronto({ fase: "aprovacao_desenho" }),
+  tickets: [
+    doGate(34, "registro", concluido),
+    doGate(35, "desenho", concluido),
+    doGate(37, "desenho", concluido),
+    doGate(38, "desenvolvimento", { origem: "agente", origemTicket: 37 }),
+    doGate(39, "desenvolvimento", { origem: "auditor" }),
+  ],
+});
+
+const desenho = (ag: Agregado, entrada: unknown, ator: Ator = auditor) => decidirDesenho(ag, entrada, ator, contexto());
+
+test("C15 aprovado: decisão sobre o último desenho e a issue vai a desenvolvimento com os tickets propostos", () => {
+  const ag = noGate();
+  assert.deepEqual(desenho(ag, { aprovado: true }), {
+    ...ag,
+    issue: { ...ag.issue, fase: "desenvolvimento" },
+    decisoes: [{ id: 41, issue: 1, ticket: 37, gate: "desenho", aprovado: true, por: "auditor", em: AGORA }],
+  });
+});
+
+test("C15 reprovado: remove os tickets abertos e volta a desenho com um ticket novo que traz o motivo", () => {
+  const ag = noGate();
+  assert.deepEqual(desenho(ag, { aprovado: false, motivo: "faltou o índice" }), {
+    ...ag,
+    issue: { ...ag.issue, fase: "desenho" },
+    tickets: [
+      ...ag.tickets.slice(0, 3),
+      {
+        id: 41,
+        issue: 1,
+        etapa: "desenho",
+        titulo: "Refazer o desenho",
+        descricao: "faltou o índice",
+        status: "aberto",
+        origem: "fabriquinha",
+        criadoEm: AGORA,
+      },
+    ],
+    decisoes: [
+      {
+        id: 41,
+        issue: 1,
+        ticket: 37,
+        gate: "desenho",
+        aprovado: false,
+        motivo: "faltou o índice",
+        por: "auditor",
+        em: AGORA,
+      },
+    ],
+  });
+});
+
+test("C15 é só do Auditor, no gate de desenho; aprovar exige ticket de desenvolvimento aberto", () => {
+  const ag = noGate();
+  assert.throws(() => desenho(ag, { aprovado: true }, { tipo: "agente", execucao: 6, ticket: 37 }), ErroDeEscopo);
+  assert.throws(() => desenho(ag, { aprovado: false }), ZodError);
+  regra(
+    () => desenho({ ...ag, issue: { ...ag.issue, fase: "desenho" } }, { aprovado: true }),
+    "a I-1 está na fase desenho, não na aprovação do desenho (o gate de desenho abre quando o ticket de desenho conclui)",
+  );
+  const semProposta = { ...ag, tickets: ag.tickets.slice(0, 3) };
+  regra(
+    () => desenho(semProposta, { aprovado: true }),
+    "a I-1 não pode ir ao desenvolvimento sem ticket de desenvolvimento aberto (crie um ticket ou reprove o desenho)",
+  );
+  assert.equal(desenho(semProposta, { aprovado: false, motivo: "m" }).issue.fase, "desenho");
+  regra(
+    () => desenho({ ...ag, tickets: [] }, { aprovado: true }),
+    "a I-1 não tem ticket de desenho concluído (conclua o desenho antes)",
   );
 });
