@@ -4,14 +4,14 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Node ≥ 22.13 rodando TypeScript direto (type stripping), `node:test` como runner, `tsc --noEmit` estrito, lint com zero warnings, formatação verificável e cobertura; tudo exposto como scripts do pacote.
-- [ ] `sonar-project.properties` com `sonar.projectKey=Fabriquinha` (já criado; manter `sonar.exclusions=prototipos/**`).
-- [ ] Fitness function no próprio repositório: o módulo de domínio (F1) não importa nada de I/O (`node:*` de I/O, banco, outros módulos da Fabriquinha).
-- [ ] `abrir(raiz?)` usa `$FABRIQUINHA_ROOT` ou `~/fabriquinha`; diretórios `0700`, arquivos `0600`; PRAGMAs `WAL`, `foreign_keys`, `busy_timeout=5000`, `synchronous=NORMAL` em toda conexão.
-- [ ] Migrações ordenadas aplicadas na abertura, cada uma na sua transação, versão em `PRAGMA user_version`; reabrir não reaplica.
-- [ ] Listas dos `CHECK ... IN (...)` geradas dos enums zod (`Fase`, `Etapa` etc.).
-- [ ] Escrita em `BEGIN IMMEDIATE` com rollback que propaga o erro original; tabela `sequencia` e `novoId(tipo)` dentro da transação.
-- [ ] Primitivos zod de F1 §3.1 (Id, Instante, Titulo, Markdown ≤ 1000 palavras, Motivo, Slug, Modelo, Etapa, Fase) com testes.
-- [ ] `ErroDeRegra` e `ErroDeEscopo` com mensagem de uma frase dizendo o que faltou e como resolver.
+- [x] Node ≥ 22.13 rodando TypeScript direto (type stripping), `node:test` como runner, `tsc --noEmit` estrito, lint com zero warnings, formatação verificável e cobertura; tudo exposto como scripts do pacote.
+- [x] `sonar-project.properties` com `sonar.projectKey=Fabriquinha` (já criado; manter `sonar.exclusions=prototipos/**`).
+- [x] Fitness function no próprio repositório: o módulo de domínio (F1) não importa nada de I/O (`node:*` de I/O, banco, outros módulos da Fabriquinha).
+- [x] `abrir(raiz?)` usa `$FABRIQUINHA_ROOT` ou `~/fabriquinha`; diretórios `0700`, arquivos `0600`; PRAGMAs `WAL`, `foreign_keys`, `busy_timeout=5000`, `synchronous=NORMAL` em toda conexão.
+- [x] Migrações ordenadas aplicadas na abertura, cada uma na sua transação, versão em `PRAGMA user_version`; reabrir não reaplica.
+- [x] Listas dos `CHECK ... IN (...)` geradas dos enums zod (`Fase`, `Etapa` etc.).
+- [x] Escrita em `BEGIN IMMEDIATE` com rollback que propaga o erro original; tabela `sequencia` e `novoId(tipo)` dentro da transação.
+- [x] Primitivos zod de F1 §3.1 (Id, Instante, Titulo, Markdown ≤ 1000 palavras, Motivo, Slug, Modelo, Etapa, Fase) com testes.
+- [x] `ErroDeRegra` e `ErroDeEscopo` com mensagem de uma frase dizendo o que faltou e como resolver.

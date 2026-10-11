@@ -1,0 +1,4 @@
+# Specs e protótipos não são código do produto; o Prettier cuida só do pacote.
+*.md
+prototipos/
+.scratch/

@@ -1,0 +1,90 @@
+// Abertura do banco, transações de escrita e sequência de IDs (F2 §2, §3.1, §3.2, §3.4, §3.7).
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { ErroDeRegra } from "../dominio/erros.ts";
+import type { TipoId } from "../dominio/primitivos.ts";
+import { MIGRACOES } from "./migracoes.ts";
+
+/** Cria a raiz, abre o banco, aplica os PRAGMAs e as migrações pendentes. */
+export function abrir(raiz = process.env.FABRIQUINHA_ROOT || join(homedir(), "fabriquinha")): DatabaseSync {
+  // Evidências podem conter telas e dados sensíveis: diretório 0700, arquivos 0600.
+  mkdirSync(raiz, { recursive: true, mode: 0o700 });
+  chmodSync(raiz, 0o700);
+  const arquivo = join(raiz, "fabriquinha.db");
+  // O SQLite cria -wal e -shm com a permissão do banco; criá-lo antes garante 0600 nos três.
+  writeFileSync(arquivo, "", { flag: "a", mode: 0o600 });
+  chmodSync(arquivo, 0o600);
+
+  const banco = new DatabaseSync(arquivo);
+  try {
+    // busy_timeout vem antes do WAL: trocar o journal pega lock, e dois processos podem abrir juntos.
+    banco.exec(`
+      PRAGMA busy_timeout = 5000;
+      PRAGMA journal_mode = WAL;
+      PRAGMA foreign_keys = ON;
+      PRAGMA synchronous = NORMAL;
+    `);
+    migrar(banco, MIGRACOES);
+  } catch (error_) {
+    banco.close();
+    throw error_;
+  }
+  return banco;
+}
+
+/** Aplica em ordem as migrações ainda não aplicadas, cada uma na sua transação; a versão fica em `user_version`. */
+export function migrar(banco: DatabaseSync, migracoes: readonly string[]): void {
+  const inicial = versao(banco);
+  if (inicial > migracoes.length) {
+    throw new ErroDeRegra(
+      `o banco está na versão ${String(inicial)}, mais nova que a ${String(migracoes.length)} que esta Fabriquinha conhece`,
+      "atualize a Fabriquinha antes de abrir este banco",
+    );
+  }
+  if (inicial === migracoes.length) return; // em dia: nem pega o lock
+  // A versão é relida dentro do lock: dois processos abrindo juntos não aplicam a mesma migração duas vezes.
+  let pendente = true;
+  while (pendente) {
+    pendente = escrever(banco, () => {
+      const atual = versao(banco);
+      const sql = migracoes[atual];
+      if (sql === undefined) return false;
+      banco.exec(sql);
+      banco.exec(`PRAGMA user_version = ${String(atual + 1)}`);
+      return true;
+    });
+  }
+}
+
+const versao = (banco: DatabaseSync): number =>
+  (banco.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+
+/**
+ * Roda `trabalho` numa transação de escrita. `BEGIN IMMEDIATE` pega o lock no início, então duas escritas
+ * nunca entram em deadlock ao promover o lock. Erro faz ROLLBACK e propaga o erro original.
+ * Nada aqui dentro pode esperar I/O externo (pi, git, testes): isso roda antes, fora da transação.
+ */
+export function escrever<T>(banco: DatabaseSync, trabalho: () => T): T {
+  banco.exec("BEGIN IMMEDIATE");
+  try {
+    const resultado = trabalho();
+    banco.exec("COMMIT");
+    return resultado;
+  } catch (error_) {
+    if (banco.isTransaction) banco.exec("ROLLBACK");
+    throw error_;
+  }
+}
+
+/** Próximo ID do tipo. Só dentro de `escrever`: as escritas serializadas por `BEGIN IMMEDIATE` evitam corrida. */
+export function novoId(banco: DatabaseSync, tipo: TipoId): number {
+  if (!banco.isTransaction) throw new Error(`novoId(${tipo}) chamado fora de transação; use dentro de escrever()`);
+  const linha = banco
+    .prepare(
+      "INSERT INTO sequencia (nome, valor) VALUES (?, 1) ON CONFLICT (nome) DO UPDATE SET valor = valor + 1 RETURNING valor",
+    )
+    .get(tipo) as { valor: number };
+  return linha.valor;
+}
