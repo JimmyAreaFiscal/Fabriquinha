@@ -37,7 +37,7 @@ export const naFilaDoProjeto = <T>(raiz: string, nome: string, trabalho: () => P
   naFila(dirname(resolve(caminhoDaWorktree(raiz, nome, 0))), trabalho);
 
 /** `git` que lança ErroDeRegra com o stderr quando o comando falha. */
-async function exigirGit(dir: string, ...args: string[]): Promise<string> {
+export async function exigirGit(dir: string, ...args: string[]): Promise<string> {
   const r = await git(dir, ...args);
   if (r.codigo !== 0) {
     throw new ErroDeRegra(

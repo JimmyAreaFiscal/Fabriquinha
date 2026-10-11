@@ -4,8 +4,8 @@
 
 **Blocked by:** 05, 08
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Confere `api/system/status`, roda o `sonar-scanner-cli` em Docker sobre a worktree, espera a tarefa do Compute Engine, busca issues abertas nos arquivos alterados contra `HEAD` (versionados e não versionados).
-- [ ] `SONAR_HOST_URL` e `SONAR_TOKEN` do ambiente; `projectKey` do projeto.
-- [ ] Teste unitário com servidor HTTP falso; teste de integração separado contra o SonarQube local (depende de Docker), fora da suíte padrão.
+- [x] Confere `api/system/status`, roda o `sonar-scanner-cli` em Docker sobre a worktree, espera a tarefa do Compute Engine, busca issues abertas nos arquivos alterados contra `HEAD` (versionados e não versionados).
+- [x] `SONAR_HOST_URL` e `SONAR_TOKEN` do ambiente; `projectKey` do projeto.
+- [x] Teste unitário com servidor HTTP falso; teste de integração separado contra o SonarQube local (depende de Docker), fora da suíte padrão.

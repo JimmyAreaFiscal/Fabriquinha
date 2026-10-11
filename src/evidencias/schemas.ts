@@ -270,6 +270,24 @@ const SCHEMAS: Partial<Record<TipoEvidencia, SchemaEvidencia>> = {
     }),
     arquivos: LOGS,
   },
+  // Produzida pela Fabriquinha (F3 §4.3, §6): aprovada = nenhuma issue aberta nos arquivos alterados.
+  relatorio_sonar: {
+    dados: z.object({
+      projectKey: z.string(),
+      ceTaskId: z.string(),
+      arquivosAnalisados: z.array(z.string()),
+      issues: z.array(
+        z.object({
+          arquivo: z.string(),
+          linha: z.number().int().optional(),
+          regra: z.string(),
+          severidade: z.string(),
+          mensagem: z.string(),
+        }),
+      ),
+    }),
+    arquivos: Arquivos({ max: 0 }),
+  },
 };
 
 export function schemaDe(tipo: TipoEvidencia): SchemaEvidencia {

@@ -15,5 +15,5 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["src", "fitness"]
+  "include": ["src", "fitness", "integracao"]
 }
