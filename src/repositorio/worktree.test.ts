@@ -161,6 +161,12 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
   assert.equal(c.lerLog().match(/^tentando$/gm)?.length, 2);
 });
 
+test("erro de sintaxe na preparação vai para o log", async () => {
+  const c = cenario(["npm test ("]);
+  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log), /saiu com código 2/);
+  assert.match(c.lerLog(), /preparação: npm test \(\n.*syntax error.*preparação falhou: saiu com código 2\n$/is);
+});
+
 test("comando de preparação que passa de 30 minutos é morto e a preparação falha", async (t) => {
   const c = cenario(["sleep 600"]);
   t.mock.timers.enable({ apis: ["setTimeout"] });

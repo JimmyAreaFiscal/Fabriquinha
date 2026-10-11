@@ -4,9 +4,13 @@ import { dirname, join, resolve } from "node:path";
 import type { Issue } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { Projeto } from "../dominio/projeto.ts";
-import { executar, git } from "../processo.ts";
+import { executarNoShell, git, LIMITE_COMANDO_MS } from "../processo.ts";
 
-const LIMITE_PREPARACAO_MS = 30 * 60_000;
+/**
+ * Bytes do fim do log de cada comando de preparação.
+ * ponytail: o corte só protege a memória do serviço; o log da execução não tem limite de tamanho (F5 §3.2).
+ */
+const LIMITE_LOG_PREPARACAO = 5 * 1024 * 1024;
 
 /** `<raiz>/worktrees/<projeto>/I-<n>` (F5 §3): fora do repositório, para o test runner dele não varrer worktrees. */
 export const caminhoDaWorktree = (raiz: string, projeto: string, issue: number): string =>
@@ -114,11 +118,12 @@ export async function garantirWorktree(
 async function preparar(caminho: string, comandos: readonly string[], log: string): Promise<void> {
   for (const comando of comandos) {
     anotar(log, `preparação: ${comando}`);
-    const r = await executar("/bin/sh", ["-c", comando], { cwd: caminho, limiteMs: LIMITE_PREPARACAO_MS });
-    // ponytail: stdout e depois stderr, não intercalados; um descritor do log como stdio do filho intercalaria.
-    appendFileSync(log, r.saida + r.erro);
+    const r = await executarNoShell(comando, caminho, { limiteLog: LIMITE_LOG_PREPARACAO });
+    appendFileSync(log, r.log);
     if (r.codigo !== 0) {
-      const motivo = r.limiteEstourado ? "passou de 30 minutos" : `saiu com código ${String(r.codigo)}`;
+      const motivo = r.estourou
+        ? `passou de ${String(LIMITE_COMANDO_MS / 60_000)} minutos`
+        : `saiu com código ${String(r.codigo)}`;
       anotar(log, `preparação falhou: ${motivo}`);
       throw new ErroDeRegra(
         `a preparação da worktree falhou em "${comando}": ${motivo}`,

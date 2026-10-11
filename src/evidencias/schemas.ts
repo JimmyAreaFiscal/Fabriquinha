@@ -2,11 +2,22 @@
 import { z } from "zod";
 import type { TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { Motivo, Titulo, unicoPor } from "../dominio/primitivos.ts";
+import { Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
 
 /** F3 §3.1: a classe vem dos bytes iniciais, nunca da extensão. */
 export const Classe = z.enum(["video", "imagem", "html", "texto"]);
 export type Classe = z.infer<typeof Classe>;
+
+const MiB = 1024 * 1024;
+/** F3 §3.1: tamanho máximo de um anexo de cada classe. */
+export const LIMITE: Readonly<Record<Classe, number>> = {
+  video: 500 * MiB,
+  imagem: 20 * MiB,
+  html: 5 * MiB,
+  texto: 5 * MiB,
+};
+/** O mime de um anexo da classe `texto`. */
+export const MIME_TEXTO = "text/plain; charset=utf-8";
 
 export interface RegraArquivos {
   readonly classes: readonly Classe[];
@@ -184,6 +195,16 @@ const RelatorioComplexidade = z
 
 const HTML_UNICO = Arquivos({ classes: ["html"], min: 1, max: 1 });
 
+/** Um comando rodado por um coletor (F3 §6); `log` é o nome do anexo com o stdout e o stderr dele. */
+const ComandoRodado = z.object({
+  comando: z.string(),
+  codigoSaida: z.number().int().nullable().meta({ description: "null quando estourou o tempo" }),
+  estourou: z.boolean(),
+  duracaoMs: z.number().int().nonnegative(),
+  log: z.string(),
+});
+const LOGS = Arquivos({ classes: ["texto"], min: 1 });
+
 /** Os tipos já implementados; os demais entram com as etapas que os usam. */
 const SCHEMAS: Partial<Record<TipoEvidencia, SchemaEvidencia>> = {
   // "vídeo / código do comportamento atual e/ou do problema"
@@ -240,6 +261,14 @@ const SCHEMAS: Partial<Record<TipoEvidencia, SchemaEvidencia>> = {
       riscos: z.array(z.object({ descricao: Texto, mitigacao: Texto })),
     }),
     arquivos: HTML_UNICO,
+  },
+  // Produzidas pelos coletores (F3 §6); aprovada quando cada codigoSaida é 0.
+  execucao_testes: { dados: z.object({ comandos: z.array(ComandoRodado).min(1) }), arquivos: LOGS },
+  matriz_fitness: {
+    dados: z.object({
+      linhas: z.array(z.object({ nome: Slug, descricao: z.string(), ...ComandoRodado.shape })).min(1),
+    }),
+    arquivos: LOGS,
   },
 };
 

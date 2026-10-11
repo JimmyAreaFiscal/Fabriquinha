@@ -4,9 +4,9 @@
 
 **Blocked by:** 05, 08
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Executor de comando via `/bin/sh -c` com `cwd` na worktree, limite de 30 min (mata o grupo), stdout+stderr num anexo `texto` com os últimos 5 MiB.
-- [ ] Roda todos os comandos mesmo após falha; comando não encontrado conta como reprovado.
-- [ ] Registro via C17 com produtor `fabriquinha`, fora de transação durante a execução.
-- [ ] Testes com `true`, `false` e `sleep` além do limite (limite injetável no teste).
+- [x] Executor de comando via `/bin/sh -c` com `cwd` na worktree, limite de 30 min (mata o grupo), stdout+stderr num anexo `texto` com os últimos 5 MiB.
+- [x] Roda todos os comandos mesmo após falha; comando não encontrado conta como reprovado.
+- [x] Registro via C17 com produtor `fabriquinha`, fora de transação durante a execução.
+- [x] Testes com `true`, `false` e `sleep` além do limite (limite injetável no teste).

@@ -55,13 +55,35 @@ test("jsonSchemaDe publica o JSON Schema de dados (z.toJSONSchema) e as regras d
 
 test("tipo ainda sem schema é recusado com os tipos aceitos", () => {
   assert.throws(
-    () => schemaDe("execucao_testes"),
+    () => schemaDe("pr_aberto"),
     (e) =>
       e instanceof ErroDeRegra &&
-      e.message ===
-        "a Fabriquinha ainda não valida evidências do tipo execucao_testes (os tipos aceitos hoje são comportamento, " +
-          "criterios_aceite, desenho_solucao, prototipo, relatorio_complexidade, relatorio_impactos_arquitetura)",
+      e.message.startsWith(
+        "a Fabriquinha ainda não valida evidências do tipo pr_aberto (os tipos aceitos hoje são comportamento, " +
+          "criterios_aceite, desenho_solucao, prototipo, relatorio_complexidade, relatorio_impactos_arquitetura, ",
+      ),
   );
+});
+
+const RODADO = { comando: "npm test", codigoSaida: 0, estourou: false, duracaoMs: 12, log: "teste-1.log" };
+
+test("execucao_testes e matriz_fitness: comandos rodados pelos coletores, com o log de cada um em texto", () => {
+  assert.deepEqual(recusados("execucao_testes", { comandos: [RODADO, { ...RODADO, codigoSaida: null }] }), []);
+  assert.deepEqual(recusados("execucao_testes", { comandos: [] }), ["comandos"]);
+  assert.deepEqual(recusados("execucao_testes", { comandos: [{ ...RODADO, codigoSaida: 1.5, duracaoMs: -1 }] }), [
+    "comandos.0.codigoSaida",
+    "comandos.0.duracaoMs",
+  ]);
+  const linha = { nome: "camadas", descricao: "domínio sem I/O", ...RODADO };
+  assert.deepEqual(schemaDe("matriz_fitness").dados.parse({ linhas: [linha] }), { linhas: [linha] });
+  assert.deepEqual(recusados("matriz_fitness", { linhas: [] }), ["linhas"]);
+  assert.deepEqual(recusados("matriz_fitness", { linhas: [{ ...linha, nome: "Camadas", estourou: undefined }] }), [
+    "linhas.0.nome",
+    "linhas.0.estourou",
+  ]);
+  for (const tipo of ["execucao_testes", "matriz_fitness"] as const) {
+    assert.deepEqual(schemaDe(tipo).arquivos, { classes: ["texto"], min: 1 });
+  }
 });
 
 const HTML_UNICO = { classes: ["html"], min: 1, max: 1 };

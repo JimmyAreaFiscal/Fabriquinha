@@ -34,7 +34,9 @@ function sincronizarDiretorio(diretorio: string): void {
  * `link` é atômico como o `rename` e, ao contrário dele, não sobrescreve: se o hash já existe, o guardado fica
  * intocado e a cópia é descartada (deduplicação). O temporário fica em `arquivos/` porque a subpasta depende do hash,
  * que só se conhece no fim; é o mesmo sistema de arquivos, o que basta para o `link`.
- * ponytail: cópia síncrona em blocos de 1 MiB; quem chama é o CLI do agente, um processo por submissão.
+ * ponytail: cópia síncrona em blocos de 1 MiB. Quem chama é o CLI do agente, um processo por submissão, e o serviço
+ * nos coletores (F3 §6), com logs de até 5 MiB, que bloqueiam o laço de eventos dele só durante a cópia. Se um anexo
+ * grande passar a ser copiado pelo serviço, trocar por cópia assíncrona.
  * ponytail: sem coleta de lixo. Sobram um arquivo sem referência quando a transação depois desta cópia falha (F2
  * §5.2) e um `.tmp-*` em `arquivos/` quando o processo morre no meio da cópia; ambos são inofensivos. Se o disco
  * pesar, uma varredura que apague hashes sem referência e `.tmp-*` antigos resolve.

@@ -355,3 +355,9 @@ export function agregado(banco: DatabaseSync, issue: Id): Agregado | undefined {
     banco.exec("COMMIT");
   }
 }
+
+/** Agregado da issue do `ticket`, ou `undefined` se o ticket não existe. */
+export function agregadoDoTicket(banco: DatabaseSync, ticket: Id): Agregado | undefined {
+  const linha = banco.prepare("SELECT issue FROM ticket WHERE id = ?").get(ticket);
+  return linha && agregado(banco, Number(linha.issue));
+}

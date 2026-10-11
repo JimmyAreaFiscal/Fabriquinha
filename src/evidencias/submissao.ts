@@ -8,12 +8,11 @@ import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
 import { exigirRegistroDeEvidencia, registrarEvidencia } from "../dominio/evidencia.ts";
 import { guardarArquivos } from "../persistencia/arquivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
-import { agregado, comIssue } from "../persistencia/issues.ts";
-import { type Classe, type RegraArquivos, schemaDe } from "./schemas.ts";
+import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
+import { type Classe, LIMITE, MIME_TEXTO, type RegraArquivos, schemaDe } from "./schemas.ts";
 
 const MiB = 1024 * 1024;
 const mib = (bytes: number) => `${(bytes / MiB).toFixed(1)} MiB`;
-const LIMITE: Readonly<Record<Classe, number>> = { video: 500 * MiB, imagem: 20 * MiB, html: 5 * MiB, texto: 5 * MiB };
 const MAIOR = Math.max(...Object.values(LIMITE));
 
 /** F3 §3.1: assinaturas dos formatos binários aceitos. */
@@ -68,7 +67,7 @@ function classificar(caminho: string, fd: number, bytes: number): { classe: Clas
   }
   return /^\s*<(!doctype html|html)/i.test(texto)
     ? { classe: "html", mime: "text/html; charset=utf-8" }
-    : { classe: "texto", mime: "text/plain; charset=utf-8" };
+    : { classe: "texto", mime: MIME_TEXTO };
 }
 
 const dentro = (raiz: string, alvo: string) => relative(raiz, alvo).split(sep)[0] !== "..";
@@ -205,8 +204,7 @@ export function submeter(
     throw new ErroDeEscopo("só o agente do ticket submete evidência", "a Fabriquinha registra as dela nos coletores");
   }
   const tipoValido = z.object({ tipo: TipoEvidencia }).parse({ tipo }).tipo;
-  const linha = banco.prepare("SELECT issue FROM ticket WHERE id = ?").get(ator.ticket);
-  const antes = linha && agregado(banco, Number(linha.issue));
+  const antes = agregadoDoTicket(banco, ator.ticket);
   if (!antes) {
     throw new ErroDeEscopo(
       `o ticket T-${String(ator.ticket)} não existe`,
