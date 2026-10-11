@@ -4,10 +4,10 @@
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Os 4 schemas de `dados` e regras de arquivo do F3 §4.2, com `CaminhoRelativo` (glob, sem `..`, sem absoluto) e `temClasse`.
-- [ ] Parser Big-O descendente recursivo com a gramática do F3; teste com todos os exemplos válidos e recusados da spec.
-- [ ] Todo símbolo usado está declarado em `variaveis` e todo declarado é usado; `antes` presente se e somente se `situacao = alterado`.
-- [ ] `prototipo` obrigatório só quando a issue é `funcionalidade`.
-- [ ] Um teste por schema com exemplo válido e os inválidos mais prováveis de um agente.
+- [x] Os 4 schemas de `dados` e regras de arquivo do F3 §4.2, com `CaminhoRelativo` (glob, sem `..`, sem absoluto) e `temClasse`.
+- [x] Parser Big-O descendente recursivo com a gramática do F3; teste com todos os exemplos válidos e recusados da spec.
+- [x] Todo símbolo usado está declarado em `variaveis` e todo declarado é usado; `antes` presente se e somente se `situacao = alterado`.
+- [x] `prototipo` obrigatório só quando a issue é `funcionalidade`.
+- [x] Um teste por schema com exemplo válido e os inválidos mais prováveis de um agente.

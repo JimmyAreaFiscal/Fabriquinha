@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { type Agregado, type Ator, type Contexto, type Decisao, exigirAuditor, rotuloIssue } from "./agregado.ts";
 import { ErroDeRegra } from "./erros.ts";
-import { CATALOGO } from "./evidencia.ts";
+import { evidenciasFaltando } from "./evidencia.ts";
 import { exigirSemExecucao, rotuloTicket } from "./execucao.ts";
 import { Motivo } from "./primitivos.ts";
 
@@ -37,9 +37,7 @@ export function decidirRegistro(ag: Agregado, entrada: unknown, ator: Ator, ctx:
         `o agente de ${t} os preenche com fabriquinha issue editar ${i}`,
       );
     }
-    const faltam = CATALOGO.filter(
-      (c) => c.etapa === "registro" && !ag.evidencias.some((e) => e.ticket === ticket.id && e.tipo === c.tipo),
-    ).map((c) => c.tipo);
+    const faltam = evidenciasFaltando(ag, ticket);
     if (faltam.length > 0) {
       const comandos = faltam.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ");
       throw new ErroDeRegra(

@@ -7,6 +7,7 @@ import {
   Evidencia,
   exigirExecucaoEmAndamento,
   type Produtor,
+  type Ticket,
   TipoEvidencia,
 } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
@@ -50,6 +51,19 @@ export const CATALOGO: readonly ItemCatalogo[] = [
   item("encerramento", "relatorio_produtividade", "fabriquinha"),
   item("encerramento", "pr_aberto", "fabriquinha"),
 ];
+
+/**
+ * As evidências obrigatórias (F1 §3.9) que faltam em `ticket`: ausentes, ou sem `aprovada = true` quando o catálogo
+ * a exige. `prototipo` só é obrigatório quando a issue é funcionalidade.
+ */
+export function evidenciasFaltando(ag: Agregado, ticket: Ticket): TipoEvidencia[] {
+  return CATALOGO.filter((c) => {
+    if (c.etapa !== ticket.etapa) return false;
+    if (c.obrigatoria === "funcionalidade" && ag.issue.tipo !== "funcionalidade") return false;
+    const e = ag.evidencias.find((x) => x.ticket === ticket.id && x.tipo === c.tipo);
+    return !e || (c.obrigatoria === "aprovada" && e.aprovada !== true);
+  }).map((c) => c.tipo);
+}
 
 /**
  * Pré-condições de C17. O F3 as confere antes de validar e guardar o conteúdo (F3 §5, passos 1 e 2), e C17 de novo

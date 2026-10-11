@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import { type Agregado, type Ator, type Contexto, type Evidencia, type Ticket, TipoEvidencia } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { CATALOGO, registrarEvidencia } from "./evidencia.ts";
+import { CATALOGO, evidenciasFaltando, registrarEvidencia } from "./evidencia.ts";
 import type { Etapa } from "./primitivos.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
@@ -98,6 +98,46 @@ test("o catálogo do F1 §3.9: tipos por etapa, produtor e obrigatoriedade", () 
   ]);
   assert.deepEqual(porEtapa("sessao"), []);
   assert.deepEqual(new Set(CATALOGO.map((i) => i.tipo)), new Set(TipoEvidencia.options));
+});
+
+test("evidências que faltam: prototipo só na funcionalidade; aprovada exige aprovada = true", () => {
+  const desenho = ticket(2, "desenho");
+  const de = (t: Ticket, tipo: Evidencia["tipo"], aprovada?: boolean): Evidencia => ({
+    id: 90,
+    ticket: t.id,
+    tipo,
+    produtor: "agente",
+    ...(aprovada !== undefined && { aprovada }),
+    dados: {},
+    arquivos: [],
+    em: AGORA,
+  });
+  const comTipo = (tipo: Agregado["issue"]["tipo"], evidencias: Evidencia[] = []): Agregado => ({
+    ...base(),
+    issue: { ...base().issue, tipo },
+    evidencias,
+  });
+  const restoDoDesenho = ["desenho_solucao", "relatorio_complexidade", "relatorio_impactos_arquitetura"] as const;
+  assert.deepEqual(evidenciasFaltando(comTipo("problema"), desenho), restoDoDesenho);
+  assert.deepEqual(evidenciasFaltando(comTipo("funcionalidade"), desenho), [
+    "desenho_solucao",
+    "prototipo",
+    "relatorio_complexidade",
+    "relatorio_impactos_arquitetura",
+  ]);
+  const completo = restoDoDesenho.map((tipo) => de(desenho, tipo));
+  assert.deepEqual(evidenciasFaltando(comTipo("problema", completo), desenho), []);
+  assert.deepEqual(evidenciasFaltando(comTipo("funcionalidade", completo), desenho), ["prototipo"]);
+  // Evidência de outro ticket não conta.
+  assert.deepEqual(
+    evidenciasFaltando(comTipo("funcionalidade", [...completo, de(ticket(7, "desenho"), "prototipo")]), desenho),
+    ["prototipo"],
+  );
+  assert.deepEqual(evidenciasFaltando(comTipo("funcionalidade", [...completo, de(desenho, "prototipo")]), desenho), []);
+
+  const dev = ticket(3, "desenvolvimento");
+  const medidas = [de(dev, "execucao_testes", true), de(dev, "matriz_fitness", false), de(dev, "relatorio_sonar")];
+  assert.deepEqual(evidenciasFaltando(comTipo("problema", medidas), dev), ["matriz_fitness", "relatorio_sonar"]);
 });
 
 test("C17 grava a evidência do agente com o produtor do catálogo, sem aprovada", () => {

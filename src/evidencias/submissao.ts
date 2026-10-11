@@ -124,8 +124,8 @@ function abrir(caminho: string, raizes: readonly string[], saida: string): numbe
 }
 
 /**
- * Quantidade, nomes, origem, classe e limite (F3 §3, §5 passos 4 e 6). A classe é conferida na cópia privada que
- * `guardarArquivos` faz, e não no arquivo do agente: o que fica guardado é o que foi validado.
+ * Quantidade, nomes, origem, classe, limite e `temClasse` (F3 §3, §5 passos 4 a 6). A classe é conferida na cópia
+ * privada que `guardarArquivos` faz, e não no arquivo do agente: o que fica guardado é o que foi validado.
  */
 function guardarAnexos(
   banco: DatabaseSync,
@@ -153,6 +153,7 @@ function guardarAnexos(
   if (repetido) throw new ErroDeRegra(`dois anexos se chamam ${repetido}`, "renomeie um deles");
 
   const abertos: { fd: number; caminho: string; nome: string }[] = [];
+  const classes: Classe[] = [];
   try {
     for (const caminho of caminhos) {
       abertos.push({
@@ -171,6 +172,12 @@ function guardarAnexos(
             `${caminho} é ${classe}, e ${tipo} aceita só ${regra.classes.join(" ou ")}`,
             "anexe um arquivo de uma dessas classes",
           );
+        }
+        // 5: a regra do conjunto, depois de classificar o último e antes de guardar qualquer um.
+        classes.push(classe);
+        const exigida = regra.temClasse;
+        if (exigida && classes.length === abertos.length && !classes.some((c) => exigida.classes.includes(c))) {
+          throw new ErroDeRegra(exigida.mensagem, `anexe também um arquivo ${exigida.classes.join(" ou ")}`);
         }
         return { nome, mime };
       },
@@ -212,8 +219,8 @@ export function submeter(
   const schema = schemaDe(tipoValido);
   const validos = z.object({ dados: schema.dados }).parse({ dados }).dados;
 
-  // 4 e 6: fora da transação (F2 §5.2); se a 7 falhar, sobra só arquivo sem referência. (5, as regras cruzadas,
-  // ainda não existem nos tipos do registro.) As origens partem da raiz real da Fabriquinha e nada abaixo dela é
+  // 4, 5 e 6: fora da transação (F2 §5.2); se a 7 falhar, sobra só arquivo sem referência. As regras cruzadas de
+  // `dados` (5) já vieram no schema do passo 3. As origens partem da raiz real da Fabriquinha e nada abaixo dela é
   // resolvido: trocar a worktree ou a saída por um link não as leva para outro lugar.
   const raiz = realpathSync(raizDo(banco));
   const arquivos = guardarAnexos(banco, caminhos, tipoValido, schema.arquivos, {

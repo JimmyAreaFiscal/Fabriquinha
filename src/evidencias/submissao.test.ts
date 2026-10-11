@@ -19,9 +19,12 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { z, ZodError } from "zod";
-import type { Ator } from "../dominio/agregado.ts";
+import type { Ator, TipoIssue } from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
+import { evidenciasFaltando } from "../dominio/evidencia.ts";
 import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
+import { decidirRegistro } from "../dominio/gates.ts";
+import { editarIssue } from "../dominio/issue.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
@@ -470,5 +473,146 @@ test("escopo: só o agente do ticket em execução, com tipo da etapa e produzid
     terminarExecucao(ag, { execucao: 1, resultado: "sucesso" }, fabriquinha, ctx),
   );
   recusa(c, enviar(agente), ErroDeEscopo, "a execução E-1 já terminou (peça ao Auditor uma nova execução)");
+  c.banco.close();
+});
+
+const desenhista: Ator = { tipo: "agente", execucao: 2, ticket: 2 };
+const SOLUCAO = {
+  resumo: "cache na busca",
+  arquivosPrevistos: [{ caminho: "src/busca/*.ts", acao: "alterar", motivo: "lê do cache" }],
+};
+const COMPLEXIDADE = {
+  variaveis: [{ simbolo: "n", significado: "itens do catálogo" }],
+  fluxos: [{ nome: "Busca", gatilho: "GET /busca", situacao: "novo", depois: { tempo: "O(log n)", espaco: "O(n)" } }],
+};
+const IMPACTOS = { impacto: "baixo", novasDependencias: [], novosAcoplamentos: [], riscos: [] };
+
+/** O cenário com o registro aprovado: I-1 do tipo `tipo` em `desenho`, com T-2 rodando na E-2 (autônoma). */
+function noDesenho(tipo: TipoIssue): Cenario & { saida2: string } {
+  const c = cenario();
+  submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [c.arquivo(c.saida, "tela.webm", WEBM)]);
+  submeter(c.banco, agente, "criterios_aceite", { criterios: [CRITERIO] }, []);
+  comIssue(c.banco, 1, "editarIssue", auditor, (ag) => editarIssue(ag, { titulo: "Busca lenta", tipo }, auditor));
+  comIssue(c.banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao: 1, resultado: "sucesso" }, fabriquinha, ctx),
+  );
+  comIssue(c.banco, 1, "decidirRegistro", auditor, (ag, ctx) => decidirRegistro(ag, { aprovado: true }, auditor, ctx));
+  comIssue(c.banco, 1, "iniciarExecucao", fabriquinha, (ag, ctx) =>
+    iniciarExecucao(
+      ag,
+      { ticket: 2, modo: "autonomo", sessaoPi: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c" },
+      fabriquinha,
+      ctx,
+    ),
+  );
+  const saida2 = join(c.raiz, "execucoes", "E-2", "saida");
+  mkdirSync(saida2, { recursive: true });
+  return { ...c, saida2 };
+}
+
+test("desenho: o agente submete as quatro evidências; prototipo só é obrigatório na funcionalidade", () => {
+  for (const tipo of ["funcionalidade", "problema"] as const) {
+    const c = noDesenho(tipo);
+    const html = (nome: string) => c.arquivo(c.saida2, nome, HTML);
+    const desenho = () => {
+      const ag = agregado(c.banco, 1);
+      assert.ok(ag);
+      const ticket = ag.tickets.find((t) => t.id === 2);
+      assert.ok(ticket);
+      return evidenciasFaltando(ag, ticket);
+    };
+    assert.deepEqual(desenho(), [
+      "desenho_solucao",
+      ...(tipo === "funcionalidade" ? ["prototipo"] : []),
+      "relatorio_complexidade",
+      "relatorio_impactos_arquitetura",
+    ]);
+    submeter(c.banco, desenhista, "desenho_solucao", SOLUCAO, [html("desenho.html")]);
+    submeter(c.banco, desenhista, "relatorio_complexidade", COMPLEXIDADE, [html("fluxos.html")]);
+    const ag = submeter(c.banco, desenhista, "relatorio_impactos_arquitetura", IMPACTOS, [html("impactos.html")]);
+    assert.deepEqual(desenho(), tipo === "funcionalidade" ? ["prototipo"] : []);
+    assert.deepEqual(
+      ag.evidencias.filter((e) => e.ticket === 2).map((e) => [e.tipo, e.arquivos.map((a) => a.mime)]),
+      [
+        ["desenho_solucao", ["text/html; charset=utf-8"]],
+        ["relatorio_complexidade", ["text/html; charset=utf-8"]],
+        ["relatorio_impactos_arquitetura", ["text/html; charset=utf-8"]],
+      ],
+    );
+    assert.deepEqual(ag.evidencias.find((e) => e.tipo === "desenho_solucao")?.dados, { ...SOLUCAO, foraDeEscopo: [] });
+
+    // Na issue de problema o protótipo é opcional, mas aceito.
+    const prototipo = [c.arquivo(c.saida2, "demo.webm", WEBM), c.arquivo(c.worktree, "demo.ts", "export {};\n")];
+    submeter(c.banco, desenhista, "prototipo", { descricao: "tela nova" }, prototipo);
+    assert.deepEqual(desenho(), []);
+    c.banco.close();
+  }
+});
+
+test("prototipo precisa de um vídeo ou print; os relatórios do desenho, de exatamente um HTML", () => {
+  const c = noDesenho("funcionalidade");
+  const recusar = (tipo: string, dados: unknown, caminhos: string[], msg: string) => {
+    const evidencias = contar(c.banco, "evidencia");
+    assert.throws(
+      () => submeter(c.banco, desenhista, tipo, dados, caminhos),
+      (e) => e instanceof ErroDeRegra && e.message === msg,
+    );
+    assert.equal(contar(c.banco, "evidencia"), evidencias);
+  };
+  const guardados = () => readdirSync(join(c.raiz, "arquivos"), { recursive: true }).length;
+  const antes = guardados();
+  const pagina = c.arquivo(c.saida2, "demo.html", HTML);
+  const codigo = c.arquivo(c.saida2, "demo.ts", "export {};\n");
+  recusar(
+    "prototipo",
+    { descricao: "tela nova" },
+    [pagina, codigo],
+    "protótipo precisa de pelo menos um vídeo ou print (anexe também um arquivo video ou imagem)",
+  );
+  // A recusa vem antes de guardar: nenhum dos dois anexos ficou.
+  assert.equal(guardados(), antes);
+  const print = c.arquivo(c.saida2, "tela.png", PNG);
+  const ag = submeter(c.banco, desenhista, "prototipo", { descricao: "tela nova" }, [pagina, print]);
+  assert.deepEqual(
+    ag.evidencias.at(-1)?.arquivos.map((a) => a.mime),
+    ["text/html; charset=utf-8", "image/png"],
+  );
+
+  recusar(
+    "desenho_solucao",
+    SOLUCAO,
+    [print],
+    `${print} é imagem, e desenho_solucao aceita só html (anexe um arquivo de uma dessas classes)`,
+  );
+  recusar(
+    "relatorio_complexidade",
+    COMPLEXIDADE,
+    [pagina, c.arquivo(c.saida2, "outro.html", HTML)],
+    "relatorio_complexidade aceita no máximo 1 arquivo(s), e vieram 2 (submeta sem os excedentes)",
+  );
+  recusar(
+    "relatorio_impactos_arquitetura",
+    IMPACTOS,
+    [],
+    "relatorio_impactos_arquitetura precisa de pelo menos 1 arquivo(s), e veio 0 (anexe com --arquivo <caminho>)",
+  );
+  c.banco.close();
+});
+
+test("relatorio_complexidade com símbolo não declarado: ZodError no caminho do Big-O a partir de dados", () => {
+  const c = noDesenho("problema");
+  const fluxo = { ...COMPLEXIDADE.fluxos[0], depois: { tempo: "O(n * k)", espaco: "O(n²)" } };
+  let erro: unknown;
+  try {
+    submeter(c.banco, desenhista, "relatorio_complexidade", { ...COMPLEXIDADE, fluxos: [fluxo] }, []);
+  } catch (error_) {
+    erro = error_;
+  }
+  assert.ok(erro instanceof ZodError);
+  assert.equal(
+    z.prettifyError(erro),
+    "✖ fora da gramática Big-O (ex.: O(1), O(n log n), O(n^2), O(n + m))\n  → at dados.fluxos[0].depois.espaco\n" +
+      "✖ k não está declarado em variaveis\n  → at dados.fluxos[0].depois.tempo",
+  );
   c.banco.close();
 });
