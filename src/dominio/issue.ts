@@ -64,6 +64,8 @@ export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agr
       },
     ],
     execucoes: [],
+    decisoes: [],
+    evidencias: [],
   };
 }
 

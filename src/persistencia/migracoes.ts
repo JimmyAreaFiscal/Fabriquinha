@@ -1,7 +1,17 @@
 // Migrações do banco (F2 §3.7): lista ordenada; a posição + 1 é a versão gravada em `PRAGMA user_version`.
 // Só se acrescenta ao fim; migração já aplicada não muda.
 import type { z } from "zod";
-import { ModoExecucao, ResultadoExecucao, StatusTicket, TipoAtor, TipoIssue } from "../dominio/agregado.ts";
+import {
+  Decisao,
+  GateDecisao,
+  ModoExecucao,
+  Produtor,
+  ResultadoExecucao,
+  StatusTicket,
+  TipoAtor,
+  TipoEvidencia,
+  TipoIssue,
+} from "../dominio/agregado.ts";
 import { Etapa, Fase, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
 
@@ -98,4 +108,39 @@ export const MIGRACOES: readonly string[] = [
   CREATE UNIQUE INDEX ux_execucao_por_ticket ON execucao(ticket) WHERE resultado = 'em_andamento';
   -- Invariante 3 do F1 (D8): uma execução autônoma em andamento no sistema inteiro.
   CREATE UNIQUE INDEX ux_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';`,
+  `CREATE TABLE decisao (
+    id       INTEGER PRIMARY KEY,
+    issue    INTEGER NOT NULL REFERENCES issue(id),
+    ticket   INTEGER NOT NULL REFERENCES ticket(id),
+    gate     TEXT NOT NULL CHECK (gate IN (${listaSql(GateDecisao)})),
+    aprovado INTEGER NOT NULL CHECK (aprovado IN (0,1)),
+    motivo   TEXT CHECK (length(motivo) BETWEEN 1 AND 2000),
+    nota     INTEGER CHECK (nota BETWEEN 1 AND 5),
+    por      TEXT NOT NULL CHECK (por IN (${listaSql(Decisao.shape.por)})),
+    em       TEXT NOT NULL,
+    -- Invariante 7 do F1.
+    CHECK ((por = 'agente') = (gate = 'revisao')),
+    CHECK (aprovado = 1 OR motivo IS NOT NULL),
+    -- F1 §3.7: a nota vem só com o PR aprovado (o F2 ainda diz gate = 'pr', o que exigiria nota ao pedir mudanças).
+    CHECK ((nota IS NOT NULL) = (gate = 'pr' AND aprovado = 1))
+  );
+  CREATE UNIQUE INDEX ux_decisao_revisao ON decisao(ticket) WHERE gate = 'revisao';
+  CREATE TABLE evidencia (
+    id       INTEGER PRIMARY KEY,
+    ticket   INTEGER NOT NULL REFERENCES ticket(id),
+    tipo     TEXT NOT NULL CHECK (tipo IN (${listaSql(TipoEvidencia)})),
+    produtor TEXT NOT NULL CHECK (produtor IN (${listaSql(Produtor)})),
+    aprovada INTEGER CHECK (aprovada IN (0,1)),
+    dados    TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(dados)),
+    em       TEXT NOT NULL,
+    UNIQUE (ticket, tipo)
+  );
+  CREATE TABLE evidencia_arquivo (
+    evidencia INTEGER NOT NULL REFERENCES evidencia(id) ON DELETE CASCADE,
+    nome      TEXT NOT NULL CHECK (length(nome) BETWEEN 1 AND 200),
+    sha256    TEXT NOT NULL CHECK (length(sha256) = 64),
+    mime      TEXT NOT NULL,
+    bytes     INTEGER NOT NULL CHECK (bytes >= 0),
+    PRIMARY KEY (evidencia, nome)
+  );`,
 ];

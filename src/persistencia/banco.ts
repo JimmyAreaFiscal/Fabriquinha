@@ -1,7 +1,7 @@
 // Abertura do banco, transações de escrita e sequência de IDs (F2 §2, §3.1, §3.2, §3.4, §3.7).
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { TipoId } from "../dominio/primitivos.ts";
@@ -33,6 +33,10 @@ export function abrir(raiz = process.env.FABRIQUINHA_ROOT || join(homedir(), "fa
   }
   return banco;
 }
+
+/** A raiz do banco aberto: os arquivos de evidência, as worktrees e as execuções moram nela (F2 §2). */
+export const raizDo = (banco: DatabaseSync): string =>
+  dirname((banco.prepare("PRAGMA database_list").get() as { file: string }).file);
 
 /** Aplica em ordem as migrações ainda não aplicadas, cada uma na sua transação; a versão fica em `user_version`. */
 export function migrar(banco: DatabaseSync, migracoes: readonly string[]): void {

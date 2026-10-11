@@ -4,12 +4,13 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Armazenamento por SHA-256 (`guardarArquivo`, `caminhoArquivo`): temporário no mesmo diretório, `fsync`, `rename`; deduplicação; nada é alterado nem apagado.
-- [ ] Classes de arquivo pelos bytes iniciais e limites do F3 §3.1; origem só da worktree ou de `$FABRIQUINHA_SAIDA` após `realpath`; só arquivo regular.
-- [ ] `submeter(banco, ator, tipo, dados, caminhos)` com os 7 passos do F3 §5, erro de schema via `z.prettifyError`; resubmeter substitui.
-- [ ] Agente não submete tipo de produtor `fabriquinha`; tipo precisa pertencer à etapa.
-- [ ] Catálogo de evidências por etapa (F1 §3.9) como regra do domínio; `schemaDe`/`jsonSchemaDe` (via `z.toJSONSchema`) para os tipos implementados.
-- [ ] C10: aprovado exige título, tipo e evidências do registro; aprovado conclui o ticket, fase `desenho`, novo ticket `desenho`; reprovado só grava a decisão.
-- [ ] Teste: link simbólico para fora da worktree é recusado.
+- [x] Armazenamento por SHA-256 (`guardarArquivo`, `caminhoArquivo`): temporário no mesmo diretório, `fsync`, `rename`; deduplicação; nada é alterado nem apagado.
+- [x] Classes de arquivo pelos bytes iniciais e limites do F3 §3.1; origem só da worktree ou de `$FABRIQUINHA_SAIDA` após `realpath`; só arquivo regular.
+- [x] `submeter(banco, ator, tipo, dados, caminhos)` com os 7 passos do F3 §5, erro de schema via `z.prettifyError`; resubmeter substitui.
+- [x] Agente não submete tipo de produtor `fabriquinha`; tipo precisa pertencer à etapa.
+- [x] Catálogo de evidências por etapa (F1 §3.9) como regra do domínio; `schemaDe`/`jsonSchemaDe` (via `z.toJSONSchema`) para os tipos implementados.
+- [x] Tabela `decisao` com os CHECKs do F2 (versão atual da spec; ver F1 §3.7 para a regra da `nota`).
+- [x] C10: aprovado exige título, tipo e evidências do registro; aprovado conclui o ticket, fase `desenho`, novo ticket `desenho`; reprovado só grava a decisão.
+- [x] Teste: link simbólico para fora da worktree é recusado.

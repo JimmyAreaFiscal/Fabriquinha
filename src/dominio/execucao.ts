@@ -34,9 +34,9 @@ const modoDaEtapa = (etapa: Etapa): ModoExecucao =>
 export const modeloDaExecucao = (ticket: Ticket, projeto: Projeto | undefined): Modelo | undefined =>
   ticket.modelo ?? projeto?.modelos[ticket.etapa];
 
-const rotulo = (ticket: Ticket): string => `T-${String(ticket.id)}`;
+export const rotuloTicket = (ticket: Ticket): string => `T-${String(ticket.id)}`;
 
-function ticketDe(ag: Agregado, id: Id): Ticket {
+export function ticketDe(ag: Agregado, id: Id): Ticket {
   const ticket = ag.tickets.find((t) => t.id === id);
   if (!ticket)
     throw new ErroDeRegra(`o ticket T-${String(id)} não é da ${rotuloIssue(ag)}`, "confira o número do ticket");
@@ -46,12 +46,12 @@ function ticketDe(ag: Agregado, id: Id): Ticket {
 const emAndamento = (ag: Agregado, ticket: Ticket): Execucao | undefined =>
   ag.execucoes.find((e) => e.ticket === ticket.id && e.resultado === "em_andamento");
 
-/** C7, C8, C20 e C21 esperam a execução do ticket terminar. */
-function exigirSemExecucao(ag: Agregado, ticket: Ticket, acao: string): void {
+/** C7, C8, C10, C20 e C21 esperam a execução do ticket terminar. */
+export function exigirSemExecucao(ag: Agregado, ticket: Ticket, acao: string): void {
   const execucao = emAndamento(ag, ticket);
   if (execucao) {
     throw new ErroDeRegra(
-      `${rotulo(ticket)} não pode ${acao}: a execução E-${String(execucao.id)} ainda está em andamento`,
+      `${rotuloTicket(ticket)} não pode ${acao}: a execução E-${String(execucao.id)} ainda está em andamento`,
       "espere ela terminar",
     );
   }
@@ -82,7 +82,7 @@ export function iniciarExecucao(ag: Agregado, entrada: unknown, ator: Ator, ctx:
   exigirFabriquinha(ator, "iniciar uma execução");
   const { ticket: id, modo, sessaoPi } = EntradaInicio.parse(entrada);
   const ticket = ticketDe(ag, id);
-  const t = rotulo(ticket);
+  const t = rotuloTicket(ticket);
   const esperado = modoDaEtapa(ticket.etapa);
   if (modo !== esperado) {
     throw new ErroDeRegra(
@@ -162,12 +162,15 @@ export function falharTicket(ag: Agregado, entrada: unknown, ator: Ator): Agrega
   const ticket = ticketDe(ag, id);
   if (modoDaEtapa(ticket.etapa) !== "autonomo") {
     throw new ErroDeRegra(
-      `${rotulo(ticket)} é interativo e não falha`,
+      `${rotuloTicket(ticket)} é interativo e não falha`,
       "a sessão continua em execução e o Auditor a retoma",
     );
   }
   if (ticket.status !== "em_execucao") {
-    throw new ErroDeRegra(`${rotulo(ticket)} está ${ticket.status}, não em execução`, "só falha o ticket em execução");
+    throw new ErroDeRegra(
+      `${rotuloTicket(ticket)} está ${ticket.status}, não em execução`,
+      "só falha o ticket em execução",
+    );
   }
   exigirSemExecucao(ag, ticket, "falhar");
   const criadoPorEle = (t: Ticket) =>
@@ -188,7 +191,7 @@ export function reabrirTicket(ag: Agregado, entrada: unknown, ator: Ator): Agreg
   const { ticket: id, instrucao } = EntradaReabertura.parse(entrada);
   const ticket = ticketDe(ag, id);
   if (ticket.status !== "falhou") {
-    throw new ErroDeRegra(`${rotulo(ticket)} está ${ticket.status}`, "só se reabre ticket que falhou");
+    throw new ErroDeRegra(`${rotuloTicket(ticket)} está ${ticket.status}`, "só se reabre ticket que falhou");
   }
   const { erro: _apagado, ...resto } = ticket;
   return trocarTicket(ag, { ...resto, status: "aberto", ...(instrucao !== undefined && { instrucao }) });
@@ -202,7 +205,7 @@ export function definirModeloTicket(ag: Agregado, entrada: unknown, ator: Ator):
   const { ticket: id, modelo } = EntradaModelo.parse(entrada);
   const ticket = ticketDe(ag, id);
   if (ticket.status === "concluido") {
-    throw new ErroDeRegra(`${rotulo(ticket)} já está concluído`, "o modelo só vale para as próximas execuções");
+    throw new ErroDeRegra(`${rotuloTicket(ticket)} já está concluído`, "o modelo só vale para as próximas execuções");
   }
   exigirSemExecucao(ag, ticket, "trocar de modelo");
   const { modelo: _anterior, ...resto } = ticket;
@@ -218,11 +221,14 @@ export function iniciarConsulta(ag: Agregado, entrada: unknown, ator: Ator, ctx:
   const ticket = ticketDe(ag, id);
   const principal = ag.execucoes.find((e) => e.ticket === ticket.id && e.modo !== "consulta")?.sessaoPi;
   if (principal === undefined) {
-    throw new ErroDeRegra(`${rotulo(ticket)} ainda não tem sessão`, "consulte um ticket que já executou");
+    throw new ErroDeRegra(`${rotuloTicket(ticket)} ainda não tem sessão`, "consulte um ticket que já executou");
   }
   exigirSemExecucao(ag, ticket, "abrir uma consulta");
   if (sessaoPi === principal) {
-    throw new ErroDeRegra(`a consulta não pode usar a sessão principal de ${rotulo(ticket)}`, "copie a sessão antes");
+    throw new ErroDeRegra(
+      `a consulta não pode usar a sessão principal de ${rotuloTicket(ticket)}`,
+      "copie a sessão antes",
+    );
   }
   return { ...ag, execucoes: [...ag.execucoes, novaExecucao(ag, ticket, "consulta", sessaoPi, ctx)] };
 }

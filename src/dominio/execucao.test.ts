@@ -91,6 +91,8 @@ const agregado = (fase: Fase, tickets: Ticket[], execucoes: Execucao[] = []): Ag
   },
   tickets,
   execucoes,
+  decisoes: [],
+  evidencias: [],
 });
 
 const regra = (trabalho: () => unknown, mensagem: string) => {

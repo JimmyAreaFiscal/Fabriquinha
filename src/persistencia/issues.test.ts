@@ -17,6 +17,8 @@ import {
   reabrirTicket,
   terminarExecucao,
 } from "../dominio/execucao.ts";
+import { registrarEvidencia } from "../dominio/evidencia.ts";
+import { decidirRegistro } from "../dominio/gates.ts";
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { abrir } from "./banco.ts";
 import { agregado, arquivarConcluidas, comIssue, registrarIssue } from "./issues.ts";
@@ -710,3 +712,205 @@ test(
     lido.close();
   },
 );
+
+const SHA = (letra: string) => letra.repeat(64);
+
+/** I-1 em `registro` com título e tipo e o ticket de registro T-1 rodando na E-1, interativa. */
+function registroRodando(banco: DatabaseSync): Ator {
+  const { issue } = registrarIssue(banco, { projeto: "loja" }, auditor);
+  comIssue(banco, issue.id, "editarIssue", auditor, (ag) =>
+    editarIssue(ag, { titulo: "T", tipo: "problema" }, auditor),
+  );
+  iniciar(banco, issue.id, 1, "interativo");
+  return { tipo: "agente", execucao: 1, ticket: 1 };
+}
+
+const evidenciar = (banco: DatabaseSync, ator: Ator, tipo: string, arquivos: string[] = []) =>
+  comIssue(banco, 1, "registrarEvidencia", ator, (ag, ctx) =>
+    registrarEvidencia(
+      ag,
+      {
+        ticket: 1,
+        tipo,
+        dados: { tipo, lista: [1, "a", null] },
+        arquivos: arquivos.map((letra, i) => ({
+          nome: `${letra}${String(i)}.txt`,
+          sha256: SHA(letra),
+          mime: "text/plain",
+          bytes: i,
+        })),
+      },
+      ator,
+      ctx,
+    ),
+  );
+
+test("C17 pelo comIssue grava evidência e anexos; resubmeter troca as linhas e o agregado relido é igual", () => {
+  const banco = novoBanco();
+  const agente = registroRodando(banco);
+  const primeiro = evidenciar(banco, agente, "comportamento", ["a", "b"]);
+  assert.deepEqual(agregado(banco, 1), primeiro);
+  assert.deepEqual(
+    todas(banco, "SELECT evidencia, nome, sha256, mime, bytes FROM evidencia_arquivo ORDER BY rowid").map((l) =>
+      Object.values(l),
+    ),
+    [
+      [1, "a0.txt", SHA("a"), "text/plain", 0],
+      [1, "b1.txt", SHA("b"), "text/plain", 1],
+    ],
+  );
+  evidenciar(banco, agente, "criterios_aceite");
+  const depois = evidenciar(banco, agente, "comportamento", ["c"]);
+
+  assert.deepEqual(
+    depois.evidencias.map((e) => [e.id, e.tipo, e.produtor, e.arquivos.map((a) => a.nome)]),
+    [
+      [2, "criterios_aceite", "agente", []],
+      [3, "comportamento", "agente", ["c0.txt"]],
+    ],
+  );
+  assert.deepEqual(agregado(banco, 1), depois);
+  assert.deepEqual(
+    todas(banco, "SELECT evidencia, nome FROM evidencia_arquivo").map((l) => Object.values(l)),
+    [[3, "c0.txt"]],
+  );
+  assert.equal(
+    valor(banco, "SELECT dados FROM evidencia WHERE id = 3"),
+    '{"tipo":"comportamento","lista":[1,"a",null]}',
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM comando WHERE nome = 'registrarEvidencia' AND ator = 'agente'"), 3);
+  banco.close();
+});
+
+test("C10 pelo comIssue: reprovado grava só a decisão; aprovado leva a issue a desenho com o ticket novo", () => {
+  const banco = novoBanco();
+  const agente = registroRodando(banco);
+  evidenciar(banco, agente, "comportamento");
+  evidenciar(banco, agente, "criterios_aceite");
+  const decidir = (entrada: unknown) =>
+    comIssue(banco, 1, "decidirRegistro", auditor, (ag, ctx) => decidirRegistro(ag, entrada, auditor, ctx));
+  regra(
+    () => decidir({ aprovado: true }),
+    "T-1 não pode passar pelo gate: a execução E-1 ainda está em andamento (espere ela terminar)",
+  );
+  comIssue(banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao: 1, resultado: "sucesso" }, fabriquinha, ctx),
+  );
+
+  const reprovado = decidir({ aprovado: false, motivo: "faltou o vídeo" });
+  assert.equal(reprovado.issue.fase, "registro");
+  const aprovado = decidir({ aprovado: true });
+  assert.deepEqual(agregado(banco, 1), aprovado);
+  assert.equal(aprovado.issue.fase, "desenho");
+  assert.deepEqual(
+    aprovado.tickets.map((t) => [t.id, t.etapa, t.status]),
+    [
+      [1, "registro", "concluido"],
+      [2, "desenho", "aberto"],
+    ],
+  );
+  assert.deepEqual(
+    todas(banco, "SELECT id, issue, ticket, gate, aprovado, motivo, nota, por FROM decisao ORDER BY id").map((l) =>
+      Object.values(l),
+    ),
+    [
+      [1, 1, 1, "registro", 0, "faltou o vídeo", null, "auditor"],
+      [2, 1, 1, "registro", 1, null, null, "auditor"],
+    ],
+  );
+  assert.deepEqual(
+    todas(banco, "SELECT fase FROM comando WHERE nome = 'decidirRegistro'").map((l) => l.fase),
+    ["registro", "registro"],
+  );
+  banco.close();
+});
+
+test("as constraints da tabela decisao valem no banco (nota só no PR aprovado, como no F1 §3.7)", () => {
+  const banco = novoBanco();
+  registrarIssue(banco, { projeto: "loja" }, auditor);
+  const decisao = inseridor(banco, "decisao", {
+    issue: 1,
+    ticket: 1,
+    gate: "registro",
+    aprovado: 1,
+    por: "auditor",
+    em: "x",
+  });
+  violam(decisao, [
+    [{ issue: 9 }, /FOREIGN KEY/],
+    [{ ticket: 9 }, /FOREIGN KEY/],
+    [{ gate: "codigo" }, /CHECK/],
+    [{ aprovado: 2 }, /CHECK/],
+    [{ motivo: "" }, /CHECK/],
+    [{ motivo: "a".repeat(2001) }, /CHECK/],
+    [{ por: "fabriquinha" }, /CHECK/],
+    [{ em: null }, /NOT NULL/],
+    // Invariante 7: revisão é do agente; os outros gates, do Auditor.
+    [{ por: "agente" }, /CHECK/],
+    [{ gate: "revisao" }, /CHECK/],
+    // Reprovar exige motivo.
+    [{ aprovado: 0 }, /CHECK/],
+    // Nota se e somente se PR aprovado.
+    [{ nota: 3 }, /CHECK/],
+    [{ gate: "pr" }, /CHECK/],
+    [{ gate: "pr", aprovado: 0, motivo: "m", nota: 3 }, /CHECK/],
+    [{ gate: "pr", nota: 0 }, /CHECK/],
+    [{ gate: "pr", nota: 6 }, /CHECK/],
+  ]);
+  decisao();
+  decisao({ aprovado: 0, motivo: "m" });
+  decisao({ gate: "pr", nota: 5 });
+  decisao({ gate: "pr", aprovado: 0, motivo: "m" });
+  const revisao = { gate: "revisao", por: "agente" };
+  decisao(revisao);
+  // Uma decisão de revisão por ticket.
+  violam(decisao, [[revisao, /UNIQUE constraint failed: decisao.ticket/]]);
+  assert.throws(() => {
+    banco.exec("DELETE FROM ticket WHERE id = 1");
+  }, /FOREIGN KEY/);
+  banco.close();
+});
+
+test("as constraints de evidencia e evidencia_arquivo valem no banco; apagar a evidência leva os anexos", () => {
+  const banco = novoBanco();
+  registrarIssue(banco, { projeto: "loja" }, auditor);
+  const evidencia = inseridor(banco, "evidencia", { ticket: 1, tipo: "comportamento", produtor: "agente", em: "x" });
+  violam(evidencia, [
+    [{ ticket: 9 }, /FOREIGN KEY/],
+    [{ tipo: "video" }, /CHECK/],
+    [{ produtor: "auditor" }, /CHECK/],
+    [{ aprovada: 2 }, /CHECK/],
+    [{ dados: "{" }, /CHECK/],
+    [{ dados: null }, /NOT NULL/],
+    [{ em: null }, /NOT NULL/],
+  ]);
+  evidencia({ id: 1 });
+  assert.equal(valor(banco, "SELECT dados FROM evidencia"), "{}");
+  // Uma evidência por (ticket, tipo).
+  violam(evidencia, [[{}, /UNIQUE constraint failed: evidencia.ticket, evidencia.tipo/]]);
+  evidencia({ tipo: "execucao_testes", produtor: "fabriquinha", aprovada: 1 });
+
+  const arquivo = inseridor(banco, "evidencia_arquivo", {
+    evidencia: 1,
+    nome: "a.webm",
+    sha256: SHA("a"),
+    mime: "video/webm",
+    bytes: 0,
+  });
+  violam(arquivo, [
+    [{ evidencia: 9 }, /FOREIGN KEY/],
+    [{ nome: "" }, /CHECK/],
+    [{ nome: "a".repeat(201) }, /CHECK/],
+    [{ sha256: "abc" }, /CHECK/],
+    [{ bytes: -1 }, /CHECK/],
+    [{ mime: null }, /NOT NULL/],
+  ]);
+  arquivo();
+  violam(arquivo, [[{}, /UNIQUE constraint failed: evidencia_arquivo.evidencia, evidencia_arquivo.nome/]]);
+  assert.throws(() => {
+    banco.exec("DELETE FROM ticket WHERE id = 1");
+  }, /FOREIGN KEY/);
+  banco.exec("DELETE FROM evidencia WHERE id = 1");
+  assert.equal(valor(banco, "SELECT count(*) FROM evidencia_arquivo"), 0);
+  banco.close();
+});

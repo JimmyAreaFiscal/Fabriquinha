@@ -2,7 +2,19 @@
 // Cada comando é uma função pura `(agregado, entrada, ator, contexto) → agregado`; o F2 carrega, aplica e grava.
 import { z } from "zod";
 import { ErroDeEscopo } from "./erros.ts";
-import { Etapa, Fase, Id, Instante, Markdown, Modelo, Slug, Titulo, type TipoId } from "./primitivos.ts";
+import {
+  Etapa,
+  Fase,
+  Id,
+  Instante,
+  Markdown,
+  Modelo,
+  Motivo,
+  Slug,
+  Titulo,
+  type TipoId,
+  unicoPor,
+} from "./primitivos.ts";
 import type { Projeto } from "./projeto.ts";
 
 /** Quem pede o comando; também é a origem de um ticket (quem o criou). */
@@ -62,19 +74,87 @@ export const Execucao = z.object({
   terminadaEm: Instante.optional(),
 });
 
+export const GateDecisao = z.enum(["registro", "desenho", "revisao", "pr"]);
+
+/** Veredito de um gate. As regras entre `gate`, `aprovado`, `motivo`, `nota` e `por` (F1 §3.7) ficam nos CHECKs do F2. */
+export const Decisao = z.object({
+  id: Id,
+  issue: Id,
+  ticket: Id,
+  gate: GateDecisao,
+  aprovado: z.boolean(),
+  motivo: Motivo.optional(),
+  nota: z.number().int().min(1).max(5).optional(),
+  por: TipoAtor.extract(["auditor", "agente"]),
+  em: Instante,
+});
+
+/** Os 16 tipos do F3 §2. */
+export const TipoEvidencia = z.enum([
+  "comportamento",
+  "criterios_aceite",
+  "desenho_solucao",
+  "prototipo",
+  "relatorio_complexidade",
+  "relatorio_impactos_arquitetura",
+  "execucao_testes",
+  "matriz_fitness",
+  "relatorio_sonar",
+  "arquivos_alterados",
+  "explicacao_fitness",
+  "comprovacao_criterios",
+  "mensagem_pr",
+  "video_explicativo",
+  "relatorio_produtividade",
+  "pr_aberto",
+]);
+
+export const Produtor = TipoAtor.extract(["agente", "fabriquinha"]);
+
+/** Um anexo guardado por conteúdo (F2 §5.1); `nome` é o nome original, que o `dados` referencia. */
+export const ArquivoEvidencia = z.object({
+  nome: z.string().min(1).max(200),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  mime: z.string().min(1),
+  bytes: z.number().int().nonnegative(),
+});
+
+/**
+ * Metadados da evidência (F1 §3.8). `dados` e `arquivos` vêm já validados pelo F3; o domínio só os carrega, para
+ * que C17 grave metadados e conteúdo na mesma transação pelo caminho único do `comIssue`.
+ */
+export const Evidencia = z.object({
+  id: Id,
+  ticket: Id,
+  tipo: TipoEvidencia,
+  produtor: Produtor,
+  aprovada: z.boolean().optional(),
+  dados: z.record(z.string(), z.json()),
+  arquivos: z.array(ArquivoEvidencia).refine(unicoPor("nome"), "nome de anexo repetido"),
+  em: Instante,
+});
+
 export type Ator = z.infer<typeof Ator>;
 export type TipoIssue = z.infer<typeof TipoIssue>;
 export type Issue = z.infer<typeof Issue>;
 export type Ticket = z.infer<typeof Ticket>;
 export type ModoExecucao = z.infer<typeof ModoExecucao>;
 export type Execucao = z.infer<typeof Execucao>;
+export type Decisao = z.infer<typeof Decisao>;
+export type TipoEvidencia = z.infer<typeof TipoEvidencia>;
+export type Produtor = z.infer<typeof Produtor>;
+export type ArquivoEvidencia = z.infer<typeof ArquivoEvidencia>;
+export type Evidencia = z.infer<typeof Evidencia>;
 
-/** A issue com o que pertence a ela. Decisões e evidências entram com os tickets que as criam. */
+/** A issue com o que pertence a ela (F1 §5). */
 export interface Agregado {
   readonly issue: Issue;
   readonly tickets: readonly Ticket[];
   /** As execuções dos tickets desta issue. */
   readonly execucoes: readonly Execucao[];
+  readonly decisoes: readonly Decisao[];
+  /** As evidências dos tickets desta issue. */
+  readonly evidencias: readonly Evidencia[];
 }
 
 /**
@@ -104,7 +184,9 @@ export type NomeComando =
   | "falharTicket"
   | "reabrirTicket"
   | "definirModeloTicket"
-  | "iniciarConsulta";
+  | "iniciarConsulta"
+  | "registrarEvidencia"
+  | "decidirRegistro";
 
 export const rotuloIssue = (ag: Agregado): string => `I-${String(ag.issue.id)}`;
 
@@ -130,6 +212,11 @@ export function exigirAuditorOuAgente(ag: Agregado, ator: Ator, etapas: readonly
   if (!ag.tickets.some((t) => t.id === ator.ticket && etapas.includes(t.etapa))) {
     throw new ErroDeEscopo(`o agente de ${ticket} não pode ${acao}`, `quem pode é ${quem}`);
   }
+  exigirExecucaoEmAndamento(ag, ator, acao);
+}
+
+/** O agente só age enquanto a execução dele está em andamento e não é consulta (F1 §3.2, F4 §6.5). */
+export function exigirExecucaoEmAndamento(ag: Agregado, ator: Ator & { tipo: "agente" }, acao: string): void {
   const execucao = `E-${String(ator.execucao)}`;
   const emAndamento = ag.execucoes.find(
     (e) => e.id === ator.execucao && e.ticket === ator.ticket && e.resultado === "em_andamento",

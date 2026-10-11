@@ -2,8 +2,11 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import {
   type Agregado,
+  type ArquivoEvidencia,
   type Ator,
   type Contexto,
+  Decisao,
+  Evidencia,
   Execucao,
   Issue,
   type NomeComando,
@@ -117,6 +120,37 @@ const deLinhaExecucao = (l: Linha): Execucao =>
     }),
   );
 
+const bit = (b: boolean | undefined) => (b === undefined ? null : Number(b));
+const deBit = (v: unknown) => (v === null ? null : v === 1);
+
+const linhaDecisao = (d: Decisao): Linha => ({
+  id: d.id,
+  issue: d.issue,
+  ticket: d.ticket,
+  gate: d.gate,
+  aprovado: bit(d.aprovado),
+  motivo: d.motivo ?? null,
+  nota: d.nota ?? null,
+  por: d.por,
+  em: d.em,
+});
+
+const deLinhaDecisao = (l: Linha): Decisao => Decisao.parse(semNulos({ ...l, aprovado: deBit(l.aprovado) }));
+
+// Os anexos vão para `evidencia_arquivo`; a linha da evidência leva o resto, com `dados` em JSON.
+const linhaEvidencia = ({ arquivos: _, ...e }: Evidencia): Linha => ({
+  id: e.id,
+  ticket: e.ticket,
+  tipo: e.tipo,
+  produtor: e.produtor,
+  aprovada: bit(e.aprovada),
+  dados: JSON.stringify(e.dados),
+  em: e.em,
+});
+
+const deLinhaEvidencia = (l: Linha, arquivos: ArquivoEvidencia[]): Evidencia =>
+  Evidencia.parse(semNulos({ ...l, aprovada: deBit(l.aprovada), dados: JSON.parse(l.dados as string), arquivos }));
+
 interface Tabela {
   nome: string;
   chave: readonly string[];
@@ -125,7 +159,7 @@ interface Tabela {
 
 /**
  * Tabelas do agregado, dos pais para os filhos: insere e atualiza nessa ordem e apaga na inversa, porque as FKs
- * são RESTRICT. Decisão e evidência entram aqui junto com os seus comandos.
+ * são RESTRICT.
  */
 const TABELAS: readonly Tabela[] = [
   { nome: "issue", chave: ["id"], linhas: (ag) => [linhaIssue(ag.issue)] },
@@ -136,6 +170,13 @@ const TABELAS: readonly Tabela[] = [
   },
   { nome: "ticket", chave: ["id"], linhas: (ag) => ag.tickets.map(linhaTicket) },
   { nome: "execucao", chave: ["id"], linhas: (ag) => ag.execucoes.map(linhaExecucao) },
+  { nome: "decisao", chave: ["id"], linhas: (ag) => ag.decisoes.map(linhaDecisao) },
+  { nome: "evidencia", chave: ["id"], linhas: (ag) => ag.evidencias.map(linhaEvidencia) },
+  {
+    nome: "evidencia_arquivo",
+    chave: ["evidencia", "nome"],
+    linhas: (ag) => ag.evidencias.flatMap((e) => e.arquivos.map((a) => ({ evidencia: e.id, ...a }))),
+  },
 ];
 
 /** Linhas da tabela no agregado, indexadas pelo JSON dos valores da chave primária, na ordem de `chave`. */
@@ -199,7 +240,26 @@ function montar(banco: DatabaseSync, linha: Linha): Agregado {
     .prepare("SELECT e.* FROM execucao e JOIN ticket t ON t.id = e.ticket WHERE t.issue = ? ORDER BY e.id")
     .all(id)
     .map(deLinhaExecucao);
-  return { issue: deLinhaIssue(linha, deps), tickets, execucoes };
+  const decisoes = banco.prepare("SELECT * FROM decisao WHERE issue = ? ORDER BY id").all(id).map(deLinhaDecisao);
+  const arquivos = Map.groupBy(
+    banco
+      .prepare(
+        `SELECT a.* FROM evidencia_arquivo a JOIN evidencia e ON e.id = a.evidencia JOIN ticket t ON t.id = e.ticket
+         WHERE t.issue = ? ORDER BY a.rowid`,
+      )
+      .all(id),
+    (a) => Number(a.evidencia),
+  );
+  const evidencias = banco
+    .prepare("SELECT e.* FROM evidencia e JOIN ticket t ON t.id = e.ticket WHERE t.issue = ? ORDER BY e.id")
+    .all(id)
+    .map((e) =>
+      deLinhaEvidencia(
+        e,
+        (arquivos.get(Number(e.id)) ?? []).map(({ evidencia: _, ...a }) => a as ArquivoEvidencia),
+      ),
+    );
+  return { issue: deLinhaIssue(linha, deps), tickets, execucoes, decisoes, evidencias };
 }
 
 /** Fatos externos do F2 §3.5, consultados na transação do comando. */

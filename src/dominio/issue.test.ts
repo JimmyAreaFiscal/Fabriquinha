@@ -94,6 +94,8 @@ const base = (troca: Partial<Issue> = {}): Agregado => ({
     },
   ],
   execucoes: [{ ...execucao(6, "interativo"), resultado: "sucesso", terminadaEm: AGORA }, execucao(7, "interativo")],
+  decisoes: [],
+  evidencias: [],
 });
 
 const regra = (trabalho: () => unknown, mensagem: string) => {
@@ -128,6 +130,8 @@ test("C1 cria a issue em registro, sem título e tipo, com o ticket de registro 
       },
     ],
     execucoes: [],
+    decisoes: [],
+    evidencias: [],
   });
   assert.deepEqual(registrarIssue({ projeto: "loja" }, auditor, contexto()).issue.deps, []);
 });
