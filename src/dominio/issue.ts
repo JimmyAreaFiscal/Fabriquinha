@@ -1,0 +1,117 @@
+// Comandos da issue: C1 registrar, C2 editar, C3/C4 dependências e C18 arquivar (F1 §5).
+import { z } from "zod";
+import {
+  type Agregado,
+  type Ator,
+  type Contexto,
+  exigirAuditor,
+  exigirAuditorOuAgente,
+  type Issue,
+  rotuloIssue,
+  TipoIssue,
+} from "./agregado.ts";
+import { ErroDeRegra } from "./erros.ts";
+import { Id, Markdown, Slug, Titulo } from "./primitivos.ts";
+
+const EntradaRegistro = z.object({ projeto: Slug, deps: z.array(Id).default([]) });
+const EntradaEdicao = z.object({ titulo: Titulo, tipo: TipoIssue, descricao: Markdown }).partial();
+
+function exigirIssue(ctx: Contexto, id: Id): void {
+  if (!ctx.issueExiste(id)) {
+    throw new ErroDeRegra(`a issue I-${String(id)} não existe`, "confira o número da issue");
+  }
+}
+
+/** C3 e C4 não mudam issue concluída. */
+function exigirNaoConcluida(ag: Agregado): void {
+  if (ag.issue.fase === "concluida") {
+    throw new ErroDeRegra(
+      `a ${rotuloIssue(ag)} está concluída e as dependências dela não mudam mais`,
+      "registre uma nova issue se precisar",
+    );
+  }
+}
+
+/** C1: issue em `registro`, sem título e tipo, com o ticket de registro aberto. */
+export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
+  exigirAuditor(ator, "registrar uma issue");
+  const { projeto, deps } = EntradaRegistro.parse(entrada);
+  if (!ctx.projeto(projeto)) throw new ErroDeRegra(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
+  for (const dep of deps) exigirIssue(ctx, dep);
+  // Uma issue nova ainda não é dependência de ninguém, então as dependências dela não fecham ciclo.
+  const id = ctx.novoId("issue");
+  return {
+    issue: {
+      id,
+      projeto,
+      titulo: null,
+      tipo: null,
+      descricao: "",
+      fase: "registro",
+      deps: [...new Set(deps)],
+      criadaEm: ctx.agora,
+    },
+    tickets: [
+      {
+        id: ctx.novoId("ticket"),
+        issue: id,
+        etapa: "registro",
+        titulo: "Registrar a necessidade",
+        descricao: "",
+        status: "aberto",
+        origem: "fabriquinha",
+        criadoEm: ctx.agora,
+      },
+    ],
+  };
+}
+
+/** C2: muda só os campos informados. Título, tipo e descrição ficam congelados depois do registro. */
+export function editarIssue(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
+  exigirAuditorOuAgente(ag, ator, ctx, ["registro"], `editar a ${rotuloIssue(ag)}`);
+  if (ag.issue.fase !== "registro") {
+    throw new ErroDeRegra(
+      `a ${rotuloIssue(ag)} está na fase ${ag.issue.fase}: título, tipo e descrição só mudam no registro`,
+      "registre uma nova issue para a mudança",
+    );
+  }
+  // Campo ausente ou `undefined` (ex.: opção não passada no CLI) mantém o valor atual.
+  const campos = Object.entries(EntradaEdicao.parse(entrada)).filter((par: [string, unknown]) => par[1] !== undefined);
+  return { ...ag, issue: { ...ag.issue, ...Object.fromEntries(campos) } };
+}
+
+/** C3: idempotente; recusa autorreferência, issue inexistente e ciclo. Vale entre projetos. */
+export function adicionarDependencia(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
+  exigirAuditorOuAgente(ag, ator, ctx, ["registro"], `mudar as dependências da ${rotuloIssue(ag)}`);
+  const dep = Id.parse(entrada);
+  exigirNaoConcluida(ag);
+  const { issue } = ag;
+  if (issue.deps.includes(dep)) return ag;
+  const eu = rotuloIssue(ag);
+  if (dep === issue.id) throw new ErroDeRegra(`a ${eu} não pode depender de si mesma`, "informe outra issue");
+  exigirIssue(ctx, dep);
+  if (ctx.alcancaveis(dep).includes(issue.id)) {
+    throw new ErroDeRegra(
+      `a ${eu} não pode depender da I-${String(dep)}: a I-${String(dep)} já depende da ${eu} e isso fecharia um ciclo`,
+      "remova antes uma das dependências do ciclo",
+    );
+  }
+  return { ...ag, issue: { ...issue, deps: [...issue.deps, dep] } };
+}
+
+/** C4: idempotente. */
+export function removerDependencia(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
+  exigirAuditorOuAgente(ag, ator, ctx, ["registro"], `mudar as dependências da ${rotuloIssue(ag)}`);
+  const dep = Id.parse(entrada);
+  exigirNaoConcluida(ag);
+  const { issue } = ag;
+  return issue.deps.includes(dep) ? { ...ag, issue: { ...issue, deps: issue.deps.filter((d) => d !== dep) } } : ag;
+}
+
+/** C18: devolve só as issues que arquivou, com `arquivadaEm`; as demais não mudam. */
+export function arquivarConcluidas(issues: readonly Issue[], ator: Ator, ctx: Contexto): Issue[] {
+  exigirAuditor(ator, "arquivar issues");
+  return issues
+    .filter((i) => i.fase === "concluida" && i.arquivadaEm === undefined)
+    .map((i) => ({ ...i, arquivadaEm: ctx.agora }));
+}

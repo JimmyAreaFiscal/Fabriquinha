@@ -1,0 +1,243 @@
+// Aplicação dos comandos do F1 sobre o agregado da issue (F2 §3.3, §3.5, §6): carrega, aplica, grava a diferença.
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import { type Agregado, type Ator, type Contexto, Issue, type NomeComando, Ticket } from "../dominio/agregado.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
+import * as dominio from "../dominio/issue.ts";
+import type { Id } from "../dominio/primitivos.ts";
+import { escrever, novoId } from "./banco.ts";
+import { projeto } from "./projetos.ts";
+
+type Linha = Record<string, SQLInputValue>;
+
+/** No banco o ausente é NULL; no domínio, campo opcional sem a chave. */
+const semNulos = (linha: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(linha).filter(([, valor]) => valor !== null));
+
+const linhaIssue = (i: Issue): Linha => ({
+  id: i.id,
+  projeto: i.projeto,
+  titulo: i.titulo,
+  tipo: i.tipo,
+  descricao: i.descricao,
+  fase: i.fase,
+  criada_em: i.criadaEm,
+  concluida_em: i.concluidaEm ?? null,
+  arquivada_em: i.arquivadaEm ?? null,
+});
+
+const deLinhaIssue = (l: Linha, deps: Id[]): Issue =>
+  Issue.parse({
+    ...semNulos({ concluidaEm: l.concluida_em, arquivadaEm: l.arquivada_em }),
+    id: l.id,
+    projeto: l.projeto,
+    titulo: l.titulo,
+    tipo: l.tipo,
+    descricao: l.descricao,
+    fase: l.fase,
+    deps,
+    criadaEm: l.criada_em,
+  });
+
+const linhaTicket = (t: Ticket): Linha => ({
+  id: t.id,
+  issue: t.issue,
+  etapa: t.etapa,
+  titulo: t.titulo,
+  descricao: t.descricao,
+  status: t.status,
+  origem: t.origem,
+  origem_ticket: t.origemTicket ?? null,
+  modelo_provedor: t.modelo?.provedor ?? null,
+  modelo_nome: t.modelo?.modelo ?? null,
+  instrucao: t.instrucao ?? null,
+  erro: t.erro ?? null,
+  criado_em: t.criadoEm,
+  concluido_em: t.concluidoEm ?? null,
+});
+
+const deLinhaTicket = (l: Linha): Ticket =>
+  Ticket.parse(
+    semNulos({
+      id: l.id,
+      issue: l.issue,
+      etapa: l.etapa,
+      titulo: l.titulo,
+      descricao: l.descricao,
+      status: l.status,
+      origem: l.origem,
+      origemTicket: l.origem_ticket,
+      modelo: l.modelo_provedor === null ? null : { provedor: l.modelo_provedor, modelo: l.modelo_nome },
+      instrucao: l.instrucao,
+      erro: l.erro,
+      criadoEm: l.criado_em,
+      concluidoEm: l.concluido_em,
+    }),
+  );
+
+interface Tabela {
+  nome: string;
+  chave: readonly string[];
+  linhas: (ag: Agregado) => Linha[];
+}
+
+/**
+ * Tabelas do agregado, dos pais para os filhos: insere e atualiza nessa ordem e apaga na inversa, porque as FKs
+ * são RESTRICT. Execução, decisão e evidência entram aqui junto com os seus comandos.
+ */
+const TABELAS: readonly Tabela[] = [
+  { nome: "issue", chave: ["id"], linhas: (ag) => [linhaIssue(ag.issue)] },
+  {
+    nome: "issue_dep",
+    chave: ["issue", "dep"],
+    linhas: (ag) => ag.issue.deps.map((dep) => ({ issue: ag.issue.id, dep })),
+  },
+  { nome: "ticket", chave: ["id"], linhas: (ag) => ag.tickets.map(linhaTicket) },
+];
+
+/** Linhas da tabela no agregado, indexadas pelo JSON dos valores da chave primária, na ordem de `chave`. */
+function porChave(tabela: Tabela, ag: Agregado | undefined): Map<string, Linha> {
+  const chaveDe = (linha: Linha) => JSON.stringify(tabela.chave.map((c) => linha[c]));
+  return new Map((ag ? tabela.linhas(ag) : []).map((linha) => [chaveDe(linha), linha]));
+}
+
+/** `a = $a, b = $b` (parâmetros nomeados) ou `a = ? AND b = ?` (posicionais). */
+const atribuicoes = (colunas: readonly string[], separador: string, nomeados = true): string =>
+  colunas.map((c) => c + " = " + (nomeados ? "$" + c : "?")).join(separador);
+
+/**
+ * Grava só a diferença entre `antes` e `depois`: insere o novo, atualiza o que mudou, apaga o que sumiu.
+ * ponytail: comparação linha a linha por igualdade de JSON; o agregado tem dezenas de linhas. Se passar de
+ * milhares, trocar por gravação dirigida por eventos do domínio (F2 §3.3).
+ */
+function gravarDiferenca(banco: DatabaseSync, antes: Agregado | undefined, depois: Agregado): void {
+  const comparacoes = TABELAS.map((tabela) => ({
+    ...tabela,
+    velhas: porChave(tabela, antes),
+    novas: porChave(tabela, depois),
+  }));
+  for (const { nome, chave, velhas, novas } of comparacoes.toReversed()) {
+    const sql = `DELETE FROM ${nome} WHERE ${atribuicoes(chave, " AND ", false)}`;
+    for (const k of velhas.keys()) {
+      if (!novas.has(k)) banco.prepare(sql).run(...(JSON.parse(k) as SQLInputValue[]));
+    }
+  }
+  for (const { nome, chave, velhas, novas } of comparacoes) {
+    for (const [k, linha] of novas) {
+      const velha = velhas.get(k);
+      const colunas = Object.keys(linha);
+      if (!velha) {
+        const valores = colunas.map((c) => "$" + c).join(", ");
+        banco.prepare(`INSERT INTO ${nome} (${colunas.join(", ")}) VALUES (${valores})`).run(linha);
+      } else if (JSON.stringify(velha) !== JSON.stringify(linha)) {
+        const sets = atribuicoes(
+          colunas.filter((c) => !chave.includes(c)),
+          ", ",
+        );
+        banco.prepare(`UPDATE ${nome} SET ${sets} WHERE ${atribuicoes(chave, " AND ")}`).run(linha);
+      }
+    }
+  }
+}
+
+function carregar(banco: DatabaseSync, id: Id): Agregado | undefined {
+  const linha = banco.prepare("SELECT * FROM issue WHERE id = ?").get(id);
+  return linha && montar(banco, linha);
+}
+
+function montar(banco: DatabaseSync, linha: Linha): Agregado {
+  const id = Number(linha.id);
+  const deps = banco
+    .prepare("SELECT dep FROM issue_dep WHERE issue = ? ORDER BY rowid")
+    .all(id)
+    .map((l) => Number(l.dep));
+  const tickets = banco.prepare("SELECT * FROM ticket WHERE issue = ? ORDER BY id").all(id).map(deLinhaTicket);
+  return { issue: deLinhaIssue(linha, deps), tickets };
+}
+
+/** Fatos externos do F2 §3.5, consultados na transação do comando. */
+const contexto = (banco: DatabaseSync): Contexto => ({
+  agora: new Date().toISOString(),
+  novoId: (tipo) => novoId(banco, tipo),
+  projeto: (nome) => projeto(banco, nome),
+  issueExiste: (id) => banco.prepare("SELECT 1 FROM issue WHERE id = ?").get(id) !== undefined,
+  alcancaveis: (id) =>
+    banco
+      .prepare(
+        `WITH RECURSIVE alcancaveis (id) AS (
+           SELECT dep FROM issue_dep WHERE issue = ?
+           UNION SELECT d.dep FROM issue_dep d JOIN alcancaveis a ON d.issue = a.id
+         ) SELECT id FROM alcancaveis`,
+      )
+      .all(id)
+      .map((l) => Number(l.id)),
+  // ponytail: a tabela execucao nasce no ticket 04; até lá não há execução, logo nenhuma em andamento.
+  execucaoEmAndamento: () => false,
+});
+
+/**
+ * Aplica um comando do F1 ao agregado da issue numa transação só e registra o comando em `comando` com a fase de
+ * antes (F6 §5.1). Ex.: `comIssue(banco, 12, "editarIssue", ator, (ag, ctx) => editarIssue(ag, entrada, ator, ctx))`.
+ */
+export function comIssue(
+  banco: DatabaseSync,
+  issue: Id,
+  nome: NomeComando,
+  ator: Ator,
+  comando: (agregado: Agregado, ctx: Contexto) => Agregado,
+): Agregado {
+  return escrever(banco, () => {
+    const antes = carregar(banco, issue);
+    if (!antes) throw new ErroDeRegra(`a issue I-${String(issue)} não existe`, "confira o número da issue");
+    const ctx = contexto(banco);
+    const depois = comando(antes, ctx);
+    gravarDiferenca(banco, antes, depois);
+    banco
+      .prepare("INSERT INTO comando (issue, nome, ator, fase, em) VALUES (?, ?, ?, ?, ?)")
+      .run(issue, nome, ator.tipo, antes.issue.fase, ctx.agora);
+    return depois;
+  });
+}
+
+/** C1: cria a issue e o ticket de registro. */
+export const registrarIssue = (banco: DatabaseSync, entrada: unknown, ator: Ator): Agregado =>
+  escrever(banco, () => {
+    const ag = dominio.registrarIssue(entrada, ator, contexto(banco));
+    gravarDiferenca(banco, undefined, ag);
+    return ag;
+  });
+
+/**
+ * C18: arquiva numa transação só as concluídas do projeto e devolve quantas arquivou.
+ * ponytail: carrega todas as issues do projeto; filtrar no SQL quando o histórico pesar.
+ */
+export const arquivarConcluidas = (banco: DatabaseSync, nomeProjeto: string, ator: Ator): number =>
+  escrever(banco, () => {
+    const ags = banco
+      .prepare("SELECT * FROM issue WHERE projeto = ?")
+      .all(nomeProjeto)
+      .map((linha) => montar(banco, linha));
+    const arquivadas = new Map(
+      dominio
+        .arquivarConcluidas(
+          ags.map((ag) => ag.issue),
+          ator,
+          contexto(banco),
+        )
+        .map((issue) => [issue.id, issue]),
+    );
+    for (const ag of ags) {
+      const issue = arquivadas.get(ag.issue.id);
+      if (issue) gravarDiferenca(banco, ag, { ...ag, issue });
+    }
+    return arquivadas.size;
+  });
+
+/** Agregado da issue, lido num snapshot só (transação de leitura). */
+export function agregado(banco: DatabaseSync, issue: Id): Agregado | undefined {
+  banco.exec("BEGIN");
+  try {
+    return carregar(banco, issue);
+  } finally {
+    banco.exec("COMMIT");
+  }
+}
