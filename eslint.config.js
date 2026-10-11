@@ -20,6 +20,8 @@ export default defineConfig(
       ],
       // Variável de ambiente vazia vale como ausente: `||` em string é intencional.
       "@typescript-eslint/prefer-nullish-coalescing": ["error", { ignorePrimitives: { string: true } }],
+      // `const { campo: _, ...resto } = obj` é o jeito de tirar um campo opcional do objeto.
+      "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }],
     },
   },
 );

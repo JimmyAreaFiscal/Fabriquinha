@@ -1,7 +1,7 @@
 // Migrações do banco (F2 §3.7): lista ordenada; a posição + 1 é a versão gravada em `PRAGMA user_version`.
 // Só se acrescenta ao fim; migração já aplicada não muda.
 import type { z } from "zod";
-import { StatusTicket, TipoAtor, TipoIssue } from "../dominio/agregado.ts";
+import { ModoExecucao, ResultadoExecucao, StatusTicket, TipoAtor, TipoIssue } from "../dominio/agregado.ts";
 import { Etapa, Fase, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
 
@@ -78,4 +78,24 @@ export const MIGRACOES: readonly string[] = [
     fase  TEXT    NOT NULL CHECK (fase IN (${listaSql(Fase)})),
     em    TEXT    NOT NULL
   );`,
+  `CREATE TABLE execucao (
+    id              INTEGER PRIMARY KEY,
+    ticket          INTEGER NOT NULL REFERENCES ticket(id),
+    modo            TEXT NOT NULL CHECK (modo IN (${listaSql(ModoExecucao)})),
+    sessao_pi       TEXT NOT NULL,
+    modelo_provedor TEXT,
+    modelo_nome     TEXT,
+    pgid_pi         INTEGER, -- F4 §7: grupo de processos do pi, para encerrar sobras após reinício
+    resultado       TEXT NOT NULL CHECK (resultado IN (${listaSql(ResultadoExecucao)})),
+    erro            TEXT,
+    iniciada_em     TEXT NOT NULL,
+    terminada_em    TEXT,
+    CHECK ((resultado = 'em_andamento') = (terminada_em IS NULL)),
+    CHECK ((resultado = 'falha') = (erro IS NOT NULL)),
+    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))
+  );
+  -- Uma execução em andamento por ticket.
+  CREATE UNIQUE INDEX ux_execucao_por_ticket ON execucao(ticket) WHERE resultado = 'em_andamento';
+  -- Invariante 3 do F1 (D8): uma execução autônoma em andamento no sistema inteiro.
+  CREATE UNIQUE INDEX ux_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';`,
 ];

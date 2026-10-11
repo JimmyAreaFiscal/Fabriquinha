@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import type { Agregado, Ator, Contexto, Issue } from "./agregado.ts";
+import type { Agregado, Ator, Contexto, Execucao, Issue, ModoExecucao } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { adicionarDependencia, arquivarConcluidas, editarIssue, registrarIssue, removerDependencia } from "./issue.ts";
 
@@ -10,8 +10,8 @@ const auditor: Ator = { tipo: "auditor" };
 const fabriquinha: Ator = { tipo: "fabriquinha" };
 const agente = (ticket: number, execucao = 7): Ator => ({ tipo: "agente", execucao, ticket });
 
-/** Contexto falso: issues 1..10 existem, `grafo` diz de quem cada uma depende, `rodando` são as execuções vivas. */
-function contexto(grafo: Record<number, number[]> = {}, rodando: number[] = [7]): Contexto {
+/** Contexto falso: issues 1..10 existem e `grafo` diz de quem cada uma depende. */
+function contexto(grafo: Record<number, number[]> = {}): Contexto {
   const ids: Record<string, number> = {};
   const alcancaveis = (id: number): number[] => {
     const vistos = new Set<number>();
@@ -41,11 +41,24 @@ function contexto(grafo: Record<number, number[]> = {}, rodando: number[] = [7])
         : undefined,
     issueExiste: (id) => id >= 1 && id <= 10,
     alcancaveis,
-    execucaoEmAndamento: (execucao) => rodando.includes(execucao),
+    depsConcluidas: () => true,
+    execucaoAutonomaEmAndamento: () => false,
   };
 }
 
-/** I-1 em `registro` com o ticket de registro T-34; T-35 é um ticket de desenho de outra etapa. */
+const execucao = (id: number, modo: ModoExecucao, ticket = 34): Execucao => ({
+  id,
+  ticket,
+  modo,
+  sessaoPi: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+  resultado: "em_andamento",
+  iniciadaEm: AGORA,
+});
+
+/**
+ * I-1 em `registro` com o ticket de registro T-34 rodando na E-7, depois da E-6 já terminada; T-35 é um ticket de
+ * desenho de outra etapa.
+ */
 const base = (troca: Partial<Issue> = {}): Agregado => ({
   issue: {
     id: 1,
@@ -80,6 +93,7 @@ const base = (troca: Partial<Issue> = {}): Agregado => ({
       criadoEm: AGORA,
     },
   ],
+  execucoes: [{ ...execucao(6, "interativo"), resultado: "sucesso", terminadaEm: AGORA }, execucao(7, "interativo")],
 });
 
 const regra = (trabalho: () => unknown, mensagem: string) => {
@@ -113,6 +127,7 @@ test("C1 cria a issue em registro, sem título e tipo, com o ticket de registro 
         criadoEm: AGORA,
       },
     ],
+    execucoes: [],
   });
   assert.deepEqual(registrarIssue({ projeto: "loja" }, auditor, contexto()).issue.deps, []);
 });
@@ -138,38 +153,45 @@ test("C1 é só do Auditor, exige projeto e deps existentes e valida a entrada",
 
 test("C2 muda só os campos informados; ausente ou undefined mantém o valor", () => {
   const ag = base({ titulo: "Antigo", descricao: "texto" });
-  const depois = editarIssue(ag, { titulo: "  Novo  ", tipo: "problema", descricao: undefined }, auditor, contexto());
+  const depois = editarIssue(ag, { titulo: "  Novo  ", tipo: "problema", descricao: undefined }, auditor);
   assert.deepEqual(depois, { ...ag, issue: { ...ag.issue, titulo: "Novo", tipo: "problema" } });
-  assert.deepEqual(editarIssue(ag, {}, auditor, contexto()), ag);
-  assert.equal(editarIssue(ag, { descricao: "outra" }, agente(34), contexto()).issue.descricao, "outra");
-  assert.throws(() => editarIssue(ag, { titulo: "a\nb" }, auditor, contexto()), ZodError);
-  assert.throws(() => editarIssue(ag, { tipo: "bug" }, auditor, contexto()), ZodError);
-  assert.throws(() => editarIssue(ag, { descricao: "p ".repeat(1001) }, auditor, contexto()), ZodError);
+  assert.deepEqual(editarIssue(ag, {}, auditor), ag);
+  assert.equal(editarIssue(ag, { descricao: "outra" }, agente(34)).issue.descricao, "outra");
+  assert.throws(() => editarIssue(ag, { titulo: "a\nb" }, auditor), ZodError);
+  assert.throws(() => editarIssue(ag, { tipo: "bug" }, auditor), ZodError);
+  assert.throws(() => editarIssue(ag, { descricao: "p ".repeat(1001) }, auditor), ZodError);
 });
 
 test("C2 só na fase registro", () => {
   const ag = base({ fase: "desenho", titulo: "T", tipo: "problema" });
   regra(
-    () => editarIssue(ag, { titulo: "Outro" }, auditor, contexto()),
+    () => editarIssue(ag, { titulo: "Outro" }, auditor),
     "a I-1 está na fase desenho: título, tipo e descrição só mudam no registro (registre uma nova issue para a mudança)",
   );
 });
 
-test("C2, C3 e C4: agente só pelo ticket de registro da issue e com a execução em andamento", () => {
-  const casos: [(ag: Agregado, ator: Ator, ctx: Contexto) => unknown, string][] = [
-    [(ag, ator, ctx) => editarIssue(ag, { titulo: "T" }, ator, ctx), "editar a I-1"],
-    [(ag, ator, ctx) => adicionarDependencia(ag, 2, ator, ctx), "mudar as dependências da I-1"],
-    [(ag, ator, ctx) => removerDependencia(ag, 2, ator, ctx), "mudar as dependências da I-1"],
+test("C2, C3 e C4: agente só pelo ticket de registro da issue e com a execução dele em andamento", () => {
+  const casos: [(ag: Agregado, ator: Ator) => unknown, string][] = [
+    [(ag, ator) => editarIssue(ag, { titulo: "T" }, ator), "editar a I-1"],
+    [(ag, ator) => adicionarDependencia(ag, 2, ator, contexto()), "mudar as dependências da I-1"],
+    [(ag, ator) => removerDependencia(ag, 2, ator), "mudar as dependências da I-1"],
   ];
   const quem = "quem pode é o Auditor ou o agente de registro da I-1";
+  // E-9 roda o T-35, não o T-34; E-7 numa consulta não altera nada (F4 §6.5).
+  const outroTicket = { ...base(), execucoes: [...base().execucoes, execucao(9, "autonomo", 35)] };
+  const consulta = { ...base(), execucoes: [execucao(7, "consulta")] };
+  const terminou = (id: number) => `a execução E-${String(id)} já terminou (peça ao Auditor uma nova execução)`;
   for (const [comando, acao] of casos) {
-    assert.ok(comando(base(), agente(34), contexto()));
-    escopo(() => comando(base(), fabriquinha, contexto()), `a Fabriquinha não pode ${acao} (${quem})`);
-    escopo(() => comando(base(), agente(35), contexto()), `o agente de T-35 não pode ${acao} (${quem})`);
-    escopo(() => comando(base(), agente(99), contexto()), `o agente de T-99 não pode ${acao} (${quem})`);
+    assert.ok(comando(base(), agente(34)));
+    escopo(() => comando(base(), fabriquinha), `a Fabriquinha não pode ${acao} (${quem})`);
+    escopo(() => comando(base(), agente(35)), `o agente de T-35 não pode ${acao} (${quem})`);
+    escopo(() => comando(base(), agente(99)), `o agente de T-99 não pode ${acao} (${quem})`);
+    escopo(() => comando(base(), agente(34, 8)), terminou(8));
+    escopo(() => comando(base(), agente(34, 6)), terminou(6));
+    escopo(() => comando(outroTicket, agente(34, 9)), terminou(9));
     escopo(
-      () => comando(base(), agente(34, 8), contexto()),
-      "a execução E-8 já terminou (peça ao Auditor uma nova execução)",
+      () => comando(consulta, agente(34)),
+      `a execução E-7 é uma consulta, que só pergunta e não pode ${acao} (peça ao Auditor que faça a mudança)`,
     );
   }
 });
@@ -203,14 +225,14 @@ test("C3 recusa autorreferência, issue inexistente, ciclo e issue concluída", 
   const concluida = base({ fase: "concluida", titulo: "T", tipo: "problema", concluidaEm: AGORA });
   const mensagem = "a I-1 está concluída e as dependências dela não mudam mais (registre uma nova issue se precisar)";
   regra(() => adicionarDependencia(concluida, 2, auditor, contexto()), mensagem);
-  regra(() => removerDependencia(concluida, 2, auditor, contexto()), mensagem);
+  regra(() => removerDependencia(concluida, 2, auditor), mensagem);
 });
 
 test("C4 remove e é idempotente", () => {
   const ag = base({ deps: [2, 3] });
-  const depois = removerDependencia(ag, 2, auditor, contexto());
+  const depois = removerDependencia(ag, 2, auditor);
   assert.deepEqual(depois.issue.deps, [3]);
-  assert.equal(removerDependencia(depois, 2, auditor, contexto()), depois);
+  assert.equal(removerDependencia(depois, 2, auditor), depois);
 });
 
 test("C18 arquiva só as concluídas ainda não arquivadas e é só do Auditor", () => {

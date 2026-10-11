@@ -63,12 +63,13 @@ export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agr
         criadoEm: ctx.agora,
       },
     ],
+    execucoes: [],
   };
 }
 
 /** C2: muda só os campos informados. Título, tipo e descrição ficam congelados depois do registro. */
-export function editarIssue(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
-  exigirAuditorOuAgente(ag, ator, ctx, ["registro"], `editar a ${rotuloIssue(ag)}`);
+export function editarIssue(ag: Agregado, entrada: unknown, ator: Ator): Agregado {
+  exigirAuditorOuAgente(ag, ator, ["registro"], `editar a ${rotuloIssue(ag)}`);
   if (ag.issue.fase !== "registro") {
     throw new ErroDeRegra(
       `a ${rotuloIssue(ag)} está na fase ${ag.issue.fase}: título, tipo e descrição só mudam no registro`,
@@ -82,7 +83,7 @@ export function editarIssue(ag: Agregado, entrada: unknown, ator: Ator, ctx: Con
 
 /** C3: idempotente; recusa autorreferência, issue inexistente e ciclo. Vale entre projetos. */
 export function adicionarDependencia(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
-  exigirAuditorOuAgente(ag, ator, ctx, ["registro"], `mudar as dependências da ${rotuloIssue(ag)}`);
+  exigirAuditorOuAgente(ag, ator, ["registro"], `mudar as dependências da ${rotuloIssue(ag)}`);
   const dep = Id.parse(entrada);
   exigirNaoConcluida(ag);
   const { issue } = ag;
@@ -100,8 +101,8 @@ export function adicionarDependencia(ag: Agregado, entrada: unknown, ator: Ator,
 }
 
 /** C4: idempotente. */
-export function removerDependencia(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
-  exigirAuditorOuAgente(ag, ator, ctx, ["registro"], `mudar as dependências da ${rotuloIssue(ag)}`);
+export function removerDependencia(ag: Agregado, entrada: unknown, ator: Ator): Agregado {
+  exigirAuditorOuAgente(ag, ator, ["registro"], `mudar as dependências da ${rotuloIssue(ag)}`);
   const dep = Id.parse(entrada);
   exigirNaoConcluida(ag);
   const { issue } = ag;

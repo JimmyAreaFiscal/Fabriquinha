@@ -4,10 +4,11 @@
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Tabela `execucao` com CHECKs e índices únicos do F2 (uma em andamento por ticket; uma autônoma em andamento no sistema).
-- [ ] C5 com todas as pré-condições (fase × etapa, modo × etapa, deps concluídas, D8, interativo aceita `em_execucao`) e consumo de `ticket.instrucao`.
-- [ ] C6, C8 (remove tickets de desenvolvimento abertos criados pelo ticket e a decisão de revisão dele), C9, C20, C21.
-- [ ] Função pura que resolve o modelo da execução na ordem do F1 §3.10.
-- [ ] Teste de concorrência: dois processos tentam iniciar execução autônoma ao mesmo tempo; um consegue e o outro recebe `ErroDeRegra`.
+- [x] Tabela `execucao` com CHECKs e índices únicos do F2 (uma em andamento por ticket; uma autônoma em andamento no sistema).
+- [x] C5 com todas as pré-condições (fase × etapa, modo × etapa, deps concluídas, D8, interativo aceita `em_execucao`) e consumo de `ticket.instrucao`.
+- [x] C6, C8 (remove tickets de desenvolvimento abertos criados pelo ticket e a decisão de revisão dele), C9, C20, C21.
+  A remoção da decisão de revisão pelo C8 ficou para o ticket 16, quando a decisão de revisão (C14) entrar no agregado.
+- [x] Função pura que resolve o modelo da execução na ordem do F1 §3.10.
+- [x] Teste de concorrência: dois processos tentam iniciar execução autônoma ao mesmo tempo; um consegue e o outro recebe `ErroDeRegra`.

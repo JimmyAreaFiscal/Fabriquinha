@@ -5,8 +5,18 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { ZodError } from "zod";
-import type { Ator, Ticket } from "../dominio/agregado.ts";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import type { Agregado, Ator, Ticket } from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
+import {
+  definirModeloTicket,
+  falharTicket,
+  iniciarConsulta,
+  iniciarExecucao,
+  reabrirTicket,
+  terminarExecucao,
+} from "../dominio/execucao.ts";
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { abrir } from "./banco.ts";
 import { agregado, arquivarConcluidas, comIssue, registrarIssue } from "./issues.ts";
@@ -18,11 +28,14 @@ after(() => {
 });
 
 const auditor: Ator = { tipo: "auditor" };
+const fabriquinha: Ator = { tipo: "fabriquinha" };
+const SESSAO = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
+const COPIA = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
 const INSTANTE = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/;
 
 /** Banco novo com os projetos `loja` e `outro`. */
-function novoBanco(): DatabaseSync {
-  const banco = abrir(mkdtempSync(join(base, "raiz-")));
+function novoBanco(raiz = mkdtempSync(join(base, "raiz-"))): DatabaseSync {
+  const banco = abrir(raiz);
   for (const nome of ["loja", "outro"]) {
     registrarProjeto(banco, {
       nome,
@@ -85,13 +98,13 @@ test("comIssue aplica C2, C3 e C4 e registra cada comando com o ator e a fase de
     registrarIssue(banco, { projeto: "outro" }, auditor),
   ];
   const id = a.issue.id;
-  comIssue(banco, id, "editarIssue", auditor, (ag, ctx) =>
-    editarIssue(ag, { titulo: "Login lento", tipo: "problema" }, auditor, ctx),
+  comIssue(banco, id, "editarIssue", auditor, (ag) =>
+    editarIssue(ag, { titulo: "Login lento", tipo: "problema" }, auditor),
   );
   comIssue(banco, id, "adicionarDependencia", auditor, (ag, ctx) => adicionarDependencia(ag, b.issue.id, auditor, ctx));
   comIssue(banco, id, "adicionarDependencia", auditor, (ag, ctx) => adicionarDependencia(ag, b.issue.id, auditor, ctx));
-  const depois = comIssue(banco, id, "removerDependencia", auditor, (ag, ctx) =>
-    removerDependencia(ag, b.issue.id, auditor, ctx),
+  const depois = comIssue(banco, id, "removerDependencia", auditor, (ag) =>
+    removerDependencia(ag, b.issue.id, auditor),
   );
 
   assert.deepEqual(depois, { ...a, issue: { ...a.issue, titulo: "Login lento", tipo: "problema" } });
@@ -164,7 +177,7 @@ test("comIssue recusa issue inexistente e desfaz tudo quando o comando falha", (
     () =>
       comIssue(banco, 1, "editarIssue", auditor, (atual, ctx) => {
         ctx.novoId("ticket");
-        return editarIssue(atual, { tipo: "bug" }, auditor, ctx);
+        return editarIssue(atual, { tipo: "bug" }, auditor);
       }),
     ZodError,
   );
@@ -174,14 +187,28 @@ test("comIssue recusa issue inexistente e desfaz tudo quando o comando falha", (
   banco.close();
 });
 
-test("comIssue: agente sem execução em andamento recebe ErroDeEscopo", () => {
+test("comIssue: o agente age só enquanto a execução dele, lida do agregado, está em andamento", () => {
   const banco = novoBanco();
   const { issue, tickets } = registrarIssue(banco, { projeto: "loja" }, auditor);
-  const agente: Ator = { tipo: "agente", execucao: 7, ticket: tickets[0]?.id ?? 0 };
-  assert.throws(
-    () => comIssue(banco, issue.id, "editarIssue", agente, (ag, ctx) => editarIssue(ag, { titulo: "T" }, agente, ctx)),
-    (e) => e instanceof ErroDeEscopo && e.message === "a execução E-7 já terminou (peça ao Auditor uma nova execução)",
+  const ticket = tickets[0]?.id ?? 0;
+  const { execucoes } = comIssue(banco, issue.id, "iniciarExecucao", fabriquinha, (ag, ctx) =>
+    iniciarExecucao(ag, { ticket, modo: "interativo", sessaoPi: SESSAO }, fabriquinha, ctx),
   );
+  const execucao = execucoes[0]?.id ?? 0;
+  const editar = (agente: Ator) =>
+    comIssue(banco, issue.id, "editarIssue", agente, (ag) => editarIssue(ag, { titulo: "T" }, agente));
+  assert.equal(editar({ tipo: "agente", execucao, ticket }).issue.titulo, "T");
+  comIssue(banco, issue.id, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
+  );
+  for (const id of [execucao, 7]) {
+    assert.throws(
+      () => editar({ tipo: "agente", execucao: id, ticket }),
+      (e) =>
+        e instanceof ErroDeEscopo &&
+        e.message === `a execução E-${String(id)} já terminou (peça ao Auditor uma nova execução)`,
+    );
+  }
   banco.close();
 });
 
@@ -226,6 +253,7 @@ test("comIssue grava só a diferença: insere, atualiza e apaga linha a linha", 
     CREATE TEMP TRIGGER t6 AFTER DELETE ON issue_dep BEGIN INSERT INTO escrita VALUES ('delete', 'issue_dep'); END;
   `);
   const depois = comIssue(banco, issue.id, "editarIssue", auditor, (ag) => ({
+    ...ag,
     issue: { ...ag.issue, descricao: "nova", deps: [] },
     tickets: ag.tickets
       .filter((t) => t.id !== 13)
@@ -413,3 +441,272 @@ test("as constraints da tabela comando valem no banco", () => {
   assert.equal(valor(banco, "SELECT count(*) FROM comando"), 1);
   banco.close();
 });
+
+/** Leva uma issue nova do `projeto` à fase `desenho`, com o ticket de desenho aberto; devolve a issue e o ticket. */
+function emDesenho(banco: DatabaseSync, projeto = "loja", deps: number[] = []): { issue: number; ticket: number } {
+  const { issue } = registrarIssue(banco, { projeto, deps }, auditor);
+  const ag = comIssue(banco, issue.id, "editarIssue", auditor, (atual, ctx) => ({
+    ...atual,
+    issue: { ...atual.issue, titulo: "T", tipo: "problema", fase: "desenho" },
+    tickets: [
+      ...atual.tickets.map((t) => ({ ...t, status: "concluido" as const, concluidoEm: ctx.agora })),
+      { ...ticketBase(issue.id), id: ctx.novoId("ticket"), etapa: "desenho", criadoEm: ctx.agora },
+    ],
+  }));
+  return { issue: issue.id, ticket: ag.tickets[1]?.id ?? 0 };
+}
+
+const ticketBase = (issue: number): Ticket => ({
+  id: 0,
+  issue,
+  etapa: "desenvolvimento",
+  titulo: "Ticket",
+  descricao: "",
+  status: "aberto",
+  origem: "fabriquinha",
+  criadoEm: "x",
+});
+
+const iniciar = (banco: DatabaseSync, issue: number, ticket: number, modo = "autonomo") =>
+  comIssue(banco, issue, "iniciarExecucao", fabriquinha, (ag, ctx) =>
+    iniciarExecucao(ag, { ticket, modo, sessaoPi: SESSAO }, fabriquinha, ctx),
+  );
+
+const terminar = (banco: DatabaseSync, issue: number, execucao: number) =>
+  comIssue(banco, issue, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao, resultado: "falha", erro: "pi saiu com 1" }, fabriquinha, ctx),
+  );
+
+test("ciclo de um ticket autônomo pelo comIssue: C5, C6, C8, C9, C20, C5 de novo e C21", () => {
+  const banco = novoBanco();
+  banco.exec(`UPDATE projeto SET modelos = '{"desenho":{"provedor":"llamacpp","modelo":"qwen"}}' WHERE nome = 'loja'`);
+  const { issue, ticket } = emDesenho(banco);
+  const execucao = iniciar(banco, issue, ticket).execucoes[0]?.id ?? 0;
+  // O agente do desenho propõe um ticket de desenvolvimento, que some quando o desenho falha (C8).
+  comIssue(banco, issue, "editarIssue", auditor, (ag, ctx) => ({
+    ...ag,
+    tickets: [
+      ...ag.tickets,
+      { ...ticketBase(issue), id: ctx.novoId("ticket"), origem: "agente", origemTicket: ticket, criadoEm: ctx.agora },
+    ],
+  }));
+  terminar(banco, issue, execucao);
+  comIssue(banco, issue, "falharTicket", fabriquinha, (ag) =>
+    falharTicket(ag, { ticket, erro: "faltou o relatório de complexidade" }, fabriquinha),
+  );
+  comIssue(banco, issue, "reabrirTicket", auditor, (ag) =>
+    reabrirTicket(ag, { ticket, instrucao: "escreva o relatório" }, auditor),
+  );
+  comIssue(banco, issue, "definirModeloTicket", auditor, (ag) =>
+    definirModeloTicket(ag, { ticket, modelo: { provedor: "openai", modelo: "gpt-5" } }, auditor),
+  );
+  const reaberto = agregado(banco, issue);
+  assert.deepEqual(
+    reaberto?.tickets.map((t) => [t.id, t.status, t.erro, t.instrucao, t.modelo?.modelo]),
+    [
+      [1, "concluido", undefined, undefined, undefined],
+      [ticket, "aberto", undefined, "escreva o relatório", "gpt-5"],
+    ],
+  );
+
+  const segunda = iniciar(banco, issue, ticket);
+  assert.deepEqual(agregado(banco, issue), segunda);
+  assert.equal(segunda.tickets[1]?.instrucao, undefined);
+  comIssue(banco, issue, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao: segunda.execucoes[1]?.id, resultado: "sucesso" }, fabriquinha, ctx),
+  );
+  const final = comIssue(banco, issue, "iniciarConsulta", auditor, (ag, ctx) =>
+    iniciarConsulta(ag, { ticket, sessaoPi: COPIA }, auditor, ctx),
+  );
+  assert.deepEqual(agregado(banco, issue), final);
+  assert.deepEqual(
+    final.execucoes.map((e) => [e.id, e.modo, e.sessaoPi, e.modelo?.modelo, e.resultado, e.erro]),
+    [
+      [1, "autonomo", SESSAO, "qwen", "falha", "pi saiu com 1"],
+      [2, "autonomo", SESSAO, "gpt-5", "sucesso", undefined],
+      [3, "consulta", COPIA, "gpt-5", "em_andamento", undefined],
+    ],
+  );
+  assert.ok(final.execucoes.every((e) => INSTANTE.test(e.iniciadaEm)));
+  assert.deepEqual(
+    todas(banco, "SELECT nome, ator FROM comando WHERE nome <> 'editarIssue' ORDER BY id").map(
+      (c) => `${String(c.nome)} ${String(c.ator)}`,
+    ),
+    [
+      "iniciarExecucao fabriquinha",
+      "terminarExecucao fabriquinha",
+      "falharTicket fabriquinha",
+      "reabrirTicket auditor",
+      "definirModeloTicket auditor",
+      "iniciarExecucao fabriquinha",
+      "terminarExecucao fabriquinha",
+      "iniciarConsulta auditor",
+    ],
+  );
+  banco.close();
+});
+
+test("C5 lê do banco as dependências concluídas e a execução autônoma de outra issue (D8)", () => {
+  const banco = novoBanco();
+  const dep = emDesenho(banco, "outro");
+  const { issue, ticket } = emDesenho(banco, "loja", [dep.issue]);
+  regra(
+    () => iniciar(banco, issue, ticket),
+    "a I-2 depende de issues ainda não concluídas (conclua as dependências antes)",
+  );
+  banco.exec(`UPDATE issue SET fase = 'concluida', concluida_em = 'x' WHERE id = ${String(dep.issue)}`);
+  const outra = emDesenho(banco, "outro");
+  iniciar(banco, outra.issue, outra.ticket);
+  regra(() => iniciar(banco, issue, ticket), "já há uma execução autônoma em andamento (D8) (espere ela terminar)");
+  terminar(banco, outra.issue, 1);
+  assert.equal(iniciar(banco, issue, ticket).execucoes[0]?.modo, "autonomo");
+  banco.close();
+});
+
+test("o diff apaga a execução antes do ticket (FK RESTRICT) e não toca em pgid_pi", () => {
+  const banco = novoBanco();
+  const { issue, ticket } = emDesenho(banco);
+  iniciar(banco, issue, ticket);
+  banco.exec("UPDATE execucao SET pgid_pi = 4242");
+  terminar(banco, issue, 1);
+  assert.equal(valor(banco, "SELECT pgid_pi FROM execucao"), 4242);
+
+  const semTicket = (ag: Agregado): Agregado => ({
+    ...ag,
+    tickets: ag.tickets.filter((t) => t.id !== ticket),
+    execucoes: [],
+  });
+  comIssue(banco, issue, "editarIssue", auditor, semTicket);
+  assert.deepEqual(
+    agregado(banco, issue)?.tickets.map((t) => t.id),
+    [1],
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM execucao"), 0);
+  banco.close();
+});
+
+test("as constraints da tabela execucao valem no banco", () => {
+  const banco = novoBanco();
+  const a = emDesenho(banco);
+  const b = emDesenho(banco);
+  const execucao = inseridor(banco, "execucao", {
+    ticket: a.ticket,
+    modo: "autonomo",
+    sessao_pi: SESSAO,
+    resultado: "sucesso",
+    iniciada_em: "x",
+    terminada_em: "x",
+  });
+  violam(execucao, [
+    [{ ticket: 99 }, /FOREIGN KEY/],
+    [{ modo: "paralelo" }, /CHECK/],
+    [{ resultado: "cancelada" }, /CHECK/],
+    [{ sessao_pi: null }, /NOT NULL/],
+    [{ iniciada_em: null }, /NOT NULL/],
+    [{ terminada_em: null }, /CHECK/],
+    [{ resultado: "em_andamento" }, /CHECK/],
+    [{ resultado: "falha" }, /CHECK/],
+    [{ erro: "e" }, /CHECK/],
+    [{ modelo_provedor: "openai" }, /CHECK/],
+    [{ modelo_nome: "gpt" }, /CHECK/],
+  ]);
+  execucao({ resultado: "falha", erro: "e", modelo_provedor: "openai", modelo_nome: "gpt", pgid_pi: 10 });
+  const rodando = { resultado: "em_andamento", terminada_em: null };
+  execucao({ ...rodando, modo: "interativo" });
+  // Uma execução em andamento por ticket, de qualquer modo.
+  violam(execucao, [[{ ...rodando, modo: "consulta" }, /UNIQUE constraint failed: execucao.ticket/]]);
+  execucao({ ...rodando, ticket: b.ticket });
+  // Invariante 3 (D8): uma autônoma em andamento no sistema, mesmo em outra issue.
+  const c = emDesenho(banco, "outro");
+  violam(execucao, [[{ ...rodando, ticket: c.ticket }, /UNIQUE constraint failed: execucao.modo/]]);
+  execucao({ ...rodando, ticket: c.ticket, modo: "consulta" });
+  assert.throws(() => {
+    banco.exec(`DELETE FROM ticket WHERE id = ${String(a.ticket)}`);
+  }, /FOREIGN KEY/);
+  banco.close();
+});
+
+/** Processo filho que abre o banco, avisa `pronto`, espera uma linha no stdin e tenta iniciar a execução autônoma. */
+const CORREDOR = `
+  const { env } = process;
+  const { abrir } = await import(env.BANCO);
+  const { comIssue } = await import(env.ISSUES);
+  const { iniciarExecucao } = await import(env.EXECUCAO);
+  const banco = abrir(env.RAIZ);
+  const ator = { tipo: "fabriquinha" };
+  const entrada = { ticket: Number(env.TICKET), modo: "autonomo", sessaoPi: env.SESSAO };
+  process.stdout.write("pronto\\n");
+  await new Promise((largada) => process.stdin.once("data", largada));
+  try {
+    comIssue(banco, Number(env.ISSUE), "iniciarExecucao", ator, (ag, ctx) => iniciarExecucao(ag, entrada, ator, ctx));
+    process.stdout.write("ok\\n");
+  } catch (erro) {
+    process.stdout.write(erro.name + ": " + erro.message + "\\n");
+  }
+  banco.close();
+  process.exit(0);
+`;
+
+test(
+  "D8 sob corrida: dois processos iniciam execução autônoma juntos; um consegue, o outro recebe ErroDeRegra",
+  { timeout: 30_000 },
+  async () => {
+    const raiz = mkdtempSync(join(base, "corrida-"));
+    const preparado = novoBanco(raiz);
+    const alvos = [emDesenho(preparado, "loja"), emDesenho(preparado, "outro")];
+    preparado.close();
+
+    const corredores = alvos.map(({ issue, ticket }) => {
+      const filho = spawn(
+        process.execPath,
+        ["--disable-warning=ExperimentalWarning", "--input-type=module", "-e", CORREDOR],
+        {
+          env: {
+            ...process.env,
+            BANCO: new URL("banco.ts", import.meta.url).href,
+            ISSUES: new URL("issues.ts", import.meta.url).href,
+            EXECUCAO: new URL("../dominio/execucao.ts", import.meta.url).href,
+            RAIZ: raiz,
+            ISSUE: String(issue),
+            TICKET: String(ticket),
+            SESSAO,
+          },
+          stdio: ["pipe", "pipe", "inherit"],
+        },
+      );
+      let saida = "";
+      filho.stdout.setEncoding("utf8");
+      const fim = once(filho, "close").then(() => saida.replace("pronto\n", "").trim());
+      // O filho que morre antes de ficar pronto falha o teste em vez de deixá-lo esperando para sempre.
+      const pronto = Promise.race([
+        new Promise<void>((resolve) => {
+          filho.stdout.on("data", (parte: string) => {
+            saida += parte;
+            if (saida.includes("pronto\n")) resolve();
+          });
+        }),
+        fim.then((resto) => {
+          throw new Error(`o processo filho saiu antes de ficar pronto: ${resto}`);
+        }),
+      ]);
+      return { filho, pronto, fim };
+    });
+    await Promise.all(corredores.map((c) => c.pronto));
+    for (const { filho } of corredores) filho.stdin.end("vai\n");
+    const resultados = await Promise.all(corredores.map((c) => c.fim));
+
+    assert.deepEqual(resultados.toSorted(), [
+      "ErroDeRegra: já há uma execução autônoma em andamento (D8) (espere ela terminar)",
+      "ok",
+    ]);
+    const lido = abrir(raiz);
+    assert.deepEqual(
+      lido
+        .prepare("SELECT modo, resultado FROM execucao")
+        .all()
+        .map((e) => Object.values(e)),
+      [["autonomo", "em_andamento"]],
+    );
+    lido.close();
+  },
+);

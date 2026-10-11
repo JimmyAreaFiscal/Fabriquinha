@@ -1,9 +1,17 @@
 // Aplicação dos comandos do F1 sobre o agregado da issue (F2 §3.3, §3.5, §6): carrega, aplica, grava a diferença.
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
-import { type Agregado, type Ator, type Contexto, Issue, type NomeComando, Ticket } from "../dominio/agregado.ts";
+import {
+  type Agregado,
+  type Ator,
+  type Contexto,
+  Execucao,
+  Issue,
+  type NomeComando,
+  Ticket,
+} from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import * as dominio from "../dominio/issue.ts";
-import type { Id } from "../dominio/primitivos.ts";
+import type { Id, Modelo } from "../dominio/primitivos.ts";
 import { escrever, novoId } from "./banco.ts";
 import { projeto } from "./projetos.ts";
 
@@ -12,6 +20,14 @@ type Linha = Record<string, SQLInputValue>;
 /** No banco o ausente é NULL; no domínio, campo opcional sem a chave. */
 const semNulos = (linha: Record<string, unknown>) =>
   Object.fromEntries(Object.entries(linha).filter(([, valor]) => valor !== null));
+
+const colunasModelo = (m: Modelo | undefined): Linha => ({
+  modelo_provedor: m?.provedor ?? null,
+  modelo_nome: m?.modelo ?? null,
+});
+
+const deColunasModelo = (l: Linha) =>
+  l.modelo_provedor === null ? null : { provedor: l.modelo_provedor, modelo: l.modelo_nome };
 
 const linhaIssue = (i: Issue): Linha => ({
   id: i.id,
@@ -47,8 +63,7 @@ const linhaTicket = (t: Ticket): Linha => ({
   status: t.status,
   origem: t.origem,
   origem_ticket: t.origemTicket ?? null,
-  modelo_provedor: t.modelo?.provedor ?? null,
-  modelo_nome: t.modelo?.modelo ?? null,
+  ...colunasModelo(t.modelo),
   instrucao: t.instrucao ?? null,
   erro: t.erro ?? null,
   criado_em: t.criadoEm,
@@ -66,11 +81,39 @@ const deLinhaTicket = (l: Linha): Ticket =>
       status: l.status,
       origem: l.origem,
       origemTicket: l.origem_ticket,
-      modelo: l.modelo_provedor === null ? null : { provedor: l.modelo_provedor, modelo: l.modelo_nome },
+      modelo: deColunasModelo(l),
       instrucao: l.instrucao,
       erro: l.erro,
       criadoEm: l.criado_em,
       concluidoEm: l.concluido_em,
+    }),
+  );
+
+// `pgid_pi` não é do domínio: o F4 o grava à parte, e o diff não o toca.
+const linhaExecucao = (e: Execucao): Linha => ({
+  id: e.id,
+  ticket: e.ticket,
+  modo: e.modo,
+  sessao_pi: e.sessaoPi,
+  ...colunasModelo(e.modelo),
+  resultado: e.resultado,
+  erro: e.erro ?? null,
+  iniciada_em: e.iniciadaEm,
+  terminada_em: e.terminadaEm ?? null,
+});
+
+const deLinhaExecucao = (l: Linha): Execucao =>
+  Execucao.parse(
+    semNulos({
+      id: l.id,
+      ticket: l.ticket,
+      modo: l.modo,
+      sessaoPi: l.sessao_pi,
+      modelo: deColunasModelo(l),
+      resultado: l.resultado,
+      erro: l.erro,
+      iniciadaEm: l.iniciada_em,
+      terminadaEm: l.terminada_em,
     }),
   );
 
@@ -82,7 +125,7 @@ interface Tabela {
 
 /**
  * Tabelas do agregado, dos pais para os filhos: insere e atualiza nessa ordem e apaga na inversa, porque as FKs
- * são RESTRICT. Execução, decisão e evidência entram aqui junto com os seus comandos.
+ * são RESTRICT. Decisão e evidência entram aqui junto com os seus comandos.
  */
 const TABELAS: readonly Tabela[] = [
   { nome: "issue", chave: ["id"], linhas: (ag) => [linhaIssue(ag.issue)] },
@@ -92,6 +135,7 @@ const TABELAS: readonly Tabela[] = [
     linhas: (ag) => ag.issue.deps.map((dep) => ({ issue: ag.issue.id, dep })),
   },
   { nome: "ticket", chave: ["id"], linhas: (ag) => ag.tickets.map(linhaTicket) },
+  { nome: "execucao", chave: ["id"], linhas: (ag) => ag.execucoes.map(linhaExecucao) },
 ];
 
 /** Linhas da tabela no agregado, indexadas pelo JSON dos valores da chave primária, na ordem de `chave`. */
@@ -151,7 +195,11 @@ function montar(banco: DatabaseSync, linha: Linha): Agregado {
     .all(id)
     .map((l) => Number(l.dep));
   const tickets = banco.prepare("SELECT * FROM ticket WHERE issue = ? ORDER BY id").all(id).map(deLinhaTicket);
-  return { issue: deLinhaIssue(linha, deps), tickets };
+  const execucoes = banco
+    .prepare("SELECT e.* FROM execucao e JOIN ticket t ON t.id = e.ticket WHERE t.issue = ? ORDER BY e.id")
+    .all(id)
+    .map(deLinhaExecucao);
+  return { issue: deLinhaIssue(linha, deps), tickets, execucoes };
 }
 
 /** Fatos externos do F2 §3.5, consultados na transação do comando. */
@@ -170,13 +218,19 @@ const contexto = (banco: DatabaseSync): Contexto => ({
       )
       .all(id)
       .map((l) => Number(l.id)),
-  // ponytail: a tabela execucao nasce no ticket 04; até lá não há execução, logo nenhuma em andamento.
-  execucaoEmAndamento: () => false,
+  depsConcluidas: (id) =>
+    banco
+      .prepare(
+        `SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep WHERE d.issue = ? AND x.fase <> 'concluida' LIMIT 1`,
+      )
+      .get(id) === undefined,
+  execucaoAutonomaEmAndamento: () =>
+    banco.prepare("SELECT 1 FROM execucao WHERE modo = 'autonomo' AND resultado = 'em_andamento'").get() !== undefined,
 });
 
 /**
  * Aplica um comando do F1 ao agregado da issue numa transação só e registra o comando em `comando` com a fase de
- * antes (F6 §5.1). Ex.: `comIssue(banco, 12, "editarIssue", ator, (ag, ctx) => editarIssue(ag, entrada, ator, ctx))`.
+ * antes (F6 §5.1). Ex.: `comIssue(banco, 12, "editarIssue", ator, (ag) => editarIssue(ag, entrada, ator))`.
  */
 export function comIssue(
   banco: DatabaseSync,
