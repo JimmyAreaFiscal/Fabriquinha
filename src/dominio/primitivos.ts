@@ -3,6 +3,12 @@ import { z } from "zod";
 
 const palavras = (texto: string): number => texto.match(/\S+/g)?.length ?? 0;
 
+/** Para `.refine` de listas: o campo `campo` não se repete entre os itens. */
+export const unicoPor =
+  <C extends string>(campo: C) =>
+  (itens: readonly Record<C, unknown>[]): boolean =>
+    new Set(itens.map((item) => item[campo])).size === itens.length;
+
 export const Id = z.number().int().positive();
 export const Instante = z.iso.datetime({ offset: true });
 export const Titulo = z
