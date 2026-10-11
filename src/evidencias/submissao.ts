@@ -8,7 +8,9 @@ import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
 import { exigirRegistroDeEvidencia, registrarEvidencia } from "../dominio/evidencia.ts";
 import { guardarArquivos } from "../persistencia/arquivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
+import { dirDaExecucao } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
+import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { type Classe, LIMITE, MIME_TEXTO, type RegraArquivos, schemaDe } from "./schemas.ts";
 
 const MiB = 1024 * 1024;
@@ -222,8 +224,8 @@ export function submeter(
   // resolvido: trocar a worktree ou a saída por um link não as leva para outro lugar.
   const raiz = realpathSync(raizDo(banco));
   const arquivos = guardarAnexos(banco, caminhos, tipoValido, schema.arquivos, {
-    worktree: join(raiz, "worktrees", antes.issue.projeto, `I-${String(antes.issue.id)}`),
-    saida: join(raiz, "execucoes", `E-${String(ator.execucao)}`, "saida"),
+    worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
+    saida: join(dirDaExecucao(raiz, ator.execucao), "saida"),
   });
 
   // 7

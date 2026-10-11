@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import type { Issue } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { Projeto } from "../dominio/projeto.ts";
+import { anotar } from "../persistencia/execucoes.ts";
 import { executarNoShell, git, LIMITE_COMANDO_MS } from "../processo.ts";
 
 /**
@@ -47,11 +48,6 @@ export async function exigirGit(dir: string, ...args: string[]): Promise<string>
   }
   return r.saida;
 }
-
-/** Uma linha com horário no log da execução (`<raiz>/execucoes/E-<n>/log`, criado pelo F4). */
-const anotar = (log: string, texto: string): void => {
-  appendFileSync(log, `${new Date().toISOString()} ${texto}\n`);
-};
 
 /**
  * F5 §3.1: devolve o caminho da worktree da issue, criando-a (ou recriando, se a pasta foi apagada) e preparando-a

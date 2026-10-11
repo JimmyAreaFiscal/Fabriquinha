@@ -2,6 +2,18 @@
 import { spawn } from "node:child_process";
 import { ErroDeRegra } from "./dominio/erros.ts";
 
+/**
+ * `sinal` para o grupo de processos `pgid` inteiro. Grupo que já acabou é ignorado: quem ainda segura o stdout saiu
+ * do grupo (setsid) e não é alcançável daqui.
+ */
+export function sinalNoGrupo(pgid: number, sinal: NodeJS.Signals): void {
+  try {
+    process.kill(-pgid, sinal);
+  } catch {
+    // ESRCH: o grupo já acabou.
+  }
+}
+
 export interface Saida {
   codigo: number | null;
   saida: string;
@@ -38,11 +50,7 @@ export function executar(
     const relogio = detached
       ? setTimeout(() => {
           limiteEstourado = true;
-          try {
-            process.kill(-Number(filho.pid), "SIGKILL");
-          } catch {
-            // ESRCH: o grupo já acabou; quem segura o close saiu do grupo (setsid) e não é alcançável daqui.
-          }
+          sinalNoGrupo(Number(filho.pid), "SIGKILL");
         }, limiteMs)
       : undefined;
     // Corta só quando passa do dobro, para não copiar a string inteira a cada pedaço.
