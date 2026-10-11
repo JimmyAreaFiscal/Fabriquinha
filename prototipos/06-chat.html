@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <style>
+    body { min-height: 100vh; }
+    .link { color: var(--accent); font-size: var(--fs-sm); background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; white-space: nowrap; }
+    .link:hover { text-decoration: underline; }
+    .modelo { font: var(--fs-xs) var(--mono); color: var(--muted); }
+    textarea, select, input.campo { font: inherit; font-size: var(--fs-md); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--s-2) var(--s-3); color-scheme: dark; }
+    textarea { width: 100%; resize: none; line-height: 1.5; }
+    textarea:focus, select:focus, input.campo:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+    .btn-perigo { color: var(--danger); border-color: var(--danger-bg); background: transparent; }
+    .btn-perigo:hover { background: var(--danger-bg); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Barra de estado */
+    .estado { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-6); border-bottom: 1px solid var(--line); background: var(--surface); }
+    .estado .issue { font-weight: var(--w-strong); }
+    .estado .issue .id { margin-right: 6px; }
+    .estado .sep { color: var(--line); }
+    .estado .direita { margin-left: auto; display: flex; gap: var(--s-3); align-items: center; }
+
+    /* Conversa */
+    .conversa { display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5) 0; }
+    .msg { display: flex; flex-direction: column; gap: 4px; }
+    .msg .quem { font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .msg.voce .quem { color: var(--accent); }
+    .msg .texto { line-height: 1.65; }
+    .msg .texto p { margin: 0 0 var(--s-2); } .msg .texto p:last-child { margin: 0; }
+    .msg .texto code { font: 0.9em var(--mono); padding: 1px 4px; background: var(--surface-2); border-radius: var(--r-sm); }
+    .msg.voce .texto { padding: var(--s-2) var(--s-3); background: var(--surface-2); border-radius: var(--r-md); align-self: flex-start; max-width: 85%; }
+    .sistema { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); color: var(--muted); }
+    .sistema::before, .sistema::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+    .sistema a { color: var(--accent); }
+    .erro-bloco { padding: var(--s-3) var(--s-4); background: var(--danger-bg); border: 1px solid #5a2a1d; border-radius: var(--r-md); color: var(--ink); font-size: var(--fs-sm); }
+    .erro-bloco strong { color: var(--danger); }
+    .pensando > summary, .ferramenta > summary { list-style: none; cursor: pointer; }
+    .pensando > summary::-webkit-details-marker, .ferramenta > summary::-webkit-details-marker { display: none; }
+    .pensando > summary { font-size: var(--fs-sm); color: var(--muted); font-style: italic; }
+    .pensando > summary::before { content: "▸ "; font-style: normal; }
+    .pensando[open] > summary::before { content: "▾ "; }
+    .pensando p { margin: var(--s-1) 0 0 var(--s-4); font-size: var(--fs-sm); color: var(--muted); font-style: italic; }
+    .ferramenta { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+    .ferramenta > summary { display: flex; align-items: center; gap: var(--s-2); height: 34px; padding: 0 var(--s-3); font: var(--fs-sm) var(--mono); }
+    .ferramenta > summary::before { content: "▸"; color: var(--muted); font-family: var(--font); font-size: 11px; }
+    .ferramenta[open] > summary::before { content: "▾"; }
+    .ferramenta .nome-f { color: var(--accent); }
+    .ferramenta .args { color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ferramenta .res { margin-left: auto; font-family: var(--font); font-size: var(--fs-xs); white-space: nowrap; }
+    .ferramenta .res.ok { color: var(--closed); } .ferramenta .res.nok { color: var(--danger); } .ferramenta .res.neutro { color: var(--muted); }
+    .ferramenta pre { margin: 0; padding: var(--s-2) var(--s-3); max-height: 180px; overflow: auto; font: var(--fs-xs) / 1.55 var(--mono); color: var(--muted); border-top: 1px solid var(--line); white-space: pre-wrap; }
+    .ferramenta .ver { display: block; padding: 4px var(--s-3) var(--s-2); }
+    .cursor { display: inline-block; width: 8px; height: 1.1em; vertical-align: -3px; margin-left: 2px; background: var(--accent); animation: piscar 1s steps(2) infinite; }
+    @keyframes piscar { 50% { opacity: 0; } }
+
+    /* Compositor */
+    .compositor { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
+    .compositor .linha-1 { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+    .compositor .linha-1 .direita { margin-left: auto; display: flex; gap: var(--s-2); align-items: center; }
+    .segmento { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+    .segmento button { height: 28px; padding: 0 var(--s-3); font: inherit; font-size: var(--fs-sm); color: var(--muted); background: var(--surface); border: 0; cursor: pointer; }
+    .segmento button + button { border-left: 1px solid var(--line); }
+    .segmento button[aria-pressed="true"] { color: var(--ink); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
+    .dica-tecla { font-size: var(--fs-xs); color: var(--muted); }
+    .anexos { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+    .anexos[hidden] { display: none; }
+    .anexo { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 4px 0 var(--s-2); font: var(--fs-xs) var(--mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .anexo button { background: none; border: 0; color: var(--muted); cursor: pointer; }
+    .dialogo-ext { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); background: var(--surface); border: 1px solid #5a4720; border-top: 3px solid var(--open); border-radius: var(--r-lg); }
+    .dialogo-ext .rotulo { color: var(--open); }
+    .opcoes { display: flex; flex-direction: column; gap: var(--s-1); }
+    .opcoes label { display: flex; gap: var(--s-2); align-items: center; padding: var(--s-2) var(--s-3); border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; font-size: var(--fs-sm); }
+    .opcoes label:hover { border-color: var(--muted); }
+    .opcoes input { accent-color: var(--accent); margin: 0; }
+    .opcoes label:has(input:checked) { border-color: var(--accent); background: var(--surface-2); }
+    .fim { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); font-size: var(--fs-sm); color: var(--muted); }
+    .fim .botoes { margin-left: auto; display: flex; gap: var(--s-2); }
+
+    /* Painéis (registro, gate, sessão) */
+    .painel { padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
+    .painel h3, .titulo-bloco { font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .campo-rot { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
+    .campo-rot input, .campo-rot select, .campo-rot textarea { font-size: var(--fs-sm); padding: 6px var(--s-2); }
+    .gate-reg { border: 1px solid #5a4720; border-top: 3px solid var(--open); border-radius: var(--r-lg); background: var(--surface); }
+    .gate-reg .cab { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+    .gate-reg .cab .rotulo { color: var(--open); }
+    .gate-reg .corpo { padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); font-size: var(--fs-sm); }
+    .gate-reg .decidir { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-top: 1px solid var(--line); background: #191714; border-radius: 0 0 var(--r-lg) var(--r-lg); }
+    .gate-reg .decidir .botoes { display: flex; justify-content: flex-end; gap: var(--s-2); }
+    .tabela { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .tabela th { text-align: left; font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+    .tabela td { padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .tabela tr:last-child td { border-bottom: 0; }
+    .tabela .mono { font: var(--fs-xs) var(--mono); white-space: nowrap; }
+    .fatos { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--s-3); margin: 0; font-size: var(--fs-sm); }
+    .fatos dt { color: var(--muted); }
+    .fatos dd { margin: 0; display: flex; flex-wrap: wrap; gap: 4px var(--s-2); align-items: center; }
+    .acoes-col { display: flex; flex-direction: column; gap: var(--s-2); align-items: flex-start; }
+    .uso { height: 6px; width: 100%; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+    .uso i { display: block; height: 100%; background: var(--claimed); }
+
+    /* Conversa + issue */
+    .alt-c .layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--s-5); padding: 0 var(--s-6); }
+    .alt-c .coluna-conversa { display: flex; flex-direction: column; padding-bottom: var(--s-4); min-width: 0; }
+    .alt-c .compositor, .alt-c .dialogo-ext, .alt-c .fim, .alt-c .falha-comp { position: sticky; bottom: var(--s-3); }
+    .alt-c .lateral { position: sticky; top: 64px; margin-top: var(--s-4); max-height: calc(100vh - 80px); overflow: auto; display: flex; flex-direction: column; gap: var(--s-3); }
+    .trilho-mini { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
+    .trilho-mini i { height: 6px; border-radius: 3px; background: var(--line); }
+    .trilho-mini i.feito { background: var(--closed); }
+    .trilho-mini i.atual { background: var(--open); }
+    .linha-tempo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .linha-tempo li { display: grid; grid-template-columns: 10px 48px minmax(0, 1fr) auto; gap: var(--s-2); align-items: center; padding: 5px var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-sm); }
+    .linha-tempo li.atual { background: var(--surface-2); outline: 1px solid var(--accent); }
+    .linha-tempo .p { width: 8px; height: 8px; border-radius: 50%; background: var(--closed); }
+    .linha-tempo .p.aberto { background: var(--bg); border: 2px solid var(--muted); width: 4px; height: 4px; }
+    .linha-tempo .p.em_execucao { background: var(--claimed); } .linha-tempo .p.falhou { background: var(--danger); }
+    .linha-tempo .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cards-art { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+    .art { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 var(--s-2); font-size: var(--fs-xs); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; color: var(--ink); }
+    .art:hover { border-color: var(--accent); }
+    .art b { font: 600 9px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 0 3px; }
+
+    .trocador .trocador-botoes.estados { flex-wrap: wrap; }
+    .trocador .trocador-botoes.estados a { flex: 1 0 30%; font-weight: 400; font-size: var(--fs-xs); }
+    @media (max-width: 1100px) {
+      .alt-c .layout { grid-template-columns: minmax(0, 1fr); }
+      .alt-c .lateral { position: static; max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html">Início <span class="contador" title="sessões que aguardam você">6</span></a>
+      <a href="02-projeto.html">Projetos</a>
+      <a href="04-metricas.html">Métricas</a>
+      <a href="05-historico.html">Histórico</a>
+      <a href="07-configuracao.html">Configuração</a>
+    </nav>
+  </header>
+
+  <div data-pagina></div>
+
+  <aside class="trocador" aria-label="Alternativas do protótipo">
+    <button class="trocador-fechar" title="Recolher">–</button>
+    <span class="rotulo">Chat · estado de exemplo</span>
+    <div class="trocador-botoes estados" data-estados></div>
+    <p>Troque o estado da sessão para ver o que muda no envio e no painel da direita.</p>
+  </aside>
+
+  <script>
+    const ESTADOS = [["rodando", "rodando"], ["dialogo", "diálogo"], ["falha", "falha"], ["registro", "registro"], ["gate", "gate do registro"], ["aberta", "sessão em aberto"], ["terminada", "terminada"]];
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+    // ——— sessões de exemplo ———
+    const DEV = {
+      issue: "I-34", titulo: "Timeout no checkout com cupom", projeto: "loja-api", ticket: "T-101", etapa: "desenvolvimento", modo: "autônoma", modelo: "anthropic / claude-sonnet-5-5", exec: "E-231", fase: 3,
+      msgs: [
+        ["sis", 'Execução E-231 iniciada · autônoma · <a href="#">prompt da etapa</a>'],
+        ["pensa", "Vou ler o ticket, o desenho aprovado e os critérios antes de mexer no código."],
+        ["tool", "bash", "fabriquinha ticket", "ok", "JSON · 2 KB", '{ "ticket": "T-101", "titulo": "Buscar cupons sem N+1", "etapa": "desenvolvimento", ... }'],
+        ["tool", "read", "src/cupons/buscar.ts", "neutro", "84 linhas", "export async function buscarCupons(carrinho) {\n  for (const item of carrinho.itens) {\n    const c = await db.cupom.find({ produto: item.produto });\n    ..."],
+        ["agente", "<p>A busca faz uma consulta por item do carrinho (N+1). Vou trocar por uma consulta só com <code>IN</code>, mantendo a ordem por validade.</p>"],
+        ["tool", "edit", "src/cupons/buscar.ts", "neutro", "+12 −9", "- for (const item of carrinho.itens) {\n-   const c = await db.cupom.find(...)\n+ const cupons = await db.cupom.findMany({ produto: { in: produtos } })"],
+        ["tool", "bash", "npm test", "nok", "✗ 3 de 214 · 41 s", "FAIL test/cupons.spec.ts\n  ✗ aplica o cupom de maior desconto primeiro\n  ✗ ignora cupom vencido\n  ✗ mantém a ordem de validade\n211 passed, 3 failed"],
+      ],
+      ultima: "<p>Os 3 testes esperam a ordem antiga. A consulta nova devolve os cupons pela chave, não pela validade. Vou ordenar depois da busca e rodar de novo",
+    };
+    const REG = {
+      issue: "I-41", titulo: "sem título", projeto: "loja-api", ticket: "T-118", etapa: "registro", modo: "interativa", modelo: "anthropic / claude-opus-5-5", exec: "E-233", fase: 0,
+      msgs: [
+        ["sis", "Sessão de registro aberta · loja-api · I-41"],
+        ["agente", "<p>Vamos registrar uma necessidade no projeto <strong>loja-api</strong> (I-41). O que você precisa?</p>"],
+        ["voce", "Quero exportar os pedidos do mês em CSV para a contabilidade."],
+        ["agente", "<p>Entendi. Quais colunas o arquivo precisa ter? E ele é gerado na hora, por um botão, ou enviado por e-mail?</p>"],
+        ["voce", "Número, data, cliente, total e status. Na hora, num botão do painel de pedidos."],
+        ["tool", "bash", "fabriquinha issue editar --titulo \"Exportar pedidos em CSV\" --tipo funcionalidade", "ok", "ok", '{ "issue": "I-41", "titulo": "Exportar pedidos em CSV" }'],
+        ["tool", "bash", "fabriquinha evidencia submeter criterios_aceite", "ok", "3 critérios", '{ "tipo": "criterios_aceite", "criterios": 3 }'],
+        ["agente", "<p>Registrei o título, o tipo, a descrição e 3 critérios de aceite. Quer ajustar algo antes de eu concluir?</p>"],
+      ],
+      gateMsgs: [
+        ["voce", "Pode concluir."],
+        ["tool", "bash", "fabriquinha concluir", "ok", "ok", '{ "ticket": "T-118", "status": "concluido" }'],
+        ["sis", "Registro concluído · aguarda a sua decisão"],
+      ],
+    };
+    const ABERTA = {
+      issue: "I-27", titulo: "Relatório de vendas por região", projeto: "loja-api", ticket: "T-117", etapa: "sessão em aberto", modo: "interativa", modelo: "anthropic / claude-sonnet-5-5", exec: "E-229", fase: 7,
+      msgs: [
+        ["sis", "Sessão em aberto · o PR #205 voltou com pedido de mudança"],
+        ["agente", "<p>Li o pedido: <em>separar o relatório por estado, não só por região</em>. Proponho agrupar por estado dentro de cada região, com subtotal por região. Pode ser?</p>"],
+        ["voce", "Pode, mas mantenha o total geral no fim."],
+        ["tool", "edit", "src/relatorios/vendas.ts", "neutro", "+31 −8", "+ agrupar(pedidos, ['regiao', 'estado'])"],
+        ["tool", "bash", "npm test", "ok", "✓ 220 de 220 · 44 s", "220 passed"],
+        ["agente", "<p>Feito: agrupado por região e estado, com subtotal por região e total geral. Os testes passam. Posso fazer mais alguma coisa?</p>"],
+      ],
+    };
+    const TICKETS = {
+      "I-34": [["T-92", "concluido", "Registrar a necessidade"], ["T-96", "concluido", "Desenhar a solução"], ["T-100", "aberto", "Teste de carga do checkout"], ["T-101", "em_execucao", "Buscar cupons sem N+1"]],
+      "I-41": [["T-118", "em_execucao", "Registrar a necessidade"]],
+      "I-27": [["T-70", "concluido", "Registrar a necessidade"], ["T-72", "concluido", "Desenhar a solução"], ["T-74", "concluido", "Consulta agregada por região"], ["T-88", "concluido", "Revisar a issue"], ["T-91", "concluido", "Encerrar e abrir o PR"], ["T-117", "em_execucao", "Ajustar o PR"]],
+    };
+    const ARTEFATOS = { "I-34": [["TABELA", "Critérios"], ["HTML", "Desenho"], ["TABELA", "Complexidade"], ["HTML", "Impactos"]], "I-41": [["TABELA", "Critérios"]], "I-27": [["VÍDEO", "Vídeo"], ["TABELA", "Comprovação"], ["TABELA", "Fitness"], ["HTML", "Produtividade"]] };
+
+    const sessaoDe = (e) => (["registro", "gate"].includes(e) ? REG : e === "aberta" ? ABERTA : DEV);
+    const PILL = {
+      rodando: '<span class="pill pill-rodando">rodando</span>', dialogo: '<span class="pill pill-aguarda">aguarda você · diálogo</span>', falha: '<span class="pill pill-falha">aguarda você · falha</span>',
+      registro: '<span class="pill pill-aguarda">aguarda você · conversa</span>', gate: '<span class="pill pill-aguarda">aguarda você · gate do registro</span>', aberta: '<span class="pill pill-aguarda">aguarda você · conversa</span>', terminada: '<span class="pill pill-neutro">terminada</span>',
+    };
+
+    // ——— peças da conversa ———
+    function msg(m) {
+      if (m[0] === "sis") return `<div class="sistema">${m[1]}</div>`;
+      if (m[0] === "pensa") return `<details class="pensando"><summary>raciocínio</summary><p>${esc(m[1])}</p></details>`;
+      if (m[0] === "tool") return `<details class="ferramenta"><summary><span class="nome-f">${m[1]}</span><span class="args">${esc(m[2])}</span><span class="res ${m[3]}">${m[4]}</span></summary><pre>${esc(m[5])}</pre><button class="link ver">ver tudo</button></details>`;
+      return `<div class="msg ${m[0]}"><span class="quem">${m[0] === "voce" ? "você" : "agente"}</span><div class="texto">${m[0] === "voce" ? `<p>${esc(m[1])}</p>` : m[1]}</div></div>`;
+    }
+    function conversa(e) {
+      const s = sessaoDe(e);
+      let l = s.msgs.map(msg);
+      if (s === DEV) {
+        if (e === "rodando") l.push(msg(["agente", `${s.ultima}<span class="cursor"></span></p>`]));
+        else if (e === "dialogo") l.push(msg(["agente", `${s.ultima}.</p>`]), `<div class="sistema">a extensão <code>pergunta</code> abriu um diálogo</div>`);
+        else if (e === "falha") l.push(msg(["agente", `${s.ultima}.</p>`]), `<div class="erro-bloco"><strong>Execução E-231 falhou:</strong> tempo limite de 30 min atingido. O ticket T-101 ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>`);
+        else if (e === "terminada") l.push(msg(["agente", `${s.ultima}.</p>`]), msg(["tool", "bash", "npm test", "ok", "✓ 214 de 214 · 39 s", "214 passed"]), msg(["agente", "<p>Testes passando. Evidências submetidas; ticket concluído.</p>"]), `<div class="sistema">Execução E-231 concluída · commit <code>a41c9e2</code> · sessão terminada</div>`);
+      }
+      if (e === "gate") l = l.concat(REG.gateMsgs.map(msg));
+      return `<div class="conversa">${l.join("")}</div>`;
+    }
+    const anexar = `<button class="btn btn-pequeno" title="Levar o histórico de outra sessão para esta conversa">+ Anexar histórico</button>`;
+    const MODELOS = ["anthropic / claude-sonnet-5-5", "anthropic / claude-opus-5-5", "llamacpp / qwen3-coder-30b"];
+    let modoEnvio = "steer";
+    function compositor(e) {
+      if (e === "terminada") return `<div class="fim">Sessão terminada; a conversa fica só para leitura.<div class="botoes"><button class="btn">Exportar histórico</button><button class="btn btn-primario">Conversar sobre esta sessão</button></div></div>`;
+      if (e === "gate") return `<div class="fim">A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.</div>`;
+      if (e === "dialogo") return `<div class="dialogo-ext"><span class="rotulo">O agente pergunta</span><div>Qual ordem os cupons devem ter quando mais de um se aplica?</div>
+        <div class="opcoes"><label><input type="radio" name="op" checked> Maior desconto primeiro</label><label><input type="radio" name="op"> Validade mais próxima primeiro</label><label><input type="radio" name="op"> A ordem em que foram cadastrados</label></div>
+        <div class="compositor-linha" style="display:flex;gap:8px;justify-content:flex-end"><button class="btn">Cancelar</button><button class="btn btn-primario">Responder</button></div></div>`;
+      if (e === "falha") return `<div class="compositor falha-comp"><textarea rows="2" placeholder="Instrução para a próxima tentativa (vai antes do prompt da etapa)"></textarea>
+        <div class="linha-1"><label class="dica-tecla" style="display:flex;gap:6px;align-items:center">Modelo <select style="font-size:12px;padding:3px 6px">${MODELOS.map((m, i) => `<option ${i === 0 ? "selected" : ""}>${m}</option>`).join("")}</select></label>${anexar}<div class="direita"><button class="btn btn-primario">Responder e retomar</button></div></div></div>`;
+      const rodando = e === "rodando";
+      return `<div class="compositor"><div class="anexos" ${e === "aberta" ? "" : "hidden"}><span class="anexo">histórico de s-2a7d · I-27 · T-114<button title="Remover">×</button></span></div>
+        <textarea rows="2" placeholder="${rodando ? "Mensagem para o agente enquanto ele trabalha" : "Responda ao agente"}"></textarea>
+        <div class="linha-1">${rodando ? `<div class="segmento" role="group" aria-label="Como enviar"><button data-envio="steer" aria-pressed="${modoEnvio === "steer"}" title="Interrompe e redireciona agora">Redirecionar</button><button data-envio="follow_up" aria-pressed="${modoEnvio === "follow_up"}" title="Entrega quando o agente terminar o passo">Enfileirar</button></div>` : ""}
+          ${anexar}<span class="dica-tecla">Enter envia · Shift+Enter quebra linha</span>
+          <div class="direita">${rodando ? '<button class="btn btn-perigo">Abortar</button>' : ""}${e === "aberta" ? '<button class="btn">Concluir sessão</button>' : ""}<button class="btn btn-primario">Enviar</button></div></div></div>`;
+    }
+    function formRegistro(e) {
+      if (!["registro", "gate"].includes(e)) return "";
+      if (e === "gate") return `<section class="gate-reg"><div class="cab"><span class="rotulo">Gate do registro</span><span class="muted" style="font-size:var(--fs-sm)">aguarda você há 1 min</span></div>
+        <div class="corpo"><dl class="fatos"><dt>Título</dt><dd>Exportar pedidos em CSV</dd><dt>Tipo</dt><dd><span class="tag">funcionalidade</span></dd><dt>Descrição</dt><dd>Botão no painel de pedidos que baixa os pedidos do mês em CSV para a contabilidade.</dd><dt>Comportamento</dt><dd>hoje a contabilidade copia os pedidos à mão · <a class="link" href="#">ver</a></dd></dl>
+          <div><div class="titulo-bloco" style="margin-bottom:4px">Critérios de aceite</div><table class="tabela"><tr><th>ID</th><th>Então</th></tr><tr><td class="mono">CA-1</td><td>o CSV traz número, data, cliente, total e status</td></tr><tr><td class="mono">CA-2</td><td>só os pedidos do mês escolhido entram</td></tr><tr><td class="mono">CA-3</td><td>o arquivo abre no Excel com acentos certos</td></tr></table></div>
+          <span class="muted">Nenhuma evidência faltando.</span></div>
+        <div class="decidir"><label class="campo-rot">Motivo (obrigatório para devolver)<textarea rows="2"></textarea></label><div class="botoes"><button class="btn btn-perigo" disabled>Devolver</button><button class="btn btn-primario">Aprovar registro</button></div></div></section>`;
+      return `<section class="painel superficie"><h3>Registro · você pode corrigir direto</h3>
+        <label class="campo-rot">Título<input class="campo" value="Exportar pedidos em CSV"></label>
+        <label class="campo-rot">Tipo<select><option selected>funcionalidade</option><option>problema</option></select></label>
+        <label class="campo-rot">Descrição<textarea rows="5">Botão no painel de pedidos que baixa os pedidos do mês em CSV para a contabilidade. Colunas: número, data, cliente, total e status.</textarea></label>
+        <div style="display:flex;justify-content:flex-end"><button class="btn btn-pequeno">Salvar</button></div></section>`;
+    }
+    function barraEstado(e, curta = false) {
+      const s = sessaoDe(e);
+      return `<div class="estado"><a class="issue" href="03-issue.html"><span class="id">${s.issue}</span>${esc(s.titulo)}</a><span class="sep">│</span><span class="id">${s.ticket}</span><span class="muted">${s.etapa} · ${s.modo}</span>${PILL[e]}
+        ${curta ? "" : `<span class="modelo">${s.modelo}</span>`}<div class="direita"><span class="muted" style="font-size:var(--fs-xs)">${s.exec}</span><a class="link" href="#">log</a><a class="link" href="#">prompt</a>${curta ? "" : '<button class="link">Exportar</button><button class="link">Conversar sobre</button>'}</div></div>`;
+    }
+
+    // ——— layouts ———
+    function C(e) {
+      const s = sessaoDe(e);
+      const fases = Array.from({ length: 8 }, (_, i) => `<i class="${i < s.fase ? "feito" : i === s.fase ? "atual" : ""}"></i>`).join("");
+      return `<div class="alt-c">${barraEstado(e)}<div class="layout"><div class="coluna-conversa">${conversa(e)}${compositor(e)}</div>
+        <aside class="lateral">${formRegistro(e)}
+          <section class="painel superficie"><h3>${s.issue} · ${s.projeto}</h3><div class="trilho-mini" title="fases da issue">${fases}</div>
+            <div class="titulo-bloco">Tickets e sessões</div>
+            <ul class="linha-tempo">${TICKETS[s.issue].map(([id, st, t]) => `<li class="${id === s.ticket ? "atual" : ""}"><span class="p ${st}"></span><span class="id">${id}</span><span class="t">${t}</span>${st === "concluido" ? '<a class="link" href="#">chat</a>' : id === s.ticket ? '<span class="muted" style="font-size:var(--fs-xs)">esta</span>' : ""}</li>`).join("")}</ul>
+            <div class="titulo-bloco">Artefatos</div><div class="cards-art">${ARTEFATOS[s.issue].map(([c, n]) => `<button class="art"><b>${c}</b>${n}</button>`).join("")}</div>
+            <a class="link" href="03-issue.html">Abrir a issue →</a></section>
+        </aside></div></div>`;
+    }
+
+    let estado = new URLSearchParams(location.search).get("estado") ?? "rodando";
+    function render() {
+      document.querySelector("[data-pagina]").innerHTML = C(estado);
+      document.querySelector("[data-estados]").innerHTML = ESTADOS.map(([k, n]) => `<a href="?estado=${k}" data-estado="${k}" aria-current="${k === estado}">${n}</a>`).join("");
+    }
+    document.addEventListener("click", (e) => {
+      const s = e.target.closest("[data-estado]"); if (s) { e.preventDefault(); estado = s.dataset.estado; history.replaceState(null, "", `?estado=${estado}`); render(); return; }
+      const v = e.target.closest("[data-envio]"); if (v) { modoEnvio = v.dataset.envio; render(); }
+    });
+    const trocador = document.querySelector(".trocador");
+    trocador.querySelector(".trocador-fechar").onclick = () => trocador.classList.toggle("min");
+    render();
+  </script>
+</body>
+</html>

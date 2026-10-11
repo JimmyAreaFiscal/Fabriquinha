@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Projeto · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <style>
+    /* Cabeçalho do projeto */
+    .seletor-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin-bottom: var(--s-2); }
+    .seletor-linha h1 { color: var(--muted); font-weight: 400; }
+    .seletor { appearance: none; height: 34px; padding: 0 32px 0 var(--s-3); font: var(--w-strong) var(--fs-xl) var(--font); color: var(--ink); background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23aaa293'/%3E%3C/svg%3E") no-repeat right 12px center; border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; }
+    .seletor:hover { border-color: var(--muted); }
+    .editar { font-size: var(--fs-sm); color: var(--accent); }
+    .seletor-linha .acoes { margin-left: auto; display: flex; gap: var(--s-2); }
+    .ferramentas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); margin-bottom: var(--s-3); }
+    .ferramentas .contagem { font-size: var(--fs-sm); color: var(--muted); }
+    .alternar { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--muted); cursor: pointer; user-select: none; }
+    .alternar input { accent-color: var(--accent); margin: 0; }
+    .alternar:has(input:checked) { color: var(--ink); }
+    .ferramentas .direita { margin-left: auto; }
+    .btn-perigo { color: var(--danger); background: transparent; border-color: transparent; }
+    .btn-perigo:hover { background: var(--danger-bg); border-color: var(--danger-bg); }
+
+    /* Peças comuns */
+    .st { font-size: var(--fs-xs); }
+    .st-aberto { color: var(--muted); background: var(--surface-2); }
+    .st-em_execucao { color: var(--claimed); background: var(--claimed-bg); }
+    .st-concluido { color: var(--closed); background: var(--closed-bg); }
+    .st-falhou { color: var(--danger); background: var(--danger-bg); }
+    .fase { color: var(--ink); background: var(--surface-2); }
+    .fase-concluida { color: var(--closed); background: var(--closed-bg); }
+    .fase-arquivada { color: var(--muted); background: transparent; border: 1px dashed var(--line); }
+    .modelo { font: var(--fs-xs) var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .override { color: var(--accent); }
+    .chat { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
+    .chat .ir { font-size: var(--fs-sm); color: var(--accent); }
+    .chat:hover .ir { text-decoration: underline; }
+    .dep { font: var(--fs-xs) var(--mono); color: var(--danger); white-space: nowrap; }
+    .pr { font: var(--fs-xs) var(--mono); color: var(--accent); white-space: nowrap; }
+    .progresso { display: inline-flex; align-items: center; gap: 6px; font: var(--fs-xs) var(--mono); color: var(--muted); white-space: nowrap; }
+    .trilho-p { width: 40px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+    .trilho-p i { display: block; height: 100%; background: var(--closed); }
+    .apagada { opacity: 0.55; }
+    .caret { display: inline-flex; width: 18px; justify-content: center; color: var(--muted); background: none; border: 0; cursor: pointer; font-size: 10px; transition: transform 0.12s; }
+    .fechada .caret { transform: rotate(-90deg); }
+
+    /* Métricas do mês em cards */
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s-3); margin: var(--s-4) 0 var(--s-6); }
+    .kpi { padding: var(--s-3) var(--s-4); }
+    .kpi-valor { display: block; margin-top: 2px; font-size: var(--fs-xl); font-weight: var(--w-strong); font-variant-numeric: tabular-nums; }
+    .kpi-sub { font-size: var(--fs-sm); color: var(--muted); }
+    /* Trilho de fases */
+    .pista { --cols: 300px repeat(8, minmax(64px, 1fr)) 230px; }
+    .pista-cabeca, .pista-linha { display: grid; grid-template-columns: var(--cols); align-items: center; column-gap: 0; }
+    .pista-cabeca { position: sticky; top: 48px; z-index: 1; background: var(--bg); padding-top: var(--s-2); }
+    .pista-etapa { padding: 0 var(--s-1) 4px; margin: 0 4px; border-bottom: 2px solid var(--line); font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; }
+    .pista-fase { padding: 6px 2px var(--s-2); font-size: var(--fs-xs); color: var(--muted); text-align: center; line-height: 1.25; }
+    .pista-fase.gate { color: var(--open); }
+    .pista-item { margin-bottom: var(--s-2); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: var(--r-lg); }
+    .pista-item.aguarda { border-left-color: var(--open); }
+    .pista-item.falha { border-left-color: var(--danger); }
+    .pista-item.rodando { border-left-color: var(--claimed); }
+    .pista-linha { min-height: 56px; cursor: pointer; }
+    .pista-linha:hover { background: var(--surface-2); border-radius: var(--r-lg); }
+    .pista-issue { display: flex; align-items: center; gap: var(--s-2); min-width: 0; padding: 0 var(--s-3) 0 var(--s-2); }
+    .pista-issue .texto { min-width: 0; }
+    .pista-issue .titulo { display: block; font-weight: var(--w-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pista-issue .titulo.sem { color: var(--muted); font-style: italic; font-weight: 400; }
+    .pista-issue .sub { display: flex; flex-wrap: wrap; gap: 2px var(--s-2); align-items: center; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
+    .passo { position: relative; height: 56px; display: flex; align-items: center; justify-content: center; }
+    .passo::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--line); }
+    .passo:first-of-type::before { left: 50%; }
+    .passo.ultimo::before { right: 50%; }
+    .passo.feito::before { background: var(--closed); }
+    .passo.atual::before { background: linear-gradient(to right, var(--closed) 50%, var(--line) 50%); }
+    .marco { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--line); }
+    .gate .marco { border-radius: 2px; transform: rotate(45deg); width: 11px; height: 11px; }
+    .feito .marco { background: var(--closed); border-color: var(--closed); }
+    .atual .marco { width: 16px; height: 16px; background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px rgb(229 173 111 / 0.18); }
+    .atual.gate .marco { width: 14px; height: 14px; }
+    .aguarda .atual .marco { background: var(--open); border-color: var(--open); box-shadow: 0 0 0 4px rgb(234 178 76 / 0.22); }
+    .falha .atual .marco { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 0 4px rgb(243 146 116 / 0.22); }
+    .rodando .atual .marco { background: var(--claimed); border-color: var(--claimed); box-shadow: 0 0 0 4px rgb(142 188 233 / 0.22); animation: pulsar 1.4s ease-in-out infinite; }
+    .concluida-toda .marco { background: var(--closed); border-color: var(--closed); }
+    .pista-estado { padding: 0 var(--s-3); display: flex; justify-content: flex-end; }
+    .pista-item:not(.fechada) .pista-estado { visibility: hidden; }
+    .gaveta { padding: 0 var(--s-3) var(--s-3) 44px; }
+    .pista-item.fechada .gaveta { display: none; }
+    .gaveta table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .gaveta td { height: 32px; padding: 0 var(--s-2); border-top: 1px solid var(--line); }
+    .gaveta tr:hover td { background: var(--surface-2); }
+    .gaveta .etapa-cel { width: 140px; color: var(--muted); }
+    .gaveta .titulo-cel { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Diálogo de confirmação */
+    .dialogo { max-width: 460px; padding: var(--s-6); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 18px 48px rgb(0 0 0 / 0.6); }
+    .dialogo::backdrop { background: rgb(0 0 0 / 0.6); }
+    .dialogo h2 { margin-bottom: var(--s-2); }
+    .dialogo p { margin: 0 0 var(--s-6); color: var(--muted); }
+    .dialogo-botoes { display: flex; justify-content: flex-end; gap: var(--s-2); }
+    .btn-perigo-cheio { color: var(--bg); background: var(--danger); border-color: var(--danger); font-weight: var(--w-strong); }
+
+    .vazio { padding: var(--s-8); text-align: center; color: var(--muted); }
+
+    @media (max-width: 1100px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pista-rola { overflow-x: auto; }
+      .pista { min-width: 1080px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html">Início <span class="contador" title="sessões que aguardam você">6</span></a>
+      <a href="02-projeto.html" aria-current="page">Projetos</a>
+      <a href="04-metricas.html">Métricas</a>
+      <a href="05-historico.html">Histórico</a>
+      <a href="07-configuracao.html">Configuração</a>
+    </nav>
+  </header>
+
+  <main class="pagina">
+    <div class="seletor-linha">
+      <h1>Projeto</h1>
+      <select class="seletor" aria-label="Projeto"><option>fabriquinha</option><option selected>loja-api</option><option>site-pessoal</option></select>
+      <a class="editar" href="#">Editar na Configuração</a>
+      <div class="acoes"><button class="btn btn-primario">+ Registrar necessidade</button></div>
+    </div>
+    <div data-kpis></div>
+
+    <div class="ferramentas">
+      <span class="contagem" data-contagem></span>
+      <label class="alternar"><input type="checkbox" data-mostrar="concluidas"> Mostrar concluídas</label>
+      <label class="alternar"><input type="checkbox" data-mostrar="arquivadas"> Mostrar arquivadas</label>
+      <button class="btn btn-perigo direita" data-arquivar>Arquivar concluídas</button>
+    </div>
+
+    <div data-lista></div>
+  </main>
+
+  <dialog class="dialogo" data-dialogo>
+    <h2>Arquivar concluídas</h2>
+    <p data-dialogo-texto></p>
+    <div class="dialogo-botoes">
+      <button class="btn" value="nao" data-fechar>Cancelar</button>
+      <button class="btn btn-perigo-cheio" data-confirmar>Arquivar</button>
+    </div>
+  </dialog>
+
+  <script>
+    const FASES = [
+      ["registro", "Registro"], ["desenho", "Desenho"], ["aprovacao_desenho", "Aprovação do desenho"],
+      ["desenvolvimento", "Desenvolvimento"], ["revisao", "Revisão"], ["encerramento", "Encerramento"],
+      ["aprovacao_pr", "Aprovação do PR"], ["ajuste_pr", "Ajuste do PR"],
+    ];
+    const NOME_FASE = Object.fromEntries([...FASES, ["concluida", "Concluída"]]);
+    const ETAPAS = [["Registrar", 1], ["Desenhar", 2], ["Implementar", 1], ["Revisar", 1], ["Encerrar", 3]];
+    const GATES = new Set(["aprovacao_desenho", "aprovacao_pr"]);
+    const STATUS = { aberto: "aberto", em_execucao: "em execução", concluido: "concluído", falhou: "falhou" };
+    const OPUS = "anthropic / claude-opus-5-5", SONNET = "anthropic / claude-sonnet-5-5", QWEN = "llamacpp / qwen3-coder-30b";
+
+    const t = (id, etapa, titulo, status = "concluido", modelo = SONNET, extra = {}) => ({ id, etapa, titulo, status, modelo, ...extra });
+    const feitos = (ids) => [
+      t(ids[0], "registro", "Registrar a necessidade", "concluido", OPUS),
+      t(ids[1], "desenho", "Desenhar a solução", "concluido", OPUS),
+      ...ids.slice(2, -2).map((id, n) => t(id, "desenvolvimento", ["Modelo e migração", "Endpoint e validação", "Testes de integração"][n] ?? "Ajustes")),
+      t(ids.at(-2), "revisao", "Revisar a issue"),
+      t(ids.at(-1), "encerramento", "Encerrar e abrir o PR"),
+    ];
+
+    let ISSUES = [
+      { id: "I-41", titulo: null, tipo: null, fase: "registro", tickets: [
+        t("T-118", "registro", "Registrar a necessidade", "em_execucao", OPUS, { sessao: ["aguarda", "Conversa", "há 2 min"] })] },
+      { id: "I-40", titulo: "Exportar pedidos em CSV", tipo: "funcionalidade", fase: "registro", tickets: [
+        t("T-115", "registro", "Registrar a necessidade", "concluido", OPUS, { sessao: ["aguarda", "Gate do registro", "há 22 min"] })] },
+      { id: "I-39", titulo: "Rate limit por cliente na API pública", tipo: "funcionalidade", fase: "desenho", dep: "I-35", tickets: [
+        t("T-111", "registro", "Registrar a necessidade", "concluido", OPUS),
+        t("T-113", "desenho", "Desenhar a solução", "aberto", OPUS)] },
+      { id: "I-38", titulo: "Limite de tentativas no login", tipo: "problema", fase: "desenho", tickets: [
+        t("T-107", "registro", "Registrar a necessidade", "concluido", OPUS),
+        t("T-112", "desenho", "Desenhar a solução", "em_execucao", OPUS, { sessao: ["rodando", "Rodando", "há 6 min"] })] },
+      { id: "I-35", titulo: "Cache do catálogo de produtos", tipo: "funcionalidade", fase: "desenvolvimento", tickets: [
+        t("T-95", "registro", "Registrar a necessidade", "concluido", OPUS),
+        t("T-97", "desenho", "Desenhar a solução", "concluido", OPUS),
+        t("T-102", "desenvolvimento", "Camada de cache com TTL"),
+        t("T-103", "desenvolvimento", "Invalidar o cache ao editar produto"),
+        t("T-106", "desenvolvimento", "Métricas de acerto do cache", "aberto"),
+        t("T-116", "desenvolvimento", "Cabeçalhos de cache na API", "aberto", QWEN, { override: true })] },
+      { id: "I-34", titulo: "Timeout no checkout com cupom", tipo: "problema", fase: "desenvolvimento", tickets: [
+        t("T-92", "registro", "Registrar a necessidade", "concluido", OPUS),
+        t("T-96", "desenho", "Desenhar a solução", "concluido", OPUS),
+        t("T-100", "desenvolvimento", "Teste de carga do checkout", "aberto"),
+        t("T-101", "desenvolvimento", "Buscar cupons sem N+1", "falhou", SONNET, { sessao: ["falha", "Falhou", "há 2 h 14 min"] })] },
+      { id: "I-29", titulo: "Webhook de pagamento do Pix", tipo: "funcionalidade", fase: "aprovacao_pr", pr: "#212", tickets: [
+        ...feitos(["T-80", "T-82", "T-85", "T-86", "T-93", "T-99"]).map((x) => x.id === "T-99" ? { ...x, sessao: ["aguarda", "Gate do PR", "há 1 h 20 min"] } : x)] },
+      { id: "I-27", titulo: "Relatório de vendas por região", tipo: "funcionalidade", fase: "ajuste_pr", pr: "#205", tickets: [
+        ...feitos(["T-70", "T-72", "T-74", "T-88", "T-91"]),
+        t("T-117", "sessao", "Ajustar o PR: separar por estado", "em_execucao", SONNET, { sessao: ["aguarda", "Conversa", "há 9 min"] })] },
+      { id: "I-22", titulo: "Busca por SKU", tipo: "funcionalidade", fase: "concluida", em: "03/10", pr: "#198", tickets: [
+        ...feitos(["T-60", "T-62", "T-64", "T-66", "T-84", "T-90"]).map((x) => x.id === "T-90" ? { ...x, sessao: ["rodando", "Consulta", "há 1 min"] } : x)] },
+      { id: "I-19", titulo: "Frete grátis acima de R$ 200", tipo: "funcionalidade", fase: "concluida", em: "28/09", pr: "#190", tickets: feitos(["T-50", "T-52", "T-55", "T-58", "T-59"]) },
+      { id: "I-12", titulo: "Login com Google", tipo: "funcionalidade", fase: "concluida", em: "02/09", arquivada: true, pr: "#171", tickets: feitos(["T-30", "T-31", "T-33", "T-34", "T-36", "T-38"]) },
+    ];
+    const mostrar = { concluidas: false, arquivadas: false };
+
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const PILL = { aguarda: "pill-aguarda", falha: "pill-falha", rodando: "pill-rodando" };
+    const estadoIssue = (i) => {
+      const s = i.tickets.map((x) => x.sessao?.[0]).filter(Boolean);
+      return s.includes("falha") ? "falha" : s.includes("aguarda") ? "aguarda" : s.includes("rodando") ? "rodando" : "";
+    };
+    const visiveis = () => ISSUES.filter((i) => i.arquivada ? mostrar.arquivadas : i.fase === "concluida" ? mostrar.concluidas : true);
+    const progresso = (i) => {
+      const f = i.tickets.filter((x) => x.status === "concluido").length, n = i.tickets.length;
+      return `<span class="progresso" title="tickets concluídos">${f}/${n}<span class="trilho-p"><i style="width:${(100 * f) / n}%"></i></span></span>`;
+    };
+    const fasePill = (i) => i.arquivada ? `<span class="pill fase-arquivada">arquivada em ${i.em}</span>`
+      : i.fase === "concluida" ? `<span class="pill fase-concluida">concluída em ${i.em}</span>`
+      : `<span class="pill fase">${NOME_FASE[i.fase]}</span>`;
+    const statusPill = (x) => `<span class="pill st st-${x.status}">${STATUS[x.status]}</span>`;
+    const modelo = (x) => `<span class="modelo ${x.override ? "override" : ""}" title="${x.override ? "modelo do ticket (override)" : "modelo da etapa no projeto"}">${x.modelo}${x.override ? " ★" : ""}</span>`;
+    const sessao = (x) => x.sessao ? `<a class="chat" href="06-chat.html"><span class="pill ${PILL[x.sessao[0]]}">${x.sessao[1]}</span><span class="muted" style="font-size:var(--fs-xs)">${x.sessao[2]}</span><span class="ir">chat →</span></a>` : "";
+    const marcas = (i) => [
+      i.tipo ? `<span class="tag">${i.tipo}</span>` : "",
+      i.dep ? `<span class="dep">bloqueada por ${i.dep}</span>` : "",
+      i.pr ? `<a class="pr" href="#">PR ${i.pr}</a>` : "",
+    ].join("");
+    const etapaNome = (e) => ({ registro: "registro", desenho: "desenho", desenvolvimento: "desenvolvimento", revisao: "revisão", encerramento: "encerramento", sessao: "sessão em aberto" })[e];
+
+    function renderLista(lista) {
+      const idx = Object.fromEntries(FASES.map(([f], n) => [f, n]));
+      const cabeca = `<div class="pista-cabeca">
+        <div></div>${ETAPAS.map(([n, span]) => `<div class="pista-etapa" style="grid-column: span ${span}">${n}</div>`).join("")}<div></div>
+        <div></div>${FASES.map(([f, n]) => `<div class="pista-fase ${GATES.has(f) ? "gate" : ""}">${n}</div>`).join("")}<div></div>
+      </div>`;
+      const linhas = lista.map((i) => {
+        const atual = i.fase === "concluida" ? 99 : idx[i.fase];
+        const est = estadoIssue(i);
+        const aberta = est === "aguarda" || est === "falha";
+        const passos = FASES.map(([f], n) => `<div class="passo ${GATES.has(f) ? "gate" : ""} ${n < atual ? "feito" : n === atual ? "atual" : ""} ${n === 7 ? "ultimo" : ""}" title="${NOME_FASE[f]}"><span class="marco"></span></div>`).join("");
+        const s = i.tickets.find((x) => x.sessao);
+        return `<div class="pista-item ${est} ${aberta ? "" : "fechada"} ${i.fase === "concluida" ? "apagada concluida-toda" : ""}">
+          <div class="pista-linha" data-gaveta>
+            <div class="pista-issue"><button class="caret">▼</button><div class="texto">
+              <a class="titulo ${i.titulo ? "" : "sem"}" href="03-issue.html">${esc(i.titulo ?? "sem título")}</a>
+              <span class="sub"><span class="id">${i.id}</span>${marcas(i)}${progresso(i)}${i.fase === "concluida" ? `<span>${i.arquivada ? "arquivada" : "concluída"} em ${i.em}</span>` : ""}</span>
+            </div></div>
+            ${passos}
+            <div class="pista-estado">${s ? sessao(s) : ""}</div>
+          </div>
+          <div class="gaveta"><table>${i.tickets.map((x) => `<tr class="${x.status === "concluido" && !x.sessao ? "apagada" : ""}">
+            <td class="etapa-cel">${etapaNome(x.etapa)}</td>
+            <td style="width:64px"><span class="id">${x.id}</span></td>
+            <td class="titulo-cel">${esc(x.titulo)}</td>
+            <td style="width:110px">${statusPill(x)}</td>
+            <td style="width:210px; max-width:210px">${modelo(x)}</td>
+            <td style="width:220px; text-align:right">${sessao(x)}</td>
+          </tr>`).join("")}</table></div>
+        </div>`;
+      }).join("");
+      return `<div class="pista-rola"><div class="pista">${cabeca}${linhas}</div></div>`;
+    }
+
+    const KPIS = `<div class="kpis">
+      <div class="kpi superficie"><span class="rotulo">Custo · outubro</span><span class="kpi-valor">US$ 27,10</span><span class="kpi-sub">902 chamadas de LLM</span></div>
+      <div class="kpi superficie"><span class="rotulo">Tokens</span><span class="kpi-valor">8,9 M</span><span class="kpi-sub">2,2 M entrada · 0,4 M saída · 6,3 M cache</span></div>
+      <div class="kpi superficie"><span class="rotulo">Issues</span><span class="kpi-valor">6 <small class="muted">/ 2</small></span><span class="kpi-sub">registradas / concluídas</span></div>
+      <div class="kpi superficie"><span class="rotulo">Tickets</span><span class="kpi-valor">22 <small class="muted">/ 17</small></span><span class="kpi-sub">criados / concluídos</span></div>
+      <div class="kpi superficie"><span class="rotulo">PRs</span><span class="kpi-valor">3 <small class="muted">/ 2</small></span><span class="kpi-sub">abertos / mergeados</span></div>
+    </div>`;
+
+    function render() {
+      const lista = visiveis();
+      document.querySelector("[data-kpis]").innerHTML = KPIS;
+      const andamento = ISSUES.filter((i) => i.fase !== "concluida").length;
+      const concl = ISSUES.filter((i) => i.fase === "concluida" && !i.arquivada).length;
+      document.querySelector("[data-contagem]").textContent = `${andamento} em andamento · ${concl} concluídas · ${ISSUES.filter((i) => i.arquivada).length} arquivadas`;
+      document.querySelector("[data-arquivar]").disabled = concl === 0;
+      document.querySelector("[data-lista]").innerHTML = lista.length ? renderLista(lista) : '<p class="vazio">Nenhuma issue.</p>';
+    }
+
+    document.addEventListener("click", (e) => {
+      const linha = e.target.closest("[data-gaveta]");
+      if (linha && !e.target.closest("a")) linha.parentElement.classList.toggle("fechada");
+    });
+    document.querySelectorAll("[data-mostrar]").forEach((c) => c.addEventListener("change", () => { mostrar[c.dataset.mostrar] = c.checked; render(); }));
+    const dialogo = document.querySelector("[data-dialogo]");
+    document.querySelector("[data-arquivar]").onclick = () => {
+      const n = ISSUES.filter((i) => i.fase === "concluida" && !i.arquivada).length;
+      document.querySelector("[data-dialogo-texto]").textContent = `${n} issues concluídas de loja-api serão arquivadas. Elas saem desta lista e continuam acessíveis em "Mostrar arquivadas". Nada é apagado.`;
+      dialogo.showModal();
+    };
+    dialogo.querySelector("[data-fechar]").onclick = () => dialogo.close();
+    dialogo.querySelector("[data-confirmar]").onclick = () => {
+      ISSUES = ISSUES.map((i) => (i.fase === "concluida" ? { ...i, arquivada: true } : i));
+      dialogo.close(); render();
+    };
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Métricas · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <style>
+    /* Séries validadas no fundo escuro (dataviz: categórica 1–3, CVD ΔE ≥ 9,4) */
+    :root { --serie-1: #3987e5; --serie-2: #d95926; --serie-3: #199e70; --foco: #e5ad6f; --base: #8a765c; --resto: #4a4034; --grade: #2c2924; }
+
+    .filtros { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); margin-bottom: var(--s-4); }
+    .filtros label { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); color: var(--muted); }
+    .filtros select { height: 30px; padding: 0 var(--s-2); font: inherit; font-size: var(--fs-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); color-scheme: dark; }
+    .filtros .resumo { font-size: var(--fs-sm); color: var(--muted); }
+    .filtros .resumo b { color: var(--ink); font-weight: var(--w-strong); }
+    .filtros .limpar { font-size: var(--fs-sm); color: var(--accent); background: none; border: 0; cursor: pointer; font-family: inherit; }
+
+    /* Régua de meses */
+    .regua { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin-bottom: var(--s-5); }
+    .mes-btn { all: unset; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 76px; padding: 6px 2px; border: 1px solid transparent; border-radius: var(--r-md); cursor: pointer; }
+    .mes-btn:hover { background: var(--surface); }
+    .mes-btn:focus-visible { outline: 2px solid var(--accent); }
+    .mes-btn i { width: min(20px, 60%); border-radius: 3px 3px 0 0; background: var(--resto); }
+    .mes-btn span { font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
+    .mes-btn.base i { background: var(--base); }
+    .mes-btn[aria-pressed="true"] { background: var(--surface); border-color: var(--line); }
+    .mes-btn[aria-pressed="true"] i { background: var(--foco); }
+    .mes-btn[aria-pressed="true"] span { color: var(--ink); font-weight: var(--w-strong); }
+
+    .titulo-secao { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); margin: var(--s-6) 0 var(--s-3); }
+    .titulo-secao.primeiro { margin-top: 0; }
+    .titulo-secao .muted { font-size: var(--fs-sm); }
+
+    /* Cards: mês × média */
+    .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--s-3); }
+    .kpi { all: unset; box-sizing: border-box; display: flex; flex-direction: column; padding: var(--s-3) var(--s-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); cursor: pointer; }
+    .kpi:hover { border-color: var(--muted); }
+    .kpi:focus-visible { outline: 2px solid var(--accent); }
+    .kpi[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+    .kpi-valor { margin-top: 2px; font-size: var(--fs-xl); font-weight: var(--w-strong); font-variant-numeric: tabular-nums; }
+    .kpi-valor small { font-size: var(--fs-sm); font-weight: 400; color: var(--muted); }
+    .kpi-media { display: flex; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+    .delta { font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--ink); background: var(--surface-2); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+
+    /* Evolução mensal */
+    .grafico { padding: var(--s-3) var(--s-4) var(--s-2); min-width: 0; }
+    .grafico-cabeca { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2) var(--s-4); margin-bottom: var(--s-2); }
+    .grafico-cabeca h3 { font-size: var(--fs-md); }
+    .grafico-cabeca .sub { font-size: var(--fs-sm); color: var(--muted); }
+    .grafico-cabeca .ver { margin-left: auto; font-size: var(--fs-xs); color: var(--accent); background: none; border: 0; cursor: pointer; font-family: inherit; }
+    .legenda { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-4); font-size: var(--fs-sm); color: var(--muted); }
+    .legenda span { display: inline-flex; align-items: center; gap: 6px; }
+    .legenda i { width: 10px; height: 10px; border-radius: 2px; }
+    .legenda i.linha { height: 2px; border-radius: 1px; width: 14px; }
+    .area { position: relative; }
+    svg.barras { display: block; width: 100%; height: auto; overflow: visible; }
+    svg text { font: 11px var(--font); fill: var(--muted); }
+    svg .valor { fill: var(--ink); font-weight: 600; }
+    svg .rot-media { fill: var(--ink); }
+    .hit { fill: transparent; cursor: pointer; }
+    .hit:hover + g > * { filter: brightness(1.2); }
+    .dica { position: absolute; z-index: 4; pointer-events: none; min-width: 160px; padding: var(--s-2) var(--s-3); font-size: var(--fs-sm); background: #0d0c0b; border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: 0 8px 24px rgb(0 0 0 / 0.5); }
+    .dica[hidden] { display: none; }
+    .dica .t { color: var(--muted); font-size: var(--fs-xs); margin-bottom: 4px; }
+    .dica .l { display: grid; grid-template-columns: 12px auto 1fr; align-items: center; gap: var(--s-2); }
+    .dica .l b { font-variant-numeric: tabular-nums; }
+    .dica .l i { width: 10px; height: 2px; border-radius: 1px; }
+    .dica .l span { color: var(--muted); }
+
+    /* Tabelas */
+    .tabela { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .tabela th { text-align: left; font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 6px var(--s-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .tabela th.ordenavel { cursor: pointer; user-select: none; }
+    .tabela th.ordenavel:hover { color: var(--ink); }
+    .tabela th[aria-sort]::after { content: " ▾"; color: var(--accent); }
+    .tabela th[aria-sort="ascending"]::after { content: " ▴"; }
+    .tabela td { padding: 7px var(--s-2); border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+    .tabela tbody tr:hover td { background: var(--surface-2); }
+    .tabela tfoot td { font-weight: var(--w-strong); border-top: 1px solid var(--muted); border-bottom: 0; }
+    .tabela .num { text-align: right; white-space: nowrap; }
+    .tabela .muted { color: var(--muted); font-weight: 400; }
+    .tabela .sep { border-left: 1px solid var(--line); }
+    .tabela a.id:hover { color: var(--accent); }
+    .fase { color: var(--ink); background: var(--surface-2); }
+    .fase-concluida { color: var(--closed); background: var(--closed-bg); }
+    .barras-cel { display: flex; flex-direction: column; gap: 3px; min-width: 120px; }
+    .barras-cel i { display: block; height: 7px; border-radius: 0 3px 3px 0; }
+    .rola { overflow-x: auto; }
+
+    .duas { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--s-3); align-items: start; }
+    .modelos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3) var(--s-6); }
+    @media (max-width: 1100px) { .modelos { grid-template-columns: minmax(0, 1fr); } }
+    .modelo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--s-3); font-size: var(--fs-sm); }
+    .modelo .nome { font: var(--fs-xs) var(--mono); }
+    .modelo .nome small { color: var(--muted); font-family: var(--font); margin-left: 6px; }
+    .modelo .vals { text-align: right; font-variant-numeric: tabular-nums; }
+    .modelo .vals small { color: var(--muted); margin-left: 6px; }
+    .modelo .trilha { grid-column: 1 / -1; height: 8px; display: flex; gap: 2px; }
+    .modelo .trilha i { display: block; height: 100%; }
+    .modelo .trilha i:last-child { border-radius: 0 4px 4px 0; }
+
+    @media (max-width: 1100px) {
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .duas { grid-template-columns: minmax(0, 1fr); }
+      .regua { overflow-x: auto; grid-auto-columns: 56px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html">Início <span class="contador" title="sessões que aguardam você">6</span></a>
+      <a href="02-projeto.html">Projetos</a>
+      <a href="04-metricas.html" aria-current="page">Métricas</a>
+      <a href="05-historico.html">Histórico</a>
+      <a href="07-configuracao.html">Configuração</a>
+    </nav>
+  </header>
+
+  <main class="pagina">
+    <div class="cabeca-pagina"><h1>Métricas</h1></div>
+    <div class="filtros">
+      <label>Projeto <select data-projeto><option value="todos">Todos os projetos</option><option>fabriquinha</option><option selected>loja-api</option><option>site-pessoal</option></select></label>
+      <label>De <select data-de></select></label>
+      <label>Até <select data-ate></select></label>
+      <button class="limpar" data-padrao>últimos 12 meses</button>
+      <span class="resumo" data-resumo></span>
+    </div>
+    <div class="regua" role="group" aria-label="Mês em foco" data-regua></div>
+    <div data-conteudo></div>
+  </main>
+  <div class="dica" data-dica hidden></div>
+
+  <aside class="trocador min" aria-label="Sobre o protótipo">
+    <button class="trocador-fechar" title="Expandir ou recolher">–</button>
+    <span class="rotulo">Métricas · C refinada</span>
+    <p>O mês em foco (padrão: o último do período) é comparado com a média dos meses anteriores do período. Clique num mês da régua para mudar o foco e num card para trocar o gráfico de evolução.</p>
+  </aside>
+
+  <script>
+    // 18 meses de dados de exemplo; o período padrão são os 12 últimos.
+    const MESES = ["mai/25", "jun/25", "jul/25", "ago/25", "set/25", "out/25", "nov/25", "dez/25", "jan/26", "fev/26", "mar/26", "abr/26", "mai/26", "jun/26", "jul/26", "ago/26", "set/26", "out/26"];
+    const BASE = {
+      custo: [3.1, 4.4, 5.2, 4.9, 6.8, 7.4, 8.2, 11.4, 14.9, 13.1, 18.7, 22.3, 19.8, 25.6, 31.2, 28.9, 35.4, 38.42],
+      issuesReg: [1, 2, 2, 2, 3, 3, 3, 4, 5, 4, 6, 7, 6, 8, 9, 8, 10, 9], issuesConc: [0, 1, 2, 1, 2, 3, 1, 3, 4, 4, 5, 6, 6, 6, 8, 8, 9, 7],
+      ticketsCri: [4, 6, 7, 6, 9, 10, 10, 14, 17, 15, 21, 24, 22, 27, 31, 29, 34, 31], ticketsConc: [2, 5, 6, 6, 8, 9, 7, 12, 15, 14, 18, 22, 21, 24, 28, 27, 31, 26],
+      prsAb: [0, 1, 2, 1, 2, 3, 1, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 7], prsMerg: [0, 1, 1, 2, 2, 2, 1, 2, 4, 3, 5, 6, 6, 6, 8, 7, 9, 6],
+      nota: [null, 4, 3.5, 4, 3, 4, 3.7, 4, 4.2, 3.8, 4.1, 4.3, 4, 4.2, 4.4, 4.1, 4.5, 4.3], // média das notas dadas no mês (1 a 5)
+    };
+    const FATOR = { todos: 1, "loja-api": 0.7, fabriquinha: 0.2, "site-pessoal": 0.1 };
+    // [etapa, nome, parte do custo, execuções por issue, taxa de falha, reprovações por issue, minutos por execução]
+    const ETAPAS = [
+      ["registro", "Registro", 0.08, 1.0, 0.05, 0.12, 24], ["desenho", "Desenho", 0.22, 1.1, 0.12, 0.15, 21],
+      ["desenvolvimento", "Desenvolvimento", 0.45, 2.6, 0.18, 0, 28], ["revisao", "Revisão", 0.12, 1.0, 0.04, 0.08, 17],
+      ["encerramento", "Encerramento", 0.09, 1.0, 0.03, 0.2, 14], ["sessao", "Sessão em aberto", 0.04, 0.3, 0, 0, 31],
+    ];
+    const MODELOS = [["claude-sonnet-5-5", "anthropic", 0.55, 0.56], ["claude-opus-5-5", "anthropic", 0.45, 0.24], ["qwen3-coder-30b", "llamacpp", 0, 0.2]];
+    // [id, projeto, título, fase, custo, execuções, falhas, reprovações, minutos, nota do PR]
+    const ISSUES = [
+      ["I-41", "loja-api", "sem título", "registro", 0.9, 1, 0, 0, 34, null],
+      ["I-40", "loja-api", "Exportar pedidos em CSV", "registro", 1.1, 1, 0, 0, 41, null],
+      ["I-39", "loja-api", "Rate limit por cliente na API pública", "desenho", 0.6, 1, 0, 0, 12, null],
+      ["I-38", "loja-api", "Limite de tentativas no login", "desenho", 2.2, 2, 1, 0, 52, null],
+      ["I-37", "fabriquinha", "Board por fase na página inicial", "aprovacao_desenho", 2.78, 3, 1, 0, 86, null],
+      ["I-35", "loja-api", "Cache do catálogo de produtos", "desenvolvimento", 7.9, 6, 1, 0, 164, null],
+      ["I-34", "loja-api", "Timeout no checkout com cupom", "desenvolvimento", 5.4, 5, 2, 0, 131, null],
+      ["I-33", "site-pessoal", "Paginação na busca de posts", "revisao", 3.3, 5, 0, 0, 97, null],
+      ["I-31", "site-pessoal", "Modo escuro no blog", "encerramento", 2.9, 5, 0, 1, 88, null],
+      ["I-29", "loja-api", "Webhook de pagamento do Pix", "aprovacao_pr", 6.84, 11, 1, 0, 202, null],
+      ["I-27", "loja-api", "Relatório de vendas por região", "ajuste_pr", 9.1, 12, 1, 1, 241, 3],
+      ["I-22", "loja-api", "Busca por SKU", "concluida", 5.2, 8, 0, 0, 171, 5],
+      ["I-19", "loja-api", "Frete grátis acima de R$ 200", "concluida", 3.9, 6, 1, 0, 128, 4],
+      ["I-17", "fabriquinha", "Sessões em cards", "concluida", 4.6, 7, 0, 1, 150, 4],
+    ];
+    const NOME_FASE = { registro: "Registro", desenho: "Desenho", aprovacao_desenho: "Aprovação do desenho", desenvolvimento: "Desenvolvimento", revisao: "Revisão", encerramento: "Encerramento", aprovacao_pr: "Aprovação do PR", ajuste_pr: "Ajuste do PR", concluida: "Concluída" };
+
+    const soma = (a) => a.reduce((x, y) => x + y, 0);
+    // ponytail: a média da nota é a média das médias mensais; ponderar pelo número de notas se um mês com 1 PR distorcer
+    const media = (a) => { const v = a.filter((x) => x !== null && x !== undefined); return v.length ? soma(v) / v.length : null; };
+    const fmtNota = (v) => (v === null || v === undefined ? "—" : num(v, 1));
+    const num = (v, d = 0) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+    const qtd = (v) => num(v, Number.isInteger(v) ? 0 : 1);
+    const usd = (v) => `US$ ${num(v, 2)}`;
+    const mtok = (v) => `${num(v, 1)} M`;
+    const dur = (min) => (min >= 60 ? `${Math.floor(min / 60)} h ${String(Math.round(min % 60)).padStart(2, "0")} min` : `${Math.round(min)} min`);
+
+    function dados(projeto) {
+      const f = FATOR[projeto], r = (v) => Math.max(0, Math.round(v * f));
+      const custo = BASE.custo.map((v) => +(v * f).toFixed(2));
+      return {
+        custo, tokens: custo.map((c) => +(c * 0.33).toFixed(2)),
+        nota: BASE.nota.map((n, k) => (r(BASE.prsMerg[k]) ? n : null)), notas: BASE.prsMerg.map(r),
+        issuesReg: BASE.issuesReg.map(r), issuesConc: BASE.issuesConc.map(r), ticketsCri: BASE.ticketsCri.map(r), ticketsConc: BASE.ticketsConc.map(r), prsAb: BASE.prsAb.map(r), prsMerg: BASE.prsMerg.map(r),
+      };
+    }
+    const etapaNoMes = (d, k, [etapa, , parte0, exPorIssue, falha, reprov, minEx]) => {
+      const parte = parte0 * (1 + 0.35 * Math.sin(k * 1.7 + etapa.length)); // variação de exemplo entre os meses
+      const ex = Math.max(0, Math.round(d.issuesReg[k] * exPorIssue + (k % 3)));
+      return { custo: d.custo[k] * parte, tokens: d.tokens[k] * parte, ex, falhas: Math.round(ex * falha), reprov: Math.round(d.issuesReg[k] * reprov), min: minEx + (k % 4) * 2 };
+    };
+
+    const st = { projeto: "loja-api", de: MESES.length - 12, ate: MESES.length - 1, foco: MESES.length - 1, metrica: "custo", ordem: ["custo", -1], tabela: false };
+
+    const METRICAS = {
+      custo: { nome: "Custo", v: (d) => d.custo, fmt: usd, eixo: (v) => `$${num(v)}` },
+      tokens: { nome: "Tokens", v: (d) => d.tokens, fmt: mtok, eixo: (v) => `${num(v)} M` },
+      issues: { nome: "Issues concluídas", v: (d) => d.issuesConc, fmt: qtd, eixo: (v) => num(v), par: (d) => d.issuesReg, parNome: "registradas" },
+      tickets: { nome: "Tickets concluídos", v: (d) => d.ticketsConc, fmt: qtd, eixo: (v) => num(v), par: (d) => d.ticketsCri, parNome: "criados" },
+      prs: { nome: "PRs mergeados", v: (d) => d.prsMerg, fmt: qtd, eixo: (v) => num(v), par: (d) => d.prsAb, parNome: "abertos" },
+      nota: { nome: "Nota média dos PRs", v: (d) => d.nota, fmt: fmtNota, eixo: (v) => num(v), max: 5, par: (d) => d.notas, parNome: "notas dadas", fmtPar: qtd },
+    };
+
+    function deltaTxt(atual, med) {
+      if (atual === null || med === null || med === 0) return "";
+      const p = Math.round(((atual - med) / med) * 100);
+      return `<span class="delta" title="contra a média">${p > 0 ? "▲" : p < 0 ? "▼" : "="} ${Math.abs(p)}%</span>`;
+    }
+
+    // ——— gráfico de evolução ———
+    function passo(v) { const bruto = (v || 1) / 4, p = 10 ** Math.floor(Math.log10(bruto)); return [1, 2, 5, 10].map((c) => c * p).find((c) => c >= bruto); }
+    const coluna = (x, y, w, h, r) => { r = Math.min(r, w / 2, h); return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; };
+    function evolucao(el, d) {
+      const M = METRICAS[st.metrica], v = M.v(d), meses = [];
+      for (let k = st.de; k <= st.ate; k++) meses.push(k);
+      const vals = meses.map((k) => v[k]), med = media(v.slice(st.de, st.foco));
+      const W = Math.max(300, el.clientWidth), H = 210, m = { t: 22, r: 8, b: 24, l: 46 };
+      const n = meses.length, iw = W - m.l - m.r, ih = H - m.t - m.b, band = iw / n;
+      const topo = M.max ?? Math.max(...vals, med ?? 0), s0 = M.max ? 1 : passo(topo), nt = Math.ceil(topo / s0), max = s0 * nt, y = (x) => m.t + ih - (x / max) * ih;
+      const bw = Math.min(24, band * 0.62);
+      let s = `<svg class="barras" viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução de ${M.nome} por mês">`;
+      for (let i = 0; i <= nt; i++) { const yy = y(s0 * i); s += `<line x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}" stroke="var(--grade)"/><text x="${m.l - 8}" y="${yy + 4}" text-anchor="end">${M.eixo(s0 * i)}</text>`; }
+      meses.forEach((k, i) => {
+        const x = m.l + band * i, h = v[k] === null ? 0 : y(0) - y(v[k]);
+        const cor = k === st.foco ? "var(--foco)" : k < st.foco ? "var(--base)" : "var(--resto)";
+        s += `<rect class="hit" data-k="${k}" x="${x}" y="${m.t}" width="${band}" height="${ih}"/><g>${h > 0 ? `<path d="${coluna(x + (band - bw) / 2, y(v[k]), bw, h, 4)}" fill="${cor}"/>` : ""}</g>`;
+        s += `<text x="${x + band / 2}" y="${H - 6}" text-anchor="middle" ${k === st.foco ? 'style="fill:var(--ink);font-weight:600"' : ""}>${W < 560 && i % 2 && k !== st.foco ? "" : MESES[k]}</text>`;
+      });
+      if (med !== null) {
+        const x2 = m.l + band * (st.foco - st.de), yy = y(med);
+        s += `<line x1="${m.l}" x2="${x2}" y1="${yy}" y2="${yy}" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>`;
+        s += `<text class="rot-media" x="${m.l + 4}" y="${yy - 6}">média ${M.fmt(med)}</text>`;
+      }
+      const kf = st.foco - st.de;
+      if (v[st.foco] !== null) s += `<text class="valor" x="${m.l + band * kf + band / 2}" y="${y(v[st.foco]) - 6}" text-anchor="middle">${M.fmt(v[st.foco])}</text>`;
+      s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/></svg>`;
+      el.innerHTML = s;
+      el.querySelectorAll(".hit").forEach((h) => {
+        const k = +h.dataset.k;
+        h.addEventListener("pointermove", (ev) => {
+          const linhas = [["var(--foco)", M.fmt(v[k]), M.nome.toLowerCase()]];
+          if (M.par) linhas.push(["var(--muted)", (M.fmtPar ?? M.fmt)(M.par(d)[k]), M.parNome]);
+          if (med !== null && k === st.foco) linhas.push(["var(--ink)", M.fmt(med), "média dos anteriores"]);
+          dica(ev, `${MESES[k]}${k === st.foco ? " · em foco" : " · clique para focar"}`, linhas);
+        });
+        h.addEventListener("pointerleave", () => (document.querySelector("[data-dica]").hidden = true));
+        h.addEventListener("click", () => { st.foco = k; document.querySelector("[data-dica]").hidden = true; render(); });
+      });
+    }
+    function dica(ev, titulo, linhas) {
+      const d = document.querySelector("[data-dica]");
+      d.replaceChildren();
+      const t = document.createElement("div"); t.className = "t"; t.textContent = titulo; d.append(t);
+      for (const [cor, valor, nome] of linhas) {
+        const l = document.createElement("div"); l.className = "l";
+        const i = document.createElement("i"); i.style.background = cor;
+        const b = document.createElement("b"); b.textContent = valor;
+        const sp = document.createElement("span"); sp.textContent = nome;
+        l.append(i, b, sp); d.append(l);
+      }
+      d.hidden = false;
+      d.style.left = `${Math.min(ev.pageX + 14, scrollX + innerWidth - d.offsetWidth - 8)}px`;
+      d.style.top = `${ev.pageY + 14}px`;
+    }
+
+    // ——— seções ———
+    function cards(d) {
+      const base = (a) => a.slice(st.de, st.foco), k = st.foco;
+      const card = (id, rot, val, med, fmt, extra = "") => `<button class="kpi" data-metrica="${id}" aria-pressed="${st.metrica === id}">
+        <span class="rotulo">${rot}</span><span class="kpi-valor">${fmt(val)}${extra}</span>
+        <span class="kpi-media">${med === null ? "sem meses anteriores" : `média ${fmt(med)}`}${deltaTxt(val, med)}</span></button>`;
+      return `<div class="kpis">
+        ${card("custo", "Custo", d.custo[k], media(base(d.custo)), usd)}
+        ${card("tokens", "Tokens", d.tokens[k], media(base(d.tokens)), mtok)}
+        ${card("issues", "Issues concluídas", d.issuesConc[k], media(base(d.issuesConc)), qtd, ` <small>de ${d.issuesReg[k]} registradas</small>`)}
+        ${card("tickets", "Tickets concluídos", d.ticketsConc[k], media(base(d.ticketsConc)), qtd, ` <small>de ${d.ticketsCri[k]} criados</small>`)}
+        ${card("prs", "PRs mergeados", d.prsMerg[k], media(base(d.prsMerg)), qtd, ` <small>de ${d.prsAb[k]} abertos</small>`)}
+        ${card("nota", "Nota média dos PRs", d.nota[k], media(base(d.nota)), fmtNota, ` <small>de 5 · ${d.notas[k]} ${d.notas[k] === 1 ? "nota" : "notas"}</small>`)}
+      </div>`;
+    }
+    function tabelaEvolucao(d) {
+      const M = METRICAS[st.metrica], v = M.v(d), linhas = [];
+      for (let k = st.de; k <= st.ate; k++) linhas.push(`<tr><td>${MESES[k]}${k === st.foco ? " <span class=\"muted\">· em foco</span>" : ""}</td><td class="num">${M.fmt(v[k])}</td>${M.par ? `<td class="num">${(M.fmtPar ?? M.fmt)(M.par(d)[k])}</td>` : ""}</tr>`);
+      return `<div class="rola"><table class="tabela"><thead><tr><th>Mês</th><th class="num">${M.nome}</th>${M.par ? `<th class="num">${M.parNome}</th>` : ""}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
+    }
+    function porEtapa(d) {
+      const k = st.foco, ant = [];
+      for (let i = st.de; i < k; i++) ant.push(i);
+      const linhas = ETAPAS.map((e) => {
+        const a = etapaNoMes(d, k, e), ms = ant.map((i) => etapaNoMes(d, i, e)), mm = (f) => (ms.length ? media(ms.map(f)) : null);
+        return { nome: e[1], a, med: { custo: mm((x) => x.custo), ex: mm((x) => x.ex), falhas: mm((x) => x.falhas), reprov: mm((x) => x.reprov), min: mm((x) => x.min), tokens: mm((x) => x.tokens) } };
+      });
+      const maxC = Math.max(...linhas.flatMap((l) => [l.a.custo, l.med.custo ?? 0]));
+      const fm = (v, f) => (v === null ? "—" : f(v));
+      return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${MESES[k]} × média</h3><span class="sub">${MESES[k]} / média dos meses anteriores</span>
+          <div class="legenda"><span><i style="background:var(--foco)"></i>${MESES[k]}</span><span><i style="background:var(--base)"></i>média</span></div></div>
+        <div class="rola"><table class="tabela"><thead><tr><th>Etapa</th><th>Custo</th><th class="num">${MESES[k]}</th><th class="num">média</th><th class="num">Δ</th><th class="num sep">Tokens</th><th class="num">Execuções</th><th class="num">Falhas</th><th class="num">Reprovações</th><th class="num">Duração média</th></tr></thead><tbody>
+        ${linhas.map((l) => `<tr><td>${l.nome}</td>
+          <td><div class="barras-cel"><i style="width:${(l.a.custo / maxC) * 100}%;background:var(--foco)"></i><i style="width:${((l.med.custo ?? 0) / maxC) * 100}%;background:var(--base)"></i></div></td>
+          <td class="num">${usd(l.a.custo)}</td><td class="num muted">${fm(l.med.custo, usd)}</td><td class="num">${deltaTxt(l.a.custo, l.med.custo)}</td>
+          <td class="num sep">${mtok(l.a.tokens)} <span class="muted">/ ${fm(l.med.tokens, mtok)}</span></td>
+          <td class="num">${l.a.ex} <span class="muted">/ ${fm(l.med.ex, (x) => num(x, 1))}</span></td>
+          <td class="num">${l.a.falhas} <span class="muted">/ ${fm(l.med.falhas, (x) => num(x, 1))}</span></td>
+          <td class="num">${l.a.reprov} <span class="muted">/ ${fm(l.med.reprov, (x) => num(x, 1))}</span></td>
+          <td class="num">${dur(l.a.min)} <span class="muted">/ ${fm(l.med.min, dur)}</span></td></tr>`).join("")}
+        </tbody></table></div></section>`;
+    }
+    function modelos(d) {
+      const k = st.foco, custo = d.custo[k], tok = d.tokens[k], maxT = tok * 0.56;
+      return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${MESES[k]}</h3><span class="sub">tokens por tipo e custo como o pi calculou</span></div>
+        <div class="legenda" style="margin-bottom:var(--s-3)"><span><i style="background:var(--serie-3)"></i>cache</span><span><i style="background:var(--serie-1)"></i>entrada</span><span><i style="background:var(--serie-2)"></i>saída</span></div>
+        <div class="modelos">${MODELOS.map(([n, p, pc, pt]) => `<div class="modelo"><span class="nome">${n}<small>${p}</small></span><span class="vals"><b>${usd(custo * pc)}</b><small>${mtok(tok * pt)}</small></span>
+          <div class="trilha" style="width:${((tok * pt) / maxT) * 100}%"><i style="width:70%;background:var(--serie-3)"></i><i style="width:25%;background:var(--serie-1)"></i><i style="flex:1;background:var(--serie-2)"></i></div></div>`).join("")}</div></section>`;
+    }
+    function porIssue() {
+      const todos = st.projeto === "todos";
+      const linhas = ISSUES.filter((i) => todos || i[1] === st.projeto).map(([id, proj, tit, fase, custo, ex, fal, rep, min, nota]) => ({ id, proj, tit, fase, custo, tokens: custo * 0.33, ex, fal, rep, min, nota }));
+      const [col, dir] = st.ordem;
+      linhas.sort((a, b) => (typeof a[col] === "string" ? a[col].localeCompare(b[col], "pt-BR", { numeric: true }) : (a[col] ?? -1) - (b[col] ?? -1)) * dir);
+      const th = (c, rot, cls = "num") => `<th class="${cls} ordenavel" data-ordem="${c}" ${col === c ? `aria-sort="${dir < 0 ? "descending" : "ascending"}"` : ""}>${rot}</th>`;
+      const t = (f) => soma(linhas.map(f));
+      return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>Issues com execução no período</h3><span class="sub">${MESES[st.de]} a ${MESES[st.ate]} · ${todos ? "todos os projetos" : st.projeto} · clique no cabeçalho para ordenar</span></div>
+        <div class="rola"><table class="tabela"><thead><tr>${th("id", "Issue", "")}${th("tit", "Título", "")}${todos ? th("proj", "Projeto", "") : ""}${th("fase", "Fase", "")}${th("custo", "Custo")}${th("tokens", "Tokens")}${th("ex", "Execuções")}${th("fal", "Falhas")}${th("rep", "Reprovações")}${th("min", "Duração")}${th("nota", "Nota do PR")}</tr></thead>
+        <tbody>${linhas.map((l) => `<tr><td><a class="id" href="03-issue.html">${l.id}</a></td><td>${l.tit}</td>${todos ? `<td class="muted">${l.proj}</td>` : ""}<td><span class="pill ${l.fase === "concluida" ? "fase-concluida" : "fase"}">${NOME_FASE[l.fase]}</span></td><td class="num">${usd(l.custo)}</td><td class="num">${mtok(l.tokens)}</td><td class="num">${l.ex}</td><td class="num">${l.fal}</td><td class="num">${l.rep}</td><td class="num">${dur(l.min)}</td><td class="num">${l.nota ?? "—"}</td></tr>`).join("")}</tbody>
+        <tfoot><tr><td colspan="${todos ? 4 : 3}">${linhas.length} issues</td><td class="num">${usd(t((l) => l.custo))}</td><td class="num">${mtok(t((l) => l.tokens))}</td><td class="num">${t((l) => l.ex)}</td><td class="num">${t((l) => l.fal)}</td><td class="num">${t((l) => l.rep)}</td><td class="num">${dur(t((l) => l.min))}</td><td></td></tr></tfoot>
+        </table></div></section>`;
+    }
+
+    // ——— render ———
+    const conteudo = document.querySelector("[data-conteudo]");
+    function preencherMeses() {
+      document.querySelector("[data-de]").innerHTML = MESES.map((m, i) => `<option value="${i}" ${i === st.de ? "selected" : ""} ${i >= st.ate ? "disabled" : ""}>${m}</option>`).join("");
+      document.querySelector("[data-ate]").innerHTML = MESES.map((m, i) => `<option value="${i}" ${i === st.ate ? "selected" : ""} ${i <= st.de ? "disabled" : ""}>${m}</option>`).join("");
+    }
+    function render() {
+      const d = dados(st.projeto), n = st.foco - st.de;
+      preencherMeses();
+      document.querySelector("[data-resumo]").innerHTML = n > 0
+        ? `comparando <b>${MESES[st.foco]}</b> com a média de <b>${n} ${n > 1 ? "meses" : "mês"}</b> (${MESES[st.de]}${n > 1 ? ` a ${MESES[st.foco - 1]}` : ""})`
+        : `<b>${MESES[st.foco]}</b> é o primeiro mês do período: sem média para comparar`;
+      const maxC = Math.max(...d.custo.slice(st.de, st.ate + 1)), regua = [];
+      for (let k = st.de; k <= st.ate; k++) regua.push(`<button class="mes-btn ${k < st.foco ? "base" : ""}" data-mes="${k}" aria-pressed="${k === st.foco}" title="${usd(d.custo[k])}"><i style="height:${Math.max(3, (d.custo[k] / maxC) * 42)}px"></i><span>${MESES[k]}</span></button>`);
+      document.querySelector("[data-regua]").innerHTML = regua.join("");
+      const M = METRICAS[st.metrica];
+      conteudo.innerHTML = `
+        <div class="titulo-secao primeiro"><h2>${MESES[st.foco]}</h2><span class="muted">valor do mês, média dos meses anteriores do período e a diferença · clique num card para ver a evolução</span></div>
+        ${cards(d)}
+        <div class="titulo-secao"><h2>Evolução por mês</h2></div>
+        <section class="grafico superficie"><div class="grafico-cabeca"><h3>${M.nome}</h3><span class="sub">${MESES[st.de]} a ${MESES[st.ate]}</span>
+          <div class="legenda"><span><i style="background:var(--foco)"></i>mês em foco</span><span><i style="background:var(--base)"></i>meses da média</span><span><i class="linha" style="background:var(--ink)"></i>média</span></div>
+          <button class="ver" data-tabela>${st.tabela ? "ver gráfico" : "ver tabela"}</button></div>
+          <div class="area" data-evolucao></div></section>
+        <div class="titulo-secao"><h2>Por etapa</h2></div>
+        ${porEtapa(d)}
+        <div class="titulo-secao"><h2>Por modelo</h2></div>
+        ${modelos(d)}
+        <div class="titulo-secao"><h2>Por issue</h2></div>
+        ${porIssue()}`;
+      const area = document.querySelector("[data-evolucao]");
+      if (st.tabela) area.innerHTML = tabelaEvolucao(d); else evolucao(area, d);
+    }
+
+    document.addEventListener("click", (e) => {
+      const mes = e.target.closest("[data-mes]"); if (mes) { st.foco = +mes.dataset.mes; render(); return; }
+      const met = e.target.closest("[data-metrica]"); if (met) { st.metrica = met.dataset.metrica; render(); return; }
+      const ord = e.target.closest("[data-ordem]"); if (ord) { const c = ord.dataset.ordem; st.ordem = [c, st.ordem[0] === c ? -st.ordem[1] : (["id", "tit", "proj", "fase"].includes(c) ? 1 : -1)]; render(); return; }
+      if (e.target.closest("[data-tabela]")) { st.tabela = !st.tabela; render(); return; }
+      if (e.target.closest("[data-padrao]")) { st.ate = MESES.length - 1; st.de = st.ate - 11; st.foco = st.ate; render(); }
+    });
+    document.querySelector("[data-projeto]").addEventListener("change", (e) => { st.projeto = e.target.value; render(); });
+    document.querySelector("[data-de]").addEventListener("change", (e) => { st.de = +e.target.value; if (st.foco < st.de) st.foco = st.ate; render(); });
+    document.querySelector("[data-ate]").addEventListener("change", (e) => { st.ate = +e.target.value; st.foco = st.ate; render(); });
+    let tempo; addEventListener("resize", () => { clearTimeout(tempo); tempo = setTimeout(render, 120); });
+    const trocador = document.querySelector(".trocador");
+    trocador.querySelector(".trocador-fechar").onclick = () => trocador.classList.toggle("min");
+    render();
+  </script>
+</body>
+</html>

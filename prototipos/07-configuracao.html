@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuração · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <style>
+    .link { color: var(--accent); font-size: var(--fs-sm); background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; white-space: nowrap; }
+    .link:hover { text-decoration: underline; }
+    .btn-perigo { color: var(--danger); border-color: var(--danger-bg); background: transparent; }
+    .btn-perigo:hover { background: var(--danger-bg); }
+    input, select, textarea { font: inherit; font-size: var(--fs-sm); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); padding: 6px var(--s-2); color-scheme: dark; min-width: 0; }
+    input.mono, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+    input[readonly] { color: var(--muted); background: var(--surface-2); }
+    textarea { resize: vertical; }
+    .erro input, .erro select, input.erro { border-color: var(--danger); }
+    .msg-erro { font-size: var(--fs-xs); color: var(--danger); }
+    .ajuda { font-size: var(--fs-xs); color: var(--muted); }
+
+    /* Agendador */
+    .agendador { display: grid; grid-template-columns: auto repeat(3, minmax(0, 180px)) minmax(0, 1fr) auto; gap: var(--s-3) var(--s-5); align-items: end; padding: var(--s-4); }
+    .chave { display: flex; align-items: center; gap: var(--s-3); cursor: pointer; }
+    .chave input { position: absolute; opacity: 0; }
+    .trilho-chave { width: 40px; height: 22px; border-radius: 11px; background: var(--line); position: relative; transition: background 0.15s; flex: none; }
+    .trilho-chave::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: left 0.15s; }
+    .chave input:checked + .trilho-chave { background: var(--closed); }
+    .chave input:checked + .trilho-chave::after { left: 21px; }
+    .chave input:focus-visible + .trilho-chave { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .chave strong { display: block; }
+    .chave small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+    .num-campo { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
+    .num-campo .com-unidade { display: flex; align-items: center; gap: 6px; }
+    .num-campo input { width: 80px; text-align: right; font-variant-numeric: tabular-nums; }
+    .status-ag { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); color: var(--muted); }
+    .status-ag b { color: var(--ink); font-weight: var(--w-strong); }
+
+    /* Formulário de projeto */
+    .form { display: flex; flex-direction: column; gap: var(--s-5); }
+    .grupo h3 { font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--s-2); }
+    .grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+    .campo { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--muted); }
+    .campo.largo { grid-column: 1 / -1; }
+    .lista { display: flex; flex-direction: column; gap: var(--s-1); }
+    .item-lista { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1); }
+    .x { padding: 0 var(--s-2); color: var(--muted); background: none; border: 1px solid transparent; border-radius: var(--r-md); cursor: pointer; }
+    .x:hover { color: var(--danger); border-color: var(--danger-bg); }
+    .fitness { display: grid; grid-template-columns: 180px minmax(0, 1.2fr) minmax(0, 1.5fr) auto; gap: var(--s-1); align-items: start; }
+    .fitness-cab { display: grid; grid-template-columns: 180px minmax(0, 1.2fr) minmax(0, 1.5fr) 30px; gap: var(--s-1); font-size: var(--fs-xs); color: var(--muted); }
+    .fitness .celula { display: flex; flex-direction: column; gap: 2px; }
+    .modelos-grade { display: grid; grid-template-columns: 150px minmax(0, 360px); gap: var(--s-1) var(--s-3); align-items: center; font-size: var(--fs-sm); }
+    .modelos-grade select { font-family: var(--mono); font-size: var(--fs-xs); }
+    .modelos-grade select.padrao { color: var(--muted); }
+    .rodape-form { display: flex; align-items: center; gap: var(--s-2); padding-top: var(--s-3); border-top: 1px solid var(--line); }
+    .rodape-form .ajuda { margin-right: auto; }
+
+    /* Navegação lateral */
+    .config-b { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--s-6); align-items: start; }
+    .menu-config { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 2px; }
+    .menu-config .rotulo { margin: var(--s-3) var(--s-2) var(--s-1); }
+    .menu-config button { all: unset; display: flex; justify-content: space-between; align-items: center; padding: 7px var(--s-3); border-radius: var(--r-md); font-size: var(--fs-sm); cursor: pointer; color: var(--muted); }
+    .menu-config button:hover { color: var(--ink); background: var(--surface); }
+    .menu-config button[aria-current="true"] { color: var(--ink); background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+    .menu-config .novo { color: var(--accent); }
+    .painel-b { padding: var(--s-5); }
+    .painel-b > h2 { margin-bottom: var(--s-4); display: flex; gap: var(--s-2); align-items: baseline; }
+
+    @media (max-width: 1100px) {
+      .agendador { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .config-b { grid-template-columns: minmax(0, 1fr); }
+      .menu-config { position: static; }
+      .grade, .fitness, .fitness-cab { grid-template-columns: minmax(0, 1fr); }
+      .fitness-cab { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html">Início <span class="contador" title="sessões que aguardam você">6</span></a>
+      <a href="02-projeto.html">Projetos</a>
+      <a href="04-metricas.html">Métricas</a>
+      <a href="05-historico.html">Histórico</a>
+      <a href="07-configuracao.html" aria-current="page">Configuração</a>
+    </nav>
+  </header>
+
+  <main class="pagina" data-pagina></main>
+
+  <script>
+    const OPUS = "anthropic / claude-opus-5-5", SONNET = "anthropic / claude-sonnet-5-5", QWEN = "llamacpp / qwen3-coder-30b";
+    const MODELOS = [OPUS, SONNET, QWEN];
+    const ETAPAS = [["registro", "Registro"], ["desenho", "Desenho"], ["desenvolvimento", "Desenvolvimento"], ["revisao", "Revisão"], ["encerramento", "Encerramento"], ["sessao", "Sessão em aberto"]];
+    const PROJETOS = [
+      { nome: "loja-api", repo: "/home/jimmy.gomes/code/loja-api", branchBase: "main", hospedagem: "github", preparacao: ["npm ci"], testes: ["npm test", "npm run test:e2e"], sonar: "loja-api",
+        fitness: [["cobertura-minima", "npx c8 check-coverage --lines 85", "Rotas novas com pelo menos 85% de cobertura de linhas."], ["sem-segredo-no-codigo", "gitleaks detect --no-git -s src", "Nenhum segredo escrito no código."], ["cobertura-minima", "npm run bench:webhook", "p95 do webhook abaixo de 100 ms com 200 avisos por segundo."]],
+        modelos: { registro: OPUS, desenho: OPUS, desenvolvimento: SONNET, revisao: SONNET, encerramento: SONNET }, issues: 11, erro: true },
+      { nome: "fabriquinha", repo: "/home/jimmy.gomes/code/fabriquinha", branchBase: "main", hospedagem: "github", preparacao: ["npm ci"], testes: ["npm test"], sonar: "fabriquinha",
+        fitness: [["sem-dependencia-nova", "node scripts/deps.mjs", "Nenhuma dependência de produção nova sem aprovação."]], modelos: { desenho: OPUS }, issues: 2 },
+      { nome: "site-pessoal", repo: "/home/jimmy.gomes/code/site-pessoal", branchBase: "master", hospedagem: "azure-devops", preparacao: [], testes: ["npm run build", "npm test"], sonar: "site-pessoal",
+        fitness: [["lighthouse-90", "npm run lighthouse", "Nota de desempenho do Lighthouse de pelo menos 90."]], modelos: { desenvolvimento: QWEN }, issues: 2 },
+    ];
+    const NOVO = { nome: "", repo: "", branchBase: "main", hospedagem: null, preparacao: [], testes: [""], sonar: "", fitness: [["", "", ""]], modelos: {}, issues: 0, novo: true };
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const HOSP = { github: "GitHub", "azure-devops": "Azure DevOps" };
+
+    function agendador() {
+      return `<section class="agendador superficie">
+        <label class="chave"><input type="checkbox" checked><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos e executa um por vez</small></span></label>
+        <label class="num-campo">Procurar a cada<span class="com-unidade"><input type="number" value="5" min="1" max="1440"> min</span></label>
+        <label class="num-campo">Tempo limite da execução<span class="com-unidade"><input type="number" value="120" min="10" max="1440"> min</span></label>
+        <label class="num-campo">Parar sessão ociosa após<span class="com-unidade"><input type="number" value="30" min="5" max="1440"> min</span></label>
+        <div class="status-ag"><span>Próxima busca às <b>14:35</b></span><span>Executando <b>E-231</b> · I-38 · T-112 · há 6 min</span></div>
+        <button class="btn btn-primario">Salvar</button>
+      </section>`;
+    }
+    const itemLista = (v, ph) => `<div class="item-lista"><input class="mono" value="${esc(v)}" placeholder="${ph}"><button class="x" title="Remover">×</button></div>`;
+    function form(p) {
+      const repetido = (i) => p.erro && i === 2;
+      return `<div class="form">
+        <div class="grupo"><h3>Repositório</h3><div class="grade">
+          <label class="campo">Nome<input value="${esc(p.nome)}" ${p.novo ? 'placeholder="loja-api"' : "readonly"}>${p.novo ? '<span class="ajuda">letras minúsculas, números e hífen; não muda depois</span>' : ""}</label>
+          <label class="campo">Branch base<input class="mono" value="${esc(p.branchBase)}"></label>
+          <label class="campo largo">Caminho do repositório<input class="mono" value="${esc(p.repo)}" placeholder="/home/…/meu-projeto"><span class="ajuda">caminho absoluto; o repositório precisa ter o remoto <code>origin</code></span></label>
+          <label class="campo">Hospedagem<input value="${p.hospedagem ? HOSP[p.hospedagem] : "deduzida do remoto ao salvar"}" readonly></label>
+          <label class="campo">Projeto no SonarQube<input class="mono" value="${esc(p.sonar)}" placeholder="projectKey"><span class="ajuda">o token fica em <code>~/fabriquinha/ambiente</code>, fora do banco</span></label>
+        </div></div>
+        <div class="grupo"><h3>Preparação e testes</h3><div class="grade">
+          <div class="campo">Preparação da worktree <span class="ajuda">opcional; roda ao criar a worktree</span><div class="lista">${p.preparacao.map((c) => itemLista(c, "npm ci")).join("")}<button class="link" style="align-self:flex-start">+ comando</button></div></div>
+          <div class="campo">Testes <span class="ajuda">pelo menos um; todos precisam sair com 0</span><div class="lista">${p.testes.map((c) => itemLista(c, "npm test")).join("")}<button class="link" style="align-self:flex-start">+ comando</button></div></div>
+        </div></div>
+        <div class="grupo"><h3>Fitness functions <span style="text-transform:none;letter-spacing:0;font-weight:400">· pelo menos uma; rodam no desenvolvimento e na revisão</span></h3>
+          <div class="lista"><div class="fitness-cab"><span>Nome</span><span>Comando</span><span>Descrição (até 300)</span><span></span></div>
+          ${p.fitness.map(([n, c, d], i) => `<div class="fitness"><div class="celula ${repetido(i) ? "erro" : ""}"><input class="mono ${repetido(i) ? "erro" : ""}" value="${esc(n)}" placeholder="cobertura-minima">${repetido(i) ? '<span class="msg-erro">nome de fitness function repetido</span>' : ""}</div><input class="mono" value="${esc(c)}" placeholder="comando"><input value="${esc(d)}" placeholder="o que ela garante"><button class="x" title="Remover">×</button></div>`).join("")}
+          <button class="link" style="align-self:flex-start">+ fitness function</button></div></div>
+        <div class="grupo"><h3>Modelo por etapa <span style="text-transform:none;letter-spacing:0;font-weight:400">· vazio usa o padrão do pi; o ticket pode sobrescrever</span></h3>
+          <div class="modelos-grade">${ETAPAS.map(([k, n]) => `<span>${n}</span><select class="${p.modelos[k] ? "" : "padrao"}"><option value="">padrão do pi</option>${MODELOS.map((m) => `<option ${p.modelos[k] === m ? "selected" : ""}>${m}</option>`).join("")}</select>`).join("")}</div></div>
+        <div class="rodape-form"><span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${p.erro ? '<span class="msg-erro" style="margin-right:8px">1 campo com erro</span>' : ""}<button class="btn" data-cancelar>Cancelar</button><button class="btn btn-primario">${p.novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div>
+      </div>`;
+    }
+    
+    let selB = "projeto:loja-api";
+    function B() {
+      const [tipo, nome] = selB.split(":");
+      const p = nome === "__novo" ? NOVO : PROJETOS.find((x) => x.nome === nome);
+      return `<div class="cabeca-pagina"><h1>Configuração</h1></div><div class="config-b">
+        <nav class="menu-config"><span class="rotulo">Geral</span><button data-sel="agendador" aria-current="${selB === "agendador"}">Agendador <span class="pill pill-ok">ligado</span></button>
+          <span class="rotulo">Projetos</span>${PROJETOS.map((x) => `<button data-sel="projeto:${x.nome}" aria-current="${selB === `projeto:${x.nome}`}">${x.nome}<span class="muted" style="font-size:var(--fs-xs)">${HOSP[x.hospedagem]}</span></button>`).join("")}
+          <button class="novo" data-sel="projeto:__novo" aria-current="${nome === "__novo"}">+ Novo projeto</button></nav>
+        <section class="painel-b superficie">${tipo === "agendador" ? `<h2>Agendador</h2>${agendador()}` : `<h2>${p.novo ? "Novo projeto" : p.nome}${p.novo ? "" : ` <span class="muted" style="font-size:var(--fs-sm);font-weight:400">${p.issues} issues</span>`}</h2>${form(p)}`}</section></div>`;
+    }
+    function render() { document.querySelector("[data-pagina]").innerHTML = B(); }
+    document.addEventListener("click", (e) => {
+      const s = e.target.closest("[data-sel]"); if (s) { selB = s.dataset.sel; render(); return; }
+      if (e.target.closest("[data-cancelar]")) render();
+    });
+    document.addEventListener("change", (e) => { if (e.target.matches(".modelos-grade select")) e.target.classList.toggle("padrao", !e.target.value); });
+    render();
+  </script>
+</body>
+</html>

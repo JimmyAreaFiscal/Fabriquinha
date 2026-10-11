@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Histórico · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <style>
+    .filtros { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); margin-bottom: var(--s-4); }
+    .filtros label { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); color: var(--muted); }
+    .filtros select, .filtros input { height: 30px; padding: 0 var(--s-2); font: inherit; font-size: var(--fs-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); color-scheme: dark; }
+    .filtros input { width: 120px; font-family: var(--mono); }
+    .filtros .contagem { margin-left: auto; font-size: var(--fs-sm); color: var(--muted); }
+    .link { color: var(--accent); font-size: var(--fs-sm); background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; white-space: nowrap; }
+    .link:hover { text-decoration: underline; }
+    .res-concluida { color: var(--closed); background: var(--closed-bg); }
+    .res-falha { color: var(--danger); background: var(--danger-bg); }
+    .res-abortada { color: var(--muted); background: var(--surface-2); }
+    .modo { font-size: var(--fs-xs); color: var(--muted); }
+    .modelo { font: var(--fs-xs) var(--mono); color: var(--muted); white-space: nowrap; }
+
+    /* Dias + prévia */
+    .mestre { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: var(--s-5); align-items: start; }
+    .dia { margin-bottom: var(--s-4); }
+    .dia h3 { font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 var(--s-2); }
+    .linha { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 46px 52px 52px minmax(0, 1fr) 120px 90px; align-items: center; gap: var(--s-3); width: 100%; height: 42px; padding: 0 var(--s-3); font-size: var(--fs-sm); border: 1px solid transparent; border-radius: var(--r-md); cursor: pointer; }
+    .linha:hover { background: var(--surface); }
+    .linha:focus-visible { outline: 2px solid var(--accent); }
+    .linha[aria-selected="true"] { background: var(--surface); border-color: var(--accent); }
+    .linha .hora { font-family: var(--mono); font-size: var(--fs-xs); color: var(--muted); }
+    .linha .meio { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .linha .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .previa { position: sticky; top: 64px; padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); max-height: calc(100vh - 88px); overflow: auto; }
+    .previa h2 { font-size: var(--fs-lg); line-height: 1.35; }
+    .fatos { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--s-3); margin: 0; font-size: var(--fs-sm); }
+    .fatos dt { color: var(--muted); }
+    .fatos dd { margin: 0; }
+    .trecho { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); font-size: var(--fs-sm); }
+    .trecho .quem { font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .trecho .ferr { font: var(--fs-xs) var(--mono); color: var(--muted); }
+    .previa .botoes { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+
+    @media (max-width: 1100px) {
+      .mestre { grid-template-columns: minmax(0, 1fr); }
+      .previa { position: static; max-height: none; }
+      .linha { grid-template-columns: 46px 52px minmax(0, 1fr) 90px; }
+      .linha .esconde { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html">Início <span class="contador" title="sessões que aguardam você">6</span></a>
+      <a href="02-projeto.html">Projetos</a>
+      <a href="04-metricas.html">Métricas</a>
+      <a href="05-historico.html" aria-current="page">Histórico</a>
+      <a href="07-configuracao.html">Configuração</a>
+    </nav>
+  </header>
+
+  <main class="pagina">
+    <div class="cabeca-pagina"><h1>Histórico</h1><span class="muted">sessões terminadas, da mais recente para a mais antiga</span></div>
+    <div class="filtros">
+      <label>Projeto <select data-f="projeto"><option value="">todos</option><option>fabriquinha</option><option>loja-api</option><option>site-pessoal</option></select></label>
+      <label>Issue <input data-f="issue" placeholder="I-29" spellcheck="false"></label>
+      <label>Etapa <select data-f="etapa"><option value="">todas</option><option>registro</option><option>desenho</option><option>desenvolvimento</option><option>revisão</option><option>encerramento</option><option>sessão em aberto</option></select></label>
+      <span class="contagem" data-contagem></span>
+    </div>
+    <div data-lista></div>
+  </main>
+
+  <script>
+    // [sessão, dia, hora, issue, título, projeto, ticket, etapa, modo, resultado, duração, custo, modelo, mensagens, trecho]
+    const S = [
+      ["s-9c2e", "Hoje", "13:34", "I-37", "Board por fase na página inicial", "fabriquinha", "T-109", "desenho", "autônoma", "concluida", "22 min", 1.86, "claude-opus-5-5", 41, ["agente", "Desenho submetido: 4 evidências, 3 tickets propostos. Aguarda o gate."]],
+      ["s-41aa", "Hoje", "12:20", "I-29", "Webhook de pagamento do Pix", "loja-api", "T-99", "encerramento", "autônoma", "concluida", "15 min", 1.36, "claude-sonnet-5-5", 33, ["agente", "PR #212 aberto. Vídeo e mensagem do PR submetidos."]],
+      ["s-7b10", "Hoje", "11:02", "I-22", "Busca por SKU", "loja-api", "T-90", "encerramento", "consulta", "concluida", "9 min", 0.09, "qwen3-coder-30b", 12, ["você", "Por que a busca usa índice parcial?"]],
+      ["s-55f0", "Ontem", "18:47", "I-34", "Timeout no checkout com cupom", "loja-api", "T-96", "desenho", "autônoma", "concluida", "26 min", 1.52, "claude-opus-5-5", 38, ["agente", "Desenho submetido: N+1 na busca de cupons é a causa."]],
+      ["s-30d1", "Ontem", "16:15", "I-31", "Modo escuro no blog", "site-pessoal", "T-102", "revisão", "autônoma", "concluida", "18 min", 0.71, "claude-sonnet-5-5", 27, ["agente", "Revisão aprovada: 4 de 4 critérios atendidos."]],
+      ["s-0e4c", "Ontem", "10:03", "I-35", "Cache do catálogo de produtos", "loja-api", "T-103", "desenvolvimento", "autônoma", "concluida", "31 min", 1.21, "claude-sonnet-5-5", 52, ["agente", "Commit feito: invalidação ao editar produto."]],
+      ["s-c812", "09/10", "17:40", "I-38", "Limite de tentativas no login", "loja-api", "T-107", "registro", "interativa", "concluida", "28 min", 0.77, "claude-opus-5-5", 24, ["você", "Pode registrar. O limite é 5 tentativas em 15 minutos."]],
+      ["s-f3e9", "09/10", "14:22", "I-35", "Cache do catálogo de produtos", "loja-api", "T-102", "desenvolvimento", "autônoma", "falha", "30 min", 1.04, "claude-sonnet-5-5", 47, ["fabriquinha", "Tempo limite de 30 min atingido."]],
+      ["s-2a7d", "09/10", "09:11", "I-27", "Relatório de vendas por região", "loja-api", "T-114", "sessão em aberto", "interativa", "concluida", "44 min", 1.66, "claude-sonnet-5-5", 61, ["você", "Ficou bom. Pode concluir a sessão."]],
+      ["s-6d33", "08/10", "16:58", "I-33", "Paginação na busca de posts", "site-pessoal", "T-100", "desenvolvimento", "autônoma", "abortada", "7 min", 0.22, "claude-sonnet-5-5", 9, ["você", "Abortado: estava mexendo no arquivo errado."]],
+      ["s-91b4", "08/10", "10:51", "I-37", "Board por fase na página inicial", "fabriquinha", "T-105", "registro", "interativa", "concluida", "34 min", 0.92, "claude-opus-5-5", 29, ["agente", "Registro concluído: 4 critérios de aceite."]],
+      ["s-48e2", "07/10", "15:30", "I-29", "Webhook de pagamento do Pix", "loja-api", "T-93", "revisão", "autônoma", "concluida", "18 min", 0.88, "claude-sonnet-5-5", 30, ["agente", "Revisão aprovada: 3 de 3 critérios, fitness 3/3."]],
+    ];
+    const RES = { concluida: "concluída", falha: "falha", abortada: "abortada" };
+    const usd = (v) => `US$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+    const f = { projeto: "", issue: "", etapa: "" };
+    let sel = S[0][0];
+    const filtradas = () => S.filter((s) => (!f.projeto || s[5] === f.projeto) && (!f.issue || s[3].toLowerCase().includes(f.issue.toLowerCase())) && (!f.etapa || s[7] === f.etapa));
+    const pill = (r) => `<span class="pill res-${r}">${RES[r]}</span>`;
+
+    function lista(l) {
+      const dias = new Map();
+      for (const s of l) { if (!dias.has(s[1])) dias.set(s[1], []); dias.get(s[1]).push(s); }
+      const s = l.find((x) => x[0] === sel) ?? l[0];
+      if (!s) return "";
+      sel = s[0];
+      return `<div class="mestre"><div>${[...dias].map(([dia, ss]) => `<section class="dia"><h3>${dia}</h3>${ss.map((x) => `
+        <button class="linha" data-sel="${x[0]}" aria-selected="${x[0] === sel}"><span class="hora">${x[2]}</span><span class="id">${x[3]}</span><span class="id esconde">${x[6]}</span><span class="meio">${x[4]} <span class="muted">· ${x[7]} · ${x[8]}</span></span><span class="esconde">${pill(x[9])}</span><span class="num muted">${usd(x[11])}</span></button>`).join("")}</section>`).join("")}</div>
+        <aside class="previa superficie">
+          <div><span class="id">${s[3]} · ${s[6]}</span><h2>${s[4]}</h2></div>
+          <dl class="fatos"><dt>Projeto</dt><dd>${s[5]}</dd><dt>Etapa</dt><dd>${s[7]} · ${s[8]}</dd><dt>Resultado</dt><dd>${pill(s[9])}</dd><dt>Terminada</dt><dd>${s[1]} ${s[2]} · durou ${s[10]}</dd><dt>Custo</dt><dd>${usd(s[11])} · <span class="modelo">${s[12]}</span></dd><dt>Mensagens</dt><dd>${s[13]}</dd></dl>
+          <div class="trecho"><span class="quem">fim da conversa</span><span class="ferr">▸ bash  npm test  ✓ 214 de 214</span><div><span class="quem">${s[14][0]}</span><div>${s[14][1]}</div></div></div>
+          <div class="botoes"><a class="btn btn-primario" href="06-chat.html">Abrir o chat</a><button class="btn">Conversar sobre</button><button class="btn">Exportar</button></div>
+        </aside></div>`;
+    }
+
+    function render() {
+      const l = filtradas();
+      document.querySelector("[data-contagem]").textContent = `${l.length} sessões`;
+      document.querySelector("[data-lista]").innerHTML = l.length ? lista(l) : '<p class="muted">Nenhuma sessão com esses filtros.</p>';
+    }
+    document.querySelectorAll("[data-f]").forEach((e) => e.addEventListener("input", () => { f[e.dataset.f] = e.value.trim(); render(); }));
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-sel]"); if (b) { sel = b.dataset.sel; render(); return; }
+    });
+    render();
+  </script>
+</body>
+</html>

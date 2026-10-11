@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Início · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <style>
+    .bloco { margin-top: var(--s-8); }
+
+    .frase-mes { font-size: var(--fs-sm); color: var(--muted); }
+    .frase-mes b { color: var(--ink); font-weight: var(--w-strong); }
+    .frase-mes a { color: var(--accent); margin-left: var(--s-2); }
+    .decisoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--s-3); }
+    .decisao { display: grid; grid-template-columns: 1fr auto; align-content: start; gap: 4px var(--s-3); padding: var(--s-3) var(--s-4); border-left: 3px solid var(--open); }
+    .decisao.falha { border-left-color: var(--danger); }
+    .decisao-motivo { grid-column: 1; align-self: center; font-size: var(--fs-xs); font-weight: var(--w-strong); text-transform: uppercase; letter-spacing: 0.06em; color: var(--open); }
+    .decisao.falha .decisao-motivo { color: var(--danger); }
+    .decisao-titulo { grid-column: 1 / -1; font-size: var(--fs-lg); font-weight: var(--w-strong); line-height: 1.35; }
+    .decisao-texto { grid-column: 1 / -1; margin: 0; font-size: var(--fs-sm); }
+    .decisao-pe { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); margin-top: var(--s-1); font-size: var(--fs-sm); color: var(--muted); }
+    .decisao-pe .mono { white-space: nowrap; }
+    .rodando-linhas { display: flex; flex-direction: column; }
+    .rodando-linha { display: grid; grid-template-columns: 96px 64px minmax(0, 1fr) 140px 220px 90px; align-items: center; gap: var(--s-3); height: 40px; padding: 0 var(--s-4); font-size: var(--fs-sm); border-bottom: 1px solid var(--line); }
+    .rodando-linha:last-child { border-bottom: 0; }
+    .rodando-linha:hover { background: var(--surface-2); }
+    .rodando-linha .titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+    .rodando-linha .tempo { text-align: right; font-variant-numeric: tabular-nums; }
+    .board-etapas { display: grid; grid-template-columns: repeat(8, minmax(158px, 1fr)); gap: var(--s-2) 10px; overflow-x: auto; padding-bottom: var(--s-2); }
+    .etapa { padding: 0 var(--s-1) var(--s-1); border-bottom: 2px solid var(--line); font-size: var(--fs-xs); font-weight: var(--w-strong); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .coluna-gate .coluna-corpo { background: repeating-linear-gradient(135deg, var(--surface), var(--surface) 8px, #201d18 8px, #201d18 16px); border-color: #4a3c22; }
+    .tag-gate { color: var(--open); border-color: #5a4720; }
+
+    @media (max-width: 1100px) {
+      .rodando-linha { grid-template-columns: auto 44px minmax(0, 1fr) auto; padding: 0 var(--s-3); }
+      .rodando-linha .esconde { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html" aria-current="page">Início <span class="contador" title="sessões que aguardam você">6</span></a>
+      <a href="02-projeto.html">Projetos</a>
+      <a href="04-metricas.html">Métricas</a>
+      <a href="05-historico.html">Histórico</a>
+      <a href="07-configuracao.html">Configuração</a>
+    </nav>
+  </header>
+
+  <main class="pagina">
+    <div class="cabeca-pagina">
+      <h1>Início</h1>
+      <div class="acoes"><button class="btn btn-primario">+ Registrar necessidade</button></div>
+    </div>
+    <p class="frase-mes" data-frase-mes></p>
+
+    <section class="bloco" style="margin-top: var(--s-5)">
+      <div class="secao-titulo"><h2>Aguarda você</h2><span class="contador">6</span><span class="muted">da mais antiga para a mais nova</span></div>
+      <div class="decisoes" data-decisoes></div>
+    </section>
+
+    <section class="bloco" style="margin-top: var(--s-6)">
+      <div class="secao-titulo"><h2>Rodando</h2><span class="muted">2</span></div>
+      <div class="rodando-linhas superficie" data-rodando></div>
+    </section>
+
+    <section class="bloco">
+      <div class="secao-titulo"><h2>Board</h2><span class="muted" data-total></span></div>
+      <div class="board-etapas" data-board-etapas></div>
+    </section>
+  </main>
+
+  <script>
+    const FASES = [
+      ["registro", "Registro"], ["desenho", "Desenho"], ["aprovacao_desenho", "Aprovação do desenho"],
+      ["desenvolvimento", "Desenvolvimento"], ["revisao", "Revisão"], ["encerramento", "Encerramento"],
+      ["aprovacao_pr", "Aprovação do PR"], ["ajuste_pr", "Ajuste do PR"],
+    ];
+    const ETAPAS = [
+      ["Registrar", 1], ["Desenhar", 2], ["Implementar", 1], ["Revisar", 1], ["Encerrar", 3],
+    ];
+    const GATES = new Set(["aprovacao_desenho", "aprovacao_pr"]);
+
+    // marca: aguarda | rodando | bloqueada
+    const ISSUES = [
+      { id: "I-41", titulo: null, tipo: null, projeto: "loja-api", fase: "registro", ticket: ["T-118", "registro · em execução"], marcas: [["aguarda", "aguarda você · responder"]] },
+      { id: "I-40", titulo: "Exportar pedidos em CSV", tipo: "funcionalidade", projeto: "loja-api", fase: "registro", ticket: null, marcas: [["aguarda", "aguarda você · gate do registro"]] },
+      { id: "I-39", titulo: "Rate limit por cliente na API pública", tipo: "funcionalidade", projeto: "loja-api", fase: "desenho", ticket: ["T-113", "desenho · aberto"], marcas: [["bloqueada", "bloqueada por I-35"]] },
+      { id: "I-38", titulo: "Limite de tentativas no login", tipo: "problema", projeto: "loja-api", fase: "desenho", ticket: ["T-112", "desenho · em execução"], marcas: [["rodando", "em execução · 6 min"]] },
+      { id: "I-37", titulo: "Board por fase na página inicial", tipo: "funcionalidade", projeto: "fabriquinha", fase: "aprovacao_desenho", ticket: ["T-110", "desenvolvimento · aberto (+2)"], marcas: [["aguarda", "aguarda você · gate do desenho"]] },
+      { id: "I-35", titulo: "Cache do catálogo de produtos", tipo: "funcionalidade", projeto: "loja-api", fase: "desenvolvimento", ticket: ["T-106", "desenvolvimento · aberto"], marcas: [] },
+      { id: "I-34", titulo: "Timeout no checkout com cupom", tipo: "problema", projeto: "loja-api", fase: "desenvolvimento", ticket: ["T-101", "desenvolvimento · falhou"], marcas: [["falha", "aguarda você · falha"]] },
+      { id: "I-33", titulo: "Paginação na busca de posts", tipo: "funcionalidade", projeto: "site-pessoal", fase: "revisao", ticket: ["T-104", "revisão · aberto"], marcas: [] },
+      { id: "I-31", titulo: "Modo escuro no blog", tipo: "funcionalidade", projeto: "site-pessoal", fase: "encerramento", ticket: ["T-108", "encerramento · aberto"], marcas: [] },
+      { id: "I-29", titulo: "Webhook de pagamento do Pix", tipo: "funcionalidade", projeto: "loja-api", fase: "aprovacao_pr", ticket: null, marcas: [["aguarda", "aguarda você · gate do PR"]] },
+      { id: "I-27", titulo: "Relatório de vendas por região", tipo: "funcionalidade", projeto: "loja-api", fase: "ajuste_pr", ticket: ["T-117", "sessão · em execução"], marcas: [["aguarda", "aguarda você · responder"]] },
+    ];
+
+    // Ordem do F7: aguardando da mais antiga para a mais nova, depois rodando.
+    const SESSOES = [
+      { estado: "falha", motivo: "Falhou", texto: "3 testes falharam em checkout.spec.ts", acao: "Responder e retomar", issue: "I-34", titulo: "Timeout no checkout com cupom", ticket: "T-101", etapa: "desenvolvimento", modo: "autônoma", projeto: "loja-api", quando: "há 2 h 14 min", modelo: "anthropic / claude-sonnet-5-5" },
+      { estado: "aguarda", motivo: "Gate do PR", texto: "PR #212 aberto; aguarda a sua revisão no PR", acao: "Ver o PR", issue: "I-29", titulo: "Webhook de pagamento do Pix", ticket: "T-99", etapa: "encerramento", modo: "autônoma", projeto: "loja-api", quando: "há 1 h 20 min", modelo: "anthropic / claude-sonnet-5-5" },
+      { estado: "aguarda", motivo: "Gate do desenho", texto: "3 tickets de desenvolvimento propostos", acao: "Avaliar desenho", issue: "I-37", titulo: "Board por fase na página inicial", ticket: "T-109", etapa: "desenho", modo: "autônoma", projeto: "fabriquinha", quando: "há 47 min", modelo: "anthropic / claude-opus-5-5" },
+      { estado: "aguarda", motivo: "Gate do registro", texto: "Registro pronto; falta aprovar", acao: "Avaliar registro", issue: "I-40", titulo: "Exportar pedidos em CSV", ticket: "T-115", etapa: "registro", modo: "interativa", projeto: "loja-api", quando: "há 22 min", modelo: "anthropic / claude-opus-5-5" },
+      { estado: "aguarda", motivo: "Conversa", texto: "O agente respondeu e espera você", acao: "Responder", issue: "I-27", titulo: "Relatório de vendas por região", ticket: "T-117", etapa: "sessão", modo: "interativa", projeto: "loja-api", quando: "há 9 min", modelo: "anthropic / claude-sonnet-5-5" },
+      { estado: "aguarda", motivo: "Conversa", texto: "O agente perguntou qual é o formato do arquivo", acao: "Responder", issue: "I-41", titulo: "sem título", ticket: "T-118", etapa: "registro", modo: "interativa", projeto: "loja-api", quando: "há 2 min", modelo: "anthropic / claude-opus-5-5" },
+      { estado: "rodando", motivo: "Rodando", texto: "Escrevendo o relatório de complexidade", issue: "I-38", titulo: "Limite de tentativas no login", ticket: "T-112", etapa: "desenho", modo: "autônoma", projeto: "loja-api", quando: "há 6 min", modelo: "anthropic / claude-opus-5-5" },
+      { estado: "rodando", motivo: "Rodando", texto: "Respondendo à sua pergunta", issue: "I-22", titulo: "Busca por SKU", ticket: "T-90", etapa: "desenvolvimento", modo: "consulta", projeto: "loja-api", quando: "há 1 min", modelo: "llamacpp / qwen3-coder-30b" },
+    ];
+
+    const MES = {
+      custo: "US$ 38,42", chamadas: "1.284", tokens: "12,4 M", entrada: "3,1 M", saida: "0,6 M", cache: "8,7 M",
+      issues: [9, 4], tickets: [31, 24], prs: [5, 4],
+    };
+
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const PILL = { aguarda: "pill-aguarda", rodando: "pill-rodando", falha: "pill-falha", bloqueada: "pill-neutro" };
+
+    function cartao(i) {
+      const classe = i.marcas.map(([m]) => (m === "falha" ? "aguarda" : m)).join(" ");
+      return `<a class="cartao ${classe}" href="03-issue.html">
+        <div class="cartao-topo"><span class="id">${i.id}</span><span class="tag">${esc(i.projeto)}</span></div>
+        <div class="cartao-titulo ${i.titulo ? "" : "sem"}">${esc(i.titulo ?? "sem título")}</div>
+        ${i.ticket ? `<div class="cartao-ticket"><span class="mono">${i.ticket[0]}</span> ${esc(i.ticket[1])}</div>` : ""}
+        ${i.marcas.length ? `<div class="cartao-marcas">${i.marcas.map(([m, t]) => `<span class="pill ${PILL[m]}">${esc(t)}</span>`).join("")}</div>` : ""}
+      </a>`;
+    }
+    function coluna([fase, nome], gate = false) {
+      const lista = ISSUES.filter((i) => i.fase === fase);
+      return `<div class="coluna ${gate ? "coluna-gate" : ""}">
+        <div class="coluna-cabeca">${nome}<span class="n">${lista.length}</span>${gate ? '<span class="tag tag-gate">gate</span>' : ""}</div>
+        <div class="coluna-corpo">${lista.map(cartao).join("") || '<span class="coluna-vazia">vazia</span>'}</div>
+      </div>`;
+    }
+    document.querySelector("[data-total]").textContent = `${ISSUES.length} issues em andamento`;
+    document.querySelector("[data-frase-mes]").innerHTML =
+      `Outubro de 2026, todos os projetos: <b>${MES.custo}</b> · <b>${MES.tokens}</b> tokens · issues <b>${MES.issues[0]}</b> registradas, <b>${MES.issues[1]}</b> concluídas · tickets <b>${MES.tickets[0]}</b> criados, <b>${MES.tickets[1]}</b> concluídos · PRs <b>${MES.prs[0]}</b> abertos, <b>${MES.prs[1]}</b> mergeados <a href="04-metricas.html">Métricas →</a>`;
+    document.querySelector("[data-decisoes]").innerHTML = SESSOES.filter((s) => s.estado !== "rodando").map((s) => `
+      <a class="decisao superficie ${s.estado}" href="06-chat.html">
+        <span class="decisao-motivo">${s.motivo}</span><span class="btn ${s.estado === "falha" ? "" : "btn-primario"} btn-pequeno">${s.acao} →</span>
+        <span class="decisao-titulo"><span class="id">${s.issue}</span> ${esc(s.titulo)}</span>
+        <p class="decisao-texto">${esc(s.texto)}</p>
+        <div class="decisao-pe"><span class="tag">${s.projeto}</span><span><span class="mono">${s.ticket}</span> · ${s.etapa} · ${s.modo} · ${s.quando}</span></div>
+      </a>`).join("");
+    document.querySelector("[data-rodando]").innerHTML = SESSOES.filter((s) => s.estado === "rodando").map((s) => `
+      <a class="rodando-linha" href="06-chat.html">
+        <span class="pill pill-rodando">${s.modo}</span>
+        <span class="id">${s.issue}</span>
+        <span class="titulo">${esc(s.titulo)} <span class="muted">— ${esc(s.texto)}</span></span>
+        <span class="muted esconde"><span class="mono">${s.ticket}</span> · ${s.etapa}</span>
+        <span class="mono muted esconde">${s.modelo}</span>
+        <span class="tempo muted">${s.quando}</span>
+      </a>`).join("");
+    document.querySelector("[data-board-etapas]").innerHTML =
+      ETAPAS.map(([n, span]) => `<div class="etapa" style="grid-column: span ${span}">${n}</div>`).join("") +
+      FASES.map((f) => coluna(f, GATES.has(f[0]))).join("");
+
+  </script>
+</body>
+</html>

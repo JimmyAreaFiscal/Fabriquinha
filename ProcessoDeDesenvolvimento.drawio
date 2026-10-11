@@ -1,0 +1,301 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.1.2 Chrome/138.0.7204.243 Electron/37.4.0 Safari/537.36" version="28.1.2">
+  <diagram name="Page-1" id="sykZtoRQ7xBaICq0kerP">
+    <mxGraphModel dx="3705" dy="2520" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="r_LA35FQatkXShZi-ib0-35" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="1101" width="170" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-25" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="450" width="250" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-12" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="230" width="220" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="b0luNn-IH9dh5ok0e9bF-1" target="b0luNn-IH9dh5ok0e9bF-8" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-1" value="Demanda" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="40" y="280" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="b0luNn-IH9dh5ok0e9bF-2" target="b0luNn-IH9dh5ok0e9bF-1" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-2" value="Auditor" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;labelPosition=center;align=center;" parent="1" vertex="1">
+          <mxGeometry x="-100" y="260" width="40" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-4" value="Periodicamente" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" parent="1" vertex="1">
+          <mxGeometry x="-330" y="280" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="b0luNn-IH9dh5ok0e9bF-4" target="b0luNn-IH9dh5ok0e9bF-2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="b0luNn-IH9dh5ok0e9bF-8" target="b0luNn-IH9dh5ok0e9bF-10" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-8" value="Auditor" style="shape=umlActor;verticalLabelPosition=top;verticalAlign=bottom;html=1;outlineConnect=0;labelPosition=center;align=center;" parent="1" vertex="1">
+          <mxGeometry x="160" y="260" width="40" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="b0luNn-IH9dh5ok0e9bF-10" target="r_LA35FQatkXShZi-ib0-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;" edge="1" parent="1" source="b0luNn-IH9dh5ok0e9bF-10" target="r_LA35FQatkXShZi-ib0-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b0luNn-IH9dh5ok0e9bF-10" value="RegistrarNecessidade" style="shape=mxgraph.signs.tech.computer;html=1;pointerEvents=1;verticalLabelPosition=top;verticalAlign=bottom;align=center;sketch=0;labelPosition=center;" parent="1" vertex="1">
+          <mxGeometry x="275" y="271" width="50" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-1" target="r_LA35FQatkXShZi-ib0-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-1" value="Issue + Ticket de Desenho" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=left;verticalLabelPosition=middle;align=left;verticalAlign=middle;spacingTop=2;" vertex="1" parent="1">
+          <mxGeometry x="280" y="400" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-7" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;RegistrarNecessidade&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;h3&gt;Objetivo&lt;/h3&gt;O objetivo nesta etapa é entender qual é o trabalho a ser feito dentro da Issue. &lt;br&gt;&lt;br&gt;&lt;h3&gt;Problemas atuais: &lt;/h3&gt;1) desvio do que deve ser feito&lt;br&gt;2) ampliação do que deve ser feito&lt;br&gt;&lt;br&gt;&lt;h3&gt;Evidências&lt;/h3&gt;&lt;div&gt;1) Video / Código do comportamento atual e/ou do problema&amp;nbsp;&lt;/div&gt;&lt;div&gt;2) Critérios de Aceite&amp;nbsp;&lt;br&gt;&lt;br&gt;&lt;h3&gt;Métricas de Sucesso&amp;nbsp;&lt;/h3&gt;&lt;/div&gt;&lt;div&gt;1) Quantidade de tokens gastos por modelo e Custos&lt;/div&gt;&lt;div&gt;2) Quantidade de alterações/correções do Auditor&lt;/div&gt;&lt;p&gt;&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="290" y="-190" width="430" height="390" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-9" value="Vídeo" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="480" y="251" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-10" value="Código" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="540" y="251" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-11" value="Critério de Aceite" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="600" y="251" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-14" target="r_LA35FQatkXShZi-ib0-25">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-47" target="r_LA35FQatkXShZi-ib0-27">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="750" y="891" />
+              <mxPoint x="300" y="890" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-14" value="DesenharSolucao" style="shape=mxgraph.signs.tech.computer;html=1;pointerEvents=1;verticalLabelPosition=top;verticalAlign=bottom;align=left;sketch=0;labelPosition=right;" vertex="1" parent="1">
+          <mxGeometry x="275" y="530" width="50" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-16" target="r_LA35FQatkXShZi-ib0-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-16" value="Cron / Timer" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" vertex="1" parent="1">
+          <mxGeometry x="100" y="490" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-18" value="Auditor" style="shape=umlActor;verticalLabelPosition=top;verticalAlign=bottom;html=1;outlineConnect=0;labelPosition=center;align=center;" vertex="1" parent="1">
+          <mxGeometry x="100" y="570" width="40" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-18" target="r_LA35FQatkXShZi-ib0-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-21" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;DesenharSolucao&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;h3&gt;Objetivo&lt;/h3&gt;O objetivo nesta etapa é desenhar a solução possível para o problema ou para a nova funcionalidade (conforme a necessidade/issue)&lt;br&gt;&lt;br&gt;&lt;h3&gt;Problemas atuais: &lt;/h3&gt;1) desenho complexo da solução&lt;br&gt;2) ampliação do que deve ser feito&lt;br&gt;&lt;br&gt;&lt;h3&gt;Evidências&lt;/h3&gt;&lt;div&gt;1) Desenho da Solução&amp;nbsp;&lt;/div&gt;&lt;div&gt;2) Protótipo (se for funcionalidade)&lt;/div&gt;&lt;div&gt;3) Relatório de Análise de Complexidade&lt;br&gt;&lt;br&gt;&lt;h3&gt;Métricas de Sucesso&lt;/h3&gt;&lt;/div&gt;&lt;div&gt;1) Quantidade de token/modelo e&amp;nbsp; custo total&amp;nbsp;&lt;/div&gt;&lt;div&gt;2) Quantidade de alterações/correções no desenho&lt;/div&gt;&lt;p&gt;&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="-230" y="440" width="290" height="420" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-22" value="Desenho da Solução" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="550" y="480" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-23" value="Protótipo + vídeo/print" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="630" y="480" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-24" value="Relatório de Análise de Complexidade" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="710" y="480" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-27" target="r_LA35FQatkXShZi-ib0-30">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-27" value="Ticket de Desenvolvimento" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=left;verticalLabelPosition=middle;align=right;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="280" y="1001" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-36" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;dashed=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-30" target="r_LA35FQatkXShZi-ib0-35">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-39" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-30" target="r_LA35FQatkXShZi-ib0-38">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-57" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-30" target="r_LA35FQatkXShZi-ib0-47">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="655" y="961" />
+              <mxPoint x="850" y="961" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-30" value="ImplementarSolucao" style="shape=mxgraph.signs.tech.computer;html=1;pointerEvents=1;verticalLabelPosition=bottom;verticalAlign=top;align=left;sketch=0;labelPosition=right;" vertex="1" parent="1">
+          <mxGeometry x="630" y="992" width="50" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-32" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;ImplementarSolucao&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;h3&gt;Objetivo&lt;/h3&gt;O objetivo nesta etapa é implementar a solução desenhada anteriormente&lt;br&gt;&lt;br&gt;&lt;h3&gt;Problemas atuais: &lt;/h3&gt;1) implementação parcial ou com bug&lt;br&gt;2) alteração dos testes e2e e de integração&lt;div&gt;3) adição de complexidade acidental&amp;nbsp;&lt;/div&gt;&lt;div&gt;4) adição de acoplamento&lt;/div&gt;&lt;div&gt;5) adição de bad smells&lt;br&gt;&lt;br&gt;&lt;h3&gt;Evidências&lt;/h3&gt;&lt;div&gt;1) Aprovação dos testes (todos)&lt;/div&gt;&lt;div&gt;2) SAST (SonarQube)&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;h3&gt;Métricas de Sucesso&lt;/h3&gt;&lt;/div&gt;&lt;div&gt;1) Quantidade de token/modelo e&amp;nbsp; custo total&amp;nbsp;&lt;/div&gt;&lt;div&gt;2) Quantidade de alterações posteriores no código desenvolvido&lt;/div&gt;&lt;p&gt;&lt;/p&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="705" y="1101" width="290" height="430" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-33" value="Execução dos Testes" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="240" y="1121" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-34" value="Relatório do SonarQube" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="320" y="1121" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-45" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-37" target="r_LA35FQatkXShZi-ib0-44">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-37" value="RevisarSolucao" style="shape=mxgraph.signs.tech.computer;html=1;pointerEvents=1;verticalLabelPosition=top;verticalAlign=bottom;align=center;sketch=0;labelPosition=center;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="565" width="50" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-38" target="r_LA35FQatkXShZi-ib0-37">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-38" value="Ticket de Revisão" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" vertex="1" parent="1">
+          <mxGeometry x="1210" y="1001" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-43" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;RevisarSolucao&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;h3&gt;Objetivo&lt;/h3&gt;O objetivo nesta etapa é revisar o que foi implementad, acrescentando tarefas de implementação em caso de problemas&lt;br&gt;&lt;br&gt;&lt;h3&gt;Problemas atuais: &lt;/h3&gt;1) complexidade elevada é enviada para PR&lt;br&gt;2) revisão altera funcionalidades ou problemas não envolvidos com o código modificado&lt;div&gt;3) adição de complexidade acidental&amp;nbsp;&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;h3&gt;Evidências&lt;/h3&gt;&lt;div&gt;1) Critérios de Aceite com vídeos / imagens&lt;/div&gt;&lt;div&gt;2) Relatório Arquivos Alterados x Desenho Inicial&amp;nbsp;&lt;/div&gt;&lt;div&gt;3) Matriz de Fitness Functions com Explicações&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;h3&gt;Métricas de Sucesso&lt;/h3&gt;&lt;/div&gt;&lt;div&gt;1) Quantidade de token/modelo e&amp;nbsp; custo total&amp;nbsp;&lt;/div&gt;&lt;div&gt;2) Quantidade de exigências de alterações&lt;/div&gt;&lt;div&gt;3) Quantidade de bugs em arquivos revisados&lt;/div&gt;&lt;p&gt;&lt;/p&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="560" width="290" height="440" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-49" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-44" target="r_LA35FQatkXShZi-ib0-47">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1220" y="700" />
+              <mxPoint x="1060" y="700" />
+              <mxPoint x="1060" y="891" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-50" value="Reprovado" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="r_LA35FQatkXShZi-ib0-49">
+          <mxGeometry x="-0.9244" y="-2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-53" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-44" target="r_LA35FQatkXShZi-ib0-52">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1220" y="309" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-58" value="Aprovado&amp;nbsp;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="r_LA35FQatkXShZi-ib0-53">
+          <mxGeometry x="-0.7827" y="2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-44" value="" style="rhombus;whiteSpace=wrap;html=1;verticalAlign=bottom;pointerEvents=1;sketch=0;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="554" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-48" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-72" target="r_LA35FQatkXShZi-ib0-27">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="588" as="sourcePoint" />
+            <mxPoint x="300" y="810" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="300" y="930" />
+              <mxPoint x="300" y="930" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-47" value="Loop" style="rhombus;whiteSpace=wrap;html=1;verticalAlign=middle;pointerEvents=1;sketch=0;" vertex="1" parent="1">
+          <mxGeometry x="810" y="851" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-55" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-52" target="r_LA35FQatkXShZi-ib0-54">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-52" value="Ticket de Encerramento" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="289" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-63" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;dashed=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-54" target="r_LA35FQatkXShZi-ib0-59">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-65" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-54" target="r_LA35FQatkXShZi-ib0-64">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-54" value="EncerrarSolucao" style="shape=mxgraph.signs.tech.computer;html=1;pointerEvents=1;verticalLabelPosition=bottom;verticalAlign=top;align=right;sketch=0;labelPosition=left;" vertex="1" parent="1">
+          <mxGeometry x="1365" y="-398" width="50" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-56" value="&lt;h2 style=&quot;margin-top: 0px;&quot;&gt;EncerrarSolucao&lt;/h2&gt;&lt;p&gt;&lt;/p&gt;&lt;h3&gt;Objetivo&lt;/h3&gt;O objetivo nesta etapa é documentar o que foi feito para manter o histórico e para dar evidências ao code reviewer humano (engenheiro)&lt;br&gt;&lt;br&gt;&lt;h3&gt;Problemas atuais: &lt;/h3&gt;1) trabalhos encerrados sem limpeza&lt;br&gt;2) falta de descrição do que foi realizado&lt;div&gt;3) PRs não padronizados e mensagens commits sem relação adequada&amp;nbsp;&lt;/div&gt;&lt;div&gt;4) falta de mensuração de custos e métricas das alterações&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;h3&gt;Evidências&lt;/h3&gt;&lt;div&gt;1) Mensagem PR&amp;nbsp;&lt;/div&gt;&lt;div&gt;2) Dados do trabalho (registro em banco de dados local)&amp;nbsp;&lt;/div&gt;&lt;div&gt;3) Vídeo explicativo&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;h3&gt;Métricas de Sucesso&lt;/h3&gt;&lt;/div&gt;&lt;div&gt;1) Quantidade de token/modelo e&amp;nbsp; custo total&amp;nbsp;&lt;/div&gt;&lt;div&gt;2) Feedback humano da qualidade (rating)&lt;/div&gt;&lt;p&gt;&lt;/p&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1520" y="-610" width="420" height="440" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-59" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="-558" width="230" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-60" value="Vídeo" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="-537" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-61" value="PR aberto" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="-537" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-62" value="Relatório de Produtividade do SDLC" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="-537" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-67" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-64" target="r_LA35FQatkXShZi-ib0-66">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="890" y="-508" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-64" value="Pull Request" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="870" y="-388" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-69" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-66" target="r_LA35FQatkXShZi-ib0-68">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-66" value="Auditor" style="shape=umlActor;verticalLabelPosition=top;verticalAlign=bottom;html=1;outlineConnect=0;labelPosition=center;align=center;" vertex="1" parent="1">
+          <mxGeometry x="640" y="-548" width="40" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-70" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-74" target="r_LA35FQatkXShZi-ib0-47">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-80" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-68" target="r_LA35FQatkXShZi-ib0-79">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-68" value="Aprovação" style="rhombus;whiteSpace=wrap;html=1;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="620" y="-388" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-73" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-14" target="r_LA35FQatkXShZi-ib0-72">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="300" y="588" as="sourcePoint" />
+            <mxPoint x="850" y="660" as="targetPoint" />
+            <Array as="points" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-72" value="Auditor" style="shape=umlActor;verticalLabelPosition=top;verticalAlign=bottom;html=1;outlineConnect=0;labelPosition=center;align=center;" vertex="1" parent="1">
+          <mxGeometry x="280" y="710" width="40" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-75" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-68" target="r_LA35FQatkXShZi-ib0-74">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="700" y="70" as="sourcePoint" />
+            <mxPoint x="850" y="851" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="660" y="-210" />
+              <mxPoint x="850" y="-210" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-76" value="&amp;nbsp;Não&amp;nbsp;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="r_LA35FQatkXShZi-ib0-75">
+          <mxGeometry x="-0.8628" y="-2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-74" value="Sessão em aberto (sem skill específica)" style="shape=mxgraph.signs.tech.computer;html=1;pointerEvents=1;verticalLabelPosition=middle;verticalAlign=middle;align=left;sketch=0;labelPosition=right;" vertex="1" parent="1">
+          <mxGeometry x="825" y="320" width="50" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-81" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="r_LA35FQatkXShZi-ib0-79" target="b0luNn-IH9dh5ok0e9bF-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-79" value="CI/CD" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="-378" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-84" value="" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1455" y="400" width="270" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-85" value="Comprovação de Critérios de Aceite" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1500" y="421" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-86" value="Relatório de Arquivos Alterados" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1570" y="421" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-87" value="Matriz de Fitness functions com Explicações" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;size=15;labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1640" y="421" width="40" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="r_LA35FQatkXShZi-ib0-90" value="&lt;font style=&quot;font-size: 48px;&quot;&gt;SDLC tradicional&lt;/font&gt;" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;strokeWidth=5;gradientColor=none;fillStyle=auto;swimlaneLine=1;glass=0;shadow=0;rounded=0;perimeterSpacing=0;startSize=160;" vertex="1" parent="1">
+          <mxGeometry x="-650" y="-687" width="2690" height="2297" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

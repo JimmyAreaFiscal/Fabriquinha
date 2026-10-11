@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Issue · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <style>
+    h3 { font-size: var(--fs-md); }
+    .migalha { font-size: var(--fs-sm); color: var(--muted); margin-bottom: var(--s-2); }
+    .migalha a:hover { color: var(--ink); }
+    .titulo-issue { font-size: var(--fs-2xl); line-height: 1.25; }
+    .titulo-issue .id { font-size: var(--fs-xl); margin-right: var(--s-2); vertical-align: 2px; }
+    .pr { font-family: var(--mono); color: var(--accent); }
+    .link { color: var(--accent); font-size: var(--fs-sm); background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }
+    .link:hover { text-decoration: underline; }
+    .dep { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 2px 0 var(--s-2); font: var(--fs-xs) var(--mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .x { display: inline-flex; padding: 1px 4px; color: var(--muted); background: none; border: 0; border-radius: var(--r-sm); cursor: pointer; }
+    .x:hover { color: var(--ink); background: var(--line); }
+
+    /* Trilho de fases */
+    .trilho-fases { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); margin: var(--s-4) 0 0; max-width: 980px; }
+    .passo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .passo .linha { position: relative; width: 100%; height: 18px; display: flex; align-items: center; justify-content: center; }
+    .passo .linha::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--line); }
+    .passo:first-child .linha::before { left: 50%; }
+    .passo:last-child .linha::before { right: 50%; }
+    .passo.feito .linha::before { background: var(--closed); }
+    .passo.atual .linha::before { background: linear-gradient(to right, var(--closed) 50%, var(--line) 50%); }
+    .marco { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--line); }
+    .gate .marco { border-radius: 2px; transform: rotate(45deg); width: 11px; height: 11px; }
+    .feito .marco { background: var(--closed); border-color: var(--closed); }
+    .atual .marco { width: 16px; height: 16px; background: var(--open); border-color: var(--open); box-shadow: 0 0 0 4px rgb(234 178 76 / 0.22); }
+    .atual.gate .marco { width: 14px; height: 14px; }
+    .passo > span { font-size: var(--fs-xs); color: var(--muted); text-align: center; line-height: 1.25; }
+    .passo.atual > span { color: var(--open); font-weight: var(--w-strong); }
+
+    /* Mesa: lateral + principal */
+    .mesa { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s-6); align-items: start; margin-top: var(--s-5); }
+    .lateral { position: sticky; top: 64px; max-height: calc(100vh - 80px); overflow: auto; display: flex; flex-direction: column; gap: var(--s-3); }
+    .cartao-lateral { padding: var(--s-3) var(--s-4); }
+    .cartao-lateral h3, .titulo-bloco { margin-bottom: var(--s-2); font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .fatos { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--s-3); margin: 0; font-size: var(--fs-sm); }
+    .fatos dt { color: var(--muted); }
+    .fatos dd { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .descricao { max-height: 180px; overflow: hidden; position: relative; }
+    .descricao.aberta { max-height: none; }
+    .descricao:not(.aberta)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 48px; background: linear-gradient(transparent, var(--surface)); }
+
+    .linha-tempo { list-style: none; margin: 0; padding: 0; }
+    .linha-tempo li { position: relative; padding: 0 0 var(--s-3) var(--s-5); font-size: var(--fs-sm); }
+    .linha-tempo li::before { content: ""; position: absolute; left: 4px; top: 10px; bottom: -2px; width: 2px; background: var(--line); }
+    .linha-tempo li:last-child { padding-bottom: 0; }
+    .linha-tempo li:last-child::before { display: none; }
+    .linha-tempo li::after { content: ""; position: absolute; left: 0; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+    .linha-tempo li.concluido::after { background: var(--closed); }
+    .linha-tempo li.em_execucao::after { background: var(--claimed); }
+    .linha-tempo li.aberto::after { background: var(--bg); border: 2px solid var(--muted); width: 6px; height: 6px; }
+    .linha-tempo li.falhou::after { background: var(--danger); }
+    .ticket-btn { all: unset; display: flex; gap: var(--s-2); align-items: baseline; width: 100%; cursor: pointer; }
+    .ticket-btn:hover .tt { text-decoration: underline; text-decoration-color: var(--muted); }
+    .ticket-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .linha-tempo .sub { display: flex; flex-wrap: wrap; gap: 4px var(--s-2); align-items: center; margin-top: 3px; font-size: var(--fs-xs); color: var(--muted); }
+    .st-aberto { color: var(--muted); background: var(--surface-2); }
+    .st-em_execucao { color: var(--claimed); background: var(--claimed-bg); }
+    .st-concluido { color: var(--closed); background: var(--closed-bg); }
+    .st-falhou { color: var(--danger); background: var(--danger-bg); }
+    .chat { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .chat .ir { color: var(--accent); }
+
+    /* Gate */
+    .gate-painel { background: var(--surface); border: 1px solid #5a4720; border-top: 3px solid var(--open); border-radius: var(--r-lg); }
+    .gate-cabeca { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+    .gate-cabeca .rotulo { color: var(--open); font-size: var(--fs-sm); }
+    .gate-cabeca .direita { margin-left: auto; }
+    .gate-corpo { padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-5); }
+    .numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--s-2); }
+    .numero { padding: var(--s-2) var(--s-3); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .numero strong { display: block; font-size: var(--fs-xl); line-height: 1.3; font-variant-numeric: tabular-nums; }
+    .numero > span { font-size: var(--fs-sm); color: var(--muted); }
+    .impacto-baixo { color: var(--closed); }
+    .duas { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--s-4); align-items: start; }
+    .duas .numeros { grid-template-columns: 1fr 1fr; }
+    .video { position: relative; aspect-ratio: 16 / 9; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 30% 20%, #2b2721, #0d0c0b); border: 1px solid var(--line); border-radius: var(--r-md); color: var(--muted); }
+    .video .play { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgb(237 231 219 / 0.12); border: 1px solid rgb(237 231 219 / 0.3); color: var(--ink); font-size: 18px; padding-left: 4px; }
+    .video .legenda { position: absolute; left: var(--s-3); bottom: var(--s-2); font: var(--fs-xs) var(--mono); }
+    .corpo-pr { max-height: 280px; overflow: auto; padding: var(--s-3) var(--s-4); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); }
+    .propostos .seletor-modelo { width: 250px; }
+    .seletor-modelo, textarea { font: inherit; font-size: var(--fs-sm); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); padding: 4px var(--s-2); }
+    .seletor-modelo { font: var(--fs-xs) var(--mono); height: 26px; }
+    .seletor-modelo.override { color: var(--accent); border-color: #5a4720; }
+    textarea { width: 100%; resize: vertical; min-height: 56px; line-height: 1.5; }
+    .seletor-modelo:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+    .decidir { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-2) var(--s-4); align-items: end; padding: var(--s-3) var(--s-4); background: #191714; border-top: 1px solid var(--line); border-radius: 0 0 var(--r-lg) var(--r-lg); }
+    .decidir label { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-sm); color: var(--muted); }
+    .decidir .botoes { display: flex; gap: var(--s-2); }
+    .btn-reprovar { color: var(--danger); border-color: var(--danger-bg); background: transparent; }
+    .btn-reprovar:hover:enabled { background: var(--danger-bg); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-grande { height: 34px; padding: 0 var(--s-4); font-size: var(--fs-md); }
+    .manual { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-4); background: #191714; border-top: 1px solid var(--line); border-radius: 0 0 var(--r-lg) var(--r-lg); font-size: var(--fs-sm); color: var(--muted); }
+    .manual .btn { margin-left: auto; }
+
+    /* Tabelas */
+    .tabela { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .tabela th { text-align: left; font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 6px var(--s-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .tabela td { padding: 7px var(--s-2); border-bottom: 1px solid var(--line); vertical-align: middle; }
+    .tabela tr:last-child td { border-bottom: 0; }
+    .tabela .mono { font-family: var(--mono); font-size: var(--fs-xs); white-space: nowrap; }
+    .tabela .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .tabela .acoes-t { text-align: right; white-space: nowrap; }
+    .tabela .d { color: var(--muted); font-size: var(--fs-xs); }
+    .ok { color: var(--closed); } .nok { color: var(--danger); }
+    .bigo { font-family: var(--mono); font-size: var(--fs-xs); white-space: nowrap; }
+    .nao-previsto { color: var(--open); font-weight: var(--w-strong); }
+
+    /* Artefatos: cards que abrem a caixa */
+    .secao { margin-top: var(--s-6); }
+    .secao > h2 { display: flex; align-items: baseline; gap: var(--s-2); margin-bottom: var(--s-3); }
+    .secao > h2 .muted { font-size: var(--fs-sm); font-weight: 400; }
+    .etapa-artefatos { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--s-3); padding: var(--s-2) 0; border-top: 1px solid var(--line); }
+    .etapa-artefatos:first-of-type { border-top: 0; }
+    .etapa-nome { font-size: var(--fs-sm); padding-top: 6px; }
+    .etapa-nome .id { display: block; }
+    .cards-art { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+    .art { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: var(--s-2); height: 36px; padding: 0 var(--s-3); font-size: var(--fs-sm); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); cursor: pointer; }
+    .art:hover { border-color: var(--accent); }
+    .art:focus-visible { outline: 2px solid var(--accent); }
+    .art .tipo { font: 600 10px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 2px; padding: 1px 4px; letter-spacing: 0.04em; }
+    .art .ponto { width: 7px; height: 7px; border-radius: 50%; background: var(--closed); }
+    .art .ponto.nok { background: var(--danger); }
+
+    /* Caixa (dialog) */
+    .caixa { width: min(1100px, 94vw); height: min(820px, 88vh); padding: 0; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 24px 64px rgb(0 0 0 / 0.65); }
+    .caixa[open] { display: flex; flex-direction: column; }
+    .caixa::backdrop { background: rgb(0 0 0 / 0.6); }
+    .caixa-cabeca { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+    .caixa-cabeca h2 { font-size: var(--fs-lg); }
+    .caixa-cabeca .direita { margin-left: auto; display: flex; gap: var(--s-3); align-items: center; }
+    .btn-icone { width: 28px; padding: 0; justify-content: center; }
+    .caixa-corpo { flex: 1; min-height: 0; overflow: auto; padding: var(--s-4); }
+    .caixa-corpo iframe { display: block; width: 100%; height: 100%; min-height: 560px; border: 0; background: #fff; border-radius: var(--r-md); }
+    .caixa-corpo img { display: block; max-width: 100%; margin: 0 auto; border: 1px solid var(--line); border-radius: var(--r-md); }
+    .caixa-corpo pre { margin: 0; padding: var(--s-3); font: var(--fs-sm) / 1.55 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); white-space: pre-wrap; }
+    .caixa-corpo .video { max-width: 900px; margin: 0 auto; }
+
+    .md { line-height: 1.6; font-size: var(--fs-sm); }
+    .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+    .md p, .md ul, .md ol, .md table { margin: 0 0 var(--s-2); }
+    .md h2, .md h3, .md h4 { margin: var(--s-3) 0 var(--s-1); font-size: var(--fs-sm); }
+    .md ul, .md ol { padding-left: var(--s-5); }
+    .md code { font: 0.9em var(--mono); padding: 1px 4px; background: var(--surface-2); border-radius: var(--r-sm); }
+    .md table { border-collapse: collapse; }
+    .md th, .md td { padding: 3px var(--s-2); border: 1px solid var(--line); text-align: left; }
+
+    .trocador .trocador-botoes a { font-weight: 400; font-size: var(--fs-xs); }
+
+    @media (max-width: 1100px) {
+      .mesa { grid-template-columns: minmax(0, 1fr); }
+      .lateral { position: static; max-height: none; }
+      .duas { grid-template-columns: minmax(0, 1fr); }
+      .rola { overflow-x: auto; }
+    }
+    @media (max-width: 700px) {
+      .passo:not(.atual) > span { visibility: hidden; }
+      .passo.atual > span { white-space: nowrap; }
+      .etapa-artefatos { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
+      .decidir { grid-template-columns: minmax(0, 1fr); }
+      .propostos .seletor-modelo { width: 150px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html">Início <span class="contador" title="sessões que aguardam você">6</span></a>
+      <a href="02-projeto.html" aria-current="page">Projetos</a>
+      <a href="04-metricas.html">Métricas</a>
+      <a href="05-historico.html">Histórico</a>
+      <a href="07-configuracao.html">Configuração</a>
+    </nav>
+  </header>
+
+  <main class="pagina" data-pagina></main>
+
+  <dialog class="caixa" data-caixa aria-labelledby="caixa-titulo">
+    <div class="caixa-cabeca"><h2 id="caixa-titulo" data-caixa-titulo></h2><span data-caixa-meta class="muted"></span>
+      <div class="direita"><a class="link" href="#" data-caixa-aba hidden>abrir em nova aba ↗</a><a class="link" href="#" data-caixa-baixar hidden>baixar</a><button class="btn btn-icone" data-fechar title="Fechar (Esc)" autofocus>✕</button></div>
+    </div>
+    <div class="caixa-corpo" data-caixa-corpo></div>
+  </dialog>
+
+  <aside class="trocador" aria-label="Exemplos do protótipo">
+    <button class="trocador-fechar" title="Recolher">–</button>
+    <span class="rotulo">Issue · C enxuta · exemplo</span>
+    <div class="trocador-botoes">
+      <a href="?ex=desenho" data-ex="desenho">I-37 · gate do desenho</a><a href="?ex=pr" data-ex="pr">I-29 · gate do PR</a>
+    </div>
+    <p>Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR. Cada artefato abre numa caixa; cada ticket abre as suas execuções.</p>
+  </aside>
+
+  <script>
+    const FASES = [
+      ["registro", "Registro"], ["desenho", "Desenho"], ["aprovacao_desenho", "Aprovação do desenho"],
+      ["desenvolvimento", "Desenvolvimento"], ["revisao", "Revisão"], ["encerramento", "Encerramento"],
+      ["aprovacao_pr", "Aprovação do PR"], ["ajuste_pr", "Ajuste do PR"],
+    ];
+    const GATES = new Set(["aprovacao_desenho", "aprovacao_pr"]);
+    const STATUS = { aberto: "aberto", em_execucao: "em execução", concluido: "concluído", falhou: "falhou" };
+    const OPUS = "anthropic / claude-opus-5-5", QWEN = "llamacpp / qwen3-coder-30b";
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const doc = (titulo, corpo) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{font:15px/1.6 system-ui,sans-serif;margin:24px;color:#1d1d1f;background:#fff;max-width:860px}h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;margin:20px 0 6px}code{background:#f0f0f0;padding:1px 4px;border-radius:3px}.fluxo{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}.fluxo div{border:1px solid #888;border-radius:6px;padding:6px 10px;background:#f7f7f7}</style></head><body><h1>${titulo}</h1>${corpo}</body></html>`;
+    const wire = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="960" height="450" viewBox="0 0 640 300"><rect width="640" height="300" fill="#141311"/><rect width="640" height="28" fill="#1c1a17"/><rect x="16" y="9" width="70" height="10" rx="2" fill="#e5ad6f"/>${[0,1,2,3,4,5,6,7].map(n=>`<rect x="${16+n*77}" y="60" width="70" height="${[180,140,120,200,90,90,110,90][n]}" rx="4" fill="#1c1a17" stroke="#37332c"/><rect x="${22+n*77}" y="70" width="58" height="36" rx="3" fill="#25231f"/>${n%3===0?`<rect x="${22+n*77}" y="112" width="58" height="36" rx="3" fill="#25231f" stroke="#eab24c"/>`:""}`).join("")}</svg>`)}`;
+
+    // ——— tabelas usadas na página e na caixa ———
+    const tCriterios = (c) => `<div class="rola"><table class="tabela"><thead><tr><th>ID</th><th>Dado</th><th>Quando</th><th>Então</th></tr></thead><tbody>${c.map(([id, d, q, e]) => `<tr><td class="mono">${id}</td><td>${esc(d)}</td><td>${esc(q)}</td><td>${esc(e)}</td></tr>`).join("")}</tbody></table></div>`;
+    const tComprovacao = (c) => `<div class="rola"><table class="tabela"><thead><tr><th>ID</th><th>Atendido</th><th>Como foi verificado</th><th class="num">Anexos</th></tr></thead><tbody>${c.map(([id, ok, como, n]) => `<tr><td class="mono">${id}</td><td class="${ok ? "ok" : "nok"}">${ok ? "✓ sim" : "✗ não"}</td><td>${esc(como)}</td><td class="num"><button class="link">${n} ${n > 1 ? "prints" : "print"}</button></td></tr>`).join("")}</tbody></table></div>`;
+    const tFitness = (f) => `<div class="rola"><table class="tabela"><thead><tr><th>Fitness function</th><th>Resultado</th><th class="num">Duração</th><th>Explicação do agente</th></tr></thead><tbody>${f.map(([n, ok, d, e]) => `<tr><td class="mono">${n}</td><td class="${ok ? "ok" : "nok"}">${ok ? "✓ passou" : "✗ falhou"}</td><td class="num">${d}</td><td>${esc(e)}</td></tr>`).join("")}</tbody></table></div>`;
+    const tComplexidade = `<div class="rola"><table class="tabela"><thead><tr><th>Fluxo</th><th>Situação</th><th>Antes (tempo · espaço)</th><th>Depois (tempo · espaço)</th></tr></thead><tbody>
+      <tr><td>Montar o board</td><td>novo</td><td class="bigo muted">—</td><td class="bigo">O(i + t) · O(i + t)</td></tr>
+      <tr><td>Listar sessões ativas</td><td>alterado</td><td class="bigo">O(s log s) · O(s)</td><td class="bigo">O(s log s) · O(s)</td></tr></tbody></table></div>`;
+    const tArquivos = `<div class="rola"><table class="tabela"><thead><tr><th>Arquivo</th><th>Status</th><th class="num">+/−</th><th>Previsto no desenho</th></tr></thead><tbody>
+      <tr><td class="mono">src/rotas/webhook-pix.ts</td><td>A</td><td class="num"><span class="ok">+142</span> <span class="nok">−0</span></td><td class="mono">src/rotas/webhook-*.ts</td></tr>
+      <tr><td class="mono">src/pagamento/conciliar.ts</td><td>A</td><td class="num"><span class="ok">+88</span> <span class="nok">−0</span></td><td class="mono">src/pagamento/*.ts</td></tr>
+      <tr><td class="mono">src/pedidos/estado.ts</td><td>M</td><td class="num"><span class="ok">+12</span> <span class="nok">−3</span></td><td class="mono">src/pedidos/estado.ts</td></tr>
+      <tr><td class="mono">src/config.ts</td><td>M</td><td class="num"><span class="ok">+4</span> <span class="nok">−0</span></td><td class="nao-previsto">não previsto: chave do HMAC no ambiente</td></tr></tbody></table></div>`;
+    const tTestes = `<table class="tabela"><thead><tr><th>Comando</th><th>Resultado</th><th class="num">Duração</th></tr></thead><tbody><tr><td class="mono">npm test</td><td class="ok">✓ 214 de 214</td><td class="num">48 s</td></tr><tr><td class="mono">npm run test:e2e</td><td class="ok">✓ 12 de 12</td><td class="num">2 min 10 s</td></tr></tbody></table>`;
+    const tSonar = `<table class="tabela"><thead><tr><th>Arquivos analisados</th><th>Issues abertas</th></tr></thead><tbody><tr><td>4</td><td class="ok">0</td></tr></tbody></table>`;
+
+    const ISSUES = {
+      desenho: {
+        id: "I-37", titulo: "Board por fase na página inicial", tipo: "funcionalidade", projeto: "fabriquinha", fase: "aprovacao_desenho", criada: "08/10 10:12", pr: null,
+        deps: [["I-30", "concluída"]],
+        descricao: `<p>Hoje o Auditor precisa abrir cada issue para saber em que fase ela está. A página inicial deve mostrar um <strong>board com uma coluna por fase</strong> e destacar o que aguarda a decisão dele.</p><h4>Contexto</h4><ul><li>As fases vêm do F1, na ordem do SDLC.</li><li>Issues concluídas ficam fora do board; arquivadas também.</li><li>Sessões que aguardam o Auditor vêm primeiro.</li></ul>`,
+        gate: { tipo: "desenho", quando: "há 47 min" },
+        criterios: [
+          ["CA-1", "issues em fases diferentes", "o Auditor abre /home", "cada issue aparece na coluna da sua fase"],
+          ["CA-2", "uma sessão aguardando o Auditor", "o board atualiza", "o cartão mostra “aguarda você” com o motivo"],
+          ["CA-3", "uma issue concluída", "o Auditor abre /home", "ela não aparece no board"],
+          ["CA-4", "uma issue com dependência não concluída", "o Auditor abre /home", "o cartão mostra “bloqueada por I-x”"],
+        ],
+        propostos: [
+          ["T-110", "Rota /home com o board por fase", "Criar a leitura do board no F2 e as colunas na ordem do SDLC.", ""],
+          ["T-119", "Cards de quem aguarda você", "Cards com motivo e ação, da mais antiga para a mais nova.", ""],
+          ["T-120", "Métricas do mês em cards", "Ler metricasPorMes com meses=1 e mostrar 5 cards.", QWEN],
+        ],
+        tickets: [
+          { id: "T-105", etapa: "registro", titulo: "Registrar a necessidade", status: "concluido", sessoes: [["interativa", "terminada"]], execs: [["E-201", "interativo", "concluida", "08/10 10:12", "34 min", "US$ 0,92", ""]] },
+          { id: "T-109", etapa: "desenho", titulo: "Desenhar a solução", status: "concluido", sessoes: [["autônoma", "aguarda", "Gate do desenho"]], execs: [["E-214", "autonomo", "falha", "10/10 09:00", "30 min", "US$ 1,10", "tempo limite de 30 min"], ["E-219", "autonomo", "concluida", "11/10 13:12", "22 min", "US$ 1,86", ""]] },
+          { id: "T-110", etapa: "desenvolvimento", titulo: "Rota /home com o board por fase", status: "aberto", sessoes: [], execs: [] },
+          { id: "T-119", etapa: "desenvolvimento", titulo: "Cards de quem aguarda você", status: "aberto", sessoes: [], execs: [] },
+          { id: "T-120", etapa: "desenvolvimento", titulo: "Métricas do mês em cards", status: "aberto", sessoes: [], execs: [] },
+        ],
+        artefatos: [
+          ["Desenho", "T-109", [
+            ["desenho_solucao", "Desenho da solução", "HTML", () => ({ html: doc("Desenho da solução", `<p>O board é uma leitura nova do F2, servida por <code>GET /api/board</code> e desenhada no cliente por fase.</p><div class="fluxo"><div>GET /api/board</div>→<div>lerBoard()</div>→<div>agrupar por fase</div>→<div>render</div></div><h2>Arquivos previstos</h2><ol><li><code>src/web/inicio.js</code> — criar</li><li><code>src/web/board.js</code> — criar</li><li><code>src/server/rotas.ts</code> — alterar</li></ol><h2>Fora de escopo</h2><p>Arrastar cartões entre colunas.</p>`) })],
+            ["prototipo", "Protótipo", "IMG", () => ({ img: wire })],
+            ["relatorio_complexidade", "Complexidade", "TABELA", () => ({ tabela: tComplexidade, html: doc("Etapas de cada fluxo", `<h2>Montar o board</h2><ol><li>Ler as issues não concluídas — <code>O(i)</code></li><li>Ler os tickets abertos — <code>O(t)</code></li><li>Agrupar por fase — <code>O(i)</code></li></ol>`) })],
+            ["relatorio_impactos_arquitetura", "Impactos na arquitetura", "HTML", () => ({ html: doc("Impactos na arquitetura", `<p>Impacto baixo. Nenhuma dependência nova. O cliente passa a depender de <code>/api/board</code>.</p><h2>Risco</h2><p>Releitura a cada 5 s com muitas issues. Mitigação: contador de versão.</p>`) })],
+          ]],
+          ["Registro", "T-105", [
+            ["comportamento", "Comportamento", "TEXTO", () => ({ texto: "# Board atual\n\nO board lista issues sem separar por fase.\nO Auditor abre uma a uma para saber onde cada uma está." })],
+            ["criterios_aceite", "Critérios de aceite", "TABELA", (i) => ({ tabela: tCriterios(i.criterios) })],
+          ]],
+        ],
+      },
+      pr: {
+        id: "I-29", titulo: "Webhook de pagamento do Pix", tipo: "funcionalidade", projeto: "loja-api", fase: "aprovacao_pr", criada: "01/10 15:40", pr: "#212",
+        deps: [],
+        descricao: `<p>O provedor de pagamento avisa por <strong>webhook</strong> quando um Pix é confirmado. Hoje o pedido só muda de estado quando alguém confere o extrato.</p><h4>Contexto</h4><ul><li>O provedor reenvia o aviso até 5 vezes.</li><li>O corpo vem assinado com HMAC-SHA256.</li></ul>`,
+        gate: { tipo: "pr", quando: "há 1 h 20 min" },
+        comprovacao: [["CA-1", true, "Teste de integração envia o aviso assinado e confere o pedido pago.", 2], ["CA-2", true, "Aviso com assinatura inválida devolve 401 e não muda o pedido.", 1], ["CA-3", true, "O mesmo aviso enviado 3 vezes muda o pedido uma vez só.", 1]],
+        fitness: [["cobertura-minima", true, "41 s", "Cobertura das rotas novas em 92%, acima dos 85% do projeto."], ["sem-segredo-no-codigo", true, "3 s", "A chave do HMAC vem de variável de ambiente."], ["latencia-p95", true, "1 min 12 s", "p95 de 38 ms no webhook com 200 avisos por segundo."]],
+        cards: [["US$ 6,84", "custo"], ["2,3 M", "tokens"], ["11", "execuções · 1 falha"], ["0", "reprovações"]],
+        tickets: [
+          { id: "T-80", etapa: "registro", titulo: "Registrar a necessidade", status: "concluido", sessoes: [["interativa", "terminada"]], execs: [["E-150", "interativo", "concluida", "01/10 15:40", "21 min", "US$ 0,61", ""]] },
+          { id: "T-82", etapa: "desenho", titulo: "Desenhar a solução", status: "concluido", sessoes: [["autônoma", "terminada"]], execs: [["E-158", "autonomo", "concluida", "02/10 09:10", "19 min", "US$ 1,42", ""]] },
+          { id: "T-85", etapa: "desenvolvimento", titulo: "Endpoint do webhook", status: "concluido", sessoes: [["autônoma", "terminada"]], execs: [["E-171", "autonomo", "falha", "03/10 10:02", "12 min", "US$ 0,48", "testes falharam"], ["E-174", "autonomo", "concluida", "03/10 14:30", "25 min", "US$ 0,97", ""]] },
+          { id: "T-86", etapa: "desenvolvimento", titulo: "Conciliação do pagamento", status: "concluido", sessoes: [["autônoma", "terminada"]], execs: [["E-180", "autonomo", "concluida", "04/10 09:00", "31 min", "US$ 1,12", ""]] },
+          { id: "T-93", etapa: "revisao", titulo: "Revisar a issue", status: "concluido", sessoes: [["autônoma", "terminada"], ["consulta", "terminada"]], execs: [["E-196", "autonomo", "concluida", "06/10 11:20", "18 min", "US$ 0,88", ""]] },
+          { id: "T-99", etapa: "encerramento", titulo: "Encerrar e abrir o PR", status: "concluido", sessoes: [["autônoma", "aguarda", "Gate do PR"]], execs: [["E-224", "autonomo", "concluida", "11/10 12:05", "15 min", "US$ 1,36", ""]] },
+        ],
+        artefatos: [
+          ["Encerramento", "T-99", [
+            ["relatorio_produtividade", "Relatório de produtividade", "HTML", () => ({ html: doc("Produtividade · I-29", `<p><strong>US$ 6,84</strong> · 2,3 M tokens · 11 execuções · 1 falha · 0 reprovações</p><h2>Por etapa</h2><ol><li>registro — US$ 0,61</li><li>desenho — US$ 1,42</li><li>desenvolvimento — US$ 2,57</li><li>revisão — US$ 0,88</li><li>encerramento — US$ 1,36</li></ol>`) })],
+            ["mensagem_pr", "Mensagem do PR", "JSON", () => ({ texto: JSON.stringify({ titulo: "feat: confirmar pedido pelo webhook do Pix [I-29]", oQueMudou: "Nova rota POST /webhook/pix…", decisoesNaoObvias: "Idempotência pela chave endToEndId…" }, null, 2) })],
+          ]],
+          ["Revisão", "T-93", [
+            ["arquivos_alterados", "Arquivos alterados × desenho", "TABELA", () => ({ tabela: tArquivos })],
+          ]],
+          ["Desenvolvimento", "T-86", [
+            ["execucao_testes", "Testes", "TABELA", () => ({ tabela: tTestes }), true],
+            ["relatorio_sonar", "SonarQube", "TABELA", () => ({ tabela: tSonar }), true],
+            ["matriz_fitness", "Fitness", "TABELA", (i) => ({ tabela: tFitness(i.fitness) }), true],
+          ]],
+          ["Desenvolvimento", "T-85", [
+            ["execucao_testes", "Testes", "TABELA", () => ({ tabela: tTestes }), true],
+            ["relatorio_sonar", "SonarQube", "TABELA", () => ({ tabela: tSonar }), true],
+            ["matriz_fitness", "Fitness", "TABELA", (i) => ({ tabela: tFitness(i.fitness) }), true],
+          ]],
+          ["Desenho", "T-82", [
+            ["desenho_solucao", "Desenho da solução", "HTML", () => ({ html: doc("Desenho da solução", "<p>Rota nova que confere a assinatura e concilia o pagamento.</p>") })],
+            ["prototipo", "Protótipo", "IMG", () => ({ img: wire })],
+            ["relatorio_complexidade", "Complexidade", "TABELA", () => ({ tabela: tComplexidade })],
+            ["relatorio_impactos_arquitetura", "Impactos", "HTML", () => ({ html: doc("Impactos", "<p>Impacto baixo.</p>") })],
+          ]],
+          ["Registro", "T-80", [
+            ["comportamento", "Comportamento", "VÍDEO", () => ({ video: "comportamento-I-29.webm · 1:05" })],
+            ["criterios_aceite", "Critérios de aceite", "TABELA", () => ({ tabela: tCriterios([["CA-1", "um aviso assinado", "chega ao webhook", "o pedido fica pago"], ["CA-2", "uma assinatura inválida", "chega ao webhook", "devolve 401 e nada muda"], ["CA-3", "o mesmo aviso 3 vezes", "chega ao webhook", "o pedido muda uma vez só"]]) })],
+          ]],
+        ],
+      },
+    };
+
+    // ——— peças ———
+    function trilho(i) {
+      const atual = FASES.findIndex(([f]) => f === i.fase);
+      return `<div class="trilho-fases">${FASES.map(([f, n], k) => `<div class="passo ${GATES.has(f) ? "gate" : ""} ${k < atual ? "feito" : k === atual ? "atual" : ""}"><div class="linha"><span class="marco"></span></div><span>${n}</span></div>`).join("")}</div>`;
+    }
+    const cards = (lista) => `<div class="numeros">${lista.map(([v, r]) => `<div class="numero"><strong>${v}</strong><span>${r}</span></div>`).join("")}</div>`;
+    const sessao = ([modo, estado, motivo]) => `<a class="chat" href="#">${estado === "aguarda" ? `<span class="pill pill-aguarda">${motivo}</span>` : `<span class="pill pill-neutro">${modo}</span>`}<span class="ir">chat →</span></a>`;
+
+    function lateral(i) {
+      return `<aside class="lateral">
+        <div class="cartao-lateral superficie"><h3>Detalhes</h3><dl class="fatos">
+          <dt>Projeto</dt><dd>${i.projeto}</dd>
+          <dt>Tipo</dt><dd><span class="tag">${i.tipo}</span></dd>
+          <dt>Criada</dt><dd>${i.criada}</dd>
+          ${i.pr ? `<dt>PR</dt><dd><a class="pr" href="#">${i.pr} ↗</a></dd>` : ""}
+          <dt>Dependências</dt><dd>${i.deps.map(([d, f]) => `<span class="dep">${d} <span class="muted" style="font-family:var(--font)">${f}</span><button class="x" title="Remover">×</button></span>`).join("")}<button class="link">+ adicionar</button></dd>
+        </dl></div>
+        <div class="cartao-lateral superficie"><h3>Descrição</h3><div class="md descricao" data-descricao>${i.descricao}</div><button class="link" data-ver-descricao style="margin-top:6px">ver tudo</button></div>
+        <div class="cartao-lateral superficie"><h3>Tickets e sessões</h3><ol class="linha-tempo">${i.tickets.map((t) => `<li class="${t.status}">
+          <button class="ticket-btn" data-ticket="${t.id}" title="Ver execuções"><span class="id">${t.id}</span><span class="tt">${esc(t.titulo)}</span></button>
+          <div class="sub"><span>${t.etapa}</span><span class="pill st-${t.status}">${STATUS[t.status]}</span>${t.sessoes.map(sessao).join("")}</div>
+        </li>`).join("")}</ol></div>
+      </aside>`;
+    }
+
+    const opcoes = (sel) => [`<option value="">padrão · claude-sonnet-5-5</option>`, ...[OPUS, QWEN].map((m) => `<option ${m === sel ? "selected" : ""}>${m}</option>`)].join("");
+    function gateDesenho(i) {
+      return `<section class="gate-painel">
+        <div class="gate-cabeca"><span class="rotulo">Gate do desenho</span><span class="muted">aguarda você ${i.gate.quando}</span><a class="link direita" href="#">abrir o chat da sessão →</a></div>
+        <div class="gate-corpo">
+          ${cards([["6", "arquivos previstos"], ["3", "tickets propostos"], ["1", "acoplamento novo"], ['<span class="impacto-baixo">baixo</span>', "impacto na arquitetura"]])}
+          <div><div class="titulo-bloco">Critérios de aceite</div>${tCriterios(i.criterios)}</div>
+          <div><div class="titulo-bloco">Tickets propostos</div>
+            <div class="rola"><table class="tabela propostos"><tbody>${i.propostos.map(([id, t, d, m]) => `<tr><td class="mono" style="width:56px">${id}</td><td>${esc(t)}<div class="d">${esc(d)}</div></td><td style="width:260px"><select class="seletor-modelo ${m ? "override" : ""}" aria-label="Modelo de ${id}">${opcoes(m)}</select></td><td class="acoes-t"><button class="btn btn-pequeno">Editar</button> <button class="btn btn-pequeno btn-reprovar">Remover</button></td></tr>`).join("")}</tbody></table></div>
+            <button class="link" style="margin-top:8px">+ Novo ticket</button>
+          </div>
+        </div>
+        <div class="decidir">
+          <label>Motivo (obrigatório para reprovar)<textarea data-motivo placeholder="O que precisa mudar no desenho"></textarea></label>
+          <div class="botoes"><button class="btn btn-grande btn-reprovar" data-reprovar disabled>Reprovar</button><button class="btn btn-grande btn-primario">Aprovar desenho</button></div>
+        </div>
+      </section>`;
+    }
+    function gatePR(i) {
+      return `<section class="gate-painel">
+        <div class="gate-cabeca"><span class="rotulo">Gate do PR</span><a class="pr" href="#">PR ${i.pr} ↗</a><span class="pill pill-neutro">aberto · sem revisão</span><span class="muted">aguarda você ${i.gate.quando}</span><a class="link direita" href="#">abrir o chat da sessão →</a></div>
+        <div class="gate-corpo">
+          <div class="duas">
+            <div class="video"><span class="play">▶</span><span class="legenda">explicacao-I-29.webm · 3:42</span></div>
+            ${cards(i.cards)}
+          </div>
+          <div><div class="titulo-bloco">Corpo do PR</div><div class="corpo-pr md">
+            <h2>1. Por quê</h2><p><strong>funcionalidade</strong> · Webhook de pagamento do Pix. O pedido só muda de estado quando alguém confere o extrato…</p>
+            <h2>2. O que mudou</h2><p>Nova rota <code>POST /webhook/pix</code> que confere a assinatura HMAC e concilia o pagamento com o pedido…</p>
+            <h2>3. Decisões não óbvias</h2><p>Idempotência pela chave <code>endToEndId</code>, porque o provedor reenvia até 5 vezes.</p>
+            <h2>4. Fora do escopo</h2><p>Estorno pelo webhook.</p>
+            <h2>5. Arquivos alterados × desenho</h2><table><tr><th>Arquivo</th><th>Status</th><th>+/−</th><th>Previsto</th></tr><tr><td><code>src/config.ts</code></td><td>M</td><td>+4 −0</td><td>não previsto: chave do HMAC</td></tr></table>
+            <h2>6. Como revisar</h2><ol><li><code>src/rotas/webhook-pix.ts</code></li><li><code>src/pagamento/conciliar.ts</code></li></ol>
+            <h2>7. Evidências</h2><p>Testes 3/3 ✓ · SonarQube 0 issues em 4 arquivos · Fitness 3/3 · Critérios 3/3</p>
+            <h2>8. Não verificado</h2><p>Nada.</p><h2>9. Riscos e reversão</h2><p>Impacto baixo. Reverter o merge desliga o webhook.</p>
+            <h2>10. Autoria e custo</h2><p>Produzido por agentes pi · 11 execuções · US$ 6,84.</p></div></div>
+          <div><div class="titulo-bloco">Comprovação dos critérios</div>${tComprovacao(i.comprovacao)}</div>
+          <div><div class="titulo-bloco">Fitness functions</div>${tFitness(i.fitness)}</div>
+        </div>
+        <div class="manual">A revisão, o merge e o pedido de mudanças são feitos no próprio PR. <a class="btn btn-primario" href="#">Abrir PR ${i.pr} ↗</a></div>
+      </section>`;
+    }
+
+    function artefatos(i) {
+      return `<section class="secao"><h2>Artefatos <span class="muted">clique para abrir</span></h2>${i.artefatos.map(([etapa, ticket, lista], g) => `
+        <div class="etapa-artefatos"><div class="etapa-nome">${etapa}<span class="id">${ticket}</span></div>
+          <div class="cards-art">${lista.map(([, nome, classe, , aprovada], k) => `<button class="art" data-art="${g}:${k}"><span class="tipo">${classe}</span>${nome}${aprovada !== undefined ? `<span class="ponto ${aprovada ? "" : "nok"}" title="${aprovada ? "aprovada" : "reprovada"}"></span>` : ""}</button>`).join("")}</div>
+        </div>`).join("")}</section>`;
+    }
+
+    let ex = new URLSearchParams(location.search).get("ex") === "pr" ? "pr" : "desenho";
+    const pagina = document.querySelector("[data-pagina]");
+    function render() {
+      const i = ISSUES[ex];
+      pagina.innerHTML = `<div class="migalha"><a href="02-projeto.html">Projetos</a> › <a href="02-projeto.html">${i.projeto}</a> › ${i.id}</div>
+        <h1 class="titulo-issue"><span class="id">${i.id}</span>${esc(i.titulo)}</h1>
+        ${trilho(i)}
+        <div class="mesa">${lateral(i)}<div>${i.gate.tipo === "desenho" ? gateDesenho(i) : gatePR(i)}${artefatos(i)}</div></div>`;
+      document.querySelectorAll("[data-ex]").forEach((a) => a.setAttribute("aria-current", String(a.dataset.ex === ex)));
+    }
+
+    // Caixa
+    const caixa = document.querySelector("[data-caixa]");
+    function abrirCaixa(titulo, meta, corpo, comArquivo) {
+      document.querySelector("[data-caixa-titulo]").textContent = titulo;
+      document.querySelector("[data-caixa-meta]").textContent = meta;
+      document.querySelector("[data-caixa-aba]").hidden = !comArquivo;
+      document.querySelector("[data-caixa-baixar]").hidden = !comArquivo;
+      document.querySelector("[data-caixa-corpo]").innerHTML = corpo;
+      caixa.showModal();
+    }
+    function abrirArtefato(g, k) {
+      const i = ISSUES[ex], [etapa, ticket, lista] = i.artefatos[g], [tipo, nome, , conteudo] = lista[k];
+      const c = conteudo(i);
+      const corpo = [
+        c.tabela ?? "",
+        c.img ? `<img src="${c.img}" alt="${nome}">` : "",
+        c.video ? `<div class="video"><span class="play">▶</span><span class="legenda">${c.video}</span></div>` : "",
+        c.texto ? `<pre>${esc(c.texto)}</pre>` : "",
+        c.html ? `<iframe sandbox="allow-scripts" srcdoc="${esc(c.html)}" title="${nome}" ${c.tabela ? 'style="margin-top:16px;min-height:360px"' : ""}></iframe>` : "",
+      ].join("");
+      abrirCaixa(nome, `${tipo} · ${etapa} · ${ticket}`, corpo, Boolean(c.html || c.img || c.video || c.texto));
+    }
+    function abrirTicket(id) {
+      const t = ISSUES[ex].tickets.find((x) => x.id === id);
+      const corpo = t.execs.length
+        ? `<table class="tabela"><thead><tr><th>Execução</th><th>Modo</th><th>Resultado</th><th>Início</th><th class="num">Duração</th><th class="num">Custo</th><th>Erro</th><th></th></tr></thead><tbody>${t.execs.map(([e, m, r, ini, d, c, erro]) => `<tr><td class="mono">${e}</td><td>${m}</td><td class="${r === "falha" ? "nok" : ""}">${r}</td><td>${ini}</td><td class="num">${d}</td><td class="num">${c}</td><td>${erro}</td><td class="acoes-t"><a class="link" href="#">log</a> · <a class="link" href="#">prompt</a></td></tr>`).join("")}</tbody></table>`
+        : '<p class="muted">Ainda sem execução.</p>';
+      abrirCaixa(`${t.id} · ${t.titulo}`, `${t.etapa} · ${STATUS[t.status]}`, corpo, false);
+    }
+
+    document.addEventListener("click", (e) => {
+      const art = e.target.closest("[data-art]");
+      if (art) { const [g, k] = art.dataset.art.split(":").map(Number); abrirArtefato(g, k); return; }
+      const tk = e.target.closest("[data-ticket]");
+      if (tk) { abrirTicket(tk.dataset.ticket); return; }
+      if (e.target.closest("[data-fechar]") || e.target === caixa) { caixa.close(); return; }
+      if (e.target.closest("[data-ver-descricao]")) { const d = document.querySelector("[data-descricao]"); d.classList.toggle("aberta"); e.target.textContent = d.classList.contains("aberta") ? "ver menos" : "ver tudo"; return; }
+      const exb = e.target.closest("[data-ex]");
+      if (exb) { e.preventDefault(); ex = exb.dataset.ex; history.replaceState(null, "", `?ex=${ex}`); render(); scrollTo(0, 0); }
+    });
+    document.addEventListener("input", (e) => { if (e.target.matches("[data-motivo]")) document.querySelector("[data-reprovar]").disabled = !e.target.value.trim(); });
+    document.addEventListener("change", (e) => { if (e.target.matches(".seletor-modelo")) e.target.classList.toggle("override", e.target.value !== ""); });
+    const trocador = document.querySelector(".trocador");
+    trocador.querySelector(".trocador-fechar").onclick = () => trocador.classList.toggle("min");
+    render();
+    const aberta = location.hash.match(/^#caixa=(\d+):(\d+)$/);
+    if (aberta) abrirArtefato(+aberta[1], +aberta[2]);
+  </script>
+</body>
+</html>
