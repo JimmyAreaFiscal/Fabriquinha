@@ -4,12 +4,12 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Caminho `<raiz>/worktrees/<projeto>/I-<n>`, branch `fabriquinha/I-<n>` a partir de `origin/<branchBase>` após `git fetch`.
-- [ ] Os cenários do F5 §3.1: existe e preparada; não existe; pasta apagada com branch existente; branch de sobra sem pertencer à issue é recusada.
-- [ ] Preparação via `/bin/sh -c`, em ordem, para no primeiro erro, limite de 30 min, log no log da execução; refaz após falha.
-- [ ] Descarte com `reset --hard` + `clean -fd` (mantém ignorados), registrando no log o que removeu.
-- [ ] Fila em memória por projeto para comandos git.
-- [ ] Ganchos para `varrerBase` (F6) ficam como ponto de extensão a ser ligado no ticket 18.
-- [ ] Testes com git real e `origin` bare; descarte mantém `node_modules` ignorado e remove arquivo novo não ignorado.
+- [x] Caminho `<raiz>/worktrees/<projeto>/I-<n>`, branch `fabriquinha/I-<n>` a partir de `origin/<branchBase>` após `git fetch`.
+- [x] Os cenários do F5 §3.1: existe e preparada; não existe; pasta apagada com branch existente; branch de sobra sem pertencer à issue é recusada.
+- [x] Preparação via `/bin/sh -c`, em ordem, para no primeiro erro, limite de 30 min, log no log da execução; refaz após falha.
+- [x] Descarte com `reset --hard` + `clean -fd` (mantém ignorados), registrando no log o que removeu.
+- [x] Fila em memória por projeto para comandos git.
+- [x] Ganchos para `varrerBase` (F6) ficam como ponto de extensão a ser ligado no ticket 18 (callback opcional em `garantirWorktree`).
+- [x] Testes com git real e `origin` bare; descarte mantém `node_modules` ignorado e remove arquivo novo não ignorado.

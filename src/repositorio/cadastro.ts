@@ -1,7 +1,7 @@
 // Conferência do projeto antes de C19 (F5 §2): para no primeiro problema, com a mensagem do que fazer.
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { Hospedagem, Projeto } from "../dominio/projeto.ts";
-import { executar } from "../processo.ts";
+import { executar, git } from "../processo.ts";
 
 // F5 §2.1. O `usuario@` opcional nas URLs HTTPS do Azure é o formato que o próprio botão Clone do Azure DevOps dá.
 const REMOTOS: [RegExp, Hospedagem][] = [
@@ -16,10 +16,6 @@ const REMOTOS: [RegExp, Hospedagem][] = [
 /** Hospedagem pelos formatos de URL do `origin` aceitos (F5 §2.1); qualquer outro host dá `undefined`. */
 export const hospedagemDoRemoto = (url: string): Hospedagem | undefined =>
   REMOTOS.find(([padrao]) => padrao.test(url))?.[1];
-
-// Sem terminal para pedir senha: git falha em vez de esperar quem não está ali.
-const git = (repo: string, ...args: string[]) =>
-  executar("git", ["-C", repo, ...args], { ...process.env, GIT_TERMINAL_PROMPT: "0" });
 
 /** F5 §2: confere repositório, identidade, remoto, branch base e CLI da hospedagem, nessa ordem. */
 export async function conferirProjeto({
