@@ -2,6 +2,7 @@
 // Fora da suíte padrão, porque depende do Docker e do servidor no ar: `npm run integracao`.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +15,9 @@ import { agregado, comIssue, registrarIssue } from "../src/persistencia/issues.t
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
 import { garantirWorktree } from "../src/repositorio/worktree.ts";
 
-const CHAVE = "fabriquinha-integracao-sonar";
+// Uma chave por execução: duas worktrees rodando a integração juntas no mesmo servidor não apagam o projeto uma da outra
+// no meio da análise.
+const CHAVE = `fabriquinha-integracao-sonar-${randomUUID().slice(0, 8)}`;
 // Docker Desktop só compartilha $HOME com os contêineres.
 mkdirSync(join(homedir(), ".cache"), { recursive: true });
 const dir = mkdtempSync(join(homedir(), ".cache", "fabriquinha-integracao-"));
