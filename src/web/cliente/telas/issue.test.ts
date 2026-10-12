@@ -300,6 +300,16 @@ test("Ação do Auditor: Executar agora habilitado, desabilitado com o motivo do
     /<pre class="comandos">git -C \/repo worktree remove --force \/w\/I-1\ngit -C \/repo worktree prune<\/pre>/,
   );
 
+  // Logo depois de encerrar, o que de fato falhou, com a saída do git, no lugar do comando lido do disco (F5 §5.3).
+  const avisos = acaoDoAuditor(
+    { ...p, limpeza: ["git -C /repo worktree remove --force /w/I-1"] },
+    { modelos: [], agora: new Date(), avisos: ["git -C /repo worktree remove --force /w/I-1 falhou: fatal: <x>"] },
+  );
+  assert.match(
+    avisos,
+    /<span class="muted">a issue foi encerrada, mas a limpeza da worktree falhou:<\/span><\/div>\s*<pre class="comandos">git -C \/repo worktree remove --force \/w\/I-1 falhou: fatal: &#60;x&#62;<\/pre>/,
+  );
+
   // O ponto de extensão dos painéis de gate: um painel novo entra na mesma coluna.
   PAINEIS.unshift(() => "<section>gate</section>");
   try {

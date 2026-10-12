@@ -3,7 +3,7 @@
 // encerrar com a nota, a worktree removida e as branches mantidas.
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { caminhoArquivo } from "../src/persistencia/arquivos.ts";
 import { abrir } from "../src/persistencia/banco.ts";
@@ -269,4 +269,32 @@ test("com o PR aberto, Encerrar fica desabilitado e o servidor recusa; depois do
     /refs\/heads\/fabriquinha\/I-1/,
   );
   await expect(pagina.getByText("A limpeza falhou")).toHaveCount(0);
+});
+
+test("encerrar com a limpeza da worktree falhando mostra o que falhou, com a saída do git", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const worktree = await noGatePR(fabriquinha.raiz);
+  prNoGitHub(fabriquinha.raiz, "MERGED", URL_PR);
+  // O git já não conhece a worktree: o `worktree remove` falha, e ela fica no disco.
+  rmSync(join(fabriquinha.raiz, "loja", ".git", "worktrees"), { recursive: true, force: true });
+  await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
+  const gate = pagina.getByRole("region", { name: "Gate do PR" });
+  await gate.getByRole("tab", { name: "Decisão" }).click();
+  const decisao = gate.getByRole("tabpanel", { name: "Decisão" });
+  await decisao.getByRole("button", { name: "5" }).click();
+  await decisao.getByRole("button", { name: "Encerrar issue" }).click();
+
+  await expect(gate).toBeHidden();
+  expect(issue(fabriquinha.raiz)?.issue.fase).toBe("concluida");
+  const aviso = pagina.getByRole("status").filter({ hasText: "A limpeza falhou" });
+  await expect(aviso).toContainText("a issue foi encerrada, mas a limpeza da worktree falhou:");
+  await expect(aviso.locator(".comandos")).toContainText(`worktree remove --force ${worktree} falhou: fatal:`);
+  expect(existsSync(worktree)).toBe(true);
+
+  // Recarregada, a página volta ao comando a rodar, lido do disco.
+  await pagina.reload();
+  await expect(aviso).toContainText("a issue foi encerrada, mas a worktree ficou no disco; rode:");
+  await expect(aviso.locator(".comandos")).not.toContainText("falhou");
 });

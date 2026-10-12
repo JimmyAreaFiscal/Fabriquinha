@@ -165,13 +165,21 @@ function executarAgora(p: PaginaDaIssue): string {
   </section>`;
 }
 
-const limpeza = (p: PaginaDaIssue): string =>
-  p.limpeza.length === 0
+/**
+ * O aviso da limpeza que falhou (F5 §5.3): logo depois de encerrar, os comandos que falharam com a saída do git
+ * (`avisos`, da resposta do encerramento); depois, o comando a rodar, lido do disco.
+ */
+function limpeza(p: PaginaDaIssue, { avisos }: Extras): string {
+  const [linhas, texto] = avisos?.length
+    ? [avisos, "a issue foi encerrada, mas a limpeza da worktree falhou:"]
+    : [p.limpeza, "a issue foi encerrada, mas a worktree ficou no disco; rode:"];
+  return linhas.length === 0
     ? ""
     : `<section class="painel-acao falhou" role="status">
-    <div class="painel-linha"><span class="rotulo">A limpeza falhou</span><span class="muted">a issue foi encerrada, mas a worktree ficou no disco; rode:</span></div>
-    <pre class="comandos">${p.limpeza.map(escapar).join("\n")}</pre>
+    <div class="painel-linha"><span class="rotulo">A limpeza falhou</span><span class="muted">${texto}</span></div>
+    <pre class="comandos">${linhas.map(escapar).join("\n")}</pre>
   </section>`;
+}
 
 /** O estado do PR como a página o leu (`GET /api/issues/:id/pr`), ou a mensagem da falha do `gh` ou do `az` (502). */
 export type EstadoLido = { leitura: LeituraDoPR } | { erro: string };
@@ -194,6 +202,8 @@ export interface Extras {
   agora: Date;
   pr?: EstadoLido;
   rascunho?: RascunhoDoPR;
+  /** O que falhou na limpeza, da resposta do encerramento (C16), até a página ser recarregada. */
+  avisos?: readonly string[];
 }
 
 const SEM_EXTRAS: Extras = { modelos: [], agora: new Date(0) };

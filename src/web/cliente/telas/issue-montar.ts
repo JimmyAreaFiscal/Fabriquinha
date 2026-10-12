@@ -122,16 +122,23 @@ const decidirRegistro =
     await remontar();
   };
 
+/**
+ * O que falhou na limpeza ao encerrar cada issue (F5 §5.3), com a saída do git, que só vem na resposta do
+ * encerramento: a página o mostra até ser recarregada.
+ */
+const avisosDaLimpeza = new Map<number, readonly string[]>();
+
 /** Decide o gate do PR (C16) e relê a página: depois de encerrar, o aviso da limpeza que falhou aparece nela. */
 const decidirPR =
   (aprovado: boolean) =>
   async ({ alvo, pagina, raiz, remontar }: Contexto): Promise<void> => {
     const rascunho = rascunhoDoPR(raiz);
     (alvo as HTMLButtonElement).disabled = true;
-    await api(
+    const resposta = await api<{ avisos?: string[] }>(
       `/api/issues/${String(pagina.issue.id)}/pr`,
       enviarJson("POST", aprovado ? { aprovado, nota: rascunho?.nota } : { aprovado, motivo: rascunho?.motivo }),
     );
+    if (resposta.avisos?.length) avisosDaLimpeza.set(pagina.issue.id, resposta.avisos);
     await remontar();
   };
 
@@ -245,6 +252,7 @@ export async function montarIssue(
     ...(fase === "aprovacao_pr" && { pr: await lerPR(pagina.issue.id, signal) }),
     agora: new Date(),
     ...(rascunho.pr && { rascunho: rascunho.pr }),
+    avisos: avisosDaLimpeza.get(pagina.issue.id),
   };
   // Os modelos vêm da leitura guardada, que não se cancela: o Auditor pode ter saído enquanto ela chegava.
   signal.throwIfAborted();
