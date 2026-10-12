@@ -142,7 +142,7 @@ function linha(
         <a class="titulo${i.titulo === null ? " sem" : ""}" href="${caminhoDaIssue(i.projeto, i.id)}">${escapar(i.titulo ?? "sem título")}</a>
         <span class="sub">${marcas(i)}</span>
       </div></div>
-      ${trilho(i.fase, estado)}
+      ${trilho(i.fase, i.percorridas, estado)}
       <div class="pista-estado">${destaque ? sessao(destaque, agora) : ""}</div>
     </div>
     ${gaveta(i, sessoes, projeto, agora)}

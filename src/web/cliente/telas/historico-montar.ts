@@ -6,6 +6,7 @@ import type { SessaoDoHistorico } from "../../rotas/historico.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
 import { caminhoDaSessao } from "../render.ts";
+import { verSaida } from "./chat-montar.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { consulta, contagem, type Filtros, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
 
@@ -62,8 +63,11 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
 
   raiz.addEventListener("click", (evento) => {
     const alvo =
-      evento.target instanceof Element ? evento.target.closest<HTMLElement>("[data-sel], [data-consulta]") : null;
-    if (alvo?.dataset.sel !== undefined) {
+      evento.target instanceof Element
+        ? evento.target.closest<HTMLElement>("[data-sel], [data-consulta], [data-ver-tudo]")
+        : null;
+    if (alvo?.dataset.verTudo !== undefined) verSaida(alvo);
+    else if (alvo?.dataset.sel !== undefined) {
       selecionada = alvo.dataset.sel;
       desenhar();
       lista.querySelector<HTMLElement>(`[data-sel="${CSS.escape(selecionada)}"]`)?.focus();

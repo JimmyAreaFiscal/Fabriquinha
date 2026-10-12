@@ -54,6 +54,14 @@ const rolarAoFim = () => {
   scrollTo(0, document.documentElement.scrollHeight);
 };
 
+/** O **ver tudo** de uma chamada de ferramenta: a saída inteira na caixa. Também na prévia do Histórico. */
+export function verSaida(botao: Element): void {
+  const chamada = botao.closest(".ferramenta");
+  const saida = chamada?.querySelector("pre")?.textContent ?? "";
+  const nome = chamada?.querySelector(".nome-f")?.textContent ?? "";
+  abrirCaixa({ titulo: `Saída de ${nome}`, corpo: `<pre>${escapar(saida)}</pre>` });
+}
+
 /** Monta o chat da sessão em `main`; ao sair da página (`signal`), fecha o SSE e solta o ouvinte da caixa. */
 export function montarChat(main: HTMLElement, params: Parametros, signal: AbortSignal): void {
   const sessao = String(params.sessao);
@@ -272,11 +280,8 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     } else if (botao.dataset.devolver !== undefined) {
       const motivo = botao.form?.querySelector("textarea")?.value ?? "";
       acao(postar(`/api/issues/${issue()}/registro`, { aprovado: false, motivo }));
-    } else if ("verTudo" in botao.dataset) {
-      const saida = botao.closest(".ferramenta")?.querySelector("pre")?.textContent ?? "";
-      const nome = botao.closest(".ferramenta")?.querySelector(".nome-f")?.textContent ?? "";
-      abrirCaixa({ titulo: `Saída de ${nome}`, corpo: `<pre>${escapar(saida)}</pre>` });
-    } else aoClicarNaConsulta(botao);
+    } else if ("verTudo" in botao.dataset) verSaida(botao);
+    else aoClicarNaConsulta(botao);
   });
 
   /** Conversar sobre, os anexos de histórico e os artefatos ao lado. */

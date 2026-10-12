@@ -19,7 +19,7 @@ import {
   rotuloIssue,
   rotuloTicket,
 } from "../render.ts";
-import { argumentos, blocos, type MensagemPi, modeloDe, resumoDoResultado, textoDe } from "./chat.ts";
+import { type Bloco, blocos, ferramenta, type MensagemPi, modeloDe, textoDe } from "./chat.ts";
 
 /** O que o Auditor escolheu nos filtros, como digitou. */
 export interface Filtros {
@@ -107,8 +107,8 @@ export function listaDoHistorico(lista: readonly SessaoDoHistorico[], selecionad
   return `<div class="mestre"><div>${secoes.join("")}</div><aside class="previa superficie" data-previa aria-label="Prévia da sessão"><p class="muted">Carregando a sessão…</p></aside></div>`;
 }
 
-/** Um pedaço do fim da conversa: uma chamada de ferramenta numa linha, ou quem falou e o texto. */
-type Pedaco = { ferramenta: string } | { quem: string; texto: string };
+/** Um pedaço do fim da conversa: uma chamada de ferramenta com o resultado, ou quem falou e o texto. */
+type Pedaco = { chamada: Bloco; resultado?: MensagemPi } | { quem: string; texto: string };
 
 /** As mensagens do Auditor e do agente da conversa, sem os prompts montados pela Fabriquinha. */
 const mensagens = (d: DadosDoChat): MensagemPi[] =>
@@ -117,9 +117,6 @@ const mensagens = (d: DadosDoChat): MensagemPi[] =>
       ? [e.message as MensagemPi]
       : [],
   );
-
-const resumoDaFerramenta = (resultado: MensagemPi | undefined): string =>
-  resultado ? resumoDoResultado(resultado).resumo : "sem resultado";
 
 /** Os últimos pedaços da conversa (F7 §4.4, item 3, "o fim da conversa"). */
 function fimDaConversa(d: DadosDoChat, quantos = 3): Pedaco[] {
@@ -132,19 +129,17 @@ function fimDaConversa(d: DadosDoChat, quantos = 3): Pedaco[] {
   const pedacos = mensagens(d).flatMap((m): Pedaco[] => {
     if (m.role === "user") return [{ quem: "você", texto: textoDe(m) }];
     return blocos(m).flatMap((b): Pedaco[] => {
-      if (b.type === "toolCall") {
-        const args = argumentos(b.arguments);
-        return [{ ferramenta: `▸ ${String(b.name)}  ${args}  ${resumoDaFerramenta(resultados.get(String(b.id)))}` }];
-      }
+      if (b.type === "toolCall") return [{ chamada: b, resultado: resultados.get(String(b.id)) }];
       return b.type === "text" && b.text?.trim() ? [{ quem: "agente", texto: b.text }] : [];
     });
   });
   return pedacos.slice(-quantos);
 }
 
+/** A chamada sai recolhível, como no chat (F7 §4.4, Chat, item 2). */
 const pedaco = (p: Pedaco): string =>
-  "ferramenta" in p
-    ? `<span class="ferr">${escapar(p.ferramenta)}</span>`
+  "chamada" in p
+    ? ferramenta(p.chamada, p.resultado)
     : `<div><span class="quem">${p.quem}</span><div class="texto md">${markdown(p.texto)}</div></div>`;
 
 /**

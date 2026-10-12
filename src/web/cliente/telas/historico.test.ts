@@ -163,7 +163,11 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
   );
   assert.ok(
     html.includes(
-      '<div class="trecho"><span class="quem">fim da conversa</span><span class="ferr">▸ ler  a.ts  ✗ 1 linha</span><span class="ferr">▸ busca  {&#34;q&#34;:1}  sem resultado</span><div><span class="quem">agente</span><div class="texto md"><p>Desenho <strong>submetido</strong>.</p>\n</div></div></div>',
+      // As chamadas, recolhíveis como no chat, e não achatadas numa linha.
+      '<div class="trecho"><span class="quem">fim da conversa</span>' +
+        '<details class="ferramenta" data-chamada="t2"><summary><span class="nome-f">ler</span><span class="args">a.ts</span><span class="res nok">✗ 1 linha</span></summary><pre>sem &#60;arquivo&#62;</pre></details>' +
+        '<details class="ferramenta" data-chamada="t3"><summary><span class="nome-f">busca</span><span class="args">{&#34;q&#34;:1}</span><span class="res neutro">sem resultado ainda</span></summary></details>' +
+        '<div><span class="quem">agente</span><div class="texto md"><p>Desenho <strong>submetido</strong>.</p>\n</div></div></div>',
     ),
     html,
   );
@@ -178,18 +182,13 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
   assert.match(comeco, /durou 0 s/);
   assert.match(comeco, /<span class="quem">você<\/span><div class="texto md"><p>comece pelos testes<\/p>/);
   assert.match(comeco, /<dt>Mensagens<\/dt><dd>2<\/dd>/);
-  assert.ok(previa(sessao(), dados(conversa.slice(1, 5), []), AGORA).includes("▸ bash  npm test  ✓ 2 linhas"));
-  // Sem mensagens, o fim da conversa diz isso; sem saída, a ferramenta tem 0 linhas.
+  assert.match(
+    previa(sessao(), dados(conversa.slice(1, 5), []), AGORA),
+    /<span class="nome-f">bash<\/span><span class="args">npm test<\/span><span class="res ok">✓ 2 linhas<\/span>/,
+  );
+  // Sem mensagens, o fim da conversa diz isso.
   assert.match(
     previa(sessao(), dados([], []), AGORA),
     /fim da conversa<\/span><span class="muted">sem mensagens<\/span>/,
   );
-  const vazia = dados(
-    [
-      msg({ role: "assistant", content: [{ type: "toolCall", id: "t9", name: "bash", arguments: {} }] }),
-      msg({ role: "toolResult", toolCallId: "t9", content: [] }),
-    ],
-    [],
-  );
-  assert.ok(previa(sessao(), vazia, AGORA).includes("▸ bash  {}  ✓ sem saída"));
 });

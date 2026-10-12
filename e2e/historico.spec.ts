@@ -19,7 +19,11 @@ function conversa(raiz: string, sessao: string, ultima: string): void {
   const mensagens = [
     { role: "user", content: "desenhe a solução" },
     { ...agente, content: [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: "npm test" } }] },
-    { role: "toolResult", toolCallId: "t1", content: [{ type: "text", text: "214 passed" }] },
+    {
+      role: "toolResult",
+      toolCallId: "t1",
+      content: [{ type: "text", text: Array.from({ length: 12 }, (_, i) => `suite ${String(i + 1)}: ok`).join("\n") }],
+    },
     { ...agente, content: [{ type: "text", text: ultima }] },
   ];
   writeFileSync(
@@ -101,7 +105,17 @@ test("filtra por issue, seleciona uma sessão, lê a prévia e abre uma consulta
     "3",
   ]);
   const trecho = previa.locator(".trecho");
-  await expect(trecho.locator(".ferr")).toHaveText("▸ bash npm test ✓ 1 linha");
+  // A chamada de ferramenta vem recolhida, como no chat; aberta, mostra a saída, e ver tudo a abre inteira na caixa.
+  const ferramenta = trecho.locator("details.ferramenta");
+  await expect(ferramenta.locator("summary")).toHaveText("bashnpm test✓ 12 linhas");
+  await expect(ferramenta.locator("pre")).toBeHidden();
+  await ferramenta.locator("summary").click();
+  await expect(ferramenta.locator("pre")).toContainText("suite 1: ok");
+  await ferramenta.getByRole("button", { name: "ver tudo" }).click();
+  const caixa = pagina.getByRole("dialog", { name: "Saída de bash" });
+  await expect(caixa.locator("pre")).toContainText("suite 12: ok");
+  await pagina.keyboard.press("Escape");
+  await expect(caixa).toBeHidden();
   await expect(trecho).toContainText("agenteDesenho submetido: 4 evidências, 3 tickets propostos.");
   await expect(trecho.locator("strong")).toHaveText("4 evidências");
   await expect(previa.getByRole("link", { name: "Abrir o chat" })).toHaveAttribute("href", `/sessions/${S1}`);

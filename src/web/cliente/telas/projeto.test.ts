@@ -61,6 +61,7 @@ const issue = (i: Partial<IssueDoProjeto> & Pick<IssueDoProjeto, "id" | "fase">)
   criadaEm: ha(600),
   tickets: [ticket({ id: i.id * 10, issue: i.id, etapa: "registro", status: "concluido" })],
   bloqueadaPor: [],
+  percorridas: [],
   ...i,
 });
 
@@ -153,6 +154,8 @@ test("linha por issue: título, I-n, tipo, bloqueio, PR, progresso, trilho com a
         fase: "desenvolvimento",
         titulo: "Cache <do> catálogo",
         bloqueadaPor: [30, 31],
+        // Sem o desenho: o trilho pinta de verde só o registro, e não a fase pulada.
+        percorridas: ["registro"],
         pr: { id: "212", url: "https://github.com/x/loja/pull/212?a=1&b=2" },
         tickets: [
           ticket({ id: 95, issue: 35, etapa: "registro", status: "concluido" }),
@@ -194,6 +197,12 @@ test("linha por issue: título, I-n, tipo, bloqueio, PR, progresso, trilho com a
 
   // A falha vence o que roda: a cor, a gaveta aberta e a sessão em destaque.
   const cache = item(html, 35);
+  assert.deepEqual([...cache.matchAll(/<li class="([^"]+)"/g)].map((m) => m[1]).slice(0, 4), [
+    "passo feito",
+    "passo",
+    "passo gate",
+    "passo atual",
+  ]);
   assert.match(cache, /^<div class="pista-item falha" data-issue="35">/);
   assert.match(cache, /<a class="titulo" href="[^"]+">Cache &#60;do&#62; catálogo<\/a>/);
   assert.match(

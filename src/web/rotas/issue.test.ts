@@ -108,6 +108,7 @@ test("GET /api/issues/:id: agregado, projeto, dependências com a fase, sessões
   );
   assert.deepEqual(p.custos, { 1: 1.75 });
   assert.deepEqual(p.limpeza, []);
+  assert.deepEqual(p.percorridas, [], "semeada direto no banco, a issue ainda não teve comando");
   assert.deepEqual([p.executar?.ticket.id, p.executar?.ocupada], [2, undefined]);
 
   const concluida = await pagina(2);

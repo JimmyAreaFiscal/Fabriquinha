@@ -526,11 +526,15 @@ function classeDoCard(e: Evidencia): string {
   return primeiro ? ROTULO_DA_CLASSE[classe(primeiro)] : "JSON";
 }
 
-/** O card de um artefato, que abre a evidência na caixa pelo `data-evidencia`; aqui e na coluna da direita do chat. */
-export function cardDaEvidencia(e: Evidencia): string {
+/**
+ * O card de um artefato, que abre a evidência na caixa pelo `data-evidencia`; aqui e na coluna da direita do chat. Aqui
+ * os cards vêm agrupados por etapa e ticket; no chat, sem o grupo, `comTicket` põe o `T-n` em cada um.
+ */
+export function cardDaEvidencia(e: Evidencia, comTicket = false): string {
   const ponto =
     e.aprovada === undefined ? "" : `<span class="ponto ${cor(e.aprovada)}" title="${veredito(e.aprovada)}"></span>`;
-  return `<button type="button" class="art" data-evidencia="${String(e.id)}"><span class="tipo">${classeDoCard(e)}</span>${NOME[e.tipo]}${ponto}</button>`;
+  const ticket = comTicket ? `<span class="id">${rotuloTicket(e.ticket)}</span>` : "";
+  return `<button type="button" class="art" data-evidencia="${String(e.id)}"><span class="tipo">${classeDoCard(e)}</span>${NOME[e.tipo]}${ticket}${ponto}</button>`;
 }
 
 /** Os artefatos que aparecem como card: `explicacao_fitness` vai dentro da tabela da `matriz_fitness` do ticket. */
@@ -542,7 +546,7 @@ function artefatos(p: PaginaDaIssue): string {
     const evidencias = porTicket.get(t.id);
     if (!evidencias) return [];
     return [
-      `<div class="etapa-artefatos"><div class="etapa-nome">${NOME_DA_ETAPA[t.etapa]}<span class="id">${rotuloTicket(t.id)}</span></div><div class="cards-art">${evidencias.map(cardDaEvidencia).join("")}</div></div>`,
+      `<div class="etapa-artefatos"><div class="etapa-nome">${NOME_DA_ETAPA[t.etapa]}<span class="id">${rotuloTicket(t.id)}</span></div><div class="cards-art">${evidencias.map((e) => cardDaEvidencia(e)).join("")}</div></div>`,
     ];
   });
   return `<section class="secao"><h2>Artefatos <span class="muted">${linhas.length ? "clique para abrir" : ""}</span></h2>${
@@ -558,7 +562,7 @@ export function paginaDaIssue(p: PaginaDaIssue, descricaoHtml: string, extras = 
   return `<div class="pagina-issue">
     <nav class="migalha" aria-label="Caminho"><a href="/projects">Projetos</a> › <a href="/projects/${encodeURIComponent(issue.projeto)}">${escapar(issue.projeto)}</a> › ${rotuloIssue(issue.id)}</nav>
     <h1 class="titulo-issue"><span class="id">${rotuloIssue(issue.id)}</span>${titulo}</h1>
-    ${trilho(issue.fase, estadoDoTrilho(ativas))}
+    ${trilho(issue.fase, p.percorridas, estadoDoTrilho(ativas))}
     <div class="mesa">
       <aside class="lateral">${detalhes(p)}${descricao(descricaoHtml)}${tickets(p)}</aside>
       <div class="principal">${acaoDoAuditor(p, extras)}${artefatos(p)}</div>
@@ -620,9 +624,12 @@ function resultadoDoComando(c: ComandoRodado): string {
 
 type Tabela = (e: Evidencia, p: PaginaDaIssue) => string;
 
+/** O status do arquivo no git (F3, `arquivos_alterados`), por extenso. */
+const STATUS_DO_ARQUIVO = { A: "adicionado", M: "modificado", D: "removido", R: "renomeado" } as const;
+
 interface Alterado {
   caminho: string;
-  status: string;
+  status: keyof typeof STATUS_DO_ARQUIVO;
   adicionadas: number | null;
   removidas: number | null;
   previsto: string | null;
@@ -715,7 +722,7 @@ const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
           a.previsto === null
             ? `<td class="nao-previsto md">não previsto${porque}</td>`
             : `<td class="mono">${escapar(a.previsto)}</td>`;
-        return `<tr><td class="mono">${escapar(a.caminho)}</td><td>${a.status}</td><td class="num">${linhas}</td>${previsto}</tr>`;
+        return `<tr><td class="mono">${escapar(a.caminho)}</td><td>${STATUS_DO_ARQUIVO[a.status]}</td><td class="num">${linhas}</td>${previsto}</tr>`;
       }),
     );
   },

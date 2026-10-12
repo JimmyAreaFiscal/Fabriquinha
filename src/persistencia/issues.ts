@@ -14,7 +14,7 @@ import {
 } from "../dominio/agregado.ts";
 import { ErroDeInexistente, encontrado } from "../dominio/erros.ts";
 import * as dominio from "../dominio/issue.ts";
-import type { Id, Modelo } from "../dominio/primitivos.ts";
+import type { Fase, Id, Modelo } from "../dominio/primitivos.ts";
 import { escrever, novoId } from "./banco.ts";
 import { temCommit } from "./commits.ts";
 import { projeto } from "./projetos.ts";
@@ -385,6 +385,16 @@ export const ultimaEdicaoDoAgente = (banco: DatabaseSync, issue: Id): string =>
       )
       .get(issue)?.em,
   );
+
+/**
+ * As fases em que a issue já esteve, na ordem em que entrou nelas: as da tabela `comando` (a fase de antes de cada
+ * comando, F6 §7), porque toda transição passa por `comIssue`. A fase atual só aparece depois do primeiro comando nela.
+ */
+export const fasesPercorridas = (banco: DatabaseSync, issue: Id): Fase[] =>
+  banco
+    .prepare("SELECT fase FROM comando WHERE issue = ? GROUP BY fase ORDER BY MIN(id)")
+    .all(issue)
+    .map((l) => l.fase as Fase);
 
 /** As issues não concluídas de todos os projetos, da mais nova para a mais antiga (o board do Início, F7 §5). */
 export const issuesEmAndamento = (banco: DatabaseSync): Id[] =>

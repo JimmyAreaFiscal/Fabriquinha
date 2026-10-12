@@ -23,7 +23,7 @@ import { decidirDesenho, decidirRegistro } from "../dominio/gates.ts";
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { abrir } from "./banco.ts";
-import { agregado, arquivarConcluidas, comIssue, registrarIssue } from "./issues.ts";
+import { agregado, arquivarConcluidas, comIssue, fasesPercorridas, registrarIssue } from "./issues.ts";
 import { registrarProjeto } from "./projetos.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-issues-"));
@@ -139,6 +139,9 @@ test("comIssue grava a fase de antes, não a de depois", () => {
     todas(banco, "SELECT fase FROM comando ORDER BY id").map((c) => c.fase),
     ["registro", "desenho"],
   );
+  // As fases percorridas, uma vez cada e na ordem em que a issue entrou nelas.
+  comIssue(banco, issue.id, "removerDependencia", auditor, (ag) => ag);
+  assert.deepEqual(fasesPercorridas(banco, issue.id), ["registro", "desenho"]);
   banco.close();
 });
 

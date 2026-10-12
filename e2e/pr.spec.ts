@@ -108,6 +108,14 @@ async function noGatePR(raiz: string): Promise<string> {
       (2, 1, 'revisao', 'Revisar', '', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}'),
       (3, 1, 'encerramento', 'Publicar o PR', '', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}');
     INSERT INTO sequencia (nome, valor) VALUES ('ticket', 3) ON CONFLICT (nome) DO UPDATE SET valor = 3;
+    -- O caminho da issue até o gate do PR, sem o ajuste do PR (F6 §7: a fase de antes de cada comando).
+    INSERT INTO comando (issue, nome, ator, fase, em) VALUES
+      (1, 'decidirRegistro', 'auditor', 'registro', '${AGORA}'),
+      (1, 'concluirTicket', 'fabriquinha', 'desenho', '${AGORA}'),
+      (1, 'decidirDesenho', 'auditor', 'aprovacao_desenho', '${AGORA}'),
+      (1, 'concluirTicket', 'fabriquinha', 'desenvolvimento', '${AGORA}'),
+      (1, 'concluirTicket', 'fabriquinha', 'revisao', '${AGORA}'),
+      (1, 'concluirTicket', 'fabriquinha', 'encerramento', '${AGORA}');
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
       VALUES (1, 3, 'autonomo', '${SESSAO}', 'sucesso', '${AGORA}', '${AGORA}');
     INSERT INTO sequencia (nome, valor) VALUES ('execucao', 1) ON CONFLICT (nome) DO UPDATE SET valor = 1;
@@ -256,6 +264,17 @@ test("com o PR aberto, Encerrar fica desabilitado e o servidor recusa; depois do
 
   await expect(gate).toBeHidden();
   await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveCount(0);
+  // Fases passadas em verde; o ajuste do PR, que a issue não teve, fica neutro.
+  await expect(pagina.locator(".trilho-fases .passo.feito")).toHaveText([
+    "Registro",
+    "Desenho",
+    "Aprovação do desenho",
+    "Desenvolvimento",
+    "Revisão",
+    "Encerramento",
+    "Aprovação do PR",
+  ]);
+  await expect(pagina.locator(".trilho-fases .passo", { hasText: "Ajuste do PR" })).not.toHaveClass(/feito/);
   const ag = issue(fabriquinha.raiz);
   expect(ag?.issue.fase).toBe("concluida");
   expect(ag?.decisoes.map((d) => [d.gate, d.aprovado, d.nota])).toEqual([["pr", true, 4]]);

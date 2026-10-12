@@ -75,7 +75,7 @@ test("issues do projeto: em andamento sempre; concluídas e arquivadas só quand
 
   const lista = await chamar("GET", "/api/projetos/loja/issues");
   assert.deepEqual(lista, {
-    issues: [{ ...andamento.issue, tickets: andamento.tickets, bloqueadaPor: [] }],
+    issues: [{ ...andamento.issue, tickets: andamento.tickets, bloqueadaPor: [], percorridas: [] }],
     sessoes: [],
     contagem: { andamento: 1, concluidas: 2, arquivadas: 0 },
   });
@@ -113,6 +113,7 @@ test("cada issue diz que dependência ainda bloqueia, inclusive de outro projeto
     issues: [issue],
   } = (await chamar("GET", "/api/projetos/loja/issues")) as { issues: [Record<string, unknown>] };
   assert.deepEqual(issue.bloqueadaPor, [1]);
+  assert.deepEqual(issue.percorridas, ["registro"], "a fase em que um comando foi aplicado");
   assert.deepEqual(issue.pr, { id: "212", url: "https://github.com/x/loja/pull/212" });
   assert.equal(issue.evidencias, undefined);
 });

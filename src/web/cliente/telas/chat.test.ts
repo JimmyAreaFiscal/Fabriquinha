@@ -472,6 +472,7 @@ const evidencia = (e: Partial<Evidencia>): Evidencia => ({
 const pagina = (p: Partial<PaginaDaIssue> = {}): PaginaDaIssue =>
   ({
     issue: { ...cabecalho().issue, fase: "desenvolvimento" },
+    percorridas: ["registro", "desenho", "aprovacao_desenho", "desenvolvimento"],
     tickets: [
       ticket({ id: 1, etapa: "registro", titulo: "Registrar", status: "concluido" }),
       ticket({ id: 2, titulo: "Teste de carga", status: "aberto" }),
@@ -516,15 +517,39 @@ test("contexto da issue: I-n e projeto, trilho compacto, tickets com o desta ses
     [...html.matchAll(/data-evidencia="(\d+)"/g)].map((m) => m[1]),
     ["10", "12"],
   );
+  // Cada card diz de que ticket é: com dois tickets de desenvolvimento, os Testes de um e do outro se distinguem.
+  assert.deepEqual(
+    [...html.matchAll(/<button type="button" class="art" data-evidencia="\d+">.*?<\/button>/g)].map((m) =>
+      m[0]
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    ),
+    ["TABELA Critérios de aceite T-1", "JSON Desenho da solução T-3"],
+  );
   assert.match(html, /<a class="link" href="\/projects\/loja%20api\/issues\/I-4">Abrir a issue →<\/a><\/section>$/);
 
   const concluida = contextoDaIssue(
-    pagina({ issue: { ...cabecalho().issue, fase: "concluida" }, evidencias: [], sessoes: [] }),
+    pagina({
+      issue: { ...cabecalho().issue, fase: "concluida" },
+      percorridas: [
+        "registro",
+        "desenho",
+        "aprovacao_desenho",
+        "desenvolvimento",
+        "revisao",
+        "encerramento",
+        "aprovacao_pr",
+      ],
+      evidencias: [],
+      sessoes: [],
+    }),
     info(),
   );
+  // O ajuste do PR, que não aconteceu, fica neutro.
   assert.match(
     concluida,
-    /<div class="trilho-mini" role="img" aria-label="Fase: Concluída">(<i class="feito" [^>]+><\/i>){8}<\/div>/,
+    /<div class="trilho-mini" role="img" aria-label="Fase: Concluída">(<i class="feito" [^>]+><\/i>){7}<i title="Ajuste do PR"><\/i><\/div>/,
   );
   assert.match(concluida, /<p class="muted pequeno">Nenhum artefato ainda.<\/p>/);
 });

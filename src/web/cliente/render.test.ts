@@ -10,6 +10,7 @@ import {
   duracao,
   escapar,
   estadoDoTrilho,
+  FASES,
   etapa,
   modeloDoSeletor,
   NAO_ENCONTRADA,
@@ -98,8 +99,15 @@ test("navegação fixa marca a página atual e mostra quem aguarda só quando h�
 /** As classes de cada passo do trilho, na ordem. */
 const passos = (html: string) => [...html.matchAll(/<li class="([^"]+)"/g)].map((m) => m[1]);
 
+/** Todas as fases antes de `fase`, como se a issue tivesse passado por cada uma. */
+const ate = (fase: string) =>
+  FASES.map(([f]) => f).slice(
+    0,
+    FASES.findIndex(([f]) => f === fase),
+  );
+
 test("trilho: passadas feitas, a atual marcada, gates em losango e a cor do estado", () => {
-  const html = trilho("aprovacao_desenho", "aguarda");
+  const html = trilho("aprovacao_desenho", ate("aprovacao_desenho"), "aguarda");
   assert.match(html, /^<ol class="trilho-fases aguarda" aria-label="Fases da issue">/);
   assert.deepEqual(passos(html), [
     "passo feito",
@@ -112,13 +120,38 @@ test("trilho: passadas feitas, a atual marcada, gates em losango e a cor do esta
     "passo",
   ]);
   assert.match(html, /<li class="passo gate atual" aria-current="step">.*?<span>Aprovação do desenho<\/span>/);
-  assert.match(trilho("registro"), /^<ol class="trilho-fases" /);
+  assert.match(trilho("registro", []), /^<ol class="trilho-fases" /);
 });
 
-test("trilho de issue concluída: todas as fases feitas, nenhuma atual", () => {
-  const html = trilho("concluida");
-  assert.ok(passos(html).every((c) => c?.includes("feito")));
+test("trilho: a fase antes da atual por que a issue não passou fica neutra, não verde", () => {
+  // Uma issue que voltou do PR para o desenvolvimento e está de novo na revisão: o ajuste do PR, depois da atual, não
+  // é verde; a aprovação do desenho, se não aconteceu, também não.
+  assert.deepEqual(passos(trilho("revisao", ["registro", "desenho", "desenvolvimento", "ajuste_pr"])), [
+    "passo feito",
+    "passo feito",
+    "passo gate",
+    "passo feito",
+    "passo atual",
+    "passo",
+    "passo gate",
+    "passo",
+  ]);
+});
+
+test("trilho de issue concluída: as fases percorridas feitas, as que não aconteceram neutras, nenhuma atual", () => {
+  const html = trilho("concluida", ate("ajuste_pr"));
+  assert.deepEqual(passos(html), [
+    "passo feito",
+    "passo feito",
+    "passo gate feito",
+    "passo feito",
+    "passo feito",
+    "passo feito",
+    "passo gate feito",
+    "passo",
+  ]);
   assert.doesNotMatch(html, /atual|aria-current/);
+  assert.ok(passos(trilho("concluida", [...ate("ajuste_pr"), "ajuste_pr"])).every((c) => c?.includes("feito")));
 });
 
 test("página vazia escapa o título e a não encontrada leva ao Início", () => {

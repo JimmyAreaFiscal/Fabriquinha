@@ -22,6 +22,7 @@ import {
   rotuloDoModelo,
   rotuloIssue,
   rotuloTicket,
+  situacaoDasFases,
 } from "../render.ts";
 import { cardDaEvidencia, comCard, corpoDoRegistro } from "./issue.ts";
 
@@ -164,7 +165,7 @@ export const linhaDoDialogo = (d: Dialogo): Item => ({
 });
 
 /** O que a chamada recebeu, numa linha: o comando, o caminho ou os argumentos em JSON. */
-export function argumentos(args: unknown): string {
+function argumentos(args: unknown): string {
   const a = (args ?? {}) as Record<string, unknown>;
   for (const campo of ["command", "path"]) if (typeof a[campo] === "string") return a[campo];
   return JSON.stringify(a);
@@ -174,7 +175,7 @@ export function argumentos(args: unknown): string {
 const LINHAS_VISIVEIS = 10;
 
 /** O resumo do resultado de uma ferramenta: ✓ ou ✗ com o número de linhas da saída. */
-export function resumoDoResultado(resultado: MensagemPi): { ok: boolean; resumo: string; linhas: number } {
+function resumoDoResultado(resultado: MensagemPi): { ok: boolean; resumo: string; linhas: number } {
   const texto = textoDe(resultado);
   const linhas = texto === "" ? 0 : texto.split("\n").length;
   const quantas = linhas === 0 ? "sem saída" : plural(linhas, "linha", "linhas");
@@ -453,15 +454,12 @@ export function lateral(c: CabecalhoDoChat, agora: number): string {
 
 /** O trilho de fases compacto: uma barra por fase, as passadas em verde e a atual com a cor do estado. */
 function trilhoCompacto(p: PaginaDaIssue): string {
-  const { fase } = p.issue;
-  const atual = fase === "concluida" ? FASES.length : FASES.findIndex(([f]) => f === fase);
   const estado = estadoDoTrilho(p.sessoes.filter((s) => s.estado !== "terminada"));
-  const barras = FASES.map(([, rotulo], i) => {
-    const classe = (i < atual && "feito") || (i === atual && "atual") || "";
-    const atributo = classe && ' class="' + classe + '"';
+  const barras = situacaoDasFases(p.issue.fase, p.percorridas).map(({ rotulo, situacao }) => {
+    const atributo = situacao && ' class="' + situacao + '"';
     return `<i${atributo} title="${rotulo}"></i>`;
   });
-  const nome = FASES[atual]?.[1] ?? "Concluída";
+  const nome = FASES.find(([f]) => f === p.issue.fase)?.[1] ?? "Concluída";
   return `<div class="${["trilho-mini", estado].filter(Boolean).join(" ")}" role="img" aria-label="Fase: ${nome}">${barras.join("")}</div>`;
 }
 
@@ -478,7 +476,9 @@ export function contextoDaIssue(p: PaginaDaIssue, sessao: InfoSessao): string {
     else if (principal) lado = `<a class="link" href="${caminhoDaSessao(principal.sessao)}">chat</a>`;
     return `<li${desta ? ' class="atual" aria-current="true"' : ""}><span class="p ${t.status}" aria-hidden="true"></span><span class="id">${rotuloTicket(t.id)}</span><span class="t">${escapar(t.titulo)}</span>${lado}</li>`;
   });
-  const cards = comCard(p).map(cardDaEvidencia).join("");
+  const cards = comCard(p)
+    .map((e) => cardDaEvidencia(e, true))
+    .join("");
   const artefatos = cards
     ? '<div class="cards-art">' + cards + "</div>"
     : '<p class="muted pequeno">Nenhum artefato ainda.</p>';

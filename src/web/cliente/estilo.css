@@ -3049,6 +3049,10 @@ input.erro {
   font-size: 9px;
   padding: 0 3px;
 }
+/* Sem o grupo por ticket da página da issue, cada card diz de que ticket é. */
+.contexto-issue .art .id {
+  font-size: inherit;
+}
 
 @media (max-width: 1100px) {
   .chat-layout {
@@ -3156,10 +3160,6 @@ input.erro {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-.pagina-historico .trecho .ferr {
-  font: var(--fs-xs) var(--mono);
-  color: var(--muted);
 }
 .pagina-historico .previa .botoes {
   display: flex;

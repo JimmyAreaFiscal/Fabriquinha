@@ -18,7 +18,7 @@ import { type MetricasIssue, numerosDoDesenho } from "../../metricas/issue.ts";
 import { arquivoRegistrado, caminhoArquivo } from "../../persistencia/arquivos.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { dirDaExecucao } from "../../persistencia/execucoes.ts";
-import { agregadoExistente, comIssue } from "../../persistencia/issues.ts";
+import { agregadoExistente, comIssue, fasesPercorridas } from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import { ocupacaoDoD8, ticketElegivel } from "../../persistencia/servico.ts";
@@ -62,6 +62,8 @@ export interface PaginaDaIssue extends Agregado {
   projeto: Projeto;
   /** As dependências com o projeto (a dependência vale entre projetos) e a fase de cada uma. */
   dependencias: { id: Id; projeto: string; fase: Fase }[];
+  /** As fases em que a issue já esteve, para o trilho não pintar de verde a que ela pulou. */
+  percorridas: Fase[];
   /** As sessões dos tickets, ativas e terminadas. */
   sessoes: InfoSessao[];
   /** O custo de cada execução com uso, pelo ID dela. */
@@ -101,6 +103,7 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
       const { projeto: p, fase } = agregadoExistente(banco, dep).issue;
       return { id: dep, projeto: p, fase };
     }),
+    percorridas: fasesPercorridas(banco, id),
     sessoes: todas,
     custos: custoPorExecucao(banco, id),
     limpeza: limpezaPendente(raizDo(banco), doProjeto, ag.issue),

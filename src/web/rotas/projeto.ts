@@ -4,11 +4,12 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { type Agregado, AUDITOR, type Issue, type Ticket } from "../../dominio/agregado.ts";
 import { encontrado } from "../../dominio/erros.ts";
-import type { Id } from "../../dominio/primitivos.ts";
+import type { Fase, Id } from "../../dominio/primitivos.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
 import {
   agregadoExistente,
   arquivarConcluidas,
+  fasesPercorridas,
   issuesEmAndamento,
   situacaoDasIssues,
 } from "../../persistencia/issues.ts";
@@ -19,6 +20,8 @@ import type { Rota } from "../rotas.ts";
 export type IssueDoProjeto = Issue & {
   tickets: readonly Ticket[];
   bloqueadaPor: readonly Id[];
+  /** As fases em que a issue já esteve, para o trilho. */
+  percorridas: readonly Fase[];
   pr?: { id: string; url: string };
 };
 
@@ -59,6 +62,7 @@ async function lista(banco: DatabaseSync, nome: string, query: URLSearchParams):
         ...ag.issue,
         tickets: ag.tickets,
         bloqueadaPor: ag.issue.deps.filter((d) => emAndamento.has(d)),
+        percorridas: fasesPercorridas(banco, id),
         ...(pr && { pr }),
       };
     });

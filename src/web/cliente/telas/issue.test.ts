@@ -166,6 +166,7 @@ function exemplo(): PaginaDaIssue {
     sessoes: [sessao({}), sessao({ sessao: CONSULTA, modo: "consulta", execucao: 3, estado: "rodando" })],
     custos: { 2: 1.861 },
     limpeza: [],
+    percorridas: ["registro", "desenho", "aprovacao_desenho"],
   };
 }
 
@@ -453,6 +454,8 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
             { caminho: "src/a.ts", status: "M", adicionadas: 12, removidas: 3, previsto: "src/*.ts" },
             { caminho: "src/config.ts", status: "A", adicionadas: 4, removidas: 0, previsto: null },
             { caminho: "logo.png", status: "A", adicionadas: null, removidas: null, previsto: null },
+            { caminho: "src/velho.ts", status: "D", adicionadas: 0, removidas: 9, previsto: "src/*.ts" },
+            { caminho: "src/novo.ts", status: "R", adicionadas: 1, removidas: 1, previsto: "src/*.ts" },
           ],
         },
       }),
@@ -517,10 +520,15 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
   const alterados = evidenciaNaCaixa(outros, evidenciaDe(outros, 36));
   assert.match(
     alterados.corpo,
-    /<td class="mono">src\/a.ts<\/td><td>M<\/td><td class="num"><span class="ok">\+12<\/span> <span class="nok">−3<\/span><\/td><td class="mono">src\/\*.ts<\/td>/,
+    /<td class="mono">src\/a.ts<\/td><td>modificado<\/td><td class="num"><span class="ok">\+12<\/span> <span class="nok">−3<\/span><\/td><td class="mono">src\/\*.ts<\/td>/,
   );
   assert.match(alterados.corpo, /<td class="nao-previsto md">não previsto: chave do <code>HMAC<\/code><\/td>/);
   assert.match(alterados.corpo, /<td class="num">binário<\/td><td class="nao-previsto md">não previsto<\/td>/);
+  // O status por extenso, não a letra do git.
+  assert.deepEqual(
+    [...alterados.corpo.matchAll(/<td class="mono">[^<]+<\/td><td>([^<]+)<\/td>/g)].map((m) => m[1]),
+    ["modificado", "adicionado", "adicionado", "removido", "renomeado"],
+  );
 
   const comprovacao = evidenciaNaCaixa(outros, evidenciaDe(outros, 38));
   assert.match(

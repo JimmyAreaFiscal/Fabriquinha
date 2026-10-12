@@ -174,14 +174,26 @@ export const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
 ];
 
 /**
- * Trilho de fases: passadas em verde, a atual maior e com a cor do estado, as de gate em losango. Numa issue
- * `concluida`, todas estão passadas.
+ * Como cada fase do trilho aparece: `feito` a passada, `atual` a atual, e `""` a que vem depois ou a que a issue pulou
+ * (F7 §4.4: só a fase passada fica verde). `percorridas` são as fases em que a issue esteve (a tabela `comando`), porque
+ * o ajuste do PR, por exemplo, só acontece com o PR reprovado. Numa issue `concluida`, não há atual.
  */
-export function trilho(fase: Fase, estado?: EstadoDoTrilho): string {
+export function situacaoDasFases(
+  fase: Fase,
+  percorridas: readonly Fase[],
+): { fase: Exclude<Fase, "concluida">; rotulo: string; situacao: "feito" | "atual" | "" }[] {
   const atual = fase === "concluida" ? FASES.length : FASES.findIndex(([f]) => f === fase);
-  const passos = FASES.map(([f, rotulo], i) => {
-    const classes = ["passo", GATES.has(f) && "gate", i < atual && "feito", i === atual && "atual"];
-    const corrente = i === atual ? ' aria-current="step"' : "";
+  return FASES.map(([f, rotulo], i) => {
+    if (i === atual) return { fase: f, rotulo, situacao: "atual" };
+    return { fase: f, rotulo, situacao: i < atual && percorridas.includes(f) ? "feito" : "" };
+  });
+}
+
+/** Trilho de fases: passadas em verde, a atual maior e com a cor do estado, as de gate em losango. */
+export function trilho(fase: Fase, percorridas: readonly Fase[], estado?: EstadoDoTrilho): string {
+  const passos = situacaoDasFases(fase, percorridas).map(({ fase: f, rotulo, situacao }) => {
+    const classes = ["passo", GATES.has(f) && "gate", situacao];
+    const corrente = situacao === "atual" ? ' aria-current="step"' : "";
     return `<li class="${classes.filter(Boolean).join(" ")}"${corrente}><span class="linha"><span class="marco"></span></span><span>${rotulo}</span></li>`;
   });
   return `<ol class="${["trilho-fases", estado].filter(Boolean).join(" ")}" aria-label="Fases da issue">${passos.join("")}</ol>`;
