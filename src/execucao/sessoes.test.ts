@@ -20,7 +20,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { type Agregado, AUDITOR, type Execucao, type Ticket } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Fase } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { agregado, registrarIssue } from "../persistencia/issues.ts";
@@ -895,6 +895,12 @@ test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove
     pedirMudancas(c.banco, 1, "tarde demais", opcoes),
     rejeitaCom("a I-1 não pode pedir mudanças: o PR já foi mergeado (encerre a issue com a nota)"),
   );
+  assert.equal(situacao(consulta)?.ocupado, false, "a decisão recusada não para a consulta");
+  // O `gh` que falha (502) também não para nada: o PR é lido antes.
+  process.env.FALSO_GH = "não é JSON";
+  await assert.rejects(encerrarIssue(c.banco, 1, 5), ErroExterno);
+  assert.equal(situacao(consulta)?.ocupado, false, "a leitura do PR que falhou não para a consulta");
+  prNoGitHub("MERGED");
 
   assert.deepEqual(await encerrarIssue(c.banco, 1, 5), []);
   assert.equal(situacao(consulta), undefined, "a consulta parou antes da limpeza");
@@ -941,13 +947,13 @@ test("gate do PR: pedir mudanças com uma execução em andamento na issue não 
   );
   intacta();
 
-  // Uma consulta que começa enquanto o PR é lido faz o C5 recusar, e o C16 da mesma transação também não fica.
+  // Uma consulta que começa enquanto o PR é lido também faz a decisão esperar: as consultas são vistas depois da leitura.
   c.banco.exec(`UPDATE execucao SET resultado = 'sucesso', terminada_em = '${T1}' WHERE id = 8`);
   process.env.FALSO_GH_BANCO = join(c.raiz, "fabriquinha.db");
   process.env.FALSO_GH_SQL = consulta(9, "00000000-0000-4000-8000-000000000009");
   await assert.rejects(
     pedirMudancas(c.banco, 1, "falta o índice", opcoes),
-    rejeitaCom("a I-1 já tem a execução E-9 em andamento (espere ela terminar)"),
+    rejeitaCom("a sessão de T-2 ainda está rodando (espere o agente terminar)"),
   );
   delete process.env.FALSO_GH_SQL;
   intacta();

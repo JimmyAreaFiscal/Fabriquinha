@@ -605,10 +605,26 @@ async function pararOciosasDaIssue(banco: DatabaseSync, issue: Id): Promise<void
   for (const e of ag.execucoes.filter((x) => x.resultado === "em_andamento")) await pararOciosa(ag, e.ticket);
 }
 
+/** O que o `conferirC16` lança para desfazer a transação depois de o C16 aceitar. */
+class Aceito extends Error {}
+
+/** Roda o C16 numa transação sempre desfeita: lança a recusa dele e não grava nada. */
+function conferirC16(banco: DatabaseSync, issue: Id, decidir: (a: Agregado, ctx: Contexto) => Agregado): void {
+  try {
+    comIssue(banco, issue, "decidirPR", AUDITOR, (a, ctx) => {
+      decidir(a, ctx);
+      throw new Aceito();
+    });
+  } catch (error_) {
+    if (!(error_ instanceof Aceito)) throw error_;
+  }
+}
+
 /**
  * C16 com o PR lido na plataforma agora, logo antes da transação (F5 §5.2), e o aviso à sessão do encerramento, que
- * sai do gate. `depois` aplica, na mesma transação, o que vem com a decisão. Antes, para as consultas ociosas da
- * issue, que rodam na worktree. Devolve o agregado e o PR lido.
+ * sai do gate. `depois` aplica, na mesma transação, o que vem com a decisão. Antes da transação, para as consultas
+ * ociosas da issue, que rodam na worktree, mas só depois de o PR lido e de o C16 aceitar a decisão: a falha do `gh` ou
+ * do `az` e a recusa não mexem em nada (F7 §4.2). Devolve o agregado e o PR lido.
  */
 async function decidirComPR(
   banco: DatabaseSync,
@@ -616,17 +632,17 @@ async function decidirComPR(
   decisao: { aprovado: true; nota: number } | { aprovado: false; motivo: string },
   depois: (ag: Agregado, ctx: Contexto) => Agregado = (ag) => ag,
 ): Promise<[Agregado, LeituraDoPR, Projeto]> {
-  await pararOciosasDaIssue(banco, issue);
-  const antes = agregadoDa(banco, issue);
+  const antes = await agregadoAssentado(banco, issue);
   const projeto = existe(
     lerProjeto(banco, antes.issue.projeto),
     `o projeto ${antes.issue.projeto} não existe`,
     "cadastre-o na Configuração",
   );
   const pr = await estadoPR(projeto, antes);
-  const ag = comIssue(banco, issue, "decidirPR", AUDITOR, (a, ctx) =>
-    depois(decidirPR(a, decisao, AUDITOR, { ...ctx, estadoPR: pr.estado }), ctx),
-  );
+  const decidir = (a: Agregado, ctx: Contexto) => decidirPR(a, decisao, AUDITOR, { ...ctx, estadoPR: pr.estado });
+  conferirC16(banco, issue, decidir);
+  await pararOciosasDaIssue(banco, issue);
+  const ag = comIssue(banco, issue, "decidirPR", AUDITOR, (a, ctx) => depois(decidir(a, ctx), ctx));
   // C16 só passa com um encerramento concluído, que já executou.
   const encerramento = existe(
     ag.tickets.findLast((t) => t.etapa === "encerramento"),

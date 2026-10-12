@@ -286,13 +286,13 @@ test("Executar agora: desabilitado com o motivo enquanto outra autônoma roda; d
   await expect(pagina.locator(".linha-tempo > li").nth(2)).toHaveClass(/em_execucao|falhou/);
 });
 
-test("issue concluída com a limpeza que falhou mostra os comandos a rodar", async ({ pagina, fabriquinha }) => {
+test("issue concluída com a limpeza que falhou mostra o comando que falhou", async ({ pagina, fabriquinha }) => {
   semear(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-2`);
   const acao = pagina.getByRole("region", { name: "Ação do Auditor" });
   await expect(acao).toContainText("A limpeza falhou");
   await expect(acao.locator("pre")).toHaveText(
-    `git -C /nao/existe worktree remove --force ${caminhoDaWorktree(fabriquinha.raiz, "loja", 2)}\ngit -C /nao/existe worktree prune`,
+    `git -C /nao/existe worktree remove --force ${caminhoDaWorktree(fabriquinha.raiz, "loja", 2)}`,
   );
   await expect(pagina.getByRole("button", { name: "+ adicionar" })).toHaveCount(0);
 });

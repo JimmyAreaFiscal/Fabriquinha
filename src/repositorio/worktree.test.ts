@@ -316,16 +316,18 @@ test("limpar só depois de encerrar a issue", async () => {
   );
 });
 
-test("limpeza pendente: a worktree da issue concluída que ficou no disco vira os comandos a rodar", async () => {
+test("limpeza pendente: a worktree da issue concluída que ficou no disco vira o comando que falhou, que basta", async () => {
   const c = cenario();
   const worktree = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
   assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "aprovacao_pr" }), [], "ainda não encerrada");
+  // A worktree no disco é o `remove` que falhou; o `prune` que falha depois de um `remove` que passou não deixa nada
+  // da issue para trás.
   assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [
     `git -C ${c.repo} worktree remove --force ${worktree}`,
-    `git -C ${c.repo} worktree prune`,
   ]);
   for (const comando of limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" })) {
     execFileSync("sh", ["-c", comando]);
   }
-  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [], "rodou os comandos");
+  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [], "rodou o comando");
+  assert.doesNotMatch(execFileSync("git", ["-C", c.repo, "worktree", "list"]).toString(), /I-1/, "nada a podar");
 });

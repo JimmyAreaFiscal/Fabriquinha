@@ -114,7 +114,6 @@ test("GET /api/issues/:id: agregado, projeto, dependências com a fase, sessões
   assert.equal(concluida.executar, undefined, "sem ticket elegível, sem Executar agora");
   assert.deepEqual(concluida.limpeza, [
     `git -C /nao/existe worktree remove --force ${caminhoDaWorktree(raiz, "loja", 2)}`,
-    "git -C /nao/existe worktree prune",
   ]);
 
   const inexistente = await pedir("/api/issues/99");
