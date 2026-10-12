@@ -50,6 +50,12 @@ interface Viva extends Omit<Situacao, "dialogos"> {
   pendentes: Map<string, Dialogo>;
   /** Os eventos da mensagem que o pi está escrevendo, do `message_start` em diante: ela só vai ao JSONL no fim. */
   emAndamento: EventoPi[];
+  /**
+   * Os `message_end` que o JSONL pode ainda não ter. O pi 0.84.4 emite o `message_end` antes de gravar a mensagem e,
+   * numa sessão sem resposta do agente, só grava quando a primeira chega: qualquer evento depois do `message_end` de
+   * uma mensagem do agente prova que tudo até ela está no arquivo. O chat ignora o que o retrato já tem.
+   */
+  naoGravadas: EventoPi[];
   /** O Auditor mandou `abort`. */
   abortada: boolean;
   responder(id: string, resposta: object): void;
@@ -67,12 +73,14 @@ const vivaDaSessao = (sessao: string): Viva | undefined => [...vivas.values()].f
 
 /**
  * Recebe cada evento do pi das execuções da sessão e `{ type: "estado" }` quando o estado dela pode ter mudado.
- * Quem assina no meio de uma mensagem recebe antes os eventos dela até ali: o retrato do JSONL ainda não a tem.
+ * Quem assina recebe antes o que o retrato do JSONL pode ainda não ter: as mensagens terminadas ainda sem gravação
+ * garantida e os eventos da mensagem em andamento até ali.
  */
 export function assinar(sessao: string, ouvinte: (evento: EventoPi) => void): () => void {
   const lista = ouvintes.get(sessao) ?? new Set();
   ouvintes.set(sessao, lista.add(ouvinte));
-  for (const evento of vivaDaSessao(sessao)?.emAndamento ?? []) ouvinte(evento);
+  const viva = vivaDaSessao(sessao);
+  for (const evento of [...(viva?.naoGravadas ?? []), ...(viva?.emAndamento ?? [])]) ouvinte(evento);
   return () => {
     lista.delete(ouvinte);
     if (lista.size === 0) ouvintes.delete(sessao);
@@ -384,7 +392,11 @@ function rodarPi(r: Processo): Promise<string | undefined> {
       );
     };
 
+    /** O último evento foi o `message_end` de uma mensagem do agente. */
+    let agenteTerminou = false;
     const pi = lancarPi(r.args, r, (evento) => {
+      if (agenteTerminou) estaViva.naoGravadas = [];
+      agenteTerminou = false;
       repassar(sessaoPi, evento, r.log);
       switch (evento.type) {
         case "message_start":
@@ -398,9 +410,13 @@ function rodarPi(r: Processo): Promise<string | undefined> {
           break;
         case "message_end": {
           estaViva.emAndamento = [];
+          estaViva.naoGravadas.push(evento);
           // `message` ausente ou nulo não derruba o ouvinte: vale como mensagem sem papel.
           const mensagem = (evento.message ?? {}) as Mensagem;
-          if (mensagem.role === "assistant") ultima = mensagem;
+          if (mensagem.role === "assistant") {
+            ultima = mensagem;
+            agenteTerminou = true;
+          }
           break;
         }
         case "agent_start":
@@ -426,6 +442,7 @@ function rodarPi(r: Processo): Promise<string | undefined> {
       desde: new Date().toISOString(),
       pendentes,
       emAndamento: [],
+      naoGravadas: [],
       abortada: false,
       responder(dialogo, resposta) {
         if (!pendentes.delete(dialogo)) {

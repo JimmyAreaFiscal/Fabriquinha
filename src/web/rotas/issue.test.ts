@@ -58,7 +58,7 @@ before(async () => {
       VALUES (1, 'anthropic', 'a', 3, 10, 10, 0, 0, 1.5), (1, 'llamacpp', 'b', 1, 10, 10, 0, 0, 0.25);
     INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES (1, 1, 'desenho_solucao', 'agente', '{}', '${AGORA}');
     INSERT INTO evidencia_arquivo (evidencia, nome, sha256, mime, bytes)
-      VALUES (1, 'desenho de I-1.html', '${SHA_HTML}', 'text/html; charset=utf-8', ${String(Buffer.byteLength(HTML))}),
+      VALUES (1, 'desenho (v2) de I-1''s*.html', '${SHA_HTML}', 'text/html; charset=utf-8', ${String(Buffer.byteLength(HTML))}),
              (1, 'video.webm', '${SHA_VIDEO}', 'video/webm', ${String(VIDEO.length)});
   `);
   for (const [sha, conteudo] of [
@@ -205,7 +205,11 @@ test("arquivos: só hash registrado, com o mime, nosniff e o sandbox; ?baixar co
   assert.equal(html.headers.get("content-disposition"), null);
 
   const baixar = await pedir(`/arquivos/${SHA_HTML}?baixar`);
-  assert.equal(baixar.headers.get("content-disposition"), "attachment; filename*=UTF-8''desenho%20de%20I-1.html");
+  // RFC 5987: `'`, `(`, `)` e `*` não são attr-char e também vão em %XX, que o `encodeURIComponent` não faz.
+  assert.equal(
+    baixar.headers.get("content-disposition"),
+    "attachment; filename*=UTF-8''desenho%20%28v2%29%20de%20I-1%27s%2A.html",
+  );
   assert.equal((await fetch(`${origem}/arquivos/${SHA_HTML}`)).status, 401, "sem o cookie");
 });
 
@@ -227,6 +231,40 @@ test("arquivos: Range de um intervalo dá 206 com o trecho certo; fora do arquiv
 
   const fora = await pedir(`/arquivos/${SHA_VIDEO}`, { headers: { range: "bytes=5000-" } });
   assert.deepEqual([fora.status, fora.headers.get("content-range")], [416, `bytes */${String(VIDEO.length)}`]);
+});
+
+test("arquivos: o navegador que cancela o pedido no meio (vídeo) não é erro do serviço", async (t) => {
+  const sha = "e".repeat(64);
+  servico.banco.exec(
+    `INSERT INTO evidencia_arquivo (evidencia, nome, sha256, mime, bytes) VALUES (1, 'longo.webm', '${sha}', 'video/webm', 33554432)`,
+  );
+  mkdirSync(dirname(caminhoArquivo(servico.banco, sha)), { recursive: true });
+  writeFileSync(caminhoArquivo(servico.banco, sha), Buffer.alloc(32 * 1024 * 1024));
+  const erros = t.mock.method(console, "error", () => undefined);
+  const controle = new AbortController();
+  const r = await fetch(`${origem}/arquivos/${sha}`, {
+    headers: { cookie: `fabriquinha=${token()}`, range: "bytes=0-" },
+    signal: controle.signal,
+  });
+  assert.equal(r.status, 206);
+  await r.body?.getReader().read();
+  controle.abort();
+  // Só pode passar por engano, nunca falhar por engano: o erro, se houvesse, sairia logo depois do fechamento.
+  await dormir(500);
+  assert.equal(erros.mock.callCount(), 0);
+});
+
+test("arquivos: o arquivo que não se lê depois dos cabeçalhos corta a conexão e vai para o log", async (t) => {
+  const sha = "9".repeat(64);
+  servico.banco.exec(
+    `INSERT INTO evidencia_arquivo (evidencia, nome, sha256, mime, bytes) VALUES (1, 'trancado.txt', '${sha}', 'text/plain', 3)`,
+  );
+  const caminho = caminhoArquivo(servico.banco, sha);
+  mkdirSync(dirname(caminho), { recursive: true });
+  writeFileSync(caminho, "abc", { mode: 0o000 });
+  const erros = t.mock.method(console, "error", () => undefined);
+  await assert.rejects(async () => (await pedir(`/arquivos/${sha}`)).text());
+  assert.match(String(erros.mock.calls[0]?.arguments[1]), /EACCES/);
 });
 
 test("intervalo: as formas de um intervalo de bytes e o que se ignora", () => {

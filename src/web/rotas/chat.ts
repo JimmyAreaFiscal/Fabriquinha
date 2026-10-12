@@ -142,6 +142,9 @@ function dadosDoChat(banco: DatabaseSync, sessao: InfoSessao, conversa: unknown[
  */
 async function eventos(banco: DatabaseSync, sessao: string, resposta: ServerResponse) {
   const chat = await abrirChat(banco, sessao);
+  // `abrirChat` pode esperar o C6 de um pi que está parando: quem saiu nesse meio-tempo não assina, senão a assinatura
+  // ficaria para sempre, sem o `close` que a cancela.
+  if (resposta.destroyed) return;
   const escrever = (dado: object) => resposta.write(`data: ${JSON.stringify(dado)}\n\n`);
   resposta.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store" });
   escrever({ type: "chat", ...dadosDoChat(banco, chat.sessao, chat.conversa) });

@@ -124,9 +124,19 @@ async function enviarArquivo(
     ...(trecho && { "Content-Range": `bytes ${String(inicio)}-${String(fim)}/${String(tamanho)}` }),
   });
   // Arquivo vazio: `createReadStream` com `end: -1` leria tudo; não há o que mandar.
-  if (tamanho === 0) resposta.end();
-  else await pipeline(createReadStream(caminho, { start: inicio, end: fim }), resposta);
+  if (tamanho === 0) {
+    resposta.end();
+    return;
+  }
+  // O navegador cancela pedidos `Range` a cada avanço do vídeo: o cliente que fechou não é erro.
+  await pipeline(createReadStream(caminho, { start: inicio, end: fim }), resposta).catch((error_: unknown) => {
+    if ((error_ as NodeJS.ErrnoException).code !== "ERR_STREAM_PREMATURE_CLOSE") throw error_;
+  });
 }
+
+/** RFC 5987: além do que o `encodeURIComponent` codifica, `'`, `(`, `)` e `*`, que não são attr-char. */
+const rfc5987 = (texto: string): string =>
+  encodeURIComponent(texto).replaceAll(/['()*]/g, (c) => `%${Number(c.codePointAt(0)).toString(16).toUpperCase()}`);
 
 /** O `log` ou o `prompt.md` da execução, como texto; o caminho sai do ID inteiro (F7 §4.3). */
 const textoDaExecucao =
@@ -186,7 +196,7 @@ export const ROTAS_DA_ISSUE: Rota[] = [
         "Content-Type": arquivo.mime,
         "Content-Security-Policy": "sandbox allow-scripts",
         ...(query.has("baixar") && {
-          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(arquivo.nome)}`,
+          "Content-Disposition": `attachment; filename*=UTF-8''${rfc5987(arquivo.nome)}`,
         }),
       });
     },

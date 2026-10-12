@@ -9,11 +9,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { encerrar } from "../../execucao/gerente.ts";
+import { IncomingMessage, ServerResponse } from "node:http";
+import { Socket } from "node:net";
+import { avisar, encerrar } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
-import type { CabecalhoDoChat, DadosDoChat } from "./chat.ts";
+import type { Pedido } from "../rotas.ts";
+import { type CabecalhoDoChat, type DadosDoChat, ROTAS_DO_CHAT } from "./chat.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -253,16 +256,24 @@ test("rodando: redirecionar e abortar; sessão inexistente dá 404", async () =>
     "o texto começar a chegar em fluxo",
   );
   sse.fechar();
-  // Quem assina no meio da mensagem recebe, logo depois do retrato, o começo dela e os pedaços já escritos.
+  // Quem assina no meio da mensagem recebe, logo depois do retrato, o resultado da ferramenta, que o pi pode ainda
+  // não ter gravado (o chat ignora o que o retrato já tem), o começo da mensagem e os pedaços já escritos.
   const tarde = await assinar(sessao);
-  await ate(() => tarde.eventos.length >= 5, "o retrato e a mensagem em andamento");
+  await ate(() => tarde.eventos.length >= 6, "o retrato e a mensagem em andamento");
   assert.deepEqual(
-    tarde.eventos.slice(1, 5).map((e) => [e.type, (e.assistantMessageEvent as { delta?: string } | undefined)?.delta]),
+    tarde.eventos
+      .slice(1, 6)
+      .map((e) => [
+        e.type,
+        (e.message as { role?: string } | undefined)?.role,
+        (e.assistantMessageEvent as { delta?: string } | undefined)?.delta,
+      ]),
     [
-      ["message_start", undefined],
-      ["message_update", undefined],
-      ["message_update", "Os testes "],
-      ["message_update", "esperam a "],
+      ["message_end", "toolResult", undefined],
+      ["message_start", "assistant", undefined],
+      ["message_update", undefined, undefined],
+      ["message_update", undefined, "Os testes "],
+      ["message_update", undefined, "esperam a "],
     ],
   );
   await ate(
@@ -290,6 +301,19 @@ test("rodando: redirecionar e abortar; sessão inexistente dá 404", async () =>
   const { conversa: depois } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
   assert.equal((depois.at(-1)?.message as { stopReason: string }).stopReason, "aborted");
   assert.equal((await postar("/api/sessoes/nada/abortar")).status, 404);
+});
+
+test("SSE: o cliente que sai enquanto o chat abre não fica assinando a sessão", async () => {
+  const [sessao] = await registro();
+  const resposta = new ServerResponse(new IncomingMessage(new Socket()));
+  const escritos: unknown[] = [];
+  resposta.write = (dado: unknown) => escritos.push(dado) > 0;
+  // O navegador fecha antes de `abrirChat` resolver (ele espera o C6 de um pi que está parando).
+  resposta.destroy();
+  const rota = ROTAS_DO_CHAT.find((r) => r.caminho === "/api/sessoes/:sessao/eventos");
+  await rota?.tratar({ banco: servico.banco, params: { sessao }, resposta } as unknown as Pedido);
+  avisar(sessao, join(base, "log"));
+  assert.deepEqual(escritos, []);
 });
 
 test("concluir só a sessão em aberto; entrada inválida dá 422 e sessão ou ticket inexistente, 404", async () => {

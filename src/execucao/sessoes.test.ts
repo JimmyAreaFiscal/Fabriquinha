@@ -294,16 +294,23 @@ const sessao = join(dir, existente ? existente.name : "2026-10-11T10-00-00-000Z_
 // --fork copia as entradas da sessão de origem para a nova, como o SessionManager.forkFrom do pi.
 const copia = process.argv.includes("--fork") ? readFileSync(arg("--fork"), "utf8").split("\\n").slice(1).join("\\n") : "";
 if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n" + copia);
-const guardar = (message) =>
-  appendFileSync(sessao, JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
+// Como o pi 0.84.4, emite o message_end antes de gravar e, numa sessão sem resposta do agente, só grava quando a
+// primeira chega, junto com o que veio antes.
+let naoGravadas = readFileSync(sessao, "utf8").includes('"assistant"') ? undefined : [];
+const guardar = (message) => {
+  const linha = JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n";
+  if (naoGravadas && message.role !== "assistant") return void naoGravadas.push(linha);
+  appendFileSync(sessao, (naoGravadas ?? []).join("") + linha);
+  naoGravadas = undefined;
+};
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const responder = (texto, stopReason = "stop") => {
   const message = {
     role: "assistant", content: [{ type: "text", text: texto }], provider: "anthropic", model: "claude-teste", stopReason,
     usage: { input: 10, output: 2, cacheRead: 100, cacheWrite: 0, totalTokens: 112, cost: { total: 0.01 } },
   };
-  guardar(message);
   emitir({ type: "message_end", message });
+  guardar(message);
   emitir({ type: "agent_settled" });
 };
 const recusa = (process.env.FALSO_PI_RECUSA ?? "").split(",");
@@ -314,9 +321,9 @@ async function aoPrompt(c) {
   }
   emitir({ type: "response", command: "prompt", success: true });
   emitir({ type: "agent_start" });
-  const usuario = { role: "user", content: c.message };
-  guardar(usuario);
+  const usuario = { role: "user", content: c.message, timestamp: Date.now() };
   emitir({ type: "message_end", message: usuario });
+  guardar(usuario);
   if (variante === "espera") return;
   if (variante === "sai") process.exit(3);
   if (process.env.FALSO_PI_AGENTE && !c.message.includes("pergunte")) await (await import(process.env.FALSO_PI_AGENTE)).default(c.message.includes("edite"));
@@ -657,6 +664,24 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
   );
   await ate(() => c.comandos().length === 1, "o prompt chegar ao pi");
   assert.equal(await estadoDe(c, sessao), "rodando");
+  // O pi já emitiu o prompt, mas não o gravou: a sessão ainda não tem resposta do agente. Quem abre o chat agora
+  // recebe a mensagem logo depois do retrato, que não a tem.
+  const replay = async () => {
+    const chat = await abrirChat(c.banco, sessao);
+    const eventos: EventoPi[] = [];
+    chat.assinar((e) => eventos.push(e))();
+    return { conversa: chat.conversa, eventos };
+  };
+  await ate(async () => (await replay()).eventos.length > 0, "a mensagem do prompt no replay");
+  const tarde = await replay();
+  assert.deepEqual(
+    tarde.conversa.map((e) => (e as { type: string }).type),
+    ["session"],
+  );
+  assert.deepEqual(
+    tarde.eventos.map((e) => [e.type, (e.message as { role: string }).role]),
+    [["message_end", "user"]],
+  );
   await assert.rejects(
     enviar(c.banco, sessao, "oi", "prompt", opcoes),
     rejeitaCom("a sessão de T-1 está rodando e não recebe prompt (envie com steer ou follow_up)"),
