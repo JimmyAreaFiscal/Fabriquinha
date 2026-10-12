@@ -128,6 +128,11 @@ test("a linha da issue com o trilho e a sessão; a gaveta de tickets vem aberta 
 
   // Registrar necessidade já com o projeto escolhido.
   await pagina.getByLabel("Projeto", { exact: true }).selectOption("site");
+  // A página do site desenhada, e não o botão da do loja que ainda está na tela.
+  await expect(pagina.getByRole("link", { name: "Editar na Configuração" })).toHaveAttribute(
+    "href",
+    "/config?projeto=site",
+  );
   await pagina.getByRole("button", { name: "+ Registrar necessidade" }).click();
   await expect(pagina.getByRole("dialog", { name: "Registrar necessidade" }).getByLabel("Projeto")).toHaveValue("site");
 });
