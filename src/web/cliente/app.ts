@@ -5,6 +5,7 @@ import { api, avisar, ErroDaApi, elemento } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, paginaVazia, TITULOS } from "./render.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
+import { montarHistorico } from "./telas/historico-montar.ts";
 import { montarInicio } from "./telas/inicio-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
 import { montarProjeto } from "./telas/projeto-montar.ts";
@@ -26,7 +27,7 @@ const MONTAR: Record<Pagina, Montar> = {
   projeto: montarProjeto,
   issue: montarIssue,
   metricas: vazia("metricas"),
-  historico: vazia("historico"),
+  historico: montarHistorico,
   chat: montarChat,
   configuracao: montarConfiguracao,
 };

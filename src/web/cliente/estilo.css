@@ -3021,3 +3021,166 @@ input.erro {
     max-height: none;
   }
 }
+
+/* Histórico (F7 §4.4): filtros com a contagem, as sessões terminadas por dia e a prévia da escolhida ao lado. */
+.pagina-historico .filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.pagina-historico .filtros label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.pagina-historico .filtros :is(select, input) {
+  height: 30px;
+  padding: 0 var(--s-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color-scheme: dark;
+}
+.pagina-historico .filtros input {
+  width: 120px;
+  font-family: var(--mono);
+}
+.pagina-historico .filtros .contagem {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.res-concluida {
+  color: var(--closed);
+  background: var(--closed-bg);
+}
+.res-falha {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.res-abortada {
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.pagina-historico .mestre {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  gap: var(--s-5);
+  align-items: start;
+}
+.pagina-historico .dia {
+  margin-bottom: var(--s-4);
+}
+.pagina-historico .dia h3 {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 var(--s-2);
+}
+.pagina-historico .linha {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 46px 52px 52px minmax(0, 1fr) 120px 90px;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  height: 42px;
+  padding: 0 var(--s-3);
+  font-size: var(--fs-sm);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.pagina-historico .linha:hover {
+  background: var(--surface);
+}
+.pagina-historico .linha:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.pagina-historico .linha[aria-selected="true"] {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+.pagina-historico .linha .hora {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.pagina-historico .linha .meio {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pagina-historico .linha .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pagina-historico .previa {
+  position: sticky;
+  top: 64px;
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-height: calc(100vh - 88px);
+  overflow: auto;
+}
+.pagina-historico .previa h2 {
+  font-size: var(--fs-lg);
+  line-height: 1.35;
+}
+.pagina-historico .previa .modelo {
+  white-space: nowrap;
+}
+.pagina-historico .trecho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.pagina-historico .trecho .quem {
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.pagina-historico .trecho .ferr {
+  font: var(--fs-xs) var(--mono);
+  color: var(--muted);
+}
+.pagina-historico .previa .botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+@media (max-width: 1100px) {
+  .pagina-historico .mestre {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pagina-historico .previa {
+    position: static;
+    max-height: none;
+  }
+  .pagina-historico .linha {
+    grid-template-columns: 46px 52px minmax(0, 1fr) 90px;
+  }
+  .pagina-historico .linha .esconde {
+    display: none;
+  }
+}

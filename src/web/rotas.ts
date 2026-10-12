@@ -2,13 +2,12 @@
 // vira JSON; a guarda, a leitura do corpo e a tradução dos erros ficam no servidor.
 import type { IncomingHttpHeaders, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
-import { z } from "zod";
-import { Etapa, type Id } from "../dominio/primitivos.ts";
-import { sessoes } from "../execucao/sessoes.ts";
+import type { Id } from "../dominio/primitivos.ts";
 import type { Parametros } from "./cliente/caminhos.ts";
 import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
+import { ROTAS_DO_HISTORICO } from "./rotas/historico.ts";
 import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
 import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
 import { ROTAS_DO_PR } from "./rotas/pr.ts";
@@ -42,19 +41,8 @@ export interface Rota {
   tratar(pedido: Pedido): unknown;
 }
 
-const FiltroSessoes = z.object({
-  escopo: z.enum(["ativas", "historico"]),
-  projeto: z.string().min(1).optional(),
-  issue: z.coerce.number().int().positive().optional(),
-  etapa: Etapa.optional(),
-});
-
 export const ROTAS: Rota[] = [
-  {
-    metodo: "GET",
-    caminho: "/api/sessoes",
-    tratar: ({ banco, query }) => sessoes(banco, FiltroSessoes.parse(Object.fromEntries(query))),
-  },
+  ...ROTAS_DO_HISTORICO,
   ...ROTAS_DA_CONFIGURACAO,
   ...ROTAS_DA_ISSUE,
   ...ROTAS_DO_CHAT,

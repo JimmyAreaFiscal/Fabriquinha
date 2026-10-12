@@ -40,10 +40,10 @@ export interface Item {
   html: string;
 }
 
-const blocos = (m: MensagemPi): Bloco[] =>
+export const blocos = (m: MensagemPi): Bloco[] =>
   typeof m.content === "string" ? [{ type: "text", text: m.content }] : (m.content ?? []);
 
-const textoDe = (m: MensagemPi): string =>
+export const textoDe = (m: MensagemPi): string =>
   blocos(m)
     .filter((b) => b.type === "text")
     .map((b) => String(b.text))
@@ -159,7 +159,7 @@ export const linhaDoDialogo = (d: Dialogo): Item => ({
 });
 
 /** O que a chamada recebeu, numa linha: o comando, o caminho ou os argumentos em JSON. */
-function argumentos(args: unknown): string {
+export function argumentos(args: unknown): string {
   const a = (args ?? {}) as Record<string, unknown>;
   for (const campo of ["command", "path"]) if (typeof a[campo] === "string") return a[campo];
   return JSON.stringify(a);
