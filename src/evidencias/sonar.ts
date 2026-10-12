@@ -180,7 +180,9 @@ export async function coletarSonar(
     nome,
     sonar: { projectKey: chave },
   } = config;
-  const host = (process.env.SONAR_HOST_URL || "").replace(/\/+$/, "");
+  // Barras do fim fora sem regex: `\/+$` voltaria atrás em tempo quadrático numa sequência longa de `/` no meio.
+  let host = process.env.SONAR_HOST_URL || "";
+  while (host.endsWith("/")) host = host.slice(0, -1);
   const token = process.env.SONAR_TOKEN || "";
   if (!host || !token) {
     throw new ErroDeRegra(

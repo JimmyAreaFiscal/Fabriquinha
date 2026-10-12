@@ -272,6 +272,24 @@ test("sem issue nos arquivos alterados: aprovada; a barra no fim do SONAR_HOST_U
   banco.close();
 });
 
+test("100 mil `/` seguidas no SONAR_HOST_URL: as do meio não travam a leitura, e as do fim saem", async () => {
+  const { banco } = cenario();
+  const barras = "/".repeat(100_000);
+  // Barras seguidas de outra coisa: `\/+$` voltaria atrás a cada barra. Sem token, falha antes de consultar.
+  delete process.env.SONAR_TOKEN;
+  process.env.SONAR_HOST_URL = `${HOST}${barras}x`;
+  const inicio = Date.now();
+  await falha(banco, /^SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente/);
+  assert.ok(Date.now() - inicio < 1000);
+
+  process.env.SONAR_TOKEN = "segredo";
+  process.env.SONAR_HOST_URL = `${HOST}${barras}`;
+  const [evidencia] = (await coletarSonar(banco, 1)).evidencias;
+  assert.equal(evidencia?.aprovada, true);
+  assert.equal(pedidos[0]?.caminho, "/api/system/status");
+  banco.close();
+});
+
 /** Falha com a mensagem exata e sem registrar nada. */
 async function falha(banco: DatabaseSync, mensagem: string | RegExp, opcoes = {}) {
   await assert.rejects(coletarSonar(banco, 1, opcoes), (e) => {

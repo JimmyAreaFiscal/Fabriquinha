@@ -114,13 +114,27 @@ function neutro(texto: string): string {
 const item = (texto: string): string => `- ${neutro(texto).replaceAll("\n", "\n  ")}`;
 const lista = (itens: readonly string[], vazio: string): string =>
   itens.length === 0 ? vazio : itens.map(item).join("\n");
-/** Célula de tabela Markdown: uma linha só, sem `|` que abra outra coluna. */
-const celula = (texto: string): string =>
-  neutro(texto)
-    // O pipe só fica escapado atrás de um número ímpar de barras: o `\|` do agente já está escapado, e `\\|` seria
-    // uma barra literal seguida de um pipe que divide a coluna.
-    .replaceAll(/\\*\|/g, (pipe) => (pipe.length % 2 === 0 ? pipe : `\\${pipe}`))
-    .replaceAll(/\s*\n\s*/g, " ");
+/**
+ * Célula de tabela Markdown: uma linha só, sem `|` que abra outra coluna. Varreduras lineares, sem regex: o texto vem
+ * do agente, e `\\*\|` ou `\s*\n\s*` voltariam atrás em tempo quadrático numa sequência longa de barras ou espaços.
+ */
+function celula(texto: string): string {
+  // O pipe só fica escapado atrás de um número ímpar de barras: o `\|` do agente já está escapado, e `\\|` seria
+  // uma barra literal seguida de um pipe que divide a coluna.
+  let escapado = "";
+  let barras = 0;
+  for (const c of neutro(texto)) {
+    if (c === "|" && barras % 2 === 0) escapado += "\\";
+    escapado += c;
+    barras = c === "\\" ? barras + 1 : 0;
+  }
+  // Cada quebra de linha, com os espaços em volta, vira um espaço; linhas em branco somem e as bordas saem aparadas.
+  return escapado
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean)
+    .join(" ");
+}
 const tabela = (cabecalho: readonly string[], linhas: readonly (readonly string[])[]): string =>
   [cabecalho, cabecalho.map(() => "---"), ...linhas].map((l) => `| ${l.join(" | ")} |`).join("\n");
 const plural = (n: number, um: string, varios: string): string => `${inteiro(n)} ${n === 1 ? um : varios}`;

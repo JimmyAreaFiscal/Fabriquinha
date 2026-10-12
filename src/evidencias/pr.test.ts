@@ -293,6 +293,23 @@ test("corpo do PR sem uma evidência da issue: ErroDeRegra com o que falta", () 
   );
 });
 
+test("célula de tabela em tempo linear: 100 mil barras ou espaços seguidos não travam o PR", () => {
+  const ag = encerrando();
+  const mensagem = ag.evidencias.find((e) => e.tipo === "mensagem_pr");
+  assert.ok(mensagem);
+  const barras = "\\".repeat(100_000);
+  const espacos = " ".repeat(100_000);
+  // Barras e espaços sem o `|` ou a quebra que fecharia o padrão: `\\*\|` e `\s*\n\s*` voltariam atrás a cada um.
+  // Quebras com espaços em volta e linhas em branco viram um espaço só; as bordas da célula saem aparadas.
+  Object.assign(mensagem.dados, {
+    naoPrevistos: [{ caminho: "a|b.png", motivo: `${barras}x${espacos}x \n${espacos}\n\n  ${barras}|  ` }],
+  });
+  const inicio = Date.now();
+  const { completo } = montarPR(ag, 5, LIMITE_DO_CORPO.github);
+  assert.ok(Date.now() - inicio < 1000);
+  assert.ok(completo.includes(`| não previsto: ${barras}x${espacos}x ${barras}\\| |\n`));
+});
+
 test("texto do agente não esconde nem imita seção, e o código dele sai como ele escreveu", () => {
   const ag = encerrando();
   const mensagem = ag.evidencias.find((e) => e.tipo === "mensagem_pr");
