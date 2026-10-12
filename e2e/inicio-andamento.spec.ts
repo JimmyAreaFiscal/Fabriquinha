@@ -1,6 +1,7 @@
 // Início (F7 §4.4, itens 3 e 4): a linha de Rodando diz o que o agente está fazendo agora, pelo processo vivo, e o
 // card do gate do PR traz o número do PR.
 import { abrir } from "../src/persistencia/banco.ts";
+import type { Locator } from "@playwright/test";
 import { expect, projeto, test } from "./apoio.ts";
 
 test("Rodando mostra o que o agente está fazendo agora, e não só o título do ticket", async ({
@@ -29,14 +30,29 @@ test("Rodando mostra o que o agente está fazendo agora, e não só o título do
   }).toPass();
   // O nome do modelo fica numa linha só, sem quebrar no hífen, com o nome inteiro no `title`.
   const modelo = pagina.locator(".rodando-linha").getByText("anthropic / claude-sonnet-5-5");
-  const linhas = await modelo.evaluate((e) => {
-    const r = document.createRange();
-    r.selectNodeContents(e);
-    return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
-  });
-  expect(linhas).toBe(1);
+  expect(await linhasDo(modelo, /.+/)).toBe(1);
   await expect(modelo).toHaveAttribute("title", "anthropic / claude-sonnet-5-5");
+  // O tempo também ("há menos de 1 min"): na linha de Rodando, e na marca do cartão, onde só quebra antes da duração.
+  expect(await linhasDo(pagina.locator(".rodando-linha .tempo"), /.+/)).toBe(1);
+  expect(await linhasDo(pagina.locator(".cartao-marcas .pill"), /[^·\s][^·]*$/)).toBe(1);
+  // Com 1 min, "em execução · 1" cabia na primeira linha do cartão e o "min" ia sozinho para a segunda.
+  await pagina.clock.setFixedTime(Date.now() + 90_000);
+  await pagina.reload();
+  await expect(pagina.locator(".cartao-marcas .pill")).toHaveText("em execução · 1 min");
+  expect(await linhasDo(pagina.locator(".cartao-marcas .pill"), /1\smin$/)).toBe(1);
 });
+
+/** Em quantas linhas da página o trecho do texto do elemento ficou. */
+const linhasDo = (elemento: Locator, trecho: RegExp) =>
+  elemento.evaluate((e, trecho) => {
+    const texto = e.firstChild;
+    const achado = new RegExp(trecho).exec(texto?.textContent ?? "");
+    if (!texto || !achado) throw new Error(`sem "${trecho}" em "${e.textContent}"`);
+    const r = document.createRange();
+    r.setStart(texto, achado.index);
+    r.setEnd(texto, achado.index + achado[0].length);
+    return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+  }, trecho.source);
 
 test("o card do gate do PR traz o número do PR aberto", async ({ pagina, fabriquinha }) => {
   const banco = abrir(fabriquinha.raiz);

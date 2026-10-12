@@ -271,7 +271,7 @@ test("board: colunas por fase sob as 5 etapas, gates hachurados, cartões com ti
   assert.match(cartoes[0] ?? "", /<div class="cartao-titulo sem">sem título<\/div>/);
   assert.match(
     cartoes[0] ?? "",
-    /<span class="pill pill-aguarda">aguarda você · responder<\/span><span class="pill pill-rodando">/,
+    /<span class="pill pill-aguarda">aguarda você · responder<\/span><span class="pill pill-rodando">em execução · 6\u00a0min<\/span>/,
   );
   assert.match(cartoes[1] ?? "", /^<a class="cartao bloqueada" href="\/projects\/loja\/issues\/I-39">/);
   assert.match(cartoes[1] ?? "", /<span class="pill pill-neutro">bloqueada por I-35<\/span>/);

@@ -510,7 +510,8 @@ a {
 }
 .rodando-linha {
   display: grid;
-  grid-template-columns: 96px 64px minmax(0, 1fr) 140px 220px 90px;
+  /* O tempo cresce além dos 90 px do protótipo só quando precisa ("há menos de 1 min"), sem quebrar. */
+  grid-template-columns: 96px 64px minmax(0, 1fr) 140px 220px minmax(90px, max-content);
   align-items: center;
   gap: var(--s-3);
   height: 40px;
@@ -531,6 +532,7 @@ a {
   color: var(--ink);
 }
 .rodando-linha .tempo {
+  white-space: nowrap;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
