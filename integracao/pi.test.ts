@@ -7,7 +7,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { PACOTE, ambientePi, argumentosPi, binarioPi } from "../src/execucao/pi.ts";
+import { PACOTE, ambientePi, argumentosPi, binarioPi, skillsDaEtapa } from "../src/execucao/pi.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));
 after(() => {
@@ -22,7 +22,7 @@ export default (pi) =>
   });
 `;
 
-test("o pi das execuções carrega a guarda com a configuração do Auditor", (t) => {
+test("o pi das execuções carrega a guarda e as skills da etapa com a configuração do Auditor", (t) => {
   const sonda = join(dir, "sonda.js");
   const prompt = join(dir, "prompt.md");
   writeFileSync(sonda, SONDA);
@@ -52,6 +52,12 @@ test("o pi das execuções carrega a guarda com a configuração do Auditor", (t
   // A lista alimenta a revisão periódica do pi do Auditor (P1 §2.4).
   for (const extensao of extensoes) t.diagnostic(`extensão carregada: ${extensao}`);
   assert.ok(extensoes.includes(join(PACOTE, "extensions", "guarda.ts")), pi.stderr);
-  // O prompt de sistema desta sessão, que a sonda gravou no início dela.
-  assert.ok(readFileSync(prompt, "utf8").includes(`Current working directory: ${dir}`));
+  // O prompt de sistema desta sessão, que a sonda gravou no início dela. O pi ignora em silêncio um `--skill` que não
+  // existe; a skill só conta se o nome e o caminho entraram no prompt.
+  const sistema = readFileSync(prompt, "utf8");
+  assert.ok(sistema.includes(`Current working directory: ${dir}`));
+  for (const skill of skillsDaEtapa("registro")) {
+    assert.ok(sistema.includes(`<name>${skill}</name>`), skill);
+    assert.ok(sistema.includes(`<location>${join(PACOTE, "skills", skill, "SKILL.md")}</location>`), skill);
+  }
 });
