@@ -6,9 +6,16 @@ import { z } from "zod";
 import { Etapa } from "../dominio/primitivos.ts";
 import { sessoes } from "../execucao/sessoes.ts";
 import type { Parametros } from "./cliente/caminhos.ts";
+import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
+
+/** O que o serviço expõe do agendador ao web (F4 §4). */
+export interface Agendador {
+  proximaBusca(): Date;
+}
 
 export interface Pedido {
   banco: DatabaseSync;
+  agendador: Agendador;
   /** Os `:parametros` do caminho, decodificados. */
   params: Parametros;
   query: URLSearchParams;
@@ -39,4 +46,5 @@ export const ROTAS: Rota[] = [
     caminho: "/api/sessoes",
     tratar: ({ banco, query }) => sessoes(banco, FiltroSessoes.parse(Object.fromEntries(query))),
   },
+  ...ROTAS_DA_CONFIGURACAO,
 ];

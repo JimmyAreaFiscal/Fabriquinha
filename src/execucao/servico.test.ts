@@ -291,7 +291,11 @@ test("agendador: desligado por padrão; ligado, inicia a cada intervaloMin o tic
 
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 3 });
   minuto(); // o intervalo já passou enquanto desligado: o primeiro ciclo vem na batida seguinte
-  assert.deepEqual(autonomaEmAndamento(s.banco), { execucao: 1, ticket: 1 }, "o C5 roda na própria batida");
+  assert.partialDeepStrictEqual(
+    autonomaEmAndamento(s.banco),
+    { execucao: 1, ticket: 1 },
+    "o C5 roda na própria batida",
+  );
   await falhouNaWorktree(s.banco, 1);
   assert.equal(estado(s.banco, 2).status, "aberto", "um ticket por ciclo");
 
@@ -300,6 +304,22 @@ test("agendador: desligado por padrão; ligado, inicia a cada intervaloMin o tic
   assert.equal(estado(s.banco, 2).status, "aberto", "intervalo de 3 minutos");
   minuto();
   await falhouNaWorktree(s.banco, 2);
+  await s.parar();
+});
+
+test("próxima busca: a batida em que o contador chega ao intervaloMin; desligado além dele, a batida seguinte", async (t) => {
+  const inicio = Date.parse("2026-10-12T14:00:00.000Z");
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: inicio });
+  const s = await subir();
+  const proxima = () => s.proximaBusca().toISOString();
+  assert.equal(proxima(), "2026-10-12T14:05:00.000Z", "padrão: 5 minutos depois da subida");
+  t.mock.timers.tick(2 * 60_000);
+  assert.equal(proxima(), "2026-10-12T14:05:00.000Z");
+  salvarConfiguracao(s.banco, { intervaloMin: 1 });
+  assert.equal(proxima(), "2026-10-12T14:03:00.000Z", "o contador já passou do intervalo: a batida seguinte");
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 3 });
+  t.mock.timers.tick(60_000);
+  assert.equal(proxima(), "2026-10-12T14:06:00.000Z", "buscou às 14:03; a próxima, 3 minutos depois");
   await s.parar();
 });
 
@@ -378,7 +398,11 @@ test("agendador: varre em segundo plano a base dos projetos sem varredura há 24
   const varrido = () => s.banco.prepare("SELECT em FROM varredura_base WHERE projeto = 'q'").get()?.em;
 
   minuto();
-  assert.deepEqual(autonomaEmAndamento(s.banco), { execucao: 1, ticket: 1 }, "a batida não espera a varredura");
+  assert.partialDeepStrictEqual(
+    autonomaEmAndamento(s.banco),
+    { execucao: 1, ticket: 1 },
+    "a batida não espera a varredura",
+  );
   minuto();
   minuto();
   await ate(() => varrido() !== undefined && erros.mock.callCount() === 1);
@@ -436,7 +460,7 @@ test("executarAgora: não espera o agendador, devolve a recusa do C5 e recusa co
 
   await assert.rejects(s.executarAgora(3), /T-3 é da etapa registro, que roda em modo interativo/);
   await s.executarAgora(1);
-  assert.deepEqual(autonomaEmAndamento(s.banco), { execucao: 1, ticket: 1 }, "volta logo depois do C5");
+  assert.partialDeepStrictEqual(autonomaEmAndamento(s.banco), { execucao: 1, ticket: 1 }, "volta logo depois do C5");
   await assert.rejects(
     s.executarAgora(2),
     (erro: unknown) =>

@@ -57,12 +57,24 @@ export function ticketElegivel(banco: DatabaseSync): Id | undefined {
   return linha && Number(linha.id);
 }
 
-/** A execução autônoma em andamento, que ocupa a vaga do D8. */
-export function autonomaEmAndamento(banco: DatabaseSync): { execucao: Id; ticket: Id } | undefined {
+/** A execução autônoma em andamento, que ocupa a vaga do D8, com o ticket, a issue e quando começou. */
+export function autonomaEmAndamento(
+  banco: DatabaseSync,
+): { execucao: Id; ticket: Id; issue: Id; iniciadaEm: string } | undefined {
   const linha = banco
-    .prepare("SELECT id, ticket FROM execucao WHERE modo = 'autonomo' AND resultado = 'em_andamento'")
+    .prepare(
+      `SELECT e.id, e.ticket, t.issue, e.iniciada_em FROM execucao e JOIN ticket t ON t.id = e.ticket
+       WHERE e.modo = 'autonomo' AND e.resultado = 'em_andamento'`,
+    )
     .get();
-  return linha && { execucao: Number(linha.id), ticket: Number(linha.ticket) };
+  return (
+    linha && {
+      execucao: Number(linha.id),
+      ticket: Number(linha.ticket),
+      issue: Number(linha.issue),
+      iniciadaEm: String(linha.iniciada_em),
+    }
+  );
 }
 
 /** F4 §7: as execuções em andamento, com a issue e o grupo de processos do pi. */

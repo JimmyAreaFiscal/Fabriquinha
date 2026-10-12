@@ -1,6 +1,9 @@
 // Primitivos do domínio (F1 §3.1). Fonte única: o schema gera o tipo e valida em runtime (D2).
 import { z } from "zod";
 
+// As mensagens do zod em português, como o resto da Fabriquinha: o web as mostra ao lado de cada campo (F7 §4.4).
+z.config(z.locales.ptBR());
+
 const palavras = (texto: string): number => texto.match(/\S+/g)?.length ?? 0;
 
 /** Para `.refine` de listas: o campo `campo` não se repete entre os itens. */
@@ -24,7 +27,9 @@ export const Motivo = z.string().trim().min(1).max(2000);
  * fica `em_andamento` segurando a vaga do D8.
  */
 export const motivo = (texto: string): string => Motivo.catch("falha sem mensagem").parse(texto.slice(0, 2000));
-export const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/);
+export const Slug = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "use letras minúsculas, números e hífen, começando por letra ou número (até 64)");
 export const Modelo = z.object({
   provedor: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
   modelo: z.string().trim().min(1).max(200),

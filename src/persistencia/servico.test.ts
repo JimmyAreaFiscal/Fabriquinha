@@ -158,7 +158,8 @@ test("elegível: a issue mais antiga primeiro e, nela, o ticket mais antigo", ()
   assert.equal(ticketElegivel(banco), indice);
 
   const execucao = iniciar(banco, i1.issue, indice, "autonomo");
-  assert.deepEqual(autonomaEmAndamento(banco), { execucao, ticket: indice });
+  assert.partialDeepStrictEqual(autonomaEmAndamento(banco), { execucao, ticket: indice, issue: i1.issue });
+  assert.match(String(autonomaEmAndamento(banco)?.iniciadaEm), /^\d{4}-\d\d-\d\dT/);
   assert.equal(ticketElegivel(banco), i2.desenho, "a I-1 está ocupada; a I-2 é a próxima");
   comIssue(banco, i1.issue, "terminarExecucao", fabriquinha, (a, ctx) =>
     terminarExecucao(a, { execucao, resultado: "falha", erro: "pi saiu" }, fabriquinha, ctx),

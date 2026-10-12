@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { conferirModelo } from "./modelos.ts";
+import { conferirModelo, listarModelos } from "./modelos.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-modelos-"));
 after(() => {
@@ -50,6 +50,15 @@ test("recusa o que a busca aproximada do pi lista, mas não é o par exato", asy
   await recusa("openai", "gpt-6-luna", como("openai/gpt-6-luna"));
   await recusa("llamacpp", "qwen3", como("llamacpp/qwen3"));
   await recusa("provider", "model", como("provider/model"));
+});
+
+test("listarModelos: todos os pares da tabela do pi, sem busca, para os seletores", async () => {
+  assert.deepEqual(await listarModelos(), [
+    { provedor: "openai-codex", modelo: "gpt-5.6-luna" },
+    { provedor: "openai-codex", modelo: "gpt-6-luna" },
+    { provedor: "llamacpp", modelo: "qwen3 coder (local)" },
+  ]);
+  assert.deepEqual(readFileSync(argumentos, "utf8"), "--list-models\n");
 });
 
 test("recusa quando o pi falha, com o stderr dele", async () => {

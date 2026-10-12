@@ -10,7 +10,7 @@ import { raizDo } from "../persistencia/banco.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { casar } from "./cliente/caminhos.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
-import { ROTAS } from "./rotas.ts";
+import { type Agendador, ROTAS } from "./rotas.ts";
 
 const CLIENTE = join(import.meta.dirname, "cliente");
 const COOKIE = "fabriquinha";
@@ -71,13 +71,14 @@ const cookie = (pedido: IncomingMessage): string | undefined =>
 export interface Web {
   banco: DatabaseSync;
   porta: number;
+  agendador: Agendador;
 }
 
 /**
  * Gera o token desta subida (32 bytes aleatórios), grava o link de entrada em `<raiz>/web.url` com `0600` e devolve o
  * tratador das requisições. Reiniciar o serviço troca o token e invalida o cookie dos navegadores.
  */
-export function servirWeb({ banco, porta }: Web): RequestListener {
+export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
   const token = Buffer.from(randomBytes(32).toString("base64url"));
   const origem = `127.0.0.1:${String(porta)}`;
   const arquivo = join(raizDo(banco), "web.url");
@@ -123,7 +124,7 @@ export function servirWeb({ banco, porta }: Web): RequestListener {
     for (const rota of ROTAS) {
       const params = rota.metodo === pedido.method ? casar(rota.caminho, url.pathname) : undefined;
       if (!params) continue;
-      const valor: unknown = await rota.tratar({ banco, params, query: url.searchParams, corpo, resposta });
+      const valor: unknown = await rota.tratar({ banco, agendador, params, query: url.searchParams, corpo, resposta });
       if (resposta.headersSent) return;
       if (valor === undefined) resposta.writeHead(204).end();
       else json(resposta, 200, valor);

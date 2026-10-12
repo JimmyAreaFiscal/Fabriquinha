@@ -31,6 +31,8 @@ export interface Servico {
   banco: DatabaseSync;
   /** F4 §4: inicia o ticket autônomo já, sem esperar o agendador; recusa com a execução que ocupa o D8. */
   executarAgora(ticket: Id): Promise<void>;
+  /** Quando o agendador procura trabalho de novo, se estiver ligado (F7 §4.4, Configuração). */
+  proximaBusca(): Date;
   parar(): Promise<void>;
 }
 
@@ -64,6 +66,12 @@ function recuperar(banco: DatabaseSync): void {
  */
 export async function iniciarServico(raiz: string): Promise<Servico> {
   const porta = portaDoServico();
+  // ponytail: o relógio bate de minuto em minuto e cada batida relê a configuração; uma mudança vale em até um minuto.
+  let minutos = 0;
+  /** A última batida do relógio (ou a subida): a próxima busca conta a partir dela. */
+  let batida = Date.now();
+  /** A batida em que `minutos` chega ao intervalo; desligado além dele, o ciclo roda na batida seguinte. */
+  const proximaBusca = (): Date => new Date(batida + Math.max(1, configuracao(banco).intervaloMin - minutos) * 60_000);
   // O tratador do web (F7 §4.1) entra depois do banco aberto; antes disso, ninguém tem o link de entrada.
   const web = createServer();
   await new Promise<void>((pronto, falhou) => {
@@ -81,7 +89,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   try {
     aberto = abrir(raiz);
     recuperar(aberto);
-    web.on("request", servirWeb({ banco: aberto, porta }));
+    web.on("request", servirWeb({ banco: aberto, porta, agendador: { proximaBusca } }));
   } catch (error_) {
     aberto?.close();
     web.close();
@@ -100,8 +108,6 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     execucao.catch(noLog);
   }
 
-  // ponytail: o relógio bate de minuto em minuto e cada batida relê a configuração; uma mudança vale em até um minuto.
-  let minutos = 0;
   /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
   let varredura: Promise<void> | undefined;
 
@@ -121,6 +127,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
    * a batida nunca espera o git, e uma varredura só começa quando a anterior terminou.
    */
   function ciclo(): void {
+    batida = Date.now();
     try {
       const c = configuracao(banco);
       // Desligado, o contador continua: ligado depois do intervalo, o primeiro ciclo vem na batida seguinte.
@@ -154,6 +161,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       }
       await iniciar(ticket);
     },
+    proximaBusca,
     async parar() {
       clearInterval(relogio);
       const fechou = new Promise((pronto) => web.close(pronto));

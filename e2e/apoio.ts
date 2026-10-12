@@ -3,7 +3,7 @@
 import { test as base, type Page } from "@playwright/test";
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -44,6 +44,11 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
     // git e pi sem a configuração do usuário da máquina.
     const gitconfig = join(raiz, "gitconfig");
     writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
+    // gh falso, autenticado: a conferência do cadastro de projeto (F5 §2) passa sem rede.
+    const bin = join(raiz, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "gh"), "#!/bin/sh\nexit 0\n");
+    chmodSync(join(bin, "gh"), 0o755);
     const porta = await portaLivre();
     let log = "";
     const servico = spawn(
@@ -57,6 +62,7 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
           PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
           GIT_CONFIG_GLOBAL: gitconfig,
           GIT_CONFIG_NOSYSTEM: "1",
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
         },
         stdio: ["ignore", "inherit", "pipe"],
       },

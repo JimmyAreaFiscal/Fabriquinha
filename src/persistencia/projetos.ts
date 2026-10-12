@@ -97,3 +97,7 @@ export function projeto(banco: DatabaseSync, nome: string): Projeto | undefined 
 export function projetos(banco: DatabaseSync): Projeto[] {
   return (banco.prepare("SELECT * FROM projeto ORDER BY nome").all() as unknown as Linha[]).map(deLinha);
 }
+
+/** Quantas issues o projeto tem, inclusive concluídas e arquivadas: o número ao lado do nome na Configuração. */
+export const issuesDoProjeto = (banco: DatabaseSync, nome: string): number =>
+  Number(banco.prepare("SELECT count(*) AS n FROM issue WHERE projeto = ?").get(nome)?.n);
