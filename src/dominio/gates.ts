@@ -1,4 +1,5 @@
-// Gates (F1 §5): C10 decidirRegistro e C15 decidirDesenho, do Auditor, e C14 registrarDecisaoRevisao, do agente revisor.
+// Gates (F1 §5): C10 decidirRegistro, C15 decidirDesenho e C16 decidirPR, do Auditor, e C14 registrarDecisaoRevisao,
+// do agente revisor.
 import { z } from "zod";
 import {
   type Agregado,
@@ -19,14 +20,13 @@ const EntradaDecisao = z.discriminatedUnion("aprovado", [
   z.object({ aprovado: z.literal(true), motivo: Motivo.optional() }),
   z.object({ aprovado: z.literal(false), motivo: Motivo }),
 ]);
-type EntradaDecisao = z.infer<typeof EntradaDecisao>;
 
 /** O agregado com a decisão sobre o resultado de `ticket` acrescentada: do agente na revisão, do Auditor nos demais. */
 function comDecisao(
   ag: Agregado,
   ticket: Ticket,
   gate: Decisao["gate"],
-  { aprovado, motivo }: EntradaDecisao,
+  { aprovado, motivo, nota }: Pick<Decisao, "aprovado" | "motivo" | "nota">,
   ctx: Contexto,
 ): Agregado {
   const decisao: Decisao = {
@@ -36,6 +36,7 @@ function comDecisao(
     gate,
     aprovado,
     ...(motivo !== undefined && { motivo }),
+    ...(nota !== undefined && { nota }),
     por: gate === "revisao" ? "agente" : "auditor",
     em: ctx.agora,
   };
@@ -137,4 +138,50 @@ export function registrarDecisaoRevisao(ag: Agregado, entrada: unknown, ator: At
   }
   const semAnterior = { ...ag, decisoes: ag.decisoes.filter((d) => d.gate !== "revisao" || d.ticket !== id) };
   return comDecisao(semAnterior, ticket, "revisao", decisao, ctx);
+}
+
+/** C16: encerrar a issue pede só a nota; pedir mudanças, só o motivo (F1 §3.7). */
+const EntradaPR = z.discriminatedUnion("aprovado", [
+  z.strictObject({ aprovado: z.literal(true), nota: z.number().int().min(1).max(5) }),
+  z.strictObject({ aprovado: z.literal(false), motivo: Motivo }),
+]);
+
+/**
+ * C16: grava a decisão sobre o último encerramento, com o PR que o F5 acabou de ler (`ctx.estadoPR`). Aprovado
+ * ("encerrar a issue") exige o PR mergeado e conclui a issue; reprovado ("pedir mudanças") exige o PR não mergeado e
+ * leva a issue a `ajuste_pr`, com um ticket `sessao` que traz o motivo na descrição.
+ */
+export function decidirPR(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
+  exigirAuditor(ator, "decidir o gate do PR");
+  const decisao = EntradaPR.parse(entrada);
+  const i = rotuloIssue(ag);
+  if (ag.issue.fase !== "aprovacao_pr") {
+    throw new ErroDeRegra(
+      `a ${i} está na fase ${ag.issue.fase}, não na aprovação do PR`,
+      "o gate do PR abre quando o encerramento publica o PR",
+    );
+  }
+  const encerramento = ag.tickets.findLast((t) => t.etapa === "encerramento" && t.status === "concluido");
+  if (!encerramento) throw new ErroDeRegra(`a ${i} não tem ticket de encerramento concluído`, "confira o banco");
+  const pr = ctx.estadoPR;
+  if (pr === undefined) {
+    throw new ErroDeRegra(`o estado do PR da ${i} não foi lido`, "leia o PR na plataforma logo antes de decidir");
+  }
+  if (decisao.aprovado && pr !== "mergeado") {
+    throw new ErroDeRegra(
+      `a ${i} não pode ser encerrada: o PR está ${pr}, não mergeado`,
+      "faça o merge na plataforma, com merge commit, e encerre de novo",
+    );
+  }
+  if (!decisao.aprovado && pr === "mergeado") {
+    throw new ErroDeRegra(`a ${i} não pode pedir mudanças: o PR já foi mergeado`, "encerre a issue com a nota");
+  }
+
+  const decidido = comDecisao(ag, encerramento, "pr", decisao, ctx);
+  if (decisao.aprovado) return { ...decidido, issue: { ...ag.issue, fase: "concluida", concluidaEm: ctx.agora } };
+  return {
+    ...decidido,
+    issue: { ...ag.issue, fase: "ajuste_pr" },
+    tickets: [...ag.tickets, novoTicket(ag, ctx, "sessao", "Ajustar o PR", decisao.motivo)],
+  };
 }

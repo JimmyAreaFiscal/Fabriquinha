@@ -12,7 +12,7 @@ import {
 import { ErroDeRegra } from "./erros.ts";
 import { exigirEvidencias } from "./evidencia.ts";
 import { exigirSemExecucao, marcarConcluido, novoTicket, rotuloTicket, ticketDe } from "./execucao.ts";
-import { type Etapa, Id } from "./primitivos.ts";
+import { type Etapa, type Fase, Id } from "./primitivos.ts";
 
 /** Regra adicional e transição de uma etapa (F1 §5.1); recebe o agregado com o ticket já `concluido`. */
 type Regra = (ag: Agregado, ticket: Ticket, ctx: Contexto) => Agregado;
@@ -46,18 +46,24 @@ const nomesDe = (ag: Agregado, ticket: Ticket, tipo: TipoEvidencia, lista: strin
     .flatMap((e) => (e.dados[lista] as { nome: string }[]).map((item) => item.nome))
     .toSorted((a, b) => a.localeCompare(b));
 
-// ponytail: a sessão entra aqui no ticket 21.
-const REGRAS: Partial<Record<Exclude<Etapa, "registro">, Regra>> = {
-  desenho: (ag, ticket) => {
+/** O desenho e a sessão em aberto só concluem com ticket de desenvolvimento criado; a issue vai a `fase`. */
+const comTicketCriado =
+  (quem: string, fase: Fase): Regra =>
+  (ag, ticket) => {
     if (!criouTicket(ag, ticket)) {
       const t = rotuloTicket(ticket);
       throw new ErroDeRegra(
-        `${t} não pode concluir: o desenho não criou ticket de desenvolvimento`,
+        `${t} não pode concluir: ${quem} não criou ticket de desenvolvimento`,
         `o agente de ${t} cria com fabriquinha ticket criar ${rotuloIssue(ag)} --titulo <título>`,
       );
     }
-    return { ...ag, issue: { ...ag.issue, fase: "aprovacao_desenho" } };
-  },
+    return { ...ag, issue: { ...ag.issue, fase } };
+  };
+
+// O registro não conclui por C7 (C10); as demais etapas têm todas a sua regra.
+const REGRAS: Record<Exclude<Etapa, "registro">, Regra> = {
+  desenho: comTicketCriado("o desenho", "aprovacao_desenho"),
+  sessao: comTicketCriado("a sessão em aberto", "desenvolvimento"),
   desenvolvimento: (ag, ticket, ctx) => {
     if (!ctx.temCommit(ticket.id)) {
       throw new ErroDeRegra(
@@ -126,18 +132,11 @@ export function concluirTicket(ag: Agregado, entrada: unknown, ator: Ator, ctx: 
       "o Auditor o conclui no gate de registro",
     );
   }
-  const regra = REGRAS[ticket.etapa];
-  if (!regra) {
-    throw new ErroDeRegra(
-      `${t} é da etapa ${ticket.etapa}, que ainda não conclui`,
-      "aguarde a versão que a implementa",
-    );
-  }
   if (ticket.status !== "em_execucao") {
     throw new ErroDeRegra(`${t} tem status ${ticket.status}, não em_execucao`, "só se conclui ticket em execução");
   }
   exigirSemExecucao(ag, ticket, "concluir");
   exigirEvidencias(ag, ticket);
   const depois = marcarConcluido(ag, ticket, ctx.agora);
-  return regra(depois, ticketDe(depois, id), ctx);
+  return REGRAS[ticket.etapa](depois, ticketDe(depois, id), ctx);
 }

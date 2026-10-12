@@ -6,6 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   type Agregado,
   AUDITOR,
+  type Contexto,
   type Execucao,
   FABRIQUINHA,
   type ModoExecucao,
@@ -14,13 +15,24 @@ import {
 import { concluirTicket } from "../dominio/conclusao.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import { evidenciasFaltando } from "../dominio/evidencia.ts";
-import { iniciarConsulta, naSessaoPrincipal, terminarExecucao, ticketDe } from "../dominio/execucao.ts";
-import { decidirRegistro } from "../dominio/gates.ts";
+import {
+  iniciarConsulta,
+  iniciarExecucao,
+  naSessaoPrincipal,
+  terminarExecucao,
+  ticketDe,
+} from "../dominio/execucao.ts";
+import { decidirPR, decidirRegistro } from "../dominio/gates.ts";
 import { type Etapa, type Fase, type Id, type Instante, motivo } from "../dominio/primitivos.ts";
+import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
+import type { Projeto } from "../dominio/projeto.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { anotar, arquivoDaSessao, issueDaSessao, issuesComSessao, logDaExecucao } from "../persistencia/execucoes.ts";
 import { agregado, agregadoDoTicket, comIssue, registrarIssue, ultimaEdicaoDoAgente } from "../persistencia/issues.ts";
+import { projeto as lerProjeto } from "../persistencia/projetos.ts";
+import { estadoPR, type LeituraDoPR } from "../repositorio/pr.ts";
+import { caminhoDaWorktree, descartarAlteracoes, limpar } from "../repositorio/worktree.ts";
 import {
   assinar,
   avisar,
@@ -284,6 +296,17 @@ const issueDoTicket = (banco: DatabaseSync, ticket: Id): Id =>
  */
 export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string, opcoes: OpcoesInterativa): string {
   const { ag, execucao } = iniciarNaSessaoPrincipal(banco, issueDoTicket(banco, ticket), ticket, "interativo");
+  return acompanharInterativa(banco, ag, execucao, texto, opcoes);
+}
+
+/** A execução interativa já iniciada (C5), em segundo plano, com `texto` como mensagem. Devolve a sessão. */
+function acompanharInterativa(
+  banco: DatabaseSync,
+  ag: Agregado,
+  execucao: Execucao,
+  texto: string,
+  opcoes: OpcoesInterativa,
+): string {
   const raiz = raizDo(banco);
   return acompanhar(banco, ag, execucao, opcoes, {
     // Dentro da execução: sessão com dois arquivos (F6 §3.1) vira falha dela, não execução presa em andamento.
@@ -291,7 +314,7 @@ export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string
       if (arquivoDaSessao(raiz, execucao.sessaoPi) !== undefined) return texto;
       const contexto = montarPrompt({
         ag,
-        ticket: ticketDe(ag, ticket),
+        ticket: ticketDe(ag, execucao.ticket),
         instrucao: undefined,
         ...c,
         modo: "interativo",
@@ -518,6 +541,7 @@ export async function decidirRegistroNoChat(
   const ag = await agregadoAssentado(banco, issue);
   const ticket = ag.tickets.find((t) => t.etapa === "registro" && t.status !== "concluido");
   if (ticket) await pararOciosa(ag, ticket.id);
+  if (ticket && decisao.aprovado) await descartarDaSessao(banco, ag, ticket.id);
   comIssue(banco, issue, "decidirRegistro", AUDITOR, (a, ctx) => decidirRegistro(a, decisao, AUDITOR, ctx));
   // C10 só passa com o ticket de registro aberto; aprovar exige as evidências de uma execução, e devolver, o motivo.
   const t = existe(ticket, "C10 passou sem ticket de registro", "confira o banco");
@@ -528,7 +552,16 @@ export async function decidirRegistroNoChat(
   avisar(...principalDe(banco, ag, t.id));
 }
 
-/** F4 §6.6: Concluir sessão, na sessão em aberto. Para o pi ocioso e chama C7. */
+/**
+ * F3 §7 nas etapas interativas (registro e sessão em aberto), que não mudam código: descarta o que ficou na worktree,
+ * com o log da última execução do ticket. Vem antes do comando que encerra a etapa: se falhar, nada muda.
+ */
+async function descartarDaSessao(banco: DatabaseSync, ag: Agregado, ticket: Id): Promise<void> {
+  const [, log] = principalDe(banco, ag, ticket);
+  await descartarAlteracoes(caminhoDaWorktree(raizDo(banco), ag.issue.projeto, ag.issue.id), log);
+}
+
+/** F4 §6.6: Concluir sessão, na sessão em aberto. Para o pi ocioso, descarta as alterações (F3 §7) e chama C7. */
 export async function concluirSessao(banco: DatabaseSync, ticket: Id): Promise<void> {
   const issue = existe(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número")
     .issue.id;
@@ -538,7 +571,96 @@ export async function concluirSessao(banco: DatabaseSync, ticket: Id): Promise<v
     throw new ErroDeRegra(`T-${String(ticket)} é da etapa ${t.etapa}`, "só a sessão em aberto se conclui pelo chat");
   }
   await pararOciosa(ag, ticket);
+  await descartarDaSessao(banco, ag, ticket);
   comIssue(banco, issue, "concluirTicket", FABRIQUINHA, (a, ctx) => concluirTicket(a, { ticket }, FABRIQUINHA, ctx));
   // C7 exige o ticket em execução, então ele já tem sessão.
   avisar(...principalDe(banco, ag, ticket));
+}
+
+/** Para os pis ociosos da issue (as consultas, no gate do PR) e espera o C6; recusa se algum agente trabalha. */
+async function pararOciosasDaIssue(banco: DatabaseSync, issue: Id): Promise<void> {
+  const ag = await agregadoAssentado(banco, issue);
+  for (const e of ag.execucoes.filter((x) => x.resultado === "em_andamento")) await pararOciosa(ag, e.ticket);
+}
+
+/**
+ * C16 com o PR lido na plataforma agora, logo antes da transação (F5 §5.2), e o aviso à sessão do encerramento, que
+ * sai do gate. `depois` aplica, na mesma transação, o que vem com a decisão. Antes, para as consultas ociosas da
+ * issue, que rodam na worktree. Devolve o agregado e o PR lido.
+ */
+async function decidirComPR(
+  banco: DatabaseSync,
+  issue: Id,
+  decisao: { aprovado: true; nota: number } | { aprovado: false; motivo: string },
+  depois: (ag: Agregado, ctx: Contexto) => Agregado = (ag) => ag,
+): Promise<[Agregado, LeituraDoPR, Projeto]> {
+  await pararOciosasDaIssue(banco, issue);
+  const antes = agregadoDa(banco, issue);
+  const projeto = existe(
+    lerProjeto(banco, antes.issue.projeto),
+    `o projeto ${antes.issue.projeto} não existe`,
+    "cadastre-o na Configuração",
+  );
+  const pr = await estadoPR(projeto, antes);
+  const ag = comIssue(banco, issue, "decidirPR", AUDITOR, (a, ctx) =>
+    depois(decidirPR(a, decisao, AUDITOR, { ...ctx, estadoPR: pr.estado }), ctx),
+  );
+  // C16 só passa com um encerramento concluído, que já executou.
+  const encerramento = existe(
+    ag.tickets.findLast((t) => t.etapa === "encerramento"),
+    "C16 passou sem encerramento",
+    "confira o banco",
+  );
+  avisar(...principalDe(banco, ag, encerramento.id));
+  return [ag, pr, projeto];
+}
+
+/**
+ * F5 §5.2 e §5.3: encerrar a issue com a nota (C16 aprovado), com o PR lido como mergeado agora, e remover a
+ * worktree. Devolve os avisos da limpeza, que não desfazem o encerramento.
+ */
+export async function encerrarIssue(banco: DatabaseSync, issue: Id, nota: number): Promise<string[]> {
+  const [ag, , projeto] = await decidirComPR(banco, issue, { aprovado: true, nota });
+  return limpar(raizDo(banco), projeto, ag.issue, () => varrerBase(banco, projeto.nome));
+}
+
+/**
+ * F4 §6.6: pedir mudanças no PR (C16 reprovado), com o PR lido como não mergeado agora, e abrir a sessão em aberto,
+ * cuja mensagem inicial traz o motivo e a URL do PR. C16 e o C5 da sessão vão numa transação só: se o C5 recusar,
+ * nada é gravado, e uma queda depois deixa a execução que o reinício do serviço recupera (F4 §7). Devolve a sessão.
+ */
+export async function pedirMudancas(
+  banco: DatabaseSync,
+  issue: Id,
+  pedido: string,
+  opcoes: OpcoesInterativa,
+): Promise<string> {
+  const [ag, pr] = await decidirComPR(banco, issue, { aprovado: false, motivo: pedido }, (decidido, ctx) => {
+    const sessao = existe(
+      decidido.tickets.find((t) => t.etapa === "sessao" && t.status === "aberto"),
+      "C16 reprovado não criou a sessão em aberto",
+      "confira o banco",
+    );
+    return iniciarExecucao(
+      decidido,
+      { ticket: sessao.id, modo: "interativo", sessaoPi: randomUUID() },
+      FABRIQUINHA,
+      ctx,
+    );
+  });
+  // O C5 só passa sem outra execução em andamento na issue: a única é a da sessão em aberto.
+  const execucao = existe(
+    ag.execucoes.find((e) => e.resultado === "em_andamento"),
+    "C5 não deixou a sessão em aberto em andamento",
+    "confira o banco",
+  );
+  // A descrição do ticket é o motivo já validado (F1 C16).
+  const motivoPedido = ticketDe(ag, execucao.ticket).descricao;
+  return acompanharInterativa(
+    banco,
+    ag,
+    execucao,
+    `O Auditor pediu mudanças no PR ${pr.url}. Motivo: ${motivoPedido}`,
+    opcoes,
+  );
 }

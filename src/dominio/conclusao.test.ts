@@ -136,11 +136,6 @@ test("C7 é só da Fabriquinha, valida a entrada e exige ticket em execução, s
     () => concluir(ag, { ticket: 1 }),
     "T-1 é de registro e não conclui por concluirTicket (o Auditor o conclui no gate de registro)",
   );
-  const sessao = { ...ag, tickets: [...ag.tickets, ticket(4, "sessao")] };
-  regra(
-    () => concluir(sessao, { ticket: 4 }),
-    "T-4 é da etapa sessao, que ainda não conclui (aguarde a versão que a implementa)",
-  );
   const falhou = { ...ag, tickets: ag.tickets.map((t) => (t.id === 2 ? { ...t, status: "falhou" as const } : t)) };
   regra(() => concluir(falhou), "T-2 tem status falhou, não em_execucao (só se conclui ticket em execução)");
   const rodando = { ...ag, execucoes: ag.execucoes.map((e) => ({ ...e, resultado: "em_andamento" as const })) };
@@ -388,5 +383,29 @@ test("C7 do encerramento: com as quatro evidências da etapa, a issue vai para a
   regra(
     () => concluir({ ...encerrando, evidencias: encerrando.evidencias.slice(0, 3) }),
     "T-2 não pode concluir: falta a evidência pr_aberto (a Fabriquinha coleta depois do pi; execute o ticket de novo)",
+  );
+});
+
+/** I-1 em `ajuste_pr`: a sessão em aberto T-2 em execução (E-5 terminada), sem tickets criados. */
+const emAjuste = (): Agregado => ({
+  ...desenhado({ fase: "ajuste_pr" }),
+  tickets: [ticket(1, "encerramento", { status: "concluido", concluidoEm: ANTES }), ticket(2, "sessao")],
+  evidencias: [],
+});
+
+test("C7 da sessão em aberto: com ticket de desenvolvimento criado, a issue volta a desenvolvimento", () => {
+  const ag = emAjuste();
+  const criado = ticket(3, "desenvolvimento", { status: "aberto", origem: "agente", origemTicket: 2 });
+  const depois = concluir({ ...ag, tickets: [...ag.tickets, criado] });
+  assert.equal(depois.issue.fase, "desenvolvimento");
+  assert.deepEqual(depois.tickets[1], ticket(2, "sessao", { status: "concluido", concluidoEm: AGORA }));
+  assert.deepEqual(depois.tickets[2], criado);
+});
+
+test("C7 da sessão em aberto exige que ela tenha criado ao menos um ticket de desenvolvimento", () => {
+  regra(
+    () => concluir(emAjuste()),
+    "T-2 não pode concluir: a sessão em aberto não criou ticket de desenvolvimento " +
+      "(o agente de T-2 cria com fabriquinha ticket criar I-1 --titulo <título>)",
   );
 });

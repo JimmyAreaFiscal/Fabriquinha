@@ -1,10 +1,11 @@
-// PR da issue (F5 §5): conferência de PR criado fora da Fabriquinha (§5.0) e publicação (§5.1) com `gh` ou `az`, no
-// ambiente do serviço, que é o autenticado. Sempre com argumentos em lista: título e corpo nunca viram comando.
+// PR da issue (F5 §5): conferência de PR criado fora da Fabriquinha (§5.0), publicação (§5.1) e leitura do estado
+// (§5.2) com `gh` ou `az`, no ambiente do serviço, que é o autenticado. Sempre com argumentos em lista: título e corpo nunca viram comando.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { ErroDeRegra, mensagem } from "../dominio/erros.ts";
+import type { Evidencia, Issue } from "../dominio/agregado.ts";
+import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import type { Hospedagem, Projeto } from "../dominio/projeto.ts";
 import { anotar } from "../persistencia/execucoes.ts";
@@ -36,23 +37,36 @@ interface CliDePR {
   ): Promise<{ id: string; url: string }>;
   atualizar(repo: string, pr: PRNaHospedagem, titulo: string, corpo: string): Promise<{ id: string; url: string }>;
   reabrir(repo: string, id: string): Promise<void>;
+  ler(repo: string, id: string): Promise<Omit<LeituraDoPR, "lidoEm">>;
 }
 
-/** Roda o CLI e devolve o stdout; a falha faz o ticket falhar com a saída do comando (F3 §6). */
-async function rodar(cli: "gh" | "az", args: readonly string[], cwd: string): Promise<string> {
+/** O estado do PR lido na plataforma (F5 §5.2). */
+export interface LeituraDoPR {
+  estado: PRNaHospedagem["estado"];
+  url: string;
+  /** Só no PR mergeado, quando a plataforma informa. */
+  mergeadoEm?: string;
+  lidoEm: string;
+}
+
+/** O ticket falha, e a próxima execução tenta de novo; o gate do PR lê de novo. */
+const DE_NOVO = "execute o ticket de novo";
+
+/** Roda o CLI e devolve o stdout; a falha vira ErroDeRegra com a saída do comando (F3 §6, F5 §5.2). */
+async function rodar(cli: "gh" | "az", args: readonly string[], cwd: string, deNovo = DE_NOVO): Promise<string> {
   const r = await executar(cli, args, { cwd, limiteMs: LIMITE_COMANDO_MS });
   if (r.codigo !== 0) {
     // Estouro do limite sai com código null.
     throw new ErroDeRegra(
       `${cli} ${args.slice(0, cli === "gh" ? 2 : 3).join(" ")} saiu com código ${String(r.codigo)}: ${(r.erro + r.saida).trim()}`,
-      `confira o acesso do ${cli} à hospedagem e execute o ticket de novo`,
+      `confira o acesso do ${cli} à hospedagem e ${deNovo}`,
     );
   }
   return r.saida;
 }
 
 /** A saída JSON do CLI no formato esperado, ou ErroDeRegra com o que veio. */
-function lerJson<T>(saida: string, schema: z.ZodType<T>, comando: string): T {
+function lerJson<T>(saida: string, schema: z.ZodType<T>, comando: string, deNovo = DE_NOVO): T {
   let json: unknown;
   try {
     json = JSON.parse(saida);
@@ -63,7 +77,7 @@ function lerJson<T>(saida: string, schema: z.ZodType<T>, comando: string): T {
   if (!r.success) {
     throw new ErroDeRegra(
       `saída inesperada de ${comando}: ${saida.trim().slice(0, 500)}`,
-      "confira a versão do CLI e execute o ticket de novo",
+      `confira a versão do CLI e ${deNovo}`,
     );
   }
   return r.data;
@@ -90,8 +104,36 @@ const ListaGh = z.array(
     isCrossRepository: z.boolean(),
   }),
 );
-const ESTADO_GH: Readonly<Record<string, PRNaHospedagem["estado"]>> = { CLOSED: "fechado", MERGED: "mergeado" };
-const ESTADO_AZ: Readonly<Record<string, PRNaHospedagem["estado"]>> = { abandoned: "fechado", completed: "mergeado" };
+type EstadoNaHospedagem = PRNaHospedagem["estado"];
+const ESTADO_GH = new Map<string, EstadoNaHospedagem>([
+  ["OPEN", "aberto"],
+  ["CLOSED", "fechado"],
+  ["MERGED", "mergeado"],
+]);
+const ESTADO_AZ = new Map<string, EstadoNaHospedagem>([
+  ["active", "aberto"],
+  ["abandoned", "fechado"],
+  ["completed", "mergeado"],
+]);
+
+/** O estado do PR no vocabulário da Fabriquinha; um estado que ela não conhece nunca vira "aberto" por engano. */
+function estadoDe(cli: "gh" | "az", mapa: ReadonlyMap<string, EstadoNaHospedagem>, valor: string): EstadoNaHospedagem {
+  const estado = mapa.get(valor);
+  if (estado === undefined) {
+    throw new ErroDeRegra(
+      `o ${cli} devolveu um estado de PR que a Fabriquinha não conhece: ${valor}`,
+      `confira a versão do ${cli}; os estados conhecidos são ${[...mapa.keys()].join(", ")}`,
+    );
+  }
+  return estado;
+}
+/** Lido no gate do PR: a falha não é de ticket. */
+const LER_DE_NOVO = "leia o estado do PR de novo";
+const DataDaPlataforma = z.iso.datetime({ offset: true });
+/** A data da plataforma no formato do domínio, só no PR mergeado que a traz. */
+const mergeadoEm = (estado: PRNaHospedagem["estado"], data: string | null | undefined) =>
+  estado === "mergeado" && data ? { mergeadoEm: new Date(data).toISOString() } : {};
+const PrGh = z.object({ state: z.string(), url: z.string(), mergedAt: DataDaPlataforma.nullable() });
 
 const github: CliDePR = {
   async listar(repo, branch) {
@@ -100,7 +142,7 @@ const github: CliDePR = {
     return lerJson(await rodar("gh", args, repo), ListaGh, "gh pr list").map((p) => ({
       id: String(p.number),
       url: p.url,
-      estado: ESTADO_GH[p.state] ?? "aberto",
+      estado: estadoDe("gh", ESTADO_GH, p.state),
       corpo: p.body,
       base: p.baseRefName,
       deFork: p.isCrossRepository,
@@ -125,6 +167,12 @@ const github: CliDePR = {
   async reabrir(repo, id) {
     await rodar("gh", ["pr", "reopen", id], repo);
   },
+  async ler(repo, id) {
+    const args = ["pr", "view", id, "--json", "state,url,mergedAt,mergeCommit"];
+    const p = lerJson(await rodar("gh", args, repo, LER_DE_NOVO), PrGh, "gh pr view", LER_DE_NOVO);
+    const estado = estadoDe("gh", ESTADO_GH, p.state);
+    return { estado, url: p.url, ...mergeadoEm(estado, p.mergedAt) };
+  },
 };
 
 const PrAz = z.object({
@@ -132,9 +180,11 @@ const PrAz = z.object({
   status: z.string(),
   description: z.string().nullish(),
   targetRefName: z.string(),
-  /** Presente quando a branch de origem é de um fork. */
+  /** Preenchido quando a branch de origem é de um fork; `null` senão. */
   forkSource: z.unknown().optional(),
   repository: z.object({ webUrl: z.string() }),
+  /** `null` enquanto o PR está ativo. */
+  closedDate: DataDaPlataforma.nullish(),
 });
 type PrAz = z.infer<typeof PrAz>;
 /** O `url` do az é o da API; o da página do PR sai do repositório. */
@@ -149,7 +199,7 @@ const azure: CliDePR = {
     return lerJson(await rodar("az", [...args, "--output", "json"], repo), z.array(PrAz), "az repos pr list").map(
       (p) => ({
         ...doAz(p),
-        estado: ESTADO_AZ[p.status] ?? "aberto",
+        estado: estadoDe("az", ESTADO_AZ, p.status),
         corpo: p.description ?? "",
         base: p.targetRefName.replace(/^refs\/heads\//, ""),
         deFork: p.forkSource != null,
@@ -167,6 +217,12 @@ const azure: CliDePR = {
   },
   async reabrir(repo, id) {
     await rodar("az", ["repos", "pr", "update", "--id", id, "--status", "active"], repo);
+  },
+  async ler(repo, id) {
+    const saida = await rodar("az", ["repos", "pr", "show", "--id", id, "--output", "json"], repo, LER_DE_NOVO);
+    const p = lerJson(saida, PrAz, "az repos pr show", LER_DE_NOVO);
+    const estado = estadoDe("az", ESTADO_AZ, p.status);
+    return { url: doAz(p).url, estado, ...mergeadoEm(estado, p.closedDate) };
   },
 };
 
@@ -252,4 +308,21 @@ export async function publicarPR(
   if (!alvo) return { ...(await cli.criar(repo, projeto.branchBase, branch, pr.titulo, pr.corpo)), branch, head };
   if (alvo.estado === "fechado") await cli.reabrir(repo, alvo.id);
   return { ...(await cli.atualizar(repo, alvo, pr.titulo, pr.corpo)), branch, head };
+}
+
+/**
+ * F5 §5.2: o estado do PR da issue (o da última evidência `pr_aberto`, a fonte única do PR), lido agora na
+ * plataforma. Uma falha do `gh` ou do `az` lança ErroDeRegra com a saída do comando; nada é gravado.
+ */
+export async function estadoPR(
+  projeto: Pick<Projeto, "repo" | "hospedagem">,
+  ag: { issue: Pick<Issue, "id">; evidencias: readonly Pick<Evidencia, "tipo" | "dados">[] },
+): Promise<LeituraDoPR> {
+  const pr = existe(
+    ag.evidencias.findLast((e) => e.tipo === "pr_aberto"),
+    `a I-${String(ag.issue.id)} ainda não tem PR`,
+    "o encerramento publica o PR",
+  );
+  const leitura = await CLIS[projeto.hospedagem].ler(projeto.repo, pr.dados.id as string);
+  return { ...leitura, lidoEm: new Date().toISOString() };
 }

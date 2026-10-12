@@ -181,7 +181,15 @@ export interface Contexto {
    * fica fora do agregado, e o F5 o grava na mesma transação, logo antes do C7 (F5 §4, passo 4).
    */
   temCommit(ticket: Id): boolean;
+  /**
+   * O estado do PR da issue que o F5 acabou de ler na plataforma, logo antes da transação (F5 §5.2). Só o gate do PR
+   * (C16) o lê e o informa: a Fabriquinha não confia num estado lido antes.
+   */
+  readonly estadoPR?: EstadoDoPR;
 }
+
+/** O PR na plataforma (F5 §5.2): mergeado é o PR aceito; fechado é sem merge. */
+export type EstadoDoPR = "aberto" | "mergeado" | "fechado";
 
 /** Nome gravado na tabela `comando` (F6 §7) para cada comando aplicado por `comIssue`. */
 export type NomeComando =
@@ -201,7 +209,8 @@ export type NomeComando =
   | "editarTicket"
   | "removerTicket"
   | "decidirDesenho"
-  | "registrarDecisaoRevisao";
+  | "registrarDecisaoRevisao"
+  | "decidirPR";
 
 export const rotuloIssue = (ag: Agregado): string => `I-${String(ag.issue.id)}`;
 

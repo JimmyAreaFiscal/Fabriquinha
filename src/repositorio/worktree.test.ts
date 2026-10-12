@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { caminhoDaWorktree, descartarAlteracoes, garantirWorktree, naFilaDoProjeto } from "./worktree.ts";
+import { caminhoDaWorktree, descartarAlteracoes, garantirWorktree, limpar, naFilaDoProjeto } from "./worktree.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-worktree-")));
 after(() => {
@@ -266,4 +266,45 @@ test("o descarte entra na mesma fila do projeto que a worktree", async () => {
   const descarte = descartarAlteracoes(caminho, c.log).then(() => eventos.push("descarte"));
   await Promise.all([ocupada, descarte]);
   assert.deepEqual(eventos, ["fila+", "fila-", "descarte"]);
+});
+
+test("limpar (F5 §5.3): varre a base, remove a worktree suja e faz prune; as branches local e remota ficam", async () => {
+  const c = cenario();
+  const worktree = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  writeFileSync(join(worktree, "sujo.txt"), "não commitado\n");
+  git(worktree, "push", "-q", "-u", "origin", "fabriquinha/I-1");
+  let varreuComWorktree: boolean | undefined;
+  const varrer = () => {
+    varreuComWorktree = existsSync(worktree);
+    return Promise.resolve();
+  };
+
+  assert.deepEqual(await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, varrer), []);
+  assert.equal(varreuComWorktree, true, "varreu a base antes de remover a worktree");
+  assert.equal(existsSync(worktree), false);
+  assert.doesNotMatch(git(c.repo, "worktree", "list"), /I-1/);
+  assert.equal(git(c.repo, "branch", "--list", "fabriquinha/I-1"), "fabriquinha/I-1");
+  assert.match(git(c.bare, "branch", "--list", "fabriquinha/I-1"), /fabriquinha\/I-1/);
+});
+
+test("limpar: falha da varredura vai só para o log; falha do git vira aviso com o comando", async (t) => {
+  const c = cenario();
+  const erros = t.mock.method(console, "error", () => undefined);
+  const falhou = () => Promise.reject(new Error("git fetch falhou"));
+
+  const avisos = await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, falhou);
+  const caminho = caminhoDaWorktree(c.raiz, "loja", 1);
+  assert.equal(avisos.length, 1, "o prune passa");
+  assert.match(String(avisos[0]), new RegExp(`^git -C ${c.repo} worktree remove --force ${caminho} falhou: fatal: `));
+  assert.match(String(erros.mock.calls[0]?.arguments[1]), /^varrerBase ao limpar a I-1 falhou: git fetch falhou$/);
+});
+
+test("limpar só depois de encerrar a issue", async () => {
+  const c = cenario();
+  await assert.rejects(
+    limpar(c.raiz, c.projeto, { id: 1, fase: "aprovacao_pr" }, semVarredura),
+    (e) =>
+      e instanceof ErroDeRegra &&
+      e.message === "a I-1 está na fase aprovacao_pr (a worktree só é removida depois de encerrar a issue)",
+  );
 });

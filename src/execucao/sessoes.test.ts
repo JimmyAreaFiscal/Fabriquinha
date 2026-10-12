@@ -6,6 +6,7 @@ import {
   chmodSync,
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -24,7 +25,7 @@ import type { Fase } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { agregado, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
-import { caminhoDaWorktree } from "../repositorio/worktree.ts";
+import { caminhoDaWorktree, garantirWorktree } from "../repositorio/worktree.ts";
 import { abortar, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
 import type { EventoPi } from "./pi.ts";
 import {
@@ -32,10 +33,11 @@ import {
   concluirSessao,
   conversarSobre,
   decidirRegistroNoChat,
+  encerrarIssue,
   enviar,
   estadoDaSessao,
   infoDaSessao,
-  iniciarInterativa,
+  pedirMudancas,
   registrarNecessidade,
   sessoes,
 } from "./sessoes.ts";
@@ -521,8 +523,15 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
   assert.equal(agregado(c.banco, 1)?.issue.titulo, "Busca lenta com mil itens");
   assert.equal(agregado(c.banco, 1)?.evidencias.length, 2, "nenhuma evidência nova");
 
+  // Aprovado, o que a sessão deixou na worktree é descartado antes do C10 (F3 §7).
+  const worktree = caminhoDaWorktree(c.raiz, "loja", 1);
+  writeFileSync(join(worktree, "rascunho.txt"), "do registro\n");
+  writeFileSync(join(worktree, "LEIAME"), "mudado\n");
   await decidirRegistroNoChat(c.banco, 1, { aprovado: true }, opcoes);
   assert.equal(agregado(c.banco, 1)?.issue.fase, "desenho");
+  assert.equal(existsSync(join(worktree, "rascunho.txt")), false);
+  assert.equal(readFileSync(join(worktree, "LEIAME"), "utf8"), "loja\n");
+  assert.match(c.log(2), /descarte removeu: rascunho\.txt\n/);
   assert.equal(await estadoDe(c, sessao), "terminada");
   assert.equal(estados().at(-1), "terminada", "avisou o fim");
   await assert.rejects(
@@ -725,24 +734,187 @@ test("autônoma sem pi: steer explica se o ticket espera o agendador ou a coleta
   c.banco.close();
 });
 
-test("sessão em aberto: concluirSessao para o pi ocioso e chama C7", async () => {
-  const c = cenario();
-  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
-  // A fase ajuste_pr e o ticket sessao nascem do C16 (ticket 21); aqui, direto no banco.
-  c.banco.exec(`UPDATE issue SET fase = 'ajuste_pr', titulo = 'Busca lenta', tipo = 'problema';
-    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-      VALUES (2, 1, 'sessao', 'Ajustar o PR', 'aberto', 'fabriquinha', '${T1}');`);
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
-  const sessao = iniciarInterativa(c.banco, 2, "O Auditor pediu mudanças no PR.", opcoes);
-  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a conversa");
-  await assert.rejects(
-    concluirSessao(c.banco, 2),
-    rejeitaCom("T-2 é da etapa sessao, que ainda não conclui (aguarde a versão que a implementa)"),
+/**
+ * `gh` falso na frente do PATH (F5 §9): devolve $FALSO_GH no stdout. Com $FALSO_GH_SQL, antes roda esse SQL no banco
+ * de $FALSO_GH_BANCO, como algo que acontece enquanto a Fabriquinha lê o PR.
+ */
+const bin = join(base, "bin");
+mkdirSync(bin);
+writeFileSync(
+  join(bin, "gh"),
+  `#!/bin/sh
+if [ -n "$FALSO_GH_SQL" ]; then
+  "${process.execPath}" -e 'new (require("node:sqlite").DatabaseSync)(process.env.FALSO_GH_BANCO).exec(process.env.FALSO_GH_SQL)'
+fi
+printf '%s' "$FALSO_GH"
+`,
+);
+chmodSync(join(bin, "gh"), 0o755);
+process.env.PATH = `${bin}:${String(process.env.PATH)}`;
+const URL_PR = "https://github.com/dono/loja/pull/7";
+const prNoGitHub = (state: "OPEN" | "MERGED") => {
+  process.env.FALSO_GH = JSON.stringify({
+    state,
+    url: URL_PR,
+    mergedAt: state === "MERGED" ? "2026-10-11T13:00:00Z" : null,
+    mergeCommit: null,
+  });
+};
+
+/**
+ * A I-1 no gate do PR, como o encerramento a deixa: registro e encerramento T-2 concluídos, a execução autônoma do
+ * encerramento, com o arquivo da sessão, e a evidência `pr_aberto`; com a worktree e a branch publicada. C1 e a worktree são os reais; o resto,
+ * SQL direto.
+ */
+async function noGatePR(c: Cenario): Promise<string> {
+  const { issue } = registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
+  const projeto = { nome: "loja", repo, branchBase: "main", preparacao: [] };
+  const worktree = await garantirWorktree(c.raiz, projeto, issue, join(c.raiz, "log"), () => Promise.resolve());
+  git(worktree, "push", "-q", "-u", "origin", "fabriquinha/I-1");
+  mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
+  writeFileSync(
+    join(c.raiz, "sessoes", `2026-10-11T10-00-00-000Z_${SESSAO}.jsonl`),
+    JSON.stringify({ type: "session", version: 3, id: SESSAO }) + "\n",
   );
-  assert.equal(c.execucoes()[0]?.resultado, "sucesso", "o pi ocioso parou antes do C7");
-  assert.equal(situacao(sessao), undefined);
-  await assert.rejects(concluirSessao(c.banco, 2), /T-2 é da etapa sessao, que ainda não conclui/, "sem pi para parar");
+  delete process.env.FALSO_GH_SQL;
+  const pr = { hospedagem: "github", id: "7", url: URL_PR, branch: "fabriquinha/I-1", base: "main" };
+  c.banco.exec(`UPDATE issue SET fase = 'aprovacao_pr', titulo = 'Busca lenta', tipo = 'problema';
+    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
+      VALUES (2, 1, 'encerramento', 'Publicar o PR', 'concluido', 'fabriquinha', '${T1}', '${T1}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
+      VALUES (1, 2, 'autonomo', '${SESSAO}', 'sucesso', '${T0}', '${T1}');
+    INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em)
+      VALUES (1, 2, 'pr_aberto', 'fabriquinha', '${JSON.stringify(pr)}', '${T1}');
+    INSERT INTO sequencia (nome, valor) VALUES ('ticket', 2), ('execucao', 1), ('evidencia', 1)
+      ON CONFLICT (nome) DO UPDATE SET valor = excluded.valor;`);
+  return worktree;
+}
+
+test("gate do PR: encerrar recusado com o PR aberto; pedir mudanças abre a sessão em aberto, que volta ao desenvolvimento", async () => {
+  const c = cenario();
+  await noGatePR(c);
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  prNoGitHub("OPEN");
+  await assert.rejects(
+    encerrarIssue(c.banco, 1, 4),
+    rejeitaCom(
+      "a I-1 não pode ser encerrada: o PR está aberto, não mergeado (faça o merge na plataforma, com merge commit, e encerre de novo)",
+    ),
+  );
+  assert.equal(agregado(c.banco, 1)?.issue.fase, "aprovacao_pr", "nada mudou");
+  assert.equal(await estadoDe(c, SESSAO), "aguardando_humano: gate_pr");
+
+  const sessao = await pedirMudancas(c.banco, 1, "  Falta o índice da busca.  ", opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a sessão em aberto");
+  const ag = agregado(c.banco, 1);
+  assert.equal(ag?.issue.fase, "ajuste_pr");
+  assert.deepEqual(
+    ag.decisoes.map((d) => [d.gate, d.ticket, d.aprovado, d.motivo, d.nota]),
+    [["pr", 2, false, "Falta o índice da busca.", undefined]],
+  );
+  assert.deepEqual(
+    ag.tickets.filter((t) => t.etapa === "sessao").map((t) => [t.id, t.status, t.descricao]),
+    [[3, "em_execucao", "Falta o índice da busca."]],
+  );
+  const prompt = c.comandos().find((cmd) => cmd.type === "prompt")?.message;
+  assert.match(
+    String(prompt),
+    /O Auditor pediu mudanças no PR https:\/\/github\.com\/dono\/loja\/pull\/7\. Motivo: Falta o índice da busca\.\n$/,
+  );
+  assert.equal(await estadoDe(c, SESSAO), "terminada", "a sessão do encerramento sai do gate");
+
+  await assert.rejects(
+    concluirSessao(c.banco, 3),
+    rejeitaCom(
+      "T-3 não pode concluir: a sessão em aberto não criou ticket de desenvolvimento (o agente de T-3 cria com fabriquinha ticket criar I-1 --titulo <título>)",
+    ),
+  );
+  assert.equal(situacao(sessao), undefined, "o pi ocioso parou antes do C7");
+  // O que a sessão deixou na worktree é descartado antes do C7 (F3 §7).
+  const worktree = caminhoDaWorktree(c.raiz, "loja", 1);
+  writeFileSync(join(worktree, "rascunho.txt"), "da sessão\n");
+  // O ticket que o agente da sessão criaria com C11.
+  c.banco.exec(`INSERT INTO ticket (id, issue, etapa, titulo, status, origem, origem_ticket, criado_em)
+    VALUES (4, 1, 'desenvolvimento', 'Criar o índice', 'aberto', 'agente', 3, '${T1}')`);
+  await concluirSessao(c.banco, 3);
+  assert.equal(agregado(c.banco, 1)?.issue.fase, "desenvolvimento");
+  assert.equal(existsSync(join(worktree, "rascunho.txt")), false);
+  assert.match(c.log(2), /descarte removeu: rascunho\.txt\n/);
+  assert.equal(await estadoDe(c, sessao), "terminada");
+  await assert.rejects(pedirMudancas(c.banco, 1, "de novo", opcoes), /a I-1 está na fase desenvolvimento/);
+  c.banco.close();
+});
+
+test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove a worktree, mantendo as branches", async () => {
+  const c = cenario();
+  const worktree = await noGatePR(c);
+  prNoGitHub("MERGED");
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  // Uma consulta ociosa sobre o encerramento, com o pi na worktree.
+  const consulta = await conversarSobre(c.banco, 2, opcoes);
+  await ate(() => situacao(consulta)?.ocupado === false, "a consulta subir");
+  await assert.rejects(
+    pedirMudancas(c.banco, 1, "tarde demais", opcoes),
+    rejeitaCom("a I-1 não pode pedir mudanças: o PR já foi mergeado (encerre a issue com a nota)"),
+  );
+
+  assert.deepEqual(await encerrarIssue(c.banco, 1, 5), []);
+  assert.equal(situacao(consulta), undefined, "a consulta parou antes da limpeza");
+  assert.equal(c.execucoes().find((e) => e.sessao_pi === consulta)?.resultado, "sucesso");
+  const ag = agregado(c.banco, 1);
+  assert.equal(ag?.issue.fase, "concluida");
+  assert.ok(ag.issue.concluidaEm);
+  assert.deepEqual(
+    ag.decisoes.map((d) => [d.gate, d.ticket, d.aprovado, d.nota]),
+    [["pr", 2, true, 5]],
+  );
+  assert.equal(await estadoDe(c, SESSAO), "terminada");
+  assert.equal(existsSync(worktree), false);
+  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
+  assert.equal(git(repo, "branch", "--list", "fabriquinha/I-1").toString().trim(), "fabriquinha/I-1");
+  assert.match(
+    git(repo, "ls-remote", "--heads", "origin", "fabriquinha/I-1").toString(),
+    /refs\/heads\/fabriquinha\/I-1/,
+  );
+  c.banco.close();
+});
+
+test("gate do PR: pedir mudanças com uma execução em andamento na issue não grava nada", async () => {
+  const c = cenario();
+  await noGatePR(c);
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  prNoGitHub("OPEN");
+  const intacta = () => {
+    const ag = agregado(c.banco, 1);
+    assert.equal(ag?.issue.fase, "aprovacao_pr");
+    assert.deepEqual(ag.decisoes, []);
+    assert.equal(ag.tickets.length, 2, "sem ticket sessao");
+    assert.equal(c.banco.prepare("SELECT 1 FROM comando WHERE nome = 'decidirPR'").get(), undefined);
+  };
+  const consulta = (id: number, sessao: string) =>
+    `INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
+       VALUES (${String(id)}, 2, 'consulta', '${sessao}', 'em_andamento', '${T1}')`;
+
+  // Uma consulta em andamento sem pi neste serviço não é parada: a decisão espera.
+  c.banco.exec(consulta(8, "00000000-0000-4000-8000-000000000008"));
+  await assert.rejects(
+    pedirMudancas(c.banco, 1, "falta o índice", opcoes),
+    rejeitaCom("a sessão de T-2 ainda está rodando (espere o agente terminar)"),
+  );
+  intacta();
+
+  // Uma consulta que começa enquanto o PR é lido faz o C5 recusar, e o C16 da mesma transação também não fica.
+  c.banco.exec(`UPDATE execucao SET resultado = 'sucesso', terminada_em = '${T1}' WHERE id = 8`);
+  process.env.FALSO_GH_BANCO = join(c.raiz, "fabriquinha.db");
+  process.env.FALSO_GH_SQL = consulta(9, "00000000-0000-4000-8000-000000000009");
+  await assert.rejects(
+    pedirMudancas(c.banco, 1, "falta o índice", opcoes),
+    rejeitaCom("a I-1 já tem a execução E-9 em andamento (espere ela terminar)"),
+  );
+  delete process.env.FALSO_GH_SQL;
+  intacta();
   c.banco.close();
 });
 

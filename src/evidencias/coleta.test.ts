@@ -4,7 +4,7 @@ import { test } from "node:test";
 import type { Agregado } from "../dominio/agregado.ts";
 import { antesDoPi, depoisDoPi } from "./coleta.ts";
 
-// O descarte do registro e do desenho, o ciclo do desenvolvimento e a coleta da revisão antes e depois do pi são
+// O descarte do desenho, o ciclo do desenvolvimento e a coleta da revisão antes e depois do pi são
 // provados de ponta a ponta em execucao/.
 test("etapa sem coleta antes nem depois do pi não toca a worktree nem o banco", async () => {
   const ticket = {

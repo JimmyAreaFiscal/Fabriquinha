@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import type { Agregado, Ator, Contexto, Evidencia, Issue, Ticket } from "./agregado.ts";
+import type { Agregado, Ator, Contexto, EstadoDoPR, Evidencia, Issue, Ticket } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { decidirDesenho, decidirRegistro, registrarDecisaoRevisao } from "./gates.ts";
+import { decidirDesenho, decidirPR, decidirRegistro, registrarDecisaoRevisao } from "./gates.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const ANTES = "2026-10-11T11:00:00.000Z";
@@ -351,5 +351,98 @@ test("C14 é só do agente da própria revisão, em execução", () => {
   regra(
     () => decidirRevisao(revisor, 40, concluida),
     "T-40 é de revisao e está concluido, não é uma revisão em execução (só a revisão registra a decisão de revisão)",
+  );
+});
+
+/** I-1 no gate do PR: o encerramento antigo T-44 e o atual T-46, concluídos. */
+const noGatePR = (): Agregado => ({
+  ...pronto({ fase: "aprovacao_pr" }),
+  tickets: [
+    doGate(34, "registro", concluido),
+    doGate(44, "encerramento", concluido),
+    doGate(46, "encerramento", concluido),
+  ],
+});
+
+const pr = (ag: Agregado, entrada: unknown, estadoPR?: EstadoDoPR, ator: Ator = auditor) =>
+  decidirPR(ag, entrada, ator, { ...contexto(), ...(estadoPR && { estadoPR }) });
+
+test("C16 aprovado com o PR mergeado: decisão com a nota sobre o último encerramento e a issue concluída", () => {
+  const ag = noGatePR();
+  assert.deepEqual(pr(ag, { aprovado: true, nota: 4 }, "mergeado"), {
+    ...ag,
+    issue: { ...ag.issue, fase: "concluida", concluidaEm: AGORA },
+    decisoes: [{ id: 41, issue: 1, ticket: 46, gate: "pr", aprovado: true, nota: 4, por: "auditor", em: AGORA }],
+  });
+});
+
+test("C16 reprovado com o PR não mergeado: fase ajuste_pr e um ticket sessao com o motivo na descrição", () => {
+  const ag = noGatePR();
+  const esperado = (estado: EstadoDoPR) => {
+    assert.deepEqual(pr(ag, { aprovado: false, motivo: "falta o índice" }, estado), {
+      ...ag,
+      issue: { ...ag.issue, fase: "ajuste_pr" },
+      tickets: [
+        ...ag.tickets,
+        {
+          id: 41,
+          issue: 1,
+          etapa: "sessao",
+          titulo: "Ajustar o PR",
+          descricao: "falta o índice",
+          status: "aberto",
+          origem: "fabriquinha",
+          criadoEm: AGORA,
+        },
+      ],
+      decisoes: [
+        {
+          id: 41,
+          issue: 1,
+          ticket: 46,
+          gate: "pr",
+          aprovado: false,
+          motivo: "falta o índice",
+          por: "auditor",
+          em: AGORA,
+        },
+      ],
+    });
+  };
+  esperado("aberto");
+  esperado("fechado");
+});
+
+test("C16 é só do Auditor, no gate do PR, com o estado lido: encerrar só mergeado, pedir mudanças só não mergeado", () => {
+  const ag = noGatePR();
+  assert.throws(
+    () => pr(ag, { aprovado: true, nota: 4 }, "mergeado", { tipo: "agente", execucao: 6, ticket: 46 }),
+    ErroDeEscopo,
+  );
+  assert.throws(() => pr(ag, { aprovado: true }, "mergeado"), ZodError, "encerrar sem nota");
+  assert.throws(() => pr(ag, { aprovado: true, nota: 6 }, "mergeado"), ZodError, "nota fora de 1 a 5");
+  assert.throws(() => pr(ag, { aprovado: false }, "aberto"), ZodError, "pedir mudanças sem motivo");
+  assert.throws(() => pr(ag, { aprovado: false, motivo: "m", nota: 3 }, "aberto"), ZodError, "pedir mudanças com nota");
+  regra(
+    () => pr({ ...ag, issue: { ...ag.issue, fase: "encerramento" } }, { aprovado: true, nota: 4 }, "mergeado"),
+    "a I-1 está na fase encerramento, não na aprovação do PR (o gate do PR abre quando o encerramento publica o PR)",
+  );
+  regra(
+    () => pr({ ...ag, tickets: ag.tickets.slice(0, 1) }, { aprovado: true, nota: 4 }, "mergeado"),
+    "a I-1 não tem ticket de encerramento concluído (confira o banco)",
+  );
+  regra(
+    () => pr(ag, { aprovado: true, nota: 4 }),
+    "o estado do PR da I-1 não foi lido (leia o PR na plataforma logo antes de decidir)",
+  );
+  for (const estado of ["aberto", "fechado"] as const) {
+    regra(
+      () => pr(ag, { aprovado: true, nota: 4 }, estado),
+      `a I-1 não pode ser encerrada: o PR está ${estado}, não mergeado (faça o merge na plataforma, com merge commit, e encerre de novo)`,
+    );
+  }
+  regra(
+    () => pr(ag, { aprovado: false, motivo: "m" }, "mergeado"),
+    "a I-1 não pode pedir mudanças: o PR já foi mergeado (encerre a issue com a nota)",
   );
 });

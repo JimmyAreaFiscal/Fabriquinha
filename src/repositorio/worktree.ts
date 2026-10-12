@@ -1,10 +1,11 @@
-// Worktree e branch da issue (F5 §3), descarte das alterações (F5 §3.3) e fila de comandos git (F5 §6).
+// Worktree e branch da issue (F5 §3), descarte das alterações (F5 §3.3), limpeza depois do encerramento (F5 §5.3) e
+// fila de comandos git (F5 §6).
 import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { Issue } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeRegra, mensagem } from "../dominio/erros.ts";
 import type { Projeto } from "../dominio/projeto.ts";
-import { anotar } from "../persistencia/execucoes.ts";
+import { anotar, noLog } from "../persistencia/execucoes.ts";
 import { executarNoShell, git, LIMITE_COMANDO_MS } from "../processo.ts";
 
 /**
@@ -146,4 +147,39 @@ export async function descartarAlteracoes(worktree: string, log: string): Promis
   });
   if (removidos.length > 0) anotar(log, `descarte removeu: ${removidos.join(", ")}`);
   return removidos;
+}
+
+/**
+ * F5 §5.3, depois de C16 aprovado: `varrerBase`, o gancho do F6 (§4.4) que busca a base e varre os commits humanos,
+ * cuja falha só vai para o log; depois remove a worktree e faz prune. As branches local e remota ficam. Devolve um
+ * aviso por comando que falhou: a limpeza não desfaz o encerramento. O gancho entra na fila do projeto sozinho, por
+ * isso roda fora dela aqui.
+ */
+export async function limpar(
+  raiz: string,
+  projeto: Pick<Projeto, "nome" | "repo">,
+  issue: Pick<Issue, "id" | "fase">,
+  varrerBase: () => Promise<void>,
+): Promise<string[]> {
+  const i = `I-${String(issue.id)}`;
+  if (issue.fase !== "concluida") {
+    throw new ErroDeRegra(`a ${i} está na fase ${issue.fase}`, "a worktree só é removida depois de encerrar a issue");
+  }
+  try {
+    await varrerBase();
+  } catch (error_) {
+    noLog(`varrerBase ao limpar a ${i} falhou: ${mensagem(error_)}`);
+  }
+  const caminho = caminhoDaWorktree(raiz, projeto.nome, issue.id);
+  return naFilaDoProjeto(raiz, projeto.nome, async () => {
+    const avisos: string[] = [];
+    for (const args of [
+      ["worktree", "remove", "--force", caminho],
+      ["worktree", "prune"],
+    ]) {
+      const r = await git(projeto.repo, ...args);
+      if (r.codigo !== 0) avisos.push(`git -C ${projeto.repo} ${args.join(" ")} falhou: ${r.erro.trim()}`);
+    }
+    return avisos;
+  });
 }

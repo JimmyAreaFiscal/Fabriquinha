@@ -62,11 +62,15 @@ const az = (p) => ({
   status: { aberto: "active", fechado: "abandoned", mergeado: "completed" }[p.estado],
   description: p.corpo === "" ? null : p.corpo,
   targetRefName: "refs/heads/" + p.base,
-  ...(p.fork ? { forkSource: { name: "refs/heads/" + p.head } } : {}),
+  // Como o az real: os campos sem valor vêm como null, não ausentes.
+  forkSource: p.fork ? { name: "refs/heads/" + p.head } : null,
+  closedDate: p.estado === "aberto" ? null : "2026-10-11T13:00:00.1234567Z",
   url: "https://dev.azure.com/org/_apis/git/pullRequests/" + p.id,
   repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
 });
 const pr = (id) => estado.prs.find((p) => p.id === Number(id));
+/** Quando o PR mergeado foi mergeado, como o gh o mostra. */
+const MERGE = "2026-10-11T13:00:00Z";
 const novo = (head, base, titulo, corpo) => {
   const p = { id: estado.prs.length + 1, head, base, titulo, corpo, estado: "aberto" };
   estado.prs.push(p);
@@ -91,6 +95,14 @@ switch (comando) {
     editar(pr(args[2]), opcao("--title"), readFileSync(opcao("--body-file"), "utf8"));
     resposta = gh(pr(args[2])).url;
     break;
+  case "pr view":
+    resposta = JSON.stringify({
+      state: gh(pr(args[2])).state,
+      url: gh(pr(args[2])).url,
+      mergedAt: pr(args[2]).estado === "mergeado" ? MERGE : null,
+      mergeCommit: pr(args[2]).estado === "mergeado" ? { oid: "abc" } : null,
+    });
+    break;
   case "pr reopen":
     pr(args[2]).estado = "aberto";
     resposta = "";
@@ -102,6 +114,9 @@ switch (comando) {
     resposta = JSON.stringify(
       az(novo(opcao("--source-branch"), opcao("--target-branch"), opcao("--title"), opcao("--description"))),
     );
+    break;
+  case "repos pr show":
+    resposta = JSON.stringify(az(pr(opcao("--id"))));
     break;
   case "repos pr update":
     if (opcao("--status") === "active") pr(opcao("--id")).estado = "aberto";
@@ -188,6 +203,7 @@ if (import.meta.main) {
           description: null,
           targetRefName: "refs/heads/main",
           forkSource: { name: "refs/heads/b" },
+          closedDate: "2026-10-11T13:00:00.1234567Z",
           url: "https://dev.azure.com/org/_apis/git/pullRequests/1",
           repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
         },

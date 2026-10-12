@@ -95,7 +95,7 @@ test("sem instrução nem registro: o desenho mostra as seções vazias, sem inv
   assert.match(prompt, /## Critérios de aceite\n\n\(vazio\)\n/);
 });
 
-test("etapa sem contexto próprio nem skill, interativa e com a issue ainda sem título e tipo", () => {
+test("etapa sem skill, interativa e com a issue ainda sem título e tipo; sessão sem PR mostra a seção vazia", () => {
   const ag = agregado([]);
   const sessao: Ticket = { ...desenho, etapa: "sessao", descricao: "" };
   const prompt = montarPrompt({
@@ -107,8 +107,19 @@ test("etapa sem contexto próprio nem skill, interativa e com a issue ainda sem 
   });
   assert.match(prompt, /- Issue: I-1, sem título \(tipo ainda não definido\)/);
   assert.match(prompt, /## Descrição do ticket\n\n\(vazio\)\n/);
+  assert.match(prompt, /## PR\n\n\(vazio\)\n/);
   assert.match(prompt, /## Modo de trabalhar: sessão em aberto/);
   assert.doesNotMatch(prompt, /Comportamento registrado|Skills de artefato|Execução autônoma/);
+});
+
+test("sessão em aberto: o motivo do pedido de mudanças na descrição do ticket e a URL do PR (F4 §6.3)", () => {
+  const ag = agregado([evidencia(1, "pr_aberto", { url: "https://github.com/dono/loja/pull/7" })]);
+  const sessao: Ticket = { ...desenho, etapa: "sessao", descricao: "Falta o índice." };
+  const prompt = montarPrompt({ ...comum, ag, ticket: sessao, instrucao: undefined, modo: "interativo" });
+  assert.match(
+    prompt,
+    /## Descrição do ticket\n\nFalta o índice\.\n\n## PR\n\nhttps:\/\/github\.com\/dono\/loja\/pull\/7\n/,
+  );
 });
 
 test("há um texto de modo de trabalhar para cada etapa", () => {

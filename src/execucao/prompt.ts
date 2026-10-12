@@ -76,10 +76,10 @@ const desenvolvimento = (ag: Agregado): string[] => {
  * critérios e os tickets de desenvolvimento já concluídos; a revisão, o mesmo e o que a Fabriquinha coletou antes
  * do pi: os arquivos alterados × o desenho e a matriz de fitness functions. O encerramento, o contexto do
  * desenvolvimento, o impacto do desenho, as decisões de revisão, os arquivos que a mensagem do PR explica e, numa nova
- * volta, o motivo da última reprovação do PR.
- * ponytail: a sessão ganha o seu contexto com o ticket 21.
+ * volta, o motivo da última reprovação do PR. A sessão em aberto, a URL do PR; o motivo já vem na descrição do
+ * ticket (C16).
  */
-const CONTEXTO_DA_ETAPA: Partial<Record<Etapa, (ag: Agregado) => string[]>> = {
+const CONTEXTO_DA_ETAPA: Record<Etapa, (ag: Agregado) => string[]> = {
   registro: (ag) => [secao("Dependências informadas", ag.issue.deps.map((d) => `- I-${String(d)}`).join("\n"))],
   desenho: (ag) => [
     secao(
@@ -139,6 +139,7 @@ const CONTEXTO_DA_ETAPA: Partial<Record<Etapa, (ag: Agregado) => string[]>> = {
         : []),
     ];
   },
+  sessao: (ag) => [secao("PR", (dadosDe(ag, "pr_aberto") as { url: string } | undefined)?.url ?? "")],
 };
 
 /** O texto do modo de trabalhar e do CLI da etapa. */
@@ -161,7 +162,7 @@ export function montarPrompt(c: Contexto): string {
     ].join("\n"),
     secao("Descrição da issue", issue.descricao),
     secao("Descrição do ticket", ticket.descricao),
-    ...(CONTEXTO_DA_ETAPA[ticket.etapa]?.(ag) ?? []),
+    ...CONTEXTO_DA_ETAPA[ticket.etapa](ag),
     textoDaEtapa(ticket.etapa).trim() + "\n",
     ...(skills.length > 0
       ? [
