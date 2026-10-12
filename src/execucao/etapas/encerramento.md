@@ -4,12 +4,12 @@
 
 **Passos:**
 
-1. Leia o desenho, as revisões e os tickets concluídos da issue.
-2. Escreva a mensagem do PR.
+1. Leia o desenho, as revisões e os tickets concluídos da issue; numa nova volta, o motivo da última reprovação do PR.
+2. Escreva a mensagem do PR: explique em `naoPrevistos` cada um dos arquivos não previstos e, se o impacto na arquitetura não for baixo, diga em `reversao` como desfazer a mudança.
 3. Grave o vídeo explicativo para quem revisa o PR.
 
 **Entregas:** as evidências `mensagem_pr` e `video_explicativo`.
-A Fabriquinha monta o PR, faz o push e o publica depois de você.
+A Fabriquinha monta o PR com a sua mensagem e as evidências da issue, faz o push e o publica depois de você; se o PR já existe, título e corpo são trocados inteiros.
 
 **Quando parar:** quando as evidências estiverem aceitas; termine a sua resposta.
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z, ZodError } from "zod";
-import type { TipoEvidencia } from "../dominio/agregado.ts";
+import { type Agregado, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { jsonSchemaDe, schemaDe, simbolosDe } from "./schemas.ts";
 
@@ -53,16 +53,8 @@ test("jsonSchemaDe publica o JSON Schema de dados (z.toJSONSchema) e as regras d
   assert.deepEqual(jsonSchemaDe("comportamento").dados.required, ["descricao", "comoReproduzir"]);
 });
 
-test("tipo ainda sem schema é recusado com os tipos aceitos", () => {
-  assert.throws(
-    () => schemaDe("pr_aberto"),
-    (e) =>
-      e instanceof ErroDeRegra &&
-      e.message.startsWith(
-        "a Fabriquinha ainda não valida evidências do tipo pr_aberto (os tipos aceitos hoje são comportamento, " +
-          "criterios_aceite, desenho_solucao, prototipo, relatorio_complexidade, relatorio_impactos_arquitetura, ",
-      ),
-  );
+test("todo tipo do F3 §2 tem schema", () => {
+  for (const tipo of TipoEvidencia.options) assert.ok(schemaDe(tipo).dados);
 });
 
 const RODADO = { comando: "npm test", codigoSaida: 0, estourou: false, duracaoMs: 12, log: "teste-1.log" };
@@ -314,4 +306,124 @@ test("comprovacao_criterios: cada critério atendido ou não, como foi verificad
     ["criterios.0.id", "criterios.0.atendido", "criterios.0.comoVerificado", "criterios.0.arquivos"],
   );
   assert.deepEqual(schemaDe("comprovacao_criterios").arquivos, { classes: ["video", "imagem"], min: 1 });
+});
+
+const MENSAGEM = {
+  titulo: "Responder a busca pelo cache",
+  oQueMudou: "a busca lê do cache",
+  decisoesNaoObvias: [],
+  naoFeito: [],
+  naoPrevistos: [{ caminho: "metrica.ts", motivo: "mede o cache" }],
+  comoRevisar: ["comece por busca.ts"],
+  naoVerificado: [],
+};
+
+test("mensagem_pr: só as partes do PR que exigem julgamento, com os limites do F3 §4.5; nenhum anexo", () => {
+  assert.deepEqual(recusados("mensagem_pr", MENSAGEM), []);
+  assert.deepEqual(recusados("mensagem_pr", { ...MENSAGEM, reversao: "reverter o merge" }), []);
+  assert.deepEqual(
+    recusados("mensagem_pr", {
+      titulo: "a".repeat(73),
+      oQueMudou: "a".repeat(3001),
+      decisoesNaoObvias: [" "],
+      naoFeito: ["a".repeat(1001)],
+      naoPrevistos: [{ caminho: "x.ts", motivo: "" }],
+      comoRevisar: [],
+      naoVerificado: undefined,
+      reversao: " ",
+    }),
+    [
+      "titulo",
+      "oQueMudou",
+      "decisoesNaoObvias.0",
+      "naoFeito.0",
+      "naoPrevistos.0.motivo",
+      "comoRevisar",
+      "naoVerificado",
+      "reversao",
+    ],
+  );
+  assert.deepEqual(recusados("mensagem_pr", { ...MENSAGEM, titulo: "duas\nlinhas" }), ["titulo"]);
+  assert.deepEqual(recusados("mensagem_pr", { ...MENSAGEM, titulo: "duas\rlinhas" }), ["titulo"]);
+  assert.deepEqual(schemaDe("mensagem_pr").arquivos.max, 0);
+});
+
+/** Uma issue com o desenho T-2 (impacto `impacto`) e a revisão T-5 concluídos; `naoPrevistos`: os de previsto null. */
+function encerrando(impacto: string, naoPrevistos: string[], revisaoConcluida = true): Agregado {
+  const ticket = (id: number, etapa: string, status: string) => ({ id, etapa, status });
+  const evidencia = (ticket: number, tipo: string, dados: object) => ({ ticket, tipo, dados });
+  return {
+    tickets: [
+      ticket(2, "desenho", "concluido"),
+      ticket(5, "revisao", revisaoConcluida ? "concluido" : "falhou"),
+      ticket(6, "encerramento", "em_execucao"),
+    ],
+    evidencias: [
+      evidencia(2, "relatorio_impactos_arquitetura", { impacto }),
+      evidencia(5, "arquivos_alterados", {
+        arquivos: [
+          { caminho: "busca.ts", previsto: "busca.ts" },
+          ...naoPrevistos.map((caminho) => ({ caminho, previsto: null })),
+        ],
+      }),
+    ],
+  } as unknown as Agregado;
+}
+
+test("mensagem_pr, regras cruzadas: naoPrevistos são os da última revisão; reversao obrigatória com impacto ≠ baixo", () => {
+  const cruzar = (ag: Agregado, dados: object) => () =>
+    schemaDe("mensagem_pr").cruzar?.(schemaDe("mensagem_pr").dados.parse(dados), { ag, ticket: 6, anexos: [] });
+  const recusa = (ag: Agregado, dados: object, msg: string) => {
+    assert.throws(cruzar(ag, dados), (e) => e instanceof ErroDeRegra && e.message === msg);
+  };
+
+  cruzar(encerrando("baixo", ["metrica.ts"]), MENSAGEM)();
+  const naoPrevistos =
+    "(submeta em naoPrevistos exatamente um item por arquivo com previsto null no arquivos_alterados, com o motivo)";
+  recusa(
+    encerrando("baixo", ["metrica.ts", "x.ts"]),
+    MENSAGEM,
+    `mensagem_pr explica os não previstos [metrica.ts], e a última revisão concluída tem [metrica.ts, x.ts] ${naoPrevistos}`,
+  );
+  recusa(
+    encerrando("baixo", []),
+    MENSAGEM,
+    `mensagem_pr explica os não previstos [metrica.ts], e a última revisão concluída tem [] ${naoPrevistos}`,
+  );
+  // A revisão que conta é a concluída: sem ela, não há arquivo não previsto a explicar.
+  cruzar(encerrando("baixo", ["x.ts"], false), { ...MENSAGEM, naoPrevistos: [] })();
+
+  recusa(
+    encerrando("medio", ["metrica.ts"]),
+    MENSAGEM,
+    "mensagem_pr não tem reversao, e o impacto do desenho aprovado é medio (descreva em reversao como desfazer a mudança)",
+  );
+  cruzar(encerrando("alto", ["metrica.ts"]), { ...MENSAGEM, reversao: "reverter o merge" })();
+});
+
+test("video_explicativo: o roteiro e exatamente um vídeo", () => {
+  assert.deepEqual(recusados("video_explicativo", { roteiro: "mostro a busca" }), []);
+  assert.deepEqual(recusados("video_explicativo", { roteiro: "a".repeat(2001) }), ["roteiro"]);
+  assert.deepEqual(schemaDe("video_explicativo").arquivos, { classes: ["video"], min: 1, max: 1 });
+});
+
+test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o corpo em texto e o HTML anexados", () => {
+  const pr = {
+    hospedagem: "github",
+    id: "12",
+    url: "https://github.com/o/r/pull/12",
+    branch: "fabriquinha/I-1",
+    base: "main",
+    head: SHA,
+    condensado: false,
+  };
+  assert.deepEqual(recusados("pr_aberto", pr), []);
+  assert.deepEqual(recusados("pr_aberto", { ...pr, hospedagem: "gitlab", url: "pull/12", head: "abc" }), [
+    "hospedagem",
+    "url",
+    "head",
+  ]);
+  assert.deepEqual(schemaDe("pr_aberto").arquivos, { classes: ["texto"], min: 1, max: 1 });
+  assert.deepEqual(recusados("relatorio_produtividade", {}).slice(0, 2), ["issue", "geradoEm"]);
+  assert.deepEqual(schemaDe("relatorio_produtividade").arquivos, HTML_UNICO);
 });

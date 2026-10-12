@@ -1,8 +1,10 @@
 // Conteúdo de cada tipo de evidência (F3 §3.1, §4): o schema de `dados` e as regras dos arquivos.
 import { z } from "zod";
-import type { Agregado, TipoEvidencia } from "../dominio/agregado.ts";
+import type { Agregado, Evidencia, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { type Id, Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
+import { type Etapa, type Id, Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
+import { Hospedagem } from "../dominio/projeto.ts";
+import { MetricasIssue } from "../metricas/issue.ts";
 
 /** F3 §3.1: a classe vem dos bytes iniciais, nunca da extensão. */
 export const Classe = z.enum(["video", "imagem", "html", "texto"]);
@@ -18,6 +20,8 @@ export const LIMITE: Readonly<Record<Classe, number>> = {
 };
 /** O mime de um anexo da classe `texto`. */
 export const MIME_TEXTO = "text/plain; charset=utf-8";
+/** O mime de um anexo da classe `html`. */
+export const MIME_HTML = "text/html; charset=utf-8";
 
 export interface RegraArquivos {
   readonly classes: readonly Classe[];
@@ -62,6 +66,15 @@ const daEvidencia = (ag: Agregado, tipo: TipoEvidencia, lista: string, campo: st
   ag.evidencias
     .filter((e) => e.tipo === tipo && (ticket === undefined || e.ticket === ticket))
     .flatMap((e) => (e.dados[lista] as Record<string, string>[]).map((item) => String(item[campo])));
+
+/**
+ * A evidência `tipo` do último ticket concluído da `etapa`: a do desenho aprovado, a da revisão que levou ao
+ * encerramento, a do último ticket de desenvolvimento.
+ */
+export function daUltimaConcluida(ag: Agregado, etapa: Etapa, tipo: TipoEvidencia): Evidencia | undefined {
+  const ticket = ag.tickets.findLast((t) => t.etapa === etapa && t.status === "concluido");
+  return ticket && ag.evidencias.find((e) => e.ticket === ticket.id && e.tipo === tipo);
+}
 
 const Criterio = z.object({
   id: z.string().regex(/^CA-\d+$/),
@@ -258,8 +271,29 @@ const ComprovacaoCriterios = z.object({
   ),
 });
 
-/** Os tipos já implementados; os demais entram com as etapas que os usam. */
-const SCHEMAS: Partial<Record<TipoEvidencia, SchemaEvidencia>> = {
+/** Texto não vazio de até `max` caracteres. */
+const TextoAte = (max: number) => z.string().trim().min(1).max(max);
+
+// F3 §4.5: só as partes do PR que exigem julgamento; o resto a Fabriquinha gera (§4.6).
+const MensagemPR = z.object({
+  titulo: TextoAte(72)
+    .regex(/^[^\r\n]*$/, "título ocupa uma linha só")
+    .meta({ description: "frase no imperativo, entendível sozinha no histórico" }),
+  oQueMudou: TextoAte(3000).meta({ description: "o que mudou, por que desta forma e as limitações da abordagem" }),
+  decisoesNaoObvias: z.array(TextoAte(1000)),
+  naoFeito: z.array(TextoAte(1000)).meta({ description: "o que não foi feito, além do foraDeEscopo do desenho" }),
+  naoPrevistos: z
+    .array(z.object({ caminho: z.string(), motivo: TextoAte(2000) }))
+    .meta({ description: "um item por arquivo com previsto null no arquivos_alterados da última revisão" }),
+  comoRevisar: z.array(TextoAte(500)).min(1).meta({ description: "passos em ordem de leitura" }),
+  naoVerificado: z.array(TextoAte(1000)),
+  reversao: TextoAte(2000)
+    .optional()
+    .meta({ description: "como desfazer; obrigatória se o impacto do desenho aprovado não é baixo" }),
+});
+
+/** Todos os tipos do F3 §2. */
+const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
   // "vídeo / código do comportamento atual e/ou do problema"
   comportamento: {
     dados: z.object({
@@ -395,18 +429,53 @@ const SCHEMAS: Partial<Record<TipoEvidencia, SchemaEvidencia>> = {
     },
     aprovada: ({ criterios }) => criterios.every((c) => c.atendido),
   }),
+  mensagem_pr: tipado({
+    dados: MensagemPR,
+    arquivos: Arquivos({ max: 0 }),
+    cruzar({ naoPrevistos, reversao }, { ag }) {
+      const alterados = (daUltimaConcluida(ag, "revisao", "arquivos_alterados")?.dados.arquivos ?? []) as {
+        caminho: string;
+        previsto: string | null;
+      }[];
+      const esperados = alterados.filter((a) => a.previsto === null).map((a) => a.caminho);
+      const citados = naoPrevistos.map((n) => n.caminho);
+      if (ordenados(citados) !== ordenados(esperados)) {
+        throw new ErroDeRegra(
+          `mensagem_pr explica os não previstos ${ordenados(citados)}, e a última revisão concluída tem ${ordenados(esperados)}`,
+          "submeta em naoPrevistos exatamente um item por arquivo com previsto null no arquivos_alterados, com o motivo",
+        );
+      }
+      const impacto = daUltimaConcluida(ag, "desenho", "relatorio_impactos_arquitetura")?.dados.impacto;
+      if (reversao === undefined && impacto !== undefined && impacto !== "baixo") {
+        throw new ErroDeRegra(
+          `mensagem_pr não tem reversao, e o impacto do desenho aprovado é ${impacto as string}`,
+          "descreva em reversao como desfazer a mudança",
+        );
+      }
+    },
+  }),
+  video_explicativo: {
+    dados: z.object({ roteiro: Texto }),
+    arquivos: Arquivos({ classes: ["video"], min: 1, max: 1 }),
+  },
+  // Produzidas pela Fabriquinha no encerramento (F3 §4.5): o relatório do F6 com o HTML, e o PR com o corpo completo,
+  // antes de qualquer condensação (§4.7).
+  relatorio_produtividade: { dados: MetricasIssue, arquivos: HTML_UNICO },
+  pr_aberto: {
+    dados: z.object({
+      hospedagem: Hospedagem,
+      id: z.string(),
+      url: z.url(),
+      branch: z.string(),
+      base: z.string(),
+      head: Sha,
+      condensado: z.boolean().meta({ description: "true se o corpo publicado passou pela condensação do F3 §4.7" }),
+    }),
+    arquivos: Arquivos({ classes: ["texto"], min: 1, max: 1 }),
+  },
 };
 
-export function schemaDe(tipo: TipoEvidencia): SchemaEvidencia {
-  const schema = SCHEMAS[tipo];
-  if (!schema) {
-    throw new ErroDeRegra(
-      `a Fabriquinha ainda não valida evidências do tipo ${tipo}`,
-      `os tipos aceitos hoje são ${Object.keys(SCHEMAS).join(", ")}`,
-    );
-  }
-  return schema;
-}
+export const schemaDe = (tipo: TipoEvidencia): SchemaEvidencia => SCHEMAS[tipo];
 
 /** O formato que o agente envia (`fabriquinha evidencia schema <tipo>`): JSON Schema de `dados` e as regras de arquivo. */
 export function jsonSchemaDe(tipo: TipoEvidencia): { dados: z.core.JSONSchema.BaseSchema; arquivos: RegraArquivos } {

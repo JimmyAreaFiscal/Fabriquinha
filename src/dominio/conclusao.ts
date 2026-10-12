@@ -46,7 +46,7 @@ const nomesDe = (ag: Agregado, ticket: Ticket, tipo: TipoEvidencia, lista: strin
     .flatMap((e) => (e.dados[lista] as { nome: string }[]).map((item) => item.nome))
     .toSorted((a, b) => a.localeCompare(b));
 
-// ponytail: encerramento e sessão entram aqui nos tickets 20 e 21.
+// ponytail: a sessão entra aqui no ticket 21.
 const REGRAS: Partial<Record<Exclude<Etapa, "registro">, Regra>> = {
   desenho: (ag, ticket) => {
     if (!criouTicket(ag, ticket)) {
@@ -108,6 +108,8 @@ const REGRAS: Partial<Record<Exclude<Etapa, "registro">, Regra>> = {
       tickets: [...ag.tickets, novoTicket(ag, ctx, "encerramento", "Publicar o PR")],
     };
   },
+  // As evidências do catálogo bastam: a Fabriquinha só registra pr_aberto depois de publicar o PR.
+  encerramento: (ag) => ({ ...ag, issue: { ...ag.issue, fase: "aprovacao_pr" } }),
 };
 
 const EntradaConclusao = z.object({ ticket: Id });

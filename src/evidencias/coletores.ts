@@ -10,30 +10,49 @@ import { exigirRegistroDeEvidencia, registrarEvidencia } from "../dominio/eviden
 import type { Id } from "../dominio/primitivos.ts";
 import { guardarArquivos } from "../persistencia/arquivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
+import { ticketDoCommit } from "../persistencia/commits.ts";
+import { anotar } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
 import { projeto } from "../persistencia/projetos.ts";
 import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS } from "../processo.ts";
+import { relatorio } from "../metricas/relatorio.ts";
+import { varrerBase } from "../metricas/retrabalho.ts";
 import { diffDaIssue } from "../repositorio/commit.ts";
+import { publicarPR } from "../repositorio/pr.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
-import { LIMITE, MIME_TEXTO, schemaDe } from "./schemas.ts";
+import { LIMITE_DO_CORPO, marcaDoPR, montarPR } from "./pr.ts";
+import { LIMITE, MIME_HTML, MIME_TEXTO, schemaDe } from "./schemas.ts";
 
 type Coletado = "execucao_testes" | "matriz_fitness";
 
-/** Guarda os logs por conteúdo (F2 §5.1), cada um passando por um arquivo em `pasta`: `guardarArquivos` lê de um fd. */
-function guardarLogs(
+/**
+ * Guarda os textos por conteúdo (F2 §5.1), cada um passando por um arquivo em `pasta`: `guardarArquivos` lê de um fd.
+ * Sem `mime`, é texto puro, como os logs.
+ */
+function guardarTextos(
   banco: DatabaseSync,
   pasta: string,
-  logs: readonly { nome: string; texto: string }[],
+  textos: readonly { nome: string; texto: string; mime?: string }[],
 ): ArquivoEvidencia[] {
-  const abertos: { fd: number; nome: string }[] = [];
+  const abertos: { fd: number; nome: string; mime: string }[] = [];
   try {
-    for (const { nome, texto } of logs) {
+    for (const { nome, texto, mime = MIME_TEXTO } of textos) {
       writeFileSync(join(pasta, nome), texto, { mode: 0o600 });
-      abertos.push({ fd: openSync(join(pasta, nome), "r"), nome });
+      abertos.push({ fd: openSync(join(pasta, nome), "r"), nome, mime });
     }
-    return guardarArquivos(banco, abertos, (_copia, _bytes, { nome }) => ({ nome, mime: MIME_TEXTO }), LIMITE.texto);
+    return guardarArquivos(banco, abertos, (_copia, _bytes, { nome, mime }) => ({ nome, mime }), LIMITE.texto);
   } finally {
     for (const { fd } of abertos) closeSync(fd);
+  }
+}
+
+/** `guardarTextos` numa pasta temporária, apagada no fim. */
+function guardarNumaPasta(banco: DatabaseSync, textos: Parameters<typeof guardarTextos>[2]): ArquivoEvidencia[] {
+  const pasta = mkdtempSync(join(tmpdir(), "fabriquinha-coleta-"));
+  try {
+    return guardarTextos(banco, pasta, textos);
+  } finally {
+    rmSync(pasta, { recursive: true, force: true });
   }
 }
 
@@ -83,7 +102,7 @@ async function coletar(banco: DatabaseSync, ticket: Id, tipo: Coletado, limiteMs
     }
     const dados = schemaDe(tipo).dados.parse(tipo === "execucao_testes" ? { comandos: linhas } : { linhas });
     const aprovada = linhas.every((l) => l.codigoSaida === 0);
-    const arquivos = guardarLogs(banco, pasta, logs);
+    const arquivos = guardarTextos(banco, pasta, logs);
 
     return comIssue(banco, antes.issue.id, "registrarEvidencia", FABRIQUINHA, (ag, ctx) =>
       registrarEvidencia(ag, { ticket, tipo, aprovada, dados, arquivos }, FABRIQUINHA, ctx),
@@ -138,5 +157,59 @@ export async function coletarArquivosAlterados(banco: DatabaseSync, ticket: Id):
   });
   return comIssue(banco, antes.issue.id, "registrarEvidencia", FABRIQUINHA, (ag, ctx) =>
     registrarEvidencia(ag, { ticket, tipo: "arquivos_alterados", dados, arquivos: [] }, FABRIQUINHA, ctx),
+  );
+}
+
+/**
+ * F3 §6, coletor de produtividade: o relatório do F6 (§6.1), com o HTML anexado. Fora da fila git do projeto: o
+ * relatório refaz o retrabalho, que entra nela.
+ */
+export async function coletarProdutividade(banco: DatabaseSync, ticket: Id): Promise<Agregado> {
+  const { antes } = exigirColeta(banco, ticket, "relatorio_produtividade");
+  const { dados, html } = await relatorio(banco, antes.issue.id);
+  const arquivos = guardarNumaPasta(banco, [{ nome: "relatorio.html", texto: html, mime: MIME_HTML }]);
+  return comIssue(banco, antes.issue.id, "registrarEvidencia", FABRIQUINHA, (ag, ctx) =>
+    registrarEvidencia(ag, { ticket, tipo: "relatorio_produtividade", dados, arquivos }, FABRIQUINHA, ctx),
+  );
+}
+
+/**
+ * F3 §6, coletor do PR: monta título e corpo (F3 §4.6) das evidências da issue, com o `relatorio_produtividade` já
+ * registrado, condensa o corpo ao limite da hospedagem (§4.7), publica (F5 §5.1) e registra `pr_aberto` com o corpo
+ * completo anexado. Os PRs conhecidos são os das evidências `pr_aberto` da issue, em ordem: o último é o atual.
+ */
+export async function coletarPR(banco: DatabaseSync, ticket: Id, log: string): Promise<Agregado> {
+  const { antes, proj } = exigirColeta(banco, ticket, "pr_aberto");
+  const issue = antes.issue;
+  const { titulo, completo, publicado, condensado } = montarPR(antes, ticket, LIMITE_DO_CORPO[proj.hospedagem]);
+  const daIssue = new Set(antes.tickets.map((t) => t.id));
+  const pr = await publicarPR(
+    raizDo(banco),
+    proj,
+    issue.id,
+    {
+      titulo,
+      corpo: publicado,
+      conhecidos: antes.evidencias.filter((e) => e.tipo === "pr_aberto").map((e) => e.dados.id as string),
+      marca: marcaDoPR(issue.id, ticket),
+      // `commit_ticket` só guarda commits de tickets de desenvolvimento; o da issue é o de um ticket dela.
+      registrado: (sha) => daIssue.has(ticketDoCommit(banco, sha) ?? 0),
+    },
+    () => varrerBase(banco, proj.nome),
+    log,
+  );
+  anotar(log, `PR publicado: ${pr.url}`);
+  const dados = schemaDe("pr_aberto").dados.parse({
+    hospedagem: proj.hospedagem,
+    id: pr.id,
+    url: pr.url,
+    branch: pr.branch,
+    base: proj.branchBase,
+    head: pr.head,
+    condensado,
+  });
+  const arquivos = guardarNumaPasta(banco, [{ nome: "pr.md", texto: completo }]);
+  return comIssue(banco, issue.id, "registrarEvidencia", FABRIQUINHA, (ag, ctx) =>
+    registrarEvidencia(ag, { ticket, tipo: "pr_aberto", dados, arquivos }, FABRIQUINHA, ctx),
   );
 }

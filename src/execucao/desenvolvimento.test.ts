@@ -1,5 +1,6 @@
-// Ponta a ponta do ciclo do desenvolvimento e da revisão (F3 §7, F5 §4, F1 §5.1) por `executarAutonomo`, contra banco
-// real e git real, com falsos só para os binários externos: o pi, o docker do sonar-scanner e o servidor do SonarQube.
+// Ponta a ponta do ciclo do desenvolvimento, da revisão e do encerramento (F3 §7, F5 §4, §5, F1 §5.1) por
+// `executarAutonomo`, contra banco real e git real, com falsos só para os binários externos: o pi, o docker do
+// sonar-scanner, o servidor do SonarQube e o gh.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -30,6 +31,8 @@ import { submeter } from "../evidencias/submissao.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
+import { caminhoArquivo } from "../persistencia/arquivos.ts";
+import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { executarAutonomo } from "./autonoma.ts";
 
@@ -121,6 +124,43 @@ export default function () {
 `,
 );
 
+/**
+ * Agente do encerramento falso: submete a mensagem do PR, explicando os arquivos não previstos da última revisão, e
+ * o vídeo explicativo.
+ */
+const encerrador = join(base, "encerrador.mjs");
+writeFileSync(
+  encerrador,
+  `import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+const { abrir } = await import(${JSON.stringify(src("persistencia/banco.ts"))});
+const { agregadoDoTicket } = await import(${JSON.stringify(src("persistencia/issues.ts"))});
+const { submeter } = await import(${JSON.stringify(src("evidencias/submissao.ts"))});
+export default function () {
+  const banco = abrir(process.env.FABRIQUINHA_ROOT);
+  const execucao = Number(process.env.FABRIQUINHA_EXECUCAO);
+  const { ticket } = banco.prepare("SELECT ticket FROM execucao WHERE id = ?").get(execucao);
+  const ator = { tipo: "agente", execucao, ticket };
+  const alterados = agregadoDoTicket(banco, ticket).evidencias.findLast((e) => e.tipo === "arquivos_alterados");
+  submeter(banco, ator, "mensagem_pr", {
+    titulo: "Responder a busca pelo cache",
+    oQueMudou: "A busca lê do cache antes de varrer a tabela.",
+    decisoesNaoObvias: [],
+    naoFeito: ["invalidação por evento"],
+    naoPrevistos: alterados.dados.arquivos
+      .filter((a) => a.previsto === null)
+      .map((a) => ({ caminho: a.caminho, motivo: "mede o cache" })),
+    comoRevisar: ["Comece por busca.ts."],
+    naoVerificado: [],
+  }, []);
+  const video = join(process.env.FABRIQUINHA_SAIDA, "explicacao.webm");
+  writeFileSync(video, Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01]));
+  submeter(banco, ator, "video_explicativo", { roteiro: "mostro a busca" }, [video]);
+  banco.close();
+}
+`,
+);
+
 // docker falso no PATH: o "scanner" só informa a tarefa do Compute Engine.
 mkdirSync(join(base, "bin"));
 writeFileSync(
@@ -156,7 +196,10 @@ after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
+const hospedagem = hospedagemFalsa(base);
+
 beforeEach(() => {
+  hospedagem.zerar();
   issuesSonar = [];
   analises = 0;
   delete process.env.SAIDA_TESTES;
@@ -290,6 +333,7 @@ function cenario() {
     raiz,
     banco,
     repo,
+    bare,
     worktree: caminhoDaWorktree(raiz, "loja", 1),
     ambienteDoHook,
     /** O ticket e a fase da issue, lidos do banco. */
@@ -708,5 +752,210 @@ test("falha antes do pi da revisão: execução e ticket falham, sem execução 
   c.reabrir(5);
   await executarAutonomo(c.banco, 5, OPCOES);
   assert.equal(c.estado(5).ticket?.status, "concluido", c.estado(5).ticket?.erro);
+  c.banco.close();
+});
+
+/** Leva a I-1 ao encerramento pela revisão aprovada; o T-6 é o encerramento, com o agente falso do encerramento. */
+async function noEncerramento() {
+  const c = await naRevisao();
+  c.planejar({ atendido: true, tickets: [], decisao: { aprovado: true } });
+  await executarAutonomo(c.banco, 5, OPCOES);
+  assert.equal(c.estado(5).ag.issue.fase, "encerramento");
+  // O encerrador deixa lixo na worktree, que não pode subir no PR.
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "lixo.txt": "x", "busca.ts": "quebrado\n" });
+  process.env.FALSO_PI_AGENTE = encerrador;
+  const doEncerramento = () => c.estado(6).ag.evidencias.filter((e) => e.ticket === 6);
+  const anexo = (tipo: string) => {
+    const a = doEncerramento().find((e) => e.tipo === tipo)?.arquivos[0];
+    assert.ok(a);
+    return { ...a, conteudo: readFileSync(caminhoArquivo(c.banco, a.sha256), "utf8") };
+  };
+  const publicado = () => git(c.bare, "for-each-ref", "--format=%(objectname)", "refs/heads/fabriquinha/I-1");
+  return { ...c, doEncerramento, anexo, publicado };
+}
+
+test("encerramento: descarte, relatório de produtividade, push, PR padronizado no GitHub, pr_aberto e aprovacao_pr", async () => {
+  const c = await noEncerramento();
+  const head = git(c.worktree, "rev-parse", "HEAD");
+
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  const { ag, ticket } = c.estado(6);
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "aprovacao_pr");
+  assert.deepEqual(
+    c.doEncerramento().map((e) => [e.tipo, e.produtor]),
+    [
+      ["mensagem_pr", "agente"],
+      ["video_explicativo", "agente"],
+      ["relatorio_produtividade", "fabriquinha"],
+      ["pr_aberto", "fabriquinha"],
+    ],
+  );
+  // O lixo do agente foi descartado: a branch publicada é a do último commit do desenvolvimento.
+  assert.equal(git(c.worktree, "status", "--porcelain"), "");
+  assert.equal(c.publicado(), head);
+
+  const [pr] = hospedagem.prs();
+  assert.ok(pr);
+  assert.deepEqual(
+    { ...pr, corpo: undefined },
+    {
+      id: 1,
+      head: "fabriquinha/I-1",
+      base: "main",
+      titulo: "fix: Responder a busca pelo cache [I-1]",
+      corpo: undefined,
+      estado: "aberto",
+    },
+  );
+  assert.deepEqual(c.doEncerramento().find((e) => e.tipo === "pr_aberto")?.dados, {
+    hospedagem: "github",
+    id: "1",
+    url: "https://github.com/org/loja/pull/1",
+    branch: "fabriquinha/I-1",
+    base: "main",
+    head,
+    condensado: false,
+  });
+  // O corpo completo fica anexado ao pr_aberto; aqui, abaixo do limite do GitHub, é o mesmo publicado.
+  const corpo = c.anexo("pr_aberto");
+  assert.equal(corpo.nome, "pr.md");
+  assert.equal(corpo.mime, "text/plain; charset=utf-8");
+  assert.equal(corpo.conteudo, pr.corpo);
+  assert.deepEqual(
+    [...pr.corpo.matchAll(/^## (.+)$/gm)].map((m) => m[1]),
+    [
+      "Por quê",
+      "O que mudou",
+      "Decisões não óbvias",
+      "Fora do escopo",
+      "Arquivos alterados × desenho",
+      "Como revisar",
+      "Evidências",
+      "Não verificado",
+      "Riscos e reversão",
+      "Autoria e custo",
+    ],
+  );
+  assert.ok(pr.corpo.startsWith("<!-- fabriquinha I-1/T-6 -->\n\n## Por quê\n\n**Problema:** Busca lenta\n"));
+  assert.match(pr.corpo, /\| `metrica\.ts` \| A \| \+1 −0 \| não previsto: mede o cache \|/);
+  assert.match(
+    pr.corpo,
+    /- I-1 · video_explicativo · explicacao\.webm\n- I-1 · relatorio_produtividade · relatorio\.html/,
+  );
+
+  const relatorio = c.anexo("relatorio_produtividade");
+  assert.equal(relatorio.mime, "text/html; charset=utf-8");
+  assert.match(relatorio.conteudo, /^<!doctype html>/);
+  assert.equal(c.doEncerramento().find((e) => e.tipo === "relatorio_produtividade")?.dados.issue, 1);
+  // O gh rodou com a credencial do serviço.
+  assert.ok(hospedagem.chamadas().every((ch) => ch.cli === "gh" && ch.token === "segredo-gh"));
+  const log = readFileSync(join(c.raiz, "execucoes", "E-6", "log"), "utf8");
+  assert.match(log, /descarte removeu: lixo\.txt/);
+  assert.match(
+    log,
+    /relatorio_produtividade registrado\n.*PR publicado: https:\/\/github\.com\/org\/loja\/pull\/1\n.*pr_aberto registrado\n/,
+  );
+  c.banco.close();
+});
+
+test("encerramento: o PR saiu, mas o registro de pr_aberto falhou; reaberto, o ticket adota o próprio PR e conclui", async () => {
+  const c = await noEncerramento();
+  c.banco.exec(
+    `CREATE TRIGGER falha BEFORE INSERT ON evidencia WHEN NEW.tipo = 'pr_aberto'
+     BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;`,
+  );
+  await executarAutonomo(c.banco, 6, OPCOES);
+  assert.equal(c.estado(6).ticket?.erro, "disco cheio");
+  assert.equal(hospedagem.prs().length, 1, "o PR saiu");
+
+  c.banco.exec("DROP TRIGGER falha");
+  c.reabrir(6);
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  const { ag, ticket } = c.estado(6);
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "aprovacao_pr");
+  assert.equal(hospedagem.prs().length, 1, "nenhum PR novo");
+  assert.equal(c.doEncerramento().find((e) => e.tipo === "pr_aberto")?.dados.id, "1");
+  assert.deepEqual(
+    hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
+    ["pr list", "pr create", "pr list", "pr edit"],
+  );
+  c.banco.close();
+});
+
+test("encerramento: PR da branch criado fora da Fabriquinha faz o ticket falhar sem publicar nada", async () => {
+  const c = await noEncerramento();
+  hospedagem.abrir({ head: "fabriquinha/I-1", base: "main", titulo: "pelo agente", corpo: "", estado: "aberto" });
+
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  const { ag, ticket } = c.estado(6);
+  assert.equal(ticket?.status, "falhou");
+  assert.equal(
+    ticket.erro,
+    "PR criado fora da Fabriquinha: https://github.com/org/loja/pull/1 (feche-o e reabra o ticket)",
+  );
+  assert.equal(ag.issue.fase, "encerramento");
+  assert.equal(c.publicado(), "");
+  c.banco.close();
+});
+
+test("encerramento: o C7 falhou depois do pr_aberto; reaberto, o ticket atualiza o mesmo PR, já conhecido", async () => {
+  const c = await noEncerramento();
+  c.banco.exec(
+    `CREATE TRIGGER falha BEFORE UPDATE OF status ON ticket WHEN NEW.id = 6 AND NEW.status = 'concluido'
+     BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;`,
+  );
+  await executarAutonomo(c.banco, 6, OPCOES);
+  assert.equal(c.estado(6).ticket?.erro, "disco cheio");
+  assert.equal(c.doEncerramento().find((e) => e.tipo === "pr_aberto")?.dados.id, "1");
+  // O Auditor fechou o PR na plataforma enquanto isso.
+  hospedagem.mudar(1, { estado: "fechado", corpo: "editado à mão" });
+
+  c.banco.exec("DROP TRIGGER falha");
+  c.reabrir(6);
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  assert.equal(c.estado(6).ticket?.status, "concluido", c.estado(6).ticket?.erro);
+  assert.deepEqual(
+    hospedagem.prs().map((p) => [p.id, p.estado, p.corpo.startsWith("<!-- fabriquinha I-1/T-6 -->")]),
+    [[1, "aberto", true]],
+  );
+  assert.deepEqual(
+    hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
+    ["pr list", "pr create", "pr list", "pr reopen", "pr edit"],
+  );
+  c.banco.close();
+});
+
+test("encerramento: commit de agente fora do desenvolvimento na branch faz o ticket falhar sem publicar nada", async () => {
+  const c = await noEncerramento();
+  // O revisor commitou por conta própria; o descarte não desfaz commit.
+  writeFileSync(join(c.worktree, "busca.ts"), "export const busca = gambiarra;\n");
+  git(c.worktree, "commit", "-q", "-am", "ajuste do revisor");
+  const sha = git(c.worktree, "rev-parse", "HEAD");
+
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  const { ticket } = c.estado(6);
+  assert.equal(ticket?.status, "falhou");
+  assert.equal(
+    ticket.erro,
+    `a branch fabriquinha/I-1 está no commit ${sha.slice(0, 12)}, que nenhum ticket de desenvolvimento da I-1 ` +
+      "registrou: um agente commitou fora do desenvolvimento, e esse commit não sobe no PR " +
+      `(desfaça com git -C ${c.worktree} reset --hard HEAD~1, repetindo até a HEAD ser um commit [I-1/T-<m>] ` +
+      "da Fabriquinha, e reabra o ticket)",
+  );
+  assert.equal(c.publicado(), "");
+  assert.deepEqual(hospedagem.prs(), []);
+
+  git(c.worktree, "reset", "-q", "--hard", "HEAD~1");
+  c.reabrir(6);
+  await executarAutonomo(c.banco, 6, OPCOES);
+  assert.equal(c.estado(6).ticket?.status, "concluido", c.estado(6).ticket?.erro);
+  assert.equal(c.publicado(), git(c.worktree, "rev-parse", "HEAD"));
   c.banco.close();
 });

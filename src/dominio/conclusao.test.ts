@@ -136,10 +136,10 @@ test("C7 é só da Fabriquinha, valida a entrada e exige ticket em execução, s
     () => concluir(ag, { ticket: 1 }),
     "T-1 é de registro e não conclui por concluirTicket (o Auditor o conclui no gate de registro)",
   );
-  const encerramento = { ...ag, tickets: [...ag.tickets, ticket(4, "encerramento")] };
+  const sessao = { ...ag, tickets: [...ag.tickets, ticket(4, "sessao")] };
   regra(
-    () => concluir(encerramento, { ticket: 4 }),
-    "T-4 é da etapa encerramento, que ainda não conclui (aguarde a versão que a implementa)",
+    () => concluir(sessao, { ticket: 4 }),
+    "T-4 é da etapa sessao, que ainda não conclui (aguarde a versão que a implementa)",
   );
   const falhou = { ...ag, tickets: ag.tickets.map((t) => (t.id === 2 ? { ...t, status: "falhou" as const } : t)) };
   regra(() => concluir(falhou), "T-2 tem status falhou, não em_execucao (só se conclui ticket em execução)");
@@ -368,5 +368,25 @@ test("C7 da revisão exige a decisão e a coerência dela com os tickets criados
     () => concluir(revisando(false), { ticket: 5 }),
     "T-5 não pode concluir: a revisão reprovou sem criar ticket de desenvolvimento " +
       "(o agente de T-5 cria um para cada exigência com fabriquinha ticket criar I-1 --titulo <título>)",
+  );
+});
+
+test("C7 do encerramento: com as quatro evidências da etapa, a issue vai para aprovacao_pr", () => {
+  const ag = desenhado({ fase: "encerramento" });
+  const tipos = ["mensagem_pr", "video_explicativo", "relatorio_produtividade", "pr_aberto"] as const;
+  const encerrando = {
+    ...ag,
+    tickets: [ticket(1, "registro", { status: "concluido" }), ticket(2, "encerramento")],
+    evidencias: tipos.map((tipo, i) => evidencia(i + 1, tipo)),
+  };
+  const depois = concluir(encerrando);
+  assert.deepEqual(depois, {
+    ...encerrando,
+    issue: { ...encerrando.issue, fase: "aprovacao_pr" },
+    tickets: [encerrando.tickets[0], { ...encerrando.tickets[1], status: "concluido", concluidoEm: AGORA }],
+  });
+  regra(
+    () => concluir({ ...encerrando, evidencias: encerrando.evidencias.slice(0, 3) }),
+    "T-2 não pode concluir: falta a evidência pr_aberto (a Fabriquinha coleta depois do pi; execute o ticket de novo)",
   );
 });

@@ -8,7 +8,13 @@ import { gravarCommit } from "../persistencia/commits.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 import { commitarTicket } from "../repositorio/commit.ts";
 import { descartarAlteracoes } from "../repositorio/worktree.ts";
-import { coletarArquivosAlterados, coletarFitness, coletarTestes } from "./coletores.ts";
+import {
+  coletarArquivosAlterados,
+  coletarFitness,
+  coletarPR,
+  coletarProdutividade,
+  coletarTestes,
+} from "./coletores.ts";
 import { coletarSonar } from "./sonar.ts";
 
 /** O que a coleta grava na mesma transação do C7 do ticket (F5 §4, passo 4). */
@@ -54,14 +60,30 @@ const desenvolver: Coleta = async (banco, ticket) => {
 };
 
 /**
+ * F3 §7: o encerramento descarta o que o agente mexeu, para não subir lixo no PR; registra o relatório de
+ * produtividade (F6) e publica o PR (F5), cada um por C17. O C7 só vem depois, e exige as quatro evidências da etapa.
+ * Se a publicação sair e o registro de `pr_aberto` falhar, o ticket falha; a próxima execução reconhece o PR pela
+ * marca do ticket e o adota (`publicarPR`).
+ */
+const encerrar: Coleta = async (banco, ticket, worktree, log) => {
+  await descartarAlteracoes(worktree, log);
+  await coletarProdutividade(banco, ticket.id);
+  anotar(log, "relatorio_produtividade registrado");
+  await coletarPR(banco, ticket.id, log);
+  anotar(log, "pr_aberto registrado");
+  return undefined;
+};
+
+/**
  * Registro, desenho e revisão não mudam código: o descarte (F5 §3.3) vem depois de as evidências estarem guardadas.
- * ponytail: encerramento e sessão entram aqui com os tickets 20 e 21.
+ * ponytail: a sessão entra aqui com o ticket 21.
  */
 const DEPOIS_DO_PI: Partial<Record<Etapa, Coleta>> = {
   registro: descartar,
   desenho: descartar,
   desenvolvimento: desenvolver,
   revisao: descartar,
+  encerramento: encerrar,
 };
 
 /**

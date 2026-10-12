@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import type { Agregado, ModoExecucao, Ticket } from "../dominio/agregado.ts";
 import type { Etapa } from "../dominio/primitivos.ts";
 import type { Projeto } from "../dominio/projeto.ts";
+import { linhas, resultado } from "../evidencias/formato.ts";
 import { skillsDaEtapa } from "./pi.ts";
 
 export interface Contexto {
@@ -69,20 +70,14 @@ const desenvolvimento = (ag: Agregado): string[] => {
   ];
 };
 
-const linhas = (a: ArquivosAlterados["arquivos"][number]): string =>
-  a.adicionadas === null ? "binário" : `+${String(a.adicionadas)} −${String(a.removidas)}`;
-
-function resultado(l: LinhaFitness): string {
-  if (l.estourou) return "estourou o tempo";
-  return l.codigoSaida === 0 ? "passou" : `reprovou (código ${String(l.codigoSaida)})`;
-}
-
 /**
  * O contexto próprio da etapa (F4 §6.3). O registro leva as dependências informadas (o resto vem da conversa); o
  * desenho lê o registro: o resumo do comportamento e os critérios. O desenvolvimento lê o desenho aprovado, os
  * critérios e os tickets de desenvolvimento já concluídos; a revisão, o mesmo e o que a Fabriquinha coletou antes
- * do pi: os arquivos alterados × o desenho e a matriz de fitness functions.
- * ponytail: encerramento e sessão ganham o seu contexto com os tickets 20 e 21.
+ * do pi: os arquivos alterados × o desenho e a matriz de fitness functions. O encerramento, o contexto do
+ * desenvolvimento, o impacto do desenho, as decisões de revisão, os arquivos que a mensagem do PR explica e, numa nova
+ * volta, o motivo da última reprovação do PR.
+ * ponytail: a sessão ganha o seu contexto com o ticket 21.
  */
 const CONTEXTO_DA_ETAPA: Partial<Record<Etapa, (ag: Agregado) => string[]>> = {
   registro: (ag) => [secao("Dependências informadas", ag.issue.deps.map((d) => `- I-${String(d)}`).join("\n"))],
@@ -111,6 +106,37 @@ const CONTEXTO_DA_ETAPA: Partial<Record<Etapa, (ag: Agregado) => string[]>> = {
       ),
       secao("Previstos e não tocados", (alterados?.previstosNaoTocados ?? []).map((p) => `- \`${p}\``).join("\n")),
       secao("Fitness functions", fitness.map((l) => `- **${l.nome}** (${l.descricao}): ${resultado(l)}`).join("\n")),
+    ];
+  },
+  encerramento: (ag) => {
+    const impactos = dadosDe(ag, "relatorio_impactos_arquitetura") as { impacto: string } | undefined;
+    const alterados = dadosDe(ag, "arquivos_alterados") as ArquivosAlterados | undefined;
+    const reprovacao = ag.decisoes.findLast((d) => d.gate === "pr" && !d.aprovado);
+    return [
+      ...desenvolvimento(ag),
+      secao("Impacto na arquitetura", impactos?.impacto ?? ""),
+      secao(
+        "Revisões",
+        ag.decisoes
+          .filter((d) => d.gate === "revisao")
+          .map((d) => `- T-${String(d.ticket)}, ${d.aprovado ? "aprovada" : "reprovada"}: ${d.motivo ?? "sem motivo"}`)
+          .join("\n"),
+      ),
+      secao(
+        "Arquivos não previstos",
+        (alterados?.arquivos ?? [])
+          .filter((a) => a.previsto === null)
+          .map((a) => `- \`${a.caminho}\``)
+          .join("\n"),
+      ),
+      ...(reprovacao
+        ? [
+            secao(
+              "Última reprovação do PR",
+              `${String(reprovacao.motivo)}\n\nPR: ${String(dadosDe(ag, "pr_aberto")?.url)}`,
+            ),
+          ]
+        : []),
     ];
   },
 };

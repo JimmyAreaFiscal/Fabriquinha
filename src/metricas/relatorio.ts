@@ -20,12 +20,13 @@ const esc = (texto: string): string =>
 
 const INTEIRO = new Intl.NumberFormat("pt-BR");
 const DOLARES = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-const inteiro = (n: number): string => INTEIRO.format(n);
-const dolares = (n: number): string => `US$ ${DOLARES.format(n)}`;
-const tokens = (c: Consumo): number => c.tokens.input + c.tokens.output + c.tokens.cacheRead + c.tokens.cacheWrite;
+export const inteiro = (n: number): string => INTEIRO.format(n);
+export const dolares = (n: number): string => `US$ ${DOLARES.format(n)}`;
+export const tokens = (c: Consumo): number =>
+  c.tokens.input + c.tokens.output + c.tokens.cacheRead + c.tokens.cacheWrite;
 
 /** `1h 02min`, `3min 07s` ou `12s`. */
-function duracao(ms: number): string {
+export function duracao(ms: number): string {
   const s = Math.round(ms / 1000);
   const [h, min, seg] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
   const dois = (n: number) => String(n).padStart(2, "0");

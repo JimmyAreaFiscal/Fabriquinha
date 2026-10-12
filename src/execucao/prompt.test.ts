@@ -238,3 +238,59 @@ test("revisão: o contexto do desenvolvimento, os arquivos alterados × desenho 
     assert.match(vazio, new RegExp(`## ${titulo}\\n\\n\\(vazio\\)\\n`));
   }
 });
+
+test("encerramento: o contexto do desenvolvimento, o impacto, as revisões, os não previstos e a última reprovação do PR", () => {
+  const ag = agregado([
+    evidencia(1, "relatorio_impactos_arquitetura", { impacto: "medio" }),
+    evidencia(2, "arquivos_alterados", {
+      arquivos: [
+        { caminho: "busca.ts", previsto: "busca.ts" },
+        { caminho: "logo.png", previsto: null },
+      ],
+    }),
+    evidencia(3, "pr_aberto", { url: "https://github.com/org/loja/pull/4" }),
+  ]);
+  const decisao = (id: number, gate: "revisao" | "pr", aprovado: boolean, motivo?: string) => ({
+    id,
+    issue: 1,
+    ticket: id,
+    gate,
+    aprovado,
+    ...(motivo !== undefined && { motivo }),
+    por: "auditor" as const,
+    em: AGORA,
+  });
+  const encerramento: Ticket = { ...desenho, id: 9, etapa: "encerramento", titulo: "Publicar o PR" };
+  const prompt = (decisoes: Agregado["decisoes"]) =>
+    montarPrompt({ ...comum, ag: { ...ag, decisoes }, ticket: encerramento, instrucao: undefined, modo: "autonomo" });
+
+  const primeira = prompt([decisao(5, "revisao", false, "falta o cache"), decisao(7, "revisao", true)]);
+  assert.ok(
+    primeira.includes(
+      [
+        "## Tickets de desenvolvimento já concluídos\n\n(vazio)\n",
+        "## Impacto na arquitetura\n\nmedio\n",
+        "## Revisões\n\n- T-5, reprovada: falta o cache\n- T-7, aprovada: sem motivo\n",
+        "## Arquivos não previstos\n\n- `logo.png`\n",
+        "## Modo de trabalhar: encerramento",
+      ].join("\n"),
+    ),
+    primeira,
+  );
+  const novaVolta = prompt([decisao(7, "revisao", true), decisao(8, "pr", false, "renomeie a função")]);
+  assert.match(
+    novaVolta,
+    /## Última reprovação do PR\n\nrenomeie a função\n\nPR: https:\/\/github\.com\/org\/loja\/pull\/4\n/,
+  );
+  const vazio = montarPrompt({
+    ...comum,
+    ag: agregado([]),
+    ticket: encerramento,
+    instrucao: undefined,
+    modo: "autonomo",
+  });
+  for (const titulo of ["Impacto na arquitetura", "Revisões", "Arquivos não previstos"]) {
+    assert.match(vazio, new RegExp(`## ${titulo}\\n\\n\\(vazio\\)\\n`));
+  }
+  assert.doesNotMatch(vazio, /Última reprovação do PR/);
+});

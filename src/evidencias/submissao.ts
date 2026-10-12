@@ -11,7 +11,7 @@ import { raizDo } from "../persistencia/banco.ts";
 import { dirDaExecucao } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
-import { type Classe, LIMITE, MIME_TEXTO, type RegraArquivos, schemaDe } from "./schemas.ts";
+import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos, schemaDe } from "./schemas.ts";
 
 const MiB = 1024 * 1024;
 const mib = (bytes: number) => `${(bytes / MiB).toFixed(1)} MiB`;
@@ -68,7 +68,7 @@ function classificar(caminho: string, fd: number, bytes: number): { classe: Clas
     );
   }
   return /^\s*<(!doctype html|html)/i.test(texto)
-    ? { classe: "html", mime: "text/html; charset=utf-8" }
+    ? { classe: "html", mime: MIME_HTML }
     : { classe: "texto", mime: MIME_TEXTO };
 }
 
