@@ -76,14 +76,13 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
       log += parte.toString();
     });
     try {
-      // O `web.url` existe vazio por um instante antes de o link ser escrito nele.
+      // O `web.url` nasce inteiro (escrito ao lado e renomeado): existir basta.
       const arquivo = join(raiz, "web.url");
-      const lido = () => (existsSync(arquivo) ? readFileSync(arquivo, "utf8") : "");
-      for (let i = 0; !lido(); i++) {
+      for (let i = 0; !existsSync(arquivo); i++) {
         if (servico.exitCode !== null || i > 200) throw new Error(`a Fabriquinha não subiu:\n${log}`);
         await dormir(50);
       }
-      const link = lido();
+      const link = readFileSync(arquivo, "utf8");
       await use({ raiz, base: new URL(link).origin, link });
     } finally {
       await parar(servico);

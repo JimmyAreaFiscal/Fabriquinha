@@ -16,7 +16,7 @@ import type { Id } from "../dominio/primitivos.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { jsonSchemaDe } from "../evidencias/schemas.ts";
 import { submeter } from "../evidencias/submissao.ts";
-import { iniciarServico, portaDoServico } from "../execucao/servico.ts";
+import { iniciarServico } from "../execucao/servico.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir as abrirBanco, raizPadrao } from "../persistencia/banco.ts";
 import { execucaoDoAgente } from "../persistencia/execucoes.ts";
@@ -106,7 +106,7 @@ const COMANDOS: readonly Comando[] = [
       // Os sinais passam a ser ouvidos antes da linha, que sai quando o serviço já atende: quem a lê pode mandar o
       // SIGTERM na hora, e sem ouvinte o sinal mataria o processo sem parar o serviço.
       const parou = io.parada();
-      io.stdout.write(`${JSON.stringify({ porta: portaDoServico() })}\n`);
+      io.stdout.write(`${JSON.stringify({ porta: servico.porta })}\n`);
       await parou;
       await servico.parar();
     },
@@ -342,8 +342,9 @@ function resolverAgente(banco: DatabaseSync, valor: string): Agente {
   return { ator: { tipo: "agente", execucao: execucao.execucao, ticket }, projeto: nome };
 }
 
-async function rodar(comando: Comando, chamada: Chamada): Promise<unknown> {
-  const execucao = chamada.io.env.FABRIQUINHA_EXECUCAO;
+/** O ator decide antes dos argumentos (F7 §3.1): o comando de outro ator é ErroDeEscopo, com ou sem argumento certo. */
+async function rodar(comando: Comando, resto: string[], io: Io): Promise<unknown> {
+  const execucao = io.env.FABRIQUINHA_EXECUCAO;
   if (!comando.doAgente) {
     if (execucao) {
       throw new ErroDeEscopo(
@@ -351,10 +352,11 @@ async function rodar(comando: Comando, chamada: Chamada): Promise<unknown> {
         "o serviço já está rodando; siga com o seu ticket",
       );
     }
-    return comando.rodar(chamada);
+    return comando.rodar({ ...argumentosDe(comando, resto), io });
   }
   if (!execucao) throw new ErroDeEscopo("este comando é do agente", "o Auditor usa o web");
-  const banco = abrirBanco(raizPadrao(chamada.io.env));
+  const chamada = { ...argumentosDe(comando, resto), io };
+  const banco = abrirBanco(raizPadrao(io.env));
   try {
     return await comando.rodar({ ...chamada, banco, agente: resolverAgente(banco, execucao) });
   } finally {
@@ -392,7 +394,7 @@ export async function principal(args: readonly string[], io: Io): Promise<number
     const comando = COMANDOS.find((c) => c.palavras.every((p, i) => args[i] === p));
     if (!comando)
       throw new ErroDeUso(grupo === undefined ? "falta o comando" : `comando desconhecido: ${args.join(" ")}`);
-    const resultado = await rodar(comando, { ...argumentosDe(comando, args.slice(comando.palavras.length)), io });
+    const resultado = await rodar(comando, args.slice(comando.palavras.length), io);
     if (resultado !== undefined) io.stdout.write(`${JSON.stringify(resultado)}\n`);
     return 0;
   } catch (error_) {

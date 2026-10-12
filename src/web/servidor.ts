@@ -1,7 +1,7 @@
 // Servidor web do F7 §4.1: o token de cada subida em `<raiz>/web.url`, a entrada pelo link, a guarda de toda
 // requisição, os estáticos do cliente, o `index.html` das páginas e o despacho das rotas da API (rotas.ts).
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
 import { stripTypeScriptTypes } from "node:module";
 import { extname, join } from "node:path";
@@ -96,9 +96,12 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
   const token = Buffer.from(randomBytes(32).toString("base64url"));
   const origem = `127.0.0.1:${String(porta)}`;
   const arquivo = join(raizDo(banco), "web.url");
-  // Recriado a cada subida: o modo só vale na criação, e o arquivo de outra subida pode ter outro.
-  rmSync(arquivo, { force: true });
-  writeFileSync(arquivo, `http://${origem}/entrar?token=${token.toString()}`, { mode: 0o600 });
+  // Escrito ao lado e renomeado: quem lê nunca vê o arquivo vazio ou pela metade. O temporário é recriado: o modo só
+  // vale na criação.
+  const temporario = `${arquivo}.novo`;
+  rmSync(temporario, { force: true });
+  writeFileSync(temporario, `http://${origem}/entrar?token=${token.toString()}`, { mode: 0o600 });
+  renameSync(temporario, arquivo);
 
   /** Compara em tempo constante; o tamanho diferente sai antes, sem revelar nada do token. */
   const confere = (valor: string | null | undefined): boolean => {

@@ -31,6 +31,8 @@ const REINICIADO = "serviço reiniciado";
 
 export interface Servico {
   banco: DatabaseSync;
+  /** A porta em que o serviço escuta: a pedida, ou a que ele escolheu na porta 0. */
+  porta: number;
   /** F4 §4: inicia o ticket autônomo já, sem esperar o agendador; recusa com a execução que ocupa o D8. */
   executarAgora(ticket: Id): Promise<void>;
   /** Quando o agendador procura trabalho de novo, se estiver ligado (F7 §4.4, Configuração). */
@@ -162,6 +164,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
 
   return {
     banco,
+    porta,
     executarAgora,
     proximaBusca,
     async parar() {

@@ -1,7 +1,7 @@
 // Servidor web do F7 §4.1 e §7 (web) contra o serviço de verdade, numa raiz temporária e numa porta livre.
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { request } from "node:http";
 import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -71,6 +71,7 @@ const mesmaOrigem = () => comCookie({ "sec-fetch-site": "same-origin", "content-
 
 test("web.url: link de entrada com token de 32 bytes, só para o dono, trocado a cada subida", async () => {
   assert.equal(statSync(join(raiz, "web.url")).mode & 0o777, 0o600);
+  assert.equal(existsSync(join(raiz, "web.url.novo")), false, "o temporário virou o web.url");
   assert.equal(link().origin, `http://${origem}`);
   assert.equal(link().pathname, "/entrar");
   assert.equal(Buffer.from(token(), "base64url").length, 32);

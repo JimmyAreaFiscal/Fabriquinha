@@ -341,6 +341,17 @@ test("sem a variável, todo comando além de servidor, abrir e --help sai com Er
     falha(await cli(env, args, stdin), "este comando é do agente (o Auditor usa o web)");
   }
   assert.equal(c.banco.prepare("SELECT count(*) AS n FROM evidencia").get()?.n, 0);
+  // O ator vem antes dos argumentos (F7 §3.1): sem a variável, nem o argumento que falta é uso inválido.
+  for (const args of [
+    ["issue", "ver"],
+    ["issue", "ver", "T-1"],
+    ["ticket", "criar", "I-1"],
+    ["projeto", "ver", "x"],
+  ]) {
+    falha(await cli(env, args), "este comando é do agente (o Auditor usa o web)");
+  }
+  // O que não é comando nenhum continua uso inválido.
+  usoInvalido(await cli(env, ["issue", "apagar"]), "comando desconhecido: issue apagar", "issue");
   const ajuda = await cli(env, ["--help"]);
   assert.equal(ajuda.codigo, 0);
   assert.match(ajuda.out, /^ {2}fabriquinha servidor$/m);
@@ -442,10 +453,18 @@ test("servidor sobe o serviço na raiz e para na parada; não sobe uma segunda i
   falha(await cli({ FABRIQUINHA_ROOT: raiz }, ["servidor"]), /^a Fabriquinha não conseguiu abrir 127\.0\.0\.1:/);
   await new Promise((fechou) => ocupada.close(fechou));
 
-  falha(
-    await cli({ FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "1" }, ["servidor"]),
-    "servidor não é comando do agente (o serviço já está rodando; siga com o seu ticket)",
-  );
+  for (const args of [["servidor"], ["servidor", "a-mais"], ["abrir", "--porta", "1"]]) {
+    falha(
+      await cli({ FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "1" }, args),
+      `${String(args[0])} não é comando do agente (o serviço já está rodando; siga com o seu ticket)`,
+    );
+  }
+
+  // Na porta 0, a linha leva a porta que o serviço escolheu.
+  process.env.FABRIQUINHA_PORTA = "0";
+  const livre = await cli({ FABRIQUINHA_ROOT: raiz }, ["servidor"]);
+  const { porta } = json(livre) as { porta: number };
+  assert.ok(Number.isInteger(porta) && porta > 0, `porta ${String(porta)}`);
 });
 
 test("abrir lê web.url e abre o navegador; sem o arquivo, diz que o serviço não está rodando", async () => {
