@@ -209,10 +209,10 @@ const TABELA: readonly Linha[] = [
     },
   },
   {
-    args: ["ticket", "ver", "T-2"],
+    args: ["ticket", "ver", "T-1"],
     etapa: "sessao",
     confere: (s) => {
-      assert.deepEqual([s.id, s.issue, s.etapa], [2, 2, "registro"]);
+      assert.deepEqual([s.id, s.issue, s.etapa], [1, 1, "sessao"]);
     },
   },
   {
@@ -397,9 +397,35 @@ test("uso inválido sai com 2 e imprime a ajuda do grupo", async () => {
   c.banco.close();
 });
 
+test("leituras do agente: só a issue da execução, os tickets e as evidências dela, e as issues de que ela depende", async () => {
+  const c = cenario("desenho");
+  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  const evidencia = (id: number, ticket: number) =>
+    `INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES (${String(id)}, ${String(ticket)},
+      'comportamento', 'agente', '${JSON.stringify(COMPORTAMENTO)}', '2026-10-12T10:00:00.000Z')`;
+  c.banco.exec(`${evidencia(1, 2)}; ${evidencia(2, 3)}`);
+  const fora = (oQue: string, dica: string) => `o agente de T-1 não pode ler ${oQue} (${dica})`;
+  const semDep = "leia a I-1, a do seu ticket";
+  falha(await cli(c.env, ["issue", "ver", "I-2"]), fora("a I-2", semDep));
+  falha(await cli(c.env, ["ticket", "ver", "T-2"]), fora("T-2, da I-2", semDep));
+  falha(await cli(c.env, ["evidencia", "ver", "T-2", "comportamento"]), fora("T-2, da I-2", semDep));
+
+  // Com I-2 como dependência, ela passa; I-3 continua de fora, e a issue que não existe também.
+  c.banco.exec("INSERT INTO issue_dep (issue, dep) VALUES (1, 2)");
+  assert.equal(json(await cli(c.env, ["issue", "ver", "I-1"])).id, 1);
+  assert.equal(json(await cli(c.env, ["issue", "ver", "2"])).id, 2);
+  assert.equal(json(await cli(c.env, ["ticket", "ver", "T-2"])).id, 2);
+  assert.equal(json(await cli(c.env, ["evidencia", "ver", "T-2", "comportamento"])).ticket, 2);
+  const comDep = "leia a I-1, a do seu ticket, ou as de que ela depende: I-2";
+  falha(await cli(c.env, ["issue", "ver", "I-3"]), fora("a I-3", comDep));
+  falha(await cli(c.env, ["issue", "ver", "I-9"]), fora("a I-9", comDep));
+  falha(await cli(c.env, ["ticket", "ver", "T-3"]), fora("T-3, da I-3", comDep));
+  falha(await cli(c.env, ["evidencia", "ver", "T-3", "comportamento"]), fora("T-3, da I-3", comDep));
+  c.banco.close();
+});
+
 test("erros do F1, de schema e de entrada saem em uma linha com código 1", async () => {
   const c = cenario("registro");
-  falha(await cli(c.env, ["issue", "ver", "I-9"]), "a issue I-9 não existe (confira o número da issue)");
   falha(await cli(c.env, ["ticket", "ver", "T-9"]), "o ticket T-9 não existe (confira o número do ticket)");
   falha(await cli(c.env, ["ticket", "remover", "T-9"]), "o ticket T-9 não existe (confira o número do ticket)");
   falha(

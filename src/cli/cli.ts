@@ -36,9 +36,10 @@ export interface Io {
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
 class ErroDeUso extends Error {}
 
-/** O agente da execução e o projeto do próprio ticket, que `projeto ver` mostra. */
+/** O agente da execução, a issue do próprio ticket e o projeto dela, que `projeto ver` mostra. */
 interface Agente {
   readonly ator: Ator & { tipo: "agente" };
+  readonly issue: Id;
   readonly projeto: string;
 }
 
@@ -93,6 +94,21 @@ const descricao = async ({ op, io }: Chamada): Promise<string | undefined> => {
   const arquivo = opcional(op.descricao);
   return arquivo === undefined ? undefined : ler(arquivo, io);
 };
+
+/**
+ * As leituras do agente (F7 §3.1): a issue da própria execução, com os tickets e as evidências dela, e as issues de
+ * que ela depende. Fora disso, ErroDeEscopo, que diz o que ele pode ler.
+ */
+function exigirAlcance(banco: DatabaseSync, agente: Agente, issue: Id, oQue: string): void {
+  const { deps } = agregadoExistente(banco, agente.issue).issue;
+  if (issue === agente.issue || deps.includes(issue)) return;
+  const sua = `leia a I-${String(agente.issue)}, a do seu ticket`;
+  const dependencias = deps.map((d) => `I-${String(d)}`).join(", ");
+  throw new ErroDeEscopo(
+    `o agente de T-${String(agente.ator.ticket)} não pode ler ${oQue}`,
+    deps.length > 0 ? `${sua}, ou as de que ela depende: ${dependencias}` : sua,
+  );
+}
 
 const TITULO_DESCRICAO: ParseArgsOptionsConfig = { titulo: { type: "string" }, descricao: { type: "string" } };
 
@@ -149,8 +165,9 @@ const COMANDOS: readonly Comando[] = [
     palavras: ["issue", "ver"],
     argumentos: ["I-<n>"],
     doAgente: true,
-    rodar({ banco, pos }) {
+    rodar({ banco, agente, pos }) {
       const id = numero(pos[0], "I");
+      exigirAlcance(banco, agente, id, `a I-${String(id)}`);
       const ag = agregadoExistente(banco, id);
       return { ...ag.issue, tickets: ag.tickets };
     },
@@ -191,13 +208,15 @@ const COMANDOS: readonly Comando[] = [
     palavras: ["ticket", "ver"],
     argumentos: ["T-<n>"],
     doAgente: true,
-    rodar({ banco, pos }) {
+    rodar({ banco, agente, pos }) {
       const id = numero(pos[0], "T");
-      return encontrado(
+      const ag = encontrado(
         agregadoDoTicket(banco, id),
         `o ticket T-${String(id)} não existe`,
         "confira o número do ticket",
-      ).tickets.find((t) => t.id === id);
+      );
+      exigirAlcance(banco, agente, ag.issue.id, `T-${String(id)}, da I-${String(ag.issue.id)}`);
+      return ag.tickets.find((t) => t.id === id);
     },
   },
   {
@@ -291,11 +310,13 @@ const COMANDOS: readonly Comando[] = [
     palavras: ["evidencia", "ver"],
     argumentos: ["T-<n>", "<tipo>"],
     doAgente: true,
-    rodar({ banco, pos }) {
+    rodar({ banco, agente, pos }) {
       const id = numero(pos[0], "T");
       const tipo = tipoDeEvidencia(pos[1]);
+      const ag = agregadoDoTicket(banco, id);
+      if (ag) exigirAlcance(banco, agente, ag.issue.id, `T-${String(id)}, da I-${String(ag.issue.id)}`);
       const evidencia = encontrado(
-        agregadoDoTicket(banco, id)?.evidencias.find((e) => e.ticket === id && e.tipo === tipo),
+        ag?.evidencias.find((e) => e.ticket === id && e.tipo === tipo),
         `T-${String(id)} não tem evidência ${tipo}`,
         "confira o ticket e o tipo",
       );
@@ -332,14 +353,14 @@ function ajuda(grupo?: string): string {
 function resolverAgente(banco: DatabaseSync, valor: string): Agente {
   const execucao = execucaoDoAgente(banco, valor);
   if (!execucao) throw new ErroDeEscopo(`a execução ${valor} não existe`, "confira FABRIQUINHA_EXECUCAO");
-  const { ticket, projeto: nome } = execucao;
+  const { ticket, issue, projeto: nome } = execucao;
   if (!execucao.emAndamento) {
     throw new ErroDeEscopo(
       `a execução E-${String(execucao.execucao)} já terminou`,
       "peça ao Auditor uma nova execução",
     );
   }
-  return { ator: { tipo: "agente", execucao: execucao.execucao, ticket }, projeto: nome };
+  return { ator: { tipo: "agente", execucao: execucao.execucao, ticket }, issue, projeto: nome };
 }
 
 /** O ator decide antes dos argumentos (F7 §3.1): o comando de outro ator é ErroDeEscopo, com ou sem argumento certo. */
