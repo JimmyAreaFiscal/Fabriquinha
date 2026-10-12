@@ -6,7 +6,9 @@ import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import {
   acaoDoAuditor,
+  bloqueiosDoPR,
   caminhoDaIssue,
+  compacto,
   custo,
   data,
   duracao,
@@ -14,6 +16,7 @@ import {
   evidenciaNaCaixa,
   execucoesDoTicket,
   gateDoDesenho,
+  gateDoPR,
   PAINEIS,
   paginaDaIssue,
 } from "./issue.ts";
@@ -537,9 +540,9 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
   const comprovacao = evidenciaNaCaixa(outros, evidenciaDe(outros, 38));
   assert.match(
     comprovacao.corpo,
-    /<td class="mono">CA-1<\/td><td class="ok">✓ sim<\/td><td>teste<\/td><td><a class="link" href="\/arquivos\/9{64}"[^>]*>ca1.png<\/a>, x.mp4<\/td>/,
+    /<td class="mono">CA-1<\/td><td class="ok">✓ sim<\/td><td>teste<\/td><td class="num"><a class="link" href="\/arquivos\/9{64}"[^>]*>ca1.png<\/a>, x.mp4<\/td>/,
   );
-  assert.match(comprovacao.corpo, /<td class="nok">✗ não<\/td><td>não deu<\/td><td><\/td>/);
+  assert.match(comprovacao.corpo, /<td class="nok">✗ não<\/td><td>não deu<\/td><td class="num"><\/td>/);
   assert.doesNotMatch(comprovacao.corpo, /<img/, "o print fica no link da tabela");
 });
 
@@ -699,4 +702,281 @@ test("gate do desenho: sem números, impacto, espera, critérios, propostos nem 
   assert.match(umDeCada, /<strong>1<\/strong><span>ticket proposto<\/span>/);
   assert.match(umDeCada, /<strong>0<\/strong><span>acoplamentos novos<\/span>/);
   assert.match(umDeCada, /<option value="">padrão do pi<\/option>/);
+});
+
+const URL_PR = "https://github.com/dono/loja/pull/7";
+const consumo = (custoUS: number, tokens: number) => ({
+  chamadas: 1,
+  tokens: { input: tokens, output: 0, cacheRead: 0, cacheWrite: 0 },
+  custo: custoUS,
+});
+const etapa = (
+  nome: string,
+  execucoes: number,
+  falhas: number,
+  reprovacoes: number,
+  custoUS: number,
+  tokens: number,
+) => ({
+  etapa: nome,
+  execucoes,
+  falhas,
+  reprovacoes,
+  duracaoMs: 0,
+  modelos: [],
+  ...consumo(custoUS, tokens),
+});
+
+/** A I-1 no gate do PR: o encerramento T-6 com vídeo, produtividade e PR; a revisão T-5 com comprovação e fitness. */
+function noGatePR(): PaginaDaIssue {
+  const p = exemplo();
+  return {
+    ...p,
+    issue: { ...p.issue, fase: "aprovacao_pr" },
+    tickets: [...p.tickets, ticket(5, "revisao", "concluido"), ticket(6, "encerramento", "concluido")],
+    evidencias: [
+      evidencia(10, 5, "comprovacao_criterios", {
+        dados: { criterios: [{ id: "CA-1", atendido: true, comoVerificado: `teste ${XSS}`, arquivos: [] }] },
+      }),
+      evidencia(11, 5, "matriz_fitness", {
+        dados: { linhas: [{ nome: "cobertura", ...comando({ log: "cobertura.log" }) }] },
+      }),
+      evidencia(12, 5, "explicacao_fitness", { dados: { explicacoes: [{ nome: "cobertura", explicacao: "92%" }] } }),
+      evidencia(13, 6, "video_explicativo", {
+        dados: { roteiro: "r" },
+        arquivos: [{ nome: "explicacao.webm", sha256: sha("f"), mime: "video/webm", bytes: 10 }],
+      }),
+      evidencia(14, 6, "relatorio_produtividade", {
+        produtor: "fabriquinha",
+        dados: {
+          etapas: [etapa("desenvolvimento", 9, 1, 0, 5.1, 2_000_000), etapa("revisao", 2, 0, 0, 1.5, 250_000)],
+          consultas: { ...consumo(0.24, 50_000), execucoes: 1, modelos: [] },
+        },
+      }),
+      evidencia(15, 6, "pr_aberto", {
+        produtor: "fabriquinha",
+        dados: { hospedagem: "github", id: "7", url: URL_PR },
+        arquivos: [{ nome: "corpo.md", sha256: sha("9"), mime: "text/markdown; charset=utf-8", bytes: 10 }],
+      }),
+    ],
+    sessoes: [sessao({ ticket: 6, etapa: "encerramento", estado: "aguardando_humano", motivo: "gate_pr" })],
+  };
+}
+
+const LIDO = new Date(Date.parse(AGORA) + 12_000);
+const leitura = (estado: "aberto" | "mergeado" | "fechado", mergeadoEm?: string) => ({
+  leitura: { estado, url: URL_PR, lidoEm: AGORA, ...(mergeadoEm && { mergeadoEm }) },
+});
+
+test("compacto: milhões, milhares e unidades", () => {
+  assert.deepEqual([compacto(2_300_000), compacto(48_120), compacto(950)], ["2,3 M", "48,1 mil", "950"]);
+});
+
+test("gate do PR: só na aprovação do PR, no começo da Ação do Auditor, aberto na aba Revisão", () => {
+  assert.equal(gateDoPR(exemplo(), { modelos: [], agora: LIDO }), "");
+  const html = acaoDoAuditor(noGatePR(), { modelos: [], agora: LIDO, pr: leitura("aberto") });
+  assert.match(html, /^<div class="acao-auditor"[^>]*><section class="gate-painel" aria-label="Gate do PR">/);
+  assert.match(
+    html,
+    new RegExp(
+      `<div class="gate-cabeca"><span class="rotulo">Gate do PR</span><a class="pr" href="${URL_PR}" target="_blank" rel="noopener">PR #7 ↗</a><span class="muted">aguarda você há menos de 1 min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
+    ),
+  );
+  assert.match(
+    html,
+    /<button type="button" role="tab" id="aba-pr-revisao" aria-controls="painel-pr-revisao" aria-selected="true" data-acao="aba-pr" data-aba="revisao">Revisão<\/button><button type="button" role="tab" id="aba-pr-decisao" aria-controls="painel-pr-decisao" aria-selected="false" data-acao="aba-pr" data-aba="decisao">Decisão<\/button>/,
+  );
+  assert.match(html, /data-painel-pr="revisao">/);
+  assert.match(html, /data-painel-pr="decisao" hidden>/);
+});
+
+test("gate do PR, Revisão: vídeo, 4 cards de produtividade, corpo do PR a carregar, comprovação e fitness", () => {
+  const html = gateDoPR(noGatePR(), { modelos: [], agora: LIDO, pr: leitura("aberto") });
+  assert.match(
+    html,
+    new RegExp(
+      `<video controls preload="metadata" src="/arquivos/${sha("f")}" aria-label="Vídeo explicativo"></video>`,
+    ),
+  );
+  assert.deepEqual(
+    [...html.matchAll(/<div class="numero"><strong>(.*?)<\/strong><span>(.*?)<\/span><\/div>/g)].map((m) => [
+      m[1],
+      m[2],
+    ]),
+    [
+      ["US$ 6,84", "custo"],
+      ["2,3 M", "tokens"],
+      ["11", "execuções · 1 falha"],
+      ["0", "reprovações"],
+    ],
+  );
+  assert.match(
+    html,
+    new RegExp(
+      `<div class="titulo-bloco">Corpo do PR</div><div class="corpo-pr md" data-corpo-pr="/arquivos/${sha("9")}">carregando…</div>`,
+    ),
+  );
+  assert.match(
+    html,
+    /<div class="titulo-bloco">Comprovação dos critérios<\/div><div class="rola">.*<td>teste &#60;img/s,
+  );
+  assert.match(
+    html,
+    /<div class="titulo-bloco">Fitness functions<\/div><div class="rola">.*<td class="mono">cobertura<\/td>.*<td>92%<\/td>/s,
+  );
+});
+
+test("gate do PR, Revisão: sem as evidências, os avisos; uma execução, uma falha e uma reprovação no singular", () => {
+  const p = noGatePR();
+  const vazio = gateDoPR({ ...p, evidencias: [], sessoes: [] }, { modelos: [], agora: LIDO });
+  assert.match(vazio, /<span class="rotulo">Gate do PR<\/span><\/div>/, "sem o PR e a espera no cabeçalho");
+  assert.match(vazio, /<div class="sem-video">sem vídeo explicativo<\/div>/);
+  assert.deepEqual(
+    [...vazio.matchAll(/<strong>(.*?)<\/strong><span>(.*?)<\/span>/g)].map((m) => [m[1], m[2]]),
+    [
+      ["—", "custo"],
+      ["—", "tokens"],
+      ["—", "execuções"],
+      ["—", "reprovações"],
+    ],
+  );
+  assert.match(vazio, /<p class="muted">Sem o corpo do PR.<\/p>/);
+  assert.match(vazio, /<p class="muted">Sem a comprovação dos critérios.<\/p>/);
+  assert.match(vazio, /<p class="muted">Sem a matriz de fitness.<\/p>/);
+  assert.match(
+    vazio,
+    /<span class="pill pill-falha">não lido<\/span><span class="erro-pr">o estado do PR não foi lido<\/span>/,
+  );
+  assert.doesNotMatch(vazio, /Abrir PR/);
+
+  const um = gateDoPR(
+    {
+      ...p,
+      evidencias: [
+        evidencia(14, 6, "relatorio_produtividade", {
+          dados: {
+            etapas: [etapa("desenho", 1, 1, 1, 0.5, 900)],
+            consultas: { ...consumo(0, 0), execucoes: 0, modelos: [] },
+          },
+        }),
+      ],
+    },
+    { modelos: [], agora: LIDO },
+  );
+  assert.match(um, /<strong>1<\/strong><span>execução · 1 falha<\/span>/);
+  assert.match(um, /<strong>1<\/strong><span>reprovação<\/span>/);
+  const nenhuma = gateDoPR(
+    {
+      ...p,
+      evidencias: [
+        evidencia(14, 6, "relatorio_produtividade", {
+          dados: {
+            etapas: [etapa("desenho", 2, 0, 2, 0, 0)],
+            consultas: { ...consumo(0, 0), execucoes: 0, modelos: [] },
+          },
+        }),
+      ],
+    },
+    { modelos: [], agora: LIDO },
+  );
+  assert.match(nenhuma, /<strong>2<\/strong><span>execuções · 0 falhas<\/span>/);
+  assert.match(um, /<strong>US\$ 0,50<\/strong><span>custo<\/span><\/div><div class="numero"><strong>900<\/strong>/);
+});
+
+test("gate do PR, Decisão: o estado lido, quando, Atualizar e Abrir PR; a falha do gh com a saída, escapada", () => {
+  const p = noGatePR();
+  const decisao = { aba: "decisao" as const, motivo: "" };
+  const aberto = gateDoPR(p, { modelos: [], agora: LIDO, pr: leitura("aberto"), rascunho: decisao });
+  assert.match(aberto, /data-painel-pr="revisao" hidden>/);
+  assert.match(aberto, /aria-selected="true" data-acao="aba-pr" data-aba="decisao"/);
+  assert.match(
+    aberto,
+    new RegExp(
+      `<div class="estado-pr"><span>Estado no GitHub</span><span class="pill pill-neutro">aberto · aguardando merge</span><span class="muted">lido há 12 s</span><div class="direita"><button type="button" class="btn btn-pequeno" data-acao="atualizar-pr" title="Lê de novo com gh pr view">Atualizar</button><a class="btn btn-pequeno" href="${URL_PR}" target="_blank" rel="noopener">Abrir PR #7 ↗</a></div></div>`,
+    ),
+  );
+  const agora = { modelos: [], agora: new Date(AGORA), rascunho: decisao };
+  assert.match(
+    gateDoPR(p, { ...agora, pr: leitura("fechado") }),
+    /<span class="pill pill-falha">fechado sem merge<\/span><span class="muted">lido agora<\/span>/,
+  );
+  assert.match(
+    gateDoPR(p, {
+      ...agora,
+      agora: new Date(Date.parse(AGORA) + 3 * 60_000),
+      pr: leitura("mergeado", "2026-10-11T15:02:00.000Z"),
+    }),
+    /<span class="pill pill-ok">mergeado em 11\/10 12:02<\/span><span class="muted">lido há 3 min<\/span>/,
+  );
+  assert.match(gateDoPR(p, { ...agora, pr: leitura("mergeado") }), /<span class="pill pill-ok">mergeado<\/span>/);
+  const azure = gateDoPR(
+    { ...p, projeto: { ...p.projeto, hospedagem: "azure-devops" } },
+    { ...agora, pr: { erro: `az repos pr show saiu com código 1: ${XSS}` } },
+  );
+  assert.match(
+    azure,
+    /<span>Estado no Azure DevOps<\/span><span class="pill pill-falha">não lido<\/span><span class="erro-pr">az repos pr show saiu com código 1: &#60;img/,
+  );
+  assert.match(azure, /title="Lê de novo com az repos pr show"/);
+});
+
+test("gate do PR, Decisão: pedir mudanças com o motivo e encerrar com a nota, conforme o estado lido", () => {
+  const p = noGatePR();
+  const comRascunho = (pr: Parameters<typeof bloqueiosDoPR>[0], motivo: string, nota?: number) =>
+    gateDoPR(p, { modelos: [], agora: LIDO, pr, rascunho: { aba: "decisao", motivo, ...(nota && { nota }) } });
+
+  const aberto = comRascunho(leitura("aberto"), `falta ${XSS}`);
+  assert.match(
+    aberto,
+    /<textarea data-motivo-pr rows="3" placeholder="O que precisa mudar" aria-label="O que precisa mudar no PR">falta &#60;img[^<]*<\/textarea>/,
+  );
+  assert.match(
+    aberto,
+    /<span class="bloqueio" data-bloqueio="pedir"><\/span><button type="button" class="btn btn-reprovar" data-acao="pedir-mudancas">Pedir mudanças<\/button>/,
+  );
+  assert.match(
+    aberto,
+    /<button type="button" data-acao="nota-pr" data-nota="1" aria-pressed="false" disabled>1<\/button>/,
+  );
+  assert.match(
+    aberto,
+    /<span class="bloqueio" data-bloqueio="encerrar">o PR ainda não foi mergeado<\/span><button type="button" class="btn btn-primario" data-acao="encerrar-issue" disabled>Encerrar issue<\/button>/,
+  );
+
+  const mergeado = comRascunho(leitura("mergeado"), "", 4);
+  assert.match(mergeado, /aria-label="O que precisa mudar no PR" disabled><\/textarea>/);
+  assert.match(
+    mergeado,
+    /data-bloqueio="pedir">o PR já foi mergeado<\/span><button [^>]*data-acao="pedir-mudancas" disabled>/,
+  );
+  assert.match(mergeado, /data-nota="4" aria-pressed="true">4<\/button>/);
+  assert.match(
+    mergeado,
+    /data-bloqueio="encerrar"><\/span><button type="button" class="btn btn-primario" data-acao="encerrar-issue">/,
+  );
+});
+
+test("bloqueios do PR: sem o estado, nada; aberto, pedir com o motivo; mergeado, encerrar com a nota", () => {
+  const naoLido = "o estado do PR não foi lido";
+  assert.deepEqual(bloqueiosDoPR({ erro: "x" }, "motivo", 3), {
+    motivo: true,
+    pedir: [false, naoLido],
+    notas: false,
+    encerrar: [false, naoLido],
+  });
+  assert.deepEqual(bloqueiosDoPR(leitura("aberto"), "  ", undefined), {
+    motivo: true,
+    pedir: [false, ""],
+    notas: false,
+    encerrar: [false, "o PR ainda não foi mergeado"],
+  });
+  assert.deepEqual(bloqueiosDoPR(leitura("fechado"), "falta o índice", undefined).pedir, [true, ""]);
+  assert.deepEqual(bloqueiosDoPR(leitura("fechado"), "", undefined).encerrar, [false, "o PR foi fechado sem merge"]);
+  assert.deepEqual(bloqueiosDoPR(leitura("mergeado"), "x", undefined), {
+    motivo: false,
+    pedir: [false, "o PR já foi mergeado"],
+    notas: true,
+    encerrar: [false, "escolha a nota"],
+  });
+  assert.deepEqual(bloqueiosDoPR(leitura("mergeado"), "", 5).encerrar, [true, ""]);
 });

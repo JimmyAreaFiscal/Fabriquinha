@@ -15,6 +15,11 @@ export class ErroDeInexistente extends ErroDeRegra {
   override name = "ErroDeInexistente";
 }
 
+/** Um comando de fora (`gh`, `az`) falhou ou respondeu o que não se esperava: um ErroDeRegra que o web responde com 502. */
+export class ErroExterno extends ErroDeRegra {
+  override name = "ErroExterno";
+}
+
 /** O ator não pode pedir o comando. */
 export class ErroDeEscopo extends Error {
   override name = "ErroDeEscopo";

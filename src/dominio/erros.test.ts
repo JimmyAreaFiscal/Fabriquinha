@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { encontrado, ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "./erros.ts";
+import { encontrado, ErroDeEscopo, ErroDeInexistente, ErroDeRegra, ErroExterno } from "./erros.ts";
 
 test("ErroDeRegra diz numa frase o que faltou e como resolver", () => {
   const erro = new ErroDeRegra(
@@ -21,6 +21,13 @@ test("ErroDeEscopo é distinguível do ErroDeRegra", () => {
   assert.ok(!(erro instanceof ErroDeRegra));
   assert.equal(erro.name, "ErroDeEscopo");
   assert.equal(erro.message, "a execução E-7 já terminou (peça ao Auditor uma nova execução)");
+});
+
+test("ErroExterno é um ErroDeRegra que o web distingue (502)", () => {
+  const erro = new ErroExterno("gh pr view saiu com código 1: HTTP 401", "confira o acesso do gh");
+  assert.ok(erro instanceof ErroDeRegra);
+  assert.equal(erro.name, "ErroExterno");
+  assert.equal(erro.message, "gh pr view saiu com código 1: HTTP 401 (confira o acesso do gh)");
 });
 
 test("ErroDeInexistente é um ErroDeRegra que o web distingue (404)", () => {

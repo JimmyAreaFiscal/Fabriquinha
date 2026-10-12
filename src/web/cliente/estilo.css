@@ -2033,6 +2033,177 @@ input.erro {
   cursor: not-allowed;
 }
 
+/* Gate do PR: abas Revisão (vídeo, produtividade, corpo do PR, comprovação e fitness) e Decisão (F7 §4.4). */
+.gate-corpo[hidden] {
+  display: none;
+}
+.abas-gate {
+  display: flex;
+  gap: var(--s-1);
+  padding: 0 var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+.abas-gate button {
+  height: 38px;
+  padding: 0 var(--s-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.abas-gate button:hover {
+  color: var(--ink);
+}
+.abas-gate button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.duas {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+.duas .numeros {
+  grid-template-columns: 1fr 1fr;
+}
+.duas video,
+.sem-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: radial-gradient(circle at 30% 20%, #2b2721, #0d0c0b);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.sem-video {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.corpo-pr {
+  max-height: 280px;
+  overflow: auto;
+  padding: var(--s-3) var(--s-4);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.estado-pr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.estado-pr .direita {
+  margin-left: auto;
+  display: flex;
+  gap: var(--s-2);
+}
+.estado-pr .erro-pr {
+  flex: 1;
+  min-width: 0;
+  font: var(--fs-xs) / 1.5 var(--mono);
+  color: var(--danger);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.gate-painel .plataforma {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.decisoes-pr {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.decisao-pr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  background: #191714;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.decisao-pr h3 {
+  font-size: var(--fs-md);
+}
+.decisao-pr p {
+  margin: 0;
+  color: var(--muted);
+}
+.decisao-pr textarea {
+  width: 100%;
+  min-height: 56px;
+  padding: 4px var(--s-2);
+  line-height: 1.5;
+}
+.decisao-pr .rodape {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: auto;
+}
+.decisao-pr .rodape .btn {
+  margin-left: auto;
+}
+.decisao-pr .bloqueio {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.nota-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fs-sm);
+}
+.notas {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.notas button {
+  width: 40px;
+  height: 32px;
+  font: var(--w-strong) var(--fs-md) var(--font);
+  color: var(--muted);
+  background: var(--surface);
+  border: 0;
+  cursor: pointer;
+}
+.notas button + button {
+  border-left: 1px solid var(--line);
+}
+.notas button:hover:enabled {
+  color: var(--ink);
+}
+.notas button[aria-pressed="true"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+.notas button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+@media (max-width: 1100px) {
+  .decisoes-pr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Artefatos: uma linha por etapa e ticket, com um card por evidência que abre a caixa. */
 .secao > h2 {
   display: flex;

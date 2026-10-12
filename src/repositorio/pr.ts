@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Evidencia, Issue } from "../dominio/agregado.ts";
-import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
+import { ErroDeRegra, ErroExterno, existe, mensagem } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import type { Hospedagem, Projeto } from "../dominio/projeto.ts";
 import { anotar } from "../persistencia/execucoes.ts";
@@ -52,12 +52,12 @@ export interface LeituraDoPR {
 /** O ticket falha, e a próxima execução tenta de novo; o gate do PR lê de novo. */
 const DE_NOVO = "execute o ticket de novo";
 
-/** Roda o CLI e devolve o stdout; a falha vira ErroDeRegra com a saída do comando (F3 §6, F5 §5.2). */
+/** Roda o CLI e devolve o stdout; a falha vira ErroExterno com a saída do comando (F3 §6, F5 §5.2). */
 async function rodar(cli: "gh" | "az", args: readonly string[], cwd: string, deNovo = DE_NOVO): Promise<string> {
   const r = await executar(cli, args, { cwd, limiteMs: LIMITE_COMANDO_MS });
   if (r.codigo !== 0) {
     // Estouro do limite sai com código null.
-    throw new ErroDeRegra(
+    throw new ErroExterno(
       `${cli} ${args.slice(0, cli === "gh" ? 2 : 3).join(" ")} saiu com código ${String(r.codigo)}: ${(r.erro + r.saida).trim()}`,
       `confira o acesso do ${cli} à hospedagem e ${deNovo}`,
     );
@@ -65,7 +65,7 @@ async function rodar(cli: "gh" | "az", args: readonly string[], cwd: string, deN
   return r.saida;
 }
 
-/** A saída JSON do CLI no formato esperado, ou ErroDeRegra com o que veio. */
+/** A saída JSON do CLI no formato esperado, ou ErroExterno com o que veio. */
 function lerJson<T>(saida: string, schema: z.ZodType<T>, comando: string, deNovo = DE_NOVO): T {
   let json: unknown;
   try {
@@ -75,7 +75,7 @@ function lerJson<T>(saida: string, schema: z.ZodType<T>, comando: string, deNovo
   }
   const r = schema.safeParse(json);
   if (!r.success) {
-    throw new ErroDeRegra(
+    throw new ErroExterno(
       `saída inesperada de ${comando}: ${saida.trim().slice(0, 500)}`,
       `confira a versão do CLI e ${deNovo}`,
     );
@@ -120,7 +120,7 @@ const ESTADO_AZ = new Map<string, EstadoNaHospedagem>([
 function estadoDe(cli: "gh" | "az", mapa: ReadonlyMap<string, EstadoNaHospedagem>, valor: string): EstadoNaHospedagem {
   const estado = mapa.get(valor);
   if (estado === undefined) {
-    throw new ErroDeRegra(
+    throw new ErroExterno(
       `o ${cli} devolveu um estado de PR que a Fabriquinha não conhece: ${valor}`,
       `confira a versão do ${cli}; os estados conhecidos são ${[...mapa.keys()].join(", ")}`,
     );
@@ -155,7 +155,7 @@ const github: CliDePR = {
       const url = String((await rodar("gh", args, repo)).trim().split("\n").at(-1));
       const id = /\/pull\/(\d+)$/.exec(url)?.[1];
       if (id === undefined) {
-        throw new ErroDeRegra(`saída inesperada de gh pr create: ${url}`, "confira a versão do gh");
+        throw new ErroExterno(`saída inesperada de gh pr create: ${url}`, "confira a versão do gh");
       }
       return { id, url };
     }),
@@ -312,7 +312,7 @@ export async function publicarPR(
 
 /**
  * F5 §5.2: o estado do PR da issue (o da última evidência `pr_aberto`, a fonte única do PR), lido agora na
- * plataforma. Uma falha do `gh` ou do `az` lança ErroDeRegra com a saída do comando; nada é gravado.
+ * plataforma. Uma falha do `gh` ou do `az` lança ErroExterno com a saída do comando; nada é gravado.
  */
 export async function estadoPR(
   projeto: Pick<Projeto, "repo" | "hospedagem">,

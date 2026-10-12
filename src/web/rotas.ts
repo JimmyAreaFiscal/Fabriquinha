@@ -10,6 +10,8 @@ import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
 import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
+import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
+import { ROTAS_DO_PR } from "./rotas/pr.ts";
 import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
@@ -18,8 +20,6 @@ export interface Agendador {
   /** O "Executar agora" (F4 §4), que só o serviço sabe iniciar. */
   executarAgora(ticket: Id): Promise<void>;
 }
-import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
-
 export interface Pedido {
   banco: DatabaseSync;
   agendador: Agendador;
@@ -59,6 +59,7 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DA_ISSUE,
   ...ROTAS_DO_CHAT,
   ...ROTAS_DO_DESENHO,
+  ...ROTAS_DO_PR,
   ...ROTAS_DO_INICIO,
   ...ROTAS_DO_PROJETO,
 ];

@@ -2,19 +2,37 @@
 // Não se atualiza sozinha, para não apagar o que o Auditor digita num gate; cada ação relê a página quando termina.
 // Não roda em Node: os testes de ponta a ponta (e2e/issue.spec.ts) a exercitam no navegador.
 import type { Modelo } from "../../../dominio/primitivos.ts";
+import type { LeituraDoPR } from "../../../repositorio/pr.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, avisar, elemento } from "../dom.ts";
 import { markdown } from "../markdown.ts";
 import { paginaVazia } from "../render.ts";
-import { caminhoDaIssue, evidenciaNaCaixa, execucoesDoTicket, paginaDaIssue } from "./issue.ts";
+import {
+  type AbaDoPR,
+  bloqueiosDoPR,
+  caminhoDaIssue,
+  type EstadoLido,
+  evidenciaNaCaixa,
+  execucoesDoTicket,
+  type Extras,
+  paginaDaIssue,
+  type RascunhoDoPR,
+} from "./issue.ts";
 
-/** O que uma ação recebe: o elemento clicado, a página lida e como desenhá-la de novo. */
+/** O que uma ação recebe: o elemento clicado, a página lida, o que veio fora dela e como desenhá-la de novo. */
 interface Contexto {
   alvo: HTMLElement;
   pagina: PaginaDaIssue;
+  extras: Extras;
   raiz: HTMLElement;
   remontar: () => Promise<void>;
+}
+
+/** O que o Auditor já escreveu ou escolheu nos gates, que uma ação que relê a página não apaga. */
+interface Rascunho {
+  motivo?: string;
+  pr?: RascunhoDoPR;
 }
 
 const enviarJson = (metodo: "POST" | "DELETE", corpo?: unknown): RequestInit => ({
@@ -47,6 +65,57 @@ const decidirDesenho =
     await api(
       `/api/issues/${String(pagina.issue.id)}/desenho`,
       enviarJson("POST", aprovado ? { aprovado } : { aprovado, motivo }),
+    );
+    await remontar();
+  };
+
+/**
+ * O estado do PR lido agora na plataforma (F5 §5.2); a falha do `gh` ou do `az` (502) fica no painel, com a saída.
+ * ponytail: a página espera o `gh`/`az` antes de se desenhar no gate do PR; se ficar lento, desenhar antes e
+ * preencher a aba Decisão depois.
+ */
+const lerPR = (issue: number): Promise<EstadoLido> =>
+  api<LeituraDoPR>(`/api/issues/${String(issue)}/pr`).then(
+    (leitura) => ({ leitura }),
+    (error_: unknown) => ({ erro: error_ instanceof Error ? error_.message : String(error_) }),
+  );
+
+/** O rascunho do gate do PR que está na tela: a aba aberta, o motivo e a nota escolhida. */
+function rascunhoDoPR(raiz: HTMLElement): RascunhoDoPR | undefined {
+  const motivo = raiz.querySelector<HTMLTextAreaElement>("[data-motivo-pr]");
+  if (!motivo) return undefined;
+  const aba = raiz.querySelector<HTMLElement>('[data-acao="aba-pr"][aria-selected="true"]')?.dataset.aba as AbaDoPR;
+  const nota = raiz.querySelector<HTMLElement>('[data-nota][aria-pressed="true"]')?.dataset.nota;
+  return { aba, motivo: motivo.value, ...(nota && { nota: Number(nota) }) };
+}
+
+/** Aplica na aba Decisão o que o estado lido, o motivo e a nota deixam fazer (a mesma regra do render). */
+function aplicarBloqueios(raiz: HTMLElement, pr: EstadoLido): void {
+  const rascunho = rascunhoDoPR(raiz);
+  if (!rascunho) return;
+  const b = bloqueiosDoPR(pr, rascunho.motivo, rascunho.nota);
+  for (const [acao, [habilitada, bloqueio]] of [
+    ["pedir", b.pedir],
+    ["encerrar", b.encerrar],
+  ] as const) {
+    const botao = raiz.querySelector<HTMLButtonElement>(
+      `[data-acao="${acao === "pedir" ? "pedir-mudancas" : "encerrar-issue"}"]`,
+    );
+    if (botao) botao.disabled = !habilitada;
+    const texto = raiz.querySelector(`[data-bloqueio="${acao}"]`);
+    if (texto) texto.textContent = bloqueio;
+  }
+}
+
+/** Decide o gate do PR (C16) e relê a página: depois de encerrar, o aviso da limpeza que falhou aparece nela. */
+const decidirPR =
+  (aprovado: boolean) =>
+  async ({ alvo, pagina, raiz, remontar }: Contexto): Promise<void> => {
+    const rascunho = rascunhoDoPR(raiz);
+    (alvo as HTMLButtonElement).disabled = true;
+    await api(
+      `/api/issues/${String(pagina.issue.id)}/pr`,
+      enviarJson("POST", aprovado ? { aprovado, nota: rascunho?.nota } : { aprovado, motivo: rascunho?.motivo }),
     );
     await remontar();
   };
@@ -112,13 +181,34 @@ const ACOES: Record<string, (c: Contexto) => void | Promise<void>> = {
   },
   "aprovar-desenho": decidirDesenho(true),
   "reprovar-desenho": decidirDesenho(false),
+  // Gate do PR (ticket 32).
+  "aba-pr": ({ alvo, raiz }) => {
+    for (const aba of raiz.querySelectorAll<HTMLElement>('[data-acao="aba-pr"]')) {
+      aba.setAttribute("aria-selected", String(aba === alvo));
+    }
+    for (const painel of raiz.querySelectorAll<HTMLElement>("[data-painel-pr]")) {
+      painel.hidden = painel.dataset.painelPr !== alvo.dataset.aba;
+    }
+  },
+  "nota-pr": ({ alvo, raiz, extras }) => {
+    for (const nota of raiz.querySelectorAll<HTMLElement>("[data-nota]")) {
+      nota.setAttribute("aria-pressed", String(nota === alvo));
+    }
+    if (extras.pr) aplicarBloqueios(raiz, extras.pr);
+  },
+  "atualizar-pr": async ({ alvo, remontar }) => {
+    (alvo as HTMLButtonElement).disabled = true;
+    await remontar();
+  },
+  "pedir-mudancas": decidirPR(false),
+  "encerrar-issue": decidirPR(true),
 };
 
 /**
- * `/projects/:projeto/issues/:issue`: a issue `I-n` (ou `n`), com o projeto do caminho trocado pelo dela. `motivo` é o
- * que o Auditor já escreveu no gate, que uma ação que relê a página não apaga.
+ * `/projects/:projeto/issues/:issue`: a issue `I-n` (ou `n`), com o projeto do caminho trocado pelo dela. `rascunho` é
+ * o que o Auditor já escreveu ou escolheu nos gates, que uma ação que relê a página não apaga.
  */
-export async function montarIssue(main: HTMLElement, params: Parametros, motivo = ""): Promise<void> {
+export async function montarIssue(main: HTMLElement, params: Parametros, rascunho: Rascunho = {}): Promise<void> {
   const id = String(params.issue).replace(/^I-/, "");
   let pagina: PaginaDaIssue;
   try {
@@ -130,9 +220,12 @@ export async function montarIssue(main: HTMLElement, params: Parametros, motivo 
   const certo = caminhoDaIssue(pagina.issue.projeto, pagina.issue.id);
   if (location.pathname !== certo) history.replaceState(null, "", certo);
   document.title = `I-${String(pagina.issue.id)} · Fabriquinha`;
-  const extras = {
-    modelos: pagina.issue.fase === "aprovacao_desenho" ? await modelos() : [],
+  const { fase } = pagina.issue;
+  const extras: Extras = {
+    modelos: fase === "aprovacao_desenho" ? await modelos() : [],
+    ...(fase === "aprovacao_pr" && { pr: await lerPR(pagina.issue.id) }),
     agora: new Date(),
+    ...(rascunho.pr && { rascunho: rascunho.pr }),
   };
   main.innerHTML = paginaDaIssue(pagina, pagina.issue.descricao.trim() ? markdown(pagina.issue.descricao) : "", extras);
   const raiz = elemento(".pagina-issue", HTMLElement);
@@ -143,9 +236,9 @@ export async function montarIssue(main: HTMLElement, params: Parametros, motivo 
   const habilitarReprovar = () => {
     if (campoMotivo && reprovar) reprovar.disabled = !campoMotivo.value.trim();
   };
-  if (campoMotivo) campoMotivo.value = motivo;
+  if (campoMotivo) campoMotivo.value = rascunho.motivo ?? "";
   habilitarReprovar();
-  const remontar = () => montarIssue(main, params, campoMotivo?.value);
+  const remontar = () => montarIssue(main, params, { motivo: campoMotivo?.value, pr: rascunhoDoPR(raiz) });
 
   // Descrição curta não precisa de "ver tudo".
   const descricao = raiz.querySelector<HTMLElement>("[data-descricao]");
@@ -180,7 +273,7 @@ export async function montarIssue(main: HTMLElement, params: Parametros, motivo 
         await remontar();
       });
     } else if (acao && acao in ACOES) {
-      agir(() => ACOES[acao]?.({ alvo, pagina: p, raiz, remontar }), alvo as HTMLButtonElement);
+      agir(() => ACOES[acao]?.({ alvo, pagina: p, extras, raiz, remontar }), alvo as HTMLButtonElement);
     }
   });
 
@@ -211,7 +304,20 @@ export async function montarIssue(main: HTMLElement, params: Parametros, motivo 
 
   raiz.addEventListener("input", (evento) => {
     if (evento.target === campoMotivo) habilitarReprovar();
+    if (evento.target instanceof HTMLTextAreaElement && evento.target.matches("[data-motivo-pr]") && extras.pr) {
+      aplicarBloqueios(raiz, extras.pr);
+    }
   });
+
+  // O corpo completo do PR (o anexo de `pr_aberto`), em Markdown sem HTML.
+  const corpoPR = raiz.querySelector<HTMLElement>("[data-corpo-pr]");
+  if (corpoPR) {
+    agir(async () => {
+      const resposta = await fetch(String(corpoPR.dataset.corpoPr));
+      if (!resposta.ok) throw new Error(`não foi possível ler o corpo do PR (${String(resposta.status)})`);
+      corpoPR.innerHTML = markdown(await resposta.text());
+    });
+  }
 
   // C20: o padrão da etapa (vazio) remove o override.
   raiz.addEventListener("change", (evento) => {

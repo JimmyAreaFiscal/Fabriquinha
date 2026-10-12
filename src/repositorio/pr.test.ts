@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
 import { hospedagemFalsa } from "./hospedagem-falsa.test.ts";
 import { estadoPR, publicarPR } from "./pr.ts";
@@ -82,8 +82,8 @@ function cenario(tipo: Hospedagem = "github") {
   };
 }
 
-const recusa = async (promessa: Promise<unknown>, msg: string) => {
-  await assert.rejects(promessa, (e) => e instanceof ErroDeRegra && e.message === msg);
+const recusa = async (promessa: Promise<unknown>, msg: string, tipo = ErroDeRegra) => {
+  await assert.rejects(promessa, (e) => e instanceof tipo && e.message === msg);
 };
 
 test("GitHub: sem PR, publica a branch, varre a base e cria o PR com o corpo por arquivo, no ambiente do serviço", async () => {
@@ -426,19 +426,21 @@ test("estadoPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no
   }
 });
 
-test("estadoPR: falha e saída inesperada do CLI viram ErroDeRegra com a saída; issue sem PR também", async () => {
+test("estadoPR: falha e saída inesperada do CLI viram ErroExterno com a saída; issue sem PR é ErroDeRegra", async () => {
   const c = cenario();
   const projeto = { repo: c.repo, hospedagem: "github" as const };
   hospedagem.falhar("pr view", "HTTP 401: Bad credentials");
   await recusa(
     estadoPR(projeto, comPR("1")),
     "gh pr view saiu com código 1: HTTP 401: Bad credentials (confira o acesso do gh à hospedagem e leia o estado do PR de novo)",
+    ErroExterno,
   );
   hospedagem.zerar();
   hospedagem.responder("pr view", JSON.stringify({ state: "MERGED", url: `${URL_GH}1`, mergedAt: "ontem" }));
   await recusa(
     estadoPR(projeto, comPR("1")),
     `saída inesperada de gh pr view: {"state":"MERGED","url":"${URL_GH}1","mergedAt":"ontem"} (confira a versão do CLI e leia o estado do PR de novo)`,
+    ErroExterno,
   );
   hospedagem.responder("pr view", JSON.stringify({ state: "MERGED", url: `${URL_GH}1`, mergedAt: null }));
   assert.equal((await estadoPR(projeto, comPR("1"))).mergeadoEm, undefined, "mergeado sem data");
@@ -455,6 +457,7 @@ test("estado de PR desconhecido do gh ou do az é erro, na leitura e na publica�
     estadoPR({ repo: c.repo, hospedagem: "github" }, comPR("1")),
     "o gh devolveu um estado de PR que a Fabriquinha não conhece: DRAFT " +
       "(confira a versão do gh; os estados conhecidos são OPEN, CLOSED, MERGED)",
+    ErroExterno,
   );
   const az = cenario("azure-devops");
   hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });

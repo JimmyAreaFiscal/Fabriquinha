@@ -44,16 +44,19 @@ export interface PaginaDaIssue extends Agregado {
   desenho?: MetricasIssue["desenho"];
 }
 
-const issueExistente = (banco: DatabaseSync, id: Id): Agregado =>
+export const issueExistente = (banco: DatabaseSync, id: Id): Agregado =>
   encontrado(agregado(banco, id), `a issue I-${String(id)} não existe`, "confira o número da issue");
 
-async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue> {
-  const ag = issueExistente(banco, id);
-  const doProjeto = encontrado(
+export const projetoDa = (banco: DatabaseSync, ag: Agregado): Projeto =>
+  encontrado(
     projeto(banco, ag.issue.projeto),
     `o projeto ${ag.issue.projeto} não existe`,
     "cadastre-o na Configuração",
   );
+
+async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue> {
+  const ag = issueExistente(banco, id);
+  const doProjeto = projetoDa(banco, ag);
   const elegivel = ticketElegivel(banco, id);
   const ticket = ag.tickets.find((t) => t.id === elegivel);
   const ocupada = ocupacaoDoD8(banco);

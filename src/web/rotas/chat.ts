@@ -79,7 +79,7 @@ export interface DadosDoChat extends CabecalhoDoChat {
   conversa: Entrada[];
 }
 
-const opcoes = (banco: DatabaseSync): OpcoesInterativa => ({ ociosidadeMin: configuracao(banco).ociosidadeMin });
+export const opcoes = (banco: DatabaseSync): OpcoesInterativa => ({ ociosidadeMin: configuracao(banco).ociosidadeMin });
 
 const agregadoDa = (banco: DatabaseSync, sessao: InfoSessao): Agregado =>
   existe(agregado(banco, sessao.issue), `a I-${String(sessao.issue)} sumiu`, "confira o banco");

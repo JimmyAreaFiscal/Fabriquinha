@@ -1,43 +1,8 @@
 // Chat (F7 §4.4; F4 §5.4, §6.4 a §6.8) com o pi falso: acompanhar uma sessão autônoma ao vivo, redirecioná-la e
 // responder a um diálogo; registrar pelo chat, corrigir o registro ao lado e aprovar o registro; responder e retomar
 // um ticket que falhou; abrir uma consulta com o histórico de outra sessão anexado.
-import { execFileSync } from "node:child_process";
-import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import { abrir } from "../src/persistencia/banco.ts";
-import { registrarProjeto } from "../src/persistencia/projetos.ts";
-import { expect, type Fabriquinha, test } from "./apoio.ts";
-
-const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
-
-/** O projeto `loja`, com um clone de verdade e o remoto num bare local, para a worktree das execuções. */
-function projeto(raiz: string, sql = ""): void {
-  const bare = join(raiz, "origin.git");
-  const repo = join(raiz, "loja");
-  mkdirSync(repo);
-  git(raiz, "init", "-q", "--bare", bare);
-  git(repo, "init", "-q", "-b", "main");
-  writeFileSync(join(repo, "LEIAME"), "loja\n");
-  git(repo, "add", "LEIAME");
-  git(repo, "commit", "-q", "-m", "início");
-  git(repo, "remote", "add", "origin", bare);
-  git(repo, "push", "-q", "origin", "main");
-  const banco = abrir(raiz);
-  registrarProjeto(banco, {
-    nome: "loja",
-    repo: realpathSync(repo),
-    branchBase: "main",
-    hospedagem: "github",
-    preparacao: [],
-    testes: ["true"],
-    sonar: { projectKey: "loja" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    modelos: {},
-  });
-  banco.exec(sql);
-  banco.close();
-}
+import { expect, type Fabriquinha, projeto, test } from "./apoio.ts";
 
 /** A primeira sessão ativa, assim que ela aparece. */
 async function sessaoAtiva(pagina: Page, { base }: Fabriquinha): Promise<string> {

@@ -3,7 +3,10 @@
 // por `escapar`; a descrição chega já renderizada pelo `markdown-it` sem HTML.
 import type { ArquivoEvidencia, Evidencia, ModoExecucao, Ticket, TipoEvidencia } from "../../../dominio/agregado.ts";
 import type { Etapa, Fase, Modelo } from "../../../dominio/primitivos.ts";
+import type { Hospedagem } from "../../../dominio/projeto.ts";
 import type { InfoSessao, MotivoEspera } from "../../../execucao/sessoes.ts";
+import type { Consumo, MetricasIssue } from "../../../metricas/issue.ts";
+import type { LeituraDoPR } from "../../../repositorio/pr.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { ConteudoDaCaixa } from "../dom.ts";
 import { type EstadoDoTrilho, escapar, ha, MODO_DA_SESSAO, STATUS_DO_TICKET, trilho } from "../render.ts";
@@ -84,6 +87,12 @@ export function duracao(ms: number): string {
 
 export const custo = (valor: number): string => `US$ ${valor.toFixed(2).replace(".", ",")}`;
 
+/** `2,3 M`, `48,1 mil` ou `950`. */
+export function compacto(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(".", ",")} M`;
+  return n >= 1e3 ? `${(n / 1e3).toFixed(1).replace(".", ",")} mil` : String(n);
+}
+
 /** A cor do marco atual no trilho: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
 export function estadoDoTrilho(sessoes: readonly InfoSessao[]): EstadoDoTrilho | undefined {
   if (sessoes.some((s) => s.motivo === "falha")) return "falha";
@@ -93,8 +102,12 @@ export function estadoDoTrilho(sessoes: readonly InfoSessao[]): EstadoDoTrilho |
 
 // ——— coluna da esquerda ———
 
+/** O PR da issue: o da última evidência `pr_aberto` (F5 §5.2). */
+const prAberto = (p: PaginaDaIssue) =>
+  p.evidencias.findLast((e) => e.tipo === "pr_aberto")?.dados as { id: string; url: string } | undefined;
+
 function pr(p: PaginaDaIssue): string {
-  const aberto = p.evidencias.findLast((e) => e.tipo === "pr_aberto")?.dados as { id: string; url: string } | undefined;
+  const aberto = prAberto(p);
   return aberto
     ? `<dt>PR</dt><dd><a class="pr" href="${escapar(aberto.url)}" target="_blank" rel="noopener">#${escapar(aberto.id)} ↗</a></dd>`
     : "";
@@ -185,10 +198,27 @@ const limpeza = (p: PaginaDaIssue): string =>
     <pre class="comandos">${p.limpeza.map(escapar).join("\n")}</pre>
   </section>`;
 
-/** O que a página lê fora do `GET /api/issues/:id`: os modelos do pi (seletor do gate do desenho) e a hora atual. */
+/** O estado do PR como a página o leu (`GET /api/issues/:id/pr`), ou a mensagem da falha do `gh` ou do `az` (502). */
+export type EstadoLido = { leitura: LeituraDoPR } | { erro: string };
+
+export type AbaDoPR = "revisao" | "decisao";
+
+/** O que o Auditor já fez no gate do PR, que a releitura da página (o **Atualizar**, por exemplo) mantém. */
+export interface RascunhoDoPR {
+  aba: AbaDoPR;
+  motivo: string;
+  nota?: number;
+}
+
+/**
+ * O que a página lê fora do `GET /api/issues/:id`: os modelos do pi (seletor do gate do desenho), a hora atual e, no
+ * gate do PR, o estado lido na plataforma e o rascunho do Auditor.
+ */
 export interface Extras {
   modelos: readonly Modelo[];
   agora: Date;
+  pr?: EstadoLido;
+  rascunho?: RascunhoDoPR;
 }
 
 const SEM_EXTRAS: Extras = { modelos: [], agora: new Date(0) };
@@ -267,12 +297,183 @@ export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): str
   </section>`;
 }
 
+// ——— gate do PR ———
+
+const NAO_LIDO = "o estado do PR não foi lido";
+
+/** Uma ação da decisão: habilitada, ou desabilitada com o motivo ao lado (que pode ser vazio). */
+type Liberacao = [habilitada: boolean, bloqueio: string];
+
+/** O que a aba Decisão deixa fazer com o estado lido, o motivo escrito e a nota escolhida (F1 C16, F7 §4.4). */
+export interface BloqueiosDoPR {
+  motivo: boolean;
+  pedir: Liberacao;
+  notas: boolean;
+  encerrar: Liberacao;
+}
+
+/**
+ * Pedir mudanças só com o PR não mergeado e o motivo escrito; encerrar só com o PR mergeado e a nota; sem o estado
+ * lido, nenhum dos dois. O servidor confere de novo com o estado relido (F5 §5.2).
+ */
+export function bloqueiosDoPR(pr: EstadoLido, motivo: string, nota: number | undefined): BloqueiosDoPR {
+  if ("erro" in pr) return { motivo: true, pedir: [false, NAO_LIDO], notas: false, encerrar: [false, NAO_LIDO] };
+  const { estado } = pr.leitura;
+  if (estado === "mergeado") {
+    return {
+      motivo: false,
+      pedir: [false, "o PR já foi mergeado"],
+      notas: true,
+      encerrar: nota === undefined ? [false, "escolha a nota"] : [true, ""],
+    };
+  }
+  return {
+    motivo: true,
+    pedir: [motivo.trim() !== "", ""],
+    notas: false,
+    encerrar: [false, estado === "fechado" ? "o PR foi fechado sem merge" : "o PR ainda não foi mergeado"],
+  };
+}
+
+const HOSPEDAGEM: Record<Hospedagem, [nome: string, comando: string]> = {
+  github: ["GitHub", "gh pr view"],
+  "azure-devops": ["Azure DevOps", "az repos pr show"],
+};
+
+/** `lido agora`, `lido há 12 s` ou `lido há 3 min`. */
+function lido(lidoEm: string, agora: Date): string {
+  const s = Math.round((agora.getTime() - Date.parse(lidoEm)) / 1000);
+  if (s < 5) return "lido agora";
+  return s < 60 ? `lido há ${String(s)} s` : `lido ${ha(lidoEm, agora)}`;
+}
+
+function estadoDoPR(l: LeituraDoPR, agora: Date): string {
+  const pilula = {
+    aberto: '<span class="pill pill-neutro">aberto · aguardando merge</span>',
+    mergeado: `<span class="pill pill-ok">mergeado${l.mergeadoEm ? " em " + data(l.mergeadoEm) : ""}</span>`,
+    fechado: '<span class="pill pill-falha">fechado sem merge</span>',
+  }[l.estado];
+  return `${pilula}<span class="muted">${lido(l.lidoEm, agora)}</span>`;
+}
+
+const habilitar = (sim: boolean): string => (sim ? "" : " disabled");
+
+/** A aba Decisão: o estado do PR na plataforma, **Pedir mudanças** com o motivo e **Encerrar issue** com a nota. */
+function decisaoDoPR(p: PaginaDaIssue, pr: EstadoLido, rascunho: RascunhoDoPR, agora: Date): string {
+  const [hospedagem, comando] = HOSPEDAGEM[p.projeto.hospedagem];
+  const aberto = prAberto(p);
+  const b = bloqueiosDoPR(pr, rascunho.motivo, rascunho.nota);
+  const estado =
+    "erro" in pr
+      ? `<span class="pill pill-falha">não lido</span><span class="erro-pr">${escapar(pr.erro)}</span>`
+      : estadoDoPR(pr.leitura, agora);
+  const abrir = aberto
+    ? `<a class="btn btn-pequeno" href="${escapar(aberto.url)}" target="_blank" rel="noopener">Abrir PR #${escapar(aberto.id)} ↗</a>`
+    : "";
+  const notas = [1, 2, 3, 4, 5].map(
+    (n) =>
+      `<button type="button" data-acao="nota-pr" data-nota="${String(n)}" aria-pressed="${String(n === rascunho.nota)}"${habilitar(b.notas)}>${String(n)}</button>`,
+  );
+  return `<div class="estado-pr"><span>Estado no ${hospedagem}</span>${estado}<div class="direita"><button type="button" class="btn btn-pequeno" data-acao="atualizar-pr" title="Lê de novo com ${comando}">Atualizar</button>${abrir}</div></div>
+      <p class="muted plataforma">A revisão e o merge acontecem na plataforma. Aqui você registra o resultado.</p>
+      <div class="decisoes-pr">
+        <section class="decisao-pr"><h3>Pedir mudanças</h3><p>Volta para o agente numa sessão em aberto, com este motivo.</p>
+          <textarea data-motivo-pr rows="3" placeholder="O que precisa mudar" aria-label="O que precisa mudar no PR"${habilitar(b.motivo)}>${escapar(rascunho.motivo)}</textarea>
+          <div class="rodape"><span class="bloqueio" data-bloqueio="pedir">${b.pedir[1]}</span><button type="button" class="btn btn-reprovar" data-acao="pedir-mudancas"${habilitar(b.pedir[0])}>Pedir mudanças</button></div></section>
+        <section class="decisao-pr"><h3>Encerrar issue</h3><p>Só depois do merge. A Fabriquinha remove a worktree; as branches ficam para você limpar na plataforma.</p>
+          <div class="nota-campo"><span class="muted">Nota da qualidade (obrigatória)</span><div class="notas" role="group" aria-label="Nota de 1 a 5">${notas.join("")}</div></div>
+          <div class="rodape"><span class="bloqueio" data-bloqueio="encerrar">${b.encerrar[1]}</span><button type="button" class="btn btn-primario" data-acao="encerrar-issue"${habilitar(b.encerrar[0])}>Encerrar issue</button></div></section>
+      </div>`;
+}
+
+const card = (valor: string, rotulo: string): string =>
+  `<div class="numero"><strong>${valor}</strong><span>${rotulo}</span></div>`;
+
+const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
+
+/** Os 4 cards de produtividade, do relatório do encerramento (F6 §6): custo e tokens somam as consultas. */
+function produtividade(m: MetricasIssue | undefined): string {
+  if (!m) return ["custo", "tokens", "execuções", "reprovações"].map((r) => card("—", r)).join("");
+  const consumos: Consumo[] = [...m.etapas, m.consultas];
+  const total = (f: (c: Consumo) => number) => consumos.reduce((n, c) => n + f(c), 0);
+  const nas = (campo: "execucoes" | "falhas" | "reprovacoes") => m.etapas.reduce((n, e) => n + e[campo], 0);
+  const [execucoes, reprovacoes] = [nas("execucoes"), nas("reprovacoes")];
+  return [
+    card(custo(total((c) => c.custo)), "custo"),
+    card(compacto(total((c) => c.tokens.input + c.tokens.output + c.tokens.cacheRead + c.tokens.cacheWrite)), "tokens"),
+    card(
+      String(execucoes),
+      `${execucoes === 1 ? "execução" : "execuções"} · ${plural(nas("falhas"), "falha", "falhas")}`,
+    ),
+    card(String(reprovacoes), reprovacoes === 1 ? "reprovação" : "reprovações"),
+  ].join("");
+}
+
+/** Um bloco da aba Revisão com o título, ou o aviso de que falta a evidência. */
+function bloco(titulo: string, conteudo: string | undefined, falta: string): string {
+  const corpo = conteudo ?? '<p class="muted">' + falta + "</p>";
+  return `<div><div class="titulo-bloco">${titulo}</div>${corpo}</div>`;
+}
+
+/** A aba Revisão: vídeo, produtividade, o corpo completo do PR (preenchido pela montagem), comprovação e fitness. */
+function revisaoDoPR(p: PaginaDaIssue): string {
+  const ultima = (tipo: TipoEvidencia) => p.evidencias.findLast((e) => e.tipo === tipo);
+  const [video] = ultima("video_explicativo")?.arquivos ?? [];
+  const [corpo] = ultima("pr_aberto")?.arquivos ?? [];
+  const comprovacao = ultima("comprovacao_criterios");
+  const fitness = ultima("matriz_fitness");
+  return `<div class="duas">${
+    video
+      ? `<video controls preload="metadata" src="${arquivo(video)}" aria-label="Vídeo explicativo"></video>`
+      : '<div class="sem-video">sem vídeo explicativo</div>'
+  }<div class="numeros">${produtividade(ultima("relatorio_produtividade")?.dados as MetricasIssue | undefined)}</div></div>
+      ${bloco("Corpo do PR", corpo && `<div class="corpo-pr md" data-corpo-pr="${arquivo(corpo)}">carregando…</div>`, "Sem o corpo do PR.")}
+      ${bloco("Comprovação dos critérios", comprovacao && tabelaDeComprovacao(comprovacao), "Sem a comprovação dos critérios.")}
+      ${bloco("Fitness functions", fitness && tabelaDeFitness(fitness, p), "Sem a matriz de fitness.")}`;
+}
+
+/**
+ * O gate do PR (F7 §4.4), em duas abas: **Revisão** (vídeo, produtividade, corpo do PR, comprovação e fitness) e
+ * **Decisão** (o estado lido na plataforma, pedir mudanças e encerrar a issue, C16).
+ */
+export function gateDoPR(
+  p: PaginaDaIssue,
+  { agora, pr = { erro: NAO_LIDO }, rascunho = { aba: "revisao", motivo: "" } }: Extras,
+): string {
+  if (p.issue.fase !== "aprovacao_pr") return "";
+  const espera = p.sessoes.find((s) => s.motivo === "gate_pr");
+  const aberto = prAberto(p);
+  const aba = (id: AbaDoPR, rotulo: string) =>
+    `<button type="button" role="tab" id="aba-pr-${id}" aria-controls="painel-pr-${id}" aria-selected="${String(id === rascunho.aba)}" data-acao="aba-pr" data-aba="${id}">${rotulo}</button>`;
+  const painel = (id: AbaDoPR, conteudo: string) =>
+    `<div class="gate-corpo" role="tabpanel" id="painel-pr-${id}" aria-labelledby="aba-pr-${id}" data-painel-pr="${id}"${id === rascunho.aba ? "" : " hidden"}>${conteudo}</div>`;
+  return `<section class="gate-painel" aria-label="Gate do PR">
+    <div class="gate-cabeca"><span class="rotulo">Gate do PR</span>${
+      aberto
+        ? `<a class="pr" href="${escapar(aberto.url)}" target="_blank" rel="noopener">PR #${escapar(aberto.id)} ↗</a>`
+        : ""
+    }${
+      espera
+        ? `<span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="/sessions/${espera.sessao}">abrir o chat da sessão →</a>`
+        : ""
+    }</div>
+    <div class="abas-gate" role="tablist">${aba("revisao", "Revisão")}${aba("decisao", "Decisão")}</div>
+    ${painel("revisao", revisaoDoPR(p))}
+    ${painel("decisao", decisaoDoPR(p, pr, rascunho, agora))}
+  </section>`;
+}
+
 /**
  * Os painéis da "Ação do Auditor", na ordem da coluna: cada um devolve o seu HTML, ou `""` quando não se aplica. Os
  * painéis de gate da fase (desenho e PR, tickets 31 e 32) entram no começo desta lista, e as ações deles na tabela
  * `ACOES` da montagem (issue-montar.ts).
  */
-export const PAINEIS: ((p: PaginaDaIssue, extras: Extras) => string)[] = [gateDoDesenho, executarAgora, limpeza];
+export const PAINEIS: ((p: PaginaDaIssue, extras: Extras) => string)[] = [
+  gateDoDesenho,
+  gateDoPR,
+  executarAgora,
+  limpeza,
+];
 
 /** A "Ação do Auditor", só quando algum painel existe (F7 §4.4). */
 export function acaoDoAuditor(p: PaginaDaIssue, extras = SEM_EXTRAS): string {
@@ -420,17 +621,38 @@ const tabelaDeCriterios = (e: Evidencia): string =>
     ),
   );
 
+/** A comprovação dos critérios, na caixa e no gate do PR. */
+const tabelaDeComprovacao = (e: Evidencia): string =>
+  tabela(
+    '<th>ID</th><th>Atendido</th><th>Como foi verificado</th><th class="num">Anexos</th>',
+    lista<{ id: string; atendido: boolean; comoVerificado: string; arquivos: string[] }>(e.dados.criterios).map(
+      (c) =>
+        `<tr><td class="mono">${escapar(c.id)}</td>${sim(c.atendido, "sim", "não")}<td>${escapar(c.comoVerificado)}</td><td class="num">${c.arquivos.map((nome) => anexo(e, nome)).join(", ")}</td></tr>`,
+    ),
+  );
+
+/** A matriz de fitness com a explicação do agente do mesmo ticket, na caixa e no gate do PR. */
+function tabelaDeFitness(e: Evidencia, p: PaginaDaIssue): string {
+  const explicacoes = new Map(
+    p.evidencias
+      .filter((x) => x.tipo === "explicacao_fitness" && x.ticket === e.ticket)
+      .flatMap((x) =>
+        lista<{ nome: string; explicacao: string }>(x.dados.explicacoes).map((n) => [n.nome, n.explicacao]),
+      ),
+  );
+  return tabela(
+    '<th>Fitness function</th><th>Resultado</th><th class="num">Duração</th><th>Explicação do agente</th><th>Log</th>',
+    lista<ComandoRodado & { nome: string }>(e.dados.linhas).map(
+      (l) =>
+        `<tr><td class="mono">${escapar(l.nome)}</td>${resultadoDoComando(l)}<td class="num">${duracao(l.duracaoMs)}</td><td>${escapar(explicacoes.get(l.nome) ?? "—")}</td><td>${anexo(e, l.log)}</td></tr>`,
+    ),
+  );
+}
+
 /** As tabelas dos tipos que o Auditor lê para decidir um gate (F7 §4.5); os demais saem como JSON formatado. */
 const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
   criterios_aceite: tabelaDeCriterios,
-  comprovacao_criterios: (e) =>
-    tabela(
-      "<th>ID</th><th>Atendido</th><th>Como foi verificado</th><th>Anexos</th>",
-      lista<{ id: string; atendido: boolean; comoVerificado: string; arquivos: string[] }>(e.dados.criterios).map(
-        (c) =>
-          `<tr><td class="mono">${escapar(c.id)}</td>${sim(c.atendido, "sim", "não")}<td>${escapar(c.comoVerificado)}</td><td>${c.arquivos.map((nome) => anexo(e, nome)).join(", ")}</td></tr>`,
-      ),
-    ),
+  comprovacao_criterios: (e) => tabelaDeComprovacao(e),
   relatorio_complexidade: (e) => {
     type Big = { tempo: string; espaco: string } | undefined;
     const bigo = (c: Big) =>
@@ -468,22 +690,7 @@ const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
       }),
     );
   },
-  matriz_fitness: (e, p) => {
-    const explicacoes = new Map(
-      p.evidencias
-        .filter((x) => x.tipo === "explicacao_fitness" && x.ticket === e.ticket)
-        .flatMap((x) =>
-          lista<{ nome: string; explicacao: string }>(x.dados.explicacoes).map((n) => [n.nome, n.explicacao]),
-        ),
-    );
-    return tabela(
-      '<th>Fitness function</th><th>Resultado</th><th class="num">Duração</th><th>Explicação do agente</th><th>Log</th>',
-      lista<ComandoRodado & { nome: string }>(e.dados.linhas).map(
-        (l) =>
-          `<tr><td class="mono">${escapar(l.nome)}</td>${resultadoDoComando(l)}<td class="num">${duracao(l.duracaoMs)}</td><td>${escapar(explicacoes.get(l.nome) ?? "—")}</td><td>${anexo(e, l.log)}</td></tr>`,
-      ),
-    );
-  },
+  matriz_fitness: (e, p) => tabelaDeFitness(e, p),
   execucao_testes: (e) =>
     tabela(
       '<th>Comando</th><th>Resultado</th><th class="num">Duração</th><th>Log</th>',

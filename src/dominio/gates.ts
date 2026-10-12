@@ -141,7 +141,7 @@ export function registrarDecisaoRevisao(ag: Agregado, entrada: unknown, ator: At
 }
 
 /** C16: encerrar a issue pede só a nota; pedir mudanças, só o motivo (F1 §3.7). */
-const EntradaPR = z.discriminatedUnion("aprovado", [
+export const EntradaPR = z.discriminatedUnion("aprovado", [
   z.strictObject({ aprovado: z.literal(true), nota: z.number().int().min(1).max(5) }),
   z.strictObject({ aprovado: z.literal(false), motivo: Motivo }),
 ]);

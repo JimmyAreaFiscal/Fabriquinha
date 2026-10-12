@@ -7,6 +7,7 @@
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
 //   pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz "registre", e não conta;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
+// - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
 // A resposta a um diálogo é ecoada numa mensagem e assenta; `abort` para a mensagem em fluxo como abortada.
 import { execFileSync } from "node:child_process";
@@ -99,12 +100,17 @@ function fecharFluxo(stopReason = "stop"): void {
   emFluxo = undefined;
 }
 
+/** O CLI `fabriquinha` como o agente o chama, com o escopo da execução no ambiente. */
+const cli = (...args: string[]) =>
+  execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "cli", "fabriquinha.ts"), ...args]);
+
+/** A issue do prompt montado pela Fabriquinha (F4 §6.3). */
+const issueDoPrompt = () => /Issue: I-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
+
 /** Como o agente do registro: título e tipo pelo CLI, e as duas evidências do registro (F3). */
 function registrar(): void {
-  const issue = /Issue: I-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
+  const issue = issueDoPrompt();
   const saida = String(process.env.FABRIQUINHA_SAIDA);
-  const cli = (...args: string[]) =>
-    execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "cli", "fabriquinha.ts"), ...args]);
   cli("issue", "editar", issue, "--titulo", "Exportar pedidos em CSV", "--tipo", "funcionalidade");
   writeFileSync(join(saida, "hoje.txt"), "a contabilidade copia os pedidos à mão\n");
   const comportamento = {
@@ -157,6 +163,9 @@ async function aoPrompt(texto: string): Promise<void> {
   if (texto.trim() === "registre" || texto.includes("**registre**")) {
     registrar();
     responder("Registrei o título, o tipo, o comportamento e os critérios de aceite.");
+  } else if (texto.includes("crie um ticket")) {
+    cli("ticket", "criar", `I-${issueDoPrompt()}`, "--titulo", "Criar o índice da busca");
+    responder("Criei o ticket de desenvolvimento do índice.");
   } else responder(process.env.FALSO_PI_RESPOSTA ?? "pronto");
   emitir({ type: "agent_settled" });
 }
