@@ -59,7 +59,7 @@ process.env.AZURE_DEVOPS_EXT_PAT = "segredo-az";
  * (ignora SIGTERM) e filho (deixa um processo filho e sai sem assentar).
  */
 const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync } from "node:fs";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 const anotar = (o) => appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(o) + "\\n");
 if (process.argv.includes("--version")) {
@@ -78,8 +78,20 @@ const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 process.stdout.write("aviso do pi fora do protocolo\\n");
 process.stderr.write("stderr do pi falso\\n");
 if (variante === "dorme") process.on("SIGTERM", () => anotar({ evento: "SIGTERM ignorado" }));
-const assistente = (stopReason, extra = {}) =>
-  emitir({ type: "message_end", message: { role: "assistant", content: [], stopReason, ...extra } });
+// Como o pi, grava cada resposta do assistente na sessão <session-dir>/<timestamp>_<session-id>.jsonl.
+const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
+function assistente(stopReason, extra = {}) {
+  const message = {
+    role: "assistant", content: [], provider: "anthropic", model: "claude-teste", stopReason, ...extra,
+    usage: { input: 10, output: 2, cacheRead: 100, cacheWrite: 0, totalTokens: 112, cost: { total: 0.01 } },
+  };
+  mkdirSync(arg("--session-dir"), { recursive: true });
+  appendFileSync(
+    arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl",
+    JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n",
+  );
+  emitir({ type: "message_end", message });
+}
 async function terminar() {
   if (process.env.FALSO_PI_AGENTE) await (await import(process.env.FALSO_PI_AGENTE)).default();
   assistente("stop");
@@ -273,6 +285,13 @@ function cenario({ preparacao = [] as string[], variante = "sucesso", comAgente 
   };
 }
 
+/** As linhas de `uso` da execução, como listas. */
+const uso = (banco: DatabaseSync, execucao: number) =>
+  banco
+    .prepare("SELECT * FROM uso WHERE execucao = ? ORDER BY provedor, modelo")
+    .all(execucao)
+    .map((l) => Object.values(l).slice(1));
+
 const vivo = (pid: number) => {
   try {
     process.kill(pid, 0);
@@ -352,6 +371,8 @@ test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e
   assert.match(log, /^stderr do pi falso$/m);
   assert.match(log, /fora do protocolo: aviso do pi fora do protocolo/);
   assert.match(log, /T-2 concluído\n$/);
+  // F6 §3.3: o uso da sessão foi coletado logo depois do C6.
+  assert.deepEqual(uso(c.banco, 2), [["anthropic", "claude-teste", 1, 10, 2, 100, 0, 0.01]]);
   // Coleta do desenho (F3 §7): o rascunho do agente foi descartado, e as evidências ficaram.
   assert.match(log, /descarte removeu: rascunho-do-prototipo\.txt/);
   assert.equal(existsSync(join(c.worktree, "rascunho-do-prototipo.txt")), false);
@@ -388,6 +409,9 @@ test("stopReason error: C6 + C8 com o erro do pi inteiro, mesmo com U+2028, cort
     ["falha", "sucesso"],
   );
   assert.equal(execucoes[1]?.sessaoPi, execucoes[0]?.sessaoPi);
+  // Mesma sessão, uma resposta em cada janela: a da falha também foi coletada depois do seu C6.
+  assert.deepEqual(uso(c.banco, 2), [["anthropic", "claude-teste", 1, 10, 2, 100, 0, 0.01]]);
+  assert.deepEqual(uso(c.banco, 3), [["anthropic", "claude-teste", 1, 10, 2, 100, 0, 0.01]]);
   const inicios = c.registro().filter((r) => r.evento === "inicio");
   const sessao = (r: Record<string, unknown> | undefined) => (r?.argv as string[]).at(5);
   assert.equal(sessao(inicios[1]), sessao(inicios[0]));

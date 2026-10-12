@@ -2,7 +2,17 @@
 // falso que fala o protocolo RPC (F4 §12), registro, ociosidade e retomada, diálogo pendente, steer e aborto.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -248,10 +258,14 @@ mkdirSync(dir, { recursive: true });
 const existente = readdirSync(dir, { withFileTypes: true }).find((f) => f.name.endsWith("_" + id + ".jsonl"));
 const sessao = join(dir, existente ? existente.name : "2026-10-11T10-00-00-000Z_" + id + ".jsonl");
 if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n");
-const guardar = (message) => appendFileSync(sessao, JSON.stringify({ type: "message", message }) + "\\n");
+const guardar = (message) =>
+  appendFileSync(sessao, JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const responder = (texto, stopReason = "stop") => {
-  const message = { role: "assistant", content: [{ type: "text", text: texto }], stopReason };
+  const message = {
+    role: "assistant", content: [{ type: "text", text: texto }], provider: "anthropic", model: "claude-teste", stopReason,
+    usage: { input: 10, output: 2, cacheRead: 100, cacheWrite: 0, totalTokens: 112, cost: { total: 0.01 } },
+  };
   guardar(message);
   emitir({ type: "message_end", message });
   emitir({ type: "agent_settled" });
@@ -548,6 +562,14 @@ test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a pr�
   const inicios = c.registro().filter((r) => r.evento === "inicio");
   assert.deepEqual((inicios[1]?.argv as string[]).slice(4, 6), ["--session-id", sessao]);
   assert.deepEqual(c.comandos().at(-1), { type: "prompt", message: "voltei" }, "a retomada leva só a mensagem");
+  // F6 §3.3: o uso foi coletado depois de cada C6, e cada execução da sessão ficou só com a sua resposta.
+  const uso = (e: number) =>
+    c.banco
+      .prepare("SELECT provedor, modelo, chamadas, custo FROM uso WHERE execucao = ?")
+      .all(e)
+      .map((l) => ({ ...l }));
+  const umaResposta = [{ provedor: "anthropic", modelo: "claude-teste", chamadas: 1, custo: 0.01 }];
+  assert.deepEqual([uso(1), uso(2)], [umaResposta, umaResposta]);
 
   const outra = registrarNecessidade(c.banco, "loja", [], opcoes);
   await ate(() => c.execucoes()[2]?.resultado === "sucesso", "a parada da outra sessão");
@@ -709,6 +731,23 @@ test("banco fechado ao fim da sessão interativa: o término vai para o log em v
   await ate(() => situacao(sessao)?.ocupado === false, "a conversa");
   c.banco.close();
   await ate(() => c.log(1).includes("E-1 não gravou o término:"), "o registro do erro no log");
+});
+
+test("sessão com dois arquivos (F6 §3.1): a retomada falha com o motivo, e o chat diz como resolver", async () => {
+  const c = cenario();
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
+  const dir = join(c.raiz, "sessoes");
+  const [arquivo] = readdirSync(dir);
+  copyFileSync(join(dir, String(arquivo)), join(dir, `2026-10-12T00-00-00-000Z_${sessao}.jsonl`));
+
+  await enviar(c.banco, sessao, "voltei", "prompt", opcoes);
+  await ate(() => c.execucoes()[1]?.resultado === "falha", "o C6 da falha");
+  assert.match(c.log(2), /E-2 terminou com falha: a sessão \S+ tem 2 arquivos/);
+  assert.match(c.log(2), /coleta de uso falhou: ErroDeRegra: a sessão \S+ tem 2 arquivos/);
+  await assert.rejects(abrirChat(c.banco, sessao), /tem 2 arquivos .*\(deixe só o arquivo da sessão/);
+  c.banco.close();
 });
 
 test("pi que sai sozinho: C6 falha, mas o ticket interativo não falha e a sessão segue em conversa", async () => {

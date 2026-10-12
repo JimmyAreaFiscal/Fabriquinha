@@ -1,8 +1,9 @@
 // Arquivos e dados de uma execução fora do agregado (F2 §2, F4 §6.1.2, §7): o diretório `<raiz>/execucoes/E-<n>/`, o
 // `log` dele e o grupo de processos do pi.
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 
 /** `<raiz>/execucoes/E-<n>`: `log`, `prompt.md` e `saida/` da execução. */
@@ -12,6 +13,27 @@ export const dirDaExecucao = (raiz: string, execucao: Id): string => join(raiz, 
 export const anotar = (log: string, texto: string): void => {
   appendFileSync(log, `${new Date().toISOString()} ${texto}\n`);
 };
+
+/** O log do serviço é o stderr, que o systemd guarda (F4 §2). */
+export const noLog = (erro: unknown): void => {
+  console.error(`${new Date().toISOString()} fabriquinha:`, erro);
+};
+
+/**
+ * O arquivo JSONL que o pi grava em `<raiz>/sessoes/<instante>_<sessaoPi>.jsonl`, ou `undefined` se ainda não existe.
+ * Mais de um arquivo para o mesmo ID é erro (F6 §3.1): não há como saber qual é a sessão.
+ */
+export function arquivoDaSessao(raiz: string, sessao: string): string | undefined {
+  const dir = join(raiz, "sessoes");
+  const achados = existsSync(dir) ? readdirSync(dir).filter((nome) => nome.endsWith(`_${sessao}.jsonl`)) : [];
+  if (achados.length > 1) {
+    throw new ErroDeRegra(
+      `a sessão ${sessao} tem ${String(achados.length)} arquivos em ${dir}: ${achados.join(", ")}`,
+      "deixe só o arquivo da sessão e apague as cópias",
+    );
+  }
+  return achados[0] && join(dir, achados[0]);
+}
 
 /** Grava o grupo de processos do pi, que o reinício do serviço mata (F4 §7); não é do domínio. */
 export const gravarPgid = (banco: DatabaseSync, execucao: Id, pgid: number): void => {

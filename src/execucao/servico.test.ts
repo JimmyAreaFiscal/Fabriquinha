@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -189,6 +189,22 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   issue(banco, 4, "desenvolvimento");
   ticket(banco, 4, 4, "desenvolvimento", "em_execucao");
   execucao(banco, 4, 4, "autonomo", "sucesso");
+  // F6 §3.3: a sessão da interativa tem uma resposta; a da autônoma tem dois arquivos, e a coleta dela falha.
+  const sessao = (e: number) => String(banco.prepare("SELECT sessao_pi FROM execucao WHERE id = ?").get(e)?.sessao_pi);
+  mkdirSync(join(raiz, "sessoes"));
+  const resposta = {
+    type: "message",
+    timestamp: AGORA,
+    message: {
+      role: "assistant",
+      provider: "openai",
+      model: "gpt-5",
+      usage: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, cost: { total: 0.5 } },
+    },
+  };
+  writeFileSync(join(raiz, "sessoes", `a_${sessao(2)}.jsonl`), JSON.stringify(resposta));
+  for (const copia of ["a", "b"]) writeFileSync(join(raiz, "sessoes", `${copia}_${sessao(1)}.jsonl`), "");
+  mkdirSync(join(raiz, "execucoes", "E-1"), { recursive: true });
   banco.close();
 
   const s = await subir(raiz);
@@ -205,6 +221,26 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   assert.partialDeepStrictEqual(ag(4), { ticket: { status: "falhou", erro: "serviço reiniciado" } });
   assert.equal(ag(2).ticket?.erro, undefined);
   assert.deepEqual(ticketsAutonomosEmExecucao(s.banco), []);
+  assert.deepEqual(
+    s.banco
+      .prepare("SELECT * FROM uso")
+      .all()
+      .map((l) => ({ ...l })),
+    [
+      {
+        execucao: 2,
+        provedor: "openai",
+        modelo: "gpt-5",
+        chamadas: 1,
+        input: 1,
+        output: 2,
+        cache_read: 3,
+        cache_write: 4,
+        custo: 0.5,
+      },
+    ],
+  );
+  assert.match(readFileSync(join(raiz, "execucoes", "E-1", "log"), "utf8"), /coleta de uso falhou: .* tem 2 arquivos/);
   await s.parar();
 });
 

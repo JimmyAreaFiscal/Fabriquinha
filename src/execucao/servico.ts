@@ -6,7 +6,9 @@ import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { falharTicket, terminarExecucao } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
+import { depoisDoC6 } from "../metricas/uso.ts";
 import { abrir } from "../persistencia/banco.ts";
+import { noLog } from "../persistencia/execucoes.ts";
 import { comIssue } from "../persistencia/issues.ts";
 import {
   autonomaEmAndamento,
@@ -30,11 +32,6 @@ export interface Servico {
 /** A porta do serviço e trava de instância única: `$FABRIQUINHA_PORTA`, padrão 4317 (F4 §10). */
 export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => Number(env.FABRIQUINHA_PORTA || 4317);
 
-/** O log do serviço é o stderr, que o systemd guarda (F4 §2). */
-const noLog = (erro: unknown): void => {
-  console.error(`${new Date().toISOString()} fabriquinha:`, erro);
-};
-
 /**
  * F4 §7: toda execução em andamento é de uma instância anterior. Mata o grupo do pi, grava C6 com falha e leva a C8 cada
  * ticket autônomo que ficou `em_execucao`: o da execução encerrada agora e também o de quem caiu entre o C6 e a
@@ -43,10 +40,10 @@ const noLog = (erro: unknown): void => {
 function recuperar(banco: DatabaseSync): void {
   for (const e of execucoesEmAndamento(banco)) {
     if (e.pgid !== null) sinalNoGrupo(e.pgid, "SIGKILL");
-    // ponytail: coletarUso (F6 §3.3) entra depois deste C6 com o ticket 17.
     comIssue(banco, e.issue, "terminarExecucao", FABRIQUINHA, (ag, ctx) =>
       terminarExecucao(ag, { execucao: e.id, resultado: "falha", erro: REINICIADO }, FABRIQUINHA, ctx),
     );
+    depoisDoC6(banco, e.id);
   }
   for (const t of ticketsAutonomosEmExecucao(banco)) {
     comIssue(banco, t.issue, "falharTicket", FABRIQUINHA, (ag) =>

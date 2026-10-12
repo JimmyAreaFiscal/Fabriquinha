@@ -7,6 +7,7 @@ import { existe, mensagem } from "../dominio/erros.ts";
 import { falharTicket, terminarExecucao, ticketDe } from "../dominio/execucao.ts";
 import { type Id, motivo } from "../dominio/primitivos.ts";
 import { depoisDoPi } from "../evidencias/coleta.ts";
+import { depoisDoC6 } from "../metricas/uso.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { anotar, logDaExecucao } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
@@ -51,17 +52,18 @@ export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: 
     prompt: (c) => montarPrompt({ ag, ticket: t, instrucao, ...c, modo: "autonomo" }),
   });
 
-  // ponytail: coletarUso (F6 §3.3) entra depois de cada C6 com o ticket 17.
   if (falha !== undefined) {
     comIssue(banco, issue, "terminarExecucao", FABRIQUINHA, (a, ctx) =>
       terminarExecucao(a, { execucao: execucao.id, resultado: "falha", erro: motivo(falha) }, FABRIQUINHA, ctx),
     );
+    depoisDoC6(banco, execucao.id);
     falhar(falha);
     return;
   }
   comIssue(banco, issue, "terminarExecucao", FABRIQUINHA, (a, ctx) =>
     terminarExecucao(a, { execucao: execucao.id, resultado: "sucesso" }, FABRIQUINHA, ctx),
   );
+  depoisDoC6(banco, execucao.id);
   anotar(log, "pi terminou bem; coleta depois do pi");
   try {
     const naConclusao = await depoisDoPi(banco, t, worktree, log);

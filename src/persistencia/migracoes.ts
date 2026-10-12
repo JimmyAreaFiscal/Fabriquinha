@@ -172,4 +172,17 @@ export const MIGRACOES: readonly string[] = [
   );
   -- Para o F6: alterações e bugs por arquivo.
   CREATE INDEX ix_arquivo_commit_caminho ON arquivo_commit(caminho);`,
+  // F6 §7: tokens e custo por execução × provedor/modelo, regravados por coletarUso (F6 §3.3).
+  `CREATE TABLE uso (
+    execucao    INTEGER NOT NULL REFERENCES execucao(id),
+    provedor    TEXT    NOT NULL,
+    modelo      TEXT    NOT NULL,
+    chamadas    INTEGER NOT NULL CHECK (chamadas >= 1),
+    input       INTEGER NOT NULL CHECK (input >= 0),
+    output      INTEGER NOT NULL CHECK (output >= 0),
+    cache_read  INTEGER NOT NULL CHECK (cache_read >= 0),
+    cache_write INTEGER NOT NULL CHECK (cache_write >= 0),
+    custo       REAL    NOT NULL CHECK (custo >= 0), -- US$, como o pi calculou
+    PRIMARY KEY (execucao, provedor, modelo)
+  );`,
 ];

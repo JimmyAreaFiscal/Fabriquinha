@@ -1,7 +1,6 @@
 // Sessões (F4 §5, §6.6): estado calculado, lista e histórico, chat, mensagens conforme o estado e as sessões
 // interativas, que param por ociosidade e retomam na próxima mensagem no mesmo modo.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type Agregado,
@@ -17,8 +16,9 @@ import { evidenciasFaltando } from "../dominio/evidencia.ts";
 import { terminarExecucao, ticketDe } from "../dominio/execucao.ts";
 import { decidirRegistro } from "../dominio/gates.ts";
 import { type Etapa, type Fase, type Id, type Instante, motivo } from "../dominio/primitivos.ts";
+import { depoisDoC6 } from "../metricas/uso.ts";
 import { raizDo } from "../persistencia/banco.ts";
-import { anotar, issueDaSessao, issuesComSessao, logDaExecucao } from "../persistencia/execucoes.ts";
+import { anotar, arquivoDaSessao, issueDaSessao, issuesComSessao, logDaExecucao } from "../persistencia/execucoes.ts";
 import { agregado, agregadoDoTicket, comIssue, registrarIssue, ultimaEdicaoDoAgente } from "../persistencia/issues.ts";
 import {
   assinar,
@@ -212,13 +212,6 @@ export async function infoDaSessao(banco: DatabaseSync, sessao: string): Promise
   return estadoNoBanco(banco, await agregadoAssentado(banco, issueDe(banco, sessao)), sessao);
 }
 
-/** O arquivo JSONL da sessão que o pi grava em `<raiz>/sessoes/<instante>_<sessaoPi>.jsonl`, se já existe. */
-function arquivoDaSessao(raiz: string, sessao: string): string | undefined {
-  const dir = join(raiz, "sessoes");
-  const nome = existsSync(dir) ? readdirSync(dir).find((n) => n.endsWith(`_${sessao}.jsonl`)) : undefined;
-  return nome && join(dir, nome);
-}
-
 /** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
 function lerConversa(raiz: string, sessao: string): unknown[] {
   const arquivo = arquivoDaSessao(raiz, sessao);
@@ -270,7 +263,6 @@ export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string
   const { ag, execucao } = iniciarNaSessaoPrincipal(banco, issue, ticket, "interativo");
   const raiz = raizDo(banco);
   const log = logDaExecucao(raiz, execucao.id);
-  const primeira = arquivoDaSessao(raiz, execucao.sessaoPi) === undefined;
   const e = `E-${String(execucao.id)}`;
   const tarefa = rodarExecucao({
     banco,
@@ -278,8 +270,9 @@ export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string
     execucao,
     pacote: opcoes.pacote,
     limiteMin: opcoes.ociosidadeMin,
+    // Dentro da execução: sessão com dois arquivos (F6 §3.1) vira falha dela, não execução presa em andamento.
     prompt: (c) => {
-      if (!primeira) return texto;
+      if (arquivoDaSessao(raiz, execucao.sessaoPi) !== undefined) return texto;
       const contexto = montarPrompt({
         ag,
         ticket: ticketDe(ag, ticket),
@@ -302,6 +295,7 @@ export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string
           ctx,
         ),
       );
+      depoisDoC6(banco, execucao.id);
       anotar(log, falha === undefined ? `${e} terminou` : `${e} terminou com falha: ${falha}`);
     })
     .catch((error_: unknown) => {
