@@ -1,6 +1,8 @@
 // O serviço de longa duração (F4 §2, §4, §7): a porta como trava de instância única e o web (F7 §4), o reinício que
 // encerra as execuções de uma instância anterior, o agendador e o "Executar agora".
+import { rmSync } from "node:fs";
 import { createServer } from "node:http";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
@@ -158,6 +160,8 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
       web.closeAllConnections();
       await fechou;
+      // F7 §3.2: sem o link de entrada, o `abrir` diz que o serviço não está rodando em vez de abrir um link morto.
+      rmSync(join(raiz, "web.url"), { force: true });
       await varredura;
       banco.close();
     },

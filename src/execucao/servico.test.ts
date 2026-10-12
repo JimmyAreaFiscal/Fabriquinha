@@ -179,6 +179,14 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   await outra.parar();
 });
 
+test("parar apaga o web.url: o abrir diz que o serviço não está rodando em vez de abrir um link morto", async () => {
+  const raiz = novaRaiz();
+  const s = await subir(raiz);
+  assert.equal(existsSync(join(raiz, "web.url")), true);
+  await s.parar();
+  assert.equal(existsSync(join(raiz, "web.url")), false);
+});
+
 test("reinício: as execuções da instância anterior são encerradas conforme o F4 §7 na subida", async () => {
   const raiz = novaRaiz();
   const banco = abrir(raiz);
