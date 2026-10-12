@@ -242,3 +242,37 @@ test("modelo que o pi não lista dá 422 no campo da etapa; nada é gravado", as
   );
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
 });
+
+const issueComExecucao = (resultado: "em_andamento" | "sucesso") => `
+  INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'Busca', 'problema', 'desenvolvimento', '2026-10-12T14:00:00.000Z');
+  INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
+    VALUES (1, 1, 'desenvolvimento', 'Dev', '${resultado === "sucesso" ? "concluido" : "em_execucao"}', 'fabriquinha', '2026-10-12T14:00:00.000Z', ${resultado === "sucesso" ? "'2026-10-12T15:00:00.000Z'" : "NULL"});
+  INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
+    VALUES (1, 1, 'autonomo', 's', '${resultado}', '2026-10-12T14:20:00.000Z', ${resultado === "sucesso" ? "'2026-10-12T15:00:00.000Z'" : "NULL"});`;
+
+test("remover: apaga o projeto e tudo dele, responde { avisos } e o projeto some do GET (404 no detalhe)", async () => {
+  await chamar("POST", "/api/projetos", formulario(clone()));
+  banco.exec(issueComExecucao("sucesso"));
+  assert.deepEqual(await chamar("DELETE", "/api/projetos/loja"), { avisos: [] });
+  assert.deepEqual(await chamar("GET", "/api/projetos"), []);
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), [
+    404,
+    "o projeto loja não existe (confira o nome do projeto)",
+  ]);
+  assert.equal(banco.prepare("SELECT count(*) AS n FROM issue").get()?.n, 0);
+});
+
+test("remover projeto que não existe dá 404 com a mensagem do projeto", async () => {
+  const [status, erro] = (await chamar("DELETE", "/api/projetos/fantasma")) as [number, string];
+  assert.equal(status, 404);
+  assert.match(erro, /o projeto fantasma não existe/);
+});
+
+test("remover projeto com execução em andamento dá 409 e o projeto continua", async () => {
+  await chamar("POST", "/api/projetos", formulario(clone()));
+  banco.exec(issueComExecucao("em_andamento"));
+  const [status, erro] = (await chamar("DELETE", "/api/projetos/loja")) as [number, string];
+  assert.equal(status, 409);
+  assert.match(erro, /execução em andamento/);
+  assert.equal(((await chamar("GET", "/api/projetos")) as unknown[]).length, 1);
+});

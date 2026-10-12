@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   agendador,
+  confirmacaoDeRemover,
   errosDoZod,
   type EstadoDaConfiguracao,
   formularioDeProjeto,
@@ -114,7 +115,8 @@ test("agendador: interruptor, os três tempos, a próxima busca no fuso local e 
 
 test("projeto salvo: nome só leitura, hospedagem, as listas, as fitness e o modelo de cada etapa", () => {
   const html = formularioDeProjeto(LOJA, { issues: 1, modelos: MODELOS, erros: new Map() });
-  assert.match(html, /^<h2>loja <span class="muted contagem">1 issue<\/span><\/h2>/);
+  assert.match(html, /^<h2>loja <span class="muted contagem">1 issue<\/span><button [^>]*data-remover-projeto/);
+  assert.match(html, /aria-label="Remover o projeto loja">Remover<\/button><\/h2>/);
   assert.match(html, /<input id="campo-nome" name="nome" value="loja" readonly>/);
   assert.match(html, /<input id="campo-hospedagem" value="GitHub" readonly>/);
   assert.match(
@@ -138,6 +140,19 @@ test("projeto salvo: nome só leitura, hospedagem, as listas, as fitness e o mod
   );
   assert.match(html, /<button type="submit" class="btn btn-primario">Salvar projeto<\/button>/);
   assert.match(formularioDeProjeto(LOJA, { issues: 11, modelos: MODELOS, erros: new Map() }), /11 issues/);
+});
+
+test("o botão Remover só existe no projeto salvo", () => {
+  assert.doesNotMatch(formularioDeProjeto(NOVO, { modelos: MODELOS, erros: new Map() }), /data-remover-projeto/);
+});
+
+test("confirmacaoDeRemover: o nome escapado, o plural das issues, Cancelar e Remover projeto", () => {
+  const um = confirmacaoDeRemover("<demo>", 1);
+  assert.match(um, /<h2 id="titulo-remover">Remover o projeto &#60;demo&#62;<\/h2>/);
+  assert.match(um, /O projeto <strong>&#60;demo&#62;<\/strong> e 1 issue serão apagados/);
+  assert.match(um, /<button class="btn">Cancelar<\/button>/);
+  assert.match(um, /data-confirmar-remover>Remover projeto<\/button>/);
+  assert.match(confirmacaoDeRemover("demo", 4), /e 4 issues serão apagados/);
 });
 
 test("o modelo gravado que o pi deixou de listar continua no seletor, escolhido", () => {

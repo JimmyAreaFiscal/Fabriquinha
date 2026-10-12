@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -12,6 +21,7 @@ import {
   limpar,
   limpezaPendente,
   naFilaDoProjeto,
+  removerWorktrees,
 } from "./worktree.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-worktree-")));
@@ -331,3 +341,53 @@ test("limpeza pendente: a worktree da issue concluída que ficou no disco vira o
   assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [], "rodou o comando");
   assert.doesNotMatch(execFileSync("git", ["-C", c.repo, "worktree", "list"]).toString(), /I-1/, "nada a podar");
 });
+
+test("removerWorktrees: apaga worktrees/<projeto> e faz prune; repositório, HEAD, branch e outros projetos ficam", async () => {
+  const c = cenario();
+  const caminho = caminhoDaWorktree(c.raiz, "demo", 1);
+  mkdirSync(join(c.raiz, "worktrees", "demo"), { recursive: true });
+  mkdirSync(join(c.raiz, "worktrees", "outro"), { recursive: true });
+  git(c.repo, "worktree", "add", "-q", "-b", "fabriquinha/I-1", caminho);
+  const head = git(c.repo, "rev-parse", "HEAD");
+
+  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo }), []);
+
+  assert.equal(existsSync(join(c.raiz, "worktrees", "demo")), false);
+  assert.equal(existsSync(join(c.raiz, "worktrees", "outro")), true);
+  assert.doesNotMatch(git(c.repo, "worktree", "list"), /I-1/);
+  assert.match(git(c.repo, "branch", "--list", "fabriquinha/I-1"), /fabriquinha\/I-1/);
+  assert.equal(git(c.repo, "rev-parse", "HEAD"), head);
+});
+
+test("removerWorktrees: sem worktrees/<projeto> no disco devolve []", async () => {
+  const c = cenario();
+  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo }), []);
+});
+
+test("removerWorktrees: repositório que não existe mais vira o aviso do prune", async () => {
+  const c = cenario();
+  const repo = join(c.raiz, "sumiu");
+  const avisos = await removerWorktrees(c.raiz, { nome: "demo", repo });
+  assert.equal(avisos.length, 1);
+  assert.match(String(avisos[0]), new RegExp(`^git -C ${repo} worktree prune falhou: .+`));
+});
+
+test(
+  "removerWorktrees: pasta que não dá para apagar vira aviso com o caminho",
+  { skip: process.getuid?.() === 0 },
+  async (t) => {
+    const c = cenario();
+    const pasta = join(c.raiz, "worktrees", "demo");
+    const interna = join(pasta, "I-1");
+    mkdirSync(interna, { recursive: true });
+    writeFileSync(join(interna, "a.txt"), "");
+    chmodSync(interna, 0o500);
+    t.after(() => {
+      chmodSync(interna, 0o700);
+    });
+
+    const avisos = await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo });
+    assert.equal(avisos.length, 1);
+    assert.match(String(avisos[0]), new RegExp(`^não foi possível apagar ${pasta}: `));
+  },
+);

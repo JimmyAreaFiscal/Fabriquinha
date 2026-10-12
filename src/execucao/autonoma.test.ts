@@ -32,6 +32,8 @@ import { executarAutonomo } from "./autonoma.ts";
 import { ABORTADA, abortar, dialogosPendentes, responderDialogo } from "./gerente.ts";
 import { PACOTE } from "./pi.ts";
 
+// O ambiente do pi herda a porta do serviço; quando os testes rodam dentro de uma execução ela vem definida.
+delete process.env.FABRIQUINHA_PORTA;
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-autonoma-")));
 after(() => {
   rmSync(base, { recursive: true, force: true });

@@ -1,6 +1,7 @@
 // Worktree e branch da issue (F5 §3), descarte das alterações (F5 §3.3), limpeza depois do encerramento (F5 §5.3) e
 // fila de comandos git (F5 §6).
 import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Issue } from "../dominio/agregado.ts";
 import { ErroDeRegra, mensagem } from "../dominio/erros.ts";
@@ -199,6 +200,26 @@ export async function limpar(
       const r = await git(projeto.repo, ...args);
       if (r.codigo !== 0) avisos.push(`git -C ${projeto.repo} ${args.join(" ")} falhou: ${r.erro.trim()}`);
     }
+    return avisos;
+  });
+}
+
+/**
+ * Remoção do projeto: apaga `<raiz>/worktrees/<projeto>` inteira e faz `git worktree prune` no repositório, que só
+ * recebe o prune (arquivos, commits, branches `fabriquinha/I-n` e remoto ficam). Como `limpar`, devolve um aviso por
+ * falha e nunca lança por causa do disco ou do git.
+ */
+export function removerWorktrees(raiz: string, projeto: Pick<Projeto, "nome" | "repo">): Promise<string[]> {
+  return naFilaDoProjeto(raiz, projeto.nome, async () => {
+    const avisos: string[] = [];
+    const pasta = dirname(caminhoDaWorktree(raiz, projeto.nome, 0));
+    try {
+      await rm(pasta, { recursive: true, force: true });
+    } catch (error_) {
+      avisos.push(`não foi possível apagar ${pasta}: ${mensagem(error_)}`);
+    }
+    const r = await git(projeto.repo, "worktree", "prune");
+    if (r.codigo !== 0) avisos.push(`git -C ${projeto.repo} worktree prune falhou: ${r.erro.trim()}`);
     return avisos;
   });
 }

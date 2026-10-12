@@ -2,10 +2,11 @@
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Modelo } from "../../../dominio/primitivos.ts";
 import type { Parametros } from "../caminhos.ts";
-import { api, ErroDaApi, mostrarErro } from "../dom.ts";
+import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
 import {
   agendador,
+  confirmacaoDeRemover,
   type Erros,
   errosDoZod,
   type EstadoDaConfiguracao,
@@ -99,6 +100,27 @@ function montarAgendador(
   });
 }
 
+/** O diálogo de remover o projeto salvo: só o DELETE apaga; ao concluir, volta a `/config` com os avisos do disco. */
+function montarRemocao(main: HTMLElement, signal: AbortSignal, salvo: ProjetoListado): void {
+  main.querySelector(".painel-config")?.insertAdjacentHTML("beforeend", confirmacaoDeRemover(salvo.nome, salvo.issues));
+  const dialogo = main.querySelector<HTMLDialogElement>("[data-dialogo-remover]");
+  main.querySelector("[data-remover-projeto]")?.addEventListener("click", () => dialogo?.showModal());
+  dialogo?.querySelector("[data-confirmar-remover]")?.addEventListener("click", (evento) => {
+    (evento.currentTarget as HTMLButtonElement).disabled = true;
+    api<{ avisos: string[] }>(`/api/projetos/${encodeURIComponent(salvo.nome)}`, { method: "DELETE" })
+      .then(async ({ avisos }) => {
+        dialogo.close();
+        history.replaceState(null, "", "/config");
+        await montarConfiguracao(main, {}, signal);
+        if (avisos.length > 0) avisar(avisos.join("; "));
+      })
+      .catch((error_: unknown) => {
+        dialogo.close();
+        mostrarErro(error_);
+      });
+  });
+}
+
 function montarProjeto(
   main: HTMLElement,
   signal: AbortSignal,
@@ -111,6 +133,7 @@ function montarProjeto(
     main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { issues: salvo?.issues, modelos, erros, falha }));
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");
     if (!form) return;
+    if (salvo) montarRemocao(main, signal, salvo);
     form.addEventListener("change", (evento) => {
       if (evento.target instanceof HTMLSelectElement) evento.target.classList.toggle("padrao", !evento.target.value);
     });

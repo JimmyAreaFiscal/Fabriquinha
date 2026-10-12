@@ -1,9 +1,13 @@
 // Gravação e leitura de projetos (C19: registrar e editar; F2 §4 e §6).
 // As conferências externas (F5 §2, F4 §9) rodam antes, fora daqui.
+import { readdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { Projeto } from "../dominio/projeto.ts";
-import { escrever } from "./banco.ts";
+import { caminhoArquivo } from "./arquivos.ts";
+import { escrever, raizDo } from "./banco.ts";
+import { dirDaExecucao } from "./execucoes.ts";
 
 interface Linha {
   nome: string;
@@ -101,3 +105,100 @@ export function projetos(banco: DatabaseSync): Projeto[] {
 /** Quantas issues o projeto tem, inclusive concluídas e arquivadas: o número ao lado do nome na Configuração. */
 export const issuesDoProjeto = (banco: DatabaseSync, nome: string): number =>
   Number(banco.prepare("SELECT count(*) AS n FROM issue WHERE projeto = ?").get(nome)?.n);
+
+const DOS_TICKETS = "SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue WHERE i.projeto = $p";
+const DAS_EXECUCOES = `SELECT id FROM execucao WHERE ticket IN (${DOS_TICKETS})`;
+const DOS_COMMITS = `SELECT sha FROM commit_ticket WHERE ticket IN (${DOS_TICKETS})`;
+const DAS_EVIDENCIAS = `SELECT id FROM evidencia WHERE ticket IN (${DOS_TICKETS})`;
+const DAS_ISSUES = "SELECT id FROM issue WHERE projeto = $p";
+
+/** Apaga as linhas do projeto, na ordem das chaves estrangeiras, e devolve o que sobra para apagar no disco. */
+function apagarLinhas(banco: DatabaseSync, nome: string) {
+  const p = { p: nome };
+  const emAndamento = banco
+    .prepare(
+      `SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue
+       WHERE i.projeto = $p AND (t.status = 'em_execucao'
+         OR EXISTS (SELECT 1 FROM execucao e WHERE e.ticket = t.id AND e.resultado = 'em_andamento'))
+       ORDER BY t.id LIMIT 1`,
+    )
+    .get(p);
+  if (emAndamento) {
+    throw new ErroDeRegra(
+      `o projeto ${nome} tem execução em andamento no T-${String(emAndamento.id)}`,
+      "espere ela terminar ou pare a sessão, e remova de novo",
+    );
+  }
+  const execucoes = banco.prepare(`SELECT id, sessao_pi FROM execucao WHERE id IN (${DAS_EXECUCOES})`).all(p) as {
+    id: number;
+    sessao_pi: string;
+  }[];
+  const anexos = (
+    banco.prepare(`SELECT DISTINCT sha256 FROM evidencia_arquivo WHERE evidencia IN (${DAS_EVIDENCIAS})`).all(p) as {
+      sha256: string;
+    }[]
+  ).map((a) => a.sha256);
+
+  const apagar = (tabela: string, onde: string) => banco.prepare(`DELETE FROM ${tabela} WHERE ${onde}`).run(p);
+  apagar("uso", `execucao IN (${DAS_EXECUCOES})`);
+  apagar("retrabalho", `ticket IN (${DOS_TICKETS}) OR ticket_origem IN (${DOS_TICKETS})`);
+  apagar("arquivo_commit", `sha IN (${DOS_COMMITS})`);
+  apagar("commit_ticket", `ticket IN (${DOS_TICKETS})`);
+  apagar("evidencia", `ticket IN (${DOS_TICKETS})`); // evidencia_arquivo sai por ON DELETE CASCADE
+  apagar("decisao", `issue IN (${DAS_ISSUES})`);
+  apagar("execucao", `ticket IN (${DOS_TICKETS})`);
+  apagar("comando", `issue IN (${DAS_ISSUES})`);
+  apagar("issue_dep", `issue IN (${DAS_ISSUES}) OR dep IN (${DAS_ISSUES})`);
+  apagar("ticket", `issue IN (${DAS_ISSUES})`);
+  apagar("varredura_base", "projeto = $p");
+  apagar("issue", "projeto = $p");
+  apagar("projeto", "nome = $p");
+
+  const restam = new Set(
+    (
+      banco
+        .prepare("SELECT DISTINCT sha256 FROM evidencia_arquivo WHERE sha256 IN (SELECT value FROM json_each(?))")
+        .all(JSON.stringify(anexos)) as { sha256: string }[]
+    ).map((a) => a.sha256),
+  );
+  return { execucoes, orfaos: anexos.filter((sha) => !restam.has(sha)) };
+}
+
+/**
+ * Remove o projeto e tudo o que depende dele, em qualquer fase (I-4): primeiro o banco, numa transação; depois,
+ * com o banco já commitado, as pastas de execução, as sessões do pi e os anexos que nenhum outro projeto usa.
+ * Falha no disco vira aviso: o banco não volta atrás.
+ * ponytail: janela de corrida. Uma submissão de outro projeto com o mesmo conteúdo copia o anexo fora da transação
+ * (F2 §5.2); se ela cair entre a consulta dos órfãos e o `rm`, o arquivo some sob a evidência nova. É rara
+ * (mesmo hash, no mesmo instante); se importar, trocar o `rm` por uma conferência no banco imediatamente antes.
+ */
+export async function removerProjeto(
+  banco: DatabaseSync,
+  nome: string,
+): Promise<{ projeto: Projeto; avisos: string[] }> {
+  const { removido, execucoes, orfaos } = escrever(banco, () => {
+    const removido = projeto(banco, nome);
+    if (!removido) throw new ErroDeInexistente(`o projeto ${nome} não existe`, "confira o nome do projeto");
+    return { removido, ...apagarLinhas(banco, nome) };
+  });
+
+  const raiz = raizDo(banco);
+  const avisos: string[] = [];
+  const apagar = (caminho: string) =>
+    rm(caminho, { recursive: true, force: true }).catch((error_: unknown) => {
+      avisos.push(`não foi possível apagar ${caminho}: ${(error_ as Error).message}`);
+    });
+
+  // `<instante>_<sessaoPi>.jsonl`: o instante não tem `_`, então o ID é o que vem depois do primeiro.
+  const sessoes = new Set(execucoes.map((e) => e.sessao_pi));
+  const dirSessoes = join(raiz, "sessoes");
+  const arquivosDeSessao = (await readdir(dirSessoes).catch(() => [])).filter(
+    (arquivo) => arquivo.endsWith(".jsonl") && sessoes.has(arquivo.slice(arquivo.indexOf("_") + 1, -".jsonl".length)),
+  );
+  await Promise.all([
+    ...execucoes.map((e) => apagar(dirDaExecucao(raiz, e.id))),
+    ...arquivosDeSessao.map((arquivo) => apagar(join(dirSessoes, arquivo))),
+    ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),
+  ]);
+  return { projeto: removido, avisos };
+}
