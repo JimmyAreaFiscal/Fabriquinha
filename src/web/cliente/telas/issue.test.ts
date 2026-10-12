@@ -10,6 +10,7 @@ import {
   evidenciaNaCaixa,
   execucoesDoTicket,
   gateDoDesenho,
+  gateDoRegistro,
   gateDoPR,
   PAINEIS,
   paginaDaIssue,
@@ -945,4 +946,38 @@ test("bloqueios do PR: sem o estado, nada; aberto, pedir com o motivo; mergeado,
     encerrar: [false, "escolha a nota"],
   });
   assert.deepEqual(bloqueiosDoPR(leitura("mergeado"), "", 5).encerrar, [true, ""]);
+});
+
+test("gate do registro na página da issue: o que o agente registrou, os critérios, o que falta e a decisão", () => {
+  const p = exemplo();
+  assert.equal(gateDoRegistro(p, QUARENTA_E_SETE), "", "sem o painel do servidor, nada");
+  const noRegistro: PaginaDaIssue = {
+    ...p,
+    issue: { ...p.issue, fase: "registro", descricao: "Baixar os **pedidos**." },
+    sessoes: [sessao({ estado: "aguardando_humano", motivo: "gate_registro", etapa: "registro", desde: AGORA })],
+    registro: {
+      comportamento: "copia <à> mão",
+      criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "o <CSV>" }],
+      faltando: [],
+    },
+  };
+  const html = acaoDoAuditor(noRegistro, QUARENTA_E_SETE);
+  assert.match(html, /^<div class="acao-auditor"[^>]*><section class="gate-painel" aria-label="Gate do registro">/);
+  assert.match(
+    html,
+    new RegExp(
+      `<div class="gate-cabeca"><span class="rotulo">Gate do registro</span><span class="muted">aguarda você há 47 min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
+    ),
+  );
+  // O mesmo conteúdo do painel do chat: os fatos com o texto do agente em Markdown, a tabela e o que falta.
+  assert.match(
+    html,
+    /<dt>Descrição<\/dt><dd><div class="md"><p>Baixar os <strong>pedidos<\/strong>.<\/p>\n<\/div><\/dd><dt>Comportamento<\/dt><dd><div class="md"><p>copia &lt;à&gt; mão<\/p>\n<\/div><\/dd>/,
+  );
+  assert.match(html, /<th>Dado<\/th><th>Quando<\/th><th>Então<\/th>.*<td>o &#60;CSV&#62;<\/td>/s);
+  assert.match(html, /Nenhuma evidência faltando./);
+  assert.match(
+    html,
+    /<div class="decidir"><label>Motivo \(obrigatório para devolver\)<textarea data-motivo-registro placeholder="O que o agente precisa rever no registro"><\/textarea><\/label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="devolver-registro" disabled>Devolver<\/button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-registro">Aprovar registro<\/button><\/div><\/div>/,
+  );
 });

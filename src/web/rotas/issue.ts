@@ -6,8 +6,10 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { type Agregado, AUDITOR, type Ticket } from "../../dominio/agregado.ts";
-import { encontrado } from "../../dominio/erros.ts";
+import { type Agregado, AUDITOR, type Ticket, type TipoEvidencia } from "../../dominio/agregado.ts";
+import { encontrado, existe } from "../../dominio/erros.ts";
+import { evidenciasFaltando } from "../../dominio/evidencia.ts";
+import { ticketDe } from "../../dominio/execucao.ts";
 import { adicionarDependencia, removerDependencia } from "../../dominio/issue.ts";
 import { type Fase, Id } from "../../dominio/primitivos.ts";
 import type { Projeto } from "../../dominio/projeto.ts";
@@ -24,6 +26,37 @@ import { limpezaPendente } from "../../repositorio/worktree.ts";
 import { ErroHttp } from "../erros.ts";
 import { type Rota, IdDoCaminho } from "../rotas.ts";
 
+/** Um critério de aceite (F3, `criterios_aceite`). */
+export interface Criterio {
+  id: string;
+  dado: string;
+  quando: string;
+  entao: string;
+}
+
+/** O que o painel do gate do registro mostra (F7 §4.4), no chat e na página da issue. */
+export interface PainelRegistro {
+  comportamento: string;
+  criterios: Criterio[];
+  faltando: TipoEvidencia[];
+}
+
+/** Os `dados` da evidência `tipo` do ticket, que o gate do registro garante existir (F4 §5.2). */
+function dadosDe(ag: Agregado, ticket: Id, tipo: TipoEvidencia): Record<string, unknown> {
+  return existe(
+    ag.evidencias.findLast((e) => e.ticket === ticket && e.tipo === tipo),
+    `T-${String(ticket)} não tem ${tipo}`,
+    "confira o banco",
+  ).dados;
+}
+
+/** O painel do gate do registro do ticket de registro `ticket`. */
+export const painelDoRegistro = (ag: Agregado, ticket: Id): PainelRegistro => ({
+  comportamento: String(dadosDe(ag, ticket, "comportamento").descricao),
+  criterios: dadosDe(ag, ticket, "criterios_aceite").criterios as Criterio[],
+  faltando: evidenciasFaltando(ag, ticketDe(ag, ticket)),
+});
+
 /** O que a página da issue lê (F7 §5): o agregado e o que fica fora dele. */
 export interface PaginaDaIssue extends Agregado {
   projeto: Projeto;
@@ -39,6 +72,8 @@ export interface PaginaDaIssue extends Agregado {
   executar?: { ticket: Ticket; ocupada?: string };
   /** Os números do desenho (F6 §5.5), só no gate do desenho; `null` com as evidências faltando ou malformadas. */
   desenho?: MetricasIssue["desenho"];
+  /** O painel do gate do registro, só quando a sessão do registro aguarda a decisão (C10). */
+  registro?: PainelRegistro;
 }
 
 export const projetoDa = (banco: DatabaseSync, ag: Agregado): Projeto =>
@@ -54,6 +89,11 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
   const elegivel = ticketElegivel(banco, id);
   const ticket = ag.tickets.find((t) => t.id === elegivel);
   const ocupada = ocupacaoDoD8(banco);
+  const todas = [
+    ...(await sessoes(banco, { escopo: "ativas", issue: id })),
+    ...(await sessoes(banco, { escopo: "historico", issue: id })),
+  ];
+  const gateRegistro = todas.find((s) => s.motivo === "gate_registro");
   return {
     ...ag,
     projeto: doProjeto,
@@ -61,14 +101,12 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
       const { projeto: p, fase } = agregadoExistente(banco, dep).issue;
       return { id: dep, projeto: p, fase };
     }),
-    sessoes: [
-      ...(await sessoes(banco, { escopo: "ativas", issue: id })),
-      ...(await sessoes(banco, { escopo: "historico", issue: id })),
-    ],
+    sessoes: todas,
     custos: custoPorExecucao(banco, id),
     limpeza: limpezaPendente(raizDo(banco), doProjeto, ag.issue),
     ...(ticket && { executar: { ticket, ...(ocupada && { ocupada }) } }),
     ...(ag.issue.fase === "aprovacao_desenho" && { desenho: numerosDoDesenho(ag) }),
+    ...(gateRegistro && { registro: painelDoRegistro(ag, gateRegistro.ticket) }),
   };
 }
 

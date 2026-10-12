@@ -1,14 +1,22 @@
 // Página da issue (F7 §4.4, §4.5) como funções puras que devolvem HTML: cabeçalho, coluna da esquerda (detalhes,
 // descrição e tickets), "Ação do Auditor", artefatos e o conteúdo da caixa. O texto que vem do servidor passa sempre
 // por `escapar`; a descrição chega já renderizada pelo `markdown-it` sem HTML.
-import type { ArquivoEvidencia, Evidencia, ModoExecucao, Ticket, TipoEvidencia } from "../../../dominio/agregado.ts";
+import type {
+  ArquivoEvidencia,
+  Evidencia,
+  Issue,
+  ModoExecucao,
+  Ticket,
+  TipoEvidencia,
+} from "../../../dominio/agregado.ts";
 import type { Fase, Modelo } from "../../../dominio/primitivos.ts";
 import type { Hospedagem } from "../../../dominio/projeto.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { Consumo, MetricasIssue } from "../../../metricas/issue.ts";
 import type { LeituraDoPR } from "../../../repositorio/pr.ts";
-import type { PaginaDaIssue } from "../../rotas/issue.ts";
+import type { PainelRegistro, PaginaDaIssue } from "../../rotas/issue.ts";
 import type { ConteudoDaCaixa } from "../dom.ts";
+import { markdown } from "../markdown.ts";
 import {
   caminhoDaIssue,
   caminhoDaSessao,
@@ -264,6 +272,42 @@ export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): str
   </section>`;
 }
 
+// ——— gate do registro ———
+
+/** Texto que o agente registrou, em Markdown sem HTML (F7 §4.4); vazio, "—". */
+const textoDoAgente = (texto: string): string => (texto.trim() ? `<div class="md">${markdown(texto)}</div>` : "—");
+
+/**
+ * O que o painel do gate do registro mostra (F7 §4.4), no chat e na página da issue: título, tipo, descrição,
+ * comportamento, a tabela de critérios de aceite e as evidências que faltam.
+ */
+export function corpoDoRegistro(issue: Pick<Issue, "titulo" | "tipo" | "descricao">, r: PainelRegistro): string {
+  const faltando = r.faltando.length ? `Faltam evidências: ${r.faltando.join(", ")}.` : "Nenhuma evidência faltando.";
+  return (
+    '<dl class="fatos">' +
+    `<dt>Título</dt><dd>${escapar(issue.titulo)}</dd>` +
+    `<dt>Tipo</dt><dd><span class="tag">${escapar(issue.tipo)}</span></dd>` +
+    `<dt>Descrição</dt><dd>${textoDoAgente(issue.descricao)}</dd>` +
+    `<dt>Comportamento</dt><dd>${textoDoAgente(r.comportamento)}</dd></dl>` +
+    `<div><div class="titulo-bloco">Critérios de aceite</div>${tabelaDeCriterios(r.criterios)}</div>` +
+    `<span class="muted">${faltando}</span>`
+  );
+}
+
+/**
+ * O gate do registro na página da issue (F7 §4.4), quando a sessão do registro aguarda a decisão: o mesmo conteúdo do
+ * painel do chat, **Aprovar registro** (C10) e **Devolver** com o motivo, que vai ao agente.
+ */
+export function gateDoRegistro(p: PaginaDaIssue, { agora }: Extras): string {
+  const espera = p.sessoes.find((s) => s.motivo === "gate_registro");
+  if (!p.registro || !espera) return "";
+  return `<section class="gate-painel" aria-label="Gate do registro">
+    <div class="gate-cabeca"><span class="rotulo">Gate do registro</span><span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="${caminhoDaSessao(espera.sessao)}">abrir o chat da sessão →</a></div>
+    <div class="gate-corpo">${corpoDoRegistro(p.issue, p.registro)}</div>
+    <div class="decidir"><label>Motivo (obrigatório para devolver)<textarea data-motivo-registro placeholder="O que o agente precisa rever no registro"></textarea></label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="devolver-registro" disabled>Devolver</button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-registro">Aprovar registro</button></div></div>
+  </section>`;
+}
+
 // ——— gate do PR ———
 
 const NAO_LIDO = "o estado do PR não foi lido";
@@ -434,6 +478,7 @@ export function gateDoPR(
  * `ACOES` da montagem (issue-montar.ts).
  */
 export const PAINEIS: ((p: PaginaDaIssue, extras: Extras) => string)[] = [
+  gateDoRegistro,
   gateDoDesenho,
   gateDoPR,
   executarAgora,

@@ -5,16 +5,7 @@
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import {
-  type Agregado,
-  AUDITOR,
-  type Execucao,
-  type Issue,
-  type Ticket,
-  type TipoEvidencia,
-} from "../../dominio/agregado.ts";
-import { existe } from "../../dominio/erros.ts";
-import { evidenciasFaltando } from "../../dominio/evidencia.ts";
+import { AUDITOR, type Execucao, type Issue, type Ticket } from "../../dominio/agregado.ts";
 import { ticketDe } from "../../dominio/execucao.ts";
 import { editarIssue } from "../../dominio/issue.ts";
 import { Id, Motivo } from "../../dominio/primitivos.ts";
@@ -42,22 +33,8 @@ import {
 import { raizDo } from "../../persistencia/banco.ts";
 import { agregadoExistente, comIssue } from "../../persistencia/issues.ts";
 import { configuracao } from "../../persistencia/servico.ts";
-import { type Rota, IdDoCaminho } from "../rotas.ts";
-
-/** Um critério de aceite (F3, `criterios_aceite`). */
-export interface Criterio {
-  id: string;
-  dado: string;
-  quando: string;
-  entao: string;
-}
-
-/** O que o painel do gate do registro mostra (F7 §4.4). */
-export interface PainelRegistro {
-  comportamento: string;
-  criterios: Criterio[];
-  faltando: TipoEvidencia[];
-}
+import { IdDoCaminho, type Rota } from "../rotas.ts";
+import { type PainelRegistro, painelDoRegistro } from "./issue.ts";
 
 /** A sessão com o que a barra de estado, o envio e a coluna da direita do chat leem. */
 export interface CabecalhoDoChat {
@@ -80,25 +57,9 @@ export interface DadosDoChat extends CabecalhoDoChat {
 
 export const opcoes = (banco: DatabaseSync): OpcoesInterativa => ({ ociosidadeMin: configuracao(banco).ociosidadeMin });
 
-/** Os `dados` da evidência `tipo` do ticket da sessão, que o gate do registro garante existir (F4 §5.2). */
-function dadosDe(ag: Agregado, ticket: Id, tipo: TipoEvidencia): Record<string, unknown> {
-  return existe(
-    ag.evidencias.findLast((e) => e.ticket === ticket && e.tipo === tipo),
-    `T-${String(ticket)} não tem ${tipo}`,
-    "confira o banco",
-  ).dados;
-}
-
 function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
   const ag = agregadoExistente(banco, sessao.issue);
-  const registro: PainelRegistro | undefined =
-    sessao.motivo === "gate_registro"
-      ? {
-          comportamento: String(dadosDe(ag, sessao.ticket, "comportamento").descricao),
-          criterios: dadosDe(ag, sessao.ticket, "criterios_aceite").criterios as Criterio[],
-          faltando: evidenciasFaltando(ag, ticketDe(ag, sessao.ticket)),
-        }
-      : undefined;
+  const registro = sessao.motivo === "gate_registro" ? painelDoRegistro(ag, sessao.ticket) : undefined;
   return {
     sessao,
     issue: ag.issue,

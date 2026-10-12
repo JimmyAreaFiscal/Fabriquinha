@@ -109,6 +109,19 @@ function aplicarBloqueios(raiz: HTMLElement, pr: EstadoLido): void {
   }
 }
 
+/** Decide o gate do registro (C10, a mesma rota do chat) e relê a página; devolver leva o motivo ao agente. */
+const decidirRegistro =
+  (aprovado: boolean) =>
+  async ({ alvo, pagina, raiz, remontar }: Contexto): Promise<void> => {
+    const motivo = raiz.querySelector<HTMLTextAreaElement>("[data-motivo-registro]")?.value.trim();
+    (alvo as HTMLButtonElement).disabled = true;
+    await api(
+      `/api/issues/${String(pagina.issue.id)}/registro`,
+      enviarJson("POST", aprovado ? { aprovado } : { aprovado, motivo }),
+    );
+    await remontar();
+  };
+
 /** Decide o gate do PR (C16) e relê a página: depois de encerrar, o aviso da limpeza que falhou aparece nela. */
 const decidirPR =
   (aprovado: boolean) =>
@@ -161,6 +174,8 @@ const ACOES: Record<string, (c: Contexto) => void | Promise<void>> = {
     await api(`/api/tickets/${String(alvo.dataset.executar)}/executar`, enviarJson("POST"));
     await remontar();
   },
+  "aprovar-registro": decidirRegistro(true),
+  "devolver-registro": decidirRegistro(false),
   // Gate do desenho (ticket 31).
   "editar-ticket": ({ alvo, raiz }) => {
     const id = String(alvo.dataset.id);
@@ -313,6 +328,10 @@ export async function montarIssue(
 
   raiz.addEventListener("input", (evento) => {
     if (evento.target === campoMotivo) habilitarReprovar();
+    if (evento.target instanceof HTMLTextAreaElement && evento.target.matches("[data-motivo-registro]")) {
+      const devolver = raiz.querySelector<HTMLButtonElement>('[data-acao="devolver-registro"]');
+      if (devolver) devolver.disabled = !evento.target.value.trim();
+    }
     if (evento.target instanceof HTMLTextAreaElement && evento.target.matches("[data-motivo-pr]") && extras.pr) {
       aplicarBloqueios(raiz, extras.pr);
     }

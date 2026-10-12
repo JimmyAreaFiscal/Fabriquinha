@@ -322,3 +322,25 @@ test("arquivo vazio sai com 200 e corpo vazio", async () => {
   const r = await pedir(`/arquivos/${sha}`);
   assert.deepEqual([r.status, r.headers.get("content-length"), await r.text()], [200, "0", ""]);
 });
+
+test("GET /api/issues/:id: o painel do gate do registro só quando a sessão do registro aguarda a decisão", async () => {
+  const criterios = [{ id: "CA-1", dado: "pedidos no mês", quando: "exporto", entao: "o CSV traz o total" }];
+  servico.banco.exec(`
+    INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
+      VALUES (50, 'loja', 'Exportar CSV', 'funcionalidade', 'Baixar os pedidos.', 'registro', '${AGORA}');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (50, 50, 'registro', 'Registrar', 'em_execucao', 'fabriquinha', '${AGORA}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
+      VALUES (50, 50, 'interativo', '7a1e2f3a-5b6c-4d7e-8f90-a1b2c3d4e5f6', 'sucesso', '${AGORA}', '${AGORA}');
+    INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES
+      (50, 50, 'comportamento', 'agente', '{"descricao":"copia à mão"}', '${AGORA}'),
+      (51, 50, 'criterios_aceite', 'agente', '${JSON.stringify({ criterios })}', '${AGORA}');
+  `);
+  const p = await pagina(50);
+  assert.deepEqual(
+    p.sessoes.map((s) => s.motivo),
+    ["gate_registro"],
+  );
+  assert.deepEqual(p.registro, { comportamento: "copia à mão", criterios, faltando: [] });
+  assert.equal((await pagina()).registro, undefined);
+});

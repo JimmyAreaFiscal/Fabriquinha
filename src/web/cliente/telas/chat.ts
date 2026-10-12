@@ -22,7 +22,7 @@ import {
   rotuloIssue,
   rotuloTicket,
 } from "../render.ts";
-import { cardDaEvidencia, comCard, tabelaDeCriterios } from "./issue.ts";
+import { cardDaEvidencia, comCard, corpoDoRegistro } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -412,27 +412,15 @@ function formularioDoRegistro(c: CabecalhoDoChat): string {
   );
 }
 
-/** Texto que o agente registrou, em Markdown sem HTML (F7 §4.4); vazio, "—". */
-const textoDoAgente = (texto: string): string => (texto.trim() ? `<div class="md">${markdown(texto)}</div>` : "—");
-
 /** O painel do gate do registro (F7 §4.4): o que o agente registrou, Aprovar registro e Devolver com o motivo. */
 function gateDoRegistro(c: CabecalhoDoChat, agora: number): string {
   const { issue, sessao } = c;
   // O servidor sempre manda o painel no gate; sem ele, o painel fica vazio em vez de quebrar.
   const registro = c.registro ?? { comportamento: "", criterios: [], faltando: [] };
-  const faltando = registro.faltando.length
-    ? `Faltam evidências: ${registro.faltando.join(", ")}.`
-    : "Nenhuma evidência faltando.";
   return (
     '<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro</span>' +
     `<span class="muted pequeno">aguarda você ${ha(sessao.desde, new Date(agora))}</span></div>` +
-    '<div class="corpo"><dl class="fatos">' +
-    `<dt>Título</dt><dd>${escapar(issue.titulo)}</dd>` +
-    `<dt>Tipo</dt><dd><span class="tag">${escapar(issue.tipo)}</span></dd>` +
-    `<dt>Descrição</dt><dd>${textoDoAgente(issue.descricao)}</dd>` +
-    `<dt>Comportamento</dt><dd>${textoDoAgente(registro.comportamento)}</dd></dl>` +
-    `<div><div class="titulo-bloco">Critérios de aceite</div>${tabelaDeCriterios(registro.criterios)}</div>` +
-    `<span class="muted">${faltando}</span></div>` +
+    `<div class="corpo">${corpoDoRegistro(issue, registro)}</div>` +
     '<form class="decidir" data-gate-registro><label class="campo">Motivo (obrigatório para devolver)<textarea name="motivo" rows="2"></textarea></label>' +
     '<div class="botoes"><button type="button" class="btn btn-perigo" data-devolver disabled>Devolver</button>' +
     '<button class="btn btn-primario">Aprovar registro</button></div></form></section>'
