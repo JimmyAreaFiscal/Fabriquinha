@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { AUDITOR } from "../../dominio/agregado.ts";
+import { AUDITOR, FABRIQUINHA } from "../../dominio/agregado.ts";
 import { abrir } from "../../persistencia/banco.ts";
 import { comIssue, registrarIssue } from "../../persistencia/issues.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
@@ -70,4 +70,25 @@ test("board: as issues não concluídas de todos os projetos, da mais nova para 
     { ...site.issue, tickets: site.tickets },
     { ...loja.issue, tickets: loja.tickets },
   ]);
+});
+
+test("board: a issue com PR aberto traz o número e o endereço dele, para o card do gate do PR", async () => {
+  const loja = registrarIssue(banco, { projeto: "loja" }, AUDITOR);
+  comIssue(banco, loja.issue.id, "registrarEvidencia", FABRIQUINHA, (ag, ctx) => ({
+    ...ag,
+    evidencias: [
+      {
+        id: 100,
+        ticket: loja.tickets[0]?.id ?? 0,
+        tipo: "pr_aberto",
+        produtor: "fabriquinha",
+        dados: { id: "212", url: "https://github.com/x/loja/pull/212", branch: "b", base: "main" },
+        arquivos: [],
+        em: ctx.agora,
+      },
+    ],
+  }));
+  const [issue] = (await chamar("GET", "/api/board")) as [Record<string, unknown>];
+  assert.deepEqual(issue.pr, { id: "212", url: "https://github.com/x/loja/pull/212" });
+  assert.equal(issue.evidencias, undefined);
 });

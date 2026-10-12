@@ -2,7 +2,7 @@
 // O Registrar necessidade usa `POST /api/registros`, do chat (rotas/chat.ts).
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { AUDITOR, type Issue, type Ticket } from "../../dominio/agregado.ts";
+import { type Agregado, AUDITOR, type Issue, type Ticket } from "../../dominio/agregado.ts";
 import { encontrado } from "../../dominio/erros.ts";
 import type { Id } from "../../dominio/primitivos.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
@@ -21,6 +21,12 @@ export type IssueDoProjeto = Issue & {
   bloqueadaPor: readonly Id[];
   pr?: { id: string; url: string };
 };
+
+/** O PR da issue: o da última evidência `pr_aberto` (F5 §5.2), com o número e o endereço. */
+export function prDa(ag: Agregado): { id: string; url: string } | undefined {
+  const pr = ag.evidencias.findLast((e) => e.tipo === "pr_aberto")?.dados as { id: string; url: string } | undefined;
+  return pr && { id: pr.id, url: pr.url };
+}
 
 /** `GET /api/projetos/:nome/issues`: as issues pedidas, as sessões ativas do projeto e a contagem de todas. */
 export interface ListaDoProjeto {
@@ -48,13 +54,12 @@ async function lista(banco: DatabaseSync, nome: string, query: URLSearchParams):
     .filter((i) => (i.arquivada ? filtro.arquivadas : !i.concluida || filtro.concluidas))
     .map(({ id }): IssueDoProjeto => {
       const ag = agregadoExistente(banco, id);
-      const pr = ag.evidencias.findLast((e) => e.tipo === "pr_aberto")?.dados as
-        { id: string; url: string } | undefined;
+      const pr = prDa(ag);
       return {
         ...ag.issue,
         tickets: ag.tickets,
         bloqueadaPor: ag.issue.deps.filter((d) => emAndamento.has(d)),
-        ...(pr && { pr: { id: pr.id, url: pr.url } }),
+        ...(pr && { pr }),
       };
     });
   return {

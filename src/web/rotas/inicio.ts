@@ -4,9 +4,10 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Issue, Ticket } from "../../dominio/agregado.ts";
 import { agregadoExistente, issuesEmAndamento } from "../../persistencia/issues.ts";
 import type { Rota } from "../rotas.ts";
+import { prDa } from "./projeto.ts";
 
-/** Uma issue do board (`GET /api/board`): a issue com todos os tickets dela. */
-export type IssueDoBoard = Issue & { tickets: readonly Ticket[] };
+/** Uma issue do board (`GET /api/board`): a issue com todos os tickets dela e o PR aberto, para o card do gate. */
+export type IssueDoBoard = Issue & { tickets: readonly Ticket[]; pr?: { id: string; url: string } };
 
 /**
  * F7 §5: as issues não concluídas de todos os projetos, da mais nova para a mais antiga. Os tickets vão todos: o
@@ -16,7 +17,8 @@ export type IssueDoBoard = Issue & { tickets: readonly Ticket[] };
 const board = (banco: DatabaseSync): IssueDoBoard[] =>
   issuesEmAndamento(banco).map((id) => {
     const ag = agregadoExistente(banco, id);
-    return { ...ag.issue, tickets: ag.tickets };
+    const pr = prDa(ag);
+    return { ...ag.issue, tickets: ag.tickets, ...(pr && { pr }) };
   });
 
 export const ROTAS_DO_INICIO: Rota[] = [{ metodo: "GET", caminho: "/api/board", tratar: ({ banco }) => board(banco) }];

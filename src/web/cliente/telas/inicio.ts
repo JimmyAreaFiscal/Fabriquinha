@@ -46,8 +46,10 @@ function falta(s: InfoSessao, issue: IssueDoBoard | undefined): string {
       const n = tickets.filter((t) => t.etapa === "desenvolvimento" && t.status !== "concluido").length;
       return plural(n, "ticket de desenvolvimento proposto", "tickets de desenvolvimento propostos");
     }
-    case "gate_pr":
-      return "PR aberto; aguarda a sua revisão no PR";
+    case "gate_pr": {
+      const numero = issue?.pr ? "#" + issue.pr.id + " " : "";
+      return `PR ${numero}aberto; aguarda a sua revisão no PR`;
+    }
     case "dialogo": {
       const titulo = s.dialogos[0]?.title;
       return typeof titulo === "string" ? `O agente pergunta: ${titulo}` : "O agente abriu uma pergunta";
@@ -69,12 +71,16 @@ function decisao(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): s
   </a>`;
 }
 
-/** Linha de uma sessão rodando: o que o agente faz é o título do ticket; na consulta, responder ao Auditor. */
+/**
+ * Linha de uma sessão rodando: o que o agente faz, como o processo vivo diz; sem ele, o título do ticket e, na
+ * consulta, responder ao Auditor.
+ */
 function rodando(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): string {
-  const fazendo =
+  const doTicket =
     s.modo === "consulta"
       ? "Respondendo à sua pergunta"
       : (issue?.tickets.find((t) => t.id === s.ticket)?.titulo ?? "Trabalhando");
+  const fazendo = s.atividade ?? doTicket;
   return `<a class="rodando-linha" href="${caminhoDaSessao(s.sessao)}">
     <span class="pill pill-rodando">${MODO_DA_SESSAO[s.modo]}</span>
     <span class="id">${rotuloIssue(s.issue)}</span>

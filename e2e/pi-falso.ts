@@ -72,6 +72,7 @@ async function aoVivo(): Promise<void> {
       "toolUse",
     ),
   );
+  emitir({ type: "tool_execution_start", toolCallId: "t1", toolName: "bash", args: { command: "npm test" } });
   const saida = Array.from({ length: 40 }, (_, i) => `ok ${String(i + 1)} - caso ${String(i + 1)}`);
   mensagem({
     role: "toolResult",

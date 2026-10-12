@@ -72,7 +72,12 @@ test("aguarda você: um card por sessão, na ordem recebida, com motivo, issue, 
       titulo: "Timeout no checkout <com cupom>",
       tickets: [ticket({ id: 101, issue: 34, etapa: "desenvolvimento", status: "falhou", erro: "3 testes falharam" })],
     }),
-    issue({ id: 29, fase: "aprovacao_pr", projeto: "site" }),
+    issue({
+      id: 29,
+      fase: "aprovacao_pr",
+      projeto: "site",
+      pr: { id: "212", url: "https://github.com/x/site/pull/212" },
+    }),
     issue({
       id: 37,
       fase: "aprovacao_desenho",
@@ -125,7 +130,7 @@ test("aguarda você: um card por sessão, na ordem recebida, com motivo, issue, 
   const cards = blocos(html, "decisao");
   assert.deepEqual(cards.map(texto), [
     "Falhou Responder e retomar → I-34 Timeout no checkout &#60;com cupom&#62; 3 testes falharam loja T-101 · desenvolvimento · autônoma · há 2 h 14 min",
-    "Gate do PR Ver o PR → I-29 Issue 29 PR aberto; aguarda a sua revisão no PR site T-99 · encerramento · autônoma · há 1 h 20 min",
+    "Gate do PR Ver o PR → I-29 Issue 29 PR #212 aberto; aguarda a sua revisão no PR site T-99 · encerramento · autônoma · há 1 h 20 min",
     "Gate do desenho Avaliar desenho → I-37 Issue 37 2 tickets de desenvolvimento propostos loja T-109 · desenho · autônoma · há 47 min",
     "Gate do desenho Avaliar desenho → I-38 Issue 38 1 ticket de desenvolvimento proposto loja T-119 · desenho · autônoma · há 30 min",
     "Gate do registro Avaliar registro → I-40 Issue 40 Registro pronto; falta aprovar loja T-115 · registro · interativa · há 22 min",
@@ -134,6 +139,12 @@ test("aguarda você: um card por sessão, na ordem recebida, com motivo, issue, 
     "Diálogo Responder → I-41 sem título O agente abriu uma pergunta loja T-118 · desenvolvimento · consulta · há 5 min",
     "Conversa Responder → I-42 sem título O agente respondeu e espera você loja T-130 · desenvolvimento · autônoma · há menos de 1 min",
   ]);
+  // Sem a evidência do PR (ainda não lida), o card fica sem o número.
+  const semPR = inicio(
+    { sessoes: sessoes.slice(1, 2), board: [issue({ id: 29, fase: "aprovacao_pr" })], mes: MES },
+    AGORA,
+  );
+  assert.match(semPR, /PR aberto; aguarda a sua revisão no PR/);
   // O card inteiro abre o chat; a falha em vermelho, com o botão secundário.
   assert.match(cards[0] ?? "", /^<a class="decisao superficie falha" href="\/sessions\/s-101">/);
   assert.match(cards[0] ?? "", /<span class="btn btn-pequeno">Responder e retomar →<\/span>/);
@@ -161,13 +172,16 @@ test("rodando: uma linha por sessão com modo, issue, o que o agente faz, ticket
     }),
     sessao({ issue: 38, ticket: 112, sessao: "consulta", estado: "rodando", modo: "consulta", desde: ha(1) }),
     sessao({ issue: 22, ticket: 90, estado: "rodando", modo: "interativo" }),
+    // O que o processo vivo diz que o agente faz agora vence o título do ticket.
+    sessao({ issue: 38, ticket: 112, sessao: "viva", estado: "rodando", atividade: "bash npm test <x>" }),
   ];
   const html = inicio({ sessoes, board, mes: MES }, AGORA);
-  assert.match(texto(html), /Aguarda você Nada aguarda você agora\. Rodando 3 /);
+  assert.match(texto(html), /Aguarda você Nada aguarda você agora\. Rodando 4 /);
   assert.deepEqual(blocos(html, "rodando-linha").map(texto), [
     "autônoma I-38 Limite de tentativas no login — Desenhar a solução T-112 · desenho anthropic / claude-opus-5-5 há 6 min",
     "consulta I-38 Limite de tentativas no login — Respondendo à sua pergunta T-112 · desenvolvimento padrão do pi há 1 min",
     "interativa I-22 sem título — Trabalhando T-90 · desenvolvimento padrão do pi há 5 min",
+    "autônoma I-38 Limite de tentativas no login — bash npm test &#60;x&#62; T-112 · desenvolvimento padrão do pi há 5 min",
   ]);
   assert.match(html, /<a class="rodando-linha" href="\/sessions\/consulta">/);
 });

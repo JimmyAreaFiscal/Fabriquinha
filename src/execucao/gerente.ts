@@ -36,6 +36,8 @@ export interface Situacao {
   /** Desde quando está ocupada ou ociosa. */
   desde: string;
   dialogos: Dialogo[];
+  /** O que o agente está fazendo, pelo último evento que o diz (`atividadeDo`). */
+  atividade?: string;
 }
 
 /** A parte de uma mensagem do pi que decide o sucesso (F4 §6.2, passo 5). */
@@ -115,8 +117,35 @@ export function situacao(sessao: string): Situacao | undefined {
       ocupado: viva.ocupado,
       desde: viva.desde,
       dialogos: [...viva.pendentes.values()],
+      ...(viva.atividade && { atividade: viva.atividade }),
     }
   );
+}
+
+/** Uma linha de até 100 caracteres. */
+const linha = (texto: string): string => (texto.length > 100 ? `${texto.slice(0, 99)}…` : texto);
+
+/**
+ * O que o agente está fazendo, se o evento o diz (F7 §4.4, Início): a ferramenta que começou a rodar, com o comando
+ * ou o caminho, ou a primeira linha do texto que ele acabou de escrever. Os demais eventos não mudam a atividade.
+ */
+export function atividadeDo(evento: EventoPi): string | undefined {
+  if (evento.type === "tool_execution_start") {
+    const args = (evento.args ?? {}) as Record<string, unknown>;
+    const alvo = [args.command, args.path].find((x) => typeof x === "string");
+    return linha([String(evento.toolName), alvo].filter(Boolean).join(" "));
+  }
+  const m = evento.type === "message_end" ? (evento.message as { role?: string; content?: unknown } | null) : null;
+  if (m?.role !== "assistant" || !Array.isArray(m.content)) return undefined;
+  const texto = (m.content as { type?: string; text?: string }[])
+    .filter((b) => b.type === "text")
+    .map((b) => String(b.text))
+    .join("\n");
+  const primeira = texto
+    .split("\n")
+    .map((l) => l.trim())
+    .find(Boolean);
+  return primeira && linha(primeira);
 }
 
 const viva = (execucao: Id, solucao: string): Viva =>
@@ -398,6 +427,7 @@ function rodarPi(r: Processo): Promise<string | undefined> {
       if (agenteTerminou) estaViva.naoGravadas = [];
       agenteTerminou = false;
       repassar(sessaoPi, evento, r.log);
+      estaViva.atividade = atividadeDo(evento) ?? estaViva.atividade;
       switch (evento.type) {
         case "message_start":
           estaViva.emAndamento = [evento];

@@ -26,7 +26,7 @@ import { abrir } from "../persistencia/banco.ts";
 import { agregado, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree, garantirWorktree } from "../repositorio/worktree.ts";
-import { abortar, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
+import { abortar, atividadeDo, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
 import { type EventoPi, PACOTE } from "./pi.ts";
 import {
   abrirChat,
@@ -113,6 +113,28 @@ test("estado: autônoma rodando, inclusive na coleta depois do C6 e reaberta à 
   assert.deepEqual(estado(desenho("em_execucao", "sucesso")), ["rodando", undefined, T1]);
   assert.deepEqual(estado(desenho("aberto", "falha")), ["rodando", undefined, T1]);
   assert.deepEqual(estado(desenho("falhou", "falha")), ["aguardando_humano", "falha", T1]);
+});
+
+test("atividade: a ferramenta com o comando ou o caminho, ou a primeira linha do texto do agente; o resto não diz", () => {
+  const ferramenta = (args: unknown) => atividadeDo({ type: "tool_execution_start", toolName: "bash", args });
+  assert.equal(ferramenta({ command: "npm test" }), "bash npm test");
+  assert.equal(ferramenta({ path: "src/a.ts", content: "x" }), "bash src/a.ts");
+  assert.equal(ferramenta(undefined), "bash");
+  assert.equal(ferramenta({ command: "x".repeat(200) }), `bash ${"x".repeat(94)}…`);
+  const doAgente = (content: unknown, role = "assistant") =>
+    atividadeDo({ type: "message_end", message: { role, content } });
+  assert.equal(
+    doAgente([
+      { type: "thinking", thinking: "hmm" },
+      { type: "text", text: "\n  Escrevendo o relatório de complexidade\nresto" },
+    ]),
+    "Escrevendo o relatório de complexidade",
+  );
+  assert.equal(doAgente([{ type: "toolCall", id: "t" }]), undefined);
+  assert.equal(doAgente("texto"), undefined);
+  assert.equal(doAgente([{ type: "text", text: "oi" }], "user"), undefined);
+  assert.equal(atividadeDo({ type: "message_end", message: null }), undefined);
+  assert.equal(atividadeDo({ type: "agent_start" }), undefined);
 });
 
 test("estado: diálogo pendente vence tudo, com o instante em que chegou", () => {
@@ -324,7 +346,10 @@ async function aoPrompt(c) {
   const usuario = { role: "user", content: c.message, timestamp: Date.now() };
   emitir({ type: "message_end", message: usuario });
   guardar(usuario);
-  if (variante === "espera") return;
+  if (variante === "espera") {
+    emitir({ type: "tool_execution_start", toolCallId: "t1", toolName: "bash", args: { command: "npm test" } });
+    return;
+  }
   if (variante === "sai") process.exit(3);
   if (process.env.FALSO_PI_AGENTE && !c.message.includes("pergunte")) await (await import(process.env.FALSO_PI_AGENTE)).default(c.message.includes("edite"));
   responder("entendi:\\u2028tudo");
@@ -682,6 +707,8 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
     tarde.eventos.map((e) => [e.type, (e.message as { role: string }).role]),
     [["message_end", "user"]],
   );
+  // O que o agente faz, pelo processo vivo, só enquanto roda.
+  await ate(async () => (await infoDaSessao(c.banco, sessao)).atividade === "bash npm test", "a ferramenta começar");
   await assert.rejects(
     enviar(c.banco, sessao, "oi", "prompt", opcoes),
     rejeitaCom("a sessão de T-1 está rodando e não recebe prompt (envie com steer ou follow_up)"),
@@ -700,6 +727,7 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
   const { execucao } = await infoDaSessao(c.banco, sessao);
   abortar(execucao);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "o agente parar");
+  assert.equal((await infoDaSessao(c.banco, sessao)).atividade, undefined);
   assert.deepEqual(c.comandos().slice(1), [
     { type: "follow_up", message: "faça só a busca" },
     { type: "extension_ui_response", id: "e2", cancelled: true },

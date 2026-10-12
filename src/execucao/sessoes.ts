@@ -76,6 +76,8 @@ export interface InfoSessao {
   /** Desde quando a sessão está neste estado. */
   desde: Instante;
   dialogos: Dialogo[];
+  /** Rodando com o pi vivo neste serviço: o que o agente está fazendo agora (F7 §4.4, Início). */
+  atividade?: string;
 }
 
 export interface OpcoesInterativa {
@@ -197,6 +199,7 @@ export function estadoDaSessao(ag: Agregado, sessao: string, fatos: Fatos): Info
     ...(motivoEspera && { motivo: motivoEspera }),
     desde,
     dialogos: fatos.viva?.dialogos ?? [],
+    ...(estado === "rodando" && fatos.viva?.atividade && { atividade: fatos.viva.atividade }),
   };
 }
 
