@@ -22,42 +22,46 @@ export default (pi) =>
   });
 `;
 
-test("o pi das execuções carrega a guarda e as skills da etapa com a configuração do Auditor", (t) => {
-  const sonda = join(dir, "sonda.js");
-  const prompt = join(dir, "prompt.md");
-  writeFileSync(sonda, SONDA);
-  const args = argumentosPi({
-    raiz: dir,
-    sessaoPi: "fumaca",
-    etapa: "registro",
-    modelo: undefined,
-    confianca: undefined,
-    modo: "autonomo",
+const sonda = join(dir, "sonda.js");
+writeFileSync(sonda, SONDA);
+
+// Uma sessão por etapa que já tem skills de artefato no pacote.
+for (const etapa of ["registro", "desenho"] as const) {
+  test(`o pi das execuções de ${etapa} carrega a guarda e as skills da etapa com a configuração do Auditor`, (t) => {
+    const prompt = join(dir, `prompt-${etapa}.md`);
+    const args = argumentosPi({
+      raiz: dir,
+      sessaoPi: `fumaca-${etapa}`,
+      etapa,
+      modelo: undefined,
+      confianca: undefined,
+      modo: "autonomo",
+    });
+    // A API de extensões não lista as extensões carregadas; com `PI_TIMING=1`, o pi imprime no stderr cada uma que
+    // importou e inicializou (`<caminho> factory`), na ordem de carga.
+    const pi = spawnSync(binarioPi(), [...args, "-e", sonda], {
+      cwd: dir,
+      env: { ...ambientePi(dir, 1, dir), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
+      input: "",
+      encoding: "utf8",
+      timeout: 30_000,
+    });
+    assert.equal(pi.status, 0, pi.stderr);
+    const fabrica = / factory: \d+ms$/;
+    const extensoes = pi.stderr
+      .split("\n")
+      .filter((linha) => fabrica.test(linha))
+      .map((linha) => linha.replace(fabrica, "").trim());
+    // A lista alimenta a revisão periódica do pi do Auditor (P1 §2.4).
+    for (const extensao of extensoes) t.diagnostic(`extensão carregada: ${extensao}`);
+    assert.ok(extensoes.includes(join(PACOTE, "extensions", "guarda.ts")), pi.stderr);
+    // O prompt de sistema desta sessão, que a sonda gravou no início dela. O pi ignora em silêncio um `--skill` que não
+    // existe; a skill só conta se o nome e o caminho entraram no prompt.
+    const sistema = readFileSync(prompt, "utf8");
+    assert.ok(sistema.includes(`Current working directory: ${dir}`));
+    for (const skill of skillsDaEtapa(etapa)) {
+      assert.ok(sistema.includes(`<name>${skill}</name>`), skill);
+      assert.ok(sistema.includes(`<location>${join(PACOTE, "skills", skill, "SKILL.md")}</location>`), skill);
+    }
   });
-  // A API de extensões não lista as extensões carregadas; com `PI_TIMING=1`, o pi imprime no stderr cada uma que
-  // importou e inicializou (`<caminho> factory`), na ordem de carga.
-  const pi = spawnSync(binarioPi(), [...args, "-e", sonda], {
-    cwd: dir,
-    env: { ...ambientePi(dir, 1, dir), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
-    input: "",
-    encoding: "utf8",
-    timeout: 30_000,
-  });
-  assert.equal(pi.status, 0, pi.stderr);
-  const fabrica = / factory: \d+ms$/;
-  const extensoes = pi.stderr
-    .split("\n")
-    .filter((linha) => fabrica.test(linha))
-    .map((linha) => linha.replace(fabrica, "").trim());
-  // A lista alimenta a revisão periódica do pi do Auditor (P1 §2.4).
-  for (const extensao of extensoes) t.diagnostic(`extensão carregada: ${extensao}`);
-  assert.ok(extensoes.includes(join(PACOTE, "extensions", "guarda.ts")), pi.stderr);
-  // O prompt de sistema desta sessão, que a sonda gravou no início dela. O pi ignora em silêncio um `--skill` que não
-  // existe; a skill só conta se o nome e o caminho entraram no prompt.
-  const sistema = readFileSync(prompt, "utf8");
-  assert.ok(sistema.includes(`Current working directory: ${dir}`));
-  for (const skill of skillsDaEtapa("registro")) {
-    assert.ok(sistema.includes(`<name>${skill}</name>`), skill);
-    assert.ok(sistema.includes(`<location>${join(PACOTE, "skills", skill, "SKILL.md")}</location>`), skill);
-  }
-});
+}
