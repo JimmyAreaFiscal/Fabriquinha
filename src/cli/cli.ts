@@ -9,7 +9,7 @@ import { text } from "node:stream/consumers";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { z, ZodError } from "zod";
 import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
-import { ErroDeEscopo, ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
+import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../dominio/erros.ts";
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { registrarDecisaoRevisao } from "../dominio/gates.ts";
 import type { Id } from "../dominio/primitivos.ts";
@@ -96,7 +96,7 @@ const descricao = async ({ op, io }: Chamada): Promise<string | undefined> => {
 
 /** A issue do ticket `id`, para aplicar o comando do F1 ao agregado dela. */
 const issueDoTicket = (banco: DatabaseSync, id: Id): Id =>
-  existe(agregadoDoTicket(banco, id), `o ticket T-${String(id)} não existe`, "confira o número do ticket").issue.id;
+  encontrado(agregadoDoTicket(banco, id), `o ticket T-${String(id)} não existe`, "confira o número do ticket").issue.id;
 
 const TITULO_DESCRICAO: ParseArgsOptionsConfig = { titulo: { type: "string" }, descricao: { type: "string" } };
 
@@ -147,7 +147,7 @@ const COMANDOS: readonly Comando[] = [
     argumentos: [],
     doAgente: true,
     rodar: ({ banco, agente }) =>
-      existe(projeto(banco, agente.projeto), `o projeto ${agente.projeto} não existe`, "confira a execução"),
+      encontrado(projeto(banco, agente.projeto), `o projeto ${agente.projeto} não existe`, "confira a execução"),
   },
   {
     palavras: ["issue", "ver"],
@@ -155,7 +155,7 @@ const COMANDOS: readonly Comando[] = [
     doAgente: true,
     rodar({ banco, pos }) {
       const id = numero(pos[0], "I");
-      const ag = existe(agregado(banco, id), `a issue I-${String(id)} não existe`, "confira o número da issue");
+      const ag = encontrado(agregado(banco, id), `a issue I-${String(id)} não existe`, "confira o número da issue");
       return { ...ag.issue, tickets: ag.tickets };
     },
   },
@@ -197,7 +197,7 @@ const COMANDOS: readonly Comando[] = [
     doAgente: true,
     rodar({ banco, pos }) {
       const id = numero(pos[0], "T");
-      return existe(
+      return encontrado(
         agregadoDoTicket(banco, id),
         `o ticket T-${String(id)} não existe`,
         "confira o número do ticket",
@@ -298,7 +298,7 @@ const COMANDOS: readonly Comando[] = [
     rodar({ banco, pos }) {
       const id = numero(pos[0], "T");
       const tipo = tipoDeEvidencia(pos[1]);
-      const evidencia = existe(
+      const evidencia = encontrado(
         agregadoDoTicket(banco, id)?.evidencias.find((e) => e.ticket === id && e.tipo === tipo),
         `T-${String(id)} não tem evidência ${tipo}`,
         "confira o ticket e o tipo",

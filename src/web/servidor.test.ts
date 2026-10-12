@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { request } from "node:http";
-import { createServer } from "node:net";
+import { connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -271,4 +271,15 @@ test("rota que devolve nada dá 204; a que responde sozinha fica como está; err
   assert.deepEqual([quebra.status, quebra.json()], [500, { erro: "disco cheio" }]);
   assert.equal(log.mock.callCount(), 1);
   await assert.rejects(pedir("/api/teste/meio", { headers: comCookie() }), /aborted|ECONNRESET|socket hang up/);
+});
+
+test("parar não espera conexão aberta: um pedido pela metade (como o SSE) é cortado", { timeout: 5000 }, async () => {
+  const conexao = connect(Number(process.env.FABRIQUINHA_PORTA), "127.0.0.1");
+  await once(conexao, "connect");
+  conexao.write(`GET /api/sessoes HTTP/1.1\r\nHost: ${origem}\r\n`);
+  // O corte chega como ECONNRESET: `once` rejeitaria com ele.
+  const fechou = new Promise((fechada) => conexao.on("error", () => undefined).once("close", fechada));
+  await servico.parar();
+  await fechou;
+  servico = await iniciarServico(raiz);
 });

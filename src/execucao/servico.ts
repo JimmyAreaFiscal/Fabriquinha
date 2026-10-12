@@ -154,7 +154,10 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     },
     async parar() {
       clearInterval(relogio);
-      await new Promise((fechou) => web.close(fechou));
+      const fechou = new Promise((pronto) => web.close(pronto));
+      // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
+      web.closeAllConnections();
+      await fechou;
       await varredura;
       banco.close();
     },
