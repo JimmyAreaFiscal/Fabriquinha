@@ -116,7 +116,7 @@ O estado é calculado; não é gravado.
 |---|---|
 | `rodando` | Há execução em andamento e nada esperando o Auditor. Inclui a preparação da worktree e as coletas do F3. |
 | `aguardando_humano` | Algum dos motivos abaixo. |
-| `terminada` | O ticket está `concluido` e nenhum gate depende dele. |
+| `terminada` | O ticket está `concluido` e nenhum gate depende dele, ou a issue foi cancelada (6.9). |
 
 | Motivo de `aguardando_humano` | Ação no chat |
 |---|---|
@@ -302,6 +302,24 @@ O histórico de qualquer sessão, ativa ou do histórico, pode ser levado para o
   O F4 grava a exportação de cada uma em `$FABRIQUINHA_SAIDA/historico-T-<n>.md` da execução atual.
   A mensagem enviada ganha uma linha por anexo: "Histórico da sessão T-n (I-m, etapa) em `<caminho>`; leia antes de responder."
   O agente lê o arquivo sob demanda, então um histórico longo não estoura o contexto de uma vez.
+
+### 6.9 Cancelamento da issue
+
+O Auditor cancela a issue (C22, F1), e o cancelamento atinge também as dependentes, diretas e indiretas.
+O serviço `cancelarIssue` roda nesta ordem:
+
+1. Confere o C22 (Auditor, issue não concluída nem cancelada), antes de tocar em qualquer pi.
+2. Para cada execução `em_andamento` da issue e das dependentes, `pararParaCancelar`: marca a execução como cancelada, responde `cancelled` aos diálogos pendentes e para o pi como no encerramento (6.6), esperando o processo sair.
+3. Grava o C22 de todas numa transação. A execução termina em `falha` com `CANCELADA`, e o ticket que ela rodava fica `cancelado`.
+4. Para cada execução que terminou: coleta o uso como depois de qualquer C6 (F6 §3.3), anota "E-n cancelada com a I-n pelo Auditor" no log e avisa quem assina a sessão.
+
+A execução marcada não grava mais nada:
+
+- `rodarExecucao` não lança o `pi --version` nem o pi dela e devolve `CANCELADA`; a marca é conferida depois do prompt e depois do `pi --version`.
+- A autônoma não grava C6, C7 nem C8 depois do pi, e a interativa não grava o C6 dela: o cancelamento já gravou o término, e a guarda do C22 recusaria o resto.
+- A sessão de uma issue cancelada é `terminada` (5.2), a principal e as de consulta.
+
+ponytail: as execuções marcadas ficam num `Set` em memória que só cresce; são poucos IDs por dia, e o reinício do serviço o esvazia (7).
 
 ## 7. Reinício do serviço
 

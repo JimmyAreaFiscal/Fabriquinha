@@ -136,6 +136,87 @@ test("migrar() recusa banco mais novo que o código, sem alterá-lo", () => {
   banco.close();
 });
 
+/** Banco na versão anterior à última, com um ticket de cada tipo de filho que aponta para `ticket`. */
+function bancoAntesDoCancelamento(): DatabaseSync {
+  const banco = new DatabaseSync(":memory:");
+  migrar(banco, MIGRACOES.slice(0, -1));
+  banco.exec(`
+    INSERT INTO projeto VALUES ('loja', '/r', 'main', 'github', '[]', '["t"]', 'k', '[{}]', '{}');
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'desenho', 'x');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em) VALUES (1, 1, 'registro', 'R', 'concluido', 'fabriquinha', 'x', 'x');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, origem_ticket, erro, criado_em) VALUES (2, 1, 'desenho', 'D', 'falhou', 'agente', 1, 'e', 'x');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em) VALUES (1, 2, 'autonomo', 's', 'falha', 'e', 'x', 'y');
+    INSERT INTO decisao (id, issue, ticket, gate, aprovado, por, em) VALUES (1, 1, 1, 'registro', 1, 'auditor', 'x');
+    INSERT INTO evidencia (id, ticket, tipo, produtor, em) VALUES (1, 1, 'comportamento', 'agente', 'x');
+    INSERT INTO evidencia_arquivo VALUES (1, 'a.txt', '${"0".repeat(64)}', 'text/plain', 1);
+  `);
+  return banco;
+}
+
+test("a última migração recria ticket com os status novos sem perder linhas nem FKs", () => {
+  const banco = bancoAntesDoCancelamento();
+  const antes = banco.prepare("SELECT * FROM ticket ORDER BY id").all();
+  assert.throws(() => {
+    banco.exec("UPDATE ticket SET status = 'fechado' WHERE id = 2");
+  }, /CHECK/);
+
+  migrar(banco, MIGRACOES);
+
+  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length);
+  assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
+  assert.deepEqual(banco.prepare("SELECT * FROM ticket ORDER BY id").all(), antes);
+  assert.equal(valor(banco, "SELECT count(*) FROM execucao"), 1);
+  assert.equal(valor(banco, "SELECT count(*) FROM decisao"), 1);
+  assert.equal(valor(banco, "SELECT count(*) FROM evidencia_arquivo"), 1);
+  assert.equal(valor(banco, "SELECT cancelada_em FROM issue"), null);
+  assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ticket_novo'"), 0);
+  for (const filha of ["execucao", "decisao", "evidencia", "commit_ticket", "retrabalho"]) {
+    const alvos = banco.prepare(`PRAGMA foreign_key_list(${filha})`).all();
+    assert.ok(
+      alvos.some((fk) => fk.table === "ticket"),
+      filha,
+    );
+  }
+  for (const indice of ["ux_ticket_em_execucao", "ux_ticket_etapa_unica", "ix_issue_dep_dep"]) {
+    assert.equal(valor(banco, `SELECT count(*) FROM sqlite_master WHERE name = '${indice}'`), 1, indice);
+  }
+
+  banco.exec("UPDATE ticket SET status = 'fechado', erro = NULL WHERE id = 2");
+  banco.exec(
+    "INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em) VALUES (3, 1, 'sessao', 'S', 'cancelado', 'auditor', 'x')",
+  );
+  assert.throws(() => {
+    banco.exec("UPDATE ticket SET status = 'arquivado' WHERE id = 3");
+  }, /CHECK/);
+  assert.throws(() => {
+    banco.exec("DELETE FROM ticket WHERE id = 1");
+  }, /FOREIGN KEY/);
+  assert.throws(() => {
+    banco.exec("UPDATE issue SET cancelada_em = 'x', fase = 'concluida', concluida_em = 'x' WHERE id = 1");
+  }, /CHECK/);
+  banco.close();
+});
+
+test("migrar() desfaz a migração e religa as FKs quando ela deixa referência órfã", () => {
+  const banco = bancoAntesDoCancelamento();
+  banco.exec("PRAGMA foreign_keys = OFF");
+  banco.exec(
+    "INSERT INTO decisao (id, issue, ticket, gate, aprovado, por, em) VALUES (2, 1, 99, 'desenho', 1, 'auditor', 'x')",
+  );
+
+  assert.throws(
+    () => {
+      migrar(banco, MIGRACOES);
+    },
+    (erro) => erro instanceof ErroDeRegra && erro.message.includes("deixou 1 referência(s) órfã(s)"),
+  );
+  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 1);
+  assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
+  assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ticket_novo'"), 0);
+  assert.equal(valor(banco, "SELECT count(*) FROM pragma_table_info('issue') WHERE name = 'cancelada_em'"), 0);
+  banco.close();
+});
+
 test("as listas dos CHECK ... IN (...) vêm dos enums zod", () => {
   assert.equal(listaSql(Etapa), "'registro','desenho','desenvolvimento','revisao','encerramento','sessao'");
   assert.equal(listaSql(Fase).split(",").length, Fase.options.length);

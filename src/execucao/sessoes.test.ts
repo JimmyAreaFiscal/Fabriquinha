@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { type Agregado, AUDITOR, type Execucao, type Ticket } from "../dominio/agregado.ts";
+import { type Agregado, AUDITOR, CANCELADA, type Execucao, type Ticket } from "../dominio/agregado.ts";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Fase } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
@@ -267,6 +267,20 @@ test("estado: a consulta só conversa, sem a falha nem os gates do ticket, e par
   const viva = consulta("desenvolvimento", "concluido", "em_andamento");
   assert.deepEqual(estado(viva, ociosa), ["aguardando_humano", "conversa", T1], "o pi vivo espera a pergunta");
   assert.deepEqual(estado(viva, { ...ociosa, ocupado: true }), ["rodando", undefined, T1]);
+});
+
+test("estado: a sessão de issue cancelada é terminada, a principal e a de consulta", () => {
+  const cancelada = (modo: Execucao["modo"], status: Ticket["status"]) => {
+    const ag = agregadoCom(
+      "desenvolvimento",
+      [ticket({ id: 2, etapa: "desenvolvimento", status })],
+      [execucao({ ticket: 2, modo, resultado: "falha", erro: CANCELADA })],
+    );
+    return { ...ag, issue: { ...ag.issue, canceladaEm: T1 } };
+  };
+  assert.deepEqual(estado(cancelada("autonomo", "cancelado")), ["terminada", undefined, T1]);
+  assert.deepEqual(estado(cancelada("interativo", "cancelado")), ["terminada", undefined, T1]);
+  assert.deepEqual(estado(cancelada("consulta", "fechado")), ["terminada", undefined, T1]);
 });
 
 // ---------------------------------------------------------------------------------------------------------------

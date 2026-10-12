@@ -121,6 +121,7 @@ test("trilho: passadas feitas, a atual marcada, gates em losango e a cor do esta
   ]);
   assert.match(html, /<li class="passo gate atual" aria-current="step">.*?<span>Aprovação do desenho<\/span>/);
   assert.match(trilho("registro", []), /^<ol class="trilho-fases" /);
+  assert.match(trilho("desenho", ["registro"], "cancelada"), /^<ol class="trilho-fases cancelada" /);
 });
 
 test("trilho: a fase antes da atual por que a issue não passou fica neutra, não verde", () => {

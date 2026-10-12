@@ -359,6 +359,15 @@ test("sem a variável, todo comando além de servidor, abrir e --help sai com Er
   c.banco.close();
 });
 
+test("issue cancelar: o agente recebe saída 1 e a fase não muda", async () => {
+  const c = cenario("desenho");
+  falha(await cli(c.env, ["issue", "cancelar", "I-1"]), "só o Auditor pode cancelar a I-1 (peça ao Auditor pelo web)");
+  const issue = c.banco.prepare("SELECT fase, cancelada_em FROM issue WHERE id = 1").get();
+  assert.deepEqual([issue?.fase, issue?.cancelada_em], ["desenho", null]);
+  assert.match((await cli(c.env, ["issue", "-h"])).out, /^ {2}fabriquinha issue cancelar I-<n>$/m);
+  c.banco.close();
+});
+
 test("--help de um grupo imprime só a ajuda dele no stdout", async () => {
   const s = await cli({}, ["ticket", "criar", "-h"]);
   assert.deepEqual([s.codigo, s.err], [0, ""]);

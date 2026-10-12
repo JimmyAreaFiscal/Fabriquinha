@@ -2,7 +2,7 @@
 // com o título da issue, o resultado e o custo, que a lista mostra por linha. A prévia lê a sessão pela rota do chat.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { Agregado, Execucao } from "../../dominio/agregado.ts";
+import { type Agregado, CANCELADA, type Execucao } from "../../dominio/agregado.ts";
 import { Etapa, type Id } from "../../dominio/primitivos.ts";
 import { ABORTADA } from "../../execucao/gerente.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
@@ -10,7 +10,7 @@ import { agregadoExistente } from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
 import type { Rota } from "../rotas.ts";
 
-export type Resultado = "concluida" | "falha" | "abortada";
+export type Resultado = "concluida" | "falha" | "abortada" | "cancelada";
 
 /** Uma linha do Histórico (F7 §4.4): a sessão terminada, o título da issue, o resultado e o custo dela. */
 export interface SessaoDoHistorico extends InfoSessao {
@@ -26,9 +26,10 @@ const FiltroSessoes = z.object({
   etapa: Etapa.optional(),
 });
 
-/** O resultado da sessão é o da última execução; a autônoma que o Auditor aborta falha com o erro `ABORTADA`. */
+/** O resultado da sessão é o da última execução; a autônoma que o Auditor aborta falha com o erro `ABORTADA`; a da issue cancelada, com `CANCELADA`. */
 function resultado(e: Execucao | undefined): Resultado {
   if (e?.resultado !== "falha") return "concluida";
+  if (e.erro === CANCELADA) return "cancelada";
   return e.erro === ABORTADA ? "abortada" : "falha";
 }
 

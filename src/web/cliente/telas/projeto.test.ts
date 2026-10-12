@@ -76,8 +76,12 @@ const sessao = (s: Partial<InfoSessao> & Pick<InfoSessao, "issue" | "ticket" | "
   ...s,
 });
 
-const NADA: Escolhas = { mostrar: { concluidas: false, arquivadas: false }, gavetas: new Map() };
-const VAZIA: ListaDoProjeto = { issues: [], sessoes: [], contagem: { andamento: 0, concluidas: 0, arquivadas: 0 } };
+const NADA: Escolhas = { mostrar: { concluidas: false, arquivadas: false, canceladas: false }, gavetas: new Map() };
+const VAZIA: ListaDoProjeto = {
+  issues: [],
+  sessoes: [],
+  contagem: { andamento: 0, concluidas: 0, arquivadas: 0, canceladas: 0 },
+};
 
 const texto = (html: string) =>
   html
@@ -107,12 +111,13 @@ test("cabeçalho com o seletor, Editar na Configuração e Registrar; barra com 
   assert.match(html, /<option>fabriquinha<\/option><option selected>loja &#60;api&#62;<\/option>/);
   assert.match(html, /<a class="editar" href="\/config\?projeto=loja%20%3Capi%3E">Editar na Configuração<\/a>/);
   assert.match(html, /data-registrar>\+ Registrar necessidade</);
-  assert.match(html, /<span class="contagem">0 em andamento · 0 concluídas · 0 arquivadas<\/span>/);
+  assert.match(html, /<span class="contagem">0 em andamento · 0 concluídas · 0 arquivadas · 0 canceladas<\/span>/);
   assert.match(
     html,
     /<\/div>\s*<div class="kpis-mes">\s*<div class="kpi superficie"><span class="rotulo">Custo · outubro<\/span><span class="kpi-valor">US\$ 1,50<\/span><span class="kpi-sub">3 chamadas de LLM/,
   );
   assert.match(html, /<input type="checkbox" data-mostrar="concluidas"> Mostrar concluídas/);
+  assert.match(html, /<input type="checkbox" data-mostrar="canceladas"> Mostrar canceladas/);
   assert.match(html, /data-arquivar disabled>Arquivar concluídas/);
   assert.match(html, /<p class="vazio">Nenhuma issue.<\/p>/);
   assert.doesNotMatch(html, /pista-cabeca/);
@@ -120,12 +125,13 @@ test("cabeçalho com o seletor, Editar na Configuração e Registrar; barra com 
   const marcado = paginaDoProjeto(
     PROJETOS,
     "fabriquinha",
-    { ...VAZIA, contagem: { andamento: 3, concluidas: 1, arquivadas: 1 } },
+    { ...VAZIA, contagem: { andamento: 3, concluidas: 1, arquivadas: 1, canceladas: 2 } },
     MES,
-    { ...NADA, mostrar: { concluidas: true, arquivadas: true } },
+    { ...NADA, mostrar: { concluidas: true, arquivadas: true, canceladas: true } },
     AGORA,
   );
-  assert.match(marcado, /3 em andamento · 1 concluída · 1 arquivada/);
+  assert.match(marcado, /3 em andamento · 1 concluída · 1 arquivada · 2 canceladas/);
+  assert.match(marcado, /data-mostrar="canceladas" checked> Mostrar canceladas/);
   assert.match(marcado, /data-mostrar="concluidas" checked> Mostrar concluídas/);
   assert.match(marcado, /data-mostrar="arquivadas" checked> Mostrar arquivadas/);
   assert.match(marcado, /data-arquivar>Arquivar concluídas/);
@@ -175,7 +181,7 @@ test("linha por issue: título, I-n, tipo, bloqueio, PR, progresso, trilho com a
       sessao({ issue: 34, ticket: 340, estado: "aguardando_humano" }),
       sessao({ issue: 33, ticket: 330, estado: "rodando", modo: "consulta" }),
     ],
-    contagem: { andamento: 4, concluidas: 0, arquivadas: 0 },
+    contagem: { andamento: 4, concluidas: 0, arquivadas: 0, canceladas: 0 },
   };
   const html = paginaDoProjeto(PROJETOS, "loja <api>", lista, MES, NADA, AGORA);
   // O cabeçalho do trilho: as 5 etapas sobre as 8 fases, as de gate marcadas.
@@ -256,9 +262,14 @@ test("a gaveta lista os tickets com etapa, status, modelo (★ no override) e se
     arquivadaEm: "2026-09-02T12:00:00.000Z",
   });
   const lista: ListaDoProjeto = {
-    issues: [i, arquivada, issue({ id: 5, fase: "desenho" })],
+    issues: [
+      i,
+      arquivada,
+      issue({ id: 5, fase: "desenho" }),
+      issue({ id: 6, fase: "desenho", canceladaEm: "2026-10-04T12:00:00.000Z" }),
+    ],
     sessoes: [sessao({ issue: 22, ticket: 90, estado: "rodando", modo: "consulta", desde: ha(1) })],
-    contagem: { andamento: 1, concluidas: 1, arquivadas: 1 },
+    contagem: { andamento: 1, concluidas: 1, arquivadas: 1, canceladas: 1 },
   };
   const gavetas = new Map([
     [22, true],
@@ -284,6 +295,11 @@ test("a gaveta lista os tickets com etapa, status, modelo (★ no override) e se
   assert.match(texto(`<tr${linhas[3] ?? ""}`), /^sessão em aberto T-91 Ticket 91 aberto padrão do pi$/);
   assert.match(item(html, 12), /<span>arquivada em 02\/09<\/span>/);
   assert.match(item(html, 5), /^<div class="pista-item fechada" data-issue="5">/);
+  // A cancelada fica apagada, com o trilho no estado cancelada e a data na cor do perigo.
+  const cancelada = item(html, 6);
+  assert.match(cancelada, /^<div class="pista-item cancelada fechada apagada" data-issue="6">/);
+  assert.match(cancelada, /<span class="cancelada">cancelada em 04\/10<\/span>/);
+  assert.match(cancelada, /<ol class="trilho-fases cancelada"/);
 
   // Fora da lista de projetos, o modelo da etapa é o padrão do pi.
   assert.doesNotMatch(paginaDoProjeto([], "outro", lista, MES, NADA, AGORA), /claude-sonnet/);

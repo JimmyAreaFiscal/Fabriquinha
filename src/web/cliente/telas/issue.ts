@@ -88,7 +88,7 @@ function pr(p: PaginaDaIssue): string {
 }
 
 function dependencias(p: PaginaDaIssue): string {
-  const aberta = p.issue.fase !== "concluida";
+  const aberta = p.issue.fase !== "concluida" && p.issue.canceladaEm === undefined;
   const deps = p.dependencias.map(
     (d) =>
       `<span class="dep"><a href="${caminhoDaIssue(d.projeto, d.id)}">${rotuloIssue(d.id)}</a><span class="fase">${FASE[d.fase]}</span>${
@@ -106,16 +106,48 @@ function dependencias(p: PaginaDaIssue): string {
   return deps.join("") || '<span class="muted">—</span>';
 }
 
+/** O que o C22 faz além de cancelar a issue, para o Auditor ler antes de confirmar. */
+function efeitosDoCancelamento(p: PaginaDaIssue): string {
+  const fechados = p.tickets.filter((t) => t.status === "aberto" || t.status === "falhou");
+  const rodando = p.tickets.find((t) => t.status === "em_execucao");
+  const itens = [
+    fechados.length > 0 &&
+      `<li>${fechados.length === 1 ? "Ticket que será fechado" : "Tickets que serão fechados"}: ${fechados.map((t) => rotuloTicket(t.id)).join(", ")}</li>`,
+    rodando && `<li>A execução em andamento de ${rotuloTicket(rodando.id)} será parada e o ticket, cancelado</li>`,
+    p.dependentes.length > 0 &&
+      `<li>${p.dependentes.length === 1 ? "Dependente que será cancelada" : "Dependentes que serão canceladas"}:<ul>${p.dependentes
+        .map(
+          (d) =>
+            `<li><a href="${caminhoDaIssue(d.projeto, d.id)}">${rotuloIssue(d.id)}</a> <span class="muted">${escapar(d.projeto)} · ${FASE[d.fase]}</span></li>`,
+        )
+        .join("")}</ul></li>`,
+  ].filter(Boolean);
+  return itens.length > 0 ? `<ul class="efeitos">${itens.join("")}</ul>` : "";
+}
+
+/** O pé do card Detalhes: o botão com a confirmação (C22), ou o motivo de não haver o que cancelar. */
+function cancelar(p: PaginaDaIssue): string {
+  const { issue } = p;
+  if (issue.canceladaEm !== undefined) return "";
+  if (issue.fase === "concluida") {
+    return `<div class="cancelar"><button type="button" class="btn btn-perigo" disabled>Cancelar issue</button><p class="muted">A ${rotuloIssue(issue.id)} está concluída e não pode ser cancelada.</p></div>`;
+  }
+  return `<div class="cancelar"><button type="button" class="btn btn-perigo" data-acao="cancelar-issue">Cancelar issue</button>
+    <dialog class="dialogo" data-dialogo-cancelar aria-labelledby="titulo-cancelar"><h2 id="titulo-cancelar">Cancelar ${rotuloIssue(issue.id)}</h2><p>A issue sai do andamento e não volta mais. Nada é apagado: tickets, execuções, decisões e evidências continuam na página, e os custos continuam nas métricas.</p>${efeitosDoCancelamento(p)}<form method="dialog" class="dialogo-botoes"><button class="btn">Voltar</button><button type="button" class="btn btn-perigo-cheio" data-acao="confirmar-cancelar" data-confirmar-cancelar>Cancelar issue</button></form></dialog></div>`;
+}
+
 function detalhes(p: PaginaDaIssue): string {
   const { issue } = p;
   const tipo = issue.tipo ? `<span class="tag">${issue.tipo}</span>` : '<span class="muted">—</span>';
+  const cancelada = issue.canceladaEm === undefined ? "" : `<dt>Cancelada</dt><dd>${data(issue.canceladaEm)}</dd>`;
   return `<section class="cartao-lateral superficie"><h3>Detalhes</h3><dl class="fatos">
     <dt>Projeto</dt><dd>${escapar(issue.projeto)}</dd>
     <dt>Tipo</dt><dd>${tipo}</dd>
     <dt>Criada</dt><dd>${data(issue.criadaEm)}</dd>
+    ${cancelada}
     ${pr(p)}
     <dt>Dependências</dt><dd>${dependencias(p)}</dd>
-  </dl></section>`;
+  </dl>${cancelar(p)}</section>`;
 }
 
 const descricao = (html: string): string =>
@@ -497,6 +529,8 @@ export const PAINEIS: ((p: PaginaDaIssue, extras: Extras) => string)[] = [
 
 /** A "Ação do Auditor", só quando algum painel existe (F7 §4.4). */
 export function acaoDoAuditor(p: PaginaDaIssue, extras = SEM_EXTRAS): string {
+  // A cancelada fica na fase em que parou, mas não tem mais o que decidir (C22).
+  if (p.issue.canceladaEm !== undefined) return "";
   const paineis = PAINEIS.map((painel) => painel(p, extras)).join("");
   return paineis && `<div class="acao-auditor" aria-label="Ação do Auditor" role="region">${paineis}</div>`;
 }
@@ -561,8 +595,8 @@ export function paginaDaIssue(p: PaginaDaIssue, descricaoHtml: string, extras = 
   const titulo = issue.titulo === null ? '<span class="muted">sem título</span>' : escapar(issue.titulo);
   return `<div class="pagina-issue">
     <nav class="migalha" aria-label="Caminho"><a href="/projects">Projetos</a> › <a href="/projects/${encodeURIComponent(issue.projeto)}">${escapar(issue.projeto)}</a> › ${rotuloIssue(issue.id)}</nav>
-    <h1 class="titulo-issue"><span class="id">${rotuloIssue(issue.id)}</span>${titulo}</h1>
-    ${trilho(issue.fase, p.percorridas, estadoDoTrilho(ativas))}
+    <h1 class="titulo-issue"><span class="id">${rotuloIssue(issue.id)}</span>${titulo}${issue.canceladaEm === undefined ? "" : ' <span class="pill pill-cancelada">Cancelada</span>'}</h1>
+    ${trilho(issue.fase, p.percorridas, issue.canceladaEm === undefined ? estadoDoTrilho(ativas) : "cancelada")}
     <div class="mesa">
       <aside class="lateral">${detalhes(p)}${descricao(descricaoHtml)}${tickets(p)}</aside>
       <div class="principal">${acaoDoAuditor(p, extras)}${artefatos(p)}</div>

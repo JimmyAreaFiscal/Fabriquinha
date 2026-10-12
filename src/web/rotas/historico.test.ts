@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { CANCELADA } from "../../dominio/agregado.ts";
 import { ABORTADA } from "../../execucao/gerente.ts";
 import { abrir } from "../../persistencia/banco.ts";
 import { casar } from "../cliente/caminhos.ts";
@@ -25,6 +26,7 @@ const S2 = "22222222-2222-4222-8222-222222222222";
 const S3 = "33333333-3333-4333-8333-333333333333";
 const S4 = "44444444-4444-4444-8444-444444444444";
 const S5 = "55555555-5555-4555-8555-555555555555";
+const S6 = "66666666-6666-4666-8666-666666666666";
 
 /**
  * I-1 da loja no desenvolvimento: T-1 de desenho concluído em duas execuções (S1, a última com sucesso, e uma
@@ -86,6 +88,19 @@ const resumo = (lista: unknown) =>
     custo,
     desde,
   ]);
+
+test("histórico: a execução da issue cancelada tem o resultado cancelada", async () => {
+  banco.exec(`
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em, cancelada_em)
+      VALUES (3, 'site', 'Por engano', 'funcionalidade', 'desenho', '${T0}', '2026-10-11T16:01:00.000Z');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (4, 3, 'desenho', 'Desenhar', 'cancelado', 'fabriquinha', '${T0}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
+      VALUES (7, 4, 'autonomo', '${S6}', 'falha', '${CANCELADA}', '2026-10-11T16:00:00.000Z', '2026-10-11T16:01:00.000Z');
+  `);
+  const lista = resumo(await sessoes("escopo=historico&projeto=site"));
+  assert.deepEqual(lista.at(-1), [S6, "Por engano", "cancelada", 0, "2026-10-11T16:01:00.000Z"]);
+});
 
 test("histórico: as terminadas com o título da issue, o resultado da última execução e o custo das execuções", async () => {
   assert.deepEqual(resumo(await sessoes("escopo=historico")), [

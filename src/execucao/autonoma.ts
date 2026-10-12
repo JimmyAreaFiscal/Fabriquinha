@@ -13,7 +13,7 @@ import { raizDo } from "../persistencia/banco.ts";
 import { commitDoTicket } from "../persistencia/commits.ts";
 import { anotar, logDaExecucao } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
-import { avisar, iniciarNaSessaoPrincipal, rodarExecucao } from "./gerente.ts";
+import { avisar, foiCancelada, iniciarNaSessaoPrincipal, rodarExecucao } from "./gerente.ts";
 import { montarPrompt } from "./prompt.ts";
 
 export interface OpcoesAutonoma {
@@ -53,6 +53,8 @@ export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: 
       montarPrompt({ ag: await antesDoPi(banco, ag, t, log), ticket: t, instrucao, ...c, modo: "autonomo" }),
   });
 
+  // A issue foi cancelada (C22): o cancelamento já gravou o término e o uso, e a guarda recusaria o resto.
+  if (foiCancelada(execucao.id)) return;
   if (falha !== undefined) {
     comIssue(banco, issue, "terminarExecucao", FABRIQUINHA, (a, ctx) =>
       terminarExecucao(a, { execucao: execucao.id, resultado: "falha", erro: motivo(falha) }, FABRIQUINHA, ctx),

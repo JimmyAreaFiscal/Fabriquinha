@@ -75,6 +75,7 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
         etapa: "sessao",
         modo: "interativo",
       }),
+      sessao({ sessao: "z", desde: "2026-10-08T19:50:00.000Z", resultado: "cancelada" }),
     ],
     "x",
     AGORA,
@@ -91,6 +92,7 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
   assert.match(html, /data-sel="x" aria-selected="true"><span class="hora">18:47<\/span>/);
   assert.match(html, /sem título <span class="muted">· desenho · consulta<\/span>.*pill-falha">falha<.*US\$ 0,00/);
   assert.match(html, /· sessão em aberto · interativa<\/span>.*pill-neutro">abortada</);
+  assert.match(html, /data-sel="z".*pill-neutro">cancelada</);
   assert.match(html, /<aside class="previa superficie" data-previa aria-label="Prévia da sessão">/);
   assert.equal(listaDoHistorico([], "", AGORA), '<p class="muted">Nenhuma sessão com esses filtros.</p>');
 });

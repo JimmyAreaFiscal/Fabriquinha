@@ -52,17 +52,31 @@ export function migrar(banco: DatabaseSync, migracoes: readonly string[]): void 
     );
   }
   if (inicial === migracoes.length) return; // em dia: nem pega o lock
+  // As FKs ficam desligadas fora da transação (o PRAGMA não vale dentro dela), porque recriar uma tabela com DROP/RENAME
+  // falha com FK ligada. Em troca, `foreign_key_check` confere antes do COMMIT.
   // A versão é relida dentro do lock: dois processos abrindo juntos não aplicam a mesma migração duas vezes.
-  let pendente = true;
-  while (pendente) {
-    pendente = escrever(banco, () => {
-      const atual = versao(banco);
-      const sql = migracoes[atual];
-      if (sql === undefined) return false;
-      banco.exec(sql);
-      banco.exec(`PRAGMA user_version = ${String(atual + 1)}`);
-      return true;
-    });
+  banco.exec("PRAGMA foreign_keys = OFF");
+  try {
+    let pendente = true;
+    while (pendente) {
+      pendente = escrever(banco, () => {
+        const atual = versao(banco);
+        const sql = migracoes[atual];
+        if (sql === undefined) return false;
+        banco.exec(sql);
+        banco.exec(`PRAGMA user_version = ${String(atual + 1)}`);
+        const orfas = banco.prepare("PRAGMA foreign_key_check").all();
+        if (orfas.length > 0) {
+          throw new ErroDeRegra(
+            `a migração ${String(atual + 1)} deixou ${String(orfas.length)} referência(s) órfã(s) no banco`,
+            "restaure o banco do backup e relate o problema",
+          );
+        }
+        return true;
+      });
+    }
+  } finally {
+    banco.exec("PRAGMA foreign_keys = ON");
   }
 }
 

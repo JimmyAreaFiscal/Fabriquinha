@@ -7,8 +7,8 @@ import { after, test } from "node:test";
 import { ZodError } from "zod";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import type { Agregado, Ator, Ticket } from "../dominio/agregado.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
+import { type Agregado, type Ator, CANCELADA, type Ticket } from "../dominio/agregado.ts";
+import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import {
   definirModeloTicket,
   falharTicket,
@@ -23,7 +23,17 @@ import { decidirDesenho, decidirRegistro } from "../dominio/gates.ts";
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { abrir } from "./banco.ts";
-import { agregado, arquivarConcluidas, comIssue, fasesPercorridas, registrarIssue } from "./issues.ts";
+import {
+  agregado,
+  arquivarConcluidas,
+  cancelarIssues,
+  comIssue,
+  dependentes,
+  fasesPercorridas,
+  issuesEmAndamento,
+  registrarIssue,
+  situacaoDasIssues,
+} from "./issues.ts";
 import { registrarProjeto } from "./projetos.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-issues-"));
@@ -398,7 +408,7 @@ test("as constraints da tabela ticket valem no banco", () => {
     [{ titulo: "" }, /CHECK/],
     [{ titulo: "a".repeat(121) }, /CHECK/],
     [{ titulo: null }, /NOT NULL/],
-    [{ status: "cancelado" }, /CHECK/],
+    [{ status: "arquivado" }, /CHECK/],
     [{ origem: "humano" }, /CHECK/],
     [{ origem_ticket: 99 }, /FOREIGN KEY/],
     [{ status: "falhou" }, /CHECK/],
@@ -986,5 +996,160 @@ test("gate de desenho pelo comIssue: C11, C17 e C7 do agente; C11 a C13 e C15 re
       ["decidirDesenho", "auditor", "aprovacao_desenho"],
     ],
   );
+  banco.close();
+});
+
+/** Põe a issue em `desenvolvimento` com o ticket de registro `em_execucao` e a execução dele em andamento. */
+const emExecucao = (banco: DatabaseSync, issue: number) =>
+  comIssue(banco, issue, "editarIssue", auditor, (ag, ctx) => ({
+    ...ag,
+    issue: { ...ag.issue, titulo: "T", tipo: "problema", fase: "desenvolvimento" },
+    tickets: ag.tickets.map((t) => ({ ...t, status: "em_execucao" })),
+    execucoes: [
+      {
+        id: ctx.novoId("execucao"),
+        ticket: ag.tickets[0]?.id ?? 0,
+        modo: "autonomo",
+        sessaoPi: SESSAO,
+        resultado: "em_andamento",
+        iniciadaEm: ctx.agora,
+      },
+    ],
+  }));
+
+test("cancelarIssues cancela a issue e as dependentes diretas e indiretas de qualquer projeto, não as dependências", () => {
+  const banco = novoBanco();
+  const a = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  const b = registrarIssue(banco, { projeto: "outro", deps: [a] }, auditor).issue.id;
+  const c = registrarIssue(banco, { projeto: "loja", deps: [b] }, auditor).issue.id;
+  const livre = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  emExecucao(banco, c);
+  const antes = agregado(banco, a);
+
+  assert.deepEqual(dependentes(banco, a), [
+    { id: b, projeto: "outro", fase: "registro" },
+    { id: c, projeto: "loja", fase: "desenvolvimento" },
+  ]);
+  const { issues, execucoes } = cancelarIssues(banco, a, auditor);
+
+  assert.deepEqual(issues, [a, b, c]);
+  assert.deepEqual(
+    execucoes.map((e) => [e.ticket, e.resultado, e.erro]),
+    [[c, "falha", CANCELADA]],
+  );
+  for (const id of [a, b, c]) {
+    const ag = agregado(banco, id);
+    assert.match(String(ag?.issue.canceladaEm), INSTANTE);
+    assert.equal(
+      ag?.tickets.some((t) => t.status === "aberto"),
+      false,
+    );
+  }
+  assert.deepEqual(
+    agregado(banco, c)?.tickets.map((t) => t.status),
+    ["cancelado"],
+  );
+  assert.deepEqual(
+    agregado(banco, a)?.tickets.map((t) => t.status),
+    ["fechado"],
+  );
+  assert.equal(agregado(banco, a)?.issue.fase, antes?.issue.fase);
+  assert.equal(agregado(banco, livre)?.issue.canceladaEm, undefined);
+  assert.deepEqual(
+    todas(banco, "SELECT issue, nome, ator, fase FROM comando WHERE nome = 'cancelarIssue' ORDER BY issue").map(
+      (l) => ({
+        ...l,
+      }),
+    ),
+    [
+      { issue: a, nome: "cancelarIssue", ator: "auditor", fase: "registro" },
+      { issue: b, nome: "cancelarIssue", ator: "auditor", fase: "registro" },
+      { issue: c, nome: "cancelarIssue", ator: "auditor", fase: "desenvolvimento" },
+    ],
+  );
+  assert.deepEqual(dependentes(banco, a), []); // já canceladas
+  assert.equal(valor(banco, "SELECT count(*) FROM execucao WHERE resultado = 'em_andamento'"), 0);
+  banco.close();
+});
+
+test("cancelarIssues na dependente não cancela a issue de que ela depende", () => {
+  const banco = novoBanco();
+  const a = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  const b = registrarIssue(banco, { projeto: "loja", deps: [a] }, auditor).issue.id;
+
+  assert.deepEqual(cancelarIssues(banco, b, auditor), { issues: [b], execucoes: [] });
+  assert.equal(agregado(banco, a)?.issue.canceladaEm, undefined);
+  assert.notEqual(agregado(banco, b)?.issue.canceladaEm, undefined);
+  banco.close();
+});
+
+test("cancelarIssues recusa sem gravar nada: inexistente, não Auditor, concluída e já cancelada", () => {
+  const banco = novoBanco();
+  const a = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  registrarIssue(banco, { projeto: "loja", deps: [a] }, auditor);
+  const concluida = comIssue(banco, a, "editarIssue", auditor, (ag, ctx) => ({
+    ...ag,
+    issue: { ...ag.issue, titulo: "T", tipo: "problema", fase: "concluida", concluidaEm: ctx.agora },
+  }));
+
+  assert.throws(() => cancelarIssues(banco, 99, auditor), ErroDeInexistente);
+  assert.throws(() => cancelarIssues(banco, a, { tipo: "agente", execucao: 1, ticket: 1 }), ErroDeEscopo);
+  regra(
+    () => cancelarIssues(banco, a, auditor),
+    "a I-1 está concluída e não pode ser cancelada (ela já terminou o processo)",
+  );
+  assert.deepEqual(agregado(banco, a), concluida);
+  assert.equal(agregado(banco, 2)?.issue.canceladaEm, undefined);
+
+  const nova = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  cancelarIssues(banco, nova, auditor);
+  regra(() => cancelarIssues(banco, nova, auditor), "a I-3 já está cancelada (não há mais nada a fazer)");
+  banco.close();
+});
+
+test("dependentes deixa de fora as concluídas mas segue por elas", () => {
+  const banco = novoBanco();
+  const a = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  const b = registrarIssue(banco, { projeto: "loja", deps: [a] }, auditor).issue.id;
+  const c = registrarIssue(banco, { projeto: "loja", deps: [b] }, auditor).issue.id;
+  comIssue(banco, b, "editarIssue", auditor, (ag, ctx) => ({
+    ...ag,
+    issue: { ...ag.issue, titulo: "T", tipo: "problema", fase: "concluida", concluidaEm: ctx.agora },
+  }));
+
+  assert.deepEqual(
+    dependentes(banco, a).map((d) => d.id),
+    [c],
+  );
+  banco.close();
+});
+
+test("comIssue recusa qualquer comando sobre issue cancelada, sem gravar nada", () => {
+  const banco = novoBanco();
+  const { issue } = registrarIssue(banco, { projeto: "loja" }, auditor);
+  cancelarIssues(banco, issue.id, auditor);
+  const antes = agregado(banco, issue.id);
+  const comandos = valor(banco, "SELECT count(*) FROM comando");
+
+  regra(
+    () => comIssue(banco, issue.id, "editarIssue", auditor, (ag) => editarIssue(ag, { titulo: "x" }, auditor)),
+    "a I-1 está cancelada e não muda mais (registre uma nova issue se precisar)",
+  );
+  assert.deepEqual(agregado(banco, issue.id), antes);
+  assert.equal(valor(banco, "SELECT count(*) FROM comando"), comandos);
+  banco.close();
+});
+
+test("issuesEmAndamento e situacaoDasIssues excluem e marcam a cancelada", () => {
+  const banco = novoBanco();
+  const a = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  const b = registrarIssue(banco, { projeto: "loja" }, auditor).issue.id;
+  cancelarIssues(banco, a, auditor);
+
+  assert.deepEqual(issuesEmAndamento(banco), [b]);
+  assert.deepEqual(situacaoDasIssues(banco, "loja"), [
+    { id: b, concluida: false, arquivada: false, cancelada: false },
+    { id: a, concluida: false, arquivada: false, cancelada: true },
+  ]);
   banco.close();
 });

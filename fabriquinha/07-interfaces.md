@@ -44,6 +44,7 @@ O F1 confere o escopo de cada comando (próprio ticket, própria issue); o CLI s
 | `projeto ver` | leitura | todas |
 | `issue ver I-n` | leitura | todas |
 | `issue editar I-n [--titulo <t>] [--tipo <funcionalidade\|problema>] [--descricao <arquivo>]` | C2 | registro |
+| `issue cancelar I-n` | C22 (o agente recebe `ErroDeEscopo`, saída 1; só o Auditor cancela, no web) | desenho, desenvolvimento, revisao, encerramento, registro, sessao |
 | `issue dep add I-n I-m` / `issue dep rm I-n I-m` | C3, C4 | registro |
 | `ticket ver T-n` | leitura | todas |
 | `ticket criar I-n --titulo <t> [--descricao <arquivo>]` | C11 | desenho, revisao, sessao |
@@ -111,7 +112,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | Rota | O que devolve |
 |---|---|
 | `GET /api/board` | Issues não concluídas de todos os projetos, para o board do Início (4.4). |
-| `GET /api/projetos/:nome/issues?concluidas=&arquivadas=` | Issues do projeto com os seus tickets e as sessões ativas, para a página do projeto (4.4). |
+| `GET /api/projetos/:nome/issues?concluidas=&arquivadas=&canceladas=` | Issues do projeto com os seus tickets e as sessões ativas, para a página do projeto (4.4). |
 | `GET /api/metricas?projeto=&de=&ate=` | `MetricasMes[]` (F6, 5.7), um por mês de `de` a `ate`, no formato `AAAA-MM`; padrão: os 11 meses anteriores mais o mês corrente; no máximo 24 meses; sem `projeto`, todos. |
 | `GET /api/metricas/issues?projeto=&de=&ate=` | `metricasPorIssue` (F6, 5.8): uma linha por issue com execução no período. |
 | `GET /api/issues/:id` | Agregado da issue, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). |
@@ -139,6 +140,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | `POST /api/registros` `{ projeto, deps }` | `registrarNecessidade` (F4, 6.6): C1, worktree e sessão interativa. Devolve a sessão para o cliente abrir o chat. |
 | `POST /api/issues/:id` `{ titulo?, tipo?, descricao? }` | C2 do Auditor, só na fase `registro`. |
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
+| `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
 | `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | C10. Devolver também envia o motivo ao agente como mensagem (F4, 6.6). |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
@@ -237,9 +239,10 @@ Duas peças se repetem entre as páginas:
 
 1. Cabeçalho: seletor de projeto, link **Editar na Configuração** e **Registrar necessidade**, com o projeto já escolhido.
 2. Métricas do mês corrente só do projeto (F6, 5.7), em 5 cards: custo (com chamadas de LLM), tokens (entrada, saída e cache), issues, tickets e PRs.
-3. Barra com a contagem (em andamento, concluídas, arquivadas), as opções explícitas **Mostrar concluídas** e **Mostrar arquivadas** (Q2) e **Arquivar concluídas** (C18 do projeto, com confirmação que diz quantas serão arquivadas e que nada é apagado).
+3. Barra com a contagem (em andamento, concluídas, arquivadas, canceladas), as opções explícitas **Mostrar concluídas**, **Mostrar arquivadas** e **Mostrar canceladas** (Q2) e **Arquivar concluídas** (C18 do projeto, com confirmação que diz quantas serão arquivadas e que nada é apagado).
 4. Cabeçalho das colunas do trilho (etapas e fases) fixo no topo ao rolar.
 5. Uma linha por issue: título, `I-n`, tipo, dependência que bloqueia, PR e progresso dos tickets (concluídos/total), o trilho de fases e, à direita, a sessão ativa com estado e link para o chat.
+   A cancelada só aparece com **Mostrar canceladas**, apagada, com "cancelada em dd/mm" e o trilho neutro; fica fora de "em andamento" e não bloqueia as que dependem dela.
 6. Clicar na linha abre a gaveta com os tickets: etapa, `T-n`, título, status, modelo (★ quando é override do ticket, C20) e sessão.
    As issues que aguardam o Auditor ou falharam já vêm com a gaveta aberta.
 7. Atualiza sozinha a cada 5 segundos, como o Início.
@@ -250,9 +253,10 @@ ponytail: o Início e a página do projeto releem tudo a cada 5 segundos; com ce
 
 Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR; o resto abre na caixa.
 
-1. Cabeçalho: caminho (Projetos › projeto › `I-n`), título e o trilho de fases.
+1. Cabeçalho: caminho (Projetos › projeto › `I-n`), título (com a pílula **Cancelada** quando for o caso) e o trilho de fases; na cancelada o marco da fase em que a issue parou fica neutro.
 2. Coluna da esquerda, fixa ao rolar:
-   - **Detalhes:** projeto, tipo, criada em, PR (link) e dependências com a fase de cada uma, com adicionar e remover enquanto a issue não estiver concluída (C3, C4);
+   - **Detalhes:** projeto, tipo, criada em, PR (link) e dependências com a fase de cada uma, com adicionar e remover enquanto a issue não estiver concluída nem cancelada (C3, C4); **Cancelada em** quando for o caso.
+     No pé do card, **Cancelar issue** (C22) abre um diálogo que diz que a issue sai do andamento e que nada é apagado, e lista os efeitos: os tickets abertos ou que falharam, que serão fechados, a execução em andamento, que será parada, e as dependentes (link, projeto e fase), que serão canceladas junto; **Voltar** ou **Cancelar issue**. Na concluída o botão fica desabilitado, com "A I-n está concluída e não pode ser cancelada."; na cancelada some, e também a **Ação do Auditor**;
    - **Descrição** em Markdown, recolhida com **ver tudo**;
    - **Tickets e sessões:** linha do tempo dos tickets em ordem de criação, com etapa, status e as sessões de cada um (principal e consultas) com link para o chat.
      Clicar no ticket abre na caixa as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
@@ -291,7 +295,7 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 
 1. Filtros: projeto, issue e etapa, com a contagem de sessões.
 2. Lista das sessões `terminada` agrupada por dia (Hoje, Ontem, data), da mais recente para a mais antiga.
-   Cada linha: hora, `I-n`, `T-n`, título com etapa e modo, resultado (concluída, falha, abortada) e custo.
+   Cada linha: hora, `I-n`, `T-n`, título com etapa e modo, resultado (concluída, falha, abortada, cancelada) e custo.
 3. Selecionar uma linha mostra ao lado, sem sair da página: issue, ticket e título, projeto, etapa e modo, resultado, quando terminou e quanto durou, custo e modelo, número de mensagens e o fim da conversa.
    Botões **Abrir o chat**, **Conversar sobre** (C21) e **Exportar**.
 
@@ -417,7 +421,8 @@ As leituras de tela são estas:
   - em Métricas, mudar o mês em foco e conferir que a média passa a usar só os meses anteriores a ele;
   - conferir que um script dentro de um HTML de evidência não consegue chamar a API;
   - abrir `/projects/<projeto>/issues/<issue>` direto numa aba nova, e com o projeto errado no caminho;
-  - arquivar as concluídas de um projeto, conferir que somem da lista e voltam com **Mostrar arquivadas**, e que as de outro projeto continuam como estavam.
+  - arquivar as concluídas de um projeto, conferir que somem da lista e voltam com **Mostrar arquivadas**, e que as de outro projeto continuam como estavam;
+  - cancelar uma issue, conferir que sai do projeto e volta apagada com **Mostrar canceladas**, e que os cards de custo e tokens do mês não mudam.
 
 ## 8. Fora de escopo
 
