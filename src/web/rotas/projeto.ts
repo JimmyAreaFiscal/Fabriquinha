@@ -1,0 +1,82 @@
+// Rotas da página do projeto (F7 §4.2): as issues do projeto com os tickets e as sessões ativas, e o C18 do projeto.
+// O Registrar necessidade usa `POST /api/registros`, do chat (rotas/chat.ts).
+import type { DatabaseSync } from "node:sqlite";
+import { z } from "zod";
+import { AUDITOR, type Issue, type Ticket } from "../../dominio/agregado.ts";
+import { encontrado, existe } from "../../dominio/erros.ts";
+import type { Id } from "../../dominio/primitivos.ts";
+import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
+import { agregado, arquivarConcluidas, issuesEmAndamento, situacaoDasIssues } from "../../persistencia/issues.ts";
+import { projeto } from "../../persistencia/projetos.ts";
+import type { Rota } from "../rotas.ts";
+
+/** Uma linha da página do projeto: a issue, os tickets, as dependências não concluídas e o PR aberto mais recente. */
+export type IssueDoProjeto = Issue & {
+  tickets: readonly Ticket[];
+  bloqueadaPor: readonly Id[];
+  pr?: { id: string; url: string };
+};
+
+/** `GET /api/projetos/:nome/issues`: as issues pedidas, as sessões ativas do projeto e a contagem de todas. */
+export interface ListaDoProjeto {
+  issues: IssueDoProjeto[];
+  sessoes: InfoSessao[];
+  contagem: { andamento: number; concluidas: number; arquivadas: number };
+}
+
+const Filtro = z.object({ concluidas: z.stringbool().default(false), arquivadas: z.stringbool().default(false) });
+
+const exigirProjeto = (banco: DatabaseSync, nome: string): void => {
+  encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "escolha um projeto cadastrado na Configuração");
+};
+
+/**
+ * F7 §5: as em andamento sempre; as concluídas e as arquivadas só quando pedidas (Q2).
+ * ponytail: um agregado por issue, como o board do Início; uma consulta só quando a página pesar.
+ */
+async function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Promise<ListaDoProjeto> {
+  exigirProjeto(banco, nome);
+  const filtro = Filtro.parse(Object.fromEntries(query));
+  const todas = situacaoDasIssues(banco, nome);
+  const emAndamento = new Set(issuesEmAndamento(banco));
+  const issues = todas
+    .filter((i) => (i.arquivada ? filtro.arquivadas : !i.concluida || filtro.concluidas))
+    .map(({ id }): IssueDoProjeto => {
+      // Issue não se apaga: a lida na lista existe.
+      const ag = existe(agregado(banco, id), `a I-${String(id)} sumiu do banco`, "confira o banco");
+      const pr = ag.evidencias.findLast((e) => e.tipo === "pr_aberto")?.dados as
+        { id: string; url: string } | undefined;
+      return {
+        ...ag.issue,
+        tickets: ag.tickets,
+        bloqueadaPor: ag.issue.deps.filter((d) => emAndamento.has(d)),
+        ...(pr && { pr: { id: pr.id, url: pr.url } }),
+      };
+    });
+  return {
+    issues,
+    sessoes: await sessoes(banco, { escopo: "ativas", projeto: nome }),
+    contagem: {
+      andamento: todas.filter((i) => !i.concluida).length,
+      concluidas: todas.filter((i) => i.concluida && !i.arquivada).length,
+      arquivadas: todas.filter((i) => i.arquivada).length,
+    },
+  };
+}
+
+export const ROTAS_DO_PROJETO: Rota[] = [
+  {
+    metodo: "GET",
+    caminho: "/api/projetos/:nome/issues",
+    tratar: ({ banco, params, query }) => lista(banco, String(params.nome), query),
+  },
+  {
+    metodo: "POST",
+    caminho: "/api/projetos/:nome/arquivar",
+    tratar: ({ banco, params }) => {
+      const nome = String(params.nome);
+      exigirProjeto(banco, nome);
+      return { arquivadas: arquivarConcluidas(banco, nome, AUDITOR) };
+    },
+  },
+];

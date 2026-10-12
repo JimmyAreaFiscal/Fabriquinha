@@ -7,6 +7,7 @@ import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
 import { montarInicio } from "./telas/inicio-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
+import { montarProjeto } from "./telas/projeto-montar.ts";
 
 /**
  * Desenha a página em `<main>`. Cada tela troca a sua entrada aqui; a função pura de render fica num módulo à parte.
@@ -22,7 +23,7 @@ const vazia =
 
 const MONTAR: Record<Pagina, Montar> = {
   inicio: montarInicio,
-  projeto: vazia("projeto"),
+  projeto: montarProjeto,
   issue: montarIssue,
   metricas: vazia("metricas"),
   historico: vazia("historico"),
@@ -95,7 +96,7 @@ caixa.addEventListener("click", (evento) => {
 });
 
 /** As páginas que se redesenham sozinhas (F7 §4.4). */
-const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio"]);
+const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio", "projeto"]);
 
 /** A cada 5 s com a aba visível, e ao voltar a ela: o contador da navegação e a página, se ela se atualiza. */
 function atualizar(): void {

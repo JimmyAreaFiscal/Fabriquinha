@@ -19,7 +19,7 @@ const ETAPA: Record<Etapa, string> = {
   encerramento: "Encerramento",
   sessao: "Sessão em aberto",
 };
-const etapa = (e: Etapa): string => ETAPA[e].toLowerCase();
+export const etapa = (e: Etapa): string => ETAPA[e].toLowerCase();
 
 const FASE: Record<Fase, string> = {
   registro: "registro",

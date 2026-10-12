@@ -14,7 +14,7 @@ export interface DadosDoInicio {
 }
 
 /** Por motivo (F4 §5.2): o destaque do card, a marca no cartão do board e o botão (F7 §4.4). */
-const MOTIVOS: Record<MotivoEspera, { titulo: string; marca: string; acao: string }> = {
+export const MOTIVOS: Record<MotivoEspera, { titulo: string; marca: string; acao: string }> = {
   conversa: { titulo: "Conversa", marca: "responder", acao: "Responder" },
   dialogo: { titulo: "Diálogo", marca: "responder", acao: "Responder" },
   falha: { titulo: "Falhou", marca: "falha", acao: "Responder e retomar" },
@@ -33,7 +33,7 @@ const ETAPA: Record<Etapa, string> = {
 };
 
 /** As 5 etapas do processo sobre as colunas do board, com quantas fases cada uma agrupa (F7 §4.4). */
-const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
+export const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
   ["Registrar", 1],
   ["Desenhar", 2],
   ["Implementar", 1],

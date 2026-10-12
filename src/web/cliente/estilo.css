@@ -534,6 +534,347 @@ a {
   border-color: #5a4720;
 }
 
+/* Projeto: seletor, barra com a contagem e os filtros, e uma linha por issue com o trilho e a gaveta de tickets. */
+.seletor-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+.seletor-linha h1 {
+  color: var(--muted);
+  font-weight: 400;
+}
+.seletor {
+  appearance: none;
+  height: 34px;
+  padding: 0 32px 0 var(--s-3);
+  font: var(--w-strong) var(--fs-xl) var(--font);
+  color: var(--ink);
+  background: var(--surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23aaa293'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.seletor:hover {
+  border-color: var(--muted);
+}
+.editar {
+  font-size: var(--fs-sm);
+  color: var(--accent);
+}
+.seletor-linha .acoes {
+  margin-left: auto;
+  display: flex;
+  gap: var(--s-2);
+}
+.ferramentas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  margin: var(--s-4) 0 var(--s-3);
+}
+.ferramentas .contagem {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.alternar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.alternar input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+.alternar:has(input:checked) {
+  color: var(--ink);
+}
+.ferramentas .direita {
+  margin-left: auto;
+}
+/* O .btn-perigo do chat, sem a borda até o hover. */
+.ferramentas .btn-perigo {
+  border-color: transparent;
+}
+.ferramentas .btn-perigo:hover {
+  border-color: var(--danger-bg);
+}
+.ferramentas .btn-perigo:disabled {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+.btn-perigo-cheio {
+  color: var(--bg);
+  background: var(--danger);
+  border-color: var(--danger);
+  font-weight: var(--w-strong);
+}
+.dialogo {
+  max-width: 460px;
+  padding: var(--s-6);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.6);
+}
+.dialogo::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+.dialogo h2 {
+  margin-bottom: var(--s-2);
+}
+.dialogo p {
+  margin: 0 0 var(--s-6);
+  color: var(--muted);
+}
+.dialogo-botoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+.ferramentas + .vazio {
+  padding: var(--s-8);
+  text-align: center;
+  color: var(--muted);
+}
+
+.pista {
+  --cols: 300px repeat(8, minmax(64px, 1fr)) 230px;
+}
+.pista-cabeca,
+.pista-linha {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+}
+.pista-cabeca {
+  position: sticky;
+  top: 48px;
+  z-index: 1;
+  background: var(--bg);
+  padding-top: var(--s-2);
+}
+.pista-etapa {
+  padding: 0 var(--s-1) 4px;
+  margin: 0 4px;
+  border-bottom: 2px solid var(--line);
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pista-fase {
+  padding: 6px 2px var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.25;
+}
+.pista-fase.gate {
+  color: var(--open);
+}
+.pista-item {
+  margin-bottom: var(--s-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.pista-item.aguarda {
+  border-left-color: var(--open);
+}
+.pista-item.falha {
+  border-left-color: var(--danger);
+}
+.pista-item.rodando {
+  border-left-color: var(--claimed);
+}
+.pista-linha {
+  min-height: 56px;
+  cursor: pointer;
+}
+.pista-linha:hover {
+  background: var(--surface-2);
+  border-radius: var(--r-lg);
+}
+.pista-issue {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: 0 var(--s-3) 0 var(--s-2);
+}
+.pista-issue .texto {
+  min-width: 0;
+}
+.pista-issue .titulo {
+  display: block;
+  font-weight: var(--w-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pista-issue .titulo.sem {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+}
+.pista-issue .sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s-2);
+  align-items: center;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.pista .bloqueia {
+  font: var(--fs-xs) var(--mono);
+  color: var(--danger);
+  white-space: nowrap;
+}
+.pista .pr {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.progresso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--fs-xs) var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.trilho-p {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.trilho-p i {
+  display: block;
+  height: 100%;
+  background: var(--closed);
+}
+.pista .apagada {
+  opacity: 0.55;
+}
+.caret {
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+  transition: transform 0.12s;
+}
+.fechada .caret {
+  transform: rotate(-90deg);
+}
+/* O trilho de render.ts vira as 8 colunas da linha; o nome da fase fica para o leitor de tela. */
+.pista-linha .trilho-fases {
+  display: contents;
+}
+.pista-linha .trilho-fases .passo {
+  position: relative;
+  height: 56px;
+  justify-content: center;
+}
+.pista-linha .trilho-fases .passo > span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.pista-estado {
+  padding: 0 var(--s-3);
+  display: flex;
+  justify-content: flex-end;
+}
+.pista-item:not(.fechada) .pista-estado {
+  visibility: hidden;
+}
+.pista .chat .ir {
+  font-size: var(--fs-sm);
+}
+.pista .chat:hover .ir {
+  text-decoration: underline;
+}
+.pista .quando {
+  font-size: var(--fs-xs);
+}
+.gaveta {
+  padding: 0 var(--s-3) var(--s-3) 44px;
+}
+.pista-item.fechada .gaveta {
+  display: none;
+}
+.gaveta table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.gaveta td {
+  height: 32px;
+  padding: 0 var(--s-2);
+  border-top: 1px solid var(--line);
+}
+.gaveta tr:hover td {
+  background: var(--surface-2);
+}
+.gaveta .etapa-cel {
+  width: 140px;
+  color: var(--muted);
+}
+.gaveta .id-cel {
+  width: 64px;
+}
+.gaveta .titulo-cel {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gaveta .status-cel {
+  width: 110px;
+}
+.gaveta .status-cel .pill {
+  font-size: var(--fs-xs);
+}
+.gaveta .modelo-cel {
+  width: 210px;
+  max-width: 210px;
+}
+.gaveta .modelo {
+  white-space: nowrap;
+}
+.gaveta .modelo.override {
+  color: var(--accent);
+}
+.gaveta .sessao-cel {
+  width: 220px;
+  text-align: right;
+}
+
 /* Registrar necessidade, na caixa estreita. */
 .caixa.estreita {
   width: min(560px, 94vw);
@@ -1794,6 +2135,12 @@ input.erro {
 }
 
 @media (max-width: 1100px) {
+  .pista-rola {
+    overflow-x: auto;
+  }
+  .pista {
+    min-width: 1080px;
+  }
   .rodando-linha {
     grid-template-columns: auto 44px minmax(0, 1fr) auto;
     padding: 0 var(--s-3);

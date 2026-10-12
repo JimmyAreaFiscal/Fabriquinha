@@ -388,3 +388,13 @@ export const issuesEmAndamento = (banco: DatabaseSync): Id[] =>
     .prepare("SELECT id FROM issue WHERE fase <> 'concluida' ORDER BY id DESC")
     .all()
     .map((l) => Number(l.id));
+
+/** As issues do projeto, da mais nova para a mais antiga, com o que a página do projeto filtra e conta (F7 §5). */
+export const situacaoDasIssues = (
+  banco: DatabaseSync,
+  nomeProjeto: string,
+): { id: Id; concluida: boolean; arquivada: boolean }[] =>
+  banco
+    .prepare("SELECT id, fase, arquivada_em FROM issue WHERE projeto = ? ORDER BY id DESC")
+    .all(nomeProjeto)
+    .map((l) => ({ id: Number(l.id), concluida: l.fase === "concluida", arquivada: l.arquivada_em !== null }));
