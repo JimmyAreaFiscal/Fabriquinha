@@ -65,16 +65,33 @@ export function evidenciasFaltando(ag: Agregado, ticket: Ticket): TipoEvidencia[
   }).map((c) => c.tipo);
 }
 
-/** C7 e C10: lança dizendo o que falta e o comando para submeter (F1 §7). */
+/**
+ * C7 e C10: lança dizendo o que falta ou está reprovado e quem resolve (F1 §7): o agente submete as dele; as da
+ * Fabriquinha ela coleta de novo depois do pi.
+ */
 export function exigirEvidencias(ag: Agregado, ticket: Ticket): void {
   const faltam = evidenciasFaltando(ag, ticket);
   if (faltam.length === 0) return;
   const t = rotuloTicket(ticket);
-  const comandos = faltam.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ");
-  throw new ErroDeRegra(
-    `${t} não pode concluir: falta a evidência ${faltam.join(", ")}`,
-    `o agente de ${t} submete com ${comandos}`,
-  );
+  const existe = (tipo: TipoEvidencia) => ag.evidencias.some((e) => e.ticket === ticket.id && e.tipo === tipo);
+  const doAgente = (tipo: TipoEvidencia) =>
+    CATALOGO.some((c) => c.etapa === ticket.etapa && c.tipo === tipo && c.produtor === "agente");
+  const ausentes = faltam.filter((tipo) => !existe(tipo));
+  const reprovadas = faltam.filter(existe);
+  const doAgenteFaltando = faltam.filter(doAgente);
+  const problemas = [
+    ...(ausentes.length > 0 ? [`falta a evidência ${ausentes.join(", ")}`] : []),
+    ...(reprovadas.length > 0 ? [`a evidência ${reprovadas.join(", ")} está reprovada`] : []),
+  ];
+  const solucoes = [
+    ...(doAgenteFaltando.length > 0
+      ? [
+          `o agente de ${t} submete com ${doAgenteFaltando.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ")}`,
+        ]
+      : []),
+    ...(doAgenteFaltando.length < faltam.length ? ["a Fabriquinha coleta depois do pi; execute o ticket de novo"] : []),
+  ];
+  throw new ErroDeRegra(`${t} não pode concluir: ${problemas.join("; ")}`, solucoes.join("; "));
 }
 
 /**

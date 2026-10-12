@@ -4,11 +4,11 @@
 
 **Blocked by:** 09, 13, 14
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Cadeia pós-pi do desenvolvimento, parando no primeiro reprovado (ticket falha com o motivo).
-- [ ] `commitarTicket`: `git add -A`; nada a commitar falha; mensagem Conventional Commits `<feat|fix>: <título> [I-n/T-m]` + descrição cortada em 72 colunas; nunca `--no-verify`; hook que reprova falha o ticket com a saída.
-- [ ] Commit e arquivos (`git show --numstat --name-status`) gravados na mesma transação de C7.
-- [ ] C7 do desenvolvimento exige commit; transição para `revisao` quando não sobra ticket de desenvolvimento não concluído.
-- [ ] Ponto de chamada de `registrarRetrabalho` (ligado no ticket 18).
-- [ ] Teste de ponta a ponta com pi falso que altera um arquivo, testes e fitness falsos e SonarQube falso.
+- [x] Cadeia pós-pi do desenvolvimento, parando no primeiro reprovado (ticket falha com o motivo).
+- [x] `commitarTicket`: `git add -A`; nada a commitar falha; mensagem Conventional Commits `<feat|fix>: <título> [I-n/T-m]` + descrição cortada em 72 colunas; nunca `--no-verify`; hook que reprova falha o ticket com a saída.
+- [x] Commit e arquivos (`git show --numstat --name-status`) gravados na mesma transação de C7.
+- [x] C7 do desenvolvimento exige commit; transição para `revisao` quando não sobra ticket de desenvolvimento não concluído.
+- [x] Ponto de chamada de `registrarRetrabalho` (ligado no ticket 18).
+- [x] Teste de ponta a ponta com pi falso que altera um arquivo, testes e fitness falsos e SonarQube falso.

@@ -48,6 +48,7 @@ function contexto(fatos: { depsConcluidas?: boolean; autonoma?: boolean } = {}):
     alcancaveis: () => [],
     depsConcluidas: () => fatos.depsConcluidas ?? true,
     execucaoAutonomaEmAndamento: () => fatos.autonoma ?? false,
+    temCommit: () => false,
   };
 }
 

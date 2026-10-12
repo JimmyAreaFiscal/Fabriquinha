@@ -43,6 +43,7 @@ function contexto(grafo: Record<number, number[]> = {}): Contexto {
     alcancaveis,
     depsConcluidas: () => true,
     execucaoAutonomaEmAndamento: () => false,
+    temCommit: () => false,
   };
 }
 

@@ -139,3 +139,60 @@ test("registro: as dependências informadas pelo Auditor", () => {
   assert.match(prompt([3, 5]), /## Dependências informadas\n\n- I-3\n- I-5\n/);
   assert.match(prompt([]), /## Dependências informadas\n\n\(vazio\)\n/);
 });
+
+test("desenvolvimento: o desenho aprovado (o mais recente), arquivos previstos, fora do escopo, critérios e os concluídos", () => {
+  const desenhoSolucao = (id: number, resumo: string) =>
+    evidencia(id, "desenho_solucao", {
+      resumo,
+      arquivosPrevistos: [
+        { caminho: "src/busca.ts", acao: "alterar", motivo: "lê do cache" },
+        { caminho: "src/cache/*.ts", acao: "criar", motivo: "o cache" },
+      ],
+      foraDeEscopo: ["paginação"],
+    });
+  const ag = agregado([
+    evidencia(1, "criterios_aceite", {
+      criterios: [{ id: "CA-1", dado: "mil itens", quando: "busco", entao: "responde em 1 s" }],
+    }),
+    desenhoSolucao(2, "varre tudo"),
+    desenhoSolucao(3, "cache na busca"),
+  ]);
+  const dev = (id: number, titulo: string, status: Ticket["status"]): Ticket => ({
+    ...desenho,
+    id,
+    etapa: "desenvolvimento",
+    titulo,
+    status,
+  });
+  const ticket = dev(5, "Invalidar o cache", "em_execucao");
+  const prompt = montarPrompt({
+    ...comum,
+    ag: { ...ag, tickets: [desenho, dev(4, "Criar o cache", "concluido"), ticket, dev(6, "Métrica", "aberto")] },
+    ticket,
+    instrucao: undefined,
+    modo: "autonomo",
+  });
+  assert.ok(
+    prompt.includes(
+      [
+        "## Desenho aprovado\n\ncache na busca\n",
+        "## Arquivos previstos\n\n- `src/busca.ts` (alterar): lê do cache\n- `src/cache/*.ts` (criar): o cache\n",
+        "## Fora do escopo\n\n- paginação\n",
+        "## Critérios de aceite\n\n- **CA-1**: dado mil itens, quando busco, então responde em 1 s.\n",
+        "## Tickets de desenvolvimento já concluídos\n\n- T-4, Criar o cache\n",
+        "## Modo de trabalhar: desenvolvimento",
+      ].join("\n"),
+    ),
+    prompt,
+  );
+
+  const vazio = montarPrompt({ ...comum, ag: agregado([]), ticket, instrucao: undefined, modo: "autonomo" });
+  for (const titulo of [
+    "Desenho aprovado",
+    "Arquivos previstos",
+    "Fora do escopo",
+    "Tickets de desenvolvimento já concluídos",
+  ]) {
+    assert.match(vazio, new RegExp(`## ${titulo}\\n\\n\\(vazio\\)\\n`));
+  }
+});

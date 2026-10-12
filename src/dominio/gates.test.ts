@@ -19,6 +19,7 @@ function contexto(): Contexto {
     alcancaveis: () => [],
     depsConcluidas: () => true,
     execucaoAutonomaEmAndamento: () => false,
+    temCommit: () => false,
   };
 }
 

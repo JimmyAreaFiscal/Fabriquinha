@@ -19,28 +19,55 @@ export interface Contexto {
 
 const secao = (titulo: string, texto: string): string => `## ${titulo}\n\n${texto.trim() || "(vazio)"}\n`;
 
+/** Os `dados` da evidência `tipo` mais recente da issue: a do último desenho, que é o aprovado, por exemplo. */
 const dadosDe = (ag: Agregado, tipo: string): Record<string, unknown> | undefined =>
-  ag.evidencias.find((e) => e.tipo === tipo)?.dados;
+  ag.evidencias.findLast((e) => e.tipo === tipo)?.dados;
+
+// Os formatos vêm dos schemas do F3, validados na submissão.
+type Criterio = Record<"id" | "dado" | "quando" | "entao", string>;
+interface DesenhoSolucao {
+  resumo: string;
+  arquivosPrevistos: Record<"caminho" | "acao" | "motivo", string>[];
+  foraDeEscopo: string[];
+}
+
+const criteriosDeAceite = (ag: Agregado): string =>
+  secao(
+    "Critérios de aceite",
+    ((dadosDe(ag, "criterios_aceite")?.criterios ?? []) as Criterio[])
+      .map((c) => `- **${c.id}**: dado ${c.dado}, quando ${c.quando}, então ${c.entao}.`)
+      .join("\n"),
+  );
 
 /**
  * O contexto próprio da etapa (F4 §6.3). O registro leva as dependências informadas (o resto vem da conversa); o
- * desenho lê o registro: o resumo do comportamento e os critérios.
- * ponytail: desenvolvimento, revisão, encerramento e sessão ganham o seu contexto com os tickets 15, 16, 20 e 21.
+ * desenho lê o registro: o resumo do comportamento e os critérios. O desenvolvimento lê o desenho aprovado, os
+ * critérios e os tickets de desenvolvimento já concluídos.
+ * ponytail: revisão, encerramento e sessão ganham o seu contexto com os tickets 16, 20 e 21.
  */
 const CONTEXTO_DA_ETAPA: Partial<Record<Etapa, (ag: Agregado) => string[]>> = {
   registro: (ag) => [secao("Dependências informadas", ag.issue.deps.map((d) => `- I-${String(d)}`).join("\n"))],
-  desenho: (ag) => {
-    // O formato vem do schema do F3, validado na submissão.
-    const comportamento = dadosDe(ag, "comportamento") as { descricao: string } | undefined;
-    const criterios = (dadosDe(ag, "criterios_aceite")?.criterios ?? []) as Record<
-      "id" | "dado" | "quando" | "entao",
-      string
-    >[];
+  desenho: (ag) => [
+    secao(
+      "Comportamento registrado",
+      (dadosDe(ag, "comportamento") as { descricao: string } | undefined)?.descricao ?? "",
+    ),
+    criteriosDeAceite(ag),
+  ],
+  desenvolvimento: (ag) => {
+    const desenho = dadosDe(ag, "desenho_solucao") as DesenhoSolucao | undefined;
+    const concluidos = ag.tickets.filter((t) => t.etapa === "desenvolvimento" && t.status === "concluido");
     return [
-      secao("Comportamento registrado", comportamento?.descricao ?? ""),
+      secao("Desenho aprovado", desenho?.resumo ?? ""),
       secao(
-        "Critérios de aceite",
-        criterios.map((c) => `- **${c.id}**: dado ${c.dado}, quando ${c.quando}, então ${c.entao}.`).join("\n"),
+        "Arquivos previstos",
+        (desenho?.arquivosPrevistos ?? []).map((a) => `- \`${a.caminho}\` (${a.acao}): ${a.motivo}`).join("\n"),
+      ),
+      secao("Fora do escopo", (desenho?.foraDeEscopo ?? []).map((f) => `- ${f}`).join("\n")),
+      criteriosDeAceite(ag),
+      secao(
+        "Tickets de desenvolvimento já concluídos",
+        concluidos.map((t) => `- T-${String(t.id)}, ${t.titulo}`).join("\n"),
       ),
     ];
   },

@@ -16,6 +16,7 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import * as dominio from "../dominio/issue.ts";
 import type { Id, Modelo } from "../dominio/primitivos.ts";
 import { escrever, novoId } from "./banco.ts";
+import { temCommit } from "./commits.ts";
 import { projeto } from "./projetos.ts";
 
 type Linha = Record<string, SQLInputValue>;
@@ -286,6 +287,7 @@ const contexto = (banco: DatabaseSync): Contexto => ({
       .get(id) === undefined,
   execucaoAutonomaEmAndamento: () =>
     banco.prepare("SELECT 1 FROM execucao WHERE modo = 'autonomo' AND resultado = 'em_andamento'").get() !== undefined,
+  temCommit: (ticket) => temCommit(banco, ticket),
 });
 
 /**

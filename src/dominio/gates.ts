@@ -11,7 +11,7 @@ import {
 } from "./agregado.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { exigirEvidencias } from "./evidencia.ts";
-import { exigirSemExecucao, marcarConcluido, rotuloTicket } from "./execucao.ts";
+import { exigirSemExecucao, marcarConcluido, novoTicket, rotuloTicket } from "./execucao.ts";
 import { Motivo } from "./primitivos.ts";
 
 const EntradaDecisao = z.discriminatedUnion("aprovado", [
@@ -40,17 +40,6 @@ function comDecisao(
   };
   return { ...ag, decisoes: [...ag.decisoes, decisao] };
 }
-
-const ticketDeDesenho = (ag: Agregado, ctx: Contexto, titulo: string, descricao: string): Ticket => ({
-  id: ctx.novoId("ticket"),
-  issue: ag.issue.id,
-  etapa: "desenho",
-  titulo,
-  descricao,
-  status: "aberto",
-  origem: "fabriquinha",
-  criadoEm: ctx.agora,
-});
 
 /**
  * C10: grava a decisão. Aprovado conclui o ticket de registro e leva a issue a `desenho` com um ticket de desenho
@@ -85,7 +74,7 @@ export function decidirRegistro(ag: Agregado, entrada: unknown, ator: Ator, ctx:
   return {
     ...decidido,
     issue: { ...ag.issue, fase: "desenho" },
-    tickets: [...marcarConcluido(ag, ticket, ctx.agora).tickets, ticketDeDesenho(ag, ctx, "Desenhar a solução", "")],
+    tickets: [...marcarConcluido(ag, ticket, ctx.agora).tickets, novoTicket(ag, ctx, "desenho", "Desenhar a solução")],
   };
 }
 
@@ -118,6 +107,9 @@ export function decidirDesenho(ag: Agregado, entrada: unknown, ator: Ator, ctx: 
   return {
     ...decidido,
     issue: { ...ag.issue, fase: "desenho" },
-    tickets: [...ag.tickets.filter((t) => !proposto(t)), ticketDeDesenho(ag, ctx, "Refazer o desenho", decisao.motivo)],
+    tickets: [
+      ...ag.tickets.filter((t) => !proposto(t)),
+      novoTicket(ag, ctx, "desenho", "Refazer o desenho", decisao.motivo),
+    ],
   };
 }

@@ -20,6 +20,7 @@ const contexto = (): Contexto => ({
   alcancaveis: () => [],
   depsConcluidas: () => true,
   execucaoAutonomaEmAndamento: () => false,
+  temCommit: () => false,
 });
 
 const ticket = (id: number, etapa: Etapa, troca: Partial<Ticket> = {}): Ticket => ({

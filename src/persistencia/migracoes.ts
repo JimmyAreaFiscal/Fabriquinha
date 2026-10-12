@@ -14,6 +14,7 @@ import {
 } from "../dominio/agregado.ts";
 import { Etapa, Fase, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
+import { StatusArquivo } from "./commits.ts";
 
 /** Lista de um `CHECK ... IN (...)` gerada de um enum zod, para o banco e o domínio não divergirem. */
 export const listaSql = (enumeracao: z.ZodEnum): string =>
@@ -152,4 +153,23 @@ export const MIGRACOES: readonly string[] = [
     ociosidade_min   INTEGER NOT NULL DEFAULT 30  CHECK (ociosidade_min BETWEEN 5 AND 1440)
   );
   INSERT INTO configuracao (id) VALUES (1);`,
+  // F5 §7: o commit de cada ticket de desenvolvimento e o que ele mudou, por arquivo.
+  `CREATE TABLE commit_ticket (
+    sha      TEXT PRIMARY KEY CHECK (length(sha) IN (40, 64)),
+    ticket   INTEGER NOT NULL UNIQUE REFERENCES ticket(id),
+    mensagem TEXT NOT NULL,
+    em       TEXT NOT NULL
+  );
+  CREATE TABLE arquivo_commit (
+    sha              TEXT NOT NULL REFERENCES commit_ticket(sha),
+    caminho          TEXT NOT NULL,
+    caminho_anterior TEXT,
+    status           TEXT NOT NULL CHECK (status IN (${listaSql(StatusArquivo)})),
+    adicionadas      INTEGER CHECK (adicionadas >= 0),
+    removidas        INTEGER CHECK (removidas >= 0),
+    PRIMARY KEY (sha, caminho),
+    CHECK ((status = 'R') = (caminho_anterior IS NOT NULL))
+  );
+  -- Para o F6: alterações e bugs por arquivo.
+  CREATE INDEX ix_arquivo_commit_caminho ON arquivo_commit(caminho);`,
 ];

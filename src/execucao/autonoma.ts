@@ -270,9 +270,15 @@ export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: 
   );
   anotar(log, "pi terminou bem; coleta depois do pi");
   try {
-    await depoisDoPi(banco, t, worktree, log);
-    comIssue(banco, issue, "concluirTicket", FABRIQUINHA, (a, ctx) => concluirTicket(a, { ticket }, FABRIQUINHA, ctx));
+    const naConclusao = await depoisDoPi(banco, t, worktree, log);
+    comIssue(banco, issue, "concluirTicket", FABRIQUINHA, (a, ctx) => {
+      // F5 §4, passo 4: o commit do desenvolvimento é gravado na transação do C7, que o exige.
+      naConclusao?.(banco);
+      return concluirTicket(a, { ticket }, FABRIQUINHA, ctx);
+    });
     anotar(log, `T-${String(ticket)} concluído`);
+    // ponytail: no desenvolvimento, o ticket 18 chama aqui registrarRetrabalho (F5 §4, passo 5; F6 §4.2), anotando a
+    // falha no log e seguindo.
   } catch (error_) {
     falhar(mensagem(error_));
   }

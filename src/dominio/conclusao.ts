@@ -3,7 +3,7 @@ import { z } from "zod";
 import { type Agregado, type Ator, type Contexto, exigirFabriquinha, rotuloIssue, type Ticket } from "./agregado.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { exigirEvidencias } from "./evidencia.ts";
-import { exigirSemExecucao, marcarConcluido, rotuloTicket, ticketDe } from "./execucao.ts";
+import { exigirSemExecucao, marcarConcluido, novoTicket, rotuloTicket, ticketDe } from "./execucao.ts";
 import { type Etapa, Id } from "./primitivos.ts";
 
 /** Regra adicional e transição de uma etapa (F1 §5.1); recebe o agregado com o ticket já `concluido`. */
@@ -12,7 +12,7 @@ type Regra = (ag: Agregado, ticket: Ticket, ctx: Contexto) => Agregado;
 const criouTicket = (ag: Agregado, ticket: Ticket): boolean =>
   ag.tickets.some((t) => t.etapa === "desenvolvimento" && t.origemTicket === ticket.id);
 
-// ponytail: desenvolvimento, revisão, encerramento e sessão entram aqui nos tickets 15, 16, 20 e 21.
+// ponytail: revisão, encerramento e sessão entram aqui nos tickets 16, 20 e 21.
 const REGRAS: Partial<Record<Exclude<Etapa, "registro">, Regra>> = {
   desenho: (ag, ticket) => {
     if (!criouTicket(ag, ticket)) {
@@ -23,6 +23,20 @@ const REGRAS: Partial<Record<Exclude<Etapa, "registro">, Regra>> = {
       );
     }
     return { ...ag, issue: { ...ag.issue, fase: "aprovacao_desenho" } };
+  },
+  desenvolvimento: (ag, ticket, ctx) => {
+    if (!ctx.temCommit(ticket.id)) {
+      throw new ErroDeRegra(
+        `${rotuloTicket(ticket)} não pode concluir: não tem commit registrado`,
+        "a Fabriquinha commita depois que testes, fitness e SonarQube aprovam; execute o ticket de novo",
+      );
+    }
+    if (ag.tickets.some((t) => t.etapa === "desenvolvimento" && t.status !== "concluido")) return ag;
+    return {
+      ...ag,
+      issue: { ...ag.issue, fase: "revisao" },
+      tickets: [...ag.tickets, novoTicket(ag, ctx, "revisao", "Revisar o desenvolvimento")],
+    };
   },
 };
 

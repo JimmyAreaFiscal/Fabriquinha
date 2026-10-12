@@ -19,6 +19,7 @@ const contexto = (): Contexto => ({
   alcancaveis: () => [],
   depsConcluidas: () => true,
   execucaoAutonomaEmAndamento: () => false,
+  temCommit: () => false,
 });
 
 const ticket = (id: number, etapa: Etapa, status: Ticket["status"] = "em_execucao"): Ticket => ({

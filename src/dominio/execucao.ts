@@ -66,6 +66,18 @@ const trocarTicket = (ag: Agregado, ticket: Ticket): Agregado => ({
 export const marcarConcluido = (ag: Agregado, ticket: Ticket, agora: string): Agregado =>
   trocarTicket(ag, { ...ticket, status: "concluido", concluidoEm: agora });
 
+/** Ticket aberto que a própria Fabriquinha cria numa transição (C7, C10, C15). */
+export const novoTicket = (ag: Agregado, ctx: Contexto, etapa: Etapa, titulo: string, descricao = ""): Ticket => ({
+  id: ctx.novoId("ticket"),
+  issue: ag.issue.id,
+  etapa,
+  titulo,
+  descricao,
+  status: "aberto",
+  origem: "fabriquinha",
+  criadoEm: ctx.agora,
+});
+
 function novaExecucao(ag: Agregado, ticket: Ticket, modo: ModoExecucao, sessaoPi: string, ctx: Contexto): Execucao {
   const modelo = modeloDaExecucao(ticket, ctx.projeto(ag.issue.projeto));
   return {

@@ -172,6 +172,11 @@ export interface Contexto {
   depsConcluidas(issue: Id): boolean;
   /** Há execução autônoma em andamento em qualquer issue (D8). */
   execucaoAutonomaEmAndamento(): boolean;
+  /**
+   * O ticket tem commit registrado pelo F5 (C7 do desenvolvimento, F1 §5.1). Fora da lista do F2 §3.5: o commit
+   * fica fora do agregado, e o F5 o grava na mesma transação, logo antes do C7 (F5 §4, passo 4).
+   */
+  temCommit(ticket: Id): boolean;
 }
 
 /** Nome gravado na tabela `comando` (F6 §7) para cada comando aplicado por `comIssue`. */
