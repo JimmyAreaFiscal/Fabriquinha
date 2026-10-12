@@ -2,8 +2,8 @@
 // pi falso do e2e (F4 §12), via FABRIQUINHA_PI: responde `--version`, lista modelos em `--list-models` e, no modo
 // RPC, fala o protocolo do pi: grava cada mensagem no JSONL da sessão e a emite. O que faz com o `prompt` depende do
 // texto dele:
-// - "[ao vivo]": raciocínio, uma ferramenta que falha e um texto chegando em fluxo, sem terminar (recomeça a cada meio
-//   segundo), até um `steer`, que o redireciona e abre um diálogo `select`;
+// - "[ao vivo]": raciocínio, uma ferramenta que falha e um texto chegando em fluxo, sem terminar, até um `steer`, que
+//   o redireciona e abre um diálogo `select`;
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
 //   pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz "registre", e não conta;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
@@ -80,22 +80,21 @@ async function aoVivo(): Promise<void> {
     content: [{ type: "text", text: [...saida, "FAIL test/cupons.spec.ts", "3 failed"].join("\n") }],
     isError: true,
   });
+  emitir({ type: "message_start", message: doAgente([]) });
+  emitir({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
   const fluxo = { texto: "" };
   emFluxo = fluxo;
-  // O retrato do SSE não traz a mensagem ainda em fluxo: o fluxo recomeça a cada meio segundo, para quem assina depois
-  // do começo também o ver chegar. O texto da mensagem é o da primeira volta.
-  for (let volta = 0; ; volta++) {
-    emitir({ type: "message_start", message: doAgente([]) });
-    emitir({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
-    for (const pedaco of ["Os testes ", "esperam a ", "**ordem antiga**"]) {
-      await dormir(50);
-      // Um `steer` ou `abort` no meio já fechou a mensagem.
-      if (emFluxo !== fluxo) return;
-      if (volta === 0) fluxo.texto += pedaco;
-      emitir({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: pedaco } });
-    }
-    await dormir(500);
+  // O último pedaço demora: quem abre o chat depois do começo vê o parcial e o resto chegar.
+  for (const [pausa, pedaco] of [
+    [50, "Os testes "],
+    [50, "esperam a "],
+    [1000, "**ordem antiga**"],
+  ] as const) {
+    await dormir(pausa);
+    // Um `steer` ou `abort` no meio já fechou a mensagem.
     if (emFluxo !== fluxo) return;
+    fluxo.texto += pedaco;
+    emitir({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: pedaco } });
   }
 }
 

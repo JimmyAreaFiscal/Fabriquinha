@@ -249,10 +249,27 @@ test("rodando: redirecionar e abortar; sessão inexistente dá 404", async () =>
   const sse = await assinar(sessao);
   assert.equal((await enviar("[ao vivo]", "prompt")).status, 204);
   await ate(
-    () => sse.eventos.some((e) => JSON.stringify(e).includes('"delta":"**ordem antiga**"')),
-    "o texto chegar em fluxo",
+    () => sse.eventos.some((e) => JSON.stringify(e).includes('"delta":"esperam a "')),
+    "o texto começar a chegar em fluxo",
   );
   sse.fechar();
+  // Quem assina no meio da mensagem recebe, logo depois do retrato, o começo dela e os pedaços já escritos.
+  const tarde = await assinar(sessao);
+  await ate(() => tarde.eventos.length >= 5, "o retrato e a mensagem em andamento");
+  assert.deepEqual(
+    tarde.eventos.slice(1, 5).map((e) => [e.type, (e.assistantMessageEvent as { delta?: string } | undefined)?.delta]),
+    [
+      ["message_start", undefined],
+      ["message_update", undefined],
+      ["message_update", "Os testes "],
+      ["message_update", "esperam a "],
+    ],
+  );
+  await ate(
+    () => tarde.eventos.some((e) => JSON.stringify(e).includes('"delta":"**ordem antiga**"')),
+    "o resto chegar ao vivo",
+  );
+  tarde.fechar();
   assert.equal((await enviar("use a validade", "steer")).status, 204);
   await esperarEstado(sessao, "aguardando_humano: dialogo");
   assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);

@@ -45,6 +45,8 @@ interface Mensagem {
 interface Viva extends Omit<Situacao, "dialogos"> {
   sessaoPi: string;
   pendentes: Map<string, Dialogo>;
+  /** Os eventos da mensagem que o pi está escrevendo, do `message_start` em diante: ela só vai ao JSONL no fim. */
+  emAndamento: EventoPi[];
   responder(id: string, resposta: object): void;
   mandar(comando: { type: string; message?: string }): void;
   encerrar(): void;
@@ -56,10 +58,16 @@ const ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
 /** Execuções cujo pi já recebeu a ordem de parar e ainda não saiu: o C6 delas vem logo depois. */
 const encerrando = new Set<Id>();
 
-/** Recebe cada evento do pi das execuções da sessão e `{ type: "estado" }` quando o estado dela pode ter mudado. */
+const vivaDaSessao = (sessao: string): Viva | undefined => [...vivas.values()].find((v) => v.sessaoPi === sessao);
+
+/**
+ * Recebe cada evento do pi das execuções da sessão e `{ type: "estado" }` quando o estado dela pode ter mudado.
+ * Quem assina no meio de uma mensagem recebe antes os eventos dela até ali: o retrato do JSONL ainda não a tem.
+ */
 export function assinar(sessao: string, ouvinte: (evento: EventoPi) => void): () => void {
   const lista = ouvintes.get(sessao) ?? new Set();
   ouvintes.set(sessao, lista.add(ouvinte));
+  for (const evento of vivaDaSessao(sessao)?.emAndamento ?? []) ouvinte(evento);
   return () => {
     lista.delete(ouvinte);
     if (lista.size === 0) ouvintes.delete(sessao);
@@ -87,7 +95,7 @@ export const estaEncerrando = (execucao: Id): boolean => encerrando.has(execucao
 
 /** A execução viva da sessão neste serviço, se há uma. */
 export function situacao(sessao: string): Situacao | undefined {
-  const viva = [...vivas.values()].find((v) => v.sessaoPi === sessao);
+  const viva = vivaDaSessao(sessao);
   return (
     viva && {
       execucao: viva.execucao,
@@ -369,10 +377,17 @@ function rodarPi(r: Processo): Promise<string | undefined> {
     const pi = lancarPi(r.args, r, (evento) => {
       repassar(sessaoPi, evento, r.log);
       switch (evento.type) {
+        case "message_start":
+          estaViva.emAndamento = [evento];
+          break;
+        case "message_update":
+          estaViva.emAndamento.push(evento);
+          break;
         case "response":
           if (evento.success === false) aoRecusar(evento);
           break;
         case "message_end": {
+          estaViva.emAndamento = [];
           // `message` ausente ou nulo não derruba o ouvinte: vale como mensagem sem papel.
           const mensagem = (evento.message ?? {}) as Mensagem;
           if (mensagem.role === "assistant") ultima = mensagem;
@@ -400,6 +415,7 @@ function rodarPi(r: Processo): Promise<string | undefined> {
       ocupado: r.prompt !== undefined,
       desde: new Date().toISOString(),
       pendentes,
+      emAndamento: [],
       responder(dialogo, resposta) {
         if (!pendentes.delete(dialogo)) {
           throw new ErroDeRegra(`o diálogo ${dialogo} não está pendente na E-${String(id)}`, "atualize o chat");

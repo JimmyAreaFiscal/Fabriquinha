@@ -137,8 +137,8 @@ function dadosDoChat(banco: DatabaseSync, sessao: InfoSessao, conversa: unknown[
 
 /**
  * SSE (F4 §5.4): primeiro `{ type: "chat" }` com a sessão e a conversa até agora, lidas logo antes de assinar, sem
- * nada no meio; depois cada evento do pi como veio e `{ type: "estado" }` com o cabeçalho novo. Quem reconecta
- * recebe o retrato inteiro de novo.
+ * nada no meio; depois os eventos da mensagem que o agente ainda escreve, que o JSONL não tem, e cada evento do pi
+ * como veio e `{ type: "estado" }` com o cabeçalho novo. Quem reconecta recebe o retrato inteiro de novo.
  */
 async function eventos(banco: DatabaseSync, sessao: string, resposta: ServerResponse) {
   const chat = await abrirChat(banco, sessao);

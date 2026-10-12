@@ -17,6 +17,21 @@ async function sessaoAtiva(pagina: Page, { base }: Fabriquinha): Promise<string>
   return String(sessao);
 }
 
+/** Espera, por um assinante à parte do SSE da sessão, o `trecho` chegar: o agente já começou a escrever. */
+async function esperarNoFluxo(pagina: Page, sessao: string, trecho: string): Promise<void> {
+  await pagina.evaluate(
+    async ({ sessao, trecho }) => {
+      const leitor = (await fetch(`/api/sessoes/${sessao}/eventos`)).body
+        ?.pipeThrough(new TextDecoderStream())
+        .getReader();
+      let lido = "";
+      while (leitor && !lido.includes(trecho)) lido += (await leitor.read()).value ?? "";
+      await leitor?.cancel();
+    },
+    { sessao, trecho },
+  );
+}
+
 test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um diálogo", async ({
   pagina,
   fabriquinha,
@@ -37,8 +52,12 @@ test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um di�
     ).status(),
   ).toBe(204);
   const sessao = await sessaoAtiva(pagina, fabriquinha);
+  // O chat abre com o agente no meio de uma mensagem: ela não está no JSONL e o retrato a traz até ali.
+  await esperarNoFluxo(pagina, sessao, '"delta":"esperam a "');
   await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
   await expect(pagina).toHaveTitle("Chat · Fabriquinha");
+  const fluxo = pagina.locator("[data-conversa] .fluxo");
+  await expect(fluxo).toContainText("Os testes esperam a");
 
   // Barra de estado: issue, ticket, etapa e modo, estado, modelo e a execução com log e prompt.
   const barra = pagina.locator(".estado-sessao");
@@ -54,7 +73,7 @@ test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um di�
   await expect(barra.getByRole("link", { name: "prompt" })).toHaveAttribute("href", "/api/execucoes/1/prompt");
 
   // A conversa: a linha da execução no lugar do prompt da etapa, raciocínio recolhido, a ferramenta com o resumo e o
-  // texto chegando em fluxo, com o cursor.
+  // resto do texto chegando ao vivo, com o cursor.
   const conversa = pagina.locator("[data-conversa]");
   await expect(conversa.locator(".sistema").first()).toHaveText("Execução E-1 iniciada · autônoma · prompt da etapa");
   await expect(conversa).not.toContainText("# Contexto");
@@ -69,7 +88,6 @@ test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um di�
   const caixa = pagina.getByRole("dialog", { name: "Saída de bash" });
   await expect(caixa.locator("pre")).toContainText("3 failed");
   await pagina.keyboard.press("Escape");
-  const fluxo = conversa.locator(".fluxo");
   await expect(fluxo).toContainText("Os testes esperam a ordem antiga");
   await expect(fluxo.locator("strong")).toHaveText("ordem antiga");
   await expect(fluxo.locator(".cursor")).toBeVisible();
