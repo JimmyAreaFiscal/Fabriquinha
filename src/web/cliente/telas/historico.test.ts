@@ -157,7 +157,7 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
   assert.ok(html.startsWith('<div><span class="id">I-37 · T-109</span><h2>Board &#60;por&#62; fase</h2></div>'));
   assert.ok(
     html.includes(
-      '<dt>Projeto</dt><dd>loja &#60;api&#62;</dd><dt>Etapa</dt><dd>desenho · autônoma</dd><dt>Resultado</dt><dd><span class="pill pill-ok">concluída</span></dd><dt>Terminada</dt><dd>Hoje 10:34 · durou 22 min</dd><dt>Custo</dt><dd>US$ 1,86 · <span class="modelo">anthropic / claude-opus-5-5</span></dd><dt>Mensagens</dt><dd>4</dd>',
+      '<dt>Projeto</dt><dd>loja &#60;api&#62;</dd><dt>Etapa</dt><dd>desenho · autônoma</dd><dt>Resultado</dt><dd><span class="pill pill-ok">concluída</span></dd><dt>Terminada</dt><dd>Hoje 10:34 · durou 22 min</dd><dt>Custo</dt><dd>US$ 1,86 · <span class="modelo" title="anthropic / claude-opus-5-5">anthropic / claude-opus-5-5</span></dd><dt>Mensagens</dt><dd>4</dd>',
     ),
     html,
   );

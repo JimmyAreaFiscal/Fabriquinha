@@ -19,6 +19,7 @@ import {
   MODO_DA_SESSAO,
   nomeDoModelo,
   plural,
+  rotuloDoModelo,
   rotuloIssue,
   rotuloTicket,
 } from "../render.ts";
@@ -106,7 +107,7 @@ export function barraDeEstado(c: CabecalhoDoChat, modelo: string): string {
     `<a class="issue" href="${caminhoDaIssue(issue.projeto, issue.id)}"><span class="id">${rotuloIssue(issue.id)}</span> ${escapar(titulo)}</a>` +
     `<span class="sep">│</span><span class="id">${rotuloTicket(sessao.ticket)}</span>` +
     `<span class="muted">${etapa(sessao.etapa)} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
-    `<span class="modelo">${escapar(modelo)}</span>` +
+    rotuloDoModelo(modelo) +
     `<div class="direita"><span class="muted pequeno">E-${e}</span>` +
     `<a class="link" href="/api/execucoes/${e}/log" target="_blank" rel="noopener">log</a>` +
     `<a class="link" href="/api/execucoes/${e}/prompt" target="_blank" rel="noopener">prompt</a>` +

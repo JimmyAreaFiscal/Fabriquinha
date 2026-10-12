@@ -17,6 +17,7 @@ import {
   MOTIVOS,
   nomeDoModelo,
   plural,
+  rotuloDoModelo,
   rotuloIssue,
   rotuloTicket,
   STATUS_DO_TICKET,
@@ -86,7 +87,7 @@ function rodando(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): s
     <span class="id">${rotuloIssue(s.issue)}</span>
     <span class="titulo">${escapar(tituloDa(issue))} <span class="muted">— ${escapar(fazendo)}</span></span>
     <span class="muted esconde"><span class="mono">${rotuloTicket(s.ticket)}</span> · ${etapa(s.etapa)}</span>
-    <span class="mono muted esconde">${escapar(modelo(s.modelo))}</span>
+    ${rotuloDoModelo(modelo(s.modelo))}
     <span class="tempo muted">${ha(s.desde, agora)}</span>
   </a>`;
 }

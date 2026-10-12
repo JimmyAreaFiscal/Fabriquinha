@@ -12,7 +12,8 @@ test("Rodando mostra o que o agente está fazendo agora, e não só o título do
     `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
        VALUES (1, 'loja', 'Timeout no checkout com cupom', 'problema', '[ao vivo]', 'desenvolvimento', '2026-10-11T12:00:00.000Z');
      INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-       VALUES (1, 1, 'desenvolvimento', 'Buscar cupons sem N+1', 'aberto', 'fabriquinha', '2026-10-11T12:00:00.000Z');`,
+       VALUES (1, 1, 'desenvolvimento', 'Buscar cupons sem N+1', 'aberto', 'fabriquinha', '2026-10-11T12:00:00.000Z');
+     UPDATE projeto SET modelos = '{"desenvolvimento":{"provedor":"anthropic","modelo":"claude-sonnet-5-5"}}';`,
   );
   const executar = await pagina.request.post(`${fabriquinha.base}/api/tickets/1/executar`, {
     headers: { "Sec-Fetch-Site": "same-origin" },
@@ -26,6 +27,15 @@ test("Rodando mostra o que o agente está fazendo agora, e não só o título do
       timeout: 500,
     });
   }).toPass();
+  // O nome do modelo fica numa linha só, sem quebrar no hífen, com o nome inteiro no `title`.
+  const modelo = pagina.locator(".rodando-linha").getByText("anthropic / claude-sonnet-5-5");
+  const linhas = await modelo.evaluate((e) => {
+    const r = document.createRange();
+    r.selectNodeContents(e);
+    return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+  });
+  expect(linhas).toBe(1);
+  await expect(modelo).toHaveAttribute("title", "anthropic / claude-sonnet-5-5");
 });
 
 test("o card do gate do PR traz o número do PR aberto", async ({ pagina, fabriquinha }) => {

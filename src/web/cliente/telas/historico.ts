@@ -15,6 +15,7 @@ import {
   hora,
   MODO_DA_SESSAO,
   plural,
+  rotuloDoModelo,
   rotuloIssue,
   rotuloTicket,
 } from "../render.ts";
@@ -164,7 +165,7 @@ export function previa(s: SessaoDoHistorico, d: DadosDoChat, agora: Date): strin
     `<dt>Etapa</dt><dd>${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</dd>` +
     `<dt>Resultado</dt><dd>${pilula(s.resultado)}</dd>` +
     `<dt>Terminada</dt><dd>${dia(s.desde, agora)} ${hora(new Date(s.desde))} · durou ${duracao(durou)}</dd>` +
-    `<dt>Custo</dt><dd>${custo(s.custo)} · <span class="modelo">${escapar(modeloDe(d, d.conversa))}</span></dd>` +
+    `<dt>Custo</dt><dd>${custo(s.custo)} · ${rotuloDoModelo(modeloDe(d, d.conversa))}</dd>` +
     `<dt>Mensagens</dt><dd>${String(mensagens(d).length)}</dd></dl>` +
     `<div class="trecho"><span class="quem">fim da conversa</span>${fim.length ? fim.map(pedaco).join("") : '<span class="muted">sem mensagens</span>'}</div>` +
     `<div class="botoes"><a class="btn btn-primario" href="${caminhoDaSessao(s.sessao)}">Abrir o chat</a>` +

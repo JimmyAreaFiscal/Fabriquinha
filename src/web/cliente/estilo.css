@@ -564,7 +564,8 @@ a {
     grid-template-columns: auto 44px minmax(0, 1fr) auto;
     padding: 0 var(--s-3);
   }
-  .rodando-linha .esconde {
+  .rodando-linha .esconde,
+  .rodando-linha .modelo {
     display: none;
   }
 }
@@ -903,9 +904,6 @@ a {
 .gaveta .modelo-cel {
   width: 210px;
   max-width: 210px;
-}
-.gaveta .modelo {
-  white-space: nowrap;
 }
 .gaveta .modelo.override {
   color: var(--accent);
@@ -1596,6 +1594,14 @@ input.erro {
 .tabela tr:last-child td {
   border-bottom: 0;
 }
+/*
+ * O texto do agente (Markdown em linha, como os critérios de aceite) quebra até no meio de um `código` longo: a tabela
+ * cabe na coluna estreita do chat sem rolar de lado, e a altura da linha fica a das outras tabelas.
+ */
+.tabela td.md {
+  line-height: normal;
+  overflow-wrap: anywhere;
+}
 .tabela .mono {
   font-family: var(--mono);
   font-size: var(--fs-xs);
@@ -2069,7 +2075,7 @@ input.erro {
 .propostos tr:nth-last-child(2) td {
   border-bottom: 0;
 }
-.propostos .modelo {
+.propostos .modelo-cel {
   width: 260px;
 }
 .seletor-modelo {
@@ -2154,7 +2160,7 @@ input.erro {
   .seletor-modelo {
     width: 150px;
   }
-  .propostos .modelo {
+  .propostos .modelo-cel {
     width: auto;
   }
 }
@@ -2480,9 +2486,13 @@ input.erro {
   gap: var(--s-3);
   align-items: center;
 }
+/* O nome do modelo, onde quer que apareça: numa linha só (sem quebrar no hífen), com reticências se faltar espaço. */
 .modelo {
   font: var(--fs-xs) var(--mono);
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chat-layout {
   display: grid;
@@ -3125,9 +3135,6 @@ input.erro {
 .pagina-historico .previa h2 {
   font-size: var(--fs-lg);
   line-height: 1.35;
-}
-.pagina-historico .previa .modelo {
-  white-space: nowrap;
 }
 .pagina-historico .trecho {
   display: flex;

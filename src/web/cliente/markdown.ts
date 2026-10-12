@@ -5,3 +5,6 @@ import markdownit from "markdown-it/browser";
 const md = markdownit({ html: false });
 
 export const markdown = (texto: string): string => md.render(texto);
+
+/** O mesmo Markdown em linha, sem `<p>`: para o texto curto do agente numa célula de tabela. */
+export const markdownEmLinha = (texto: string): string => md.renderInline(texto);

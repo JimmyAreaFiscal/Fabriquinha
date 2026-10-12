@@ -63,6 +63,10 @@ export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeUR
 /** `anthropic / claude-opus-4-5`. */
 export const nomeDoModelo = (m: Modelo): string => `${m.provedor} / ${m.modelo}`;
 
+/** O nome do modelo na página: numa linha só, cortado com reticências se faltar espaço, e inteiro no `title`. */
+export const rotuloDoModelo = (nome: string): string =>
+  `<span class="modelo" title="${escapar(nome)}">${escapar(nome)}</span>`;
+
 /** O valor de um seletor de modelo (`provedor/modelo`) como o corpo de C20, ou `null` para o padrão da etapa. */
 export function modeloDoSeletor(valor: string): Modelo | null {
   const corte = valor.indexOf("/");

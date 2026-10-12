@@ -121,7 +121,7 @@ test("barra de estado: issue com link e título escapado, ticket, etapa e modo, 
     html,
     /<span class="id">T-3<\/span><span class="muted">sessão em aberto · interativa<\/span><span class="pill pill-rodando">/,
   );
-  assert.match(html, /<span class="modelo">anthropic \/ &#60;opus&#62;<\/span>/);
+  assert.match(html, /<span class="modelo" title="anthropic \/ &#60;opus&#62;">anthropic \/ &#60;opus&#62;<\/span>/);
   assert.match(
     html,
     /E-7<\/span><a class="link" href="\/api\/execucoes\/7\/log" target="_blank" rel="noopener">log<\/a>/,
@@ -577,7 +577,7 @@ test("lateral no gate do registro: o que foi registrado, os critérios, o que fa
   // A tabela de critérios_aceite da página da issue (F7 §4.5): id, dado, quando, então.
   assert.match(
     html,
-    /<thead><tr><th>ID<\/th><th>Dado<\/th><th>Quando<\/th><th>Então<\/th><\/tr><\/thead><tbody><tr><td class="mono">CA-1<\/td><td>d<\/td><td>q<\/td><td>o &#60;CSV&#62;<\/td><\/tr>/,
+    /<thead><tr><th>ID<\/th><th>Dado<\/th><th>Quando<\/th><th>Então<\/th><\/tr><\/thead><tbody><tr><td class="mono">CA-1<\/td><td class="md">d<\/td><td class="md">q<\/td><td class="md">o &lt;CSV&gt;<\/td><\/tr>/,
   );
   assert.match(html, /Nenhuma evidência faltando./);
   assert.match(

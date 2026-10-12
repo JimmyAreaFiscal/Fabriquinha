@@ -191,10 +191,15 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
     "exporto",
     "o CSV traz número, data, cliente e total",
     "CA-2",
-    "pedidos de outro mês",
-    "exporto",
-    "só os do mês escolhido entram",
+    "pedidos de outro mês em exportarPedidos.js",
+    "o Auditor roda node exportarPedidos.js --mes 2026-10",
+    "só os do mês escolhido entram, o stderr fica vazio e o código de saída é 0; com --mes inválido, o stderr mostra o uso (node exportarPedidos.js --mes <AAAA-MM>)",
   ]);
+  // O texto do agente é Markdown em linha, e a tabela cabe na coluna de 400 px sem rolar de lado.
+  await expect(gate.locator("td code").first()).toHaveText("exportarPedidos.js");
+  await expect(gate.locator("td p")).toHaveCount(0);
+  const rola = await gate.locator(".rola").evaluate((e) => [e.scrollWidth, e.clientWidth]);
+  expect(rola[0]).toBeLessThanOrEqual(rola[1] ?? 0);
   await expect(gate).toContainText("Nenhuma evidência faltando.");
   const devolver = gate.getByRole("button", { name: "Devolver" });
   await expect(devolver).toBeDisabled();

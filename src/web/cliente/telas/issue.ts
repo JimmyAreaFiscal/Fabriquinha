@@ -16,7 +16,7 @@ import type { Consumo, MetricasIssue } from "../../../metricas/issue.ts";
 import type { LeituraDoPR } from "../../../repositorio/pr.ts";
 import type { PainelRegistro, PaginaDaIssue } from "../../rotas/issue.ts";
 import type { ConteudoDaCaixa } from "../dom.ts";
-import { markdown } from "../markdown.ts";
+import { markdown, markdownEmLinha } from "../markdown.ts";
 import {
   caminhoDaIssue,
   caminhoDaSessao,
@@ -244,7 +244,7 @@ function propostos(p: PaginaDaIssue, modelos: readonly Modelo[]): string {
     .filter((t) => t.etapa === "desenvolvimento" && t.status === "aberto")
     .map((t) => {
       const id = String(t.id);
-      return `<tr data-proposto="${id}"><td class="mono">${rotuloTicket(t.id)}</td><td>${escapar(t.titulo)}<div class="d">${escapar(t.descricao)}</div></td><td class="modelo">${seletorDeModelo(p, t, modelos)}</td><td class="acoes-t"><button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="${id}">Editar</button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="${id}">Remover</button></td></tr><tr data-edicao="${id}" hidden><td class="mono">${rotuloTicket(t.id)}</td><td colspan="3">${formularioDeTicket(t)}</td></tr>`;
+      return `<tr data-proposto="${id}"><td class="mono">${rotuloTicket(t.id)}</td><td>${escapar(t.titulo)}<div class="d">${escapar(t.descricao)}</div></td><td class="modelo-cel">${seletorDeModelo(p, t, modelos)}</td><td class="acoes-t"><button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="${id}">Editar</button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="${id}">Remover</button></td></tr><tr data-edicao="${id}" hidden><td class="mono">${rotuloTicket(t.id)}</td><td colspan="3">${formularioDeTicket(t)}</td></tr>`;
     });
   return linhas.length
     ? `<div class="rola"><table class="tabela propostos"><tbody>${linhas.join("")}</tbody></table></div>`
@@ -631,13 +631,16 @@ interface Alterado {
 /** Uma lista de `dados`, que o F3 já validou com o schema do tipo. */
 const lista = <T>(valor: unknown): T[] => valor as T[];
 
+/** Uma célula com o texto curto do agente, em Markdown de linha. */
+const celulaDoAgente = (texto: string): string => `<td class="md">${markdownEmLinha(texto)}</td>`;
+
 /** Os critérios de aceite (F7 §4.5), na caixa, no gate do desenho e no gate do registro. */
 export const tabelaDeCriterios = (criterios: unknown): string =>
   tabela(
     "<th>ID</th><th>Dado</th><th>Quando</th><th>Então</th>",
     lista<{ id: string; dado: string; quando: string; entao: string }>(criterios).map(
       (c) =>
-        `<tr><td class="mono">${escapar(c.id)}</td><td>${escapar(c.dado)}</td><td>${escapar(c.quando)}</td><td>${escapar(c.entao)}</td></tr>`,
+        `<tr><td class="mono">${escapar(c.id)}</td>${[c.dado, c.quando, c.entao].map(celulaDoAgente).join("")}</tr>`,
     ),
   );
 

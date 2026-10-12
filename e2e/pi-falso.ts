@@ -135,7 +135,14 @@ function registrar(): void {
   );
   const criterios = [
     { id: "CA-1", dado: "pedidos no mês", quando: "exporto", entao: "o CSV traz número, data, cliente e total" },
-    { id: "CA-2", dado: "pedidos de outro mês", quando: "exporto", entao: "só os do mês escolhido entram" },
+    // Longo e com código, como os de um agente de verdade: a tabela cabe na coluna do chat sem rolar de lado.
+    {
+      id: "CA-2",
+      dado: "pedidos de outro mês em `exportarPedidos.js`",
+      quando: "o Auditor roda `node exportarPedidos.js --mes 2026-10`",
+      entao:
+        "só os do mês escolhido entram, o stderr fica vazio e o código de saída é 0; com `--mes` inválido, o stderr mostra o uso (`node exportarPedidos.js --mes <AAAA-MM>`)",
+    },
   ];
   writeFileSync(join(saida, "criterios.json"), JSON.stringify({ criterios }));
   cli("evidencia", "add", "criterios_aceite", "--dados", join(saida, "criterios.json"));

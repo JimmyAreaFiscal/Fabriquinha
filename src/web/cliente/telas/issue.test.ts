@@ -117,7 +117,7 @@ function exemplo(): PaginaDaIssue {
     decisoes: [],
     evidencias: [
       evidencia(1, 1, "criterios_aceite", {
-        dados: { criterios: [{ id: "CA-1", dado: XSS, quando: "abre", entao: "vê" }] },
+        dados: { criterios: [{ id: "CA-1", dado: XSS, quando: "roda `npm test`", entao: "vê" }] },
       }),
       evidencia(2, 1, "comportamento", {
         dados: { descricao: "d", comoReproduzir: ["a"] },
@@ -391,7 +391,10 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
   const p = exemplo();
   const criterios = evidenciaNaCaixa(p, evidenciaDe(p, 1));
   assert.match(criterios.corpo, /<th>ID<\/th><th>Dado<\/th><th>Quando<\/th><th>Então<\/th>/);
-  assert.match(criterios.corpo, /<td class="mono">CA-1<\/td><td>&#60;img src=x[^<]*<\/td><td>abre<\/td><td>vê<\/td>/);
+  assert.match(
+    criterios.corpo,
+    /<td class="mono">CA-1<\/td><td class="md">&lt;img src=x[^<]*<\/td><td class="md">roda <code>npm test<\/code><\/td><td class="md">vê<\/td>/,
+  );
 
   const complexidade = evidenciaNaCaixa(p, evidenciaDe(p, 5));
   assert.match(
@@ -602,7 +605,7 @@ test("gate do desenho: espera, 4 números, critérios, tickets propostos com o m
     ],
   );
   assert.match(html, /<div class="titulo-bloco">Critérios de aceite<\/div><div class="rola"><table class="tabela">/);
-  assert.match(html, /<td class="mono">CA-1<\/td><td>&#60;img/);
+  assert.match(html, /<td class="mono">CA-1<\/td><td class="md">&lt;img/);
 
   // Só os de desenvolvimento abertos, escapados, cada um com o seletor e a edição escondida.
   assert.deepEqual(
@@ -984,7 +987,7 @@ test("gate do registro na página da issue: o que o agente registrou, os critér
     html,
     /<dt>Descrição<\/dt><dd><div class="md"><p>Baixar os <strong>pedidos<\/strong>.<\/p>\n<\/div><\/dd><dt>Comportamento<\/dt><dd><div class="md"><p>copia &lt;à&gt; mão<\/p>\n<\/div><\/dd>/,
   );
-  assert.match(html, /<th>Dado<\/th><th>Quando<\/th><th>Então<\/th>.*<td>o &#60;CSV&#62;<\/td>/s);
+  assert.match(html, /<th>Dado<\/th><th>Quando<\/th><th>Então<\/th>.*<td class="md">o &lt;CSV&gt;<\/td>/s);
   assert.match(html, /Nenhuma evidência faltando./);
   assert.match(
     html,
