@@ -368,8 +368,9 @@ test("Compute Engine falhando, cancelado, parado na fila ou recusando o token: f
   sonar.tarefas = [{ status: "CANCELED" }];
   await falha(banco, `o SonarQube não processou a análise: CANCELED ${dica}`);
   sonar.tarefas = [{ status: "PENDING" }];
+  // O limite vale também para o scanner: folga para o docker falso terminar antes dele numa máquina carregada.
   await falha(banco, `a análise passou do tempo limite na fila do SonarQube ${dica}`, {
-    limiteMs: 30,
+    limiteMs: 1000,
     intervaloMs: 5,
   });
   sonar.erros = { "/api/ce/task": 403 };

@@ -51,7 +51,8 @@ before(async () => {
     branchBase: "main",
     hospedagem: "github",
     preparacao: [],
-    testes: ["true"],
+    // Os testes reprovam: a coleta depois do pi do desenvolvimento falha o ticket sem depender do SonarQube da máquina.
+    testes: ["false"],
     sonar: { projectKey: "loja" },
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     modelos: {},
@@ -307,7 +308,7 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
     return sessao;
   };
 
-  // Sem evidências, a coleta depois do pi falha o ticket: a sessão espera a resposta do Auditor.
+  // Os testes do projeto reprovam na coleta depois do pi, e o ticket falha: a sessão espera a resposta do Auditor.
   const sessao = await executarEsperandoFalha(1);
   const falha = await dados(sessao);
   assert.equal(falha.ticket.status, "falhou");

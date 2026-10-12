@@ -202,7 +202,7 @@ const emDesenvolvimento = (...ids: number[]) =>
     .join("\n");
 
 /**
- * Executar agora, como na página da issue, até o ticket falhar: sem evidências, a coleta depois do pi o falha.
+ * Executar agora, como na página da issue, até o ticket falhar: os testes do projeto reprovam na coleta depois do pi.
  * Devolve a sessão.
  */
 async function executarAteFalhar(pagina: Page, { base }: Fabriquinha, ticket: number): Promise<string> {

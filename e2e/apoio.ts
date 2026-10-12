@@ -1,5 +1,6 @@
-// Apoio dos testes de ponta a ponta: cada teste sobe a sua Fabriquinha, com a raiz temporária, uma porta livre e o pi
-// falso (pi-falso.ts), e recebe o navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`.
+// Apoio dos testes de ponta a ponta: cada teste sobe a sua Fabriquinha, com a raiz temporária, a porta livre que ela
+// mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (pi-falso.ts), e recebe o
+// navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`.
 import { test as base, type Page } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
@@ -13,7 +14,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
@@ -27,15 +27,6 @@ export interface Fabriquinha {
   base: string;
   /** O link de entrada com o token, lido de `web.url`. */
   link: string;
-}
-
-async function portaLivre(): Promise<number> {
-  const s = createServer().listen(0, "127.0.0.1");
-  await once(s, "listening");
-  const { port } = s.address() as { port: number };
-  s.close();
-  await once(s, "close");
-  return port;
 }
 
 /** Para o serviço com SIGTERM; se não sair em 5 s, SIGKILL. */
@@ -64,7 +55,6 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
       `#!/bin/sh\nif [ "$1 $2" = "pr view" ]; then cat "${join(raiz, "gh-pr.json")}"; fi\nexit 0\n`,
     );
     chmodSync(join(bin, "gh"), 0o755);
-    const porta = await portaLivre();
     let log = "";
     const servico = spawn(
       process.execPath,
@@ -72,7 +62,7 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
       {
         env: {
           ...process.env,
-          FABRIQUINHA_PORTA: String(porta),
+          FABRIQUINHA_PORTA: "0",
           FABRIQUINHA_PI: join(import.meta.dirname, "pi-falso.ts"),
           PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
           GIT_CONFIG_GLOBAL: gitconfig,
@@ -86,12 +76,15 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
       log += parte.toString();
     });
     try {
+      // O `web.url` existe vazio por um instante antes de o link ser escrito nele.
       const arquivo = join(raiz, "web.url");
-      for (let i = 0; !existsSync(arquivo); i++) {
+      const lido = () => (existsSync(arquivo) ? readFileSync(arquivo, "utf8") : "");
+      for (let i = 0; !lido(); i++) {
         if (servico.exitCode !== null || i > 200) throw new Error(`a Fabriquinha não subiu:\n${log}`);
         await dormir(50);
       }
-      await use({ raiz, base: `http://127.0.0.1:${String(porta)}`, link: readFileSync(arquivo, "utf8") });
+      const link = lido();
+      await use({ raiz, base: new URL(link).origin, link });
     } finally {
       await parar(servico);
       if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
@@ -108,7 +101,11 @@ export { expect } from "@playwright/test";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
 
-/** O projeto `loja`, com um clone de verdade e o remoto num bare local, para a worktree das execuções. */
+/**
+ * O projeto `loja`, com um clone de verdade e o remoto num bare local, para a worktree das execuções. O comando de
+ * testes falha: toda execução do desenvolvimento que chega à coleta depois do pi falha nela, sem depender do SonarQube
+ * da máquina.
+ */
 export function projeto(raiz: string, sql = ""): void {
   const bare = join(raiz, "origin.git");
   const repo = join(raiz, "loja");
@@ -127,7 +124,7 @@ export function projeto(raiz: string, sql = ""): void {
     branchBase: "main",
     hospedagem: "github",
     preparacao: [],
-    testes: ["true"],
+    testes: ["false"],
     sonar: { projectKey: "loja" },
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     modelos: {},

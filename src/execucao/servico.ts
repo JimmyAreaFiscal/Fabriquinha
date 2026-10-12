@@ -2,6 +2,7 @@
 // encerra as execuções de uma instância anterior, o agendador e o "Executar agora".
 import { rmSync } from "node:fs";
 import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
@@ -63,10 +64,11 @@ function recuperar(banco: DatabaseSync): void {
 /**
  * Sobe o serviço: ocupa `127.0.0.1:<portaDoServico>` como trava de instância única antes de tocar no banco (uma
  * segunda instância, mesmo de versão mais nova, sai com erro sem migrar nada), abre o banco, encerra as execuções da
- * instância anterior e liga o agendador.
+ * instância anterior e liga o agendador. A porta 0 escolhe uma livre, sem a trava, e o `web.url` leva a escolhida: os
+ * testes sobem várias instâncias juntas sem disputar porta.
  */
 export async function iniciarServico(raiz: string): Promise<Servico> {
-  const porta = portaDoServico();
+  const pedida = portaDoServico();
   // ponytail: o relógio bate de minuto em minuto e cada batida relê a configuração; uma mudança vale em até um minuto.
   let minutos = 0;
   /** A última batida do relógio (ou a subida): a próxima busca conta a partir dela. */
@@ -79,13 +81,14 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     web.once("error", (erro) => {
       falhou(
         new ErroDeRegra(
-          `a Fabriquinha não conseguiu abrir 127.0.0.1:${String(porta)}: ${erro.message}`,
+          `a Fabriquinha não conseguiu abrir 127.0.0.1:${String(pedida)}: ${erro.message}`,
           "se outra Fabriquinha já está rodando, use-a; senão, libere a porta ou troque FABRIQUINHA_PORTA",
         ),
       );
     });
-    web.listen(porta, "127.0.0.1", pronto);
+    web.listen(pedida, "127.0.0.1", pronto);
   });
+  const { port: porta } = web.address() as AddressInfo;
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
