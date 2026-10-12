@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ambienteSemCredenciais, executar, executarNoShell } from "./processo.ts";
+import { ambienteSemCredenciais, executar, executarNoShell, git, gitComLimite } from "./processo.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-processo-")));
 after(() => {
@@ -98,4 +98,16 @@ test("ambienteSemCredenciais tira os tokens e aponta gh e az para a pasta vazia;
   assert.equal(comTokens.GH_TOKEN, "1");
   const r = await executarNoShell('echo "[$GH_TOKEN] $GH_CONFIG_DIR"', base, { env, limiteLog: 1024 });
   assert.equal(r.log, "[] /vazio\n");
+});
+
+test("git tem limite: o git parado é morto e o stderr diz por quê; sem estourar, a saída vem igual", async () => {
+  const dir = mkdtempSync(join(base, "git-"));
+  // Um alias de shell segura o git como um fetch parado seguraria.
+  const r = await gitComLimite(200, dir, "-c", "alias.dorme=!sleep 30", "dorme");
+  assert.equal(r.limiteEstourado, true);
+  assert.equal(r.codigo, null);
+  assert.match(r.erro, /passou do limite de 200 ms e foi morto$/);
+  const v = await git(dir, "--version");
+  assert.equal(v.limiteEstourado, false);
+  assert.match(v.saida, /^git version /);
 });

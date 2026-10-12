@@ -4,11 +4,11 @@
 
 **Blocked by:** 09
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `iniciarServico(raiz)` escuta em `127.0.0.1:$FABRIQUINHA_PORTA` (padrão 4317); segunda instância sai com erro.
-- [ ] Tabela `configuracao` (linha única) e `salvarConfiguracao` validada por zod; agendador desligado por padrão.
-- [ ] Consulta de ticket elegível do F4 §4.1 (issue mais antiga, depois ticket mais antigo).
-- [ ] `executarAgora(ticket)` recusa com a execução em andamento quando o D8 está ocupado.
-- [ ] Reinício: execuções `em_andamento` encerradas conforme F4 §7, antes do agendador.
-- [ ] Testes: ordem de elegibilidade; reinício; instância única.
+- [x] `iniciarServico(raiz)` escuta em `127.0.0.1:$FABRIQUINHA_PORTA` (padrão 4317); segunda instância sai com erro.
+- [x] Tabela `configuracao` (linha única) e `salvarConfiguracao` validada por zod; agendador desligado por padrão.
+- [x] Consulta de ticket elegível do F4 §4.1 (issue mais antiga, depois ticket mais antigo).
+- [x] `executarAgora(ticket)` recusa com a execução em andamento quando o D8 está ocupado.
+- [x] Reinício: execuções `em_andamento` encerradas conforme F4 §7, antes do agendador.
+- [x] Testes: ordem de elegibilidade; reinício; instância única.

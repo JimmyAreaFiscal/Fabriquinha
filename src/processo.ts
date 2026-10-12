@@ -76,10 +76,19 @@ export function executar(
 
 /**
  * `git -C <dir> <args>`, sem terminal para pedir senha (falha em vez de esperar quem não está ali) e em LC_ALL=C:
- * mensagens e saídas lidas pelo texto (como a do `clean`) nunca vêm traduzidas.
+ * mensagens e saídas lidas pelo texto (como a do `clean`) nunca vêm traduzidas. Passado `limiteMs`, o grupo do git
+ * é morto e o stderr diz por quê: um `fetch` parado nunca prende a execução (e a vaga do D8).
  */
-export const git = (dir: string, ...args: string[]): Promise<Saida> =>
-  executar("git", ["-C", dir, ...args], { env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" } });
+export async function gitComLimite(limiteMs: number, dir: string, ...args: string[]): Promise<Saida> {
+  const r = await executar("git", ["-C", dir, ...args], {
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
+    limiteMs,
+  });
+  return r.limiteEstourado ? { ...r, erro: `${r.erro}passou do limite de ${String(limiteMs)} ms e foi morto` } : r;
+}
+
+/** `gitComLimite` com o limite dos comandos configurados (F3 §6, F5 §3.2). */
+export const git = (dir: string, ...args: string[]): Promise<Saida> => gitComLimite(LIMITE_COMANDO_MS, dir, ...args);
 
 /** F3 §6 e F5 §3.2: limite de cada comando configurado pelo Auditor. */
 export const LIMITE_COMANDO_MS = 30 * 60_000;

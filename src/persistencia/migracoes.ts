@@ -143,4 +143,13 @@ export const MIGRACOES: readonly string[] = [
     bytes     INTEGER NOT NULL CHECK (bytes >= 0),
     PRIMARY KEY (evidencia, nome)
   );`,
+  // F4 §10: configuração do serviço (F4 §3), linha única já com os padrões.
+  `CREATE TABLE configuracao (
+    id               INTEGER PRIMARY KEY CHECK (id = 1),
+    agendador_ativo  INTEGER NOT NULL DEFAULT 0 CHECK (agendador_ativo IN (0,1)),
+    intervalo_min    INTEGER NOT NULL DEFAULT 5   CHECK (intervalo_min BETWEEN 1 AND 1440),
+    timeout_min      INTEGER NOT NULL DEFAULT 120 CHECK (timeout_min BETWEEN 10 AND 1440),
+    ociosidade_min   INTEGER NOT NULL DEFAULT 30  CHECK (ociosidade_min BETWEEN 5 AND 1440)
+  );
+  INSERT INTO configuracao (id) VALUES (1);`,
 ];
