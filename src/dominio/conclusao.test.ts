@@ -136,10 +136,10 @@ test("C7 é só da Fabriquinha, valida a entrada e exige ticket em execução, s
     () => concluir(ag, { ticket: 1 }),
     "T-1 é de registro e não conclui por concluirTicket (o Auditor o conclui no gate de registro)",
   );
-  const revisao = { ...ag, tickets: [...ag.tickets, ticket(4, "revisao")] };
+  const encerramento = { ...ag, tickets: [...ag.tickets, ticket(4, "encerramento")] };
   regra(
-    () => concluir(revisao, { ticket: 4 }),
-    "T-4 é da etapa revisao, que ainda não conclui (aguarde a versão que a implementa)",
+    () => concluir(encerramento, { ticket: 4 }),
+    "T-4 é da etapa encerramento, que ainda não conclui (aguarde a versão que a implementa)",
   );
   const falhou = { ...ag, tickets: ag.tickets.map((t) => (t.id === 2 ? { ...t, status: "falhou" as const } : t)) };
   regra(() => concluir(falhou), "T-2 tem status falhou, não em_execucao (só se conclui ticket em execução)");
@@ -242,5 +242,131 @@ test("C7 diz o que falta e o que está reprovado; evidência da Fabriquinha se r
     () => concluir(reprovada, { ticket: 3 }, fabriquinha, contexto([3])),
     "T-3 não pode concluir: a evidência matriz_fitness está reprovada " +
       "(a Fabriquinha coleta depois do pi; execute o ticket de novo)",
+  );
+});
+
+/**
+ * I-1 em `revisao`: a revisão T-5 em execução (E-7 terminada), com as quatro evidências da revisão aprovadas e a
+ * decisão `aprovado` do agente revisor.
+ */
+const revisando = (aprovado = true): Agregado => {
+  const ag = desenhado({ fase: "revisao" });
+  const da = (id: number, tipo: Evidencia["tipo"], troca: Partial<Evidencia> = {}): Evidencia => ({
+    ...evidencia(id, tipo),
+    ticket: 5,
+    ...troca,
+  });
+  return {
+    ...ag,
+    tickets: [
+      ...ag.tickets.map((t) => ({ ...t, status: "concluido" as const, concluidoEm: ANTES })),
+      ticket(5, "revisao"),
+    ],
+    execucoes: [{ ...ag.execucoes[0], id: 7, ticket: 5 } as Agregado["execucoes"][number]],
+    decisoes: [
+      {
+        id: 9,
+        issue: 1,
+        ticket: 5,
+        gate: "revisao",
+        aprovado,
+        ...(!aprovado && { motivo: "falta o índice" }),
+        por: "agente",
+        em: ANTES,
+      },
+    ],
+    evidencias: [
+      ...ag.evidencias,
+      da(4, "arquivos_alterados", { produtor: "fabriquinha" }),
+      da(5, "matriz_fitness", {
+        produtor: "fabriquinha",
+        aprovada: true,
+        dados: { linhas: [{ nome: "complexidade" }, { nome: "camadas" }] },
+      }),
+      da(6, "explicacao_fitness", { dados: { explicacoes: [{ nome: "camadas" }, { nome: "complexidade" }] } }),
+      da(7, "comprovacao_criterios", { aprovada: true }),
+    ],
+  };
+};
+
+const criadoPelaRevisao = ticket(8, "desenvolvimento", { status: "aberto", origem: "agente", origemTicket: 5 });
+
+test("C7 da revisão aprovada: fase encerramento e um ticket de encerramento novo", () => {
+  const ag = revisando();
+  const depois = concluir(ag, { ticket: 5 });
+  assert.deepEqual(depois, {
+    ...ag,
+    issue: { ...ag.issue, fase: "encerramento" },
+    tickets: [
+      ...ag.tickets.slice(0, 3),
+      { ...ag.tickets[3], status: "concluido", concluidoEm: AGORA },
+      {
+        id: 41,
+        issue: 1,
+        etapa: "encerramento",
+        titulo: "Publicar o PR",
+        descricao: "",
+        status: "aberto",
+        origem: "fabriquinha",
+        criadoEm: AGORA,
+      },
+    ],
+  });
+});
+
+test("C7 da revisão reprovada: volta a desenvolvimento com os tickets que ela criou", () => {
+  const ag = { ...revisando(false), tickets: [...revisando(false).tickets, criadoPelaRevisao] };
+  const depois = concluir(ag, { ticket: 5 });
+  assert.equal(depois.issue.fase, "desenvolvimento");
+  assert.deepEqual(depois.tickets.slice(3), [
+    { ...ag.tickets[3], status: "concluido", concluidoEm: AGORA },
+    criadoPelaRevisao,
+  ]);
+});
+
+test("C7 da revisão exige a decisão e a coerência dela com os tickets criados, os critérios e a fitness (F3 §8)", () => {
+  const ag = revisando();
+  const explicando = (...nomes: string[]) => ({
+    ...ag,
+    evidencias: ag.evidencias.map((e) =>
+      e.tipo === "explicacao_fitness" ? { ...e, dados: { explicacoes: nomes.map((nome) => ({ nome })) } } : e,
+    ),
+  });
+  for (const nomes of [["complexidade"], ["camadas", "complexidade", "mutacao"]]) {
+    regra(
+      () => concluir(explicando(...nomes), { ticket: 5 }),
+      "T-5 não pode concluir: a explicacao_fitness não explica exatamente as linhas da matriz_fitness atual " +
+        "(o agente de T-5 submete de novo com fabriquinha evidencia add explicacao_fitness, uma explicação por linha)",
+    );
+  }
+  regra(
+    () =>
+      concluir({ ...ag, decisoes: [{ ...ag.decisoes[0], ticket: 3 } as Agregado["decisoes"][number]] }, { ticket: 5 }),
+    "T-5 não pode concluir: não tem decisão de revisão " +
+      "(o agente de T-5 decide com fabriquinha revisao decidir T-5 aprovar|reprovar)",
+  );
+  regra(
+    () => concluir({ ...ag, tickets: [...ag.tickets, criadoPelaRevisao] }, { ticket: 5 }),
+    "T-5 não pode concluir: a revisão aprovou e criou ticket de desenvolvimento " +
+      "(o agente de T-5 remove os tickets que criou ou reprova a revisão)",
+  );
+  const reprovada = (tipo: Evidencia["tipo"]) => ({
+    ...ag,
+    evidencias: ag.evidencias.map((e) => (e.tipo === tipo ? { ...e, aprovada: false } : e)),
+  });
+  regra(
+    () => concluir(reprovada("comprovacao_criterios"), { ticket: 5 }),
+    "T-5 não pode concluir: a revisão aprovou com critério de aceite não atendido " +
+      "(o agente de T-5 reprova a revisão e cria um ticket de desenvolvimento para cada exigência)",
+  );
+  regra(
+    () => concluir(reprovada("matriz_fitness"), { ticket: 5 }),
+    "T-5 não pode concluir: a revisão aprovou com fitness function reprovada " +
+      "(o agente de T-5 reprova a revisão e cria um ticket de desenvolvimento para cada exigência)",
+  );
+  regra(
+    () => concluir(revisando(false), { ticket: 5 }),
+    "T-5 não pode concluir: a revisão reprovou sem criar ticket de desenvolvimento " +
+      "(o agente de T-5 cria um para cada exigência com fabriquinha ticket criar I-1 --titulo <título>)",
   );
 });

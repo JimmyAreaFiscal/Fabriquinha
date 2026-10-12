@@ -30,6 +30,17 @@ interface DesenhoSolucao {
   arquivosPrevistos: Record<"caminho" | "acao" | "motivo", string>[];
   foraDeEscopo: string[];
 }
+interface ArquivosAlterados {
+  arquivos: {
+    caminho: string;
+    status: string;
+    adicionadas: number | null;
+    removidas: number | null;
+    previsto: string | null;
+  }[];
+  previstosNaoTocados: string[];
+}
+type LinhaFitness = Record<"nome" | "descricao", string> & { codigoSaida: number | null; estourou: boolean };
 
 const criteriosDeAceite = (ag: Agregado): string =>
   secao(
@@ -39,11 +50,39 @@ const criteriosDeAceite = (ag: Agregado): string =>
       .join("\n"),
   );
 
+/** O desenho aprovado, os critérios e os tickets de desenvolvimento já concluídos. */
+const desenvolvimento = (ag: Agregado): string[] => {
+  const desenho = dadosDe(ag, "desenho_solucao") as DesenhoSolucao | undefined;
+  const concluidos = ag.tickets.filter((t) => t.etapa === "desenvolvimento" && t.status === "concluido");
+  return [
+    secao("Desenho aprovado", desenho?.resumo ?? ""),
+    secao(
+      "Arquivos previstos",
+      (desenho?.arquivosPrevistos ?? []).map((a) => `- \`${a.caminho}\` (${a.acao}): ${a.motivo}`).join("\n"),
+    ),
+    secao("Fora do escopo", (desenho?.foraDeEscopo ?? []).map((f) => `- ${f}`).join("\n")),
+    criteriosDeAceite(ag),
+    secao(
+      "Tickets de desenvolvimento já concluídos",
+      concluidos.map((t) => `- T-${String(t.id)}, ${t.titulo}`).join("\n"),
+    ),
+  ];
+};
+
+const linhas = (a: ArquivosAlterados["arquivos"][number]): string =>
+  a.adicionadas === null ? "binário" : `+${String(a.adicionadas)} −${String(a.removidas)}`;
+
+function resultado(l: LinhaFitness): string {
+  if (l.estourou) return "estourou o tempo";
+  return l.codigoSaida === 0 ? "passou" : `reprovou (código ${String(l.codigoSaida)})`;
+}
+
 /**
  * O contexto próprio da etapa (F4 §6.3). O registro leva as dependências informadas (o resto vem da conversa); o
  * desenho lê o registro: o resumo do comportamento e os critérios. O desenvolvimento lê o desenho aprovado, os
- * critérios e os tickets de desenvolvimento já concluídos.
- * ponytail: revisão, encerramento e sessão ganham o seu contexto com os tickets 16, 20 e 21.
+ * critérios e os tickets de desenvolvimento já concluídos; a revisão, o mesmo e o que a Fabriquinha coletou antes
+ * do pi: os arquivos alterados × o desenho e a matriz de fitness functions.
+ * ponytail: encerramento e sessão ganham o seu contexto com os tickets 20 e 21.
  */
 const CONTEXTO_DA_ETAPA: Partial<Record<Etapa, (ag: Agregado) => string[]>> = {
   registro: (ag) => [secao("Dependências informadas", ag.issue.deps.map((d) => `- I-${String(d)}`).join("\n"))],
@@ -54,21 +93,24 @@ const CONTEXTO_DA_ETAPA: Partial<Record<Etapa, (ag: Agregado) => string[]>> = {
     ),
     criteriosDeAceite(ag),
   ],
-  desenvolvimento: (ag) => {
-    const desenho = dadosDe(ag, "desenho_solucao") as DesenhoSolucao | undefined;
-    const concluidos = ag.tickets.filter((t) => t.etapa === "desenvolvimento" && t.status === "concluido");
+  desenvolvimento,
+  revisao: (ag) => {
+    const alterados = dadosDe(ag, "arquivos_alterados") as ArquivosAlterados | undefined;
+    const fitness = (dadosDe(ag, "matriz_fitness")?.linhas ?? []) as LinhaFitness[];
     return [
-      secao("Desenho aprovado", desenho?.resumo ?? ""),
+      ...desenvolvimento(ag),
       secao(
-        "Arquivos previstos",
-        (desenho?.arquivosPrevistos ?? []).map((a) => `- \`${a.caminho}\` (${a.acao}): ${a.motivo}`).join("\n"),
+        "Arquivos alterados × desenho",
+        (alterados?.arquivos ?? [])
+          .map(
+            (a) =>
+              `- \`${a.caminho}\` (${a.status}, ${linhas(a)}): ` +
+              (a.previsto === null ? "não previsto" : `previsto por \`${a.previsto}\``),
+          )
+          .join("\n"),
       ),
-      secao("Fora do escopo", (desenho?.foraDeEscopo ?? []).map((f) => `- ${f}`).join("\n")),
-      criteriosDeAceite(ag),
-      secao(
-        "Tickets de desenvolvimento já concluídos",
-        concluidos.map((t) => `- T-${String(t.id)}, ${t.titulo}`).join("\n"),
-      ),
+      secao("Previstos e não tocados", (alterados?.previstosNaoTocados ?? []).map((p) => `- \`${p}\``).join("\n")),
+      secao("Fitness functions", fitness.map((l) => `- **${l.nome}** (${l.descricao}): ${resultado(l)}`).join("\n")),
     ];
   },
 };

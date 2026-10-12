@@ -1,5 +1,5 @@
-// Ponta a ponta do ciclo do desenvolvimento (F3 §7, F5 §4, F1 §5.1) por `executarAutonomo`, contra banco real e git
-// real, com falsos só para os binários externos: o pi, o docker do sonar-scanner e o servidor do SonarQube.
+// Ponta a ponta do ciclo do desenvolvimento e da revisão (F3 §7, F5 §4, F1 §5.1) por `executarAutonomo`, contra banco
+// real e git real, com falsos só para os binários externos: o pi, o docker do sonar-scanner e o servidor do SonarQube.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -18,6 +18,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { after, beforeEach, test } from "node:test";
 import type { Ator } from "../dominio/agregado.ts";
 import { concluirTicket } from "../dominio/conclusao.ts";
@@ -44,23 +45,30 @@ process.env.PI_CODING_AGENT_DIR = join(base, "pi-agent");
 process.env.GH_TOKEN = "segredo-gh";
 process.env.SONAR_TOKEN = "segredo-sonar";
 
-/** pi falso: no prompt, escreve na worktree os arquivos de $FALSO_PI_ESCREVE (JSON caminho → conteúdo) e assenta. */
+/**
+ * pi falso: no prompt, escreve na worktree os arquivos de $FALSO_PI_ESCREVE (JSON caminho → conteúdo, ou null para
+ * apagar), roda o agente de $FALSO_PI_AGENTE, se houver, e assenta.
+ */
 const pi = join(base, "pi.mjs");
 writeFileSync(
   pi,
   `#!/usr/bin/env node
-import { writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 if (process.argv.includes("--version")) {
   console.log("0.84.4-falso");
   process.exit(0);
 }
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
+process.stdin.setEncoding("utf8").on("data", async (parte) => {
   const linhas = (resto + parte).split("\\n");
   resto = linhas.pop();
   if (!linhas.some((l) => JSON.parse(l).type === "prompt")) return;
-  for (const [caminho, conteudo] of Object.entries(JSON.parse(process.env.FALSO_PI_ESCREVE))) writeFileSync(caminho, conteudo);
+  for (const [caminho, conteudo] of Object.entries(JSON.parse(process.env.FALSO_PI_ESCREVE))) {
+    if (conteudo === null) rmSync(caminho);
+    else writeFileSync(caminho, conteudo);
+  }
+  if (process.env.FALSO_PI_AGENTE) await (await import(process.env.FALSO_PI_AGENTE)).default();
   emitir({ type: "response", command: "prompt", success: true });
   emitir({ type: "message_end", message: { role: "assistant", content: [], stopReason: "stop" } });
   emitir({ type: "agent_settled" });
@@ -69,6 +77,49 @@ process.stdin.setEncoding("utf8").on("data", (parte) => {
 );
 chmodSync(pi, 0o755);
 process.env.FABRIQUINHA_PI = pi;
+
+/**
+ * Agente revisor falso: faz, pelos mesmos módulos que o CLI do agente chama (F7), o que a revisão pede ao agente.
+ * Explica cada linha da matriz, comprova o CA-1 com um print (atendido conforme $FALSO_REVISAO), cria os tickets
+ * pedidos e registra a decisão (C14).
+ */
+const src = (modulo: string) => pathToFileURL(join(import.meta.dirname, "..", modulo)).href;
+const revisor = join(base, "revisor.mjs");
+writeFileSync(
+  revisor,
+  `import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+const { abrir } = await import(${JSON.stringify(src("persistencia/banco.ts"))});
+const { agregadoDoTicket, comIssue } = await import(${JSON.stringify(src("persistencia/issues.ts"))});
+const { submeter } = await import(${JSON.stringify(src("evidencias/submissao.ts"))});
+const { registrarDecisaoRevisao } = await import(${JSON.stringify(src("dominio/gates.ts"))});
+const { adicionarTicketDesenvolvimento } = await import(${JSON.stringify(src("dominio/tickets.ts"))});
+export default function () {
+  const plano = JSON.parse(process.env.FALSO_REVISAO);
+  const banco = abrir(process.env.FABRIQUINHA_ROOT);
+  const execucao = Number(process.env.FABRIQUINHA_EXECUCAO);
+  const { ticket } = banco.prepare("SELECT ticket FROM execucao WHERE id = ?").get(execucao);
+  const ator = { tipo: "agente", execucao, ticket };
+  const ag = agregadoDoTicket(banco, ticket);
+  const matriz = ag.evidencias.find((e) => e.ticket === ticket && e.tipo === "matriz_fitness");
+  const explicacoes = matriz.dados.linhas.map((l) => ({ nome: l.nome, explicacao: "mede a busca" }));
+  submeter(banco, ator, "explicacao_fitness", { explicacoes }, []);
+  const print = join(process.env.FABRIQUINHA_SAIDA, "ca-1.png");
+  writeFileSync(print, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const criterio = { id: "CA-1", atendido: plano.atendido, comoVerificado: "busquei mil itens", arquivos: ["ca-1.png"] };
+  submeter(banco, ator, "comprovacao_criterios", { criterios: [criterio] }, [print]);
+  for (const titulo of plano.tickets) {
+    comIssue(banco, ag.issue.id, "adicionarTicketDesenvolvimento", ator, (a, ctx) =>
+      adicionarTicketDesenvolvimento(a, { titulo }, ator, ctx),
+    );
+  }
+  comIssue(banco, ag.issue.id, "registrarDecisaoRevisao", ator, (a, ctx) =>
+    registrarDecisaoRevisao(a, { ticket, ...plano.decisao }, ator, ctx),
+  );
+  banco.close();
+}
+`,
+);
 
 // docker falso no PATH: o "scanner" só informa a tarefa do Compute Engine.
 mkdirSync(join(base, "bin"));
@@ -111,6 +162,7 @@ beforeEach(() => {
   delete process.env.SAIDA_TESTES;
   delete process.env.SAIDA_FITNESS;
   delete process.env.HOOK_REPROVA;
+  delete process.env.FALSO_PI_AGENTE;
   process.env.FALSO_PI_ESCREVE = JSON.stringify({ "busca.ts": "export const busca = cache;\n", "cache.ts": "1\n" });
 });
 
@@ -197,7 +249,11 @@ function cenario() {
     "desenho_solucao",
     {
       resumo: "cache na busca",
-      arquivosPrevistos: [{ caminho: "busca.ts", acao: "alterar", motivo: "lê do cache" }],
+      arquivosPrevistos: [
+        { caminho: "busca.ts", acao: "alterar", motivo: "lê do cache" },
+        { caminho: "cache*.ts", acao: "criar", motivo: "o cache" },
+        { caminho: "docs/**", acao: "alterar", motivo: "documenta o cache" },
+      ],
     },
     html("desenho.html"),
   );
@@ -443,5 +499,182 @@ test("retomada com outro ticket por cima: T-4 conclui sobre o órfão de T-3, e 
     ["busca.ts", "cache.ts"],
   );
   assert.equal(git(c.worktree, "rev-list", "--count", "main..HEAD"), "2", "nenhum commit novo");
+  c.banco.close();
+});
+
+/**
+ * Leva a I-1 do cenário à revisão pelos dois tickets de desenvolvimento reais; o T-5 é a revisão. `escreveT3`: o que
+ * o pi do T-3 muda na worktree, no formato de $FALSO_PI_ESCREVE.
+ */
+async function naRevisao(escreveT3?: Record<string, string | null>) {
+  const c = cenario();
+  if (escreveT3) process.env.FALSO_PI_ESCREVE = JSON.stringify(escreveT3);
+  await executarAutonomo(c.banco, 3, OPCOES);
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
+  await executarAutonomo(c.banco, 4, OPCOES);
+  assert.equal(c.estado(4).ag.issue.fase, "revisao");
+  // O revisor mexe na worktree (o que o descarte desfaz) e age pelo agente falso.
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({
+    "busca.ts": "export const busca = gambiarra;\n",
+    "rascunho.txt": "x",
+  });
+  process.env.FALSO_PI_AGENTE = revisor;
+  const planejar = (plano: { atendido: boolean; tickets: string[]; decisao: object }) => {
+    process.env.FALSO_REVISAO = JSON.stringify(plano);
+  };
+  const daRevisao = () => c.estado(5).ag.evidencias.filter((e) => e.ticket === 5);
+  return { ...c, planejar, daRevisao };
+}
+
+test("revisão aprovada: arquivos alterados × desenho e fitness antes do pi, evidências do agente, descarte e encerramento", async () => {
+  const c = await naRevisao();
+  c.planejar({ atendido: true, tickets: [], decisao: { aprovado: true } });
+
+  await executarAutonomo(c.banco, 5, OPCOES);
+
+  const { ag, ticket } = c.estado(5);
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "encerramento");
+  assert.deepEqual(
+    ag.tickets.filter((t) => t.etapa === "encerramento").map((t) => [t.id, t.status, t.titulo]),
+    [[6, "aberto", "Publicar o PR"]],
+  );
+  assert.deepEqual(
+    ag.decisoes.filter((d) => d.gate === "revisao").map((d) => [d.ticket, d.aprovado, d.por]),
+    [[5, true, "agente"]],
+  );
+  assert.deepEqual(
+    c.daRevisao().map((e) => [e.tipo, e.produtor, e.aprovada]),
+    [
+      ["arquivos_alterados", "fabriquinha", undefined],
+      ["matriz_fitness", "fabriquinha", true],
+      ["explicacao_fitness", "agente", undefined],
+      ["comprovacao_criterios", "agente", true],
+    ],
+  );
+  // O diff vai do merge-base com origin/main até a HEAD, cruzado com os padrões do desenho por path.matchesGlob.
+  assert.deepEqual(c.daRevisao()[0]?.dados, {
+    base: git(c.repo, "rev-parse", "main"),
+    head: git(c.worktree, "rev-parse", "HEAD"),
+    arquivos: [
+      { caminho: "busca.ts", status: "M", adicionadas: 1, removidas: 1, previsto: "busca.ts" },
+      { caminho: "cache.ts", status: "A", adicionadas: 1, removidas: 0, previsto: "cache*.ts" },
+      { caminho: "metrica.ts", status: "A", adicionadas: 1, removidas: 0, previsto: null },
+    ],
+    previstosNaoTocados: ["docs/**"],
+  });
+  // O agente recebeu o que foi coletado antes do pi.
+  const prompt = readFileSync(join(c.raiz, "execucoes", "E-5", "prompt.md"), "utf8");
+  assert.match(
+    prompt,
+    /## Arquivos alterados × desenho\n\n- `busca\.ts` \(M, \+1 −1\): previsto por `busca\.ts`\n[\s\S]*- `metrica\.ts` \(A, \+1 −0\): não previsto\n/,
+  );
+  assert.match(prompt, /## Previstos e não tocados\n\n- `docs\/\*\*`\n/);
+  assert.match(prompt, /## Fitness functions\n\n- \*\*complexidade\*\* \(d\): passou\n/);
+  // A revisão não muda código: o que o agente alterou foi descartado depois das evidências guardadas.
+  assert.equal(git(c.worktree, "status", "--porcelain"), "");
+  assert.equal(readFileSync(join(c.worktree, "busca.ts"), "utf8"), "export const busca = cache;\n");
+  const log = readFileSync(join(c.raiz, "execucoes", "E-5", "log"), "utf8");
+  assert.match(log, /descarte removeu: rascunho\.txt/);
+  assert.match(
+    log,
+    /coleta antes do pi: arquivos_alterados\n.*coleta antes do pi: arquivos_alterados registrada\n.*coleta antes do pi: matriz_fitness\n[\s\S]*coleta antes do pi: matriz_fitness registrada\n/,
+  );
+  c.banco.close();
+});
+
+test("arquivos alterados: a renomeação casa também pelo caminho anterior, que deixa de ser previsto e não tocado", async () => {
+  const c = await naRevisao({ "busca.ts": null, "procura.ts": "export const busca = varrer;\n", "cache.ts": "1\n" });
+  c.planejar({ atendido: true, tickets: [], decisao: { aprovado: true } });
+
+  await executarAutonomo(c.banco, 5, OPCOES);
+
+  assert.equal(c.estado(5).ticket?.status, "concluido", c.estado(5).ticket?.erro);
+  const dados = c.daRevisao().find((e) => e.tipo === "arquivos_alterados")?.dados as {
+    arquivos: { caminho: string }[];
+    previstosNaoTocados: string[];
+  };
+  assert.deepEqual(
+    dados.arquivos.find((a) => a.caminho === "procura.ts"),
+    {
+      caminho: "procura.ts",
+      status: "R",
+      adicionadas: 0,
+      removidas: 0,
+      previsto: "busca.ts",
+    },
+  );
+  assert.deepEqual(dados.previstosNaoTocados, ["docs/**"]);
+  c.banco.close();
+});
+
+test("revisão que aprova com fitness reprovada falha e perde a decisão (C8); reaberta, reprova criando ticket", async () => {
+  const c = await naRevisao();
+  process.env.SAIDA_FITNESS = "1";
+  c.planejar({ atendido: true, tickets: [], decisao: { aprovado: true } });
+
+  await executarAutonomo(c.banco, 5, OPCOES);
+
+  let { ag, ticket } = c.estado(5);
+  assert.equal(ticket?.status, "falhou");
+  assert.equal(
+    ticket.erro,
+    "T-5 não pode concluir: a revisão aprovou com fitness function reprovada " +
+      "(o agente de T-5 reprova a revisão e cria um ticket de desenvolvimento para cada exigência)",
+  );
+  assert.equal(c.daRevisao().find((e) => e.tipo === "matriz_fitness")?.aprovada, false);
+  assert.deepEqual(
+    ag.decisoes.filter((d) => d.gate === "revisao"),
+    [],
+    "C8 removeu a decisão da revisão que falhou",
+  );
+  assert.equal(git(c.worktree, "status", "--porcelain"), "", "o descarte rodou antes do C7");
+
+  c.reabrir(5);
+  c.planejar({
+    atendido: true,
+    tickets: ["Reduzir a complexidade da busca"],
+    decisao: { aprovado: false, motivo: "a fitness complexidade reprovou" },
+  });
+  await executarAutonomo(c.banco, 5, OPCOES);
+
+  ({ ag, ticket } = c.estado(5));
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "desenvolvimento");
+  assert.deepEqual(
+    ag.tickets.filter((t) => t.id > 5).map((t) => [t.id, t.etapa, t.status, t.origem, t.origemTicket, t.titulo]),
+    [[6, "desenvolvimento", "aberto", "agente", 5, "Reduzir a complexidade da busca"]],
+  );
+  assert.deepEqual(
+    ag.decisoes.filter((d) => d.gate === "revisao").map((d) => [d.ticket, d.aprovado, d.motivo]),
+    [[5, false, "a fitness complexidade reprovou"]],
+  );
+  c.banco.close();
+});
+
+test("falha antes do pi da revisão: execução e ticket falham, sem execução órfã nem pi; reaberta, conclui", async () => {
+  const c = await naRevisao();
+  c.planejar({ atendido: true, tickets: [], decisao: { aprovado: true } });
+  c.banco.exec(
+    `CREATE TRIGGER falha BEFORE INSERT ON evidencia WHEN NEW.tipo = 'arquivos_alterados'
+     BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;`,
+  );
+
+  await executarAutonomo(c.banco, 5, OPCOES);
+
+  const { ag, ticket } = c.estado(5);
+  assert.equal(ticket?.status, "falhou");
+  assert.equal(ticket.erro, "disco cheio");
+  assert.deepEqual(
+    ag.execucoes.filter((e) => e.ticket === 5).map((e) => [e.resultado, e.erro]),
+    [["falha", "disco cheio"]],
+  );
+  assert.ok(!existsSync(join(c.raiz, "execucoes", "E-5", "prompt.md")), "o pi não foi lançado");
+  assert.deepEqual(c.daRevisao(), []);
+
+  c.banco.exec("DROP TRIGGER falha");
+  c.reabrir(5);
+  await executarAutonomo(c.banco, 5, OPCOES);
+  assert.equal(c.estado(5).ticket?.status, "concluido", c.estado(5).ticket?.erro);
   c.banco.close();
 });

@@ -200,7 +200,8 @@ export type NomeComando =
   | "adicionarTicketDesenvolvimento"
   | "editarTicket"
   | "removerTicket"
-  | "decidirDesenho";
+  | "decidirDesenho"
+  | "registrarDecisaoRevisao";
 
 export const rotuloIssue = (ag: Agregado): string => `I-${String(ag.issue.id)}`;
 

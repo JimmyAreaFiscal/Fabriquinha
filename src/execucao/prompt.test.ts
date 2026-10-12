@@ -196,3 +196,45 @@ test("desenvolvimento: o desenho aprovado (o mais recente), arquivos previstos, 
     assert.match(vazio, new RegExp(`## ${titulo}\\n\\n\\(vazio\\)\\n`));
   }
 });
+
+test("revisão: o contexto do desenvolvimento, os arquivos alterados × desenho e a matriz de fitness coletados", () => {
+  const rodado = { comando: "c", duracaoMs: 1, log: "x.log" };
+  const ag = agregado([
+    evidencia(1, "arquivos_alterados", {
+      base: "a".repeat(40),
+      head: "b".repeat(40),
+      arquivos: [
+        { caminho: "busca.ts", status: "M", adicionadas: 1, removidas: 1, previsto: "busca.ts" },
+        { caminho: "logo.png", status: "A", adicionadas: null, removidas: null, previsto: null },
+      ],
+      previstosNaoTocados: ["docs/**"],
+    }),
+    evidencia(2, "matriz_fitness", {
+      linhas: [
+        { nome: "complexidade", descricao: "ciclomática", codigoSaida: 0, estourou: false, ...rodado },
+        { nome: "camadas", descricao: "domínio sem I/O", codigoSaida: 1, estourou: false, ...rodado },
+        { nome: "mutacao", descricao: "Stryker", codigoSaida: null, estourou: true, ...rodado },
+      ],
+    }),
+  ]);
+  const revisao: Ticket = { ...desenho, id: 5, etapa: "revisao", titulo: "Revisar o desenvolvimento" };
+  const prompt = montarPrompt({ ...comum, ag, ticket: revisao, instrucao: undefined, modo: "autonomo" });
+  assert.ok(
+    prompt.includes(
+      [
+        "## Tickets de desenvolvimento já concluídos\n\n(vazio)\n",
+        "## Arquivos alterados × desenho\n\n- `busca.ts` (M, +1 −1): previsto por `busca.ts`\n" +
+          "- `logo.png` (A, binário): não previsto\n",
+        "## Previstos e não tocados\n\n- `docs/**`\n",
+        "## Fitness functions\n\n- **complexidade** (ciclomática): passou\n" +
+          "- **camadas** (domínio sem I/O): reprovou (código 1)\n- **mutacao** (Stryker): estourou o tempo\n",
+        "## Modo de trabalhar: revisão",
+      ].join("\n"),
+    ),
+    prompt,
+  );
+  const vazio = montarPrompt({ ...comum, ag: agregado([]), ticket: revisao, instrucao: undefined, modo: "autonomo" });
+  for (const titulo of ["Arquivos alterados × desenho", "Previstos e não tocados", "Fitness functions"]) {
+    assert.match(vazio, new RegExp(`## ${titulo}\\n\\n\\(vazio\\)\\n`));
+  }
+});

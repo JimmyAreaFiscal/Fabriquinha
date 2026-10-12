@@ -1,12 +1,14 @@
-// Coleta por etapa depois do pi (F3 §7). Só roda quando o pi terminou bem; se ele falhou, o ticket falha direto.
+// Coleta por etapa antes e depois do pi (F3 §7). O depois só roda quando o pi terminou bem; se ele falhou, o ticket
+// falha direto.
 import type { DatabaseSync } from "node:sqlite";
 import type { Agregado, Ticket, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { Etapa, Id } from "../dominio/primitivos.ts";
 import { gravarCommit } from "../persistencia/commits.ts";
+import { anotar } from "../persistencia/execucoes.ts";
 import { commitarTicket } from "../repositorio/commit.ts";
 import { descartarAlteracoes } from "../repositorio/worktree.ts";
-import { coletarFitness, coletarTestes } from "./coletores.ts";
+import { coletarArquivosAlterados, coletarFitness, coletarTestes } from "./coletores.ts";
 import { coletarSonar } from "./sonar.ts";
 
 /** O que a coleta grava na mesma transação do C7 do ticket (F5 §4, passo 4). */
@@ -52,14 +54,43 @@ const desenvolver: Coleta = async (banco, ticket) => {
 };
 
 /**
- * Registro e desenho não mudam código: o descarte (F5 §3.3) vem depois de as evidências estarem guardadas.
- * ponytail: revisão, encerramento e sessão entram aqui com os tickets 16, 20 e 21.
+ * Registro, desenho e revisão não mudam código: o descarte (F5 §3.3) vem depois de as evidências estarem guardadas.
+ * ponytail: encerramento e sessão entram aqui com os tickets 20 e 21.
  */
 const DEPOIS_DO_PI: Partial<Record<Etapa, Coleta>> = {
   registro: descartar,
   desenho: descartar,
   desenvolvimento: desenvolver,
+  revisao: descartar,
 };
+
+/**
+ * F3 §7, antes do pi, em ordem: o que a revisão lê e explica, coletado da worktree como o desenvolvimento a deixou.
+ * Na revisão, a matriz de fitness não barra a execução: reprovada, ela obriga o agente a reprovar a revisão (F3 §8).
+ */
+const ANTES_DO_PI: Partial<
+  Record<Etapa, readonly [TipoEvidencia, (banco: DatabaseSync, ticket: Id) => Promise<Agregado>][]>
+> = {
+  revisao: [
+    ["arquivos_alterados", coletarArquivosAlterados],
+    ["matriz_fitness", coletarFitness],
+  ],
+};
+
+/**
+ * F3 §9: o que a Fabriquinha coleta antes de lançar o pi do ticket, já em execução, anotando cada coleta no `log` da
+ * execução. Devolve o agregado com o que coletou, para o prompt levar (F4 §6.3); etapa sem coleta devolve `ag` como
+ * veio. Uma falha lança, e o F4 falha o ticket como em qualquer passo da execução.
+ */
+export async function antesDoPi(banco: DatabaseSync, ag: Agregado, ticket: Ticket, log: string): Promise<Agregado> {
+  let atual = ag;
+  for (const [tipo, coletar] of ANTES_DO_PI[ticket.etapa] ?? []) {
+    anotar(log, `coleta antes do pi: ${tipo}`);
+    atual = await coletar(banco, ticket.id);
+    anotar(log, `coleta antes do pi: ${tipo} registrada`);
+  }
+  return atual;
+}
 
 /**
  * F3 §9: o que a Fabriquinha faz na worktree e no banco ao fim do pi do ticket; etapa sem coleta não faz nada.

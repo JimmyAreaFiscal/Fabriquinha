@@ -4,11 +4,11 @@
 
 **Blocked by:** 15
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `diffDaIssue` de `merge-base(origin/<branchBase>, HEAD)` até `HEAD`; `previsto` por `path.matchesGlob` contra `arquivosPrevistos` do último desenho concluído; `previstosNaoTocados`.
-- [ ] Schemas de `explicacao_fitness` e `comprovacao_criterios` com as regras cruzadas do F3 §4.4.
-- [ ] C14 grava ou substitui a decisão de revisão.
-- [ ] C7 da revisão com as regras do F1 §5.1 e do F3 §8.
-- [ ] Descarte das alterações após o pi.
-- [ ] Teste de ponta a ponta com pi falso: revisão aprovada e revisão reprovada que cria ticket.
+- [x] `diffDaIssue` de `merge-base(origin/<branchBase>, HEAD)` até `HEAD`; `previsto` por `path.matchesGlob` contra `arquivosPrevistos` do último desenho concluído; `previstosNaoTocados`.
+- [x] Schemas de `explicacao_fitness` e `comprovacao_criterios` com as regras cruzadas do F3 §4.4.
+- [x] C14 grava ou substitui a decisão de revisão; C8 passa a remover também a decisão de revisão do ticket que falhou (pendente desde o ticket 04).
+- [x] C7 da revisão com as regras do F1 §5.1 e do F3 §8.
+- [x] Descarte das alterações após o pi.
+- [x] Teste de ponta a ponta com pi falso: revisão aprovada e revisão reprovada que cria ticket.

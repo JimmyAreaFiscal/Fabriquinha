@@ -99,15 +99,17 @@ test("desenho_solucao: resumo, arquivos previstos com caminho relativo (glob) e 
     "arquivosPrevistos.0.acao",
     "arquivosPrevistos.0.motivo",
   ]);
-  for (const caminho of ["/src/a.ts", "../fora.ts", "src/../../x", "a/..", ""]) {
+  for (const caminho of ["/src/a.ts", "../fora.ts", "src/../../x", "a/..", "", "./src/a.ts", "src/./a.ts", "docs/"]) {
     assert.deepEqual(recusados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [{ ...PREVISTO, caminho }] }), [
       "arquivosPrevistos.0.caminho",
     ]);
   }
-  for (const caminho of ["src/a.ts", "./src/a.ts", "src/**/x..y.ts", "docs/*.md"]) {
+  for (const caminho of ["src/a.ts", ".github/**", "src/**/x..y.ts", "docs/*.md", ".env"]) {
     assert.deepEqual(recusados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [{ ...PREVISTO, caminho }] }), []);
   }
   assert.deepEqual(schemaDe("desenho_solucao").arquivos, HTML_UNICO);
+  // A regra dos dotfiles do path.matchesGlob, que a descrição do campo ensina ao agente.
+  assert.match(JSON.stringify(jsonSchemaDe("desenho_solucao").dados), /use o caminho explícito ou \.github\/\*\*/);
 });
 
 test("prototipo: descrição e como executar opcional; qualquer classe, com pelo menos um vídeo ou print", () => {
@@ -265,4 +267,51 @@ test("jsonSchemaDe dos tipos do desenho: o que o agente precisa saber, incluindo
     "novosAcoplamentos",
     "riscos",
   ]);
+});
+
+const SHA = "a".repeat(40);
+const ALTERADO = { caminho: "src/busca.ts", status: "M", adicionadas: 3, removidas: 1, previsto: "src/**/*.ts" };
+
+test("arquivos_alterados: base e head, cada arquivo com status, linhas e o padrão previsto que casou; nenhum anexo", () => {
+  const dados = { base: SHA, head: "b".repeat(64), arquivos: [ALTERADO], previstosNaoTocados: ["docs/**"] };
+  assert.deepEqual(recusados("arquivos_alterados", dados), []);
+  // Arquivo binário não tem contagem de linhas (F5 §7); arquivo fora do desenho tem previsto null.
+  const binario = { ...ALTERADO, caminho: "logo.png", status: "A", adicionadas: null, removidas: null, previsto: null };
+  assert.deepEqual(recusados("arquivos_alterados", { ...dados, arquivos: [ALTERADO, binario] }), []);
+  assert.deepEqual(
+    recusados("arquivos_alterados", {
+      base: "abc",
+      head: SHA,
+      arquivos: [{ ...ALTERADO, status: "C", adicionadas: -1 }],
+    }),
+    ["base", "arquivos.0.status", "arquivos.0.adicionadas", "previstosNaoTocados"],
+  );
+  assert.deepEqual(schemaDe("arquivos_alterados").arquivos.max, 0);
+});
+
+test("explicacao_fitness: uma explicação de até 1.000 caracteres por fitness function, pelo nome; nenhum anexo", () => {
+  const explicacao = { nome: "complexidade", explicacao: "a busca ficou O(1)" };
+  assert.deepEqual(recusados("explicacao_fitness", { explicacoes: [explicacao] }), []);
+  assert.deepEqual(
+    recusados("explicacao_fitness", {
+      explicacoes: [
+        { nome: "Complexidade", explicacao: " " },
+        { ...explicacao, explicacao: "a".repeat(1001) },
+      ],
+    }),
+    ["explicacoes.0.nome", "explicacoes.0.explicacao", "explicacoes.1.explicacao"],
+  );
+  assert.deepEqual(schemaDe("explicacao_fitness").arquivos.max, 0);
+});
+
+test("comprovacao_criterios: cada critério atendido ou não, como foi verificado e os anexos citados; vídeo ou print", () => {
+  const criterio = { id: "CA-1", atendido: true, comoVerificado: "busquei mil itens", arquivos: ["busca.webm"] };
+  assert.deepEqual(recusados("comprovacao_criterios", { criterios: [criterio] }), []);
+  assert.deepEqual(
+    recusados("comprovacao_criterios", {
+      criterios: [{ id: "1", atendido: "sim", comoVerificado: "", arquivos: [] }],
+    }),
+    ["criterios.0.id", "criterios.0.atendido", "criterios.0.comoVerificado", "criterios.0.arquivos"],
+  );
+  assert.deepEqual(schemaDe("comprovacao_criterios").arquivos, { classes: ["video", "imagem"], min: 1 });
 });

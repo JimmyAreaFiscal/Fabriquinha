@@ -168,8 +168,8 @@ export interface Rodada {
    * Interativa: a ociosidade depois da qual o processo para (F4 §6.6).
    */
   limiteMin: number;
-  /** O primeiro prompt da execução, montado com a worktree pronta (F4 §6.3). */
-  prompt(c: { projeto: Projeto; worktree: string; saida: string }): string;
+  /** O primeiro prompt da execução, montado com a worktree pronta (F4 §6.3), depois da coleta antes do pi (F3 §7). */
+  prompt(c: { projeto: Projeto; worktree: string; saida: string }): string | Promise<string>;
 }
 
 /**
@@ -198,8 +198,7 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       "cadastre-o",
     );
     worktree = await garantirWorktree(raiz, projeto, r.ag.issue, log);
-    // ponytail: antesDoPi (F3 §7) entra aqui com a revisão (ticket 16); registro e desenho não coletam antes do pi.
-    const prompt = r.prompt({ projeto, worktree, saida: join(dir, "saida") });
+    const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
     writeFileSync(join(dir, "prompt.md"), prompt);
     // O `pi --version` conta no limite: um pi travado não prende a vaga do D8 nem a sessão.
     const versao = await executar(binarioPi(), ["--version"], { limiteMs: r.limiteMin * 60_000 });

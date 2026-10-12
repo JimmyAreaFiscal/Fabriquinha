@@ -1,8 +1,8 @@
 // Conteúdo de cada tipo de evidência (F3 §3.1, §4): o schema de `dados` e as regras dos arquivos.
 import { z } from "zod";
-import type { TipoEvidencia } from "../dominio/agregado.ts";
+import type { Agregado, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
+import { type Id, Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
 
 /** F3 §3.1: a classe vem dos bytes iniciais, nunca da extensão. */
 export const Classe = z.enum(["video", "imagem", "html", "texto"]);
@@ -35,10 +35,33 @@ const Arquivos = ({ classes = Classe.options, min = 0, max, temClasse }: Partial
   ...(temClasse && { temClasse }),
 });
 
-export interface SchemaEvidencia {
-  readonly dados: z.ZodType<Record<string, unknown>>;
-  readonly arquivos: RegraArquivos;
+/** O que as regras cruzadas consultam: o agregado antes da submissão, o ticket e os nomes dos anexos. */
+export interface Cruzamento {
+  readonly ag: Agregado;
+  readonly ticket: Id;
+  readonly anexos: readonly string[];
 }
+
+export interface SchemaEvidencia<Dados extends Record<string, unknown> = Record<string, unknown>> {
+  readonly dados: z.ZodType<Dados>;
+  readonly arquivos: RegraArquivos;
+  /** F3 §5, passo 5: as regras cruzadas do tipo; lança ErroDeRegra com o que corrigir. */
+  cruzar?(dados: Dados, c: Cruzamento): void;
+  /** F3 §2: `aprovada` calculada do conteúdo, nos tipos com resultado binário. */
+  aprovada?(dados: Dados): boolean;
+}
+
+/** Infere o tipo de `dados` nas regras do schema, que o registro guarda sem ele. */
+const tipado = <Dados extends Record<string, unknown>>(schema: SchemaEvidencia<Dados>): SchemaEvidencia => schema;
+
+/** Os nomes de `de`, em ordem, para comparar com os esperados de uma regra cruzada. */
+const ordenados = (de: readonly string[]): string => `[${de.toSorted((a, b) => a.localeCompare(b)).join(", ")}]`;
+
+/** Os valores de `campo` de cada item de `lista` nos `dados` das evidências `tipo` que passam no filtro. */
+const daEvidencia = (ag: Agregado, tipo: TipoEvidencia, lista: string, campo: string, ticket?: Id): string[] =>
+  ag.evidencias
+    .filter((e) => e.tipo === tipo && (ticket === undefined || e.ticket === ticket))
+    .flatMap((e) => (e.dados[lista] as Record<string, string>[]).map((item) => String(item[campo])));
 
 const Criterio = z.object({
   id: z.string().regex(/^CA-\d+$/),
@@ -50,13 +73,23 @@ const Criterio = z.object({
 /** Texto livre de até 2.000 caracteres: o mesmo formato do `Motivo` do F1, para campos que não são motivo. */
 const Texto = Motivo;
 
-/** Caminho na worktree: aceita glob; sem `..` e sem caminho absoluto. */
+/**
+ * Caminho na worktree, casado com os arquivos alterados por `path.matchesGlob` (F3 §4.4): aceita glob; sem `.` nem
+ * `..` como segmento, sem caminho absoluto e sem `/` no fim, formas que nunca casam com um caminho do git.
+ */
 const CaminhoRelativo = z
   .string()
   .trim()
   .min(1)
   .refine((c) => !c.startsWith("/"), "caminho absoluto; use o caminho a partir da raiz do repositório")
-  .refine((c) => !c.split("/").includes(".."), "o caminho não pode ter ..");
+  .refine((c) => !c.split("/").includes(".."), "o caminho não pode ter ..")
+  .refine((c) => !c.split("/").includes("."), "o caminho não pode ter ./; escreva-o a partir da raiz, como src/a.ts")
+  .refine((c) => !c.endsWith("/"), "o caminho não pode terminar em /; para uma pasta inteira use pasta/**")
+  .meta({
+    description:
+      "Caminho a partir da raiz do repositório, com glob (*, **). Curinga não alcança segmento que começa com " +
+      "ponto: **/*.yml não casa com .github/ci.yml; use o caminho explícito ou .github/**.",
+  });
 
 /** Nome de variável do Big-O, o mesmo na declaração e no uso; `log` é reservado. */
 const SIMBOLO = /^[a-z][a-z0-9_]{0,15}$/;
@@ -205,6 +238,26 @@ const ComandoRodado = z.object({
 });
 const LOGS = Arquivos({ classes: ["texto"], min: 1 });
 
+/** SHA-1 ou SHA-256 de um commit. */
+const Sha = z.string().regex(/^([0-9a-f]{40}|[0-9a-f]{64})$/);
+/** Linhas de um arquivo no diff; `null` em arquivo binário, como no F5 §7. */
+const Linhas = z.number().int().nonnegative().nullable();
+
+const ExplicacaoFitness = z.object({
+  explicacoes: z.array(z.object({ nome: Slug, explicacao: z.string().trim().min(1).max(1000) })),
+});
+
+const ComprovacaoCriterios = z.object({
+  criterios: z.array(
+    z.object({
+      id: z.string().regex(/^CA-\d+$/),
+      atendido: z.boolean(),
+      comoVerificado: Texto,
+      arquivos: z.array(z.string()).min(1).meta({ description: "nomes de arquivos anexados nesta submissão" }),
+    }),
+  ),
+});
+
 /** Os tipos já implementados; os demais entram com as etapas que os usam. */
 const SCHEMAS: Partial<Record<TipoEvidencia, SchemaEvidencia>> = {
   // "vídeo / código do comportamento atual e/ou do problema"
@@ -288,6 +341,60 @@ const SCHEMAS: Partial<Record<TipoEvidencia, SchemaEvidencia>> = {
     }),
     arquivos: Arquivos({ max: 0 }),
   },
+  // Produzida pela Fabriquinha antes do pi da revisão (F3 §4.4, §7): o diff da issue × o desenho aprovado.
+  arquivos_alterados: {
+    dados: z.object({
+      base: Sha,
+      head: Sha,
+      arquivos: z.array(
+        z.object({
+          caminho: z.string(),
+          status: z.enum(["A", "M", "D", "R"]),
+          adicionadas: Linhas,
+          removidas: Linhas,
+          previsto: z.string().nullable().meta({ description: "o padrão de arquivosPrevistos que casou, ou null" }),
+        }),
+      ),
+      previstosNaoTocados: z.array(z.string()),
+    }),
+    arquivos: Arquivos({ max: 0 }),
+  },
+  explicacao_fitness: tipado({
+    dados: ExplicacaoFitness,
+    arquivos: Arquivos({ max: 0 }),
+    cruzar({ explicacoes }, { ag, ticket }) {
+      const linhas = daEvidencia(ag, "matriz_fitness", "linhas", "nome", ticket);
+      const nomes = explicacoes.map((e) => e.nome);
+      if (ordenados(nomes) !== ordenados(linhas)) {
+        throw new ErroDeRegra(
+          `explicacao_fitness explica ${ordenados(nomes)}, e a matriz_fitness de T-${String(ticket)} tem as linhas ${ordenados(linhas)}`,
+          "submeta exatamente uma explicação por linha da matriz",
+        );
+      }
+    },
+  }),
+  comprovacao_criterios: tipado({
+    dados: ComprovacaoCriterios,
+    arquivos: Arquivos({ classes: ["video", "imagem"], min: 1 }),
+    cruzar({ criterios }, { ag, anexos }) {
+      const esperados = daEvidencia(ag, "criterios_aceite", "criterios", "id");
+      const ids = criterios.map((c) => c.id);
+      if (ordenados(ids) !== ordenados(esperados)) {
+        throw new ErroDeRegra(
+          `comprovacao_criterios comprova ${ordenados(ids)}, e os critérios de aceite do registro são ${ordenados(esperados)}`,
+          "submeta exatamente uma comprovação por critério de aceite",
+        );
+      }
+      const semAnexo = [...new Set(criterios.flatMap((c) => c.arquivos))].filter((nome) => !anexos.includes(nome));
+      if (semAnexo.length > 0) {
+        throw new ErroDeRegra(
+          `comprovacao_criterios cita ${semAnexo.join(", ")}, que não está entre os anexos`,
+          "anexe cada arquivo citado com --arquivo <caminho>, com o mesmo nome",
+        );
+      }
+    },
+    aprovada: ({ criterios }) => criterios.every((c) => c.atendido),
+  }),
 };
 
 export function schemaDe(tipo: TipoEvidencia): SchemaEvidencia {

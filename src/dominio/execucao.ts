@@ -169,8 +169,8 @@ export function terminarExecucao(ag: Agregado, entrada: unknown, ator: Ator, ctx
 const EntradaFalha = z.object({ ticket: Id, erro: Motivo });
 
 /**
- * C8: ticket `falhou` e some o que a execução propôs: os tickets de desenvolvimento ainda abertos que ele criou.
- * ponytail: a decisão de revisão dele também sai aqui, quando a decisão entrar no agregado (C14).
+ * C8: ticket `falhou` e some o que a execução propôs: os tickets de desenvolvimento ainda abertos que ele criou e a
+ * decisão de revisão dele (C14).
  */
 export function falharTicket(ag: Agregado, entrada: unknown, ator: Ator): Agregado {
   exigirFabriquinha(ator, "falhar um ticket");
@@ -193,6 +193,7 @@ export function falharTicket(ag: Agregado, entrada: unknown, ator: Ator): Agrega
     t.origemTicket === ticket.id && t.etapa === "desenvolvimento" && t.status === "aberto";
   return {
     ...ag,
+    decisoes: ag.decisoes.filter((d) => d.gate !== "revisao" || d.ticket !== ticket.id),
     tickets: ag.tickets
       .filter((t) => !criadoPorEle(t))
       .map((t) => (t.id === ticket.id ? { ...t, status: "falhou" as const, erro } : t)),

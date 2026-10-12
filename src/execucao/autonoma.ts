@@ -6,7 +6,7 @@ import { concluirTicket } from "../dominio/conclusao.ts";
 import { existe, mensagem } from "../dominio/erros.ts";
 import { falharTicket, terminarExecucao, ticketDe } from "../dominio/execucao.ts";
 import { type Id, motivo } from "../dominio/primitivos.ts";
-import { depoisDoPi } from "../evidencias/coleta.ts";
+import { antesDoPi, depoisDoPi } from "../evidencias/coleta.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { anotar, logDaExecucao } from "../persistencia/execucoes.ts";
@@ -49,7 +49,9 @@ export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: 
     execucao,
     pacote: opcoes.pacote,
     limiteMin: opcoes.timeoutMin,
-    prompt: (c) => montarPrompt({ ag, ticket: t, instrucao, ...c, modo: "autonomo" }),
+    // F3 §7: a coleta antes do pi entra no prompt; a falha dela vira C6 + C8 como qualquer passo da execução.
+    prompt: async (c) =>
+      montarPrompt({ ag: await antesDoPi(banco, ag, t, log), ticket: t, instrucao, ...c, modo: "autonomo" }),
   });
 
   if (falha !== undefined) {

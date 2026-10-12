@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import type { Agregado, Ator, Contexto, Evidencia, Issue, Ticket } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { decidirDesenho, decidirRegistro } from "./gates.ts";
+import { decidirDesenho, decidirRegistro, registrarDecisaoRevisao } from "./gates.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const ANTES = "2026-10-11T11:00:00.000Z";
@@ -266,5 +266,90 @@ test("C15 é só do Auditor, no gate de desenho; aprovar exige ticket de desenvo
   regra(
     () => desenho({ ...ag, tickets: [] }, { aprovado: true }),
     "a I-1 não tem ticket de desenho concluído (conclua o desenho antes)",
+  );
+});
+
+/** I-1 em `revisao`: a revisão T-40 em execução pela E-7, autônoma, com uma decisão antiga da revisão T-36. */
+const revisando = (): Agregado => ({
+  ...pronto({ fase: "revisao" }),
+  tickets: [
+    doGate(34, "registro", concluido),
+    doGate(36, "revisao", concluido),
+    doGate(39, "desenho", { status: "em_execucao" }),
+    doGate(40, "revisao", { status: "em_execucao" }),
+  ],
+  execucoes: [
+    {
+      id: 7,
+      ticket: 40,
+      modo: "autonomo",
+      sessaoPi: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+      resultado: "em_andamento",
+      iniciadaEm: ANTES,
+    },
+  ],
+  decisoes: [{ id: 3, issue: 1, ticket: 36, gate: "revisao", aprovado: true, por: "agente", em: ANTES }],
+});
+const revisor: Ator = { tipo: "agente", execucao: 7, ticket: 40 };
+
+test("C14 grava a decisão do agente revisor e, na mesma execução, a substitui", () => {
+  const ag = revisando();
+  const ctx = contexto();
+  const aprovada = registrarDecisaoRevisao(ag, { ticket: 40, aprovado: true }, revisor, ctx);
+  assert.deepEqual(aprovada, {
+    ...ag,
+    decisoes: [
+      ...ag.decisoes,
+      { id: 41, issue: 1, ticket: 40, gate: "revisao", aprovado: true, por: "agente", em: AGORA },
+    ],
+  });
+  const reprovada = registrarDecisaoRevisao(
+    aprovada,
+    { ticket: 40, aprovado: false, motivo: "falta o índice" },
+    revisor,
+    ctx,
+  );
+  assert.deepEqual(reprovada.decisoes, [
+    ...ag.decisoes,
+    {
+      id: 42,
+      issue: 1,
+      ticket: 40,
+      gate: "revisao",
+      aprovado: false,
+      motivo: "falta o índice",
+      por: "agente",
+      em: AGORA,
+    },
+  ]);
+  assert.throws(() => registrarDecisaoRevisao(ag, { ticket: 40, aprovado: false }, revisor, ctx), ZodError);
+});
+
+test("C14 é só do agente da própria revisão, em execução", () => {
+  const ag = revisando();
+  const decidirRevisao = (ator: Ator, ticket = 40, agregado = ag) =>
+    registrarDecisaoRevisao(agregado, { ticket, aprovado: true }, ator, contexto());
+  const escopo = (trabalho: () => unknown, mensagem: string) => {
+    assert.throws(trabalho, (e) => e instanceof ErroDeEscopo && e.message === mensagem);
+  };
+  const soOAgente =
+    "só o agente de T-40 pode registrar a decisão de revisão dele (cada revisão é decidida pelo próprio agente revisor)";
+  escopo(() => decidirRevisao(auditor), soOAgente);
+  escopo(() => decidirRevisao({ tipo: "fabriquinha" }), soOAgente);
+  escopo(() => decidirRevisao({ tipo: "agente", execucao: 7, ticket: 39 }), soOAgente);
+  const terminou = {
+    ...ag,
+    execucoes: ag.execucoes.map((e) => ({ ...e, resultado: "sucesso" as const, terminadaEm: AGORA })),
+  };
+  escopo(() => decidirRevisao(revisor, 40, terminou), "a execução E-7 já terminou (peça ao Auditor uma nova execução)");
+  const doDesenho = { ...ag, execucoes: ag.execucoes.map((e) => ({ ...e, ticket: 39 })) };
+  regra(
+    () => decidirRevisao({ tipo: "agente", execucao: 7, ticket: 39 }, 39, doDesenho),
+    "T-39 é de desenho e está em_execucao, não é uma revisão em execução (só a revisão registra a decisão de revisão)",
+  );
+  const concluida = { ...ag, tickets: ag.tickets.map((t) => (t.id === 40 ? { ...t, ...concluido } : t)) };
+  regra(
+    () => decidirRevisao(revisor, 40, concluida),
+    "T-40 é de revisao e está concluido, não é uma revisão em execução (só a revisão registra a decisão de revisão)",
   );
 });

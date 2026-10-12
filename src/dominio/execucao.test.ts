@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import type { Agregado, Ator, Contexto, Execucao, ModoExecucao, Ticket } from "./agregado.ts";
+import type { Agregado, Ator, Contexto, Decisao, Execucao, ModoExecucao, Ticket } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
   definirModeloTicket,
@@ -295,11 +295,11 @@ test("C6 grava resultado e término sem mudar o ticket", () => {
   assert.throws(() => terminar({ execucao: 6, resultado: "em_andamento" }), ZodError);
 });
 
-test("C8 falha o ticket e remove os tickets de desenvolvimento abertos que ele criou", () => {
+test("C8 falha o ticket e remove os tickets de desenvolvimento abertos que ele criou e a decisão de revisão dele", () => {
   const filho = (id: number, status: Ticket["status"], troca: Partial<Ticket> = {}) =>
     ticket(id, "desenvolvimento", status, { origem: "agente", origemTicket: 1, ...troca });
   const revisao = ticket(1, "revisao", "em_execucao");
-  const ag = agregado(
+  let ag = agregado(
     "revisao",
     [
       revisao,
@@ -311,9 +311,20 @@ test("C8 falha o ticket e remove os tickets de desenvolvimento abertos que ele c
     ],
     [terminada(7, 1)],
   );
+  const decisao = (id: number, de: number, gate: Decisao["gate"]): Decisao => ({
+    id,
+    issue: 1,
+    ticket: de,
+    gate,
+    aprovado: true,
+    por: gate === "revisao" ? "agente" : "auditor",
+    em: ANTES,
+  });
+  ag = { ...ag, decisoes: [decisao(1, 9, "desenho"), decisao(2, 1, "revisao"), decisao(3, 8, "revisao")] };
   const falhou = falharTicket(ag, { ticket: 1, erro: "tempo limite de 120 min" }, fabriquinha);
   assert.deepEqual(falhou, {
     ...ag,
+    decisoes: [decisao(1, 9, "desenho"), decisao(3, 8, "revisao")],
     tickets: [
       { ...revisao, status: "falhou", erro: "tempo limite de 120 min" },
       ...ag.tickets.filter((t) => [3, 4, 5].includes(t.id)),

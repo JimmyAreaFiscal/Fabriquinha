@@ -125,8 +125,9 @@ function abrir(caminho: string, raizes: readonly string[], saida: string): numbe
 }
 
 /**
- * Quantidade, nomes, origem, classe, limite e `temClasse` (F3 §3, §5 passos 4 a 6). A classe é conferida na cópia
- * privada que `guardarArquivos` faz, e não no arquivo do agente: o que fica guardado é o que foi validado.
+ * F3 §5, passos 4 a 6: quantidade, nomes, origem, classe e limite de cada arquivo (4); `temClasse` e as regras
+ * cruzadas do tipo, em `cruzar` (5); e só então a guarda (6). A classe é conferida na cópia privada que
+ * `guardarArquivos` faz, e não no arquivo do agente: o que fica guardado é o que foi validado.
  */
 function guardarAnexos(
   banco: DatabaseSync,
@@ -134,6 +135,7 @@ function guardarAnexos(
   tipo: TipoEvidencia,
   regra: RegraArquivos,
   origens: { worktree: string; saida: string },
+  cruzar: () => void,
 ): ArquivoEvidencia[] {
   if (caminhos.length < regra.min) {
     throw new ErroDeRegra(
@@ -174,15 +176,18 @@ function guardarAnexos(
             "anexe um arquivo de uma dessas classes",
           );
         }
-        // 5: a regra do conjunto, depois de classificar o último e antes de guardar qualquer um.
         classes.push(classe);
-        const exigida = regra.temClasse;
-        if (exigida && classes.length === abertos.length && !classes.some((c) => exigida.classes.includes(c))) {
-          throw new ErroDeRegra(exigida.mensagem, `anexe também um arquivo ${exigida.classes.join(" ou ")}`);
-        }
         return { nome, mime };
       },
       MAIOR,
+      // 5: as regras do conjunto, depois de classificar o último e antes de guardar qualquer um.
+      () => {
+        const exigida = regra.temClasse;
+        if (exigida && !classes.some((c) => exigida.classes.includes(c))) {
+          throw new ErroDeRegra(exigida.mensagem, `anexe também um arquivo ${exigida.classes.join(" ou ")}`);
+        }
+        cruzar();
+      },
     );
   } finally {
     for (const { fd } of abertos) closeSync(fd);
@@ -219,17 +224,30 @@ export function submeter(
   const schema = schemaDe(tipoValido);
   const validos = z.object({ dados: schema.dados }).parse({ dados }).dados;
 
-  // 4, 5 e 6: fora da transação (F2 §5.2); se a 7 falhar, sobra só arquivo sem referência. As regras cruzadas de
-  // `dados` (5) já vieram no schema do passo 3. As origens partem da raiz real da Fabriquinha e nada abaixo dela é
-  // resolvido: trocar a worktree ou a saída por um link não as leva para outro lugar.
+  // 4, 5 e 6: fora da transação (F2 §5.2); se a 7 falhar, sobra só arquivo sem referência. As origens partem da raiz
+  // real da Fabriquinha e nada abaixo dela é resolvido: trocar a worktree ou a saída por um link não as leva para
+  // outro lugar. As regras cruzadas leem o agregado lido no passo 1: os fatos que elas consultam (a matriz coletada
+  // antes do pi, os critérios do registro) não mudam durante a execução.
   const raiz = realpathSync(raizDo(banco));
-  const arquivos = guardarAnexos(banco, caminhos, tipoValido, schema.arquivos, {
-    worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
-    saida: join(dirDaExecucao(raiz, ator.execucao), "saida"),
-  });
+  const arquivos = guardarAnexos(
+    banco,
+    caminhos,
+    tipoValido,
+    schema.arquivos,
+    {
+      worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
+      saida: join(dirDaExecucao(raiz, ator.execucao), "saida"),
+    },
+    () => schema.cruzar?.(validos, { ag: antes, ticket: ator.ticket, anexos: caminhos.map((c) => basename(c)) }),
+  );
 
   // 7
   return comIssue(banco, antes.issue.id, "registrarEvidencia", ator, (ag, ctx) =>
-    registrarEvidencia(ag, { ticket: ator.ticket, tipo: tipoValido, dados: validos, arquivos }, ator, ctx),
+    registrarEvidencia(
+      ag,
+      { ticket: ator.ticket, tipo: tipoValido, aprovada: schema.aprovada?.(validos), dados: validos, arquivos },
+      ator,
+      ctx,
+    ),
   );
 }

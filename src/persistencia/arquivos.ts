@@ -29,8 +29,9 @@ function sincronizarDiretorio(diretorio: string): void {
  * Guarda os arquivos abertos em `origens[].fd` (F2 §5.1), cada um com até `teto` bytes. Cada um é lido uma vez só,
  * do início, para um temporário privado
  * em `arquivos/` (0600), calculando o SHA-256 na mesma passada; `conferir` valida esse temporário, que ninguém mais
- * altera, e devolve o que quiser anexar ao resultado. Só quando todos passam os temporários são ligados aos nomes
- * finais: o que fica guardado é exatamente o que foi conferido, e uma recusa não guarda nada.
+ * altera, e devolve o que quiser anexar ao resultado. Depois de conferir todos, `antesDeGuardar` confere o conjunto.
+ * Só quando tudo passa os temporários são ligados aos nomes finais: o que fica guardado é exatamente o que foi
+ * conferido, e uma recusa não guarda nada.
  * `link` é atômico como o `rename` e, ao contrário dele, não sobrescreve: se o hash já existe, o guardado fica
  * intocado e a cópia é descartada (deduplicação). O temporário fica em `arquivos/` porque a subpasta depende do hash,
  * que só se conhece no fim; é o mesmo sistema de arquivos, o que basta para o `link`.
@@ -46,6 +47,7 @@ export function guardarArquivos<O extends { readonly fd: number }, T extends obj
   origens: readonly O[],
   conferir: (copia: number, bytes: number, origem: O) => T,
   teto: number,
+  antesDeGuardar?: () => void,
 ): (T & { sha256: string; bytes: number })[] {
   const pasta = join(raizDo(banco), "arquivos");
   mkdirSync(pasta, { recursive: true, mode: 0o700 });
@@ -78,6 +80,7 @@ export function guardarArquivos<O extends { readonly fd: number }, T extends obj
         closeSync(copia);
       }
     });
+    antesDeGuardar?.();
     return copias.map(({ temporario, ...guardado }) => {
       const destino = caminhoArquivo(banco, guardado.sha256);
       mkdirSync(dirname(destino), { recursive: true, mode: 0o700 });

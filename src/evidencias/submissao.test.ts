@@ -21,7 +21,7 @@ import { after, test } from "node:test";
 import { z, ZodError } from "zod";
 import type { Ator, TipoIssue } from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
-import { evidenciasFaltando } from "../dominio/evidencia.ts";
+import { evidenciasFaltando, registrarEvidencia } from "../dominio/evidencia.ts";
 import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
 import { decidirRegistro } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
@@ -614,5 +614,121 @@ test("relatorio_complexidade com símbolo não declarado: ZodError no caminho do
     "✖ fora da gramática Big-O (ex.: O(1), O(n log n), O(n^2), O(n + m))\n  → at dados.fluxos[0].depois.espaco\n" +
       "✖ k não está declarado em variaveis\n  → at dados.fluxos[0].depois.tempo",
   );
+  c.banco.close();
+});
+
+const RODADO = { comando: "c", codigoSaida: 0, estourou: false, duracaoMs: 1 };
+
+/**
+ * O cenário na revisão, com T-2 rodando na E-2. A revisão real só nasce do desenvolvimento (provado em
+ * execucao/desenvolvimento.test.ts); aqui o T-2 vira revisão por UPDATE. `fitness`: as linhas da matriz que a
+ * Fabriquinha coletou antes do pi; vazio, ela não foi coletada.
+ */
+function naRevisao(fitness: string[]): Cenario & { saida2: string } {
+  const c = noDesenho("problema");
+  c.banco.exec("UPDATE issue SET fase = 'revisao'; UPDATE ticket SET etapa = 'revisao' WHERE id = 2");
+  if (fitness.length > 0) {
+    const linhas = fitness.map((nome) => ({ nome, descricao: "d", ...RODADO, log: `${nome}.log` }));
+    comIssue(c.banco, 1, "registrarEvidencia", fabriquinha, (ag, ctx) =>
+      registrarEvidencia(
+        ag,
+        { ticket: 2, tipo: "matriz_fitness", aprovada: true, dados: { linhas }, arquivos: [] },
+        fabriquinha,
+        ctx,
+      ),
+    );
+  }
+  return c;
+}
+
+const revisor = desenhista;
+
+test("explicacao_fitness: exatamente uma explicação por linha da matriz_fitness do próprio ticket", () => {
+  const c = naRevisao(["complexidade", "camadas"]);
+  const explicar = (...nomes: string[]) =>
+    submeter(
+      c.banco,
+      revisor,
+      "explicacao_fitness",
+      { explicacoes: nomes.map((nome) => ({ nome, explicacao: "ok" })) },
+      [],
+    );
+  const recusar = (nomes: string[], msg: string) => {
+    assert.throws(
+      () => explicar(...nomes),
+      (e) => e instanceof ErroDeRegra && e.message === msg,
+    );
+  };
+  const tem =
+    "e a matriz_fitness de T-2 tem as linhas [camadas, complexidade] " +
+    "(submeta exatamente uma explicação por linha da matriz)";
+  recusar(["complexidade"], `explicacao_fitness explica [complexidade], ${tem}`);
+  recusar(
+    ["complexidade", "camadas", "camadas"],
+    `explicacao_fitness explica [camadas, camadas, complexidade], ${tem}`,
+  );
+  recusar(["complexidade", "cobertura"], `explicacao_fitness explica [cobertura, complexidade], ${tem}`);
+  const ag = explicar("camadas", "complexidade");
+  const e = ag.evidencias.find((x) => x.tipo === "explicacao_fitness");
+  assert.deepEqual([e?.produtor, e?.aprovada], ["agente", undefined]);
+  c.banco.close();
+
+  const semMatriz = naRevisao([]);
+  assert.throws(
+    () =>
+      submeter(semMatriz.banco, revisor, "explicacao_fitness", { explicacoes: [{ nome: "f", explicacao: "ok" }] }, []),
+    (e) =>
+      e instanceof ErroDeRegra &&
+      e.message.startsWith("explicacao_fitness explica [f], e a matriz_fitness de T-2 tem as linhas []"),
+  );
+  semMatriz.banco.close();
+});
+
+test("comprovacao_criterios: os critérios do registro, cada anexo citado presente; aprovada se todos atendidos", () => {
+  const c = naRevisao(["f"]);
+  const print = c.arquivo(c.saida2, "ca-1.png", PNG);
+  const video = c.arquivo(c.saida2, "ca-1.webm", WEBM);
+  const comprovar = (criterios: object[], anexos = [print]) =>
+    submeter(c.banco, revisor, "comprovacao_criterios", { criterios }, anexos);
+  const criterio = (troca: object = {}) => ({
+    id: "CA-1",
+    atendido: true,
+    comoVerificado: "busquei mil itens",
+    arquivos: ["ca-1.png"],
+    ...troca,
+  });
+  const recusar = (criterios: object[], msg: string) => {
+    const guardados = readdirSync(join(c.raiz, "arquivos"), { recursive: true }).length;
+    assert.throws(
+      () => comprovar(criterios),
+      (e) => e instanceof ErroDeRegra && e.message === msg,
+    );
+    assert.equal(readdirSync(join(c.raiz, "arquivos"), { recursive: true }).length, guardados, "nada guardado");
+  };
+  const exatos =
+    "e os critérios de aceite do registro são [CA-1] (submeta exatamente uma comprovação por critério de aceite)";
+  recusar([], `comprovacao_criterios comprova [], ${exatos}`);
+  // F3 §5: os arquivos (passo 4) são validados antes das regras cruzadas (passo 5).
+  const pagina = c.arquivo(c.saida2, "ca-1.html", HTML);
+  assert.throws(
+    () => comprovar([], [pagina]),
+    (e) =>
+      e instanceof ErroDeRegra &&
+      e.message ===
+        `${pagina} é html, e comprovacao_criterios aceita só video ou imagem (anexe um arquivo de uma dessas classes)`,
+  );
+  recusar([criterio(), criterio({ id: "CA-2" })], `comprovacao_criterios comprova [CA-1, CA-2], ${exatos}`);
+  recusar([criterio(), criterio()], `comprovacao_criterios comprova [CA-1, CA-1], ${exatos}`);
+  recusar(
+    [criterio({ arquivos: ["ca-1.png", "ca-1.webm", "ca-1.webm"] })],
+    "comprovacao_criterios cita ca-1.webm, que não está entre os anexos " +
+      "(anexe cada arquivo citado com --arquivo <caminho>, com o mesmo nome)",
+  );
+
+  const aprovada = () => agregado(c.banco, 1)?.evidencias.find((e) => e.tipo === "comprovacao_criterios")?.aprovada;
+  comprovar([criterio({ atendido: false })]);
+  assert.equal(aprovada(), false);
+  comprovar([criterio({ arquivos: ["ca-1.png", "ca-1.webm"] })], [print, video]);
+  assert.equal(aprovada(), true);
   c.banco.close();
 });
