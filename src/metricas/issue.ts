@@ -134,7 +134,7 @@ export function consumo(linhas: readonly UsoDoModelo[]) {
  * F6 §5.5: os números objetivos do último desenho concluído, ou `null` antes dele. Evidência faltando ou malformada
  * também dá `null`, com um aviso no log do serviço: métrica nunca é gate (F6 §1).
  */
-function desenho(ag: Agregado): MetricasIssue["desenho"] {
+export function numerosDoDesenho(ag: Agregado): MetricasIssue["desenho"] {
   const ticket = ag.tickets.findLast((t) => t.etapa === "desenho" && t.status === "concluido");
   if (!ticket) return null;
   const dados = (tipo: string) => ag.evidencias.find((e) => e.ticket === ticket.id && e.tipo === tipo)?.dados;
@@ -211,7 +211,7 @@ export function metricasDaIssue(banco: DatabaseSync, issue: Id): MetricasIssue {
     consultas: { ...consumo(uso.get(null) ?? []), execucoes: consultas.length },
     correcoesRegistro: { devolucoes: devolucoes("registro"), ajustesAuditor: ajustes("registro") },
     correcoesDesenho: { devolucoes: devolucoes("desenho"), ajustesAuditor: ajustes("aprovacao_desenho") },
-    desenho: desenho(ag),
+    desenho: numerosDoDesenho(ag),
     retrabalho: retrabalhoDaIssue(banco, issue),
     exigenciasRevisao: ag.tickets.filter(
       (t) => t.etapa === "desenvolvimento" && t.origemTicket !== undefined && revisoes.has(t.origemTicket),

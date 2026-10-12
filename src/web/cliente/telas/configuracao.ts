@@ -3,7 +3,7 @@
 import type { Hospedagem, Projeto } from "../../../dominio/projeto.ts";
 import type { Etapa, Modelo } from "../../../dominio/primitivos.ts";
 import type { Configuracao } from "../../../persistencia/servico.ts";
-import { escapar } from "../render.ts";
+import { escapar, ha } from "../render.ts";
 
 /** `GET /api/configuracao`. */
 export interface EstadoDaConfiguracao extends Configuracao {
@@ -91,14 +91,6 @@ export function menu(config: Configuracao, projetos: readonly ProjetoListado[], 
       `<a href="/config?projeto=${encodeURIComponent(p.nome)}"${atual(sel.tipo === "projeto" && sel.nome === p.nome)}>${escapar(p.nome)}<span class="muted hospedagem">${HOSPEDAGEM[p.hospedagem]}</span></a>`,
   );
   return `<nav class="menu-config" aria-label="Configuração"><span class="rotulo">Geral</span><a href="/config"${atual(sel.tipo === "agendador")}>Agendador ${ligado}</a><span class="rotulo">Projetos</span>${itens.join("")}<a class="novo" href="/config?novo"${atual(sel.tipo === "novo")}>+ Novo projeto</a></nav>`;
-}
-
-/** Há quanto tempo, em minutos ou horas e minutos. */
-function ha(desde: string, agora: Date): string {
-  const minutos = Math.floor((agora.getTime() - Date.parse(desde)) / 60_000);
-  if (minutos < 1) return "há menos de 1 min";
-  if (minutos < 60) return `há ${String(minutos)} min`;
-  return `há ${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;
 }
 
 const hora = (instante: string): string =>

@@ -13,6 +13,7 @@ import {
   estadoDoTrilho,
   evidenciaNaCaixa,
   execucoesDoTicket,
+  gateDoDesenho,
   PAINEIS,
   paginaDaIssue,
 } from "./issue.ts";
@@ -557,4 +558,145 @@ test("tickets: a sessão que aguarda mostra o motivo, e a falha em vermelho", ()
   assert.match(html, /<span class="pill pill-aguarda">Gate do desenho<\/span><span class="ir">chat →<\/span>/);
   assert.match(html, /<span class="pill pill-falha">Falha<\/span>/);
   assert.match(html, /<ol class="trilho-fases falha"/);
+});
+
+const OPUS = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+const SONNET = { provedor: "anthropic", modelo: "claude-sonnet-5-5" };
+const QWEN = { provedor: "llamacpp", modelo: "qwen3-coder-30b" };
+
+/** A I-1 no gate do desenho: T-3 e T-5 propostos (T-3 com override fora da lista do pi), T-6 já concluído. */
+function noGate(): PaginaDaIssue {
+  const p = exemplo();
+  return {
+    ...p,
+    issue: { ...p.issue, fase: "aprovacao_desenho" },
+    tickets: [
+      ticket(1, "registro", "concluido"),
+      ticket(2, "desenho", "concluido"),
+      { ...ticket(3, "desenvolvimento", "aberto", `Cache ${XSS}`), descricao: `com TTL ${XSS}`, modelo: QWEN },
+      ticket(5, "desenvolvimento", "aberto", "Índice"),
+      ticket(6, "desenvolvimento", "concluido"),
+    ],
+    evidencias: [
+      ...p.evidencias,
+      evidencia(7, 2, "relatorio_impactos_arquitetura", {
+        dados: { impacto: "medio", novasDependencias: [], novosAcoplamentos: [{}], riscos: [] },
+      }),
+    ],
+    projeto: { ...p.projeto, modelos: { desenvolvimento: SONNET } },
+    sessoes: [sessao({ estado: "aguardando_humano", motivo: "gate_desenho", desde: AGORA })],
+    desenho: { arquivosPrevistos: 3, ticketsPropostos: 2, novasDependencias: 0, novosAcoplamentos: 1 },
+  };
+}
+
+const QUARENTA_E_SETE = { modelos: [OPUS, SONNET], agora: new Date(Date.parse(AGORA) + 47 * 60_000) };
+
+test("gate do desenho: só na aprovação do desenho, no começo da Ação do Auditor", () => {
+  assert.equal(gateDoDesenho(exemplo(), QUARENTA_E_SETE), "");
+  const html = acaoDoAuditor(noGate(), QUARENTA_E_SETE);
+  assert.match(html, /^<div class="acao-auditor"[^>]*><section class="gate-painel" aria-label="Gate do desenho">/);
+});
+
+test("gate do desenho: espera, 4 números, critérios, tickets propostos com o modelo, e a decisão", () => {
+  const html = gateDoDesenho(noGate(), QUARENTA_E_SETE);
+  assert.match(
+    html,
+    new RegExp(
+      `<div class="gate-cabeca"><span class="rotulo">Gate do desenho</span><span class="muted">aguarda você há 47 min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
+    ),
+  );
+  assert.deepEqual(
+    [...html.matchAll(/<div class="numero"><strong>(.*?)<\/strong><span>(.*?)<\/span><\/div>/g)].map((m) => [
+      m[1],
+      m[2],
+    ]),
+    [
+      ["3", "arquivos previstos"],
+      ["2", "tickets propostos"],
+      ["1", "acoplamento novo"],
+      ['<span class="impacto-medio">médio</span>', "impacto na arquitetura"],
+    ],
+  );
+  assert.match(html, /<div class="titulo-bloco">Critérios de aceite<\/div><div class="rola"><table class="tabela">/);
+  assert.match(html, /<td class="mono">CA-1<\/td><td>&#60;img/);
+
+  // Só os de desenvolvimento abertos, escapados, cada um com o seletor e a edição escondida.
+  assert.deepEqual(
+    [...html.matchAll(/data-proposto="(\d+)"/g)].map((m) => m[1]),
+    ["3", "5"],
+  );
+  assert.match(
+    html,
+    /<tr data-proposto="3"><td class="mono">T-3<\/td><td>Cache &#60;img[^<]*<div class="d">com TTL &#60;img[^<]*<\/div><\/td>/,
+  );
+  assert.match(
+    html,
+    /<select class="seletor-modelo override" data-modelo="3" aria-label="Modelo de T-3"><option value="">padrão · claude-sonnet-5-5<\/option><option value="anthropic\/claude-opus-5-5">anthropic \/ claude-opus-5-5<\/option><option value="anthropic\/claude-sonnet-5-5">anthropic \/ claude-sonnet-5-5<\/option><option value="llamacpp\/qwen3-coder-30b" selected>llamacpp \/ qwen3-coder-30b<\/option><\/select>/,
+    "o override que o pi não lista continua no seletor",
+  );
+  assert.match(
+    html,
+    /<select class="seletor-modelo" data-modelo="5" aria-label="Modelo de T-5"><option value="">padrão/,
+  );
+  assert.match(
+    html,
+    /<button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="3">Editar<\/button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="3">Remover<\/button>/,
+  );
+  assert.match(
+    html,
+    /<tr data-edicao="3" hidden><td class="mono">T-3<\/td><td colspan="3"><form class="form-ticket" data-form-ticket="3"><input name="titulo" value="Cache &#60;img[^"]*"/,
+  );
+  assert.match(html, /<textarea name="descricao" [^>]*>com TTL &#60;img[^<]*<\/textarea>/);
+  assert.match(html, /<button class="btn btn-pequeno btn-primario">Salvar<\/button>/);
+
+  assert.match(
+    html,
+    /<button type="button" class="link" data-acao="novo-ticket">\+ Novo ticket<\/button><div class="novo-ticket" data-novo-ticket hidden><form class="form-ticket" data-form-ticket><input name="titulo" value=""/,
+  );
+  assert.match(html, /<button class="btn btn-pequeno btn-primario">Criar ticket<\/button>/);
+
+  assert.match(
+    html,
+    /<div class="decidir"><label>Motivo \(obrigatório para reprovar\)<textarea data-motivo placeholder="O que precisa mudar no desenho"><\/textarea><\/label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="reprovar-desenho" disabled>Reprovar<\/button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-desenho">Aprovar desenho<\/button><\/div><\/div>/,
+  );
+});
+
+test("gate do desenho: sem números, impacto, espera, critérios, propostos nem modelo da etapa", () => {
+  const p = noGate();
+  const html = gateDoDesenho(
+    {
+      ...p,
+      tickets: p.tickets.filter((t) => t.etapa !== "desenvolvimento"),
+      evidencias: [],
+      sessoes: [],
+      projeto: { ...p.projeto, modelos: {} },
+      desenho: null,
+    },
+    { modelos: [], agora: new Date() },
+  );
+  assert.match(html, /<span class="rotulo">Gate do desenho<\/span><\/div>/, "sem a espera e o link do chat");
+  assert.deepEqual(
+    [...html.matchAll(/<strong>(.*?)<\/strong><span>(.*?)<\/span>/g)].map((m) => [m[1], m[2]]),
+    [
+      ["—", "arquivos previstos"],
+      ["—", "tickets propostos"],
+      ["—", "acoplamentos novos"],
+      ["—", "impacto na arquitetura"],
+    ],
+  );
+  assert.match(html, /<p class="muted">Sem critérios de aceite.<\/p>/);
+  assert.match(html, /<p class="muted">Nenhum ticket proposto.<\/p>/);
+
+  const umDeCada = gateDoDesenho(
+    {
+      ...p,
+      projeto: { ...p.projeto, modelos: {} },
+      desenho: { arquivosPrevistos: 1, ticketsPropostos: 1, novasDependencias: 0, novosAcoplamentos: 0 },
+    },
+    { modelos: [], agora: new Date() },
+  );
+  assert.match(umDeCada, /<strong>1<\/strong><span>arquivo previsto<\/span>/);
+  assert.match(umDeCada, /<strong>1<\/strong><span>ticket proposto<\/span>/);
+  assert.match(umDeCada, /<strong>0<\/strong><span>acoplamentos novos<\/span>/);
+  assert.match(umDeCada, /<option value="">padrão do pi<\/option>/);
 });

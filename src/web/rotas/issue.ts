@@ -12,6 +12,7 @@ import { adicionarDependencia, removerDependencia } from "../../dominio/issue.ts
 import { type Fase, Id } from "../../dominio/primitivos.ts";
 import type { Projeto } from "../../dominio/projeto.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
+import { type MetricasIssue, numerosDoDesenho } from "../../metricas/issue.ts";
 import { arquivoRegistrado, caminhoArquivo } from "../../persistencia/arquivos.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { dirDaExecucao } from "../../persistencia/execucoes.ts";
@@ -39,6 +40,8 @@ export interface PaginaDaIssue extends Agregado {
   limpeza: string[];
   /** O ticket do **Executar agora**, se há um elegível; `ocupada` diz por que ele está desabilitado (D8). */
   executar?: { ticket: Ticket; ocupada?: string };
+  /** Os números do desenho (F6 §5.5), só no gate do desenho; `null` com as evidências faltando ou malformadas. */
+  desenho?: MetricasIssue["desenho"];
 }
 
 const issueExistente = (banco: DatabaseSync, id: Id): Agregado =>
@@ -68,6 +71,7 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
     custos: custoPorExecucao(banco, id),
     limpeza: limpezaPendente(raizDo(banco), doProjeto, ag.issue),
     ...(ticket && { executar: { ticket, ...(ocupada && { ocupada }) } }),
+    ...(ag.issue.fase === "aprovacao_desenho" && { desenho: numerosDoDesenho(ag) }),
   };
 }
 

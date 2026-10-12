@@ -20,7 +20,7 @@ import { iniciarServico, portaDoServico } from "../execucao/servico.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir as abrirBanco, raizPadrao } from "../persistencia/banco.ts";
 import { execucaoDoAgente } from "../persistencia/execucoes.ts";
-import { agregado, agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
+import { agregado, agregadoDoTicket, comIssue, issueDoTicket } from "../persistencia/issues.ts";
 import { projeto } from "../persistencia/projetos.ts";
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */
@@ -93,10 +93,6 @@ const descricao = async ({ op, io }: Chamada): Promise<string | undefined> => {
   const arquivo = opcional(op.descricao);
   return arquivo === undefined ? undefined : ler(arquivo, io);
 };
-
-/** A issue do ticket `id`, para aplicar o comando do F1 ao agregado dela. */
-const issueDoTicket = (banco: DatabaseSync, id: Id): Id =>
-  encontrado(agregadoDoTicket(banco, id), `o ticket T-${String(id)} não existe`, "confira o número do ticket").issue.id;
 
 const TITULO_DESCRICAO: ParseArgsOptionsConfig = { titulo: { type: "string" }, descricao: { type: "string" } };
 

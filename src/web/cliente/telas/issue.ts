@@ -2,11 +2,11 @@
 // descrição e tickets), "Ação do Auditor", artefatos e o conteúdo da caixa. O texto que vem do servidor passa sempre
 // por `escapar`; a descrição chega já renderizada pelo `markdown-it` sem HTML.
 import type { ArquivoEvidencia, Evidencia, ModoExecucao, Ticket, TipoEvidencia } from "../../../dominio/agregado.ts";
-import type { Etapa, Fase } from "../../../dominio/primitivos.ts";
+import type { Etapa, Fase, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao, MotivoEspera } from "../../../execucao/sessoes.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { ConteudoDaCaixa } from "../dom.ts";
-import { type EstadoDoTrilho, escapar, trilho } from "../render.ts";
+import { type EstadoDoTrilho, escapar, ha, trilho } from "../render.ts";
 
 export const caminhoDaIssue = (projeto: string, issue: number): string =>
   `/projects/${encodeURIComponent(projeto)}/issues/I-${String(issue)}`;
@@ -193,16 +193,95 @@ const limpeza = (p: PaginaDaIssue): string =>
     <pre class="comandos">${p.limpeza.map(escapar).join("\n")}</pre>
   </section>`;
 
+/** O que a página lê fora do `GET /api/issues/:id`: os modelos do pi (seletor do gate do desenho) e a hora atual. */
+export interface Extras {
+  modelos: readonly Modelo[];
+  agora: Date;
+}
+
+const SEM_EXTRAS: Extras = { modelos: [], agora: new Date(0) };
+
+const par = (m: Modelo): string => `${m.provedor}/${m.modelo}`;
+
+type Impacto = "baixo" | "medio" | "alto";
+const IMPACTO: Record<Impacto, string> = { baixo: "baixo", medio: "médio", alto: "alto" };
+
+/** Um card de número, com o rótulo no singular ou no plural; sem o número, "—". */
+function numero(valor: number | undefined, um: string, varios: string): string {
+  const rotulo = valor === 1 ? um : varios;
+  return `<div class="numero"><strong>${valor === undefined ? "—" : String(valor)}</strong><span>${rotulo}</span></div>`;
+}
+
+/** O seletor do modelo do ticket: o padrão da etapa ou um override (C20); o override que o pi não lista continua. */
+function seletorDeModelo(p: PaginaDaIssue, t: Ticket, modelos: readonly Modelo[]): string {
+  const padrao = p.projeto.modelos.desenvolvimento;
+  const { modelo } = t;
+  const opcoes = modelo && !modelos.some((m) => par(m) === par(modelo)) ? [...modelos, modelo] : modelos;
+  const options = opcoes.map((m) => {
+    const selecionado = modelo && par(m) === par(modelo) ? " selected" : "";
+    return `<option value="${escapar(par(m))}"${selecionado}>${escapar(m.provedor + " / " + m.modelo)}</option>`;
+  });
+  const rotuloPadrao = padrao ? "padrão · " + escapar(padrao.modelo) : "padrão do pi";
+  return `<select class="seletor-modelo${modelo ? " override" : ""}" data-modelo="${String(t.id)}" aria-label="Modelo de T-${String(t.id)}"><option value="">${rotuloPadrao}</option>${options.join("")}</select>`;
+}
+
+/** O formulário de C12 (com o ticket) ou de C11 (sem). */
+const formularioDeTicket = (t?: Ticket): string =>
+  `<form class="form-ticket" data-form-ticket${t ? '="' + String(t.id) + '"' : ""}><input name="titulo" value="${escapar(t?.titulo ?? "")}" placeholder="Título do ticket" aria-label="Título" required maxlength="120" autocomplete="off" /><textarea name="descricao" placeholder="O que o ticket entrega, em Markdown" aria-label="Descrição" rows="3">${escapar(t?.descricao ?? "")}</textarea><div class="botoes"><button type="button" class="btn btn-pequeno" data-acao="cancelar-ticket">Cancelar</button><button class="btn btn-pequeno btn-primario">${t ? "Salvar" : "Criar ticket"}</button></div></form>`;
+
+function propostos(p: PaginaDaIssue, modelos: readonly Modelo[]): string {
+  const linhas = p.tickets
+    .filter((t) => t.etapa === "desenvolvimento" && t.status === "aberto")
+    .map((t) => {
+      const id = String(t.id);
+      return `<tr data-proposto="${id}"><td class="mono">T-${id}</td><td>${escapar(t.titulo)}<div class="d">${escapar(t.descricao)}</div></td><td class="modelo">${seletorDeModelo(p, t, modelos)}</td><td class="acoes-t"><button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="${id}">Editar</button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="${id}">Remover</button></td></tr><tr data-edicao="${id}" hidden><td class="mono">T-${id}</td><td colspan="3">${formularioDeTicket(t)}</td></tr>`;
+    });
+  return linhas.length
+    ? `<div class="rola"><table class="tabela propostos"><tbody>${linhas.join("")}</tbody></table></div>`
+    : '<p class="muted">Nenhum ticket proposto.</p>';
+}
+
+/**
+ * O gate do desenho (F7 §4.4): a espera, os números do desenho (F6 §5.5) com o impacto, os critérios de aceite, os
+ * tickets propostos com o modelo, editar, remover e criar (C11 a C13, C20), e a decisão (C15).
+ */
+export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): string {
+  if (p.issue.fase !== "aprovacao_desenho") return "";
+  const espera = p.sessoes.find((s) => s.motivo === "gate_desenho");
+  const desenho = p.tickets.findLast((t) => t.etapa === "desenho" && t.status === "concluido");
+  const impacto = p.evidencias.find((e) => e.ticket === desenho?.id && e.tipo === "relatorio_impactos_arquitetura")
+    ?.dados.impacto as Impacto | undefined;
+  const criterios = p.evidencias.findLast((e) => e.tipo === "criterios_aceite");
+  const n = p.desenho ?? undefined;
+  return `<section class="gate-painel" aria-label="Gate do desenho">
+    <div class="gate-cabeca"><span class="rotulo">Gate do desenho</span>${
+      espera
+        ? `<span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="/sessions/${espera.sessao}">abrir o chat da sessão →</a>`
+        : ""
+    }</div>
+    <div class="gate-corpo">
+      <div class="numeros">${numero(n?.arquivosPrevistos, "arquivo previsto", "arquivos previstos")}${numero(n?.ticketsPropostos, "ticket proposto", "tickets propostos")}${numero(n?.novosAcoplamentos, "acoplamento novo", "acoplamentos novos")}<div class="numero"><strong>${
+        impacto ? `<span class="impacto-${impacto}">${IMPACTO[impacto]}</span>` : "—"
+      }</strong><span>impacto na arquitetura</span></div></div>
+      <div><div class="titulo-bloco">Critérios de aceite</div>${
+        criterios ? tabelaDeCriterios(criterios) : '<p class="muted">Sem critérios de aceite.</p>'
+      }</div>
+      <div><div class="titulo-bloco">Tickets propostos</div>${propostos(p, modelos)}<button type="button" class="link" data-acao="novo-ticket">+ Novo ticket</button><div class="novo-ticket" data-novo-ticket hidden>${formularioDeTicket()}</div></div>
+    </div>
+    <div class="decidir"><label>Motivo (obrigatório para reprovar)<textarea data-motivo placeholder="O que precisa mudar no desenho"></textarea></label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="reprovar-desenho" disabled>Reprovar</button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-desenho">Aprovar desenho</button></div></div>
+  </section>`;
+}
+
 /**
  * Os painéis da "Ação do Auditor", na ordem da coluna: cada um devolve o seu HTML, ou `""` quando não se aplica. Os
  * painéis de gate da fase (desenho e PR, tickets 31 e 32) entram no começo desta lista, e as ações deles na tabela
  * `ACOES` da montagem (issue-montar.ts).
  */
-export const PAINEIS: ((p: PaginaDaIssue) => string)[] = [executarAgora, limpeza];
+export const PAINEIS: ((p: PaginaDaIssue, extras: Extras) => string)[] = [gateDoDesenho, executarAgora, limpeza];
 
 /** A "Ação do Auditor", só quando algum painel existe (F7 §4.4). */
-export function acaoDoAuditor(p: PaginaDaIssue): string {
-  const paineis = PAINEIS.map((painel) => painel(p)).join("");
+export function acaoDoAuditor(p: PaginaDaIssue, extras = SEM_EXTRAS): string {
+  const paineis = PAINEIS.map((painel) => painel(p, extras)).join("");
   return paineis && `<div class="acao-auditor" aria-label="Ação do Auditor" role="region">${paineis}</div>`;
 }
 
@@ -257,7 +336,7 @@ function artefatos(p: PaginaDaIssue): string {
 }
 
 /** A página inteira. `descricaoHtml` é a descrição já renderizada pelo `markdown-it` com `html: false`. */
-export function paginaDaIssue(p: PaginaDaIssue, descricaoHtml: string): string {
+export function paginaDaIssue(p: PaginaDaIssue, descricaoHtml: string, extras = SEM_EXTRAS): string {
   const { issue } = p;
   const ativas = p.sessoes.filter((s) => s.estado !== "terminada");
   const titulo = issue.titulo === null ? '<span class="muted">sem título</span>' : escapar(issue.titulo);
@@ -267,7 +346,7 @@ export function paginaDaIssue(p: PaginaDaIssue, descricaoHtml: string): string {
     ${trilho(issue.fase, estadoDoTrilho(ativas))}
     <div class="mesa">
       <aside class="lateral">${detalhes(p)}${descricao(descricaoHtml)}${tickets(p)}</aside>
-      <div class="principal">${acaoDoAuditor(p)}${artefatos(p)}</div>
+      <div class="principal">${acaoDoAuditor(p, extras)}${artefatos(p)}</div>
     </div>
   </div>`;
 }
@@ -337,16 +416,19 @@ interface Alterado {
 /** Uma lista de `dados`, que o F3 já validou com o schema do tipo. */
 const lista = <T>(valor: unknown): T[] => valor as T[];
 
+/** Os critérios de aceite, na caixa e no gate do desenho. */
+const tabelaDeCriterios = (e: Evidencia): string =>
+  tabela(
+    "<th>ID</th><th>Dado</th><th>Quando</th><th>Então</th>",
+    lista<{ id: string; dado: string; quando: string; entao: string }>(e.dados.criterios).map(
+      (c) =>
+        `<tr><td class="mono">${escapar(c.id)}</td><td>${escapar(c.dado)}</td><td>${escapar(c.quando)}</td><td>${escapar(c.entao)}</td></tr>`,
+    ),
+  );
+
 /** As tabelas dos tipos que o Auditor lê para decidir um gate (F7 §4.5); os demais saem como JSON formatado. */
 const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
-  criterios_aceite: (e) =>
-    tabela(
-      "<th>ID</th><th>Dado</th><th>Quando</th><th>Então</th>",
-      lista<{ id: string; dado: string; quando: string; entao: string }>(e.dados.criterios).map(
-        (c) =>
-          `<tr><td class="mono">${escapar(c.id)}</td><td>${escapar(c.dado)}</td><td>${escapar(c.quando)}</td><td>${escapar(c.entao)}</td></tr>`,
-      ),
-    ),
+  criterios_aceite: tabelaDeCriterios,
   comprovacao_criterios: (e) =>
     tabela(
       "<th>ID</th><th>Atendido</th><th>Como foi verificado</th><th>Anexos</th>",

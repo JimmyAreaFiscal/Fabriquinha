@@ -12,7 +12,7 @@ import {
   type NomeComando,
   Ticket,
 } from "../dominio/agregado.ts";
-import { ErroDeInexistente } from "../dominio/erros.ts";
+import { ErroDeInexistente, encontrado } from "../dominio/erros.ts";
 import * as dominio from "../dominio/issue.ts";
 import type { Id, Modelo } from "../dominio/primitivos.ts";
 import { escrever, novoId } from "./banco.ts";
@@ -363,6 +363,10 @@ export function agregadoDoTicket(banco: DatabaseSync, ticket: Id): Agregado | un
   const linha = banco.prepare("SELECT issue FROM ticket WHERE id = ?").get(ticket);
   return linha && agregado(banco, Number(linha.issue));
 }
+
+/** A issue do ticket `id`, para aplicar o comando do F1 ao agregado dela; ticket inexistente dá `ErroDeInexistente`. */
+export const issueDoTicket = (banco: DatabaseSync, id: Id): Id =>
+  encontrado(agregadoDoTicket(banco, id), `o ticket T-${String(id)} não existe`, "confira o número do ticket").issue.id;
 
 /**
  * Quando o agente editou a issue pela última vez (C2 a C4, na tabela `comando`), ou `""` se nunca editou: depois de
