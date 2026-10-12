@@ -25,8 +25,8 @@ export default (pi) =>
 const sonda = join(dir, "sonda.js");
 writeFileSync(sonda, SONDA);
 
-// Uma sessão por etapa que já tem skills de artefato no pacote.
-for (const etapa of ["registro", "desenho"] as const) {
+// Uma sessão por etapa que tem skills de artefato (o desenvolvimento não tem).
+for (const etapa of ["registro", "desenho", "revisao", "encerramento"] as const) {
   test(`o pi das execuções de ${etapa} carrega a guarda e as skills da etapa com a configuração do Auditor`, (t) => {
     const prompt = join(dir, `prompt-${etapa}.md`);
     const args = argumentosPi({

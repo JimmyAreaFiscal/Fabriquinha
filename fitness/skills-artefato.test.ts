@@ -1,5 +1,6 @@
-// Fitness function: a forma de toda skill de artefato do pacote P1 (§5.2, §6). O pi carrega uma skill com frontmatter
-// inválido só com aviso, e o F4 a acha pelo nome do diretório; uma skill fora de forma passaria despercebida.
+// Fitness function: a forma de toda skill de artefato do pacote P1 (§5.2, §6) e o catálogo completo: exatamente uma
+// skill por evidência de produtor agente do F1 §3.9. O pi carrega uma skill com frontmatter inválido só com aviso e
+// ignora em silêncio um `--skill` que não existe; uma skill fora de forma ou faltando passaria despercebida.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,8 +22,9 @@ const campo = (frontmatter: string, chave: string): string | undefined =>
   new RegExp(`^${chave}:[ \\t]*(\\S.*)$`, "m").exec(frontmatter)?.[1]?.trim();
 
 function problemas(skills: string): string[] {
-  const achados: string[] = [];
-  for (const dir of readdirSync(skills)) {
+  const dirs = readdirSync(skills);
+  const achados = [...DE_ARTEFATO].filter((s) => !dirs.includes(s)).map((s) => `${s}: falta a skill`);
+  for (const dir of dirs) {
     const texto = readFileSync(join(skills, dir, "SKILL.md"), "utf8");
     const linhas = texto.trimEnd().split("\n");
     if (linhas.length > MAX_LINHAS) achados.push(`${dir}: ${String(linhas.length)} linhas`);
@@ -39,7 +41,7 @@ function problemas(skills: string): string[] {
   return achados;
 }
 
-test("toda skill de artefato do pacote tem a forma do P1 §5.2", () => {
+test("o pacote tem exatamente uma skill para cada evidência de produtor agente, com a forma do P1 §5.2", () => {
   assert.deepEqual(problemas(join(PACOTE, "skills")), []);
 });
 
@@ -60,13 +62,20 @@ test("a fitness acusa cada desvio de forma", (t) => {
   );
   skill("Artefato_X", `---\nname: Artefato_X\n---\n\n${corpo}`);
 
-  assert.deepEqual(problemas(raiz).sort(), [
-    "Artefato_X: description vazia ou longa",
-    "Artefato_X: nome inválido para o pi",
-    "Artefato_X: não é de evidência de produtor agente",
-    "artefato-criterios-aceite: 106 linhas",
-    "artefato-criterios-aceite: description vazia ou longa",
-    "artefato-criterios-aceite: name outro difere do diretório",
-    "artefato-criterios-aceite: seções Como produzir",
-  ]);
+  const faltando = [...DE_ARTEFATO]
+    .filter((s) => s !== "artefato-comportamento" && s !== "artefato-criterios-aceite")
+    .map((s) => `${s}: falta a skill`);
+  assert.deepEqual(
+    problemas(raiz).sort(),
+    [
+      ...faltando,
+      "Artefato_X: description vazia ou longa",
+      "Artefato_X: nome inválido para o pi",
+      "Artefato_X: não é de evidência de produtor agente",
+      "artefato-criterios-aceite: 106 linhas",
+      "artefato-criterios-aceite: description vazia ou longa",
+      "artefato-criterios-aceite: name outro difere do diretório",
+      "artefato-criterios-aceite: seções Como produzir",
+    ].sort(),
+  );
 });
