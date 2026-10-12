@@ -1,11 +1,15 @@
-// Chat (F7 §4.4; F4 §5.4): a barra de estado, a conversa do JSONL com as linhas do sistema, as peças que chegam ao
-// vivo, o envio conforme o estado e a coluna da direita do registro, como funções puras que devolvem HTML. O texto
-// de agente passa sempre pelo `markdown-it` com `html: false`; o resto, por `escapar`.
+// Chat (F7 §4.4; F4 §5.4, §6.4, §6.5, §6.8): a barra de estado, a conversa do JSONL com as linhas do sistema e o
+// erro da falha, as peças que chegam ao vivo, o envio conforme o estado com os anexos de histórico, e a coluna da
+// direita com o registro e o contexto da issue, como funções puras que devolvem HTML. O texto de agente passa sempre
+// pelo `markdown-it` com `html: false`; o resto, por `escapar`.
 import type { Execucao } from "../../../dominio/agregado.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
+import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
+import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import { markdown } from "../markdown.ts";
-import { escapar } from "../render.ts";
+import { escapar, FASES, ha } from "../render.ts";
+import { caminhoDaIssue, cardDaEvidencia, comCard, estadoDoTrilho } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -85,7 +89,14 @@ export function modeloDe(c: CabecalhoDoChat, conversa: readonly Entrada[]): stri
   return resposta?.model ? `${String(resposta.provider)} / ${resposta.model}` : "modelo padrão do pi";
 }
 
-/** Barra de estado (F7 §4.4, item 1): issue, ticket, etapa e modo, estado, modelo e a execução com log e prompt. */
+/** **Exportar histórico** (F4 §6.8): o Markdown da sessão, baixado. */
+const exportar = (sessao: string, classe: string, rotulo = "Exportar"): string =>
+  `<a class="${classe}" href="/api/sessoes/${encodeURIComponent(sessao)}/historico.md" download>${rotulo}</a>`;
+
+/**
+ * Barra de estado (F7 §4.4, item 1): issue, ticket, etapa e modo, estado, modelo, a execução com log e prompt,
+ * **Exportar** e **Conversar sobre**.
+ */
 export function barraDeEstado(c: CabecalhoDoChat, modelo: string): string {
   const { sessao, issue } = c;
   const e = String(sessao.execucao);
@@ -98,7 +109,8 @@ export function barraDeEstado(c: CabecalhoDoChat, modelo: string): string {
     `<span class="modelo">${escapar(modelo)}</span>` +
     `<div class="direita"><span class="muted pequeno">E-${e}</span>` +
     `<a class="link" href="/api/execucoes/${e}/log" target="_blank" rel="noopener">log</a>` +
-    `<a class="link" href="/api/execucoes/${e}/prompt" target="_blank" rel="noopener">prompt</a></div>` +
+    `<a class="link" href="/api/execucoes/${e}/prompt" target="_blank" rel="noopener">prompt</a>` +
+    `${exportar(sessao.sessao, "link")}<button type="button" class="link" data-consulta>Conversar sobre</button></div>` +
     `</div>`
   );
 }
@@ -122,6 +134,22 @@ export function linhasDaExecucao(e: Execucao, i: number): (Item & { em: string }
   if (e.resultado === "falha") fim = `Execução ${n} falhou: ${escapar(e.erro)}`;
   else if (e.modo === "autonomo") fim = `Execução ${n} concluída`;
   return [...linhas, { chave: `fim-${n}`, em: e.terminadaEm, html: sistema(fim) }];
+}
+
+/**
+ * O erro da falha em destaque no fim da conversa (F7 §4.4, item 3): a última execução, o erro do ticket (C8) e o que
+ * ficou. Nada fora da falha.
+ */
+export function erroDaFalha({ sessao, ticket }: CabecalhoDoChat): Item[] {
+  if (sessao.motivo !== "falha") return [];
+  const e = `E-${String(sessao.execucao)}`;
+  const erro = escapar(String(ticket.erro).replace(/\.$/, ""));
+  return [
+    {
+      chave: `falha-${e}`,
+      html: `<div class="erro-bloco" role="alert"><strong>Execução ${e} falhou:</strong> ${erro}. O ticket T-${String(ticket.id)} ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>`,
+    },
+  ];
 }
 
 /** Uma linha por diálogo de extensão aberto pelo agente. */
@@ -197,8 +225,8 @@ export function mensagem(m: MensagemPi, resultados: ReadonlyMap<string, Mensagem
 export const chaveDa = (m: MensagemPi): string => `${String(m.role)}-${String(m.timestamp)}`;
 
 /**
- * A conversa inteira (F7 §4.4, item 2): as mensagens do JSONL e as linhas das execuções, por instante, e no fim os
- * diálogos abertos. O prompt montado pela Fabriquinha não aparece: a linha da execução tem o link dele.
+ * A conversa inteira (F7 §4.4, item 2): as mensagens do JSONL e as linhas das execuções, por instante, e no fim o
+ * erro da falha e os diálogos abertos. O prompt montado pela Fabriquinha não aparece: a linha da execução tem o link dele.
  */
 export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Item[] {
   const mensagens = entradas.flatMap((e) =>
@@ -215,7 +243,11 @@ export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Item
     })),
     ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)),
   ].toSorted((a, b) => a.em.localeCompare(b.em));
-  return [...itens.map(({ chave, html }) => ({ chave, html })), ...c.sessao.dialogos.map(linhaDoDialogo)];
+  return [
+    ...itens.map(({ chave, html }) => ({ chave, html })),
+    ...erroDaFalha(c),
+    ...c.sessao.dialogos.map(linhaDoDialogo),
+  ];
 }
 
 /** A mensagem do agente chegando em fluxo, com o cursor piscando no fim do texto. */
@@ -265,7 +297,54 @@ function dialogo(d: Dialogo): string {
 export const respostaDoDialogo = (metodo: string, valor: string): { valor: string } | { confirmado: boolean } =>
   metodo === "confirm" ? { confirmado: valor === "sim" } : { valor };
 
-const fim = (texto: string): string => `<div class="fim">${texto}</div>`;
+const fim = (texto: string, botoes = ""): string =>
+  `<div class="fim">${texto}${botoes && '<div class="botoes">' + botoes + "</div>"}</div>`;
+
+const ANEXAR =
+  '<button type="button" class="btn btn-pequeno" data-anexar title="Levar o histórico de outra sessão para esta conversa">+ Anexar histórico</button>';
+
+/** Os anexos de histórico da mensagem como etiquetas removíveis; o envio os leva em `anexos` (F4 §6.8). */
+export function etiquetasDeAnexo(anexos: readonly InfoSessao[]): string {
+  return anexos
+    .map(
+      (s) =>
+        `<span class="anexo">histórico de ${rotuloDaSessao(s)}<button type="button" data-remover-anexo="${escapar(s.sessao)}" title="Remover" aria-label="Remover o histórico de ${rotuloDaSessao(s)}">×</button></span>`,
+    )
+    .join("");
+}
+
+/** `s-2a7d · I-27 · T-114`: o começo do id da sessão, a issue e o ticket. */
+const rotuloDaSessao = (s: InfoSessao): string =>
+  `s-${escapar(s.sessao.slice(0, 4))} · I-${String(s.issue)} · T-${String(s.ticket)}`;
+
+/**
+ * O seletor de sessões do **+ Anexar histórico**, na caixa: as outras sessões, ativas e do histórico, da mais recente
+ * para a mais antiga, sem a desta conversa e sem as já anexadas.
+ */
+export function seletorDeSessoes(sessoes: readonly InfoSessao[], atual: string, anexadas: readonly string[]): string {
+  const opcoes = sessoes
+    .filter((s) => s.sessao !== atual && !anexadas.includes(s.sessao))
+    .toSorted((a, b) => b.desde.localeCompare(a.desde))
+    .map(
+      (s) =>
+        `<li><button type="button" class="opcao-sessao" data-anexar-sessao="${escapar(s.sessao)}"><span class="id">I-${String(s.issue)} · T-${String(s.ticket)}</span><span>${escapar(s.projeto)} · ${ETAPAS[s.etapa]} · ${MODOS[s.modo]}</span>${etiquetaDoEstado(s)}<span class="muted pequeno">s-${escapar(s.sessao.slice(0, 4))}</span></button></li>`,
+    );
+  return opcoes.length
+    ? `<ul class="sessoes-anexo">${opcoes.join("")}</ul>`
+    : '<p class="muted">Nenhuma outra sessão para anexar.</p>';
+}
+
+/** O valor do seletor de modelo como o corpo de C20: `provedor/modelo`, ou `null` para o padrão da etapa. */
+export function modeloDoSeletor(valor: string): { provedor: string; modelo: string } | null {
+  const corte = valor.indexOf("/");
+  return corte < 0 ? null : { provedor: valor.slice(0, corte), modelo: valor.slice(corte + 1) };
+}
+
+/** Na falha (F4 §6.4): a instrução para a próxima tentativa, o modelo (C20, preenchido com a issue) e o C9. */
+const retomar =
+  '<form class="compositor falha-comp" data-retomar><textarea name="texto" rows="2" aria-label="Instrução" placeholder="Instrução para a próxima tentativa (vai antes do prompt da etapa)"></textarea>' +
+  '<div class="linha-1"><label class="dica-tecla rotulo-modelo">Modelo <span data-seletor-modelo><select class="seletor-modelo" disabled aria-label="Modelo"><option>carregando…</option></select></span></label>' +
+  '<div class="direita"><button class="btn btn-primario">Responder e retomar</button></div></div></form>';
 
 /**
  * A área de envio (F7 §4.4, item 3), conforme o estado: rodando, redirecionar ou enfileirar e abortar; diálogo, o
@@ -275,15 +354,21 @@ export function envio(c: CabecalhoDoChat, modo: ModoEnvio): string {
   const { sessao } = c;
   const [pendente] = sessao.dialogos;
   if (pendente) return dialogo(pendente);
-  if (sessao.estado === "terminada") return fim("Sessão terminada; a conversa fica só para leitura.");
+  if (sessao.estado === "terminada") {
+    return fim(
+      "Sessão terminada; a conversa fica só para leitura.",
+      exportar(sessao.sessao, "btn", "Exportar histórico") +
+        '<button type="button" class="btn btn-primario" data-consulta>Conversar sobre esta sessão</button>',
+    );
+  }
+  if (sessao.motivo === "falha") return retomar;
   const rodando = sessao.estado === "rodando";
   if (!rodando && sessao.motivo !== "conversa") {
-    const avisos: Record<string, string> = {
-      gate_registro:
-        "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.",
-      falha: "A execução falhou e o ticket aguarda a sua resposta.",
-    };
-    return fim(avisos[String(sessao.motivo)] ?? "A etapa terminou; a decisão do gate fica na página da issue.");
+    return fim(
+      sessao.motivo === "gate_registro"
+        ? "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa."
+        : "A etapa terminou; a decisão do gate fica na página da issue.",
+    );
   }
   const segmento = rodando
     ? '<div class="segmento" role="group" aria-label="Como enviar">' +
@@ -297,20 +382,9 @@ export function envio(c: CabecalhoDoChat, modo: ModoEnvio): string {
   ].join("");
   const dica = rodando ? "Mensagem para o agente enquanto ele trabalha" : "Responda ao agente";
   return (
-    `<form class="compositor" data-envio><textarea name="texto" rows="2" aria-label="Mensagem" placeholder="${dica}"></textarea>` +
-    `<div class="linha-1">${segmento}${DICA}<div class="direita">${acoes}</div></div></form>`
+    `<form class="compositor" data-envio><div class="anexos" data-anexos hidden></div><textarea name="texto" rows="2" aria-label="Mensagem" placeholder="${dica}"></textarea>` +
+    `<div class="linha-1">${segmento}${ANEXAR}${DICA}<div class="direita">${acoes}</div></div></form>`
   );
-}
-
-/** Há quanto tempo, em português: "agora", "há 5 min", "há 2 h", "há 3 dias". */
-export function haQuanto(desde: string, agora: number): string {
-  const min = Math.floor((agora - Date.parse(desde)) / 60_000);
-  if (min < 1) return "agora";
-  if (min < 60) return `há ${String(min)} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `há ${String(h)} h`;
-  const dias = Math.floor(h / 24);
-  return `há ${String(dias)} ${dias === 1 ? "dia" : "dias"}`;
 }
 
 /** O formulário de C2 (F7 §4.4, item 4): o Auditor corrige direto o que o agente registrou. */
@@ -340,7 +414,7 @@ function gateDoRegistro(c: CabecalhoDoChat, agora: number): string {
     : "Nenhuma evidência faltando.";
   return (
     '<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro</span>' +
-    `<span class="muted pequeno">aguarda você ${haQuanto(sessao.desde, agora)}</span></div>` +
+    `<span class="muted pequeno">aguarda você ${ha(sessao.desde, new Date(agora))}</span></div>` +
     '<div class="corpo"><dl class="fatos">' +
     `<dt>Título</dt><dd>${escapar(issue.titulo)}</dd>` +
     `<dt>Tipo</dt><dd><span class="tag">${escapar(issue.tipo)}</span></dd>` +
@@ -373,6 +447,46 @@ export function lateral(c: CabecalhoDoChat, agora: number): string {
     );
   }
   return sessao.etapa === "registro" && issue.fase === "registro" ? formularioDoRegistro(c) : "";
+}
+
+/** O trilho de fases compacto: uma barra por fase, as passadas em verde e a atual com a cor do estado. */
+function trilhoCompacto(p: PaginaDaIssue): string {
+  const { fase } = p.issue;
+  const atual = fase === "concluida" ? FASES.length : FASES.findIndex(([f]) => f === fase);
+  const estado = estadoDoTrilho(p.sessoes.filter((s) => s.estado !== "terminada"));
+  const barras = FASES.map(([, rotulo], i) => {
+    const classe = (i < atual && "feito") || (i === atual && "atual") || "";
+    const atributo = classe && ' class="' + classe + '"';
+    return `<i${atributo} title="${rotulo}"></i>`;
+  });
+  const nome = FASES[atual]?.[1] ?? "Concluída";
+  return `<div class="${["trilho-mini", estado].filter(Boolean).join(" ")}" role="img" aria-label="Fase: ${nome}">${barras.join("")}</div>`;
+}
+
+/**
+ * O contexto da issue (F7 §4.4, item 4): `I-n` e projeto, o trilho compacto, os tickets com o desta sessão marcado e
+ * o chat da sessão principal dos outros, os artefatos como cards que abrem na caixa e **Abrir a issue**.
+ */
+export function contextoDaIssue(p: PaginaDaIssue, sessao: InfoSessao): string {
+  const tickets = p.tickets.map((t) => {
+    const desta = t.id === sessao.ticket;
+    const principal = p.sessoes.find((s) => s.ticket === t.id && s.modo !== "consulta");
+    let lado = "";
+    if (desta) lado = '<span class="muted pequeno">esta</span>';
+    else if (principal) lado = `<a class="link" href="/sessions/${encodeURIComponent(principal.sessao)}">chat</a>`;
+    return `<li${desta ? ' class="atual" aria-current="true"' : ""}><span class="p ${t.status}" aria-hidden="true"></span><span class="id">T-${String(t.id)}</span><span class="t">${escapar(t.titulo)}</span>${lado}</li>`;
+  });
+  const cards = comCard(p).map(cardDaEvidencia).join("");
+  const artefatos = cards
+    ? '<div class="cards-art">' + cards + "</div>"
+    : '<p class="muted pequeno">Nenhum artefato ainda.</p>';
+  return (
+    `<section class="painel superficie contexto-issue" aria-label="Contexto da issue"><h3>I-${String(p.issue.id)} · ${escapar(p.issue.projeto)}</h3>` +
+    trilhoCompacto(p) +
+    `<div><div class="titulo-bloco">Tickets e sessões</div><ul class="tickets-da-issue">${tickets.join("")}</ul></div>` +
+    `<div><div class="titulo-bloco">Artefatos</div>${artefatos}</div>` +
+    `<a class="link" href="${caminhoDaIssue(p.issue.projeto, p.issue.id)}">Abrir a issue →</a></section>`
+  );
 }
 
 /** O corpo de `POST /api/issues/:id` a partir do formulário: só os campos preenchidos; a descrição pode ficar vazia. */

@@ -10,7 +10,7 @@ import type { Id } from "../dominio/primitivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { dirDaExecucao, issueDaSessao } from "../persistencia/execucoes.ts";
 import { agregado } from "../persistencia/issues.ts";
-import { infoDaSessao, lerConversa } from "./sessoes.ts";
+import { type InfoSessao, infoDaSessao, lerConversa } from "./sessoes.ts";
 
 /** ponytail: o corte é fixo (F4 §6.8); se algum resultado longo fizer falta, aumentar o limite. */
 const CORTE = 2000;
@@ -118,9 +118,17 @@ export function exportarHistorico(banco: DatabaseSync, sessao: string): string {
 }
 
 /**
+ * O nome do arquivo do histórico da sessão, no anexo e no download: `historico-T-<n>.md`; a consulta ganha o id
+ * dela, `historico-T-<n>-consulta-<sessao>.md`, para não se confundir com a principal.
+ */
+export function nomeDoHistorico({ sessao, ticket, modo }: Pick<InfoSessao, "sessao" | "ticket" | "modo">): string {
+  const consulta = modo === "consulta" ? "-consulta-" + sessao : "";
+  return `historico-T-${String(ticket)}${consulta}.md`;
+}
+
+/**
  * F4 §6.8: grava a exportação de cada sessão de origem em `historico-T-<n>.md` no `$FABRIQUINHA_SAIDA` da execução
- * atual (a última) da sessão de destino e devolve a `mensagem` com uma linha por anexo, para mandar com `enviar`. A
- * consulta ganha o id dela no nome, `historico-T-<n>-consulta-<sessao>.md`, para não sobrescrever a principal.
+ * atual (a última) da sessão de destino e devolve a `mensagem` com uma linha por anexo, para mandar com `enviar`.
  */
 export async function anexarHistorico(
   banco: DatabaseSync,
@@ -132,9 +140,9 @@ export async function anexarHistorico(
   mkdirSync(saida, { recursive: true });
   const linhas = [mensagem];
   for (const origem of origens) {
-    const { ticket, issue, etapa, modo } = await infoDaSessao(banco, origem);
-    const consulta = modo === "consulta" ? `-consulta-${origem}` : "";
-    const arquivo = join(saida, `historico-T-${String(ticket)}${consulta}.md`);
+    const info = await infoDaSessao(banco, origem);
+    const { ticket, issue, etapa } = info;
+    const arquivo = join(saida, nomeDoHistorico(info));
     writeFileSync(arquivo, exportarHistorico(banco, origem));
     linhas.push(
       `Histórico da sessão T-${String(ticket)} (I-${String(issue)}, ${etapa}) em \`${arquivo}\`; leia antes de responder.`,

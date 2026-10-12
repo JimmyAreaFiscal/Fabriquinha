@@ -1,5 +1,6 @@
-// Chat (F7 §4.4; F4 §5.4, §6.6) com o pi falso: acompanhar uma sessão autônoma ao vivo, redirecioná-la e responder a
-// um diálogo; registrar pelo chat, corrigir o registro ao lado e aprovar o registro.
+// Chat (F7 §4.4; F4 §5.4, §6.4 a §6.8) com o pi falso: acompanhar uma sessão autônoma ao vivo, redirecioná-la e
+// responder a um diálogo; registrar pelo chat, corrigir o registro ao lado e aprovar o registro; responder e retomar
+// um ticket que falhou; abrir uma consulta com o histórico de outra sessão anexado.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -193,7 +194,7 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
     "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.",
   );
   const gate = pagina.getByRole("region", { name: "Gate do registro" });
-  await expect(gate).toContainText("aguarda você agora");
+  await expect(gate).toContainText("aguarda você há menos de 1 min");
   await expect(gate.locator(".fatos dd")).toHaveText([
     "Exportar pedidos em CSV",
     "funcionalidade",
@@ -216,7 +217,149 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
 
   await gate.getByRole("button", { name: "Aprovar registro" }).click();
   await expect(barra.locator(".pill")).toHaveText("terminada");
-  await expect(pagina.locator(".fim")).toHaveText("Sessão terminada; a conversa fica só para leitura.");
+  await expect(pagina.locator(".fim")).toHaveText(
+    "Sessão terminada; a conversa fica só para leitura.Exportar históricoConversar sobre esta sessão",
+  );
   await expect(pagina.locator("[data-lateral]")).toBeEmpty();
   await expect(conversa.locator(".sistema").last()).toHaveText("Execução E-1 encerrada");
+});
+
+/** Issues em desenvolvimento, cada uma com um ticket aberto de mesmo número que o pi falso não conclui. */
+const emDesenvolvimento = (...ids: number[]) =>
+  ids
+    .map(
+      (id) =>
+        `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
+           VALUES (${String(id)}, 'loja', 'Issue ${String(id)}', 'problema', '', 'desenvolvimento', '2026-10-11T12:00:00.000Z');
+         INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+           VALUES (${String(id)}, ${String(id)}, 'desenvolvimento', 'Ticket ${String(id)}', 'aberto', 'fabriquinha', '2026-10-11T12:00:00.000Z');`,
+    )
+    .join("\n");
+
+/**
+ * Executar agora, como na página da issue, até o ticket falhar: sem evidências, a coleta depois do pi o falha.
+ * Devolve a sessão.
+ */
+async function executarAteFalhar(pagina: Page, { base }: Fabriquinha, ticket: number): Promise<string> {
+  const executar = await pagina.request.post(`${base}/api/tickets/${String(ticket)}/executar`, {
+    headers: { "Sec-Fetch-Site": "same-origin" },
+  });
+  expect(executar.status()).toBe(204);
+  let sessao = "";
+  await expect(async () => {
+    const ativas = (await (await pagina.request.get(`${base}/api/sessoes?escopo=ativas`)).json()) as {
+      sessao: string;
+      ticket: number;
+      motivo?: string;
+    }[];
+    const falhou = ativas.find((s) => s.ticket === ticket && s.motivo === "falha");
+    expect(falhou).toBeTruthy();
+    sessao = String(falhou?.sessao);
+  }).toPass();
+  return sessao;
+}
+
+test("responde e retoma um ticket que falhou, trocando o modelo", async ({ pagina, fabriquinha }) => {
+  projeto(fabriquinha.raiz, emDesenvolvimento(1));
+  const sessao = await executarAteFalhar(pagina, fabriquinha, 1);
+  await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
+
+  // O erro em destaque no fim da conversa, e o envio vira a instrução com o modelo.
+  const barra = pagina.locator(".estado-sessao");
+  await expect(barra.locator(".pill")).toHaveText("aguarda você · falha");
+  const erro = pagina.locator("[data-conversa] .erro-bloco");
+  await expect(erro).toContainText("Execução E-1 falhou:");
+  await expect(erro).toContainText("O ticket T-1 ficou falhou; o trabalho na worktree foi mantido.");
+  const retomar = pagina.locator("form[data-retomar]");
+  const instrucao = retomar.getByRole("textbox", { name: "Instrução" });
+  await expect(instrucao).toHaveAttribute(
+    "placeholder",
+    "Instrução para a próxima tentativa (vai antes do prompt da etapa)",
+  );
+  const modelo = retomar.getByRole("combobox", { name: "Modelo de T-1" });
+  await expect(modelo.locator("option")).toHaveText([
+    "padrão do pi",
+    "anthropic / claude-opus-5-5",
+    "anthropic / claude-sonnet-5-5",
+  ]);
+  await expect(modelo).toHaveValue("");
+
+  // Ao lado, o contexto da issue com o ticket desta sessão marcado.
+  const contexto = pagina.getByRole("region", { name: "Contexto da issue" });
+  await expect(contexto.getByRole("heading")).toHaveText("I-1 · loja");
+  await expect(contexto.locator(".trilho-mini")).toHaveAttribute("aria-label", "Fase: Desenvolvimento");
+  await expect(contexto.locator("li.atual")).toHaveText("T-1Ticket 1esta");
+  await expect(contexto.getByRole("link", { name: "Abrir a issue →" })).toHaveAttribute(
+    "href",
+    "/projects/loja/issues/I-1",
+  );
+
+  await modelo.selectOption("anthropic/claude-sonnet-5-5");
+  await instrucao.fill("ordene pela validade");
+  await retomar.getByRole("button", { name: "Responder e retomar" }).click();
+  // Reaberto, o ticket espera o agendador; o chat sai da falha sozinho, pelo SSE.
+  await expect(barra.locator(".pill")).toHaveText("rodando");
+  await expect(retomar).toHaveCount(0);
+
+  // A próxima execução, na mesma sessão, leva a instrução e roda com o modelo escolhido.
+  expect(await executarAteFalhar(pagina, fabriquinha, 1)).toBe(sessao);
+  await expect(pagina.locator("[data-conversa] .sistema", { hasText: "Execução E-2 iniciada" })).toBeVisible();
+  await expect(pagina.locator("[data-conversa] .erro-bloco").last()).toContainText("Execução E-2 falhou:");
+  await expect(barra.locator(".modelo")).toHaveText("anthropic / claude-sonnet-5-5");
+  const prompt = await pagina.request.get(`${fabriquinha.base}/api/execucoes/2/prompt`);
+  expect(await prompt.text()).toContain("# Instrução do Auditor\n\nordene pela validade");
+  await expect(pagina.getByRole("combobox", { name: "Modelo de T-1" })).toHaveValue("anthropic/claude-sonnet-5-5");
+});
+
+test("abre uma consulta com o histórico de outra sessão anexado", async ({ pagina, fabriquinha }) => {
+  projeto(fabriquinha.raiz, emDesenvolvimento(1, 2));
+  const sessao = await executarAteFalhar(pagina, fabriquinha, 1);
+  const outra = await executarAteFalhar(pagina, fabriquinha, 2);
+  await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
+
+  // Exportar baixa o Markdown da sessão.
+  const barra = pagina.locator(".estado-sessao");
+  const baixado = pagina.waitForEvent("download");
+  await barra.getByRole("link", { name: "Exportar" }).click();
+  expect((await baixado).suggestedFilename()).toBe("historico-T-1.md");
+
+  // Conversar sobre abre o chat da consulta, que começa com a conversa da principal.
+  await barra.getByRole("button", { name: "Conversar sobre" }).click();
+  await expect(pagina).not.toHaveURL(new RegExp(sessao));
+  await expect(barra).toContainText("desenvolvimento · consulta");
+  await expect(barra.locator(".pill")).toHaveText("aguarda você · conversa");
+  const conversa = pagina.locator("[data-conversa]");
+  await expect(conversa.locator(".msg.agente")).toHaveText(["agentepronto"]);
+
+  // + Anexar histórico: a outra sessão no seletor; a escolhida vira etiqueta removível.
+  const envio = pagina.locator("form[data-envio]");
+  await envio.getByRole("button", { name: "+ Anexar histórico" }).click();
+  const caixa = pagina.getByRole("dialog", { name: "Anexar histórico" });
+  await expect(caixa.locator("[data-anexar-sessao]")).toHaveCount(2);
+  await caixa.locator(`[data-anexar-sessao="${outra}"]`).click();
+  await expect(caixa).toBeHidden();
+  const etiqueta = envio.locator(".anexo");
+  await expect(etiqueta).toHaveText(`histórico de s-${outra.slice(0, 4)} · I-2 · T-2×`);
+  await envio.getByRole("button", { name: "+ Anexar histórico" }).click();
+  await caixa.locator(`[data-anexar-sessao="${sessao}"]`).click();
+  await expect(etiqueta).toHaveCount(2);
+  await etiqueta
+    .last()
+    .getByRole("button", { name: /Remover/ })
+    .click();
+  await expect(etiqueta).toHaveCount(1);
+
+  const mensagem = envio.getByRole("textbox", { name: "Mensagem" });
+  await mensagem.fill("o que houve?");
+  await mensagem.press("Enter");
+  const minha = conversa.locator(".msg.voce").last();
+  await expect(minha).toContainText("o que houve?");
+  await expect(minha).toContainText("Histórico da sessão T-2 (I-2, desenvolvimento) em");
+  await expect(minha).toContainText("historico-T-2.md; leia antes de responder.");
+  await expect(etiqueta).toHaveCount(0);
+  await expect(conversa.locator(".msg.agente").last()).toHaveText("agentepronto");
+
+  // Ao lado, o ticket da consulta marcado e o link para o chat da principal do outro ticket… da mesma issue.
+  const contexto = pagina.getByRole("region", { name: "Contexto da issue" });
+  await expect(contexto.locator("li.atual")).toHaveText("T-1Ticket 1esta");
 });

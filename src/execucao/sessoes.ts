@@ -19,6 +19,7 @@ import {
   iniciarConsulta,
   iniciarExecucao,
   naSessaoPrincipal,
+  reabrirTicket,
   terminarExecucao,
   ticketDe,
 } from "../dominio/execucao.ts";
@@ -270,11 +271,19 @@ export interface Chat {
   assinar(ouvinte: (evento: EventoPi) => void): () => void;
 }
 
-/** F4 §5.4: a conversa da sessão até agora e o fluxo de eventos das execuções dela. */
+/**
+ * F4 §5.4: a conversa da sessão até agora e o fluxo de eventos das execuções dela. A consulta começa com a conversa da
+ * principal (F4 §6.5): até o pi gravar a cópia, logo depois de subir, o chat lê a principal, e a consulta recém-aberta
+ * não aparece vazia.
+ */
 export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Chat> {
+  const ag = await agregadoAssentado(banco, issueDe(banco, sessao));
+  const info = estadoNoBanco(banco, ag, sessao);
+  const raiz = raizDo(banco);
+  const semCopia = info.modo === "consulta" && arquivoDaSessao(raiz, sessao) === undefined;
   return {
-    sessao: await infoDaSessao(banco, sessao),
-    conversa: lerConversa(raizDo(banco), sessao),
+    sessao: info,
+    conversa: lerConversa(raiz, semCopia ? principalDe(banco, ag, info.ticket)[0] : sessao),
     // O aviso de estado não espera o C6: o aviso seguinte, logo depois dele, corrige.
     assinar: (ouvinte) =>
       assinar(sessao, (evento) => {
@@ -574,6 +583,19 @@ export async function concluirSessao(banco: DatabaseSync, ticket: Id): Promise<v
     concluirTicket(a, { ticket }, FABRIQUINHA, ctx),
   );
   // C7 exige o ticket em execução, então ele já tem sessão.
+  avisar(...principalDe(banco, ag, ticket));
+}
+
+/**
+ * F4 §6.4: Responder e retomar. C9 grava a instrução do Auditor e devolve o ticket que falhou a `aberto`; a próxima
+ * execução da sessão principal, pelo agendador ou pelo Executar agora, a leva antes do prompt da etapa. O aviso tira o
+ * chat da falha.
+ */
+export function reabrir(banco: DatabaseSync, ticket: Id, instrucao?: string): void {
+  const ag = comIssue(banco, issueDoTicket(banco, ticket), "reabrirTicket", AUDITOR, (a) =>
+    reabrirTicket(a, { ticket, instrucao }, AUDITOR),
+  );
+  // C9 só reabre ticket que falhou, e só falha o que executou: a sessão principal existe.
   avisar(...principalDe(banco, ag, ticket));
 }
 

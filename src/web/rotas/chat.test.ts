@@ -285,3 +285,101 @@ test("concluir só a sessão em aberto; entrada inválida dá 422 e sessão ou t
   assert.equal((await pedir("/api/sessoes/nada")).status, 404);
   assert.equal((await pedir("/api/sessoes/nada/eventos")).status, 404);
 });
+
+test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra sessão anexado; histórico em Markdown", async () => {
+  const t0 = "2026-10-11T12:00:00.000Z";
+  servico.banco.exec(
+    `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
+       VALUES (900, 'loja', 'Timeout no checkout', 'problema', '', 'desenvolvimento', '${t0}');
+     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+       VALUES (900, 900, 'desenvolvimento', 'Buscar cupons', 'aberto', 'fabriquinha', '${t0}');`,
+  );
+  const dados = async (s: string) => (await pedir(`/api/sessoes/${s}`)).corpo as DadosDoChat;
+  const executarEsperandoFalha = async (execucoes: number) => {
+    assert.equal((await postar("/api/tickets/900/executar")).status, 204);
+    let sessao = "";
+    await ate(async () => {
+      const [s] = (await pedir("/api/sessoes?escopo=ativas&issue=900")).corpo as { sessao: string }[];
+      sessao = s?.sessao ?? "";
+      return sessao !== "" && (await estado(sessao)) === "aguardando_humano: falha";
+    }, "o ticket falhar");
+    assert.equal((await dados(sessao)).execucoes.length, execucoes);
+    return sessao;
+  };
+
+  // Sem evidências, a coleta depois do pi falha o ticket: a sessão espera a resposta do Auditor.
+  const sessao = await executarEsperandoFalha(1);
+  const falha = await dados(sessao);
+  assert.equal(falha.ticket.status, "falhou");
+  assert.ok(falha.ticket.erro);
+  const enviar = await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "oi", modo: "prompt" });
+  assert.equal(enviar.status, 409);
+  assert.match((enviar.corpo as { erro: string }).erro, /responda e retome o ticket/);
+
+  // C20 pela rota do desenho e C9 com a instrução: o ticket volta a aberto e o chat sai da falha pelo SSE.
+  const modelo = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  assert.equal((await postar("/api/tickets/900/modelo", { modelo })).status, 204);
+  const sse = await assinar(sessao);
+  assert.equal((await postar("/api/tickets/900/reabrir", { instrucao: "ordene pela validade" })).status, 204);
+  await ate(
+    () => sse.eventos.some((e) => e.type === "estado" && (e as Evento & CabecalhoDoChat).sessao.estado === "rodando"),
+    "o aviso do estado novo",
+  );
+  sse.fechar();
+  const reaberto = (await dados(sessao)).ticket;
+  assert.deepEqual([reaberto.status, reaberto.instrucao, reaberto.modelo], ["aberto", "ordene pela validade", modelo]);
+  const deNovo = await postar("/api/tickets/900/reabrir", {});
+  assert.equal(deNovo.status, 409, "só se reabre ticket que falhou");
+  assert.equal((await postar("/api/tickets/900/reabrir", { instrucao: 3 })).status, 422);
+  assert.equal((await postar("/api/tickets/999/reabrir", {})).status, 404);
+
+  // A próxima execução, na mesma sessão, leva a instrução antes do prompt da etapa e roda com o modelo novo.
+  assert.equal(await executarEsperandoFalha(2), sessao);
+  const segunda = (await dados(sessao)).execucoes[1];
+  assert.ok(segunda);
+  assert.deepEqual(segunda.modelo, modelo);
+  assert.match(
+    (await pedir(`/api/execucoes/${String(segunda.id)}/prompt`)).texto,
+    /# Instrução do Auditor\n\nordene pela validade/,
+  );
+  assert.equal((await postar("/api/tickets/900/reabrir", {})).status, 204, "sem instrução também retoma");
+
+  // Conversar sobre esta sessão: a consulta começa com a conversa da principal.
+  const { corpo } = await postar("/api/tickets/900/consulta");
+  const { sessao: consulta } = corpo as { sessao: string };
+  await esperarEstado(consulta, "aguardando_humano: conversa");
+  const aberta = await dados(consulta);
+  assert.equal(aberta.sessao.modo, "consulta");
+  assert.ok(aberta.conversa.length > 0);
+  assert.equal(aberta.conversa.length, (await dados(sessao)).conversa.length);
+  assert.equal((await postar("/api/tickets/999/consulta")).status, 404);
+
+  // + Anexar histórico: a exportação da outra sessão vai para a saída da execução, e a mensagem ganha a linha dela.
+  const [outra] = await registro();
+  const { ticket: doRegistro, issue: daOutra } = (await dados(outra)).sessao;
+  const perguntar = (anexos: unknown) =>
+    postar(`/api/sessoes/${consulta}/mensagens`, { texto: "o que houve?", modo: "prompt", anexos });
+  assert.equal((await perguntar("x")).status, 422);
+  assert.equal((await perguntar(["nada"])).status, 404);
+  assert.equal((await perguntar([outra])).status, 204);
+  await ate(async () => (await dados(consulta)).conversa.length > aberta.conversa.length + 1, "a resposta");
+  const pergunta = textos((await dados(consulta)).conversa).find((t) => t.startsWith("user: o que houve?"));
+  const linha = new RegExp(
+    `^user: o que houve\\?\\nHistórico da sessão T-${String(doRegistro)} \\(I-${String(daOutra)}, registro\\) em \`(.+historico-T-${String(doRegistro)}\\.md)\`; leia antes de responder\\.$`,
+  ).exec(String(pergunta));
+  assert.ok(linha?.[1], String(pergunta));
+  assert.match(readFileSync(linha[1], "utf8"), /^# Histórico da sessão T-/);
+
+  // Exportar histórico: o Markdown como download, com o nome do anexo.
+  const baixar = (s: string) => fetch(`${origem}/api/sessoes/${s}/historico.md`, { headers: { cookie: cookie() } });
+  const principal = await baixar(sessao);
+  assert.equal(principal.status, 200);
+  assert.equal(principal.headers.get("content-type"), "text/markdown; charset=utf-8");
+  assert.equal(principal.headers.get("content-disposition"), 'attachment; filename="historico-T-900.md"');
+  assert.match(await principal.text(), /^# Histórico da sessão T-900 \(I-900, desenvolvimento\)/);
+  assert.equal(
+    (await baixar(consulta)).headers.get("content-disposition"),
+    `attachment; filename="historico-T-900-consulta-${consulta}.md"`,
+  );
+  assert.equal((await baixar("nada")).status, 404);
+});

@@ -986,6 +986,9 @@ test("consulta: copia a sessão principal, sem ferramentas de escrita, sem promp
 
   const consulta = await conversarSobre(c.banco, 1, opcoes);
   assert.notEqual(consulta, principal);
+  // Antes de o pi gravar a cópia, o chat da consulta já mostra a conversa da principal.
+  assert.equal(existsSync(arquivoFalso(c, consulta)), false);
+  assert.deepEqual((await abrirChat(c.banco, consulta)).conversa, (await abrirChat(c.banco, principal)).conversa);
   assert.deepEqual(
     { ...c.execucoes().at(-1) },
     { id: 2, resultado: "em_andamento", sessao_pi: consulta, modo: "consulta" },

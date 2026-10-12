@@ -4,12 +4,13 @@
 // texto dele:
 // - "[ao vivo]": raciocínio, uma ferramenta que falha e um texto chegando em fluxo, sem terminar, até um `steer`, que
 //   o redireciona e abre um diálogo `select`;
-// - "registre": como o agente do registro, edita a issue e submete as evidências pelo CLI `fabriquinha`;
+// - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
+//   pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz "registre", e não conta;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
 // A resposta a um diálogo é ecoada numa mensagem e assenta; `abort` para a mensagem em fluxo como abortada.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 
@@ -29,6 +30,11 @@ if (argumentos.includes("--list-models")) {
 }
 
 const sessao = join(arg("--session-dir"), `2026-10-12T00-00-00-000Z_${arg("--session-id")}.jsonl`);
+// Como o pi, `--fork` começa a sessão nova com a conversa da sessão copiada (F4 §6.5).
+if (argumentos.includes("--fork")) {
+  mkdirSync(arg("--session-dir"), { recursive: true });
+  copyFileSync(arg("--fork"), sessao);
+}
 
 /** Como o pi, grava a mensagem em `<session-dir>/<instante>_<session-id>.jsonl` e a emite. */
 function mensagem(message: object): void {
@@ -148,7 +154,7 @@ async function aoPrompt(texto: string): Promise<void> {
     dialogo(pergunta);
     return;
   }
-  if (texto.includes("registre")) {
+  if (texto.trim() === "registre" || texto.includes("**registre**")) {
     registrar();
     responder("Registrei o título, o tipo, o comportamento e os critérios de aceite.");
   } else responder(process.env.FALSO_PI_RESPOSTA ?? "pronto");

@@ -23,12 +23,13 @@ const enviarJson = (metodo: "POST" | "DELETE", corpo?: unknown): RequestInit => 
 });
 
 /**
- * Os modelos do pi para o seletor do gate do desenho, lidos uma vez por carga do cliente: cada ação relê a página, e
- * `pi --list-models` não precisa rodar a cada uma. Falhando, o seletor fica só com o padrão e o override, com o aviso.
+ * Os modelos do pi para os seletores de modelo (gate do desenho e Responder e retomar no chat), lidos uma vez por carga
+ * do cliente: cada ação relê a página, e `pi --list-models` não precisa rodar a cada uma. Falhando, o seletor fica só
+ * com o padrão e o override, com o aviso.
  * ponytail: um modelo novo no pi só aparece depois de recarregar a página.
  */
 let modelosDoPi: Promise<Modelo[]> | undefined;
-function modelos(): Promise<Modelo[]> {
+export function modelos(): Promise<Modelo[]> {
   modelosDoPi ??= api<Modelo[]>("/api/modelos").catch((error_: unknown) => {
     modelosDoPi = undefined;
     avisar(`não foi possível listar os modelos do pi: ${error_ instanceof Error ? error_.message : String(error_)}`);
@@ -59,7 +60,7 @@ function alternar(mostrar: HTMLElement | null, esconder: HTMLElement | null): vo
 }
 
 /** Preenche cada `[data-texto]` da caixa com o texto do anexo, como texto (nunca como HTML). */
-async function carregarTextos(): Promise<void> {
+export async function carregarTextos(): Promise<void> {
   for (const pre of elemento("[data-caixa-corpo]", HTMLElement).querySelectorAll<HTMLElement>("[data-texto]")) {
     const resposta = await fetch(String(pre.dataset.texto));
     pre.textContent = resposta.ok

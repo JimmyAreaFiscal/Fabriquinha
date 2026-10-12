@@ -1,25 +1,42 @@
-// Rotas do chat (F7 §4.2, §4.4; F4 §5.4, §6.6): a sessão com a conversa, os eventos ao vivo por SSE, as mensagens,
-// os diálogos de extensão, o aborto, o registro (C1, C2 e C10) e a conclusão da sessão em aberto. Cada rota só
-// converte a entrada e chama o F4; as regras ficam lá.
+// Rotas do chat (F7 §4.2, §4.4; F4 §5.4, §6.4 a §6.8): a sessão com a conversa, os eventos ao vivo por SSE, as
+// mensagens com o histórico de outras sessões anexado, os diálogos de extensão, o aborto, o registro (C1, C2 e C10), a
+// conclusão da sessão em aberto, responder e retomar (C9 e C20), a consulta (C21) e o histórico em Markdown. Cada rota
+// só converte a entrada e chama o F4; as regras ficam lá.
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { type Agregado, AUDITOR, type Execucao, type Issue, type TipoEvidencia } from "../../dominio/agregado.ts";
+import {
+  type Agregado,
+  AUDITOR,
+  type Execucao,
+  type Issue,
+  type Ticket,
+  type TipoEvidencia,
+} from "../../dominio/agregado.ts";
 import { existe } from "../../dominio/erros.ts";
 import { evidenciasFaltando } from "../../dominio/evidencia.ts";
 import { ticketDe } from "../../dominio/execucao.ts";
 import { editarIssue } from "../../dominio/issue.ts";
 import { Id, Motivo } from "../../dominio/primitivos.ts";
 import { abortar, responderDialogo } from "../../execucao/gerente.ts";
-import { type Mensagem, promptsDaFabriquinha, texto } from "../../execucao/historico.ts";
+import {
+  anexarHistorico,
+  exportarHistorico,
+  type Mensagem,
+  nomeDoHistorico,
+  promptsDaFabriquinha,
+  texto,
+} from "../../execucao/historico.ts";
 import {
   abrirChat,
   concluirSessao,
+  conversarSobre,
   decidirRegistroNoChat,
   enviar,
   type InfoSessao,
   infoDaSessao,
   type OpcoesInterativa,
+  reabrir,
   registrarNecessidade,
 } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
@@ -47,6 +64,8 @@ export interface PainelRegistro {
 export interface CabecalhoDoChat {
   sessao: InfoSessao;
   issue: Issue;
+  /** O ticket da sessão: o erro dele na falha e o modelo que o seletor da retomada mostra. */
+  ticket: Ticket;
   /** As execuções da sessão, em ordem: dão as linhas do sistema da conversa. */
   execucoes: Execucao[];
   /** Só no gate do registro. */
@@ -87,6 +106,7 @@ function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
   return {
     sessao,
     issue: ag.issue,
+    ticket: ticketDe(ag, sessao.ticket),
     execucoes: ag.execucoes.filter((e) => e.sessaoPi === sessao.sessao),
     ...(registro && { registro }),
   };
@@ -135,7 +155,12 @@ async function eventos(banco: DatabaseSync, sessao: string, resposta: ServerResp
   resposta.on("close", cancelar);
 }
 
-const NovaMensagem = z.object({ texto: z.string().trim().min(1), modo: z.enum(["prompt", "steer", "follow_up"]) });
+/** `anexos` são sessões cujo histórico vai junto (F4 §6.8). */
+const NovaMensagem = z.object({
+  texto: z.string().trim().min(1),
+  modo: z.enum(["prompt", "steer", "follow_up"]),
+  anexos: z.array(z.string().min(1)).default([]),
+});
 
 /** `{ valor }`, `{ confirmado }` ou `{ cancelado: true }`, no formato do `extension_ui_response` do pi. */
 const RespostaDialogo = z.union([
@@ -177,8 +202,23 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/mensagens",
     tratar: async ({ banco, params, corpo }) => {
-      const { texto, modo } = NovaMensagem.parse(corpo);
-      await enviar(banco, String(params.sessao), texto, modo, opcoes(banco));
+      const { texto, modo, anexos } = NovaMensagem.parse(corpo);
+      const sessao = String(params.sessao);
+      const mensagem = anexos.length > 0 ? await anexarHistorico(banco, sessao, anexos, texto) : texto;
+      await enviar(banco, sessao, mensagem, modo, opcoes(banco));
+    },
+  },
+  {
+    metodo: "GET",
+    caminho: "/api/sessoes/:sessao/historico.md",
+    tratar: async ({ banco, params, resposta }) => {
+      const info = await infoDaSessao(banco, String(params.sessao));
+      resposta
+        .writeHead(200, {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${nomeDoHistorico(info)}"`,
+        })
+        .end(exportarHistorico(banco, info.sessao));
     },
   },
   {
@@ -211,6 +251,24 @@ export const ROTAS_DO_CHAT: Rota[] = [
       const decisao = DecisaoRegistro.parse(corpo);
       await decidirRegistroNoChat(banco, IdDoCaminho.parse(params.id), decisao, opcoes(banco));
     },
+  },
+  {
+    metodo: "POST",
+    caminho: "/api/tickets/:id/reabrir",
+    tratar: ({ banco, params, corpo }) => {
+      reabrir(
+        banco,
+        IdDoCaminho.parse(params.id),
+        z.object({ instrucao: z.string().optional() }).parse(corpo).instrucao,
+      );
+    },
+  },
+  {
+    metodo: "POST",
+    caminho: "/api/tickets/:id/consulta",
+    tratar: async ({ banco, params }) => ({
+      sessao: await conversarSobre(banco, IdDoCaminho.parse(params.id), opcoes(banco)),
+    }),
   },
   {
     metodo: "POST",

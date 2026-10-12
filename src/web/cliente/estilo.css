@@ -2306,6 +2306,182 @@ input.erro {
   cursor: not-allowed;
 }
 
+/* Falha (F4 §6.4): o erro em destaque no fim da conversa e o envio que responde e retoma. */
+.erro-bloco {
+  padding: var(--s-3) var(--s-4);
+  background: var(--danger-bg);
+  border: 1px solid #5a2a1d;
+  border-radius: var(--r-md);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+.erro-bloco strong {
+  color: var(--danger);
+}
+.rotulo-modelo {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.rotulo-modelo .seletor-modelo {
+  width: auto;
+  height: auto;
+  padding: 3px 6px;
+  font: 12px var(--font);
+}
+
+/* Anexos de histórico (F4 §6.8): etiquetas removíveis no envio e o seletor de sessões na caixa. */
+.anexos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.anexos[hidden] {
+  display: none;
+}
+.anexos .anexo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 4px 0 var(--s-2);
+  font: var(--fs-xs) var(--mono);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.anexos .anexo button {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+.anexos .anexo button:hover {
+  color: var(--ink);
+}
+.sessoes-anexo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.opcao-sessao {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  align-items: center;
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.opcao-sessao:hover {
+  border-color: var(--accent);
+}
+.opcao-sessao:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.opcao-sessao > :last-child {
+  margin-left: auto;
+}
+
+/* Contexto da issue, ao lado da conversa: trilho compacto, tickets, artefatos e o link para a issue. */
+.lado {
+  display: contents;
+}
+.contexto-issue > .link {
+  align-self: flex-start;
+}
+.trilho-mini {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+}
+.trilho-mini i {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.trilho-mini i.feito {
+  background: var(--closed);
+}
+.trilho-mini i.atual {
+  background: var(--accent);
+}
+.trilho-mini.aguarda i.atual {
+  background: var(--open);
+}
+.trilho-mini.falha i.atual {
+  background: var(--danger);
+}
+.trilho-mini.rodando i.atual {
+  background: var(--claimed);
+}
+.tickets-da-issue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tickets-da-issue li {
+  display: grid;
+  grid-template-columns: 10px 48px minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: center;
+  padding: 5px var(--s-2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+.tickets-da-issue li.atual {
+  background: var(--surface-2);
+  outline: 1px solid var(--accent);
+}
+.tickets-da-issue .p {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--closed);
+}
+.tickets-da-issue .p.aberto {
+  background: var(--bg);
+  border: 2px solid var(--muted);
+  width: 4px;
+  height: 4px;
+}
+.tickets-da-issue .p.em_execucao {
+  background: var(--claimed);
+}
+.tickets-da-issue .p.falhou {
+  background: var(--danger);
+}
+.tickets-da-issue .t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contexto-issue .cards-art {
+  gap: var(--s-1);
+}
+.contexto-issue .art {
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--s-2);
+  font-size: var(--fs-xs);
+  background: var(--bg);
+}
+.contexto-issue .art .tipo {
+  font-size: 9px;
+  padding: 0 3px;
+}
+
 @media (max-width: 1100px) {
   .chat-layout {
     grid-template-columns: minmax(0, 1fr);

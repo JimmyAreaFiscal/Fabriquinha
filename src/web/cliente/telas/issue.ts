@@ -204,9 +204,12 @@ function numero(valor: number | undefined, um: string, varios: string): string {
   return `<div class="numero"><strong>${valor === undefined ? "—" : String(valor)}</strong><span>${rotulo}</span></div>`;
 }
 
-/** O seletor do modelo do ticket: o padrão da etapa ou um override (C20); o override que o pi não lista continua. */
-function seletorDeModelo(p: PaginaDaIssue, t: Ticket, modelos: readonly Modelo[]): string {
-  const padrao = p.projeto.modelos.desenvolvimento;
+/**
+ * O seletor do modelo do ticket: o padrão da etapa dele ou um override (C20); o override que o pi não lista continua.
+ * Serve ao gate do desenho e ao Responder e retomar do chat.
+ */
+export function seletorDeModelo(p: PaginaDaIssue, t: Ticket, modelos: readonly Modelo[]): string {
+  const padrao = p.projeto.modelos[t.etapa];
   const { modelo } = t;
   const opcoes = modelo && !modelos.some((m) => par(m) === par(modelo)) ? [...modelos, modelo] : modelos;
   const options = opcoes.map((m) => {
@@ -302,24 +305,23 @@ function classeDoCard(e: Evidencia): string {
   return primeiro ? ROTULO_DA_CLASSE[classe(primeiro)] : "JSON";
 }
 
+/** O card de um artefato, que abre a evidência na caixa pelo `data-evidencia`; aqui e na coluna da direita do chat. */
+export function cardDaEvidencia(e: Evidencia): string {
+  const ponto =
+    e.aprovada === undefined ? "" : `<span class="ponto ${cor(e.aprovada)}" title="${veredito(e.aprovada)}"></span>`;
+  return `<button type="button" class="art" data-evidencia="${String(e.id)}"><span class="tipo">${classeDoCard(e)}</span>${NOME[e.tipo]}${ponto}</button>`;
+}
+
+/** Os artefatos que aparecem como card: `explicacao_fitness` vai dentro da tabela da `matriz_fitness` do ticket. */
+export const comCard = (p: PaginaDaIssue): Evidencia[] => p.evidencias.filter((e) => e.tipo !== "explicacao_fitness");
+
 function artefatos(p: PaginaDaIssue): string {
-  // `explicacao_fitness` aparece dentro da tabela da `matriz_fitness` do mesmo ticket.
-  const porTicket = Map.groupBy(
-    p.evidencias.filter((e) => e.tipo !== "explicacao_fitness"),
-    (e) => e.ticket,
-  );
+  const porTicket = Map.groupBy(comCard(p), (e) => e.ticket);
   const linhas = p.tickets.toReversed().flatMap((t) => {
     const evidencias = porTicket.get(t.id);
     if (!evidencias) return [];
-    const cards = evidencias.map((e) => {
-      const ponto =
-        e.aprovada === undefined
-          ? ""
-          : `<span class="ponto ${cor(e.aprovada)}" title="${veredito(e.aprovada)}"></span>`;
-      return `<button type="button" class="art" data-evidencia="${String(e.id)}"><span class="tipo">${classeDoCard(e)}</span>${NOME[e.tipo]}${ponto}</button>`;
-    });
     return [
-      `<div class="etapa-artefatos"><div class="etapa-nome">${ETAPA[t.etapa]}<span class="id">T-${String(t.id)}</span></div><div class="cards-art">${cards.join("")}</div></div>`,
+      `<div class="etapa-artefatos"><div class="etapa-nome">${ETAPA[t.etapa]}<span class="id">T-${String(t.id)}</span></div><div class="cards-art">${evidencias.map(cardDaEvidencia).join("")}</div></div>`,
     ];
   });
   return `<section class="secao"><h2>Artefatos <span class="muted">${linhas.length ? "clique para abrir" : ""}</span></h2>${
