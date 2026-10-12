@@ -206,9 +206,10 @@ export function formularioDeProjeto(
     erros.size > 0
       ? '<span class="msg-erro">' + plural(erros.size, "campo com erro", "campos com erro") + "</span>"
       : "";
-  const rodape = falha
-    ? `<span class="msg-erro falha">${escapar(falha)}</span>`
-    : `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
+  // A falha do F5 (502) ou a recusa do C19 (409) entra numa linha própria; a nota e a contagem ficam (F7 §4.4).
+  const rodape =
+    (falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "") +
+    `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
   return `<h2>${titulo}</h2><form class="form" data-projeto novalidate>
 <div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branchBase", "Branch base", p.branchBase, { mono: true })}${texto(erros, "repo", "Caminho do repositório", p.repo, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div>${texto(erros, "sonar.projectKey", "Projeto no SonarQube", p.sonar.projectKey, { mono: true, extra: ' placeholder="projectKey"', ajuda: "o token fica em <code>&lt;raiz&gt;/ambiente</code>, fora do banco" })}</div></div>
 <div class="grupo"><h3>Preparação e testes</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}${lista(erros, "testes", "Testes", "pelo menos um; todos precisam sair com 0", p.testes)}</div></div>

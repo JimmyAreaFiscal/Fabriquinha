@@ -68,7 +68,15 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
   const rolagem = main.querySelector(".pista-rola")?.scrollLeft ?? 0;
   main.innerHTML = paginaDoProjeto(projetos, nome, lista, mes, { mostrar, gavetas }, new Date());
   const rola = main.querySelector(".pista-rola");
-  if (rola) rola.scrollLeft = rolagem;
+  const topo = main.querySelector(".pista-topo");
+  if (rola && topo) {
+    // O cabeçalho, fora do trilho para ficar fixo ao rolar a página, acompanha a rolagem horizontal dele.
+    rola.addEventListener("scroll", () => {
+      topo.scrollLeft = rola.scrollLeft;
+    });
+    rola.scrollLeft = rolagem;
+    topo.scrollLeft = rolagem;
+  }
 
   const redesenhar = (): void => {
     montarProjeto(main, params, signal).catch(mostrarErro);

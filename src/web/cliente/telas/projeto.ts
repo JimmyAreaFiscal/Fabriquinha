@@ -149,7 +149,10 @@ function linha(
   </div>`;
 }
 
-/** O cabeçalho das colunas do trilho: as 5 etapas sobre as 8 fases, as de gate em âmbar. */
+/**
+ * O cabeçalho das colunas do trilho: as 5 etapas sobre as 8 fases, as de gate em âmbar. Fica fora do trilho, que rola
+ * na horizontal na janela estreita: dentro dele, deixaria de ficar fixo ao rolar a página (a montagem o acompanha).
+ */
 function cabeca(): string {
   const etapas = ETAPAS_DO_PROCESSO.map(
     ([nome, fases]) => `<div class="pista-etapa" style="grid-column: span ${String(fases)}">${nome}</div>`,
@@ -158,7 +161,7 @@ function cabeca(): string {
     const classe = GATES.has(f) ? "pista-fase gate" : "pista-fase";
     return `<div class="${classe}">${nome}</div>`;
   });
-  return `<div class="pista-cabeca" aria-hidden="true"><div></div>${etapas.join("")}<div></div><div></div>${fases.join("")}<div></div></div>`;
+  return `<div class="pista-cabeca"><div></div>${etapas.join("")}<div></div><div></div>${fases.join("")}<div></div></div>`;
 }
 
 /** A página `/projects/:projeto`, com o mês corrente do projeto (`mes`) em 5 cards. */
@@ -192,7 +195,7 @@ export function paginaDoProjeto(
   ${confirmacaoDeArquivar(contagem.concluidas, nome)}
   ${
     issues.length > 0
-      ? `<div class="pista-rola"><div class="pista">${cabeca()}${issues.map((i) => linha(i, sessoes, projeto, escolhas, agora)).join("")}</div></div>`
+      ? `<div class="pista-topo" aria-hidden="true">${cabeca()}</div><div class="pista-rola"><div class="pista">${issues.map((i) => linha(i, sessoes, projeto, escolhas, agora)).join("")}</div></div>`
       : '<p class="vazio">Nenhuma issue.</p>'
   }`;
 }

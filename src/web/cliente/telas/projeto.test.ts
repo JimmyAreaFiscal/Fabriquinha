@@ -176,6 +176,11 @@ test("linha por issue: título, I-n, tipo, bloqueio, PR, progresso, trilho com a
   };
   const html = paginaDoProjeto(PROJETOS, "loja <api>", lista, MES, NADA, AGORA);
   // O cabeçalho do trilho: as 5 etapas sobre as 8 fases, as de gate marcadas.
+  // O cabeçalho fica fora do trilho que rola na horizontal, para continuar fixo ao rolar a página (ticket 29).
+  assert.match(
+    html,
+    /<div class="pista-topo" aria-hidden="true"><div class="pista-cabeca">.*<\/div><\/div><div class="pista-rola"><div class="pista"><div class="pista-item/s,
+  );
   assert.match(html, /<div class="pista-etapa" style="grid-column: span 2">Desenhar<\/div>/);
   assert.match(html, /<div class="pista-fase gate">Aprovação do PR<\/div>/);
   assert.equal(html.match(/class="pista-item/g)?.length, 4);

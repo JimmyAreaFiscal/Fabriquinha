@@ -89,9 +89,11 @@ test("mudar o mês em foco: a média passa a usar só os meses anteriores a ele"
   await expect(issues.locator("tbody tr")).toHaveCount(2);
   await expect(issues.locator("tfoot")).toContainText("2 issues");
   await expect(issues.locator("tfoot")).toContainText("US$ 95,00");
+  // O foco continua no primeiro mês, que o período ainda contém (metricas-foco.spec.ts).
   await pagina.getByLabel("Projeto", { exact: true }).selectOption("loja");
   await expect(issues.locator("tbody tr")).toHaveCount(1);
-  await expect(custo).toHaveText(/US\$ 60,00\s*média US\$ 15,00/);
+  await expect(issues.locator("tfoot")).toContainText("US$ 90,00");
+  await expect(custo).toHaveText(/US\$ 10,00\s*sem meses anteriores/);
 });
 
 test("Início com a frase do mês de todos os projetos e Projeto com os 5 cards do mês", async ({

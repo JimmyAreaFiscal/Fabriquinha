@@ -12,6 +12,7 @@ import {
   media,
   mesDe,
   paginaDeMetricas,
+  focoNoPeriodo,
   periodoPadrao,
   proximaOrdem,
   resumo,
@@ -98,6 +99,10 @@ test("meses: somar, contar, o do instante, o rótulo e o período padrão", () =
   assert.equal(mesDe(new Date(2026, 0, 31, 23, 59)), "2026-01");
   assert.equal(rotuloMes("2026-03"), "mar/26");
   assert.deepEqual(periodoPadrao("2026-10"), { de: "2025-11", ate: "2026-10", foco: "2026-10" });
+  // O foco fica enquanto o período o contém; fora dele, vai para o último mês.
+  assert.equal(focoNoPeriodo({ de: "2025-11", ate: "2026-10", foco: "2026-07" }), "2026-07");
+  assert.equal(focoNoPeriodo({ de: "2025-11", ate: "2026-04", foco: "2026-07" }), "2026-04");
+  assert.equal(focoNoPeriodo({ de: "2026-08", ate: "2026-10", foco: "2026-07" }), "2026-10");
 });
 
 test("números: média sem os vazios e a variação contra a média", () => {

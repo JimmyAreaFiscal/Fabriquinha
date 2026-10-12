@@ -200,13 +200,16 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
   );
 });
 
-test("a falha que não é de campo (F5, C19) fica no rodapé, no lugar da ajuda", () => {
-  const html = formularioDeProjeto(NOVO, { modelos: [], erros: new Map(), falha: "o gh não está autenticado <x>" });
+test("a falha que não é de campo (F5, C19) fica no rodapé, junto da nota e da contagem, que ficam", () => {
+  const html = formularioDeProjeto(NOVO, {
+    modelos: [],
+    erros: new Map([["nome", ["obrigatório"]]]),
+    falha: "o gh não está autenticado <x>",
+  });
   assert.match(
     html,
-    /<div class="rodape-form"><span class="msg-erro falha">o gh não está autenticado &#60;x&#62;<\/span><button/,
+    /<div class="rodape-form"><span class="msg-erro falha" role="alert">o gh não está autenticado &#60;x&#62;<\/span><span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.<\/span><span class="msg-erro">1 campo com erro<\/span><button/,
   );
-  assert.doesNotMatch(html, /Ao salvar/);
 });
 
 test("página: cabeçalho, menu e painel; projeto do endereço que não existe", () => {

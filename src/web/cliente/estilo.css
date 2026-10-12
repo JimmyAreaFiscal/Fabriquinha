@@ -684,8 +684,17 @@ a {
   color: var(--muted);
 }
 
-.pista {
+.pista,
+.pista-cabeca {
   --cols: 300px repeat(8, minmax(64px, 1fr)) 230px;
+}
+/* Fixo ao rolar a página; na janela estreita, a montagem o rola junto com o trilho. */
+.pista-topo {
+  position: sticky;
+  top: 48px;
+  z-index: 1;
+  overflow: hidden;
+  background: var(--bg);
 }
 .pista-cabeca,
 .pista-linha {
@@ -694,10 +703,6 @@ a {
   align-items: center;
 }
 .pista-cabeca {
-  position: sticky;
-  top: 48px;
-  z-index: 1;
-  background: var(--bg);
   padding-top: var(--s-2);
 }
 .pista-etapa {
@@ -914,7 +919,8 @@ a {
   .pista-rola {
     overflow-x: auto;
   }
-  .pista {
+  .pista,
+  .pista-cabeca {
     min-width: 1080px;
   }
 }
@@ -1533,6 +1539,13 @@ input.erro {
 }
 .rodape-form .ajuda + .msg-erro {
   margin-right: var(--s-2);
+}
+/* A falha de salvar o projeto numa linha própria, acima da nota e dos botões. */
+.painel-config .rodape-form {
+  flex-wrap: wrap;
+}
+.painel-config .rodape-form .falha {
+  flex-basis: 100%;
 }
 
 @media (max-width: 1100px) {

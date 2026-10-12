@@ -11,6 +11,7 @@ import {
   dica,
   type EstadoDasMetricas,
   evolucao,
+  focoNoPeriodo,
   type Metrica,
   mesDe,
   paginaDeMetricas,
@@ -91,7 +92,7 @@ export function montarMetricas(main: HTMLElement, _params: Parametros, signal: A
     if (!(seletor instanceof HTMLSelectElement) || !seletor.dataset.filtro) return;
     const campo = seletor.dataset.filtro as "projeto" | "de" | "ate";
     estado[campo] = seletor.value;
-    estado.foco = estado.ate;
+    estado.foco = focoNoPeriodo(estado);
     recarregar();
   }
 

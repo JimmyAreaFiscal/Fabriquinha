@@ -108,6 +108,10 @@ export interface DadosDasMetricas {
   atual: string;
 }
 
+/** O mês em foco depois de trocar um filtro: o mesmo, se o período ainda o contém; senão, o último mês dele. */
+export const focoNoPeriodo = ({ de, ate, foco }: Pick<EstadoDasMetricas, "de" | "ate" | "foco">): string =>
+  foco >= de && foco <= ate ? foco : ate;
+
 /** O período padrão (F7 §4.2): os 11 meses anteriores mais o corrente, com o foco no corrente. */
 export function periodoPadrao(atual: string): Pick<EstadoDasMetricas, "de" | "ate" | "foco"> {
   return { de: somarMeses(atual, -11), ate: atual, foco: atual };
