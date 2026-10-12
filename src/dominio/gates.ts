@@ -16,10 +16,9 @@ import { exigirEvidencias } from "./evidencia.ts";
 import { exigirSemExecucao, marcarConcluido, novoTicket, rotuloTicket, ticketDe } from "./execucao.ts";
 import { Id, Motivo } from "./primitivos.ts";
 
-const EntradaDecisao = z.discriminatedUnion("aprovado", [
-  z.object({ aprovado: z.literal(true), motivo: Motivo.optional() }),
-  z.object({ aprovado: z.literal(false), motivo: Motivo }),
-]);
+const APROVADA = { aprovado: z.literal(true), motivo: Motivo.optional() };
+const REPROVADA = { aprovado: z.literal(false), motivo: Motivo };
+const EntradaDecisao = z.discriminatedUnion("aprovado", [z.strictObject(APROVADA), z.strictObject(REPROVADA)]);
 
 /** O agregado com a decisão sobre o resultado de `ticket` acrescentada: do agente na revisão, do Auditor nos demais. */
 function comDecisao(
@@ -116,7 +115,10 @@ export function decidirDesenho(ag: Agregado, entrada: unknown, ator: Ator, ctx: 
   };
 }
 
-const EntradaRevisao = z.object({ ticket: Id }).and(EntradaDecisao);
+const EntradaRevisao = z.discriminatedUnion("aprovado", [
+  z.strictObject({ ticket: Id, ...APROVADA }),
+  z.strictObject({ ticket: Id, ...REPROVADA }),
+]);
 
 /** C14: o agente da revisão grava a decisão sobre o próprio ticket; outra na mesma execução substitui a anterior. */
 export function registrarDecisaoRevisao(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {

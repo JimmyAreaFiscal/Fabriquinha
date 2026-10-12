@@ -53,7 +53,7 @@ export const ROTAS_DO_DESENHO: Rota[] = [
     caminho: "/api/tickets/:id/modelo",
     tratar: async ({ banco, params, corpo }) => {
       const ticket = IdDoCaminho.parse(params.id);
-      const { modelo } = z.object({ modelo: Modelo.nullable() }).parse(corpo);
+      const { modelo } = z.strictObject({ modelo: Modelo.nullable() }).parse(corpo);
       await conferir(modelo);
       comIssue(banco, issueDoTicket(banco, ticket), "definirModeloTicket", AUDITOR, (ag) =>
         definirModeloTicket(ag, { ticket, modelo }, AUDITOR),

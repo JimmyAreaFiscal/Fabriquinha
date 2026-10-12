@@ -14,7 +14,7 @@ import { ErroDeRegra } from "./erros.ts";
 import { Id, Markdown, Slug, Titulo } from "./primitivos.ts";
 
 const EntradaRegistro = z.object({ projeto: Slug, deps: z.array(Id).default([]) });
-const EntradaEdicao = z.object({ titulo: Titulo, tipo: TipoIssue, descricao: Markdown }).partial();
+const EntradaEdicao = z.strictObject({ titulo: Titulo, tipo: TipoIssue, descricao: Markdown }).partial();
 
 function exigirIssue(ctx: Contexto, id: Id): void {
   if (!ctx.issueExiste(id)) {

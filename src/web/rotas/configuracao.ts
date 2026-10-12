@@ -2,12 +2,12 @@
 // (C19) e os modelos do pi para os seletores.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { mensagem } from "../../dominio/erros.ts";
-import { Projeto } from "../../dominio/projeto.ts";
+import { encontrado, mensagem } from "../../dominio/erros.ts";
+import { Hospedagem, Projeto } from "../../dominio/projeto.ts";
 import { conferirModelo, listarModelos } from "../../execucao/modelos.ts";
 import { varrerBase } from "../../metricas/retrabalho.ts";
 import { noLog } from "../../persistencia/execucoes.ts";
-import { editarProjeto, issuesDoProjeto, projetos, registrarProjeto } from "../../persistencia/projetos.ts";
+import { editarProjeto, issuesDoProjeto, projeto, projetos, registrarProjeto } from "../../persistencia/projetos.ts";
 import { autonomaEmAndamento, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
 import { conferirProjeto } from "../../repositorio/cadastro.ts";
 import { ErroHttp } from "../erros.ts";
@@ -23,16 +23,16 @@ function estado(banco: DatabaseSync, agendador: Agendador) {
   };
 }
 
-/** O projeto como o formulário manda: a hospedagem não vem dele, é deduzida do remoto pelo F5. */
-const DoFormulario = Projeto.omit({ hospedagem: true });
-const DaEdicao = DoFormulario.omit({ nome: true });
+/** O projeto como o formulário manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
+const DoFormulario = Projeto.extend({ hospedagem: Hospedagem.optional() });
+/** O nome é a chave e não muda (C19): o do caminho vale, e o do corpo é ignorado. */
+const DaEdicao = DoFormulario.extend({ nome: z.unknown() });
 
 /**
  * C19 pelo web: confere o repositório (F5 §2; a falha é externa, 502, e nada é gravado), confere cada modelo (F4 §9;
- * o recusado vira erro do campo, 422), grava e fixa o cursor inicial da base (F6 §4.4). A varredura que falha só vai
- * para o log: o agendador a refaz no dia seguinte.
+ * o recusado vira erro do campo, 422) e grava.
  */
-async function cadastrar(
+async function conferirEGravar(
   banco: DatabaseSync,
   p: z.infer<typeof DoFormulario>,
   gravar: typeof registrarProjeto,
@@ -53,10 +53,20 @@ async function cadastrar(
     )
   ).flat();
   if (recusados.length > 0) throw new z.ZodError(recusados);
-  const salvo = gravar(banco, { ...p, hospedagem });
+  return gravar(banco, { ...p, hospedagem });
+}
+
+/**
+ * O cadastro e só ele fixa o cursor inicial da base (F6 §4.4); a edição não varre. A varredura que falha só vai para o
+ * log: o agendador a refaz no dia seguinte.
+ */
+async function cadastrar(banco: DatabaseSync, p: z.infer<typeof DoFormulario>): Promise<Projeto> {
+  const salvo = await conferirEGravar(banco, p, registrarProjeto);
   await varrerBase(banco, salvo.nome).catch(noLog);
   return salvo;
 }
+
+const comIssues = (banco: DatabaseSync, p: Projeto) => ({ ...p, issues: issuesDoProjeto(banco, p.nome) });
 
 export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   { metodo: "GET", caminho: "/api/configuracao", tratar: ({ banco, agendador }) => estado(banco, agendador) },
@@ -71,19 +81,29 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos",
-    tratar: ({ banco }) => projetos(banco).map((p) => ({ ...p, issues: issuesDoProjeto(banco, p.nome) })),
+    tratar: ({ banco }) => projetos(banco).map((p) => comIssues(banco, p)),
+  },
+  {
+    metodo: "GET",
+    caminho: "/api/projetos/:nome",
+    tratar: ({ banco, params }) => {
+      const nome = String(params.nome);
+      return comIssues(
+        banco,
+        encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "confira o nome do projeto"),
+      );
+    },
   },
   { metodo: "GET", caminho: "/api/modelos", tratar: () => listarModelos() },
   {
     metodo: "POST",
     caminho: "/api/projetos",
-    tratar: ({ banco, corpo }) => cadastrar(banco, DoFormulario.parse(corpo), registrarProjeto),
+    tratar: ({ banco, corpo }) => cadastrar(banco, DoFormulario.parse(corpo)),
   },
-  // O nome é a chave e não muda (C19): o do caminho vale, e o do corpo é ignorado.
   {
     metodo: "POST",
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params, corpo }) =>
-      cadastrar(banco, { ...DaEdicao.parse(corpo), nome: String(params.nome) }, editarProjeto),
+      conferirEGravar(banco, { ...DaEdicao.parse(corpo), nome: String(params.nome) }, editarProjeto),
   },
 ];

@@ -159,7 +159,7 @@ async function eventos(banco: DatabaseSync, sessao: string, resposta: ServerResp
 }
 
 /** `anexos` são sessões cujo histórico vai junto (F4 §6.8). */
-const NovaMensagem = z.object({
+const NovaMensagem = z.strictObject({
   texto: z.string().trim().min(1),
   modo: z.enum(["prompt", "steer", "follow_up"]),
   anexos: z.array(z.string().min(1)).default([]),
@@ -173,11 +173,11 @@ const RespostaDialogo = z.union([
 ]);
 
 const DecisaoRegistro = z.discriminatedUnion("aprovado", [
-  z.object({ aprovado: z.literal(true) }),
-  z.object({ aprovado: z.literal(false), motivo: Motivo }),
+  z.strictObject({ aprovado: z.literal(true) }),
+  z.strictObject({ aprovado: z.literal(false), motivo: Motivo }),
 ]);
 
-const Registro = z.object({ projeto: z.string(), deps: z.array(Id).default([]) });
+const Registro = z.strictObject({ projeto: z.string(), deps: z.array(Id).default([]) });
 
 export const ROTAS_DO_CHAT: Rota[] = [
   {
@@ -262,7 +262,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
       reabrir(
         banco,
         IdDoCaminho.parse(params.id),
-        z.object({ instrucao: z.string().optional() }).parse(corpo).instrucao,
+        z.strictObject({ instrucao: z.string().optional() }).parse(corpo).instrucao,
       );
     },
   },

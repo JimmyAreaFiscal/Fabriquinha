@@ -266,6 +266,38 @@ test("arquivos: o arquivo que não se lê depois dos cabeçalhos corta a conexã
   assert.match(String(erros.mock.calls[0]?.arguments[1]), /EACCES/);
 });
 
+test("toda mutação recusa campo desconhecido no corpo com 422", async () => {
+  const projeto = {
+    nome: "loja",
+    repo: "/nao/existe",
+    branchBase: "main",
+    testes: ["npm test"],
+    sonar: { projectKey: "loja" },
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+  };
+  const extra = { extra: 1 };
+  for (const [caminho, corpo] of [
+    ["/api/registros", { projeto: "loja", ...extra }],
+    ["/api/issues/3", { titulo: "Busca", ...extra }],
+    ["/api/issues/1/deps", { dep: 2, ...extra }],
+    ["/api/issues/3/registro", { aprovado: true, ...extra }],
+    ["/api/issues/1/desenho", { aprovado: true, ...extra }],
+    ["/api/issues/1/pr", { aprovado: true, nota: 5, ...extra }],
+    ["/api/tickets/2", { titulo: "Cache", ...extra }],
+    ["/api/tickets/2/modelo", { modelo: null, ...extra }],
+    ["/api/tickets/2/reabrir", { instrucao: "siga", ...extra }],
+    [`/api/sessoes/${SESSAO}/mensagens`, { texto: "oi", modo: "prompt", ...extra }],
+    [`/api/sessoes/${SESSAO}/dialogos/d1`, { valor: "x", ...extra }],
+    ["/api/configuracao", { agendadorAtivo: false, ...extra }],
+    ["/api/projetos", { ...projeto, nome: "outra", ...extra }],
+    ["/api/projetos/loja", { ...projeto, ...extra }],
+    ["/api/projetos/loja", { ...projeto, sonar: { projectKey: "loja", ...extra } }],
+  ] as const) {
+    const r = await pedir(caminho, { method: "POST", corpo });
+    assert.equal(r.status, 422, `${caminho} ${JSON.stringify(corpo)}: ${await r.text()}`);
+  }
+});
+
 test("intervalo: as formas de um intervalo de bytes e o que se ignora", () => {
   assert.equal(intervalo(undefined, 10), undefined);
   assert.equal(intervalo("bytes=-", 10), undefined);

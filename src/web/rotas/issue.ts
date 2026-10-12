@@ -158,7 +158,7 @@ export const ROTAS_DA_ISSUE: Rota[] = [
     metodo: "POST",
     caminho: "/api/issues/:id/deps",
     tratar: ({ banco, params, corpo }) => {
-      const { dep } = z.object({ dep: Id }).parse(corpo);
+      const { dep } = z.strictObject({ dep: Id }).parse(corpo);
       comIssue(banco, IdDoCaminho.parse(params.id), "adicionarDependencia", AUDITOR, (ag, ctx) =>
         adicionarDependencia(ag, dep, AUDITOR, ctx),
       );

@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { Id } from "../dominio/primitivos.ts";
 
-export const Configuracao = z.object({
+export const Configuracao = z.strictObject({
   agendadorAtivo: z.boolean().default(false),
   intervaloMin: z.number().int().min(1).max(1440).default(5),
   timeoutMin: z.number().int().min(10).max(1440).default(120),

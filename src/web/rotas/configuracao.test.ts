@@ -162,15 +162,24 @@ test("cadastrar: confere, grava com a hospedagem deduzida do remoto e fixa o cur
     "INSERT INTO issue (id, projeto, fase, criada_em) VALUES (1, 'loja', 'registro', '2026-10-12T14:00:00.000Z')",
   );
   assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...salvo, issues: 1 }]);
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...salvo, issues: 1 });
+  assert.deepEqual(await chamar("GET", "/api/projetos/nao-existe"), [
+    404,
+    "o projeto nao-existe não existe (confira o nome do projeto)",
+  ]);
   assert.deepEqual(await chamar("POST", "/api/projetos", formulario(repo)), [
     409,
     "já existe o projeto loja (edite-o na Configuração)",
   ]);
 });
 
-test("editar: o nome do caminho vale, o do corpo é ignorado; projeto que não existe dá 404", async () => {
+test("editar: o nome do caminho vale, o do corpo é ignorado, o cursor da base fica; projeto que não existe dá 404", async () => {
   const repo = clone();
   await chamar("POST", "/api/projetos", formulario(repo));
+  const inicial = cursorDaBase(banco, "loja");
+  // A base andou depois do cadastro: só o cadastro fixa o cursor inicial (F6 §4.4); a edição não varre.
+  git(repo, "commit", "-q", "--allow-empty", "-m", "depois");
+  git(repo, "push", "-q", "origin", "HEAD:refs/heads/main");
   const editado = { ...formulario(repo), nome: "outro", testes: ["npm test", "npm run e2e"], modelos: {} };
   assert.deepEqual(await chamar("POST", "/api/projetos/loja", editado), {
     ...editado,
@@ -179,6 +188,7 @@ test("editar: o nome do caminho vale, o do corpo é ignorado; projeto que não e
   });
   assert.deepEqual(projeto(banco, "loja")?.testes, ["npm test", "npm run e2e"]);
   assert.equal(projeto(banco, "outro"), undefined);
+  assert.equal(cursorDaBase(banco, "loja"), inicial);
   assert.deepEqual(await chamar("POST", "/api/projetos/nao-existe", formulario(clone())), [
     404,
     "o projeto nao-existe não existe (cadastre-o na Configuração)",

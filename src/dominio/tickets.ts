@@ -43,7 +43,7 @@ function exigirProposto(ag: Agregado, ator: Ator, id: Id, acao: string): Ticket 
   return ticket;
 }
 
-const EntradaNovo = z.object({ titulo: Titulo, descricao: Markdown.default(""), modelo: Modelo.optional() });
+const EntradaNovo = z.strictObject({ titulo: Titulo, descricao: Markdown.default(""), modelo: Modelo.optional() });
 
 /** C11: ticket de desenvolvimento aberto; `origemTicket` é o ticket do agente que o criou. */
 export function adicionarTicketDesenvolvimento(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
@@ -68,7 +68,7 @@ export function adicionarTicketDesenvolvimento(ag: Agregado, entrada: unknown, a
   return { ...ag, tickets: [...ag.tickets, novo] };
 }
 
-const EntradaEdicao = z.object({ ticket: Id, titulo: Titulo.optional(), descricao: Markdown.optional() });
+const EntradaEdicao = z.strictObject({ ticket: Id, titulo: Titulo.optional(), descricao: Markdown.optional() });
 
 /** C12: muda só os campos informados. */
 export function editarTicket(ag: Agregado, entrada: unknown, ator: Ator): Agregado {
