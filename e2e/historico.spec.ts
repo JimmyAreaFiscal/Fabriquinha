@@ -2,13 +2,14 @@
 // consulta a partir dela.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { dia } from "../src/web/cliente/telas/historico.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
 const S1 = "9c2e0000-0000-4000-8000-000000000001";
 const S2 = "55f00000-0000-4000-8000-000000000002";
 
-const instante = (minutosAtras: number) => new Date(Date.now() - minutosAtras * 60_000).toISOString();
+/** O agora do navegador, fixo: 12/10/2026 às 15:00, no fuso local (o do serviço e o do navegador). */
+const AGORA = new Date(2026, 9, 12, 15, 0);
+const instante = (minutosAtras: number) => new Date(AGORA.getTime() - minutosAtras * 60_000).toISOString();
 
 /** A conversa da sessão no JSONL do pi: o prompt, uma ferramenta e a última resposta do agente. */
 function conversa(raiz: string, sessao: string, ultima: string): void {
@@ -28,10 +29,10 @@ function conversa(raiz: string, sessao: string, ultima: string): void {
 }
 
 /**
- * Duas sessões de desenho terminadas: a da I-1, há pouco, que levou 22 min e custou US$ 1,86; e a da I-2, de ontem,
- * que falhou e foi refeita. O projeto tem um clone de verdade, para a consulta subir o pi falso.
+ * Duas sessões de desenho terminadas: a da I-1, hoje às 14:55, que levou 22 min e custou US$ 1,86; e a da I-2, ontem
+ * às 13:00, que falhou e foi refeita. O projeto tem um clone de verdade, para a consulta subir o pi falso.
  */
-function semear(raiz: string): [string, string] {
+function semear(raiz: string): void {
   const [fim1, fim2] = [instante(5), instante(26 * 60)];
   projeto(
     raiz,
@@ -50,25 +51,24 @@ function semear(raiz: string): [string, string] {
   );
   conversa(raiz, S1, "Desenho submetido: **4 evidências**, 3 tickets propostos.");
   conversa(raiz, S2, "Tempo esgotado.");
-  return [fim1, fim2];
 }
 
 test("filtra por issue, seleciona uma sessão, lê a prévia e abre uma consulta a partir dela", async ({
   pagina,
   fabriquinha,
 }) => {
-  const [fim1, fim2] = semear(fabriquinha.raiz);
+  semear(fabriquinha.raiz);
+  await pagina.clock.setFixedTime(AGORA);
   await pagina.goto(`${fabriquinha.base}/history`);
   await expect(pagina).toHaveTitle("Histórico · Fabriquinha");
   const contagem = pagina.locator("[data-contagem]");
   await expect(contagem).toHaveText("2 sessões");
 
   // Da mais recente para a mais antiga, por dia; a mais recente já vem selecionada.
-  const agora = new Date();
-  await expect(pagina.locator(".dia h3")).toHaveText([dia(fim1, agora), dia(fim2, agora)]);
+  await expect(pagina.locator(".dia h3")).toHaveText(["Hoje", "Ontem"]);
   const linhas = pagina.locator("button.linha");
-  await expect(linhas.nth(0)).toContainText("I-1T-1Board por fase · desenho · autônomaconcluídaUS$ 1,86");
-  await expect(linhas.nth(1)).toContainText("I-2T-2Timeout no checkout · desenho · autônomafalhaUS$ 0,00");
+  await expect(linhas.nth(0)).toHaveText("14:55I-1T-1Board por fase · desenho · autônomaconcluídaUS$ 1,86");
+  await expect(linhas.nth(1)).toHaveText("13:00I-2T-2Timeout no checkout · desenho · autônomafalhaUS$ 0,00");
   await expect(linhas.nth(0)).toHaveAttribute("aria-selected", "true");
   const previa = pagina.getByRole("complementary", { name: "Prévia da sessão" });
   await expect(previa.getByRole("heading")).toHaveText("Board por fase");
@@ -96,7 +96,7 @@ test("filtra por issue, seleciona uma sessão, lê a prévia e abre uma consulta
     "loja",
     "desenho · autônoma",
     "concluída",
-    `${dia(fim1, agora)} ${new Date(fim1).toTimeString().slice(0, 5)} · durou 22 min`,
+    "Hoje 14:55 · durou 22 min",
     "US$ 1,86 · anthropic / claude-opus-5-5",
     "3",
   ]);

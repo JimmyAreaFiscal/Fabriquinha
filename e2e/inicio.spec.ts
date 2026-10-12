@@ -32,13 +32,17 @@ test("uma sessão que aguarda aparece sozinha no card certo, com a marca no boar
   pagina,
   fabriquinha,
 }) => {
+  // O relógio do navegador na mão do teste: os 5 s do redesenho passam sem esperar de verdade.
+  await pagina.clock.install();
+  await pagina.reload();
   await expect(pagina.getByText("Nada aguarda você agora.")).toBeVisible();
   await expect(pagina.getByText("0 issues em andamento")).toBeVisible();
   semear(fabriquinha.raiz);
 
   // Sem recarregar: a página se redesenha a cada 5 s.
+  await pagina.clock.runFor(5000);
   const card = pagina.locator(".decisao");
-  await expect(card).toHaveCount(1, { timeout: 8000 });
+  await expect(card).toHaveCount(1);
   await expect(card).toHaveClass(/falha/);
   await expect(card.locator(".decisao-motivo")).toHaveText("Falhou");
   await expect(card.locator(".decisao-titulo")).toHaveText("I-1 Busca por SKU");
@@ -112,14 +116,16 @@ test("registrar uma necessidade pede projeto e dependências e abre o chat da se
   await expect(caixa).toBeHidden();
   await expect(pagina).toHaveURL(new RegExp(`^${fabriquinha.base}/sessions/[0-9a-f-]{36}$`));
   const chat = new URL(pagina.url()).pathname;
+  // O pi falso respondeu: a sessão espera a próxima mensagem do Auditor.
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
 
-  // De volta ao Início: o pi falso respondeu, e a sessão espera a próxima mensagem do Auditor.
+  // De volta ao Início, o card dela.
   await pagina
     .getByRole("navigation", { name: "Páginas" })
     .getByRole("link", { name: /^Início/ })
     .click();
   const card = pagina.locator(".decisao");
-  await expect(card).toHaveAttribute("href", chat, { timeout: 8000 });
+  await expect(card).toHaveAttribute("href", chat);
   await expect(card.locator(".decisao-motivo")).toHaveText("Conversa");
   await expect(card.locator(".decisao-titulo")).toHaveText("I-1 sem título");
   await expect(card.locator(".decisao-pe")).toContainText("T-1 · registro · interativa · há");

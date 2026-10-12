@@ -142,11 +142,11 @@ test("lê a issue: caminho, título, trilho, detalhes, descrição em Markdown r
   await expect(detalhes).toContainText("Tipofuncionalidade");
   await expect(detalhes.locator(".dep")).toHaveText("I-2concluída×");
 
-  // Markdown sem HTML: o script da descrição vira texto e não roda.
+  // Markdown sem HTML: o script da descrição vira texto, não elemento.
   const descricao = pagina.locator("[data-descricao]");
   await expect(descricao.locator("strong")).toHaveText("board com uma coluna por fase");
   await expect(descricao).toContainText("<script>window.invadiu = true</script>");
-  expect(await pagina.evaluate(() => "invadiu" in window)).toBe(false);
+  await expect(descricao.locator("script")).toHaveCount(0);
   const verTudo = pagina.getByRole("button", { name: "ver tudo" });
   const degrade = () => descricao.evaluate((d) => getComputedStyle(d, "::after").content);
   expect(await degrade()).toBe('""');

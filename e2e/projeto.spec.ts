@@ -89,6 +89,8 @@ test("a linha da issue com o trilho e a sessão; a gaveta de tickets vem aberta 
   fabriquinha,
 }) => {
   semear(fabriquinha.raiz);
+  // O relógio do navegador na mão do teste: os 5 s do redesenho passam sem esperar de verdade.
+  await pagina.clock.install();
   await pagina.goto(`${fabriquinha.base}/projects/loja`);
   const item = pagina.locator(".pista-item").first();
   await expect(item).toHaveClass("pista-item falha");
@@ -115,7 +117,11 @@ test("a linha da issue com o trilho e a sessão; a gaveta de tickets vem aberta 
   await pagina.getByRole("button", { name: "Tickets de I-1" }).click();
   await expect(gaveta).toBeHidden();
   await expect(item.locator(".pista-estado")).toContainText("Falhou");
-  await pagina.waitForResponse((r) => r.url().includes("/api/projetos/loja/issues"), { timeout: 8000 });
+  const banco = abrir(fabriquinha.raiz);
+  banco.exec("UPDATE issue SET titulo = 'Busca por SKU e EAN' WHERE id = 1");
+  banco.close();
+  await pagina.clock.runFor(5000);
+  await expect(item.locator(".pista-issue")).toContainText("Busca por SKU e EAN");
   await expect(gaveta).toBeHidden();
   await item.locator(".pista-linha").click({ position: { x: 600, y: 20 } });
   await expect(gaveta).toBeVisible();

@@ -163,7 +163,7 @@ test("reprova o desenho com o motivo e mostra o ticket de desenho novo", async (
   await expect(gate).toBeHidden();
   await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveText("Desenho");
   const tickets = pagina.locator(".linha-tempo > li");
-  await expect(tickets).toHaveCount(3, { timeout: 5000 });
+  await expect(tickets).toHaveCount(3);
   await expect(tickets.last()).toContainText("T-5Refazer o desenho");
   await expect(tickets.last()).toContainText("desenhoaberto");
   await pagina.getByRole("button", { name: "T-5 Refazer o desenho" }).click();

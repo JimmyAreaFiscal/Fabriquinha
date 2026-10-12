@@ -29,6 +29,8 @@ test("entra pelo link de web.url e navega entre as páginas pela navegação fix
   const nav = page.getByRole("navigation", { name: "Páginas" });
   await expect(nav.getByRole("link", { name: "Início" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Início");
+  // O Início desenhado com o que a API respondeu: o navegador entrou, e não há aviso.
+  await expect(page.getByText("Nada aguarda você agora.")).toBeVisible();
   await expect(page.getByRole("alert")).toBeHidden();
 
   // Uma marca na janela some se a página recarregar.
@@ -102,6 +104,7 @@ test("sem entrar, a página abre e o aviso manda rodar fabriquinha abrir", async
   await expect(page.getByRole("alert")).toContainText("rode fabriquinha abrir");
 
   await page.goto(fabriquinha.link);
+  await expect(page.getByText("Nada aguarda você agora.")).toBeVisible();
   await expect(page.getByRole("alert")).toBeHidden();
 });
 
