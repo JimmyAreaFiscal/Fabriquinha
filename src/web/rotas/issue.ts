@@ -16,16 +16,13 @@ import { type MetricasIssue, numerosDoDesenho } from "../../metricas/issue.ts";
 import { arquivoRegistrado, caminhoArquivo } from "../../persistencia/arquivos.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { dirDaExecucao } from "../../persistencia/execucoes.ts";
-import { agregado, comIssue } from "../../persistencia/issues.ts";
+import { agregadoExistente, comIssue } from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import { ocupacaoDoD8, ticketElegivel } from "../../persistencia/servico.ts";
 import { limpezaPendente } from "../../repositorio/worktree.ts";
 import { ErroHttp } from "../erros.ts";
-import type { Rota } from "../rotas.ts";
-
-/** O ID de um `:parametro` do caminho. */
-export const IdDoCaminho = z.coerce.number().pipe(Id);
+import { type Rota, IdDoCaminho } from "../rotas.ts";
 
 /** O que a página da issue lê (F7 §5): o agregado e o que fica fora dele. */
 export interface PaginaDaIssue extends Agregado {
@@ -44,9 +41,6 @@ export interface PaginaDaIssue extends Agregado {
   desenho?: MetricasIssue["desenho"];
 }
 
-export const issueExistente = (banco: DatabaseSync, id: Id): Agregado =>
-  encontrado(agregado(banco, id), `a issue I-${String(id)} não existe`, "confira o número da issue");
-
 export const projetoDa = (banco: DatabaseSync, ag: Agregado): Projeto =>
   encontrado(
     projeto(banco, ag.issue.projeto),
@@ -55,7 +49,7 @@ export const projetoDa = (banco: DatabaseSync, ag: Agregado): Projeto =>
   );
 
 async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue> {
-  const ag = issueExistente(banco, id);
+  const ag = agregadoExistente(banco, id);
   const doProjeto = projetoDa(banco, ag);
   const elegivel = ticketElegivel(banco, id);
   const ticket = ag.tickets.find((t) => t.id === elegivel);
@@ -64,7 +58,7 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
     ...ag,
     projeto: doProjeto,
     dependencias: ag.issue.deps.map((dep) => {
-      const { projeto: p, fase } = issueExistente(banco, dep).issue;
+      const { projeto: p, fase } = agregadoExistente(banco, dep).issue;
       return { id: dep, projeto: p, fase };
     }),
     sessoes: [

@@ -49,16 +49,18 @@ export type Periodo = z.input<typeof Periodo>;
 export type MetricasMes = z.infer<typeof MetricasMes>;
 export type MetricasIssuePeriodo = z.infer<typeof MetricasIssuePeriodo>;
 
+/** O mês `AAAA-MM` de um instante, no fuso do serviço. */
+export const mesDe = (d: Date): string => `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
 /** O mês `AAAA-MM` deslocado de `n` meses, com o intervalo de instantes UTC das suas meias-noites no fuso do serviço. */
 function intervalo(mes: string, n = 0): Intervalo {
   const [ano = 0, m = 0] = mes.split("-").map(Number);
   const inicio = new Date(ano, m - 1 + n, 1);
-  return {
-    mes: `${String(inicio.getFullYear())}-${String(inicio.getMonth() + 1).padStart(2, "0")}`,
-    inicio: inicio.toISOString(),
-    fim: new Date(ano, m + n, 1).toISOString(),
-  };
+  return { mes: mesDe(inicio), inicio: inicio.toISOString(), fim: new Date(ano, m + n, 1).toISOString() };
 }
+
+/** O mês `n` meses depois de `mes` (antes, com `n` negativo). */
+export const somarMeses = (mes: string, n: number): string => intervalo(mes, n).mes;
 
 /** Os meses de `de` a `ate`, inclusive. */
 function intervalos(de: string, ate: string): Intervalo[] {

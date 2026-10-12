@@ -358,6 +358,10 @@ export function agregado(banco: DatabaseSync, issue: Id): Agregado | undefined {
   }
 }
 
+/** Agregado da issue; issue inexistente dá `ErroDeInexistente`. */
+export const agregadoExistente = (banco: DatabaseSync, issue: Id): Agregado =>
+  encontrado(agregado(banco, issue), `a issue I-${String(issue)} não existe`, "confira o número da issue");
+
 /** Agregado da issue do `ticket`, ou `undefined` se o ticket não existe. */
 export function agregadoDoTicket(banco: DatabaseSync, ticket: Id): Agregado | undefined {
   const linha = banco.prepare("SELECT issue FROM ticket WHERE id = ?").get(ticket);

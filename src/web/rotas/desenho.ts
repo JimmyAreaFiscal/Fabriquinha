@@ -8,8 +8,7 @@ import { Modelo } from "../../dominio/primitivos.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../../dominio/tickets.ts";
 import { conferirModelo } from "../../execucao/modelos.ts";
 import { comIssue, issueDoTicket } from "../../persistencia/issues.ts";
-import type { Rota } from "../rotas.ts";
-import { IdDoCaminho } from "./issue.ts";
+import { type Rota, IdDoCaminho } from "../rotas.ts";
 
 /** Confere o modelo no pi antes de gravar: o recusado não chega ao banco. */
 const conferir = async (modelo: Modelo | null | undefined): Promise<void> => {

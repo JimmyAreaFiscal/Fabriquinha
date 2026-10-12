@@ -40,10 +40,9 @@ import {
   registrarNecessidade,
 } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
-import { agregado, comIssue } from "../../persistencia/issues.ts";
+import { agregadoExistente, comIssue } from "../../persistencia/issues.ts";
 import { configuracao } from "../../persistencia/servico.ts";
-import type { Rota } from "../rotas.ts";
-import { IdDoCaminho } from "./issue.ts";
+import { type Rota, IdDoCaminho } from "../rotas.ts";
 
 /** Um critério de aceite (F3, `criterios_aceite`). */
 export interface Criterio {
@@ -81,9 +80,6 @@ export interface DadosDoChat extends CabecalhoDoChat {
 
 export const opcoes = (banco: DatabaseSync): OpcoesInterativa => ({ ociosidadeMin: configuracao(banco).ociosidadeMin });
 
-const agregadoDa = (banco: DatabaseSync, sessao: InfoSessao): Agregado =>
-  existe(agregado(banco, sessao.issue), `a I-${String(sessao.issue)} sumiu`, "confira o banco");
-
 /** Os `dados` da evidência `tipo` do ticket da sessão, que o gate do registro garante existir (F4 §5.2). */
 function dadosDe(ag: Agregado, ticket: Id, tipo: TipoEvidencia): Record<string, unknown> {
   return existe(
@@ -94,7 +90,7 @@ function dadosDe(ag: Agregado, ticket: Id, tipo: TipoEvidencia): Record<string, 
 }
 
 function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
-  const ag = agregadoDa(banco, sessao);
+  const ag = agregadoExistente(banco, sessao.issue);
   const registro: PainelRegistro | undefined =
     sessao.motivo === "gate_registro"
       ? {
@@ -117,7 +113,7 @@ function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
  * do sistema, com o link do `prompt.md`, e não como mensagem do Auditor.
  */
 function marcador(banco: DatabaseSync, sessao: InfoSessao): (mensagem: unknown) => boolean {
-  const prompts = promptsDaFabriquinha(raizDo(banco), agregadoDa(banco, sessao), sessao.ticket);
+  const prompts = promptsDaFabriquinha(raizDo(banco), agregadoExistente(banco, sessao.issue), sessao.ticket);
   return (mensagem) => {
     const m = mensagem as Partial<Mensagem> | undefined;
     return m?.role === "user" && prompts.has(texto(m as Mensagem));

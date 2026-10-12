@@ -30,7 +30,13 @@ import { depoisDoC6 } from "../metricas/uso.ts";
 import type { Projeto } from "../dominio/projeto.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { anotar, arquivoDaSessao, issueDaSessao, issuesComSessao, logDaExecucao } from "../persistencia/execucoes.ts";
-import { agregado, agregadoDoTicket, comIssue, registrarIssue, ultimaEdicaoDoAgente } from "../persistencia/issues.ts";
+import {
+  agregadoExistente,
+  comIssue,
+  issueDoTicket,
+  registrarIssue,
+  ultimaEdicaoDoAgente,
+} from "../persistencia/issues.ts";
 import { projeto as lerProjeto } from "../persistencia/projetos.ts";
 import { estadoPR, type LeituraDoPR } from "../repositorio/pr.ts";
 import { caminhoDaWorktree, descartarAlteracoes, limpar } from "../repositorio/worktree.ts";
@@ -205,16 +211,13 @@ export interface FiltroSessoes {
 /** Execuções interativas deste serviço, com a issue delas, até o C6. */
 const tarefas = new Map<Id, { issue: Id; tarefa: Promise<void> }>();
 
-const agregadoDa = (banco: DatabaseSync, issue: Id): Agregado =>
-  encontrado(agregado(banco, issue), `a issue I-${String(issue)} não existe`, "confira o número da issue");
-
 /**
  * O agregado depois do C6 das execuções interativas da issue cujo pi está parando: sem isso, a sessão pareceria
  * `rodando` nos até 10 s entre a ordem de parar e o C6, e as ações seriam recusadas.
  */
 async function agregadoAssentado(banco: DatabaseSync, issue: Id): Promise<Agregado> {
   await Promise.all([...tarefas].filter(([id, t]) => t.issue === issue && estaEncerrando(id)).map(([, t]) => t.tarefa));
-  return agregadoDa(banco, issue);
+  return agregadoExistente(banco, issue);
 }
 
 /** O estado da sessão com os fatos lidos agora: a execução viva e a última edição do agente na issue. */
@@ -289,15 +292,12 @@ export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Ch
       assinar(sessao, (evento) => {
         ouvinte(
           evento.type === "estado"
-            ? { type: "estado", sessao: estadoNoBanco(banco, agregadoDa(banco, issueDe(banco, sessao)), sessao) }
+            ? { type: "estado", sessao: estadoNoBanco(banco, agregadoExistente(banco, issueDe(banco, sessao)), sessao) }
             : evento,
         );
       }),
   };
 }
-
-const issueDoTicket = (banco: DatabaseSync, ticket: Id): Id =>
-  encontrado(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número").issue.id;
 
 /**
  * F4 §6.6: C5 interativo na sessão principal do ticket e, em segundo plano, worktree, pi e C6 quando o processo

@@ -20,7 +20,7 @@ import { iniciarServico } from "../execucao/servico.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir as abrirBanco, raizPadrao } from "../persistencia/banco.ts";
 import { execucaoDoAgente } from "../persistencia/execucoes.ts";
-import { agregado, agregadoDoTicket, comIssue, issueDoTicket } from "../persistencia/issues.ts";
+import { agregadoDoTicket, agregadoExistente, comIssue, issueDoTicket } from "../persistencia/issues.ts";
 import { projeto } from "../persistencia/projetos.ts";
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */
@@ -151,7 +151,7 @@ const COMANDOS: readonly Comando[] = [
     doAgente: true,
     rodar({ banco, pos }) {
       const id = numero(pos[0], "I");
-      const ag = encontrado(agregado(banco, id), `a issue I-${String(id)} não existe`, "confira o número da issue");
+      const ag = agregadoExistente(banco, id);
       return { ...ag.issue, tickets: ag.tickets };
     },
   },

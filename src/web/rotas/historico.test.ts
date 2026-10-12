@@ -11,7 +11,7 @@ import { ABORTADA } from "../../execucao/gerente.ts";
 import { abrir } from "../../persistencia/banco.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
-import { ROTAS } from "../rotas.ts";
+import { ROTAS } from "../servidor.ts";
 import type { SessaoDoHistorico } from "./historico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-historico-"));

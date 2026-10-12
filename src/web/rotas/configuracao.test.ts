@@ -14,7 +14,7 @@ import { projeto } from "../../persistencia/projetos.ts";
 import { cursorDaBase } from "../../persistencia/retrabalho.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
-import { ROTAS } from "../rotas.ts";
+import { ROTAS } from "../servidor.ts";
 
 // realpath: a conferência do F5 compara o caminho do repositório literalmente, e o tmpdir pode ser um symlink.
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-config-")));

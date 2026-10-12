@@ -4,16 +4,17 @@
 import { EntradaPR } from "../../dominio/gates.ts";
 import { encerrarIssue, pedirMudancas } from "../../execucao/sessoes.ts";
 import { estadoPR } from "../../repositorio/pr.ts";
-import type { Rota } from "../rotas.ts";
+import { type Rota, IdDoCaminho } from "../rotas.ts";
 import { opcoes } from "./chat.ts";
-import { IdDoCaminho, issueExistente, projetoDa } from "./issue.ts";
+import { agregadoExistente } from "../../persistencia/issues.ts";
+import { projetoDa } from "./issue.ts";
 
 export const ROTAS_DO_PR: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/issues/:id/pr",
     tratar: ({ banco, params }) => {
-      const ag = issueExistente(banco, IdDoCaminho.parse(params.id));
+      const ag = agregadoExistente(banco, IdDoCaminho.parse(params.id));
       return estadoPR(projetoDa(banco, ag), ag);
     },
   },

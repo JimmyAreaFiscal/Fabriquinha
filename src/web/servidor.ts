@@ -1,5 +1,5 @@
 // Servidor web do F7 §4.1: o token de cada subida em `<raiz>/web.url`, a entrada pelo link, a guarda de toda
-// requisição, os estáticos do cliente, o `index.html` das páginas e o despacho das rotas da API (rotas.ts).
+// requisição, os estáticos do cliente, o `index.html` das páginas e o despacho das rotas da API (o contrato em rotas.ts, as de cada tela em rotas/).
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import type { IncomingMessage, RequestListener, ServerResponse } from "node:http";
@@ -11,7 +11,29 @@ import { raizDo } from "../persistencia/banco.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { casar } from "./cliente/caminhos.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
-import { type Agendador, ROTAS } from "./rotas.ts";
+import type { Agendador, Rota } from "./rotas.ts";
+import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
+import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
+import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
+import { ROTAS_DO_HISTORICO } from "./rotas/historico.ts";
+import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
+import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
+import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
+import { ROTAS_DO_PR } from "./rotas/pr.ts";
+import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
+
+/** A tabela das rotas da API (F7 §4.2), uma lista por tela. */
+export const ROTAS: Rota[] = [
+  ...ROTAS_DO_HISTORICO,
+  ...ROTAS_DA_CONFIGURACAO,
+  ...ROTAS_DA_ISSUE,
+  ...ROTAS_DO_CHAT,
+  ...ROTAS_DO_DESENHO,
+  ...ROTAS_DO_PR,
+  ...ROTAS_DO_INICIO,
+  ...ROTAS_DO_PROJETO,
+  ...ROTAS_DAS_METRICAS,
+];
 
 const CLIENTE = join(import.meta.dirname, "cliente");
 const COOKIE = "fabriquinha";

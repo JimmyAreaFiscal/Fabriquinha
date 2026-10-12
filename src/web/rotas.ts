@@ -1,18 +1,11 @@
-// Rotas da API (F7 §4.2): uma linha por método e caminho. A rota só resolve a entrada, chama o F1/F4 e devolve o que
-// vira JSON; a guarda, a leitura do corpo e a tradução dos erros ficam no servidor.
+// O contrato das rotas da API (F7 §4.2): uma linha por método e caminho. A rota só resolve a entrada, chama o F1/F4 e
+// devolve o que vira JSON; a guarda, a leitura do corpo, a tradução dos erros e a tabela das rotas ficam no servidor.
+// As rotas de cada tela importam daqui; este módulo não importa nenhuma delas.
 import type { IncomingHttpHeaders, ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
-import type { Id } from "../dominio/primitivos.ts";
+import { z } from "zod";
+import { Id } from "../dominio/primitivos.ts";
 import type { Parametros } from "./cliente/caminhos.ts";
-import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
-import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
-import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
-import { ROTAS_DO_HISTORICO } from "./rotas/historico.ts";
-import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
-import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
-import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
-import { ROTAS_DO_PR } from "./rotas/pr.ts";
-import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
 export interface Agendador {
@@ -42,14 +35,5 @@ export interface Rota {
   tratar(pedido: Pedido): unknown;
 }
 
-export const ROTAS: Rota[] = [
-  ...ROTAS_DO_HISTORICO,
-  ...ROTAS_DA_CONFIGURACAO,
-  ...ROTAS_DA_ISSUE,
-  ...ROTAS_DO_CHAT,
-  ...ROTAS_DO_DESENHO,
-  ...ROTAS_DO_PR,
-  ...ROTAS_DO_INICIO,
-  ...ROTAS_DO_PROJETO,
-  ...ROTAS_DAS_METRICAS,
-];
+/** O ID de um `:parametro` do caminho. */
+export const IdDoCaminho = z.coerce.number().pipe(Id);

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { iniciarServico, type Servico } from "../execucao/servico.ts";
-import { ROTAS } from "./rotas.ts";
+import { ROTAS } from "./servidor.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-web-"));
 let raiz: string;

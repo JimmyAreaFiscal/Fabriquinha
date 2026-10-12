@@ -2,8 +2,7 @@
 // `GET /api/sessoes`; o Registrar necessidade usa `POST /api/registros`, do chat (rotas/chat.ts).
 import type { DatabaseSync } from "node:sqlite";
 import type { Issue, Ticket } from "../../dominio/agregado.ts";
-import { existe } from "../../dominio/erros.ts";
-import { agregado, issuesEmAndamento } from "../../persistencia/issues.ts";
+import { agregadoExistente, issuesEmAndamento } from "../../persistencia/issues.ts";
 import type { Rota } from "../rotas.ts";
 
 /** Uma issue do board (`GET /api/board`): a issue com todos os tickets dela. */
@@ -16,8 +15,7 @@ export type IssueDoBoard = Issue & { tickets: readonly Ticket[] };
  */
 const board = (banco: DatabaseSync): IssueDoBoard[] =>
   issuesEmAndamento(banco).map((id) => {
-    // Issue não se apaga: a lida na lista existe.
-    const ag = existe(agregado(banco, id), `a I-${String(id)} sumiu do banco`, "confira o banco");
+    const ag = agregadoExistente(banco, id);
     return { ...ag.issue, tickets: ag.tickets };
   });
 

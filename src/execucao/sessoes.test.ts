@@ -1123,7 +1123,10 @@ test("consulta recusada: ticket sem sessão, sessão sem conversa gravada e agen
     conversarSobre(c.banco, 1, opcoes),
     rejeitaCom("T-1 ainda não tem sessão (consulte um ticket que já executou)"),
   );
-  await assert.rejects(conversarSobre(c.banco, 9, opcoes), rejeitaCom("o ticket T-9 não existe (confira o número)"));
+  await assert.rejects(
+    conversarSobre(c.banco, 9, opcoes),
+    rejeitaCom("o ticket T-9 não existe (confira o número do ticket)"),
+  );
   c.banco.exec(`INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
     VALUES (50, 1, 'interativo', '${SESSAO}', 'sucesso', '${T0}', '${T1}')`);
   await assert.rejects(

@@ -3,10 +3,15 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { AUDITOR, type Issue, type Ticket } from "../../dominio/agregado.ts";
-import { encontrado, existe } from "../../dominio/erros.ts";
+import { encontrado } from "../../dominio/erros.ts";
 import type { Id } from "../../dominio/primitivos.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
-import { agregado, arquivarConcluidas, issuesEmAndamento, situacaoDasIssues } from "../../persistencia/issues.ts";
+import {
+  agregadoExistente,
+  arquivarConcluidas,
+  issuesEmAndamento,
+  situacaoDasIssues,
+} from "../../persistencia/issues.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import type { Rota } from "../rotas.ts";
 
@@ -42,8 +47,7 @@ async function lista(banco: DatabaseSync, nome: string, query: URLSearchParams):
   const issues = todas
     .filter((i) => (i.arquivada ? filtro.arquivadas : !i.concluida || filtro.concluidas))
     .map(({ id }): IssueDoProjeto => {
-      // Issue não se apaga: a lida na lista existe.
-      const ag = existe(agregado(banco, id), `a I-${String(id)} sumiu do banco`, "confira o banco");
+      const ag = agregadoExistente(banco, id);
       const pr = ag.evidencias.findLast((e) => e.tipo === "pr_aberto")?.dados as
         { id: string; url: string } | undefined;
       return {

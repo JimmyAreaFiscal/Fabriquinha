@@ -3,11 +3,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { Agregado, Execucao } from "../../dominio/agregado.ts";
-import { existe } from "../../dominio/erros.ts";
 import { Etapa, type Id } from "../../dominio/primitivos.ts";
 import { ABORTADA } from "../../execucao/gerente.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
-import { agregado } from "../../persistencia/issues.ts";
+import { agregadoExistente } from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
 import type { Rota } from "../rotas.ts";
 
@@ -41,7 +40,7 @@ function noHistorico(banco: DatabaseSync, lista: InfoSessao[]): SessaoDoHistoric
   const lidas = new Map<Id, { ag: Agregado; custos: Record<string, number> }>();
   const daIssue = (id: Id) => {
     const lida = lidas.get(id) ?? {
-      ag: existe(agregado(banco, id), `a I-${String(id)} sumiu do banco`, "confira o banco"),
+      ag: agregadoExistente(banco, id),
       custos: custoPorExecucao(banco, id),
     };
     lidas.set(id, lida);

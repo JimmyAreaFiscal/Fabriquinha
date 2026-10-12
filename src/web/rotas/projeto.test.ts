@@ -12,7 +12,7 @@ import { comIssue, registrarIssue } from "../../persistencia/issues.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
-import { ROTAS } from "../rotas.ts";
+import { ROTAS } from "../servidor.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-projeto-"));
 after(() => {
