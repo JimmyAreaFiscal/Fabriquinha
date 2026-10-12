@@ -353,7 +353,8 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   });
 
   /**
-   * Responder e retomar (F4 §6.4): C20 só quando o modelo mudou, depois C9 com a instrução; o SSE traz o estado novo.
+   * Responder e retomar (F4 §6.4): C20 só quando o modelo mudou, depois C9 com a instrução e os anexos de histórico; o
+   * SSE traz o estado novo.
    * Se C20 passar e C9 não, o modelo novo fica, e responder de novo só refaz o C9.
    */
   async function responderERetomar(form: HTMLFormElement, instrucao: string): Promise<void> {
@@ -362,7 +363,10 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       await postar(`/api/tickets/${ticket()}/modelo`, { modelo: modeloDoSeletor(select.value) });
       select.dataset.inicial = select.value;
     }
-    await postar(`/api/tickets/${ticket()}/reabrir`, instrucao ? { instrucao } : {});
+    const comAnexos = anexos.length > 0 ? { anexos: anexos.map((a) => a.sessao) } : {};
+    await postar(`/api/tickets/${ticket()}/reabrir`, { ...(instrucao && { instrucao }), ...comAnexos });
+    anexos = [];
+    desenharAnexos();
   }
 
   /** As sessões que o seletor do **+ Anexar histórico** mostra na caixa. */

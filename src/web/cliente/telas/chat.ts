@@ -348,10 +348,13 @@ export function seletorDeSessoes(sessoes: readonly InfoSessao[], atual: string, 
     : '<p class="muted">Nenhuma outra sessão para anexar.</p>';
 }
 
-/** Na falha (F4 §6.4): a instrução para a próxima tentativa, o modelo (C20, preenchido com a issue) e o C9. */
+/**
+ * Na falha (F4 §6.4): a instrução para a próxima tentativa, o modelo (C20, preenchido com a issue), os anexos de
+ * histórico, que vão com a instrução (F4 §6.8), e o C9.
+ */
 const retomar =
-  '<form class="compositor falha-comp" data-retomar><textarea name="texto" rows="2" aria-label="Instrução" placeholder="Instrução para a próxima tentativa (vai antes do prompt da etapa)"></textarea>' +
-  '<div class="linha-1"><label class="dica-tecla rotulo-modelo">Modelo <span data-seletor-modelo><select class="seletor-modelo" disabled aria-label="Modelo"><option>carregando…</option></select></span></label>' +
+  '<form class="compositor falha-comp" data-retomar><div class="anexos" data-anexos hidden></div><textarea name="texto" rows="2" aria-label="Instrução" placeholder="Instrução para a próxima tentativa (vai antes do prompt da etapa)"></textarea>' +
+  `<div class="linha-1"><label class="dica-tecla rotulo-modelo">Modelo <span data-seletor-modelo><select class="seletor-modelo" disabled aria-label="Modelo"><option>carregando…</option></select></span></label>${ANEXAR}` +
   '<div class="direita"><button class="btn btn-primario">Responder e retomar</button></div></div></form>';
 
 /**

@@ -6,7 +6,8 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { AUDITOR, type Execucao, type Issue, type Ticket } from "../../dominio/agregado.ts";
-import { ticketDe } from "../../dominio/execucao.ts";
+import { naSessaoPrincipal, ticketDe } from "../../dominio/execucao.ts";
+import { existe } from "../../dominio/erros.ts";
 import { editarIssue } from "../../dominio/issue.ts";
 import { Id, Motivo } from "../../dominio/primitivos.ts";
 import { abortar, responderDialogo } from "../../execucao/gerente.ts";
@@ -31,7 +32,7 @@ import {
   registrarNecessidade,
 } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
-import { agregadoExistente, comIssue } from "../../persistencia/issues.ts";
+import { agregadoExistente, comIssue, issueDoTicket } from "../../persistencia/issues.ts";
 import { configuracao } from "../../persistencia/servico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 import { type PainelRegistro, painelDoRegistro } from "./issue.ts";
@@ -113,6 +114,22 @@ async function eventos(banco: DatabaseSync, sessao: string, resposta: ServerResp
     } else escrever(evento);
   });
   resposta.on("close", cancelar);
+}
+
+/** Responder e retomar (C9): a instrução e as sessões cujo histórico vai junto com ela (F4 §6.8). */
+const Reabertura = z.strictObject({
+  instrucao: z.string().default(""),
+  anexos: z.array(z.string().min(1)).default([]),
+});
+
+/** A sessão principal do ticket, onde a retomada continua (F4 §6.4). */
+function sessaoPrincipal(banco: DatabaseSync, ticket: Id): string {
+  const ag = agregadoExistente(banco, issueDoTicket(banco, ticket));
+  return existe(
+    ag.execucoes.findLast(naSessaoPrincipal(ticket)),
+    `T-${String(ticket)} ainda não tem sessão`,
+    "execute o ticket antes de retomá-lo",
+  ).sessaoPi;
 }
 
 /** `anexos` são sessões cujo histórico vai junto (F4 §6.8). */
@@ -215,12 +232,13 @@ export const ROTAS_DO_CHAT: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/tickets/:id/reabrir",
-    tratar: ({ banco, params, corpo }) => {
-      reabrir(
-        banco,
-        IdDoCaminho.parse(params.id),
-        z.strictObject({ instrucao: z.string().optional() }).parse(corpo).instrucao,
-      );
+    tratar: async ({ banco, params, corpo }) => {
+      const ticket = IdDoCaminho.parse(params.id);
+      const { instrucao, anexos } = Reabertura.parse(corpo);
+      // O histórico anexado vai na instrução da próxima tentativa (F4 §6.4, §6.8), como numa mensagem.
+      const texto =
+        anexos.length > 0 ? await anexarHistorico(banco, sessaoPrincipal(banco, ticket), anexos, instrucao) : instrucao;
+      reabrir(banco, ticket, texto.trim() || undefined);
     },
   },
   {

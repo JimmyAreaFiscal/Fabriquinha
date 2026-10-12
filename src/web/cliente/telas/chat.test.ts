@@ -392,11 +392,15 @@ test("envio na falha: a instrução, o seletor de modelo esperando a issue e Res
   const html = envio(cabecalho({ estado: "aguardando_humano", motivo: "falha" }), "steer");
   assert.match(
     html,
-    /^<form class="compositor falha-comp" data-retomar><textarea name="texto" rows="2" aria-label="Instrução" placeholder="Instrução para a próxima tentativa \(vai antes do prompt da etapa\)"><\/textarea>/,
+    /^<form class="compositor falha-comp" data-retomar><div class="anexos" data-anexos hidden><\/div><textarea name="texto" rows="2" aria-label="Instrução" placeholder="Instrução para a próxima tentativa \(vai antes do prompt da etapa\)"><\/textarea>/,
   );
   assert.match(html, /<label class="dica-tecla rotulo-modelo">Modelo <span data-seletor-modelo><select [^>]*disabled/);
   assert.match(html, /<button class="btn btn-primario">Responder e retomar<\/button><\/div><\/div><\/form>$/);
-  assert.doesNotMatch(html, /data-anexar/);
+  // + Anexar histórico também aqui, como no protótipo: o histórico vai com a instrução (F4 §6.8).
+  assert.match(
+    html,
+    /<\/select><\/span><\/label><button type="button" class="btn btn-pequeno" data-anexar [^>]*>\+ Anexar histórico<\/button><div class="direita">/,
+  );
 });
 
 test("envio que aceita mensagem: os anexos vazios e + Anexar histórico antes da dica", () => {

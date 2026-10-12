@@ -384,7 +384,21 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
     (await pedir(`/api/execucoes/${String(segunda.id)}/prompt`)).texto,
     /# Instrução do Auditor\n\nordene pela validade/,
   );
-  assert.equal((await postar("/api/tickets/900/reabrir", {})).status, 204, "sem instrução também retoma");
+  // Responder e retomar com o histórico de outra sessão anexado (F4 §6.8): o anexo vai na instrução da próxima tentativa.
+  const [outra] = await registro();
+  const { ticket: doRegistro, issue: daOutra } = (await dados(outra)).sessao;
+  assert.equal((await postar("/api/tickets/900/reabrir", { anexos: ["nada"] })).status, 404);
+  assert.equal((await postar("/api/tickets/900/reabrir", { anexos: [outra], extra: 1 })).status, 422);
+  assert.equal(
+    (await postar("/api/tickets/900/reabrir", { anexos: [outra] })).status,
+    204,
+    "sem instrução também retoma",
+  );
+  const comAnexo = new RegExp(
+    `^Histórico da sessão T-${String(doRegistro)} \\(I-${String(daOutra)}, registro\\) em \`(.+historico-T-${String(doRegistro)}\\.md)\`; leia antes de responder\\.$`,
+  ).exec(String((await dados(sessao)).ticket.instrucao));
+  assert.ok(comAnexo?.[1], String((await dados(sessao)).ticket.instrucao));
+  assert.match(readFileSync(comAnexo[1], "utf8"), /^# Histórico da sessão T-/);
 
   // Conversar sobre esta sessão: a consulta começa com a conversa da principal.
   const { corpo } = await postar("/api/tickets/900/consulta");
@@ -397,8 +411,6 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
   assert.equal((await postar("/api/tickets/999/consulta")).status, 404);
 
   // + Anexar histórico: a exportação da outra sessão vai para a saída da execução, e a mensagem ganha a linha dela.
-  const [outra] = await registro();
-  const { ticket: doRegistro, issue: daOutra } = (await dados(outra)).sessao;
   const perguntar = (anexos: unknown) =>
     postar(`/api/sessoes/${consulta}/mensagens`, { texto: "o que houve?", modo: "prompt", anexos });
   assert.equal((await perguntar("x")).status, 422);
