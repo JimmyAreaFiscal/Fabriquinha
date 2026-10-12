@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Etapa, type Id } from "../dominio/primitivos.ts";
 import { sessoes } from "../execucao/sessoes.ts";
 import type { Parametros } from "./cliente/caminhos.ts";
+import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
@@ -53,4 +54,5 @@ export const ROTAS: Rota[] = [
   },
   ...ROTAS_DA_CONFIGURACAO,
   ...ROTAS_DA_ISSUE,
+  ...ROTAS_DO_CHAT,
 ];

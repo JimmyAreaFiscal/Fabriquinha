@@ -1,0 +1,453 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import type { Execucao } from "../../../dominio/agregado.ts";
+import type { Dialogo } from "../../../execucao/gerente.ts";
+import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
+import {
+  barraDeEstado,
+  chaveDa,
+  conversa,
+  edicaoDoRegistro,
+  emFluxo,
+  envio,
+  etiquetaDoEstado,
+  ferramenta,
+  haQuanto,
+  lateral,
+  linhaDoDialogo,
+  linhasDaExecucao,
+  mensagem,
+  modeloDe,
+  respostaDoDialogo,
+} from "./chat.ts";
+
+const T0 = "2026-10-11T10:00:00.000Z";
+
+const execucao = (e: Partial<Execucao> = {}): Execucao => ({
+  id: 7,
+  ticket: 3,
+  modo: "autonomo",
+  sessaoPi: "00000000-0000-4000-8000-000000000001",
+  resultado: "em_andamento",
+  iniciadaEm: T0,
+  ...e,
+});
+
+type Sessao = CabecalhoDoChat["sessao"];
+
+const cabecalho = (sessao: Partial<Sessao> = {}, extra: Partial<CabecalhoDoChat> = {}): CabecalhoDoChat => ({
+  sessao: {
+    sessao: "s",
+    issue: 4,
+    projeto: "loja api",
+    ticket: 3,
+    etapa: "desenvolvimento",
+    modo: "autonomo",
+    execucao: 7,
+    estado: "rodando",
+    desde: T0,
+    dialogos: [],
+    ...sessao,
+  },
+  issue: {
+    id: 4,
+    projeto: "loja api",
+    titulo: "Timeout <no> checkout",
+    tipo: "problema",
+    descricao: "",
+    fase: "desenvolvimento",
+    deps: [],
+    criadaEm: T0,
+  },
+  execucoes: [execucao()],
+  ...extra,
+});
+
+const dialogo = (d: Record<string, unknown>): Dialogo => ({ type: "extension_ui_request", id: "d1", em: T0, ...d });
+
+test("etiqueta do estado: rodando, aguardando com o motivo (falha em vermelho) e terminada", () => {
+  const s = cabecalho().sessao;
+  assert.equal(etiquetaDoEstado(s), '<span class="pill pill-rodando">rodando</span>');
+  assert.equal(etiquetaDoEstado({ ...s, estado: "terminada" }), '<span class="pill pill-neutro">terminada</span>');
+  const aguarda = { ...s, estado: "aguardando_humano" as const };
+  assert.equal(
+    etiquetaDoEstado({ ...aguarda, motivo: "gate_registro" }),
+    '<span class="pill pill-aguarda">aguarda você · gate do registro</span>',
+  );
+  assert.equal(
+    etiquetaDoEstado({ ...aguarda, motivo: "falha" }),
+    '<span class="pill pill-falha">aguarda você · falha</span>',
+  );
+  assert.equal(etiquetaDoEstado(aguarda), '<span class="pill pill-aguarda">aguarda você · </span>');
+});
+
+test("modelo: o da execução, senão o da última resposta do agente, senão o padrão do pi", () => {
+  const resposta = (model?: string): Entrada => ({
+    type: "message",
+    message: { role: "assistant", provider: "anthropic", ...(model && { model }) },
+  });
+  const fixado = cabecalho({}, { execucoes: [execucao({ modelo: { provedor: "llamacpp", modelo: "qwen" } })] });
+  assert.equal(modeloDe(fixado, [resposta("opus")]), "llamacpp / qwen");
+  assert.equal(modeloDe(cabecalho(), [resposta("sonnet"), resposta("opus"), { type: "session" }]), "anthropic / opus");
+  assert.equal(modeloDe(cabecalho(), [resposta()]), "modelo padrão do pi");
+  assert.equal(modeloDe(cabecalho({}, { execucoes: [] }), []), "modelo padrão do pi");
+});
+
+test("barra de estado: issue com link e título escapado, ticket, etapa e modo, estado, modelo, log e prompt", () => {
+  const html = barraDeEstado(cabecalho({ etapa: "sessao", modo: "interativo" }), "anthropic / <opus>");
+  assert.match(
+    html,
+    /<a class="issue" href="\/projects\/loja%20api\/issues\/I-4"><span class="id">I-4<\/span> Timeout &#60;no&#62; checkout<\/a>/,
+  );
+  assert.match(
+    html,
+    /<span class="id">T-3<\/span><span class="muted">sessão em aberto · interativa<\/span><span class="pill pill-rodando">/,
+  );
+  assert.match(html, /<span class="modelo">anthropic \/ &#60;opus&#62;<\/span>/);
+  assert.match(
+    html,
+    /E-7<\/span><a class="link" href="\/api\/execucoes\/7\/log" target="_blank" rel="noopener">log<\/a>/,
+  );
+  assert.match(html, /href="\/api\/execucoes\/7\/prompt"/);
+  const semTitulo = cabecalho({ etapa: "registro", modo: "consulta" });
+  assert.match(
+    barraDeEstado({ ...semTitulo, issue: { ...semTitulo.issue, titulo: null } }, "m"),
+    /I-4<\/span> sem título.*registro · consulta/,
+  );
+});
+
+test("linhas da execução: início com o prompt e o fim conforme o resultado e o modo", () => {
+  const [inicio, fim] = linhasDaExecucao(
+    execucao({ resultado: "sucesso", terminadaEm: "2026-10-11T10:05:00.000Z" }),
+    2,
+  );
+  assert.deepEqual(inicio, {
+    chave: "inicio-E-7",
+    em: T0,
+    html: '<div class="sistema">Execução E-7 iniciada · autônoma · <a href="/api/execucoes/7/prompt" target="_blank" rel="noopener">prompt da etapa</a></div>',
+  });
+  assert.deepEqual(fim, {
+    chave: "fim-E-7",
+    em: "2026-10-11T10:05:00.000Z",
+    html: '<div class="sistema">Execução E-7 concluída</div>',
+  });
+  assert.equal(linhasDaExecucao(execucao(), 0).length, 1, "em andamento, só o início");
+  const retomada = linhasDaExecucao(execucao({ modo: "interativo", resultado: "sucesso", terminadaEm: T0 }), 1);
+  assert.match(String(retomada[0]?.html), /interativa · <a [^>]+>prompt<\/a>/);
+  assert.equal(retomada[1]?.html, '<div class="sistema">Execução E-7 encerrada</div>');
+  assert.match(String(linhasDaExecucao(execucao({ modo: "interativo" }), 0)[0]?.html), />prompt da etapa</);
+  const consulta = linhasDaExecucao(
+    execucao({ modo: "consulta", resultado: "falha", erro: "<pi> caiu", terminadaEm: T0 }),
+    0,
+  );
+  assert.equal(consulta[0]?.html, '<div class="sistema">Execução E-7 iniciada · consulta</div>');
+  assert.equal(consulta[1]?.html, '<div class="sistema">Execução E-7 falhou: &#60;pi&#62; caiu</div>');
+});
+
+test("linha do diálogo aberto pelo agente", () => {
+  assert.deepEqual(linhaDoDialogo(dialogo({ title: "Qual <ordem>?" })), {
+    chave: "dialogo-d1",
+    html: '<div class="sistema">o agente abriu um diálogo: Qual &#60;ordem&#62;?</div>',
+  });
+});
+
+test("ferramenta: argumentos em uma linha, resumo do resultado e a saída com ver tudo quando é longa", () => {
+  const bash = { id: "t1", name: "bash", arguments: { command: "npm test" } };
+  assert.equal(
+    ferramenta(bash),
+    '<details class="ferramenta" data-chamada="t1"><summary><span class="nome-f">bash</span><span class="args">npm test</span><span class="res neutro">sem resultado ainda</span></summary></details>',
+  );
+  const longa = Array.from({ length: 11 }, (_, i) => `<l${String(i)}>`).join("\n");
+  const falhou = ferramenta(
+    bash,
+    { role: "toolResult", isError: true, content: [{ type: "text", text: longa }] },
+    true,
+  );
+  assert.match(falhou, /^<details class="ferramenta" data-chamada="t1" open>/);
+  assert.match(falhou, /<span class="res nok">✗ 11 linhas<\/span>/);
+  assert.match(falhou, /<pre>&#60;l0&#62;\n/);
+  assert.match(falhou, /<button type="button" class="link ver" data-ver-tudo>ver tudo<\/button><\/details>$/);
+  const read = { id: "t2", name: "read", arguments: { path: "src/a.ts" } };
+  const uma = ferramenta(read, { role: "toolResult", content: "uma" });
+  assert.match(
+    uma,
+    /<span class="args">src\/a.ts<\/span><span class="res ok">✓ 1 linha<\/span><\/summary><pre>uma<\/pre><\/details>/,
+  );
+  assert.match(ferramenta(read, { role: "toolResult", content: "a\nb" }), /✓ 2 linhas/);
+  const vazia = ferramenta({ id: "t3", name: "edit", arguments: { trocas: 2 } }, { role: "toolResult", content: [] });
+  assert.match(
+    vazia,
+    /<span class="args">\{&#34;trocas&#34;:2\}<\/span><span class="res ok">✓ sem saída<\/span><\/summary><\/details>/,
+  );
+  assert.match(ferramenta({ id: "t4", name: "ls" }), /<span class="args">\{\}<\/span>/);
+});
+
+test("mensagem: a do Auditor e a do agente em Markdown sem HTML, raciocínio, chamadas com o resultado e a parada", () => {
+  assert.equal(
+    mensagem({ role: "user", content: "<b>oi</b> **já**" }),
+    '<div class="msg voce"><span class="quem">você</span><div class="texto"><p>&lt;b&gt;oi&lt;/b&gt; <strong>já</strong></p>\n</div></div>',
+  );
+  const resultados = new Map([["t1", { role: "toolResult", content: "ok" }]]);
+  const html = mensagem(
+    {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "penso <x>" },
+        { type: "text", text: "Vou [rodar](javascript:alert(1))" },
+        { type: "text", text: "  " },
+        { type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } },
+        { type: "image" },
+      ],
+      stopReason: "error",
+      errorMessage: "sem <crédito>",
+    },
+    resultados,
+  );
+  assert.equal(
+    html,
+    '<details class="pensando"><summary>raciocínio</summary><p>penso &#60;x&#62;</p></details>' +
+      '<div class="msg agente"><span class="quem">agente</span><div class="texto"><p>Vou [rodar](javascript:alert(1))</p>\n</div></div>' +
+      ferramenta({ id: "t1", name: "bash", arguments: { command: "ls" } }, { role: "toolResult", content: "ok" }) +
+      '<div class="sistema">o agente parou com erro: sem &#60;crédito&#62;</div>',
+  );
+  assert.equal(
+    mensagem({ role: "assistant", content: [], stopReason: "aborted" }),
+    '<div class="sistema">o agente foi interrompido</div>',
+  );
+  assert.equal(mensagem({ role: "assistant" }), "");
+  assert.equal(mensagem({ role: "toolResult", content: "x" }), "", "o resultado completa a chamada");
+});
+
+test("conversa: mensagens e linhas das execuções por instante, sem o prompt da Fabriquinha, e os diálogos no fim", () => {
+  const c = cabecalho(
+    { dialogos: [dialogo({ title: "Seguir?" })] },
+    {
+      execucoes: [
+        execucao({
+          resultado: "sucesso",
+          iniciadaEm: "2026-10-11T10:00:00.000Z",
+          terminadaEm: "2026-10-11T10:09:00.000Z",
+        }),
+      ],
+    },
+  );
+  const entrada = (em: string, message: Record<string, unknown>, fabriquinha = false): Entrada => ({
+    type: "message",
+    timestamp: em,
+    message,
+    ...(fabriquinha && { fabriquinha: true }),
+  });
+  const itens = conversa(c, [
+    { type: "session", id: "s" },
+    entrada("2026-10-11T10:01:00.000Z", { role: "user", content: "# Contexto", timestamp: 1 }, true),
+    entrada("2026-10-11T10:02:00.000Z", {
+      role: "assistant",
+      timestamp: 2,
+      content: [{ type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } }],
+    }),
+    entrada("2026-10-11T10:03:00.000Z", { role: "toolResult", toolCallId: "t1", content: "a", timestamp: 3 }),
+    entrada("2026-10-11T10:04:00.000Z", { role: "user", content: "oi", timestamp: 4 }),
+  ]);
+  assert.deepEqual(
+    itens.map((i) => i.chave),
+    ["inicio-E-7", "user-1", "assistant-2", "toolResult-3", "user-4", "fim-E-7", "dialogo-d1"],
+  );
+  assert.equal(itens[1]?.html, "");
+  assert.match(String(itens[2]?.html), /<span class="res ok">✓ 1 linha<\/span>/);
+  assert.equal(itens[3]?.html, "");
+  assert.equal(chaveDa({ role: "assistant", timestamp: 9 }), "assistant-9");
+});
+
+test("em fluxo: o cursor no fim do último parágrafo, ou depois do bloco; raciocínio só quando há", () => {
+  assert.equal(
+    emFluxo("Os **testes**", ""),
+    '<div class="msg agente"><span class="quem">agente</span><div class="texto"><p>Os <strong>testes</strong><span class="cursor"></span></p></div></div>',
+  );
+  assert.match(
+    emFluxo("", "pensando"),
+    /^<details class="pensando"><summary>raciocínio…<\/summary><p>pensando<\/p><\/details>.*<div class="texto"><span class="cursor"><\/span><\/div>/,
+  );
+  assert.match(emFluxo("- item", ""), /<\/ul>\n<span class="cursor"><\/span>/);
+});
+
+test("envio rodando: redirecionar ou enfileirar, abortar e enviar", () => {
+  const html = envio(cabecalho(), "follow_up");
+  assert.match(
+    html,
+    /^<form class="compositor" data-envio><textarea name="texto" rows="2" aria-label="Mensagem" placeholder="Mensagem para o agente enquanto ele trabalha"><\/textarea>/,
+  );
+  assert.match(html, /data-modo="steer" aria-pressed="false"[^>]*>Redirecionar<\/button>/);
+  assert.match(html, /data-modo="follow_up" aria-pressed="true"[^>]*>Enfileirar<\/button>/);
+  assert.match(html, /Enter envia · Shift\+Enter quebra linha/);
+  assert.match(html, /data-abortar>Abortar<\/button><button class="btn btn-primario">Enviar<\/button>/);
+  assert.doesNotMatch(html, /Concluir sessão/);
+});
+
+test("envio em conversa: só enviar; na sessão em aberto, também concluir", () => {
+  const conversaHtml = envio(
+    cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "registro" }),
+    "steer",
+  );
+  assert.match(conversaHtml, /placeholder="Responda ao agente"/);
+  assert.doesNotMatch(conversaHtml, /segmento|Abortar|Concluir/);
+  const aberta = envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao" }), "steer");
+  assert.match(
+    aberta,
+    /<button type="button" class="btn" data-concluir>Concluir sessão<\/button><button class="btn btn-primario">Enviar<\/button>/,
+  );
+});
+
+test("envio em diálogo: o formulário do método, com Cancelar e Responder", () => {
+  const com = (d: Record<string, unknown>) =>
+    envio(cabecalho({ estado: "aguardando_humano", motivo: "dialogo", dialogos: [dialogo(d)] }), "steer");
+  const select = com({ method: "select", title: "Qual <ordem>?", options: ["A <1>", "B"] });
+  assert.match(
+    select,
+    /^<form class="dialogo-ext" data-dialogo="d1" data-metodo="select"><span class="rotulo">O agente pergunta<\/span><div>Qual &#60;ordem&#62;\?<\/div>/,
+  );
+  assert.match(
+    select,
+    /<label><input type="radio" name="valor" value="A &#60;1&#62;" checked> A &#60;1&#62;<\/label><label><input type="radio" name="valor" value="B"> B<\/label>/,
+  );
+  assert.match(
+    select,
+    /data-cancelar>Cancelar<\/button><button class="btn btn-primario">Responder<\/button><\/div><\/form>$/,
+  );
+  assert.match(
+    com({ method: "select", title: "t" }),
+    /<div class="opcoes" role="radiogroup" aria-label="Opções"><\/div>/,
+  );
+  const confirm = com({ method: "confirm", title: "Apagar?", message: "Fica <lento>." });
+  assert.match(confirm, /<div class="muted">Fica &#60;lento&#62;.<\/div>/);
+  assert.match(confirm, /value="sim" checked> Sim<\/label><label><input type="radio" name="valor" value="nao"> Não/);
+  assert.match(
+    com({ method: "input", title: "t", placeholder: "em <s>" }),
+    /<input name="valor" aria-label="Resposta" placeholder="em &#60;s&#62;" autocomplete="off">/,
+  );
+  assert.match(com({ method: "input", title: "t" }), /placeholder=""/);
+  assert.match(
+    com({ method: "editor", title: "t", prefill: "l1\nl2" }),
+    /<textarea name="valor" rows="6" aria-label="Resposta">l1\nl2<\/textarea>/,
+  );
+  assert.match(com({ method: "editor", title: "t" }), /aria-label="Resposta"><\/textarea>/);
+  assert.deepEqual(respostaDoDialogo("confirm", "sim"), { confirmado: true });
+  assert.deepEqual(respostaDoDialogo("confirm", "nao"), { confirmado: false });
+  assert.deepEqual(respostaDoDialogo("editor", "x"), { valor: "x" });
+});
+
+test("envio nos gates, na falha e terminada: só o aviso", () => {
+  const aviso = (sessao: Partial<Sessao>) => envio(cabecalho({ estado: "aguardando_humano", ...sessao }), "steer");
+  assert.equal(
+    aviso({ motivo: "gate_registro" }),
+    '<div class="fim">A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.</div>',
+  );
+  assert.equal(
+    aviso({ motivo: "falha" }),
+    '<div class="fim">A execução falhou e o ticket aguarda a sua resposta.</div>',
+  );
+  assert.equal(
+    aviso({ motivo: "gate_pr" }),
+    '<div class="fim">A etapa terminou; a decisão do gate fica na página da issue.</div>',
+  );
+  assert.equal(
+    aviso({ estado: "terminada" }),
+    '<div class="fim">Sessão terminada; a conversa fica só para leitura.</div>',
+  );
+});
+
+test("há quanto tempo", () => {
+  const agora = Date.parse(T0);
+  const antes = (min: number) => new Date(agora - min * 60_000).toISOString();
+  assert.deepEqual(
+    [0.5, 5, 59, 60, 23 * 60 + 59, 24 * 60, 3 * 24 * 60].map((m) => haQuanto(antes(m), agora)),
+    ["agora", "há 5 min", "há 59 min", "há 1 h", "há 23 h", "há 1 dia", "há 3 dias"],
+  );
+});
+
+test("lateral no registro: o formulário de C2 com o que está registrado", () => {
+  const c = cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "registro" });
+  const registro = {
+    ...c,
+    issue: { ...c.issue, fase: "registro" as const, titulo: null, tipo: null, descricao: "a <b>" },
+  };
+  const html = lateral(registro, 0);
+  assert.match(html, /^<form class="painel superficie" data-registro><h3>Registro · você pode corrigir direto<\/h3>/);
+  assert.match(html, /<input name="titulo" value="" autocomplete="off">/);
+  assert.match(
+    html,
+    /<select name="tipo"><option value="" selected>—<\/option><option value="funcionalidade">funcionalidade<\/option><option value="problema">problema<\/option><\/select>/,
+  );
+  assert.match(html, /<textarea name="descricao" rows="5">a &#60;b&#62;<\/textarea>/);
+  const preenchido = lateral({ ...registro, issue: { ...registro.issue, titulo: "T <1>", tipo: "problema" } }, 0);
+  assert.match(preenchido, /value="T &#60;1&#62;"/);
+  assert.match(
+    preenchido,
+    /<select name="tipo"><option value="funcionalidade">funcionalidade<\/option><option value="problema" selected>problema<\/option>/,
+  );
+  assert.equal(
+    lateral({ ...registro, issue: { ...registro.issue, fase: "desenho" } }, 0),
+    "",
+    "depois do registro, nada",
+  );
+  assert.equal(lateral(cabecalho(), 0), "");
+});
+
+test("lateral no gate do registro: o que foi registrado, os critérios, o que falta e a decisão", () => {
+  const c = cabecalho(
+    { estado: "aguardando_humano", motivo: "gate_registro", etapa: "registro" },
+    {
+      registro: {
+        comportamento: "copia <à> mão",
+        criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "o <CSV>" }],
+        faltando: [],
+      },
+    },
+  );
+  const html = lateral(c, Date.parse(T0) + 120_000);
+  assert.match(
+    html,
+    /^<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro<\/span><span class="muted pequeno">aguarda você há 2 min<\/span>/,
+  );
+  assert.match(
+    html,
+    /<dt>Título<\/dt><dd>Timeout &#60;no&#62; checkout<\/dd><dt>Tipo<\/dt><dd><span class="tag">problema<\/span><\/dd><dt>Descrição<\/dt><dd>—<\/dd><dt>Comportamento<\/dt><dd>copia &#60;à&#62; mão<\/dd>/,
+  );
+  assert.match(html, /<tr><td class="mono">CA-1<\/td><td>o &#60;CSV&#62;<\/td><\/tr>/);
+  assert.match(html, /Nenhuma evidência faltando./);
+  assert.match(
+    html,
+    /data-devolver disabled>Devolver<\/button><button class="btn btn-primario">Aprovar registro<\/button>/,
+  );
+  const faltando = lateral(
+    { ...c, registro: { comportamento: "x", criterios: [], faltando: ["comportamento", "criterios_aceite"] } },
+    0,
+  );
+  assert.match(faltando, /Faltam evidências: comportamento, criterios_aceite./);
+  assert.match(
+    lateral({ ...c, issue: { ...c.issue, descricao: "d" }, registro: undefined }, 0),
+    /<dd>d<\/dd><dt>Comportamento<\/dt><dd>—<\/dd>.*Nenhuma evidência faltando/,
+  );
+});
+
+test("lateral nos gates de desenho e de PR: só o aviso com Decidir na página da issue", () => {
+  for (const [motivo, rotulo] of [
+    ["gate_desenho", "Gate do desenho"],
+    ["gate_pr", "Gate do PR"],
+  ] as const) {
+    const html = lateral(cabecalho({ estado: "aguardando_humano", motivo }), 0);
+    assert.match(html, new RegExp(`^<section class="gate-reg" aria-label="${rotulo}">`));
+    assert.match(
+      html,
+      /<a class="btn btn-primario" href="\/projects\/loja%20api\/issues\/I-4">Decidir na página da issue<\/a>/,
+    );
+  }
+});
+
+test("edição do registro: só título e tipo preenchidos; a descrição vai sempre", () => {
+  assert.deepEqual(edicaoDoRegistro({ titulo: "  ", tipo: "", descricao: "" }), { descricao: "" });
+  assert.deepEqual(edicaoDoRegistro({ titulo: " T ", tipo: "problema", descricao: "d" }), {
+    titulo: "T",
+    tipo: "problema",
+    descricao: "d",
+  });
+});

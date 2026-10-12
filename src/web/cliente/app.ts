@@ -3,11 +3,15 @@
 import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
 import { api, avisar, ErroDaApi, elemento } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, paginaVazia, TITULOS } from "./render.ts";
+import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
 
-/** Desenha a página em `<main>`. Cada tela troca a sua entrada aqui; a função pura de render fica num módulo à parte. */
-type Montar = (main: HTMLElement, params: Parametros) => void | Promise<void>;
+/**
+ * Desenha a página em `<main>`. Cada tela troca a sua entrada aqui; a função pura de render fica num módulo à parte.
+ * A tela que mantém algo aberto (o SSE do chat) devolve a função que o fecha quando o Auditor sai dela.
+ */
+type Montar = (main: HTMLElement, params: Parametros) => undefined | Promise<void> | (() => void);
 
 const vazia =
   (pagina: Pagina): Montar =>
@@ -21,13 +25,14 @@ const MONTAR: Record<Pagina, Montar> = {
   issue: montarIssue,
   metricas: vazia("metricas"),
   historico: vazia("historico"),
-  chat: vazia("chat"),
+  chat: montarChat,
   configuracao: montarConfiguracao,
 };
 
 const cabeca = elemento("[data-navegacao]", HTMLElement);
 const main = elemento("main", HTMLElement);
 let aguardando = 0;
+let desmontar: (() => void) | undefined;
 
 /** O erro aparece no aviso como o servidor mandou; o 401 a `api` já avisou. */
 function mostrar(erro: unknown): void {
@@ -48,8 +53,12 @@ function desenhar(): void {
   document.title = rota ? `${TITULOS[rota.pagina]} · Fabriquinha` : "Fabriquinha";
   cabeca.innerHTML = navegacao(rota?.pagina, aguardando);
   avisar();
-  if (rota) Promise.resolve(MONTAR[rota.pagina](main, rota.params)).catch(mostrar);
-  else main.innerHTML = NAO_ENCONTRADA;
+  desmontar?.();
+  desmontar = undefined;
+  const montada = rota && MONTAR[rota.pagina](main, rota.params);
+  if (!rota) main.innerHTML = NAO_ENCONTRADA;
+  else if (typeof montada === "function") desmontar = montada;
+  else Promise.resolve(montada).catch(mostrar);
   contar().catch(mostrar);
 }
 

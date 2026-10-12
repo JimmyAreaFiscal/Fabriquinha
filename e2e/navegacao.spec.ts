@@ -67,8 +67,10 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
   await expect(aba.getByRole("heading", { level: 1 })).toHaveText("Issue");
   await expect(aba.getByRole("link", { name: "Projetos" })).toHaveAttribute("aria-current", "page");
 
+  // Sessão que não existe: o chat abre e o aviso diz o que o servidor respondeu.
   await aba.goto(`${fabriquinha.base}/sessions/${SESSAO}`);
-  await expect(aba.getByRole("heading", { level: 1 })).toHaveText("Chat");
+  await expect(aba).toHaveTitle("Chat · Fabriquinha");
+  await expect(aba.getByRole("alert")).toHaveText(`a sessão ${SESSAO} não existe (confira o endereço do chat)`);
   await expect(aba.locator('[aria-current="page"]')).toHaveCount(0);
 
   await aba.goto(`${fabriquinha.base}/`);

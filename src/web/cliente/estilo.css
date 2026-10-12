@@ -1507,3 +1507,456 @@ input.erro {
     gap: var(--s-1);
   }
 }
+
+/* Chat (F7 §4.4): barra de estado, conversa à esquerda com o envio fixo no fim e a coluna da direita. */
+.pagina:has(> .pagina-chat) {
+  padding: 0;
+}
+.pequeno {
+  font-size: var(--fs-xs);
+}
+.estado-sessao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-6);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.estado-sessao .issue {
+  font-weight: var(--w-strong);
+}
+.estado-sessao .issue .id {
+  margin-right: 2px;
+}
+.estado-sessao .sep {
+  color: var(--line);
+}
+.estado-sessao .direita {
+  margin-left: auto;
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+}
+.modelo {
+  font: var(--fs-xs) var(--mono);
+  color: var(--muted);
+}
+.chat-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: var(--s-5);
+  padding: 0 var(--s-6);
+}
+.coluna-conversa {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--s-4);
+  min-width: 0;
+}
+.chat-layout .lateral {
+  align-self: start;
+  margin-top: var(--s-4);
+}
+
+.conversa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5) 0;
+}
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.msg .quem {
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.msg.voce .quem {
+  color: var(--accent);
+}
+.msg .texto {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.msg .texto :is(p, ul, ol, pre, blockquote, table) {
+  margin: 0 0 var(--s-2);
+}
+.msg .texto > :last-child {
+  margin-bottom: 0;
+}
+.msg .texto :is(ul, ol) {
+  padding-left: var(--s-5);
+}
+.msg .texto :is(h1, h2, h3, h4) {
+  margin: var(--s-3) 0 var(--s-2);
+  font-size: var(--fs-md);
+}
+.msg .texto a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.msg .texto code {
+  font: 0.9em var(--mono);
+  padding: 1px 4px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+}
+.msg .texto pre {
+  padding: var(--s-2) var(--s-3);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.msg .texto pre code {
+  padding: 0;
+  background: none;
+}
+.msg.voce .texto {
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  align-self: flex-start;
+  max-width: 85%;
+}
+.sistema {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.sistema::before,
+.sistema::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.sistema a {
+  color: var(--accent);
+}
+.pensando > summary,
+.ferramenta > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.pensando > summary::-webkit-details-marker,
+.ferramenta > summary::-webkit-details-marker {
+  display: none;
+}
+.pensando > summary {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  font-style: italic;
+}
+.pensando > summary::before {
+  content: "▸ ";
+  font-style: normal;
+}
+.pensando[open] > summary::before {
+  content: "▾ ";
+}
+.pensando p {
+  margin: var(--s-1) 0 0 var(--s-4);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+.ferramenta {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.ferramenta > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 34px;
+  padding: 0 var(--s-3);
+  font: var(--fs-sm) var(--mono);
+}
+.ferramenta > summary::before {
+  content: "▸";
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 11px;
+}
+.ferramenta[open] > summary::before {
+  content: "▾";
+}
+.ferramenta .nome-f {
+  color: var(--accent);
+}
+.ferramenta .args {
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ferramenta .res {
+  margin-left: auto;
+  font-family: var(--font);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.ferramenta .res.ok {
+  color: var(--closed);
+}
+.ferramenta .res.nok {
+  color: var(--danger);
+}
+.ferramenta .res.neutro {
+  color: var(--muted);
+}
+.ferramenta pre {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  max-height: 180px;
+  overflow: auto;
+  font: var(--fs-xs) / 1.55 var(--mono);
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  white-space: pre-wrap;
+}
+.ferramenta .ver {
+  display: block;
+  padding: 4px var(--s-3) var(--s-2);
+}
+.cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.1em;
+  vertical-align: -3px;
+  margin-left: 2px;
+  background: var(--accent);
+  animation: piscar 1s steps(2) infinite;
+}
+@keyframes piscar {
+  50% {
+    opacity: 0;
+  }
+}
+.fluxo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* Envio: fixo no fim da conversa, conforme o estado da sessão. */
+.compositor,
+.dialogo-ext,
+.fim {
+  position: sticky;
+  bottom: var(--s-3);
+}
+.compositor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.compositor textarea,
+.dialogo-ext textarea,
+.dialogo-ext input:not([type="radio"]) {
+  width: 100%;
+  resize: none;
+  line-height: 1.5;
+  font-size: var(--fs-md);
+  padding: var(--s-2) var(--s-3);
+}
+.compositor .linha-1 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.compositor .linha-1 .direita {
+  margin-left: auto;
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+}
+.segmento {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.segmento button {
+  height: 28px;
+  padding: 0 var(--s-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  background: var(--surface);
+  border: 0;
+  cursor: pointer;
+}
+.segmento button + button {
+  border-left: 1px solid var(--line);
+}
+.segmento button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--surface-2);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.dica-tecla {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.btn-perigo {
+  color: var(--danger);
+  border-color: var(--danger-bg);
+  background: transparent;
+}
+.btn-perigo:hover {
+  background: var(--danger-bg);
+}
+.dialogo-ext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  background: var(--surface);
+  border: 1px solid #5a4720;
+  border-top: 3px solid var(--open);
+  border-radius: var(--r-lg);
+}
+.dialogo-ext .rotulo {
+  color: var(--open);
+}
+.dialogo-ext .botoes,
+.gate-reg .botoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+.opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.opcoes label {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+}
+.opcoes label:hover {
+  border-color: var(--muted);
+}
+.opcoes input {
+  accent-color: var(--accent);
+  margin: 0;
+  padding: 0;
+}
+.opcoes label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.fim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+/* Coluna da direita: o formulário do registro e os painéis de gate. */
+.painel {
+  padding: var(--s-3) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.painel h3,
+.titulo-bloco {
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.titulo-bloco {
+  margin-bottom: 4px;
+}
+.lateral textarea {
+  resize: none;
+}
+.painel .salvar {
+  display: flex;
+  justify-content: flex-end;
+}
+.gate-reg {
+  border: 1px solid #5a4720;
+  border-top: 3px solid var(--open);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+.gate-reg .cab {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+.gate-reg .cab .rotulo {
+  color: var(--open);
+}
+.gate-reg .corpo {
+  padding: var(--s-3) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-3);
+  font-size: var(--fs-sm);
+}
+.gate-reg .corpo > .btn {
+  align-self: flex-start;
+}
+.gate-reg .decidir {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--line);
+  background: #191714;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+.gate-reg .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+  .chat-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chat-layout .lateral {
+    position: static;
+    max-height: none;
+  }
+}

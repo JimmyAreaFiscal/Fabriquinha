@@ -560,16 +560,16 @@ async function descartarDaSessao(banco: DatabaseSync, ag: Agregado, ticket: Id):
 
 /** F4 §6.6: Concluir sessão, na sessão em aberto. Para o pi ocioso, descarta as alterações (F3 §7) e chama C7. */
 export async function concluirSessao(banco: DatabaseSync, ticket: Id): Promise<void> {
-  const issue = existe(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número")
-    .issue.id;
-  const ag = await agregadoAssentado(banco, issue);
+  const ag = await agregadoAssentado(banco, issueDoTicket(banco, ticket));
   const t = ticketDe(ag, ticket);
   if (t.etapa !== "sessao") {
     throw new ErroDeRegra(`T-${String(ticket)} é da etapa ${t.etapa}`, "só a sessão em aberto se conclui pelo chat");
   }
   await pararOciosa(ag, ticket);
   await descartarDaSessao(banco, ag, ticket);
-  comIssue(banco, issue, "concluirTicket", FABRIQUINHA, (a, ctx) => concluirTicket(a, { ticket }, FABRIQUINHA, ctx));
+  comIssue(banco, ag.issue.id, "concluirTicket", FABRIQUINHA, (a, ctx) =>
+    concluirTicket(a, { ticket }, FABRIQUINHA, ctx),
+  );
   // C7 exige o ticket em execução, então ele já tem sessão.
   avisar(...principalDe(banco, ag, ticket));
 }

@@ -1,9 +1,17 @@
 #!/usr/bin/env -S node --disable-warning=ExperimentalWarning
 // pi falso do e2e (F4 §12), via FABRIQUINHA_PI: responde `--version`, lista modelos em `--list-models` e, no modo
-// RPC, a cada `prompt` responde com $FALSO_PI_RESPOSTA (padrão "pronto"), grava a resposta no JSONL da sessão e
-// assenta. Os testes que precisam de outro comportamento acrescentam variantes aqui.
-import { appendFileSync, mkdirSync } from "node:fs";
+// RPC, fala o protocolo do pi: grava cada mensagem no JSONL da sessão e a emite. O que faz com o `prompt` depende do
+// texto dele:
+// - "[ao vivo]": raciocínio, uma ferramenta que falha e um texto chegando em fluxo, sem terminar, até um `steer`, que
+//   o redireciona e abre um diálogo `select`;
+// - "registre": como o agente do registro, edita a issue e submete as evidências pelo CLI `fabriquinha`;
+// - "pergunte <select|confirm|input|editor>": abre esse diálogo;
+// - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
+// A resposta a um diálogo é ecoada numa mensagem e assenta; `abort` para a mensagem em fluxo como abortada.
+import { execFileSync } from "node:child_process";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as dormir } from "node:timers/promises";
 
 const argumentos = process.argv.slice(2);
 const emitir = (evento: object) => process.stdout.write(`${JSON.stringify(evento)}\n`);
@@ -20,37 +28,167 @@ if (argumentos.includes("--list-models")) {
   process.exit(0);
 }
 
-/** Como o pi, grava cada mensagem em `<session-dir>/<instante>_<session-id>.jsonl` e a emite. */
+const sessao = join(arg("--session-dir"), `2026-10-12T00-00-00-000Z_${arg("--session-id")}.jsonl`);
+
+/** Como o pi, grava a mensagem em `<session-dir>/<instante>_<session-id>.jsonl` e a emite. */
 function mensagem(message: object): void {
   mkdirSync(arg("--session-dir"), { recursive: true });
-  appendFileSync(
-    join(arg("--session-dir"), `2026-10-12T00-00-00-000Z_${arg("--session-id")}.jsonl`),
-    `${JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message })}\n`,
-  );
-  emitir({ type: "message_end", message });
+  const completa = { ...message, timestamp: Date.now() };
+  const entrada = { type: "message", timestamp: new Date().toISOString(), message: completa };
+  appendFileSync(sessao, `${JSON.stringify(entrada)}\n`);
+  emitir({ type: "message_end", message: completa });
 }
 
-function aoPrompt(texto: string): void {
+const doAgente = (content: object[], stopReason = "stop") => ({
+  role: "assistant",
+  content,
+  provider: "anthropic",
+  model: "claude-opus-5-5",
+  stopReason,
+  usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12, cost: { total: 0.01 } },
+});
+
+const responder = (texto: string) => {
+  mensagem(doAgente([{ type: "text", text: texto }]));
+};
+
+/** O texto que está chegando em fluxo, ainda sem `message_end`. */
+let emFluxo: { texto: string } | undefined;
+
+async function aoVivo(): Promise<void> {
+  mensagem(
+    doAgente(
+      [
+        { type: "thinking", thinking: "Vou rodar os testes antes de mexer no código." },
+        { type: "toolCall", id: "t1", name: "bash", arguments: { command: "npm test" } },
+      ],
+      "toolUse",
+    ),
+  );
+  const saida = Array.from({ length: 40 }, (_, i) => `ok ${String(i + 1)} - caso ${String(i + 1)}`);
+  mensagem({
+    role: "toolResult",
+    toolCallId: "t1",
+    toolName: "bash",
+    content: [{ type: "text", text: [...saida, "FAIL test/cupons.spec.ts", "3 failed"].join("\n") }],
+    isError: true,
+  });
+  emitir({ type: "message_start", message: doAgente([]) });
+  emitir({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
+  const fluxo = { texto: "" };
+  emFluxo = fluxo;
+  for (const pedaco of ["Os testes ", "esperam a ", "**ordem antiga**"]) {
+    await dormir(50);
+    // Um `steer` ou `abort` no meio já fechou a mensagem.
+    if (emFluxo !== fluxo) return;
+    fluxo.texto += pedaco;
+    emitir({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: pedaco } });
+  }
+}
+
+/** Termina a mensagem em fluxo, se há uma. */
+function fecharFluxo(stopReason = "stop"): void {
+  if (emFluxo === undefined) return;
+  mensagem(doAgente([{ type: "text", text: emFluxo.texto }], stopReason));
+  emFluxo = undefined;
+}
+
+/** Como o agente do registro: título e tipo pelo CLI, e as duas evidências do registro (F3). */
+function registrar(): void {
+  const issue = /Issue: I-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
+  const saida = String(process.env.FABRIQUINHA_SAIDA);
+  const cli = (...args: string[]) =>
+    execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "cli", "fabriquinha.ts"), ...args]);
+  cli("issue", "editar", issue, "--titulo", "Exportar pedidos em CSV", "--tipo", "funcionalidade");
+  writeFileSync(join(saida, "hoje.txt"), "a contabilidade copia os pedidos à mão\n");
+  const comportamento = {
+    descricao: "hoje a contabilidade copia os pedidos à mão",
+    comoReproduzir: ["abrir o painel"],
+  };
+  writeFileSync(join(saida, "comportamento.json"), JSON.stringify(comportamento));
+  cli(
+    "evidencia",
+    "add",
+    "comportamento",
+    "--dados",
+    join(saida, "comportamento.json"),
+    "--arquivo",
+    join(saida, "hoje.txt"),
+  );
+  const criterios = [
+    { id: "CA-1", dado: "pedidos no mês", quando: "exporto", entao: "o CSV traz número, data, cliente e total" },
+    { id: "CA-2", dado: "pedidos de outro mês", quando: "exporto", entao: "só os do mês escolhido entram" },
+  ];
+  writeFileSync(join(saida, "criterios.json"), JSON.stringify({ criterios }));
+  cli("evidencia", "add", "criterios_aceite", "--dados", join(saida, "criterios.json"));
+}
+
+const DIALOGOS: Record<string, object> = {
+  select: { title: "Qual ordem os cupons devem ter?", options: ["Maior desconto primeiro", "Validade mais próxima"] },
+  confirm: { title: "Posso apagar o cache?", message: "Os relatórios vão ficar lentos por uma hora." },
+  input: { title: "Qual é o limite?", placeholder: "em segundos" },
+  editor: { title: "Revise a mensagem", prefill: "linha 1\nlinha 2" },
+};
+
+const dialogo = (method: string) => {
+  emitir({ type: "extension_ui_request", id: `d-${method}`, method, ...DIALOGOS[method] });
+};
+
+async function aoPrompt(texto: string): Promise<void> {
   emitir({ type: "response", command: "prompt", success: true });
   emitir({ type: "agent_start" });
   mensagem({ role: "user", content: texto });
-  mensagem({
-    role: "assistant",
-    content: [{ type: "text", text: process.env.FALSO_PI_RESPOSTA ?? "pronto" }],
-    provider: "anthropic",
-    model: "claude-opus-5-5",
-    stopReason: "stop",
-    usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12, cost: { total: 0.01 } },
-  });
+  const pergunta = /pergunte (select|confirm|input|editor)/.exec(texto)?.[1];
+  if (texto.includes("[ao vivo]")) {
+    await aoVivo();
+    return;
+  }
+  if (pergunta) {
+    responder("Preciso de uma resposta.");
+    dialogo(pergunta);
+    return;
+  }
+  if (texto.includes("registre")) {
+    registrar();
+    responder("Registrei o título, o tipo, o comportamento e os critérios de aceite.");
+  } else responder(process.env.FALSO_PI_RESPOSTA ?? "pronto");
   emitir({ type: "agent_settled" });
+}
+
+interface Comando {
+  type?: string;
+  message?: string;
+  id?: string;
+  value?: string;
+  confirmed?: boolean;
+  cancelled?: boolean;
+}
+
+function aoComando(c: Comando): void {
+  if (c.type === "prompt") void aoPrompt(c.message ?? "");
+  if (c.type === "steer") {
+    emitir({ type: "response", command: "steer", success: true });
+    fecharFluxo();
+    mensagem({ role: "user", content: c.message });
+    responder(`Redirecionado: ${String(c.message)}`);
+    dialogo("select");
+  }
+  if (c.type === "follow_up") emitir({ type: "response", command: "follow_up", success: true });
+  if (c.type === "extension_ui_response") {
+    const { type: _, id: __, ...resposta } = c;
+    responder(`Resposta do diálogo: ${JSON.stringify(resposta)}`);
+    emitir({ type: "agent_settled" });
+  }
+  if (c.type === "abort") {
+    emitir({ type: "response", command: "abort", success: true });
+    fecharFluxo("aborted");
+    emitir({ type: "agent_settled" });
+  }
 }
 
 let resto = "";
 process.stdin.setEncoding("utf8").on("data", (parte: string) => {
   const linhas = (resto + parte).split("\n");
   resto = linhas.pop() ?? "";
-  for (const linha of linhas) {
-    const comando = JSON.parse(linha) as { type?: string; message?: string };
-    if (comando.type === "prompt") aoPrompt(comando.message ?? "");
-  }
+  for (const linha of linhas) aoComando(JSON.parse(linha) as Comando);
 });

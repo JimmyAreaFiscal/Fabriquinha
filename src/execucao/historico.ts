@@ -23,7 +23,7 @@ interface Bloco {
 }
 
 /** A parte de uma mensagem do pi que o histórico mostra (formato da sessão do pi). */
-interface Mensagem {
+export interface Mensagem {
   role?: string;
   content: string | Bloco[];
   toolName?: string;
@@ -36,7 +36,7 @@ const blocos = (m: Mensagem): Bloco[] =>
   typeof m.content === "string" ? [{ type: "text", text: m.content }] : m.content;
 
 /** O texto da mensagem; imagens e raciocínio ficam de fora. */
-const texto = (m: Mensagem): string =>
+export const texto = (m: Mensagem): string =>
   blocos(m)
     .filter((b) => b.type === "text")
     .map((b) => String(b.text))
@@ -55,7 +55,7 @@ const cortar = (t: string): string =>
  * Os prompts que a Fabriquinha montou (F4 §6.3) na sessão principal do ticket, que a consulta também copia: o da
  * primeira execução e os das autônomas. Os das retomadas interativas são a mensagem do Auditor.
  */
-function promptsDaFabriquinha(raiz: string, ag: Agregado, ticket: Id): Set<string> {
+export function promptsDaFabriquinha(raiz: string, ag: Agregado, ticket: Id): Set<string> {
   const prompts = ag.execucoes
     .filter(naSessaoPrincipal(ticket))
     .filter((e, i) => i === 0 || e.modo === "autonomo")

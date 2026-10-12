@@ -1,0 +1,386 @@
+// Chat (F7 §4.4; F4 §5.4): a barra de estado, a conversa do JSONL com as linhas do sistema, as peças que chegam ao
+// vivo, o envio conforme o estado e a coluna da direita do registro, como funções puras que devolvem HTML. O texto
+// de agente passa sempre pelo `markdown-it` com `html: false`; o resto, por `escapar`.
+import type { Execucao } from "../../../dominio/agregado.ts";
+import type { Dialogo } from "../../../execucao/gerente.ts";
+import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
+import { markdown } from "../markdown.ts";
+import { escapar } from "../render.ts";
+
+/** Um bloco do `content` de uma mensagem do pi. */
+export interface Bloco {
+  type?: string;
+  text?: string;
+  thinking?: string;
+  id?: string;
+  name?: string;
+  arguments?: unknown;
+}
+
+/** Uma mensagem do pi (usuário, agente ou resultado de ferramenta), como vem no JSONL e no `message_end`. */
+export interface MensagemPi {
+  role?: string;
+  content?: string | Bloco[];
+  toolCallId?: string;
+  isError?: boolean;
+  stopReason?: string;
+  errorMessage?: string;
+  provider?: string;
+  model?: string;
+  timestamp?: number;
+}
+
+/** Um pedaço da conversa com a chave que o identifica, para o que chega ao vivo não repetir o que já está na tela. */
+export interface Item {
+  chave: string;
+  html: string;
+}
+
+const blocos = (m: MensagemPi): Bloco[] =>
+  typeof m.content === "string" ? [{ type: "text", text: m.content }] : (m.content ?? []);
+
+const textoDe = (m: MensagemPi): string =>
+  blocos(m)
+    .filter((b) => b.type === "text")
+    .map((b) => String(b.text))
+    .join("\n");
+
+const MODOS: Record<Execucao["modo"], string> = {
+  autonomo: "autônoma",
+  interativo: "interativa",
+  consulta: "consulta",
+};
+
+const ETAPAS: Record<CabecalhoDoChat["sessao"]["etapa"], string> = {
+  registro: "registro",
+  desenho: "desenho",
+  desenvolvimento: "desenvolvimento",
+  revisao: "revisão",
+  encerramento: "encerramento",
+  sessao: "sessão em aberto",
+};
+
+const MOTIVOS: Record<NonNullable<CabecalhoDoChat["sessao"]["motivo"]>, string> = {
+  conversa: "conversa",
+  dialogo: "diálogo",
+  falha: "falha",
+  gate_registro: "gate do registro",
+  gate_desenho: "gate do desenho",
+  gate_pr: "gate do PR",
+};
+
+/** O estado da sessão (F4 §5.2) como etiqueta: azul rodando, âmbar aguardando, vermelho na falha. */
+export function etiquetaDoEstado({ estado, motivo }: CabecalhoDoChat["sessao"]): string {
+  if (estado === "rodando") return '<span class="pill pill-rodando">rodando</span>';
+  if (estado === "terminada") return '<span class="pill pill-neutro">terminada</span>';
+  const classe = motivo === "falha" ? "pill-falha" : "pill-aguarda";
+  return `<span class="pill ${classe}">aguarda você · ${motivo ? MOTIVOS[motivo] : ""}</span>`;
+}
+
+/** O modelo da sessão: o da última execução, senão o da última resposta do agente, senão o padrão do pi. */
+export function modeloDe(c: CabecalhoDoChat, conversa: readonly Entrada[]): string {
+  const fixado = c.execucoes.at(-1)?.modelo;
+  if (fixado) return `${fixado.provedor} / ${fixado.modelo}`;
+  const resposta = conversa.map((e) => e.message as MensagemPi | undefined).findLast((m) => m?.role === "assistant");
+  return resposta?.model ? `${String(resposta.provider)} / ${resposta.model}` : "modelo padrão do pi";
+}
+
+/** Barra de estado (F7 §4.4, item 1): issue, ticket, etapa e modo, estado, modelo e a execução com log e prompt. */
+export function barraDeEstado(c: CabecalhoDoChat, modelo: string): string {
+  const { sessao, issue } = c;
+  const e = String(sessao.execucao);
+  const titulo = issue.titulo ?? "sem título";
+  return (
+    `<div class="estado-sessao">` +
+    `<a class="issue" href="/projects/${encodeURIComponent(issue.projeto)}/issues/I-${String(issue.id)}"><span class="id">I-${String(issue.id)}</span> ${escapar(titulo)}</a>` +
+    `<span class="sep">│</span><span class="id">T-${String(sessao.ticket)}</span>` +
+    `<span class="muted">${ETAPAS[sessao.etapa]} · ${MODOS[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
+    `<span class="modelo">${escapar(modelo)}</span>` +
+    `<div class="direita"><span class="muted pequeno">E-${e}</span>` +
+    `<a class="link" href="/api/execucoes/${e}/log" target="_blank" rel="noopener">log</a>` +
+    `<a class="link" href="/api/execucoes/${e}/prompt" target="_blank" rel="noopener">prompt</a></div>` +
+    `</div>`
+  );
+}
+
+const sistema = (html: string): string => `<div class="sistema">${html}</div>`;
+
+/** As linhas do sistema de uma execução: quando começou e, se já terminou, como terminou. */
+export function linhasDaExecucao(e: Execucao, i: number): (Item & { em: string })[] {
+  const n = `E-${String(e.id)}`;
+  // O prompt da etapa (F4 §6.3) abre a sessão e cada execução autônoma; a retomada interativa leva só a mensagem.
+  const rotulo = i === 0 || e.modo === "autonomo" ? "prompt da etapa" : "prompt";
+  const prompt =
+    e.modo === "consulta"
+      ? ""
+      : ` · <a href="/api/execucoes/${String(e.id)}/prompt" target="_blank" rel="noopener">${rotulo}</a>`;
+  const linhas = [
+    { chave: `inicio-${n}`, em: e.iniciadaEm, html: sistema(`Execução ${n} iniciada · ${MODOS[e.modo]}${prompt}`) },
+  ];
+  if (e.terminadaEm === undefined) return linhas;
+  let fim = `Execução ${n} encerrada`;
+  if (e.resultado === "falha") fim = `Execução ${n} falhou: ${escapar(e.erro)}`;
+  else if (e.modo === "autonomo") fim = `Execução ${n} concluída`;
+  return [...linhas, { chave: `fim-${n}`, em: e.terminadaEm, html: sistema(fim) }];
+}
+
+/** Uma linha por diálogo de extensão aberto pelo agente. */
+export const linhaDoDialogo = (d: Dialogo): Item => ({
+  chave: `dialogo-${String(d.id)}`,
+  html: sistema(`o agente abriu um diálogo: ${escapar(d.title)}`),
+});
+
+/** O que a chamada recebeu, numa linha: o comando, o caminho ou os argumentos em JSON. */
+function argumentos(args: unknown): string {
+  const a = (args ?? {}) as Record<string, unknown>;
+  for (const campo of ["command", "path"]) if (typeof a[campo] === "string") return a[campo];
+  return JSON.stringify(a);
+}
+
+/** Linhas a partir das quais a saída da ferramenta rola e ganha **ver tudo**. */
+const LINHAS_VISIVEIS = 10;
+
+/**
+ * Uma chamada de ferramenta, recolhível: nome, argumentos e o resumo do resultado (✓ ou ✗ com o número de linhas), e a
+ * saída em fonte monoespaçada, com **ver tudo** quando passa de algumas linhas. Sem resultado ainda, diz que espera.
+ */
+export function ferramenta(chamada: Bloco, resultado?: MensagemPi, aberta = false): string {
+  let resumo = '<span class="res neutro">sem resultado ainda</span>';
+  let saida = "";
+  if (resultado) {
+    const texto = textoDe(resultado);
+    const linhas = texto === "" ? 0 : texto.split("\n").length;
+    let quantas = linhas === 1 ? "1 linha" : `${String(linhas)} linhas`;
+    if (linhas === 0) quantas = "sem saída";
+    resumo = resultado.isError
+      ? `<span class="res nok">✗ ${quantas}</span>`
+      : `<span class="res ok">✓ ${quantas}</span>`;
+    const ver =
+      linhas > LINHAS_VISIVEIS ? '<button type="button" class="link ver" data-ver-tudo>ver tudo</button>' : "";
+    saida = linhas === 0 ? "" : `<pre>${escapar(texto)}</pre>${ver}`;
+  }
+  return (
+    `<details class="ferramenta" data-chamada="${escapar(chamada.id)}"${aberta ? " open" : ""}>` +
+    `<summary><span class="nome-f">${escapar(chamada.name)}</span><span class="args">${escapar(argumentos(chamada.arguments))}</span>${resumo}</summary>` +
+    `${saida}</details>`
+  );
+}
+
+const pensamento = (texto: string, rotulo = "raciocínio"): string =>
+  `<details class="pensando"><summary>${rotulo}</summary><p>${escapar(texto)}</p></details>`;
+
+const doAgente = (html: string): string =>
+  `<div class="msg agente"><span class="quem">agente</span><div class="texto">${html}</div></div>`;
+
+const PAROU: Record<string, string> = { aborted: "o agente foi interrompido", error: "o agente parou com erro" };
+
+/**
+ * Uma mensagem do pi na conversa: a do Auditor, e a do agente com o raciocínio, o texto e as chamadas na ordem em que
+ * vieram. O resultado de uma ferramenta não aparece sozinho: ele completa a chamada (`resultados`, por id).
+ */
+export function mensagem(m: MensagemPi, resultados: ReadonlyMap<string, MensagemPi> = new Map()): string {
+  if (m.role === "user") {
+    return `<div class="msg voce"><span class="quem">você</span><div class="texto">${markdown(textoDe(m))}</div></div>`;
+  }
+  if (m.role !== "assistant") return "";
+  const partes = blocos(m).map((b) => {
+    if (b.type === "thinking") return pensamento(String(b.thinking));
+    if (b.type === "toolCall") return ferramenta(b, resultados.get(String(b.id)));
+    return b.type === "text" && b.text?.trim() ? doAgente(markdown(b.text)) : "";
+  });
+  const parou = PAROU[String(m.stopReason)];
+  if (parou) partes.push(sistema(escapar([parou, m.errorMessage].filter(Boolean).join(": "))));
+  return partes.join("");
+}
+
+/** A chave de uma mensagem: o papel e o instante dela no pi, que o JSONL e o `message_end` repetem. */
+export const chaveDa = (m: MensagemPi): string => `${String(m.role)}-${String(m.timestamp)}`;
+
+/**
+ * A conversa inteira (F7 §4.4, item 2): as mensagens do JSONL e as linhas das execuções, por instante, e no fim os
+ * diálogos abertos. O prompt montado pela Fabriquinha não aparece: a linha da execução tem o link dele.
+ */
+export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Item[] {
+  const mensagens = entradas.flatMap((e) =>
+    e.type === "message" ? [{ em: String(e.timestamp), m: e.message as MensagemPi, fabriquinha: e.fabriquinha }] : [],
+  );
+  const resultados = new Map(
+    mensagens.filter(({ m }) => m.role === "toolResult").map(({ m }) => [String(m.toolCallId), m] as const),
+  );
+  const itens = [
+    ...mensagens.map(({ em, m, fabriquinha }) => ({
+      chave: chaveDa(m),
+      em,
+      html: fabriquinha ? "" : mensagem(m, resultados),
+    })),
+    ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)),
+  ].toSorted((a, b) => a.em.localeCompare(b.em));
+  return [...itens.map(({ chave, html }) => ({ chave, html })), ...c.sessao.dialogos.map(linhaDoDialogo)];
+}
+
+/** A mensagem do agente chegando em fluxo, com o cursor piscando no fim do texto. */
+export function emFluxo(texto: string, raciocinio: string): string {
+  const html = markdown(texto);
+  const comCursor = html.endsWith("</p>\n")
+    ? `${html.slice(0, -"</p>\n".length)}<span class="cursor"></span></p>`
+    : `${html}<span class="cursor"></span>`;
+  return `${raciocinio ? pensamento(raciocinio, "raciocínio…") : ""}${doAgente(comCursor)}`;
+}
+
+export type ModoEnvio = "steer" | "follow_up";
+
+const DICA = '<span class="dica-tecla">Enter envia · Shift+Enter quebra linha</span>';
+
+/** O pedido do agente (F4 §5.4) com o formulário do método: lista de opções, Sim/Não, texto ou área de texto. */
+function dialogo(d: Dialogo): string {
+  const opcoes = (valores: [string, string][]) =>
+    `<div class="opcoes" role="radiogroup" aria-label="Opções">${valores
+      .map(
+        ([valor, rotulo], i) =>
+          `<label><input type="radio" name="valor" value="${escapar(valor)}"${i === 0 ? " checked" : ""}> ${escapar(rotulo)}</label>`,
+      )
+      .join("")}</div>`;
+  const campos: Record<string, () => string> = {
+    select: () => opcoes(((d.options ?? []) as string[]).map((o) => [o, o])),
+    confirm: () =>
+      opcoes([
+        ["sim", "Sim"],
+        ["nao", "Não"],
+      ]),
+    input: () =>
+      `<input name="valor" aria-label="Resposta" placeholder="${escapar(d.placeholder ?? "")}" autocomplete="off">`,
+    editor: () => `<textarea name="valor" rows="6" aria-label="Resposta">${escapar(d.prefill ?? "")}</textarea>`,
+  };
+  const detalhe = typeof d.message === "string" ? `<div class="muted">${escapar(d.message)}</div>` : "";
+  return (
+    `<form class="dialogo-ext" data-dialogo="${escapar(d.id)}" data-metodo="${escapar(d.method)}">` +
+    `<span class="rotulo">O agente pergunta</span><div>${escapar(d.title)}</div>${detalhe}` +
+    String(campos[String(d.method)]?.()) +
+    '<div class="botoes"><button type="button" class="btn" data-cancelar>Cancelar</button>' +
+    '<button class="btn btn-primario">Responder</button></div></form>'
+  );
+}
+
+/** O corpo de `POST /api/sessoes/:sessao/dialogos/:id` para o valor escolhido no formulário do diálogo. */
+export const respostaDoDialogo = (metodo: string, valor: string): { valor: string } | { confirmado: boolean } =>
+  metodo === "confirm" ? { confirmado: valor === "sim" } : { valor };
+
+const fim = (texto: string): string => `<div class="fim">${texto}</div>`;
+
+/**
+ * A área de envio (F7 §4.4, item 3), conforme o estado: rodando, redirecionar ou enfileirar e abortar; diálogo, o
+ * formulário dele; conversa, enviar e, na sessão em aberto, concluir; nos gates e terminada, só o aviso.
+ */
+export function envio(c: CabecalhoDoChat, modo: ModoEnvio): string {
+  const { sessao } = c;
+  const [pendente] = sessao.dialogos;
+  if (pendente) return dialogo(pendente);
+  if (sessao.estado === "terminada") return fim("Sessão terminada; a conversa fica só para leitura.");
+  const rodando = sessao.estado === "rodando";
+  if (!rodando && sessao.motivo !== "conversa") {
+    const avisos: Record<string, string> = {
+      gate_registro:
+        "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.",
+      falha: "A execução falhou e o ticket aguarda a sua resposta.",
+    };
+    return fim(avisos[String(sessao.motivo)] ?? "A etapa terminou; a decisão do gate fica na página da issue.");
+  }
+  const segmento = rodando
+    ? '<div class="segmento" role="group" aria-label="Como enviar">' +
+      `<button type="button" data-modo="steer" aria-pressed="${String(modo === "steer")}" title="Interrompe e redireciona agora">Redirecionar</button>` +
+      `<button type="button" data-modo="follow_up" aria-pressed="${String(modo === "follow_up")}" title="Entrega quando o agente terminar o passo">Enfileirar</button></div>`
+    : "";
+  const acoes = [
+    rodando ? '<button type="button" class="btn btn-perigo" data-abortar>Abortar</button>' : "",
+    sessao.etapa === "sessao" ? '<button type="button" class="btn" data-concluir>Concluir sessão</button>' : "",
+    '<button class="btn btn-primario">Enviar</button>',
+  ].join("");
+  const dica = rodando ? "Mensagem para o agente enquanto ele trabalha" : "Responda ao agente";
+  return (
+    `<form class="compositor" data-envio><textarea name="texto" rows="2" aria-label="Mensagem" placeholder="${dica}"></textarea>` +
+    `<div class="linha-1">${segmento}${DICA}<div class="direita">${acoes}</div></div></form>`
+  );
+}
+
+/** Há quanto tempo, em português: "agora", "há 5 min", "há 2 h", "há 3 dias". */
+export function haQuanto(desde: string, agora: number): string {
+  const min = Math.floor((agora - Date.parse(desde)) / 60_000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${String(min)} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${String(h)} h`;
+  const dias = Math.floor(h / 24);
+  return `há ${String(dias)} ${dias === 1 ? "dia" : "dias"}`;
+}
+
+/** O formulário de C2 (F7 §4.4, item 4): o Auditor corrige direto o que o agente registrou. */
+function formularioDoRegistro(c: CabecalhoDoChat): string {
+  const { titulo, tipo, descricao } = c.issue;
+  const opcao = (valor: string, rotulo: string) =>
+    `<option value="${valor}"${tipo === valor || (valor === "" && tipo === null) ? " selected" : ""}>${rotulo}</option>`;
+  return (
+    '<form class="painel superficie" data-registro><h3>Registro · você pode corrigir direto</h3>' +
+    `<label class="campo">Título<input name="titulo" value="${escapar(titulo ?? "")}" autocomplete="off"></label>` +
+    `<label class="campo">Tipo<select name="tipo">${tipo === null ? opcao("", "—") : ""}${opcao("funcionalidade", "funcionalidade")}${opcao("problema", "problema")}</select></label>` +
+    `<label class="campo">Descrição<textarea name="descricao" rows="5">${escapar(descricao)}</textarea></label>` +
+    '<div class="salvar"><button class="btn btn-pequeno">Salvar</button></div></form>'
+  );
+}
+
+/** O painel do gate do registro (F7 §4.4): o que o agente registrou, Aprovar registro e Devolver com o motivo. */
+function gateDoRegistro(c: CabecalhoDoChat, agora: number): string {
+  const { issue, sessao } = c;
+  // O servidor sempre manda o painel no gate; sem ele, o painel fica vazio em vez de quebrar.
+  const registro = c.registro ?? { comportamento: "—", criterios: [], faltando: [] };
+  const criterios = registro.criterios
+    .map((k) => `<tr><td class="mono">${escapar(k.id)}</td><td>${escapar(k.entao)}</td></tr>`)
+    .join("");
+  const faltando = registro.faltando.length
+    ? `Faltam evidências: ${registro.faltando.join(", ")}.`
+    : "Nenhuma evidência faltando.";
+  return (
+    '<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro</span>' +
+    `<span class="muted pequeno">aguarda você ${haQuanto(sessao.desde, agora)}</span></div>` +
+    '<div class="corpo"><dl class="fatos">' +
+    `<dt>Título</dt><dd>${escapar(issue.titulo)}</dd>` +
+    `<dt>Tipo</dt><dd><span class="tag">${escapar(issue.tipo)}</span></dd>` +
+    `<dt>Descrição</dt><dd>${escapar(issue.descricao || "—")}</dd>` +
+    `<dt>Comportamento</dt><dd>${escapar(registro.comportamento)}</dd></dl>` +
+    '<div><div class="titulo-bloco">Critérios de aceite</div>' +
+    `<table class="tabela"><tr><th>ID</th><th>Então</th></tr>${criterios}</table></div>` +
+    `<span class="muted">${faltando}</span></div>` +
+    '<form class="decidir" data-gate-registro><label class="campo">Motivo (obrigatório para devolver)<textarea name="motivo" rows="2"></textarea></label>' +
+    '<div class="botoes"><button type="button" class="btn btn-perigo" data-devolver disabled>Devolver</button>' +
+    '<button class="btn btn-primario">Aprovar registro</button></div></form></section>'
+  );
+}
+
+const ROTULO_DO_GATE: Record<string, string> = { gate_desenho: "Gate do desenho", gate_pr: "Gate do PR" };
+
+/**
+ * A coluna da direita (F7 §4.4, item 4): na sessão de registro, o formulário de C2 ou, no gate, o painel dele; nos
+ * gates de desenho e de PR, só o aviso que leva à página da issue.
+ */
+export function lateral(c: CabecalhoDoChat, agora: number): string {
+  const { sessao, issue } = c;
+  if (sessao.motivo === "gate_registro") return gateDoRegistro(c, agora);
+  const gate = ROTULO_DO_GATE[String(sessao.motivo)];
+  if (gate) {
+    return (
+      `<section class="gate-reg" aria-label="${gate}"><div class="cab"><span class="rotulo">${gate}</span></div>` +
+      '<div class="corpo">A decisão deste gate fica na página da issue, com tudo o que ela precisa.' +
+      `<a class="btn btn-primario" href="/projects/${encodeURIComponent(issue.projeto)}/issues/I-${String(issue.id)}">Decidir na página da issue</a></div></section>`
+    );
+  }
+  return sessao.etapa === "registro" && issue.fase === "registro" ? formularioDoRegistro(c) : "";
+}
+
+/** O corpo de `POST /api/issues/:id` a partir do formulário: só os campos preenchidos; a descrição pode ficar vazia. */
+export function edicaoDoRegistro(campos: { titulo: string; tipo: string; descricao: string }): Record<string, string> {
+  const titulo = campos.titulo.trim();
+  return {
+    ...(titulo && { titulo }),
+    ...(campos.tipo && { tipo: campos.tipo }),
+    descricao: campos.descricao,
+  };
+}

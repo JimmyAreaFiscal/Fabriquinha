@@ -24,7 +24,7 @@ import { ErroHttp } from "../erros.ts";
 import type { Rota } from "../rotas.ts";
 
 /** O ID de um `:parametro` do caminho. */
-const IdDoCaminho = z.coerce.number().pipe(Id);
+export const IdDoCaminho = z.coerce.number().pipe(Id);
 
 /** O que a página da issue lê (F7 §5): o agregado e o que fica fora dele. */
 export interface PaginaDaIssue extends Agregado {
