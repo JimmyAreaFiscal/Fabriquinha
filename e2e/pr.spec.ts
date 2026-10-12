@@ -147,6 +147,10 @@ test("revisa o PR, pede mudanças com o motivo e conclui a sessão em aberto pel
   await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
   const gate = pagina.getByRole("region", { name: "Gate do PR" });
   await expect(gate.locator(".gate-cabeca")).toContainText("Gate do PRPR #7 ↗aguarda você há");
+  // A descrição curta, sem "ver tudo", fica nítida: sem o degradê da recolhida.
+  const descricao = pagina.locator("[data-descricao]");
+  await expect(pagina.getByRole("button", { name: "ver tudo" })).toBeHidden();
+  expect(await descricao.evaluate((d) => getComputedStyle(d, "::after").content)).toBe("none");
   await expect(gate.getByRole("link", { name: "abrir o chat da sessão →" })).toHaveAttribute(
     "href",
     `/sessions/${SESSAO}`,

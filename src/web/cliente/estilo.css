@@ -1701,7 +1701,8 @@ input.erro {
 .descricao.aberta {
   max-height: none;
 }
-.descricao:not(.aberta)::after {
+/* O degradê só quando a descrição passa da altura: a curta, sem **ver tudo**, fica nítida. */
+.descricao:not(.aberta):has(+ .ver-tudo:not([hidden]))::after {
   content: "";
   position: absolute;
   left: 0;

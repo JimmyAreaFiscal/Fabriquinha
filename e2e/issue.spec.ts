@@ -148,6 +148,8 @@ test("lê a issue: caminho, título, trilho, detalhes, descrição em Markdown r
   await expect(descricao).toContainText("<script>window.invadiu = true</script>");
   expect(await pagina.evaluate(() => "invadiu" in window)).toBe(false);
   const verTudo = pagina.getByRole("button", { name: "ver tudo" });
+  const degrade = () => descricao.evaluate((d) => getComputedStyle(d, "::after").content);
+  expect(await degrade()).toBe('""');
   const recolhida = (await descricao.boundingBox())?.height ?? 0;
   await verTudo.click();
   await expect(pagina.getByRole("button", { name: "ver menos" })).toBeVisible();
