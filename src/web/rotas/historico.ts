@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Agregado, Execucao } from "../../dominio/agregado.ts";
 import { existe } from "../../dominio/erros.ts";
 import { Etapa, type Id } from "../../dominio/primitivos.ts";
+import { ABORTADA } from "../../execucao/gerente.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
 import { agregado } from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
@@ -26,10 +27,10 @@ const FiltroSessoes = z.object({
   etapa: Etapa.optional(),
 });
 
-/** O resultado da sessão é o da última execução; o aborto pelo Auditor falha a execução com o `stopReason` (F4 §8). */
+/** O resultado da sessão é o da última execução; a autônoma que o Auditor aborta falha com o erro `ABORTADA`. */
 function resultado(e: Execucao | undefined): Resultado {
   if (e?.resultado !== "falha") return "concluida";
-  return e.erro?.includes("stopReason aborted") ? "abortada" : "falha";
+  return e.erro === ABORTADA ? "abortada" : "falha";
 }
 
 /**

@@ -22,6 +22,9 @@ import { ambientePi, argumentosPi, binarioPi, confianca, type EventoPi, type Lan
 /** Diálogos que esperam resposta; `notify` e afins não esperam, e `custom` nunca chega no modo RPC (P1 §2.1). */
 const DIALOGOS = new Set(["select", "confirm", "input", "editor"]);
 
+/** O `erro` do C6 da execução autônoma que o Auditor abortou: o Histórico a mostra como abortada (F7 §4.4). */
+export const ABORTADA = "abortada pelo Auditor";
+
 /** Um diálogo de extensão pendente: o pedido do pi, quando chegou e, se o pi o resolve sozinho, quando expira. */
 export type Dialogo = EventoPi & { em: string; expiraEm?: string };
 
@@ -47,6 +50,8 @@ interface Viva extends Omit<Situacao, "dialogos"> {
   pendentes: Map<string, Dialogo>;
   /** Os eventos da mensagem que o pi está escrevendo, do `message_start` em diante: ela só vai ao JSONL no fim. */
   emAndamento: EventoPi[];
+  /** O Auditor mandou `abort`. */
+  abortada: boolean;
   responder(id: string, resposta: object): void;
   mandar(comando: { type: string; message?: string }): void;
   encerrar(): void;
@@ -128,6 +133,7 @@ export function responderDialogo(
 export function abortar(execucao: Id): void {
   const v = viva(execucao, "nada a abortar");
   for (const id of v.pendentes.keys()) v.responder(id, { cancelled: true });
+  v.abortada = true;
   v.mandar({ type: "abort" });
 }
 
@@ -364,6 +370,10 @@ function rodarPi(r: Processo): Promise<string | undefined> {
         mudou();
         return;
       }
+      if (estaViva.abortada && ultima.stopReason === "aborted") {
+        fim(ABORTADA);
+        return;
+      }
       const parou = ["error", "aborted"].includes(String(ultima.stopReason));
       fim(
         parou
@@ -416,6 +426,7 @@ function rodarPi(r: Processo): Promise<string | undefined> {
       desde: new Date().toISOString(),
       pendentes,
       emAndamento: [],
+      abortada: false,
       responder(dialogo, resposta) {
         if (!pendentes.delete(dialogo)) {
           throw new ErroDeRegra(`o diálogo ${dialogo} não está pendente na E-${String(id)}`, "atualize o chat");

@@ -29,7 +29,7 @@ import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { executarAutonomo } from "./autonoma.ts";
-import { dialogosPendentes, responderDialogo } from "./gerente.ts";
+import { ABORTADA, abortar, dialogosPendentes, responderDialogo } from "./gerente.ts";
 import { PACOTE } from "./pi.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-autonoma-")));
@@ -129,9 +129,13 @@ process.stdin.setEncoding("utf8").on("data", (parte) => {
     const c = JSON.parse(linha);
     anotar({ evento: "comando", comando: c });
     if (c.type === "prompt") aoPrompt(c);
-    if (c.type === "extension_ui_response") {
+    if (c.type === "extension_ui_response" && !c.cancelled) {
       respondidos.add(c.id);
       if (respondidos.has("d1") && respondidos.has("d2")) void terminar();
+    }
+    if (c.type === "abort") {
+      assistente("aborted");
+      emitir({ type: "agent_settled" });
     }
   }
 });
@@ -482,6 +486,25 @@ test("diálogo: o tempo esperando o Auditor não conta; respondido, a execução
   assert.match(
     String(ticket.erro),
     /^T-2 não pode concluir: falta a evidência desenho_solucao, relatorio_complexidade/,
+  );
+  c.banco.close();
+});
+
+test("abortada pelo Auditor, com diálogos pendentes: C6 + C8 com o erro ABORTADA", async () => {
+  const c = cenario({ variante: "dialogo", comAgente: false });
+  const execucao = executarAutonomo(c.banco, 2, { timeoutMin: 1 });
+  for (let espera = 0; dialogosPendentes(2).length < 3; espera += 20) {
+    assert.ok(espera < 10_000, "os diálogos não chegaram em 10 s");
+    await dormir(20);
+  }
+  abortar(2);
+  await execucao;
+
+  const { ticket, execucoes } = c.estado();
+  assert.equal(ticket.erro, ABORTADA);
+  assert.deepEqual(
+    execucoes.map((e) => [e.resultado, e.erro]),
+    [["falha", ABORTADA]],
   );
   c.banco.close();
 });

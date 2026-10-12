@@ -346,3 +346,26 @@ test("abre uma consulta com o histórico de outra sessão anexado", async ({ pag
   const contexto = pagina.getByRole("region", { name: "Contexto da issue" });
   await expect(contexto.locator("li.atual")).toHaveText("T-1Ticket 1esta");
 });
+
+test("abortar uma sessão autônoma pelo chat falha a execução como abortada pelo Auditor", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(
+    fabriquinha.raiz,
+    `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
+       VALUES (1, 'loja', 'Timeout no checkout com cupom', 'problema', '[ao vivo]', 'desenvolvimento', '2026-10-11T12:00:00.000Z');
+     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+       VALUES (1, 1, 'desenvolvimento', 'Buscar cupons sem N+1', 'aberto', 'fabriquinha', '2026-10-11T12:00:00.000Z');`,
+  );
+  await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
+  await pagina.getByRole("button", { name: "Executar agora" }).click();
+  await pagina.getByRole("link", { name: /chat →/ }).click();
+  const conversa = pagina.locator("[data-conversa]");
+  await expect(conversa.locator(".fluxo")).toContainText("Os testes");
+  await pagina.getByRole("button", { name: "Abortar" }).click();
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · falha");
+  await expect(conversa.locator(".sistema", { hasText: "Execução E-1 falhou" })).toHaveText(
+    "Execução E-1 falhou: abortada pelo Auditor",
+  );
+});

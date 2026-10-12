@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { ABORTADA } from "../../execucao/gerente.ts";
 import { abrir } from "../../persistencia/banco.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -27,8 +28,8 @@ const S5 = "55555555-5555-4555-8555-555555555555";
 
 /**
  * I-1 da loja no desenvolvimento: T-1 de desenho concluído em duas execuções (S1, a última com sucesso, e uma
- * consulta S2 que o agente abortou) e T-2 aberto, ativo (S3). I-2 do site, com T-3 de registro concluído e a
- * execução que falhou (S4), e uma consulta que caiu (S5). Custos em `uso`.
+ * consulta S2 que o Auditor abortou) e T-2 aberto, ativo (S3). I-2 do site, com T-3 de registro concluído e a
+ * execução que falhou com o pi abortando sozinho, sem o Auditor (S4), e uma consulta que caiu (S5). Custos em `uso`.
  */
 let banco: DatabaseSync;
 beforeEach(() => {
@@ -47,9 +48,9 @@ beforeEach(() => {
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em) VALUES
       (1, 1, 'autonomo', '${S1}', 'falha', 'tempo limite', '${T0}', '2026-10-11T12:10:00.000Z'),
       (2, 1, 'autonomo', '${S1}', 'sucesso', NULL, '2026-10-11T12:20:00.000Z', '2026-10-11T12:30:00.000Z'),
-      (3, 1, 'consulta', '${S2}', 'falha', 'o agente parou com stopReason aborted', '2026-10-11T14:00:00.000Z', '2026-10-11T14:05:00.000Z'),
+      (3, 1, 'consulta', '${S2}', 'falha', '${ABORTADA}', '2026-10-11T14:00:00.000Z', '2026-10-11T14:05:00.000Z'),
       (4, 2, 'interativo', '${S3}', 'sucesso', NULL, '${T0}', '2026-10-11T12:01:00.000Z'),
-      (5, 3, 'interativo', '${S4}', 'falha', 'o pi caiu', '${T0}', '2026-10-11T13:00:00.000Z'),
+      (5, 3, 'interativo', '${S4}', 'falha', 'o agente parou com stopReason aborted', '${T0}', '2026-10-11T13:00:00.000Z'),
       (6, 3, 'consulta', '${S5}', 'sucesso', NULL, '2026-10-11T15:00:00.000Z', '2026-10-11T15:01:00.000Z');
     INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo) VALUES
       (1, 'anthropic', 'claude-opus-5-5', 1, 1, 1, 0, 0, 0.5),
