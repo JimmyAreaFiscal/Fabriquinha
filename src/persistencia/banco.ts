@@ -7,8 +7,12 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import type { TipoId } from "../dominio/primitivos.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
+/** A raiz da Fabriquinha: `$FABRIQUINHA_ROOT`, padrão `~/fabriquinha` (F2 §2). */
+export const raizPadrao = (env: NodeJS.ProcessEnv = process.env): string =>
+  env.FABRIQUINHA_ROOT || join(homedir(), "fabriquinha");
+
 /** Cria a raiz, abre o banco, aplica os PRAGMAs e as migrações pendentes. */
-export function abrir(raiz = process.env.FABRIQUINHA_ROOT || join(homedir(), "fabriquinha")): DatabaseSync {
+export function abrir(raiz = raizPadrao()): DatabaseSync {
   // Evidências podem conter telas e dados sensíveis: diretório 0700, arquivos 0600.
   mkdirSync(raiz, { recursive: true, mode: 0o700 });
   chmodSync(raiz, 0o700);
