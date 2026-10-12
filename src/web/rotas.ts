@@ -10,6 +10,7 @@ import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
 import { ROTAS_DO_HISTORICO } from "./rotas/historico.ts";
 import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
 import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
+import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
 import { ROTAS_DO_PR } from "./rotas/pr.ts";
 import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
 
@@ -50,4 +51,5 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DO_PR,
   ...ROTAS_DO_INICIO,
   ...ROTAS_DO_PROJETO,
+  ...ROTAS_DAS_METRICAS,
 ];

@@ -2,12 +2,13 @@
 // links são `<a href>` de verdade, que também abrem em outra aba) e desenha a navegação fixa com quem aguarda.
 import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
 import { api, avisar, ErroDaApi, elemento } from "./dom.ts";
-import { NAO_ENCONTRADA, navegacao, paginaVazia, TITULOS } from "./render.ts";
+import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
 import { montarHistorico } from "./telas/historico-montar.ts";
 import { montarInicio } from "./telas/inicio-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
+import { montarMetricas } from "./telas/metricas-montar.ts";
 import { montarProjeto } from "./telas/projeto-montar.ts";
 
 /**
@@ -16,17 +17,11 @@ import { montarProjeto } from "./telas/projeto-montar.ts";
  */
 type Montar = (main: HTMLElement, params: Parametros) => undefined | Promise<void> | (() => void);
 
-const vazia =
-  (pagina: Pagina): Montar =>
-  (main) => {
-    main.innerHTML = paginaVazia(TITULOS[pagina]);
-  };
-
 const MONTAR: Record<Pagina, Montar> = {
   inicio: montarInicio,
   projeto: montarProjeto,
   issue: montarIssue,
-  metricas: vazia("metricas"),
+  metricas: montarMetricas,
   historico: montarHistorico,
   chat: montarChat,
   configuracao: montarConfiguracao,

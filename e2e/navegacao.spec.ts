@@ -86,7 +86,7 @@ test("o Início da navegação conta as sessões que aguardam o Auditor", async 
   const inicio = pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: /^Início/ });
   await expect(inicio.locator(".contador")).toHaveCount(0);
   sessaoAguardando(fabriquinha.raiz);
-  await pagina.getByRole("link", { name: "Métricas" }).click();
+  await pagina.getByRole("link", { name: "Métricas", exact: true }).click();
   await expect(inicio.locator(".contador")).toHaveText("1");
   await expect(inicio.locator(".contador")).toHaveAttribute("title", "sessões que aguardam você");
 });

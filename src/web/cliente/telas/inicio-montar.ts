@@ -1,10 +1,12 @@
 // Início (F7 §4.4) no DOM: lê as sessões ativas e o board, desenha com as funções puras de inicio.ts e abre o
 // Registrar necessidade na caixa. O app.ts o redesenha a cada 5 s. Os testes de ponta a ponta (e2e/) o exercitam.
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
+import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import { abrirCaixa, api, avisar, ErroDaApi, elemento, irPara } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { formularioDeRegistro, inicio } from "./inicio.ts";
+import { mesDe } from "./metricas.ts";
 
 /** O erro que não é do formulário vai para o aviso; o 401 a `api` já avisou. */
 function mostrar(erro: unknown): void {
@@ -55,14 +57,16 @@ export async function abrirRegistro(issues: readonly IssueDoBoard[], escolhido?:
 
 /** A página `/home`. Redesenhar preserva a rolagem horizontal do board. */
 export async function montarInicio(main: HTMLElement): Promise<void> {
-  const [sessoes, board] = await Promise.all([
+  const atual = mesDe(new Date());
+  const [sessoes, board, [mes]] = await Promise.all([
     api<InfoSessao[]>("/api/sessoes?escopo=ativas"),
     api<IssueDoBoard[]>("/api/board"),
+    api<[MetricasMes]>(`/api/metricas?de=${atual}&ate=${atual}`),
   ]);
   // A resposta pode chegar depois que o Auditor saiu do Início.
   if (location.pathname !== "/home") return;
   const rolagem = main.querySelector(".board-etapas")?.scrollLeft ?? 0;
-  main.innerHTML = inicio({ sessoes, board }, new Date());
+  main.innerHTML = inicio({ sessoes, board, mes }, new Date());
   const etapas = main.querySelector(".board-etapas");
   if (etapas) etapas.scrollLeft = rolagem;
   main.querySelector("[data-registrar]")?.addEventListener("click", () => {

@@ -2,12 +2,26 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Ticket } from "../../../dominio/agregado.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
+import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { formularioDeRegistro, inicio } from "./inicio.ts";
 
 const AGORA = new Date("2026-10-12T15:00:00.000Z");
 const ha = (min: number) => new Date(AGORA.getTime() - min * 60_000).toISOString();
+
+/** O mês corrente de `GET /api/metricas`, para a frase do Início e os cards do Projeto. */
+const MES: MetricasMes = {
+  mes: "2026-10",
+  projeto: null,
+  consumo: { chamadas: 3, tokens: { input: 1200, output: 300, cacheRead: 0, cacheWrite: 0 }, custo: 1.5 },
+  modelos: [],
+  issues: { registradas: 2, concluidas: 1 },
+  tickets: { criados: 4, concluidos: 3 },
+  prs: { abertos: 1, mergeados: 0 },
+  notaPR: { media: null, notas: 0 },
+  etapas: [],
+};
 
 const ticket = (t: Partial<Ticket> & Pick<Ticket, "id" | "issue" | "etapa" | "status">): Ticket => ({
   titulo: "t",
@@ -103,8 +117,11 @@ test("aguarda você: um card por sessão, na ordem recebida, com motivo, issue, 
     }),
     aguarda({ issue: 42, ticket: 130, sessao: "s-sem-motivo", desde: ha(0.5) }),
   ];
-  const html = inicio({ sessoes, board }, AGORA);
-  assert.match(texto(html), /^Início \+ Registrar necessidade Aguarda você 9 da mais antiga para a mais nova /);
+  const html = inicio({ sessoes, board, mes: MES }, AGORA);
+  assert.match(
+    texto(html),
+    /^Início \+ Registrar necessidade .* Métricas → Aguarda você 9 da mais antiga para a mais nova /,
+  );
   const cards = blocos(html, "decisao");
   assert.deepEqual(cards.map(texto), [
     "Falhou Responder e retomar → I-34 Timeout no checkout &#60;com cupom&#62; 3 testes falharam loja T-101 · desenvolvimento · autônoma · há 2 h 14 min",
@@ -145,7 +162,7 @@ test("rodando: uma linha por sessão com modo, issue, o que o agente faz, ticket
     sessao({ issue: 38, ticket: 112, sessao: "consulta", estado: "rodando", modo: "consulta", desde: ha(1) }),
     sessao({ issue: 22, ticket: 90, estado: "rodando", modo: "interativo" }),
   ];
-  const html = inicio({ sessoes, board }, AGORA);
+  const html = inicio({ sessoes, board, mes: MES }, AGORA);
   assert.match(texto(html), /Aguarda você Nada aguarda você agora\. Rodando 3 /);
   assert.deepEqual(blocos(html, "rodando-linha").map(texto), [
     "autônoma I-38 Limite de tentativas no login — Desenhar a solução T-112 · desenho anthropic / claude-opus-5-5 há 6 min",
@@ -156,8 +173,12 @@ test("rodando: uma linha por sessão com modo, issue, o que o agente faz, ticket
 });
 
 test("board: colunas por fase sob as 5 etapas, gates hachurados, cartões com ticket e marcas; vazio diz vazia", () => {
-  const vazio = inicio({ sessoes: [], board: [] }, AGORA);
+  const vazio = inicio({ sessoes: [], board: [], mes: MES }, AGORA);
   assert.match(texto(vazio), /Rodando 0 Nenhuma sessão rodando\. Board 0 issues em andamento /);
+  assert.match(
+    texto(vazio),
+    /^Início \+ Registrar necessidade Outubro de 2026, todos os projetos: US\$ 1,50 · 1,5 mil tokens · issues 2 registradas, 1 concluídas .* Métricas → Aguarda você/,
+  );
   assert.deepEqual(
     [...vazio.matchAll(/<div class="etapa" style="grid-column: span (\d)">([^<]+)</g)].map((m) => [m[2], m[1]]),
     [
@@ -223,7 +244,7 @@ test("board: colunas por fase sob as 5 etapas, gates hachurados, cartões com ti
     sessao({ issue: 35, ticket: 101, estado: "aguardando_humano", motivo: "falha" }),
     sessao({ issue: 29, ticket: 99, estado: "aguardando_humano" }),
   ];
-  const html = inicio({ sessoes, board }, AGORA);
+  const html = inicio({ sessoes, board, mes: MES }, AGORA);
   assert.match(texto(html), /Board 4 issues em andamento/);
   const cartoes = blocos(html, "cartao");
   assert.deepEqual(cartoes.map(texto), [
@@ -248,7 +269,7 @@ test("board: colunas por fase sob as 5 etapas, gates hachurados, cartões com ti
   assert.match(coluna("Registro"), /^Registro 1 I-41/);
   assert.match(coluna("Aprovação do PR"), /^Aprovação do PR 1 gate I-29/);
   assert.match(
-    texto(inicio({ sessoes: [], board: [issue({ id: 1, fase: "registro" })] }, AGORA)),
+    texto(inicio({ sessoes: [], board: [issue({ id: 1, fase: "registro" })], mes: MES }, AGORA)),
     /Board 1 issue em andamento/,
   );
 });

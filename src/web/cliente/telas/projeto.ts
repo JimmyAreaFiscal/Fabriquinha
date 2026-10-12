@@ -3,11 +3,13 @@
 import type { Ticket } from "../../../dominio/agregado.ts";
 import type { Id, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
+import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoProjeto, ListaDoProjeto } from "../../rotas/projeto.ts";
 import { escapar, FASES, GATES, ha, STATUS_DO_TICKET, trilho } from "../render.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { ETAPAS_DO_PROCESSO, MOTIVOS } from "./inicio.ts";
 import { caminhoDaIssue, estadoDoTrilho, etapa } from "./issue.ts";
+import { cardsDoMes } from "./metricas.ts";
 
 export const caminhoDoProjeto = (nome: string): string => `/projects/${encodeURIComponent(nome)}`;
 
@@ -147,11 +149,12 @@ function cabeca(): string {
   return `<div class="pista-cabeca" aria-hidden="true"><div></div>${etapas.join("")}<div></div><div></div>${fases.join("")}<div></div></div>`;
 }
 
-/** A página `/projects/:projeto`. */
+/** A página `/projects/:projeto`, com o mês corrente do projeto (`mes`) em 5 cards. */
 export function paginaDoProjeto(
   projetos: readonly ProjetoListado[],
   nome: string,
   { issues, sessoes, contagem }: ListaDoProjeto,
+  mes: MetricasMes,
   escolhas: Escolhas,
   agora: Date,
 ): string {
@@ -167,6 +170,7 @@ export function paginaDoProjeto(
     <a class="editar" href="/config?projeto=${encodeURIComponent(nome)}">Editar na Configuração</a>
     <div class="acoes"><button type="button" class="btn btn-primario" data-registrar>+ Registrar necessidade</button></div>
   </div>
+  ${cardsDoMes(mes)}
   <div class="ferramentas">
     <span class="contagem">${String(contagem.andamento)} em andamento · ${plural(contagem.concluidas, "concluída", "concluídas")} · ${plural(contagem.arquivadas, "arquivada", "arquivadas")}</span>
     ${alternar("concluidas", "Mostrar concluídas")}

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Ticket } from "../../../dominio/agregado.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
+import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoProjeto, ListaDoProjeto } from "../../rotas/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
@@ -29,6 +30,19 @@ const projeto = (nome: string): ProjetoListado => ({
   issues: 0,
 });
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
+
+/** O mês corrente de `GET /api/metricas`, para a frase do Início e os cards do Projeto. */
+const MES: MetricasMes = {
+  mes: "2026-10",
+  projeto: null,
+  consumo: { chamadas: 3, tokens: { input: 1200, output: 300, cacheRead: 0, cacheWrite: 0 }, custo: 1.5 },
+  modelos: [],
+  issues: { registradas: 2, concluidas: 1 },
+  tickets: { criados: 4, concluidos: 3 },
+  prs: { abertos: 1, mergeados: 0 },
+  notaPR: { media: null, notas: 0 },
+  etapas: [],
+};
 
 const ticket = (t: Partial<Ticket> & Pick<Ticket, "id" | "issue" | "etapa" | "status">): Ticket => ({
   titulo: `Ticket ${String(t.id)}`,
@@ -88,11 +102,15 @@ test("/projects escolhe o último projeto visto, se ainda existe, ou o primeiro 
 });
 
 test("cabeçalho com o seletor, Editar na Configuração e Registrar; barra com a contagem, os filtros e Arquivar", () => {
-  const html = paginaDoProjeto(PROJETOS, "loja <api>", VAZIA, NADA, AGORA);
+  const html = paginaDoProjeto(PROJETOS, "loja <api>", VAZIA, MES, NADA, AGORA);
   assert.match(html, /<option>fabriquinha<\/option><option selected>loja &#60;api&#62;<\/option>/);
   assert.match(html, /<a class="editar" href="\/config\?projeto=loja%20%3Capi%3E">Editar na Configuração<\/a>/);
   assert.match(html, /data-registrar>\+ Registrar necessidade</);
   assert.match(html, /<span class="contagem">0 em andamento · 0 concluídas · 0 arquivadas<\/span>/);
+  assert.match(
+    html,
+    /<\/div>\s*<div class="kpis-mes">\s*<div class="kpi superficie"><span class="rotulo">Custo · outubro<\/span><span class="kpi-valor">US\$ 1,50<\/span><span class="kpi-sub">3 chamadas de LLM/,
+  );
   assert.match(html, /<input type="checkbox" data-mostrar="concluidas"> Mostrar concluídas/);
   assert.match(html, /data-arquivar disabled>Arquivar concluídas/);
   assert.match(html, /<p class="vazio">Nenhuma issue.<\/p>/);
@@ -102,6 +120,7 @@ test("cabeçalho com o seletor, Editar na Configuração e Registrar; barra com 
     PROJETOS,
     "fabriquinha",
     { ...VAZIA, contagem: { andamento: 3, concluidas: 1, arquivadas: 1 } },
+    MES,
     { ...NADA, mostrar: { concluidas: true, arquivadas: true } },
     AGORA,
   );
@@ -155,7 +174,7 @@ test("linha por issue: título, I-n, tipo, bloqueio, PR, progresso, trilho com a
     ],
     contagem: { andamento: 4, concluidas: 0, arquivadas: 0 },
   };
-  const html = paginaDoProjeto(PROJETOS, "loja <api>", lista, NADA, AGORA);
+  const html = paginaDoProjeto(PROJETOS, "loja <api>", lista, MES, NADA, AGORA);
   // O cabeçalho do trilho: as 5 etapas sobre as 8 fases, as de gate marcadas.
   assert.match(html, /<div class="pista-etapa" style="grid-column: span 2">Desenhar<\/div>/);
   assert.match(html, /<div class="pista-fase gate">Aprovação do PR<\/div>/);
@@ -228,7 +247,7 @@ test("a gaveta lista os tickets com etapa, status, modelo (★ no override) e se
     [22, true],
     [5, false],
   ]);
-  const html = paginaDoProjeto(PROJETOS, "loja <api>", lista, { ...NADA, gavetas }, AGORA);
+  const html = paginaDoProjeto(PROJETOS, "loja <api>", lista, MES, { ...NADA, gavetas }, AGORA);
   const concluida = item(html, 22);
   assert.match(concluida, /^<div class="pista-item rodando apagada" data-issue="22">/);
   assert.match(texto(concluida), /I-22 funcionalidade 3\/4 concluída em 03\/10 Registro/);
@@ -250,5 +269,5 @@ test("a gaveta lista os tickets com etapa, status, modelo (★ no override) e se
   assert.match(item(html, 5), /^<div class="pista-item fechada" data-issue="5">/);
 
   // Fora da lista de projetos, o modelo da etapa é o padrão do pi.
-  assert.doesNotMatch(paginaDoProjeto([], "outro", lista, NADA, AGORA), /claude-sonnet/);
+  assert.doesNotMatch(paginaDoProjeto([], "outro", lista, MES, NADA, AGORA), /claude-sonnet/);
 });

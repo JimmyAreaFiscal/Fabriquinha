@@ -85,12 +85,15 @@ export function duracao(ms: number): string {
   return m ? `${String(h)} h ${String(m)} min` : `${String(h)} h`;
 }
 
-export const custo = (valor: number): string => `US$ ${valor.toFixed(2).replace(".", ",")}`;
+export const custo = (valor: number): string =>
+  `US$ ${valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** `2,3 M`, `48,1 mil` ou `950`. */
+/** `2,3 M`, `48,1 mil` ou `950`; a média fracionária abaixo de mil sai arredondada. */
 export function compacto(n: number): string {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(".", ",")} M`;
-  return n >= 1e3 ? `${(n / 1e3).toFixed(1).replace(".", ",")} mil` : String(n);
+  const fmt = (v: number, casas: number) =>
+    v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+  if (n >= 1e6) return `${fmt(n / 1e6, 1)} M`;
+  return n >= 1e3 ? `${fmt(n / 1e3, 1)} mil` : fmt(n, 0);
 }
 
 /** A cor do marco atual no trilho: a falha antes de quem aguarda, e quem aguarda antes do que roda. */

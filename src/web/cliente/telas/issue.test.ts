@@ -770,6 +770,7 @@ const leitura = (estado: "aberto" | "mergeado" | "fechado", mergeadoEm?: string)
 
 test("compacto: milhões, milhares e unidades", () => {
   assert.deepEqual([compacto(2_300_000), compacto(48_120), compacto(950)], ["2,3 M", "48,1 mil", "950"]);
+  assert.deepEqual([compacto(1_234_500_000), compacto(830.4)], ["1.234,5 M", "830"]);
 });
 
 test("gate do PR: só na aprovação do PR, no começo da Ação do Auditor, aberto na aba Revisão", () => {

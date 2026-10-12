@@ -2,15 +2,18 @@
 // formulário do Registrar necessidade. O DOM e a rede ficam em inicio-montar.ts.
 import type { Etapa, Fase, Id, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao, MotivoEspera } from "../../../execucao/sessoes.ts";
+import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import { escapar, FASES, ha, GATES, MODO_DA_SESSAO, STATUS_DO_TICKET } from "../render.ts";
 import { caminhoDaIssue } from "./issue.ts";
+import { fraseDoMes } from "./metricas.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 
-/** O que o Início lê: `GET /api/sessoes?escopo=ativas` e `GET /api/board`. */
+/** O que o Início lê: `GET /api/sessoes?escopo=ativas`, `GET /api/board` e o mês corrente de `GET /api/metricas`. */
 export interface DadosDoInicio {
   sessoes: readonly InfoSessao[];
   board: readonly IssueDoBoard[];
+  mes: MetricasMes;
 }
 
 /** Por motivo (F4 §5.2): o destaque do card, a marca no cartão do board e o botão (F7 §4.4). */
@@ -151,7 +154,7 @@ function board({ sessoes, board: issues }: DadosDoInicio, agora: Date): string {
   );
 }
 
-/** A página `/home`: o cabeçalho com Registrar necessidade, Aguarda você, Rodando e o board. */
+/** A página `/home`: o cabeçalho com Registrar necessidade, a frase do mês, Aguarda você, Rodando e o board. */
 export function inicio(dados: DadosDoInicio, agora: Date): string {
   const issue = (id: Id) => dados.board.find((i) => i.id === id);
   const aguardam = dados.sessoes.filter((s) => s.estado === "aguardando_humano");
@@ -161,6 +164,7 @@ export function inicio(dados: DadosDoInicio, agora: Date): string {
     <h1>Início</h1>
     <div class="acoes"><button type="button" class="btn btn-primario" data-registrar>+ Registrar necessidade</button></div>
   </div>
+  ${fraseDoMes(dados.mes)}
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-aguarda">
     <div class="secao-titulo"><h2 id="titulo-aguarda">Aguarda você</h2>${aguardam.length > 0 ? `<span class="contador">${String(aguardam.length)}</span><span class="muted">da mais antiga para a mais nova</span>` : ""}</div>
     ${aguardam.length > 0 ? `<div class="decisoes">${aguardam.map((s) => decisao(s, issue(s.issue), agora)).join("")}</div>` : '<p class="muted vazio">Nada aguarda você agora.</p>'}
