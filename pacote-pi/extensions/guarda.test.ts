@@ -25,6 +25,15 @@ test("barra quem cria, altera, reabre ou faz merge de PR pelo gh ou pelo az (P1 
     "echo `gh pr create`",
     "x=$(gh pr create)",
     "/opt/az repos pr create",
+    // Opções antes e depois de `pr`, com o valor separado ou com `=`; na dúvida se a opção leva valor, barra.
+    "gh --repo dono/r pr create",
+    "gh --repo=dono/r pr merge 1",
+    "gh pr -R dono/r create",
+    "gh pr --repo=dono/r edit 3",
+    "gh pr --web create",
+    "gh api -X POST repos/d/r/pulls",
+    "az --debug repos pr create",
+    "az repos --org x pr update --id 9",
   ])
     assert.equal(bloqueio(comando), RECUSA, comando);
 });
@@ -33,6 +42,14 @@ test("libera as leituras de PR e o que não mexe em PR (P1 §6)", () => {
   for (const comando of [
     "gh pr view 12 --json state",
     "gh pr list",
+    // O subcomando é a primeira palavra depois de `pr` que não é opção: o resto da linha não conta.
+    "gh pr list --label ready",
+    "gh pr list --search review",
+    "gh pr view 12 --comments --json reviews",
+    "gh pr -R dono/r list --label ready",
+    "gh pr --repo=dono/r view 1",
+    'gh issue create --title "fix pr review"',
+    "gh issue comment 1 --body pr create",
     "gh pr diff 1",
     "gh pr checks 1",
     "gh pr status",
@@ -40,6 +57,8 @@ test("libera as leituras de PR e o que não mexe em PR (P1 §6)", () => {
     "gh api repos/d/r/issues",
     "az repos pr show --id 9",
     "az repos pr list",
+    "az repos pr list --status create",
+    "az repos pr show --id 9 --query reviewer",
     "npm test && git status",
     // `pr` e `create` sem o `gh` antes, no mesmo trecho.
     "pr create; gh status",

@@ -16,17 +16,47 @@ const umDe =
   (palavra) =>
     nomes.includes(palavra);
 
-/** Cada regra barra o trecho que tem, em ordem, uma palavra para cada teste, em qualquer posição adiante. */
-const REGRAS: Teste[][] = [
+/**
+ * Cada regra é o programa e, em seguida, cada palavra de comando que ele recebe: a primeira palavra que não é opção
+ * depois da anterior. `gh pr list --label ready` é `list`: o resto da linha não conta.
+ */
+const REGRAS: [Teste, ...Teste[]][] = [
   [programa("gh"), umDe("pr"), umDe("create", "new", "edit", "merge", "close", "reopen", "ready", "review", "comment")],
   [programa("gh"), umDe("api"), (palavra) => palavra.includes("pulls")],
   [programa("az"), umDe("repos"), umDe("pr"), umDe("create", "update", "set-vote", "reviewer", "work-item")],
 ];
 
-/** Se as palavras contêm, em ordem e não necessariamente seguidas, uma que passa em cada teste da regra. */
-const emOrdem = (palavras: string[], regra: Teste[]): boolean =>
-  palavras.reduce((achados, palavra) => (regra[achados]?.(palavra) === true ? achados + 1 : achados), 0) ===
-  regra.length;
+/**
+ * As posições em que pode estar a primeira palavra que não é opção a partir de `inicio`. A guarda não sabe quais
+ * opções levam valor: `--opcao=valor` é uma palavra só, e `--opcao valor` vale das duas leituras, com e sem valor. Na
+ * dúvida, a regra que casa em qualquer leitura barra.
+ */
+function proximas(palavras: string[], inicio: number): number[] {
+  const achadas: number[] = [];
+  const vistas = new Set<number>();
+  const visitar = [inicio];
+  for (let i = visitar.pop(); i !== undefined; i = visitar.pop()) {
+    const palavra = palavras[i];
+    if (palavra === undefined || vistas.has(i)) continue;
+    vistas.add(i);
+    if (palavra.startsWith("-")) visitar.push(i + 1, ...(palavra.includes("=") ? [] : [i + 2]));
+    else achadas.push(i);
+  }
+  return achadas;
+}
+
+/** Se, a partir de `inicio`, cada próxima palavra de comando passa no teste seguinte da regra. */
+const casa = (palavras: string[], regra: Teste[], inicio: number): boolean => {
+  const [teste, ...resto] = regra;
+  return (
+    teste === undefined ||
+    proximas(palavras, inicio).some((i) => teste(String(palavras[i])) && casa(palavras, resto, i + 1))
+  );
+};
+
+/** O programa da regra em qualquer palavra do trecho (depois de `env`, `bash -c`...) e o resto em seguida a ele. */
+const barra = (palavras: string[], [programaDaRegra, ...resto]: [Teste, ...Teste[]]): boolean =>
+  palavras.some((palavra, i) => programaDaRegra(palavra) && casa(palavras, resto, i + 1));
 
 /**
  * A recusa, se o comando mexe em PR (P1 §3.1), ou `null`. O pi entrega a string que o modelo escreveu e a roda com
@@ -36,8 +66,11 @@ const emOrdem = (palavras: string[], regra: Teste[]): boolean =>
  */
 export function bloqueio(comando: string): string | null {
   const trechos = comando.replaceAll(/["'`)]|\$\(/g, " ").split(/[;|&\n]/);
-  const barra = trechos.some((trecho) => REGRAS.some((regra) => emOrdem(trecho.split(/\s+/), regra)));
-  return barra ? RECUSA : null;
+  const mexe = trechos.some((trecho) => {
+    const palavras = trecho.split(/\s+/).filter(Boolean);
+    return REGRAS.some((regra) => barra(palavras, regra));
+  });
+  return mexe ? RECUSA : null;
 }
 
 /** O pedaço da API de extensões do pi que a guarda usa. */
