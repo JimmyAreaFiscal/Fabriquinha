@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ambientePi, argumentosPi, binarioPi, confianca, divisorJsonl, lancarPi, skillsDaEtapa } from "./pi.ts";
+import { PACOTE, ambientePi, argumentosPi, binarioPi, confianca, divisorJsonl, lancarPi, skillsDaEtapa } from "./pi.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pi-")));
 after(() => {
@@ -34,7 +43,9 @@ test("skills de artefato da etapa: uma por evidência de agente, com o nome do P
 });
 
 test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e confiança; sem prompt de sistema extra", () => {
-  const comum = { raiz: "/r", sessaoPi: "s-1", pacote: "/p", modo: "autonomo" as const };
+  // O pacote vem do próprio repositório, ao lado de `src/`.
+  assert.equal(existsSync(join(PACOTE, "extensions", "guarda.ts")), true);
+  const comum = { raiz: "/r", sessaoPi: "s-1", modo: "autonomo" as const };
   assert.deepEqual(
     argumentosPi({ ...comum, etapa: "registro", modelo: { provedor: "anthropic", modelo: "m 1" }, confianca: true }),
     [
@@ -49,11 +60,11 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
       "--model",
       "m 1",
       "--skill",
-      "/p/skills/artefato-comportamento",
+      `${PACOTE}/skills/artefato-comportamento`,
       "--skill",
-      "/p/skills/artefato-criterios-aceite",
+      `${PACOTE}/skills/artefato-criterios-aceite`,
       "-e",
-      "/p/extensions/guarda.ts",
+      `${PACOTE}/extensions/guarda.ts`,
       "--approve",
     ],
   );
@@ -65,11 +76,11 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     "--session-id",
     "s-1",
     "-e",
-    "/p/extensions/guarda.ts",
+    `${PACOTE}/extensions/guarda.ts`,
     "--no-approve",
   ]);
   assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: undefined }).slice(-1), [
-    "/p/extensions/guarda.ts",
+    `${PACOTE}/extensions/guarda.ts`,
   ]);
   // F4 §6.5: a consulta abre copiando a sessão principal e retoma sem copiar; em ambas, sem as ferramentas de escrita.
   const consulta = {
@@ -86,7 +97,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     "edit,write,bash,powershell",
   ]);
   assert.deepEqual(argumentosPi(consulta).slice(-3), [
-    "/p/extensions/guarda.ts",
+    `${PACOTE}/extensions/guarda.ts`,
     "--exclude-tools",
     "edit,write,bash,powershell",
   ]);

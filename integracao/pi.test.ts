@@ -1,0 +1,57 @@
+// Fumaça com o pi real (P1 §6): o pi sobe em modo RPC com a linha de comando e o ambiente do F4 e uma extensão de
+// teste que, no início da sessão, grava o prompt de sistema e encerra o pi, sem modelo nem chamada de LLM. Fora da
+// suíte padrão, porque depende do pi instalado e da configuração do Auditor: `npm run integracao`.
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, test } from "node:test";
+import { PACOTE, ambientePi, argumentosPi, binarioPi } from "../src/execucao/pi.ts";
+
+const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));
+after(() => {
+  rmSync(dir, { recursive: true, force: true });
+});
+
+const SONDA = `import { writeFileSync } from "node:fs";
+export default (pi) =>
+  pi.on("session_start", (_evento, ctx) => {
+    writeFileSync(process.env.FABRIQUINHA_SONDA, ctx.getSystemPrompt());
+    ctx.shutdown();
+  });
+`;
+
+test("o pi das execuções carrega a guarda com a configuração do Auditor", (t) => {
+  const sonda = join(dir, "sonda.js");
+  const prompt = join(dir, "prompt.md");
+  writeFileSync(sonda, SONDA);
+  const args = argumentosPi({
+    raiz: dir,
+    sessaoPi: "fumaca",
+    etapa: "registro",
+    modelo: undefined,
+    confianca: undefined,
+    modo: "autonomo",
+  });
+  // A API de extensões não lista as extensões carregadas; com `PI_TIMING=1`, o pi imprime no stderr cada uma que
+  // importou e inicializou (`<caminho> factory`), na ordem de carga.
+  const pi = spawnSync(binarioPi(), [...args, "-e", sonda], {
+    cwd: dir,
+    env: { ...ambientePi(dir, 1, dir), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
+    input: "",
+    encoding: "utf8",
+    timeout: 30_000,
+  });
+  assert.equal(pi.status, 0, pi.stderr);
+  const fabrica = / factory: \d+ms$/;
+  const extensoes = pi.stderr
+    .split("\n")
+    .filter((linha) => fabrica.test(linha))
+    .map((linha) => linha.replace(fabrica, "").trim());
+  // A lista alimenta a revisão periódica do pi do Auditor (P1 §2.4).
+  for (const extensao of extensoes) t.diagnostic(`extensão carregada: ${extensao}`);
+  assert.ok(extensoes.includes(join(PACOTE, "extensions", "guarda.ts")), pi.stderr);
+  // O prompt de sistema desta sessão, que a sonda gravou no início dela.
+  assert.ok(readFileSync(prompt, "utf8").includes(`Current working directory: ${dir}`));
+});

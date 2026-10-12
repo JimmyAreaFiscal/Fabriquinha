@@ -5,6 +5,7 @@ import { appendFileSync, existsSync, readFileSync, realpathSync } from "node:fs"
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { CATALOGO } from "../dominio/evidencia.ts";
 import type { ModoExecucao } from "../dominio/agregado.ts";
 import type { Etapa, Modelo } from "../dominio/primitivos.ts";
@@ -16,6 +17,9 @@ export type EventoPi = Record<string, unknown> & { type?: unknown };
 
 /** Entre o SIGTERM e o SIGKILL no grupo (F4 §6.7). */
 const GRACA_MS = 10_000;
+
+/** A raiz do pacote P1 `pi-fabriquinha`, versionado junto com a Fabriquinha (F4 §6.1). */
+export const PACOTE = fileURLToPath(new URL("../../pacote-pi", import.meta.url));
 
 /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
 export const binarioPi = (): string => process.env.FABRIQUINHA_PI || "pi";
@@ -46,8 +50,6 @@ export interface Lancamento {
   sessaoPi: string;
   etapa: Etapa;
   modelo: Modelo | undefined;
-  /** Raiz do pacote P1 `pi-fabriquinha`. */
-  pacote: string;
   confianca: boolean | undefined;
   modo: ModoExecucao;
   /**
@@ -70,9 +72,9 @@ export const argumentosPi = (l: Lancamento): string[] => [
   "--session-id",
   l.sessaoPi,
   ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.modelo] : []),
-  ...skillsDaEtapa(l.etapa).flatMap((skill) => ["--skill", join(l.pacote, "skills", skill)]),
+  ...skillsDaEtapa(l.etapa).flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
   "-e",
-  join(l.pacote, "extensions", "guarda.ts"),
+  join(PACOTE, "extensions", "guarda.ts"),
   ...(l.confianca === undefined ? [] : [l.confianca ? "--approve" : "--no-approve"]),
   ...(l.fork ? ["--fork", l.fork] : []),
   ...(l.modo === "consulta" ? ["--exclude-tools", "edit,write,bash,powershell"] : []),

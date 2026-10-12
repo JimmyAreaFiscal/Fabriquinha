@@ -48,7 +48,7 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
     let log = "";
     const servico = spawn(
       process.execPath,
-      ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "servidor.ts"), raiz, "/opt/pi-fabriquinha"],
+      ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "servidor.ts"), raiz],
       {
         env: {
           ...process.env,

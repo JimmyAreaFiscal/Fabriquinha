@@ -104,8 +104,6 @@ function execucao(
     .run(id);
 }
 
-const PACOTE = "/opt/pi-fabriquinha";
-
 /** Cada teste do serviço numa porta livre, para não esbarrar numa Fabriquinha de verdade. */
 beforeEach(async () => {
   const s = createServer().listen(0, "127.0.0.1");
@@ -115,7 +113,7 @@ beforeEach(async () => {
   await once(s, "close");
 });
 
-const subir = (raiz = novaRaiz()) => iniciarServico(raiz, PACOTE);
+const subir = (raiz = novaRaiz()) => iniciarServico(raiz);
 
 /** A porta do teste está livre: dá para escutar nela. */
 async function portaLivre(): Promise<void> {
@@ -166,7 +164,7 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   // A raiz da segunda nem existe: ela recusa pela porta sem chegar a criá-la nem a migrar o banco.
   const outraRaiz = join(base, "nunca-criada");
   await assert.rejects(
-    iniciarServico(outraRaiz, PACOTE),
+    iniciarServico(outraRaiz),
     (erro: unknown) =>
       erro instanceof ErroDeRegra &&
       erro.message.startsWith(`a Fabriquinha não conseguiu abrir 127.0.0.1:${porta}: listen EADDRINUSE`),

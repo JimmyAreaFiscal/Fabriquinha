@@ -27,7 +27,7 @@ import { agregado, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree, garantirWorktree } from "../repositorio/worktree.ts";
 import { abortar, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
-import type { EventoPi } from "./pi.ts";
+import { type EventoPi, PACOTE } from "./pi.ts";
 import {
   abrirChat,
   concluirSessao,
@@ -371,8 +371,6 @@ export default async function (soEditar) {
 `,
 );
 
-const PACOTE = "/opt/pi-fabriquinha";
-
 interface Cenario {
   raiz: string;
   banco: DatabaseSync;
@@ -466,7 +464,7 @@ const rejeitaCom = (mensagem: string) => (e: unknown) => e instanceof ErroDeRegr
 
 test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no chat, devolver com motivo e aprovar", async () => {
   const c = cenario({ comAgente: true });
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
   assert.equal(await estadoDe(c, sessao), "rodando", "a preparação da worktree conta como rodando");
   const chat = await abrirChat(c.banco, sessao);
@@ -559,7 +557,7 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
 
 test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a próxima mensagem a retoma no mesmo modo", async () => {
   const c = cenario();
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const opcoes = { ociosidadeMin: 0.01 };
   const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
   // Um ouvinte do chat que lança não derruba a execução: o erro vai para o log dela.
   (await abrirChat(c.banco, sessao)).assinar(() => {
@@ -613,7 +611,7 @@ test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a pr�
 
 test("diálogo pendente: a sessão interativa espera o Auditor sem parar por ociosidade; respondido, a ociosidade volta a contar", async () => {
   const c = cenario({ variante: "dialogo" });
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const opcoes = { ociosidadeMin: 0.01 };
   const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: dialogo", "o diálogo");
   const info = await infoDaSessao(c.banco, sessao);
@@ -638,7 +636,7 @@ test("diálogo pendente: a sessão interativa espera o Auditor sem parar por oci
 
 test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo pendente e manda abort", async () => {
   const c = cenario({ variante: "espera", preparacao: ["sleep 0.5"] });
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
   await assert.rejects(
     enviar(c.banco, sessao, "já?", "steer", opcoes),
@@ -691,7 +689,7 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
 
 test("interativa: a recusa de um comando vai ao chat e ao log sem derrubar o pi", async () => {
   const c = cenario({ variante: "espera", recusa: "prompt,steer" });
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a recusa do prompt");
   assert.match(c.log(1), /o pi recusou o comando prompt: modelo ocupado\n/);
@@ -716,7 +714,7 @@ test("autônoma sem pi: steer explica se o ticket espera o agendador ou a coleta
       VALUES (2, 1, 'desenho', 'Desenhar', 'aberto', 'fabriquinha', '${T1}');
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
       VALUES (1, 2, 'autonomo', '${SESSAO}', 'falha', 'deu ruim', '${T0}', '${T1}');`);
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   await assert.rejects(
     enviar(c.banco, SESSAO, "rápido", "steer", opcoes),
     rejeitaCom(
@@ -795,7 +793,7 @@ async function noGatePR(c: Cenario): Promise<string> {
 test("gate do PR: encerrar recusado com o PR aberto; pedir mudanças abre a sessão em aberto, que volta ao desenvolvimento", async () => {
   const c = cenario();
   await noGatePR(c);
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   prNoGitHub("OPEN");
   await assert.rejects(
     encerrarIssue(c.banco, 1, 4),
@@ -851,7 +849,7 @@ test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove
   const c = cenario();
   const worktree = await noGatePR(c);
   prNoGitHub("MERGED");
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   // Uma consulta ociosa sobre o encerramento, com o pi na worktree.
   const consulta = await conversarSobre(c.banco, 2, opcoes);
   await ate(() => situacao(consulta)?.ocupado === false, "a consulta subir");
@@ -884,7 +882,7 @@ test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove
 test("gate do PR: pedir mudanças com uma execução em andamento na issue não grava nada", async () => {
   const c = cenario();
   await noGatePR(c);
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   prNoGitHub("OPEN");
   const intacta = () => {
     const ag = agregado(c.banco, 1);
@@ -920,7 +918,7 @@ test("gate do PR: pedir mudanças com uma execução em andamento na issue não 
 
 test("banco fechado ao fim da sessão interativa: o término vai para o log em vez de derrubar o serviço", async () => {
   const c = cenario();
-  const sessao = registrarNecessidade(c.banco, "loja", [], { pacote: PACOTE, ociosidadeMin: 0.01 });
+  const sessao = registrarNecessidade(c.banco, "loja", [], { ociosidadeMin: 0.01 });
   await ate(() => situacao(sessao)?.ocupado === false, "a conversa");
   c.banco.close();
   await ate(() => c.log(1).includes("E-1 não gravou o término:"), "o registro do erro no log");
@@ -928,7 +926,7 @@ test("banco fechado ao fim da sessão interativa: o término vai para o log em v
 
 test("sessão com dois arquivos (F6 §3.1): a retomada falha com o motivo, e o chat diz como resolver", async () => {
   const c = cenario();
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const opcoes = { ociosidadeMin: 0.01 };
   const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
   await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
   const dir = join(c.raiz, "sessoes");
@@ -945,7 +943,7 @@ test("sessão com dois arquivos (F6 §3.1): a retomada falha com o motivo, e o c
 
 test("pi que sai sozinho: C6 falha, mas o ticket interativo não falha e a sessão segue em conversa", async () => {
   const c = cenario({ variante: "sai" });
-  const sessao = registrarNecessidade(c.banco, "loja", [], { pacote: PACOTE, ociosidadeMin: 1 });
+  const sessao = registrarNecessidade(c.banco, "loja", [], { ociosidadeMin: 1 });
   await ate(() => c.execucoes()[0]?.resultado === "falha", "o C6 da falha");
   assert.match(c.log(1), /E-1 terminou com falha: o pi saiu antes de terminar a execução \(código 3\)/);
   assert.equal(agregado(c.banco, 1)?.tickets[0]?.status, "em_execucao");
@@ -966,7 +964,7 @@ const inicioDe = (c: Cenario, sessao: string) =>
 
 test("consulta: copia a sessão principal, sem ferramentas de escrita, sem prompt e sem mudar o ticket", async () => {
   const c = cenario({ comAgente: true });
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   const principal = registrarNecessidade(c.banco, "loja", [], opcoes);
   await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
   await decidirRegistroNoChat(c.banco, 1, { aprovado: true }, opcoes);
@@ -1031,9 +1029,9 @@ test("consulta: copia a sessão principal, sem ferramentas de escrita, sem promp
 
 test("consulta de um ticket por decidir: para o pi ocioso, segue em conversa depois da ociosidade e retoma como consulta", async () => {
   const c = cenario({ comAgente: true });
-  const principal = registrarNecessidade(c.banco, "loja", [], { pacote: PACOTE, ociosidadeMin: 1 });
+  const principal = registrarNecessidade(c.banco, "loja", [], { ociosidadeMin: 1 });
   await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const opcoes = { ociosidadeMin: 0.01 };
   const consulta = await conversarSobre(c.banco, 1, opcoes);
   assert.deepEqual(c.execucoes()[0]?.resultado, "sucesso", "o pi ocioso da principal parou antes do C21");
   await ate(() => c.execucoes()[1]?.resultado === "sucesso", "a parada da consulta por ociosidade");
@@ -1061,7 +1059,7 @@ test("consulta de um ticket por decidir: para o pi ocioso, segue em conversa dep
   );
   const retomada = inicioDe(c, consulta);
   assert.deepEqual(retomada.argv.slice(-3), [
-    "/opt/pi-fabriquinha/extensions/guarda.ts",
+    join(PACOTE, "extensions", "guarda.ts"),
     "--exclude-tools",
     "edit,write,bash,powershell",
   ]);
@@ -1072,7 +1070,7 @@ test("consulta de um ticket por decidir: para o pi ocioso, segue em conversa dep
 
 test("consulta recusada: ticket sem sessão, sessão sem conversa gravada e agente trabalhando", async () => {
   const c = cenario({ variante: "espera" });
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
   await assert.rejects(
     conversarSobre(c.banco, 1, opcoes),
@@ -1098,7 +1096,7 @@ test("consulta recusada: ticket sem sessão, sessão sem conversa gravada e agen
 
 test("consulta sem cópia: a primeira execução falhou antes de o pi subir, e a retomada copia a principal", async () => {
   const c = cenario({ comAgente: true });
-  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const opcoes = { ociosidadeMin: 1 };
   const principal = registrarNecessidade(c.banco, "loja", [], opcoes);
   await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
   encerrar((await infoDaSessao(c.banco, principal)).execucao);

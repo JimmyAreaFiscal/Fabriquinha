@@ -70,8 +70,6 @@ export interface InfoSessao {
 }
 
 export interface OpcoesInterativa {
-  /** Raiz do pacote P1 `pi-fabriquinha`. */
-  pacote: string;
   /** Minutos sem mensagem até o processo parar (F4 §3, §6.6). */
   ociosidadeMin: number;
 }
@@ -389,7 +387,6 @@ function acompanhar(
     banco,
     ag,
     execucao,
-    pacote: opcoes.pacote,
     limiteMin: opcoes.ociosidadeMin,
     ...abertura,
   })

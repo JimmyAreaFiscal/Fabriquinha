@@ -23,7 +23,7 @@ before(async () => {
   await once(livre, "close");
   origem = `127.0.0.1:${process.env.FABRIQUINHA_PORTA}`;
   raiz = mkdtempSync(join(base, "raiz-"));
-  servico = await iniciarServico(raiz, "/opt/pi-fabriquinha");
+  servico = await iniciarServico(raiz);
 });
 after(async () => {
   await servico.parar();
@@ -77,7 +77,7 @@ test("web.url: link de entrada com token de 32 bytes, só para o dono, trocado a
 
   const antes = token();
   await servico.parar();
-  servico = await iniciarServico(raiz, "/opt/pi-fabriquinha");
+  servico = await iniciarServico(raiz);
   assert.notEqual(token(), antes);
   assert.equal(
     (await pedir("/api/sessoes?escopo=ativas", { headers: { cookie: `fabriquinha=${antes}` } })).status,

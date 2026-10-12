@@ -17,8 +17,6 @@ import { avisar, iniciarNaSessaoPrincipal, rodarExecucao } from "./gerente.ts";
 import { montarPrompt } from "./prompt.ts";
 
 export interface OpcoesAutonoma {
-  /** Raiz do pacote P1 `pi-fabriquinha`. */
-  pacote: string;
   /** Tempo limite de tempo ativo (F4 §3, §6.7). */
   timeoutMin: number;
 }
@@ -49,7 +47,6 @@ export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: 
     banco,
     ag,
     execucao,
-    pacote: opcoes.pacote,
     limiteMin: opcoes.timeoutMin,
     // F3 §7: a coleta antes do pi entra no prompt; a falha dela vira C6 + C8 como qualquer passo da execução.
     prompt: async (c) =>

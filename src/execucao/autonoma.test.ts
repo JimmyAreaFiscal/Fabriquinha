@@ -30,6 +30,7 @@ import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { executarAutonomo } from "./autonoma.ts";
 import { dialogosPendentes, responderDialogo } from "./gerente.ts";
+import { PACOTE } from "./pi.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-autonoma-")));
 after(() => {
@@ -182,7 +183,6 @@ export default async function () {
 
 const auditor: Ator = { tipo: "auditor" };
 const fabriquinha: Ator = { tipo: "fabriquinha" };
-const PACOTE = "/opt/pi-fabriquinha";
 
 interface Cenario {
   raiz: string;
@@ -309,7 +309,7 @@ async function morreu(pid: number): Promise<boolean> {
 
 test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e log, coleta, C6 e C7", async () => {
   const c = cenario();
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 1 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   const { fase, ticket, execucoes } = c.estado();
   assert.equal(fase, "aprovacao_desenho");
@@ -381,7 +381,7 @@ test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e
 
 test("stopReason error: C6 + C8 com o erro do pi inteiro, mesmo com U+2028, cortado em 2.000 caracteres; responder e retomar continua a mesma sessão", async () => {
   const c = cenario({ variante: "erro" });
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 1 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   let { ticket, execucoes } = c.estado();
   assert.equal(ticket.status, "falhou");
@@ -399,7 +399,7 @@ test("stopReason error: C6 + C8 com o erro do pi inteiro, mesmo com U+2028, cort
     reabrirTicket(ag, { ticket: 2, instrucao: "Use o índice que já existe." }, auditor),
   );
   process.env.FALSO_PI = "sucesso";
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 1 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   ({ ticket, execucoes } = c.estado());
   assert.equal(ticket.status, "concluido");
@@ -425,7 +425,7 @@ test("stopReason error: C6 + C8 com o erro do pi inteiro, mesmo com U+2028, cort
 test("diálogo: o tempo esperando o Auditor não conta; respondido, a execução segue, e o C7 sem evidência vira C8", async () => {
   const c = cenario({ variante: "dialogo", comAgente: false });
   // Limite de 3 s: folga para o pi falso subir numa máquina carregada antes de abrir os diálogos.
-  const execucao = executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 0.05 });
+  const execucao = executarAutonomo(c.banco, 2, { timeoutMin: 0.05 });
   for (let espera = 0; dialogosPendentes(2).length < 3; espera += 20) {
     assert.ok(espera < 10_000, "os diálogos não chegaram em 10 s");
     await dormir(20);
@@ -489,7 +489,7 @@ test("diálogo: o tempo esperando o Auditor não conta; respondido, a execução
 test("tempo limite: SIGTERM no grupo, 10 s, SIGKILL, e C8 com tempo limite de N min", async () => {
   const c = cenario({ variante: "dorme" });
   const inicio = Date.now();
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 0.005 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 0.005 });
   const duracao = Date.now() - inicio;
 
   const { ticket, execucoes } = c.estado();
@@ -505,7 +505,7 @@ test("tempo limite: SIGTERM no grupo, 10 s, SIGKILL, e C8 com tempo limite de N 
 
 test("pi que deixa um filho e some: falha dizendo que o pi saiu, e o grupo inteiro morre", async () => {
   const c = cenario({ variante: "filho" });
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 1 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   const { ticket, execucoes } = c.estado();
   const log = join(c.raiz, "execucoes", "E-2", "log");
@@ -519,14 +519,14 @@ test("pi que deixa um filho e some: falha dizendo que o pi saiu, e o grupo intei
 
 test("pi que recusa o prompt falha na hora, sem esperar o tempo limite", async () => {
   const c = cenario({ variante: "recusa" });
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 1 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
   assert.equal(c.estado().ticket.erro, "o pi recusou o comando prompt: modelo inexistente");
   c.banco.close();
 });
 
 test("pi --version travado conta no tempo limite: C8 em vez de execução presa em andamento", async () => {
   const c = cenario({ variante: "versao-trava" });
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 0.005 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 0.005 });
   const { ticket, execucoes } = c.estado();
   assert.equal(ticket.erro, "tempo limite de 0.005 min em pi --version");
   assert.equal(execucoes[0]?.resultado, "falha");
@@ -547,7 +547,7 @@ test("um throw que não é Error também vira C6 + C8 com o texto, nunca sucesso
   });
   syncBuiltinESMExports();
   try {
-    await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 1 });
+    await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
   } finally {
     t.mock.restoreAll();
     syncBuiltinESMExports();
@@ -561,7 +561,7 @@ test("um throw que não é Error também vira C6 + C8 com o texto, nunca sucesso
 
 test("falha antes do pi (preparação da worktree): C6 + C8 com a mensagem, sem lançar o pi nem deixar execução órfã", async () => {
   const c = cenario({ preparacao: ["exit 7"] });
-  await executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 1 });
+  await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   const { ticket, execucoes } = c.estado();
   assert.equal(ticket.status, "falhou");
@@ -575,11 +575,11 @@ test("falha antes do pi (preparação da worktree): C6 + C8 com a mensagem, sem 
 test("C5 recusado ou ticket inexistente: rejeita sem criar execução nem lançar o pi", async () => {
   const c = cenario();
   await assert.rejects(
-    executarAutonomo(c.banco, 99, { pacote: PACOTE, timeoutMin: 1 }),
+    executarAutonomo(c.banco, 99, { timeoutMin: 1 }),
     (e) => e instanceof ErroDeRegra && e.message === "o ticket T-99 não existe (confira o número do ticket)",
   );
   await assert.rejects(
-    executarAutonomo(c.banco, 1, { pacote: PACOTE, timeoutMin: 1 }),
+    executarAutonomo(c.banco, 1, { timeoutMin: 1 }),
     (e) => e instanceof ErroDeRegra && e.message.startsWith("T-1 é da etapa registro, que roda em modo interativo"),
   );
   assert.deepEqual(c.estado().execucoes, []);

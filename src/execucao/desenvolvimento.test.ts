@@ -212,7 +212,7 @@ beforeEach(() => {
 const auditor: Ator = { tipo: "auditor" };
 const fabriquinha: Ator = { tipo: "fabriquinha" };
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
-const OPCOES = { pacote: "/opt/pi-fabriquinha", timeoutMin: 1 };
+const OPCOES = { timeoutMin: 1 };
 
 let n = 0;
 /**

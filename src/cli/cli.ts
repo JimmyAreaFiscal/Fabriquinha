@@ -6,7 +6,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
-import { fileURLToPath } from "node:url";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { z, ZodError } from "zod";
 import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
@@ -33,9 +32,6 @@ export interface Io {
   /** Resolve quando o `servidor` deve parar (SIGINT ou SIGTERM). */
   parada(): Promise<unknown>;
 }
-
-/** A raiz do pacote P1 `pi-fabriquinha`, versionado junto com a Fabriquinha (F4 §6.1). */
-const PACOTE = fileURLToPath(new URL("../../pacote-pi", import.meta.url));
 
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
 class ErroDeUso extends Error {}
@@ -110,10 +106,12 @@ const COMANDOS: readonly Comando[] = [
     argumentos: [],
     doAgente: false,
     async rodar({ io }) {
-      const servico = await iniciarServico(raizPadrao(io.env), PACOTE);
-      // A linha sai quando o serviço já atende, e `parada` passa a ouvir os sinais no mesmo tick.
+      const servico = await iniciarServico(raizPadrao(io.env));
+      // Os sinais passam a ser ouvidos antes da linha, que sai quando o serviço já atende: quem a lê pode mandar o
+      // SIGTERM na hora, e sem ouvinte o sinal mataria o processo sem parar o serviço.
+      const parou = io.parada();
       io.stdout.write(`${JSON.stringify({ porta: portaDoServico() })}\n`);
-      await io.parada();
+      await parou;
       await servico.parar();
     },
   },

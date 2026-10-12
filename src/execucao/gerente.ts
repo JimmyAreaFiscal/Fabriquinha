@@ -162,8 +162,6 @@ export interface Rodada extends Pick<Lancamento, "fork"> {
   /** O agregado logo depois de C5. */
   ag: Agregado;
   execucao: Execucao;
-  /** Raiz do pacote P1 `pi-fabriquinha`. */
-  pacote: string;
   /**
    * Autônoma: tempo limite de tempo ativo (F4 §6.7), que vale também para o `pi --version`.
    * Interativa: a ociosidade depois da qual o processo para (F4 §6.6).
@@ -217,7 +215,6 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       sessaoPi: execucao.sessaoPi,
       etapa: ticket.etapa,
       modelo: execucao.modelo,
-      pacote: r.pacote,
       confianca: confianca(projeto.repo),
       modo: execucao.modo,
       fork: r.fork,

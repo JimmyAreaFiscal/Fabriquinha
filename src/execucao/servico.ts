@@ -58,9 +58,9 @@ function recuperar(banco: DatabaseSync): void {
 /**
  * Sobe o serviço: ocupa `127.0.0.1:<portaDoServico>` como trava de instância única antes de tocar no banco (uma
  * segunda instância, mesmo de versão mais nova, sai com erro sem migrar nada), abre o banco, encerra as execuções da
- * instância anterior e liga o agendador. `pacote` é a raiz do pacote P1 `pi-fabriquinha` (F4 §6.1).
+ * instância anterior e liga o agendador.
  */
-export async function iniciarServico(raiz: string, pacote: string): Promise<Servico> {
+export async function iniciarServico(raiz: string): Promise<Servico> {
   const porta = portaDoServico();
   // O tratador do web (F7 §4.1) entra depois do banco aberto; antes disso, ninguém tem o link de entrada.
   const web = createServer();
@@ -93,7 +93,7 @@ export async function iniciarServico(raiz: string, pacote: string): Promise<Serv
    * se aceitou, ela está pendente e a corrida resolve na hora. Depois do C5, a promessa só rejeita se o banco falhar.
    */
   async function iniciar(ticket: Id): Promise<void> {
-    const execucao = executarAutonomo(banco, ticket, { pacote, timeoutMin: configuracao(banco).timeoutMin });
+    const execucao = executarAutonomo(banco, ticket, { timeoutMin: configuracao(banco).timeoutMin });
     await Promise.race([execucao, Promise.resolve()]);
     execucao.catch(noLog);
   }
@@ -132,7 +132,7 @@ export async function iniciarServico(raiz: string, pacote: string): Promise<Serv
       if (autonomaEmAndamento(banco)) return;
       const ticket = ticketElegivel(banco);
       if (ticket !== undefined) {
-        executarAutonomo(banco, ticket, { pacote, timeoutMin: c.timeoutMin }).catch(noLog);
+        executarAutonomo(banco, ticket, { timeoutMin: c.timeoutMin }).catch(noLog);
       }
     } catch (error_) {
       noLog(error_);
