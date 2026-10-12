@@ -179,6 +179,15 @@ test("estáticos sem token: o cliente TypeScript sai como JavaScript, CSS e font
   assert.doesNotMatch(app.texto, /: Montar|import type|<HTMLElement>/);
   assert.doesNotMatch((await pedir("/static/render.ts")).texto, /import type/);
 
+  // O markdown-it do navegador, que o import map do index.html resolve.
+  const md = await pedir("/static/markdown-it.js");
+  assert.equal(md.headers["content-type"], "text/javascript; charset=utf-8");
+  assert.match(md.texto, /^\/\*! markdown-it /);
+  assert.match(
+    readFileSync(join(import.meta.dirname, "cliente", "index.html"), "utf8"),
+    /"markdown-it\/browser": "\/static\/markdown-it.js"/,
+  );
+
   const css = await pedir("/static/estilo.css");
   assert.equal(css.headers["content-type"], "text/css; charset=utf-8");
   assert.match(css.texto, /url\("fontes\/plex-sans-400\.woff2"\)/);

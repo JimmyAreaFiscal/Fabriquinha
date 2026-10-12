@@ -77,10 +77,11 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     try {
       return await rota.tratar({
         banco,
-        agendador: { proximaBusca: () => PROXIMA },
+        agendador: { proximaBusca: () => PROXIMA, executarAgora: () => Promise.resolve() },
         params,
         query: new URLSearchParams(),
         corpo,
+        cabecalhos: {},
         resposta: undefined as unknown as ServerResponse,
       });
     } catch (erro) {

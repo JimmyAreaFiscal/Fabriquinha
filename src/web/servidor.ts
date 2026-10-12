@@ -6,6 +6,7 @@ import type { IncomingMessage, RequestListener, ServerResponse } from "node:http
 import { stripTypeScriptTypes } from "node:module";
 import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 import { raizDo } from "../persistencia/banco.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { casar } from "./cliente/caminhos.ts";
@@ -23,13 +24,17 @@ const TIPOS: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
-/** Os arquivos de `cliente/` que o navegador pode pedir, com o tipo: só os tipos acima, sem testes. */
-const ESTATICOS = new Map(
-  readdirSync(CLIENTE, { recursive: true, encoding: "utf8" }).flatMap((arquivo) => {
+/**
+ * Os arquivos que o navegador pode pedir, com o caminho e o tipo: os de `cliente/` dos tipos acima, sem testes, e o
+ * `markdown-it` do navegador, que o import map do `index.html` resolve.
+ */
+const ESTATICOS = new Map([
+  ...readdirSync(CLIENTE, { recursive: true, encoding: "utf8" }).flatMap((arquivo) => {
     const tipo = TIPOS[extname(arquivo)];
-    return tipo && !arquivo.endsWith(".test.ts") ? [[arquivo, tipo] as const] : [];
+    return tipo && !arquivo.endsWith(".test.ts") ? [[arquivo, [join(CLIENTE, arquivo), tipo]] as const] : [];
   }),
-);
+  ["markdown-it.js", [fileURLToPath(import.meta.resolve("markdown-it/browser")), "text/javascript; charset=utf-8"]],
+]);
 
 function enviar(resposta: ServerResponse, status: number, tipo: string, corpo: string | Buffer): void {
   resposta.writeHead(status, { "Content-Type": tipo }).end(corpo);
@@ -60,6 +65,15 @@ async function lerCorpo(pedido: IncomingMessage): Promise<unknown> {
   }
 }
 
+/** Um arquivo de `/static/`: o cliente, sem os tipos, e o `markdown-it`. */
+function estatico(caminho: string, resposta: ServerResponse): void {
+  const nome = caminho.slice("/static/".length);
+  const achado = ESTATICOS.get(nome);
+  if (achado === undefined) throw new ErroHttp(404, `${caminho} não existe`);
+  const [arquivo, tipo] = achado;
+  const conteudo = readFileSync(arquivo);
+  enviar(resposta, 200, tipo, nome.endsWith(".ts") ? stripTypeScriptTypes(conteudo.toString()) : conteudo);
+}
 /** O valor do cookie `fabriquinha`, se veio. */
 const cookie = (pedido: IncomingMessage): string | undefined =>
   pedido.headers.cookie
@@ -112,19 +126,19 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
     resposta.writeHead(303, { Location: "/home" }).end();
   }
 
-  function estatico(caminho: string, resposta: ServerResponse): void {
-    const nome = caminho.slice("/static/".length);
-    const tipo = ESTATICOS.get(nome);
-    if (tipo === undefined) throw new ErroHttp(404, `${caminho} não existe`);
-    const conteudo = readFileSync(join(CLIENTE, nome));
-    enviar(resposta, 200, tipo, nome.endsWith(".ts") ? stripTypeScriptTypes(conteudo.toString()) : conteudo);
-  }
-
   async function api(pedido: IncomingMessage, url: URL, resposta: ServerResponse, corpo: unknown): Promise<void> {
     for (const rota of ROTAS) {
       const params = rota.metodo === pedido.method ? casar(rota.caminho, url.pathname) : undefined;
       if (!params) continue;
-      const valor: unknown = await rota.tratar({ banco, agendador, params, query: url.searchParams, corpo, resposta });
+      const valor: unknown = await rota.tratar({
+        banco,
+        agendador,
+        params,
+        query: url.searchParams,
+        corpo,
+        cabecalhos: pedido.headers,
+        resposta,
+      });
       if (resposta.headersSent) return;
       if (valor === undefined) resposta.writeHead(204).end();
       else json(resposta, 200, valor);

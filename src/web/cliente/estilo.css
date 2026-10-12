@@ -916,6 +916,544 @@ input.erro {
   margin-right: var(--s-2);
 }
 
+/* Tabelas: as execuções de um ticket e as tabelas dos tipos de gate (F7 §4.5). */
+.rola {
+  overflow-x: auto;
+}
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.tabela th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px var(--s-2);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.tabela td {
+  padding: 7px var(--s-2);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.tabela tr:last-child td {
+  border-bottom: 0;
+}
+.tabela .mono {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.tabela .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tabela .acoes-t {
+  text-align: right;
+  white-space: nowrap;
+}
+.ok {
+  color: var(--closed);
+}
+.nok {
+  color: var(--danger);
+}
+.bigo {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.nao-previsto {
+  color: var(--open);
+  font-weight: var(--w-strong);
+}
+
+/* Markdown de agente e do Auditor (markdown-it sem HTML). */
+.md {
+  line-height: 1.6;
+  font-size: var(--fs-sm);
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md table {
+  margin: 0 0 var(--s-2);
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: var(--s-3) 0 var(--s-1);
+  font-size: var(--fs-sm);
+}
+.md ul,
+.md ol {
+  padding-left: var(--s-5);
+}
+.md code {
+  font: 0.9em var(--mono);
+  padding: 1px 4px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+}
+.md pre {
+  overflow-x: auto;
+  padding: var(--s-2);
+  background: var(--bg);
+  border-radius: var(--r-md);
+}
+.md pre code {
+  padding: 0;
+  background: none;
+}
+.md a {
+  color: var(--accent);
+}
+.md table {
+  border-collapse: collapse;
+}
+.md th,
+.md td {
+  padding: 3px var(--s-2);
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+/* Página da issue: mesa de trabalho com a coluna da esquerda fixa e a da direita com ação e artefatos. */
+.migalha {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  margin-bottom: var(--s-2);
+}
+.migalha a:hover {
+  color: var(--ink);
+}
+.titulo-issue {
+  font-size: var(--fs-2xl);
+  line-height: 1.25;
+}
+.titulo-issue .id {
+  font-size: var(--fs-xl);
+  margin-right: var(--s-2);
+  vertical-align: 2px;
+}
+.pr {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+.dep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 2px 0 var(--s-2);
+  font: var(--fs-xs) var(--mono);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.dep a:hover {
+  color: var(--accent);
+}
+.dep .fase {
+  color: var(--muted);
+  font-family: var(--font);
+}
+.dep:not(:has(.x)) {
+  padding-right: var(--s-2);
+}
+.dep .x {
+  display: inline-flex;
+  padding: 1px 4px;
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.dep .x:hover {
+  color: var(--ink);
+  background: var(--line);
+}
+.nova-dep {
+  display: flex;
+  gap: var(--s-1);
+}
+.nova-dep[hidden],
+.ver-tudo[hidden] {
+  display: none;
+}
+.nova-dep input {
+  width: 72px;
+  height: 24px;
+  padding: 0 var(--s-2);
+  font: var(--fs-xs) var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.nova-dep input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.mesa {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: var(--s-6);
+  align-items: start;
+  margin-top: var(--s-5);
+}
+.lateral {
+  position: sticky;
+  top: 64px;
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.cartao-lateral {
+  padding: var(--s-3) var(--s-4);
+}
+.cartao-lateral h3 {
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.cartao-lateral .vazio {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.fatos {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px var(--s-3);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.fatos dt {
+  color: var(--muted);
+}
+.fatos dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.descricao {
+  max-height: 180px;
+  overflow: hidden;
+  position: relative;
+}
+.descricao.aberta {
+  max-height: none;
+}
+.descricao:not(.aberta)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  background: linear-gradient(transparent, var(--surface));
+}
+.ver-tudo {
+  margin-top: 6px;
+}
+
+.linha-tempo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.linha-tempo li {
+  position: relative;
+  padding: 0 0 var(--s-3) var(--s-5);
+  font-size: var(--fs-sm);
+}
+.linha-tempo li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--line);
+}
+.linha-tempo li:last-child {
+  padding-bottom: 0;
+}
+.linha-tempo li:last-child::before {
+  display: none;
+}
+.linha-tempo li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.linha-tempo li.concluido::after {
+  background: var(--closed);
+}
+.linha-tempo li.em_execucao::after {
+  background: var(--claimed);
+}
+.linha-tempo li.aberto::after {
+  background: var(--bg);
+  border: 2px solid var(--muted);
+  width: 6px;
+  height: 6px;
+}
+.linha-tempo li.falhou::after {
+  background: var(--danger);
+}
+.ticket-btn {
+  all: unset;
+  display: flex;
+  gap: var(--s-2);
+  align-items: baseline;
+  width: 100%;
+  cursor: pointer;
+}
+.ticket-btn:hover .tt {
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+}
+.ticket-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.linha-tempo .sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--s-2);
+  align-items: center;
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.st-aberto {
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.st-em_execucao {
+  color: var(--claimed);
+  background: var(--claimed-bg);
+}
+.st-concluido {
+  color: var(--closed);
+  background: var(--closed-bg);
+}
+.st-falhou {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.chat .ir {
+  color: var(--accent);
+}
+
+/* Ação do Auditor: o painel do gate da fase, o "Executar agora" e o aviso da limpeza que falhou. */
+.acao-auditor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-bottom: var(--s-6);
+}
+.painel-acao {
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--r-lg);
+}
+.painel-acao.falhou {
+  border-color: #5a2a1c;
+  border-top-color: var(--danger);
+}
+.painel-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  font-size: var(--fs-sm);
+}
+.painel-acao .rotulo {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+}
+.painel-acao.falhou .rotulo {
+  color: var(--danger);
+}
+.painel-linha .btn {
+  margin-left: auto;
+}
+.painel-acao .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.painel-acao .btn-primario:disabled:hover {
+  border-color: var(--accent);
+}
+.painel-acao .bloqueio {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-align: right;
+}
+.painel-acao .comandos {
+  margin: var(--s-3) 0 0;
+  padding: var(--s-2) var(--s-3);
+  font: var(--fs-xs) / 1.6 var(--mono);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* Artefatos: uma linha por etapa e ticket, com um card por evidência que abre a caixa. */
+.secao > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+.secao > h2 .muted {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+.secao > p {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.etapa-artefatos {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--line);
+}
+.etapa-artefatos:first-of-type {
+  border-top: 0;
+}
+.etapa-nome {
+  font-size: var(--fs-sm);
+  padding-top: 6px;
+}
+.etapa-nome .id {
+  display: block;
+}
+.cards-art {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.art {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 36px;
+  padding: 0 var(--s-3);
+  font-size: var(--fs-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.art:hover {
+  border-color: var(--accent);
+}
+.art:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.art .tipo {
+  font: 600 10px var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1px 4px;
+  letter-spacing: 0.04em;
+}
+.art .ponto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--closed);
+}
+.art .ponto.nok {
+  background: var(--danger);
+}
+
+/* A evidência na caixa: a marca de aprovada, a tabela, os anexos e o JSON. */
+.evidencia {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-height: 100%;
+}
+.evidencia > iframe:only-child,
+.evidencia > .marca-aprovada + iframe:last-child {
+  flex: 1;
+}
+.marca-aprovada {
+  margin: 0;
+}
+.caixa-corpo video {
+  display: block;
+  width: 100%;
+  max-width: 900px;
+  max-height: 100%;
+  margin: 0 auto;
+  background: #000;
+  border-radius: var(--r-md);
+}
+.anexo {
+  margin: 0;
+}
+.anexo figcaption {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-sm);
+}
+.anexo figcaption .mono {
+  margin-right: auto;
+}
+
 @media (max-width: 1100px) {
   .agendador {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -934,6 +1472,13 @@ input.erro {
   .fitness-cab {
     display: none;
   }
+  .mesa {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lateral {
+    position: static;
+    max-height: none;
+  }
 }
 
 @media (max-width: 700px) {
@@ -950,5 +1495,15 @@ input.erro {
   }
   .aviso {
     margin: var(--s-3) var(--s-4) 0;
+  }
+  .trilho-fases .passo:not(.atual) > span:last-child {
+    visibility: hidden;
+  }
+  .trilho-fases .atual > span:last-child {
+    white-space: nowrap;
+  }
+  .etapa-artefatos {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1);
   }
 }

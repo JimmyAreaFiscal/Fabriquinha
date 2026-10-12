@@ -5,7 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { caminhoDaWorktree, descartarAlteracoes, garantirWorktree, limpar, naFilaDoProjeto } from "./worktree.ts";
+import {
+  caminhoDaWorktree,
+  descartarAlteracoes,
+  garantirWorktree,
+  limpar,
+  limpezaPendente,
+  naFilaDoProjeto,
+} from "./worktree.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-worktree-")));
 after(() => {
@@ -307,4 +314,18 @@ test("limpar só depois de encerrar a issue", async () => {
       e instanceof ErroDeRegra &&
       e.message === "a I-1 está na fase aprovacao_pr (a worktree só é removida depois de encerrar a issue)",
   );
+});
+
+test("limpeza pendente: a worktree da issue concluída que ficou no disco vira os comandos a rodar", async () => {
+  const c = cenario();
+  const worktree = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "aprovacao_pr" }), [], "ainda não encerrada");
+  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [
+    `git -C ${c.repo} worktree remove --force ${worktree}`,
+    `git -C ${c.repo} worktree prune`,
+  ]);
+  for (const comando of limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" })) {
+    execFileSync("sh", ["-c", comando]);
+  }
+  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [], "rodou os comandos");
 });

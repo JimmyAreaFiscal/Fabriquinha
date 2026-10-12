@@ -34,11 +34,12 @@ export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Confi
 }
 
 /**
- * F4 §4.1: o próximo ticket autônomo elegível, da issue mais antiga e, nela, o mais antigo. Além da consulta da
- * spec, pula a issue com execução em andamento (consulta inclusive) ou com ticket em execução: C5 a recusaria, e o
- * agendador escolheria o mesmo ticket a cada ciclo, sem chegar às outras issues.
+ * F4 §4.1: o próximo ticket autônomo elegível, da issue mais antiga e, nela, o mais antigo; com `issue`, só dela (o
+ * **Executar agora** da página da issue, F7 §4.4). Além da consulta da spec, pula a issue com execução em andamento
+ * (consulta inclusive) ou com ticket em execução: C5 a recusaria, e o agendador escolheria o mesmo ticket a cada
+ * ciclo, sem chegar às outras issues.
  */
-export function ticketElegivel(banco: DatabaseSync): Id | undefined {
+export function ticketElegivel(banco: DatabaseSync, issue?: Id): Id | undefined {
   const linha = banco
     .prepare(
       `SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue
@@ -46,6 +47,7 @@ export function ticketElegivel(banco: DatabaseSync): Id | undefined {
          AND t.etapa IN ${AUTONOMAS}
          AND i.fase = t.etapa
          AND i.arquivada_em IS NULL
+         AND ($issue IS NULL OR i.id = $issue)
          AND NOT EXISTS (SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep
                          WHERE d.issue = i.id AND x.fase <> 'concluida')
          AND NOT EXISTS (SELECT 1 FROM ticket o LEFT JOIN execucao e ON e.ticket = o.id
@@ -53,7 +55,7 @@ export function ticketElegivel(banco: DatabaseSync): Id | undefined {
        ORDER BY i.id, t.id
        LIMIT 1`,
     )
-    .get();
+    .get({ issue: issue ?? null });
   return linha && Number(linha.id);
 }
 
@@ -74,6 +76,15 @@ export function autonomaEmAndamento(
       issue: Number(linha.issue),
       iniciadaEm: String(linha.iniciada_em),
     }
+  );
+}
+
+/** A recusa do D8 com a execução que ocupa a vaga, ou `undefined` se a vaga está livre. */
+export function ocupacaoDoD8(banco: DatabaseSync): string | undefined {
+  const ocupada = autonomaEmAndamento(banco);
+  return (
+    ocupada &&
+    `já há uma execução autônoma em andamento (D8): E-${String(ocupada.execucao)} de T-${String(ocupada.ticket)}`
   );
 }
 

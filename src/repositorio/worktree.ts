@@ -150,6 +150,22 @@ export async function descartarAlteracoes(worktree: string, log: string): Promis
 }
 
 /**
+ * F5 §5.3: os comandos que a limpeza que falhou deixou para o Auditor rodar: a worktree de uma issue concluída que
+ * ainda está no disco. Lido do disco a cada vez, o aviso some sozinho quando o Auditor a remove.
+ * ponytail: nos instantes entre o C16 e o fim do `limpar`, a worktree ainda existe e o aviso aparece; quem relê a
+ * página depois já não o vê.
+ */
+export function limpezaPendente(
+  raiz: string,
+  projeto: Pick<Projeto, "nome" | "repo">,
+  issue: Pick<Issue, "id" | "fase">,
+): string[] {
+  const caminho = caminhoDaWorktree(raiz, projeto.nome, issue.id);
+  if (issue.fase !== "concluida" || !existsSync(caminho)) return [];
+  return [`git -C ${projeto.repo} worktree remove --force ${caminho}`, `git -C ${projeto.repo} worktree prune`];
+}
+
+/**
  * F5 §5.3, depois de C16 aprovado: `varrerBase`, o gancho do F6 (§4.4) que busca a base e varre os commits humanos,
  * cuja falha só vai para o log; depois remove a worktree e faz prune. As branches local e remota ficam. Devolve um
  * aviso por comando que falhou: a limpeza não desfaz o encerramento. O gancho entra na fila do projeto sozinho, por

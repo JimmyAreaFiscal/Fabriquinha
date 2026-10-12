@@ -4,6 +4,7 @@ import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
 import { api, avisar, ErroDaApi, elemento } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, paginaVazia, TITULOS } from "./render.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
+import { montarIssue } from "./telas/issue-montar.ts";
 
 /** Desenha a página em `<main>`. Cada tela troca a sua entrada aqui; a função pura de render fica num módulo à parte. */
 type Montar = (main: HTMLElement, params: Parametros) => void | Promise<void>;
@@ -17,7 +18,7 @@ const vazia =
 const MONTAR: Record<Pagina, Montar> = {
   inicio: vazia("inicio"),
   projeto: vazia("projeto"),
-  issue: vazia("issue"),
+  issue: montarIssue,
   metricas: vazia("metricas"),
   historico: vazia("historico"),
   chat: vazia("chat"),

@@ -37,6 +37,18 @@ export const usoDaIssue = (banco: DatabaseSync, issue: Id): UsoPorModelo[] =>
     )
     .all(issue) as unknown as UsoPorModelo[];
 
+/** O custo de cada execução da issue que tem uso, pelo ID da execução (F7 §4.4, execuções de um ticket). */
+export const custoPorExecucao = (banco: DatabaseSync, issue: Id): Record<string, number> =>
+  Object.fromEntries(
+    banco
+      .prepare(
+        `SELECT u.execucao, SUM(u.custo) AS custo FROM uso u JOIN execucao e ON e.id = u.execucao
+         JOIN ticket t ON t.id = e.ticket WHERE t.issue = ? GROUP BY u.execucao`,
+      )
+      .all(issue)
+      .map((l) => [String(l.execucao), Number(l.custo)]),
+  );
+
 /** Quantas vezes o Auditor aplicou cada comando na issue, por fase de antes do comando (F6 §5.1). */
 export const comandosDoAuditor = (banco: DatabaseSync, issue: Id): { fase: Fase; nome: string; n: number }[] =>
   banco

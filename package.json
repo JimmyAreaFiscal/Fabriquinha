@@ -10,6 +10,7 @@
     "node": ">=22.20"
   },
   "dependencies": {
+    "markdown-it": "^15.0.2",
     "zod": "^4.6.6"
   },
   "devDependencies": {

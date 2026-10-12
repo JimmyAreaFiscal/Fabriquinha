@@ -18,6 +18,7 @@ import {
   autonomaEmAndamento,
   configuracao,
   execucoesEmAndamento,
+  ocupacaoDoD8,
   ticketElegivel,
   ticketsAutonomosEmExecucao,
 } from "../persistencia/servico.ts";
@@ -89,7 +90,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   try {
     aberto = abrir(raiz);
     recuperar(aberto);
-    web.on("request", servirWeb({ banco: aberto, porta, agendador: { proximaBusca } }));
+    web.on("request", servirWeb({ banco: aberto, porta, agendador: { proximaBusca, executarAgora } }));
   } catch (error_) {
     aberto?.close();
     web.close();
@@ -149,18 +150,16 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   }
   const relogio = setInterval(ciclo, 60_000);
 
+  // Declarada como função para o web, ligado antes do `banco` existir, recebê-la; só é chamada depois.
+  async function executarAgora(ticket: Id): Promise<void> {
+    const ocupada = ocupacaoDoD8(banco);
+    if (ocupada) throw new ErroDeRegra(ocupada, "espere ela terminar");
+    await iniciar(ticket);
+  }
+
   return {
     banco,
-    async executarAgora(ticket) {
-      const ocupada = autonomaEmAndamento(banco);
-      if (ocupada) {
-        throw new ErroDeRegra(
-          `já há uma execução autônoma em andamento (D8): E-${String(ocupada.execucao)} de T-${String(ocupada.ticket)}`,
-          "espere ela terminar",
-        );
-      }
-      await iniciar(ticket);
-    },
+    executarAgora,
     proximaBusca,
     async parar() {
       clearInterval(relogio);
