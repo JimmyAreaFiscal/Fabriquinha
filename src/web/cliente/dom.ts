@@ -49,10 +49,12 @@ export interface ConteudoDaCaixa {
   aba?: string;
   /** Endereço para **baixar**. */
   baixar?: string;
+  /** Caixa estreita e da altura do conteúdo, para um formulário curto. */
+  estreita?: boolean;
 }
 
 /** Abre a caixa (F7 §4.4) sobre a página; fecha com Esc, com o ✕ ou clicando fora. */
-export function abrirCaixa({ titulo, meta, corpo, aba, baixar }: ConteudoDaCaixa): void {
+export function abrirCaixa({ titulo, meta, corpo, aba, baixar, estreita = false }: ConteudoDaCaixa): void {
   elemento("[data-caixa-titulo]", HTMLElement).textContent = titulo;
   elemento("[data-caixa-meta]", HTMLElement).textContent = meta ?? "";
   for (const [seletor, href] of [
@@ -64,5 +66,14 @@ export function abrirCaixa({ titulo, meta, corpo, aba, baixar }: ConteudoDaCaixa
     link.href = href ?? "";
   }
   elemento("[data-caixa-corpo]", HTMLElement).innerHTML = corpo;
-  elemento("[data-caixa]", HTMLDialogElement).showModal();
+  const caixa = elemento("[data-caixa]", HTMLDialogElement);
+  caixa.classList.toggle("estreita", estreita);
+  caixa.showModal();
+}
+
+/** Vai para outra página da Fabriquinha sem recarregar, como um clique num link: o app.ts redesenha no `popstate`. */
+export function irPara(caminho: string): void {
+  history.pushState(null, "", caminho);
+  dispatchEvent(new PopStateEvent("popstate"));
+  scrollTo(0, 0);
 }

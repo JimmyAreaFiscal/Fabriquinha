@@ -23,7 +23,7 @@ import {
   ticketDe,
 } from "../dominio/execucao.ts";
 import { decidirPR, decidirRegistro } from "../dominio/gates.ts";
-import { type Etapa, type Fase, type Id, type Instante, motivo } from "../dominio/primitivos.ts";
+import { type Etapa, type Fase, type Id, type Instante, type Modelo, motivo } from "../dominio/primitivos.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
 import type { Projeto } from "../dominio/projeto.ts";
@@ -62,6 +62,8 @@ export interface InfoSessao {
   modo: ModoExecucao;
   /** A última execução da sessão. */
   execucao: Id;
+  /** O modelo da última execução; sem ele, valeu o padrão do pi. */
+  modelo?: Modelo;
   estado: Estado;
   motivo?: MotivoEspera;
   /** Desde quando a sessão está neste estado. */
@@ -183,6 +185,7 @@ export function estadoDaSessao(ag: Agregado, sessao: string, fatos: Fatos): Info
     etapa: ticket.etapa,
     modo: execucao.modo,
     execucao: execucao.id,
+    ...(execucao.modelo && { modelo: execucao.modelo }),
     estado,
     ...(motivoEspera && { motivo: motivoEspera }),
     desde,

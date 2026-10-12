@@ -9,6 +9,7 @@ import type { Parametros } from "./cliente/caminhos.ts";
 import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
+import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
 
 /** O que o serviço expõe do agendador ao web (F4 §4). */
 export interface Agendador {
@@ -57,4 +58,5 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DA_ISSUE,
   ...ROTAS_DO_CHAT,
   ...ROTAS_DO_DESENHO,
+  ...ROTAS_DO_INICIO,
 ];

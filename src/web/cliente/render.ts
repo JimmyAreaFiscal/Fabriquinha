@@ -1,7 +1,23 @@
 // Peças comuns do cliente (F7 §4.4) como funções puras que devolvem HTML: navegação fixa, trilho de fases e as
 // páginas ainda vazias. O texto que vem do servidor passa sempre por `escapar`.
+import type { ModoExecucao, Ticket } from "../../dominio/agregado.ts";
 import type { Fase } from "../../dominio/primitivos.ts";
 import type { Pagina } from "./caminhos.ts";
+
+/** O status do ticket (F1 §3.5) como as telas o mostram. */
+export const STATUS_DO_TICKET: Record<Ticket["status"], string> = {
+  aberto: "aberto",
+  em_execucao: "em execução",
+  concluido: "concluído",
+  falhou: "falhou",
+};
+
+/** O modo da sessão (F4 §5.1), no feminino de "sessão autônoma". */
+export const MODO_DA_SESSAO: Record<ModoExecucao, string> = {
+  autonomo: "autônoma",
+  interativo: "interativa",
+  consulta: "consulta",
+};
 
 export const escapar = (texto: unknown): string =>
   String(texto).replaceAll(/[&<>"']/g, (c) => `&#${String(c.codePointAt(0))};`);
@@ -37,7 +53,7 @@ export function navegacao(pagina: Pagina | undefined, aguardando: number): strin
 }
 
 /** As 8 fases do trilho (F1, menos `concluida`), na ordem do processo. */
-const FASES = [
+export const FASES = [
   ["registro", "Registro"],
   ["desenho", "Desenho"],
   ["aprovacao_desenho", "Aprovação do desenho"],
@@ -48,7 +64,7 @@ const FASES = [
   ["ajuste_pr", "Ajuste do PR"],
 ] as const satisfies readonly (readonly [Exclude<Fase, "concluida">, string])[];
 
-const GATES: ReadonlySet<Fase> = new Set(["aprovacao_desenho", "aprovacao_pr"]);
+export const GATES: ReadonlySet<Fase> = new Set(["aprovacao_desenho", "aprovacao_pr"]);
 
 /** Como está a sessão da fase atual: dá a cor do marco (âmbar, vermelho, azul). */
 export type EstadoDoTrilho = "aguarda" | "falha" | "rodando";

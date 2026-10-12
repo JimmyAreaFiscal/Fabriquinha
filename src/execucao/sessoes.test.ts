@@ -87,6 +87,19 @@ const estado = (ag: Agregado, viva?: Situacao, edicaoDoAgente = "") => {
   return [estado, motivo, desde];
 };
 
+test("a sessão leva o modelo da última execução, quando ele foi escolhido", () => {
+  const modelo = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  const ag = (e: Partial<Execucao>) =>
+    agregadoCom(
+      "desenho",
+      [ticket({ id: 2, etapa: "desenho", status: "em_execucao" })],
+      [execucao({ ticket: 2, modo: "autonomo", resultado: "em_andamento", ...e })],
+    );
+  const fatos = { viva: undefined, edicaoDoAgente: "" };
+  assert.deepEqual(estadoDaSessao(ag({ modelo }), SESSAO, fatos).modelo, modelo);
+  assert.equal("modelo" in estadoDaSessao(ag({}), SESSAO, fatos), false, "o padrão do pi");
+});
+
 test("estado: autônoma rodando, inclusive na coleta depois do C6 e reaberta à espera do agendador", () => {
   const desenho = (status: Ticket["status"], resultado: Execucao["resultado"]) =>
     agregadoCom(

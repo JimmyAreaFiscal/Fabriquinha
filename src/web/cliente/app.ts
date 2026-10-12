@@ -5,6 +5,7 @@ import { api, avisar, ErroDaApi, elemento } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, paginaVazia, TITULOS } from "./render.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
+import { montarInicio } from "./telas/inicio-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
 
 /**
@@ -20,7 +21,7 @@ const vazia =
   };
 
 const MONTAR: Record<Pagina, Montar> = {
-  inicio: vazia("inicio"),
+  inicio: montarInicio,
   projeto: vazia("projeto"),
   issue: montarIssue,
   metricas: vazia("metricas"),
@@ -92,5 +93,18 @@ caixa.addEventListener("click", (evento) => {
     caixa.close();
   }
 });
+
+/** As páginas que se redesenham sozinhas (F7 §4.4). */
+const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio"]);
+
+/** A cada 5 s com a aba visível, e ao voltar a ela: o contador da navegação e a página, se ela se atualiza. */
+function atualizar(): void {
+  if (document.visibilityState !== "visible") return;
+  const rota = rotear(location.pathname);
+  if (rota && ATUALIZAM.has(rota.pagina)) Promise.resolve(MONTAR[rota.pagina](main, rota.params)).catch(mostrar);
+  contar().catch(mostrar);
+}
+setInterval(atualizar, 5000);
+document.addEventListener("visibilitychange", atualizar);
 
 desenhar();

@@ -381,3 +381,10 @@ export const ultimaEdicaoDoAgente = (banco: DatabaseSync, issue: Id): string =>
       )
       .get(issue)?.em,
   );
+
+/** As issues não concluídas de todos os projetos, da mais nova para a mais antiga (o board do Início, F7 §5). */
+export const issuesEmAndamento = (banco: DatabaseSync): Id[] =>
+  banco
+    .prepare("SELECT id FROM issue WHERE fase <> 'concluida' ORDER BY id DESC")
+    .all()
+    .map((l) => Number(l.id));

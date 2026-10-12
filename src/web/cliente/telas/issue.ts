@@ -6,7 +6,7 @@ import type { Etapa, Fase, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao, MotivoEspera } from "../../../execucao/sessoes.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { ConteudoDaCaixa } from "../dom.ts";
-import { type EstadoDoTrilho, escapar, ha, trilho } from "../render.ts";
+import { type EstadoDoTrilho, escapar, ha, MODO_DA_SESSAO, STATUS_DO_TICKET, trilho } from "../render.ts";
 
 export const caminhoDaIssue = (projeto: string, issue: number): string =>
   `/projects/${encodeURIComponent(projeto)}/issues/I-${String(issue)}`;
@@ -33,13 +33,6 @@ const FASE: Record<Fase, string> = {
   concluida: "concluída",
 };
 
-const STATUS: Record<Ticket["status"], string> = {
-  aberto: "aberto",
-  em_execucao: "em execução",
-  concluido: "concluído",
-  falhou: "falhou",
-};
-
 const MOTIVO: Record<MotivoEspera, string> = {
   conversa: "Conversa",
   dialogo: "Diálogo",
@@ -49,7 +42,6 @@ const MOTIVO: Record<MotivoEspera, string> = {
   gate_pr: "Gate do PR",
 };
 
-const SESSAO: Record<ModoExecucao, string> = { autonomo: "autônoma", interativo: "interativa", consulta: "consulta" };
 const MODO: Record<ModoExecucao, string> = { autonomo: "autônomo", interativo: "interativo", consulta: "consulta" };
 
 /** O nome de cada tipo de evidência no card e na caixa. */
@@ -152,7 +144,7 @@ function pilulaDaSessao(s: InfoSessao): string {
   }
   return s.estado === "rodando"
     ? '<span class="pill pill-rodando">rodando</span>'
-    : `<span class="pill pill-neutro">${SESSAO[s.modo]}</span>`;
+    : `<span class="pill pill-neutro">${MODO_DA_SESSAO[s.modo]}</span>`;
 }
 
 function tickets(p: PaginaDaIssue): string {
@@ -166,7 +158,7 @@ function tickets(p: PaginaDaIssue): string {
       );
     return `<li class="${t.status}">
       <button type="button" class="ticket-btn" data-ticket="${String(t.id)}" title="Ver execuções"><span class="id">T-${String(t.id)}</span><span class="tt">${escapar(t.titulo)}</span></button>
-      <div class="sub"><span>${etapa(t.etapa)}</span><span class="pill st-${t.status}">${STATUS[t.status]}</span>${sessoes.join("")}</div>
+      <div class="sub"><span>${etapa(t.etapa)}</span><span class="pill st-${t.status}">${STATUS_DO_TICKET[t.status]}</span>${sessoes.join("")}</div>
     </li>`;
   });
   return `<section class="cartao-lateral superficie"><h3>Tickets e sessões</h3><ol class="linha-tempo">${itens.join("")}</ol></section>`;
@@ -366,7 +358,7 @@ export function execucoesDoTicket(p: PaginaDaIssue, ticket: Ticket): ConteudoDaC
     });
   return {
     titulo: `T-${String(id)} · ${ticket.titulo}`,
-    meta: `${etapa(ticket.etapa)} · ${STATUS[ticket.status]}`,
+    meta: `${etapa(ticket.etapa)} · ${STATUS_DO_TICKET[ticket.status]}`,
     corpo: linhas.length
       ? `<div class="rola"><table class="tabela"><thead><tr><th>Execução</th><th>Modo</th><th>Resultado</th><th>Início</th><th class="num">Duração</th><th class="num">Custo</th><th>Erro</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
       : '<p class="muted">Ainda sem execução.</p>',

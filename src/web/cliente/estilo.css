@@ -409,6 +409,198 @@ a {
   opacity: 0.6;
 }
 
+/* Início: o que aguarda o Auditor, o que roda e o board agrupado sob as 5 etapas. */
+.bloco {
+  margin-top: var(--s-8);
+}
+.bloco-aguarda {
+  margin-top: var(--s-5);
+}
+.bloco-rodando {
+  margin-top: var(--s-6);
+}
+.bloco .vazio {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.decisoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: var(--s-3);
+}
+.decisao {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: start;
+  gap: 4px var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-left: 3px solid var(--open);
+}
+.decisao.falha {
+  border-left-color: var(--danger);
+}
+.decisao-motivo {
+  grid-column: 1;
+  align-self: center;
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--open);
+}
+.decisao.falha .decisao-motivo {
+  color: var(--danger);
+}
+.decisao-titulo {
+  grid-column: 1 / -1;
+  font-size: var(--fs-lg);
+  font-weight: var(--w-strong);
+  line-height: 1.35;
+}
+.decisao-texto {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--fs-sm);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.decisao-pe {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  margin-top: var(--s-1);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.decisao-pe .mono {
+  white-space: nowrap;
+}
+.rodando-linhas {
+  display: flex;
+  flex-direction: column;
+}
+.rodando-linha {
+  display: grid;
+  grid-template-columns: 96px 64px minmax(0, 1fr) 140px 220px 90px;
+  align-items: center;
+  gap: var(--s-3);
+  height: 40px;
+  padding: 0 var(--s-4);
+  font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--line);
+}
+.rodando-linha:last-child {
+  border-bottom: 0;
+}
+.rodando-linha:hover {
+  background: var(--surface-2);
+}
+.rodando-linha .titulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.rodando-linha .tempo {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.board-etapas {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(158px, 1fr));
+  gap: var(--s-2) 10px;
+  overflow-x: auto;
+  padding-bottom: var(--s-2);
+}
+.etapa {
+  padding: 0 var(--s-1) var(--s-1);
+  border-bottom: 2px solid var(--line);
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.coluna-gate .coluna-corpo {
+  background: repeating-linear-gradient(135deg, var(--surface), var(--surface) 8px, #201d18 8px, #201d18 16px);
+  border-color: #4a3c22;
+}
+.tag-gate {
+  color: var(--open);
+  border-color: #5a4720;
+}
+
+/* Registrar necessidade, na caixa estreita. */
+.caixa.estreita {
+  width: min(560px, 94vw);
+  height: fit-content;
+  max-height: 88vh;
+}
+.registro {
+  gap: var(--s-4);
+}
+.registro > p {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.registro fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.registro legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+.deps-lista {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--s-1);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.dep-opcao {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 5px var(--s-2);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+.dep-opcao:hover {
+  background: var(--surface-2);
+}
+.dep-opcao input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+.dep-opcao .id {
+  white-space: nowrap;
+}
+.dep-titulo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dep-titulo.sem {
+  color: var(--muted);
+  font-style: italic;
+}
+.registro .rodape-form {
+  justify-content: flex-end;
+}
+
 /* Aviso abaixo da navegação: erro da API como o servidor mandou, inclusive o de entrar de novo. */
 .aviso {
   margin: var(--s-4) var(--s-6) 0;
@@ -1602,6 +1794,13 @@ input.erro {
 }
 
 @media (max-width: 1100px) {
+  .rodando-linha {
+    grid-template-columns: auto 44px minmax(0, 1fr) auto;
+    padding: 0 var(--s-3);
+  }
+  .rodando-linha .esconde {
+    display: none;
+  }
   .agendador {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
