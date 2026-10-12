@@ -88,7 +88,9 @@ test("o SonarQube local acusa a issue do arquivo alterado, ignora a do intocado 
   mkdirSync(join(raiz, "execucoes", "E-1"), { recursive: true });
   const issue = agregado(banco, 1)?.issue;
   assert.ok(issue);
-  const worktree = await garantirWorktree(raiz, projeto, issue, join(raiz, "execucoes", "E-1", "log"));
+  const worktree = await garantirWorktree(raiz, projeto, issue, join(raiz, "execucoes", "E-1", "log"), () =>
+    Promise.resolve(),
+  );
   writeFileSync(join(worktree, "alterado.js"), COM_ISSUE);
   writeFileSync(join(worktree, "novo.js"), LIMPO);
 

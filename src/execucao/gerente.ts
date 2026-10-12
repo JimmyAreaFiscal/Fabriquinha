@@ -10,6 +10,7 @@ import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import { iniciarExecucao, ticketDe } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import type { Projeto } from "../dominio/projeto.ts";
+import { varrerBase } from "../metricas/retrabalho.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { anotar, dirDaExecucao, gravarPgid } from "../persistencia/execucoes.ts";
 import { comIssue } from "../persistencia/issues.ts";
@@ -197,7 +198,7 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       `o projeto ${r.ag.issue.projeto} sumiu`,
       "cadastre-o",
     );
-    worktree = await garantirWorktree(raiz, projeto, r.ag.issue, log);
+    worktree = await garantirWorktree(raiz, projeto, r.ag.issue, log, () => varrerBase(r.banco, projeto.nome));
     const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
     writeFileSync(join(dir, "prompt.md"), prompt);
     // O `pi --version` conta no limite: um pi travado não prende a vaga do D8 nem a sessão.

@@ -185,4 +185,21 @@ export const MIGRACOES: readonly string[] = [
     custo       REAL    NOT NULL CHECK (custo >= 0), -- US$, como o pi calculou
     PRIMARY KEY (execucao, provedor, modelo)
   );`,
+  // F6 §7: linhas de um ticket reescritas depois, por outro ticket ou por commit humano, e o cursor da varredura.
+  `CREATE TABLE retrabalho (
+    commit_alterador TEXT    NOT NULL,
+    ticket           INTEGER REFERENCES ticket(id),
+    autor            TEXT,
+    ticket_origem    INTEGER NOT NULL REFERENCES ticket(id),
+    linhas           INTEGER NOT NULL CHECK (linhas >= 1),
+    PRIMARY KEY (commit_alterador, ticket_origem),
+    CHECK (ticket IS NULL OR ticket <> ticket_origem),
+    CHECK ((ticket IS NULL) = (autor IS NOT NULL))
+  );
+  CREATE INDEX ix_retrabalho_origem ON retrabalho(ticket_origem);
+  CREATE TABLE varredura_base (
+    projeto    TEXT PRIMARY KEY REFERENCES projeto(nome),
+    ultimo_sha TEXT NOT NULL CHECK (length(ultimo_sha) IN (40, 64)),
+    em         TEXT NOT NULL
+  );`,
 ];

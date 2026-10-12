@@ -299,6 +299,11 @@ function cenario() {
       return { ag, ticket: ag.tickets.find((t) => t.id === ticket) };
     },
     commits: () => banco.prepare("SELECT * FROM commit_ticket ORDER BY ticket").all(),
+    retrabalho: () =>
+      banco
+        .prepare("SELECT * FROM retrabalho")
+        .all()
+        .map((l) => ({ ...l })),
     arquivos: (sha: unknown) =>
       banco
         .prepare("SELECT caminho, caminho_anterior, status, adicionadas, removidas FROM arquivo_commit WHERE sha = ?")
@@ -347,6 +352,11 @@ test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks 
     { caminho: "cache.ts", caminho_anterior: null, status: "A", adicionadas: 1, removidas: 0 },
   ]);
   assert.equal(git(c.worktree, "status", "--porcelain"), "", "nada ficou de fora do commit");
+  // A worktree nasceu buscando a base, e a varredura de commits humanos fixou o cursor nela (F6 §4.4).
+  assert.deepEqual(
+    { ...c.banco.prepare("SELECT projeto, ultimo_sha FROM varredura_base").get() },
+    { projeto: "loja", ultimo_sha: base },
+  );
   // O hook rodou, sem credenciais.
   const ambiente = readFileSync(c.ambienteDoHook, "utf8");
   assert.match(ambiente, /^GH_CONFIG_DIR=/m);
@@ -356,8 +366,9 @@ test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks 
   assert.match(prompt, /## Desenho aprovado\n\ncache na busca\n/);
   assert.match(prompt, /## Arquivos previstos\n\n- `busca\.ts` \(alterar\): lê do cache\n/);
 
-  // O último ticket de desenvolvimento leva a issue à revisão, com o ticket de revisão novo.
-  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
+  // O último ticket de desenvolvimento leva a issue à revisão, com o ticket de revisão novo; ele reescreve a linha
+  // de cache.ts que T-3 escreveu, e o retrabalho é registrado depois do commit (F5 §4, passo 5).
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n", "cache.ts": "3\n" });
   await executarAutonomo(c.banco, 4, OPCOES);
 
   ({ ag, ticket } = c.estado(4));
@@ -372,7 +383,11 @@ test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks 
   assert.equal(commit4.mensagem, "fix: Métrica do cache [I-1/T-4]");
   assert.equal(git(c.worktree, "rev-parse", "HEAD~1"), head);
   assert.deepEqual(c.arquivos(commit4.sha), [
+    { caminho: "cache.ts", caminho_anterior: null, status: "M", adicionadas: 1, removidas: 1 },
     { caminho: "metrica.ts", caminho_anterior: null, status: "A", adicionadas: 1, removidas: 0 },
+  ]);
+  assert.deepEqual(c.retrabalho(), [
+    { commit_alterador: commit4.sha, ticket: 4, autor: null, ticket_origem: 3, linhas: 1 },
   ]);
   c.banco.close();
 });
@@ -420,6 +435,23 @@ test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem co
   await executarAutonomo(c.banco, 3, OPCOES);
   assert.equal(c.estado(3).ticket?.status, "concluido");
   assert.equal(c.commits().length, 1);
+  c.banco.close();
+});
+
+test("falha em registrarRetrabalho só vai para o log: o ticket conclui", async () => {
+  const c = cenario();
+  c.banco.exec("CREATE TRIGGER falha BEFORE INSERT ON retrabalho BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
+  await executarAutonomo(c.banco, 3, OPCOES);
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "cache.ts": "3\n" });
+  await executarAutonomo(c.banco, 4, OPCOES);
+
+  assert.equal(c.estado(4).ticket?.status, "concluido", c.estado(4).ticket?.erro);
+  assert.equal(c.estado(4).ag.issue.fase, "revisao");
+  assert.deepEqual(c.retrabalho(), []);
+  assert.match(
+    readFileSync(join(c.raiz, "execucoes", "E-4", "log"), "utf8"),
+    / registrarRetrabalho falhou: disco cheio\n/,
+  );
   c.banco.close();
 });
 

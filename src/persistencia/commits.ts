@@ -46,3 +46,11 @@ export const temCommit = (banco: DatabaseSync, ticket: Id): boolean =>
 /** Algum ticket registrou o commit `sha`. */
 export const commitRegistrado = (banco: DatabaseSync, sha: string): boolean =>
   banco.prepare("SELECT 1 FROM commit_ticket WHERE sha = ?").get(sha) !== undefined;
+
+/** O ticket que registrou o commit `sha`, se algum registrou. */
+export const ticketDoCommit = (banco: DatabaseSync, sha: string): Id | undefined =>
+  (banco.prepare("SELECT ticket FROM commit_ticket WHERE sha = ?").get(sha) as { ticket: Id } | undefined)?.ticket;
+
+/** O commit do ticket, se ele tem. */
+export const commitDoTicket = (banco: DatabaseSync, ticket: Id): string | undefined =>
+  (banco.prepare("SELECT sha FROM commit_ticket WHERE ticket = ?").get(ticket) as { sha: string } | undefined)?.sha;

@@ -8,7 +8,9 @@ import { falharTicket, terminarExecucao, ticketDe } from "../dominio/execucao.ts
 import { type Id, motivo } from "../dominio/primitivos.ts";
 import { antesDoPi, depoisDoPi } from "../evidencias/coleta.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
+import { registrarRetrabalho } from "../metricas/retrabalho.ts";
 import { raizDo } from "../persistencia/banco.ts";
+import { commitDoTicket } from "../persistencia/commits.ts";
 import { anotar, logDaExecucao } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
 import { avisar, iniciarNaSessaoPrincipal, rodarExecucao } from "./gerente.ts";
@@ -75,9 +77,14 @@ export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: 
       return concluirTicket(a, { ticket }, FABRIQUINHA, ctx);
     });
     anotar(log, `T-${String(ticket)} concluído`);
+    // F5 §4, passo 5: o retrabalho do commit do desenvolvimento; a falha só vai para o log (F6 §4.2).
+    const sha = commitDoTicket(banco, ticket);
+    if (sha !== undefined) {
+      await registrarRetrabalho(banco, ticket, sha).catch((error_: unknown) => {
+        anotar(log, `registrarRetrabalho falhou: ${mensagem(error_)}`);
+      });
+    }
     avisar(execucao.sessaoPi, log);
-    // ponytail: no desenvolvimento, o ticket 18 chama aqui registrarRetrabalho (F5 §4, passo 5; F6 §4.2), anotando a
-    // falha no log e seguindo.
   } catch (error_) {
     falhar(mensagem(error_));
   }

@@ -52,14 +52,15 @@ export async function exigirGit(dir: string, ...args: string[]): Promise<string>
 /**
  * F5 §3.1: devolve o caminho da worktree da issue, criando-a (ou recriando, se a pasta foi apagada) e preparando-a
  * quando ela acabou de nascer ou a última preparação falhou. `log` é o arquivo de log da execução que pediu.
- * `varrerBase` é o gancho do F6 (4.4), chamado quando a base foi buscada; a falha dele só vai para o log.
+ * `varrerBase` é o gancho do F6 (4.4), chamado quando a base foi buscada; a falha dele só vai para o log. Obrigatório:
+ * quem cria worktree sem ele perderia os commits humanos sem o compilador acusar.
  */
 export async function garantirWorktree(
   raiz: string,
   projeto: Pick<Projeto, "nome" | "repo" | "branchBase" | "preparacao">,
   issue: Pick<Issue, "id" | "criadaEm">,
   log: string,
-  varrerBase?: () => Promise<void>,
+  varrerBase: () => Promise<void>,
 ): Promise<string> {
   const { repo, branchBase } = projeto;
   const caminho = caminhoDaWorktree(raiz, projeto.nome, issue.id);
@@ -96,7 +97,7 @@ export async function garantirWorktree(
     return { buscouBase, marca };
   });
 
-  if (buscouBase && varrerBase) {
+  if (buscouBase) {
     try {
       await varrerBase();
     } catch (error_) {

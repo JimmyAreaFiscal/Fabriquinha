@@ -6,10 +6,12 @@ import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { falharTicket, terminarExecucao } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
+import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { comIssue } from "../persistencia/issues.ts";
+import { projetosAVarrer } from "../persistencia/retrabalho.ts";
 import {
   autonomaEmAndamento,
   configuracao,
@@ -96,12 +98,23 @@ export async function iniciarServico(raiz: string, pacote: string): Promise<Serv
 
   // ponytail: o relógio bate de minuto em minuto e cada batida relê a configuração; uma mudança vale em até um minuto.
   let minutos = 0;
+  /** A varredura do passo 1 em andamento: no máximo uma, e o `parar` a espera antes de fechar o banco. */
+  let varredura: Promise<void> | undefined;
 
   /**
-   * F4 §4, passos 2 a 4, numa batida do relógio. Síncrono até o C5 (que roda antes do primeiro `await` de
+   * F4 §4, passo 1: `varrerBase` em cada projeto sem varredura há 24 horas, um por vez; a falha de um só vai para o log.
+   * ponytail: o projeto cuja varredura falha (remoto fora do ar) é tentado de novo a cada ciclo, com uma linha de log
+   * em cada; guardar a última tentativa se o log incomodar.
+   */
+  async function varrerVencidos(): Promise<void> {
+    for (const projeto of projetosAVarrer(banco)) await varrerBase(banco, projeto).catch(noLog);
+  }
+
+  /**
+   * F4 §4, passos 1 a 4, numa batida do relógio. Síncrono até o C5 (que roda antes do primeiro `await` de
    * `executarAutonomo`), então duas batidas nunca se cruzam; o resto da execução segue em segundo plano. Nunca lança:
-   * qualquer erro, inclusive a recusa do C5, vai para o log, e a batida seguinte roda.
-   * ponytail: o passo 1, `varrerBase` diário (F6 §4.4), entra com o ticket 18.
+   * qualquer erro, inclusive a recusa do C5, vai para o log, e a batida seguinte roda. O passo 1 roda em segundo plano:
+   * a batida nunca espera o git, e uma varredura só começa quando a anterior terminou.
    */
   function ciclo(): void {
     try {
@@ -109,6 +122,11 @@ export async function iniciarServico(raiz: string, pacote: string): Promise<Serv
       // Desligado, o contador continua: ligado depois do intervalo, o primeiro ciclo vem na batida seguinte.
       if (++minutos < c.intervaloMin || !c.agendadorAtivo) return;
       minutos = 0;
+      varredura ??= varrerVencidos()
+        .catch(noLog)
+        .finally(() => {
+          varredura = undefined;
+        });
       if (autonomaEmAndamento(banco)) return;
       const ticket = ticketElegivel(banco);
       if (ticket !== undefined) {
@@ -135,6 +153,7 @@ export async function iniciarServico(raiz: string, pacote: string): Promise<Serv
     async parar() {
       clearInterval(relogio);
       await new Promise((fechou) => web.close(fechou));
+      await varredura;
       banco.close();
     },
   };

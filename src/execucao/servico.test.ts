@@ -1,7 +1,7 @@
 // Serviço, agendador e reinício (F4 §2, §3, §4, §4.1, §7) contra banco real; issues e tickets vão direto em SQL,
 // porque o que importa aqui é o estado em que o serviço os encontra.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -33,18 +33,29 @@ const novaRaiz = () => mkdtempSync(join(base, "raiz-"));
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 
-/** Issue `id` na `fase`, do projeto `p`, cujo repositório não existe: uma execução iniciada falha ao criar a worktree. */
+/** Cadastra o projeto `nome` no repositório `repo`. */
+function projeto(banco: DatabaseSync, nome: string, repo: string): void {
+  registrarProjeto(banco, {
+    nome,
+    repo,
+    branchBase: "main",
+    hospedagem: "github",
+    testes: ["npm test"],
+    sonar: { projectKey: nome },
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+  });
+}
+
+/**
+ * Issue `id` na `fase`, do projeto `p`, cujo repositório não existe: uma execução iniciada falha ao criar a worktree.
+ * O projeto acabou de ser varrido (F6 §4.4), para o agendador não tentar buscar a base dele.
+ */
 function issue(banco: DatabaseSync, id: number, fase: string): void {
-  if (!banco.prepare("SELECT 1 FROM projeto").get()) {
-    registrarProjeto(banco, {
-      nome: "p",
-      repo: "/nao/existe",
-      branchBase: "main",
-      hospedagem: "github",
-      testes: ["npm test"],
-      sonar: { projectKey: "p" },
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    });
+  if (!banco.prepare("SELECT 1 FROM projeto WHERE nome = 'p'").get()) {
+    projeto(banco, "p", "/nao/existe");
+    banco
+      .prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('p', ?, ?)")
+      .run("a".repeat(40), new Date().toISOString());
   }
   banco
     .prepare(
@@ -336,6 +347,75 @@ test("o ciclo nunca trava nem lança: erro na batida e recusa do C5 vão para o 
   minuto();
   await falhouNaWorktree(s.banco, 1);
   await s.parar();
+});
+
+test("agendador: varre em segundo plano a base dos projetos sem varredura há 24 horas, sem sobrepor varreduras", async (t) => {
+  const minuto = relogio(t);
+  const erros = t.mock.method(console, "error", () => undefined);
+  const s = await subir();
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  issue(s.banco, 1, "desenho");
+  ticket(s.banco, 1, 1, "desenho");
+  // `q`: base real, com o upload-pack do `origin` lento e contando as buscas. `r`: o fetch falha.
+  const dir = mkdtempSync(join(base, "repo-"));
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+  git(dir, "init", "-q", "--bare", "origin.git");
+  git(dir, "clone", "-q", "origin.git", "q");
+  const q = join(dir, "q");
+  git(q, "-c", "user.name=A", "-c", "user.email=a@exemplo.com", "commit", "-q", "--allow-empty", "-m", "início");
+  git(q, "push", "-q", "origin", "HEAD:main");
+  const buscas = join(dir, "buscas");
+  git(q, "config", "remote.origin.uploadpack", `echo x >> '${buscas}'; sleep 0.3; git-upload-pack`);
+  projeto(s.banco, "q", q);
+  projeto(s.banco, "r", join(dir, "nao-existe"));
+  const contadas = () => (existsSync(buscas) ? readFileSync(buscas, "utf8").length / 2 : 0);
+  const varrido = () => s.banco.prepare("SELECT em FROM varredura_base WHERE projeto = 'q'").get()?.em;
+
+  minuto();
+  assert.deepEqual(autonomaEmAndamento(s.banco), { execucao: 1, ticket: 1 }, "a batida não espera a varredura");
+  minuto();
+  minuto();
+  await ate(() => varrido() !== undefined && erros.mock.callCount() === 1);
+  assert.equal(contadas(), 1, "uma varredura só começa quando a anterior terminou");
+  assert.match(String(erros.mock.calls[0]?.arguments[1]), /git fetch .* falhou em .*nao-existe/);
+  await falhouNaWorktree(s.banco, 1);
+
+  // Varrido agora, `q` só volta depois de 24 horas; `r`, que falhou, é tentado de novo.
+  minuto();
+  await ate(() => erros.mock.callCount() === 2);
+  assert.equal(contadas(), 1);
+  s.banco.prepare("UPDATE varredura_base SET em = ? WHERE projeto = 'q'").run("2000-01-01T00:00:00.000Z");
+  minuto();
+  await ate(() => erros.mock.callCount() === 3);
+  assert.equal(contadas(), 2);
+  await s.parar();
+});
+
+test("parar espera a varredura em andamento antes de fechar o banco", async (t) => {
+  const minuto = relogio(t);
+  const erros = t.mock.method(console, "error", () => undefined);
+  const raiz = novaRaiz();
+  const s = await subir(raiz);
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  const dir = mkdtempSync(join(base, "repo-"));
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+  git(dir, "init", "-q", "--bare", "origin.git");
+  git(dir, "clone", "-q", "origin.git", "q");
+  const q = join(dir, "q");
+  git(q, "-c", "user.name=A", "-c", "user.email=a@exemplo.com", "commit", "-q", "--allow-empty", "-m", "início");
+  git(q, "push", "-q", "origin", "HEAD:main");
+  git(q, "config", "remote.origin.uploadpack", "sleep 0.3; git-upload-pack");
+  projeto(s.banco, "q", q);
+
+  minuto();
+  await s.parar();
+  assert.equal(erros.mock.callCount(), 0);
+  const banco = abrir(raiz);
+  assert.equal(
+    banco.prepare("SELECT ultimo_sha FROM varredura_base WHERE projeto = 'q'").get()?.ultimo_sha,
+    git(q, "rev-parse", "HEAD"),
+  );
+  banco.close();
 });
 
 test("executarAgora: não espera o agendador, devolve a recusa do C5 e recusa com a execução que ocupa o D8", async () => {

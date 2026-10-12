@@ -4,9 +4,9 @@
 
 **Blocked by:** 10, 15
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `registrarRetrabalho(banco, ticket, sha)` com o algoritmo do F6 §4.2 (diff `-U0 -M`, blame porcelain por intervalos, commit → ticket), idempotente; ligado após o commit do ticket.
-- [ ] `varrerBase(banco, projeto)` com cursor, `--no-merges`, ignorando commits de ticket, autor gravado, cursor inicial e force-push conforme F6 §4.4.
-- [ ] Ligado na criação de worktree, na publicação de PR (quando existir) e uma vez por dia por projeto pelo agendador; falhas só no log.
-- [ ] Testes do F6 §10 (retrabalho A/B, removido, renomeado, binário, humano, merge commit, force-push).
+- [x] `registrarRetrabalho(banco, ticket, sha)` com o algoritmo do F6 §4.2 (diff `-U0 -M`, blame porcelain por intervalos, commit → ticket), idempotente; ligado após o commit do ticket.
+- [x] `varrerBase(banco, projeto)` com cursor, `--no-merges`, ignorando commits de ticket, autor gravado, cursor inicial e force-push conforme F6 §4.4.
+- [x] Ligado na criação de worktree, na publicação de PR (quando existir) e uma vez por dia por projeto pelo agendador; falhas só no log.
+- [x] Testes do F6 §10 (retrabalho A/B, removido, renomeado, binário, humano, merge commit, force-push).

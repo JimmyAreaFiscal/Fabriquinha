@@ -26,6 +26,9 @@ const commitar = (repo: string, arquivo: string, conteudo: string) => {
   return git(repo, "rev-parse", "HEAD");
 };
 
+/** Gancho do F6 que não faz nada: estes testes não medem a varredura. */
+const semVarredura = () => Promise.resolve();
+
 let n = 0;
 /** Clone com `origin` bare local, `main` publicada com um `.gitignore` de `node_modules/`, e uma raiz e um log novos. */
 function cenario(preparacao: string[] = []) {
@@ -132,10 +135,10 @@ test("branch fabriquinha/I-n de sobra, que não pertence à issue, é recusada e
       `a branch fabriquinha/I-1 já existe em ${c.repo} e não pertence à I-1 desta Fabriquinha ` +
         `(se for sobra, remova-a com git -C ${c.repo} branch -D fabriquinha/I-1; a Fabriquinha nunca a sobrescreve)`;
 
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log), recusa);
+  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), recusa);
   // A mesma branch criada para outra I-1 (outra instalação, outra raiz) também é sobra.
   git(c.repo, "config", "branch.fabriquinha/I-1.fabriquinha", `/outra/raiz/worktrees/loja/I-1 ${c.issue.criadaEm}`);
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log), recusa);
+  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), recusa);
 
   assert.equal(git(c.repo, "rev-parse", "fabriquinha/I-1"), sha);
   assert.equal(existsSync(caminhoDaWorktree(c.raiz, "loja", 1)), false);
@@ -151,19 +154,19 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
       `a preparação da worktree falhou em "echo tentando; test -f ${sinal}": saiu com código 1 ` +
         `(veja o log em ${c.log}; ela roda de novo na próxima execução)`;
 
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log), falha);
+  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), falha);
   assert.equal(existsSync(segundo), false);
   assert.match(c.lerLog(), /tentando\n.*preparação falhou: saiu com código 1\n$/s);
 
   writeFileSync(sinal, "");
-  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log);
+  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
   assert.equal(existsSync(segundo), true);
   assert.equal(c.lerLog().match(/^tentando$/gm)?.length, 2);
 });
 
 test("erro de sintaxe na preparação vai para o log", async () => {
   const c = cenario(["npm test ("]);
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log), /saiu com código 2/);
+  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), /saiu com código 2/);
   assert.match(c.lerLog(), /preparação: npm test \(\n.*syntax error.*preparação falhou: saiu com código 2\n$/is);
 });
 
@@ -171,7 +174,9 @@ test("comando de preparação que passa de 30 minutos é morto e a preparação 
   const c = cenario(["sleep 600"]);
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let resultado: unknown;
-  const pedido = garantirWorktree(c.raiz, c.projeto, c.issue, c.log).catch((erro: unknown) => (resultado = erro));
+  const pedido = garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura).catch(
+    (erro: unknown) => (resultado = erro),
+  );
   // O relógio falso anda um minuto por volta do laço de eventos real: o git roda de verdade até o sleep começar.
   let minutos = 0;
   while (resultado === undefined) {
@@ -197,7 +202,7 @@ test("falha do varrerBase só vai para o log", async () => {
 test("comando git que falha vira ErroDeRegra com a saída do git", async () => {
   const c = cenario();
   await assert.rejects(
-    garantirWorktree(c.raiz, { ...c.projeto, branchBase: "nao-existe" }, c.issue, c.log),
+    garantirWorktree(c.raiz, { ...c.projeto, branchBase: "nao-existe" }, c.issue, c.log, semVarredura),
     (erro: unknown) =>
       erro instanceof ErroDeRegra &&
       /^git fetch origin .* falhou em .*: fatal: couldn't find remote ref/.test(erro.message),
@@ -206,7 +211,7 @@ test("comando git que falha vira ErroDeRegra com a saída do git", async () => {
 
 test("descarte: reset --hard + clean -fd mantém ignorados, remove o novo e anota no log o que removeu", async () => {
   const c = cenario();
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log);
+  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
   mkdirSync(join(caminho, "node_modules", "pacote"), { recursive: true });
   writeFileSync(join(caminho, "node_modules", "pacote", "index.js"), "");
   mkdirSync(join(caminho, "pasta nova"));
@@ -250,7 +255,7 @@ test("fila por projeto: mesmo projeto em série (mesmo depois de uma falha), pro
 
 test("o descarte entra na mesma fila do projeto que a worktree", async () => {
   const c = cenario();
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log);
+  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
   writeFileSync(join(caminho, "novo.txt"), "");
   const eventos: string[] = [];
   const ocupada = naFilaDoProjeto(c.raiz, "loja", async () => {
