@@ -163,6 +163,7 @@ function exemplo(): PaginaDaIssue {
       modelos: {},
     },
     dependencias: [{ id: 2, projeto: "base", fase: "aprovacao_pr" }],
+    dependentes: [],
     sessoes: [sessao({}), sessao({ sessao: CONSULTA, modo: "consulta", execucao: 3, estado: "rodando" })],
     custos: { 2: 1.861 },
     limpeza: [],
@@ -243,6 +244,76 @@ test("página: sem título, tipo, descrição, dependência e artefato; issue co
 
   const comDep = paginaDaIssue({ ...vazia, dependencias: [{ id: 2, projeto: "loja", fase: "concluida" }] }, "");
   assert.match(comDep, /<span class="fase">concluída<\/span><\/span>/, "sem o × de remover");
+});
+
+test("cancelar: botão e diálogo com os efeitos; cancelada sem botão, com pílula, data e trilho; concluída desabilitada", () => {
+  const p = exemplo();
+  const html = paginaDaIssue(
+    {
+      ...p,
+      tickets: [...p.tickets, ticket(5, "desenvolvimento", "em_execucao")],
+      dependentes: [{ id: 7, projeto: "base", fase: "desenho" }],
+    },
+    "",
+  );
+  assert.match(
+    html,
+    /<button type="button" class="btn btn-perigo" data-acao="cancelar-issue">Cancelar issue<\/button>/,
+  );
+  assert.match(
+    html,
+    /<dialog class="dialogo" data-dialogo-cancelar [^>]*>.*A issue sai do andamento e não volta mais\. Nada é apagado/,
+  );
+  assert.match(html, /Tickets que serão fechados: T-3, T-4<\/li>/);
+  assert.match(html, /Dependente que será cancelada:/);
+  assert.match(html, /A execução em andamento de T-5 será parada/);
+  assert.match(
+    html,
+    /Dependente que será cancelada:<ul><li><a href="\/projects\/base\/issues\/I-7">I-7<\/a> <span class="muted">base · desenho<\/span>/,
+  );
+  assert.match(
+    html,
+    /<button class="btn">Voltar<\/button><button type="button" class="btn btn-perigo-cheio" data-acao="confirmar-cancelar" data-confirmar-cancelar>Cancelar issue/,
+  );
+  assert.doesNotMatch(html, /pill-cancelada|<dt>Cancelada/);
+
+  const sem = paginaDaIssue({ ...p, tickets: [ticket(1, "registro", "concluido")], dependentes: [] }, "");
+  assert.doesNotMatch(sem, /class="efeitos"/);
+  const um = paginaDaIssue({ ...p, tickets: [ticket(3, "desenvolvimento", "aberto")], dependentes: [] }, "");
+  assert.match(um, /Ticket que será fechado: T-3/);
+  const duas = paginaDaIssue(
+    {
+      ...p,
+      dependentes: [
+        { id: 7, projeto: "base", fase: "desenho" },
+        { id: 8, projeto: "loja", fase: "registro" },
+      ],
+    },
+    "",
+  );
+  assert.match(duas, /Dependentes que serão canceladas:<ul><li>.*I-7.*<\/li><li>.*I-8/);
+
+  const cancelada = paginaDaIssue(
+    { ...p, issue: { ...p.issue, canceladaEm: "2026-10-12T15:00:00.000Z" }, sessoes: [] },
+    "",
+  );
+  assert.match(cancelada, /<\/span>Busca [^<]*<span class="pill pill-cancelada">Cancelada<\/span><\/h1>/);
+  assert.match(cancelada, /<ol class="trilho-fases cancelada"/);
+  assert.match(cancelada, /<dt>Cancelada<\/dt><dd>12\/10 12:00<\/dd>/);
+  assert.doesNotMatch(cancelada, /cancelar-issue|data-dialogo-cancelar|remover-dep|data-form-dep|mostrar-dep/);
+
+  const concluida = paginaDaIssue({ ...p, issue: { ...p.issue, fase: "concluida" } }, "");
+  assert.match(
+    concluida,
+    /<button type="button" class="btn btn-perigo" disabled>Cancelar issue<\/button><p class="muted">A I-1 está concluída e não pode ser cancelada\.<\/p>/,
+  );
+  assert.doesNotMatch(concluida, /data-dialogo-cancelar/);
+});
+
+test("cancelada não tem Ação do Auditor, mesmo parada num gate", () => {
+  const p = exemplo();
+  const gate = { ...p, issue: { ...p.issue, fase: "aprovacao_pr" as const, canceladaEm: AGORA } };
+  assert.equal(acaoDoAuditor(gate), "");
 });
 
 test("PR, aprovada e reprovada nos cards", () => {

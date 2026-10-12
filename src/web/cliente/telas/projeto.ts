@@ -32,7 +32,7 @@ export const caminhoDoProjeto = (nome: string): string => `/projects/${encodeURI
 
 /** O que o Auditor escolheu na página e vale entre os redesenhos de 5 s. */
 export interface Escolhas {
-  mostrar: { concluidas: boolean; arquivadas: boolean };
+  mostrar: { concluidas: boolean; arquivadas: boolean; canceladas: boolean };
   /** A gaveta que o Auditor abriu ou fechou; as demais seguem o padrão (aberta quando aguarda ou falhou). */
   gavetas: ReadonlyMap<Id, boolean>;
 }
@@ -57,8 +57,9 @@ export const confirmacaoDeArquivar = (n: number, projeto: string): string =>
 
 const dia = (instante: string): string => diaMes(new Date(instante));
 
-/** Quando a issue saiu do andamento: arquivada ou concluída. */
+/** Quando a issue saiu do andamento: cancelada, arquivada ou concluída. */
 function quando(i: IssueDoProjeto): string {
+  if (i.canceladaEm) return `<span class="cancelada">cancelada em ${dia(i.canceladaEm)}</span>`;
   if (i.arquivadaEm) return `<span>arquivada em ${dia(i.arquivadaEm)}</span>`;
   return i.concluidaEm ? `<span>concluída em ${dia(i.concluidaEm)}</span>` : "";
 }
@@ -131,11 +132,11 @@ function linha(
   agora: Date,
 ): string {
   const sessoes = todas.filter((s) => s.issue === i.id);
-  const estado = estadoDoTrilho(sessoes);
+  const estado = i.canceladaEm ? "cancelada" : estadoDoTrilho(sessoes);
   const aberta = gavetas.get(i.id) ?? (estado === "aguarda" || estado === "falha");
   const [destaque] = sessoes.toSorted((a, b) => prioridade(a) - prioridade(b));
   const id = rotuloIssue(i.id);
-  const classes = ["pista-item", estado, !aberta && "fechada", i.fase === "concluida" && "apagada"];
+  const classes = ["pista-item", estado, !aberta && "fechada", (i.fase === "concluida" || i.canceladaEm) && "apagada"];
   return `<div class="${classes.filter(Boolean).join(" ")}" data-issue="${String(i.id)}">
     <div class="pista-linha" data-gaveta>
       <div class="pista-issue"><button type="button" class="caret" aria-expanded="${String(aberta)}" aria-label="Tickets de ${id}">▼</button><div class="texto">
@@ -187,9 +188,10 @@ export function paginaDoProjeto(
   </div>
   ${cardsDoMes(mes)}
   <div class="ferramentas">
-    <span class="contagem">${String(contagem.andamento)} em andamento · ${plural(contagem.concluidas, "concluída", "concluídas")} · ${plural(contagem.arquivadas, "arquivada", "arquivadas")}</span>
+    <span class="contagem">${String(contagem.andamento)} em andamento · ${plural(contagem.concluidas, "concluída", "concluídas")} · ${plural(contagem.arquivadas, "arquivada", "arquivadas")} · ${plural(contagem.canceladas, "cancelada", "canceladas")}</span>
     ${alternar("concluidas", "Mostrar concluídas")}
     ${alternar("arquivadas", "Mostrar arquivadas")}
+    ${alternar("canceladas", "Mostrar canceladas")}
     <button type="button" class="btn btn-perigo direita" data-arquivar${contagem.concluidas === 0 ? " disabled" : ""}>Arquivar concluídas</button>
   </div>
   ${confirmacaoDeArquivar(contagem.concluidas, nome)}

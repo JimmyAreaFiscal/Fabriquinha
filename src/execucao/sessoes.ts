@@ -46,6 +46,7 @@ import {
   type Dialogo,
   encerrar,
   estaEncerrando,
+  foiCancelada,
   iniciarNaSessaoPrincipal,
   mandar,
   type Rodada,
@@ -172,6 +173,7 @@ function calcular(ag: Agregado, ticket: Ticket, execucao: Execucao, { viva, edic
   if (execucao.resultado === "em_andamento" && !ociosa)
     return ["rodando", undefined, viva?.desde ?? execucao.iniciadaEm];
   const parada = viva?.desde ?? String(execucao.terminadaEm);
+  if (ag.issue.canceladaEm !== undefined) return ["terminada", undefined, parada];
   return execucao.modo === "consulta"
     ? consultaParada(ag, ticket, viva !== undefined, parada)
     : principalParada(ag, ticket, execucao.modo === "autonomo", parada, edicaoDoAgente);
@@ -406,6 +408,7 @@ function acompanhar(
     ...abertura,
   })
     .then(({ falha }) => {
+      if (foiCancelada(execucao.id)) return;
       // Ticket interativo nunca falha (F1 §4.2): só a execução termina; a próxima mensagem retoma a sessão.
       comIssue(banco, issue, "terminarExecucao", FABRIQUINHA, (a, ctx) =>
         terminarExecucao(

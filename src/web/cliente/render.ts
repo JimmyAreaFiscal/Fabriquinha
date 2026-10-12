@@ -12,6 +12,8 @@ export const STATUS_DO_TICKET: Record<Ticket["status"], string> = {
   em_execucao: "em execução",
   concluido: "concluído",
   falhou: "falhou",
+  fechado: "fechado",
+  cancelado: "cancelado",
 };
 
 /** A cor do status do ticket, nas pílulas comuns; em execução não pulsa, porque o ticket pode estar parado à espera. */
@@ -20,6 +22,8 @@ export const PILULA_DO_STATUS: Record<Ticket["status"], string> = {
   em_execucao: "pill-rodando sem-pulso",
   concluido: "pill-ok",
   falhou: "pill-falha",
+  fechado: "pill-neutro",
+  cancelado: "pill-neutro",
 };
 
 /** O modo da sessão (F4 §5.1), no feminino de "sessão autônoma". */
@@ -154,8 +158,8 @@ export const FASES = [
 
 export const GATES: ReadonlySet<Fase> = new Set(["aprovacao_desenho", "aprovacao_pr"]);
 
-/** Como está a sessão da fase atual: dá a cor do marco (âmbar, vermelho, azul). */
-export type EstadoDoTrilho = "aguarda" | "falha" | "rodando";
+/** Como está a sessão da fase atual: dá a cor do marco (âmbar, vermelho, azul); `cancelada` apaga o marco (C22). */
+export type EstadoDoTrilho = "aguarda" | "falha" | "rodando" | "cancelada";
 
 /** A cor do marco atual no trilho: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
 export function estadoDoTrilho(sessoes: readonly InfoSessao[]): EstadoDoTrilho | undefined {

@@ -8,7 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../../dominio/agregado.ts";
 import { abrir } from "../../persistencia/banco.ts";
-import { comIssue, registrarIssue } from "../../persistencia/issues.ts";
+import { cancelarIssues, comIssue, registrarIssue } from "../../persistencia/issues.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -77,18 +77,43 @@ test("issues do projeto: em andamento sempre; concluídas e arquivadas só quand
   assert.deepEqual(lista, {
     issues: [{ ...andamento.issue, tickets: andamento.tickets, bloqueadaPor: [], percorridas: [] }],
     sessoes: [],
-    contagem: { andamento: 1, concluidas: 2, arquivadas: 0 },
+    contagem: { andamento: 1, concluidas: 2, arquivadas: 0, canceladas: 0 },
   });
   assert.deepEqual(ids(await chamar("GET", "/api/projetos/loja/issues?concluidas=true")), [3, 2, 1]);
 
   assert.deepEqual(await chamar("POST", "/api/projetos/loja/arquivar"), { arquivadas: 2 });
   const arquivada = await chamar("GET", "/api/projetos/loja/issues?concluidas=true&arquivadas=false");
   assert.deepEqual(ids(arquivada), [1]);
-  assert.deepEqual((arquivada as { contagem: unknown }).contagem, { andamento: 1, concluidas: 0, arquivadas: 2 });
+  assert.deepEqual((arquivada as { contagem: unknown }).contagem, {
+    andamento: 1,
+    concluidas: 0,
+    arquivadas: 2,
+    canceladas: 0,
+  });
   assert.deepEqual(ids(await chamar("GET", "/api/projetos/loja/issues?arquivadas=true")), [3, 2, 1]);
   // Arquivar de novo não acha mais nada; o outro projeto não muda.
   assert.deepEqual(await chamar("POST", "/api/projetos/loja/arquivar"), { arquivadas: 0 });
   assert.deepEqual(ids(await chamar("GET", "/api/projetos/site/issues?arquivadas=true")), [4]);
+});
+
+test("a cancelada fica fora do andamento e da lista; com canceladas=true volta, e a contagem a separa", async () => {
+  const a = registrarIssue(banco, { projeto: "loja" }, AUDITOR);
+  const b = registrarIssue(banco, { projeto: "loja", deps: [a.issue.id] }, AUDITOR);
+  cancelarIssues(banco, a.issue.id, AUDITOR);
+
+  const lista = await chamar("GET", "/api/projetos/loja/issues");
+  assert.deepEqual(ids(lista), []);
+  assert.deepEqual((lista as { contagem: unknown }).contagem, {
+    andamento: 0,
+    concluidas: 0,
+    arquivadas: 0,
+    canceladas: 2,
+  });
+  const todas = await chamar("GET", "/api/projetos/loja/issues?canceladas=true");
+  assert.deepEqual(ids(todas), [b.issue.id, a.issue.id]);
+  assert.equal(typeof (todas as { issues: { canceladaEm?: string }[] }).issues[0]?.canceladaEm, "string");
+  // A dependência cancelada não bloqueia mais.
+  assert.deepEqual((todas as { issues: { bloqueadaPor: number[] }[] }).issues[0]?.bloqueadaPor, []);
 });
 
 test("cada issue diz que dependência ainda bloqueia, inclusive de outro projeto, e o PR aberto", async () => {

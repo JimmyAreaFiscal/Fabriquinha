@@ -202,4 +202,35 @@ export const MIGRACOES: readonly string[] = [
     ultimo_sha TEXT NOT NULL CHECK (length(ultimo_sha) IN (40, 64)),
     em         TEXT NOT NULL
   );`,
+  // F1 C22: issue cancelada e os status de ticket `fechado` e `cancelado`. O CHECK de `status` não se altera no
+  // SQLite, então `ticket` é recriada (receita do SQLite: tabela nova, cópia, DROP, RENAME). `migrar` desliga as FKs
+  // e confere `foreign_key_check` antes do COMMIT, porque com FK ligada o DROP falha.
+  `ALTER TABLE issue ADD COLUMN cancelada_em TEXT CHECK (cancelada_em IS NULL OR fase <> 'concluida');
+  CREATE TABLE ticket_novo (
+    id              INTEGER PRIMARY KEY,
+    issue           INTEGER NOT NULL REFERENCES issue(id),
+    etapa           TEXT NOT NULL CHECK (etapa IN (${listaSql(Etapa)})),
+    titulo          TEXT NOT NULL CHECK (length(titulo) BETWEEN 1 AND 120),
+    descricao       TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL CHECK (status IN (${listaSql(StatusTicket)})),
+    origem          TEXT NOT NULL CHECK (origem IN (${listaSql(TipoAtor)})),
+    origem_ticket   INTEGER REFERENCES ticket(id),
+    modelo_provedor TEXT,
+    modelo_nome     TEXT,
+    instrucao       TEXT,
+    erro            TEXT,
+    criado_em       TEXT NOT NULL,
+    concluido_em    TEXT,
+    CHECK ((status = 'falhou') = (erro IS NOT NULL)),
+    CHECK ((status = 'concluido') = (concluido_em IS NOT NULL)),
+    CHECK (origem <> 'agente' OR origem_ticket IS NOT NULL),
+    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))
+  );
+  INSERT INTO ticket_novo SELECT * FROM ticket;
+  DROP TABLE ticket;
+  ALTER TABLE ticket_novo RENAME TO ticket;
+  CREATE UNIQUE INDEX ux_ticket_em_execucao ON ticket(issue) WHERE status = 'em_execucao';
+  CREATE UNIQUE INDEX ux_ticket_etapa_unica ON ticket(issue, etapa) WHERE etapa <> 'desenvolvimento' AND status <> 'concluido';
+  -- As dependentes de uma issue (busca reversa do cancelamento).
+  CREATE INDEX ix_issue_dep_dep ON issue_dep(dep);`,
 ];

@@ -108,6 +108,7 @@ const Issue = z.object({
   criadaEm: Instante,
   concluidaEm: Instante.optional(),
   arquivadaEm: Instante.optional(),
+  canceladaEm: Instante.optional(),
 });
 ```
 
@@ -119,6 +120,7 @@ const Issue = z.object({
 | `deps` | Issues de qualquer projeto. Sem ciclo e sem autorreferência. Nenhum ticket autônomo da issue roda enquanto alguma dependência não estiver `concluida`. |
 | `concluidaEm` | Presente se e somente se `fase = concluida`. |
 | `arquivadaEm` | Só em issue `concluida`. Arquivar não apaga nada; a issue some do board e continua acessível por opção explícita. |
+| `canceladaEm` | Só em issue que não está `concluida` (C22). A fase fica onde parou; a issue cancelada não muda mais e nada dela é apagado. |
 
 ### 3.5 Ticket
 
@@ -129,7 +131,7 @@ const Ticket = z.object({
   etapa: Etapa,
   titulo: Titulo,
   descricao: Markdown.default(""),
-  status: z.enum(["aberto", "em_execucao", "concluido", "falhou"]),
+  status: z.enum(["aberto", "em_execucao", "concluido", "falhou", "fechado", "cancelado"]),
   origem: z.enum(["fabriquinha", "agente", "auditor"]),
   origemTicket: Id.optional(),
   modelo: Modelo.optional(),
@@ -148,6 +150,7 @@ const Ticket = z.object({
 | `instrucao` | Resposta do Auditor a uma falha (C9). Abre o prompt da próxima execução e é consumida por C5 (F4, 6.4). |
 | `erro` | Presente se e somente se `status = falhou`. |
 | `concluidoEm` | Presente se e somente se `status = concluido`. |
+| `fechado`, `cancelado` | Só pelo C22: `fechado` é o ticket `aberto` ou `falhou` de uma issue cancelada (sem `erro`); `cancelado` é o que estava `em_execucao`. Não voltam a mudar. |
 
 A ordem de execução dos tickets de desenvolvimento é a ordem de criação; não há dependência entre tickets.
 
@@ -269,6 +272,7 @@ stateDiagram-v2
     aprovacao_pr --> ajuste_pr: gate PR reprovado
     ajuste_pr --> desenvolvimento: sessão em aberto criou tickets
     concluida --> [*]
+    note right of registro: qualquer fase, menos concluida, pode ser cancelada (C22); a fase fica onde parou
 ```
 
 ### 4.2 Status do ticket
@@ -280,7 +284,12 @@ stateDiagram-v2
     em_execucao --> concluido: concluirTicket / decidirRegistro aprovado
     em_execucao --> falhou: falharTicket
     falhou --> aberto: reabrirTicket (Auditor)
+    aberto --> fechado: cancelarIssue
+    falhou --> fechado: cancelarIssue
+    em_execucao --> cancelado: cancelarIssue
     concluido --> [*]
+    fechado --> [*]
+    cancelado --> [*]
 ```
 
 Ticket interativo (`registro`, `sessao`) nunca falha: quando o pi sai sem concluir, o ticket continua `em_execucao` e o Auditor retoma a sessão depois.
@@ -328,6 +337,10 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 | C19 | `registrarProjeto(projeto)` / `editarProjeto(projeto)` | Auditor | schema 3.3; F5 já conferiu repo, branch e remoto; F4 já conferiu os modelos | Grava. |
 | C21 | `iniciarConsulta(ticket, sessaoPi)` | Auditor | o ticket já tem sessão principal; nenhuma execução do ticket em andamento (índice do F2); `sessaoPi` é a nova sessão copiada dela | Nova Execução em modo `consulta`. O ticket não muda. |
 | C20 | `definirModeloTicket(ticket, modelo \| null)` | Auditor | ticket não concluído e sem execução em andamento | Define ou remove o override; vale a partir da próxima execução. |
+| C22 | `cancelarIssue(issue)` | Auditor | fase ≠ `concluida`; ainda não cancelada | `canceladaEm`; tickets `aberto` e `falhou` viram `fechado` (sem `erro`), o `em_execucao` vira `cancelado`; execução `em_andamento` termina em `falha` com o erro `issue cancelada pelo Auditor`. A F2 aplica o mesmo comando a toda issue que dependa dela, direta ou indiretamente e de qualquer projeto, numa transação só; as issues de que ela depende não mudam. |
+
+Depois do C22 a F2 recusa qualquer outro comando sobre a issue (`a I-n está cancelada e não muda mais`).
+Tokens, custo, tickets, execuções, decisões e evidências continuam consultáveis e contando nas métricas.
 
 ### 5.1 Regras de C7 por etapa
 
@@ -351,6 +364,7 @@ Valem depois de qualquer comando; F2 reforça as que cabem em constraint de banc
 5. Fora da fase `registro`, a issue tem título e tipo.
 6. `arquivadaEm` implica `fase = concluida`.
 7. Toda decisão de gate humano tem `por = auditor`; a de revisão tem `por = agente`.
+8. `canceladaEm` implica `fase ≠ concluida`; issue cancelada não tem ticket `aberto`, `falhou` ou `em_execucao`, nem execução `em_andamento`.
 
 ## 7. Erros
 
@@ -368,5 +382,4 @@ O agente lê esse texto e corrige sem precisar adivinhar (Feedback.txt, item 1).
 - O agente roda com o mesmo usuário do sistema operacional que a Fabriquinha.
   O CLI não tem comando de Auditor (D9), mas um agente determinado poderia ler o `web.url` com o token ou escrever direto no banco.
   Isolamento de verdade exige rodar o pi com outro usuário ou em contêiner; fica fora desta versão.
-- Não há cancelamento nem exclusão de issue (Q2).
-  Uma issue registrada por engano fica parada na fase em que estiver.
+- Não há exclusão de issue (Q2). Uma issue registrada por engano se cancela (C22), mas continua no histórico.

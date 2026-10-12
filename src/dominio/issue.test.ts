@@ -1,9 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import type { Agregado, Ator, Contexto, Execucao, Issue, ModoExecucao } from "./agregado.ts";
+import {
+  type Agregado,
+  type Ator,
+  CANCELADA,
+  type Contexto,
+  type Execucao,
+  exigirNaoCancelada,
+  type Issue,
+  type ModoExecucao,
+  type Ticket,
+} from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { adicionarDependencia, arquivarConcluidas, editarIssue, registrarIssue, removerDependencia } from "./issue.ts";
+import {
+  adicionarDependencia,
+  arquivarConcluidas,
+  cancelarIssue,
+  editarIssue,
+  registrarIssue,
+  removerDependencia,
+} from "./issue.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const auditor: Ator = { tipo: "auditor" };
@@ -266,4 +283,61 @@ test("C18 arquiva só as concluídas ainda não arquivadas e é só do Auditor",
     () => arquivarConcluidas(issues, agente(34), contexto()),
     "só o Auditor pode arquivar issues (peça ao Auditor pelo web)",
   );
+});
+
+test("C22 cancela a issue em qualquer fase menos concluída e mantém a fase", () => {
+  for (const fase of ["registro", "desenho", "desenvolvimento", "revisao", "aprovacao_pr", "ajuste_pr"] as const) {
+    const depois = cancelarIssue(base({ fase }), auditor, contexto());
+    assert.equal(depois.issue.canceladaEm, AGORA, fase);
+    assert.equal(depois.issue.fase, fase);
+  }
+});
+
+test("C22 fecha os tickets abertos e falhos sem erro, cancela o em execução e termina a execução em andamento", () => {
+  const ag = base();
+  const molde = ag.tickets[1] ?? assert.fail("ticket 35 ausente");
+  const falho: Ticket = { ...molde, id: 36, status: "falhou", erro: "caiu" };
+  const feito: Ticket = { ...molde, id: 37, status: "concluido", concluidoEm: AGORA };
+  const depois = cancelarIssue({ ...ag, tickets: [...ag.tickets, falho, feito] }, auditor, contexto());
+
+  assert.deepEqual(
+    depois.tickets.map((t) => [t.id, t.status, t.erro]),
+    [
+      [34, "cancelado", undefined],
+      [35, "fechado", undefined],
+      [36, "fechado", undefined],
+      [37, "concluido", undefined],
+    ],
+  );
+  assert.deepEqual(depois.execucoes, [
+    ag.execucoes[0],
+    { ...execucao(7, "interativo"), resultado: "falha", erro: CANCELADA, terminadaEm: AGORA },
+  ]);
+  assert.equal(CANCELADA, "issue cancelada pelo Auditor");
+});
+
+test("C22 é só do Auditor e recusa issue concluída e já cancelada", () => {
+  escopo(
+    () => cancelarIssue(base(), agente(34), contexto()),
+    "só o Auditor pode cancelar a I-1 (peça ao Auditor pelo web)",
+  );
+  escopo(
+    () => cancelarIssue(base(), fabriquinha, contexto()),
+    "só o Auditor pode cancelar a I-1 (peça ao Auditor pelo web)",
+  );
+  regra(
+    () => cancelarIssue(base({ fase: "concluida", concluidaEm: AGORA }), auditor, contexto()),
+    "a I-1 está concluída e não pode ser cancelada (ela já terminou o processo)",
+  );
+  regra(
+    () => cancelarIssue(base({ canceladaEm: AGORA }), auditor, contexto()),
+    "a I-1 já está cancelada (não há mais nada a fazer)",
+  );
+});
+
+test("exigirNaoCancelada recusa a issue cancelada", () => {
+  exigirNaoCancelada(base());
+  regra(() => {
+    exigirNaoCancelada(base({ canceladaEm: AGORA }));
+  }, "a I-1 está cancelada e não muda mais (registre uma nova issue se precisar)");
 });

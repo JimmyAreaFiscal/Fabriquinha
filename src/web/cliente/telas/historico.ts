@@ -34,6 +34,7 @@ const RESULTADOS: Record<Resultado, [rotulo: string, pilula: string]> = {
   concluida: ["concluída", "pill-ok"],
   falha: ["falha", "pill-falha"],
   abortada: ["abortada", "pill-neutro"],
+  cancelada: ["cancelada", "pill-neutro"],
 };
 
 const selecionado = (valor: string, atual: string): string => (valor === atual ? " selected" : "");
