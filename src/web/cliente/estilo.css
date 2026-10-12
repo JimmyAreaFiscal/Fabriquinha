@@ -1940,6 +1940,17 @@ input.erro {
 .propostos .mono {
   width: 56px;
 }
+/*
+ * A linha escondida (a do ticket em edição, ou a edição dos outros) sai da tela sem sair do cálculo das colunas: com
+ * `display: none`, a largura do texto dela deixaria de contar e as colunas das outras linhas se deslocariam.
+ */
+.propostos tr[hidden] {
+  display: table-row;
+  visibility: collapse;
+}
+.propostos tr[data-proposto][hidden] td {
+  border-bottom: 0;
+}
 /* A última linha visível é a do último ticket; a edição dele, escondida, vem depois. */
 .propostos tr:nth-last-child(2) td {
   border-bottom: 0;

@@ -91,8 +91,16 @@ test("aprova o desenho com um ticket editado, outro com o modelo trocado, um rem
   await expect(gate.getByRole("option", { name: "padrão · claude-sonnet-5-5" }).first()).toBeAttached();
   await expect(gate.getByRole("button", { name: "Reprovar" })).toBeDisabled();
 
-  // Editar T-3: o Cancelar volta à linha sem gravar; o Salvar grava.
+  // A linha em edição não desloca as colunas das outras: o título do T-4, o mais largo, continua contando.
   const t3 = gate.locator('tr[data-proposto="3"]');
+  const colunas = () => t3.locator("td").evaluateAll((tds) => tds.map((td) => td.getBoundingClientRect().x));
+  const antes = await colunas();
+  await gate.locator('tr[data-proposto="4"]').getByRole("button", { name: "Editar" }).click();
+  await expect(gate.locator('tr[data-edicao="4"]')).toBeVisible();
+  expect(await colunas()).toEqual(antes);
+  await gate.locator('tr[data-edicao="4"]').getByRole("button", { name: "Cancelar" }).click();
+
+  // Editar T-3: o Cancelar volta à linha sem gravar; o Salvar grava.
   await t3.getByRole("button", { name: "Editar" }).click();
   const edicao = gate.locator('tr[data-edicao="3"]');
   await expect(t3).toBeHidden();
