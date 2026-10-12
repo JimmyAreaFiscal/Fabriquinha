@@ -1,0 +1,86 @@
+// Apoio dos testes de ponta a ponta: cada teste sobe a sua Fabriquinha, com a raiz temporária, uma porta livre e o pi
+// falso (pi-falso.ts), e recebe o navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`.
+import { test as base, type Page } from "@playwright/test";
+import { type ChildProcess, spawn } from "node:child_process";
+import { once } from "node:events";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { setTimeout as dormir } from "node:timers/promises";
+
+export interface Fabriquinha {
+  /** A raiz da instância: banco, `web.url`, sessões e execuções. */
+  raiz: string;
+  /** `http://127.0.0.1:<porta>`, para `page.goto(`${base}/config`)`. */
+  base: string;
+  /** O link de entrada com o token, lido de `web.url`. */
+  link: string;
+}
+
+async function portaLivre(): Promise<number> {
+  const s = createServer().listen(0, "127.0.0.1");
+  await once(s, "listening");
+  const { port } = s.address() as { port: number };
+  s.close();
+  await once(s, "close");
+  return port;
+}
+
+/** Para o serviço com SIGTERM; se não sair em 5 s, SIGKILL. */
+async function parar(servico: ChildProcess): Promise<void> {
+  if (servico.exitCode !== null) return;
+  const saiu = once(servico, "exit");
+  servico.kill("SIGTERM");
+  if (await Promise.race([saiu.then(() => true), dormir(5000).then(() => false)])) return;
+  servico.kill("SIGKILL");
+  await saiu;
+}
+
+export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
+  // eslint-disable-next-line no-empty-pattern -- o Playwright lê as dependências da desestruturação; esta não tem.
+  fabriquinha: async ({}, use) => {
+    const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-e2e-"));
+    // git e pi sem a configuração do usuário da máquina.
+    const gitconfig = join(raiz, "gitconfig");
+    writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
+    const porta = await portaLivre();
+    let log = "";
+    const servico = spawn(
+      process.execPath,
+      ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "servidor.ts"), raiz, "/opt/pi-fabriquinha"],
+      {
+        env: {
+          ...process.env,
+          FABRIQUINHA_PORTA: String(porta),
+          FABRIQUINHA_PI: join(import.meta.dirname, "pi-falso.ts"),
+          PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
+          GIT_CONFIG_GLOBAL: gitconfig,
+          GIT_CONFIG_NOSYSTEM: "1",
+        },
+        stdio: ["ignore", "inherit", "pipe"],
+      },
+    );
+    servico.stderr.on("data", (parte: Buffer) => {
+      log += parte.toString();
+    });
+    try {
+      const arquivo = join(raiz, "web.url");
+      for (let i = 0; !existsSync(arquivo); i++) {
+        if (servico.exitCode !== null || i > 200) throw new Error(`a Fabriquinha não subiu:\n${log}`);
+        await dormir(50);
+      }
+      await use({ raiz, base: `http://127.0.0.1:${String(porta)}`, link: readFileSync(arquivo, "utf8") });
+    } finally {
+      await parar(servico);
+      if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
+      rmSync(raiz, { recursive: true, force: true });
+    }
+  },
+  pagina: async ({ page, fabriquinha }, use) => {
+    await page.goto(fabriquinha.link);
+    await use(page);
+  },
+});
+
+export { expect } from "@playwright/test";

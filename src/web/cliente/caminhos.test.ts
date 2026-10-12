@@ -1,0 +1,36 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { casar, rotear } from "./caminhos.ts";
+
+test("casar devolve os parâmetros decodificados de cada segmento", () => {
+  assert.deepEqual(casar("/api/sessoes", "/api/sessoes"), {});
+  assert.deepEqual(casar("/projects/:projeto/issues/:issue", "/projects/loja%20api/issues/I-3"), {
+    projeto: "loja api",
+    issue: "I-3",
+  });
+});
+
+test("casar recusa outro tamanho, outro segmento fixo, parâmetro vazio e escape malformado", () => {
+  assert.equal(casar("/projects/:projeto", "/projects"), undefined);
+  assert.equal(casar("/projects/:projeto", "/projects/a/b"), undefined);
+  assert.equal(casar("/projects/:projeto", "/project/a"), undefined);
+  assert.equal(casar("/projects/:projeto", "/projects/"), undefined);
+  assert.equal(casar("/projects/:projeto", "/projects/%E0%A4%A"), undefined);
+});
+
+test("rotear escolhe a página do F7 §4.4 pelo caminho", () => {
+  assert.deepEqual(rotear("/home"), { pagina: "inicio", params: {} });
+  assert.deepEqual(rotear("/projects"), { pagina: "projeto", params: {} });
+  assert.deepEqual(rotear("/projects/loja"), { pagina: "projeto", params: { projeto: "loja" } });
+  assert.deepEqual(rotear("/projects/loja/issues/I-3"), { pagina: "issue", params: { projeto: "loja", issue: "I-3" } });
+  assert.deepEqual(rotear("/metrics"), { pagina: "metricas", params: {} });
+  assert.deepEqual(rotear("/history"), { pagina: "historico", params: {} });
+  assert.deepEqual(rotear("/sessions/abc"), { pagina: "chat", params: { sessao: "abc" } });
+  assert.deepEqual(rotear("/config"), { pagina: "configuracao", params: {} });
+  assert.equal(rotear("/nada"), undefined);
+});
+
+test("casar trata o ponto do padrão como literal", () => {
+  assert.deepEqual(casar("/api/sessoes/:sessao/historico.md", "/api/sessoes/s1/historico.md"), { sessao: "s1" });
+  assert.equal(casar("/api/sessoes/:sessao/historico.md", "/api/sessoes/s1/historicoXmd"), undefined);
+});

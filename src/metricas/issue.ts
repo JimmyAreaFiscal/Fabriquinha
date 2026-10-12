@@ -2,7 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { type Agregado, type Decisao, GateDecisao, type NomeComando } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { Etapa, type Fase, Id, Instante } from "../dominio/primitivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { arquivoDaSessao, noLog } from "../persistencia/execucoes.ts";
@@ -173,7 +173,7 @@ function semSessao(raiz: string, sessao: string): boolean {
  */
 export function metricasDaIssue(banco: DatabaseSync, issue: Id): MetricasIssue {
   const ag = agregado(banco, issue);
-  if (!ag) throw new ErroDeRegra(`a issue I-${String(issue)} não existe`, "confira o número da issue");
+  if (!ag) throw new ErroDeInexistente(`a issue I-${String(issue)} não existe`, "confira o número da issue");
   const uso = Map.groupBy(usoDaIssue(banco, issue), (l) => l.etapa);
   const etapaDoTicket = new Map(ag.tickets.map((t) => [t.id, t.etapa]));
   const comandos = comandosDoAuditor(banco, issue);

@@ -158,7 +158,7 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   const raiz = novaRaiz();
   const s = await subir(raiz);
   const porta = String(portaDoServico());
-  assert.equal((await fetch(`http://127.0.0.1:${porta}/`)).status, 404, "a porta só trava; as rotas são do F7");
+  assert.match(await (await fetch(`http://127.0.0.1:${porta}/home`)).text(), /^<!doctype html>/, "a porta serve o web");
   issue(s.banco, 1, "desenho");
   ticket(s.banco, 1, 1, "desenho", "em_execucao");
   execucao(s.banco, 1, 1, "autonomo");

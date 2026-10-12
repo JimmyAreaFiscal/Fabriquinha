@@ -19,7 +19,7 @@ import { delimiter, dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import type { Ator } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { iniciarExecucao } from "../dominio/execucao.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
@@ -402,7 +402,7 @@ test("sem SONAR_HOST_URL ou SONAR_TOKEN no ambiente, ou com ticket inexistente: 
   await falha(banco, ambiente);
   await assert.rejects(
     coletarSonar(banco, 9),
-    new ErroDeRegra("o ticket T-9 não existe", "confira o número do ticket"),
+    new ErroDeInexistente("o ticket T-9 não existe", "confira o número do ticket"),
   );
   assert.deepEqual(pedidos, []);
   banco.close();

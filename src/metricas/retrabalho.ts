@@ -1,7 +1,7 @@
 // Retrabalho (F6 §4): que linhas escritas por um ticket de desenvolvimento foram removidas ou reescritas depois, por
 // commit de outro ticket (4.2) ou por commit humano na branch base (4.4).
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { commitRegistrado, ticketDoCommit } from "../persistencia/commits.ts";
@@ -91,7 +91,9 @@ async function reescritas(banco: DatabaseSync, repo: string, pai: string, sha: s
 export async function registrarRetrabalho(banco: DatabaseSync, ticket: Id, sha: string): Promise<void> {
   const ag = agregadoDoTicket(banco, ticket);
   const p = ag && lerProjeto(banco, ag.issue.projeto);
-  if (p === undefined) throw new ErroDeRegra(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
+  if (p === undefined) {
+    throw new ErroDeInexistente(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
+  }
   const linhas = await naFilaDoProjeto(raizDo(banco), p.nome, () => reescritas(banco, p.repo, `${sha}^`, sha));
   // Um commit por ticket (D4): o pai nunca tem linha do próprio ticket; a guarda só protege o CHECK do F6 §7.
   linhas.delete(ticket);
@@ -106,7 +108,7 @@ export async function registrarRetrabalho(banco: DatabaseSync, ticket: Id, sha: 
  */
 export async function varrerBase(banco: DatabaseSync, projeto: string): Promise<void> {
   const p = lerProjeto(banco, projeto);
-  if (p === undefined) throw new ErroDeRegra(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
+  if (p === undefined) throw new ErroDeInexistente(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
   const ref = `refs/remotes/origin/${p.branchBase}`;
   await naFilaDoProjeto(raizDo(banco), projeto, async () => {
     // Refspec explícita, como na criação de worktree: um branchBase começando com "-" nunca vira opção do git.

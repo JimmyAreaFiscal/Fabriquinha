@@ -1,5 +1,5 @@
-// O serviço de longa duração (F4 §2, §4, §7): a porta como trava de instância única, o reinício que encerra as
-// execuções de uma instância anterior, o agendador e o "Executar agora".
+// O serviço de longa duração (F4 §2, §4, §7): a porta como trava de instância única e o web (F7 §4), o reinício que
+// encerra as execuções de uma instância anterior, o agendador e o "Executar agora".
 import { createServer } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
@@ -20,6 +20,7 @@ import {
   ticketsAutonomosEmExecucao,
 } from "../persistencia/servico.ts";
 import { sinalNoGrupo } from "../processo.ts";
+import { servirWeb } from "../web/servidor.ts";
 import { executarAutonomo } from "./autonoma.ts";
 
 const REINICIADO = "serviço reiniciado";
@@ -61,8 +62,8 @@ function recuperar(banco: DatabaseSync): void {
  */
 export async function iniciarServico(raiz: string, pacote: string): Promise<Servico> {
   const porta = portaDoServico();
-  // ponytail: a porta só trava a instância; as rotas e o token do web entram com o F7 (ticket 24).
-  const web = createServer((_, resposta) => resposta.writeHead(404).end());
+  // O tratador do web (F7 §4.1) entra depois do banco aberto; antes disso, ninguém tem o link de entrada.
+  const web = createServer();
   await new Promise<void>((pronto, falhou) => {
     web.once("error", (erro) => {
       falhou(
@@ -78,6 +79,7 @@ export async function iniciarServico(raiz: string, pacote: string): Promise<Serv
   try {
     aberto = abrir(raiz);
     recuperar(aberto);
+    web.on("request", servirWeb({ banco: aberto, porta }));
   } catch (error_) {
     aberto?.close();
     web.close();

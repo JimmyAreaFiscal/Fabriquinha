@@ -10,6 +10,11 @@ export class ErroDeRegra extends Error {
   }
 }
 
+/** O ID pedido (issue, ticket, sessão, execução, projeto) não existe: um ErroDeRegra que o web responde com 404. */
+export class ErroDeInexistente extends ErroDeRegra {
+  override name = "ErroDeInexistente";
+}
+
 /** O ator não pode pedir o comando. */
 export class ErroDeEscopo extends Error {
   override name = "ErroDeEscopo";
@@ -21,6 +26,12 @@ export class ErroDeEscopo extends Error {
 /** `valor`, ou ErroDeRegra se ele não existe. */
 export function existe<T>(valor: T | undefined, problema: string, solucao: string): T {
   if (valor === undefined) throw new ErroDeRegra(problema, solucao);
+  return valor;
+}
+
+/** `valor`, ou ErroDeInexistente se o ID pedido não existe. */
+export function encontrado<T>(valor: T | undefined, problema: string, solucao: string): T {
+  if (valor === undefined) throw new ErroDeInexistente(problema, solucao);
   return valor;
 }
 

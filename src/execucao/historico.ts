@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { existe } from "../dominio/erros.ts";
+import { encontrado } from "../dominio/erros.ts";
 import type { Agregado } from "../dominio/agregado.ts";
 import { naSessaoPrincipal, ticketDe } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
@@ -89,10 +89,10 @@ function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
  */
 export function exportarHistorico(banco: DatabaseSync, sessao: string): string {
   const erro = [`a sessão ${sessao} não existe`, "confira o endereço do chat"] as const;
-  const ag = existe(agregado(banco, existe(issueDaSessao(banco, sessao), ...erro)), ...erro);
+  const ag = encontrado(agregado(banco, encontrado(issueDaSessao(banco, sessao), ...erro)), ...erro);
   const execucoes = ag.execucoes.filter((e) => e.sessaoPi === sessao);
-  const primeira = existe(execucoes[0], ...erro);
-  const ultima = existe(execucoes.at(-1), ...erro);
+  const primeira = encontrado(execucoes[0], ...erro);
+  const ultima = encontrado(execucoes.at(-1), ...erro);
   const ticket = ticketDe(ag, ultima.ticket);
   const raiz = raizDo(banco);
   const mensagens = lerConversa(raiz, sessao).flatMap((entrada) => {

@@ -2,7 +2,7 @@
 // janela da execução e regrava as linhas de `uso` dela.
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { escrever, raizDo } from "../persistencia/banco.ts";
 import { anotar, arquivoDaSessao, logDaExecucao, noLog } from "../persistencia/execucoes.ts";
@@ -157,7 +157,7 @@ function somar(texto: string, inicio: number, fim: number): Soma[] {
  */
 export function coletarUso(banco: DatabaseSync, execucao: Id): void {
   const e = banco.prepare("SELECT sessao_pi, iniciada_em, terminada_em FROM execucao WHERE id = ?").get(execucao);
-  if (!e) throw new ErroDeRegra(`a execução E-${String(execucao)} não existe`, "confira o número da execução");
+  if (!e) throw new ErroDeInexistente(`a execução E-${String(execucao)} não existe`, "confira o número da execução");
   if (e.terminada_em === null) {
     throw new ErroDeRegra(`a E-${String(execucao)} ainda está em andamento`, "colete o uso depois do C6");
   }

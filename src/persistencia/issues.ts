@@ -12,7 +12,7 @@ import {
   type NomeComando,
   Ticket,
 } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente } from "../dominio/erros.ts";
 import * as dominio from "../dominio/issue.ts";
 import type { Id, Modelo } from "../dominio/primitivos.ts";
 import { escrever, novoId } from "./banco.ts";
@@ -303,7 +303,7 @@ export function comIssue(
 ): Agregado {
   return escrever(banco, () => {
     const antes = carregar(banco, issue);
-    if (!antes) throw new ErroDeRegra(`a issue I-${String(issue)} não existe`, "confira o número da issue");
+    if (!antes) throw new ErroDeInexistente(`a issue I-${String(issue)} não existe`, "confira o número da issue");
     const ctx = contexto(banco);
     const depois = comando(antes, ctx);
     gravarDiferenca(banco, antes, depois);

@@ -7,7 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
 import { type Agregado, FABRIQUINHA } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { registrarEvidencia } from "../dominio/evidencia.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
@@ -174,7 +174,9 @@ export async function coletarSonar(
 ): Promise<Agregado> {
   const ag = agregadoDoTicket(banco, ticket);
   const config = ag && projeto(banco, ag.issue.projeto);
-  if (!ag || !config) throw new ErroDeRegra(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
+  if (!ag || !config) {
+    throw new ErroDeInexistente(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
+  }
   const issue = ag.issue.id;
   const {
     nome,

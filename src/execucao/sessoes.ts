@@ -13,7 +13,7 @@ import {
   type Ticket,
 } from "../dominio/agregado.ts";
 import { concluirTicket } from "../dominio/conclusao.ts";
-import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
+import { encontrado, ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import { evidenciasFaltando } from "../dominio/evidencia.ts";
 import {
   iniciarConsulta,
@@ -204,7 +204,7 @@ export interface FiltroSessoes {
 const tarefas = new Map<Id, { issue: Id; tarefa: Promise<void> }>();
 
 const agregadoDa = (banco: DatabaseSync, issue: Id): Agregado =>
-  existe(agregado(banco, issue), `a issue I-${String(issue)} não existe`, "confira o número da issue");
+  encontrado(agregado(banco, issue), `a issue I-${String(issue)} não existe`, "confira o número da issue");
 
 /**
  * O agregado depois do C6 das execuções interativas da issue cujo pi está parando: sem isso, a sessão pareceria
@@ -220,7 +220,7 @@ const estadoNoBanco = (banco: DatabaseSync, ag: Agregado, sessao: string): InfoS
   estadoDaSessao(ag, sessao, { viva: situacao(sessao), edicaoDoAgente: ultimaEdicaoDoAgente(banco, ag.issue.id) });
 
 const issueDe = (banco: DatabaseSync, sessao: string): Id =>
-  existe(issueDaSessao(banco, sessao), `a sessão ${sessao} não existe`, "confira o endereço do chat");
+  encontrado(issueDaSessao(banco, sessao), `a sessão ${sessao} não existe`, "confira o endereço do chat");
 
 /**
  * F4 §5.3: as sessões do escopo, da que está assim há mais tempo para a mais recente.
@@ -287,7 +287,7 @@ export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Ch
 }
 
 const issueDoTicket = (banco: DatabaseSync, ticket: Id): Id =>
-  existe(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número").issue.id;
+  encontrado(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número").issue.id;
 
 /**
  * F4 §6.6: C5 interativo na sessão principal do ticket e, em segundo plano, worktree, pi e C6 quando o processo

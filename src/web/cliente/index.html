@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fabriquinha</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/static/estilo.css" />
+    <script type="module" src="/static/app.ts"></script>
+  </head>
+  <body>
+    <header class="nav" data-navegacao></header>
+    <p class="aviso" role="alert" data-aviso hidden></p>
+    <main class="pagina"></main>
+    <dialog class="caixa" data-caixa aria-labelledby="caixa-titulo">
+      <div class="caixa-cabeca">
+        <h2 id="caixa-titulo" data-caixa-titulo>Caixa</h2>
+        <span class="muted" data-caixa-meta></span>
+        <div class="direita">
+          <a class="link" target="_blank" rel="noopener" data-caixa-aba hidden>abrir em nova aba ↗</a>
+          <a class="link" download data-caixa-baixar hidden>baixar</a>
+          <button type="button" class="btn btn-icone" data-fechar title="Fechar (Esc)" aria-label="Fechar" autofocus>
+            ✕
+          </button>
+        </div>
+      </div>
+      <div class="caixa-corpo" data-caixa-corpo></div>
+    </dialog>
+  </body>
+</html>

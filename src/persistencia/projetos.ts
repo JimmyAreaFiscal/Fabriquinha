@@ -1,7 +1,7 @@
 // Gravação e leitura de projetos (C19: registrar e editar; F2 §4 e §6).
 // As conferências externas (F5 §2, F4 §9) rodam antes, fora daqui.
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { Projeto } from "../dominio/projeto.ts";
 import { escrever } from "./banco.ts";
 
@@ -84,7 +84,7 @@ export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
        testes = $testes, sonar_project_key = $sonar_project_key, fitness = $fitness, modelos = $modelos
      WHERE nome = $nome`,
     (p, mudou) => {
-      if (!mudou) throw new ErroDeRegra(`o projeto ${p.nome} não existe`, "cadastre-o na Configuração");
+      if (!mudou) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre-o na Configuração");
     },
   );
 

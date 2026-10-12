@@ -1,6 +1,6 @@
 // Relatório de produtividade do SDLC de uma issue (F6 §6): recoleta, monta `MetricasIssue` e gera o HTML autocontido.
 import type { DatabaseSync } from "node:sqlite";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeInexistente } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { commitDoTicket } from "../persistencia/commits.ts";
 import { noLog } from "../persistencia/execucoes.ts";
@@ -221,7 +221,7 @@ ${secoes.join("\n")}
  */
 export async function relatorio(banco: DatabaseSync, issue: Id): Promise<{ dados: MetricasIssue; html: string }> {
   const ag = agregado(banco, issue);
-  if (!ag) throw new ErroDeRegra(`a issue I-${String(issue)} não existe`, "confira o número da issue");
+  if (!ag) throw new ErroDeInexistente(`a issue I-${String(issue)} não existe`, "confira o número da issue");
   for (const e of ag.execucoes) if (e.terminadaEm !== undefined) depoisDoC6(banco, e.id);
   for (const t of ag.tickets) {
     const sha = t.etapa === "desenvolvimento" ? commitDoTicket(banco, t.id) : undefined;

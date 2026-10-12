@@ -3,7 +3,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { concluirTicket } from "../dominio/conclusao.ts";
-import { existe, mensagem } from "../dominio/erros.ts";
+import { encontrado, mensagem } from "../dominio/erros.ts";
 import { falharTicket, terminarExecucao, ticketDe } from "../dominio/execucao.ts";
 import { type Id, motivo } from "../dominio/primitivos.ts";
 import { antesDoPi, depoisDoPi } from "../evidencias/coleta.ts";
@@ -28,7 +28,7 @@ export interface OpcoesAutonoma {
  * sem lançar nada; dali em diante, toda falha vira C6 + C8, e a promessa só rejeita se o próprio banco falhar.
  */
 export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: OpcoesAutonoma): Promise<void> {
-  const issue = existe(
+  const issue = encontrado(
     agregadoDoTicket(banco, ticket),
     `o ticket T-${String(ticket)} não existe`,
     "confira o número do ticket",

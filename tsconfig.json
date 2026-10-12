@@ -15,5 +15,5 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["src", "fitness", "integracao"]
+  "include": ["src", "fitness", "integracao", "e2e", "playwright.config.ts"]
 }
