@@ -5,10 +5,27 @@ import type { Id, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoProjeto, ListaDoProjeto } from "../../rotas/projeto.ts";
-import { escapar, FASES, GATES, ha, STATUS_DO_TICKET, trilho } from "../render.ts";
+import {
+  caminhoDaIssue,
+  caminhoDaSessao,
+  diaMes,
+  escapar,
+  estadoDoTrilho,
+  ETAPAS_DO_PROCESSO,
+  etapa,
+  FASES,
+  GATES,
+  ha,
+  MOTIVOS,
+  nomeDoModelo,
+  PILULA_DO_STATUS,
+  plural,
+  rotuloIssue,
+  rotuloTicket,
+  STATUS_DO_TICKET,
+  trilho,
+} from "../render.ts";
 import type { ProjetoListado } from "./configuracao.ts";
-import { ETAPAS_DO_PROCESSO, MOTIVOS } from "./inicio.ts";
-import { caminhoDaIssue, estadoDoTrilho, etapa } from "./issue.ts";
 import { cardsDoMes } from "./metricas.ts";
 
 export const caminhoDoProjeto = (nome: string): string => `/projects/${encodeURIComponent(nome)}`;
@@ -30,8 +47,6 @@ export const SEM_PROJETOS =
 export const projetoNaoEncontrado = (nome: string): string =>
   `<div class="cabeca-pagina"><h1>Projeto não encontrado</h1></div><p class="muted">O projeto ${escapar(nome)} não está cadastrado. <a class="link" href="/projects">Ver os projetos</a></p>`;
 
-const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
-
 /** A confirmação do **Arquivar concluídas** (C18): quantas e que nada é apagado. */
 export const confirmacaoDeArquivar = (n: number, projeto: string): string =>
   `<dialog class="dialogo" data-dialogo aria-labelledby="titulo-arquivar"><h2 id="titulo-arquivar">Arquivar concluídas</h2><p>${
@@ -40,8 +55,7 @@ export const confirmacaoDeArquivar = (n: number, projeto: string): string =>
       : `${String(n)} issues concluídas de ${escapar(projeto)} serão arquivadas. Elas saem desta lista e continuam acessíveis`
   } em "Mostrar arquivadas". Nada é apagado.</p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-perigo-cheio" data-confirmar>Arquivar</button></form></dialog>`;
 
-const dia = (instante: string): string =>
-  new Date(instante).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+const dia = (instante: string): string => diaMes(new Date(instante));
 
 /** Quando a issue saiu do andamento: arquivada ou concluída. */
 function quando(i: IssueDoProjeto): string {
@@ -55,7 +69,7 @@ function sessao(s: InfoSessao, agora: Date): string {
     s.estado === "rodando"
       ? ["pill-rodando", s.modo === "consulta" ? "Consulta" : "Rodando"]
       : [s.motivo === "falha" ? "pill-falha" : "pill-aguarda", MOTIVOS[s.motivo ?? "conversa"].titulo];
-  return `<a class="chat" href="/sessions/${encodeURIComponent(s.sessao)}"><span class="pill ${pill}">${rotulo}</span><span class="muted quando">${ha(s.desde, agora)}</span><span class="ir">chat →</span></a>`;
+  return `<a class="chat" href="${caminhoDaSessao(s.sessao)}"><span class="pill ${pill}">${rotulo}</span><span class="muted quando">${ha(s.desde, agora)}</span><span class="ir">chat →</span></a>`;
 }
 
 /** A sessão que dá a cor da linha: a que falhou, depois a que aguarda, depois a que roda. */
@@ -66,7 +80,7 @@ const prioridade = (s: InfoSessao): number => {
 
 /** O modelo do ticket: o override (C20) com ★, ou o da etapa no projeto, ou o padrão do pi. */
 function modelo(t: Ticket, projeto: ProjetoListado | undefined): string {
-  const nome = (m: Modelo): string => escapar(m.provedor + " / " + m.modelo);
+  const nome = (m: Modelo): string => escapar(nomeDoModelo(m));
   if (t.modelo) {
     return `<span class="modelo override" title="modelo do ticket (override)">${nome(t.modelo)} ★</span>`;
   }
@@ -79,9 +93,9 @@ function gaveta(i: IssueDoProjeto, sessoes: readonly InfoSessao[], projeto: Proj
     const s = sessoes.find((x) => x.ticket === t.id);
     return `<tr${t.status === "concluido" && !s ? ' class="apagada"' : ""}>
       <td class="etapa-cel">${etapa(t.etapa)}</td>
-      <td class="id-cel"><span class="id">T-${String(t.id)}</span></td>
+      <td class="id-cel"><span class="id">${rotuloTicket(t.id)}</span></td>
       <td class="titulo-cel">${escapar(t.titulo)}</td>
-      <td class="status-cel"><span class="pill st-${t.status}">${STATUS_DO_TICKET[t.status]}</span></td>
+      <td class="status-cel"><span class="pill ${PILULA_DO_STATUS[t.status]}">${STATUS_DO_TICKET[t.status]}</span></td>
       <td class="modelo-cel">${modelo(t, projeto)}</td>
       <td class="sessao-cel">${s ? sessao(s, agora) : ""}</td>
     </tr>`;
@@ -89,16 +103,14 @@ function gaveta(i: IssueDoProjeto, sessoes: readonly InfoSessao[], projeto: Proj
   return `<div class="gaveta"><table>${linhas.join("")}</table></div>`;
 }
 
-const rotulo = (id: Id): string => "I-" + String(id);
-
 /** O que fica sob o título: `I-n`, tipo, a dependência que bloqueia, o PR, o progresso e quando saiu do andamento. */
 function marcas(i: IssueDoProjeto): string {
   const feitos = i.tickets.filter((t) => t.status === "concluido").length;
   const largura = String((100 * feitos) / i.tickets.length);
-  const partes = [`<span class="id">${rotulo(i.id)}</span>`];
+  const partes = [`<span class="id">${rotuloIssue(i.id)}</span>`];
   if (i.tipo) partes.push(`<span class="tag">${i.tipo}</span>`);
   if (i.bloqueadaPor.length > 0) {
-    partes.push(`<span class="bloqueia">bloqueada por ${i.bloqueadaPor.map(rotulo).join(", ")}</span>`);
+    partes.push(`<span class="bloqueia">bloqueada por ${i.bloqueadaPor.map(rotuloIssue).join(", ")}</span>`);
   }
   if (i.pr) {
     partes.push(`<a class="pr" href="${escapar(i.pr.url)}" target="_blank" rel="noopener">PR #${escapar(i.pr.id)}</a>`);
@@ -122,7 +134,7 @@ function linha(
   const estado = estadoDoTrilho(sessoes);
   const aberta = gavetas.get(i.id) ?? (estado === "aguarda" || estado === "falha");
   const [destaque] = sessoes.toSorted((a, b) => prioridade(a) - prioridade(b));
-  const id = rotulo(i.id);
+  const id = rotuloIssue(i.id);
   const classes = ["pista-item", estado, !aberta && "fechada", i.fase === "concluida" && "apagada"];
   return `<div class="${classes.filter(Boolean).join(" ")}" data-issue="${String(i.id)}">
     <div class="pista-linha" data-gaveta>

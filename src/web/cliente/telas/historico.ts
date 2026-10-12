@@ -5,9 +5,20 @@ import type { Etapa } from "../../../dominio/primitivos.ts";
 import type { DadosDoChat } from "../../rotas/chat.ts";
 import type { Resultado, SessaoDoHistorico } from "../../rotas/historico.ts";
 import { markdown } from "../markdown.ts";
-import { escapar, MODO_DA_SESSAO } from "../render.ts";
-import { argumentos, blocos, type MensagemPi, modeloDe, textoDe } from "./chat.ts";
-import { custo, duracao, etapa } from "./issue.ts";
+import {
+  caminhoDaSessao,
+  custo,
+  diaMes,
+  duracao,
+  escapar,
+  etapa,
+  hora,
+  MODO_DA_SESSAO,
+  plural,
+  rotuloIssue,
+  rotuloTicket,
+} from "../render.ts";
+import { argumentos, blocos, type MensagemPi, modeloDe, resumoDoResultado, textoDe } from "./chat.ts";
 
 /** O que o Auditor escolheu nos filtros, como digitou. */
 export interface Filtros {
@@ -18,7 +29,11 @@ export interface Filtros {
 
 const ETAPAS: readonly Etapa[] = ["registro", "desenho", "desenvolvimento", "revisao", "encerramento", "sessao"];
 
-const RESULTADOS: Record<Resultado, string> = { concluida: "concluída", falha: "falha", abortada: "abortada" };
+const RESULTADOS: Record<Resultado, [rotulo: string, pilula: string]> = {
+  concluida: ["concluída", "pill-ok"],
+  falha: ["falha", "pill-falha"],
+  abortada: ["abortada", "pill-neutro"],
+};
 
 const selecionado = (valor: string, atual: string): string => (valor === atual ? " selected" : "");
 
@@ -56,10 +71,7 @@ export function consulta(f: Filtros): string | undefined {
   return q.toString();
 }
 
-export const contagem = (n: number): string => (n === 1 ? "1 sessão" : `${String(n)} sessões`);
-
-const dois = (n: number): string => String(n).padStart(2, "0");
-const hora = (d: Date): string => `${dois(d.getHours())}:${dois(d.getMinutes())}`;
+export const contagem = (n: number): string => plural(n, "sessão", "sessões");
 
 /** O dia da sessão, no fuso do navegador: `Hoje`, `Ontem` ou `09/10` (com o ano, se não é o de agora). */
 export function dia(instante: string, agora: Date): string {
@@ -69,15 +81,15 @@ export function dia(instante: string, agora: Date): string {
   if (dias === 0) return "Hoje";
   if (dias === 1) return "Ontem";
   const ano = d.getFullYear() === agora.getFullYear() ? "" : `/${String(d.getFullYear())}`;
-  return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}${ano}`;
+  return `${diaMes(d)}${ano}`;
 }
 
-const pilula = (r: Resultado): string => `<span class="pill res-${r}">${RESULTADOS[r]}</span>`;
+const pilula = (r: Resultado): string => `<span class="pill ${RESULTADOS[r][1]}">${RESULTADOS[r][0]}</span>`;
 
 const linha = (s: SessaoDoHistorico, selecionada: string): string =>
   `<button type="button" class="linha" data-sel="${escapar(s.sessao)}" aria-selected="${String(s.sessao === selecionada)}">` +
-  `<span class="hora">${hora(new Date(s.desde))}</span><span class="id">I-${String(s.issue)}</span>` +
-  `<span class="id esconde">T-${String(s.ticket)}</span>` +
+  `<span class="hora">${hora(new Date(s.desde))}</span><span class="id">${rotuloIssue(s.issue)}</span>` +
+  `<span class="id esconde">${rotuloTicket(s.ticket)}</span>` +
   `<span class="meio">${escapar(s.titulo ?? "sem título")} <span class="muted">· ${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</span></span>` +
   `<span class="esconde">${pilula(s.resultado)}</span><span class="num muted">${custo(s.custo)}</span></button>`;
 
@@ -105,12 +117,8 @@ const mensagens = (d: DadosDoChat): MensagemPi[] =>
       : [],
   );
 
-function resumoDaFerramenta(resultado: MensagemPi | undefined): string {
-  if (!resultado) return "sem resultado";
-  const linhas = textoDe(resultado) === "" ? 0 : textoDe(resultado).split("\n").length;
-  const quantas = linhas === 1 ? "1 linha" : `${String(linhas)} linhas`;
-  return `${resultado.isError ? "✗" : "✓"} ${quantas}`;
-}
+const resumoDaFerramenta = (resultado: MensagemPi | undefined): string =>
+  resultado ? resumoDoResultado(resultado).resumo : "sem resultado";
 
 /** Os últimos pedaços da conversa (F7 §4.4, item 3, "o fim da conversa"). */
 function fimDaConversa(d: DadosDoChat, quantos = 3): Pedaco[] {
@@ -150,7 +158,7 @@ export function previa(s: SessaoDoHistorico, d: DadosDoChat, agora: Date): strin
   );
   const fim = fimDaConversa(d);
   return (
-    `<div><span class="id">I-${String(s.issue)} · T-${String(s.ticket)}</span><h2>${escapar(s.titulo ?? "sem título")}</h2></div>` +
+    `<div><span class="id">${rotuloIssue(s.issue)} · ${rotuloTicket(s.ticket)}</span><h2>${escapar(s.titulo ?? "sem título")}</h2></div>` +
     `<dl class="fatos">` +
     `<dt>Projeto</dt><dd>${escapar(s.projeto)}</dd>` +
     `<dt>Etapa</dt><dd>${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</dd>` +
@@ -159,7 +167,7 @@ export function previa(s: SessaoDoHistorico, d: DadosDoChat, agora: Date): strin
     `<dt>Custo</dt><dd>${custo(s.custo)} · <span class="modelo">${escapar(modeloDe(d, d.conversa))}</span></dd>` +
     `<dt>Mensagens</dt><dd>${String(mensagens(d).length)}</dd></dl>` +
     `<div class="trecho"><span class="quem">fim da conversa</span>${fim.length ? fim.map(pedaco).join("") : '<span class="muted">sem mensagens</span>'}</div>` +
-    `<div class="botoes"><a class="btn btn-primario" href="/sessions/${sessao}">Abrir o chat</a>` +
+    `<div class="botoes"><a class="btn btn-primario" href="${caminhoDaSessao(s.sessao)}">Abrir o chat</a>` +
     `<button type="button" class="btn" data-consulta="${String(s.ticket)}">Conversar sobre</button>` +
     `<a class="btn" href="/api/sessoes/${sessao}/historico.md" download>Exportar</a></div>`
   );

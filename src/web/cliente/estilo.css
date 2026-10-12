@@ -210,6 +210,20 @@ a {
   color: var(--accent);
 }
 
+@media (max-width: 700px) {
+  .pagina {
+    padding: var(--s-4);
+  }
+  .nav {
+    gap: var(--s-3);
+    padding: 0 var(--s-4);
+    overflow-x: auto;
+  }
+  .marca {
+    display: none;
+  }
+}
+
 /* Botões */
 .btn {
   display: inline-flex;
@@ -285,6 +299,9 @@ a {
 }
 .pill-rodando::before {
   animation: pulsar 1.4s ease-in-out infinite;
+}
+.pill.sem-pulso::before {
+  animation: none;
 }
 @keyframes pulsar {
   50% {
@@ -540,6 +557,16 @@ a {
 .tag-gate {
   color: var(--open);
   border-color: #5a4720;
+}
+
+@media (max-width: 1100px) {
+  .rodando-linha {
+    grid-template-columns: auto 44px minmax(0, 1fr) auto;
+    padding: 0 var(--s-3);
+  }
+  .rodando-linha .esconde {
+    display: none;
+  }
 }
 
 /* Projeto: seletor, barra com a contagem e os filtros, e uma linha por issue com o trilho e a gaveta de tickets. */
@@ -883,6 +910,15 @@ a {
   text-align: right;
 }
 
+@media (max-width: 1100px) {
+  .pista-rola {
+    overflow-x: auto;
+  }
+  .pista {
+    min-width: 1080px;
+  }
+}
+
 /* Registrar necessidade, na caixa estreita. */
 .caixa.estreita {
   width: min(560px, 94vw);
@@ -980,6 +1016,12 @@ a {
   width: 28px;
   padding: 0;
   justify-content: center;
+}
+
+@media (max-width: 700px) {
+  .aviso {
+    margin: var(--s-3) var(--s-4) 0;
+  }
 }
 
 /* Trilho de fases: as 8 fases do F1 em linha; a atual com a cor do estado da sessão. */
@@ -1089,6 +1131,15 @@ a {
 }
 .trilho-fases.rodando .atual > span:last-child {
   color: var(--claimed);
+}
+
+@media (max-width: 700px) {
+  .trilho-fases .passo:not(.atual) > span:last-child {
+    visibility: hidden;
+  }
+  .trilho-fases .atual > span:last-child {
+    white-space: nowrap;
+  }
 }
 
 /* Caixa: janela sobreposta que abre um artefato ou as execuções de um ticket sem sair da página. */
@@ -1209,6 +1260,33 @@ input.erro {
 .btn:disabled {
   opacity: 0.6;
   cursor: progress;
+}
+
+/* Filtros no topo de uma lista (Histórico, Métricas). */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.filtros label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.filtros :is(select, input) {
+  height: 30px;
+  padding: 0 var(--s-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color-scheme: dark;
 }
 
 /* Configuração: menu lateral e o formulário do item escolhido. */
@@ -1457,6 +1535,26 @@ input.erro {
   margin-right: var(--s-2);
 }
 
+@media (max-width: 1100px) {
+  .agendador {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .config {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .menu-config {
+    position: static;
+  }
+  .grade,
+  .fitness,
+  .fitness-cab {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fitness-cab {
+    display: none;
+  }
+}
+
 /* Tabelas: as execuções de um ticket e as tabelas dos tipos de gate (F7 §4.5). */
 .rola {
   overflow-x: auto;
@@ -1537,7 +1635,7 @@ input.erro {
 .md h3,
 .md h4 {
   margin: var(--s-3) 0 var(--s-1);
-  font-size: var(--fs-sm);
+  font-size: 1em;
 }
 .md ul,
 .md ol {
@@ -1798,22 +1896,6 @@ input.erro {
   font-size: var(--fs-xs);
   color: var(--muted);
 }
-.st-aberto {
-  color: var(--muted);
-  background: var(--surface-2);
-}
-.st-em_execucao {
-  color: var(--claimed);
-  background: var(--claimed-bg);
-}
-.st-concluido {
-  color: var(--closed);
-  background: var(--closed-bg);
-}
-.st-falhou {
-  color: var(--danger);
-  background: var(--danger-bg);
-}
 .chat {
   display: inline-flex;
   align-items: center;
@@ -1822,6 +1904,16 @@ input.erro {
 }
 .chat .ir {
   color: var(--accent);
+}
+
+@media (max-width: 1100px) {
+  .mesa {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lateral {
+    position: static;
+    max-height: none;
+  }
 }
 
 /* Ação do Auditor: o painel do gate da fase, o "Executar agora" e o aviso da limpeza que falhou. */
@@ -2040,6 +2132,18 @@ input.erro {
 .gate-painel .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .gate-painel .decidir {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .seletor-modelo {
+    width: 150px;
+  }
+  .propostos .modelo {
+    width: auto;
+  }
 }
 
 /* Gate do PR: abas Revisão (vídeo, produtividade, corpo do PR, comprovação e fitness) e Decisão (F7 §4.4). */
@@ -2288,6 +2392,13 @@ input.erro {
   background: var(--danger);
 }
 
+@media (max-width: 700px) {
+  .etapa-artefatos {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1);
+  }
+}
+
 /* A evidência na caixa: a marca de aprovada, a tabela, os anexos e o JSON. */
 .evidencia {
   display: flex;
@@ -2323,82 +2434,6 @@ input.erro {
 }
 .anexo figcaption .mono {
   margin-right: auto;
-}
-
-@media (max-width: 1100px) {
-  .pista-rola {
-    overflow-x: auto;
-  }
-  .pista {
-    min-width: 1080px;
-  }
-  .rodando-linha {
-    grid-template-columns: auto 44px minmax(0, 1fr) auto;
-    padding: 0 var(--s-3);
-  }
-  .rodando-linha .esconde {
-    display: none;
-  }
-  .agendador {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .config {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .menu-config {
-    position: static;
-  }
-  .grade,
-  .fitness,
-  .fitness-cab {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .fitness-cab {
-    display: none;
-  }
-  .mesa {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .lateral {
-    position: static;
-    max-height: none;
-  }
-}
-
-@media (max-width: 700px) {
-  .pagina {
-    padding: var(--s-4);
-  }
-  .nav {
-    gap: var(--s-3);
-    padding: 0 var(--s-4);
-    overflow-x: auto;
-  }
-  .marca {
-    display: none;
-  }
-  .aviso {
-    margin: var(--s-3) var(--s-4) 0;
-  }
-  .trilho-fases .passo:not(.atual) > span:last-child {
-    visibility: hidden;
-  }
-  .trilho-fases .atual > span:last-child {
-    white-space: nowrap;
-  }
-  .etapa-artefatos {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s-1);
-  }
-  .gate-painel .decidir {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .seletor-modelo {
-    width: 150px;
-  }
-  .propostos .modelo {
-    width: auto;
-  }
 }
 
 /* Chat (F7 §4.4): barra de estado, conversa à esquerda com o envio fixo no fim e a coluna da direita. */
@@ -2474,43 +2509,11 @@ input.erro {
 .msg.voce .quem {
   color: var(--accent);
 }
+/* O Markdown da conversa é o .md, no tamanho do texto da página, como no protótipo do chat. */
 .msg .texto {
+  font-size: inherit;
   line-height: 1.65;
   overflow-wrap: anywhere;
-}
-.msg .texto :is(p, ul, ol, pre, blockquote, table) {
-  margin: 0 0 var(--s-2);
-}
-.msg .texto > :last-child {
-  margin-bottom: 0;
-}
-.msg .texto :is(ul, ol) {
-  padding-left: var(--s-5);
-}
-.msg .texto :is(h1, h2, h3, h4) {
-  margin: var(--s-3) 0 var(--s-2);
-  font-size: var(--fs-md);
-}
-.msg .texto a {
-  color: var(--accent);
-  text-decoration: underline;
-}
-.msg .texto code {
-  font: 0.9em var(--mono);
-  padding: 1px 4px;
-  background: var(--surface-2);
-  border-radius: var(--r-sm);
-}
-.msg .texto pre {
-  padding: var(--s-2) var(--s-3);
-  overflow: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-}
-.msg .texto pre code {
-  padding: 0;
-  background: none;
 }
 .msg.voce .texto {
   padding: var(--s-2) var(--s-3);
@@ -3031,31 +3034,6 @@ input.erro {
 }
 
 /* Histórico (F7 §4.4): filtros com a contagem, as sessões terminadas por dia e a prévia da escolhida ao lado. */
-.pagina-historico .filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-3);
-  margin-bottom: var(--s-4);
-}
-.pagina-historico .filtros label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: var(--fs-sm);
-  color: var(--muted);
-}
-.pagina-historico .filtros :is(select, input) {
-  height: 30px;
-  padding: 0 var(--s-2);
-  font: inherit;
-  font-size: var(--fs-sm);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  color-scheme: dark;
-}
 .pagina-historico .filtros input {
   width: 120px;
   font-family: var(--mono);
@@ -3064,18 +3042,6 @@ input.erro {
   margin-left: auto;
   font-size: var(--fs-sm);
   color: var(--muted);
-}
-.res-concluida {
-  color: var(--closed);
-  background: var(--closed-bg);
-}
-.res-falha {
-  color: var(--danger);
-  background: var(--danger-bg);
-}
-.res-abortada {
-  color: var(--muted);
-  background: var(--surface-2);
 }
 .pagina-historico .mestre {
   display: grid;
@@ -3195,31 +3161,6 @@ input.erro {
 
 /* Métricas (F7 §4.4): filtros, régua de meses, cards do mês em foco contra a média, evolução, etapas, modelos e issues.
    As cores das séries estão nos tokens (:root); o texto nunca usa a cor da série. */
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-3);
-  margin-bottom: var(--s-4);
-}
-.filtros label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: var(--fs-sm);
-  color: var(--muted);
-}
-.filtros select {
-  height: 30px;
-  padding: 0 var(--s-2);
-  font: inherit;
-  font-size: var(--fs-sm);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  color-scheme: dark;
-}
 .filtros .resumo {
   font-size: var(--fs-sm);
   color: var(--muted);
@@ -3524,10 +3465,6 @@ svg.barras :not(.hit) {
 .pill.fase {
   color: var(--ink);
   background: var(--surface-2);
-}
-.pill.fase-concluida {
-  color: var(--closed);
-  background: var(--closed-bg);
 }
 .barras-cel {
   display: flex;

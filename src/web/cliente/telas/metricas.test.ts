@@ -326,7 +326,7 @@ test("por issue: ordenável pelo cabeçalho, com link, projeto só em todos, fas
   );
   assert.match(
     html,
-    /<a class="id" href="\/projects\/site\/issues\/I-12">I-12<\/a><\/td>\s*<td><span class="muted">sem título<\/span><\/td>\s*<td class="muted">site<\/td>\s*<td><span class="pill fase-concluida">Concluída<\/span>/,
+    /<a class="id" href="\/projects\/site\/issues\/I-12">I-12<\/a><\/td>\s*<td><span class="muted">sem título<\/span><\/td>\s*<td class="muted">site<\/td>\s*<td><span class="pill pill-ok">Concluída<\/span>/,
   );
   assert.match(html, /Busca &#60;b&#62;/);
   assert.match(html, /<span class="pill fase">Desenvolvimento<\/span>/);

@@ -22,7 +22,6 @@ import {
   linhasDaExecucao,
   mensagem,
   modeloDe,
-  modeloDoSeletor,
   respostaDoDialogo,
   seletorDeSessoes,
 } from "./chat.ts";
@@ -207,7 +206,7 @@ test("ferramenta: argumentos em uma linha, resumo do resultado e a saída com ve
 test("mensagem: a do Auditor e a do agente em Markdown sem HTML, raciocínio, chamadas com o resultado e a parada", () => {
   assert.equal(
     mensagem({ role: "user", content: "<b>oi</b> **já**" }),
-    '<div class="msg voce"><span class="quem">você</span><div class="texto"><p>&lt;b&gt;oi&lt;/b&gt; <strong>já</strong></p>\n</div></div>',
+    '<div class="msg voce"><span class="quem">você</span><div class="texto md"><p>&lt;b&gt;oi&lt;/b&gt; <strong>já</strong></p>\n</div></div>',
   );
   const resultados = new Map([["t1", { role: "toolResult", content: "ok" }]]);
   const html = mensagem(
@@ -228,7 +227,7 @@ test("mensagem: a do Auditor e a do agente em Markdown sem HTML, raciocínio, ch
   assert.equal(
     html,
     '<details class="pensando"><summary>raciocínio</summary><p>penso &#60;x&#62;</p></details>' +
-      '<div class="msg agente"><span class="quem">agente</span><div class="texto"><p>Vou [rodar](javascript:alert(1))</p>\n</div></div>' +
+      '<div class="msg agente"><span class="quem">agente</span><div class="texto md"><p>Vou [rodar](javascript:alert(1))</p>\n</div></div>' +
       ferramenta({ id: "t1", name: "bash", arguments: { command: "ls" } }, { role: "toolResult", content: "ok" }) +
       '<div class="sistema">o agente parou com erro: sem &#60;crédito&#62;</div>',
   );
@@ -283,11 +282,11 @@ test("conversa: mensagens e linhas das execuções por instante, sem o prompt da
 test("em fluxo: o cursor no fim do último parágrafo, ou depois do bloco; raciocínio só quando há", () => {
   assert.equal(
     emFluxo("Os **testes**", ""),
-    '<div class="msg agente"><span class="quem">agente</span><div class="texto"><p>Os <strong>testes</strong><span class="cursor"></span></p></div></div>',
+    '<div class="msg agente"><span class="quem">agente</span><div class="texto md"><p>Os <strong>testes</strong><span class="cursor"></span></p></div></div>',
   );
   assert.match(
     emFluxo("", "pensando"),
-    /^<details class="pensando"><summary>raciocínio…<\/summary><p>pensando<\/p><\/details>.*<div class="texto"><span class="cursor"><\/span><\/div>/,
+    /^<details class="pensando"><summary>raciocínio…<\/summary><p>pensando<\/p><\/details>.*<div class="texto md"><span class="cursor"><\/span><\/div>/,
   );
   assert.match(emFluxo("- item", ""), /<\/ul>\n<span class="cursor"><\/span>/);
 });
@@ -382,11 +381,6 @@ test("envio na falha: a instrução, o seletor de modelo esperando a issue e Res
   assert.match(html, /<label class="dica-tecla rotulo-modelo">Modelo <span data-seletor-modelo><select [^>]*disabled/);
   assert.match(html, /<button class="btn btn-primario">Responder e retomar<\/button><\/div><\/div><\/form>$/);
   assert.doesNotMatch(html, /data-anexar/);
-  assert.deepEqual(modeloDoSeletor("openrouter/anthropic/claude"), {
-    provedor: "openrouter",
-    modelo: "anthropic/claude",
-  });
-  assert.equal(modeloDoSeletor(""), null);
 });
 
 test("envio que aceita mensagem: os anexos vazios e + Anexar histórico antes da dica", () => {

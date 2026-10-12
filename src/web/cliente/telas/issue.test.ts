@@ -7,12 +7,6 @@ import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import {
   acaoDoAuditor,
   bloqueiosDoPR,
-  caminhoDaIssue,
-  compacto,
-  custo,
-  data,
-  duracao,
-  estadoDoTrilho,
   evidenciaNaCaixa,
   execucoesDoTicket,
   gateDoDesenho,
@@ -173,30 +167,6 @@ function exemplo(): PaginaDaIssue {
   };
 }
 
-test("formatos: data no fuso do navegador, duração e custo", () => {
-  assert.equal(data(AGORA), "11/10 09:00");
-  assert.deepEqual([0, 48_400, 60_000, 130_000, 3_600_000, 4_800_000].map(duracao), [
-    "0 s",
-    "48 s",
-    "1 min",
-    "2 min 10 s",
-    "1 h",
-    "1 h 20 min",
-  ]);
-  assert.equal(custo(0.5), "US$ 0,50");
-  assert.equal(caminhoDaIssue("loja", 7), "/projects/loja/issues/I-7");
-});
-
-test("trilho: a falha antes de quem aguarda, e quem aguarda antes do que roda", () => {
-  const rodando = sessao({ estado: "rodando" });
-  const aguarda = sessao({ estado: "aguardando_humano", motivo: "gate_desenho" });
-  const falha = sessao({ estado: "aguardando_humano", motivo: "falha" });
-  assert.equal(estadoDoTrilho([]), undefined);
-  assert.equal(estadoDoTrilho([rodando]), "rodando");
-  assert.equal(estadoDoTrilho([rodando, aguarda]), "aguarda");
-  assert.equal(estadoDoTrilho([aguarda, falha]), "falha");
-});
-
 test("página: caminho, título, trilho, detalhes, descrição, tickets com sessões e artefatos, tudo escapado", () => {
   const html = paginaDaIssue(exemplo(), "<p><strong>x</strong></p>");
   assert.doesNotMatch(html, /<img src=x/, "texto do agente nunca vira HTML");
@@ -219,7 +189,7 @@ test("página: caminho, título, trilho, detalhes, descrição, tickets com sess
     [...html.matchAll(/data-ticket="(\d+)"/g)].map((m) => m[1]),
     ["1", "2", "3", "4"],
   );
-  assert.match(html, /<li class="falhou">[\s\S]*?<span>revisão<\/span><span class="pill st-falhou">falhou<\/span>/);
+  assert.match(html, /<li class="falhou">[\s\S]*?<span>revisão<\/span><span class="pill pill-falha">falhou<\/span>/);
   assert.match(
     html,
     new RegExp(
@@ -559,7 +529,7 @@ test("tickets: a sessão que aguarda mostra o motivo, e a falha em vermelho", ()
     "",
   );
   assert.match(html, /<span class="pill pill-aguarda">Gate do desenho<\/span><span class="ir">chat →<\/span>/);
-  assert.match(html, /<span class="pill pill-falha">Falha<\/span>/);
+  assert.match(html, /<span class="pill pill-falha">Falhou<\/span>/);
   assert.match(html, /<ol class="trilho-fases falha"/);
 });
 
@@ -766,11 +736,6 @@ function noGatePR(): PaginaDaIssue {
 const LIDO = new Date(Date.parse(AGORA) + 12_000);
 const leitura = (estado: "aberto" | "mergeado" | "fechado", mergeadoEm?: string) => ({
   leitura: { estado, url: URL_PR, lidoEm: AGORA, ...(mergeadoEm && { mergeadoEm }) },
-});
-
-test("compacto: milhões, milhares e unidades", () => {
-  assert.deepEqual([compacto(2_300_000), compacto(48_120), compacto(950)], ["2,3 M", "48,1 mil", "950"]);
-  assert.deepEqual([compacto(1_234_500_000), compacto(830.4)], ["1.234,5 M", "830"]);
 });
 
 test("gate do PR: só na aprovação do PR, no começo da Ação do Auditor, aberto na aba Revisão", () => {

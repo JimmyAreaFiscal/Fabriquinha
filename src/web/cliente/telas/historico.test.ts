@@ -85,12 +85,12 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
   );
   assert.ok(
     html.includes(
-      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37</span><span class="id esconde">T-109</span><span class="meio">Board &#60;por&#62; fase <span class="muted">· desenho · autônoma</span></span><span class="esconde"><span class="pill res-concluida">concluída</span></span><span class="num muted">US$ 1,86</span></button>',
+      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37</span><span class="id esconde">T-109</span><span class="meio">Board &#60;por&#62; fase <span class="muted">· desenho · autônoma</span></span><span class="esconde"><span class="pill pill-ok">concluída</span></span><span class="num muted">US$ 1,86</span></button>',
     ),
   );
   assert.match(html, /data-sel="x" aria-selected="true"><span class="hora">18:47<\/span>/);
-  assert.match(html, /sem título <span class="muted">· desenho · consulta<\/span>.*res-falha">falha<.*US\$ 0,00/);
-  assert.match(html, /· sessão em aberto · interativa<\/span>.*res-abortada">abortada</);
+  assert.match(html, /sem título <span class="muted">· desenho · consulta<\/span>.*pill-falha">falha<.*US\$ 0,00/);
+  assert.match(html, /· sessão em aberto · interativa<\/span>.*pill-neutro">abortada</);
   assert.match(html, /<aside class="previa superficie" data-previa aria-label="Prévia da sessão">/);
   assert.equal(listaDoHistorico([], "", AGORA), '<p class="muted">Nenhuma sessão com esses filtros.</p>');
 });
@@ -157,7 +157,7 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
   assert.ok(html.startsWith('<div><span class="id">I-37 · T-109</span><h2>Board &#60;por&#62; fase</h2></div>'));
   assert.ok(
     html.includes(
-      '<dt>Projeto</dt><dd>loja &#60;api&#62;</dd><dt>Etapa</dt><dd>desenho · autônoma</dd><dt>Resultado</dt><dd><span class="pill res-concluida">concluída</span></dd><dt>Terminada</dt><dd>Hoje 10:34 · durou 22 min</dd><dt>Custo</dt><dd>US$ 1,86 · <span class="modelo">anthropic / claude-opus-5-5</span></dd><dt>Mensagens</dt><dd>4</dd>',
+      '<dt>Projeto</dt><dd>loja &#60;api&#62;</dd><dt>Etapa</dt><dd>desenho · autônoma</dd><dt>Resultado</dt><dd><span class="pill pill-ok">concluída</span></dd><dt>Terminada</dt><dd>Hoje 10:34 · durou 22 min</dd><dt>Custo</dt><dd>US$ 1,86 · <span class="modelo">anthropic / claude-opus-5-5</span></dd><dt>Mensagens</dt><dd>4</dd>',
     ),
     html,
   );
@@ -191,5 +191,5 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
     ],
     [],
   );
-  assert.ok(previa(sessao(), vazia, AGORA).includes("▸ bash  {}  ✓ 0 linhas"));
+  assert.ok(previa(sessao(), vazia, AGORA).includes("▸ bash  {}  ✓ sem saída"));
 });

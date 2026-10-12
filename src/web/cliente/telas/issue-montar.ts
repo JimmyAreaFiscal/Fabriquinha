@@ -7,11 +7,10 @@ import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, avisar, elemento, mostrarErro } from "../dom.ts";
 import { markdown } from "../markdown.ts";
-import { paginaVazia } from "../render.ts";
+import { caminhoDaIssue, modeloDoSeletor, paginaVazia, rotuloIssue } from "../render.ts";
 import {
   type AbaDoPR,
   bloqueiosDoPR,
-  caminhoDaIssue,
   type EstadoLido,
   evidenciaNaCaixa,
   execucoesDoTicket,
@@ -236,7 +235,7 @@ export async function montarIssue(
   signal.throwIfAborted();
   const certo = caminhoDaIssue(pagina.issue.projeto, pagina.issue.id);
   if (location.pathname !== certo) history.replaceState(null, "", certo);
-  document.title = `I-${String(pagina.issue.id)} · Fabriquinha`;
+  document.title = `${rotuloIssue(pagina.issue.id)} · Fabriquinha`;
   main.innerHTML = paginaDaIssue(pagina, pagina.issue.descricao.trim() ? markdown(pagina.issue.descricao) : "", extras);
   const raiz = elemento(".pagina-issue", HTMLElement);
   const p = pagina;
@@ -333,8 +332,7 @@ export async function montarIssue(
   raiz.addEventListener("change", (evento) => {
     const select = evento.target;
     if (!(select instanceof HTMLSelectElement) || !select.dataset.modelo) return;
-    const corte = select.value.indexOf("/");
-    const modelo = corte > 0 ? { provedor: select.value.slice(0, corte), modelo: select.value.slice(corte + 1) } : null;
+    const modelo = modeloDoSeletor(select.value);
     select.disabled = true;
     agir(async () => {
       try {

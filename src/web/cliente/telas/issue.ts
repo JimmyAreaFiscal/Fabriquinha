@@ -2,27 +2,35 @@
 // descrição e tickets), "Ação do Auditor", artefatos e o conteúdo da caixa. O texto que vem do servidor passa sempre
 // por `escapar`; a descrição chega já renderizada pelo `markdown-it` sem HTML.
 import type { ArquivoEvidencia, Evidencia, ModoExecucao, Ticket, TipoEvidencia } from "../../../dominio/agregado.ts";
-import type { Etapa, Fase, Modelo } from "../../../dominio/primitivos.ts";
+import type { Fase, Modelo } from "../../../dominio/primitivos.ts";
 import type { Hospedagem } from "../../../dominio/projeto.ts";
-import type { InfoSessao, MotivoEspera } from "../../../execucao/sessoes.ts";
+import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { Consumo, MetricasIssue } from "../../../metricas/issue.ts";
 import type { LeituraDoPR } from "../../../repositorio/pr.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { ConteudoDaCaixa } from "../dom.ts";
-import { type EstadoDoTrilho, escapar, ha, MODO_DA_SESSAO, STATUS_DO_TICKET, trilho } from "../render.ts";
-
-export const caminhoDaIssue = (projeto: string, issue: number): string =>
-  `/projects/${encodeURIComponent(projeto)}/issues/I-${String(issue)}`;
-
-const ETAPA: Record<Etapa, string> = {
-  registro: "Registro",
-  desenho: "Desenho",
-  desenvolvimento: "Desenvolvimento",
-  revisao: "Revisão",
-  encerramento: "Encerramento",
-  sessao: "Sessão em aberto",
-};
-export const etapa = (e: Etapa): string => ETAPA[e].toLowerCase();
+import {
+  caminhoDaIssue,
+  caminhoDaSessao,
+  compacto,
+  custo,
+  data,
+  duracao,
+  escapar,
+  estadoDoTrilho,
+  etapa,
+  ha,
+  MODO_DA_SESSAO,
+  MOTIVOS,
+  NOME_DA_ETAPA,
+  PILULA_DO_STATUS,
+  nomeDoModelo,
+  plural,
+  rotuloIssue,
+  rotuloTicket,
+  STATUS_DO_TICKET,
+  trilho,
+} from "../render.ts";
 
 const FASE: Record<Fase, string> = {
   registro: "registro",
@@ -34,15 +42,6 @@ const FASE: Record<Fase, string> = {
   aprovacao_pr: "aprovação do PR",
   ajuste_pr: "ajuste do PR",
   concluida: "concluída",
-};
-
-const MOTIVO: Record<MotivoEspera, string> = {
-  conversa: "Conversa",
-  dialogo: "Diálogo",
-  falha: "Falha",
-  gate_registro: "Gate do registro",
-  gate_desenho: "Gate do desenho",
-  gate_pr: "Gate do PR",
 };
 
 const MODO: Record<ModoExecucao, string> = { autonomo: "autônomo", interativo: "interativo", consulta: "consulta" };
@@ -67,42 +66,6 @@ const NOME: Record<TipoEvidencia, string> = {
   pr_aberto: "PR aberto",
 };
 
-const dois = (n: number): string => String(n).padStart(2, "0");
-
-/** `11/10 09:00`, no fuso do navegador. */
-export function data(instante: string): string {
-  const d = new Date(instante);
-  return `${dois(d.getDate())}/${dois(d.getMonth() + 1)} ${dois(d.getHours())}:${dois(d.getMinutes())}`;
-}
-
-/** `48 s`, `2 min 10 s`, `34 min`, `1 h 20 min`. */
-export function duracao(ms: number): string {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${String(s)} s`;
-  const [min, resto] = [Math.floor(s / 60), s % 60];
-  if (min < 60) return resto ? `${String(min)} min ${String(resto)} s` : `${String(min)} min`;
-  const [h, m] = [Math.floor(min / 60), min % 60];
-  return m ? `${String(h)} h ${String(m)} min` : `${String(h)} h`;
-}
-
-export const custo = (valor: number): string =>
-  `US$ ${valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-/** `2,3 M`, `48,1 mil` ou `950`; a média fracionária abaixo de mil sai arredondada. */
-export function compacto(n: number): string {
-  const fmt = (v: number, casas: number) =>
-    v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
-  if (n >= 1e6) return `${fmt(n / 1e6, 1)} M`;
-  return n >= 1e3 ? `${fmt(n / 1e3, 1)} mil` : fmt(n, 0);
-}
-
-/** A cor do marco atual no trilho: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
-export function estadoDoTrilho(sessoes: readonly InfoSessao[]): EstadoDoTrilho | undefined {
-  if (sessoes.some((s) => s.motivo === "falha")) return "falha";
-  if (sessoes.some((s) => s.estado === "aguardando_humano")) return "aguarda";
-  return sessoes.some((s) => s.estado === "rodando") ? "rodando" : undefined;
-}
-
 // ——— coluna da esquerda ———
 
 /** O PR da issue: o da última evidência `pr_aberto` (F5 §5.2). */
@@ -120,9 +83,9 @@ function dependencias(p: PaginaDaIssue): string {
   const aberta = p.issue.fase !== "concluida";
   const deps = p.dependencias.map(
     (d) =>
-      `<span class="dep"><a href="${caminhoDaIssue(d.projeto, d.id)}">I-${String(d.id)}</a><span class="fase">${FASE[d.fase]}</span>${
+      `<span class="dep"><a href="${caminhoDaIssue(d.projeto, d.id)}">${rotuloIssue(d.id)}</a><span class="fase">${FASE[d.fase]}</span>${
         aberta
-          ? `<button type="button" class="x" data-remover-dep="${String(d.id)}" title="Remover I-${String(d.id)}" aria-label="Remover I-${String(d.id)}">×</button>`
+          ? `<button type="button" class="x" data-remover-dep="${String(d.id)}" title="Remover ${rotuloIssue(d.id)}" aria-label="Remover ${rotuloIssue(d.id)}">×</button>`
           : ""
       }</span>`,
   );
@@ -156,7 +119,7 @@ const descricao = (html: string): string =>
 
 function pilulaDaSessao(s: InfoSessao): string {
   if (s.motivo) {
-    return `<span class="pill ${s.motivo === "falha" ? "pill-falha" : "pill-aguarda"}">${MOTIVO[s.motivo]}</span>`;
+    return `<span class="pill ${s.motivo === "falha" ? "pill-falha" : "pill-aguarda"}">${MOTIVOS[s.motivo].titulo}</span>`;
   }
   return s.estado === "rodando"
     ? '<span class="pill pill-rodando">rodando</span>'
@@ -170,11 +133,12 @@ function tickets(p: PaginaDaIssue): string {
       .filter((s) => s.ticket === t.id)
       .toSorted((a, b) => Number(a.modo === "consulta") - Number(b.modo === "consulta"))
       .map(
-        (s) => `<a class="chat" href="/sessions/${s.sessao}">${pilulaDaSessao(s)}<span class="ir">chat →</span></a>`,
+        (s) =>
+          `<a class="chat" href="${caminhoDaSessao(s.sessao)}">${pilulaDaSessao(s)}<span class="ir">chat →</span></a>`,
       );
     return `<li class="${t.status}">
-      <button type="button" class="ticket-btn" data-ticket="${String(t.id)}" title="Ver execuções"><span class="id">T-${String(t.id)}</span><span class="tt">${escapar(t.titulo)}</span></button>
-      <div class="sub"><span>${etapa(t.etapa)}</span><span class="pill st-${t.status}">${STATUS_DO_TICKET[t.status]}</span>${sessoes.join("")}</div>
+      <button type="button" class="ticket-btn" data-ticket="${String(t.id)}" title="Ver execuções"><span class="id">${rotuloTicket(t.id)}</span><span class="tt">${escapar(t.titulo)}</span></button>
+      <div class="sub"><span>${etapa(t.etapa)}</span><span class="pill ${PILULA_DO_STATUS[t.status]}">${STATUS_DO_TICKET[t.status]}</span>${sessoes.join("")}</div>
     </li>`;
   });
   return `<section class="cartao-lateral superficie"><h3>Tickets e sessões</h3><ol class="linha-tempo">${itens.join("")}</ol></section>`;
@@ -187,7 +151,7 @@ function executarAgora(p: PaginaDaIssue): string {
   const { ticket, ocupada } = p.executar;
   const id = String(ticket.id);
   return `<section class="painel-acao">
-    <div class="painel-linha"><span class="rotulo">Executar agora</span><span class="muted"><span class="mono">T-${id}</span> · ${escapar(ticket.titulo)} · ${etapa(ticket.etapa)}</span>
+    <div class="painel-linha"><span class="rotulo">Executar agora</span><span class="muted"><span class="mono">${rotuloTicket(ticket.id)}</span> · ${escapar(ticket.titulo)} · ${etapa(ticket.etapa)}</span>
       <button type="button" class="btn btn-primario" data-acao="executar" data-executar="${id}"${ocupada ? ` disabled title="${escapar(ocupada)}"` : ""}>Executar agora</button></div>
     ${ocupada ? `<p class="bloqueio">${escapar(ocupada)}</p>` : ""}
   </section>`;
@@ -247,10 +211,10 @@ export function seletorDeModelo(p: PaginaDaIssue, t: Ticket, modelos: readonly M
   const opcoes = modelo && !modelos.some((m) => par(m) === par(modelo)) ? [...modelos, modelo] : modelos;
   const options = opcoes.map((m) => {
     const selecionado = modelo && par(m) === par(modelo) ? " selected" : "";
-    return `<option value="${escapar(par(m))}"${selecionado}>${escapar(m.provedor + " / " + m.modelo)}</option>`;
+    return `<option value="${escapar(par(m))}"${selecionado}>${escapar(nomeDoModelo(m))}</option>`;
   });
   const rotuloPadrao = padrao ? "padrão · " + escapar(padrao.modelo) : "padrão do pi";
-  return `<select class="seletor-modelo${modelo ? " override" : ""}" data-modelo="${String(t.id)}" aria-label="Modelo de T-${String(t.id)}"><option value="">${rotuloPadrao}</option>${options.join("")}</select>`;
+  return `<select class="seletor-modelo${modelo ? " override" : ""}" data-modelo="${String(t.id)}" aria-label="Modelo de ${rotuloTicket(t.id)}"><option value="">${rotuloPadrao}</option>${options.join("")}</select>`;
 }
 
 /** O formulário de C12 (com o ticket) ou de C11 (sem). */
@@ -262,7 +226,7 @@ function propostos(p: PaginaDaIssue, modelos: readonly Modelo[]): string {
     .filter((t) => t.etapa === "desenvolvimento" && t.status === "aberto")
     .map((t) => {
       const id = String(t.id);
-      return `<tr data-proposto="${id}"><td class="mono">T-${id}</td><td>${escapar(t.titulo)}<div class="d">${escapar(t.descricao)}</div></td><td class="modelo">${seletorDeModelo(p, t, modelos)}</td><td class="acoes-t"><button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="${id}">Editar</button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="${id}">Remover</button></td></tr><tr data-edicao="${id}" hidden><td class="mono">T-${id}</td><td colspan="3">${formularioDeTicket(t)}</td></tr>`;
+      return `<tr data-proposto="${id}"><td class="mono">${rotuloTicket(t.id)}</td><td>${escapar(t.titulo)}<div class="d">${escapar(t.descricao)}</div></td><td class="modelo">${seletorDeModelo(p, t, modelos)}</td><td class="acoes-t"><button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="${id}">Editar</button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="${id}">Remover</button></td></tr><tr data-edicao="${id}" hidden><td class="mono">${rotuloTicket(t.id)}</td><td colspan="3">${formularioDeTicket(t)}</td></tr>`;
     });
   return linhas.length
     ? `<div class="rola"><table class="tabela propostos"><tbody>${linhas.join("")}</tbody></table></div>`
@@ -284,7 +248,7 @@ export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): str
   return `<section class="gate-painel" aria-label="Gate do desenho">
     <div class="gate-cabeca"><span class="rotulo">Gate do desenho</span>${
       espera
-        ? `<span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="/sessions/${espera.sessao}">abrir o chat da sessão →</a>`
+        ? `<span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="${caminhoDaSessao(espera.sessao)}">abrir o chat da sessão →</a>`
         : ""
     }</div>
     <div class="gate-corpo">
@@ -392,8 +356,6 @@ function decisaoDoPR(p: PaginaDaIssue, pr: EstadoLido, rascunho: RascunhoDoPR, a
 const card = (valor: string, rotulo: string): string =>
   `<div class="numero"><strong>${valor}</strong><span>${rotulo}</span></div>`;
 
-const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
-
 /** Os 4 cards de produtividade, do relatório do encerramento (F6 §6): custo e tokens somam as consultas. */
 function produtividade(m: MetricasIssue | undefined): string {
   if (!m) return ["custo", "tokens", "execuções", "reprovações"].map((r) => card("—", r)).join("");
@@ -457,7 +419,7 @@ export function gateDoPR(
         : ""
     }${
       espera
-        ? `<span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="/sessions/${espera.sessao}">abrir o chat da sessão →</a>`
+        ? `<span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="${caminhoDaSessao(espera.sessao)}">abrir o chat da sessão →</a>`
         : ""
     }</div>
     <div class="abas-gate" role="tablist">${aba("revisao", "Revisão")}${aba("decisao", "Decisão")}</div>
@@ -525,7 +487,7 @@ function artefatos(p: PaginaDaIssue): string {
     const evidencias = porTicket.get(t.id);
     if (!evidencias) return [];
     return [
-      `<div class="etapa-artefatos"><div class="etapa-nome">${ETAPA[t.etapa]}<span class="id">T-${String(t.id)}</span></div><div class="cards-art">${evidencias.map(cardDaEvidencia).join("")}</div></div>`,
+      `<div class="etapa-artefatos"><div class="etapa-nome">${NOME_DA_ETAPA[t.etapa]}<span class="id">${rotuloTicket(t.id)}</span></div><div class="cards-art">${evidencias.map(cardDaEvidencia).join("")}</div></div>`,
     ];
   });
   return `<section class="secao"><h2>Artefatos <span class="muted">${linhas.length ? "clique para abrir" : ""}</span></h2>${
@@ -539,8 +501,8 @@ export function paginaDaIssue(p: PaginaDaIssue, descricaoHtml: string, extras = 
   const ativas = p.sessoes.filter((s) => s.estado !== "terminada");
   const titulo = issue.titulo === null ? '<span class="muted">sem título</span>' : escapar(issue.titulo);
   return `<div class="pagina-issue">
-    <nav class="migalha" aria-label="Caminho"><a href="/projects">Projetos</a> › <a href="/projects/${encodeURIComponent(issue.projeto)}">${escapar(issue.projeto)}</a> › I-${String(issue.id)}</nav>
-    <h1 class="titulo-issue"><span class="id">I-${String(issue.id)}</span>${titulo}</h1>
+    <nav class="migalha" aria-label="Caminho"><a href="/projects">Projetos</a> › <a href="/projects/${encodeURIComponent(issue.projeto)}">${escapar(issue.projeto)}</a> › ${rotuloIssue(issue.id)}</nav>
+    <h1 class="titulo-issue"><span class="id">${rotuloIssue(issue.id)}</span>${titulo}</h1>
     ${trilho(issue.fase, estadoDoTrilho(ativas))}
     <div class="mesa">
       <aside class="lateral">${detalhes(p)}${descricao(descricaoHtml)}${tickets(p)}</aside>
@@ -563,7 +525,7 @@ export function execucoesDoTicket(p: PaginaDaIssue, ticket: Ticket): ConteudoDaC
       return `<tr><td class="mono">E-${String(e.id)}</td><td>${MODO[e.modo]}</td><td class="${e.resultado === "falha" ? "nok" : ""}">${resultado}</td><td>${data(e.iniciadaEm)}</td><td class="num">${tempo}</td><td class="num">${gasto === undefined ? "—" : custo(gasto)}</td><td>${escapar(e.erro ?? "")}</td><td class="acoes-t"><a class="link" href="/api/execucoes/${String(e.id)}/log" target="_blank" rel="noopener">log</a> · <a class="link" href="/api/execucoes/${String(e.id)}/prompt" target="_blank" rel="noopener">prompt</a></td></tr>`;
     });
   return {
-    titulo: `T-${String(id)} · ${ticket.titulo}`,
+    titulo: `${rotuloTicket(id)} · ${ticket.titulo}`,
     meta: `${etapa(ticket.etapa)} · ${STATUS_DO_TICKET[ticket.status]}`,
     corpo: linhas.length
       ? `<div class="rola"><table class="tabela"><thead><tr><th>Execução</th><th>Modo</th><th>Resultado</th><th>Início</th><th class="num">Duração</th><th class="num">Custo</th><th>Erro</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
@@ -761,7 +723,7 @@ export function evidenciaNaCaixa(p: PaginaDaIssue, e: Evidencia): ConteudoDaCaix
   const corpo = montarTabela ? [marca, dados, ...anexos] : [marca, ...anexos, dados];
   return {
     titulo: NOME[e.tipo],
-    meta: [e.tipo, etapaDoTicket.get(e.ticket), `T-${String(e.ticket)}`].filter(Boolean).join(" · "),
+    meta: [e.tipo, etapaDoTicket.get(e.ticket), rotuloTicket(e.ticket)].filter(Boolean).join(" · "),
     corpo: `<div class="evidencia">${corpo.join("")}</div>`,
     ...(unico && { aba: arquivo(unico), baixar: baixar(unico) }),
   };

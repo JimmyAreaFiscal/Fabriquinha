@@ -1,10 +1,19 @@
 // Métricas (F7 §4.4) como funções puras: o período em meses, a página `/metrics` (mês em foco contra a média dos
 // meses anteriores do período), a frase do mês do Início e os cards do mês do Projeto. O DOM e a rede ficam em
 // metricas-montar.ts. A comparação com a média é feita aqui, sobre a lista de meses do F6 §5.7.
-import type { Etapa, Fase } from "../../../dominio/primitivos.ts";
+import type { Fase } from "../../../dominio/primitivos.ts";
 import type { MetricasIssuePeriodo, MetricasMes } from "../../../metricas/periodo.ts";
-import { escapar, FASES } from "../render.ts";
-import { caminhoDaIssue, compacto, custo, duracao } from "./issue.ts";
+import {
+  caminhoDaIssue,
+  compacto,
+  custo,
+  duracao,
+  escapar,
+  FASES,
+  NOME_DA_ETAPA,
+  plural as pluralDe,
+  rotuloIssue,
+} from "../render.ts";
 
 // ——— meses (`AAAA-MM`) ———
 
@@ -119,7 +128,7 @@ interface DefMetrica {
   inteiro?: boolean;
 }
 
-const plural = (n: number, um: string, varios: string): string => `${qtd(n)} ${n === 1 ? um : varios}`;
+const plural = (n: number, um: string, varios: string): string => pluralDe(n, um, varios, qtd);
 
 const METRICAS: Record<Metrica, DefMetrica> = {
   custo: {
@@ -370,15 +379,6 @@ function blocoDaEvolucao(meses: readonly MetricasMes[], e: EstadoDasMetricas): s
 
 // ——— por etapa ———
 
-const NOME_DA_ETAPA: Record<Etapa, string> = {
-  registro: "Registro",
-  desenho: "Desenho",
-  desenvolvimento: "Desenvolvimento",
-  revisao: "Revisão",
-  encerramento: "Encerramento",
-  sessao: "Sessão em aberto",
-};
-
 type NumerosDaEtapa = MetricasMes["etapas"][number];
 
 const numerosDaEtapa = (n: NumerosDaEtapa) => ({
@@ -507,10 +507,10 @@ function tabelaDeIssues(issues: readonly MetricasIssuePeriodo[], e: EstadoDasMet
     return `<th class="${num ? "num " : ""}ordenavel"${sort}><button type="button" data-ordem="${c}">${rotulo}</button></th>`;
   };
   const linhas = ordenar(issues, e.ordem).map(
-    (i) => `<tr><td><a class="id" href="${caminhoDaIssue(i.projeto, i.issue)}">I-${String(i.issue)}</a></td>
+    (i) => `<tr><td><a class="id" href="${caminhoDaIssue(i.projeto, i.issue)}">${rotuloIssue(i.issue)}</a></td>
       <td>${i.titulo === null ? '<span class="muted">sem título</span>' : escapar(i.titulo)}</td>
       ${todos ? `<td class="muted">${escapar(i.projeto)}</td>` : ""}
-      <td><span class="pill ${i.fase === "concluida" ? "fase-concluida" : "fase"}">${NOME_DA_FASE[i.fase]}</span></td>
+      <td><span class="pill ${i.fase === "concluida" ? "pill-ok" : "fase"}">${NOME_DA_FASE[i.fase]}</span></td>
       <td class="num">${custo(i.consumo.custo)}</td><td class="num">${compacto(somaDosTokens(i.consumo))}</td>
       <td class="num">${String(i.execucoes)}</td><td class="num">${String(i.falhas)}</td><td class="num">${String(i.reprovacoes)}</td>
       <td class="num">${duracao(i.duracaoMs)}</td><td class="num">${i.notaPR === null ? "—" : String(i.notaPR)}</td></tr>`,

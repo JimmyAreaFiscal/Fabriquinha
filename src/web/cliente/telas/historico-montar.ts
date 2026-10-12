@@ -5,6 +5,7 @@ import type { DadosDoChat } from "../../rotas/chat.ts";
 import type { SessaoDoHistorico } from "../../rotas/historico.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
+import { caminhoDaSessao } from "../render.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { consulta, contagem, type Filtros, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
 
@@ -71,7 +72,7 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
       avisar();
       api<{ sessao: string }>(`/api/tickets/${alvo.dataset.consulta}/consulta`, { method: "POST" })
         .then(({ sessao }) => {
-          irPara(`/sessions/${encodeURIComponent(sessao)}`);
+          irPara(caminhoDaSessao(sessao));
         })
         .catch((error_: unknown) => {
           (alvo as HTMLButtonElement).disabled = false;

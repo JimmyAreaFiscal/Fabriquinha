@@ -3,7 +3,7 @@
 import type { Hospedagem, Projeto } from "../../../dominio/projeto.ts";
 import type { Etapa, Modelo } from "../../../dominio/primitivos.ts";
 import type { Configuracao } from "../../../persistencia/servico.ts";
-import { escapar, ha } from "../render.ts";
+import { escapar, ha, nomeDoModelo, rotuloIssue, rotuloTicket } from "../render.ts";
 
 /** `GET /api/configuracao`. */
 export interface EstadoDaConfiguracao extends Configuracao {
@@ -113,7 +113,7 @@ export function agendador(estado: EstadoDaConfiguracao, erros: Erros, agora: Dat
     : "Desligado: <b>não procura tickets</b>";
   const e = estado.emAndamento;
   const execucao = e
-    ? `Executando <b>E-${String(e.execucao)}</b> · I-${String(e.issue)} · T-${String(e.ticket)} · ${ha(e.iniciadaEm, agora)}`
+    ? `Executando <b>E-${String(e.execucao)}</b> · ${rotuloIssue(e.issue)} · ${rotuloTicket(e.ticket)} · ${ha(e.iniciadaEm, agora)}`
     : "Nenhuma execução autônoma em andamento";
   return `<h2>Agendador</h2><form class="agendador superficie" data-agendador novalidate><label class="chave"><input type="checkbox" name="agendadorAtivo"${estado.agendadorAtivo ? " checked" : ""}><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos e executa um por vez</small></span></label>${numeros.join("")}<div class="status-ag"><span>${busca}</span><span>${execucao}</span></div><button type="submit" class="btn btn-primario">Salvar</button></form>`;
 }
@@ -176,7 +176,7 @@ function modelos(erros: Erros, escolhidos: Rascunho["modelos"], disponiveis: rea
     const m = marca(erros, caminho);
     const options = opcoes.map((o) => {
       const selecionado = escolhido && par(o) === par(escolhido) ? " selected" : "";
-      const rotuloDoPar = escapar(o.provedor + " / " + o.modelo);
+      const rotuloDoPar = escapar(nomeDoModelo(o));
       return `<option value="${escapar(par(o))}"${selecionado}>${rotuloDoPar}</option>`;
     });
     return `<label for="${idDe(caminho)}">${rotulo}</label><div class="celula${m.classe}"><select id="${idDe(caminho)}" name="${caminho}"${escolhido ? "" : ' class="padrao"'}${m.aria}><option value="">padrão do pi</option>${options.join("")}</select>${m.msg}</div>`;

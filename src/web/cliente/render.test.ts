@@ -1,6 +1,77 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { escapar, NAO_ENCONTRADA, navegacao, paginaVazia, trilho } from "./render.ts";
+import type { InfoSessao } from "../../execucao/sessoes.ts";
+import {
+  caminhoDaIssue,
+  caminhoDaSessao,
+  compacto,
+  custo,
+  data,
+  duracao,
+  escapar,
+  estadoDoTrilho,
+  etapa,
+  modeloDoSeletor,
+  NAO_ENCONTRADA,
+  navegacao,
+  NOME_DA_ETAPA,
+  nomeDoModelo,
+  paginaVazia,
+  plural,
+  rotuloIssue,
+  rotuloTicket,
+  trilho,
+} from "./render.ts";
+
+// As datas saem no fuso do navegador; o teste fixa um.
+process.env.TZ = "America/Sao_Paulo";
+
+test("formatos: data no fuso do navegador, duração, custo e compacto", () => {
+  assert.equal(data("2026-10-11T12:05:00.000Z"), "11/10 09:05");
+  assert.deepEqual([0, 48_400, 60_000, 130_000, 3_600_000, 4_800_000].map(duracao), [
+    "0 s",
+    "48 s",
+    "1 min",
+    "2 min 10 s",
+    "1 h",
+    "1 h 20 min",
+  ]);
+  assert.equal(custo(0.5), "US$ 0,50");
+  assert.deepEqual([compacto(2_300_000), compacto(48_120), compacto(950)], ["2,3 M", "48,1 mil", "950"]);
+  assert.deepEqual([compacto(1_234_500_000), compacto(830.4)], ["1.234,5 M", "830"]);
+  assert.deepEqual([plural(1, "falha", "falhas"), plural(0, "falha", "falhas")], ["1 falha", "0 falhas"]);
+  assert.equal(
+    plural(1.5, "mês", "meses", (n) => n.toFixed(1)),
+    "1.5 meses",
+  );
+});
+
+test("rótulos e caminhos: I-n, T-n, a issue, o chat, a etapa e o modelo", () => {
+  assert.deepEqual([rotuloIssue(7), rotuloTicket(12)], ["I-7", "T-12"]);
+  assert.equal(caminhoDaIssue("loja nova", 7), "/projects/loja%20nova/issues/I-7");
+  assert.equal(caminhoDaSessao("a/b c"), "/sessions/a%2Fb%20c");
+  assert.deepEqual(
+    [NOME_DA_ETAPA.sessao, etapa("sessao"), etapa("revisao")],
+    ["Sessão em aberto", "sessão em aberto", "revisão"],
+  );
+  assert.equal(nomeDoModelo({ provedor: "anthropic", modelo: "claude" }), "anthropic / claude");
+  assert.deepEqual(modeloDoSeletor("openrouter/anthropic/claude"), {
+    provedor: "openrouter",
+    modelo: "anthropic/claude",
+  });
+  assert.deepEqual([modeloDoSeletor(""), modeloDoSeletor("/sem-provedor")], [null, null]);
+});
+
+test("trilho: a falha antes de quem aguarda, e quem aguarda antes do que roda", () => {
+  const sessao = (s: Partial<InfoSessao>) => ({ estado: "terminada", ...s }) as InfoSessao;
+  const rodando = sessao({ estado: "rodando" });
+  const aguarda = sessao({ estado: "aguardando_humano", motivo: "gate_desenho" });
+  const falha = sessao({ estado: "aguardando_humano", motivo: "falha" });
+  assert.equal(estadoDoTrilho([]), undefined);
+  assert.equal(estadoDoTrilho([rodando]), "rodando");
+  assert.equal(estadoDoTrilho([rodando, aguarda]), "aguarda");
+  assert.equal(estadoDoTrilho([aguarda, falha]), "falha");
+});
 
 test("escapar neutraliza HTML vindo do agente", () => {
   assert.equal(

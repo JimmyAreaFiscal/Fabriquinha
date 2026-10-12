@@ -8,7 +8,7 @@ import type { CabecalhoDoChat, DadosDoChat } from "../../rotas/chat.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
-import { escapar } from "../render.ts";
+import { caminhoDaSessao, escapar, modeloDoSeletor } from "../render.ts";
 import {
   barraDeEstado,
   chaveDa,
@@ -28,7 +28,6 @@ import {
   type MensagemPi,
   type ModoEnvio,
   modeloDe,
-  modeloDoSeletor,
   respostaDoDialogo,
   seletorDeSessoes,
 } from "./chat.ts";
@@ -286,7 +285,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if ("consulta" in botao.dataset) {
       acao(
         api<{ sessao: string }>(`/api/tickets/${ticket()}/consulta`, { method: "POST" }).then(({ sessao: nova }) => {
-          irPara(`/sessions/${encodeURIComponent(nova)}`);
+          irPara(caminhoDaSessao(nova));
         }),
       );
     } else if ("anexar" in botao.dataset) {

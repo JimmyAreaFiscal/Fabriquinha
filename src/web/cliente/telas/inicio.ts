@@ -1,11 +1,26 @@
 // Início (F7 §4.4) como funções puras: o que aguarda o Auditor, o que roda, o board das issues em andamento e o
 // formulário do Registrar necessidade. O DOM e a rede ficam em inicio-montar.ts.
-import type { Etapa, Fase, Id, Modelo } from "../../../dominio/primitivos.ts";
-import type { InfoSessao, MotivoEspera } from "../../../execucao/sessoes.ts";
+import type { Fase, Id, Modelo } from "../../../dominio/primitivos.ts";
+import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
-import { escapar, FASES, ha, GATES, MODO_DA_SESSAO, STATUS_DO_TICKET } from "../render.ts";
-import { caminhoDaIssue } from "./issue.ts";
+import {
+  caminhoDaIssue,
+  caminhoDaSessao,
+  escapar,
+  ETAPAS_DO_PROCESSO,
+  etapa,
+  FASES,
+  GATES,
+  ha,
+  MODO_DA_SESSAO,
+  MOTIVOS,
+  nomeDoModelo,
+  plural,
+  rotuloIssue,
+  rotuloTicket,
+  STATUS_DO_TICKET,
+} from "../render.ts";
 import { fraseDoMes } from "./metricas.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 
@@ -16,39 +31,8 @@ export interface DadosDoInicio {
   mes: MetricasMes;
 }
 
-/** Por motivo (F4 §5.2): o destaque do card, a marca no cartão do board e o botão (F7 §4.4). */
-export const MOTIVOS: Record<MotivoEspera, { titulo: string; marca: string; acao: string }> = {
-  conversa: { titulo: "Conversa", marca: "responder", acao: "Responder" },
-  dialogo: { titulo: "Diálogo", marca: "responder", acao: "Responder" },
-  falha: { titulo: "Falhou", marca: "falha", acao: "Responder e retomar" },
-  gate_registro: { titulo: "Gate do registro", marca: "gate do registro", acao: "Avaliar registro" },
-  gate_desenho: { titulo: "Gate do desenho", marca: "gate do desenho", acao: "Avaliar desenho" },
-  gate_pr: { titulo: "Gate do PR", marca: "gate do PR", acao: "Ver o PR" },
-};
-
-const ETAPA: Record<Etapa, string> = {
-  registro: "registro",
-  desenho: "desenho",
-  desenvolvimento: "desenvolvimento",
-  revisao: "revisão",
-  encerramento: "encerramento",
-  sessao: "sessão",
-};
-
-/** As 5 etapas do processo sobre as colunas do board, com quantas fases cada uma agrupa (F7 §4.4). */
-export const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
-  ["Registrar", 1],
-  ["Desenhar", 2],
-  ["Implementar", 1],
-  ["Revisar", 1],
-  ["Encerrar", 3],
-];
-
-const rotuloIssue = (id: Id): string => `I-${String(id)}`;
-const rotuloTicket = (id: Id): string => `T-${String(id)}`;
 const tituloDa = (issue: IssueDoBoard | undefined): string => issue?.titulo ?? "sem título";
-const linkDoChat = (s: InfoSessao): string => `/sessions/${encodeURIComponent(s.sessao)}`;
-const modelo = (m: Modelo | undefined): string => (m ? `${m.provedor} / ${m.modelo}` : "padrão do pi");
+const modelo = (m: Modelo | undefined): string => (m ? nomeDoModelo(m) : "padrão do pi");
 
 /** A frase do que falta para a sessão sair da espera. */
 function falta(s: InfoSessao, issue: IssueDoBoard | undefined): string {
@@ -60,7 +44,7 @@ function falta(s: InfoSessao, issue: IssueDoBoard | undefined): string {
       return "Registro pronto; falta aprovar";
     case "gate_desenho": {
       const n = tickets.filter((t) => t.etapa === "desenvolvimento" && t.status !== "concluido").length;
-      return n === 1 ? "1 ticket de desenvolvimento proposto" : `${String(n)} tickets de desenvolvimento propostos`;
+      return plural(n, "ticket de desenvolvimento proposto", "tickets de desenvolvimento propostos");
     }
     case "gate_pr":
       return "PR aberto; aguarda a sua revisão no PR";
@@ -77,11 +61,11 @@ function falta(s: InfoSessao, issue: IssueDoBoard | undefined): string {
 function decisao(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): string {
   const m = MOTIVOS[s.motivo ?? "conversa"];
   const falhou = s.motivo === "falha";
-  return `<a class="decisao superficie${falhou ? " falha" : ""}" href="${linkDoChat(s)}">
+  return `<a class="decisao superficie${falhou ? " falha" : ""}" href="${caminhoDaSessao(s.sessao)}">
     <span class="decisao-motivo">${m.titulo}</span><span class="btn${falhou ? "" : " btn-primario"} btn-pequeno">${m.acao} →</span>
     <span class="decisao-titulo"><span class="id">${rotuloIssue(s.issue)}</span> ${escapar(tituloDa(issue))}</span>
     <p class="decisao-texto">${escapar(falta(s, issue))}</p>
-    <div class="decisao-pe"><span class="tag">${escapar(s.projeto)}</span><span><span class="mono">${rotuloTicket(s.ticket)}</span> · ${ETAPA[s.etapa]} · ${MODO_DA_SESSAO[s.modo]} · ${ha(s.desde, agora)}</span></div>
+    <div class="decisao-pe"><span class="tag">${escapar(s.projeto)}</span><span><span class="mono">${rotuloTicket(s.ticket)}</span> · ${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]} · ${ha(s.desde, agora)}</span></div>
   </a>`;
 }
 
@@ -91,11 +75,11 @@ function rodando(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): s
     s.modo === "consulta"
       ? "Respondendo à sua pergunta"
       : (issue?.tickets.find((t) => t.id === s.ticket)?.titulo ?? "Trabalhando");
-  return `<a class="rodando-linha" href="${linkDoChat(s)}">
+  return `<a class="rodando-linha" href="${caminhoDaSessao(s.sessao)}">
     <span class="pill pill-rodando">${MODO_DA_SESSAO[s.modo]}</span>
     <span class="id">${rotuloIssue(s.issue)}</span>
     <span class="titulo">${escapar(tituloDa(issue))} <span class="muted">— ${escapar(fazendo)}</span></span>
-    <span class="muted esconde"><span class="mono">${rotuloTicket(s.ticket)}</span> · ${ETAPA[s.etapa]}</span>
+    <span class="muted esconde"><span class="mono">${rotuloTicket(s.ticket)}</span> · ${etapa(s.etapa)}</span>
     <span class="mono muted esconde">${escapar(modelo(s.modelo))}</span>
     <span class="tempo muted">${ha(s.desde, agora)}</span>
   </a>`;
@@ -131,7 +115,7 @@ function cartao(issue: IssueDoBoard, sessoes: readonly InfoSessao[], emAndamento
   return `<a class="${classes}" href="${caminhoDaIssue(issue.projeto, issue.id)}">
     <div class="cartao-topo"><span class="id">${rotuloIssue(issue.id)}</span><span class="tag">${escapar(issue.projeto)}</span></div>
     <div class="cartao-titulo${issue.titulo === null ? " sem" : ""}">${escapar(tituloDa(issue))}</div>
-    ${ticket ? `<div class="cartao-ticket"><span class="mono">${rotuloTicket(ticket.id)}</span> ${ETAPA[ticket.etapa]} · ${STATUS_DO_TICKET[ticket.status]}${mais}</div>` : ""}
+    ${ticket ? `<div class="cartao-ticket"><span class="mono">${rotuloTicket(ticket.id)}</span> ${etapa(ticket.etapa)} · ${STATUS_DO_TICKET[ticket.status]}${mais}</div>` : ""}
     ${lista.length > 0 ? `<div class="cartao-marcas">${pills}</div>` : ""}
   </a>`;
 }
@@ -174,7 +158,7 @@ export function inicio(dados: DadosDoInicio, agora: Date): string {
     ${rodam.length > 0 ? `<div class="rodando-linhas superficie">${rodam.map((s) => rodando(s, issue(s.issue), agora)).join("")}</div>` : '<p class="muted vazio">Nenhuma sessão rodando.</p>'}
   </section>
   <section class="bloco" aria-labelledby="titulo-board">
-    <div class="secao-titulo"><h2 id="titulo-board">Board</h2><span class="muted">${String(n)} ${n === 1 ? "issue" : "issues"} em andamento</span></div>
+    <div class="secao-titulo"><h2 id="titulo-board">Board</h2><span class="muted">${plural(n, "issue", "issues")} em andamento</span></div>
     <div class="board-etapas">${board(dados, agora)}</div>
   </section>`;
 }

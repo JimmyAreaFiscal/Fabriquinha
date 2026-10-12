@@ -5,6 +5,7 @@ import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, elemento, irPara, mostrarErro } from "../dom.ts";
+import { caminhoDaSessao } from "../render.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { formularioDeRegistro, inicio } from "./inicio.ts";
 import { mesDe } from "./metricas.ts";
@@ -41,7 +42,7 @@ export async function abrirRegistro(issues: readonly IssueDoBoard[], escolhido?:
       })
         .then(({ sessao }) => {
           elemento("[data-caixa]", HTMLDialogElement).close();
-          irPara(`/sessions/${encodeURIComponent(sessao)}`);
+          irPara(caminhoDaSessao(sessao));
         })
         .catch((error_: unknown) => {
           desenhar(nome, marcadas, error_ instanceof Error ? error_.message : String(error_));

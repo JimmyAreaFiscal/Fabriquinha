@@ -3,6 +3,7 @@
 import type { Modelo } from "../../../dominio/primitivos.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, ErroDaApi, mostrarErro } from "../dom.ts";
+import { modeloDoSeletor } from "../render.ts";
 import {
   agendador,
   type Erros,
@@ -48,13 +49,8 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
     [...form.querySelectorAll<HTMLInputElement>(`[data-lista="${campo}"] input`)].map((i) => i.value);
   const modelos: Rascunho["modelos"] = {};
   for (const s of form.querySelectorAll<HTMLSelectElement>('select[name^="modelos."]')) {
-    const corte = s.value.indexOf("/");
-    if (corte > 0) {
-      modelos[s.name.slice("modelos.".length) as keyof Rascunho["modelos"]] = {
-        provedor: s.value.slice(0, corte),
-        modelo: s.value.slice(corte + 1),
-      };
-    }
+    const modelo = modeloDoSeletor(s.value);
+    if (modelo) modelos[s.name.slice("modelos.".length) as keyof Rascunho["modelos"]] = modelo;
   }
   return {
     nome: valor(form, '[name="nome"]'),

@@ -8,8 +8,21 @@ import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import { markdown } from "../markdown.ts";
-import { escapar, FASES, ha } from "../render.ts";
-import { caminhoDaIssue, cardDaEvidencia, comCard, estadoDoTrilho } from "./issue.ts";
+import {
+  caminhoDaIssue,
+  caminhoDaSessao,
+  escapar,
+  estadoDoTrilho,
+  etapa,
+  FASES,
+  ha,
+  MODO_DA_SESSAO,
+  nomeDoModelo,
+  plural,
+  rotuloIssue,
+  rotuloTicket,
+} from "../render.ts";
+import { cardDaEvidencia, comCard } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -49,21 +62,6 @@ export const textoDe = (m: MensagemPi): string =>
     .map((b) => String(b.text))
     .join("\n");
 
-const MODOS: Record<Execucao["modo"], string> = {
-  autonomo: "autônoma",
-  interativo: "interativa",
-  consulta: "consulta",
-};
-
-const ETAPAS: Record<CabecalhoDoChat["sessao"]["etapa"], string> = {
-  registro: "registro",
-  desenho: "desenho",
-  desenvolvimento: "desenvolvimento",
-  revisao: "revisão",
-  encerramento: "encerramento",
-  sessao: "sessão em aberto",
-};
-
 const MOTIVOS: Record<NonNullable<CabecalhoDoChat["sessao"]["motivo"]>, string> = {
   conversa: "conversa",
   dialogo: "diálogo",
@@ -84,9 +82,11 @@ export function etiquetaDoEstado({ estado, motivo }: CabecalhoDoChat["sessao"]):
 /** O modelo da sessão: o da última execução, senão o da última resposta do agente, senão o padrão do pi. */
 export function modeloDe(c: CabecalhoDoChat, conversa: readonly Entrada[]): string {
   const fixado = c.execucoes.at(-1)?.modelo;
-  if (fixado) return `${fixado.provedor} / ${fixado.modelo}`;
+  if (fixado) return nomeDoModelo(fixado);
   const resposta = conversa.map((e) => e.message as MensagemPi | undefined).findLast((m) => m?.role === "assistant");
-  return resposta?.model ? `${String(resposta.provider)} / ${resposta.model}` : "modelo padrão do pi";
+  return resposta?.model
+    ? nomeDoModelo({ provedor: String(resposta.provider), modelo: resposta.model })
+    : "modelo padrão do pi";
 }
 
 /** **Exportar histórico** (F4 §6.8): o Markdown da sessão, baixado. */
@@ -103,9 +103,9 @@ export function barraDeEstado(c: CabecalhoDoChat, modelo: string): string {
   const titulo = issue.titulo ?? "sem título";
   return (
     `<div class="estado-sessao">` +
-    `<a class="issue" href="/projects/${encodeURIComponent(issue.projeto)}/issues/I-${String(issue.id)}"><span class="id">I-${String(issue.id)}</span> ${escapar(titulo)}</a>` +
-    `<span class="sep">│</span><span class="id">T-${String(sessao.ticket)}</span>` +
-    `<span class="muted">${ETAPAS[sessao.etapa]} · ${MODOS[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
+    `<a class="issue" href="${caminhoDaIssue(issue.projeto, issue.id)}"><span class="id">${rotuloIssue(issue.id)}</span> ${escapar(titulo)}</a>` +
+    `<span class="sep">│</span><span class="id">${rotuloTicket(sessao.ticket)}</span>` +
+    `<span class="muted">${etapa(sessao.etapa)} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
     `<span class="modelo">${escapar(modelo)}</span>` +
     `<div class="direita"><span class="muted pequeno">E-${e}</span>` +
     `<a class="link" href="/api/execucoes/${e}/log" target="_blank" rel="noopener">log</a>` +
@@ -127,7 +127,11 @@ export function linhasDaExecucao(e: Execucao, i: number): (Item & { em: string }
       ? ""
       : ` · <a href="/api/execucoes/${String(e.id)}/prompt" target="_blank" rel="noopener">${rotulo}</a>`;
   const linhas = [
-    { chave: `inicio-${n}`, em: e.iniciadaEm, html: sistema(`Execução ${n} iniciada · ${MODOS[e.modo]}${prompt}`) },
+    {
+      chave: `inicio-${n}`,
+      em: e.iniciadaEm,
+      html: sistema(`Execução ${n} iniciada · ${MODO_DA_SESSAO[e.modo]}${prompt}`),
+    },
   ];
   if (e.terminadaEm === undefined) return linhas;
   let fim = `Execução ${n} encerrada`;
@@ -147,7 +151,7 @@ export function erroDaFalha({ sessao, ticket }: CabecalhoDoChat): Item[] {
   return [
     {
       chave: `falha-${e}`,
-      html: `<div class="erro-bloco" role="alert"><strong>Execução ${e} falhou:</strong> ${erro}. O ticket T-${String(ticket.id)} ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>`,
+      html: `<div class="erro-bloco" role="alert"><strong>Execução ${e} falhou:</strong> ${erro}. O ticket ${rotuloTicket(ticket.id)} ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>`,
     },
   ];
 }
@@ -168,6 +172,15 @@ export function argumentos(args: unknown): string {
 /** Linhas a partir das quais a saída da ferramenta rola e ganha **ver tudo**. */
 const LINHAS_VISIVEIS = 10;
 
+/** O resumo do resultado de uma ferramenta: ✓ ou ✗ com o número de linhas da saída. */
+export function resumoDoResultado(resultado: MensagemPi): { ok: boolean; resumo: string; linhas: number } {
+  const texto = textoDe(resultado);
+  const linhas = texto === "" ? 0 : texto.split("\n").length;
+  const quantas = linhas === 0 ? "sem saída" : plural(linhas, "linha", "linhas");
+  const ok = !resultado.isError;
+  return { ok, resumo: `${ok ? "✓" : "✗"} ${quantas}`, linhas };
+}
+
 /**
  * Uma chamada de ferramenta, recolhível: nome, argumentos e o resumo do resultado (✓ ou ✗ com o número de linhas), e a
  * saída em fonte monoespaçada, com **ver tudo** quando passa de algumas linhas. Sem resultado ainda, diz que espera.
@@ -177,12 +190,9 @@ export function ferramenta(chamada: Bloco, resultado?: MensagemPi, aberta = fals
   let saida = "";
   if (resultado) {
     const texto = textoDe(resultado);
-    const linhas = texto === "" ? 0 : texto.split("\n").length;
-    let quantas = linhas === 1 ? "1 linha" : `${String(linhas)} linhas`;
-    if (linhas === 0) quantas = "sem saída";
-    resumo = resultado.isError
-      ? `<span class="res nok">✗ ${quantas}</span>`
-      : `<span class="res ok">✓ ${quantas}</span>`;
+    const r = resumoDoResultado(resultado);
+    const { linhas } = r;
+    resumo = `<span class="res ${r.ok ? "ok" : "nok"}">${r.resumo}</span>`;
     const ver =
       linhas > LINHAS_VISIVEIS ? '<button type="button" class="link ver" data-ver-tudo>ver tudo</button>' : "";
     saida = linhas === 0 ? "" : `<pre>${escapar(texto)}</pre>${ver}`;
@@ -198,7 +208,7 @@ const pensamento = (texto: string, rotulo = "raciocínio"): string =>
   `<details class="pensando"><summary>${rotulo}</summary><p>${escapar(texto)}</p></details>`;
 
 const doAgente = (html: string): string =>
-  `<div class="msg agente"><span class="quem">agente</span><div class="texto">${html}</div></div>`;
+  `<div class="msg agente"><span class="quem">agente</span><div class="texto md">${html}</div></div>`;
 
 const PAROU: Record<string, string> = { aborted: "o agente foi interrompido", error: "o agente parou com erro" };
 
@@ -208,7 +218,7 @@ const PAROU: Record<string, string> = { aborted: "o agente foi interrompido", er
  */
 export function mensagem(m: MensagemPi, resultados: ReadonlyMap<string, MensagemPi> = new Map()): string {
   if (m.role === "user") {
-    return `<div class="msg voce"><span class="quem">você</span><div class="texto">${markdown(textoDe(m))}</div></div>`;
+    return `<div class="msg voce"><span class="quem">você</span><div class="texto md">${markdown(textoDe(m))}</div></div>`;
   }
   if (m.role !== "assistant") return "";
   const partes = blocos(m).map((b) => {
@@ -315,7 +325,7 @@ export function etiquetasDeAnexo(anexos: readonly InfoSessao[]): string {
 
 /** `s-2a7d · I-27 · T-114`: o começo do id da sessão, a issue e o ticket. */
 const rotuloDaSessao = (s: InfoSessao): string =>
-  `s-${escapar(s.sessao.slice(0, 4))} · I-${String(s.issue)} · T-${String(s.ticket)}`;
+  `s-${escapar(s.sessao.slice(0, 4))} · ${rotuloIssue(s.issue)} · ${rotuloTicket(s.ticket)}`;
 
 /**
  * O seletor de sessões do **+ Anexar histórico**, na caixa: as outras sessões, ativas e do histórico, da mais recente
@@ -327,17 +337,11 @@ export function seletorDeSessoes(sessoes: readonly InfoSessao[], atual: string, 
     .toSorted((a, b) => b.desde.localeCompare(a.desde))
     .map(
       (s) =>
-        `<li><button type="button" class="opcao-sessao" data-anexar-sessao="${escapar(s.sessao)}"><span class="id">I-${String(s.issue)} · T-${String(s.ticket)}</span><span>${escapar(s.projeto)} · ${ETAPAS[s.etapa]} · ${MODOS[s.modo]}</span>${etiquetaDoEstado(s)}<span class="muted pequeno">s-${escapar(s.sessao.slice(0, 4))}</span></button></li>`,
+        `<li><button type="button" class="opcao-sessao" data-anexar-sessao="${escapar(s.sessao)}"><span class="id">${rotuloIssue(s.issue)} · ${rotuloTicket(s.ticket)}</span><span>${escapar(s.projeto)} · ${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</span>${etiquetaDoEstado(s)}<span class="muted pequeno">s-${escapar(s.sessao.slice(0, 4))}</span></button></li>`,
     );
   return opcoes.length
     ? `<ul class="sessoes-anexo">${opcoes.join("")}</ul>`
     : '<p class="muted">Nenhuma outra sessão para anexar.</p>';
-}
-
-/** O valor do seletor de modelo como o corpo de C20: `provedor/modelo`, ou `null` para o padrão da etapa. */
-export function modeloDoSeletor(valor: string): { provedor: string; modelo: string } | null {
-  const corte = valor.indexOf("/");
-  return corte < 0 ? null : { provedor: valor.slice(0, corte), modelo: valor.slice(corte + 1) };
 }
 
 /** Na falha (F4 §6.4): a instrução para a próxima tentativa, o modelo (C20, preenchido com a issue) e o C9. */
@@ -443,7 +447,7 @@ export function lateral(c: CabecalhoDoChat, agora: number): string {
     return (
       `<section class="gate-reg" aria-label="${gate}"><div class="cab"><span class="rotulo">${gate}</span></div>` +
       '<div class="corpo">A decisão deste gate fica na página da issue, com tudo o que ela precisa.' +
-      `<a class="btn btn-primario" href="/projects/${encodeURIComponent(issue.projeto)}/issues/I-${String(issue.id)}">Decidir na página da issue</a></div></section>`
+      `<a class="btn btn-primario" href="${caminhoDaIssue(issue.projeto, issue.id)}">Decidir na página da issue</a></div></section>`
     );
   }
   return sessao.etapa === "registro" && issue.fase === "registro" ? formularioDoRegistro(c) : "";
@@ -473,15 +477,15 @@ export function contextoDaIssue(p: PaginaDaIssue, sessao: InfoSessao): string {
     const principal = p.sessoes.find((s) => s.ticket === t.id && s.modo !== "consulta");
     let lado = "";
     if (desta) lado = '<span class="muted pequeno">esta</span>';
-    else if (principal) lado = `<a class="link" href="/sessions/${encodeURIComponent(principal.sessao)}">chat</a>`;
-    return `<li${desta ? ' class="atual" aria-current="true"' : ""}><span class="p ${t.status}" aria-hidden="true"></span><span class="id">T-${String(t.id)}</span><span class="t">${escapar(t.titulo)}</span>${lado}</li>`;
+    else if (principal) lado = `<a class="link" href="${caminhoDaSessao(principal.sessao)}">chat</a>`;
+    return `<li${desta ? ' class="atual" aria-current="true"' : ""}><span class="p ${t.status}" aria-hidden="true"></span><span class="id">${rotuloTicket(t.id)}</span><span class="t">${escapar(t.titulo)}</span>${lado}</li>`;
   });
   const cards = comCard(p).map(cardDaEvidencia).join("");
   const artefatos = cards
     ? '<div class="cards-art">' + cards + "</div>"
     : '<p class="muted pequeno">Nenhum artefato ainda.</p>';
   return (
-    `<section class="painel superficie contexto-issue" aria-label="Contexto da issue"><h3>I-${String(p.issue.id)} · ${escapar(p.issue.projeto)}</h3>` +
+    `<section class="painel superficie contexto-issue" aria-label="Contexto da issue"><h3>${rotuloIssue(p.issue.id)} · ${escapar(p.issue.projeto)}</h3>` +
     trilhoCompacto(p) +
     `<div><div class="titulo-bloco">Tickets e sessões</div><ul class="tickets-da-issue">${tickets.join("")}</ul></div>` +
     `<div><div class="titulo-bloco">Artefatos</div>${artefatos}</div>` +
