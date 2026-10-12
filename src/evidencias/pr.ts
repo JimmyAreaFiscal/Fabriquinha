@@ -6,6 +6,7 @@ import type { Etapa, Id } from "../dominio/primitivos.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
 import type { MetricasIssue } from "../metricas/issue.ts";
 import { dolares, duracao, inteiro, tokens } from "../metricas/relatorio.ts";
+import markdownit from "markdown-it";
 import { linhas, resultado } from "./formato.ts";
 import { daUltimaConcluida } from "./schemas.ts";
 
@@ -75,21 +76,57 @@ export const marcaDoPR = (issue: Id, ticket: Id): string =>
  */
 const CERCA = /^ {0,3}(?:(`{3,})(?![^\n]*`)|(~{3,}))/;
 
+/** Quantas crases seguidas começam em `i`. */
+function crases(linha: string, i: number): number {
+  let fim = i;
+  while (linha.charAt(fim) === "`") fim += 1;
+  return fim - i;
+}
+
+/** Onde começa, a partir de `de`, a próxima sequência de exatamente `n` crases, ou -1. */
+function fechamento(linha: string, n: number, de: number): number {
+  for (let i = linha.indexOf("`", de); i >= 0; i = linha.indexOf("`", i + crases(linha, i))) {
+    if (crases(linha, i) === n) return i;
+  }
+  return -1;
+}
+
 /**
- * Texto livre do agente ou do Auditor dentro do Markdown do PR, sem poder esconder nem imitar as seções geradas.
- * Fora de bloco cercado:
- * - cada `<` vira `&lt;`: comentário, `<details>` ou `<pre>` sem fechamento esconderiam ou transformariam o resto do
- *   corpo;
- * - uma linha com `#` ou só com `=`/`-` (o sublinhado de título) sai escapada, para um `## Evidências` no meio da
- *   mensagem não virar seção.
- * Dentro de bloco cercado a linha fica como o agente escreveu, e a cerca que ele deixou aberta é fechada no fim, para
- * o bloco não engolir o resto do corpo.
- * ponytail: o `<` dentro de código inline também vira `&lt;` e aparece assim no PR. Reconhecer código inline como o
- * CommonMark (crases de mesmo tamanho, crase escapada) é onde o HTML do agente escapava; se o cosmético pesar, usar
- * um parser de Markdown de verdade.
- * ponytail: a linha recuada em 4 espaços (bloco recuado) também fica.
+ * O `<` de uma linha fora de código inline vira `&lt;`. O código inline segue o CommonMark: crases que abrem fecham
+ * com a próxima sequência de mesmo tamanho, e a crase escapada (`\``) não abre; dentro dele o `<` fica cru, porque o
+ * GitHub e o Azure DevOps não decodificam entidade em código e o `&lt;` apareceria como está. Com `cru` falso, cada
+ * `<` da linha vira `&lt;`.
  */
-function neutro(texto: string): string {
+function semHtmlNaLinha(linha: string, cru: boolean): string {
+  let saida = "";
+  let i = 0;
+  while (i < linha.length) {
+    const c = linha.charAt(i);
+    if (c === "\\") {
+      // O caractere escapado sai como está: `\<` já não abre HTML, e `\`` não abre código.
+      saida += linha.slice(i, i + 2);
+      i += 2;
+    } else if (c === "`") {
+      const abre = crases(linha, i);
+      const fim = cru ? fechamento(linha, abre, i + abre) : -1;
+      const ate = fim < 0 ? i + abre : fim + abre;
+      saida += linha.slice(i, ate);
+      i = ate;
+    } else {
+      saida += c === "<" ? "&lt;" : c;
+      i += 1;
+    }
+  }
+  return saida;
+}
+
+/** Um título ATX do agente desce dois níveis (`## Uso` vira `#### Uso`), abaixo das seções `##` do PR. */
+const TITULO = /^( {0,3})(#{1,6})(?=[ \t]|$)/;
+/** O sublinhado de um título setext, que sai escapado. */
+const SUBLINHADO = /^( {0,3})(=+[ \t]*$|-+[ \t]*$)/;
+
+/** As linhas fora de bloco cercado neutralizadas, as de dentro como estão, e a cerca deixada aberta fechada no fim. */
+function neutralizar(texto: string, cru: boolean): string {
   let cerca: string | undefined;
   const linhas: string[] = [];
   for (const linha of texto.trim().split("\n")) {
@@ -101,13 +138,43 @@ function neutro(texto: string): string {
       }
       linhas.push(linha);
     } else if (marca === undefined) {
-      linhas.push(linha.replaceAll("<", "&lt;").replace(/^( {0,3})(#|=+[ \t]*$|-+[ \t]*$)/, String.raw`$1\$2`));
+      linhas.push(
+        semHtmlNaLinha(linha, cru)
+          .replace(TITULO, (_, recuo: string, n: string) => recuo + "#".repeat(Math.min(n.length + 2, 6)))
+          .replace(SUBLINHADO, String.raw`$1\$2`),
+      );
     } else {
       cerca = marca;
       linhas.push(linha);
     }
   }
   return linhas.join("\n") + (cerca === undefined ? "" : `\n${cerca}`);
+}
+
+const leitor = markdownit({ html: true });
+/** Se o `markdown-it` (CommonMark, como o GitHub e o Azure DevOps) acha HTML no Markdown. */
+const temHtml = (markdown: string): boolean =>
+  leitor
+    .parse(markdown, {})
+    .some((t) => t.type === "html_block" || t.children?.some((f) => f.type === "html_inline") === true);
+
+/**
+ * Texto livre do agente ou do Auditor dentro do Markdown do PR, sem poder esconder nem imitar as seções geradas.
+ * Fora de bloco cercado:
+ * - cada `<` fora de código inline vira `&lt;`: comentário, `<details>` ou `<pre>` sem fechamento esconderiam ou
+ *   transformariam o resto do corpo;
+ * - um título desce dois níveis e uma linha só com `=`/`-` (o sublinhado de título) sai escapada, para um
+ *   `## Evidências` no meio da mensagem não virar seção.
+ * Dentro de bloco cercado a linha fica como o agente escreveu, e a cerca que ele deixou aberta é fechada no fim, para
+ * o bloco não engolir o resto do corpo.
+ * O código inline é reconhecido linha a linha; o parágrafo inteiro pode casar as crases de outro jeito (uma crase
+ * aberta na linha de cima fecha na primeira desta) e deixar o `<` cru fora de código. Por isso o resultado (`montar`
+ * aplicado a ele) passa pelo `markdown-it`: se sobrou HTML, cada `<` fora de bloco cercado vira `&lt;`.
+ * ponytail: a linha recuada em 4 espaços (bloco recuado) também fica.
+ */
+function neutro(texto: string, montar = (s: string): string => s): string {
+  const cru = montar(neutralizar(texto, true));
+  return temHtml(cru) ? montar(neutralizar(texto, false)) : cru;
 }
 
 /** Uma linha de item de lista: continuação recuada, para texto de várias linhas não sair da lista. */
@@ -118,12 +185,13 @@ const lista = (itens: readonly string[], vazio: string): string =>
  * Célula de tabela Markdown: uma linha só, sem `|` que abra outra coluna. Varreduras lineares, sem regex: o texto vem
  * do agente, e `\\*\|` ou `\s*\n\s*` voltariam atrás em tempo quadrático numa sequência longa de barras ou espaços.
  */
-function celula(texto: string): string {
+const celula = (texto: string): string => neutro(texto, colunaSo);
+function colunaSo(neutralizado: string): string {
   // O pipe só fica escapado atrás de um número ímpar de barras: o `\|` do agente já está escapado, e `\\|` seria
   // uma barra literal seguida de um pipe que divide a coluna.
   let escapado = "";
   let barras = 0;
-  for (const c of neutro(texto)) {
+  for (const c of neutralizado) {
     if (c === "|" && barras % 2 === 0) escapado += "\\";
     escapado += c;
     barras = c === "\\" ? barras + 1 : 0;

@@ -310,6 +310,45 @@ test("célula de tabela em tempo linear: 100 mil barras ou espaços seguidos nã
   assert.ok(completo.includes(`| não previsto: ${barras}x${espacos}x ${barras}\\| |\n`));
 });
 
+test("o texto do PR #1 da demo: título vira subtítulo e o `<` do código inline sai cru, sem virar &lt;", () => {
+  const ag = encerrando();
+  ag.issue.descricao =
+    "## Necessidade\n\nUma calculadora.\n\n## Uso\n\n```\nnode calculadora.js <a> <op> <b>\n```\n\n" +
+    "- `<op>` é uma de `+`, `-`, `*`, `/`.\n- Entrada inválida (`<a>` ou `<b>` que não é número): o uso.";
+  const mensagem = ag.evidencias.find((e) => e.tipo === "mensagem_pr");
+  assert.ok(mensagem);
+  Object.assign(mensagem.dados, {
+    oQueMudou: "`node calculadora.js <a> <op> <b>` imprime o resultado; a<b fora de código vira entidade.",
+    naoPrevistos: [{ caminho: "a|b.png", motivo: "roda `node x <a>`, e <b> fora" }],
+  });
+  const { completo } = montarPR(ag, 5, LIMITE_DO_CORPO.github);
+  assert.ok(
+    completo.includes(
+      "#### Necessidade\n\nUma calculadora.\n\n#### Uso\n\n```\nnode calculadora.js <a> <op> <b>\n```\n\n" +
+        "- `<op>` é uma de `+`, `-`, `*`, `/`.\n- Entrada inválida (`<a>` ou `<b>` que não é número): o uso.",
+    ),
+  );
+  assert.ok(
+    completo.includes("`node calculadora.js <a> <op> <b>` imprime o resultado; a&lt;b fora de código vira entidade."),
+  );
+  assert.ok(completo.includes("| não previsto: roda `node x <a>`, e &lt;b> fora |"));
+});
+
+test("código inline que só o parágrafo inteiro desfaz: o `<` volta a virar &lt;", () => {
+  const ag = encerrando();
+  const mensagem = ag.evidencias.find((e) => e.tipo === "mensagem_pr");
+  assert.ok(mensagem);
+  Object.assign(mensagem.dados, {
+    // Linha a linha, `<details>` estaria em código; no parágrafo, a crase de cima fecha na primeira e ele fica fora.
+    oQueMudou: "Veja ` aqui\n`<details>` e `",
+    // Na célula as linhas viram uma só, com o mesmo efeito.
+    naoPrevistos: [{ caminho: "a|b.png", motivo: "` a\n`<details>` `" }],
+  });
+  const { completo } = montarPR(ag, 5, LIMITE_DO_CORPO.github);
+  assert.ok(completo.includes("Veja ` aqui\n`&lt;details>` e `"));
+  assert.ok(completo.includes("| não previsto: ` a `&lt;details>` ` |"));
+});
+
 test("texto do agente não esconde nem imita seção, e o código dele sai como ele escreveu", () => {
   const ag = encerrando();
   const mensagem = ag.evidencias.find((e) => e.tipo === "mensagem_pr");
@@ -339,20 +378,20 @@ test("texto do agente não esconde nem imita seção, e o código dele sai como 
 
   assert.equal(
     secao(completo, "O que mudou"),
-    "Mudou.\n&lt;!-- esconde o resto\n&lt;details>\n&lt;pre>\n\\## Evidências\n   \\### falso\nEvidências\n" +
+    "Mudou.\n&lt;!-- esconde o resto\n&lt;details>\n&lt;pre>\n#### Evidências\n   ##### falso\nEvidências\n" +
       "\\---\nTítulo\n\\===",
   );
   assert.equal(
     secao(completo, "Decisões não óbvias"),
     "- Instale assim:\n  ```sh\n  # instala\n  npm i\n  <!-- nada\n  ```\n" +
-      "  E use `&lt;!--` no HTML, ``a`&lt;b``, ou a&lt;b.\n" +
+      "  E use `<!--` no HTML, ``a`<b``, ou a&lt;b.\n" +
       "- Veja `&lt;details>`` aqui.\n" +
       "- Veja \\`&lt;details>` aqui.\n" +
       "- Configure:\n  ~~~yaml\n  ---\n  chave: 1\n  ~~~",
   );
   assert.equal(
     secao(completo, "Fora do escopo"),
-    "- busca por imagem\n- ```a`b\n  \\## Evidências\n- ````\n  a\n  ~~~\n  ```\n  # dentro\n  `````\n  \\# fora",
+    "- busca por imagem\n- ```a`b\n  #### Evidências\n- ````\n  a\n  ~~~\n  ```\n  # dentro\n  `````\n  ### fora",
   );
   assert.equal(secao(completo, "Como revisar"), "1. Rode:\n   ~~~~\n   # sem fim\n   ~~~~");
   assert.equal(secao(completo, "Não verificado"), "- Recuado:\n  \n      # comentário de shell");
