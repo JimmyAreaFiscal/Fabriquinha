@@ -6,7 +6,7 @@ import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import type { ListaDoProjeto } from "../../rotas/projeto.ts";
 import type { Parametros } from "../caminhos.ts";
-import { api, avisar, ErroDaApi, elemento, irPara } from "../dom.ts";
+import { api, elemento, irPara, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { abrirRegistro } from "./inicio-montar.ts";
 import { mesDe } from "./metricas.ts";
@@ -42,26 +42,15 @@ function lembrar(nome: string): void {
   }
 }
 
-/** O erro vai para o aviso; o 401 a `api` já avisou. */
-function mostrarErro(erro: unknown): void {
-  if (!(erro instanceof ErroDaApi && erro.status === 401)) avisar(erro instanceof Error ? erro.message : String(erro));
-}
-
 /** A página `/projects` e `/projects/:projeto`. Redesenhar preserva a rolagem horizontal do trilho. */
-export async function montarProjeto(main: HTMLElement, params: Parametros): Promise<void> {
-  let caminho = location.pathname;
-  const projetos = await api<ProjetoListado[]>("/api/projetos");
-  // A resposta pode chegar depois que o Auditor saiu da página.
-  if (location.pathname !== caminho) return;
+export async function montarProjeto(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
+  const projetos = await api<ProjetoListado[]>("/api/projetos", { signal });
   const nome = params.projeto ?? escolherProjeto(projetos, ultimoVisto());
   if (nome === undefined) {
     main.innerHTML = SEM_PROJETOS;
     return;
   }
-  if (params.projeto === undefined) {
-    caminho = caminhoDoProjeto(nome);
-    history.replaceState(null, "", caminho);
-  }
+  if (params.projeto === undefined) history.replaceState(null, "", caminhoDoProjeto(nome));
   if (!projetos.some((p) => p.nome === nome)) {
     main.innerHTML = projetoNaoEncontrado(nome);
     return;
@@ -70,16 +59,11 @@ export async function montarProjeto(main: HTMLElement, params: Parametros): Prom
   const filtro = `concluidas=${String(mostrar.concluidas)}&arquivadas=${String(mostrar.arquivadas)}`;
   const atual = mesDe(new Date());
   const [lista, [mes]] = await Promise.all([
-    api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/issues?${filtro}`),
-    api<[MetricasMes]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`),
+    api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/issues?${filtro}`, { signal }),
+    api<[MetricasMes]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),
   ]);
   // Com o seletor ou a confirmação abertos, o redesenho os fecharia nas mãos do Auditor: espera ele sair.
-  if (
-    location.pathname !== caminho ||
-    document.activeElement?.matches("[data-projeto]") ||
-    main.querySelector("dialog[open]")
-  )
-    return;
+  if (document.activeElement?.matches("[data-projeto]") || main.querySelector("dialog[open]")) return;
 
   const rolagem = main.querySelector(".pista-rola")?.scrollLeft ?? 0;
   main.innerHTML = paginaDoProjeto(projetos, nome, lista, mes, { mostrar, gavetas }, new Date());
@@ -87,7 +71,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros): Prom
   if (rola) rola.scrollLeft = rolagem;
 
   const redesenhar = (): void => {
-    montarProjeto(main, params).catch(mostrarErro);
+    montarProjeto(main, params, signal).catch(mostrarErro);
   };
   main.querySelector<HTMLSelectElement>("[data-projeto]")?.addEventListener("change", (evento) => {
     const seletor = evento.currentTarget as HTMLSelectElement;
@@ -102,7 +86,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros): Prom
     });
   }
   main.querySelector("[data-registrar]")?.addEventListener("click", () => {
-    api<IssueDoBoard[]>("/api/board")
+    api<IssueDoBoard[]>("/api/board", { signal })
       .then((board) => abrirRegistro(board, nome))
       .catch(mostrarErro);
   });

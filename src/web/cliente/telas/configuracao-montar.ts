@@ -1,7 +1,8 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Modelo } from "../../../dominio/primitivos.ts";
-import { api, avisar, ErroDaApi } from "../dom.ts";
+import type { Parametros } from "../caminhos.ts";
+import { api, ErroDaApi, mostrarErro } from "../dom.ts";
 import {
   agendador,
   type Erros,
@@ -26,7 +27,7 @@ const postar = (corpo: unknown): RequestInit => ({
 /** Os erros de campo do 422; qualquer outro erro vai para o aviso, e o formulário volta sem erro de campo. */
 function errosDe(erro: unknown): Erros {
   if (erro instanceof ErroDaApi && erro.status === 422) return errosDoZod(erro.message);
-  mostrar(erro);
+  mostrarErro(erro);
   return new Map();
 }
 
@@ -81,7 +82,13 @@ function ocupar(form: HTMLFormElement, texto: string): void {
   }
 }
 
-function montarAgendador(main: HTMLElement, menuHtml: string, estado: EstadoDaConfiguracao, erros: Erros): void {
+function montarAgendador(
+  main: HTMLElement,
+  signal: AbortSignal,
+  menuHtml: string,
+  estado: EstadoDaConfiguracao,
+  erros: Erros,
+): void {
   main.innerHTML = pagina(menuHtml, agendador(estado, erros, new Date()));
   const form = main.querySelector<HTMLFormElement>("[data-agendador]");
   form?.addEventListener("submit", (evento) => {
@@ -89,15 +96,16 @@ function montarAgendador(main: HTMLElement, menuHtml: string, estado: EstadoDaCo
     const dados = lerAgendador(form);
     ocupar(form, "Salvando…");
     api("/api/configuracao", postar(dados))
-      .then(() => montarConfiguracao(main))
+      .then(() => montarConfiguracao(main, {}, signal))
       .catch((error_: unknown) => {
-        montarAgendador(main, menuHtml, { ...estado, ...dados }, errosDe(error_));
+        if (!signal.aborted) montarAgendador(main, signal, menuHtml, { ...estado, ...dados }, errosDe(error_));
       });
   });
 }
 
 function montarProjeto(
   main: HTMLElement,
+  signal: AbortSignal,
   menuHtml: string,
   salvo: ProjetoListado | undefined,
   modelos: readonly Modelo[],
@@ -136,9 +144,10 @@ function montarProjeto(
       api<ProjetoListado>(caminho, postar(p))
         .then(async (gravado) => {
           if (!salvo) history.pushState(null, "", `/config?projeto=${encodeURIComponent(gravado.nome)}`);
-          await montarConfiguracao(main);
+          await montarConfiguracao(main, {}, signal);
         })
         .catch((error_: unknown) => {
+          if (signal.aborted) return;
           // A falha do F5 (502) e a recusa do C19 (409) não são de um campo: vão para o rodapé, onde se clicou.
           if (error_ instanceof ErroDaApi && error_.status !== 422 && error_.status !== 401)
             desenhar(p, new Map(), error_.message);
@@ -149,21 +158,16 @@ function montarProjeto(
   desenhar(inicial, new Map());
 }
 
-/** O erro que não é de campo vai para o aviso; o 401 a `api` já avisou. */
-function mostrar(erro: unknown): void {
-  if (!(erro instanceof ErroDaApi && erro.status === 401)) avisar(erro instanceof Error ? erro.message : String(erro));
-}
-
 /** A página `/config`: o item do menu vem do endereço (`?projeto=<nome>`, `?novo`), e cada link troca o item. */
-export async function montarConfiguracao(main: HTMLElement): Promise<void> {
+export async function montarConfiguracao(main: HTMLElement, _params: Parametros, signal: AbortSignal): Promise<void> {
   const sel = selecao(location.search);
   const [estado, projetos] = await Promise.all([
-    api<EstadoDaConfiguracao>("/api/configuracao"),
-    api<ProjetoListado[]>("/api/projetos"),
+    api<EstadoDaConfiguracao>("/api/configuracao", { signal }),
+    api<ProjetoListado[]>("/api/projetos", { signal }),
   ]);
   const menuHtml = menu(estado, projetos, sel);
   if (sel.tipo === "agendador") {
-    montarAgendador(main, menuHtml, estado, new Map());
+    montarAgendador(main, signal, menuHtml, estado, new Map());
     return;
   }
   const salvo = sel.tipo === "projeto" ? projetos.find((p) => p.nome === sel.nome) : undefined;
@@ -171,5 +175,5 @@ export async function montarConfiguracao(main: HTMLElement): Promise<void> {
     main.innerHTML = pagina(menuHtml, projetoInexistente(sel.nome));
     return;
   }
-  montarProjeto(main, menuHtml, salvo, await api<Modelo[]>("/api/modelos"));
+  montarProjeto(main, signal, menuHtml, salvo, await api<Modelo[]>("/api/modelos", { signal }));
 }

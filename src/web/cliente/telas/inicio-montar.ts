@@ -3,15 +3,11 @@
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
-import { abrirCaixa, api, avisar, ErroDaApi, elemento, irPara } from "../dom.ts";
+import type { Parametros } from "../caminhos.ts";
+import { abrirCaixa, api, elemento, irPara, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { formularioDeRegistro, inicio } from "./inicio.ts";
 import { mesDe } from "./metricas.ts";
-
-/** O erro que não é do formulário vai para o aviso; o 401 a `api` já avisou. */
-function mostrar(erro: unknown): void {
-  if (!(erro instanceof ErroDaApi && erro.status === 401)) avisar(erro instanceof Error ? erro.message : String(erro));
-}
 
 /**
  * Registrar necessidade (F4 §6.6) na caixa: projeto e dependências; o servidor faz o C1 e abre a sessão, e o
@@ -56,20 +52,18 @@ export async function abrirRegistro(issues: readonly IssueDoBoard[], escolhido?:
 }
 
 /** A página `/home`. Redesenhar preserva a rolagem horizontal do board. */
-export async function montarInicio(main: HTMLElement): Promise<void> {
+export async function montarInicio(main: HTMLElement, _params: Parametros, signal: AbortSignal): Promise<void> {
   const atual = mesDe(new Date());
   const [sessoes, board, [mes]] = await Promise.all([
-    api<InfoSessao[]>("/api/sessoes?escopo=ativas"),
-    api<IssueDoBoard[]>("/api/board"),
-    api<[MetricasMes]>(`/api/metricas?de=${atual}&ate=${atual}`),
+    api<InfoSessao[]>("/api/sessoes?escopo=ativas", { signal }),
+    api<IssueDoBoard[]>("/api/board", { signal }),
+    api<[MetricasMes]>(`/api/metricas?de=${atual}&ate=${atual}`, { signal }),
   ]);
-  // A resposta pode chegar depois que o Auditor saiu do Início.
-  if (location.pathname !== "/home") return;
   const rolagem = main.querySelector(".board-etapas")?.scrollLeft ?? 0;
   main.innerHTML = inicio({ sessoes, board, mes }, new Date());
   const etapas = main.querySelector(".board-etapas");
   if (etapas) etapas.scrollLeft = rolagem;
   main.querySelector("[data-registrar]")?.addEventListener("click", () => {
-    abrirRegistro(board).catch(mostrar);
+    abrirRegistro(board).catch(mostrarErro);
   });
 }

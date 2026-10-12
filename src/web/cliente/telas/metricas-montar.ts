@@ -2,7 +2,8 @@
 // gráfico de evolução, mostra a dica ao passar o mouse e troca o foco, a métrica, a ordem e a tabela sem reler a API.
 // Não se atualiza sozinha. Os testes de ponta a ponta (e2e/) a exercitam.
 import type { MetricasIssuePeriodo, MetricasMes } from "../../../metricas/periodo.ts";
-import { api, avisar, ErroDaApi } from "../dom.ts";
+import type { Parametros } from "../caminhos.ts";
+import { api, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
   type Coluna,
@@ -17,16 +18,11 @@ import {
   proximaOrdem,
 } from "./metricas.ts";
 
-/** O erro vai para o aviso; o 401 a `api` já avisou. */
-function mostrar(erro: unknown): void {
-  if (!(erro instanceof ErroDaApi && erro.status === 401)) avisar(erro instanceof Error ? erro.message : String(erro));
-}
-
 /** Os controles que voltam a ter o foco do teclado depois de um redesenho. */
 const FOCAVEIS = ["data-mes", "data-metrica", "data-ordem", "data-tabela", "data-filtro", "data-padrao"];
 
-/** A página `/metrics`. Devolve a função que solta os ouvintes quando o Auditor sai dela. */
-export function montarMetricas(main: HTMLElement): () => void {
+/** A página `/metrics`; os ouvintes saem com `signal`, quando o Auditor sai dela. */
+export function montarMetricas(main: HTMLElement, _params: Parametros, signal: AbortSignal): void {
   const atual = mesDe(new Date());
   const estado: EstadoDasMetricas = {
     projeto: "",
@@ -59,18 +55,18 @@ export function montarMetricas(main: HTMLElement): () => void {
     const meu = ++pedido;
     const q = new URLSearchParams({ de: estado.de, ate: estado.ate });
     if (estado.projeto) q.set("projeto", estado.projeto);
-    projetos ??= api<ProjetoListado[]>("/api/projetos");
+    projetos ??= api<ProjetoListado[]>("/api/projetos", { signal });
     const [lista, meses, issues] = await Promise.all([
       projetos,
-      api<MetricasMes[]>(`/api/metricas?${q.toString()}`),
-      api<MetricasIssuePeriodo[]>(`/api/metricas/issues?${q.toString()}`),
+      api<MetricasMes[]>(`/api/metricas?${q.toString()}`, { signal }),
+      api<MetricasIssuePeriodo[]>(`/api/metricas/issues?${q.toString()}`, { signal }),
     ]);
     if (meu !== pedido) return;
     dados = { projetos: lista.map((p) => p.nome), meses, issues, atual };
     desenhar();
   }
   const recarregar = (): void => {
-    carregar().catch(mostrar);
+    carregar().catch(mostrarErro);
   };
 
   function aoClicar(evento: Event): void {
@@ -138,17 +134,12 @@ export function montarMetricas(main: HTMLElement): () => void {
     espera = setTimeout(grafico, 120);
   };
 
-  main.addEventListener("click", aoClicar);
-  main.addEventListener("change", aoMudar);
-  main.addEventListener("pointermove", aoMover);
-  addEventListener("resize", aoRedimensionar);
-  recarregar();
-  return () => {
-    pedido++;
+  main.addEventListener("click", aoClicar, { signal });
+  main.addEventListener("change", aoMudar, { signal });
+  main.addEventListener("pointermove", aoMover, { signal });
+  addEventListener("resize", aoRedimensionar, { signal });
+  signal.addEventListener("abort", () => {
     clearTimeout(espera);
-    main.removeEventListener("click", aoClicar);
-    main.removeEventListener("change", aoMudar);
-    main.removeEventListener("pointermove", aoMover);
-    removeEventListener("resize", aoRedimensionar);
-  };
+  });
+  recarregar();
 }

@@ -1,7 +1,7 @@
 // Entrada do cliente (F7 §4.4): escolhe a página pelo caminho, troca de página pela History API sem recarregar (os
 // links são `<a href>` de verdade, que também abrem em outra aba) e desenha a navegação fixa com quem aguarda.
 import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
-import { api, avisar, ErroDaApi, elemento } from "./dom.ts";
+import { api, avisar, elemento, mostrarErro } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
@@ -13,9 +13,10 @@ import { montarProjeto } from "./telas/projeto-montar.ts";
 
 /**
  * Desenha a página em `<main>`. Cada tela troca a sua entrada aqui; a função pura de render fica num módulo à parte.
- * A tela que mantém algo aberto (o SSE do chat) devolve a função que o fecha quando o Auditor sai dela.
+ * `sinal` é abortado quando o Auditor sai da página: a tela o passa às chamadas da API (a resposta atrasada não desenha
+ * por cima da página nova) e aos ouvintes e ao SSE que abre fora do que ela desenha em `main`.
  */
-type Montar = (main: HTMLElement, params: Parametros) => undefined | Promise<void> | (() => void);
+type Montar = (main: HTMLElement, params: Parametros, sinal: AbortSignal) => void | Promise<void>;
 
 const MONTAR: Record<Pagina, Montar> = {
   inicio: montarInicio,
@@ -30,13 +31,8 @@ const MONTAR: Record<Pagina, Montar> = {
 const cabeca = elemento("[data-navegacao]", HTMLElement);
 const main = elemento("main", HTMLElement);
 let aguardando = 0;
-let desmontar: (() => void) | undefined;
-
-/** O erro aparece no aviso como o servidor mandou; o 401 a `api` já avisou. */
-function mostrar(erro: unknown): void {
-  if (erro instanceof ErroDaApi && erro.status === 401) return;
-  avisar(erro instanceof Error ? erro.message : String(erro));
-}
+/** O da página na tela; trocar de página o aborta. */
+let pagina = new AbortController();
 
 /** Quantas sessões aguardam o Auditor, para o contador do Início. */
 async function contar(): Promise<void> {
@@ -51,13 +47,11 @@ function desenhar(): void {
   document.title = rota ? `${TITULOS[rota.pagina]} · Fabriquinha` : "Fabriquinha";
   cabeca.innerHTML = navegacao(rota?.pagina, aguardando);
   avisar();
-  desmontar?.();
-  desmontar = undefined;
-  const montada = rota && MONTAR[rota.pagina](main, rota.params);
-  if (!rota) main.innerHTML = NAO_ENCONTRADA;
-  else if (typeof montada === "function") desmontar = montada;
-  else Promise.resolve(montada).catch(mostrar);
-  contar().catch(mostrar);
+  pagina.abort();
+  pagina = new AbortController();
+  if (rota) Promise.resolve(MONTAR[rota.pagina](main, rota.params, pagina.signal)).catch(mostrarErro);
+  else main.innerHTML = NAO_ENCONTRADA;
+  contar().catch(mostrarErro);
 }
 
 // Clique comum num link da própria Fabriquinha troca a página sem recarregar; com modificador, nova aba ou download,
@@ -98,8 +92,10 @@ const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio", "projeto"]);
 function atualizar(): void {
   if (document.visibilityState !== "visible") return;
   const rota = rotear(location.pathname);
-  if (rota && ATUALIZAM.has(rota.pagina)) Promise.resolve(MONTAR[rota.pagina](main, rota.params)).catch(mostrar);
-  contar().catch(mostrar);
+  if (rota && ATUALIZAM.has(rota.pagina)) {
+    Promise.resolve(MONTAR[rota.pagina](main, rota.params, pagina.signal)).catch(mostrarErro);
+  }
+  contar().catch(mostrarErro);
 }
 setInterval(atualizar, 5000);
 document.addEventListener("visibilitychange", atualizar);

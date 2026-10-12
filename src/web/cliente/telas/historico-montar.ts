@@ -3,7 +3,8 @@
 // terminado. Os testes de ponta a ponta (e2e/historico.spec.ts) o exercitam.
 import type { DadosDoChat } from "../../rotas/chat.ts";
 import type { SessaoDoHistorico } from "../../rotas/historico.ts";
-import { api, avisar, ErroDaApi, elemento, irPara } from "../dom.ts";
+import type { Parametros } from "../caminhos.ts";
+import { api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { consulta, contagem, type Filtros, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
 
@@ -11,13 +12,8 @@ import { consulta, contagem, type Filtros, listaDoHistorico, paginaDoHistorico, 
 const filtros: Filtros = { projeto: "", issue: "", etapa: "" };
 let selecionada = "";
 
-/** O erro vai para o aviso; o 401 a `api` já avisou. */
-function mostrarErro(erro: unknown): void {
-  if (!(erro instanceof ErroDaApi && erro.status === 401)) avisar(erro instanceof Error ? erro.message : String(erro));
-}
-
-export async function montarHistorico(main: HTMLElement): Promise<void> {
-  const projetos = await api<ProjetoListado[]>("/api/projetos");
+export async function montarHistorico(main: HTMLElement, _params: Parametros, signal: AbortSignal): Promise<void> {
+  const projetos = await api<ProjetoListado[]>("/api/projetos", { signal });
   main.innerHTML = paginaDoHistorico(
     projetos.map((p) => p.nome),
     filtros,
@@ -31,7 +27,7 @@ export async function montarHistorico(main: HTMLElement): Promise<void> {
 
   /** Lê a prévia da selecionada pela rota do chat e a põe ao lado, se ela ainda é a selecionada. */
   async function carregarPrevia(s: SessaoDoHistorico): Promise<void> {
-    const dados = await api<DadosDoChat>(`/api/sessoes/${encodeURIComponent(s.sessao)}`);
+    const dados = await api<DadosDoChat>(`/api/sessoes/${encodeURIComponent(s.sessao)}`, { signal });
     const lugar = lista.querySelector("[data-previa]");
     if (s.sessao === selecionada && lugar) lugar.innerHTML = previa(s, dados, new Date());
   }
@@ -48,8 +44,8 @@ export async function montarHistorico(main: HTMLElement): Promise<void> {
   async function carregar(): Promise<void> {
     const n = ++pedido;
     const query = consulta(filtros);
-    const lidas = query === undefined ? [] : await api<SessaoDoHistorico[]>(`/api/sessoes?${query}`);
-    if (n !== pedido || !main.contains(raiz)) return;
+    const lidas = query === undefined ? [] : await api<SessaoDoHistorico[]>(`/api/sessoes?${query}`, { signal });
+    if (n !== pedido) return;
     // A API devolve da mais antiga para a mais recente (F4 §5.3).
     sessoes = lidas.toReversed();
     desenhar();

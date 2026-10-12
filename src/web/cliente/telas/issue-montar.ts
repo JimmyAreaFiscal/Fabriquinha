@@ -5,7 +5,7 @@ import type { Modelo } from "../../../dominio/primitivos.ts";
 import type { LeituraDoPR } from "../../../repositorio/pr.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { Parametros } from "../caminhos.ts";
-import { abrirCaixa, api, avisar, elemento } from "../dom.ts";
+import { abrirCaixa, api, avisar, elemento, mostrarErro } from "../dom.ts";
 import { markdown } from "../markdown.ts";
 import { paginaVazia } from "../render.ts";
 import {
@@ -74,10 +74,13 @@ const decidirDesenho =
  * ponytail: a página espera o `gh`/`az` antes de se desenhar no gate do PR; se ficar lento, desenhar antes e
  * preencher a aba Decisão depois.
  */
-const lerPR = (issue: number): Promise<EstadoLido> =>
-  api<LeituraDoPR>(`/api/issues/${String(issue)}/pr`).then(
+const lerPR = (issue: number, signal: AbortSignal): Promise<EstadoLido> =>
+  api<LeituraDoPR>(`/api/issues/${String(issue)}/pr`, { signal }).then(
     (leitura) => ({ leitura }),
-    (error_: unknown) => ({ erro: error_ instanceof Error ? error_.message : String(error_) }),
+    (error_: unknown) => {
+      signal.throwIfAborted();
+      return { erro: error_ instanceof Error ? error_.message : String(error_) };
+    },
   );
 
 /** O rascunho do gate do PR que está na tela: a aba aberta, o motivo e a nota escolhida. */
@@ -208,25 +211,32 @@ const ACOES: Record<string, (c: Contexto) => void | Promise<void>> = {
  * `/projects/:projeto/issues/:issue`: a issue `I-n` (ou `n`), com o projeto do caminho trocado pelo dela. `rascunho` é
  * o que o Auditor já escreveu ou escolheu nos gates, que uma ação que relê a página não apaga.
  */
-export async function montarIssue(main: HTMLElement, params: Parametros, rascunho: Rascunho = {}): Promise<void> {
+export async function montarIssue(
+  main: HTMLElement,
+  params: Parametros,
+  signal: AbortSignal,
+  rascunho: Rascunho = {},
+): Promise<void> {
   const id = String(params.issue).replace(/^I-/, "");
   let pagina: PaginaDaIssue;
   try {
-    pagina = await api<PaginaDaIssue>(`/api/issues/${encodeURIComponent(id)}`);
+    pagina = await api<PaginaDaIssue>(`/api/issues/${encodeURIComponent(id)}`, { signal });
   } catch (error_) {
-    main.innerHTML = paginaVazia("Issue");
+    if (!signal.aborted) main.innerHTML = paginaVazia("Issue");
     throw error_;
   }
-  const certo = caminhoDaIssue(pagina.issue.projeto, pagina.issue.id);
-  if (location.pathname !== certo) history.replaceState(null, "", certo);
-  document.title = `I-${String(pagina.issue.id)} · Fabriquinha`;
   const { fase } = pagina.issue;
   const extras: Extras = {
     modelos: fase === "aprovacao_desenho" ? await modelos() : [],
-    ...(fase === "aprovacao_pr" && { pr: await lerPR(pagina.issue.id) }),
+    ...(fase === "aprovacao_pr" && { pr: await lerPR(pagina.issue.id, signal) }),
     agora: new Date(),
     ...(rascunho.pr && { rascunho: rascunho.pr }),
   };
+  // Os modelos vêm da leitura guardada, que não se cancela: o Auditor pode ter saído enquanto ela chegava.
+  signal.throwIfAborted();
+  const certo = caminhoDaIssue(pagina.issue.projeto, pagina.issue.id);
+  if (location.pathname !== certo) history.replaceState(null, "", certo);
+  document.title = `I-${String(pagina.issue.id)} · Fabriquinha`;
   main.innerHTML = paginaDaIssue(pagina, pagina.issue.descricao.trim() ? markdown(pagina.issue.descricao) : "", extras);
   const raiz = elemento(".pagina-issue", HTMLElement);
   const p = pagina;
@@ -238,7 +248,7 @@ export async function montarIssue(main: HTMLElement, params: Parametros, rascunh
   };
   if (campoMotivo) campoMotivo.value = rascunho.motivo ?? "";
   habilitarReprovar();
-  const remontar = () => montarIssue(main, params, { motivo: campoMotivo?.value, pr: rascunhoDoPR(raiz) });
+  const remontar = () => montarIssue(main, params, signal, { motivo: campoMotivo?.value, pr: rascunhoDoPR(raiz) });
 
   // Descrição curta não precisa de "ver tudo".
   const descricao = raiz.querySelector<HTMLElement>("[data-descricao]");
@@ -250,7 +260,7 @@ export async function montarIssue(main: HTMLElement, params: Parametros, rascunh
     avisar();
     Promise.resolve(acao()).catch((error_: unknown) => {
       if (alvo) alvo.disabled = false;
-      avisar(error_ instanceof Error ? error_.message : String(error_));
+      mostrarErro(error_);
     });
   };
 

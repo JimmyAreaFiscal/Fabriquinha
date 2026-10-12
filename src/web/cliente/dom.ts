@@ -27,7 +27,8 @@ export class ErroDaApi extends Error {
 
 /**
  * Chama a API e devolve o JSON (`undefined` no 204). Erro sai como `ErroDaApi`; o 401 também vira o aviso que manda
- * rodar `fabriquinha abrir`, porque nenhuma página funciona sem entrar.
+ * rodar `fabriquinha abrir`, porque nenhuma página funciona sem entrar. Com o `signal` da página em `init`, a chamada
+ * é cancelada quando o Auditor sai dela.
  */
 export async function api<T>(caminho: string, init?: RequestInit): Promise<T> {
   const resposta = await fetch(caminho, init);
@@ -37,6 +38,16 @@ export async function api<T>(caminho: string, init?: RequestInit): Promise<T> {
   const mensagem = (corpo as { erro?: string }).erro ?? resposta.statusText;
   if (resposta.status === 401) avisar(mensagem);
   throw new ErroDaApi(resposta.status, mensagem);
+}
+
+/**
+ * O erro no aviso, como o servidor o mandou. O 401 a `api` já avisou; o cancelamento é de uma página que o Auditor
+ * deixou, e não é erro.
+ */
+export function mostrarErro(erro: unknown): void {
+  if (erro instanceof ErroDaApi && erro.status === 401) return;
+  if (erro instanceof DOMException && erro.name === "AbortError") return;
+  avisar(erro instanceof Error ? erro.message : String(erro));
 }
 
 export interface ConteudoDaCaixa {

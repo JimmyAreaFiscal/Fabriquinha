@@ -6,7 +6,8 @@ import type { Dialogo } from "../../../execucao/gerente.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { CabecalhoDoChat, DadosDoChat } from "../../rotas/chat.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
-import { abrirCaixa, api, avisar, elemento, irPara } from "../dom.ts";
+import type { Parametros } from "../caminhos.ts";
+import { abrirCaixa, api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
 import {
   barraDeEstado,
@@ -48,18 +49,14 @@ const postar = (caminho: string, corpo: unknown = {}) =>
     body: JSON.stringify(corpo),
   });
 
-const mostrar = (erro: unknown) => {
-  avisar(erro instanceof Error ? erro.message : String(erro));
-};
-
 /** O Auditor está no fim da página: o que chega rola junto; se ele subiu para ler, a página fica onde está. */
 const noFim = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
 const rolarAoFim = () => {
   scrollTo(0, document.documentElement.scrollHeight);
 };
 
-/** Monta o chat da sessão em `main`; devolve o que o desfaz ao sair da página (fecha o SSE). */
-export function montarChat(main: HTMLElement, params: Record<string, string>): () => void {
+/** Monta o chat da sessão em `main`; ao sair da página (`signal`), fecha o SSE e solta o ouvinte da caixa. */
+export function montarChat(main: HTMLElement, params: Parametros, signal: AbortSignal): void {
   const sessao = String(params.sessao);
   main.innerHTML = ESQUELETO;
   // Os ouvintes ficam na raiz do chat, que some quando o Auditor troca de página; `main` fica.
@@ -136,14 +133,14 @@ export function montarChat(main: HTMLElement, params: Record<string, string>): (
   /** Relê a página da issue para o contexto ao lado; a resposta de uma leitura antiga não sobrescreve a nova. */
   function lerContexto(c: CabecalhoDoChat): void {
     const vez = ++leituras;
-    api<PaginaDaIssue>(`/api/issues/${String(c.issue.id)}`)
+    api<PaginaDaIssue>(`/api/issues/${String(c.issue.id)}`, { signal })
       .then((lida) => {
         if (vez !== leituras || !cabecalho) return;
         pagina = lida;
         contexto.innerHTML = contextoDaIssue(lida, cabecalho.sessao);
         if (!areaDeEnvio.querySelector("[data-seletor-modelo] select:not([disabled])")) desenharSeletor();
       })
-      .catch(mostrar);
+      .catch(mostrarErro);
   }
 
   /** Barra, envio e coluna da direita; envio e coluna só mudam quando a forma muda, para não apagar o que se digita. */
@@ -243,14 +240,14 @@ export function montarChat(main: HTMLElement, params: Record<string, string>): (
   };
   // Fechado de vez (404, 401): a mensagem do servidor só vem pela API. Caído, o navegador reconecta sozinho.
   fonte.onerror = () => {
-    if (fonte.readyState === EventSource.CLOSED) api(`/api/sessoes/${encodeURIComponent(sessao)}`).catch(mostrar);
+    if (fonte.readyState === EventSource.CLOSED) api(`/api/sessoes/${encodeURIComponent(sessao)}`).catch(mostrarErro);
   };
 
   const issue = () => String(cabecalho?.issue.id);
   const ticket = () => String(cabecalho?.sessao.ticket);
   const acao = (promessa: Promise<unknown>) => {
     avisar();
-    promessa.catch(mostrar);
+    promessa.catch(mostrarErro);
   };
 
   raiz.addEventListener("click", (evento) => {
@@ -401,7 +398,7 @@ export function montarChat(main: HTMLElement, params: Record<string, string>): (
     elemento("[data-caixa]", HTMLDialogElement).close();
     areaDeEnvio.querySelector<HTMLTextAreaElement>("textarea[name=texto]")?.focus();
   };
-  corpoDaCaixa.addEventListener("click", aoEscolher);
+  corpoDaCaixa.addEventListener("click", aoEscolher, { signal });
 
   // Enter envia; Shift+Enter quebra a linha.
   raiz.addEventListener("keydown", (evento) => {
@@ -412,8 +409,7 @@ export function montarChat(main: HTMLElement, params: Record<string, string>): (
     alvo.closest("form")?.requestSubmit();
   });
 
-  return () => {
+  signal.addEventListener("abort", () => {
     fonte.close();
-    corpoDaCaixa.removeEventListener("click", aoEscolher);
-  };
+  });
 }
