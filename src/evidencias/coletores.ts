@@ -3,7 +3,7 @@ import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, statSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Agregado, ArquivoEvidencia, Ator } from "../dominio/agregado.ts";
+import { type Agregado, type ArquivoEvidencia, FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { exigirRegistroDeEvidencia, registrarEvidencia } from "../dominio/evidencia.ts";
 import type { Id } from "../dominio/primitivos.ts";
@@ -14,8 +14,6 @@ import { projeto } from "../persistencia/projetos.ts";
 import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS } from "../processo.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { LIMITE, MIME_TEXTO, schemaDe } from "./schemas.ts";
-
-const FABRIQUINHA: Ator = { tipo: "fabriquinha" };
 
 type Coletado = "execucao_testes" | "matriz_fitness";
 

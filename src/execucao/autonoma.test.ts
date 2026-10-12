@@ -28,7 +28,8 @@ import { abrir } from "../persistencia/banco.ts";
 import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
-import { dialogosPendentes, executarAutonomo, responderDialogo } from "./autonoma.ts";
+import { executarAutonomo } from "./autonoma.ts";
+import { dialogosPendentes, responderDialogo } from "./gerente.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-autonoma-")));
 after(() => {
@@ -95,7 +96,7 @@ function aoPrompt(c) {
     emitir({ type: "agent_settled" });
   } else if (variante === "dialogo") {
     emitir({ type: "extension_ui_request", id: "n1", method: "notify", message: "olá" });
-    emitir({ type: "extension_ui_request", id: "c1", method: "confirm", title: "Seguir?", timeout: 5 });
+    emitir({ type: "extension_ui_request", id: "c1", method: "confirm", title: "Seguir?", timeout: 1000 });
     emitir({ type: "extension_ui_request", id: "d1", method: "select", title: "Qual?", options: ["a", "b"] });
     emitir({ type: "extension_ui_request", id: "d2", method: "editor", title: "Explique" });
   } else if (variante === "filho") {
@@ -401,17 +402,25 @@ test("diálogo: o tempo esperando o Auditor não conta; respondido, a execução
   const c = cenario({ variante: "dialogo", comAgente: false });
   // Limite de 3 s: folga para o pi falso subir numa máquina carregada antes de abrir os diálogos.
   const execucao = executarAutonomo(c.banco, 2, { pacote: PACOTE, timeoutMin: 0.05 });
-  for (let espera = 0; dialogosPendentes(2).length < 2; espera += 20) {
+  for (let espera = 0; dialogosPendentes(2).length < 3; espera += 20) {
     assert.ok(espera < 10_000, "os diálogos não chegaram em 10 s");
     await dormir(20);
   }
   assert.deepEqual(
-    dialogosPendentes(2).map((d) => [d.id, d.method]),
+    dialogosPendentes(2).map((d) => [d.id, d.method, d.expiraEm !== undefined]),
     [
-      ["d1", "select"],
-      ["d2", "editor"],
+      ["c1", "confirm", true],
+      ["d1", "select", false],
+      ["d2", "editor", false],
     ],
-    "notify e diálogo com timeout do pi não ficam pendentes",
+    "notify não fica pendente; o diálogo com timeout fica, com a expiração",
+  );
+  const c1 = dialogosPendentes(2)[0];
+  assert.equal(Date.parse(String(c1?.expiraEm)) - Date.parse(String(c1?.em)), 1000);
+  await dormir(1200); // o pi resolve o c1 sozinho quando expira
+  assert.deepEqual(
+    dialogosPendentes(2).map((d) => d.id),
+    ["d1", "d2"],
   );
   await dormir(3500); // além do limite de 3 s
   assert.equal(c.estado().execucoes[0]?.resultado, "em_andamento");

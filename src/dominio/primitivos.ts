@@ -19,6 +19,11 @@ export const Titulo = z
   .regex(/^[^\n]*$/, "título ocupa uma linha só");
 export const Markdown = z.string().refine((t) => palavras(t) <= 1000, "texto excede 1.000 palavras");
 export const Motivo = z.string().trim().min(1).max(2000);
+/**
+ * Um erro qualquer como `Motivo`, cortado em 2.000 caracteres: C6 e C8 nunca recusam a falha, e a execução nunca
+ * fica `em_andamento` segurando a vaga do D8.
+ */
+export const motivo = (texto: string): string => Motivo.catch("falha sem mensagem").parse(texto.slice(0, 2000));
 export const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/);
 export const Modelo = z.object({
   provedor: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),

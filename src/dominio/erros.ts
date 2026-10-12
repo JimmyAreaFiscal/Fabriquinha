@@ -17,3 +17,12 @@ export class ErroDeEscopo extends Error {
     super(frase(problema, solucao));
   }
 }
+
+/** `valor`, ou ErroDeRegra se ele não existe. */
+export function existe<T>(valor: T | undefined, problema: string, solucao: string): T {
+  if (valor === undefined) throw new ErroDeRegra(problema, solucao);
+  return valor;
+}
+
+/** O texto de qualquer coisa lançada: um `throw` que não é `Error` também vira falha, nunca sucesso. */
+export const mensagem = (erro: unknown): string => (erro instanceof Error ? erro.message : String(erro));

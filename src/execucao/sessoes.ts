@@ -1,0 +1,460 @@
+// Sessões (F4 §5, §6.6): estado calculado, lista e histórico, chat, mensagens conforme o estado e as sessões
+// interativas, que param por ociosidade e retomam na próxima mensagem no mesmo modo.
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
+import {
+  type Agregado,
+  AUDITOR,
+  type Execucao,
+  FABRIQUINHA,
+  type ModoExecucao,
+  type Ticket,
+} from "../dominio/agregado.ts";
+import { concluirTicket } from "../dominio/conclusao.ts";
+import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
+import { evidenciasFaltando } from "../dominio/evidencia.ts";
+import { terminarExecucao, ticketDe } from "../dominio/execucao.ts";
+import { decidirRegistro } from "../dominio/gates.ts";
+import { type Etapa, type Fase, type Id, type Instante, motivo } from "../dominio/primitivos.ts";
+import { raizDo } from "../persistencia/banco.ts";
+import { anotar, issueDaSessao, issuesComSessao, logDaExecucao } from "../persistencia/execucoes.ts";
+import { agregado, agregadoDoTicket, comIssue, registrarIssue, ultimaEdicaoDoAgente } from "../persistencia/issues.ts";
+import {
+  assinar,
+  avisar,
+  type Dialogo,
+  encerrar,
+  estaEncerrando,
+  iniciarNaSessaoPrincipal,
+  mandar,
+  rodarExecucao,
+  type Situacao,
+  situacao,
+} from "./gerente.ts";
+import type { EventoPi } from "./pi.ts";
+import { montarPrompt } from "./prompt.ts";
+
+export type Estado = "rodando" | "aguardando_humano" | "terminada";
+export type MotivoEspera = "conversa" | "dialogo" | "falha" | "gate_registro" | "gate_desenho" | "gate_pr";
+
+/** Uma sessão (F4 §5.1) com o estado calculado (F4 §5.2). `sessao` é o `sessaoPi`. */
+export interface InfoSessao {
+  sessao: string;
+  issue: Id;
+  projeto: string;
+  ticket: Id;
+  etapa: Etapa;
+  modo: ModoExecucao;
+  /** A última execução da sessão. */
+  execucao: Id;
+  estado: Estado;
+  motivo?: MotivoEspera;
+  /** Desde quando a sessão está neste estado. */
+  desde: Instante;
+  dialogos: Dialogo[];
+}
+
+export interface OpcoesInterativa {
+  /** Raiz do pacote P1 `pi-fabriquinha`. */
+  pacote: string;
+  /** Minutos sem mensagem até o processo parar (F4 §3, §6.6). */
+  ociosidadeMin: number;
+}
+
+/** Gate que depende do último ticket concluído da etapa, e a fase em que ele está aberto (F4 §5.2). */
+const GATES: Partial<Record<Etapa, [Fase, MotivoEspera]>> = {
+  desenho: ["aprovacao_desenho", "gate_desenho"],
+  encerramento: ["aprovacao_pr", "gate_pr"],
+};
+
+function gateDe(ag: Agregado, ticket: Ticket): MotivoEspera | undefined {
+  const gate = GATES[ticket.etapa];
+  const ultimo = ag.tickets.findLast((t) => t.etapa === ticket.etapa && t.status === "concluido");
+  return gate?.[0] === ag.issue.fase && ultimo?.id === ticket.id ? gate[1] : undefined;
+}
+
+/** O que o estado lê de fora do agregado. */
+export interface Fatos {
+  /** A execução viva da sessão neste serviço. */
+  viva: Situacao | undefined;
+  /** Quando o agente editou a issue pela última vez (C2 a C4), ou `""`. */
+  edicaoDoAgente: string;
+}
+
+/**
+ * O registro espera a decisão do Auditor: tem o que C10 aprovado exige (título, tipo e as evidências da etapa) e,
+ * se já foi devolvido, o agente trabalhou depois da última devolução: submeteu evidência ou editou a issue. Sem
+ * isso, a conversa continua: um agente que só pergunta depois de Devolver não volta ao gate.
+ */
+function registroParaDecidir(ag: Agregado, ticket: Ticket, edicaoDoAgente: string): boolean {
+  const devolvido = ag.decisoes.findLast((d) => d.gate === "registro" && !d.aprovado)?.em;
+  return (
+    ag.issue.titulo !== null &&
+    ag.issue.tipo !== null &&
+    evidenciasFaltando(ag, ticket).length === 0 &&
+    (devolvido === undefined ||
+      edicaoDoAgente > devolvido ||
+      ag.evidencias.some((e) => e.ticket === ticket.id && e.em > devolvido))
+  );
+}
+
+function calcular(
+  ag: Agregado,
+  ticket: Ticket,
+  execucao: Execucao,
+  { viva, edicaoDoAgente }: Fatos,
+): [Estado, MotivoEspera | undefined, string] {
+  const [dialogo] = viva?.dialogos ?? [];
+  if (dialogo) return ["aguardando_humano", "dialogo", dialogo.em];
+  // Interativa com o pi vivo esperando a próxima mensagem: decide como se estivesse parada.
+  const ociosa = viva?.ocupado === false;
+  if (execucao.resultado === "em_andamento" && !ociosa)
+    return ["rodando", undefined, viva?.desde ?? execucao.iniciadaEm];
+  const parada = viva?.desde ?? String(execucao.terminadaEm);
+  const autonoma = execucao.modo === "autonomo";
+  // Depois do C6 a autônoma ainda roda a coleta do F3 e o C7.
+  if (autonoma && ticket.status === "em_execucao") return ["rodando", undefined, parada];
+  if (ticket.status === "falhou") return ["aguardando_humano", "falha", parada];
+  if (ticket.etapa === "registro" && ag.issue.fase === "registro") {
+    return [
+      "aguardando_humano",
+      registroParaDecidir(ag, ticket, edicaoDoAgente) ? "gate_registro" : "conversa",
+      parada,
+    ];
+  }
+  if (ticket.status === "concluido") {
+    const gate = gateDe(ag, ticket);
+    return gate
+      ? ["aguardando_humano", gate, String(ticket.concluidoEm)]
+      : ["terminada", undefined, String(ticket.concluidoEm)];
+  }
+  // ponytail: a autônoma reaberta (C9) que espera o agendador conta como rodando, porque o Auditor já respondeu; a
+  // consulta (ticket 12) cai aqui como conversa enquanto o seu ticket não terminou.
+  return autonoma ? ["rodando", undefined, parada] : ["aguardando_humano", "conversa", parada];
+}
+
+/** F4 §5.2: o estado da sessão, calculado do agregado e dos fatos de fora dele. */
+export function estadoDaSessao(ag: Agregado, sessao: string, fatos: Fatos): InfoSessao {
+  const execucao = existe(
+    ag.execucoes.findLast((e) => e.sessaoPi === sessao),
+    `a sessão ${sessao} não é da I-${String(ag.issue.id)}`,
+    "confira o endereço do chat",
+  );
+  const ticket = ticketDe(ag, execucao.ticket);
+  const [estado, motivoEspera, desde] = calcular(ag, ticket, execucao, fatos);
+  return {
+    sessao,
+    issue: ag.issue.id,
+    projeto: ag.issue.projeto,
+    ticket: ticket.id,
+    etapa: ticket.etapa,
+    modo: execucao.modo,
+    execucao: execucao.id,
+    estado,
+    ...(motivoEspera && { motivo: motivoEspera }),
+    desde,
+    dialogos: fatos.viva?.dialogos ?? [],
+  };
+}
+
+export interface FiltroSessoes {
+  /** `ativas`: rodando e aguardando o Auditor; `historico`: terminadas (F4 §5.3). */
+  escopo: "ativas" | "historico";
+  projeto?: string;
+  issue?: Id;
+  etapa?: Etapa;
+}
+
+/** Execuções interativas deste serviço, com a issue delas, até o C6. */
+const tarefas = new Map<Id, { issue: Id; tarefa: Promise<void> }>();
+
+const agregadoDa = (banco: DatabaseSync, issue: Id): Agregado =>
+  existe(agregado(banco, issue), `a issue I-${String(issue)} não existe`, "confira o número da issue");
+
+/**
+ * O agregado depois do C6 das execuções interativas da issue cujo pi está parando: sem isso, a sessão pareceria
+ * `rodando` nos até 10 s entre a ordem de parar e o C6, e as ações seriam recusadas.
+ */
+async function agregadoAssentado(banco: DatabaseSync, issue: Id): Promise<Agregado> {
+  await Promise.all([...tarefas].filter(([id, t]) => t.issue === issue && estaEncerrando(id)).map(([, t]) => t.tarefa));
+  return agregadoDa(banco, issue);
+}
+
+/** O estado da sessão com os fatos lidos agora: a execução viva e a última edição do agente na issue. */
+const estadoNoBanco = (banco: DatabaseSync, ag: Agregado, sessao: string): InfoSessao =>
+  estadoDaSessao(ag, sessao, { viva: situacao(sessao), edicaoDoAgente: ultimaEdicaoDoAgente(banco, ag.issue.id) });
+
+const issueDe = (banco: DatabaseSync, sessao: string): Id =>
+  existe(issueDaSessao(banco, sessao), `a sessão ${sessao} não existe`, "confira o endereço do chat");
+
+/**
+ * F4 §5.3: as sessões do escopo, da que está assim há mais tempo para a mais recente.
+ * ponytail: carrega o agregado de cada issue com sessão; filtrar o histórico no SQL quando ele pesar.
+ */
+export async function sessoes(banco: DatabaseSync, filtro: FiltroSessoes): Promise<InfoSessao[]> {
+  const todas: InfoSessao[] = [];
+  for (const issue of issuesComSessao(banco, filtro)) {
+    const ag = await agregadoAssentado(banco, issue);
+    for (const s of new Set(ag.execucoes.map((e) => e.sessaoPi))) todas.push(estadoNoBanco(banco, ag, s));
+  }
+  return todas
+    .filter(
+      (s) =>
+        (filtro.etapa === undefined || s.etapa === filtro.etapa) &&
+        (s.estado === "terminada") === (filtro.escopo === "historico"),
+    )
+    .toSorted((a, b) => a.desde.localeCompare(b.desde));
+}
+
+/** A sessão pelo `sessaoPi`, com o estado. */
+export async function infoDaSessao(banco: DatabaseSync, sessao: string): Promise<InfoSessao> {
+  return estadoNoBanco(banco, await agregadoAssentado(banco, issueDe(banco, sessao)), sessao);
+}
+
+/** O arquivo JSONL da sessão que o pi grava em `<raiz>/sessoes/<instante>_<sessaoPi>.jsonl`, se já existe. */
+function arquivoDaSessao(raiz: string, sessao: string): string | undefined {
+  const dir = join(raiz, "sessoes");
+  const nome = existsSync(dir) ? readdirSync(dir).find((n) => n.endsWith(`_${sessao}.jsonl`)) : undefined;
+  return nome && join(dir, nome);
+}
+
+/** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
+function lerConversa(raiz: string, sessao: string): unknown[] {
+  const arquivo = arquivoDaSessao(raiz, sessao);
+  if (!arquivo) return [];
+  return readFileSync(arquivo, "utf8")
+    .split("\n")
+    .flatMap((linha) => {
+      try {
+        return [JSON.parse(linha) as unknown];
+      } catch {
+        return [];
+      }
+    });
+}
+
+export interface Chat {
+  sessao: InfoSessao;
+  /** O que já aconteceu, do JSONL da sessão do pi. */
+  conversa: unknown[];
+  /** Os eventos ao vivo; `{ type: "estado", sessao }` traz o estado novo. Devolve a função que cancela. */
+  assinar(ouvinte: (evento: EventoPi) => void): () => void;
+}
+
+/** F4 §5.4: a conversa da sessão até agora e o fluxo de eventos das execuções dela. */
+export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Chat> {
+  return {
+    sessao: await infoDaSessao(banco, sessao),
+    conversa: lerConversa(raizDo(banco), sessao),
+    // O aviso de estado não espera o C6: o aviso seguinte, logo depois dele, corrige.
+    assinar: (ouvinte) =>
+      assinar(sessao, (evento) => {
+        ouvinte(
+          evento.type === "estado"
+            ? { type: "estado", sessao: estadoNoBanco(banco, agregadoDa(banco, issueDe(banco, sessao)), sessao) }
+            : evento,
+        );
+      }),
+  };
+}
+
+/**
+ * F4 §6.6: C5 interativo na sessão principal do ticket e, em segundo plano, worktree, pi e C6 quando o processo
+ * para. A primeira mensagem de uma sessão leva o contexto da etapa (F4 §6.3); a retomada leva só a mensagem.
+ * Devolve a sessão.
+ */
+export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string, opcoes: OpcoesInterativa): string {
+  const issue = existe(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número")
+    .issue.id;
+  const { ag, execucao } = iniciarNaSessaoPrincipal(banco, issue, ticket, "interativo");
+  const raiz = raizDo(banco);
+  const log = logDaExecucao(raiz, execucao.id);
+  const primeira = arquivoDaSessao(raiz, execucao.sessaoPi) === undefined;
+  const e = `E-${String(execucao.id)}`;
+  const tarefa = rodarExecucao({
+    banco,
+    ag,
+    execucao,
+    pacote: opcoes.pacote,
+    limiteMin: opcoes.ociosidadeMin,
+    prompt: (c) => {
+      if (!primeira) return texto;
+      const contexto = montarPrompt({
+        ag,
+        ticket: ticketDe(ag, ticket),
+        instrucao: undefined,
+        ...c,
+        modo: "interativo",
+      });
+      return `${contexto}\n${texto}\n`;
+    },
+  })
+    .then(({ falha }) => {
+      // Ticket interativo nunca falha (F1 §4.2): só a execução termina; a próxima mensagem retoma a sessão.
+      comIssue(banco, issue, "terminarExecucao", FABRIQUINHA, (a, ctx) =>
+        terminarExecucao(
+          a,
+          falha === undefined
+            ? { execucao: execucao.id, resultado: "sucesso" }
+            : { execucao: execucao.id, resultado: "falha", erro: motivo(falha) },
+          FABRIQUINHA,
+          ctx,
+        ),
+      );
+      anotar(log, falha === undefined ? `${e} terminou` : `${e} terminou com falha: ${falha}`);
+    })
+    .catch((error_: unknown) => {
+      anotar(log, `${e} não gravou o término: ${mensagem(error_)}`);
+    })
+    .finally(() => {
+      tarefas.delete(execucao.id);
+      avisar(execucao.sessaoPi, log);
+    });
+  tarefas.set(execucao.id, { issue, tarefa });
+  return execucao.sessaoPi;
+}
+
+/** F4 §6.6: C1, worktree, sessão interativa e a mensagem inicial. Devolve a sessão para o chat. */
+export function registrarNecessidade(
+  banco: DatabaseSync,
+  projeto: string,
+  deps: Id[],
+  opcoes: OpcoesInterativa,
+): string {
+  const ag = registrarIssue(banco, { projeto, deps }, AUDITOR);
+  const [ticket] = ag.tickets;
+  const i = `I-${String(ag.issue.id)}`;
+  return iniciarInterativa(
+    banco,
+    existe(ticket, `a ${i} nasceu sem ticket de registro`, "confira o C1").id,
+    `Vamos registrar uma necessidade no projeto ${projeto} (issue ${i}).`,
+    opcoes,
+  );
+}
+
+/** Por que a sessão não recebe mensagem em cada estado (F4 §5.4). */
+const SEM_MENSAGEM: Record<string, string> = {
+  dialogo: "responda o diálogo aberto pelo agente",
+  falha: "responda e retome o ticket",
+  gate_registro: "aprove o registro, ou devolva-o com o motivo, que vai ao agente como mensagem",
+  gate_desenho: "decida na página da issue",
+  gate_pr: "decida na página da issue",
+  terminada: "a sessão é só leitura; converse sobre ela numa consulta",
+};
+
+export type ModoEnvio = "prompt" | "steer" | "follow_up";
+
+/** Por que uma sessão `rodando` ainda não tem pi para receber `steer` ou `follow_up`. */
+function semPi(ag: Agregado, info: InfoSessao): ErroDeRegra {
+  const t = `T-${String(info.ticket)}`;
+  if (ag.execucoes.some((e) => e.sessaoPi === info.sessao && e.resultado === "em_andamento")) {
+    return new ErroDeRegra(`o pi da sessão de ${t} ainda não subiu`, "espere a preparação da worktree");
+  }
+  if (ticketDe(ag, info.ticket).status === "aberto") {
+    return new ErroDeRegra(
+      `${t} espera o agendador para a próxima execução, que já leva a resposta do Auditor`,
+      "use Executar agora para não esperar",
+    );
+  }
+  return new ErroDeRegra(`o agente de ${t} já terminou, e a Fabriquinha confere as evidências`, "espere o resultado");
+}
+
+/**
+ * F4 §5.4: `steer` ou `follow_up` com a sessão rodando; `prompt` com ela esperando a conversa, retomando-a numa
+ * nova execução no mesmo modo se o processo parou (ociosidade ou reinício).
+ */
+export async function enviar(
+  banco: DatabaseSync,
+  sessao: string,
+  texto: string,
+  modo: ModoEnvio,
+  opcoes: OpcoesInterativa,
+): Promise<void> {
+  const ag = await agregadoAssentado(banco, issueDe(banco, sessao));
+  const info = estadoNoBanco(banco, ag, sessao);
+  const t = `T-${String(info.ticket)}`;
+  let aceitos: ModoEnvio[] = [];
+  if (info.estado === "rodando") aceitos = ["steer", "follow_up"];
+  else if (info.motivo === "conversa") aceitos = ["prompt"];
+  const rotulo = info.motivo ? `${info.estado}: ${info.motivo}` : info.estado;
+  if (aceitos.length === 0) {
+    throw new ErroDeRegra(
+      `a sessão de ${t} está ${rotulo} e não recebe mensagem`,
+      String(SEM_MENSAGEM[info.motivo ?? info.estado]),
+    );
+  }
+  if (!aceitos.includes(modo)) {
+    throw new ErroDeRegra(`a sessão de ${t} está ${rotulo} e não recebe ${modo}`, `envie com ${aceitos.join(" ou ")}`);
+  }
+  const viva = situacao(sessao);
+  if (viva) {
+    mandar(viva.execucao, { type: modo, message: texto });
+    return;
+  }
+  if (info.estado === "rodando") throw semPi(ag, info);
+  iniciarInterativa(banco, info.ticket, texto, opcoes);
+}
+
+/**
+ * Para o pi ocioso do ticket e espera o C6 dele: C7 e C10 exigem o ticket sem execução em andamento. Recusa se o
+ * agente ainda trabalha ou espera um diálogo.
+ */
+async function pararOciosa(ag: Agregado, ticket: Id): Promise<void> {
+  const execucao = ag.execucoes.find((e) => e.ticket === ticket && e.resultado === "em_andamento");
+  if (!execucao) return;
+  const viva = situacao(execucao.sessaoPi);
+  if (viva?.ocupado !== false || viva.dialogos.length > 0) {
+    throw new ErroDeRegra(`a sessão de T-${String(ticket)} ainda está rodando`, "espere o agente terminar");
+  }
+  encerrar(execucao.id);
+  await tarefas.get(execucao.id)?.tarefa;
+}
+
+/** A sessão principal de um ticket que já executou, com o log da última execução dela. */
+function principalDe(banco: DatabaseSync, ag: Agregado, ticket: Id): [string, string] {
+  const execucao = existe(
+    ag.execucoes.findLast((e) => e.ticket === ticket && e.modo !== "consulta"),
+    `T-${String(ticket)} ainda não tem sessão`,
+    "confira o banco",
+  );
+  return [execucao.sessaoPi, logDaExecucao(raizDo(banco), execucao.id)];
+}
+
+/**
+ * F4 §6.6: Aprovar registro e Devolver, no chat. Para o pi ocioso, grava C10 e, se devolvido, retoma a sessão com o
+ * motivo como mensagem ao agente.
+ */
+export async function decidirRegistroNoChat(
+  banco: DatabaseSync,
+  issue: Id,
+  decisao: { aprovado: boolean; motivo?: string },
+  opcoes: OpcoesInterativa,
+): Promise<void> {
+  const ag = await agregadoAssentado(banco, issue);
+  const ticket = ag.tickets.find((t) => t.etapa === "registro" && t.status !== "concluido");
+  if (ticket) await pararOciosa(ag, ticket.id);
+  comIssue(banco, issue, "decidirRegistro", AUDITOR, (a, ctx) => decidirRegistro(a, decisao, AUDITOR, ctx));
+  // C10 só passa com o ticket de registro aberto; aprovar exige as evidências de uma execução, e devolver, o motivo.
+  const t = existe(ticket, "C10 passou sem ticket de registro", "confira o banco");
+  if (!decisao.aprovado) {
+    iniciarInterativa(banco, t.id, `O Auditor devolveu o registro. Motivo: ${String(decisao.motivo)}`, opcoes);
+    return;
+  }
+  avisar(...principalDe(banco, ag, t.id));
+}
+
+/** F4 §6.6: Concluir sessão, na sessão em aberto. Para o pi ocioso e chama C7. */
+export async function concluirSessao(banco: DatabaseSync, ticket: Id): Promise<void> {
+  const issue = existe(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número")
+    .issue.id;
+  const ag = await agregadoAssentado(banco, issue);
+  const t = ticketDe(ag, ticket);
+  if (t.etapa !== "sessao") {
+    throw new ErroDeRegra(`T-${String(ticket)} é da etapa ${t.etapa}`, "só a sessão em aberto se conclui pelo chat");
+  }
+  await pararOciosa(ag, ticket);
+  comIssue(banco, issue, "concluirTicket", FABRIQUINHA, (a, ctx) => concluirTicket(a, { ticket }, FABRIQUINHA, ctx));
+  // C7 exige o ticket em execução, então ele já tem sessão.
+  avisar(...principalDe(banco, ag, ticket));
+}

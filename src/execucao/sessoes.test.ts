@@ -1,0 +1,722 @@
+// Sessões (F4 §5, §6.6): o estado calculado em cada caso e, de ponta a ponta contra banco real, git real e um pi
+// falso que fala o protocolo RPC (F4 §12), registro, ociosidade e retomada, diálogo pendente, steer e aborto.
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
+import { after, test } from "node:test";
+import { setTimeout as dormir } from "node:timers/promises";
+import { type Agregado, AUDITOR, type Execucao, type Ticket } from "../dominio/agregado.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
+import type { Fase } from "../dominio/primitivos.ts";
+import { abrir } from "../persistencia/banco.ts";
+import { agregado, registrarIssue } from "../persistencia/issues.ts";
+import { registrarProjeto } from "../persistencia/projetos.ts";
+import { caminhoDaWorktree } from "../repositorio/worktree.ts";
+import { abortar, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
+import type { EventoPi } from "./pi.ts";
+import {
+  abrirChat,
+  concluirSessao,
+  decidirRegistroNoChat,
+  enviar,
+  estadoDaSessao,
+  infoDaSessao,
+  iniciarInterativa,
+  registrarNecessidade,
+  sessoes,
+} from "./sessoes.ts";
+
+// ---------------------------------------------------------------------------------------------------------------
+// Estado calculado (F4 §5.2), sobre agregados montados à mão.
+
+const T0 = "2026-10-11T10:00:00.000Z";
+const T1 = "2026-10-11T11:00:00.000Z";
+const SESSAO = "00000000-0000-4000-8000-000000000001";
+
+const ticket = (t: Partial<Ticket> & Pick<Ticket, "id" | "etapa" | "status">): Ticket => ({
+  issue: 1,
+  titulo: "t",
+  descricao: "",
+  origem: "fabriquinha",
+  criadoEm: T0,
+  ...(t.status === "concluido" && { concluidoEm: T1 }),
+  ...(t.status === "falhou" && { erro: "deu ruim" }),
+  ...t,
+});
+
+const execucao = (e: Partial<Execucao> & Pick<Execucao, "ticket" | "modo" | "resultado">): Execucao => ({
+  id: 1,
+  sessaoPi: SESSAO,
+  iniciadaEm: T0,
+  ...(e.resultado !== "em_andamento" && { terminadaEm: T1 }),
+  ...e,
+});
+
+const agregadoCom = (
+  fase: Fase,
+  tickets: Ticket[],
+  execucoes: Execucao[],
+  extra: Partial<Agregado> = {},
+): Agregado => ({
+  issue: { id: 1, projeto: "loja", titulo: null, tipo: null, descricao: "", fase, deps: [], criadaEm: T0 },
+  tickets,
+  execucoes,
+  decisoes: [],
+  evidencias: [],
+  ...extra,
+});
+
+const estado = (ag: Agregado, viva?: Situacao, edicaoDoAgente = "") => {
+  const { estado, motivo, desde } = estadoDaSessao(ag, SESSAO, { viva, edicaoDoAgente });
+  return [estado, motivo, desde];
+};
+
+test("estado: autônoma rodando, inclusive na coleta depois do C6 e reaberta à espera do agendador", () => {
+  const desenho = (status: Ticket["status"], resultado: Execucao["resultado"]) =>
+    agregadoCom(
+      "desenho",
+      [ticket({ id: 2, etapa: "desenho", status })],
+      [execucao({ ticket: 2, modo: "autonomo", resultado })],
+    );
+  assert.deepEqual(estado(desenho("em_execucao", "em_andamento")), ["rodando", undefined, T0]);
+  const viva = { execucao: 1, ocupado: true, desde: T1, dialogos: [] };
+  assert.deepEqual(estado(desenho("em_execucao", "em_andamento"), viva), ["rodando", undefined, T1]);
+  assert.deepEqual(estado(desenho("em_execucao", "sucesso")), ["rodando", undefined, T1]);
+  assert.deepEqual(estado(desenho("aberto", "falha")), ["rodando", undefined, T1]);
+  assert.deepEqual(estado(desenho("falhou", "falha")), ["aguardando_humano", "falha", T1]);
+});
+
+test("estado: diálogo pendente vence tudo, com o instante em que chegou", () => {
+  const ag = agregadoCom(
+    "desenho",
+    [ticket({ id: 2, etapa: "desenho", status: "em_execucao" })],
+    [execucao({ ticket: 2, modo: "autonomo", resultado: "em_andamento" })],
+  );
+  const dialogo: Dialogo = { type: "extension_ui_request", id: "d", method: "editor", em: T1 };
+  assert.deepEqual(estado(ag, { execucao: 1, ocupado: true, desde: T0, dialogos: [dialogo] }), [
+    "aguardando_humano",
+    "dialogo",
+    T1,
+  ]);
+  assert.deepEqual(
+    estadoDaSessao(ag, SESSAO, {
+      viva: { execucao: 1, ocupado: true, desde: T0, dialogos: [dialogo] },
+      edicaoDoAgente: "",
+    }).dialogos,
+    [dialogo],
+  );
+});
+
+test("estado: registro em conversa até ficar completo, e então gate_registro, com o pi ocioso ou parado", () => {
+  const registro = ticket({ id: 1, etapa: "registro", status: "em_execucao" });
+  const ocioso = { execucao: 1, ocupado: false, desde: T1, dialogos: [] };
+  const vivo = execucao({ ticket: 1, modo: "interativo", resultado: "em_andamento" });
+  const incompleto = agregadoCom("registro", [registro], [vivo]);
+  assert.deepEqual(estado(incompleto, ocioso), ["aguardando_humano", "conversa", T1]);
+  assert.deepEqual(estado(incompleto, { ...ocioso, ocupado: true }), ["rodando", undefined, T1]);
+  const evidencia = (id: number, tipo: "comportamento" | "criterios_aceite") => ({
+    id,
+    ticket: 1,
+    tipo,
+    produtor: "agente" as const,
+    dados: {},
+    arquivos: [],
+    em: T0,
+  });
+  const completo = agregadoCom(
+    "registro",
+    [registro],
+    [execucao({ ticket: 1, modo: "interativo", resultado: "sucesso" })],
+    {
+      issue: { ...incompleto.issue, titulo: "Busca lenta", tipo: "problema" },
+      evidencias: [evidencia(1, "comportamento"), evidencia(2, "criterios_aceite")],
+    },
+  );
+  assert.deepEqual(estado(completo), ["aguardando_humano", "gate_registro", T1]);
+  const devolucao = {
+    id: 1,
+    issue: 1,
+    ticket: 1,
+    gate: "registro" as const,
+    aprovado: false,
+    motivo: "m",
+    por: "auditor" as const,
+  };
+  const devolvido = { ...completo, decisoes: [{ ...devolucao, em: T1 }] };
+  assert.deepEqual(estado(devolvido), ["aguardando_humano", "conversa", T1], "evidências de antes da devolução");
+  const refeito = {
+    ...devolvido,
+    evidencias: [...completo.evidencias, { ...evidencia(3, "comportamento"), em: "2026-10-11T12:00:00.000Z" }],
+  };
+  assert.deepEqual(estado(refeito), ["aguardando_humano", "gate_registro", T1], "evidência depois da devolução");
+  assert.deepEqual(estado(devolvido, undefined, T0), ["aguardando_humano", "conversa", T1], "edição de antes");
+  assert.deepEqual(
+    estado(devolvido, undefined, "2026-10-11T12:00:00.000Z"),
+    ["aguardando_humano", "gate_registro", T1],
+    "edição da issue pelo agente depois da devolução",
+  );
+});
+
+test("estado: gates de desenho e de PR só para o último ticket concluído da etapa; o resto termina", () => {
+  const desenhos = [
+    ticket({ id: 2, etapa: "desenho", status: "concluido", concluidoEm: T0 }),
+    ticket({ id: 3, etapa: "desenho", status: "concluido" }),
+  ];
+  const outra = "00000000-0000-4000-8000-000000000002";
+  const execs = [
+    execucao({ id: 1, ticket: 2, modo: "autonomo", resultado: "sucesso" }),
+    execucao({ id: 2, ticket: 3, modo: "autonomo", resultado: "sucesso", sessaoPi: outra }),
+  ];
+  const ag = agregadoCom("aprovacao_desenho", desenhos, execs);
+  assert.deepEqual(estado(ag), ["terminada", undefined, T0], "o desenho reprovado antes");
+  const ultimo = estadoDaSessao(ag, outra, { viva: undefined, edicaoDoAgente: "" });
+  assert.deepEqual([ultimo.estado, ultimo.motivo, ultimo.desde], ["aguardando_humano", "gate_desenho", T1]);
+  assert.deepEqual(estado(agregadoCom("desenvolvimento", desenhos, execs)), ["terminada", undefined, T0]);
+
+  const encerramento = agregadoCom(
+    "aprovacao_pr",
+    [ticket({ id: 2, etapa: "encerramento", status: "concluido" })],
+    [execucao({ ticket: 2, modo: "autonomo", resultado: "sucesso" })],
+  );
+  assert.deepEqual(estado(encerramento), ["aguardando_humano", "gate_pr", T1]);
+  const revisao = agregadoCom(
+    "encerramento",
+    [ticket({ id: 2, etapa: "revisao", status: "concluido" })],
+    [execucao({ ticket: 2, modo: "autonomo", resultado: "sucesso" })],
+  );
+  assert.deepEqual(estado(revisao), ["terminada", undefined, T1]);
+});
+
+test("estado: sessão em aberto parada é conversa; sessão desconhecida é erro", () => {
+  const ag = agregadoCom(
+    "ajuste_pr",
+    [ticket({ id: 2, etapa: "sessao", status: "em_execucao" })],
+    [execucao({ ticket: 2, modo: "interativo", resultado: "falha", erro: "serviço reiniciado" })],
+  );
+  assert.deepEqual(estado(ag), ["aguardando_humano", "conversa", T1]);
+  assert.throws(
+    () => estadoDaSessao(ag, "00000000-0000-4000-8000-000000000009", { viva: undefined, edicaoDoAgente: "" }),
+    (e) =>
+      e instanceof ErroDeRegra && e.message.startsWith("a sessão 00000000-0000-4000-8000-000000000009 não é da I-1"),
+  );
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Ponta a ponta com o pi falso.
+
+const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sessoes-")));
+after(() => {
+  rmSync(base, { recursive: true, force: true });
+});
+const src = resolve(import.meta.dirname, "..");
+
+const gitconfig = join(base, "gitconfig");
+writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
+process.env.GIT_CONFIG_GLOBAL = gitconfig;
+process.env.GIT_CONFIG_NOSYSTEM = "1";
+process.env.PI_CODING_AGENT_DIR = join(base, "pi-agent");
+const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
+
+/**
+ * pi falso interativo. Anota em $FALSO_PI_REGISTRO o início e cada comando, grava a conversa no JSONL da sessão
+ * (`<session-dir>/<instante>_<session-id>.jsonl`, como o pi) e responde conforme $FALSO_PI:
+ * - conversa: roda o "agente" de $FALSO_PI_AGENTE, se houver, responde e assenta;
+ * - dialogo: responde, assenta e depois abre um `editor` (como o gancho de uma extensão);
+ * - espera: fica trabalhando; `steer` o faz responder e assentar, `follow_up` abre um `editor`, `abort` o faz
+ *   parar com stopReason aborted;
+ * - sai: sai com código 3 ao receber o prompt.
+ * Uma mensagem com "pergunte" não roda o agente: ele só pergunta; com "edite", ele só edita a issue. $FALSO_PI_RECUSA ("prompt", "steer") faz o pi recusar
+ * o primeiro prompt ou todo steer.
+ */
+const PI_FALSO = `#!/usr/bin/env node
+import { appendFileSync, mkdirSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+const anotar = (o) => appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(o) + "\\n");
+if (process.argv.includes("--version")) {
+  console.log("0.84.4-falso");
+  process.exit(0);
+}
+const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
+const variante = process.env.FALSO_PI;
+anotar({ evento: "inicio", argv: process.argv.slice(2), cwd: process.cwd(), pid: process.pid });
+const dir = arg("--session-dir");
+const id = arg("--session-id");
+mkdirSync(dir, { recursive: true });
+const existente = readdirSync(dir, { withFileTypes: true }).find((f) => f.name.endsWith("_" + id + ".jsonl"));
+const sessao = join(dir, existente ? existente.name : "2026-10-11T10-00-00-000Z_" + id + ".jsonl");
+if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n");
+const guardar = (message) => appendFileSync(sessao, JSON.stringify({ type: "message", message }) + "\\n");
+const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
+const responder = (texto, stopReason = "stop") => {
+  const message = { role: "assistant", content: [{ type: "text", text: texto }], stopReason };
+  guardar(message);
+  emitir({ type: "message_end", message });
+  emitir({ type: "agent_settled" });
+};
+const recusa = (process.env.FALSO_PI_RECUSA ?? "").split(",");
+async function aoPrompt(c) {
+  if (recusa.includes("prompt")) {
+    recusa.splice(recusa.indexOf("prompt"), 1);
+    return emitir({ type: "response", command: "prompt", success: false, error: "modelo ocupado" });
+  }
+  emitir({ type: "response", command: "prompt", success: true });
+  emitir({ type: "agent_start" });
+  const usuario = { role: "user", content: c.message };
+  guardar(usuario);
+  emitir({ type: "message_end", message: usuario });
+  if (variante === "espera") return;
+  if (variante === "sai") process.exit(3);
+  if (process.env.FALSO_PI_AGENTE && !c.message.includes("pergunte")) await (await import(process.env.FALSO_PI_AGENTE)).default(c.message.includes("edite"));
+  responder("entendi:\\u2028tudo");
+  if (variante === "dialogo") emitir({ type: "extension_ui_request", id: "e1", method: "editor", title: "Explique" });
+}
+let resto = "";
+process.stdin.setEncoding("utf8").on("data", (parte) => {
+  const linhas = (resto + parte).split("\\n");
+  resto = linhas.pop();
+  for (const linha of linhas) {
+    const c = JSON.parse(linha);
+    anotar({ evento: "comando", comando: c });
+    if (c.type === "prompt") void aoPrompt(c);
+    if (c.type === "steer" && recusa.includes("steer")) {
+      emitir({ type: "response", command: "steer", success: false, error: "o agente não está rodando" });
+    } else if (c.type === "steer") {
+      emitir({ type: "response", command: "steer", success: true });
+      responder("redirecionado");
+      emitir({ type: "extension_ui_request", id: "c3", method: "confirm", title: "Seguir?", timeout: 60000 });
+    }
+    if (c.type === "follow_up") {
+      emitir({ type: "response", command: "follow_up", success: true });
+      emitir({ type: "extension_ui_request", id: "e2", method: "editor", title: "Por quê?" });
+    }
+    if (c.type === "abort") {
+      emitir({ type: "response", command: "abort", success: true });
+      responder("", "aborted");
+    }
+  }
+});
+`;
+const pi = join(base, "pi.mjs");
+writeFileSync(pi, PI_FALSO);
+chmodSync(pi, 0o755);
+process.env.FABRIQUINHA_PI = pi;
+
+/** "Agente" do registro: dá título e tipo à issue e, se não for `soEditar`, submete as evidências do registro. */
+const agente = join(base, "agente.mjs");
+writeFileSync(
+  agente,
+  `import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { editarIssue } from "${src}/dominio/issue.ts";
+import { submeter } from "${src}/evidencias/submissao.ts";
+import { abrir } from "${src}/persistencia/banco.ts";
+import { comIssue } from "${src}/persistencia/issues.ts";
+export default async function (soEditar) {
+  const banco = abrir(process.env.FABRIQUINHA_ROOT);
+  const execucao = Number(process.env.FABRIQUINHA_EXECUCAO);
+  const { ticket, issue } = banco
+    .prepare("SELECT e.ticket, t.issue FROM execucao e JOIN ticket t ON t.id = e.ticket WHERE e.id = ?")
+    .get(execucao);
+  const ator = { tipo: "agente", execucao, ticket };
+  const titulo = soEditar ? "Busca lenta com mil itens" : "Busca lenta";
+  comIssue(banco, issue, "editarIssue", ator, (ag) => editarIssue(ag, { titulo, tipo: "problema" }, ator));
+  if (soEditar) return banco.close();
+  const log = join(process.env.FABRIQUINHA_SAIDA, "busca.log");
+  writeFileSync(log, "busca levou 8 s\\n");
+  submeter(banco, ator, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [log]);
+  submeter(banco, ator, "criterios_aceite",
+    { criterios: [{ id: "CA-1", dado: "mil itens", quando: "busco", entao: "responde em 1 s" }] }, []);
+  banco.close();
+}
+`,
+);
+
+const PACOTE = "/opt/pi-fabriquinha";
+
+interface Cenario {
+  raiz: string;
+  banco: DatabaseSync;
+  /** O que o pi falso anotou. */
+  registro(): Record<string, unknown>[];
+  comandos(): Record<string, unknown>[];
+  log(execucao: number): string;
+  execucoes(): { id: number; resultado: string; sessao_pi: string; modo: string }[];
+}
+
+let n = 0;
+function cenario({ variante = "conversa", comAgente = false, preparacao = [] as string[], recusa = "" } = {}): Cenario {
+  const dir = join(base, `c${String(++n)}`);
+  const bare = join(dir, "origin.git");
+  const repo = join(dir, "repo");
+  const raiz = join(dir, "raiz");
+  git(base, "init", "-q", "--bare", bare);
+  git(base, "clone", "-q", bare, repo);
+  git(repo, "checkout", "-q", "-b", "main");
+  writeFileSync(join(repo, "LEIAME"), "loja\n");
+  git(repo, "add", "LEIAME");
+  git(repo, "commit", "-q", "-m", "início");
+  git(repo, "push", "-q", "origin", "main");
+  const banco = abrir(raiz);
+  registrarProjeto(banco, {
+    nome: "loja",
+    repo,
+    branchBase: "main",
+    hospedagem: "github",
+    preparacao,
+    testes: ["npm test"],
+    sonar: { projectKey: "loja" },
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+    modelos: {},
+  });
+  const registro = join(dir, "registro.jsonl");
+  process.env.FALSO_PI_REGISTRO = registro;
+  process.env.FALSO_PI = variante;
+  process.env.FALSO_PI_RECUSA = recusa;
+  if (comAgente) process.env.FALSO_PI_AGENTE = agente;
+  else delete process.env.FALSO_PI_AGENTE;
+  const lerRegistro = () =>
+    existsSync(registro)
+      ? readFileSync(registro, "utf8")
+          .trim()
+          .split("\n")
+          .map((l) => JSON.parse(l) as Record<string, unknown>)
+      : [];
+  return {
+    raiz,
+    banco,
+    registro: lerRegistro,
+    comandos: () =>
+      lerRegistro()
+        .filter((r) => r.evento === "comando")
+        .map((r) => r.comando as Record<string, unknown>),
+    log: (execucao) => readFileSync(join(raiz, "execucoes", `E-${String(execucao)}`, "log"), "utf8"),
+    execucoes: () =>
+      banco.prepare("SELECT id, resultado, sessao_pi, modo FROM execucao ORDER BY id").all() as {
+        id: number;
+        resultado: string;
+        sessao_pi: string;
+        modo: string;
+      }[],
+  };
+}
+
+/** Espera `condicao` ficar verdadeira, até 10 s. */
+async function ate(condicao: () => boolean | Promise<boolean>, oQue: string): Promise<void> {
+  for (let espera = 0; !(await condicao()); espera += 20) {
+    assert.ok(espera < 10_000, `${oQue} não aconteceu em 10 s`);
+    await dormir(20);
+  }
+}
+
+const estadoDe = async (c: Cenario, sessao: string) => {
+  const info = await infoDaSessao(c.banco, sessao);
+  return info.motivo ? `${info.estado}: ${info.motivo}` : info.estado;
+};
+
+const vivo = (pid: unknown) => {
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const rejeitaCom = (mensagem: string) => (e: unknown) => e instanceof ErroDeRegra && e.message === mensagem;
+
+test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no chat, devolver com motivo e aprovar", async () => {
+  const c = cenario({ comAgente: true });
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  assert.equal(await estadoDe(c, sessao), "rodando", "a preparação da worktree conta como rodando");
+  const chat = await abrirChat(c.banco, sessao);
+  assert.deepEqual(chat.conversa, [], "o pi ainda não gravou a sessão");
+  const eventos: EventoPi[] = [];
+  const cancelar = chat.assinar((e) => eventos.push(e));
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: gate_registro", "o gate do registro");
+
+  const [inicio] = c.registro();
+  assert.equal(inicio?.cwd, caminhoDaWorktree(c.raiz, "loja", 1));
+  assert.deepEqual((inicio.argv as string[]).slice(4, 6), ["--session-id", sessao]);
+  const [primeiro] = c.comandos();
+  const prompt = readFileSync(join(c.raiz, "execucoes", "E-1", "prompt.md"), "utf8");
+  assert.deepEqual(primeiro, { type: "prompt", message: prompt });
+  assert.match(prompt, /## Modo de trabalhar: registro/);
+  assert.doesNotMatch(prompt, /Execução autônoma/);
+  assert.match(prompt, /\nVamos registrar uma necessidade no projeto loja \(issue I-1\)\.\n$/);
+  assert.ok(eventos.some((e) => e.type === "agent_settled"));
+  const estados = () => eventos.filter((e) => e.type === "estado").map((e) => (e.sessao as { estado: string }).estado);
+  assert.deepEqual([estados()[0], estados().at(-1)], ["rodando", "aguardando_humano"]);
+
+  // O gate do registro fica no chat: o campo de mensagem dá lugar a Aprovar e Devolver.
+  await assert.rejects(
+    enviar(c.banco, sessao, "mais uma coisa", "prompt", opcoes),
+    rejeitaCom(
+      "a sessão de T-1 está aguardando_humano: gate_registro e não recebe mensagem (aprove o registro, ou " +
+        "devolva-o com o motivo, que vai ao agente como mensagem)",
+    ),
+  );
+  const conversa = (await abrirChat(c.banco, sessao)).conversa as { type: string; message?: { role: string } }[];
+  assert.deepEqual(
+    conversa.map((e) => e.message?.role ?? e.type),
+    ["session", "user", "assistant"],
+  );
+
+  // Devolvido, o agente só pergunta: as evidências antigas não devolvem a sessão ao gate.
+  await decidirRegistroNoChat(c.banco, 1, { aprovado: false, motivo: "Falta o passo a passo; pergunte" }, opcoes);
+  assert.deepEqual(
+    c.execucoes().map((e) => [e.id, e.resultado, e.sessao_pi, e.modo]),
+    [
+      [1, "sucesso", sessao, "interativo"],
+      [2, "em_andamento", sessao, "interativo"],
+    ],
+    "o pi ocioso parou (C6), e a sessão retomou com o motivo",
+  );
+  assert.equal(agregado(c.banco, 1)?.decisoes.at(-1)?.motivo, "Falta o passo a passo; pergunte");
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a pergunta do agente");
+  assert.equal(c.comandos().at(-1)?.message, "O Auditor devolveu o registro. Motivo: Falta o passo a passo; pergunte");
+  assert.equal(c.registro().filter((r) => r.evento === "inicio").length, 2);
+
+  // O Auditor responde; o agente só edita a issue, sem evidência nova, e isso basta para o gate voltar.
+  await enviar(c.banco, sessao, "Buscar com mil itens; edite o título.", "prompt", opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: gate_registro", "o gate de novo");
+  assert.equal(agregado(c.banco, 1)?.issue.titulo, "Busca lenta com mil itens");
+  assert.equal(agregado(c.banco, 1)?.evidencias.length, 2, "nenhuma evidência nova");
+
+  await decidirRegistroNoChat(c.banco, 1, { aprovado: true }, opcoes);
+  assert.equal(agregado(c.banco, 1)?.issue.fase, "desenho");
+  assert.equal(await estadoDe(c, sessao), "terminada");
+  assert.equal(estados().at(-1), "terminada", "avisou o fim");
+  await assert.rejects(
+    enviar(c.banco, sessao, "oi", "prompt", opcoes),
+    rejeitaCom(
+      "a sessão de T-1 está terminada e não recebe mensagem (a sessão é só leitura; converse sobre ela numa consulta)",
+    ),
+  );
+  cancelar();
+  assert.deepEqual(await sessoes(c.banco, { escopo: "ativas" }), []);
+  assert.deepEqual(
+    (await sessoes(c.banco, { escopo: "historico", projeto: "loja", issue: 1, etapa: "registro" })).map(
+      (s) => s.sessao,
+    ),
+    [sessao],
+  );
+  assert.deepEqual(await sessoes(c.banco, { escopo: "historico", etapa: "desenho" }), []);
+  assert.deepEqual(await sessoes(c.banco, { escopo: "historico", projeto: "outro" }), []);
+  await assert.rejects(
+    infoDaSessao(c.banco, "nenhuma"),
+    rejeitaCom("a sessão nenhuma não existe (confira o endereço do chat)"),
+  );
+  c.banco.close();
+});
+
+test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a próxima mensagem a retoma no mesmo modo", async () => {
+  const c = cenario();
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  // Um ouvinte do chat que lança não derruba a execução: o erro vai para o log dela.
+  (await abrirChat(c.banco, sessao)).assinar(() => {
+    throw new Error("o navegador fechou");
+  });
+  await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
+  const [inicio] = c.registro();
+  await ate(() => !vivo(inicio?.pid), "o fim do pi");
+  assert.match(c.log(1), /sessão ociosa por 0\.01 min; o pi para\n.*E-1 terminou\n/);
+  assert.match(c.log(1), /um ouvinte da sessão falhou com o evento agent_settled: o navegador fechou\n/);
+  assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
+  assert.deepEqual(
+    (await sessoes(c.banco, { escopo: "ativas" })).map((s) => [s.sessao, s.motivo]),
+    [[sessao, "conversa"]],
+  );
+  await assert.rejects(
+    enviar(c.banco, sessao, "oi", "steer", opcoes),
+    rejeitaCom("a sessão de T-1 está aguardando_humano: conversa e não recebe steer (envie com prompt)"),
+  );
+
+  await enviar(c.banco, sessao, "voltei", "prompt", opcoes);
+  await ate(() => c.execucoes()[1]?.resultado === "sucesso", "a nova parada por ociosidade");
+  assert.deepEqual(
+    c.execucoes().map((e) => [e.sessao_pi, e.modo]),
+    [
+      [sessao, "interativo"],
+      [sessao, "interativo"],
+    ],
+  );
+  const inicios = c.registro().filter((r) => r.evento === "inicio");
+  assert.deepEqual((inicios[1]?.argv as string[]).slice(4, 6), ["--session-id", sessao]);
+  assert.deepEqual(c.comandos().at(-1), { type: "prompt", message: "voltei" }, "a retomada leva só a mensagem");
+
+  const outra = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await ate(() => c.execucoes()[2]?.resultado === "sucesso", "a parada da outra sessão");
+  assert.deepEqual(
+    (await sessoes(c.banco, { escopo: "ativas" })).map((s) => s.sessao),
+    [sessao, outra],
+    "da que espera há mais tempo para a mais recente",
+  );
+  c.banco.close();
+});
+
+test("diálogo pendente: a sessão interativa espera o Auditor sem parar por ociosidade; respondido, a ociosidade volta a contar", async () => {
+  const c = cenario({ variante: "dialogo" });
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: dialogo", "o diálogo");
+  const info = await infoDaSessao(c.banco, sessao);
+  assert.deepEqual(
+    info.dialogos.map((d) => [d.id, d.method, d.expiraEm]),
+    [["e1", "editor", undefined]],
+  );
+  await assert.rejects(
+    enviar(c.banco, sessao, "oi", "prompt", opcoes),
+    rejeitaCom(
+      "a sessão de T-1 está aguardando_humano: dialogo e não recebe mensagem (responda o diálogo aberto pelo agente)",
+    ),
+  );
+  await dormir(1500); // mais que a ociosidade de 0,6 s
+  assert.equal(c.execucoes()[0]?.resultado, "em_andamento");
+  responderDialogo(info.execucao, "e1", { value: "porque sim" });
+  assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
+  await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
+  assert.deepEqual(c.comandos().at(-1), { type: "extension_ui_response", id: "e1", value: "porque sim" });
+  c.banco.close();
+});
+
+test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo pendente e manda abort", async () => {
+  const c = cenario({ variante: "espera", preparacao: ["sleep 0.5"] });
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await assert.rejects(
+    enviar(c.banco, sessao, "já?", "steer", opcoes),
+    rejeitaCom("o pi da sessão de T-1 ainda não subiu (espere a preparação da worktree)"),
+  );
+  await ate(() => c.comandos().length === 1, "o prompt chegar ao pi");
+  assert.equal(await estadoDe(c, sessao), "rodando");
+  await assert.rejects(
+    enviar(c.banco, sessao, "oi", "prompt", opcoes),
+    rejeitaCom("a sessão de T-1 está rodando e não recebe prompt (envie com steer ou follow_up)"),
+  );
+  await assert.rejects(
+    concluirSessao(c.banco, 1),
+    rejeitaCom("T-1 é da etapa registro (só a sessão em aberto se conclui pelo chat)"),
+  );
+  await assert.rejects(
+    decidirRegistroNoChat(c.banco, 1, { aprovado: false, motivo: "x" }, opcoes),
+    rejeitaCom("a sessão de T-1 ainda está rodando (espere o agente terminar)"),
+  );
+
+  await enviar(c.banco, sessao, "faça só a busca", "follow_up", opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: dialogo", "o diálogo");
+  const { execucao } = await infoDaSessao(c.banco, sessao);
+  abortar(execucao);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "o agente parar");
+  assert.deepEqual(c.comandos().slice(1), [
+    { type: "follow_up", message: "faça só a busca" },
+    { type: "extension_ui_response", id: "e2", cancelled: true },
+    { type: "abort" },
+  ]);
+  await enviar(c.banco, sessao, "agora sim", "prompt", opcoes);
+  assert.equal(await estadoDe(c, sessao), "rodando");
+  await enviar(c.banco, sessao, "mudei de ideia", "steer", opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: dialogo", "o diálogo com tempo limite");
+  const [c3] = (await infoDaSessao(c.banco, sessao)).dialogos;
+  assert.equal(Date.parse(String(c3?.expiraEm)) - Date.parse(String(c3?.em)), 60_000);
+  assert.deepEqual(c.comandos().slice(-2), [
+    { type: "prompt", message: "agora sim" },
+    { type: "steer", message: "mudei de ideia" },
+  ]);
+  assert.throws(() => {
+    abortar(99);
+  }, rejeitaCom("a execução E-99 não tem pi rodando (nada a abortar)"));
+  // Entre a ordem de parar e o C6 o estado espera o C6, em vez de mostrar `rodando`.
+  encerrar(execucao);
+  assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
+  assert.equal(c.execucoes()[0]?.resultado, "sucesso");
+  c.banco.close();
+});
+
+test("interativa: a recusa de um comando vai ao chat e ao log sem derrubar o pi", async () => {
+  const c = cenario({ variante: "espera", recusa: "prompt,steer" });
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a recusa do prompt");
+  assert.match(c.log(1), /o pi recusou o comando prompt: modelo ocupado\n/);
+  await enviar(c.banco, sessao, "de novo", "prompt", opcoes);
+  await enviar(c.banco, sessao, "pare", "steer", opcoes);
+  await ate(() => c.log(1).includes("o pi recusou o comando steer: o agente não está rodando"), "a recusa do steer");
+  assert.equal(await estadoDe(c, sessao), "rodando");
+  const viva = situacao(sessao);
+  assert.ok(viva, "o pi segue vivo");
+  encerrar(viva.execucao);
+  assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
+  c.banco.close();
+});
+
+test("autônoma sem pi: steer explica se o ticket espera o agendador ou a coleta", async () => {
+  const c = cenario();
+  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  // Um desenho que falhou e foi reaberto (C9), direto no banco.
+  c.banco.exec(`UPDATE issue SET fase = 'desenho', titulo = 'Busca lenta', tipo = 'problema';
+    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (2, 1, 'desenho', 'Desenhar', 'aberto', 'fabriquinha', '${T1}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
+      VALUES (1, 2, 'autonomo', '${SESSAO}', 'falha', 'deu ruim', '${T0}', '${T1}');`);
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  await assert.rejects(
+    enviar(c.banco, SESSAO, "rápido", "steer", opcoes),
+    rejeitaCom(
+      "T-2 espera o agendador para a próxima execução, que já leva a resposta do Auditor (use Executar agora " +
+        "para não esperar)",
+    ),
+  );
+  c.banco.exec(
+    `UPDATE execucao SET resultado = 'sucesso', erro = NULL; UPDATE ticket SET status = 'em_execucao' WHERE id = 2;`,
+  );
+  await assert.rejects(
+    enviar(c.banco, SESSAO, "rápido", "steer", opcoes),
+    rejeitaCom("o agente de T-2 já terminou, e a Fabriquinha confere as evidências (espere o resultado)"),
+  );
+  c.banco.close();
+});
+
+test("sessão em aberto: concluirSessao para o pi ocioso e chama C7", async () => {
+  const c = cenario();
+  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  // A fase ajuste_pr e o ticket sessao nascem do C16 (ticket 21); aqui, direto no banco.
+  c.banco.exec(`UPDATE issue SET fase = 'ajuste_pr', titulo = 'Busca lenta', tipo = 'problema';
+    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (2, 1, 'sessao', 'Ajustar o PR', 'aberto', 'fabriquinha', '${T1}');`);
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const sessao = iniciarInterativa(c.banco, 2, "O Auditor pediu mudanças no PR.", opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a conversa");
+  await assert.rejects(
+    concluirSessao(c.banco, 2),
+    rejeitaCom("T-2 é da etapa sessao, que ainda não conclui (aguarde a versão que a implementa)"),
+  );
+  assert.equal(c.execucoes()[0]?.resultado, "sucesso", "o pi ocioso parou antes do C7");
+  assert.equal(situacao(sessao), undefined);
+  await assert.rejects(concluirSessao(c.banco, 2), /T-2 é da etapa sessao, que ainda não conclui/, "sem pi para parar");
+  c.banco.close();
+});
+
+test("banco fechado ao fim da sessão interativa: o término vai para o log em vez de derrubar o serviço", async () => {
+  const c = cenario();
+  const sessao = registrarNecessidade(c.banco, "loja", [], { pacote: PACOTE, ociosidadeMin: 0.01 });
+  await ate(() => situacao(sessao)?.ocupado === false, "a conversa");
+  c.banco.close();
+  await ate(() => c.log(1).includes("E-1 não gravou o término:"), "o registro do erro no log");
+});
+
+test("pi que sai sozinho: C6 falha, mas o ticket interativo não falha e a sessão segue em conversa", async () => {
+  const c = cenario({ variante: "sai" });
+  const sessao = registrarNecessidade(c.banco, "loja", [], { pacote: PACOTE, ociosidadeMin: 1 });
+  await ate(() => c.execucoes()[0]?.resultado === "falha", "o C6 da falha");
+  assert.match(c.log(1), /E-1 terminou com falha: o pi saiu antes de terminar a execução \(código 3\)/);
+  assert.equal(agregado(c.banco, 1)?.tickets[0]?.status, "em_execucao");
+  assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
+  c.banco.close();
+});

@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
-import type { Agregado, Ator } from "../dominio/agregado.ts";
+import { type Agregado, FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { registrarEvidencia } from "../dominio/evidencia.ts";
 import type { Id } from "../dominio/primitivos.ts";
@@ -25,7 +25,6 @@ const PAGINA = 500;
 const LIMITE_DA_API = 10_000;
 const URL_NOS_DOIS =
   "SONAR_HOST_URL precisa resolver no host e no contêiner do scanner, e localhost não serve: use host.docker.internal";
-const fabriquinha: Ator = { tipo: "fabriquinha" };
 
 export interface OpcoesSonar {
   /** Tempo máximo do scanner e, à parte, da espera pelo Compute Engine (F3 §6: 30 minutos). */
@@ -239,11 +238,11 @@ export async function coletarSonar(
     arquivosAnalisados: arquivos,
     issues: achados,
   });
-  return comIssue(banco, issue, "registrarEvidencia", fabriquinha, (ag, ctx) =>
+  return comIssue(banco, issue, "registrarEvidencia", FABRIQUINHA, (ag, ctx) =>
     registrarEvidencia(
       ag,
       { ticket, tipo: "relatorio_sonar", aprovada: achados.length === 0, dados, arquivos: [] },
-      fabriquinha,
+      FABRIQUINHA,
       ctx,
     ),
   );

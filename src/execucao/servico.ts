@@ -2,7 +2,7 @@
 // execuções de uma instância anterior, o agendador e o "Executar agora".
 import { createServer } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { falharTicket, terminarExecucao } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
@@ -18,7 +18,6 @@ import {
 import { sinalNoGrupo } from "../processo.ts";
 import { executarAutonomo } from "./autonoma.ts";
 
-const FABRIQUINHA: Ator = { tipo: "fabriquinha" };
 const REINICIADO = "serviço reiniciado";
 
 export interface Servico {

@@ -363,3 +363,17 @@ export function agregadoDoTicket(banco: DatabaseSync, ticket: Id): Agregado | un
   const linha = banco.prepare("SELECT issue FROM ticket WHERE id = ?").get(ticket);
   return linha && agregado(banco, Number(linha.issue));
 }
+
+/**
+ * Quando o agente editou a issue pela última vez (C2 a C4, na tabela `comando`), ou `""` se nunca editou: depois de
+ * uma devolução do registro, isso também conta como trabalho novo (F4 §5.2).
+ */
+export const ultimaEdicaoDoAgente = (banco: DatabaseSync, issue: Id): string =>
+  String(
+    banco
+      .prepare(
+        `SELECT COALESCE(MAX(em), '') AS em FROM comando WHERE issue = ? AND ator = 'agente'
+         AND nome IN ('editarIssue', 'adicionarDependencia', 'removerDependencia')`,
+      )
+      .get(issue)?.em,
+  );

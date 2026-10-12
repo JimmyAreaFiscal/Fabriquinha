@@ -26,6 +26,10 @@ export const Ator = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal(TipoAtor.enum.fabriquinha) }),
 ]);
 
+/** Os atores sem dados: o Auditor e a própria Fabriquinha. */
+export const AUDITOR: Ator = { tipo: "auditor" };
+export const FABRIQUINHA: Ator = { tipo: "fabriquinha" };
+
 export const TipoIssue = z.enum(["funcionalidade", "problema"]);
 
 export const Issue = z.object({
