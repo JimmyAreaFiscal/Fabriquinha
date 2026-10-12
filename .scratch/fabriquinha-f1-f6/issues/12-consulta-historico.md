@@ -4,10 +4,10 @@
 
 **Blocked by:** 11
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `conversarSobre(ticket)`: `pi --mode rpc --fork <sessão principal> --exclude-tools edit,write,bash`, novo `sessionId` via `get_state`, C21; não ocupa o D8 nem muda o ticket.
-- [ ] `cwd` no repositório do projeto quando a issue está concluída.
-- [ ] `exportarHistorico(sessao)` com cabeçalho, mensagens na íntegra, chamadas de ferramenta e resultados cortados em 2.000 caracteres.
-- [ ] `anexarHistorico` grava `historico-T-<n>.md` em `$FABRIQUINHA_SAIDA` e acrescenta uma linha por anexo à mensagem.
-- [ ] Testes com o pi falso.
+- [x] `conversarSobre(ticket)`: `pi --mode rpc --fork <sessão principal> --exclude-tools edit,write,bash`, novo `sessionId` via `get_state`, C21; não ocupa o D8 nem muda o ticket.
+- [x] `cwd` no repositório do projeto quando a issue está concluída.
+- [x] `exportarHistorico(sessao)` com cabeçalho, mensagens na íntegra, chamadas de ferramenta e resultados cortados em 2.000 caracteres.
+- [x] `anexarHistorico` grava `historico-T-<n>.md` em `$FABRIQUINHA_SAIDA` e acrescenta uma linha por anexo à mensagem.
+- [x] Testes com o pi falso.

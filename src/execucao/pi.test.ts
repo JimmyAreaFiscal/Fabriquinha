@@ -34,7 +34,7 @@ test("skills de artefato da etapa: uma por evidência de agente, com o nome do P
 });
 
 test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e confiança; sem prompt de sistema extra", () => {
-  const comum = { raiz: "/r", sessaoPi: "s-1", pacote: "/p" };
+  const comum = { raiz: "/r", sessaoPi: "s-1", pacote: "/p", modo: "autonomo" as const };
   assert.deepEqual(
     argumentosPi({ ...comum, etapa: "registro", modelo: { provedor: "anthropic", modelo: "m 1" }, confianca: true }),
     [
@@ -70,6 +70,25 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
   ]);
   assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: undefined }).slice(-1), [
     "/p/extensions/guarda.ts",
+  ]);
+  // F4 §6.5: a consulta abre copiando a sessão principal e retoma sem copiar; em ambas, sem as ferramentas de escrita.
+  const consulta = {
+    ...comum,
+    etapa: "sessao" as const,
+    modelo: undefined,
+    confianca: undefined,
+    modo: "consulta" as const,
+  };
+  assert.deepEqual(argumentosPi({ ...consulta, fork: "/r/sessoes/x_p.jsonl" }).slice(-4), [
+    "--fork",
+    "/r/sessoes/x_p.jsonl",
+    "--exclude-tools",
+    "edit,write,bash,powershell",
+  ]);
+  assert.deepEqual(argumentosPi(consulta).slice(-3), [
+    "/p/extensions/guarda.ts",
+    "--exclude-tools",
+    "edit,write,bash,powershell",
   ]);
 });
 

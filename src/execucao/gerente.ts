@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { type Agregado, type Execucao, FABRIQUINHA, type ModoExecucao } from "../dominio/agregado.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
-import { iniciarExecucao, ticketDe } from "../dominio/execucao.ts";
+import { iniciarExecucao, naSessaoPrincipal, ticketDe } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import type { Projeto } from "../dominio/projeto.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
@@ -17,7 +17,7 @@ import { comIssue } from "../persistencia/issues.ts";
 import { projeto as lerProjeto } from "../persistencia/projetos.ts";
 import { executar } from "../processo.ts";
 import { garantirWorktree } from "../repositorio/worktree.ts";
-import { ambientePi, argumentosPi, binarioPi, confianca, type EventoPi, lancarPi } from "./pi.ts";
+import { ambientePi, argumentosPi, binarioPi, confianca, type EventoPi, type Lancamento, lancarPi } from "./pi.ts";
 
 /** Diálogos que esperam resposta; `notify` e afins não esperam, e `custom` nunca chega no modo RPC (P1 §2.1). */
 const DIALOGOS = new Set(["select", "confirm", "input", "editor"]);
@@ -146,7 +146,7 @@ export function iniciarNaSessaoPrincipal(
   let instrucao: string | undefined;
   const ag = comIssue(banco, issue, "iniciarExecucao", FABRIQUINHA, (antes, ctx) => {
     instrucao = ticketDe(antes, ticket).instrucao;
-    const principal = antes.execucoes.find((e) => e.ticket === ticket && e.modo !== "consulta");
+    const principal = antes.execucoes.find(naSessaoPrincipal(ticket));
     return iniciarExecucao(antes, { ticket, modo, sessaoPi: principal?.sessaoPi ?? randomUUID() }, FABRIQUINHA, ctx);
   });
   const execucao = existe(
@@ -157,7 +157,7 @@ export function iniciarNaSessaoPrincipal(
   return { ag, execucao, instrucao };
 }
 
-export interface Rodada {
+export interface Rodada extends Pick<Lancamento, "fork"> {
   banco: DatabaseSync;
   /** O agregado logo depois de C5. */
   ag: Agregado;
@@ -169,8 +169,11 @@ export interface Rodada {
    * Interativa: a ociosidade depois da qual o processo para (F4 §6.6).
    */
   limiteMin: number;
-  /** O primeiro prompt da execução, montado com a worktree pronta (F4 §6.3), depois da coleta antes do pi (F3 §7). */
-  prompt(c: { projeto: Projeto; worktree: string; saida: string }): string | Promise<string>;
+  /**
+   * O primeiro prompt da execução, montado com a worktree pronta (F4 §6.3), depois da coleta antes do pi (F3 §7). Sem
+   * prompt, o pi sobe ocioso, à espera da primeira mensagem do Auditor: é como a consulta abre (F4 §6.5).
+   */
+  prompt(c: { projeto: Projeto; worktree: string; saida: string }): string | undefined | Promise<string | undefined>;
 }
 
 /**
@@ -198,9 +201,13 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       `o projeto ${r.ag.issue.projeto} sumiu`,
       "cadastre-o",
     );
-    worktree = await garantirWorktree(raiz, projeto, r.ag.issue, log, () => varrerBase(r.banco, projeto.nome));
+    // F4 §6.1.2: a consulta de uma issue já concluída roda no repositório do projeto.
+    worktree =
+      execucao.modo === "consulta" && r.ag.issue.fase === "concluida"
+        ? projeto.repo
+        : await garantirWorktree(raiz, projeto, r.ag.issue, log, () => varrerBase(r.banco, projeto.nome));
     const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
-    writeFileSync(join(dir, "prompt.md"), prompt);
+    if (prompt !== undefined) writeFileSync(join(dir, "prompt.md"), prompt);
     // O `pi --version` conta no limite: um pi travado não prende a vaga do D8 nem a sessão.
     const versao = await executar(binarioPi(), ["--version"], { limiteMs: r.limiteMin * 60_000 });
     anotar(log, `pi --version: ${(versao.saida + versao.erro).trim()}`);
@@ -212,6 +219,8 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       modelo: execucao.modelo,
       pacote: r.pacote,
       confianca: confianca(projeto.repo),
+      modo: execucao.modo,
+      fork: r.fork,
     });
     anotar(log, `pi ${args.join(" ")}`);
     const falha = await rodarPi({
@@ -237,7 +246,7 @@ interface Processo {
   cwd: string;
   env: NodeJS.ProcessEnv;
   log: string;
-  prompt: string;
+  prompt: string | undefined;
   limiteMin: number;
 }
 
@@ -391,7 +400,7 @@ function rodarPi(r: Processo): Promise<string | undefined> {
     const estaViva: Viva = {
       execucao: id,
       sessaoPi,
-      ocupado: true,
+      ocupado: r.prompt !== undefined,
       desde: new Date().toISOString(),
       pendentes,
       responder(dialogo, resposta) {
@@ -415,7 +424,7 @@ function rodarPi(r: Processo): Promise<string | undefined> {
       },
     };
     vivas.set(id, estaViva);
-    pi.enviar({ type: "prompt", message: r.prompt });
+    if (r.prompt !== undefined) pi.enviar({ type: "prompt", message: r.prompt });
     mudou();
   });
 }

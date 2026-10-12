@@ -30,6 +30,7 @@ import type { EventoPi } from "./pi.ts";
 import {
   abrirChat,
   concluirSessao,
+  conversarSobre,
   decidirRegistroNoChat,
   enviar,
   estadoDaSessao,
@@ -214,6 +215,23 @@ test("estado: sessão em aberto parada é conversa; sessão desconhecida é erro
   );
 });
 
+test("estado: a consulta só conversa, sem a falha nem os gates do ticket, e parada termina com o ticket", () => {
+  const consulta = (fase: Fase, status: Ticket["status"], resultado: Execucao["resultado"] = "sucesso") =>
+    agregadoCom(
+      fase,
+      [ticket({ id: 2, etapa: "desenho", status })],
+      [execucao({ ticket: 2, modo: "consulta", resultado })],
+    );
+  assert.deepEqual(estado(consulta("desenho", "falhou")), ["aguardando_humano", "conversa", T1]);
+  assert.deepEqual(estado(consulta("desenho", "aberto")), ["aguardando_humano", "conversa", T1]);
+  assert.deepEqual(estado(consulta("aprovacao_desenho", "concluido")), ["aguardando_humano", "conversa", T1]);
+  assert.deepEqual(estado(consulta("desenvolvimento", "concluido")), ["terminada", undefined, T1]);
+  const ociosa = { execucao: 1, ocupado: false, desde: T1, dialogos: [] };
+  const viva = consulta("desenvolvimento", "concluido", "em_andamento");
+  assert.deepEqual(estado(viva, ociosa), ["aguardando_humano", "conversa", T1], "o pi vivo espera a pergunta");
+  assert.deepEqual(estado(viva, { ...ociosa, ocupado: true }), ["rodando", undefined, T1]);
+});
+
 // ---------------------------------------------------------------------------------------------------------------
 // Ponta a ponta com o pi falso.
 
@@ -238,11 +256,12 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
  * - espera: fica trabalhando; `steer` o faz responder e assentar, `follow_up` abre um `editor`, `abort` o faz
  *   parar com stopReason aborted;
  * - sai: sai com código 3 ao receber o prompt.
+ * Com --fork, a sessão nova começa com as entradas da de origem.
  * Uma mensagem com "pergunte" não roda o agente: ele só pergunta; com "edite", ele só edita a issue. $FALSO_PI_RECUSA ("prompt", "steer") faz o pi recusar
  * o primeiro prompt ou todo steer.
  */
 const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, mkdirSync, readdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 const anotar = (o) => appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(o) + "\\n");
 if (process.argv.includes("--version")) {
@@ -257,7 +276,9 @@ const id = arg("--session-id");
 mkdirSync(dir, { recursive: true });
 const existente = readdirSync(dir, { withFileTypes: true }).find((f) => f.name.endsWith("_" + id + ".jsonl"));
 const sessao = join(dir, existente ? existente.name : "2026-10-11T10-00-00-000Z_" + id + ".jsonl");
-if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n");
+// --fork copia as entradas da sessão de origem para a nova, como o SessionManager.forkFrom do pi.
+const copia = process.argv.includes("--fork") ? readFileSync(arg("--fork"), "utf8").split("\\n").slice(1).join("\\n") : "";
+if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n" + copia);
 const guardar = (message) =>
   appendFileSync(sessao, JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
@@ -757,5 +778,183 @@ test("pi que sai sozinho: C6 falha, mas o ticket interativo não falha e a sess�
   assert.match(c.log(1), /E-1 terminou com falha: o pi saiu antes de terminar a execução \(código 3\)/);
   assert.equal(agregado(c.banco, 1)?.tickets[0]?.status, "em_execucao");
   assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
+  c.banco.close();
+});
+
+/** O arquivo da sessão que o pi falso grava. */
+const arquivoFalso = (c: Cenario, sessao: string) =>
+  join(c.raiz, "sessoes", `2026-10-11T10-00-00-000Z_${sessao}.jsonl`);
+
+/** O último início do pi falso na sessão. */
+const inicioDe = (c: Cenario, sessao: string) =>
+  c.registro().findLast((r) => r.evento === "inicio" && (r.argv as string[]).includes(sessao)) as {
+    argv: string[];
+    cwd: string;
+  };
+
+test("consulta: copia a sessão principal, sem ferramentas de escrita, sem prompt e sem mudar o ticket", async () => {
+  const c = cenario({ comAgente: true });
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const principal = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
+  await decidirRegistroNoChat(c.banco, 1, { aprovado: true }, opcoes);
+  const original = readFileSync(arquivoFalso(c, principal), "utf8");
+  const comandos = c.comandos().length;
+
+  const consulta = await conversarSobre(c.banco, 1, opcoes);
+  assert.notEqual(consulta, principal);
+  assert.deepEqual(
+    { ...c.execucoes().at(-1) },
+    { id: 2, resultado: "em_andamento", sessao_pi: consulta, modo: "consulta" },
+  );
+  await ate(async () => (await estadoDe(c, consulta)) === "aguardando_humano: conversa", "a consulta pronta");
+  await ate(() => existsSync(arquivoFalso(c, consulta)), "a cópia da sessão");
+  const inicio = inicioDe(c, consulta);
+  assert.equal(inicio.cwd, caminhoDaWorktree(c.raiz, "loja", 1), "issue não concluída: a worktree");
+  assert.deepEqual(inicio.argv.slice(4, 6), ["--session-id", consulta]);
+  assert.deepEqual(inicio.argv.slice(-4), [
+    "--fork",
+    arquivoFalso(c, principal),
+    "--exclude-tools",
+    "edit,write,bash,powershell",
+  ]);
+  assert.equal(c.comandos().length, comandos, "a consulta sobe sem prompt, à espera da pergunta");
+  assert.equal(existsSync(join(c.raiz, "execucoes", "E-2", "prompt.md")), false);
+  const conversa = (await abrirChat(c.banco, consulta)).conversa as { message?: { role: string } }[];
+  assert.deepEqual(
+    conversa.map((e) => e.message?.role),
+    [undefined, "user", "assistant"],
+    "a conversa da principal",
+  );
+  assert.deepEqual(
+    (await sessoes(c.banco, { escopo: "ativas" })).map((s) => [s.sessao, s.modo, s.ticket]),
+    [[consulta, "consulta", 1]],
+  );
+
+  await enviar(c.banco, consulta, "Por que esse título? Só pergunte.", "prompt", opcoes);
+  await ate(() => situacao(consulta)?.ocupado === false, "a resposta");
+  assert.deepEqual(c.comandos().at(-1), { type: "prompt", message: "Por que esse título? Só pergunte." });
+  assert.equal(readFileSync(arquivoFalso(c, principal), "utf8"), original, "a principal não recebe a consulta");
+  const ag = agregado(c.banco, 1);
+  assert.deepEqual([ag?.issue.fase, ag?.tickets[0]?.status], ["desenho", "concluido"], "nada muda no ticket");
+
+  // Parada, a consulta de um ticket concluído termina com ele.
+  encerrar((await infoDaSessao(c.banco, consulta)).execucao);
+  assert.equal(await estadoDe(c, consulta), "terminada");
+  assert.deepEqual(
+    (await sessoes(c.banco, { escopo: "historico" })).map((s) => s.sessao).toSorted(),
+    [consulta, principal].toSorted(),
+  );
+
+  // Issue concluída: a nova consulta roda no repositório do projeto.
+  c.banco.exec(`UPDATE issue SET fase = 'concluida', concluida_em = '${T1}'`);
+  const outra = await conversarSobre(c.banco, 1, opcoes);
+  await ate(() => existsSync(arquivoFalso(c, outra)), "a outra consulta");
+  assert.equal(inicioDe(c, outra).cwd, join(c.raiz, "..", "repo"));
+  assert.deepEqual(inicioDe(c, outra).argv.slice(-4, -2), ["--fork", arquivoFalso(c, principal)]);
+  encerrar((await infoDaSessao(c.banco, outra)).execucao);
+  assert.equal(await estadoDe(c, outra), "terminada");
+  c.banco.close();
+});
+
+test("consulta de um ticket por decidir: para o pi ocioso, segue em conversa depois da ociosidade e retoma como consulta", async () => {
+  const c = cenario({ comAgente: true });
+  const principal = registrarNecessidade(c.banco, "loja", [], { pacote: PACOTE, ociosidadeMin: 1 });
+  await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 0.01 };
+  const consulta = await conversarSobre(c.banco, 1, opcoes);
+  assert.deepEqual(c.execucoes()[0]?.resultado, "sucesso", "o pi ocioso da principal parou antes do C21");
+  await ate(() => c.execucoes()[1]?.resultado === "sucesso", "a parada da consulta por ociosidade");
+  assert.equal(await estadoDe(c, consulta), "aguardando_humano: conversa");
+  assert.equal(await estadoDe(c, principal), "aguardando_humano: gate_registro", "o gate fica na principal");
+
+  await enviar(c.banco, consulta, "E o critério? Só pergunte.", "prompt", opcoes);
+  await ate(() => c.execucoes()[2]?.resultado === "sucesso", "a parada da retomada");
+  // F6 §3.3: depoisDoC6 coleta o uso de cada C6 da consulta; a cópia da principal fica fora da janela dela.
+  const uso = (e: number) =>
+    c.banco
+      .prepare("SELECT modelo, chamadas FROM uso WHERE execucao = ?")
+      .all(e)
+      .map((l) => ({ ...l }));
+  assert.deepEqual([uso(2), uso(3)], [[], [{ modelo: "claude-teste", chamadas: 1 }]]);
+  assert.doesNotMatch(c.log(2) + c.log(3), /coleta de uso falhou/);
+  assert.deepEqual(
+    c.execucoes().map((e) => [e.sessao_pi, e.modo]),
+    [
+      [principal, "interativo"],
+      [consulta, "consulta"],
+      [consulta, "consulta"],
+    ],
+    "a retomada é uma consulta na mesma sessão",
+  );
+  const retomada = inicioDe(c, consulta);
+  assert.deepEqual(retomada.argv.slice(-3), [
+    "/opt/pi-fabriquinha/extensions/guarda.ts",
+    "--exclude-tools",
+    "edit,write,bash,powershell",
+  ]);
+  assert.deepEqual(c.comandos().at(-1), { type: "prompt", message: "E o critério? Só pergunte." }, "só a mensagem");
+  assert.equal(agregado(c.banco, 1)?.tickets[0]?.status, "em_execucao");
+  c.banco.close();
+});
+
+test("consulta recusada: ticket sem sessão, sessão sem conversa gravada e agente trabalhando", async () => {
+  const c = cenario({ variante: "espera" });
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  await assert.rejects(
+    conversarSobre(c.banco, 1, opcoes),
+    rejeitaCom("T-1 ainda não tem sessão (consulte um ticket que já executou)"),
+  );
+  await assert.rejects(conversarSobre(c.banco, 9, opcoes), rejeitaCom("o ticket T-9 não existe (confira o número)"));
+  c.banco.exec(`INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
+    VALUES (50, 1, 'interativo', '${SESSAO}', 'sucesso', '${T0}', '${T1}')`);
+  await assert.rejects(
+    conversarSobre(c.banco, 1, opcoes),
+    rejeitaCom("a sessão de T-1 ainda não tem conversa gravada (espere o agente responder)"),
+  );
+  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await ate(() => c.comandos().length === 1, "o prompt chegar ao pi");
+  await assert.rejects(
+    conversarSobre(c.banco, 2, opcoes),
+    rejeitaCom("a sessão de T-2 ainda está rodando (espere o agente terminar)"),
+  );
+  encerrar((await infoDaSessao(c.banco, sessao)).execucao);
+  assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa", "espera o C6");
+  c.banco.close();
+});
+
+test("consulta sem cópia: a primeira execução falhou antes de o pi subir, e a retomada copia a principal", async () => {
+  const c = cenario({ comAgente: true });
+  const opcoes = { pacote: PACOTE, ociosidadeMin: 1 };
+  const principal = registrarNecessidade(c.banco, "loja", [], opcoes);
+  await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
+  encerrar((await infoDaSessao(c.banco, principal)).execucao);
+  assert.equal(await estadoDe(c, principal), "aguardando_humano: gate_registro");
+  // O C21 gravou a consulta, e o serviço reiniciou antes do pi subir: não há cópia.
+  const consulta = "00000000-0000-4000-8000-0000000000c1";
+  c.banco.exec(`INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
+    VALUES (50, 1, 'consulta', '${consulta}', 'falha', 'serviço reiniciado', '${T0}', '${T1}')`);
+  assert.equal(await estadoDe(c, consulta), "aguardando_humano: conversa");
+
+  await enviar(c.banco, consulta, "Do que tratamos? Só pergunte.", "prompt", opcoes);
+  await ate(() => situacao(consulta)?.ocupado === false, "a resposta");
+  const retomada = inicioDe(c, consulta);
+  assert.deepEqual(retomada.argv.slice(-4), [
+    "--fork",
+    arquivoFalso(c, principal),
+    "--exclude-tools",
+    "edit,write,bash,powershell",
+  ]);
+  const conversa = (await abrirChat(c.banco, consulta)).conversa as { message?: { role: string } }[];
+  assert.deepEqual(
+    conversa.map((e) => e.message?.role),
+    [undefined, "user", "assistant", "user", "assistant"],
+    "a cópia da principal e depois a pergunta",
+  );
+  const viva = situacao(consulta);
+  assert.ok(viva, "o pi da retomada");
+  encerrar(viva.execucao);
+  await ate(() => c.execucoes().every((e) => e.resultado !== "em_andamento"), "o C6 da retomada");
   c.banco.close();
 });

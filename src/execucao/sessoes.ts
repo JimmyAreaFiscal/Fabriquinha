@@ -1,5 +1,6 @@
-// Sessões (F4 §5, §6.6): estado calculado, lista e histórico, chat, mensagens conforme o estado e as sessões
-// interativas, que param por ociosidade e retomam na próxima mensagem no mesmo modo.
+// Sessões (F4 §5, §6.5, §6.6): estado calculado, lista e histórico, chat, mensagens conforme o estado, e as sessões
+// interativas e de consulta, que param por ociosidade e retomam na próxima mensagem no mesmo modo.
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -13,7 +14,7 @@ import {
 import { concluirTicket } from "../dominio/conclusao.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import { evidenciasFaltando } from "../dominio/evidencia.ts";
-import { terminarExecucao, ticketDe } from "../dominio/execucao.ts";
+import { iniciarConsulta, naSessaoPrincipal, terminarExecucao, ticketDe } from "../dominio/execucao.ts";
 import { decidirRegistro } from "../dominio/gates.ts";
 import { type Etapa, type Fase, type Id, type Instante, motivo } from "../dominio/primitivos.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
@@ -28,6 +29,7 @@ import {
   estaEncerrando,
   iniciarNaSessaoPrincipal,
   mandar,
+  type Rodada,
   rodarExecucao,
   type Situacao,
   situacao,
@@ -99,20 +101,28 @@ function registroParaDecidir(ag: Agregado, ticket: Ticket, edicaoDoAgente: strin
   );
 }
 
-function calcular(
+type Calculado = [Estado, MotivoEspera | undefined, string];
+
+/**
+ * F4 §6.5: a falha e os gates do ticket se resolvem na sessão principal; a consulta só conversa e, parada, termina com
+ * o ticket, como as outras sessões (§5.2).
+ * ponytail: o §6.6 diz que a consulta parada por ociosidade segue em conversa, o que a deixaria para sempre entre as
+ * ativas quando o ticket já terminou; aqui vale o §5.2. A conversa fica no JSONL, para exportar ou anexar a uma
+ * consulta nova. Se a spec decidir pelo §6.6, falta um jeito de encerrar a consulta.
+ */
+const consultaParada = (ag: Agregado, ticket: Ticket, viva: boolean, parada: string): Calculado =>
+  !viva && ticket.status === "concluido" && gateDe(ag, ticket) === undefined
+    ? ["terminada", undefined, parada]
+    : ["aguardando_humano", "conversa", parada];
+
+/** A sessão principal sem o agente trabalhando: o estado sai do ticket e da issue. */
+function principalParada(
   ag: Agregado,
   ticket: Ticket,
-  execucao: Execucao,
-  { viva, edicaoDoAgente }: Fatos,
-): [Estado, MotivoEspera | undefined, string] {
-  const [dialogo] = viva?.dialogos ?? [];
-  if (dialogo) return ["aguardando_humano", "dialogo", dialogo.em];
-  // Interativa com o pi vivo esperando a próxima mensagem: decide como se estivesse parada.
-  const ociosa = viva?.ocupado === false;
-  if (execucao.resultado === "em_andamento" && !ociosa)
-    return ["rodando", undefined, viva?.desde ?? execucao.iniciadaEm];
-  const parada = viva?.desde ?? String(execucao.terminadaEm);
-  const autonoma = execucao.modo === "autonomo";
+  autonoma: boolean,
+  parada: string,
+  edicaoDoAgente: string,
+): Calculado {
   // Depois do C6 a autônoma ainda roda a coleta do F3 e o C7.
   if (autonoma && ticket.status === "em_execucao") return ["rodando", undefined, parada];
   if (ticket.status === "falhou") return ["aguardando_humano", "falha", parada];
@@ -129,9 +139,21 @@ function calcular(
       ? ["aguardando_humano", gate, String(ticket.concluidoEm)]
       : ["terminada", undefined, String(ticket.concluidoEm)];
   }
-  // ponytail: a autônoma reaberta (C9) que espera o agendador conta como rodando, porque o Auditor já respondeu; a
-  // consulta (ticket 12) cai aqui como conversa enquanto o seu ticket não terminou.
+  // ponytail: a autônoma reaberta (C9) que espera o agendador conta como rodando, porque o Auditor já respondeu.
   return autonoma ? ["rodando", undefined, parada] : ["aguardando_humano", "conversa", parada];
+}
+
+function calcular(ag: Agregado, ticket: Ticket, execucao: Execucao, { viva, edicaoDoAgente }: Fatos): Calculado {
+  const [dialogo] = viva?.dialogos ?? [];
+  if (dialogo) return ["aguardando_humano", "dialogo", dialogo.em];
+  // Interativa com o pi vivo esperando a próxima mensagem: decide como se estivesse parada.
+  const ociosa = viva?.ocupado === false;
+  if (execucao.resultado === "em_andamento" && !ociosa)
+    return ["rodando", undefined, viva?.desde ?? execucao.iniciadaEm];
+  const parada = viva?.desde ?? String(execucao.terminadaEm);
+  return execucao.modo === "consulta"
+    ? consultaParada(ag, ticket, viva !== undefined, parada)
+    : principalParada(ag, ticket, execucao.modo === "autonomo", parada, edicaoDoAgente);
 }
 
 /** F4 §5.2: o estado da sessão, calculado do agregado e dos fatos de fora dele. */
@@ -213,7 +235,7 @@ export async function infoDaSessao(banco: DatabaseSync, sessao: string): Promise
 }
 
 /** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
-function lerConversa(raiz: string, sessao: string): unknown[] {
+export function lerConversa(raiz: string, sessao: string): unknown[] {
   const arquivo = arquivoDaSessao(raiz, sessao);
   if (!arquivo) return [];
   return readFileSync(arquivo, "utf8")
@@ -252,24 +274,18 @@ export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Ch
   };
 }
 
+const issueDoTicket = (banco: DatabaseSync, ticket: Id): Id =>
+  existe(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número").issue.id;
+
 /**
  * F4 §6.6: C5 interativo na sessão principal do ticket e, em segundo plano, worktree, pi e C6 quando o processo
  * para. A primeira mensagem de uma sessão leva o contexto da etapa (F4 §6.3); a retomada leva só a mensagem.
  * Devolve a sessão.
  */
 export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string, opcoes: OpcoesInterativa): string {
-  const issue = existe(agregadoDoTicket(banco, ticket), `o ticket T-${String(ticket)} não existe`, "confira o número")
-    .issue.id;
-  const { ag, execucao } = iniciarNaSessaoPrincipal(banco, issue, ticket, "interativo");
+  const { ag, execucao } = iniciarNaSessaoPrincipal(banco, issueDoTicket(banco, ticket), ticket, "interativo");
   const raiz = raizDo(banco);
-  const log = logDaExecucao(raiz, execucao.id);
-  const e = `E-${String(execucao.id)}`;
-  const tarefa = rodarExecucao({
-    banco,
-    ag,
-    execucao,
-    pacote: opcoes.pacote,
-    limiteMin: opcoes.ociosidadeMin,
+  return acompanhar(banco, ag, execucao, opcoes, {
     // Dentro da execução: sessão com dois arquivos (F6 §3.1) vira falha dela, não execução presa em andamento.
     prompt: (c) => {
       if (arquivoDaSessao(raiz, execucao.sessaoPi) !== undefined) return texto;
@@ -282,6 +298,77 @@ export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string
       });
       return `${contexto}\n${texto}\n`;
     },
+  });
+}
+
+/** C21 na sessão `sessao` e, em segundo plano, o pi da consulta até o C6 (F4 §6.5, §6.6). Devolve a sessão. */
+function iniciarNaConsulta(
+  banco: DatabaseSync,
+  ticket: Id,
+  sessao: string,
+  opcoes: OpcoesInterativa,
+  abertura: Pick<Rodada, "prompt" | "fork">,
+): string {
+  const issue = issueDoTicket(banco, ticket);
+  const ag = comIssue(banco, issue, "iniciarConsulta", AUDITOR, (a, ctx) =>
+    iniciarConsulta(a, { ticket, sessaoPi: sessao }, AUDITOR, ctx),
+  );
+  const execucao = existe(
+    ag.execucoes.findLast((e) => e.sessaoPi === sessao),
+    `C21 não abriu a consulta ${sessao}`,
+    "confira o banco",
+  );
+  return acompanhar(banco, ag, execucao, opcoes, abertura);
+}
+
+/**
+ * O arquivo da sessão principal que a consulta `sessao` deve copiar com `--fork`: nenhum se a cópia já existe. Uma
+ * consulta cuja primeira execução falhou antes de o pi subir ainda não tem cópia, e a retomada a faz (F4 §6.5).
+ * Sem sessão principal também não há o que copiar, e o C21 recusa.
+ */
+function copiaDaPrincipal(raiz: string, ag: Agregado, ticket: Id, sessao: string): string | undefined {
+  const principal = ag.execucoes.find(naSessaoPrincipal(ticket));
+  if (arquivoDaSessao(raiz, sessao) || !principal) return undefined;
+  return existe(
+    arquivoDaSessao(raiz, principal.sessaoPi),
+    `a sessão de T-${String(ticket)} ainda não tem conversa gravada`,
+    "espere o agente responder",
+  );
+}
+
+/**
+ * F4 §6.5: Conversar sobre esta sessão. Para o pi ocioso do ticket, abre a consulta (C21) numa sessão nova, que o pi
+ * copia da principal (`--fork`), e sobe o pi ocioso, à espera da primeira pergunta. Devolve a sessão da consulta.
+ *
+ * O pi recebe o id da cópia por `--session-id`, que ele aceita junto com `--fork`: assim o C21 grava a execução
+ * antes de o pi subir, com o ambiente dela (F4 §6.1.2), em vez de esperar o id pelo `get_state`.
+ */
+export async function conversarSobre(banco: DatabaseSync, ticket: Id, opcoes: OpcoesInterativa): Promise<string> {
+  const ag = await agregadoAssentado(banco, issueDoTicket(banco, ticket));
+  const sessao = randomUUID();
+  const fork = copiaDaPrincipal(raizDo(banco), ag, ticket, sessao);
+  await pararOciosa(ag, ticket);
+  return iniciarNaConsulta(banco, ticket, sessao, opcoes, { prompt: () => undefined, fork });
+}
+
+/** Roda em segundo plano a execução interativa ou de consulta já iniciada, até o C6 quando o pi para. */
+function acompanhar(
+  banco: DatabaseSync,
+  ag: Agregado,
+  execucao: Execucao,
+  opcoes: OpcoesInterativa,
+  abertura: Pick<Rodada, "prompt" | "fork">,
+): string {
+  const issue = ag.issue.id;
+  const log = logDaExecucao(raizDo(banco), execucao.id);
+  const e = `E-${String(execucao.id)}`;
+  const tarefa = rodarExecucao({
+    banco,
+    ag,
+    execucao,
+    pacote: opcoes.pacote,
+    limiteMin: opcoes.ociosidadeMin,
+    ...abertura,
   })
     .then(({ falha }) => {
       // Ticket interativo nunca falha (F1 §4.2): só a execução termina; a próxima mensagem retoma a sessão.
@@ -387,7 +474,10 @@ export async function enviar(
     return;
   }
   if (info.estado === "rodando") throw semPi(ag, info);
-  iniciarInterativa(banco, info.ticket, texto, opcoes);
+  if (info.modo === "consulta") {
+    const fork = copiaDaPrincipal(raizDo(banco), ag, info.ticket, sessao);
+    iniciarNaConsulta(banco, info.ticket, sessao, opcoes, { prompt: () => texto, fork });
+  } else iniciarInterativa(banco, info.ticket, texto, opcoes);
 }
 
 /**
@@ -408,7 +498,7 @@ async function pararOciosa(ag: Agregado, ticket: Id): Promise<void> {
 /** A sessão principal de um ticket que já executou, com o log da última execução dela. */
 function principalDe(banco: DatabaseSync, ag: Agregado, ticket: Id): [string, string] {
   const execucao = existe(
-    ag.execucoes.findLast((e) => e.ticket === ticket && e.modo !== "consulta"),
+    ag.execucoes.findLast(naSessaoPrincipal(ticket)),
     `T-${String(ticket)} ainda não tem sessão`,
     "confira o banco",
   );

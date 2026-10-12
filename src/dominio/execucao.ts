@@ -36,6 +36,12 @@ export const modeloDaExecucao = (ticket: Ticket, projeto: Projeto | undefined): 
 
 export const rotuloTicket = (ticket: Ticket): string => `T-${String(ticket.id)}`;
 
+/** As execuções da sessão principal do ticket: as autônomas e interativas, não as consultas (F1 §3.6). */
+export const naSessaoPrincipal =
+  (ticket: Id) =>
+  (e: Execucao): boolean =>
+    e.ticket === ticket && e.modo !== "consulta";
+
 export function ticketDe(ag: Agregado, id: Id): Ticket {
   const ticket = ag.tickets.find((t) => t.id === id);
   if (!ticket)
@@ -236,7 +242,7 @@ export function iniciarConsulta(ag: Agregado, entrada: unknown, ator: Ator, ctx:
   exigirAuditor(ator, "abrir uma consulta");
   const { ticket: id, sessaoPi } = EntradaConsulta.parse(entrada);
   const ticket = ticketDe(ag, id);
-  const principal = ag.execucoes.find((e) => e.ticket === ticket.id && e.modo !== "consulta")?.sessaoPi;
+  const principal = ag.execucoes.find(naSessaoPrincipal(ticket.id))?.sessaoPi;
   if (principal === undefined) {
     throw new ErroDeRegra(`${rotuloTicket(ticket)} ainda não tem sessão`, "consulte um ticket que já executou");
   }

@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { CATALOGO } from "../dominio/evidencia.ts";
+import type { ModoExecucao } from "../dominio/agregado.ts";
 import type { Etapa, Modelo } from "../dominio/primitivos.ts";
 import { ambienteSemCredenciais, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../persistencia/execucoes.ts";
@@ -48,9 +49,19 @@ export interface Lancamento {
   /** Raiz do pacote P1 `pi-fabriquinha`. */
   pacote: string;
   confianca: boolean | undefined;
+  modo: ModoExecucao;
+  /**
+   * O arquivo da sessão principal que a consulta copia (F4 §6.5): na primeira execução dela, ou na retomada se a
+   * cópia ainda não existe.
+   */
+  fork?: string;
 }
 
-/** F4 §6.1: a configuração do Auditor vale inteira; a Fabriquinha só soma as skills da etapa e a guarda. */
+/**
+ * F4 §6.1: a configuração do Auditor vale inteira; a Fabriquinha só soma as skills da etapa e a guarda. A consulta
+ * (F4 §6.5) copia a sessão principal para a sessão nova `sessaoPi` e tira só as ferramentas embutidas de escrita;
+ * além das três da spec, o `powershell`, que o pi 0.84.4 também embute e que altera arquivos se houver `pwsh`.
+ */
 export const argumentosPi = (l: Lancamento): string[] => [
   "--mode",
   "rpc",
@@ -63,6 +74,8 @@ export const argumentosPi = (l: Lancamento): string[] => [
   "-e",
   join(l.pacote, "extensions", "guarda.ts"),
   ...(l.confianca === undefined ? [] : [l.confianca ? "--approve" : "--no-approve"]),
+  ...(l.fork ? ["--fork", l.fork] : []),
+  ...(l.modo === "consulta" ? ["--exclude-tools", "edit,write,bash,powershell"] : []),
 ];
 
 /**
