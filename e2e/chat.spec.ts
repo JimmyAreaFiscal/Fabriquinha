@@ -184,10 +184,15 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
     "Botão no painel de pedidos que baixa o CSV do mês.",
     "hoje a contabilidade copia os pedidos à mão",
   ]);
+  await expect(gate.locator("th")).toHaveText(["ID", "Dado", "Quando", "Então"]);
   await expect(gate.locator("td")).toHaveText([
     "CA-1",
+    "pedidos no mês",
+    "exporto",
     "o CSV traz número, data, cliente e total",
     "CA-2",
+    "pedidos de outro mês",
+    "exporto",
     "só os do mês escolhido entram",
   ]);
   await expect(gate).toContainText("Nenhuma evidência faltando.");

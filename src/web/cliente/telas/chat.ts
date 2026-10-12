@@ -22,7 +22,7 @@ import {
   rotuloIssue,
   rotuloTicket,
 } from "../render.ts";
-import { cardDaEvidencia, comCard } from "./issue.ts";
+import { cardDaEvidencia, comCard, tabelaDeCriterios } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -294,12 +294,16 @@ function dialogo(d: Dialogo): string {
     editor: () => `<textarea name="valor" rows="6" aria-label="Resposta">${escapar(d.prefill ?? "")}</textarea>`,
   };
   const detalhe = typeof d.message === "string" ? `<div class="muted">${escapar(d.message)}</div>` : "";
+  const campo = campos[String(d.method)];
+  // Só os 4 métodos chegam (P1 §2.1); outro, o Auditor só pode cancelar.
+  const corpo = campo
+    ? campo()
+    : `<p class="muted">A Fabriquinha não sabe responder a este pedido (${escapar(d.method)}); cancele para o agente seguir.</p>`;
   return (
     `<form class="dialogo-ext" data-dialogo="${escapar(d.id)}" data-metodo="${escapar(d.method)}">` +
-    `<span class="rotulo">O agente pergunta</span><div>${escapar(d.title)}</div>${detalhe}` +
-    String(campos[String(d.method)]?.()) +
+    `<span class="rotulo">O agente pergunta</span><div>${escapar(d.title)}</div>${detalhe}${corpo}` +
     '<div class="botoes"><button type="button" class="btn" data-cancelar>Cancelar</button>' +
-    '<button class="btn btn-primario">Responder</button></div></form>'
+    `${campo ? '<button class="btn btn-primario">Responder</button>' : ""}</div></form>`
   );
 }
 
@@ -381,7 +385,10 @@ export function envio(c: CabecalhoDoChat, modo: ModoEnvio): string {
     : "";
   const acoes = [
     rodando ? '<button type="button" class="btn btn-perigo" data-abortar>Abortar</button>' : "",
-    sessao.etapa === "sessao" ? '<button type="button" class="btn" data-concluir>Concluir sessão</button>' : "",
+    // C14 só na conversa da sessão em aberto (F7 §4.4): não rodando e não numa consulta.
+    !rodando && sessao.modo === "interativo" && sessao.etapa === "sessao"
+      ? '<button type="button" class="btn" data-concluir>Concluir sessão</button>'
+      : "",
     '<button class="btn btn-primario">Enviar</button>',
   ].join("");
   const dica = rodando ? "Mensagem para o agente enquanto ele trabalha" : "Responda ao agente";
@@ -405,14 +412,14 @@ function formularioDoRegistro(c: CabecalhoDoChat): string {
   );
 }
 
+/** Texto que o agente registrou, em Markdown sem HTML (F7 §4.4); vazio, "—". */
+const textoDoAgente = (texto: string): string => (texto.trim() ? `<div class="md">${markdown(texto)}</div>` : "—");
+
 /** O painel do gate do registro (F7 §4.4): o que o agente registrou, Aprovar registro e Devolver com o motivo. */
 function gateDoRegistro(c: CabecalhoDoChat, agora: number): string {
   const { issue, sessao } = c;
   // O servidor sempre manda o painel no gate; sem ele, o painel fica vazio em vez de quebrar.
-  const registro = c.registro ?? { comportamento: "—", criterios: [], faltando: [] };
-  const criterios = registro.criterios
-    .map((k) => `<tr><td class="mono">${escapar(k.id)}</td><td>${escapar(k.entao)}</td></tr>`)
-    .join("");
+  const registro = c.registro ?? { comportamento: "", criterios: [], faltando: [] };
   const faltando = registro.faltando.length
     ? `Faltam evidências: ${registro.faltando.join(", ")}.`
     : "Nenhuma evidência faltando.";
@@ -422,10 +429,9 @@ function gateDoRegistro(c: CabecalhoDoChat, agora: number): string {
     '<div class="corpo"><dl class="fatos">' +
     `<dt>Título</dt><dd>${escapar(issue.titulo)}</dd>` +
     `<dt>Tipo</dt><dd><span class="tag">${escapar(issue.tipo)}</span></dd>` +
-    `<dt>Descrição</dt><dd>${escapar(issue.descricao || "—")}</dd>` +
-    `<dt>Comportamento</dt><dd>${escapar(registro.comportamento)}</dd></dl>` +
-    '<div><div class="titulo-bloco">Critérios de aceite</div>' +
-    `<table class="tabela"><tr><th>ID</th><th>Então</th></tr>${criterios}</table></div>` +
+    `<dt>Descrição</dt><dd>${textoDoAgente(issue.descricao)}</dd>` +
+    `<dt>Comportamento</dt><dd>${textoDoAgente(registro.comportamento)}</dd></dl>` +
+    `<div><div class="titulo-bloco">Critérios de aceite</div>${tabelaDeCriterios(registro.criterios)}</div>` +
     `<span class="muted">${faltando}</span></div>` +
     '<form class="decidir" data-gate-registro><label class="campo">Motivo (obrigatório para devolver)<textarea name="motivo" rows="2"></textarea></label>' +
     '<div class="botoes"><button type="button" class="btn btn-perigo" data-devolver disabled>Devolver</button>' +

@@ -256,7 +256,7 @@ export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): str
         impacto ? `<span class="impacto-${impacto}">${IMPACTO[impacto]}</span>` : "—"
       }</strong><span>impacto na arquitetura</span></div></div>
       <div><div class="titulo-bloco">Critérios de aceite</div>${
-        criterios ? tabelaDeCriterios(criterios) : '<p class="muted">Sem critérios de aceite.</p>'
+        criterios ? tabelaDeCriterios(criterios.dados.criterios) : '<p class="muted">Sem critérios de aceite.</p>'
       }</div>
       <div><div class="titulo-bloco">Tickets propostos</div>${propostos(p, modelos)}<button type="button" class="link" data-acao="novo-ticket">+ Novo ticket</button><div class="novo-ticket" data-novo-ticket hidden>${formularioDeTicket()}</div></div>
     </div>
@@ -576,11 +576,11 @@ interface Alterado {
 /** Uma lista de `dados`, que o F3 já validou com o schema do tipo. */
 const lista = <T>(valor: unknown): T[] => valor as T[];
 
-/** Os critérios de aceite, na caixa e no gate do desenho. */
-const tabelaDeCriterios = (e: Evidencia): string =>
+/** Os critérios de aceite (F7 §4.5), na caixa, no gate do desenho e no gate do registro. */
+export const tabelaDeCriterios = (criterios: unknown): string =>
   tabela(
     "<th>ID</th><th>Dado</th><th>Quando</th><th>Então</th>",
-    lista<{ id: string; dado: string; quando: string; entao: string }>(e.dados.criterios).map(
+    lista<{ id: string; dado: string; quando: string; entao: string }>(criterios).map(
       (c) =>
         `<tr><td class="mono">${escapar(c.id)}</td><td>${escapar(c.dado)}</td><td>${escapar(c.quando)}</td><td>${escapar(c.entao)}</td></tr>`,
     ),
@@ -616,7 +616,7 @@ function tabelaDeFitness(e: Evidencia, p: PaginaDaIssue): string {
 
 /** As tabelas dos tipos que o Auditor lê para decidir um gate (F7 §4.5); os demais saem como JSON formatado. */
 const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
-  criterios_aceite: tabelaDeCriterios,
+  criterios_aceite: (e) => tabelaDeCriterios(e.dados.criterios),
   comprovacao_criterios: (e) => tabelaDeComprovacao(e),
   relatorio_complexidade: (e) => {
     type Big = { tempo: string; espaco: string } | undefined;

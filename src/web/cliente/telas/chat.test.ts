@@ -302,6 +302,7 @@ test("envio rodando: redirecionar ou enfileirar, abortar e enviar", () => {
   assert.match(html, /Enter envia · Shift\+Enter quebra linha/);
   assert.match(html, /data-abortar>Abortar<\/button><button class="btn btn-primario">Enviar<\/button>/);
   assert.doesNotMatch(html, /Concluir sessão/);
+  assert.doesNotMatch(envio(cabecalho({ etapa: "sessao", modo: "interativo" }), "steer"), /Concluir sessão/);
 });
 
 test("envio em conversa: só enviar; na sessão em aberto, também concluir", () => {
@@ -311,11 +312,19 @@ test("envio em conversa: só enviar; na sessão em aberto, também concluir", ()
   );
   assert.match(conversaHtml, /placeholder="Responda ao agente"/);
   assert.doesNotMatch(conversaHtml, /segmento|Abortar|Concluir/);
-  const aberta = envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao" }), "steer");
+  const aberta = envio(
+    cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "interativo" }),
+    "steer",
+  );
   assert.match(
     aberta,
     /<button type="button" class="btn" data-concluir>Concluir sessão<\/button><button class="btn btn-primario">Enviar<\/button>/,
   );
+  const consulta = envio(
+    cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "consulta" }),
+    "steer",
+  );
+  assert.doesNotMatch(consulta, /Concluir/);
 });
 
 test("envio em diálogo: o formulário do método, com Cancelar e Responder", () => {
@@ -351,6 +360,13 @@ test("envio em diálogo: o formulário do método, com Cancelar e Responder", ()
     /<textarea name="valor" rows="6" aria-label="Resposta">l1\nl2<\/textarea>/,
   );
   assert.match(com({ method: "editor", title: "t" }), /aria-label="Resposta"><\/textarea>/);
+  // Só os 4 métodos chegam (P1 §2.1); outro não vira "undefined" nem um Responder que não sabe o que mandar.
+  const outro = com({ method: "notify", title: "t" });
+  assert.doesNotMatch(outro, /undefined|Responder/);
+  assert.match(
+    outro,
+    /<p class="muted">A Fabriquinha não sabe responder a este pedido \(notify\); cancele para o agente seguir.<\/p><div class="botoes"><button type="button" class="btn" data-cancelar>Cancelar<\/button><\/div><\/form>$/,
+  );
   assert.deepEqual(respostaDoDialogo("confirm", "sim"), { confirmado: true });
   assert.deepEqual(respostaDoDialogo("confirm", "nao"), { confirmado: false });
   assert.deepEqual(respostaDoDialogo("editor", "x"), { valor: "x" });
@@ -539,7 +555,7 @@ test("lateral no gate do registro: o que foi registrado, os critérios, o que fa
     { estado: "aguardando_humano", motivo: "gate_registro", etapa: "registro" },
     {
       registro: {
-        comportamento: "copia <à> mão",
+        comportamento: "copia <à> **mão**",
         criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "o <CSV>" }],
         faltando: [],
       },
@@ -552,9 +568,13 @@ test("lateral no gate do registro: o que foi registrado, os critérios, o que fa
   );
   assert.match(
     html,
-    /<dt>Título<\/dt><dd>Timeout &#60;no&#62; checkout<\/dd><dt>Tipo<\/dt><dd><span class="tag">problema<\/span><\/dd><dt>Descrição<\/dt><dd>—<\/dd><dt>Comportamento<\/dt><dd>copia &#60;à&#62; mão<\/dd>/,
+    /<dt>Título<\/dt><dd>Timeout &#60;no&#62; checkout<\/dd><dt>Tipo<\/dt><dd><span class="tag">problema<\/span><\/dd><dt>Descrição<\/dt><dd>—<\/dd><dt>Comportamento<\/dt><dd><div class="md"><p>copia &lt;à&gt; <strong>mão<\/strong><\/p>\n<\/div><\/dd>/,
   );
-  assert.match(html, /<tr><td class="mono">CA-1<\/td><td>o &#60;CSV&#62;<\/td><\/tr>/);
+  // A tabela de critérios_aceite da página da issue (F7 §4.5): id, dado, quando, então.
+  assert.match(
+    html,
+    /<thead><tr><th>ID<\/th><th>Dado<\/th><th>Quando<\/th><th>Então<\/th><\/tr><\/thead><tbody><tr><td class="mono">CA-1<\/td><td>d<\/td><td>q<\/td><td>o &#60;CSV&#62;<\/td><\/tr>/,
+  );
   assert.match(html, /Nenhuma evidência faltando./);
   assert.match(
     html,
@@ -566,8 +586,8 @@ test("lateral no gate do registro: o que foi registrado, os critérios, o que fa
   );
   assert.match(faltando, /Faltam evidências: comportamento, criterios_aceite./);
   assert.match(
-    lateral({ ...c, issue: { ...c.issue, descricao: "d" }, registro: undefined }, 0),
-    /<dd>d<\/dd><dt>Comportamento<\/dt><dd>—<\/dd>.*Nenhuma evidência faltando/,
+    lateral({ ...c, issue: { ...c.issue, descricao: "d *e*" }, registro: undefined }, 0),
+    /<dd><div class="md"><p>d <em>e<\/em><\/p>\n<\/div><\/dd><dt>Comportamento<\/dt><dd>—<\/dd>.*Nenhuma evidência faltando/,
   );
 });
 
