@@ -244,7 +244,7 @@ function propostos(p: PaginaDaIssue, modelos: readonly Modelo[]): string {
     .filter((t) => t.etapa === "desenvolvimento" && t.status === "aberto")
     .map((t) => {
       const id = String(t.id);
-      return `<tr data-proposto="${id}"><td class="mono">${rotuloTicket(t.id)}</td><td>${escapar(t.titulo)}<div class="d">${escapar(t.descricao)}</div></td><td class="modelo-cel">${seletorDeModelo(p, t, modelos)}</td><td class="acoes-t"><button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="${id}">Editar</button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="${id}">Remover</button></td></tr><tr data-edicao="${id}" hidden><td class="mono">${rotuloTicket(t.id)}</td><td colspan="3">${formularioDeTicket(t)}</td></tr>`;
+      return `<tr data-proposto="${id}"><td class="mono">${rotuloTicket(t.id)}</td><td>${escapar(t.titulo)}<div class="d md">${markdown(t.descricao)}</div></td><td class="modelo-cel">${seletorDeModelo(p, t, modelos)}</td><td class="acoes-t"><button type="button" class="btn btn-pequeno" data-acao="editar-ticket" data-id="${id}">Editar</button> <button type="button" class="btn btn-pequeno btn-reprovar" data-acao="remover-ticket" data-id="${id}">Remover</button></td></tr><tr data-edicao="${id}" hidden><td class="mono">${rotuloTicket(t.id)}</td><td colspan="3">${formularioDeTicket(t)}</td></tr>`;
     });
   return linhas.length
     ? `<div class="rola"><table class="tabela propostos"><tbody>${linhas.join("")}</tbody></table></div>`
@@ -650,7 +650,7 @@ const tabelaDeComprovacao = (e: Evidencia): string =>
     '<th>ID</th><th>Atendido</th><th>Como foi verificado</th><th class="num">Anexos</th>',
     lista<{ id: string; atendido: boolean; comoVerificado: string; arquivos: string[] }>(e.dados.criterios).map(
       (c) =>
-        `<tr><td class="mono">${escapar(c.id)}</td>${sim(c.atendido, "sim", "não")}<td>${escapar(c.comoVerificado)}</td><td class="num">${c.arquivos.map((nome) => anexo(e, nome)).join(", ")}</td></tr>`,
+        `<tr><td class="mono">${escapar(c.id)}</td>${sim(c.atendido, "sim", "não")}${celulaDoAgente(c.comoVerificado)}<td class="num">${c.arquivos.map((nome) => anexo(e, nome)).join(", ")}</td></tr>`,
     ),
   );
 
@@ -667,10 +667,16 @@ function tabelaDeFitness(e: Evidencia, p: PaginaDaIssue): string {
     '<th>Fitness function</th><th>Resultado</th><th class="num">Duração</th><th>Explicação do agente</th><th>Log</th>',
     lista<ComandoRodado & { nome: string }>(e.dados.linhas).map(
       (l) =>
-        `<tr><td class="mono">${escapar(l.nome)}</td>${resultadoDoComando(l)}<td class="num">${duracao(l.duracaoMs)}</td><td>${escapar(explicacoes.get(l.nome) ?? "—")}</td><td>${anexo(e, l.log)}</td></tr>`,
+        `<tr><td class="mono">${escapar(l.nome)}</td>${resultadoDoComando(l)}<td class="num">${duracao(l.duracaoMs)}</td>${celulaDoAgente(explicacoes.get(l.nome) ?? "—")}<td>${anexo(e, l.log)}</td></tr>`,
     ),
   );
 }
+
+/**
+ * O corpo do PR em Markdown sem HTML, sem a marca `<!-- fabriquinha I-n/T-n -->` da primeira linha: é para o GitHub e
+ * o Azure DevOps, que a escondem; aqui o `markdown-it` sem HTML a mostraria como texto.
+ */
+export const corpoDoPR = (texto: string): string => markdown(texto.replace(/^<!-- fabriquinha [^\n]*-->\n*/, ""));
 
 /** As tabelas dos tipos que o Auditor lê para decidir um gate (F7 §4.5); os demais saem como JSON formatado. */
 const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
@@ -683,7 +689,7 @@ const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
     return tabela(
       "<th>Fluxo</th><th>Situação</th><th>Antes (tempo · espaço)</th><th>Depois (tempo · espaço)</th>",
       lista<{ nome: string; situacao: string; antes?: Big; depois: Big }>(e.dados.fluxos).map(
-        (f) => `<tr><td>${escapar(f.nome)}</td><td>${escapar(f.situacao)}</td>${bigo(f.antes)}${bigo(f.depois)}</tr>`,
+        (f) => `<tr>${celulaDoAgente(f.nome)}<td>${escapar(f.situacao)}</td>${bigo(f.antes)}${bigo(f.depois)}</tr>`,
       ),
     );
   },
@@ -704,10 +710,10 @@ const TABELAS: Partial<Record<TipoEvidencia, Tabela>> = {
             ? "binário"
             : `<span class="ok">+${String(a.adicionadas)}</span> <span class="nok">−${String(a.removidas)}</span>`;
         const motivo = motivos.get(a.caminho);
-        const porque = motivo ? ": " + escapar(motivo) : "";
+        const porque = motivo ? ": " + markdownEmLinha(motivo) : "";
         const previsto =
           a.previsto === null
-            ? `<td class="nao-previsto">não previsto${porque}</td>`
+            ? `<td class="nao-previsto md">não previsto${porque}</td>`
             : `<td class="mono">${escapar(a.previsto)}</td>`;
         return `<tr><td class="mono">${escapar(a.caminho)}</td><td>${a.status}</td><td class="num">${linhas}</td>${previsto}</tr>`;
       }),

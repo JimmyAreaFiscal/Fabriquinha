@@ -7,7 +7,7 @@ import type { Dialogo } from "../../../execucao/gerente.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
-import { markdown } from "../markdown.ts";
+import { markdown, markdownEmLinha } from "../markdown.ts";
 import {
   caminhoDaIssue,
   caminhoDaSessao,
@@ -160,7 +160,7 @@ export function erroDaFalha({ sessao, ticket }: CabecalhoDoChat): Item[] {
 /** Uma linha por diálogo de extensão aberto pelo agente. */
 export const linhaDoDialogo = (d: Dialogo): Item => ({
   chave: `dialogo-${String(d.id)}`,
-  html: sistema(`o agente abriu um diálogo: ${escapar(d.title)}`),
+  html: sistema(`o agente abriu um diálogo: ${markdownEmLinha(String(d.title))}`),
 });
 
 /** O que a chamada recebeu, numa linha: o comando, o caminho ou os argumentos em JSON. */
@@ -294,7 +294,7 @@ function dialogo(d: Dialogo): string {
       `<input name="valor" aria-label="Resposta" placeholder="${escapar(d.placeholder ?? "")}" autocomplete="off">`,
     editor: () => `<textarea name="valor" rows="6" aria-label="Resposta">${escapar(d.prefill ?? "")}</textarea>`,
   };
-  const detalhe = typeof d.message === "string" ? `<div class="muted">${escapar(d.message)}</div>` : "";
+  const detalhe = typeof d.message === "string" ? `<div class="muted md">${markdown(d.message)}</div>` : "";
   const campo = campos[String(d.method)];
   // Só os 4 métodos chegam (P1 §2.1); outro, o Auditor só pode cancelar.
   const corpo = campo
@@ -302,7 +302,7 @@ function dialogo(d: Dialogo): string {
     : `<p class="muted">A Fabriquinha não sabe responder a este pedido (${escapar(d.method)}); cancele para o agente seguir.</p>`;
   return (
     `<form class="dialogo-ext" data-dialogo="${escapar(d.id)}" data-metodo="${escapar(d.method)}">` +
-    `<span class="rotulo">O agente pergunta</span><div>${escapar(d.title)}</div>${detalhe}${corpo}` +
+    `<span class="rotulo">O agente pergunta</span><div>${markdownEmLinha(String(d.title))}</div>${detalhe}${corpo}` +
     '<div class="botoes"><button type="button" class="btn" data-cancelar>Cancelar</button>' +
     `${campo ? '<button class="btn btn-primario">Responder</button>' : ""}</div></form>`
   );

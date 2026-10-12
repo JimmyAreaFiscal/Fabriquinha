@@ -114,6 +114,11 @@ a {
   color: var(--muted);
   font-size: var(--fs-sm);
 }
+/* Um rótulo (I-n, T-n, E-n, CA-n), em .id ou num trecho em .mono, nunca quebra no hífen. */
+.id,
+span.mono {
+  white-space: nowrap;
+}
 .superficie {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -377,9 +382,6 @@ a {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-}
-.cartao-topo .id {
-  white-space: nowrap;
 }
 .cartao-topo .tag {
   margin-left: auto;
@@ -973,9 +975,6 @@ a {
 .dep-opcao input {
   margin: 0;
   accent-color: var(--accent);
-}
-.dep-opcao .id {
-  white-space: nowrap;
 }
 .dep-titulo {
   flex: 1;
@@ -1662,7 +1661,10 @@ input.erro {
 .md ol {
   padding-left: var(--s-5);
 }
-.md code {
+/* O Markdown em linha do agente fora de um .md (a pergunta do diálogo e a linha dela na conversa) também. */
+.md code,
+.dialogo-ext code,
+.sistema code {
   font: 0.9em var(--mono);
   padding: 1px 4px;
   background: var(--surface-2);

@@ -216,7 +216,10 @@ test("linha por issue: título, I-n, tipo, bloqueio, PR, progresso, trilho com a
   assert.match(consulta, /aria-expanded="false"/);
   assert.match(consulta, /<span class="pill pill-rodando">Consulta<\/span>/);
   // O que roda no modo autônomo.
-  assert.match(cache, /<span class="pill pill-rodando">Rodando<\/span><span class="muted quando">há 6 min<\/span>/);
+  assert.match(
+    cache,
+    /<span class="pill pill-rodando">Rodando<\/span><span class="muted quando">há 6\u00a0min<\/span>/,
+  );
 });
 
 test("a gaveta lista os tickets com etapa, status, modelo (★ no override) e sessão; o Auditor a abre ou fecha", () => {

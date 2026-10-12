@@ -96,12 +96,9 @@ function rodando(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): s
 function marcas(issue: IssueDoBoard, sessoes: readonly InfoSessao[], emAndamento: ReadonlySet<Id>, agora: Date) {
   const lista = new Map<string, [classe: string, pill: string]>();
   for (const s of sessoes.filter((x) => x.issue === issue.id)) {
-    // A marca pode quebrar no cartão estreito, mas só antes da duração: "1 min" não se separa.
+    // A marca pode quebrar no cartão estreito, mas só antes da duração, que o `ha()` não deixa separar.
     if (s.estado === "rodando")
-      lista.set(`em execução · ${ha(s.desde, agora).replace("há ", "").replaceAll(" ", "\u00a0")}`, [
-        "rodando",
-        "pill-rodando",
-      ]);
+      lista.set(`em execução · ${ha(s.desde, agora).replace("há ", "")}`, ["rodando", "pill-rodando"]);
     else {
       const motivo = s.motivo ?? "conversa";
       lista.set(`aguarda você · ${MOTIVOS[motivo].marca}`, [

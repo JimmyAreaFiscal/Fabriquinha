@@ -166,9 +166,9 @@ test("linhas da execução: início com o prompt e o fim conforme o resultado e 
 });
 
 test("linha do diálogo aberto pelo agente", () => {
-  assert.deepEqual(linhaDoDialogo(dialogo({ title: "Qual <ordem>?" })), {
+  assert.deepEqual(linhaDoDialogo(dialogo({ title: "Qual `<ordem>`?" })), {
     chave: "dialogo-d1",
-    html: '<div class="sistema">o agente abriu um diálogo: Qual &#60;ordem&#62;?</div>',
+    html: '<div class="sistema">o agente abriu um diálogo: Qual <code>&lt;ordem&gt;</code>?</div>',
   });
 });
 
@@ -330,10 +330,10 @@ test("envio em conversa: só enviar; na sessão em aberto, também concluir", ()
 test("envio em diálogo: o formulário do método, com Cancelar e Responder", () => {
   const com = (d: Record<string, unknown>) =>
     envio(cabecalho({ estado: "aguardando_humano", motivo: "dialogo", dialogos: [dialogo(d)] }), "steer");
-  const select = com({ method: "select", title: "Qual <ordem>?", options: ["A <1>", "B"] });
+  const select = com({ method: "select", title: "Qual `<ordem>`?", options: ["A <1>", "B"] });
   assert.match(
     select,
-    /^<form class="dialogo-ext" data-dialogo="d1" data-metodo="select"><span class="rotulo">O agente pergunta<\/span><div>Qual &#60;ordem&#62;\?<\/div>/,
+    /^<form class="dialogo-ext" data-dialogo="d1" data-metodo="select"><span class="rotulo">O agente pergunta<\/span><div>Qual <code>&lt;ordem&gt;<\/code>\?<\/div>/,
   );
   assert.match(
     select,
@@ -347,8 +347,11 @@ test("envio em diálogo: o formulário do método, com Cancelar e Responder", ()
     com({ method: "select", title: "t" }),
     /<div class="opcoes" role="radiogroup" aria-label="Opções"><\/div>/,
   );
-  const confirm = com({ method: "confirm", title: "Apagar?", message: "Fica <lento>." });
-  assert.match(confirm, /<div class="muted">Fica &#60;lento&#62;.<\/div>/);
+  const confirm = com({ method: "confirm", title: "Apagar?", message: "Fica <lento>.\n\n- roda `npm ci`" });
+  assert.match(
+    confirm,
+    /<div class="muted md"><p>Fica &lt;lento&gt;.<\/p>\n<ul>\n<li>roda <code>npm ci<\/code><\/li>\n<\/ul>\n<\/div>/,
+  );
   assert.match(confirm, /value="sim" checked> Sim<\/label><label><input type="radio" name="valor" value="nao"> Não/);
   assert.match(
     com({ method: "input", title: "t", placeholder: "em <s>" }),
@@ -568,7 +571,7 @@ test("lateral no gate do registro: o que foi registrado, os critérios, o que fa
   const html = lateral(c, Date.parse(T0) + 120_000);
   assert.match(
     html,
-    /^<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro<\/span><span class="muted pequeno">aguarda você há 2 min<\/span>/,
+    /^<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro<\/span><span class="muted pequeno">aguarda você há 2\u00a0min<\/span>/,
   );
   assert.match(
     html,

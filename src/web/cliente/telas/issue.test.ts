@@ -7,6 +7,7 @@ import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import {
   acaoDoAuditor,
   bloqueiosDoPR,
+  corpoDoPR,
   evidenciaNaCaixa,
   execucoesDoTicket,
   gateDoDesenho,
@@ -138,7 +139,7 @@ function exemplo(): PaginaDaIssue {
         dados: {
           variaveis: [],
           fluxos: [
-            { nome: "Montar", situacao: "novo", depois: { tempo: "O(n)", espaco: "O(1)" } },
+            { nome: "Montar `x`", situacao: "novo", depois: { tempo: "O(n)", espaco: "O(1)" } },
             {
               nome: "Listar",
               situacao: "alterado",
@@ -399,7 +400,7 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
   const complexidade = evidenciaNaCaixa(p, evidenciaDe(p, 5));
   assert.match(
     complexidade.corpo,
-    /<td>Montar<\/td><td>novo<\/td><td class="bigo muted">—<\/td><td class="bigo">O\(n\) · O\(1\)<\/td>/,
+    /<td class="md">Montar <code>x<\/code><\/td><td>novo<\/td><td class="bigo muted">—<\/td><td class="bigo">O\(n\) · O\(1\)<\/td>/,
   );
   assert.match(complexidade.corpo, /<td class="bigo">O\(n\^2\) · O\(n\)<\/td>/);
   assert.match(
@@ -456,14 +457,14 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
         },
       }),
       evidencia(37, 4, "mensagem_pr", {
-        dados: { naoPrevistos: [{ caminho: "src/config.ts", motivo: "chave do HMAC" }] },
+        dados: { naoPrevistos: [{ caminho: "src/config.ts", motivo: "chave do `HMAC`" }] },
       }),
       evidencia(38, 4, "comprovacao_criterios", {
         aprovada: true,
         arquivos: [print],
         dados: {
           criterios: [
-            { id: "CA-1", atendido: true, comoVerificado: "teste", arquivos: ["ca1.png", "x.mp4"] },
+            { id: "CA-1", atendido: true, comoVerificado: "rodei `npm test`", arquivos: ["ca1.png", "x.mp4"] },
             { id: "CA-2", atendido: false, comoVerificado: "não deu", arquivos: [] },
           ],
         },
@@ -497,11 +498,11 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
   );
   assert.match(
     fitness.corpo,
-    /<td class="mono">cobertura<\/td><td class="ok">✓ passou<\/td><td class="num">48 s<\/td><td>92%<\/td>/,
+    /<td class="mono">cobertura<\/td><td class="ok">✓ passou<\/td><td class="num">48 s<\/td><td class="md">92%<\/td>/,
   );
   assert.match(
     fitness.corpo,
-    /<td class="mono">sem-segredo<\/td>.*?<td>—<\/td>/,
+    /<td class="mono">sem-segredo<\/td>.*?<td class="md">—<\/td>/,
     "a explicação de outro ticket não entra",
   );
 
@@ -518,15 +519,15 @@ test("caixa da evidência: as tabelas dos tipos de gate, com o HTML abaixo e os 
     alterados.corpo,
     /<td class="mono">src\/a.ts<\/td><td>M<\/td><td class="num"><span class="ok">\+12<\/span> <span class="nok">−3<\/span><\/td><td class="mono">src\/\*.ts<\/td>/,
   );
-  assert.match(alterados.corpo, /<td class="nao-previsto">não previsto: chave do HMAC<\/td>/);
-  assert.match(alterados.corpo, /<td class="num">binário<\/td><td class="nao-previsto">não previsto<\/td>/);
+  assert.match(alterados.corpo, /<td class="nao-previsto md">não previsto: chave do <code>HMAC<\/code><\/td>/);
+  assert.match(alterados.corpo, /<td class="num">binário<\/td><td class="nao-previsto md">não previsto<\/td>/);
 
   const comprovacao = evidenciaNaCaixa(outros, evidenciaDe(outros, 38));
   assert.match(
     comprovacao.corpo,
-    /<td class="mono">CA-1<\/td><td class="ok">✓ sim<\/td><td>teste<\/td><td class="num"><a class="link" href="\/arquivos\/9{64}"[^>]*>ca1.png<\/a>, x.mp4<\/td>/,
+    /<td class="mono">CA-1<\/td><td class="ok">✓ sim<\/td><td class="md">rodei <code>npm test<\/code><\/td><td class="num"><a class="link" href="\/arquivos\/9{64}"[^>]*>ca1.png<\/a>, x.mp4<\/td>/,
   );
-  assert.match(comprovacao.corpo, /<td class="nok">✗ não<\/td><td>não deu<\/td><td class="num"><\/td>/);
+  assert.match(comprovacao.corpo, /<td class="nok">✗ não<\/td><td class="md">não deu<\/td><td class="num"><\/td>/);
   assert.doesNotMatch(comprovacao.corpo, /<img/, "o print fica no link da tabela");
 });
 
@@ -560,7 +561,11 @@ function noGate(): PaginaDaIssue {
     tickets: [
       ticket(1, "registro", "concluido"),
       ticket(2, "desenho", "concluido"),
-      { ...ticket(3, "desenvolvimento", "aberto", `Cache ${XSS}`), descricao: `com TTL ${XSS}`, modelo: QWEN },
+      {
+        ...ticket(3, "desenvolvimento", "aberto", `Cache ${XSS}`),
+        descricao: `com TTL ${XSS}\n\n- usa \`Map\``,
+        modelo: QWEN,
+      },
       ticket(5, "desenvolvimento", "aberto", "Índice"),
       ticket(6, "desenvolvimento", "concluido"),
     ],
@@ -589,7 +594,7 @@ test("gate do desenho: espera, 4 números, critérios, tickets propostos com o m
   assert.match(
     html,
     new RegExp(
-      `<div class="gate-cabeca"><span class="rotulo">Gate do desenho</span><span class="muted">aguarda você há 47 min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
+      `<div class="gate-cabeca"><span class="rotulo">Gate do desenho</span><span class="muted">aguarda você há 47\u00a0min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
     ),
   );
   assert.deepEqual(
@@ -614,7 +619,7 @@ test("gate do desenho: espera, 4 números, critérios, tickets propostos com o m
   );
   assert.match(
     html,
-    /<tr data-proposto="3"><td class="mono">T-3<\/td><td>Cache &#60;img[^<]*<div class="d">com TTL &#60;img[^<]*<\/div><\/td>/,
+    /<tr data-proposto="3"><td class="mono">T-3<\/td><td>Cache &#60;img[^<]*<div class="d md"><p>com TTL &lt;img[^<]*<\/p>\n<ul>\n<li>usa <code>Map<\/code><\/li>\n<\/ul>\n<\/div><\/td>/,
   );
   assert.match(
     html,
@@ -759,7 +764,7 @@ test("gate do PR: só na aprovação do PR, no começo da Ação do Auditor, abe
   assert.match(
     html,
     new RegExp(
-      `<div class="gate-cabeca"><span class="rotulo">Gate do PR</span><a class="pr" href="${URL_PR}" target="_blank" rel="noopener">PR #7 ↗</a><span class="muted">aguarda você há menos de 1 min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
+      `<div class="gate-cabeca"><span class="rotulo">Gate do PR</span><a class="pr" href="${URL_PR}" target="_blank" rel="noopener">PR #7 ↗</a><span class="muted">aguarda você há menos\u00a0de\u00a01\u00a0min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
     ),
   );
   assert.match(
@@ -798,11 +803,11 @@ test("gate do PR, Revisão: vídeo, 4 cards de produtividade, corpo do PR a carr
   );
   assert.match(
     html,
-    /<div class="titulo-bloco">Comprovação dos critérios<\/div><div class="rola">.*<td>teste &#60;img/s,
+    /<div class="titulo-bloco">Comprovação dos critérios<\/div><div class="rola">.*<td class="md">teste &lt;img/s,
   );
   assert.match(
     html,
-    /<div class="titulo-bloco">Fitness functions<\/div><div class="rola">.*<td class="mono">cobertura<\/td>.*<td>92%<\/td>/s,
+    /<div class="titulo-bloco">Fitness functions<\/div><div class="rola">.*<td class="mono">cobertura<\/td>.*<td class="md">92%<\/td>/s,
   );
 });
 
@@ -886,7 +891,7 @@ test("gate do PR, Decisão: o estado lido, quando, Atualizar e Abrir PR; a falha
       agora: new Date(Date.parse(AGORA) + 3 * 60_000),
       pr: leitura("mergeado", "2026-10-11T15:02:00.000Z"),
     }),
-    /<span class="pill pill-ok">mergeado em 11\/10 12:02<\/span><span class="muted">lido há 3 min<\/span>/,
+    /<span class="pill pill-ok">mergeado em 11\/10 12:02<\/span><span class="muted">lido há 3\u00a0min<\/span>/,
   );
   assert.match(gateDoPR(p, { ...agora, pr: leitura("mergeado") }), /<span class="pill pill-ok">mergeado<\/span>/);
   const azure = gateDoPR(
@@ -979,7 +984,7 @@ test("gate do registro na página da issue: o que o agente registrou, os critér
   assert.match(
     html,
     new RegExp(
-      `<div class="gate-cabeca"><span class="rotulo">Gate do registro</span><span class="muted">aguarda você há 47 min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
+      `<div class="gate-cabeca"><span class="rotulo">Gate do registro</span><span class="muted">aguarda você há 47\u00a0min</span><a class="link direita" href="/sessions/${SESSAO}">abrir o chat da sessão →</a></div>`,
     ),
   );
   // O mesmo conteúdo do painel do chat: os fatos com o texto do agente em Markdown, a tabela e o que falta.
@@ -992,5 +997,14 @@ test("gate do registro na página da issue: o que o agente registrou, os critér
   assert.match(
     html,
     /<div class="decidir"><label>Motivo \(obrigatório para devolver\)<textarea data-motivo-registro placeholder="O que o agente precisa rever no registro"><\/textarea><\/label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="devolver-registro" disabled>Devolver<\/button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-registro">Aprovar registro<\/button><\/div><\/div>/,
+  );
+});
+
+test("corpo do PR: sem a marca da Fabriquinha, que o markdown-it sem HTML mostraria como texto", () => {
+  const corpo = "<!-- fabriquinha I-1/T-6 -->\n\n## Por quê\n\n- `<op>` é uma de `+`, `-`.\n\nE <!-- outro --> fica.";
+  assert.equal(
+    corpoDoPR(corpo),
+    "<h2>Por quê</h2>\n<ul>\n<li><code>&lt;op&gt;</code> é uma de <code>+</code>, <code>-</code>.</li>\n</ul>\n" +
+      "<p>E &lt;!-- outro --&gt; fica.</p>\n",
   );
 });

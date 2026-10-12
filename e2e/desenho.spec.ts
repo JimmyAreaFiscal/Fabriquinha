@@ -41,7 +41,8 @@ function semear(raiz: string): void {
       (1, 1, 'registro', 'Registrar a necessidade', '', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}'),
       (2, 1, 'desenho', 'Desenhar a solução', '', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}'),
       (3, 1, 'desenvolvimento', 'Rota /home com o board', 'Ler o board no F2.', 'aberto', 'agente', 2, '${AGORA}', NULL),
-      (4, 1, 'desenvolvimento', 'Métricas do mês em cards', 'Cinco cards.', 'aberto', 'agente', 2, '${AGORA}', NULL);
+      (4, 1, 'desenvolvimento', 'Métricas do mês em cards (CLI com as 4 operações e códigos de saída)',
+        'Criar \`cards.ts\` na raiz:\n- um card por métrica;\n- sem \`fetch\` novo.', 'aberto', 'agente', 2, '${AGORA}', NULL);
     INSERT INTO sequencia (nome, valor) VALUES ('ticket', 4) ON CONFLICT (nome) DO UPDATE SET valor = 4;
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
       VALUES (1, 2, 'autonomo', '${SESSAO}', 'sucesso', '${AGORA}', '2026-10-11T12:22:00.000Z');
@@ -87,6 +88,25 @@ test("aprova o desenho com um ticket editado, outro com o modelo trocado, um rem
   );
   const propostos = gate.locator("tr[data-proposto]");
   await expect(propostos).toHaveCount(2);
+  // A descrição do agente é Markdown: código e lista, não crases e hífens soltos num parágrafo.
+  const descricao = propostos.nth(1).locator(".d");
+  await expect(descricao.locator("p code")).toHaveText("cards.ts");
+  await expect(descricao.locator("li")).toHaveText(["um card por métrica;", "sem fetch novo."]);
+  // O rótulo T-n não quebra no hífen, nem com o título longo ao lado.
+  const rotulos = pagina.locator(".linha-tempo .id");
+  await expect(rotulos).toHaveText(["T-1", "T-2", "T-3", "T-4"]);
+  for (const linhas of await rotulos.evaluateAll((ids) =>
+    ids.map((e) => {
+      const r = document.createRange();
+      r.selectNodeContents(e);
+      return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+    }),
+  )) {
+    expect(linhas).toBe(1);
+  }
+  // O gate aguarda o Auditor: o contador do Início conta a sessão.
+  const contador = pagina.locator("[data-navegacao] .contador");
+  await expect(contador).toHaveText("1");
   await expect(gate.getByRole("combobox", { name: "Modelo de T-3" })).toHaveValue("");
   await expect(gate.getByRole("option", { name: "padrão · claude-sonnet-5-5" }).first()).toBeAttached();
   await expect(gate.getByRole("button", { name: "Reprovar" })).toBeDisabled();
@@ -136,6 +156,8 @@ test("aprova o desenho com um ticket editado, outro com o modelo trocado, um rem
 
   await gate.getByRole("button", { name: "Aprovar desenho" }).click();
   await expect(gate).toBeHidden();
+  // O contador cai logo depois da ação, sem esperar a volta de 5 s.
+  await expect(contador).toBeHidden({ timeout: 1000 });
   await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveText("Desenvolvimento");
   const ag = issue(fabriquinha.raiz);
   expect(ag?.issue.fase).toBe("desenvolvimento");

@@ -25,13 +25,17 @@ export class ErroDaApi extends Error {
   }
 }
 
+/** O evento de uma ação do Auditor que deu certo: a navegação reconta quem aguarda na hora, sem esperar os 5 s. */
+export const MUDOU = "fabriquinha:mudou";
+
 /**
  * Chama a API e devolve o JSON (`undefined` no 204). Erro sai como `ErroDaApi`; o 401 também vira o aviso que manda
  * rodar `fabriquinha abrir`, porque nenhuma página funciona sem entrar. Com o `signal` da página em `init`, a chamada
- * é cancelada quando o Auditor sai dela.
+ * é cancelada quando o Auditor sai dela. Uma mutação que deu certo dispara `MUDOU`.
  */
 export async function api<T>(caminho: string, init?: RequestInit): Promise<T> {
   const resposta = await fetch(caminho, init);
+  if (resposta.ok && (init?.method ?? "GET") !== "GET") dispatchEvent(new Event(MUDOU));
   if (resposta.status === 204) return undefined as T;
   const corpo = (await resposta.json()) as unknown;
   if (resposta.ok) return corpo as T;

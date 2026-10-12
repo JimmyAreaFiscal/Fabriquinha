@@ -11,6 +11,7 @@ import { caminhoDaIssue, modeloDoSeletor, paginaVazia, rotuloIssue } from "../re
 import {
   type AbaDoPR,
   bloqueiosDoPR,
+  corpoDoPR,
   type EstadoLido,
   evidenciaNaCaixa,
   execucoesDoTicket,
@@ -351,7 +352,7 @@ export async function montarIssue(
     agir(async () => {
       const resposta = await fetch(String(corpoPR.dataset.corpoPr));
       if (!resposta.ok) throw new Error(`não foi possível ler o corpo do PR (${String(resposta.status)})`);
-      corpoPR.innerHTML = markdown(await resposta.text());
+      corpoPR.innerHTML = corpoDoPR(await resposta.text());
     });
   }
 

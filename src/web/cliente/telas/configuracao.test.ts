@@ -92,11 +92,11 @@ test("agendador: interruptor, os três tempos, a próxima busca no fuso local e 
   assert.match(html, /name="timeoutMin" value="120" min="10"/);
   assert.match(html, /name="ociosidadeMin" value="30" min="5"/);
   assert.match(html, /Próxima busca às <b>14:35<\/b>/);
-  assert.match(html, /Executando <b>E-231<\/b> · I-38 · T-112 · há 6 min/);
+  assert.match(html, /Executando <b>E-231<\/b> · I-38 · T-112 · há 6\u00a0min/);
 
   const em = (agora: string) => agendador(ESTADO, new Map(), new Date(agora));
-  assert.match(em("2026-10-12T17:24:59.000Z"), /há menos de 1 min/);
-  assert.match(em("2026-10-12T19:29:00.000Z"), /há 2 h 5 min/);
+  assert.match(em("2026-10-12T17:24:59.000Z"), /há menos\u00a0de\u00a01\u00a0min/);
+  assert.match(em("2026-10-12T19:29:00.000Z"), /há 2\u00a0h\u00a05\u00a0min/);
 
   const parado = agendador(
     { ...ESTADO, agendadorAtivo: false, proximaBusca: null, emAndamento: null },

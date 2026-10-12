@@ -106,12 +106,16 @@ export function compacto(n: number): string {
   return n >= 1e3 ? `${fmt(n / 1e3, 1)} mil` : fmt(n, 0);
 }
 
-/** Há quanto tempo, em minutos ou horas e minutos. */
+/**
+ * Há quanto tempo, em minutos ou horas e minutos. A duração tem espaços não separáveis: numa coluna estreita ela
+ * desce inteira para a linha de baixo, e "1 min" nunca se separa.
+ */
 export function ha(desde: string, agora: Date): string {
   const minutos = Math.floor((agora.getTime() - Date.parse(desde)) / 60_000);
-  if (minutos < 1) return "há menos de 1 min";
-  if (minutos < 60) return `há ${String(minutos)} min`;
-  return `há ${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;
+  let duracao = `${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;
+  if (minutos < 1) duracao = "menos de 1 min";
+  else if (minutos < 60) duracao = `${String(minutos)} min`;
+  return `há ${duracao.replaceAll(" ", "\u00a0")}`;
 }
 
 /** Navegação fixa: caminho, rótulo e as páginas em que o item fica marcado. */

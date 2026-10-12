@@ -1,7 +1,7 @@
 // Entrada do cliente (F7 §4.4): escolhe a página pelo caminho, troca de página pela History API sem recarregar (os
 // links são `<a href>` de verdade, que também abrem em outra aba) e desenha a navegação fixa com quem aguarda.
 import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
-import { api, avisar, elemento, mostrarErro } from "./dom.ts";
+import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
@@ -98,6 +98,9 @@ function atualizar(): void {
   contar().catch(mostrarErro);
 }
 setInterval(atualizar, 5000);
+addEventListener(MUDOU, () => {
+  contar().catch(mostrarErro);
+});
 document.addEventListener("visibilitychange", atualizar);
 
 desenhar();
