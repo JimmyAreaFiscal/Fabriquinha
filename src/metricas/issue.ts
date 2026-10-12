@@ -11,18 +11,19 @@ import {
   bugsEmArquivosRevisados,
   comandosDoAuditor,
   retrabalhoDaIssue,
-  type UsoPorModelo,
+  type SomaDeUso,
+  type UsoDoModelo,
   usoDaIssue,
 } from "../persistencia/metricas.ts";
 
-const Inteiro = z.number().int().nonnegative();
+export const Inteiro = z.number().int().nonnegative();
 export const Consumo = z.object({
   chamadas: Inteiro,
   tokens: z.object({ input: Inteiro, output: Inteiro, cacheRead: Inteiro, cacheWrite: Inteiro }),
   custo: z.number().nonnegative(), // US$, como o pi calculou
 });
-const ConsumoModelo = Consumo.extend({ provedor: z.string(), modelo: z.string() });
-const Nota = z.number().int().min(1).max(5);
+export const ConsumoModelo = Consumo.extend({ provedor: z.string(), modelo: z.string() });
+export const Nota = z.number().int().min(1).max(5);
 const Correcoes = z.object({ devolucoes: Inteiro, ajustesAuditor: Inteiro });
 
 export const MetricasIssue = z.object({
@@ -80,7 +81,7 @@ export type Consumo = z.infer<typeof Consumo>;
 export type MetricasIssue = z.infer<typeof MetricasIssue>;
 
 /** A etapa de cada gate, para as reprovações do apoio (F6 §5.6); a decisão `pr` é o C16, do encerramento. */
-const ETAPA_DO_GATE: Readonly<Record<Decisao["gate"], Etapa>> = {
+export const ETAPA_DO_GATE: Readonly<Record<Decisao["gate"], Etapa>> = {
   registro: "registro",
   desenho: "desenho",
   revisao: "revisao",
@@ -116,15 +117,16 @@ export const somar = (itens: readonly Consumo[]): Consumo =>
     { chamadas: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, custo: 0 },
   );
 
-/** O consumo por modelo e o total, a partir das linhas de uso de uma etapa ou das consultas. */
-function consumo(linhas: readonly UsoPorModelo[]) {
-  const modelos = linhas.map(({ provedor, modelo, chamadas, input, output, cacheRead, cacheWrite, custo }) => ({
-    provedor,
-    modelo,
-    chamadas,
-    tokens: { input, output, cacheRead, cacheWrite },
-    custo,
-  }));
+/** O `Consumo` de uma soma de linhas de uso. */
+export const consumoDe = ({ chamadas, input, output, cacheRead, cacheWrite, custo }: SomaDeUso): Consumo => ({
+  chamadas,
+  tokens: { input, output, cacheRead, cacheWrite },
+  custo,
+});
+
+/** O consumo por modelo e o total, a partir das linhas de uso por modelo. */
+export function consumo(linhas: readonly UsoDoModelo[]) {
+  const modelos = linhas.map((l) => ({ provedor: l.provedor, modelo: l.modelo, ...consumoDe(l) }));
   return { ...somar(modelos), modelos };
 }
 
