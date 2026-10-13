@@ -18,7 +18,6 @@ const contexto = (comCommit: readonly number[] = []): Contexto => ({
   issueExiste: () => true,
   alcancaveis: () => [],
   depsConcluidas: () => true,
-  execucaoAutonomaEmAndamento: () => false,
   temCommit: (id) => comCommit.includes(id),
 });
 

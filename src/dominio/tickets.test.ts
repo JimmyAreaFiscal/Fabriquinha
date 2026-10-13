@@ -19,7 +19,6 @@ const contexto = (): Contexto => ({
   issueExiste: () => true,
   alcancaveis: () => [],
   depsConcluidas: () => true,
-  execucaoAutonomaEmAndamento: () => false,
   temCommit: () => false,
 });
 

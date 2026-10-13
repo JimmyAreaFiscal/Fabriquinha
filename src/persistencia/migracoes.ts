@@ -202,4 +202,8 @@ export const MIGRACOES: readonly string[] = [
     ultimo_sha TEXT NOT NULL CHECK (length(ultimo_sha) IN (40, 64)),
     em         TEXT NOT NULL
   );`,
+  // O D8 saiu (uma execução autônoma por issue, em paralelo): o índice único vira comum e segue servindo à consulta
+  // das autônomas em andamento. A trava por issue continua em ux_execucao_por_ticket e na C5.
+  `DROP INDEX ux_execucao_autonoma;
+  CREATE INDEX ix_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';`,
 ];

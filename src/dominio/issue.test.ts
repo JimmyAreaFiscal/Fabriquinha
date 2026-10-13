@@ -42,7 +42,6 @@ function contexto(grafo: Record<number, number[]> = {}): Contexto {
     issueExiste: (id) => id >= 1 && id <= 10,
     alcancaveis,
     depsConcluidas: () => true,
-    execucaoAutonomaEmAndamento: () => false,
     temCommit: () => false,
   };
 }

@@ -121,7 +121,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | `GET /api/sessoes/:sessao/historico.md` | Exportação do histórico em Markdown, como download (F4, 6.8). |
 | `GET /api/execucoes/:id/log` e `/prompt` | O `log` e o `prompt.md` da execução (F4, 6.1.2), como texto. |
 | `GET /arquivos/:sha256[?baixar]` | Arquivo de evidência (4.3). |
-| `GET /api/configuracao` | A configuração do F4 (seção 3) e o estado do agendador (ligado, próxima busca, execução autônoma em andamento). |
+| `GET /api/configuracao` | A configuração do F4 (seção 3) e o estado do agendador (ligado, próxima busca, execuções autônomas em andamento, uma por item). |
 | `GET /api/projetos` / `GET /api/projetos/:nome` | Projetos cadastrados. |
 | `GET /api/modelos` | Pares provedor + modelo disponíveis, de `pi --list-models`, para os seletores. |
 
@@ -171,7 +171,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 |---|---|
 | `ErroDeEscopo` | 403 |
 | ID inexistente | 404 |
-| `ErroDeRegra` de estado, inclusive "já há execução autônoma em andamento: E-x" (D8) | 409 |
+| `ErroDeRegra` de estado, inclusive "a I-n já tem a execução E-n em andamento" (C5) | 409 |
 | `ErroDeRegra` de schema, corpo inválido | 422, com o caminho de cada campo (`z.prettifyError`) |
 | falha do F5 no cadastro | 502, com a saída do comando; nada é gravado |
 
@@ -257,7 +257,7 @@ Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR; o re
    - **Tickets e sessões:** linha do tempo dos tickets em ordem de criação, com etapa, status e as sessões de cada um (principal e consultas) com link para o chat.
      Clicar no ticket abre na caixa as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
 3. Coluna da direita:
-   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket autônomo `aberto` e elegível, desabilitado com o motivo quando há outra execução autônoma (D8); o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
+   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket autônomo `aberto` e elegível, desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
    - **Artefatos:** uma linha por etapa e ticket, do mais recente ao mais antigo, com um card pequeno por evidência (classe do conteúdo — HTML, IMG, VÍDEO, TABELA, TEXTO, JSON — nome e um ponto verde ou vermelho quando a evidência tem `aprovada`).
      Clicar abre a evidência na caixa (4.5), com **abrir em nova aba** e **baixar**.
 4. As métricas da issue não ficam nesta página: a tabela por issue fica em **Métricas** e o relatório de produtividade é um artefato do encerramento.
@@ -321,7 +321,7 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 
 1. Menu à esquerda: **Geral → Agendador** (com a marca ligado ou desligado) e **Projetos →** um item por projeto, com a hospedagem, e **+ Novo projeto**.
 2. À direita, o formulário do item escolhido.
-3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, a execução autônoma em andamento e **Salvar**.
+3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, as execuções autônomas em andamento (uma linha "Executando E-n · I-n · T-n · há …" por item) e **Salvar**.
 4. Projeto, com o número de issues ao lado do nome, em quatro grupos:
    - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) e projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`;
    - **Preparação e testes:** listas de comandos com adicionar e remover; preparação opcional, testes com pelo menos um;
@@ -399,7 +399,7 @@ As leituras de tela são estas:
   - mutação com `Sec-Fetch-Site: cross-site` ou sem o cabeçalho dá 403;
   - `sha256` que não pertence a evidência dá 404;
   - arquivo HTML sai com o cabeçalho `sandbox`; `Range` devolve 206 com o trecho certo;
-  - **Executar agora** com outra execução autônoma em andamento dá 409;
+  - **Executar agora** com a própria issue executando dá 409; com outra issue executando, 204;
   - cadastro de projeto com remoto inválido dá 502 com a mensagem do F5, e com campo inválido dá 422 com o caminho do campo;
   - `GET /api/metricas` com `ate=2026-13`, com `de` depois de `ate` ou com mais de 24 meses dá 422;
   - `GET /projects/x/issues/I-1` sem cookie devolve o `index.html`, e a chamada de API da página é que dá 401.

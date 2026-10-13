@@ -87,7 +87,6 @@ Consultados dentro da mesma transação, então são consistentes com o que vai 
 | `depsConcluidas(issue)` | C5 | todas as linhas de `issue_dep` da issue apontam para issue `concluida` |
 | `alcancaveis(dep)` | C1, C3 (ciclo) | CTE recursiva sobre `issue_dep` a partir de `dep` |
 | `issueExiste(id)` | C1, C3 | busca por chave |
-| `execucaoAutonomaEmAndamento()` | C5 (D8) | existe linha em `execucao` com `modo = 'autonomo'` e `resultado = 'em_andamento'` |
 | `projeto(nome)` | C1, C19 | busca por chave |
 
 ### 3.6 Datas, booleanos e JSON
@@ -192,8 +191,9 @@ CREATE TABLE execucao (
 );
 -- Uma execução em andamento por ticket.
 CREATE UNIQUE INDEX ux_execucao_por_ticket ON execucao(ticket) WHERE resultado = 'em_andamento';
--- Invariante 3 (D8): uma execução autônoma em andamento no sistema inteiro.
-CREATE UNIQUE INDEX ux_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';
+-- Invariante 3 (uma execução em andamento por issue) fica na C5, dentro da transação de escrita. O D8 saiu: o índice
+-- é comum e só mantém a consulta das autônomas em andamento como SEARCH.
+CREATE INDEX ix_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';
 
 CREATE TABLE decisao (
   id       INTEGER PRIMARY KEY,

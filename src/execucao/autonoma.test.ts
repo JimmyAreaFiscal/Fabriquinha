@@ -312,6 +312,8 @@ async function morreu(pid: number): Promise<boolean> {
 }
 
 test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e log, coleta, C6 e C7", async () => {
+  // O ambiente de quem roda o teste (uma execução da Fabriquinha, por exemplo) pode trazer a porta do serviço.
+  delete process.env.FABRIQUINHA_PORTA;
   const c = cenario();
   await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 

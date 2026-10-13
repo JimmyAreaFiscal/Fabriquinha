@@ -79,7 +79,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
 
   await menu.getByRole("link", { name: "Agendador" }).click();
   await expect(pagina.getByText("Desligado: não procura tickets")).toBeVisible();
-  await pagina.getByText("procura tickets abertos e executa um por vez").click();
+  await pagina.getByText("procura tickets abertos e executa um por issue").click();
   await pagina.getByRole("spinbutton", { name: "Procurar a cada" }).fill("10");
   await pagina.getByRole("button", { name: "Salvar" }).click();
   await expect(menu.getByRole("link", { name: "Agendador" })).toContainText("ligado");

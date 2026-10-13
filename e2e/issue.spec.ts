@@ -254,7 +254,7 @@ test("adiciona e remove dependências sem sair da página; o erro aparece no avi
   await expect(pagina.getByRole("heading", { level: 1 })).toHaveText("I-3Outra");
 });
 
-test("Executar agora: desabilitado com o motivo enquanto outra autônoma roda; depois inicia o ticket", async ({
+test("Executar agora: habilitado com outra issue rodando, desabilitado com a execução da própria issue; depois inicia o ticket", async ({
   pagina,
   fabriquinha,
 }) => {
@@ -270,12 +270,22 @@ test("Executar agora: desabilitado com o motivo enquanto outra autônoma roda; d
   const acao = pagina.getByRole("region", { name: "Ação do Auditor" });
   await expect(acao).toContainText("T-3 · Rota /home com o board · desenvolvimento");
   const executar = acao.getByRole("button", { name: "Executar agora" });
-  await expect(executar).toBeDisabled();
-  await expect(acao).toContainText("já há uma execução autônoma em andamento (D8): E-9 de T-9");
+  await expect(executar).toBeEnabled();
+  await expect(acao).not.toContainText("já há uma execução autônoma em andamento");
 
   banco.exec(`
-    UPDATE execucao SET resultado = 'sucesso', terminada_em = '${AGORA}' WHERE id = 9;
-    UPDATE ticket SET status = 'aberto' WHERE id = 9;
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (10, 1, 'desenvolvimento', 'Da própria', 'em_execucao', 'auditor', '${AGORA}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
+      VALUES (10, 10, 'autonomo', '${randomUUID()}', 'em_andamento', '${AGORA}');
+  `);
+  await pagina.reload();
+  await expect(executar).toBeDisabled();
+  await expect(acao).toContainText("a I-1 já tem a execução E-10 em andamento");
+
+  banco.exec(`
+    UPDATE execucao SET resultado = 'sucesso', terminada_em = '${AGORA}' WHERE id = 10;
+    UPDATE ticket SET status = 'concluido', concluido_em = '${AGORA}' WHERE id = 10;
   `);
   banco.close();
   await pagina.reload();

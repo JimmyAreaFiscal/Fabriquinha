@@ -34,15 +34,14 @@ export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Confi
 }
 
 /**
- * F4 §4.1: o próximo ticket autônomo elegível, da issue mais antiga e, nela, o mais antigo; com `issue`, só dela (o
- * **Executar agora** da página da issue, F7 §4.4). Além da consulta da spec, pula a issue com execução em andamento
- * (consulta inclusive) ou com ticket em execução: C5 a recusaria, e o agendador escolheria o mesmo ticket a cada
- * ciclo, sem chegar às outras issues.
+ * F4 §4.1: os tickets autônomos elegíveis, um por issue (o mais antigo dela), da issue mais antiga à mais nova; com
+ * `issue`, só o dela (o **Executar agora** da página da issue, F7 §4.4). Além da consulta da spec, pula a issue com
+ * execução em andamento (consulta inclusive) ou com ticket em execução: C5 a recusaria.
  */
-export function ticketElegivel(banco: DatabaseSync, issue?: Id): Id | undefined {
-  const linha = banco
+export function ticketsElegiveis(banco: DatabaseSync, issue?: Id): Id[] {
+  return banco
     .prepare(
-      `SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue
+      `SELECT min(t.id) AS id FROM ticket t JOIN issue i ON i.id = t.issue
        WHERE t.status = 'aberto'
          AND t.etapa IN ${AUTONOMAS}
          AND i.fase = t.etapa
@@ -52,41 +51,29 @@ export function ticketElegivel(banco: DatabaseSync, issue?: Id): Id | undefined 
                          WHERE d.issue = i.id AND x.fase <> 'concluida')
          AND NOT EXISTS (SELECT 1 FROM ticket o LEFT JOIN execucao e ON e.ticket = o.id
                          WHERE o.issue = i.id AND (o.status = 'em_execucao' OR e.resultado = 'em_andamento'))
-       ORDER BY i.id, t.id
-       LIMIT 1`,
+       GROUP BY i.id
+       ORDER BY i.id`,
     )
-    .get({ issue: issue ?? null });
-  return linha && Number(linha.id);
+    .all({ issue: issue ?? null })
+    .map((l) => Number(l.id));
 }
 
-/** A execução autônoma em andamento, que ocupa a vaga do D8, com o ticket, a issue e quando começou. */
-export function autonomaEmAndamento(
+/** As execuções autônomas em andamento (uma por issue), da mais antiga à mais nova, com o ticket, a issue e quando começaram. */
+export const autonomasEmAndamento = (
   banco: DatabaseSync,
-): { execucao: Id; ticket: Id; issue: Id; iniciadaEm: string } | undefined {
-  const linha = banco
+): { execucao: Id; ticket: Id; issue: Id; iniciadaEm: string }[] =>
+  banco
     .prepare(
       `SELECT e.id, e.ticket, t.issue, e.iniciada_em FROM execucao e JOIN ticket t ON t.id = e.ticket
-       WHERE e.modo = 'autonomo' AND e.resultado = 'em_andamento'`,
+       WHERE e.modo = 'autonomo' AND e.resultado = 'em_andamento' ORDER BY e.id`,
     )
-    .get();
-  return (
-    linha && {
-      execucao: Number(linha.id),
-      ticket: Number(linha.ticket),
-      issue: Number(linha.issue),
-      iniciadaEm: String(linha.iniciada_em),
-    }
-  );
-}
-
-/** A recusa do D8 com a execução que ocupa a vaga, ou `undefined` se a vaga está livre. */
-export function ocupacaoDoD8(banco: DatabaseSync): string | undefined {
-  const ocupada = autonomaEmAndamento(banco);
-  return (
-    ocupada &&
-    `já há uma execução autônoma em andamento (D8): E-${String(ocupada.execucao)} de T-${String(ocupada.ticket)}`
-  );
-}
+    .all()
+    .map((l) => ({
+      execucao: Number(l.id),
+      ticket: Number(l.ticket),
+      issue: Number(l.issue),
+      iniciadaEm: String(l.iniciada_em),
+    }));
 
 /** F4 §7: as execuções em andamento, com a issue e o grupo de processos do pi. */
 export const execucoesEmAndamento = (banco: DatabaseSync): { id: Id; issue: Id; pgid: number | null }[] =>

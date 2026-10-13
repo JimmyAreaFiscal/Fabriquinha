@@ -16,11 +16,9 @@ import { noLog } from "../persistencia/execucoes.ts";
 import { comIssue } from "../persistencia/issues.ts";
 import { projetosAVarrer } from "../persistencia/retrabalho.ts";
 import {
-  autonomaEmAndamento,
   configuracao,
   execucoesEmAndamento,
-  ocupacaoDoD8,
-  ticketElegivel,
+  ticketsElegiveis,
   ticketsAutonomosEmExecucao,
 } from "../persistencia/servico.ts";
 import { sinalNoGrupo } from "../processo.ts";
@@ -33,7 +31,7 @@ export interface Servico {
   banco: DatabaseSync;
   /** A porta em que o serviço escuta: a pedida, ou a que ele escolheu na porta 0. */
   porta: number;
-  /** F4 §4: inicia o ticket autônomo já, sem esperar o agendador; recusa com a execução que ocupa o D8. */
+  /** F4 §4: inicia o ticket autônomo já, sem esperar o agendador; recusa se a própria issue já executa (C5). */
   executarAgora(ticket: Id): Promise<void>;
   /** Quando o agendador procura trabalho de novo, se estiver ligado (F7 §4.4, Configuração). */
   proximaBusca(): Date;
@@ -144,9 +142,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
         .finally(() => {
           varredura = undefined;
         });
-      if (autonomaEmAndamento(banco)) return;
-      const ticket = ticketElegivel(banco);
-      if (ticket !== undefined) {
+      for (const ticket of ticketsElegiveis(banco)) {
         executarAutonomo(banco, ticket, { timeoutMin: c.timeoutMin }).catch(noLog);
       }
     } catch (error_) {
@@ -156,10 +152,8 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   const relogio = setInterval(ciclo, 60_000);
 
   // Declarada como função para o web, ligado antes do `banco` existir, recebê-la; só é chamada depois.
-  async function executarAgora(ticket: Id): Promise<void> {
-    const ocupada = ocupacaoDoD8(banco);
-    if (ocupada) throw new ErroDeRegra(ocupada, "espere ela terminar");
-    await iniciar(ticket);
+  function executarAgora(ticket: Id): Promise<void> {
+    return iniciar(ticket);
   }
 
   return {

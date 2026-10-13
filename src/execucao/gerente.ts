@@ -257,7 +257,7 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
         : await garantirWorktree(raiz, projeto, r.ag.issue, log, () => varrerBase(r.banco, projeto.nome));
     const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
     if (prompt !== undefined) writeFileSync(join(dir, "prompt.md"), prompt);
-    // O `pi --version` conta no limite: um pi travado não prende a vaga do D8 nem a sessão.
+    // O `pi --version` conta no limite: um pi travado não prende a issue nem a sessão.
     const versao = await executar(binarioPi(), ["--version"], { limiteMs: r.limiteMin * 60_000 });
     anotar(log, `pi --version: ${(versao.saida + versao.erro).trim()}`);
     if (versao.limiteEstourado) throw new Error(`tempo limite de ${String(r.limiteMin)} min em pi --version`);

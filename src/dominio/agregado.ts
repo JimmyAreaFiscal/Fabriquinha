@@ -174,8 +174,6 @@ export interface Contexto {
   alcancaveis(id: Id): readonly Id[];
   /** Todas as dependências da issue estão `concluida`. */
   depsConcluidas(issue: Id): boolean;
-  /** Há execução autônoma em andamento em qualquer issue (D8). */
-  execucaoAutonomaEmAndamento(): boolean;
   /**
    * O ticket tem commit registrado pelo F5 (C7 do desenvolvimento, F1 §5.1). Fora da lista do F2 §3.5: o commit
    * fica fora do agregado, e o F5 o grava na mesma transação, logo antes do C7 (F5 §4, passo 4).

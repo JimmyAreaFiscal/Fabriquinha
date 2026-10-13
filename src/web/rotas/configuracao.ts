@@ -8,18 +8,18 @@ import { conferirModelo, listarModelos } from "../../execucao/modelos.ts";
 import { varrerBase } from "../../metricas/retrabalho.ts";
 import { noLog } from "../../persistencia/execucoes.ts";
 import { editarProjeto, issuesDoProjeto, projeto, projetos, registrarProjeto } from "../../persistencia/projetos.ts";
-import { autonomaEmAndamento, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
+import { autonomasEmAndamento, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
 import { conferirProjeto } from "../../repositorio/cadastro.ts";
 import { ErroHttp } from "../erros.ts";
 import type { Agendador, Rota } from "../rotas.ts";
 
-/** A configuração do F4 §3 e o estado do agendador: a próxima busca (só ligado) e a execução autônoma em andamento. */
+/** A configuração do F4 §3 e o estado do agendador: a próxima busca (só ligado) e as execuções autônomas em andamento. */
 function estado(banco: DatabaseSync, agendador: Agendador) {
   const c = configuracao(banco);
   return {
     ...c,
     proximaBusca: c.agendadorAtivo ? agendador.proximaBusca().toISOString() : null,
-    emAndamento: autonomaEmAndamento(banco) ?? null,
+    emAndamento: autonomasEmAndamento(banco),
   };
 }
 

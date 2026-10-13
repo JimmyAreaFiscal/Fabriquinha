@@ -143,7 +143,7 @@ Ela só soma o pacote P1.
 | D5 | PR no GitHub (`gh`) e no Azure DevOps (`az repos`), merge com merge commit | Os dois hospedam os projetos; o merge commit preserva os commits por ticket na branch base. | Squash; um provedor só |
 | D6 | Quality gate do SonarQube reprovado barra o Ticket de Desenvolvimento | Mesma regra da sua skill `commit`. | Só anexar o relatório |
 | D7 | Execução que falha (crash, timeout, evidência faltando) leva o ticket a `falhou` e espera o Auditor | Evita que o agendador repita a mesma falha e queime tokens a cada ciclo. | Nova tentativa automática |
-| D8 | Uma execução autônoma por vez, global | O modelo padrão roda localmente (llamacpp). Paralelizar por issue quando houver capacidade. | Execuções paralelas |
+| D8 | Uma execução autônoma por issue, em paralelo (revista: antes era uma por vez, global) | Issues diferentes não disputam nada no domínio; dentro da issue continua uma execução por vez. | Limite de execuções simultâneas |
 | D9 | Toda operação do Auditor (configuração, registro, sessões, gates) fica no web, com token gerado na subida do serviço; o CLI é só do agente, mais `servidor` e `abrir` | O CLI não tem comando de Auditor que o agente possa chamar. | Gates e sessões pelo terminal |
 | D10 | A Fabriquinha roda como um serviço único, com agendador interno ligado e calibrado pelo web; a porta é a trava de instância única | O agendamento faz parte do produto e é configurado pelo Auditor; o sistema operacional só mantém o serviço de pé. | cron chamando `fabriquinha tick` |
 

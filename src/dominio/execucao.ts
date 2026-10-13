@@ -99,6 +99,10 @@ function novaExecucao(ag: Agregado, ticket: Ticket, modo: ModoExecucao, sessaoPi
 
 const EntradaInicio = z.object({ ticket: Id, modo: ModoExecucao, sessaoPi: z.uuid() });
 
+/** Por que a issue não aceita outra execução agora. */
+export const jaTemExecucao = (ag: Agregado, execucao: Execucao): string =>
+  `a ${rotuloIssue(ag)} já tem a execução E-${String(execucao.id)} em andamento`;
+
 /** C5: ticket `em_execucao`, nova execução em andamento e a instrução do Auditor consumida. */
 export function iniciarExecucao(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   exigirFabriquinha(ator, "iniciar uma execução");
@@ -120,12 +124,7 @@ export function iniciarExecucao(ag: Agregado, entrada: unknown, ator: Ator, ctx:
     );
   }
   const rodando = ag.execucoes.find((e) => e.resultado === "em_andamento");
-  if (rodando) {
-    throw new ErroDeRegra(
-      `a ${rotuloIssue(ag)} já tem a execução E-${String(rodando.id)} em andamento`,
-      "espere ela terminar",
-    );
-  }
+  if (rodando) throw new ErroDeRegra(jaTemExecucao(ag, rodando), "espere ela terminar");
   const aceitos: readonly Ticket["status"][] = modo === "autonomo" ? ["aberto"] : ["aberto", "em_execucao"];
   if (!aceitos.includes(ticket.status)) {
     throw new ErroDeRegra(`${t} está ${ticket.status} e não pode executar`, "reabra-o se ele falhou");
@@ -136,9 +135,6 @@ export function iniciarExecucao(ag: Agregado, entrada: unknown, ator: Ator, ctx:
         `a ${rotuloIssue(ag)} depende de issues ainda não concluídas`,
         "conclua as dependências antes",
       );
-    }
-    if (ctx.execucaoAutonomaEmAndamento()) {
-      throw new ErroDeRegra("já há uma execução autônoma em andamento (D8)", "espere ela terminar");
     }
   }
   const { instrucao: _consumida, ...resto } = ticket;
@@ -237,7 +233,7 @@ export function definirModeloTicket(ag: Agregado, entrada: unknown, ator: Ator):
 
 const EntradaConsulta = z.object({ ticket: Id, sessaoPi: z.uuid() });
 
-/** C21: nova execução em modo consulta, numa cópia da sessão principal; o ticket não muda e o D8 não conta. */
+/** C21: nova execução em modo consulta, numa cópia da sessão principal; o ticket não muda. */
 export function iniciarConsulta(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   exigirAuditor(ator, "abrir uma consulta");
   const { ticket: id, sessaoPi } = EntradaConsulta.parse(entrada);

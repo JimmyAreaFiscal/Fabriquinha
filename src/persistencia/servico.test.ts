@@ -19,11 +19,11 @@ import { abrir } from "./banco.ts";
 import { comIssue, registrarIssue } from "./issues.ts";
 import { registrarProjeto } from "./projetos.ts";
 import {
-  autonomaEmAndamento,
+  autonomasEmAndamento,
   configuracao,
   execucoesEmAndamento,
   salvarConfiguracao,
-  ticketElegivel,
+  ticketsElegiveis,
   ticketsAutonomosEmExecucao,
 } from "./servico.ts";
 
@@ -149,26 +149,29 @@ test("configuração: linha única, agendador desligado por padrão, salvar vali
   banco.close();
 });
 
-test("elegível: a issue mais antiga primeiro e, nela, o ticket mais antigo", () => {
+test("elegíveis: um ticket por issue, o mais antigo dela, da issue mais antiga à mais nova", () => {
   const banco = novoBanco();
   const i1 = desenhada(banco, ["Índice", "Cache"]);
   const i2 = emDesenho(banco);
   const [indice = 0, cache = 0] = i1.desenvolvimento;
   assert.ok(indice < cache);
-  assert.equal(ticketElegivel(banco), indice);
+  assert.deepEqual(ticketsElegiveis(banco), [indice, i2.desenho], "CA-3: da I-1 só o mais antigo");
+  assert.deepEqual(ticketsElegiveis(banco, i2.issue), [i2.desenho], "com issue, só os dela");
+  assert.deepEqual(autonomasEmAndamento(banco), []);
 
   const execucao = iniciar(banco, i1.issue, indice, "autonomo");
-  assert.partialDeepStrictEqual(autonomaEmAndamento(banco), { execucao, ticket: indice, issue: i1.issue });
-  assert.match(String(autonomaEmAndamento(banco)?.iniciadaEm), /^\d{4}-\d\d-\d\dT/);
-  assert.equal(ticketElegivel(banco), i2.desenho, "a I-1 está ocupada; a I-2 é a próxima");
+  assert.partialDeepStrictEqual(autonomasEmAndamento(banco), [{ execucao, ticket: indice, issue: i1.issue }]);
+  assert.match(String(autonomasEmAndamento(banco)[0]?.iniciadaEm), /^\d{4}-\d\d-\d\dT/);
+  assert.deepEqual(ticketsElegiveis(banco), [i2.desenho], "CA-2: a I-1 está ocupada; a I-2 segue");
+  assert.deepEqual(ticketsElegiveis(banco, i1.issue), []);
   comIssue(banco, i1.issue, "terminarExecucao", fabriquinha, (a, ctx) =>
     terminarExecucao(a, { execucao, resultado: "falha", erro: "pi saiu" }, fabriquinha, ctx),
   );
   comIssue(banco, i1.issue, "falharTicket", fabriquinha, (a) =>
     falharTicket(a, { ticket: indice, erro: "pi saiu" }, fabriquinha),
   );
-  assert.equal(autonomaEmAndamento(banco), undefined);
-  assert.equal(ticketElegivel(banco), cache, "o que falhou espera o Auditor; a I-1 volta à frente");
+  assert.deepEqual(autonomasEmAndamento(banco), []);
+  assert.deepEqual(ticketsElegiveis(banco), [cache, i2.desenho], "o que falhou espera o Auditor; a I-1 volta à frente");
   banco.close();
 });
 
@@ -188,7 +191,7 @@ test("não elegível: etapa interativa, fase que não casa, dependência aberta 
   terminar(banco, i4.issue, iniciar(banco, i4.issue, log, "autonomo"));
   // I-5 depende da I-1, que não concluiu.
   emDesenho(banco, [1]);
-  assert.equal(ticketElegivel(banco), undefined);
+  assert.deepEqual(ticketsElegiveis(banco), [], "CA-2, CA-7: nenhuma issue serve");
 
   assert.deepEqual(ticketsAutonomosEmExecucao(banco), [{ id: log, issue: i4.issue }]);
   assert.deepEqual(execucoesEmAndamento(banco), [{ id: consulta, issue: i3.issue, pgid: null }]);
@@ -197,6 +200,6 @@ test("não elegível: etapa interativa, fase que não casa, dependência aberta 
   comIssue(banco, i3.issue, "terminarExecucao", fabriquinha, (a, ctx) =>
     terminarExecucao(a, { execucao: consulta, resultado: "sucesso" }, fabriquinha, ctx),
   );
-  assert.equal(ticketElegivel(banco), cacheI3, "a consulta terminou: a I-3 volta a ser elegível");
+  assert.deepEqual(ticketsElegiveis(banco), [cacheI3], "a consulta terminou: a I-3 volta a ser elegível");
   banco.close();
 });

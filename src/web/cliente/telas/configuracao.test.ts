@@ -79,7 +79,10 @@ const ESTADO: EstadoDaConfiguracao = {
   timeoutMin: 120,
   ociosidadeMin: 30,
   proximaBusca: "2026-10-12T17:35:00.000Z",
-  emAndamento: { execucao: 231, ticket: 112, issue: 38, iniciadaEm: "2026-10-12T17:24:00.000Z" },
+  emAndamento: [
+    { execucao: 231, ticket: 112, issue: 38, iniciadaEm: "2026-10-12T17:24:00.000Z" },
+    { execucao: 232, ticket: 120, issue: 40, iniciadaEm: "2026-10-12T17:25:00.000Z" },
+  ],
 };
 
 test("agendador: interruptor, os três tempos, a próxima busca no fuso local e a execução com há quanto tempo", () => {
@@ -92,14 +95,16 @@ test("agendador: interruptor, os três tempos, a próxima busca no fuso local e 
   assert.match(html, /name="timeoutMin" value="120" min="10"/);
   assert.match(html, /name="ociosidadeMin" value="30" min="5"/);
   assert.match(html, /Próxima busca às <b>14:35<\/b>/);
-  assert.match(html, /Executando <b>E-231<\/b> · I-38 · T-112 · há 6\u00a0min/);
+  assert.match(html, /<span>Executando <b>E-231<\/b> · I-38 · T-112 · há 6\u00a0min<\/span>/);
+  assert.match(html, /<span>Executando <b>E-232<\/b> · I-40 · T-120 · há 5\u00a0min<\/span>/);
+  assert.doesNotMatch(html, /Nenhuma execução autônoma/);
 
   const em = (agora: string) => agendador(ESTADO, new Map(), new Date(agora));
   assert.match(em("2026-10-12T17:24:59.000Z"), /há menos\u00a0de\u00a01\u00a0min/);
   assert.match(em("2026-10-12T19:29:00.000Z"), /há 2\u00a0h\u00a05\u00a0min/);
 
   const parado = agendador(
-    { ...ESTADO, agendadorAtivo: false, proximaBusca: null, emAndamento: null },
+    { ...ESTADO, agendadorAtivo: false, proximaBusca: null, emAndamento: [] },
     errosDoZod("✖ Pequeno demais: esperava que o número fosse >= 1\n  → at intervaloMin"),
     new Date(),
   );

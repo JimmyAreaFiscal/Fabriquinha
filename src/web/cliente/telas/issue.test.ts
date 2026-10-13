@@ -274,7 +274,7 @@ test("PR, aprovada e reprovada nos cards", () => {
   assert.doesNotMatch(html, /Explicação das fitness/, "entra na tabela da matriz_fitness");
 });
 
-test("Ação do Auditor: Executar agora habilitado, desabilitado com o motivo do D8, e o aviso da limpeza", () => {
+test("Ação do Auditor: Executar agora habilitado, desabilitado com o motivo da própria issue, e o aviso da limpeza", () => {
   const p = exemplo();
   const t3 = ticketDe(p, 3);
   assert.equal(acaoDoAuditor(p), "");
@@ -287,10 +287,10 @@ test("Ação do Auditor: Executar agora habilitado, desabilitado com o motivo do
   );
   assert.doesNotMatch(livre, /bloqueio/);
 
-  const motivo = "já há uma execução autônoma em andamento (D8): E-9 de T-4";
+  const motivo = "a I-1 já tem a execução E-9 em andamento";
   const ocupada = acaoDoAuditor({ ...p, executar: { ticket: t3, ocupada: motivo } });
-  assert.match(ocupada, new RegExp(`data-executar="3" disabled title="${motivo.replace(/[()]/g, "\\$&")}">`));
-  assert.match(ocupada, /<p class="bloqueio">já há uma execução/);
+  assert.match(ocupada, new RegExp(`data-executar="3" disabled title="${motivo}">`));
+  assert.match(ocupada, /<p class="bloqueio">a I-1 já tem a execução/);
 
   const limpeza = acaoDoAuditor({
     ...p,
