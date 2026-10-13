@@ -125,7 +125,7 @@ export function ha(desde: string, agora: Date): string {
 /** Navegação fixa: caminho, rótulo e as páginas em que o item fica marcado. */
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio"]],
-  ["/projects", "Projetos", ["projeto", "issue"]],
+  ["/projects", "Projetos", ["projeto", "heatmap", "issue"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico"]],
   ["/config", "Configuração", ["configuracao"]],
@@ -207,6 +207,7 @@ export function trilho(fase: Fase, percorridas: readonly Fase[], estado?: Estado
 export const TITULOS: Record<Pagina, string> = {
   inicio: "Início",
   projeto: "Projetos",
+  heatmap: "Heatmap",
   issue: "Issue",
   metricas: "Métricas",
   historico: "Histórico",
