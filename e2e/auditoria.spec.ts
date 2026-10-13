@@ -118,6 +118,8 @@ test.describe("com o pi fora do ar", () => {
     await pagina.goto(`${fabriquinha.base}/history`);
     await pagina.getByRole("button", { name: "Auditar" }).click();
     await expect(pagina.locator("[data-aviso]")).toContainText("o agente da auditoria não subiu");
+    await expect(pagina.locator("[data-aviso]")).toContainText("spawn /nao/existe/pi ENOENT");
+    await expect(pagina.locator("[data-aviso]")).not.toContainText("auditorias/");
     await expect(pagina).toHaveURL(/\/history$/);
     await expect(pagina.getByRole("button", { name: "Auditar" })).toBeEnabled();
   });

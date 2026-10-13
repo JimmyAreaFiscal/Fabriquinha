@@ -141,7 +141,7 @@ test("prepararAuditoria: mês sem sessão grava só os cabeçalhos", () => {
  * da sessão e responde conforme $FALSO_PI:
  * - conversa: responde ao prompt e assenta;
  * - espera: fica trabalhando; `abort` o faz parar com stopReason aborted;
- * - morre: cria o JSONL da sessão e sai com código 3 antes de qualquer evento.
+ * - morre: cria o JSONL da sessão, escreve a causa no stderr e sai com código 3 antes de qualquer evento.
  */
 const PI_FALSO = `#!/usr/bin/env node
 import { appendFileSync, mkdirSync, readdirSync } from "node:fs";
@@ -159,7 +159,10 @@ mkdirSync(dir, { recursive: true });
 const existente = readdirSync(dir).find((nome) => nome.endsWith("_" + id + ".jsonl"));
 const sessao = join(dir, existente ?? "2026-10-11T10-00-00-000Z_" + id + ".jsonl");
 if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n");
-if (env.FALSO_PI === "morre") process.exit(3);
+if (env.FALSO_PI === "morre") {
+  process.stderr.write("erro: nenhum modelo configurado\\n");
+  process.exit(3);
+}
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const guardar = (message) =>
   appendFileSync(sessao, JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
@@ -381,9 +384,8 @@ test("iniciarAuditoria: se o pi não sobe, lança ErroExterno e não deixa pasta
   const sessoesAntes = arquivosDeSessao();
   const erro = (e: unknown) =>
     e instanceof ErroExterno &&
-    /^o agente da auditoria não subiu: o pi saiu antes de terminar a execução \(código .*\); veja o log em .*\(confira o pi e o log em .*\/log\)$/.test(
-      e.message,
-    );
+    /^o agente da auditoria não subiu: o pi saiu antes de terminar a execução \(código .*\)/.test(e.message) &&
+    !e.message.includes("auditorias/");
   const lista = await sessoesDoMes(banco, "2026-09");
 
   process.env.FABRIQUINHA_PI = join(raiz, "nao-existe");
@@ -396,6 +398,11 @@ test("iniciarAuditoria: se o pi não sobe, lança ErroExterno e não deixa pasta
   await assert.rejects(iniciarAuditoria(banco, "2026-09", lista, { ociosidadeMin: 60 }), erro);
   assert.equal(inicios(f).length, 1);
   assert.deepEqual([auditorias(), arquivosDeSessao()], [pastas, sessoesAntes], "pi que morre");
+  await assert.rejects(
+    iniciarAuditoria(banco, "2026-09", lista, { ociosidadeMin: 60 }),
+    (e: unknown) => e instanceof ErroExterno && e.message.includes("erro: nenhum modelo configurado"),
+    "a causa do stderr vai na mensagem",
+  );
 });
 
 test("iniciarAuditoria: a preparação que falha também não deixa pasta", async () => {

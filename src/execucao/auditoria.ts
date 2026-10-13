@@ -215,6 +215,15 @@ function subir(raiz: string, sessao: string, prompt: string, ociosidadeMin: numb
   return tarefa;
 }
 
+/** O motivo da falha sem a dica do log, seguido das últimas linhas do `log` do pi (stderr, erro do spawn). */
+function causaDaFalha(dir: string, motivo: string): string {
+  const linhas = readFileSync(join(dir, "log"), "utf8")
+    .split("\n")
+    .filter((l) => l && !/^\S+ (pi |o pi da auditoria parou)/.test(l))
+    .slice(-5);
+  return [motivo.split("; veja o log")[0], ...linhas].join(": ");
+}
+
 /**
  * Prepara a pasta `<raiz>/auditorias/<sessão>/` com o histórico do mês `lista` e sobe o pi com o `prompt.md`; resolve
  * com a sessão no primeiro `agent_start`. Se o pi termina antes (CA-10) ou a preparação falha, não sobra pasta nem
@@ -243,10 +252,8 @@ export async function iniciarAuditoria(
     );
     // ponytail: sem `agent_start`, o `rodarPi` só resolve com `undefined` se alguém encerra a sessão; vira texto da falha.
     if (resultado !== true) {
-      throw new ErroExterno(
-        `o agente da auditoria não subiu: ${String(resultado)}`,
-        `confira o pi e o log em ${join(dir, "log")}`,
-      );
+      // A pasta, com o log, é apagada no catch: a causa (o stderr do pi) vai na mensagem, sem citar o log.
+      throw new ErroExterno(`o agente da auditoria não subiu: ${causaDaFalha(dir, String(resultado))}`, "confira o pi");
     }
     return sessao;
   } catch (error_) {
