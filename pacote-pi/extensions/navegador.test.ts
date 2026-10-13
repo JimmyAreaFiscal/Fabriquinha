@@ -21,6 +21,7 @@ interface Conteudo {
   mimeType?: string;
 }
 interface Ferramenta {
+  executionMode?: string;
   execute(id: string, p: Record<string, unknown>): Promise<{ content: Conteudo[] }>;
 }
 
@@ -33,7 +34,7 @@ function carregar() {
     registerTool: (f) => ferramentas.set(f.name, f),
   });
   const usar = (nome: string) => ferramentas.get(nome) ?? assert.fail(nome);
-  return { usar, encerrar: () => encerrar(), nomes: [...ferramentas.keys()] };
+  return { usar, encerrar: () => encerrar(), nomes: [...ferramentas.keys()], todas: [...ferramentas.values()] };
 }
 
 let servidor: Server;
@@ -65,6 +66,32 @@ const tela = async (n: ReturnType<typeof carregar>, nome: string, p: Record<stri
 
 test("registra as seis ferramentas", () => {
   assert.deepEqual(carregar().nomes, ["ver_tela", "clicar", "digitar", "tecla", "rolar", "relatar"]);
+});
+
+test("toda ferramenta declara executionMode sequential", () => {
+  for (const f of carregar().todas) assert.equal(f.executionMode, "sequential");
+});
+
+test("ações disparadas juntas dão o mesmo resultado que em sequência", async () => {
+  const passos: [string, Record<string, unknown>][] = [
+    ["clicar", { x: 150, y: 210 }],
+    ["digitar", { texto: "Computador novo" }],
+    ["tecla", { tecla: "Enter" }],
+    ["ver_tela", {}],
+  ];
+  const em = async (juntas: boolean) => {
+    const n = carregar();
+    const rodar = ([nome, p]: [string, Record<string, unknown>]) => n.usar(nome).execute("1", p);
+    let telas;
+    if (juntas) telas = await Promise.all(passos.map(rodar));
+    else {
+      telas = [];
+      for (const passo of passos) telas.push(await rodar(passo));
+    }
+    await n.encerrar();
+    return telas.at(-1)?.content[0]?.data;
+  };
+  assert.equal(await em(true), await em(false));
 });
 
 test("ver_tela, clicar, digitar, tecla e rolar agem na página e devolvem o print", async () => {

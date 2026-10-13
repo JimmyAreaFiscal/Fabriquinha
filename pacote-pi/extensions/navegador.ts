@@ -18,6 +18,7 @@ interface Pi {
     label: string;
     description: string;
     parameters: object;
+    executionMode: "sequential";
     execute(id: string, parametros: Parametros): Promise<{ content: Conteudo[]; details: undefined }>;
   }): void;
 }
@@ -57,6 +58,15 @@ export default function navegador(pi: Pi): void {
     await (await atual)?.browser.close();
   });
 
+  // O pi roda em paralelo as chamadas de um turno; `executionMode` o impede, e esta fila é a defesa de que duas
+  // ações na mesma página nunca se misturam.
+  let fila: Promise<unknown> = Promise.resolve();
+  const naVez = <T>(tarefa: () => Promise<T>): Promise<T> => {
+    const vez = fila.then(tarefa);
+    fila = vez.catch(() => undefined);
+    return vez;
+  };
+
   /** Registra a ferramenta que age na página e devolve o print e o endereço. */
   const agir = (
     name: string,
@@ -69,19 +79,21 @@ export default function navegador(pi: Pi): void {
       label: name,
       description,
       parameters: objeto(props),
-      async execute(_id, parametros) {
-        const { page } = await abrir();
-        await acao(page, parametros);
-        await page.waitForTimeout(300);
-        const png = await page.screenshot({ type: "png" });
-        return {
-          content: [
-            { type: "image", data: png.toString("base64"), mimeType: "image/png" },
-            { type: "text", text: `Endereço atual: ${page.url()}` },
-          ],
-          details: undefined,
-        };
-      },
+      executionMode: "sequential",
+      execute: (_id, parametros) =>
+        naVez(async () => {
+          const { page } = await abrir();
+          await acao(page, parametros);
+          await page.waitForTimeout(300);
+          const png = await page.screenshot({ type: "png" });
+          return {
+            content: [
+              { type: "image", data: png.toString("base64"), mimeType: "image/png" },
+              { type: "text", text: `Endereço atual: ${page.url()}` },
+            ],
+            details: undefined,
+          };
+        }),
     });
   };
 
@@ -106,6 +118,7 @@ export default function navegador(pi: Pi): void {
     description:
       "Entrega o relatório final: os problemas de usabilidade e os bugs encontrados. Chame uma vez, ao terminar.",
     parameters: objeto({ usabilidade: lista, bugs: lista }),
+    executionMode: "sequential",
     async execute(_id, parametros) {
       const saida = String(process.env.FABRIQUINHA_SAIDA);
       await mkdir(saida, { recursive: true });
