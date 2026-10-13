@@ -51,6 +51,16 @@ Seções do HTML, nesta ordem:
 
 `foraDeEscopo`: itens concretos e próximos da solução, que alguém poderia esperar e que ficam para outra issue.
 
+## Mais de 30 arquivos previstos
+
+Um PR que altera mais de 30 arquivos é difícil de analisar.
+
+- Com mais de 30 `arquivosPrevistos` e a alteração sem caber num só PR, proponha uma issue com a parte que sai: `fabriquinha issue propor I-<n> --titulo <título> --arquivos <estimativa> --descricao <arquivo>`.
+  A mensagem (`--descricao`) já é a descrição da issue nova, completa para quem não viu esta conversa.
+  Entregue o desenho inteiro mesmo assim, evidências e tickets: a proposta não bloqueia nada, e o Auditor aceita, recusa ou aprova sem decidir sobre ela.
+- Com 30 ou menos, ou com mais de 30 numa alteração que cabe num PR (um glob de renomeação, por exemplo), não proponha.
+- Se o Auditor aceitou, o desenho volta reprovado com um motivo que cita a issue nova. Leia-a com `fabriquinha issue ver I-<m>` e tire dos `arquivosPrevistos`, do HTML e dos tickets o que ela assumiu.
+
 ## Antes de submeter
 
 - [ ] O HTML abre sozinho, sem rede, e começa por `<!doctype html>`.
@@ -59,3 +69,4 @@ Seções do HTML, nesta ordem:
 - [ ] Os `arquivosPrevistos` cobrem todo arquivo que os tickets vão tocar, testes incluídos.
 - [ ] O `resumo` basta para um agente que nunca viu o HTML nem esta conversa.
 - [ ] HTML e `dados` dizem a mesma coisa: mesma lista de arquivos, mesmo fora de escopo.
+- [ ] Com mais de 30 `arquivosPrevistos` numa alteração que não cabe num PR, há uma proposta de issue.

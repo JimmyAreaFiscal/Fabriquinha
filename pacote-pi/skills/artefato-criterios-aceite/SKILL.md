@@ -43,6 +43,16 @@ A Fabriquinha monta a frase "dado …, quando …, então …", então escreva c
 
 Um número entra só com unidade e limite: "responde em até 2 s com 1.000 issues".
 
+## Mudança de mais de 30 arquivos
+
+Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arquivos a mudança pedida altera, testes incluídos.
+
+- Acima de 30, proponha uma issue com a parte que sai: `fabriquinha issue propor I-<n> --titulo <título> --arquivos <estimativa> --descricao <arquivo>`.
+  O título diz a parte que sai; a mensagem (`--descricao`) já é a descrição da issue nova, completa para quem não viu a conversa; a estimativa é o número de arquivos dessa parte.
+- Com 30 ou menos, não proponha.
+- A proposta não bloqueia nada: o Auditor aceita ou recusa no chat, e você segue o registro normalmente. Só a Fabriquinha cria a issue.
+- Depois do aviso da Fabriquinha de que a issue nova foi criada, tire da descrição, do comportamento e dos critérios o que ela assumiu, na mesma sessão, e submeta de novo as evidências. Se a proposta foi recusada, mantenha o escopo.
+
 ## Antes de submeter
 
 - [ ] Cada `entao` é verificável por quem não participou da conversa, com print ou vídeo.
@@ -51,3 +61,4 @@ Um número entra só com unidade e limite: "responde em até 2 s com 1.000 issue
 - [ ] Os critérios descrevem o comportamento visto de fora; a solução interna fica para o desenho.
 - [ ] Os termos são os do produto e do código (nomes de tela, comando, campo), os mesmos da conversa com o Auditor.
 - [ ] O Auditor reconhece nos critérios tudo o que pediu, e só o que pediu.
+- [ ] Se a mudança passa de 30 arquivos, há uma proposta de issue; se não passa, não há.

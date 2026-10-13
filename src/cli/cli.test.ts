@@ -186,6 +186,22 @@ const TABELA: readonly Linha[] = [
     },
   },
   {
+    args: ["issue", "propor", "I-1", "--titulo", "Parte B", "--arquivos", "35", "--descricao", "-"],
+    etapa: "desenho",
+    stdin: "Parte B: tela de relatório",
+    confere: (s, c) => {
+      assert.deepEqual(
+        [s.id, s.ticket, s.titulo, s.mensagem, s.arquivos, s.status],
+        [1, 1, "Parte B", "Parte B: tela de relatório", 35, "pendente"],
+      );
+      assert.equal(c.banco.prepare("SELECT COUNT(*) AS n FROM issue").get()?.n, 2);
+    },
+    outra: {
+      etapa: "revisao",
+      erro: /^o agente de T-1 não pode propor uma issue a partir da I-1 \(quem pode é o Auditor ou o agente de registro, desenho da I-1\)/,
+    },
+  },
+  {
     args: ["issue", "dep", "add", "I-1", "2"],
     etapa: "registro",
     confere: (s) => {
@@ -384,6 +400,19 @@ test("uso inválido sai com 2 e imprime a ajuda do grupo", async () => {
   usoInvalido(await cli(c.env, ["issue", "ver", "T-1"]), "T-1 não é um I-<n>: use I-<n> ou só o número", "issue");
   usoInvalido(await cli(c.env, ["ticket", "ver", "T-0"]), "T-0 não é um T-<n>: use T-<n> ou só o número", "ticket");
   usoInvalido(await cli(c.env, ["ticket", "criar", "I-1"]), "falta --titulo <t>", "ticket");
+  const propor = ["issue", "propor", "I-1"];
+  const completo = ["--titulo", "Parte B", "--arquivos", "35", "--descricao", "-"];
+  const sem = (opcao: string) => completo.filter((_, i, a) => a[i] !== opcao && a[i - 1] !== opcao);
+  usoInvalido(await cli(c.env, [...propor, ...sem("--titulo")]), "falta --titulo <t>", "issue");
+  usoInvalido(await cli(c.env, [...propor, ...sem("--arquivos")]), "falta --arquivos <n>", "issue");
+  usoInvalido(await cli(c.env, [...propor, ...sem("--descricao")]), "falta --descricao <arquivo|->", "issue");
+  for (const ruim of ["-1", "2.5", "muitos"]) {
+    usoInvalido(
+      await cli(c.env, [...propor, "--titulo", "B", `--arquivos=${ruim}`, "--descricao", "-"]),
+      `${ruim} não é um inteiro maior ou igual a 0`,
+      "issue",
+    );
+  }
   usoInvalido(await cli(c.env, ["issue", "apagar", "I-1"]), "comando desconhecido: issue apagar I-1", "issue");
   usoInvalido(
     await cli(c.env, ["revisao", "decidir", "T-1", "talvez"]),
@@ -430,6 +459,15 @@ test("leituras do agente: só a issue da execução, os tickets e as evidências
   falha(await cli(c.env, ["issue", "ver", "I-9"]), fora("a I-9", comDep));
   falha(await cli(c.env, ["ticket", "ver", "T-3"]), fora("T-3, da I-3", comDep));
   falha(await cli(c.env, ["evidencia", "ver", "T-3", "comportamento"]), fora("T-3, da I-3", comDep));
+  c.banco.close();
+});
+
+test("leitura de uma dependente: a issue nova, criada depois do aceite, pode ser lida pelo agente da atual", async () => {
+  const c = cenario("desenho");
+  falha(await cli(c.env, ["issue", "ver", "I-2"]), /^o agente de T-1 não pode ler a I-2 /);
+  c.banco.exec("INSERT INTO issue_dep (issue, dep) VALUES (2, 1)");
+  assert.equal(json(await cli(c.env, ["issue", "ver", "I-2"])).id, 2);
+  assert.equal(json(await cli(c.env, ["ticket", "ver", "T-2"])).id, 2);
   c.banco.close();
 });
 

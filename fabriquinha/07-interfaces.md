@@ -34,6 +34,7 @@ Um agente que apague a variável de ambiente não ganha poder de Auditor no CLI:
 | variável ausente | Só `servidor`, `abrir` e `--help`. Qualquer outro comando sai com `ErroDeEscopo`: "este comando é do agente; o Auditor usa o web". |
 
 O F1 confere o escopo de cada comando (próprio ticket, própria issue); o CLI só repassa o ator.
+As leituras (`issue ver`, `ticket ver`, `evidencia ver`) alcançam a issue do ticket, as issues de que ela depende e as que dependem dela (as `dependentes` da F2), para o desenho refeito ler a issue nova; fora disso, `ErroDeEscopo`.
 
 ### 3.2 Comandos
 
@@ -44,6 +45,7 @@ O F1 confere o escopo de cada comando (próprio ticket, própria issue); o CLI s
 | `projeto ver` | leitura | todas |
 | `issue ver I-n` | leitura | todas |
 | `issue editar I-n [--titulo <t>] [--tipo <funcionalidade\|problema>] [--descricao <arquivo>]` | C2 | registro |
+| `issue propor I-n --titulo <t> --arquivos <n> --descricao <arquivo>` | C23 (`--arquivos` inteiro ≥ 0, sem comparação com 30; a regra dos 30 arquivos mora nas skills) | registro, desenho |
 | `issue cancelar I-n` | C22 (o agente recebe `ErroDeEscopo`, saída 1; só o Auditor cancela, no web) | desenho, desenvolvimento, revisao, encerramento, registro, sessao |
 | `issue dep add I-n I-m` / `issue dep rm I-n I-m` | C3, C4 | registro |
 | `ticket ver T-n` | leitura | todas |
