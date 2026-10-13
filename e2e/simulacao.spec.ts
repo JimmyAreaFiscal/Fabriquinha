@@ -1,11 +1,13 @@
-// Simulação (I-10): o Link do produto no Projeto (CA-1 e CA-2), os Usuários Simulados da Configuração (CA-3 a CA-6) e
-// as Tarefas da página Simulação (CA-7 a CA-9).
+// Simulação (I-10): o Link do produto no Projeto (CA-1 e CA-2), os Usuários Simulados da Configuração (CA-3 a CA-6),
+// as Tarefas da página Simulação (CA-7 a CA-9) e o Executar com o relatório (CA-10 a CA-14).
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
+import { createServer } from "node:http";
+import { createServer as servidorTcp } from "node:net";
 import { join } from "node:path";
 import { abrir } from "../src/persistencia/banco.ts";
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
-import { criarUsuarioSimulado } from "../src/persistencia/simulacao.ts";
+import { criarTarefa, criarUsuarioSimulado } from "../src/persistencia/simulacao.ts";
 import type { Page } from "@playwright/test";
 import { expect, test } from "./apoio.ts";
 
@@ -17,7 +19,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
  * O projeto `fabriquinha`, sem link do produto, com um clone de remoto GitHub: o `insteadOf` desvia o acesso para um
  * bare local, e salvar passa pela conferência do repositório (F5 §2).
  */
-function semear(raiz: string, linkProduto?: string, usuarios: string[] = []): void {
+function semear(raiz: string, linkProduto?: string, usuarios: string[] = [], tarefa?: { n: number }): void {
   const bare = join(raiz, "origin.git");
   const repo = join(raiz, "fabriquinha");
   mkdirSync(bare);
@@ -39,7 +41,8 @@ function semear(raiz: string, linkProduto?: string, usuarios: string[] = []): vo
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linkProduto,
   });
-  for (const nome of usuarios) criarUsuarioSimulado(banco, "fabriquinha", { nome, descricao: DESCRICAO });
+  const alocados = usuarios.map((nome) => criarUsuarioSimulado(banco, "fabriquinha", { nome, descricao: DESCRICAO }));
+  if (tarefa) criarTarefa(banco, "fabriquinha", { texto: TAREFA, n: tarefa.n, usuarios: alocados.map((u) => u.id) });
   banco.close();
 }
 
@@ -216,4 +219,113 @@ test("a Tarefa sem texto mostra o erro no campo, e o projeto sem link avisa na p
   await expect(pagina.getByText("sem link do produto")).toBeVisible();
   await pagina.getByRole("button", { name: "Criar tarefa" }).click();
   await expect(pagina.locator("#campo-tarefa-texto-erro")).toHaveText("Tarefa obrigatória");
+});
+
+/** O produto no ar: um servidor HTTP local que responde qualquer página. Devolve o link e quem o desliga. */
+async function produtoNoAr(): Promise<{ link: string; desligar: () => Promise<void> }> {
+  const servidor = createServer((_, resposta) => {
+    resposta.end("<!doctype html><title>Produto</title><button>Enviar</button>");
+  });
+  await new Promise<void>((pronto) => servidor.listen(0, "127.0.0.1", pronto));
+  const { port } = servidor.address() as { port: number };
+  return {
+    link: `http://127.0.0.1:${String(port)}`,
+    desligar: () =>
+      new Promise<void>((pronto) => {
+        servidor.close(() => {
+          pronto();
+        });
+      }),
+  };
+}
+
+/** As linhas da tabela de execuções do cartão da Tarefa. */
+const linhasDeExecucao = (pagina: Page) => pagina.locator("[data-tarefa] tbody tr");
+const ESPERA = { timeout: 20_000 };
+
+test("CA-10: Executar sem link do produto não inicia nada e o cartão mostra o erro", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semear(fabriquinha.raiz, undefined, ["Dona Maria"], { n: 1 });
+  await pagina.goto(`${fabriquinha.base}/simulation/fabriquinha`);
+  await pagina.getByRole("button", { name: "Executar", exact: true }).click();
+
+  const cartao = pagina.locator("[data-tarefa]", { hasText: TAREFA });
+  await expect(cartao.getByRole("alert")).toHaveText("Informe o link do produto na Configuração do projeto");
+  await expect(cartao).toContainText("Nenhuma execução ainda.");
+  await pagina.reload();
+  await expect(pagina.locator("[data-tarefa]")).toContainText("Nenhuma execução ainda.");
+});
+
+test("CA-11 e CA-13: as 3 execuções de Dona Maria terminam concluídas e o relatório tem Usabilidade e Bugs", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const produto = await produtoNoAr();
+  try {
+    semear(fabriquinha.raiz, produto.link, ["Dona Maria"], { n: 3 });
+    await pagina.goto(`${fabriquinha.base}/simulation/fabriquinha`);
+    await pagina.getByRole("button", { name: "Executar", exact: true }).click();
+    await expect(pagina.getByRole("button", { name: "Executando…" })).toBeDisabled();
+
+    await expect(linhasDeExecucao(pagina)).toHaveCount(3);
+    await expect(linhasDeExecucao(pagina).locator(".pill-ok")).toHaveText(
+      ["concluído", "concluído", "concluído"],
+      ESPERA,
+    );
+    await expect(linhasDeExecucao(pagina).locator("td:nth-child(2)")).toHaveText([
+      "Dona Maria",
+      "Dona Maria",
+      "Dona Maria",
+    ]);
+    await expect(pagina.getByRole("button", { name: "Executar", exact: true })).toBeEnabled();
+
+    await linhasDeExecucao(pagina).first().getByRole("button", { name: "Ver relatório" }).click();
+    const caixa = pagina.locator("[data-caixa]");
+    await expect(caixa.getByRole("heading", { name: "Usabilidade" })).toBeVisible();
+    await expect(caixa.getByRole("heading", { name: "Bugs" })).toBeVisible();
+    await expect(caixa).toContainText("O botão Enviar tem pouco contraste e fica no fim da página");
+    await expect(caixa.getByText("Nenhum achado")).toHaveCount(1); // Bugs vem vazia
+  } finally {
+    await produto.desligar();
+  }
+});
+
+test("CA-12: N = 2 com Dona Maria e Seu João dá 4 execuções, 2 de cada", async ({ pagina, fabriquinha }) => {
+  const produto = await produtoNoAr();
+  try {
+    semear(fabriquinha.raiz, produto.link, ["Dona Maria", "Seu João"], { n: 2 });
+    await pagina.goto(`${fabriquinha.base}/simulation/fabriquinha`);
+    await pagina.getByRole("button", { name: "Executar", exact: true }).click();
+
+    await expect(linhasDeExecucao(pagina)).toHaveCount(4);
+    await expect(linhasDeExecucao(pagina).locator(".pill-ok")).toHaveCount(4, ESPERA);
+    await expect(linhasDeExecucao(pagina).locator("td:nth-child(2)")).toHaveText([
+      "Dona Maria",
+      "Dona Maria",
+      "Seu João",
+      "Seu João",
+    ]);
+  } finally {
+    await produto.desligar();
+  }
+});
+
+test("CA-14: com o link fora do ar cada execução termina falhou com a mensagem", async ({ pagina, fabriquinha }) => {
+  const fechado = servidorTcp();
+  await new Promise<void>((pronto) => fechado.listen(0, "127.0.0.1", pronto));
+  const { port } = fechado.address() as { port: number };
+  await new Promise((pronto) => fechado.close(pronto));
+  semear(fabriquinha.raiz, `http://127.0.0.1:${String(port)}`, ["Dona Maria"], { n: 2 });
+  await pagina.goto(`${fabriquinha.base}/simulation/fabriquinha`);
+  await pagina.getByRole("button", { name: "Executar", exact: true }).click();
+
+  await expect(linhasDeExecucao(pagina).locator(".pill-falha")).toHaveText(["falhou", "falhou"], ESPERA);
+  await expect(linhasDeExecucao(pagina).locator(".msg-erro")).toHaveText([
+    "Não foi possível abrir o link do produto",
+    "Não foi possível abrir o link do produto",
+  ]);
+  await pagina.reload();
+  await expect(linhasDeExecucao(pagina).locator(".pill-falha")).toHaveCount(2);
 });

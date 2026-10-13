@@ -8,7 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "./arquivos.ts";
 import { abrir, raizDo } from "./banco.ts";
-import { dirDaExecucao } from "./execucoes.ts";
+import { dirDaExecucao, dirDaExecucaoSimulada } from "./execucoes.ts";
 import { editarProjeto, projeto, projetos, registrarProjeto, removerProjeto } from "./projetos.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-projetos-"));
@@ -174,6 +174,7 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
 });
 
 const TABELAS = [
+  "execucao_simulada",
   "tarefa_usuario",
   "tarefa",
   "usuario_simulado_anexo",
@@ -199,6 +200,13 @@ const custo = (banco: DatabaseSync) => Number(banco.prepare("SELECT total(custo)
 
 const SHA_COMPARTILHADO = "c".repeat(64);
 let contador = 0;
+
+/** Os IDs das execuções simuladas das Tarefas do projeto. */
+const simuladas = (banco: DatabaseSync, nome: string): number[] =>
+  banco
+    .prepare("SELECT e.id FROM execucao_simulada e JOIN tarefa t ON t.id = e.tarefa WHERE t.projeto = ?")
+    .all(nome)
+    .map((l) => Number(l.id));
 
 /**
  * Um projeto com 4 issues (registro, desenho, desenvolvimento, concluida), cada uma com linhas em todas as tabelas e
@@ -240,7 +248,13 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
     INSERT INTO usuario_simulado_anexo SELECT id, 'manual.pdf', '${shaProprio}', 1 FROM usuario_simulado WHERE projeto = '${nome}';
     INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('${nome}', 't', 1, 't');
     INSERT INTO tarefa_usuario SELECT t.id, u.id FROM tarefa t, usuario_simulado u WHERE t.projeto = '${nome}' AND u.projeto = '${nome}';
+    INSERT INTO execucao_simulada (tarefa, usuario, status, erro)
+      SELECT t.id, u.id, 'falhou', 'x' FROM tarefa t, usuario_simulado u WHERE t.projeto = '${nome}' AND u.projeto = '${nome}';
   `);
+  for (const id of simuladas(banco, nome)) {
+    mkdirSync(dirDaExecucaoSimulada(raiz, id), { recursive: true });
+    writeFileSync(join(dirDaExecucaoSimulada(raiz, id), "log"), "x");
+  }
   for (const sha of [SHA_COMPARTILHADO, shaProprio]) {
     mkdirSync(join(caminhoArquivo(banco, sha), ".."), { recursive: true });
     writeFileSync(caminhoArquivo(banco, sha), "x");
@@ -255,6 +269,9 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
   const antes = contagens(banco);
   const custoAntes = custo(banco);
   const demo = popular(banco, "demo", "f".repeat(64));
+  const simuladasDemo = simuladas(banco, "demo");
+  const simuladasOutro = simuladas(banco, "outro");
+  assert.equal(simuladasDemo.length + simuladasOutro.length, 2);
   banco.prepare("INSERT INTO issue_dep (issue, dep) VALUES (?, ?)").run(issueOutro, demo[0]);
 
   const { projeto: removido, avisos } = await removerProjeto(banco, "demo");
@@ -270,6 +287,8 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
     assert.equal(existsSync(dirDaExecucao(raiz, n)), false);
     assert.equal(existsSync(join(raiz, "sessoes", `2026-01-01T00-00-00Z_s${String(n)}.jsonl`)), false);
   }
+  for (const id of simuladasDemo) assert.equal(existsSync(dirDaExecucaoSimulada(raiz, id)), false);
+  for (const id of simuladasOutro) assert.equal(existsSync(dirDaExecucaoSimulada(raiz, id)), true);
   assert.equal(existsSync(caminhoArquivo(banco, "f".repeat(64))), false);
   assert.equal(existsSync(caminhoArquivo(banco, SHA_COMPARTILHADO)), true);
   assert.equal(existsSync(caminhoArquivo(banco, "e".repeat(64))), true);
@@ -332,6 +351,27 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
     `o projeto demo tem execução em andamento no T-${String(segunda)} (espere ela terminar ou pare a sessão, e remova de novo)`,
   );
   assert.deepEqual(contagens(banco), antes);
+  banco.close();
+});
+
+test("removerProjeto recusa execução simulada na fila ou em andamento, sem apagar nada", async () => {
+  const banco = novoBanco();
+  popular(banco, "demo", "f".repeat(64));
+  const antes = contagens(banco);
+  const [id] = simuladas(banco, "demo");
+  for (const status of ["na_fila", "em_andamento"]) {
+    banco.prepare("UPDATE execucao_simulada SET status = ?, erro = NULL").run(status);
+    await assert.rejects(
+      () => removerProjeto(banco, "demo"),
+      (falha) =>
+        falha instanceof ErroDeRegra &&
+        /^o projeto demo tem execução simulada pendente na Tarefa \d+ \(espere ela terminar, e remova de novo\)$/.test(
+          falha.message,
+        ),
+    );
+    assert.deepEqual(contagens(banco), antes);
+    assert.equal(existsSync(dirDaExecucaoSimulada(raizDo(banco), id ?? 0)), true);
+  }
   banco.close();
 });
 

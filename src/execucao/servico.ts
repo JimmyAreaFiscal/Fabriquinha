@@ -21,6 +21,7 @@ import {
   ticketsElegiveis,
   ticketsAutonomosEmExecucao,
 } from "../persistencia/servico.ts";
+import { falharPendentes } from "../persistencia/simulacao.ts";
 import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
 import { executarAutonomo } from "./autonoma.ts";
@@ -45,6 +46,7 @@ export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => 
  * F4 §7: toda execução em andamento é de uma instância anterior. Mata o grupo do pi, grava C6 com falha e leva a C8 cada
  * ticket autônomo que ficou `em_execucao`: o da execução encerrada agora e também o de quem caiu entre o C6 e a
  * coleta depois do pi (F4 §6.2, passo 6), que já não tem execução em andamento. O interativo continua `em_execucao`.
+ * As execuções simuladas pendentes (F8 §4) também são de uma instância anterior: o pi delas morre e elas falham.
  */
 function recuperar(banco: DatabaseSync): void {
   for (const e of execucoesEmAndamento(banco)) {
@@ -59,6 +61,7 @@ function recuperar(banco: DatabaseSync): void {
       falharTicket(ag, { ticket: t.id, erro: REINICIADO }, FABRIQUINHA),
     );
   }
+  for (const pgid of falharPendentes(banco, REINICIADO)) sinalNoGrupo(pgid, "SIGKILL");
 }
 
 /**

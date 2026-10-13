@@ -23,6 +23,7 @@ A raiz é `$FABRIQUINHA_ROOT` ou, sem a variável, `~/fabriquinha`.
 ├── arquivos/ab/abcdef….    # arquivos de evidência, endereçados por SHA-256 (F2)
 ├── sessoes/                # sessões do pi, passadas por --session-dir (F4)
 ├── execucoes/E-7/         # log da execução e saida/ para vídeos e prints do agente (F4)
+├── simulacoes/12/          # uma execução simulada: anexos, sessao/, log e saida/relatorio.json (F8)
 └── worktrees/<projeto>/I-12/   # uma worktree por issue (F5)
 ```
 
@@ -269,10 +270,26 @@ CREATE TABLE tarefa_usuario (                                     -- F8: os Usu�
   usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
   PRIMARY KEY (tarefa, usuario)
 );
+
+CREATE TABLE execucao_simulada (                                  -- F8: uma vez que um Usuário Simulado fez a Tarefa
+  id           INTEGER PRIMARY KEY,
+  tarefa       INTEGER NOT NULL REFERENCES tarefa(id),
+  usuario      INTEGER NOT NULL REFERENCES usuario_simulado(id),
+  status       TEXT NOT NULL CHECK (status IN ('na_fila','em_andamento','concluida','falhou')),
+  relatorio    TEXT CHECK (relatorio IS NULL OR json_valid(relatorio)),  -- RelatorioSimulacao (F8 5)
+  erro         TEXT,
+  pgid         INTEGER,                                           -- grupo do pi em andamento, para o reinício matá-lo
+  iniciada_em  TEXT,
+  terminada_em TEXT,
+  CHECK ((status = 'falhou') = (erro IS NOT NULL)),
+  CHECK ((status = 'concluida') = (relatorio IS NOT NULL))
+);
+CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa);
+CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento');
 ```
 
 As FKs ficam sem `ON DELETE` (comportamento `RESTRICT`), exceto `evidencia_arquivo`.
-Remover o projeto apaga `tarefa_usuario`, `tarefa`, `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`).
+Remover o projeto apaga `execucao_simulada`, `tarefa_usuario`, `tarefa`, `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`), recusa se há execução simulada pendente e apaga as pastas `<raiz>/simulacoes/<id>` (F8 5).
 Assim, apagar um ticket que já tem execução, decisão ou evidência falha no banco, e o histórico nunca some por engano.
 Os únicos tickets apagados pelo domínio (C8, C13, C15) são de desenvolvimento ainda `aberto`, sem histórico.
 

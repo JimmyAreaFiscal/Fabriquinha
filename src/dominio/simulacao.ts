@@ -1,4 +1,4 @@
-// Simulação (F8): o Usuário Simulado, o nome dos seus anexos e a Tarefa. Sem I/O.
+// Simulação (F8): o Usuário Simulado, o nome dos seus anexos, a Tarefa e o resultado das execuções. Sem I/O.
 import { extname } from "node:path";
 import { z } from "zod";
 import { Id } from "./primitivos.ts";
@@ -30,3 +30,16 @@ export const NovaTarefa = z.strictObject({
 });
 
 export type NovoUsuarioSimulado = z.infer<typeof NovoUsuarioSimulado>;
+
+/** Onde está uma execução simulada (F8 §4): `na_fila` e `em_andamento` são as pendentes. */
+export const StatusExecucaoSimulada = z.enum(["na_fila", "em_andamento", "concluida", "falhou"]);
+export type StatusExecucaoSimulada = z.infer<typeof StatusExecucaoSimulada>;
+
+const Achados = z.array(z.string().min(1).max(2000)).max(50);
+
+/** O que o Usuário Simulado entrega ao terminar (`relatar`): os problemas de usabilidade e os bugs que achou. */
+export const RelatorioSimulacao = z.object({ usabilidade: Achados, bugs: Achados });
+export type RelatorioSimulacao = z.infer<typeof RelatorioSimulacao>;
+
+export const SEM_LINK = "Informe o link do produto na Configuração do projeto";
+export const LINK_FORA_DO_AR = "Não foi possível abrir o link do produto";

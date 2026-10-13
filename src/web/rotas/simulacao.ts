@@ -1,4 +1,6 @@
-// Rotas da Simulação (F7 §4.2, F8): os Usuários Simulados do projeto, os seus anexos e as Tarefas.
+// Rotas da Simulação (F7 §4.2, F8): os Usuários Simulados do projeto, os seus anexos, as Tarefas e o Executar.
+import { noLog } from "../../persistencia/execucoes.ts";
+import { configuracao } from "../../persistencia/servico.ts";
 import {
   anexar,
   criarTarefa,
@@ -7,6 +9,7 @@ import {
   tarefas,
   usuariosSimulados,
 } from "../../persistencia/simulacao.ts";
+import { executarTarefa } from "../../simulacao/executor.ts";
 import { ErroHttp } from "../erros.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 
@@ -48,5 +51,14 @@ export const ROTAS_DA_SIMULACAO: Rota[] = [
     metodo: "POST",
     caminho: "/api/projetos/:nome/tarefas",
     tratar: ({ banco, params, corpo }) => criarTarefa(banco, String(params.nome), corpo),
+  },
+  {
+    // As execuções seguem em segundo plano: a resposta é 204 assim que estão na fila (409 sem link ou com pendente).
+    metodo: "POST",
+    caminho: "/api/tarefas/:id/executar",
+    tratar: ({ banco, params }) => {
+      const { timeoutMin } = configuracao(banco);
+      executarTarefa(banco, IdDoCaminho.parse(params.id), { timeoutMin }).catch(noLog);
+    },
   },
 ];

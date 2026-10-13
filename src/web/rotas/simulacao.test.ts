@@ -6,8 +6,10 @@ import type { ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { createServer } from "node:net";
+import { setTimeout as dormir } from "node:timers/promises";
 import { abrir } from "../../persistencia/banco.ts";
-import { registrarProjeto } from "../../persistencia/projetos.ts";
+import { editarProjeto, projeto, registrarProjeto } from "../../persistencia/projetos.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -170,4 +172,55 @@ test("Tarefa inválida dá 422 com o caminho do campo (CA-8 e CA-9); usuário al
     "o projeto fantasma não existe (confira o nome do projeto)",
   ]);
   assert.equal(((await chamar("GET", TAREFAS)) as unknown[]).length, 1);
+});
+
+/** Uma porta onde ninguém escuta: a conexão é recusada. */
+async function portaFechada(): Promise<number> {
+  const servidor = createServer();
+  await new Promise<void>((pronto) => servidor.listen(0, "127.0.0.1", pronto));
+  const { port } = servidor.address() as { port: number };
+  await new Promise((pronto) => servidor.close(pronto));
+  return port;
+}
+
+type ComExecucoes = { id: number; execucoes: { status: string; erro?: string }[] }[];
+
+test("Executar sem link do produto dá 409 com a mensagem do CA-10, e Tarefa inexistente ou ID inválido dão 404 e 422", async () => {
+  const [{ id }] = (await chamar("GET", TAREFAS)) as [{ id: number }];
+  assert.deepEqual(await chamar("POST", `/api/tarefas/${String(id)}/executar`), [
+    409,
+    "Informe o link do produto na Configuração do projeto",
+  ]);
+  assert.deepEqual(((await chamar("GET", TAREFAS)) as ComExecucoes)[0]?.execucoes, []);
+  assert.deepEqual(await chamar("POST", "/api/tarefas/999/executar"), [
+    404,
+    "a Tarefa 999 não existe (confira a Tarefa na página Simulação)",
+  ]);
+  assert.equal(((await chamar("POST", "/api/tarefas/abc/executar")) as [number])[0], 422);
+});
+
+test("Executar responde 204 com as execuções na fila, recusa uma segunda com 409 e termina falhou com o link fora do ar (CA-14)", async () => {
+  const atual = projeto(banco, "fabriquinha");
+  assert.ok(atual);
+  editarProjeto(banco, { ...atual, linkProduto: `http://127.0.0.1:${String(await portaFechada())}` });
+  const [{ id }] = (await chamar("GET", TAREFAS)) as [{ id: number }];
+
+  assert.equal(await chamar("POST", `/api/tarefas/${String(id)}/executar`), undefined);
+  const logo = ((await chamar("GET", TAREFAS)) as ComExecucoes)[0]?.execucoes;
+  assert.equal(logo?.length, 3);
+  assert.ok(logo.every((e) => e.status === "na_fila" || e.status === "em_andamento"));
+  assert.deepEqual(await chamar("POST", `/api/tarefas/${String(id)}/executar`), [
+    409,
+    "a Tarefa já está em execução (espere ela terminar para executar de novo)",
+  ]);
+
+  let execucoes = logo;
+  while (execucoes.some((e) => e.status === "na_fila" || e.status === "em_andamento")) {
+    await dormir(20);
+    execucoes = ((await chamar("GET", TAREFAS)) as ComExecucoes)[0]?.execucoes ?? [];
+  }
+  assert.deepEqual(
+    execucoes.map((e) => [e.status, e.erro]),
+    Array.from({ length: 3 }, () => ["falhou", "Não foi possível abrir o link do produto"]),
+  );
 });

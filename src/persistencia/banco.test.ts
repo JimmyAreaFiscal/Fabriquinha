@@ -144,6 +144,34 @@ test("as tabelas da Tarefa: N de 1 a 20, projeto e usuário existentes, alocaç�
   banco.close();
 });
 
+test("a tabela da execução simulada: status válido, falhou exige erro, concluída exige relatório JSON, tarefa e usuário existentes", () => {
+  const banco = abrir(raizTemp());
+  banco.exec(
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+     INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd');
+     INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'p', 't', 1, 'x')`,
+  );
+  const falha = (sql: string, erro: RegExp) => {
+    assert.throws(() => {
+      banco.exec(sql);
+    }, erro);
+  };
+  const inserir = (valores: string) =>
+    `INSERT INTO execucao_simulada (tarefa, usuario, status, relatorio, erro) VALUES ${valores}`;
+  falha(inserir("(2, 1, 'na_fila', NULL, NULL)"), /FOREIGN KEY/);
+  falha(inserir("(1, 2, 'na_fila', NULL, NULL)"), /FOREIGN KEY/);
+  falha(inserir("(1, 1, 'pronta', NULL, NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'falhou', NULL, NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'na_fila', NULL, 'x')"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'concluida', NULL, NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'em_andamento', '{}', NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'concluida', 'não é json', NULL)"), /CHECK constraint failed/);
+  banco.exec(inserir("(1, 1, 'na_fila', NULL, NULL), (1, 1, 'falhou', NULL, 'x'), (1, 1, 'concluida', '{}', NULL)"));
+  assert.equal(valor(banco, "SELECT count(*) FROM execucao_simulada"), 3);
+  banco.close();
+});
+
 test("abrir() propaga a falha de migração sem deixar a versão avançar", () => {
   const raiz = raizTemp();
   abrir(raiz).close();
@@ -196,10 +224,10 @@ test("migrar() recusa banco mais novo que o código, sem alterá-lo", () => {
   banco.close();
 });
 
-/** Banco na versão anterior à migração do cancelamento (C22, penúltima), com um ticket de cada tipo de filho que aponta para `ticket`. */
+/** Banco na versão anterior à migração do cancelamento (C22), com um ticket de cada tipo de filho que aponta para `ticket`. */
 function bancoAntesDoCancelamento(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES.slice(0, -5));
+  migrar(banco, MIGRACOES.slice(0, -6));
   banco.exec(`
     INSERT INTO projeto VALUES ('loja', '/r', 'main', 'github', '[]', '["t"]', 'k', '[{}]', '{}');
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'desenho', 'x');
@@ -270,7 +298,7 @@ test("migrar() desfaz a migração e religa as FKs quando ela deixa referência 
     },
     (erro) => erro instanceof ErroDeRegra && erro.message.includes("deixou 1 referência(s) órfã(s)"),
   );
-  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 5);
+  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 6);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ticket_novo'"), 0);
   assert.equal(valor(banco, "SELECT count(*) FROM pragma_table_info('issue') WHERE name = 'cancelada_em'"), 0);

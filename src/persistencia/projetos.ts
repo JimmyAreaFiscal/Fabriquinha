@@ -7,7 +7,7 @@ import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { Projeto } from "../dominio/projeto.ts";
 import { caminhoArquivo } from "./arquivos.ts";
 import { escrever, raizDo } from "./banco.ts";
-import { dirDaExecucao } from "./execucoes.ts";
+import { dirDaExecucao, dirDaExecucaoSimulada } from "./execucoes.ts";
 
 interface Linha {
   nome: string;
@@ -115,6 +115,7 @@ const DAS_EXECUCOES = `SELECT id FROM execucao WHERE ticket IN (${DOS_TICKETS})`
 const DOS_COMMITS = `SELECT sha FROM commit_ticket WHERE ticket IN (${DOS_TICKETS})`;
 const DAS_EVIDENCIAS = `SELECT id FROM evidencia WHERE ticket IN (${DOS_TICKETS})`;
 const DAS_ISSUES = "SELECT id FROM issue WHERE projeto = $p";
+const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";
 
 /** Apaga as linhas do projeto, na ordem das chaves estrangeiras, e devolve o que sobra para apagar no disco. */
 function apagarLinhas(banco: DatabaseSync, nome: string) {
@@ -133,6 +134,21 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
       "espere ela terminar ou pare a sessão, e remova de novo",
     );
   }
+  const pendente = banco
+    .prepare(
+      `SELECT tarefa FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS}) AND status IN ('na_fila', 'em_andamento')
+       LIMIT 1`,
+    )
+    .get(p);
+  if (pendente) {
+    throw new ErroDeRegra(
+      `o projeto ${nome} tem execução simulada pendente na Tarefa ${String(pendente.tarefa)}`,
+      "espere ela terminar, e remova de novo",
+    );
+  }
+  const simuladas = (
+    banco.prepare(`SELECT id FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS})`).all(p) as { id: number }[]
+  ).map((e) => e.id);
   const execucoes = banco.prepare(`SELECT id, sessao_pi FROM execucao WHERE id IN (${DAS_EXECUCOES})`).all(p) as {
     id: number;
     sessao_pi: string;
@@ -155,7 +171,8 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   apagar("issue_dep", `issue IN (${DAS_ISSUES}) OR dep IN (${DAS_ISSUES})`);
   apagar("ticket", `issue IN (${DAS_ISSUES})`);
   apagar("varredura_base", "projeto = $p");
-  apagar("tarefa_usuario", "tarefa IN (SELECT id FROM tarefa WHERE projeto = $p)");
+  apagar("execucao_simulada", `tarefa IN (${DAS_TAREFAS})`);
+  apagar("tarefa_usuario", `tarefa IN (${DAS_TAREFAS})`);
   apagar("tarefa", "projeto = $p");
   apagar("usuario_simulado_anexo", "usuario IN (SELECT id FROM usuario_simulado WHERE projeto = $p)");
   apagar("usuario_simulado", "projeto = $p");
@@ -172,7 +189,7 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
         .all({ anexos: JSON.stringify(anexos) }) as { sha256: string }[]
     ).map((a) => a.sha256),
   );
-  return { execucoes, orfaos: anexos.filter((sha) => !restam.has(sha)) };
+  return { execucoes, simuladas, orfaos: anexos.filter((sha) => !restam.has(sha)) };
 }
 
 /**
@@ -187,7 +204,7 @@ export async function removerProjeto(
   banco: DatabaseSync,
   nome: string,
 ): Promise<{ projeto: Projeto; avisos: string[] }> {
-  const { removido, execucoes, orfaos } = escrever(banco, () => {
+  const { removido, execucoes, simuladas, orfaos } = escrever(banco, () => {
     const removido = projeto(banco, nome);
     if (!removido) throw new ErroDeInexistente(`o projeto ${nome} não existe`, "confira o nome do projeto");
     return { removido, ...apagarLinhas(banco, nome) };
@@ -208,6 +225,7 @@ export async function removerProjeto(
   );
   await Promise.all([
     ...execucoes.map((e) => apagar(dirDaExecucao(raiz, e.id))),
+    ...simuladas.map((id) => apagar(dirDaExecucaoSimulada(raiz, id))),
     ...arquivosDeSessao.map((arquivo) => apagar(join(dirSessoes, arquivo))),
     ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),
   ]);

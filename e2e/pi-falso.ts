@@ -9,6 +9,8 @@
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
 // - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
+// Em `--mode json` (a Simulação, I-10) não fala o protocolo: espera um instante, grava o `relatorio.json` em
+// $FABRIQUINHA_SAIDA, como a ferramenta `relatar` da extensão navegador, e sai.
 // A resposta a um diálogo é ecoada numa mensagem e assenta; `abort` para a mensagem em fluxo como abortada.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -27,6 +29,13 @@ if (argumentos.includes("--list-models")) {
   console.log("provider   model              context  max-out  thinking  images");
   console.log("anthropic  claude-opus-5-5    200K     64K      yes       yes");
   console.log("anthropic  claude-sonnet-5-5  200K     64K      yes       yes");
+  process.exit(0);
+}
+
+if (arg("--mode") === "json") {
+  await dormir(300);
+  const relatorio = { usabilidade: ["O botão Enviar tem pouco contraste e fica no fim da página"], bugs: [] };
+  writeFileSync(join(String(process.env.FABRIQUINHA_SAIDA), "relatorio.json"), JSON.stringify(relatorio));
   process.exit(0);
 }
 

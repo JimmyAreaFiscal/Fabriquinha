@@ -14,6 +14,7 @@ import {
 } from "../dominio/agregado.ts";
 import { Etapa, Fase, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
+import { StatusExecucaoSimulada } from "../dominio/simulacao.ts";
 import { StatusArquivo } from "./commits.ts";
 
 /** Lista de um `CHECK ... IN (...)` gerada de um enum zod, para o banco e o domínio não divergirem. */
@@ -267,4 +268,21 @@ export const MIGRACOES: readonly string[] = [
     usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
     PRIMARY KEY (tarefa, usuario)
   );`,
+  // F8 (I-10): as execuções simuladas de cada Tarefa, uma por usuário alocado e por N; o relatório é JSON e o `pgid` é o
+  // do pi em andamento, para o reinício matá-lo.
+  `CREATE TABLE execucao_simulada (
+    id           INTEGER PRIMARY KEY,
+    tarefa       INTEGER NOT NULL REFERENCES tarefa(id),
+    usuario      INTEGER NOT NULL REFERENCES usuario_simulado(id),
+    status       TEXT NOT NULL CHECK (status IN (${listaSql(StatusExecucaoSimulada)})),
+    relatorio    TEXT CHECK (relatorio IS NULL OR json_valid(relatorio)),
+    erro         TEXT,
+    pgid         INTEGER,
+    iniciada_em  TEXT,
+    terminada_em TEXT,
+    CHECK ((status = 'falhou') = (erro IS NOT NULL)),
+    CHECK ((status = 'concluida') = (relatorio IS NOT NULL))
+  );
+  CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa);
+  CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento');`,
 ];

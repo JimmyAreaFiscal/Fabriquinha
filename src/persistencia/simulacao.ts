@@ -3,7 +3,14 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { encontrado, ErroDeInexistente, ErroDeRegra, existe } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
-import { NomeDoAnexo, NovaTarefa, NovoUsuarioSimulado } from "../dominio/simulacao.ts";
+import {
+  NomeDoAnexo,
+  NovaTarefa,
+  NovoUsuarioSimulado,
+  type RelatorioSimulacao,
+  SEM_LINK,
+  type StatusExecucaoSimulada,
+} from "../dominio/simulacao.ts";
 import { guardarBytes } from "./arquivos.ts";
 import { escrever } from "./banco.ts";
 import { projeto } from "./projetos.ts";
@@ -22,6 +29,16 @@ export interface UsuarioSimulado {
   anexos: Anexo[];
 }
 
+/** Uma vez que um Usuário Simulado fez a Tarefa (F8 §4): o `relatorio` só vem na concluída e o `erro`, na que falhou. */
+export interface ExecucaoSimulada {
+  id: Id;
+  usuario: Id;
+  usuarioNome: string;
+  status: StatusExecucaoSimulada;
+  relatorio?: RelatorioSimulacao;
+  erro?: string;
+}
+
 export interface Tarefa {
   id: Id;
   projeto: string;
@@ -30,8 +47,8 @@ export interface Tarefa {
   criadaEm: string;
   /** Os Usuários Simulados alocados, em ordem de criação. */
   usuarios: { id: Id; nome: string }[];
-  /** Ainda não há como executar: o ticket seguinte da I-10 preenche. */
-  execucoes: never[];
+  /** As execuções na ordem em que foram enfileiradas: N por usuário alocado, de todas as vezes que o Executar rodou. */
+  execucoes: ExecucaoSimulada[];
 }
 
 const doProjeto = (banco: DatabaseSync, nome: string): void => {
@@ -145,7 +162,7 @@ export function criarTarefa(banco: DatabaseSync, nomeDoProjeto: string, entrada:
   );
 }
 
-/** As Tarefas do projeto na ordem em que foram criadas, cada uma com os Usuários Simulados alocados. */
+/** As Tarefas do projeto na ordem em que foram criadas, cada uma com os Usuários Simulados alocados e as execuções. */
 export function tarefas(banco: DatabaseSync, nomeDoProjeto: string): Tarefa[] {
   doProjeto(banco, nomeDoProjeto);
   const alocados = banco
@@ -155,6 +172,25 @@ export function tarefas(banco: DatabaseSync, nomeDoProjeto: string): Tarefa[] {
        WHERE t.projeto = ? ORDER BY u.id`,
     )
     .all(nomeDoProjeto) as unknown as { tarefa: Id; id: Id; nome: string }[];
+  // ponytail: o relatório de todas as execuções vai em cada leitura (a tela relê a cada 3 s com pendentes); se pesar,
+  // a lista leva só o status e o relatório sai numa rota própria.
+  const execucoes = (
+    banco
+      .prepare(
+        `SELECT e.id, e.tarefa, e.usuario, u.nome AS usuarioNome, e.status, e.relatorio, e.erro
+         FROM execucao_simulada e JOIN tarefa t ON t.id = e.tarefa JOIN usuario_simulado u ON u.id = e.usuario
+         WHERE t.projeto = ? ORDER BY e.id`,
+      )
+      .all(nomeDoProjeto) as unknown as (Omit<ExecucaoSimulada, "relatorio" | "erro"> & {
+      tarefa: Id;
+      relatorio: string | null;
+      erro: string | null;
+    })[]
+  ).map(({ relatorio, erro, ...e }) => ({
+    ...e,
+    ...(relatorio !== null && { relatorio: JSON.parse(relatorio) as RelatorioSimulacao }),
+    ...(erro !== null && { erro }),
+  }));
   return (
     banco
       .prepare("SELECT id, projeto, texto, n, criada_em AS criadaEm FROM tarefa WHERE projeto = ? ORDER BY id")
@@ -162,6 +198,105 @@ export function tarefas(banco: DatabaseSync, nomeDoProjeto: string): Tarefa[] {
   ).map((t) => ({
     ...t,
     usuarios: alocados.filter((a) => a.tarefa === t.id).map(({ id, nome }) => ({ id, nome })),
-    execucoes: [],
+    execucoes: execucoes.filter((e) => e.tarefa === t.id).map(({ tarefa: _, ...e }) => e),
   }));
+}
+
+const PENDENTES = "status IN ('na_fila', 'em_andamento')";
+
+/**
+ * Enfileira as execuções da Tarefa: N para cada usuário alocado, todas `na_fila`, numa transação. Sem link do produto
+ * ou com execução pendente da Tarefa, recusa sem gravar nada. Devolve os IDs, na ordem de execução, e o link, que vale
+ * para todas.
+ */
+export function enfileirar(banco: DatabaseSync, tarefa: Id): { execucoes: Id[]; link: string } {
+  return escrever(banco, () => {
+    const t = encontrado(
+      banco
+        .prepare("SELECT t.n, p.link_produto AS link FROM tarefa t JOIN projeto p ON p.nome = t.projeto WHERE t.id = ?")
+        .get(tarefa) as { n: number; link: string | null } | undefined,
+      `a Tarefa ${String(tarefa)} não existe`,
+      "confira a Tarefa na página Simulação",
+    );
+    if (!t.link) throw new ErroDeRegra(SEM_LINK);
+    if (banco.prepare(`SELECT 1 FROM execucao_simulada WHERE tarefa = ? AND ${PENDENTES}`).get(tarefa)) {
+      throw new ErroDeRegra("a Tarefa já está em execução", "espere ela terminar para executar de novo");
+    }
+    const usuarios = banco.prepare("SELECT usuario FROM tarefa_usuario WHERE tarefa = ? ORDER BY usuario").all(tarefa);
+    const inserir = banco.prepare("INSERT INTO execucao_simulada (tarefa, usuario, status) VALUES (?, ?, 'na_fila')");
+    const execucoes = usuarios.flatMap(({ usuario }) =>
+      Array.from({ length: t.n }, () => Number(inserir.run(tarefa, Number(usuario)).lastInsertRowid)),
+    );
+    return { execucoes, link: t.link };
+  });
+}
+
+export type Marca =
+  | { status: "em_andamento" }
+  | { status: "concluida"; relatorio: RelatorioSimulacao }
+  | { status: "falhou"; erro: string };
+
+/** Leva a execução ao novo status; ao terminar (concluída ou falhou), grava o fim e solta o `pgid`. */
+export function marcar(banco: DatabaseSync, id: Id, marca: Marca): void {
+  const agora = new Date().toISOString();
+  const terminou = marca.status !== "em_andamento";
+  banco
+    .prepare(
+      `UPDATE execucao_simulada SET status = $status, relatorio = $relatorio, erro = $erro,
+         iniciada_em = COALESCE($inicio, iniciada_em), terminada_em = $fim,
+         pgid = CASE WHEN $fim IS NULL THEN pgid END
+       WHERE id = $id`,
+    )
+    .run({
+      id,
+      status: marca.status,
+      relatorio: marca.status === "concluida" ? JSON.stringify(marca.relatorio) : null,
+      erro: marca.status === "falhou" ? marca.erro : null,
+      inicio: terminou ? null : agora,
+      fim: terminou ? agora : null,
+    });
+}
+
+/** O grupo de processos do pi da execução, para o reinício do serviço matá-lo. */
+export function gravarPgid(banco: DatabaseSync, id: Id, pgid: number): void {
+  banco.prepare("UPDATE execucao_simulada SET pgid = ? WHERE id = ?").run(pgid, id);
+}
+
+/**
+ * Reinício do serviço (F4 §7): toda execução simulada pendente é de uma instância anterior. Marca-as `falhou` com o
+ * `erro` e devolve os `pgid` dos pi que ficaram rodando, para quem chama matar.
+ */
+export function falharPendentes(banco: DatabaseSync, erro: string): number[] {
+  return escrever(banco, () => {
+    const pgids = banco
+      .prepare(`SELECT pgid FROM execucao_simulada WHERE ${PENDENTES} AND pgid IS NOT NULL`)
+      .all()
+      .map(({ pgid }) => Number(pgid));
+    banco
+      .prepare(
+        `UPDATE execucao_simulada SET status = 'falhou', erro = ?, relatorio = NULL, pgid = NULL, terminada_em = ?
+         WHERE ${PENDENTES}`,
+      )
+      .run(erro, new Date().toISOString());
+    return pgids;
+  });
+}
+
+/** O que o executor precisa de uma execução: o texto da Tarefa e o Usuário Simulado com os anexos. */
+export function paraRodar(banco: DatabaseSync, id: Id): { texto: string; usuario: UsuarioSimulado } {
+  const l = encontrado(
+    banco
+      .prepare(
+        "SELECT t.texto, t.projeto, e.usuario FROM execucao_simulada e JOIN tarefa t ON t.id = e.tarefa WHERE e.id = ?",
+      )
+      .get(id) as { texto: string; projeto: string; usuario: Id } | undefined,
+    `a execução simulada ${String(id)} não existe`,
+    "confira a Tarefa na página Simulação",
+  );
+  const usuario = existe(
+    usuariosSimulados(banco, l.projeto).find((u) => u.id === l.usuario),
+    `o Usuário Simulado ${String(l.usuario)} sumiu`,
+    "tente executar de novo",
+  );
+  return { texto: l.texto, usuario };
 }

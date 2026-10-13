@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
-import { NomeDoAnexo, NovaTarefa, NovoUsuarioSimulado } from "./simulacao.ts";
+import {
+  LINK_FORA_DO_AR,
+  NomeDoAnexo,
+  NovaTarefa,
+  NovoUsuarioSimulado,
+  RelatorioSimulacao,
+  SEM_LINK,
+  StatusExecucaoSimulada,
+} from "./simulacao.ts";
 
 const erros = (schema: z.ZodType, entrada: unknown): string[] =>
   schema.safeParse(entrada).error?.issues.map((i) => `${i.path.join(".")}: ${i.message}`) ?? [];
@@ -72,4 +80,21 @@ test("NovaTarefa respeita o teto do texto e recusa campo desconhecido e usuário
   assert.equal(erros(NovaTarefa, { texto: "t".repeat(2001), n: 1, usuarios: [1] }).length, 1);
   assert.equal(erros(NovaTarefa, { texto: "t", n: 1, usuarios: [1], extra: 1 }).length, 1);
   assert.equal(erros(NovaTarefa, { texto: "t", n: 1, usuarios: [0] }).length, 1);
+});
+
+test("StatusExecucaoSimulada tem os quatro estados e as mensagens são as dos CAs", () => {
+  assert.deepEqual(StatusExecucaoSimulada.options, ["na_fila", "em_andamento", "concluida", "falhou"]);
+  assert.equal(SEM_LINK, "Informe o link do produto na Configuração do projeto");
+  assert.equal(LINK_FORA_DO_AR, "Não foi possível abrir o link do produto");
+});
+
+test("RelatorioSimulacao aceita seções vazias e até 50 achados de 1 a 2000 caracteres", () => {
+  assert.deepEqual(erros(RelatorioSimulacao, { usabilidade: [], bugs: [] }), []);
+  const cheio = { usabilidade: Array.from({ length: 50 }, () => "x".repeat(2000)), bugs: ["b"] };
+  assert.deepEqual(erros(RelatorioSimulacao, cheio), []);
+  assert.equal(erros(RelatorioSimulacao, { usabilidade: Array.from({ length: 51 }, () => "x"), bugs: [] }).length, 1);
+  assert.equal(erros(RelatorioSimulacao, { usabilidade: ["x".repeat(2001)], bugs: [] }).length, 1);
+  assert.equal(erros(RelatorioSimulacao, { usabilidade: [""], bugs: [] }).length, 1);
+  assert.equal(erros(RelatorioSimulacao, { usabilidade: [] }).length, 1);
+  assert.equal(erros(RelatorioSimulacao, { usabilidade: [1], bugs: [] }).length, 1);
 });
