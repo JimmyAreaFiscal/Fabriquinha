@@ -160,6 +160,15 @@ test("C1 grava a descrição informada na issue; sem ela, fica vazia", () => {
   assert.throws(() => registrarIssue({ projeto: "loja", descricao: "a ".repeat(1001) }, auditor, contexto()), ZodError);
 });
 
+test("C1 grava o título informado; sem ele, fica nulo; título inválido é recusado", () => {
+  assert.equal(
+    registrarIssue({ projeto: "loja", titulo: "Tela de relatório" }, auditor, contexto()).issue.titulo,
+    "Tela de relatório",
+  );
+  assert.equal(registrarIssue({ projeto: "loja" }, auditor, contexto()).issue.titulo, null);
+  assert.throws(() => registrarIssue({ projeto: "loja", titulo: "" }, auditor, contexto()), ZodError);
+});
+
 test("C1 é só do Auditor, exige projeto e deps existentes e valida a entrada", () => {
   for (const ator of [agente(34), fabriquinha]) {
     escopo(

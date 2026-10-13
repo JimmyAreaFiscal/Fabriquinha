@@ -139,6 +139,24 @@ export const Evidencia = z.object({
   em: Instante,
 });
 
+export const StatusProposta = z.enum(["pendente", "aceita", "recusada"]);
+
+/**
+ * Proposta de issue (C23): fato preso ao ticket de registro ou desenho que a IA fez, fora do agregado. O Auditor a
+ * aceita ou recusa (C24); o aceite cria a issue `issueCriada`.
+ */
+export const PropostaIssue = z.object({
+  id: Id,
+  ticket: Id,
+  titulo: Titulo,
+  mensagem: Markdown.refine((t) => t.trim() !== "", "mensagem vazia"),
+  arquivos: z.number().int().nonnegative(),
+  status: StatusProposta,
+  issueCriada: Id.optional(),
+  em: Instante,
+  decididaEm: Instante.optional(),
+});
+
 export type Ator = z.infer<typeof Ator>;
 export type TipoIssue = z.infer<typeof TipoIssue>;
 export type Issue = z.infer<typeof Issue>;
@@ -150,6 +168,7 @@ export type TipoEvidencia = z.infer<typeof TipoEvidencia>;
 export type Produtor = z.infer<typeof Produtor>;
 export type ArquivoEvidencia = z.infer<typeof ArquivoEvidencia>;
 export type Evidencia = z.infer<typeof Evidencia>;
+export type PropostaIssue = z.infer<typeof PropostaIssue>;
 
 /** A issue com o que pertence a ela (F1 §5). */
 export interface Agregado {
@@ -210,7 +229,9 @@ export type NomeComando =
   | "decidirDesenho"
   | "registrarDecisaoRevisao"
   | "decidirPR"
-  | "cancelarIssue";
+  | "cancelarIssue"
+  | "proporIssue"
+  | "decidirProposta";
 
 /** Erro da execução que o cancelamento da issue terminou (C22). */
 export const CANCELADA = "issue cancelada pelo Auditor";

@@ -15,7 +15,12 @@ import {
 import { ErroDeRegra } from "./erros.ts";
 import { Id, Markdown, Slug, Titulo } from "./primitivos.ts";
 
-const EntradaRegistro = z.object({ projeto: Slug, deps: z.array(Id).default([]), descricao: Markdown.default("") });
+const EntradaRegistro = z.object({
+  projeto: Slug,
+  deps: z.array(Id).default([]),
+  descricao: Markdown.default(""),
+  titulo: Titulo.optional(),
+});
 const EntradaEdicao = z.strictObject({ titulo: Titulo, tipo: TipoIssue, descricao: Markdown }).partial();
 
 function exigirIssue(ctx: Contexto, id: Id): void {
@@ -34,10 +39,10 @@ function exigirNaoConcluida(ag: Agregado): void {
   }
 }
 
-/** C1: issue em `registro`, sem título e tipo, com o ticket de registro aberto. */
+/** C1: issue em `registro`, sem tipo (e sem título, salvo o da proposta de issue, C24), com o ticket de registro aberto. */
 export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   exigirAuditor(ator, "registrar uma issue");
-  const { projeto, deps, descricao } = EntradaRegistro.parse(entrada);
+  const { projeto, deps, descricao, titulo } = EntradaRegistro.parse(entrada);
   if (!ctx.projeto(projeto)) throw new ErroDeRegra(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
   for (const dep of deps) exigirIssue(ctx, dep);
   // Uma issue nova ainda não é dependência de ninguém, então as dependências dela não fecham ciclo.
@@ -46,7 +51,7 @@ export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agr
     issue: {
       id,
       projeto,
-      titulo: null,
+      titulo: titulo ?? null,
       tipo: null,
       descricao,
       fase: "registro",
