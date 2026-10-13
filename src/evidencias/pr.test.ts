@@ -306,7 +306,7 @@ test("célula de tabela em tempo linear: 100 mil barras ou espaços seguidos nã
   });
   const inicio = Date.now();
   const { completo } = montarPR(ag, 5, LIMITE_DO_CORPO.github);
-  assert.ok(Date.now() - inicio < 5000); // ~1 s sem carga; o backtracking quadrático levaria minutos
+  assert.ok(Date.now() - inicio < 5000); // a versão quadrática leva muito mais; a folga cobre a máquina carregada
   assert.ok(completo.includes(`| não previsto: ${barras}x${espacos}x ${barras}\\| |\n`));
 });
 

@@ -81,6 +81,23 @@ export const argumentosPi = (l: Lancamento): string[] => [
 ];
 
 /**
+ * A auditoria do Histórico: a sessão `sessao` em `<raiz>/sessoes`, sem as ferramentas embutidas de escrita (as da
+ * consulta, F4 §6.5) e com a guarda, que só deixa o `subagent` chamar o `scout`. Não herda skills nem modelo de etapa.
+ */
+export const argumentosDaAuditoria = (raiz: string, sessao: string): string[] => [
+  "--mode",
+  "rpc",
+  "--session-dir",
+  join(raiz, "sessoes"),
+  "--session-id",
+  sessao,
+  "-e",
+  join(PACOTE, "extensions", "guarda.ts"),
+  "--exclude-tools",
+  "edit,write,bash,powershell",
+];
+
+/**
  * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio da execução, e
  * as variáveis da Fabriquinha.
  */
@@ -176,4 +193,14 @@ export function lancarPi(
       sinalNoGrupo(pgid, "SIGKILL");
     },
   };
+}
+
+/**
+ * O ambiente da auditoria `dir` (`<raiz>/auditorias/<sessão>`): como o da execução, mas sem `FABRIQUINHA_EXECUCAO`,
+ * porque ela não é de nenhum ticket, e com `FABRIQUINHA_AUDITORIA`, que liga a regra do `scout` na guarda.
+ */
+export function ambienteDaAuditoria(raiz: string, dir: string): NodeJS.ProcessEnv {
+  const env = ambienteSemCredenciais(process.env, join(dir, "vazio"));
+  delete env.FABRIQUINHA_EXECUCAO;
+  return { ...env, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" };
 }

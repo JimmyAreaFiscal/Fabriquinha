@@ -15,6 +15,9 @@ import {
   modeloDoSeletor,
   NAO_ENCONTRADA,
   navegacao,
+  caminhoDaAuditoria,
+  mesPorExtenso,
+  TITULOS,
   NOME_DA_ETAPA,
   nomeDoModelo,
   paginaVazia,
@@ -51,6 +54,9 @@ test("rótulos e caminhos: I-n, T-n, a issue, o chat, a etapa e o modelo", () =>
   assert.deepEqual([rotuloIssue(7), rotuloTicket(12)], ["I-7", "T-12"]);
   assert.equal(caminhoDaIssue("loja nova", 7), "/projects/loja%20nova/issues/I-7");
   assert.equal(caminhoDaSessao("a/b c"), "/sessions/a%2Fb%20c");
+  assert.equal(caminhoDaAuditoria("a/b c"), "/audits/a%2Fb%20c");
+  assert.deepEqual([mesPorExtenso("2026-09"), mesPorExtenso("2026-03")], ["setembro de 2026", "março de 2026"]);
+  assert.equal(TITULOS.auditoria, "Auditoria");
   assert.deepEqual(
     [NOME_DA_ETAPA.sessao, etapa("sessao"), etapa("revisao")],
     ["Sessão em aberto", "sessão em aberto", "revisão"],
@@ -91,10 +97,12 @@ test("navegação fixa marca a página atual e mostra quem aguarda só quando h�
     ["/home", "/projects", "/simulation", "/metrics", "/history", "/config"],
   );
   assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
+  assert.match(navegacao("heatmap", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.doesNotMatch(navegacao("inicio", 0), /contador/);
   assert.match(navegacao("inicio", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
   assert.doesNotMatch(navegacao(undefined, 0), /aria-current/);
   assert.doesNotMatch(navegacao("chat", 0), /aria-current/);
+  assert.match(navegacao("auditoria", 0), /<a href="\/history" aria-current="page">Histórico<\/a>/);
 });
 
 /** As classes de cada passo do trilho, na ordem. */

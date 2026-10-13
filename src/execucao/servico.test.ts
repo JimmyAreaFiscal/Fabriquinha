@@ -198,6 +198,20 @@ test("parar apaga o web.url: o abrir diz que o serviço não está rodando em ve
   assert.equal(existsSync(join(raiz, "web.url")), false);
 });
 
+test("reinício: o pi de uma auditoria da instância anterior é morto pelo pgid da pasta dela", async () => {
+  const raiz = novaRaiz();
+  abrir(raiz).close();
+  const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
+  const saiu = once(pi, "exit");
+  const dir = join(raiz, "auditorias", "11111111-1111-4111-8111-111111111111");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "pgid"), String(pi.pid));
+
+  await (await subir(raiz)).parar();
+  assert.deepEqual(await saiu, [null, "SIGKILL"]);
+  assert.equal(existsSync(join(dir, "pgid")), false);
+});
+
 test("reinício: as execuções da instância anterior são encerradas conforme o F4 §7 na subida", async () => {
   const raiz = novaRaiz();
   const banco = abrir(raiz);

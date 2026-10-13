@@ -10,7 +10,8 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
-import { anexarHistorico, exportarHistorico } from "./historico.ts";
+import { anexarHistorico, exportarHistorico, noHistorico } from "./historico.ts";
+import { infoDaSessao } from "./sessoes.ts";
 
 const raiz = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-historico-")));
 after(() => {
@@ -183,4 +184,11 @@ test("anexar: um arquivo por sessão na saída da execução atual do destino, a
     "a consulta não sobrescreve a principal",
   );
   assert.equal(readFileSync(daConsulta, "utf8"), exportarHistorico(banco, CONSULTA));
+});
+
+test("noHistorico: a sessão ganha o título da issue, o resultado da última execução e o custo", async () => {
+  banco.exec(`INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo)
+    VALUES (3, 'anthropic', 'claude', 1, 1, 1, 0, 0, 0.5)`);
+  const [linha] = noHistorico(banco, [await infoDaSessao(banco, DESTINO)]);
+  assert.deepEqual([linha?.titulo, linha?.resultado, linha?.custo], ["Busca lenta", "concluida", 0.5]);
 });

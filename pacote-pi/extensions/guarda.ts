@@ -73,18 +73,34 @@ export function bloqueio(comando: string): string | null {
   return mexe ? RECUSA : null;
 }
 
+const SO_SCOUT = "A auditoria só usa subagentes de leitura (scout).";
+
+/** O que as ferramentas `bash` e `subagent` recebem. */
+interface Entrada {
+  command: string;
+  agent?: string;
+  tasks?: { agent?: string }[];
+}
+
+/** Na auditoria, a recusa se o `subagent` chama um agente que não é o `scout`, no `agent` ou em algum item de `tasks`. */
+function bloqueioDoSubagent({ agent, tasks = [] }: Entrada): string | null {
+  return [agent, ...tasks.map((t) => t.agent)].some((a) => a !== undefined && a !== "scout") ? SO_SCOUT : null;
+}
+
 /** O pedaço da API de extensões do pi que a guarda usa. */
 interface Pi {
   on(
     evento: "tool_call",
-    tratador: (evento: { toolName: string; input: { command: string } }) => { block: true; reason: string } | undefined,
+    tratador: (evento: { toolName: string; input: Entrada }) => { block: true; reason: string } | undefined,
   ): void;
 }
 
 export default function guarda(pi: Pi): void {
   pi.on("tool_call", (evento) => {
-    if (evento.toolName !== "bash") return undefined;
-    const reason = bloqueio(evento.input.command);
+    let reason: string | null = null;
+    if (evento.toolName === "bash") reason = bloqueio(evento.input.command);
+    else if (evento.toolName === "subagent" && process.env.FABRIQUINHA_AUDITORIA)
+      reason = bloqueioDoSubagent(evento.input);
     return reason === null ? undefined : { block: true, reason };
   });
 }

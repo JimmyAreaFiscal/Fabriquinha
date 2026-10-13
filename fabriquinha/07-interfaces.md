@@ -156,6 +156,7 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
 | `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
 | `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | C10. Devolver também envia o motivo ao agente como mensagem (F4, 6.6). |
+| `GET /api/projetos/:nome/heatmap` | Heatmap de alterações da base nos últimos 12 meses (`heatmapDo`, F5 §11): `{ branch, desde, ate, raiz, commits }`, com a árvore inteira de pastas e arquivos. Projeto inexistente dá 404; pasta do repositório ou branch base ausente dá 409 com motivo e correção. |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
 **Tickets e gates**
@@ -218,6 +219,7 @@ Os números dos protótipos são fictícios.
 |---|---|---|
 | Início | `/home`; `/` redireciona para cá | `01-inicio.html` |
 | Projeto | `/projects/:projeto`; `/projects` abre o último projeto visto neste navegador, ou o primeiro em ordem alfabética | `02-projeto.html` |
+| Heatmap | `/projects/:projeto/heatmap`, a aba Heatmap da página Projeto | — |
 | Issue | `/projects/:projeto/issues/:issue` | `03-issue.html` |
 | Simulação | `/simulation/:projeto`; `/simulation` abre o último projeto visto neste navegador, ou o primeiro em ordem alfabética | `prototipo` da I-10 |
 | Métricas | `/metrics` | `04-metricas.html` |
@@ -253,6 +255,7 @@ Duas peças se repetem entre as páginas:
 **Projeto** (`/projects/:projeto`) — trilho de fases
 
 1. Cabeçalho: seletor de projeto, link **Editar na Configuração** e **Registrar necessidade**, com o projeto já escolhido.
+   Abaixo dele, as abas **Issues** (esta página, ativa) e **Heatmap** (`/projects/:projeto/heatmap`), links de verdade.
 2. Métricas do mês corrente só do projeto (F6, 5.7), em 5 cards: custo (com chamadas de LLM), tokens (entrada, saída e cache), issues, tickets e PRs.
 3. Barra com a contagem (em andamento, concluídas, arquivadas, canceladas), as opções explícitas **Mostrar concluídas**, **Mostrar arquivadas** e **Mostrar canceladas** (Q2) e **Arquivar concluídas** (C18 do projeto, com confirmação que diz quantas serão arquivadas e que nada é apagado).
 4. Cabeçalho das colunas do trilho (etapas e fases) fixo no topo ao rolar.
@@ -261,6 +264,20 @@ Duas peças se repetem entre as páginas:
 6. Clicar na linha abre a gaveta com os tickets: etapa, `T-n`, título, status, modelo (★ quando é override do ticket, C20) e sessão.
    As issues que aguardam o Auditor ou falharam já vêm com a gaveta aberta.
 7. Atualiza sozinha a cada 5 segundos, como o Início.
+
+**Heatmap** (`/projects/:projeto/heatmap`) — onde o código mais mudou
+
+1. Cabeçalho como o da página Projeto (só o seletor) e as mesmas abas, com **Heatmap** ativa; o item **Projetos** da navegação segue marcado.
+2. Barra com a janela de 12 meses até hoje (dd/mm/aaaa), a branch base e o total de alterações do projeto, igual à soma das linhas da raiz.
+   Total 0 mostra "Nenhuma alteração nos últimos 12 meses", com todos os totais em 0.
+3. A árvore do repositório: uma linha por pasta e arquivo, cada uma um `<details>` com quadrado de cor, nome, total de alterações e barra.
+   A cor é `hsl(220·(1−calor) 70% 50%)` (azul frio a vermelho quente), com `calor = ln(1+n)/ln(1+T)`, `n` as alterações da linha e `T` o total do projeto.
+   Ordem: mais alterações primeiro, empate por nome.
+4. Clicar numa pasta abre e mostra os filhos (o conteúdo é desenhado na primeira abertura, sem nova chamada à API); clicar de novo fecha.
+5. Clicar num arquivo mostra "Código alterado: N alterações · quanto maior, pior" (a métrica: mais alterações, pior) e a tabela de commits da janela: hash de 7, mensagem, data e "PR #N" ou "sem PR".
+   Arquivo sem alterações na janela mostra 0, na cor mais fria, sem tabela.
+6. Projeto inexistente mostra "Projeto não encontrado" como a página Projeto; erro do git (repositório ou branch base ausente) mostra o motivo e a correção sob as abas.
+7. Não se atualiza sozinha: cada abertura relê o git.
 
 ponytail: o Início e a página do projeto releem tudo a cada 5 segundos; com centenas de issues ativas, trocar por um contador de versão e só reler quando mudar.
 
