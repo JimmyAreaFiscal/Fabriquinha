@@ -5,6 +5,7 @@ import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
+import { montarHeatmap } from "./telas/heatmap-montar.ts";
 import { montarHistorico } from "./telas/historico-montar.ts";
 import { montarInicio } from "./telas/inicio-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
@@ -21,6 +22,7 @@ type Montar = (main: HTMLElement, params: Parametros, sinal: AbortSignal) => voi
 const MONTAR: Record<Pagina, Montar> = {
   inicio: montarInicio,
   projeto: montarProjeto,
+  heatmap: montarHeatmap,
   issue: montarIssue,
   metricas: montarMetricas,
   historico: montarHistorico,

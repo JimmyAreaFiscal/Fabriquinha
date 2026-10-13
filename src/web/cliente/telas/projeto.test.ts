@@ -6,6 +6,7 @@ import type { MetricasMes } from "../../../metricas/periodo.ts";
 import type { IssueDoProjeto, ListaDoProjeto } from "../../rotas/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
+  abas,
   caminhoDoProjeto,
   confirmacaoDeArquivar,
   escolherProjeto,
@@ -106,6 +107,20 @@ test("/projects escolhe o último projeto visto, se ainda existe, ou o primeiro 
   assert.match(projetoNaoEncontrado("<x>"), /O projeto &#60;x&#62; não está cadastrado/);
 });
 
+test("as abas são links, com a ativa marcada, e a página do projeto abre com Issues ativa", () => {
+  assert.equal(
+    abas("loja <api>", "heatmap"),
+    '<nav class="abas" aria-label="Abas do projeto"><a href="/projects/loja%20%3Capi%3E">Issues</a><a href="/projects/loja%20%3Capi%3E/heatmap" aria-current="page">Heatmap</a></nav>',
+  );
+  assert.match(
+    abas("loja", "issues"),
+    /<a href="\/projects\/loja" aria-current="page">Issues<\/a><a href="\/projects\/loja\/heatmap">/,
+  );
+  const html = paginaDoProjeto(PROJETOS, "loja <api>", VAZIA, MES, NADA, AGORA);
+  assert.ok(html.indexOf("data-projeto") < html.indexOf('class="abas"'));
+  assert.match(html, /<a href="\/projects\/loja%20%3Capi%3E" aria-current="page">Issues<\/a>/);
+});
+
 test("cabeçalho com o seletor, Editar na Configuração e Registrar; barra com a contagem, os filtros e Arquivar", () => {
   const html = paginaDoProjeto(PROJETOS, "loja <api>", VAZIA, MES, NADA, AGORA);
   assert.match(html, /<option>fabriquinha<\/option><option selected>loja &#60;api&#62;<\/option>/);
@@ -114,7 +129,7 @@ test("cabeçalho com o seletor, Editar na Configuração e Registrar; barra com 
   assert.match(html, /<span class="contagem">0 em andamento · 0 concluídas · 0 arquivadas · 0 canceladas<\/span>/);
   assert.match(
     html,
-    /<\/div>\s*<div class="kpis-mes">\s*<div class="kpi superficie"><span class="rotulo">Custo · outubro<\/span><span class="kpi-valor">US\$ 1,50<\/span><span class="kpi-sub">3 chamadas de LLM/,
+    /<\/nav>\s*<div class="kpis-mes">\s*<div class="kpi superficie"><span class="rotulo">Custo · outubro<\/span><span class="kpi-valor">US\$ 1,50<\/span><span class="kpi-sub">3 chamadas de LLM/,
   );
   assert.match(html, /<input type="checkbox" data-mostrar="concluidas"> Mostrar concluídas/);
   assert.match(html, /<input type="checkbox" data-mostrar="canceladas"> Mostrar canceladas/);

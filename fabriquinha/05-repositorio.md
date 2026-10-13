@@ -227,6 +227,7 @@ O PR não tem tabela: número, URL e estado ficam na evidência `pr_aberto` (F3)
 | `publicarPR(projeto, issue, titulo, corpo)` → `{ id, url }` | F3, coletor do PR |
 | `mergearPR(projeto, issue)` | F7, gate do PR |
 | `limpar(projeto, issue)` | F7, depois de C16 aprovado |
+| `heatmapDo(projeto, agora?)` → `Heatmap` ou erro | F7, rota do heatmap da página Projetos |
 
 ## 9. Verificação
 
@@ -240,3 +241,20 @@ O PR não tem tabela: número, URL e estado ficam na evidência `pr_aberto` (F3)
 - Hospedagens além de GitHub e Azure DevOps.
 - Atualizar a branch da issue com a base automaticamente.
 - Anexar vídeos e HTML ao PR (F3, 4.7).
+
+## 11. Heatmap de alterações
+
+`heatmapDo` mostra ao Auditor onde o código da base mais mudou nos últimos 12 meses.
+Só lê o git do repositório principal: não busca no remoto e roda fora da fila do projeto (seção 6).
+
+- **Ref**: `refs/remotes/origin/<branchBase>`, a mesma da worktree e da varredura da base (F6 4.4).
+  Pasta do repositório inexistente ou ref ausente é `ErroDeRegra` com o motivo e a correção (corrigir o caminho na Configuração; `git fetch origin <base>` ou corrigir a branch base).
+- **Arquivos**: os de hoje, de `git ls-tree -r -z --name-only <ref>`; arquivo sem alteração na janela aparece com 0.
+  Arquivo apagado da base não aparece, e renomeação não é seguida: o arquivo conta a partir do nome atual.
+- **Janela**: de `agora` menos 12 meses até `agora` (`agora` é injetável nos testes), por `git log --since`.
+- **Alteração**: commit não-merge da janela que toca o arquivo (`git log --name-only`); quanto mais alterações, pior a métrica.
+  A pasta soma os arquivos abaixo dela, em qualquer nível; filhos ordenados por total (maior primeiro) e nome.
+- **PR** de cada commit, só pelo texto do git (sem `gh` nem `az`), pela linha first-parent da base, do mais antigo ao mais novo:
+  - merge `Merge pull request #N` ou `Merged PR N` dá `N` aos commits que trouxe pelo 2º pai e que nenhum merge anterior trouxe;
+  - commit da linha com `(#N)` no fim do assunto é squash e tem o PR `N`;
+  - o resto foi direto na base: `pr: null`.
