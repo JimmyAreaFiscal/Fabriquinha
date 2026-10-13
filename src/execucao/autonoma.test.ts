@@ -58,6 +58,9 @@ process.env.AZURE_DEVOPS_EXT_PAT = "segredo-az";
 // O teste confere o ambiente exato do pi: a porta do serviço, se quem roda os testes a tiver, não entra.
 Reflect.deleteProperty(process.env, "FABRIQUINHA_PORTA");
 
+// O ambiente do pi é fechado: a porta do serviço que roda estes testes não pode entrar na comparação.
+delete process.env.FABRIQUINHA_PORTA;
+
 /**
  * pi falso (F4 §12). Anota em $FALSO_PI_REGISTRO os argumentos, o cwd, o ambiente e cada comando recebido, e responde
  * ao prompt conforme $FALSO_PI: sucesso (roda o "agente" de $FALSO_PI_AGENTE), erro, recusa, dialogo, dorme

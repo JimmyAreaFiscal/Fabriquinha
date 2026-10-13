@@ -151,15 +151,19 @@ const DecisaoRegistro = z.discriminatedUnion("aprovado", [
   z.strictObject({ aprovado: z.literal(false), motivo: Motivo }),
 ]);
 
-const Registro = z.strictObject({ projeto: z.string(), deps: z.array(Id).default([]) });
+const Registro = z.strictObject({
+  projeto: z.string(),
+  deps: z.array(Id).default([]),
+  descricao: z.string().trim().min(1, "a descrição da necessidade é obrigatória"),
+});
 
 export const ROTAS_DO_CHAT: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/registros",
     tratar: ({ banco, corpo }) => {
-      const { projeto, deps } = Registro.parse(corpo);
-      return { sessao: registrarNecessidade(banco, projeto, deps, opcoes(banco)) };
+      const { projeto, deps, descricao } = Registro.parse(corpo);
+      return { sessao: registrarNecessidade(banco, projeto, deps, descricao, opcoes(banco)) };
     },
   },
   {

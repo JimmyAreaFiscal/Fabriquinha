@@ -278,7 +278,7 @@ test("toda mutação recusa campo desconhecido no corpo com 422", async () => {
   };
   const extra = { extra: 1 };
   for (const [caminho, corpo] of [
-    ["/api/registros", { projeto: "loja", ...extra }],
+    ["/api/registros", { projeto: "loja", descricao: "Exportar pedidos em CSV", ...extra }],
     ["/api/issues/3", { titulo: "Busca", ...extra }],
     ["/api/issues/1/deps", { dep: 2, ...extra }],
     ["/api/issues/3/registro", { aprovado: true, ...extra }],

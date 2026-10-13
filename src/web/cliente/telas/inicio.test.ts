@@ -320,6 +320,11 @@ test("registro: projeto e dependências entre as issues em andamento; sem projet
     html,
     /value="35"><span class="id">I-35<\/span><span class="dep-titulo">Cache &#60;x&#62;<\/span><span class="tag">site<\/span>/,
   );
+  assert.match(
+    html,
+    /<\/select><\/label>\s*<label class="campo">Descrição<textarea name="descricao" rows="5" placeholder="O problema ou a funcionalidade, em poucas frases"><\/textarea><\/label>\s*<fieldset/,
+  );
+  assert.doesNotMatch(html, /required/);
   assert.doesNotMatch(html, /role="alert"/);
   assert.match(texto(html), /Cancelar Registrar e abrir o chat$/);
 
@@ -327,4 +332,7 @@ test("registro: projeto e dependências entre as issues em andamento; sem projet
   assert.doesNotMatch(recusado, /selected/);
   assert.match(recusado, /<span class="ajuda">Nenhuma issue em andamento\.<\/span>/);
   assert.match(recusado, /<span class="msg-erro falha" role="alert">o projeto &#60;loja&#62; não existe<\/span>/);
+
+  const mantido = formularioDeRegistro([projeto("loja")], [], "loja", "recusado", "CSV de <pedidos>");
+  assert.match(mantido, /<textarea name="descricao"[^>]*>CSV de &#60;pedidos&#62;<\/textarea>/);
 });

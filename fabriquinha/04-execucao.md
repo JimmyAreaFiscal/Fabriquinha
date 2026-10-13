@@ -266,8 +266,8 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
 
 ### 6.6 Sessões interativas e ociosidade
 
-- **Registro:** o botão **Registrar necessidade** pede o projeto e as dependências.
-  Ele dispara C1 e a preparação da worktree (F5), abre o chat e envia a mensagem inicial "Vamos registrar uma necessidade no projeto X (issue I-n)".
+- **Registro:** o botão **Registrar necessidade** pede o projeto, a descrição da necessidade (obrigatória) e as dependências.
+  Ele dispara C1 com a descrição, que vai ao prompt da primeira mensagem na seção "Descrição da issue", e a preparação da worktree (F5), abre o chat e envia a mensagem inicial "Vamos registrar uma necessidade no projeto X (issue I-n)".
   A partir daí é conversa.
   Os botões **Aprovar registro** e **Devolver** ficam no próprio chat.
   Devolver pede o motivo, grava C10 reprovado e envia o motivo ao agente como mensagem.
@@ -397,7 +397,7 @@ Mudanças nas tabelas do F2 que vêm deste módulo:
 | `conversarSobre(ticket)` → nova consulta (6.5) | F7, chat |
 | `enviar(sessao, texto, modo)` | F7, chat (`prompt`, `steer`, `follow_up`, conforme 5.4) |
 | `responderDialogo(execucao, id, resposta)` / `abortar(execucao)` | F7, chat |
-| `registrarNecessidade(projeto, deps)` / `concluirSessao(ticket)` | F7 |
+| `registrarNecessidade(projeto, deps, descricao)` / `concluirSessao(ticket)` | F7 |
 | `executarAgora(ticket)` | F7, botão Executar agora |
 | `salvarConfiguracao(config)` / `conferirModelo(modelo)` | F7, configuração |
 

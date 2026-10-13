@@ -154,6 +154,13 @@ test("C1 cria a issue em registro, sem título e tipo, com o ticket de registro 
   assert.deepEqual(registrarIssue({ projeto: "loja" }, auditor, contexto()).issue.deps, []);
 });
 
+test("C1 grava a descrição informada na issue; sem ela, fica vazia", () => {
+  const com = registrarIssue({ projeto: "loja", descricao: "Exportar pedidos em CSV" }, auditor, contexto());
+  assert.equal(com.issue.descricao, "Exportar pedidos em CSV");
+  assert.equal(registrarIssue({ projeto: "loja" }, auditor, contexto()).issue.descricao, "");
+  assert.throws(() => registrarIssue({ projeto: "loja", descricao: "a ".repeat(1001) }, auditor, contexto()), ZodError);
+});
+
 test("C1 é só do Auditor, exige projeto e deps existentes e valida a entrada", () => {
   for (const ator of [agente(34), fabriquinha]) {
     escopo(
