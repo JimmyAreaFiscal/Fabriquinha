@@ -224,6 +224,19 @@ test("campo inválido dá 422 com o caminho, antes de conferir o repositório; n
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
 });
 
+test("link do produto: válido é gravado, inválido dá 422 em linkProduto e o anterior fica", async () => {
+  const repo = clone();
+  const link = "https://demo.exemplo.com";
+  await chamar("POST", "/api/projetos", { ...formulario(repo), linkProduto: link });
+  const [status, erro] = (await chamar("POST", "/api/projetos/loja", {
+    ...formulario(repo),
+    linkProduto: "isso nao e um link",
+  })) as [number, string];
+  assert.equal(status, 422);
+  assert.match(erro, /✖ Informe um link http\(s\) válido, como https:\/\/produto.exemplo.com\n {2}→ at linkProduto/);
+  assert.equal(projeto(banco, "loja")?.linkProduto, link);
+});
+
 test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", async () => {
   const pasta = mkdtempSync(join(base, "nao-git-"));
   assert.deepEqual(await chamar("POST", "/api/projetos", formulario(pasta)), [

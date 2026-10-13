@@ -237,4 +237,20 @@ export const MIGRACOES: readonly string[] = [
   // das autônomas em andamento. A trava por issue continua em ux_execucao_por_ticket e na C5.
   `DROP INDEX ux_execucao_autonoma;
   CREATE INDEX ix_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';`,
+  `ALTER TABLE projeto ADD COLUMN link_produto TEXT;`,
+  // F8 (I-10): os Usuários Simulados do projeto e os anexos que vão para a IA; o conteúdo fica em arquivos/ pelo sha256.
+  `CREATE TABLE usuario_simulado (
+    id        INTEGER PRIMARY KEY,
+    projeto   TEXT NOT NULL REFERENCES projeto(nome),
+    nome      TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    UNIQUE (projeto, nome)
+  );
+  CREATE TABLE usuario_simulado_anexo (
+    usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+    nome    TEXT NOT NULL,
+    sha256  TEXT NOT NULL CHECK (length(sha256) = 64),
+    bytes   INTEGER NOT NULL CHECK (bytes >= 0),
+    PRIMARY KEY (usuario, nome)
+  );`,
 ];

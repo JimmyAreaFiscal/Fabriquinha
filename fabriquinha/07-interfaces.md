@@ -105,6 +105,7 @@ Todo `GET` fora de `/api/*`, `/arquivos/*`, `/static/*` e `/entrar` devolve o `i
 
 Respostas em JSON, exceto onde indicado.
 Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
+A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-stream`, até 20 MiB, que a rota recebe como `Buffer`; passou do teto, o servidor lê o corpo até o fim, descarta e responde 422.
 `:sessao` é o `sessaoPi` (F4, 5.1).
 
 **Leitura**
@@ -133,6 +134,15 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | `POST /api/configuracao` | Salva a configuração do F4 (seção 3). |
 | `POST /api/projetos` | C19: `conferirProjeto` (F5, 2), `conferirModelo` para cada modelo (F4, 9), grava, e chama `varrerBase` (F6, 4.4) para fixar o cursor inicial. |
 | `DELETE /api/projetos/:nome` | Remove o projeto e tudo o que depende dele, em qualquer fase: do banco, as issues com tickets, execuções, evidências, decisões e uso (custo); do disco, as pastas de execução, as sessões do pi, os anexos que nenhum outro projeto usa e `<raiz>/worktrees/<projeto>`. O repositório original, as branches `fabriquinha/I-n` e o remoto não são tocados. Recusa com 409 se há execução em andamento no projeto; projeto inexistente dá 404. Devolve `{ avisos }`, um por falha ao apagar no disco (o banco não volta atrás). |
+
+**Simulação (F8)**
+
+| Rota | O que faz |
+|---|---|
+| `GET /api/projetos/:nome/usuarios-simulados` | Os Usuários Simulados do projeto, na ordem de criação, cada um com `anexos` (`nome`, `sha256`, `bytes`). Projeto inexistente dá 404. |
+| `POST /api/projetos/:nome/usuarios-simulados` | Cria o usuário: `{ nome, descricao }` (`NovoUsuarioSimulado`, F8 2). Campo inválido dá 422 com o caminho do campo; nome repetido no projeto, 409. |
+| `POST /api/usuarios-simulados/:id/anexos?nome=` | Corpo binário. Guarda o conteúdo por hash (`guardarBytes`) e grava o anexo; o mesmo nome troca o anexo. Nome inválido ou formato fora de PDF, texto e imagem dá 422 com o caminho `nome`; corpo que não é binário, 422; usuário inexistente, 404. |
+| `DELETE /api/usuarios-simulados/:id/anexos/:nome` | Remove o anexo (204); o arquivo em `arquivos/` fica. Anexo ou usuário inexistente dá 404. |
 
 **Registro e issue**
 
@@ -328,13 +338,17 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 2. À direita, o formulário do item escolhido.
 3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, as execuções autônomas em andamento (uma linha "Executando E-n · I-n · T-n · há …" por item) e **Salvar**.
 4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em quatro grupos:
-   - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) e projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`;
+   - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`, e **Link do produto** (opcional, http ou https; vazio apaga o link; link inválido dá erro no campo e nada é gravado). Sem o link, a Simulação não executa;
    - **Preparação e testes:** listas de comandos com adicionar e remover; preparação opcional, testes com pelo menos um;
    - **Fitness functions:** nome, comando e descrição (até 300), com adicionar e remover;
    - **Modelo por etapa:** um seletor por etapa alimentado por `GET /api/modelos`, com "padrão do pi" apagado quando vazio.
    Rodapé: "Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos", **Cancelar** e **Salvar projeto** (ou **Cadastrar projeto**).
    **Remover** (só no projeto já salvo) abre uma confirmação com o nome e o número de issues, avisando que issues, custos e arquivos do projeto serão apagados: **Cancelar** não muda nada, **Remover projeto** envia `DELETE /api/projetos/:nome`. Com sucesso, a tela volta a `/config` e mostra os avisos; com erro (execução em andamento, por exemplo), a confirmação fecha e a mensagem aparece.
 5. Erros de validação aparecem ao lado de cada campo, a partir do caminho que o `zod` devolve, e o rodapé diz quantos campos têm erro.
+6. **Usuários simulados** (F8 2), numa seção abaixo do formulário do projeto, só no projeto já salvo; ela se atualiza sozinha, sem tocar no que foi digitado no formulário do projeto:
+   - um cartão por usuário, com o nome, a descrição e os anexos, cada um como "manual.pdf 248.731 bytes" e um **×** que o remove;
+   - **+ anexar arquivo** em cada cartão abre o seletor de arquivo (PDF, texto ou imagem) e envia na hora, em `application/octet-stream`; a recusa (formato, tamanho) aparece no próprio cartão;
+   - o formulário **Nome do usuário** e **Descrição do usuário**, com o erro de cada campo abaixo dele ("Descrição obrigatória") e a recusa do servidor (nome repetido) abaixo do formulário; **Criar usuário simulado** limpa os campos quando dá certo.
 
 ### 4.5 Exibição de evidências
 
@@ -406,6 +420,7 @@ As leituras de tela são estas:
   - `sha256` que não pertence a evidência dá 404;
   - arquivo HTML sai com o cabeçalho `sandbox`; `Range` devolve 206 com o trecho certo;
   - **Executar agora** com a própria issue executando dá 409; com outra issue executando, 204;
+  - anexo de Usuário Simulado: o corpo binário chega à rota como `Buffer` até 20 MiB, acima disso dá 422, e o teto do JSON segue em 64 KiB;
   - cadastro de projeto com remoto inválido dá 502 com a mensagem do F5, e com campo inválido dá 422 com o caminho do campo;
   - `GET /api/metricas` com `ate=2026-13`, com `de` depois de `ate` ou com mais de 24 meses dá 422;
   - `GET /projects/x/issues/I-1` sem cookie devolve o `index.html`, e a chamada de API da página é que dá 401.
@@ -413,6 +428,7 @@ As leituras de tela são estas:
 - Ponta a ponta num navegador real (Playwright):
   - entrar pelo link de `web.url`;
   - configurar um projeto e ligar o agendador;
+  - criar um Usuário Simulado, anexar um arquivo, ver o tamanho em bytes e removê-lo;
   - registrar uma necessidade pelo chat e aprovar o registro;
   - acompanhar uma sessão autônoma ao vivo, redirecioná-la e responder a um diálogo de extensão;
   - responder e retomar um ticket que falhou;

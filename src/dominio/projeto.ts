@@ -4,6 +4,8 @@ import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { Etapa, Modelo, Slug, unicoPor } from "./primitivos.ts";
 
+const MENSAGEM_LINK = "Informe um link http(s) válido, como https://produto.exemplo.com";
+
 export const Hospedagem = z.enum(["github", "azure-devops"]);
 
 export const Projeto = z.strictObject({
@@ -21,6 +23,12 @@ export const Projeto = z.strictObject({
     .min(1)
     .refine(unicoPor("nome"), "nome de fitness function repetido"),
   modelos: z.partialRecord(Etapa, Modelo).default({}),
+  // O formulário manda "" quando o campo está vazio.
+  linkProduto: z
+    .union([z.literal("").transform(() => undefined), z.url({ protocol: /^https?$/, error: MENSAGEM_LINK })], {
+      error: MENSAGEM_LINK,
+    })
+    .optional(),
 });
 
 export type Hospedagem = z.infer<typeof Hospedagem>;

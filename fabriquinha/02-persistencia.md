@@ -126,7 +126,8 @@ CREATE TABLE projeto (
   testes            TEXT NOT NULL CHECK (json_valid(testes) AND json_array_length(testes) >= 1),
   sonar_project_key TEXT NOT NULL,
   fitness           TEXT NOT NULL CHECK (json_valid(fitness) AND json_array_length(fitness) >= 1),
-  modelos           TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(modelos))
+  modelos           TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(modelos)),
+  link_produto      TEXT -- opcional: endereço http(s) do produto no ar, para a Simulação (I-10); NULL = sem link
 );
 
 CREATE TABLE issue (
@@ -237,9 +238,26 @@ CREATE TABLE evidencia_arquivo (
   bytes     INTEGER NOT NULL CHECK (bytes >= 0),
   PRIMARY KEY (evidencia, nome)
 );
+
+CREATE TABLE usuario_simulado (                                   -- F8: pessoa fictícia do projeto
+  id        INTEGER PRIMARY KEY,
+  projeto   TEXT NOT NULL REFERENCES projeto(nome),
+  nome      TEXT NOT NULL,
+  descricao TEXT NOT NULL,
+  UNIQUE (projeto, nome)
+);
+
+CREATE TABLE usuario_simulado_anexo (                             -- F8: manuais e outros arquivos que vão para a IA
+  usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+  nome    TEXT NOT NULL,                                          -- nome original; o conteúdo está em arquivos/<sha256> (5.1)
+  sha256  TEXT NOT NULL CHECK (length(sha256) = 64),
+  bytes   INTEGER NOT NULL CHECK (bytes >= 0),
+  PRIMARY KEY (usuario, nome)
+);
 ```
 
 As FKs ficam sem `ON DELETE` (comportamento `RESTRICT`), exceto `evidencia_arquivo`.
+Remover o projeto apaga `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`).
 Assim, apagar um ticket que já tem execução, decisão ou evidência falha no banco, e o histórico nunca some por engano.
 Os únicos tickets apagados pelo domínio (C8, C13, C15) são de desenvolvimento ainda `aberto`, sem histórico.
 
@@ -258,6 +276,8 @@ O que fica só no F1, por não caber em constraint:
 - Gravação: copia para um temporário no mesmo diretório calculando o SHA-256 no caminho, faz `fsync` e `rename`.
   O `rename` é atômico, então um arquivo existe inteiro ou não existe.
 - Se o hash já existe, nada é copiado: o mesmo print anexado duas vezes ocupa espaço uma vez.
+- Os anexos dos Usuários Simulados (F8) usam o mesmo armazenamento, por `guardarBytes`, que recebe o conteúdo já em memória.
+  Um arquivo só é apagado do disco (remoção do projeto) se nenhuma evidência nem anexo restante o usa.
 - Arquivos nunca são alterados nem apagados.
   Substituir uma evidência troca as linhas do banco; o arquivo antigo continua no disco.
 
@@ -287,6 +307,7 @@ Antes de servir, o F7 confere que o hash pertence a uma evidência; nunca serve 
 | `salvarProjeto(banco, projeto)` / `projeto(banco, nome)` / `projetos(banco)` | C19 e leituras. |
 | `agregado(banco, issue)` | Leitura do agregado, sem transação de escrita. |
 | `guardarArquivo(origem) → { sha256, bytes }` | Grava um arquivo no armazenamento por conteúdo (5.1). |
+| `guardarBytes(conteudo) → { sha256, bytes }` | Grava um `Buffer` do mesmo jeito (anexo de Usuário Simulado, F8). |
 | `caminhoArquivo(sha256)` | Caminho do arquivo no disco. |
 
 As consultas de leitura de cada tela, do agendador e das métricas ficam nas specs do F4, F6 e F7, que são donos delas.

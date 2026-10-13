@@ -1582,9 +1582,82 @@ input.erro {
   flex-basis: 100%;
 }
 
+/* Usuários simulados (F8 §2), abaixo do formulário do projeto. */
+.usuarios-simulados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+}
+.usuarios-simulados h3 {
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.usuarios-simulados h3 .nota {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.cartoes-usuario {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.cartao-usuario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.cartao-usuario h4 {
+  font-size: var(--fs-md);
+  font-weight: var(--w-strong);
+}
+.descricao-usuario {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.anexos-usuario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  list-style: none;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+}
+.anexo-usuario {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.anexo-usuario .x {
+  margin-left: auto;
+}
+.anexar {
+  align-self: flex-start;
+}
+.novo-usuario .campo textarea {
+  resize: vertical;
+}
+.novo-usuario .rodape-form {
+  justify-content: flex-end;
+}
+
 @media (max-width: 1100px) {
   .agendador {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cartoes-usuario {
+    grid-template-columns: minmax(0, 1fr);
   }
   .config {
     grid-template-columns: minmax(0, 1fr);

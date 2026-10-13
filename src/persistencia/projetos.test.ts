@@ -53,6 +53,18 @@ const recusa = (trabalho: () => unknown, mensagem: string) => {
   assert.throws(trabalho, (erro) => erro instanceof ErroDeRegra && erro.message === mensagem);
 };
 
+test("o link do produto é gravado, relido e apagado ao editar com o campo vazio", () => {
+  const banco = novoBanco();
+  const link = "https://demo.exemplo.com";
+  registrarProjeto(banco, { ...exemplo, linkProduto: link });
+  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, link);
+  assert.throws(() => editarProjeto(banco, { ...exemplo, linkProduto: "isso nao e um link" }), ZodError);
+  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, link);
+  assert.equal(editarProjeto(banco, { ...exemplo, linkProduto: "" }).linkProduto, undefined);
+  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, undefined);
+  banco.close();
+});
+
 test("registrarProjeto recusa nome que já existe, sem mexer no projeto", () => {
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
@@ -162,6 +174,8 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
 });
 
 const TABELAS = [
+  "usuario_simulado_anexo",
+  "usuario_simulado",
   "uso",
   "retrabalho",
   "arquivo_commit",
@@ -219,6 +233,10 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
     writeFileSync(join(raiz, "sessoes", `2026-01-01T00-00-00Z_s${n}.jsonl`), "x");
     return id;
   }) as [number, number, number, number];
+  banco.exec(`
+    INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('${nome}', 'Dona Maria', 'd');
+    INSERT INTO usuario_simulado_anexo SELECT id, 'manual.pdf', '${shaProprio}', 1 FROM usuario_simulado WHERE projeto = '${nome}';
+  `);
   for (const sha of [SHA_COMPARTILHADO, shaProprio]) {
     mkdirSync(join(caminhoArquivo(banco, sha), ".."), { recursive: true });
     writeFileSync(caminhoArquivo(banco, sha), "x");
@@ -255,6 +273,19 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
     assert.equal(existsSync(dirDaExecucao(raiz, n)), true);
     assert.equal(existsSync(join(raiz, "sessoes", `2026-01-01T00-00-00Z_s${String(n)}.jsonl`)), true);
   }
+  banco.close();
+});
+
+test("removerProjeto não apaga o arquivo que um anexo de outro projeto ainda usa", async () => {
+  const banco = novoBanco();
+  popular(banco, "demo", "f".repeat(64));
+  registrarProjeto(banco, { ...exemplo, nome: "outro", repo: "/repos/outro" });
+  banco.exec(`
+    INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('outro', 'Seu João', 'd');
+    INSERT INTO usuario_simulado_anexo SELECT id, 'igual.pdf', '${"f".repeat(64)}', 1 FROM usuario_simulado WHERE projeto = 'outro';
+  `);
+  await removerProjeto(banco, "demo");
+  assert.equal(existsSync(caminhoArquivo(banco, "f".repeat(64))), true);
   banco.close();
 });
 

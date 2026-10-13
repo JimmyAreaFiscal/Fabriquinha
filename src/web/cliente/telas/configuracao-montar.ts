@@ -1,6 +1,7 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Modelo } from "../../../dominio/primitivos.ts";
+import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
@@ -13,11 +14,13 @@ import {
   formularioDeProjeto,
   menu,
   NOVO,
+  type OpcoesDosUsuarios,
   pagina,
   type ProjetoListado,
   projetoInexistente,
   type Rascunho,
   selecao,
+  usuariosSimulados,
 } from "./configuracao.ts";
 
 const postar = (corpo: unknown): RequestInit => ({
@@ -67,6 +70,7 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
       descricao: valor(linha, '[data-campo="descricao"]'),
     })),
     modelos,
+    linkProduto: valor(form, '[name="linkProduto"]'),
   };
 }
 
@@ -121,6 +125,92 @@ function montarRemocao(main: HTMLElement, signal: AbortSignal, salvo: ProjetoLis
   });
 }
 
+/**
+ * Os usuários simulados do projeto salvo (F8 §2), na seção abaixo do formulário: ela se redesenha sozinha, então
+ * criar usuário ou anexar arquivo não toca no que o Auditor digitou no formulário do projeto.
+ */
+function montarUsuarios(main: HTMLElement, signal: AbortSignal, projeto: string): void {
+  const secao = main.querySelector<HTMLElement>("[data-usuarios-simulados]");
+  if (!secao) return;
+  const rota = `/api/projetos/${encodeURIComponent(projeto)}/usuarios-simulados`;
+  let usuarios: UsuarioSimulado[] = [];
+  const rascunho = () => ({ nome: valor(secao, '[name="nome"]'), descricao: valor(secao, '[name="descricao"]') });
+  const desenhar = (extra: Partial<OpcoesDosUsuarios> = {}): void => {
+    secao.innerHTML = usuariosSimulados(usuarios, {
+      rascunho: rascunho(),
+      erros: new Map(),
+      falhasDeAnexo: new Map(),
+      ...extra,
+    });
+  };
+  /** Relê a lista e redesenha; o que o Auditor digitou no formulário fica. */
+  const recarregar = (extra?: Partial<OpcoesDosUsuarios>): Promise<void> =>
+    api<UsuarioSimulado[]>(rota, { signal }).then((lista) => {
+      const atual = rascunho();
+      usuarios = lista;
+      desenhar({ rascunho: atual, ...extra });
+    });
+  const falhou = (erro: unknown): void => {
+    if (!signal.aborted) mostrarErro(erro);
+  };
+  /** A recusa do anexo: o 422 do nome leva o caminho `nome`; o resto (tamanho, 404) vai como o servidor mandou. */
+  const recusaDoAnexo = (erro: unknown): string | undefined => {
+    if (!(erro instanceof ErroDaApi) || erro.status === 401) return undefined;
+    return erro.status === 422 ? (errosDoZod(erro.message).get("nome") ?? [erro.message]).join("; ") : erro.message;
+  };
+  const idDoCartao = (alvo: Element | null): number =>
+    Number(alvo?.closest<HTMLElement>("[data-usuario]")?.dataset.usuario);
+
+  secao.addEventListener("click", (evento) => {
+    const alvo = evento.target instanceof Element ? evento.target : null;
+    const cartao = alvo?.closest("[data-usuario]");
+    if (alvo?.closest("[data-anexar-botao]")) {
+      cartao?.querySelector<HTMLInputElement>("[data-anexar]")?.click();
+      return;
+    }
+    const nome = alvo?.closest<HTMLElement>("[data-remover-anexo]")?.dataset.removerAnexo;
+    if (nome === undefined) return;
+    const id = idDoCartao(alvo);
+    api(`/api/usuarios-simulados/${String(id)}/anexos/${encodeURIComponent(nome)}`, { method: "DELETE" })
+      .then(() => recarregar())
+      .catch(falhou);
+  });
+  secao.addEventListener("change", (evento) => {
+    const entrada = evento.target;
+    if (!(entrada instanceof HTMLInputElement) || entrada.type !== "file") return;
+    const arquivo = entrada.files?.[0];
+    if (!arquivo) return;
+    const id = idDoCartao(entrada);
+    api(`/api/usuarios-simulados/${String(id)}/anexos?nome=${encodeURIComponent(arquivo.name)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: arquivo,
+    })
+      .then(() => recarregar())
+      .catch((error_: unknown) => {
+        const recusa = recusaDoAnexo(error_);
+        if (recusa === undefined) falhou(error_);
+        else if (!signal.aborted) desenhar({ falhasDeAnexo: new Map([[id, recusa]]) });
+      });
+  });
+  secao.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    const dados = rascunho();
+    if (evento.target instanceof HTMLFormElement) ocupar(evento.target, "Criando…");
+    api(rota, postar(dados))
+      .then(() => recarregar({ rascunho: { nome: "", descricao: "" } }))
+      .catch((error_: unknown) => {
+        if (signal.aborted) return;
+        if (error_ instanceof ErroDaApi && error_.status === 422)
+          desenhar({ rascunho: dados, erros: errosDoZod(error_.message) });
+        else if (error_ instanceof ErroDaApi && error_.status !== 401)
+          desenhar({ rascunho: dados, falha: error_.message });
+        else falhou(error_);
+      });
+  });
+  recarregar().catch(falhou);
+}
+
 function montarProjeto(
   main: HTMLElement,
   signal: AbortSignal,
@@ -133,7 +223,10 @@ function montarProjeto(
     main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { issues: salvo?.issues, modelos, erros, falha }));
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");
     if (!form) return;
-    if (salvo) montarRemocao(main, signal, salvo);
+    if (salvo) {
+      montarRemocao(main, signal, salvo);
+      montarUsuarios(main, signal, salvo.nome);
+    }
     form.addEventListener("change", (evento) => {
       if (evento.target instanceof HTMLSelectElement) evento.target.classList.toggle("padrao", !evento.target.value);
     });
