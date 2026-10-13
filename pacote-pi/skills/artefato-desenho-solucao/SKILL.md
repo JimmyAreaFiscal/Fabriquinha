@@ -51,7 +51,7 @@ Seções do HTML, nesta ordem:
 
 `foraDeEscopo`: itens concretos e próximos da solução, que alguém poderia esperar e que ficam para outra issue.
 
-## Mais de 30 arquivos previstos
+### Mais de 30 arquivos previstos
 
 Um PR que altera mais de 30 arquivos é difícil de analisar.
 

@@ -117,9 +117,9 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | `GET /api/projetos/:nome/issues?concluidas=&arquivadas=&canceladas=` | Issues do projeto com os seus tickets e as sessões ativas, para a página do projeto (4.4). |
 | `GET /api/metricas?projeto=&de=&ate=` | `MetricasMes[]` (F6, 5.7), um por mês de `de` a `ate`, no formato `AAAA-MM`; padrão: os 11 meses anteriores mais o mês corrente; no máximo 24 meses; sem `projeto`, todos. |
 | `GET /api/metricas/issues?projeto=&de=&ate=` | `metricasPorIssue` (F6, 5.8): uma linha por issue com execução no período. |
-| `GET /api/issues/:id` | Agregado da issue, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). |
+| `GET /api/issues/:id` | Agregado da issue, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). No gate do desenho traz também `propostas`, as propostas de issue abertas. |
 | `GET /api/sessoes?escopo=ativas\|historico&projeto=&issue=&etapa=` | Sessões com estado e motivo (F4, 5.2). |
-| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). |
+| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). No registro interativo traz `propostas`, as propostas de issue abertas do ticket; a mensagem de aviso da Fabriquinha sobre uma proposta decidida vem marcada `aviso`. |
 | `GET /api/sessoes/:sessao/eventos` | Server-Sent Events com os eventos do processo vivo e as mudanças de estado (F4, 5.4). |
 | `GET /api/sessoes/:sessao/historico.md` | Exportação do histórico em Markdown, como download (F4, 6.8). |
 | `GET /api/execucoes/:id/log` e `/prompt` | O `log` e o `prompt.md` da execução (F4, 6.1.2), como texto. |
@@ -145,6 +145,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
 | `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
 | `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | C10. Devolver também envia o motivo ao agente como mensagem (F4, 6.6). |
+| `POST /api/propostas/:id` `{ aceita }` | `decidirProposta` (F4, 6.6): C24 pelo Auditor. Devolve `{ issue? }`, a issue criada no aceite. 409 se a proposta já foi decidida ou o agente ainda trabalha, 404 se não existe, 422 se `aceita` não é booleano. No registro retoma a IA com o aviso da Fabriquinha; no desenho reprova o desenho (C15). |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
 **Tickets e gates**

@@ -5,10 +5,11 @@
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { AUDITOR, type Execucao, type Issue, type Ticket } from "../../dominio/agregado.ts";
+import { AUDITOR, type Execucao, type Issue, type PropostaIssue, type Ticket } from "../../dominio/agregado.ts";
 import { naSessaoPrincipal, ticketDe } from "../../dominio/execucao.ts";
 import { existe } from "../../dominio/erros.ts";
 import { editarIssue } from "../../dominio/issue.ts";
+import { propostasAbertas } from "../../dominio/propostas.ts";
 import { Id, Motivo } from "../../dominio/primitivos.ts";
 import { abortar, responderDialogo } from "../../execucao/gerente.ts";
 import {
@@ -21,8 +22,10 @@ import {
 } from "../../execucao/historico.ts";
 import {
   abrirChat,
+  avisoDaProposta,
   concluirSessao,
   conversarSobre,
+  decidirProposta,
   decidirRegistroNoChat,
   enviar,
   type InfoSessao,
@@ -32,7 +35,7 @@ import {
   registrarNecessidade,
 } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
-import { agregadoExistente, comIssue, issueDoTicket } from "../../persistencia/issues.ts";
+import { agregadoExistente, comIssue, issueDoTicket, propostasDaIssue } from "../../persistencia/issues.ts";
 import { configuracao } from "../../persistencia/servico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 import { type PainelRegistro, painelDoRegistro } from "./issue.ts";
@@ -47,10 +50,15 @@ export interface CabecalhoDoChat {
   execucoes: Execucao[];
   /** Só no gate do registro. */
   registro?: PainelRegistro;
+  /** As propostas de issue abertas do ticket, só no registro interativo. */
+  propostas?: PropostaIssue[];
 }
 
-/** Uma entrada do JSONL do pi; o prompt montado pela Fabriquinha (F4 §6.3) vem com `fabriquinha`. */
-export type Entrada = Record<string, unknown> & { fabriquinha?: true };
+/**
+ * Uma entrada do JSONL do pi; o prompt montado pela Fabriquinha (F4 §6.3) vem com `fabriquinha`, e o aviso de uma
+ * proposta decidida, com `aviso`.
+ */
+export type Entrada = Record<string, unknown> & { fabriquinha?: true; aviso?: true };
 
 export interface DadosDoChat extends CabecalhoDoChat {
   conversa: Entrada[];
@@ -61,35 +69,47 @@ export const opcoes = (banco: DatabaseSync): OpcoesInterativa => ({ ociosidadeMi
 function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
   const ag = agregadoExistente(banco, sessao.issue);
   const registro = sessao.motivo === "gate_registro" ? painelDoRegistro(ag, sessao.ticket) : undefined;
+  const propostas =
+    sessao.etapa === "registro" && sessao.modo === "interativo"
+      ? propostasAbertas(ag, propostasDaIssue(banco, sessao.issue)).filter((p) => p.ticket === sessao.ticket)
+      : undefined;
   return {
     sessao,
     issue: ag.issue,
     ticket: ticketDe(ag, sessao.ticket),
     execucoes: ag.execucoes.filter((e) => e.sessaoPi === sessao.sessao),
     ...(registro && { registro }),
+    ...(propostas && { propostas }),
   };
 }
 
 /**
- * Marca com `fabriquinha` a mensagem do usuário que é um prompt montado pela Fabriquinha: o chat o mostra como linha
- * do sistema, com o link do `prompt.md`, e não como mensagem do Auditor.
+ * A marca da mensagem do usuário que veio da Fabriquinha: `fabriquinha` no prompt montado por ela, que o chat mostra
+ * como linha do sistema, com o link do `prompt.md`; `aviso` na mensagem de uma proposta de issue decidida, que o chat
+ * mostra como mensagem da Fabriquinha. Nenhuma marca é mensagem do Auditor.
  */
-function marcador(banco: DatabaseSync, sessao: InfoSessao): (mensagem: unknown) => boolean {
-  const prompts = promptsDaFabriquinha(raizDo(banco), agregadoExistente(banco, sessao.issue), sessao.ticket);
+function marcador(banco: DatabaseSync, sessao: InfoSessao): (mensagem: unknown) => Entrada | undefined {
+  const ag = agregadoExistente(banco, sessao.issue);
+  const prompts = promptsDaFabriquinha(raizDo(banco), ag, sessao.ticket);
+  const avisos = new Set(
+    propostasDaIssue(banco, sessao.issue)
+      .filter((p) => p.ticket === sessao.ticket && p.status !== "pendente")
+      .map((p) => avisoDaProposta(p, sessao.issue)),
+  );
   return (mensagem) => {
     const m = mensagem as Partial<Mensagem> | undefined;
-    return m?.role === "user" && prompts.has(texto(m as Mensagem));
+    if (m?.role !== "user") return undefined;
+    const t = texto(m as Mensagem);
+    if (prompts.has(t)) return { fabriquinha: true };
+    return avisos.has(t) ? { aviso: true } : undefined;
   };
 }
 
 function dadosDoChat(banco: DatabaseSync, sessao: InfoSessao, conversa: unknown[]): DadosDoChat {
-  const daFabriquinha = marcador(banco, sessao);
+  const marcar = marcador(banco, sessao);
   return {
     ...cabecalho(banco, sessao),
-    conversa: conversa.map((e) => {
-      const entrada = e as Entrada;
-      return daFabriquinha(entrada.message) ? { ...entrada, fabriquinha: true } : entrada;
-    }),
+    conversa: conversa.map((e) => ({ ...(e as Entrada), ...marcar((e as Entrada).message) })),
   };
 }
 
@@ -109,9 +129,8 @@ async function eventos(banco: DatabaseSync, sessao: string, resposta: ServerResp
   const cancelar = chat.assinar((evento) => {
     if (evento.type === "estado") {
       escrever({ type: "estado", ...cabecalho(banco, evento.sessao as InfoSessao) });
-    } else if (evento.type === "message_end" && marcador(banco, chat.sessao)(evento.message)) {
-      escrever({ ...evento, fabriquinha: true });
-    } else escrever(evento);
+    } else
+      escrever(evento.type === "message_end" ? { ...evento, ...marcador(banco, chat.sessao)(evento.message) } : evento);
   });
   resposta.on("close", cancelar);
 }
@@ -150,6 +169,8 @@ const DecisaoRegistro = z.discriminatedUnion("aprovado", [
   z.strictObject({ aprovado: z.literal(true) }),
   z.strictObject({ aprovado: z.literal(false), motivo: Motivo }),
 ]);
+
+const DecisaoProposta = z.strictObject({ aceita: z.boolean() });
 
 const Registro = z.strictObject({
   projeto: z.string(),
@@ -231,6 +252,14 @@ export const ROTAS_DO_CHAT: Rota[] = [
     tratar: async ({ banco, params, corpo }) => {
       const decisao = DecisaoRegistro.parse(corpo);
       await decidirRegistroNoChat(banco, IdDoCaminho.parse(params.id), decisao, opcoes(banco));
+    },
+  },
+  {
+    metodo: "POST",
+    caminho: "/api/propostas/:id",
+    tratar: ({ banco, params, corpo }) => {
+      const { aceita } = DecisaoProposta.parse(corpo);
+      return decidirProposta(banco, IdDoCaminho.parse(params.id), aceita, opcoes(banco));
     },
   },
   {

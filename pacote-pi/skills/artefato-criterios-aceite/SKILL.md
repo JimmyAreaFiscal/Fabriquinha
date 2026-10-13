@@ -43,7 +43,7 @@ A Fabriquinha monta a frase "dado …, quando …, então …", então escreva c
 
 Um número entra só com unidade e limite: "responde em até 2 s com 1.000 issues".
 
-## Mudança de mais de 30 arquivos
+### Mudança de mais de 30 arquivos
 
 Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arquivos a mudança pedida altera, testes incluídos.
 

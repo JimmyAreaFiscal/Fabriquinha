@@ -47,7 +47,8 @@ function noGateAtual(ag: Agregado, proposta: PropostaIssue): boolean {
   );
 }
 
-function exigirPropostaAberta(ag: Agregado, proposta: PropostaIssue): void {
+/** A proposta pendente do gate atual, senão `ErroDeRegra`. */
+export function exigirPropostaAberta(ag: Agregado, proposta: PropostaIssue): void {
   const p = rotuloProposta(proposta);
   if (proposta.status !== "pendente") {
     throw new ErroDeRegra(`a proposta ${p} já foi decidida: ${proposta.status}`, "uma proposta só se decide uma vez");

@@ -362,7 +362,7 @@ export const registrarIssue = (banco: DatabaseSync, entrada: unknown, ator: Ator
   });
 
 /** A proposta `id`, ou `ErroDeInexistente`. */
-const propostaExistente = (banco: DatabaseSync, id: Id): PropostaIssue =>
+export const propostaExistente = (banco: DatabaseSync, id: Id): PropostaIssue =>
   deLinhaProposta(
     encontrado(
       banco.prepare("SELECT * FROM proposta_issue WHERE id = ?").get(id),

@@ -6,11 +6,12 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { type Agregado, AUDITOR, type Ticket, type TipoEvidencia } from "../../dominio/agregado.ts";
+import { type Agregado, AUDITOR, type PropostaIssue, type Ticket, type TipoEvidencia } from "../../dominio/agregado.ts";
 import { encontrado, existe } from "../../dominio/erros.ts";
 import { evidenciasFaltando } from "../../dominio/evidencia.ts";
 import { jaTemExecucao, ticketDe } from "../../dominio/execucao.ts";
 import { adicionarDependencia, removerDependencia } from "../../dominio/issue.ts";
+import { propostasAbertas } from "../../dominio/propostas.ts";
 import { type Fase, Id } from "../../dominio/primitivos.ts";
 import type { Projeto } from "../../dominio/projeto.ts";
 import { cancelarIssue } from "../../execucao/cancelamento.ts";
@@ -19,7 +20,13 @@ import { type MetricasIssue, numerosDoDesenho } from "../../metricas/issue.ts";
 import { arquivoRegistrado, caminhoArquivo } from "../../persistencia/arquivos.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { dirDaExecucao } from "../../persistencia/execucoes.ts";
-import { agregadoExistente, comIssue, dependentes, fasesPercorridas } from "../../persistencia/issues.ts";
+import {
+  agregadoExistente,
+  comIssue,
+  dependentes,
+  fasesPercorridas,
+  propostasDaIssue,
+} from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import { ticketsElegiveis } from "../../persistencia/servico.ts";
@@ -79,6 +86,8 @@ export interface PaginaDaIssue extends Agregado {
   desenho?: MetricasIssue["desenho"];
   /** O painel do gate do registro, só quando a sessão do registro aguarda a decisão (C10). */
   registro?: PainelRegistro;
+  /** As propostas de issue abertas, só no gate do desenho. */
+  propostas?: PropostaIssue[];
 }
 
 export const projetoDa = (banco: DatabaseSync, ag: Agregado): Projeto =>
@@ -112,7 +121,10 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
     custos: custoPorExecucao(banco, id),
     limpeza: limpezaPendente(raizDo(banco), doProjeto, ag.issue),
     ...(ticket && { executar: { ticket, ...(rodando && { ocupada: jaTemExecucao(ag, rodando) }) } }),
-    ...(ag.issue.fase === "aprovacao_desenho" && { desenho: numerosDoDesenho(ag) }),
+    ...(ag.issue.fase === "aprovacao_desenho" && {
+      desenho: numerosDoDesenho(ag),
+      propostas: propostasAbertas(ag, propostasDaIssue(banco, id)),
+    }),
     ...(gateRegistro && { registro: painelDoRegistro(ag, gateRegistro.ticket) }),
   };
 }

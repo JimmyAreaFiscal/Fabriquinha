@@ -13,6 +13,7 @@ import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import { avisar, encerrar } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
+import { proporIssue } from "../../persistencia/issues.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import type { Pedido } from "../rotas.ts";
@@ -226,6 +227,68 @@ test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, gate co
   assert.equal(((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).issue.fase, "desenho");
   assert.equal((await postar("/api/issues/abc/registro", { aprovado: true })).status, 422);
   sse.fechar();
+});
+
+test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o aviso marcado, 409; recusar", async () => {
+  const [sessao, issue] = await registro();
+  const { ticket, execucoes } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  const agente = { tipo: "agente", execucao: execucoes[0]?.id ?? 0, ticket: ticket.id } as const;
+  const proposta = { titulo: "Tela de relatório", mensagem: "Parte B: tela de relatório", arquivos: 31 };
+  assert.deepEqual(((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).propostas, []);
+  const a = proporIssue(servico.banco, issue, proposta, agente);
+  const b = proporIssue(servico.banco, issue, { ...proposta, titulo: "Outra" }, agente);
+  const abertas = ((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).propostas;
+  assert.deepEqual(
+    abertas?.map((p) => [p.id, p.titulo, p.mensagem, p.arquivos]),
+    [
+      [a.id, "Tela de relatório", "Parte B: tela de relatório", 31],
+      [b.id, "Outra", "Parte B: tela de relatório", 31],
+    ],
+  );
+
+  assert.equal((await postar(`/api/propostas/${String(a.id)}`, { aceita: "sim" })).status, 422);
+  assert.equal((await postar(`/api/propostas/${String(a.id)}`, {})).status, 422);
+  assert.equal((await postar("/api/propostas/9999", { aceita: true })).status, 404);
+  const aceita = await postar(`/api/propostas/${String(a.id)}`, { aceita: true });
+  assert.equal(aceita.status, 200);
+  const nova = (aceita.corpo as { issue: number }).issue;
+  assert.deepEqual(
+    ((await pedir(`/api/issues/${String(nova)}`)).corpo as { dependencias: { id: number }[] }).dependencias.map(
+      (d) => d.id,
+    ),
+    [issue],
+  );
+  await esperarEstado(sessao, "aguardando_humano: conversa");
+
+  const chat = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.deepEqual(
+    chat.propostas?.map((p) => p.id),
+    [b.id],
+    "só a aberta continua no cartão",
+  );
+  const avisos = chat.conversa.filter((e) => e.aviso);
+  assert.deepEqual(
+    avisos.map((e) => e.fabriquinha),
+    [undefined],
+  );
+  assert.match(
+    textos(avisos)[0] ?? "",
+    new RegExp(
+      `^user: A Fabriquinha criou a I-${String(nova)} \\(«Tela de relatório»\\) .* ela depende da I-${String(issue)}\\. Reduza`,
+    ),
+  );
+  const segundo = await postar(`/api/propostas/${String(a.id)}`, { aceita: true });
+  assert.equal(segundo.status, 409);
+  assert.match((segundo.corpo as { erro: string }).erro, /a proposta P-\d+ já foi decidida: aceita/);
+
+  assert.deepEqual((await postar(`/api/propostas/${String(b.id)}`, { aceita: false })).corpo, {});
+  await esperarEstado(sessao, "aguardando_humano: conversa");
+  const depois = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.deepEqual(depois.propostas, []);
+  assert.match(
+    textos(depois.conversa.filter((e) => e.aviso)).at(-1) ?? "",
+    /^user: O Auditor recusou a sua proposta de issue «Outra»/,
+  );
 });
 
 test("diálogos: select, confirm, input e editor respondidos ou cancelados no formato do pi; corpo inválido dá 422", async () => {

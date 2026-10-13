@@ -274,6 +274,12 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
   A partir daí é conversa.
   Os botões **Aprovar registro** e **Devolver** ficam no próprio chat.
   Devolver pede o motivo, grava C10 reprovado e envia o motivo ao agente como mensagem.
+- **Proposta de issue (C23, C24):** a IA do registro ou do desenho propõe dividir a issue (`fabriquinha issue propor`), e o Auditor só aceita ou recusa; `decidirProposta(proposta, aceita)` confere que a proposta está pendente no gate atual e recusa antes de gravar se não estiver.
+  - **No registro**, a decisão é no chat. O F4 para o pi ocioso (recusa se o agente ainda trabalha), grava C24 e retoma a sessão com o aviso da Fabriquinha à IA.
+    O aviso de aceite diz: "A Fabriquinha criou a I-n («título») a partir da sua proposta, que o Auditor aceitou; ela depende da I-m. Reduza o escopo da I-m: …". O de recusa: "O Auditor recusou a sua proposta de issue «título»…".
+    A IA ajusta a issue e as evidências na mesma sessão.
+  - **No desenho**, que é autônomo, a decisão é na página da issue. O aceite grava C24 com o desenho reprovado (C15) e o motivo que cita a issue nova, e o F4 só avisa a sessão do desenho: não há mensagem, porque o agendador refaz o desenho no novo Ticket de Desenho. A recusa só marca a proposta, e o gate continua aberto.
+  - No aceite, nos dois casos, o F4 abre o registro da issue nova (mesma sessão interativa de **Registrar necessidade**, com a descrição que veio da mensagem da proposta).
 - **Sessão em aberto:** aparece sozinha como `aguardando_humano: conversa` quando o PR é reprovado (C16).
   A mensagem inicial traz o motivo e a URL do PR.
   Quando o Auditor clica em **Concluir sessão**, o F4 chama C7, que exige pelo menos um ticket de desenvolvimento criado.
@@ -401,6 +407,7 @@ Mudanças nas tabelas do F2 que vêm deste módulo:
 | `enviar(sessao, texto, modo)` | F7, chat (`prompt`, `steer`, `follow_up`, conforme 5.4) |
 | `responderDialogo(execucao, id, resposta)` / `abortar(execucao)` | F7, chat |
 | `registrarNecessidade(projeto, deps, descricao)` / `concluirSessao(ticket)` | F7 |
+| `decidirProposta(proposta, aceita)` → `{ issue? }` (6.6) | F7, chat do registro e gate do desenho |
 | `executarAgora(ticket)` | F7, botão Executar agora |
 | `salvarConfiguracao(config)` / `conferirModelo(modelo)` | F7, configuração |
 
