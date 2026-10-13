@@ -148,15 +148,15 @@ test("dependências: C3 adiciona e C4 remove pelo Auditor; ciclo dá 409 e corpo
   );
 });
 
-test("Executar agora: 409 com a execução que ocupa o D8, a recusa do C5, e 204 quando inicia", async () => {
+test("Executar agora: 409 com a execução da própria issue, a recusa do C5, e 204 com outra issue rodando", async () => {
   servico.banco.exec(`
     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-      VALUES (4, 3, 'desenvolvimento', 'Outro', 'em_execucao', 'fabriquinha', '${AGORA}');
+      VALUES (4, 1, 'desenvolvimento', 'Outro', 'em_execucao', 'fabriquinha', '${AGORA}');
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
       VALUES (9, 4, 'autonomo', '${crypto.randomUUID()}', 'em_andamento', '${AGORA}');
   `);
-  const ocupada = "já há uma execução autônoma em andamento (D8): E-9 de T-4";
-  assert.deepEqual([(await pagina()).executar?.ticket.titulo, (await pagina()).executar?.ocupada], ["Cache", ocupada]);
+  const ocupada = "a I-1 já tem a execução E-9 em andamento";
+  assert.deepEqual([(await pagina()).executar?.ticket.titulo, (await pagina()).executar?.ocupada], ["Outro", ocupada]);
   const recusada = await pedir("/api/tickets/2/executar", { method: "POST" });
   assert.deepEqual([recusada.status, await recusada.json()], [409, { erro: `${ocupada} (espere ela terminar)` }]);
   servico.banco.exec(`
@@ -168,10 +168,22 @@ test("Executar agora: 409 com a execução que ocupa o D8, a recusa do C5, e 204
   assert.equal(c5.status, 409);
   assert.match(((await c5.json()) as { erro: string }).erro, /T-3 é da etapa registro, que roda em modo interativo/);
 
+  // A I-4 executa: não atrapalha a I-1.
+  servico.banco.exec(`
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (4, 'loja', 'Vizinha', 'problema', 'desenho', '${AGORA}');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (5, 4, 'desenho', 'Desenho', 'em_execucao', 'fabriquinha', '${AGORA}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
+      VALUES (8, 5, 'autonomo', '${crypto.randomUUID()}', 'em_andamento', '${AGORA}');
+  `);
+  assert.deepEqual([(await pagina()).executar?.ticket.id, (await pagina()).executar?.ocupada], [2, undefined]);
   assert.equal((await pedir("/api/tickets/2/executar", { method: "POST" })).status, 204);
   // O repositório do projeto não existe: a execução falha ao criar a worktree, em segundo plano.
   for (let i = 0; i < 500 && (await pagina()).tickets[1]?.status !== "falhou"; i++) await dormir(10);
   assert.equal((await pagina()).tickets[1]?.status, "falhou");
+  servico.banco.exec(
+    "DELETE FROM execucao WHERE id = 8; DELETE FROM ticket WHERE id = 5; DELETE FROM issue WHERE id = 4;",
+  );
 });
 
 test("log e prompt da execução como texto; o que não existe dá 404", async () => {

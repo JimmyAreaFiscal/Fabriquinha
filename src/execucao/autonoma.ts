@@ -22,7 +22,7 @@ export interface OpcoesAutonoma {
 }
 
 /**
- * F4 §6.2: executa o ticket autônomo do início ao fim. Erro de C5 (ticket não elegível, vaga do D8 ocupada) sobe
+ * F4 §6.2: executa o ticket autônomo do início ao fim. Erro de C5 (ticket não elegível, issue já com execução) sobe
  * sem lançar nada; dali em diante, toda falha vira C6 + C8, e a promessa só rejeita se o próprio banco falhar.
  */
 export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: OpcoesAutonoma): Promise<void> {

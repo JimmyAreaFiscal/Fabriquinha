@@ -16,11 +16,11 @@ import { abrir } from "../persistencia/banco.ts";
 import { agregado } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import {
-  autonomaEmAndamento,
+  autonomasEmAndamento,
   configuracao,
   execucoesEmAndamento,
   salvarConfiguracao,
-  ticketElegivel,
+  ticketsElegiveis,
   ticketsAutonomosEmExecucao,
 } from "../persistencia/servico.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
@@ -288,32 +288,39 @@ test("subida que falha ao abrir o banco ou ao recuperar libera a porta", async (
   await portaLivre();
 });
 
-test("agendador: desligado por padrão; ligado, inicia a cada intervaloMin o ticket elegível", async (t) => {
+test("agendador: desligado por padrão; ligado, inicia a cada intervaloMin um ticket por issue elegível", async (t) => {
   const minuto = relogio(t);
   const s = await subir();
-  issue(s.banco, 1, "desenho");
-  ticket(s.banco, 1, 1, "desenho");
-  issue(s.banco, 2, "desenho");
-  ticket(s.banco, 2, 2, "desenho");
+  for (const id of [1, 2, 3]) {
+    issue(s.banco, id, "desenho");
+    ticket(s.banco, id, id, "desenho");
+  }
   for (let i = 0; i < 10; i++) minuto();
   await dormir(50);
-  assert.equal(estado(s.banco, 1).status, "aberto");
+  for (const id of [1, 2, 3]) assert.equal(estado(s.banco, id).status, "aberto", "CA-9: desligado, nada inicia");
+  assert.deepEqual(autonomasEmAndamento(s.banco), []);
 
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 3 });
   minuto(); // o intervalo já passou enquanto desligado: o primeiro ciclo vem na batida seguinte
+  for (const id of [1, 2, 3]) assert.equal(estado(s.banco, id).status, "em_execucao", "CA-1: o C5 roda na batida");
   assert.partialDeepStrictEqual(
-    autonomaEmAndamento(s.banco),
-    { execucao: 1, ticket: 1 },
-    "o C5 roda na própria batida",
+    autonomasEmAndamento(s.banco),
+    [
+      { execucao: 1, ticket: 1, issue: 1 },
+      { execucao: 2, ticket: 2, issue: 2 },
+      { execucao: 3, ticket: 3, issue: 3 },
+    ],
+    "uma execução por issue",
   );
-  await falhouNaWorktree(s.banco, 1);
-  assert.equal(estado(s.banco, 2).status, "aberto", "um ticket por ciclo");
+  for (const id of [1, 2, 3]) await falhouNaWorktree(s.banco, id);
 
+  issue(s.banco, 4, "desenho");
+  ticket(s.banco, 4, 4, "desenho");
   minuto();
   minuto();
-  assert.equal(estado(s.banco, 2).status, "aberto", "intervalo de 3 minutos");
+  assert.equal(estado(s.banco, 4).status, "aberto", "intervalo de 3 minutos");
   minuto();
-  await falhouNaWorktree(s.banco, 2);
+  await falhouNaWorktree(s.banco, 4);
   await s.parar();
 });
 
@@ -333,7 +340,7 @@ test("próxima busca: a batida em que o contador chega ao intervaloMin; desligad
   await s.parar();
 });
 
-test("agendador respeita o D8 da execução e pula a issue que o C5 recusaria", async (t) => {
+test("agendador inicia as issues livres e pula a que o C5 recusaria (CA-2)", async (t) => {
   const minuto = relogio(t);
   const s = await subir();
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
@@ -346,15 +353,53 @@ test("agendador respeita o D8 da execução e pula a issue que o C5 recusaria", 
   execucao(s.banco, 2, 3, "autonomo");
   issue(s.banco, 3, "desenho");
   ticket(s.banco, 4, 3, "desenho");
+  issue(s.banco, 4, "desenho");
+  ticket(s.banco, 5, 4, "desenho");
 
   minuto();
-  assert.equal(estado(s.banco, 4).status, "aberto", "D8 ocupado: o agendador não faz nada");
-
-  // C6 da E-2: a vaga do D8 é da execução, mesmo com o T-3 ainda na coleta.
-  s.banco.exec(`UPDATE execucao SET resultado = 'sucesso', terminada_em = '${AGORA}' WHERE id = 2`);
-  minuto();
+  assert.equal(estado(s.banco, 2).status, "aberto", "a I-1 tem uma consulta em andamento");
+  assert.equal(estado(s.banco, 4).status, "em_execucao");
+  assert.equal(estado(s.banco, 5).status, "em_execucao");
+  assert.deepEqual(
+    autonomasEmAndamento(s.banco).map((e) => e.issue),
+    [2, 3, 4],
+    "a I-2 mantém a única execução; a I-3 e a I-4 ganham a sua",
+  );
   await falhouNaWorktree(s.banco, 4);
+  await falhouNaWorktree(s.banco, 5);
+  await s.parar();
+});
+
+test("agendador: numa issue em desenvolvimento só o ticket mais antigo inicia (CA-3)", async (t) => {
+  const minuto = relogio(t);
+  const s = await subir();
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  issue(s.banco, 1, "desenvolvimento");
+  ticket(s.banco, 1, 1, "desenvolvimento");
+  ticket(s.banco, 2, 1, "desenvolvimento");
+
+  minuto();
+  assert.equal(estado(s.banco, 1).status, "em_execucao");
   assert.equal(estado(s.banco, 2).status, "aberto");
+  await falhouNaWorktree(s.banco, 1);
+  await s.parar();
+});
+
+test("agendador: a issue com dependência aberta espera (CA-7)", async (t) => {
+  const minuto = relogio(t);
+  const s = await subir();
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  issue(s.banco, 1, "desenho");
+  ticket(s.banco, 1, 1, "desenho");
+  issue(s.banco, 2, "desenho");
+  ticket(s.banco, 2, 2, "desenho");
+  issue(s.banco, 3, "registro");
+  s.banco.exec("INSERT INTO issue_dep (issue, dep) VALUES (2, 3)");
+
+  minuto();
+  assert.equal(estado(s.banco, 1).status, "em_execucao");
+  assert.equal(estado(s.banco, 2).status, "aberto");
+  await falhouNaWorktree(s.banco, 1);
   await s.parar();
 });
 
@@ -409,8 +454,8 @@ test("agendador: varre em segundo plano a base dos projetos sem varredura há 24
 
   minuto();
   assert.partialDeepStrictEqual(
-    autonomaEmAndamento(s.banco),
-    { execucao: 1, ticket: 1 },
+    autonomasEmAndamento(s.banco),
+    [{ execucao: 1, ticket: 1 }],
     "a batida não espera a varredura",
   );
   minuto();
@@ -458,26 +503,34 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
   banco.close();
 });
 
-test("executarAgora: não espera o agendador, devolve a recusa do C5 e recusa com a execução que ocupa o D8", async () => {
+test("executarAgora: não espera o agendador, inicia com outra issue rodando e recusa a 2ª da mesma issue", async () => {
   const s = await subir();
   assert.equal(configuracao(s.banco).agendadorAtivo, false);
   issue(s.banco, 1, "desenho");
-  ticket(s.banco, 1, 1, "desenho");
-  issue(s.banco, 2, "desenho");
-  ticket(s.banco, 2, 2, "desenho");
+  ticket(s.banco, 1, 1, "desenho", "em_execucao");
+  execucao(s.banco, 1, 1, "autonomo");
+  issue(s.banco, 2, "desenvolvimento");
+  ticket(s.banco, 2, 2, "desenvolvimento");
+  ticket(s.banco, 3, 2, "desenvolvimento");
   issue(s.banco, 3, "registro");
-  ticket(s.banco, 3, 3, "registro");
+  ticket(s.banco, 4, 3, "registro");
 
-  await assert.rejects(s.executarAgora(3), /T-3 é da etapa registro, que roda em modo interativo/);
-  await s.executarAgora(1);
-  assert.partialDeepStrictEqual(autonomaEmAndamento(s.banco), { execucao: 1, ticket: 1 }, "volta logo depois do C5");
-  await assert.rejects(
-    s.executarAgora(2),
-    (erro: unknown) =>
-      erro instanceof ErroDeRegra &&
-      erro.message === "já há uma execução autônoma em andamento (D8): E-1 de T-1 (espere ela terminar)",
+  await assert.rejects(s.executarAgora(4), /T-4 é da etapa registro, que roda em modo interativo/);
+  await s.executarAgora(2);
+  assert.partialDeepStrictEqual(
+    autonomasEmAndamento(s.banco),
+    [
+      { execucao: 1, issue: 1 },
+      { execucao: 2, ticket: 2, issue: 2 },
+    ],
+    "CA-4: volta logo depois do C5, com a I-1 ainda rodando",
   );
-  await falhouNaWorktree(s.banco, 1);
-  assert.equal(ticketElegivel(s.banco), 2);
+  await assert.rejects(
+    s.executarAgora(3),
+    (erro: unknown) =>
+      erro instanceof ErroDeRegra && erro.message === "a I-2 já tem a execução E-2 em andamento (espere ela terminar)",
+  );
+  await falhouNaWorktree(s.banco, 2);
+  assert.deepEqual(ticketsElegiveis(s.banco), [3]);
   await s.parar();
 });

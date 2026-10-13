@@ -102,14 +102,14 @@ const formulario = (repo: string) => ({
   modelos: { desenho: { provedor: "anthropic", modelo: "claude-opus-5-5" } },
 });
 
-test("configuração: o F4 §3 com a próxima busca só ligado e a execução autônoma em andamento", async () => {
+test("configuração: o F4 §3 com a próxima busca só ligado e as execuções autônomas em andamento", async () => {
   assert.deepEqual(await chamar("GET", "/api/configuracao"), {
     agendadorAtivo: false,
     intervaloMin: 5,
     timeoutMin: 120,
     ociosidadeMin: 30,
     proximaBusca: null,
-    emAndamento: null,
+    emAndamento: [],
   });
 
   banco.exec(`
@@ -120,12 +120,20 @@ test("configuração: o F4 §3 com a próxima busca só ligado e a execução au
       VALUES (7, 3, 'desenho', 'Desenho', 'em_execucao', 'fabriquinha', '2026-10-12T14:00:00.000Z');
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
       VALUES (9, 7, 'autonomo', 's', 'em_andamento', '2026-10-12T14:20:00.000Z');
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (4, 'p', 'Cache', 'problema', 'desenho', '2026-10-12T14:00:00.000Z');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (8, 4, 'desenho', 'Desenho', 'em_execucao', 'fabriquinha', '2026-10-12T14:00:00.000Z');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
+      VALUES (10, 8, 'autonomo', 's2', 'em_andamento', '2026-10-12T14:21:00.000Z');
   `);
   const salvo = { agendadorAtivo: true, intervaloMin: 10, timeoutMin: 60, ociosidadeMin: 15 };
   assert.deepEqual(await chamar("POST", "/api/configuracao", salvo), {
     ...salvo,
     proximaBusca: PROXIMA.toISOString(),
-    emAndamento: { execucao: 9, ticket: 7, issue: 3, iniciadaEm: "2026-10-12T14:20:00.000Z" },
+    emAndamento: [
+      { execucao: 9, ticket: 7, issue: 3, iniciadaEm: "2026-10-12T14:20:00.000Z" },
+      { execucao: 10, ticket: 8, issue: 4, iniciadaEm: "2026-10-12T14:21:00.000Z" },
+    ],
   });
 });
 

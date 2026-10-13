@@ -303,7 +303,7 @@ test("cancelada antes de o pi subir: nem o pi nem o pi --version são lançados,
     [aqui(ag.tickets.find((t) => t.id === ticket)).status, aqui(ag.execucoes.find((e) => e.id === proxima)).resultado],
     ["em_execucao", "em_andamento"],
   );
-  await cancelarIssue(banco, issue); // quem grava o término é o cancelamento, e a vaga do D8 é liberada
+  await cancelarIssue(banco, issue); // quem grava o término é o cancelamento, e a issue fica livre
 });
 
 test("cancelada durante o pi --version: o pi não sobe e a autônoma não grava nada", async () => {

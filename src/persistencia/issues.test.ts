@@ -563,7 +563,7 @@ test("ciclo de um ticket autônomo pelo comIssue: C5, C6, C8, C9, C20, C5 de nov
   banco.close();
 });
 
-test("C5 lê do banco as dependências concluídas e a execução autônoma de outra issue (D8)", () => {
+test("C5 lê do banco as dependências concluídas e aceita autônoma com outra issue rodando", () => {
   const banco = novoBanco();
   const dep = emDesenho(banco, "outro");
   const { issue, ticket } = emDesenho(banco, "loja", [dep.issue]);
@@ -574,9 +574,8 @@ test("C5 lê do banco as dependências concluídas e a execução autônoma de o
   banco.exec(`UPDATE issue SET fase = 'concluida', concluida_em = 'x' WHERE id = ${String(dep.issue)}`);
   const outra = emDesenho(banco, "outro");
   iniciar(banco, outra.issue, outra.ticket);
-  regra(() => iniciar(banco, issue, ticket), "já há uma execução autônoma em andamento (D8) (espere ela terminar)");
-  terminar(banco, outra.issue, 1);
   assert.equal(iniciar(banco, issue, ticket).execucoes[0]?.modo, "autonomo");
+  assert.equal(valor(banco, "SELECT count(*) FROM execucao WHERE resultado = 'em_andamento'"), 2);
   banco.close();
 });
 
@@ -633,10 +632,9 @@ test("as constraints da tabela execucao valem no banco", () => {
   // Uma execução em andamento por ticket, de qualquer modo.
   violam(execucao, [[{ ...rodando, modo: "consulta" }, /UNIQUE constraint failed: execucao.ticket/]]);
   execucao({ ...rodando, ticket: b.ticket });
-  // Invariante 3 (D8): uma autônoma em andamento no sistema, mesmo em outra issue.
+  // Sem o D8: autônomas em andamento em issues diferentes passam.
   const c = emDesenho(banco, "outro");
-  violam(execucao, [[{ ...rodando, ticket: c.ticket }, /UNIQUE constraint failed: execucao.modo/]]);
-  execucao({ ...rodando, ticket: c.ticket, modo: "consulta" });
+  execucao({ ...rodando, ticket: c.ticket });
   assert.throws(() => {
     banco.exec(`DELETE FROM ticket WHERE id = ${String(a.ticket)}`);
   }, /FOREIGN KEY/);
@@ -665,12 +663,24 @@ const CORREDOR = `
 `;
 
 test(
-  "D8 sob corrida: dois processos iniciam execução autônoma juntos; um consegue, o outro recebe ErroDeRegra",
+  "corrida na mesma issue: dois processos iniciam tickets de desenvolvimento juntos; um consegue, o outro recebe ErroDeRegra",
   { timeout: 30_000 },
   async () => {
     const raiz = mkdtempSync(join(base, "corrida-"));
     const preparado = novoBanco(raiz);
-    const alvos = [emDesenho(preparado, "loja"), emDesenho(preparado, "outro")];
+    const { issue: alvo } = emDesenho(preparado, "loja");
+    const ids = comIssue(preparado, alvo, "editarIssue", auditor, (atual, ctx) => {
+      const abertos = [1, 2].map(() => ({ ...ticketBase(alvo), id: ctx.novoId("ticket"), criadoEm: ctx.agora }));
+      return {
+        ...atual,
+        issue: { ...atual.issue, fase: "desenvolvimento" },
+        tickets: [
+          ...atual.tickets.map((t) => ({ ...t, status: "concluido" as const, concluidoEm: ctx.agora })),
+          ...abertos,
+        ],
+      };
+    }).tickets.slice(-2);
+    const alvos = ids.map(({ id }) => ({ issue: alvo, ticket: id }));
     preparado.close();
 
     const corredores = alvos.map(({ issue, ticket }) => {
@@ -713,7 +723,7 @@ test(
     const resultados = await Promise.all(corredores.map((c) => c.fim));
 
     assert.deepEqual(resultados.toSorted(), [
-      "ErroDeRegra: já há uma execução autônoma em andamento (D8) (espere ela terminar)",
+      "ErroDeRegra: a I-1 já tem a execução E-1 em andamento (espere ela terminar)",
       "ok",
     ]);
     const lido = abrir(raiz);

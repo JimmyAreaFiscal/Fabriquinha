@@ -8,7 +8,7 @@ import { escapar, ha, nomeDoModelo, rotuloIssue, rotuloTicket } from "../render.
 /** `GET /api/configuracao`. */
 export interface EstadoDaConfiguracao extends Configuracao {
   proximaBusca: string | null;
-  emAndamento: { execucao: number; ticket: number; issue: number; iniciadaEm: string } | null;
+  emAndamento: { execucao: number; ticket: number; issue: number; iniciadaEm: string }[];
 }
 
 /** `GET /api/projetos`: o projeto com o número de issues. */
@@ -102,7 +102,7 @@ const NUMEROS = [
   ["ociosidadeMin", "Parar sessão ociosa após", 5],
 ] as const;
 
-/** Agendador (F4 §3): interruptor, os três tempos em minutos, a próxima busca e a execução autônoma em andamento. */
+/** Agendador (F4 §3): interruptor, os três tempos em minutos, a próxima busca e as execuções autônomas em andamento. */
 export function agendador(estado: EstadoDaConfiguracao, erros: Erros, agora: Date): string {
   const numeros = NUMEROS.map(([campo, rotulo, minimo]) => {
     const m = marca(erros, campo);
@@ -111,11 +111,11 @@ export function agendador(estado: EstadoDaConfiguracao, erros: Erros, agora: Dat
   const busca = estado.proximaBusca
     ? `Próxima busca às <b>${hora(estado.proximaBusca)}</b>`
     : "Desligado: <b>não procura tickets</b>";
-  const e = estado.emAndamento;
-  const execucao = e
-    ? `Executando <b>E-${String(e.execucao)}</b> · ${rotuloIssue(e.issue)} · ${rotuloTicket(e.ticket)} · ${ha(e.iniciadaEm, agora)}`
-    : "Nenhuma execução autônoma em andamento";
-  return `<h2>Agendador</h2><form class="agendador superficie" data-agendador novalidate><label class="chave"><input type="checkbox" name="agendadorAtivo"${estado.agendadorAtivo ? " checked" : ""}><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos e executa um por vez</small></span></label>${numeros.join("")}<div class="status-ag"><span>${busca}</span><span>${execucao}</span></div><button type="submit" class="btn btn-primario">Salvar</button></form>`;
+  const execucoes = estado.emAndamento.map(
+    (e) =>
+      `<span>Executando <b>E-${String(e.execucao)}</b> · ${rotuloIssue(e.issue)} · ${rotuloTicket(e.ticket)} · ${ha(e.iniciadaEm, agora)}</span>`,
+  );
+  return `<h2>Agendador</h2><form class="agendador superficie" data-agendador novalidate><label class="chave"><input type="checkbox" name="agendadorAtivo"${estado.agendadorAtivo ? " checked" : ""}><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos e executa um por issue</small></span></label>${numeros.join("")}<div class="status-ag"><span>${busca}</span>${execucoes.join("") || "<span>Nenhuma execução autônoma em andamento</span>"}</div><button type="submit" class="btn btn-primario">Salvar</button></form>`;
 }
 
 export interface OpcoesDoProjeto {

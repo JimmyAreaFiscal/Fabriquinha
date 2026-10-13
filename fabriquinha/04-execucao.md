@@ -6,7 +6,7 @@ Usado por: F7 (telas de sessões, chat, configuração e gates).
 
 ## 1. Responsabilidade
 
-- Manter a Fabriquinha rodando como um serviço que, de tempos em tempos, procura trabalho autônomo e o executa, um por vez (D8).
+- Manter a Fabriquinha rodando como um serviço que, de tempos em tempos, procura trabalho autônomo e o executa, uma execução por issue, em paralelo (D8).
 - Gerenciar as sessões do pi: iniciar, conversar, responder diálogos, interromper, retomar e encerrar.
 - Dar a cada sessão um estado que diga ao Auditor se ela está rodando, se precisa dele ou se já terminou.
 - Recuperar execuções interrompidas quando o serviço reinicia.
@@ -73,28 +73,31 @@ Segredos (`SONAR_TOKEN`) continuam no ambiente do serviço (`<raiz>/ambiente`), 
 A cada `intervaloMin`, se `agendadorAtivo`:
 
 1. Para cada projeto cuja última varredura de commits humanos tem mais de 24 horas, chama `varrerBase` (F6, 4.4); falha só vai para o log.
-2. Se já existe execução autônoma em andamento, não faz nada (D8).
-3. Busca o próximo ticket elegível (4.1).
-4. Se achou, pede ao gerente de sessões para iniciá-lo em modo autônomo (6.2).
+2. Busca os tickets elegíveis (4.1), um por issue.
+3. Para cada um, pede ao gerente de sessões para iniciá-lo em modo autônomo (6.2). A C5 de cada um roda antes do primeiro `await`; a recusa vai para o log e não para os outros.
 
-O botão **Executar agora** de um ticket (o "Auditor → DesenharSolucao" do diagrama) pula o intervalo, mas respeita o D8: com outra execução autônoma em andamento, o botão fica desabilitado e diz qual está rodando.
+Issues diferentes executam em paralelo (D8); dentro de cada issue, uma execução por vez (C5).
 
-### 4.1 Ticket elegível
+O botão **Executar agora** de um ticket (o "Auditor → DesenharSolucao" do diagrama) pula o intervalo, mas respeita a C5 da própria issue: só fica desabilitado, dizendo qual execução está rodando, quando a issue já executa. Execução de outra issue não atrapalha.
+
+### 4.1 Tickets elegíveis
 
 ```sql
-SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue
+SELECT min(t.id) AS id FROM ticket t JOIN issue i ON i.id = t.issue
 WHERE t.status = 'aberto'
   AND t.etapa IN ('desenho','desenvolvimento','revisao','encerramento')
   AND i.fase = t.etapa                       -- casamento etapa × fase (F1, 4.3)
   AND i.arquivada_em IS NULL
   AND NOT EXISTS (SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep
                   WHERE d.issue = i.id AND x.fase <> 'concluida')
-ORDER BY i.id, t.id
-LIMIT 1;
+  AND NOT EXISTS (SELECT 1 FROM ticket o LEFT JOIN execucao e ON e.ticket = o.id
+                  WHERE o.issue = i.id AND (o.status = 'em_execucao' OR e.resultado = 'em_andamento'))
+GROUP BY i.id
+ORDER BY i.id;
 ```
 
-A issue mais antiga vem primeiro, depois o ticket mais antigo.
-Isso termina o que já começou antes de abrir trabalho novo.
+Um ticket por issue, o mais antigo dela, da issue mais antiga à mais nova.
+A issue com ticket `em_execucao` ou execução em andamento fica de fora: a C5 a recusaria. Com `issue`, a consulta devolve só o ticket dela (o **Executar agora**).
 
 ## 5. Sessões
 
@@ -247,7 +250,7 @@ Quando um ticket autônomo falha, o Auditor lê o erro e a conversa no chat e es
    O prompt começa pela instrução do Auditor.
 3. C5 consome a instrução (a mensagem já está na conversa do pi).
 
-A instrução fica no banco até ser consumida, então nem um reinício do serviço nem a vaga do D8 ocupada a perdem.
+A instrução fica no banco até ser consumida, então nem um reinício do serviço nem a issue ocupada a perdem.
 
 ### 6.5 Consulta
 
@@ -258,7 +261,7 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
   A sessão principal não recebe nenhuma mensagem da consulta.
 - Sem as ferramentas embutidas que alteram arquivos (`--exclude-tools edit,write,bash`): a consulta pergunta, não altera.
   As ferramentas das extensões do Auditor continuam disponíveis; se alguma delas escrever, é escolha dele.
-- Não muda o estado do ticket nem da issue e não ocupa a vaga do D8.
+- Não muda o estado do ticket nem da issue e não ocupa a issue.
 - Aparece na lista como "Consulta sobre T-n" e segue os mesmos estados das outras sessões.
 - O custo entra nas métricas da issue, separado como consulta.
   O F6 conta só o que foi acrescentado depois da cópia, para não contar o histórico duas vezes.
@@ -414,5 +417,5 @@ Mudanças nas tabelas do F2 que vêm deste módulo:
 ## 13. Fora de escopo
 
 - Controle de uso de contexto (o item 2 do Feedback.txt, limitar a 40%): o diagrama não pede; a compactação do pi segue valendo.
-- Execuções autônomas em paralelo (D8).
+- Limite de execuções autônomas simultâneas.
 - Acesso ao web por outra máquina: o serviço escuta só em `127.0.0.1`.

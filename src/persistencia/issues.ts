@@ -287,8 +287,6 @@ const contexto = (banco: DatabaseSync): Contexto => ({
         `SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep WHERE d.issue = ? AND x.fase <> 'concluida' LIMIT 1`,
       )
       .get(id) === undefined,
-  execucaoAutonomaEmAndamento: () =>
-    banco.prepare("SELECT 1 FROM execucao WHERE modo = 'autonomo' AND resultado = 'em_andamento'").get() !== undefined,
   temCommit: (ticket) => temCommit(banco, ticket),
 });
 

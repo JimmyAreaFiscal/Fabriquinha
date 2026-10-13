@@ -136,10 +136,10 @@ test("migrar() recusa banco mais novo que o código, sem alterá-lo", () => {
   banco.close();
 });
 
-/** Banco na versão anterior à última, com um ticket de cada tipo de filho que aponta para `ticket`. */
+/** Banco na versão anterior à migração do cancelamento (C22, penúltima), com um ticket de cada tipo de filho que aponta para `ticket`. */
 function bancoAntesDoCancelamento(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES.slice(0, -1));
+  migrar(banco, MIGRACOES.slice(0, -2));
   banco.exec(`
     INSERT INTO projeto VALUES ('loja', '/r', 'main', 'github', '[]', '["t"]', 'k', '[{}]', '{}');
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'desenho', 'x');
@@ -153,7 +153,7 @@ function bancoAntesDoCancelamento(): DatabaseSync {
   return banco;
 }
 
-test("a última migração recria ticket com os status novos sem perder linhas nem FKs", () => {
+test("a migração do cancelamento recria ticket com os status novos sem perder linhas nem FKs", () => {
   const banco = bancoAntesDoCancelamento();
   const antes = banco.prepare("SELECT * FROM ticket ORDER BY id").all();
   assert.throws(() => {
@@ -210,7 +210,7 @@ test("migrar() desfaz a migração e religa as FKs quando ela deixa referência 
     },
     (erro) => erro instanceof ErroDeRegra && erro.message.includes("deixou 1 referência(s) órfã(s)"),
   );
-  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 1);
+  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 2);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ticket_novo'"), 0);
   assert.equal(valor(banco, "SELECT count(*) FROM pragma_table_info('issue') WHERE name = 'cancelada_em'"), 0);

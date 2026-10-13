@@ -104,12 +104,12 @@
         fitness: [["lighthouse-90", "npm run lighthouse", "Nota de desempenho do Lighthouse de pelo menos 90."]], modelos: { desenvolvimento: QWEN }, issues: 2 },
     ];
     const NOVO = { nome: "", repo: "", branchBase: "main", hospedagem: null, preparacao: [], testes: [""], sonar: "", fitness: [["", "", ""]], modelos: {}, issues: 0, novo: true };
-    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const esc = (s) => String(s).replaceAll(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
     const HOSP = { github: "GitHub", "azure-devops": "Azure DevOps" };
 
     function agendador() {
       return `<section class="agendador superficie">
-        <label class="chave"><input type="checkbox" checked><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos e executa um por vez</small></span></label>
+        <label class="chave"><input type="checkbox" checked><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos e executa um por issue</small></span></label>
         <label class="num-campo">Procurar a cada<span class="com-unidade"><input type="number" value="5" min="1" max="1440"> min</span></label>
         <label class="num-campo">Tempo limite da execução<span class="com-unidade"><input type="number" value="120" min="10" max="1440"> min</span></label>
         <label class="num-campo">Parar sessão ociosa após<span class="com-unidade"><input type="number" value="30" min="5" max="1440"> min</span></label>
@@ -118,8 +118,26 @@
       </section>`;
     }
     const itemLista = (v, ph) => `<div class="item-lista"><input class="mono" value="${esc(v)}" placeholder="${ph}"><button class="x" title="Remover">×</button></div>`;
+    const linhaFitness = ([n, c, d], repetido) => {
+      const erro = repetido ? "erro" : "";
+      const aviso = repetido ? '<span class="msg-erro">nome de fitness function repetido</span>' : "";
+      return `<div class="fitness"><div class="celula ${erro}"><input class="mono ${erro}" value="${esc(n)}" placeholder="cobertura-minima">${aviso}</div><input class="mono" value="${esc(c)}" placeholder="comando"><input value="${esc(d)}" placeholder="o que ela garante"><button class="x" title="Remover">×</button></div>`;
+    };
+    const opcaoModelo = (m, atual) => `<option ${atual === m ? "selected" : ""}>${m}</option>`;
+    const linhaModelo = ([k, n], p) => {
+      const opcoes = MODELOS.map((m) => opcaoModelo(m, p.modelos[k])).join("");
+      return `<span>${n}</span><select class="${p.modelos[k] ? "" : "padrao"}"><option value="">padrão do pi</option>${opcoes}</select>`;
+    };
+    const botaoProjeto = (x, selecionado) => `<button data-sel="projeto:${x.nome}" aria-current="${selecionado === "projeto:" + x.nome}">${x.nome}<span class="muted" style="font-size:var(--fs-xs)">${HOSP[x.hospedagem]}</span></button>`;
+    function painel(tipo, p) {
+      if (tipo === "agendador") return `<h2>Agendador</h2>${agendador()}`;
+      const issues = p.novo ? "" : `<span class="muted" style="font-size:var(--fs-sm);font-weight:400">${p.issues} issues</span>`;
+      return `<h2>${p.novo ? "Novo projeto" : p.nome} ${issues}</h2>${form(p)}`;
+    }
     function form(p) {
       const repetido = (i) => p.erro && i === 2;
+      const fitness = p.fitness.map((f, i) => linhaFitness(f, repetido(i))).join("");
+      const modelos = ETAPAS.map((e) => linhaModelo(e, p)).join("");
       return `<div class="form">
         <div class="grupo"><h3>Repositório</h3><div class="grade">
           <label class="campo">Nome<input value="${esc(p.nome)}" ${p.novo ? 'placeholder="loja-api"' : "readonly"}>${p.novo ? '<span class="ajuda">letras minúsculas, números e hífen; não muda depois</span>' : ""}</label>
@@ -134,10 +152,10 @@
         </div></div>
         <div class="grupo"><h3>Fitness functions <span style="text-transform:none;letter-spacing:0;font-weight:400">· pelo menos uma; rodam no desenvolvimento e na revisão</span></h3>
           <div class="lista"><div class="fitness-cab"><span>Nome</span><span>Comando</span><span>Descrição (até 300)</span><span></span></div>
-          ${p.fitness.map(([n, c, d], i) => `<div class="fitness"><div class="celula ${repetido(i) ? "erro" : ""}"><input class="mono ${repetido(i) ? "erro" : ""}" value="${esc(n)}" placeholder="cobertura-minima">${repetido(i) ? '<span class="msg-erro">nome de fitness function repetido</span>' : ""}</div><input class="mono" value="${esc(c)}" placeholder="comando"><input value="${esc(d)}" placeholder="o que ela garante"><button class="x" title="Remover">×</button></div>`).join("")}
+          ${fitness}
           <button class="link" style="align-self:flex-start">+ fitness function</button></div></div>
         <div class="grupo"><h3>Modelo por etapa <span style="text-transform:none;letter-spacing:0;font-weight:400">· vazio usa o padrão do pi; o ticket pode sobrescrever</span></h3>
-          <div class="modelos-grade">${ETAPAS.map(([k, n]) => `<span>${n}</span><select class="${p.modelos[k] ? "" : "padrao"}"><option value="">padrão do pi</option>${MODELOS.map((m) => `<option ${p.modelos[k] === m ? "selected" : ""}>${m}</option>`).join("")}</select>`).join("")}</div></div>
+          <div class="modelos-grade">${modelos}</div></div>
         <div class="rodape-form"><span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${p.erro ? '<span class="msg-erro" style="margin-right:8px">1 campo com erro</span>' : ""}<button class="btn" data-cancelar>Cancelar</button><button class="btn btn-primario">${p.novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div>
       </div>`;
     }
@@ -148,9 +166,9 @@
       const p = nome === "__novo" ? NOVO : PROJETOS.find((x) => x.nome === nome);
       return `<div class="cabeca-pagina"><h1>Configuração</h1></div><div class="config-b">
         <nav class="menu-config"><span class="rotulo">Geral</span><button data-sel="agendador" aria-current="${selB === "agendador"}">Agendador <span class="pill pill-ok">ligado</span></button>
-          <span class="rotulo">Projetos</span>${PROJETOS.map((x) => `<button data-sel="projeto:${x.nome}" aria-current="${selB === `projeto:${x.nome}`}">${x.nome}<span class="muted" style="font-size:var(--fs-xs)">${HOSP[x.hospedagem]}</span></button>`).join("")}
+          <span class="rotulo">Projetos</span>${PROJETOS.map((x) => botaoProjeto(x, selB)).join("")}
           <button class="novo" data-sel="projeto:__novo" aria-current="${nome === "__novo"}">+ Novo projeto</button></nav>
-        <section class="painel-b superficie">${tipo === "agendador" ? `<h2>Agendador</h2>${agendador()}` : `<h2>${p.novo ? "Novo projeto" : p.nome}${p.novo ? "" : ` <span class="muted" style="font-size:var(--fs-sm);font-weight:400">${p.issues} issues</span>`}</h2>${form(p)}`}</section></div>`;
+        <section class="painel-b superficie">${painel(tipo, p)}</section></div>`;
     }
     function render() { document.querySelector("[data-pagina]").innerHTML = B(); }
     document.addEventListener("click", (e) => {

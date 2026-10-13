@@ -38,7 +38,7 @@ const projeto: Projeto = {
 };
 
 /** Contexto falso: o projeto `loja`, IDs a partir de 41, e os fatos do C5 que o teste quiser. */
-function contexto(fatos: { depsConcluidas?: boolean; autonoma?: boolean } = {}): Contexto {
+function contexto(fatos: { depsConcluidas?: boolean } = {}): Contexto {
   const ids: Record<string, number> = {};
   return {
     agora: AGORA,
@@ -47,7 +47,6 @@ function contexto(fatos: { depsConcluidas?: boolean; autonoma?: boolean } = {}):
     issueExiste: () => true,
     alcancaveis: () => [],
     depsConcluidas: () => fatos.depsConcluidas ?? true,
-    execucaoAutonomaEmAndamento: () => fatos.autonoma ?? false,
     temCommit: () => false,
   };
 }
@@ -143,7 +142,7 @@ test("C5 autônomo: ticket em execução, execução nova com o modelo resolvido
   assert.ok(semModelo && !("modelo" in semModelo));
 });
 
-test("C5 autônomo exige ticket aberto, dependências concluídas e nenhuma outra autônoma no sistema (D8)", () => {
+test("C5 autônomo exige ticket aberto e dependências concluídas", () => {
   const inicio = { ticket: 2, modo: "autonomo", sessaoPi: SESSAO };
   const com = (status: Ticket["status"], troca: Partial<Ticket> = {}) =>
     agregado("desenvolvimento", [ticket(2, "desenvolvimento", status, troca)]);
@@ -163,14 +162,25 @@ test("C5 autônomo exige ticket aberto, dependências concluídas e nenhuma outr
     () => iniciarExecucao(com("aberto"), inicio, fabriquinha, contexto({ depsConcluidas: false })),
     "a I-1 depende de issues ainda não concluídas (conclua as dependências antes)",
   );
-  regra(
-    () => iniciarExecucao(com("aberto"), inicio, fabriquinha, contexto({ autonoma: true })),
-    "já há uma execução autônoma em andamento (D8) (espere ela terminar)",
-  );
 });
 
-test("C5 interativo aceita ticket aberto ou em execução e ignora dependências e D8", () => {
-  const fatos = contexto({ depsConcluidas: false, autonoma: true });
+test("C5 autônomo não recusa por autônoma de outra issue, mas recusa a 2ª da mesma issue e não cria execução (CA-6)", () => {
+  const inicio = { ticket: 2, modo: "autonomo", sessaoPi: SESSAO };
+  const dev = (id: number) => ticket(id, "desenvolvimento", "aberto");
+  const ag = agregado("desenvolvimento", [dev(2), dev(3)]);
+  const rodando = iniciarExecucao(ag, inicio, fabriquinha, contexto());
+  assert.equal(rodando.execucoes.length, 1);
+  assert.equal(rodando.tickets[0]?.status, "em_execucao");
+  const mesma = { ...ag, execucoes: [execucao(9, 3, "autonomo")] };
+  regra(
+    () => iniciarExecucao(mesma, inicio, fabriquinha, contexto()),
+    "a I-1 já tem a execução E-9 em andamento (espere ela terminar)",
+  );
+  assert.equal(mesma.execucoes.length, 1);
+});
+
+test("C5 interativo aceita ticket aberto ou em execução e ignora dependências", () => {
+  const fatos = contexto({ depsConcluidas: false });
   const registro = agregado("registro", [ticket(1, "registro", "em_execucao")], [terminada(5, 1, "interativo")]);
   const retomado = iniciarExecucao(registro, { ticket: 1, modo: "interativo", sessaoPi: SESSAO }, fabriquinha, fatos);
   assert.equal(retomado.tickets[0]?.status, "em_execucao");
@@ -400,10 +410,10 @@ test("C20 define ou remove o override de modelo de ticket não concluído e para
   assert.throws(() => definirModeloTicket(ag, { ticket: 1 }, auditor), ZodError);
 });
 
-test("C21 abre consulta numa sessão nova, sem mudar o ticket, mesmo com D8 ocupado e issue concluída", () => {
+test("C21 abre consulta numa sessão nova, sem mudar o ticket, mesmo com issue concluída", () => {
   const dev = ticket(1, "desenvolvimento", "concluido", { concluidoEm: ANTES });
   const ag = agregado("concluida", [dev], [terminada(5, 1), terminada(6, 1, "consulta")]);
-  const depois = iniciarConsulta(ag, { ticket: 1, sessaoPi: OUTRA }, auditor, contexto({ autonoma: true }));
+  const depois = iniciarConsulta(ag, { ticket: 1, sessaoPi: OUTRA }, auditor, contexto());
   assert.deepEqual(depois, {
     ...ag,
     execucoes: [

@@ -233,4 +233,8 @@ export const MIGRACOES: readonly string[] = [
   CREATE UNIQUE INDEX ux_ticket_etapa_unica ON ticket(issue, etapa) WHERE etapa <> 'desenvolvimento' AND status <> 'concluido';
   -- As dependentes de uma issue (busca reversa do cancelamento).
   CREATE INDEX ix_issue_dep_dep ON issue_dep(dep);`,
+  // O D8 saiu (uma execução autônoma por issue, em paralelo): o índice único vira comum e segue servindo à consulta
+  // das autônomas em andamento. A trava por issue continua em ux_execucao_por_ticket e na C5.
+  `DROP INDEX ux_execucao_autonoma;
+  CREATE INDEX ix_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';`,
 ];

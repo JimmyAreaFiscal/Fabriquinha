@@ -173,7 +173,7 @@ const Execucao = z.object({
 | Regra |
 |---|
 | `registro` e `sessao` rodam em modo `interativo`; as demais etapas, em `autonomo`, inclusive quando o Auditor dispara à mão. |
-| `consulta` é uma conversa do Auditor sobre a sessão de qualquer ticket, sem as ferramentas embutidas de escrita (`edit`, `write`, `bash`); não muda o estado do ticket nem ocupa a vaga do D8 (C21). |
+| `consulta` é uma conversa do Auditor sobre a sessão de qualquer ticket, sem as ferramentas embutidas de escrita (`edit`, `write`, `bash`); não muda o estado do ticket (C21). |
 | `terminadaEm` está presente se e somente se `resultado ≠ em_andamento`; `erro`, se e somente se `resultado = falha`. |
 | `modelo` é o par pedido ao pi nesta execução (3.10); ausente quando valeu o padrão do pi. O consumo real por modelo vem da sessão (F6). |
 | As execuções autônomas e interativas de um ticket compartilham a sessão principal (mesmo `sessaoPi`). Cada consulta tem uma sessão própria, copiada da principal (F4, 6.5). |
@@ -320,7 +320,7 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 | C2 | `editarIssue(issue, {titulo, tipo, descricao})` | agente do registro ou Auditor | fase `registro` | Atualiza os campos. |
 | C3 | `adicionarDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida`; dep existe; sem ciclo; não é a própria issue | Adiciona; idempotente. |
 | C4 | `removerDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida` | Remove; idempotente. |
-| C5 | `iniciarExecucao(ticket, modo, sessaoPi)` | Fabriquinha | fase × etapa (4.3); modo × etapa (3.6); nenhum ticket da issue com execução em andamento; autônomo: ticket `aberto`, deps da issue concluídas, nenhuma outra execução autônoma em andamento (D8); interativo: ticket `aberto` ou `em_execucao` | Ticket `em_execucao`; nova Execução `em_andamento`; consome `ticket.instrucao`. |
+| C5 | `iniciarExecucao(ticket, modo, sessaoPi)` | Fabriquinha | fase × etapa (4.3); modo × etapa (3.6); nenhum ticket da issue com execução em andamento; autônomo: ticket `aberto`, deps da issue concluídas; interativo: ticket `aberto` ou `em_execucao` | Ticket `em_execucao`; nova Execução `em_andamento`; consome `ticket.instrucao`. |
 | C6 | `terminarExecucao(execucao, resultado, erro)` | Fabriquinha | execução `em_andamento` | Grava resultado e término. O ticket não muda. |
 | C7 | `concluirTicket(ticket)` | Fabriquinha | ticket `em_execucao`; sem execução em andamento; evidências obrigatórias (3.9); regras da etapa (tabela abaixo) | Ticket `concluido` e a transição da etapa. |
 | C8 | `falharTicket(ticket, erro)` | Fabriquinha | ticket autônomo `em_execucao`; sem execução em andamento | Ticket `falhou`; remove os tickets de desenvolvimento ainda abertos que ele criou e a decisão de revisão dele. |
@@ -359,7 +359,7 @@ Valem depois de qualquer comando; F2 reforça as que cabem em constraint de banc
 
 1. No máximo um ticket `em_execucao` por issue.
 2. Etapas diferentes de `desenvolvimento` têm no máximo um ticket não concluído por issue.
-3. No máximo uma execução autônoma `em_andamento` no sistema inteiro (D8).
+3. No máximo uma execução `em_andamento` por issue.
 4. Dependências entre issues não formam ciclo.
 5. Fora da fase `registro`, a issue tem título e tipo.
 6. `arquivadaEm` implica `fase = concluida`.
