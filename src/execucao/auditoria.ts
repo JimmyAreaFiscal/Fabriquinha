@@ -147,6 +147,19 @@ const tarefas = new Map<string, Promise<string | undefined>>();
 
 const dirDaAuditoria = (raiz: string, sessao: string): string => join(raiz, "auditorias", sessao);
 
+/** A pasta da auditoria `sessao`; recusa a que não existe. */
+function pastaExistente(raiz: string, sessao: string): string {
+  const dir = dirDaAuditoria(raiz, sessao);
+  if (!existsSync(join(dir, "auditoria.json"))) {
+    throw new ErroDeInexistente(`a auditoria ${sessao} não existe`, "confira o endereço da auditoria");
+  }
+  return dir;
+}
+
+/** O `indice.md` da auditoria `sessao`. */
+export const indiceDaAuditoria = (banco: DatabaseSync, sessao: string): string =>
+  readFileSync(join(pastaExistente(raizDo(banco), sessao), "indice.md"), "utf8");
+
 /** O agente trabalha (ou o pi sobe ou para); parado, espera a próxima pergunta do Auditor. */
 export const estadoDaAuditoria = (sessao: string): EstadoDaAuditoria =>
   (situacao(sessao)?.ocupado ?? tarefas.has(sessao)) ? "rodando" : "conversa";
@@ -261,10 +274,7 @@ export interface Auditoria {
 /** A auditoria `sessao`: o que o agente recebeu, o estado e a conversa até agora. */
 export function abrirAuditoria(banco: DatabaseSync, sessao: string): Auditoria {
   const raiz = raizDo(banco);
-  const dir = dirDaAuditoria(raiz, sessao);
-  if (!existsSync(join(dir, "auditoria.json"))) {
-    throw new ErroDeInexistente(`a auditoria ${sessao} não existe`, "confira o endereço da auditoria");
-  }
+  const dir = pastaExistente(raiz, sessao);
   const { mes, sessoes, projetos } = JSON.parse(readFileSync(join(dir, "auditoria.json"), "utf8")) as Pick<
     Auditoria,
     "mes" | "sessoes" | "projetos"
@@ -305,9 +315,7 @@ export function enviarNaAuditoria(
   { ociosidadeMin }: OpcoesDaAuditoria,
 ): void {
   const raiz = raizDo(banco);
-  if (!existsSync(join(dirDaAuditoria(raiz, sessao), "auditoria.json"))) {
-    throw new ErroDeInexistente(`a auditoria ${sessao} não existe`, "confira o endereço da auditoria");
-  }
+  pastaExistente(raiz, sessao);
   const viva = situacao(sessao);
   if (viva?.ocupado) {
     throw new ErroDeRegra("o agente da auditoria está trabalhando", "espere a resposta, ou use Abortar");
