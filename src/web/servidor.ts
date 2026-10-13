@@ -7,6 +7,7 @@ import { stripTypeScriptTypes } from "node:module";
 import { extname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
 import { raizDo } from "../persistencia/banco.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { casar } from "./cliente/caminhos.ts";
@@ -42,6 +43,7 @@ const LIMITE_DO_CORPO = 64 * 1024;
 /** Os tipos servidos em `/static/*`. O cliente é TypeScript: o navegador recebe o JavaScript sem os tipos. */
 const TIPOS: Record<string, string> = {
   ".ts": "text/javascript; charset=utf-8",
+  ".tsx": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".woff2": "font/woff2",
 };
@@ -87,12 +89,40 @@ async function lerCorpo(pedido: IncomingMessage): Promise<unknown> {
   }
 }
 
-/** Um arquivo de `/static/`: o cliente, sem os tipos, e o `markdown-it`. */
-function estatico(caminho: string, resposta: ServerResponse): void {
+/**
+ * Os `.tsx` empacotados (React e assistant-ui dentro), por arquivo: montados no primeiro pedido.
+ * ponytail: guardado até o servidor cair; editar o `.tsx` exige reiniciar o servidor.
+ */
+const PACOTES = new Map<string, Promise<string>>();
+
+function empacotar(arquivo: string): Promise<string> {
+  let pacote = PACOTES.get(arquivo);
+  if (pacote === undefined) {
+    pacote = build({
+      entryPoints: [arquivo],
+      bundle: true,
+      format: "esm",
+      jsx: "automatic",
+      minify: true,
+      write: false,
+      external: ["markdown-it/browser"],
+      define: { "process.env.NODE_ENV": '"production"' },
+    }).then(({ outputFiles }) => String(outputFiles[0]?.text));
+    PACOTES.set(arquivo, pacote);
+  }
+  return pacote;
+}
+
+/** Um arquivo de `/static/`: o cliente, sem os tipos (o `.tsx` empacotado), e o `markdown-it`. */
+async function estatico(caminho: string, resposta: ServerResponse): Promise<void> {
   const nome = caminho.slice("/static/".length);
   const achado = ESTATICOS.get(nome);
   if (achado === undefined) throw new ErroHttp(404, `${caminho} não existe`);
   const [arquivo, tipo] = achado;
+  if (nome.endsWith(".tsx")) {
+    enviar(resposta, 200, tipo, await empacotar(arquivo));
+    return;
+  }
   const conteudo = readFileSync(arquivo);
   enviar(resposta, 200, tipo, nome.endsWith(".ts") ? stripTypeScriptTypes(conteudo.toString()) : conteudo);
 }
@@ -185,7 +215,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
     }
     if (pedido.method !== "GET") throw new ErroHttp(404, `${String(pedido.method)} ${caminho} não existe`);
     if (caminho === "/entrar") entrar(url, resposta);
-    else if (caminho.startsWith("/static/")) estatico(caminho, resposta);
+    else if (caminho.startsWith("/static/")) await estatico(caminho, resposta);
     // Toda outra página: o cliente escolhe a tela pelo caminho (F7 §4.4).
     else enviar(resposta, 200, "text/html; charset=utf-8", readFileSync(join(CLIENTE, "index.html")));
   }

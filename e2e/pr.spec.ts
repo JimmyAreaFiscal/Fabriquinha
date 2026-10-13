@@ -214,7 +214,7 @@ test("revisa o PR, pede mudanças com o motivo e conclui a sessão em aberto pel
   const sessao = pagina.locator(".linha-tempo > li").filter({ hasText: "Ajustar o PR" }).getByRole("link");
   await sessao.click();
   await expect(pagina.locator("[data-conversa] .msg.agente").last()).toHaveText(
-    "agenteCriei o ticket de desenvolvimento do índice.",
+    "Criei o ticket de desenvolvimento do índice.",
   );
   await pagina.getByRole("button", { name: "Concluir sessão" }).click();
   await expect(pagina.locator(".estado-sessao .pill")).toHaveText("terminada");

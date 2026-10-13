@@ -2,6 +2,7 @@
 // automática que pausa quando o Auditor sobe, e liga à API o envio com os anexos de histórico, os diálogos, o
 // registro, o Responder e retomar, a consulta e o contexto da issue ao lado. O HTML vem de chat.ts; os testes de
 // ponta a ponta (e2e/chat.spec.ts) o exercitam no navegador.
+import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Dialogo } from "../../../execucao/gerente.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { CabecalhoDoChat, DadosDoChat } from "../../rotas/chat.ts";
@@ -12,6 +13,7 @@ import { caminhoDaSessao, escapar, modeloDoSeletor } from "../render.ts";
 import {
   barraDeEstado,
   chaveDa,
+  comResultado,
   contextoDaIssue,
   conversa,
   edicaoDoRegistro,
@@ -19,7 +21,7 @@ import {
   envio,
   erroDaFalha,
   etiquetasDeAnexo,
-  ferramenta,
+  doSistema,
   type Item,
   lateral,
   linhaDoDialogo,
@@ -31,12 +33,13 @@ import {
   respostaDoDialogo,
   seletorDeSessoes,
 } from "./chat.ts";
+import { desenharConversa, desmontarConversa } from "./chat-conversa.tsx";
 import { evidenciaNaCaixa, seletorDeModelo } from "./issue.ts";
 import { carregarTextos, modelos as modelosDoPi } from "./issue-montar.ts";
 
 const ESQUELETO =
-  '<div class="pagina-chat"><div data-barra></div><div class="chat-layout"><div class="coluna-conversa">' +
-  '<div class="conversa" data-conversa aria-live="polite"></div><div data-envio-area></div></div>' +
+  '<div class="pagina-chat"><div data-barra></div><div class="chat-layout"><div data-conversa-area>' +
+  "</div>" +
   '<aside class="lateral" aria-label="Ao lado da conversa"><div class="lado" data-lateral></div><div class="lado" data-contexto></div></aside></div></div>';
 
 type Evento = Record<string, unknown> & { type?: string };
@@ -47,12 +50,6 @@ const postar = (caminho: string, corpo: unknown = {}) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(corpo),
   });
-
-/** O Auditor está no fim da página: o que chega rola junto; se ele subiu para ler, a página fica onde está. */
-const noFim = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
-const rolarAoFim = () => {
-  scrollTo(0, document.documentElement.scrollHeight);
-};
 
 /** O **ver tudo** de uma chamada de ferramenta: a saída inteira na caixa. Também na prévia do Histórico. */
 export function verSaida(botao: Element): void {
@@ -70,58 +67,68 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   const raiz = main.querySelector<HTMLElement>(".pagina-chat") ?? main;
   const parte = (seletor: string) => raiz.querySelector<HTMLElement>(seletor) ?? raiz;
   const barra = parte("[data-barra]");
-  const lista = parte("[data-conversa]");
-  const areaDeEnvio = parte("[data-envio-area]");
+  const areaDeEnvio = parte("[data-conversa-area]");
   const aoLado = parte("[data-lateral]");
   const contexto = parte("[data-contexto]");
 
   let cabecalho: CabecalhoDoChat | undefined;
   let modelo = "";
   let modo: ModoEnvio = "steer";
-  let formaDoEnvio = "";
   let formaDoLado = "";
   /** As chaves do retrato e das linhas do sistema, para o que chega ao vivo não repetir o que já está na tela. */
   const vistas = new Set<string>();
-  /** As chamadas de ferramenta por id, para completá-las quando o resultado chegar. */
-  const chamadas = new Map<string, Record<string, unknown>>();
+  /** A conversa como o assistant-ui a desenha; o que chega ao vivo entra no fim. */
+  let mensagens: ThreadMessageLike[] = [];
   /** A mensagem do agente chegando em fluxo. */
-  let fluxo: { el: HTMLElement; texto: string; raciocinio: string } | undefined;
+  let fluxo: { texto: string; raciocinio: string } | undefined;
   /** As sessões cujo histórico vai com a próxima mensagem (F4 §6.8). */
   let anexos: InfoSessao[] = [];
   /** A página da issue, para o contexto ao lado, os artefatos na caixa e o seletor de modelo da falha. */
   let pagina: PaginaDaIssue | undefined;
   let leituras = 0;
 
-  /** Acrescenta ao fim da conversa, antes do que chega em fluxo, rolando junto se o Auditor está no fim. */
-  function acrescentar(html: string): void {
-    const rolar = noFim();
-    lista.insertAdjacentHTML("beforeend", html);
-    if (fluxo) lista.append(fluxo.el);
-    if (rolar) rolarAoFim();
+  /** Redesenha a conversa e o envio; o React só troca o que mudou, e o Viewport rola junto se o Auditor está no fim. */
+  function desenhar(): void {
+    if (!cabecalho) return;
+    desenharConversa(areaDeEnvio, {
+      mensagens: fluxo ? [...mensagens, emFluxo(fluxo.texto, fluxo.raciocinio)] : mensagens,
+      envio: envio(cabecalho, modo),
+      anexos: etiquetasDeAnexo(anexos),
+      aoEnviar: enviar,
+    });
+    // As etiquetas do formulário de retomada (HTML pronto de chat.ts) ficam por nossa conta; as do compositor, do React.
+    const daRetomada = areaDeEnvio.querySelector<HTMLElement>("[data-retomar] [data-anexos]");
+    if (daRetomada) {
+      daRetomada.innerHTML = etiquetasDeAnexo(anexos);
+      daRetomada.hidden = anexos.length === 0;
+    }
   }
 
   /** As linhas do sistema que ainda não estão na conversa. */
   function linhasNovas(itens: Item[]): void {
     const novas = itens.filter(({ chave }) => !vistas.has(chave));
     for (const { chave } of novas) vistas.add(chave);
-    acrescentar(novas.map(({ html }) => html).join(""));
-  }
-
-  function guardarChamadas(m: MensagemPi): void {
-    if (m.role !== "assistant" || typeof m.content === "string") return;
-    for (const b of m.content ?? []) if (b.type === "toolCall") chamadas.set(String(b.id), { ...b });
+    mensagens = [...mensagens, ...novas.map(doSistema)];
   }
 
   function fecharFluxo(): void {
-    fluxo?.el.remove();
     fluxo = undefined;
   }
 
-  function desenharAnexos(): void {
-    const area = areaDeEnvio.querySelector<HTMLElement>("[data-anexos]");
-    if (!area) return;
-    area.innerHTML = etiquetasDeAnexo(anexos);
-    area.hidden = anexos.length === 0;
+  /** O envio do compositor (F4 §6.8): o modo conforme o estado e os anexos de histórico. */
+  async function enviar(texto: string): Promise<void> {
+    if (!cabecalho) return;
+    avisar();
+    const modoDoEnvio = cabecalho.sessao.estado === "rodando" ? modo : "prompt";
+    const corpo = { texto, modo: modoDoEnvio, ...(anexos.length > 0 && { anexos: anexos.map((a) => a.sessao) }) };
+    try {
+      await postar(`/api/sessoes/${encodeURIComponent(sessao)}/mensagens`, corpo);
+    } catch (error_) {
+      mostrarErro(error_);
+      throw error_;
+    }
+    anexos = [];
+    desenhar();
   }
 
   /** Na falha, o seletor de modelo do ticket, quando a issue e os modelos do pi chegam; guarda o valor de partida. */
@@ -150,23 +157,13 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       .catch(mostrarErro);
   }
 
-  /** Barra, envio e coluna da direita; envio e coluna só mudam quando a forma muda, para não apagar o que se digita. */
+  /** Barra, conversa com o envio e coluna da direita; a coluna só muda quando a forma muda, para não apagar o que se digita. */
   function aplicar(c: CabecalhoDoChat): void {
     cabecalho = c;
     // Uma execução nova com o modelo fixado (C20) troca o da barra já no início, antes da primeira resposta.
     if (c.execucoes.at(-1)?.modelo) modelo = modeloDe(c, []);
     barra.innerHTML = barraDeEstado(c, modelo);
     const { sessao: s } = c;
-    const forma = [s.estado, s.motivo, s.etapa, s.dialogos[0]?.id].join("|");
-    if (forma !== formaDoEnvio) {
-      formaDoEnvio = forma;
-      const digitado = areaDeEnvio.querySelector<HTMLTextAreaElement>("textarea[name=texto]")?.value ?? "";
-      areaDeEnvio.innerHTML = envio(c, modo);
-      const texto = areaDeEnvio.querySelector<HTMLTextAreaElement>("textarea[name=texto]");
-      if (texto) texto.value = digitado;
-      desenharAnexos();
-      desenharSeletor();
-    }
     const doLado = JSON.stringify([s.motivo, s.etapa, c.issue, c.registro]);
     const sujo = aoLado.querySelector("[data-sujo]") !== null;
     if (doLado !== formaDoLado && !sujo) {
@@ -179,41 +176,38 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       ...erroDaFalha(c),
       ...s.dialogos.map(linhaDoDialogo),
     ]);
+    desenhar();
+    // O select que o Auditor já mexeu não é refeito a cada estado.
+    if (!areaDeEnvio.querySelector("[data-seletor-modelo] select:not([disabled])")) desenharSeletor();
     lerContexto(c);
   }
 
   function retrato(dados: DadosDoChat): void {
-    lista.innerHTML = "";
     vistas.clear();
-    chamadas.clear();
     fecharFluxo();
-    formaDoEnvio = "";
     formaDoLado = "";
-    for (const e of dados.conversa) if (e.type === "message") guardarChamadas(e.message as MensagemPi);
     modelo = modeloDe(dados, dados.conversa);
-    const itens = conversa(dados, dados.conversa);
-    for (const { chave } of itens) vistas.add(chave);
-    lista.innerHTML = itens.map(({ html }) => html).join("");
+    mensagens = conversa(dados, dados.conversa);
+    for (const { id } of mensagens) vistas.add(String(id));
+    for (const e of dados.conversa) if (e.type === "message") vistas.add(chaveDa(e.message as MensagemPi));
     aplicar(dados);
-    rolarAoFim();
   }
 
   function aoFimDaMensagem(evento: Evento): void {
     const m = evento.message as MensagemPi;
     if (m.role === "assistant") fecharFluxo();
-    if (vistas.has(chaveDa(m))) return;
-    if (m.role === "toolResult") {
-      const el = lista.querySelector<HTMLDetailsElement>(`[data-chamada="${CSS.escape(String(m.toolCallId))}"]`);
-      const chamada = chamadas.get(String(m.toolCallId));
-      if (el && chamada) el.outerHTML = ferramenta(chamada, m, el.open);
+    if (vistas.has(chaveDa(m))) {
+      desenhar();
       return;
     }
-    guardarChamadas(m);
+    vistas.add(chaveDa(m));
+    if (m.role === "toolResult") mensagens = mensagens.map((x) => comResultado(x, m));
+    else if (!evento.fabriquinha) mensagens = [...mensagens, ...mensagem(m)];
     if (m.role === "assistant" && cabecalho) {
       modelo = modeloDe(cabecalho, [evento]);
       barra.innerHTML = barraDeEstado(cabecalho, modelo);
     }
-    if (!evento.fabriquinha) acrescentar(mensagem(m));
+    desenhar();
   }
 
   /** Texto e raciocínio que chegam em `message_update` (F4 §5.4), com o cursor no fim. */
@@ -223,9 +217,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (delta.type === "text_delta") fluxo.texto += delta.delta;
     else if (delta.type === "thinking_delta") fluxo.raciocinio += delta.delta;
     else return;
-    const rolar = noFim();
-    fluxo.el.innerHTML = emFluxo(fluxo.texto, fluxo.raciocinio);
-    if (rolar) rolarAoFim();
+    desenhar();
   }
 
   const fonte = new EventSource(`/api/sessoes/${encodeURIComponent(sessao)}/eventos`);
@@ -236,13 +228,11 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     else if (evento.type === "message_end") aoFimDaMensagem(evento);
     else if (evento.type === "message_update") aoFluxo(evento);
     else if (evento.type === "message_start" && (evento.message as MensagemPi).role === "assistant") {
-      fecharFluxo();
-      fluxo = { el: document.createElement("div"), texto: "", raciocinio: "" };
-      fluxo.el.className = "fluxo";
-      fluxo.el.innerHTML = emFluxo("", "");
-      acrescentar("");
+      fluxo = { texto: "", raciocinio: "" };
+      desenhar();
     } else if (evento.type === "extension_ui_request" && "title" in evento) {
       linhasNovas([linhaDoDialogo(evento as Dialogo)]);
+      desenhar();
     }
   };
   // Fechado de vez (404, 401): a mensagem do servidor só vem pela API. Caído, o navegador reconecta sozinho.
@@ -263,9 +253,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (!botao) return;
     if (botao.dataset.modo) {
       modo = botao.dataset.modo as ModoEnvio;
-      for (const b of areaDeEnvio.querySelectorAll<HTMLElement>("[data-modo]")) {
-        b.setAttribute("aria-pressed", String(b === botao));
-      }
+      desenhar();
     } else if (botao.dataset.abortar !== undefined) {
       acao(postar(`/api/sessoes/${encodeURIComponent(sessao)}/abortar`));
     } else if (botao.dataset.concluir !== undefined) {
@@ -297,7 +285,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       acao(escolherAnexo());
     } else if (removerAnexo) {
       anexos = anexos.filter((a) => a.sessao !== removerAnexo);
-      desenharAnexos();
+      desenhar();
     } else if (evidencia && pagina) {
       const e = pagina.evidencias.find((x) => x.id === Number(evidencia));
       if (e) {
@@ -311,19 +299,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     evento.preventDefault();
     const form = evento.target as HTMLFormElement;
     const campos = Object.fromEntries(new FormData(form)) as Record<string, string>;
-    if (form.dataset.envio !== undefined) {
-      const texto = String(campos.texto).trim();
-      if (!texto || !cabecalho) return;
-      const modoDoEnvio = cabecalho.sessao.estado === "rodando" ? modo : "prompt";
-      const corpo = { texto, modo: modoDoEnvio, ...(anexos.length > 0 && { anexos: anexos.map((a) => a.sessao) }) };
-      acao(
-        postar(`/api/sessoes/${encodeURIComponent(sessao)}/mensagens`, corpo).then(() => {
-          form.reset();
-          anexos = [];
-          desenharAnexos();
-        }),
-      );
-    } else if (form.dataset.retomar !== undefined) {
+    if (form.dataset.retomar !== undefined) {
       acao(responderERetomar(form, String(campos.texto).trim()));
     } else if (form.dataset.dialogo) {
       const corpo = respostaDoDialogo(String(form.dataset.metodo), String(campos.valor));
@@ -371,7 +347,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     const comAnexos = anexos.length > 0 ? { anexos: anexos.map((a) => a.sessao) } : {};
     await postar(`/api/tickets/${ticket()}/reabrir`, { ...(instrucao && { instrucao }), ...comAnexos });
     anexos = [];
-    desenharAnexos();
+    desenhar();
   }
 
   /** As sessões que o seletor do **+ Anexar histórico** mostra na caixa. */
@@ -402,16 +378,16 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     const escolhida = escolhas.find((s) => s.sessao === alvo?.dataset.anexarSessao);
     if (!escolhida) return;
     anexos = [...anexos, escolhida];
-    desenharAnexos();
+    desenhar();
     elemento("[data-caixa]", HTMLDialogElement).close();
-    areaDeEnvio.querySelector<HTMLTextAreaElement>("textarea[name=texto]")?.focus();
+    areaDeEnvio.querySelector<HTMLTextAreaElement>("textarea")?.focus();
   };
   corpoDaCaixa.addEventListener("click", aoEscolher, { signal });
 
   // Enter envia; Shift+Enter quebra a linha.
   raiz.addEventListener("keydown", (evento) => {
     const alvo = evento.target as HTMLElement;
-    if (evento.key !== "Enter" || evento.shiftKey || evento.isComposing || !alvo.matches("textarea[name=texto]"))
+    if (evento.key !== "Enter" || evento.shiftKey || evento.isComposing || !alvo.matches("[data-retomar] textarea"))
       return;
     evento.preventDefault();
     alvo.closest("form")?.requestSubmit();
@@ -419,5 +395,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
 
   signal.addEventListener("abort", () => {
     fonte.close();
+    desmontarConversa(areaDeEnvio);
   });
 }

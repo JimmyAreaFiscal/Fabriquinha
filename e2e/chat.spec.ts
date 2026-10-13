@@ -102,10 +102,18 @@ test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um di�
   await expect(mensagem).toHaveAttribute("placeholder", "Mensagem para o agente enquanto ele trabalha");
   await mensagem.fill("use a validade");
   await mensagem.press("Enter");
-  await expect(conversa.locator(".msg.voce").last()).toHaveText("vocêuse a validade");
-  await expect(conversa.locator(".msg.agente").last()).toHaveText("agenteRedirecionado: use a validade");
+  await expect(conversa.locator(".msg.voce").last()).toHaveText("use a validade");
+  await expect(conversa.locator(".msg.agente").last()).toHaveText("Redirecionado: use a validade");
   await expect(fluxo).toHaveCount(0);
   await expect(conversa.locator(".msg.agente", { hasText: "Os testes esperam a ordem antiga" })).toHaveCount(1);
+
+  // Balões: o do Auditor à direita, o do agente à esquerda, sem rótulo (CA-1).
+  const doAuditor = await conversa.locator(".msg.voce .balao").last().boundingBox();
+  const doAgente = await conversa.locator(".msg.agente .balao").first().boundingBox();
+  const lista = await conversa.boundingBox();
+  expect((doAuditor?.x ?? 0) + (doAuditor?.width ?? 0)).toBeGreaterThan((lista?.x ?? 0) + (lista?.width ?? 0) - 40);
+  expect(doAgente?.x ?? 1000).toBeLessThan((lista?.x ?? 0) + 40);
+  expect(doAuditor?.x).toBeGreaterThan(doAgente?.x ?? 1000);
 
   // O diálogo da extensão toma o lugar do envio até o Auditor responder.
   await expect(barra.locator(".pill")).toHaveText("aguarda você · diálogo");
@@ -120,13 +128,14 @@ test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um di�
   await dialogo.getByText("Validade mais próxima").click();
   await dialogo.getByRole("button", { name: "Responder" }).click();
   await expect(conversa.locator(".msg.agente").last()).toHaveText(
-    'agenteResposta do diálogo: {"value":"Validade mais próxima"}',
+    'Resposta do diálogo: {"value":"Validade mais próxima"}',
   );
   await expect(dialogo).toHaveCount(0);
 });
 
-test("registra pelo chat, corrige o registro ao lado e aprova o registro", async ({ pagina, fabriquinha }) => {
-  projeto(fabriquinha.raiz);
+/** A sessão de registro de uma necessidade nova, aberta no chat: aguarda o Auditor, que ainda não escreveu nada. */
+async function abrirRegistro(pagina: Page, { base, raiz }: Fabriquinha): Promise<string> {
+  projeto(raiz);
   const { sessao } = await pagina.evaluate(async () => {
     const r = await fetch("/api/registros", {
       method: "POST",
@@ -135,7 +144,143 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
     });
     return (await r.json()) as { sessao: string };
   });
-  await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
+  await pagina.goto(`${base}/sessions/${sessao}`);
+  return sessao;
+}
+
+test("a conversa rola sozinha: a página fica parada, segue o fim e para quando o Auditor sobe", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(
+    fabriquinha.raiz,
+    `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
+       VALUES (1, 'loja', 'Timeout no checkout com cupom', 'problema', '[longo]', 'desenvolvimento', '2026-10-11T12:00:00.000Z');
+     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+       VALUES (1, 1, 'desenvolvimento', 'Buscar cupons sem N+1', 'aberto', 'fabriquinha', '2026-10-11T12:00:00.000Z');`,
+  );
+  await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
+  await pagina.getByRole("button", { name: "Executar agora" }).click();
+  await pagina.getByRole("link", { name: /chat →/ }).click();
+  const conversa = pagina.locator("[data-conversa]");
+  const fluxo = conversa.locator(".fluxo");
+  await expect(fluxo).toContainText("Começo do fluxo.");
+
+  // CA-2: só a lista rola; a barra de estado e o campo Mensagem seguem na tela.
+  expect(await pagina.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  expect(await conversa.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true);
+  await expect(pagina.locator(".estado-sessao")).toBeInViewport();
+  await expect(pagina.getByRole("textbox", { name: "Mensagem" })).toBeInViewport();
+
+  // CA-3: no fim, a lista segue o texto e o cursor fica à vista.
+  const noFim = () => conversa.evaluate((e) => e.scrollHeight - e.scrollTop - e.clientHeight < 8);
+  await expect(fluxo).toContainText("Trecho 2 do fluxo.");
+  await expect(fluxo.locator(".cursor")).toBeInViewport();
+  await expect.poll(noFim).toBe(true);
+
+  // CA-4: rolada para cima, a lista fica onde está enquanto chegam trechos.
+  await conversa.hover();
+  await pagina.mouse.wheel(0, -100_000);
+  await expect.poll(() => conversa.evaluate((e) => e.scrollTop)).toBe(0);
+  const trechos = await fluxo.locator("p").count();
+  await expect(fluxo.locator("p")).toHaveCount(trechos + 2);
+  expect(await conversa.evaluate((e) => e.scrollTop)).toBe(0);
+});
+
+test("o campo Mensagem: só espaços não envia, Shift+Enter quebra a linha e o texto do agente é Markdown seguro", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  await abrirRegistro(pagina, fabriquinha);
+  const conversa = pagina.locator("[data-conversa]");
+  const mensagem = pagina.locator("form[data-envio]").getByRole("textbox", { name: "Mensagem" });
+  await expect(conversa.locator(".msg")).toHaveText(["pronto"]);
+  const envios: string[] = [];
+  pagina.on("request", (r) => {
+    if (r.method() === "POST" && r.url().endsWith("/mensagens")) envios.push(r.url());
+  });
+
+  // CA-6
+  await mensagem.fill("   ");
+  await mensagem.press("Enter");
+  await pagina.waitForTimeout(300);
+  await expect(mensagem).toHaveValue("   ");
+  await expect(conversa.locator(".msg")).toHaveCount(1);
+  expect(envios).toHaveLength(0);
+
+  // CA-7
+  await mensagem.fill("linha 1");
+  await mensagem.press("Shift+Enter");
+  await expect(mensagem).toHaveValue("linha 1\n");
+  await pagina.waitForTimeout(300);
+  await expect(conversa.locator(".msg")).toHaveCount(1);
+  expect(envios).toHaveLength(0);
+
+  // CA-14
+  await mensagem.fill("eco: **negrito** <script>window.invadido = 1</script>");
+  await mensagem.press("Enter");
+  const agente = conversa.locator(".msg.agente").last();
+  await expect(agente).toHaveText("negrito <script>window.invadido = 1</script>");
+  await expect(agente.locator("strong")).toHaveText("negrito");
+  await expect(conversa.locator("script")).toHaveCount(0);
+  expect(await pagina.evaluate(() => (window as { invadido?: number }).invadido)).toBeUndefined();
+});
+
+test("diálogo confirm cancelado; o mesmo diálogo respondido em outra aba avisa que não está pendente", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const sessao = await abrirRegistro(pagina, fabriquinha);
+  const conversa = pagina.locator("[data-conversa]");
+  const mensagem = pagina.getByRole("textbox", { name: "Mensagem" });
+
+  // CA-10
+  await mensagem.fill("pergunte confirm");
+  await mensagem.press("Enter");
+  const dialogo = pagina.locator("form.dialogo-ext");
+  await expect(dialogo).toContainText("Posso apagar o cache?");
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialogo).toHaveCount(0);
+  await expect(conversa.locator(".msg.agente").last()).toHaveText('Resposta do diálogo: {"cancelled":true}');
+
+  // CA-11: a segunda aba só lê o retrato e depois ignora os eventos, como uma aba que ficou para trás.
+  await mensagem.fill("pergunte select");
+  await mensagem.press("Enter");
+  await expect(dialogo).toContainText("Qual ordem os cupons devem ter?");
+  const segunda = await pagina.context().newPage();
+  await segunda.addInitScript(() => {
+    const Original = window.EventSource;
+    window.EventSource = class extends Original {
+      constructor(url: string | URL, opcoes?: EventSourceInit) {
+        super(url, opcoes);
+        let lidas = 0;
+        this.addEventListener("message", (evento) => {
+          if (++lidas > 1) evento.stopImmediatePropagation();
+        });
+      }
+    };
+  });
+  await segunda.goto(`${fabriquinha.base}/sessions/${sessao}`);
+  const dialogoDaSegunda = segunda.locator("form.dialogo-ext");
+  await expect(dialogoDaSegunda).toContainText("Qual ordem os cupons devem ter?");
+  await dialogo.getByRole("button", { name: "Responder" }).click();
+  await expect(dialogo).toHaveCount(0);
+  await dialogoDaSegunda.getByRole("button", { name: "Responder" }).click();
+  await expect(segunda.locator("[data-aviso]")).toContainText("não está pendente");
+  await expect(segunda).toHaveURL(`${fabriquinha.base}/sessions/${sessao}`);
+});
+
+test("+ Anexar histórico sem outra sessão: a caixa avisa e nenhuma etiqueta nasce", async ({ pagina, fabriquinha }) => {
+  await abrirRegistro(pagina, fabriquinha);
+  const envio = pagina.locator("form[data-envio]");
+  await envio.getByRole("button", { name: "+ Anexar histórico" }).click();
+  const caixa = pagina.getByRole("dialog", { name: "Anexar histórico" });
+  await expect(caixa).toContainText("Nenhuma outra sessão para anexar.");
+  await expect(envio.locator(".anexo")).toHaveCount(0);
+});
+
+test("registra pelo chat, corrige o registro ao lado e aprova o registro", async ({ pagina, fabriquinha }) => {
+  await abrirRegistro(pagina, fabriquinha);
 
   const barra = pagina.locator(".estado-sessao");
   await expect(barra.getByRole("link", { name: "I-1 sem título" })).toBeVisible();
@@ -143,7 +288,7 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
   await expect(barra.locator(".pill")).toHaveText("aguarda você · conversa");
   const conversa = pagina.locator("[data-conversa]");
   await expect(conversa.locator(".sistema").first()).toHaveText("Execução E-1 iniciada · interativa · prompt da etapa");
-  await expect(conversa.locator(".msg")).toHaveText(["agentepronto"]);
+  await expect(conversa.locator(".msg")).toHaveText(["pronto"]);
 
   // O Auditor corrige direto o que vai no registro.
   const registro = pagina.locator("form[data-registro]");
@@ -163,11 +308,11 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
   await mensagem.fill("<b>sem html</b> e **registre** agora");
   await envio.getByRole("button", { name: "Enviar" }).click();
   const minha = conversa.locator(".msg.voce").last();
-  await expect(minha).toHaveText("você<b>sem html</b> e registre agora");
+  await expect(minha).toHaveText("<b>sem html</b> e registre agora");
   await expect(minha.locator("b")).toHaveCount(0);
   await expect(minha.locator("strong")).toHaveText("registre");
   await expect(conversa.locator(".msg.agente").last()).toHaveText(
-    "agenteRegistrei o título, o tipo, o comportamento e os critérios de aceite.",
+    "Registrei o título, o tipo, o comportamento e os critérios de aceite.",
   );
 
   // Registro completo: o gate no lugar do formulário, e o envio só avisa.
@@ -322,7 +467,7 @@ test("abre uma consulta com o histórico de outra sessão anexado", async ({ pag
   await expect(barra).toContainText("desenvolvimento · consulta");
   await expect(barra.locator(".pill")).toHaveText("aguarda você · conversa");
   const conversa = pagina.locator("[data-conversa]");
-  await expect(conversa.locator(".msg.agente")).toHaveText(["agentepronto"]);
+  await expect(conversa.locator(".msg.agente")).toHaveText(["pronto"]);
 
   // + Anexar histórico: a outra sessão no seletor; a escolhida vira etiqueta removível.
   const envio = pagina.locator("form[data-envio]");
@@ -350,7 +495,7 @@ test("abre uma consulta com o histórico de outra sessão anexado", async ({ pag
   await expect(minha).toContainText("Histórico da sessão T-2 (I-2, desenvolvimento) em");
   await expect(minha).toContainText("historico-T-2.md; leia antes de responder.");
   await expect(etiqueta).toHaveCount(0);
-  await expect(conversa.locator(".msg.agente").last()).toHaveText("agentepronto");
+  await expect(conversa.locator(".msg.agente").last()).toHaveText("pronto");
 
   // Ao lado, o ticket da consulta marcado e o link para o chat da principal do outro ticket… da mesma issue.
   const contexto = pagina.getByRole("region", { name: "Contexto da issue" });
