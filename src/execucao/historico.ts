@@ -3,13 +3,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { type Agregado, CANCELADA, type Execucao } from "../dominio/agregado.ts";
 import { encontrado } from "../dominio/erros.ts";
-import type { Agregado } from "../dominio/agregado.ts";
 import { naSessaoPrincipal, ticketDe } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { dirDaExecucao, issueDaSessao } from "../persistencia/execucoes.ts";
-import { agregado } from "../persistencia/issues.ts";
+import { agregado, agregadoExistente } from "../persistencia/issues.ts";
+import { custoPorExecucao } from "../persistencia/metricas.ts";
+import { ABORTADA } from "./gerente.ts";
 import { type InfoSessao, infoDaSessao, lerConversa } from "./sessoes.ts";
 
 /** ponytail: o corte é fixo (F4 §6.8); se algum resultado longo fizer falta, aumentar o limite. */
@@ -149,4 +151,46 @@ export async function anexarHistorico(
     );
   }
   return linhas.join("\n");
+}
+
+export type Resultado = "concluida" | "falha" | "abortada" | "cancelada";
+
+/** Uma linha do Histórico (F7 §4.4): a sessão terminada, o título da issue, o resultado e o custo dela. */
+export interface SessaoDoHistorico extends InfoSessao {
+  titulo: string | null;
+  resultado: Resultado;
+  custo: number;
+}
+
+/** O resultado da sessão é o da última execução; a autônoma que o Auditor aborta falha com o erro `ABORTADA`; a da issue cancelada, com `CANCELADA`. */
+function resultado(e: Execucao | undefined): Resultado {
+  if (e?.resultado !== "falha") return "concluida";
+  if (e.erro === CANCELADA) return "cancelada";
+  return e.erro === ABORTADA ? "abortada" : "falha";
+}
+
+/**
+ * As terminadas com o que a linha do Histórico mostra; o custo soma o `uso` de todas as execuções da sessão.
+ * ponytail: relê o agregado de cada issue que `sessoes` já leu; juntar as duas leituras quando o histórico pesar.
+ */
+export function noHistorico(banco: DatabaseSync, lista: InfoSessao[]): SessaoDoHistorico[] {
+  const lidas = new Map<Id, { ag: Agregado; custos: Record<string, number> }>();
+  const daIssue = (id: Id) => {
+    const lida = lidas.get(id) ?? {
+      ag: agregadoExistente(banco, id),
+      custos: custoPorExecucao(banco, id),
+    };
+    lidas.set(id, lida);
+    return lida;
+  };
+  return lista.map((s) => {
+    const { ag, custos } = daIssue(s.issue);
+    const execucoes = ag.execucoes.filter((e) => e.sessaoPi === s.sessao);
+    return {
+      ...s,
+      titulo: ag.issue.titulo,
+      resultado: resultado(execucoes.at(-1)),
+      custo: execucoes.reduce((soma, e) => soma + (custos[String(e.id)] ?? 0), 0),
+    };
+  });
 }
