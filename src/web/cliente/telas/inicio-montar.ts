@@ -11,15 +11,15 @@ import { formularioDeRegistro, inicio } from "./inicio.ts";
 import { mesDe } from "./metricas.ts";
 
 /**
- * Registrar necessidade (F4 §6.6) na caixa: projeto e dependências; o servidor faz o C1 e abre a sessão, e o
+ * Registrar necessidade (F4 §6.6) na caixa: projeto, descrição e dependências; o servidor faz o C1 e abre a sessão, e o
  * navegador vai para o chat dela. A recusa aparece no rodapé, com o que já foi escolhido.
  */
 export async function abrirRegistro(issues: readonly IssueDoBoard[], escolhido?: string): Promise<void> {
   const projetos = await api<ProjetoListado[]>("/api/projetos");
-  const desenhar = (projeto?: string, deps: readonly string[] = [], falha?: string): void => {
+  const desenhar = (projeto?: string, deps: readonly string[] = [], descricao = "", falha?: string): void => {
     abrirCaixa({
       titulo: "Registrar necessidade",
-      corpo: formularioDeRegistro(projetos, issues, projeto, falha),
+      corpo: formularioDeRegistro(projetos, issues, projeto, falha, descricao),
       estreita: true,
     });
     const form = document.querySelector<HTMLFormElement>("[data-registro]");
@@ -30,6 +30,11 @@ export async function abrirRegistro(issues: readonly IssueDoBoard[], escolhido?:
       evento.preventDefault();
       const nome = form.querySelector<HTMLSelectElement>('[name="projeto"]')?.value ?? "";
       const marcadas = [...form.querySelectorAll<HTMLInputElement>('[name="deps"]:checked')].map((c) => c.value);
+      const descricao = form.querySelector<HTMLTextAreaElement>('[name="descricao"]')?.value ?? "";
+      if (descricao.trim() === "") {
+        desenhar(nome, marcadas, descricao, "a descrição é obrigatória (descreva a necessidade)");
+        return;
+      }
       const botao = form.querySelector<HTMLButtonElement>('[type="submit"]');
       if (botao) {
         botao.disabled = true;
@@ -38,14 +43,14 @@ export async function abrirRegistro(issues: readonly IssueDoBoard[], escolhido?:
       api<{ sessao: string }>("/api/registros", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projeto: nome, deps: marcadas.map(Number) }),
+        body: JSON.stringify({ projeto: nome, deps: marcadas.map(Number), descricao }),
       })
         .then(({ sessao }) => {
           elemento("[data-caixa]", HTMLDialogElement).close();
           irPara(caminhoDaSessao(sessao));
         })
         .catch((error_: unknown) => {
-          desenhar(nome, marcadas, error_ instanceof Error ? error_.message : String(error_));
+          desenhar(nome, marcadas, descricao, error_ instanceof Error ? error_.message : String(error_));
         });
     });
   };

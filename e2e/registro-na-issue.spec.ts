@@ -30,7 +30,10 @@ async function aguardar(pagina: Page, { base }: Fabriquinha, sessao: string, mot
 test("devolver e aprovar o registro pela página da issue", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/home`);
-  const { sessao } = (await postar(pagina, "/api/registros", { projeto: "loja" })) as { sessao: string };
+  const { sessao } = (await postar(pagina, "/api/registros", {
+    projeto: "loja",
+    descricao: "Exportar pedidos em CSV",
+  })) as { sessao: string };
   await aguardar(pagina, fabriquinha, sessao, "conversa");
   await postar(pagina, `/api/sessoes/${sessao}/mensagens`, { texto: "registre", modo: "prompt" });
   await aguardar(pagina, fabriquinha, sessao, "gate_registro");
@@ -47,7 +50,7 @@ test("devolver e aprovar o registro pela página da issue", async ({ pagina, fab
   await expect(gate.locator(".fatos dd")).toHaveText([
     "Exportar pedidos em CSV",
     "funcionalidade",
-    "—",
+    "Exportar pedidos em CSV",
     "hoje a contabilidade copia os pedidos à mão",
   ]);
   await expect(gate.locator("th")).toHaveText(["ID", "Dado", "Quando", "Então"]);

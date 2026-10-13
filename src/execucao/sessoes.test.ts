@@ -510,7 +510,7 @@ const rejeitaCom = (mensagem: string) => (e: unknown) => e instanceof ErroDeRegr
 test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no chat, devolver com motivo e aprovar", async () => {
   const c = cenario({ comAgente: true });
   const opcoes = { ociosidadeMin: 1 };
-  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   assert.equal(await estadoDe(c, sessao), "rodando", "a preparação da worktree conta como rodando");
   const chat = await abrirChat(c.banco, sessao);
   assert.deepEqual(chat.conversa, [], "o pi ainda não gravou a sessão");
@@ -525,6 +525,7 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
   const prompt = readFileSync(join(c.raiz, "execucoes", "E-1", "prompt.md"), "utf8");
   assert.deepEqual(primeiro, { type: "prompt", message: prompt });
   assert.match(prompt, /## Modo de trabalhar: registro/);
+  assert.match(prompt, /## Descrição da issue\n\nExportar pedidos em CSV\n/);
   assert.doesNotMatch(prompt, /Execução autônoma/);
   assert.match(prompt, /\nVamos registrar uma necessidade no projeto loja \(issue I-1\)\.\n$/);
   assert.ok(eventos.some((e) => e.type === "agent_settled"));
@@ -603,7 +604,7 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
 test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a próxima mensagem a retoma no mesmo modo", async () => {
   const c = cenario();
   const opcoes = { ociosidadeMin: 0.01 };
-  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   // Um ouvinte do chat que lança não derruba a execução: o erro vai para o log dela.
   (await abrirChat(c.banco, sessao)).assinar(() => {
     throw new Error("o navegador fechou");
@@ -644,7 +645,7 @@ test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a pr�
   const umaResposta = [{ provedor: "anthropic", modelo: "claude-teste", chamadas: 1, custo: 0.01 }];
   assert.deepEqual([uso(1), uso(2)], [umaResposta, umaResposta]);
 
-  const outra = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const outra = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(() => c.execucoes()[2]?.resultado === "sucesso", "a parada da outra sessão");
   assert.deepEqual(
     (await sessoes(c.banco, { escopo: "ativas" })).map((s) => s.sessao),
@@ -657,7 +658,7 @@ test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a pr�
 test("diálogo pendente: a sessão interativa espera o Auditor sem parar por ociosidade; respondido, a ociosidade volta a contar", async () => {
   const c = cenario({ variante: "dialogo" });
   const opcoes = { ociosidadeMin: 0.01 };
-  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: dialogo", "o diálogo");
   const info = await infoDaSessao(c.banco, sessao);
   assert.deepEqual(
@@ -682,7 +683,7 @@ test("diálogo pendente: a sessão interativa espera o Auditor sem parar por oci
 test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo pendente e manda abort", async () => {
   const c = cenario({ variante: "espera", preparacao: ["sleep 0.5"] });
   const opcoes = { ociosidadeMin: 1 };
-  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await assert.rejects(
     enviar(c.banco, sessao, "já?", "steer", opcoes),
     rejeitaCom("o pi da sessão de T-1 ainda não subiu (espere a preparação da worktree)"),
@@ -756,7 +757,7 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
 test("interativa: a recusa de um comando vai ao chat e ao log sem derrubar o pi", async () => {
   const c = cenario({ variante: "espera", recusa: "prompt,steer" });
   const opcoes = { ociosidadeMin: 1 };
-  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a recusa do prompt");
   assert.match(c.log(1), /o pi recusou o comando prompt: modelo ocupado\n/);
   await enviar(c.banco, sessao, "de novo", "prompt", opcoes);
@@ -990,7 +991,7 @@ test("gate do PR: pedir mudanças com uma execução em andamento na issue não 
 
 test("banco fechado ao fim da sessão interativa: o término vai para o log em vez de derrubar o serviço", async () => {
   const c = cenario();
-  const sessao = registrarNecessidade(c.banco, "loja", [], { ociosidadeMin: 0.01 });
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", { ociosidadeMin: 0.01 });
   await ate(() => situacao(sessao)?.ocupado === false, "a conversa");
   c.banco.close();
   await ate(() => c.log(1).includes("E-1 não gravou o término:"), "o registro do erro no log");
@@ -999,7 +1000,7 @@ test("banco fechado ao fim da sessão interativa: o término vai para o log em v
 test("sessão com dois arquivos (F6 §3.1): a retomada falha com o motivo, e o chat diz como resolver", async () => {
   const c = cenario();
   const opcoes = { ociosidadeMin: 0.01 };
-  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
   const dir = join(c.raiz, "sessoes");
   const [arquivo] = readdirSync(dir);
@@ -1015,7 +1016,7 @@ test("sessão com dois arquivos (F6 §3.1): a retomada falha com o motivo, e o c
 
 test("pi que sai sozinho: C6 falha, mas o ticket interativo não falha e a sessão segue em conversa", async () => {
   const c = cenario({ variante: "sai" });
-  const sessao = registrarNecessidade(c.banco, "loja", [], { ociosidadeMin: 1 });
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", { ociosidadeMin: 1 });
   await ate(() => c.execucoes()[0]?.resultado === "falha", "o C6 da falha");
   assert.match(c.log(1), /E-1 terminou com falha: o pi saiu antes de terminar a execução \(código 3\)/);
   assert.equal(agregado(c.banco, 1)?.tickets[0]?.status, "em_execucao");
@@ -1037,7 +1038,7 @@ const inicioDe = (c: Cenario, sessao: string) =>
 test("consulta: copia a sessão principal, sem ferramentas de escrita, sem prompt e sem mudar o ticket", async () => {
   const c = cenario({ comAgente: true });
   const opcoes = { ociosidadeMin: 1 };
-  const principal = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const principal = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
   await decidirRegistroNoChat(c.banco, 1, { aprovado: true }, opcoes);
   const original = readFileSync(arquivoFalso(c, principal), "utf8");
@@ -1104,7 +1105,7 @@ test("consulta: copia a sessão principal, sem ferramentas de escrita, sem promp
 
 test("consulta de um ticket por decidir: para o pi ocioso, segue em conversa depois da ociosidade e retoma como consulta", async () => {
   const c = cenario({ comAgente: true });
-  const principal = registrarNecessidade(c.banco, "loja", [], { ociosidadeMin: 1 });
+  const principal = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", { ociosidadeMin: 1 });
   await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
   const opcoes = { ociosidadeMin: 0.01 };
   const consulta = await conversarSobre(c.banco, 1, opcoes);
@@ -1161,7 +1162,7 @@ test("consulta recusada: ticket sem sessão, sessão sem conversa gravada e agen
     conversarSobre(c.banco, 1, opcoes),
     rejeitaCom("a sessão de T-1 ainda não tem conversa gravada (espere o agente responder)"),
   );
-  const sessao = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(() => c.comandos().length === 1, "o prompt chegar ao pi");
   await assert.rejects(
     conversarSobre(c.banco, 2, opcoes),
@@ -1175,7 +1176,7 @@ test("consulta recusada: ticket sem sessão, sessão sem conversa gravada e agen
 test("consulta sem cópia: a primeira execução falhou antes de o pi subir, e a retomada copia a principal", async () => {
   const c = cenario({ comAgente: true });
   const opcoes = { ociosidadeMin: 1 };
-  const principal = registrarNecessidade(c.banco, "loja", [], opcoes);
+  const principal = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
   encerrar((await infoDaSessao(c.banco, principal)).execucao);
   assert.equal(await estadoDe(c, principal), "aguardando_humano: gate_registro");

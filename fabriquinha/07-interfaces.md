@@ -136,7 +136,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/registros` `{ projeto, deps }` | `registrarNecessidade` (F4, 6.6): C1, worktree e sessão interativa. Devolve a sessão para o cliente abrir o chat. |
+| `POST /api/registros` `{ projeto, deps, descricao }` | `registrarNecessidade` (F4, 6.6): C1 com a descrição, que é obrigatória (vazia ou só espaços dá 422 antes de gravar), worktree e sessão interativa. Devolve a sessão para o cliente abrir o chat. |
 | `POST /api/issues/:id` `{ titulo?, tipo?, descricao? }` | C2 do Auditor, só na fase `registro`. |
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
 | `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | C10. Devolver também envia o motivo ao agente como mensagem (F4, 6.6). |
@@ -222,7 +222,7 @@ Duas peças se repetem entre as páginas:
 
 **Início** (`/home`) — foco na decisão
 
-1. Cabeçalho com **Registrar necessidade**, que pede projeto e dependências e abre o chat do registro.
+1. Cabeçalho com **Registrar necessidade**, que pede projeto, descrição (obrigatória) e dependências e abre o chat do registro.
 2. Métricas do mês corrente de todos os projetos (F6, 5.7) numa frase: custo, tokens, issues registradas e concluídas, tickets criados e concluídos, PRs abertos e mergeados, com link para **Métricas**.
 3. **Aguarda você:** um card grande por sessão `aguardando_humano` (F4, 5.2), da mais antiga para a mais nova.
    - Cada card: o motivo em destaque, a issue com título, uma frase do que falta, projeto, ticket, etapa, modo e há quanto tempo.

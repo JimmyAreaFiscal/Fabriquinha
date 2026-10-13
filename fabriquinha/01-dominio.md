@@ -307,7 +307,7 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 
 | # | Comando | Ator | Pré-condições | Efeito |
 |---|---|---|---|---|
-| C1 | `registrarIssue(projeto, deps)` | Auditor | projeto existe; deps existem e não formam ciclo | Issue em `registro`, sem título e tipo; Ticket `registro` aberto. |
+| C1 | `registrarIssue(projeto, deps, descricao?)` | Auditor | projeto existe; deps existem e não formam ciclo; descrição opcional, até 1.000 palavras | Issue em `registro`, sem título e tipo, com a descrição informada (vazia se omitida); Ticket `registro` aberto. |
 | C2 | `editarIssue(issue, {titulo, tipo, descricao})` | agente do registro ou Auditor | fase `registro` | Atualiza os campos. |
 | C3 | `adicionarDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida`; dep existe; sem ciclo; não é a própria issue | Adiciona; idempotente. |
 | C4 | `removerDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida` | Remove; idempotente. |

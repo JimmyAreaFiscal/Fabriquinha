@@ -436,9 +436,10 @@ export function registrarNecessidade(
   banco: DatabaseSync,
   projeto: string,
   deps: Id[],
+  descricao: string,
   opcoes: OpcoesInterativa,
 ): string {
-  const ag = registrarIssue(banco, { projeto, deps }, AUDITOR);
+  const ag = registrarIssue(banco, { projeto, deps, descricao }, AUDITOR);
   const [ticket] = ag.tickets;
   const i = `I-${String(ag.issue.id)}`;
   return iniciarInterativa(
