@@ -120,6 +120,30 @@ test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuár
   banco.close();
 });
 
+test("as tabelas da Tarefa: N de 1 a 20, projeto e usuário existentes, alocação única", () => {
+  const banco = abrir(raizTemp());
+  banco.exec(
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+     INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd')`,
+  );
+  const falha = (sql: string, erro: RegExp) => {
+    assert.throws(() => {
+      banco.exec(sql);
+    }, erro);
+  };
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('fantasma', 't', 1, 'x')", /FOREIGN KEY/);
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('p', 't', 0, 'x')", /CHECK constraint failed/);
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('p', 't', 21, 'x')", /CHECK constraint failed/);
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('p', '', 1, 'x')", /CHECK constraint failed/);
+  banco.exec("INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'p', 't', 20, 'x')");
+  falha("INSERT INTO tarefa_usuario VALUES (2, 1)", /FOREIGN KEY/);
+  falha("INSERT INTO tarefa_usuario VALUES (1, 2)", /FOREIGN KEY/);
+  banco.exec("INSERT INTO tarefa_usuario VALUES (1, 1)");
+  falha("INSERT INTO tarefa_usuario VALUES (1, 1)", /UNIQUE constraint failed/);
+  banco.close();
+});
+
 test("abrir() propaga a falha de migração sem deixar a versão avançar", () => {
   const raiz = raizTemp();
   abrir(raiz).close();
@@ -175,7 +199,7 @@ test("migrar() recusa banco mais novo que o código, sem alterá-lo", () => {
 /** Banco na versão anterior à migração do cancelamento (C22, penúltima), com um ticket de cada tipo de filho que aponta para `ticket`. */
 function bancoAntesDoCancelamento(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES.slice(0, -4));
+  migrar(banco, MIGRACOES.slice(0, -5));
   banco.exec(`
     INSERT INTO projeto VALUES ('loja', '/r', 'main', 'github', '[]', '["t"]', 'k', '[{}]', '{}');
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'desenho', 'x');
@@ -246,7 +270,7 @@ test("migrar() desfaz a migração e religa as FKs quando ela deixa referência 
     },
     (erro) => erro instanceof ErroDeRegra && erro.message.includes("deixou 1 referência(s) órfã(s)"),
   );
-  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 4);
+  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 5);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ticket_novo'"), 0);
   assert.equal(valor(banco, "SELECT count(*) FROM pragma_table_info('issue') WHERE name = 'cancelada_em'"), 0);

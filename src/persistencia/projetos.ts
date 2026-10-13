@@ -155,6 +155,8 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   apagar("issue_dep", `issue IN (${DAS_ISSUES}) OR dep IN (${DAS_ISSUES})`);
   apagar("ticket", `issue IN (${DAS_ISSUES})`);
   apagar("varredura_base", "projeto = $p");
+  apagar("tarefa_usuario", "tarefa IN (SELECT id FROM tarefa WHERE projeto = $p)");
+  apagar("tarefa", "projeto = $p");
   apagar("usuario_simulado_anexo", "usuario IN (SELECT id FROM usuario_simulado WHERE projeto = $p)");
   apagar("usuario_simulado", "projeto = $p");
   apagar("issue", "projeto = $p");

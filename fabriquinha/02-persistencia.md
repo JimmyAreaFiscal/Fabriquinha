@@ -254,10 +254,25 @@ CREATE TABLE usuario_simulado_anexo (                             -- F8: manuais
   bytes   INTEGER NOT NULL CHECK (bytes >= 0),
   PRIMARY KEY (usuario, nome)
 );
+
+CREATE TABLE tarefa (                                             -- F8: o que o usuário simulado deve tentar fazer
+  id        INTEGER PRIMARY KEY,
+  projeto   TEXT NOT NULL REFERENCES projeto(nome),
+  texto     TEXT NOT NULL CHECK (length(texto) BETWEEN 1 AND 2000),
+  n         INTEGER NOT NULL CHECK (n BETWEEN 1 AND 20),            -- execuções por usuário alocado
+  criada_em TEXT NOT NULL
+);
+CREATE INDEX ix_tarefa_projeto ON tarefa(projeto);
+
+CREATE TABLE tarefa_usuario (                                     -- F8: os Usuários Simulados alocados à Tarefa
+  tarefa  INTEGER NOT NULL REFERENCES tarefa(id),
+  usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+  PRIMARY KEY (tarefa, usuario)
+);
 ```
 
 As FKs ficam sem `ON DELETE` (comportamento `RESTRICT`), exceto `evidencia_arquivo`.
-Remover o projeto apaga `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`).
+Remover o projeto apaga `tarefa_usuario`, `tarefa`, `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`).
 Assim, apagar um ticket que já tem execução, decisão ou evidência falha no banco, e o histórico nunca some por engano.
 Os únicos tickets apagados pelo domínio (C8, C13, C15) são de desenvolvimento ainda `aberto`, sem histórico.
 

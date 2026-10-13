@@ -1,5 +1,12 @@
-// Rotas da Simulação (F7 §4.2, F8): os Usuários Simulados do projeto e os seus anexos.
-import { anexar, criarUsuarioSimulado, removerAnexo, usuariosSimulados } from "../../persistencia/simulacao.ts";
+// Rotas da Simulação (F7 §4.2, F8): os Usuários Simulados do projeto, os seus anexos e as Tarefas.
+import {
+  anexar,
+  criarTarefa,
+  criarUsuarioSimulado,
+  removerAnexo,
+  tarefas,
+  usuariosSimulados,
+} from "../../persistencia/simulacao.ts";
 import { ErroHttp } from "../erros.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 
@@ -31,5 +38,15 @@ export const ROTAS_DA_SIMULACAO: Rota[] = [
     tratar: ({ banco, params }) => {
       removerAnexo(banco, IdDoCaminho.parse(params.id), String(params.nome));
     },
+  },
+  {
+    metodo: "GET",
+    caminho: "/api/projetos/:nome/tarefas",
+    tratar: ({ banco, params }) => tarefas(banco, String(params.nome)),
+  },
+  {
+    metodo: "POST",
+    caminho: "/api/projetos/:nome/tarefas",
+    tratar: ({ banco, params, corpo }) => criarTarefa(banco, String(params.nome), corpo),
   },
 ];

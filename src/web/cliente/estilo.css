@@ -1652,6 +1652,86 @@ input.erro {
   justify-content: flex-end;
 }
 
+/* Simulação (F8 §3): abas por projeto, formulário de nova Tarefa e os cartões das Tarefas. */
+.abas-projeto {
+  display: flex;
+  gap: 2px;
+}
+.abas-projeto a {
+  padding: 4px var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.abas-projeto a[aria-current="page"] {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.form-tarefa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+.form-tarefa h2 {
+  font-size: var(--fs-md);
+}
+.linha-tarefa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-5);
+}
+.linha-tarefa .btn {
+  margin-left: auto;
+}
+.num-campo.erro input {
+  border-color: var(--danger);
+}
+.alocar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.alocar legend {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+.tarefas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.tarefa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+}
+.tarefa-cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.tarefa-texto {
+  white-space: pre-wrap;
+}
+
 @media (max-width: 1100px) {
   .agendador {
     grid-template-columns: repeat(2, minmax(0, 1fr));

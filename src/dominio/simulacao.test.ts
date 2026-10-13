@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { z } from "zod";
-import { NomeDoAnexo, NovoUsuarioSimulado } from "./simulacao.ts";
+import { NomeDoAnexo, NovaTarefa, NovoUsuarioSimulado } from "./simulacao.ts";
 
 const erros = (schema: z.ZodType, entrada: unknown): string[] =>
   schema.safeParse(entrada).error?.issues.map((i) => `${i.path.join(".")}: ${i.message}`) ?? [];
@@ -45,4 +45,31 @@ test("NomeDoAnexo recusa formato fora da lista, nome vazio, longo, com / ou cara
   assert.ok(erros(NomeDoAnexo, "../manual.pdf").includes(`: ${barra}`));
   assert.ok(erros(NomeDoAnexo, "pasta/manual.pdf").includes(`: ${barra}`));
   assert.ok(erros(NomeDoAnexo, "man\nual.pdf").includes(`: ${barra}`));
+});
+
+test("NovaTarefa apara o texto e dá a mensagem de cada campo", () => {
+  assert.deepEqual(NovaTarefa.parse({ texto: "  Registrar uma necessidade ", n: 3, usuarios: [1, 2] }), {
+    texto: "Registrar uma necessidade",
+    n: 3,
+    usuarios: [1, 2],
+  });
+  assert.deepEqual(erros(NovaTarefa, { texto: " ", n: 3, usuarios: [1] }), ["texto: Tarefa obrigatória"]);
+  assert.deepEqual(erros(NovaTarefa, { texto: "t", n: 3, usuarios: [] }), [
+    "usuarios: Aloque ao menos um usuário simulado",
+  ]);
+});
+
+test("NovaTarefa aceita N de 1 a 20 inteiro; o resto dá a mensagem de N", () => {
+  for (const n of [1, 20]) assert.deepEqual(erros(NovaTarefa, { texto: "t", n, usuarios: [1] }), []);
+  for (const n of [0, -1, 2.5, "3", null]) {
+    assert.deepEqual(erros(NovaTarefa, { texto: "t", n, usuarios: [1] }), ["n: N deve ser um inteiro maior que zero"]);
+  }
+  assert.deepEqual(erros(NovaTarefa, { texto: "t", n: 21, usuarios: [1] }), ["n: N passa de 20"]);
+});
+
+test("NovaTarefa respeita o teto do texto e recusa campo desconhecido e usuário que não é ID", () => {
+  assert.deepEqual(erros(NovaTarefa, { texto: "t".repeat(2000), n: 1, usuarios: [1] }), []);
+  assert.equal(erros(NovaTarefa, { texto: "t".repeat(2001), n: 1, usuarios: [1] }).length, 1);
+  assert.equal(erros(NovaTarefa, { texto: "t", n: 1, usuarios: [1], extra: 1 }).length, 1);
+  assert.equal(erros(NovaTarefa, { texto: "t", n: 1, usuarios: [0] }).length, 1);
 });

@@ -1,9 +1,9 @@
 // Usuários Simulados e os seus anexos (F8 §2): o cadastro por projeto. O conteúdo do anexo fica em arquivos/ pelo SHA-256.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { encontrado, ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
+import { encontrado, ErroDeInexistente, ErroDeRegra, existe } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
-import { NomeDoAnexo, NovoUsuarioSimulado } from "../dominio/simulacao.ts";
+import { NomeDoAnexo, NovaTarefa, NovoUsuarioSimulado } from "../dominio/simulacao.ts";
 import { guardarBytes } from "./arquivos.ts";
 import { escrever } from "./banco.ts";
 import { projeto } from "./projetos.ts";
@@ -20,6 +20,18 @@ export interface UsuarioSimulado {
   nome: string;
   descricao: string;
   anexos: Anexo[];
+}
+
+export interface Tarefa {
+  id: Id;
+  projeto: string;
+  texto: string;
+  n: number;
+  criadaEm: string;
+  /** Os Usuários Simulados alocados, em ordem de criação. */
+  usuarios: { id: Id; nome: string }[];
+  /** Ainda não há como executar: o ticket seguinte da I-10 preenche. */
+  execucoes: never[];
 }
 
 const doProjeto = (banco: DatabaseSync, nome: string): void => {
@@ -101,4 +113,55 @@ export function removerAnexo(banco: DatabaseSync, usuario: Id, nome: string): vo
       "confira o nome do anexo",
     );
   }
+}
+
+/** Cria a Tarefa do projeto e a aloca aos Usuários Simulados dele; usuário de outro projeto é recusado. */
+export function criarTarefa(banco: DatabaseSync, nomeDoProjeto: string, entrada: unknown): Tarefa {
+  const { texto, n, usuarios } = NovaTarefa.parse(entrada);
+  const criadaEm = new Date().toISOString();
+  const id = escrever(banco, () => {
+    doProjeto(banco, nomeDoProjeto);
+    const alocar = [...new Set(usuarios)];
+    const dele = banco.prepare("SELECT id FROM usuario_simulado WHERE id = ? AND projeto = ?");
+    const alheio = alocar.find((u) => !dele.get(u, nomeDoProjeto));
+    if (alheio !== undefined) {
+      throw new ErroDeRegra(
+        `o Usuário Simulado ${String(alheio)} não é do projeto ${nomeDoProjeto}`,
+        "aloque só usuários simulados do projeto",
+      );
+    }
+    const { lastInsertRowid } = banco
+      .prepare("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES (?, ?, ?, ?)")
+      .run(nomeDoProjeto, texto, n, criadaEm);
+    for (const u of alocar) {
+      banco.prepare("INSERT INTO tarefa_usuario (tarefa, usuario) VALUES (?, ?)").run(lastInsertRowid, u);
+    }
+    return Number(lastInsertRowid);
+  });
+  return existe(
+    tarefas(banco, nomeDoProjeto).find((t) => t.id === id),
+    `a Tarefa ${String(id)} sumiu`,
+    "tente criar de novo",
+  );
+}
+
+/** As Tarefas do projeto na ordem em que foram criadas, cada uma com os Usuários Simulados alocados. */
+export function tarefas(banco: DatabaseSync, nomeDoProjeto: string): Tarefa[] {
+  doProjeto(banco, nomeDoProjeto);
+  const alocados = banco
+    .prepare(
+      `SELECT tu.tarefa, u.id, u.nome FROM tarefa_usuario tu
+       JOIN tarefa t ON t.id = tu.tarefa JOIN usuario_simulado u ON u.id = tu.usuario
+       WHERE t.projeto = ? ORDER BY u.id`,
+    )
+    .all(nomeDoProjeto) as unknown as { tarefa: Id; id: Id; nome: string }[];
+  return (
+    banco
+      .prepare("SELECT id, projeto, texto, n, criada_em AS criadaEm FROM tarefa WHERE projeto = ? ORDER BY id")
+      .all(nomeDoProjeto) as unknown as Omit<Tarefa, "usuarios" | "execucoes">[]
+  ).map((t) => ({
+    ...t,
+    usuarios: alocados.filter((a) => a.tarefa === t.id).map(({ id, nome }) => ({ id, nome })),
+    execucoes: [],
+  }));
 }

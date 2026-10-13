@@ -143,6 +143,8 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/projetos/:nome/usuarios-simulados` | Cria o usuário: `{ nome, descricao }` (`NovoUsuarioSimulado`, F8 2). Campo inválido dá 422 com o caminho do campo; nome repetido no projeto, 409. |
 | `POST /api/usuarios-simulados/:id/anexos?nome=` | Corpo binário. Guarda o conteúdo por hash (`guardarBytes`) e grava o anexo; o mesmo nome troca o anexo. Nome inválido ou formato fora de PDF, texto e imagem dá 422 com o caminho `nome`; corpo que não é binário, 422; usuário inexistente, 404. |
 | `DELETE /api/usuarios-simulados/:id/anexos/:nome` | Remove o anexo (204); o arquivo em `arquivos/` fica. Anexo ou usuário inexistente dá 404. |
+| `GET /api/projetos/:nome/tarefas` | As Tarefas do projeto na ordem de criação: `id`, `texto`, `n`, `criadaEm`, `usuarios` (`id`, `nome` dos alocados) e `execucoes` (por ora sempre `[]`). Projeto inexistente dá 404. |
+| `POST /api/projetos/:nome/tarefas` | Cria a Tarefa: `{ texto, n, usuarios }` (`NovaTarefa`, F8 3). Campo inválido dá 422 com o caminho do campo (`texto`, `n`, `usuarios`); usuário que não é do projeto, 409; projeto inexistente, 404. |
 
 **Registro e issue**
 
@@ -216,12 +218,13 @@ Os números dos protótipos são fictícios.
 | Início | `/home`; `/` redireciona para cá | `01-inicio.html` |
 | Projeto | `/projects/:projeto`; `/projects` abre o último projeto visto neste navegador, ou o primeiro em ordem alfabética | `02-projeto.html` |
 | Issue | `/projects/:projeto/issues/:issue` | `03-issue.html` |
+| Simulação | `/simulation/:projeto`; `/simulation` abre o último projeto visto neste navegador, ou o primeiro em ordem alfabética | `prototipo` da I-10 |
 | Métricas | `/metrics` | `04-metricas.html` |
 | Histórico | `/history` | `05-historico.html` |
 | Chat | `/sessions/:sessao` | `06-chat.html` |
 | Configuração | `/config` | `07-configuracao.html` |
 
-Navegação fixa no topo: **Início** (com o número de sessões que aguardam o Auditor), **Projetos**, **Métricas**, **Histórico** e **Configuração**.
+Navegação fixa no topo: **Início** (com o número de sessões que aguardam o Auditor), **Projetos**, **Simulação**, **Métricas**, **Histórico** e **Configuração**.
 As páginas usam caminho, com a History API.
 Todo link é um `<a href>` de verdade, então qualquer página, inclusive o chat, também abre em outra aba do navegador.
 Se o projeto do caminho não for o da issue, o cliente troca o caminho pelo certo, sem recarregar.
@@ -350,6 +353,11 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
    - **+ anexar arquivo** em cada cartão abre o seletor de arquivo (PDF, texto ou imagem) e envia na hora, em `application/octet-stream`; a recusa (formato, tamanho) aparece no próprio cartão;
    - o formulário **Nome do usuário** e **Descrição do usuário**, com o erro de cada campo abaixo dele ("Descrição obrigatória") e a recusa do servidor (nome repetido) abaixo do formulário; **Criar usuário simulado** limpa os campos quando dá certo.
 
+**Simulação** (F8 3), em `/simulation/:projeto`: o cabeçalho tem o título, uma aba por projeto e, à direita, o link do produto ou o aviso "sem link do produto".
+   - o formulário **Nova tarefa** tem **Tarefa** (texto), **Execuções por usuário (N)** (padrão 1) e uma caixa por Usuário Simulado do projeto; sem usuário, manda cadastrá-los na Configuração do projeto;
+   - o erro de cada campo (`texto`, `n`, `usuarios`) aparece abaixo dele, e a recusa do servidor, abaixo do formulário; o que o Auditor digitou fica;
+   - um cartão por Tarefa, com o texto, "N = 3" e os alocados ("alocada a Dona Maria"); sem Tarefa, "Nenhuma tarefa neste projeto.".
+
 ### 4.5 Exibição de evidências
 
 Na página da issue, cada evidência é um card pequeno; o conteúdo abre na caixa:
@@ -429,6 +437,7 @@ As leituras de tela são estas:
   - entrar pelo link de `web.url`;
   - configurar um projeto e ligar o agendador;
   - criar um Usuário Simulado, anexar um arquivo, ver o tamanho em bytes e removê-lo;
+  - criar uma Tarefa em Simulação alocada a um Usuário Simulado, e os erros de N e de alocação;
   - registrar uma necessidade pelo chat e aprovar o registro;
   - acompanhar uma sessão autônoma ao vivo, redirecioná-la e responder a um diálogo de extensão;
   - responder e retomar um ticket que falhou;

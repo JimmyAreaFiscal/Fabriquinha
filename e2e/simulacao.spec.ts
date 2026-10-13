@@ -1,11 +1,15 @@
-// Simulação (I-10): o Link do produto no Projeto (CA-1 e CA-2) e os Usuários Simulados da Configuração (CA-3 a CA-6).
+// Simulação (I-10): o Link do produto no Projeto (CA-1 e CA-2), os Usuários Simulados da Configuração (CA-3 a CA-6) e
+// as Tarefas da página Simulação (CA-7 a CA-9).
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { abrir } from "../src/persistencia/banco.ts";
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
+import { criarUsuarioSimulado } from "../src/persistencia/simulacao.ts";
 import type { Page } from "@playwright/test";
 import { expect, test } from "./apoio.ts";
+
+const DESCRICAO = "Contadora de 60 anos, pouca familiaridade com sistemas web";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
 
@@ -13,7 +17,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
  * O projeto `fabriquinha`, sem link do produto, com um clone de remoto GitHub: o `insteadOf` desvia o acesso para um
  * bare local, e salvar passa pela conferência do repositório (F5 §2).
  */
-function semear(raiz: string, linkProduto?: string): void {
+function semear(raiz: string, linkProduto?: string, usuarios: string[] = []): void {
   const bare = join(raiz, "origin.git");
   const repo = join(raiz, "fabriquinha");
   mkdirSync(bare);
@@ -35,6 +39,7 @@ function semear(raiz: string, linkProduto?: string): void {
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linkProduto,
   });
+  for (const nome of usuarios) criarUsuarioSimulado(banco, "fabriquinha", { nome, descricao: DESCRICAO });
   banco.close();
 }
 
@@ -65,8 +70,6 @@ test("CA-1 e CA-2: o link do produto é salvo e relido; um link inválido dá er
 
 /** O formulário de novo Usuário Simulado, abaixo do formulário do projeto. */
 const novoUsuario = (pagina: Page) => pagina.locator("[data-usuario-simulado]");
-
-const DESCRICAO = "Contadora de 60 anos, pouca familiaridade com sistemas web";
 
 /** O cartão do Usuário Simulado `nome`, no bloco abaixo do formulário do projeto. */
 const cartao = (pagina: Page, nome: string) =>
@@ -145,4 +148,72 @@ test("um formato que a IA não lê é recusado no cartão, sem anexo", async ({ 
   });
   await expect(maria.getByRole("alert")).toHaveText("formato não suportado: envie PDF, texto ou imagem");
   await expect(maria.locator(".anexo-usuario")).toHaveCount(0);
+});
+
+const TAREFA = "Registrar uma necessidade";
+
+/** O formulário de nova Tarefa, na página Simulação. */
+const novaTarefa = (pagina: Page) => pagina.locator("[data-nova-tarefa]");
+
+test("CA-7: a Tarefa criada aparece em Simulação com N e o usuário alocado, também depois de recarregar", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semear(fabriquinha.raiz, "https://demo.exemplo.com", ["Dona Maria"]);
+  await pagina.goto(`${fabriquinha.base}/simulation`);
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/simulation/fabriquinha`);
+  await expect(pagina.getByText("Nenhuma tarefa neste projeto.")).toBeVisible();
+
+  await novaTarefa(pagina).getByLabel("Tarefa", { exact: true }).fill(TAREFA);
+  await novaTarefa(pagina).getByLabel("Execuções por usuário (N)").fill("3");
+  await novaTarefa(pagina).getByLabel("Dona Maria").check();
+  await pagina.getByRole("button", { name: "Criar tarefa" }).click();
+
+  const cartao = pagina.locator("[data-tarefa]", { hasText: TAREFA });
+  await expect(cartao).toContainText("N = 3");
+  await expect(cartao).toContainText("alocada a Dona Maria");
+  await expect(novaTarefa(pagina).getByLabel("Tarefa", { exact: true })).toHaveValue("");
+  await pagina.reload();
+  await expect(cartao).toContainText("N = 3");
+});
+
+test("CA-8: com N = 0 a Tarefa não é criada e o campo N mostra o erro", async ({ pagina, fabriquinha }) => {
+  semear(fabriquinha.raiz, "https://demo.exemplo.com", ["Dona Maria"]);
+  await pagina.goto(`${fabriquinha.base}/simulation/fabriquinha`);
+  await novaTarefa(pagina).getByLabel("Tarefa", { exact: true }).fill(TAREFA);
+  await novaTarefa(pagina).getByLabel("Execuções por usuário (N)").fill("0");
+  await novaTarefa(pagina).getByLabel("Dona Maria").check();
+  await pagina.getByRole("button", { name: "Criar tarefa" }).click();
+
+  await expect(novaTarefa(pagina).getByLabel("Execuções por usuário (N)")).toHaveAttribute("aria-invalid", "true");
+  await expect(pagina.locator("#campo-tarefa-n-erro")).toHaveText("N deve ser um inteiro maior que zero");
+  await expect(novaTarefa(pagina).getByLabel("Tarefa", { exact: true })).toHaveValue(TAREFA);
+  await expect(novaTarefa(pagina).getByLabel("Dona Maria")).toBeChecked();
+  await pagina.reload();
+  await expect(pagina.getByText("Nenhuma tarefa neste projeto.")).toBeVisible();
+});
+
+test("CA-9: sem Usuário Simulado alocado a Tarefa não é criada e o formulário mostra o erro", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semear(fabriquinha.raiz, "https://demo.exemplo.com", ["Dona Maria"]);
+  await pagina.goto(`${fabriquinha.base}/simulation/fabriquinha`);
+  await novaTarefa(pagina).getByLabel("Tarefa", { exact: true }).fill(TAREFA);
+  await pagina.getByRole("button", { name: "Criar tarefa" }).click();
+
+  await expect(pagina.locator("#campo-tarefa-usuarios-erro")).toHaveText("Aloque ao menos um usuário simulado");
+  await pagina.reload();
+  await expect(pagina.getByText("Nenhuma tarefa neste projeto.")).toBeVisible();
+});
+
+test("a Tarefa sem texto mostra o erro no campo, e o projeto sem link avisa na página", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semear(fabriquinha.raiz, undefined, ["Dona Maria"]);
+  await pagina.goto(`${fabriquinha.base}/simulation/fabriquinha`);
+  await expect(pagina.getByText("sem link do produto")).toBeVisible();
+  await pagina.getByRole("button", { name: "Criar tarefa" }).click();
+  await expect(pagina.locator("#campo-tarefa-texto-erro")).toHaveText("Tarefa obrigatória");
 });

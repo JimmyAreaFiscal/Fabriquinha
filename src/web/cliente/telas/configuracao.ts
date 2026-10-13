@@ -56,10 +56,10 @@ const mensagensDe = (erros: Erros, caminho: string): string[] =>
   [...erros].flatMap(([c, ms]) => (c === caminho || c.startsWith(`${caminho}.`) ? ms : []));
 
 /** O `id` do controle do campo `caminho` (`campo-fitness[0].nome`), para o `<label for>` e a mensagem de erro. */
-const idDe = (caminho: string, prefixo = "campo"): string => `${prefixo}-${caminho}`;
+export const idDe = (caminho: string, prefixo = "campo"): string => `${prefixo}-${caminho}`;
 
 /** A marca de erro do campo: a classe, o `aria-invalid` ligado à mensagem e a mensagem logo abaixo do controle. */
-function marca(erros: Erros, caminho: string, prefixo?: string): { classe: string; aria: string; msg: string } {
+export function marca(erros: Erros, caminho: string, prefixo?: string): { classe: string; aria: string; msg: string } {
   const ms = mensagensDe(erros, caminho);
   if (ms.length === 0) return { classe: "", aria: "", msg: "" };
   const id = `${idDe(caminho, prefixo)}-erro`;

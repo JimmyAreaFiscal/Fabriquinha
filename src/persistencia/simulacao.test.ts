@@ -10,7 +10,7 @@ import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "./arquivos.ts";
 import { abrir } from "./banco.ts";
 import { registrarProjeto } from "./projetos.ts";
-import { anexar, criarUsuarioSimulado, removerAnexo, usuariosSimulados } from "./simulacao.ts";
+import { anexar, criarTarefa, criarUsuarioSimulado, removerAnexo, tarefas, usuariosSimulados } from "./simulacao.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-simulacao-"));
 after(() => {
@@ -138,5 +138,68 @@ test("removerAnexo tira só o anexo pedido e mantém o arquivo; anexo ou usuári
   assert.throws(() => {
     removerAnexo(banco, id + 1, "outro.txt");
   }, ErroDeInexistente);
+  banco.close();
+});
+
+test("criarTarefa grava e tarefas lista só as do projeto, com os usuários alocados", () => {
+  const banco = novoBanco();
+  assert.deepEqual(tarefas(banco, "fabriquinha"), []);
+  const maria = criarUsuarioSimulado(banco, "fabriquinha", MARIA);
+  const joao = criarUsuarioSimulado(banco, "fabriquinha", { nome: "Seu João", descricao: "Gerente" });
+  const dona = criarUsuarioSimulado(banco, "outro", MARIA);
+
+  const primeira = criarTarefa(banco, "fabriquinha", {
+    texto: " Registrar uma necessidade ",
+    n: 3,
+    usuarios: [joao.id, maria.id, maria.id],
+  });
+  const segunda = criarTarefa(banco, "fabriquinha", { texto: "Ver o histórico", n: 1, usuarios: [maria.id] });
+  criarTarefa(banco, "outro", { texto: "Outra", n: 2, usuarios: [dona.id] });
+
+  assert.deepEqual(primeira, {
+    id: primeira.id,
+    projeto: "fabriquinha",
+    texto: "Registrar uma necessidade",
+    n: 3,
+    criadaEm: primeira.criadaEm,
+    usuarios: [
+      { id: maria.id, nome: "Dona Maria" },
+      { id: joao.id, nome: "Seu João" },
+    ],
+    execucoes: [],
+  });
+  assert.ok(!Number.isNaN(Date.parse(primeira.criadaEm)));
+  assert.deepEqual(tarefas(banco, "fabriquinha"), [primeira, segunda]);
+  assert.equal(tarefas(banco, "outro").length, 1);
+  banco.close();
+});
+
+test("criarTarefa recusa N e alocação inválidos, usuário de outro projeto e projeto inexistente, sem gravar", () => {
+  const banco = novoBanco();
+  const maria = criarUsuarioSimulado(banco, "fabriquinha", MARIA);
+  const alheio = criarUsuarioSimulado(banco, "outro", MARIA);
+  assert.throws(
+    () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 0, usuarios: [maria.id] }),
+    (erro) => erro instanceof ZodError && erro.issues[0]?.message === "N deve ser um inteiro maior que zero",
+  );
+  assert.throws(
+    () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 1, usuarios: [] }),
+    (erro) => erro instanceof ZodError && erro.issues[0]?.message === "Aloque ao menos um usuário simulado",
+  );
+  assert.throws(
+    () => criarTarefa(banco, "fabriquinha", { texto: "t", n: 1, usuarios: [maria.id, alheio.id] }),
+    (erro) =>
+      erro instanceof ErroDeRegra &&
+      erro.message ===
+        `o Usuário Simulado ${String(alheio.id)} não é do projeto fabriquinha (aloque só usuários simulados do projeto)`,
+  );
+  assert.throws(
+    () => criarTarefa(banco, "fantasma", { texto: "t", n: 1, usuarios: [maria.id] }),
+    (erro) =>
+      erro instanceof ErroDeInexistente && erro.message === "o projeto fantasma não existe (confira o nome do projeto)",
+  );
+  assert.throws(() => tarefas(banco, "fantasma"), ErroDeInexistente);
+  assert.deepEqual(tarefas(banco, "fabriquinha"), []);
+  assert.equal(banco.prepare("SELECT count(*) AS n FROM tarefa_usuario").get()?.n, 0);
   banco.close();
 });

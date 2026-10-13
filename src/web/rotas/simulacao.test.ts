@@ -126,3 +126,48 @@ test("o nome do anexo vem codificado na URL e é conferido; corpo que não é bi
     404,
   );
 });
+
+const TAREFAS = "/api/projetos/fabriquinha/tarefas";
+
+test("criar e listar Tarefas alocadas a Usuários Simulados do projeto (CA-7)", async () => {
+  assert.deepEqual(await chamar("GET", TAREFAS), []);
+  const [{ id }] = (await chamar("GET", LISTA)) as [{ id: number }];
+  const criada = (await chamar("POST", TAREFAS, { texto: "Registrar uma necessidade", n: 3, usuarios: [id] })) as {
+    id: number;
+  };
+  assert.deepEqual(criada, {
+    id: criada.id,
+    projeto: "fabriquinha",
+    texto: "Registrar uma necessidade",
+    n: 3,
+    criadaEm: (criada as unknown as { criadaEm: string }).criadaEm,
+    usuarios: [{ id, nome: "Dona Maria" }],
+    execucoes: [],
+  });
+  assert.deepEqual(await chamar("GET", TAREFAS), [criada]);
+});
+
+test("Tarefa inválida dá 422 com o caminho do campo (CA-8 e CA-9); usuário alheio dá 409; projeto inexistente, 404", async () => {
+  const [{ id }] = (await chamar("GET", LISTA)) as [{ id: number }];
+  assert.deepEqual(await chamar("POST", TAREFAS, { texto: "t", n: 0, usuarios: [id] }), [
+    422,
+    "✖ N deve ser um inteiro maior que zero\n  → at n",
+  ]);
+  assert.deepEqual(await chamar("POST", TAREFAS, { texto: "t", n: 1, usuarios: [] }), [
+    422,
+    "✖ Aloque ao menos um usuário simulado\n  → at usuarios",
+  ]);
+  assert.deepEqual(await chamar("POST", TAREFAS, { texto: "", n: 21, usuarios: [id] }), [
+    422,
+    "✖ Tarefa obrigatória\n  → at texto\n✖ N passa de 20\n  → at n",
+  ]);
+  assert.deepEqual(await chamar("POST", TAREFAS, { texto: "t", n: 1, usuarios: [999] }), [
+    409,
+    "o Usuário Simulado 999 não é do projeto fabriquinha (aloque só usuários simulados do projeto)",
+  ]);
+  assert.deepEqual(await chamar("GET", "/api/projetos/fantasma/tarefas"), [
+    404,
+    "o projeto fantasma não existe (confira o nome do projeto)",
+  ]);
+  assert.equal(((await chamar("GET", TAREFAS)) as unknown[]).length, 1);
+});

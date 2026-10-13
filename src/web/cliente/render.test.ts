@@ -88,8 +88,9 @@ test("navegação fixa marca a página atual e mostra quem aguarda só quando h�
   assert.match(html, /<a href="\/home">Início <span class="contador" title="sessões que aguardam você">6<\/span><\/a>/);
   assert.deepEqual(
     [...html.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]),
-    ["/home", "/projects", "/metrics", "/history", "/config"],
+    ["/home", "/projects", "/simulation", "/metrics", "/history", "/config"],
   );
+  assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
   assert.doesNotMatch(navegacao("inicio", 0), /contador/);
   assert.match(navegacao("inicio", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
   assert.doesNotMatch(navegacao(undefined, 0), /aria-current/);

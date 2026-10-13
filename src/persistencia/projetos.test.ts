@@ -174,6 +174,8 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
 });
 
 const TABELAS = [
+  "tarefa_usuario",
+  "tarefa",
   "usuario_simulado_anexo",
   "usuario_simulado",
   "uso",
@@ -236,6 +238,8 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
   banco.exec(`
     INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('${nome}', 'Dona Maria', 'd');
     INSERT INTO usuario_simulado_anexo SELECT id, 'manual.pdf', '${shaProprio}', 1 FROM usuario_simulado WHERE projeto = '${nome}';
+    INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('${nome}', 't', 1, 't');
+    INSERT INTO tarefa_usuario SELECT t.id, u.id FROM tarefa t, usuario_simulado u WHERE t.projeto = '${nome}' AND u.projeto = '${nome}';
   `);
   for (const sha of [SHA_COMPARTILHADO, shaProprio]) {
     mkdirSync(join(caminhoArquivo(banco, sha), ".."), { recursive: true });

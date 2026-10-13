@@ -126,6 +126,7 @@ export function ha(desde: string, agora: Date): string {
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio"]],
   ["/projects", "Projetos", ["projeto", "issue"]],
+  ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico"]],
   ["/config", "Configuração", ["configuracao"]],
@@ -212,6 +213,7 @@ export const TITULOS: Record<Pagina, string> = {
   historico: "Histórico",
   chat: "Chat",
   configuracao: "Configuração",
+  simulacao: "Simulação",
 };
 
 /** Página ainda sem conteúdo: só o cabeçalho com o título. */

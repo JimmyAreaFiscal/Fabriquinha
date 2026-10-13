@@ -253,4 +253,18 @@ export const MIGRACOES: readonly string[] = [
     bytes   INTEGER NOT NULL CHECK (bytes >= 0),
     PRIMARY KEY (usuario, nome)
   );`,
+  // F8 (I-10): as Tarefas do projeto, com N execuções por usuário, e os Usuários Simulados alocados a cada uma.
+  `CREATE TABLE tarefa (
+    id        INTEGER PRIMARY KEY,
+    projeto   TEXT NOT NULL REFERENCES projeto(nome),
+    texto     TEXT NOT NULL CHECK (length(texto) BETWEEN 1 AND 2000),
+    n         INTEGER NOT NULL CHECK (n BETWEEN 1 AND 20),
+    criada_em TEXT NOT NULL
+  );
+  CREATE INDEX ix_tarefa_projeto ON tarefa(projeto);
+  CREATE TABLE tarefa_usuario (
+    tarefa  INTEGER NOT NULL REFERENCES tarefa(id),
+    usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+    PRIMARY KEY (tarefa, usuario)
+  );`,
 ];
