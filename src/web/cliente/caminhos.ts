@@ -17,7 +17,7 @@ export function casar(padrao: string, caminho: string): Parametros | undefined {
   }
 }
 
-export type Pagina = "inicio" | "projeto" | "issue" | "metricas" | "historico" | "chat" | "configuracao";
+export type Pagina = "inicio" | "projeto" | "issue" | "metricas" | "historico" | "chat" | "auditoria" | "configuracao";
 
 /** As páginas do F7 §4.4. `/` só redireciona para `/home`; `/projects` sem nome escolhe o projeto (ticket 29). */
 const PAGINAS: readonly (readonly [string, Pagina])[] = [
@@ -28,6 +28,7 @@ const PAGINAS: readonly (readonly [string, Pagina])[] = [
   ["/metrics", "metricas"],
   ["/history", "historico"],
   ["/sessions/:sessao", "chat"],
+  ["/audits/:sessao", "auditoria"],
   ["/config", "configuracao"],
 ];
 

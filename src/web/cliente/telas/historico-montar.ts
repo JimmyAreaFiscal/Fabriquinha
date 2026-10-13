@@ -5,7 +5,7 @@ import type { DadosDoChat } from "../../rotas/chat.ts";
 import type { SessaoDoHistorico } from "../../rotas/historico.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
-import { caminhoDaSessao } from "../render.ts";
+import { caminhoDaAuditoria, caminhoDaSessao } from "../render.ts";
 import { verSaida } from "./chat-montar.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { consulta, contagem, type Filtros, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
@@ -61,12 +61,31 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
     carregar().catch(mostrarErro);
   });
 
+  /** Auditar (F4): abre o chat da auditoria do mês escolhido; se falha, a tela fica aqui com o erro do servidor. */
+  function auditar(botao: HTMLButtonElement): void {
+    botao.disabled = true;
+    avisar();
+    api<{ sessao: string }>("/api/auditorias", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mes: elemento("[data-mes]", HTMLSelectElement).value }),
+    })
+      .then(({ sessao }) => {
+        irPara(caminhoDaAuditoria(sessao));
+      })
+      .catch((error_: unknown) => {
+        botao.disabled = false;
+        mostrarErro(error_);
+      });
+  }
+
   raiz.addEventListener("click", (evento) => {
     const alvo =
       evento.target instanceof Element
-        ? evento.target.closest<HTMLElement>("[data-sel], [data-consulta], [data-ver-tudo]")
+        ? evento.target.closest<HTMLElement>("[data-sel], [data-consulta], [data-ver-tudo], [data-auditar]")
         : null;
-    if (alvo?.dataset.verTudo !== undefined) verSaida(alvo);
+    if (alvo?.dataset.auditar !== undefined) auditar(alvo as HTMLButtonElement);
+    else if (alvo?.dataset.verTudo !== undefined) verSaida(alvo);
     else if (alvo?.dataset.sel !== undefined) {
       selecionada = alvo.dataset.sel;
       desenhar();

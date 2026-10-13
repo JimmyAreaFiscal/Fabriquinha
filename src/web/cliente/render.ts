@@ -63,6 +63,11 @@ export const rotuloTicket = (id: Id): string => `T-${String(id)}`;
 export const caminhoDaIssue = (projeto: string, issue: Id): string =>
   `/projects/${encodeURIComponent(projeto)}/issues/${rotuloIssue(issue)}`;
 export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeURIComponent(sessao)}`;
+export const caminhoDaAuditoria = (sessao: string): string => `/audits/${encodeURIComponent(sessao)}`;
+
+/** O mês `AAAA-MM` por extenso, em português: `setembro de 2026`. O mesmo texto de `mesPorExtenso` do servidor. */
+export const mesPorExtenso = (mes: string): string =>
+  new Date(`${mes}-01T12:00:00`).toLocaleString("pt-BR", { month: "long", year: "numeric" });
 
 /** `anthropic / claude-opus-4-5`. */
 export const nomeDoModelo = (m: Modelo): string => `${m.provedor} / ${m.modelo}`;
@@ -127,7 +132,7 @@ const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio"]],
   ["/projects", "Projetos", ["projeto", "issue"]],
   ["/metrics", "Métricas", ["metricas"]],
-  ["/history", "Histórico", ["historico"]],
+  ["/history", "Histórico", ["historico", "auditoria"]],
   ["/config", "Configuração", ["configuracao"]],
 ];
 
@@ -211,6 +216,7 @@ export const TITULOS: Record<Pagina, string> = {
   metricas: "Métricas",
   historico: "Histórico",
   chat: "Chat",
+  auditoria: "Auditoria",
   configuracao: "Configuração",
 };
 

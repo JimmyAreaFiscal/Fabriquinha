@@ -4,6 +4,8 @@
 // texto dele:
 // - "[ao vivo]": raciocínio, uma ferramenta que falha e um texto chegando em fluxo, sem terminar, até um `steer`, que
 //   o redireciona e abre um diálogo `select`;
+// - "# Auditoria" (o prompt da auditoria do Histórico, F4): chama `subagent` com três tarefas `scout`, recebe o
+//   resultado e responde com as quatro seções; uma pergunta depois cai na resposta padrão;
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
 //   pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz "registre", e não conta;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
@@ -148,6 +150,30 @@ function registrar(): void {
   cli("evidencia", "add", "criterios_aceite", "--dados", join(saida, "criterios.json"));
 }
 
+/** Como o agente da auditoria: três tarefas `scout` em paralelo, o resultado e as seções da resposta. */
+function auditar(): void {
+  const tasks = ["Oportunidades de melhoria", "Custos", "Qualidade"].map((analise) => ({
+    agent: "scout",
+    task: `${analise}: leia o indice.md e as sessões`,
+  }));
+  mensagem(doAgente([{ type: "toolCall", id: "a1", name: "subagent", arguments: { tasks } }], "toolUse"));
+  mensagem({
+    role: "toolResult",
+    toolCallId: "a1",
+    toolName: "subagent",
+    content: [{ type: "text", text: "3 subagentes (scout) concluídos: melhorias, custos, qualidade." }],
+    isError: false,
+  });
+  responder(
+    [
+      "## Oportunidades de melhoria\n\nO prompt do desenvolvimento repete o desenho inteiro.",
+      "## Custos\n\nO desenvolvimento levou a maior parte do gasto.",
+      "## Qualidade\n\nHouve retrabalho e correções do Auditor no mês.",
+      "## Melhorias propostas\n\n1. Resumo por ticket no prompt do desenvolvimento.",
+    ].join("\n\n"),
+  );
+}
+
 const DIALOGOS: Record<string, object> = {
   select: { title: "Qual ordem os cupons devem ter?", options: ["Maior desconto primeiro", "Validade mais próxima"] },
   confirm: { title: "Posso apagar o cache?", message: "Os relatórios vão ficar lentos por uma hora." },
@@ -164,6 +190,11 @@ async function aoPrompt(texto: string): Promise<void> {
   emitir({ type: "agent_start" });
   mensagem({ role: "user", content: texto });
   const pergunta = /pergunte (select|confirm|input|editor)/.exec(texto)?.[1];
+  if (texto.startsWith("# Auditoria")) {
+    auditar();
+    emitir({ type: "agent_settled" });
+    return;
+  }
   if (texto.includes("[ao vivo]")) {
     await aoVivo();
     return;
