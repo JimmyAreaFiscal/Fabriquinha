@@ -111,6 +111,7 @@ async function executarUma(banco: DatabaseSync, id: Id, link: string, timeoutMin
         FABRIQUINHA_SAIDA: saida,
       },
       log: join(dir, "log"),
+      fecharStdin: true,
     },
     () => undefined,
   );

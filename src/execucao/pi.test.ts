@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as dormir } from "node:timers/promises";
 import { after, test } from "node:test";
 import { PACOTE, ambientePi, argumentosPi, binarioPi, confianca, divisorJsonl, lancarPi, skillsDaEtapa } from "./pi.ts";
 
@@ -182,6 +183,26 @@ test("stdout: cada objeto JSON vira evento; texto solto, null e número vão par
     // Escrever depois que o pi saiu dá EPIPE, que só vai para o log.
     pi.enviar({ type: "abort" });
     await pi.parar();
+  } finally {
+    delete process.env.FABRIQUINHA_PI;
+  }
+});
+
+test("fecharStdin: o pi recebe o EOF do stdin; sem ele, o stdin segue aberto", async () => {
+  const log = join(base, "log-eof");
+  process.env.FABRIQUINHA_PI = "/bin/sh";
+  try {
+    // `cat` só termina no EOF; sem fecharStdin, o pi ficaria preso até o parar().
+    const fechado = lancarPi(
+      ["-c", "cat >/dev/null"],
+      { cwd: base, env: process.env, log, fecharStdin: true },
+      () => undefined,
+    );
+    assert.equal(await fechado.saiu, 0);
+    const aberto = lancarPi(["-c", "cat >/dev/null"], { cwd: base, env: process.env, log }, () => undefined);
+    const preso = await Promise.race([aberto.saiu, dormir(200, "preso")]);
+    assert.equal(preso, "preso");
+    await aberto.parar();
   } finally {
     delete process.env.FABRIQUINHA_PI;
   }

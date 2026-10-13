@@ -9,7 +9,7 @@
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
 // - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
-// Em `--mode json` (a Simulação, I-10) não fala o protocolo: espera um instante, grava o `relatorio.json` em
+// Em `--mode json` (a Simulação, I-10) não fala o protocolo: espera o EOF do stdin, como o pi real, grava o `relatorio.json` em
 // $FABRIQUINHA_SAIDA, como a ferramenta `relatar` da extensão navegador, e sai.
 // A resposta a um diálogo é ecoada numa mensagem e assenta; `abort` para a mensagem em fluxo como abortada.
 import { execFileSync } from "node:child_process";
@@ -33,6 +33,7 @@ if (argumentos.includes("--list-models")) {
 }
 
 if (arg("--mode") === "json") {
+  await new Promise((pronto) => process.stdin.resume().on("end", pronto));
   await dormir(300);
   const relatorio = { usabilidade: ["O botão Enviar tem pouco contraste e fica no fim da página"], bugs: [] };
   writeFileSync(join(String(process.env.FABRIQUINHA_SAIDA), "relatorio.json"), JSON.stringify(relatorio));

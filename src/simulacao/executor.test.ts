@@ -22,6 +22,7 @@ const base = mkdtempSync(join(tmpdir(), "fabriquinha-executor-"));
  * O pi falso. Grava em `args.json` (na pasta da execução) o que recebeu e, em `$FALSO_PI_ORDEM`, quando começou e
  * terminou. O que faz depende de uma marca no prompt, que é o último argumento: `[sem relatório]` sai sem entregar,
  * `[lixo]` entrega um arquivo que não é relatório, `[demora]` não termina sozinho; sem marca, entrega o relatório.
+ * Como o pi real em `--mode json`, só começa depois do EOF do stdin: se o executor não o fecha, nada conclui.
  */
 const PI_FALSO = `#!/usr/bin/env node
 import { appendFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -29,6 +30,7 @@ import { join } from "node:path";
 const args = process.argv.slice(2);
 const prompt = args.at(-1);
 console.log(JSON.stringify({ type: "agent_start" })); // o --mode json fala JSONL no stdout
+await new Promise((pronto) => process.stdin.resume().on("end", pronto));
 const saida = process.env.FABRIQUINHA_SAIDA;
 writeFileSync("args.json", JSON.stringify({
   args,

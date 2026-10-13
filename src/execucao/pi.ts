@@ -135,11 +135,12 @@ export interface ProcessoPi {
 
 /**
  * Lança o pi num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
- * protocolo vai para o log.
+ * protocolo vai para o log. Com `fecharStdin`, o stdin fecha já: o `--mode json` do pi só começa depois do EOF dele,
+ * e o modo RPC precisa do stdin aberto.
  */
 export function lancarPi(
   args: readonly string[],
-  { cwd, env, log }: { cwd: string; env: NodeJS.ProcessEnv; log: string },
+  { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
   aoEvento: (evento: EventoPi) => void,
 ): ProcessoPi {
   const filho = spawn(binarioPi(), args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
@@ -150,6 +151,7 @@ export function lancarPi(
   };
   filho.on("error", falhou);
   filho.stdin.on("error", falhou);
+  if (fecharStdin) filho.stdin.end();
   filho.stderr.on("data", (parte: Buffer) => {
     appendFileSync(log, parte);
   });
