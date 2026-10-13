@@ -39,9 +39,10 @@ async function parar(servico: ChildProcess): Promise<void> {
   await saiu;
 }
 
-export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
-  // eslint-disable-next-line no-empty-pattern -- o Playwright lê as dependências da desestruturação; esta não tem.
-  fabriquinha: async ({}, use) => {
+export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: string }>({
+  /** O binário do pi que a Fabriquinha usa (`FABRIQUINHA_PI`); o falso, a menos que o teste troque com `test.use`. */
+  pi: [join(import.meta.dirname, "pi-falso.ts"), { option: true }],
+  fabriquinha: async ({ pi }, use) => {
     const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-e2e-"));
     // git e pi sem a configuração do usuário da máquina.
     const gitconfig = join(raiz, "gitconfig");
@@ -63,7 +64,7 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page }>({
         env: {
           ...process.env,
           FABRIQUINHA_PORTA: "0",
-          FABRIQUINHA_PI: join(import.meta.dirname, "pi-falso.ts"),
+          FABRIQUINHA_PI: pi,
           PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
           GIT_CONFIG_GLOBAL: gitconfig,
           GIT_CONFIG_NOSYSTEM: "1",

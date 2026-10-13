@@ -86,3 +86,37 @@ test("a extensão responde no tool_call do bash com block e reason, sem terminat
   assert.equal(tratador({ toolName: "bash", input: { command: "gh pr view 1" } }), undefined);
   assert.equal(tratador({ toolName: "write", input: { command: "gh pr create" } }), undefined);
 });
+
+test("na auditoria (e só nela), recusa o subagent cujo agente, ou o de algum item de tasks, não é o scout (CA-7)", () => {
+  const tratadores: Record<string, (evento: { toolName: string; input: never }) => unknown> = {};
+  guarda({
+    on(nome, tratador) {
+      tratadores[nome] = tratador;
+    },
+  });
+  const chamar = (input: object) => tratadores.tool_call?.({ toolName: "subagent", input: input as never });
+  const recusa = { block: true, reason: "A auditoria só usa subagentes de leitura (scout)." };
+  const worker = { agent: "worker", task: "edite" };
+  const tres = {
+    tasks: [
+      { agent: "scout", task: "a" },
+      { agent: "scout", task: "b" },
+    ],
+  };
+
+  assert.equal(chamar(worker), undefined, "fora da auditoria a guarda não olha o subagent");
+  process.env.FABRIQUINHA_AUDITORIA = "1";
+  try {
+    assert.deepEqual(chamar(worker), recusa);
+    assert.deepEqual(chamar({ tasks: [...tres.tasks, { agent: "worker", task: "c" }] }), recusa);
+    assert.equal(chamar({ agent: "scout", task: "lê" }), undefined);
+    assert.equal(chamar(tres), undefined);
+    assert.equal(
+      tratadores.tool_call?.({ toolName: "read", input: { agent: "worker" } as never }),
+      undefined,
+      "só o subagent",
+    );
+  } finally {
+    delete process.env.FABRIQUINHA_AUDITORIA;
+  }
+});

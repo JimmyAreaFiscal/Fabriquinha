@@ -615,6 +615,156 @@ span.mono {
   display: flex;
   gap: var(--s-2);
 }
+/* Abas da página do projeto: Issues e Heatmap. */
+.abas {
+  display: flex;
+  gap: var(--s-1);
+  margin-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+.abas a {
+  padding: var(--s-2) var(--s-4);
+  margin-bottom: -1px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.abas a:hover {
+  color: var(--ink);
+}
+.abas a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: var(--w-strong);
+  border-bottom-color: var(--accent);
+}
+
+/* Heatmap: cabeçalho com a janela, árvore de pastas e arquivos com cor de calor, e o detalhe de cada arquivo. */
+.hm-cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-5);
+  margin-bottom: var(--s-4);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.hm-cabeca strong {
+  color: var(--ink);
+}
+.hm-branch {
+  font-family: var(--mono);
+}
+.hm-legenda {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.hm-legenda i {
+  width: 18px;
+  height: 10px;
+  border-radius: var(--r-sm);
+}
+.hm-frio {
+  background: hsl(220 70% 50%);
+}
+.hm-morno {
+  background: hsl(120 70% 50%);
+}
+.hm-quente {
+  background: hsl(0 70% 50%);
+}
+.hm-filhos {
+  padding-left: var(--s-6);
+}
+.hm-linha {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 56px minmax(120px, 220px);
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  list-style: none;
+}
+.hm-linha::-webkit-details-marker {
+  display: none;
+}
+.hm-linha:hover,
+.hm-arquivo[open] > .hm-linha {
+  background: var(--surface-2);
+}
+.hm-cor {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-sm);
+}
+.hm-nome {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.hm-pasta > .hm-linha .hm-nome::before {
+  content: "▸ ";
+  color: var(--muted);
+}
+.hm-pasta[open] > .hm-linha .hm-nome::before {
+  content: "▾ ";
+}
+.hm-total {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.hm-barra {
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.hm-barra i {
+  display: block;
+  height: 100%;
+}
+.hm-detalhe {
+  padding: var(--s-3) var(--s-4) var(--s-4) var(--s-8);
+}
+.hm-metrica {
+  margin-bottom: var(--s-3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.hm-metrica strong {
+  color: var(--ink);
+}
+.hm-commits {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.hm-commits th,
+.hm-commits td {
+  padding: var(--s-2);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.hm-hash,
+.hm-data,
+.hm-pr {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.hm-hash {
+  font-family: var(--mono);
+}
+.hm-erro {
+  padding: var(--s-3) var(--s-4);
+  color: var(--ink);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-lg);
+}
+
 .ferramentas {
   display: flex;
   flex-wrap: wrap;
@@ -3164,6 +3314,11 @@ input.erro {
   margin-left: auto;
   font-size: var(--fs-sm);
   color: var(--muted);
+}
+.pagina-historico .filtros .auditar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
 }
 .pagina-historico .mestre {
   display: grid;

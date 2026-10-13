@@ -30,7 +30,8 @@ export type Dialogo = EventoPi & { em: string; expiraEm?: string };
 
 /** O que o estado da sessão (F4 §5.2) lê de uma execução viva. */
 export interface Situacao {
-  execucao: Id;
+  /** O id da execução; a auditoria (fora do agregado) usa o id da sessão. */
+  execucao: Id | string;
   /** O agente está trabalhando; falso quando uma sessão interativa espera a próxima mensagem. */
   ocupado: boolean;
   /** Desde quando está ocupada ou ociosa. */
@@ -65,11 +66,11 @@ interface Viva extends Omit<Situacao, "dialogos"> {
   encerrar(): void;
 }
 
-const vivas = new Map<Id, Viva>();
+const vivas = new Map<Id | string, Viva>();
 const ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
 
 /** Execuções cujo pi já recebeu a ordem de parar, com a promessa de ele sair: o C6 delas vem logo depois. */
-const encerrando = new Map<Id, Promise<void>>();
+const encerrando = new Map<Id | string, Promise<void>>();
 
 /** Execuções cuja issue foi cancelada (C22): não lançam pi e não gravam C6 nem C8. ponytail: o Set só cresce; poucos IDs por dia. */
 const canceladas = new Set<Id>();
@@ -111,7 +112,7 @@ export const avisar = (sessao: string, log: string): void => {
 };
 
 /** O pi da execução está parando; o C6 dela vem logo depois que ele sai. */
-export const estaEncerrando = (execucao: Id): boolean => encerrando.has(execucao);
+export const estaEncerrando = (execucao: Id | string): boolean => encerrando.has(execucao);
 
 /** A execução viva da sessão neste serviço, se há uma. */
 export function situacao(sessao: string): Situacao | undefined {
@@ -153,7 +154,7 @@ export function atividadeDo(evento: EventoPi): string | undefined {
   return primeira && linha(primeira);
 }
 
-const viva = (execucao: Id, solucao: string): Viva =>
+const viva = (execucao: Id | string, solucao: string): Viva =>
   existe(vivas.get(execucao), `a execução E-${String(execucao)} não tem pi rodando`, solucao);
 
 /** Os diálogos de extensão da execução que esperam o Auditor; vazio se o pi dela não está vivo. */
@@ -172,7 +173,7 @@ export function responderDialogo(
  * Manda `abort` ao pi. Antes cancela os diálogos pendentes: o `editor` não tem tempo limite nem cancelamento do lado
  * do pi, e o agente preso nele nunca veria o `abort` (F4 §5.4).
  */
-export function abortar(execucao: Id): void {
+export function abortar(execucao: Id | string): void {
   const v = viva(execucao, "nada a abortar");
   for (const id of v.pendentes.keys()) v.responder(id, { cancelled: true });
   v.abortada = true;
@@ -194,12 +195,15 @@ export async function pararParaCancelar(execucao: Id): Promise<void> {
 }
 
 /** Um comando de conversa ao pi vivo: `prompt` acorda a sessão ociosa; `steer` e `follow_up` entram no passo atual. */
-export function mandar(execucao: Id, comando: { type: "prompt" | "steer" | "follow_up"; message: string }): void {
+export function mandar(
+  execucao: Id | string,
+  comando: { type: "prompt" | "steer" | "follow_up"; message: string },
+): void {
   viva(execucao, "retome a sessão").mandar(comando);
 }
 
 /** Para o pi da execução e a dá por bem terminada, como na ociosidade (F4 §6.6). */
-export function encerrar(execucao: Id): void {
+export function encerrar(execucao: Id | string): void {
   viva(execucao, "nada a encerrar").encerrar();
 }
 
@@ -293,7 +297,6 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
     });
     anotar(log, `pi ${args.join(" ")}`);
     const falha = await rodarPi({
-      banco: r.banco,
       execucao,
       args,
       cwd: worktree,
@@ -301,6 +304,9 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       log,
       prompt,
       limiteMin: r.limiteMin,
+      aoLancar: (pgid) => {
+        gravarPgid(r.banco, execucao.id, pgid);
+      },
     });
     return { worktree, ...(falha !== undefined && { falha }) };
   } catch (error_) {
@@ -308,15 +314,17 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
   }
 }
 
-interface Processo {
-  banco: DatabaseSync;
-  execucao: Execucao;
+export interface Processo {
+  /** A execução de um ticket, ou a auditoria (`id` é a sessão), que roda como consulta e fica fora do agregado. */
+  execucao: { id: Id | string; sessaoPi: string; modo: ModoExecucao };
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
   log: string;
   prompt: string | undefined;
   limiteMin: number;
+  /** Chamado com o grupo de processos do pi logo depois de lançado, para quem precisa matá-lo no reinício (F4 §7). */
+  aoLancar(pgid: number): void;
 }
 
 /**
@@ -330,7 +338,7 @@ interface Processo {
  * relógio parado) até o Auditor respondê-lo ou cancelá-lo, ou até o pi terminar. Se a extensão que faz isso existir,
  * dar o diálogo por resolvido no `turn_start` seguinte.
  */
-function rodarPi(r: Processo): Promise<string | undefined> {
+export function rodarPi(r: Processo): Promise<string | undefined> {
   return new Promise((resolve) => {
     const { id, sessaoPi } = r.execucao;
     const autonoma = r.execucao.modo === "autonomo";
@@ -484,7 +492,7 @@ function rodarPi(r: Processo): Promise<string | undefined> {
           break;
       }
     });
-    gravarPgid(r.banco, id, pi.pgid);
+    r.aoLancar(pi.pgid);
     void pi.saiu.then((codigo) => {
       fim(`o pi saiu antes de terminar a execução (código ${String(codigo)}); veja o log em ${r.log}`);
     });

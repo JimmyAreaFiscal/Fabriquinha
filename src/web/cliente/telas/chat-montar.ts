@@ -42,7 +42,7 @@ const ESQUELETO =
 
 type Evento = Record<string, unknown> & { type?: string };
 
-const postar = (caminho: string, corpo: unknown = {}) =>
+export const postar = (caminho: string, corpo: unknown = {}) =>
   api<undefined>(caminho, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -50,8 +50,8 @@ const postar = (caminho: string, corpo: unknown = {}) =>
   });
 
 /** O Auditor está no fim da página: o que chega rola junto; se ele subiu para ler, a página fica onde está. */
-const noFim = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
-const rolarAoFim = () => {
+export const noFim = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 48;
+export const rolarAoFim = () => {
   scrollTo(0, document.documentElement.scrollHeight);
 };
 

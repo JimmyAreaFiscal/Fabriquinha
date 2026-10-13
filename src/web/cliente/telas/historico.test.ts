@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { Execucao } from "../../../dominio/agregado.ts";
 import type { DadosDoChat, Entrada } from "../../rotas/chat.ts";
 import type { SessaoDoHistorico } from "../../rotas/historico.ts";
-import { consulta, contagem, dia, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
+import { consulta, contagem, dia, listaDoHistorico, mesesParaAuditar, paginaDoHistorico, previa } from "./historico.ts";
 
 process.env.TZ = "America/Sao_Paulo";
 
@@ -34,7 +34,40 @@ test("página: filtros de projeto, issue e etapa com o que o Auditor escolheu, e
   assert.match(html, /<input data-f="issue" value="I-&#34;2" placeholder="I-29"/);
   assert.match(html, /<option value="revisao">revisão<\/option>/);
   assert.match(html, /<option value="sessao" selected>sessão em aberto<\/option>/);
-  assert.match(html, /<span class="contagem" data-contagem><\/span><\/div><div data-lista><\/div>/);
+  assert.match(
+    html,
+    /<span class="contagem" data-contagem><\/span><span class="auditar">.*<\/span><\/div><div data-lista><\/div>/,
+  );
+});
+
+test("página: depois da contagem, o mês (12 meses, o corrente escolhido, sem data-f) e o botão Auditar", () => {
+  const html = paginaDoHistorico([], { projeto: "", issue: "", etapa: "" }, new Date(2026, 9, 13));
+  const grupo = /<span class="auditar">(.*?)<\/span><\/div><div data-lista>/.exec(html)?.[1] ?? "";
+  assert.ok(html.indexOf("data-contagem") < html.indexOf('class="auditar"'));
+  assert.match(grupo, /^<label>Mês <select data-mes><option value="2026-10" selected>outubro de 2026<\/option>/);
+  assert.equal(grupo.match(/<option /g)?.length, 12);
+  assert.equal(grupo.match(/selected/g)?.length, 1);
+  assert.match(grupo, /<option value="2025-11">novembro de 2025<\/option><\/select><\/label>/);
+  assert.match(grupo, /<button type="button" class="btn btn-primario" data-auditar>Auditar<\/button>$/);
+  assert.doesNotMatch(grupo, /data-f/);
+  assert.match(paginaDoHistorico([], { projeto: "", issue: "", etapa: "" }), /data-auditar/);
+});
+
+test("meses para auditar: os 12 últimos, do corrente para o mais antigo, atravessando o ano", () => {
+  assert.deepEqual(mesesParaAuditar(new Date(2026, 0, 31)), [
+    "2026-01",
+    "2025-12",
+    "2025-11",
+    "2025-10",
+    "2025-09",
+    "2025-08",
+    "2025-07",
+    "2025-06",
+    "2025-05",
+    "2025-04",
+    "2025-03",
+    "2025-02",
+  ]);
 });
 
 test("consulta: só os filtros escolhidos, a issue como I-n ou n, e nada a pedir se ela não é número", () => {
