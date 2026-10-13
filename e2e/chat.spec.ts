@@ -114,6 +114,8 @@ test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um di�
   expect((doAuditor?.x ?? 0) + (doAuditor?.width ?? 0)).toBeGreaterThan((lista?.x ?? 0) + (lista?.width ?? 0) - 40);
   expect(doAgente?.x ?? 1000).toBeLessThan((lista?.x ?? 0) + 40);
   expect(doAuditor?.x).toBeGreaterThan(doAgente?.x ?? 1000);
+  // `innerText` já aplica o `text-transform`: um rótulo em caixa alta apareceria como AGENTE/VOCÊ.
+  expect(await conversa.evaluate((e) => /\b(AGENTE|VOCÊ)\b/.test((e as HTMLElement).innerText))).toBe(false);
 
   // O diálogo da extensão toma o lugar do envio até o Auditor responder.
   await expect(barra.locator(".pill")).toHaveText("aguarda você · diálogo");
