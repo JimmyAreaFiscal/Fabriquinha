@@ -1380,6 +1380,9 @@ input.erro {
   font-size: var(--fs-sm);
   font-weight: 400;
 }
+.painel-config .remover-projeto {
+  margin-left: auto;
+}
 
 .agendador {
   display: grid;

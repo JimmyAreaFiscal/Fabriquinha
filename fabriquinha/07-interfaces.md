@@ -132,6 +132,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 |---|---|
 | `POST /api/configuracao` | Salva a configuração do F4 (seção 3). |
 | `POST /api/projetos` | C19: `conferirProjeto` (F5, 2), `conferirModelo` para cada modelo (F4, 9), grava, e chama `varrerBase` (F6, 4.4) para fixar o cursor inicial. |
+| `DELETE /api/projetos/:nome` | Remove o projeto e tudo o que depende dele, em qualquer fase: do banco, as issues com tickets, execuções, evidências, decisões e uso (custo); do disco, as pastas de execução, as sessões do pi, os anexos que nenhum outro projeto usa e `<raiz>/worktrees/<projeto>`. O repositório original, as branches `fabriquinha/I-n` e o remoto não são tocados. Recusa com 409 se há execução em andamento no projeto; projeto inexistente dá 404. Devolve `{ avisos }`, um por falha ao apagar no disco (o banco não volta atrás). |
 
 **Registro e issue**
 
@@ -326,12 +327,13 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 1. Menu à esquerda: **Geral → Agendador** (com a marca ligado ou desligado) e **Projetos →** um item por projeto, com a hospedagem, e **+ Novo projeto**.
 2. À direita, o formulário do item escolhido.
 3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, a execução autônoma em andamento e **Salvar**.
-4. Projeto, com o número de issues ao lado do nome, em quatro grupos:
+4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em quatro grupos:
    - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) e projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`;
    - **Preparação e testes:** listas de comandos com adicionar e remover; preparação opcional, testes com pelo menos um;
    - **Fitness functions:** nome, comando e descrição (até 300), com adicionar e remover;
    - **Modelo por etapa:** um seletor por etapa alimentado por `GET /api/modelos`, com "padrão do pi" apagado quando vazio.
    Rodapé: "Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos", **Cancelar** e **Salvar projeto** (ou **Cadastrar projeto**).
+   **Remover** (só no projeto já salvo) abre uma confirmação com o nome e o número de issues, avisando que issues, custos e arquivos do projeto serão apagados: **Cancelar** não muda nada, **Remover projeto** envia `DELETE /api/projetos/:nome`. Com sucesso, a tela volta a `/config` e mostra os avisos; com erro (execução em andamento, por exemplo), a confirmação fecha e a mensagem aparece.
 5. Erros de validação aparecem ao lado de cada campo, a partir do caminho que o `zod` devolve, e o rodapé diz quantos campos têm erro.
 
 ### 4.5 Exibição de evidências
