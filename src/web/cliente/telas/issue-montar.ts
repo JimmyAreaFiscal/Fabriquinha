@@ -182,6 +182,20 @@ const ACOES: Record<string, (c: Contexto) => void | Promise<void>> = {
     await api(`/api/tickets/${String(alvo.dataset.executar)}/executar`, enviarJson("POST"));
     await remontar();
   },
+  "cancelar-issue": ({ raiz }) => {
+    raiz.querySelector<HTMLDialogElement>("[data-dialogo-cancelar]")?.showModal();
+  },
+  // C22; a página relida mostra a issue cancelada. Se a rota recusar, o diálogo fecha para o aviso aparecer.
+  "confirmar-cancelar": async ({ alvo, pagina, remontar }) => {
+    (alvo as HTMLButtonElement).disabled = true;
+    try {
+      await api(`/api/issues/${String(pagina.issue.id)}/cancelar`, enviarJson("POST"));
+    } catch (error_) {
+      alvo.closest("dialog")?.close();
+      throw error_;
+    }
+    await remontar();
+  },
   "aprovar-registro": decidirRegistro(true),
   "devolver-registro": decidirRegistro(false),
   // Gate do desenho (ticket 31).

@@ -135,7 +135,7 @@ const esperarEstado = (sessao: string, alvo: string) =>
 
 /** Um registro novo pelo chat, já com a primeira resposta do agente. Devolve a sessão e a issue. */
 async function registro(): Promise<[string, number]> {
-  const { corpo } = await postar("/api/registros", { projeto: "loja" });
+  const { corpo } = await postar("/api/registros", { projeto: "loja", descricao: "Exportar pedidos em CSV" });
   const { sessao } = corpo as { sessao: string };
   await esperarEstado(sessao, "aguardando_humano: conversa");
   return [sessao, ((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).issue.id];
@@ -147,8 +147,17 @@ const textos = (conversa: Record<string, unknown>[]) =>
     return `${m.role}: ${typeof m.content === "string" ? m.content : m.content.map((b) => b.text).join("")}`;
   });
 
+test("registro sem descrição, ou só com espaços, dá 422 e nenhuma issue nasce", async () => {
+  for (const corpo of [{ projeto: "loja" }, { projeto: "loja", descricao: "  \n " }]) {
+    const r = await postar("/api/registros", corpo);
+    assert.equal(r.status, 422);
+    assert.match(JSON.stringify(r.corpo), /descricao/);
+  }
+  assert.deepEqual((await pedir("/api/board")).corpo, []);
+});
+
 test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, gate com o painel, devolver e aprovar", async () => {
-  const { corpo } = await postar("/api/registros", { projeto: "loja" });
+  const { corpo } = await postar("/api/registros", { projeto: "loja", descricao: "Exportar pedidos em CSV" });
   const { sessao } = corpo as { sessao: string };
   const sse = await assinar(sessao);
   await ate(() => sse.eventos.length > 0, "o retrato");
@@ -323,7 +332,7 @@ test("concluir só a sessão em aberto; entrada inválida dá 422 e sessão ou t
   assert.equal(concluir.status, 409);
   assert.match((concluir.corpo as { erro: string }).erro, /só a sessão em aberto/);
   assert.equal((await postar("/api/tickets/999/concluir-sessao")).status, 404);
-  assert.equal((await postar("/api/registros", { projeto: 3 })).status, 422);
+  assert.equal((await postar("/api/registros", { projeto: 3, descricao: "x" })).status, 422);
   assert.equal((await pedir("/api/sessoes/nada")).status, 404);
   assert.equal((await pedir("/api/sessoes/nada/eventos")).status, 404);
 });

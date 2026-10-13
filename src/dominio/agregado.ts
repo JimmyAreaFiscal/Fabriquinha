@@ -1,7 +1,7 @@
 // Agregado da issue, ator e contexto dos comandos (F1 §3.2, §3.4, §3.5, §5).
 // Cada comando é uma função pura `(agregado, entrada, ator, contexto) → agregado`; o F2 carrega, aplica e grava.
 import { z } from "zod";
-import { ErroDeEscopo } from "./erros.ts";
+import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
   Etapa,
   Fase,
@@ -43,9 +43,10 @@ export const Issue = z.object({
   criadaEm: Instante,
   concluidaEm: Instante.optional(),
   arquivadaEm: Instante.optional(),
+  canceladaEm: Instante.optional(),
 });
 
-export const StatusTicket = z.enum(["aberto", "em_execucao", "concluido", "falhou"]);
+export const StatusTicket = z.enum(["aberto", "em_execucao", "concluido", "falhou", "fechado", "cancelado"]);
 
 export const Ticket = z.object({
   id: Id,
@@ -208,9 +209,20 @@ export type NomeComando =
   | "removerTicket"
   | "decidirDesenho"
   | "registrarDecisaoRevisao"
-  | "decidirPR";
+  | "decidirPR"
+  | "cancelarIssue";
+
+/** Erro da execução que o cancelamento da issue terminou (C22). */
+export const CANCELADA = "issue cancelada pelo Auditor";
 
 export const rotuloIssue = (ag: Agregado): string => `I-${String(ag.issue.id)}`;
+
+/** Issue cancelada não muda mais: a F2 recusa qualquer comando sobre ela. */
+export function exigirNaoCancelada(ag: Agregado): void {
+  if (ag.issue.canceladaEm !== undefined) {
+    throw new ErroDeRegra(`a ${rotuloIssue(ag)} está cancelada e não muda mais`, "registre uma nova issue se precisar");
+  }
+}
 
 export function exigirAuditor(ator: Ator, acao: string): void {
   if (ator.tipo !== "auditor") throw new ErroDeEscopo(`só o Auditor pode ${acao}`, "peça ao Auditor pelo web");

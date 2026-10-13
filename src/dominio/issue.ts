@@ -1,19 +1,21 @@
-// Comandos da issue: C1 registrar, C2 editar, C3/C4 dependências e C18 arquivar (F1 §5).
+// Comandos da issue: C1 registrar, C2 editar, C3/C4 dependências, C18 arquivar e C22 cancelar (F1 §5).
 import { z } from "zod";
 import {
   type Agregado,
   type Ator,
+  CANCELADA,
   type Contexto,
   exigirAuditor,
   exigirAuditorOuAgente,
   type Issue,
   rotuloIssue,
+  type Ticket,
   TipoIssue,
 } from "./agregado.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { Id, Markdown, Slug, Titulo } from "./primitivos.ts";
 
-const EntradaRegistro = z.object({ projeto: Slug, deps: z.array(Id).default([]) });
+const EntradaRegistro = z.object({ projeto: Slug, deps: z.array(Id).default([]), descricao: Markdown.default("") });
 const EntradaEdicao = z.strictObject({ titulo: Titulo, tipo: TipoIssue, descricao: Markdown }).partial();
 
 function exigirIssue(ctx: Contexto, id: Id): void {
@@ -35,7 +37,7 @@ function exigirNaoConcluida(ag: Agregado): void {
 /** C1: issue em `registro`, sem título e tipo, com o ticket de registro aberto. */
 export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   exigirAuditor(ator, "registrar uma issue");
-  const { projeto, deps } = EntradaRegistro.parse(entrada);
+  const { projeto, deps, descricao } = EntradaRegistro.parse(entrada);
   if (!ctx.projeto(projeto)) throw new ErroDeRegra(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
   for (const dep of deps) exigirIssue(ctx, dep);
   // Uma issue nova ainda não é dependência de ninguém, então as dependências dela não fecham ciclo.
@@ -46,7 +48,7 @@ export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agr
       projeto,
       titulo: null,
       tipo: null,
-      descricao: "",
+      descricao,
       fase: "registro",
       deps: [...new Set(deps)],
       criadaEm: ctx.agora,
@@ -117,4 +119,38 @@ export function arquivarConcluidas(issues: readonly Issue[], ator: Ator, ctx: Co
   return issues
     .filter((i) => i.fase === "concluida" && i.arquivadaEm === undefined)
     .map((i) => ({ ...i, arquivadaEm: ctx.agora }));
+}
+
+/** C22, só as guardas: Auditor, fora da concluída e ainda não cancelada. */
+export function exigirCancelavel(ag: Agregado, ator: Ator): void {
+  exigirAuditor(ator, `cancelar a ${rotuloIssue(ag)}`);
+  if (ag.issue.fase === "concluida") {
+    throw new ErroDeRegra(`a ${rotuloIssue(ag)} está concluída e não pode ser cancelada`, "ela já terminou o processo");
+  }
+  if (ag.issue.canceladaEm !== undefined) {
+    throw new ErroDeRegra(`a ${rotuloIssue(ag)} já está cancelada`, "não há mais nada a fazer");
+  }
+}
+
+/** Aberto ou falho vira `fechado` (sem `erro`), em execução vira `cancelado`; o resto fica como está. */
+function encerrarTicket(t: Ticket): Ticket {
+  const { erro: _, ...semErro } = t;
+  if (t.status === "aberto" || t.status === "falhou") return { ...semErro, status: "fechado" };
+  return t.status === "em_execucao" ? { ...semErro, status: "cancelado" } : t;
+}
+
+/**
+ * C22: cancela a issue (a fase fica onde parou). Tickets abertos ou falhos ficam `fechado`, o em execução fica
+ * `cancelado`, e a execução em andamento termina em `falha` com `CANCELADA`. Nada se apaga.
+ */
+export function cancelarIssue(ag: Agregado, ator: Ator, ctx: Contexto): Agregado {
+  exigirCancelavel(ag, ator);
+  return {
+    ...ag,
+    issue: { ...ag.issue, canceladaEm: ctx.agora },
+    tickets: ag.tickets.map(encerrarTicket),
+    execucoes: ag.execucoes.map((e) =>
+      e.resultado === "em_andamento" ? { ...e, resultado: "falha", erro: CANCELADA, terminadaEm: ctx.agora } : e,
+    ),
+  };
 }

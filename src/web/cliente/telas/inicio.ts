@@ -180,6 +180,7 @@ export function formularioDeRegistro(
   issues: readonly IssueDoBoard[],
   escolhido?: string,
   falha?: string,
+  descricao = "",
 ): string {
   if (projetos.length === 0) {
     return '<p class="muted">Nenhum projeto cadastrado ainda. <a class="link" href="/config?novo" data-fechar>Cadastrar um projeto na Configuração</a></p>';
@@ -199,6 +200,7 @@ export function formularioDeRegistro(
   return `<form class="form registro" data-registro>
     <p class="muted">O agente conversa com você no chat do registro até a issue ficar pronta para o gate.</p>
     <label class="campo">Projeto<select name="projeto">${opcoes}</select></label>
+    <label class="campo">Descrição<textarea name="descricao" rows="5" placeholder="O problema ou a funcionalidade, em poucas frases">${escapar(descricao)}</textarea></label>
     <fieldset class="campo">
       <legend>Dependências <span class="ajuda">opcional · a issue espera estas concluírem</span></legend>
       <div class="deps-lista">${deps}</div>

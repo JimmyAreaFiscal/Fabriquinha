@@ -13,12 +13,13 @@ import { jaTemExecucao, ticketDe } from "../../dominio/execucao.ts";
 import { adicionarDependencia, removerDependencia } from "../../dominio/issue.ts";
 import { type Fase, Id } from "../../dominio/primitivos.ts";
 import type { Projeto } from "../../dominio/projeto.ts";
+import { cancelarIssue } from "../../execucao/cancelamento.ts";
 import { type InfoSessao, sessoes } from "../../execucao/sessoes.ts";
 import { type MetricasIssue, numerosDoDesenho } from "../../metricas/issue.ts";
 import { arquivoRegistrado, caminhoArquivo } from "../../persistencia/arquivos.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { dirDaExecucao } from "../../persistencia/execucoes.ts";
-import { agregadoExistente, comIssue, fasesPercorridas } from "../../persistencia/issues.ts";
+import { agregadoExistente, comIssue, dependentes, fasesPercorridas } from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import { ticketsElegiveis } from "../../persistencia/servico.ts";
@@ -62,6 +63,8 @@ export interface PaginaDaIssue extends Agregado {
   projeto: Projeto;
   /** As dependências com o projeto (a dependência vale entre projetos) e a fase de cada uma. */
   dependencias: { id: Id; projeto: string; fase: Fase }[];
+  /** As dependentes, diretas e indiretas, de qualquer projeto: as que o cancelamento (C22) leva junto. */
+  dependentes: { id: Id; projeto: string; fase: Fase }[];
   /** As fases em que a issue já esteve, para o trilho não pintar de verde a que ela pulou. */
   percorridas: Fase[];
   /** As sessões dos tickets, ativas e terminadas. */
@@ -103,6 +106,7 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
       const { projeto: p, fase } = agregadoExistente(banco, dep).issue;
       return { id: dep, projeto: p, fase };
     }),
+    dependentes: dependentes(banco, id),
     percorridas: fasesPercorridas(banco, id),
     sessoes: todas,
     custos: custoPorExecucao(banco, id),
@@ -207,6 +211,13 @@ export const ROTAS_DA_ISSUE: Rota[] = [
       comIssue(banco, IdDoCaminho.parse(params.id), "removerDependencia", AUDITOR, (ag) =>
         removerDependencia(ag, dep, AUDITOR),
       );
+    },
+  },
+  {
+    metodo: "POST",
+    caminho: "/api/issues/:id/cancelar",
+    tratar: async ({ banco, params }) => {
+      await cancelarIssue(banco, IdDoCaminho.parse(params.id));
     },
   },
   {

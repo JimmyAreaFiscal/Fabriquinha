@@ -10,7 +10,7 @@ import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { z, ZodError } from "zod";
 import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../dominio/erros.ts";
-import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
+import { adicionarDependencia, cancelarIssue, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { registrarDecisaoRevisao } from "../dominio/gates.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
@@ -183,6 +183,15 @@ const COMANDOS: readonly Comando[] = [
       const entrada = { titulo: opcional(c.op.titulo), tipo: opcional(c.op.tipo), descricao: await descricao(c) };
       const { ator } = c.agente;
       return comIssue(c.banco, id, "editarIssue", ator, (ag) => editarIssue(ag, entrada, ator)).issue;
+    },
+  },
+  {
+    palavras: ["issue", "cancelar"],
+    argumentos: ["I-<n>"],
+    doAgente: true,
+    rodar({ banco, agente: { ator }, pos }) {
+      return comIssue(banco, numero(pos[0], "I"), "cancelarIssue", ator, (ag, ctx) => cancelarIssue(ag, ator, ctx))
+        .issue;
     },
   },
   {

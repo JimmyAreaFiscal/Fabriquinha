@@ -29,9 +29,11 @@ import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { executarAutonomo } from "./autonoma.ts";
-import { ABORTADA, abortar, dialogosPendentes, responderDialogo } from "./gerente.ts";
+import { ABORTADA, abortar, dialogosPendentes, foiCancelada, pararParaCancelar, responderDialogo } from "./gerente.ts";
 import { PACOTE } from "./pi.ts";
 
+// O ambiente do pi herda a porta do serviço; quando os testes rodam dentro de uma execução ela vem definida.
+delete process.env.FABRIQUINHA_PORTA;
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-autonoma-")));
 after(() => {
   rmSync(base, { recursive: true, force: true });
@@ -53,6 +55,11 @@ process.env.PI_CODING_AGENT_DIR = agenteDir;
 // Credenciais que o pi não pode receber (F4 §6.1.2).
 process.env.GH_TOKEN = "segredo-gh";
 process.env.AZURE_DEVOPS_EXT_PAT = "segredo-az";
+// O teste confere o ambiente exato do pi: a porta do serviço, se quem roda os testes a tiver, não entra.
+Reflect.deleteProperty(process.env, "FABRIQUINHA_PORTA");
+
+// O ambiente do pi é fechado: a porta do serviço que roda estes testes não pode entrar na comparação.
+delete process.env.FABRIQUINHA_PORTA;
 
 /**
  * pi falso (F4 §12). Anota em $FALSO_PI_REGISTRO os argumentos, o cwd, o ambiente e cada comando recebido, e responde
@@ -609,5 +616,28 @@ test("C5 recusado ou ticket inexistente: rejeita sem criar execução nem lança
   );
   assert.deepEqual(c.estado().execucoes, []);
   assert.deepEqual(c.registro(), []);
+  c.banco.close();
+});
+
+// Por último: o gerente guarda as execuções canceladas por ID, e cada cenário recomeça a numeração.
+test("execução cancelada pela issue: o pi para e a autônoma não grava C6 nem C8", async () => {
+  const c = cenario({ variante: "dialogo", comAgente: false });
+  const execucao = executarAutonomo(c.banco, 2, { timeoutMin: 1 });
+  for (let espera = 0; dialogosPendentes(2).length < 3; espera += 20) {
+    assert.ok(espera < 10_000, "os diálogos não chegaram em 10 s");
+    await dormir(20);
+  }
+  await pararParaCancelar(2);
+  await execucao;
+
+  assert.equal(foiCancelada(2), true);
+  assert.deepEqual(dialogosPendentes(2), []);
+  // Quem grava o término é o cancelamento da issue (C22); a autônoma deixou o banco como o C5 o deixou.
+  const { ticket, execucoes } = c.estado();
+  assert.equal(ticket.status, "em_execucao");
+  assert.deepEqual(
+    execucoes.map((e) => e.resultado),
+    ["em_andamento"],
+  );
   c.banco.close();
 });

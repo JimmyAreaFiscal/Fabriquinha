@@ -1,7 +1,7 @@
 // Início (F7 §4.4): o que aguarda o Auditor no card certo, com o botão que abre o chat; o board com as marcas; a
 // atualização sozinha; e o Registrar necessidade, que abre o chat da sessão criada (F4 §6.6) com o pi falso.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { abrir } from "../src/persistencia/banco.ts";
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
@@ -111,6 +111,7 @@ test("registrar uma necessidade pede projeto e dependências e abre o chat da se
   const caixa = pagina.getByRole("dialog", { name: "Registrar necessidade" });
   await expect(caixa.getByLabel("Projeto")).toHaveValue("loja");
   await expect(caixa.getByRole("group", { name: /Dependências/ })).toContainText("Nenhuma issue em andamento.");
+  await caixa.getByLabel("Descrição").fill("Exportar pedidos em CSV");
   await caixa.getByRole("button", { name: "Registrar e abrir o chat" }).click();
 
   await expect(caixa).toBeHidden();
@@ -118,6 +119,10 @@ test("registrar uma necessidade pede projeto e dependências e abre o chat da se
   const chat = new URL(pagina.url()).pathname;
   // O pi falso respondeu: a sessão espera a próxima mensagem do Auditor.
   await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
+  // A descrição foi para a primeira mensagem do prompt.
+  expect(readFileSync(join(fabriquinha.raiz, "execucoes", "E-1", "prompt.md"), "utf8")).toContain(
+    "## Descrição da issue\n\nExportar pedidos em CSV\n",
+  );
 
   // De volta ao Início, o card dela.
   await pagina
@@ -133,6 +138,7 @@ test("registrar uma necessidade pede projeto e dependências e abre o chat da se
   // A segunda necessidade pode depender da primeira.
   await pagina.getByRole("button", { name: "+ Registrar necessidade" }).click();
   await caixa.getByRole("checkbox", { name: /I-1/ }).check();
+  await caixa.getByLabel("Descrição").fill("Filtrar pedidos por data");
   await caixa.getByRole("button", { name: "Registrar e abrir o chat" }).click();
   await expect(pagina).not.toHaveURL(`${fabriquinha.base}${chat}`);
   await expect(pagina).toHaveURL(/\/sessions\/[0-9a-f-]{36}$/);
@@ -143,12 +149,35 @@ test("registrar uma necessidade pede projeto e dependências e abre o chat da se
   await expect(pagina.locator(".cartao", { hasText: "I-2" }).locator(".pill-neutro")).toHaveText("bloqueada por I-1");
 });
 
+for (const [caso, descricao] of [
+  ["vazia", ""],
+  ["só com espaços e quebras de linha", "   \n  \n "],
+] as const) {
+  test(`a descrição ${caso} é recusada no rodapé, sem sair do Início nem criar issue`, async ({
+    pagina,
+    fabriquinha,
+  }) => {
+    projeto(fabriquinha.raiz);
+    await pagina.getByRole("button", { name: "+ Registrar necessidade" }).click();
+    const caixa = pagina.getByRole("dialog", { name: "Registrar necessidade" });
+    await caixa.getByLabel("Descrição").fill(descricao);
+    await caixa.getByRole("button", { name: "Registrar e abrir o chat" }).click();
+    await expect(caixa.getByRole("alert")).toHaveText("a descrição é obrigatória (descreva a necessidade)");
+    await expect(pagina).toHaveURL(`${fabriquinha.base}/home`);
+    expect(await pagina.evaluate(async () => (await (await fetch("/api/board")).json()) as unknown)).toEqual([]);
+    expect(
+      await pagina.evaluate(async () => (await (await fetch("/api/sessoes?escopo=ativas")).json()) as unknown),
+    ).toEqual([]);
+  });
+}
+
 test("a recusa do registro aparece na caixa, sem sair do Início", async ({ pagina, fabriquinha }) => {
   semear(fabriquinha.raiz);
   await pagina.reload();
   await pagina.getByRole("button", { name: "+ Registrar necessidade" }).click();
   const caixa = pagina.getByRole("dialog", { name: "Registrar necessidade" });
   await caixa.getByRole("checkbox", { name: /I-2/ }).check();
+  await caixa.getByLabel("Descrição").fill("Exportar pedidos em CSV");
   // O projeto do semear aponta para um repositório que não existe: o C1 grava, e a worktree falha em segundo plano.
   // Para ver a recusa, a dependência some do banco antes do envio.
   const banco = abrir(fabriquinha.raiz);
@@ -157,6 +186,8 @@ test("a recusa do registro aparece na caixa, sem sair do Início", async ({ pagi
   await caixa.getByRole("button", { name: "Registrar e abrir o chat" }).click();
   await expect(caixa.getByRole("alert")).toHaveText("a issue I-2 não existe (confira o número da issue)");
   await expect(caixa.getByRole("checkbox", { name: /I-2/ })).toBeChecked();
+  await expect(caixa.getByLabel("Descrição")).toHaveValue("Exportar pedidos em CSV");
+  await expect(caixa.getByLabel("Projeto")).toHaveValue("loja");
   await expect(pagina).toHaveURL(`${fabriquinha.base}/home`);
   await caixa.getByRole("button", { name: "Cancelar" }).click();
   await expect(caixa).toBeHidden();

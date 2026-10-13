@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { type Agregado, type Execucao, FABRIQUINHA, type ModoExecucao } from "../dominio/agregado.ts";
+import { type Agregado, CANCELADA, type Execucao, FABRIQUINHA, type ModoExecucao } from "../dominio/agregado.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import { iniciarExecucao, naSessaoPrincipal, ticketDe } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
@@ -68,8 +68,13 @@ interface Viva extends Omit<Situacao, "dialogos"> {
 const vivas = new Map<Id, Viva>();
 const ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
 
-/** Execuções cujo pi já recebeu a ordem de parar e ainda não saiu: o C6 delas vem logo depois. */
-const encerrando = new Set<Id>();
+/** Execuções cujo pi já recebeu a ordem de parar, com a promessa de ele sair: o C6 delas vem logo depois. */
+const encerrando = new Map<Id, Promise<void>>();
+
+/** Execuções cuja issue foi cancelada (C22): não lançam pi e não gravam C6 nem C8. ponytail: o Set só cresce; poucos IDs por dia. */
+const canceladas = new Set<Id>();
+
+export const foiCancelada = (execucao: Id): boolean => canceladas.has(execucao);
 
 const vivaDaSessao = (sessao: string): Viva | undefined => [...vivas.values()].find((v) => v.sessaoPi === sessao);
 
@@ -174,6 +179,20 @@ export function abortar(execucao: Id): void {
   v.mandar({ type: "abort" });
 }
 
+/**
+ * Marca a execução como cancelada pela issue (C22) e, se o pi dela está vivo, cancela os diálogos pendentes e o para
+ * como no encerramento. Resolve quando o pi saiu; sem pi vivo, quando o que já estava parando termina.
+ */
+export async function pararParaCancelar(execucao: Id): Promise<void> {
+  canceladas.add(execucao);
+  const v = vivas.get(execucao);
+  if (v) {
+    for (const id of v.pendentes.keys()) v.responder(id, { cancelled: true });
+    v.encerrar();
+  }
+  await encerrando.get(execucao);
+}
+
 /** Um comando de conversa ao pi vivo: `prompt` acorda a sessão ociosa; `steer` e `follow_up` entram no passo atual. */
 export function mandar(execucao: Id, comando: { type: "prompt" | "steer" | "follow_up"; message: string }): void {
   viva(execucao, "retome a sessão").mandar(comando);
@@ -257,9 +276,11 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
         : await garantirWorktree(raiz, projeto, r.ag.issue, log, () => varrerBase(r.banco, projeto.nome));
     const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
     if (prompt !== undefined) writeFileSync(join(dir, "prompt.md"), prompt);
+    if (canceladas.has(execucao.id)) return { worktree, falha: CANCELADA };
     // O `pi --version` conta no limite: um pi travado não prende a issue nem a sessão.
     const versao = await executar(binarioPi(), ["--version"], { limiteMs: r.limiteMin * 60_000 });
     anotar(log, `pi --version: ${(versao.saida + versao.erro).trim()}`);
+    if (canceladas.has(execucao.id)) return { worktree, falha: CANCELADA };
     if (versao.limiteEstourado) throw new Error(`tempo limite de ${String(r.limiteMin)} min em pi --version`);
     const args = argumentosPi({
       raiz,
@@ -326,11 +347,13 @@ function rodarPi(r: Processo): Promise<string | undefined> {
       clearTimeout(relogio);
       for (const t of expiracoes.values()) clearTimeout(t);
       vivas.delete(id);
-      encerrando.add(id);
-      void pi.parar().then(() => {
-        encerrando.delete(id);
-        resolve(falha);
-      });
+      encerrando.set(
+        id,
+        pi.parar().then(() => {
+          encerrando.delete(id);
+          resolve(falha);
+        }),
+      );
     };
     // Autônoma (F4 §6.7): só o tempo ativo conta; o relógio para enquanto algum diálogo espera o Auditor.
     // Interativa (F4 §6.6): a ociosidade conta do zero cada vez que o agente assenta sem diálogo pendente.

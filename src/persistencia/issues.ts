@@ -8,6 +8,7 @@ import {
   Decisao,
   Evidencia,
   Execucao,
+  exigirNaoCancelada,
   Issue,
   type NomeComando,
   Ticket,
@@ -43,11 +44,12 @@ const linhaIssue = (i: Issue): Linha => ({
   criada_em: i.criadaEm,
   concluida_em: i.concluidaEm ?? null,
   arquivada_em: i.arquivadaEm ?? null,
+  cancelada_em: i.canceladaEm ?? null,
 });
 
 const deLinhaIssue = (l: Linha, deps: Id[]): Issue =>
   Issue.parse({
-    ...semNulos({ concluidaEm: l.concluida_em, arquivadaEm: l.arquivada_em }),
+    ...semNulos({ concluidaEm: l.concluida_em, arquivadaEm: l.arquivada_em, canceladaEm: l.cancelada_em }),
     id: l.id,
     projeto: l.projeto,
     titulo: l.titulo,
@@ -302,15 +304,20 @@ export function comIssue(
   return escrever(banco, () => {
     const antes = carregar(banco, issue);
     if (!antes) throw new ErroDeInexistente(`a issue I-${String(issue)} não existe`, "confira o número da issue");
+    exigirNaoCancelada(antes);
     const ctx = contexto(banco);
     const depois = comando(antes, ctx);
     gravarDiferenca(banco, antes, depois);
-    banco
-      .prepare("INSERT INTO comando (issue, nome, ator, fase, em) VALUES (?, ?, ?, ?, ?)")
-      .run(issue, nome, ator.tipo, antes.issue.fase, ctx.agora);
+    gravarComando(banco, antes, nome, ator, ctx);
     return depois;
   });
 }
+
+const gravarComando = (banco: DatabaseSync, antes: Agregado, nome: NomeComando, ator: Ator, ctx: Contexto): void => {
+  banco
+    .prepare("INSERT INTO comando (issue, nome, ator, fase, em) VALUES (?, ?, ?, ?, ?)")
+    .run(antes.issue.id, nome, ator.tipo, antes.issue.fase, ctx.agora);
+};
 
 /** C1: cria a issue e o ticket de registro. */
 export const registrarIssue = (banco: DatabaseSync, entrada: unknown, ator: Ator): Agregado =>
@@ -344,6 +351,44 @@ export const arquivarConcluidas = (banco: DatabaseSync, nomeProjeto: string, ato
       if (issue) gravarDiferenca(banco, ag, { ...ag, issue });
     }
     return arquivadas.size;
+  });
+
+/**
+ * As issues que dependem de `id`, direta ou indiretamente e de qualquer projeto, ainda não concluídas nem canceladas
+ * (as que o C22 atinge junto), da menor para a maior.
+ */
+export const dependentes = (banco: DatabaseSync, id: Id): { id: Id; projeto: string; fase: Fase }[] =>
+  banco
+    .prepare(
+      `WITH RECURSIVE dependentes (id) AS (
+         SELECT issue FROM issue_dep WHERE dep = ?
+         UNION SELECT d.issue FROM issue_dep d JOIN dependentes x ON d.dep = x.id
+       ) SELECT i.id, i.projeto, i.fase FROM issue i JOIN dependentes x ON x.id = i.id
+       WHERE i.fase <> 'concluida' AND i.cancelada_em IS NULL ORDER BY i.id`,
+    )
+    .all(id)
+    .map((l) => ({ id: Number(l.id), projeto: String(l.projeto), fase: l.fase as Fase }));
+
+/**
+ * C22: cancela a issue e as dependentes dela numa transação só, uma linha `cancelarIssue` em `comando` por issue.
+ * Devolve as issues canceladas (a pedida primeiro) e as execuções que estavam em andamento e terminaram.
+ */
+export const cancelarIssues = (banco: DatabaseSync, issue: Id, ator: Ator): { issues: Id[]; execucoes: Execucao[] } =>
+  escrever(banco, () => {
+    const carregada = (id: Id) =>
+      encontrado(carregar(banco, id), `a issue I-${String(id)} não existe`, "confira o número da issue");
+    const ctx = contexto(banco);
+    const alvos = [issue, ...dependentes(banco, issue).map((d) => d.id)].map(carregada);
+    const execucoes: Execucao[] = [];
+    for (const antes of alvos) {
+      const depois = dominio.cancelarIssue(antes, ator, ctx);
+      gravarDiferenca(banco, antes, depois);
+      gravarComando(banco, antes, "cancelarIssue", ator, ctx);
+      execucoes.push(
+        ...depois.execucoes.filter((e) => antes.execucoes.some((a) => a.id === e.id && a.resultado === "em_andamento")),
+      );
+    }
+    return { issues: alvos.map((a) => a.issue.id), execucoes };
   });
 
 /** Agregado da issue, lido num snapshot só (transação de leitura). */
@@ -397,7 +442,7 @@ export const fasesPercorridas = (banco: DatabaseSync, issue: Id): Fase[] =>
 /** As issues não concluídas de todos os projetos, da mais nova para a mais antiga (o board do Início, F7 §5). */
 export const issuesEmAndamento = (banco: DatabaseSync): Id[] =>
   banco
-    .prepare("SELECT id FROM issue WHERE fase <> 'concluida' ORDER BY id DESC")
+    .prepare("SELECT id FROM issue WHERE fase <> 'concluida' AND cancelada_em IS NULL ORDER BY id DESC")
     .all()
     .map((l) => Number(l.id));
 
@@ -405,8 +450,13 @@ export const issuesEmAndamento = (banco: DatabaseSync): Id[] =>
 export const situacaoDasIssues = (
   banco: DatabaseSync,
   nomeProjeto: string,
-): { id: Id; concluida: boolean; arquivada: boolean }[] =>
+): { id: Id; concluida: boolean; arquivada: boolean; cancelada: boolean }[] =>
   banco
-    .prepare("SELECT id, fase, arquivada_em FROM issue WHERE projeto = ? ORDER BY id DESC")
+    .prepare("SELECT id, fase, arquivada_em, cancelada_em FROM issue WHERE projeto = ? ORDER BY id DESC")
     .all(nomeProjeto)
-    .map((l) => ({ id: Number(l.id), concluida: l.fase === "concluida", arquivada: l.arquivada_em !== null }));
+    .map((l) => ({
+      id: Number(l.id),
+      concluida: l.fase === "concluida",
+      arquivada: l.arquivada_em !== null,
+      cancelada: l.cancelada_em !== null,
+    }));

@@ -6,10 +6,19 @@ import { encontrado, mensagem } from "../../dominio/erros.ts";
 import { Hospedagem, Projeto } from "../../dominio/projeto.ts";
 import { conferirModelo, listarModelos } from "../../execucao/modelos.ts";
 import { varrerBase } from "../../metricas/retrabalho.ts";
+import { raizDo } from "../../persistencia/banco.ts";
 import { noLog } from "../../persistencia/execucoes.ts";
-import { editarProjeto, issuesDoProjeto, projeto, projetos, registrarProjeto } from "../../persistencia/projetos.ts";
+import {
+  editarProjeto,
+  issuesDoProjeto,
+  projeto,
+  projetos,
+  registrarProjeto,
+  removerProjeto,
+} from "../../persistencia/projetos.ts";
 import { autonomasEmAndamento, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
 import { conferirProjeto } from "../../repositorio/cadastro.ts";
+import { removerWorktrees } from "../../repositorio/worktree.ts";
 import { ErroHttp } from "../erros.ts";
 import type { Agendador, Rota } from "../rotas.ts";
 
@@ -105,5 +114,13 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params, corpo }) =>
       conferirEGravar(banco, { ...DaEdicao.parse(corpo), nome: String(params.nome) }, editarProjeto),
+  },
+  {
+    metodo: "DELETE",
+    caminho: "/api/projetos/:nome",
+    tratar: async ({ banco, params }) => {
+      const { projeto: p, avisos } = await removerProjeto(banco, String(params.nome));
+      return { avisos: [...avisos, ...(await removerWorktrees(raizDo(banco), p))] };
+    },
   },
 ];

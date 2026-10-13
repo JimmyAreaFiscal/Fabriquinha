@@ -35,17 +35,21 @@ export function prDa(ag: Agregado): { id: string; url: string } | undefined {
 export interface ListaDoProjeto {
   issues: IssueDoProjeto[];
   sessoes: InfoSessao[];
-  contagem: { andamento: number; concluidas: number; arquivadas: number };
+  contagem: { andamento: number; concluidas: number; arquivadas: number; canceladas: number };
 }
 
-const Filtro = z.object({ concluidas: z.stringbool().default(false), arquivadas: z.stringbool().default(false) });
+const Filtro = z.object({
+  concluidas: z.stringbool().default(false),
+  arquivadas: z.stringbool().default(false),
+  canceladas: z.stringbool().default(false),
+});
 
 const exigirProjeto = (banco: DatabaseSync, nome: string): void => {
   encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "escolha um projeto cadastrado na Configuração");
 };
 
 /**
- * F7 §5: as em andamento sempre; as concluídas e as arquivadas só quando pedidas (Q2).
+ * F7 §5: as em andamento sempre; as concluídas, as arquivadas e as canceladas só quando pedidas (Q2).
  * ponytail: um agregado por issue, como o board do Início; uma consulta só quando a página pesar.
  */
 async function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Promise<ListaDoProjeto> {
@@ -54,7 +58,10 @@ async function lista(banco: DatabaseSync, nome: string, query: URLSearchParams):
   const todas = situacaoDasIssues(banco, nome);
   const emAndamento = new Set(issuesEmAndamento(banco));
   const issues = todas
-    .filter((i) => (i.arquivada ? filtro.arquivadas : !i.concluida || filtro.concluidas))
+    .filter((i) => {
+      if (i.cancelada) return filtro.canceladas;
+      return i.arquivada ? filtro.arquivadas : !i.concluida || filtro.concluidas;
+    })
     .map(({ id }): IssueDoProjeto => {
       const ag = agregadoExistente(banco, id);
       const pr = prDa(ag);
@@ -70,9 +77,10 @@ async function lista(banco: DatabaseSync, nome: string, query: URLSearchParams):
     issues,
     sessoes: await sessoes(banco, { escopo: "ativas", projeto: nome }),
     contagem: {
-      andamento: todas.filter((i) => !i.concluida).length,
+      andamento: todas.filter((i) => !i.concluida && !i.cancelada).length,
       concluidas: todas.filter((i) => i.concluida && !i.arquivada).length,
       arquivadas: todas.filter((i) => i.arquivada).length,
+      canceladas: todas.filter((i) => i.cancelada).length,
     },
   };
 }

@@ -194,7 +194,7 @@ export function formularioDeProjeto(
   const novo = issues === undefined;
   const titulo = novo
     ? "Novo projeto"
-    : `${escapar(p.nome)} <span class="muted contagem">${plural(issues, "issue", "issues")}</span>`;
+    : `${escapar(p.nome)} <span class="muted contagem">${plural(issues, "issue", "issues")}</span><button type="button" class="btn btn-perigo remover-projeto" data-remover-projeto aria-label="Remover o projeto ${escapar(p.nome)}">Remover</button>`;
   const nome = novo
     ? texto(erros, "nome", "Nome", p.nome, {
         extra: ' placeholder="loja-api"',
@@ -217,6 +217,10 @@ ${fitness(erros, p.fitness)}
 ${modelos(erros, p.modelos, disponiveis)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;
 }
+
+/** A confirmação de remover o projeto (C18 do arquivar, mas sem volta): o nome e quantas issues saem junto. */
+export const confirmacaoDeRemover = (nome: string, issues: number): string =>
+  `<dialog class="dialogo" data-dialogo-remover aria-labelledby="titulo-remover"><h2 id="titulo-remover">Remover o projeto ${escapar(nome)}</h2><p>O projeto <strong>${escapar(nome)}</strong> e ${plural(issues, "issue", "issues")} serão apagados, em qualquer fase, com tickets, execuções, evidências, decisões e custo. Saem do disco as worktrees e as pastas de execução; o repositório original não é tocado. Não dá para desfazer.</p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-perigo-cheio" data-confirmar-remover>Remover projeto</button></form></dialog>`;
 
 /** A página: o cabeçalho, o menu e o painel do item escolhido. */
 export const pagina = (menuHtml: string, painel: string): string =>

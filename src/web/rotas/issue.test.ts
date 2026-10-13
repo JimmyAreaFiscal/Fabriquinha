@@ -290,7 +290,7 @@ test("toda mutação recusa campo desconhecido no corpo com 422", async () => {
   };
   const extra = { extra: 1 };
   for (const [caminho, corpo] of [
-    ["/api/registros", { projeto: "loja", ...extra }],
+    ["/api/registros", { projeto: "loja", descricao: "Exportar pedidos em CSV", ...extra }],
     ["/api/issues/3", { titulo: "Busca", ...extra }],
     ["/api/issues/1/deps", { dep: 2, ...extra }],
     ["/api/issues/3/registro", { aprovado: true, ...extra }],
@@ -356,4 +356,36 @@ test("GET /api/issues/:id: o painel do gate do registro só quando a sessão do 
   );
   assert.deepEqual(p.registro, { comportamento: "copia à mão", criterios, faltando: [] });
   assert.equal((await pagina()).registro, undefined);
+});
+
+test("cancelar: fecha o ticket aberto, leva a dependente (listada na página), mantém o histórico e recusa a concluída com 409", async () => {
+  servico.banco.exec(`
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (10, 'loja', 'Engano', 'problema', 'registro', '${AGORA}');
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (11, 'loja', 'Depende', 'problema', 'registro', '${AGORA}');
+    INSERT INTO issue_dep (issue, dep) VALUES (11, 10);
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (10, 10, 'registro', 'Registrar', 'aberto', 'fabriquinha', '${AGORA}'),
+             (11, 11, 'registro', 'Registrar', 'aberto', 'fabriquinha', '${AGORA}');
+  `);
+  assert.deepEqual((await pagina(10)).dependentes, [{ id: 11, projeto: "loja", fase: "registro" }]);
+  assert.equal((await pedir("/api/issues/10/cancelar", { method: "POST" })).status, 204);
+
+  const cancelada = await pagina(10);
+  assert.equal(typeof cancelada.issue.canceladaEm, "string");
+  assert.deepEqual(
+    cancelada.tickets.map((t) => t.status),
+    ["fechado"],
+  );
+  const dependente = await pagina(11);
+  assert.equal(typeof dependente.issue.canceladaEm, "string");
+  assert.deepEqual(dependente.dependentes, []);
+
+  const jaCancelada = await pedir("/api/issues/10/cancelar", { method: "POST" });
+  assert.equal(jaCancelada.status, 409);
+  const concluida = await pedir("/api/issues/2/cancelar", { method: "POST" });
+  assert.deepEqual(
+    [concluida.status, await concluida.json()],
+    [409, { erro: "a I-2 está concluída e não pode ser cancelada (ela já terminou o processo)" }],
+  );
+  assert.equal((await pagina(2)).issue.canceladaEm, undefined);
 });

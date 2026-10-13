@@ -102,6 +102,9 @@ Consultados dentro da mesma transação, então são consistentes com o que vai 
 - As migrações são uma lista ordenada de scripts SQL, aplicada na abertura do banco, cada uma na sua transação.
 - As listas dos `CHECK ... IN (...)` são geradas a partir dos enums `zod` do F1 (`Fase.options`, `Etapa.options` etc.).
   Assim o banco e o domínio não divergem.
+- `migrar` desliga `foreign_keys` antes do laço (o PRAGMA não vale dentro de transação) e liga de novo num `finally`, porque recriar uma tabela com DROP/RENAME falha com FK ligada (`defer_foreign_keys` e `legacy_alter_table` não resolvem).
+  Em troca, cada migração roda `PRAGMA foreign_key_check` antes do COMMIT e é desfeita com `ErroDeRegra` se sobrar linha órfã.
+- A migração do C22 (F1) acrescenta `issue.cancelada_em`, recria `ticket` com `fechado` e `cancelado` no CHECK de `status` (tabela nova, cópia, DROP, RENAME e os dois índices únicos) e cria `ix_issue_dep_dep` em `issue_dep(dep)`, para a busca das dependentes.
 - As tabelas de outros módulos (`configuracao` no F4; `commit_ticket` e `arquivo_commit` no F5; `uso`, `retrabalho`, `comando` e `varredura_base` no F6) são definidas nas specs desses módulos e entram no mesmo arquivo de schema.
 
 ## 4. DDL (versão 1)
@@ -136,8 +139,10 @@ CREATE TABLE issue (
   criada_em    TEXT NOT NULL,
   concluida_em TEXT,
   arquivada_em TEXT,
+  cancelada_em TEXT,                                                    -- migração do C22
   CHECK ((fase = 'concluida') = (concluida_em IS NOT NULL)),
   CHECK (arquivada_em IS NULL OR fase = 'concluida'),
+  CHECK (cancelada_em IS NULL OR fase <> 'concluida'),
   CHECK (fase = 'registro' OR (titulo IS NOT NULL AND tipo IS NOT NULL))
 );
 
@@ -147,6 +152,7 @@ CREATE TABLE issue_dep (
   PRIMARY KEY (issue, dep),
   CHECK (issue <> dep)
 );
+CREATE INDEX ix_issue_dep_dep ON issue_dep(dep);   -- migração do C22
 
 CREATE TABLE ticket (
   id              INTEGER PRIMARY KEY,
@@ -154,7 +160,7 @@ CREATE TABLE ticket (
   etapa           TEXT NOT NULL CHECK (etapa IN (<Etapa>)),
   titulo          TEXT NOT NULL CHECK (length(titulo) BETWEEN 1 AND 120),
   descricao       TEXT NOT NULL DEFAULT '',
-  status          TEXT NOT NULL CHECK (status IN ('aberto','em_execucao','concluido','falhou')),
+  status          TEXT NOT NULL CHECK (status IN ('aberto','em_execucao','concluido','falhou','fechado','cancelado')),   -- fechado e cancelado: migração do C22
   origem          TEXT NOT NULL CHECK (origem IN ('fabriquinha','agente','auditor')),
   origem_ticket   INTEGER REFERENCES ticket(id),
   modelo_provedor TEXT,
@@ -277,6 +283,7 @@ Antes de servir, o F7 confere que o hash pertence a uma evidência; nunca serve 
 | `comIssue(banco, issue, nome, ator, comando)` | Aplica um comando do F1 sobre o agregado da issue e registra o comando (3.3). |
 | `registrarIssue(banco, entrada, ator)` | C1: cria a issue e o ticket de registro. |
 | `arquivarConcluidas(banco, projeto)` | C18: uma transação só; devolve quantas issues do projeto foram arquivadas. |
+| `cancelarIssues(banco, issue, ator)` | C22: uma transação só, na issue e nas dependentes diretas e indiretas (`dependentes`); um `cancelarIssue` em `comando` por issue; devolve as issues canceladas e as execuções que terminaram. `comIssue` recusa comando sobre issue cancelada. |
 | `salvarProjeto(banco, projeto)` / `projeto(banco, nome)` / `projetos(banco)` | C19 e leituras. |
 | `agregado(banco, issue)` | Leitura do agregado, sem transação de escrita. |
 | `guardarArquivo(origem) → { sha256, bytes }` | Grava um arquivo no armazenamento por conteúdo (5.1). |

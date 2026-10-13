@@ -131,7 +131,7 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
     const r = await fetch("/api/registros", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projeto: "loja" }),
+      body: JSON.stringify({ projeto: "loja", descricao: "Exportar pedidos em CSV" }),
     });
     return (await r.json()) as { sessao: string };
   });

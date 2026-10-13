@@ -119,7 +119,7 @@ O estado é calculado; não é gravado.
 |---|---|
 | `rodando` | Há execução em andamento e nada esperando o Auditor. Inclui a preparação da worktree e as coletas do F3. |
 | `aguardando_humano` | Algum dos motivos abaixo. |
-| `terminada` | O ticket está `concluido` e nenhum gate depende dele. |
+| `terminada` | O ticket está `concluido` e nenhum gate depende dele, ou a issue foi cancelada (6.9). |
 
 | Motivo de `aguardando_humano` | Ação no chat |
 |---|---|
@@ -269,8 +269,8 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
 
 ### 6.6 Sessões interativas e ociosidade
 
-- **Registro:** o botão **Registrar necessidade** pede o projeto e as dependências.
-  Ele dispara C1 e a preparação da worktree (F5), abre o chat e envia a mensagem inicial "Vamos registrar uma necessidade no projeto X (issue I-n)".
+- **Registro:** o botão **Registrar necessidade** pede o projeto, a descrição da necessidade (obrigatória) e as dependências.
+  Ele dispara C1 com a descrição, que vai ao prompt da primeira mensagem na seção "Descrição da issue", e a preparação da worktree (F5), abre o chat e envia a mensagem inicial "Vamos registrar uma necessidade no projeto X (issue I-n)".
   A partir daí é conversa.
   Os botões **Aprovar registro** e **Devolver** ficam no próprio chat.
   Devolver pede o motivo, grava C10 reprovado e envia o motivo ao agente como mensagem.
@@ -305,6 +305,24 @@ O histórico de qualquer sessão, ativa ou do histórico, pode ser levado para o
   O F4 grava a exportação de cada uma em `$FABRIQUINHA_SAIDA/historico-T-<n>.md` da execução atual.
   A mensagem enviada ganha uma linha por anexo: "Histórico da sessão T-n (I-m, etapa) em `<caminho>`; leia antes de responder."
   O agente lê o arquivo sob demanda, então um histórico longo não estoura o contexto de uma vez.
+
+### 6.9 Cancelamento da issue
+
+O Auditor cancela a issue (C22, F1), e o cancelamento atinge também as dependentes, diretas e indiretas.
+O serviço `cancelarIssue` roda nesta ordem:
+
+1. Confere o C22 (Auditor, issue não concluída nem cancelada), antes de tocar em qualquer pi.
+2. Para cada execução `em_andamento` da issue e das dependentes, `pararParaCancelar`: marca a execução como cancelada, responde `cancelled` aos diálogos pendentes e para o pi como no encerramento (6.6), esperando o processo sair.
+3. Grava o C22 de todas numa transação. A execução termina em `falha` com `CANCELADA`, e o ticket que ela rodava fica `cancelado`.
+4. Para cada execução que terminou: coleta o uso como depois de qualquer C6 (F6 §3.3), anota "E-n cancelada com a I-n pelo Auditor" no log e avisa quem assina a sessão.
+
+A execução marcada não grava mais nada:
+
+- `rodarExecucao` não lança o `pi --version` nem o pi dela e devolve `CANCELADA`; a marca é conferida depois do prompt e depois do `pi --version`.
+- A autônoma não grava C6, C7 nem C8 depois do pi, e a interativa não grava o C6 dela: o cancelamento já gravou o término, e a guarda do C22 recusaria o resto.
+- A sessão de uma issue cancelada é `terminada` (5.2), a principal e as de consulta.
+
+ponytail: as execuções marcadas ficam num `Set` em memória que só cresce; são poucos IDs por dia, e o reinício do serviço o esvazia (7).
 
 ## 7. Reinício do serviço
 
@@ -382,7 +400,7 @@ Mudanças nas tabelas do F2 que vêm deste módulo:
 | `conversarSobre(ticket)` → nova consulta (6.5) | F7, chat |
 | `enviar(sessao, texto, modo)` | F7, chat (`prompt`, `steer`, `follow_up`, conforme 5.4) |
 | `responderDialogo(execucao, id, resposta)` / `abortar(execucao)` | F7, chat |
-| `registrarNecessidade(projeto, deps)` / `concluirSessao(ticket)` | F7 |
+| `registrarNecessidade(projeto, deps, descricao)` / `concluirSessao(ticket)` | F7 |
 | `executarAgora(ticket)` | F7, botão Executar agora |
 | `salvarConfiguracao(config)` / `conferirModelo(modelo)` | F7, configuração |
 

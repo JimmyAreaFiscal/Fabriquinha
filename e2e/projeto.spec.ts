@@ -44,7 +44,7 @@ test("arquivar as concluídas de um projeto: somem, voltam com Mostrar arquivada
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/loja`);
   await expect(pagina.getByLabel("Projeto", { exact: true })).toHaveValue("loja");
   const contagem = pagina.locator(".contagem");
-  await expect(contagem).toHaveText("1 em andamento · 2 concluídas · 0 arquivadas");
+  await expect(contagem).toHaveText("1 em andamento · 2 concluídas · 0 arquivadas · 0 canceladas");
   const linhas = pagina.locator(".pista-item");
   await expect(linhas).toHaveCount(1);
 
@@ -59,7 +59,7 @@ test("arquivar as concluídas de um projeto: somem, voltam com Mostrar arquivada
   );
   await caixa.getByRole("button", { name: "Arquivar" }).click();
   await expect(caixa).toBeHidden();
-  await expect(contagem).toHaveText("1 em andamento · 0 concluídas · 2 arquivadas");
+  await expect(contagem).toHaveText("1 em andamento · 0 concluídas · 2 arquivadas · 0 canceladas");
   await expect(linhas).toHaveCount(1);
   await expect(pagina.getByRole("button", { name: "Arquivar concluídas" })).toBeDisabled();
 
@@ -72,7 +72,7 @@ test("arquivar as concluídas de um projeto: somem, voltam com Mostrar arquivada
   await pagina.getByLabel("Projeto", { exact: true }).focus();
   await pagina.getByLabel("Projeto", { exact: true }).selectOption("site");
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/site`);
-  await expect(contagem).toHaveText("0 em andamento · 1 concluída · 0 arquivadas");
+  await expect(contagem).toHaveText("0 em andamento · 1 concluída · 0 arquivadas · 0 canceladas");
   await expect(linhas).toHaveCount(1);
   await expect(linhas.first()).toContainText("Página de contato");
   await expect(linhas.first()).toContainText("concluída em 03/10");

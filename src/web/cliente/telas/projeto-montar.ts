@@ -23,7 +23,7 @@ import {
 const CHAVE = "fabriquinha.projeto";
 
 // Valem entre os redesenhos de 5 s e entre projetos: os IDs das issues são únicos em toda a Fabriquinha.
-const mostrar: Escolhas["mostrar"] = { concluidas: false, arquivadas: false };
+const mostrar: Escolhas["mostrar"] = { concluidas: false, arquivadas: false, canceladas: false };
 const gavetas = new Map<Id, boolean>();
 
 // O armazenamento do navegador pode faltar (bloqueado, modo privado): a página segue sem lembrar.
@@ -56,7 +56,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
     return;
   }
   lembrar(nome);
-  const filtro = `concluidas=${String(mostrar.concluidas)}&arquivadas=${String(mostrar.arquivadas)}`;
+  const filtro = `concluidas=${String(mostrar.concluidas)}&arquivadas=${String(mostrar.arquivadas)}&canceladas=${String(mostrar.canceladas)}`;
   const atual = mesDe(new Date());
   const [lista, [mes]] = await Promise.all([
     api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/issues?${filtro}`, { signal }),
