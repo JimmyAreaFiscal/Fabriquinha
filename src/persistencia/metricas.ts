@@ -80,6 +80,21 @@ export const retrabalhoDaIssue = (banco: DatabaseSync, issue: Id): RetrabalhoDoT
     .all(issue) as unknown as RetrabalhoDoTicket[];
 
 /**
+ * F6 §6.2: quantos caminhos distintos os commits da issue alteraram, ou `null` se ela não tem commit. O LEFT JOIN
+ * separa "sem commit" (`null`) de "commit sem arquivos" (0).
+ */
+export const arquivosAlteradosDaIssue = (banco: DatabaseSync, issue: Id): number | null => {
+  const l = banco
+    .prepare(
+      `SELECT COUNT(c.sha) AS commits, COUNT(DISTINCT a.caminho) AS arquivos
+       FROM commit_ticket c JOIN ticket t ON t.id = c.ticket LEFT JOIN arquivo_commit a ON a.sha = c.sha
+       WHERE t.issue = ?`,
+    )
+    .get(issue) as { commits: number; arquivos: number };
+  return l.commits === 0 ? null : l.arquivos;
+};
+
+/**
  * F6 §5.3 (M6): issues `problema` do mesmo projeto, registradas depois que a issue foi concluída e já concluídas, que
  * alteraram arquivo que ela alterou. Nas renomeações, dos dois lados, contam os dois caminhos. Zero antes da conclusão.
  */

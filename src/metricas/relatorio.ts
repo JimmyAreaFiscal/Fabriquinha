@@ -43,9 +43,20 @@ function tabela(cabecalho: readonly string[], linhas: readonly (readonly string[
   return `<table><thead><tr>${celulas("th", cabecalho)}</tr></thead><tbody>${corpo}</tbody></table>`;
 }
 
+// ponytail: limite fixo, tornar configurável está fora do pedido (I-9); a regra mora nas skills.
+const LIMITE_DE_ARQUIVOS = 30;
+
+/** O texto da seção "Arquivos alterados": `indisponível` sem commit, e o selo acima do limite. */
+function arquivosAlterados(n: number | null): string {
+  if (n === null) return "indisponível";
+  return n > LIMITE_DE_ARQUIVOS
+    ? `${inteiro(n)} <strong>acima do limite de ${String(LIMITE_DE_ARQUIVOS)}</strong>`
+    : inteiro(n);
+}
+
 const secao = (titulo: string, corpo: string): string => `<section><h2>${titulo}</h2>${corpo}</section>`;
 
-/** F6 §6.3: o HTML autocontido, com as seis seções na ordem; `titulo` é o da issue, ainda nulo no registro. */
+/** F6 §6.3: o HTML autocontido, com as sete seções na ordem; `titulo` é o da issue, ainda nulo no registro. */
 function html(d: MetricasIssue, titulo: string | null): string {
   const total = somar([...d.etapas, d.consultas]);
   const soma = (campo: "execucoes" | "falhas" | "duracaoMs") => d.etapas.reduce((n, e) => n + e[campo], 0);
@@ -79,6 +90,7 @@ function html(d: MetricasIssue, titulo: string | null): string {
         ],
       ),
     ),
+    secao("Arquivos alterados", `<p>Arquivos alterados: ${arquivosAlterados(d.arquivosAlterados)}</p>`),
     secao(
       "Por etapa",
       tabela(

@@ -199,7 +199,7 @@ test("relatorio recoleta uso e retrabalho, segue quando a recoleta falha e gera 
   assert.doesNotMatch(html, EXTERNO);
   assert.deepEqual(
     [...html.matchAll(SECOES)].map((m) => m[1]),
-    ["Resumo", "Por etapa", "Por modelo", "Métricas do diagrama", "Decisões", "Avisos"],
+    ["Resumo", "Arquivos alterados", "Por etapa", "Por modelo", "Métricas do diagrama", "Decisões", "Avisos"],
   );
   assert.ok(
     html.includes("I-1: &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &#39;aspas&#39;</h1>"),
@@ -211,6 +211,7 @@ test("relatorio recoleta uso e retrabalho, segue quando a recoleta falha e gera 
   assert.ok(html.includes("<td>desenvolvimento</td><td>2</td><td>0</td><td>3min 19s</td>"), "por etapa");
   assert.ok(html.includes("<td>registro</td><td>anthropic/claude-sonnet-5</td><td>1</td><td>100</td>"), "por modelo");
   assert.ok(html.includes("<td>consultas</td><td>openai/gpt-5&lt;b&gt;</td><td>1</td><td>20</td>"), "consulta");
+  assert.ok(html.includes("<p>Arquivos alterados: 1</p>"), "arquivos alterados, sem selo");
   assert.ok(html.includes("<td>3 de 20 linhas (0 por humanos)</td>"), "M4");
   assert.ok(html.includes("<td>M5</td><td>Exigências de alteração</td><td>1</td>"), "M5");
   assert.ok(html.includes("<td>M7</td><td>Feedback humano da qualidade</td><td>5 de 5</td>"), "M7");
@@ -231,6 +232,7 @@ test("relatorio de uma issue recém-registrada: sem título, chamadas, decisões
   assert.doesNotMatch(html, EXTERNO);
   assert.ok(html.includes(`<h1>Produtividade da I-${String(id)}</h1>`));
   assert.ok(html.includes("<td>US$ 0,0000</td><td>0</td><td>0s</td><td>0</td><td>0</td>"), "resumo zerado");
+  assert.ok(html.includes("<p>Arquivos alterados: indisponível</p>"));
   assert.ok(html.includes("<p>Nenhuma chamada de modelo registrada.</p>"));
   assert.ok(html.includes("<p>Nenhuma decisão registrada.</p>"));
   assert.ok(html.includes("<p>Nenhum aviso.</p>"));
@@ -239,6 +241,45 @@ test("relatorio de uma issue recém-registrada: sem título, chamadas, decisões
   await assert.rejects(
     relatorio(banco, 99),
     (e) => e instanceof ErroDeRegra && e.message === "a issue I-99 não existe (confira o número da issue)",
+  );
+  banco.close();
+});
+
+test("relatorio destaca os arquivos alterados acima do limite de 30", async () => {
+  const { banco } = novoBanco();
+  inserir(banco, "issue", {
+    id: 1,
+    projeto: "loja",
+    titulo: "t",
+    tipo: "funcionalidade",
+    fase: "revisao",
+    criada_em: em("09:00:00"),
+  });
+  for (const id of [1, 2]) {
+    inserir(banco, "ticket", {
+      id,
+      issue: 1,
+      etapa: "desenvolvimento",
+      titulo: `T-${String(id)}`,
+      status: "concluido",
+      origem: "fabriquinha",
+      criado_em: em("09:00:00"),
+      concluido_em: em("09:00:00"),
+    });
+  }
+  const arquivos = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      caminho: `src/${String(i)}.ts`,
+      status: "M" as const,
+      adicionadas: 1,
+      removidas: 0,
+    }));
+  gravarCommit(banco, 1, { sha: "a".repeat(40), mensagem: "m", em: em("12:00:00"), arquivos: arquivos(30) });
+  assert.ok((await relatorio(banco, 1)).html.includes("<p>Arquivos alterados: 30</p>"), "30 ainda cabe");
+
+  gravarCommit(banco, 2, { sha: "b".repeat(40), mensagem: "m", em: em("12:30:00"), arquivos: arquivos(31) });
+  assert.ok(
+    (await relatorio(banco, 1)).html.includes("<p>Arquivos alterados: 31 <strong>acima do limite de 30</strong></p>"),
   );
   banco.close();
 });

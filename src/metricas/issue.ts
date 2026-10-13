@@ -8,6 +8,7 @@ import { raizDo } from "../persistencia/banco.ts";
 import { arquivoDaSessao, noLog } from "../persistencia/execucoes.ts";
 import { agregado } from "../persistencia/issues.ts";
 import {
+  arquivosAlteradosDaIssue,
   bugsEmArquivosRevisados,
   comandosDoAuditor,
   retrabalhoDaIssue,
@@ -62,6 +63,7 @@ export const MetricasIssue = z.object({
       linhasAlteradasPorHumanos: Inteiro,
     }),
   ),
+  arquivosAlterados: Inteiro.nullable(), // null sem commit
   exigenciasRevisao: Inteiro, // M5
   bugsEmArquivosRevisados: Inteiro, // M6; 0 antes do merge
   notaPR: Nota.nullable(), // M7; null até o encerramento
@@ -213,6 +215,7 @@ export function metricasDaIssue(banco: DatabaseSync, issue: Id): MetricasIssue {
     correcoesDesenho: { devolucoes: devolucoes("desenho"), ajustesAuditor: ajustes("aprovacao_desenho") },
     desenho: numerosDoDesenho(ag),
     retrabalho: retrabalhoDaIssue(banco, issue),
+    arquivosAlterados: arquivosAlteradosDaIssue(banco, issue),
     exigenciasRevisao: ag.tickets.filter(
       (t) => t.etapa === "desenvolvimento" && t.origemTicket !== undefined && revisoes.has(t.origemTicket),
     ).length,

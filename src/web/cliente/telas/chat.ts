@@ -24,7 +24,7 @@ import {
   rotuloTicket,
   situacaoDasFases,
 } from "../render.ts";
-import { cardDaEvidencia, comCard, corpoDoRegistro } from "./issue.ts";
+import { cardDaEvidencia, cartaoDaProposta, comCard, corpoDoRegistro } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -214,11 +214,24 @@ const doAgente = (html: string): string =>
 
 const PAROU: Record<string, string> = { aborted: "o agente foi interrompido", error: "o agente parou com erro" };
 
+/** A mensagem da Fabriquinha ao agente (o aviso de uma proposta decidida), com o rótulo dela. */
+const daFabriquinha = (m: MensagemPi): string =>
+  `<div class="msg fabriquinha"><span class="quem">Fabriquinha</span><div class="texto md">${markdown(textoDe(m))}</div></div>`;
+
+/** Os cartões das propostas de issue abertas do registro, entre a conversa e o envio. */
+export const propostasDoChat = (c: CabecalhoDoChat): string =>
+  (c.propostas ?? []).map((p) => cartaoDaProposta(p, false, c.issue.id)).join("");
+
 /**
  * Uma mensagem do pi na conversa: a do Auditor, e a do agente com o raciocínio, o texto e as chamadas na ordem em que
  * vieram. O resultado de uma ferramenta não aparece sozinho: ele completa a chamada (`resultados`, por id).
  */
-export function mensagem(m: MensagemPi, resultados: ReadonlyMap<string, MensagemPi> = new Map()): string {
+export function mensagem(
+  m: MensagemPi,
+  resultados: ReadonlyMap<string, MensagemPi> = new Map(),
+  aviso = false,
+): string {
+  if (m.role === "user" && aviso) return daFabriquinha(m);
   if (m.role === "user") {
     return `<div class="msg voce"><span class="quem">você</span><div class="texto md">${markdown(textoDe(m))}</div></div>`;
   }
@@ -242,16 +255,18 @@ export const chaveDa = (m: MensagemPi): string => `${String(m.role)}-${String(m.
  */
 export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Item[] {
   const mensagens = entradas.flatMap((e) =>
-    e.type === "message" ? [{ em: String(e.timestamp), m: e.message as MensagemPi, fabriquinha: e.fabriquinha }] : [],
+    e.type === "message"
+      ? [{ em: String(e.timestamp), m: e.message as MensagemPi, fabriquinha: e.fabriquinha, aviso: e.aviso }]
+      : [],
   );
   const resultados = new Map(
     mensagens.filter(({ m }) => m.role === "toolResult").map(({ m }) => [String(m.toolCallId), m] as const),
   );
   const itens = [
-    ...mensagens.map(({ em, m, fabriquinha }) => ({
+    ...mensagens.map(({ em, m, fabriquinha, aviso }) => ({
       chave: chaveDa(m),
       em,
-      html: fabriquinha ? "" : mensagem(m, resultados),
+      html: fabriquinha ? "" : mensagem(m, resultados, aviso === true),
     })),
     ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)),
   ].toSorted((a, b) => a.em.localeCompare(b.em));

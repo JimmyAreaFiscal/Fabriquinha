@@ -6,6 +6,7 @@
 //   o redireciona e abre um diálogo `select`;
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
 //   pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz "registre", e não conta;
+// - "proponha": como o agente do registro que acha a mudança grande, propõe uma issue pelo CLI `fabriquinha`;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
 // - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
@@ -113,6 +114,23 @@ const cli = (...args: string[]) =>
 /** A issue do prompt montado pela Fabriquinha (F4 §6.3). */
 const issueDoPrompt = () => /Issue: I-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
 
+/** Como o agente do registro que estima mais de 30 arquivos: propõe uma issue pelo CLI (C23). */
+function proporIssue(): void {
+  const mensagem = join(String(process.env.FABRIQUINHA_SAIDA), "proposta.md");
+  writeFileSync(mensagem, "Parte B: tela de **relatório**\n");
+  cli(
+    "issue",
+    "propor",
+    `I-${issueDoPrompt()}`,
+    "--titulo",
+    "Tela de relatório",
+    "--arquivos",
+    "42",
+    "--descricao",
+    mensagem,
+  );
+}
+
 /** Como o agente do registro: título e tipo pelo CLI, e as duas evidências do registro (F3). */
 function registrar(): void {
   const issue = issueDoPrompt();
@@ -176,6 +194,9 @@ async function aoPrompt(texto: string): Promise<void> {
   if (texto.trim() === "registre" || texto.includes("**registre**")) {
     registrar();
     responder("Registrei o título, o tipo, o comportamento e os critérios de aceite.");
+  } else if (texto.includes("proponha")) {
+    proporIssue();
+    responder("Propus a issue da tela de relatório.");
   } else if (texto.includes("crie um ticket")) {
     cli("ticket", "criar", `I-${issueDoPrompt()}`, "--titulo", "Criar o índice da busca");
     responder("Criei o ticket de desenvolvimento do índice.");

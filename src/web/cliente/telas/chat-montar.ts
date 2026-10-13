@@ -28,6 +28,7 @@ import {
   type MensagemPi,
   type ModoEnvio,
   modeloDe,
+  propostasDoChat,
   respostaDoDialogo,
   seletorDeSessoes,
 } from "./chat.ts";
@@ -36,7 +37,7 @@ import { carregarTextos, modelos as modelosDoPi } from "./issue-montar.ts";
 
 const ESQUELETO =
   '<div class="pagina-chat"><div data-barra></div><div class="chat-layout"><div class="coluna-conversa">' +
-  '<div class="conversa" data-conversa aria-live="polite"></div><div data-envio-area></div></div>' +
+  '<div class="conversa" data-conversa aria-live="polite"></div><div data-propostas></div><div data-envio-area></div></div>' +
   '<aside class="lateral" aria-label="Ao lado da conversa"><div class="lado" data-lateral></div><div class="lado" data-contexto></div></aside></div></div>';
 
 type Evento = Record<string, unknown> & { type?: string };
@@ -72,6 +73,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   const barra = parte("[data-barra]");
   const lista = parte("[data-conversa]");
   const areaDeEnvio = parte("[data-envio-area]");
+  const propostas = parte("[data-propostas]");
   const aoLado = parte("[data-lateral]");
   const contexto = parte("[data-contexto]");
 
@@ -156,6 +158,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     // Uma execução nova com o modelo fixado (C20) troca o da barra já no início, antes da primeira resposta.
     if (c.execucoes.at(-1)?.modelo) modelo = modeloDe(c, []);
     barra.innerHTML = barraDeEstado(c, modelo);
+    propostas.innerHTML = propostasDoChat(c);
     const { sessao: s } = c;
     const forma = [s.estado, s.motivo, s.etapa, s.dialogos[0]?.id].join("|");
     if (forma !== formaDoEnvio) {
@@ -213,7 +216,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       modelo = modeloDe(cabecalho, [evento]);
       barra.innerHTML = barraDeEstado(cabecalho, modelo);
     }
-    if (!evento.fabriquinha) acrescentar(mensagem(m));
+    if (!evento.fabriquinha) acrescentar(mensagem(m, undefined, evento.aviso === true));
   }
 
   /** Texto e raciocínio que chegam em `message_update` (F4 §5.4), com o cursor no fim. */
@@ -275,6 +278,17 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       acao(
         postar(`/api/sessoes/${encodeURIComponent(sessao)}/dialogos/${encodeURIComponent(String(id))}`, {
           cancelado: true,
+        }),
+      );
+    } else if (botao.dataset.acao === "aceitar-proposta" || botao.dataset.acao === "recusar-proposta") {
+      botao.disabled = true;
+      const decisao = postar(`/api/propostas/${String(botao.dataset.id)}`, {
+        aceita: botao.dataset.acao === "aceitar-proposta",
+      });
+      acao(
+        decisao.catch((error_: unknown) => {
+          botao.disabled = false;
+          throw error_;
         }),
       );
     } else if (botao.dataset.devolver !== undefined) {

@@ -277,7 +277,7 @@ A página da issue não se atualiza sozinha, para não apagar o que o Auditor es
 | Gate | Mostra | Ações |
 |---|---|---|
 | Registro (`registro`) | Título, tipo, descrição, `comportamento` e a tabela de `criterios_aceite`, e as evidências que faltam. | **Aprovar registro** (C10); **Devolver**, habilitado só com o motivo. |
-| Desenho (`aprovacao_desenho`) | 4 cards: arquivos previstos, tickets propostos, acoplamentos novos e impacto na arquitetura (F6, 5.5). Tabela de critérios de aceite. Tabela de tickets de desenvolvimento propostos, cada um com seletor de modelo (padrão da etapa ou override, C20), **Editar** e **Remover**, e **+ Novo ticket** (C11 a C13). As quatro evidências do desenho ficam nos artefatos. | **Aprovar desenho** (C15); **Reprovar**, habilitado só com o motivo. |
+| Desenho (`aprovacao_desenho`) | 4 cards: arquivos previstos, tickets propostos, acoplamentos novos e impacto na arquitetura (F6, 5.5). Tabela de critérios de aceite. Tabela de tickets de desenvolvimento propostos, cada um com seletor de modelo (padrão da etapa ou override, C20), **Editar** e **Remover**, e **+ Novo ticket** (C11 a C13). As quatro evidências do desenho ficam nos artefatos. Antes da decisão, um **cartão de proposta de issue** por proposta aberta da IA (C23): rótulo "Proposta de issue", `T-n` do ticket que a fez, "~n arquivos estimados · limite de 30 por PR" (em destaque acima de 30), título, mensagem em Markdown sem HTML e a frase do efeito. | **Aceitar** e **Recusar** a proposta (C24, `POST /api/propostas/:id`); **Aprovar desenho** (C15); **Reprovar**, habilitado só com o motivo. |
 | PR (`aprovacao_pr`) | Link do PR com o estado na hospedagem, vídeo explicativo, 4 cards de produtividade (custo, tokens, execuções e falhas, reprovações), corpo completo do PR (anexo de `pr_aberto`) em Markdown, tabela de comprovação dos critérios e tabela de fitness functions com explicações. | Nenhuma decisão no web: a revisão, o merge e o pedido de mudanças são feitos no próprio PR, com o botão **Abrir PR**. Como a Fabriquinha fica sabendo da decisão está pendente (4.6). |
 
 **Métricas** (`/metrics`) — mês em foco contra a média
@@ -309,10 +309,12 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 2. Conversa, à esquerda:
    - linhas do sistema (execução iniciada, concluída, diálogo aberto) entre traços;
    - mensagens do agente e do Auditor em Markdown;
+   - a mensagem de aviso da Fabriquinha sobre uma proposta de issue decidida, marcada `aviso`, com o rótulo "Fabriquinha";
    - raciocínio recolhido;
    - cada chamada de ferramenta como bloco recolhível: nome, argumentos e um resumo do resultado (por exemplo "✗ 3 de 214"), com a saída em fonte monoespaçada cortada com **ver tudo**;
    - eventos ao vivo pelo SSE, com o texto do agente chegando em fluxo e cursor piscando;
    - rolagem automática para o fim, que pausa quando o Auditor sobe para ler.
+   - no registro interativo, entre a conversa e o envio, um **cartão de proposta de issue** por proposta aberta (o mesmo do gate do desenho, abaixo), redesenhado a cada estado;
 3. Área de envio, fixa no fim da conversa, conforme o estado (F4, 5.4):
    - rodando: **Redirecionar** (`steer`) ou **Enfileirar** (`follow_up`), **Abortar** e **Enviar**;
    - diálogo de extensão: o pedido do agente com o formulário (`select` como lista de opções, `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** e **Responder**;

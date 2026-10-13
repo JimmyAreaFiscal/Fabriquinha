@@ -22,6 +22,7 @@ import {
   linhasDaExecucao,
   mensagem,
   modeloDe,
+  propostasDoChat,
   respostaDoDialogo,
   seletorDeSessoes,
 } from "./chat.ts";
@@ -644,4 +645,33 @@ test("edição do registro: só título e tipo preenchidos; a descrição vai se
     tipo: "problema",
     descricao: "d",
   });
+});
+
+test("propostas do chat: um cartão por proposta aberta, nenhum sem elas", () => {
+  assert.equal(propostasDoChat(cabecalho()), "");
+  const proposta = {
+    id: 9,
+    ticket: 3,
+    titulo: "Parte <B>",
+    mensagem: "Tela",
+    arquivos: 31,
+    status: "pendente" as const,
+    em: T0,
+  };
+  const html = propostasDoChat(cabecalho({}, { propostas: [proposta] }));
+  assert.match(html, /Proposta de issue/);
+  assert.match(html, /Parte &#60;B&#62;/);
+  assert.match(html, /a IA da I-4 reduz o escopo/);
+});
+
+test("aviso da Fabriquinha: mensagem do usuário marcada aparece como Fabriquinha, não como você", () => {
+  const m = { role: "user", content: "A Fabriquinha criou a **I-10**", timestamp: 1 };
+  const html = mensagem(m, undefined, true);
+  assert.match(html, /^<div class="msg fabriquinha"><span class="quem">Fabriquinha<\/span>/);
+  assert.match(html, /<strong>I-10<\/strong>/);
+  assert.match(mensagem(m), /class="msg voce"/);
+  const itens = conversa(cabecalho({ estado: "aguardando_humano", motivo: "conversa" }, { execucoes: [] }), [
+    { type: "message", timestamp: T0, message: m, aviso: true },
+  ]);
+  assert.match(itens[0]?.html ?? "", /msg fabriquinha/);
 });
