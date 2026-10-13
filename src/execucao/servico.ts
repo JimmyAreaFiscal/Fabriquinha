@@ -11,7 +11,7 @@ import { falharTicket, terminarExecucao } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
-import { abrir } from "../persistencia/banco.ts";
+import { abrir, raizDo } from "../persistencia/banco.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { comIssue } from "../persistencia/issues.ts";
 import { projetosAVarrer } from "../persistencia/retrabalho.ts";
@@ -23,6 +23,7 @@ import {
 } from "../persistencia/servico.ts";
 import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
+import { recuperarAuditorias } from "./auditoria.ts";
 import { executarAutonomo } from "./autonoma.ts";
 
 const REINICIADO = "serviço reiniciado";
@@ -45,8 +46,10 @@ export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => 
  * F4 §7: toda execução em andamento é de uma instância anterior. Mata o grupo do pi, grava C6 com falha e leva a C8 cada
  * ticket autônomo que ficou `em_execucao`: o da execução encerrada agora e também o de quem caiu entre o C6 e a
  * coleta depois do pi (F4 §6.2, passo 6), que já não tem execução em andamento. O interativo continua `em_execucao`.
+ * Mata também o grupo do pi de cada auditoria, que não tem execução.
  */
 function recuperar(banco: DatabaseSync): void {
+  recuperarAuditorias(raizDo(banco));
   for (const e of execucoesEmAndamento(banco)) {
     if (e.pgid !== null) sinalNoGrupo(e.pgid, "SIGKILL");
     comIssue(banco, e.issue, "terminarExecucao", FABRIQUINHA, (ag, ctx) =>

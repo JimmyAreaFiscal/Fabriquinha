@@ -16,7 +16,7 @@ import { removerTicket } from "../dominio/tickets.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { arquivarConcluidas, comIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
-import { metricasPorIssue, metricasPorMes } from "./periodo.ts";
+import { mesPorExtenso, metricasPorIssue, metricasPorMes } from "./periodo.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-periodo-"));
 after(() => {
@@ -345,4 +345,9 @@ test("período inválido: mês fora do formato ou `de` depois de `ate`", () => {
     assert.throws(() => metricasPorIssue(banco, periodo), ZodError);
   }
   banco.close();
+});
+
+test("mesPorExtenso: o mês em português com o ano", () => {
+  assert.equal(mesPorExtenso("2026-09"), "setembro de 2026");
+  assert.equal(mesPorExtenso("2026-03"), "março de 2026");
 });

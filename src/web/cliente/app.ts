@@ -3,6 +3,7 @@
 import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
 import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
+import { montarAuditoria } from "./telas/auditoria-montar.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
 import { montarHeatmap } from "./telas/heatmap-montar.ts";
@@ -27,6 +28,7 @@ const MONTAR: Record<Pagina, Montar> = {
   metricas: montarMetricas,
   historico: montarHistorico,
   chat: montarChat,
+  auditoria: montarAuditoria,
   configuracao: montarConfiguracao,
 };
 

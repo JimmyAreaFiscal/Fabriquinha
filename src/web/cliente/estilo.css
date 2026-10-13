@@ -3259,6 +3259,11 @@ input.erro {
   font-size: var(--fs-sm);
   color: var(--muted);
 }
+.pagina-historico .filtros .auditar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
 .pagina-historico .mestre {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 460px;
