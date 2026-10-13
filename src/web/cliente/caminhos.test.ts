@@ -22,6 +22,7 @@ test("rotear escolhe a página do F7 §4.4 pelo caminho", () => {
   assert.deepEqual(rotear("/home"), { pagina: "inicio", params: {} });
   assert.deepEqual(rotear("/projects"), { pagina: "projeto", params: {} });
   assert.deepEqual(rotear("/projects/loja"), { pagina: "projeto", params: { projeto: "loja" } });
+  assert.deepEqual(rotear("/projects/loja/heatmap"), { pagina: "heatmap", params: { projeto: "loja" } });
   assert.deepEqual(rotear("/projects/loja/issues/I-3"), { pagina: "issue", params: { projeto: "loja", issue: "I-3" } });
   assert.deepEqual(rotear("/metrics"), { pagina: "metricas", params: {} });
   assert.deepEqual(rotear("/history"), { pagina: "historico", params: {} });
