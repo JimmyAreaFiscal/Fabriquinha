@@ -49,6 +49,7 @@ Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arq
 
 - Acima de 30, proponha uma issue com a parte que sai: `fabriquinha issue propor I-<n> --titulo <título> --arquivos <estimativa> --descricao <arquivo>`.
   O título diz a parte que sai; a mensagem (`--descricao`) já é a descrição da issue nova, completa para quem não viu a conversa; a estimativa é o número de arquivos dessa parte.
+  Atribua à issue nova só o que sai inteiro desta: arquivo que as duas precisam tocar fica nesta issue e não é atribuído à nova (a mensagem pode dizer que a nova depende dele).
 - Com 30 ou menos, não proponha.
 - A proposta não bloqueia nada: o Auditor aceita ou recusa no chat, e você segue o registro normalmente. Só a Fabriquinha cria a issue.
 - Depois do aviso da Fabriquinha de que a issue nova foi criada, tire da descrição, do comportamento e dos critérios o que ela assumiu, na mesma sessão, e submeta de novo as evidências. Se a proposta foi recusada, mantenha o escopo.
