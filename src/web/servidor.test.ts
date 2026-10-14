@@ -254,6 +254,16 @@ test("estáticos sem token: o cliente TypeScript sai como JavaScript, CSS e font
   assert.match((await pedir("/static/%2e%2e/servidor.ts")).texto, /^<!doctype html>/);
 });
 
+test("estáticos sem token: o .tsx sai empacotado, sem JSX, e o segundo pedido vem do cache", async () => {
+  const caminho = "/static/telas/chat-conversa.tsx";
+  const primeiro = await pedir(caminho);
+  assert.equal(primeiro.status, 200);
+  assert.equal(primeiro.headers["content-type"], "text/javascript; charset=utf-8");
+  assert.doesNotMatch(primeiro.texto, /<ThreadPrimitive|jsxDEV|from"react"/);
+  assert.match(primeiro.texto, /from"markdown-it\/browser"/);
+  assert.equal((await pedir(caminho)).texto, primeiro.texto);
+});
+
 const SESSAO = "0b7c5a52-3f0e-4c1e-9d3a-6f1f2b9e8a10";
 
 test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inválido dá 422 com o campo", async () => {

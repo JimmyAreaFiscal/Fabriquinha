@@ -94,6 +94,27 @@ test("o Início da navegação conta as sessões que aguardam o Auditor", async 
   await expect(inicio.locator(".contador")).toHaveAttribute("title", "sessões que aguardam você");
 });
 
+test("só o chat baixa o componente React da conversa", async ({ pagina, fabriquinha }) => {
+  const pedidos: string[] = [];
+  pagina.on("request", (pedido) => pedidos.push(new URL(pedido.url()).pathname));
+  const conversa = "/static/telas/chat-conversa.tsx";
+  const nav = pagina.getByRole("navigation", { name: "Páginas" });
+  for (const [item, titulo] of [
+    ["Início", "Início"],
+    ["Histórico", "Histórico"],
+    ["Configuração", "Configuração"],
+  ] as const) {
+    await nav.getByRole("link", { name: item }).click();
+    await expect(pagina.getByRole("heading", { level: 1 })).toHaveText(titulo);
+  }
+  expect(pedidos).not.toContain(conversa);
+
+  sessaoAguardando(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/sessions/${SESSAO}`);
+  await expect(pagina.getByRole("textbox", { name: "Instrução" })).toBeVisible();
+  expect(pedidos).toContain(conversa);
+});
+
 test("sem entrar, a página abre e o aviso manda rodar fabriquinha abrir", async ({ page, fabriquinha }) => {
   await page.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Issue");

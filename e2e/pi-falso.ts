@@ -4,6 +4,9 @@
 // texto dele:
 // - "[ao vivo]": raciocínio, uma ferramenta que falha e um texto chegando em fluxo, sem terminar, até um `steer`, que
 //   o redireciona e abre um diálogo `select`;
+// - "[longo]": uma resposta que passa da altura da janela e, depois, um texto em fluxo de vários segundos, sem
+//   terminar, para a conversa rolar enquanto o agente escreve;
+// - "eco: <texto>": responde exatamente <texto>;
 // - "# Auditoria" (o prompt da auditoria do Histórico, F4): chama `subagent` com três tarefas `scout`, recebe o
 //   resultado e responde com as quatro seções; uma pergunta depois cai na resposta padrão;
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
@@ -49,10 +52,14 @@ if (argumentos.includes("--fork")) {
   copyFileSync(arg("--fork"), sessao);
 }
 
+/** Um instante por mensagem, sempre maior que o anterior: o chat distingue as mensagens pelo papel e pelo instante. */
+let ultimo = 0;
+const agora = () => (ultimo = Math.max(Date.now(), ultimo + 1));
+
 /** Como o pi, grava a mensagem em `<session-dir>/<instante>_<session-id>.jsonl` e a emite. */
 function mensagem(message: object): void {
   mkdirSync(arg("--session-dir"), { recursive: true });
-  const completa = { ...message, timestamp: Date.now() };
+  const completa = { ...message, timestamp: agora() };
   const entrada = { type: "message", timestamp: new Date().toISOString(), message: completa };
   appendFileSync(sessao, `${JSON.stringify(entrada)}\n`);
   emitir({ type: "message_end", message: completa });
@@ -93,22 +100,38 @@ async function aoVivo(): Promise<void> {
     content: [{ type: "text", text: [...saida, "FAIL test/cupons.spec.ts", "3 failed"].join("\n") }],
     isError: true,
   });
+  await transmitir([
+    [50, "Os testes "],
+    [50, "esperam a "],
+    [1000, "**ordem antiga**"],
+  ]);
+}
+
+/**
+ * Abre uma mensagem do agente em fluxo e emite os pedaços, cada um depois da sua pausa. O último demora: quem abre o
+ * chat depois do começo vê o parcial e o resto chegar.
+ */
+async function transmitir(pedacos: readonly (readonly [number, string])[]): Promise<void> {
   emitir({ type: "message_start", message: doAgente([]) });
   emitir({ type: "message_update", assistantMessageEvent: { type: "text_start", contentIndex: 0 } });
   const fluxo = { texto: "" };
   emFluxo = fluxo;
-  // O último pedaço demora: quem abre o chat depois do começo vê o parcial e o resto chegar.
-  for (const [pausa, pedaco] of [
-    [50, "Os testes "],
-    [50, "esperam a "],
-    [1000, "**ordem antiga**"],
-  ] as const) {
+  for (const [pausa, pedaco] of pedacos) {
     await dormir(pausa);
     // Um `steer` ou `abort` no meio já fechou a mensagem.
     if (emFluxo !== fluxo) return;
     fluxo.texto += pedaco;
     emitir({ type: "message_update", assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: pedaco } });
   }
+}
+
+/** "[longo]": uma resposta de 40 parágrafos e, em seguida, 25 trechos em fluxo, um a cada 0,6 s. */
+async function longo(): Promise<void> {
+  responder(Array.from({ length: 40 }, (_, i) => `Parágrafo ${String(i + 1)} da análise do checkout.`).join("\n\n"));
+  await transmitir([
+    [100, "Começo do fluxo."],
+    ...Array.from({ length: 25 }, (_, i) => [600, `\n\nTrecho ${String(i + 1)} do fluxo.`] as const),
+  ]);
 }
 
 /** Termina a mensagem em fluxo, se há uma. */
@@ -209,6 +232,10 @@ async function aoPrompt(texto: string): Promise<void> {
     await aoVivo();
     return;
   }
+  if (texto.includes("[longo]")) {
+    await longo();
+    return;
+  }
   if (pergunta) {
     responder("Preciso de uma resposta.");
     dialogo(pergunta);
@@ -217,6 +244,8 @@ async function aoPrompt(texto: string): Promise<void> {
   if (texto.trim() === "registre" || texto.includes("**registre**")) {
     registrar();
     responder("Registrei o título, o tipo, o comportamento e os critérios de aceite.");
+  } else if (texto.startsWith("eco: ")) {
+    responder(texto.slice("eco: ".length));
   } else if (texto.includes("crie um ticket")) {
     cli("ticket", "criar", `I-${issueDoPrompt()}`, "--titulo", "Criar o índice da busca");
     responder("Criei o ticket de desenvolvimento do índice.");

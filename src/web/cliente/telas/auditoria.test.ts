@@ -5,8 +5,8 @@ import {
   conversaDaAuditoria,
   type DadosDaAuditoria,
   envioDaAuditoria,
-  inicioDaAuditoria,
   ladoDaAuditoria,
+  linhaDoInicio,
   modeloDaAuditoria,
 } from "./auditoria.ts";
 
@@ -68,18 +68,20 @@ test("lado: o mês, as sessões, os projetos escapados e a frase de que o agente
   assert.match(ladoDaAuditoria(dados({ sessoes: 1 })), /<dd>1 terminada<\/dd>/);
 });
 
-test("envio: em conversa, a área de texto e Enviar; rodando, só Abortar", () => {
+test("envio: em conversa, o compositor com Enviar; rodando, só Abortar", () => {
   const conversa = envioDaAuditoria("conversa");
-  assert.match(conversa, /<form class="compositor" data-envio><textarea name="texto"/);
-  assert.match(conversa, /<button class="btn btn-primario">Enviar<\/button>/);
-  assert.doesNotMatch(conversa, /data-abortar/);
+  assert.ok("placeholder" in conversa);
+  assert.equal(conversa.placeholder, "Pergunte sobre a auditoria");
+  assert.match(conversa.linha, /<button class="btn btn-primario">Enviar<\/button>/);
+  assert.doesNotMatch(conversa.linha, /data-abortar/);
   const rodando = envioDaAuditoria("rodando");
-  assert.match(rodando, /<button type="button" class="btn btn-perigo" data-abortar>Abortar<\/button>/);
-  assert.doesNotMatch(rodando, /textarea|Enviar/);
+  assert.ok("html" in rodando);
+  assert.match(rodando.html, /<button type="button" class="btn btn-perigo" data-abortar>Abortar<\/button>/);
+  assert.doesNotMatch(rodando.html, /textarea|Enviar/);
 });
 
 test("conversa: o prompt marcado vira a linha do início, a chamada recebe o resultado e o resto segue", () => {
-  const html = conversaDaAuditoria(
+  const mensagens = conversaDaAuditoria(
     dados({
       conversa: [
         { type: "session" },
@@ -101,13 +103,20 @@ test("conversa: o prompt marcado vira a linha do início, a chamada recebe o res
     }),
   );
   assert.deepEqual(
-    html.map(({ chave }) => chave),
-    ["user-1", "assistant-2", "toolResult-3", "assistant-4"],
+    mensagens.map(({ id, role }) => [id, role]),
+    [
+      ["user-1", "system"],
+      ["assistant-2", "assistant"],
+      ["assistant-4", "assistant"],
+    ],
   );
-  const [inicio, chamada, resultado, final] = html.map((item) => item.html);
-  assert.equal(inicio, inicioDaAuditoria(dados()));
-  assert.equal(inicio, '<div class="sistema">Auditoria de setembro de 2026 iniciada</div>');
-  assert.match(String(chamada), /<span class="nome-f">subagent<\/span>.*✓ 1 linha/);
-  assert.equal(resultado, "");
-  assert.match(String(final), /<h2>Custos<\/h2>/);
+  const [inicio, chamada, final] = mensagens;
+  assert.deepEqual(inicio, linhaDoInicio({ role: "user", timestamp: 1 }, dados()));
+  assert.equal(
+    (inicio.metadata?.custom as { html: string }).html,
+    '<div class="sistema">Auditoria de setembro de 2026 iniciada</div>',
+  );
+  const [parte] = chamada?.content as unknown as { artifact: { resultado?: { toolCallId?: string } } }[];
+  assert.equal(parte?.artifact.resultado?.toolCallId, "c1");
+  assert.deepEqual(final?.content, [{ type: "text", text: "## Custos" }]);
 });

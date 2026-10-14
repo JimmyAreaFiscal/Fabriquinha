@@ -334,14 +334,14 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 **Chat** (`/sessions/:sessao`) — conversa + issue
 
 1. Barra de estado: issue (link), ticket, etapa, modo, estado com o motivo e modelo; à direita, a execução atual com **log** e **prompt**, **Exportar** e **Conversar sobre**.
-2. Conversa, à esquerda:
+2. Conversa, à esquerda, desenhada em React com o assistant-ui (`chat-conversa.tsx`; o servidor empacota só os `.tsx` com esbuild, no primeiro pedido, e o resto do cliente segue TypeScript sem build). A página tem a altura da janela: só a lista de mensagens e a coluna da direita rolam, e a área de envio fica fixa no pé:
    - linhas do sistema (execução iniciada, concluída, diálogo aberto) entre traços;
-   - mensagens do agente e do Auditor em Markdown;
+   - mensagens do agente (balão à esquerda) e do Auditor (balão à direita) em Markdown, sem rótulo de quem fala;
    - raciocínio recolhido;
    - cada chamada de ferramenta como bloco recolhível: nome, argumentos e um resumo do resultado (por exemplo "✗ 3 de 214"), com a saída em fonte monoespaçada cortada com **ver tudo**;
    - eventos ao vivo pelo SSE, com o texto do agente chegando em fluxo e cursor piscando;
    - rolagem automática para o fim, que pausa quando o Auditor sobe para ler.
-3. Área de envio, fixa no fim da conversa, conforme o estado (F4, 5.4):
+3. Área de envio, fixa no pé da página, conforme o estado (F4, 5.4); o campo Mensagem é o compositor do assistant-ui, e o resto (diálogos, retomada, avisos) segue HTML:
    - rodando: **Redirecionar** (`steer`) ou **Enfileirar** (`follow_up`), **Abortar** e **Enviar**;
    - diálogo de extensão: o pedido do agente com o formulário (`select` como lista de opções, `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** e **Responder**;
    - falha: o erro em destaque na conversa e, no envio, instrução para a próxima tentativa, seletor de modelo (C20) e **Responder e retomar** (C9);
