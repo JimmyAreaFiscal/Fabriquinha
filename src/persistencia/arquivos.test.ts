@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { caminhoArquivo, guardarArquivos } from "./arquivos.ts";
+import { caminhoArquivo, guardarArquivos, guardarBytes } from "./arquivos.ts";
 import { abrir, raizDo } from "./banco.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-arquivos-"));
@@ -158,5 +158,39 @@ test("caminhoArquivo só aceita um SHA-256, nunca um caminho", () => {
   for (const ruim of ["../../etc/passwd", "A".repeat(64), "a".repeat(63)]) {
     assert.throws(() => caminhoArquivo(banco, ruim), ErroDeRegra);
   }
+  banco.close();
+});
+
+test("guardarBytes grava o Buffer por SHA-256, 0600, deduplica e não deixa temporário", () => {
+  const { raiz, banco } = preparar();
+  const conteudo = Buffer.from("x".repeat(3 * 1024 * 1024 + 7));
+  const guardado = guardarBytes(banco, conteudo);
+
+  assert.deepEqual(guardado, { sha256: sha(conteudo.toString()), bytes: conteudo.length });
+  const caminho = caminhoArquivo(banco, guardado.sha256);
+  assert.deepEqual(readFileSync(caminho), conteudo);
+  assert.equal(permissao(caminho), 0o600);
+  assert.equal(permissao(join(raiz, "arquivos", guardado.sha256.slice(0, 2))), 0o700);
+
+  const antes = statSync(caminho);
+  assert.deepEqual(guardarBytes(banco, conteudo), guardado);
+  const depois = statSync(caminho);
+  assert.deepEqual([depois.ino, depois.mtimeMs, depois.nlink], [antes.ino, antes.mtimeMs, 1]);
+  assert.deepEqual(guardarBytes(banco, Buffer.alloc(0)), { sha256: sha(""), bytes: 0 });
+  assert.deepEqual(
+    readdirSync(join(raiz, "arquivos")).toSorted(),
+    [guardado.sha256.slice(0, 2), sha("").slice(0, 2)].toSorted(),
+  );
+  banco.close();
+});
+
+test("guardarBytes propaga a falha ao ligar o arquivo e não deixa temporário", () => {
+  const { raiz, banco } = preparar();
+  const pasta = join(raiz, "arquivos", sha("bloqueado").slice(0, 2));
+  mkdirSync(pasta, { recursive: true });
+  chmodSync(pasta, 0o500);
+  assert.throws(() => guardarBytes(banco, Buffer.from("bloqueado")), { code: "EACCES" });
+  chmodSync(pasta, 0o700);
+  assert.deepEqual(readdirSync(join(raiz, "arquivos")), [sha("bloqueado").slice(0, 2)]);
   banco.close();
 });

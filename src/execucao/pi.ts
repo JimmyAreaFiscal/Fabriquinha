@@ -81,6 +81,23 @@ export const argumentosPi = (l: Lancamento): string[] => [
 ];
 
 /**
+ * A auditoria do Histórico: a sessão `sessao` em `<raiz>/sessoes`, sem as ferramentas embutidas de escrita (as da
+ * consulta, F4 §6.5) e com a guarda, que só deixa o `subagent` chamar o `scout`. Não herda skills nem modelo de etapa.
+ */
+export const argumentosDaAuditoria = (raiz: string, sessao: string): string[] => [
+  "--mode",
+  "rpc",
+  "--session-dir",
+  join(raiz, "sessoes"),
+  "--session-id",
+  sessao,
+  "-e",
+  join(PACOTE, "extensions", "guarda.ts"),
+  "--exclude-tools",
+  "edit,write,bash,powershell",
+];
+
+/**
  * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio da execução, e
  * as variáveis da Fabriquinha.
  */
@@ -135,11 +152,12 @@ export interface ProcessoPi {
 
 /**
  * Lança o pi num grupo próprio, com o stderr no `log`. Cada linha JSON do stdout vai para `aoEvento`; linha fora do
- * protocolo vai para o log.
+ * protocolo vai para o log. Com `fecharStdin`, o stdin fecha já: o `--mode json` do pi só começa depois do EOF dele,
+ * e o modo RPC precisa do stdin aberto.
  */
 export function lancarPi(
   args: readonly string[],
-  { cwd, env, log }: { cwd: string; env: NodeJS.ProcessEnv; log: string },
+  { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
   aoEvento: (evento: EventoPi) => void,
 ): ProcessoPi {
   const filho = spawn(binarioPi(), args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
@@ -150,6 +168,7 @@ export function lancarPi(
   };
   filho.on("error", falhou);
   filho.stdin.on("error", falhou);
+  if (fecharStdin) filho.stdin.end();
   filho.stderr.on("data", (parte: Buffer) => {
     appendFileSync(log, parte);
   });
@@ -174,4 +193,14 @@ export function lancarPi(
       sinalNoGrupo(pgid, "SIGKILL");
     },
   };
+}
+
+/**
+ * O ambiente da auditoria `dir` (`<raiz>/auditorias/<sessão>`): como o da execução, mas sem `FABRIQUINHA_EXECUCAO`,
+ * porque ela não é de nenhum ticket, e com `FABRIQUINHA_AUDITORIA`, que liga a regra do `scout` na guarda.
+ */
+export function ambienteDaAuditoria(raiz: string, dir: string): NodeJS.ProcessEnv {
+  const env = ambienteSemCredenciais(process.env, join(dir, "vazio"));
+  delete env.FABRIQUINHA_EXECUCAO;
+  return { ...env, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_AUDITORIA: "1" };
 }

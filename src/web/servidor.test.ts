@@ -8,6 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { iniciarServico, type Servico } from "../execucao/servico.ts";
+import { caminhoArquivo } from "../persistencia/arquivos.ts";
+import { registrarProjeto } from "../persistencia/projetos.ts";
+import { criarUsuarioSimulado, usuariosSimulados } from "../persistencia/simulacao.ts";
 import { ROTAS } from "./servidor.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-web-"));
@@ -44,7 +47,11 @@ interface Resposta {
 /** Uma requisição com controle total dos cabeçalhos (o `fetch` não deixa trocar o `Host`). */
 async function pedir(
   caminho: string,
-  { metodo = "GET", headers = {}, corpo }: { metodo?: string; headers?: Record<string, string>; corpo?: string } = {},
+  {
+    metodo = "GET",
+    headers = {},
+    corpo,
+  }: { metodo?: string; headers?: Record<string, string>; corpo?: string | Buffer } = {},
 ): Promise<Resposta> {
   // Com o tamanho, como o navegador: sem ele, o cliente do Node manda o corpo do DELETE solto na conexão.
   const tamanho = corpo === undefined ? {} : { "content-length": String(Buffer.byteLength(corpo)) };
@@ -157,6 +164,43 @@ test("corpo de mutação: JSON até 64 KiB; inválido ou grande demais dá 422",
   const noLimite = JSON.stringify("x".repeat(64 * 1024 - 2));
   assert.equal((await pedir("/api/nada", { metodo: "POST", headers: mesmaOrigem(), corpo: noLimite })).status, 404);
   assert.equal((await pedir("/api/nada", { metodo: "POST", headers: mesmaOrigem() })).status, 404);
+});
+
+test("corpo binário (anexo): application/octet-stream chega como Buffer, até 20 MiB; acima, 422; o JSON segue em 64 KiB", async () => {
+  registrarProjeto(servico.banco, {
+    nome: "loja",
+    repo: "/repos/loja",
+    branchBase: "main",
+    hospedagem: "github",
+    testes: ["npm test"],
+    sonar: { projectKey: "loja" },
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+  });
+  const { id } = criarUsuarioSimulado(servico.banco, "loja", { nome: "Dona Maria", descricao: "Contadora" });
+  const binario = (corpo: Buffer, tipo = "application/octet-stream") =>
+    pedir(`/api/usuarios-simulados/${String(id)}/anexos?nome=manual.pdf`, {
+      metodo: "POST",
+      headers: comCookie({ "sec-fetch-site": "same-origin", "content-type": tipo }),
+      corpo,
+    });
+
+  const bytes = Buffer.from([0x25, 0x50, 0x44, 0x46, 0xff, 0xfe, 0x00]); // não é UTF-8 válido
+  const aceito = await binario(bytes, "Application/Octet-Stream; charset=binary");
+  const { sha256 } = aceito.json() as { sha256: string };
+  assert.deepEqual([aceito.status, aceito.json()], [200, { nome: "manual.pdf", sha256, bytes: 7 }]);
+  assert.deepEqual(readFileSync(caminhoArquivo(servico.banco, sha256)), bytes);
+  assert.equal(usuariosSimulados(servico.banco, "loja")[0]?.anexos[0]?.bytes, 7);
+
+  assert.equal((await binario(Buffer.alloc(20 * 1024 * 1024))).status, 200);
+  const grande = await binario(Buffer.alloc(20 * 1024 * 1024 + 1));
+  assert.deepEqual([grande.status, grande.json()], [422, { erro: "o corpo passa de 20 MiB" }]);
+  // O teto do JSON não mudou: 64 KiB, mesmo com o limite maior do anexo.
+  const json = await pedir("/api/nada", {
+    metodo: "POST",
+    headers: mesmaOrigem(),
+    corpo: JSON.stringify("x".repeat(64 * 1024)),
+  });
+  assert.deepEqual([json.status, json.json()], [422, { erro: "o corpo passa de 64 KiB" }]);
 });
 
 test("caminho de página sem cookie devolve o index.html, e a chamada de API dele dá 401", async () => {

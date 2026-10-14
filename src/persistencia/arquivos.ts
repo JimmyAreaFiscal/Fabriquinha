@@ -39,6 +39,19 @@ function sincronizarDiretorio(diretorio: string): void {
   }
 }
 
+/** Liga o temporário ao nome final pelo hash; se o hash já existe, o guardado fica intocado (deduplicação). */
+function ligar(banco: DatabaseSync, pasta: string, temporario: string, sha256: string): void {
+  const destino = caminhoArquivo(banco, sha256);
+  mkdirSync(dirname(destino), { recursive: true, mode: 0o700 });
+  try {
+    linkSync(temporario, destino);
+  } catch (error_) {
+    if ((error_ as NodeJS.ErrnoException).code !== "EEXIST") throw error_;
+  }
+  sincronizarDiretorio(dirname(destino));
+  sincronizarDiretorio(pasta);
+}
+
 /**
  * Guarda os arquivos abertos em `origens[].fd` (F2 §5.1), cada um com até `teto` bytes. Cada um é lido uma vez só,
  * do início, para um temporário privado
@@ -96,18 +109,31 @@ export function guardarArquivos<O extends { readonly fd: number }, T extends obj
     });
     antesDeGuardar?.();
     return copias.map(({ temporario, ...guardado }) => {
-      const destino = caminhoArquivo(banco, guardado.sha256);
-      mkdirSync(dirname(destino), { recursive: true, mode: 0o700 });
-      try {
-        linkSync(temporario, destino);
-      } catch (error_) {
-        if ((error_ as NodeJS.ErrnoException).code !== "EEXIST") throw error_;
-      }
-      sincronizarDiretorio(dirname(destino));
-      sincronizarDiretorio(pasta);
+      ligar(banco, pasta, temporario, guardado.sha256);
       return guardado as T & { sha256: string; bytes: number };
     });
   } finally {
     for (const temporario of temporarios) rmSync(temporario, { force: true });
+  }
+}
+
+/** Guarda o conteúdo já em memória (o anexo de um Usuário Simulado, F8 §2) do mesmo jeito: por hash, sem sobrescrever. */
+export function guardarBytes(banco: DatabaseSync, conteudo: Buffer): { sha256: string; bytes: number } {
+  const pasta = join(raizDo(banco), "arquivos");
+  mkdirSync(pasta, { recursive: true, mode: 0o700 });
+  const temporario = join(pasta, `.tmp-${randomUUID()}`);
+  try {
+    const copia = openSync(temporario, "wx", 0o600);
+    try {
+      for (let escritos = 0; escritos < conteudo.length;) escritos += writeSync(copia, conteudo, escritos);
+      fsyncSync(copia);
+    } finally {
+      closeSync(copia);
+    }
+    const sha256 = createHash("sha256").update(conteudo).digest("hex");
+    ligar(banco, pasta, temporario, sha256);
+    return { sha256, bytes: conteudo.length };
+  } finally {
+    rmSync(temporario, { force: true });
   }
 }

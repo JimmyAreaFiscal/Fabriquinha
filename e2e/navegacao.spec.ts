@@ -39,6 +39,7 @@ test("entra pelo link de web.url e navega entre as páginas pela navegação fix
   });
   const paginas = [
     ["Projetos", "/projects", "Projetos"],
+    ["Simulação", "/simulation", "Simulação"],
     ["Métricas", "/metrics", "Métricas"],
     ["Histórico", "/history", "Histórico"],
     ["Configuração", "/config", "Configuração"],

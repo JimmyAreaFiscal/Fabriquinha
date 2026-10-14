@@ -105,6 +105,7 @@ Todo `GET` fora de `/api/*`, `/arquivos/*`, `/static/*` e `/entrar` devolve o `i
 
 Respostas em JSON, exceto onde indicado.
 Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
+A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-stream`, até 20 MiB, que a rota recebe como `Buffer`; passou do teto, o servidor lê o corpo até o fim, descarta e responde 422.
 `:sessao` é o `sessaoPi` (F4, 5.1).
 
 **Leitura**
@@ -134,6 +135,18 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | `POST /api/projetos` | C19: `conferirProjeto` (F5, 2), `conferirModelo` para cada modelo (F4, 9), grava, e chama `varrerBase` (F6, 4.4) para fixar o cursor inicial. |
 | `DELETE /api/projetos/:nome` | Remove o projeto e tudo o que depende dele, em qualquer fase: do banco, as issues com tickets, execuções, evidências, decisões e uso (custo); do disco, as pastas de execução, as sessões do pi, os anexos que nenhum outro projeto usa e `<raiz>/worktrees/<projeto>`. O repositório original, as branches `fabriquinha/I-n` e o remoto não são tocados. Recusa com 409 se há execução em andamento no projeto; projeto inexistente dá 404. Devolve `{ avisos }`, um por falha ao apagar no disco (o banco não volta atrás). |
 
+**Simulação (F8)**
+
+| Rota | O que faz |
+|---|---|
+| `GET /api/projetos/:nome/usuarios-simulados` | Os Usuários Simulados do projeto, na ordem de criação, cada um com `anexos` (`nome`, `sha256`, `bytes`). Projeto inexistente dá 404. |
+| `POST /api/projetos/:nome/usuarios-simulados` | Cria o usuário: `{ nome, descricao }` (`NovoUsuarioSimulado`, F8 2). Campo inválido dá 422 com o caminho do campo; nome repetido no projeto, 409. |
+| `POST /api/usuarios-simulados/:id/anexos?nome=` | Corpo binário. Guarda o conteúdo por hash (`guardarBytes`) e grava o anexo; o mesmo nome troca o anexo. Nome inválido ou formato fora de PDF, texto e imagem dá 422 com o caminho `nome`; corpo que não é binário, 422; usuário inexistente, 404. |
+| `DELETE /api/usuarios-simulados/:id/anexos/:nome` | Remove o anexo (204); o arquivo em `arquivos/` fica. Anexo ou usuário inexistente dá 404. |
+| `GET /api/projetos/:nome/tarefas` | As Tarefas do projeto na ordem de criação: `id`, `texto`, `n`, `criadaEm`, `usuarios` (`id`, `nome` dos alocados) e `execucoes` (F8 5: `id`, `usuario`, `usuarioNome`, `status`, e `relatorio` na concluída ou `erro` na que falhou). Projeto inexistente dá 404. |
+| `POST /api/projetos/:nome/tarefas` | Cria a Tarefa: `{ texto, n, usuarios }` (`NovaTarefa`, F8 3). Campo inválido dá 422 com o caminho do campo (`texto`, `n`, `usuarios`); usuário que não é do projeto, 409; projeto inexistente, 404. |
+| `POST /api/tarefas/:id/executar` | Executa a Tarefa (F8 5): enfileira N execuções por usuário alocado e responde 204 já; elas rodam em segundo plano, uma por vez. Sem link do produto, 409 com "Informe o link do produto na Configuração do projeto"; Tarefa com execução pendente, 409; Tarefa inexistente, 404. |
+
 **Registro e issue**
 
 | Rota | O que faz |
@@ -143,6 +156,7 @@ Corpo das mutações em JSON, até 64 KiB, validado por schema `zod`.
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
 | `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
 | `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | C10. Devolver também envia o motivo ao agente como mensagem (F4, 6.6). |
+| `GET /api/projetos/:nome/heatmap` | Heatmap de alterações da base nos últimos 12 meses (`heatmapDo`, F5 §11): `{ branch, desde, ate, raiz, commits }`, com a árvore inteira de pastas e arquivos. Projeto inexistente dá 404; pasta do repositório ou branch base ausente dá 409 com motivo e correção. |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
 **Tickets e gates**
@@ -205,13 +219,15 @@ Os números dos protótipos são fictícios.
 |---|---|---|
 | Início | `/home`; `/` redireciona para cá | `01-inicio.html` |
 | Projeto | `/projects/:projeto`; `/projects` abre o último projeto visto neste navegador, ou o primeiro em ordem alfabética | `02-projeto.html` |
+| Heatmap | `/projects/:projeto/heatmap`, a aba Heatmap da página Projeto | — |
 | Issue | `/projects/:projeto/issues/:issue` | `03-issue.html` |
+| Simulação | `/simulation/:projeto`; `/simulation` abre o último projeto visto neste navegador, ou o primeiro em ordem alfabética | `prototipo` da I-10 |
 | Métricas | `/metrics` | `04-metricas.html` |
 | Histórico | `/history` | `05-historico.html` |
 | Chat | `/sessions/:sessao` | `06-chat.html` |
 | Configuração | `/config` | `07-configuracao.html` |
 
-Navegação fixa no topo: **Início** (com o número de sessões que aguardam o Auditor), **Projetos**, **Métricas**, **Histórico** e **Configuração**.
+Navegação fixa no topo: **Início** (com o número de sessões que aguardam o Auditor), **Projetos**, **Simulação**, **Métricas**, **Histórico** e **Configuração**.
 As páginas usam caminho, com a History API.
 Todo link é um `<a href>` de verdade, então qualquer página, inclusive o chat, também abre em outra aba do navegador.
 Se o projeto do caminho não for o da issue, o cliente troca o caminho pelo certo, sem recarregar.
@@ -239,6 +255,7 @@ Duas peças se repetem entre as páginas:
 **Projeto** (`/projects/:projeto`) — trilho de fases
 
 1. Cabeçalho: seletor de projeto, link **Editar na Configuração** e **Registrar necessidade**, com o projeto já escolhido.
+   Abaixo dele, as abas **Issues** (esta página, ativa) e **Heatmap** (`/projects/:projeto/heatmap`), links de verdade.
 2. Métricas do mês corrente só do projeto (F6, 5.7), em 5 cards: custo (com chamadas de LLM), tokens (entrada, saída e cache), issues, tickets e PRs.
 3. Barra com a contagem (em andamento, concluídas, arquivadas, canceladas), as opções explícitas **Mostrar concluídas**, **Mostrar arquivadas** e **Mostrar canceladas** (Q2) e **Arquivar concluídas** (C18 do projeto, com confirmação que diz quantas serão arquivadas e que nada é apagado).
 4. Cabeçalho das colunas do trilho (etapas e fases) fixo no topo ao rolar.
@@ -247,6 +264,20 @@ Duas peças se repetem entre as páginas:
 6. Clicar na linha abre a gaveta com os tickets: etapa, `T-n`, título, status, modelo (★ quando é override do ticket, C20) e sessão.
    As issues que aguardam o Auditor ou falharam já vêm com a gaveta aberta.
 7. Atualiza sozinha a cada 5 segundos, como o Início.
+
+**Heatmap** (`/projects/:projeto/heatmap`) — onde o código mais mudou
+
+1. Cabeçalho como o da página Projeto (só o seletor) e as mesmas abas, com **Heatmap** ativa; o item **Projetos** da navegação segue marcado.
+2. Barra com a janela de 12 meses até hoje (dd/mm/aaaa), a branch base e o total de alterações do projeto, igual à soma das linhas da raiz.
+   Total 0 mostra "Nenhuma alteração nos últimos 12 meses", com todos os totais em 0.
+3. A árvore do repositório: uma linha por pasta e arquivo, cada uma um `<details>` com quadrado de cor, nome, total de alterações e barra.
+   A cor é `hsl(220·(1−calor) 70% 50%)` (azul frio a vermelho quente), com `calor = ln(1+n)/ln(1+T)`, `n` as alterações da linha e `T` o total do projeto.
+   Ordem: mais alterações primeiro, empate por nome.
+4. Clicar numa pasta abre e mostra os filhos (o conteúdo é desenhado na primeira abertura, sem nova chamada à API); clicar de novo fecha.
+5. Clicar num arquivo mostra "Código alterado: N alterações · quanto maior, pior" (a métrica: mais alterações, pior) e a tabela de commits da janela: hash de 7, mensagem, data e "PR #N" ou "sem PR".
+   Arquivo sem alterações na janela mostra 0, na cor mais fria, sem tabela.
+6. Projeto inexistente mostra "Projeto não encontrado" como a página Projeto; erro do git (repositório ou branch base ausente) mostra o motivo e a correção sob as abas.
+7. Não se atualiza sozinha: cada abertura relê o git.
 
 ponytail: o Início e a página do projeto releem tudo a cada 5 segundos; com centenas de issues ativas, trocar por um contador de versão e só reler quando mudar.
 
@@ -328,13 +359,26 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 2. À direita, o formulário do item escolhido.
 3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, as execuções autônomas em andamento (uma linha "Executando E-n · I-n · T-n · há …" por item) e **Salvar**.
 4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em quatro grupos:
-   - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) e projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`;
+   - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`, e **Link do produto** (opcional, http ou https; vazio apaga o link; link inválido dá erro no campo e nada é gravado). Sem o link, a Simulação não executa;
    - **Preparação e testes:** listas de comandos com adicionar e remover; preparação opcional, testes com pelo menos um;
    - **Fitness functions:** nome, comando e descrição (até 300), com adicionar e remover;
    - **Modelo por etapa:** um seletor por etapa alimentado por `GET /api/modelos`, com "padrão do pi" apagado quando vazio.
    Rodapé: "Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos", **Cancelar** e **Salvar projeto** (ou **Cadastrar projeto**).
    **Remover** (só no projeto já salvo) abre uma confirmação com o nome e o número de issues, avisando que issues, custos e arquivos do projeto serão apagados: **Cancelar** não muda nada, **Remover projeto** envia `DELETE /api/projetos/:nome`. Com sucesso, a tela volta a `/config` e mostra os avisos; com erro (execução em andamento, por exemplo), a confirmação fecha e a mensagem aparece.
 5. Erros de validação aparecem ao lado de cada campo, a partir do caminho que o `zod` devolve, e o rodapé diz quantos campos têm erro.
+6. **Usuários simulados** (F8 2), numa seção abaixo do formulário do projeto, só no projeto já salvo; ela se atualiza sozinha, sem tocar no que foi digitado no formulário do projeto:
+   - um cartão por usuário, com o nome, a descrição e os anexos, cada um como "manual.pdf 248.731 bytes" e um **×** que o remove;
+   - **+ anexar arquivo** em cada cartão abre o seletor de arquivo (PDF, texto ou imagem) e envia na hora, em `application/octet-stream`; a recusa (formato, tamanho) aparece no próprio cartão;
+   - o formulário **Nome do usuário** e **Descrição do usuário**, com o erro de cada campo abaixo dele ("Descrição obrigatória") e a recusa do servidor (nome repetido) abaixo do formulário; **Criar usuário simulado** limpa os campos quando dá certo.
+
+**Simulação** (F8 3), em `/simulation/:projeto`: o cabeçalho tem o título, uma aba por projeto e, à direita, o link do produto ou o aviso "sem link do produto".
+   - o formulário **Nova tarefa** tem **Tarefa** (texto), **Execuções por usuário (N)** (padrão 1) e uma caixa por Usuário Simulado do projeto; sem usuário, manda cadastrá-los na Configuração do projeto;
+   - o erro de cada campo (`texto`, `n`, `usuarios`) aparece abaixo dele, e a recusa do servidor, abaixo do formulário; o que o Auditor digitou fica;
+   - um cartão por Tarefa, com o texto, "N = 3", os alocados ("alocada a Dona Maria") e o botão **Executar**; sem Tarefa, "Nenhuma tarefa neste projeto.";
+   - o **Executar** vira "Executando…" (desligado) enquanto a Tarefa tem execução na fila ou em andamento; a recusa do servidor (409, como a falta do link) aparece como alerta no cartão;
+   - sob o cartão, a tabela das execuções (`#`, usuário simulado, pílula "na fila", "em andamento", "concluído" ou "falhou", e "Ver relatório" na concluída ou o erro na que falhou); sem execução, "Nenhuma execução ainda.";
+   - **Ver relatório** abre o relatório numa caixa com as seções "Usabilidade" e "Bugs", cada uma com a lista de achados ou "Nenhum achado";
+   - com alguma execução pendente, a página relê as Tarefas a cada 3 s, só os cartões: o que o Auditor digita no formulário fica.
 
 ### 4.5 Exibição de evidências
 
@@ -406,6 +450,7 @@ As leituras de tela são estas:
   - `sha256` que não pertence a evidência dá 404;
   - arquivo HTML sai com o cabeçalho `sandbox`; `Range` devolve 206 com o trecho certo;
   - **Executar agora** com a própria issue executando dá 409; com outra issue executando, 204;
+  - anexo de Usuário Simulado: o corpo binário chega à rota como `Buffer` até 20 MiB, acima disso dá 422, e o teto do JSON segue em 64 KiB;
   - cadastro de projeto com remoto inválido dá 502 com a mensagem do F5, e com campo inválido dá 422 com o caminho do campo;
   - `GET /api/metricas` com `ate=2026-13`, com `de` depois de `ate` ou com mais de 24 meses dá 422;
   - `GET /projects/x/issues/I-1` sem cookie devolve o `index.html`, e a chamada de API da página é que dá 401.
@@ -413,6 +458,9 @@ As leituras de tela são estas:
 - Ponta a ponta num navegador real (Playwright):
   - entrar pelo link de `web.url`;
   - configurar um projeto e ligar o agendador;
+  - criar um Usuário Simulado, anexar um arquivo, ver o tamanho em bytes e removê-lo;
+  - criar uma Tarefa em Simulação alocada a um Usuário Simulado, e os erros de N e de alocação;
+  - executar a Tarefa (pi falso e produto local): sem link, o erro no cartão; com link, as execuções concluídas, o relatório com as duas seções e o link fora do ar;
   - registrar uma necessidade pelo chat e aprovar o registro;
   - acompanhar uma sessão autônoma ao vivo, redirecioná-la e responder a um diálogo de extensão;
   - responder e retomar um ticket que falhou;

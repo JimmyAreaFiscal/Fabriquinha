@@ -165,6 +165,20 @@ function cabeca(): string {
   return `<div class="pista-cabeca"><div></div>${etapas.join("")}<div></div><div></div>${fases.join("")}<div></div></div>`;
 }
 
+/** O seletor de projeto das duas abas; trocar de projeto leva à mesma aba do outro. */
+export const seletor = (projetos: readonly ProjetoListado[], nome: string): string =>
+  `<select class="seletor" aria-label="Projeto" data-projeto>${projetos
+    .map((p) => `<option${p.nome === nome ? " selected" : ""}>${escapar(p.nome)}</option>`)
+    .join("")}</select>`;
+
+/** As abas da página do projeto: links de verdade, com a ativa marcada. */
+export function abas(nome: string, ativa: "issues" | "heatmap"): string {
+  const aba = (id: typeof ativa, href: string, rotulo: string) =>
+    `<a href="${href}"${ativa === id ? ' aria-current="page"' : ""}>${rotulo}</a>`;
+  const heatmap = `${caminhoDoProjeto(nome)}/heatmap`;
+  return `<nav class="abas" aria-label="Abas do projeto">${aba("issues", caminhoDoProjeto(nome), "Issues")}${aba("heatmap", heatmap, "Heatmap")}</nav>`;
+}
+
 /** A página `/projects/:projeto`, com o mês corrente do projeto (`mes`) em 5 cards. */
 export function paginaDoProjeto(
   projetos: readonly ProjetoListado[],
@@ -175,17 +189,15 @@ export function paginaDoProjeto(
   agora: Date,
 ): string {
   const projeto = projetos.find((p) => p.nome === nome);
-  const opcoes = projetos
-    .map((p) => `<option${p.nome === nome ? " selected" : ""}>${escapar(p.nome)}</option>`)
-    .join("");
   const alternar = (chave: keyof Escolhas["mostrar"], rotulo: string) =>
     `<label class="alternar"><input type="checkbox" data-mostrar="${chave}"${escolhas.mostrar[chave] ? " checked" : ""}> ${rotulo}</label>`;
   return `<div class="seletor-linha">
     <h1>Projeto</h1>
-    <select class="seletor" aria-label="Projeto" data-projeto>${opcoes}</select>
+    ${seletor(projetos, nome)}
     <a class="editar" href="/config?projeto=${encodeURIComponent(nome)}">Editar na Configuração</a>
     <div class="acoes"><button type="button" class="btn btn-primario" data-registrar>+ Registrar necessidade</button></div>
   </div>
+  ${abas(nome, "issues")}
   ${cardsDoMes(mes)}
   <div class="ferramentas">
     <span class="contagem">${String(contagem.andamento)} em andamento · ${plural(contagem.concluidas, "concluída", "concluídas")} · ${plural(contagem.arquivadas, "arquivada", "arquivadas")} · ${plural(contagem.canceladas, "cancelada", "canceladas")}</span>

@@ -53,11 +53,15 @@ export type MetricasIssuePeriodo = z.infer<typeof MetricasIssuePeriodo>;
 export const mesDe = (d: Date): string => `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
 /** O mês `AAAA-MM` deslocado de `n` meses, com o intervalo de instantes UTC das suas meias-noites no fuso do serviço. */
-function intervalo(mes: string, n = 0): Intervalo {
+export function intervalo(mes: string, n = 0): Intervalo {
   const [ano = 0, m = 0] = mes.split("-").map(Number);
   const inicio = new Date(ano, m - 1 + n, 1);
   return { mes: mesDe(inicio), inicio: inicio.toISOString(), fim: new Date(ano, m + n, 1).toISOString() };
 }
+
+/** O mês `AAAA-MM` por extenso, em português: `setembro de 2026`. */
+export const mesPorExtenso = (mes: string): string =>
+  new Date(`${mes}-01T12:00:00`).toLocaleString("pt-BR", { month: "long", year: "numeric" });
 
 /** O mês `n` meses depois de `mes` (antes, com `n` negativo). */
 export const somarMeses = (mes: string, n: number): string => intervalo(mes, n).mes;

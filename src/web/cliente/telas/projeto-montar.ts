@@ -27,14 +27,14 @@ const mostrar: Escolhas["mostrar"] = { concluidas: false, arquivadas: false, can
 const gavetas = new Map<Id, boolean>();
 
 // O armazenamento do navegador pode faltar (bloqueado, modo privado): a página segue sem lembrar.
-function ultimoVisto(): string | undefined {
+export function ultimoVisto(): string | undefined {
   try {
     return localStorage.getItem(CHAVE) ?? undefined;
   } catch {
     return undefined;
   }
 }
-function lembrar(nome: string): void {
+export function lembrar(nome: string): void {
   try {
     localStorage.setItem(CHAVE, nome);
   } catch {

@@ -3,6 +3,7 @@
 import type { Hospedagem, Projeto } from "../../../dominio/projeto.ts";
 import type { Etapa, Modelo } from "../../../dominio/primitivos.ts";
 import type { Configuracao } from "../../../persistencia/servico.ts";
+import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import { escapar, ha, nomeDoModelo, rotuloIssue, rotuloTicket } from "../render.ts";
 
 /** `GET /api/configuracao`. */
@@ -36,6 +37,7 @@ export const NOVO: Rascunho = {
   sonar: { projectKey: "" },
   fitness: [{ nome: "", comando: "", descricao: "" }],
   modelos: {},
+  linkProduto: "",
 };
 
 /** As mensagens por caminho (`fitness[0].nome`) do 422, a partir do `z.prettifyError` que o servidor manda. */
@@ -54,13 +56,13 @@ const mensagensDe = (erros: Erros, caminho: string): string[] =>
   [...erros].flatMap(([c, ms]) => (c === caminho || c.startsWith(`${caminho}.`) ? ms : []));
 
 /** O `id` do controle do campo `caminho` (`campo-fitness[0].nome`), para o `<label for>` e a mensagem de erro. */
-const idDe = (caminho: string): string => `campo-${caminho}`;
+export const idDe = (caminho: string, prefixo = "campo"): string => `${prefixo}-${caminho}`;
 
 /** A marca de erro do campo: a classe, o `aria-invalid` ligado à mensagem e a mensagem logo abaixo do controle. */
-function marca(erros: Erros, caminho: string): { classe: string; aria: string; msg: string } {
+export function marca(erros: Erros, caminho: string, prefixo?: string): { classe: string; aria: string; msg: string } {
   const ms = mensagensDe(erros, caminho);
   if (ms.length === 0) return { classe: "", aria: "", msg: "" };
-  const id = `${idDe(caminho)}-erro`;
+  const id = `${idDe(caminho, prefixo)}-erro`;
   return {
     classe: " erro",
     aria: ` aria-invalid="true" aria-describedby="${id}"`,
@@ -211,11 +213,63 @@ export function formularioDeProjeto(
     (falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "") +
     `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
   return `<h2>${titulo}</h2><form class="form" data-projeto novalidate>
-<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branchBase", "Branch base", p.branchBase, { mono: true })}${texto(erros, "repo", "Caminho do repositório", p.repo, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div>${texto(erros, "sonar.projectKey", "Projeto no SonarQube", p.sonar.projectKey, { mono: true, extra: ' placeholder="projectKey"', ajuda: "o token fica em <code>&lt;raiz&gt;/ambiente</code>, fora do banco" })}</div></div>
+<div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branchBase", "Branch base", p.branchBase, { mono: true })}${texto(erros, "repo", "Caminho do repositório", p.repo, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div>${texto(erros, "sonar.projectKey", "Projeto no SonarQube", p.sonar.projectKey, { mono: true, extra: ' placeholder="projectKey"', ajuda: "o token fica em <code>&lt;raiz&gt;/ambiente</code>, fora do banco" })}${texto(erros, "linkProduto", "Link do produto", p.linkProduto ?? "", { classe: " largo", mono: true, extra: ' placeholder="https://produto.exemplo.com"', ajuda: "opcional; endereço http(s) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa" })}</div></div>
 <div class="grupo"><h3>Preparação e testes</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}${lista(erros, "testes", "Testes", "pelo menos um; todos precisam sair com 0", p.testes)}</div></div>
 ${fitness(erros, p.fitness)}
 ${modelos(erros, p.modelos, disponiveis)}
-<div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>`;
+<div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>${novo ? "" : '<section class="usuarios-simulados" data-usuarios-simulados aria-label="Usuários simulados"></section>'}`;
+}
+
+export interface OpcoesDosUsuarios {
+  /** O que está nos campos do formulário de novo usuário. */
+  rascunho: { nome: string; descricao: string };
+  /** Os erros do 422 do formulário, por campo (`nome`, `descricao`). */
+  erros: Erros;
+  /** A recusa que não é de um campo (nome repetido, 409), logo abaixo do formulário. */
+  falha?: string;
+  /** A recusa do último anexo de cada usuário, pelo ID dele. */
+  falhasDeAnexo: ReadonlyMap<number, string>;
+}
+
+const FORMATOS_DO_ANEXO = ".pdf,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif";
+const tamanho = (bytes: number): string => `${bytes.toLocaleString("pt-BR")} ${bytes === 1 ? "byte" : "bytes"}`;
+
+function cartaoDoUsuario(u: UsuarioSimulado, falha: string | undefined): string {
+  const anexos = u.anexos.map(
+    (a) =>
+      `<li class="anexo-usuario">${escapar(a.nome)} <span class="muted">${tamanho(a.bytes)}</span><button type="button" class="x" data-remover-anexo="${escapar(a.nome)}" title="Remover o anexo" aria-label="Remover o anexo ${escapar(a.nome)}">×</button></li>`,
+  );
+  const aviso = falha ? `<span class="msg-erro" role="alert">${escapar(falha)}</span>` : "";
+  const listaDeAnexos = anexos.length > 0 ? `<ul class="anexos-usuario">${anexos.join("")}</ul>` : "";
+  return `<article class="cartao-usuario" data-usuario="${String(u.id)}"><h4>${escapar(u.nome)}</h4><p class="descricao-usuario">${escapar(u.descricao)}</p>${listaDeAnexos}<div class="anexar"><button type="button" class="link" data-anexar-botao>+ anexar arquivo</button><input type="file" accept="${FORMATOS_DO_ANEXO}" data-anexar hidden aria-label="Anexar arquivo a ${escapar(u.nome)}"></div>${aviso}</article>`;
+}
+
+/** Um campo do formulário de novo usuário: `campo-usuario-nome`, para não colidir com o `campo-nome` do projeto. */
+function campoDoUsuario(erros: Erros, campo: "nome" | "descricao", rotulo: string, valor: string): string {
+  const m = marca(erros, campo, "campo-usuario");
+  const id = idDe(campo, "campo-usuario");
+  const controle =
+    campo === "nome"
+      ? `<input id="${id}" name="nome" value="${escapar(valor)}" placeholder="Dona Maria"${m.aria}>`
+      : `<textarea id="${id}" name="descricao" rows="3" placeholder="Contadora de 60 anos, pouca familiaridade com sistemas web"${m.aria}>${escapar(valor)}</textarea>`;
+  return `<div class="campo${campo === "descricao" ? " largo" : ""}${m.classe}"><label for="${id}">${rotulo}</label>${controle}${m.msg}</div>`;
+}
+
+/**
+ * Usuários simulados (F8 §2), abaixo do formulário do projeto salvo: um cartão por usuário, com os anexos e o
+ * "+ anexar arquivo", e o formulário de novo usuário.
+ */
+export function usuariosSimulados(
+  usuarios: readonly UsuarioSimulado[],
+  { rascunho, erros, falha, falhasDeAnexo }: OpcoesDosUsuarios,
+): string {
+  const cartoes = usuarios.map((u) => cartaoDoUsuario(u, falhasDeAnexo.get(u.id)));
+  const lista =
+    cartoes.length > 0
+      ? `<div class="cartoes-usuario">${cartoes.join("")}</div>`
+      : '<p class="muted">Nenhum usuário simulado neste projeto ainda.</p>';
+  const aviso = falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "";
+  return `<h3>Usuários simulados <span class="nota">· pessoas fictícias que usam o produto na Simulação</span></h3>${lista}<form class="form novo-usuario" data-usuario-simulado novalidate><div class="grade">${campoDoUsuario(erros, "nome", "Nome do usuário", rascunho.nome)}${campoDoUsuario(erros, "descricao", "Descrição do usuário", rascunho.descricao)}</div><span class="ajuda">A descrição e os anexos (manuais em PDF, texto ou imagem, até 20 MiB) vão para a IA.</span>${aviso}<div class="rodape-form"><button type="submit" class="btn btn-primario">Criar usuário simulado</button></div></form>`;
 }
 
 /** A confirmação de remover o projeto (C18 do arquivar, mas sem volta): o nome e quantas issues saem junto. */

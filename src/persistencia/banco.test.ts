@@ -84,6 +84,94 @@ test("abrir() aplica as migrações e grava a versão; reabrir não reaplica", (
   banco.close();
 });
 
+test("a coluna projeto.link_produto é opcional", () => {
+  const banco = abrir(raizTemp());
+  banco.exec(
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]')`,
+  );
+  assert.equal(valor(banco, "SELECT link_produto FROM projeto"), null);
+  banco.close();
+});
+
+test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuário existentes, anexo com hash e tamanho válidos", () => {
+  const banco = abrir(raizTemp());
+  banco.exec(
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+     INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd')`,
+  );
+  const sha = "a".repeat(64);
+  const falha = (sql: string, erro: RegExp) => {
+    assert.throws(() => {
+      banco.exec(sql);
+    }, erro);
+  };
+  falha(
+    "INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('p', 'Dona Maria', 'd')",
+    /UNIQUE constraint failed/,
+  );
+  falha("INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('fantasma', 'x', 'd')", /FOREIGN KEY/);
+  falha(`INSERT INTO usuario_simulado_anexo VALUES (2, 'm.pdf', '${sha}', 1)`, /FOREIGN KEY/);
+  falha(`INSERT INTO usuario_simulado_anexo VALUES (1, 'm.pdf', '${sha.slice(1)}', 1)`, /CHECK constraint failed/);
+  falha(`INSERT INTO usuario_simulado_anexo VALUES (1, 'm.pdf', '${sha}', -1)`, /CHECK constraint failed/);
+  banco.exec(`INSERT INTO usuario_simulado_anexo VALUES (1, 'm.pdf', '${sha}', 0)`);
+  falha(`INSERT INTO usuario_simulado_anexo VALUES (1, 'm.pdf', '${sha}', 1)`, /UNIQUE constraint failed/);
+  banco.close();
+});
+
+test("as tabelas da Tarefa: N de 1 a 20, projeto e usuário existentes, alocação única", () => {
+  const banco = abrir(raizTemp());
+  banco.exec(
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+     INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd')`,
+  );
+  const falha = (sql: string, erro: RegExp) => {
+    assert.throws(() => {
+      banco.exec(sql);
+    }, erro);
+  };
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('fantasma', 't', 1, 'x')", /FOREIGN KEY/);
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('p', 't', 0, 'x')", /CHECK constraint failed/);
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('p', 't', 21, 'x')", /CHECK constraint failed/);
+  falha("INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('p', '', 1, 'x')", /CHECK constraint failed/);
+  banco.exec("INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'p', 't', 20, 'x')");
+  falha("INSERT INTO tarefa_usuario VALUES (2, 1)", /FOREIGN KEY/);
+  falha("INSERT INTO tarefa_usuario VALUES (1, 2)", /FOREIGN KEY/);
+  banco.exec("INSERT INTO tarefa_usuario VALUES (1, 1)");
+  falha("INSERT INTO tarefa_usuario VALUES (1, 1)", /UNIQUE constraint failed/);
+  banco.close();
+});
+
+test("a tabela da execução simulada: status válido, falhou exige erro, concluída exige relatório JSON, tarefa e usuário existentes", () => {
+  const banco = abrir(raizTemp());
+  banco.exec(
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+     INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd');
+     INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'p', 't', 1, 'x')`,
+  );
+  const falha = (sql: string, erro: RegExp) => {
+    assert.throws(() => {
+      banco.exec(sql);
+    }, erro);
+  };
+  const inserir = (valores: string) =>
+    `INSERT INTO execucao_simulada (tarefa, usuario, status, relatorio, erro) VALUES ${valores}`;
+  falha(inserir("(2, 1, 'na_fila', NULL, NULL)"), /FOREIGN KEY/);
+  falha(inserir("(1, 2, 'na_fila', NULL, NULL)"), /FOREIGN KEY/);
+  falha(inserir("(1, 1, 'pronta', NULL, NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'falhou', NULL, NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'na_fila', NULL, 'x')"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'concluida', NULL, NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'em_andamento', '{}', NULL)"), /CHECK constraint failed/);
+  falha(inserir("(1, 1, 'concluida', 'não é json', NULL)"), /CHECK constraint failed/);
+  banco.exec(inserir("(1, 1, 'na_fila', NULL, NULL), (1, 1, 'falhou', NULL, 'x'), (1, 1, 'concluida', '{}', NULL)"));
+  assert.equal(valor(banco, "SELECT count(*) FROM execucao_simulada"), 3);
+  banco.close();
+});
+
 test("abrir() propaga a falha de migração sem deixar a versão avançar", () => {
   const raiz = raizTemp();
   abrir(raiz).close();
@@ -136,10 +224,10 @@ test("migrar() recusa banco mais novo que o código, sem alterá-lo", () => {
   banco.close();
 });
 
-/** Banco na versão anterior à migração do cancelamento (C22, penúltima), com um ticket de cada tipo de filho que aponta para `ticket`. */
+/** Banco na versão anterior à migração do cancelamento (C22), com um ticket de cada tipo de filho que aponta para `ticket`. */
 function bancoAntesDoCancelamento(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES.slice(0, -2));
+  migrar(banco, MIGRACOES.slice(0, -6));
   banco.exec(`
     INSERT INTO projeto VALUES ('loja', '/r', 'main', 'github', '[]', '["t"]', 'k', '[{}]', '{}');
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'desenho', 'x');
@@ -210,7 +298,7 @@ test("migrar() desfaz a migração e religa as FKs quando ela deixa referência 
     },
     (erro) => erro instanceof ErroDeRegra && erro.message.includes("deixou 1 referência(s) órfã(s)"),
   );
-  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 2);
+  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 6);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ticket_novo'"), 0);
   assert.equal(valor(banco, "SELECT count(*) FROM pragma_table_info('issue') WHERE name = 'cancelada_em'"), 0);

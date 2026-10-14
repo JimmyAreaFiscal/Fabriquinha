@@ -7,11 +7,15 @@
 // - "[longo]": uma resposta que passa da altura da janela e, depois, um texto em fluxo de vários segundos, sem
 //   terminar, para a conversa rolar enquanto o agente escreve;
 // - "eco: <texto>": responde exatamente <texto>;
+// - "# Auditoria" (o prompt da auditoria do Histórico, F4): chama `subagent` com três tarefas `scout`, recebe o
+//   resultado e responde com as quatro seções; uma pergunta depois cai na resposta padrão;
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
 //   pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz "registre", e não conta;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
 // - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
+// Em `--mode json` (a Simulação, I-10) não fala o protocolo: espera o EOF do stdin, como o pi real, grava o `relatorio.json` em
+// $FABRIQUINHA_SAIDA, como a ferramenta `relatar` da extensão navegador, e sai.
 // A resposta a um diálogo é ecoada numa mensagem e assenta; `abort` para a mensagem em fluxo como abortada.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -30,6 +34,14 @@ if (argumentos.includes("--list-models")) {
   console.log("provider   model              context  max-out  thinking  images");
   console.log("anthropic  claude-opus-5-5    200K     64K      yes       yes");
   console.log("anthropic  claude-sonnet-5-5  200K     64K      yes       yes");
+  process.exit(0);
+}
+
+if (arg("--mode") === "json") {
+  await new Promise((pronto) => process.stdin.resume().on("end", pronto));
+  await dormir(300);
+  const relatorio = { usabilidade: ["O botão Enviar tem pouco contraste e fica no fim da página"], bugs: [] };
+  writeFileSync(join(String(process.env.FABRIQUINHA_SAIDA), "relatorio.json"), JSON.stringify(relatorio));
   process.exit(0);
 }
 
@@ -171,6 +183,30 @@ function registrar(): void {
   cli("evidencia", "add", "criterios_aceite", "--dados", join(saida, "criterios.json"));
 }
 
+/** Como o agente da auditoria: três tarefas `scout` em paralelo, o resultado e as seções da resposta. */
+function auditar(): void {
+  const tasks = ["Oportunidades de melhoria", "Custos", "Qualidade"].map((analise) => ({
+    agent: "scout",
+    task: `${analise}: leia o indice.md e as sessões`,
+  }));
+  mensagem(doAgente([{ type: "toolCall", id: "a1", name: "subagent", arguments: { tasks } }], "toolUse"));
+  mensagem({
+    role: "toolResult",
+    toolCallId: "a1",
+    toolName: "subagent",
+    content: [{ type: "text", text: "3 subagentes (scout) concluídos: melhorias, custos, qualidade." }],
+    isError: false,
+  });
+  responder(
+    [
+      "## Oportunidades de melhoria\n\nO prompt do desenvolvimento repete o desenho inteiro.",
+      "## Custos\n\nO desenvolvimento levou a maior parte do gasto.",
+      "## Qualidade\n\nHouve retrabalho e correções do Auditor no mês.",
+      "## Melhorias propostas\n\n1. Resumo por ticket no prompt do desenvolvimento.",
+    ].join("\n\n"),
+  );
+}
+
 const DIALOGOS: Record<string, object> = {
   select: { title: "Qual ordem os cupons devem ter?", options: ["Maior desconto primeiro", "Validade mais próxima"] },
   confirm: { title: "Posso apagar o cache?", message: "Os relatórios vão ficar lentos por uma hora." },
@@ -187,6 +223,11 @@ async function aoPrompt(texto: string): Promise<void> {
   emitir({ type: "agent_start" });
   mensagem({ role: "user", content: texto });
   const pergunta = /pergunte (select|confirm|input|editor)/.exec(texto)?.[1];
+  if (texto.startsWith("# Auditoria")) {
+    auditar();
+    emitir({ type: "agent_settled" });
+    return;
+  }
   if (texto.includes("[ao vivo]")) {
     await aoVivo();
     return;

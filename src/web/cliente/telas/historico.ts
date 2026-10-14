@@ -13,6 +13,7 @@ import {
   escapar,
   etapa,
   hora,
+  mesPorExtenso,
   MODO_DA_SESSAO,
   plural,
   rotuloDoModelo,
@@ -39,14 +40,27 @@ const RESULTADOS: Record<Resultado, [rotulo: string, pilula: string]> = {
 
 const selecionado = (valor: string, atual: string): string => (valor === atual ? " selected" : "");
 
-/** O cabeçalho e os filtros (F7 §4.4, item 1), com a lista vazia até as sessões chegarem. */
-export function paginaDoHistorico(projetos: readonly string[], f: Filtros): string {
+/** Os 12 últimos meses `AAAA-MM` até o de `agora`, no fuso do navegador, o corrente primeiro. */
+export const mesesParaAuditar = (agora: Date): string[] =>
+  Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+    return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+/**
+ * O cabeçalho e os filtros (F7 §4.4, item 1), com a lista vazia até as sessões chegarem. Depois da contagem, o grupo
+ * **Auditar**: o mês (o corrente escolhido) não é filtro e não tem `data-f`.
+ */
+export function paginaDoHistorico(projetos: readonly string[], f: Filtros, agora = new Date()): string {
   const opcoesDeProjeto = projetos
     .map((p) => `<option value="${escapar(p)}"${selecionado(p, f.projeto)}>${escapar(p)}</option>`)
     .join("");
   const opcoesDeEtapa = ETAPAS.map((e) => `<option value="${e}"${selecionado(e, f.etapa)}>${etapa(e)}</option>`).join(
     "",
   );
+  const opcoesDeMes = mesesParaAuditar(agora)
+    .map((m, i) => `<option value="${m}"${i === 0 ? " selected" : ""}>${mesPorExtenso(m)}</option>`)
+    .join("");
   return (
     `<div class="pagina-historico">` +
     `<div class="cabeca-pagina"><h1>Histórico</h1><span class="muted">sessões terminadas, da mais recente para a mais antiga</span></div>` +
@@ -54,7 +68,9 @@ export function paginaDoHistorico(projetos: readonly string[], f: Filtros): stri
     `<label>Projeto <select data-f="projeto"><option value="">todos</option>${opcoesDeProjeto}</select></label>` +
     `<label>Issue <input data-f="issue" value="${escapar(f.issue)}" placeholder="I-29" spellcheck="false" autocomplete="off"></label>` +
     `<label>Etapa <select data-f="etapa"><option value="">todas</option>${opcoesDeEtapa}</select></label>` +
-    `<span class="contagem" data-contagem></span></div>` +
+    `<span class="contagem" data-contagem></span>` +
+    `<span class="auditar"><label>Mês <select data-mes>${opcoesDeMes}</select></label>` +
+    `<button type="button" class="btn btn-primario" data-auditar>Auditar</button></span></div>` +
     `<div data-lista></div></div>`
   );
 }

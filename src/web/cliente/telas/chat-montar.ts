@@ -44,7 +44,7 @@ const ESQUELETO =
 
 type Evento = Record<string, unknown> & { type?: string };
 
-const postar = (caminho: string, corpo: unknown = {}) =>
+export const postar = (caminho: string, corpo: unknown = {}) =>
   api<undefined>(caminho, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
