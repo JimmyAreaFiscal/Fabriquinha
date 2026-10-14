@@ -9,6 +9,9 @@ import type { Id } from "../dominio/primitivos.ts";
 /** `<raiz>/execucoes/E-<n>`: `log`, `prompt.md` e `saida/` da execução. */
 export const dirDaExecucao = (raiz: string, execucao: Id): string => join(raiz, "execucoes", `E-${String(execucao)}`);
 
+/** `<raiz>/simulacoes/<n>`: anexos, sessão, log e `saida/` da execução simulada `n` (F8 §4). */
+export const dirDaExecucaoSimulada = (raiz: string, execucao: Id): string => join(raiz, "simulacoes", String(execucao));
+
 /** Uma linha com horário no log da execução (`<dirDaExecucao>/log`). */
 export const anotar = (log: string, texto: string): void => {
   appendFileSync(log, `${new Date().toISOString()} ${texto}\n`);

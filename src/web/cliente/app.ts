@@ -12,6 +12,7 @@ import { montarInicio } from "./telas/inicio-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
 import { montarMetricas } from "./telas/metricas-montar.ts";
 import { montarProjeto } from "./telas/projeto-montar.ts";
+import { montarSimulacao } from "./telas/simulacao-montar.ts";
 
 /**
  * Desenha a página em `<main>`. Cada tela troca a sua entrada aqui; a função pura de render fica num módulo à parte.
@@ -30,6 +31,7 @@ const MONTAR: Record<Pagina, Montar> = {
   chat: montarChat,
   auditoria: montarAuditoria,
   configuracao: montarConfiguracao,
+  simulacao: montarSimulacao,
 };
 
 const cabeca = elemento("[data-navegacao]", HTMLElement);

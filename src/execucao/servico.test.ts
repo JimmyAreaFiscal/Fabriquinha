@@ -23,6 +23,7 @@ import {
   ticketsElegiveis,
   ticketsAutonomosEmExecucao,
 } from "../persistencia/servico.ts";
+import { criarUsuarioSimulado } from "../persistencia/simulacao.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-servico-"));
@@ -282,6 +283,39 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
     ],
   );
   assert.match(readFileSync(join(raiz, "execucoes", "E-1", "log"), "utf8"), /coleta de uso falhou: .* tem 2 arquivos/);
+  await s.parar();
+});
+
+test("reinício: as execuções simuladas pendentes falham e o pi delas é morto; as terminadas ficam", async () => {
+  const raiz = novaRaiz();
+  const banco = abrir(raiz);
+  projeto(banco, "sim", "/nao/existe");
+  criarUsuarioSimulado(banco, "sim", { nome: "Dona Maria", descricao: "d" });
+  banco.exec(`INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'sim', 't', 1, 'x');
+    INSERT INTO tarefa_usuario VALUES (1, 1)`);
+  const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
+  const saiu = once(pi, "exit");
+  banco
+    .prepare(
+      `INSERT INTO execucao_simulada (id, tarefa, usuario, status, relatorio, pgid) VALUES
+         (1, 1, 1, 'em_andamento', NULL, ?), (2, 1, 1, 'na_fila', NULL, NULL), (3, 1, 1, 'concluida', '{}', NULL)`,
+    )
+    .run(pi.pid ?? null);
+  banco.close();
+
+  const s = await subir(raiz);
+  assert.deepEqual(await saiu, [null, "SIGKILL"]);
+  assert.deepEqual(
+    s.banco
+      .prepare("SELECT id, status, erro, pgid FROM execucao_simulada ORDER BY id")
+      .all()
+      .map((l) => ({ ...l })),
+    [
+      { id: 1, status: "falhou", erro: "serviço reiniciado", pgid: null },
+      { id: 2, status: "falhou", erro: "serviço reiniciado", pgid: null },
+      { id: 3, status: "concluida", erro: null, pgid: null },
+    ],
+  );
   await s.parar();
 });
 

@@ -12,6 +12,7 @@ import {
   type ProjetoListado,
   projetoInexistente,
   selecao,
+  usuariosSimulados,
 } from "./configuracao.ts";
 
 // A hora da próxima busca sai no fuso do navegador; aqui, um fuso fixo.
@@ -145,6 +146,90 @@ test("projeto salvo: nome só leitura, hospedagem, as listas, as fitness e o mod
   );
   assert.match(html, /<button type="submit" class="btn btn-primario">Salvar projeto<\/button>/);
   assert.match(formularioDeProjeto(LOJA, { issues: 11, modelos: MODELOS, erros: new Map() }), /11 issues/);
+});
+
+test("link do produto: no grupo Repositório depois do SonarQube, com a ajuda, o valor e o erro do campo", () => {
+  const html = formularioDeProjeto(
+    { ...LOJA, linkProduto: "https://demo.exemplo.com" },
+    { issues: 1, modelos: MODELOS, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at linkProduto") },
+  );
+  assert.match(
+    html,
+    /id="campo-sonar.projectKey".*<div class="campo largo erro"><label for="campo-linkProduto">Link do produto<\/label><input class="mono" id="campo-linkProduto" name="linkProduto" value="https:\/\/demo.exemplo.com" placeholder="https:\/\/produto.exemplo.com" aria-invalid="true" aria-describedby="campo-linkProduto-erro"><span class="msg-erro" id="campo-linkProduto-erro">Informe um link http\(s\) válido<\/span><span class="ajuda">opcional; endereço http\(s\) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa<\/span>/,
+  );
+  assert.match(formularioDeProjeto(NOVO, { modelos: [], erros: new Map() }), /name="linkProduto" value=""/);
+});
+
+test("o bloco dos usuários simulados só existe no projeto salvo, depois do formulário", () => {
+  assert.match(
+    formularioDeProjeto(LOJA, { issues: 1, modelos: MODELOS, erros: new Map() }),
+    /<\/form><section class="usuarios-simulados" data-usuarios-simulados [^>]*><\/section>$/,
+  );
+  assert.doesNotMatch(formularioDeProjeto(NOVO, { modelos: MODELOS, erros: new Map() }), /data-usuarios-simulados/);
+});
+
+const VAZIO = { rascunho: { nome: "", descricao: "" }, erros: new Map(), falhasDeAnexo: new Map<number, string>() };
+const MARIA = {
+  id: 7,
+  projeto: "loja",
+  nome: "Dona <Maria>",
+  descricao: "Contadora de 60 anos",
+  anexos: [
+    { nome: "manual.pdf", sha256: "a".repeat(64), bytes: 248731 },
+    { nome: "nota.txt", sha256: "b".repeat(64), bytes: 1 },
+  ],
+};
+
+test("usuários simulados: o cartão tem nome, descrição, anexos com o tamanho e o ×, e o + anexar arquivo (CA-3, CA-5)", () => {
+  const html = usuariosSimulados([MARIA], VAZIO);
+  assert.match(html, /<article class="cartao-usuario" data-usuario="7"><h4>Dona &#60;Maria&#62;<\/h4>/);
+  assert.match(html, /<p class="descricao-usuario">Contadora de 60 anos<\/p>/);
+  assert.match(
+    html,
+    /<li class="anexo-usuario">manual.pdf <span class="muted">248.731 bytes<\/span><button type="button" class="x" data-remover-anexo="manual.pdf" [^>]*aria-label="Remover o anexo manual.pdf">×<\/button><\/li>/,
+  );
+  assert.match(html, /<li class="anexo-usuario">nota.txt <span class="muted">1 byte<\/span>/);
+  assert.match(
+    html,
+    /<button type="button" class="link" data-anexar-botao>\+ anexar arquivo<\/button><input type="file" accept="\.pdf,[^"]*\.gif" data-anexar hidden/,
+  );
+  assert.doesNotMatch(usuariosSimulados([{ ...MARIA, anexos: [] }], VAZIO), /class="anexos-usuario"/);
+});
+
+test("usuários simulados: sem usuário, a nota; o formulário tem Nome e Descrição com o rascunho", () => {
+  const html = usuariosSimulados([], { ...VAZIO, rascunho: { nome: 'Seu "João"', descricao: "Gerente" } });
+  assert.match(html, /Nenhum usuário simulado neste projeto ainda\./);
+  assert.doesNotMatch(html, /cartao-usuario/);
+  assert.match(html, /<form class="form novo-usuario" data-usuario-simulado novalidate>/);
+  assert.match(
+    html,
+    /<label for="campo-usuario-nome">Nome do usuário<\/label><input id="campo-usuario-nome" name="nome" value="Seu &#34;João&#34;"/,
+  );
+  assert.match(
+    html,
+    /<label for="campo-usuario-descricao">Descrição do usuário<\/label><textarea id="campo-usuario-descricao" name="descricao"[^>]*>Gerente<\/textarea>/,
+  );
+  assert.match(html, /<button type="submit" class="btn btn-primario">Criar usuário simulado<\/button>/);
+});
+
+test("usuários simulados: o erro de cada campo fica abaixo dele, a recusa do servidor abaixo do formulário e a do anexo no cartão (CA-4)", () => {
+  const erros = errosDoZod("✖ Descrição obrigatória\n  → at descricao");
+  const html = usuariosSimulados([MARIA], {
+    ...VAZIO,
+    erros,
+    falha: "já existe o Usuário Simulado Seu João",
+    falhasDeAnexo: new Map([[7, "formato não suportado: envie PDF, texto ou imagem"]]),
+  });
+  assert.match(
+    html,
+    /<textarea id="campo-usuario-descricao"[^>]*aria-invalid="true" aria-describedby="campo-usuario-descricao-erro"><\/textarea><span class="msg-erro" id="campo-usuario-descricao-erro">Descrição obrigatória<\/span>/,
+  );
+  assert.doesNotMatch(html, /campo-usuario-nome-erro/);
+  assert.match(html, /<span class="msg-erro falha" role="alert">já existe o Usuário Simulado Seu João<\/span>/);
+  assert.match(
+    html,
+    /<span class="msg-erro" role="alert">formato não suportado: envie PDF, texto ou imagem<\/span><\/article>/,
+  );
 });
 
 test("o botão Remover só existe no projeto salvo", () => {

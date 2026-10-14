@@ -336,6 +336,8 @@ Na subida, antes de abrir o web e o agendador, para cada execução `em_andament
    Interativa: o ticket continua `em_execucao`, e a próxima mensagem retoma a sessão (6.6).
    Consulta: só o C6.
 
+As execuções simuladas pendentes (F8 5.5) seguem a mesma lógica: `SIGKILL` no grupo do `pgid` e `falhou` com "serviço reiniciado".
+
 ponytail: a instância única garantida pela porta torna desnecessário conferir PID e instante de início de processo.
 
 ## 8. Fluxo completo de uma issue no web

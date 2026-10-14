@@ -2,11 +2,11 @@
 // para o agente corrigir sem adivinhar. Ex.: "T-34 não pode concluir: falta a evidência X (submeta com …)".
 const frase = (problema: string, solucao: string): string => `${problema} (${solucao})`;
 
-/** Pré-condição, schema ou invariante violada. */
+/** Pré-condição, schema ou invariante violada. Sem `solucao`, a mensagem é só o `problema` (um texto que a tela mostra como está). */
 export class ErroDeRegra extends Error {
   override name = "ErroDeRegra";
-  constructor(problema: string, solucao: string) {
-    super(frase(problema, solucao));
+  constructor(problema: string, solucao?: string) {
+    super(solucao === undefined ? problema : frase(problema, solucao));
   }
 }
 

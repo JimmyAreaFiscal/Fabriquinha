@@ -22,6 +22,7 @@ import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
 import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
 import { ROTAS_DO_PR } from "./rotas/pr.ts";
 import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
+import { ROTAS_DA_SIMULACAO } from "./rotas/simulacao.ts";
 
 /** A tabela das rotas da API (F7 §4.2), uma lista por tela. */
 export const ROTAS: Rota[] = [
@@ -35,11 +36,13 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DO_INICIO,
   ...ROTAS_DO_PROJETO,
   ...ROTAS_DAS_METRICAS,
+  ...ROTAS_DA_SIMULACAO,
 ];
 
 const CLIENTE = join(import.meta.dirname, "cliente");
 const COOKIE = "fabriquinha";
-const LIMITE_DO_CORPO = 64 * 1024;
+const LIMITE_DO_JSON = { bytes: 64 * 1024, texto: "64 KiB" };
+const LIMITE_DO_ANEXO = { bytes: 20 * 1024 * 1024, texto: "20 MiB" };
 
 /** Os tipos servidos em `/static/*`. O cliente é TypeScript: o navegador recebe o JavaScript sem os tipos. */
 const TIPOS: Record<string, string> = {
@@ -69,18 +72,23 @@ const json = (resposta: ServerResponse, status: number, valor: unknown): void =>
 };
 
 /**
- * O JSON do corpo, até 64 KiB; vazio é `undefined`. Corpo grande demais ou JSON inválido é corpo inválido (422).
+ * O corpo da mutação. `application/octet-stream` é o anexo (F8 §2): os bytes, num `Buffer`, até 20 MiB. Qualquer outro
+ * é JSON, até 64 KiB; vazio é `undefined`. Corpo grande demais ou JSON inválido é corpo inválido (422).
  * ponytail: o corpo grande demais é lido até o fim e descartado, para a resposta chegar ao cliente.
  */
 async function lerCorpo(pedido: IncomingMessage): Promise<unknown> {
+  const binario = pedido.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() === "application/octet-stream";
+  const limite = binario ? LIMITE_DO_ANEXO : LIMITE_DO_JSON;
   const partes: Buffer[] = [];
   let tamanho = 0;
   for await (const parte of pedido as AsyncIterable<Buffer>) {
     tamanho += parte.length;
-    if (tamanho <= LIMITE_DO_CORPO) partes.push(parte);
+    if (tamanho <= limite.bytes) partes.push(parte);
   }
-  if (tamanho > LIMITE_DO_CORPO) throw new ErroHttp(422, "o corpo passa de 64 KiB");
-  const texto = Buffer.concat(partes).toString("utf8");
+  if (tamanho > limite.bytes) throw new ErroHttp(422, `o corpo passa de ${limite.texto}`);
+  const todo = Buffer.concat(partes);
+  if (binario) return todo;
+  const texto = todo.toString("utf8");
   if (texto === "") return undefined;
   try {
     return JSON.parse(texto);
