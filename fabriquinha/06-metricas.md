@@ -299,6 +299,7 @@ const MetricasIssue = z.object({
   retrabalho: z.array(z.object({                                                     // M4
     ticket: Id, linhasAdicionadas: Inteiro, linhasAlteradasDepois: Inteiro, linhasAlteradasPorHumanos: Inteiro,
   })),
+  arquivosAlterados: Inteiro.nullable(),                                              // arquivos distintos dos commits da issue; null sem commit
   exigenciasRevisao: Inteiro,                                                         // M5
   bugsEmArquivosRevisados: Inteiro,                                                   // M6; 0 antes do merge
   notasPR: z.array(z.number().int().min(1).max(5)),                                   // M7
@@ -316,11 +317,12 @@ Autocontido, como todo HTML de evidência (F3, 3.3).
 Seções, nesta ordem:
 
 1. Resumo: custo total, tokens totais, duração, execuções e falhas.
-2. Por etapa: execuções, falhas, duração, reprovações, tokens e custo, com as consultas numa linha à parte.
-3. Por modelo: etapa × modelo, com chamadas, tokens por tipo e custo.
-4. Métricas do diagrama: M2 a M7, cada uma com o valor e a definição em uma linha.
-5. Decisões: gate, resultado, motivo e nota, em ordem.
-6. Avisos: execuções sem sessão.
+2. Arquivos alterados: "Arquivos alterados: N", com o selo "acima do limite de 30" quando N > 30, ou "indisponível" quando a issue não tem commit. Só lê; nada barra a issue.
+3. Por etapa: execuções, falhas, duração, reprovações, tokens e custo, com as consultas numa linha à parte.
+4. Por modelo: etapa × modelo, com chamadas, tokens por tipo e custo.
+5. Métricas do diagrama: M2 a M7, cada uma com o valor e a definição em uma linha.
+6. Decisões: gate, resultado, motivo e nota, em ordem.
+7. Avisos: execuções sem sessão.
 
 ponytail: só tabelas, sem gráfico; gráfico entra quando houver visão entre issues.
 

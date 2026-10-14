@@ -10,6 +10,7 @@ import {
   type Execucao,
   FABRIQUINHA,
   type ModoExecucao,
+  type PropostaIssue,
   type Ticket,
 } from "../dominio/agregado.ts";
 import { concluirTicket } from "../dominio/conclusao.ts";
@@ -24,6 +25,7 @@ import {
   ticketDe,
 } from "../dominio/execucao.ts";
 import { decidirPR, decidirRegistro } from "../dominio/gates.ts";
+import { exigirPropostaAberta } from "../dominio/propostas.ts";
 import { type Etapa, type Fase, type Id, type Instante, type Modelo, motivo } from "../dominio/primitivos.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
@@ -33,7 +35,9 @@ import { anotar, arquivoDaSessao, issueDaSessao, issuesComSessao, logDaExecucao 
 import {
   agregadoExistente,
   comIssue,
+  decidirProposta as gravarDecisaoDaProposta,
   issueDoTicket,
+  propostaExistente,
   registrarIssue,
   ultimaEdicaoDoAgente,
 } from "../persistencia/issues.ts";
@@ -442,14 +446,32 @@ export function registrarNecessidade(
   descricao: string,
   opcoes: OpcoesInterativa,
 ): string {
-  const ag = registrarIssue(banco, { projeto, deps, descricao }, AUDITOR);
+  return abrirRegistro(banco, registrarIssue(banco, { projeto, deps, descricao }, AUDITOR), opcoes);
+}
+
+/** A sessão interativa do registro da issue que o C1 acabou de criar, com a mensagem inicial. Devolve a sessão. */
+function abrirRegistro(banco: DatabaseSync, ag: Agregado, opcoes: OpcoesInterativa): string {
   const [ticket] = ag.tickets;
   const i = `I-${String(ag.issue.id)}`;
   return iniciarInterativa(
     banco,
     existe(ticket, `a ${i} nasceu sem ticket de registro`, "confira o C1").id,
-    `Vamos registrar uma necessidade no projeto ${projeto} (issue ${i}).`,
+    `Vamos registrar uma necessidade no projeto ${ag.issue.projeto} (issue ${i}).`,
     opcoes,
+  );
+}
+
+/** O que a Fabriquinha diz à IA da issue `issue` quando o Auditor decide a proposta dela. */
+export function avisoDaProposta(proposta: PropostaIssue, issue: Id): string {
+  const m = `I-${String(issue)}`;
+  if (proposta.status === "recusada") {
+    return `O Auditor recusou a sua proposta de issue «${proposta.titulo}»; mantenha o escopo atual da ${m}.`;
+  }
+  const n = `I-${String(proposta.issueCriada)}`;
+  return (
+    `A Fabriquinha criou a ${n} («${proposta.titulo}») a partir da sua proposta, que o Auditor aceitou; ela depende da ${m}. ` +
+    `Reduza o escopo da ${m}: tire da descrição e das evidências o que a ${n} assumiu (leia a descrição dela com ` +
+    `fabriquinha issue ver ${n}) e submeta de novo o que mudar.`
   );
 }
 
@@ -708,4 +730,29 @@ export async function pedirMudancas(
     `O Auditor pediu mudanças no PR ${pr.url}. Motivo: ${motivoPedido}`,
     opcoes,
   );
+}
+
+/**
+ * C24 pelo Auditor. No registro, para o pi ocioso, grava a decisão e retoma a sessão com o aviso à IA; no desenho, que é
+ * autônomo, o aceite devolve o desenho como reprovado e só avisa a sessão. O aceite abre o registro da issue nova.
+ * Recusa antes de gravar se a proposta já foi decidida ou se o agente ainda trabalha. Devolve a issue criada, se houve.
+ */
+export async function decidirProposta(
+  banco: DatabaseSync,
+  id: Id,
+  aceita: boolean,
+  opcoes: OpcoesInterativa,
+): Promise<{ issue?: Id }> {
+  const proposta = propostaExistente(banco, id);
+  const issue = issueDoTicket(banco, proposta.ticket);
+  const antes = await agregadoAssentado(banco, issue);
+  exigirPropostaAberta(antes, proposta);
+  const noRegistro = antes.issue.fase === "registro";
+  if (noRegistro) await pararOciosa(antes, proposta.ticket);
+  const { ag, proposta: decidida, nova } = gravarDecisaoDaProposta(banco, id, { aceita }, AUDITOR);
+  if (noRegistro) iniciarInterativa(banco, proposta.ticket, avisoDaProposta(decidida, issue), opcoes);
+  else avisar(...principalDe(banco, ag, proposta.ticket));
+  if (!nova) return {};
+  abrirRegistro(banco, nova, opcoes);
+  return { issue: nova.issue.id };
 }

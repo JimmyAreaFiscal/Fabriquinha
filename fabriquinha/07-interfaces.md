@@ -34,6 +34,7 @@ Um agente que apague a variável de ambiente não ganha poder de Auditor no CLI:
 | variável ausente | Só `servidor`, `abrir` e `--help`. Qualquer outro comando sai com `ErroDeEscopo`: "este comando é do agente; o Auditor usa o web". |
 
 O F1 confere o escopo de cada comando (próprio ticket, própria issue); o CLI só repassa o ator.
+As leituras (`issue ver`, `ticket ver`, `evidencia ver`) alcançam a issue do ticket, as issues de que ela depende e as que dependem dela (as `dependentes` da F2), para o desenho refeito ler a issue nova; fora disso, `ErroDeEscopo`.
 
 ### 3.2 Comandos
 
@@ -44,6 +45,7 @@ O F1 confere o escopo de cada comando (próprio ticket, própria issue); o CLI s
 | `projeto ver` | leitura | todas |
 | `issue ver I-n` | leitura | todas |
 | `issue editar I-n [--titulo <t>] [--tipo <funcionalidade\|problema>] [--descricao <arquivo>]` | C2 | registro |
+| `issue propor I-n --titulo <t> --arquivos <n> --descricao <arquivo>` | C23 (`--arquivos` inteiro ≥ 0, sem comparação com 30; a regra dos 30 arquivos mora nas skills) | registro, desenho |
 | `issue cancelar I-n` | C22 (o agente recebe `ErroDeEscopo`, saída 1; só o Auditor cancela, no web) | desenho, desenvolvimento, revisao, encerramento, registro, sessao |
 | `issue dep add I-n I-m` / `issue dep rm I-n I-m` | C3, C4 | registro |
 | `ticket ver T-n` | leitura | todas |
@@ -116,9 +118,9 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `GET /api/projetos/:nome/issues?concluidas=&arquivadas=&canceladas=` | Issues do projeto com os seus tickets e as sessões ativas, para a página do projeto (4.4). |
 | `GET /api/metricas?projeto=&de=&ate=` | `MetricasMes[]` (F6, 5.7), um por mês de `de` a `ate`, no formato `AAAA-MM`; padrão: os 11 meses anteriores mais o mês corrente; no máximo 24 meses; sem `projeto`, todos. |
 | `GET /api/metricas/issues?projeto=&de=&ate=` | `metricasPorIssue` (F6, 5.8): uma linha por issue com execução no período. |
-| `GET /api/issues/:id` | Agregado da issue, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). |
+| `GET /api/issues/:id` | Agregado da issue, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). No gate do desenho traz também `propostas`, as propostas de issue abertas. |
 | `GET /api/sessoes?escopo=ativas\|historico&projeto=&issue=&etapa=` | Sessões com estado e motivo (F4, 5.2). |
-| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). |
+| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). No registro interativo traz `propostas`, as propostas de issue abertas do ticket; a mensagem de aviso da Fabriquinha sobre uma proposta decidida vem marcada `aviso`. |
 | `GET /api/sessoes/:sessao/eventos` | Server-Sent Events com os eventos do processo vivo e as mudanças de estado (F4, 5.4). |
 | `GET /api/sessoes/:sessao/historico.md` | Exportação do histórico em Markdown, como download (F4, 6.8). |
 | `GET /api/execucoes/:id/log` e `/prompt` | O `log` e o `prompt.md` da execução (F4, 6.1.2), como texto. |
@@ -156,6 +158,7 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
 | `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
 | `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | C10. Devolver também envia o motivo ao agente como mensagem (F4, 6.6). |
+| `POST /api/propostas/:id` `{ aceita }` | `decidirProposta` (F4, 6.6): C24 pelo Auditor. Devolve `{ issue? }`, a issue criada no aceite. 409 se a proposta já foi decidida ou o agente ainda trabalha, 404 se não existe, 422 se `aceita` não é booleano. No registro retoma a IA com o aviso da Fabriquinha; no desenho reprova o desenho (C15). |
 | `GET /api/projetos/:nome/heatmap` | Heatmap de alterações da base nos últimos 12 meses (`heatmapDo`, F5 §11): `{ branch, desde, ate, raiz, commits }`, com a árvore inteira de pastas e arquivos. Projeto inexistente dá 404; pasta do repositório ou branch base ausente dá 409 com motivo e correção. |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
@@ -305,7 +308,7 @@ A página da issue não se atualiza sozinha, para não apagar o que o Auditor es
 | Gate | Mostra | Ações |
 |---|---|---|
 | Registro (`registro`) | Título, tipo, descrição, `comportamento` e a tabela de `criterios_aceite`, e as evidências que faltam. | **Aprovar registro** (C10); **Devolver**, habilitado só com o motivo. |
-| Desenho (`aprovacao_desenho`) | 4 cards: arquivos previstos, tickets propostos, acoplamentos novos e impacto na arquitetura (F6, 5.5). Tabela de critérios de aceite. Tabela de tickets de desenvolvimento propostos, cada um com seletor de modelo (padrão da etapa ou override, C20), **Editar** e **Remover**, e **+ Novo ticket** (C11 a C13). As quatro evidências do desenho ficam nos artefatos. | **Aprovar desenho** (C15); **Reprovar**, habilitado só com o motivo. |
+| Desenho (`aprovacao_desenho`) | 4 cards: arquivos previstos, tickets propostos, acoplamentos novos e impacto na arquitetura (F6, 5.5). Tabela de critérios de aceite. Tabela de tickets de desenvolvimento propostos, cada um com seletor de modelo (padrão da etapa ou override, C20), **Editar** e **Remover**, e **+ Novo ticket** (C11 a C13). As quatro evidências do desenho ficam nos artefatos. Antes da decisão, um **cartão de proposta de issue** por proposta aberta da IA (C23): rótulo "Proposta de issue", `T-n` do ticket que a fez, "~n arquivos estimados · limite de 30 por PR" (em destaque acima de 30), título, mensagem em Markdown sem HTML e a frase do efeito. | **Aceitar** e **Recusar** a proposta (C24, `POST /api/propostas/:id`); **Aprovar desenho** (C15); **Reprovar**, habilitado só com o motivo. |
 | PR (`aprovacao_pr`) | Link do PR com o estado na hospedagem, vídeo explicativo, 4 cards de produtividade (custo, tokens, execuções e falhas, reprovações), corpo completo do PR (anexo de `pr_aberto`) em Markdown, tabela de comprovação dos critérios e tabela de fitness functions com explicações. | Nenhuma decisão no web: a revisão, o merge e o pedido de mudanças são feitos no próprio PR, com o botão **Abrir PR**. Como a Fabriquinha fica sabendo da decisão está pendente (4.6). |
 
 **Métricas** (`/metrics`) — mês em foco contra a média
@@ -337,10 +340,12 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 2. Conversa, à esquerda, desenhada em React com o assistant-ui (`chat-conversa.tsx`; o servidor empacota só os `.tsx` com esbuild, no primeiro pedido, e o resto do cliente segue TypeScript sem build). A página tem a altura da janela: só a lista de mensagens e a coluna da direita rolam, e a área de envio fica fixa no pé:
    - linhas do sistema (execução iniciada, concluída, diálogo aberto) entre traços;
    - mensagens do agente (balão à esquerda) e do Auditor (balão à direita) em Markdown, sem rótulo de quem fala;
+   - a mensagem de aviso da Fabriquinha sobre uma proposta de issue decidida, marcada `aviso`, com o rótulo "Fabriquinha";
    - raciocínio recolhido;
    - cada chamada de ferramenta como bloco recolhível: nome, argumentos e um resumo do resultado (por exemplo "✗ 3 de 214"), com a saída em fonte monoespaçada cortada com **ver tudo**;
    - eventos ao vivo pelo SSE, com o texto do agente chegando em fluxo e cursor piscando;
    - rolagem automática para o fim, que pausa quando o Auditor sobe para ler.
+   - no registro interativo, entre a conversa e o envio, um **cartão de proposta de issue** por proposta aberta (o mesmo do gate do desenho, abaixo), redesenhado a cada estado;
 3. Área de envio, fixa no pé da página, conforme o estado (F4, 5.4); o campo Mensagem é o compositor do assistant-ui, e o resto (diálogos, retomada, avisos) segue HTML:
    - rodando: **Redirecionar** (`steer`) ou **Enfileirar** (`follow_up`), **Abortar** e **Enviar**;
    - diálogo de extensão: o pedido do agente com o formulário (`select` como lista de opções, `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** e **Responder**;

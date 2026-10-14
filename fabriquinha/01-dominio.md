@@ -218,6 +218,28 @@ O conteúdo (`dados` e arquivos) e o schema de cada tipo ficam no F3.
 `aprovada` existe nos tipos em que o conteúdo tem um resultado binário (testes, SonarQube, matriz de fitness, comprovação de critérios) e é sempre calculada pelo F3; ninguém a declara.
 Há no máximo uma evidência por par (ticket, tipo); submeter de novo substitui.
 
+### 3.8.1 Proposta de issue
+
+A IA do registro ou do desenho que percebe uma mudança maior que 30 arquivos propõe uma issue nova; o Auditor aceita ou recusa.
+A proposta é um fato preso ao ticket que a fez e fica fora do agregado (como o commit do F5): o agregado da issue não a carrega.
+
+```ts
+const PropostaIssue = z.object({
+  id: Id,                                   // P-n
+  ticket: Id,                               // o ticket de registro ou desenho que a fez
+  titulo: Titulo,
+  mensagem: Markdown,                       // não vazia; vira a descrição da issue nova
+  arquivos: z.number().int().nonnegative(), // estimativa da IA
+  status: z.enum(["pendente", "aceita", "recusada"]),
+  issueCriada: Id.optional(),               // só quando aceita
+  em: Instante,
+  decididaEm: Instante.optional(),          // só quando decidida
+});
+```
+
+A regra dos 30 arquivos vive nas skills (orientação à IA).
+Nenhum código a compara com 30 e nenhum gate, comando ou validação barra a issue por passar disso.
+
 ### 3.9 Catálogo de evidências por etapa
 
 O catálogo é regra de negócio e mora aqui; o F3 implementa os schemas e os coletores.
@@ -316,7 +338,7 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 
 | # | Comando | Ator | Pré-condições | Efeito |
 |---|---|---|---|---|
-| C1 | `registrarIssue(projeto, deps, descricao?)` | Auditor | projeto existe; deps existem e não formam ciclo; descrição opcional, até 1.000 palavras | Issue em `registro`, sem título e tipo, com a descrição informada (vazia se omitida); Ticket `registro` aberto. |
+| C1 | `registrarIssue(projeto, deps, descricao?, titulo?)` | Auditor | projeto existe; deps existem e não formam ciclo; descrição opcional, até 1.000 palavras; título opcional (só o C24 o informa) | Issue em `registro`, sem tipo e sem título (salvo o informado), com a descrição informada (vazia se omitida); Ticket `registro` aberto. |
 | C2 | `editarIssue(issue, {titulo, tipo, descricao})` | agente do registro ou Auditor | fase `registro` | Atualiza os campos. |
 | C3 | `adicionarDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida`; dep existe; sem ciclo; não é a própria issue | Adiciona; idempotente. |
 | C4 | `removerDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida` | Remove; idempotente. |
@@ -338,6 +360,8 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 | C21 | `iniciarConsulta(ticket, sessaoPi)` | Auditor | o ticket já tem sessão principal; nenhuma execução do ticket em andamento (índice do F2); `sessaoPi` é a nova sessão copiada dela | Nova Execução em modo `consulta`. O ticket não muda. |
 | C20 | `definirModeloTicket(ticket, modelo \| null)` | Auditor | ticket não concluído e sem execução em andamento | Define ou remove o override; vale a partir da próxima execução. |
 | C22 | `cancelarIssue(issue)` | Auditor | fase ≠ `concluida`; ainda não cancelada | `canceladaEm`; tickets `aberto` e `falhou` viram `fechado` (sem `erro`), o `em_execucao` vira `cancelado`; execução `em_andamento` termina em `falha` com o erro `issue cancelada pelo Auditor`. A F2 aplica o mesmo comando a toda issue que dependa dela, direta ou indiretamente e de qualquer projeto, numa transação só; as issues de que ela depende não mudam. |
+| C23 | `proporIssue(issue, titulo, mensagem, arquivos)` | agente de `registro` ou `desenho` da issue (o Auditor não) | execução do agente `em_andamento` e não consulta | Cria a Proposta `pendente`, presa ao ticket do agente (3.8.1). A issue não muda. |
+| C24 | `decidirProposta(proposta, aceita)` | Auditor | proposta `pendente` (senão `a proposta P-n já foi decidida: …`); o ticket dela está no gate atual: o de registro com a issue em `registro`, ou o último desenho concluído com a issue em `aprovacao_desenho` | Recusada: só marca a proposta. Aceita: aplica o C1 (mesmo projeto, `deps [issue atual]`, `titulo`, `descricao = mensagem`), marca a proposta `aceita` com `issueCriada` e, no desenho, aplica o C15 reprovado com o motivo `A Fabriquinha criou a I-n («título») a partir da proposta de issue aceita pelo Auditor. Refaça o desenho sem o que a I-n assumiu; leia a descrição dela com fabriquinha issue ver I-n.` |
 
 Depois do C22 a F2 recusa qualquer outro comando sobre a issue (`a I-n está cancelada e não muda mais`).
 Tokens, custo, tickets, execuções, decisões e evidências continuam consultáveis e contando nas métricas.

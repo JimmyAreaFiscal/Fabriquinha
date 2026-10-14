@@ -9,7 +9,8 @@ O Auditor lê o desenho para aprová-lo ou reprová-lo antes de qualquer código
 2. Estude o código da worktree que a solução toca.
 3. Se a issue for funcionalidade, prove a solução visível com um protótipo; as alterações de código do protótipo são descartadas ao fim da execução.
 4. Analise a complexidade de tempo e espaço de cada fluxo tocado e o impacto na arquitetura.
-5. Submeta as evidências e crie os tickets de desenvolvimento, um por entrega pequena e verificável, na ordem em que devem ser feitos.
+5. Avalie quantos arquivos a alteração toca; acima de 30 `arquivosPrevistos`, siga a regra da skill `artefato-desenho-solucao`.
+6. Submeta as evidências e crie os tickets de desenvolvimento, um por entrega pequena e verificável, na ordem em que devem ser feitos.
 
 **Entregas:** as evidências `desenho_solucao`, `relatorio_complexidade` e `relatorio_impactos_arquitetura`, mais `prototipo` quando a issue é funcionalidade; e pelo menos um ticket de desenvolvimento.
 
@@ -25,6 +26,7 @@ O comando `fabriquinha` já sabe qual é a sua execução; cada comando imprime 
 - `fabriquinha projeto ver`, `fabriquinha issue ver I-<n>` e `fabriquinha ticket ver T-<n>`: leitura.
 - `fabriquinha ticket criar I-<n> --titulo <título> [--descricao <arquivo>]`: propõe um ticket de desenvolvimento.
 - `fabriquinha ticket editar T-<n> [--titulo <título>] [--descricao <arquivo>]` e `fabriquinha ticket remover T-<n>`: ajustam os tickets que você criou.
+- `fabriquinha issue propor I-<n> --titulo <título> --arquivos <n> --descricao <arquivo>`: propõe ao Auditor uma issue com a parte que sai do desenho; a issue só nasce se ele aceitar.
 - Texto longo vai num arquivo Markdown passado em `--descricao`, ou em stdin com `-`.
 
 ## Submissão de evidências

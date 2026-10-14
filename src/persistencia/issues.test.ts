@@ -28,9 +28,12 @@ import {
   arquivarConcluidas,
   cancelarIssues,
   comIssue,
+  decidirProposta,
   dependentes,
   fasesPercorridas,
   issuesEmAndamento,
+  proporIssue,
+  propostasDaIssue,
   registrarIssue,
   situacaoDasIssues,
 } from "./issues.ts";
@@ -1161,5 +1164,165 @@ test("issuesEmAndamento e situacaoDasIssues excluem e marcam a cancelada", () =>
     { id: b, concluida: false, arquivada: false, cancelada: false },
     { id: a, concluida: false, arquivada: false, cancelada: true },
   ]);
+  banco.close();
+});
+
+const PROPOSTA = { titulo: "Tela de relatório", mensagem: "Parte B: tela de relatório", arquivos: 31 };
+
+test("C23 grava a proposta presa ao ticket, fora do agregado, e propostasDaIssue a lê", () => {
+  const banco = novoBanco();
+  const agente = registroRodando(banco);
+  const antes = agregado(banco, 1);
+
+  const p = proporIssue(banco, 1, PROPOSTA, agente);
+
+  assert.deepEqual(p, { id: 1, ticket: 1, ...PROPOSTA, status: "pendente", em: p.em });
+  assert.match(p.em, INSTANTE);
+  assert.deepEqual(propostasDaIssue(banco, 1), [p]);
+  assert.deepEqual(propostasDaIssue(banco, 2), []);
+  assert.deepEqual(agregado(banco, 1), antes);
+  assert.equal(proporIssue(banco, 1, { ...PROPOSTA, arquivos: 0 }, agente).id, 2);
+  assert.deepEqual(
+    propostasDaIssue(banco, 1).map((x) => x.id),
+    [1, 2],
+  );
+  assert.deepEqual(
+    todas(banco, "SELECT nome, ator, fase FROM comando WHERE nome = 'proporIssue'").map((l) => Object.values(l)),
+    [
+      ["proporIssue", "agente", "registro"],
+      ["proporIssue", "agente", "registro"],
+    ],
+  );
+  banco.close();
+});
+
+test("C23 recusa sem gravar nada: Auditor, entrada inválida e issue inexistente", () => {
+  const banco = novoBanco();
+  const agente = registroRodando(banco);
+  assert.throws(() => proporIssue(banco, 1, PROPOSTA, auditor), ErroDeEscopo);
+  assert.throws(() => proporIssue(banco, 1, { ...PROPOSTA, titulo: "" }, agente), ZodError);
+  assert.throws(() => proporIssue(banco, 9, PROPOSTA, agente), ErroDeInexistente);
+  assert.equal(valor(banco, "SELECT count(*) FROM proposta_issue"), 0);
+  assert.equal(valor(banco, "SELECT count(*) FROM comando WHERE nome = 'proporIssue'"), 0);
+  assert.equal(banco.isTransaction, false);
+  banco.close();
+});
+
+test("C24 aceita no registro: grava a issue nova dependente da atual, a proposta e o comando numa transação", () => {
+  const banco = novoBanco();
+  const agente = registroRodando(banco);
+  proporIssue(banco, 1, PROPOSTA, agente);
+  const antes = agregado(banco, 1);
+
+  const { ag, proposta, nova } = decidirProposta(banco, 1, { aceita: true }, auditor);
+
+  assert.equal(nova?.issue.id, 2);
+  assert.deepEqual(agregado(banco, 2), nova);
+  assert.deepEqual(
+    [nova.issue.titulo, nova.issue.descricao, nova.issue.deps, nova.issue.fase],
+    ["Tela de relatório", "Parte B: tela de relatório", [1], "registro"],
+  );
+  assert.deepEqual(agregado(banco, 1), antes);
+  assert.deepEqual(ag, antes);
+  assert.deepEqual(propostasDaIssue(banco, 1), [proposta]);
+  assert.deepEqual([proposta.status, proposta.issueCriada, proposta.decididaEm], ["aceita", 2, proposta.decididaEm]);
+  assert.match(proposta.decididaEm ?? "", INSTANTE);
+  assert.deepEqual(
+    todas(banco, "SELECT issue, nome, ator, fase FROM comando WHERE nome = 'decidirProposta'").map((l) =>
+      Object.values(l),
+    ),
+    [[1, "decidirProposta", "auditor", "registro"]],
+  );
+  banco.close();
+});
+
+test("C24 recusa grava só a proposta; decidir de novo, proposta inexistente e não Auditor não gravam nada", () => {
+  const banco = novoBanco();
+  const agente = registroRodando(banco);
+  proporIssue(banco, 1, PROPOSTA, agente);
+  assert.throws(() => decidirProposta(banco, 1, { aceita: true }, agente), ErroDeEscopo);
+  assert.throws(() => decidirProposta(banco, 7, { aceita: true }, auditor), ErroDeInexistente);
+  assert.equal(propostasDaIssue(banco, 1)[0]?.status, "pendente");
+
+  const recusada = decidirProposta(banco, 1, { aceita: false }, auditor);
+  assert.equal(recusada.nova, undefined);
+  assert.deepEqual(
+    [recusada.proposta.status, recusada.proposta.issueCriada, recusada.proposta.decididaEm !== undefined],
+    ["recusada", undefined, true],
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM issue"), 1);
+
+  regra(
+    () => decidirProposta(banco, 1, { aceita: true }, auditor),
+    "a proposta P-1 já foi decidida: recusada (uma proposta só se decide uma vez)",
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM issue"), 1);
+  assert.equal(valor(banco, "SELECT count(*) FROM comando WHERE nome = 'decidirProposta'"), 1);
+  banco.close();
+});
+
+test("C24 aceita duas vezes cria uma issue só: a segunda é recusada", () => {
+  const banco = novoBanco();
+  proporIssue(banco, 1, PROPOSTA, registroRodando(banco));
+  decidirProposta(banco, 1, { aceita: true }, auditor);
+  regra(
+    () => decidirProposta(banco, 1, { aceita: true }, auditor),
+    "a proposta P-1 já foi decidida: aceita (uma proposta só se decide uma vez)",
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM issue"), 2);
+  banco.close();
+});
+
+test("C24 recusa a proposta cuja issue foi cancelada, sem gravar nada", () => {
+  const banco = novoBanco();
+  const agente = registroRodando(banco);
+  proporIssue(banco, 1, PROPOSTA, agente);
+  cancelarIssues(banco, 1, auditor);
+  regra(
+    () => decidirProposta(banco, 1, { aceita: true }, auditor),
+    "a I-1 está cancelada e não muda mais (registre uma nova issue se precisar)",
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM issue"), 1);
+  assert.equal(propostasDaIssue(banco, 1)[0]?.status, "pendente");
+  banco.close();
+});
+
+test("C24 aceita no desenho: cria a issue nova e devolve o desenho como reprovado, na mesma transação", () => {
+  const banco = novoBanco();
+  const { issue, ticket } = emDesenho(banco);
+  const execucao = iniciar(banco, issue, ticket).execucoes[0]?.id ?? 0;
+  const agente: Ator = { tipo: "agente", execucao, ticket };
+  const p = proporIssue(banco, issue, PROPOSTA, agente);
+  regra(
+    () => decidirProposta(banco, p.id, { aceita: true }, auditor),
+    "a proposta P-1 não está no gate atual da I-1 (o gate dela já passou ou ela é de outra issue)",
+  );
+  comIssue(banco, issue, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
+  );
+  comIssue(banco, issue, "concluirTicket", fabriquinha, (ag, ctx) => ({
+    ...ag,
+    issue: { ...ag.issue, fase: "aprovacao_desenho" },
+    tickets: ag.tickets.map((t) => (t.id === ticket ? { ...t, status: "concluido", concluidoEm: ctx.agora } : t)),
+  }));
+
+  const { ag, proposta, nova } = decidirProposta(banco, p.id, { aceita: true }, auditor);
+
+  assert.equal(proposta.issueCriada, nova?.issue.id);
+  assert.deepEqual(nova?.issue.deps, [issue]);
+  assert.deepEqual(agregado(banco, issue), ag);
+  assert.equal(ag.issue.fase, "desenho");
+  assert.deepEqual(
+    todas(banco, "SELECT ticket, gate, aprovado, por FROM decisao").map((l) => Object.values(l)),
+    [[ticket, "desenho", 0, "auditor"]],
+  );
+  assert.match(
+    String(valor(banco, "SELECT descricao FROM ticket WHERE etapa = 'desenho' AND status = 'aberto'")),
+    /I-2 \(«Tela de relatório»\)/,
+  );
+  assert.deepEqual(
+    todas(banco, "SELECT nome, fase FROM comando WHERE nome = 'decidirProposta'").map((l) => Object.values(l)),
+    [["decidirProposta", "aprovacao_desenho"]],
+  );
   banco.close();
 });

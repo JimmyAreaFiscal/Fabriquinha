@@ -165,6 +165,7 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   apagar("arquivo_commit", `sha IN (${DOS_COMMITS})`);
   apagar("commit_ticket", `ticket IN (${DOS_TICKETS})`);
   apagar("evidencia", `ticket IN (${DOS_TICKETS})`); // evidencia_arquivo sai por ON DELETE CASCADE
+  apagar("proposta_issue", `ticket IN (${DOS_TICKETS})`);
   apagar("decisao", `issue IN (${DAS_ISSUES})`);
   apagar("execucao", `ticket IN (${DOS_TICKETS})`);
   apagar("comando", `issue IN (${DAS_ISSUES})`);

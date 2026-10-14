@@ -6,6 +6,7 @@ import type {
   Evidencia,
   Issue,
   ModoExecucao,
+  PropostaIssue,
   Ticket,
   TipoEvidencia,
 } from "../../../dominio/agregado.ts";
@@ -284,6 +285,23 @@ function propostos(p: PaginaDaIssue, modelos: readonly Modelo[]): string {
 }
 
 /**
+ * O cartão da proposta de issue da IA (C23), comum ao chat do registro e ao gate do desenho: título e mensagem prontos,
+ * a estimativa de arquivos (em destaque acima de 30, só visual) e **Recusar** e **Aceitar** (C24). A mensagem passa
+ * pelo `markdown-it` sem HTML.
+ */
+export function cartaoDaProposta(proposta: PropostaIssue, noDesenho: boolean, issue: number): string {
+  const id = proposta.id;
+  const efeito = noDesenho
+    ? `Aceitar cria a issue, que depende da ${rotuloIssue(issue)}, e devolve o desenho como reprovado para a IA refazê-lo menor.`
+    : `Aceitar cria a issue, que depende da ${rotuloIssue(issue)}, e a IA da ${rotuloIssue(issue)} reduz o escopo.`;
+  return `<article class="proposta" aria-label="Proposta de issue">
+    <div class="cab"><span class="rotulo">Proposta de issue</span><span class="id">${rotuloTicket(proposta.ticket)}</span><span class="arquivos${proposta.arquivos > 30 ? " acima" : ""}">~${String(proposta.arquivos)} arquivos estimados · limite de 30 por PR</span></div>
+    <div class="corpo"><strong class="titulo">${escapar(proposta.titulo)}</strong><div class="md">${markdown(proposta.mensagem)}</div><p class="efeito muted">${efeito}</p></div>
+    <div class="botoes"><button type="button" class="btn btn-reprovar" data-acao="recusar-proposta" data-id="${String(id)}">Recusar</button><button type="button" class="btn btn-primario" data-acao="aceitar-proposta" data-id="${String(id)}">Aceitar</button></div>
+  </article>`;
+}
+
+/**
  * O gate do desenho (F7 §4.4): a espera, os números do desenho (F6 §5.5) com o impacto, os critérios de aceite, os
  * tickets propostos com o modelo, editar, remover e criar (C11 a C13, C20), e a decisão (C15).
  */
@@ -310,6 +328,7 @@ export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): str
       }</div>
       <div><div class="titulo-bloco">Tickets propostos</div>${propostos(p, modelos)}<button type="button" class="link" data-acao="novo-ticket">+ Novo ticket</button><div class="novo-ticket" data-novo-ticket hidden>${formularioDeTicket()}</div></div>
     </div>
+    ${(p.propostas ?? []).map((x) => cartaoDaProposta(x, true, p.issue.id)).join("")}
     <div class="decidir"><label>Motivo (obrigatório para reprovar)<textarea data-motivo placeholder="O que precisa mudar no desenho"></textarea></label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="reprovar-desenho" disabled>Reprovar</button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-desenho">Aprovar desenho</button></div></div>
   </section>`;
 }

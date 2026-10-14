@@ -185,6 +185,7 @@ const TABELAS = [
   "commit_ticket",
   "evidencia_arquivo",
   "evidencia",
+  "proposta_issue",
   "decisao",
   "execucao",
   "comando",
@@ -230,6 +231,10 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       INSERT INTO uso VALUES (${n}, 'p', 'm', 1, 1, 1, 0, 0, ${n}.5);
       INSERT INTO evidencia (id, ticket, tipo, produtor, em) VALUES (${n}, ${n}, 'comportamento', 'agente', 't');
       INSERT INTO evidencia_arquivo VALUES (${n}, 'a.txt', '${i === 0 ? SHA_COMPARTILHADO : shaProprio}', 'text/plain', 1);
+      INSERT INTO proposta_issue (id, ticket, titulo, mensagem, arquivos, status, em)
+        VALUES (${n}, ${n}, 't', 'm', 31, 'pendente', 't');
+      INSERT INTO proposta_issue (id, ticket, titulo, mensagem, arquivos, status, issue_criada, em, decidida_em)
+        VALUES (${n}0, ${n}, 't', 'm', 31, 'aceita', ${n}, 't', 't');
       INSERT INTO decisao (id, issue, ticket, gate, aprovado, por, em)
         VALUES (${n}, ${n}, ${n}, 'registro', 1, 'auditor', 't');
       INSERT INTO comando (issue, nome, ator, fase, em) VALUES (${n}, 'c', 'auditor', 'registro', 't');

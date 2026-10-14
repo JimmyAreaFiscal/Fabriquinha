@@ -25,7 +25,7 @@ import {
   rotuloTicket,
   situacaoDasFases,
 } from "../render.ts";
-import { cardDaEvidencia, comCard, corpoDoRegistro } from "./issue.ts";
+import { cardDaEvidencia, cartaoDaProposta, comCard, corpoDoRegistro } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -219,6 +219,14 @@ export const doSistema = ({ chave, html }: Item): ThreadMessageLike => ({
 
 const PAROU: Record<string, string> = { aborted: "o agente foi interrompido", error: "o agente parou com erro" };
 
+/** A mensagem da Fabriquinha ao agente (o aviso de uma proposta decidida), com o rótulo dela. */
+const daFabriquinha = (m: MensagemPi): string =>
+  `<div class="msg fabriquinha"><span class="quem">Fabriquinha</span><div class="balao md">${markdown(textoDe(m))}</div></div>`;
+
+/** Os cartões das propostas de issue abertas do registro, entre a conversa e o envio. */
+export const propostasDoChat = (c: CabecalhoDoChat): string =>
+  (c.propostas ?? []).map((p) => cartaoDaProposta(p, false, c.issue.id)).join("");
+
 /** A chamada de ferramenta como parte do assistant-ui; o bloco do pi e o resultado vão inteiros em `artifact`. */
 const parteDaChamada = (b: Bloco, resultado?: MensagemPi): Parte => ({
   type: "tool-call",
@@ -232,8 +240,13 @@ const parteDaChamada = (b: Bloco, resultado?: MensagemPi): Parte => ({
  * chamadas na ordem em que vieram, mais a linha do sistema quando ele parou. O resultado de uma ferramenta não aparece
  * sozinho: ele completa a chamada (`resultados`, por id).
  */
-export function mensagem(m: MensagemPi, resultados: ReadonlyMap<string, MensagemPi> = new Map()): ThreadMessageLike[] {
+export function mensagem(
+  m: MensagemPi,
+  resultados: ReadonlyMap<string, MensagemPi> = new Map(),
+  aviso = false,
+): ThreadMessageLike[] {
   const id = chaveDa(m);
+  if (m.role === "user" && aviso) return [doSistema({ chave: id, html: daFabriquinha(m) })];
   if (m.role === "user") return [{ id, role: "user", content: [{ type: "text", text: textoDe(m) }] }];
   if (m.role !== "assistant") return [];
   const content = blocos(m).flatMap((b): Parte[] => {
@@ -275,13 +288,18 @@ export const chaveDa = (m: MensagemPi): string => `${String(m.role)}-${String(m.
  */
 export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): ThreadMessageLike[] {
   const mensagens = entradas.flatMap((e) =>
-    e.type === "message" ? [{ em: String(e.timestamp), m: e.message as MensagemPi, fabriquinha: e.fabriquinha }] : [],
+    e.type === "message"
+      ? [{ em: String(e.timestamp), m: e.message as MensagemPi, fabriquinha: e.fabriquinha, aviso: e.aviso }]
+      : [],
   );
   const resultados = new Map(
     mensagens.filter(({ m }) => m.role === "toolResult").map(({ m }) => [String(m.toolCallId), m] as const),
   );
   const itens = [
-    ...mensagens.map(({ em, m, fabriquinha }) => ({ em, lista: fabriquinha ? [] : mensagem(m, resultados) })),
+    ...mensagens.map(({ em, m, fabriquinha, aviso }) => ({
+      em,
+      lista: fabriquinha ? [] : mensagem(m, resultados, aviso === true),
+    })),
     ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)).map((l) => ({ em: l.em, lista: [doSistema(l)] })),
   ].toSorted((a, b) => a.em.localeCompare(b.em));
   return [

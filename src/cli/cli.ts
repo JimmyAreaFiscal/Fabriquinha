@@ -20,7 +20,14 @@ import { iniciarServico } from "../execucao/servico.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir as abrirBanco, raizPadrao } from "../persistencia/banco.ts";
 import { execucaoDoAgente } from "../persistencia/execucoes.ts";
-import { agregadoDoTicket, agregadoExistente, comIssue, issueDoTicket } from "../persistencia/issues.ts";
+import {
+  agregadoDoTicket,
+  agregadoExistente,
+  comIssue,
+  dependentes,
+  issueDoTicket,
+  proporIssue,
+} from "../persistencia/issues.ts";
 import { projeto } from "../persistencia/projetos.ts";
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */
@@ -97,11 +104,14 @@ const descricao = async ({ op, io }: Chamada): Promise<string | undefined> => {
 
 /**
  * As leituras do agente (F7 §3.1): a issue da própria execução, com os tickets e as evidências dela, e as issues de
- * que ela depende. Fora disso, ErroDeEscopo, que diz o que ele pode ler.
+ * que ela depende ou que dependem dela (o desenho refeito lê a issue nova). Fora disso, ErroDeEscopo, que diz o que ele
+ * pode ler.
  */
 function exigirAlcance(banco: DatabaseSync, agente: Agente, issue: Id, oQue: string): void {
   const { deps } = agregadoExistente(banco, agente.issue).issue;
-  if (issue === agente.issue || deps.includes(issue)) return;
+  if (issue === agente.issue || deps.includes(issue) || dependentes(banco, agente.issue).some((d) => d.id === issue)) {
+    return;
+  }
   const sua = `leia a I-${String(agente.issue)}, a do seu ticket`;
   const dependencias = deps.map((d) => `I-${String(d)}`).join(", ");
   throw new ErroDeEscopo(
@@ -183,6 +193,24 @@ const COMANDOS: readonly Comando[] = [
       const entrada = { titulo: opcional(c.op.titulo), tipo: opcional(c.op.tipo), descricao: await descricao(c) };
       const { ator } = c.agente;
       return comIssue(c.banco, id, "editarIssue", ator, (ag) => editarIssue(ag, entrada, ator)).issue;
+    },
+  },
+  {
+    palavras: ["issue", "propor"],
+    argumentos: ["I-<n>"],
+    opcoesDeUso: "--titulo <t> --arquivos <n> --descricao <arquivo|->",
+    opcoes: { ...TITULO_DESCRICAO, arquivos: { type: "string" } },
+    doAgente: true,
+    async rodar(c) {
+      const id = numero(c.pos[0], "I");
+      const titulo = opcional(c.op.titulo);
+      if (titulo === undefined) throw new ErroDeUso("falta --titulo <t>");
+      const arquivos = opcional(c.op.arquivos);
+      if (arquivos === undefined) throw new ErroDeUso("falta --arquivos <n>");
+      if (!/^\d+$/.test(arquivos)) throw new ErroDeUso(`${arquivos} não é um inteiro maior ou igual a 0`);
+      const mensagem = await descricao(c);
+      if (mensagem === undefined) throw new ErroDeUso("falta --descricao <arquivo|->");
+      return proporIssue(c.banco, id, { titulo, mensagem, arquivos: Number(arquivos) }, c.agente.ator);
     },
   },
   {

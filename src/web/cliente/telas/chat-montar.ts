@@ -30,6 +30,7 @@ import {
   type MensagemPi,
   type ModoEnvio,
   modeloDe,
+  propostasDoChat,
   respostaDoDialogo,
   seletorDeSessoes,
 } from "./chat.ts";
@@ -97,6 +98,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       mensagens: fluxo ? [...mensagens, emFluxo(fluxo.texto, fluxo.raciocinio)] : mensagens,
       envio: envio(cabecalho, modo),
       anexos: etiquetasDeAnexo(anexos),
+      propostas: propostasDoChat(cabecalho),
       aoEnviar: enviar,
     });
     // As etiquetas do formulário de retomada (HTML pronto de chat.ts) ficam por nossa conta; as do compositor, do React.
@@ -205,7 +207,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     }
     vistas.add(chaveDa(m));
     if (m.role === "toolResult") mensagens = mensagens.map((x) => comResultado(x, m));
-    else if (!evento.fabriquinha) mensagens = [...mensagens, ...mensagem(m)];
+    else if (!evento.fabriquinha) mensagens = [...mensagens, ...mensagem(m, undefined, evento.aviso === true)];
     if (m.role === "assistant" && cabecalho) {
       modelo = modeloDe(cabecalho, [evento]);
       barra.innerHTML = barraDeEstado(cabecalho, modelo);
@@ -275,6 +277,17 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       acao(
         postar(`/api/sessoes/${encodeURIComponent(sessao)}/dialogos/${encodeURIComponent(String(id))}`, {
           cancelado: true,
+        }),
+      );
+    } else if (botao.dataset.acao === "aceitar-proposta" || botao.dataset.acao === "recusar-proposta") {
+      botao.disabled = true;
+      const decisao = postar(`/api/propostas/${String(botao.dataset.id)}`, {
+        aceita: botao.dataset.acao === "aceitar-proposta",
+      });
+      acao(
+        decisao.catch((error_: unknown) => {
+          botao.disabled = false;
+          throw error_;
         }),
       );
     } else if (botao.dataset.devolver !== undefined) {

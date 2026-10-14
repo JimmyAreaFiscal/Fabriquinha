@@ -389,3 +389,22 @@ test("cancelar: fecha o ticket aberto, leva a dependente (listada na página), m
   );
   assert.equal((await pagina(2)).issue.canceladaEm, undefined);
 });
+
+test("a página traz as propostas de issue abertas só no gate do desenho", async () => {
+  servico.banco.exec(`
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (6, 'loja', 'Grande', 'funcionalidade', 'aprovacao_desenho', '${AGORA}');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
+      VALUES (6, 6, 'desenho', 'Desenhar', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}');
+    INSERT INTO proposta_issue (id, ticket, titulo, mensagem, arquivos, status, em, decidida_em)
+      VALUES (1, 6, 'Tela de relatório', 'Parte B: tela de relatório', 31, 'pendente', '${AGORA}', NULL),
+             (2, 6, 'Já recusada', 'x', 31, 'recusada', '${AGORA}', '${AGORA}'),
+             (3, 3, 'De outro gate', 'y', 31, 'pendente', '${AGORA}', NULL);
+  `);
+  assert.deepEqual(
+    (await pagina(6)).propostas?.map((p) => [p.id, p.titulo, p.mensagem, p.arquivos]),
+    [[1, "Tela de relatório", "Parte B: tela de relatório", 31]],
+  );
+  assert.equal("propostas" in (await pagina(3)), false, "a proposta do registro não aparece na página");
+  assert.equal("propostas" in (await pagina(1)), false);
+  servico.banco.exec("DELETE FROM proposta_issue; DELETE FROM ticket WHERE id = 6; DELETE FROM issue WHERE id = 6;");
+});

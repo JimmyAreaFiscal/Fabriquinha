@@ -49,7 +49,7 @@ export const Fase = z.enum([
 ]);
 
 // Cada tipo tem a sua sequência de IDs (F2 §3.4); o contexto dos comandos entrega `novoId(tipo)`.
-export const TipoId = z.enum(["issue", "ticket", "execucao", "decisao", "evidencia"]);
+export const TipoId = z.enum(["issue", "ticket", "execucao", "decisao", "evidencia", "proposta"]);
 
 export type Id = z.infer<typeof Id>;
 export type Instante = z.infer<typeof Instante>;

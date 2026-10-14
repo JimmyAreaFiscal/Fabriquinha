@@ -69,6 +69,15 @@ const decidirDesenho =
     await remontar();
   };
 
+/** Decide a proposta de issue (C24) e relê a página. */
+const decidirProposta =
+  (aceita: boolean) =>
+  async ({ alvo, remontar }: Contexto): Promise<void> => {
+    (alvo as HTMLButtonElement).disabled = true;
+    await api(`/api/propostas/${String(alvo.dataset.id)}`, enviarJson("POST", { aceita }));
+    await remontar();
+  };
+
 /**
  * O estado do PR lido agora na plataforma (F5 §5.2); a falha do `gh` ou do `az` (502) fica no painel, com a saída.
  * ponytail: a página espera o `gh`/`az` antes de se desenhar no gate do PR; se ficar lento, desenhar antes e
@@ -220,6 +229,8 @@ const ACOES: Record<string, (c: Contexto) => void | Promise<void>> = {
   },
   "aprovar-desenho": decidirDesenho(true),
   "reprovar-desenho": decidirDesenho(false),
+  "aceitar-proposta": decidirProposta(true),
+  "recusar-proposta": decidirProposta(false),
   // Gate do PR (ticket 32).
   "aba-pr": ({ alvo, raiz }) => {
     for (const aba of raiz.querySelectorAll<HTMLElement>('[data-acao="aba-pr"]')) {

@@ -78,6 +78,7 @@ O agregado de uma issue tem dezenas de linhas; se um dia passar de milhares, tro
 - O contexto entrega `novoId(tipo)`, que incrementa a tabela `sequencia` dentro da transação.
   Como as escritas são serializadas por `BEGIN IMMEDIATE`, não há corrida.
 - Cada tipo tem a sua sequência: `I-1` e `T-1` convivem, e o prefixo desfaz a ambiguidade.
+  Os tipos são `issue`, `ticket`, `execucao`, `decisao`, `evidencia` e `proposta` (`P-n`).
 
 ### 3.5 Fatos externos fornecidos ao domínio
 
@@ -106,6 +107,9 @@ Consultados dentro da mesma transação, então são consistentes com o que vai 
 - `migrar` desliga `foreign_keys` antes do laço (o PRAGMA não vale dentro de transação) e liga de novo num `finally`, porque recriar uma tabela com DROP/RENAME falha com FK ligada (`defer_foreign_keys` e `legacy_alter_table` não resolvem).
   Em troca, cada migração roda `PRAGMA foreign_key_check` antes do COMMIT e é desfeita com `ErroDeRegra` se sobrar linha órfã.
 - A migração do C22 (F1) acrescenta `issue.cancelada_em`, recria `ticket` com `fechado` e `cancelado` no CHECK de `status` (tabela nova, cópia, DROP, RENAME e os dois índices únicos) e cria `ix_issue_dep_dep` em `issue_dep(dep)`, para a busca das dependentes.
+- As migrações 12 a 15 são da Simulação (F8, I-10): `projeto.link_produto` (12), `usuario_simulado` e `usuario_simulado_anexo` (13), `tarefa` e `tarefa_usuario` (14) e `execucao_simulada` (15).
+- A migração 16 (proposta de issue, C23 e C24 do F1) cria `proposta_issue` e `ix_proposta_issue_ticket` e recria `sequencia` com o tipo `proposta` no CHECK (tabela nova, `INSERT … SELECT`, DROP, RENAME), preservando os valores.
+  A migração 1 guarda a lista de tipos original, para a lista nova só valer a partir da 16.
 - As tabelas de outros módulos (`configuracao` no F4; `commit_ticket` e `arquivo_commit` no F5; `uso`, `retrabalho`, `comando` e `varredura_base` no F6) são definidas nas specs desses módulos e entram no mesmo arquivo de schema.
 
 ## 4. DDL (versão 1)
@@ -288,6 +292,25 @@ CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa);
 CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento');
 ```
 
+A proposta de issue (migração 16) fica fora do agregado, presa ao ticket que a fez:
+
+```sql
+CREATE TABLE proposta_issue (
+  id           INTEGER PRIMARY KEY,
+  ticket       INTEGER NOT NULL REFERENCES ticket(id),
+  titulo       TEXT NOT NULL CHECK (length(titulo) BETWEEN 1 AND 120),
+  mensagem     TEXT NOT NULL CHECK (length(trim(mensagem)) >= 1),
+  arquivos     INTEGER NOT NULL CHECK (arquivos >= 0),
+  status       TEXT NOT NULL CHECK (status IN ('pendente','aceita','recusada')),
+  issue_criada INTEGER REFERENCES issue(id),
+  em           TEXT NOT NULL,
+  decidida_em  TEXT,
+  CHECK ((status = 'aceita') = (issue_criada IS NOT NULL)),
+  CHECK ((status = 'pendente') = (decidida_em IS NULL))
+);
+CREATE INDEX ix_proposta_issue_ticket ON proposta_issue(ticket);
+```
+
 As FKs ficam sem `ON DELETE` (comportamento `RESTRICT`), exceto `evidencia_arquivo`.
 Remover o projeto apaga `execucao_simulada`, `tarefa_usuario`, `tarefa`, `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`), recusa se há execução simulada pendente e apaga as pastas `<raiz>/simulacoes/<id>` (F8 5).
 Assim, apagar um ticket que já tem execução, decisão ou evidência falha no banco, e o histórico nunca some por engano.
@@ -334,6 +357,9 @@ Antes de servir, o F7 confere que o hash pertence a uma evidência; nunca serve 
 | `abrir(raiz?)` | Cria a raiz, abre o banco, aplica os PRAGMAs e as migrações pendentes. |
 | `comIssue(banco, issue, nome, ator, comando)` | Aplica um comando do F1 sobre o agregado da issue e registra o comando (3.3). |
 | `registrarIssue(banco, entrada, ator)` | C1: cria a issue e o ticket de registro. |
+| `proporIssue(banco, issue, entrada, ator)` | C23: grava a proposta `pendente` e o `proporIssue` em `comando`; recusa issue cancelada. |
+| `decidirProposta(banco, proposta, entrada, ator)` | C24 numa transação só: grava a issue nova antes da atual (e do desenho reprovado), atualiza a proposta e grava `decidirProposta` em `comando`. Recusa issue cancelada. |
+| `propostasDaIssue(banco, issue)` | As propostas dos tickets da issue, da mais antiga para a mais nova. |
 | `arquivarConcluidas(banco, projeto)` | C18: uma transação só; devolve quantas issues do projeto foram arquivadas. |
 | `cancelarIssues(banco, issue, ator)` | C22: uma transação só, na issue e nas dependentes diretas e indiretas (`dependentes`); um `cancelarIssue` em `comando` por issue; devolve as issues canceladas e as execuções que terminaram. `comIssue` recusa comando sobre issue cancelada. |
 | `salvarProjeto(banco, projeto)` / `projeto(banco, nome)` / `projetos(banco)` | C19 e leituras. |

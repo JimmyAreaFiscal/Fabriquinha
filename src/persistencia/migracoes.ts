@@ -7,6 +7,7 @@ import {
   ModoExecucao,
   Produtor,
   ResultadoExecucao,
+  StatusProposta,
   StatusTicket,
   TipoAtor,
   TipoEvidencia,
@@ -22,8 +23,9 @@ export const listaSql = (enumeracao: z.ZodEnum): string =>
   enumeracao.options.map((v) => `'${String(v).replaceAll("'", "''")}'`).join(",");
 
 export const MIGRACOES: readonly string[] = [
+  // A lista é fixa: o tipo `proposta` entra na migração 16, que recria `sequencia`.
   `CREATE TABLE sequencia (
-    nome  TEXT PRIMARY KEY CHECK (nome IN (${listaSql(TipoId)})),
+    nome  TEXT PRIMARY KEY CHECK (nome IN ('issue','ticket','execucao','decisao','evidencia')),
     valor INTEGER NOT NULL CHECK (valor >= 0)
   );`,
   `CREATE TABLE projeto (
@@ -285,4 +287,27 @@ export const MIGRACOES: readonly string[] = [
   );
   CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa);
   CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento');`,
+  // Proposta de issue (C23, C24): fato preso ao ticket que a fez. O CHECK de `sequencia` não se altera no SQLite, então
+  // ela é recriada com o tipo `proposta` (tabela nova, cópia, DROP, RENAME), preservando os valores.
+  `CREATE TABLE proposta_issue (
+    id           INTEGER PRIMARY KEY,
+    ticket       INTEGER NOT NULL REFERENCES ticket(id),
+    titulo       TEXT NOT NULL CHECK (length(titulo) BETWEEN 1 AND 120),
+    mensagem     TEXT NOT NULL CHECK (length(trim(mensagem)) >= 1),
+    arquivos     INTEGER NOT NULL CHECK (arquivos >= 0),
+    status       TEXT NOT NULL CHECK (status IN (${listaSql(StatusProposta)})),
+    issue_criada INTEGER REFERENCES issue(id),
+    em           TEXT NOT NULL,
+    decidida_em  TEXT,
+    CHECK ((status = 'aceita') = (issue_criada IS NOT NULL)),
+    CHECK ((status = 'pendente') = (decidida_em IS NULL))
+  );
+  CREATE INDEX ix_proposta_issue_ticket ON proposta_issue(ticket);
+  CREATE TABLE sequencia_nova (
+    nome  TEXT PRIMARY KEY CHECK (nome IN (${listaSql(TipoId)})),
+    valor INTEGER NOT NULL CHECK (valor >= 0)
+  );
+  INSERT INTO sequencia_nova SELECT nome, valor FROM sequencia;
+  DROP TABLE sequencia;
+  ALTER TABLE sequencia_nova RENAME TO sequencia;`,
 ];

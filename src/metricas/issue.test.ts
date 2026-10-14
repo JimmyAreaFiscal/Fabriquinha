@@ -311,6 +311,7 @@ test("issue concluída: M1 e apoio por etapa, consultas à parte, M4 a M7, desen
       { ticket: 5, linhasAdicionadas: 3, linhasAlteradasDepois: 1, linhasAlteradasPorHumanos: 1 },
       { ticket: 7, linhasAdicionadas: 0, linhasAlteradasDepois: 0, linhasAlteradasPorHumanos: 0 },
     ],
+    arquivosAlterados: 3, // a.ts, b.ts e logo.png
     exigenciasRevisao: 1,
     bugsEmArquivosRevisados: 1,
     notaPR: 4,
@@ -355,6 +356,7 @@ test("issue no registro: só a etapa de registro, sem desenho nem nota; execuç�
       correcoesDesenho: { devolucoes: 0, ajustesAuditor: 0 },
       desenho: null,
       retrabalho: [],
+      arquivosAlterados: null,
       exigenciasRevisao: 0,
       bugsEmArquivosRevisados: 0,
       notaPR: null,
@@ -465,5 +467,40 @@ test("erro de E/S ao procurar a sessão não vira aviso: propaga", () => {
   writeFileSync(join(raiz, "sessoes"), ""); // um arquivo no lugar do diretório das sessões
 
   assert.throws(() => metricasDaIssue(banco, i.id), { code: "ENOTDIR" });
+  banco.close();
+});
+
+test("arquivos alterados: caminhos distintos dos commits da issue, e null sem commit", () => {
+  const { banco } = novoBanco();
+  /** Commit do ticket `t` com `n` arquivos a partir de `inicio` (`src/<i>.ts`). */
+  const commitar = (t: number, sha: string, inicio: number, n: number) => {
+    gravarCommit(banco, t, {
+      sha: sha.padStart(40, "0"),
+      mensagem: "m",
+      em: em(1, "10:00:00"),
+      arquivos: Array.from({ length: n }, (_, i) => ({
+        caminho: `src/${String(inicio + i)}.ts`,
+        status: "M" as const,
+        adicionadas: 1,
+        removidas: 0,
+      })),
+    });
+  };
+
+  issue(banco, 1);
+  ticket(banco, 1, 1, "desenvolvimento");
+  commitar(1, "a", 0, 12);
+  assert.equal(metricasDaIssue(banco, 1).arquivosAlterados, 12);
+
+  issue(banco, 2);
+  ticket(banco, 2, 2, "desenvolvimento");
+  ticket(banco, 3, 2, "desenvolvimento");
+  commitar(2, "b", 0, 20);
+  commitar(3, "c", 19, 12); // repete o caminho src/19.ts
+  assert.equal(metricasDaIssue(banco, 2).arquivosAlterados, 31);
+
+  issue(banco, 3);
+  ticket(banco, 4, 3, "desenvolvimento");
+  assert.equal(metricasDaIssue(banco, 3).arquivosAlterados, null);
   banco.close();
 });

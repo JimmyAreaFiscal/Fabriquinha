@@ -224,10 +224,16 @@ test("migrar() recusa banco mais novo que o código, sem alterá-lo", () => {
   banco.close();
 });
 
+/** A migração 16 é a da proposta de issue, depois das 12 a 15 da main. */
+const VERSAO_PROPOSTA = 16;
+
+/** A migração 10 é a do cancelamento (C22); as seguintes não a movem. */
+const VERSAO_CANCELAMENTO = 10;
+
 /** Banco na versão anterior à migração do cancelamento (C22), com um ticket de cada tipo de filho que aponta para `ticket`. */
 function bancoAntesDoCancelamento(): DatabaseSync {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES.slice(0, -6));
+  migrar(banco, MIGRACOES.slice(0, VERSAO_CANCELAMENTO - 1));
   banco.exec(`
     INSERT INTO projeto VALUES ('loja', '/r', 'main', 'github', '[]', '["t"]', 'k', '[{}]', '{}');
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'desenho', 'x');
@@ -285,6 +291,78 @@ test("a migração do cancelamento recria ticket com os status novos sem perder 
   banco.close();
 });
 
+test("a migração da proposta recria sequencia com o tipo novo, preserva os valores e cria proposta_issue", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrar(banco, MIGRACOES.slice(0, VERSAO_PROPOSTA - 1));
+  banco.exec("INSERT INTO sequencia VALUES ('issue', 3), ('ticket', 5)");
+  banco.exec(
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness) VALUES ('loja', '/r', 'main', 'github', '["t"]', 'k', '[{}]')`,
+  );
+  assert.throws(() => {
+    banco.exec("INSERT INTO sequencia VALUES ('proposta', 1)");
+  }, /CHECK/);
+
+  migrar(banco, MIGRACOES);
+
+  assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_PROPOSTA);
+  assert.deepEqual(
+    banco
+      .prepare("SELECT * FROM sequencia ORDER BY nome")
+      .all()
+      .map((l) => [l.nome, l.valor]),
+    [
+      ["issue", 3],
+      ["ticket", 5],
+    ],
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM projeto"), 1);
+  banco.exec("INSERT INTO sequencia VALUES ('proposta', 1)");
+  assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'sequencia_nova'"), 0);
+  assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ix_proposta_issue_ticket'"), 1);
+
+  banco.exec(`
+    INSERT INTO issue (id, projeto, fase, criada_em) VALUES (1, 'loja', 'registro', 'x');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em) VALUES (1, 1, 'registro', 'R', 'aberto', 'fabriquinha', 'x');
+  `);
+  const proposta = (campos: string, valores: string) => {
+    banco.exec(
+      `INSERT INTO proposta_issue (ticket, titulo, mensagem, arquivos, em, ${campos}) VALUES (1, 'T', 'M', 31, 'x', ${valores})`,
+    );
+  };
+  proposta("status", "'pendente'");
+  proposta("status, issue_criada, decidida_em", "'aceita', 1, 'y'");
+  proposta("status, decidida_em", "'recusada', 'y'");
+  for (const ruim of [
+    ["status", "'outra'"],
+    ["status, issue_criada, decidida_em", "'pendente', 1, NULL"],
+    ["status, decidida_em", "'aceita', 'y'"],
+    ["status, issue_criada, decidida_em", "'recusada', 1, 'y'"],
+    ["status, decidida_em", "'pendente', 'y'"],
+    ["status", "'recusada'"],
+    ["status, issue_criada, decidida_em", "'aceita', 9, 'y'"],
+  ] as [string, string][]) {
+    assert.throws(() => {
+      proposta(...ruim);
+    }, /CHECK|FOREIGN KEY/);
+  }
+  assert.throws(() => {
+    banco.exec(
+      "INSERT INTO proposta_issue (ticket, titulo, mensagem, arquivos, status, em) VALUES (1, 'T', '  ', 1, 'pendente', 'x')",
+    );
+  }, /CHECK/);
+  assert.throws(() => {
+    banco.exec(
+      "INSERT INTO proposta_issue (ticket, titulo, mensagem, arquivos, status, em) VALUES (1, 'T', 'M', -1, 'pendente', 'x')",
+    );
+  }, /CHECK/);
+  assert.throws(() => {
+    banco.exec(
+      "INSERT INTO proposta_issue (ticket, titulo, mensagem, arquivos, status, em) VALUES (9, 'T', 'M', 1, 'pendente', 'x')",
+    );
+  }, /FOREIGN KEY/);
+  banco.close();
+});
+
 test("migrar() desfaz a migração e religa as FKs quando ela deixa referência órfã", () => {
   const banco = bancoAntesDoCancelamento();
   banco.exec("PRAGMA foreign_keys = OFF");
@@ -298,7 +376,7 @@ test("migrar() desfaz a migração e religa as FKs quando ela deixa referência 
     },
     (erro) => erro instanceof ErroDeRegra && erro.message.includes("deixou 1 referência(s) órfã(s)"),
   );
-  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length - 6);
+  assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_CANCELAMENTO - 1);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'ticket_novo'"), 0);
   assert.equal(valor(banco, "SELECT count(*) FROM pragma_table_info('issue') WHERE name = 'cancelada_em'"), 0);

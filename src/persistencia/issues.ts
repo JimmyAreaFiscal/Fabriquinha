@@ -11,10 +11,12 @@ import {
   exigirNaoCancelada,
   Issue,
   type NomeComando,
+  PropostaIssue,
   Ticket,
 } from "../dominio/agregado.ts";
-import { ErroDeInexistente, encontrado } from "../dominio/erros.ts";
+import { encontrado } from "../dominio/erros.ts";
 import * as dominio from "../dominio/issue.ts";
+import * as propostas from "../dominio/propostas.ts";
 import type { Fase, Id, Modelo } from "../dominio/primitivos.ts";
 import { escrever, novoId } from "./banco.ts";
 import { temCommit } from "./commits.ts";
@@ -154,6 +156,33 @@ const linhaEvidencia = ({ arquivos: _, ...e }: Evidencia): Linha => ({
 const deLinhaEvidencia = (l: Linha, arquivos: ArquivoEvidencia[]): Evidencia =>
   Evidencia.parse(semNulos({ ...l, aprovada: deBit(l.aprovada), dados: JSON.parse(l.dados as string), arquivos }));
 
+const linhaProposta = (p: PropostaIssue): Linha => ({
+  id: p.id,
+  ticket: p.ticket,
+  titulo: p.titulo,
+  mensagem: p.mensagem,
+  arquivos: p.arquivos,
+  status: p.status,
+  issue_criada: p.issueCriada ?? null,
+  em: p.em,
+  decidida_em: p.decididaEm ?? null,
+});
+
+const deLinhaProposta = (l: Linha): PropostaIssue =>
+  PropostaIssue.parse(
+    semNulos({
+      id: l.id,
+      ticket: l.ticket,
+      titulo: l.titulo,
+      mensagem: l.mensagem,
+      arquivos: l.arquivos,
+      status: l.status,
+      issueCriada: l.issue_criada,
+      em: l.em,
+      decididaEm: l.decidida_em,
+    }),
+  );
+
 interface Tabela {
   nome: string;
   chave: readonly string[];
@@ -290,6 +319,13 @@ const contexto = (banco: DatabaseSync): Contexto => ({
   temCommit: (ticket) => temCommit(banco, ticket),
 });
 
+/** O agregado da issue, dentro de uma transação de escrita; issue inexistente ou cancelada recusa o comando. */
+function carregarAtiva(banco: DatabaseSync, issue: Id): Agregado {
+  const ag = encontrado(carregar(banco, issue), `a issue I-${String(issue)} não existe`, "confira o número da issue");
+  exigirNaoCancelada(ag);
+  return ag;
+}
+
 /**
  * Aplica um comando do F1 ao agregado da issue numa transação só e registra o comando em `comando` com a fase de
  * antes (F6 §5.1). Ex.: `comIssue(banco, 12, "editarIssue", ator, (ag) => editarIssue(ag, entrada, ator))`.
@@ -302,9 +338,7 @@ export function comIssue(
   comando: (agregado: Agregado, ctx: Contexto) => Agregado,
 ): Agregado {
   return escrever(banco, () => {
-    const antes = carregar(banco, issue);
-    if (!antes) throw new ErroDeInexistente(`a issue I-${String(issue)} não existe`, "confira o número da issue");
-    exigirNaoCancelada(antes);
+    const antes = carregarAtiva(banco, issue);
     const ctx = contexto(banco);
     const depois = comando(antes, ctx);
     gravarDiferenca(banco, antes, depois);
@@ -326,6 +360,64 @@ export const registrarIssue = (banco: DatabaseSync, entrada: unknown, ator: Ator
     gravarDiferenca(banco, undefined, ag);
     return ag;
   });
+
+/** A proposta `id`, ou `ErroDeInexistente`. */
+export const propostaExistente = (banco: DatabaseSync, id: Id): PropostaIssue =>
+  deLinhaProposta(
+    encontrado(
+      banco.prepare("SELECT * FROM proposta_issue WHERE id = ?").get(id),
+      `a proposta P-${String(id)} não existe`,
+      "confira o número da proposta",
+    ),
+  );
+
+/** C23: a IA do ticket de registro ou desenho de `issue` propõe uma issue nova; a proposta fica fora do agregado. */
+export const proporIssue = (banco: DatabaseSync, issue: Id, entrada: unknown, ator: Ator): PropostaIssue =>
+  escrever(banco, () => {
+    const antes = carregarAtiva(banco, issue);
+    const ctx = contexto(banco);
+    const proposta = propostas.proporIssue(antes, entrada, ator, ctx);
+    const linha = linhaProposta(proposta);
+    const colunas = Object.keys(linha);
+    banco
+      .prepare(`INSERT INTO proposta_issue (${colunas.join(", ")}) VALUES (${colunas.map((c) => "$" + c).join(", ")})`)
+      .run(linha);
+    gravarComando(banco, antes, "proporIssue", ator, ctx);
+    return proposta;
+  });
+
+/**
+ * C24: o Auditor decide a proposta numa transação só. O aceite grava a issue nova antes da atual (e do desenho
+ * reprovado, se for o caso), atualiza a proposta e registra o comando na issue atual.
+ */
+export const decidirProposta = (
+  banco: DatabaseSync,
+  id: Id,
+  entrada: unknown,
+  ator: Ator,
+): { ag: Agregado; proposta: PropostaIssue; nova?: Agregado } =>
+  escrever(banco, () => {
+    const proposta = propostaExistente(banco, id);
+    const dono = banco.prepare("SELECT issue FROM ticket WHERE id = ?").get(proposta.ticket) as { issue: Id };
+    const antes = carregarAtiva(banco, dono.issue);
+    const ctx = contexto(banco);
+    const decidida = propostas.decidirProposta(antes, proposta, entrada, ator, ctx);
+    if (decidida.nova) gravarDiferenca(banco, undefined, decidida.nova);
+    gravarDiferenca(banco, antes, decidida.ag);
+    const { id: _, ...campos } = linhaProposta(decidida.proposta);
+    banco
+      .prepare(`UPDATE proposta_issue SET ${atribuicoes(Object.keys(campos), ", ")} WHERE id = $id`)
+      .run({ ...campos, id });
+    gravarComando(banco, antes, "decidirProposta", ator, ctx);
+    return decidida;
+  });
+
+/** As propostas dos tickets da issue, da mais antiga para a mais nova. */
+export const propostasDaIssue = (banco: DatabaseSync, issue: Id): PropostaIssue[] =>
+  banco
+    .prepare("SELECT p.* FROM proposta_issue p JOIN ticket t ON t.id = p.ticket WHERE t.issue = ? ORDER BY p.id")
+    .all(issue)
+    .map(deLinhaProposta);
 
 /**
  * C18: arquiva numa transação só as concluídas do projeto e devolve quantas arquivou.

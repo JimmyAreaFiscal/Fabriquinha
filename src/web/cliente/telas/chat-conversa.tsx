@@ -25,6 +25,8 @@ export interface PropsDaConversa {
   envio: Envio;
   /** As etiquetas de anexo, em HTML (`etiquetasDeAnexo`). */
   anexos: string;
+  /** Os cartões das propostas de issue abertas, em HTML (`propostasDoChat`). */
+  propostas?: string;
   /** Envia o texto do compositor; se falhar, o texto volta ao campo. */
   aoEnviar: (texto: string) => Promise<void>;
 }
@@ -96,7 +98,7 @@ function DaMensagem({ papel }: Readonly<{ papel: keyof typeof PAPEIS }>) {
   return <Mensagem />;
 }
 
-function Conversa({ mensagens, envio, anexos, aoEnviar }: Readonly<PropsDaConversa>) {
+function Conversa({ mensagens, envio, anexos, propostas, aoEnviar }: Readonly<PropsDaConversa>) {
   // ponytail: sem `isRunning`: o assistant-ui bloqueia o Enter enquanto roda, e o Auditor redireciona o agente rodando.
   const runtime = useExternalStoreRuntime({
     messages: mensagens,
@@ -120,6 +122,7 @@ function Conversa({ mensagens, envio, anexos, aoEnviar }: Readonly<PropsDaConver
           <ThreadPrimitive.Messages>{({ message }) => <DaMensagem papel={message.role} />}</ThreadPrimitive.Messages>
           <RolarAoEnviar />
         </ThreadPrimitive.Viewport>
+        <div data-propostas dangerouslySetInnerHTML={html(propostas ?? "")} />
         <div className="area-envio">
           {"html" in envio ? (
             <div className="envio-fixo" dangerouslySetInnerHTML={html(envio.html)} />

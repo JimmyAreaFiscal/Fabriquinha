@@ -2947,6 +2947,64 @@ body:has(.pagina-chat) {
 .balao > :last-child {
   margin-bottom: 0;
 }
+.msg.fabriquinha {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+.msg.fabriquinha .quem {
+  color: var(--open);
+}
+.msg.fabriquinha .balao {
+  background: var(--open-bg);
+  border: 0;
+  border-left: 3px solid var(--open);
+  border-radius: var(--r-md);
+}
+/* Proposta de issue da IA (C23): no chat do registro e no gate do desenho. */
+.proposta {
+  background: var(--surface);
+  border: 1px solid #5a4720;
+  border-left: 3px solid var(--open);
+  border-radius: var(--r-lg);
+  margin: var(--s-3) 0;
+}
+.proposta .cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-sm);
+}
+.proposta .rotulo {
+  color: var(--open);
+}
+.proposta .arquivos {
+  margin-left: auto;
+  color: var(--muted);
+}
+.proposta .arquivos.acima {
+  color: var(--danger);
+  font-weight: var(--w-strong);
+}
+.proposta .corpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--fs-sm);
+}
+.proposta .efeito {
+  margin: 0;
+}
+.proposta .botoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--line);
+}
 .sistema {
   display: flex;
   align-items: center;

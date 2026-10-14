@@ -1,12 +1,13 @@
 // Render da página da issue (F7 §4.4, §4.5): funções puras, sem DOM.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Evidencia, Ticket } from "../../../dominio/agregado.ts";
+import type { Evidencia, PropostaIssue, Ticket } from "../../../dominio/agregado.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import {
   acaoDoAuditor,
   bloqueiosDoPR,
+  cartaoDaProposta,
   corpoDoPR,
   evidenciaNaCaixa,
   execucoesDoTicket,
@@ -666,6 +667,38 @@ test("gate do desenho: só na aprovação do desenho, no começo da Ação do Au
   assert.equal(gateDoDesenho(exemplo(), QUARENTA_E_SETE), "");
   const html = acaoDoAuditor(noGate(), QUARENTA_E_SETE);
   assert.match(html, /^<div class="acao-auditor"[^>]*><section class="gate-painel" aria-label="Gate do desenho">/);
+});
+
+const proposta = (p: Partial<PropostaIssue> = {}): PropostaIssue => ({
+  id: 9,
+  ticket: 2,
+  titulo: `Parte B ${XSS}`,
+  mensagem: `Tela de **relatório** ${XSS}`,
+  arquivos: 42,
+  status: "pendente",
+  em: AGORA,
+  ...p,
+});
+
+test("cartão da proposta: rótulo, T-n, estimativa em destaque acima de 30, texto escapado e os botões", () => {
+  const html = cartaoDaProposta(proposta(), true, 1);
+  assert.match(html, /<span class="rotulo">Proposta de issue<\/span><span class="id">T-2<\/span>/);
+  assert.match(html, /<span class="arquivos acima">~42 arquivos estimados · limite de 30 por PR<\/span>/);
+  assert.match(html, /<strong class="titulo">Parte B &#60;img src=x onerror=&#34;alert\(1\)&#34;&#62;<\/strong>/);
+  assert.match(html, /<strong>relatório<\/strong>/);
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /devolve o desenho como reprovado/);
+  assert.match(html, /data-acao="recusar-proposta" data-id="9">Recusar<\/button>/);
+  assert.match(html, /data-acao="aceitar-proposta" data-id="9">Aceitar<\/button>/);
+  assert.doesNotMatch(cartaoDaProposta(proposta({ arquivos: 30 }), false, 1), /acima/);
+  assert.match(cartaoDaProposta(proposta(), false, 1), /a IA da I-1 reduz o escopo/);
+});
+
+test("gate do desenho: o cartão da proposta vem antes de decidir, e só com proposta", () => {
+  assert.doesNotMatch(gateDoDesenho(noGate(), QUARENTA_E_SETE), /class="proposta"/);
+  const html = gateDoDesenho({ ...noGate(), propostas: [proposta()] }, QUARENTA_E_SETE);
+  assert.ok(html.indexOf('class="proposta"') < html.indexOf('class="decidir"'));
+  assert.match(html, /data-acao="aprovar-desenho"/);
 });
 
 test("gate do desenho: espera, 4 números, critérios, tickets propostos com o modelo, e a decisão", () => {

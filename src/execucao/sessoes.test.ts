@@ -23,15 +23,17 @@ import { type Agregado, AUDITOR, CANCELADA, type Execucao, type Ticket } from ".
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Fase } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { agregado, registrarIssue } from "../persistencia/issues.ts";
+import { agregado, propostasDaIssue, proporIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree, garantirWorktree } from "../repositorio/worktree.ts";
 import { abortar, atividadeDo, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
 import { type EventoPi, PACOTE } from "./pi.ts";
 import {
   abrirChat,
+  avisoDaProposta,
   concluirSessao,
   conversarSobre,
+  decidirProposta,
   decidirRegistroNoChat,
   encerrarIssue,
   enviar,
@@ -612,6 +614,155 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
     infoDaSessao(c.banco, "nenhuma"),
     rejeitaCom("a sessão nenhuma não existe (confira o endereço do chat)"),
   );
+  c.banco.close();
+});
+
+/** Para os pis ociosos que o teste deixou vivos e espera o C6 deles, para o processo do teste poder sair. */
+async function pararTudo(c: Cenario): Promise<void> {
+  for (const e of c.execucoes().filter((x) => x.resultado === "em_andamento")) encerrar(e.id);
+  await ate(() => c.execucoes().every((e) => e.resultado !== "em_andamento"), "os pis pararem");
+}
+
+const PROPOSTA = { titulo: "Tela de relatório", mensagem: "Parte B: tela de relatório", arquivos: 31 };
+
+/** Registra a I-1 e espera a sessão do registro em conversa, com o pi ocioso; devolve a sessão e a IA do ticket. */
+async function registroEmConversa(c: Cenario, opcoes: { ociosidadeMin: number }) {
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Relatórios de vendas", opcoes);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a conversa do registro");
+  return { sessao, agente: { tipo: "agente", execucao: 1, ticket: 1 } as const };
+}
+
+test("proposta no registro: aceitar cria a issue dependente, abre o registro dela e retoma a IA com o aviso", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  const { sessao, agente } = await registroEmConversa(c, opcoes);
+  const proposta = proporIssue(c.banco, 1, PROPOSTA, agente);
+
+  assert.deepEqual(await decidirProposta(c.banco, proposta.id, true, opcoes), { issue: 2 });
+
+  const nova = agregado(c.banco, 2);
+  assert.deepEqual(
+    [nova?.issue.deps, nova?.issue.titulo, nova?.issue.descricao, nova?.issue.fase],
+    [[1], "Tela de relatório", "Parte B: tela de relatório", "registro"],
+  );
+  const decidida = propostasDaIssue(c.banco, 1)[0];
+  assert.ok(decidida);
+  assert.deepEqual([decidida.status, decidida.issueCriada], ["aceita", 2]);
+  const aviso = avisoDaProposta(decidida, 1);
+  assert.match(
+    aviso,
+    /^A Fabriquinha criou a I-2 \(«Tela de relatório»\) a partir da sua proposta, que o Auditor aceitou; ela depende da I-1\. Reduza o escopo da I-1: /,
+  );
+  assert.deepEqual(
+    c.execucoes().map((e) => [e.id, e.resultado, e.modo]),
+    [
+      [1, "sucesso", "interativo"],
+      [2, "em_andamento", "interativo"],
+      [3, "em_andamento", "interativo"],
+    ],
+    "o pi ocioso da I-1 parou (C6) e retomou; o registro da I-2 abriu",
+  );
+  assert.equal(c.execucoes()[1]?.sessao_pi, sessao);
+  assert.notEqual(c.execucoes()[2]?.sessao_pi, sessao);
+  await ate(() => c.comandos().some((m) => m.message === aviso), "o aviso chegar ao pi");
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a IA responder ao aviso");
+  await ate(
+    async () => (await estadoDe(c, c.execucoes()[2]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
+    "o registro da I-2",
+  );
+
+  await assert.rejects(
+    decidirProposta(c.banco, proposta.id, true, opcoes),
+    rejeitaCom("a proposta P-1 já foi decidida: aceita (uma proposta só se decide uma vez)"),
+  );
+  assert.equal(agregado(c.banco, 3), undefined, "o segundo aceite não criou outra issue");
+  await pararTudo(c);
+  c.banco.close();
+});
+
+test("proposta no registro: recusar só grava a decisão e retoma a IA com o aviso", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  const { sessao, agente } = await registroEmConversa(c, opcoes);
+  const proposta = proporIssue(c.banco, 1, PROPOSTA, agente);
+
+  assert.deepEqual(await decidirProposta(c.banco, proposta.id, false, opcoes), {});
+
+  assert.equal(propostasDaIssue(c.banco, 1)[0]?.status, "recusada");
+  assert.equal(agregado(c.banco, 2), undefined);
+  const aviso = "O Auditor recusou a sua proposta de issue «Tela de relatório»; mantenha o escopo atual da I-1.";
+  assert.equal(avisoDaProposta({ ...proposta, status: "recusada" }, 1), aviso);
+  await ate(() => c.comandos().some((m) => m.message === aviso), "o aviso chegar ao pi");
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a IA responder ao aviso");
+  assert.deepEqual(
+    c.execucoes().map((e) => [e.id, e.resultado]),
+    [
+      [1, "sucesso"],
+      [2, "em_andamento"],
+    ],
+  );
+  await pararTudo(c);
+  c.banco.close();
+});
+
+test("proposta: agente ocupado recusa antes de gravar, e proposta inexistente é erro", async () => {
+  const c = cenario({ variante: "espera" });
+  const opcoes = { ociosidadeMin: 1 };
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Relatórios de vendas", opcoes);
+  await ate(async () => (await infoDaSessao(c.banco, sessao)).atividade !== undefined, "o agente trabalhar");
+  const proposta = proporIssue(c.banco, 1, PROPOSTA, { tipo: "agente", execucao: 1, ticket: 1 });
+
+  await assert.rejects(
+    decidirProposta(c.banco, proposta.id, true, opcoes),
+    rejeitaCom("a sessão de T-1 ainda está rodando (espere o agente terminar)"),
+  );
+  assert.equal(propostasDaIssue(c.banco, 1)[0]?.status, "pendente");
+  assert.equal(agregado(c.banco, 2), undefined);
+  await assert.rejects(decidirProposta(c.banco, 9, true, opcoes), /a proposta P-9 não existe/);
+  await pararTudo(c);
+  c.banco.close();
+});
+
+test("proposta no desenho: aceitar reprova o desenho e abre o registro da nova, sem mensagem à IA do desenho", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  c.banco.exec(`UPDATE issue SET fase = 'desenho', titulo = 'Busca lenta', tipo = 'funcionalidade';
+    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (2, 1, 'desenho', 'Desenhar', 'em_execucao', 'fabriquinha', '${T1}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
+      VALUES (1, 2, 'autonomo', '${SESSAO}', 'em_andamento', '${T1}');
+    INSERT INTO sequencia (nome, valor) VALUES ('ticket', 2), ('execucao', 1)
+      ON CONFLICT (nome) DO UPDATE SET valor = excluded.valor;`);
+  const proposta = proporIssue(c.banco, 1, PROPOSTA, { tipo: "agente", execucao: 1, ticket: 2 });
+  c.banco.exec(`UPDATE issue SET fase = 'aprovacao_desenho';
+    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}' WHERE id = 2;
+    UPDATE execucao SET resultado = 'sucesso', terminada_em = '${T1}';`);
+
+  assert.deepEqual(await decidirProposta(c.banco, proposta.id, true, opcoes), { issue: 2 });
+
+  const ag = agregado(c.banco, 1);
+  assert.ok(ag);
+  assert.equal(ag.issue.fase, "desenho");
+  assert.equal(ag.decisoes.at(-1)?.aprovado, false);
+  assert.match(ag.decisoes.at(-1)?.motivo ?? "", /I-2 \(«Tela de relatório»\)/);
+  assert.equal(ag.tickets.at(-1)?.etapa, "desenho");
+  assert.equal(ag.tickets.at(-1)?.status, "aberto");
+  assert.equal(agregado(c.banco, 2)?.issue.descricao, "Parte B: tela de relatório");
+  assert.deepEqual(
+    c.execucoes().map((e) => [e.id, e.sessao_pi === SESSAO]),
+    [
+      [1, true],
+      [2, false],
+    ],
+    "nenhuma execução nova na I-1; só o registro da I-2",
+  );
+  await ate(
+    async () => (await estadoDe(c, c.execucoes()[1]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
+    "o registro da I-2",
+  );
+  await pararTudo(c);
   c.banco.close();
 });
 
