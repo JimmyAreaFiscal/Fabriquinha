@@ -606,7 +606,7 @@ export function paginaDaIssue(p: PaginaDaIssue, descricaoHtml: string, extras = 
 
 // ——— caixa ———
 
-/** As execuções do ticket na caixa: modo, resultado, início, duração, custo, erro, log e prompt. */
+/** A descrição e as execuções do ticket na caixa: modo, resultado, início, duração, custo, erro, log e prompt. */
 export function execucoesDoTicket(p: PaginaDaIssue, ticket: Ticket): ConteudoDaCaixa {
   const id = ticket.id;
   const linhas = p.execucoes
@@ -620,9 +620,11 @@ export function execucoesDoTicket(p: PaginaDaIssue, ticket: Ticket): ConteudoDaC
   return {
     titulo: `${rotuloTicket(id)} · ${ticket.titulo}`,
     meta: `${etapa(ticket.etapa)} · ${STATUS_DO_TICKET[ticket.status]}`,
-    corpo: linhas.length
-      ? `<div class="rola"><table class="tabela"><thead><tr><th>Execução</th><th>Modo</th><th>Resultado</th><th>Início</th><th class="num">Duração</th><th class="num">Custo</th><th>Erro</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
-      : '<p class="muted">Ainda sem execução.</p>',
+    corpo:
+      (ticket.descricao ? `<div class="md descricao-ticket">${markdown(ticket.descricao)}</div>` : "") +
+      (linhas.length
+        ? `<div class="rola"><table class="tabela"><thead><tr><th>Execução</th><th>Modo</th><th>Resultado</th><th>Início</th><th class="num">Duração</th><th class="num">Custo</th><th>Erro</th><th></th></tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
+        : '<p class="muted">Ainda sem execução.</p>'),
   };
 }
 

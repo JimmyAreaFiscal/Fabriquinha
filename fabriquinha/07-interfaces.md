@@ -291,7 +291,7 @@ Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR; o re
      No pé do card, **Cancelar issue** (C22) abre um diálogo que diz que a issue sai do andamento e que nada é apagado, e lista os efeitos: os tickets abertos ou que falharam, que serão fechados, a execução em andamento, que será parada, e as dependentes (link, projeto e fase), que serão canceladas junto; **Voltar** ou **Cancelar issue**. Na concluída o botão fica desabilitado, com "A I-n está concluída e não pode ser cancelada."; na cancelada some, e também a **Ação do Auditor**;
    - **Descrição** em Markdown, recolhida com **ver tudo**;
    - **Tickets e sessões:** linha do tempo dos tickets em ordem de criação, com etapa, status e as sessões de cada um (principal e consultas) com link para o chat.
-     Clicar no ticket abre na caixa as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
+     Clicar no ticket abre na caixa a descrição e as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
 3. Coluna da direita:
    - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket autônomo `aberto` e elegível, desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
    - **Artefatos:** uma linha por etapa e ticket, do mais recente ao mais antigo, com um card pequeno por evidência (classe do conteúdo — HTML, IMG, VÍDEO, TABELA, TEXTO, JSON — nome e um ponto verde ou vermelho quando a evidência tem `aprovada`).
