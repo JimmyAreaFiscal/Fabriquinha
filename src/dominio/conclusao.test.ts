@@ -365,24 +365,74 @@ test("C7 da revisão exige a decisão e a coerência dela com os tickets criados
   );
 });
 
-test("C7 do encerramento: com as quatro evidências da etapa, a issue vai para aprovacao_pr", () => {
-  const ag = desenhado({ fase: "encerramento" });
+/** I-1 no encerramento, com as quatro evidências da etapa; o `pr_aberto` leva a URL e a base do PR. */
+const encerrando = (): Agregado => {
   const tipos = ["mensagem_pr", "video_explicativo", "relatorio_produtividade", "pr_aberto"] as const;
-  const encerrando = {
-    ...ag,
+  return {
+    ...desenhado({ fase: "encerramento" }),
     tickets: [ticket(1, "registro", { status: "concluido" }), ticket(2, "encerramento")],
-    evidencias: tipos.map((tipo, i) => evidencia(i + 1, tipo)),
+    evidencias: tipos.map((tipo, i) => {
+      const dados: Evidencia["dados"] =
+        tipo === "pr_aberto" ? { url: "https://github.com/org/loja/pull/7", base: "main" } : {};
+      return { ...evidencia(i + 1, tipo), dados };
+    }),
   };
-  const depois = concluir(encerrando);
+};
+
+test("C7 do encerramento: com o PR sem conflito e sem check falho, a issue vai para aprovacao_pr", () => {
+  const ag = encerrando();
+  const depois = concluir(ag, { ticket: 2 }, fabriquinha, {
+    ...contexto(),
+    problemasPR: { conflito: false, checksFalhos: [] },
+  });
   assert.deepEqual(depois, {
-    ...encerrando,
-    issue: { ...encerrando.issue, fase: "aprovacao_pr" },
-    tickets: [encerrando.tickets[0], { ...encerrando.tickets[1], status: "concluido", concluidoEm: AGORA }],
+    ...ag,
+    issue: { ...ag.issue, fase: "aprovacao_pr" },
+    tickets: [ag.tickets[0], { ...ag.tickets[1], status: "concluido", concluidoEm: AGORA }],
   });
   regra(
-    () => concluir({ ...encerrando, evidencias: encerrando.evidencias.slice(0, 3) }),
+    () => concluir({ ...ag, evidencias: ag.evidencias.slice(0, 3) }),
     "T-2 não pode concluir: falta a evidência pr_aberto (a Fabriquinha coleta depois do pi; execute o ticket de novo)",
   );
+});
+
+test("C7 do encerramento: sem a verificação do PR, a regra recusa", () => {
+  regra(
+    () => concluir(encerrando()),
+    "T-2 não pode concluir: a situação do PR não foi verificada " +
+      "(a Fabriquinha verifica o PR depois de publicá-lo; execute o ticket de novo)",
+  );
+});
+
+test("C7 do encerramento: PR com conflito volta a desenvolvimento com um ticket novo que manda mesclar a base", () => {
+  const ag = encerrando();
+  const depois = concluir(ag, { ticket: 2 }, fabriquinha, {
+    ...contexto(),
+    problemasPR: { conflito: true, checksFalhos: [] },
+  });
+  assert.equal(depois.issue.fase, "desenvolvimento");
+  assert.equal(depois.tickets[1]?.status, "concluido");
+  const novo = depois.tickets[2];
+  assert.deepEqual(
+    [novo?.id, novo?.etapa, novo?.status, novo?.origem, novo?.titulo],
+    [41, "desenvolvimento", "aberto", "fabriquinha", "Resolver o conflito do PR com a branch base main"],
+  );
+  assert.match(novo?.descricao ?? "", /https:\/\/github\.com\/org\/loja\/pull\/7/);
+  assert.match(novo?.descricao ?? "", /`git fetch origin main` e `git merge --no-commit origin\/main`/);
+  assert.match(novo?.descricao ?? "", /sem commit|Não faça commit/);
+});
+
+test("C7 do encerramento: check falho volta a desenvolvimento com o nome e o link de cada check", () => {
+  const checksFalhos = [{ nome: "build", url: "https://ci.exemplo.com/build" }, { nome: "lint" }];
+  const depois = concluir(encerrando(), { ticket: 2 }, fabriquinha, {
+    ...contexto(),
+    problemasPR: { conflito: false, checksFalhos },
+  });
+  assert.equal(depois.issue.fase, "desenvolvimento");
+  const novo = depois.tickets[2];
+  assert.equal(novo?.titulo, "Corrigir os checks de CI falhos do PR: build, lint");
+  assert.match(novo.descricao, /https:\/\/github\.com\/org\/loja\/pull\/7/);
+  assert.match(novo.descricao, /^- build: https:\/\/ci\.exemplo\.com\/build\n- lint$/m);
 });
 
 /** I-1 em `ajuste_pr`: a sessão em aberto T-2 em execução (E-5 terminada), sem tickets criados. */

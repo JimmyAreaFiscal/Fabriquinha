@@ -114,8 +114,39 @@ const REGRAS: Record<Exclude<Etapa, "registro">, Regra> = {
       tickets: [...ag.tickets, novoTicket(ag, ctx, "encerramento", "Publicar o PR")],
     };
   },
-  // As evidências do catálogo bastam: a Fabriquinha só registra pr_aberto depois de publicar o PR.
-  encerramento: (ag) => ({ ...ag, issue: { ...ag.issue, fase: "aprovacao_pr" } }),
+  // As evidências do catálogo bastam: a Fabriquinha só registra pr_aberto depois de publicar o PR. O gate do PR só
+  // recebe o PR limpo; senão, a issue volta ao desenvolvimento com um ticket que resolve o problema (F5 §5.1, passo 4).
+  encerramento: (ag, ticket, ctx) => {
+    const problemas = ctx.problemasPR;
+    if (!problemas) {
+      throw new ErroDeRegra(
+        `${rotuloTicket(ticket)} não pode concluir: a situação do PR não foi verificada`,
+        "a Fabriquinha verifica o PR depois de publicá-lo; execute o ticket de novo",
+      );
+    }
+    const pr = ag.evidencias.findLast((e) => e.tipo === "pr_aberto")?.dados as { url: string; base: string };
+    const linhas = problemas.checksFalhos.map((c) => (c.url ? `- ${c.nome}: ${c.url}` : `- ${c.nome}`));
+    const [titulo, descricao] = problemas.conflito
+      ? [
+          `Resolver o conflito do PR com a branch base ${pr.base}`,
+          `O PR ${pr.url} tem conflito com a branch base ${pr.base}. Na worktree, rode \`git fetch origin ${pr.base}\` e ` +
+            `\`git merge --no-commit origin/${pr.base}\`, resolva os conflitos e rode os testes. Não faça commit: a ` +
+            "Fabriquinha commita depois que testes, fitness e SonarQube aprovam.",
+        ]
+      : [
+          `Corrigir os checks de CI falhos do PR: ${problemas.checksFalhos.map((c) => c.nome).join(", ")}`,
+          `Os checks de CI do PR ${pr.url} terminaram falhos. Reproduza cada falha localmente, corrija e rode os ` +
+            `testes:\n${linhas.join("\n")}`,
+        ];
+    if (!problemas.conflito && problemas.checksFalhos.length === 0) {
+      return { ...ag, issue: { ...ag.issue, fase: "aprovacao_pr" } };
+    }
+    return {
+      ...ag,
+      issue: { ...ag.issue, fase: "desenvolvimento" },
+      tickets: [...ag.tickets, novoTicket(ag, ctx, "desenvolvimento", titulo, descricao)],
+    };
+  },
 };
 
 const EntradaConclusao = z.object({ ticket: Id });

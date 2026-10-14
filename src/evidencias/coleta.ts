@@ -1,7 +1,7 @@
 // Coleta por etapa antes e depois do pi (F3 §7). O depois só roda quando o pi terminou bem; se ele falhou, o ticket
 // falha direto.
 import type { DatabaseSync } from "node:sqlite";
-import type { Agregado, Ticket, TipoEvidencia } from "../dominio/agregado.ts";
+import type { Agregado, Contexto, Ticket, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { Etapa, Id } from "../dominio/primitivos.ts";
 import { gravarCommit } from "../persistencia/commits.ts";
@@ -14,11 +14,12 @@ import {
   coletarPR,
   coletarProdutividade,
   coletarTestes,
+  verificarOPR,
 } from "./coletores.ts";
 import { coletarSonar } from "./sonar.ts";
 
 /** O que a coleta grava na mesma transação do C7 do ticket (F5 §4, passo 4). */
-export type NaConclusao = (banco: DatabaseSync) => void;
+export type NaConclusao = (banco: DatabaseSync, ctx: Contexto) => Contexto;
 
 type Coleta = (banco: DatabaseSync, ticket: Ticket, worktree: string, log: string) => Promise<NaConclusao | undefined>;
 
@@ -54,8 +55,9 @@ const desenvolver: Coleta = async (banco, ticket) => {
   await exigirAprovada(banco, ticket.id, "matriz_fitness", coletarFitness);
   const { issue } = await exigirAprovada(banco, ticket.id, "relatorio_sonar", coletarSonar);
   const commit = await commitarTicket(banco, issue.projeto, issue, ticket);
-  return (b) => {
+  return (b, ctx) => {
     gravarCommit(b, ticket.id, commit);
+    return ctx;
   };
 };
 
@@ -71,7 +73,10 @@ const encerrar: Coleta = async (banco, ticket, worktree, log) => {
   anotar(log, "relatorio_produtividade registrado");
   await coletarPR(banco, ticket.id, log);
   anotar(log, "pr_aberto registrado");
-  return undefined;
+  const problemasPR = await verificarOPR(banco, ticket.id, log);
+  const falhos = `${String(problemasPR.checksFalhos.length)} check(s) falho(s)`;
+  anotar(log, `PR verificado: ${problemasPR.conflito ? "com conflito" : falhos}`);
+  return (_b, ctx) => ({ ...ctx, problemasPR });
 };
 
 /**

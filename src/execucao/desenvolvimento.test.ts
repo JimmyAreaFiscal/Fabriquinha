@@ -881,7 +881,7 @@ test("encerramento: o PR saiu, mas o registro de pr_aberto falhou; reaberto, o t
   assert.equal(c.doEncerramento().find((e) => e.tipo === "pr_aberto")?.dados.id, "1");
   assert.deepEqual(
     hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
-    ["pr list", "pr create", "pr list", "pr edit"],
+    ["pr list", "pr create", "pr list", "pr edit", "pr view"],
   );
   c.banco.close();
 });
@@ -926,7 +926,7 @@ test("encerramento: o C7 falhou depois do pr_aberto; reaberto, o ticket atualiza
   );
   assert.deepEqual(
     hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
-    ["pr list", "pr create", "pr list", "pr reopen", "pr edit"],
+    ["pr list", "pr create", "pr view", "pr list", "pr reopen", "pr edit", "pr view"],
   );
   c.banco.close();
 });
@@ -957,5 +957,96 @@ test("encerramento: commit de agente fora do desenvolvimento na branch faz o tic
   await executarAutonomo(c.banco, 6, OPCOES);
   assert.equal(c.estado(6).ticket?.status, "concluido", c.estado(6).ticket?.erro);
   assert.equal(c.publicado(), git(c.worktree, "rev-parse", "HEAD"));
+  c.banco.close();
+});
+
+/** O que o `gh pr view --json mergeable,statusCheckRollup` responde; o PR do teste ainda não existe quando o gh é programado. */
+const situacaoGh = (mergeable: string, checks: { name: string; conclusion: string }[]) =>
+  JSON.stringify({
+    mergeable,
+    statusCheckRollup: checks.map((c) => ({ __typename: "CheckRun", status: "COMPLETED", ...c })),
+  });
+const LIMPO = situacaoGh("MERGEABLE", [{ name: "ci", conclusion: "SUCCESS" }]);
+
+test("encerramento: PR com conflito com a base volta a desenvolvimento com o ticket novo, sem o gate", async () => {
+  const c = await noEncerramento();
+  hospedagem.responder("pr view", situacaoGh("CONFLICTING", []));
+
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  const { ag, ticket } = c.estado(6);
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "desenvolvimento");
+  const novo = ag.tickets.find((t) => t.id === 7);
+  assert.deepEqual([novo?.etapa, novo?.status, novo?.origem], ["desenvolvimento", "aberto", "fabriquinha"]);
+  assert.equal(novo?.titulo, "Resolver o conflito do PR com a branch base main");
+  assert.match(novo.descricao, /https:\/\/github\.com\/org\/loja\/pull\/1 tem conflito com a branch base main/);
+  assert.match(novo.descricao, /`git fetch origin main` e `git merge --no-commit origin\/main`/);
+  assert.match(readFileSync(join(c.raiz, "execucoes", "E-6", "log"), "utf8"), /PR verificado: com conflito/);
+  c.banco.close();
+});
+
+test("encerramento: check de CI falho volta a desenvolvimento com o ticket que lista o check e o link", async () => {
+  const c = await noEncerramento();
+  hospedagem.responder("pr view", situacaoGh("MERGEABLE", [{ name: "build", conclusion: "FAILURE" }]));
+
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  const { ag, ticket } = c.estado(6);
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "desenvolvimento");
+  const novo = ag.tickets.find((t) => t.id === 7);
+  assert.deepEqual([novo?.etapa, novo?.origem], ["desenvolvimento", "fabriquinha"]);
+  assert.equal(novo?.titulo, "Corrigir os checks de CI falhos do PR: build");
+  assert.match(novo.descricao, /https:\/\/github\.com\/org\/loja\/pull\/1/);
+  assert.match(novo.descricao, /- build$/m);
+  assert.match(readFileSync(join(c.raiz, "execucoes", "E-6", "log"), "utf8"), /PR verificado: 1 check\(s\) falho\(s\)/);
+  c.banco.close();
+});
+
+test("encerramento: o gh falhando ao consultar o PR deixa o ticket falhou com a saída, sem o gate", async () => {
+  const c = await noEncerramento();
+  hospedagem.falhar("pr view", "gh: não autenticado");
+
+  await executarAutonomo(c.banco, 6, OPCOES);
+
+  const { ag, ticket } = c.estado(6);
+  assert.equal(ticket?.status, "falhou");
+  assert.match(ticket.erro ?? "", /gh pr view saiu com código 1: gh: não autenticado/);
+  assert.match(ticket.erro ?? "", /execute o ticket de novo/);
+  assert.equal(ag.issue.fase, "encerramento");
+  c.banco.close();
+});
+
+test("a volta por conflito: desenvolvimento, revisão e encerramento chegam ao gate sem decisão do Auditor", async () => {
+  const c = await noEncerramento();
+  hospedagem.responder("pr view", situacaoGh("CONFLICTING", []));
+  await executarAutonomo(c.banco, 6, OPCOES);
+  assert.equal(c.estado(7).ag.issue.fase, "desenvolvimento");
+
+  // O desenvolvimento resolve o conflito; a revisão aprova; o encerramento atualiza o PR, agora limpo.
+  delete process.env.FALSO_PI_AGENTE;
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "merge.ts": "2\n" });
+  await executarAutonomo(c.banco, 7, OPCOES);
+  assert.equal(c.estado(7).ticket?.status, "concluido", c.estado(7).ticket?.erro);
+  assert.equal(c.estado(7).ag.issue.fase, "revisao");
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "rascunho.txt": "x" });
+  process.env.FALSO_PI_AGENTE = revisor;
+  process.env.FALSO_REVISAO = JSON.stringify({ atendido: true, tickets: [], decisao: { aprovado: true } });
+  await executarAutonomo(c.banco, 8, OPCOES);
+  assert.equal(c.estado(8).ticket?.status, "concluido", c.estado(8).ticket?.erro);
+  assert.equal(c.estado(8).ag.issue.fase, "encerramento");
+  process.env.FALSO_PI_AGENTE = encerrador;
+  hospedagem.responder("pr view", LIMPO);
+  await executarAutonomo(c.banco, 9, OPCOES);
+
+  const { ag, ticket } = c.estado(9);
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "aprovacao_pr");
+  assert.equal(hospedagem.prs().length, 1, "o mesmo PR, atualizado");
+  assert.deepEqual(
+    ag.decisoes.filter((d) => d.gate === "pr"),
+    [],
+  );
   c.banco.close();
 });

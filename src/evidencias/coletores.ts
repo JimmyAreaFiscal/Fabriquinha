@@ -4,8 +4,14 @@ import { closeSync, mkdirSync, mkdtempSync, openSync, rmSync, statSync, writeFil
 import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { type Agregado, type ArquivoEvidencia, FABRIQUINHA, type TipoEvidencia } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import {
+  type Agregado,
+  type ArquivoEvidencia,
+  FABRIQUINHA,
+  type ProblemasDoPR,
+  type TipoEvidencia,
+} from "../dominio/agregado.ts";
+import { ErroDeRegra, existe } from "../dominio/erros.ts";
 import { exigirRegistroDeEvidencia, registrarEvidencia } from "../dominio/evidencia.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { guardarArquivos } from "../persistencia/arquivos.ts";
@@ -18,7 +24,7 @@ import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS } from "../p
 import { relatorio } from "../metricas/relatorio.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
 import { diffDaIssue } from "../repositorio/commit.ts";
-import { publicarPR } from "../repositorio/pr.ts";
+import { publicarPR, verificarPR } from "../repositorio/pr.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { LIMITE_DO_CORPO, marcaDoPR, montarPR } from "./pr.ts";
 import { LIMITE, MIME_HTML, MIME_TEXTO, schemaDe } from "./schemas.ts";
@@ -56,15 +62,21 @@ function guardarNumaPasta(banco: DatabaseSync, textos: Parameters<typeof guardar
   }
 }
 
+/** O agregado do ticket e o projeto da issue. */
+function daIssue(banco: DatabaseSync, ticket: Id) {
+  const antes = agregadoDoTicket(banco, ticket);
+  // A FK de issue.projeto garante o projeto de um ticket que existe.
+  const proj = antes && projeto(banco, antes.issue.projeto);
+  if (!antes || !proj) throw new ErroDeRegra(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
+  return { antes, proj };
+}
+
 /**
  * As pré-condições de C17 para `tipo` e a worktree da issue, conferidas antes de coletar, para não gastar até 30
  * minutos por comando à toa.
  */
 function exigirColeta(banco: DatabaseSync, ticket: Id, tipo: TipoEvidencia) {
-  const antes = agregadoDoTicket(banco, ticket);
-  // A FK de issue.projeto garante o projeto de um ticket que existe.
-  const proj = antes && projeto(banco, antes.issue.projeto);
-  if (!antes || !proj) throw new ErroDeRegra(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
+  const { antes, proj } = daIssue(banco, ticket);
   exigirRegistroDeEvidencia(antes, FABRIQUINHA, ticket, tipo);
   const worktree = caminhoDaWorktree(raizDo(banco), proj.nome, antes.issue.id);
   if (!statSync(worktree, { throwIfNoEntry: false })?.isDirectory()) {
@@ -212,4 +224,15 @@ export async function coletarPR(banco: DatabaseSync, ticket: Id, log: string): P
   return comIssue(banco, issue.id, "registrarEvidencia", FABRIQUINHA, (ag, ctx) =>
     registrarEvidencia(ag, { ticket, tipo: "pr_aberto", dados, arquivos }, FABRIQUINHA, ctx),
   );
+}
+
+/** F5 §5.1, passo 4: espera a plataforma decidir o conflito e os checks do último PR publicado da issue do ticket. */
+export async function verificarOPR(banco: DatabaseSync, ticket: Id, log: string): Promise<ProblemasDoPR> {
+  const { antes, proj } = daIssue(banco, ticket);
+  const pr = existe(
+    antes.evidencias.findLast((e) => e.tipo === "pr_aberto"),
+    `a I-${String(antes.issue.id)} ainda não tem PR`,
+    "o encerramento publica o PR",
+  );
+  return verificarPR(proj, pr.dados.id as string, log);
 }

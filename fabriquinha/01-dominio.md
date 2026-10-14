@@ -267,7 +267,8 @@ stateDiagram-v2
     desenvolvimento --> revisao: último ticket de desenvolvimento concluído
     revisao --> encerramento: revisão aprovada
     revisao --> desenvolvimento: revisão reprovada
-    encerramento --> aprovacao_pr: PR aberto
+    encerramento --> aprovacao_pr: PR aberto, sem conflito e com a CI aprovada
+    encerramento --> desenvolvimento: PR com conflito ou check de CI falho
     aprovacao_pr --> concluida: gate PR aprovado e merge feito
     aprovacao_pr --> ajuste_pr: gate PR reprovado
     ajuste_pr --> desenvolvimento: sessão em aberto criou tickets
@@ -349,7 +350,7 @@ Tokens, custo, tickets, execuções, decisões e evidências continuam consultá
 | desenho | criou pelo menos um ticket de desenvolvimento | fase `aprovacao_desenho` |
 | desenvolvimento | tem commit registrado (F5) | se não sobrar ticket de desenvolvimento não concluído na issue: fase `revisao` e novo Ticket `revisao`; senão, a fase continua |
 | revisao | tem Decisão de revisão; aprovada ⇒ não criou tickets, `comprovacao_criterios.aprovada` e `matriz_fitness.aprovada` (F3, seção 8); reprovada ⇒ criou pelo menos um | aprovada: fase `encerramento` e novo Ticket `encerramento`; reprovada: fase `desenvolvimento` |
-| encerramento | — | fase `aprovacao_pr` |
+| encerramento | `ctx.problemasPR` presente (a coleta verificou o PR, F5 §5.1) | sem conflito e sem check falho: fase `aprovacao_pr`; com conflito ou check falho: fase `desenvolvimento` e novo Ticket `desenvolvimento` (origem `fabriquinha`) que resolve o conflito com a base ou corrige os checks |
 | sessao | criou pelo menos um ticket de desenvolvimento | fase `desenvolvimento` |
 | registro | não usa C7; conclui por C10 | — |
 
