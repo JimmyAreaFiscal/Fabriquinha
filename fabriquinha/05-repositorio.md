@@ -139,15 +139,35 @@ No encerramento, depois do descarte (F3, seção 7):
 1. `git push -u origin fabriquinha/I-<n>`, depois `git fetch origin <branchBase>` e `varrerBase` (F6, 4.4), cuja falha só vai para o log.
 2. Se a issue ainda não tem PR, cria; se já tem (nova volta depois de um PR reprovado), atualiza título e corpo inteiros (F3, 4.6).
 3. Lê o número e a URL e devolve ao F3, que grava `pr_aberto`.
+4. Verifica o PR: lê na plataforma o conflito com a `branchBase` e os checks de CI, e espera a plataforma decidir.
+   - Com conflito, devolve na hora (os checks não importam).
+   - Sem conflito, devolve os checks falhos quando nenhum está em andamento e há ao menos um check.
+   Lista vazia é a CI que ainda não registrou: só vale como PR sem CI depois da carência de 2 minutos.
+   - Enquanto o conflito é calculado ou há check em andamento, anota no log da execução o que espera e lê de novo a cada 30 segundos.
+   - Passados 60 minutos, falha com os checks ainda em andamento e "acompanhe o PR na plataforma e execute o ticket de novo".
+   - A falha do `gh` ou do `az` sai com a saída do comando.
 
 | Ação | GitHub | Azure DevOps |
 |---|---|---|
 | Criar | `gh pr create --base <branchBase> --head fabriquinha/I-<n> --title <t> --body-file <arquivo>` | `az repos pr create --detect true --source-branch fabriquinha/I-<n> --target-branch <branchBase> --title <t> --description <corpo> --output json` |
 | Atualizar | `gh pr edit <n> --title <t> --body-file <arquivo>` | `az repos pr update --id <n> --title <t> --description <corpo> --output json` |
 | Ler estado | `gh pr view <n> --json number,url,state` | `az repos pr show --id <n> --output json` |
+| Ler situação | `gh pr view <n> --json mergeable,statusCheckRollup` | `az repos pr show --id <n> --output json` (`mergeStatus`) e `az repos pr policy list --id <n> --detect true --output json` |
 | Listar PRs da branch (5.0) | `gh pr list --head fabriquinha/I-<n> --state all --json number,url` | `az repos pr list --detect true --source-branch fabriquinha/I-<n> --status all --output json` |
 
 O corpo vem do F3 já condensado para o limite da hospedagem (F3, 4.7).
+
+Como a situação vira conflito e checks:
+
+| | GitHub | Azure DevOps |
+|---|---|---|
+| Conflito | `mergeable`: `CONFLICTING` é sim, `MERGEABLE` é não, `UNKNOWN` é calculando | `mergeStatus`: `conflicts` é sim, `succeeded` é não, `queued` e `notSet` são calculando |
+| Checks | `statusCheckRollup`: `CheckRun` e `StatusContext` | só as políticas de tipo `Build` e `Status`, sem as `notApplicable`; revisores e afins ficam de fora |
+| Em andamento | `CheckRun` com status diferente de `COMPLETED`; `StatusContext` `PENDING` ou `EXPECTED` | `queued` e `running` |
+| Aprovado | `CheckRun` `SUCCESS`, `NEUTRAL` ou `SKIPPED`; `StatusContext` `SUCCESS` | `approved` |
+| Falho | o resto | `rejected` e `broken` |
+
+Um valor que a Fabriquinha não conhece é erro, nunca aprovado.
 
 ### 5.2 Merge
 
@@ -164,7 +184,8 @@ Quando o Auditor aprova o PR no web, o F5 faz o merge **antes** de C16; C16 só 
 Se o merge não acontece (conflito com a base, política de branch, revisor obrigatório ou build pendente), nenhuma decisão é gravada.
 O web mostra a mensagem da plataforma.
 O Auditor resolve na plataforma e aprova de novo, ou reprova o PR.
-Conflito com a base resolve-se pelo fluxo normal: reprovar o PR abre a sessão em aberto, que cria um ticket de desenvolvimento para integrar a base.
+O conflito que existe ao publicar o PR não chega ao gate: a verificação (5.1, passo 4) o pega antes.
+Um conflito que nasce depois, com o PR já no gate, resolve-se pelo fluxo normal: reprovar o PR abre a sessão em aberto, que cria um ticket de desenvolvimento para integrar a base.
 A Fabriquinha nunca atualiza a branch sozinha, porque só ticket de desenvolvimento muda código.
 
 ### 5.3 Limpeza

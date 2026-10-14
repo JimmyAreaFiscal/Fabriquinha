@@ -3,8 +3,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
-import type { Evidencia, Issue } from "../dominio/agregado.ts";
+import type { Evidencia, Issue, ProblemasDoPR } from "../dominio/agregado.ts";
 import { ErroDeRegra, ErroExterno, existe, mensagem } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import type { Hospedagem, Projeto } from "../dominio/projeto.ts";
@@ -38,6 +39,13 @@ interface CliDePR {
   atualizar(repo: string, pr: PRNaHospedagem, titulo: string, corpo: string): Promise<{ id: string; url: string }>;
   reabrir(repo: string, id: string): Promise<void>;
   ler(repo: string, id: string): Promise<Omit<LeituraDoPR, "lidoEm">>;
+  situacao(repo: string, id: string): Promise<SituacaoDoPR>;
+}
+
+/** O conflito do PR com a base e os checks de CI, como a plataforma os informa agora (F5 §5.1, passo 4). */
+interface SituacaoDoPR {
+  conflito: "sim" | "nao" | "calculando";
+  checks: { nome: string; estado: "aprovado" | "falho" | "andamento"; url?: string }[];
 }
 
 /** O estado do PR lido na plataforma (F5 §5.2). */
@@ -58,7 +66,8 @@ async function rodar(cli: "gh" | "az", args: readonly string[], cwd: string, deN
   if (r.codigo !== 0) {
     // Estouro do limite sai com código null.
     throw new ErroExterno(
-      `${cli} ${args.slice(0, cli === "gh" ? 2 : 3).join(" ")} saiu com código ${String(r.codigo)}: ${(r.erro + r.saida).trim()}`,
+      // O az nomeia o comando até a primeira opção (`repos pr policy list`); o gh, em duas palavras.
+      `${cli} ${args.slice(0, cli === "gh" ? 2 : args.findIndex((a) => a.startsWith("--"))).join(" ")} saiu com código ${String(r.codigo)}: ${(r.erro + r.saida).trim()}`,
       `confira o acesso do ${cli} à hospedagem e ${deNovo}`,
     );
   }
@@ -116,17 +125,53 @@ const ESTADO_AZ = new Map<string, EstadoNaHospedagem>([
   ["completed", "mergeado"],
 ]);
 
-/** O estado do PR no vocabulário da Fabriquinha; um estado que ela não conhece nunca vira "aberto" por engano. */
-function estadoDe(cli: "gh" | "az", mapa: ReadonlyMap<string, EstadoNaHospedagem>, valor: string): EstadoNaHospedagem {
+/** O estado no vocabulário da Fabriquinha; um estado que ela não conhece nunca vira "aberto" ou "aprovado" por engano. */
+function estadoDe<T>(cli: "gh" | "az", mapa: ReadonlyMap<string, T>, valor: string, oque = "estado de PR"): T {
   const estado = mapa.get(valor);
   if (estado === undefined) {
     throw new ErroExterno(
-      `o ${cli} devolveu um estado de PR que a Fabriquinha não conhece: ${valor}`,
+      `o ${cli} devolveu um ${oque} que a Fabriquinha não conhece: ${valor}`,
       `confira a versão do ${cli}; os estados conhecidos são ${[...mapa.keys()].join(", ")}`,
     );
   }
   return estado;
 }
+type Conflito = SituacaoDoPR["conflito"];
+type EstadoDoCheck = SituacaoDoPR["checks"][number]["estado"];
+const CONFLITO_GH = new Map<string, Conflito>([
+  ["CONFLICTING", "sim"],
+  ["MERGEABLE", "nao"],
+  ["UNKNOWN", "calculando"],
+]);
+const CONFLITO_AZ = new Map<string, Conflito>([
+  ["conflicts", "sim"],
+  ["succeeded", "nao"],
+  ["queued", "calculando"],
+  ["notSet", "calculando"],
+]);
+const CHECK_AZ = new Map<string, EstadoDoCheck>([
+  ["approved", "aprovado"],
+  ["queued", "andamento"],
+  ["running", "andamento"],
+  ["rejected", "falho"],
+  ["broken", "falho"],
+]);
+/** O link do check, só quando a plataforma o informa. */
+const comUrl = (url: string | undefined) => (url ? { url } : {});
+const CONCLUSAO_APROVADA = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
+/** O `state` do StatusContext; o que não está aqui terminou falho. */
+const ESTADO_STATUS_GH = new Map<string, EstadoDoCheck>([
+  ["PENDING", "andamento"],
+  ["EXPECTED", "andamento"],
+  ["SUCCESS", "aprovado"],
+]);
+/** CheckRun: só o COMPLETED tem conclusão; os outros status estão em andamento. */
+function estadoDoCheckRun(status: string, conclusao: string): EstadoDoCheck {
+  if (status === "COMPLETED") return CONCLUSAO_APROVADA.has(conclusao) ? "aprovado" : "falho";
+  return "andamento";
+}
+/** As políticas do Azure DevOps que são de CI: build e status externo. Revisores e afins ficam de fora. */
+const POLITICAS_DE_CI = new Set(["Build", "Status"]);
 /** Lido no gate do PR: a falha não é de ticket. */
 const LER_DE_NOVO = "leia o estado do PR de novo";
 const DataDaPlataforma = z.iso.datetime({ offset: true });
@@ -134,6 +179,26 @@ const DataDaPlataforma = z.iso.datetime({ offset: true });
 const mergeadoEm = (estado: PRNaHospedagem["estado"], data: string | null | undefined) =>
   estado === "mergeado" && data ? { mergeadoEm: new Date(data).toISOString() } : {};
 const PrGh = z.object({ state: z.string(), url: z.string(), mergedAt: DataDaPlataforma.nullable() });
+const SituacaoGh = z.object({
+  mergeable: z.string(),
+  statusCheckRollup: z.array(
+    z.discriminatedUnion("__typename", [
+      z.object({
+        __typename: z.literal("CheckRun"),
+        name: z.string(),
+        status: z.string(),
+        conclusion: z.string(),
+        detailsUrl: z.string().optional(),
+      }),
+      z.object({
+        __typename: z.literal("StatusContext"),
+        context: z.string(),
+        state: z.string(),
+        targetUrl: z.string().optional(),
+      }),
+    ]),
+  ),
+});
 
 const github: CliDePR = {
   async listar(repo, branch) {
@@ -172,6 +237,17 @@ const github: CliDePR = {
     const p = lerJson(await rodar("gh", args, repo, LER_DE_NOVO), PrGh, "gh pr view", LER_DE_NOVO);
     const estado = estadoDe("gh", ESTADO_GH, p.state);
     return { estado, url: p.url, ...mergeadoEm(estado, p.mergedAt) };
+  },
+  async situacao(repo, id) {
+    const args = ["pr", "view", id, "--json", "mergeable,statusCheckRollup"];
+    const p = lerJson(await rodar("gh", args, repo), SituacaoGh, "gh pr view");
+    const checks = p.statusCheckRollup.map((c): SituacaoDoPR["checks"][number] => {
+      if (c.__typename === "StatusContext") {
+        return { nome: c.context, estado: ESTADO_STATUS_GH.get(c.state) ?? "falho", ...comUrl(c.targetUrl) };
+      }
+      return { nome: c.name, estado: estadoDoCheckRun(c.status, c.conclusion), ...comUrl(c.detailsUrl) };
+    });
+    return { conflito: estadoDe("gh", CONFLITO_GH, p.mergeable, "estado de conflito"), checks };
   },
 };
 
@@ -224,7 +300,30 @@ const azure: CliDePR = {
     const estado = estadoDe("az", ESTADO_AZ, p.status);
     return { url: doAz(p).url, estado, ...mergeadoEm(estado, p.closedDate) };
   },
+  async situacao(repo, id) {
+    const pr = await rodar("az", ["repos", "pr", "show", "--id", id, "--output", "json"], repo);
+    const { mergeStatus } = lerJson(pr, z.object({ mergeStatus: z.string() }), "az repos pr show");
+    const args = ["repos", "pr", "policy", "list", "--id", id, "--detect", "true", "--output", "json"];
+    const politicas = lerJson(await rodar("az", args, repo), PoliticasAz, "az repos pr policy list");
+    const checks = politicas
+      .filter((p) => POLITICAS_DE_CI.has(p.configuration.type.displayName) && p.status !== "notApplicable")
+      .map((p) => ({
+        nome: p.configuration.settings?.displayName ?? p.configuration.type.displayName,
+        estado: estadoDe("az", CHECK_AZ, p.status, "estado de política"),
+      }));
+    return { conflito: estadoDe("az", CONFLITO_AZ, mergeStatus, "estado de conflito"), checks };
+  },
 };
+
+const PoliticasAz = z.array(
+  z.object({
+    status: z.string(),
+    configuration: z.object({
+      type: z.object({ displayName: z.string() }),
+      settings: z.object({ displayName: z.string().nullish() }).nullish(),
+    }),
+  }),
+);
 
 const CLIS: Readonly<Record<Hospedagem, CliDePR>> = { github, "azure-devops": azure };
 
@@ -325,4 +424,54 @@ export async function estadoPR(
   );
   const leitura = await CLIS[projeto.hospedagem].ler(projeto.repo, pr.dados.id as string);
   return { ...leitura, lidoEm: new Date().toISOString() };
+}
+
+export interface OpcoesVerificacao {
+  /** Quanto esperar a plataforma decidir o PR (F5 §5.1: 60 minutos). */
+  limiteMs?: number;
+  /** Intervalo entre as leituras da situação. */
+  intervaloMs?: number;
+  /** Quanto esperar um primeiro check antes de aceitar que o PR não tem CI. */
+  carenciaMs?: number;
+}
+
+/**
+ * F5 §5.1, passo 4: espera a plataforma decidir o conflito do PR com a base e os checks de CI, até `limiteMs`, e
+ * devolve os problemas. Conflito volta na hora. Sem conflito, a leitura só vale sem check em andamento e com algum
+ * check: a lista vazia é a CI que ainda não registrou, e só passada a `carenciaMs` vale como PR sem CI. Cada espera vai
+ * para o `log`; passado o limite, lança ErroExterno com o que ainda espera.
+ */
+export async function verificarPR(
+  projeto: Pick<Projeto, "repo" | "hospedagem">,
+  id: string,
+  log: string,
+  { limiteMs = 60 * 60_000, intervaloMs = 30_000, carenciaMs = 2 * 60_000 }: OpcoesVerificacao = {},
+): Promise<ProblemasDoPR> {
+  const cli = CLIS[projeto.hospedagem];
+  const inicio = Date.now();
+  for (;;) {
+    const { conflito, checks } = await cli.situacao(projeto.repo, id);
+    if (conflito === "sim") return { conflito: true, checksFalhos: [] };
+    const andamento = checks.filter((c) => c.estado === "andamento").map((c) => c.nome);
+    const decidido =
+      conflito === "nao" && andamento.length === 0 && (checks.length > 0 || Date.now() - inicio >= carenciaMs);
+    if (decidido) {
+      const checksFalhos = checks
+        .filter((c) => c.estado === "falho")
+        .map(({ nome, url }) => ({ nome, ...comUrl(url) }));
+      return { conflito: false, checksFalhos };
+    }
+    const espera =
+      andamento.length > 0 && conflito === "nao"
+        ? `os checks em andamento: ${andamento.join(", ")}`
+        : "a plataforma ainda calcula o PR";
+    if (Date.now() - inicio >= limiteMs) {
+      throw new ErroExterno(
+        `o PR ${id} não ficou decidido em ${String(Math.round(limiteMs / 60_000))} min, ainda espera ${espera}`,
+        `acompanhe o PR na plataforma e ${DE_NOVO}`,
+      );
+    }
+    anotar(log, `PR ${id}: espera ${espera}`);
+    await esperar(intervaloMs);
+  }
 }

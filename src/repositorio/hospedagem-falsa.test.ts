@@ -17,6 +17,10 @@ export interface PRFalso {
   estado: "aberto" | "fechado" | "mergeado";
   /** A branch de origem vem de um fork. */
   fork?: boolean;
+  /** Padrão: sem conflito. */
+  conflito?: boolean | "calculando";
+  /** Padrão: um check `ci` aprovado. */
+  checks?: { nome: string; estado: "aprovado" | "falho" | "andamento" }[];
 }
 
 interface Estado {
@@ -40,7 +44,7 @@ const salvar = () => writeFileSync(arquivo, JSON.stringify(estado));
 estado.chamadas.push({ cli, args, cwd: process.cwd(), token: process.env.GH_TOKEN ?? null });
 salvar();
 const opcao = (nome) => args[args.indexOf(nome) + 1];
-const comando = args.slice(0, cli === "gh" ? 2 : 3).join(" ");
+const comando = args.slice(0, cli === "gh" ? 2 : args.findIndex((a) => a.startsWith("--"))).join(" ");
 if (estado.falha[comando] !== undefined) {
   process.stderr.write(estado.falha[comando]);
   process.exit(1);
@@ -65,9 +69,34 @@ const az = (p) => ({
   // Como o az real: os campos sem valor vêm como null, não ausentes.
   forkSource: p.fork ? { name: "refs/heads/" + p.head } : null,
   closedDate: p.estado === "aberto" ? null : "2026-10-11T13:00:00.1234567Z",
+  mergeStatus: { true: "conflicts", false: "succeeded", calculando: "queued" }[String(conflito(p))],
   url: "https://dev.azure.com/org/_apis/git/pullRequests/" + p.id,
   repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
 });
+const conflito = (p) => p.conflito ?? false;
+const checks = (p) => p.checks ?? [{ nome: "ci", estado: "aprovado" }];
+// O rollup do gh: CheckRun para os checks de nome com "/" e StatusContext para os demais.
+const rollup = (p) =>
+  checks(p).map((c) =>
+    c.nome.includes("/")
+      ? { __typename: "StatusContext", context: c.nome, state: { aprovado: "SUCCESS", falho: "FAILURE", andamento: "PENDING" }[c.estado], targetUrl: "https://ci.exemplo.com/" + c.nome }
+      : {
+          __typename: "CheckRun",
+          name: c.nome,
+          status: c.estado === "andamento" ? "IN_PROGRESS" : "COMPLETED",
+          conclusion: { aprovado: "SUCCESS", falho: "FAILURE", andamento: "" }[c.estado],
+          detailsUrl: "https://ci.exemplo.com/" + c.nome,
+        },
+  );
+// As políticas do az: as de CI (Build) com o nome e as que a Fabriquinha ignora (revisores, build que não se aplica).
+const politicas = (p) => [
+  { status: "rejected", configuration: { type: { displayName: "Minimum number of reviewers" }, settings: {} } },
+  { status: "notApplicable", configuration: { type: { displayName: "Build" }, settings: { displayName: "so-na-main" } } },
+  ...checks(p).map((c) => ({
+    status: { aprovado: "approved", falho: "rejected", andamento: "running" }[c.estado],
+    configuration: { type: { displayName: "Build" }, settings: { displayName: c.nome } },
+  })),
+];
 const pr = (id) => estado.prs.find((p) => p.id === Number(id));
 /** Quando o PR mergeado foi mergeado, como o gh o mostra. */
 const MERGE = "2026-10-11T13:00:00Z";
@@ -101,6 +130,8 @@ switch (comando) {
       url: gh(pr(args[2])).url,
       mergedAt: pr(args[2]).estado === "mergeado" ? MERGE : null,
       mergeCommit: pr(args[2]).estado === "mergeado" ? { oid: "abc" } : null,
+      mergeable: { true: "CONFLICTING", false: "MERGEABLE", calculando: "UNKNOWN" }[String(conflito(pr(args[2])))],
+      statusCheckRollup: rollup(pr(args[2])),
     });
     break;
   case "pr reopen":
@@ -117,6 +148,9 @@ switch (comando) {
     break;
   case "repos pr show":
     resposta = JSON.stringify(az(pr(opcao("--id"))));
+    break;
+  case "repos pr policy list":
+    resposta = JSON.stringify(politicas(pr(opcao("--id"))));
     break;
   case "repos pr update":
     if (opcao("--status") === "active") pr(opcao("--id")).estado = "aberto";
@@ -204,6 +238,7 @@ if (import.meta.main) {
           targetRefName: "refs/heads/main",
           forkSource: { name: "refs/heads/b" },
           closedDate: "2026-10-11T13:00:00.1234567Z",
+          mergeStatus: "succeeded",
           url: "https://dev.azure.com/org/_apis/git/pullRequests/1",
           repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
         },
