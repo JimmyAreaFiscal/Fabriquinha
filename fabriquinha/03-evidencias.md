@@ -409,7 +409,7 @@ O F4 chama estes passos antes e depois de cada execução autônoma.
 | desenho | — | descartar alterações (F5) |
 | desenvolvimento | — | testes → se aprovada, fitness → se aprovada, SonarQube → se aprovada, commit (F5) |
 | revisao | arquivos alterados; fitness | descartar alterações (F5) |
-| encerramento | — | descartar alterações (F5); produtividade (F6); push e PR (F5) |
+| encerramento | — | descartar alterações (F5); produtividade (F6); push e PR (F5); verificação do PR: conflito e CI (F5 §5.1) |
 | sessao | — | descartar alterações (F5) |
 
 **Só o ticket de desenvolvimento muda código.**

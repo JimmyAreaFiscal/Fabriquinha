@@ -4,10 +4,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
+import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
 import { hospedagemFalsa } from "./hospedagem-falsa.test.ts";
-import { estadoPR, publicarPR } from "./pr.ts";
+import { estadoPR, publicarPR, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
 after(() => {
@@ -471,4 +472,225 @@ test("estado de PR desconhecido do gh ou do az é erro, na leitura e na publica�
       "(confira a versão do az; os estados conhecidos são active, abandoned, completed)",
   );
   assert.equal(az.publicado(), "", "nada foi publicado");
+});
+
+const HOSPEDAGENS = ["github", "azure-devops"] as const;
+const RAPIDO = { intervaloMs: 10, carenciaMs: 0 };
+/** Um PR aberto na hospedagem falsa, verificado com o `repo` do cenário. */
+function verificar(tipo: Hospedagem, pr: Partial<Parameters<typeof hospedagem.abrir>[0]>, opcoes = RAPIDO) {
+  const c = cenario(tipo);
+  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto", ...pr });
+  return { c, resultado: verificarPR({ repo: c.repo, hospedagem: tipo }, "1", c.log, opcoes) };
+}
+
+test("verificarPR (F5 §5.1, passo 4): com conflito devolve na hora, sem olhar os checks", async () => {
+  for (const tipo of HOSPEDAGENS) {
+    const { resultado } = verificar(tipo, { conflito: true, checks: [{ nome: "ci", estado: "falho" }] });
+    assert.deepEqual(await resultado, { conflito: true, checksFalhos: [] });
+    hospedagem.zerar();
+  }
+});
+
+test("verificarPR: sem conflito e com a CI aprovada não há problema; o gh e o az são chamados com os comandos do F5", async () => {
+  const gh = verificar("github", {});
+  assert.deepEqual(await gh.resultado, { conflito: false, checksFalhos: [] });
+  assert.deepEqual(hospedagem.chamadas().at(-1)?.args, ["pr", "view", "1", "--json", "mergeable,statusCheckRollup"]);
+  hospedagem.zerar();
+  const az = verificar("azure-devops", {});
+  assert.deepEqual(await az.resultado, { conflito: false, checksFalhos: [] });
+  assert.deepEqual(
+    hospedagem.chamadas().map((ch) => ch.args.join(" ")),
+    ["repos pr show --id 1 --output json", "repos pr policy list --id 1 --detect true --output json"],
+  );
+  assert.equal(existsSync(az.c.log), false, "nada a esperar, nada no log");
+});
+
+test("verificarPR: o check falho volta com o nome (e a URL, quando a plataforma a dá), ignorando as políticas que não são de CI", async () => {
+  const checks = [
+    { nome: "build", estado: "falho" as const },
+    { nome: "ci/lint", estado: "falho" as const },
+    { nome: "testes", estado: "aprovado" as const },
+  ];
+  const gh = verificar("github", { checks });
+  assert.deepEqual(await gh.resultado, {
+    conflito: false,
+    checksFalhos: [
+      { nome: "build", url: "https://ci.exemplo.com/build" },
+      { nome: "ci/lint", url: "https://ci.exemplo.com/ci/lint" },
+    ],
+  });
+  hospedagem.zerar();
+  // No Azure DevOps o revisor mínimo está rejeitado e há um build que não se aplica: nenhum dos dois é check.
+  const az = verificar("azure-devops", { checks });
+  assert.deepEqual(await az.resultado, {
+    conflito: false,
+    checksFalhos: [{ nome: "build" }, { nome: "ci/lint" }],
+  });
+});
+
+test("verificarPR: check em andamento e conflito ainda calculado esperam, anotam no log e depois decidem", async () => {
+  for (const tipo of HOSPEDAGENS) {
+    const { c, resultado } = verificar(
+      tipo,
+      { conflito: "calculando", checks: [{ nome: "ci", estado: "andamento" }] },
+      { ...RAPIDO, intervaloMs: 300 },
+    );
+    while (!existsSync(c.log)) await esperar(5);
+    hospedagem.mudar(1, { conflito: false });
+    while (readFileSync(c.log, "utf8").split("\n").filter(Boolean).length < 2) await esperar(5);
+    hospedagem.mudar(1, { checks: [{ nome: "ci", estado: "aprovado" }] });
+    assert.deepEqual(await resultado, { conflito: false, checksFalhos: [] });
+    const anotacoes = readFileSync(c.log, "utf8");
+    assert.match(anotacoes, /PR 1: espera a plataforma ainda calcula o PR/);
+    assert.match(anotacoes, /PR 1: espera os checks em andamento: ci/);
+    hospedagem.zerar();
+  }
+});
+
+test("verificarPR: a lista vazia só vale depois da carência, e então é um PR sem CI", async () => {
+  for (const tipo of HOSPEDAGENS) {
+    const inicio = Date.now();
+    const { c, resultado } = verificar(tipo, { checks: [] }, { intervaloMs: 10, carenciaMs: 300 });
+    assert.deepEqual(await resultado, { conflito: false, checksFalhos: [] });
+    assert.ok(Date.now() - inicio >= 300, "esperou a carência");
+    assert.match(readFileSync(c.log, "utf8"), /PR 1: espera a plataforma ainda calcula o PR/);
+    hospedagem.zerar();
+  }
+});
+
+test("verificarPR: passado o limite, ErroExterno com o que ainda espera", async () => {
+  const limite = { limiteMs: 0, intervaloMs: 10, carenciaMs: 0 };
+  const dica = "acompanhe o PR na plataforma e execute o ticket de novo";
+  for (const tipo of HOSPEDAGENS) {
+    await recusa(
+      verificar(
+        tipo,
+        {
+          checks: [
+            { nome: "build", estado: "andamento" },
+            { nome: "lint", estado: "andamento" },
+          ],
+        },
+        limite,
+      ).resultado,
+      `o PR 1 não ficou decidido em 0 min, ainda espera os checks em andamento: build, lint (${dica})`,
+      ErroExterno,
+    );
+    hospedagem.zerar();
+    await recusa(
+      verificar(tipo, { conflito: "calculando" }, limite).resultado,
+      `o PR 1 não ficou decidido em 0 min, ainda espera a plataforma ainda calcula o PR (${dica})`,
+      ErroExterno,
+    );
+    hospedagem.zerar();
+  }
+});
+
+test("verificarPR: a falha do CLI sai com a saída do comando; nada é devolvido", async () => {
+  const c = cenario();
+  const projeto = { repo: c.repo, hospedagem: "github" as const };
+  hospedagem.falhar("pr view", "HTTP 401: Bad credentials");
+  await recusa(
+    verificarPR(projeto, "1", c.log),
+    "gh pr view saiu com código 1: HTTP 401: Bad credentials (confira o acesso do gh à hospedagem e execute o ticket de novo)",
+    ErroExterno,
+  );
+  const az = cenario("azure-devops");
+  const projetoAz = { repo: az.repo, hospedagem: "azure-devops" as const };
+  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+  hospedagem.falhar("repos pr policy list", "Please run 'az login'");
+  await recusa(
+    verificarPR(projetoAz, "1", az.log),
+    "az repos pr policy list saiu com código 1: Please run 'az login' (confira o acesso do az à hospedagem e execute o ticket de novo)",
+    ErroExterno,
+  );
+});
+
+test("verificarPR: os estados do gh e do az viram aprovado, falho ou andamento; o desconhecido é erro", async () => {
+  const c = cenario();
+  const projeto = { repo: c.repo, hospedagem: "github" as const };
+  const rollup = (...checks: object[]) => JSON.stringify({ mergeable: "MERGEABLE", statusCheckRollup: checks });
+  const run = (nome: string, status: string, conclusion: string) => ({
+    __typename: "CheckRun",
+    name: nome,
+    status,
+    conclusion,
+  });
+  const contexto = (nome: string, state: string) => ({ __typename: "StatusContext", context: nome, state });
+  hospedagem.responder(
+    "pr view",
+    rollup(
+      run("a", "COMPLETED", "SUCCESS"),
+      run("b", "COMPLETED", "NEUTRAL"),
+      run("c", "COMPLETED", "SKIPPED"),
+      run("d", "COMPLETED", "CANCELLED"),
+      run("e", "COMPLETED", "TIMED_OUT"),
+      contexto("f", "SUCCESS"),
+      contexto("g", "ERROR"),
+      contexto("h", "FAILURE"),
+    ),
+  );
+  assert.deepEqual(await verificarPR(projeto, "1", c.log), {
+    conflito: false,
+    checksFalhos: [{ nome: "d" }, { nome: "e" }, { nome: "g" }, { nome: "h" }],
+  });
+  for (const [estado, nome] of [
+    [contexto("p", "PENDING"), "p"],
+    [contexto("x", "EXPECTED"), "x"],
+    [run("q", "QUEUED", ""), "q"],
+  ] as const) {
+    hospedagem.responder("pr view", rollup(estado));
+    await recusa(
+      verificarPR(projeto, "1", c.log, { limiteMs: 0 }),
+      `o PR 1 não ficou decidido em 0 min, ainda espera os checks em andamento: ${nome} (acompanhe o PR na plataforma e execute o ticket de novo)`,
+      ErroExterno,
+    );
+  }
+  hospedagem.responder("pr view", JSON.stringify({ mergeable: "TALVEZ", statusCheckRollup: [] }));
+  await recusa(
+    verificarPR(projeto, "1", c.log),
+    "o gh devolveu um estado de conflito que a Fabriquinha não conhece: TALVEZ " +
+      "(confira a versão do gh; os estados conhecidos são CONFLICTING, MERGEABLE, UNKNOWN)",
+    ErroExterno,
+  );
+  hospedagem.responder("pr view", "não é json");
+  await assert.rejects(verificarPR(projeto, "1", c.log), /saída inesperada de gh pr view: não é json/);
+
+  const az = cenario("azure-devops");
+  const projetoAz = { repo: az.repo, hospedagem: "azure-devops" as const };
+  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+  const politica = (status: string, tipo: string, settings?: object) => ({
+    status,
+    configuration: { type: { displayName: tipo }, ...(settings && { settings }) },
+  });
+  hospedagem.responder(
+    "repos pr policy list",
+    JSON.stringify([
+      politica("broken", "Status", {}),
+      politica("approved", "Build", { displayName: "ok" }),
+      politica("queued", "Build"),
+    ]),
+  );
+  await recusa(
+    verificarPR(projetoAz, "1", az.log, { limiteMs: 0 }),
+    "o PR 1 não ficou decidido em 0 min, ainda espera os checks em andamento: Build (acompanhe o PR na plataforma e execute o ticket de novo)",
+    ErroExterno,
+  );
+  hospedagem.responder("repos pr policy list", JSON.stringify([politica("broken", "Status", {})]));
+  assert.deepEqual(await verificarPR(projetoAz, "1", az.log), { conflito: false, checksFalhos: [{ nome: "Status" }] });
+  hospedagem.responder("repos pr policy list", JSON.stringify([politica("pausado", "Build")]));
+  await recusa(
+    verificarPR(projetoAz, "1", az.log),
+    "o az devolveu um estado de política que a Fabriquinha não conhece: pausado " +
+      "(confira a versão do az; os estados conhecidos são approved, queued, running, rejected, broken)",
+    ErroExterno,
+  );
+  hospedagem.responder("repos pr policy list", "[]");
+  hospedagem.responder("repos pr show", JSON.stringify({ mergeStatus: "failure" }));
+  await recusa(
+    verificarPR(projetoAz, "1", az.log),
+    "o az devolveu um estado de conflito que a Fabriquinha não conhece: failure " +
+      "(confira a versão do az; os estados conhecidos são conflicts, succeeded, queued, notSet)",
+    ErroExterno,
+  );
 });

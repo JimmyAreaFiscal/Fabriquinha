@@ -419,6 +419,12 @@ test("caixa do ticket: as execuções com modo, resultado, início, duração, c
 
   const sem = execucoesDoTicket(p, ticketDe(p, 3));
   assert.equal(sem.corpo, '<p class="muted">Ainda sem execução.</p>');
+
+  const com = execucoesDoTicket(p, { ...ticketDe(p, 3), descricao: `Resolver o **conflito** ${XSS}` });
+  assert.match(
+    com.corpo,
+    /^<div class="md descricao-ticket"><p>Resolver o <strong>conflito<\/strong> &lt;img[^<]*<\/p>\n<\/div><p class="muted">Ainda sem execução\.<\/p>$/,
+  );
 });
 
 function evidenciaDe(p: PaginaDaIssue, id: number): Evidencia {

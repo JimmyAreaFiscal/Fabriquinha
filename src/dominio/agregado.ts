@@ -204,10 +204,21 @@ export interface Contexto {
    * (C16) o lê e o informa: a Fabriquinha não confia num estado lido antes.
    */
   readonly estadoPR?: EstadoDoPR;
+  /**
+   * O conflito e os checks falhos do PR que o F5 acabou de ler na plataforma, depois de publicá-lo (F5 §5.1, passo 4).
+   * Só o encerramento (C7) o lê: a Fabriquinha não confia numa verificação feita antes.
+   */
+  readonly problemasPR?: ProblemasDoPR;
 }
 
 /** O PR na plataforma (F5 §5.2): mergeado é o PR aceito; fechado é sem merge. */
 export type EstadoDoPR = "aberto" | "mergeado" | "fechado";
+
+/** O que impede o PR de ir ao gate (F5 §5.1, passo 4): conflito com a base e checks de CI que terminaram falhos. */
+export interface ProblemasDoPR {
+  conflito: boolean;
+  checksFalhos: readonly { nome: string; url?: string }[];
+}
 
 /** Nome gravado na tabela `comando` (F6 §7) para cada comando aplicado por `comIssue`. */
 export type NomeComando =
