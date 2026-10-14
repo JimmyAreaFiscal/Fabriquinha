@@ -33,7 +33,7 @@ import {
   respostaDoDialogo,
   seletorDeSessoes,
 } from "./chat.ts";
-import { desenharConversa, desmontarConversa } from "./chat-conversa.tsx";
+import type * as ModuloDaConversa from "./chat-conversa.tsx";
 import { evidenciaNaCaixa, seletorDeModelo } from "./issue.ts";
 import { carregarTextos, modelos as modelosDoPi } from "./issue-montar.ts";
 
@@ -87,10 +87,13 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   let pagina: PaginaDaIssue | undefined;
   let leituras = 0;
 
+  /** O componente React da conversa; só o chat o baixa, e até chegar o estado só se acumula em `mensagens`. */
+  let conversaReact: typeof ModuloDaConversa | undefined;
+
   /** Redesenha a conversa e o envio; o React só troca o que mudou, e o Viewport rola junto se o Auditor está no fim. */
   function desenhar(): void {
-    if (!cabecalho) return;
-    desenharConversa(areaDeEnvio, {
+    if (!cabecalho || !conversaReact) return;
+    conversaReact.desenharConversa(areaDeEnvio, {
       mensagens: fluxo ? [...mensagens, emFluxo(fluxo.texto, fluxo.raciocinio)] : mensagens,
       envio: envio(cabecalho, modo),
       anexos: etiquetasDeAnexo(anexos),
@@ -219,6 +222,15 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     else return;
     desenhar();
   }
+
+  import("./chat-conversa.tsx")
+    .then((modulo) => {
+      if (signal.aborted) return;
+      conversaReact = modulo;
+      desenhar();
+      if (!areaDeEnvio.querySelector("[data-seletor-modelo] select:not([disabled])")) desenharSeletor();
+    })
+    .catch(mostrarErro);
 
   const fonte = new EventSource(`/api/sessoes/${encodeURIComponent(sessao)}/eventos`);
   fonte.onmessage = (mensagemSse) => {
@@ -395,6 +407,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
 
   signal.addEventListener("abort", () => {
     fonte.close();
-    desmontarConversa(areaDeEnvio);
+    conversaReact?.desmontarConversa(areaDeEnvio);
   });
 }
