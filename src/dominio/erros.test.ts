@@ -15,6 +15,10 @@ test("ErroDeRegra diz numa frase o que faltou e como resolver", () => {
   );
 });
 
+test("ErroDeRegra sem solução tem como mensagem só o problema", () => {
+  assert.equal(new ErroDeRegra("Informe o link").message, "Informe o link");
+});
+
 test("ErroDeEscopo é distinguível do ErroDeRegra", () => {
   const erro = new ErroDeEscopo("a execução E-7 já terminou", "peça ao Auditor uma nova execução");
   assert.ok(erro instanceof Error);

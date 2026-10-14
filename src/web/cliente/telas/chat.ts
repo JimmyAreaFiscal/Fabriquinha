@@ -2,6 +2,7 @@
 // erro da falha, as peças que chegam ao vivo, o envio conforme o estado com os anexos de histórico, e a coluna da
 // direita com o registro e o contexto da issue, como funções puras que devolvem HTML. O texto de agente passa sempre
 // pelo `markdown-it` com `html: false`; o resto, por `escapar`.
+import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Execucao } from "../../../dominio/agregado.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
@@ -187,7 +188,7 @@ function resumoDoResultado(resultado: MensagemPi): { ok: boolean; resumo: string
  * Uma chamada de ferramenta, recolhível: nome, argumentos e o resumo do resultado (✓ ou ✗ com o número de linhas), e a
  * saída em fonte monoespaçada, com **ver tudo** quando passa de algumas linhas. Sem resultado ainda, diz que espera.
  */
-export function ferramenta(chamada: Bloco, resultado?: MensagemPi, aberta = false): string {
+export function corpoDaFerramenta(chamada: Bloco, resultado?: MensagemPi): string {
   let resumo = '<span class="res neutro">sem resultado ainda</span>';
   let saida = "";
   if (resultado) {
@@ -199,51 +200,83 @@ export function ferramenta(chamada: Bloco, resultado?: MensagemPi, aberta = fals
       linhas > LINHAS_VISIVEIS ? '<button type="button" class="link ver" data-ver-tudo>ver tudo</button>' : "";
     saida = linhas === 0 ? "" : `<pre>${escapar(texto)}</pre>${ver}`;
   }
-  return (
-    `<details class="ferramenta" data-chamada="${escapar(chamada.id)}"${aberta ? " open" : ""}>` +
-    `<summary><span class="nome-f">${escapar(chamada.name)}</span><span class="args">${escapar(argumentos(chamada.arguments))}</span>${resumo}</summary>` +
-    `${saida}</details>`
-  );
+  return `<summary><span class="nome-f">${escapar(chamada.name)}</span><span class="args">${escapar(argumentos(chamada.arguments))}</span>${resumo}</summary>${saida}`;
 }
 
-const pensamento = (texto: string, rotulo = "raciocínio"): string =>
-  `<details class="pensando"><summary>${rotulo}</summary><p>${escapar(texto)}</p></details>`;
+/** A chamada recolhível inteira, como a prévia do Histórico a desenha; no chat, o `<details>` é do componente. */
+export const ferramenta = (chamada: Bloco, resultado?: MensagemPi): string =>
+  `<details class="ferramenta" data-chamada="${escapar(chamada.id)}">${corpoDaFerramenta(chamada, resultado)}</details>`;
 
-const doAgente = (html: string): string =>
-  `<div class="msg agente"><span class="quem">agente</span><div class="texto md">${html}</div></div>`;
+type Parte = Exclude<ThreadMessageLike["content"], string>[number];
+
+/** Uma linha do sistema como mensagem do assistant-ui: o HTML, já escapado, vai em `metadata.custom.html`. */
+export const doSistema = ({ chave, html }: Item): ThreadMessageLike => ({
+  id: chave,
+  role: "system",
+  content: [{ type: "text", text: "" }],
+  metadata: { custom: { html } },
+});
 
 const PAROU: Record<string, string> = { aborted: "o agente foi interrompido", error: "o agente parou com erro" };
 
 /** A mensagem da Fabriquinha ao agente (o aviso de uma proposta decidida), com o rótulo dela. */
 const daFabriquinha = (m: MensagemPi): string =>
-  `<div class="msg fabriquinha"><span class="quem">Fabriquinha</span><div class="texto md">${markdown(textoDe(m))}</div></div>`;
+  `<div class="msg fabriquinha"><span class="quem">Fabriquinha</span><div class="balao md">${markdown(textoDe(m))}</div></div>`;
 
 /** Os cartões das propostas de issue abertas do registro, entre a conversa e o envio. */
 export const propostasDoChat = (c: CabecalhoDoChat): string =>
   (c.propostas ?? []).map((p) => cartaoDaProposta(p, false, c.issue.id)).join("");
 
+/** A chamada de ferramenta como parte do assistant-ui; o bloco do pi e o resultado vão inteiros em `artifact`. */
+const parteDaChamada = (b: Bloco, resultado?: MensagemPi): Parte => ({
+  type: "tool-call",
+  toolCallId: String(b.id),
+  toolName: String(b.name),
+  artifact: { chamada: b, resultado },
+});
+
 /**
- * Uma mensagem do pi na conversa: a do Auditor, e a do agente com o raciocínio, o texto e as chamadas na ordem em que
- * vieram. O resultado de uma ferramenta não aparece sozinho: ele completa a chamada (`resultados`, por id).
+ * Uma mensagem do pi como mensagens do assistant-ui: a do Auditor, e a do agente com o raciocínio, o texto e as
+ * chamadas na ordem em que vieram, mais a linha do sistema quando ele parou. O resultado de uma ferramenta não aparece
+ * sozinho: ele completa a chamada (`resultados`, por id).
  */
 export function mensagem(
   m: MensagemPi,
   resultados: ReadonlyMap<string, MensagemPi> = new Map(),
   aviso = false,
-): string {
-  if (m.role === "user" && aviso) return daFabriquinha(m);
-  if (m.role === "user") {
-    return `<div class="msg voce"><span class="quem">você</span><div class="texto md">${markdown(textoDe(m))}</div></div>`;
-  }
-  if (m.role !== "assistant") return "";
-  const partes = blocos(m).map((b) => {
-    if (b.type === "thinking") return pensamento(String(b.thinking));
-    if (b.type === "toolCall") return ferramenta(b, resultados.get(String(b.id)));
-    return b.type === "text" && b.text?.trim() ? doAgente(markdown(b.text)) : "";
+): ThreadMessageLike[] {
+  const id = chaveDa(m);
+  if (m.role === "user" && aviso) return [doSistema({ chave: id, html: daFabriquinha(m) })];
+  if (m.role === "user") return [{ id, role: "user", content: [{ type: "text", text: textoDe(m) }] }];
+  if (m.role !== "assistant") return [];
+  const content = blocos(m).flatMap((b): Parte[] => {
+    if (b.type === "thinking") return [{ type: "reasoning", text: String(b.thinking) }];
+    if (b.type === "toolCall") return [parteDaChamada(b, resultados.get(String(b.id)))];
+    return b.type === "text" && b.text?.trim() ? [{ type: "text", text: b.text }] : [];
   });
   const parou = PAROU[String(m.stopReason)];
-  if (parou) partes.push(sistema(escapar([parou, m.errorMessage].filter(Boolean).join(": "))));
-  return partes.join("");
+  return [
+    ...(content.length > 0 ? [{ id, role: "assistant" as const, content }] : []),
+    ...(parou
+      ? [
+          doSistema({
+            chave: `${id}-parou`,
+            html: sistema(escapar([parou, m.errorMessage].filter(Boolean).join(": "))),
+          }),
+        ]
+      : []),
+  ];
+}
+
+/** A mensagem do agente com o resultado da ferramenta na chamada dele; outra mensagem fica como está. */
+export function comResultado(m: ThreadMessageLike, resultado: MensagemPi): ThreadMessageLike {
+  if (typeof m.content === "string") return m;
+  const content = m.content.map((p) =>
+    p.type === "tool-call" && p.toolCallId === resultado.toolCallId
+      ? parteDaChamada((p.artifact as { chamada: Bloco }).chamada, resultado)
+      : p,
+  );
+  return { ...m, content };
 }
 
 /** A chave de uma mensagem: o papel e o instante dela no pi, que o JSONL e o `message_end` repetem. */
@@ -253,7 +286,7 @@ export const chaveDa = (m: MensagemPi): string => `${String(m.role)}-${String(m.
  * A conversa inteira (F7 §4.4, item 2): as mensagens do JSONL e as linhas das execuções, por instante, e no fim o
  * erro da falha e os diálogos abertos. O prompt montado pela Fabriquinha não aparece: a linha da execução tem o link dele.
  */
-export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Item[] {
+export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): ThreadMessageLike[] {
   const mensagens = entradas.flatMap((e) =>
     e.type === "message"
       ? [{ em: String(e.timestamp), m: e.message as MensagemPi, fabriquinha: e.fabriquinha, aviso: e.aviso }]
@@ -264,26 +297,33 @@ export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Item
   );
   const itens = [
     ...mensagens.map(({ em, m, fabriquinha, aviso }) => ({
-      chave: chaveDa(m),
       em,
-      html: fabriquinha ? "" : mensagem(m, resultados, aviso === true),
+      lista: fabriquinha ? [] : mensagem(m, resultados, aviso === true),
     })),
-    ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)),
+    ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)).map((l) => ({ em: l.em, lista: [doSistema(l)] })),
   ].toSorted((a, b) => a.em.localeCompare(b.em));
   return [
-    ...itens.map(({ chave, html }) => ({ chave, html })),
-    ...erroDaFalha(c),
-    ...c.sessao.dialogos.map(linhaDoDialogo),
+    ...itens.flatMap(({ lista }) => lista),
+    ...erroDaFalha(c).map(doSistema),
+    ...c.sessao.dialogos.map(linhaDoDialogo).map(doSistema),
   ];
 }
 
-/** A mensagem do agente chegando em fluxo, com o cursor piscando no fim do texto. */
-export function emFluxo(texto: string, raciocinio: string): string {
-  const html = markdown(texto);
-  const comCursor = html.endsWith("</p>\n")
+/** A mensagem do agente chegando em fluxo: id `fluxo`, que o componente desenha com o cursor no fim do texto. */
+export const emFluxo = (texto: string, raciocinio: string): ThreadMessageLike => ({
+  id: "fluxo",
+  role: "assistant",
+  content: [
+    ...(raciocinio ? [{ type: "reasoning" as const, text: raciocinio }] : []),
+    { type: "text" as const, text: texto },
+  ],
+});
+
+/** O Markdown do texto com o cursor piscando no fim, dentro do último parágrafo. */
+export function comCursor(html: string): string {
+  return html.endsWith("</p>\n")
     ? `${html.slice(0, -"</p>\n".length)}<span class="cursor"></span></p>`
     : `${html}<span class="cursor"></span>`;
-  return `${raciocinio ? pensamento(raciocinio, "raciocínio…") : ""}${doAgente(comCursor)}`;
 }
 
 export type ModoEnvio = "steer" | "follow_up";
@@ -378,25 +418,31 @@ const retomar =
  * A área de envio (F7 §4.4, item 3), conforme o estado: rodando, redirecionar ou enfileirar e abortar; diálogo, o
  * formulário dele; conversa, enviar e, na sessão em aberto, concluir; nos gates e terminada, só o aviso.
  */
-export function envio(c: CabecalhoDoChat, modo: ModoEnvio): string {
+export type Envio = { html: string } | { placeholder: string; linha: string };
+
+export function envio(c: CabecalhoDoChat, modo: ModoEnvio): Envio {
   const { sessao } = c;
   const [pendente] = sessao.dialogos;
-  if (pendente) return dialogo(pendente);
+  if (pendente) return { html: dialogo(pendente) };
   if (sessao.estado === "terminada") {
-    return fim(
-      "Sessão terminada; a conversa fica só para leitura.",
-      exportar(sessao.sessao, "btn", "Exportar histórico") +
-        '<button type="button" class="btn btn-primario" data-consulta>Conversar sobre esta sessão</button>',
-    );
+    return {
+      html: fim(
+        "Sessão terminada; a conversa fica só para leitura.",
+        exportar(sessao.sessao, "btn", "Exportar histórico") +
+          '<button type="button" class="btn btn-primario" data-consulta>Conversar sobre esta sessão</button>',
+      ),
+    };
   }
-  if (sessao.motivo === "falha") return retomar;
+  if (sessao.motivo === "falha") return { html: retomar };
   const rodando = sessao.estado === "rodando";
   if (!rodando && sessao.motivo !== "conversa") {
-    return fim(
-      sessao.motivo === "gate_registro"
-        ? "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa."
-        : "A etapa terminou; a decisão do gate fica na página da issue.",
-    );
+    return {
+      html: fim(
+        sessao.motivo === "gate_registro"
+          ? "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa."
+          : "A etapa terminou; a decisão do gate fica na página da issue.",
+      ),
+    };
   }
   const segmento = rodando
     ? '<div class="segmento" role="group" aria-label="Como enviar">' +
@@ -411,11 +457,10 @@ export function envio(c: CabecalhoDoChat, modo: ModoEnvio): string {
       : "",
     '<button class="btn btn-primario">Enviar</button>',
   ].join("");
-  const dica = rodando ? "Mensagem para o agente enquanto ele trabalha" : "Responda ao agente";
-  return (
-    `<form class="compositor" data-envio><div class="anexos" data-anexos hidden></div><textarea name="texto" rows="2" aria-label="Mensagem" placeholder="${dica}"></textarea>` +
-    `<div class="linha-1">${segmento}${ANEXAR}${DICA}<div class="direita">${acoes}</div></div></form>`
-  );
+  return {
+    placeholder: rodando ? "Mensagem para o agente enquanto ele trabalha" : "Responda ao agente",
+    linha: `${segmento}${ANEXAR}${DICA}<div class="direita">${acoes}</div>`,
+  };
 }
 
 /** O formulário de C2 (F7 §4.4, item 4): o Auditor corrige direto o que o agente registrou. */

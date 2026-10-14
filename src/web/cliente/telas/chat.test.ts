@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Evidencia, Execucao, Ticket } from "../../../dominio/agregado.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
@@ -8,10 +9,15 @@ import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import {
   barraDeEstado,
   chaveDa,
+  comCursor,
+  comResultado,
   contextoDaIssue,
+  corpoDaFerramenta,
+  doSistema,
   conversa,
   edicaoDoRegistro,
   emFluxo,
+  type Envio,
   envio,
   erroDaFalha,
   etiquetaDoEstado,
@@ -176,68 +182,112 @@ test("linha do diálogo aberto pelo agente", () => {
 test("ferramenta: argumentos em uma linha, resumo do resultado e a saída com ver tudo quando é longa", () => {
   const bash = { id: "t1", name: "bash", arguments: { command: "npm test" } };
   assert.equal(
-    ferramenta(bash),
-    '<details class="ferramenta" data-chamada="t1"><summary><span class="nome-f">bash</span><span class="args">npm test</span><span class="res neutro">sem resultado ainda</span></summary></details>',
+    corpoDaFerramenta(bash),
+    '<summary><span class="nome-f">bash</span><span class="args">npm test</span><span class="res neutro">sem resultado ainda</span></summary>',
   );
+  assert.equal(ferramenta(bash), `<details class="ferramenta" data-chamada="t1">${corpoDaFerramenta(bash)}</details>`);
   const longa = Array.from({ length: 11 }, (_, i) => `<l${String(i)}>`).join("\n");
-  const falhou = ferramenta(
-    bash,
-    { role: "toolResult", isError: true, content: [{ type: "text", text: longa }] },
-    true,
-  );
-  assert.match(falhou, /^<details class="ferramenta" data-chamada="t1" open>/);
+  const falhou = corpoDaFerramenta(bash, {
+    role: "toolResult",
+    isError: true,
+    content: [{ type: "text", text: longa }],
+  });
   assert.match(falhou, /<span class="res nok">✗ 11 linhas<\/span>/);
   assert.match(falhou, /<pre>&#60;l0&#62;\n/);
-  assert.match(falhou, /<button type="button" class="link ver" data-ver-tudo>ver tudo<\/button><\/details>$/);
+  assert.match(falhou, /<button type="button" class="link ver" data-ver-tudo>ver tudo<\/button>$/);
   const read = { id: "t2", name: "read", arguments: { path: "src/a.ts" } };
-  const uma = ferramenta(read, { role: "toolResult", content: "uma" });
   assert.match(
-    uma,
-    /<span class="args">src\/a.ts<\/span><span class="res ok">✓ 1 linha<\/span><\/summary><pre>uma<\/pre><\/details>/,
+    corpoDaFerramenta(read, { role: "toolResult", content: "uma" }),
+    /<span class="args">src\/a.ts<\/span><span class="res ok">✓ 1 linha<\/span><\/summary><pre>uma<\/pre>$/,
   );
-  assert.match(ferramenta(read, { role: "toolResult", content: "a\nb" }), /✓ 2 linhas/);
-  const vazia = ferramenta({ id: "t3", name: "edit", arguments: { trocas: 2 } }, { role: "toolResult", content: [] });
+  assert.match(corpoDaFerramenta(read, { role: "toolResult", content: "a\nb" }), /✓ 2 linhas/);
+  const vazia = corpoDaFerramenta(
+    { id: "t3", name: "edit", arguments: { trocas: 2 } },
+    { role: "toolResult", content: [] },
+  );
   assert.match(
     vazia,
-    /<span class="args">\{&#34;trocas&#34;:2\}<\/span><span class="res ok">✓ sem saída<\/span><\/summary><\/details>/,
+    /<span class="args">\{&#34;trocas&#34;:2\}<\/span><span class="res ok">✓ sem saída<\/span><\/summary>$/,
   );
-  assert.match(ferramenta({ id: "t4", name: "ls" }), /<span class="args">\{\}<\/span>/);
+  assert.match(corpoDaFerramenta({ id: "t4", name: "ls" }), /<span class="args">\{\}<\/span>/);
 });
 
-test("mensagem: a do Auditor e a do agente em Markdown sem HTML, raciocínio, chamadas com o resultado e a parada", () => {
-  assert.equal(
-    mensagem({ role: "user", content: "<b>oi</b> **já**" }),
-    '<div class="msg voce"><span class="quem">você</span><div class="texto md"><p>&lt;b&gt;oi&lt;/b&gt; <strong>já</strong></p>\n</div></div>',
-  );
-  const resultados = new Map([["t1", { role: "toolResult", content: "ok" }]]);
-  const html = mensagem(
+test("linha do sistema: o HTML vai em metadata.custom.html e o id é a chave", () => {
+  assert.deepEqual(doSistema({ chave: "inicio-E-7", html: '<div class="sistema">x</div>' }), {
+    id: "inicio-E-7",
+    role: "system",
+    content: [{ type: "text", text: "" }],
+    metadata: { custom: { html: '<div class="sistema">x</div>' } },
+  });
+});
+
+test("mensagem: a do Auditor e a do agente com raciocínio, texto e chamadas na ordem, e a parada como linha do sistema", () => {
+  assert.deepEqual(mensagem({ role: "user", content: "<b>oi</b> **já**", timestamp: 4 }), [
+    { id: "user-4", role: "user", content: [{ type: "text", text: "<b>oi</b> **já**" }] },
+  ]);
+  const bash = { type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } };
+  const resultado = { role: "toolResult", content: "ok" };
+  const [agente, parou] = mensagem(
     {
       role: "assistant",
+      timestamp: 5,
       content: [
         { type: "thinking", thinking: "penso <x>" },
         { type: "text", text: "Vou [rodar](javascript:alert(1))" },
         { type: "text", text: "  " },
-        { type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } },
+        bash,
         { type: "image" },
       ],
       stopReason: "error",
       errorMessage: "sem <crédito>",
     },
-    resultados,
+    new Map([["t1", resultado]]),
   );
-  assert.equal(
-    html,
-    '<details class="pensando"><summary>raciocínio</summary><p>penso &#60;x&#62;</p></details>' +
-      '<div class="msg agente"><span class="quem">agente</span><div class="texto md"><p>Vou [rodar](javascript:alert(1))</p>\n</div></div>' +
-      ferramenta({ id: "t1", name: "bash", arguments: { command: "ls" } }, { role: "toolResult", content: "ok" }) +
-      '<div class="sistema">o agente parou com erro: sem &#60;crédito&#62;</div>',
+  assert.deepEqual(agente, {
+    id: "assistant-5",
+    role: "assistant",
+    content: [
+      { type: "reasoning", text: "penso <x>" },
+      { type: "text", text: "Vou [rodar](javascript:alert(1))" },
+      { type: "tool-call", toolCallId: "t1", toolName: "bash", artifact: { chamada: bash, resultado } },
+    ],
+  });
+  assert.deepEqual(
+    parou,
+    doSistema({
+      chave: "assistant-5-parou",
+      html: '<div class="sistema">o agente parou com erro: sem &#60;crédito&#62;</div>',
+    }),
   );
-  assert.equal(
-    mensagem({ role: "assistant", content: [], stopReason: "aborted" }),
-    '<div class="sistema">o agente foi interrompido</div>',
-  );
-  assert.equal(mensagem({ role: "assistant" }), "");
-  assert.equal(mensagem({ role: "toolResult", content: "x" }), "", "o resultado completa a chamada");
+  assert.deepEqual(mensagem({ role: "assistant", content: [], stopReason: "aborted", timestamp: 6 }), [
+    doSistema({ chave: "assistant-6-parou", html: '<div class="sistema">o agente foi interrompido</div>' }),
+  ]);
+  assert.deepEqual(mensagem({ role: "assistant" }), []);
+  assert.deepEqual(mensagem({ role: "toolResult", content: "x" }), [], "o resultado completa a chamada");
+});
+
+interface ParteDeTeste {
+  type: string;
+  artifact?: { resultado?: unknown };
+}
+const partesDe = (m?: ThreadMessageLike) => m?.content as readonly ParteDeTeste[];
+
+test("comResultado: completa só a chamada do id; o resto da conversa fica como está", () => {
+  const chamada = { type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls" } };
+  const [agente = assert.fail("sem mensagem")] = mensagem({
+    role: "assistant",
+    timestamp: 1,
+    content: [{ type: "text", text: "oi" }, chamada, { type: "toolCall", id: "t2", name: "ls" }],
+  });
+  const resultado = { role: "toolResult", toolCallId: "t1", content: "a" };
+  const partes = partesDe(comResultado(agente, resultado));
+  assert.equal(partes[0]?.type, "text");
+  assert.deepEqual(partes[1]?.artifact, { chamada, resultado });
+  assert.equal(partes[2]?.artifact?.resultado, undefined);
+  const sistema = doSistema({ chave: "k", html: "" });
+  assert.deepEqual(comResultado(sistema, resultado), sistema);
+  const texto: ThreadMessageLike = { role: "user", content: "só texto" };
+  assert.equal(comResultado(texto, resultado), texto);
 });
 
 test("conversa: mensagens e linhas das execuções por instante, sem o prompt da Fabriquinha, e os diálogos no fim", () => {
@@ -271,66 +321,82 @@ test("conversa: mensagens e linhas das execuções por instante, sem o prompt da
     entrada("2026-10-11T10:04:00.000Z", { role: "user", content: "oi", timestamp: 4 }),
   ]);
   assert.deepEqual(
-    itens.map((i) => i.chave),
-    ["inicio-E-7", "user-1", "assistant-2", "toolResult-3", "user-4", "fim-E-7", "dialogo-d1"],
+    itens.map((i) => i.id),
+    ["inicio-E-7", "assistant-2", "user-4", "fim-E-7", "dialogo-d1"],
   );
-  assert.equal(itens[1]?.html, "");
-  assert.match(String(itens[2]?.html), /<span class="res ok">✓ 1 linha<\/span>/);
-  assert.equal(itens[3]?.html, "");
+  const [, agente] = itens;
+  assert.deepEqual(partesDe(agente)[0]?.artifact?.resultado, {
+    role: "toolResult",
+    toolCallId: "t1",
+    content: "a",
+    timestamp: 3,
+  });
   assert.equal(chaveDa({ role: "assistant", timestamp: 9 }), "assistant-9");
 });
 
-test("em fluxo: o cursor no fim do último parágrafo, ou depois do bloco; raciocínio só quando há", () => {
+test("em fluxo: o id é fluxo, o raciocínio só quando há; o cursor no fim do último parágrafo, ou depois do bloco", () => {
+  assert.deepEqual(emFluxo("Os **testes**", ""), {
+    id: "fluxo",
+    role: "assistant",
+    content: [{ type: "text", text: "Os **testes**" }],
+  });
+  assert.deepEqual(emFluxo("", "pensando").content, [
+    { type: "reasoning", text: "pensando" },
+    { type: "text", text: "" },
+  ]);
   assert.equal(
-    emFluxo("Os **testes**", ""),
-    '<div class="msg agente"><span class="quem">agente</span><div class="texto md"><p>Os <strong>testes</strong><span class="cursor"></span></p></div></div>',
+    comCursor("<p>Os <strong>testes</strong></p>\n"),
+    '<p>Os <strong>testes</strong><span class="cursor"></span></p>',
   );
-  assert.match(
-    emFluxo("", "pensando"),
-    /^<details class="pensando"><summary>raciocínio…<\/summary><p>pensando<\/p><\/details>.*<div class="texto md"><span class="cursor"><\/span><\/div>/,
-  );
-  assert.match(emFluxo("- item", ""), /<\/ul>\n<span class="cursor"><\/span>/);
+  assert.equal(comCursor("<ul>\n<li>item</li>\n</ul>\n"), '<ul>\n<li>item</li>\n</ul>\n<span class="cursor"></span>');
+  assert.equal(comCursor(""), '<span class="cursor"></span>');
 });
 
+/** O envio que é HTML pronto (diálogo, retomada, avisos), sem compositor. */
+const htmlDe = (e: Envio): string => {
+  assert.ok("html" in e);
+  return e.html;
+};
+/** O envio que é o compositor do assistant-ui: o placeholder e a linha de botões. */
+const compositorDe = (e: Envio) => {
+  assert.ok("linha" in e);
+  return e;
+};
+
 test("envio rodando: redirecionar ou enfileirar, abortar e enviar", () => {
-  const html = envio(cabecalho(), "follow_up");
-  assert.match(
-    html,
-    /^<form class="compositor" data-envio><div class="anexos" data-anexos hidden><\/div><textarea name="texto" rows="2" aria-label="Mensagem" placeholder="Mensagem para o agente enquanto ele trabalha"><\/textarea>/,
-  );
-  assert.match(html, /data-modo="steer" aria-pressed="false"[^>]*>Redirecionar<\/button>/);
-  assert.match(html, /data-modo="follow_up" aria-pressed="true"[^>]*>Enfileirar<\/button>/);
-  assert.match(html, /Enter envia · Shift\+Enter quebra linha/);
-  assert.match(html, /data-abortar>Abortar<\/button><button class="btn btn-primario">Enviar<\/button>/);
-  assert.doesNotMatch(html, /Concluir sessão/);
-  assert.doesNotMatch(envio(cabecalho({ etapa: "sessao", modo: "interativo" }), "steer"), /Concluir sessão/);
+  const { placeholder, linha } = compositorDe(envio(cabecalho(), "follow_up"));
+  assert.equal(placeholder, "Mensagem para o agente enquanto ele trabalha");
+  assert.match(linha, /data-modo="steer" aria-pressed="false"[^>]*>Redirecionar<\/button>/);
+  assert.match(linha, /data-modo="follow_up" aria-pressed="true"[^>]*>Enfileirar<\/button>/);
+  assert.match(linha, /Enter envia · Shift\+Enter quebra linha/);
+  assert.match(linha, /data-abortar>Abortar<\/button><button class="btn btn-primario">Enviar<\/button>/);
+  assert.doesNotMatch(linha, /Concluir sessão/);
+  const interativa = compositorDe(envio(cabecalho({ etapa: "sessao", modo: "interativo" }), "steer"));
+  assert.doesNotMatch(interativa.linha, /Concluir sessão/);
 });
 
 test("envio em conversa: só enviar; na sessão em aberto, também concluir", () => {
-  const conversaHtml = envio(
-    cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "registro" }),
-    "steer",
+  const conversa = compositorDe(
+    envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "registro" }), "steer"),
   );
-  assert.match(conversaHtml, /placeholder="Responda ao agente"/);
-  assert.doesNotMatch(conversaHtml, /segmento|Abortar|Concluir/);
-  const aberta = envio(
-    cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "interativo" }),
-    "steer",
+  assert.equal(conversa.placeholder, "Responda ao agente");
+  assert.doesNotMatch(conversa.linha, /segmento|Abortar|Concluir/);
+  const aberta = compositorDe(
+    envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "interativo" }), "steer"),
   );
   assert.match(
-    aberta,
+    aberta.linha,
     /<button type="button" class="btn" data-concluir>Concluir sessão<\/button><button class="btn btn-primario">Enviar<\/button>/,
   );
-  const consulta = envio(
-    cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "consulta" }),
-    "steer",
+  const consulta = compositorDe(
+    envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "consulta" }), "steer"),
   );
-  assert.doesNotMatch(consulta, /Concluir/);
+  assert.doesNotMatch(consulta.linha, /Concluir/);
 });
 
 test("envio em diálogo: o formulário do método, com Cancelar e Responder", () => {
   const com = (d: Record<string, unknown>) =>
-    envio(cabecalho({ estado: "aguardando_humano", motivo: "dialogo", dialogos: [dialogo(d)] }), "steer");
+    htmlDe(envio(cabecalho({ estado: "aguardando_humano", motivo: "dialogo", dialogos: [dialogo(d)] }), "steer"));
   const select = com({ method: "select", title: "Qual `<ordem>`?", options: ["A <1>", "B"] });
   assert.match(
     select,
@@ -377,7 +443,8 @@ test("envio em diálogo: o formulário do método, com Cancelar e Responder", ()
 });
 
 test("envio nos gates: só o aviso; terminada: Exportar histórico e Conversar sobre esta sessão", () => {
-  const aviso = (sessao: Partial<Sessao>) => envio(cabecalho({ estado: "aguardando_humano", ...sessao }), "steer");
+  const aviso = (sessao: Partial<Sessao>) =>
+    htmlDe(envio(cabecalho({ estado: "aguardando_humano", ...sessao }), "steer"));
   assert.equal(
     aviso({ motivo: "gate_registro" }),
     '<div class="fim">A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.</div>',
@@ -393,7 +460,7 @@ test("envio nos gates: só o aviso; terminada: Exportar histórico e Conversar s
 });
 
 test("envio na falha: a instrução, o seletor de modelo esperando a issue e Responder e retomar", () => {
-  const html = envio(cabecalho({ estado: "aguardando_humano", motivo: "falha" }), "steer");
+  const html = htmlDe(envio(cabecalho({ estado: "aguardando_humano", motivo: "falha" }), "steer"));
   assert.match(
     html,
     /^<form class="compositor falha-comp" data-retomar><div class="anexos" data-anexos hidden><\/div><textarea name="texto" rows="2" aria-label="Instrução" placeholder="Instrução para a próxima tentativa \(vai antes do prompt da etapa\)"><\/textarea>/,
@@ -407,11 +474,10 @@ test("envio na falha: a instrução, o seletor de modelo esperando a issue e Res
   );
 });
 
-test("envio que aceita mensagem: os anexos vazios e + Anexar histórico antes da dica", () => {
+test("envio que aceita mensagem: + Anexar histórico antes da dica", () => {
   for (const sessao of [{}, { estado: "aguardando_humano", motivo: "conversa" }] as Partial<Sessao>[]) {
-    const html = envio(cabecalho(sessao), "steer");
-    assert.match(html, /^<form class="compositor" data-envio><div class="anexos" data-anexos hidden><\/div><textarea/);
-    assert.match(html, /data-anexar title="[^"]+">\+ Anexar histórico<\/button><span class="dica-tecla">/);
+    const { linha } = compositorDe(envio(cabecalho(sessao), "steer"));
+    assert.match(linha, /data-anexar title="[^"]+">\+ Anexar histórico<\/button><span class="dica-tecla">/);
   }
 });
 
@@ -454,7 +520,7 @@ test("erro da falha: a última execução, o erro do ticket escapado e o que fic
   assert.deepEqual(erroDaFalha(cabecalho()), []);
   const itens = conversa({ ...falha, sessao: { ...falha.sessao, dialogos: [dialogo({ title: "t" })] } }, []);
   assert.deepEqual(
-    itens.map((i) => i.chave),
+    itens.map((i) => i.id),
     ["inicio-E-7", "falha-E-9", "dialogo-d1"],
   );
 });
@@ -666,12 +732,13 @@ test("propostas do chat: um cartão por proposta aberta, nenhum sem elas", () =>
 
 test("aviso da Fabriquinha: mensagem do usuário marcada aparece como Fabriquinha, não como você", () => {
   const m = { role: "user", content: "A Fabriquinha criou a **I-10**", timestamp: 1 };
-  const html = mensagem(m, undefined, true);
-  assert.match(html, /^<div class="msg fabriquinha"><span class="quem">Fabriquinha<\/span>/);
-  assert.match(html, /<strong>I-10<\/strong>/);
-  assert.match(mensagem(m), /class="msg voce"/);
+  const html = (l: ThreadMessageLike[]) => (l[0]?.metadata?.custom?.html as string | undefined) ?? "";
+  const aviso = html(mensagem(m, undefined, true));
+  assert.match(aviso, /^<div class="msg fabriquinha"><span class="quem">Fabriquinha<\/span>/);
+  assert.match(aviso, /<strong>I-10<\/strong>/);
+  assert.equal(mensagem(m)[0]?.role, "user");
   const itens = conversa(cabecalho({ estado: "aguardando_humano", motivo: "conversa" }, { execucoes: [] }), [
     { type: "message", timestamp: T0, message: m, aviso: true },
   ]);
-  assert.match(itens[0]?.html ?? "", /msg fabriquinha/);
+  assert.match(html(itens), /msg fabriquinha/);
 });

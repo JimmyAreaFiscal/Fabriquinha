@@ -1,10 +1,11 @@
-// Auditoria do Histórico (F4; F7 §4.4) como funções puras que devolvem HTML: a barra com o mês, a coluna "O que o
-// agente recebeu", o envio conforme o estado e a conversa. As peças da conversa (mensagem, ferramenta, emFluxo, chaveDa)
-// são as do chat. O texto que vem do servidor passa sempre por `escapar`.
+// Auditoria do Histórico (F4; F7 §4.4) como funções puras: a barra com o mês e a coluna "O que o agente recebeu" em
+// HTML, o envio conforme o estado e a conversa como mensagens do assistant-ui. As peças da conversa (mensagem, doSistema,
+// chaveDa) são as do chat. O texto que vem do servidor passa sempre por `escapar`.
+import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Auditoria } from "../../../execucao/auditoria.ts";
 import type { Entrada } from "../../rotas/chat.ts";
 import { escapar, nomeDoModelo, plural, rotuloDoModelo } from "../render.ts";
-import { chaveDa, type Item, mensagem, type MensagemPi } from "./chat.ts";
+import { chaveDa, doSistema, type Envio, mensagem, type MensagemPi } from "./chat.ts";
 
 /** O que `GET /api/auditorias/:sessao` e o primeiro evento do SSE dão, com o id da sessão da página. */
 export type DadosDaAuditoria = Omit<Auditoria, "assinar"> & { sessao: string };
@@ -48,34 +49,35 @@ export function ladoDaAuditoria(dados: DadosDaAuditoria): string {
   );
 }
 
-/** Em conversa, a área de texto e Enviar; com o agente rodando, só Abortar. */
-export function envioDaAuditoria(estado: Auditoria["estado"]): string {
+/** Em conversa, o compositor com Enviar; com o agente rodando, só Abortar. */
+export function envioDaAuditoria(estado: Auditoria["estado"]): Envio {
   if (estado === "rodando") {
-    return (
-      '<div class="fim">O agente está trabalhando; a pergunta fica para quando ele terminar.' +
-      '<div class="botoes"><button type="button" class="btn btn-perigo" data-abortar>Abortar</button></div></div>'
-    );
+    return {
+      html:
+        '<div class="fim">O agente está trabalhando; a pergunta fica para quando ele terminar.' +
+        '<div class="botoes"><button type="button" class="btn btn-perigo" data-abortar>Abortar</button></div></div>',
+    };
   }
-  return (
-    '<form class="compositor" data-envio><textarea name="texto" rows="2" aria-label="Mensagem" placeholder="Pergunte sobre a auditoria"></textarea>' +
-    `<div class="linha-1">${DICA}<div class="direita"><button class="btn btn-primario">Enviar</button></div></div></form>`
-  );
+  return {
+    placeholder: "Pergunte sobre a auditoria",
+    linha: `${DICA}<div class="direita"><button class="btn btn-primario">Enviar</button></div>`,
+  };
 }
 
-/** A linha do sistema que ocupa o lugar do prompt montado pela Fabriquinha. */
-export const inicioDaAuditoria = (dados: Pick<DadosDaAuditoria, "rotulo">): string =>
-  `<div class="sistema">Auditoria de ${escapar(dados.rotulo)} iniciada</div>`;
+/** A linha do sistema "Auditoria de … iniciada", que ocupa o lugar do prompt montado pela Fabriquinha (`m`). */
+export const linhaDoInicio = (m: MensagemPi, dados: Pick<DadosDaAuditoria, "rotulo">): ThreadMessageLike =>
+  doSistema({
+    chave: chaveDa(m),
+    html: `<div class="sistema">Auditoria de ${escapar(dados.rotulo)} iniciada</div>`,
+  });
 
-/** A conversa do JSONL, com a chave de cada mensagem; o prompt marcado `fabriquinha` vira a linha do início. */
-export function conversaDaAuditoria(dados: DadosDaAuditoria): Item[] {
+/** A conversa do JSONL; o prompt marcado `fabriquinha` vira a linha do início. */
+export function conversaDaAuditoria(dados: DadosDaAuditoria): ThreadMessageLike[] {
   const mensagens = (dados.conversa as Entrada[]).flatMap((e) =>
     e.type === "message" ? [{ m: e.message as MensagemPi, fabriquinha: e.fabriquinha === true }] : [],
   );
   const resultados = new Map(
     mensagens.filter(({ m }) => m.role === "toolResult").map(({ m }) => [String(m.toolCallId), m] as const),
   );
-  return mensagens.map(({ m, fabriquinha }) => ({
-    chave: chaveDa(m),
-    html: fabriquinha ? inicioDaAuditoria(dados) : mensagem(m, resultados),
-  }));
+  return mensagens.flatMap(({ m, fabriquinha }) => (fabriquinha ? [linhaDoInicio(m, dados)] : mensagem(m, resultados)));
 }

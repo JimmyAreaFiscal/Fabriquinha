@@ -28,6 +28,23 @@ test("Projeto aceita preparação e modelo por etapa", () => {
   assert.deepEqual(Projeto.parse(completo), completo);
 });
 
+test("linkProduto: http(s) válido passa, vazio vira ausente, o resto dá a mensagem do campo", () => {
+  assert.equal(
+    Projeto.parse({ ...valido, linkProduto: "https://demo.exemplo.com" }).linkProduto,
+    "https://demo.exemplo.com",
+  );
+  assert.equal(
+    Projeto.parse({ ...valido, linkProduto: "http://localhost:3000/app" }).linkProduto,
+    "http://localhost:3000/app",
+  );
+  assert.equal(Projeto.parse({ ...valido, linkProduto: "" }).linkProduto, undefined);
+  for (const ruim of ["isso nao e um link", "ftp://produto.exemplo.com", "javascript:alert(1)"]) {
+    assert.deepEqual(erros({ ...valido, linkProduto: ruim }), [
+      "linkProduto: Informe um link http(s) válido, como https://produto.exemplo.com",
+    ]);
+  }
+});
+
 test("Projeto recusa cada campo fora da regra, com o caminho do campo", () => {
   const casos: [Record<string, unknown>, string][] = [
     [{ nome: "Com Espaco" }, "nome"],

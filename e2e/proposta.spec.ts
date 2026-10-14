@@ -97,7 +97,7 @@ test("o chat do registro mostra o cartão da proposta; aceitar cria a issue e av
   });
   await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
   // Só depois do primeiro turno do agente (o prompt da etapa) a conversa aceita a mensagem do Auditor.
-  await expect(pagina.locator("[data-conversa] .msg")).toHaveText(["agentepronto"]);
+  await expect(pagina.locator("[data-conversa] .msg")).toHaveText(["pronto"]);
   const envio = pagina.locator("form[data-envio]");
   await envio.getByRole("textbox", { name: "Mensagem" }).fill("proponha a divisão");
   await envio.getByRole("button", { name: "Enviar" }).click();

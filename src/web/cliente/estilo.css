@@ -1732,9 +1732,180 @@ input.erro {
   flex-basis: 100%;
 }
 
+/* Usuários simulados (F8 §2), abaixo do formulário do projeto. */
+.usuarios-simulados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--line);
+}
+.usuarios-simulados h3 {
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.usuarios-simulados h3 .nota {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.cartoes-usuario {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.cartao-usuario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.cartao-usuario h4 {
+  font-size: var(--fs-md);
+  font-weight: var(--w-strong);
+}
+.descricao-usuario {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+.anexos-usuario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  list-style: none;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+}
+.anexo-usuario {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.anexo-usuario .x {
+  margin-left: auto;
+}
+.anexar {
+  align-self: flex-start;
+}
+.novo-usuario .campo textarea {
+  resize: vertical;
+}
+.novo-usuario .rodape-form {
+  justify-content: flex-end;
+}
+
+/* Simulação (F8 §3): abas por projeto, formulário de nova Tarefa e os cartões das Tarefas. */
+.abas-projeto {
+  display: flex;
+  gap: 2px;
+}
+.abas-projeto a {
+  padding: 4px var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.abas-projeto a[aria-current="page"] {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.form-tarefa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+.form-tarefa h2 {
+  font-size: var(--fs-md);
+}
+.linha-tarefa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-5);
+}
+.linha-tarefa .btn {
+  margin-left: auto;
+}
+.num-campo.erro input {
+  border-color: var(--danger);
+}
+.alocar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.alocar legend {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+.tarefas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.tarefa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+}
+.tarefa-cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.tarefa-texto {
+  white-space: pre-wrap;
+}
+.tarefa-cab .btn {
+  margin-left: auto;
+}
+/* O relatório de uma execução (F8 §5), na caixa. */
+.rel-secao h3 {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: var(--s-3) 0 var(--s-2);
+}
+.rel-secao ul {
+  margin: 0;
+  padding-left: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 @media (max-width: 1100px) {
   .agendador {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cartoes-usuario {
+    grid-template-columns: minmax(0, 1fr);
   }
   .config {
     grid-template-columns: minmax(0, 1fr);
@@ -2647,6 +2818,8 @@ input.erro {
 /* Chat (F7 §4.4): barra de estado, conversa à esquerda com o envio fixo no fim e a coluna da direita. */
 .pagina:has(> .pagina-chat) {
   padding: 0;
+  flex: 1;
+  min-height: 0;
 }
 .pequeno {
   font-size: var(--fs-xs);
@@ -2683,67 +2856,109 @@ input.erro {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Chat de página inteira: a página não rola; rolam a conversa e a coluna da direita, cada uma no seu espaço. */
+body:has(.pagina-chat) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+.pagina-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
 .chat-layout {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 400px;
   gap: var(--s-5);
   padding: 0 var(--s-6);
 }
+[data-conversa-area] {
+  min-height: 0;
+}
 .coluna-conversa {
   display: flex;
   flex-direction: column;
-  padding-bottom: var(--s-4);
+  height: 100%;
   min-width: 0;
 }
 .chat-layout .lateral {
-  align-self: start;
-  margin-top: var(--s-4);
+  position: static;
+  max-height: 100%;
+  padding: var(--s-4) 0;
 }
 
 .conversa {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--s-4);
-  padding: var(--s-5) 0;
+  padding: var(--s-5) var(--s-2) var(--s-5) 0;
 }
+.area-envio {
+  flex: none;
+  padding-bottom: var(--s-4);
+}
+/* Balões: o Auditor à direita, o agente à esquerda, sem rótulo; raciocínio e ferramentas ficam na coluna do agente. */
 .msg {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--s-2);
+  max-width: 80%;
 }
-.msg .quem {
-  font-size: var(--fs-xs);
-  font-weight: var(--w-strong);
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.msg.voce {
+  align-self: flex-end;
+  align-items: flex-end;
 }
-.msg.voce .quem {
-  color: var(--accent);
+.msg.agente {
+  align-self: flex-start;
+  align-items: flex-start;
+  min-width: 60%;
+}
+.msg.agente .ferramenta,
+.msg.agente .pensando {
+  align-self: stretch;
 }
 /* O Markdown da conversa é o .md, no tamanho do texto da página, como no protótipo do chat. */
-.msg .texto {
+.balao {
   font-size: inherit;
   line-height: 1.65;
   overflow-wrap: anywhere;
+  padding: var(--s-2) var(--s-4);
+  border-radius: 12px;
 }
-.msg.voce .texto {
-  padding: var(--s-2) var(--s-3);
+.msg.agente .balao {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: var(--r-sm);
+}
+.msg.voce .balao {
   background: var(--surface-2);
-  border-radius: var(--r-md);
+  border: 1px solid var(--accent);
+  border-bottom-right-radius: var(--r-sm);
+}
+.balao > :first-child {
+  margin-top: 0;
+}
+.balao > :last-child {
+  margin-bottom: 0;
+}
+.msg.fabriquinha {
   align-self: flex-start;
-  max-width: 85%;
+  align-items: flex-start;
 }
 .msg.fabriquinha .quem {
   color: var(--open);
 }
-.msg.fabriquinha .texto {
-  padding: var(--s-2) var(--s-3);
+.msg.fabriquinha .balao {
   background: var(--open-bg);
+  border: 0;
   border-left: 3px solid var(--open);
   border-radius: var(--r-md);
-  align-self: flex-start;
-  max-width: 85%;
 }
 /* Proposta de issue da IA (C23): no chat do registro e no gate do desenho. */
 .proposta {
@@ -2917,12 +3132,7 @@ input.erro {
 }
 
 /* Envio: fixo no fim da conversa, conforme o estado da sessão. */
-.compositor,
-.dialogo-ext,
-.fim {
-  position: sticky;
-  bottom: var(--s-3);
-}
+
 .compositor {
   display: flex;
   flex-direction: column;

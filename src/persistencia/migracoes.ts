@@ -15,6 +15,7 @@ import {
 } from "../dominio/agregado.ts";
 import { Etapa, Fase, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
+import { StatusExecucaoSimulada } from "../dominio/simulacao.ts";
 import { StatusArquivo } from "./commits.ts";
 
 /** Lista de um `CHECK ... IN (...)` gerada de um enum zod, para o banco e o domínio não divergirem. */
@@ -22,7 +23,7 @@ export const listaSql = (enumeracao: z.ZodEnum): string =>
   enumeracao.options.map((v) => `'${String(v).replaceAll("'", "''")}'`).join(",");
 
 export const MIGRACOES: readonly string[] = [
-  // A lista é fixa: o tipo `proposta` entra na migração 12, que recria `sequencia`.
+  // A lista é fixa: o tipo `proposta` entra na migração 16, que recria `sequencia`.
   `CREATE TABLE sequencia (
     nome  TEXT PRIMARY KEY CHECK (nome IN ('issue','ticket','execucao','decisao','evidencia')),
     valor INTEGER NOT NULL CHECK (valor >= 0)
@@ -239,6 +240,53 @@ export const MIGRACOES: readonly string[] = [
   // das autônomas em andamento. A trava por issue continua em ux_execucao_por_ticket e na C5.
   `DROP INDEX ux_execucao_autonoma;
   CREATE INDEX ix_execucao_autonoma ON execucao(modo) WHERE modo = 'autonomo' AND resultado = 'em_andamento';`,
+  `ALTER TABLE projeto ADD COLUMN link_produto TEXT;`,
+  // F8 (I-10): os Usuários Simulados do projeto e os anexos que vão para a IA; o conteúdo fica em arquivos/ pelo sha256.
+  `CREATE TABLE usuario_simulado (
+    id        INTEGER PRIMARY KEY,
+    projeto   TEXT NOT NULL REFERENCES projeto(nome),
+    nome      TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    UNIQUE (projeto, nome)
+  );
+  CREATE TABLE usuario_simulado_anexo (
+    usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+    nome    TEXT NOT NULL,
+    sha256  TEXT NOT NULL CHECK (length(sha256) = 64),
+    bytes   INTEGER NOT NULL CHECK (bytes >= 0),
+    PRIMARY KEY (usuario, nome)
+  );`,
+  // F8 (I-10): as Tarefas do projeto, com N execuções por usuário, e os Usuários Simulados alocados a cada uma.
+  `CREATE TABLE tarefa (
+    id        INTEGER PRIMARY KEY,
+    projeto   TEXT NOT NULL REFERENCES projeto(nome),
+    texto     TEXT NOT NULL CHECK (length(texto) BETWEEN 1 AND 2000),
+    n         INTEGER NOT NULL CHECK (n BETWEEN 1 AND 20),
+    criada_em TEXT NOT NULL
+  );
+  CREATE INDEX ix_tarefa_projeto ON tarefa(projeto);
+  CREATE TABLE tarefa_usuario (
+    tarefa  INTEGER NOT NULL REFERENCES tarefa(id),
+    usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+    PRIMARY KEY (tarefa, usuario)
+  );`,
+  // F8 (I-10): as execuções simuladas de cada Tarefa, uma por usuário alocado e por N; o relatório é JSON e o `pgid` é o
+  // do pi em andamento, para o reinício matá-lo.
+  `CREATE TABLE execucao_simulada (
+    id           INTEGER PRIMARY KEY,
+    tarefa       INTEGER NOT NULL REFERENCES tarefa(id),
+    usuario      INTEGER NOT NULL REFERENCES usuario_simulado(id),
+    status       TEXT NOT NULL CHECK (status IN (${listaSql(StatusExecucaoSimulada)})),
+    relatorio    TEXT CHECK (relatorio IS NULL OR json_valid(relatorio)),
+    erro         TEXT,
+    pgid         INTEGER,
+    iniciada_em  TEXT,
+    terminada_em TEXT,
+    CHECK ((status = 'falhou') = (erro IS NOT NULL)),
+    CHECK ((status = 'concluida') = (relatorio IS NOT NULL))
+  );
+  CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa);
+  CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento');`,
   // Proposta de issue (C23, C24): fato preso ao ticket que a fez. O CHECK de `sequencia` não se altera no SQLite, então
   // ela é recriada com o tipo `proposta` (tabela nova, cópia, DROP, RENAME), preservando os valores.
   `CREATE TABLE proposta_issue (

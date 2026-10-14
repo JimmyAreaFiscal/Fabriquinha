@@ -13,7 +13,8 @@
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "jsx": "react-jsx"
   },
   "include": ["src", "pacote-pi", "fitness", "integracao", "e2e", "playwright.config.ts"]
 }

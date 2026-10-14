@@ -23,6 +23,7 @@ A raiz é `$FABRIQUINHA_ROOT` ou, sem a variável, `~/fabriquinha`.
 ├── arquivos/ab/abcdef….    # arquivos de evidência, endereçados por SHA-256 (F2)
 ├── sessoes/                # sessões do pi, passadas por --session-dir (F4)
 ├── execucoes/E-7/         # log da execução e saida/ para vídeos e prints do agente (F4)
+├── simulacoes/12/          # uma execução simulada: anexos, sessao/, log e saida/relatorio.json (F8)
 └── worktrees/<projeto>/I-12/   # uma worktree por issue (F5)
 ```
 
@@ -106,8 +107,9 @@ Consultados dentro da mesma transação, então são consistentes com o que vai 
 - `migrar` desliga `foreign_keys` antes do laço (o PRAGMA não vale dentro de transação) e liga de novo num `finally`, porque recriar uma tabela com DROP/RENAME falha com FK ligada (`defer_foreign_keys` e `legacy_alter_table` não resolvem).
   Em troca, cada migração roda `PRAGMA foreign_key_check` antes do COMMIT e é desfeita com `ErroDeRegra` se sobrar linha órfã.
 - A migração do C22 (F1) acrescenta `issue.cancelada_em`, recria `ticket` com `fechado` e `cancelado` no CHECK de `status` (tabela nova, cópia, DROP, RENAME e os dois índices únicos) e cria `ix_issue_dep_dep` em `issue_dep(dep)`, para a busca das dependentes.
-- A migração 12 (proposta de issue, C23 e C24 do F1) cria `proposta_issue` e `ix_proposta_issue_ticket` e recria `sequencia` com o tipo `proposta` no CHECK (tabela nova, `INSERT … SELECT`, DROP, RENAME), preservando os valores.
-  A migração 1 guarda a lista de tipos original, para a lista nova só valer a partir da 12.
+- As migrações 12 a 15 são da Simulação (F8, I-10): `projeto.link_produto` (12), `usuario_simulado` e `usuario_simulado_anexo` (13), `tarefa` e `tarefa_usuario` (14) e `execucao_simulada` (15).
+- A migração 16 (proposta de issue, C23 e C24 do F1) cria `proposta_issue` e `ix_proposta_issue_ticket` e recria `sequencia` com o tipo `proposta` no CHECK (tabela nova, `INSERT … SELECT`, DROP, RENAME), preservando os valores.
+  A migração 1 guarda a lista de tipos original, para a lista nova só valer a partir da 16.
 - As tabelas de outros módulos (`configuracao` no F4; `commit_ticket` e `arquivo_commit` no F5; `uso`, `retrabalho`, `comando` e `varredura_base` no F6) são definidas nas specs desses módulos e entram no mesmo arquivo de schema.
 
 ## 4. DDL (versão 1)
@@ -129,7 +131,8 @@ CREATE TABLE projeto (
   testes            TEXT NOT NULL CHECK (json_valid(testes) AND json_array_length(testes) >= 1),
   sonar_project_key TEXT NOT NULL,
   fitness           TEXT NOT NULL CHECK (json_valid(fitness) AND json_array_length(fitness) >= 1),
-  modelos           TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(modelos))
+  modelos           TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(modelos)),
+  link_produto      TEXT -- opcional: endereço http(s) do produto no ar, para a Simulação (I-10); NULL = sem link
 );
 
 CREATE TABLE issue (
@@ -240,9 +243,56 @@ CREATE TABLE evidencia_arquivo (
   bytes     INTEGER NOT NULL CHECK (bytes >= 0),
   PRIMARY KEY (evidencia, nome)
 );
+
+CREATE TABLE usuario_simulado (                                   -- F8: pessoa fictícia do projeto
+  id        INTEGER PRIMARY KEY,
+  projeto   TEXT NOT NULL REFERENCES projeto(nome),
+  nome      TEXT NOT NULL,
+  descricao TEXT NOT NULL,
+  UNIQUE (projeto, nome)
+);
+
+CREATE TABLE usuario_simulado_anexo (                             -- F8: manuais e outros arquivos que vão para a IA
+  usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+  nome    TEXT NOT NULL,                                          -- nome original; o conteúdo está em arquivos/<sha256> (5.1)
+  sha256  TEXT NOT NULL CHECK (length(sha256) = 64),
+  bytes   INTEGER NOT NULL CHECK (bytes >= 0),
+  PRIMARY KEY (usuario, nome)
+);
+
+CREATE TABLE tarefa (                                             -- F8: o que o usuário simulado deve tentar fazer
+  id        INTEGER PRIMARY KEY,
+  projeto   TEXT NOT NULL REFERENCES projeto(nome),
+  texto     TEXT NOT NULL CHECK (length(texto) BETWEEN 1 AND 2000),
+  n         INTEGER NOT NULL CHECK (n BETWEEN 1 AND 20),            -- execuções por usuário alocado
+  criada_em TEXT NOT NULL
+);
+CREATE INDEX ix_tarefa_projeto ON tarefa(projeto);
+
+CREATE TABLE tarefa_usuario (                                     -- F8: os Usuários Simulados alocados à Tarefa
+  tarefa  INTEGER NOT NULL REFERENCES tarefa(id),
+  usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),
+  PRIMARY KEY (tarefa, usuario)
+);
+
+CREATE TABLE execucao_simulada (                                  -- F8: uma vez que um Usuário Simulado fez a Tarefa
+  id           INTEGER PRIMARY KEY,
+  tarefa       INTEGER NOT NULL REFERENCES tarefa(id),
+  usuario      INTEGER NOT NULL REFERENCES usuario_simulado(id),
+  status       TEXT NOT NULL CHECK (status IN ('na_fila','em_andamento','concluida','falhou')),
+  relatorio    TEXT CHECK (relatorio IS NULL OR json_valid(relatorio)),  -- RelatorioSimulacao (F8 5)
+  erro         TEXT,
+  pgid         INTEGER,                                           -- grupo do pi em andamento, para o reinício matá-lo
+  iniciada_em  TEXT,
+  terminada_em TEXT,
+  CHECK ((status = 'falhou') = (erro IS NOT NULL)),
+  CHECK ((status = 'concluida') = (relatorio IS NOT NULL))
+);
+CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa);
+CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento');
 ```
 
-A proposta de issue (migração 12) fica fora do agregado, presa ao ticket que a fez:
+A proposta de issue (migração 16) fica fora do agregado, presa ao ticket que a fez:
 
 ```sql
 CREATE TABLE proposta_issue (
@@ -262,6 +312,7 @@ CREATE INDEX ix_proposta_issue_ticket ON proposta_issue(ticket);
 ```
 
 As FKs ficam sem `ON DELETE` (comportamento `RESTRICT`), exceto `evidencia_arquivo`.
+Remover o projeto apaga `execucao_simulada`, `tarefa_usuario`, `tarefa`, `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`), recusa se há execução simulada pendente e apaga as pastas `<raiz>/simulacoes/<id>` (F8 5).
 Assim, apagar um ticket que já tem execução, decisão ou evidência falha no banco, e o histórico nunca some por engano.
 Os únicos tickets apagados pelo domínio (C8, C13, C15) são de desenvolvimento ainda `aberto`, sem histórico.
 
@@ -280,6 +331,8 @@ O que fica só no F1, por não caber em constraint:
 - Gravação: copia para um temporário no mesmo diretório calculando o SHA-256 no caminho, faz `fsync` e `rename`.
   O `rename` é atômico, então um arquivo existe inteiro ou não existe.
 - Se o hash já existe, nada é copiado: o mesmo print anexado duas vezes ocupa espaço uma vez.
+- Os anexos dos Usuários Simulados (F8) usam o mesmo armazenamento, por `guardarBytes`, que recebe o conteúdo já em memória.
+  Um arquivo só é apagado do disco (remoção do projeto) se nenhuma evidência nem anexo restante o usa.
 - Arquivos nunca são alterados nem apagados.
   Substituir uma evidência troca as linhas do banco; o arquivo antigo continua no disco.
 
@@ -312,6 +365,7 @@ Antes de servir, o F7 confere que o hash pertence a uma evidência; nunca serve 
 | `salvarProjeto(banco, projeto)` / `projeto(banco, nome)` / `projetos(banco)` | C19 e leituras. |
 | `agregado(banco, issue)` | Leitura do agregado, sem transação de escrita. |
 | `guardarArquivo(origem) → { sha256, bytes }` | Grava um arquivo no armazenamento por conteúdo (5.1). |
+| `guardarBytes(conteudo) → { sha256, bytes }` | Grava um `Buffer` do mesmo jeito (anexo de Usuário Simulado, F8). |
 | `caminhoArquivo(sha256)` | Caminho do arquivo no disco. |
 
 As consultas de leitura de cada tela, do agendador e das métricas ficam nas specs do F4, F6 e F7, que são donos delas.

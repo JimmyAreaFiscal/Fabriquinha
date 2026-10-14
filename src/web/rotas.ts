@@ -19,7 +19,7 @@ export interface Pedido {
   /** Os `:parametros` do caminho, decodificados. */
   params: Parametros;
   query: URLSearchParams;
-  /** O JSON do corpo de uma mutação, ainda sem schema; `undefined` num `GET` ou com corpo vazio. */
+  /** O JSON do corpo de uma mutação, ainda sem schema (os bytes, num `Buffer`, se vier `application/octet-stream`); `undefined` num `GET` ou com corpo vazio. */
   corpo: unknown;
   /** Os cabeçalhos do pedido (o `Range` de um arquivo, por exemplo). */
   cabecalhos: IncomingHttpHeaders;
