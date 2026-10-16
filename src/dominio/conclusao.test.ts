@@ -90,39 +90,11 @@ const regra = (trabalho: () => unknown, mensagem: string) => {
   assert.throws(trabalho, (e) => e instanceof ErroDeRegra && e.message === mensagem);
 };
 
-test("C7 do desenho: ticket concluído e a issue vai a aprovacao_desenho, com os tickets propostos intactos", () => {
-  const ag = desenhado();
-  assert.deepEqual(concluir(ag), {
-    ...ag,
-    issue: { ...ag.issue, fase: "aprovacao_desenho" },
-    tickets: [ag.tickets[0], { ...ag.tickets[1], status: "concluido", concluidoEm: AGORA }, ag.tickets[2]],
-  });
-});
-
-test("C7 do desenho exige as evidências do catálogo, com o protótipo só em funcionalidade", () => {
-  const ag = desenhado();
+test("C7 não conclui o desenho: ele termina no gate do Auditor (C15)", () => {
   regra(
-    () => concluir({ ...ag, evidencias: ag.evidencias.slice(1) }),
-    "T-2 não pode concluir: falta a evidência desenho_solucao (o agente de T-2 submete com fabriquinha evidencia add desenho_solucao)",
+    () => concluir(desenhado()),
+    "T-2 é de desenho e não conclui por concluirTicket (o Auditor o conclui no gate de desenho)",
   );
-  const funcionalidade = desenhado({ tipo: "funcionalidade" });
-  regra(
-    () => concluir(funcionalidade),
-    "T-2 não pode concluir: falta a evidência prototipo (o agente de T-2 submete com fabriquinha evidencia add prototipo)",
-  );
-  const comPrototipo = { ...funcionalidade, evidencias: [...ag.evidencias, evidencia(4, "prototipo")] };
-  assert.equal(concluir(comPrototipo).issue.fase, "aprovacao_desenho");
-});
-
-test("C7 do desenho exige que ele tenha criado ao menos um ticket de desenvolvimento", () => {
-  const ag = desenhado();
-  const semProposta =
-    "T-2 não pode concluir: o desenho não criou ticket de desenvolvimento " +
-    "(o agente de T-2 cria com fabriquinha ticket criar I-1 --titulo <título>)";
-  regra(() => concluir({ ...ag, tickets: ag.tickets.slice(0, 2) }), semProposta);
-  // Ticket criado por outro (o Auditor, ou uma revisão) não conta para este desenho.
-  const doAuditor = ticket(3, "desenvolvimento", { status: "aberto", origem: "auditor" });
-  regra(() => concluir({ ...ag, tickets: [...ag.tickets.slice(0, 2), doAuditor] }), semProposta);
 });
 
 test("C7 é só da Fabriquinha, valida a entrada e exige ticket em execução, sem execução em andamento", () => {
@@ -135,9 +107,16 @@ test("C7 é só da Fabriquinha, valida a entrada e exige ticket em execução, s
     () => concluir(ag, { ticket: 1 }),
     "T-1 é de registro e não conclui por concluirTicket (o Auditor o conclui no gate de registro)",
   );
-  const falhou = { ...ag, tickets: ag.tickets.map((t) => (t.id === 2 ? { ...t, status: "falhou" as const } : t)) };
+  const sessao = emAjuste();
+  const falhou = {
+    ...sessao,
+    tickets: sessao.tickets.map((t) => (t.id === 2 ? { ...t, status: "falhou" as const } : t)),
+  };
   regra(() => concluir(falhou), "T-2 tem status falhou, não em_execucao (só se conclui ticket em execução)");
-  const rodando = { ...ag, execucoes: ag.execucoes.map((e) => ({ ...e, resultado: "em_andamento" as const })) };
+  const rodando = {
+    ...sessao,
+    execucoes: sessao.execucoes.map((e) => ({ ...e, resultado: "em_andamento" as const })),
+  };
   regra(() => concluir(rodando), "T-2 não pode concluir: a execução E-5 ainda está em andamento (espere ela terminar)");
 });
 
@@ -367,7 +346,7 @@ test("C7 da revisão exige a decisão e a coerência dela com os tickets criados
 
 /** I-1 no encerramento, com as quatro evidências da etapa; o `pr_aberto` leva a URL e a base do PR. */
 const encerrando = (): Agregado => {
-  const tipos = ["mensagem_pr", "video_explicativo", "relatorio_produtividade", "pr_aberto"] as const;
+  const tipos = ["mensagem_pr", "aula_codigo", "relatorio_produtividade", "pr_aberto"] as const;
   return {
     ...desenhado({ fase: "encerramento" }),
     tickets: [ticket(1, "registro", { status: "concluido" }), ticket(2, "encerramento")],

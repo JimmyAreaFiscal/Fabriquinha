@@ -49,14 +49,14 @@ const comum = {
   saida: "/r/execucoes/E-2/saida",
 };
 
-test("desenho autônomo: instrução primeiro, contexto, registro, modo de trabalhar, CLI, skills e o aviso", () => {
+test("desenho interativo: instrução primeiro, contexto, registro, modo de trabalhar, CLI e skills, sem o aviso", () => {
   const ag = agregado([
     evidencia(1, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }),
     evidencia(2, "criterios_aceite", {
       criterios: [{ id: "CA-1", dado: "mil itens", quando: "busco", entao: "responde em 1 s" }],
     }),
   ]);
-  const prompt = montarPrompt({ ...comum, ag, ticket: desenho, instrucao: "  Use o índice.  ", modo: "autonomo" });
+  const prompt = montarPrompt({ ...comum, ag, ticket: desenho, instrucao: "  Use o índice.  ", modo: "interativo" });
 
   assert.ok(prompt.startsWith("# Instrução do Auditor\n\nUse o índice.\n\n# Contexto\n"));
   const ordem = [
@@ -70,14 +70,14 @@ test("desenho autônomo: instrução primeiro, contexto, registro, modo de traba
     "## Comportamento registrado\n\na busca varre tudo",
     "## Critérios de aceite\n\n- **CA-1**: dado mil itens, quando busco, então responde em 1 s.",
     "## Modo de trabalhar: desenho",
-    "**O que não fazer:** não implemente a solução, não crie PR, não faça commit nem push",
+    "**O que não fazer:** não envie sem a confirmação do Auditor na conversa",
     "## CLI da Fabriquinha",
+    "`fabriquinha ticket enviar T-<n>`",
     "## Submissão de evidências",
     "`fabriquinha evidencia add <tipo>",
     "$FABRIQUINHA_SAIDA",
     "## Skills de artefato",
     "- `artefato-desenho-solucao`\n- `artefato-prototipo`\n- `artefato-complexidade`\n- `artefato-impactos-arquitetura`",
-    "## Execução autônoma\n\nNinguém acompanha esta execução para responder perguntas.",
   ];
   let desde = 0;
   for (const trecho of ordem) {
@@ -85,11 +85,17 @@ test("desenho autônomo: instrução primeiro, contexto, registro, modo de traba
     assert.ok(em >= 0, `falta, ou está fora de ordem: ${trecho}`);
     desde = em + trecho.length;
   }
-  assert.doesNotMatch(prompt, /continuar trabalhando/i);
+  assert.doesNotMatch(prompt, /continuar trabalhando|Execução autônoma/i);
 });
 
 test("sem instrução nem registro: o desenho mostra as seções vazias, sem inventar critério", () => {
-  const prompt = montarPrompt({ ...comum, ag: agregado([]), ticket: desenho, instrucao: undefined, modo: "autonomo" });
+  const prompt = montarPrompt({
+    ...comum,
+    ag: agregado([]),
+    ticket: desenho,
+    instrucao: undefined,
+    modo: "interativo",
+  });
   assert.ok(prompt.startsWith("# Contexto\n"));
   assert.match(prompt, /## Comportamento registrado\n\n\(vazio\)\n/);
   assert.match(prompt, /## Critérios de aceite\n\n\(vazio\)\n/);
@@ -244,6 +250,7 @@ test("revisão: o contexto do desenvolvimento, os arquivos alterados × desenho 
     ),
     prompt,
   );
+  assert.match(prompt, /## Execução autônoma\n\nNinguém acompanha esta execução para responder perguntas\./);
   const vazio = montarPrompt({ ...comum, ag: agregado([]), ticket: revisao, instrucao: undefined, modo: "autonomo" });
   for (const titulo of ["Arquivos alterados × desenho", "Previstos e não tocados", "Fitness functions"]) {
     assert.match(vazio, new RegExp(`## ${titulo}\\n\\n\\(vazio\\)\\n`));

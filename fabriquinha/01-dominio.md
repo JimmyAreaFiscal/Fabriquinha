@@ -139,12 +139,14 @@ const Ticket = z.object({
   erro: z.string().max(2000).optional(),
   criadoEm: Instante,
   concluidoEm: Instante.optional(),
+  enviadoEm: Instante.optional(),
 });
 ```
 
 | Campo | Regra |
 |---|---|
 | `etapa` | Só `desenvolvimento` pode ser criado por agente ou Auditor; as demais etapas nascem de transições. |
+| `enviadoEm` | Só em `registro` e `desenho`: quando o agente enviou o resultado à aprovação (C25). Sai quando o Auditor devolve (C10, C15 reprovados). |
 | `origemTicket` | Ticket cuja execução criou este. Obrigatório quando `origem = agente`. Alimenta "exigências de alteração" (origem numa revisão) no F6. |
 | `modelo` | Override do modelo da etapa só para este ticket. Só o Auditor define, porque modelo é custo por execução. |
 | `instrucao` | Resposta do Auditor a uma falha (C9). Abre o prompt da próxima execução e é consumida por C5 (F4, 6.4). |
@@ -172,7 +174,7 @@ const Execucao = z.object({
 
 | Regra |
 |---|
-| `registro` e `sessao` rodam em modo `interativo`; as demais etapas, em `autonomo`, inclusive quando o Auditor dispara à mão. |
+| `registro`, `desenho` e `sessao` rodam em modo `interativo`; as demais etapas, em `autonomo`, inclusive quando o Auditor dispara à mão. O desenho é iniciado pelo agendador, como as autônomas, e conversa com o Auditor nas decisões relevantes. |
 | `consulta` é uma conversa do Auditor sobre a sessão de qualquer ticket, sem as ferramentas embutidas de escrita (`edit`, `write`, `bash`); não muda o estado do ticket (C21). |
 | `terminadaEm` está presente se e somente se `resultado ≠ em_andamento`; `erro`, se e somente se `resultado = falha`. |
 | `modelo` é o par pedido ao pi nesta execução (3.10); ausente quando valeu o padrão do pi. O consumo real por modelo vem da sessão (F6). |
@@ -260,7 +262,8 @@ O catálogo é regra de negócio e mora aqui; o F3 implementa os schemas e os co
 | revisao | `explicacao_fitness` | agente | sim, uma explicação por linha da matriz |
 | revisao | `comprovacao_criterios` | agente | sim |
 | encerramento | `mensagem_pr` | agente | sim |
-| encerramento | `video_explicativo` | agente | sim |
+| encerramento | `aula_codigo` (a lógica de cada trecho alterado; o HTML a Fabriquinha gera do git) | agente | sim |
+| encerramento | `video_demonstracao` (o sistema funcionando, só pelo cliente) | agente | não: só quando a mudança aparece no cliente, e quem decide é o agente |
 | encerramento | `relatorio_produtividade` | fabriquinha | sim |
 | encerramento | `pr_aberto` | fabriquinha | sim |
 | sessao | — | — | — |
@@ -283,7 +286,7 @@ O F4 resolve o modelo de cada execução nesta ordem e passa o par ao pi (`--pro
 stateDiagram-v2
     [*] --> registro
     registro --> desenho: gate registro aprovado
-    desenho --> aprovacao_desenho: ticket de desenho concluído
+    desenho --> aprovacao_desenho: desenho enviado (C25)
     aprovacao_desenho --> desenvolvimento: gate desenho aprovado
     aprovacao_desenho --> desenho: gate desenho reprovado
     desenvolvimento --> revisao: último ticket de desenvolvimento concluído
@@ -304,7 +307,7 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> aberto
     aberto --> em_execucao: iniciarExecucao
-    em_execucao --> concluido: concluirTicket / decidirRegistro aprovado
+    em_execucao --> concluido: concluirTicket / decidirRegistro ou decidirDesenho aprovado
     em_execucao --> falhou: falharTicket
     falhou --> aberto: reabrirTicket (Auditor)
     aberto --> fechado: cancelarIssue
@@ -315,7 +318,8 @@ stateDiagram-v2
     cancelado --> [*]
 ```
 
-Ticket interativo (`registro`, `sessao`) nunca falha: quando o pi sai sem concluir, o ticket continua `em_execucao` e o Auditor retoma a sessão depois.
+Ticket interativo (`registro`, `desenho`, `sessao`) nunca falha: quando o pi sai sem concluir, o ticket continua `em_execucao` e o Auditor retoma a sessão depois.
+O registro e o desenho continuam `em_execucao` também depois do envio (C25), até o Auditor decidir o gate.
 
 ### 4.3 Etapa × fase
 
@@ -343,17 +347,17 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 | C2 | `editarIssue(issue, {titulo, tipo, descricao})` | agente do registro ou Auditor | fase `registro` | Atualiza os campos. |
 | C3 | `adicionarDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida`; dep existe; sem ciclo; não é a própria issue | Adiciona; idempotente. |
 | C4 | `removerDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida` | Remove; idempotente. |
-| C5 | `iniciarExecucao(ticket, modo, sessaoPi)` | Fabriquinha | fase × etapa (4.3); modo × etapa (3.6); nenhum ticket da issue com execução em andamento; autônomo: ticket `aberto`, deps da issue concluídas; interativo: ticket `aberto` ou `em_execucao` | Ticket `em_execucao`; nova Execução `em_andamento`; consome `ticket.instrucao`. |
+| C5 | `iniciarExecucao(ticket, modo, sessaoPi)` | Fabriquinha | fase × etapa (4.3); modo × etapa (3.6); nenhum ticket da issue com execução em andamento; autônomo: ticket `aberto`, deps da issue concluídas; interativo: ticket `aberto` ou `em_execucao`, e o desenho `aberto` também exige as deps concluídas | Ticket `em_execucao`; nova Execução `em_andamento`; consome `ticket.instrucao`. |
 | C6 | `terminarExecucao(execucao, resultado, erro)` | Fabriquinha | execução `em_andamento` | Grava resultado e término. O ticket não muda. |
 | C7 | `concluirTicket(ticket)` | Fabriquinha | ticket `em_execucao`; sem execução em andamento; evidências obrigatórias (3.9); regras da etapa (tabela abaixo) | Ticket `concluido` e a transição da etapa. |
 | C8 | `falharTicket(ticket, erro)` | Fabriquinha | ticket autônomo `em_execucao`; sem execução em andamento | Ticket `falhou`; remove os tickets de desenvolvimento ainda abertos que ele criou e a decisão de revisão dele. |
 | C9 | `reabrirTicket(ticket, instrucao)` | Auditor | ticket `falhou` | Ticket `aberto`; apaga `erro`; grava `instrucao` quando informada. |
-| C10 | `decidirRegistro(issue, aprovado, motivo)` | Auditor | fase `registro`; ticket de registro sem execução em andamento; aprovado: título, tipo e evidências do registro presentes | Grava a Decisão. Aprovado: ticket de registro `concluido`, fase `desenho`, novo Ticket `desenho`. Reprovado: nada mais muda; F4 retoma a sessão com o motivo. |
+| C10 | `decidirRegistro(issue, aprovado, motivo)` | Auditor | fase `registro`; ticket de registro enviado (C25) e sem execução em andamento; aprovado: título, tipo e evidências do registro presentes | Grava a Decisão. Aprovado: ticket de registro `concluido`, fase `desenho`, novo Ticket `desenho`. Reprovado: o ticket perde o `enviadoEm`; F4 retoma a mesma sessão com o motivo. |
 | C11 | `adicionarTicketDesenvolvimento(issue, titulo, descricao, modelo)` | agente de `desenho`, `revisao` ou `sessao` da mesma issue; Auditor na fase `aprovacao_desenho` | `modelo` só quando o ator é o Auditor | Ticket `desenvolvimento` aberto, com `origem` e `origemTicket`. |
 | C12 | `editarTicket(ticket, {titulo, descricao})` | quem pode criá-lo (C11) | ticket `desenvolvimento` `aberto`; o agente só edita os que a sua execução criou | Atualiza. |
 | C13 | `removerTicket(ticket)` | idem C12 | idem C12 | Remove. |
 | C14 | `registrarDecisaoRevisao(ticket, aprovado, motivo)` | agente da revisão | ticket `revisao` `em_execucao` | Grava ou substitui a Decisão de revisão. |
-| C15 | `decidirDesenho(issue, aprovado, motivo)` | Auditor | fase `aprovacao_desenho`; aprovado: há ticket de desenvolvimento aberto | Grava a Decisão. Aprovado: fase `desenvolvimento`. Reprovado: remove os tickets de desenvolvimento abertos, fase `desenho`, novo Ticket `desenho` com o motivo na descrição. |
+| C15 | `decidirDesenho(issue, aprovado, motivo)` | Auditor | fase `aprovacao_desenho`; ticket de desenho enviado (C25) e sem execução em andamento; aprovado: há ticket de desenvolvimento aberto | Grava a Decisão. Aprovado: ticket de desenho `concluido`, fase `desenvolvimento`. Reprovado: fase `desenho`, o ticket perde o `enviadoEm` e os tickets propostos ficam; F4 retoma a mesma sessão com o motivo. |
 | C16 | `decidirPR(issue, aprovado, nota, motivo)` | Auditor | fase `aprovacao_pr`; aprovado: o merge já foi feito (F5 chama depois do merge) | Grava a Decisão. Aprovado: fase `concluida`, `concluidaEm`. Reprovado: fase `ajuste_pr`, novo Ticket `sessao` com o motivo na descrição. |
 | C17 | `registrarEvidencia(ticket, tipo, aprovada)` | agente do ticket, para tipo de produtor agente; Fabriquinha, para os demais | ticket `em_execucao`; o tipo pertence à etapa do ticket (3.9) | Grava ou substitui os metadados. O conteúdo já foi validado pelo F3. |
 | C18 | `arquivarConcluidas(projeto)` | Auditor | — | `arquivadaEm` em toda issue `concluida` do projeto ainda não arquivada. |
@@ -362,7 +366,8 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 | C20 | `definirModeloTicket(ticket, modelo \| null)` | Auditor | ticket não concluído e sem execução em andamento | Define ou remove o override; vale a partir da próxima execução. |
 | C22 | `cancelarIssue(issue)` | Auditor | fase ≠ `concluida`; ainda não cancelada | `canceladaEm`; tickets `aberto` e `falhou` viram `fechado` (sem `erro`), o `em_execucao` vira `cancelado`; execução `em_andamento` termina em `falha` com o erro `issue cancelada pelo Auditor`. A F2 aplica o mesmo comando a toda issue que dependa dela, direta ou indiretamente e de qualquer projeto, numa transação só; as issues de que ela depende não mudam. |
 | C23 | `proporIssue(issue, titulo, mensagem, arquivos)` | agente de `registro` ou `desenho` da issue (o Auditor não) | execução do agente `em_andamento` e não consulta | Cria a Proposta `pendente`, presa ao ticket do agente (3.8.1). A issue não muda. |
-| C24 | `decidirProposta(proposta, aceita)` | Auditor | proposta `pendente` (senão `a proposta P-n já foi decidida: …`); o ticket dela está no gate atual: o de registro com a issue em `registro`, ou o último desenho concluído com a issue em `aprovacao_desenho` | Recusada: só marca a proposta. Aceita: aplica o C1 (mesmo projeto, `deps [issue atual]`, `titulo`, `descricao = mensagem`), marca a proposta `aceita` com `issueCriada` e, no desenho, aplica o C15 reprovado com o motivo `A Fabriquinha criou a I-n («título») a partir da proposta de issue aceita pelo Auditor. Refaça o desenho sem o que a I-n assumiu; leia a descrição dela com fabriquinha issue ver I-n.` |
+| C24 | `decidirProposta(proposta, aceita)` | Auditor | proposta `pendente` (senão `a proposta P-n já foi decidida: …`); o ticket dela está no gate atual: o de registro com a issue em `registro`, ou o desenho enviado (em execução) com a issue em `aprovacao_desenho` | Recusada: só marca a proposta. Aceita: aplica o C1 (mesmo projeto, `deps [issue atual]`, `titulo`, `descricao = mensagem`), marca a proposta `aceita` com `issueCriada` e, no desenho, aplica o C15 reprovado com o motivo `A Fabriquinha criou a I-n («título») a partir da proposta de issue aceita pelo Auditor. Refaça o desenho sem o que a I-n assumiu; leia a descrição dela com fabriquinha issue ver I-n.` |
+| C25 | `enviarParaAprovacao(ticket)` | agente do próprio ticket de `registro` ou `desenho`, com a execução em andamento | ainda não enviado; registro: título, tipo e evidências; desenho: evidências e pelo menos um ticket de desenvolvimento criado por ele | `enviadoEm`; o desenho vai à fase `aprovacao_desenho`. O agente só envia depois de o Auditor confirmar na conversa (instrução da etapa). |
 
 Depois do C22 a F2 recusa qualquer outro comando sobre a issue (`a I-n está cancelada e não muda mais`).
 Tokens, custo, tickets, execuções, decisões e evidências continuam consultáveis e contando nas métricas.
@@ -371,12 +376,12 @@ Tokens, custo, tickets, execuções, decisões e evidências continuam consultá
 
 | Etapa | Regra adicional | Transição |
 |---|---|---|
-| desenho | criou pelo menos um ticket de desenvolvimento | fase `aprovacao_desenho` |
 | desenvolvimento | tem commit registrado (F5) | se não sobrar ticket de desenvolvimento não concluído na issue: fase `revisao` e novo Ticket `revisao`; senão, a fase continua |
 | revisao | tem Decisão de revisão; aprovada ⇒ não criou tickets, `comprovacao_criterios.aprovada` e `matriz_fitness.aprovada` (F3, seção 8); reprovada ⇒ criou pelo menos um | aprovada: fase `encerramento` e novo Ticket `encerramento`; reprovada: fase `desenvolvimento` |
 | encerramento | `ctx.problemasPR` presente (a coleta verificou o PR, F5 §5.1) | sem conflito e sem check falho: fase `aprovacao_pr`; com conflito ou check falho: fase `desenvolvimento` e novo Ticket `desenvolvimento` (origem `fabriquinha`) que resolve o conflito com a base ou corrige os checks |
 | sessao | criou pelo menos um ticket de desenvolvimento | fase `desenvolvimento` |
 | registro | não usa C7; conclui por C10 | — |
+| desenho | não usa C7; conclui por C15 | — |
 
 ## 6. Invariantes
 

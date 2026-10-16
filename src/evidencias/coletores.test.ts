@@ -6,11 +6,10 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import type { Ator, Evidencia } from "../dominio/agregado.ts";
-import { concluirTicket } from "../dominio/conclusao.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { registrarEvidencia } from "../dominio/evidencia.ts";
 import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
-import { decidirDesenho, decidirRegistro } from "../dominio/gates.ts";
+import { decidirDesenho, decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
 import { adicionarTicketDesenvolvimento } from "../dominio/tickets.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
@@ -50,7 +49,10 @@ function iniciar(banco: DatabaseSync, ticket: number, modo: string): number {
   return ag.execucoes.find((e) => e.ticket === ticket && e.resultado === "em_andamento")?.id ?? 0;
 }
 
-/** O agente da `execucao` registra as evidências obrigatórias do `ticket` e a execução termina com sucesso (C17, C6). */
+/**
+ * O agente da `execucao` registra as evidências obrigatórias do `ticket`, o envia à aprovação (C25, registro e
+ * desenho) e a execução termina com sucesso (C17, C6).
+ */
 function cumprir(banco: DatabaseSync, execucao: number, ticket: number, tipos: string[]): void {
   const ator = agente(execucao, ticket);
   for (const tipo of tipos) {
@@ -58,6 +60,7 @@ function cumprir(banco: DatabaseSync, execucao: number, ticket: number, tipos: s
       registrarEvidencia(ag, { ticket, tipo, dados: {}, arquivos: [] }, ator, ctx),
     );
   }
+  comIssue(banco, 1, "enviarParaAprovacao", ator, (ag, ctx) => enviarParaAprovacao(ag, { ticket }, ator, ctx));
   comIssue(banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
     terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
   );
@@ -65,7 +68,7 @@ function cumprir(banco: DatabaseSync, execucao: number, ticket: number, tipos: s
 
 /**
  * I-1 do projeto `loja` levada pelos comandos reais até `etapa`, com o ticket dela em execução e a worktree criada:
- * registro (T-1) aprovado, desenho (T-2) que propõe o T-3 de desenvolvimento, gate de desenho aprovado.
+ * registro (T-1) aprovado, desenho (T-2, interativo) que propõe o T-3 de desenvolvimento, gate de desenho aprovado.
  * Revisão ainda não tem a transição real (tickets 15 e 16): o T-3 passa a revisão por UPDATE e roda por C5.
  */
 function cenario(
@@ -91,7 +94,7 @@ function cenario(
   cumprir(banco, iniciar(banco, 1, "interativo"), 1, ["comportamento", "criterios_aceite"]);
   comIssue(banco, 1, "decidirRegistro", auditor, (ag, ctx) => decidirRegistro(ag, { aprovado: true }, auditor, ctx));
 
-  const desenho = iniciar(banco, 2, "autonomo");
+  const desenho = iniciar(banco, 2, "interativo");
   const desenhista = agente(desenho, 2);
   comIssue(banco, 1, "adicionarTicketDesenvolvimento", desenhista, (ag, ctx) =>
     adicionarTicketDesenvolvimento(ag, { titulo: "Cache da busca" }, desenhista, ctx),
@@ -99,7 +102,6 @@ function cenario(
   let ticket = 2;
   if (etapa !== "desenho") {
     cumprir(banco, desenho, 2, ["desenho_solucao", "relatorio_complexidade", "relatorio_impactos_arquitetura"]);
-    comIssue(banco, 1, "concluirTicket", fabriquinha, (ag, ctx) => concluirTicket(ag, { ticket: 2 }, fabriquinha, ctx));
     comIssue(banco, 1, "decidirDesenho", auditor, (ag, ctx) => decidirDesenho(ag, { aprovado: true }, auditor, ctx));
     if (etapa === "revisao")
       banco.exec("UPDATE issue SET fase = 'revisao'; UPDATE ticket SET etapa = 'revisao' WHERE id = 3");

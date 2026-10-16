@@ -168,8 +168,8 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   const s = await subir(raiz);
   const porta = String(portaDoServico());
   assert.match(await (await fetch(`http://127.0.0.1:${porta}/home`)).text(), /^<!doctype html>/, "a porta serve o web");
-  issue(s.banco, 1, "desenho");
-  ticket(s.banco, 1, 1, "desenho", "em_execucao");
+  issue(s.banco, 1, "revisao");
+  ticket(s.banco, 1, 1, "revisao", "em_execucao");
   execucao(s.banco, 1, 1, "autonomo");
 
   // A raiz da segunda nem existe: ela recusa pela porta sem chegar a criá-la nem a migrar o banco.
@@ -218,8 +218,8 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   // O pi da instância anterior, num grupo próprio, ainda vivo.
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
-  issue(banco, 1, "desenho");
-  ticket(banco, 1, 1, "desenho", "em_execucao");
+  issue(banco, 1, "revisao");
+  ticket(banco, 1, 1, "revisao", "em_execucao");
   execucao(banco, 1, 1, "autonomo", "em_andamento", pi.pid);
   issue(banco, 2, "registro");
   ticket(banco, 2, 2, "registro", "em_execucao");
@@ -231,6 +231,10 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   issue(banco, 4, "desenvolvimento");
   ticket(banco, 4, 4, "desenvolvimento", "em_execucao");
   execucao(banco, 4, 4, "autonomo", "sucesso");
+  // O desenho é interativo (F1 §3.6): como o registro, continua em execução, e a próxima mensagem o retoma.
+  issue(banco, 5, "desenho");
+  ticket(banco, 5, 5, "desenho", "em_execucao");
+  execucao(banco, 5, 5, "interativo");
   // F6 §3.3: a sessão da interativa tem uma resposta; a da autônoma tem dois arquivos, e a coleta dela falha.
   const sessao = (e: number) => String(banco.prepare("SELECT sessao_pi FROM execucao WHERE id = ?").get(e)?.sessao_pi);
   mkdirSync(join(raiz, "sessoes"));
@@ -261,6 +265,7 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   assert.partialDeepStrictEqual(ag(2), { ticket: { status: "em_execucao" }, execucao: falha });
   assert.partialDeepStrictEqual(ag(3), { ticket: { status: "concluido" }, execucao: falha });
   assert.partialDeepStrictEqual(ag(4), { ticket: { status: "falhou", erro: "serviço reiniciado" } });
+  assert.partialDeepStrictEqual(ag(5), { ticket: { status: "em_execucao" }, execucao: falha });
   assert.equal(ag(2).ticket?.erro, undefined);
   assert.deepEqual(ticketsAutonomosEmExecucao(s.banco), []);
   assert.deepEqual(
@@ -327,8 +332,8 @@ test("subida que falha ao abrir o banco ou ao recuperar libera a porta", async (
 
   const raiz = novaRaiz();
   const banco = abrir(raiz);
-  issue(banco, 1, "desenho");
-  ticket(banco, 1, 1, "desenho", "em_execucao");
+  issue(banco, 1, "revisao");
+  ticket(banco, 1, 1, "revisao", "em_execucao");
   execucao(banco, 1, 1, "autonomo");
   banco.exec("UPDATE execucao SET sessao_pi = 'nao-e-uuid'");
   banco.close();
@@ -340,8 +345,8 @@ test("agendador: desligado por padrão; ligado, inicia a cada intervaloMin um ti
   const minuto = relogio(t);
   const s = await subir();
   for (const id of [1, 2, 3]) {
-    issue(s.banco, id, "desenho");
-    ticket(s.banco, id, id, "desenho");
+    issue(s.banco, id, "revisao");
+    ticket(s.banco, id, id, "revisao");
   }
   for (let i = 0; i < 10; i++) minuto();
   await dormir(50);
@@ -362,13 +367,39 @@ test("agendador: desligado por padrão; ligado, inicia a cada intervaloMin um ti
   );
   for (const id of [1, 2, 3]) await falhouNaWorktree(s.banco, id);
 
-  issue(s.banco, 4, "desenho");
-  ticket(s.banco, 4, 4, "desenho");
+  issue(s.banco, 4, "revisao");
+  ticket(s.banco, 4, 4, "revisao");
   minuto();
   minuto();
   assert.equal(estado(s.banco, 4).status, "aberto", "intervalo de 3 minutos");
   minuto();
   await falhouNaWorktree(s.banco, 4);
+  await s.parar();
+});
+
+test("agendador e Executar agora abrem o desenho como sessão interativa, que espera o Auditor sem falhar", async (t) => {
+  const minuto = relogio(t);
+  const s = await subir();
+  for (const id of [1, 2]) {
+    issue(s.banco, id, "desenho");
+    ticket(s.banco, id, id, "desenho");
+  }
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  minuto();
+  await s.executarAgora(2).catch(() => undefined); // a I-2 já começou na batida: o C5 recusa a segunda
+  for (const id of [1, 2]) {
+    assert.equal(estado(s.banco, id).status, "em_execucao");
+    assert.equal(s.banco.prepare("SELECT modo FROM execucao WHERE ticket = ?").get(id)?.modo, "interativo");
+  }
+  assert.deepEqual(autonomasEmAndamento(s.banco), [], "nenhuma autônoma");
+  // O repositório não existe: a execução termina com falha, e o ticket interativo continua em execução.
+  await ate(() => execucoesEmAndamento(s.banco).length === 0);
+  for (const id of [1, 2]) assert.equal(estado(s.banco, id).status, "em_execucao");
+  issue(s.banco, 3, "desenho");
+  ticket(s.banco, 3, 3, "desenho");
+  await s.executarAgora(3);
+  assert.equal(s.banco.prepare("SELECT modo FROM execucao WHERE ticket = 3").get()?.modo, "interativo");
+  await ate(() => execucoesEmAndamento(s.banco).length === 0);
   await s.parar();
 });
 
@@ -396,13 +427,13 @@ test("agendador inicia as issues livres e pula a que o C5 recusaria (CA-2)", asy
   ticket(s.banco, 1, 1, "desenvolvimento", "concluido");
   ticket(s.banco, 2, 1, "desenvolvimento");
   execucao(s.banco, 1, 1, "consulta");
-  issue(s.banco, 2, "desenho");
-  ticket(s.banco, 3, 2, "desenho", "em_execucao");
+  issue(s.banco, 2, "revisao");
+  ticket(s.banco, 3, 2, "revisao", "em_execucao");
   execucao(s.banco, 2, 3, "autonomo");
-  issue(s.banco, 3, "desenho");
-  ticket(s.banco, 4, 3, "desenho");
-  issue(s.banco, 4, "desenho");
-  ticket(s.banco, 5, 4, "desenho");
+  issue(s.banco, 3, "revisao");
+  ticket(s.banco, 4, 3, "revisao");
+  issue(s.banco, 4, "revisao");
+  ticket(s.banco, 5, 4, "revisao");
 
   minuto();
   assert.equal(estado(s.banco, 2).status, "aberto", "a I-1 tem uma consulta em andamento");
@@ -437,10 +468,10 @@ test("agendador: a issue com dependência aberta espera (CA-7)", async (t) => {
   const minuto = relogio(t);
   const s = await subir();
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "desenho");
-  ticket(s.banco, 1, 1, "desenho");
-  issue(s.banco, 2, "desenho");
-  ticket(s.banco, 2, 2, "desenho");
+  issue(s.banco, 1, "revisao");
+  ticket(s.banco, 1, 1, "revisao");
+  issue(s.banco, 2, "revisao");
+  ticket(s.banco, 2, 2, "revisao");
   issue(s.banco, 3, "registro");
   s.banco.exec("INSERT INTO issue_dep (issue, dep) VALUES (2, 3)");
 
@@ -456,8 +487,8 @@ test("o ciclo nunca trava nem lança: erro na batida e recusa do C5 vão para o 
   const erros = t.mock.method(console, "error", () => undefined);
   const s = await subir();
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "desenho");
-  ticket(s.banco, 1, 1, "desenho");
+  issue(s.banco, 1, "revisao");
+  ticket(s.banco, 1, 1, "revisao");
 
   s.banco.exec("ALTER TABLE configuracao RENAME TO guardada");
   minuto();
@@ -483,8 +514,8 @@ test("agendador: varre em segundo plano a base dos projetos sem varredura há 24
   const erros = t.mock.method(console, "error", () => undefined);
   const s = await subir();
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "desenho");
-  ticket(s.banco, 1, 1, "desenho");
+  issue(s.banco, 1, "revisao");
+  ticket(s.banco, 1, 1, "revisao");
   // `q`: base real, com o upload-pack do `origin` lento e contando as buscas. `r`: o fetch falha.
   const dir = mkdtempSync(join(base, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
@@ -554,8 +585,8 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
 test("executarAgora: não espera o agendador, inicia com outra issue rodando e recusa a 2ª da mesma issue", async () => {
   const s = await subir();
   assert.equal(configuracao(s.banco).agendadorAtivo, false);
-  issue(s.banco, 1, "desenho");
-  ticket(s.banco, 1, 1, "desenho", "em_execucao");
+  issue(s.banco, 1, "revisao");
+  ticket(s.banco, 1, 1, "revisao", "em_execucao");
   execucao(s.banco, 1, 1, "autonomo");
   issue(s.banco, 2, "desenvolvimento");
   ticket(s.banco, 2, 2, "desenvolvimento");

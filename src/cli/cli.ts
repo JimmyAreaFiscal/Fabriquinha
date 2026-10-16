@@ -11,7 +11,7 @@ import { z, ZodError } from "zod";
 import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../dominio/erros.ts";
 import { adicionarDependencia, cancelarIssue, editarIssue, removerDependencia } from "../dominio/issue.ts";
-import { registrarDecisaoRevisao } from "../dominio/gates.ts";
+import { enviarParaAprovacao, registrarDecisaoRevisao } from "../dominio/gates.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { jsonSchemaDe } from "../evidencias/schemas.ts";
@@ -300,6 +300,17 @@ const COMANDOS: readonly Comando[] = [
     },
   },
   {
+    palavras: ["ticket", "enviar"],
+    argumentos: ["T-<n>"],
+    doAgente: true,
+    rodar({ banco, agente: { ator }, pos }) {
+      const id = numero(pos[0], "T");
+      return comIssue(banco, issueDoTicket(banco, id), "enviarParaAprovacao", ator, (ag, ctx) =>
+        enviarParaAprovacao(ag, { ticket: id }, ator, ctx),
+      ).tickets.find((t) => t.id === id);
+    },
+  },
+  {
     palavras: ["revisao", "decidir"],
     argumentos: ["T-<n>", "aprovar|reprovar"],
     opcoesDeUso: "[--motivo <texto>]",
@@ -332,7 +343,7 @@ const COMANDOS: readonly Comando[] = [
           throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
         }
       }
-      return submeter(banco, ator, tipo, dados, (op.arquivo ?? []) as string[]).evidencias.find(
+      return (await submeter(banco, ator, tipo, dados, (op.arquivo ?? []) as string[])).evidencias.find(
         (e) => e.ticket === ator.ticket && e.tipo === tipo,
       );
     },

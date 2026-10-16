@@ -1,5 +1,5 @@
-// Gate do registro também na página da issue (F7 §4.4, painéis de gate): o mesmo painel do chat, Devolver só com o
-// motivo, que vai ao agente como mensagem (F4 §6.6), e Aprovar registro, que leva a issue ao desenho (C10).
+// Gate do registro na página da issue (F7 §4.4, painéis de gate), depois que o agente envia (C25): Devolver só com o
+// motivo, que volta à mesma sessão (F4 §6.6), e Aprovar registro, que leva a issue ao desenho (C10).
 import type { Page } from "@playwright/test";
 import { expect, type Fabriquinha, projeto, test } from "./apoio.ts";
 

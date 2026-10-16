@@ -12,7 +12,7 @@ import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { AUDITOR, FABRIQUINHA } from "../dominio/agregado.ts";
-import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
+import { iniciarExecucao, modoDaEtapa, terminarExecucao } from "../dominio/execucao.ts";
 import type { Etapa } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { comIssue, registrarIssue } from "../persistencia/issues.ts";
@@ -109,7 +109,7 @@ function cenario(etapa: Etapa): Cenario {
   registrarIssue(banco, { projeto: "loja" }, AUDITOR);
   banco.prepare("UPDATE issue SET fase = ?, titulo = 'Busca lenta', tipo = 'problema' WHERE id = 1").run(FASE[etapa]);
   banco.prepare("UPDATE ticket SET etapa = ? WHERE id = 1").run(etapa);
-  const modo = etapa === "registro" || etapa === "sessao" ? "interativo" : "autonomo";
+  const modo = modoDaEtapa(etapa);
   comIssue(banco, 1, "iniciarExecucao", FABRIQUINHA, (ag, ctx) =>
     iniciarExecucao(ag, { ticket: 1, modo, sessaoPi: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" }, FABRIQUINHA, ctx),
   );
@@ -269,6 +269,18 @@ const TABELA: readonly Linha[] = [
       args: ["ticket", "remover", "T-1"],
       erro: `o agente de T-1 não pode remover T-1 (${quemPropoe})`,
     },
+  },
+  {
+    args: ["ticket", "enviar", "T-1"],
+    etapa: "registro",
+    preparar: async (c) => {
+      assert.equal((await submeterComportamento(c)).codigo, 0);
+      return cli(c.env, ["evidencia", "add", "criterios_aceite", "--dados", "-"], JSON.stringify(CRITERIOS));
+    },
+    confere: (s) => {
+      assert.deepEqual([s.id, s.etapa, s.status, typeof s.enviadoEm], [1, "registro", "em_execucao", "string"]);
+    },
+    outra: { etapa: "revisao", erro: "T-1 é de revisao (só o registro e o desenho vão à aprovação do Auditor)" },
   },
   {
     args: ["revisao", "decidir", "T-1", "reprovar", "--motivo", "falta teste"],

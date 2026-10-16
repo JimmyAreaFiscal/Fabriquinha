@@ -14,8 +14,11 @@ import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { rotuloTicket, ticketDe } from "./execucao.ts";
 import { type Etapa, Id } from "./primitivos.ts";
 
-/** `aprovada`: obrigatória e com `aprovada = true`; `funcionalidade`: obrigatória só se a issue é funcionalidade. */
-export type Obrigatoria = "sim" | "aprovada" | "funcionalidade";
+/**
+ * `aprovada`: obrigatória e com `aprovada = true`; `funcionalidade`: obrigatória só se a issue é funcionalidade; `nao`:
+ * o agente decide se a produz.
+ */
+export type Obrigatoria = "sim" | "aprovada" | "funcionalidade" | "nao";
 
 export interface ItemCatalogo {
   readonly etapa: Etapa;
@@ -47,7 +50,9 @@ export const CATALOGO: readonly ItemCatalogo[] = [
   item("revisao", "explicacao_fitness", "agente"),
   item("revisao", "comprovacao_criterios", "agente"),
   item("encerramento", "mensagem_pr", "agente"),
-  item("encerramento", "video_explicativo", "agente"),
+  item("encerramento", "aula_codigo", "agente"),
+  // Só quando a mudança aparece no cliente (frontend); quem decide é o agente (artefato-video-demonstracao).
+  item("encerramento", "video_demonstracao", "agente", "nao"),
   item("encerramento", "relatorio_produtividade", "fabriquinha"),
   item("encerramento", "pr_aberto", "fabriquinha"),
 ];
@@ -58,7 +63,7 @@ export const CATALOGO: readonly ItemCatalogo[] = [
  */
 export function evidenciasFaltando(ag: Agregado, ticket: Ticket): TipoEvidencia[] {
   return CATALOGO.filter((c) => {
-    if (c.etapa !== ticket.etapa) return false;
+    if (c.etapa !== ticket.etapa || c.obrigatoria === "nao") return false;
     if (c.obrigatoria === "funcionalidade" && ag.issue.tipo !== "funcionalidade") return false;
     const e = ag.evidencias.find((x) => x.ticket === ticket.id && x.tipo === c.tipo);
     return !e || (c.obrigatoria === "aprovada" && e.aprovada !== true);
@@ -66,10 +71,10 @@ export function evidenciasFaltando(ag: Agregado, ticket: Ticket): TipoEvidencia[
 }
 
 /**
- * C7 e C10: lança dizendo o que falta ou está reprovado e quem resolve (F1 §7): o agente submete as dele; as da
- * Fabriquinha ela coleta de novo depois do pi.
+ * C7, C10 e C25: lança dizendo o que falta ou está reprovado e quem resolve (F1 §7): o agente submete as dele; as da
+ * Fabriquinha ela coleta de novo depois do pi. `acao` é o que o ticket não pode fazer sem elas.
  */
-export function exigirEvidencias(ag: Agregado, ticket: Ticket): void {
+export function exigirEvidencias(ag: Agregado, ticket: Ticket, acao = "concluir"): void {
   const faltam = evidenciasFaltando(ag, ticket);
   if (faltam.length === 0) return;
   const t = rotuloTicket(ticket);
@@ -91,7 +96,7 @@ export function exigirEvidencias(ag: Agregado, ticket: Ticket): void {
       : []),
     ...(doAgenteFaltando.length < faltam.length ? ["a Fabriquinha coleta depois do pi; execute o ticket de novo"] : []),
   ];
-  throw new ErroDeRegra(`${t} não pode concluir: ${problemas.join("; ")}`, solucoes.join("; "));
+  throw new ErroDeRegra(`${t} não pode ${acao}: ${problemas.join("; ")}`, solucoes.join("; "));
 }
 
 /**

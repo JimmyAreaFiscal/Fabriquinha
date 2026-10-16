@@ -92,7 +92,8 @@ test("o catálogo do F1 §3.9: tipos por etapa, produtor e obrigatoriedade", () 
   ]);
   assert.deepEqual(porEtapa("encerramento"), [
     ["mensagem_pr", "agente", "sim"],
-    ["video_explicativo", "agente", "sim"],
+    ["aula_codigo", "agente", "sim"],
+    ["video_demonstracao", "agente", "nao"],
     ["relatorio_produtividade", "fabriquinha", "sim"],
     ["pr_aberto", "fabriquinha", "sim"],
   ]);
@@ -138,6 +139,15 @@ test("evidências que faltam: prototipo só na funcionalidade; aprovada exige ap
   const dev = ticket(3, "desenvolvimento");
   const medidas = [de(dev, "execucao_testes", true), de(dev, "matriz_fitness", false), de(dev, "relatorio_sonar")];
   assert.deepEqual(evidenciasFaltando(comTipo("problema", medidas), dev), ["matriz_fitness", "relatorio_sonar"]);
+
+  // O vídeo de demonstração nunca falta: o agente decide se a mudança aparece no cliente.
+  const encerramento = ticket(4, "encerramento");
+  assert.deepEqual(evidenciasFaltando(comTipo("funcionalidade"), encerramento), [
+    "mensagem_pr",
+    "aula_codigo",
+    "relatorio_produtividade",
+    "pr_aberto",
+  ]);
 });
 
 test("C17 grava a evidência do agente com o produtor do catálogo, sem aprovada", () => {

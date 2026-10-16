@@ -1,7 +1,7 @@
 // Sessões (F4 §5, §6.5, §6.6): estado calculado, lista e histórico, chat, mensagens conforme o estado, e as sessões
 // interativas e de consulta, que param por ociosidade e retomam na próxima mensagem no mesmo modo.
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type Agregado,
@@ -15,7 +15,6 @@ import {
 } from "../dominio/agregado.ts";
 import { concluirTicket } from "../dominio/conclusao.ts";
 import { encontrado, ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
-import { evidenciasFaltando } from "../dominio/evidencia.ts";
 import {
   iniciarConsulta,
   iniciarExecucao,
@@ -24,9 +23,9 @@ import {
   terminarExecucao,
   ticketDe,
 } from "../dominio/execucao.ts";
-import { decidirPR, decidirRegistro } from "../dominio/gates.ts";
+import { decidirDesenho, decidirPR, decidirRegistro } from "../dominio/gates.ts";
 import { exigirPropostaAberta } from "../dominio/propostas.ts";
-import { type Etapa, type Fase, type Id, type Instante, type Modelo, motivo } from "../dominio/primitivos.ts";
+import { type Etapa, type Id, type Instante, type Modelo, motivo } from "../dominio/primitivos.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
 import type { Projeto } from "../dominio/projeto.ts";
@@ -39,7 +38,6 @@ import {
   issueDoTicket,
   propostaExistente,
   registrarIssue,
-  ultimaEdicaoDoAgente,
 } from "../persistencia/issues.ts";
 import { projeto as lerProjeto } from "../persistencia/projetos.ts";
 import { estadoPR, type LeituraDoPR } from "../repositorio/pr.ts";
@@ -90,41 +88,19 @@ export interface OpcoesInterativa {
   ociosidadeMin: number;
 }
 
-/** Gate que depende do último ticket concluído da etapa, e a fase em que ele está aberto (F4 §5.2). */
-const GATES: Partial<Record<Etapa, [Fase, MotivoEspera]>> = {
-  desenho: ["aprovacao_desenho", "gate_desenho"],
-  encerramento: ["aprovacao_pr", "gate_pr"],
-};
-
+/** O gate do PR depende do último encerramento concluído, com a issue em `aprovacao_pr` (F4 §5.2). */
 function gateDe(ag: Agregado, ticket: Ticket): MotivoEspera | undefined {
-  const gate = GATES[ticket.etapa];
-  const ultimo = ag.tickets.findLast((t) => t.etapa === ticket.etapa && t.status === "concluido");
-  return gate?.[0] === ag.issue.fase && ultimo?.id === ticket.id ? gate[1] : undefined;
+  const ultimo = ag.tickets.findLast((t) => t.etapa === "encerramento" && t.status === "concluido");
+  return ag.issue.fase === "aprovacao_pr" && ultimo?.id === ticket.id ? "gate_pr" : undefined;
 }
+
+/** O gate que espera o ticket que o agente enviou à aprovação (C25) e o Auditor ainda não decidiu. */
+const GATE_DO_ENVIO: Partial<Record<Etapa, MotivoEspera>> = { registro: "gate_registro", desenho: "gate_desenho" };
 
 /** O que o estado lê de fora do agregado. */
 export interface Fatos {
   /** A execução viva da sessão neste serviço. */
   viva: Situacao | undefined;
-  /** Quando o agente editou a issue pela última vez (C2 a C4), ou `""`. */
-  edicaoDoAgente: string;
-}
-
-/**
- * O registro espera a decisão do Auditor: tem o que C10 aprovado exige (título, tipo e as evidências da etapa) e,
- * se já foi devolvido, o agente trabalhou depois da última devolução: submeteu evidência ou editou a issue. Sem
- * isso, a conversa continua: um agente que só pergunta depois de Devolver não volta ao gate.
- */
-function registroParaDecidir(ag: Agregado, ticket: Ticket, edicaoDoAgente: string): boolean {
-  const devolvido = ag.decisoes.findLast((d) => d.gate === "registro" && !d.aprovado)?.em;
-  return (
-    ag.issue.titulo !== null &&
-    ag.issue.tipo !== null &&
-    evidenciasFaltando(ag, ticket).length === 0 &&
-    (devolvido === undefined ||
-      edicaoDoAgente > devolvido ||
-      ag.evidencias.some((e) => e.ticket === ticket.id && e.em > devolvido))
-  );
 }
 
 type Calculado = [Estado, MotivoEspera | undefined, string];
@@ -142,23 +118,14 @@ const consultaParada = (ag: Agregado, ticket: Ticket, viva: boolean, parada: str
     : ["aguardando_humano", "conversa", parada];
 
 /** A sessão principal sem o agente trabalhando: o estado sai do ticket e da issue. */
-function principalParada(
-  ag: Agregado,
-  ticket: Ticket,
-  autonoma: boolean,
-  parada: string,
-  edicaoDoAgente: string,
-): Calculado {
+function principalParada(ag: Agregado, ticket: Ticket, autonoma: boolean, parada: string): Calculado {
+  const enviado = GATE_DO_ENVIO[ticket.etapa];
+  if (enviado && ticket.status === "em_execucao" && ticket.enviadoEm !== undefined) {
+    return ["aguardando_humano", enviado, ticket.enviadoEm];
+  }
   // Depois do C6 a autônoma ainda roda a coleta do F3 e o C7.
   if (autonoma && ticket.status === "em_execucao") return ["rodando", undefined, parada];
   if (ticket.status === "falhou") return ["aguardando_humano", "falha", parada];
-  if (ticket.etapa === "registro" && ag.issue.fase === "registro") {
-    return [
-      "aguardando_humano",
-      registroParaDecidir(ag, ticket, edicaoDoAgente) ? "gate_registro" : "conversa",
-      parada,
-    ];
-  }
   if (ticket.status === "concluido") {
     const gate = gateDe(ag, ticket);
     return gate
@@ -169,7 +136,7 @@ function principalParada(
   return autonoma ? ["rodando", undefined, parada] : ["aguardando_humano", "conversa", parada];
 }
 
-function calcular(ag: Agregado, ticket: Ticket, execucao: Execucao, { viva, edicaoDoAgente }: Fatos): Calculado {
+function calcular(ag: Agregado, ticket: Ticket, execucao: Execucao, { viva }: Fatos): Calculado {
   const [dialogo] = viva?.dialogos ?? [];
   if (dialogo) return ["aguardando_humano", "dialogo", dialogo.em];
   // Interativa com o pi vivo esperando a próxima mensagem: decide como se estivesse parada.
@@ -180,7 +147,7 @@ function calcular(ag: Agregado, ticket: Ticket, execucao: Execucao, { viva, edic
   if (ag.issue.canceladaEm !== undefined) return ["terminada", undefined, parada];
   return execucao.modo === "consulta"
     ? consultaParada(ag, ticket, viva !== undefined, parada)
-    : principalParada(ag, ticket, execucao.modo === "autonomo", parada, edicaoDoAgente);
+    : principalParada(ag, ticket, execucao.modo === "autonomo", parada);
 }
 
 /** F4 §5.2: o estado da sessão, calculado do agregado e dos fatos de fora dele. */
@@ -229,9 +196,9 @@ async function agregadoAssentado(banco: DatabaseSync, issue: Id): Promise<Agrega
   return agregadoExistente(banco, issue);
 }
 
-/** O estado da sessão com os fatos lidos agora: a execução viva e a última edição do agente na issue. */
-const estadoNoBanco = (banco: DatabaseSync, ag: Agregado, sessao: string): InfoSessao =>
-  estadoDaSessao(ag, sessao, { viva: situacao(sessao), edicaoDoAgente: ultimaEdicaoDoAgente(banco, ag.issue.id) });
+/** O estado da sessão com a execução viva lida agora. */
+const estadoNoBanco = (ag: Agregado, sessao: string): InfoSessao =>
+  estadoDaSessao(ag, sessao, { viva: situacao(sessao) });
 
 const issueDe = (banco: DatabaseSync, sessao: string): Id =>
   encontrado(issueDaSessao(banco, sessao), `a sessão ${sessao} não existe`, "confira o endereço do chat");
@@ -244,7 +211,7 @@ export async function sessoes(banco: DatabaseSync, filtro: FiltroSessoes): Promi
   const todas: InfoSessao[] = [];
   for (const issue of issuesComSessao(banco, filtro)) {
     const ag = await agregadoAssentado(banco, issue);
-    for (const s of new Set(ag.execucoes.map((e) => e.sessaoPi))) todas.push(estadoNoBanco(banco, ag, s));
+    for (const s of new Set(ag.execucoes.map((e) => e.sessaoPi))) todas.push(estadoNoBanco(ag, s));
   }
   return todas
     .filter(
@@ -257,7 +224,7 @@ export async function sessoes(banco: DatabaseSync, filtro: FiltroSessoes): Promi
 
 /** A sessão pelo `sessaoPi`, com o estado. */
 export async function infoDaSessao(banco: DatabaseSync, sessao: string): Promise<InfoSessao> {
-  return estadoNoBanco(banco, await agregadoAssentado(banco, issueDe(banco, sessao)), sessao);
+  return estadoNoBanco(await agregadoAssentado(banco, issueDe(banco, sessao)), sessao);
 }
 
 /** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
@@ -290,7 +257,7 @@ export interface Chat {
  */
 export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Chat> {
   const ag = await agregadoAssentado(banco, issueDe(banco, sessao));
-  const info = estadoNoBanco(banco, ag, sessao);
+  const info = estadoNoBanco(ag, sessao);
   const raiz = raizDo(banco);
   const semCopia = info.modo === "consulta" && arquivoDaSessao(raiz, sessao) === undefined;
   return {
@@ -301,7 +268,7 @@ export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Ch
       assinar(sessao, (evento) => {
         ouvinte(
           evento.type === "estado"
-            ? { type: "estado", sessao: estadoNoBanco(banco, agregadoExistente(banco, issueDe(banco, sessao)), sessao) }
+            ? { type: "estado", sessao: estadoNoBanco(agregadoExistente(banco, issueDe(banco, sessao)), sessao) }
             : evento,
         );
       }),
@@ -479,8 +446,8 @@ export function avisoDaProposta(proposta: PropostaIssue, issue: Id): string {
 const SEM_MENSAGEM: Record<string, string> = {
   dialogo: "responda o diálogo aberto pelo agente",
   falha: "responda e retome o ticket",
-  gate_registro: "aprove o registro, ou devolva-o com o motivo, que vai ao agente como mensagem",
-  gate_desenho: "decida na página da issue",
+  gate_registro: "decida na página da issue; devolver leva o motivo ao agente nesta conversa",
+  gate_desenho: "decida na página da issue; reprovar leva o motivo ao agente nesta conversa",
   gate_pr: "decida na página da issue",
   terminada: "a sessão é só leitura; converse sobre ela numa consulta",
 };
@@ -514,7 +481,7 @@ export async function enviar(
   opcoes: OpcoesInterativa,
 ): Promise<void> {
   const ag = await agregadoAssentado(banco, issueDe(banco, sessao));
-  const info = estadoNoBanco(banco, ag, sessao);
+  const info = estadoNoBanco(ag, sessao);
   const t = `T-${String(info.ticket)}`;
   let aceitos: ModoEnvio[] = [];
   if (info.estado === "rodando") aceitos = ["steer", "follow_up"];
@@ -566,37 +533,62 @@ function principalDe(banco: DatabaseSync, ag: Agregado, ticket: Id): [string, st
   return [execucao.sessaoPi, logDaExecucao(raizDo(banco), execucao.id)];
 }
 
+export interface DecisaoDoGate {
+  aprovado: boolean;
+  motivo?: string;
+}
+
+/** O C10 ou o C15, conforme a etapa do gate. */
+const DECIDIR = {
+  registro: ["decidirRegistro", decidirRegistro, "O Auditor devolveu o registro"],
+  desenho: ["decidirDesenho", decidirDesenho, "O Auditor reprovou o desenho"],
+} as const;
+
 /**
- * F4 §6.6: Aprovar registro e Devolver, no chat. Para o pi ocioso, grava C10 e, se devolvido, retoma a sessão com o
- * motivo como mensagem ao agente.
+ * F4 §6.6: Aprovar e Devolver (ou Reprovar) o registro ou o desenho enviado (C25), na página da issue. Para o pi
+ * ocioso e grava C10 ou C15. Aprovado, descarta antes o que a sessão deixou na worktree (o protótipo do desenho, F3
+ * §7); devolvido, retoma a mesma sessão com o motivo como mensagem ao agente.
  */
-export async function decidirRegistroNoChat(
+export async function decidirGate(
   banco: DatabaseSync,
   issue: Id,
-  decisao: { aprovado: boolean; motivo?: string },
+  etapa: "registro" | "desenho",
+  decisao: DecisaoDoGate,
   opcoes: OpcoesInterativa,
 ): Promise<void> {
+  const [comando, decidir, devolvido] = DECIDIR[etapa];
   const ag = await agregadoAssentado(banco, issue);
-  const ticket = ag.tickets.find((t) => t.etapa === "registro" && t.status !== "concluido");
+  const ticket = ag.tickets.find((t) => t.etapa === etapa && t.status === "em_execucao");
   if (ticket) await pararOciosa(ag, ticket.id);
-  if (ticket && decisao.aprovado) await descartarDaSessao(banco, ag, ticket.id);
-  comIssue(banco, issue, "decidirRegistro", AUDITOR, (a, ctx) => decidirRegistro(a, decisao, AUDITOR, ctx));
-  // C10 só passa com o ticket de registro aberto; aprovar exige as evidências de uma execução, e devolver, o motivo.
-  const t = existe(ticket, "C10 passou sem ticket de registro", "confira o banco");
+  if (ticket?.enviadoEm !== undefined && decisao.aprovado) await descartarDaSessao(banco, ag, ticket.id);
+  comIssue(banco, issue, comando, AUDITOR, (a, ctx) => decidir(a, decisao, AUDITOR, ctx));
+  // C10 e C15 só passam com o ticket enviado em execução, que já tem sessão; devolver exige o motivo.
+  const t = existe(ticket, `a decisão passou sem ticket de ${etapa}`, "confira o banco");
   if (!decisao.aprovado) {
-    iniciarInterativa(banco, t.id, `O Auditor devolveu o registro. Motivo: ${String(decisao.motivo)}`, opcoes);
+    iniciarInterativa(banco, t.id, `${devolvido}. Motivo: ${String(decisao.motivo)}`, opcoes);
     return;
   }
   avisar(...principalDe(banco, ag, t.id));
 }
 
 /**
- * F3 §7 nas etapas interativas (registro e sessão em aberto), que não mudam código: descarta o que ficou na worktree,
- * com o log da última execução do ticket. Vem antes do comando que encerra a etapa: se falhar, nada muda.
+ * F4 §4: o agendador (ou o Executar agora) abre o desenho como sessão interativa: o agente estuda a issue sozinho e
+ * conversa com o Auditor nas decisões. Devolve a sessão.
+ */
+export function iniciarDesenho(banco: DatabaseSync, ticket: Id, opcoes: OpcoesInterativa): string {
+  const i = `I-${String(issueDoTicket(banco, ticket))}`;
+  return iniciarInterativa(banco, ticket, `Vamos desenhar a solução da issue ${i}.`, opcoes);
+}
+
+/**
+ * F3 §7 nas etapas interativas (registro, desenho e sessão em aberto), que não mudam código: descarta o que ficou na
+ * worktree, com o log da última execução do ticket. Vem antes do comando que encerra a etapa: se falhar, nada muda.
+ * Sem worktree (a preparação falhou antes de criá-la, ou ela foi apagada), não há o que descartar.
  */
 async function descartarDaSessao(banco: DatabaseSync, ag: Agregado, ticket: Id): Promise<void> {
   const [, log] = principalDe(banco, ag, ticket);
-  await descartarAlteracoes(caminhoDaWorktree(raizDo(banco), ag.issue.projeto, ag.issue.id), log);
+  const worktree = caminhoDaWorktree(raizDo(banco), ag.issue.projeto, ag.issue.id);
+  if (existsSync(worktree)) await descartarAlteracoes(worktree, log);
 }
 
 /** F4 §6.6: Concluir sessão, na sessão em aberto. Para o pi ocioso, descarta as alterações (F3 §7) e chama C7. */
@@ -733,9 +725,10 @@ export async function pedirMudancas(
 }
 
 /**
- * C24 pelo Auditor. No registro, para o pi ocioso, grava a decisão e retoma a sessão com o aviso à IA; no desenho, que é
- * autônomo, o aceite devolve o desenho como reprovado e só avisa a sessão. O aceite abre o registro da issue nova.
- * Recusa antes de gravar se a proposta já foi decidida ou se o agente ainda trabalha. Devolve a issue criada, se houve.
+ * C24 pelo Auditor. No registro, para o pi ocioso, grava a decisão e retoma a sessão com o aviso à IA; no gate do
+ * desenho, o aceite reprova o desenho (C15) e retoma a sessão com o motivo, e a recusa só avisa a sessão. O aceite abre
+ * o registro da issue nova. Recusa antes de gravar se a proposta já foi decidida ou se o agente ainda trabalha.
+ * Devolve a issue criada, se houve.
  */
 export async function decidirProposta(
   banco: DatabaseSync,
@@ -748,10 +741,14 @@ export async function decidirProposta(
   const antes = await agregadoAssentado(banco, issue);
   exigirPropostaAberta(antes, proposta);
   const noRegistro = antes.issue.fase === "registro";
-  if (noRegistro) await pararOciosa(antes, proposta.ticket);
+  if (noRegistro || aceita) await pararOciosa(antes, proposta.ticket);
   const { ag, proposta: decidida, nova } = gravarDecisaoDaProposta(banco, id, { aceita }, AUDITOR);
   if (noRegistro) iniciarInterativa(banco, proposta.ticket, avisoDaProposta(decidida, issue), opcoes);
-  else avisar(...principalDe(banco, ag, proposta.ticket));
+  else if (aceita) {
+    // O C24 aceito no desenho grava o C15 reprovado com o motivo que cita a issue nova.
+    const motivoDoC15 = ag.decisoes.findLast((d) => d.gate === "desenho")?.motivo;
+    iniciarInterativa(banco, proposta.ticket, `O Auditor reprovou o desenho. Motivo: ${String(motivoDoC15)}`, opcoes);
+  } else avisar(...principalDe(banco, ag, proposta.ticket));
   if (!nova) return {};
   abrirRegistro(banco, nova, opcoes);
   return { issue: nova.issue.id };

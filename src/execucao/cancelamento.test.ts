@@ -20,7 +20,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { type Ator, AUDITOR, CANCELADA } from "../dominio/agregado.ts";
 import { ErroDeRegra, existe } from "../dominio/erros.ts";
 import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
-import { decidirRegistro } from "../dominio/gates.ts";
+import { decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
 import { submeter } from "../evidencias/submissao.ts";
 import { abrir } from "../persistencia/banco.ts";
@@ -120,14 +120,17 @@ registrarProjeto(banco, {
   testes: ["npm test"],
   sonar: { projectKey: "loja" },
   fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-  modelos: { desenho: { provedor: "anthropic", modelo: "claude-teste" } },
+  modelos: { revisao: { provedor: "anthropic", modelo: "claude-teste" } },
 });
 after(() => {
   banco.close();
 });
 
-/** Issue nova, com o registro aprovado: o ticket de desenho aberto, na fase `desenho`. Devolve a issue e esse ticket. */
-function issueNoDesenho(deps: number[] = []): { issue: number; ticket: number } {
+/**
+ * Issue nova, com o registro aprovado e um ticket autônomo aberto: o de desenho que o registro criou vira revisão por
+ * UPDATE, como em autonoma.test.ts (o desenho é interativo). Devolve a issue e esse ticket.
+ */
+async function issueNaRevisao(deps: number[] = []): Promise<{ issue: number; ticket: number }> {
   const issue = registrarIssue(banco, { projeto: "loja", deps }, AUDITOR).issue.id;
   comIssue(banco, issue, "iniciarExecucao", fabriquinha, (ag, ctx) =>
     iniciarExecucao(
@@ -143,10 +146,10 @@ function issueNoDesenho(deps: number[] = []): { issue: number; ticket: number } 
   mkdirSync(saida, { recursive: true });
   writeFileSync(join(saida, "busca.log"), "busca levou 8 s\n");
   const agente: Ator = { tipo: "agente", execucao, ticket };
-  submeter(banco, agente, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [
+  await submeter(banco, agente, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [
     join(saida, "busca.log"),
   ]);
-  submeter(
+  await submeter(
     banco,
     agente,
     "criterios_aceite",
@@ -156,11 +159,16 @@ function issueNoDesenho(deps: number[] = []): { issue: number; ticket: number } 
   comIssue(banco, issue, "editarIssue", AUDITOR, (a) =>
     editarIssue(a, { titulo: "Busca lenta", tipo: "problema" }, AUDITOR),
   );
+  comIssue(banco, issue, "enviarParaAprovacao", agente, (a, ctx) => enviarParaAprovacao(a, { ticket }, agente, ctx));
   comIssue(banco, issue, "terminarExecucao", fabriquinha, (a, ctx) =>
     terminarExecucao(a, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
   );
   comIssue(banco, issue, "decidirRegistro", AUDITOR, (a, ctx) => decidirRegistro(a, { aprovado: true }, AUDITOR, ctx));
-  return { issue, ticket: aqui(lerIssue(issue).tickets.find((t) => t.etapa === "desenho")).id };
+  const revisao = aqui(lerIssue(issue).tickets.find((t) => t.etapa === "desenho")).id;
+  banco.exec(
+    `UPDATE issue SET fase = 'revisao' WHERE id = ${String(issue)}; UPDATE ticket SET etapa = 'revisao' WHERE id = ${String(revisao)}`,
+  );
+  return { issue, ticket: revisao };
 }
 
 const lerIssue = (issue: number) => agregadoExistente(banco, issue);
@@ -206,7 +214,7 @@ async function interativaOciosa(deps: number[] = []): Promise<{ issue: number; e
 
 test("autônoma rodando: o pi para, o log para de crescer, o ticket fica cancelado e o uso é contado", async () => {
   process.env.FALSO_PI = "espera";
-  const { issue, ticket } = issueNoDesenho();
+  const { issue, ticket } = await issueNaRevisao();
   const rodando = executarAutonomo(banco, ticket, { timeoutMin: 1 });
   const execucao = (): number => lerIssue(issue).execucoes.find((e) => e.ticket === ticket)?.id ?? 0;
   await ate(
@@ -255,7 +263,7 @@ test("interativa ociosa: o pi para, o ticket fica cancelado, a execução falha 
 
 test("dependentes: as execuções vivas delas também param, e a dependência não é cancelada", async () => {
   process.env.FALSO_PI = "conversa";
-  const { issue: dependencia } = issueNoDesenho();
+  const { issue: dependencia } = await issueNaRevisao();
   const a = await interativaOciosa();
   const b = await interativaOciosa([a.issue]);
   const c = await interativaOciosa([b.issue]);
@@ -273,7 +281,7 @@ test("dependentes: as execuções vivas delas também param, e a dependência n�
 });
 
 test("sem execução: os tickets abertos ficam fechados; cancelar de novo é recusado", async () => {
-  const { issue } = issueNoDesenho();
+  const { issue } = await issueNaRevisao();
 
   assert.deepEqual(await cancelarIssue(banco, issue), { canceladas: [issue] });
 
@@ -292,7 +300,7 @@ test("sem execução: os tickets abertos ficam fechados; cancelar de novo é rec
 
 test("cancelada antes de o pi subir: nem o pi nem o pi --version são lançados, e a autônoma não grava nada", async () => {
   process.env.FALSO_PI = "versao-trava";
-  const { issue, ticket } = issueNoDesenho();
+  const { issue, ticket } = await issueNaRevisao();
   const proxima = Number(banco.prepare("SELECT MAX(id) + 1 AS n FROM execucao").get()?.n);
   await pararParaCancelar(proxima);
 
@@ -308,7 +316,7 @@ test("cancelada antes de o pi subir: nem o pi nem o pi --version são lançados,
 
 test("cancelada durante o pi --version: o pi não sobe e a autônoma não grava nada", async () => {
   process.env.FALSO_PI = "versao-trava";
-  const { issue, ticket } = issueNoDesenho();
+  const { issue, ticket } = await issueNaRevisao();
   const pisAntes = readFileSync(registro, "utf8").split('"pid"').length;
   const rodando = executarAutonomo(banco, ticket, { timeoutMin: 1 });
   await ate(() => readFileSync(registro, "utf8").includes('"versao"'), "o pi --version");

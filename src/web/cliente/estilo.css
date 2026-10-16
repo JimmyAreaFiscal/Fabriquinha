@@ -3212,8 +3212,7 @@ body:has(.pagina-chat) {
 .dialogo-ext .rotulo {
   color: var(--open);
 }
-.dialogo-ext .botoes,
-.gate-reg .botoes {
+.dialogo-ext .botoes {
   display: flex;
   justify-content: flex-end;
   gap: var(--s-2);
@@ -3258,7 +3257,7 @@ body:has(.pagina-chat) {
   color: var(--muted);
 }
 
-/* Coluna da direita: o formulário do registro e os painéis de gate. */
+/* Coluna da direita: o formulário do registro e o aviso dos gates. */
 .painel {
   padding: var(--s-3) var(--s-4);
   display: flex;
@@ -3310,19 +3309,6 @@ body:has(.pagina-chat) {
 }
 .gate-reg .corpo > .btn {
   align-self: flex-start;
-}
-.gate-reg .decidir {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-4);
-  border-top: 1px solid var(--line);
-  background: #191714;
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-}
-.gate-reg .btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 
 /* Falha (F4 §6.4): o erro em destaque no fim da conversa e o envio que responde e retoma. */

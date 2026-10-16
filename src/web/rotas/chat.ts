@@ -26,7 +26,7 @@ import {
   concluirSessao,
   conversarSobre,
   decidirProposta,
-  decidirRegistroNoChat,
+  decidirGate,
   enviar,
   type InfoSessao,
   infoDaSessao,
@@ -38,7 +38,6 @@ import { raizDo } from "../../persistencia/banco.ts";
 import { agregadoExistente, comIssue, issueDoTicket, propostasDaIssue } from "../../persistencia/issues.ts";
 import { configuracao } from "../../persistencia/servico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
-import { type PainelRegistro, painelDoRegistro } from "./issue.ts";
 
 /** A sessão com o que a barra de estado, o envio e a coluna da direita do chat leem. */
 export interface CabecalhoDoChat {
@@ -48,8 +47,6 @@ export interface CabecalhoDoChat {
   ticket: Ticket;
   /** As execuções da sessão, em ordem: dão as linhas do sistema da conversa. */
   execucoes: Execucao[];
-  /** Só no gate do registro. */
-  registro?: PainelRegistro;
   /** As propostas de issue abertas do ticket, só no registro interativo. */
   propostas?: PropostaIssue[];
 }
@@ -68,7 +65,6 @@ export const opcoes = (banco: DatabaseSync): OpcoesInterativa => ({ ociosidadeMi
 
 function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
   const ag = agregadoExistente(banco, sessao.issue);
-  const registro = sessao.motivo === "gate_registro" ? painelDoRegistro(ag, sessao.ticket) : undefined;
   const propostas =
     sessao.etapa === "registro" && sessao.modo === "interativo"
       ? propostasAbertas(ag, propostasDaIssue(banco, sessao.issue)).filter((p) => p.ticket === sessao.ticket)
@@ -78,7 +74,6 @@ function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
     issue: ag.issue,
     ticket: ticketDe(ag, sessao.ticket),
     execucoes: ag.execucoes.filter((e) => e.sessaoPi === sessao.sessao),
-    ...(registro && { registro }),
     ...(propostas && { propostas }),
   };
 }
@@ -165,7 +160,8 @@ const RespostaDialogo = z.union([
   z.strictObject({ cancelado: z.literal(true) }).transform(() => ({ cancelled: true as const })),
 ]);
 
-const DecisaoRegistro = z.discriminatedUnion("aprovado", [
+/** A decisão do gate do registro e do desenho (C10, C15): aprovar, ou devolver com o motivo, que vai ao agente. */
+export const DecisaoDoGate = z.discriminatedUnion("aprovado", [
   z.strictObject({ aprovado: z.literal(true) }),
   z.strictObject({ aprovado: z.literal(false), motivo: Motivo }),
 ]);
@@ -250,8 +246,8 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/issues/:id/registro",
     tratar: async ({ banco, params, corpo }) => {
-      const decisao = DecisaoRegistro.parse(corpo);
-      await decidirRegistroNoChat(banco, IdDoCaminho.parse(params.id), decisao, opcoes(banco));
+      const decisao = DecisaoDoGate.parse(corpo);
+      await decidirGate(banco, IdDoCaminho.parse(params.id), "registro", decisao, opcoes(banco));
     },
   },
   {

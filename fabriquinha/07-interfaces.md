@@ -52,8 +52,9 @@ As leituras (`issue ver`, `ticket ver`, `evidencia ver`) alcançam a issue do ti
 | `ticket criar I-n --titulo <t> [--descricao <arquivo>]` | C11 | desenho, revisao, sessao |
 | `ticket editar T-n [--titulo <t>] [--descricao <arquivo>]` | C12 | desenho, revisao, sessao |
 | `ticket remover T-n` | C13 | desenho, revisao, sessao |
+| `ticket enviar T-n` | C25 (envia o resultado à aprovação do Auditor, depois de ele confirmar na conversa) | registro, desenho |
 | `revisao decidir T-n aprovar\|reprovar [--motivo <texto>]` | C14 | revisao |
-| `evidencia add <tipo> [--dados <arquivo.json>] [--arquivo <caminho>]...` | C17 (F3, 5) | todas, conforme o catálogo |
+| `evidencia add <tipo> [--dados <arquivo.json>] [--arquivo <caminho>]...` | C17 (F3, 5); `aula_codigo` vai só com `--dados`, e a Fabriquinha gera o HTML | todas, conforme o catálogo |
 | `evidencia schema <tipo>` | leitura (F3, 5) | todas |
 | `evidencia ver T-n <tipo>` | leitura | todas |
 
@@ -157,8 +158,8 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/issues/:id` `{ titulo?, tipo?, descricao? }` | C2 do Auditor, só na fase `registro`. |
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
 | `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
-| `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | C10. Devolver também envia o motivo ao agente como mensagem (F4, 6.6). |
-| `POST /api/propostas/:id` `{ aceita }` | `decidirProposta` (F4, 6.6): C24 pelo Auditor. Devolve `{ issue? }`, a issue criada no aceite. 409 se a proposta já foi decidida ou o agente ainda trabalha, 404 se não existe, 422 se `aceita` não é booleano. No registro retoma a IA com o aviso da Fabriquinha; no desenho reprova o desenho (C15). |
+| `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C10 do registro enviado. Devolver retoma a mesma sessão com o motivo como mensagem ao agente. |
+| `POST /api/propostas/:id` `{ aceita }` | `decidirProposta` (F4, 6.6): C24 pelo Auditor. Devolve `{ issue? }`, a issue criada no aceite. 409 se a proposta já foi decidida ou o agente ainda trabalha, 404 se não existe, 422 se `aceita` não é booleano. No registro retoma a IA com o aviso da Fabriquinha; no desenho reprova o desenho (C15) e retoma a IA dele com o motivo. |
 | `GET /api/projetos/:nome/heatmap` | Heatmap de alterações da base nos últimos 12 meses (`heatmapDo`, F5 §11): `{ branch, desde, ate, raiz, commits }`, com a árvore inteira de pastas e arquivos. Projeto inexistente dá 404; pasta do repositório ou branch base ausente dá 409 com motivo e correção. |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
@@ -169,7 +170,7 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/issues/:id/tickets` `{ titulo, descricao, modelo? }` | C11 do Auditor (fase `aprovacao_desenho`). |
 | `POST /api/tickets/:id` `{ titulo?, descricao? }` | C12 do Auditor. |
 | `DELETE /api/tickets/:id` | C13 do Auditor. |
-| `POST /api/issues/:id/desenho` `{ aprovado, motivo? }` | C15. |
+| `POST /api/issues/:id/desenho` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C15 do desenho enviado. Reprovar retoma a mesma sessão com o motivo como mensagem ao agente. |
 | `POST /api/issues/:id/pr` | Pendente: a decisão do PR é tomada na hospedagem (4.6). |
 | `POST /api/tickets/:id/reabrir` `{ instrucao? }` | C9: responder e retomar (F4, 6.4). |
 | `POST /api/tickets/:id/modelo` `{ modelo \| null }` | C20, com `conferirModelo` (F4, 9). |
@@ -248,7 +249,7 @@ Duas peças se repetem entre as páginas:
 2. Métricas do mês corrente de todos os projetos (F6, 5.7) numa frase: custo, tokens, issues registradas e concluídas, tickets criados e concluídos, PRs abertos e mergeados, com link para **Métricas**.
 3. **Aguarda você:** um card grande por sessão `aguardando_humano` (F4, 5.2), da mais antiga para a mais nova.
    - Cada card: o motivo em destaque, a issue com título, uma frase do que falta, projeto, ticket, etapa, modo e há quanto tempo.
-   - Um botão com a ação do motivo, que abre o chat: **Responder e retomar** (falha), **Ver o PR**, **Avaliar desenho**, **Avaliar registro**, **Responder** (conversa ou diálogo).
+   - Um botão com a ação do motivo, que abre o chat, ou a página da issue nos gates: **Responder e retomar** (falha), **Ver o PR**, **Avaliar desenho**, **Avaliar registro**, **Responder** (conversa ou diálogo).
 4. **Rodando:** uma linha por sessão `rodando`, com modo, issue, título e o que o agente está fazendo, ticket e etapa, modelo e tempo; clicar abre o chat.
 5. **Board:** as issues não concluídas de todos os projetos, uma coluna por fase, agrupadas sob as 5 etapas; as colunas de gate são hachuradas e marcadas "gate".
    - Cartão: `I-n`, projeto, título (ou "sem título" no registro) e o ticket não concluído, com etapa e status; clicar abre a issue.
@@ -296,7 +297,7 @@ Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR; o re
    - **Tickets e sessões:** linha do tempo dos tickets em ordem de criação, com etapa, status e as sessões de cada um (principal e consultas) com link para o chat.
      Clicar no ticket abre na caixa a descrição e as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
 3. Coluna da direita:
-   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket autônomo `aberto` e elegível, desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
+   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket `aberto` e elegível do agendador (o desenho abre a sessão interativa), desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
    - **Artefatos:** uma linha por etapa e ticket, do mais recente ao mais antigo, com um card pequeno por evidência (classe do conteúdo — HTML, IMG, VÍDEO, TABELA, TEXTO, JSON — nome e um ponto verde ou vermelho quando a evidência tem `aprovada`).
      Clicar abre a evidência na caixa (4.5), com **abrir em nova aba** e **baixar**.
 4. As métricas da issue não ficam nesta página: a tabela por issue fica em **Métricas** e o relatório de produtividade é um artefato do encerramento.
@@ -307,9 +308,9 @@ A página da issue não se atualiza sozinha, para não apagar o que o Auditor es
 
 | Gate | Mostra | Ações |
 |---|---|---|
-| Registro (`registro`) | Título, tipo, descrição, `comportamento` e a tabela de `criterios_aceite`, e as evidências que faltam. | **Aprovar registro** (C10); **Devolver**, habilitado só com o motivo. |
-| Desenho (`aprovacao_desenho`) | 4 cards: arquivos previstos, tickets propostos, acoplamentos novos e impacto na arquitetura (F6, 5.5). Tabela de critérios de aceite. Tabela de tickets de desenvolvimento propostos, cada um com seletor de modelo (padrão da etapa ou override, C20), **Editar** e **Remover**, e **+ Novo ticket** (C11 a C13). As quatro evidências do desenho ficam nos artefatos. Antes da decisão, um **cartão de proposta de issue** por proposta aberta da IA (C23): rótulo "Proposta de issue", `T-n` do ticket que a fez, "~n arquivos estimados · limite de 30 por PR" (em destaque acima de 30), título, mensagem em Markdown sem HTML e a frase do efeito. | **Aceitar** e **Recusar** a proposta (C24, `POST /api/propostas/:id`); **Aprovar desenho** (C15); **Reprovar**, habilitado só com o motivo. |
-| PR (`aprovacao_pr`) | Link do PR com o estado na hospedagem, vídeo explicativo, 4 cards de produtividade (custo, tokens, execuções e falhas, reprovações), corpo completo do PR (anexo de `pr_aberto`) em Markdown, tabela de comprovação dos critérios e tabela de fitness functions com explicações. | Nenhuma decisão no web: a revisão, o merge e o pedido de mudanças são feitos no próprio PR, com o botão **Abrir PR**. Como a Fabriquinha fica sabendo da decisão está pendente (4.6). |
+| Registro (`registro`, depois do envio do agente, C25) | Título, tipo, descrição, `comportamento` e a tabela de `criterios_aceite`, e as evidências que faltam. | **Aprovar registro** (C10); **Devolver**, habilitado só com o motivo, que volta à mesma sessão. |
+| Desenho (`aprovacao_desenho`) | 4 cards: arquivos previstos, tickets propostos, acoplamentos novos e impacto na arquitetura (F6, 5.5). Tabela de critérios de aceite. Tabela de tickets de desenvolvimento propostos, cada um com seletor de modelo (padrão da etapa ou override, C20), **Editar** e **Remover**, e **+ Novo ticket** (C11 a C13). As quatro evidências do desenho ficam nos artefatos. Antes da decisão, um **cartão de proposta de issue** por proposta aberta da IA (C23): rótulo "Proposta de issue", `T-n` do ticket que a fez, "~n arquivos estimados · limite de 30 por PR" (em destaque acima de 30), título, mensagem em Markdown sem HTML e a frase do efeito. | **Aceitar** e **Recusar** a proposta (C24, `POST /api/propostas/:id`); **Aprovar desenho** (C15); **Reprovar**, habilitado só com o motivo, que volta à mesma sessão do desenho. |
+| PR (`aprovacao_pr`) | Link do PR com o estado na hospedagem, vídeo de demonstração (ou o aviso de que a mudança não aparece no cliente), 4 cards de produtividade, a aula do código (card que abre na caixa) (custo, tokens, execuções e falhas, reprovações), corpo completo do PR (anexo de `pr_aberto`) em Markdown, tabela de comprovação dos critérios e tabela de fitness functions com explicações. | Nenhuma decisão no web: a revisão, o merge e o pedido de mudanças são feitos no próprio PR, com o botão **Abrir PR**. Como a Fabriquinha fica sabendo da decisão está pendente (4.6). |
 
 **Métricas** (`/metrics`) — mês em foco contra a média
 
@@ -351,11 +352,11 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
    - diálogo de extensão: o pedido do agente com o formulário (`select` como lista de opções, `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** e **Responder**;
    - falha: o erro em destaque na conversa e, no envio, instrução para a próxima tentativa, seletor de modelo (C20) e **Responder e retomar** (C9);
    - conversa (interativa): **Enviar**; na sessão em aberto, também **Concluir sessão**;
-   - gate do registro: o aviso de que a sessão terminou e a decisão está no painel;
+   - gates do registro e do desenho: o aviso de que o agente enviou o resultado e de que a decisão fica na página da issue;
    - terminada: só leitura, com **Exportar histórico** e **Conversar sobre esta sessão**.
    Em todo estado que aceita mensagem: **+ Anexar histórico** (seletor de sessões, F4, 6.8), com os anexos como etiquetas removíveis, e a dica "Enter envia · Shift+Enter quebra linha".
 4. Coluna da direita:
-   - na sessão de registro, o formulário de C2 (título, tipo, descrição) para o Auditor corrigir direto o que o agente registrou; no gate do registro, o painel do gate;
+   - na conversa do registro, o formulário de C2 (título, tipo, descrição) para o Auditor corrigir direto o que o agente registrou; nos gates, o aviso com **Decidir na página da issue**;
    - o contexto da issue: `I-n` e projeto, o trilho de fases compacto, os tickets da issue com o ticket desta sessão marcado e link para o chat dos outros, os artefatos como cards que abrem na caixa e **Abrir a issue**.
 
 **Configuração** (`/config`) — menu lateral
@@ -416,8 +417,7 @@ Quando um deles ficar difícil de ler, ganha a sua tabela.
 
 - **PR manual:** a aprovação, o merge e o pedido de mudanças são feitos no próprio PR (decisão do Auditor ao prototipar a página da issue).
   Até decidir como a Fabriquinha fica sabendo da decisão, ficam em aberto: a rota `POST /api/issues/:id/pr`, o C16 (F1), o `mergearPR` (F5, 5.2), a origem do motivo de um pedido de mudança, o momento da nota de 1 a 5 (M7) e a limpeza depois do merge (F5, 5.3).
-- **Gates no chat:** falta decidir se os gates de desenho e de PR aparecem também no chat ou só na página da issue, com um link no chat.
-  O gate do registro fica no chat (protótipo `06-chat.html`).
+- **Gates no chat:** decidido: todos os gates ficam na página da issue; o chat mostra só o aviso com o link.
 
 ## 5. Leituras
 
@@ -466,7 +466,7 @@ As leituras de tela são estas:
   - criar um Usuário Simulado, anexar um arquivo, ver o tamanho em bytes e removê-lo;
   - criar uma Tarefa em Simulação alocada a um Usuário Simulado, e os erros de N e de alocação;
   - executar a Tarefa (pi falso e produto local): sem link, o erro no cartão; com link, as execuções concluídas, o relatório com as duas seções e o link fora do ar;
-  - registrar uma necessidade pelo chat e aprovar o registro;
+  - registrar uma necessidade pelo chat, o agente enviar e aprovar o registro na página da issue;
   - acompanhar uma sessão autônoma ao vivo, redirecioná-la e responder a um diálogo de extensão;
   - responder e retomar um ticket que falhou;
   - aprovar um desenho com um ticket ajustado;

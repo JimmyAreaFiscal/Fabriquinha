@@ -9,10 +9,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { ZodError } from "zod";
 import type { Ator } from "../dominio/agregado.ts";
-import { concluirTicket } from "../dominio/conclusao.ts";
 import { falharTicket, iniciarConsulta, iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
 import { registrarEvidencia } from "../dominio/evidencia.ts";
-import { decidirDesenho, decidirRegistro } from "../dominio/gates.ts";
+import { decidirDesenho, decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
 import { adicionarTicketDesenvolvimento } from "../dominio/tickets.ts";
 import { abrir } from "./banco.ts";
@@ -72,6 +71,12 @@ function evidencias(banco: DatabaseSync, issue: number, execucao: number, ticket
   }
 }
 
+/** O agente da execução envia o ticket à aprovação do Auditor (C25). */
+const enviar = (banco: DatabaseSync, issue: number, execucao: number, ticket: number) => {
+  const agente: Ator = { tipo: "agente", execucao, ticket };
+  comIssue(banco, issue, "enviarParaAprovacao", agente, (a, ctx) => enviarParaAprovacao(a, { ticket }, agente, ctx));
+};
+
 /** C1, a sessão de registro e o gate aprovado (C10): a issue em `desenho`, com o ticket de desenho aberto. */
 function emDesenho(banco: DatabaseSync, deps: number[] = []): { issue: number; desenho: number } {
   const { issue, tickets } = registrarIssue(banco, { projeto: "loja", deps }, auditor);
@@ -81,6 +86,7 @@ function emDesenho(banco: DatabaseSync, deps: number[] = []): { issue: number; d
   comIssue(banco, issue.id, "editarIssue", auditor, (a) =>
     editarIssue(a, { titulo: "Busca", tipo: "problema" }, auditor),
   );
+  enviar(banco, issue.id, execucao, registro);
   terminar(banco, issue.id, execucao);
   const ag = comIssue(banco, issue.id, "decidirRegistro", auditor, (a, ctx) =>
     decidirRegistro(a, { aprovado: true }, auditor, ctx),
@@ -89,7 +95,7 @@ function emDesenho(banco: DatabaseSync, deps: number[] = []): { issue: number; d
 }
 
 /**
- * Até o gate de desenho: o desenho propõe tickets de desenvolvimento com os `titulos` e conclui (C7), e a issue fica
+ * Até o gate de desenho: o desenho propõe tickets de desenvolvimento com os `titulos` e é enviado (C25), e a issue fica
  * em `aprovacao_desenho`. Com `aprovar`, o Auditor aprova (C15) e ela vai ao `desenvolvimento`.
  */
 function desenhada(
@@ -98,7 +104,7 @@ function desenhada(
   aprovar = true,
 ): { issue: number; desenho: number; desenvolvimento: number[] } {
   const { issue, desenho } = emDesenho(banco);
-  const execucao = iniciar(banco, issue, desenho, "autonomo");
+  const execucao = iniciar(banco, issue, desenho, "interativo");
   const agente: Ator = { tipo: "agente", execucao, ticket: desenho };
   for (const titulo of titulos) {
     comIssue(banco, issue, "adicionarTicketDesenvolvimento", agente, (a, ctx) =>
@@ -110,10 +116,8 @@ function desenhada(
     "relatorio_complexidade",
     "relatorio_impactos_arquitetura",
   ]);
+  enviar(banco, issue, execucao, desenho);
   terminar(banco, issue, execucao);
-  comIssue(banco, issue, "concluirTicket", fabriquinha, (a, ctx) =>
-    concluirTicket(a, { ticket: desenho }, fabriquinha, ctx),
-  );
   const ag = aprovar
     ? comIssue(banco, issue, "decidirDesenho", auditor, (a, ctx) => decidirDesenho(a, { aprovado: true }, auditor, ctx))
     : undefined;

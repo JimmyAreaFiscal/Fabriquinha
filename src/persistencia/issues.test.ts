@@ -18,8 +18,7 @@ import {
   terminarExecucao,
 } from "../dominio/execucao.ts";
 import { registrarEvidencia } from "../dominio/evidencia.ts";
-import { concluirTicket } from "../dominio/conclusao.ts";
-import { decidirDesenho, decidirRegistro } from "../dominio/gates.ts";
+import { decidirDesenho, decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { abrir } from "./banco.ts";
@@ -463,18 +462,27 @@ test("as constraints da tabela comando valem no banco", () => {
 });
 
 /** Leva uma issue nova do `projeto` à fase `desenho`, com o ticket de desenho aberto; devolve a issue e o ticket. */
-function emDesenho(banco: DatabaseSync, projeto = "loja", deps: number[] = []): { issue: number; ticket: number } {
+function emDesenho(
+  banco: DatabaseSync,
+  projeto = "loja",
+  deps: number[] = [],
+  etapa: "desenho" | "revisao" = "desenho",
+): { issue: number; ticket: number } {
   const { issue } = registrarIssue(banco, { projeto, deps }, auditor);
   const ag = comIssue(banco, issue.id, "editarIssue", auditor, (atual, ctx) => ({
     ...atual,
-    issue: { ...atual.issue, titulo: "T", tipo: "problema", fase: "desenho" },
+    issue: { ...atual.issue, titulo: "T", tipo: "problema", fase: etapa },
     tickets: [
       ...atual.tickets.map((t) => ({ ...t, status: "concluido" as const, concluidoEm: ctx.agora })),
-      { ...ticketBase(issue.id), id: ctx.novoId("ticket"), etapa: "desenho", criadoEm: ctx.agora },
+      { ...ticketBase(issue.id), id: ctx.novoId("ticket"), etapa, criadoEm: ctx.agora },
     ],
   }));
   return { issue: issue.id, ticket: ag.tickets[1]?.id ?? 0 };
 }
+
+/** A issue na revisão, com o ticket autônomo aberto: o desenho é interativo (F1 §3.6). */
+const naRevisao = (banco: DatabaseSync, projeto = "loja", deps: number[] = []) =>
+  emDesenho(banco, projeto, deps, "revisao");
 
 const ticketBase = (issue: number): Ticket => ({
   id: 0,
@@ -499,10 +507,10 @@ const terminar = (banco: DatabaseSync, issue: number, execucao: number) =>
 
 test("ciclo de um ticket autônomo pelo comIssue: C5, C6, C8, C9, C20, C5 de novo e C21", () => {
   const banco = novoBanco();
-  banco.exec(`UPDATE projeto SET modelos = '{"desenho":{"provedor":"llamacpp","modelo":"qwen"}}' WHERE nome = 'loja'`);
-  const { issue, ticket } = emDesenho(banco);
+  banco.exec(`UPDATE projeto SET modelos = '{"revisao":{"provedor":"llamacpp","modelo":"qwen"}}' WHERE nome = 'loja'`);
+  const { issue, ticket } = naRevisao(banco);
   const execucao = iniciar(banco, issue, ticket).execucoes[0]?.id ?? 0;
-  // O agente do desenho propõe um ticket de desenvolvimento, que some quando o desenho falha (C8).
+  // O agente da revisão cria um ticket de desenvolvimento, que some quando a revisão falha (C8).
   comIssue(banco, issue, "editarIssue", auditor, (ag, ctx) => ({
     ...ag,
     tickets: [
@@ -512,10 +520,10 @@ test("ciclo de um ticket autônomo pelo comIssue: C5, C6, C8, C9, C20, C5 de nov
   }));
   terminar(banco, issue, execucao);
   comIssue(banco, issue, "falharTicket", fabriquinha, (ag) =>
-    falharTicket(ag, { ticket, erro: "faltou o relatório de complexidade" }, fabriquinha),
+    falharTicket(ag, { ticket, erro: "faltou a comprovação dos critérios" }, fabriquinha),
   );
   comIssue(banco, issue, "reabrirTicket", auditor, (ag) =>
-    reabrirTicket(ag, { ticket, instrucao: "escreva o relatório" }, auditor),
+    reabrirTicket(ag, { ticket, instrucao: "comprove os critérios" }, auditor),
   );
   comIssue(banco, issue, "definirModeloTicket", auditor, (ag) =>
     definirModeloTicket(ag, { ticket, modelo: { provedor: "openai", modelo: "gpt-5" } }, auditor),
@@ -525,7 +533,7 @@ test("ciclo de um ticket autônomo pelo comIssue: C5, C6, C8, C9, C20, C5 de nov
     reaberto?.tickets.map((t) => [t.id, t.status, t.erro, t.instrucao, t.modelo?.modelo]),
     [
       [1, "concluido", undefined, undefined, undefined],
-      [ticket, "aberto", undefined, "escreva o relatório", "gpt-5"],
+      [ticket, "aberto", undefined, "comprove os critérios", "gpt-5"],
     ],
   );
 
@@ -568,14 +576,14 @@ test("ciclo de um ticket autônomo pelo comIssue: C5, C6, C8, C9, C20, C5 de nov
 
 test("C5 lê do banco as dependências concluídas e aceita autônoma com outra issue rodando", () => {
   const banco = novoBanco();
-  const dep = emDesenho(banco, "outro");
-  const { issue, ticket } = emDesenho(banco, "loja", [dep.issue]);
+  const dep = naRevisao(banco, "outro");
+  const { issue, ticket } = naRevisao(banco, "loja", [dep.issue]);
   regra(
     () => iniciar(banco, issue, ticket),
     "a I-2 depende de issues ainda não concluídas (conclua as dependências antes)",
   );
   banco.exec(`UPDATE issue SET fase = 'concluida', concluida_em = 'x' WHERE id = ${String(dep.issue)}`);
-  const outra = emDesenho(banco, "outro");
+  const outra = naRevisao(banco, "outro");
   iniciar(banco, outra.issue, outra.ticket);
   assert.equal(iniciar(banco, issue, ticket).execucoes[0]?.modo, "autonomo");
   assert.equal(valor(banco, "SELECT count(*) FROM execucao WHERE resultado = 'em_andamento'"), 2);
@@ -584,7 +592,7 @@ test("C5 lê do banco as dependências concluídas e aceita autônoma com outra 
 
 test("o diff apaga a execução antes do ticket (FK RESTRICT) e não toca em pgid_pi", () => {
   const banco = novoBanco();
-  const { issue, ticket } = emDesenho(banco);
+  const { issue, ticket } = naRevisao(banco);
   iniciar(banco, issue, ticket);
   banco.exec("UPDATE execucao SET pgid_pi = 4242");
   terminar(banco, issue, 1);
@@ -810,23 +818,33 @@ test("C17 pelo comIssue grava evidência e anexos; resubmeter troca as linhas e 
   banco.close();
 });
 
-test("C10 pelo comIssue: reprovado grava só a decisão; aprovado leva a issue a desenho com o ticket novo", () => {
+test("C10 pelo comIssue: reprovado devolve o envio; reenviado e aprovado, a issue vai a desenho com o ticket novo", () => {
   const banco = novoBanco();
   const agente = registroRodando(banco);
   evidenciar(banco, agente, "comportamento");
   evidenciar(banco, agente, "criterios_aceite");
+  const enviar = (ator: Ator) =>
+    comIssue(banco, 1, "enviarParaAprovacao", ator, (ag, ctx) => enviarParaAprovacao(ag, { ticket: 1 }, ator, ctx));
+  const terminarSessao = (execucao: number) =>
+    comIssue(banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
+      terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
+    );
   const decidir = (entrada: unknown) =>
     comIssue(banco, 1, "decidirRegistro", auditor, (ag, ctx) => decidirRegistro(ag, entrada, auditor, ctx));
+  assert.match(String(enviar(agente).tickets[0]?.enviadoEm), INSTANTE);
   regra(
     () => decidir({ aprovado: true }),
     "T-1 não pode passar pelo gate: a execução E-1 ainda está em andamento (espere ela terminar)",
   );
-  comIssue(banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
-    terminarExecucao(ag, { execucao: 1, resultado: "sucesso" }, fabriquinha, ctx),
-  );
+  terminarSessao(1);
 
   const reprovado = decidir({ aprovado: false, motivo: "faltou o vídeo" });
   assert.equal(reprovado.issue.fase, "registro");
+  assert.equal(valor(banco, "SELECT enviado_em FROM ticket WHERE id = 1"), null);
+  // A sessão retoma (F4 §6.6), o agente ajusta e envia de novo.
+  iniciar(banco, 1, 1, "interativo");
+  enviar({ tipo: "agente", execucao: 2, ticket: 1 });
+  terminarSessao(2);
   const aprovado = decidir({ aprovado: true });
   assert.deepEqual(agregado(banco, 1), aprovado);
   assert.equal(aprovado.issue.fase, "desenho");
@@ -850,6 +868,7 @@ test("C10 pelo comIssue: reprovado grava só a decisão; aprovado leva a issue a
     todas(banco, "SELECT fase FROM comando WHERE nome = 'decidirRegistro'").map((l) => l.fase),
     ["registro", "registro"],
   );
+  assert.equal(valor(banco, "SELECT count(*) FROM comando WHERE nome = 'enviarParaAprovacao' AND ator = 'agente'"), 2);
   banco.close();
 });
 
@@ -943,10 +962,10 @@ test("as constraints de evidencia e evidencia_arquivo valem no banco; apagar a e
   banco.close();
 });
 
-test("gate de desenho pelo comIssue: C11, C17 e C7 do agente; C11 a C13 e C15 reprovado do Auditor apagam linhas", () => {
+test("gate de desenho pelo comIssue: C11, C17 e C25 do agente; C11 a C13 e C15 reprovado do Auditor", () => {
   const banco = novoBanco();
   const { issue, ticket } = emDesenho(banco);
-  const execucao = iniciar(banco, issue, ticket).execucoes[0]?.id ?? 0;
+  const execucao = iniciar(banco, issue, ticket, "interativo").execucoes[0]?.id ?? 0;
   const agente: Ator = { tipo: "agente", execucao, ticket };
   comIssue(banco, issue, "adicionarTicketDesenvolvimento", agente, (ag, ctx) =>
     adicionarTicketDesenvolvimento(ag, { titulo: "Cache do login" }, agente, ctx),
@@ -956,14 +975,14 @@ test("gate de desenho pelo comIssue: C11, C17 e C7 do agente; C11 a C13 e C15 re
       registrarEvidencia(ag, { ticket, tipo, dados: {}, arquivos: [] }, agente, ctx),
     );
   }
+  const enviado = comIssue(banco, issue, "enviarParaAprovacao", agente, (ag, ctx) =>
+    enviarParaAprovacao(ag, { ticket }, agente, ctx),
+  );
   comIssue(banco, issue, "terminarExecucao", fabriquinha, (ag, ctx) =>
     terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
   );
-  const concluido = comIssue(banco, issue, "concluirTicket", fabriquinha, (ag, ctx) =>
-    concluirTicket(ag, { ticket }, fabriquinha, ctx),
-  );
-  assert.equal(concluido.issue.fase, "aprovacao_desenho");
-  assert.deepEqual(agregado(banco, issue), concluido);
+  assert.equal(enviado.issue.fase, "aprovacao_desenho");
+  assert.deepEqual(agregado(banco, issue)?.tickets, enviado.tickets);
 
   const modelo = { provedor: "openai", modelo: "gpt-5" };
   comIssue(banco, issue, "adicionarTicketDesenvolvimento", auditor, (ag, ctx) =>
@@ -976,7 +995,7 @@ test("gate de desenho pelo comIssue: C11, C17 e C7 do agente; C11 a C13 e C15 re
     ajustado.tickets.map((t) => [t.id, t.etapa, t.status, t.titulo, t.origem, t.origemTicket]),
     [
       [1, "registro", "concluido", "Registrar a necessidade", "fabriquinha", undefined],
-      [2, "desenho", "concluido", "Ticket", "fabriquinha", undefined],
+      [2, "desenho", "em_execucao", "Ticket", "fabriquinha", undefined],
       [3, "desenvolvimento", "aberto", "Cache", "agente", 2],
     ],
   );
@@ -985,12 +1004,13 @@ test("gate de desenho pelo comIssue: C11, C17 e C7 do agente; C11 a C13 e C15 re
     decidirDesenho(ag, { aprovado: false, motivo: "faltou o índice" }, auditor, ctx),
   );
   assert.deepEqual(agregado(banco, issue), reprovado);
+  // Reprovado, o mesmo desenho volta à conversa, sem o envio, com os tickets propostos.
   assert.deepEqual(
-    todas(banco, "SELECT id, etapa, status, descricao FROM ticket ORDER BY id").map((l) => Object.values(l)),
+    todas(banco, "SELECT id, etapa, status, enviado_em FROM ticket ORDER BY id").map((l) => Object.values(l)),
     [
-      [1, "registro", "concluido", ""],
-      [2, "desenho", "concluido", ""],
-      [5, "desenho", "aberto", "faltou o índice"],
+      [1, "registro", "concluido", null],
+      [2, "desenho", "em_execucao", null],
+      [3, "desenvolvimento", "aberto", null],
     ],
   );
   assert.deepEqual(
@@ -999,9 +1019,10 @@ test("gate de desenho pelo comIssue: C11, C17 e C7 do agente; C11 a C13 e C15 re
   );
   // M3 (F6 §5.1): os ajustes do Auditor nos tickets propostos ficam em `comando`, na fase do gate.
   assert.deepEqual(
-    todas(banco, "SELECT nome, ator, fase FROM comando WHERE fase = 'aprovacao_desenho' ORDER BY id").map((l) =>
-      Object.values(l),
-    ),
+    todas(
+      banco,
+      "SELECT nome, ator, fase FROM comando WHERE fase = 'aprovacao_desenho' AND ator = 'auditor' ORDER BY id",
+    ).map((l) => Object.values(l)),
     [
       ["adicionarTicketDesenvolvimento", "auditor", "aprovacao_desenho"],
       ["editarTicket", "auditor", "aprovacao_desenho"],
@@ -1290,7 +1311,7 @@ test("C24 recusa a proposta cuja issue foi cancelada, sem gravar nada", () => {
 test("C24 aceita no desenho: cria a issue nova e devolve o desenho como reprovado, na mesma transação", () => {
   const banco = novoBanco();
   const { issue, ticket } = emDesenho(banco);
-  const execucao = iniciar(banco, issue, ticket).execucoes[0]?.id ?? 0;
+  const execucao = iniciar(banco, issue, ticket, "interativo").execucoes[0]?.id ?? 0;
   const agente: Ator = { tipo: "agente", execucao, ticket };
   const p = proporIssue(banco, issue, PROPOSTA, agente);
   regra(
@@ -1300,10 +1321,11 @@ test("C24 aceita no desenho: cria a issue nova e devolve o desenho como reprovad
   comIssue(banco, issue, "terminarExecucao", fabriquinha, (ag, ctx) =>
     terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
   );
-  comIssue(banco, issue, "concluirTicket", fabriquinha, (ag, ctx) => ({
+  // O desenho enviado (C25), sem as evidências que o C25 exigiria: aqui só importa a fase do gate.
+  comIssue(banco, issue, "editarIssue", auditor, (ag, ctx) => ({
     ...ag,
     issue: { ...ag.issue, fase: "aprovacao_desenho" },
-    tickets: ag.tickets.map((t) => (t.id === ticket ? { ...t, status: "concluido", concluidoEm: ctx.agora } : t)),
+    tickets: ag.tickets.map((t) => (t.id === ticket ? { ...t, enviadoEm: ctx.agora } : t)),
   }));
 
   const { ag, proposta, nova } = decidirProposta(banco, p.id, { aceita: true }, auditor);
@@ -1317,9 +1339,10 @@ test("C24 aceita no desenho: cria a issue nova e devolve o desenho como reprovad
     [[ticket, "desenho", 0, "auditor"]],
   );
   assert.match(
-    String(valor(banco, "SELECT descricao FROM ticket WHERE etapa = 'desenho' AND status = 'aberto'")),
+    String(valor(banco, "SELECT motivo FROM decisao WHERE gate = 'desenho'")),
     /I-2 \(«Tela de relatório»\)/,
   );
+  assert.equal(valor(banco, `SELECT enviado_em FROM ticket WHERE id = ${String(ticket)}`), null);
   assert.deepEqual(
     todas(banco, "SELECT nome, fase FROM comando WHERE nome = 'decidirProposta'").map((l) => Object.values(l)),
     [["decidirProposta", "aprovacao_desenho"]],

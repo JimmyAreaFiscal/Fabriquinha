@@ -1,5 +1,15 @@
 // Submissão de evidência pelo agente (F3 §5): valida tudo, guarda os arquivos e só então roda C17 numa transação.
-import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync, realpathSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readlinkSync,
+  readSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
@@ -11,6 +21,7 @@ import { raizDo } from "../persistencia/banco.ts";
 import { dirDaExecucao } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
+import { gerarAula, type Trecho } from "./aula.ts";
 import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos, schemaDe } from "./schemas.ts";
 
 const MiB = 1024 * 1024;
@@ -194,18 +205,25 @@ function guardarAnexos(
   }
 }
 
+/** F3 §5: os tipos cujo anexo a Fabriquinha gera dos `dados`, com o nome dele; o agente não anexa nada. */
+const GERADOS: Partial<
+  Record<TipoEvidencia, (ag: Agregado, worktree: string, dados: Record<string, unknown>) => Promise<[string, string]>>
+> = {
+  aula_codigo: async (ag, worktree, dados) => ["aula.html", await gerarAula(ag, worktree, dados.trechos as Trecho[])],
+};
+
 /**
  * `fabriquinha evidencia add` (F3 §5): o primeiro passo que falhar interrompe sem gravar nada no banco.
  * Erro de schema em `dados` sai como `ZodError`, com o caminho de cada campo a partir de `dados`; quem mostra ao
  * agente (F7) o formata com `z.prettifyError`, como faz com qualquer erro de schema.
  */
-export function submeter(
+export async function submeter(
   banco: DatabaseSync,
   ator: Ator,
   tipo: unknown,
   dados: unknown,
   caminhos: readonly string[],
-): Agregado {
+): Promise<Agregado> {
   // 1 e 2: escopo e catálogo, no estado atual; C17 confere de novo na transação.
   if (ator.tipo !== "agente") {
     throw new ErroDeEscopo("só o agente do ticket submete evidência", "a Fabriquinha registra as dela nos coletores");
@@ -229,16 +247,27 @@ export function submeter(
   // outro lugar. As regras cruzadas leem o agregado lido no passo 1: os fatos que elas consultam (a matriz coletada
   // antes do pi, os critérios do registro) não mudam durante a execução.
   const raiz = realpathSync(raizDo(banco));
-  const arquivos = guardarAnexos(
-    banco,
-    caminhos,
-    tipoValido,
-    schema.arquivos,
-    {
-      worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
-      saida: join(dirDaExecucao(raiz, ator.execucao), "saida"),
-    },
-    () => schema.cruzar?.(validos, { ag: antes, ticket: ator.ticket, anexos: caminhos.map((c) => basename(c)) }),
+  const origens = {
+    worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
+    saida: join(dirDaExecucao(raiz, ator.execucao), "saida"),
+  };
+  let anexos = caminhos;
+  const gerar = GERADOS[tipoValido];
+  if (gerar) {
+    if (caminhos.length > 0) {
+      throw new ErroDeRegra(
+        `${tipoValido} não aceita anexo do agente`,
+        "a Fabriquinha gera o HTML; submeta só --dados",
+      );
+    }
+    const [nome, conteudo] = await gerar(antes, origens.worktree, validos);
+    const destino = join(origens.saida, nome);
+    mkdirSync(origens.saida, { recursive: true });
+    writeFileSync(destino, conteudo);
+    anexos = [destino];
+  }
+  const arquivos = guardarAnexos(banco, anexos, tipoValido, schema.arquivos, origens, () =>
+    schema.cruzar?.(validos, { ag: antes, ticket: ator.ticket, anexos: anexos.map((c) => basename(c)) }),
   );
 
   // 7

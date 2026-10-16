@@ -76,6 +76,7 @@ const linhaTicket = (t: Ticket): Linha => ({
   erro: t.erro ?? null,
   criado_em: t.criadoEm,
   concluido_em: t.concluidoEm ?? null,
+  enviado_em: t.enviadoEm ?? null,
 });
 
 const deLinhaTicket = (l: Linha): Ticket =>
@@ -94,6 +95,7 @@ const deLinhaTicket = (l: Linha): Ticket =>
       erro: l.erro,
       criadoEm: l.criado_em,
       concluidoEm: l.concluido_em,
+      enviadoEm: l.enviado_em,
     }),
   );
 
@@ -506,20 +508,6 @@ export function agregadoDoTicket(banco: DatabaseSync, ticket: Id): Agregado | un
 /** A issue do ticket `id`, para aplicar o comando do F1 ao agregado dela; ticket inexistente dá `ErroDeInexistente`. */
 export const issueDoTicket = (banco: DatabaseSync, id: Id): Id =>
   encontrado(agregadoDoTicket(banco, id), `o ticket T-${String(id)} não existe`, "confira o número do ticket").issue.id;
-
-/**
- * Quando o agente editou a issue pela última vez (C2 a C4, na tabela `comando`), ou `""` se nunca editou: depois de
- * uma devolução do registro, isso também conta como trabalho novo (F4 §5.2).
- */
-export const ultimaEdicaoDoAgente = (banco: DatabaseSync, issue: Id): string =>
-  String(
-    banco
-      .prepare(
-        `SELECT COALESCE(MAX(em), '') AS em FROM comando WHERE issue = ? AND ator = 'agente'
-         AND nome IN ('editarIssue', 'adicionarDependencia', 'removerDependencia')`,
-      )
-      .get(issue)?.em,
-  );
 
 /**
  * As fases em que a issue já esteve, na ordem em que entrou nelas: as da tabela `comando` (a fase de antes de cada

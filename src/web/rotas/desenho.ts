@@ -1,14 +1,15 @@
 // Rotas do gate do desenho (F7 §4.2, "Tickets e gates"): o Auditor ajusta os tickets propostos (C11 a C13), troca o
-// modelo de um ticket (C20, com o par conferido no pi, F4 §9) e decide o desenho (C15).
+// modelo de um ticket (C20, com o par conferido no pi, F4 §9) e decide o desenho (C15), que, reprovado, volta à sessão.
 import { z } from "zod";
 import { AUDITOR } from "../../dominio/agregado.ts";
 import { definirModeloTicket } from "../../dominio/execucao.ts";
-import { decidirDesenho } from "../../dominio/gates.ts";
 import { Modelo } from "../../dominio/primitivos.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../../dominio/tickets.ts";
 import { conferirModelo } from "../../execucao/modelos.ts";
+import { decidirGate } from "../../execucao/sessoes.ts";
 import { comIssue, issueDoTicket } from "../../persistencia/issues.ts";
 import { type Rota, IdDoCaminho } from "../rotas.ts";
+import { DecisaoDoGate, opcoes } from "./chat.ts";
 
 /** Confere o modelo no pi antes de gravar: o recusado não chega ao banco. */
 const conferir = async (modelo: Modelo | null | undefined): Promise<void> => {
@@ -62,10 +63,9 @@ export const ROTAS_DO_DESENHO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/issues/:id/desenho",
-    tratar: ({ banco, params, corpo }) => {
-      comIssue(banco, IdDoCaminho.parse(params.id), "decidirDesenho", AUDITOR, (ag, ctx) =>
-        decidirDesenho(ag, corpo, AUDITOR, ctx),
-      );
+    tratar: async ({ banco, params, corpo }) => {
+      const decisao = DecisaoDoGate.parse(corpo);
+      await decidirGate(banco, IdDoCaminho.parse(params.id), "desenho", decisao, opcoes(banco));
     },
   },
 ];

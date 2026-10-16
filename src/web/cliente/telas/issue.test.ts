@@ -849,9 +849,13 @@ function noGatePR(): PaginaDaIssue {
         dados: { linhas: [{ nome: "cobertura", ...comando({ log: "cobertura.log" }) }] },
       }),
       evidencia(12, 5, "explicacao_fitness", { dados: { explicacoes: [{ nome: "cobertura", explicacao: "92%" }] } }),
-      evidencia(13, 6, "video_explicativo", {
+      evidencia(13, 6, "video_demonstracao", {
         dados: { roteiro: "r" },
-        arquivos: [{ nome: "explicacao.webm", sha256: sha("f"), mime: "video/webm", bytes: 10 }],
+        arquivos: [{ nome: "demonstracao.webm", sha256: sha("f"), mime: "video/webm", bytes: 10 }],
+      }),
+      evidencia(16, 6, "aula_codigo", {
+        dados: { trechos: [] },
+        arquivos: [{ nome: "aula.html", sha256: sha("a"), mime: "text/html; charset=utf-8", bytes: 10 }],
       }),
       evidencia(14, 6, "relatorio_produtividade", {
         produtor: "fabriquinha",
@@ -893,14 +897,26 @@ test("gate do PR: só na aprovação do PR, no começo da Ação do Auditor, abe
   assert.match(html, /data-painel-pr="decisao" hidden>/);
 });
 
-test("gate do PR, Revisão: vídeo, 4 cards de produtividade, corpo do PR a carregar, comprovação e fitness", () => {
-  const html = gateDoPR(noGatePR(), { modelos: [], agora: LIDO, pr: leitura("aberto") });
+test("gate do PR, Revisão: vídeo, 4 cards de produtividade, aula, corpo do PR a carregar, comprovação e fitness", () => {
+  const p = noGatePR();
+  const html = gateDoPR(p, { modelos: [], agora: LIDO, pr: leitura("aberto") });
   assert.match(
     html,
     new RegExp(
-      `<video controls preload="metadata" src="/arquivos/${sha("f")}" aria-label="Vídeo explicativo"></video>`,
+      `<video controls preload="metadata" src="/arquivos/${sha("f")}" aria-label="Vídeo de demonstração"></video>`,
     ),
   );
+  // A aula abre na caixa, como os outros artefatos.
+  assert.match(
+    html,
+    /<div class="titulo-bloco">Aula do código<\/div><div class="cards-art"><button type="button" class="art" data-evidencia="16"><span class="tipo">[^<]*<\/span>Aula do código<\/button><\/div>/,
+  );
+  // O vídeo de um encerramento anterior não serve a este: sem o deste, nada de vídeo.
+  const antigo = {
+    ...p,
+    tickets: [...p.tickets, ...p.tickets.slice(-1).map((t) => ({ ...t, id: 7, status: "em_execucao" as const }))],
+  };
+  assert.match(gateDoPR(antigo, { modelos: [], agora: LIDO }), /<div class="sem-video">/);
   assert.deepEqual(
     [...html.matchAll(/<div class="numero"><strong>(.*?)<\/strong><span>(.*?)<\/span><\/div>/g)].map((m) => [
       m[1],
@@ -933,7 +949,8 @@ test("gate do PR, Revisão: sem as evidências, os avisos; uma execução, uma f
   const p = noGatePR();
   const vazio = gateDoPR({ ...p, evidencias: [], sessoes: [] }, { modelos: [], agora: LIDO });
   assert.match(vazio, /<span class="rotulo">Gate do PR<\/span><\/div>/, "sem o PR e a espera no cabeçalho");
-  assert.match(vazio, /<div class="sem-video">sem vídeo explicativo<\/div>/);
+  assert.match(vazio, /<div class="sem-video">sem vídeo de demonstração: a mudança não aparece no cliente<\/div>/);
+  assert.match(vazio, /<p class="muted">Sem a aula do código.<\/p>/);
   assert.deepEqual(
     [...vazio.matchAll(/<strong>(.*?)<\/strong><span>(.*?)<\/span>/g)].map((m) => [m[1], m[2]]),
     [
@@ -1112,6 +1129,17 @@ test("gate do registro na página da issue: o que o agente registrou, os critér
   );
   assert.match(html, /<th>Dado<\/th><th>Quando<\/th><th>Então<\/th>.*<td class="md">o &lt;CSV&gt;<\/td>/s);
   assert.match(html, /Nenhuma evidência faltando./);
+  // O gate só existe no envio (C25), e o que falta ainda aparece, se o agente mexeu depois de enviar.
+  const faltando = acaoDoAuditor(
+    {
+      ...noRegistro,
+      issue: { ...noRegistro.issue, descricao: "" },
+      registro: { comportamento: "", criterios: [], faltando: ["comportamento"] },
+    },
+    QUARENTA_E_SETE,
+  );
+  assert.match(faltando, /<dt>Descrição<\/dt><dd>—<\/dd><dt>Comportamento<\/dt><dd>—<\/dd>/);
+  assert.match(faltando, /Faltam evidências: comportamento./);
   assert.match(
     html,
     /<div class="decidir"><label>Motivo \(obrigatório para devolver\)<textarea data-motivo-registro placeholder="O que o agente precisa rever no registro"><\/textarea><\/label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="devolver-registro" disabled>Devolver<\/button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-registro">Aprovar registro<\/button><\/div><\/div>/,

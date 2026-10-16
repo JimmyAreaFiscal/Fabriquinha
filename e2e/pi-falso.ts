@@ -9,8 +9,11 @@
 // - "eco: <texto>": responde exatamente <texto>;
 // - "# Auditoria" (o prompt da auditoria do Histórico, F4): chama `subagent` com três tarefas `scout`, recebe o
 //   resultado e responde com as quatro seções; uma pergunta depois cai na resposta padrão;
-// - "registre" (a mensagem inteira, ou em negrito): como o agente do registro, edita a issue e submete as evidências
-//   pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz "registre", e não conta;
+// - "registre" (a mensagem inteira, ou em negrito): como o agente do registro com o "sim" do Auditor, edita a issue,
+//   submete as evidências e envia o registro à aprovação pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz
+//   "registre", e não conta;
+// - "desenhe": como o agente do desenho com o "sim" do Auditor, submete as evidências, cria um ticket de
+//   desenvolvimento e envia o desenho à aprovação pelo CLI `fabriquinha`;
 // - "proponha": como o agente do registro que acha a mudança grande, propõe uma issue pelo CLI `fabriquinha`;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo;
 // - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
@@ -148,6 +151,8 @@ const cli = (...args: string[]) =>
 
 /** A issue do prompt montado pela Fabriquinha (F4 §6.3). */
 const issueDoPrompt = () => /Issue: I-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
+/** O ticket da sessão, do prompt montado pela Fabriquinha (F4 §6.3). */
+const ticketDoPrompt = () => /Seu ticket: T-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
 
 /** Como o agente do registro que estima mais de 30 arquivos: propõe uma issue pelo CLI (C23). */
 function proporIssue(): void {
@@ -199,6 +204,59 @@ function registrar(): void {
   ];
   writeFileSync(join(saida, "criterios.json"), JSON.stringify({ criterios }));
   cli("evidencia", "add", "criterios_aceite", "--dados", join(saida, "criterios.json"));
+  cli("ticket", "enviar", ticketDoPrompt());
+}
+
+/** Como o agente do desenho: as evidências do desenho, um ticket de desenvolvimento e o envio à aprovação (C25). */
+function desenhar(): void {
+  const saida = String(process.env.FABRIQUINHA_SAIDA);
+  const evidencia = (tipo: string, dados: object, ...anexos: [string, string | Buffer][]) => {
+    writeFileSync(join(saida, `${tipo}.json`), JSON.stringify(dados));
+    for (const [nome, conteudo] of anexos) writeFileSync(join(saida, nome), conteudo);
+    cli(
+      "evidencia",
+      "add",
+      tipo,
+      "--dados",
+      join(saida, `${tipo}.json`),
+      ...anexos.flatMap(([nome]) => ["--arquivo", join(saida, nome)]),
+    );
+  };
+  const html = (nome: string): [string, string] => [nome, `<!doctype html><html><body>${nome}</body></html>`];
+  evidencia(
+    "desenho_solucao",
+    {
+      resumo: "exportar os pedidos do mês em CSV",
+      arquivosPrevistos: [{ caminho: "exportarPedidos.js", acao: "criar", motivo: "CA-1 e CA-2" }],
+    },
+    html("desenho.html"),
+  );
+  evidencia(
+    "relatorio_complexidade",
+    {
+      variaveis: [{ simbolo: "n", significado: "pedidos do mês" }],
+      fluxos: [
+        {
+          nome: "Exportar",
+          gatilho: "node exportarPedidos.js",
+          situacao: "novo",
+          depois: { tempo: "O(n)", espaco: "O(n)" },
+        },
+      ],
+    },
+    html("complexidade.html"),
+  );
+  evidencia(
+    "relatorio_impactos_arquitetura",
+    { impacto: "baixo", novasDependencias: [], novosAcoplamentos: [], riscos: [] },
+    html("impactos.html"),
+  );
+  evidencia("prototipo", { descricao: "o CSV de outubro" }, [
+    "prototipo.png",
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  ]);
+  cli("ticket", "criar", `I-${issueDoPrompt()}`, "--titulo", "Exportar os pedidos do mês em CSV");
+  cli("ticket", "enviar", ticketDoPrompt());
 }
 
 /** Como o agente da auditoria: três tarefas `scout` em paralelo, o resultado e as seções da resposta. */
@@ -262,6 +320,9 @@ async function aoPrompt(texto: string): Promise<void> {
   if (texto.trim() === "registre" || texto.includes("**registre**")) {
     registrar();
     responder("Registrei o título, o tipo, o comportamento e os critérios de aceite.");
+  } else if (texto.trim() === "desenhe") {
+    desenhar();
+    responder("Desenhei a exportação, propus o ticket e enviei à sua aprovação.");
   } else if (texto.includes("proponha")) {
     proporIssue();
     responder("Propus a issue da tela de relatório.");

@@ -380,14 +380,18 @@ test("correções: o Auditor ajusta e devolve no registro e no desenho; só os a
     editarIssue(ag, { titulo: "Login lento", tipo: "problema" }, AUDITOR),
   );
   comIssue(banco, id, "adicionarDependencia", AUDITOR, (ag, ctx) => adicionarDependencia(ag, dep, AUDITOR, ctx));
+  // O agente enviou o registro (C25) e saiu.
+  banco.prepare("UPDATE ticket SET status = 'em_execucao', enviado_em = ? WHERE issue = ?").run(em(1, "09:30:00"), id);
   comIssue(banco, id, "decidirRegistro", AUDITOR, (ag, ctx) =>
     decidirRegistro(ag, { aprovado: false, motivo: "faltou o comportamento" }, AUDITOR, ctx),
   );
 
-  // O desenho concluído com um ticket proposto pelo agente leva a issue à aprovação do desenho.
-  banco.prepare("UPDATE ticket SET status = 'concluido', concluido_em = ? WHERE issue = ?").run(em(1, "10:00:00"), id);
+  // O desenho enviado (C25) com um ticket proposto pelo agente leva a issue à aprovação do desenho.
+  banco
+    .prepare("UPDATE ticket SET status = 'concluido', concluido_em = ?, enviado_em = NULL WHERE issue = ?")
+    .run(em(1, "10:00:00"), id);
   banco.prepare("UPDATE issue SET fase = 'aprovacao_desenho' WHERE id = ?").run(id);
-  ticket(banco, 10, id, "desenho");
+  ticket(banco, 10, id, "desenho", { status: "em_execucao", concluido_em: null, enviado_em: em(1, "11:00:00") });
   evidenciasDoDesenho(banco, 10);
   ticket(banco, 11, id, "desenvolvimento", {
     status: "aberto",

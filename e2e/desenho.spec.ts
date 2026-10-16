@@ -1,15 +1,16 @@
 // Gate do desenho na página da issue (F7 §4.4, §7): ajustar os tickets propostos (editar, trocar o modelo, remover e
-// criar) e aprovar; reprovar com o motivo e ver o ticket de desenho novo.
+// criar) e aprovar; reprovar com o motivo, que volta à mesma sessão do desenho (F4 §6.6).
 import { abrir } from "../src/persistencia/banco.ts";
 import { agregado } from "../src/persistencia/issues.ts";
-import { expect, test } from "./apoio.ts";
+import { expect, projeto, test } from "./apoio.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const SESSAO = "4d1e2f3a-5b6c-4d7e-8f90-a1b2c3d4e5f6";
 
 /**
- * I-1 da loja no gate do desenho: T-2 de desenho concluído na sessão autônoma, com o desenho (2 arquivos previstos) e
- * os impactos (baixo, 1 acoplamento novo); T-3 e T-4 propostos por ele. O desenvolvimento usa o Sonnet por padrão.
+ * I-1 da loja no gate do desenho: T-2 de desenho enviado (C25) pela sessão interativa, com o desenho (2 arquivos
+ * previstos) e os impactos (baixo, 1 acoplamento novo); T-3 e T-4 propostos por ele. O desenvolvimento usa o Sonnet
+ * por padrão. O repositório é real: reprovar retoma a sessão, que cria a worktree.
  */
 function semear(raiz: string): void {
   const criterios = JSON.stringify({
@@ -30,22 +31,23 @@ function semear(raiz: string): void {
     novosAcoplamentos: [{ de: "web", para: "f2", motivo: "leitura do board" }],
     riscos: [],
   });
+  projeto(
+    raiz,
+    `UPDATE projeto SET modelos = '{"desenvolvimento":{"provedor":"anthropic","modelo":"claude-sonnet-5-5"}}';`,
+  );
   const banco = abrir(raiz);
   banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness, modelos)
-      VALUES ('loja', '/nao/existe', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]',
-        '{"desenvolvimento":{"provedor":"anthropic","modelo":"claude-sonnet-5-5"}}');
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em)
       VALUES (1, 'loja', 'Board por fase', 'funcionalidade', 'aprovacao_desenho', '${AGORA}');
-    INSERT INTO ticket (id, issue, etapa, titulo, descricao, status, origem, origem_ticket, criado_em, concluido_em) VALUES
-      (1, 1, 'registro', 'Registrar a necessidade', '', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}'),
-      (2, 1, 'desenho', 'Desenhar a solução', '', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}'),
-      (3, 1, 'desenvolvimento', 'Rota /home com o board', 'Ler o board no F2.', 'aberto', 'agente', 2, '${AGORA}', NULL),
+    INSERT INTO ticket (id, issue, etapa, titulo, descricao, status, origem, origem_ticket, criado_em, concluido_em, enviado_em) VALUES
+      (1, 1, 'registro', 'Registrar a necessidade', '', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}', '${AGORA}'),
+      (2, 1, 'desenho', 'Desenhar a solução', '', 'em_execucao', 'fabriquinha', NULL, '${AGORA}', NULL, '${AGORA}'),
+      (3, 1, 'desenvolvimento', 'Rota /home com o board', 'Ler o board no F2.', 'aberto', 'agente', 2, '${AGORA}', NULL, NULL),
       (4, 1, 'desenvolvimento', 'Métricas do mês em cards (CLI com as 4 operações e códigos de saída)',
-        'Criar \`cards.ts\` na raiz:\n- um card por métrica;\n- sem \`fetch\` novo.', 'aberto', 'agente', 2, '${AGORA}', NULL);
+        'Criar \`cards.ts\` na raiz:\n- um card por métrica;\n- sem \`fetch\` novo.', 'aberto', 'agente', 2, '${AGORA}', NULL, NULL);
     INSERT INTO sequencia (nome, valor) VALUES ('ticket', 4) ON CONFLICT (nome) DO UPDATE SET valor = 4;
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
-      VALUES (1, 2, 'autonomo', '${SESSAO}', 'sucesso', '${AGORA}', '2026-10-11T12:22:00.000Z');
+      VALUES (1, 2, 'interativo', '${SESSAO}', 'sucesso', '${AGORA}', '2026-10-11T12:22:00.000Z');
     INSERT INTO sequencia (nome, valor) VALUES ('execucao', 1) ON CONFLICT (nome) DO UPDATE SET valor = 1;
     INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES
       (1, 1, 'criterios_aceite', 'agente', '${criterios}', '${AGORA}'),
@@ -170,7 +172,10 @@ test("aprova o desenho com um ticket editado, outro com o modelo trocado, um rem
   expect(ag?.decisoes.map((d) => [d.gate, d.aprovado])).toEqual([["desenho", true]]);
 });
 
-test("reprova o desenho com o motivo e mostra o ticket de desenho novo", async ({ pagina, fabriquinha }) => {
+test("reprova o desenho com o motivo, que volta à mesma sessão do desenho, com os mesmos tickets", async ({
+  pagina,
+  fabriquinha,
+}) => {
   semear(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
   const gate = pagina.getByRole("region", { name: "Gate do desenho" });
@@ -184,11 +189,23 @@ test("reprova o desenho com o motivo e mostra o ticket de desenho novo", async (
 
   await expect(gate).toBeHidden();
   await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveText("Desenho");
-  const tickets = pagina.locator(".linha-tempo > li");
-  await expect(tickets).toHaveCount(3);
-  await expect(tickets.last()).toContainText("T-5Refazer o desenho");
-  await expect(tickets.last()).toContainText("desenhoaberto");
-  await pagina.getByRole("button", { name: "T-5 Refazer o desenho" }).click();
-  await expect(pagina.getByRole("dialog").getByRole("heading")).toHaveText("T-5 · Refazer o desenho");
-  expect(issue(fabriquinha.raiz)?.tickets.at(-1)?.descricao).toBe("Faltou o índice da busca.");
+  await expect(pagina.locator(".linha-tempo > li")).toHaveCount(4);
+  const ag = issue(fabriquinha.raiz);
+  expect(ag?.tickets.map((t) => [t.id, t.etapa, t.status])).toEqual([
+    [1, "registro", "concluido"],
+    [2, "desenho", "em_execucao"],
+    [3, "desenvolvimento", "aberto"],
+    [4, "desenvolvimento", "aberto"],
+  ]);
+  expect(ag?.decisoes.map((d) => [d.gate, d.aprovado, d.motivo])).toEqual([
+    ["desenho", false, "Faltou o índice da busca."],
+  ]);
+  // A mesma sessão retoma com o motivo, e a IA responde.
+  await expect(async () => {
+    const chat = JSON.stringify(await (await pagina.request.get(`${fabriquinha.base}/api/sessoes/${SESSAO}`)).json());
+    expect(chat).toContain("O Auditor reprovou o desenho. Motivo: Faltou o índice da busca.");
+    expect(chat).toContain('"motivo":"conversa"');
+  }).toPass();
+  await pagina.goto(`${fabriquinha.base}/sessions/${SESSAO}`);
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
 });

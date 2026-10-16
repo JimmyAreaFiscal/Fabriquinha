@@ -18,6 +18,7 @@ import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import type { Pedido } from "../rotas.ts";
 import { type CabecalhoDoChat, type DadosDoChat, ROTAS_DO_CHAT } from "./chat.ts";
+import type { PainelRegistro } from "./issue.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -157,7 +158,7 @@ test("registro sem descrição, ou só com espaços, dá 422 e nenhuma issue nas
   assert.deepEqual((await pedir("/api/board")).corpo, []);
 });
 
-test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, gate com o painel, devolver e aprovar", async () => {
+test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, envio ao gate, devolver e aprovar", async () => {
   const { corpo } = await postar("/api/registros", { projeto: "loja", descricao: "Exportar pedidos em CSV" });
   const { sessao } = corpo as { sessao: string };
   const sse = await assinar(sessao);
@@ -177,10 +178,7 @@ test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, gate co
   assert.equal(textos(chat.conversa)[1], "assistant: pronto");
   const aoVivo = [...retrato.conversa, ...sse.eventos.filter((e) => e.type === "message_end")];
   assert.equal(aoVivo.filter((e) => e.fabriquinha).length, 1);
-  assert.deepEqual(
-    [chat.issue.titulo, chat.issue.fase, chat.execucoes.length, chat.registro],
-    [null, "registro", 1, undefined],
-  );
+  assert.deepEqual([chat.issue.titulo, chat.issue.fase, chat.execucoes.length], [null, "registro", 1]);
   assert.ok(sse.eventos.some((e) => e.type === "estado" && (e as Evento & CabecalhoDoChat).issue.id === chat.issue.id));
 
   // C2 do Auditor, ao lado da conversa.
@@ -199,18 +197,23 @@ test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, gate co
     (e) => e.type === "message_end" && (e.message as { content: unknown }).content === "registre",
   );
   assert.equal(auditor?.fabriquinha, undefined);
-  const gate = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  // O agente enviou (C25): o painel do gate fica na página da issue, não no chat.
+  const pagina = (await pedir(issue)).corpo as { issue: { titulo: string }; registro?: PainelRegistro };
   assert.deepEqual(
     [
-      gate.issue.titulo,
-      gate.registro?.comportamento,
-      gate.registro?.criterios.map((c) => c.id),
-      gate.registro?.faltando,
+      pagina.issue.titulo,
+      pagina.registro?.comportamento,
+      pagina.registro?.criterios.map((c) => c.id),
+      pagina.registro?.faltando,
     ],
     ["Exportar pedidos em CSV", "hoje a contabilidade copia os pedidos à mão", ["CA-1", "CA-2"], []],
   );
-  assert.ok(sse.eventos.some((e) => e.type === "estado" && (e as Evento & CabecalhoDoChat).registro));
-  assert.equal((await enviar("mais uma")).status, 409, "o gate não recebe mensagem");
+  assert.ok(
+    sse.eventos.some((e) => e.type === "estado" && (e as Evento & CabecalhoDoChat).sessao.motivo === "gate_registro"),
+  );
+  const recusada = await enviar("mais uma");
+  assert.equal(recusada.status, 409, "o gate não recebe mensagem");
+  assert.match((recusada.corpo as { erro: string }).erro, /decida na página da issue/);
 
   // Devolver exige o motivo, que vai ao agente; depois de trabalhar de novo, ele volta ao gate.
   const decidir = `${issue}/registro`;
@@ -227,6 +230,65 @@ test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, gate co
   assert.equal(((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).issue.fase, "desenho");
   assert.equal((await postar("/api/issues/abc/registro", { aprovado: true })).status, 422);
   sse.fechar();
+});
+
+test("desenho interativo: Executar agora abre a conversa; o envio leva ao gate; reprovar volta à mesma sessão", async () => {
+  const [registrando, issue] = await registro();
+  const mensagem = (sessao: string, texto: string) =>
+    postar(`/api/sessoes/${sessao}/mensagens`, { texto, modo: "prompt" });
+  assert.equal((await mensagem(registrando, "registre")).status, 204);
+  await esperarEstado(registrando, "aguardando_humano: gate_registro");
+  assert.equal((await postar(`/api/issues/${String(issue)}/registro`, { aprovado: true })).status, 204);
+
+  interface Pagina {
+    issue: { fase: string };
+    tickets: { id: number; etapa: string; status: string }[];
+  }
+  const pagina = async () =>
+    (await pedir(`/api/issues/${String(issue)}`)).corpo as Pagina & {
+      sessoes: { sessao: string; ticket: number }[];
+    };
+  const desenho = (await pagina()).tickets.find((t) => t.etapa === "desenho")?.id ?? 0;
+  assert.equal((await postar(`/api/tickets/${String(desenho)}/executar`)).status, 204);
+  await ate(async () => (await pagina()).sessoes.some((s) => s.ticket === desenho), "a sessão do desenho");
+  const sessao = String((await pagina()).sessoes.find((s) => s.ticket === desenho)?.sessao);
+  await esperarEstado(sessao, "aguardando_humano: conversa");
+  const aberta = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.equal(aberta.execucoes[0]?.modo, "interativo");
+  assert.match(
+    textos(aberta.conversa)[0] ?? "",
+    new RegExp(`Vamos desenhar a solução da issue I-${String(issue)}\\.\\n$`),
+  );
+
+  assert.equal((await mensagem(sessao, "desenhe")).status, 204);
+  await esperarEstado(sessao, "aguardando_humano: gate_desenho");
+  assert.equal((await pagina()).issue.fase, "aprovacao_desenho");
+  assert.equal((await mensagem(sessao, "mais uma")).status, 409, "o gate não recebe mensagem");
+
+  const decidir = `/api/issues/${String(issue)}/desenho`;
+  assert.equal((await postar(decidir, { aprovado: false })).status, 422);
+  assert.equal((await postar(decidir, { aprovado: false, motivo: "use streaming" })).status, 204);
+  await esperarEstado(sessao, "aguardando_humano: conversa");
+  const devolvido = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.ok(textos(devolvido.conversa).includes("user: O Auditor reprovou o desenho. Motivo: use streaming"));
+  const reprovada = await pagina();
+  assert.equal(reprovada.issue.fase, "desenho");
+  assert.deepEqual(
+    reprovada.tickets.filter((t) => t.etapa !== "registro").map((t) => [t.id, t.etapa, t.status]),
+    [
+      [desenho, "desenho", "em_execucao"],
+      [desenho + 1, "desenvolvimento", "aberto"],
+    ],
+    "o mesmo ticket de desenho, com o ticket que ele propôs",
+  );
+
+  assert.equal((await mensagem(sessao, "desenhe")).status, 204);
+  await esperarEstado(sessao, "aguardando_humano: gate_desenho");
+  assert.equal((await postar(decidir, { aprovado: true })).status, 204);
+  await esperarEstado(sessao, "terminada");
+  const aprovada = await pagina();
+  assert.equal(aprovada.issue.fase, "desenvolvimento");
+  assert.equal(aprovada.tickets.find((t) => t.id === desenho)?.status, "concluido");
 });
 
 test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o aviso marcado, 409; recusar", async () => {

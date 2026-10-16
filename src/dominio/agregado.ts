@@ -62,6 +62,8 @@ export const Ticket = z.object({
   erro: z.string().max(2000).optional(),
   criadoEm: Instante,
   concluidoEm: Instante.optional(),
+  /** C25: quando o agente do registro ou do desenho enviou o resultado à aprovação do Auditor. */
+  enviadoEm: Instante.optional(),
 });
 
 export const ModoExecucao = z.enum(["autonomo", "interativo", "consulta"]);
@@ -94,7 +96,7 @@ export const Decisao = z.object({
   em: Instante,
 });
 
-/** Os 16 tipos do F3 §2. */
+/** Os 17 tipos do F3 §2. */
 export const TipoEvidencia = z.enum([
   "comportamento",
   "criterios_aceite",
@@ -109,7 +111,8 @@ export const TipoEvidencia = z.enum([
   "explicacao_fitness",
   "comprovacao_criterios",
   "mensagem_pr",
-  "video_explicativo",
+  "aula_codigo",
+  "video_demonstracao",
   "relatorio_produtividade",
   "pr_aberto",
 ]);
@@ -239,6 +242,7 @@ export type NomeComando =
   | "removerTicket"
   | "decidirDesenho"
   | "registrarDecisaoRevisao"
+  | "enviarParaAprovacao"
   | "decidirPR"
   | "cancelarIssue"
   | "proporIssue"

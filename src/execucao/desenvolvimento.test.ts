@@ -22,9 +22,8 @@ import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { after, beforeEach, test } from "node:test";
 import type { Ator } from "../dominio/agregado.ts";
-import { concluirTicket } from "../dominio/conclusao.ts";
 import { iniciarExecucao, reabrirTicket, terminarExecucao } from "../dominio/execucao.ts";
-import { decidirDesenho, decidirRegistro } from "../dominio/gates.ts";
+import { decidirDesenho, decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
 import { adicionarTicketDesenvolvimento } from "../dominio/tickets.ts";
 import { submeter } from "../evidencias/submissao.ts";
@@ -97,7 +96,7 @@ const { agregadoDoTicket, comIssue } = await import(${JSON.stringify(src("persis
 const { submeter } = await import(${JSON.stringify(src("evidencias/submissao.ts"))});
 const { registrarDecisaoRevisao } = await import(${JSON.stringify(src("dominio/gates.ts"))});
 const { adicionarTicketDesenvolvimento } = await import(${JSON.stringify(src("dominio/tickets.ts"))});
-export default function () {
+export default async function () {
   const plano = JSON.parse(process.env.FALSO_REVISAO);
   const banco = abrir(process.env.FABRIQUINHA_ROOT);
   const execucao = Number(process.env.FABRIQUINHA_EXECUCAO);
@@ -106,11 +105,11 @@ export default function () {
   const ag = agregadoDoTicket(banco, ticket);
   const matriz = ag.evidencias.find((e) => e.ticket === ticket && e.tipo === "matriz_fitness");
   const explicacoes = matriz.dados.linhas.map((l) => ({ nome: l.nome, explicacao: "mede a busca" }));
-  submeter(banco, ator, "explicacao_fitness", { explicacoes }, []);
+  await submeter(banco, ator, "explicacao_fitness", { explicacoes }, []);
   const print = join(process.env.FABRIQUINHA_SAIDA, "ca-1.png");
   writeFileSync(print, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   const criterio = { id: "CA-1", atendido: plano.atendido, comoVerificado: "busquei mil itens", arquivos: ["ca-1.png"] };
-  submeter(banco, ator, "comprovacao_criterios", { criterios: [criterio] }, [print]);
+  await submeter(banco, ator, "comprovacao_criterios", { criterios: [criterio] }, [print]);
   for (const titulo of plano.tickets) {
     comIssue(banco, ag.issue.id, "adicionarTicketDesenvolvimento", ator, (a, ctx) =>
       adicionarTicketDesenvolvimento(a, { titulo }, ator, ctx),
@@ -125,8 +124,8 @@ export default function () {
 );
 
 /**
- * Agente do encerramento falso: submete a mensagem do PR, explicando os arquivos não previstos da última revisão, e
- * o vídeo explicativo.
+ * Agente do encerramento falso: submete a mensagem do PR, explicando os arquivos não previstos da última revisão, a
+ * aula do código, com um trecho do busca.ts que a issue alterou, e o vídeo de demonstração.
  */
 const encerrador = join(base, "encerrador.mjs");
 writeFileSync(
@@ -136,13 +135,13 @@ import { join } from "node:path";
 const { abrir } = await import(${JSON.stringify(src("persistencia/banco.ts"))});
 const { agregadoDoTicket } = await import(${JSON.stringify(src("persistencia/issues.ts"))});
 const { submeter } = await import(${JSON.stringify(src("evidencias/submissao.ts"))});
-export default function () {
+export default async function () {
   const banco = abrir(process.env.FABRIQUINHA_ROOT);
   const execucao = Number(process.env.FABRIQUINHA_EXECUCAO);
   const { ticket } = banco.prepare("SELECT ticket FROM execucao WHERE id = ?").get(execucao);
   const ator = { tipo: "agente", execucao, ticket };
   const alterados = agregadoDoTicket(banco, ticket).evidencias.findLast((e) => e.tipo === "arquivos_alterados");
-  submeter(banco, ator, "mensagem_pr", {
+  await submeter(banco, ator, "mensagem_pr", {
     titulo: "Responder a busca pelo cache",
     oQueMudou: "A busca lê do cache antes de varrer a tabela.",
     decisoesNaoObvias: [],
@@ -153,9 +152,19 @@ export default function () {
     comoRevisar: ["Comece por busca.ts."],
     naoVerificado: [],
   }, []);
-  const video = join(process.env.FABRIQUINHA_SAIDA, "explicacao.webm");
+  await submeter(banco, ator, "aula_codigo", {
+    trechos: [{
+      arquivo: "busca.ts",
+      inicio: 1,
+      fim: 1,
+      oQueFaz: "a busca lê do cache",
+      porQue: "a tabela é grande, e a mesma busca se repete",
+      decisaoDoDesenho: "cache na busca",
+    }],
+  }, []);
+  const video = join(process.env.FABRIQUINHA_SAIDA, "demonstracao.webm");
   writeFileSync(video, Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01]));
-  submeter(banco, ator, "video_explicativo", { roteiro: "mostro a busca" }, [video]);
+  await submeter(banco, ator, "video_demonstracao", { roteiro: "mostro a busca" }, [video]);
   banco.close();
 }
 `,
@@ -220,7 +229,7 @@ let n = 0;
  * pre-commit que guarda o ambiente e reprova com $HOOK_REPROVA. A I-1 (problema) chega ao desenvolvimento pelos
  * comandos reais: registro aprovado, desenho T-2 concluído com os tickets T-3 e T-4, desenho aprovado.
  */
-function cenario() {
+async function cenario() {
   const dir = join(base, `c${String(++n)}`);
   const bare = join(dir, "origin.git");
   const repo = join(dir, "repo");
@@ -267,10 +276,10 @@ function cenario() {
 
   executar(1, "interativo");
   const registrador: Ator = { tipo: "agente", execucao: 1, ticket: 1 };
-  submeter(banco, registrador, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [
+  await submeter(banco, registrador, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [
     saida(1, "busca.log", "8 s\n"),
   ]);
-  submeter(
+  await submeter(
     banco,
     registrador,
     "criterios_aceite",
@@ -280,13 +289,16 @@ function cenario() {
   comIssue(banco, 1, "editarIssue", auditor, (ag) =>
     editarIssue(ag, { titulo: "Busca lenta", tipo: "problema" }, auditor),
   );
+  comIssue(banco, 1, "enviarParaAprovacao", registrador, (ag, ctx) =>
+    enviarParaAprovacao(ag, { ticket: 1 }, registrador, ctx),
+  );
   terminar(1);
   comIssue(banco, 1, "decidirRegistro", auditor, (ag, ctx) => decidirRegistro(ag, { aprovado: true }, auditor, ctx));
 
-  executar(2, "autonomo");
+  executar(2, "interativo");
   const desenhista: Ator = { tipo: "agente", execucao: 2, ticket: 2 };
   const html = (nome: string) => [saida(2, nome, `<!DOCTYPE html><html><body>${nome}</body></html>`)];
-  submeter(
+  await submeter(
     banco,
     desenhista,
     "desenho_solucao",
@@ -300,7 +312,7 @@ function cenario() {
     },
     html("desenho.html"),
   );
-  submeter(
+  await submeter(
     banco,
     desenhista,
     "relatorio_complexidade",
@@ -310,7 +322,7 @@ function cenario() {
     },
     html("fluxos.html"),
   );
-  submeter(
+  await submeter(
     banco,
     desenhista,
     "relatorio_impactos_arquitetura",
@@ -325,8 +337,10 @@ function cenario() {
       adicionarTicketDesenvolvimento(ag, { titulo, descricao }, desenhista, ctx),
     );
   }
+  comIssue(banco, 1, "enviarParaAprovacao", desenhista, (ag, ctx) =>
+    enviarParaAprovacao(ag, { ticket: 2 }, desenhista, ctx),
+  );
   terminar(2);
-  comIssue(banco, 1, "concluirTicket", fabriquinha, (ag, ctx) => concluirTicket(ag, { ticket: 2 }, fabriquinha, ctx));
   comIssue(banco, 1, "decidirDesenho", auditor, (ag, ctx) => decidirDesenho(ag, { aprovado: true }, auditor, ctx));
 
   return {
@@ -360,7 +374,7 @@ function cenario() {
 }
 
 test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks e sem credenciais, C7; o último leva à revisão", async () => {
-  const c = cenario();
+  const c = await cenario();
   const base = git(c.repo, "rev-parse", "main");
 
   await executarAutonomo(c.banco, 3, OPCOES);
@@ -437,7 +451,7 @@ test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks 
 });
 
 test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem commit; reaberto, segue até concluir", async () => {
-  const c = cenario();
+  const c = await cenario();
   const falhou = async (motivo: string, tipos: string[]) => {
     await executarAutonomo(c.banco, 3, OPCOES);
     const { ag, ticket } = c.estado(3);
@@ -483,7 +497,7 @@ test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem co
 });
 
 test("falha em registrarRetrabalho só vai para o log: o ticket conclui", async () => {
-  const c = cenario();
+  const c = await cenario();
   c.banco.exec("CREATE TRIGGER falha BEFORE INSERT ON retrabalho BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
   await executarAutonomo(c.banco, 3, OPCOES);
   process.env.FALSO_PI_ESCREVE = JSON.stringify({ "cache.ts": "3\n" });
@@ -500,7 +514,7 @@ test("falha em registrarRetrabalho só vai para o log: o ticket conclui", async 
 });
 
 test("ticket de desenvolvimento que não alterou nada falha, sem commit", async () => {
-  const c = cenario();
+  const c = await cenario();
   process.env.FALSO_PI_ESCREVE = "{}";
   await executarAutonomo(c.banco, 3, OPCOES);
   const { ticket } = c.estado(3);
@@ -515,7 +529,7 @@ test("ticket de desenvolvimento que não alterou nada falha, sem commit", async 
 });
 
 test("retomada: o commit saiu, mas a transação do C7 falhou; a próxima execução emenda o commit e conclui", async () => {
-  const c = cenario();
+  const c = await cenario();
   const base = git(c.repo, "rev-parse", "main");
   c.banco.exec("CREATE TRIGGER falha BEFORE INSERT ON commit_ticket BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
   await executarAutonomo(c.banco, 3, OPCOES);
@@ -545,7 +559,7 @@ test("retomada: o commit saiu, mas a transação do C7 falhou; a próxima execu�
 });
 
 test("retomada com outro ticket por cima: T-4 conclui sobre o órfão de T-3, e T-3, reaberto, o adota", async () => {
-  const c = cenario();
+  const c = await cenario();
   c.banco.exec("CREATE TRIGGER falha BEFORE INSERT ON commit_ticket BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
   await executarAutonomo(c.banco, 3, OPCOES);
   const orfao = git(c.worktree, "rev-parse", "HEAD");
@@ -583,7 +597,7 @@ test("retomada com outro ticket por cima: T-4 conclui sobre o órfão de T-3, e 
  * o pi do T-3 muda na worktree, no formato de $FALSO_PI_ESCREVE.
  */
 async function naRevisao(escreveT3?: Record<string, string | null>) {
-  const c = cenario();
+  const c = await cenario();
   if (escreveT3) process.env.FALSO_PI_ESCREVE = JSON.stringify(escreveT3);
   await executarAutonomo(c.banco, 3, OPCOES);
   process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
@@ -787,7 +801,8 @@ test("encerramento: descarte, relatório de produtividade, push, PR padronizado 
     c.doEncerramento().map((e) => [e.tipo, e.produtor]),
     [
       ["mensagem_pr", "agente"],
-      ["video_explicativo", "agente"],
+      ["aula_codigo", "agente"],
+      ["video_demonstracao", "agente"],
       ["relatorio_produtividade", "fabriquinha"],
       ["pr_aberto", "fabriquinha"],
     ],
@@ -842,8 +857,17 @@ test("encerramento: descarte, relatório de produtividade, push, PR padronizado 
   assert.match(pr.corpo, /\| `metrica\.ts` \| A \| \+1 −0 \| não previsto: mede o cache \|/);
   assert.match(
     pr.corpo,
-    /- I-1 · video_explicativo · explicacao\.webm\n- I-1 · relatorio_produtividade · relatorio\.html/,
+    /- I-1 · aula_codigo · aula\.html\n- I-1 · video_demonstracao · demonstracao\.webm\n- I-1 · relatorio_produtividade · relatorio\.html/,
   );
+  // A aula: o código lido do git, com a linha alterada marcada, e a explicação do agente.
+  const aula = c.anexo("aula_codigo");
+  assert.equal(aula.mime, "text/html; charset=utf-8");
+  assert.match(aula.conteudo, /^<!doctype html>/);
+  assert.match(
+    aula.conteudo,
+    /<tr class="mudou"><td class="n">1<\/td><td class="m">\+<\/td><td class="c">export const busca = cache;<\/td><\/tr>/,
+  );
+  assert.match(aula.conteudo, /<dt>Por que assim<\/dt><dd>a tabela é grande, e a mesma busca se repete<\/dd>/);
 
   const relatorio = c.anexo("relatorio_produtividade");
   assert.equal(relatorio.mime, "text/html; charset=utf-8");

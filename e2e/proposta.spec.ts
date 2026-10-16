@@ -1,5 +1,5 @@
 // Proposta de issue da IA (F7 §4.4; F4 §6.6): o cartão no gate do desenho, com o banco semeado (Aceitar cria a issue e
-// o ticket de desenho novo; Recusar mantém o gate), e o cartão no chat do registro com o pi falso.
+// devolve o desenho à mesma sessão; Recusar mantém o gate), e o cartão no chat do registro com o pi falso.
 import { abrir } from "../src/persistencia/banco.ts";
 import { agregado } from "../src/persistencia/issues.ts";
 import { expect, projeto, test } from "./apoio.ts";
@@ -7,7 +7,7 @@ import { expect, projeto, test } from "./apoio.ts";
 const AGORA = "2026-10-11T12:00:00.000Z";
 const SESSAO = "4d1e2f3a-5b6c-4d7e-8f90-a1b2c3d4e5f6";
 
-/** I-1 da loja no gate do desenho, com T-2 de desenho concluído e uma proposta pendente (P-1) que ele fez. */
+/** I-1 da loja no gate do desenho, com T-2 de desenho enviado (C25) e uma proposta pendente (P-1) que ele fez. */
 function semear(raiz: string): void {
   const criterios = JSON.stringify({
     criterios: [{ id: "CA-1", dado: "pedidos no mês", quando: "exporto", entao: "o CSV sai" }],
@@ -23,14 +23,14 @@ function semear(raiz: string): void {
       VALUES ('loja', '/nao/existe', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]');
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em)
       VALUES (1, 'loja', 'Exportar tudo', 'funcionalidade', 'aprovacao_desenho', '${AGORA}');
-    INSERT INTO ticket (id, issue, etapa, titulo, descricao, status, origem, criado_em, concluido_em) VALUES
-      (1, 1, 'registro', 'Registrar a necessidade', '', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}'),
-      (2, 1, 'desenho', 'Desenhar a solução', '', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}');
+    INSERT INTO ticket (id, issue, etapa, titulo, descricao, status, origem, criado_em, concluido_em, enviado_em) VALUES
+      (1, 1, 'registro', 'Registrar a necessidade', '', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}', '${AGORA}'),
+      (2, 1, 'desenho', 'Desenhar a solução', '', 'em_execucao', 'fabriquinha', '${AGORA}', NULL, '${AGORA}');
     INSERT INTO sequencia (nome, valor) VALUES ('ticket', 2) ON CONFLICT (nome) DO UPDATE SET valor = 2;
     INSERT INTO sequencia (nome, valor) VALUES ('issue', 1) ON CONFLICT (nome) DO UPDATE SET valor = 1;
     INSERT INTO sequencia (nome, valor) VALUES ('proposta', 1) ON CONFLICT (nome) DO UPDATE SET valor = 1;
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
-      VALUES (1, 2, 'autonomo', '${SESSAO}', 'sucesso', '${AGORA}', '2026-10-11T12:22:00.000Z');
+      VALUES (1, 2, 'interativo', '${SESSAO}', 'sucesso', '${AGORA}', '2026-10-11T12:22:00.000Z');
     INSERT INTO sequencia (nome, valor) VALUES ('execucao', 1) ON CONFLICT (nome) DO UPDATE SET valor = 1;
     INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES
       (1, 1, 'criterios_aceite', 'agente', '${criterios}', '${AGORA}'),
@@ -66,7 +66,7 @@ test("recusar a proposta no gate do desenho mantém o gate e não cria issue", a
   expect(ler(fabriquinha.raiz, 1)?.issue.fase).toBe("aprovacao_desenho");
 });
 
-test("aceitar a proposta no gate do desenho cria a issue dependente e o ticket de desenho novo", async ({
+test("aceitar a proposta no gate do desenho cria a issue dependente e devolve o desenho à conversa", async ({
   pagina,
   fabriquinha,
 }) => {
@@ -77,9 +77,12 @@ test("aceitar a proposta no gate do desenho cria a issue dependente e o ticket d
   await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveText("Desenho");
   const nova = ler(fabriquinha.raiz, 2);
   expect(nova?.issue).toMatchObject({ fase: "registro", deps: [1], descricao: "Parte B: **relatório**" });
-  const tickets = ler(fabriquinha.raiz, 1)?.tickets;
-  expect(tickets?.at(-1)).toMatchObject({ etapa: "desenho" });
-  expect(tickets?.at(-1)?.descricao).toContain("I-2");
+  const atual = ler(fabriquinha.raiz, 1);
+  expect(atual?.tickets.map((t) => [t.id, t.status, t.enviadoEm])).toEqual([
+    [1, "concluido", AGORA],
+    [2, "em_execucao", undefined],
+  ]);
+  expect(atual?.decisoes.at(-1)?.motivo).toContain("I-2");
 });
 
 test("o chat do registro mostra o cartão da proposta; aceitar cria a issue e avisa a IA", async ({

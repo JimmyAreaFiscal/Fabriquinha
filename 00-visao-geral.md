@@ -17,24 +17,25 @@ A Fabriquinha substitui o issues-local e passa a ser a fonte da verdade do proce
 - RevisarSolucao ganhou a métrica "quantidade de bugs em arquivos revisados".
 - O diagrama inteiro está num quadro "SDLC tradicional"; esta spec trata só desse fluxo.
 - Decidido no alinhamento das evidências (ainda não está no diagrama): DesenharSolucao ganha o "Relatório de Impactos na Arquitetura", e o "Relatório de Análise de Complexidade" passa a registrar complexidade algorítmica de tempo e espaço.
+- Decidido em 2026-10-15 (D11, ainda não está no diagrama): o Auditor constrói o registro e o desenho junto com a IA; o vídeo explicativo deu lugar à aula do código e ao vídeo de demonstração.
 
 ### 2.2 Etapas
 
 | Etapa | Gatilho | Executor | Evidências | Métricas | Saída |
 |---|---|---|---|---|---|
 | RegistrarNecessidade | Auditor | pi interativo + Auditor | vídeo e/ou código do comportamento; critérios de aceite | tokens e custo por modelo; correções do Auditor | Issue + Ticket de Desenho |
-| DesenharSolucao | Cron/Timer (agendador da Fabriquinha) ou Auditor | pi autônomo | desenho da solução; protótipo + vídeo/print (só funcionalidade); relatório de análise de complexidade (tempo e espaço); relatório de impactos na arquitetura | tokens e custo; correções no desenho | gate do Auditor → Tickets de Desenvolvimento |
+| DesenharSolucao | Cron/Timer (agendador da Fabriquinha) ou Auditor | pi interativo + Auditor | desenho da solução; protótipo + vídeo/print (só funcionalidade); relatório de análise de complexidade (tempo e espaço); relatório de impactos na arquitetura | tokens e custo; correções no desenho | gate do Auditor → Tickets de Desenvolvimento |
 | ImplementarSolucao | Loop | pi autônomo | execução dos testes (todos passando); relatório do SonarQube | tokens e custo; alterações posteriores no código | próximo Ticket de Desenvolvimento ou Ticket de Revisão |
 | RevisarSolucao | Ticket de Revisão | pi autônomo | comprovação dos critérios de aceite; arquivos alterados × desenho; matriz de fitness functions | tokens e custo; exigências de alteração; bugs em arquivos revisados | Reprovado → Loop; Aprovado → Ticket de Encerramento |
-| EncerrarSolucao | Ticket de Encerramento | pi autônomo | mensagem do PR; PR aberto; vídeo explicativo; relatório de produtividade do SDLC; dados no banco local | tokens e custo; nota do Auditor | Pull Request → gate do Auditor |
+| EncerrarSolucao | Ticket de Encerramento | pi autônomo | mensagem do PR; PR aberto; aula do código; vídeo de demonstração (só quando a mudança aparece no cliente); relatório de produtividade do SDLC; dados no banco local | tokens e custo; nota do Auditor | Pull Request → gate do Auditor |
 | Sessão em aberto | PR reprovado | pi interativo, sem skill de etapa | — | tokens e custo | Loop → Tickets de Desenvolvimento |
 
 ### 2.3 Gates
 
 | Gate | Quem decide | Aprovado | Reprovado |
 |---|---|---|---|
-| Registro | Auditor, no chat da sessão de registro | Ticket de Desenho é criado | a sessão de registro continua |
-| Desenho | Auditor | Tickets de Desenvolvimento liberados | novo Ticket de Desenho com o motivo |
+| Registro | Auditor, na página da issue, depois que a IA envia (com o "sim" dele na conversa) | Ticket de Desenho é criado | o motivo volta à mesma sessão de registro |
+| Desenho | Auditor, na página da issue, depois que a IA envia (com o "sim" dele na conversa) | Tickets de Desenvolvimento liberados | o motivo volta à mesma sessão de desenho |
 | Revisão | agente revisor | Ticket de Encerramento | novos Tickets de Desenvolvimento com as exigências |
 | PR | Auditor, com nota | merge; o CI/CD segue fora da Fabriquinha | Sessão em aberto |
 
@@ -147,6 +148,7 @@ Ela só soma o pacote P1.
 | D8 | Uma execução autônoma por issue, em paralelo (revista: antes era uma por vez, global) | Issues diferentes não disputam nada no domínio; dentro da issue continua uma execução por vez. | Limite de execuções simultâneas |
 | D9 | Toda operação do Auditor (configuração, registro, sessões, gates) fica no web, com token gerado na subida do serviço; o CLI é só do agente, mais `servidor` e `abrir` | O CLI não tem comando de Auditor que o agente possa chamar. | Gates e sessões pelo terminal |
 | D10 | A Fabriquinha roda como um serviço único, com agendador interno ligado e calibrado pelo web; a porta é a trava de instância única | O agendamento faz parte do produto e é configurado pelo Auditor; o sistema operacional só mantém o serviço de pé. | cron chamando `fabriquinha tick` |
+| D11 | Registro e desenho são conversas: a IA questiona, leva cada decisão relevante ao Auditor e só envia à aprovação (C25) com o "sim" dele; devolver volta à mesma sessão. No PR, a aula do código explica a lógica de cada trecho alterado, e o vídeo, só de demonstração pelo cliente, existe quando há frontend | Artefatos feitos sem o Auditor chegavam sem contexto e eram aprovados sem leitura; o vídeo mostrava o resultado, não a lógica | Desenho autônomo com gate só no fim; vídeo explicativo do código; handoff de sessão (fora: a compactação do pi basta por ora) |
 
 ## 7. Pendências resolvidas
 

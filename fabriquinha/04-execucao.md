@@ -74,7 +74,7 @@ A cada `intervaloMin`, se `agendadorAtivo`:
 
 1. Para cada projeto cuja última varredura de commits humanos tem mais de 24 horas, chama `varrerBase` (F6, 4.4); falha só vai para o log.
 2. Busca os tickets elegíveis (4.1), um por issue.
-3. Para cada um, pede ao gerente de sessões para iniciá-lo em modo autônomo (6.2). A C5 de cada um roda antes do primeiro `await`; a recusa vai para o log e não para os outros.
+3. Para cada um, pede ao gerente de sessões para iniciá-lo: o desenho como sessão interativa (6.6), com a mensagem inicial "Vamos desenhar a solução da issue I-n."; as demais etapas em modo autônomo (6.2). A C5 de cada um roda antes do primeiro `await`; a recusa vai para o log e não para os outros.
 
 Issues diferentes executam em paralelo (D8); dentro de cada issue, uma execução por vez (C5).
 
@@ -85,7 +85,7 @@ O botão **Executar agora** de um ticket (o "Auditor → DesenharSolucao" do dia
 ```sql
 SELECT min(t.id) AS id FROM ticket t JOIN issue i ON i.id = t.issue
 WHERE t.status = 'aberto'
-  AND t.etapa IN ('desenho','desenvolvimento','revisao','encerramento')
+  AND t.etapa IN ('desenho','desenvolvimento','revisao','encerramento')  -- o desenho abre interativo
   AND i.fase = t.etapa                       -- casamento etapa × fase (F1, 4.3)
   AND i.arquivada_em IS NULL
   AND NOT EXISTS (SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep
@@ -126,8 +126,8 @@ O estado é calculado; não é gravado.
 | `conversa`: sessão interativa esperando a próxima mensagem do Auditor | Responder. |
 | `dialogo`: uma extensão do pi abriu uma pergunta (`select`, `confirm`, `input`, `editor`) | Responder o formulário (5.4). |
 | `falha`: o ticket autônomo `falhou` | Ler o erro e **responder e retomar** (6.4). |
-| `gate_registro`: a sessão de registro terminou e falta a decisão | Aprovar ou devolver (C10). |
-| `gate_desenho`: o desenho foi concluído e a issue está em `aprovacao_desenho` | Ajustar os tickets propostos, aprovar ou reprovar (C11–C13, C15). |
+| `gate_registro`: o agente enviou o registro (C25) e falta a decisão; conta desde o envio | Na página da issue: aprovar ou devolver (C10). |
+| `gate_desenho`: o agente enviou o desenho (C25), e a issue está em `aprovacao_desenho`; conta desde o envio | Na página da issue: ajustar os tickets propostos, aprovar ou reprovar (C11–C13, C15). |
 | `gate_pr`: o encerramento foi concluído e a issue está em `aprovacao_pr` | Dar a nota e aprovar ou reprovar o PR (C16). |
 
 O gate de revisão não aparece aqui: quem decide é o agente revisor.
@@ -157,7 +157,7 @@ O que o campo de mensagem faz depende do estado:
 | `aguardando_humano: conversa` | `prompt`. Se o processo foi parado por ociosidade ou reinício, retoma a sessão antes (6.6). |
 | `aguardando_humano: dialogo` | O campo vira o formulário do diálogo; a resposta vai como `extension_ui_response`. |
 | `aguardando_humano: falha` | Responder e retomar (6.4). |
-| `aguardando_humano: gate_*` | O chat mostra os botões do gate; o botão **Conversar sobre esta sessão** abre uma consulta (6.5). |
+| `aguardando_humano: gate_*` | O chat recusa a mensagem e mostra o aviso que leva à página da issue, onde o Auditor decide; o botão **Conversar sobre esta sessão** abre uma consulta (6.5). |
 | `terminada` | Somente leitura; o botão **Conversar sobre esta sessão** abre uma consulta (6.5). |
 
 Em qualquer sessão que aceite mensagem, o campo de mensagem tem **Anexar histórico de outra sessão** (6.8).
@@ -233,7 +233,7 @@ Ele traz o contexto; o modo de trabalhar fica nas instruções da etapa (P1).
 |---|---|
 | todas | Projeto, issue (título, tipo, descrição), ticket (título, descrição), worktree, diretório de saída. Se houver `ticket.instrucao` (6.4), ela vem primeiro. |
 | registro | Só o projeto e as dependências informadas; o resto vem da conversa com o Auditor. |
-| desenho | Critérios de aceite e o resumo do comportamento. Um novo desenho já traz o motivo da reprovação na descrição do ticket (C15). |
+| desenho | Critérios de aceite e o resumo do comportamento. A reprovação (C15) chega como mensagem na mesma sessão (6.6). |
 | desenvolvimento | Resumo do desenho aprovado, arquivos previstos, fora do escopo, critérios de aceite e os tickets já concluídos. |
 | revisao | Critérios de aceite, desenho aprovado, resumo do `arquivos_alterados` e da `matriz_fitness` coletados antes do pi, e os tickets concluídos. |
 | encerramento | Resumo do desenho, das revisões e dos tickets; se o PR já existe, o motivo da última reprovação. |
@@ -271,14 +271,16 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
 
 - **Registro:** o botão **Registrar necessidade** pede o projeto, a descrição da necessidade (obrigatória) e as dependências.
   Ele dispara C1 com a descrição, que vai ao prompt da primeira mensagem na seção "Descrição da issue", e a preparação da worktree (F5), abre o chat e envia a mensagem inicial "Vamos registrar uma necessidade no projeto X (issue I-n)".
-  A partir daí é conversa.
-  Os botões **Aprovar registro** e **Devolver** ficam no próprio chat.
-  Devolver pede o motivo, grava C10 reprovado e envia o motivo ao agente como mensagem.
+  A partir daí é conversa: a IA questiona a necessidade e constrói os critérios com o Auditor, e envia o registro (C25) só com o "sim" dele.
+- **Desenho:** o agendador ou o **Executar agora** abre a sessão interativa do ticket de desenho, com o contexto da etapa e a mensagem "Vamos desenhar a solução da issue I-n.".
+  A IA estuda o código sozinha e leva ao Auditor, na conversa, cada decisão relevante; envia o desenho (C25) só com o "sim" dele.
+- **Gate do registro e do desenho (`decidirGate`):** a decisão é na página da issue.
+  O F4 para o pi ocioso; aprovado, descarta o que a sessão deixou na worktree (o protótipo do desenho, F3 §7) e grava C10 ou C15; devolvido, grava a decisão com o motivo e retoma a **mesma** sessão com a mensagem "O Auditor devolveu o registro. Motivo: …" ou "O Auditor reprovou o desenho. Motivo: …".
 - **Proposta de issue (C23, C24):** a IA do registro ou do desenho propõe dividir a issue (`fabriquinha issue propor`), e o Auditor só aceita ou recusa; `decidirProposta(proposta, aceita)` confere que a proposta está pendente no gate atual e recusa antes de gravar se não estiver.
   - **No registro**, a decisão é no chat. O F4 para o pi ocioso (recusa se o agente ainda trabalha), grava C24 e retoma a sessão com o aviso da Fabriquinha à IA.
     O aviso de aceite diz: "A Fabriquinha criou a I-n («título») a partir da sua proposta, que o Auditor aceitou; ela depende da I-m. Reduza o escopo da I-m: …". O de recusa: "O Auditor recusou a sua proposta de issue «título»…".
     A IA ajusta a issue e as evidências na mesma sessão.
-  - **No desenho**, que é autônomo, a decisão é na página da issue. O aceite grava C24 com o desenho reprovado (C15) e o motivo que cita a issue nova, e o F4 só avisa a sessão do desenho: não há mensagem, porque o agendador refaz o desenho no novo Ticket de Desenho. A recusa só marca a proposta, e o gate continua aberto.
+  - **No desenho**, a decisão é no gate, na página da issue. O aceite para o pi ocioso, grava C24 com o desenho reprovado (C15) e o motivo que cita a issue nova, e retoma a sessão do desenho com esse motivo. A recusa só marca a proposta e avisa a sessão, e o gate continua aberto.
   - No aceite, nos dois casos, o F4 abre o registro da issue nova (mesma sessão interativa de **Registrar necessidade**, com a descrição que veio da mensagem da proposta).
 - **Sessão em aberto:** aparece sozinha como `aguardando_humano: conversa` quando o PR é reprovado (C16).
   A mensagem inicial traz o motivo e a URL do PR.
@@ -356,10 +358,12 @@ sequenceDiagram
     participant S as Agendador
     A->>W: Registrar necessidade
     W->>G: sessão interativa (registro)
-    A->>W: conversa no chat, Aprovar registro
-    S->>G: desenho (autônomo)
+    A->>W: conversa no chat; a IA envia o registro
+    A->>W: Aprovar registro na página da issue
+    S->>G: desenho (interativo)
+    A->>W: decide junto na conversa; a IA envia o desenho
     G-->>W: sessão aguardando_humano: gate_desenho
-    A->>W: ajusta tickets, aprova
+    A->>W: ajusta tickets, aprova na página da issue
     S->>G: desenvolvimento, um ticket por vez
     S->>G: revisão, encerramento
     G-->>W: sessão aguardando_humano: gate_pr
@@ -409,6 +413,8 @@ Mudanças nas tabelas do F2 que vêm deste módulo:
 | `enviar(sessao, texto, modo)` | F7, chat (`prompt`, `steer`, `follow_up`, conforme 5.4) |
 | `responderDialogo(execucao, id, resposta)` / `abortar(execucao)` | F7, chat |
 | `registrarNecessidade(projeto, deps, descricao)` / `concluirSessao(ticket)` | F7 |
+| `decidirGate(issue, etapa, decisao)` (6.6) | F7, gates do registro e do desenho na página da issue |
+| `iniciarDesenho(ticket)` (6.6) | agendador e Executar agora |
 | `decidirProposta(proposta, aceita)` → `{ issue? }` (6.6) | F7, chat do registro e gate do desenho |
 | `executarAgora(ticket)` | F7, botão Executar agora |
 | `salvarConfiguracao(config)` / `conferirModelo(modelo)` | F7, configuração |

@@ -16,7 +16,6 @@ import {
   estadoDoTrilho,
   etapa,
   FASES,
-  ha,
   MODO_DA_SESSAO,
   nomeDoModelo,
   plural,
@@ -25,7 +24,7 @@ import {
   rotuloTicket,
   situacaoDasFases,
 } from "../render.ts";
-import { cardDaEvidencia, cartaoDaProposta, comCard, corpoDoRegistro } from "./issue.ts";
+import { cardDaEvidencia, cartaoDaProposta, comCard } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -438,8 +437,8 @@ export function envio(c: CabecalhoDoChat, modo: ModoEnvio): Envio {
   if (!rodando && sessao.motivo !== "conversa") {
     return {
       html: fim(
-        sessao.motivo === "gate_registro"
-          ? "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa."
+        sessao.motivo === "gate_registro" || sessao.motivo === "gate_desenho"
+          ? "O agente enviou o resultado à sua aprovação. Decida na página da issue; devolver traz o motivo de volta a esta conversa."
           : "A etapa terminou; a decisão do gate fica na página da issue.",
       ),
     };
@@ -477,30 +476,18 @@ function formularioDoRegistro(c: CabecalhoDoChat): string {
   );
 }
 
-/** O painel do gate do registro (F7 §4.4): o que o agente registrou, Aprovar registro e Devolver com o motivo. */
-function gateDoRegistro(c: CabecalhoDoChat, agora: number): string {
-  const { issue, sessao } = c;
-  // O servidor sempre manda o painel no gate; sem ele, o painel fica vazio em vez de quebrar.
-  const registro = c.registro ?? { comportamento: "", criterios: [], faltando: [] };
-  return (
-    '<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro</span>' +
-    `<span class="muted pequeno">aguarda você ${ha(sessao.desde, new Date(agora))}</span></div>` +
-    `<div class="corpo">${corpoDoRegistro(issue, registro)}</div>` +
-    '<form class="decidir" data-gate-registro><label class="campo">Motivo (obrigatório para devolver)<textarea name="motivo" rows="2"></textarea></label>' +
-    '<div class="botoes"><button type="button" class="btn btn-perigo" data-devolver disabled>Devolver</button>' +
-    '<button class="btn btn-primario">Aprovar registro</button></div></form></section>'
-  );
-}
-
-const ROTULO_DO_GATE: Record<string, string> = { gate_desenho: "Gate do desenho", gate_pr: "Gate do PR" };
+const ROTULO_DO_GATE: Record<string, string> = {
+  gate_registro: "Gate do registro",
+  gate_desenho: "Gate do desenho",
+  gate_pr: "Gate do PR",
+};
 
 /**
- * A coluna da direita (F7 §4.4, item 4): na sessão de registro, o formulário de C2 ou, no gate, o painel dele; nos
- * gates de desenho e de PR, só o aviso que leva à página da issue.
+ * A coluna da direita (F7 §4.4, item 4): na conversa do registro, o formulário de C2; nos gates, só o aviso que leva à
+ * página da issue, onde o Auditor decide.
  */
-export function lateral(c: CabecalhoDoChat, agora: number): string {
+export function lateral(c: CabecalhoDoChat): string {
   const { sessao, issue } = c;
-  if (sessao.motivo === "gate_registro") return gateDoRegistro(c, agora);
   const gate = ROTULO_DO_GATE[String(sessao.motivo)];
   if (gate) {
     return (

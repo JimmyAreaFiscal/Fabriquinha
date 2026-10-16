@@ -58,7 +58,8 @@ for (const etapa of ["registro", "desenho", "revisao", "encerramento"] as const)
     // O prompt de sistema desta sessão, que a sonda gravou no início dela. O pi ignora em silêncio um `--skill` que não
     // existe; a skill só conta se o nome e o caminho entraram no prompt.
     const sistema = readFileSync(prompt, "utf8");
-    assert.ok(sistema.includes(`Current working directory: ${dir}`));
+    // Desde o pi 1.1.0, o diretório de trabalho vem num bloco `<cwd>`.
+    assert.ok(sistema.includes(`<cwd>\n${dir}\n</cwd>`), sistema);
     for (const skill of skillsDaEtapa(etapa)) {
       assert.ok(sistema.includes(`<name>${skill}</name>`), skill);
       assert.ok(sistema.includes(`<location>${join(PACOTE, "skills", skill, "SKILL.md")}</location>`), skill);

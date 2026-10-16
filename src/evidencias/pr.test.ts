@@ -106,7 +106,8 @@ function encerrando(semMensagem = false): Agregado {
               reversao: "Reverter o merge.",
             }),
           ]),
-      evidencia(5, "video_explicativo", { roteiro: "mostro" }, "video.webm"),
+      evidencia(5, "aula_codigo", { trechos: [] }, "aula.html"),
+      evidencia(5, "video_demonstracao", { roteiro: "mostro" }, "video.webm"),
       evidencia(
         5,
         "relatorio_produtividade",
@@ -192,7 +193,8 @@ A busca aceita áudio.
 - I-7 · desenho_solucao · desenho.html
 - I-7 · relatorio_complexidade · fluxos.html
 - I-7 · relatorio_impactos_arquitetura · impactos.html
-- I-7 · video_explicativo · video.webm
+- I-7 · aula_codigo · aula.html
+- I-7 · video_demonstracao · video.webm
 - I-7 · relatorio_produtividade · relatorio.html
 
 ## Não verificado
@@ -228,6 +230,13 @@ test("corpo do PR: as 10 seções do F3 §4.6, na ordem e com os títulos, das e
   assert.equal(completo, COMPLETO);
   assert.equal(publicado, completo);
   assert.equal(condensado, false);
+  // Sem frontend, sem vídeo de demonstração: a linha dele some, e o resto fica igual.
+  const ag = encerrando();
+  const semVideo = { ...ag, evidencias: ag.evidencias.filter((e) => e.tipo !== "video_demonstracao") };
+  assert.equal(
+    montarPR(semVideo, 5, LIMITE_DO_CORPO.github).completo,
+    COMPLETO.replace(/- I-7 · video_demonstracao.*\n/, ""),
+  );
 });
 
 test("condensação do F3 §4.7: seção 5, depois 7, depois 10, parando assim que cabe; as do agente nunca", () => {

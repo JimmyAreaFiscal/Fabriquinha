@@ -50,7 +50,11 @@ test("skills de artefato da etapa: uma por evidência de agente, com o nome do P
   ]);
   assert.deepEqual(skillsDaEtapa("desenvolvimento"), []);
   assert.deepEqual(skillsDaEtapa("revisao"), ["artefato-explicacao-fitness", "artefato-comprovacao-criterios"]);
-  assert.deepEqual(skillsDaEtapa("encerramento"), ["artefato-mensagem-pr", "artefato-video-explicativo"]);
+  assert.deepEqual(skillsDaEtapa("encerramento"), [
+    "artefato-mensagem-pr",
+    "artefato-aula-codigo",
+    "artefato-video-demonstracao",
+  ]);
   assert.deepEqual(skillsDaEtapa("sessao"), []);
 });
 
