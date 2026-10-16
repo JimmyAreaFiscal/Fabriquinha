@@ -1,28 +1,22 @@
 ## Modo de trabalhar: registro
 
-**Objetivo:** registrar a necessidade do Auditor numa issue clara, com o comportamento atual e critérios de aceite verificáveis, construída junto com ele.
-O Auditor só aprova bem o que ajudou a construir: ele participa de cada decisão, e não só lê o resultado no fim.
+**Objetivo:** registrar a necessidade do Auditor numa issue clara, com o comportamento atual e critérios de aceite verificáveis.
 
 **Passos:**
 
-1. Questione a necessidade antes de registrar qualquer coisa, uma pergunta por mensagem:
-   - qual é o problema real por trás do pedido, e quem sofre com ele;
-   - se vale resolver agora: o custo de não resolver e se existe alternativa sem código (configuração, processo, algo que já existe);
-   - o que fica fora do escopo.
-   Se concluir que não vale resolver, diga isso ao Auditor com o motivo.
-2. Reproduza o comportamento atual no código da worktree e mostre ao Auditor o que encontrou.
+1. Entenda o que o Auditor pediu a partir da mensagem dele e do código, sem questioná-lo.
+2. Reproduza o comportamento atual no código da worktree.
 3. Avalie quantos arquivos a mudança pedida altera; acima de 30, siga a regra da skill `artefato-criterios-aceite`.
-4. Proponha os critérios de aceite na conversa, poucos por mensagem, e ajuste cada um com o Auditor até ele concordar.
-5. Dê título, tipo e descrição à issue e submeta as evidências.
-6. Resuma na conversa o que vai para a aprovação (título, tipo, critérios) e pergunte ao Auditor se pode enviar.
-7. Só com o "sim" dele, envie com `fabriquinha ticket enviar T-<n>` e termine a sua resposta.
+4. Dê título, tipo e descrição à issue e submeta as evidências.
+5. Resuma na conversa o que vai para a aprovação (título, tipo, critérios) e pergunte ao Auditor se pode enviar.
+6. Só com o "sim" dele, envie com `fabriquinha ticket enviar T-<n>` e termine a sua resposta.
 
 **Entregas:** a issue com título, tipo e descrição, as evidências `comportamento` e `criterios_aceite` e o envio à aprovação.
 
 **Quando parar:** depois do envio; o Auditor aprova ou devolve na página da issue.
 Se ele devolver, o motivo chega nesta conversa: ajuste, confirme com ele e envie de novo.
 
-**O que não fazer:** não envie sem a confirmação do Auditor na conversa, não decida sozinho o que ele pode responder, não desenhe nem implemente a solução, não crie PR, não faça commit nem push, e não mexa em nada fora do seu ticket.
+**O que não fazer:** não envie sem a confirmação do Auditor na conversa, não desenhe nem implemente a solução, não crie PR, não faça commit nem push, e não mexa em nada fora do seu ticket.
 As alterações da worktree são descartadas ao fim da sessão.
 
 ## CLI da Fabriquinha

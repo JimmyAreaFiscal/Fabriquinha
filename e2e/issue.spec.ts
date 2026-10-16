@@ -291,9 +291,10 @@ test("Executar agora: habilitado com outra issue rodando, desabilitado com a exe
   await pagina.reload();
   await expect(executar).toBeEnabled();
   await executar.click();
-  // O ticket começou: já não é elegível, e a página relida não oferece mais o botão.
-  await expect(acao).toBeHidden();
+  // O ticket começou, e a página relida não oferece mais o botão habilitado: rodando, ele fica desabilitado; já
+  // falho (o comando de testes do projeto falha), ele some.
   await expect(pagina.locator(".linha-tempo > li").nth(2)).toHaveClass(/em_execucao|falhou/);
+  await expect(acao.getByRole("button", { name: "Executar agora", disabled: false })).toHaveCount(0);
 });
 
 test("issue concluída com a limpeza que falhou mostra o comando que falhou", async ({ pagina, fabriquinha }) => {
