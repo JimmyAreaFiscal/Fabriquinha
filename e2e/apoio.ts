@@ -17,8 +17,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
+import { recuperarAuditorias } from "../src/execucao/auditoria.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
+import { execucoesEmAndamento } from "../src/persistencia/servico.ts";
+import { falharPendentes } from "../src/persistencia/simulacao.ts";
+import { sinalNoGrupo } from "../src/processo.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */
@@ -37,6 +41,18 @@ async function parar(servico: ChildProcess): Promise<void> {
   if (await Promise.race([saiu.then(() => true), dormir(5000).then(() => false)])) return;
   servico.kill("SIGKILL");
   await saiu;
+}
+
+/**
+ * F4 §7: o serviço parado deixa o pi rodando, e quem o mata é a subida seguinte, que no teste não vem. Sem isso, o pi
+ * ainda escreve na raiz enquanto ela é apagada.
+ */
+function matarPi(raiz: string): void {
+  const banco = abrir(raiz);
+  for (const { pgid } of execucoesEmAndamento(banco)) if (pgid !== null) sinalNoGrupo(pgid, "SIGKILL");
+  for (const pgid of falharPendentes(banco, "fim do teste")) sinalNoGrupo(pgid, "SIGKILL");
+  banco.close();
+  recuperarAuditorias(raiz);
 }
 
 export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: string }>({
@@ -87,6 +103,7 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
       await use({ raiz, base: new URL(link).origin, link });
     } finally {
       await parar(servico);
+      matarPi(raiz);
       if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
       rmSync(raiz, { recursive: true, force: true });
     }
