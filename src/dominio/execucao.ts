@@ -138,6 +138,18 @@ export function iniciarExecucao(ag: Agregado, entrada: unknown, ator: Ator, ctx:
       );
     }
   }
+  // A worktree é uma só por issue: o ticket que falhou deixa nela o trabalho sem commit, que o `git add -A` do
+  // seguinte commitaria como dele.
+  const pendente = ag.tickets.find(
+    (o) => o.etapa === "desenvolvimento" && o.id < ticket.id && o.status !== "concluido",
+  );
+  if (ticket.etapa === "desenvolvimento" && pendente) {
+    const p = rotuloTicket(pendente);
+    throw new ErroDeRegra(
+      `${t} só executa depois dos tickets de desenvolvimento anteriores da ${rotuloIssue(ag)}, e ${p} está ${pendente.status}`,
+      `conclua ${p} antes`,
+    );
+  }
   const { instrucao: _consumida, ...resto } = ticket;
   return {
     ...trocarTicket(ag, { ...resto, status: "em_execucao" }),

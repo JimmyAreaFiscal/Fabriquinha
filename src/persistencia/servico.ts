@@ -38,7 +38,7 @@ export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Confi
 /**
  * F4 §4.1: os tickets elegíveis do agendador, um por issue (o mais antigo dela), da issue mais antiga à mais nova; com
  * `issue`, só o dela (o **Executar agora** da página da issue, F7 §4.4). Além da consulta da spec, pula a issue com
- * execução em andamento (consulta inclusive) ou com ticket em execução: C5 a recusaria.
+ * execução em andamento (consulta inclusive), com ticket em execução ou com ticket da fase que falhou: C5 a recusaria.
  */
 export function ticketsElegiveis(banco: DatabaseSync, issue?: Id): Id[] {
   return banco
@@ -53,6 +53,7 @@ export function ticketsElegiveis(banco: DatabaseSync, issue?: Id): Id[] {
                          WHERE d.issue = i.id AND x.fase <> 'concluida')
          AND NOT EXISTS (SELECT 1 FROM ticket o LEFT JOIN execucao e ON e.ticket = o.id
                          WHERE o.issue = i.id AND (o.status = 'em_execucao' OR e.resultado = 'em_andamento'))
+         AND NOT EXISTS (SELECT 1 FROM ticket f WHERE f.issue = i.id AND f.etapa = i.fase AND f.status = 'falhou')
        GROUP BY i.id
        ORDER BY i.id`,
     )
