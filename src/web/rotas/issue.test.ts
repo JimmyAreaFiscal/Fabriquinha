@@ -336,7 +336,7 @@ test("arquivo vazio sai com 200 e corpo vazio", async () => {
   assert.deepEqual([r.status, r.headers.get("content-length"), await r.text()], [200, "0", ""]);
 });
 
-test("GET /api/issues/:id: o painel do gate do registro só quando a sessão do registro aguarda a decisão", async () => {
+test("GET /api/issues/:id: o painel do gate do registro só quando o agente enviou o registro (C25)", async () => {
   const criterios = [{ id: "CA-1", dado: "pedidos no mês", quando: "exporto", entao: "o CSV traz o total" }];
   servico.banco.exec(`
     INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
@@ -349,10 +349,14 @@ test("GET /api/issues/:id: o painel do gate do registro só quando a sessão do 
       (50, 50, 'comportamento', 'agente', '{"descricao":"copia à mão"}', '${AGORA}'),
       (51, 50, 'criterios_aceite', 'agente', '${JSON.stringify({ criterios })}', '${AGORA}');
   `);
+  // Com as evidências, mas sem o envio, a conversa continua.
+  const conversando = await pagina(50);
+  assert.deepEqual([conversando.sessoes.map((s) => s.motivo), conversando.registro], [["conversa"], undefined]);
+  servico.banco.exec(`UPDATE ticket SET enviado_em = '${AGORA}' WHERE id = 50`);
   const p = await pagina(50);
   assert.deepEqual(
-    p.sessoes.map((s) => s.motivo),
-    ["gate_registro"],
+    p.sessoes.map((s) => [s.motivo, s.desde]),
+    [["gate_registro", AGORA]],
   );
   assert.deepEqual(p.registro, { comportamento: "copia à mão", criterios, faltando: [] });
   assert.equal((await pagina()).registro, undefined);
@@ -393,8 +397,8 @@ test("cancelar: fecha o ticket aberto, leva a dependente (listada na página), m
 test("a página traz as propostas de issue abertas só no gate do desenho", async () => {
   servico.banco.exec(`
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (6, 'loja', 'Grande', 'funcionalidade', 'aprovacao_desenho', '${AGORA}');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
-      VALUES (6, 6, 'desenho', 'Desenhar', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, enviado_em)
+      VALUES (6, 6, 'desenho', 'Desenhar', 'em_execucao', 'fabriquinha', '${AGORA}', '${AGORA}');
     INSERT INTO proposta_issue (id, ticket, titulo, mensagem, arquivos, status, em, decidida_em)
       VALUES (1, 6, 'Tela de relatório', 'Parte B: tela de relatório', 31, 'pendente', '${AGORA}', NULL),
              (2, 6, 'Já recusada', 'x', 31, 'recusada', '${AGORA}', '${AGORA}'),

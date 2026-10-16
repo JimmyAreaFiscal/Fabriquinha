@@ -7,15 +7,16 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { falharTicket, terminarExecucao } from "../dominio/execucao.ts";
+import { falharTicket, terminarExecucao, ticketDe } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
 import { abrir, raizDo } from "../persistencia/banco.ts";
 import { noLog } from "../persistencia/execucoes.ts";
-import { comIssue } from "../persistencia/issues.ts";
+import { agregadoExistente, comIssue, issueDoTicket } from "../persistencia/issues.ts";
 import { projetosAVarrer } from "../persistencia/retrabalho.ts";
 import {
+  type Configuracao,
   configuracao,
   execucoesEmAndamento,
   ticketsElegiveis,
@@ -26,6 +27,7 @@ import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
 import { recuperarAuditorias } from "./auditoria.ts";
 import { executarAutonomo } from "./autonoma.ts";
+import { iniciarDesenho } from "./sessoes.ts";
 
 const REINICIADO = "serviço reiniciado";
 
@@ -33,7 +35,7 @@ export interface Servico {
   banco: DatabaseSync;
   /** A porta em que o serviço escuta: a pedida, ou a que ele escolheu na porta 0. */
   porta: number;
-  /** F4 §4: inicia o ticket autônomo já, sem esperar o agendador; recusa se a própria issue já executa (C5). */
+  /** F4 §4: inicia o ticket já, sem esperar o agendador; recusa se a própria issue já executa (C5). */
   executarAgora(ticket: Id): Promise<void>;
   /** Quando o agendador procura trabalho de novo, se estiver ligado (F7 §4.4, Configuração). */
   proximaBusca(): Date;
@@ -42,6 +44,24 @@ export interface Servico {
 
 /** A porta do serviço e trava de instância única: `$FABRIQUINHA_PORTA`, padrão 4317 (F4 §10). */
 export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => Number(env.FABRIQUINHA_PORTA || 4317);
+
+/**
+ * F4 §4: o desenho abre como sessão interativa (F1 §3.6); as demais etapas do agendador rodam autônomas. Síncrono até
+ * o C5, nos dois casos: a promessa devolvida já nasce rejeitada pela recusa. Não é `async`: devolver a promessa do
+ * `executarAutonomo` de dentro de uma `async` atrasaria a rejeição, e o Executar agora responderia antes dela.
+ */
+function executarTicket(banco: DatabaseSync, ticket: Id, c: Configuracao): Promise<void> {
+  try {
+    const { etapa } = ticketDe(agregadoExistente(banco, issueDoTicket(banco, ticket)), ticket);
+    if (etapa !== "desenho") return executarAutonomo(banco, ticket, { timeoutMin: c.timeoutMin });
+    iniciarDesenho(banco, ticket, { ociosidadeMin: c.ociosidadeMin });
+    return Promise.resolve();
+  } catch (error_) {
+    // Os comandos e a persistência só lançam Error (F1 §7).
+    const erro = error_ as Error;
+    return Promise.reject(erro);
+  }
+}
 
 /**
  * F4 §7: toda execução em andamento é de uma instância anterior. Mata o grupo do pi, grava C6 com falha e leva a C8 cada
@@ -109,11 +129,11 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
 
   /**
    * C5 e, se ele aceitou, o resto da execução em segundo plano. C5 roda antes do primeiro `await` de
-   * `executarAutonomo`: se recusou, a promessa já nasce rejeitada e ganha a corrida contra a promessa já resolvida;
+   * `executarTicket`: se recusou, a promessa já nasce rejeitada e ganha a corrida contra a promessa já resolvida;
    * se aceitou, ela está pendente e a corrida resolve na hora. Depois do C5, a promessa só rejeita se o banco falhar.
    */
   async function iniciar(ticket: Id): Promise<void> {
-    const execucao = executarAutonomo(banco, ticket, { timeoutMin: configuracao(banco).timeoutMin });
+    const execucao = executarTicket(banco, ticket, configuracao(banco));
     await Promise.race([execucao, Promise.resolve()]);
     execucao.catch(noLog);
   }
@@ -132,7 +152,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
 
   /**
    * F4 §4, passos 1 a 4, numa batida do relógio. Síncrono até o C5 (que roda antes do primeiro `await` de
-   * `executarAutonomo`), então duas batidas nunca se cruzam; o resto da execução segue em segundo plano. Nunca lança:
+   * `executarTicket`), então duas batidas nunca se cruzam; o resto da execução segue em segundo plano. Nunca lança:
    * qualquer erro, inclusive a recusa do C5, vai para o log, e a batida seguinte roda. O passo 1 roda em segundo plano:
    * a batida nunca espera o git, e uma varredura só começa quando a anterior terminou.
    */
@@ -148,9 +168,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
         .finally(() => {
           varredura = undefined;
         });
-      for (const ticket of ticketsElegiveis(banco)) {
-        executarAutonomo(banco, ticket, { timeoutMin: c.timeoutMin }).catch(noLog);
-      }
+      for (const ticket of ticketsElegiveis(banco)) executarTicket(banco, ticket, c).catch(noLog);
     } catch (error_) {
       noLog(error_);
     }

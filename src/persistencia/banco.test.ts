@@ -258,7 +258,14 @@ test("a migração do cancelamento recria ticket com os status novos sem perder 
 
   assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
-  assert.deepEqual(banco.prepare("SELECT * FROM ticket ORDER BY id").all(), antes);
+  // A migração 17 acrescenta `enviado_em`, vazio nos tickets que já existiam.
+  assert.deepEqual(
+    banco
+      .prepare("SELECT * FROM ticket ORDER BY id")
+      .all()
+      .map((l) => ({ ...l })),
+    antes.map((l) => ({ ...l, enviado_em: null })),
+  );
   assert.equal(valor(banco, "SELECT count(*) FROM execucao"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM decisao"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM evidencia_arquivo"), 1);
@@ -302,7 +309,7 @@ test("a migração da proposta recria sequencia com o tipo novo, preserva os val
     banco.exec("INSERT INTO sequencia VALUES ('proposta', 1)");
   }, /CHECK/);
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_PROPOSTA));
 
   assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_PROPOSTA);
   assert.deepEqual(
@@ -360,6 +367,74 @@ test("a migração da proposta recria sequencia com o tipo novo, preserva os val
       "INSERT INTO proposta_issue (ticket, titulo, mensagem, arquivos, status, em) VALUES (9, 'T', 'M', 1, 'pendente', 'x')",
     );
   }, /FOREIGN KEY/);
+  banco.close();
+});
+
+test("a migração do envio (C25) devolve à execução o desenho que esperava o gate e troca o vídeo explicativo", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrar(banco, MIGRACOES.slice(0, VERSAO_PROPOSTA));
+  // O banco antigo aceitava video_explicativo; o CHECK desta versão de teste já é o novo, então ele é ignorado aqui.
+  banco.exec(`
+    PRAGMA ignore_check_constraints = ON;
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('loja', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'aprovacao_desenho', 'x');
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em, cancelada_em) VALUES (2, 'loja', 'T', 'problema', 'aprovacao_desenho', 'x', 'y');
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (3, 'loja', 'T', 'problema', 'desenvolvimento', 'x');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em) VALUES
+      (1, 1, 'desenho', 'D', 'concluido', 'fabriquinha', 'x', 'antigo'),
+      (2, 1, 'desenho', 'D', 'concluido', 'fabriquinha', 'x', 'enviado'),
+      (3, 2, 'desenho', 'D', 'concluido', 'fabriquinha', 'x', 'x'),
+      (4, 3, 'desenho', 'D', 'concluido', 'fabriquinha', 'x', 'x'),
+      (5, 3, 'encerramento', 'E', 'concluido', 'fabriquinha', 'x', 'x');
+    INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES
+      (1, 5, 'video_explicativo', 'agente', '{"roteiro":"r"}', 'x'),
+      (2, 5, 'mensagem_pr', 'agente', '{}', 'x');
+    INSERT INTO evidencia_arquivo VALUES (1, 'v.webm', '${"0".repeat(64)}', 'video/webm', 1);
+    PRAGMA ignore_check_constraints = OFF;
+  `);
+
+  migrar(banco, MIGRACOES);
+
+  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length);
+  assert.deepEqual(
+    banco
+      .prepare("SELECT id, status, concluido_em, enviado_em FROM ticket ORDER BY id")
+      .all()
+      .map((l) => Object.values(l)),
+    [
+      [1, "concluido", "antigo", null],
+      [2, "em_execucao", null, "enviado"],
+      [3, "concluido", "x", null],
+      [4, "concluido", "x", null],
+      [5, "concluido", "x", null],
+    ],
+  );
+  assert.deepEqual(
+    banco
+      .prepare("SELECT id, tipo, dados FROM evidencia ORDER BY id")
+      .all()
+      .map((l) => Object.values(l)),
+    [
+      [1, "video_demonstracao", '{"roteiro":"r"}'],
+      [2, "mensagem_pr", "{}"],
+    ],
+  );
+  assert.equal(valor(banco, "SELECT nome FROM evidencia_arquivo WHERE evidencia = 1"), "v.webm");
+  assert.equal(valor(banco, "SELECT count(*) FROM sqlite_master WHERE name = 'evidencia_nova'"), 0);
+  assert.ok(
+    banco
+      .prepare("PRAGMA foreign_key_list(evidencia_arquivo)")
+      .all()
+      .some((fk) => fk.table === "evidencia"),
+  );
+  banco.exec("INSERT INTO evidencia (ticket, tipo, produtor, em) VALUES (5, 'aula_codigo', 'agente', 'x')");
+  assert.throws(() => {
+    banco.exec("INSERT INTO evidencia (ticket, tipo, produtor, em) VALUES (5, 'video_explicativo', 'agente', 'x')");
+  }, /CHECK/);
+  assert.throws(() => {
+    banco.exec("UPDATE ticket SET enviado_em = 'x' WHERE id = 5");
+  }, /CHECK/);
   banco.close();
 });
 

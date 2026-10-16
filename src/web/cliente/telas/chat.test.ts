@@ -445,10 +445,12 @@ test("envio em diálogo: o formulário do método, com Cancelar e Responder", ()
 test("envio nos gates: só o aviso; terminada: Exportar histórico e Conversar sobre esta sessão", () => {
   const aviso = (sessao: Partial<Sessao>) =>
     htmlDe(envio(cabecalho({ estado: "aguardando_humano", ...sessao }), "steer"));
-  assert.equal(
-    aviso({ motivo: "gate_registro" }),
-    '<div class="fim">A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.</div>',
-  );
+  for (const motivo of ["gate_registro", "gate_desenho"] as const) {
+    assert.equal(
+      aviso({ motivo }),
+      '<div class="fim">O agente enviou o resultado à sua aprovação. Decida na página da issue; devolver traz o motivo de volta a esta conversa.</div>',
+    );
+  }
   assert.equal(
     aviso({ motivo: "gate_pr" }),
     '<div class="fim">A etapa terminou; a decisão do gate fica na página da issue.</div>',
@@ -627,7 +629,7 @@ test("lateral no registro: o formulário de C2 com o que está registrado", () =
     ...c,
     issue: { ...c.issue, fase: "registro" as const, titulo: null, tipo: null, descricao: "a <b>" },
   };
-  const html = lateral(registro, 0);
+  const html = lateral(registro);
   assert.match(html, /^<form class="painel superficie" data-registro><h3>Registro · você pode corrigir direto<\/h3>/);
   assert.match(html, /<input name="titulo" value="" autocomplete="off">/);
   assert.match(
@@ -635,67 +637,23 @@ test("lateral no registro: o formulário de C2 com o que está registrado", () =
     /<select name="tipo"><option value="" selected>—<\/option><option value="funcionalidade">funcionalidade<\/option><option value="problema">problema<\/option><\/select>/,
   );
   assert.match(html, /<textarea name="descricao" rows="5">a &#60;b&#62;<\/textarea>/);
-  const preenchido = lateral({ ...registro, issue: { ...registro.issue, titulo: "T <1>", tipo: "problema" } }, 0);
+  const preenchido = lateral({ ...registro, issue: { ...registro.issue, titulo: "T <1>", tipo: "problema" } });
   assert.match(preenchido, /value="T &#60;1&#62;"/);
   assert.match(
     preenchido,
     /<select name="tipo"><option value="funcionalidade">funcionalidade<\/option><option value="problema" selected>problema<\/option>/,
   );
-  assert.equal(
-    lateral({ ...registro, issue: { ...registro.issue, fase: "desenho" } }, 0),
-    "",
-    "depois do registro, nada",
-  );
-  assert.equal(lateral(cabecalho(), 0), "");
+  assert.equal(lateral({ ...registro, issue: { ...registro.issue, fase: "desenho" } }), "", "depois do registro, nada");
+  assert.equal(lateral(cabecalho()), "");
 });
 
-test("lateral no gate do registro: o que foi registrado, os critérios, o que falta e a decisão", () => {
-  const c = cabecalho(
-    { estado: "aguardando_humano", motivo: "gate_registro", etapa: "registro" },
-    {
-      registro: {
-        comportamento: "copia <à> **mão**",
-        criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "o <CSV>" }],
-        faltando: [],
-      },
-    },
-  );
-  const html = lateral(c, Date.parse(T0) + 120_000);
-  assert.match(
-    html,
-    /^<section class="gate-reg" aria-label="Gate do registro"><div class="cab"><span class="rotulo">Gate do registro<\/span><span class="muted pequeno">aguarda você há 2\u00a0min<\/span>/,
-  );
-  assert.match(
-    html,
-    /<dt>Título<\/dt><dd>Timeout &#60;no&#62; checkout<\/dd><dt>Tipo<\/dt><dd><span class="tag">problema<\/span><\/dd><dt>Descrição<\/dt><dd>—<\/dd><dt>Comportamento<\/dt><dd><div class="md"><p>copia &lt;à&gt; <strong>mão<\/strong><\/p>\n<\/div><\/dd>/,
-  );
-  // A tabela de critérios_aceite da página da issue (F7 §4.5): id, dado, quando, então.
-  assert.match(
-    html,
-    /<thead><tr><th>ID<\/th><th>Dado<\/th><th>Quando<\/th><th>Então<\/th><\/tr><\/thead><tbody><tr><td class="mono">CA-1<\/td><td class="md">d<\/td><td class="md">q<\/td><td class="md">o &lt;CSV&gt;<\/td><\/tr>/,
-  );
-  assert.match(html, /Nenhuma evidência faltando./);
-  assert.match(
-    html,
-    /data-devolver disabled>Devolver<\/button><button class="btn btn-primario">Aprovar registro<\/button>/,
-  );
-  const faltando = lateral(
-    { ...c, registro: { comportamento: "x", criterios: [], faltando: ["comportamento", "criterios_aceite"] } },
-    0,
-  );
-  assert.match(faltando, /Faltam evidências: comportamento, criterios_aceite./);
-  assert.match(
-    lateral({ ...c, issue: { ...c.issue, descricao: "d *e*" }, registro: undefined }, 0),
-    /<dd><div class="md"><p>d <em>e<\/em><\/p>\n<\/div><\/dd><dt>Comportamento<\/dt><dd>—<\/dd>.*Nenhuma evidência faltando/,
-  );
-});
-
-test("lateral nos gates de desenho e de PR: só o aviso com Decidir na página da issue", () => {
+test("lateral nos gates: só o aviso com Decidir na página da issue", () => {
   for (const [motivo, rotulo] of [
+    ["gate_registro", "Gate do registro"],
     ["gate_desenho", "Gate do desenho"],
     ["gate_pr", "Gate do PR"],
   ] as const) {
-    const html = lateral(cabecalho({ estado: "aguardando_humano", motivo }), 0);
+    const html = lateral(cabecalho({ estado: "aguardando_humano", motivo }));
     assert.match(html, new RegExp(`^<section class="gate-reg" aria-label="${rotulo}">`));
     assert.match(
       html,

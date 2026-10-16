@@ -57,6 +57,7 @@ async function noGatePR(raiz: string): Promise<string> {
   );
   const corpo = guardar(raiz, CORPO);
   const video = guardar(raiz, WEBM);
+  const aula = guardar(raiz, "<!doctype html><html><body><h1>Aula do código da I-1</h1></body></html>");
   const log = guardar(raiz, "cobertura 92%\n");
   const pr = { hospedagem: "github", id: "7", url: URL_PR, branch: "fabriquinha/I-1", base: "main" };
   const comprovacao = {
@@ -123,13 +124,15 @@ async function noGatePR(raiz: string): Promise<string> {
       (1, 2, 'comprovacao_criterios', 'agente', '${json(comprovacao)}', '${AGORA}'),
       (2, 2, 'matriz_fitness', 'fabriquinha', '${json(fitness)}', '${AGORA}'),
       (3, 2, 'explicacao_fitness', 'agente', '${json(explicacao)}', '${AGORA}'),
-      (4, 3, 'video_explicativo', 'agente', '{"roteiro":"r"}', '${AGORA}'),
+      (4, 3, 'video_demonstracao', 'agente', '{"roteiro":"r"}', '${AGORA}'),
       (5, 3, 'relatorio_produtividade', 'fabriquinha', '${json(produtividade)}', '${AGORA}'),
-      (6, 3, 'pr_aberto', 'fabriquinha', '${json(pr)}', '${AGORA}');
-    INSERT INTO sequencia (nome, valor) VALUES ('evidencia', 6) ON CONFLICT (nome) DO UPDATE SET valor = 6;
+      (6, 3, 'pr_aberto', 'fabriquinha', '${json(pr)}', '${AGORA}'),
+      (7, 3, 'aula_codigo', 'agente', '{"trechos":[]}', '${AGORA}');
+    INSERT INTO sequencia (nome, valor) VALUES ('evidencia', 7) ON CONFLICT (nome) DO UPDATE SET valor = 7;
     INSERT INTO evidencia_arquivo (evidencia, nome, sha256, mime, bytes) VALUES
       (2, 'cobertura.log', '${log}', 'text/plain; charset=utf-8', 14),
-      (4, 'explicacao.webm', '${video}', 'video/webm', ${String(WEBM.length)}),
+      (4, 'demonstracao.webm', '${video}', 'video/webm', ${String(WEBM.length)}),
+      (7, 'aula.html', '${aula}', 'text/html; charset=utf-8', 70),
       (6, 'corpo.md', '${corpo}', 'text/markdown; charset=utf-8', ${String(Buffer.byteLength(CORPO))});
   `);
   b.close();
@@ -164,10 +167,13 @@ test("revisa o PR, pede mudanças com o motivo e conclui a sessão em aberto pel
     `/sessions/${SESSAO}`,
   );
 
-  // Revisão: vídeo, cards, o corpo em Markdown sem HTML, comprovação e fitness.
+  // Revisão: vídeo de demonstração, cards, a aula do código, o corpo em Markdown sem HTML, comprovação e fitness.
   const revisao = gate.getByRole("tabpanel", { name: "Revisão" });
   await expect(gate.getByRole("tab", { name: "Revisão" })).toHaveAttribute("aria-selected", "true");
-  await expect(revisao.getByLabel("Vídeo explicativo")).toHaveAttribute("src", /^\/arquivos\/[0-9a-f]{64}$/);
+  await expect(revisao.getByLabel("Vídeo de demonstração")).toHaveAttribute("src", /^\/arquivos\/[0-9a-f]{64}$/);
+  await revisao.getByRole("button", { name: "HTML Aula do código" }).click();
+  await expect(pagina.frameLocator("iframe").getByRole("heading")).toHaveText("Aula do código da I-1");
+  await pagina.keyboard.press("Escape");
   await expect(revisao.locator(".numero")).toHaveText([
     "US$ 6,84custo",
     "2,3 Mtokens",

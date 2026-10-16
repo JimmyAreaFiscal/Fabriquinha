@@ -42,7 +42,7 @@ function falta(s: InfoSessao, issue: IssueDoBoard | undefined): string {
     case "falha":
       return tickets.find((t) => t.id === s.ticket)?.erro ?? "o agente falhou";
     case "gate_registro":
-      return "Registro pronto; falta aprovar";
+      return "Registro enviado; falta aprovar";
     case "gate_desenho": {
       const n = tickets.filter((t) => t.etapa === "desenvolvimento" && t.status !== "concluido").length;
       return plural(n, "ticket de desenvolvimento proposto", "tickets de desenvolvimento propostos");
@@ -60,11 +60,12 @@ function falta(s: InfoSessao, issue: IssueDoBoard | undefined): string {
   }
 }
 
-/** Card de uma sessão que aguarda o Auditor; o card inteiro abre o chat. */
+/** Card de uma sessão que aguarda o Auditor; o card inteiro abre o chat, ou a página da issue, onde os gates se decidem. */
 function decisao(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): string {
   const m = MOTIVOS[s.motivo ?? "conversa"];
   const falhou = s.motivo === "falha";
-  return `<a class="decisao superficie${falhou ? " falha" : ""}" href="${caminhoDaSessao(s.sessao)}">
+  const destino = s.motivo?.startsWith("gate_") ? caminhoDaIssue(s.projeto, s.issue) : caminhoDaSessao(s.sessao);
+  return `<a class="decisao superficie${falhou ? " falha" : ""}" href="${destino}">
     <span class="decisao-motivo">${m.titulo}</span><span class="btn${falhou ? "" : " btn-primario"} btn-pequeno">${m.acao} →</span>
     <span class="decisao-titulo"><span class="id">${rotuloIssue(s.issue)}</span> ${escapar(tituloDa(issue))}</span>
     <p class="decisao-texto">${escapar(falta(s, issue))}</p>

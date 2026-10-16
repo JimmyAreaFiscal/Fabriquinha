@@ -65,7 +65,10 @@ const noRegistro = (): Agregado => ({
   evidencias: [],
 });
 
-/** I-1 em `aprovacao_desenho`: registro T-34 e desenho T-35 concluídos, um ticket de desenvolvimento proposto. */
+/**
+ * I-1 em `aprovacao_desenho`: registro T-34 concluído, desenho T-35 em execução e enviado (C25), um ticket de
+ * desenvolvimento proposto.
+ */
 const noGateDoDesenho = (): Agregado => {
   const ag = noRegistro();
   return {
@@ -73,14 +76,14 @@ const noGateDoDesenho = (): Agregado => {
     issue: { ...ag.issue, fase: "aprovacao_desenho" },
     tickets: [
       ticket(34, "registro", "concluido"),
-      ticket(35, "desenho", "concluido"),
+      { ...ticket(35, "desenho", "em_execucao"), enviadoEm: ANTES },
       ticket(36, "desenvolvimento", "aberto"),
     ],
     execucoes: [
       {
         id: 6,
         ticket: 35,
-        modo: "autonomo",
+        modo: "interativo",
         sessaoPi: SESSAO,
         resultado: "sucesso",
         iniciadaEm: ANTES,
@@ -169,7 +172,7 @@ test("C24: aceitar no registro cria a issue nova dependente da atual e não toca
   assert.equal(r.nova.issue.projeto, "loja");
 });
 
-test("C24: aceitar no desenho cria a issue e devolve o desenho como reprovado, citando a nova", () => {
+test("C24: aceitar no desenho cria a issue e devolve o mesmo desenho à conversa, reprovado, citando a nova", () => {
   const ag = noGateDoDesenho();
   const r = decidirProposta(ag, proposta({ ticket: 35 }), { aceita: true }, auditor, contexto());
   const motivo =
@@ -180,8 +183,8 @@ test("C24: aceitar no desenho cria a issue e devolve o desenho como reprovado, c
     r.ag.decisoes.map((d) => [d.gate, d.aprovado, d.motivo]),
     [["desenho", false, motivo]],
   );
-  const refazer = r.ag.tickets.find((t) => t.status === "aberto");
-  assert.deepEqual([refazer?.etapa, refazer?.descricao], ["desenho", motivo]);
+  const desenho = r.ag.tickets.find((t) => t.id === 35);
+  assert.deepEqual([desenho?.status, desenho?.enviadoEm], ["em_execucao", undefined]);
   assert.equal(r.proposta.issueCriada, 41);
   assert.equal(r.nova?.issue.id, 41);
 });
@@ -227,9 +230,12 @@ test("C24: recusa proposta de gate que já passou ou de outra issue", () => {
   // desenho: a issue ainda não chegou ao gate, ou já saiu dele
   const desenhando: Agregado = { ...noGateDoDesenho(), issue: { ...noGateDoDesenho().issue, fase: "desenho" } };
   regra(() => decidirProposta(desenhando, proposta({ ticket: 35 }), { aceita: true }, auditor, contexto()), fora);
-  // desenho antigo: o último concluído é o T-37
+  // desenho antigo, já concluído: o desenho enviado é o T-37
   const refeito = noGateDoDesenho();
-  const outro: Agregado = { ...refeito, tickets: [...refeito.tickets, ticket(37, "desenho", "concluido")] };
+  const outro: Agregado = {
+    ...refeito,
+    tickets: refeito.tickets.map((t) => (t.id === 35 ? ticket(35, "desenho", "concluido") : t)),
+  };
   regra(() => decidirProposta(outro, proposta({ ticket: 35 }), { aceita: true }, auditor, contexto()), fora);
   // ticket de desenvolvimento ou de outra issue
   regra(

@@ -262,9 +262,12 @@ function secoes(
   )
     .map((tipo) => daUltimaConcluida(ag, "desenho", tipo))
     .filter((e) => e !== undefined);
+  // O vídeo de demonstração só existe quando a mudança aparece no cliente (F1 §3.9).
+  const demonstracao = ag.evidencias.filter((x) => x.ticket === ticket && x.tipo === "video_demonstracao");
   const naFabriquinha = [
     ...doDesenho,
-    exigir("encerramento", "video_explicativo"),
+    exigir("encerramento", "aula_codigo"),
+    ...demonstracao,
     exigir("encerramento", "relatorio_produtividade"),
   ].flatMap((e) => e.arquivos.map((a) => citar(issue.id, e, a.nome)));
   const etapas = metricas.etapas;

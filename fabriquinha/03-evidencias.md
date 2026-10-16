@@ -17,7 +17,7 @@ Este módulo implementa o conteúdo.
 
 ## 2. Tipos de evidência
 
-São 16 tipos.
+São 17 tipos.
 `explicacao_fitness` separa o que o agente escreve do que a Fabriquinha mede, para que cada tipo tenha um produtor só.
 Na tela, ela aparece junto com `matriz_fitness`, formando a "matriz de fitness functions com explicações" do diagrama.
 
@@ -37,7 +37,8 @@ Na tela, ela aparece junto com `matriz_fitness`, formando a "matriz de fitness f
 | revisao | `explicacao_fitness` | agente | — |
 | revisao | `comprovacao_criterios` | agente | todos os critérios atendidos |
 | encerramento | `mensagem_pr` | agente | — |
-| encerramento | `video_explicativo` | agente | — |
+| encerramento | `aula_codigo` | agente | — |
+| encerramento | `video_demonstracao` | agente | — |
 | encerramento | `relatorio_produtividade` | fabriquinha | — |
 | encerramento | `pr_aberto` | fabriquinha | — |
 
@@ -295,7 +296,25 @@ arquivos: Arquivos({ max: 0 }),
 // - naoPrevistos traz exatamente os arquivos com previsto = null no arquivos_alterados da última revisão concluída;
 // - reversao é obrigatória se o relatorio_impactos_arquitetura do desenho aprovado tiver impacto ≠ "baixo".
 
-// video_explicativo (agente)
+// aula_codigo (agente) — a lógica de cada parte do código alterado, para o Auditor estudar antes de aprovar o PR
+dados: z.object({
+  trechos: z.array(z.object({                                         // na ordem de leitura
+    arquivo: z.string().trim().min(1),                                // caminho como no arquivos_alterados
+    inicio: z.number().int().positive(),
+    fim: z.number().int().positive(),                                 // fim ≥ inicio; até 60 linhas por trecho
+    oQueFaz: z.string().trim().min(1).max(1000),
+    porQue: z.string().trim().min(1).max(2000),                       // a lógica por trás do trecho
+    decisaoDoDesenho: z.string().trim().min(1).max(1000),
+    alternativaDescartada: z.string().trim().min(1).max(1000).optional(),
+  })).min(1),
+}),
+arquivos: Arquivos({ classes: ["html"], min: 1, max: 1 }),           // gerado pela Fabriquinha (5, passo 4)
+// regras da geração, contra o arquivos_alterados da última revisão concluída (base..head):
+// - o arquivo foi criado ou alterado pela issue e não é binário;
+// - o trecho cabe no arquivo da head e toca pelo menos uma linha que o diff `-U0` adicionou ou mudou;
+// - o HTML traz o código lido do git (nunca copiado pelo agente), com as linhas alteradas marcadas.
+
+// video_demonstracao (agente) — o sistema funcionando, só pelo cliente; só existe quando a mudança aparece nele
 dados: z.object({ roteiro: z.string().trim().min(1).max(2000) }),
 arquivos: Arquivos({ classes: ["video"], min: 1, max: 1 }),
 
@@ -366,7 +385,8 @@ Passos, nesta ordem; o primeiro que falhar interrompe sem gravar nada:
 3. Lê `dados` e valida com o schema do tipo.
    O erro sai com o caminho de cada campo, gerado por `z.prettifyError`.
    Exemplo: `dados.criterios[2].entao: obrigatório`.
-4. Valida cada arquivo: origem permitida (3.2), classe pelos bytes iniciais, limite de tamanho, quantidade.
+4. Nos tipos cujo anexo a Fabriquinha gera (`aula_codigo`), recusa anexo do agente, gera o HTML dos `dados` em `$FABRIQUINHA_SAIDA` e segue com ele como anexo.
+   Valida cada arquivo: origem permitida (3.2), classe pelos bytes iniciais, limite de tamanho, quantidade.
 5. Aplica as regras cruzadas do tipo (ids de critério, linhas da matriz, nomes de anexo).
 6. Grava os arquivos no armazenamento por conteúdo (F2, 5.1).
 7. Numa transação: C17 com `aprovada` calculada, `evidencia` e `evidencia_arquivo`.
@@ -400,13 +420,13 @@ Código de teste é excluído no servidor (`sonar.global.exclusions`), como hoje
 
 ## 7. Coleta por etapa
 
-O F4 chama estes passos antes e depois de cada execução autônoma.
+O F4 chama estes passos antes e depois de cada execução autônoma; nas etapas interativas, o descarte vem quando o Auditor aprova o gate.
 "Depois" só roda quando o pi saiu com sucesso; se o pi falhou, o ticket falha direto.
 
 | Etapa | Antes do pi | Depois do pi |
 |---|---|---|
-| registro | — | descartar alterações (F5) |
-| desenho | — | descartar alterações (F5) |
+| registro | — | descartar alterações (F5), no gate aprovado (F4, 6.6) |
+| desenho | — | descartar alterações (F5), no gate aprovado (F4, 6.6) |
 | desenvolvimento | — | testes → se aprovada, fitness → se aprovada, SonarQube → se aprovada, commit (F5) |
 | revisao | arquivos alterados; fitness | descartar alterações (F5) |
 | encerramento | — | descartar alterações (F5); produtividade (F6); push e PR (F5); verificação do PR: conflito e CI (F5 §5.1) |

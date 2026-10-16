@@ -310,4 +310,30 @@ export const MIGRACOES: readonly string[] = [
   INSERT INTO sequencia_nova SELECT nome, valor FROM sequencia;
   DROP TABLE sequencia;
   ALTER TABLE sequencia_nova RENAME TO sequencia;`,
+  // C25: o registro e o desenho esperam o Auditor com o ticket em execução e `enviado_em`. O desenho que já esperava o
+  // gate no formato anterior (ticket concluído, issue em aprovacao_desenho) volta a em execução, enviado quando
+  // concluiu. A aula do código entra, e o vídeo explicativo vira o vídeo de demonstração (mesmo formato); o CHECK de
+  // `tipo` não se altera no SQLite, então `evidencia` é recriada (tabela nova, cópia, DROP, RENAME).
+  `ALTER TABLE ticket ADD COLUMN enviado_em TEXT CHECK (enviado_em IS NULL OR etapa IN ('registro','desenho'));
+  UPDATE ticket SET status = 'em_execucao', enviado_em = concluido_em, concluido_em = NULL
+   WHERE id IN (SELECT max(t.id) FROM ticket t JOIN issue i ON i.id = t.issue
+                 WHERE t.etapa = 'desenho' AND t.status = 'concluido'
+                   AND i.fase = 'aprovacao_desenho' AND i.cancelada_em IS NULL
+                 GROUP BY t.issue);
+  CREATE TABLE evidencia_nova (
+    id       INTEGER PRIMARY KEY,
+    ticket   INTEGER NOT NULL REFERENCES ticket(id),
+    tipo     TEXT NOT NULL CHECK (tipo IN (${listaSql(TipoEvidencia)})),
+    produtor TEXT NOT NULL CHECK (produtor IN (${listaSql(Produtor)})),
+    aprovada INTEGER CHECK (aprovada IN (0,1)),
+    dados    TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(dados)),
+    em       TEXT NOT NULL,
+    UNIQUE (ticket, tipo)
+  );
+  INSERT INTO evidencia_nova
+    SELECT id, ticket, CASE tipo WHEN 'video_explicativo' THEN 'video_demonstracao' ELSE tipo END,
+           produtor, aprovada, dados, em
+      FROM evidencia;
+  DROP TABLE evidencia;
+  ALTER TABLE evidencia_nova RENAME TO evidencia;`,
 ];

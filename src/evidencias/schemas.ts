@@ -292,6 +292,33 @@ const MensagemPR = z.object({
     .meta({ description: "como desfazer; obrigatória se o impacto do desenho aprovado não é baixo" }),
 });
 
+/** Até 60 linhas: um trecho de aula é uma ideia; um trecho maior se divide. */
+const LINHAS_POR_TRECHO = 60;
+
+// F3 §4.5: só a explicação de cada trecho; o código e o HTML a Fabriquinha lê do git e gera (aula.ts).
+const AulaCodigo = z.object({
+  trechos: z
+    .array(
+      z
+        .object({
+          arquivo: z.string().trim().min(1).meta({ description: "caminho como aparece no arquivos_alterados" }),
+          inicio: z.number().int().positive().meta({ description: "primeira linha do trecho no arquivo atual" }),
+          fim: z.number().int().positive().meta({ description: "última linha do trecho, inclusive" }),
+          oQueFaz: TextoAte(1000),
+          porQue: TextoAte(2000).meta({ description: "a lógica por trás do trecho: por que ele é escrito assim" }),
+          decisaoDoDesenho: TextoAte(1000).meta({ description: "a decisão do desenho aprovado que o trecho cumpre" }),
+          alternativaDescartada: TextoAte(1000).optional(),
+        })
+        .refine((t) => t.fim >= t.inicio, { message: "fim vem antes de inicio", path: ["fim"] })
+        .refine((t) => t.fim - t.inicio < LINHAS_POR_TRECHO, {
+          message: `trecho com mais de ${String(LINHAS_POR_TRECHO)} linhas; divida-o`,
+          path: ["fim"],
+        }),
+    )
+    .min(1)
+    .meta({ description: "na ordem de leitura" }),
+});
+
 /** Todos os tipos do F3 §2. */
 const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
   // "vídeo / código do comportamento atual e/ou do problema"
@@ -454,7 +481,9 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
       }
     },
   }),
-  video_explicativo: {
+  // O agente não anexa nada: a Fabriquinha gera o HTML da aula na submissão (F3 §5).
+  aula_codigo: { dados: AulaCodigo, arquivos: HTML_UNICO },
+  video_demonstracao: {
     dados: z.object({ roteiro: Texto }),
     arquivos: Arquivos({ classes: ["video"], min: 1, max: 1 }),
   },

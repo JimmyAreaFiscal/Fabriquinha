@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import type { Agregado, Ator, Contexto, EstadoDoPR, Evidencia, Issue, Ticket } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { decidirDesenho, decidirPR, decidirRegistro, registrarDecisaoRevisao } from "./gates.ts";
+import { decidirDesenho, decidirPR, decidirRegistro, enviarParaAprovacao, registrarDecisaoRevisao } from "./gates.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const ANTES = "2026-10-11T11:00:00.000Z";
@@ -32,7 +32,10 @@ const evidencia = (id: number, tipo: Evidencia["tipo"], ticket = 34): Evidencia 
   em: ANTES,
 });
 
-/** I-1 em `registro`, com título e tipo, o ticket de registro T-34 em execução (E-6 terminada) e as duas evidências. */
+/**
+ * I-1 em `registro`, com título e tipo, o ticket de registro T-34 em execução e enviado à aprovação (C25, E-6
+ * terminada) e as duas evidências.
+ */
 const pronto = (troca: Partial<Issue> = {}): Agregado => ({
   issue: {
     id: 1,
@@ -55,6 +58,7 @@ const pronto = (troca: Partial<Issue> = {}): Agregado => ({
       status: "em_execucao",
       origem: "fabriquinha",
       criadoEm: ANTES,
+      enviadoEm: ANTES,
     },
   ],
   execucoes: [
@@ -115,10 +119,14 @@ test("C10 aprovado: decisão do Auditor, ticket de registro concluído, fase des
   assert.deepEqual(comOutro.tickets[0], outro);
 });
 
-test("C10 reprovado só grava a decisão com o motivo, mesmo sem título, tipo nem evidências", () => {
+test("C10 reprovado grava a decisão com o motivo e devolve o ticket à conversa, mesmo sem título nem evidências", () => {
   const ag = { ...pronto({ titulo: null, tipo: null }), evidencias: [] };
+  const [registro] = ag.tickets;
+  assert.ok(registro);
+  const { enviadoEm: _devolvido, ...conversando } = registro;
   assert.deepEqual(decidir(ag, { aprovado: false, motivo: "faltou o vídeo" }), {
     ...ag,
+    tickets: [conversando],
     decisoes: [
       {
         id: 41,
@@ -165,10 +173,12 @@ test("C10 é só do Auditor, na fase registro, sem execução em andamento, e va
     () => decidir(pronto({ fase: "desenho" }), { aprovado: true }),
     "a I-1 está na fase desenho, não no registro (o gate de registro já foi decidido)",
   );
-  regra(
-    () => decidir({ ...ag, tickets: [] }, { aprovado: true }),
-    "a I-1 não tem ticket de registro aberto (registre a issue de novo)",
-  );
+  const naoEnviado =
+    "o registro da I-1 ainda não foi enviado à aprovação (o agente envia com fabriquinha ticket enviar quando você " +
+    "confirmar o resultado na conversa)";
+  regra(() => decidir({ ...ag, tickets: [] }, { aprovado: true }), naoEnviado);
+  const conversando = ag.tickets.map(({ enviadoEm: _e, ...t }) => t);
+  regra(() => decidir({ ...ag, tickets: conversando }, { aprovado: false, motivo: "m" }), naoEnviado);
   const rodando = { ...ag, execucoes: ag.execucoes.map((e) => ({ ...e, resultado: "em_andamento" as const })) };
   regra(
     () => decidir(rodando, { aprovado: false, motivo: "m" }),
@@ -190,15 +200,15 @@ const doGate = (id: number, etapa: Ticket["etapa"], troca: Partial<Ticket> = {})
 const concluido = { status: "concluido", concluidoEm: ANTES } as const;
 
 /**
- * I-1 no gate de desenho: um desenho antigo T-35 e o atual T-37, concluídos, e os tickets de desenvolvimento T-38,
- * proposto pelo desenho, e T-39, pelo Auditor.
+ * I-1 no gate de desenho: um desenho antigo T-35, concluído, e o atual T-37, em execução e enviado (C25), e os tickets
+ * de desenvolvimento T-38, proposto pelo desenho, e T-39, pelo Auditor.
  */
 const noGate = (): Agregado => ({
   ...pronto({ fase: "aprovacao_desenho" }),
   tickets: [
     doGate(34, "registro", concluido),
     doGate(35, "desenho", concluido),
-    doGate(37, "desenho", concluido),
+    doGate(37, "desenho", { status: "em_execucao", enviadoEm: ANTES }),
     doGate(38, "desenvolvimento", { origem: "agente", origemTicket: 37 }),
     doGate(39, "desenvolvimento", { origem: "auditor" }),
   ],
@@ -206,33 +216,22 @@ const noGate = (): Agregado => ({
 
 const desenho = (ag: Agregado, entrada: unknown, ator: Ator = auditor) => decidirDesenho(ag, entrada, ator, contexto());
 
-test("C15 aprovado: decisão sobre o último desenho e a issue vai a desenvolvimento com os tickets propostos", () => {
+test("C15 aprovado: conclui o desenho enviado e a issue vai a desenvolvimento com os tickets propostos", () => {
   const ag = noGate();
   assert.deepEqual(desenho(ag, { aprovado: true }), {
     ...ag,
     issue: { ...ag.issue, fase: "desenvolvimento" },
+    tickets: ag.tickets.map((t) => (t.id === 37 ? { ...t, status: "concluido", concluidoEm: AGORA } : t)),
     decisoes: [{ id: 41, issue: 1, ticket: 37, gate: "desenho", aprovado: true, por: "auditor", em: AGORA }],
   });
 });
 
-test("C15 reprovado: remove os tickets abertos e volta a desenho com um ticket novo que traz o motivo", () => {
+test("C15 reprovado: volta a desenho com o mesmo ticket, de volta à conversa, e os mesmos tickets propostos", () => {
   const ag = noGate();
   assert.deepEqual(desenho(ag, { aprovado: false, motivo: "faltou o índice" }), {
     ...ag,
     issue: { ...ag.issue, fase: "desenho" },
-    tickets: [
-      ...ag.tickets.slice(0, 3),
-      {
-        id: 41,
-        issue: 1,
-        etapa: "desenho",
-        titulo: "Refazer o desenho",
-        descricao: "faltou o índice",
-        status: "aberto",
-        origem: "fabriquinha",
-        criadoEm: AGORA,
-      },
-    ],
+    tickets: ag.tickets.map(({ enviadoEm: _devolvido, ...t }) => t),
     decisoes: [
       {
         id: 41,
@@ -254,9 +253,17 @@ test("C15 é só do Auditor, no gate de desenho; aprovar exige ticket de desenvo
   assert.throws(() => desenho(ag, { aprovado: false }), ZodError);
   regra(
     () => desenho({ ...ag, issue: { ...ag.issue, fase: "desenho" } }, { aprovado: true }),
-    "a I-1 está na fase desenho, não na aprovação do desenho (o gate de desenho abre quando o ticket de desenho conclui)",
+    "a I-1 está na fase desenho, não na aprovação do desenho (o gate de desenho abre quando o agente envia o desenho)",
   );
   const semProposta = { ...ag, tickets: ag.tickets.slice(0, 3) };
+  const rodando = {
+    ...ag,
+    execucoes: [...ag.execucoes.map((e) => ({ ...e, ticket: 37, resultado: "em_andamento" as const }))],
+  };
+  regra(
+    () => desenho(rodando, { aprovado: true }),
+    "T-37 não pode passar pelo gate: a execução E-6 ainda está em andamento (espere ela terminar)",
+  );
   regra(
     () => desenho(semProposta, { aprovado: true }),
     "a I-1 não pode ir ao desenvolvimento sem ticket de desenvolvimento aberto (crie um ticket ou reprove o desenho)",
@@ -264,7 +271,90 @@ test("C15 é só do Auditor, no gate de desenho; aprovar exige ticket de desenvo
   assert.equal(desenho(semProposta, { aprovado: false, motivo: "m" }).issue.fase, "desenho");
   regra(
     () => desenho({ ...ag, tickets: [] }, { aprovado: true }),
-    "a I-1 não tem ticket de desenho concluído (conclua o desenho antes)",
+    "o desenho da I-1 ainda não foi enviado à aprovação (o agente envia com fabriquinha ticket enviar quando você " +
+      "confirmar o resultado na conversa)",
+  );
+});
+
+/**
+ * C25: o agente com a execução E-6 em andamento no ticket `etapa` T-37 de I-1, na fase da etapa, com as evidências
+ * dela; o desenho propôs o T-38.
+ */
+function enviando(etapa: "registro" | "desenho", troca: Partial<Issue> = {}): Agregado {
+  const base = pronto({ fase: etapa, ...troca });
+  const tipos = etapa === "registro" ? (["comportamento", "criterios_aceite"] as const) : DO_DESENHO;
+  return {
+    ...base,
+    tickets: [
+      doGate(34, "registro", concluido),
+      doGate(37, etapa, { status: "em_execucao" }),
+      doGate(38, "desenvolvimento", { origem: "agente", origemTicket: 37 }),
+    ],
+    execucoes: base.execucoes.map((e) => ({ ...e, ticket: 37, resultado: "em_andamento" as const })),
+    evidencias: tipos.map((tipo, i) => evidencia(i + 1, tipo, 37)),
+  };
+}
+const DO_DESENHO = ["desenho_solucao", "relatorio_complexidade", "relatorio_impactos_arquitetura"] as const;
+const agente37: Ator = { tipo: "agente", execucao: 6, ticket: 37 };
+const enviar = (ag: Agregado, ator: Ator = agente37, ticket = 37) =>
+  enviarParaAprovacao(ag, { ticket }, ator, contexto());
+
+test("C25 do registro: o ticket fica enviado, em execução, e a issue continua no registro", () => {
+  const ag = enviando("registro");
+  assert.deepEqual(enviar(ag), {
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.id === 37 ? { ...t, enviadoEm: AGORA } : t)),
+  });
+});
+
+test("C25 do desenho: o ticket fica enviado, em execução, e a issue vai a aprovacao_desenho", () => {
+  const ag = enviando("desenho");
+  assert.deepEqual(enviar(ag), {
+    ...ag,
+    issue: { ...ag.issue, fase: "aprovacao_desenho" },
+    tickets: ag.tickets.map((t) => (t.id === 37 ? { ...t, enviadoEm: AGORA } : t)),
+  });
+});
+
+test("C25 exige o que o gate exige: título, tipo e evidências no registro; evidências e ticket criado no desenho", () => {
+  regra(
+    () => enviar(enviando("registro", { tipo: null })),
+    "a I-1 não pode sair do registro sem título e tipo (o agente de T-37 os preenche com fabriquinha issue editar I-1)",
+  );
+  regra(
+    () => enviar({ ...enviando("registro"), evidencias: [] }),
+    "T-37 não pode ir à aprovação: falta a evidência comportamento, criterios_aceite (o agente de T-37 submete com " +
+      "fabriquinha evidencia add comportamento e fabriquinha evidencia add criterios_aceite)",
+  );
+  const desenhando = enviando("desenho");
+  regra(
+    () => enviar({ ...desenhando, evidencias: desenhando.evidencias.slice(1) }),
+    "T-37 não pode ir à aprovação: falta a evidência desenho_solucao (o agente de T-37 submete com fabriquinha " +
+      "evidencia add desenho_solucao)",
+  );
+  regra(
+    () => enviar({ ...desenhando, tickets: desenhando.tickets.slice(0, 2) }),
+    "T-37 não pode ir à aprovação: o desenho não criou ticket de desenvolvimento (o agente de T-37 cria com fabriquinha " +
+      "ticket criar I-1 --titulo <título>)",
+  );
+});
+
+test("C25 é só do agente do próprio ticket de registro ou desenho, em execução, e uma vez até a decisão", () => {
+  const ag = enviando("desenho");
+  assert.throws(() => enviar(ag, auditor), ErroDeEscopo);
+  assert.throws(() => enviar(ag, { tipo: "agente", execucao: 6, ticket: 38 }), ErroDeEscopo);
+  assert.throws(() => enviarParaAprovacao(ag, { ticket: "T-37" }, agente37, contexto()), ZodError);
+  const terminada = { ...ag, execucoes: ag.execucoes.map((e) => ({ ...e, resultado: "sucesso" as const })) };
+  assert.throws(() => enviar(terminada), ErroDeEscopo);
+  const revisao = {
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.id === 37 ? { ...t, etapa: "revisao" as const } : t)),
+  };
+  regra(() => enviar(revisao), "T-37 é de revisao (só o registro e o desenho vão à aprovação do Auditor)");
+  regra(
+    () => enviar(enviar(ag)),
+    "T-37 já foi enviado e espera a decisão do Auditor (termine a sua resposta; se ele devolver, o motivo chega " +
+      "nesta conversa)",
   );
 });
 

@@ -21,7 +21,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import type { Ator } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { iniciarExecucao, reabrirTicket, terminarExecucao } from "../dominio/execucao.ts";
-import { decidirRegistro } from "../dominio/gates.ts";
+import { decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
 import { submeter } from "../evidencias/submissao.ts";
 import { abrir } from "../persistencia/banco.ts";
@@ -152,13 +152,13 @@ writeFileSync(pi, PI_FALSO);
 chmodSync(pi, 0o755);
 process.env.FABRIQUINHA_PI = pi;
 
-/** "Agente" do desenho: usa o ambiente da execução para submeter as evidências, criar o ticket e sujar a worktree. */
+/** "Agente" da revisão: usa o ambiente da execução para submeter as evidências, aprovar e sujar a worktree. */
 const agente = join(base, "agente.mjs");
 writeFileSync(
   agente,
   `import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { adicionarTicketDesenvolvimento } from "${src}/dominio/tickets.ts";
+import { registrarDecisaoRevisao } from "${src}/dominio/gates.ts";
 import { submeter } from "${src}/evidencias/submissao.ts";
 import { abrir } from "${src}/persistencia/banco.ts";
 import { comIssue } from "${src}/persistencia/issues.ts";
@@ -169,24 +169,15 @@ export default async function () {
     .prepare("SELECT e.ticket, t.issue FROM execucao e JOIN ticket t ON t.id = e.ticket WHERE e.id = ?")
     .get(execucao);
   const ator = { tipo: "agente", execucao, ticket };
-  const html = (nome) => {
-    const caminho = join(process.env.FABRIQUINHA_SAIDA, nome);
-    writeFileSync(caminho, "<!DOCTYPE html><html><body>" + nome + "</body></html>");
-    return caminho;
-  };
-  submeter(banco, ator, "desenho_solucao", {
-    resumo: "cache na busca",
-    arquivosPrevistos: [{ caminho: "src/busca.ts", acao: "alterar", motivo: "lê do cache" }],
-  }, [html("desenho.html")]);
-  submeter(banco, ator, "relatorio_complexidade", {
-    variaveis: [{ simbolo: "n", significado: "itens" }],
-    fluxos: [{ nome: "Busca", gatilho: "GET /busca", situacao: "novo", depois: { tempo: "O(log n)", espaco: "O(n)" } }],
-  }, [html("fluxos.html")]);
-  submeter(banco, ator, "relatorio_impactos_arquitetura",
-    { impacto: "baixo", novasDependencias: [], novosAcoplamentos: [], riscos: [] }, [html("impactos.html")]);
-  comIssue(banco, issue, "adicionarTicketDesenvolvimento", ator, (ag, ctx) =>
-    adicionarTicketDesenvolvimento(ag, { titulo: "Cache na busca" }, ator, ctx));
-  writeFileSync("rascunho-do-prototipo.txt", "descartável\\n");
+  const print = join(process.env.FABRIQUINHA_SAIDA, "ca-1.png");
+  writeFileSync(print, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]));
+  await submeter(banco, ator, "explicacao_fitness", { explicacoes: [{ nome: "f", explicacao: "passa" }] }, []);
+  await submeter(banco, ator, "comprovacao_criterios", {
+    criterios: [{ id: "CA-1", atendido: true, comoVerificado: "busquei mil itens", arquivos: ["ca-1.png"] }],
+  }, [print]);
+  comIssue(banco, issue, "registrarDecisaoRevisao", ator, (ag, ctx) =>
+    registrarDecisaoRevisao(ag, { ticket, aprovado: true }, ator, ctx));
+  writeFileSync("rascunho-da-revisao.txt", "descartável\\n");
   banco.close();
 }
 `,
@@ -213,10 +204,11 @@ interface Cenario {
 
 let n = 0;
 /**
- * Projeto `loja` com repositório e `origin` bare reais, e a I-1 (problema) com o registro aprovado: o desenho T-2
- * aberto, na fase `desenho`. A E-1 foi a sessão de registro.
+ * Projeto `loja` com repositório e `origin` bare reais, e a I-1 (problema) com o registro aprovado e a revisão T-2
+ * aberta, na fase `revisao`. A E-1 foi a sessão de registro. A revisão real só nasce do desenvolvimento (provado em
+ * execucao/desenvolvimento.test.ts); aqui o ticket de desenho que o registro criou vira revisão por UPDATE.
  */
-function cenario({ preparacao = [] as string[], variante = "sucesso", comAgente = true } = {}): Cenario {
+async function cenario({ preparacao = [] as string[], variante = "sucesso", comAgente = true } = {}): Promise<Cenario> {
   const dir = join(base, `c${String(++n)}`);
   const bare = join(dir, "origin.git");
   const repo = join(dir, "repo");
@@ -240,7 +232,7 @@ function cenario({ preparacao = [] as string[], variante = "sucesso", comAgente 
     testes: ["npm test"],
     sonar: { projectKey: "loja" },
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    modelos: { desenho: { provedor: "anthropic", modelo: "claude-teste" } },
+    modelos: { revisao: { provedor: "anthropic", modelo: "claude-teste" } },
   });
   registrarIssue(banco, { projeto: "loja" }, auditor);
   comIssue(banco, 1, "iniciarExecucao", fabriquinha, (ag, ctx) =>
@@ -250,10 +242,10 @@ function cenario({ preparacao = [] as string[], variante = "sucesso", comAgente 
   mkdirSync(saida1, { recursive: true });
   writeFileSync(join(saida1, "busca.log"), "busca levou 8 s\n");
   const registrador: Ator = { tipo: "agente", execucao: 1, ticket: 1 };
-  submeter(banco, registrador, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [
+  await submeter(banco, registrador, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [
     join(saida1, "busca.log"),
   ]);
-  submeter(
+  await submeter(
     banco,
     registrador,
     "criterios_aceite",
@@ -263,10 +255,14 @@ function cenario({ preparacao = [] as string[], variante = "sucesso", comAgente 
   comIssue(banco, 1, "editarIssue", auditor, (ag) =>
     editarIssue(ag, { titulo: "Busca lenta", tipo: "problema" }, auditor),
   );
+  comIssue(banco, 1, "enviarParaAprovacao", registrador, (ag, ctx) =>
+    enviarParaAprovacao(ag, { ticket: 1 }, registrador, ctx),
+  );
   comIssue(banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
     terminarExecucao(ag, { execucao: 1, resultado: "sucesso" }, fabriquinha, ctx),
   );
   comIssue(banco, 1, "decidirRegistro", auditor, (ag, ctx) => decidirRegistro(ag, { aprovado: true }, auditor, ctx));
+  banco.exec("UPDATE issue SET fase = 'revisao'; UPDATE ticket SET etapa = 'revisao' WHERE id = 2");
 
   const registro = join(dir, "registro.jsonl");
   process.env.FALSO_PI_REGISTRO = registro;
@@ -321,11 +317,11 @@ async function morreu(pid: number): Promise<boolean> {
 test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e log, coleta, C6 e C7", async () => {
   // O ambiente de quem roda o teste (uma execução da Fabriquinha, por exemplo) pode trazer a porta do serviço.
   delete process.env.FABRIQUINHA_PORTA;
-  const c = cenario();
+  const c = await cenario();
   await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   const { fase, ticket, execucoes } = c.estado();
-  assert.equal(fase, "aprovacao_desenho");
+  assert.equal(fase, "encerramento");
   assert.equal(ticket.status, "concluido");
   assert.equal(execucoes.length, 1);
   const [execucao] = execucoes;
@@ -348,13 +344,9 @@ test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e
     "--model",
     "claude-teste",
     "--skill",
-    `${PACOTE}/skills/artefato-desenho-solucao`,
+    `${PACOTE}/skills/artefato-explicacao-fitness`,
     "--skill",
-    `${PACOTE}/skills/artefato-prototipo`,
-    "--skill",
-    `${PACOTE}/skills/artefato-complexidade`,
-    "--skill",
-    `${PACOTE}/skills/artefato-impactos-arquitetura`,
+    `${PACOTE}/skills/artefato-comprovacao-criterios`,
     "-e",
     `${PACOTE}/extensions/guarda.ts`,
     "--approve",
@@ -376,7 +368,7 @@ test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e
   assert.deepEqual(comandos, [{ evento: "comando", comando: { type: "prompt", message: prompt } }]);
   assert.match(prompt, /^# Contexto\n/);
   assert.match(prompt, /CA-1\*\*: dado mil itens/);
-  assert.match(prompt, /`artefato-impactos-arquitetura`/);
+  assert.match(prompt, /`artefato-comprovacao-criterios`/);
   assert.match(prompt, /## Execução autônoma/);
 
   const log = c.log(2);
@@ -386,14 +378,14 @@ test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e
   assert.match(log, /T-2 concluído\n$/);
   // F6 §3.3: o uso da sessão foi coletado logo depois do C6.
   assert.deepEqual(uso(c.banco, 2), [["anthropic", "claude-teste", 1, 10, 2, 100, 0, 0.01]]);
-  // Coleta do desenho (F3 §7): o rascunho do agente foi descartado, e as evidências ficaram.
-  assert.match(log, /descarte removeu: rascunho-do-prototipo\.txt/);
-  assert.equal(existsSync(join(c.worktree, "rascunho-do-prototipo.txt")), false);
+  // Coleta da revisão (F3 §7): o rascunho do agente foi descartado, e as evidências ficaram.
+  assert.match(log, /descarte removeu: rascunho-da-revisao\.txt/);
+  assert.equal(existsSync(join(c.worktree, "rascunho-da-revisao.txt")), false);
   c.banco.close();
 });
 
 test("stopReason error: C6 + C8 com o erro do pi inteiro, mesmo com U+2028, cortado em 2.000 caracteres; responder e retomar continua a mesma sessão", async () => {
-  const c = cenario({ variante: "erro" });
+  const c = await cenario({ variante: "erro" });
   await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   let { ticket, execucoes } = c.estado();
@@ -436,7 +428,7 @@ test("stopReason error: C6 + C8 com o erro do pi inteiro, mesmo com U+2028, cort
 });
 
 test("diálogo: o tempo esperando o Auditor não conta; respondido, a execução segue, e o C7 sem evidência vira C8", async () => {
-  const c = cenario({ variante: "dialogo", comAgente: false });
+  const c = await cenario({ variante: "dialogo", comAgente: false });
   // Limite de 3 s: folga para o pi falso subir numa máquina carregada antes de abrir os diálogos.
   const execucao = executarAutonomo(c.banco, 2, { timeoutMin: 0.05 });
   for (let espera = 0; dialogosPendentes(2).length < 3; espera += 20) {
@@ -494,13 +486,13 @@ test("diálogo: o tempo esperando o Auditor não conta; respondido, a execução
   assert.equal(ticket.status, "falhou");
   assert.match(
     String(ticket.erro),
-    /^T-2 não pode concluir: falta a evidência desenho_solucao, relatorio_complexidade/,
+    /^T-2 não pode concluir: falta a evidência explicacao_fitness, comprovacao_criterios/,
   );
   c.banco.close();
 });
 
 test("abortada pelo Auditor, com diálogos pendentes: C6 + C8 com o erro ABORTADA", async () => {
-  const c = cenario({ variante: "dialogo", comAgente: false });
+  const c = await cenario({ variante: "dialogo", comAgente: false });
   const execucao = executarAutonomo(c.banco, 2, { timeoutMin: 1 });
   for (let espera = 0; dialogosPendentes(2).length < 3; espera += 20) {
     assert.ok(espera < 10_000, "os diálogos não chegaram em 10 s");
@@ -519,7 +511,7 @@ test("abortada pelo Auditor, com diálogos pendentes: C6 + C8 com o erro ABORTAD
 });
 
 test("tempo limite: SIGTERM no grupo, 10 s, SIGKILL, e C8 com tempo limite de N min", async () => {
-  const c = cenario({ variante: "dorme" });
+  const c = await cenario({ variante: "dorme" });
   const inicio = Date.now();
   await executarAutonomo(c.banco, 2, { timeoutMin: 0.005 });
   const duracao = Date.now() - inicio;
@@ -536,7 +528,7 @@ test("tempo limite: SIGTERM no grupo, 10 s, SIGKILL, e C8 com tempo limite de N 
 });
 
 test("pi que deixa um filho e some: falha dizendo que o pi saiu, e o grupo inteiro morre", async () => {
-  const c = cenario({ variante: "filho" });
+  const c = await cenario({ variante: "filho" });
   await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   const { ticket, execucoes } = c.estado();
@@ -550,14 +542,14 @@ test("pi que deixa um filho e some: falha dizendo que o pi saiu, e o grupo intei
 });
 
 test("pi que recusa o prompt falha na hora, sem esperar o tempo limite", async () => {
-  const c = cenario({ variante: "recusa" });
+  const c = await cenario({ variante: "recusa" });
   await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
   assert.equal(c.estado().ticket.erro, "o pi recusou o comando prompt: modelo inexistente");
   c.banco.close();
 });
 
 test("pi --version travado conta no tempo limite: C8 em vez de execução presa em andamento", async () => {
-  const c = cenario({ variante: "versao-trava" });
+  const c = await cenario({ variante: "versao-trava" });
   await executarAutonomo(c.banco, 2, { timeoutMin: 0.005 });
   const { ticket, execucoes } = c.estado();
   assert.equal(ticket.erro, "tempo limite de 0.005 min em pi --version");
@@ -570,7 +562,7 @@ test("pi --version travado conta no tempo limite: C8 em vez de execução presa 
 });
 
 test("um throw que não é Error também vira C6 + C8 com o texto, nunca sucesso", async (t) => {
-  const c = cenario();
+  const c = await cenario();
   const original = fs.writeFileSync;
   t.mock.method(fs, "writeFileSync", (...args: Parameters<typeof fs.writeFileSync>) => {
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- é o caso testado
@@ -592,7 +584,7 @@ test("um throw que não é Error também vira C6 + C8 com o texto, nunca sucesso
 });
 
 test("falha antes do pi (preparação da worktree): C6 + C8 com a mensagem, sem lançar o pi nem deixar execução órfã", async () => {
-  const c = cenario({ preparacao: ["exit 7"] });
+  const c = await cenario({ preparacao: ["exit 7"] });
   await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
 
   const { ticket, execucoes } = c.estado();
@@ -605,7 +597,7 @@ test("falha antes do pi (preparação da worktree): C6 + C8 com a mensagem, sem 
 });
 
 test("C5 recusado ou ticket inexistente: rejeita sem criar execução nem lançar o pi", async () => {
-  const c = cenario();
+  const c = await cenario();
   await assert.rejects(
     executarAutonomo(c.banco, 99, { timeoutMin: 1 }),
     (e) => e instanceof ErroDeRegra && e.message === "o ticket T-99 não existe (confira o número do ticket)",
@@ -621,7 +613,7 @@ test("C5 recusado ou ticket inexistente: rejeita sem criar execução nem lança
 
 // Por último: o gerente guarda as execuções canceladas por ID, e cada cenário recomeça a numeração.
 test("execução cancelada pela issue: o pi para e a autônoma não grava C6 nem C8", async () => {
-  const c = cenario({ variante: "dialogo", comAgente: false });
+  const c = await cenario({ variante: "dialogo", comAgente: false });
   const execucao = executarAutonomo(c.banco, 2, { timeoutMin: 1 });
   for (let espera = 0; dialogosPendentes(2).length < 3; espera += 20) {
     assert.ok(espera < 10_000, "os diálogos não chegaram em 10 s");

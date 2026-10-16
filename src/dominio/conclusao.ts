@@ -12,7 +12,7 @@ import {
 import { ErroDeRegra } from "./erros.ts";
 import { exigirEvidencias } from "./evidencia.ts";
 import { exigirSemExecucao, marcarConcluido, novoTicket, rotuloTicket, ticketDe } from "./execucao.ts";
-import { type Etapa, type Fase, Id } from "./primitivos.ts";
+import { type Etapa, Id } from "./primitivos.ts";
 
 /** Regra adicional e transição de uma etapa (F1 §5.1); recebe o agregado com o ticket já `concluido`. */
 type Regra = (ag: Agregado, ticket: Ticket, ctx: Contexto) => Agregado;
@@ -46,24 +46,23 @@ const nomesDe = (ag: Agregado, ticket: Ticket, tipo: TipoEvidencia, lista: strin
     .flatMap((e) => (e.dados[lista] as { nome: string }[]).map((item) => item.nome))
     .toSorted((a, b) => a.localeCompare(b));
 
-/** O desenho e a sessão em aberto só concluem com ticket de desenvolvimento criado; a issue vai a `fase`. */
-const comTicketCriado =
-  (quem: string, fase: Fase): Regra =>
-  (ag, ticket) => {
-    if (!criouTicket(ag, ticket)) {
-      const t = rotuloTicket(ticket);
-      throw new ErroDeRegra(
-        `${t} não pode concluir: ${quem} não criou ticket de desenvolvimento`,
-        `o agente de ${t} cria com fabriquinha ticket criar ${rotuloIssue(ag)} --titulo <título>`,
-      );
-    }
-    return { ...ag, issue: { ...ag.issue, fase } };
-  };
+/** O desenho (C25) e a sessão em aberto (C7) só terminam com ticket de desenvolvimento criado. */
+export function exigirTicketCriado(ag: Agregado, ticket: Ticket, acao: string): void {
+  if (criouTicket(ag, ticket)) return;
+  const t = rotuloTicket(ticket);
+  const quem = ticket.etapa === "desenho" ? "o desenho" : "a sessão em aberto";
+  throw new ErroDeRegra(
+    `${t} não pode ${acao}: ${quem} não criou ticket de desenvolvimento`,
+    `o agente de ${t} cria com fabriquinha ticket criar ${rotuloIssue(ag)} --titulo <título>`,
+  );
+}
 
-// O registro não conclui por C7 (C10); as demais etapas têm todas a sua regra.
-const REGRAS: Record<Exclude<Etapa, "registro">, Regra> = {
-  desenho: comTicketCriado("o desenho", "aprovacao_desenho"),
-  sessao: comTicketCriado("a sessão em aberto", "desenvolvimento"),
+// O registro e o desenho não concluem por C7, e sim no gate do Auditor (C10, C15); as demais etapas têm a sua regra.
+const REGRAS: Record<Exclude<Etapa, "registro" | "desenho">, Regra> = {
+  sessao: (ag, ticket) => {
+    exigirTicketCriado(ag, ticket, "concluir");
+    return { ...ag, issue: { ...ag.issue, fase: "desenvolvimento" } };
+  },
   desenvolvimento: (ag, ticket, ctx) => {
     if (!ctx.temCommit(ticket.id)) {
       throw new ErroDeRegra(
@@ -157,10 +156,10 @@ export function concluirTicket(ag: Agregado, entrada: unknown, ator: Ator, ctx: 
   const { ticket: id } = EntradaConclusao.parse(entrada);
   const ticket = ticketDe(ag, id);
   const t = rotuloTicket(ticket);
-  if (ticket.etapa === "registro") {
+  if (ticket.etapa === "registro" || ticket.etapa === "desenho") {
     throw new ErroDeRegra(
-      `${t} é de registro e não conclui por concluirTicket`,
-      "o Auditor o conclui no gate de registro",
+      `${t} é de ${ticket.etapa} e não conclui por concluirTicket`,
+      `o Auditor o conclui no gate de ${ticket.etapa}`,
     );
   }
   if (ticket.status !== "em_execucao") {

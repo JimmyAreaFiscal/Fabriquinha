@@ -32,7 +32,7 @@ Ele abre igual no web, num download ou anexado a outro lugar, então nada vem de
 Seções do HTML, nesta ordem:
 
 1. **Problema**: o comportamento atual e o que os critérios pedem, em poucas frases.
-2. **Solução**: a ideia central e as decisões que o Auditor precisa aprovar, cada uma com o motivo e a alternativa descartada.
+2. **Solução**: a ideia central e as decisões tomadas com o Auditor na conversa, cada uma com o motivo e a alternativa descartada.
 3. **Fluxo**: um diagrama em SVG do caminho da solução, do gatilho ao resultado, com os módulos e arquivos pelos nomes reais; abaixo, o mesmo fluxo em passos numerados.
 4. **Critérios de aceite**: cada `CA-n` e a parte da solução que o atende.
 5. **Arquivos previstos**: uma tabela com caminho, ação e motivo, a mesma lista dos `dados`.
@@ -67,6 +67,7 @@ Um PR que altera mais de 30 arquivos é difícil de analisar.
 
 - [ ] O HTML abre sozinho, sem rede, e começa por `<!doctype html>`.
 - [ ] O Auditor aprova lendo só o HTML: cada critério de aceite aparece ligado a uma parte da solução.
+- [ ] Cada decisão relevante do HTML foi tomada com o Auditor na conversa; nenhuma é surpresa para ele.
 - [ ] O diagrama usa os nomes reais de módulos e arquivos, os mesmos do texto e da tabela.
 - [ ] Os `arquivosPrevistos` cobrem todo arquivo que os tickets vão tocar, testes incluídos.
 - [ ] O `resumo` basta para um agente que nunca viu o HTML nem esta conversa.

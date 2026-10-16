@@ -36,15 +36,11 @@ export function proporIssue(ag: Agregado, entrada: unknown, ator: Ator, ctx: Con
   };
 }
 
-/** O ticket da proposta está no gate atual: o de registro na fase `registro`, o último desenho concluído no gate do desenho. */
+/** O ticket da proposta está no gate atual: o de registro na fase `registro`, o desenho enviado no gate do desenho. */
 function noGateAtual(ag: Agregado, proposta: PropostaIssue): boolean {
   const ticket = ag.tickets.find((t) => t.id === proposta.ticket);
   if (ticket?.etapa === "registro") return ag.issue.fase === "registro";
-  return (
-    ticket?.etapa === "desenho" &&
-    ag.issue.fase === "aprovacao_desenho" &&
-    ag.tickets.findLast((t) => t.etapa === "desenho" && t.status === "concluido")?.id === ticket.id
-  );
+  return ticket?.etapa === "desenho" && ticket.status === "em_execucao" && ag.issue.fase === "aprovacao_desenho";
 }
 
 /** A proposta pendente do gate atual, senão `ErroDeRegra`. */

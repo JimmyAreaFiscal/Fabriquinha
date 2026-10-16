@@ -317,12 +317,17 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
     "Registrei o título, o tipo, o comportamento e os critérios de aceite.",
   );
 
-  // Registro completo: o gate no lugar do formulário, e o envio só avisa.
+  // O agente enviou (C25): o chat só avisa, e a decisão fica na página da issue.
   await expect(barra.locator(".pill")).toHaveText("aguarda você · gate do registro");
   await expect(barra.getByRole("link", { name: "I-1 Exportar pedidos em CSV" })).toBeVisible();
   await expect(pagina.locator(".fim")).toHaveText(
-    "A sessão de registro terminou. Decida no painel do gate; devolver envia o motivo ao agente e reabre a conversa.",
+    "O agente enviou o resultado à sua aprovação. Decida na página da issue; devolver traz o motivo de volta a esta conversa.",
   );
+  const aviso = pagina.getByRole("region", { name: "Gate do registro" });
+  await expect(aviso).toContainText("A decisão deste gate fica na página da issue, com tudo o que ela precisa.");
+  await aviso.getByRole("link", { name: "Decidir na página da issue" }).click();
+  await expect(pagina).toHaveURL(/\/projects\/loja\/issues\/I-1$/);
+
   const gate = pagina.getByRole("region", { name: "Gate do registro" });
   await expect(gate).toContainText("aguarda você há menos de 1 min");
   await expect(gate.locator(".fatos dd")).toHaveText([
@@ -342,20 +347,16 @@ test("registra pelo chat, corrige o registro ao lado e aprova o registro", async
     "o Auditor roda node exportarPedidos.js --mes 2026-10",
     "só os do mês escolhido entram, o stderr fica vazio e o código de saída é 0; com --mes inválido, o stderr mostra o uso (node exportarPedidos.js --mes <AAAA-MM>)",
   ]);
-  // O texto do agente é Markdown em linha, e a tabela cabe na coluna de 400 px sem rolar de lado.
+  // O texto do agente é Markdown em linha, e a tabela cabe no painel sem rolar de lado.
   await expect(gate.locator("td code").first()).toHaveText("exportarPedidos.js");
   await expect(gate.locator("td p")).toHaveCount(0);
   const rola = await gate.locator(".rola").evaluate((e) => [e.scrollWidth, e.clientWidth]);
   expect(rola[0]).toBeLessThanOrEqual(rola[1] ?? 0);
   await expect(gate).toContainText("Nenhuma evidência faltando.");
-  const devolver = gate.getByRole("button", { name: "Devolver" });
-  await expect(devolver).toBeDisabled();
-  await gate.getByLabel("Motivo (obrigatório para devolver)").fill("faltou o formato");
-  await expect(devolver).toBeEnabled();
-  await gate.getByLabel("Motivo (obrigatório para devolver)").fill(" ");
-  await expect(devolver).toBeDisabled();
 
   await gate.getByRole("button", { name: "Aprovar registro" }).click();
+  await expect(gate).toHaveCount(0);
+  await pagina.goBack();
   await expect(barra.locator(".pill")).toHaveText("terminada");
   await expect(pagina.locator(".fim")).toHaveText(
     "Sessão terminada; a conversa fica só para leitura.Exportar históricoConversar sobre esta sessão",

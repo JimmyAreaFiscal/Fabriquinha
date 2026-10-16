@@ -70,7 +70,8 @@ const NOME: Record<TipoEvidencia, string> = {
   explicacao_fitness: "Explicação das fitness",
   comprovacao_criterios: "Comprovação dos critérios",
   mensagem_pr: "Mensagem do PR",
-  video_explicativo: "Vídeo explicativo",
+  aula_codigo: "Aula do código",
+  video_demonstracao: "Vídeo de demonstração",
   relatorio_produtividade: "Relatório de produtividade",
   pr_aberto: "PR aberto",
 };
@@ -308,7 +309,7 @@ export function cartaoDaProposta(proposta: PropostaIssue, noDesenho: boolean, is
 export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): string {
   if (p.issue.fase !== "aprovacao_desenho") return "";
   const espera = p.sessoes.find((s) => s.motivo === "gate_desenho");
-  const desenho = p.tickets.findLast((t) => t.etapa === "desenho" && t.status === "concluido");
+  const desenho = p.tickets.findLast((t) => t.etapa === "desenho");
   const impacto = p.evidencias.find((e) => e.ticket === desenho?.id && e.tipo === "relatorio_impactos_arquitetura")
     ?.dados.impacto as Impacto | undefined;
   const criterios = p.evidencias.findLast((e) => e.tipo === "criterios_aceite");
@@ -485,18 +486,25 @@ function bloco(titulo: string, conteudo: string | undefined, falta: string): str
   return `<div><div class="titulo-bloco">${titulo}</div>${corpo}</div>`;
 }
 
-/** A aba Revisão: vídeo, produtividade, o corpo completo do PR (preenchido pela montagem), comprovação e fitness. */
+/**
+ * A aba Revisão: o vídeo de demonstração (só quando a mudança aparece no cliente), produtividade, a aula do código, o
+ * corpo completo do PR (preenchido pela montagem), comprovação e fitness.
+ */
 function revisaoDoPR(p: PaginaDaIssue): string {
   const ultima = (tipo: TipoEvidencia) => p.evidencias.findLast((e) => e.tipo === tipo);
-  const [video] = ultima("video_explicativo")?.arquivos ?? [];
+  const encerramento = p.tickets.findLast((t) => t.etapa === "encerramento");
+  const [video] =
+    p.evidencias.find((e) => e.ticket === encerramento?.id && e.tipo === "video_demonstracao")?.arquivos ?? [];
   const [corpo] = ultima("pr_aberto")?.arquivos ?? [];
+  const aula = ultima("aula_codigo");
   const comprovacao = ultima("comprovacao_criterios");
   const fitness = ultima("matriz_fitness");
   return `<div class="duas">${
     video
-      ? `<video controls preload="metadata" src="${arquivo(video)}" aria-label="Vídeo explicativo"></video>`
-      : '<div class="sem-video">sem vídeo explicativo</div>'
+      ? `<video controls preload="metadata" src="${arquivo(video)}" aria-label="Vídeo de demonstração"></video>`
+      : '<div class="sem-video">sem vídeo de demonstração: a mudança não aparece no cliente</div>'
   }<div class="numeros">${produtividade(ultima("relatorio_produtividade")?.dados as MetricasIssue | undefined)}</div></div>
+      ${bloco("Aula do código", aula && `<div class="cards-art">${cardDaEvidencia(aula)}</div>`, "Sem a aula do código.")}
       ${bloco("Corpo do PR", corpo && `<div class="corpo-pr md" data-corpo-pr="${arquivo(corpo)}">carregando…</div>`, "Sem o corpo do PR.")}
       ${bloco("Comprovação dos critérios", comprovacao && tabelaDeComprovacao(comprovacao), "Sem a comprovação dos critérios.")}
       ${bloco("Fitness functions", fitness && tabelaDeFitness(fitness, p), "Sem a matriz de fitness.")}`;

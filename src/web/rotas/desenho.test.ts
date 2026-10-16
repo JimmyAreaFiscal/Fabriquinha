@@ -38,8 +38,8 @@ const INEXISTENTE = { provedor: "x", modelo: "y" };
 let banco: DatabaseSync;
 
 /**
- * I-1 no gate do desenho: T-2 de desenho concluído, com o desenho (2 arquivos previstos) e os impactos (1 acoplamento
- * novo); T-3 proposto por ele e T-4 criado pelo Auditor. I-2 em desenvolvimento.
+ * I-1 no gate do desenho: T-2 de desenho enviado (C25), com o desenho (2 arquivos previstos) e os impactos (1
+ * acoplamento novo); T-3 proposto por ele e T-4 criado pelo Auditor. I-2 em desenvolvimento.
  */
 beforeEach(() => {
   banco = abrir(mkdtempSync(join(base, "raiz-")));
@@ -49,12 +49,12 @@ beforeEach(() => {
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES
       (1, 'loja', 'Busca', 'funcionalidade', 'aprovacao_desenho', '${AGORA}'),
       (2, 'loja', 'Outra', 'problema', 'desenvolvimento', '${AGORA}');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, origem_ticket, criado_em, concluido_em) VALUES
-      (1, 1, 'registro', 'Registrar', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}'),
-      (2, 1, 'desenho', 'Desenhar a solução', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}'),
-      (3, 1, 'desenvolvimento', 'Cache', 'aberto', 'agente', 2, '${AGORA}', NULL),
-      (4, 1, 'desenvolvimento', 'Índice', 'aberto', 'auditor', NULL, '${AGORA}', NULL),
-      (5, 2, 'desenvolvimento', 'Rota', 'aberto', 'auditor', NULL, '${AGORA}', NULL);
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, origem_ticket, criado_em, concluido_em, enviado_em) VALUES
+      (1, 1, 'registro', 'Registrar', 'concluido', 'fabriquinha', NULL, '${AGORA}', '${AGORA}', '${AGORA}'),
+      (2, 1, 'desenho', 'Desenhar a solução', 'em_execucao', 'fabriquinha', NULL, '${AGORA}', NULL, '${AGORA}'),
+      (3, 1, 'desenvolvimento', 'Cache', 'aberto', 'agente', 2, '${AGORA}', NULL, NULL),
+      (4, 1, 'desenvolvimento', 'Índice', 'aberto', 'auditor', NULL, '${AGORA}', NULL, NULL),
+      (5, 2, 'desenvolvimento', 'Rota', 'aberto', 'auditor', NULL, '${AGORA}', NULL, NULL);
     INSERT INTO sequencia (nome, valor) VALUES ('ticket', 5) ON CONFLICT (nome) DO UPDATE SET valor = 5;
     INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES
       (1, 2, 'desenho_solucao', 'agente', '{"arquivosPrevistos":[{"caminho":"a"},{"caminho":"b"}]}', '${AGORA}'),
@@ -151,25 +151,21 @@ test("C20: o override de modelo é conferido no pi e sai com null", async () => 
   assert.equal(((await chamar("POST", "/api/tickets/3/modelo", {})) as [number])[0], 422);
 });
 
-test("C15: reprovar exige o motivo e volta ao desenho com um ticket novo; aprovar vai ao desenvolvimento", async () => {
-  assert.equal(((await chamar("POST", "/api/issues/1/desenho", { aprovado: false })) as [number])[0], 422);
-  assert.equal(
-    await chamar("POST", "/api/issues/1/desenho", { aprovado: false, motivo: "faltou o índice" }),
-    undefined,
-  );
-  const reprovado = agregado(banco, 1);
-  assert.ok(reprovado);
-  assert.equal(reprovado.issue.fase, "desenho");
-  assert.deepEqual(
-    reprovado.tickets.filter((t) => t.status === "aberto").map((t) => [t.etapa, t.descricao]),
-    [["desenho", "faltou o índice"]],
-  );
-
-  banco.exec("UPDATE issue SET fase = 'aprovacao_desenho' WHERE id = 1");
-  banco.exec(
-    `INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em) VALUES (9, 1, 'desenvolvimento', 'Cache', 'aberto', 'auditor', '${AGORA}')`,
-  );
+test("C15 pela rota: aprovar conclui o desenho, sem worktree para descartar, e vai ao desenvolvimento", async () => {
+  banco.exec(`INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
+    VALUES (1, 2, 'interativo', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b', 'sucesso', '${AGORA}', '${AGORA}')`);
   assert.equal(await chamar("POST", "/api/issues/1/desenho", { aprovado: true }), undefined);
-  assert.equal(agregado(banco, 1)?.issue.fase, "desenvolvimento");
-  assert.equal(((await chamar("POST", "/api/issues/1/desenho", { aprovado: true })) as [number])[0], 409);
+  const ag = agregado(banco, 1);
+  assert.deepEqual([ag?.issue.fase, ag?.tickets.find((t) => t.id === 2)?.status], ["desenvolvimento", "concluido"]);
+});
+
+test("C15 pela rota: o motivo é obrigatório para reprovar, e fora do gate o C15 recusa com 409", async () => {
+  // A reprovação que retoma a sessão roda contra o serviço, com git e o pi falso, em chat.test.ts.
+  assert.equal(((await chamar("POST", "/api/issues/1/desenho", { aprovado: false })) as [number])[0], 422);
+  banco.exec("UPDATE issue SET fase = 'desenho' WHERE id = 1");
+  assert.deepEqual(await chamar("POST", "/api/issues/1/desenho", { aprovado: false, motivo: "faltou o índice" }), [
+    409,
+    "a I-1 está na fase desenho, não na aprovação do desenho (o gate de desenho abre quando o agente envia o desenho)",
+  ]);
+  assert.equal(agregado(banco, 1)?.decisoes.length, 0);
 });

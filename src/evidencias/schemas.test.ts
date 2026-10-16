@@ -401,10 +401,29 @@ test("mensagem_pr, regras cruzadas: naoPrevistos são os da última revisão; re
   cruzar(encerrando("alto", ["metrica.ts"]), { ...MENSAGEM, reversao: "reverter o merge" })();
 });
 
-test("video_explicativo: o roteiro e exatamente um vídeo", () => {
-  assert.deepEqual(recusados("video_explicativo", { roteiro: "mostro a busca" }), []);
-  assert.deepEqual(recusados("video_explicativo", { roteiro: "a".repeat(2001) }), ["roteiro"]);
-  assert.deepEqual(schemaDe("video_explicativo").arquivos, { classes: ["video"], min: 1, max: 1 });
+test("video_demonstracao: o roteiro e exatamente um vídeo", () => {
+  assert.deepEqual(recusados("video_demonstracao", { roteiro: "mostro a busca" }), []);
+  assert.deepEqual(recusados("video_demonstracao", { roteiro: "a".repeat(2001) }), ["roteiro"]);
+  assert.deepEqual(schemaDe("video_demonstracao").arquivos, { classes: ["video"], min: 1, max: 1 });
+});
+
+test("aula_codigo: trechos na ordem de leitura, de até 60 linhas, com o porquê; o HTML a Fabriquinha gera", () => {
+  const trecho = {
+    arquivo: "src/busca.ts",
+    inicio: 10,
+    fim: 20,
+    oQueFaz: "lê do cache",
+    porQue: "a busca repete",
+    decisaoDoDesenho: "cache na busca",
+  };
+  assert.deepEqual(recusados("aula_codigo", { trechos: [trecho] }), []);
+  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, alternativaDescartada: "índice" }] }), []);
+  assert.deepEqual(recusados("aula_codigo", { trechos: [] }), ["trechos"]);
+  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, fim: 9 }] }), ["trechos.0.fim"]);
+  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, fim: 69 }] }), []);
+  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, fim: 70 }] }), ["trechos.0.fim"]);
+  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, porQue: " " }] }), ["trechos.0.porQue"]);
+  assert.deepEqual(schemaDe("aula_codigo").arquivos, { classes: ["html"], min: 1, max: 1 });
 });
 
 test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o corpo em texto e o HTML anexados", () => {

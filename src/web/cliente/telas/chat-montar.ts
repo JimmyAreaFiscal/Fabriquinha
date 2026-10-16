@@ -169,11 +169,11 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (c.execucoes.at(-1)?.modelo) modelo = modeloDe(c, []);
     barra.innerHTML = barraDeEstado(c, modelo);
     const { sessao: s } = c;
-    const doLado = JSON.stringify([s.motivo, s.etapa, c.issue, c.registro]);
+    const doLado = JSON.stringify([s.motivo, s.etapa, c.issue]);
     const sujo = aoLado.querySelector("[data-sujo]") !== null;
     if (doLado !== formaDoLado && !sujo) {
       formaDoLado = doLado;
-      aoLado.innerHTML = lateral(c, Date.now());
+      aoLado.innerHTML = lateral(c);
     }
     if (s.estado !== "rodando") fecharFluxo();
     linhasNovas([
@@ -290,9 +290,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
           throw error_;
         }),
       );
-    } else if (botao.dataset.devolver !== undefined) {
-      const motivo = botao.form?.querySelector("textarea")?.value ?? "";
-      acao(postar(`/api/issues/${issue()}/registro`, { aprovado: false, motivo }));
     } else if ("verTudo" in botao.dataset) verSaida(botao);
     else aoClicarNaConsulta(botao);
   });
@@ -334,8 +331,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
           corpo,
         ),
       );
-    } else if (form.dataset.gateRegistro !== undefined) {
-      acao(postar(`/api/issues/${issue()}/registro`, { aprovado: true }));
     } else if (form.dataset.registro !== undefined) {
       const salvo = api<CabecalhoDoChat["issue"]>(`/api/issues/${issue()}`, {
         method: "POST",
@@ -353,9 +348,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     const alvo = evento.target as HTMLElement;
     const registro = alvo.closest<HTMLElement>("[data-registro]");
     if (registro) registro.dataset.sujo = "";
-    const gate = alvo.closest<HTMLFormElement>("[data-gate-registro]");
-    const devolver = gate?.querySelector<HTMLButtonElement>("[data-devolver]");
-    if (devolver) devolver.disabled = !gate?.querySelector("textarea")?.value.trim();
   });
 
   /**

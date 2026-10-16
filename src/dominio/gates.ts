@@ -1,5 +1,5 @@
-// Gates (F1 §5): C10 decidirRegistro, C15 decidirDesenho e C16 decidirPR, do Auditor, e C14 registrarDecisaoRevisao,
-// do agente revisor.
+// Gates (F1 §5): C25 enviarParaAprovacao, do agente do registro e do desenho; C10 decidirRegistro, C15 decidirDesenho e
+// C16 decidirPR, do Auditor; e C14 registrarDecisaoRevisao, do agente revisor.
 import { z } from "zod";
 import {
   type Agregado,
@@ -11,9 +11,10 @@ import {
   rotuloIssue,
   type Ticket,
 } from "./agregado.ts";
+import { exigirTicketCriado } from "./conclusao.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { exigirEvidencias } from "./evidencia.ts";
-import { exigirSemExecucao, marcarConcluido, novoTicket, rotuloTicket, ticketDe } from "./execucao.ts";
+import { exigirSemExecucao, marcarConcluido, novoTicket, rotuloTicket, ticketDe, trocarTicket } from "./execucao.ts";
 import { Id, Motivo } from "./primitivos.ts";
 
 const APROVADA = { aprovado: z.literal(true), motivo: Motivo.optional() };
@@ -42,36 +43,89 @@ function comDecisao(
   return { ...ag, decisoes: [...ag.decisoes, decisao] };
 }
 
+/** O registro precisa de título e tipo para ir à aprovação e para sair dela (C25, C10). */
+function exigirTituloETipo(ag: Agregado, ticket: Ticket): void {
+  const i = rotuloIssue(ag);
+  if (ag.issue.titulo === null || ag.issue.tipo === null) {
+    throw new ErroDeRegra(
+      `a ${i} não pode sair do registro sem título e tipo`,
+      `o agente de ${rotuloTicket(ticket)} os preenche com fabriquinha issue editar ${i}`,
+    );
+  }
+}
+
+/** A fase em que cada etapa enviada fica esperando o Auditor (C25). */
+const FASE_DO_ENVIO = { registro: "registro", desenho: "aprovacao_desenho" } as const;
+
 /**
- * C10: grava a decisão. Aprovado conclui o ticket de registro e leva a issue a `desenho` com um ticket de desenho
- * novo; reprovado não muda mais nada, e o F4 retoma a sessão com o motivo.
+ * C25: o agente do registro ou do desenho envia o resultado à aprovação do Auditor, depois de confirmá-lo com ele na
+ * conversa. Exige o que o gate exige; o desenho vai à fase `aprovacao_desenho`, e o ticket segue em execução até o
+ * Auditor decidir (C10, C15).
+ */
+export function enviarParaAprovacao(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
+  const { ticket: id } = z.strictObject({ ticket: Id }).parse(entrada);
+  const t = `T-${String(id)}`;
+  if (ator.tipo !== "agente" || ator.ticket !== id) {
+    throw new ErroDeEscopo(`só o agente de ${t} pode enviá-lo à aprovação`, "cada agente envia só o próprio ticket");
+  }
+  exigirExecucaoEmAndamento(ag, ator, `enviar ${t} à aprovação`);
+  const ticket = ticketDe(ag, id);
+  if (ticket.etapa !== "registro" && ticket.etapa !== "desenho") {
+    throw new ErroDeRegra(`${t} é de ${ticket.etapa}`, "só o registro e o desenho vão à aprovação do Auditor");
+  }
+  if (ticket.enviadoEm !== undefined) {
+    throw new ErroDeRegra(
+      `${t} já foi enviado e espera a decisão do Auditor`,
+      "termine a sua resposta; se ele devolver, o motivo chega nesta conversa",
+    );
+  }
+  if (ticket.etapa === "registro") exigirTituloETipo(ag, ticket);
+  exigirEvidencias(ag, ticket, "ir à aprovação");
+  if (ticket.etapa === "desenho") exigirTicketCriado(ag, ticket, "ir à aprovação");
+  const enviado = trocarTicket(ag, { ...ticket, enviadoEm: ctx.agora });
+  return { ...enviado, issue: { ...ag.issue, fase: FASE_DO_ENVIO[ticket.etapa] } };
+}
+
+/** O ticket enviado (C25) que espera a decisão do gate, sem execução em andamento: o F4 para o pi ocioso antes. */
+function enviado(ag: Agregado, etapa: "registro" | "desenho"): Ticket {
+  const ticket = ag.tickets.find((t) => t.etapa === etapa && t.status === "em_execucao");
+  if (ticket?.enviadoEm === undefined) {
+    throw new ErroDeRegra(
+      `o ${etapa} da ${rotuloIssue(ag)} ainda não foi enviado à aprovação`,
+      "o agente envia com fabriquinha ticket enviar quando você confirmar o resultado na conversa",
+    );
+  }
+  exigirSemExecucao(ag, ticket, "passar pelo gate");
+  return ticket;
+}
+
+/** Devolvido no gate: o ticket volta à conversa, sem o envio. */
+function devolvido(ag: Agregado, ticket: Ticket): Agregado {
+  const { enviadoEm: _devolvido, ...resto } = ticket;
+  return trocarTicket(ag, resto);
+}
+
+/**
+ * C10: grava a decisão sobre o registro enviado (C25). Aprovado conclui o ticket de registro e leva a issue a
+ * `desenho` com um ticket de desenho novo; reprovado devolve o ticket à conversa, e o F4 retoma a sessão com o motivo.
  */
 export function decidirRegistro(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   exigirAuditor(ator, "decidir o gate de registro");
   const decisao = EntradaDecisao.parse(entrada);
-  const i = rotuloIssue(ag);
   if (ag.issue.fase !== "registro") {
     throw new ErroDeRegra(
-      `a ${i} está na fase ${ag.issue.fase}, não no registro`,
+      `a ${rotuloIssue(ag)} está na fase ${ag.issue.fase}, não no registro`,
       "o gate de registro já foi decidido",
     );
   }
-  const ticket = ag.tickets.find((t) => t.etapa === "registro" && t.status !== "concluido");
-  if (!ticket) throw new ErroDeRegra(`a ${i} não tem ticket de registro aberto`, "registre a issue de novo");
-  exigirSemExecucao(ag, ticket, "passar pelo gate");
-
+  const ticket = enviado(ag, "registro");
   if (decisao.aprovado) {
-    if (ag.issue.titulo === null || ag.issue.tipo === null) {
-      throw new ErroDeRegra(
-        `a ${i} não pode sair do registro sem título e tipo`,
-        `o agente de ${rotuloTicket(ticket)} os preenche com fabriquinha issue editar ${i}`,
-      );
-    }
+    exigirTituloETipo(ag, ticket);
     exigirEvidencias(ag, ticket);
   }
 
   const decidido = comDecisao(ag, ticket, "registro", decisao, ctx);
-  if (!decisao.aprovado) return decidido;
+  if (!decisao.aprovado) return devolvido(decidido, ticket);
   return {
     ...decidido,
     issue: { ...ag.issue, fase: "desenho" },
@@ -80,8 +134,9 @@ export function decidirRegistro(ag: Agregado, entrada: unknown, ator: Ator, ctx:
 }
 
 /**
- * C15: grava a decisão sobre o último desenho concluído. Aprovado leva a issue a `desenvolvimento` com os tickets
- * propostos; reprovado os descarta e volta a `desenho` com um ticket novo que traz o motivo na descrição.
+ * C15: grava a decisão sobre o desenho enviado (C25). Aprovado conclui o ticket de desenho e leva a issue a
+ * `desenvolvimento` com os tickets propostos; reprovado volta a issue a `desenho` com o mesmo ticket e os mesmos
+ * tickets propostos, e o F4 retoma a sessão com o motivo.
  */
 export function decidirDesenho(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   exigirAuditor(ator, "decidir o gate de desenho");
@@ -90,13 +145,11 @@ export function decidirDesenho(ag: Agregado, entrada: unknown, ator: Ator, ctx: 
   if (ag.issue.fase !== "aprovacao_desenho") {
     throw new ErroDeRegra(
       `a ${i} está na fase ${ag.issue.fase}, não na aprovação do desenho`,
-      "o gate de desenho abre quando o ticket de desenho conclui",
+      "o gate de desenho abre quando o agente envia o desenho",
     );
   }
-  const desenho = ag.tickets.findLast((t) => t.etapa === "desenho" && t.status === "concluido");
-  if (!desenho) throw new ErroDeRegra(`a ${i} não tem ticket de desenho concluído`, "conclua o desenho antes");
-  const proposto = (t: Ticket) => t.etapa === "desenvolvimento" && t.status === "aberto";
-  if (decisao.aprovado && !ag.tickets.some(proposto)) {
+  const desenho = enviado(ag, "desenho");
+  if (decisao.aprovado && !ag.tickets.some((t) => t.etapa === "desenvolvimento" && t.status === "aberto")) {
     throw new ErroDeRegra(
       `a ${i} não pode ir ao desenvolvimento sem ticket de desenvolvimento aberto`,
       "crie um ticket ou reprove o desenho",
@@ -104,15 +157,10 @@ export function decidirDesenho(ag: Agregado, entrada: unknown, ator: Ator, ctx: 
   }
 
   const decidido = comDecisao(ag, desenho, "desenho", decisao, ctx);
-  if (decisao.aprovado) return { ...decidido, issue: { ...ag.issue, fase: "desenvolvimento" } };
-  return {
-    ...decidido,
-    issue: { ...ag.issue, fase: "desenho" },
-    tickets: [
-      ...ag.tickets.filter((t) => !proposto(t)),
-      novoTicket(ag, ctx, "desenho", "Refazer o desenho", decisao.motivo),
-    ],
-  };
+  if (decisao.aprovado) {
+    return { ...marcarConcluido(decidido, desenho, ctx.agora), issue: { ...ag.issue, fase: "desenvolvimento" } };
+  }
+  return { ...devolvido(decidido, desenho), issue: { ...ag.issue, fase: "desenho" } };
 }
 
 const EntradaRevisao = z.discriminatedUnion("aprovado", [

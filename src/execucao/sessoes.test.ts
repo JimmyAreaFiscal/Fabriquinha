@@ -34,7 +34,7 @@ import {
   concluirSessao,
   conversarSobre,
   decidirProposta,
-  decidirRegistroNoChat,
+  decidirGate,
   encerrarIssue,
   enviar,
   estadoDaSessao,
@@ -84,8 +84,8 @@ const agregadoCom = (
   ...extra,
 });
 
-const estado = (ag: Agregado, viva?: Situacao, edicaoDoAgente = "") => {
-  const { estado, motivo, desde } = estadoDaSessao(ag, SESSAO, { viva, edicaoDoAgente });
+const estado = (ag: Agregado, viva?: Situacao) => {
+  const { estado, motivo, desde } = estadoDaSessao(ag, SESSAO, { viva });
   return [estado, motivo, desde];
 };
 
@@ -97,7 +97,7 @@ test("a sessão leva o modelo da última execução, quando ele foi escolhido", 
       [ticket({ id: 2, etapa: "desenho", status: "em_execucao" })],
       [execucao({ ticket: 2, modo: "autonomo", resultado: "em_andamento", ...e })],
     );
-  const fatos = { viva: undefined, edicaoDoAgente: "" };
+  const fatos = { viva: undefined };
   assert.deepEqual(estadoDaSessao(ag({ modelo }), SESSAO, fatos).modelo, modelo);
   assert.equal("modelo" in estadoDaSessao(ag({}), SESSAO, fatos), false, "o padrão do pi");
 });
@@ -105,8 +105,8 @@ test("a sessão leva o modelo da última execução, quando ele foi escolhido", 
 test("estado: autônoma rodando, inclusive na coleta depois do C6 e reaberta à espera do agendador", () => {
   const desenho = (status: Ticket["status"], resultado: Execucao["resultado"]) =>
     agregadoCom(
-      "desenho",
-      [ticket({ id: 2, etapa: "desenho", status })],
+      "revisao",
+      [ticket({ id: 2, etapa: "revisao", status })],
       [execucao({ ticket: 2, modo: "autonomo", resultado })],
     );
   assert.deepEqual(estado(desenho("em_execucao", "em_andamento")), ["rodando", undefined, T0]);
@@ -154,63 +154,35 @@ test("estado: diálogo pendente vence tudo, com o instante em que chegou", () =>
   assert.deepEqual(
     estadoDaSessao(ag, SESSAO, {
       viva: { execucao: 1, ocupado: true, desde: T0, dialogos: [dialogo] },
-      edicaoDoAgente: "",
     }).dialogos,
     [dialogo],
   );
 });
 
-test("estado: registro em conversa até ficar completo, e então gate_registro, com o pi ocioso ou parado", () => {
-  const registro = ticket({ id: 1, etapa: "registro", status: "em_execucao" });
+test("estado: registro e desenho em conversa até o agente enviar (C25); enviados, o gate desde o envio", () => {
   const ocioso = { execucao: 1, ocupado: false, desde: T1, dialogos: [] };
-  const vivo = execucao({ ticket: 1, modo: "interativo", resultado: "em_andamento" });
-  const incompleto = agregadoCom("registro", [registro], [vivo]);
-  assert.deepEqual(estado(incompleto, ocioso), ["aguardando_humano", "conversa", T1]);
-  assert.deepEqual(estado(incompleto, { ...ocioso, ocupado: true }), ["rodando", undefined, T1]);
-  const evidencia = (id: number, tipo: "comportamento" | "criterios_aceite") => ({
-    id,
-    ticket: 1,
-    tipo,
-    produtor: "agente" as const,
-    dados: {},
-    arquivos: [],
-    em: T0,
-  });
-  const completo = agregadoCom(
-    "registro",
-    [registro],
-    [execucao({ ticket: 1, modo: "interativo", resultado: "sucesso" })],
-    {
-      issue: { ...incompleto.issue, titulo: "Busca lenta", tipo: "problema" },
-      evidencias: [evidencia(1, "comportamento"), evidencia(2, "criterios_aceite")],
-    },
-  );
-  assert.deepEqual(estado(completo), ["aguardando_humano", "gate_registro", T1]);
-  const devolucao = {
-    id: 1,
-    issue: 1,
-    ticket: 1,
-    gate: "registro" as const,
-    aprovado: false,
-    motivo: "m",
-    por: "auditor" as const,
-  };
-  const devolvido = { ...completo, decisoes: [{ ...devolucao, em: T1 }] };
-  assert.deepEqual(estado(devolvido), ["aguardando_humano", "conversa", T1], "evidências de antes da devolução");
-  const refeito = {
-    ...devolvido,
-    evidencias: [...completo.evidencias, { ...evidencia(3, "comportamento"), em: "2026-10-11T12:00:00.000Z" }],
-  };
-  assert.deepEqual(estado(refeito), ["aguardando_humano", "gate_registro", T1], "evidência depois da devolução");
-  assert.deepEqual(estado(devolvido, undefined, T0), ["aguardando_humano", "conversa", T1], "edição de antes");
-  assert.deepEqual(
-    estado(devolvido, undefined, "2026-10-11T12:00:00.000Z"),
-    ["aguardando_humano", "gate_registro", T1],
-    "edição da issue pelo agente depois da devolução",
-  );
+  const ENVIO = "2026-10-11T10:30:00.000Z";
+  for (const [etapa, fase, gate] of [
+    ["registro", "registro", "gate_registro"],
+    ["desenho", "aprovacao_desenho", "gate_desenho"],
+  ] as const) {
+    const conversando = ticket({ id: 1, etapa, status: "em_execucao" });
+    const vivo = execucao({ ticket: 1, modo: "interativo", resultado: "em_andamento" });
+    const ag = agregadoCom(etapa, [conversando], [vivo]);
+    assert.deepEqual(estado(ag, ocioso), ["aguardando_humano", "conversa", T1], etapa);
+    assert.deepEqual(estado(ag, { ...ocioso, ocupado: true }), ["rodando", undefined, T1], etapa);
+    // Enviado: o gate vale com o pi ainda ocioso ou já parado, e conta do envio.
+    const enviado = agregadoCom(fase, [{ ...conversando, enviadoEm: ENVIO }], [vivo]);
+    assert.deepEqual(estado(enviado, ocioso), ["aguardando_humano", gate, ENVIO], etapa);
+    const parado = { ...enviado, execucoes: [execucao({ ticket: 1, modo: "interativo", resultado: "sucesso" })] };
+    assert.deepEqual(estado(parado), ["aguardando_humano", gate, ENVIO], etapa);
+    // O desenho do formato anterior, que esperava o gate com execuções autônomas, também.
+    const autonomo = { ...enviado, execucoes: [execucao({ ticket: 1, modo: "autonomo", resultado: "sucesso" })] };
+    assert.deepEqual(estado(autonomo), ["aguardando_humano", gate, ENVIO], etapa);
+  }
 });
 
-test("estado: gates de desenho e de PR só para o último ticket concluído da etapa; o resto termina", () => {
+test("estado: o gate do PR só para o último encerramento concluído; os tickets concluídos terminam", () => {
   const desenhos = [
     ticket({ id: 2, etapa: "desenho", status: "concluido", concluidoEm: T0 }),
     ticket({ id: 3, etapa: "desenho", status: "concluido" }),
@@ -218,13 +190,11 @@ test("estado: gates de desenho e de PR só para o último ticket concluído da e
   const outra = "00000000-0000-4000-8000-000000000002";
   const execs = [
     execucao({ id: 1, ticket: 2, modo: "autonomo", resultado: "sucesso" }),
-    execucao({ id: 2, ticket: 3, modo: "autonomo", resultado: "sucesso", sessaoPi: outra }),
+    execucao({ id: 2, ticket: 3, modo: "interativo", resultado: "sucesso", sessaoPi: outra }),
   ];
-  const ag = agregadoCom("aprovacao_desenho", desenhos, execs);
-  assert.deepEqual(estado(ag), ["terminada", undefined, T0], "o desenho reprovado antes");
-  const ultimo = estadoDaSessao(ag, outra, { viva: undefined, edicaoDoAgente: "" });
-  assert.deepEqual([ultimo.estado, ultimo.motivo, ultimo.desde], ["aguardando_humano", "gate_desenho", T1]);
   assert.deepEqual(estado(agregadoCom("desenvolvimento", desenhos, execs)), ["terminada", undefined, T0]);
+  const ultimo = estadoDaSessao(agregadoCom("desenvolvimento", desenhos, execs), outra, { viva: undefined });
+  assert.deepEqual([ultimo.estado, ultimo.motivo, ultimo.desde], ["terminada", undefined, T1]);
 
   const encerramento = agregadoCom(
     "aprovacao_pr",
@@ -248,7 +218,7 @@ test("estado: sessão em aberto parada é conversa; sessão desconhecida é erro
   );
   assert.deepEqual(estado(ag), ["aguardando_humano", "conversa", T1]);
   assert.throws(
-    () => estadoDaSessao(ag, "00000000-0000-4000-8000-000000000009", { viva: undefined, edicaoDoAgente: "" }),
+    () => estadoDaSessao(ag, "00000000-0000-4000-8000-000000000009", { viva: undefined }),
     (e) =>
       e instanceof ErroDeRegra && e.message.startsWith("a sessão 00000000-0000-4000-8000-000000000009 não é da I-1"),
   );
@@ -263,7 +233,7 @@ test("estado: a consulta só conversa, sem a falha nem os gates do ticket, e par
     );
   assert.deepEqual(estado(consulta("desenho", "falhou")), ["aguardando_humano", "conversa", T1]);
   assert.deepEqual(estado(consulta("desenho", "aberto")), ["aguardando_humano", "conversa", T1]);
-  assert.deepEqual(estado(consulta("aprovacao_desenho", "concluido")), ["aguardando_humano", "conversa", T1]);
+  assert.deepEqual(estado(consulta("aprovacao_desenho", "em_execucao")), ["aguardando_humano", "conversa", T1]);
   assert.deepEqual(estado(consulta("desenvolvimento", "concluido")), ["terminada", undefined, T1]);
   const ociosa = { execucao: 1, ocupado: false, desde: T1, dialogos: [] };
   const viva = consulta("desenvolvimento", "concluido", "em_andamento");
@@ -310,7 +280,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
  *   parar com stopReason aborted;
  * - sai: sai com código 3 ao receber o prompt.
  * Com --fork, a sessão nova começa com as entradas da de origem.
- * Uma mensagem com "pergunte" não roda o agente: ele só pergunta; com "edite", ele só edita a issue. $FALSO_PI_RECUSA ("prompt", "steer") faz o pi recusar
+ * Uma mensagem que termina em "pergunte" não roda o agente: ele só pergunta; com "edite o título", ele só edita a issue. $FALSO_PI_RECUSA ("prompt", "steer") faz o pi recusar
  * o primeiro prompt ou todo steer.
  */
 const PI_FALSO = `#!/usr/bin/env node
@@ -367,7 +337,7 @@ async function aoPrompt(c) {
     return;
   }
   if (variante === "sai") process.exit(3);
-  if (process.env.FALSO_PI_AGENTE && !c.message.includes("pergunte")) await (await import(process.env.FALSO_PI_AGENTE)).default(c.message.includes("edite"));
+  if (process.env.FALSO_PI_AGENTE && !/pergunte\\.?$/.test(c.message)) await (await import(process.env.FALSO_PI_AGENTE)).default(c.message.includes("edite o título"));
   responder("entendi:\\u2028tudo");
   if (variante === "dialogo") emitir({ type: "extension_ui_request", id: "e1", method: "editor", title: "Explique" });
 }
@@ -402,12 +372,16 @@ writeFileSync(pi, PI_FALSO);
 chmodSync(pi, 0o755);
 process.env.FABRIQUINHA_PI = pi;
 
-/** "Agente" do registro: dá título e tipo à issue e, se não for `soEditar`, submete as evidências do registro. */
+/**
+ * "Agente" do registro com o "sim" do Auditor: dá título e tipo à issue, submete as evidências do registro (salvo
+ * `soEditar`, que mantém as que já existem) e envia o registro à aprovação (C25).
+ */
 const agente = join(base, "agente.mjs");
 writeFileSync(
   agente,
   `import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { enviarParaAprovacao } from "${src}/dominio/gates.ts";
 import { editarIssue } from "${src}/dominio/issue.ts";
 import { submeter } from "${src}/evidencias/submissao.ts";
 import { abrir } from "${src}/persistencia/banco.ts";
@@ -421,12 +395,14 @@ export default async function (soEditar) {
   const ator = { tipo: "agente", execucao, ticket };
   const titulo = soEditar ? "Busca lenta com mil itens" : "Busca lenta";
   comIssue(banco, issue, "editarIssue", ator, (ag) => editarIssue(ag, { titulo, tipo: "problema" }, ator));
-  if (soEditar) return banco.close();
-  const log = join(process.env.FABRIQUINHA_SAIDA, "busca.log");
-  writeFileSync(log, "busca levou 8 s\\n");
-  submeter(banco, ator, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [log]);
-  submeter(banco, ator, "criterios_aceite",
-    { criterios: [{ id: "CA-1", dado: "mil itens", quando: "busco", entao: "responde em 1 s" }] }, []);
+  if (!soEditar) {
+    const log = join(process.env.FABRIQUINHA_SAIDA, "busca.log");
+    writeFileSync(log, "busca levou 8 s\\n");
+    await submeter(banco, ator, "comportamento", { descricao: "a busca varre tudo", comoReproduzir: ["buscar"] }, [log]);
+    await submeter(banco, ator, "criterios_aceite",
+      { criterios: [{ id: "CA-1", dado: "mil itens", quando: "busco", entao: "responde em 1 s" }] }, []);
+  }
+  comIssue(banco, issue, "enviarParaAprovacao", ator, (ag, ctx) => enviarParaAprovacao(ag, { ticket }, ator, ctx));
   banco.close();
 }
 `,
@@ -523,7 +499,7 @@ const vivo = (pid: unknown) => {
 
 const rejeitaCom = (mensagem: string) => (e: unknown) => e instanceof ErroDeRegra && e.message === mensagem;
 
-test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no chat, devolver com motivo e aprovar", async () => {
+test("registro: C1, worktree, sessão interativa com a mensagem inicial; o envio abre o gate, devolver retoma e aprovar", async () => {
   const c = cenario({ comAgente: true });
   const opcoes = { ociosidadeMin: 1 };
   const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
@@ -548,12 +524,12 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
   const estados = () => eventos.filter((e) => e.type === "estado").map((e) => (e.sessao as { estado: string }).estado);
   assert.deepEqual([estados()[0], estados().at(-1)], ["rodando", "aguardando_humano"]);
 
-  // O gate do registro fica no chat: o campo de mensagem dá lugar a Aprovar e Devolver.
+  // O agente enviou (C25): a decisão fica na página da issue, e o chat não recebe mensagem.
   await assert.rejects(
     enviar(c.banco, sessao, "mais uma coisa", "prompt", opcoes),
     rejeitaCom(
-      "a sessão de T-1 está aguardando_humano: gate_registro e não recebe mensagem (aprove o registro, ou " +
-        "devolva-o com o motivo, que vai ao agente como mensagem)",
+      "a sessão de T-1 está aguardando_humano: gate_registro e não recebe mensagem (decida na página da issue; " +
+        "devolver leva o motivo ao agente nesta conversa)",
     ),
   );
   const conversa = (await abrirChat(c.banco, sessao)).conversa as { type: string; message?: { role: string } }[];
@@ -562,8 +538,8 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
     ["session", "user", "assistant"],
   );
 
-  // Devolvido, o agente só pergunta: as evidências antigas não devolvem a sessão ao gate.
-  await decidirRegistroNoChat(c.banco, 1, { aprovado: false, motivo: "Falta o passo a passo; pergunte" }, opcoes);
+  // Devolvido, o envio sai e a sessão volta à conversa; o agente só pergunta, e as evidências antigas não bastam.
+  await decidirGate(c.banco, 1, "registro", { aprovado: false, motivo: "Falta o passo a passo; pergunte" }, opcoes);
   assert.deepEqual(
     c.execucoes().map((e) => [e.id, e.resultado, e.sessao_pi, e.modo]),
     [
@@ -577,7 +553,7 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
   assert.equal(c.comandos().at(-1)?.message, "O Auditor devolveu o registro. Motivo: Falta o passo a passo; pergunte");
   assert.equal(c.registro().filter((r) => r.evento === "inicio").length, 2);
 
-  // O Auditor responde; o agente só edita a issue, sem evidência nova, e isso basta para o gate voltar.
+  // O Auditor responde; o agente edita a issue, sem evidência nova, e envia de novo.
   await enviar(c.banco, sessao, "Buscar com mil itens; edite o título.", "prompt", opcoes);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: gate_registro", "o gate de novo");
   assert.equal(agregado(c.banco, 1)?.issue.titulo, "Busca lenta com mil itens");
@@ -587,7 +563,7 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; gate no
   const worktree = caminhoDaWorktree(c.raiz, "loja", 1);
   writeFileSync(join(worktree, "rascunho.txt"), "do registro\n");
   writeFileSync(join(worktree, "LEIAME"), "mudado\n");
-  await decidirRegistroNoChat(c.banco, 1, { aprovado: true }, opcoes);
+  await decidirGate(c.banco, 1, "registro", { aprovado: true }, opcoes);
   assert.equal(agregado(c.banco, 1)?.issue.fase, "desenho");
   assert.equal(existsSync(join(worktree, "rascunho.txt")), false);
   assert.equal(readFileSync(join(worktree, "LEIAME"), "utf8"), "loja\n");
@@ -723,7 +699,7 @@ test("proposta: agente ocupado recusa antes de gravar, e proposta inexistente é
   c.banco.close();
 });
 
-test("proposta no desenho: aceitar reprova o desenho e abre o registro da nova, sem mensagem à IA do desenho", async () => {
+test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o motivo e abre o registro da nova", async () => {
   const c = cenario();
   const opcoes = { ociosidadeMin: 1 };
   registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
@@ -732,13 +708,25 @@ test("proposta no desenho: aceitar reprova o desenho e abre o registro da nova, 
     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
       VALUES (2, 1, 'desenho', 'Desenhar', 'em_execucao', 'fabriquinha', '${T1}');
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
-      VALUES (1, 2, 'autonomo', '${SESSAO}', 'em_andamento', '${T1}');
+      VALUES (1, 2, 'interativo', '${SESSAO}', 'em_andamento', '${T1}');
     INSERT INTO sequencia (nome, valor) VALUES ('ticket', 2), ('execucao', 1)
       ON CONFLICT (nome) DO UPDATE SET valor = excluded.valor;`);
+  const recusada = proporIssue(
+    c.banco,
+    1,
+    { ...PROPOSTA, titulo: "Outra" },
+    { tipo: "agente", execucao: 1, ticket: 2 },
+  );
   const proposta = proporIssue(c.banco, 1, PROPOSTA, { tipo: "agente", execucao: 1, ticket: 2 });
+  // O agente enviou o desenho (C25) e o pi parou.
   c.banco.exec(`UPDATE issue SET fase = 'aprovacao_desenho';
-    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}' WHERE id = 2;
+    UPDATE ticket SET enviado_em = '${T1}' WHERE id = 2;
     UPDATE execucao SET resultado = 'sucesso', terminada_em = '${T1}';`);
+
+  // Recusar só marca a proposta: o gate continua, sem mensagem à IA.
+  assert.deepEqual(await decidirProposta(c.banco, recusada.id, false, opcoes), {});
+  assert.equal(c.execucoes().length, 1);
+  assert.equal(agregado(c.banco, 1)?.issue.fase, "aprovacao_desenho");
 
   assert.deepEqual(await decidirProposta(c.banco, proposta.id, true, opcoes), { issue: 2 });
 
@@ -746,20 +734,30 @@ test("proposta no desenho: aceitar reprova o desenho e abre o registro da nova, 
   assert.ok(ag);
   assert.equal(ag.issue.fase, "desenho");
   assert.equal(ag.decisoes.at(-1)?.aprovado, false);
-  assert.match(ag.decisoes.at(-1)?.motivo ?? "", /I-2 \(«Tela de relatório»\)/);
-  assert.equal(ag.tickets.at(-1)?.etapa, "desenho");
-  assert.equal(ag.tickets.at(-1)?.status, "aberto");
+  const motivo = ag.decisoes.at(-1)?.motivo ?? "";
+  assert.match(motivo, /I-2 \(«Tela de relatório»\)/);
+  assert.deepEqual(
+    ag.tickets.filter((t) => t.etapa === "desenho").map((t) => [t.id, t.status, t.enviadoEm]),
+    [[2, "em_execucao", undefined]],
+    "o mesmo desenho, de volta à conversa",
+  );
   assert.equal(agregado(c.banco, 2)?.issue.descricao, "Parte B: tela de relatório");
   assert.deepEqual(
-    c.execucoes().map((e) => [e.id, e.sessao_pi === SESSAO]),
+    c.execucoes().map((e) => [e.id, e.sessao_pi === SESSAO, e.modo]),
     [
-      [1, true],
-      [2, false],
+      [1, true, "interativo"],
+      [2, true, "interativo"],
+      [3, false, "interativo"],
     ],
-    "nenhuma execução nova na I-1; só o registro da I-2",
+    "a IA do desenho retoma a mesma sessão; o registro da I-2 abre outra",
   );
   await ate(
-    async () => (await estadoDe(c, c.execucoes()[1]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
+    () => c.comandos().some((m) => String(m.message).endsWith(`O Auditor reprovou o desenho. Motivo: ${motivo}\n`)),
+    "o motivo chegar à IA do desenho",
+  );
+  await ate(async () => (await estadoDe(c, SESSAO)) === "aguardando_humano: conversa", "a IA do desenho responder");
+  await ate(
+    async () => (await estadoDe(c, c.execucoes()[2]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
     "o registro da I-2",
   );
   await pararTudo(c);
@@ -884,7 +882,7 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
     rejeitaCom("T-1 é da etapa registro (só a sessão em aberto se conclui pelo chat)"),
   );
   await assert.rejects(
-    decidirRegistroNoChat(c.banco, 1, { aprovado: false, motivo: "x" }, opcoes),
+    decidirGate(c.banco, 1, "registro", { aprovado: false, motivo: "x" }, opcoes),
     rejeitaCom("a sessão de T-1 ainda está rodando (espere o agente terminar)"),
   );
 
@@ -1205,7 +1203,7 @@ test("consulta: copia a sessão principal, sem ferramentas de escrita, sem promp
   const opcoes = { ociosidadeMin: 1 };
   const principal = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", opcoes);
   await ate(async () => (await estadoDe(c, principal)) === "aguardando_humano: gate_registro", "o gate do registro");
-  await decidirRegistroNoChat(c.banco, 1, { aprovado: true }, opcoes);
+  await decidirGate(c.banco, 1, "registro", { aprovado: true }, opcoes);
   const original = readFileSync(arquivoFalso(c, principal), "utf8");
   const comandos = c.comandos().length;
 

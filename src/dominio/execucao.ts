@@ -26,9 +26,9 @@ const FASE_DA_ETAPA: Readonly<Record<Etapa, Fase>> = {
   sessao: "ajuste_pr",
 };
 
-/** `registro` e `sessao` conversam com o Auditor; as demais rodam sozinhas (F1 §3.6). */
-const modoDaEtapa = (etapa: Etapa): ModoExecucao =>
-  etapa === "registro" || etapa === "sessao" ? "interativo" : "autonomo";
+/** `registro`, `desenho` e `sessao` conversam com o Auditor; as demais rodam sozinhas (F1 §3.6). */
+export const modoDaEtapa = (etapa: Etapa): ModoExecucao =>
+  etapa === "registro" || etapa === "desenho" || etapa === "sessao" ? "interativo" : "autonomo";
 
 /** F1 §3.10: o override do ticket, senão o modelo da etapa no projeto; `undefined` deixa valer o padrão do pi. */
 export const modeloDaExecucao = (ticket: Ticket, projeto: Projeto | undefined): Modelo | undefined =>
@@ -63,7 +63,7 @@ export function exigirSemExecucao(ag: Agregado, ticket: Ticket, acao: string): v
   }
 }
 
-const trocarTicket = (ag: Agregado, ticket: Ticket): Agregado => ({
+export const trocarTicket = (ag: Agregado, ticket: Ticket): Agregado => ({
   ...ag,
   tickets: ag.tickets.map((t) => (t.id === ticket.id ? ticket : t)),
 });
@@ -129,7 +129,8 @@ export function iniciarExecucao(ag: Agregado, entrada: unknown, ator: Ator, ctx:
   if (!aceitos.includes(ticket.status)) {
     throw new ErroDeRegra(`${t} está ${ticket.status} e não pode executar`, "reabra-o se ele falhou");
   }
-  if (modo === "autonomo") {
+  // O desenho é interativo, mas, como as etapas autônomas, só começa com as dependências concluídas (F1 §3.4).
+  if (modo === "autonomo" || (ticket.etapa === "desenho" && ticket.status === "aberto")) {
     if (!ctx.depsConcluidas(ag.issue.id)) {
       throw new ErroDeRegra(
         `a ${rotuloIssue(ag)} depende de issues ainda não concluídas`,

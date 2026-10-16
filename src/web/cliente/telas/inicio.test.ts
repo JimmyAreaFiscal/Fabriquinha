@@ -133,7 +133,7 @@ test("aguarda você: um card por sessão, na ordem recebida, com motivo, issue, 
     "Gate do PR Ver o PR → I-29 Issue 29 PR #212 aberto; aguarda a sua revisão no PR site T-99 · encerramento · autônoma · há 1 h 20 min",
     "Gate do desenho Avaliar desenho → I-37 Issue 37 2 tickets de desenvolvimento propostos loja T-109 · desenho · autônoma · há 47 min",
     "Gate do desenho Avaliar desenho → I-38 Issue 38 1 ticket de desenvolvimento proposto loja T-119 · desenho · autônoma · há 30 min",
-    "Gate do registro Avaliar registro → I-40 Issue 40 Registro pronto; falta aprovar loja T-115 · registro · interativa · há 22 min",
+    "Gate do registro Avaliar registro → I-40 Issue 40 Registro enviado; falta aprovar loja T-115 · registro · interativa · há 22 min",
     "Conversa Responder → I-27 sem título O agente respondeu e espera você loja T-117 · sessão em aberto · interativa · há 9 min",
     "Diálogo Responder → I-41 sem título O agente pergunta: Qual formato? loja T-118 · registro · interativa · há 5 min",
     "Diálogo Responder → I-41 sem título O agente abriu uma pergunta loja T-118 · desenvolvimento · consulta · há 5 min",
@@ -145,10 +145,12 @@ test("aguarda você: um card por sessão, na ordem recebida, com motivo, issue, 
     AGORA,
   );
   assert.match(semPR, /PR aberto; aguarda a sua revisão no PR/);
-  // O card inteiro abre o chat; a falha em vermelho, com o botão secundário.
+  // O card inteiro abre o chat, ou a página da issue nos gates; a falha em vermelho, com o botão secundário.
   assert.match(cards[0] ?? "", /^<a class="decisao superficie falha" href="\/sessions\/s-101">/);
   assert.match(cards[0] ?? "", /<span class="btn btn-pequeno">Responder e retomar →<\/span>/);
-  assert.match(cards[1] ?? "", /^<a class="decisao superficie" href="\/sessions\/s-99">/);
+  assert.match(cards[1] ?? "", /^<a class="decisao superficie" href="\/projects\/site\/issues\/I-29">/);
+  assert.match(cards[4] ?? "", /^<a class="decisao superficie" href="\/projects\/loja\/issues\/I-40">/);
+  assert.match(cards[5] ?? "", /^<a class="decisao superficie" href="\/sessions\//);
   assert.match(cards[1] ?? "", /<span class="btn btn-primario btn-pequeno">Ver o PR →<\/span>/);
 });
 

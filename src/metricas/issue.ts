@@ -133,11 +133,13 @@ export function consumo(linhas: readonly UsoDoModelo[]) {
 }
 
 /**
- * F6 §5.5: os números objetivos do último desenho concluído, ou `null` antes dele. Evidência faltando ou malformada
- * também dá `null`, com um aviso no log do serviço: métrica nunca é gate (F6 §1).
+ * F6 §5.5: os números objetivos do último desenho enviado à aprovação (C25) ou concluído, ou `null` antes dele.
+ * Evidência faltando ou malformada também dá `null`, com um aviso no log do serviço: métrica nunca é gate (F6 §1).
  */
 export function numerosDoDesenho(ag: Agregado): MetricasIssue["desenho"] {
-  const ticket = ag.tickets.findLast((t) => t.etapa === "desenho" && t.status === "concluido");
+  const ticket = ag.tickets.findLast(
+    (t) => t.etapa === "desenho" && (t.status === "concluido" || t.enviadoEm !== undefined),
+  );
   if (!ticket) return null;
   const dados = (tipo: string) => ag.evidencias.find((e) => e.ticket === ticket.id && e.tipo === tipo)?.dados;
   const solucao = SolucaoDesenhada.safeParse(dados("desenho_solucao"));

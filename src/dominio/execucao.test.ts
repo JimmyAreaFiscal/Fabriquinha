@@ -137,8 +137,8 @@ test("C5 autônomo: ticket em execução, execução nova com o modelo resolvido
   });
   const comOverride = agregado("desenvolvimento", [{ ...dev, modelo: CARO }]);
   assert.deepEqual(iniciarExecucao(comOverride, inicio, fabriquinha, contexto()).execucoes[0]?.modelo, CARO);
-  const desenho = agregado("desenho", [ticket(3, "desenho", "aberto")]);
-  const semModelo = iniciarExecucao(desenho, { ...inicio, ticket: 3 }, fabriquinha, contexto()).execucoes[0];
+  const revisao = agregado("revisao", [ticket(3, "revisao", "aberto")]);
+  const semModelo = iniciarExecucao(revisao, { ...inicio, ticket: 3 }, fabriquinha, contexto()).execucoes[0];
   assert.ok(semModelo && !("modelo" in semModelo));
 });
 
@@ -179,7 +179,7 @@ test("C5 autônomo não recusa por autônoma de outra issue, mas recusa a 2ª da
   assert.equal(mesma.execucoes.length, 1);
 });
 
-test("C5 interativo aceita ticket aberto ou em execução e ignora dependências", () => {
+test("C5 interativo aceita ticket aberto ou em execução; só o desenho que começa exige as dependências", () => {
   const fatos = contexto({ depsConcluidas: false });
   const registro = agregado("registro", [ticket(1, "registro", "em_execucao")], [terminada(5, 1, "interativo")]);
   const retomado = iniciarExecucao(registro, { ticket: 1, modo: "interativo", sessaoPi: SESSAO }, fabriquinha, fatos);
@@ -204,6 +204,15 @@ test("C5 interativo aceita ticket aberto ou em execução e ignora dependências
       ),
     "T-1 está concluido e não pode executar (reabra-o se ele falhou)",
   );
+  const desenho = (status: Ticket["status"]) => agregado("desenho", [ticket(2, "desenho", status)]);
+  const inicio = { ticket: 2, modo: "interativo", sessaoPi: SESSAO };
+  regra(
+    () => iniciarExecucao(desenho("aberto"), inicio, fabriquinha, fatos),
+    "a I-1 depende de issues ainda não concluídas (conclua as dependências antes)",
+  );
+  assert.equal(iniciarExecucao(desenho("aberto"), inicio, fabriquinha, contexto()).tickets[0]?.status, "em_execucao");
+  const conversa = iniciarExecucao(desenho("em_execucao"), inicio, fabriquinha, fatos);
+  assert.equal(conversa.execucoes[0]?.modo, "interativo");
 });
 
 test("C5 confere modo × etapa, fase × etapa e execução em andamento na issue", () => {
@@ -216,12 +225,12 @@ test("C5 confere modo × etapa, fase × etapa e execução em andamento na issue
     () =>
       iniciarExecucao(alvo, entrada, fabriquinha, contexto());
   regra(
-    iniciar({ ticket: 2, modo: "interativo", sessaoPi: SESSAO }),
-    "T-2 é da etapa desenho, que roda em modo autonomo (inicie em modo autonomo)",
+    iniciar({ ticket: 2, modo: "autonomo", sessaoPi: SESSAO }),
+    "T-2 é da etapa desenho, que roda em modo interativo (inicie em modo interativo)",
   );
   regra(
     iniciar({ ticket: 2, modo: "consulta", sessaoPi: SESSAO }),
-    "T-2 é da etapa desenho, que roda em modo autonomo (inicie em modo autonomo)",
+    "T-2 é da etapa desenho, que roda em modo interativo (inicie em modo interativo)",
   );
   regra(
     iniciar({ ticket: 1, modo: "autonomo", sessaoPi: SESSAO }),
@@ -229,7 +238,7 @@ test("C5 confere modo × etapa, fase × etapa e execução em andamento na issue
   );
   regra(
     iniciar(
-      { ticket: 2, modo: "autonomo", sessaoPi: SESSAO },
+      { ticket: 2, modo: "interativo", sessaoPi: SESSAO },
       { ...ag, issue: { ...ag.issue, fase: "aprovacao_desenho" } },
     ),
     "T-2 só executa na fase desenho, e a I-1 está em aprovacao_desenho (espere a issue chegar a essa fase)",
@@ -240,7 +249,7 @@ test("C5 confere modo × etapa, fase × etapa e execução em andamento na issue
   );
   // Uma consulta sobre outro ticket da issue também segura a issue.
   regra(
-    iniciar({ ticket: 2, modo: "autonomo", sessaoPi: SESSAO }, { ...ag, execucoes: [execucao(9, 1, "consulta")] }),
+    iniciar({ ticket: 2, modo: "interativo", sessaoPi: SESSAO }, { ...ag, execucoes: [execucao(9, 1, "consulta")] }),
     "a I-1 já tem a execução E-9 em andamento (espere ela terminar)",
   );
   regra(
@@ -357,11 +366,15 @@ test("C8 exige ticket autônomo em execução e sem execução em andamento", ()
     "T-1 é interativo e não falha (a sessão continua em execução e o Auditor a retoma)",
   );
   regra(
-    falhar(agregado("desenho", [ticket(1, "desenho", "aberto")])),
+    falhar(agregado("desenho", [ticket(1, "desenho", "em_execucao")])),
+    "T-1 é interativo e não falha (a sessão continua em execução e o Auditor a retoma)",
+  );
+  regra(
+    falhar(agregado("revisao", [ticket(1, "revisao", "aberto")])),
     "T-1 está aberto, não em execução (só falha o ticket em execução)",
   );
   regra(
-    falhar(agregado("desenho", [ticket(1, "desenho", "em_execucao")], [execucao(3, 1, "autonomo")])),
+    falhar(agregado("revisao", [ticket(1, "revisao", "em_execucao")], [execucao(3, 1, "autonomo")])),
     "T-1 não pode falhar: a execução E-3 ainda está em andamento (espere ela terminar)",
   );
   regra(falhar(agregado("desenho", []), 4), "o ticket T-4 não é da I-1 (confira o número do ticket)");

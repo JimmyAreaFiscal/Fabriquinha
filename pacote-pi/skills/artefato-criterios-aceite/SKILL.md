@@ -19,7 +19,8 @@ Um critério é um **contrato verificável**: quem nunca viu a conversa executa 
 3. Escreva cada critério no formato dado/quando/então, um comportamento observável por critério.
 4. Leia cada critério como se fosse o agente da revisão: defina como você provaria com um print ou um vídeo.
    Reescreva o critério que não der para provar assim.
-5. Numere `CA-1`, `CA-2`, … na ordem de leitura e confira o formato com o schema do tipo antes de submeter.
+5. Proponha os critérios ao Auditor na conversa, poucos por mensagem, e ajuste cada um com ele até ele concordar.
+6. Numere `CA-1`, `CA-2`, … na ordem de leitura e confira o formato com o schema do tipo antes de submeter.
 
 ## Estrutura
 
@@ -61,5 +62,5 @@ Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arq
 - [ ] Todo resultado esperado tem pelo menos um caminho de erro coberto.
 - [ ] Os critérios descrevem o comportamento visto de fora; a solução interna fica para o desenho.
 - [ ] Os termos são os do produto e do código (nomes de tela, comando, campo), os mesmos da conversa com o Auditor.
-- [ ] O Auditor reconhece nos critérios tudo o que pediu, e só o que pediu.
+- [ ] O Auditor confirmou cada critério na conversa: reconhece neles tudo o que pediu, e só o que pediu.
 - [ ] Se a mudança passa de 30 arquivos, há uma proposta de issue; se não passa, não há.

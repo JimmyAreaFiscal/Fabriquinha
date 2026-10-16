@@ -80,11 +80,10 @@ const encerrar: Coleta = async (banco, ticket, worktree, log) => {
 };
 
 /**
- * Desenho, revisão e encerramento são autônomos e não mudam código: o descarte (F5 §3.3) vem depois de as
- * evidências estarem guardadas. Registro e sessão em aberto são interativos e descartam ao encerrar a etapa, no F4.
+ * Revisão e encerramento são autônomos e não mudam código: o descarte (F5 §3.3) vem depois de as evidências estarem
+ * guardadas. Registro, desenho e sessão em aberto são interativos e descartam ao encerrar a etapa, no F4.
  */
 const DEPOIS_DO_PI: Partial<Record<Etapa, Coleta>> = {
-  desenho: descartar,
   desenvolvimento: desenvolver,
   revisao: descartar,
   encerramento: encerrar,

@@ -12,7 +12,9 @@ export const Configuracao = z.strictObject({
 export type Configuracao = z.infer<typeof Configuracao>;
 
 /** As etapas que rodam em modo autônomo (F1 §3.6); as fases delas têm o mesmo nome (F1 §4.3). */
-const AUTONOMAS = "('desenho','desenvolvimento','revisao','encerramento')";
+const AUTONOMAS = "('desenvolvimento','revisao','encerramento')";
+/** As etapas que o agendador inicia (F4 §4): as autônomas e o desenho, que é interativo. */
+const AGENDADAS = "('desenho','desenvolvimento','revisao','encerramento')";
 
 export function configuracao(banco: DatabaseSync): Configuracao {
   const l = banco.prepare("SELECT * FROM configuracao").get() as Record<string, number>;
@@ -34,7 +36,7 @@ export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Confi
 }
 
 /**
- * F4 §4.1: os tickets autônomos elegíveis, um por issue (o mais antigo dela), da issue mais antiga à mais nova; com
+ * F4 §4.1: os tickets elegíveis do agendador, um por issue (o mais antigo dela), da issue mais antiga à mais nova; com
  * `issue`, só o dela (o **Executar agora** da página da issue, F7 §4.4). Além da consulta da spec, pula a issue com
  * execução em andamento (consulta inclusive) ou com ticket em execução: C5 a recusaria.
  */
@@ -43,7 +45,7 @@ export function ticketsElegiveis(banco: DatabaseSync, issue?: Id): Id[] {
     .prepare(
       `SELECT min(t.id) AS id FROM ticket t JOIN issue i ON i.id = t.issue
        WHERE t.status = 'aberto'
-         AND t.etapa IN ${AUTONOMAS}
+         AND t.etapa IN ${AGENDADAS}
          AND i.fase = t.etapa
          AND i.arquivada_em IS NULL
          AND ($issue IS NULL OR i.id = $issue)
