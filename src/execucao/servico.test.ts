@@ -610,6 +610,6 @@ test("executarAgora: não espera o agendador, inicia com outra issue rodando e r
       erro instanceof ErroDeRegra && erro.message === "a I-2 já tem a execução E-2 em andamento (espere ela terminar)",
   );
   await falhouNaWorktree(s.banco, 2);
-  assert.deepEqual(ticketsElegiveis(s.banco), [3]);
+  assert.deepEqual(ticketsElegiveis(s.banco), [], "T-2 falhou: T-3 espera ele concluir (C5)");
   await s.parar();
 });

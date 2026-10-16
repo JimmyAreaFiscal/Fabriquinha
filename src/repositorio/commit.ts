@@ -97,44 +97,44 @@ function numerosDe(c: readonly string[], j: number) {
 }
 
 /**
- * Sem nada a commitar: se a HEAD é um commit que nenhum ticket registrou e que não está em branch remota, o erro diz
- * de quem ele é. Com a marca de outro ticket, é o commit dele cujo C7 falhou: executá-lo de novo o adota. Sem marca,
- * o agente commitou por conta própria (o P1 proíbe), e o erro diz como desfazer. A Fabriquinha não desfaz sozinha:
- * um merge da base feito pelo agente seria achatado, e o trabalho de outro ticket viraria deste.
+ * Sem nada a commitar e a HEAD num commit que nenhum ticket registrou e que não está em branch remota: o agente
+ * commitou por conta própria (o P1 proíbe), e o erro diz como desfazer. A Fabriquinha não desfaz sozinha: um merge da
+ * base feito pelo agente seria achatado.
  */
-async function nadaACommitar(banco: DatabaseSync, worktree: string): Promise<ErroDeRegra> {
-  const head = (await exigirGit(worktree, "rev-parse", "HEAD")).trim();
-  // Na base, ou em qualquer branch remota, o commit não é do agente desta execução.
-  const remoto = (await exigirGit(worktree, "for-each-ref", "--contains", "HEAD", "refs/remotes")) !== "";
-  if (remoto || commitRegistrado(banco, head)) {
-    return new ErroDeRegra(
-      "o ticket de desenvolvimento não alterou nenhum arquivo",
-      "reabra o ticket com uma instrução do que o agente deve mudar",
-    );
-  }
-  const commit = `a HEAD da worktree é o commit ${head.slice(0, 12)}`;
-  const deOutro = /\[I-\d+\/(T-\d+)\]/.exec(await exigirGit(worktree, "log", "-1", "--format=%s", "HEAD"))?.[1];
-  if (deOutro) {
-    return new ErroDeRegra(
-      `o ticket de desenvolvimento não deixou alteração para commitar, e ${commit}, de ${deOutro}, que não foi registrado`,
-      `execute ${deOutro} de novo: ele adota o próprio commit; depois, este ticket`,
-    );
-  }
+function agenteCommitou(worktree: string, head: string): ErroDeRegra {
   return new ErroDeRegra(
-    `o ticket de desenvolvimento não deixou alteração para commitar, e ${commit}, ` +
-      "que nenhum ticket registrou: o agente commitou por conta própria",
+    "o ticket de desenvolvimento não deixou alteração para commitar, e a HEAD da worktree é o commit " +
+      `${head.slice(0, 12)}, que nenhum ticket registrou: o agente commitou por conta própria`,
     `devolva o trabalho ao stage com git -C ${worktree} reset --soft HEAD~1 (repita até a HEAD ser um commit da ` +
       "Fabriquinha ou da base; num merge da base, refaça-o com git merge --no-commit) e execute o ticket de novo",
   );
 }
 
-/** `git commit` com os hooks, sem credenciais e com limite; `emendar` refaz a HEAD (`--amend`). */
-async function commitar(worktree: string, mensagem: string, emendar: boolean, limiteMs: number): Promise<void> {
+/**
+ * `git commit` com os hooks, sem credenciais e com limite; `emendar` refaz a HEAD (`--amend`), e `semAlteracao`
+ * aceita o commit vazio.
+ */
+async function commitar(
+  worktree: string,
+  mensagem: string,
+  { emendar, semAlteracao }: { emendar: boolean; semAlteracao: boolean },
+  limiteMs: number,
+): Promise<void> {
   const vazio = mkdtempSync(join(tmpdir(), "fabriquinha-commit-"));
   try {
     const r = await executar(
       "git",
-      ["-C", worktree, "commit", "-q", ...(emendar ? ["--amend"] : []), "--cleanup=verbatim", "-m", mensagem],
+      [
+        "-C",
+        worktree,
+        "commit",
+        "-q",
+        ...(emendar ? ["--amend"] : []),
+        ...(semAlteracao ? ["--allow-empty"] : []),
+        "--cleanup=verbatim",
+        "-m",
+        mensagem,
+      ],
       {
         env: { ...ambienteSemCredenciais(process.env, vazio), GIT_TERMINAL_PROMPT: "0" },
         limiteMs,
@@ -161,17 +161,14 @@ async function commitar(worktree: string, mensagem: string, emendar: boolean, li
  * faz o ticket falhar com a saída. Os hooks rodam código do agente (o pre-commit costuma chamar os testes), então o
  * commit roda sem credenciais, como os coletores (F5 §5.0), e com o limite de 30 minutos dos comandos do projeto.
  *
- * Retomada: se o commit saiu, mas a transação do C7 falhou, sobra um commit não publicado com a marca
- * `[I-<n>/T-<m>]` deste ticket, o órfão, e a próxima execução não teria o que commitar. Achar a marca é seguro: T-<m>
- * é global, e ticket concluído não executa de novo, logo um commit com a marca de um ticket em execução nunca foi
- * registrado.
- * - Órfão na HEAD: emenda (`--amend`, de novo com os hooks) com o que o agente mudou desde então. `--amend` e não
- *   `reset --soft`: um merge da base que o agente deixou para o nosso commit concluir continua merge.
- * - Órfão mais fundo (outro ticket commitou por cima) e nada novo: adota o órfão como está; hooks e gates já rodaram
- *   quando ele nasceu.
- * - Órfão mais fundo e alteração nova: commit normal.
- *   ponytail: os arquivos do órfão ficam sem ticket e perdem a atribuição no F6; reescrever a história para juntá-los
- *   desfaria commits de outros tickets.
+ * Sem alteração, o commit sai vazio: o trabalho do ticket já estava na branch, e o C7 continua exigindo o commit do
+ * ticket. A revisão cruza o diff da issue inteira com o desenho.
+ *
+ * Retomada: se o commit saiu, mas a transação do C7 falhou, a HEAD é um commit não publicado e não registrado com a
+ * marca `[I-<n>/T-<m>]` deste ticket, o órfão. Ele é emendado (`--amend`, de novo com os hooks) com o que o agente
+ * mudou desde então. `--amend` e não `reset --soft`: um merge da base que o agente deixou para o nosso commit concluir
+ * continua merge. Nenhum outro ticket commita por cima do órfão: o C5 só executa um ticket de desenvolvimento depois
+ * dos anteriores concluídos.
  */
 export async function commitarTicket(
   banco: DatabaseSync,
@@ -185,35 +182,24 @@ export async function commitarTicket(
   const marca = `[I-${String(issue.id)}/T-${String(ticket.id)}]`;
   return naFilaDoProjeto(raiz, projeto, async () => {
     const head = (await exigirGit(worktree, "rev-parse", "HEAD")).trim();
-    // O `--grep` olha a mensagem inteira: o commit registrado de outro ticket que cita a marca não é órfão.
-    const comMarca = await exigirGit(
-      worktree,
-      "log",
-      "-F",
-      `--grep=${marca}`,
-      "--format=%H",
-      "HEAD",
-      "--not",
-      "--remotes",
-    );
-    const orfao = comMarca.split("\n").find((sha) => sha !== "" && !commitRegistrado(banco, sha)) ?? "";
+    // Na base, em qualquer branch remota ou registrado por um ticket, o commit não é do agente desta execução.
+    const conhecido =
+      commitRegistrado(banco, head) ||
+      (await exigirGit(worktree, "for-each-ref", "--contains", "HEAD", "refs/remotes")) !== "";
+    // A mensagem inteira: o commit registrado de outro ticket que cita a marca no corpo já saiu como conhecido.
+    const orfao = !conhecido && (await exigirGit(worktree, "show", "-s", "--format=%B", "HEAD")).includes(marca);
     await exigirGit(worktree, "add", "-A");
-    const nada = (await git(worktree, "diff", "--cached", "--quiet")).codigo === 0;
-    let alvo = "HEAD";
-    if (orfao !== "" && orfao !== head && nada) {
-      alvo = orfao;
-    } else {
-      if (orfao === "" && nada) throw await nadaACommitar(banco, worktree);
-      await commitar(worktree, mensagemDoCommit(issue, ticket), orfao === head, limiteMs);
-    }
+    const semAlteracao = (await git(worktree, "diff", "--cached", "--quiet")).codigo === 0;
+    if (semAlteracao && !conhecido && !orfao) throw agenteCommitou(worktree, head);
+    await commitar(worktree, mensagemDoCommit(issue, ticket), { emendar: orfao, semAlteracao }, limiteMs);
     // `-M` explícito: a renomeação é detectada mesmo com `diff.renames` desligado na configuração do Auditor. Num
     // merge, o diff é contra o primeiro pai, a branch da issue: sem isso o git mostra o diff combinado.
     const mudou = (formato: string) =>
-      exigirGit(worktree, "show", "-z", "-M", "--diff-merges=first-parent", formato, "--format=", alvo);
+      exigirGit(worktree, "show", "-z", "-M", "--diff-merges=first-parent", formato, "--format=", "HEAD");
     return {
-      sha: (await exigirGit(worktree, "rev-parse", alvo)).trim(),
+      sha: (await exigirGit(worktree, "rev-parse", "HEAD")).trim(),
       // Lida de volta: um hook commit-msg pode tê-la mudado.
-      mensagem: (await exigirGit(worktree, "show", "-s", "--format=%B", alvo)).trimEnd(),
+      mensagem: (await exigirGit(worktree, "show", "-s", "--format=%B", "HEAD")).trimEnd(),
       em: new Date().toISOString(),
       arquivos: arquivosDe(await mudou("--name-status"), await mudou("--numstat")),
     };
