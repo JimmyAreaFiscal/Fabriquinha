@@ -4033,7 +4033,7 @@ svg.barras :not(.hit) {
 }
 .kpis-mes {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--s-3);
   margin: var(--s-4) 0 var(--s-6);
 }

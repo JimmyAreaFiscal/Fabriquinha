@@ -59,7 +59,7 @@ function mes(
       execucoes: etapa === "desenvolvimento" ? n : 0,
       falhas: 0,
       reprovacoes: 0,
-      iteracoes: 0,
+      iteracoes: etapa === "registro" ? n : 0,
       duracaoMs: etapa === "desenvolvimento" ? n * 60_000 : 0,
     })),
     ...outros,
@@ -264,17 +264,36 @@ test("por etapa: o mês em foco contra a média, com barras duplas e duração m
   const html = paginaDeMetricas(DADOS, ESTADO);
   const secao = /<h3>out\/26 × média[\s\S]*?<\/section>/.exec(html)?.[0] ?? "";
   const linhas = [...secao.matchAll(/<tr><td>([\s\S]*?)<\/tr>/g)].map((m) => texto(m[1] ?? ""));
-  assert.equal(linhas.length, 6);
-  assert.equal(linhas[0], "Registro US$ 0,00 US$ 0,00 0 / 0 0 / 0,0 0 / 0,0 0 / 0,0 — / —");
+  assert.equal(linhas.length, 7);
+  assert.equal(linhas[0], "Registro US$ 0,00 US$ 0,00 0 / 0 0 / 0,0 0 / 0,0 0 / 0,0 2 / 2,0 — / —");
   assert.equal(
     linhas[2],
-    "Desenvolvimento US$ 30,00 US$ 7,50 ▲ 300% 1,0 mil / 1,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 1 min / 1 min",
+    "Desenvolvimento US$ 30,00 US$ 7,50 ▲ 300% 1,0 mil / 1,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 0 / 0,0 1 min / 1 min",
+  );
+  // Total: custo com média e Δ, contagens somadas (mês / soma das médias) e duração ponderada pelas execuções.
+  assert.equal(
+    linhas[6],
+    "Total US$ 30,00 US$ 7,50 ▲ 300% 1,0 mil / 1,0 mil 2 / 2,0 0 / 0,0 0 / 0,0 2 / 2,0 1 min / 1 min",
   );
   assert.match(secao, /width:100.0%;background:var\(--foco\)"><\/i><i style="width:25.0%;background:var\(--base\)/);
   assert.equal(linhas[5]?.split(" ")[0], "Sessão");
+  // Primeiro mês: sem média, e o Total também mostra —.
   const primeiro = paginaDeMetricas(DADOS, { ...ESTADO, foco: "2026-08" });
-  assert.match(texto(primeiro), /Desenvolvimento US\$ 5,00 — 1,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
-  assert.match(paginaDeMetricas({ ...DADOS, meses: [mes("2026-10", 0)] }, { ...ESTADO, de: "2026-10" }), /width:0.0%/);
+  assert.match(texto(primeiro), /Desenvolvimento US\$ 5,00 — 1,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 0 \/ — 1 min \/ —/);
+  assert.match(texto(primeiro), /Total US\$ 5,00 — 1,0 mil \/ — 1 \/ — 0 \/ — 0 \/ — 1 \/ — 1 min \/ —/);
+  // A duração da média é ponderada pelas execuções: (1 min + 6 min) / 4 = 1 min 45 s, não a média simples de 1 e 2 min.
+  const comDuracao = (m: string, execucoes: number, duracaoMs: number) =>
+    mes(m, 1, 0, null, {
+      etapas: mes(m, 1).etapas.map((x) => (x.etapa === "desenvolvimento" ? { ...x, execucoes, duracaoMs } : x)),
+    });
+  const pesada = paginaDeMetricas(
+    {
+      ...DADOS,
+      meses: [comDuracao("2026-08", 1, 60_000), comDuracao("2026-09", 3, 360_000), comDuracao("2026-10", 0, 0)],
+    },
+    ESTADO,
+  );
+  assert.match(texto(/<tfoot>[\s\S]*?<\/tfoot>/.exec(pesada)?.[0] ?? ""), /— \/ 1 min 45 s$/);
 });
 
 test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, sem segmento vazio", () => {
@@ -308,7 +327,14 @@ test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, sem segm
 
 test("por issue: ordenável pelo cabeçalho, com link, projeto só em todos, fase, nota e o total", () => {
   const issues = [
-    issue({ issue: 3, titulo: "Busca <b>", consumo: consumo(5, 1000), execucoes: 4, duracaoMs: 3_600_000 }),
+    issue({
+      issue: 3,
+      titulo: "Busca <b>",
+      consumo: consumo(5, 1000),
+      execucoes: 4,
+      iteracoes: 3,
+      duracaoMs: 3_600_000,
+    }),
     issue({ issue: 12, titulo: null, projeto: "site", fase: "concluida", notaPR: 4, falhas: 1, reprovacoes: 2 }),
     issue({ issue: 7, titulo: "Cache", fase: "registro" }),
   ];
@@ -325,6 +351,7 @@ test("por issue: ordenável pelo cabeçalho, com link, projeto só em todos, fas
   assert.deepEqual(ids({ ordem: ["duracao", -1] }), [3, 12, 7]);
   assert.deepEqual(ids({ ordem: ["nota", 1] }), [3, 7, 12]);
   assert.deepEqual(ids({ ordem: ["falhas", -1] }), [12, 3, 7]);
+  assert.deepEqual(ids({ ordem: ["iteracoes", -1] }), [3, 12, 7]);
 
   const html = paginaDeMetricas({ ...DADOS, issues }, ESTADO);
   assert.match(
@@ -335,9 +362,13 @@ test("por issue: ordenável pelo cabeçalho, com link, projeto só em todos, fas
     html,
     /<a class="id" href="\/projects\/site\/issues\/I-12">I-12<\/a><\/td>\s*<td><span class="muted">sem título<\/span><\/td>\s*<td class="muted">site<\/td>\s*<td><span class="pill pill-ok">Concluída<\/span>/,
   );
+  assert.match(html, /data-ordem="iteracoes">Iterações<\/button>/);
   assert.match(html, /Busca &#60;b&#62;/);
   assert.match(html, /<span class="pill fase">Desenvolvimento<\/span>/);
-  assert.equal(texto(/<tfoot>[\s\S]*?<\/tfoot>/.exec(html)?.[0] ?? ""), "3 issues US$ 7,00 1,0 mil 6 1 2 1 h 2 min");
+  assert.equal(
+    texto(/<tfoot>(?:(?!<tfoot>)[\s\S])*?<\/tfoot>(?![\s\S]*<tfoot>)/.exec(html)?.[0] ?? ""),
+    "3 issues US$ 7,00 1,0 mil 6 1 2 3 1 h 2 min",
+  );
   assert.match(html, /a out\/26 · todos os projetos · clique/);
 
   const loja = paginaDeMetricas({ ...DADOS, issues }, { ...ESTADO, projeto: "loja", ordem: ["custo", 1] });
@@ -357,7 +388,7 @@ test("próxima ordem: a mesma coluna inverte; outra começa crescente no texto, 
   assert.deepEqual(proximaOrdem(["titulo", 1], "execucoes"), ["execucoes", -1]);
 });
 
-test("Início e Projeto: a frase e os 5 cards do mês corrente", () => {
+test("Início e Projeto: a frase e os 6 cards do mês corrente", () => {
   const m = mes("2026-10", 38.42, 7, null, { consumo: consumo(38.42, 2_200_000, 400_000, 6_000_000, 300_000, 902) });
   assert.equal(
     texto(fraseDoMes(m)),
@@ -366,7 +397,7 @@ test("Início e Projeto: a frase e os 5 cards do mês corrente", () => {
   assert.match(fraseDoMes(m), /<a href="\/metrics">Métricas →<\/a>/);
   assert.equal(
     texto(cardsDoMes(m)),
-    "Custo · outubro US$ 38,42 902 chamadas de LLM Tokens 8,9 M 2,2 M entrada · 400,0 mil saída · 6,3 M cache Issues 8 / 7 registradas / concluídas Tickets 9 / 7 criados / concluídos PRs 8 / 7 abertos / mergeados",
+    "Custo · outubro US$ 38,42 902 chamadas de LLM Tokens 8,9 M 2,2 M entrada · 400,0 mil saída · 6,3 M cache Issues 8 / 7 registradas / concluídas Tickets 9 / 7 criados / concluídos PRs 8 / 7 abertos / mergeados Iterações 7 mensagens, diálogos e reaberturas",
   );
   assert.match(cardsDoMes(mes("2026-01", 0, 0, null, { consumo: consumo(0, 0, 0, 0, 0, 1) })), /1 chamada de LLM/);
 });

@@ -85,6 +85,7 @@ export type Coluna =
   | "execucoes"
   | "falhas"
   | "reprovacoes"
+  | "iteracoes"
   | "duracao"
   | "nota";
 
@@ -391,6 +392,7 @@ const numerosDaEtapa = (n: NumerosDaEtapa) => ({
   execucoes: n.execucoes,
   falhas: n.falhas,
   reprovacoes: n.reprovacoes,
+  iteracoes: n.iteracoes,
   // A duração média por execução; mês sem execução fica fora da média.
   duracao: n.execucoes > 0 ? n.duracaoMs / n.execucoes : null,
 });
@@ -416,12 +418,43 @@ function porEtapa(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
       <td class="num">${String(a.execucoes)} <span class="muted">/ ${mm(med("execucoes"), um)}</span></td>
       <td class="num">${String(a.falhas)} <span class="muted">/ ${mm(med("falhas"), um)}</span></td>
       <td class="num">${String(a.reprovacoes)} <span class="muted">/ ${mm(med("reprovacoes"), um)}</span></td>
+      <td class="num">${String(a.iteracoes)} <span class="muted">/ ${mm(med("iteracoes"), um)}</span></td>
       <td class="num">${mm(a.duracao, duracao)} <span class="muted">/ ${mm(med("duracao"), duracao)}</span></td></tr>`;
   });
+  // O Total: o mês e a soma das médias de cada coluna; a duração é ponderada pelas execuções.
+  const soma = (f: (x: NumerosDaEtapa) => number, ms: readonly MetricasMes[]) =>
+    ms.reduce((t, m) => t + m.etapas.reduce((u, x) => u + f(x), 0), 0);
+  const total = (campo: "custo" | "tokens" | "execucoes" | "falhas" | "reprovacoes" | "iteracoes") => {
+    const meds = linhas.map((l) => l.med(campo)).filter((v) => v !== null);
+    return {
+      atual: linhas.reduce((t, l) => t + l.a[campo], 0),
+      med: meds.length > 0 ? meds.reduce((t, v) => t + v, 0) : null,
+    };
+  };
+  const par = (campo: "execucoes" | "falhas" | "reprovacoes" | "iteracoes") => {
+    const t = total(campo);
+    return `<td class="num">${String(t.atual)} <span class="muted">/ ${mm(t.med, um)}</span></td>`;
+  };
+  const tc = total("custo");
+  const execAnteriores = soma((x) => x.execucoes, anteriores);
+  const duracaoMedia = (ms: number, execucoes: number) => (execucoes > 0 ? ms / execucoes : null);
+  const totalDuracao = duracaoMedia(
+    soma((x) => x.duracaoMs, [atual]),
+    soma((x) => x.execucoes, [atual]),
+  );
+  const mediaDuracao = duracaoMedia(
+    soma((x) => x.duracaoMs, anteriores),
+    execAnteriores,
+  );
+  const rodape = `<tr><td>Total</td><td></td>
+      <td class="num">${custo(tc.atual)}</td><td class="num muted">${mm(tc.med, custo)}</td><td class="num">${variacao(tc.atual, tc.med)}</td>
+      <td class="num sep">${compacto(total("tokens").atual)} <span class="muted">/ ${mm(total("tokens").med, compacto)}</span></td>
+      ${par("execucoes")}${par("falhas")}${par("reprovacoes")}${par("iteracoes")}
+      <td class="num">${mm(totalDuracao, duracao)} <span class="muted">/ ${mm(mediaDuracao, duracao)}</span></td></tr>`;
   return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo} × média</h3><span class="sub">${rotulo} / média dos meses anteriores</span>
     <div class="legenda"><span><i style="background:var(--foco)"></i>${rotulo}</span><span><i style="background:var(--base)"></i>média</span></div></div>
-    <div class="rola"><table class="tabela"><thead><tr><th>Etapa</th><th>Custo</th><th class="num">${rotulo}</th><th class="num">média</th><th class="num">Δ</th><th class="num sep">Tokens</th><th class="num">Execuções</th><th class="num">Falhas</th><th class="num">Reprovações</th><th class="num">Duração média</th></tr></thead>
-    <tbody>${corpo.join("")}</tbody></table></div></section>`;
+    <div class="rola"><table class="tabela"><thead><tr><th>Etapa</th><th>Custo</th><th class="num">${rotulo}</th><th class="num">média</th><th class="num">Δ</th><th class="num sep">Tokens</th><th class="num">Execuções</th><th class="num">Falhas</th><th class="num">Reprovações</th><th class="num">Iterações</th><th class="num">Duração média</th></tr></thead>
+    <tbody>${corpo.join("")}</tbody><tfoot>${rodape}</tfoot></table></div></section>`;
 }
 
 // ——— por modelo ———
@@ -516,13 +549,13 @@ function tabelaDeIssues(issues: readonly MetricasIssuePeriodo[], e: EstadoDasMet
       ${todos ? `<td class="muted">${escapar(i.projeto)}</td>` : ""}
       <td><span class="pill ${i.fase === "concluida" ? "pill-ok" : "fase"}">${NOME_DA_FASE[i.fase]}</span></td>
       <td class="num">${custo(i.consumo.custo)}</td><td class="num">${compacto(somaDosTokens(i.consumo))}</td>
-      <td class="num">${String(i.execucoes)}</td><td class="num">${String(i.falhas)}</td><td class="num">${String(i.reprovacoes)}</td>
+      <td class="num">${String(i.execucoes)}</td><td class="num">${String(i.falhas)}</td><td class="num">${String(i.reprovacoes)}</td><td class="num">${String(i.iteracoes)}</td>
       <td class="num">${duracao(i.duracaoMs)}</td><td class="num">${i.notaPR === null ? "—" : String(i.notaPR)}</td></tr>`,
   );
   const soma = (f: (i: MetricasIssuePeriodo) => number) => issues.reduce((t, i) => t + f(i), 0);
-  return `<div class="rola"><table class="tabela tabela-issues"><thead><tr>${th("issue", "Issue", false)}${th("titulo", "Título", false)}${todos ? th("projeto", "Projeto", false) : ""}${th("fase", "Fase", false)}${th("custo", "Custo")}${th("tokens", "Tokens")}${th("execucoes", "Execuções")}${th("falhas", "Falhas")}${th("reprovacoes", "Reprovações")}${th("duracao", "Duração")}${th("nota", "Nota do PR")}</tr></thead>
+  return `<div class="rola"><table class="tabela tabela-issues"><thead><tr>${th("issue", "Issue", false)}${th("titulo", "Título", false)}${todos ? th("projeto", "Projeto", false) : ""}${th("fase", "Fase", false)}${th("custo", "Custo")}${th("tokens", "Tokens")}${th("execucoes", "Execuções")}${th("falhas", "Falhas")}${th("reprovacoes", "Reprovações")}${th("iteracoes", "Iterações")}${th("duracao", "Duração")}${th("nota", "Nota do PR")}</tr></thead>
     <tbody>${linhas.join("")}</tbody>
-    <tfoot><tr><td colspan="${todos ? "4" : "3"}">${plural(issues.length, "issue", "issues")}</td><td class="num">${custo(soma((i) => i.consumo.custo))}</td><td class="num">${compacto(soma((i) => somaDosTokens(i.consumo)))}</td><td class="num">${String(soma((i) => i.execucoes))}</td><td class="num">${String(soma((i) => i.falhas))}</td><td class="num">${String(soma((i) => i.reprovacoes))}</td><td class="num">${duracao(soma((i) => i.duracaoMs))}</td><td></td></tr></tfoot>
+    <tfoot><tr><td colspan="${todos ? "4" : "3"}">${plural(issues.length, "issue", "issues")}</td><td class="num">${custo(soma((i) => i.consumo.custo))}</td><td class="num">${compacto(soma((i) => somaDosTokens(i.consumo)))}</td><td class="num">${String(soma((i) => i.execucoes))}</td><td class="num">${String(soma((i) => i.falhas))}</td><td class="num">${String(soma((i) => i.reprovacoes))}</td><td class="num">${String(soma((i) => i.iteracoes))}</td><td class="num">${duracao(soma((i) => i.duracaoMs))}</td><td></td></tr></tfoot>
     </table></div>`;
 }
 
@@ -563,7 +596,7 @@ export function fraseDoMes(m: MetricasMes): string {
   return `<p class="frase-mes">${nome.charAt(0).toUpperCase()}${nome.slice(1)} de ${m.mes.slice(0, 4)}, todos os projetos: <b>${custo(m.consumo.custo)}</b> · <b>${compacto(somaDosTokens(m.consumo))}</b> tokens · issues ${b(m.issues.registradas)} registradas, ${b(m.issues.concluidas)} concluídas · tickets ${b(m.tickets.criados)} criados, ${b(m.tickets.concluidos)} concluídos · PRs ${b(m.prs.abertos)} abertos, ${b(m.prs.mergeados)} mergeados <a href="/metrics">Métricas →</a></p>`;
 }
 
-/** Os 5 cards do Projeto (F7 §4.4): o mês corrente só do projeto. */
+/** Os 6 cards do Projeto (F7 §4.4): o mês corrente só do projeto. */
 export function cardsDoMes(m: MetricasMes): string {
   const t = m.consumo.tokens;
   const card = (rotulo: string, valor: string, sub: string) =>
@@ -575,5 +608,6 @@ export function cardsDoMes(m: MetricasMes): string {
     ${card("Issues", par(m.issues.registradas, m.issues.concluidas), "registradas / concluídas")}
     ${card("Tickets", par(m.tickets.criados, m.tickets.concluidos), "criados / concluídos")}
     ${card("PRs", par(m.prs.abertos, m.prs.mergeados), "abertos / mergeados")}
+    ${card("Iterações", String(m.etapas.reduce((t, x) => t + x.iteracoes, 0)), "mensagens, diálogos e reaberturas")}
   </div>`;
 }
