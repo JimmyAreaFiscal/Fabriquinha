@@ -328,29 +328,32 @@ test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o
     [b.id],
     "só a aberta continua no cartão",
   );
-  const avisos = chat.conversa.filter((e) => e.aviso);
   assert.deepEqual(
-    avisos.map((e) => e.fabriquinha),
-    [undefined],
-  );
-  assert.match(
-    textos(avisos)[0] ?? "",
-    new RegExp(
-      `^user: A Fabriquinha criou a I-${String(nova)} \\(«Tela de relatório»\\) .* ela depende da I-${String(issue)}\\. Reduza`,
-    ),
+    chat.conversa.filter((e) => e.aviso),
+    [],
+    "com a P-2 aberta, a IA não recebeu aviso",
   );
   const segundo = await postar(`/api/propostas/${String(a.id)}`, { aceita: true });
   assert.equal(segundo.status, 409);
   assert.match((segundo.corpo as { erro: string }).erro, /a proposta P-\d+ já foi decidida: aceita/);
 
+  assert.equal((await postar(`/api/issues/${String(issue)}/registro`, { aprovado: true })).status, 409);
   assert.deepEqual((await postar(`/api/propostas/${String(b.id)}`, { aceita: false })).corpo, {});
   await esperarEstado(sessao, "aguardando_humano: conversa");
   const depois = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
   assert.deepEqual(depois.propostas, []);
-  assert.match(
-    textos(depois.conversa.filter((e) => e.aviso)).at(-1) ?? "",
-    /^user: O Auditor recusou a sua proposta de issue «Outra»/,
+  const avisos = depois.conversa.filter((e) => e.aviso);
+  assert.deepEqual(
+    avisos.map((e) => e.fabriquinha),
+    [undefined],
   );
+  const aviso = textos(avisos)[0] ?? "";
+  assert.match(aviso, /^user: O Auditor decidiu as suas propostas de issue:\n/);
+  assert.match(
+    aviso,
+    new RegExp(`- P-${String(a.id)}: A Fabriquinha criou a I-${String(nova)} \\(«Tela de relatório»\\)`),
+  );
+  assert.match(aviso, new RegExp(`- P-${String(b.id)}: O Auditor recusou a sua proposta de issue «Outra»`));
 });
 
 test("diálogos: select, confirm, input e editor respondidos ou cancelados no formato do pi; corpo inválido dá 422", async () => {

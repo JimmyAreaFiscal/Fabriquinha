@@ -19,7 +19,14 @@ import { join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { type Agregado, AUDITOR, CANCELADA, type Execucao, type Ticket } from "../dominio/agregado.ts";
+import {
+  type Agregado,
+  AUDITOR,
+  CANCELADA,
+  type Execucao,
+  type PropostaIssue,
+  type Ticket,
+} from "../dominio/agregado.ts";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Fase } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
@@ -31,6 +38,7 @@ import { type EventoPi, PACOTE } from "./pi.ts";
 import {
   abrirChat,
   avisoDaProposta,
+  avisoDoLote,
   concluirSessao,
   conversarSobre,
   decidirProposta,
@@ -699,9 +707,8 @@ test("proposta: agente ocupado recusa antes de gravar, e proposta inexistente é
   c.banco.close();
 });
 
-test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o motivo e abre o registro da nova", async () => {
-  const c = cenario();
-  const opcoes = { ociosidadeMin: 1 };
+/** A I-1 no desenho com duas propostas abertas (P-1 e P-2) e o desenho já enviado (C25) com o pi parado. */
+function desenhoComDuasPropostas(c: Cenario): [PropostaIssue, PropostaIssue] {
   registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
   c.banco.exec(`UPDATE issue SET fase = 'desenho', titulo = 'Busca lenta', tipo = 'funcionalidade';
     UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
@@ -711,18 +718,19 @@ test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o mot
       VALUES (1, 2, 'interativo', '${SESSAO}', 'em_andamento', '${T1}');
     INSERT INTO sequencia (nome, valor) VALUES ('ticket', 2), ('execucao', 1)
       ON CONFLICT (nome) DO UPDATE SET valor = excluded.valor;`);
-  const recusada = proporIssue(
-    c.banco,
-    1,
-    { ...PROPOSTA, titulo: "Outra" },
-    { tipo: "agente", execucao: 1, ticket: 2 },
-  );
-  const proposta = proporIssue(c.banco, 1, PROPOSTA, { tipo: "agente", execucao: 1, ticket: 2 });
-  // O agente enviou o desenho (C25) e o pi parou.
+  const p1 = proporIssue(c.banco, 1, { ...PROPOSTA, titulo: "Outra" }, { tipo: "agente", execucao: 1, ticket: 2 });
+  const p2 = proporIssue(c.banco, 1, PROPOSTA, { tipo: "agente", execucao: 1, ticket: 2 });
   c.banco.exec(`UPDATE issue SET fase = 'aprovacao_desenho';
     UPDATE ticket SET enviado_em = '${T1}' WHERE id = 2;
     UPDATE execucao SET resultado = 'sucesso', terminada_em = '${T1}';`);
 
+  return [p1, p2];
+}
+
+test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o motivo e abre o registro da nova", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  const [recusada, proposta] = desenhoComDuasPropostas(c);
   // Recusar só marca a proposta: o gate continua, sem mensagem à IA.
   assert.deepEqual(await decidirProposta(c.banco, recusada.id, false, opcoes), {});
   assert.equal(c.execucoes().length, 1);
@@ -760,6 +768,96 @@ test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o mot
     async () => (await estadoDe(c, c.execucoes()[2]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
     "o registro da I-2",
   );
+  await pararTudo(c);
+  c.banco.close();
+});
+
+test("proposta no registro: só a decisão que fecha o lote retoma a IA, uma vez, com as duas decisões", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  const { sessao, agente } = await registroEmConversa(c, opcoes);
+  const p1 = proporIssue(c.banco, 1, PROPOSTA, agente);
+  const p2 = proporIssue(c.banco, 1, { ...PROPOSTA, titulo: "Outra" }, agente);
+
+  assert.deepEqual(await decidirProposta(c.banco, p1.id, true, opcoes), { issue: 2 });
+  assert.equal(propostasDaIssue(c.banco, 1)[1]?.status, "pendente");
+  assert.equal(c.comandos().length, 1, "só o prompt inicial: nada foi dito à IA");
+
+  await decidirProposta(c.banco, p2.id, false, opcoes);
+  const [aceita, recusada] = propostasDaIssue(c.banco, 1);
+  assert.ok(aceita && recusada);
+  const aviso = avisoDoLote([aceita, recusada], 1);
+  assert.equal(
+    aviso,
+    `O Auditor decidiu as suas propostas de issue:\n- P-1: ${avisoDaProposta(aceita, 1)}\n- P-2: ${avisoDaProposta(recusada, 1)}`,
+  );
+  await ate(() => c.comandos().filter((m) => m.message === aviso).length === 1, "o aviso do lote chegar ao pi");
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a IA responder ao aviso");
+  await ate(
+    async () => (await estadoDe(c, c.execucoes()[1]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
+    "o registro da I-2",
+  );
+  await pararTudo(c);
+  c.banco.close();
+});
+
+test("proposta no registro: duas recusas dão um só aviso, depois da segunda", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  const { sessao, agente } = await registroEmConversa(c, opcoes);
+  const p1 = proporIssue(c.banco, 1, PROPOSTA, agente);
+  const p2 = proporIssue(c.banco, 1, { ...PROPOSTA, titulo: "Outra" }, agente);
+
+  await decidirProposta(c.banco, p1.id, false, opcoes);
+  assert.equal(c.comandos().length, 1);
+  await decidirProposta(c.banco, p2.id, false, opcoes);
+  await ate(() => c.comandos().length === 2, "o aviso do lote chegar ao pi");
+  assert.match(String(c.comandos()[1]?.message), /decidiu as suas propostas[^]*«Tela de relatório»[^]*«Outra»/);
+  await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a IA responder ao aviso");
+  await pararTudo(c);
+  c.banco.close();
+});
+
+test("gate do registro: com proposta aberta, Aprovar e Devolver recusam antes de parar o pi", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  const { agente } = await registroEmConversa(c, opcoes);
+  proporIssue(c.banco, 1, PROPOSTA, agente);
+
+  await assert.rejects(
+    decidirGate(c.banco, 1, "registro", { aprovado: false, motivo: "refaça" }, opcoes),
+    rejeitaCom("há propostas de issue abertas no gate da I-1 (decida as propostas de issue abertas antes)"),
+  );
+  assert.equal(c.execucoes()[0]?.resultado, "em_andamento", "o pi segue de pé");
+  await pararTudo(c);
+  c.banco.close();
+});
+
+test("proposta no desenho: o gate espera todas; duas recusas reprovam o desenho uma vez, sem issue nova", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  const [p1, p2] = desenhoComDuasPropostas(c);
+
+  await assert.rejects(
+    decidirGate(c.banco, 1, "desenho", { aprovado: true }, opcoes),
+    rejeitaCom("há propostas de issue abertas no gate da I-1 (decida as propostas de issue abertas antes)"),
+  );
+  assert.deepEqual(await decidirProposta(c.banco, p1.id, false, opcoes), {});
+  assert.equal(agregado(c.banco, 1)?.issue.fase, "aprovacao_desenho");
+  assert.equal(c.execucoes().length, 1, "nenhuma mensagem à IA do desenho");
+
+  assert.deepEqual(await decidirProposta(c.banco, p2.id, false, opcoes), {});
+  const ag = agregado(c.banco, 1);
+  assert.ok(ag);
+  assert.equal(ag.issue.fase, "desenho");
+  assert.equal(agregado(c.banco, 2), undefined);
+  const motivo = ag.decisoes.at(-1)?.motivo ?? "";
+  assert.match(motivo, /P-1 «Outra»: recusada[^]*P-2 «Tela de relatório»: recusada/);
+  await ate(
+    () => c.comandos().some((m) => String(m.message).endsWith(`O Auditor reprovou o desenho. Motivo: ${motivo}\n`)),
+    "o motivo chegar à IA do desenho",
+  );
+  await ate(async () => (await estadoDe(c, SESSAO)) === "aguardando_humano: conversa", "a IA do desenho responder");
   await pararTudo(c);
   c.banco.close();
 });

@@ -121,7 +121,7 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `GET /api/metricas/issues?projeto=&de=&ate=` | `metricasPorIssue` (F6, 5.8): uma linha por issue com execução no período. |
 | `GET /api/issues/:id` | Agregado da issue, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). No gate do desenho traz também `propostas`, as propostas de issue abertas. |
 | `GET /api/sessoes?escopo=ativas\|historico&projeto=&issue=&etapa=` | Sessões com estado e motivo (F4, 5.2). |
-| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). No registro interativo traz `propostas`, as propostas de issue abertas do ticket; a mensagem de aviso da Fabriquinha sobre uma proposta decidida vem marcada `aviso`. |
+| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). No registro interativo traz `propostas`, as propostas de issue abertas do ticket; a mensagem de aviso da Fabriquinha sobre uma proposta decidida, ou sobre um lote todo decidido, vem marcada `aviso`. |
 | `GET /api/sessoes/:sessao/eventos` | Server-Sent Events com os eventos do processo vivo e as mudanças de estado (F4, 5.4). |
 | `GET /api/sessoes/:sessao/historico.md` | Exportação do histórico em Markdown, como download (F4, 6.8). |
 | `GET /api/execucoes/:id/log` e `/prompt` | O `log` e o `prompt.md` da execução (F4, 6.1.2), como texto. |
@@ -158,8 +158,8 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/issues/:id` `{ titulo?, tipo?, descricao? }` | C2 do Auditor, só na fase `registro`. |
 | `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
 | `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
-| `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C10 do registro enviado. Devolver retoma a mesma sessão com o motivo como mensagem ao agente. |
-| `POST /api/propostas/:id` `{ aceita }` | `decidirProposta` (F4, 6.6): C24 pelo Auditor. Devolve `{ issue? }`, a issue criada no aceite. 409 se a proposta já foi decidida ou o agente ainda trabalha, 404 se não existe, 422 se `aceita` não é booleano. No registro retoma a IA com o aviso da Fabriquinha; no desenho reprova o desenho (C15) e retoma a IA dele com o motivo. |
+| `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C10 do registro enviado. Devolver retoma a mesma sessão com o motivo como mensagem ao agente. 409 se há propostas de issue abertas no gate. |
+| `POST /api/propostas/:id` `{ aceita }` | `decidirProposta` (F4, 6.6): C24 pelo Auditor. Devolve `{ issue? }`, a issue criada no aceite. 409 se a proposta já foi decidida ou o agente ainda trabalha, 404 se não existe, 422 se `aceita` não é booleano. Só a decisão que deixa o gate sem proposta aberta retoma a IA, uma vez: no registro com o aviso do lote; no desenho reprovando o desenho (C15) com o motivo que lista as decisões. |
 | `GET /api/projetos/:nome/heatmap` | Heatmap de alterações da base nos últimos 12 meses (`heatmapDo`, F5 §11): `{ branch, desde, ate, raiz, commits }`, com a árvore inteira de pastas e arquivos. Projeto inexistente dá 404; pasta do repositório ou branch base ausente dá 409 com motivo e correção. |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
@@ -170,7 +170,7 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/issues/:id/tickets` `{ titulo, descricao, modelo? }` | C11 do Auditor (fase `aprovacao_desenho`). |
 | `POST /api/tickets/:id` `{ titulo?, descricao? }` | C12 do Auditor. |
 | `DELETE /api/tickets/:id` | C13 do Auditor. |
-| `POST /api/issues/:id/desenho` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C15 do desenho enviado. Reprovar retoma a mesma sessão com o motivo como mensagem ao agente. |
+| `POST /api/issues/:id/desenho` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C15 do desenho enviado. Reprovar retoma a mesma sessão com o motivo como mensagem ao agente. 409 se há propostas de issue abertas no gate. |
 | `POST /api/issues/:id/pr` | Pendente: a decisão do PR é tomada na hospedagem (4.6). |
 | `POST /api/tickets/:id/reabrir` `{ instrucao? }` | C9: responder e retomar (F4, 6.4). |
 | `POST /api/tickets/:id/modelo` `{ modelo \| null }` | C20, com `conferirModelo` (F4, 9). |

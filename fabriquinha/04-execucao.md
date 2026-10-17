@@ -277,10 +277,11 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
 - **Gate do registro e do desenho (`decidirGate`):** a decisão é na página da issue.
   O F4 para o pi ocioso; aprovado, descarta o que a sessão deixou na worktree (o protótipo do desenho, F3 §7) e grava C10 ou C15; devolvido, grava a decisão com o motivo e retoma a **mesma** sessão com a mensagem "O Auditor devolveu o registro. Motivo: …" ou "O Auditor reprovou o desenho. Motivo: …".
 - **Proposta de issue (C23, C24):** a IA do registro ou do desenho propõe dividir a issue (`fabriquinha issue propor`), e o Auditor só aceita ou recusa; `decidirProposta(proposta, aceita)` confere que a proposta está pendente no gate atual e recusa antes de gravar se não estiver.
-  - **No registro**, a decisão é no chat. O F4 para o pi ocioso (recusa se o agente ainda trabalha), grava C24 e retoma a sessão com o aviso da Fabriquinha à IA.
+  - **Retomada única por lote:** o F4 sempre para o pi ocioso (recusa se o agente ainda trabalha) e grava C24, mas só a decisão que deixa o gate sem proposta aberta retoma a IA, uma vez, com o lote; as anteriores só avisam a sessão. Enquanto há proposta aberta no gate, `decidirGate` (Aprovar e Devolver do registro; Aprovar e Reprovar do desenho) recusa com 409 antes de parar o pi.
+  - **No registro**, a decisão é no chat. Fechado o lote, o F4 retoma a sessão com o aviso do lote: o da proposta, se for uma só; senão, "O Auditor decidiu as suas propostas de issue:" e uma linha `- P-n: <aviso da proposta>` por proposta.
     O aviso de aceite diz: "A Fabriquinha criou a I-n («título») a partir da sua proposta, que o Auditor aceitou; ela depende da I-m. Reduza o escopo da I-m: …". O de recusa: "O Auditor recusou a sua proposta de issue «título»…".
     A IA ajusta a issue e as evidências na mesma sessão.
-  - **No desenho**, a decisão é no gate, na página da issue. O aceite para o pi ocioso, grava C24 com o desenho reprovado (C15) e o motivo que cita a issue nova, e retoma a sessão do desenho com esse motivo. A recusa só marca a proposta e avisa a sessão, e o gate continua aberto.
+  - **No desenho**, a decisão é no gate, na página da issue. Fechado o lote (aceites, recusas ou os dois), o C24 grava o desenho reprovado (C15) com o motivo que lista as decisões, e o F4 retoma a sessão do desenho com esse motivo. Antes disso o gate continua aberto.
   - No aceite, nos dois casos, o F4 abre o registro da issue nova (mesma sessão interativa de **Registrar necessidade**, com a descrição que veio da mensagem da proposta).
 - **Sessão em aberto:** aparece sozinha como `aguardando_humano: conversa` quando o PR é reprovado (C16).
   A mensagem inicial traz o motivo e a URL do PR.

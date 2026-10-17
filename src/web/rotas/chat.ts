@@ -9,7 +9,7 @@ import { AUDITOR, type Execucao, type Issue, type PropostaIssue, type Ticket } f
 import { naSessaoPrincipal, ticketDe } from "../../dominio/execucao.ts";
 import { existe } from "../../dominio/erros.ts";
 import { editarIssue } from "../../dominio/issue.ts";
-import { propostasAbertas } from "../../dominio/propostas.ts";
+import { lotes, propostasAbertas } from "../../dominio/propostas.ts";
 import { Id, Motivo } from "../../dominio/primitivos.ts";
 import { abortar, responderDialogo } from "../../execucao/gerente.ts";
 import {
@@ -23,6 +23,7 @@ import {
 import {
   abrirChat,
   avisoDaProposta,
+  avisoDoLote,
   concluirSessao,
   conversarSobre,
   decidirProposta,
@@ -80,17 +81,19 @@ function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
 
 /**
  * A marca da mensagem do usuário que veio da Fabriquinha: `fabriquinha` no prompt montado por ela, que o chat mostra
- * como linha do sistema, com o link do `prompt.md`; `aviso` na mensagem de uma proposta de issue decidida, que o chat
- * mostra como mensagem da Fabriquinha. Nenhuma marca é mensagem do Auditor.
+ * como linha do sistema, com o link do `prompt.md`; `aviso` na mensagem de uma proposta de issue decidida ou de um
+ * lote de propostas já decididas, que o chat mostra como mensagem da Fabriquinha. Nenhuma marca é mensagem do Auditor.
  */
 function marcador(banco: DatabaseSync, sessao: InfoSessao): (mensagem: unknown) => Entrada | undefined {
   const ag = agregadoExistente(banco, sessao.issue);
   const prompts = promptsDaFabriquinha(raizDo(banco), ag, sessao.ticket);
-  const avisos = new Set(
-    propostasDaIssue(banco, sessao.issue)
-      .filter((p) => p.ticket === sessao.ticket && p.status !== "pendente")
-      .map((p) => avisoDaProposta(p, sessao.issue)),
-  );
+  const doTicket = propostasDaIssue(banco, sessao.issue).filter((p) => p.ticket === sessao.ticket);
+  const avisos = new Set([
+    ...doTicket.filter((p) => p.status !== "pendente").map((p) => avisoDaProposta(p, sessao.issue)),
+    ...lotes(doTicket)
+      .filter((l) => l.every((p) => p.status !== "pendente"))
+      .map((l) => avisoDoLote(l, sessao.issue)),
+  ]);
   return (mensagem) => {
     const m = mensagem as Partial<Mensagem> | undefined;
     if (m?.role !== "user") return undefined;
