@@ -358,7 +358,7 @@ Antes de servir, o F7 confere que o hash pertence a uma evidência; nunca serve 
 | `comIssue(banco, issue, nome, ator, comando)` | Aplica um comando do F1 sobre o agregado da issue e registra o comando (3.3). |
 | `registrarIssue(banco, entrada, ator)` | C1: cria a issue e o ticket de registro. |
 | `proporIssue(banco, issue, entrada, ator)` | C23: grava a proposta `pendente` e o `proporIssue` em `comando`; recusa issue cancelada. |
-| `decidirProposta(banco, proposta, entrada, ator)` | C24 numa transação só: grava a issue nova antes da atual (e do desenho reprovado), atualiza a proposta e grava `decidirProposta` em `comando`. Recusa issue cancelada. |
+| `decidirProposta(banco, proposta, entrada, ator)` | C24 numa transação só: lê `propostasDaIssue` e as passa ao domínio, grava a issue nova antes da atual (e do desenho reprovado, se o lote fechou no desenho), atualiza a proposta e grava `decidirProposta` em `comando`. Devolve também o `lote`, quando a decisão o fecha. Recusa issue cancelada. |
 | `propostasDaIssue(banco, issue)` | As propostas dos tickets da issue, da mais antiga para a mais nova. |
 | `arquivarConcluidas(banco, projeto)` | C18: uma transação só; devolve quantas issues do projeto foram arquivadas. |
 | `cancelarIssues(banco, issue, ator)` | C22: uma transação só, na issue e nas dependentes diretas e indiretas (`dependentes`); um `cancelarIssue` em `comando` por issue; devolve as issues canceladas e as execuções que terminaram. `comIssue` recusa comando sobre issue cancelada. |

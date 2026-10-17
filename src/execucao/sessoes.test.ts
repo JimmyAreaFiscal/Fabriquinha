@@ -735,7 +735,7 @@ test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o mot
   assert.equal(ag.issue.fase, "desenho");
   assert.equal(ag.decisoes.at(-1)?.aprovado, false);
   const motivo = ag.decisoes.at(-1)?.motivo ?? "";
-  assert.match(motivo, /I-2 \(«Tela de relatório»\)/);
+  assert.match(motivo, /P-2 «Tela de relatório»: aceita; a Fabriquinha criou a I-2/);
   assert.deepEqual(
     ag.tickets.filter((t) => t.etapa === "desenho").map((t) => [t.id, t.status, t.enviadoEm]),
     [[2, "em_execucao", undefined]],

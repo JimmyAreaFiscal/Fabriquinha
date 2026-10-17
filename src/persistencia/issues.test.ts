@@ -1349,3 +1349,41 @@ test("C24 aceita no desenho: cria a issue nova e devolve o desenho como reprovad
   );
   banco.close();
 });
+
+test("C24 no desenho com duas propostas: o primeiro aceite não reprova e o último grava o C15 com o lote", () => {
+  const banco = novoBanco();
+  const { issue, ticket } = emDesenho(banco);
+  const execucao = iniciar(banco, issue, ticket, "interativo").execucoes[0]?.id ?? 0;
+  const agente: Ator = { tipo: "agente", execucao, ticket };
+  const p1 = proporIssue(banco, issue, PROPOSTA, agente);
+  const p2 = proporIssue(banco, issue, { ...PROPOSTA, titulo: "Exportar CSV" }, agente);
+  comIssue(banco, issue, "terminarExecucao", fabriquinha, (ag, ctx) =>
+    terminarExecucao(ag, { execucao, resultado: "sucesso" }, fabriquinha, ctx),
+  );
+  comIssue(banco, issue, "editarIssue", auditor, (ag, ctx) => ({
+    ...ag,
+    issue: { ...ag.issue, fase: "aprovacao_desenho" },
+    tickets: ag.tickets.map((t) => (t.id === ticket ? { ...t, enviadoEm: ctx.agora } : t)),
+  }));
+
+  const primeira = decidirProposta(banco, p1.id, { aceita: true }, auditor);
+  assert.equal(primeira.lote, undefined);
+  assert.equal(primeira.ag.issue.fase, "aprovacao_desenho");
+  assert.equal(valor(banco, "SELECT count(*) FROM decisao"), 0);
+
+  const ultima = decidirProposta(banco, p2.id, { aceita: false }, auditor);
+  assert.deepEqual(
+    ultima.lote?.map((p) => [p.id, p.status]),
+    [
+      [p1.id, "aceita"],
+      [p2.id, "recusada"],
+    ],
+  );
+  assert.equal(ultima.ag.issue.fase, "desenho");
+  assert.match(
+    String(valor(banco, "SELECT motivo FROM decisao WHERE gate = 'desenho'")),
+    /^O Auditor decidiu as propostas de issue do desenho:\n- P-1 «Tela de relatório»: aceita;.*\n- P-2 «Exportar CSV»: recusada;/,
+  );
+  assert.equal(valor(banco, "SELECT count(*) FROM decisao"), 1);
+  banco.close();
+});
