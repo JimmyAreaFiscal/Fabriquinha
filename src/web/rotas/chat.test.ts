@@ -440,6 +440,18 @@ test("rodando: redirecionar e abortar; sessão inexistente dá 404", async () =>
   assert.equal((await postar("/api/sessoes/nada/abortar")).status, 404);
 });
 
+test("o fim de uma ferramenta do pi avisa o chat com um estado novo", async () => {
+  const [sessao] = await registro();
+  const sse = await assinar(sessao);
+  assert.equal((await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "[ao vivo]", modo: "prompt" })).status, 204);
+  await ate(() => sse.eventos.some((e) => e.type === "tool_execution_end"), "o fim da ferramenta");
+  const fim = sse.eventos.findIndex((e) => e.type === "tool_execution_end");
+  await ate(() => sse.eventos.slice(fim).some((e) => e.type === "estado"), "o estado depois da ferramenta");
+  sse.fechar();
+  assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
+  await esperarEstado(sessao, "aguardando_humano: conversa");
+});
+
 test("SSE: o cliente que sai enquanto o chat abre não fica assinando a sessão", async () => {
   const [sessao] = await registro();
   const resposta = new ServerResponse(new IncomingMessage(new Socket()));

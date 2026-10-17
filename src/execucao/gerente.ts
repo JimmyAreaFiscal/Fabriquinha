@@ -513,6 +513,8 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
           break;
         case "tool_execution_end":
           perguntas.delete(String(evento.toolCallId));
+          // O CLI `fabriquinha` roda noutro processo e não alcança os ouvintes: o fim da ferramenta avisa o chat.
+          avisar(sessaoPi, r.log);
           break;
         case "agent_start":
           ocupar(true);

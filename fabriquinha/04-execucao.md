@@ -147,7 +147,7 @@ O chat mostra a conversa inteira da sessão e, se houver processo vivo, os event
 | Origem do conteúdo | Quando |
 |---|---|
 | Arquivo JSONL da sessão do pi | Sempre, para o que já aconteceu, inclusive quando não há processo vivo. |
-| Eventos do processo, repassados ao navegador por Server-Sent Events | Enquanto há execução em andamento. |
+| Eventos do processo, repassados ao navegador por Server-Sent Events | Enquanto há execução em andamento. O fim de cada ferramenta do pi emite o evento `estado`, porque o CLI `fabriquinha` roda noutro processo e não alcança os ouvintes. |
 
 O que o campo de mensagem faz depende do estado:
 
