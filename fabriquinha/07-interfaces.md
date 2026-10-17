@@ -361,10 +361,11 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 
 **Configuração** (`/config`) — menu lateral
 
-1. Menu à esquerda: **Geral → Agendador** (com a marca ligado ou desligado) e **Projetos →** um item por projeto, com a hospedagem, e **+ Novo projeto**.
+1. Menu à esquerda: **Geral → Agendador** (com a marca ligado ou desligado) e **Auditoria**, e **Projetos →** um item por projeto, com a hospedagem, e **+ Novo projeto**.
 2. À direita, o formulário do item escolhido.
 3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, as execuções autônomas em andamento (uma linha "Executando E-n · I-n · T-n · há …" por item) e **Salvar**.
-4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em cinco grupos:
+4. Auditoria (`/config?auditoria`): o seletor **Modelo da Auditoria** (`GET /api/modelos`, com "padrão do pi" como primeira opção e o modelo gravado mantido mesmo se o pi deixar de listá-lo), a ajuda e **Salvar**; o formulário posta a configuração inteira (o Agendador também posta o modelo gravado, para não apagá-lo) e a recusa do modelo (422) aparece no campo.
+5. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em cinco grupos:
    - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`, e **Link do produto** (opcional, http ou https; vazio apaga o link; link inválido dá erro no campo e nada é gravado). Sem o link, a Simulação não executa;
    - **Preparação e testes:** listas de comandos com adicionar e remover; preparação opcional, testes com pelo menos um;
    - **Fitness functions:** nome, comando e descrição (até 300), com adicionar e remover;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   agendador,
+  auditoria,
   confirmacaoDeRemover,
   errosDoZod,
   type EstadoDaConfiguracao,
@@ -41,6 +42,7 @@ test("selecao: o item do menu pelo endereço", () => {
   assert.deepEqual(selecao("?projeto=loja%20x"), { tipo: "projeto", nome: "loja x" });
   assert.deepEqual(selecao("?projeto="), { tipo: "agendador" });
   assert.deepEqual(selecao("?novo"), { tipo: "novo" });
+  assert.deepEqual(selecao("?auditoria"), { tipo: "auditoria" });
 });
 
 test("errosDoZod: as mensagens por caminho do prettifyError; sem caminho, na raiz", () => {
@@ -72,6 +74,12 @@ test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo
 
   const desligado = menu({ ...ligado, agendadorAtivo: false }, [], { tipo: "agendador" });
   assert.match(desligado, /<a href="\/config" aria-current="page">Agendador <span class="pill pill-neutro">desligado/);
+  assert.match(html, /<a href="\/config\?auditoria">Auditoria<\/a>/);
+  assert.match(
+    menu(ligado, [], { tipo: "auditoria" }),
+    /<a href="\/config\?auditoria" aria-current="page">Auditoria<\/a>/,
+  );
+  assert.doesNotMatch(menu(ligado, [], { tipo: "auditoria" }), /<a href="\/config" aria-current/);
   assert.match(menu(ligado, [], { tipo: "novo" }), /<a class="novo" href="\/config\?novo" aria-current="page">/);
 });
 
@@ -117,6 +125,36 @@ test("agendador: interruptor, os três tempos, a próxima busca no fuso local e 
   assert.match(
     parado,
     /<div class="num-campo erro">.*aria-invalid="true" aria-describedby="campo-intervaloMin-erro"> min<\/span><span class="msg-erro" id="campo-intervaloMin-erro">Pequeno demais: esperava que o número fosse &#62;= 1<\/span><\/div>/,
+  );
+});
+
+test("auditoria: o seletor do modelo em padrão do pi, com o escolhido, com o gravado fora da lista e com o erro", () => {
+  const sem = auditoria(ESTADO, MODELOS, new Map());
+  assert.match(sem, /<h2>Auditoria<\/h2>/);
+  assert.match(sem, /<label for="campo-modeloAuditoria">Modelo da Auditoria<\/label>/);
+  assert.match(
+    sem,
+    /<select id="campo-modeloAuditoria" name="modeloAuditoria" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">/,
+  );
+  assert.match(sem, /<button type="submit" class="btn btn-primario">Salvar<\/button>/);
+
+  const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  const escolhido = auditoria({ ...ESTADO, modeloAuditoria: opus }, MODELOS, new Map());
+  assert.match(escolhido, /<select id="campo-modeloAuditoria" name="modeloAuditoria"><option value="">/);
+  assert.match(escolhido, /<option value="anthropic\/claude-opus-5-5" selected>/);
+
+  const fora = auditoria({ ...ESTADO, modeloAuditoria: { provedor: "llamacpp", modelo: "qwen" } }, MODELOS, new Map());
+  assert.match(fora, /<option value="llamacpp\/qwen" selected>llamacpp \/ qwen<\/option><\/select>/);
+
+  const erro = auditoria(
+    ESTADO,
+    MODELOS,
+    errosDoZod("✖ o modelo inexistente/xyz não existe no pi\n  → at modeloAuditoria"),
+  );
+  assert.match(erro, /aria-invalid="true" aria-describedby="campo-modeloAuditoria-erro"/);
+  assert.match(
+    erro,
+    /<span class="msg-erro" id="campo-modeloAuditoria-erro">o modelo inexistente\/xyz não existe no pi/,
   );
 });
 

@@ -7,6 +7,7 @@ import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
 import {
   agendador,
+  auditoria,
   confirmacaoDeRemover,
   type Erros,
   errosDoZod,
@@ -105,6 +106,31 @@ function montarAgendador(
       .then(() => montarConfiguracao(main, {}, signal))
       .catch((error_: unknown) => {
         if (!signal.aborted) montarAgendador(main, signal, menuHtml, { ...estado, ...dados }, errosDe(error_));
+      });
+  });
+}
+
+/** O modelo da Auditoria: posta a configuração gravada inteira com o modelo escolhido; o 422 aparece no campo. */
+function montarAuditoria(
+  main: HTMLElement,
+  signal: AbortSignal,
+  menuHtml: string,
+  estado: EstadoDaConfiguracao,
+  modelos: readonly Modelo[],
+  erros: Erros,
+): void {
+  main.innerHTML = pagina(menuHtml, auditoria(estado, modelos, erros));
+  const form = main.querySelector<HTMLFormElement>("[data-auditoria]");
+  form?.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    const { agendadorAtivo, intervaloMin, timeoutMin, ociosidadeMin } = estado;
+    const modeloAuditoria = modeloDoSeletor(valor(form, '[name="modeloAuditoria"]'));
+    ocupar(form, "Salvando…");
+    api("/api/configuracao", postar({ agendadorAtivo, intervaloMin, timeoutMin, ociosidadeMin, modeloAuditoria }))
+      .then(() => montarConfiguracao(main, {}, signal))
+      .catch((error_: unknown) => {
+        if (!signal.aborted)
+          montarAuditoria(main, signal, menuHtml, { ...estado, modeloAuditoria }, modelos, errosDe(error_));
       });
   });
 }
@@ -285,6 +311,10 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
   const menuHtml = menu(estado, projetos, sel);
   if (sel.tipo === "agendador") {
     montarAgendador(main, signal, menuHtml, estado, new Map());
+    return;
+  }
+  if (sel.tipo === "auditoria") {
+    montarAuditoria(main, signal, menuHtml, estado, await api<Modelo[]>("/api/modelos", { signal }), new Map());
     return;
   }
   const salvo = sel.tipo === "projeto" ? projetos.find((p) => p.nome === sel.nome) : undefined;
