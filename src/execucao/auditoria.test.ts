@@ -331,6 +331,45 @@ test("o modelo da Auditoria: a 1ª linha do log e os argumentos do pi o levam, n
   await parar(sem);
 });
 
+test("iniciarAuditoria com pedido: prompt.md com o pedido entre os caminhos e o texto fixo; auditoria.json e abrirAuditoria o trazem; sem pedido, nada muda (CA-6, CA-7, CA-8)", async () => {
+  pifalso("conversa");
+  const lista = await sessoesDoMes(banco, "2026-09");
+  const pedido = "Verifique se os agentes repetem perguntas que o prompt já responde";
+  const com = await iniciarAuditoria(banco, "2026-09", lista, { ociosidadeMin: 60 }, pedido);
+  const dir = join(raiz, "auditorias", com);
+  const fixo = readFileSync(new URL("auditoria.md", import.meta.url), "utf8");
+  assert.equal(
+    readFileSync(join(dir, "prompt.md"), "utf8"),
+    [
+      "# Auditoria de setembro de 2026 (2026-09)",
+      "",
+      `Pasta da auditoria, o seu diretório de trabalho: ${dir}`,
+      `- Índice: ${join(dir, "indice.md")}`,
+      `- Sessões: ${join(dir, "sessoes")}/`,
+      "",
+      "## Pedido do Auditor",
+      "",
+      pedido,
+      "",
+      "O pedido é o foco da auditoria: oriente por ele as tarefas dos subagentes e cada seção da resposta.",
+      "",
+      fixo,
+    ].join("\n"),
+  );
+  assert.equal((JSON.parse(readFileSync(join(dir, "auditoria.json"), "utf8")) as { pedido?: string }).pedido, pedido);
+  assert.equal(abrirAuditoria(banco, com).pedido, pedido);
+  await ate(() => estadoDaAuditoria(com) === "conversa", "a resposta do agente");
+  await parar(com);
+
+  const sem = await iniciarAuditoria(banco, "2026-09", lista, { ociosidadeMin: 60 });
+  await ate(() => estadoDaAuditoria(sem) === "conversa", "a resposta do agente");
+  const dirSem = join(raiz, "auditorias", sem);
+  assert.ok(!readFileSync(join(dirSem, "prompt.md"), "utf8").includes("Pedido do Auditor"));
+  assert.ok(!("pedido" in JSON.parse(readFileSync(join(dirSem, "auditoria.json"), "utf8"))));
+  assert.equal(abrirAuditoria(banco, sem).pedido, undefined);
+  await parar(sem);
+});
+
 test("enviarNaAuditoria: com o pi vivo e ocioso, prompt; depois da ociosidade, retoma a mesma sessão e pasta (CA-8)", async () => {
   const f = pifalso("conversa");
   const sessao = await iniciarAuditoria(banco, "2026-09", await sessoesDoMes(banco, "2026-09"), {

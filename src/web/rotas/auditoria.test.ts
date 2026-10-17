@@ -103,6 +103,17 @@ test("mês sem sessão: 409 com a frase exata e nenhuma pasta criada (CA-9)", as
   assert.deepEqual(auditorias(), []);
 });
 
+test("pedido que não é texto dá 422 em pedido, e mês vazio com pedido dá 409, sem pasta (CA-9, CA-10)", async () => {
+  const r = await pedir("/api/auditorias", { mes: "2026-10", pedido: 123 });
+  assert.equal(r.status, 422);
+  assert.match(r.texto, /at pedido/);
+  assert.deepEqual(auditorias(), []);
+
+  const vazio = await pedir("/api/auditorias", { mes: "2026-08", pedido: "olhe os custos" });
+  assert.equal(vazio.status, 409);
+  assert.deepEqual(auditorias(), []);
+});
+
 test("mês inválido e :sessao que não é UUID dão 422", async () => {
   assert.equal((await pedir("/api/auditorias", { mes: "2026-13" })).status, 422);
   assert.equal((await pedir("/api/auditorias", { mes: "2026-09", projeto: "loja" })).status, 422);
@@ -145,7 +156,7 @@ interface Dados {
 const ler = async (sessao: string) => (await pedir(`/api/auditorias/${sessao}`)).corpo as unknown as Dados;
 
 test("mês com sessões: devolve a sessão, o GET traz o mês e o estado, o índice e o SSE; a mensagem retoma a parada", async () => {
-  const criada = await pedir("/api/auditorias", { mes: "2026-09" });
+  const criada = await pedir("/api/auditorias", { mes: "2026-09", pedido: "  " }); // pedido em branco = sem pedido
   assert.equal(criada.status, 200);
   const { sessao } = criada.corpo as { sessao: string };
   assert.deepEqual(auditorias(), [sessao]);

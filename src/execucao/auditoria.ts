@@ -60,13 +60,23 @@ function qualidadeDaIssue(m: MetricasIssue): number[] {
 
 /**
  * Grava em `dir` o que o agente da auditoria lê: `auditoria.json`, `sessoes/<nomeDoHistorico>` de cada sessão de
- * `lista` e o `indice.md` com as sessões, os custos do mês e a qualidade por issue.
+ * `lista` e o `indice.md` com as sessões, os custos do mês e a qualidade por issue. O `pedido` do Auditor, se houver,
+ * vai no `auditoria.json`.
  */
-export function prepararAuditoria(banco: DatabaseSync, dir: string, mes: string, lista: SessaoDoHistorico[]): void {
+export function prepararAuditoria(
+  banco: DatabaseSync,
+  dir: string,
+  mes: string,
+  lista: SessaoDoHistorico[],
+  pedido?: string,
+): void {
   const projetos: Record<string, number> = {};
   for (const s of lista) projetos[s.projeto] = (projetos[s.projeto] ?? 0) + 1;
   mkdirSync(join(dir, "sessoes"), { recursive: true });
-  writeFileSync(join(dir, "auditoria.json"), JSON.stringify({ mes, sessoes: lista.length, projetos }, null, 2) + "\n");
+  writeFileSync(
+    join(dir, "auditoria.json"),
+    JSON.stringify({ mes, sessoes: lista.length, projetos, ...(pedido && { pedido }) }, null, 2) + "\n",
+  );
   for (const s of lista) writeFileSync(join(dir, "sessoes", nomeDoHistorico(s)), exportarHistorico(banco, s.sessao));
 
   const { inicio, fim } = intervalo(mes);
@@ -167,8 +177,8 @@ export const indiceDaAuditoria = (banco: DatabaseSync, sessao: string): string =
 export const estadoDaAuditoria = (sessao: string): EstadoDaAuditoria =>
   (situacao(sessao)?.ocupado ?? tarefas.has(sessao)) ? "rodando" : "conversa";
 
-/** `prompt.md`: o mês e os caminhos antes do texto fixo da auditoria. */
-function promptDaAuditoria(dir: string, mes: string): string {
+/** `prompt.md`: o mês e os caminhos, o pedido do Auditor (se houver) e o texto fixo da auditoria. */
+function promptDaAuditoria(dir: string, mes: string, pedido?: string): string {
   const fixo = readFileSync(new URL("auditoria.md", import.meta.url), "utf8");
   return [
     `# Auditoria de ${mesPorExtenso(mes)} (${mes})`,
@@ -177,6 +187,16 @@ function promptDaAuditoria(dir: string, mes: string): string {
     `- Índice: ${join(dir, "indice.md")}`,
     `- Sessões: ${join(dir, "sessoes")}/`,
     "",
+    ...(pedido
+      ? [
+          "## Pedido do Auditor",
+          "",
+          pedido,
+          "",
+          "O pedido é o foco da auditoria: oriente por ele as tarefas dos subagentes e cada seção da resposta.",
+          "",
+        ]
+      : []),
     fixo,
   ].join("\n");
 }
@@ -242,14 +262,15 @@ export async function iniciarAuditoria(
   mes: string,
   lista: SessaoDoHistorico[],
   opcoes: OpcoesDaAuditoria,
+  pedido?: string,
 ): Promise<string> {
   const raiz = raizDo(banco);
   const sessao = randomUUID();
   const dir = dirDaAuditoria(raiz, sessao);
   mkdirSync(join(dir, "vazio"), { recursive: true });
   try {
-    prepararAuditoria(banco, dir, mes, lista);
-    const prompt = promptDaAuditoria(dir, mes);
+    prepararAuditoria(banco, dir, mes, lista, pedido);
+    const prompt = promptDaAuditoria(dir, mes, pedido);
     writeFileSync(join(dir, "prompt.md"), prompt);
     const comeco = Promise.withResolvers<true>();
     const desassinar = assinarSessao(sessao, (evento) => {
@@ -277,6 +298,8 @@ export interface Auditoria {
   /** Quantas sessões o agente recebeu e quantas por projeto. */
   sessoes: number;
   projetos: Record<string, number>;
+  /** O pedido do Auditor ao abrir a auditoria; ausente quando não houve. */
+  pedido?: string;
   estado: EstadoDaAuditoria;
   /** O que já aconteceu, do JSONL da sessão do pi; o `prompt.md` vai marcado com `fabriquinha: true`. */
   conversa: unknown[];
@@ -288,9 +311,9 @@ export interface Auditoria {
 export function abrirAuditoria(banco: DatabaseSync, sessao: string): Auditoria {
   const raiz = raizDo(banco);
   const dir = pastaExistente(raiz, sessao);
-  const { mes, sessoes, projetos } = JSON.parse(readFileSync(join(dir, "auditoria.json"), "utf8")) as Pick<
+  const { mes, sessoes, projetos, pedido } = JSON.parse(readFileSync(join(dir, "auditoria.json"), "utf8")) as Pick<
     Auditoria,
-    "mes" | "sessoes" | "projetos"
+    "mes" | "sessoes" | "projetos" | "pedido"
   >;
   const prompt = readFileSync(join(dir, "prompt.md"), "utf8");
   const ehPrompt = (mensagem: unknown): boolean => {
@@ -304,6 +327,7 @@ export function abrirAuditoria(banco: DatabaseSync, sessao: string): Auditoria {
     rotulo: mesPorExtenso(mes),
     sessoes,
     projetos,
+    ...(pedido && { pedido }),
     estado: estadoDaAuditoria(sessao),
     conversa: conversa.map((e, i) => (i === primeira && ehPrompt(e.message) ? { ...e, fabriquinha: true } : e)),
     assinar: (ouvinte) =>

@@ -23,7 +23,7 @@ const opcoesDaAuditoria = (banco: DatabaseSync) => ({
   modelo: configuracao(banco).modeloAuditoria,
 });
 
-const NovaAuditoria = z.strictObject({ mes: Mes });
+const NovaAuditoria = z.strictObject({ mes: Mes, pedido: z.string().trim().max(4000).optional() });
 const NovaMensagem = z.strictObject({ texto: z.string().trim().min(1) });
 
 /** O `:sessao` do caminho, validado antes de tocar no disco. */
@@ -46,11 +46,11 @@ export const ROTAS_DA_AUDITORIA: Rota[] = [
     metodo: "POST",
     caminho: "/api/auditorias",
     tratar: async ({ banco, corpo }) => {
-      const { mes } = NovaAuditoria.parse(corpo);
+      const { mes, pedido } = NovaAuditoria.parse(corpo);
       const lista = await sessoesDoMes(banco, mes);
       if (lista.length === 0)
         throw new ErroHttp(409, `Nenhuma sessão terminada em ${mesPorExtenso(mes)} para auditar.`);
-      return { sessao: await iniciarAuditoria(banco, mes, lista, opcoesDaAuditoria(banco)) };
+      return { sessao: await iniciarAuditoria(banco, mes, lista, opcoesDaAuditoria(banco), pedido || undefined) };
     },
   },
   {
