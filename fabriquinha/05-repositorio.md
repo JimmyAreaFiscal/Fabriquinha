@@ -202,6 +202,8 @@ git -C <repo> worktree prune
 Evidências, sessões do pi e logs ficam: são o histórico da issue.
 Uma falha na limpeza não desfaz a aprovação; vira aviso no web com o comando que falhou.
 
+Na mesma fila do projeto, depois do `prune`, a `main` local (a `branchBase`) avança até `origin/<base>` só por fast-forward, sem stash, reset nem merge commit. Sem `refs/heads/<base>` local, não há o que fazer. Com a base em checkout (`git worktree list --porcelain`), roda `git merge --ff-only` nessa pasta; sem checkout, confere `git merge-base --is-ancestor` e roda `git update-ref` com o sha antigo. Quando não dá (a base tem commits que `origin/<base>` não tem, ou o merge colide com alterações locais), o encerramento conclui e a resposta traz o aviso "a <base> local não foi atualizada com origin/<base>", com o motivo e a saída do git. O aviso fica só na resposta.
+
 ## 6. Concorrência
 
 Todos os comandos git de um mesmo repositório passam por uma fila em memória por projeto, no próprio serviço.

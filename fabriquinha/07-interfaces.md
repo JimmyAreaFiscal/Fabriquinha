@@ -297,7 +297,7 @@ Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR; o re
    - **Tickets e sessões:** linha do tempo dos tickets em ordem de criação, com etapa, status e as sessões de cada um (principal e consultas) com link para o chat.
      Clicar no ticket abre na caixa a descrição e as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
 3. Coluna da direita:
-   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket `aberto` e elegível do agendador (o desenho abre a sessão interativa), desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
+   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket `aberto` e elegível do agendador (o desenho abre a sessão interativa), desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; os **Avisos do encerramento** logo depois de encerrar (a limpeza que falhou ou a `main` local que não avançou, com a saída do git, só na resposta) e, depois de recarregar, o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
    - **Artefatos:** uma linha por etapa e ticket, do mais recente ao mais antigo, com um card pequeno por evidência (classe do conteúdo — HTML, IMG, VÍDEO, TABELA, TEXTO, JSON — nome e um ponto verde ou vermelho quando a evidência tem `aprovada`).
      Clicar abre a evidência na caixa (4.5), com **abrir em nova aba** e **baixar**.
 4. As métricas da issue não ficam nesta página: a tabela por issue fica em **Métricas** e o relatório de produtividade é um artefato do encerramento.

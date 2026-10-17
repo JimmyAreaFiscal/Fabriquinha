@@ -200,17 +200,17 @@ function executarAgora(p: PaginaDaIssue): string {
 }
 
 /**
- * O aviso da limpeza que falhou (F5 §5.3): logo depois de encerrar, os comandos que falharam com a saída do git
- * (`avisos`, da resposta do encerramento); depois, o comando a rodar, lido do disco.
+ * Os avisos do encerramento (F5 §5.3): logo depois de encerrar, o que falhou na limpeza ou na `main` local, com a
+ * saída do git (`avisos`, da resposta do encerramento); depois, o comando da limpeza a rodar, lido do disco.
  */
 function limpeza(p: PaginaDaIssue, { avisos }: Extras): string {
-  const [linhas, texto] = avisos?.length
-    ? [avisos, "a issue foi encerrada, mas a limpeza da worktree falhou:"]
-    : [p.limpeza, "a issue foi encerrada, mas a worktree ficou no disco; rode:"];
+  const [rotulo, linhas, texto] = avisos?.length
+    ? ["Avisos do encerramento", avisos, "a issue foi encerrada, com estes avisos:"]
+    : ["A limpeza falhou", p.limpeza, "a issue foi encerrada, mas a worktree ficou no disco; rode:"];
   return linhas.length === 0
     ? ""
     : `<section class="painel-acao falhou" role="status">
-    <div class="painel-linha"><span class="rotulo">A limpeza falhou</span><span class="muted">${texto}</span></div>
+    <div class="painel-linha"><span class="rotulo">${rotulo}</span><span class="muted">${texto}</span></div>
     <pre class="comandos">${linhas.map(escapar).join("\n")}</pre>
   </section>`;
 }
@@ -236,7 +236,7 @@ export interface Extras {
   agora: Date;
   pr?: EstadoLido;
   rascunho?: RascunhoDoPR;
-  /** O que falhou na limpeza, da resposta do encerramento (C16), até a página ser recarregada. */
+  /** Os avisos do encerramento (limpeza e `main` local), da resposta do encerramento (C16), até a página ser recarregada. */
   avisos?: readonly string[];
 }
 

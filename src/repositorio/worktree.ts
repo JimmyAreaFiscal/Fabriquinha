@@ -170,14 +170,39 @@ export function limpezaPendente(
 }
 
 /**
+ * F5 §5.3: avança a base local (`refs/heads/<base>`) até `origin/<base>` só por fast-forward, sem stash, reset nem
+ * merge commit. Com a base em checkout, o merge roda na pasta dela; sem checkout, o `update-ref` guarda o sha antigo.
+ * Devolve o aviso de por que não avançou, ou `undefined` (avançou, ou não há base local).
+ */
+async function atualizarBaseLocal(repo: string, base: string): Promise<string | undefined> {
+  const ref = `refs/heads/${base}`;
+  const origem = `refs/remotes/origin/${base}`;
+  const antigo = await git(repo, "rev-parse", "-q", "--verify", ref);
+  if (antigo.codigo !== 0) return undefined;
+  const naoAtualizada = `a ${base} local não foi atualizada com origin/${base}`;
+  const lista = await git(repo, "worktree", "list", "--porcelain");
+  const bloco = lista.saida.split("\n\n").find((b) => b.split("\n").includes(`branch ${ref}`));
+  if (bloco !== undefined) {
+    const pasta = bloco.slice("worktree ".length, bloco.indexOf("\n"));
+    const r = await git(pasta, "merge", "--ff-only", "-q", origem);
+    return r.codigo === 0 ? undefined : `${naoAtualizada}, em checkout em ${pasta}: ${(r.saida + r.erro).trim()}`;
+  }
+  if ((await git(repo, "merge-base", "--is-ancestor", ref, origem)).codigo !== 0) {
+    return `${naoAtualizada}: ela tem commits que origin/${base} não tem; atualize-a à mão`;
+  }
+  const r = await git(repo, "update-ref", ref, origem, antigo.saida.trim());
+  return r.codigo === 0 ? undefined : `${naoAtualizada}: ${r.erro.trim()}`;
+}
+
+/**
  * F5 §5.3, depois de C16 aprovado: `varrerBase`, o gancho do F6 (§4.4) que busca a base e varre os commits humanos,
- * cuja falha só vai para o log; depois remove a worktree e faz prune. As branches local e remota ficam. Devolve um
- * aviso por comando que falhou: a limpeza não desfaz o encerramento. O gancho entra na fila do projeto sozinho, por
- * isso roda fora dela aqui.
+ * cuja falha só vai para o log; depois remove a worktree, faz prune e avança a base local até `origin/<base>`. As
+ * branches da issue, local e remota, ficam. Devolve um aviso por comando que falhou e o da base local, se ela não
+ * avançou: a limpeza não desfaz o encerramento. O gancho entra na fila do projeto sozinho, por isso roda fora dela aqui.
  */
 export async function limpar(
   raiz: string,
-  projeto: Pick<Projeto, "nome" | "repo">,
+  projeto: Pick<Projeto, "nome" | "repo" | "branchBase">,
   issue: Pick<Issue, "id" | "fase">,
   varrerBase: () => Promise<void>,
 ): Promise<string[]> {
@@ -200,6 +225,8 @@ export async function limpar(
       const r = await git(projeto.repo, ...args);
       if (r.codigo !== 0) avisos.push(`git -C ${projeto.repo} ${args.join(" ")} falhou: ${r.erro.trim()}`);
     }
+    const base = await atualizarBaseLocal(projeto.repo, projeto.branchBase);
+    if (base !== undefined) avisos.push(base);
     return avisos;
   });
 }
