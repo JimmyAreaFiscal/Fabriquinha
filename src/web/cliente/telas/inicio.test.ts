@@ -154,6 +154,47 @@ test("aguarda você: um card por sessão, na ordem recebida, com motivo, issue, 
   assert.match(cards[1] ?? "", /<span class="btn btn-primario btn-pequeno">Ver o PR →<\/span>/);
 });
 
+test("aguarda você: o registro enviado pela IA externa, sem sessão, entra na ordem do envio e marca o cartão", () => {
+  const externo = (id: number, enviadoEm?: string) =>
+    issue({
+      id,
+      fase: "registro",
+      tickets: [
+        ticket({
+          id: id * 10,
+          issue: id,
+          etapa: "registro",
+          status: "em_execucao",
+          origem: "externo",
+          ...(enviadoEm && { enviadoEm }),
+        }),
+      ],
+    });
+  const board = [externo(50, ha(20)), externo(51), issue({ id: 34, fase: "desenvolvimento" })];
+  const sessoes = [
+    sessao({ issue: 34, ticket: 101, estado: "aguardando_humano", motivo: "falha", desde: ha(30) }),
+    sessao({ issue: 34, ticket: 102, estado: "aguardando_humano", motivo: "conversa", desde: ha(10) }),
+  ];
+  const html = inicio({ sessoes, board, mes: MES }, AGORA);
+  assert.match(texto(html), /Aguarda você 3 da mais antiga para a mais nova /);
+  const cards = blocos(html, "decisao");
+  assert.deepEqual(
+    cards.map(texto).map((t) => t.split(" → ")[1]?.slice(0, 5)),
+    ["I-34 ", "I-50 ", "I-34 "],
+  );
+  assert.equal(
+    texto(cards[1] ?? ""),
+    "Gate do registro Avaliar registro → I-50 Issue 50 Registro enviado por uma IA externa; falta aprovar loja T-500 · registro · IA externa · há 20 min",
+  );
+  assert.match(cards[1] ?? "", /^<a class="decisao superficie" href="\/projects\/loja\/issues\/I-50">/);
+  const cartoes = blocos(html, "cartao");
+  assert.match(
+    cartoes.find((c) => c.includes("I-50")) ?? "",
+    /<span class="pill pill-aguarda">aguarda você · gate do registro<\/span>/,
+  );
+  assert.doesNotMatch(cartoes.find((c) => c.includes("I-51")) ?? "", /aguarda você/);
+});
+
 test("rodando: uma linha por sessão com modo, issue, o que o agente faz, ticket e etapa, modelo e tempo", () => {
   const board = [
     issue({

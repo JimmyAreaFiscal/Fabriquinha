@@ -19,11 +19,13 @@ import { join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { type Agregado, AUDITOR, CANCELADA, type Execucao, type Ticket } from "../dominio/agregado.ts";
+import { type Agregado, AUDITOR, CANCELADA, type Execucao, EXTERNO, type Ticket } from "../dominio/agregado.ts";
+import { registrarEvidencia } from "../dominio/evidencia.ts";
+import { enviarParaAprovacao } from "../dominio/gates.ts";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Fase } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { agregado, propostasDaIssue, proporIssue, registrarIssue } from "../persistencia/issues.ts";
+import { agregado, comIssue, propostasDaIssue, proporIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree, garantirWorktree } from "../repositorio/worktree.ts";
 import { abortar, atividadeDo, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
@@ -452,8 +454,9 @@ function cenario({ variante = "conversa", comAgente = false, preparacao = [] as 
   const lerRegistro = () =>
     existsSync(registro)
       ? readFileSync(registro, "utf8")
-          .trim()
+          // O pi falso pode estar escrevendo a última linha agora: só conta a que já terminou em \n.
           .split("\n")
+          .slice(0, -1)
           .map((l) => JSON.parse(l) as Record<string, unknown>)
       : [];
   return {
@@ -498,6 +501,41 @@ const vivo = (pid: unknown) => {
 };
 
 const rejeitaCom = (mensagem: string) => (e: unknown) => e instanceof ErroDeRegra && e.message === mensagem;
+
+test("registro da IA externa: o gate decide sem sessão do pi; devolver só grava o motivo, e aprovar abre o desenho", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  registrarIssue(c.banco, { projeto: "loja", titulo: "Busca lenta", tipo: "problema" }, EXTERNO);
+  const dados = {
+    comportamento: { descricao: "lenta", comoReproduzir: ["buscar"] },
+    criterios_aceite: { criterios: [{ id: "CA-1", dado: "mil itens", quando: "busca", entao: "responde" }] },
+  } as const;
+  for (const [tipo, d] of Object.entries(dados)) {
+    comIssue(c.banco, 1, "registrarEvidencia", EXTERNO, (ag, ctx) =>
+      registrarEvidencia(ag, { ticket: 1, tipo, dados: d, arquivos: [] }, EXTERNO, ctx),
+    );
+  }
+  const enviarExterno = () =>
+    comIssue(c.banco, 1, "enviarParaAprovacao", EXTERNO, (ag, ctx) =>
+      enviarParaAprovacao(ag, { ticket: 1 }, EXTERNO, ctx),
+    );
+  enviarExterno();
+  assert.deepEqual(await sessoes(c.banco, { escopo: "ativas" }), [], "sem sessão do pi");
+
+  await decidirGate(c.banco, 1, "registro", { aprovado: false, motivo: "Falta o caminho de erro" }, opcoes);
+  const devolvida = agregado(c.banco, 1);
+  assert.equal(devolvida?.decisoes.at(-1)?.motivo, "Falta o caminho de erro");
+  assert.deepEqual(
+    devolvida.tickets.map((t) => [t.status, t.enviadoEm]),
+    [["em_execucao", undefined]],
+  );
+
+  enviarExterno();
+  await decidirGate(c.banco, 1, "registro", { aprovado: true }, opcoes);
+  assert.equal(agregado(c.banco, 1)?.issue.fase, "desenho");
+  assert.deepEqual(c.execucoes(), [], "nenhuma execução do pi");
+  assert.deepEqual(c.registro(), []);
+});
 
 test("registro: C1, worktree, sessão interativa com a mensagem inicial; o envio abre o gate, devolver retoma e aprovar", async () => {
   const c = cenario({ comAgente: true });

@@ -907,7 +907,7 @@ test("encerramento: o PR saiu, mas o registro de pr_aberto falhou; reaberto, o t
   assert.equal(c.doEncerramento().find((e) => e.tipo === "pr_aberto")?.dados.id, "1");
   assert.deepEqual(
     hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
-    ["pr list", "pr create", "pr list", "pr edit", "pr view"],
+    ["pr list", "pr create", "pr list", "api repos/{owner}/{repo}/pulls/1", "pr view"],
   );
   c.banco.close();
 });
@@ -952,7 +952,7 @@ test("encerramento: o C7 falhou depois do pr_aberto; reaberto, o ticket atualiza
   );
   assert.deepEqual(
     hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
-    ["pr list", "pr create", "pr view", "pr list", "pr reopen", "pr edit", "pr view"],
+    ["pr list", "pr create", "pr view", "pr list", "pr reopen", "api repos/{owner}/{repo}/pulls/1", "pr view"],
   );
   c.banco.close();
 });

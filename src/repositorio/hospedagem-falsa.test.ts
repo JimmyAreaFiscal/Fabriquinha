@@ -32,7 +32,7 @@ interface Estado {
   saida: Record<string, string>;
 }
 
-/** O PR guardado como cada CLI o mostra; `gh pr edit` e `az repos pr update` recusam PR fechado, como o PR real. */
+/** O PR guardado como cada CLI o mostra; `az repos pr update` recusa PR fechado e a API REST do gh, não, como o PR real. */
 const SCRIPT = `#!/usr/bin/env node
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -106,7 +106,7 @@ const novo = (head, base, titulo, corpo) => {
   return p;
 };
 const editar = (p, titulo, corpo) => {
-  if (p.estado === "fechado") {
+  if (cli === "az" && p.estado === "fechado") {
     process.stderr.write("o PR está fechado");
     process.exit(1);
   }
@@ -120,9 +120,14 @@ switch (comando) {
   case "pr create":
     resposta = gh(novo(opcao("--head"), opcao("--base"), opcao("--title"), readFileSync(opcao("--body-file"), "utf8"))).url;
     break;
-  case "pr edit":
-    editar(pr(args[2]), opcao("--title"), readFileSync(opcao("--body-file"), "utf8"));
-    resposta = gh(pr(args[2])).url;
+  case "api repos/{owner}/{repo}/pulls/" + args[1].split("/").at(-1):
+    // Só a edição do PR: gh api repos/{owner}/{repo}/pulls/<id> --method PATCH -f title=… -F body=@arquivo.
+    if (opcao("--method") !== "PATCH") {
+      process.stderr.write("chamada desconhecida: " + args.join(" "));
+      process.exit(2);
+    }
+    editar(pr(args[1].split("/").at(-1)), opcao("-f").slice("title=".length), readFileSync(opcao("-F").slice("body=@".length), "utf8"));
+    resposta = "";
     break;
   case "pr view":
     resposta = JSON.stringify({

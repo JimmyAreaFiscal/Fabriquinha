@@ -19,7 +19,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { z, ZodError } from "zod";
-import type { Ator, TipoIssue } from "../dominio/agregado.ts";
+import { type Ator, EXTERNO, type TipoIssue } from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
 import { evidenciasFaltando, registrarEvidencia } from "../dominio/evidencia.ts";
 import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
@@ -29,7 +29,7 @@ import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
-import { submeter } from "./submissao.ts";
+import { submeter, submeterExterno } from "./submissao.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-submissao-"));
 after(() => {
@@ -790,4 +790,30 @@ test("aula_codigo: a Fabriquinha gera o HTML do git da worktree e o anexa; anexo
   const html = readFileSync(caminhoArquivo(c.banco, anexo.sha256), "utf8");
   assert.match(html, /<tr class="mudou"><td class="n">1<\/td><td class="m">\+<\/td><td class="c">depois<\/td><\/tr>/);
   c.banco.close();
+});
+
+test("IA externa: submete no registro que registrou, com anexo da pasta dela; fora dela e em issue alheia é recusado", async () => {
+  const c = cenario();
+  registrarIssue(c.banco, { projeto: "loja", titulo: "Busca lenta", tipo: "problema" }, EXTERNO);
+  const pasta = mkdtempSync(join(base, "pasta-"));
+  const video = c.arquivo(pasta, "tela.webm", WEBM);
+  const ag = await submeterExterno(c.banco, 2, pasta, "comportamento", COMPORTAMENTO, [video]);
+  assert.deepEqual(
+    ag.evidencias.map((e) => [e.ticket, e.tipo, e.produtor, e.arquivos.map((a) => a.nome)]),
+    [[2, "comportamento", "agente", ["tela.webm"]]],
+  );
+  assert.equal(readFileSync(caminhoArquivo(c.banco, sha(WEBM))).equals(WEBM), true);
+
+  const fora = c.arquivo(c.saida, "fora.webm", WEBM);
+  await assert.rejects(
+    submeterExterno(c.banco, 2, pasta, "comportamento", COMPORTAMENTO, [fora]),
+    (e) =>
+      e instanceof ErroDeRegra &&
+      e.message === `${fora} está fora de ${pasta}, onde você rodou o comando (copie-o para ${pasta})`,
+  );
+  await assert.rejects(
+    submeterExterno(c.banco, 1, pasta, "comportamento", COMPORTAMENTO, [video]),
+    (e) => e instanceof ErroDeEscopo && e.message.startsWith("a IA externa não pode registrar evidência na I-1 ("),
+  );
+  assert.equal(contar(c.banco, "evidencia"), 1);
 });

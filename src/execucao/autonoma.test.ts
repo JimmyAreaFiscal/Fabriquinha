@@ -277,8 +277,9 @@ async function cenario({ preparacao = [] as string[], variante = "sucesso", comA
     registro: () =>
       existsSync(registro)
         ? readFileSync(registro, "utf8")
-            .trim()
+            // O pi falso pode estar escrevendo a última linha agora: só conta a que já terminou em \n.
             .split("\n")
+            .slice(0, -1)
             .map((l) => JSON.parse(l) as Record<string, unknown>)
         : [],
     log: (execucao) => readFileSync(join(raiz, "execucoes", `E-${String(execucao)}`, "log"), "utf8"),

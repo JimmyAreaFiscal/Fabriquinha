@@ -44,6 +44,15 @@ export const NOME_DA_ETAPA: Record<Etapa, string> = {
 };
 export const etapa = (e: Etapa): string => NOME_DA_ETAPA[e].toLowerCase();
 
+/**
+ * O ticket de registro que a IA externa enviou ao gate (C25) e o Auditor ainda não decidiu. Sem sessão do pi, é ele
+ * que põe a issue em Aguarda você e o gate do registro na página da issue.
+ */
+export const registroExternoEnviado = (tickets: readonly Ticket[]): Ticket | undefined =>
+  tickets.find(
+    (t) => t.etapa === "registro" && t.origem === "externo" && t.status === "em_execucao" && t.enviadoEm !== undefined,
+  );
+
 /** Por motivo da espera (F4 §5.2): o destaque do card, a marca no cartão do board e o botão (F7 §4.4). */
 export const MOTIVOS: Record<MotivoEspera, { titulo: string; marca: string; acao: string }> = {
   conversa: { titulo: "Conversa", marca: "responder", acao: "Responder" },

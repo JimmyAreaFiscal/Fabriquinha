@@ -526,6 +526,93 @@ async function portaLivre(): Promise<number> {
   return port;
 }
 
+test("necessidade: a IA externa registra, edita, submete, envia e lê o registro dela, sem FABRIQUINHA_EXECUCAO", async () => {
+  const c = cenario("registro");
+  const env = { FABRIQUINHA_ROOT: c.raiz };
+  const pasta = mkdtempSync(join(base, "pasta-"));
+  const cwd = process.cwd();
+  process.chdir(pasta);
+  try {
+    writeFileSync("desc.md", "A busca demora 10 s");
+    writeFileSync("comp.json", JSON.stringify(COMPORTAMENTO));
+    writeFileSync("ca.json", JSON.stringify(CRITERIOS));
+    writeFileSync("tela.webm", WEBM);
+    const registrar = [
+      "necessidade",
+      "registrar",
+      "--projeto",
+      "loja",
+      "--titulo",
+      "Busca lenta",
+      "--tipo",
+      "problema",
+    ];
+    usoInvalido(await cli(env, registrar), "falta --descricao", "necessidade");
+    const issue = json(await cli(env, [...registrar, "--descricao", "desc.md", "--dep", "I-2", "--dep", "1"]));
+    assert.deepEqual(
+      [issue.id, issue.titulo, issue.tipo, issue.descricao, issue.deps, issue.fase],
+      [3, "Busca lenta", "problema", "A busca demora 10 s", [2, 1], "registro"],
+    );
+    assert.deepEqual(
+      (issue.tickets as { status: string; origem: string }[]).map((t) => [t.status, t.origem]),
+      [["em_execucao", "externo"]],
+    );
+    assert.deepEqual(
+      json(await cli(env, [...registrar, "--descricao", "desc.md"])).deps,
+      [],
+      "sem --dep, sem dependência",
+    );
+    assert.equal(
+      json(await cli(env, ["necessidade", "editar", "I-3", "--titulo", "Busca muito lenta"])).titulo,
+      "Busca muito lenta",
+    );
+    assert.match((await cli(env, ["necessidade", "schema", "comportamento"])).out, /"comoReproduzir"/);
+    falha(
+      await cli(env, ["necessidade", "enviar", "3"]),
+      /^T-3 não pode ir à aprovação: falta a evidência comportamento, criterios_aceite \(a IA externa submete com fabriquinha necessidade evidencia I-3 comportamento/,
+    );
+    const comp = json(
+      await cli(env, [
+        "necessidade",
+        "evidencia",
+        "I-3",
+        "comportamento",
+        "--dados",
+        "comp.json",
+        "--arquivo",
+        "tela.webm",
+      ]),
+    );
+    assert.deepEqual([comp.ticket, comp.tipo], [3, "comportamento"]);
+    json(
+      await cli(
+        env,
+        ["necessidade", "evidencia", "I-3", "criterios_aceite", "--dados", "-"],
+        JSON.stringify(CRITERIOS),
+      ),
+    );
+    assert.ok(json(await cli(env, ["necessidade", "enviar", "I-3"])).enviadoEm);
+    const vista = json(await cli(env, ["necessidade", "ver", "I-3"]));
+    assert.deepEqual([vista.id, vista.decisoes], [3, []]);
+  } finally {
+    process.chdir(cwd);
+  }
+  falha(
+    await cli(env, ["necessidade", "ver", "I-1"]),
+    "a IA externa não pode ler a I-1 (ela lê só as issues que registrou com fabriquinha necessidade registrar)",
+  );
+  falha(
+    await cli(env, ["necessidade", "editar", "I-1", "--titulo", "X"]),
+    "a IA externa não pode editar a I-1 (ela só age no registro das issues que registrou, e a I-1 não é uma delas ou já saiu do registro)",
+  );
+  falha(
+    await cli(c.env, ["necessidade", "ver", "I-3"]),
+    "necessidade ver não é comando do agente (é da IA de fora da Fabriquinha; siga com o seu ticket)",
+  );
+  assert.match((await cli({}, ["necessidade", "-h"])).out, /^ {2}fabriquinha necessidade evidencia I-<n> <tipo> /m);
+  c.banco.close();
+});
+
 test("servidor sobe o serviço na raiz e para na parada; não sobe uma segunda instância; é recusado ao agente", async () => {
   const raiz = mkdtempSync(join(base, "servidor-"));
   process.env.FABRIQUINHA_PORTA = String(await portaLivre());

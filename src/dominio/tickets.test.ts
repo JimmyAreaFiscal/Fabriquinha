@@ -127,10 +127,14 @@ test("C11 do Auditor só no gate de desenho, e só ele escolhe o modelo", () => 
   );
 });
 
-test("C11 recusa a Fabriquinha, o agente de outra etapa ou sem execução em andamento, e entrada inválida", () => {
+test("C11 recusa a Fabriquinha, a IA externa, o agente de outra etapa ou sem execução em andamento, e entrada inválida", () => {
   escopo(
     () => adicionar(comProposta(), { titulo: "x" }, { tipo: "fabriquinha" }),
     "a Fabriquinha não pode criar ticket na I-1 (quem pode é o Auditor ou o agente de desenho, revisao, sessao da I-1)",
+  );
+  escopo(
+    () => adicionar(comProposta(), { titulo: "x" }, { tipo: "externo" }),
+    "a IA externa não pode criar ticket na I-1 (quem pode é o Auditor ou o agente de desenho, revisao, sessao da I-1)",
   );
   escopo(
     () => adicionar(comProposta("encerramento", "encerramento"), { titulo: "x" }, agente),

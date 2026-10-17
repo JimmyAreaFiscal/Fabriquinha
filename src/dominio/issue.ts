@@ -12,7 +12,7 @@ import {
   type Ticket,
   TipoIssue,
 } from "./agregado.ts";
-import { ErroDeRegra } from "./erros.ts";
+import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { Id, Markdown, Slug, Titulo } from "./primitivos.ts";
 
 const EntradaRegistro = z.object({
@@ -21,6 +21,8 @@ const EntradaRegistro = z.object({
   descricao: Markdown.default(""),
   titulo: Titulo.optional(),
 });
+/** A IA externa chega com o registro escrito: título e tipo vêm junto, e ela segue com as evidências. */
+const EntradaRegistroExterno = EntradaRegistro.extend({ titulo: Titulo, tipo: TipoIssue });
 const EntradaEdicao = z.strictObject({ titulo: Titulo, tipo: TipoIssue, descricao: Markdown }).partial();
 
 function exigirIssue(ctx: Contexto, id: Id): void {
@@ -39,10 +41,19 @@ function exigirNaoConcluida(ag: Agregado): void {
   }
 }
 
-/** C1: issue em `registro`, sem tipo (e sem título, salvo o da proposta de issue, C24), com o ticket de registro aberto. */
+/**
+ * C1: issue em `registro`, com o ticket de registro. Do Auditor, sem tipo (e sem título, salvo o da proposta de issue,
+ * C24), com o ticket aberto para a sessão do pi. Da IA externa, com título e tipo, e o ticket já em execução por ela,
+ * sem sessão do pi: ela submete as evidências e envia pelo `fabriquinha necessidade`.
+ */
 export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
-  exigirAuditor(ator, "registrar uma issue");
-  const { projeto, deps, descricao, titulo } = EntradaRegistro.parse(entrada);
+  if (ator.tipo !== "auditor" && ator.tipo !== "externo") {
+    throw new ErroDeEscopo("só o Auditor ou a IA externa pode registrar uma issue", "peça ao Auditor pelo web");
+  }
+  const externo = ator.tipo === "externo";
+  const { projeto, deps, descricao, titulo, tipo } = externo
+    ? EntradaRegistroExterno.parse(entrada)
+    : { ...EntradaRegistro.parse(entrada), tipo: null };
   if (!ctx.projeto(projeto)) throw new ErroDeRegra(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
   for (const dep of deps) exigirIssue(ctx, dep);
   // Uma issue nova ainda não é dependência de ninguém, então as dependências dela não fecham ciclo.
@@ -52,7 +63,7 @@ export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agr
       id,
       projeto,
       titulo: titulo ?? null,
-      tipo: null,
+      tipo,
       descricao,
       fase: "registro",
       deps: [...new Set(deps)],
@@ -65,8 +76,8 @@ export function registrarIssue(entrada: unknown, ator: Ator, ctx: Contexto): Agr
         etapa: "registro",
         titulo: "Registrar a necessidade",
         descricao: "",
-        status: "aberto",
-        origem: "fabriquinha",
+        status: externo ? "em_execucao" : "aberto",
+        origem: externo ? "externo" : "fabriquinha",
         criadoEm: ctx.agora,
       },
     ],

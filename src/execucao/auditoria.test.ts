@@ -221,8 +221,9 @@ function pifalso(variante: "conversa" | "espera" | "morre"): Rodada {
     registro: () =>
       existsSync(process.env.FALSO_PI_REGISTRO ?? "")
         ? readFileSync(process.env.FALSO_PI_REGISTRO ?? "", "utf8")
-            .trim()
+            // O pi falso pode estar escrevendo a última linha agora: só conta a que já terminou em \n.
             .split("\n")
+            .slice(0, -1)
             .map((l) => JSON.parse(l) as Registro)
         : [],
   };
