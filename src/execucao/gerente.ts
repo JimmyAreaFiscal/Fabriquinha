@@ -154,6 +154,19 @@ export function atividadeDo(evento: EventoPi): string | undefined {
   return primeira && linha(primeira);
 }
 
+/** O que o chat precisa saber do select aberto pela `perguntar` (a de `title` igual a `args.question`); `undefined` nos demais. */
+function daPergunta(evento: EventoPi, emExecucao: Iterable<Record<string, unknown>>): Partial<Dialogo> | undefined {
+  const args = [...emExecucao].find((a) => a.question === evento.title);
+  if (!args) return undefined;
+  const opcoes = (args.options ?? []) as { description?: string }[];
+  return {
+    pergunta: true,
+    multiSelect: Boolean(args.multiSelect),
+    descricoes: opcoes.map((o) => o.description),
+    message: args.details,
+  };
+}
+
 const viva = (execucao: Id | string, solucao: string): Viva =>
   existe(vivas.get(execucao), `a execução E-${String(execucao)} não tem pi rodando`, solucao);
 
@@ -353,6 +366,8 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     const autonoma = r.execucao.modo === "autonomo";
     const pendentes = new Map<string, Dialogo>();
     const expiracoes = new Map<string, NodeJS.Timeout>();
+    /** Os args das chamadas da `perguntar` em execução, por `toolCallId`: o select dela é a pergunta ao Auditor. */
+    const perguntas = new Map<string, Record<string, unknown>>();
     let ultima: Mensagem = {};
     let restante = r.limiteMin * 60_000;
     let desde = 0;
@@ -424,8 +439,10 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       const em = Date.now();
       // F4 §5.4: o diálogo com tempo limite também espera o Auditor; o pi o resolve sozinho quando expira.
       const timeout = typeof evento.timeout === "number" ? evento.timeout : undefined;
+      const pergunta = evento.method === "select" ? daPergunta(evento, perguntas.values()) : undefined;
       pendentes.set(dialogo, {
         ...evento,
+        ...pergunta,
         em: new Date(em).toISOString(),
         ...(timeout !== undefined && { expiraEm: new Date(em + timeout).toISOString() }),
       });
@@ -489,6 +506,13 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
           }
           break;
         }
+        case "tool_execution_start":
+          if (evento.toolName === "perguntar")
+            perguntas.set(String(evento.toolCallId), evento.args as Record<string, unknown>);
+          break;
+        case "tool_execution_end":
+          perguntas.delete(String(evento.toolCallId));
+          break;
         case "agent_start":
           ocupar(true);
           mudou();

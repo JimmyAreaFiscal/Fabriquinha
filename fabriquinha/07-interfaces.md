@@ -349,7 +349,7 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
    - no registro interativo, entre a conversa e o envio, um **cartão de proposta de issue** por proposta aberta (o mesmo do gate do desenho, abaixo), redesenhado a cada estado;
 3. Área de envio, fixa no pé da página, conforme o estado (F4, 5.4); o campo Mensagem é o compositor do assistant-ui, e o resto (diálogos, retomada, avisos) segue HTML:
    - rodando: **Redirecionar** (`steer`) ou **Enfileirar** (`follow_up`), **Abortar** e **Enviar**;
-   - diálogo de extensão: o pedido do agente com o formulário (`select` como lista de opções, `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** e **Responder**;
+   - diálogo de extensão: o pedido do agente com o formulário (`select` como itens numerados e clicáveis, nenhum pré-marcado, e o clique já responde; na pergunta da ferramenta `perguntar` o `select` ganha **Outros** no fim, com campo de texto obrigatório, e a múltipla escolha usa caixas de seleção; `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** sempre e **Responder** quando há texto ou múltipla escolha a enviar;
    - falha: o erro em destaque na conversa e, no envio, instrução para a próxima tentativa, seletor de modelo (C20) e **Responder e retomar** (C9);
    - conversa (interativa): **Enviar**; na sessão em aberto, também **Concluir sessão**;
    - gates do registro e do desenho: o aviso de que o agente enviou o resultado e de que a decisão fica na página da issue;

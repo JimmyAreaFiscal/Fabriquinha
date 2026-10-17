@@ -350,7 +350,11 @@ test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e
     `${PACOTE}/skills/artefato-comprovacao-criterios`,
     "-e",
     `${PACOTE}/extensions/guarda.ts`,
+    "-e",
+    `${PACOTE}/extensions/pergunta.ts`,
     "--approve",
+    "--exclude-tools",
+    "ask_user_question",
   ]);
   assert.equal(inicio.cwd, c.worktree);
   assert.deepEqual(inicio.env, {

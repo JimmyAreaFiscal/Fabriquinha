@@ -30,6 +30,7 @@ import {
   modeloDe,
   propostasDoChat,
   respostaDoDialogo,
+  valorDoSelect,
   seletorDeSessoes,
 } from "./chat.ts";
 
@@ -402,17 +403,47 @@ test("envio em diálogo: o formulário do método, com Cancelar e Responder", ()
     select,
     /^<form class="dialogo-ext" data-dialogo="d1" data-metodo="select"><span class="rotulo">O agente pergunta<\/span><div>Qual <code>&lt;ordem&gt;<\/code>\?<\/div>/,
   );
+  // Extensão: itens numerados e clicáveis, nada pré-marcado, sem «Outros» nem Responder.
   assert.match(
     select,
-    /<label><input type="radio" name="valor" value="A &#60;1&#62;" checked> A &#60;1&#62;<\/label><label><input type="radio" name="valor" value="B"> B<\/label>/,
+    /<div class="opcoes" role="group" aria-label="Opções"><button type="button" class="opcao" data-opcao="A &#60;1&#62;"><span class="opcao-rotulo">1\. A &#60;1&#62;<\/span><\/button><button type="button" class="opcao" data-opcao="B"><span class="opcao-rotulo">2\. B<\/span><\/button><\/div>/,
+  );
+  assert.doesNotMatch(select, /checked|data-outros|Responder|data-multipla/);
+  assert.match(select, /data-cancelar>Cancelar<\/button><\/div><\/form>$/);
+  assert.match(com({ method: "select", title: "t" }), /<div class="opcoes" role="group" aria-label="Opções"><\/div>/);
+  // Pergunta da `perguntar`, escolha única: descrição embaixo, «Outros» no fim, campo oculto e Responder escondido.
+  const unica = com({
+    method: "select",
+    title: "t",
+    options: ["A", "B"],
+    pergunta: true,
+    descricoes: ["porque <sim>", undefined],
+  });
+  assert.match(unica, /<span class="opcao-descricao">porque &#60;sim&#62;<\/span><\/button>/);
+  assert.equal(unica.match(/opcao-descricao/g)?.length, 1);
+  assert.match(
+    unica,
+    /<button type="button" class="opcao" data-outros><span class="opcao-rotulo">Outros<\/span><\/button><\/div><textarea name="outro" rows="3" aria-label="Outros" required hidden disabled><\/textarea>/,
   );
   assert.match(
-    select,
+    unica,
+    /data-cancelar>Cancelar<\/button><button class="btn btn-primario" hidden data-responder-outros>Responder<\/button>/,
+  );
+  // Múltipla: caixas, «Outros» também caixa, Responder sempre à mostra.
+  const multipla = com({ method: "select", title: "t", options: ["A", "B"], pergunta: true, multiSelect: true });
+  assert.match(multipla, /data-metodo="select" data-multipla>/);
+  assert.match(
+    multipla,
+    /<label class="opcao"><input type="checkbox" name="opcao" value="A"><span><span class="opcao-rotulo">1\. A<\/span><\/span><\/label>/,
+  );
+  assert.match(
+    multipla,
+    /<label class="opcao"><input type="checkbox" data-outros><span class="opcao-rotulo">Outros<\/span><\/label>/,
+  );
+  assert.match(multipla, /<textarea name="outro"[^>]* required hidden disabled>/);
+  assert.match(
+    multipla,
     /data-cancelar>Cancelar<\/button><button class="btn btn-primario">Responder<\/button><\/div><\/form>$/,
-  );
-  assert.match(
-    com({ method: "select", title: "t" }),
-    /<div class="opcoes" role="radiogroup" aria-label="Opções"><\/div>/,
   );
   const confirm = com({ method: "confirm", title: "Apagar?", message: "Fica <lento>.\n\n- roda `npm ci`" });
   assert.match(
@@ -440,6 +471,15 @@ test("envio em diálogo: o formulário do método, com Cancelar e Responder", ()
   assert.deepEqual(respostaDoDialogo("confirm", "sim"), { confirmado: true });
   assert.deepEqual(respostaDoDialogo("confirm", "nao"), { confirmado: false });
   assert.deepEqual(respostaDoDialogo("editor", "x"), { valor: "x" });
+});
+
+test("valorDoSelect: o texto de «Outros» na única, o JSON da lista na múltipla, nada sem escolha", () => {
+  assert.equal(valorDoSelect(false, [], "  por data  "), "por data");
+  assert.equal(valorDoSelect(false, [], "  "), undefined);
+  assert.equal(valorDoSelect(true, ["A", "B"], ""), '["A","B"]');
+  assert.equal(valorDoSelect(true, ["A"], " e mais "), '["A","e mais"]');
+  assert.equal(valorDoSelect(true, [], "só outro"), '["só outro"]');
+  assert.equal(valorDoSelect(true, [], " "), undefined);
 });
 
 test("envio nos gates: só o aviso; terminada: Exportar histórico e Conversar sobre esta sessão", () => {
