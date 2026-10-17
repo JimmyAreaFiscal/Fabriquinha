@@ -8,7 +8,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { CATALOGO } from "../dominio/evidencia.ts";
 import type { ModoExecucao } from "../dominio/agregado.ts";
-import type { Etapa, Modelo } from "../dominio/primitivos.ts";
+import type { Effort, Etapa, Modelo } from "../dominio/primitivos.ts";
 import { ambienteSemCredenciais, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 
@@ -50,6 +50,7 @@ export interface Lancamento {
   sessaoPi: string;
   etapa: Etapa;
   modelo: Modelo | undefined;
+  effort?: Effort;
   confianca: boolean | undefined;
   modo: ModoExecucao;
   /**
@@ -60,8 +61,9 @@ export interface Lancamento {
 }
 
 /**
- * F4 §6.1: a configuração do Auditor vale inteira; a Fabriquinha só soma as skills da etapa e a guarda. A consulta
- * (F4 §6.5) copia a sessão principal para a sessão nova `sessaoPi` e tira só as ferramentas embutidas de escrita;
+ * F4 §6.1: a configuração do Auditor vale inteira; a Fabriquinha só soma as skills da etapa, a guarda e a `perguntar`,
+ * que toma o lugar da `ask_user_question` (quebrada no modo RPC; o pi não inicia com duas ferramentas de mesmo nome).
+ * A consulta (F4 §6.5) copia a sessão principal para a sessão nova `sessaoPi` e tira só as ferramentas embutidas de escrita;
  * além das três da spec, o `powershell`, que o pi 0.84.4 também embute e que altera arquivos se houver `pwsh`.
  */
 export const argumentosPi = (l: Lancamento): string[] => [
@@ -72,12 +74,16 @@ export const argumentosPi = (l: Lancamento): string[] => [
   "--session-id",
   l.sessaoPi,
   ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.modelo] : []),
+  ...(l.effort ? ["--thinking", l.effort] : []),
   ...skillsDaEtapa(l.etapa).flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
   "-e",
   join(PACOTE, "extensions", "guarda.ts"),
+  "-e",
+  join(PACOTE, "extensions", "pergunta.ts"),
   ...(l.confianca === undefined ? [] : [l.confianca ? "--approve" : "--no-approve"]),
   ...(l.fork ? ["--fork", l.fork] : []),
-  ...(l.modo === "consulta" ? ["--exclude-tools", "edit,write,bash,powershell"] : []),
+  "--exclude-tools",
+  l.modo === "consulta" ? "ask_user_question,edit,write,bash,powershell" : "ask_user_question",
 ];
 
 /**

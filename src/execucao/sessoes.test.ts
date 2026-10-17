@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
@@ -24,13 +24,16 @@ import {
   AUDITOR,
   CANCELADA,
   type Execucao,
+  EXTERNO,
   type PropostaIssue,
   type Ticket,
 } from "../dominio/agregado.ts";
+import { registrarEvidencia } from "../dominio/evidencia.ts";
+import { enviarParaAprovacao } from "../dominio/gates.ts";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Fase } from "../dominio/primitivos.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { agregado, propostasDaIssue, proporIssue, registrarIssue } from "../persistencia/issues.ts";
+import { agregado, comIssue, propostasDaIssue, proporIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree, garantirWorktree } from "../repositorio/worktree.ts";
 import { abortar, atividadeDo, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
@@ -286,6 +289,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
  * - dialogo: responde, assenta e depois abre um `editor` (como o gancho de uma extensão);
  * - espera: fica trabalhando; `steer` o faz responder e assentar, `follow_up` abre um `editor`, `abort` o faz
  *   parar com stopReason aborted;
+ * - pergunta: durante a ferramenta `perguntar` abre dois `select` (o dela e o de outra extensão) e, depois dela, um terceiro;
  * - sai: sai com código 3 ao receber o prompt.
  * Com --fork, a sessão nova começa com as entradas da de origem.
  * Uma mensagem que termina em "pergunte" não roda o agente: ele só pergunta; com "edite o título", ele só edita a issue. $FALSO_PI_RECUSA ("prompt", "steer") faz o pi recusar
@@ -342,6 +346,18 @@ async function aoPrompt(c) {
   guardar(usuario);
   if (variante === "espera") {
     emitir({ type: "tool_execution_start", toolCallId: "t1", toolName: "bash", args: { command: "npm test" } });
+    return;
+  }
+  if (variante === "pergunta") {
+    const args = { question: "Qual ordem?", details: "Pense nos cupons", multiSelect: true, options: [{ label: "A", description: "primeira" }, { label: "B" }] };
+    const select = (id, title) => emitir({ type: "extension_ui_request", id, method: "select", title, options: ["A", "B"] });
+    emitir({ type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args });
+    select("d1", "Qual ordem?");
+    select("d2", "Outra pergunta");
+    emitir({ type: "tool_execution_end", toolCallId: "p1", toolName: "perguntar" });
+    select("d3", "Qual ordem?");
+    emitir({ type: "tool_execution_start", toolCallId: "p2", toolName: "perguntar", args: { question: "Sem opções" } });
+    select("d4", "Sem opções");
     return;
   }
   if (variante === "sai") process.exit(3);
@@ -460,8 +476,9 @@ function cenario({ variante = "conversa", comAgente = false, preparacao = [] as 
   const lerRegistro = () =>
     existsSync(registro)
       ? readFileSync(registro, "utf8")
-          .trim()
+          // O pi falso pode estar escrevendo a última linha agora: só conta a que já terminou em \n.
           .split("\n")
+          .slice(0, -1)
           .map((l) => JSON.parse(l) as Record<string, unknown>)
       : [];
   return {
@@ -506,6 +523,41 @@ const vivo = (pid: unknown) => {
 };
 
 const rejeitaCom = (mensagem: string) => (e: unknown) => e instanceof ErroDeRegra && e.message === mensagem;
+
+test("registro da IA externa: o gate decide sem sessão do pi; devolver só grava o motivo, e aprovar abre o desenho", async () => {
+  const c = cenario();
+  const opcoes = { ociosidadeMin: 1 };
+  registrarIssue(c.banco, { projeto: "loja", titulo: "Busca lenta", tipo: "problema" }, EXTERNO);
+  const dados = {
+    comportamento: { descricao: "lenta", comoReproduzir: ["buscar"] },
+    criterios_aceite: { criterios: [{ id: "CA-1", dado: "mil itens", quando: "busca", entao: "responde" }] },
+  } as const;
+  for (const [tipo, d] of Object.entries(dados)) {
+    comIssue(c.banco, 1, "registrarEvidencia", EXTERNO, (ag, ctx) =>
+      registrarEvidencia(ag, { ticket: 1, tipo, dados: d, arquivos: [] }, EXTERNO, ctx),
+    );
+  }
+  const enviarExterno = () =>
+    comIssue(c.banco, 1, "enviarParaAprovacao", EXTERNO, (ag, ctx) =>
+      enviarParaAprovacao(ag, { ticket: 1 }, EXTERNO, ctx),
+    );
+  enviarExterno();
+  assert.deepEqual(await sessoes(c.banco, { escopo: "ativas" }), [], "sem sessão do pi");
+
+  await decidirGate(c.banco, 1, "registro", { aprovado: false, motivo: "Falta o caminho de erro" }, opcoes);
+  const devolvida = agregado(c.banco, 1);
+  assert.equal(devolvida?.decisoes.at(-1)?.motivo, "Falta o caminho de erro");
+  assert.deepEqual(
+    devolvida.tickets.map((t) => [t.status, t.enviadoEm]),
+    [["em_execucao", undefined]],
+  );
+
+  enviarExterno();
+  await decidirGate(c.banco, 1, "registro", { aprovado: true }, opcoes);
+  assert.equal(agregado(c.banco, 1)?.issue.fase, "desenho");
+  assert.deepEqual(c.execucoes(), [], "nenhuma execução do pi");
+  assert.deepEqual(c.registro(), []);
+});
 
 test("registro: C1, worktree, sessão interativa com a mensagem inicial; o envio abre o gate, devolver retoma e aprovar", async () => {
   const c = cenario({ comAgente: true });
@@ -731,6 +783,24 @@ test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o mot
   const c = cenario();
   const opcoes = { ociosidadeMin: 1 };
   const [recusada, proposta] = desenhoComDuasPropostas(c);
+  // A worktree já criada, com origin/main adiante: a retomada do desenho não a atualiza.
+  const issue = agregado(c.banco, 1)?.issue;
+  assert.ok(issue);
+  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
+  const worktree = await garantirWorktree(
+    c.raiz,
+    { nome: "loja", repo, branchBase: "main", preparacao: [] },
+    issue,
+    join(c.raiz, "log"),
+    () => Promise.resolve(),
+  );
+  const antes = String(git(worktree, "rev-parse", "HEAD"));
+  const outro = join(dirname(repo), "outro");
+  git(base, "clone", "-q", "-b", "main", String(git(repo, "remote", "get-url", "origin")).trim(), outro);
+  writeFileSync(join(outro, "NOVO"), "da base\n");
+  git(outro, "add", "NOVO");
+  git(outro, "commit", "-q", "-m", "da base");
+  git(outro, "push", "-q", "origin", "main");
   // Recusar só marca a proposta: o gate continua, sem mensagem à IA.
   assert.deepEqual(await decidirProposta(c.banco, recusada.id, false, opcoes), {});
   assert.equal(c.execucoes().length, 1);
@@ -763,6 +833,7 @@ test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o mot
     () => c.comandos().some((m) => String(m.message).endsWith(`O Auditor reprovou o desenho. Motivo: ${motivo}\n`)),
     "o motivo chegar à IA do desenho",
   );
+  assert.equal(String(git(worktree, "rev-parse", "HEAD")).trim(), antes.trim(), "a retomada não atualiza a worktree");
   await ate(async () => (await estadoDe(c, SESSAO)) === "aguardando_humano: conversa", "a IA do desenho responder");
   await ate(
     async () => (await estadoDe(c, c.execucoes()[2]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
@@ -938,6 +1009,22 @@ test("diálogo pendente: a sessão interativa espera o Auditor sem parar por oci
   assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
   await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
   assert.deepEqual(c.comandos().at(-1), { type: "extension_ui_response", id: "e1", value: "porque sim" });
+  c.banco.close();
+});
+
+test("diálogo select: o gerente marca o da ferramenta perguntar em execução e só ele", async () => {
+  const c = cenario({ variante: "pergunta" });
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", { ociosidadeMin: 1 });
+  await ate(async () => (await infoDaSessao(c.banco, sessao)).dialogos.length === 4, "os quatro diálogos");
+  const { dialogos } = await infoDaSessao(c.banco, sessao);
+  const marcas = dialogos.map((d) => [d.id, d.pergunta, d.multiSelect, d.descricoes, d.message]);
+  assert.deepEqual(marcas, [
+    ["d1", true, true, ["primeira", undefined], "Pense nos cupons"],
+    ["d2", undefined, undefined, undefined, undefined], // outro título
+    ["d3", undefined, undefined, undefined, undefined], // depois do tool_execution_end
+    ["d4", true, false, [], undefined], // sem opções nem details
+  ]);
+  await pararTudo(c);
   c.banco.close();
 });
 
@@ -1191,8 +1278,18 @@ test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove
   await assert.rejects(encerrarIssue(c.banco, 1, 5), ErroExterno);
   assert.equal(situacao(consulta)?.ocupado, false, "a leitura do PR que falhou não para a consulta");
   prNoGitHub("MERGED");
+  // O merge do PR avançou origin/main; a main do repositório, em checkout e limpa, o acompanha no encerramento.
+  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
+  const outro = join(dirname(repo), "outro");
+  git(base, "clone", "-q", "-b", "main", String(git(repo, "remote", "get-url", "origin")).trim(), outro);
+  writeFileSync(join(outro, "MERGE"), "do PR\n");
+  git(outro, "add", "MERGE");
+  git(outro, "commit", "-q", "-m", "merge do PR");
+  git(outro, "push", "-q", "origin", "main");
+  const mergeado = String(git(outro, "rev-parse", "HEAD")).trim();
 
   assert.deepEqual(await encerrarIssue(c.banco, 1, 5), []);
+  assert.equal(String(git(repo, "rev-parse", "main")).trim(), mergeado, "a main local avançou até origin/main");
   assert.equal(situacao(consulta), undefined, "a consulta parou antes da limpeza");
   assert.equal(c.execucoes().find((e) => e.sessao_pi === consulta)?.resultado, "sucesso");
   const ag = agregado(c.banco, 1);
@@ -1204,7 +1301,6 @@ test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove
   );
   assert.equal(await estadoDe(c, SESSAO), "terminada");
   assert.equal(existsSync(worktree), false);
-  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
   assert.equal(git(repo, "branch", "--list", "fabriquinha/I-1").toString().trim(), "fabriquinha/I-1");
   assert.match(
     git(repo, "ls-remote", "--heads", "origin", "fabriquinha/I-1").toString(),
@@ -1323,7 +1419,7 @@ test("consulta: copia a sessão principal, sem ferramentas de escrita, sem promp
     "--fork",
     arquivoFalso(c, principal),
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
   assert.equal(c.comandos().length, comandos, "a consulta sobe sem prompt, à espera da pergunta");
   assert.equal(existsSync(join(c.raiz, "execucoes", "E-2", "prompt.md")), false);
@@ -1396,9 +1492,9 @@ test("consulta de um ticket por decidir: para o pi ocioso, segue em conversa dep
   );
   const retomada = inicioDe(c, consulta);
   assert.deepEqual(retomada.argv.slice(-3), [
-    join(PACOTE, "extensions", "guarda.ts"),
+    join(PACOTE, "extensions", "pergunta.ts"),
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
   assert.deepEqual(c.comandos().at(-1), { type: "prompt", message: "E o critério? Só pergunte." }, "só a mensagem");
   assert.equal(agregado(c.banco, 1)?.tickets[0]?.status, "em_execucao");
@@ -1454,7 +1550,7 @@ test("consulta sem cópia: a primeira execução falhou antes de o pi subir, e a
     "--fork",
     arquivoFalso(c, principal),
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
   const conversa = (await abrirChat(c.banco, consulta)).conversa as { message?: { role: string } }[];
   assert.deepEqual(

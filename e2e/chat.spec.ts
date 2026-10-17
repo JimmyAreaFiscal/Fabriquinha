@@ -125,12 +125,14 @@ test("acompanha uma sessão autônoma ao vivo, a redireciona e responde a um di�
   const dialogo = pagina.locator("form.dialogo-ext");
   await expect(dialogo).toContainText("O agente pergunta");
   await expect(dialogo).toContainText("Qual ordem os cupons devem ter?");
-  await expect(dialogo.getByRole("radio", { name: "Maior desconto primeiro" })).toBeChecked();
+  // CA-7: select de extensão, itens clicáveis sem «Outros» nem Responder; o clique responde.
+  await expect(dialogo.getByRole("radio")).toHaveCount(0);
+  await expect(dialogo.getByRole("button", { name: "Outros" })).toHaveCount(0);
+  await expect(dialogo.getByRole("button", { name: "Responder" })).toHaveCount(0);
   await expect(dialogo.getByRole("button", { name: "Cancelar" })).toBeVisible();
-  await dialogo.getByText("Validade mais próxima").click();
-  await dialogo.getByRole("button", { name: "Responder" }).click();
+  await dialogo.getByRole("button", { name: "Maior desconto primeiro" }).click();
   await expect(conversa.locator(".msg.agente").last()).toHaveText(
-    'Resposta do diálogo: {"value":"Validade mais próxima"}',
+    'Resposta do diálogo: {"value":"Maior desconto primeiro"}',
   );
   await expect(dialogo).toHaveCount(0);
 });
@@ -265,11 +267,92 @@ test("diálogo confirm cancelado; o mesmo diálogo respondido em outra aba avisa
   await segunda.goto(`${fabriquinha.base}/sessions/${sessao}`);
   const dialogoDaSegunda = segunda.locator("form.dialogo-ext");
   await expect(dialogoDaSegunda).toContainText("Qual ordem os cupons devem ter?");
-  await dialogo.getByRole("button", { name: "Responder" }).click();
+  await dialogo.getByRole("button", { name: "Validade mais próxima" }).click();
   await expect(dialogo).toHaveCount(0);
-  await dialogoDaSegunda.getByRole("button", { name: "Responder" }).click();
+  await dialogoDaSegunda.getByRole("button", { name: "Validade mais próxima" }).click();
   await expect(segunda.locator("[data-aviso]")).toContainText("não está pendente");
   await expect(segunda).toHaveURL(`${fabriquinha.base}/sessions/${sessao}`);
+});
+
+/** Abre no chat do registro o `select` da `perguntar` (única ou múltipla) e devolve o diálogo e a última resposta do agente. */
+async function perguntarNoChat(pagina: Page, fabriquinha: Fabriquinha, tipo: "perguntar" | "multipla") {
+  await abrirRegistro(pagina, fabriquinha);
+  await pagina.getByRole("textbox", { name: "Mensagem" }).fill(`pergunte ${tipo}`);
+  await pagina.getByRole("textbox", { name: "Mensagem" }).press("Enter");
+  const dialogo = pagina.locator("form.dialogo-ext");
+  await expect(dialogo).toContainText("Qual ordem os cupons devem ter?");
+  return { dialogo, resposta: pagina.locator("[data-conversa] .msg.agente").last() };
+}
+
+test("perguntar: itens clicáveis, nada pré-marcado, «Outros» no fim e Cancelar (CA-1)", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const { dialogo } = await perguntarNoChat(pagina, fabriquinha, "perguntar");
+  const itens = dialogo.locator(".opcao");
+  await expect(itens).toHaveText([
+    "1. Maior desconto primeiroOrdem: Maior desconto primeiro",
+    "2. Validade mais próximaOrdem: Validade mais próxima",
+    "Outros",
+  ]);
+  await expect(dialogo.locator("[aria-checked=true], :checked")).toHaveCount(0);
+  await expect(dialogo.getByRole("button", { name: "Cancelar" })).toBeVisible();
+  await expect(dialogo.getByRole("button", { name: "Responder" })).toBeHidden();
+  await expect(dialogo.getByRole("textbox", { name: "Outros" })).toBeHidden();
+});
+
+test("perguntar: o clique numa opção responde na hora, sem Responder (CA-2)", async ({ pagina, fabriquinha }) => {
+  const { dialogo, resposta } = await perguntarNoChat(pagina, fabriquinha, "perguntar");
+  await dialogo.getByRole("button", { name: "Validade mais próxima" }).click();
+  await expect(dialogo).toHaveCount(0);
+  await expect(resposta).toHaveText('Resposta do diálogo: {"value":"Validade mais próxima"}');
+});
+
+test("perguntar: «Outros» abre o campo e Responder envia o texto, sem opção escolhida (CA-3)", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const { dialogo, resposta } = await perguntarNoChat(pagina, fabriquinha, "perguntar");
+  await dialogo.getByRole("button", { name: "Outros" }).click();
+  await dialogo.getByRole("textbox", { name: "Outros" }).fill("Por data de criação, só dos cupons ativos");
+  await dialogo.getByRole("button", { name: "Responder" }).click();
+  await expect(dialogo).toHaveCount(0);
+  await expect(resposta).toHaveText('Resposta do diálogo: {"value":"Por data de criação, só dos cupons ativos"}');
+});
+
+test("perguntar: «Outros» com o campo vazio não envia e o diálogo continua aberto (CA-4)", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const { dialogo, resposta } = await perguntarNoChat(pagina, fabriquinha, "perguntar");
+  await dialogo.getByRole("button", { name: "Outros" }).click();
+  await dialogo.getByRole("button", { name: "Responder" }).click();
+  await expect(dialogo.getByRole("textbox", { name: "Outros" })).toBeVisible();
+  await expect(dialogo).toHaveCount(1);
+  await expect(resposta).toHaveText("Preciso de uma resposta.");
+});
+
+test("perguntar: Cancelar fecha o diálogo e o agente recebe o cancelamento (CA-5)", async ({ pagina, fabriquinha }) => {
+  const { dialogo, resposta } = await perguntarNoChat(pagina, fabriquinha, "perguntar");
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialogo).toHaveCount(0);
+  await expect(resposta).toHaveText('Resposta do diálogo: {"cancelled":true}');
+});
+
+test("perguntar de múltipla escolha: marcar, «Outros» e Responder enviam a lista (CA-6)", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const { dialogo, resposta } = await perguntarNoChat(pagina, fabriquinha, "multipla");
+  await expect(dialogo.getByRole("checkbox", { checked: true })).toHaveCount(0);
+  await expect(dialogo.getByRole("button", { name: "Responder" })).toBeVisible();
+  await dialogo.getByRole("checkbox", { name: /Maior desconto primeiro/ }).check();
+  await dialogo.getByRole("checkbox", { name: "Outros" }).check();
+  await dialogo.getByRole("textbox", { name: "Outros" }).fill("e desempate pelo código");
+  await dialogo.getByRole("button", { name: "Responder" }).click();
+  await expect(dialogo).toHaveCount(0);
+  // O Markdown da resposta tira as barras do JSON; o que chegou ao pi é a lista dos dois textos.
+  await expect(resposta).toContainText('["Maior desconto primeiro","e desempate pelo código"]');
 });
 
 test("+ Anexar histórico sem outra sessão: a caixa avisa e nenhuma etiqueta nasce", async ({ pagina, fabriquinha }) => {

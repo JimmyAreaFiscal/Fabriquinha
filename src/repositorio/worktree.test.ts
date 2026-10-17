@@ -316,6 +316,101 @@ test("limpar: falha da varredura vai só para o log; falha do git vira aviso com
   assert.match(String(erros.mock.calls[0]?.arguments[1]), /^varrerBase ao limpar a I-1 falhou: git fetch falhou$/);
 });
 
+/** Encerra a I-1 (sem worktree) com `origin/main` um commit à frente (`novo.txt`, "da base"), depois de `antes(repo)`. */
+async function encerrarComOriginAvancado(antes: (c: ReturnType<typeof cenario>) => void) {
+  const c = cenario();
+  git(c.repo, "branch", "registro-externo");
+  antes(c);
+  const origin = avancarOrigin(c.bare);
+  git(c.repo, "fetch", "-q", "origin");
+  const avisos = await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, semVarredura);
+  // O `worktree remove` da I-1 inexistente falha: só os avisos da base interessam.
+  return { c, origin, avisos: avisos.filter((a) => a.startsWith("a main local")) };
+}
+
+test("limpar: a main local sem checkout avança até origin/main (CA-1)", async () => {
+  const { c, origin, avisos } = await encerrarComOriginAvancado((c) =>
+    git(c.repo, "checkout", "-q", "registro-externo"),
+  );
+  assert.deepEqual(avisos, []);
+  assert.equal(git(c.repo, "rev-parse", "main"), origin);
+});
+
+test("limpar: a main local em checkout e limpa avança até origin/main (CA-2)", async () => {
+  const { c, origin, avisos } = await encerrarComOriginAvancado(() => undefined);
+  assert.deepEqual(avisos, []);
+  assert.equal(git(c.repo, "rev-parse", "HEAD"), origin);
+  assert.equal(git(c.repo, "status", "--short"), "");
+});
+
+test("limpar: com outra branch em checkout, só a main avança; a branch atual e o status ficam (CA-3)", async () => {
+  const { c, origin, avisos } = await encerrarComOriginAvancado((c) => {
+    git(c.repo, "checkout", "-q", "registro-externo");
+    writeFileSync(join(c.repo, "solto.txt"), "não rastreado\n");
+  });
+  assert.deepEqual(avisos, []);
+  assert.equal(git(c.repo, "rev-parse", "main"), origin);
+  assert.equal(git(c.repo, "branch", "--show-current"), "registro-externo");
+  assert.equal(git(c.repo, "status", "--short"), "?? solto.txt");
+});
+
+test("limpar: a main local com commit que origin/main não tem fica como está, com aviso (CA-4)", async () => {
+  let local = "";
+  const { c, avisos } = await encerrarComOriginAvancado((c) => {
+    local = commitar(c.repo, "local.txt", "só aqui\n");
+    git(c.repo, "checkout", "-q", "registro-externo");
+  });
+  assert.equal(git(c.repo, "rev-parse", "main"), local);
+  assert.deepEqual(avisos, [
+    "a main local não foi atualizada com origin/main: ela tem commits que origin/main não tem; atualize-a à mão",
+  ]);
+});
+
+test("limpar: alteração local no arquivo que o merge altera deixa a main em checkout como está, com aviso (CA-5)", async () => {
+  const c = cenario();
+  commitar(c.repo, "novo.txt", "versão local\n");
+  git(c.repo, "push", "-q", "origin", "main");
+  const antes = git(c.repo, "rev-parse", "main");
+  const outro = mkdtempSync(join(base, "outro-"));
+  git(base, "clone", "-q", "-b", "main", c.bare, outro);
+  commitar(outro, "novo.txt", "versão do PR\n");
+  git(outro, "push", "-q", "origin", "main");
+  git(c.repo, "fetch", "-q", "origin");
+  writeFileSync(join(c.repo, "novo.txt"), "alterado à mão\n");
+
+  const avisos = (await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, semVarredura)).filter((a) =>
+    a.startsWith("a main local"),
+  );
+  assert.equal(git(c.repo, "rev-parse", "main"), antes);
+  assert.equal(readFileSync(join(c.repo, "novo.txt"), "utf8"), "alterado à mão\n");
+  assert.equal(avisos.length, 1);
+  assert.match(
+    String(avisos[0]),
+    new RegExp(`^a main local não foi atualizada com origin/main, em checkout em ${c.repo}: .*novo\\.txt`, "s"),
+  );
+});
+
+test("limpar: o update-ref que falha vira aviso com a saída do git, e a main fica como está", async () => {
+  const { c, avisos } = await encerrarComOriginAvancado((c) => {
+    git(c.repo, "checkout", "-q", "registro-externo");
+    writeFileSync(join(c.repo, ".git", "refs", "heads", "main.lock"), "");
+  });
+  assert.equal(avisos.length, 1);
+  assert.match(String(avisos[0]), /^a main local não foi atualizada com origin\/main: .*main\.lock/s);
+  assert.notEqual(git(c.repo, "rev-parse", "main"), git(c.repo, "rev-parse", "origin/main"));
+});
+
+test("limpar: sem main local, não há o que atualizar nem aviso", async () => {
+  const c = cenario();
+  git(c.repo, "checkout", "-q", "-b", "registro-externo");
+  git(c.repo, "branch", "-q", "-D", "main");
+  const avisos = await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, semVarredura);
+  assert.deepEqual(
+    avisos.filter((a) => a.startsWith("a main local")),
+    [],
+  );
+});
+
 test("limpar só depois de encerrar a issue", async () => {
   const c = cenario();
   await assert.rejects(
@@ -391,3 +486,92 @@ test(
     assert.match(String(avisos[0]), new RegExp(`^não foi possível apagar ${pasta}: `));
   },
 );
+
+/** Worktree da issue já criada e preparada; `origin/main` fica um commit à frente dela, com `arquivo`. */
+async function comOriginAdiantado(c: ReturnType<typeof cenario>, arquivo = "novo.txt", conteudo = "da base\n") {
+  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  const outro = mkdtempSync(join(base, "outro-"));
+  git(base, "clone", "-q", "-b", "main", c.bare, outro);
+  const origin = commitar(outro, arquivo, conteudo);
+  git(outro, "push", "-q", "origin", "main");
+  return { caminho, origin };
+}
+const atualizar = (c: ReturnType<typeof cenario>) =>
+  garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura, true);
+
+test("atualizarBase: a worktree sem commit próprio avança até origin/main por fast-forward (CA-6)", async () => {
+  const c = cenario();
+  const { caminho, origin } = await comOriginAdiantado(c);
+
+  assert.equal(await atualizar(c), caminho);
+  assert.equal(git(caminho, "rev-list", "--count", "HEAD..origin/main"), "0");
+  assert.equal(git(caminho, "rev-parse", "HEAD"), origin);
+  assert.equal(git(caminho, "status", "--short"), "");
+});
+
+test("atualizarBase: o commit próprio da issue fica no log e a base entra por merge (CA-7)", async () => {
+  const c = cenario();
+  const { caminho } = await comOriginAdiantado(c);
+  commitar(caminho, "proprio.txt", "da issue\n");
+
+  await atualizar(c);
+
+  assert.equal(git(caminho, "rev-list", "--count", "HEAD..origin/main"), "0");
+  assert.match(git(caminho, "log", "--format=%s"), /^proprio\.txt$/m);
+  assert.equal(git(caminho, "status", "--short"), "");
+});
+
+test("atualizarBase: o conflito com origin/main aborta o merge, falha e deixa o commit próprio (CA-8)", async () => {
+  const c = cenario();
+  const { caminho } = await comOriginAdiantado(c, "conflito.txt", "da base\n");
+  const proprio = commitar(caminho, "conflito.txt", "da issue\n");
+
+  await assert.rejects(
+    atualizar(c),
+    (erro: unknown) =>
+      erro instanceof ErroDeRegra &&
+      /^o merge de origin\/main na branch fabriquinha\/I-1 falhou: .*CONFLICT/s.test(erro.message) &&
+      erro.message.includes(`resolva o conflito com origin/main em ${caminho} e execute o ticket de novo`),
+  );
+
+  assert.equal(git(caminho, "rev-parse", "HEAD"), proprio);
+  assert.match(git(caminho, "log", "--format=%s"), /^conflito\.txt$/m);
+  assert.equal(git(caminho, "status", "--short"), "");
+});
+
+test("atualizarBase: o origin inacessível falha no git fetch e o HEAD não muda (CA-9)", async () => {
+  const c = cenario();
+  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  const antes = git(caminho, "rev-parse", "HEAD");
+  git(c.repo, "remote", "set-url", "origin", join(base, "nao-existe.git"));
+
+  await assert.rejects(
+    atualizar(c),
+    (erro: unknown) => erro instanceof ErroDeRegra && erro.message.includes("git fetch"),
+  );
+
+  assert.equal(git(caminho, "rev-parse", "HEAD"), antes);
+});
+
+test("atualizarBase: o merge que muda o HEAD prepara de novo; sem mudança, ou sem atualizarBase, não", async () => {
+  const contador = join(base, "contador-atualizar");
+  const c = cenario([`echo x >> ${contador}`]);
+  let varridas = 0;
+  const varrer = () => {
+    varridas++;
+    return Promise.resolve();
+  };
+  await comOriginAdiantado(c);
+  assert.equal(readFileSync(contador, "utf8"), "x\n");
+
+  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer);
+  assert.equal(readFileSync(contador, "utf8"), "x\n", "sem atualizarBase, nada muda");
+  assert.equal(varridas, 0);
+
+  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer, true);
+  assert.equal(readFileSync(contador, "utf8"), "x\nx\n", "o HEAD mudou");
+  assert.equal(varridas, 1, "o fetch do desenho também varre a base");
+
+  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer, true);
+  assert.equal(readFileSync(contador, "utf8"), "x\nx\n", "o HEAD não mudou");
+});

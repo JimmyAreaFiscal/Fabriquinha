@@ -61,6 +61,7 @@ test("skills de artefato da etapa: uma por evidência de agente, com o nome do P
 test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e confiança; sem prompt de sistema extra", () => {
   // O pacote vem do próprio repositório, ao lado de `src/`.
   assert.equal(existsSync(join(PACOTE, "extensions", "guarda.ts")), true);
+  assert.equal(existsSync(join(PACOTE, "extensions", "pergunta.ts")), true);
   const comum = { raiz: "/r", sessaoPi: "s-1", modo: "autonomo" as const };
   assert.deepEqual(
     argumentosPi({ ...comum, etapa: "registro", modelo: { provedor: "anthropic", modelo: "m 1" }, confianca: true }),
@@ -81,9 +82,15 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
       `${PACOTE}/skills/artefato-criterios-aceite`,
       "-e",
       `${PACOTE}/extensions/guarda.ts`,
+      "-e",
+      `${PACOTE}/extensions/pergunta.ts`,
       "--approve",
+      "--exclude-tools",
+      "ask_user_question",
     ],
   );
+  const comEffort = argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, effort: "high", confianca: false });
+  assert.deepEqual(comEffort.slice(6, 8), ["--thinking", "high"]);
   assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: false }), [
     "--mode",
     "rpc",
@@ -93,10 +100,16 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     "s-1",
     "-e",
     `${PACOTE}/extensions/guarda.ts`,
+    "-e",
+    `${PACOTE}/extensions/pergunta.ts`,
     "--no-approve",
+    "--exclude-tools",
+    "ask_user_question",
   ]);
-  assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: undefined }).slice(-1), [
-    `${PACOTE}/extensions/guarda.ts`,
+  assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: undefined }).slice(-3), [
+    `${PACOTE}/extensions/pergunta.ts`,
+    "--exclude-tools",
+    "ask_user_question",
   ]);
   // F4 §6.5: a consulta abre copiando a sessão principal e retoma sem copiar; em ambas, sem as ferramentas de escrita.
   const consulta = {
@@ -110,12 +123,12 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     "--fork",
     "/r/sessoes/x_p.jsonl",
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
   assert.deepEqual(argumentosPi(consulta).slice(-3), [
-    `${PACOTE}/extensions/guarda.ts`,
+    `${PACOTE}/extensions/pergunta.ts`,
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
 });
 

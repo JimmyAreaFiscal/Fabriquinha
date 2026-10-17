@@ -8,14 +8,14 @@ import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import { parseArgs, type ParseArgsOptionsConfig } from "node:util";
 import { z, ZodError } from "zod";
-import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
+import { type Ator, EXTERNO, exigirRegistroExterno, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../dominio/erros.ts";
 import { adicionarDependencia, cancelarIssue, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { enviarParaAprovacao, registrarDecisaoRevisao } from "../dominio/gates.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { jsonSchemaDe } from "../evidencias/schemas.ts";
-import { submeter } from "../evidencias/submissao.ts";
+import { submeter, submeterExterno } from "../evidencias/submissao.ts";
 import { iniciarServico } from "../execucao/servico.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir as abrirBanco, raizPadrao } from "../persistencia/banco.ts";
@@ -27,6 +27,7 @@ import {
   dependentes,
   issueDoTicket,
   proporIssue,
+  registrarIssue,
 } from "../persistencia/issues.ts";
 import { projeto } from "../persistencia/projetos.ts";
 
@@ -95,6 +96,32 @@ const ler = (arquivo: string, io: Io): Promise<string> =>
   arquivo === "-" ? text(io.stdin) : Promise.resolve(readFileSync(arquivo, "utf8"));
 
 const opcional = (valor: string | string[] | undefined) => valor as string | undefined;
+
+/** O JSON de `--dados`, ou `{}` sem a opção. */
+async function dadosDe({ op, io }: Chamada): Promise<unknown> {
+  const arquivo = opcional(op.dados);
+  if (arquivo === undefined) return {};
+  try {
+    return JSON.parse(await ler(arquivo, io));
+  } catch (error_) {
+    throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
+  }
+}
+
+const OPCOES_EVIDENCIA: ParseArgsOptionsConfig = {
+  dados: { type: "string" },
+  arquivo: { type: "string", multiple: true },
+};
+
+/** O banco da raiz para um comando da IA externa, fechado no fim. */
+async function comBanco<T>(io: Io, rodar: (banco: DatabaseSync) => T | Promise<T>): Promise<T> {
+  const banco = abrirBanco(raizPadrao(io.env));
+  try {
+    return await rodar(banco);
+  } finally {
+    banco.close();
+  }
+}
 
 /** A descrição de `--descricao`, ou `undefined` para manter a atual. */
 const descricao = async ({ op, io }: Chamada): Promise<string | undefined> => {
@@ -330,20 +357,17 @@ const COMANDOS: readonly Comando[] = [
     palavras: ["evidencia", "add"],
     argumentos: ["<tipo>"],
     opcoesDeUso: "[--dados <arquivo.json|->] [--arquivo <caminho>]...",
-    opcoes: { dados: { type: "string" }, arquivo: { type: "string", multiple: true } },
+    opcoes: OPCOES_EVIDENCIA,
     doAgente: true,
-    async rodar({ banco, agente: { ator }, pos, op, io }) {
+    async rodar(c) {
+      const {
+        banco,
+        agente: { ator },
+        pos,
+        op,
+      } = c;
       const tipo = tipoDeEvidencia(pos[0]);
-      const arquivo = opcional(op.dados);
-      let dados: unknown = {};
-      if (arquivo !== undefined) {
-        try {
-          dados = JSON.parse(await ler(arquivo, io));
-        } catch (error_) {
-          throw new ErroDeRegra(`${arquivo} não é um JSON válido: ${mensagem(error_)}`, "corrija o arquivo de dados");
-        }
-      }
-      return (await submeter(banco, ator, tipo, dados, (op.arquivo ?? []) as string[])).evidencias.find(
+      return (await submeter(banco, ator, tipo, await dadosDe(c), (op.arquivo ?? []) as string[])).evidencias.find(
         (e) => e.ticket === ator.ticket && e.tipo === tipo,
       );
     },
@@ -374,6 +398,102 @@ const COMANDOS: readonly Comando[] = [
       };
     },
   },
+  {
+    palavras: ["necessidade", "registrar"],
+    argumentos: [],
+    opcoesDeUso: "--projeto <p> --titulo <t> --tipo <funcionalidade|problema> --descricao <arquivo|-> [--dep I-<m>]...",
+    opcoes: {
+      ...TITULO_DESCRICAO,
+      projeto: { type: "string" },
+      tipo: { type: "string" },
+      dep: { type: "string", multiple: true },
+    },
+    doAgente: false,
+    async rodar(c) {
+      const faltando = ["projeto", "titulo", "tipo", "descricao"].find((o) => c.op[o] === undefined);
+      if (faltando !== undefined) throw new ErroDeUso(`falta --${faltando}`);
+      const entrada = {
+        projeto: c.op.projeto,
+        titulo: c.op.titulo,
+        tipo: c.op.tipo,
+        descricao: await descricao(c),
+        deps: ((c.op.dep ?? []) as string[]).map((d) => numero(d, "I")),
+      };
+      const ag = await comBanco(c.io, (banco) => registrarIssue(banco, entrada, EXTERNO));
+      return { ...ag.issue, tickets: ag.tickets };
+    },
+  },
+  {
+    palavras: ["necessidade", "editar"],
+    argumentos: ["I-<n>"],
+    opcoesDeUso: "[--titulo <t>] [--tipo <funcionalidade|problema>] [--descricao <arquivo|->]",
+    opcoes: { ...TITULO_DESCRICAO, tipo: { type: "string" } },
+    doAgente: false,
+    async rodar(c) {
+      const id = numero(c.pos[0], "I");
+      const entrada = { titulo: opcional(c.op.titulo), tipo: opcional(c.op.tipo), descricao: await descricao(c) };
+      return comBanco(
+        c.io,
+        (banco) => comIssue(banco, id, "editarIssue", EXTERNO, (ag) => editarIssue(ag, entrada, EXTERNO)).issue,
+      );
+    },
+  },
+  {
+    palavras: ["necessidade", "evidencia"],
+    argumentos: ["I-<n>", "<tipo>"],
+    opcoesDeUso: "[--dados <arquivo.json|->] [--arquivo <caminho>]...",
+    opcoes: OPCOES_EVIDENCIA,
+    doAgente: false,
+    async rodar(c) {
+      const id = numero(c.pos[0], "I");
+      const tipo = tipoDeEvidencia(c.pos[1]);
+      const dados = await dadosDe(c);
+      const arquivos = (c.op.arquivo ?? []) as string[];
+      const ag = await comBanco(c.io, (banco) => submeterExterno(banco, id, process.cwd(), tipo, dados, arquivos));
+      return ag.evidencias.find(
+        (e) => e.tipo === tipo && ag.tickets.some((t) => t.id === e.ticket && t.etapa === "registro"),
+      );
+    },
+  },
+  {
+    palavras: ["necessidade", "schema"],
+    argumentos: ["<tipo>"],
+    doAgente: false,
+    rodar: ({ pos }) => Promise.resolve(jsonSchemaDe(tipoDeEvidencia(pos[0]))),
+  },
+  {
+    palavras: ["necessidade", "enviar"],
+    argumentos: ["I-<n>"],
+    doAgente: false,
+    rodar({ pos, io }) {
+      const id = numero(pos[0], "I");
+      return comBanco(io, (banco) => {
+        const ag = comIssue(banco, id, "enviarParaAprovacao", EXTERNO, (a, ctx) => {
+          const ticket = exigirRegistroExterno(a, `enviar a I-${String(id)} à aprovação`).id;
+          return enviarParaAprovacao(a, { ticket }, EXTERNO, ctx);
+        });
+        return ag.tickets.find((t) => t.etapa === "registro" && t.enviadoEm !== undefined);
+      });
+    },
+  },
+  {
+    palavras: ["necessidade", "ver"],
+    argumentos: ["I-<n>"],
+    doAgente: false,
+    rodar({ pos, io }) {
+      const id = numero(pos[0], "I");
+      return comBanco(io, (banco) => {
+        const ag = agregadoExistente(banco, id);
+        if (!ag.tickets.some((t) => t.etapa === "registro" && t.origem === "externo")) {
+          throw new ErroDeEscopo(
+            `a IA externa não pode ler a I-${String(id)}`,
+            "ela lê só as issues que registrou com fabriquinha necessidade registrar",
+          );
+        }
+        return { ...ag.issue, tickets: ag.tickets, decisoes: ag.decisoes };
+      });
+    },
+  },
 ];
 
 /** O programa que abre uma URL no navegador padrão. */
@@ -391,7 +511,7 @@ function ajuda(grupo?: string): string {
     "Uso:",
     ...comandos.map(uso),
     "",
-    "Com FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir e --help.",
+    "Com FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, necessidade e --help.",
     "IDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.",
     "",
   ].join("\n");
@@ -418,7 +538,9 @@ async function rodar(comando: Comando, resto: string[], io: Io): Promise<unknown
     if (execucao) {
       throw new ErroDeEscopo(
         `${comando.palavras.join(" ")} não é comando do agente`,
-        "o serviço já está rodando; siga com o seu ticket",
+        comando.palavras[0] === "necessidade"
+          ? "é da IA de fora da Fabriquinha; siga com o seu ticket"
+          : "o serviço já está rodando; siga com o seu ticket",
       );
     }
     return comando.rodar({ ...argumentosDe(comando, resto), io });

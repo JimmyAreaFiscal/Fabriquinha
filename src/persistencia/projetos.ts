@@ -19,6 +19,7 @@ interface Linha {
   sonar_project_key: string;
   fitness: string;
   modelos: string;
+  efforts: string;
   link_produto: string | null;
 }
 
@@ -35,6 +36,7 @@ const deLinha = (l: Linha): Projeto =>
     sonar: { projectKey: l.sonar_project_key },
     fitness: json(l.fitness),
     modelos: json(l.modelos),
+    efforts: json(l.efforts),
     ...(l.link_produto && { linkProduto: l.link_produto }),
   });
 
@@ -62,6 +64,7 @@ function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p
       sonar_project_key: p.sonar.projectKey,
       fitness: JSON.stringify(p.fitness),
       modelos: JSON.stringify(p.modelos),
+      efforts: JSON.stringify(p.efforts ?? {}),
       link_produto: p.linkProduto ?? null,
     });
     conferir(p, changes > 0);
@@ -74,8 +77,9 @@ export const registrarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto
   gravar(
     banco,
     entrada,
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, testes, sonar_project_key, fitness, modelos, link_produto)
-     VALUES ($nome, $repo, $branch_base, $hospedagem, $preparacao, $testes, $sonar_project_key, $fitness, $modelos, $link_produto)
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, testes, sonar_project_key, fitness, modelos, efforts, link_produto)
+     VALUES ($nome, $repo, $branch_base, $hospedagem, $preparacao, $testes, $sonar_project_key, $fitness, $modelos, $efforts,
+       $link_produto)
      ON CONFLICT (nome) DO NOTHING`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeRegra(`já existe o projeto ${p.nome}`, "edite-o na Configuração");
@@ -89,7 +93,7 @@ export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
     entrada,
     `UPDATE projeto SET repo = $repo, branch_base = $branch_base, hospedagem = $hospedagem, preparacao = $preparacao,
        testes = $testes, sonar_project_key = $sonar_project_key, fitness = $fitness, modelos = $modelos,
-       link_produto = $link_produto
+       efforts = $efforts, link_produto = $link_produto
      WHERE nome = $nome`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre-o na Configuração");

@@ -13,13 +13,21 @@ import {
 import { basename, join, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { type Agregado, type ArquivoEvidencia, type Ator, TipoEvidencia } from "../dominio/agregado.ts";
+import {
+  type Agregado,
+  type ArquivoEvidencia,
+  type Ator,
+  EXTERNO,
+  exigirRegistroExterno,
+  TipoEvidencia,
+} from "../dominio/agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
 import { exigirRegistroDeEvidencia, registrarEvidencia } from "../dominio/evidencia.ts";
 import { guardarArquivos } from "../persistencia/arquivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { dirDaExecucao } from "../persistencia/execucoes.ts";
-import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
+import type { Id } from "../dominio/primitivos.ts";
+import { agregadoDoTicket, agregadoExistente, comIssue } from "../persistencia/issues.ts";
 import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { gerarAula, type Trecho } from "./aula.ts";
 import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos, schemaDe } from "./schemas.ts";
@@ -83,6 +91,14 @@ function classificar(caminho: string, fd: number, bytes: number): { classe: Clas
     : { classe: "texto", mime: MIME_TEXTO };
 }
 
+/** De onde os anexos podem vir (F3 §3.2), e o que a recusa diz: `fora` completa "está fora", `copie` é o destino. */
+interface Origens {
+  readonly worktree: string;
+  readonly saida: string;
+  readonly fora: string;
+  readonly copie: string;
+}
+
 const dentro = (raiz: string, alvo: string) => relative(raiz, alvo).split(sep)[0] !== "..";
 
 /**
@@ -94,7 +110,7 @@ const dentro = (raiz: string, alvo: string) => relative(raiz, alvo).split(sep)[0
  * worktree; só um agente hostil, que já tem shell, faria isso. Se precisar, recusar `nlink > 1` ou rodar o agente
  * com outro usuário (F1 §8).
  */
-function abrir(caminho: string, raizes: readonly string[], saida: string): number {
+function abrir(caminho: string, origens: Origens): number {
   let fd: number;
   try {
     fd = openSync(caminho, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -113,11 +129,8 @@ function abrir(caminho: string, raizes: readonly string[], saida: string): numbe
     // corrida. Se o arquivo foi trocado depois da abertura, vem com " (deleted)": é o último lugar dele, e o
     // conteúdo é o que estava lá.
     const alvo = readlinkSync(`/proc/self/fd/${String(fd)}`);
-    if (!raizes.some((raiz) => dentro(raiz, alvo))) {
-      throw new ErroDeRegra(
-        `${caminho} está fora da worktree da issue e do diretório de saída`,
-        `copie-o para $FABRIQUINHA_SAIDA (${saida})`,
-      );
+    if (![origens.worktree, origens.saida].some((raiz) => dentro(raiz, alvo))) {
+      throw new ErroDeRegra(`${caminho} está fora ${origens.fora}`, `copie-o para ${origens.copie}`);
     }
     const estado = fstatSync(fd);
     if (!estado.isFile()) throw new ErroDeRegra(`${caminho} não é um arquivo regular`, "anexe um arquivo comum");
@@ -145,7 +158,7 @@ function guardarAnexos(
   caminhos: readonly string[],
   tipo: TipoEvidencia,
   regra: RegraArquivos,
-  origens: { worktree: string; saida: string },
+  origens: Origens,
   cruzar: () => void,
 ): ArquivoEvidencia[] {
   if (caminhos.length < regra.min) {
@@ -171,7 +184,7 @@ function guardarAnexos(
   try {
     for (const caminho of caminhos) {
       abertos.push({
-        fd: abrir(caminho, [origens.worktree, origens.saida], origens.saida),
+        fd: abrir(caminho, origens),
         caminho,
         nome: basename(caminho),
       });
@@ -224,11 +237,9 @@ export async function submeter(
   dados: unknown,
   caminhos: readonly string[],
 ): Promise<Agregado> {
-  // 1 e 2: escopo e catálogo, no estado atual; C17 confere de novo na transação.
   if (ator.tipo !== "agente") {
     throw new ErroDeEscopo("só o agente do ticket submete evidência", "a Fabriquinha registra as dela nos coletores");
   }
-  const tipoValido = z.object({ tipo: TipoEvidencia }).parse({ tipo }).tipo;
   const antes = agregadoDoTicket(banco, ator.ticket);
   if (!antes) {
     throw new ErroDeEscopo(
@@ -236,21 +247,58 @@ export async function submeter(
       "confira a execução em FABRIQUINHA_EXECUCAO",
     );
   }
-  exigirRegistroDeEvidencia(antes, ator, ator.ticket, tipoValido);
+  // As origens partem da raiz real da Fabriquinha e nada abaixo dela é resolvido: trocar a worktree ou a saída por um
+  // link não as leva para outro lugar.
+  const raiz = realpathSync(raizDo(banco));
+  const saida = join(dirDaExecucao(raiz, ator.execucao), "saida");
+  const origens = {
+    worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
+    saida,
+    fora: "da worktree da issue e do diretório de saída",
+    copie: `$FABRIQUINHA_SAIDA (${saida})`,
+  };
+  return submeterNo(banco, ator, antes, ator.ticket, origens, { tipo, dados, caminhos });
+}
+
+/**
+ * `fabriquinha necessidade evidencia` (F3 §5): a submissão da IA externa no ticket de registro da issue que ela
+ * registrou. Sem worktree nem saída da Fabriquinha, os anexos vêm de `pasta` (onde ela rodou o comando), real.
+ */
+export async function submeterExterno(
+  banco: DatabaseSync,
+  issue: Id,
+  pasta: string,
+  tipo: unknown,
+  dados: unknown,
+  caminhos: readonly string[],
+): Promise<Agregado> {
+  const antes = agregadoExistente(banco, issue);
+  const ticket = exigirRegistroExterno(antes, `registrar evidência na I-${String(issue)}`).id;
+  const real = realpathSync(pasta);
+  const origens = { worktree: real, saida: real, fora: `de ${real}, onde você rodou o comando`, copie: real };
+  return submeterNo(banco, EXTERNO, antes, ticket, origens, { tipo, dados, caminhos });
+}
+
+/** F3 §5 a partir do passo 1, no `ticket` de `antes`, com os anexos vindos de `origens`. */
+async function submeterNo(
+  banco: DatabaseSync,
+  ator: Ator,
+  antes: Agregado,
+  ticket: Id,
+  origens: Origens,
+  { tipo, dados, caminhos }: { tipo: unknown; dados: unknown; caminhos: readonly string[] },
+): Promise<Agregado> {
+  // 1 e 2: escopo e catálogo, no estado atual; C17 confere de novo na transação.
+  const tipoValido = z.object({ tipo: TipoEvidencia }).parse({ tipo }).tipo;
+  exigirRegistroDeEvidencia(antes, ator, ticket, tipoValido);
 
   // 3
   const schema = schemaDe(tipoValido);
   const validos = z.object({ dados: schema.dados }).parse({ dados }).dados;
 
-  // 4, 5 e 6: fora da transação (F2 §5.2); se a 7 falhar, sobra só arquivo sem referência. As origens partem da raiz
-  // real da Fabriquinha e nada abaixo dela é resolvido: trocar a worktree ou a saída por um link não as leva para
-  // outro lugar. As regras cruzadas leem o agregado lido no passo 1: os fatos que elas consultam (a matriz coletada
-  // antes do pi, os critérios do registro) não mudam durante a execução.
-  const raiz = realpathSync(raizDo(banco));
-  const origens = {
-    worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
-    saida: join(dirDaExecucao(raiz, ator.execucao), "saida"),
-  };
+  // 4, 5 e 6: fora da transação (F2 §5.2); se a 7 falhar, sobra só arquivo sem referência. As regras cruzadas leem o
+  // agregado lido no passo 1: os fatos que elas consultam (a matriz coletada antes do pi, os critérios do registro)
+  // não mudam durante a execução.
   let anexos = caminhos;
   const gerar = GERADOS[tipoValido];
   if (gerar) {
@@ -267,14 +315,14 @@ export async function submeter(
     anexos = [destino];
   }
   const arquivos = guardarAnexos(banco, anexos, tipoValido, schema.arquivos, origens, () =>
-    schema.cruzar?.(validos, { ag: antes, ticket: ator.ticket, anexos: anexos.map((c) => basename(c)) }),
+    schema.cruzar?.(validos, { ag: antes, ticket, anexos: anexos.map((c) => basename(c)) }),
   );
 
   // 7
   return comIssue(banco, antes.issue.id, "registrarEvidencia", ator, (ag, ctx) =>
     registrarEvidencia(
       ag,
-      { ticket: ator.ticket, tipo: tipoValido, aprovada: schema.aprovada?.(validos), dados: validos, arquivos },
+      { ticket, tipo: tipoValido, aprovada: schema.aprovada?.(validos), dados: validos, arquivos },
       ator,
       ctx,
     ),

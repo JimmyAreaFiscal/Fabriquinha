@@ -154,6 +154,19 @@ export function atividadeDo(evento: EventoPi): string | undefined {
   return primeira && linha(primeira);
 }
 
+/** O que o chat precisa saber do select aberto pela `perguntar` (a de `title` igual a `args.question`); `undefined` nos demais. */
+function daPergunta(evento: EventoPi, emExecucao: Iterable<Record<string, unknown>>): Partial<Dialogo> | undefined {
+  const args = [...emExecucao].find((a) => a.question === evento.title);
+  if (!args) return undefined;
+  const opcoes = (args.options ?? []) as { description?: string }[];
+  return {
+    pergunta: true,
+    multiSelect: Boolean(args.multiSelect),
+    descricoes: opcoes.map((o) => o.description),
+    message: args.details,
+  };
+}
+
 const viva = (execucao: Id | string, solucao: string): Viva =>
   existe(vivas.get(execucao), `a execução E-${String(execucao)} não tem pi rodando`, solucao);
 
@@ -246,6 +259,8 @@ export interface Rodada extends Pick<Lancamento, "fork"> {
    * prompt, o pi sobe ocioso, à espera da primeira mensagem do Auditor: é como a consulta abre (F4 §6.5).
    */
   prompt(c: { projeto: Projeto; worktree: string; saida: string }): string | undefined | Promise<string | undefined>;
+  /** Só o início do desenho: a worktree já criada recebe `origin/<base>` por merge (F5 §3.1). */
+  atualizarBase?: boolean;
 }
 
 /**
@@ -277,7 +292,14 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
     worktree =
       execucao.modo === "consulta" && r.ag.issue.fase === "concluida"
         ? projeto.repo
-        : await garantirWorktree(raiz, projeto, r.ag.issue, log, () => varrerBase(r.banco, projeto.nome));
+        : await garantirWorktree(
+            raiz,
+            projeto,
+            r.ag.issue,
+            log,
+            () => varrerBase(r.banco, projeto.nome),
+            r.atualizarBase,
+          );
     const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
     if (prompt !== undefined) writeFileSync(join(dir, "prompt.md"), prompt);
     if (canceladas.has(execucao.id)) return { worktree, falha: CANCELADA };
@@ -291,6 +313,7 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       sessaoPi: execucao.sessaoPi,
       etapa: ticket.etapa,
       modelo: execucao.modelo,
+      effort: projeto.efforts?.[ticket.etapa],
       confianca: confianca(projeto.repo),
       modo: execucao.modo,
       fork: r.fork,
@@ -344,6 +367,8 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     const autonoma = r.execucao.modo === "autonomo";
     const pendentes = new Map<string, Dialogo>();
     const expiracoes = new Map<string, NodeJS.Timeout>();
+    /** Os args das chamadas da `perguntar` em execução, por `toolCallId`: o select dela é a pergunta ao Auditor. */
+    const perguntas = new Map<string, Record<string, unknown>>();
     let ultima: Mensagem = {};
     let restante = r.limiteMin * 60_000;
     let desde = 0;
@@ -415,8 +440,10 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       const em = Date.now();
       // F4 §5.4: o diálogo com tempo limite também espera o Auditor; o pi o resolve sozinho quando expira.
       const timeout = typeof evento.timeout === "number" ? evento.timeout : undefined;
+      const pergunta = evento.method === "select" ? daPergunta(evento, perguntas.values()) : undefined;
       pendentes.set(dialogo, {
         ...evento,
+        ...pergunta,
         em: new Date(em).toISOString(),
         ...(timeout !== undefined && { expiraEm: new Date(em + timeout).toISOString() }),
       });
@@ -480,6 +507,13 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
           }
           break;
         }
+        case "tool_execution_start":
+          if (evento.toolName === "perguntar")
+            perguntas.set(String(evento.toolCallId), evento.args as Record<string, unknown>);
+          break;
+        case "tool_execution_end":
+          perguntas.delete(String(evento.toolCallId));
+          break;
         case "agent_start":
           ocupar(true);
           mudou();

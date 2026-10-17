@@ -1,5 +1,6 @@
 // Início (F7 §4.4) como funções puras: o que aguarda o Auditor, o que roda, o board das issues em andamento e o
 // formulário do Registrar necessidade. O DOM e a rede ficam em inicio-montar.ts.
+import type { Ticket } from "../../../dominio/agregado.ts";
 import type { Fase, Id, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { MetricasMes } from "../../../metricas/periodo.ts";
@@ -17,6 +18,7 @@ import {
   MOTIVOS,
   nomeDoModelo,
   plural,
+  registroExternoEnviado,
   rotuloDoModelo,
   rotuloIssue,
   rotuloTicket,
@@ -73,6 +75,17 @@ function decisao(s: InfoSessao, issue: IssueDoBoard | undefined, agora: Date): s
   </a>`;
 }
 
+/** Card do registro que a IA externa enviou ao gate (C25): sem sessão do pi, abre a página da issue. */
+function registroExternoAguarda(issue: IssueDoBoard, ticket: Ticket, desde: string, agora: Date): string {
+  const m = MOTIVOS.gate_registro;
+  return `<a class="decisao superficie" href="${caminhoDaIssue(issue.projeto, issue.id)}">
+    <span class="decisao-motivo">${m.titulo}</span><span class="btn btn-primario btn-pequeno">${m.acao} →</span>
+    <span class="decisao-titulo"><span class="id">${rotuloIssue(issue.id)}</span> ${escapar(tituloDa(issue))}</span>
+    <p class="decisao-texto">Registro enviado por uma IA externa; falta aprovar</p>
+    <div class="decisao-pe"><span class="tag">${escapar(issue.projeto)}</span><span><span class="mono">${rotuloTicket(ticket.id)}</span> · ${etapa("registro")} · IA externa · ${ha(desde, agora)}</span></div>
+  </a>`;
+}
+
 /**
  * Linha de uma sessão rodando: o que o agente faz, como o processo vivo diz; sem ele, o título do ticket e, na
  * consulta, responder ao Auditor.
@@ -107,6 +120,9 @@ function marcas(issue: IssueDoBoard, sessoes: readonly InfoSessao[], emAndamento
         motivo === "falha" ? "pill-falha" : "pill-aguarda",
       ]);
     }
+  }
+  if (registroExternoEnviado(issue.tickets)) {
+    lista.set(`aguarda você · ${MOTIVOS.gate_registro.marca}`, ["aguarda", "pill-aguarda"]);
   }
   const bloqueio = issue.deps.filter((d) => emAndamento.has(d));
   if (bloqueio.length > 0)
@@ -150,7 +166,18 @@ function board({ sessoes, board: issues }: DadosDoInicio, agora: Date): string {
 /** A página `/home`: o cabeçalho com Registrar necessidade, a frase do mês, Aguarda você, Rodando e o board. */
 export function inicio(dados: DadosDoInicio, agora: Date): string {
   const issue = (id: Id) => dados.board.find((i) => i.id === id);
-  const aguardam = dados.sessoes.filter((s) => s.estado === "aguardando_humano");
+  // As sessões que aguardam e os registros da IA externa enviados, que não têm sessão, da mais antiga para a mais nova.
+  const aguardam = [
+    ...dados.sessoes
+      .filter((s) => s.estado === "aguardando_humano")
+      .map((s) => ({ desde: s.desde, html: decisao(s, issue(s.issue), agora) })),
+    ...dados.board.flatMap((i) => {
+      const t = registroExternoEnviado(i.tickets);
+      return t?.enviadoEm === undefined
+        ? []
+        : [{ desde: t.enviadoEm, html: registroExternoAguarda(i, t, t.enviadoEm, agora) }];
+    }),
+  ].sort((a, b) => a.desde.localeCompare(b.desde));
   const rodam = dados.sessoes.filter((s) => s.estado === "rodando");
   const n = dados.board.length;
   return `<div class="cabeca-pagina">
@@ -160,7 +187,7 @@ export function inicio(dados: DadosDoInicio, agora: Date): string {
   ${fraseDoMes(dados.mes)}
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-aguarda">
     <div class="secao-titulo"><h2 id="titulo-aguarda">Aguarda você</h2>${aguardam.length > 0 ? `<span class="contador">${String(aguardam.length)}</span><span class="muted">da mais antiga para a mais nova</span>` : ""}</div>
-    ${aguardam.length > 0 ? `<div class="decisoes">${aguardam.map((s) => decisao(s, issue(s.issue), agora)).join("")}</div>` : '<p class="muted vazio">Nada aguarda você agora.</p>'}
+    ${aguardam.length > 0 ? `<div class="decisoes">${aguardam.map((a) => a.html).join("")}</div>` : '<p class="muted vazio">Nada aguarda você agora.</p>'}
   </section>
   <section class="bloco bloco-rodando" aria-labelledby="titulo-rodando">
     <div class="secao-titulo"><h2 id="titulo-rodando">Rodando</h2><span class="muted">${String(rodam.length)}</span></div>

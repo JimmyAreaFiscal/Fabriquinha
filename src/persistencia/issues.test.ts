@@ -674,14 +674,14 @@ const CORREDOR = `
 `;
 
 test(
-  "corrida na mesma issue: dois processos iniciam tickets de desenvolvimento juntos; um consegue, o outro recebe ErroDeRegra",
+  "corrida na mesma issue: dois processos iniciam juntos o mesmo ticket de desenvolvimento; um consegue, o outro recebe ErroDeRegra",
   { timeout: 30_000 },
   async () => {
     const raiz = mkdtempSync(join(base, "corrida-"));
     const preparado = novoBanco(raiz);
     const { issue: alvo } = emDesenho(preparado, "loja");
     const ids = comIssue(preparado, alvo, "editarIssue", auditor, (atual, ctx) => {
-      const abertos = [1, 2].map(() => ({ ...ticketBase(alvo), id: ctx.novoId("ticket"), criadoEm: ctx.agora }));
+      const abertos = [{ ...ticketBase(alvo), id: ctx.novoId("ticket"), criadoEm: ctx.agora }];
       return {
         ...atual,
         issue: { ...atual.issue, fase: "desenvolvimento" },
@@ -690,8 +690,8 @@ test(
           ...abertos,
         ],
       };
-    }).tickets.slice(-2);
-    const alvos = ids.map(({ id }) => ({ issue: alvo, ticket: id }));
+    }).tickets.slice(-1);
+    const alvos = [...ids, ...ids].map(({ id }) => ({ issue: alvo, ticket: id }));
     preparado.close();
 
     const corredores = alvos.map(({ issue, ticket }) => {

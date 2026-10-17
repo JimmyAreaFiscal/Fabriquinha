@@ -379,9 +379,10 @@ test("Ação do Auditor: Executar agora habilitado, desabilitado com o motivo da
     { ...p, limpeza: ["git -C /repo worktree remove --force /w/I-1"] },
     { modelos: [], agora: new Date(), avisos: ["git -C /repo worktree remove --force /w/I-1 falhou: fatal: <x>"] },
   );
+  assert.match(avisos, /<span class="rotulo">Avisos do encerramento<\/span>/);
   assert.match(
     avisos,
-    /<span class="muted">a issue foi encerrada, mas a limpeza da worktree falhou:<\/span><\/div>\s*<pre class="comandos">git -C \/repo worktree remove --force \/w\/I-1 falhou: fatal: &#60;x&#62;<\/pre>/,
+    /<span class="muted">a issue foi encerrada, com estes avisos:<\/span><\/div>\s*<pre class="comandos">git -C \/repo worktree remove --force \/w\/I-1 falhou: fatal: &#60;x&#62;<\/pre>/,
   );
 
   // O ponto de extensão dos painéis de gate: um painel novo entra na mesma coluna.
@@ -1151,6 +1152,35 @@ test("gate do registro na página da issue: o que o agente registrou, os critér
     html,
     /<div class="decidir"><label>Motivo \(obrigatório para devolver\)<textarea data-motivo-registro placeholder="O que o agente precisa rever no registro"><\/textarea><\/label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="devolver-registro" disabled>Devolver<\/button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-registro">Aprovar registro<\/button><\/div><\/div>/,
   );
+});
+
+test("gate do registro da IA externa: sem sessão, aguarda desde o envio e diz que não há chat", () => {
+  const p = exemplo();
+  const externa: PaginaDaIssue = {
+    ...p,
+    issue: { ...p.issue, fase: "registro" },
+    sessoes: [],
+    tickets: [
+      {
+        id: 70,
+        issue: p.issue.id,
+        etapa: "registro",
+        titulo: "Registrar a necessidade",
+        descricao: "",
+        status: "em_execucao",
+        origem: "externo",
+        criadoEm: AGORA,
+        enviadoEm: AGORA,
+      },
+    ],
+    registro: { comportamento: "c", criterios: [], faltando: [] },
+  };
+  assert.match(
+    gateDoRegistro(externa, QUARENTA_E_SETE),
+    /<div class="gate-cabeca"><span class="rotulo">Gate do registro<\/span><span class="muted">aguarda você há 47\u00a0min<\/span><span class="muted direita">registrado por uma IA externa, sem chat<\/span><\/div>/,
+  );
+  const naoEnviada = { ...externa, tickets: externa.tickets.map(({ enviadoEm: _, ...t }) => t) };
+  assert.equal(gateDoRegistro(naoEnviada, QUARENTA_E_SETE), "");
 });
 
 test("corpo do PR: sem a marca da Fabriquinha, que o markdown-it sem HTML mostraria como texto", () => {

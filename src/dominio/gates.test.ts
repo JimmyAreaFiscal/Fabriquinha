@@ -358,6 +358,34 @@ test("C25 é só do agente do próprio ticket de registro ou desenho, em execuç
   );
 });
 
+test("C25 da IA externa: envia só o registro que ela registrou, sem execução, e o C10 o decide como o do agente", () => {
+  const externo: Ator = { tipo: "externo" };
+  const ag = enviando("registro");
+  const externa: Agregado = {
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.id === 37 ? { ...t, origem: "externo" } : t)),
+    execucoes: [],
+  };
+  const enviada = enviar(externa, externo);
+  assert.equal(enviada.tickets.find((t) => t.id === 37)?.enviadoEm, AGORA);
+  regra(
+    () => enviar(enviada, externo),
+    "T-37 já foi enviado e espera a decisão do Auditor (se ele devolver, leia o motivo com fabriquinha necessidade ver I-1)",
+  );
+  assert.throws(
+    () => enviar(externa, externo, 38),
+    (e) =>
+      e instanceof ErroDeEscopo &&
+      e.message === "a IA externa não pode enviar T-38 à aprovação (ela envia só o ticket de registro da issue)",
+  );
+  assert.throws(() => enviar(ag, externo), ErroDeEscopo);
+  const aprovada = decidir(enviada, { aprovado: true });
+  assert.deepEqual([aprovada.issue.fase, aprovada.tickets.find((t) => t.id === 37)?.status], ["desenho", "concluido"]);
+  const devolvida = decidir(enviada, { aprovado: false, motivo: "Falta o caminho de erro" });
+  assert.equal(devolvida.tickets.find((t) => t.id === 37)?.enviadoEm, undefined);
+  assert.deepEqual(enviar(devolvida, externo).tickets.find((t) => t.id === 37)?.enviadoEm, AGORA);
+});
+
 /** I-1 em `revisao`: a revisão T-40 em execução pela E-7, autônoma, com uma decisão antiga da revisão T-36. */
 const revisando = (): Agregado => ({
   ...pronto({ fase: "revisao" }),

@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import { type Agregado, type Ator, type Contexto, type Evidencia, type Ticket, TipoEvidencia } from "./agregado.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { CATALOGO, evidenciasFaltando, registrarEvidencia } from "./evidencia.ts";
+import { CATALOGO, evidenciasFaltando, exigirEvidencias, registrarEvidencia } from "./evidencia.ts";
+import { ticketDe } from "./execucao.ts";
 import type { Etapa } from "./primitivos.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
@@ -222,6 +223,38 @@ test("C17 recusa quem não pode registrar", () => {
     () => registrar(ag, fabriquinha, entrada),
     ErroDeEscopo,
     "a Fabriquinha não produz comportamento (quem a submete é o agente de T-1)",
+  );
+});
+
+test("C17 da IA externa: só no registro que ela registrou, como produtor agente; a falta diz o comando dela", () => {
+  const externo: Ator = { tipo: "externo" };
+  const ag = base();
+  const externa: Agregado = {
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.id === 1 ? { ...t, origem: "externo" } : t)),
+    execucoes: ag.execucoes.filter((e) => e.ticket !== 1),
+  };
+  const depois = registrar(externa, externo, { ticket: 1, tipo: "comportamento", dados: DADOS });
+  assert.deepEqual(
+    depois.evidencias.map((e) => [e.ticket, e.tipo, e.produtor]),
+    [[1, "comportamento", "agente"]],
+  );
+  falha(
+    () => registrar(ag, externo, { ticket: 1, tipo: "comportamento" }),
+    ErroDeEscopo,
+    "a IA externa não pode registrar evidência em T-1 (ela só age no registro das issues que registrou, e a I-1 não é uma delas ou já saiu do registro)",
+  );
+  falha(
+    () => registrar(externa, externo, { ticket: 6, tipo: "comportamento" }),
+    ErroDeEscopo,
+    "a IA externa não pode registrar evidência em T-6 (ela registra só no ticket de registro da issue)",
+  );
+  falha(
+    () => {
+      exigirEvidencias(depois, ticketDe(depois, 1));
+    },
+    ErroDeRegra,
+    "T-1 não pode concluir: falta a evidência criterios_aceite (a IA externa submete com fabriquinha necessidade evidencia I-1 criterios_aceite)",
   );
 });
 

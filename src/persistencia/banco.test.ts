@@ -438,6 +438,61 @@ test("a migração do envio (C25) devolve à execução o desenho que esperava o
   banco.close();
 });
 
+/** A migração 18 é a da IA externa, depois da 17 do envio (C25). */
+const VERSAO_EXTERNO = 18;
+
+test("a migração da IA externa recria ticket e comando sem perder linhas, FKs nem índices", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EXTERNO - 1));
+  banco.exec(`
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('loja', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'T', 'problema', 'registro', 'x');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, enviado_em)
+      VALUES (1, 1, 'registro', 'R', 'em_execucao', 'fabriquinha', 'x', 'y');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em) VALUES (1, 1, 'interativo', 's', 'em_andamento', 'x');
+    INSERT INTO comando (id, issue, nome, ator, fase, em) VALUES (1, 1, 'editarIssue', 'agente', 'registro', 'x');
+  `);
+  const antes = (tabela: string) =>
+    banco
+      .prepare(`SELECT * FROM ${tabela} ORDER BY id`)
+      .all()
+      .map((l) => ({ ...l }));
+  const [tickets, comandos] = [antes("ticket"), antes("comando")];
+
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EXTERNO));
+
+  assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_EXTERNO);
+  assert.deepEqual(antes("ticket"), tickets);
+  assert.deepEqual(antes("comando"), comandos);
+  for (const sobra of ["ticket_novo", "comando_novo"]) {
+    assert.equal(valor(banco, `SELECT count(*) FROM sqlite_master WHERE name = '${sobra}'`), 0, sobra);
+  }
+  for (const indice of ["ux_ticket_em_execucao", "ux_ticket_etapa_unica"]) {
+    assert.equal(valor(banco, `SELECT count(*) FROM sqlite_master WHERE name = '${indice}'`), 1, indice);
+  }
+  assert.ok(
+    banco
+      .prepare("PRAGMA foreign_key_list(execucao)")
+      .all()
+      .some((fk) => fk.table === "ticket"),
+  );
+  banco.exec(`
+    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (2, 'loja', 'T', 'problema', 'registro', 'x');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em) VALUES (2, 2, 'registro', 'R', 'em_execucao', 'externo', 'x');
+    INSERT INTO comando (issue, nome, ator, fase, em) VALUES (2, 'registrarEvidencia', 'externo', 'registro', 'x');
+  `);
+  assert.throws(() => {
+    banco.exec(
+      "INSERT INTO comando (issue, nome, ator, fase, em) VALUES (2, 'editarIssue', 'intruso', 'registro', 'x')",
+    );
+  }, /CHECK/);
+  assert.throws(() => {
+    banco.exec("UPDATE ticket SET enviado_em = 'x', etapa = 'revisao' WHERE id = 2");
+  }, /CHECK/);
+  banco.close();
+});
+
 test("migrar() desfaz a migração e religa as FKs quando ela deixa referência órfã", () => {
   const banco = bancoAntesDoCancelamento();
   banco.exec("PRAGMA foreign_keys = OFF");
@@ -532,5 +587,20 @@ test("novoId() tem uma sequência por tipo e só roda dentro da transação", ()
     2,
   );
   assert.throws(() => novoId(banco, "issue"), /fora de transação/);
+  banco.close();
+});
+
+/** A migração 19 acrescenta o effort por etapa ao projeto. */
+const VERSAO_EFFORTS = 19;
+
+test("a migração dos efforts dá {} ao projeto gravado antes dela", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EFFORTS - 1));
+  banco.exec(`
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('loja', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+  `);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EFFORTS));
+  assert.equal(valor(banco, "SELECT efforts FROM projeto WHERE nome = 'loja'"), "{}");
   banco.close();
 });

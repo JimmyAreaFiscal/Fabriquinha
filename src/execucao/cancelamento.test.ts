@@ -191,8 +191,9 @@ const USO = [["anthropic", "claude-teste", 1, 10, 2, 100, 0, 0.01]];
 
 const pids = () =>
   readFileSync(registro, "utf8")
-    .trim()
+    // O pi falso pode estar escrevendo a última linha agora: só conta a que já terminou em \n.
     .split("\n")
+    .slice(0, -1)
     .map((l) => (JSON.parse(l) as { pid: number }).pid);
 const vivo = (pid: number) => {
   try {

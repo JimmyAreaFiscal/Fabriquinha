@@ -1,6 +1,6 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Modelo } from "../../../dominio/primitivos.ts";
+import type { Effort, Modelo } from "../../../dominio/primitivos.ts";
 import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
@@ -56,6 +56,10 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
     const modelo = modeloDoSeletor(s.value);
     if (modelo) modelos[s.name.slice("modelos.".length) as keyof Rascunho["modelos"]] = modelo;
   }
+  const efforts: NonNullable<Rascunho["efforts"]> = {};
+  for (const s of form.querySelectorAll<HTMLSelectElement>('select[name^="efforts."]')) {
+    if (s.value) efforts[s.name.slice("efforts.".length) as keyof typeof efforts] = s.value as Effort;
+  }
   return {
     nome: valor(form, '[name="nome"]'),
     repo: valor(form, '[name="repo"]'),
@@ -70,6 +74,7 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
       descricao: valor(linha, '[data-campo="descricao"]'),
     })),
     modelos,
+    efforts,
     linkProduto: valor(form, '[name="linkProduto"]'),
   };
 }

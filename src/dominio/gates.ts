@@ -8,6 +8,7 @@ import {
   type Decisao,
   exigirAuditor,
   exigirExecucaoEmAndamento,
+  exigirRegistroExterno,
   rotuloIssue,
   type Ticket,
 } from "./agregado.ts";
@@ -59,16 +60,22 @@ const FASE_DO_ENVIO = { registro: "registro", desenho: "aprovacao_desenho" } as 
 
 /**
  * C25: o agente do registro ou do desenho envia o resultado à aprovação do Auditor, depois de confirmá-lo com ele na
- * conversa. Exige o que o gate exige; o desenho vai à fase `aprovacao_desenho`, e o ticket segue em execução até o
- * Auditor decidir (C10, C15).
+ * conversa; a IA externa envia o registro que ela registrou. Exige o que o gate exige; o desenho vai à fase
+ * `aprovacao_desenho`, e o ticket segue em execução até o Auditor decidir (C10, C15).
  */
 export function enviarParaAprovacao(ag: Agregado, entrada: unknown, ator: Ator, ctx: Contexto): Agregado {
   const { ticket: id } = z.strictObject({ ticket: Id }).parse(entrada);
   const t = `T-${String(id)}`;
-  if (ator.tipo !== "agente" || ator.ticket !== id) {
+  const acao = `enviar ${t} à aprovação`;
+  if (ator.tipo === "externo") {
+    if (exigirRegistroExterno(ag, acao).id !== id) {
+      throw new ErroDeEscopo(`a IA externa não pode ${acao}`, "ela envia só o ticket de registro da issue");
+    }
+  } else if (ator.tipo !== "agente" || ator.ticket !== id) {
     throw new ErroDeEscopo(`só o agente de ${t} pode enviá-lo à aprovação`, "cada agente envia só o próprio ticket");
+  } else {
+    exigirExecucaoEmAndamento(ag, ator, acao);
   }
-  exigirExecucaoEmAndamento(ag, ator, `enviar ${t} à aprovação`);
   const ticket = ticketDe(ag, id);
   if (ticket.etapa !== "registro" && ticket.etapa !== "desenho") {
     throw new ErroDeRegra(`${t} é de ${ticket.etapa}`, "só o registro e o desenho vão à aprovação do Auditor");
@@ -76,7 +83,9 @@ export function enviarParaAprovacao(ag: Agregado, entrada: unknown, ator: Ator, 
   if (ticket.enviadoEm !== undefined) {
     throw new ErroDeRegra(
       `${t} já foi enviado e espera a decisão do Auditor`,
-      "termine a sua resposta; se ele devolver, o motivo chega nesta conversa",
+      ticket.origem === "externo"
+        ? `se ele devolver, leia o motivo com fabriquinha necessidade ver ${rotuloIssue(ag)}`
+        : "termine a sua resposta; se ele devolver, o motivo chega nesta conversa",
     );
   }
   if (ticket.etapa === "registro") exigirTituloETipo(ag, ticket);

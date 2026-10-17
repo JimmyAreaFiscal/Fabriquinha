@@ -297,7 +297,7 @@ Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR; o re
    - **Tickets e sessões:** linha do tempo dos tickets em ordem de criação, com etapa, status e as sessões de cada um (principal e consultas) com link para o chat.
      Clicar no ticket abre na caixa a descrição e as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
 3. Coluna da direita:
-   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket `aberto` e elegível do agendador (o desenho abre a sessão interativa), desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
+   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket `aberto` e elegível do agendador (o desenho abre a sessão interativa), desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; os **Avisos do encerramento** logo depois de encerrar (a limpeza que falhou ou a `main` local que não avançou, com a saída do git, só na resposta) e, depois de recarregar, o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
    - **Artefatos:** uma linha por etapa e ticket, do mais recente ao mais antigo, com um card pequeno por evidência (classe do conteúdo — HTML, IMG, VÍDEO, TABELA, TEXTO, JSON — nome e um ponto verde ou vermelho quando a evidência tem `aprovada`).
      Clicar abre a evidência na caixa (4.5), com **abrir em nova aba** e **baixar**.
 4. As métricas da issue não ficam nesta página: a tabela por issue fica em **Métricas** e o relatório de produtividade é um artefato do encerramento.
@@ -349,7 +349,7 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
    - no registro interativo, entre a conversa e o envio, um **cartão de proposta de issue** por proposta aberta (o mesmo do gate do desenho, abaixo), redesenhado a cada estado;
 3. Área de envio, fixa no pé da página, conforme o estado (F4, 5.4); o campo Mensagem é o compositor do assistant-ui, e o resto (diálogos, retomada, avisos) segue HTML:
    - rodando: **Redirecionar** (`steer`) ou **Enfileirar** (`follow_up`), **Abortar** e **Enviar**;
-   - diálogo de extensão: o pedido do agente com o formulário (`select` como lista de opções, `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** e **Responder**;
+   - diálogo de extensão: o pedido do agente com o formulário (`select` como itens numerados e clicáveis, nenhum pré-marcado, e o clique já responde; na pergunta da ferramenta `perguntar` o `select` ganha **Outros** no fim, com campo de texto obrigatório, e a múltipla escolha usa caixas de seleção; `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** sempre e **Responder** quando há texto ou múltipla escolha a enviar;
    - falha: o erro em destaque na conversa e, no envio, instrução para a próxima tentativa, seletor de modelo (C20) e **Responder e retomar** (C9);
    - conversa (interativa): **Enviar**; na sessão em aberto, também **Concluir sessão**;
    - gates do registro e do desenho: o aviso de que o agente enviou o resultado e de que a decisão fica na página da issue;
@@ -364,11 +364,12 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 1. Menu à esquerda: **Geral → Agendador** (com a marca ligado ou desligado) e **Projetos →** um item por projeto, com a hospedagem, e **+ Novo projeto**.
 2. À direita, o formulário do item escolhido.
 3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, as execuções autônomas em andamento (uma linha "Executando E-n · I-n · T-n · há …" por item) e **Salvar**.
-4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em quatro grupos:
+4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em cinco grupos:
    - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`, e **Link do produto** (opcional, http ou https; vazio apaga o link; link inválido dá erro no campo e nada é gravado). Sem o link, a Simulação não executa;
    - **Preparação e testes:** listas de comandos com adicionar e remover; preparação opcional, testes com pelo menos um;
    - **Fitness functions:** nome, comando e descrição (até 300), com adicionar e remover;
    - **Modelo por etapa:** um seletor por etapa alimentado por `GET /api/modelos`, com "padrão do pi" apagado quando vazio.
+   - **Effort por etapa:** abaixo de "Modelo por etapa", um seletor por etapa (`aria-label="Effort de <Etapa>"`) com "padrão do pi" e os sete níveis do `pi --thinking` (off, minimal, low, medium, high, xhigh, max); vazio usa o padrão do pi.
    Rodapé: "Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos", **Cancelar** e **Salvar projeto** (ou **Cadastrar projeto**).
    **Remover** (só no projeto já salvo) abre uma confirmação com o nome e o número de issues, avisando que issues, custos e arquivos do projeto serão apagados: **Cancelar** não muda nada, **Remover projeto** envia `DELETE /api/projetos/:nome`. Com sucesso, a tela volta a `/config` e mostra os avisos; com erro (execução em andamento, por exemplo), a confirmação fecha e a mensagem aparece.
 5. Erros de validação aparecem ao lado de cada campo, a partir do caminho que o `zod` devolve, e o rodapé diz quantos campos têm erro.

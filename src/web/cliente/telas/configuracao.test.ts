@@ -148,6 +148,35 @@ test("projeto salvo: nome só leitura, hospedagem, as listas, as fitness e o mod
   assert.match(formularioDeProjeto(LOJA, { issues: 11, modelos: MODELOS, erros: new Map() }), /11 issues/);
 });
 
+test("effort por etapa: abaixo do modelo, seis seletores em padrão do pi, as oito opções, o gravado e o erro (CA-1, CA-2, CA-3, CA-8)", () => {
+  const vazio = formularioDeProjeto({ ...LOJA, efforts: undefined }, { issues: 1, modelos: MODELOS, erros: new Map() });
+  assert.match(
+    vazio,
+    /Modelo por etapa[\s\S]*<h3>Effort por etapa <span class="nota">· o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi<\/span><\/h3><div class="modelos-grade">/,
+  );
+  assert.equal(
+    vazio.match(/<select id="campo-efforts\.\w+" name="efforts\.\w+" aria-label="Effort de [^"]+" class="padrao">/g)
+      ?.length,
+    6,
+  );
+  assert.match(vazio, /<label for="campo-efforts.sessao">Sessão em aberto<\/label>/);
+  assert.match(vazio, /aria-label="Effort de Sessão em aberto"/);
+  assert.match(
+    vazio,
+    /name="efforts.desenho" aria-label="Effort de Desenho" class="padrao"><option value="">padrão do pi<\/option><option value="off">off<\/option><option value="minimal">minimal<\/option><option value="low">low<\/option><option value="medium">medium<\/option><option value="high">high<\/option><option value="xhigh">xhigh<\/option><option value="max">max<\/option><\/select>/,
+  );
+
+  const gravado = formularioDeProjeto(
+    { ...LOJA, efforts: { desenho: "high" } },
+    { issues: 1, modelos: MODELOS, erros: errosDoZod("✖ Entrada inválida\n  → at efforts.desenho") },
+  );
+  assert.match(
+    gravado,
+    /<div class="celula erro"><select id="campo-efforts.desenho" name="efforts.desenho" aria-label="Effort de Desenho" aria-invalid="true" aria-describedby="campo-efforts.desenho-erro">.*<option value="high" selected>high<\/option>.*<\/select><span class="msg-erro" id="campo-efforts.desenho-erro">Entrada inválida<\/span>/,
+  );
+  assert.match(gravado, /name="efforts.revisao" aria-label="Effort de Revisão" class="padrao">/);
+});
+
 test("link do produto: no grupo Repositório depois do SonarQube, com a ajuda, o valor e o erro do campo", () => {
   const html = formularioDeProjeto(
     { ...LOJA, linkProduto: "https://demo.exemplo.com" },

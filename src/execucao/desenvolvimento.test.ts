@@ -496,6 +496,34 @@ test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem co
   c.banco.close();
 });
 
+test("T-4 não executa com T-3 falhou: o trabalho de T-3 sem commit não vai para o commit de outro ticket", async () => {
+  const c = await cenario();
+  issuesSonar = [{ component: "loja:cache.ts", rule: "ts:S1", severity: "MAJOR", message: "ruim" }];
+  await executarAutonomo(c.banco, 3, OPCOES);
+  assert.equal(c.estado(3).ticket?.status, "falhou");
+  issuesSonar = [];
+
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
+  await assert.rejects(executarAutonomo(c.banco, 4, OPCOES), {
+    message:
+      "T-4 só executa depois dos tickets de desenvolvimento anteriores da I-1, e T-3 está falhou " +
+      "(conclua T-3 antes)",
+  });
+  assert.equal(c.estado(4).ticket?.status, "aberto");
+
+  c.reabrir(3);
+  process.env.FALSO_PI_ESCREVE = "{}";
+  await executarAutonomo(c.banco, 3, OPCOES);
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
+  await executarAutonomo(c.banco, 4, OPCOES);
+  const [t3, t4] = c.commits();
+  assert.deepEqual(
+    [c.arquivos(t3?.sha).map((a) => a.caminho), c.arquivos(t4?.sha).map((a) => a.caminho)],
+    [["busca.ts", "cache.ts"], ["metrica.ts"]],
+  );
+  c.banco.close();
+});
+
 test("falha em registrarRetrabalho só vai para o log: o ticket conclui", async () => {
   const c = await cenario();
   c.banco.exec("CREATE TRIGGER falha BEFORE INSERT ON retrabalho BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
@@ -513,18 +541,26 @@ test("falha em registrarRetrabalho só vai para o log: o ticket conclui", async 
   c.banco.close();
 });
 
-test("ticket de desenvolvimento que não alterou nada falha, sem commit", async () => {
+test("ticket de desenvolvimento cujo trabalho já estava na branch conclui com um commit vazio", async () => {
   const c = await cenario();
-  process.env.FALSO_PI_ESCREVE = "{}";
+  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "cache.ts": "1\n", "metrica.ts": "2\n" });
   await executarAutonomo(c.banco, 3, OPCOES);
-  const { ticket } = c.estado(3);
-  assert.equal(ticket?.status, "falhou");
-  assert.equal(
-    ticket.erro,
-    "o ticket de desenvolvimento não alterou nenhum arquivo (reabra o ticket com uma instrução do que o agente deve mudar)",
+  process.env.FALSO_PI_ESCREVE = "{}";
+  await executarAutonomo(c.banco, 4, OPCOES);
+
+  const { ag, ticket } = c.estado(4);
+  assert.equal(ticket?.status, "concluido", ticket?.erro);
+  assert.equal(ag.issue.fase, "revisao");
+  const head = git(c.worktree, "rev-parse", "HEAD");
+  assert.equal(git(c.worktree, "log", "-1", "--format=%s"), "fix: Métrica do cache [I-1/T-4]");
+  assert.deepEqual(
+    c.commits().map((l) => [l.ticket, l.sha === head]),
+    [
+      [3, false],
+      [4, true],
+    ],
   );
-  assert.deepEqual(c.commits(), []);
-  assert.ok(existsSync(c.worktree));
+  assert.deepEqual(c.arquivos(head), []);
   c.banco.close();
 });
 
@@ -555,40 +591,6 @@ test("retomada: o commit saiu, mas a transação do C7 falhou; a próxima execu�
     c.arquivos(head).map((a) => a.caminho),
     ["busca.ts", "cache.ts"],
   );
-  c.banco.close();
-});
-
-test("retomada com outro ticket por cima: T-4 conclui sobre o órfão de T-3, e T-3, reaberto, o adota", async () => {
-  const c = await cenario();
-  c.banco.exec("CREATE TRIGGER falha BEFORE INSERT ON commit_ticket BEGIN SELECT RAISE(ABORT, 'disco cheio'); END;");
-  await executarAutonomo(c.banco, 3, OPCOES);
-  const orfao = git(c.worktree, "rev-parse", "HEAD");
-  c.banco.exec("DROP TRIGGER falha");
-
-  process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
-  await executarAutonomo(c.banco, 4, OPCOES);
-  assert.equal(c.estado(4).ticket?.status, "concluido", c.estado(4).ticket?.erro);
-  assert.equal(c.estado(4).ag.issue.fase, "desenvolvimento", "T-3 ainda falhou");
-
-  c.reabrir(3);
-  process.env.FALSO_PI_ESCREVE = "{}";
-  await executarAutonomo(c.banco, 3, OPCOES);
-
-  const { ag, ticket } = c.estado(3);
-  assert.equal(ticket?.status, "concluido", ticket?.erro);
-  assert.equal(ag.issue.fase, "revisao");
-  assert.deepEqual(
-    c.commits().map((l) => [l.ticket, l.sha === orfao]),
-    [
-      [3, true],
-      [4, false],
-    ],
-  );
-  assert.deepEqual(
-    c.arquivos(orfao).map((a) => a.caminho),
-    ["busca.ts", "cache.ts"],
-  );
-  assert.equal(git(c.worktree, "rev-list", "--count", "main..HEAD"), "2", "nenhum commit novo");
   c.banco.close();
 });
 
@@ -905,7 +907,7 @@ test("encerramento: o PR saiu, mas o registro de pr_aberto falhou; reaberto, o t
   assert.equal(c.doEncerramento().find((e) => e.tipo === "pr_aberto")?.dados.id, "1");
   assert.deepEqual(
     hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
-    ["pr list", "pr create", "pr list", "pr edit", "pr view"],
+    ["pr list", "pr create", "pr list", "api repos/{owner}/{repo}/pulls/1", "pr view"],
   );
   c.banco.close();
 });
@@ -950,7 +952,7 @@ test("encerramento: o C7 falhou depois do pr_aberto; reaberto, o ticket atualiza
   );
   assert.deepEqual(
     hospedagem.chamadas().map((ch) => ch.args.slice(0, 2).join(" ")),
-    ["pr list", "pr create", "pr view", "pr list", "pr reopen", "pr edit", "pr view"],
+    ["pr list", "pr create", "pr view", "pr list", "pr reopen", "api repos/{owner}/{repo}/pulls/1", "pr view"],
   );
   c.banco.close();
 });

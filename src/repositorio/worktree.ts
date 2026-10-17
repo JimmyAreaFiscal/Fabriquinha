@@ -1,6 +1,6 @@
 // Worktree e branch da issue (F5 §3), descarte das alterações (F5 §3.3), limpeza depois do encerramento (F5 §5.3) e
 // fila de comandos git (F5 §6).
-import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Issue } from "../dominio/agregado.ts";
@@ -63,6 +63,7 @@ export async function garantirWorktree(
   issue: Pick<Issue, "id" | "criadaEm">,
   log: string,
   varrerBase: () => Promise<void>,
+  atualizarBase = false,
 ): Promise<string> {
   const { repo, branchBase } = projeto;
   const caminho = caminhoDaWorktree(raiz, projeto.nome, issue.id);
@@ -71,8 +72,9 @@ export async function garantirWorktree(
   // `git branch -D` apaga a config junto, então a branch removida pelo Auditor some com a marca.
   const dono = `${caminho} ${issue.criadaEm}`;
 
-  const { buscouBase, marca } = await naFilaDoProjeto(raiz, projeto.nome, async () => {
+  const { buscouBase, marca, mudouHead } = await naFilaDoProjeto(raiz, projeto.nome, async () => {
     let buscouBase = false;
+    let mudouHead = false;
     if ((await exigirGit(repo, "for-each-ref", "--format=%(refname)", `refs/heads/${branch}`)) === "") {
       // Refspec explícita: um branchBase começando com "-" nunca vira opção do git.
       await exigirGit(repo, "fetch", "origin", `+refs/heads/${branchBase}:refs/remotes/origin/${branchBase}`);
@@ -91,12 +93,26 @@ export async function garantirWorktree(
         await exigirGit(repo, "worktree", "prune");
         await exigirGit(repo, "worktree", "add", caminho, branch);
       }
+      if (atualizarBase) {
+        await exigirGit(repo, "fetch", "origin", `+refs/heads/${branchBase}:refs/remotes/origin/${branchBase}`);
+        buscouBase = true;
+        const antes = await exigirGit(caminho, "rev-parse", "HEAD");
+        const r = await git(caminho, "merge", "--no-edit", `refs/remotes/origin/${branchBase}`);
+        if (r.codigo !== 0) {
+          await git(caminho, "merge", "--abort");
+          throw new ErroDeRegra(
+            `o merge de origin/${branchBase} na branch ${branch} falhou: ${(r.saida + r.erro).trim()}`,
+            `resolva o conflito com origin/${branchBase} em ${caminho} e execute o ticket de novo`,
+          );
+        }
+        mudouHead = (await exigirGit(caminho, "rev-parse", "HEAD")) !== antes;
+      }
     }
     // A marca de preparada mora nos metadados da worktree (.git/worktrees/I-<n>/): some no prune, longe do clean.
     const marca = (
       await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-path", "fabriquinha-preparada")
     ).trim();
-    return { buscouBase, marca };
+    return { buscouBase, marca, mudouHead };
   });
 
   if (buscouBase) {
@@ -106,6 +122,8 @@ export async function garantirWorktree(
       anotar(log, `varrerBase falhou: ${String(error_)}`);
     }
   }
+  // F5 §3.2: o merge que muda o HEAD pode mudar o que a preparação instala.
+  if (mudouHead) rmSync(marca, { force: true });
   if (!existsSync(marca)) {
     await preparar(caminho, projeto.preparacao, log);
     writeFileSync(marca, "");
@@ -170,14 +188,39 @@ export function limpezaPendente(
 }
 
 /**
+ * F5 §5.3: avança a base local (`refs/heads/<base>`) até `origin/<base>` só por fast-forward, sem stash, reset nem
+ * merge commit. Com a base em checkout, o merge roda na pasta dela; sem checkout, o `update-ref` guarda o sha antigo.
+ * Devolve o aviso de por que não avançou, ou `undefined` (avançou, ou não há base local).
+ */
+async function atualizarBaseLocal(repo: string, base: string): Promise<string | undefined> {
+  const ref = `refs/heads/${base}`;
+  const origem = `refs/remotes/origin/${base}`;
+  const antigo = await git(repo, "rev-parse", "-q", "--verify", ref);
+  if (antigo.codigo !== 0) return undefined;
+  const naoAtualizada = `a ${base} local não foi atualizada com origin/${base}`;
+  const lista = await git(repo, "worktree", "list", "--porcelain");
+  const bloco = lista.saida.split("\n\n").find((b) => b.split("\n").includes(`branch ${ref}`));
+  if (bloco !== undefined) {
+    const pasta = bloco.slice("worktree ".length, bloco.indexOf("\n"));
+    const r = await git(pasta, "merge", "--ff-only", "-q", origem);
+    return r.codigo === 0 ? undefined : `${naoAtualizada}, em checkout em ${pasta}: ${(r.saida + r.erro).trim()}`;
+  }
+  if ((await git(repo, "merge-base", "--is-ancestor", ref, origem)).codigo !== 0) {
+    return `${naoAtualizada}: ela tem commits que origin/${base} não tem; atualize-a à mão`;
+  }
+  const r = await git(repo, "update-ref", ref, origem, antigo.saida.trim());
+  return r.codigo === 0 ? undefined : `${naoAtualizada}: ${r.erro.trim()}`;
+}
+
+/**
  * F5 §5.3, depois de C16 aprovado: `varrerBase`, o gancho do F6 (§4.4) que busca a base e varre os commits humanos,
- * cuja falha só vai para o log; depois remove a worktree e faz prune. As branches local e remota ficam. Devolve um
- * aviso por comando que falhou: a limpeza não desfaz o encerramento. O gancho entra na fila do projeto sozinho, por
- * isso roda fora dela aqui.
+ * cuja falha só vai para o log; depois remove a worktree, faz prune e avança a base local até `origin/<base>`. As
+ * branches da issue, local e remota, ficam. Devolve um aviso por comando que falhou e o da base local, se ela não
+ * avançou: a limpeza não desfaz o encerramento. O gancho entra na fila do projeto sozinho, por isso roda fora dela aqui.
  */
 export async function limpar(
   raiz: string,
-  projeto: Pick<Projeto, "nome" | "repo">,
+  projeto: Pick<Projeto, "nome" | "repo" | "branchBase">,
   issue: Pick<Issue, "id" | "fase">,
   varrerBase: () => Promise<void>,
 ): Promise<string[]> {
@@ -200,6 +243,8 @@ export async function limpar(
       const r = await git(projeto.repo, ...args);
       if (r.codigo !== 0) avisos.push(`git -C ${projeto.repo} ${args.join(" ")} falhou: ${r.erro.trim()}`);
     }
+    const base = await atualizarBaseLocal(projeto.repo, projeto.branchBase);
+    if (base !== undefined) avisos.push(base);
     return avisos;
   });
 }

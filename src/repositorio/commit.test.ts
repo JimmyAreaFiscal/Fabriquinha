@@ -129,17 +129,18 @@ test("commita tudo com os hooks, sem credenciais, e devolve sha, mensagem lida d
   assert.match(doHook, new RegExp(`^AZURE_CONFIG_DIR=${String(dir)}$`, "m"));
 });
 
-test("sem nada para commitar, o ticket falha e nada é commitado", async () => {
+test("sem nada para commitar, sobre a base: commit vazio do ticket; sem registro, a retomada emenda o vazio", async () => {
   const c = cenario();
   const antes = c.head();
-  await assert.rejects(
-    commitarTicket(c.banco, "loja", issue, ticket),
-    new ErroDeRegra(
-      "o ticket de desenvolvimento não alterou nenhum arquivo",
-      "reabra o ticket com uma instrução do que o agente deve mudar",
-    ),
-  );
-  assert.equal(c.head(), antes);
+  const commit = await commitarTicket(c.banco, "loja", issue, ticket);
+  assert.equal(commit.sha, c.head());
+  assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), antes);
+  assert.equal(commit.mensagem, "fix: Cache na busca [I-1/T-3]");
+  assert.deepEqual(commit.arquivos, []);
+
+  const retomado = await commitarTicket(c.banco, "loja", issue, ticket);
+  assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), antes, "emendou, não empilhou");
+  assert.deepEqual(retomado.arquivos, []);
 });
 
 test("hook que reprova, ou passa do limite, faz o ticket falhar com o fim da saída, sem commit", async () => {
@@ -233,53 +234,6 @@ test("listas do git que não casam por caminho: lança em vez de gravar os núme
   );
 });
 
-test("órfão abaixo do commit de outro ticket: adotado se nada mudou; com mudança nova, commit normal por cima", async () => {
-  const c = cenario();
-  writeFileSync(join(c.worktree, "mod.txt"), "do T-3\n");
-  git(c.worktree, "commit", "-q", "-am", "fix: Cache na busca [I-1/T-3]");
-  const orfao = c.head();
-  writeFileSync(join(c.worktree, "del.txt"), "do T-4\n");
-  git(c.worktree, "commit", "-q", "-am", "fix: Métrica [I-1/T-4]");
-  const doT4 = c.head();
-
-  const adotado = await commitarTicket(c.banco, "loja", issue, ticket);
-  assert.deepEqual(
-    { ...adotado, em: undefined },
-    {
-      sha: orfao,
-      mensagem: "fix: Cache na busca [I-1/T-3]",
-      em: undefined,
-      arquivos: [{ caminho: "mod.txt", status: "M", adicionadas: 1, removidas: 1 }],
-    },
-  );
-  assert.equal(c.head(), doT4, "a história não muda");
-
-  writeFileSync(join(c.worktree, "novo.txt"), "n\n");
-  const novo = await commitarTicket(c.banco, "loja", issue, ticket);
-  assert.equal(novo.sha, c.head());
-  assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), doT4);
-  assert.deepEqual(
-    novo.arquivos.map((a) => a.caminho),
-    ["novo.txt"],
-  );
-});
-
-test("sem nada para commitar, com a HEAD num commit não registrado de outro ticket: manda executar aquele ticket", async () => {
-  const c = cenario();
-  writeFileSync(join(c.worktree, "mod.txt"), "do T-9\n");
-  git(c.worktree, "commit", "-q", "-am", "fix: Outro [I-1/T-9]");
-  const head = c.head();
-  await assert.rejects(
-    commitarTicket(c.banco, "loja", issue, ticket),
-    new ErroDeRegra(
-      "o ticket de desenvolvimento não deixou alteração para commitar, e a HEAD da worktree é o commit " +
-        `${head.slice(0, 12)}, de T-9, que não foi registrado`,
-      "execute T-9 de novo: ele adota o próprio commit; depois, este ticket",
-    ),
-  );
-  assert.equal(c.head(), head);
-});
-
 test("commit registrado de outro ticket que cita a marca no corpo não é órfão", async () => {
   const c = cenario();
   writeFileSync(join(c.worktree, "mod.txt"), "do T-4\n");
@@ -295,13 +249,9 @@ test("commit registrado de outro ticket que cita a marca no corpo não é órfã
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
   });
   registrarIssue(c.banco, { projeto: "loja" }, { tipo: "auditor" });
-  gravarCommit(c.banco, 1, { sha: c.head(), mensagem: "m", em: "2026-10-11T12:00:00.000Z", arquivos: [] });
+  const doT4 = c.head();
+  gravarCommit(c.banco, 1, { sha: doT4, mensagem: "m", em: "2026-10-11T12:00:00.000Z", arquivos: [] });
 
-  await assert.rejects(
-    commitarTicket(c.banco, "loja", issue, ticket),
-    new ErroDeRegra(
-      "o ticket de desenvolvimento não alterou nenhum arquivo",
-      "reabra o ticket com uma instrução do que o agente deve mudar",
-    ),
-  );
+  await commitarTicket(c.banco, "loja", issue, ticket);
+  assert.equal(git(c.worktree, "rev-parse", "HEAD~1").trim(), doT4, "commit vazio por cima, sem emendar o do T-4");
 });

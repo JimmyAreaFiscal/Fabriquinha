@@ -15,7 +15,8 @@
 // - "desenhe": como o agente do desenho com o "sim" do Auditor, submete as evidências, cria um ticket de
 //   desenvolvimento e envia o desenho à aprovação pelo CLI `fabriquinha`;
 // - "proponha": como o agente do registro que acha a mudança grande, propõe uma issue pelo CLI `fabriquinha`;
-// - "pergunte <select|confirm|input|editor>": abre esse diálogo;
+// - "pergunte <select|confirm|input|editor>": abre esse diálogo; "pergunte perguntar" e "pergunte multipla" abrem o
+//   `select` dentro da ferramenta `perguntar` (única e de múltipla escolha), como o pi real;
 // - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
 // Em `--mode json` (a Simulação, I-10) não fala o protocolo: espera o EOF do stdin, como o pi real, grava o `relatorio.json` em
@@ -294,11 +295,19 @@ const dialogo = (method: string) => {
   emitir({ type: "extension_ui_request", id: `d-${method}`, method, ...DIALOGOS[method] });
 };
 
+/** O `select` aberto de dentro da `perguntar`: o `tool_execution_start` vem antes e o `end`, com a resposta. */
+function perguntar(multiSelect: boolean): void {
+  const { title: question, options } = DIALOGOS.select as { title: string; options: string[] };
+  const args = { question, multiSelect, options: options.map((label) => ({ label, description: `Ordem: ${label}` })) };
+  emitir({ type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args });
+  emitir({ type: "extension_ui_request", id: "d-select", method: "select", title: question, options });
+}
+
 async function aoPrompt(texto: string): Promise<void> {
   emitir({ type: "response", command: "prompt", success: true });
   emitir({ type: "agent_start" });
   mensagem({ role: "user", content: texto });
-  const pergunta = /pergunte (select|confirm|input|editor)/.exec(texto)?.[1];
+  const pergunta = /pergunte (select|confirm|input|editor|perguntar|multipla)/.exec(texto)?.[1];
   if (texto.startsWith("# Auditoria")) {
     auditar();
     emitir({ type: "agent_settled" });
@@ -314,7 +323,8 @@ async function aoPrompt(texto: string): Promise<void> {
   }
   if (pergunta) {
     responder("Preciso de uma resposta.");
-    dialogo(pergunta);
+    if (pergunta === "perguntar" || pergunta === "multipla") perguntar(pergunta === "multipla");
+    else dialogo(pergunta);
     return;
   }
   if (texto.trim() === "registre" || texto.includes("**registre**")) {
@@ -356,6 +366,7 @@ function aoComando(c: Comando): void {
   if (c.type === "follow_up") emitir({ type: "response", command: "follow_up", success: true });
   if (c.type === "extension_ui_response") {
     const { type: _, id: __, ...resposta } = c;
+    emitir({ type: "tool_execution_end", toolCallId: "p1", toolName: "perguntar" });
     responder(`Resposta do diálogo: ${JSON.stringify(resposta)}`);
     emitir({ type: "agent_settled" });
   }

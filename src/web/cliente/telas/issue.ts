@@ -35,6 +35,7 @@ import {
   PILULA_DO_STATUS,
   nomeDoModelo,
   plural,
+  registroExternoEnviado,
   rotuloIssue,
   rotuloTicket,
   STATUS_DO_TICKET,
@@ -200,17 +201,17 @@ function executarAgora(p: PaginaDaIssue): string {
 }
 
 /**
- * O aviso da limpeza que falhou (F5 §5.3): logo depois de encerrar, os comandos que falharam com a saída do git
- * (`avisos`, da resposta do encerramento); depois, o comando a rodar, lido do disco.
+ * Os avisos do encerramento (F5 §5.3): logo depois de encerrar, o que falhou na limpeza ou na `main` local, com a
+ * saída do git (`avisos`, da resposta do encerramento); depois, o comando da limpeza a rodar, lido do disco.
  */
 function limpeza(p: PaginaDaIssue, { avisos }: Extras): string {
-  const [linhas, texto] = avisos?.length
-    ? [avisos, "a issue foi encerrada, mas a limpeza da worktree falhou:"]
-    : [p.limpeza, "a issue foi encerrada, mas a worktree ficou no disco; rode:"];
+  const [rotulo, linhas, texto] = avisos?.length
+    ? ["Avisos do encerramento", avisos, "a issue foi encerrada, com estes avisos:"]
+    : ["A limpeza falhou", p.limpeza, "a issue foi encerrada, mas a worktree ficou no disco; rode:"];
   return linhas.length === 0
     ? ""
     : `<section class="painel-acao falhou" role="status">
-    <div class="painel-linha"><span class="rotulo">A limpeza falhou</span><span class="muted">${texto}</span></div>
+    <div class="painel-linha"><span class="rotulo">${rotulo}</span><span class="muted">${texto}</span></div>
     <pre class="comandos">${linhas.map(escapar).join("\n")}</pre>
   </section>`;
 }
@@ -236,7 +237,7 @@ export interface Extras {
   agora: Date;
   pr?: EstadoLido;
   rascunho?: RascunhoDoPR;
-  /** O que falhou na limpeza, da resposta do encerramento (C16), até a página ser recarregada. */
+  /** Os avisos do encerramento (limpeza e `main` local), da resposta do encerramento (C16), até a página ser recarregada. */
   avisos?: readonly string[];
 }
 
@@ -361,14 +362,19 @@ export function corpoDoRegistro(issue: Pick<Issue, "titulo" | "tipo" | "descrica
 }
 
 /**
- * O gate do registro na página da issue (F7 §4.4), quando a sessão do registro aguarda a decisão: o mesmo conteúdo do
- * painel do chat, **Aprovar registro** (C10) e **Devolver** com o motivo, que vai ao agente.
+ * O gate do registro na página da issue (F7 §4.4), quando a sessão do registro aguarda a decisão, ou quando a IA
+ * externa enviou o registro: o mesmo conteúdo do painel do chat, **Aprovar registro** (C10) e **Devolver** com o
+ * motivo, que vai ao agente (a IA externa o lê pelo CLI).
  */
 export function gateDoRegistro(p: PaginaDaIssue, { agora }: Extras): string {
   const espera = p.sessoes.find((s) => s.motivo === "gate_registro");
-  if (!p.registro || !espera) return "";
+  const desde = espera?.desde ?? registroExternoEnviado(p.tickets)?.enviadoEm;
+  if (!p.registro || desde === undefined) return "";
+  const origem = espera
+    ? `<a class="link direita" href="${caminhoDaSessao(espera.sessao)}">abrir o chat da sessão →</a>`
+    : '<span class="muted direita">registrado por uma IA externa, sem chat</span>';
   return `<section class="gate-painel" aria-label="Gate do registro">
-    <div class="gate-cabeca"><span class="rotulo">Gate do registro</span><span class="muted">aguarda você ${ha(espera.desde, agora)}</span><a class="link direita" href="${caminhoDaSessao(espera.sessao)}">abrir o chat da sessão →</a></div>
+    <div class="gate-cabeca"><span class="rotulo">Gate do registro</span><span class="muted">aguarda você ${ha(desde, agora)}</span>${origem}</div>
     <div class="gate-corpo">${corpoDoRegistro(p.issue, p.registro)}</div>
     <div class="decidir"><label>Motivo (obrigatório para devolver)<textarea data-motivo-registro placeholder="O que o agente precisa rever no registro"></textarea></label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="devolver-registro" disabled>Devolver</button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-registro">Aprovar registro</button></div></div>
   </section>`;
