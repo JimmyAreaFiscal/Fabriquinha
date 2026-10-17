@@ -93,7 +93,10 @@ export function exigirEvidencias(ag: Agregado, ticket: Ticket, acao = "concluir"
     ...(doAgenteFaltando.length > 0
       ? [
           ticket.origem === "externo"
-            ? `a IA externa submete com ${doAgenteFaltando.map((tipo) => `fabriquinha necessidade evidencia I-${String(ag.issue.id)} ${tipo}`).join(" e ")}`
+            ? "a IA externa submete com " +
+              doAgenteFaltando
+                .map((tipo) => `fabriquinha necessidade evidencia I-${String(ag.issue.id)} ${tipo}`)
+                .join(" e ")
             : `o agente de ${t} submete com ${doAgenteFaltando.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ")}`,
         ]
       : []),

@@ -390,20 +390,28 @@ export const proporIssue = (banco: DatabaseSync, issue: Id, entrada: unknown, at
 
 /**
  * C24: o Auditor decide a proposta numa transação só. O aceite grava a issue nova antes da atual (e do desenho
- * reprovado, se for o caso), atualiza a proposta e registra o comando na issue atual.
+ * reprovado, se o lote fechou no desenho), atualiza a proposta e registra o comando na issue atual. Devolve o `lote`
+ * quando a decisão o fecha.
  */
 export const decidirProposta = (
   banco: DatabaseSync,
   id: Id,
   entrada: unknown,
   ator: Ator,
-): { ag: Agregado; proposta: PropostaIssue; nova?: Agregado } =>
+): { ag: Agregado; proposta: PropostaIssue; nova?: Agregado; lote?: PropostaIssue[] } =>
   escrever(banco, () => {
     const proposta = propostaExistente(banco, id);
     const dono = banco.prepare("SELECT issue FROM ticket WHERE id = ?").get(proposta.ticket) as { issue: Id };
     const antes = carregarAtiva(banco, dono.issue);
     const ctx = contexto(banco);
-    const decidida = propostas.decidirProposta(antes, proposta, entrada, ator, ctx);
+    const decidida = propostas.decidirProposta(
+      antes,
+      proposta,
+      entrada,
+      ator,
+      ctx,
+      propostasDaIssue(banco, dono.issue),
+    );
     if (decidida.nova) gravarDiferenca(banco, undefined, decidida.nova);
     gravarDiferenca(banco, antes, decidida.ag);
     const { id: _, ...campos } = linhaProposta(decidida.proposta);

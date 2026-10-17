@@ -118,7 +118,7 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
   const externo = registroExterno(ag);
   const gateRegistro =
     todas.find((s) => s.motivo === "gate_registro")?.ticket ??
-    (externo?.enviadoEm !== undefined ? externo.id : undefined);
+    (externo?.enviadoEm === undefined ? undefined : externo.id);
   return {
     ...ag,
     projeto: doProjeto,

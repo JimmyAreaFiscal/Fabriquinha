@@ -294,7 +294,7 @@ function propostos(p: PaginaDaIssue, modelos: readonly Modelo[]): string {
 export function cartaoDaProposta(proposta: PropostaIssue, noDesenho: boolean, issue: number): string {
   const id = proposta.id;
   const efeito = noDesenho
-    ? `Aceitar cria a issue, que depende da ${rotuloIssue(issue)}, e devolve o desenho como reprovado para a IA refazê-lo menor.`
+    ? `Aceitar cria a issue, que depende da ${rotuloIssue(issue)}. Decididas todas as propostas, o desenho volta à IA com as decisões.`
     : `Aceitar cria a issue, que depende da ${rotuloIssue(issue)}, e a IA da ${rotuloIssue(issue)} reduz o escopo.`;
   return `<article class="proposta" aria-label="Proposta de issue">
     <div class="cab"><span class="rotulo">Proposta de issue</span><span class="id">${rotuloTicket(proposta.ticket)}</span><span class="arquivos${proposta.arquivos > 30 ? " acima" : ""}">~${String(proposta.arquivos)} arquivos estimados · limite de 30 por PR</span></div>
@@ -331,7 +331,11 @@ export function gateDoDesenho(p: PaginaDaIssue, { modelos, agora }: Extras): str
       <div><div class="titulo-bloco">Tickets propostos</div>${propostos(p, modelos)}<button type="button" class="link" data-acao="novo-ticket">+ Novo ticket</button><div class="novo-ticket" data-novo-ticket hidden>${formularioDeTicket()}</div></div>
     </div>
     ${(p.propostas ?? []).map((x) => cartaoDaProposta(x, true, p.issue.id)).join("")}
-    <div class="decidir"><label>Motivo (obrigatório para reprovar)<textarea data-motivo placeholder="O que precisa mudar no desenho"></textarea></label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="reprovar-desenho" disabled>Reprovar</button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-desenho">Aprovar desenho</button></div></div>
+    ${
+      p.propostas?.length
+        ? '<p class="muted">Decida as propostas de issue antes de aprovar ou reprovar o desenho.</p>'
+        : `<div class="decidir"><label>Motivo (obrigatório para reprovar)<textarea data-motivo placeholder="O que precisa mudar no desenho"></textarea></label><div class="botoes"><button type="button" class="btn btn-grande btn-reprovar" data-acao="reprovar-desenho" disabled>Reprovar</button><button type="button" class="btn btn-grande btn-primario" data-acao="aprovar-desenho">Aprovar desenho</button></div></div>`
+    }
   </section>`;
 }
 
