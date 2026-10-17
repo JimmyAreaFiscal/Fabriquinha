@@ -49,6 +49,7 @@ before(async () => {
   git(repo, "add", "LEIAME");
   git(repo, "commit", "-q", "-m", "início");
   git(repo, "push", "-q", "origin", "main");
+  delete process.env.SONAR_HOST_URL;
   servico = await iniciarServico(raiz);
   registrarProjeto(servico.banco, {
     nome: "loja",
@@ -56,8 +57,9 @@ before(async () => {
     branchBase: "main",
     hospedagem: "github",
     preparacao: [],
-    // Os testes reprovam: a coleta depois do pi do desenvolvimento falha o ticket sem depender do SonarQube da máquina.
-    testes: ["false"],
+    // Sem SONAR_HOST_URL, a coleta depois do pi do desenvolvimento falha o ticket sem depender do SonarQube da máquina;
+    // uma reprovação o devolveria ao agente.
+    testes: ["true"],
     sonar: { projectKey: "loja" },
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     modelos: {},
@@ -483,7 +485,7 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
     return sessao;
   };
 
-  // Os testes do projeto reprovam na coleta depois do pi, e o ticket falha: a sessão espera a resposta do Auditor.
+  // O SonarQube não está configurado na coleta depois do pi, e o ticket falha: a sessão espera a resposta do Auditor.
   const sessao = await executarEsperandoFalha(1);
   const falha = await dados(sessao);
   assert.equal(falha.ticket.status, "falhou");

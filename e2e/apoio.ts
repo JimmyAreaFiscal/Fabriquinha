@@ -79,6 +79,8 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
       {
         env: {
           ...process.env,
+          // Sem SonarQube, a coleta depois do pi do desenvolvimento falha o ticket; uma reprovação o devolveria ao agente.
+          SONAR_HOST_URL: "",
           FABRIQUINHA_PORTA: "0",
           FABRIQUINHA_PI: pi,
           PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
@@ -141,7 +143,7 @@ export function projeto(raiz: string, sql = ""): void {
     branchBase: "main",
     hospedagem: "github",
     preparacao: [],
-    testes: ["false"],
+    testes: ["true"],
     sonar: { projectKey: "loja" },
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     modelos: {},

@@ -185,10 +185,13 @@ test("a conversa rola sozinha: a página fica parada, segue o fim e para quando 
   // CA-4: rolada para cima, a lista fica onde está enquanto chegam trechos.
   await conversa.hover();
   await pagina.mouse.wheel(0, -100_000);
-  await expect.poll(() => conversa.evaluate((e) => e.scrollTop)).toBe(0);
+  // Um trecho chegando no meio do giro faz o assistant-ui ancorar a mensagem lida uns pixels abaixo do topo.
+  const topo = () => conversa.evaluate((e) => e.scrollTop);
+  await expect.poll(topo).toBeLessThan(100);
+  const parada = await topo();
   const trechos = await fluxo.locator("p").count();
   await expect(fluxo.locator("p")).toHaveCount(trechos + 2);
-  expect(await conversa.evaluate((e) => e.scrollTop)).toBe(0);
+  expect(await topo()).toBe(parada);
 });
 
 test("o campo Mensagem: só espaços não envia, Shift+Enter quebra a linha e o texto do agente é Markdown seguro", async ({

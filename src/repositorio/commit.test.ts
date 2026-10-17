@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeRegra, ErroDeReprovacao } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarCommit } from "../persistencia/commits.ts";
 import { registrarIssue } from "../persistencia/issues.ts";
@@ -143,13 +143,13 @@ test("sem nada para commitar, sobre a base: commit vazio do ticket; sem registro
   assert.deepEqual(retomado.arquivos, []);
 });
 
-test("hook que reprova, ou passa do limite, faz o ticket falhar com o fim da saída, sem commit", async () => {
+test("hook que reprova, ou passa do limite, reprova o ticket com o fim da saída, sem commit", async () => {
   const c = cenario({ "pre-commit": `echo "lint: 2 erros em mod.txt"; echo "${"y".repeat(2000)}" >&2; exit 1` });
   const antes = c.head();
   writeFileSync(join(c.worktree, "mod.txt"), "mudou\n");
   const dica = "corrija o que a saída aponta e execute o ticket de novo; a Fabriquinha nunca pula os hooks";
   await assert.rejects(commitarTicket(c.banco, "loja", issue, ticket), (e) => {
-    assert.ok(e instanceof ErroDeRegra);
+    assert.ok(e instanceof ErroDeReprovacao);
     assert.equal(
       e.message,
       `o git commit saiu com código 1, com os hooks do repositório: ${"y".repeat(1500)} (${dica})`,
@@ -161,7 +161,7 @@ test("hook que reprova, ou passa do limite, faz o ticket falhar com o fim da sa�
   writeFileSync(join(c.worktree, ".git", "hooks", "pre-commit"), "#!/bin/sh\necho comecei\nexec sleep 5\n");
   await assert.rejects(
     commitarTicket(c.banco, "loja", issue, ticket, 300),
-    new ErroDeRegra("o git commit passou de 0.005 minutos, com os hooks do repositório: comecei", dica),
+    new ErroDeReprovacao("o git commit passou de 0.005 minutos, com os hooks do repositório: comecei", dica),
   );
   assert.equal(c.head(), antes);
 });
