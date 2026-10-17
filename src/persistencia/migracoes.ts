@@ -336,4 +336,44 @@ export const MIGRACOES: readonly string[] = [
       FROM evidencia;
   DROP TABLE evidencia;
   ALTER TABLE evidencia_nova RENAME TO evidencia;`,
+  // A IA externa (ator `externo`) registra a necessidade pelo `fabriquinha necessidade`: ela é a origem do ticket de
+  // registro e o ator dos comandos dela. O CHECK de `origem` e o de `ator` não se alteram no SQLite, então `ticket` e
+  // `comando` são recriadas (tabela nova, cópia, DROP, RENAME), com os índices de antes.
+  `CREATE TABLE ticket_novo (
+    id              INTEGER PRIMARY KEY,
+    issue           INTEGER NOT NULL REFERENCES issue(id),
+    etapa           TEXT NOT NULL CHECK (etapa IN (${listaSql(Etapa)})),
+    titulo          TEXT NOT NULL CHECK (length(titulo) BETWEEN 1 AND 120),
+    descricao       TEXT NOT NULL DEFAULT '',
+    status          TEXT NOT NULL CHECK (status IN (${listaSql(StatusTicket)})),
+    origem          TEXT NOT NULL CHECK (origem IN (${listaSql(TipoAtor)})),
+    origem_ticket   INTEGER REFERENCES ticket(id),
+    modelo_provedor TEXT,
+    modelo_nome     TEXT,
+    instrucao       TEXT,
+    erro            TEXT,
+    criado_em       TEXT NOT NULL,
+    concluido_em    TEXT,
+    enviado_em      TEXT CHECK (enviado_em IS NULL OR etapa IN ('registro','desenho')),
+    CHECK ((status = 'falhou') = (erro IS NOT NULL)),
+    CHECK ((status = 'concluido') = (concluido_em IS NOT NULL)),
+    CHECK (origem <> 'agente' OR origem_ticket IS NOT NULL),
+    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))
+  );
+  INSERT INTO ticket_novo SELECT * FROM ticket;
+  DROP TABLE ticket;
+  ALTER TABLE ticket_novo RENAME TO ticket;
+  CREATE UNIQUE INDEX ux_ticket_em_execucao ON ticket(issue) WHERE status = 'em_execucao';
+  CREATE UNIQUE INDEX ux_ticket_etapa_unica ON ticket(issue, etapa) WHERE etapa <> 'desenvolvimento' AND status <> 'concluido';
+  CREATE TABLE comando_novo (
+    id    INTEGER PRIMARY KEY,
+    issue INTEGER NOT NULL REFERENCES issue(id),
+    nome  TEXT    NOT NULL,
+    ator  TEXT    NOT NULL CHECK (ator IN (${listaSql(TipoAtor)})),
+    fase  TEXT    NOT NULL CHECK (fase IN (${listaSql(Fase)})),
+    em    TEXT    NOT NULL
+  );
+  INSERT INTO comando_novo SELECT * FROM comando;
+  DROP TABLE comando;
+  ALTER TABLE comando_novo RENAME TO comando;`,
 ];

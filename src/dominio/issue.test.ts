@@ -25,6 +25,7 @@ import {
 const AGORA = "2026-10-11T12:00:00.000Z";
 const auditor: Ator = { tipo: "auditor" };
 const fabriquinha: Ator = { tipo: "fabriquinha" };
+const externo: Ator = { tipo: "externo" };
 const agente = (ticket: number, execucao = 7): Ator => ({ tipo: "agente", execucao, ticket });
 
 /** Contexto falso: issues 1..10 existem e `grafo` diz de quem cada uma depende. */
@@ -173,7 +174,7 @@ test("C1 é só do Auditor, exige projeto e deps existentes e valida a entrada",
   for (const ator of [agente(34), fabriquinha]) {
     escopo(
       () => registrarIssue({ projeto: "loja" }, ator, contexto()),
-      "só o Auditor pode registrar uma issue (peça ao Auditor pelo web)",
+      "só o Auditor ou a IA externa pode registrar uma issue (peça ao Auditor pelo web)",
     );
   }
   regra(
@@ -186,6 +187,50 @@ test("C1 é só do Auditor, exige projeto e deps existentes e valida a entrada",
   );
   assert.throws(() => registrarIssue({ projeto: "Loja" }, auditor, contexto()), ZodError);
   assert.throws(() => registrarIssue({ projeto: "loja", deps: [0] }, auditor, contexto()), ZodError);
+});
+
+test("C1 da IA externa: título e tipo obrigatórios, ticket de registro já em execução e com origem externo", () => {
+  const entrada = { projeto: "loja", titulo: "Busca lenta", tipo: "problema", descricao: "d", deps: [2] };
+  const ag = registrarIssue(entrada, externo, contexto());
+  assert.deepEqual(
+    [ag.issue.titulo, ag.issue.tipo, ag.issue.descricao, ag.issue.deps, ag.issue.fase],
+    ["Busca lenta", "problema", "d", [2], "registro"],
+  );
+  assert.deepEqual(
+    ag.tickets.map((t) => [t.etapa, t.status, t.origem]),
+    [["registro", "em_execucao", "externo"]],
+  );
+  assert.equal(ag.execucoes.length, 0);
+  for (const falta of ["titulo", "tipo"]) {
+    const sem = Object.fromEntries(Object.entries(entrada).filter(([k]) => k !== falta));
+    assert.throws(() => registrarIssue(sem, externo, contexto()), ZodError);
+  }
+  assert.throws(() => registrarIssue({ ...entrada, tipo: "bug" }, externo, contexto()), ZodError);
+});
+
+/** A I-1 que a IA externa registrou: T-34 de registro em execução por ela, sem execução do pi. */
+const externa = (troca: Partial<Issue> = {}): Agregado => {
+  const ag = base({ titulo: "T", tipo: "problema", ...troca });
+  return {
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.id === 34 ? { ...t, origem: "externo" } : t)),
+    execucoes: [],
+  };
+};
+
+test("C2, C3 e C4 da IA externa: só no registro que ela registrou e enquanto ele está no registro", () => {
+  const casos: [(ag: Agregado) => unknown, string][] = [
+    [(ag) => editarIssue(ag, { titulo: "Outro" }, externo), "editar a I-1"],
+    [(ag) => adicionarDependencia(ag, 2, externo, contexto()), "mudar as dependências da I-1"],
+    [(ag) => removerDependencia(ag, 2, externo), "mudar as dependências da I-1"],
+  ];
+  const fora = "ela só age no registro das issues que registrou, e a I-1 não é uma delas ou já saiu do registro";
+  for (const [comando, acao] of casos) {
+    assert.ok(comando(externa()));
+    escopo(() => comando(base()), `a IA externa não pode ${acao} (${fora})`);
+    escopo(() => comando(externa({ fase: "desenho" })), `a IA externa não pode ${acao} (${fora})`);
+  }
+  assert.equal(editarIssue(externa(), { titulo: "Outro" }, externo).issue.titulo, "Outro");
 });
 
 test("C2 muda só os campos informados; ausente ou undefined mantém o valor", () => {

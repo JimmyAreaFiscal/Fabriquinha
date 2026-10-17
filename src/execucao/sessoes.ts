@@ -547,7 +547,7 @@ const DECIDIR = {
 /**
  * F4 §6.6: Aprovar e Devolver (ou Reprovar) o registro ou o desenho enviado (C25), na página da issue. Para o pi
  * ocioso e grava C10 ou C15. Aprovado, descarta antes o que a sessão deixou na worktree (o protótipo do desenho, F3
- * §7); devolvido, retoma a mesma sessão com o motivo como mensagem ao agente.
+ * §7); devolvido, retoma a mesma sessão com o motivo como mensagem ao agente. O registro da IA externa só grava.
  */
 export async function decidirGate(
   banco: DatabaseSync,
@@ -559,6 +559,12 @@ export async function decidirGate(
   const [comando, decidir, devolvido] = DECIDIR[etapa];
   const ag = await agregadoAssentado(banco, issue);
   const ticket = ag.tickets.find((t) => t.etapa === etapa && t.status === "em_execucao");
+  if (ticket?.origem === "externo") {
+    // O registro da IA externa não tem sessão do pi: nada a parar, descartar, avisar nem retomar. Devolvido, ela lê o
+    // motivo com `fabriquinha necessidade ver`.
+    comIssue(banco, issue, comando, AUDITOR, (a, ctx) => decidir(a, decisao, AUDITOR, ctx));
+    return;
+  }
   if (ticket) await pararOciosa(ag, ticket.id);
   if (ticket?.enviadoEm !== undefined && decisao.aprovado) await descartarDaSessao(banco, ag, ticket.id);
   comIssue(banco, issue, comando, AUDITOR, (a, ctx) => decidir(a, decisao, AUDITOR, ctx));

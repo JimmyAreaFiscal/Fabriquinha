@@ -1146,6 +1146,35 @@ test("gate do registro na página da issue: o que o agente registrou, os critér
   );
 });
 
+test("gate do registro da IA externa: sem sessão, aguarda desde o envio e diz que não há chat", () => {
+  const p = exemplo();
+  const externa: PaginaDaIssue = {
+    ...p,
+    issue: { ...p.issue, fase: "registro" },
+    sessoes: [],
+    tickets: [
+      {
+        id: 70,
+        issue: p.issue.id,
+        etapa: "registro",
+        titulo: "Registrar a necessidade",
+        descricao: "",
+        status: "em_execucao",
+        origem: "externo",
+        criadoEm: AGORA,
+        enviadoEm: AGORA,
+      },
+    ],
+    registro: { comportamento: "c", criterios: [], faltando: [] },
+  };
+  assert.match(
+    gateDoRegistro(externa, QUARENTA_E_SETE),
+    /<div class="gate-cabeca"><span class="rotulo">Gate do registro<\/span><span class="muted">aguarda você há 47\u00a0min<\/span><span class="muted direita">registrado por uma IA externa, sem chat<\/span><\/div>/,
+  );
+  const naoEnviada = { ...externa, tickets: externa.tickets.map(({ enviadoEm: _, ...t }) => t) };
+  assert.equal(gateDoRegistro(naoEnviada, QUARENTA_E_SETE), "");
+});
+
 test("corpo do PR: sem a marca da Fabriquinha, que o markdown-it sem HTML mostraria como texto", () => {
   const corpo = "<!-- fabriquinha I-1/T-6 -->\n\n## Por quê\n\n- `<op>` é uma de `+`, `-`.\n\nE <!-- outro --> fica.";
   assert.equal(

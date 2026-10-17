@@ -175,7 +175,7 @@ test("elegíveis: um ticket por issue, o mais antigo dela, da issue mais antiga 
     falharTicket(a, { ticket: indice, erro: "pi saiu" }, fabriquinha),
   );
   assert.deepEqual(autonomasEmAndamento(banco), []);
-  assert.deepEqual(ticketsElegiveis(banco), [cache, i2.desenho], "o que falhou espera o Auditor; a I-1 volta à frente");
+  assert.deepEqual(ticketsElegiveis(banco), [i2.desenho], "o que falhou trava os seguintes da I-1 até concluir (C5)");
   banco.close();
 });
 

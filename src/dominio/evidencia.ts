@@ -6,6 +6,7 @@ import {
   type Contexto,
   Evidencia,
   exigirExecucaoEmAndamento,
+  exigirRegistroExterno,
   type Produtor,
   type Ticket,
   TipoEvidencia,
@@ -91,7 +92,9 @@ export function exigirEvidencias(ag: Agregado, ticket: Ticket, acao = "concluir"
   const solucoes = [
     ...(doAgenteFaltando.length > 0
       ? [
-          `o agente de ${t} submete com ${doAgenteFaltando.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ")}`,
+          ticket.origem === "externo"
+            ? `a IA externa submete com ${doAgenteFaltando.map((tipo) => `fabriquinha necessidade evidencia I-${String(ag.issue.id)} ${tipo}`).join(" e ")}`
+            : `o agente de ${t} submete com ${doAgenteFaltando.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ")}`,
         ]
       : []),
     ...(doAgenteFaltando.length < faltam.length ? ["a Fabriquinha coleta depois do pi; execute o ticket de novo"] : []),
@@ -114,6 +117,9 @@ export function exigirRegistroDeEvidencia(ag: Agregado, ator: Ator, id: Id, tipo
       "cada agente registra só no próprio ticket",
     );
   }
+  if (ator.tipo === "externo" && exigirRegistroExterno(ag, acao).id !== id) {
+    throw new ErroDeEscopo(`a IA externa não pode ${acao}`, "ela registra só no ticket de registro da issue");
+  }
   const ticket = ticketDe(ag, id);
   const t = rotuloTicket(ticket);
   if (ator.tipo === "agente") exigirExecucaoEmAndamento(ag, ator, acao);
@@ -132,8 +138,8 @@ export function exigirRegistroDeEvidencia(ag: Agregado, ator: Ator, id: Id, tipo
       `a etapa ${ticket.etapa} aceita: ${aceitos}`,
     );
   }
-  // Princípio 2 da visão geral: o agente não declara o que a máquina mede.
-  if (achado.produtor !== ator.tipo) {
+  // Princípio 2 da visão geral: o agente não declara o que a máquina mede. A IA externa produz como o agente.
+  if (achado.produtor !== (ator.tipo === "externo" ? "agente" : ator.tipo)) {
     throw achado.produtor === "fabriquinha"
       ? new ErroDeEscopo(`o agente não pode submeter ${tipo}`, "quem a produz é a Fabriquinha, ao fim da execução")
       : new ErroDeEscopo(`a Fabriquinha não produz ${tipo}`, `quem a submete é o agente de ${t}`);

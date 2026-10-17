@@ -17,18 +17,23 @@ import {
 } from "./primitivos.ts";
 import type { Projeto } from "./projeto.ts";
 
-/** Quem pede o comando; também é a origem de um ticket (quem o criou). */
-export const TipoAtor = z.enum(["auditor", "agente", "fabriquinha"]);
+/**
+ * Quem pede o comando; também é a origem de um ticket (quem o criou). `externo` é a IA de fora da Fabriquinha que
+ * registra a necessidade pelo `fabriquinha necessidade`, sem sessão do pi.
+ */
+export const TipoAtor = z.enum(["auditor", "agente", "fabriquinha", "externo"]);
 
 export const Ator = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal(TipoAtor.enum.auditor) }),
   z.object({ tipo: z.literal(TipoAtor.enum.agente), execucao: Id, ticket: Id }),
   z.object({ tipo: z.literal(TipoAtor.enum.fabriquinha) }),
+  z.object({ tipo: z.literal(TipoAtor.enum.externo) }),
 ]);
 
-/** Os atores sem dados: o Auditor e a própria Fabriquinha. */
+/** Os atores sem dados: o Auditor, a própria Fabriquinha e a IA externa. */
 export const AUDITOR: Ator = { tipo: "auditor" };
 export const FABRIQUINHA: Ator = { tipo: "fabriquinha" };
+export const EXTERNO: Ator = { tipo: "externo" };
 
 export const TipoIssue = z.enum(["funcionalidade", "problema"]);
 
@@ -270,14 +275,42 @@ export function exigirFabriquinha(ator: Ator, acao: string): void {
   }
 }
 
+/** O ticket de registro da issue que a IA externa registrou e ainda está no registro: o que ela pode mudar. */
+export const registroExterno = (ag: Agregado): Ticket | undefined =>
+  ag.issue.fase === "registro"
+    ? ag.tickets.find((t) => t.etapa === "registro" && t.origem === "externo" && t.status === "em_execucao")
+    : undefined;
+
+/** A IA externa só age no registro da issue que ela registrou (`fabriquinha necessidade`). */
+export function exigirRegistroExterno(ag: Agregado, acao: string): Ticket {
+  const ticket = registroExterno(ag);
+  if (!ticket) {
+    throw new ErroDeEscopo(
+      `a IA externa não pode ${acao}`,
+      `ela só age no registro das issues que registrou, e a ${rotuloIssue(ag)} não é uma delas ou já saiu do registro`,
+    );
+  }
+  return ticket;
+}
+
 /**
  * Auditor sempre. Agente só pelo próprio ticket, se ele for desta issue e de uma das `etapas`, e só enquanto a
- * execução dele está em andamento (F1 §3.2). Consulta não conta: ela pergunta, não altera (F4 §6.5).
+ * execução dele está em andamento (F1 §3.2). Consulta não conta: ela pergunta, não altera (F4 §6.5). IA externa só
+ * no registro que ela registrou, quando o registro está entre as `etapas`.
  */
 export function exigirAuditorOuAgente(ag: Agregado, ator: Ator, etapas: readonly Etapa[], acao: string): void {
   if (ator.tipo === "auditor") return;
+  if (ator.tipo === "externo" && etapas.includes("registro")) {
+    exigirRegistroExterno(ag, acao);
+    return;
+  }
   const quem = `o Auditor ou o agente de ${etapas.join(", ")} da ${rotuloIssue(ag)}`;
-  if (ator.tipo === "fabriquinha") throw new ErroDeEscopo(`a Fabriquinha não pode ${acao}`, `quem pode é ${quem}`);
+  if (ator.tipo !== "agente") {
+    throw new ErroDeEscopo(
+      `${ator.tipo === "fabriquinha" ? "a Fabriquinha" : "a IA externa"} não pode ${acao}`,
+      `quem pode é ${quem}`,
+    );
+  }
   const ticket = `T-${String(ator.ticket)}`;
   if (!ag.tickets.some((t) => t.id === ator.ticket && etapas.includes(t.etapa))) {
     throw new ErroDeEscopo(`o agente de ${ticket} não pode ${acao}`, `quem pode é ${quem}`);

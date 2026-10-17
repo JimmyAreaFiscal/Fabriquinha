@@ -362,6 +362,24 @@ test("GET /api/issues/:id: o painel do gate do registro só quando o agente envi
   assert.equal((await pagina()).registro, undefined);
 });
 
+test("GET /api/issues/:id: o painel do gate do registro da IA externa sai do ticket enviado, sem sessão", async () => {
+  const criterios = [{ id: "CA-1", dado: "mil itens", quando: "busco", entao: "responde em até 2 s" }];
+  servico.banco.exec(`
+    INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
+      VALUES (60, 'loja', 'Busca lenta', 'problema', 'Demora.', 'registro', '${AGORA}');
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
+      VALUES (60, 60, 'registro', 'Registrar', 'em_execucao', 'externo', '${AGORA}');
+    INSERT INTO evidencia (id, ticket, tipo, produtor, dados, em) VALUES
+      (60, 60, 'comportamento', 'agente', '{"descricao":"demora 10 s"}', '${AGORA}'),
+      (61, 60, 'criterios_aceite', 'agente', '${JSON.stringify({ criterios })}', '${AGORA}');
+  `);
+  assert.equal((await pagina(60)).registro, undefined, "sem o envio, nada");
+  servico.banco.exec(`UPDATE ticket SET enviado_em = '${AGORA}' WHERE id = 60`);
+  const p = await pagina(60);
+  assert.deepEqual(p.sessoes, []);
+  assert.deepEqual(p.registro, { comportamento: "demora 10 s", criterios, faltando: [] });
+});
+
 test("cancelar: fecha o ticket aberto, leva a dependente (listada na página), mantém o histórico e recusa a concluída com 409", async () => {
   servico.banco.exec(`
     INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (10, 'loja', 'Engano', 'problema', 'registro', '${AGORA}');

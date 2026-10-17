@@ -6,7 +6,14 @@ import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { type Agregado, AUDITOR, type PropostaIssue, type Ticket, type TipoEvidencia } from "../../dominio/agregado.ts";
+import {
+  type Agregado,
+  AUDITOR,
+  type PropostaIssue,
+  registroExterno,
+  type Ticket,
+  type TipoEvidencia,
+} from "../../dominio/agregado.ts";
 import { encontrado, existe } from "../../dominio/erros.ts";
 import { evidenciasFaltando } from "../../dominio/evidencia.ts";
 import { jaTemExecucao, ticketDe } from "../../dominio/execucao.ts";
@@ -84,7 +91,7 @@ export interface PaginaDaIssue extends Agregado {
   executar?: { ticket: Ticket; ocupada?: string };
   /** Os números do desenho (F6 §5.5), só no gate do desenho; `null` com as evidências faltando ou malformadas. */
   desenho?: MetricasIssue["desenho"];
-  /** O painel do gate do registro, só quando a sessão do registro aguarda a decisão (C10). */
+  /** O painel do gate do registro, só quando a sessão do registro, ou o registro da IA externa, aguarda a decisão (C10). */
   registro?: PainelRegistro;
   /** As propostas de issue abertas, só no gate do desenho. */
   propostas?: PropostaIssue[];
@@ -107,7 +114,11 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
     ...(await sessoes(banco, { escopo: "ativas", issue: id })),
     ...(await sessoes(banco, { escopo: "historico", issue: id })),
   ];
-  const gateRegistro = todas.find((s) => s.motivo === "gate_registro");
+  // O registro da IA externa espera o gate sem sessão do pi: o ticket enviado faz o papel dela.
+  const externo = registroExterno(ag);
+  const gateRegistro =
+    todas.find((s) => s.motivo === "gate_registro")?.ticket ??
+    (externo?.enviadoEm !== undefined ? externo.id : undefined);
   return {
     ...ag,
     projeto: doProjeto,
@@ -125,7 +136,7 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
       desenho: numerosDoDesenho(ag),
       propostas: propostasAbertas(ag, propostasDaIssue(banco, id)),
     }),
-    ...(gateRegistro && { registro: painelDoRegistro(ag, gateRegistro.ticket) }),
+    ...(gateRegistro !== undefined && { registro: painelDoRegistro(ag, gateRegistro) }),
   };
 }
 
