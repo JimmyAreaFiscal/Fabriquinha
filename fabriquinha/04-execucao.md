@@ -163,7 +163,7 @@ O que o campo de mensagem faz depende do estado:
 Em qualquer sessão que aceite mensagem, o campo de mensagem tem **Anexar histórico de outra sessão** (6.8).
 
 Os diálogos de extensão aparecem para sessões autônomas também.
-Um agente autônomo que pergunta algo pela extensão `ask-user-question`, por exemplo, para em `aguardando_humano: dialogo` até o Auditor responder.
+Um agente autônomo que pergunta algo pela ferramenta `perguntar` ou por uma extensão do Auditor, por exemplo, para em `aguardando_humano: dialogo` até o Auditor responder.
 
 ## 6. Execução do pi
 
@@ -176,8 +176,9 @@ pi --mode rpc
    --skill <pacote>/skills/fabriquinha                   # CLI da Fabriquinha, somado às skills do Auditor (P1)
    --append-system-prompt <pacote>/etapas/<etapa>.md     # instruções da etapa (P1)
    -e <pacote>/extensions/guarda.ts                      # bloqueia criação de PR pelo agente (F5, 5.0; P1)
+   -e <pacote>/extensions/pergunta.ts                    # ferramenta `perguntar`, no lugar da `ask_user_question` (5.4; P1)
    [--approve | --no-approve]                            # confiança herdada do repositório (6.1.1)
-   [--exclude-tools edit,write,bash]                     # só em consulta (6.5)
+   --exclude-tools ask_user_question[,edit,write,bash]   # `edit,write,bash` só em consulta (6.5)
 ```
 
 | Escolha | Motivo |
@@ -186,7 +187,7 @@ pi --mode rpc
 | Subprocesso, não o SDK no mesmo processo | Uma sessão que trava ou estoura memória não derruba o serviço, e o grupo de processos pode ser morto inteiro. |
 | `--append-system-prompt` com a etapa | A instrução fica sempre no contexto; uma skill depende de o modelo decidir lê-la. |
 | A configuração do pi do Auditor vale inteira | Settings, skills, extensões, ferramentas, pacotes, prompts e `AGENTS.md`/`CLAUDE.md` carregam como numa sessão aberta pelo Auditor. O que ele mudar no pi vale a partir da próxima execução; um processo já vivo segue com a configuração de quando subiu. A Fabriquinha só **soma** a skill do CLI e as instruções da etapa. |
-| Nenhuma flag que desligue recurso do Auditor | Nada de `--no-skills`, `--no-extensions` ou `--tools`. Até a consulta restringe só as ferramentas embutidas de escrita, e mantém as que vêm de extensões. |
+| Nenhuma flag que desligue recurso do Auditor | Nada de `--no-skills`, `--no-extensions` ou `--tools`. Até a consulta restringe só as ferramentas embutidas de escrita, e mantém as que vêm de extensões. A única exceção é `--exclude-tools ask_user_question`: a ferramenta pessoal do Auditor falha no modo RPC (`askWithDialogs is not defined`), e o pi não inicia com duas ferramentas de mesmo nome, então a `perguntar` do pacote P1 toma o lugar dela. |
 
 #### 6.1.1 Confiança do projeto
 
@@ -259,7 +260,7 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
 - É criada com `pi --mode rpc --fork <sessão principal>`.
   O pi copia a conversa para um arquivo novo, e o F4 lê o novo `sessionId` pelo comando RPC `get_state` e grava na execução.
   A sessão principal não recebe nenhuma mensagem da consulta.
-- Sem as ferramentas embutidas que alteram arquivos (`--exclude-tools edit,write,bash`): a consulta pergunta, não altera.
+- Sem as ferramentas embutidas que alteram arquivos (`--exclude-tools edit,write,bash`, além da `ask_user_question`): a consulta pergunta, não altera.
   As ferramentas das extensões do Auditor continuam disponíveis; se alguma delas escrever, é escolha dele.
 - Não muda o estado do ticket nem da issue e não ocupa a issue.
 - Aparece na lista como "Consulta sobre T-n" e segue os mesmos estados das outras sessões.

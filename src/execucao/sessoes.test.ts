@@ -1263,7 +1263,7 @@ test("consulta: copia a sessão principal, sem ferramentas de escrita, sem promp
     "--fork",
     arquivoFalso(c, principal),
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
   assert.equal(c.comandos().length, comandos, "a consulta sobe sem prompt, à espera da pergunta");
   assert.equal(existsSync(join(c.raiz, "execucoes", "E-2", "prompt.md")), false);
@@ -1336,9 +1336,9 @@ test("consulta de um ticket por decidir: para o pi ocioso, segue em conversa dep
   );
   const retomada = inicioDe(c, consulta);
   assert.deepEqual(retomada.argv.slice(-3), [
-    join(PACOTE, "extensions", "guarda.ts"),
+    join(PACOTE, "extensions", "pergunta.ts"),
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
   assert.deepEqual(c.comandos().at(-1), { type: "prompt", message: "E o critério? Só pergunte." }, "só a mensagem");
   assert.equal(agregado(c.banco, 1)?.tickets[0]?.status, "em_execucao");
@@ -1394,7 +1394,7 @@ test("consulta sem cópia: a primeira execução falhou antes de o pi subir, e a
     "--fork",
     arquivoFalso(c, principal),
     "--exclude-tools",
-    "edit,write,bash,powershell",
+    "ask_user_question,edit,write,bash,powershell",
   ]);
   const conversa = (await abrirChat(c.banco, consulta)).conversa as { message?: { role: string } }[];
   assert.deepEqual(

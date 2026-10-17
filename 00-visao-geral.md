@@ -128,7 +128,7 @@ flowchart LR
 | Fabriquinha | F6 Métricas | Uso de tokens e custo por execução, métricas do diagrama, relatório de produtividade. | `fabriquinha/06-metricas.md` |
 | Fabriquinha | F7 Interfaces | CLI do agente; web do Auditor com board, sessões e chat, evidências, gates, métricas e configuração. | `fabriquinha/07-interfaces.md` |
 | Fabriquinha | F8 Simulação | Usuários Simulados por projeto, com anexos, que a IA imita para achar problemas de usabilidade e bugs no produto. | `fabriquinha/08-simulacao.md` |
-| pi | P1 Pacote `pi-fabriquinha` | Instruções de cada etapa, a skill com o CLI e os formatos (usada também na sessão em aberto) e a extensão `guarda`, que impede o agente de criar PR. | `pi/01-pacote-skills.md` |
+| pi | P1 Pacote `pi-fabriquinha` | Instruções de cada etapa, a skill com o CLI e os formatos (usada também na sessão em aberto) a extensão `guarda`, que impede o agente de criar PR, e a extensão `pergunta`, com a ferramenta `perguntar` para o agente consultar o Auditor no chat. | `pi/01-pacote-skills.md` |
 | pi | P2 Gravação de evidências | Skills/tools para o agente gravar vídeo e capturar imagem por tipo de projeto. Em exploração pelo Auditor. | `pi/02-gravacao-evidencias.md` (a definir) |
 
 A Fabriquinha não desliga nada do pi do Auditor: settings, skills, extensões e ferramentas dele valem nas execuções (F4, 6.1).

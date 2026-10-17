@@ -27,7 +27,7 @@ writeFileSync(sonda, SONDA);
 
 // Uma sessão por etapa que tem skills de artefato (o desenvolvimento não tem).
 for (const etapa of ["registro", "desenho", "revisao", "encerramento"] as const) {
-  test(`o pi das execuções de ${etapa} carrega a guarda e as skills da etapa com a configuração do Auditor`, (t) => {
+  test(`o pi das execuções de ${etapa} carrega a guarda, a pergunta e as skills da etapa com a configuração do Auditor`, (t) => {
     const prompt = join(dir, `prompt-${etapa}.md`);
     const args = argumentosPi({
       raiz: dir,
@@ -54,7 +54,9 @@ for (const etapa of ["registro", "desenho", "revisao", "encerramento"] as const)
       .map((linha) => linha.replace(fabrica, "").trim());
     // A lista alimenta a revisão periódica do pi do Auditor (P1 §2.4).
     for (const extensao of extensoes) t.diagnostic(`extensão carregada: ${extensao}`);
-    assert.ok(extensoes.includes(join(PACOTE, "extensions", "guarda.ts")), pi.stderr);
+    // A `perguntar` convive com a `guarda` e com a `ask_user_question` do Auditor, que a exclusão tira.
+    for (const extensao of ["guarda.ts", "pergunta.ts"])
+      assert.ok(extensoes.includes(join(PACOTE, "extensions", extensao)), pi.stderr);
     // O prompt de sistema desta sessão, que a sonda gravou no início dela. O pi ignora em silêncio um `--skill` que não
     // existe; a skill só conta se o nome e o caminho entraram no prompt.
     const sistema = readFileSync(prompt, "utf8");
