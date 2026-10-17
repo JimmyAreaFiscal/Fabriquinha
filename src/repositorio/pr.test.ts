@@ -153,7 +153,7 @@ test("GitHub: PR já publicado e fechado é reaberto antes de ter título e corp
     [
       ["pr", "list", "--head"],
       ["pr", "reopen", "1"],
-      ["pr", "edit", "1"],
+      ["api", "repos/{owner}/{repo}/pulls/1", "--method"],
     ],
   );
 });

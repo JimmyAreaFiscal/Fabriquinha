@@ -226,7 +226,10 @@ const github: CliDePR = {
     }),
   atualizar: (repo, pr, titulo, corpo) =>
     comCorpo(corpo, async (arquivo) => {
-      await rodar("gh", ["pr", "edit", pr.id, "--title", titulo, "--body-file", arquivo], repo);
+      // A API REST, não `gh pr edit`: o gh antigo (2.45 do apt) consulta os Projects (classic), que o GitHub desligou.
+      const caminho = `repos/{owner}/{repo}/pulls/${pr.id}`;
+      const args = ["api", caminho, "--method", "PATCH", "-f", `title=${titulo}`, "-F", `body=@${arquivo}`, "--silent"];
+      await rodar("gh", args, repo);
       return { id: pr.id, url: pr.url };
     }),
   async reabrir(repo, id) {
