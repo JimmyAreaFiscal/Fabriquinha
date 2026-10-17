@@ -390,8 +390,14 @@ test("devolverTicket volta o ticket autônomo em execução a aberto com a instr
   const ag = agregado("desenvolvimento", [dev], [terminada(7, 1)]);
   assert.deepEqual(devolverTicket(ag, { ticket: 1, instrucao: "corrija" }, fabriquinha), {
     ...ag,
-    tickets: [{ ...dev, status: "aberto", instrucao: "corrija" }],
+    tickets: [{ ...dev, status: "aberto", instrucao: "corrija", devolucoes: 1 }],
   });
+  const devolvido = devolverTicket(
+    agregado("desenvolvimento", [{ ...dev, devolucoes: 1 }]),
+    { ticket: 1, instrucao: "de novo" },
+    fabriquinha,
+  );
+  assert.equal(devolvido.tickets[0]?.devolucoes, 2);
   const devolver = (a: Agregado) => () => devolverTicket(a, { ticket: 1, instrucao: "x" }, fabriquinha);
   regra(
     devolver(agregado("desenho", [ticket(1, "desenho", "em_execucao")])),
@@ -408,7 +414,7 @@ test("devolverTicket volta o ticket autônomo em execução a aberto com a instr
 });
 
 test("C9 reabre ticket falho, apaga o erro e grava a instrução quando informada", () => {
-  const falho = ticket(1, "desenho", "falhou", { erro: "testes reprovados" });
+  const falho = ticket(1, "desenho", "falhou", { erro: "testes reprovados", devolucoes: 2 });
   const ag = agregado("desenho", [falho]);
   assert.deepEqual(reabrirTicket(ag, { ticket: 1, instrucao: "use a lib X" }, auditor).tickets, [
     ticket(1, "desenho", "aberto", { instrucao: "use a lib X" }),

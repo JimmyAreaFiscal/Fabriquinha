@@ -450,7 +450,7 @@ test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks 
   c.banco.close();
 });
 
-test("a cadeia para no primeiro reprovado e devolve o ticket ao agente, sem commit; na terceira execução, falha", async () => {
+test("a cadeia para no primeiro reprovado e devolve o ticket ao agente, sem commit; na terceira reprovação seguida, falha", async () => {
   const c = await cenario();
   const reprovou = (tipo: string) =>
     `a evidência ${tipo} de T-3 reprovou (veja o que reprovou com fabriquinha evidencia ver T-3 ${tipo} e execute o ticket de novo)`;
@@ -469,9 +469,10 @@ test("a cadeia para no primeiro reprovado e devolve o ticket ao agente, sem comm
     await executarAutonomo(c.banco, 3, OPCOES);
     const { ticket } = c.estado(3);
     assert.equal(ticket?.status, "aberto");
+    assert.equal(ticket.devolucoes, execucao);
     assert.equal(
       ticket.instrucao,
-      `A Fabriquinha devolveu T-3 depois da execução ${String(execucao)} de 3: ${motivo}. ` +
+      `A Fabriquinha devolveu T-3 pela ${String(execucao)}ª vez de 2: ${motivo}. ` +
         "Corrija o código na worktree e termine de novo; não faça commit.",
     );
     semCommit(tipos);
@@ -500,7 +501,9 @@ test("a cadeia para no primeiro reprovado e devolve o ticket ao agente, sem comm
 
   issuesSonar = [];
   process.env.HOOK_REPROVA = "1";
-  await falhou(
+  // O C9 do Auditor zerou as devoluções: o hook que reprova devolve de novo.
+  await devolveu(
+    1,
     "o git commit saiu com código 1, com os hooks do repositório: lint: 2 erros em cache.ts " +
       "(corrija o que a saída aponta e execute o ticket de novo; a Fabriquinha nunca pula os hooks)",
     ["execucao_testes", "matriz_fitness", "relatorio_sonar"],

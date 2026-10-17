@@ -16,8 +16,8 @@ import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
 import { avisar, foiCancelada, iniciarNaSessaoPrincipal, rodarExecucao } from "./gerente.ts";
 import { montarPrompt } from "./prompt.ts";
 
-// ponytail: limite fixo; vira configuração do projeto se 3 tentativas não bastarem.
-const LIMITE_DE_EXECUCOES = 3;
+// ponytail: limite fixo; vira configuração do projeto se 2 devoluções seguidas não bastarem.
+const LIMITE_DE_DEVOLUCOES = 2;
 
 export interface OpcoesAutonoma {
   /** Tempo limite de tempo ativo (F4 §3, §6.7). */
@@ -88,15 +88,15 @@ export async function executarAutonomo(banco: DatabaseSync, ticket: Id, opcoes: 
     }
     avisar(execucao.sessaoPi, log);
   } catch (error_) {
-    // O código reprovou num gate: o agente corrige, até a execução LIMITE_DE_EXECUCOES; dali, o Auditor decide.
-    const execucoes = ag.execucoes.filter((e) => e.ticket === ticket).length;
-    if (!(error_ instanceof ErroDeReprovacao) || execucoes >= LIMITE_DE_EXECUCOES) {
+    // O código reprovou num gate: o agente corrige, até LIMITE_DE_DEVOLUCOES vezes seguidas; dali, o Auditor decide.
+    const devolucoes = (t.devolucoes ?? 0) + 1;
+    if (!(error_ instanceof ErroDeReprovacao) || devolucoes > LIMITE_DE_DEVOLUCOES) {
       falhar(mensagem(error_));
       return;
     }
     const instrucao =
-      `A Fabriquinha devolveu T-${String(ticket)} depois da execução ${String(execucoes)} de ` +
-      `${String(LIMITE_DE_EXECUCOES)}: ${error_.message}. Corrija o código na worktree e termine de novo; ` +
+      `A Fabriquinha devolveu T-${String(ticket)} pela ${String(devolucoes)}ª vez de ` +
+      `${String(LIMITE_DE_DEVOLUCOES)}: ${error_.message}. Corrija o código na worktree e termine de novo; ` +
       "não faça commit.";
     comIssue(banco, issue, "devolverTicket", FABRIQUINHA, (a) => devolverTicket(a, { ticket, instrucao }, FABRIQUINHA));
     anotar(log, `T-${String(ticket)} devolvido ao agente: ${error_.message}`);

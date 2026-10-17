@@ -376,4 +376,7 @@ export const MIGRACOES: readonly string[] = [
   INSERT INTO comando_novo SELECT * FROM comando;
   DROP TABLE comando;
   ALTER TABLE comando_novo RENAME TO comando;`,
+  // A reprovação de testes, fitness, SonarQube ou hooks devolve o ticket ao agente (devolverTicket) até um limite de
+  // devoluções seguidas, que o C9 do Auditor zera.
+  "ALTER TABLE ticket ADD COLUMN devolucoes INTEGER CHECK (devolucoes > 0);",
 ];

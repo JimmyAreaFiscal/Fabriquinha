@@ -229,7 +229,7 @@ export function devolverTicket(ag: Agregado, entrada: unknown, ator: Ator): Agre
     throw new ErroDeRegra(`${rotuloTicket(ticket)} está ${ticket.status}`, "só se devolve ticket autônomo em execução");
   }
   exigirSemExecucao(ag, ticket, "devolver");
-  return trocarTicket(ag, { ...ticket, status: "aberto", instrucao });
+  return trocarTicket(ag, { ...ticket, status: "aberto", instrucao, devolucoes: (ticket.devolucoes ?? 0) + 1 });
 }
 
 const EntradaReabertura = z.object({ ticket: Id, instrucao: Markdown.optional() });
@@ -242,7 +242,7 @@ export function reabrirTicket(ag: Agregado, entrada: unknown, ator: Ator): Agreg
   if (ticket.status !== "falhou") {
     throw new ErroDeRegra(`${rotuloTicket(ticket)} está ${ticket.status}`, "só se reabre ticket que falhou");
   }
-  const { erro: _apagado, ...resto } = ticket;
+  const { erro: _apagado, devolucoes: _zeradas, ...resto } = ticket;
   return trocarTicket(ag, { ...resto, status: "aberto", ...(instrucao !== undefined && { instrucao }) });
 }
 

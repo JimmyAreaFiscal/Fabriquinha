@@ -64,6 +64,8 @@ export const Ticket = z.object({
   origemTicket: Id.optional(),
   modelo: Modelo.optional(),
   instrucao: Markdown.optional(),
+  /** Quantas vezes seguidas a Fabriquinha devolveu o ticket ao agente por reprovação; o C9 do Auditor zera. */
+  devolucoes: z.number().int().positive().optional(),
   erro: z.string().max(2000).optional(),
   criadoEm: Instante,
   concluidoEm: Instante.optional(),
