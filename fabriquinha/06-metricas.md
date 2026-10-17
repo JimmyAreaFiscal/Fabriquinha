@@ -196,6 +196,7 @@ São lidos do JSON da evidência no TypeScript.
 | falhas | execuções com `resultado = falha` |
 | duração | soma de `terminadaEm − iniciadaEm`; nas etapas interativas inclui o tempo do Auditor |
 | reprovações | registro: C10 reprovado; desenho: C15 reprovado; revisao: decisão de revisão reprovada; encerramento: C16 reprovado |
+| iterações | ações do Auditor que chamam o agente, gravadas em `iteracao` (7): mensagem e resposta a diálogo só em sessão interativa (a que retoma a sessão parada inclusive), reabertura C9 sempre, com ou sem instrução. Não contam: decisão de gate (já está em reprovações), prompt inicial, consulta e C24. Sem histórico antes do deploy |
 
 ### 5.7 Visão por mês
 
@@ -217,7 +218,7 @@ const MetricasMes = z.object({
   notaPR: z.object({ media: z.number().min(1).max(5).nullable(), notas: Inteiro }),   // M7; null se não houve nota no mês
   etapas: z.array(Consumo.extend({                         // "Por etapa" da página de métricas
     etapa: Etapa,
-    execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, duracaoMs: Inteiro,
+    execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, iteracoes: Inteiro, duracaoMs: Inteiro,
   })),
 });
 ```
@@ -230,7 +231,7 @@ const MetricasMes = z.object({
 | `prs.abertos` | a primeira evidência `pr_aberto` da issue é do mês; as voltas seguintes atualizam o mesmo PR (F5, 5.1) |
 | `prs.mergeados` | a decisão `pr` aprovada é do mês |
 | `notaPR` | a decisão `pr` com nota é do mês; `media` é a média simples das notas do mês |
-| `etapas` | a execução começou no mês; `reprovacoes` segue a 5.6 pela data da decisão; `duracaoMs` soma as execuções terminadas, e o web divide por `execucoes` para a duração média |
+| `etapas` | a execução começou no mês; `reprovacoes` segue a 5.6 pela data da decisão; `iteracoes` entra no mês do `em` da iteração, na etapa do ticket (da sessão ou reaberto), e não depende de execução; `duracaoMs` soma as execuções terminadas, e o web divide por `execucoes` para a duração média |
 
 Issues arquivadas contam normalmente: arquivar só tira do board.
 O mês é o do fuso do serviço; os instantes continuam em UTC no banco (F2, 3.6).
@@ -247,12 +248,12 @@ A tabela "Por issue" da página de métricas: uma linha por issue com pelo menos
 const MetricasIssuePeriodo = z.object({
   issue: Id, projeto: Slug, titulo: Titulo.nullable(), fase: Fase,
   consumo: Consumo,                                        // só as execuções iniciadas no período
-  execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, duracaoMs: Inteiro,
+  execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, iteracoes: Inteiro, duracaoMs: Inteiro,
   notaPR: z.number().int().min(1).max(5).nullable(),       // a última nota de PR da issue, de qualquer data
 });
 ```
 
-`fase` e `notaPR` são o estado atual da issue; os demais números contam só o que caiu no período.
+`fase` e `notaPR` são o estado atual da issue; os demais números contam só o que caiu no período; `iteracoes` soma as de todas as etapas da issue com `em` no período.
 
 ## 6. Relatório de produtividade
 
