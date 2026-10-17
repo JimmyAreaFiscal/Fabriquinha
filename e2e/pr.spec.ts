@@ -294,6 +294,7 @@ test("com o PR aberto, Encerrar fica desabilitado e o servidor recusa; depois do
     /refs\/heads\/fabriquinha\/I-1/,
   );
   await expect(pagina.getByText("A limpeza falhou")).toHaveCount(0);
+  await expect(pagina.getByText("Avisos do encerramento")).toHaveCount(0);
 });
 
 test("encerrar com a limpeza da worktree falhando mostra o que falhou, com a saída do git", async ({
@@ -313,13 +314,14 @@ test("encerrar com a limpeza da worktree falhando mostra o que falhou, com a sa�
 
   await expect(gate).toBeHidden();
   expect(issue(fabriquinha.raiz)?.issue.fase).toBe("concluida");
-  const aviso = pagina.getByRole("status").filter({ hasText: "A limpeza falhou" });
-  await expect(aviso).toContainText("a issue foi encerrada, mas a limpeza da worktree falhou:");
+  const aviso = pagina.getByRole("status").filter({ hasText: "Avisos do encerramento" });
+  await expect(aviso).toContainText("a issue foi encerrada, com estes avisos:");
   await expect(aviso.locator(".comandos")).toContainText(`worktree remove --force ${worktree} falhou: fatal:`);
   expect(existsSync(worktree)).toBe(true);
 
   // Recarregada, a página volta ao comando a rodar, lido do disco.
   await pagina.reload();
-  await expect(aviso).toContainText("a issue foi encerrada, mas a worktree ficou no disco; rode:");
-  await expect(aviso.locator(".comandos")).not.toContainText("falhou");
+  const pendente = pagina.getByRole("status").filter({ hasText: "A limpeza falhou" });
+  await expect(pendente).toContainText("a issue foi encerrada, mas a worktree ficou no disco; rode:");
+  await expect(pendente.locator(".comandos")).not.toContainText("falhou");
 });

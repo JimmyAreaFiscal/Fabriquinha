@@ -68,8 +68,9 @@ stateDiagram-v2
 1. Se a worktree existe e está preparada, devolve o caminho.
 2. Se não existe e a branch também não existe: `git fetch origin <branchBase>` e `git worktree add -b fabriquinha/I-<n> <caminho> origin/<branchBase>`.
 3. Se não existe, mas a branch existe (alguém apagou a pasta): `git worktree prune` e `git worktree add <caminho> fabriquinha/I-<n>`.
-4. Roda a preparação (3.2) sempre que a worktree acabou de ser criada ou a última preparação falhou.
-5. Se buscou a base no passo 2, chama `varrerBase` (F6, 4.4); falha só vai para o log.
+4. Só no início do desenho (`atualizarBase`), com a branch já existente: `git fetch origin <branchBase>` (quando falha, o ticket falha e o `HEAD` não muda) e `git merge --no-edit origin/<branchBase>` na worktree. Se o merge falha, roda `git merge --abort` e o ticket falha com o conflito e a pasta a resolver; o commit próprio da issue fica. As retomadas do desenho e as outras etapas não atualizam.
+5. Roda a preparação (3.2) sempre que a worktree acabou de ser criada ou a última preparação falhou.
+6. Se buscou a base no passo 2 ou 4, chama `varrerBase` (F6, 4.4); falha só vai para o log.
 
 Se a branch `fabriquinha/I-<n>` já existe sem pertencer à issue (sobra de outra instalação), o F5 recusa e pede ao Auditor para removê-la; nunca sobrescreve.
 
@@ -79,6 +80,7 @@ Se a branch `fabriquinha/I-<n>` já existe sem pertencer à issue (sobra de outr
 - Limite de 30 minutos por comando, como os coletores do F3.
 - O log vai para `<raiz>/execucoes/E-<n>/log` da execução que pediu a worktree.
 - A preparação precisa poder rodar de novo sem estrago (`npm ci`, `uv sync`), porque roda outra vez depois de uma falha.
+- Ela roda de novo quando o merge do passo 4 de 3.1 muda o `HEAD`, porque a base pode ter mudado as dependências.
 - Ela não roda de novo quando o agente muda dependências no meio da issue; nesse caso, o próprio agente instala o que adicionou.
 
 ### 3.3 Descarte
@@ -202,6 +204,8 @@ git -C <repo> worktree prune
 Evidências, sessões do pi e logs ficam: são o histórico da issue.
 Uma falha na limpeza não desfaz a aprovação; vira aviso no web com o comando que falhou.
 
+Na mesma fila do projeto, depois do `prune`, a `main` local (a `branchBase`) avança até `origin/<base>` só por fast-forward, sem stash, reset nem merge commit. Sem `refs/heads/<base>` local, não há o que fazer. Com a base em checkout (`git worktree list --porcelain`), roda `git merge --ff-only` nessa pasta; sem checkout, confere `git merge-base --is-ancestor` e roda `git update-ref` com o sha antigo. Quando não dá (a base tem commits que `origin/<base>` não tem, ou o merge colide com alterações locais), o encerramento conclui e a resposta traz o aviso "a <base> local não foi atualizada com origin/<base>", com o motivo e a saída do git. O aviso fica só na resposta.
+
 ## 6. Concorrência
 
 Todos os comandos git de um mesmo repositório passam por uma fila em memória por projeto, no próprio serviço.
@@ -260,7 +264,6 @@ O PR não tem tabela: número, URL e estado ficam na evidência `pr_aberto` (F3)
 ## 10. Fora de escopo
 
 - Hospedagens além de GitHub e Azure DevOps.
-- Atualizar a branch da issue com a base automaticamente.
 - Anexar vídeos e HTML ao PR (F3, 4.7).
 
 ## 11. Heatmap de alterações

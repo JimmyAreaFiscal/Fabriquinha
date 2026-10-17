@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
@@ -740,7 +740,23 @@ test("proposta: agente ocupado recusa antes de gravar, e proposta inexistente é
 test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o motivo e abre o registro da nova", async () => {
   const c = cenario();
   const opcoes = { ociosidadeMin: 1 };
-  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  const { issue } = registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  // A worktree já criada, com origin/main adiante: a retomada do desenho não a atualiza.
+  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
+  const worktree = await garantirWorktree(
+    c.raiz,
+    { nome: "loja", repo, branchBase: "main", preparacao: [] },
+    issue,
+    join(c.raiz, "log"),
+    () => Promise.resolve(),
+  );
+  const antes = String(git(worktree, "rev-parse", "HEAD"));
+  const outro = join(dirname(repo), "outro");
+  git(base, "clone", "-q", "-b", "main", String(git(repo, "remote", "get-url", "origin")).trim(), outro);
+  writeFileSync(join(outro, "NOVO"), "da base\n");
+  git(outro, "add", "NOVO");
+  git(outro, "commit", "-q", "-m", "da base");
+  git(outro, "push", "-q", "origin", "main");
   c.banco.exec(`UPDATE issue SET fase = 'desenho', titulo = 'Busca lenta', tipo = 'funcionalidade';
     UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
@@ -793,6 +809,7 @@ test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o mot
     () => c.comandos().some((m) => String(m.message).endsWith(`O Auditor reprovou o desenho. Motivo: ${motivo}\n`)),
     "o motivo chegar à IA do desenho",
   );
+  assert.equal(String(git(worktree, "rev-parse", "HEAD")).trim(), antes.trim(), "a retomada não atualiza a worktree");
   await ate(async () => (await estadoDe(c, SESSAO)) === "aguardando_humano: conversa", "a IA do desenho responder");
   await ate(
     async () => (await estadoDe(c, c.execucoes()[2]?.sessao_pi ?? "")) === "aguardando_humano: conversa",
@@ -1131,8 +1148,18 @@ test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove
   await assert.rejects(encerrarIssue(c.banco, 1, 5), ErroExterno);
   assert.equal(situacao(consulta)?.ocupado, false, "a leitura do PR que falhou não para a consulta");
   prNoGitHub("MERGED");
+  // O merge do PR avançou origin/main; a main do repositório, em checkout e limpa, o acompanha no encerramento.
+  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
+  const outro = join(dirname(repo), "outro");
+  git(base, "clone", "-q", "-b", "main", String(git(repo, "remote", "get-url", "origin")).trim(), outro);
+  writeFileSync(join(outro, "MERGE"), "do PR\n");
+  git(outro, "add", "MERGE");
+  git(outro, "commit", "-q", "-m", "merge do PR");
+  git(outro, "push", "-q", "origin", "main");
+  const mergeado = String(git(outro, "rev-parse", "HEAD")).trim();
 
   assert.deepEqual(await encerrarIssue(c.banco, 1, 5), []);
+  assert.equal(String(git(repo, "rev-parse", "main")).trim(), mergeado, "a main local avançou até origin/main");
   assert.equal(situacao(consulta), undefined, "a consulta parou antes da limpeza");
   assert.equal(c.execucoes().find((e) => e.sessao_pi === consulta)?.resultado, "sucesso");
   const ag = agregado(c.banco, 1);
@@ -1144,7 +1171,6 @@ test("gate do PR: encerrar com o PR mergeado conclui a issue com a nota e remove
   );
   assert.equal(await estadoDe(c, SESSAO), "terminada");
   assert.equal(existsSync(worktree), false);
-  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
   assert.equal(git(repo, "branch", "--list", "fabriquinha/I-1").toString().trim(), "fabriquinha/I-1");
   assert.match(
     git(repo, "ls-remote", "--heads", "origin", "fabriquinha/I-1").toString(),

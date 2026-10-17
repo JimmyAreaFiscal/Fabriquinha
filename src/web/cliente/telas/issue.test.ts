@@ -379,9 +379,10 @@ test("Ação do Auditor: Executar agora habilitado, desabilitado com o motivo da
     { ...p, limpeza: ["git -C /repo worktree remove --force /w/I-1"] },
     { modelos: [], agora: new Date(), avisos: ["git -C /repo worktree remove --force /w/I-1 falhou: fatal: <x>"] },
   );
+  assert.match(avisos, /<span class="rotulo">Avisos do encerramento<\/span>/);
   assert.match(
     avisos,
-    /<span class="muted">a issue foi encerrada, mas a limpeza da worktree falhou:<\/span><\/div>\s*<pre class="comandos">git -C \/repo worktree remove --force \/w\/I-1 falhou: fatal: &#60;x&#62;<\/pre>/,
+    /<span class="muted">a issue foi encerrada, com estes avisos:<\/span><\/div>\s*<pre class="comandos">git -C \/repo worktree remove --force \/w\/I-1 falhou: fatal: &#60;x&#62;<\/pre>/,
   );
 
   // O ponto de extensão dos painéis de gate: um painel novo entra na mesma coluna.

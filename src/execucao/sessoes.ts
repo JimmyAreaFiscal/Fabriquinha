@@ -280,9 +280,15 @@ export async function abrirChat(banco: DatabaseSync, sessao: string): Promise<Ch
  * para. A primeira mensagem de uma sessão leva o contexto da etapa (F4 §6.3); a retomada leva só a mensagem.
  * Devolve a sessão.
  */
-export function iniciarInterativa(banco: DatabaseSync, ticket: Id, texto: string, opcoes: OpcoesInterativa): string {
+export function iniciarInterativa(
+  banco: DatabaseSync,
+  ticket: Id,
+  texto: string,
+  opcoes: OpcoesInterativa,
+  atualizarBase = false,
+): string {
   const { ag, execucao } = iniciarNaSessaoPrincipal(banco, issueDoTicket(banco, ticket), ticket, "interativo");
-  return acompanharInterativa(banco, ag, execucao, texto, opcoes);
+  return acompanharInterativa(banco, ag, execucao, texto, opcoes, atualizarBase);
 }
 
 /** A execução interativa já iniciada (C5), em segundo plano, com `texto` como mensagem. Devolve a sessão. */
@@ -292,9 +298,11 @@ function acompanharInterativa(
   execucao: Execucao,
   texto: string,
   opcoes: OpcoesInterativa,
+  atualizarBase = false,
 ): string {
   const raiz = raizDo(banco);
   return acompanhar(banco, ag, execucao, opcoes, {
+    atualizarBase,
     // Dentro da execução: sessão com dois arquivos (F6 §3.1) vira falha dela, não execução presa em andamento.
     prompt: (c) => {
       if (arquivoDaSessao(raiz, execucao.sessaoPi) !== undefined) return texto;
@@ -366,7 +374,7 @@ function acompanhar(
   ag: Agregado,
   execucao: Execucao,
   opcoes: OpcoesInterativa,
-  abertura: Pick<Rodada, "prompt" | "fork">,
+  abertura: Pick<Rodada, "prompt" | "fork" | "atualizarBase">,
 ): string {
   const issue = ag.issue.id;
   const log = logDaExecucao(raizDo(banco), execucao.id);
@@ -583,7 +591,7 @@ export async function decidirGate(
  */
 export function iniciarDesenho(banco: DatabaseSync, ticket: Id, opcoes: OpcoesInterativa): string {
   const i = `I-${String(issueDoTicket(banco, ticket))}`;
-  return iniciarInterativa(banco, ticket, `Vamos desenhar a solução da issue ${i}.`, opcoes);
+  return iniciarInterativa(banco, ticket, `Vamos desenhar a solução da issue ${i}.`, opcoes, true);
 }
 
 /**
