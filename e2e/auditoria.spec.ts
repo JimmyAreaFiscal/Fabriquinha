@@ -1,6 +1,6 @@
 // Auditoria do Histórico (F4; F7 §4.4) com o pi falso: o botão Auditar e o mês no cabeçalho, o chat da auditoria com a
 // chamada a `subagent` e as seções, a pergunta de acompanhamento, o mês sem sessões e o pi que não sobe.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, projeto, test } from "./apoio.ts";
 
@@ -129,6 +129,26 @@ test("Auditar sobe o pi com o modelo da Auditoria configurado; sem ele, com o pa
   await expect(barra).toContainText("anthropic / claude-sonnet-5-5");
 });
 
+test("Auditar com pedido põe o texto no prompt.md e o balão na conversa, também depois de recarregar", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semear(fabriquinha.raiz);
+  const pedido = "Verifique se os agentes repetem perguntas que o prompt já responde";
+  await pagina.goto(`${fabriquinha.base}/history`);
+  await pagina.getByLabel("Pedido").fill(pedido);
+  await pagina.getByRole("button", { name: "Auditar" }).click();
+  await expect(pagina).toHaveURL(/\/audits\/[0-9a-f-]{36}$/);
+
+  const sessao = /\/audits\/([0-9a-f-]{36})$/.exec(pagina.url())?.[1] ?? "";
+  expect(readFileSync(join(fabriquinha.raiz, "auditorias", sessao, "prompt.md"), "utf8")).toContain(pedido);
+  const conversa = pagina.locator("[data-conversa]");
+  await expect(conversa.locator(".msg.voce").first()).toContainText(pedido);
+  await pagina.reload();
+  await expect(conversa.locator(".sistema").first()).toHaveText(`Auditoria de ${POR_EXTENSO} iniciada`);
+  await expect(conversa.locator(".msg.voce").first()).toContainText(pedido);
+});
+
 test("um mês sem sessões terminadas deixa a tela no Histórico com o aviso", async ({ pagina, fabriquinha }) => {
   semear(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/history`);
@@ -139,6 +159,19 @@ test("um mês sem sessões terminadas deixa a tela no Histórico com o aviso", a
   await expect(pagina.locator("[data-aviso]")).toHaveText(`Nenhuma sessão terminada em ${rotulo} para auditar.`);
   await expect(pagina).toHaveURL(/\/history$/);
   await expect(pagina.getByRole("button", { name: "Auditar" })).toBeEnabled();
+});
+
+test("um mês vazio com pedido avisa, mantém o pedido no campo e não cria pasta", async ({ pagina, fabriquinha }) => {
+  semear(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/history`);
+  const rotulo = String(await pagina.getByLabel("Mês").locator("option").nth(1).textContent());
+  await pagina.getByLabel("Mês").selectOption({ index: 1 });
+  await pagina.getByLabel("Pedido").fill("Explore a métrica de custos");
+  await pagina.getByRole("button", { name: "Auditar" }).click();
+  await expect(pagina.locator("[data-aviso]")).toHaveText(`Nenhuma sessão terminada em ${rotulo} para auditar.`);
+  await expect(pagina.getByLabel("Pedido")).toHaveValue("Explore a métrica de custos");
+  const pasta = join(fabriquinha.raiz, "auditorias");
+  expect(existsSync(pasta) ? readdirSync(pasta) : []).toEqual([]);
 });
 
 test.describe("com o pi fora do ar", () => {

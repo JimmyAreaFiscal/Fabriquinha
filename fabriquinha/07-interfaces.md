@@ -330,6 +330,7 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 **Histórico** (`/history`) — dias e prévia
 
 1. Filtros: projeto, issue e etapa, com a contagem de sessões.
+   Ao lado, o mês e **Auditar**; abaixo da barra, o campo **Pedido** (opcional, 2 linhas, até 4000 caracteres): o que a auditoria deve investigar. Vai com o mês em `POST /api/auditorias` e abre a conversa da auditoria como balão do Auditor, abaixo da linha «Auditoria de … iniciada». Se a auditoria não abre (mês sem sessões), o pedido fica no campo.
 2. Lista das sessões `terminada` agrupada por dia (Hoje, Ontem, data), da mais recente para a mais antiga.
    Cada linha: hora, `I-n`, `T-n`, título com etapa e modo, resultado (concluída, falha, abortada, cancelada) e custo.
 3. Selecionar uma linha mostra ao lado, sem sair da página: issue, ticket e título, projeto, etapa e modo, resultado, quando terminou e quanto durou, custo e modelo, número de mensagens e o fim da conversa.
