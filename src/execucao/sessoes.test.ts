@@ -28,7 +28,7 @@ import { abrir } from "../persistencia/banco.ts";
 import { agregado, comIssue, propostasDaIssue, proporIssue, registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { caminhoDaWorktree, garantirWorktree } from "../repositorio/worktree.ts";
-import { abortar, atividadeDo, type Dialogo, encerrar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
+import { abortar, atividadeDo, type Dialogo, encerrar, type Situacao, situacao } from "./gerente.ts";
 import { type EventoPi, PACOTE } from "./pi.ts";
 import {
   abrirChat,
@@ -42,7 +42,9 @@ import {
   estadoDaSessao,
   infoDaSessao,
   pedirMudancas,
+  reabrir,
   registrarNecessidade,
+  responderNaSessao,
   sessoes,
 } from "./sessoes.ts";
 
@@ -499,6 +501,13 @@ async function ate(condicao: () => boolean | Promise<boolean>, oQue: string): Pr
   }
 }
 
+/** As iterações humanas gravadas (F6 §7), como [ticket, tipo]. */
+const iteracoes = (c: Cenario) =>
+  c.banco
+    .prepare("SELECT ticket, tipo FROM iteracao ORDER BY id")
+    .all()
+    .map((l) => [l.ticket, l.tipo]);
+
 const estadoDe = async (c: Cenario, sessao: string) => {
   const info = await infoDaSessao(c.banco, sessao);
   return info.motivo ? `${info.estado}: ${info.motivo}` : info.estado;
@@ -561,6 +570,7 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; o envio
   const cancelar = chat.assinar((e) => eventos.push(e));
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: gate_registro", "o gate do registro");
 
+  assert.deepEqual(iteracoes(c), [], "o prompt inicial do registro não conta");
   const [inicio] = c.registro();
   assert.equal(inicio?.cwd, caminhoDaWorktree(c.raiz, "loja", 1));
   assert.deepEqual((inicio.argv as string[]).slice(4, 6), ["--session-id", sessao]);
@@ -602,10 +612,12 @@ test("registro: C1, worktree, sessão interativa com a mensagem inicial; o envio
   assert.equal(agregado(c.banco, 1)?.decisoes.at(-1)?.motivo, "Falta o passo a passo; pergunte");
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: conversa", "a pergunta do agente");
   assert.equal(c.comandos().at(-1)?.message, "O Auditor devolveu o registro. Motivo: Falta o passo a passo; pergunte");
+  assert.deepEqual(iteracoes(c), [], "a devolução do gate não conta");
   assert.equal(c.registro().filter((r) => r.evento === "inicio").length, 2);
 
   // O Auditor responde; o agente edita a issue, sem evidência nova, e envia de novo.
   await enviar(c.banco, sessao, "Buscar com mil itens; edite o título.", "prompt", opcoes);
+  assert.deepEqual(iteracoes(c), [[1, "mensagem"]]);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: gate_registro", "o gate de novo");
   assert.equal(agregado(c.banco, 1)?.issue.titulo, "Busca lenta com mil itens");
   assert.equal(agregado(c.banco, 1)?.evidencias.length, 2, "nenhuma evidência nova");
@@ -856,6 +868,7 @@ test("ociosidade: o pi para com C6 sucesso, a sessão segue em conversa, e a pr�
   );
 
   await enviar(c.banco, sessao, "voltei", "prompt", opcoes);
+  assert.deepEqual(iteracoes(c), [[1, "mensagem"]], "a retomada da sessão parada também conta");
   await ate(() => c.execucoes()[1]?.resultado === "sucesso", "a nova parada por ociosidade");
   assert.deepEqual(
     c.execucoes().map((e) => [e.sessao_pi, e.modo]),
@@ -904,7 +917,8 @@ test("diálogo pendente: a sessão interativa espera o Auditor sem parar por oci
   );
   await dormir(1500); // mais que a ociosidade de 0,6 s
   assert.equal(c.execucoes()[0]?.resultado, "em_andamento");
-  responderDialogo(info.execucao, "e1", { value: "porque sim" });
+  await responderNaSessao(c.banco, sessao, "e1", { value: "porque sim" });
+  assert.deepEqual(iteracoes(c), [[1, "dialogo"]]);
   assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
   await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
   assert.deepEqual(c.comandos().at(-1), { type: "extension_ui_response", id: "e1", value: "porque sim" });
@@ -923,6 +937,8 @@ test("diálogo select: o gerente marca o da ferramenta perguntar em execução e
     ["d3", undefined, undefined, undefined, undefined], // depois do tool_execution_end
     ["d4", true, false, [], undefined], // sem opções nem details
   ]);
+  await responderNaSessao(c.banco, sessao, "d1", { cancelled: true });
+  assert.deepEqual(iteracoes(c), [[1, "dialogo"]], "a resposta cancelada também conta");
   await pararTudo(c);
   c.banco.close();
 });
@@ -971,6 +987,7 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
   );
 
   await enviar(c.banco, sessao, "faça só a busca", "follow_up", opcoes);
+  assert.deepEqual(iteracoes(c), [[1, "mensagem"]], "o follow_up na interativa conta");
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: dialogo", "o diálogo");
   const { execucao } = await infoDaSessao(c.banco, sessao);
   abortar(execucao);
@@ -983,7 +1000,14 @@ test("rodando: steer e follow_up conforme o estado; abortar cancela o diálogo p
   ]);
   await enviar(c.banco, sessao, "agora sim", "prompt", opcoes);
   assert.equal(await estadoDe(c, sessao), "rodando");
+  // O steer numa sessão autônoma (aqui, a execução trocada de modo no banco) não conta.
+  c.banco.exec("UPDATE execucao SET modo = 'autonomo'");
   await enviar(c.banco, sessao, "mudei de ideia", "steer", opcoes);
+  c.banco.exec("UPDATE execucao SET modo = 'interativo'");
+  assert.deepEqual(iteracoes(c), [
+    [1, "mensagem"],
+    [1, "mensagem"],
+  ]);
   await ate(async () => (await estadoDe(c, sessao)) === "aguardando_humano: dialogo", "o diálogo com tempo limite");
   const [c3] = (await infoDaSessao(c.banco, sessao)).dialogos;
   assert.equal(Date.parse(String(c3?.expiraEm)) - Date.parse(String(c3?.em)), 60_000);
@@ -1043,6 +1067,27 @@ test("autônoma sem pi: steer explica se o ticket espera o agendador ou a coleta
     enviar(c.banco, SESSAO, "rápido", "steer", opcoes),
     rejeitaCom("o agente de T-2 já terminou, e a Fabriquinha confere as evidências (espere o resultado)"),
   );
+  c.banco.close();
+});
+
+test("reabrir: grava a reabertura (C9) no ticket reaberto, com ou sem instrução", () => {
+  const c = cenario();
+  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  c.banco.exec(`UPDATE issue SET fase = 'desenvolvimento', titulo = 'Busca lenta', tipo = 'problema';
+    UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
+    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, erro, criado_em)
+      VALUES (2, 1, 'desenvolvimento', 'Buscar', 'falhou', 'fabriquinha', 'deu ruim', '${T1}');
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
+      VALUES (1, 2, 'autonomo', '${SESSAO}', 'falha', 'deu ruim', '${T0}', '${T1}');`);
+  reabrir(c.banco, 2, "use o índice");
+  assert.deepEqual(iteracoes(c), [[2, "reabertura"]]);
+  assert.throws(() => {
+    reabrir(c.banco, 2);
+  }, ErroDeRegra);
+  assert.deepEqual(iteracoes(c), [[2, "reabertura"]], "a reabertura recusada não conta");
+  c.banco.exec("UPDATE ticket SET status = 'falhou', erro = 'x' WHERE id = 2");
+  reabrir(c.banco, 2);
+  assert.equal(iteracoes(c).length, 2);
   c.banco.close();
 });
 
@@ -1336,6 +1381,7 @@ test("consulta: copia a sessão principal, sem ferramentas de escrita, sem promp
   await enviar(c.banco, consulta, "Por que esse título? Só pergunte.", "prompt", opcoes);
   await ate(() => situacao(consulta)?.ocupado === false, "a resposta");
   assert.deepEqual(c.comandos().at(-1), { type: "prompt", message: "Por que esse título? Só pergunte." });
+  assert.deepEqual(iteracoes(c), [], "a mensagem da consulta não conta");
   assert.equal(readFileSync(arquivoFalso(c, principal), "utf8"), original, "a principal não recebe a consulta");
   const ag = agregado(c.banco, 1);
   assert.deepEqual([ag?.issue.fase, ag?.tickets[0]?.status], ["desenho", "concluido"], "nada muda no ticket");

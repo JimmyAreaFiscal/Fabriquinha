@@ -362,6 +362,7 @@ test("diálogos: select, confirm, input e editor respondidos ou cancelados no fo
     ["input", { cancelado: true }, '{"cancelled":true}'],
     ["editor", { valor: "linha 1" }, '{"value":"linha 1"}'],
   ];
+  let iteracoes = 0;
   for (const [metodo, corpo, eco] of casos) {
     await postar(`/api/sessoes/${sessao}/mensagens`, { texto: `pergunte ${metodo}`, modo: "prompt" });
     await esperarEstado(sessao, "aguardando_humano: dialogo");
@@ -370,6 +371,12 @@ test("diálogos: select, confirm, input e editor respondidos ou cancelados no fo
     assert.equal((await responder(`d-${metodo}`, { valor: 1 })).status, 422);
     assert.equal((await responder(`d-${metodo}`, { valor: "a", cancelado: true })).status, 422);
     assert.equal((await responder(`d-${metodo}`, corpo)).status, 204);
+    iteracoes += 1;
+    assert.equal(
+      servico.banco.prepare("SELECT count(*) AS n FROM iteracao WHERE tipo = 'dialogo'").get()?.n,
+      iteracoes,
+      "a resposta pela rota grava a iteração",
+    );
     await esperarEstado(sessao, "aguardando_humano: conversa");
     const { conversa } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
     assert.equal(textos(conversa).at(-1), `assistant: Resposta do diálogo: ${eco}`);

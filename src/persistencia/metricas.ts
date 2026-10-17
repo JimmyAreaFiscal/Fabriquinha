@@ -37,6 +37,13 @@ export const usoDaIssue = (banco: DatabaseSync, issue: Id): UsoPorModelo[] =>
     )
     .all(issue) as unknown as UsoPorModelo[];
 
+export type TipoDeIteracao = "mensagem" | "dialogo" | "reabertura";
+
+/** F6 §8: grava uma iteração humana do ticket, depois que a ação deu certo. */
+export const registrarIteracao = (banco: DatabaseSync, ticket: Id, tipo: TipoDeIteracao): void => {
+  banco.prepare("INSERT INTO iteracao (ticket, tipo, em) VALUES (?, ?, ?)").run(ticket, tipo, new Date().toISOString());
+};
+
 /** O custo de cada execução da issue que tem uso, pelo ID da execução (F7 §4.4, execuções de um ticket). */
 export const custoPorExecucao = (banco: DatabaseSync, issue: Id): Record<string, number> =>
   Object.fromEntries(

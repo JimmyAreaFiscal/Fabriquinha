@@ -377,4 +377,11 @@ export const MIGRACOES: readonly string[] = [
   DROP TABLE comando;
   ALTER TABLE comando_novo RENAME TO comando;`,
   `ALTER TABLE projeto ADD COLUMN efforts TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(efforts));`,
+  // Iterações humanas (F6 §7): cada mensagem do Auditor ao agente, resposta a diálogo ou reabertura C9. Sem backfill.
+  `CREATE TABLE iteracao (
+    id     INTEGER PRIMARY KEY,
+    ticket INTEGER NOT NULL REFERENCES ticket(id),
+    tipo   TEXT NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),
+    em     TEXT NOT NULL
+  );`,
 ];

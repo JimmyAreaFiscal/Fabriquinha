@@ -375,10 +375,19 @@ CREATE TABLE comando (
   fase  TEXT    NOT NULL CHECK (fase IN (<Fase>)),            -- fase da issue antes do comando
   em    TEXT    NOT NULL
 );
+
+-- Gravada pelo F4 (registrarIteracao) a cada ação do Auditor que chama o agente: iteração humana.
+CREATE TABLE iteracao (
+  id     INTEGER PRIMARY KEY,
+  ticket INTEGER NOT NULL REFERENCES ticket(id),            -- ticket da sessão ou o reaberto
+  tipo   TEXT    NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),
+  em     TEXT    NOT NULL
+);
 ```
 
 Todas entram no arquivo de schema do F2 (F2, 3.7).
 `retrabalho` só aponta para tickets de desenvolvimento com commit, que já estão concluídos e nunca são apagados.
+`iteracao` não tem backfill: o que veio antes dela fica com 0. O tipo fica gravado, mas as telas mostram o total.
 Refazer o retrabalho de um ticket (4.2) apaga e regrava as linhas em que ele é o `ticket` alterador; as linhas humanas só mudam pela varredura (4.4).
 
 ## 8. Interface do módulo
@@ -387,6 +396,7 @@ Refazer o retrabalho de um ticket (4.2) apaga e regrava as linhas em que ele é 
 |---|---|
 | `coletarUso(banco, execucao)` | F4, depois de C6, inclusive para órfãs |
 | `registrarRetrabalho(banco, ticket, sha)` | F5, depois do commit de cada ticket de desenvolvimento |
+| `registrarIteracao(banco, ticket, tipo)` | F4, depois que a ação do Auditor deu certo: mensagem à sessão interativa (inclusive a que a retoma), resposta a diálogo dela e reabertura C9 |
 | `varrerBase(banco, projeto)` | F7, logo depois do cadastro do projeto; F5, depois de buscar a base; F4, uma vez por dia por projeto |
 | `metricasDaIssue(banco, issue) → MetricasIssue` | `relatorio` |
 | `metricasPorMes(banco, { projeto?, de, ate }) → MetricasMes[]` | F7 (web): um item por mês, de `de` até `ate` |
@@ -398,7 +408,7 @@ Refazer o retrabalho de um ticket (4.2) apaga e regrava as linhas em que ele é 
 | Módulo | Pedido |
 |---|---|
 | F2 | Tabela `comando` e a gravação em `comIssue`, que passa a receber o nome do comando e o ator. |
-| F4 | Chamar `coletarUso` depois de cada C6; chamar `varrerBase` uma vez por dia por projeto. |
+| F4 | Chamar `coletarUso` depois de cada C6; chamar `varrerBase` uma vez por dia por projeto; chamar `registrarIteracao` em `enviar` e `responderNaSessao` (só em sessão interativa) e em `reabrir`. Não gravam: steer e follow_up em sessão autônoma, consulta, decisões de gate, C24 e o prompt inicial. |
 | F5 | Tabela de commits (sha → ticket) e de arquivos por commit com linhas adicionadas e removidas; chamar `registrarRetrabalho` depois de cada commit de ticket e `varrerBase` depois de buscar a base. |
 
 ## 10. Verificação
