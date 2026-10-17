@@ -12,7 +12,7 @@ import { after, beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ZodError } from "zod";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { abrir } from "../persistencia/banco.ts";
+import { abrir, raizDo } from "../persistencia/banco.ts";
 import { agregado } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import {
@@ -24,6 +24,7 @@ import {
   ticketsAutonomosEmExecucao,
 } from "../persistencia/servico.ts";
 import { criarUsuarioSimulado } from "../persistencia/simulacao.ts";
+import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-servico-"));
@@ -400,6 +401,41 @@ test("agendador e Executar agora abrem o desenho como sessão interativa, que es
   await s.executarAgora(3);
   assert.equal(s.banco.prepare("SELECT modo FROM execucao WHERE ticket = 3").get()?.modo, "interativo");
   await ate(() => execucoesEmAndamento(s.banco).length === 0);
+  // O desenho de uma issue com worktree já criada atualiza a worktree com origin/main (F5 §3.1).
+  const dir = mkdtempSync(join(base, "repo-"));
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
+  const commitar = (repo: string, arquivo: string) => {
+    writeFileSync(join(repo, arquivo), arquivo);
+    git(repo, "add", arquivo);
+    git(repo, "-c", "user.name=A", "-c", "user.email=a@exemplo.com", "commit", "-q", "-m", arquivo);
+  };
+  git(dir, "init", "-q", "--bare", "origin.git");
+  git(dir, "clone", "-q", "origin.git", "w");
+  const w = join(dir, "w");
+  git(w, "checkout", "-q", "-b", "main");
+  commitar(w, "inicio");
+  git(w, "push", "-q", "origin", "main");
+  projeto(s.banco, "w", w);
+  s.banco
+    .prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('w', ?, ?)")
+    .run("a".repeat(40), new Date().toISOString());
+  s.banco
+    .prepare(
+      "INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (4, 'w', 'I-4', 'problema', 'desenho', ?)",
+    )
+    .run(AGORA);
+  ticket(s.banco, 4, 4, "desenho");
+  const worktree = caminhoDaWorktree(raizDo(s.banco), "w", 4);
+  git(w, "config", "branch.fabriquinha/I-4.fabriquinha", `${worktree} ${AGORA}`);
+  git(w, "worktree", "add", "-q", "-b", "fabriquinha/I-4", worktree, "main");
+  commitar(w, "da-base");
+  git(w, "push", "-q", "origin", "main");
+  process.env.FABRIQUINHA_PI = "false"; // sem pi: a execução termina logo depois da worktree
+  await s.executarAgora(4);
+  await ate(() => execucoesEmAndamento(s.banco).length === 0);
+  delete process.env.FABRIQUINHA_PI;
+  assert.equal(git(worktree, "rev-list", "--count", "HEAD..origin/main"), "0");
+  assert.equal(existsSync(join(worktree, "da-base")), true);
   await s.parar();
 });
 

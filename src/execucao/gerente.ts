@@ -246,6 +246,8 @@ export interface Rodada extends Pick<Lancamento, "fork"> {
    * prompt, o pi sobe ocioso, à espera da primeira mensagem do Auditor: é como a consulta abre (F4 §6.5).
    */
   prompt(c: { projeto: Projeto; worktree: string; saida: string }): string | undefined | Promise<string | undefined>;
+  /** Só o início do desenho: a worktree já criada recebe `origin/<base>` por merge (F5 §3.1). */
+  atualizarBase?: boolean;
 }
 
 /**
@@ -277,7 +279,14 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
     worktree =
       execucao.modo === "consulta" && r.ag.issue.fase === "concluida"
         ? projeto.repo
-        : await garantirWorktree(raiz, projeto, r.ag.issue, log, () => varrerBase(r.banco, projeto.nome));
+        : await garantirWorktree(
+            raiz,
+            projeto,
+            r.ag.issue,
+            log,
+            () => varrerBase(r.banco, projeto.nome),
+            r.atualizarBase,
+          );
     const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
     if (prompt !== undefined) writeFileSync(join(dir, "prompt.md"), prompt);
     if (canceladas.has(execucao.id)) return { worktree, falha: CANCELADA };

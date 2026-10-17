@@ -702,7 +702,23 @@ test("proposta: agente ocupado recusa antes de gravar, e proposta inexistente é
 test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o motivo e abre o registro da nova", async () => {
   const c = cenario();
   const opcoes = { ociosidadeMin: 1 };
-  registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  const { issue } = registrarIssue(c.banco, { projeto: "loja" }, AUDITOR);
+  // A worktree já criada, com origin/main adiante: a retomada do desenho não a atualiza.
+  const repo = String(c.banco.prepare("SELECT repo FROM projeto").get()?.repo);
+  const worktree = await garantirWorktree(
+    c.raiz,
+    { nome: "loja", repo, branchBase: "main", preparacao: [] },
+    issue,
+    join(c.raiz, "log"),
+    () => Promise.resolve(),
+  );
+  const antes = String(git(worktree, "rev-parse", "HEAD"));
+  const outro = join(dirname(repo), "outro");
+  git(base, "clone", "-q", "-b", "main", String(git(repo, "remote", "get-url", "origin")).trim(), outro);
+  writeFileSync(join(outro, "NOVO"), "da base\n");
+  git(outro, "add", "NOVO");
+  git(outro, "commit", "-q", "-m", "da base");
+  git(outro, "push", "-q", "origin", "main");
   c.banco.exec(`UPDATE issue SET fase = 'desenho', titulo = 'Busca lenta', tipo = 'funcionalidade';
     UPDATE ticket SET status = 'concluido', concluido_em = '${T1}';
     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
@@ -755,6 +771,7 @@ test("proposta no desenho: aceitar reprova o desenho, retoma a IA dele com o mot
     () => c.comandos().some((m) => String(m.message).endsWith(`O Auditor reprovou o desenho. Motivo: ${motivo}\n`)),
     "o motivo chegar à IA do desenho",
   );
+  assert.equal(String(git(worktree, "rev-parse", "HEAD")).trim(), antes.trim(), "a retomada não atualiza a worktree");
   await ate(async () => (await estadoDe(c, SESSAO)) === "aguardando_humano: conversa", "a IA do desenho responder");
   await ate(
     async () => (await estadoDe(c, c.execucoes()[2]?.sessao_pi ?? "")) === "aguardando_humano: conversa",

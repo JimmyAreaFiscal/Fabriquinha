@@ -1,6 +1,6 @@
 // Worktree e branch da issue (F5 §3), descarte das alterações (F5 §3.3), limpeza depois do encerramento (F5 §5.3) e
 // fila de comandos git (F5 §6).
-import { appendFileSync, existsSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Issue } from "../dominio/agregado.ts";
@@ -63,6 +63,7 @@ export async function garantirWorktree(
   issue: Pick<Issue, "id" | "criadaEm">,
   log: string,
   varrerBase: () => Promise<void>,
+  atualizarBase = false,
 ): Promise<string> {
   const { repo, branchBase } = projeto;
   const caminho = caminhoDaWorktree(raiz, projeto.nome, issue.id);
@@ -71,8 +72,9 @@ export async function garantirWorktree(
   // `git branch -D` apaga a config junto, então a branch removida pelo Auditor some com a marca.
   const dono = `${caminho} ${issue.criadaEm}`;
 
-  const { buscouBase, marca } = await naFilaDoProjeto(raiz, projeto.nome, async () => {
+  const { buscouBase, marca, mudouHead } = await naFilaDoProjeto(raiz, projeto.nome, async () => {
     let buscouBase = false;
+    let mudouHead = false;
     if ((await exigirGit(repo, "for-each-ref", "--format=%(refname)", `refs/heads/${branch}`)) === "") {
       // Refspec explícita: um branchBase começando com "-" nunca vira opção do git.
       await exigirGit(repo, "fetch", "origin", `+refs/heads/${branchBase}:refs/remotes/origin/${branchBase}`);
@@ -91,12 +93,26 @@ export async function garantirWorktree(
         await exigirGit(repo, "worktree", "prune");
         await exigirGit(repo, "worktree", "add", caminho, branch);
       }
+      if (atualizarBase) {
+        await exigirGit(repo, "fetch", "origin", `+refs/heads/${branchBase}:refs/remotes/origin/${branchBase}`);
+        buscouBase = true;
+        const antes = await exigirGit(caminho, "rev-parse", "HEAD");
+        const r = await git(caminho, "merge", "--no-edit", `refs/remotes/origin/${branchBase}`);
+        if (r.codigo !== 0) {
+          await git(caminho, "merge", "--abort");
+          throw new ErroDeRegra(
+            `o merge de origin/${branchBase} na branch ${branch} falhou: ${(r.saida + r.erro).trim()}`,
+            `resolva o conflito com origin/${branchBase} em ${caminho} e execute o ticket de novo`,
+          );
+        }
+        mudouHead = (await exigirGit(caminho, "rev-parse", "HEAD")) !== antes;
+      }
     }
     // A marca de preparada mora nos metadados da worktree (.git/worktrees/I-<n>/): some no prune, longe do clean.
     const marca = (
       await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-path", "fabriquinha-preparada")
     ).trim();
-    return { buscouBase, marca };
+    return { buscouBase, marca, mudouHead };
   });
 
   if (buscouBase) {
@@ -106,6 +122,8 @@ export async function garantirWorktree(
       anotar(log, `varrerBase falhou: ${String(error_)}`);
     }
   }
+  // F5 §3.2: o merge que muda o HEAD pode mudar o que a preparação instala.
+  if (mudouHead) rmSync(marca, { force: true });
   if (!existsSync(marca)) {
     await preparar(caminho, projeto.preparacao, log);
     writeFileSync(marca, "");

@@ -486,3 +486,92 @@ test(
     assert.match(String(avisos[0]), new RegExp(`^não foi possível apagar ${pasta}: `));
   },
 );
+
+/** Worktree da issue já criada e preparada; `origin/main` fica um commit à frente dela, com `arquivo`. */
+async function comOriginAdiantado(c: ReturnType<typeof cenario>, arquivo = "novo.txt", conteudo = "da base\n") {
+  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  const outro = mkdtempSync(join(base, "outro-"));
+  git(base, "clone", "-q", "-b", "main", c.bare, outro);
+  const origin = commitar(outro, arquivo, conteudo);
+  git(outro, "push", "-q", "origin", "main");
+  return { caminho, origin };
+}
+const atualizar = (c: ReturnType<typeof cenario>) =>
+  garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura, true);
+
+test("atualizarBase: a worktree sem commit próprio avança até origin/main por fast-forward (CA-6)", async () => {
+  const c = cenario();
+  const { caminho, origin } = await comOriginAdiantado(c);
+
+  assert.equal(await atualizar(c), caminho);
+  assert.equal(git(caminho, "rev-list", "--count", "HEAD..origin/main"), "0");
+  assert.equal(git(caminho, "rev-parse", "HEAD"), origin);
+  assert.equal(git(caminho, "status", "--short"), "");
+});
+
+test("atualizarBase: o commit próprio da issue fica no log e a base entra por merge (CA-7)", async () => {
+  const c = cenario();
+  const { caminho } = await comOriginAdiantado(c);
+  commitar(caminho, "proprio.txt", "da issue\n");
+
+  await atualizar(c);
+
+  assert.equal(git(caminho, "rev-list", "--count", "HEAD..origin/main"), "0");
+  assert.match(git(caminho, "log", "--format=%s"), /^proprio\.txt$/m);
+  assert.equal(git(caminho, "status", "--short"), "");
+});
+
+test("atualizarBase: o conflito com origin/main aborta o merge, falha e deixa o commit próprio (CA-8)", async () => {
+  const c = cenario();
+  const { caminho } = await comOriginAdiantado(c, "conflito.txt", "da base\n");
+  const proprio = commitar(caminho, "conflito.txt", "da issue\n");
+
+  await assert.rejects(
+    atualizar(c),
+    (erro: unknown) =>
+      erro instanceof ErroDeRegra &&
+      /^o merge de origin\/main na branch fabriquinha\/I-1 falhou: .*CONFLICT/s.test(erro.message) &&
+      erro.message.includes(`resolva o conflito com origin/main em ${caminho} e execute o ticket de novo`),
+  );
+
+  assert.equal(git(caminho, "rev-parse", "HEAD"), proprio);
+  assert.match(git(caminho, "log", "--format=%s"), /^conflito\.txt$/m);
+  assert.equal(git(caminho, "status", "--short"), "");
+});
+
+test("atualizarBase: o origin inacessível falha no git fetch e o HEAD não muda (CA-9)", async () => {
+  const c = cenario();
+  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  const antes = git(caminho, "rev-parse", "HEAD");
+  git(c.repo, "remote", "set-url", "origin", join(base, "nao-existe.git"));
+
+  await assert.rejects(
+    atualizar(c),
+    (erro: unknown) => erro instanceof ErroDeRegra && erro.message.includes("git fetch"),
+  );
+
+  assert.equal(git(caminho, "rev-parse", "HEAD"), antes);
+});
+
+test("atualizarBase: o merge que muda o HEAD prepara de novo; sem mudança, ou sem atualizarBase, não", async () => {
+  const contador = join(base, "contador-atualizar");
+  const c = cenario([`echo x >> ${contador}`]);
+  let varridas = 0;
+  const varrer = () => {
+    varridas++;
+    return Promise.resolve();
+  };
+  await comOriginAdiantado(c);
+  assert.equal(readFileSync(contador, "utf8"), "x\n");
+
+  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer);
+  assert.equal(readFileSync(contador, "utf8"), "x\n", "sem atualizarBase, nada muda");
+  assert.equal(varridas, 0);
+
+  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer, true);
+  assert.equal(readFileSync(contador, "utf8"), "x\nx\n", "o HEAD mudou");
+  assert.equal(varridas, 1, "o fetch do desenho também varre a base");
+
+  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer, true);
+  assert.equal(readFileSync(contador, "utf8"), "x\nx\n", "o HEAD não mudou");
+});
