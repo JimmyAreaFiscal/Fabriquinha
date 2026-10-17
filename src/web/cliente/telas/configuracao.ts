@@ -1,7 +1,7 @@
 // Configuração (F7 §4.4) como funções puras: o menu lateral, o agendador e o formulário de projeto, com os erros do
 // `zod` ao lado de cada campo. O DOM e a rede ficam em configuracao-montar.ts.
 import type { Hospedagem, Projeto } from "../../../dominio/projeto.ts";
-import type { Etapa, Modelo } from "../../../dominio/primitivos.ts";
+import type { Effort, Etapa, Modelo } from "../../../dominio/primitivos.ts";
 import type { Configuracao } from "../../../persistencia/servico.ts";
 import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import { escapar, ha, nomeDoModelo, rotuloIssue, rotuloTicket } from "../render.ts";
@@ -37,6 +37,7 @@ export const NOVO: Rascunho = {
   sonar: { projectKey: "" },
   fitness: [{ nome: "", comando: "", descricao: "" }],
   modelos: {},
+  efforts: {},
   linkProduto: "",
 };
 
@@ -80,6 +81,12 @@ export const ETAPAS: readonly (readonly [Etapa, string])[] = [
   ["encerramento", "Encerramento"],
   ["sessao", "Sessão em aberto"],
 ];
+
+// O cliente não importa valores de src/dominio (os .ts vão ao navegador só sem os tipos): os níveis saem das chaves.
+const EFFORTS = Object.keys({ off: 0, minimal: 0, low: 0, medium: 0, high: 0, xhigh: 0, max: 0 } satisfies Record<
+  Effort,
+  0
+>);
 
 const atual = (sim: boolean): string => (sim ? ' aria-current="page"' : "");
 
@@ -186,6 +193,17 @@ function modelos(erros: Erros, escolhidos: Rascunho["modelos"], disponiveis: rea
   return `<div class="grupo"><h3>Modelo por etapa <span class="nota">· vazio usa o padrão do pi; o ticket pode sobrescrever</span></h3><div class="modelos-grade">${linhas.join("")}</div></div>`;
 }
 
+function efforts(erros: Erros, escolhidos: NonNullable<Rascunho["efforts"]>): string {
+  const linhas = ETAPAS.map(([etapa, rotulo]) => {
+    const escolhido = escolhidos[etapa];
+    const caminho = `efforts.${etapa}`;
+    const m = marca(erros, caminho);
+    const options = EFFORTS.map((e) => `<option value="${e}"${e === escolhido ? " selected" : ""}>${e}</option>`);
+    return `<label for="${idDe(caminho)}">${rotulo}</label><div class="celula${m.classe}"><select id="${idDe(caminho)}" name="${caminho}" aria-label="Effort de ${rotulo}"${escolhido ? "" : ' class="padrao"'}${m.aria}><option value="">padrão do pi</option>${options.join("")}</select>${m.msg}</div>`;
+  });
+  return `<div class="grupo"><h3>Effort por etapa <span class="nota">· o raciocínio da IA (pi --thinking); vazio usa o padrão do pi</span></h3><div class="modelos-grade">${linhas.join("")}</div></div>`;
+}
+
 const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
 
 /** Projeto (F7 §4.4) nos quatro grupos, com o rodapé que diz o que é conferido ao salvar e quantos campos têm erro. */
@@ -217,6 +235,7 @@ export function formularioDeProjeto(
 <div class="grupo"><h3>Preparação e testes</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}${lista(erros, "testes", "Testes", "pelo menos um; todos precisam sair com 0", p.testes)}</div></div>
 ${fitness(erros, p.fitness)}
 ${modelos(erros, p.modelos, disponiveis)}
+${efforts(erros, p.efforts ?? {})}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>${novo ? "" : '<section class="usuarios-simulados" data-usuarios-simulados aria-label="Usuários simulados"></section>'}`;
 }
 
