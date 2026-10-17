@@ -32,6 +32,7 @@ import {
   modeloDe,
   propostasDoChat,
   respostaDoDialogo,
+  valorDoSelect,
   seletorDeSessoes,
 } from "./chat.ts";
 import type * as ModuloDaConversa from "./chat-conversa.tsx";
@@ -265,7 +266,12 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     const alvo = evento.target instanceof Element ? evento.target : null;
     const botao = alvo?.closest("button");
     if (!botao) return;
-    if (botao.dataset.modo) {
+    const dialogoAberto = botao.closest<HTMLElement>("[data-dialogo]")?.dataset.dialogo;
+    if (botao.dataset.opcao !== undefined) {
+      acao(respondeDialogo(String(dialogoAberto), { valor: botao.dataset.opcao }));
+    } else if (botao.dataset.outros !== undefined) {
+      mostrarOutros(botao.closest("form"), true);
+    } else if (botao.dataset.modo) {
       modo = botao.dataset.modo as ModoEnvio;
       desenhar();
     } else if (botao.dataset.abortar !== undefined) {
@@ -273,12 +279,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     } else if (botao.dataset.concluir !== undefined) {
       acao(postar(`/api/tickets/${String(cabecalho?.sessao.ticket)}/concluir-sessao`));
     } else if (botao.dataset.cancelar !== undefined) {
-      const id = botao.closest<HTMLElement>("[data-dialogo]")?.dataset.dialogo;
-      acao(
-        postar(`/api/sessoes/${encodeURIComponent(sessao)}/dialogos/${encodeURIComponent(String(id))}`, {
-          cancelado: true,
-        }),
-      );
+      acao(respondeDialogo(String(dialogoAberto), { cancelado: true }));
     } else if (botao.dataset.acao === "aceitar-proposta" || botao.dataset.acao === "recusar-proposta") {
       botao.disabled = true;
       const decisao = postar(`/api/propostas/${String(botao.dataset.id)}`, {
@@ -293,6 +294,19 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     } else if ("verTudo" in botao.dataset) verSaida(botao);
     else aoClicarNaConsulta(botao);
   });
+
+  const respondeDialogo = (id: string, corpo: object) =>
+    postar(`/api/sessoes/${encodeURIComponent(sessao)}/dialogos/${encodeURIComponent(id)}`, corpo);
+
+  /** «Outros» do select: o campo de texto (obrigatório enquanto à mostra) e, na escolha única, o Responder. */
+  function mostrarOutros(form: HTMLFormElement | null, mostrar: boolean): void {
+    const campo = form?.querySelector<HTMLTextAreaElement>("textarea[name=outro]");
+    if (!form || !campo) return;
+    campo.hidden = campo.disabled = !mostrar;
+    const responder = form.querySelector<HTMLElement>("[data-responder-outros]");
+    if (responder) responder.hidden = !mostrar;
+    if (mostrar) campo.focus();
+  }
 
   /** Conversar sobre, os anexos de histórico e os artefatos ao lado. */
   function aoClicarNaConsulta(botao: HTMLButtonElement): void {
@@ -324,13 +338,16 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (form.dataset.retomar !== undefined) {
       acao(responderERetomar(form, String(campos.texto).trim()));
     } else if (form.dataset.dialogo) {
-      const corpo = respostaDoDialogo(String(form.dataset.metodo), String(campos.valor));
-      acao(
-        postar(
-          `/api/sessoes/${encodeURIComponent(sessao)}/dialogos/${encodeURIComponent(form.dataset.dialogo)}`,
-          corpo,
-        ),
-      );
+      const valor =
+        form.dataset.metodo === "select"
+          ? valorDoSelect(
+              form.dataset.multipla !== undefined,
+              new FormData(form).getAll("opcao").map(String),
+              campos.outro ?? "",
+            )
+          : String(campos.valor);
+      if (valor !== undefined)
+        acao(respondeDialogo(form.dataset.dialogo, respostaDoDialogo(String(form.dataset.metodo), valor)));
     } else if (form.dataset.registro !== undefined) {
       const salvo = api<CabecalhoDoChat["issue"]>(`/api/issues/${issue()}`, {
         method: "POST",
@@ -342,6 +359,12 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       });
       acao(salvo);
     }
+  });
+
+  // Na múltipla escolha, «Outros» é uma caixa que alterna o campo.
+  raiz.addEventListener("change", (evento) => {
+    const alvo = evento.target as HTMLInputElement;
+    if (alvo.dataset.outros !== undefined) mostrarOutros(alvo.closest("form"), alvo.checked);
   });
 
   raiz.addEventListener("input", (evento) => {

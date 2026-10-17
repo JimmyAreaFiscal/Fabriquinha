@@ -329,6 +329,37 @@ export type ModoEnvio = "steer" | "follow_up";
 
 const DICA = '<span class="dica-tecla">Enter envia · Shift+Enter quebra linha</span>';
 
+/** Os itens numerados do `select`, sem nada pré-marcado: botões de um clique ou, na múltipla escolha, caixas; «Outros» no fim, na pergunta da `perguntar`. */
+function itens(d: Dialogo): string {
+  const descricoes = (d.descricoes ?? []) as (string | undefined)[];
+  const lista = ((d.options ?? []) as string[]).map((rotulo, i) => {
+    const texto = `<span class="opcao-rotulo">${String(i + 1)}. ${escapar(rotulo)}</span>`;
+    const descricao = descricoes[i] ? `<span class="opcao-descricao">${escapar(descricoes[i])}</span>` : "";
+    return d.multiSelect
+      ? `<label class="opcao"><input type="checkbox" name="opcao" value="${escapar(rotulo)}"><span>${texto}${descricao}</span></label>`
+      : `<button type="button" class="opcao" data-opcao="${escapar(rotulo)}">${texto}${descricao}</button>`;
+  });
+  if (d.pergunta) {
+    lista.push(
+      d.multiSelect
+        ? '<label class="opcao"><input type="checkbox" data-outros><span class="opcao-rotulo">Outros</span></label>'
+        : '<button type="button" class="opcao" data-outros><span class="opcao-rotulo">Outros</span></button>',
+    );
+  }
+  const outro = d.pergunta
+    ? '<textarea name="outro" rows="3" aria-label="Outros" required hidden disabled></textarea>'
+    : "";
+  return `<div class="opcoes" role="group" aria-label="Opções">${lista.join("")}</div>${outro}`;
+}
+
+/** O `valor` do `select`: o texto de «Outros» na escolha única, o JSON da lista (marcadas, depois «Outros») na múltipla; `undefined` sem escolha. */
+export function valorDoSelect(multipla: boolean, marcadas: readonly string[], outro: string): string | undefined {
+  const texto = outro.trim();
+  if (!multipla) return texto || undefined;
+  const lista = texto ? [...marcadas, texto] : [...marcadas];
+  return lista.length > 0 ? JSON.stringify(lista) : undefined;
+}
+
 /** O pedido do agente (F4 §5.4) com o formulário do método: lista de opções, Sim/Não, texto ou área de texto. */
 function dialogo(d: Dialogo): string {
   const opcoes = (valores: [string, string][]) =>
@@ -339,7 +370,7 @@ function dialogo(d: Dialogo): string {
       )
       .join("")}</div>`;
   const campos: Record<string, () => string> = {
-    select: () => opcoes(((d.options ?? []) as string[]).map((o) => [o, o])),
+    select: () => itens(d),
     confirm: () =>
       opcoes([
         ["sim", "Sim"],
@@ -355,11 +386,16 @@ function dialogo(d: Dialogo): string {
   const corpo = campo
     ? campo()
     : `<p class="muted">A Fabriquinha não sabe responder a este pedido (${escapar(d.method)}); cancele para o agente seguir.</p>`;
+  const select = d.method === "select";
+  // No select de escolha única o clique já responde: Responder só vale para «Outros», escondido até clicá-lo.
+  const unica = select && !d.multiSelect;
+  const escondido = unica ? " hidden data-responder-outros" : "";
+  const responder =
+    !campo || (unica && !d.pergunta) ? "" : `<button class="btn btn-primario"${escondido}>Responder</button>`;
   return (
-    `<form class="dialogo-ext" data-dialogo="${escapar(d.id)}" data-metodo="${escapar(d.method)}">` +
+    `<form class="dialogo-ext" data-dialogo="${escapar(d.id)}" data-metodo="${escapar(d.method)}"${select && d.multiSelect ? " data-multipla" : ""}>` +
     `<span class="rotulo">O agente pergunta</span><div>${markdownEmLinha(String(d.title))}</div>${detalhe}${corpo}` +
-    '<div class="botoes"><button type="button" class="btn" data-cancelar>Cancelar</button>' +
-    `${campo ? '<button class="btn btn-primario">Responder</button>' : ""}</div></form>`
+    `<div class="botoes"><button type="button" class="btn" data-cancelar>Cancelar</button>${responder}</div></form>`
   );
 }
 

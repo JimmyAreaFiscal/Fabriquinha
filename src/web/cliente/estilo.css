@@ -3244,6 +3244,38 @@ body:has(.pagina-chat) {
   border-color: var(--accent);
   background: var(--surface-2);
 }
+.dialogo-ext [hidden] {
+  display: none;
+}
+.opcoes .opcao {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+  padding: var(--s-2) var(--s-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.opcoes .opcao:hover,
+.opcoes .opcao:focus-visible {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.opcoes button.opcao,
+.opcoes label.opcao > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.opcao-descricao {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
 .fim {
   display: flex;
   flex-wrap: wrap;
