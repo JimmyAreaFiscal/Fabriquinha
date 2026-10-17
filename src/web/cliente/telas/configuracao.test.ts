@@ -59,7 +59,7 @@ test("errosDoZod: as mensagens por caminho do prettifyError; sem caminho, na rai
 });
 
 test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo; o escolhido marcado", () => {
-  const ligado = { agendadorAtivo: true, intervaloMin: 5, timeoutMin: 120, ociosidadeMin: 30 };
+  const ligado = { agendadorAtivo: true, intervaloMin: 5, timeoutMin: 120, ociosidadeMin: 30, modeloAuditoria: null };
   const azure = { ...LOJA, nome: "site<x>", hospedagem: "azure-devops" as const };
   const html = menu(ligado, [LOJA, azure], { tipo: "projeto", nome: "loja" });
   assert.match(html, /<a href="\/config">Agendador <span class="pill pill-ok">ligado<\/span><\/a>/);
@@ -80,6 +80,7 @@ const ESTADO: EstadoDaConfiguracao = {
   intervaloMin: 5,
   timeoutMin: 120,
   ociosidadeMin: 30,
+  modeloAuditoria: null,
   proximaBusca: "2026-10-12T17:35:00.000Z",
   emAndamento: [
     { execucao: 231, ticket: 112, issue: 38, iniciadaEm: "2026-10-12T17:24:00.000Z" },

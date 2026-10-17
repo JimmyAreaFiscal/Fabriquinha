@@ -130,9 +130,21 @@ function desenhada(
 
 test("configuração: linha única, agendador desligado por padrão, salvar validado por zod", () => {
   const banco = novoBanco();
-  assert.deepEqual(configuracao(banco), { agendadorAtivo: false, intervaloMin: 5, timeoutMin: 120, ociosidadeMin: 30 });
+  assert.deepEqual(configuracao(banco), {
+    agendadorAtivo: false,
+    intervaloMin: 5,
+    timeoutMin: 120,
+    ociosidadeMin: 30,
+    modeloAuditoria: null,
+  });
 
-  const nova = { agendadorAtivo: true, intervaloMin: 1, timeoutMin: 1440, ociosidadeMin: 5 };
+  const nova = {
+    agendadorAtivo: true,
+    intervaloMin: 1,
+    timeoutMin: 1440,
+    ociosidadeMin: 5,
+    modeloAuditoria: { provedor: "anthropic", modelo: "claude-opus-5-5" },
+  };
   assert.deepEqual(salvarConfiguracao(banco, nova), nova);
   assert.deepEqual(configuracao(banco), nova);
   // Campo ausente volta ao padrão do schema.
@@ -141,9 +153,17 @@ test("configuração: linha única, agendador desligado por padrão, salvar vali
     intervaloMin: 5,
     timeoutMin: 120,
     ociosidadeMin: 30,
+    modeloAuditoria: null, // o modelo da Auditoria também volta ao padrão do pi
   });
 
-  for (const errada of [{ intervaloMin: 0 }, { timeoutMin: 9 }, { ociosidadeMin: 1441 }, { intervaloMin: 1.5 }]) {
+  for (const errada of [
+    { modeloAuditoria: { provedor: "anthropic" } },
+    { modeloAuditoria: { provedor: "Maiúscula", modelo: "m" } },
+    { intervaloMin: 0 },
+    { timeoutMin: 9 },
+    { ociosidadeMin: 1441 },
+    { intervaloMin: 1.5 },
+  ]) {
     assert.throws(() => salvarConfiguracao(banco, errada), ZodError);
   }
   assert.equal(configuracao(banco).agendadorAtivo, true, "a recusada não gravou nada");

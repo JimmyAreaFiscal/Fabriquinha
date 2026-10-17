@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno, existe } from "../dominio/erros.ts";
+import type { Modelo } from "../dominio/primitivos.ts";
 import { intervalo, mesPorExtenso, metricasPorMes } from "../metricas/periodo.ts";
 import { type MetricasIssue, metricasDaIssue } from "../metricas/issue.ts";
 import { raizDo } from "../persistencia/banco.ts";
@@ -138,6 +139,8 @@ export function prepararAuditoria(banco: DatabaseSync, dir: string, mes: string,
 export interface OpcoesDaAuditoria {
   /** Minutos sem mensagem até o pi parar (F4 §3, §6.6); a próxima mensagem o retoma na mesma sessão. */
   ociosidadeMin: number;
+  /** O modelo da Auditoria na Configuração; sem ele, o pi usa o padrão dele. */
+  modelo?: Modelo | null;
 }
 
 export type EstadoDaAuditoria = "rodando" | "conversa";
@@ -183,11 +186,16 @@ function promptDaAuditoria(dir: string, mes: string): string {
  * motivo da falha, ou `undefined`, quando o pi para. O pgid fica em `<pasta>/pgid` enquanto o pi vive, para o
  * reinício do serviço matá-lo (`recuperarAuditorias`).
  */
-function subir(raiz: string, sessao: string, prompt: string, ociosidadeMin: number): Promise<string | undefined> {
+function subir(
+  raiz: string,
+  sessao: string,
+  prompt: string,
+  { ociosidadeMin, modelo }: OpcoesDaAuditoria,
+): Promise<string | undefined> {
   const dir = dirDaAuditoria(raiz, sessao);
   const log = join(dir, "log");
   const pgid = join(dir, "pgid");
-  const args = argumentosDaAuditoria(raiz, sessao);
+  const args = argumentosDaAuditoria(raiz, sessao, modelo);
   anotar(log, `pi ${args.join(" ")}`);
   const tarefa = rodarPi({
     execucao: { id: sessao, sessaoPi: sessao, modo: "consulta" },
@@ -233,7 +241,7 @@ export async function iniciarAuditoria(
   banco: DatabaseSync,
   mes: string,
   lista: SessaoDoHistorico[],
-  { ociosidadeMin }: OpcoesDaAuditoria,
+  opcoes: OpcoesDaAuditoria,
 ): Promise<string> {
   const raiz = raizDo(banco);
   const sessao = randomUUID();
@@ -247,9 +255,7 @@ export async function iniciarAuditoria(
     const desassinar = assinarSessao(sessao, (evento) => {
       if (evento.type === "agent_start") comeco.resolve(true);
     });
-    const resultado = await Promise.race([comeco.promise, subir(raiz, sessao, prompt, ociosidadeMin)]).finally(
-      desassinar,
-    );
+    const resultado = await Promise.race([comeco.promise, subir(raiz, sessao, prompt, opcoes)]).finally(desassinar);
     // ponytail: sem `agent_start`, o `rodarPi` só resolve com `undefined` se alguém encerra a sessão; vira texto da falha.
     if (resultado !== true) {
       // A pasta, com o log, é apagada no catch: a causa (o stderr do pi) vai na mensagem, sem citar o log.
@@ -319,7 +325,7 @@ export function enviarNaAuditoria(
   banco: DatabaseSync,
   sessao: string,
   mensagem: string,
-  { ociosidadeMin }: OpcoesDaAuditoria,
+  opcoes: OpcoesDaAuditoria,
 ): void {
   const raiz = raizDo(banco);
   pastaExistente(raiz, sessao);
@@ -330,7 +336,7 @@ export function enviarNaAuditoria(
   if (viva) mandar(sessao, { type: "prompt", message: mensagem });
   else if (tarefas.has(sessao)) {
     throw new ErroDeRegra("o agente da auditoria ainda está parando", "tente de novo em alguns segundos");
-  } else void subir(raiz, sessao, mensagem, ociosidadeMin);
+  } else void subir(raiz, sessao, mensagem, opcoes);
 }
 
 /** Manda `abort` ao agente da auditoria que trabalha. */

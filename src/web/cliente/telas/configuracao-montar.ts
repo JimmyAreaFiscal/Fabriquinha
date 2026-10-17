@@ -99,7 +99,7 @@ function montarAgendador(
   const form = main.querySelector<HTMLFormElement>("[data-agendador]");
   form?.addEventListener("submit", (evento) => {
     evento.preventDefault();
-    const dados = lerAgendador(form);
+    const dados = { ...lerAgendador(form), modeloAuditoria: estado.modeloAuditoria }; // o formulário posta a configuração inteira
     ocupar(form, "Salvando…");
     api("/api/configuracao", postar(dados))
       .then(() => montarConfiguracao(main, {}, signal))

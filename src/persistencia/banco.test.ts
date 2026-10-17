@@ -94,6 +94,21 @@ test("a coluna projeto.link_produto é opcional", () => {
   banco.close();
 });
 
+test("o modelo da Auditoria na configuração: nasce nulo e o CHECK exige provedor e modelo juntos", () => {
+  const banco = abrir(raizTemp());
+  assert.equal(valor(banco, "SELECT auditoria_provedor FROM configuracao"), null);
+  assert.equal(valor(banco, "SELECT auditoria_modelo FROM configuracao"), null);
+  assert.throws(() => {
+    banco.exec("UPDATE configuracao SET auditoria_provedor = 'anthropic'");
+  }, /CHECK constraint failed/);
+  assert.throws(() => {
+    banco.exec("UPDATE configuracao SET auditoria_modelo = 'claude-opus-5-5'");
+  }, /CHECK constraint failed/);
+  banco.exec("UPDATE configuracao SET auditoria_provedor = 'anthropic', auditoria_modelo = 'claude-opus-5-5'");
+  assert.equal(valor(banco, "SELECT auditoria_modelo FROM configuracao"), "claude-opus-5-5");
+  banco.close();
+});
+
 test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuário existentes, anexo com hash e tamanho válidos", () => {
   const banco = abrir(raizTemp());
   banco.exec(

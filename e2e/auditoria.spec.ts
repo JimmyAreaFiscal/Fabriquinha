@@ -1,6 +1,6 @@
 // Auditoria do Histórico (F4; F7 §4.4) com o pi falso: o botão Auditar e o mês no cabeçalho, o chat da auditoria com a
 // chamada a `subagent` e as seções, a pergunta de acompanhamento, o mês sem sessões e o pi que não sobe.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, projeto, test } from "./apoio.ts";
 
@@ -96,6 +96,37 @@ test("Auditar abre o chat da auditoria com as sessões de todos os projetos, mes
   await expect(conversa.locator(".msg.agente").last()).toContainText("pronto");
   await expect(pagina.getByLabel("Mensagem")).toBeEnabled();
   expect(pagina.url()).toBe(url);
+});
+
+test("Auditar sobe o pi com o modelo da Auditoria configurado; sem ele, com o padrão do pi", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semear(fabriquinha.raiz);
+  const barra = pagina.locator(".estado-sessao");
+  const logDaAuditoria = () => {
+    const sessao = /\/audits\/([0-9a-f-]{36})$/.exec(pagina.url())?.[1] ?? "";
+    return readFileSync(join(fabriquinha.raiz, "auditorias", sessao, "log"), "utf8").split("\n")[0] ?? "";
+  };
+  const auditar = async () => {
+    await pagina.goto(`${fabriquinha.base}/history`);
+    await pagina.getByRole("button", { name: "Auditar" }).click();
+    await expect(pagina).toHaveURL(/\/audits\/[0-9a-f-]{36}$/);
+  };
+
+  await auditar();
+  expect(logDaAuditoria()).not.toMatch(/--provider|--model/);
+  await expect(barra).toContainText("anthropic / claude-opus-5-5"); // o padrão do pi falso
+  await expect(pagina.locator("[data-conversa]").getByRole("heading", { name: "Custos" })).toBeVisible();
+
+  const resposta = await pagina.request.post(`${fabriquinha.base}/api/configuracao`, {
+    headers: { "Sec-Fetch-Site": "same-origin" },
+    data: { modeloAuditoria: { provedor: "anthropic", modelo: "claude-sonnet-5-5" } },
+  });
+  expect(resposta.ok()).toBe(true);
+  await auditar();
+  expect(logDaAuditoria()).toContain("--provider anthropic --model claude-sonnet-5-5");
+  await expect(barra).toContainText("anthropic / claude-sonnet-5-5");
 });
 
 test("um mês sem sessões terminadas deixa a tela no Histórico com o aviso", async ({ pagina, fabriquinha }) => {

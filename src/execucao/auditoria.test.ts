@@ -306,6 +306,31 @@ test("iniciarAuditoria: sobe o pi só de leitura na pasta, com o prompt.md, e a 
   await parar(sessao);
 });
 
+test("o modelo da Auditoria: a 1ª linha do log e os argumentos do pi o levam, no início e na retomada; sem modelo, sem flags (CA-3, CA-4)", async () => {
+  const f = pifalso("conversa");
+  const modelo = { provedor: "llamacpp", modelo: "qwen3-coder-30b" };
+  const lista = await sessoesDoMes(banco, "2026-09");
+  const com = await iniciarAuditoria(banco, "2026-09", lista, { ociosidadeMin: 0.003, modelo });
+  const primeira = (sessao: string) => readFileSync(join(raiz, "auditorias", sessao, "log"), "utf8").split("\n")[0];
+  assert.match(primeira(com) ?? "", /^\S+ pi .* --session-id \S+ --provider llamacpp --model qwen3-coder-30b -e /);
+  await ate(() => !situacao(com) && estadoDaAuditoria(com) === "conversa", "a parada por ociosidade");
+
+  enviarNaAuditoria(banco, com, "continue", { ociosidadeMin: 60, modelo });
+  await ate(() => comandos(f).length === 2, "o prompt da retomada");
+  assert.deepEqual(
+    inicios(f).map((i) => i.argv.slice(i.argv.indexOf("--provider"), i.argv.indexOf("--provider") + 4)),
+    [
+      ["--provider", "llamacpp", "--model", "qwen3-coder-30b"],
+      ["--provider", "llamacpp", "--model", "qwen3-coder-30b"],
+    ],
+  );
+  await parar(com);
+
+  const sem = await iniciarAuditoria(banco, "2026-09", lista, { ociosidadeMin: 60, modelo: null });
+  assert.doesNotMatch(primeira(sem) ?? "", /--provider|--model/);
+  await parar(sem);
+});
+
 test("enviarNaAuditoria: com o pi vivo e ocioso, prompt; depois da ociosidade, retoma a mesma sessão e pasta (CA-8)", async () => {
   const f = pifalso("conversa");
   const sessao = await iniciarAuditoria(banco, "2026-09", await sessoesDoMes(banco, "2026-09"), {
