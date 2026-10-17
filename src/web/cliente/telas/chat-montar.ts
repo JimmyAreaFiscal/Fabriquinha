@@ -25,6 +25,7 @@ import {
   type Item,
   lateral,
   linhaDoDialogo,
+  linhasDaEvidencia,
   linhasDaExecucao,
   mensagem,
   type MensagemPi,
@@ -179,6 +180,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (s.estado !== "rodando") fecharFluxo();
     linhasNovas([
       ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)),
+      ...c.evidencias.map(linhasDaEvidencia),
       ...erroDaFalha(c),
       ...s.dialogos.map(linhaDoDialogo),
     ]);

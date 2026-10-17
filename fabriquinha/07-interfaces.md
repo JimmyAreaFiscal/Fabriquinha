@@ -342,6 +342,7 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
    - linhas do sistema (execução iniciada, concluída, diálogo aberto) entre traços;
    - mensagens do agente (balão à esquerda) e do Auditor (balão à direita) em Markdown, sem rótulo de quem fala;
    - a mensagem de aviso da Fabriquinha sobre uma proposta de issue decidida, marcada `aviso`, com o rótulo "Fabriquinha";
+   - a mensagem da Fabriquinha de cada evidência que o agente submeteu ao ticket ("Evidência **Protótipo** submetida; o card está em Artefatos"), vinda do banco e ordenada por instante; a de uma evidência substituída some ao recarregar, e a consulta não as mostra;
    - raciocínio recolhido;
    - cada chamada de ferramenta como bloco recolhível: nome, argumentos e um resumo do resultado (por exemplo "✗ 3 de 214"), com a saída em fonte monoespaçada cortada com **ver tudo**;
    - eventos ao vivo pelo SSE, com o texto do agente chegando em fluxo e cursor piscando;

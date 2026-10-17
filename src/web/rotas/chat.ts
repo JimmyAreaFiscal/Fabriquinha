@@ -5,7 +5,14 @@
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { AUDITOR, type Execucao, type Issue, type PropostaIssue, type Ticket } from "../../dominio/agregado.ts";
+import {
+  AUDITOR,
+  type Evidencia,
+  type Execucao,
+  type Issue,
+  type PropostaIssue,
+  type Ticket,
+} from "../../dominio/agregado.ts";
 import { naSessaoPrincipal, ticketDe } from "../../dominio/execucao.ts";
 import { existe } from "../../dominio/erros.ts";
 import { editarIssue } from "../../dominio/issue.ts";
@@ -48,6 +55,8 @@ export interface CabecalhoDoChat {
   ticket: Ticket;
   /** As execuções da sessão, em ordem: dão as linhas do sistema da conversa. */
   execucoes: Execucao[];
+  /** As evidências submetidas pelo agente ao ticket (vazio na consulta): dão a mensagem da Fabriquinha de cada uma. */
+  evidencias: Pick<Evidencia, "id" | "tipo" | "em">[];
   /** As propostas de issue abertas do ticket, só no registro interativo. */
   propostas?: PropostaIssue[];
 }
@@ -75,6 +84,12 @@ function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
     issue: ag.issue,
     ticket: ticketDe(ag, sessao.ticket),
     execucoes: ag.execucoes.filter((e) => e.sessaoPi === sessao.sessao),
+    evidencias:
+      sessao.modo === "consulta"
+        ? []
+        : ag.evidencias
+            .filter((e) => e.ticket === sessao.ticket && e.produtor === "agente")
+            .map(({ id, tipo, em }) => ({ id, tipo, em })),
     ...(propostas && { propostas }),
   };
 }

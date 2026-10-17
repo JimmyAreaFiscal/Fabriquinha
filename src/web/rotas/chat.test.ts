@@ -3,16 +3,17 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import { avisar, encerrar } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
+import { submeter } from "../../evidencias/submissao.ts";
 import { proporIssue } from "../../persistencia/issues.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
@@ -450,6 +451,27 @@ test("o fim de uma ferramenta do pi avisa o chat com um estado novo", async () =
   sse.fechar();
   assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
   await esperarEstado(sessao, "aguardando_humano: conversa");
+});
+
+test("o cabeçalho traz a evidência submetida pelo agente; a consulta traz a lista vazia", async () => {
+  const [sessao] = await registro();
+  const { ticket, execucoes } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.deepEqual(((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).evidencias, []);
+  const execucao = execucoes[0]?.id ?? 0;
+  const arquivo = join(raiz, "execucoes", `E-${String(execucao)}`, "saida", "tela.webm");
+  mkdirSync(dirname(arquivo), { recursive: true });
+  writeFileSync(arquivo, Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02]));
+  const agente = { tipo: "agente", execucao, ticket: ticket.id } as const;
+  await submeter(servico.banco, agente, "comportamento", { descricao: "lento", comoReproduzir: ["abrir"] }, [arquivo]);
+  const { evidencias } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.deepEqual(
+    evidencias.map((e) => e.tipo),
+    ["comportamento"],
+  );
+  const { corpo } = await postar(`/api/tickets/${String(ticket.id)}/consulta`);
+  const { sessao: consulta } = corpo as { sessao: string };
+  await esperarEstado(consulta, "aguardando_humano: conversa");
+  assert.deepEqual(((await pedir(`/api/sessoes/${consulta}`)).corpo as DadosDoChat).evidencias, []);
 });
 
 test("SSE: o cliente que sai enquanto o chat abre não fica assinando a sessão", async () => {
