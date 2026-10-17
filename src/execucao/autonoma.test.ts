@@ -233,6 +233,7 @@ async function cenario({ preparacao = [] as string[], variante = "sucesso", comA
     sonar: { projectKey: "loja" },
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     modelos: { revisao: { provedor: "anthropic", modelo: "claude-teste" } },
+    efforts: { revisao: "high" },
   });
   registrarIssue(banco, { projeto: "loja" }, auditor);
   comIssue(banco, 1, "iniciarExecucao", fabriquinha, (ag, ctx) =>
@@ -315,6 +316,21 @@ async function morreu(pid: number): Promise<boolean> {
   return !vivo(pid);
 }
 
+test("o modelo sobrescrito no ticket vale e o effort da etapa segue no --thinking", async () => {
+  const c = await cenario();
+  c.banco.exec("UPDATE ticket SET modelo_provedor = 'openai', modelo_nome = 'gpt-5' WHERE id = 2");
+  await executarAutonomo(c.banco, 2, { timeoutMin: 1 });
+  const argv = c.registro()[0]?.argv as string[];
+  assert.deepEqual(argv.slice(argv.indexOf("--provider"), argv.indexOf("--provider") + 6), [
+    "--provider",
+    "openai",
+    "--model",
+    "gpt-5",
+    "--thinking",
+    "high",
+  ]);
+});
+
 test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e log, coleta, C6 e C7", async () => {
   // O ambiente de quem roda o teste (uma execução da Fabriquinha, por exemplo) pode trazer a porta do serviço.
   delete process.env.FABRIQUINHA_PORTA;
@@ -344,6 +360,8 @@ test("sucesso: pi em grupo próprio com as flags e o ambiente do F4, prompt.md e
     "anthropic",
     "--model",
     "claude-teste",
+    "--thinking",
+    "high",
     "--skill",
     `${PACOTE}/skills/artefato-explicacao-fitness`,
     "--skill",

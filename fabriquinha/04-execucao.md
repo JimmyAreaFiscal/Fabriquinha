@@ -173,6 +173,7 @@ Um agente autônomo que pergunta algo pela extensão `ask-user-question`, por ex
 pi --mode rpc
    --session-dir <raiz>/sessoes --session-id <sessaoPi>
    [--provider <provedor> --model <modelo>]              # F1, 3.10
+   [--thinking <effort>]                                 # effort da etapa no projeto (F1, 3.3); sem ele, o padrão do pi
    --skill <pacote>/skills/fabriquinha                   # CLI da Fabriquinha, somado às skills do Auditor (P1)
    --append-system-prompt <pacote>/etapas/<etapa>.md     # instruções da etapa (P1)
    -e <pacote>/extensions/guarda.ts                      # bloqueia criação de PR pelo agente (F5, 5.0; P1)

@@ -589,3 +589,18 @@ test("novoId() tem uma sequência por tipo e só roda dentro da transação", ()
   assert.throws(() => novoId(banco, "issue"), /fora de transação/);
   banco.close();
 });
+
+/** A migração 19 acrescenta o effort por etapa ao projeto. */
+const VERSAO_EFFORTS = 19;
+
+test("a migração dos efforts dá {} ao projeto gravado antes dela", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EFFORTS - 1));
+  banco.exec(`
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('loja', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+  `);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EFFORTS));
+  assert.equal(valor(banco, "SELECT efforts FROM projeto WHERE nome = 'loja'"), "{}");
+  banco.close();
+});

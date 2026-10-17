@@ -84,6 +84,8 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
       "--approve",
     ],
   );
+  const comEffort = argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, effort: "high", confianca: false });
+  assert.deepEqual(comEffort.slice(6, 8), ["--thinking", "high"]);
   assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: false }), [
     "--mode",
     "rpc",

@@ -28,6 +28,8 @@ const exemplo = {
   fitness: [{ nome: "dominio-sem-io", comando: "npm run fitness", descricao: "o domínio não faz I/O" }],
   modelos: { desenho: { provedor: "openai", modelo: "gpt-5" } },
 };
+// O projeto lido do banco sempre traz `efforts` (vazio quando nenhuma etapa tem).
+const lido = { ...exemplo, efforts: {} };
 
 test("registrarProjeto cadastra e projeto/projetos leem de volta igual, em ordem de nome", () => {
   const banco = novoBanco();
@@ -38,7 +40,7 @@ test("registrarProjeto cadastra e projeto/projetos leem de volta igual, em ordem
   assert.deepEqual(registrarProjeto(banco, exemplo), exemplo);
   registrarProjeto(banco, minimo);
 
-  assert.deepEqual(projeto(banco, "fabriquinha"), exemplo);
+  assert.deepEqual(projeto(banco, "fabriquinha"), lido);
   assert.deepEqual(
     projetos(banco).map((p) => [p.nome, p.preparacao, p.modelos]),
     [
@@ -65,6 +67,17 @@ test("o link do produto é gravado, relido e apagado ao editar com o campo vazio
   banco.close();
 });
 
+test("efforts: gravado, relido, e volta a {} ao editar sem eles; valor fora dos níveis é recusado sem gravar", () => {
+  const banco = novoBanco();
+  registrarProjeto(banco, { ...exemplo, efforts: { desenho: "high" } });
+  assert.deepEqual(projeto(banco, "fabriquinha")?.efforts, { desenho: "high" });
+  assert.throws(() => editarProjeto(banco, { ...exemplo, efforts: { desenho: "altissimo" } }), ZodError);
+  assert.deepEqual(projeto(banco, "fabriquinha")?.efforts, { desenho: "high" });
+  editarProjeto(banco, exemplo);
+  assert.deepEqual(projeto(banco, "fabriquinha")?.efforts, {});
+  banco.close();
+});
+
 test("registrarProjeto recusa nome que já existe, sem mexer no projeto", () => {
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
@@ -72,7 +85,7 @@ test("registrarProjeto recusa nome que já existe, sem mexer no projeto", () => 
     () => registrarProjeto(banco, { ...exemplo, repo: "/repos/outro", branchBase: "develop" }),
     "já existe o projeto fabriquinha (edite-o na Configuração)",
   );
-  assert.deepEqual(projetos(banco), [exemplo]);
+  assert.deepEqual(projetos(banco), [lido]);
   banco.close();
 });
 
@@ -92,7 +105,7 @@ test("editarProjeto substitui a configuração inteira, inclusive sem mudança",
     modelos: {},
   };
   editarProjeto(banco, editado);
-  assert.deepEqual(projetos(banco), [editado]);
+  assert.deepEqual(projetos(banco), [{ ...editado, efforts: {} }]);
   banco.close();
 });
 
@@ -108,7 +121,7 @@ test("registrar e editar recusam o schema do F1 sem gravar nada", () => {
   assert.throws(() => registrarProjeto(banco, { ...exemplo, testes: [] }), ZodError);
   registrarProjeto(banco, exemplo);
   assert.throws(() => editarProjeto(banco, { ...exemplo, testes: [] }), ZodError);
-  assert.deepEqual(projetos(banco), [exemplo]);
+  assert.deepEqual(projetos(banco), [lido]);
   banco.close();
 });
 
@@ -155,6 +168,7 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
     [{ fitness: "'[]'" }, /CHECK/],
     [{ fitness: "'x'" }, /CHECK/],
     [{ modelos: "'{'" }, /CHECK/],
+    [{ efforts: "'{'" }, /CHECK/],
     [{ branch_base: "NULL" }, /NOT NULL/],
     [{ sonar_project_key: "NULL" }, /NOT NULL/],
   ];
