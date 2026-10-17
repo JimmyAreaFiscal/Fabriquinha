@@ -280,6 +280,7 @@ const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd,
  * - dialogo: responde, assenta e depois abre um `editor` (como o gancho de uma extensão);
  * - espera: fica trabalhando; `steer` o faz responder e assentar, `follow_up` abre um `editor`, `abort` o faz
  *   parar com stopReason aborted;
+ * - pergunta: durante a ferramenta `perguntar` abre dois `select` (o dela e o de outra extensão) e, depois dela, um terceiro;
  * - sai: sai com código 3 ao receber o prompt.
  * Com --fork, a sessão nova começa com as entradas da de origem.
  * Uma mensagem que termina em "pergunte" não roda o agente: ele só pergunta; com "edite o título", ele só edita a issue. $FALSO_PI_RECUSA ("prompt", "steer") faz o pi recusar
@@ -336,6 +337,18 @@ async function aoPrompt(c) {
   guardar(usuario);
   if (variante === "espera") {
     emitir({ type: "tool_execution_start", toolCallId: "t1", toolName: "bash", args: { command: "npm test" } });
+    return;
+  }
+  if (variante === "pergunta") {
+    const args = { question: "Qual ordem?", details: "Pense nos cupons", multiSelect: true, options: [{ label: "A", description: "primeira" }, { label: "B" }] };
+    const select = (id, title) => emitir({ type: "extension_ui_request", id, method: "select", title, options: ["A", "B"] });
+    emitir({ type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args });
+    select("d1", "Qual ordem?");
+    select("d2", "Outra pergunta");
+    emitir({ type: "tool_execution_end", toolCallId: "p1", toolName: "perguntar" });
+    select("d3", "Qual ordem?");
+    emitir({ type: "tool_execution_start", toolCallId: "p2", toolName: "perguntar", args: { question: "Sem opções" } });
+    select("d4", "Sem opções");
     return;
   }
   if (variante === "sai") process.exit(3);
@@ -878,6 +891,22 @@ test("diálogo pendente: a sessão interativa espera o Auditor sem parar por oci
   assert.equal(await estadoDe(c, sessao), "aguardando_humano: conversa");
   await ate(() => c.execucoes()[0]?.resultado === "sucesso", "a parada por ociosidade");
   assert.deepEqual(c.comandos().at(-1), { type: "extension_ui_response", id: "e1", value: "porque sim" });
+  c.banco.close();
+});
+
+test("diálogo select: o gerente marca o da ferramenta perguntar em execução e só ele", async () => {
+  const c = cenario({ variante: "pergunta" });
+  const sessao = registrarNecessidade(c.banco, "loja", [], "Exportar pedidos em CSV", { ociosidadeMin: 1 });
+  await ate(async () => (await infoDaSessao(c.banco, sessao)).dialogos.length === 4, "os quatro diálogos");
+  const { dialogos } = await infoDaSessao(c.banco, sessao);
+  const marcas = dialogos.map((d) => [d.id, d.pergunta, d.multiSelect, d.descricoes, d.message]);
+  assert.deepEqual(marcas, [
+    ["d1", true, true, ["primeira", undefined], "Pense nos cupons"],
+    ["d2", undefined, undefined, undefined, undefined], // outro título
+    ["d3", undefined, undefined, undefined, undefined], // depois do tool_execution_end
+    ["d4", true, false, [], undefined], // sem opções nem details
+  ]);
+  await pararTudo(c);
   c.banco.close();
 });
 
