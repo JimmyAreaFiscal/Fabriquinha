@@ -5,6 +5,7 @@ import type { Agregado, Ator, Contexto, Decisao, Execucao, ModoExecucao, Ticket 
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
   definirModeloTicket,
+  devolverTicket,
   falharTicket,
   iniciarConsulta,
   iniciarExecucao,
@@ -275,6 +276,10 @@ test("C5, C6 e C8 são só da Fabriquinha; C9, C20 e C21 só do Auditor", () => 
       () => falharTicket(ag, {}, ator),
       "só a Fabriquinha pode falhar um ticket (ela faz isso sozinha ao executar o ticket)",
     );
+    escopo(
+      () => devolverTicket(ag, {}, ator),
+      "só a Fabriquinha pode devolver um ticket (ela faz isso sozinha ao executar o ticket)",
+    );
   }
   for (const ator of [fabriquinha, agente]) {
     escopo(() => reabrirTicket(ag, {}, ator), "só o Auditor pode reabrir um ticket (peça ao Auditor pelo web)");
@@ -378,6 +383,28 @@ test("C8 exige ticket autônomo em execução e sem execução em andamento", ()
     "T-1 não pode falhar: a execução E-3 ainda está em andamento (espere ela terminar)",
   );
   regra(falhar(agregado("desenho", []), 4), "o ticket T-4 não é da I-1 (confira o número do ticket)");
+});
+
+test("devolverTicket volta o ticket autônomo em execução a aberto com a instrução", () => {
+  const dev = ticket(1, "desenvolvimento", "em_execucao");
+  const ag = agregado("desenvolvimento", [dev], [terminada(7, 1)]);
+  assert.deepEqual(devolverTicket(ag, { ticket: 1, instrucao: "corrija" }, fabriquinha), {
+    ...ag,
+    tickets: [{ ...dev, status: "aberto", instrucao: "corrija" }],
+  });
+  const devolver = (a: Agregado) => () => devolverTicket(a, { ticket: 1, instrucao: "x" }, fabriquinha);
+  regra(
+    devolver(agregado("desenho", [ticket(1, "desenho", "em_execucao")])),
+    "T-1 está em_execucao (só se devolve ticket autônomo em execução)",
+  );
+  regra(
+    devolver(agregado("desenvolvimento", [ticket(1, "desenvolvimento", "aberto")])),
+    "T-1 está aberto (só se devolve ticket autônomo em execução)",
+  );
+  regra(
+    devolver(agregado("desenvolvimento", [dev], [execucao(3, 1, "autonomo")])),
+    "T-1 não pode devolver: a execução E-3 ainda está em andamento (espere ela terminar)",
+  );
 });
 
 test("C9 reabre ticket falho, apaga o erro e grava a instrução quando informada", () => {

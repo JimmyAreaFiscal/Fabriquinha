@@ -450,31 +450,48 @@ test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks 
   c.banco.close();
 });
 
-test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem commit; reaberto, segue até concluir", async () => {
+test("a cadeia para no primeiro reprovado e devolve o ticket ao agente, sem commit; na terceira execução, falha", async () => {
   const c = await cenario();
-  const falhou = async (motivo: string, tipos: string[]) => {
-    await executarAutonomo(c.banco, 3, OPCOES);
-    const { ag, ticket } = c.estado(3);
-    assert.equal(ticket?.status, "falhou");
-    assert.equal(ticket.erro, motivo);
+  const reprovou = (tipo: string) =>
+    `a evidência ${tipo} de T-3 reprovou (veja o que reprovou com fabriquinha evidencia ver T-3 ${tipo} e execute o ticket de novo)`;
+  const semCommit = (tipos: string[]) => {
     assert.deepEqual(
-      ag.evidencias.filter((e) => e.ticket === 3).map((e) => e.tipo),
+      c
+        .estado(3)
+        .ag.evidencias.filter((e) => e.ticket === 3)
+        .map((e) => e.tipo),
       tipos,
     );
     assert.deepEqual(c.commits(), []);
     assert.equal(git(c.worktree, "rev-parse", "HEAD"), git(c.repo, "rev-parse", "main"), "nada foi commitado");
+  };
+  const devolveu = async (execucao: number, motivo: string, tipos: string[]) => {
+    await executarAutonomo(c.banco, 3, OPCOES);
+    const { ticket } = c.estado(3);
+    assert.equal(ticket?.status, "aberto");
+    assert.equal(
+      ticket.instrucao,
+      `A Fabriquinha devolveu T-3 depois da execução ${String(execucao)} de 3: ${motivo}. ` +
+        "Corrija o código na worktree e termine de novo; não faça commit.",
+    );
+    semCommit(tipos);
+  };
+  const falhou = async (motivo: string, tipos: string[]) => {
+    await executarAutonomo(c.banco, 3, OPCOES);
+    const { ticket } = c.estado(3);
+    assert.equal(ticket?.status, "falhou");
+    assert.equal(ticket.erro, motivo);
+    semCommit(tipos);
     c.reabrir(3);
   };
-  const reprovou = (tipo: string) =>
-    `a evidência ${tipo} de T-3 reprovou (veja o que reprovou com fabriquinha evidencia ver T-3 ${tipo} e execute o ticket de novo)`;
 
   process.env.SAIDA_TESTES = "1";
-  await falhou(reprovou("execucao_testes"), ["execucao_testes"]);
+  await devolveu(1, reprovou("execucao_testes"), ["execucao_testes"]);
   assert.equal(analises, 0);
 
   delete process.env.SAIDA_TESTES;
   process.env.SAIDA_FITNESS = "1";
-  await falhou(reprovou("matriz_fitness"), ["execucao_testes", "matriz_fitness"]);
+  await devolveu(2, reprovou("matriz_fitness"), ["execucao_testes", "matriz_fitness"]);
   assert.equal(analises, 0, "o SonarQube não roda depois da fitness reprovada");
 
   delete process.env.SAIDA_FITNESS;
@@ -496,22 +513,21 @@ test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem co
   c.banco.close();
 });
 
-test("T-4 não executa com T-3 falhou: o trabalho de T-3 sem commit não vai para o commit de outro ticket", async () => {
+test("T-4 não executa com T-3 devolvido: o trabalho de T-3 sem commit não vai para o commit de outro ticket", async () => {
   const c = await cenario();
   issuesSonar = [{ component: "loja:cache.ts", rule: "ts:S1", severity: "MAJOR", message: "ruim" }];
   await executarAutonomo(c.banco, 3, OPCOES);
-  assert.equal(c.estado(3).ticket?.status, "falhou");
+  assert.equal(c.estado(3).ticket?.status, "aberto");
   issuesSonar = [];
 
   process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
   await assert.rejects(executarAutonomo(c.banco, 4, OPCOES), {
     message:
-      "T-4 só executa depois dos tickets de desenvolvimento anteriores da I-1, e T-3 está falhou " +
+      "T-4 só executa depois dos tickets de desenvolvimento anteriores da I-1, e T-3 está aberto " +
       "(conclua T-3 antes)",
   });
   assert.equal(c.estado(4).ticket?.status, "aberto");
 
-  c.reabrir(3);
   process.env.FALSO_PI_ESCREVE = "{}";
   await executarAutonomo(c.banco, 3, OPCOES);
   process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });

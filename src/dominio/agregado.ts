@@ -236,6 +236,7 @@ export type NomeComando =
   | "iniciarExecucao"
   | "terminarExecucao"
   | "falharTicket"
+  | "devolverTicket"
   | "reabrirTicket"
   | "definirModeloTicket"
   | "iniciarConsulta"
