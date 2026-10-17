@@ -376,4 +376,5 @@ export const MIGRACOES: readonly string[] = [
   INSERT INTO comando_novo SELECT * FROM comando;
   DROP TABLE comando;
   ALTER TABLE comando_novo RENAME TO comando;`,
+  `ALTER TABLE projeto ADD COLUMN efforts TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(efforts));`,
 ];

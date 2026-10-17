@@ -55,6 +55,20 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(desenho).toHaveClass("padrao");
   await desenho.selectOption("anthropic/claude-opus-5-5");
   await expect(desenho).not.toHaveClass("padrao");
+  // O effort de cada etapa fica ao lado do modelo; vazio é o padrão do pi.
+  const effortDesenho = pagina.getByLabel("Effort de Desenho");
+  await expect(effortDesenho.locator("option")).toHaveText([
+    "padrão do pi",
+    "off",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
+  await expect(effortDesenho).toHaveClass("padrao");
+  await effortDesenho.selectOption("high");
 
   await pagina.getByRole("button", { name: "Cadastrar projeto" }).click();
   const nome = pagina.getByLabel("Nome", { exact: true });
@@ -75,6 +89,9 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByLabel("Nome", { exact: true })).toHaveAttribute("readonly", "");
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("GitHub");
   await expect(pagina.getByLabel("Desenho", { exact: true })).toHaveValue("anthropic/claude-opus-5-5");
+  await expect(pagina.getByLabel("Effort de Desenho")).toHaveValue("high");
+  await expect(pagina.getByLabel("Effort de Revisão")).toHaveValue("");
+  await expect(pagina.getByLabel("Effort de Revisão")).toHaveClass("padrao");
   await expect(pagina.getByRole("button", { name: "Salvar projeto" })).toBeVisible();
 
   await menu.getByRole("link", { name: "Agendador" }).click();

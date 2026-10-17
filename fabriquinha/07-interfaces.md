@@ -364,11 +364,12 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 1. Menu à esquerda: **Geral → Agendador** (com a marca ligado ou desligado) e **Projetos →** um item por projeto, com a hospedagem, e **+ Novo projeto**.
 2. À direita, o formulário do item escolhido.
 3. Agendador: interruptor, "procurar a cada", "tempo limite da execução" e "parar sessão ociosa após", em minutos (F4, 3), a próxima busca, as execuções autônomas em andamento (uma linha "Executando E-n · I-n · T-n · há …" por item) e **Salvar**.
-4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em quatro grupos:
+4. Projeto, com o número de issues ao lado do nome e o botão **Remover** à direita dele, em cinco grupos:
    - **Repositório:** nome (só leitura depois de criado), branch base, caminho absoluto, hospedagem (só leitura, deduzida do remoto pelo F5) projeto no SonarQube, com a nota de que o token fica em `<raiz>/ambiente`, e **Link do produto** (opcional, http ou https; vazio apaga o link; link inválido dá erro no campo e nada é gravado). Sem o link, a Simulação não executa;
    - **Preparação e testes:** listas de comandos com adicionar e remover; preparação opcional, testes com pelo menos um;
    - **Fitness functions:** nome, comando e descrição (até 300), com adicionar e remover;
    - **Modelo por etapa:** um seletor por etapa alimentado por `GET /api/modelos`, com "padrão do pi" apagado quando vazio.
+   - **Effort por etapa:** abaixo de "Modelo por etapa", um seletor por etapa (`aria-label="Effort de <Etapa>"`) com "padrão do pi" e os sete níveis do `pi --thinking` (off, minimal, low, medium, high, xhigh, max); vazio usa o padrão do pi.
    Rodapé: "Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos", **Cancelar** e **Salvar projeto** (ou **Cadastrar projeto**).
    **Remover** (só no projeto já salvo) abre uma confirmação com o nome e o número de issues, avisando que issues, custos e arquivos do projeto serão apagados: **Cancelar** não muda nada, **Remover projeto** envia `DELETE /api/projetos/:nome`. Com sucesso, a tela volta a `/config` e mostra os avisos; com erro (execução em andamento, por exemplo), a confirmação fecha e a mensagem aparece.
 5. Erros de validação aparecem ao lado de cada campo, a partir do caminho que o `zod` devolve, e o rodapé diz quantos campos têm erro.

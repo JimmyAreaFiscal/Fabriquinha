@@ -313,6 +313,7 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       sessaoPi: execucao.sessaoPi,
       etapa: ticket.etapa,
       modelo: execucao.modelo,
+      effort: projeto.efforts?.[ticket.etapa],
       confianca: confianca(projeto.repo),
       modo: execucao.modo,
       fork: r.fork,

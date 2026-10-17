@@ -162,15 +162,16 @@ test("modelos: os pares de pi --list-models, para os seletores", async () => {
 test("cadastrar: confere, grava com a hospedagem deduzida do remoto e fixa o cursor inicial da base", async () => {
   const repo = clone();
   const salvo = { ...formulario(repo), hospedagem: "github" };
+  const lido = { ...salvo, efforts: {} };
   assert.deepEqual(await chamar("POST", "/api/projetos", { ...formulario(repo), hospedagem: "azure-devops" }), salvo);
-  assert.deepEqual(projeto(banco, "loja"), salvo);
+  assert.deepEqual(projeto(banco, "loja"), lido);
   assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
-  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...salvo, issues: 0 }]);
+  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...lido, issues: 0 }]);
   banco.exec(
     "INSERT INTO issue (id, projeto, fase, criada_em) VALUES (1, 'loja', 'registro', '2026-10-12T14:00:00.000Z')",
   );
-  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...salvo, issues: 1 }]);
-  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...salvo, issues: 1 });
+  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...lido, issues: 1 }]);
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...lido, issues: 1 });
   assert.deepEqual(await chamar("GET", "/api/projetos/nao-existe"), [
     404,
     "o projeto nao-existe não existe (confira o nome do projeto)",
@@ -243,6 +244,16 @@ test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", asyn
     502,
     `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,
   ]);
+  assert.deepEqual(await chamar("GET", "/api/projetos"), []);
+});
+
+test("effort fora dos níveis dá 422 em efforts.desenho; nada é gravado", async () => {
+  const [status, erro] = (await chamar("POST", "/api/projetos", {
+    ...formulario(clone()),
+    efforts: { desenho: "altissimo" },
+  })) as [number, string];
+  assert.equal(status, 422);
+  assert.match(erro, /→ at efforts\.desenho/);
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
 });
 

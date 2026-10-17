@@ -8,7 +8,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { CATALOGO } from "../dominio/evidencia.ts";
 import type { ModoExecucao } from "../dominio/agregado.ts";
-import type { Etapa, Modelo } from "../dominio/primitivos.ts";
+import type { Effort, Etapa, Modelo } from "../dominio/primitivos.ts";
 import { ambienteSemCredenciais, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 
@@ -50,6 +50,7 @@ export interface Lancamento {
   sessaoPi: string;
   etapa: Etapa;
   modelo: Modelo | undefined;
+  effort?: Effort;
   confianca: boolean | undefined;
   modo: ModoExecucao;
   /**
@@ -73,6 +74,7 @@ export const argumentosPi = (l: Lancamento): string[] => [
   "--session-id",
   l.sessaoPi,
   ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.modelo] : []),
+  ...(l.effort ? ["--thinking", l.effort] : []),
   ...skillsDaEtapa(l.etapa).flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
   "-e",
   join(PACOTE, "extensions", "guarda.ts"),

@@ -36,6 +36,8 @@ export const Modelo = z.object({
 });
 
 export const Etapa = z.enum(["registro", "desenho", "desenvolvimento", "revisao", "encerramento", "sessao"]);
+// Os níveis de `pi --thinking`.
+export const Effort = z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 export const Fase = z.enum([
   "registro",
   "desenho",
@@ -55,5 +57,6 @@ export type Id = z.infer<typeof Id>;
 export type Instante = z.infer<typeof Instante>;
 export type Modelo = z.infer<typeof Modelo>;
 export type Etapa = z.infer<typeof Etapa>;
+export type Effort = z.infer<typeof Effort>;
 export type Fase = z.infer<typeof Fase>;
 export type TipoId = z.infer<typeof TipoId>;

@@ -81,6 +81,7 @@ const Projeto = z.object({
   fitness: z.array(z.object({ nome: Slug, comando: z.string().trim().min(1), descricao: z.string().trim().min(1).max(300) })).min(1)
     .refine(unicoPor("nome"), "nome de fitness function repetido"),
   modelos: z.partialRecord(Etapa, Modelo).default({}),
+  efforts: z.partialRecord(Etapa, Effort).optional(),   // Effort = off | minimal | low | medium | high | xhigh | max
 });
 ```
 
@@ -93,6 +94,7 @@ const Projeto = z.object({
 | `sonar` | Obrigatório: a evidência do SonarQube é obrigatória na implementação. |
 | `fitness` | Pelo menos uma: sem linhas, a matriz não comprova nada. Rodam no gate de desenvolvimento e na revisão. |
 | `modelos` | Provedor + modelo por etapa. Opcional: etapa sem entrada usa o padrão do pi. A existência do par é conferida no cadastro pelo F4 (`pi --list-models`). |
+| `efforts` | Effort (raciocínio da IA) por etapa, um dos níveis de `pi --thinking`. Opcional: etapa sem entrada usa o padrão do pi. Só o schema valida; o valor fora dos níveis é recusado com o caminho `efforts.<etapa>`. |
 
 ### 3.4 Issue
 
