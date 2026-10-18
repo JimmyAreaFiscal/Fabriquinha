@@ -18,7 +18,7 @@ import { existe } from "../../dominio/erros.ts";
 import { editarIssue } from "../../dominio/issue.ts";
 import { lotes, propostasAbertas } from "../../dominio/propostas.ts";
 import { Id, Motivo } from "../../dominio/primitivos.ts";
-import { abortar, responderDialogo } from "../../execucao/gerente.ts";
+import { abortar } from "../../execucao/gerente.ts";
 import {
   anexarHistorico,
   exportarHistorico,
@@ -41,6 +41,7 @@ import {
   type OpcoesInterativa,
   reabrir,
   registrarNecessidade,
+  responderNaSessao,
 } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { agregadoExistente, comIssue, issueDoTicket, propostasDaIssue } from "../../persistencia/issues.ts";
@@ -242,8 +243,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     caminho: "/api/sessoes/:sessao/dialogos/:id",
     tratar: async ({ banco, params, corpo }) => {
       const resposta = RespostaDialogo.parse(corpo);
-      const { execucao } = await infoDaSessao(banco, String(params.sessao));
-      responderDialogo(execucao, String(params.id), resposta);
+      await responderNaSessao(banco, String(params.sessao), String(params.id), resposta);
     },
   },
   {

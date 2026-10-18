@@ -30,6 +30,7 @@ import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
 import type { Projeto } from "../dominio/projeto.ts";
 import { raizDo } from "../persistencia/banco.ts";
+import { registrarIteracao } from "../persistencia/metricas.ts";
 import { anotar, arquivoDaSessao, issueDaSessao, issuesComSessao, logDaExecucao } from "../persistencia/execucoes.ts";
 import {
   agregadoExistente,
@@ -53,6 +54,7 @@ import {
   iniciarNaSessaoPrincipal,
   mandar,
   type Rodada,
+  responderDialogo,
   rodarExecucao,
   type Situacao,
   situacao,
@@ -516,15 +518,28 @@ export async function enviar(
     throw new ErroDeRegra(`a sessão de ${t} está ${rotulo} e não recebe ${modo}`, `envie com ${aceitos.join(" ou ")}`);
   }
   const viva = situacao(sessao);
-  if (viva) {
-    mandar(viva.execucao, { type: modo, message: texto });
-    return;
+  if (viva) mandar(viva.execucao, { type: modo, message: texto });
+  else {
+    if (info.estado === "rodando") throw semPi(ag, info);
+    if (info.modo === "consulta") {
+      const fork = copiaDaPrincipal(raizDo(banco), ag, info.ticket, sessao);
+      iniciarNaConsulta(banco, info.ticket, sessao, opcoes, { prompt: () => texto, fork });
+    } else iniciarInterativa(banco, info.ticket, texto, opcoes);
   }
-  if (info.estado === "rodando") throw semPi(ag, info);
-  if (info.modo === "consulta") {
-    const fork = copiaDaPrincipal(raizDo(banco), ag, info.ticket, sessao);
-    iniciarNaConsulta(banco, info.ticket, sessao, opcoes, { prompt: () => texto, fork });
-  } else iniciarInterativa(banco, info.ticket, texto, opcoes);
+  // F6 §5.6: só a mensagem do Auditor a uma sessão interativa conta; o steer na autônoma e a consulta não.
+  if (info.modo === "interativo") registrarIteracao(banco, info.ticket, "mensagem");
+}
+
+/** A resposta do Auditor ao diálogo `id` aberto pelo agente da sessão; numa sessão interativa conta como iteração. */
+export async function responderNaSessao(
+  banco: DatabaseSync,
+  sessao: string,
+  id: string,
+  resposta: Parameters<typeof responderDialogo>[2],
+): Promise<void> {
+  const info = await infoDaSessao(banco, sessao);
+  responderDialogo(info.execucao, id, resposta);
+  if (info.modo === "interativo") registrarIteracao(banco, info.ticket, "dialogo");
 }
 
 /**
@@ -647,6 +662,7 @@ export function reabrir(banco: DatabaseSync, ticket: Id, instrucao?: string): vo
   const ag = comIssue(banco, issueDoTicket(banco, ticket), "reabrirTicket", AUDITOR, (a) =>
     reabrirTicket(a, { ticket, instrucao }, AUDITOR),
   );
+  registrarIteracao(banco, ticket, "reabertura");
   // C9 só reabre ticket que falhou, e só falha o que executou: a sessão principal existe.
   avisar(...principalDe(banco, ag, ticket));
 }

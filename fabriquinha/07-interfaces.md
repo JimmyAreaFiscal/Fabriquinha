@@ -260,7 +260,7 @@ Duas peças se repetem entre as páginas:
 
 1. Cabeçalho: seletor de projeto, link **Editar na Configuração** e **Registrar necessidade**, com o projeto já escolhido.
    Abaixo dele, as abas **Issues** (esta página, ativa) e **Heatmap** (`/projects/:projeto/heatmap`), links de verdade.
-2. Métricas do mês corrente só do projeto (F6, 5.7), em 5 cards: custo (com chamadas de LLM), tokens (entrada, saída e cache), issues, tickets e PRs.
+2. Métricas do mês corrente só do projeto (F6, 5.7), em 6 cards: custo (com chamadas de LLM), tokens (entrada, saída e cache), issues, tickets, PRs e iterações (mensagens, diálogos e reaberturas).
 3. Barra com a contagem (em andamento, concluídas, arquivadas, canceladas), as opções explícitas **Mostrar concluídas**, **Mostrar arquivadas** e **Mostrar canceladas** (Q2) e **Arquivar concluídas** (C18 do projeto, com confirmação que diz quantas serão arquivadas e que nada é apagado).
 4. Cabeçalho das colunas do trilho (etapas e fases) fixo no topo ao rolar.
 5. Uma linha por issue: título, `I-n`, tipo, dependência que bloqueia, PR e progresso dos tickets (concluídos/total), o trilho de fases e, à direita, a sessão ativa com estado e link para o chat.
@@ -321,9 +321,9 @@ A página da issue não se atualiza sozinha, para não apagar o que o Auditor es
 3. 6 cards do mês em foco, cada um com o valor, a média dos meses anteriores e a variação em %: custo, tokens, issues concluídas (de quantas registradas), tickets concluídos (de quantos criados), PRs mergeados (de quantos abertos) e nota média dos PRs (de 5, com quantas notas).
    Mês sem nota mostra "—" e fica fora da média.
 4. **Evolução por mês** do card escolhido: uma coluna por mês, o mês em foco destacado, os meses da média num tom e uma linha horizontal na altura da média; passar o mouse mostra os valores, clicar numa coluna muda o foco e **ver tabela** troca o gráfico pela tabela.
-5. **Por etapa:** tabela do mês em foco contra a média, uma linha por etapa (registro a sessão em aberto): custo em barras duplas com a variação, e tokens, execuções, falhas, reprovações e duração média no formato "mês / média".
+5. **Por etapa:** tabela do mês em foco contra a média, uma linha por etapa (registro a sessão em aberto): custo em barras duplas com a variação, e tokens, execuções, falhas, reprovações, iterações e duração média no formato "mês / média". A linha **Total** no rodapé traz o custo (mês, média e variação), as colunas de contagem somadas ("mês / soma das médias", média "—" sem meses anteriores) e a duração média ponderada pelas execuções.
 6. **Por modelo:** custo e tokens por tipo de cada provedor + modelo no mês em foco.
-7. **Por issue:** tabela das issues com execução no período, ordenável pelo cabeçalho: issue (link), título, projeto (só com "todos"), fase, custo, tokens, execuções, falhas, reprovações, duração e nota do PR, com uma linha de total.
+7. **Por issue:** tabela das issues com execução no período, ordenável pelo cabeçalho: issue (link), título, projeto (só com "todos"), fase, custo, tokens, execuções, falhas, reprovações, iterações, duração e nota do PR, com uma linha de total.
 
 As cores dos gráficos seguem a paleta categórica validada para o fundo escuro (azul, laranja e verde-água, nesta ordem); o texto nunca usa a cor da série.
 

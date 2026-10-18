@@ -21,7 +21,7 @@ export const Periodo = z
   .object({ projeto: Slug.optional(), de: Mes, ate: Mes })
   .refine((p) => p.de <= p.ate, "`de` não pode ser depois de `ate`");
 
-const Apoio = { execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, duracaoMs: Inteiro };
+const Apoio = { execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, iteracoes: Inteiro, duracaoMs: Inteiro };
 
 export const MetricasMes = z.object({
   mes: Mes,
@@ -110,6 +110,7 @@ export function metricasPorMes(banco: DatabaseSync, filtro: Periodo): MetricasMe
           reprovacoes: GateDecisao.options
             .filter((gate) => ETAPA_DO_GATE[gate] === etapa)
             .reduce((total, gate) => total + n(`reprovacao_${gate}`), 0),
+          iteracoes: n(`iteracoes_${etapa}`),
         };
       }),
     });
@@ -124,7 +125,7 @@ export function metricasPorIssue(banco: DatabaseSync, filtro: Periodo): Metricas
   const { projeto = null, de, ate } = Periodo.parse(filtro);
   const periodo = { inicio: intervalo(de).inicio, fim: intervalo(ate).fim };
   return issuesNoPeriodo(banco, periodo, projeto).map(
-    ({ issue, projeto: p, titulo, fase, execucoes, falhas, reprovacoes, duracaoMs, notaPR, ...soma }) =>
+    ({ issue, projeto: p, titulo, fase, execucoes, falhas, reprovacoes, iteracoes, duracaoMs, notaPR, ...soma }) =>
       MetricasIssuePeriodo.parse({
         issue,
         projeto: p,
@@ -134,6 +135,7 @@ export function metricasPorIssue(banco: DatabaseSync, filtro: Periodo): Metricas
         execucoes,
         falhas,
         reprovacoes,
+        iteracoes,
         duracaoMs,
         notaPR,
       }),

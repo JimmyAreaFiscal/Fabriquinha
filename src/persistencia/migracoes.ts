@@ -380,4 +380,11 @@ export const MIGRACOES: readonly string[] = [
   // O modelo da Auditoria do Histórico, global (não pertence a nenhum projeto): nulo, usa o padrão do pi.
   `ALTER TABLE configuracao ADD COLUMN auditoria_provedor TEXT;
   ALTER TABLE configuracao ADD COLUMN auditoria_modelo TEXT CHECK ((auditoria_provedor IS NULL) = (auditoria_modelo IS NULL));`,
+  // Iterações humanas (F6 §7): cada mensagem do Auditor ao agente, resposta a diálogo ou reabertura C9. Sem backfill.
+  `CREATE TABLE iteracao (
+    id     INTEGER PRIMARY KEY,
+    ticket INTEGER NOT NULL REFERENCES ticket(id),
+    tipo   TEXT NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),
+    em     TEXT NOT NULL
+  );`,
 ];
