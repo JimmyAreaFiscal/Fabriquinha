@@ -95,7 +95,7 @@ export function montarAuditoria(main: HTMLElement, params: Parametros, signal: A
     }
     vistas.add(chaveDa(m));
     if (m.role === "toolResult") mensagens = mensagens.map((x) => comResultado(x, m));
-    else if (evento.fabriquinha && dados) mensagens = [...mensagens, linhaDoInicio(m, dados)];
+    else if (evento.fabriquinha && dados) mensagens = [...mensagens, ...linhaDoInicio(m, dados)];
     else mensagens = [...mensagens, ...mensagem(m)];
     if (m.role === "assistant" && dados) {
       modelo = modeloDaAuditoria([evento]);

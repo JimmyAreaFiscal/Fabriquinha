@@ -55,6 +55,7 @@ const Configuracao = z.object({
   intervaloMin: z.number().int().min(1).max(1440).default(5),
   timeoutMin: z.number().int().min(10).max(1440).default(120),
   ociosidadeMin: z.number().int().min(5).max(1440).default(30),
+  modeloAuditoria: Modelo.nullable().default(null),
 });
 ```
 
@@ -64,6 +65,7 @@ const Configuracao = z.object({
 | `intervaloMin` | De quanto em quanto tempo o agendador procura trabalho. |
 | `timeoutMin` | Tempo limite de uma execução autônoma; conta só o tempo ativo (6.5). É o botão de calibração para modelos locais lentos. |
 | `ociosidadeMin` | Depois desse tempo sem mensagem, o processo de uma sessão interativa é parado; a próxima mensagem a retoma (6.6). |
+| `modeloAuditoria` | Modelo do pi da Auditoria do Histórico, global (não pertence a projeto). Nulo: o pi usa o modelo padrão dele. Só muda se o par é listado por `pi --list-models` (seção 9); a retomada depois da ociosidade usa o da Configuração daquele momento. |
 
 Também pelo web: cadastro e edição de projetos (C19) e override de modelo por ticket (C20), com a conferência de modelos da seção 9.
 Segredos (`SONAR_TOKEN`) continuam no ambiente do serviço (`<raiz>/ambiente`), fora do banco.
@@ -387,7 +389,10 @@ CREATE TABLE configuracao (
   agendador_ativo  INTEGER NOT NULL DEFAULT 0 CHECK (agendador_ativo IN (0,1)),
   intervalo_min    INTEGER NOT NULL DEFAULT 5   CHECK (intervalo_min BETWEEN 1 AND 1440),
   timeout_min      INTEGER NOT NULL DEFAULT 120 CHECK (timeout_min BETWEEN 10 AND 1440),
-  ociosidade_min   INTEGER NOT NULL DEFAULT 30  CHECK (ociosidade_min BETWEEN 5 AND 1440)
+  ociosidade_min   INTEGER NOT NULL DEFAULT 30  CHECK (ociosidade_min BETWEEN 5 AND 1440),
+  auditoria_provedor TEXT,
+  auditoria_modelo   TEXT,
+  CHECK ((auditoria_provedor IS NULL) = (auditoria_modelo IS NULL))
 );
 ```
 

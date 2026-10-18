@@ -105,3 +105,33 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByRole("spinbutton", { name: "Procurar a cada" })).toHaveValue("10");
   await expect(pagina.getByRole("checkbox", { name: /Agendador/ })).toBeChecked();
 });
+
+test("escolhe o Modelo da Auditoria, salva, recarrega e vê o mesmo; salvar o Agendador não o apaga", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  await pagina.goto(`${fabriquinha.base}/config?auditoria`);
+  const menu = pagina.getByRole("navigation", { name: "Configuração" });
+  await expect(menu.getByRole("link", { name: "Auditoria" })).toHaveAttribute("aria-current", "page");
+  const modelo = pagina.getByLabel("Modelo da Auditoria");
+  await expect(modelo).toHaveValue("");
+  await expect(modelo).toHaveClass("padrao");
+  await modelo.selectOption("anthropic/claude-sonnet-5-5");
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  await expect(pagina.getByRole("button", { name: "Salvar" })).toBeEnabled();
+
+  await pagina.reload();
+  await expect(pagina.getByLabel("Modelo da Auditoria")).toHaveValue("anthropic/claude-sonnet-5-5");
+  const gravada = await pagina.request.get(`${fabriquinha.base}/api/configuracao`);
+  expect(((await gravada.json()) as { modeloAuditoria: unknown }).modeloAuditoria).toEqual({
+    provedor: "anthropic",
+    modelo: "claude-sonnet-5-5",
+  });
+
+  await menu.getByRole("link", { name: "Agendador" }).click();
+  await pagina.getByRole("spinbutton", { name: "Procurar a cada" }).fill("7");
+  await pagina.getByRole("button", { name: "Salvar" }).click();
+  await expect(pagina.getByRole("spinbutton", { name: "Procurar a cada" })).toHaveValue("7");
+  await menu.getByRole("link", { name: "Auditoria" }).click();
+  await expect(pagina.getByLabel("Modelo da Auditoria")).toHaveValue("anthropic/claude-sonnet-5-5");
+});

@@ -36,13 +36,13 @@ test("página: filtros de projeto, issue e etapa com o que o Auditor escolheu, e
   assert.match(html, /<option value="sessao" selected>sessão em aberto<\/option>/);
   assert.match(
     html,
-    /<span class="contagem" data-contagem><\/span><span class="auditar">.*<\/span><\/div><div data-lista><\/div>/,
+    /<span class="contagem" data-contagem><\/span><span class="auditar">.*<\/span><\/div><label class="pedido-auditoria">.*<\/label><div data-lista><\/div>/,
   );
 });
 
 test("página: depois da contagem, o mês (12 meses, o corrente escolhido, sem data-f) e o botão Auditar", () => {
   const html = paginaDoHistorico([], { projeto: "", issue: "", etapa: "" }, new Date(2026, 9, 13));
-  const grupo = /<span class="auditar">(.*?)<\/span><\/div><div data-lista>/.exec(html)?.[1] ?? "";
+  const grupo = /<span class="auditar">(.*?)<\/span><\/div><label class="pedido-auditoria">/.exec(html)?.[1] ?? "";
   assert.ok(html.indexOf("data-contagem") < html.indexOf('class="auditar"'));
   assert.match(grupo, /^<label>Mês <select data-mes><option value="2026-10" selected>outubro de 2026<\/option>/);
   assert.equal(grupo.match(/<option /g)?.length, 12);
@@ -51,6 +51,15 @@ test("página: depois da contagem, o mês (12 meses, o corrente escolhido, sem d
   assert.match(grupo, /<button type="button" class="btn btn-primario" data-auditar>Auditar<\/button>$/);
   assert.doesNotMatch(grupo, /data-f/);
   assert.match(paginaDoHistorico([], { projeto: "", issue: "", etapa: "" }), /data-auditar/);
+});
+
+test("página: abaixo da barra, o Pedido opcional é um textarea de 2 linhas, sem data-f", () => {
+  const html = paginaDoHistorico([], { projeto: "", issue: "", etapa: "" });
+  const pedido = /<label class="pedido-auditoria">(.*?)<\/label>/.exec(html)?.[1] ?? "";
+  assert.ok(html.indexOf("data-auditar") < html.indexOf("pedido-auditoria"));
+  assert.match(pedido, /^Pedido <span class="muted">opcional; o que a auditoria deve investigar<\/span>/);
+  assert.match(pedido, /<textarea data-pedido rows="2" maxlength="4000" placeholder="Ex\.: verifique oportunidades/);
+  assert.doesNotMatch(pedido, /data-f/);
 });
 
 test("meses para auditar: os 12 últimos, do corrente para o mais antigo, atravessando o ano", () => {

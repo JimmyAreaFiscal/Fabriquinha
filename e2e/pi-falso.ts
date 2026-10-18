@@ -73,8 +73,9 @@ function mensagem(message: object): void {
 const doAgente = (content: object[], stopReason = "stop") => ({
   role: "assistant",
   content,
-  provider: "anthropic",
-  model: "claude-opus-5-5",
+  // A auditoria sobe com o modelo da Configuração (--provider/--model); sem ele, o padrão do pi.
+  provider: argumentos.includes("--provider") ? arg("--provider") : "anthropic",
+  model: argumentos.includes("--model") ? arg("--model") : "claude-opus-5-5",
   stopReason,
   usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12, cost: { total: 0.01 } },
 });
