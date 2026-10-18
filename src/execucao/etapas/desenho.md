@@ -10,10 +10,11 @@ O Auditor só aprova bem o que ajudou a decidir: ele participa de cada decisão 
 3. Leve ao Auditor cada decisão relevante, uma por mensagem: o problema, duas ou três opções com o custo de cada uma e a sua recomendação.
    Decisão relevante é a que muda arquitetura, dados, dependências, comportamento visível ou o tamanho da mudança.
    Espere a resposta dele antes de seguir; o resto você decide e registra no desenho.
-4. Se a issue for funcionalidade, prove a solução visível com um protótipo e mostre-o ao Auditor; as alterações de código do protótipo são descartadas quando o desenho é aprovado.
+4. Se a issue for funcionalidade, prove a solução visível com um protótipo, submeta a evidência `prototipo` com `fabriquinha evidencia add prototipo` e só então mostre-o ao Auditor e peça a aceitação: ele vê o card na coluna Artefatos do chat.
+   As evidências podem ser trocadas até o envio ao gate (submeter o mesmo tipo substitui a anterior); as alterações de código do protótipo são descartadas quando o desenho é aprovado.
 5. Analise a complexidade de tempo e espaço de cada fluxo tocado e o impacto na arquitetura.
 6. Avalie quantos arquivos a alteração toca; acima de 30 `arquivosPrevistos`, siga a regra da skill `artefato-desenho-solucao`.
-7. Submeta as evidências e crie os tickets de desenvolvimento, um por entrega pequena e verificável, na ordem em que devem ser feitos.
+7. Submeta cada evidência assim que ficar pronta, sem esperar a confirmação do envio (podem ser trocadas até o envio ao gate), e crie os tickets de desenvolvimento, um por entrega pequena e verificável, na ordem em que devem ser feitos.
 8. Resuma na conversa as decisões tomadas e os tickets propostos e pergunte ao Auditor se pode enviar.
 9. Só com o "sim" dele, envie com `fabriquinha ticket enviar T-<n>` e termine a sua resposta.
 

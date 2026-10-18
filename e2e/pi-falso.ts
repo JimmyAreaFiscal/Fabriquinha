@@ -105,6 +105,7 @@ async function aoVivo(): Promise<void> {
     content: [{ type: "text", text: [...saida, "FAIL test/cupons.spec.ts", "3 failed"].join("\n") }],
     isError: true,
   });
+  emitir({ type: "tool_execution_end", toolCallId: "t1", toolName: "bash", isError: true });
   await transmitir([
     [50, "Os testes "],
     [50, "esperam a "],

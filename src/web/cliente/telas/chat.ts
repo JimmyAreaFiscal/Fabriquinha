@@ -24,7 +24,7 @@ import {
   rotuloTicket,
   situacaoDasFases,
 } from "../render.ts";
-import { cardDaEvidencia, cartaoDaProposta, comCard } from "./issue.ts";
+import { cardDaEvidencia, cartaoDaProposta, comCard, NOME } from "./issue.ts";
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -222,6 +222,13 @@ const PAROU: Record<string, string> = { aborted: "o agente foi interrompido", er
 const daFabriquinha = (m: MensagemPi): string =>
   `<div class="msg fabriquinha"><span class="quem">Fabriquinha</span><div class="balao md">${markdown(textoDe(m))}</div></div>`;
 
+/** A mensagem da Fabriquinha de uma evidência submetida: a chave muda quando a evidência é substituída. */
+export const linhasDaEvidencia = (e: CabecalhoDoChat["evidencias"][number]): Item & { em: string } => ({
+  chave: `evidencia-${String(e.id)}`,
+  em: e.em,
+  html: `<div class="msg fabriquinha"><span class="quem">Fabriquinha</span><div class="balao md">${markdown("Evidência **" + NOME[e.tipo] + "** submetida; o card está em Artefatos")}</div></div>`,
+});
+
 /** Os cartões das propostas de issue abertas do registro, entre a conversa e o envio. */
 export const propostasDoChat = (c: CabecalhoDoChat): string =>
   (c.propostas ?? []).map((p) => cartaoDaProposta(p, false, c.issue.id)).join("");
@@ -299,7 +306,10 @@ export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Thre
       em,
       lista: fabriquinha ? [] : mensagem(m, resultados, aviso === true),
     })),
-    ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)).map((l) => ({ em: l.em, lista: [doSistema(l)] })),
+    ...[...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)), ...c.evidencias.map(linhasDaEvidencia)].map((l) => ({
+      em: l.em,
+      lista: [doSistema(l)],
+    })),
   ].toSorted((a, b) => a.em.localeCompare(b.em));
   return [
     ...itens.flatMap(({ lista }) => lista),

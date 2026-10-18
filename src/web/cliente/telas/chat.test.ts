@@ -25,6 +25,7 @@ import {
   ferramenta,
   lateral,
   linhaDoDialogo,
+  linhasDaEvidencia,
   linhasDaExecucao,
   mensagem,
   modeloDe,
@@ -86,6 +87,7 @@ const cabecalho = (sessao: Partial<Sessao> = {}, extra: Partial<CabecalhoDoChat>
   },
   ticket: ticket(),
   execucoes: [execucao()],
+  evidencias: [],
   ...extra,
 });
 
@@ -739,4 +741,19 @@ test("aviso da Fabriquinha: mensagem do usuário marcada aparece como Fabriquinh
     { type: "message", timestamp: T0, message: m, aviso: true },
   ]);
   assert.match(html(itens), /msg fabriquinha/);
+});
+
+test("evidência submetida: balão da Fabriquinha com o nome do tipo, por instante; substituída, chave nova", () => {
+  const e = { id: 5, tipo: "prototipo", em: "2026-10-11T10:00:30.000Z" } as const;
+  const linha = linhasDaEvidencia(e);
+  assert.equal(linha.chave, "evidencia-5");
+  assert.match(linha.html, /^<div class="msg fabriquinha"><span class="quem">Fabriquinha<\/span>/);
+  assert.match(linha.html, /Evidência <strong>Protótipo<\/strong> submetida; o card está em Artefatos/);
+  const ordem = (evidencias: CabecalhoDoChat["evidencias"]) =>
+    conversa(cabecalho({}, { evidencias, execucoes: [execucao({ terminadaEm: "2026-10-11T10:01:00.000Z" })] }), []).map(
+      (m) => m.id,
+    );
+  assert.deepEqual(ordem([e]), ["inicio-E-7", "evidencia-5", "fim-E-7"]);
+  assert.deepEqual(ordem([{ ...e, id: 6 }]), ["inicio-E-7", "evidencia-6", "fim-E-7"], "a antiga não volta");
+  assert.deepEqual(ordem([]), ["inicio-E-7", "fim-E-7"], "sem evidência, sem balão");
 });

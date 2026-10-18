@@ -25,6 +25,7 @@ import { evidenciasFaltando, registrarEvidencia } from "../dominio/evidencia.ts"
 import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
 import { decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
+import { adicionarTicketDesenvolvimento } from "../dominio/tickets.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
@@ -562,6 +563,34 @@ test("desenho: o agente submete as quatro evidências; prototipo só é obrigat�
     assert.deepEqual(desenho(), []);
     c.banco.close();
   }
+});
+
+test("prototipo: depois do envio ao gate a submissão é recusada e a evidência anterior continua", async () => {
+  const c = await noDesenho("funcionalidade");
+  const html = (nome: string) => c.arquivo(c.saida2, nome, HTML);
+  const print = c.arquivo(c.saida2, "tela.png", PNG);
+  await submeter(c.banco, desenhista, "desenho_solucao", SOLUCAO, [html("desenho.html")]);
+  await submeter(c.banco, desenhista, "relatorio_complexidade", COMPLEXIDADE, [html("fluxos.html")]);
+  await submeter(c.banco, desenhista, "relatorio_impactos_arquitetura", IMPACTOS, [html("impactos.html")]);
+  await submeter(c.banco, desenhista, "prototipo", { descricao: "tela nova" }, [print]);
+  comIssue(c.banco, 1, "adicionarTicketDesenvolvimento", desenhista, (ag, ctx) =>
+    adicionarTicketDesenvolvimento(ag, { titulo: "Cache" }, desenhista, ctx),
+  );
+  comIssue(c.banco, 1, "enviarParaAprovacao", desenhista, (ag, ctx) =>
+    enviarParaAprovacao(ag, { ticket: 2 }, desenhista, ctx),
+  );
+
+  const outro = c.arquivo(c.saida2, "outra.png", JPEG);
+  await assert.rejects(
+    submeter(c.banco, desenhista, "prototipo", { descricao: "outra" }, [outro]),
+    (e) => e instanceof ErroDeRegra && e.message.startsWith("T-2 está enviado à aprovação, não em execução"),
+  );
+  const ag = agregado(c.banco, 1);
+  assert.deepEqual(
+    ag?.evidencias.filter((e) => e.tipo === "prototipo").map((e) => e.dados),
+    [{ descricao: "tela nova" }],
+  );
+  c.banco.close();
 });
 
 test("prototipo precisa de um vídeo ou print; os relatórios do desenho, de exatamente um HTML", async () => {

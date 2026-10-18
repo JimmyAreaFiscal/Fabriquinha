@@ -57,7 +57,7 @@ const FASE: Record<Fase, string> = {
 const MODO: Record<ModoExecucao, string> = { autonomo: "autônomo", interativo: "interativo", consulta: "consulta" };
 
 /** O nome de cada tipo de evidência no card e na caixa. */
-const NOME: Record<TipoEvidencia, string> = {
+export const NOME: Record<TipoEvidencia, string> = {
   comportamento: "Comportamento",
   criterios_aceite: "Critérios de aceite",
   desenho_solucao: "Desenho da solução",
