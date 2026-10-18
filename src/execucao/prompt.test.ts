@@ -88,6 +88,22 @@ test("desenho interativo: instrução primeiro, contexto, registro, modo de trab
   assert.doesNotMatch(prompt, /continuar trabalhando|Execução autônoma/i);
 });
 
+test("desenho de funcionalidade: submete o protótipo antes de pedir a aceitação e cada evidência assim que fica pronta", () => {
+  const ag = agregado([]);
+  ag.issue.tipo = "funcionalidade";
+  const prompt = montarPrompt({ ...comum, ag, ticket: desenho, instrucao: undefined, modo: "interativo" });
+  assert.match(
+    prompt,
+    /submeta a evidência `prototipo` com `fabriquinha evidencia add prototipo` e só então mostre-o ao Auditor e peça a aceitação: ele vê o card na coluna Artefatos do chat\./,
+  );
+  assert.match(prompt, /trocadas até o envio ao gate \(submeter o mesmo tipo substitui a anterior\)/);
+  assert.match(prompt, /as alterações de código do protótipo são descartadas/);
+  assert.match(
+    prompt,
+    /Submeta cada evidência assim que ficar pronta, sem esperar a confirmação do envio \(podem ser trocadas até o envio ao gate\), e crie os tickets/,
+  );
+});
+
 test("sem instrução nem registro: o desenho mostra as seções vazias, sem inventar critério", () => {
   const prompt = montarPrompt({
     ...comum,

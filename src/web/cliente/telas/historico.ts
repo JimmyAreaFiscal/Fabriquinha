@@ -49,7 +49,7 @@ export const mesesParaAuditar = (agora: Date): string[] =>
 
 /**
  * O cabeçalho e os filtros (F7 §4.4, item 1), com a lista vazia até as sessões chegarem. Depois da contagem, o grupo
- * **Auditar**: o mês (o corrente escolhido) não é filtro e não tem `data-f`.
+ * **Auditar**: o mês (o corrente escolhido) não é filtro e não tem `data-f`; abaixo da barra, o **Pedido** opcional.
  */
 export function paginaDoHistorico(projetos: readonly string[], f: Filtros, agora = new Date()): string {
   const opcoesDeProjeto = projetos
@@ -71,6 +71,8 @@ export function paginaDoHistorico(projetos: readonly string[], f: Filtros, agora
     `<span class="contagem" data-contagem></span>` +
     `<span class="auditar"><label>Mês <select data-mes>${opcoesDeMes}</select></label>` +
     `<button type="button" class="btn btn-primario" data-auditar>Auditar</button></span></div>` +
+    `<label class="pedido-auditoria">Pedido <span class="muted">opcional; o que a auditoria deve investigar</span>` +
+    `<textarea data-pedido rows="2" maxlength="4000" placeholder="Ex.: verifique oportunidades nas conversas"></textarea></label>` +
     `<div data-lista></div></div>`
   );
 }

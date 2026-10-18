@@ -14,9 +14,16 @@ import {
 import { mesPorExtenso, Mes } from "../../metricas/periodo.ts";
 import { ErroHttp } from "../erros.ts";
 import type { Rota } from "../rotas.ts";
+import { configuracao } from "../../persistencia/servico.ts";
 import { opcoes } from "./chat.ts";
 
-const NovaAuditoria = z.strictObject({ mes: Mes });
+/** As opções do chat com o modelo da Auditoria da Configuração de agora. */
+const opcoesDaAuditoria = (banco: DatabaseSync) => ({
+  ...opcoes(banco),
+  modelo: configuracao(banco).modeloAuditoria,
+});
+
+const NovaAuditoria = z.strictObject({ mes: Mes, pedido: z.string().trim().max(4000).optional() });
 const NovaMensagem = z.strictObject({ texto: z.string().trim().min(1) });
 
 /** O `:sessao` do caminho, validado antes de tocar no disco. */
@@ -39,11 +46,11 @@ export const ROTAS_DA_AUDITORIA: Rota[] = [
     metodo: "POST",
     caminho: "/api/auditorias",
     tratar: async ({ banco, corpo }) => {
-      const { mes } = NovaAuditoria.parse(corpo);
+      const { mes, pedido } = NovaAuditoria.parse(corpo);
       const lista = await sessoesDoMes(banco, mes);
       if (lista.length === 0)
         throw new ErroHttp(409, `Nenhuma sessão terminada em ${mesPorExtenso(mes)} para auditar.`);
-      return { sessao: await iniciarAuditoria(banco, mes, lista, opcoes(banco)) };
+      return { sessao: await iniciarAuditoria(banco, mes, lista, opcoesDaAuditoria(banco), pedido || undefined) };
     },
   },
   {
@@ -70,7 +77,7 @@ export const ROTAS_DA_AUDITORIA: Rota[] = [
     metodo: "POST",
     caminho: "/api/auditorias/:sessao/mensagens",
     tratar: ({ banco, params, corpo }) => {
-      enviarNaAuditoria(banco, sessaoDe(params), NovaMensagem.parse(corpo).texto, opcoes(banco));
+      enviarNaAuditoria(banco, sessaoDe(params), NovaMensagem.parse(corpo).texto, opcoesDaAuditoria(banco));
     },
   },
   {

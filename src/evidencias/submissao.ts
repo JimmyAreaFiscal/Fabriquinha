@@ -257,7 +257,7 @@ export async function submeter(
     fora: "da worktree da issue e do diretório de saída",
     copie: `$FABRIQUINHA_SAIDA (${saida})`,
   };
-  return submeterNo(banco, ator, antes, ator.ticket, origens, tipo, dados, caminhos);
+  return submeterNo(banco, ator, antes, ator.ticket, origens, { tipo, dados, caminhos });
 }
 
 /**
@@ -276,7 +276,7 @@ export async function submeterExterno(
   const ticket = exigirRegistroExterno(antes, `registrar evidência na I-${String(issue)}`).id;
   const real = realpathSync(pasta);
   const origens = { worktree: real, saida: real, fora: `de ${real}, onde você rodou o comando`, copie: real };
-  return submeterNo(banco, EXTERNO, antes, ticket, origens, tipo, dados, caminhos);
+  return submeterNo(banco, EXTERNO, antes, ticket, origens, { tipo, dados, caminhos });
 }
 
 /** F3 §5 a partir do passo 1, no `ticket` de `antes`, com os anexos vindos de `origens`. */
@@ -286,9 +286,7 @@ async function submeterNo(
   antes: Agregado,
   ticket: Id,
   origens: Origens,
-  tipo: unknown,
-  dados: unknown,
-  caminhos: readonly string[],
+  { tipo, dados, caminhos }: { tipo: unknown; dados: unknown; caminhos: readonly string[] },
 ): Promise<Agregado> {
   // 1 e 2: escopo e catálogo, no estado atual; C17 confere de novo na transação.
   const tipoValido = z.object({ tipo: TipoEvidencia }).parse({ tipo }).tipo;

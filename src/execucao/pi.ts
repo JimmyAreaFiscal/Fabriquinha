@@ -88,15 +88,16 @@ export const argumentosPi = (l: Lancamento): string[] => [
 
 /**
  * A auditoria do Histórico: a sessão `sessao` em `<raiz>/sessoes`, sem as ferramentas embutidas de escrita (as da
- * consulta, F4 §6.5) e com a guarda, que só deixa o `subagent` chamar o `scout`. Não herda skills nem modelo de etapa.
+ * consulta, F4 §6.5) e com a guarda, que só deixa o `subagent` chamar o `scout`. Não herda skills nem modelo de etapa: o `modelo` é o da Configuração, ou o padrão do pi.
  */
-export const argumentosDaAuditoria = (raiz: string, sessao: string): string[] => [
+export const argumentosDaAuditoria = (raiz: string, sessao: string, modelo?: Modelo | null): string[] => [
   "--mode",
   "rpc",
   "--session-dir",
   join(raiz, "sessoes"),
   "--session-id",
   sessao,
+  ...(modelo ? ["--provider", modelo.provedor, "--model", modelo.modelo] : []),
   "-e",
   join(PACOTE, "extensions", "guarda.ts"),
   "--exclude-tools",

@@ -16,7 +16,7 @@ import {
   registrarProjeto,
   removerProjeto,
 } from "../../persistencia/projetos.ts";
-import { autonomasEmAndamento, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
+import { autonomasEmAndamento, Configuracao, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
 import { conferirProjeto } from "../../repositorio/cadastro.ts";
 import { removerWorktrees } from "../../repositorio/worktree.ts";
 import { ErroHttp } from "../erros.ts";
@@ -82,8 +82,18 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "POST",
     caminho: "/api/configuracao",
-    tratar: ({ banco, agendador, corpo }) => {
-      salvarConfiguracao(banco, corpo);
+    tratar: async ({ banco, agendador, corpo }) => {
+      const nova = Configuracao.parse(corpo);
+      const modelo = nova.modeloAuditoria;
+      const gravado = configuracao(banco).modeloAuditoria;
+      if (modelo && (modelo.provedor !== gravado?.provedor || modelo.modelo !== gravado.modelo)) {
+        await conferirModelo(modelo).catch((error_: unknown) => {
+          throw new z.ZodError([
+            { code: "custom", path: ["modeloAuditoria"], message: mensagem(error_), input: modelo },
+          ]);
+        });
+      }
+      salvarConfiguracao(banco, nova);
       return estado(banco, agendador);
     },
   },

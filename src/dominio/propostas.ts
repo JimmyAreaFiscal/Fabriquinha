@@ -14,6 +14,7 @@ import {
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { decidirDesenho } from "./gates.ts";
 import { registrarIssue } from "./issue.ts";
+import type { Id } from "./primitivos.ts";
 
 const EntradaProposta = PropostaIssue.pick({ titulo: true, mensagem: true, arquivos: true });
 const EntradaDecisao = z.strictObject({ aceita: z.boolean() });
@@ -62,8 +63,47 @@ export const propostasAbertas = (ag: Agregado, propostas: readonly PropostaIssue
   propostas.filter((p) => p.status === "pendente" && noGateAtual(ag, p));
 
 /**
- * C24: o Auditor decide a proposta pendente do gate atual. Recusar só a marca. Aceitar cria a issue nova (C1, que
- * depende da atual, com a mensagem por descrição) e, no desenho, reprova o desenho com um motivo que cita a nova (C15).
+ * Os lotes de propostas de um ticket, inferidos pelos horários (sem coluna): percorre por id e começa um lote novo
+ * quando a proposta nasce depois do maior `decididaEm` do lote corrente, com todas as do lote decididas.
+ */
+export function lotes(propostas: readonly PropostaIssue[]): PropostaIssue[][] {
+  const saida: PropostaIssue[][] = [];
+  for (const p of [...propostas].sort((a, b) => a.id - b.id)) {
+    const atual = saida.at(-1);
+    if (atual && !atual.every((q) => q.decididaEm !== undefined && p.em > q.decididaEm)) atual.push(p);
+    else saida.push([p]);
+  }
+  return saida;
+}
+
+/** O motivo do C15 ao fechar o lote do desenho: o de hoje para um só aceite; senão, uma linha por decisão. */
+function motivoDoLote(lote: readonly PropostaIssue[], issue: Id): string {
+  const rotulo = (n: Id | undefined): string => `I-${String(n)}`;
+  const [unica] = lote;
+  if (unica?.status === "aceita" && lote.length === 1) {
+    const i = rotulo(unica.issueCriada);
+    return (
+      `A Fabriquinha criou a ${i} («${unica.titulo}») a partir da proposta de issue aceita pelo Auditor. ` +
+      `Refaça o desenho sem o que a ${i} assumiu; leia a descrição dela com fabriquinha issue ver ${i}.`
+    );
+  }
+  const linhas = lote.map((p) => {
+    const nome = `- ${rotuloProposta(p)} «${p.titulo}»: `;
+    if (p.status !== "aceita") return `${nome}recusada; a parte dela continua na ${rotulo(issue)}.`;
+    const i = rotulo(p.issueCriada);
+    return `${nome}aceita; a Fabriquinha criou a ${i} a partir dela (leia com fabriquinha issue ver ${i}).`;
+  });
+  return [
+    "O Auditor decidiu as propostas de issue do desenho:",
+    ...linhas,
+    "Ajuste o desenho conforme essas decisões.",
+  ].join("\n");
+}
+
+/**
+ * C24: o Auditor decide a proposta pendente do gate atual. Aceitar cria a issue nova (C1, que depende da atual, com a
+ * mensagem por descrição). Quando nenhuma outra proposta segue aberta, devolve o `lote` fechado (o último de `lotes`
+ * do ticket, com a decidida atualizada) e, no desenho, reprova o desenho (C15) com o motivo que lista as decisões.
  */
 export function decidirProposta(
   ag: Agregado,
@@ -71,31 +111,32 @@ export function decidirProposta(
   entrada: unknown,
   ator: Ator,
   ctx: Contexto,
-): { ag: Agregado; proposta: PropostaIssue; nova?: Agregado } {
+  propostas: readonly PropostaIssue[],
+): { ag: Agregado; proposta: PropostaIssue; nova?: Agregado; lote?: PropostaIssue[] } {
   exigirAuditor(ator, "decidir uma proposta de issue");
   const { aceita } = EntradaDecisao.parse(entrada);
   exigirPropostaAberta(ag, proposta);
-  if (!aceita) return { ag, proposta: { ...proposta, status: "recusada", decididaEm: ctx.agora } };
 
-  const nova = registrarIssue(
-    { projeto: ag.issue.projeto, deps: [ag.issue.id], titulo: proposta.titulo, descricao: proposta.mensagem },
-    AUDITOR,
-    ctx,
-  );
+  const nova = aceita
+    ? registrarIssue(
+        { projeto: ag.issue.projeto, deps: [ag.issue.id], titulo: proposta.titulo, descricao: proposta.mensagem },
+        AUDITOR,
+        ctx,
+      )
+    : undefined;
   const decidida: PropostaIssue = {
     ...proposta,
-    status: "aceita",
-    issueCriada: nova.issue.id,
+    status: nova ? "aceita" : "recusada",
+    ...(nova && { issueCriada: nova.issue.id }),
     decididaEm: ctx.agora,
   };
-  const noRegistro = ag.issue.fase === "registro";
-  const i = `I-${String(nova.issue.id)}`;
-  const motivo =
-    `A Fabriquinha criou a ${i} («${proposta.titulo}») a partir da proposta de issue aceita pelo Auditor. ` +
-    `Refaça o desenho sem o que a ${i} assumiu; leia a descrição dela com fabriquinha issue ver ${i}.`;
-  return {
-    ag: noRegistro ? ag : decidirDesenho(ag, { aprovado: false, motivo }, ator, ctx),
-    proposta: decidida,
-    nova,
-  };
+  const todas = propostas.map((p) => (p.id === decidida.id ? decidida : p));
+  if (propostasAbertas(ag, todas).length > 0) return { ag, proposta: decidida, nova };
+
+  const [lote = []] = lotes(todas.filter((p) => p.ticket === proposta.ticket)).slice(-1);
+  const reprovado =
+    ag.issue.fase === "registro"
+      ? ag
+      : decidirDesenho(ag, { aprovado: false, motivo: motivoDoLote(lote, ag.issue.id) }, ator, ctx);
+  return { ag: reprovado, proposta: decidida, nova, lote };
 }

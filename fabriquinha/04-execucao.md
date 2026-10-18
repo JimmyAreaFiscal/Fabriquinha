@@ -55,6 +55,7 @@ const Configuracao = z.object({
   intervaloMin: z.number().int().min(1).max(1440).default(5),
   timeoutMin: z.number().int().min(10).max(1440).default(120),
   ociosidadeMin: z.number().int().min(5).max(1440).default(30),
+  modeloAuditoria: Modelo.nullable().default(null),
 });
 ```
 
@@ -64,6 +65,7 @@ const Configuracao = z.object({
 | `intervaloMin` | De quanto em quanto tempo o agendador procura trabalho. |
 | `timeoutMin` | Tempo limite de uma execução autônoma; conta só o tempo ativo (6.5). É o botão de calibração para modelos locais lentos. |
 | `ociosidadeMin` | Depois desse tempo sem mensagem, o processo de uma sessão interativa é parado; a próxima mensagem a retoma (6.6). |
+| `modeloAuditoria` | Modelo do pi da Auditoria do Histórico, global (não pertence a projeto). Nulo: o pi usa o modelo padrão dele. Só muda se o par é listado por `pi --list-models` (seção 9); a retomada depois da ociosidade usa o da Configuração daquele momento. |
 
 Também pelo web: cadastro e edição de projetos (C19) e override de modelo por ticket (C20), com a conferência de modelos da seção 9.
 Segredos (`SONAR_TOKEN`) continuam no ambiente do serviço (`<raiz>/ambiente`), fora do banco.
@@ -147,7 +149,7 @@ O chat mostra a conversa inteira da sessão e, se houver processo vivo, os event
 | Origem do conteúdo | Quando |
 |---|---|
 | Arquivo JSONL da sessão do pi | Sempre, para o que já aconteceu, inclusive quando não há processo vivo. |
-| Eventos do processo, repassados ao navegador por Server-Sent Events | Enquanto há execução em andamento. |
+| Eventos do processo, repassados ao navegador por Server-Sent Events | Enquanto há execução em andamento. O fim de cada ferramenta do pi emite o evento `estado`, porque o CLI `fabriquinha` roda noutro processo e não alcança os ouvintes. |
 
 O que o campo de mensagem faz depende do estado:
 
@@ -279,10 +281,11 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
 - **Gate do registro e do desenho (`decidirGate`):** a decisão é na página da issue.
   O F4 para o pi ocioso; aprovado, descarta o que a sessão deixou na worktree (o protótipo do desenho, F3 §7) e grava C10 ou C15; devolvido, grava a decisão com o motivo e retoma a **mesma** sessão com a mensagem "O Auditor devolveu o registro. Motivo: …" ou "O Auditor reprovou o desenho. Motivo: …".
 - **Proposta de issue (C23, C24):** a IA do registro ou do desenho propõe dividir a issue (`fabriquinha issue propor`), e o Auditor só aceita ou recusa; `decidirProposta(proposta, aceita)` confere que a proposta está pendente no gate atual e recusa antes de gravar se não estiver.
-  - **No registro**, a decisão é no chat. O F4 para o pi ocioso (recusa se o agente ainda trabalha), grava C24 e retoma a sessão com o aviso da Fabriquinha à IA.
+  - **Retomada única por lote:** o F4 sempre para o pi ocioso (recusa se o agente ainda trabalha) e grava C24, mas só a decisão que deixa o gate sem proposta aberta retoma a IA, uma vez, com o lote; as anteriores só avisam a sessão. Enquanto há proposta aberta no gate, `decidirGate` (Aprovar e Devolver do registro; Aprovar e Reprovar do desenho) recusa com 409 antes de parar o pi.
+  - **No registro**, a decisão é no chat. Fechado o lote, o F4 retoma a sessão com o aviso do lote: o da proposta, se for uma só; senão, "O Auditor decidiu as suas propostas de issue:" e uma linha `- P-n: <aviso da proposta>` por proposta.
     O aviso de aceite diz: "A Fabriquinha criou a I-n («título») a partir da sua proposta, que o Auditor aceitou; ela depende da I-m. Reduza o escopo da I-m: …". O de recusa: "O Auditor recusou a sua proposta de issue «título»…".
     A IA ajusta a issue e as evidências na mesma sessão.
-  - **No desenho**, a decisão é no gate, na página da issue. O aceite para o pi ocioso, grava C24 com o desenho reprovado (C15) e o motivo que cita a issue nova, e retoma a sessão do desenho com esse motivo. A recusa só marca a proposta e avisa a sessão, e o gate continua aberto.
+  - **No desenho**, a decisão é no gate, na página da issue. Fechado o lote (aceites, recusas ou os dois), o C24 grava o desenho reprovado (C15) com o motivo que lista as decisões, e o F4 retoma a sessão do desenho com esse motivo. Antes disso o gate continua aberto.
   - No aceite, nos dois casos, o F4 abre o registro da issue nova (mesma sessão interativa de **Registrar necessidade**, com a descrição que veio da mensagem da proposta).
 - **Sessão em aberto:** aparece sozinha como `aguardando_humano: conversa` quando o PR é reprovado (C16).
   A mensagem inicial traz o motivo e a URL do PR.
@@ -386,7 +389,10 @@ CREATE TABLE configuracao (
   agendador_ativo  INTEGER NOT NULL DEFAULT 0 CHECK (agendador_ativo IN (0,1)),
   intervalo_min    INTEGER NOT NULL DEFAULT 5   CHECK (intervalo_min BETWEEN 1 AND 1440),
   timeout_min      INTEGER NOT NULL DEFAULT 120 CHECK (timeout_min BETWEEN 10 AND 1440),
-  ociosidade_min   INTEGER NOT NULL DEFAULT 30  CHECK (ociosidade_min BETWEEN 5 AND 1440)
+  ociosidade_min   INTEGER NOT NULL DEFAULT 30  CHECK (ociosidade_min BETWEEN 5 AND 1440),
+  auditoria_provedor TEXT,
+  auditoria_modelo   TEXT,
+  CHECK ((auditoria_provedor IS NULL) = (auditoria_modelo IS NULL))
 );
 ```
 

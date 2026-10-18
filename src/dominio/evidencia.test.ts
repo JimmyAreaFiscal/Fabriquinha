@@ -282,6 +282,56 @@ test("C17 exige ticket desta issue, em execução, e tipo da etapa dele", () => 
   );
 });
 
+test("C17 recusa depois do envio ao gate, sem mudar as evidências; aceita de novo depois de devolvido", () => {
+  const prototipo = (id: number): Evidencia => ({
+    id,
+    ticket: 2,
+    tipo: "prototipo",
+    produtor: "agente",
+    dados: {},
+    arquivos: [],
+    em: ANTES,
+  });
+  const ag = base();
+  const desenho: Agregado = {
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.id === 2 ? { ...t, status: "em_execucao", enviadoEm: ANTES } : t)),
+    execucoes: [
+      ...ag.execucoes,
+      { id: 2, ticket: 2, modo: "interativo", sessaoPi: SESSAO, resultado: "em_andamento", iniciadaEm: ANTES },
+    ],
+    evidencias: [prototipo(7)],
+  };
+  const entrada = { ticket: 2, tipo: "prototipo", dados: DADOS };
+  const msg = "T-2 está enviado à aprovação, não em execução";
+  const dica =
+    "só se registra evidência de ticket em execução; se o Auditor reprovar, o ticket volta e você pode trocar a evidência";
+  const externo: Ator = { tipo: "externo" };
+  for (const ator of [agente(2), fabriquinha]) {
+    falha(() => registrar(desenho, ator, entrada), ErroDeRegra, `${msg} (${dica})`);
+  }
+  // A IA externa só registra no registro; o envio vale igual para ele.
+  const registroEnviado: Agregado = {
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.id === 1 ? { ...t, origem: "externo", enviadoEm: ANTES } : t)),
+    execucoes: ag.execucoes.filter((e) => e.ticket !== 1),
+  };
+  falha(
+    () => registrar(registroEnviado, externo, { ticket: 1, tipo: "comportamento", dados: DADOS }),
+    ErroDeRegra,
+    `T-1 está enviado à aprovação, não em execução (${dica})`,
+  );
+  assert.deepEqual(desenho.evidencias, [prototipo(7)]);
+
+  const { enviadoEm: _devolvido, ...volta } = ticketDe(desenho, 2);
+  const devolvido = { ...desenho, tickets: desenho.tickets.map((t) => (t.id === 2 ? volta : t)) };
+  const depois = registrar(devolvido, agente(2), entrada);
+  assert.deepEqual(
+    depois.evidencias.map((e) => [e.id, e.tipo]),
+    [[50, "prototipo"]],
+  );
+});
+
 test("C17 valida a entrada: tipo, ticket e anexos de nome único", () => {
   const ag = base();
   assert.throws(() => registrar(ag, agente(1), { ticket: 1, tipo: "video" }), ZodError);

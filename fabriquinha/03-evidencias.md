@@ -392,6 +392,7 @@ Passos, nesta ordem; o primeiro que falhar interrompe sem gravar nada:
 7. Numa transação: C17 com `aprovada` calculada, `evidencia` e `evidencia_arquivo`.
 
 Submeter de novo o mesmo tipo no mesmo ticket substitui a evidência anterior.
+A submissão vale até o envio do ticket ao gate (C25): enviado, o passo 1 recusa; se o Auditor reprovar, o ticket volta sem `enviadoEm` e a troca é aceita de novo.
 
 `fabriquinha evidencia schema <tipo>` imprime o JSON Schema de `dados` (gerado por `z.toJSONSchema`) e as regras de arquivo.
 A skill de cada etapa aponta para esse comando, em vez de repetir o formato.

@@ -68,7 +68,10 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
     api<{ sessao: string }>("/api/auditorias", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mes: elemento("[data-mes]", HTMLSelectElement).value }),
+      body: JSON.stringify({
+        mes: elemento("[data-mes]", HTMLSelectElement).value,
+        pedido: elemento("[data-pedido]", HTMLTextAreaElement).value,
+      }),
     })
       .then(({ sessao }) => {
         irPara(caminhoDaAuditoria(sessao));

@@ -18,13 +18,15 @@ export type ProjetoListado = Projeto & { issues: number };
 /** O projeto no formulário: o novo ainda não tem hospedagem (o F5 a deduz do remoto ao salvar). */
 export type Rascunho = Omit<Projeto, "hospedagem"> & { hospedagem?: Hospedagem };
 
-/** O item do menu escolhido, pelo endereço: `/config`, `/config?projeto=<nome>` ou `/config?novo`. */
-export type Selecao = { tipo: "agendador" } | { tipo: "projeto"; nome: string } | { tipo: "novo" };
+/** O item do menu escolhido, pelo endereço: `/config`, `/config?auditoria`, `/config?projeto=<nome>` ou `/config?novo`. */
+export type Selecao =
+  { tipo: "agendador" } | { tipo: "auditoria" } | { tipo: "projeto"; nome: string } | { tipo: "novo" };
 
 export function selecao(busca: string): Selecao {
   const q = new URLSearchParams(busca);
   const nome = q.get("projeto");
   if (nome) return { tipo: "projeto", nome };
+  if (q.has("auditoria")) return { tipo: "auditoria" };
   return q.has("novo") ? { tipo: "novo" } : { tipo: "agendador" };
 }
 
@@ -90,7 +92,7 @@ const EFFORTS = Object.keys({ off: 0, minimal: 0, low: 0, medium: 0, high: 0, xh
 
 const atual = (sim: boolean): string => (sim ? ' aria-current="page"' : "");
 
-/** Menu à esquerda: Geral → Agendador, com a marca; Projetos → um por projeto, com a hospedagem, e o novo. */
+/** Menu à esquerda: Geral → Agendador, com a marca, e Auditoria; Projetos → um por projeto, com a hospedagem, e o novo. */
 export function menu(config: Configuracao, projetos: readonly ProjetoListado[], sel: Selecao): string {
   const ligado = config.agendadorAtivo
     ? '<span class="pill pill-ok">ligado</span>'
@@ -99,7 +101,7 @@ export function menu(config: Configuracao, projetos: readonly ProjetoListado[], 
     (p) =>
       `<a href="/config?projeto=${encodeURIComponent(p.nome)}"${atual(sel.tipo === "projeto" && sel.nome === p.nome)}>${escapar(p.nome)}<span class="muted hospedagem">${HOSPEDAGEM[p.hospedagem]}</span></a>`,
   );
-  return `<nav class="menu-config" aria-label="Configuração"><span class="rotulo">Geral</span><a href="/config"${atual(sel.tipo === "agendador")}>Agendador ${ligado}</a><span class="rotulo">Projetos</span>${itens.join("")}<a class="novo" href="/config?novo"${atual(sel.tipo === "novo")}>+ Novo projeto</a></nav>`;
+  return `<nav class="menu-config" aria-label="Configuração"><span class="rotulo">Geral</span><a href="/config"${atual(sel.tipo === "agendador")}>Agendador ${ligado}</a><a href="/config?auditoria"${atual(sel.tipo === "auditoria")}>Auditoria</a><span class="rotulo">Projetos</span>${itens.join("")}<a class="novo" href="/config?novo"${atual(sel.tipo === "novo")}>+ Novo projeto</a></nav>`;
 }
 
 const hora = (instante: string): string =>
@@ -175,20 +177,34 @@ function fitness(erros: Erros, itens: Projeto["fitness"]): string {
   return `<div class="grupo"><h3>Fitness functions <span class="nota">· pelo menos uma; rodam no desenvolvimento e na revisão</span></h3><div class="lista${m.classe}"><div class="fitness-cab" aria-hidden="true"><span>Nome</span><span>Comando</span><span>Descrição (até 300)</span><span></span></div>${linhas.join("")}${m.msg}<button type="button" class="link" data-adicionar="fitness">+ fitness function</button></div></div>`;
 }
 
+/** O seletor de modelo do `caminho`: "padrão do pi" primeiro e, se o pi deixou de listar o gravado, ele continua nas opções. */
+function seletorDeModelo(
+  erros: Erros,
+  caminho: string,
+  escolhido: Modelo | null | undefined,
+  disponiveis: readonly Modelo[],
+): string {
+  // O modelo gravado que o pi deixou de listar continua no seletor: salvar sem mexer não o apaga sem aviso.
+  const opcoes =
+    escolhido && !disponiveis.some((m) => par(m) === par(escolhido)) ? [...disponiveis, escolhido] : disponiveis;
+  const m = marca(erros, caminho);
+  const options = opcoes.map((o) => {
+    const selecionado = escolhido && par(o) === par(escolhido) ? " selected" : "";
+    return `<option value="${escapar(par(o))}"${selecionado}>${escapar(nomeDoModelo(o))}</option>`;
+  });
+  return `<div class="celula${m.classe}"><select id="${idDe(caminho)}" name="${caminho}"${escolhido ? "" : ' class="padrao"'}${m.aria}><option value="">padrão do pi</option>${options.join("")}</select>${m.msg}</div>`;
+}
+
+/** Auditoria (F7 §4.4): o modelo que o pi da Auditoria do Histórico usa, e Salvar. */
+export function auditoria(estado: EstadoDaConfiguracao, modelos: readonly Modelo[], erros: Erros): string {
+  const caminho = "modeloAuditoria";
+  return `<h2>Auditoria</h2><form class="form" data-auditoria novalidate><div class="campo"><label for="${idDe(caminho)}">Modelo da Auditoria</label>${seletorDeModelo(erros, caminho, estado.modeloAuditoria, modelos)}<span class="ajuda">vazio usa o padrão do pi; vale para as auditorias iniciadas no Histórico</span></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form>`;
+}
+
 function modelos(erros: Erros, escolhidos: Rascunho["modelos"], disponiveis: readonly Modelo[]): string {
   const linhas = ETAPAS.map(([etapa, rotulo]) => {
-    const escolhido = escolhidos[etapa];
-    // O modelo gravado que o pi deixou de listar continua no seletor: salvar sem mexer não o apaga sem aviso.
-    const opcoes =
-      escolhido && !disponiveis.some((m) => par(m) === par(escolhido)) ? [...disponiveis, escolhido] : disponiveis;
     const caminho = `modelos.${etapa}`;
-    const m = marca(erros, caminho);
-    const options = opcoes.map((o) => {
-      const selecionado = escolhido && par(o) === par(escolhido) ? " selected" : "";
-      const rotuloDoPar = escapar(nomeDoModelo(o));
-      return `<option value="${escapar(par(o))}"${selecionado}>${rotuloDoPar}</option>`;
-    });
-    return `<label for="${idDe(caminho)}">${rotulo}</label><div class="celula${m.classe}"><select id="${idDe(caminho)}" name="${caminho}"${escolhido ? "" : ' class="padrao"'}${m.aria}><option value="">padrão do pi</option>${options.join("")}</select>${m.msg}</div>`;
+    return `<label for="${idDe(caminho)}">${rotulo}</label>${seletorDeModelo(erros, caminho, escolhidos[etapa], disponiveis)}`;
   });
   return `<div class="grupo"><h3>Modelo por etapa <span class="nota">· vazio usa o padrão do pi; o ticket pode sobrescrever</span></h3><div class="modelos-grade">${linhas.join("")}</div></div>`;
 }

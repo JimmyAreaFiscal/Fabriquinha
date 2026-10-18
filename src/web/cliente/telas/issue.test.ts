@@ -694,18 +694,25 @@ test("cartão da proposta: rótulo, T-n, estimativa em destaque acima de 30, tex
   assert.match(html, /<strong class="titulo">Parte B &#60;img src=x onerror=&#34;alert\(1\)&#34;&#62;<\/strong>/);
   assert.match(html, /<strong>relatório<\/strong>/);
   assert.doesNotMatch(html, /<img/);
-  assert.match(html, /devolve o desenho como reprovado/);
+  assert.match(
+    html,
+    /Aceitar cria a issue, que depende da I-1\. Decididas todas as propostas, o desenho volta à IA com as decisões\./,
+  );
   assert.match(html, /data-acao="recusar-proposta" data-id="9">Recusar<\/button>/);
   assert.match(html, /data-acao="aceitar-proposta" data-id="9">Aceitar<\/button>/);
   assert.doesNotMatch(cartaoDaProposta(proposta({ arquivos: 30 }), false, 1), /acima/);
   assert.match(cartaoDaProposta(proposta(), false, 1), /a IA da I-1 reduz o escopo/);
 });
 
-test("gate do desenho: o cartão da proposta vem antes de decidir, e só com proposta", () => {
+test("gate do desenho: com proposta aberta o cartão toma o lugar de Aprovar e Reprovar", () => {
   assert.doesNotMatch(gateDoDesenho(noGate(), QUARENTA_E_SETE), /class="proposta"/);
   const html = gateDoDesenho({ ...noGate(), propostas: [proposta()] }, QUARENTA_E_SETE);
-  assert.ok(html.indexOf('class="proposta"') < html.indexOf('class="decidir"'));
-  assert.match(html, /data-acao="aprovar-desenho"/);
+  assert.match(html, /Decida as propostas de issue antes de aprovar ou reprovar o desenho\./);
+  assert.doesNotMatch(html, /class="decidir"|data-acao="(aprovar|reprovar)-desenho"/);
+  const semProposta = gateDoDesenho(noGate(), QUARENTA_E_SETE);
+  assert.match(semProposta, /data-acao="reprovar-desenho"[^>]*>Reprovar<\/button>/);
+  assert.match(semProposta, /data-acao="aprovar-desenho"/);
+  assert.doesNotMatch(semProposta, /Decida as propostas de issue/);
 });
 
 test("gate do desenho: espera, 4 números, critérios, tickets propostos com o modelo, e a decisão", () => {

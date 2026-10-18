@@ -73,8 +73,9 @@ function mensagem(message: object): void {
 const doAgente = (content: object[], stopReason = "stop") => ({
   role: "assistant",
   content,
-  provider: "anthropic",
-  model: "claude-opus-5-5",
+  // A auditoria sobe com o modelo da Configuração (--provider/--model); sem ele, o padrão do pi.
+  provider: argumentos.includes("--provider") ? arg("--provider") : "anthropic",
+  model: argumentos.includes("--model") ? arg("--model") : "claude-opus-5-5",
   stopReason,
   usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12, cost: { total: 0.01 } },
 });
@@ -105,6 +106,7 @@ async function aoVivo(): Promise<void> {
     content: [{ type: "text", text: [...saida, "FAIL test/cupons.spec.ts", "3 failed"].join("\n") }],
     isError: true,
   });
+  emitir({ type: "tool_execution_end", toolCallId: "t1", toolName: "bash", isError: true });
   await transmitir([
     [50, "Os testes "],
     [50, "esperam a "],
