@@ -1,8 +1,9 @@
 // Repositório da configuração SDLC do projeto (comparacao-sdlc §7.1). Convive com `projetos.ts`, que segue dono do
 // formato legado; aqui só se tocam as colunas comuns e as tabelas novas. Sem coluna de posição: a ordem vem das chaves.
+import { isAbsolute } from "node:path";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { Projeto } from "../dominio/configuracao_projeto.ts";
-import { ErroDeInexistente } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { escrever } from "./banco.ts";
 
 type Linha = Record<string, unknown>;
@@ -81,6 +82,9 @@ function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: str
  */
 export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
   const p = Projeto.parse(entrada);
+  // `projeto.repo` é compartilhada com o formato legado, que exige caminho absoluto: recusar antes de gravar.
+  if (!isAbsolute(p.raiz_git))
+    throw new ErroDeRegra(`raiz_git ${p.raiz_git} não é absoluta`, "informe um caminho absoluto");
   return escrever(banco, () => {
     const { changes } = banco
       .prepare(

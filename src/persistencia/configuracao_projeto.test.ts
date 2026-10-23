@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { Projeto } from "../dominio/configuracao_projeto.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { abrir } from "./banco.ts";
+import { projeto, projetos, registrarProjeto } from "./projetos.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "./configuracao_projeto.ts";
 
 const TABELAS = [
@@ -246,5 +247,33 @@ test("leitura é um snapshot: escrita concorrente só aparece depois", () => {
       leitor.close();
     }
     assert.ok(Projeto.safeParse(configuracaoProjeto(banco, "a")).success);
+  });
+});
+
+test("raiz_git relativa é recusada sem mutação e as leituras legadas seguem válidas", () => {
+  comBanco((banco) => {
+    const legado = {
+      nome: "loja",
+      repo: "/repos/loja",
+      branchBase: "main",
+      hospedagem: "github",
+      testes: ["npm test"],
+      sonar: { projectKey: "loja" },
+      fitness: [{ nome: "dominio", comando: "npm run fitness", descricao: "Sem I/O" }],
+    };
+    banco.exec("DELETE FROM projeto"); // as fixtures a/b têm JSON legado inválido; aqui só dados válidos
+    registrarProjeto(banco, legado);
+    registrarProjeto(banco, { ...legado, nome: "outro", repo: "/repos/outro" });
+    const sdlc = { ...minima("loja"), raiz_git: "/repos/loja" };
+    gravarConfiguracaoProjeto(banco, sdlc);
+    const antes = dump(banco);
+    assert.throws(() => gravarConfiguracaoProjeto(banco, { ...sdlc, raiz_git: "repo-relativo" }), /absoluta/);
+    assert.deepEqual(dump(banco), antes);
+    assert.equal(banco.isTransaction, false);
+    assert.equal(projeto(banco, "loja")?.repo, "/repos/loja");
+    assert.equal(projetos(banco).length, 2);
+    gravarConfiguracaoProjeto(banco, { ...sdlc, raiz_git: "/repos/nova" });
+    assert.equal(projeto(banco, "loja")?.repo, "/repos/nova");
+    assert.deepEqual(configuracaoProjeto(banco, "loja")?.raiz_git, "/repos/nova");
   });
 });
