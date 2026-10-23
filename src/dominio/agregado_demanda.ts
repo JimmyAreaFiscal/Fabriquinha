@@ -30,6 +30,8 @@ export const TicketDemanda = z.object({
   modelo_provedor: Modelo.shape.provedor.optional(),
   modelo_nome: Modelo.shape.modelo.optional(),
   effort: Effort.optional(),
+  // Instrução do Auditor ao reabrir um ticket falho; a sessão que o retomar a lê (§4.2).
+  instrucao: Markdown.optional(),
 });
 
 export const RodadaDemanda = z.object({

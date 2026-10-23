@@ -9,7 +9,9 @@ import {
   decidirDemanda,
   editarDemanda,
   enviarDemanda,
+  reabrirTicket,
   registrarDemanda,
+  registrarFalhaTicket,
   reprovarPlanejamento,
   submeterPlano,
 } from "./transicoes_demanda.ts";
@@ -346,4 +348,39 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
     em: t2,
   });
   assert.equal(confirmarAprovacaoPlanejamento(ag, {}, AUDITOR, { agora: t2 }).decisoes.at(-1)?.nota, undefined);
+});
+
+const tk2 = (ag: AgregadoDemanda) => ag.tickets.find((t) => t.ticket_id === 2);
+const emExecucao = (status: string): AgregadoDemanda => {
+  const ag = emPlanejamento();
+  return {
+    ...ag,
+    demanda: { ...ag.demanda, fase: "execucao" },
+    tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, status: status as never } : t)),
+  };
+};
+
+test("CA-16: a falha põe o ticket em falhou sem mudar fase nem decisões; recusa outro status e demanda encerrada", () => {
+  const ag = emExecucao("em_execucao");
+  const novo = registrarFalhaTicket(ag, { ticket_id: 2 }, { agora: t2 });
+  assert.equal(tk2(novo)?.status, "falhou");
+  assert.equal(tk2(novo)?.status_alterado_em, t2);
+  assert.equal(novo.demanda, ag.demanda);
+  assert.equal(novo.decisoes, ag.decisoes);
+  assert.throws(() => registrarFalhaTicket(novo, { ticket_id: 2 }, { agora: t2 }), ErroDeRegra);
+  assert.throws(() => registrarFalhaTicket(ag, { ticket_id: 9 }, { agora: t2 }), ErroDeRegra);
+  const fim = { ...ag, demanda: { ...ag.demanda, fase: "concluida" as const } };
+  assert.throws(() => registrarFalhaTicket(fim, { ticket_id: 2 }, { agora: t2 }), ErroDeRegra);
+});
+
+test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a instrução", () => {
+  const ag = emExecucao("falhou");
+  assert.throws(() => reabrirTicket(ag, { ticket_id: 2, instrucao: "  " }, AUDITOR, { agora: t2 }));
+  assert.throws(() => reabrirTicket(ag, { ticket_id: 2, instrucao: "x" }, agente, { agora: t2 }), ErroDeEscopo);
+  assert.throws(() => reabrirTicket(emExecucao("aberto"), { ticket_id: 2, instrucao: "x" }, AUDITOR, { agora: t2 }));
+  const novo = reabrirTicket(ag, { ticket_id: 2, instrucao: "tente de novo" }, AUDITOR, { agora: t2 });
+  assert.equal(tk2(novo)?.status, "aberto");
+  assert.equal(tk2(novo)?.instrucao, "tente de novo");
+  assert.equal(novo.decisoes, ag.decisoes);
+  assert.equal(tk2(ag)?.status, "falhou");
 });

@@ -6,7 +6,7 @@ import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda } from "./agre
 import { branchDemanda, branchRodada, DemandaId, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { AutorDemanda, exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { type FaseDemanda, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { type FaseDemanda, Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;
@@ -324,4 +324,57 @@ export function confirmarAprovacaoPlanejamento(
       t.caminhos.map((caminho) => ({ demanda_id, ticket_id: id(t.ticket_id), caminho })),
     ),
   });
+}
+
+const FASES_ENCERRADAS: readonly FaseDemanda[] = ["concluida", "arquivada", "cancelada"];
+const EntradaReabertura = z.strictObject({
+  ticket_id: Id,
+  instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
+});
+const EntradaFalha = z.strictObject({ ticket_id: Id });
+
+function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDemanda["status"], acao: string) {
+  const ticket = existe(
+    ag.tickets.find((t) => t.ticket_id === ticket_id),
+    `o ticket ${String(ticket_id)} não existe`,
+    "use um ticket da demanda",
+  );
+  if (ticket.status !== status) {
+    throw new ErroDeRegra(
+      `o ticket ${String(ticket_id)} está ${ticket.status} e não pode ${acao}`,
+      `só ticket ${status}`,
+    );
+  }
+  return ticket;
+}
+
+const comStatus = (ag: AgregadoDemanda, alvo: TicketDemanda, extra: Partial<TicketDemanda>): AgregadoDemanda => ({
+  ...ag,
+  tickets: ag.tickets.map((t) => (t === alvo ? { ...t, ...extra } : t)),
+});
+
+/** CA-16: o ticket em execução passa a `falhou`; a fase e os gates da demanda não mudam. */
+export function registrarFalhaTicket(ag: AgregadoDemanda, entrada: unknown, ctx: ContextoDemanda): AgregadoDemanda {
+  const { ticket_id } = EntradaFalha.parse(entrada);
+  if (FASES_ENCERRADAS.includes(ag.demanda.fase)) {
+    throw new ErroDeRegra(
+      `a demanda ${ag.demanda.id} está em ${ag.demanda.fase}`,
+      "só falha ticket de demanda em andamento",
+    );
+  }
+  const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "falhar");
+  return comStatus(ag, ticket, { status: "falhou", status_alterado_em: ctx.agora });
+}
+
+/** CA-13 a CA-15: só o Auditor, com instrução; o ticket volta a `aberto` (elegível na próxima seleção), sem iniciar execução. */
+export function reabrirTicket(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirAuditor(ator, "reabrir um ticket");
+  const { ticket_id, instrucao } = EntradaReabertura.parse(entrada);
+  const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser reaberto");
+  return comStatus(ag, ticket, { status: "aberto", instrucao, status_alterado_em: ctx.agora });
 }
