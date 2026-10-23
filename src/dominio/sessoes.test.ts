@@ -119,6 +119,17 @@ test("CA-6: fim ausente é não encerrada; encerrar grava fim e falha", () => {
   assert.ok(new ErroDeRegra("x") instanceof Error);
 });
 
+test("CA-2/5/6: fim null é execução não encerrada", () => {
+  const sessoes = [sessao("s1")];
+  const e1 = { ...exec("e1", "s1"), fim: null };
+  assert.ok(ExecucaoSessao.safeParse(e1).success);
+  assert.equal(estadoExecucao({ ...e1, falha: true }), "em_andamento");
+  assert.throws(() => iniciarExecucao(sessoes, [e1], exec("e2", "s1")), regra);
+  assert.throws(() => retomarSessao(sessoes, [e1], exec("e2", "s1")), regra);
+  const fechada = primeiro(encerrarExecucao([e1], "e1", "2026-01-01T11:00:00Z", false));
+  assert.deepEqual([fechada.fim, estadoExecucao(fechada)], ["2026-01-01T11:00:00Z", "sucesso"]);
+});
+
 test("CA-7: dois modelos e registro idempotente", () => {
   let usos = registrarUso([], uso("e1", "a", 10));
   usos = registrarUso(usos, uso("e1", "b", 20));

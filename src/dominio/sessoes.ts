@@ -19,7 +19,7 @@ export const ExecucaoSessao = z.object({
   id: IdTexto,
   sessao_id: IdTexto,
   inicio: Instante,
-  fim: Instante.optional(),
+  fim: Instante.nullish(),
   /** Só vale com `fim`: false é sucesso, true é falha. */
   falha: z.boolean(),
 });
@@ -58,9 +58,12 @@ export const criarSessao = (sessoes: readonly Sessao[], nova: Sessao): Sessao[] 
   return [...sessoes, sessao];
 };
 
-/** Fim ausente é não encerrada: `falha` sozinha não indica sucesso. */
+/** Fim null ou omitido é execução não encerrada. */
+const aberta = (e: ExecucaoSessao): boolean => e.fim == null;
+
+/** `falha` sozinha não indica sucesso enquanto não houver fim. */
 export const estadoExecucao = (e: ExecucaoSessao): EstadoExecucaoSessao =>
-  e.fim === undefined ? "em_andamento" : e.falha ? "falha" : "sucesso";
+  aberta(e) ? "em_andamento" : e.falha ? "falha" : "sucesso";
 
 const abrir = (
   sessoes: readonly Sessao[],
@@ -74,7 +77,7 @@ const abrir = (
   if (retomada && daSessao.length === 0)
     throw new ErroDeRegra(`sessão ${exec.sessao_id} não tem execução a retomar`, "inicie uma");
   if (execucoes.some((e) => e.id === exec.id)) throw new ErroDeRegra(`execução ${exec.id} já existe`, "use outro id");
-  if (daSessao.some((e) => e.fim === undefined))
+  if (daSessao.some(aberta))
     throw new ErroDeRegra(`sessão ${exec.sessao_id} já tem execução sem fim`, "encerre-a antes");
   return [...execucoes, exec];
 };
@@ -97,7 +100,7 @@ export const encerrarExecucao = (
 ): ExecucaoSessao[] => {
   const alvo = execucoes.find((e) => e.id === id);
   if (!alvo) throw new ErroDeRegra(`execução ${id} não existe`);
-  if (alvo.fim !== undefined) throw new ErroDeRegra(`execução ${id} já foi encerrada`);
+  if (!aberta(alvo)) throw new ErroDeRegra(`execução ${id} já foi encerrada`);
   const encerrada = ExecucaoSessao.parse({ ...alvo, fim, falha });
   return execucoes.map((e) => (e.id === id ? encerrada : e));
 };
