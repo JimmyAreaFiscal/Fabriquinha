@@ -1,8 +1,21 @@
 // Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4): convive com o agregado legado de issue.
 import { z } from "zod";
 import { Evidencia, TipoAtor, TipoEvidencia, TipoIssue } from "./agregado.ts";
-import { branchDemanda, DemandaId } from "./demanda.ts";
-import { EtapaTicket, FaseDemanda, Id, Instante, Markdown, Motivo, Slug, StatusTicket, Titulo } from "./primitivos.ts";
+import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
+import {
+  Effort,
+  EtapaTicket,
+  FaseDemanda,
+  FaseRodada,
+  Id,
+  Instante,
+  Markdown,
+  Modelo,
+  Motivo,
+  Slug,
+  StatusTicket,
+  Titulo,
+} from "./primitivos.ts";
 
 export const TicketDemanda = z.object({
   demanda_id: DemandaId,
@@ -10,7 +23,27 @@ export const TicketDemanda = z.object({
   etapa: EtapaTicket,
   status: StatusTicket,
   status_alterado_em: Instante,
+  // Só os tickets criados pelo plano os têm (§7.2); os de demanda e planejamento nascem sem eles.
+  rodada_id: Id.optional(),
+  titulo: Titulo.optional(),
+  descricao: Markdown.optional(),
+  modelo_provedor: Modelo.shape.provedor.optional(),
+  modelo_nome: Modelo.shape.modelo.optional(),
+  effort: Effort.optional(),
 });
+
+export const RodadaDemanda = z.object({
+  demanda_id: DemandaId,
+  rodada_id: Id,
+  titulo: Titulo,
+  fase: FaseRodada,
+  e2e: z.boolean(),
+  branch: z.string(),
+});
+export const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
+export const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
+export const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
+export const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
 
 export const DecisaoDemanda = z.object({
   demanda_id: DemandaId,
@@ -23,8 +56,8 @@ export const DecisaoDemanda = z.object({
   em: Instante,
 });
 
-/** Os tipos legados mais `custos_realizados`, que só a demanda SDLC conhece (§4.1). */
-export const TipoEvidenciaAgregado = z.enum([...TipoEvidencia.options, "custos_realizados"]);
+/** Os tipos legados mais `custos_realizados` e `plano` (do ticket de planejamento), que só a demanda SDLC conhece (§4.1). */
+export const TipoEvidenciaAgregado = z.enum([...TipoEvidencia.options, "custos_realizados", "plano"]);
 
 /** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
 export const IdDono = Id.nullish().transform((v) => v ?? undefined);
@@ -80,17 +113,65 @@ export const AgregadoDemanda = z
     tickets: z.array(TicketDemanda),
     decisoes: z.array(DecisaoDemanda),
     evidencias: z.array(EvidenciaDemanda),
+    // Estado materializado pela aprovação do planejamento; o `Plano` em si só existe como evidência.
+    rodadas: z.array(RodadaDemanda).default([]),
+    dependencias_rodada: z.array(DependenciaRodada).default([]),
+    criterios_citados: z.array(CriterioCitadoRodada).default([]),
+    dependencias_ticket: z.array(DependenciaTicket).default([]),
+    caminhos_ticket: z.array(CaminhoDoTicket).default([]),
   })
   .superRefine((ag, ctx) => {
     const erro = (message: string) => {
       ctx.addIssue({ code: "custom", message });
     };
     const id = ag.demanda.id;
-    const tickets = new Set<number>();
+    const rodadas = new Set<number>();
+    for (const r of ag.rodadas) {
+      if (r.demanda_id !== id) erro(`a rodada ${String(r.rodada_id)} é de outra demanda (${r.demanda_id})`);
+      if (rodadas.has(r.rodada_id)) erro(`a rodada ${String(r.rodada_id)} se repete`);
+      if (r.branch !== branchRodada(r.demanda_id, r.rodada_id))
+        erro(`a branch da rodada ${String(r.rodada_id)} é ${branchRodada(r.demanda_id, r.rodada_id)}`);
+      rodadas.add(r.rodada_id);
+    }
+    const rodadaDe = new Map<number, number | undefined>();
     for (const t of ag.tickets) {
       if (t.demanda_id !== id) erro(`o ticket ${String(t.ticket_id)} é de outra demanda (${t.demanda_id})`);
-      if (tickets.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
-      tickets.add(t.ticket_id);
+      if (rodadaDe.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
+      if (t.rodada_id !== undefined && !rodadas.has(t.rodada_id))
+        erro(`o ticket ${String(t.ticket_id)} cita a rodada ${String(t.rodada_id)}, que não existe`);
+      if ((t.modelo_provedor === undefined) !== (t.modelo_nome === undefined))
+        erro(`o ticket ${String(t.ticket_id)} precisa de modelo_provedor e modelo_nome juntos`);
+      rodadaDe.set(t.ticket_id, t.rodada_id);
+    }
+    const tickets = new Set(rodadaDe.keys());
+    for (const l of [
+      ...ag.dependencias_rodada,
+      ...ag.criterios_citados,
+      ...ag.dependencias_ticket,
+      ...ag.caminhos_ticket,
+    ]) {
+      if (l.demanda_id !== id) erro(`um vínculo é de outra demanda (${l.demanda_id})`);
+    }
+    for (const d of ag.dependencias_rodada) {
+      if (d.rodada_id === d.depende_rodada_id) erro(`a rodada ${String(d.rodada_id)} não pode depender de si mesma`);
+      if (!rodadas.has(d.rodada_id) || !rodadas.has(d.depende_rodada_id))
+        erro(`a dependência da rodada ${String(d.rodada_id)} cita rodada que não existe`);
+    }
+    for (const c of ag.criterios_citados) {
+      if (!rodadas.has(c.rodada_id)) erro(`o ${c.criterio_id} cita a rodada ${String(c.rodada_id)}, que não existe`);
+    }
+    for (const c of ag.caminhos_ticket) {
+      if (!tickets.has(c.ticket_id))
+        erro(`o caminho ${c.caminho} cita o ticket ${String(c.ticket_id)}, que não existe`);
+    }
+    for (const d of ag.dependencias_ticket) {
+      const nome = `a dependência do ticket ${String(d.ticket_id)} no ${String(d.depende_ticket_id)}`;
+      const rodada = rodadaDe.get(d.ticket_id);
+      if (d.ticket_id === d.depende_ticket_id) erro(`o ticket ${String(d.ticket_id)} não pode depender de si mesmo`);
+      else if (!tickets.has(d.ticket_id) || !tickets.has(d.depende_ticket_id))
+        erro(`${nome} cita ticket que não existe`);
+      else if (rodada === undefined || rodada !== rodadaDe.get(d.depende_ticket_id))
+        erro(`${nome} exige a mesma rodada`);
     }
     const decisoes = new Set<string>();
     for (const d of ag.decisoes) {
@@ -112,6 +193,7 @@ export const AgregadoDemanda = z
     }
   });
 
+export type RodadaDemanda = z.infer<typeof RodadaDemanda>;
 export type TicketDemanda = z.infer<typeof TicketDemanda>;
 export type DecisaoDemanda = z.infer<typeof DecisaoDemanda>;
 export type EvidenciaDemanda = z.infer<typeof EvidenciaDemanda>;

@@ -1,6 +1,6 @@
 // Contratos SDLC puros (comparacao-sdlc-implementacao.md §2.2, §2.3, §4.1 e §7.2): identidades, branches e plano.
 import { z } from "zod";
-import { Id } from "./primitivos.ts";
+import { Effort, Id, Markdown, Modelo, Titulo } from "./primitivos.ts";
 
 // Letras + hífen + número (`I-196`): sem `/`, `.`, `..`, espaço ou `-` duplo, e sem colidir `fabriquinha/{demanda}-{rodada}`
 // com a branch de outra demanda (uma demanda sempre termina em `-n` com prefixo só de letras).
@@ -41,11 +41,29 @@ function acharCiclo(grafo: Map<string, string[]>): string[] | undefined {
   return undefined;
 }
 
+/** Caminho relativo à raiz git: sem absoluto, barra invertida nem segmento `..`. */
+export const CaminhoTicket = z
+  .string()
+  .min(1)
+  .refine((c) => !c.startsWith("/") && !c.includes("\\") && !c.split("/").includes(".."), {
+    message: "use caminho relativo à raiz git, sem `/` inicial, `\\` nem `..`",
+  });
+
 const Rodada = RodadaRef.extend({
+  titulo: Titulo,
+  e2e: z.boolean(),
   criterios: z.array(CriterioId).default([]),
   depende: z.array(RodadaRef).default([]),
 });
-const Ticket = TicketIdentidade.extend({ depende: z.array(TicketRef).default([]) });
+const Ticket = TicketIdentidade.extend({
+  titulo: Titulo,
+  descricao: Markdown,
+  caminhos: z.array(CaminhoTicket).default([]),
+  depende: z.array(TicketRef).default([]),
+  modelo_provedor: Modelo.shape.provedor.optional(),
+  modelo_nome: Modelo.shape.modelo.optional(),
+  effort: Effort.optional(),
+});
 
 /** Plano flat de uma demanda: `criterios` são os `CA-n` da demanda; cada rodada e ticket carrega o seu `demanda_id`. */
 export const Plano = z
@@ -90,6 +108,9 @@ export const Plano = z
     for (const t of plano.tickets) {
       if (t.demanda_id !== demanda) erro(`o ticket ${String(t.ticket_id)} é de outra demanda (${t.demanda_id})`);
       if (tickets.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
+      if ((t.modelo_provedor === undefined) !== (t.modelo_nome === undefined))
+        erro(`o ticket ${String(t.ticket_id)} precisa de modelo_provedor e modelo_nome juntos`);
+      if (new Set(t.caminhos).size !== t.caminhos.length) erro(`o ticket ${String(t.ticket_id)} repete caminho`);
       if (t.rodada_id !== undefined && !rodadas.has(t.rodada_id))
         erro(`o ticket ${String(t.ticket_id)} está na rodada ${String(t.rodada_id)}, que não existe`);
       tickets.set(t.ticket_id, t.rodada_id);

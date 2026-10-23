@@ -2,11 +2,11 @@
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
 import { type Ator, exigirAuditor, TipoIssue } from "./agregado.ts";
-import { AgregadoDemanda, type DecisaoDemanda } from "./agregado_demanda.ts";
-import { branchDemanda, DemandaId } from "./demanda.ts";
-import { ErroDeRegra } from "./erros.ts";
+import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
+import { branchDemanda, branchRodada, DemandaId, Plano } from "./demanda.ts";
+import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { AutorDemanda, exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { type FaseDemanda, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;
@@ -122,11 +122,206 @@ export function decidirDemanda(
     em: ctx.agora,
   };
   return {
+    ...ag,
     demanda: { ...demanda, fase: e.aprovado ? "planejamento" : "cancelada", fase_alterada_em: ctx.agora },
     tickets: ag.tickets.map((t) =>
       t === ticket ? { ...t, status: e.aprovado ? "concluido" : "cancelado", status_alterado_em: ctx.agora } : t,
     ),
     decisoes: [...ag.decisoes, decisao],
-    evidencias: ag.evidencias,
   };
+}
+
+const EntradaReprovacao = z.strictObject({ motivo: Motivo });
+const EntradaAprovacao = z.strictObject({ nota: z.number().int().min(1).max(5).optional() });
+// A definição congelada guarda os `CA-n` em `dados.criterios[].id` (F3); o resto do payload não interessa aqui.
+const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
+
+function exigirFase(ag: AgregadoDemanda, fase: FaseDemanda, acao: string): void {
+  const { demanda } = ag;
+  if (demanda.fase !== fase) {
+    throw new ErroDeRegra(`a demanda ${demanda.id} está em ${demanda.fase} e não pode ${acao}`, `só na fase ${fase}`);
+  }
+}
+
+function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
+  const ticket = ag.tickets.find((t) => t.etapa === "planejar");
+  if (ticket === undefined) {
+    throw new ErroDeRegra(
+      `a demanda ${ag.demanda.id} não tem ticket de etapa planejar`,
+      "abra o ticket de planejamento",
+    );
+  }
+  return ticket;
+}
+
+/** O plano submetido, guardado como evidência do ticket de planejamento. */
+function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plano {
+  const evidencia = ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket.ticket_id);
+  if (evidencia === undefined) {
+    throw new ErroDeRegra(
+      `a demanda ${ag.demanda.id} não tem plano submetido`,
+      "o agente de planejamento o submete antes",
+    );
+  }
+  return Plano.parse(evidencia.dados);
+}
+
+const decisaoDoAuditor = (
+  ag: AgregadoDemanda,
+  ticket: TicketDemanda,
+  resultado: DecisaoDemanda["resultado"],
+  extra: Pick<DecisaoDemanda, "motivo" | "nota">,
+  ctx: ContextoDemanda,
+): DecisaoDemanda => ({
+  demanda_id: ag.demanda.id,
+  ticket_id: ticket.ticket_id,
+  decisao_id: ag.decisoes.length + 1,
+  resultado,
+  ...extra,
+  por: "auditor",
+  em: ctx.agora,
+});
+
+/**
+ * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejamento`. O plano precisa passar pelo `Plano` e
+ * citar só `CA-n` da definição congelada; aceito, vira evidência do ticket e a demanda vai a `aprovacao_planejamento`.
+ */
+export function submeterPlano(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  const { demanda } = ag;
+  const ticket = ticketPlanejamento(ag);
+  if (ator.tipo !== "agente" || ator.ticket !== ticket.ticket_id) {
+    throw new ErroDeEscopo(
+      "só o agente do ticket de planejamento pode submeter o plano",
+      "peça à sessão de planejamento",
+    );
+  }
+  exigirFase(ag, "planejamento", "receber plano");
+  const plano = Plano.safeParse(entrada);
+  if (!plano.success) {
+    throw new ErroDeRegra(
+      `plano inválido: ${plano.error.issues.map((i) => i.message).join("; ")}`,
+      "corrija o plano e submeta de novo",
+    );
+  }
+  if (plano.data.demanda_id !== demanda.id) {
+    throw new ErroDeRegra(
+      `o plano é da demanda ${plano.data.demanda_id}, não da ${demanda.id}`,
+      "use o demanda_id certo",
+    );
+  }
+  const definicao = ag.evidencias.find(
+    (e) => e.tipo === "criterios_aceite" && e.rodada_id === undefined && e.ticket_id === undefined,
+  );
+  const existentes = new Set(DadosCriterios.safeParse(definicao?.dados).data?.criterios.map((c) => c.id));
+  const ausentes = plano.data.criterios.filter((c) => !existentes.has(c));
+  if (ausentes.length > 0) {
+    throw new ErroDeRegra(
+      `o plano cita ${ausentes.join(", ")}, que a definição da demanda ${demanda.id} não tem`,
+      "cite só os CA-n da definição congelada",
+    );
+  }
+  const evidencia = {
+    demanda_id: demanda.id,
+    rodada_id: undefined,
+    ticket_id: ticket.ticket_id,
+    tipo: "plano" as const,
+    dados: plano.data,
+    em: ctx.agora,
+  };
+  return {
+    ...ag,
+    demanda: { ...demanda, fase: "aprovacao_planejamento", fase_alterada_em: ctx.agora },
+    evidencias: [...ag.evidencias.filter((e) => !(e.tipo === "plano" && e.ticket_id === ticket.ticket_id)), evidencia],
+  };
+}
+
+/** CA-4 e CA-5: o Auditor reprova com motivo; a decisão é registrada e a demanda volta a `planejamento` com o mesmo ticket. */
+export function reprovarPlanejamento(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirAuditor(ator, "reprovar o planejamento");
+  const { motivo } = EntradaReprovacao.parse(entrada);
+  exigirFase(ag, "aprovacao_planejamento", "reprovar o planejamento");
+  const ticket = ticketPlanejamento(ag);
+  planoSubmetido(ag, ticket);
+  return {
+    ...ag,
+    demanda: { ...ag.demanda, fase: "planejamento", fase_alterada_em: ctx.agora },
+    decisoes: [...ag.decisoes, decisaoDoAuditor(ag, ticket, "recusado", { motivo }, ctx)],
+  };
+}
+
+/**
+ * CA-6 e CA-7: chamada pela aplicação só depois de preparar os recursos externos; sem a chamada nada muda. Cria
+ * rodadas, tickets de implementação e vínculos do plano, registra a aprovação e vai a `execucao`. Os `ticket_id` do
+ * plano são renumerados depois dos já existentes (mesma ordem), pois o agente não vê os IDs da demanda.
+ */
+export function confirmarAprovacaoPlanejamento(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirAuditor(ator, "aprovar o planejamento");
+  const { nota } = EntradaAprovacao.parse(entrada);
+  exigirFase(ag, "aprovacao_planejamento", "aprovar o planejamento");
+  const planejamento = ticketPlanejamento(ag);
+  const plano = planoSubmetido(ag, planejamento);
+  const demanda_id = ag.demanda.id;
+  const base = Math.max(...ag.tickets.map((t) => t.ticket_id));
+  const planos = [...plano.tickets].sort((a, b) => a.ticket_id - b.ticket_id);
+  const novoId = new Map(planos.map((t, i) => [t.ticket_id, base + i + 1]));
+  const id = (n: number): number => existe(novoId.get(n), `o ticket ${String(n)} não está no plano`, "valide o plano");
+  return AgregadoDemanda.parse({
+    ...ag,
+    demanda: { ...ag.demanda, fase: "execucao", fase_alterada_em: ctx.agora },
+    tickets: [
+      ...ag.tickets.map((t) => (t === planejamento ? { ...t, status: "concluido", status_alterado_em: ctx.agora } : t)),
+      ...planos.map(({ ticket_id, rodada_id, titulo, descricao, modelo_provedor, modelo_nome, effort }) => ({
+        demanda_id,
+        ticket_id: id(ticket_id),
+        rodada_id,
+        titulo,
+        descricao,
+        etapa: "implementar",
+        status: "aberto",
+        status_alterado_em: ctx.agora,
+        modelo_provedor,
+        modelo_nome,
+        effort,
+      })),
+    ],
+    decisoes: [
+      ...ag.decisoes,
+      decisaoDoAuditor(ag, planejamento, "aprovado", { ...(nota !== undefined && { nota }) }, ctx),
+    ],
+    rodadas: plano.rodadas.map((r) => ({
+      demanda_id,
+      rodada_id: r.rodada_id,
+      titulo: r.titulo,
+      fase: "desenvolvimento",
+      e2e: r.e2e,
+      branch: branchRodada(demanda_id, r.rodada_id),
+    })),
+    dependencias_rodada: plano.rodadas.flatMap((r) =>
+      r.depende.map((d) => ({ demanda_id, rodada_id: r.rodada_id, depende_rodada_id: d.rodada_id })),
+    ),
+    criterios_citados: plano.rodadas.flatMap((r) =>
+      r.criterios.map((criterio_id) => ({ demanda_id, rodada_id: r.rodada_id, criterio_id })),
+    ),
+    dependencias_ticket: planos.flatMap((t) =>
+      t.depende.map((d) => ({ demanda_id, ticket_id: id(t.ticket_id), depende_ticket_id: id(d.ticket_id) })),
+    ),
+    caminhos_ticket: planos.flatMap((t) =>
+      t.caminhos.map((caminho) => ({ demanda_id, ticket_id: id(t.ticket_id), caminho })),
+    ),
+  });
 }

@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, EXTERNO } from "./agregado.ts";
+import { type Ator, AUDITOR, EXTERNO } from "./agregado.ts";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { submeterEvidenciaDemanda } from "./evidencia_demanda.ts";
-import { decidirDemanda, editarDemanda, enviarDemanda, registrarDemanda } from "./transicoes_demanda.ts";
+import {
+  confirmarAprovacaoPlanejamento,
+  decidirDemanda,
+  editarDemanda,
+  enviarDemanda,
+  registrarDemanda,
+  reprovarPlanejamento,
+  submeterPlano,
+} from "./transicoes_demanda.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
@@ -144,4 +152,198 @@ test("CA-3: o mesmo autor com espaços nas pontas registra, edita, submete e env
   }
   assert.equal(enviarDemanda(ag, autor, { agora: t1 }).demanda.enviada, true);
   assert.throws(() => editarDemanda(ag, { titulo: "x" }, { ...autor, sessao: " outra " }), ErroDeEscopo);
+});
+
+const t2 = "2026-01-03T00:00:00Z";
+const agente: Ator = { tipo: "agente", execucao: 1, ticket: 2 };
+const criterios = { criterios: [{ id: "CA-1" }, { id: "CA-2" }] };
+const planoV = (m: Record<string, unknown> = {}) => ({
+  demanda_id: "I-1",
+  criterios: ["CA-1"],
+  rodadas: [
+    { demanda_id: "I-1", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"] },
+    { demanda_id: "I-1", rodada_id: 2, titulo: "r2", e2e: true, depende: [{ demanda_id: "I-1", rodada_id: 1 }] },
+  ],
+  tickets: [
+    { demanda_id: "I-1", ticket_id: 2, titulo: "b", descricao: "d", rodada_id: 1, caminhos: ["src/b.ts"] },
+    {
+      demanda_id: "I-1",
+      ticket_id: 1,
+      titulo: "a",
+      descricao: "d",
+      rodada_id: 1,
+      modelo_provedor: "p",
+      modelo_nome: "m",
+      effort: "high",
+    },
+    {
+      demanda_id: "I-1",
+      ticket_id: 3,
+      titulo: "c",
+      descricao: "d",
+      rodada_id: 2,
+    },
+  ],
+  ...m,
+});
+const emPlanejamento = (): AgregadoDemanda => {
+  const definida = ["criterios_aceite", "desenho_solucao", "custos_realizados"].reduce(
+    (ag, tipo) =>
+      submeterEvidenciaDemanda(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
+    registrada(),
+  );
+  const aprovada = decidirDemanda(enviarDemanda(definida, autora, { agora: t1 }), { aprovado: true }, AUDITOR, {
+    agora: t1,
+  });
+  return {
+    ...aprovada,
+    tickets: [
+      ...aprovada.tickets,
+      { demanda_id: "I-1", ticket_id: 2, etapa: "planejar", status: "em_execucao", status_alterado_em: t1 },
+    ],
+  };
+};
+const submetido = () => submeterPlano(emPlanejamento(), planoV(), agente, { agora: t2 });
+
+test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai a aprovacao_planejamento", () => {
+  const ag = emPlanejamento();
+  const antes = structuredClone(ag);
+  const novo = submeterPlano(ag, planoV(), agente, { agora: t2 });
+  assert.deepEqual(ag, antes);
+  assert.equal(novo.demanda.fase, "aprovacao_planejamento");
+  assert.equal(novo.evidencias.filter((e) => e.tipo === "plano" && e.ticket_id === 2).length, 1);
+  assert.deepEqual(novo.rodadas, []);
+  assert.equal(novo.tickets.length, 2);
+});
+
+test("CA-2 e CA-3: submissão recusada sem mutação", () => {
+  const ag = emPlanejamento();
+  const antes = structuredClone(ag);
+  const falha = (e: unknown, ator: Ator = agente, base = ag) => {
+    assert.throws(() => submeterPlano(base, e, ator, { agora: t2 }));
+  };
+  falha(
+    planoV({ rodadas: [], tickets: [{ demanda_id: "I-1", ticket_id: 1, titulo: "a", descricao: "d", rodada_id: 5 }] }),
+  );
+  falha(planoV({ demanda_id: "I-2", rodadas: [], tickets: [] }));
+  falha(planoV({ criterios: ["CA-9"] }));
+  falha(planoV({ criterios: ["CA-1"] }), { tipo: "auditor" });
+  falha(planoV({ criterios: ["CA-1"] }), { tipo: "agente", execucao: 1, ticket: 1 });
+  falha(planoV(), agente, enviada());
+  falha(planoV(), agente, submetido());
+  falha(planoV(), agente, { ...ag, tickets: [ag.tickets[0] as never] });
+  assert.deepEqual(ag, antes);
+  const semDefinicao = { ...ag, evidencias: [] };
+  assert.throws(() => submeterPlano(semDefinicao, planoV(), agente, { agora: t2 }), /CA-1/);
+  const malFormada = { ...ag, evidencias: ag.evidencias.map((e) => ({ ...e, dados: { x: 1 } })) };
+  assert.throws(() => submeterPlano(malFormada, planoV(), agente, { agora: t2 }), /CA-1/);
+});
+
+test("CA-4 e CA-5: reprovar exige Auditor e motivo; registra, volta a planejamento e preserva ticket e plano", () => {
+  const ag = submetido();
+  const antes = structuredClone(ag);
+  assert.throws(() => reprovarPlanejamento(ag, { motivo: "x" }, EXTERNO, { agora: t2 }), ErroDeEscopo);
+  assert.throws(() => reprovarPlanejamento(ag, { motivo: " " }, AUDITOR, { agora: t2 }));
+  assert.throws(() => reprovarPlanejamento(ag, {}, AUDITOR, { agora: t2 }));
+  assert.throws(() => reprovarPlanejamento(emPlanejamento(), { motivo: "x" }, AUDITOR, { agora: t2 }), ErroDeRegra);
+  const semPlano = { ...ag, evidencias: ag.evidencias.filter((e) => e.tipo !== "plano") };
+  assert.throws(() => reprovarPlanejamento(semPlano, { motivo: "x" }, AUDITOR, { agora: t2 }), /plano submetido/);
+  assert.deepEqual(ag, antes);
+  const novo = reprovarPlanejamento(ag, { motivo: "falta teste" }, AUDITOR, { agora: t2 });
+  assert.equal(novo.demanda.fase, "planejamento");
+  assert.deepEqual(novo.decisoes.at(-1), {
+    demanda_id: "I-1",
+    ticket_id: 2,
+    decisao_id: 2,
+    resultado: "recusado",
+    motivo: "falta teste",
+    por: "auditor",
+    em: t2,
+  });
+  assert.deepEqual(novo.tickets, ag.tickets);
+  assert.deepEqual(novo.evidencias, ag.evidencias);
+  // a mesma sessão retoma e resubmete, substituindo o plano
+  const outro = submeterPlano(novo, planoV(), agente, { agora: t2 });
+  assert.equal(outro.evidencias.filter((e) => e.tipo === "plano").length, 1);
+});
+
+test("CA-6: sem a confirmação nada é criado; só o Auditor, na fase certa e com plano, confirma", () => {
+  const ag = submetido();
+  assert.equal(ag.decisoes.length, 1);
+  assert.equal(ag.rodadas.length, 0);
+  assert.throws(() => confirmarAprovacaoPlanejamento(ag, {}, agente, { agora: t2 }), ErroDeEscopo);
+  assert.throws(() => confirmarAprovacaoPlanejamento(ag, { nota: 9 }, AUDITOR, { agora: t2 }));
+  assert.throws(() => confirmarAprovacaoPlanejamento(emPlanejamento(), {}, AUDITOR, { agora: t2 }), ErroDeRegra);
+  const semPlano = { ...ag, evidencias: ag.evidencias.filter((e) => e.tipo !== "plano") };
+  assert.throws(() => confirmarAprovacaoPlanejamento(semPlano, {}, AUDITOR, { agora: t2 }), /plano submetido/);
+});
+
+test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependências e vai a execucao", () => {
+  const base = submetido();
+  const plano = planoV({
+    criterios: ["CA-1", "CA-2"],
+    rodadas: [
+      { demanda_id: "I-1", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"] },
+      { demanda_id: "I-1", rodada_id: 2, titulo: "r2", e2e: true, depende: [{ demanda_id: "I-1", rodada_id: 1 }] },
+    ],
+    tickets: [
+      { demanda_id: "I-1", ticket_id: 5, titulo: "b", descricao: "d", rodada_id: 2, caminhos: ["src/b.ts"] },
+      {
+        demanda_id: "I-1",
+        ticket_id: 4,
+        titulo: "a",
+        descricao: "d",
+        rodada_id: 2,
+        depende: [],
+        modelo_provedor: "p",
+        modelo_nome: "m",
+        effort: "high",
+      },
+      {
+        demanda_id: "I-1",
+        ticket_id: 6,
+        titulo: "c",
+        descricao: "d",
+        rodada_id: 2,
+        depende: [{ demanda_id: "I-1", ticket_id: 4 }],
+      },
+    ],
+  });
+  const ag = submeterPlano(emPlanejamento(), plano, agente, { agora: t2 });
+  const antes = structuredClone(ag);
+  const novo = confirmarAprovacaoPlanejamento(ag, { nota: 4 }, AUDITOR, { agora: t2 });
+  assert.deepEqual(ag, antes);
+  assert.deepEqual(base.rodadas, []);
+  assert.equal(novo.demanda.fase, "execucao");
+  assert.deepEqual(
+    novo.rodadas.map((r) => [r.rodada_id, r.fase, r.e2e, r.branch]),
+    [
+      [1, "desenvolvimento", false, "fabriquinha/I-1-1"],
+      [2, "desenvolvimento", true, "fabriquinha/I-1-2"],
+    ],
+  );
+  assert.deepEqual(novo.dependencias_rodada, [{ demanda_id: "I-1", rodada_id: 2, depende_rodada_id: 1 }]);
+  assert.deepEqual(novo.criterios_citados, [{ demanda_id: "I-1", rodada_id: 1, criterio_id: "CA-1" }]);
+  // IDs do plano (4, 5, 6) são renumerados depois dos existentes (1, 2), na mesma ordem
+  assert.deepEqual(
+    novo.tickets.slice(2).map((t) => [t.ticket_id, t.titulo, t.rodada_id, t.etapa, t.status, t.effort]),
+    [
+      [3, "a", 2, "implementar", "aberto", "high"],
+      [4, "b", 2, "implementar", "aberto", undefined],
+      [5, "c", 2, "implementar", "aberto", undefined],
+    ],
+  );
+  assert.deepEqual(novo.dependencias_ticket, [{ demanda_id: "I-1", ticket_id: 5, depende_ticket_id: 3 }]);
+  assert.deepEqual(novo.caminhos_ticket, [{ demanda_id: "I-1", ticket_id: 4, caminho: "src/b.ts" }]);
+  assert.equal(novo.tickets[1]?.status, "concluido");
+  assert.deepEqual(novo.decisoes.at(-1), {
+    demanda_id: "I-1",
+    ticket_id: 2,
+    decisao_id: 2,
+    resultado: "aprovado",
+    nota: 4,
+    por: "auditor",
+    em: t2,
+  });
+  assert.equal(confirmarAprovacaoPlanejamento(ag, {}, AUDITOR, { agora: t2 }).decisoes.at(-1)?.nota, undefined);
 });

@@ -29,6 +29,11 @@ const base = (enviada = false): AgregadoDemanda => ({
   tickets: [{ demanda_id: "I-1", ticket_id: 1, etapa: "demanda", status: "aberto", status_alterado_em: em }],
   decisoes: [],
   evidencias: [],
+  rodadas: [],
+  dependencias_rodada: [],
+  criterios_citados: [],
+  dependencias_ticket: [],
+  caminhos_ticket: [],
 });
 const entrada = (tipo: string, extra: Record<string, unknown> = {}, v = 1) => ({
   tipo: tipo as never,
