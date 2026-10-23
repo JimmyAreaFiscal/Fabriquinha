@@ -41,12 +41,12 @@ function acharCiclo(grafo: Map<string, string[]>): string[] | undefined {
   return undefined;
 }
 
-/** Caminho relativo à raiz git: sem absoluto, barra invertida nem segmento `..`. */
+/** Caminho relativo à raiz git: sem absoluto (POSIX ou drive Windows), barra invertida nem segmento `..`. */
 export const CaminhoTicket = z
   .string()
   .min(1)
-  .refine((c) => !c.startsWith("/") && !c.includes("\\") && !c.split("/").includes(".."), {
-    message: "use caminho relativo à raiz git, sem `/` inicial, `\\` nem `..`",
+  .refine((c) => !c.startsWith("/") && !/^[A-Za-z]:/.test(c) && !c.includes("\\") && !c.split("/").includes(".."), {
+    message: "use caminho relativo à raiz git, sem `/` inicial, drive, `\\` nem `..`",
   });
 
 const Rodada = RodadaRef.extend({

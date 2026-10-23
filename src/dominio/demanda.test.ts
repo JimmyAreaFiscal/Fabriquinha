@@ -133,6 +133,9 @@ test("ticket do plano: caminhos relativos, par de modelo e effort válidos", () 
   recusa(plano({ tickets: [{ ...tk(1), caminhos: ["/etc/passwd"] }] }), "caminho relativo");
   recusa(plano({ tickets: [{ ...tk(1), caminhos: ["a/../b"] }] }), "caminho relativo");
   recusa(plano({ tickets: [{ ...tk(1), caminhos: ["a\\b"] }] }), "caminho relativo");
+  recusa(plano({ tickets: [{ ...tk(1), caminhos: ["C:/fora/segredo.ts"] }] }), "caminho relativo");
+  recusa(plano({ tickets: [{ ...tk(1), caminhos: ["c:/fora/segredo.ts"] }] }), "caminho relativo");
+  recusa(plano({ tickets: [{ ...tk(1), caminhos: ["C:\\fora\\segredo.ts"] }] }), "caminho relativo");
   recusa(plano({ tickets: [{ ...tk(1), caminhos: ["a", "a"] }] }), "repete caminho");
   recusa(plano({ tickets: [{ ...tk(1), modelo_provedor: "openai" }] }), "juntos");
   recusa(plano({ tickets: [{ ...tk(1), modelo_nome: "gpt" }] }), "juntos");

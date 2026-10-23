@@ -232,6 +232,17 @@ test("CA-2: ticket de implementação sem rodada é recusado na submissão, sem 
   assert.deepEqual(ag, antes);
 });
 
+test("CA-2: caminho absoluto Windows com barras normais é recusado na submissão, sem mutação", () => {
+  const ag = emPlanejamento();
+  const antes = structuredClone(ag);
+  const plano = planoV();
+  for (const caminho of ["C:/fora/segredo.ts", "c:/fora/segredo.ts"]) {
+    const e = planoV({ tickets: [{ ...plano.tickets[0], caminhos: [caminho] }, ...plano.tickets.slice(1)] });
+    assert.throws(() => submeterPlano(ag, e, agente, { agora: t2 }), /caminho relativo/);
+  }
+  assert.deepEqual(ag, antes);
+});
+
 test("CA-2 e CA-3: submissão recusada sem mutação", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);
