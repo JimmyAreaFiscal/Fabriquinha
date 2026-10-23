@@ -50,6 +50,40 @@ export const Fase = z.enum([
   "concluida",
 ]);
 
+// Estados SDLC (comparacao-sdlc-implementacao.md §2.1, D01); independentes entre si e dos enums legados acima.
+export const FaseDemanda = z.enum([
+  "registro",
+  "aprovacao_demanda",
+  "planejamento",
+  "aprovacao_planejamento",
+  "execucao",
+  "revisao_demanda",
+  "encerramento",
+  "concluida",
+  "arquivada",
+  "cancelada",
+]);
+export const FaseRodada = z.enum([
+  "desenvolvimento",
+  "revisao",
+  "encerramento",
+  "aprovacao_pull_request",
+  "sessao",
+  "concluida",
+]);
+export const EtapaTicket = z.enum([
+  "demanda",
+  "planejar",
+  "implementar",
+  "revisar_rodada",
+  "encerrar_rodada",
+  "sessao_em_aberto",
+  "revisar_demanda",
+  "encerrar_demanda",
+  "resolver_conflito",
+]);
+export const StatusTicket = z.enum(["aberto", "em_execucao", "concluido", "falhou", "fechado", "cancelado"]);
+
 // Cada tipo tem a sua sequência de IDs (F2 §3.4); o contexto dos comandos entrega `novoId(tipo)`.
 export const TipoId = z.enum(["issue", "ticket", "execucao", "decisao", "evidencia", "proposta"]);
 
@@ -60,3 +94,7 @@ export type Etapa = z.infer<typeof Etapa>;
 export type Effort = z.infer<typeof Effort>;
 export type Fase = z.infer<typeof Fase>;
 export type TipoId = z.infer<typeof TipoId>;
+export type FaseDemanda = z.infer<typeof FaseDemanda>;
+export type FaseRodada = z.infer<typeof FaseRodada>;
+export type EtapaTicket = z.infer<typeof EtapaTicket>;
+export type StatusTicket = z.infer<typeof StatusTicket>;

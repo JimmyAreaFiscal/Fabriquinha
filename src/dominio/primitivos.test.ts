@@ -1,7 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { z } from "zod";
-import { Etapa, Fase, Id, Instante, Markdown, Modelo, Motivo, Slug, Titulo } from "./primitivos.ts";
+import {
+  Etapa,
+  EtapaTicket,
+  Fase,
+  FaseDemanda,
+  FaseRodada,
+  StatusTicket,
+  Id,
+  Instante,
+  Markdown,
+  Modelo,
+  Motivo,
+  Slug,
+  Titulo,
+} from "./primitivos.ts";
 
 const aceita = (schema: z.ZodType, ...valores: unknown[]) => {
   for (const v of valores) assert.ok(schema.safeParse(v).success, `deveria aceitar ${JSON.stringify(v)}`);
@@ -74,4 +88,45 @@ test("Etapa e Fase têm exatamente os valores do F1", () => {
   ]);
   recusa(Etapa, "implementacao");
   recusa(Fase, "arquivada");
+});
+
+test("estados SDLC têm exatamente os valores da seção 2.1", () => {
+  const casos: [z.ZodEnum, string[]][] = [
+    [
+      FaseDemanda,
+      [
+        "registro",
+        "aprovacao_demanda",
+        "planejamento",
+        "aprovacao_planejamento",
+        "execucao",
+        "revisao_demanda",
+        "encerramento",
+        "concluida",
+        "arquivada",
+        "cancelada",
+      ],
+    ],
+    [FaseRodada, ["desenvolvimento", "revisao", "encerramento", "aprovacao_pull_request", "sessao", "concluida"]],
+    [
+      EtapaTicket,
+      [
+        "demanda",
+        "planejar",
+        "implementar",
+        "revisar_rodada",
+        "encerrar_rodada",
+        "sessao_em_aberto",
+        "revisar_demanda",
+        "encerrar_demanda",
+        "resolver_conflito",
+      ],
+    ],
+    [StatusTicket, ["aberto", "em_execucao", "concluido", "falhou", "fechado", "cancelado"]],
+  ];
+  for (const [schema, valores] of casos) {
+    assert.deepEqual(schema.options, valores);
+    aceita(schema, ...valores);
+    recusa(schema, "", "aprovação_demanda", "em execução", "desenho", 1);
+  }
 });
