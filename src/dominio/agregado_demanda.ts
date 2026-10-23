@@ -1,6 +1,6 @@
 // Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4): convive com o agregado legado de issue.
 import { z } from "zod";
-import { Evidencia, TipoAtor, TipoIssue } from "./agregado.ts";
+import { Evidencia, TipoAtor, TipoEvidencia, TipoIssue } from "./agregado.ts";
 import { branchDemanda, DemandaId } from "./demanda.ts";
 import { EtapaTicket, FaseDemanda, Id, Instante, Markdown, Motivo, Slug, StatusTicket, Titulo } from "./primitivos.ts";
 
@@ -23,13 +23,16 @@ export const DecisaoDemanda = z.object({
   em: Instante,
 });
 
+/** Os tipos legados mais `custos_realizados`, que só a demanda SDLC conhece (§4.1). */
+export const TipoEvidenciaAgregado = z.enum([...TipoEvidencia.options, "custos_realizados"]);
+
 /** Evidência de qualquer dono: `rodada_id` e `ticket_id` nulos indicam a própria demanda; `dados` segue opaco (F3 valida). */
 export const EvidenciaDemanda = z
   .object({
     demanda_id: DemandaId,
     rodada_id: Id.optional(),
     ticket_id: Id.optional(),
-    tipo: Evidencia.shape.tipo,
+    tipo: TipoEvidenciaAgregado,
     dados: Evidencia.shape.dados,
     em: Instante,
   })
