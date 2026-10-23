@@ -94,6 +94,21 @@ test("a coluna projeto.link_produto é opcional", () => {
   banco.close();
 });
 
+test("o modelo da Auditoria na configuração: nasce nulo e o CHECK exige provedor e modelo juntos", () => {
+  const banco = abrir(raizTemp());
+  assert.equal(valor(banco, "SELECT auditoria_provedor FROM configuracao"), null);
+  assert.equal(valor(banco, "SELECT auditoria_modelo FROM configuracao"), null);
+  assert.throws(() => {
+    banco.exec("UPDATE configuracao SET auditoria_provedor = 'anthropic'");
+  }, /CHECK constraint failed/);
+  assert.throws(() => {
+    banco.exec("UPDATE configuracao SET auditoria_modelo = 'claude-opus-5-5'");
+  }, /CHECK constraint failed/);
+  banco.exec("UPDATE configuracao SET auditoria_provedor = 'anthropic', auditoria_modelo = 'claude-opus-5-5'");
+  assert.equal(valor(banco, "SELECT auditoria_modelo FROM configuracao"), "claude-opus-5-5");
+  banco.close();
+});
+
 test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuário existentes, anexo com hash e tamanho válidos", () => {
   const banco = abrir(raizTemp());
   banco.exec(
@@ -587,5 +602,20 @@ test("novoId() tem uma sequência por tipo e só roda dentro da transação", ()
     2,
   );
   assert.throws(() => novoId(banco, "issue"), /fora de transação/);
+  banco.close();
+});
+
+/** A migração 19 acrescenta o effort por etapa ao projeto. */
+const VERSAO_EFFORTS = 19;
+
+test("a migração dos efforts dá {} ao projeto gravado antes dela", () => {
+  const banco = new DatabaseSync(":memory:");
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EFFORTS - 1));
+  banco.exec(`
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('loja', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+  `);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_EFFORTS));
+  assert.equal(valor(banco, "SELECT efforts FROM projeto WHERE nome = 'loja'"), "{}");
   banco.close();
 });

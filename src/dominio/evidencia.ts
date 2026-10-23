@@ -93,7 +93,10 @@ export function exigirEvidencias(ag: Agregado, ticket: Ticket, acao = "concluir"
     ...(doAgenteFaltando.length > 0
       ? [
           ticket.origem === "externo"
-            ? `a IA externa submete com ${doAgenteFaltando.map((tipo) => `fabriquinha necessidade evidencia I-${String(ag.issue.id)} ${tipo}`).join(" e ")}`
+            ? "a IA externa submete com " +
+              doAgenteFaltando
+                .map((tipo) => `fabriquinha necessidade evidencia I-${String(ag.issue.id)} ${tipo}`)
+                .join(" e ")
             : `o agente de ${t} submete com ${doAgenteFaltando.map((tipo) => "fabriquinha evidencia add " + tipo).join(" e ")}`,
         ]
       : []),
@@ -122,6 +125,12 @@ export function exigirRegistroDeEvidencia(ag: Agregado, ator: Ator, id: Id, tipo
   }
   const ticket = ticketDe(ag, id);
   const t = rotuloTicket(ticket);
+  if (ticket.enviadoEm !== undefined) {
+    throw new ErroDeRegra(
+      `${t} está enviado à aprovação, não em execução`,
+      "só se registra evidência de ticket em execução; se o Auditor reprovar, o ticket volta e você pode trocar a evidência",
+    );
+  }
   if (ator.tipo === "agente") exigirExecucaoEmAndamento(ag, ator, acao);
   if (ticket.status !== "em_execucao") {
     throw new ErroDeRegra(

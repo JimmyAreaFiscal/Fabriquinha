@@ -313,6 +313,7 @@ export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falh
       sessaoPi: execucao.sessaoPi,
       etapa: ticket.etapa,
       modelo: execucao.modelo,
+      effort: projeto.efforts?.[ticket.etapa],
       confianca: confianca(projeto.repo),
       modo: execucao.modo,
       fork: r.fork,
@@ -512,6 +513,8 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
           break;
         case "tool_execution_end":
           perguntas.delete(String(evento.toolCallId));
+          // O CLI `fabriquinha` roda noutro processo e não alcança os ouvintes: o fim da ferramenta avisa o chat.
+          avisar(sessaoPi, r.log);
           break;
         case "agent_start":
           ocupar(true);

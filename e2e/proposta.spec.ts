@@ -1,5 +1,5 @@
 // Proposta de issue da IA (F7 §4.4; F4 §6.6): o cartão no gate do desenho, com o banco semeado (Aceitar cria a issue e
-// devolve o desenho à mesma sessão; Recusar mantém o gate), e o cartão no chat do registro com o pi falso.
+// devolve o desenho à mesma sessão; Recusar a única proposta fecha o lote e reprova o desenho), e o cartão no chat do registro com o pi falso.
 import { abrir } from "../src/persistencia/banco.ts";
 import { agregado } from "../src/persistencia/issues.ts";
 import { expect, projeto, test } from "./apoio.ts";
@@ -51,7 +51,10 @@ function ler(raiz: string, id: number) {
   }
 }
 
-test("recusar a proposta no gate do desenho mantém o gate e não cria issue", async ({ pagina, fabriquinha }) => {
+test("recusar a única proposta no gate do desenho reprova o desenho e não cria issue", async ({
+  pagina,
+  fabriquinha,
+}) => {
   semear(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
   const gate = pagina.getByRole("region", { name: "Gate do desenho" });
@@ -61,9 +64,13 @@ test("recusar a proposta no gate do desenho mantém o gate e não cria issue", a
   await expect(cartao.locator(".md strong")).toHaveText("relatório");
   await cartao.getByRole("button", { name: "Recusar" }).click();
   await expect(cartao).toBeHidden();
-  await expect(gate.getByRole("button", { name: "Aprovar desenho" })).toBeVisible();
+  await expect(gate).toBeHidden();
+  await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveText("Desenho");
   expect(ler(fabriquinha.raiz, 2)).toBeUndefined();
-  expect(ler(fabriquinha.raiz, 1)?.issue.fase).toBe("aprovacao_desenho");
+  const atual = ler(fabriquinha.raiz, 1);
+  expect(atual?.issue.fase).toBe("desenho");
+  expect(atual?.decisoes.at(-1)).toMatchObject({ gate: "desenho", aprovado: false });
+  expect(atual?.decisoes.at(-1)?.motivo).toContain("recusada; a parte dela continua na I-1");
 });
 
 test("aceitar a proposta no gate do desenho cria a issue dependente e devolve o desenho à conversa", async ({

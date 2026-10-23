@@ -37,6 +37,13 @@ export const usoDaIssue = (banco: DatabaseSync, issue: Id): UsoPorModelo[] =>
     )
     .all(issue) as unknown as UsoPorModelo[];
 
+export type TipoDeIteracao = "mensagem" | "dialogo" | "reabertura";
+
+/** F6 §8: grava uma iteração humana do ticket, depois que a ação deu certo. */
+export const registrarIteracao = (banco: DatabaseSync, ticket: Id, tipo: TipoDeIteracao): void => {
+  banco.prepare("INSERT INTO iteracao (ticket, tipo, em) VALUES (?, ?, ?)").run(ticket, tipo, new Date().toISOString());
+};
+
 /** O custo de cada execução da issue que tem uso, pelo ID da execução (F7 §4.4, execuções de um ticket). */
 export const custoPorExecucao = (banco: DatabaseSync, issue: Id): Record<string, number> =>
   Object.fromEntries(
@@ -187,7 +194,8 @@ export type Fato =
   | "ticketsConcluidos"
   | "prsAbertos"
   | "prsMergeados"
-  | `reprovacao_${Decisao["gate"]}`;
+  | `reprovacao_${Decisao["gate"]}`
+  | `iteracoes_${Etapa}`;
 
 /**
  * F6 §5.7: quantos de cada fato caíram em cada mês e, para os PRs mergeados, a média e a quantidade das notas.
@@ -215,6 +223,8 @@ export const fatosPorMes = (
            WHERE d.gate = 'pr' AND d.aprovado = 1
          UNION ALL SELECT 'reprovacao_' || d.gate, d.em, NULL, i.projeto FROM decisao d JOIN issue i ON i.id = d.issue
            WHERE d.aprovado = 0
+         UNION ALL SELECT 'iteracoes_' || t.etapa, x.em, NULL, i.projeto
+           FROM iteracao x JOIN ticket t ON t.id = x.ticket JOIN issue i ON i.id = t.issue
        )
        SELECT m.mes, f.fato, COUNT(*) AS n, COUNT(f.nota) AS notas, AVG(f.nota) AS media
        FROM meses m JOIN fatos f ON f.em >= m.inicio AND f.em < m.fim
@@ -236,6 +246,7 @@ export interface IssueNoPeriodo extends ApoioDeExecucoes {
   titulo: string | null;
   fase: Fase;
   reprovacoes: number;
+  iteracoes: number;
   notaPR: number | null;
 }
 
@@ -250,11 +261,17 @@ export const issuesNoPeriodo = (
 ): IssueNoPeriodo[] =>
   banco
     .prepare(
-      `SELECT i.id AS issue, i.projeto, i.titulo, i.fase, ${APOIO},
+      `WITH iteracoes (issue, n) AS (
+         SELECT t.issue, COUNT(*) FROM iteracao x JOIN ticket t ON t.id = x.ticket
+         WHERE x.em >= $inicio AND x.em < $fim GROUP BY t.issue
+       )
+       SELECT i.id AS issue, i.projeto, i.titulo, i.fase, ${APOIO},
+         COALESCE(it.n, 0) AS iteracoes,
          (SELECT COUNT(*) FROM decisao d WHERE d.issue = i.id AND d.aprovado = 0 AND d.em >= $inicio AND d.em < $fim)
            AS reprovacoes,
          (SELECT d.nota FROM decisao d WHERE d.issue = i.id AND d.gate = 'pr' AND d.aprovado = 1) AS notaPR
        FROM execucao e JOIN ticket t ON t.id = e.ticket JOIN issue i ON i.id = t.issue ${USO_DA_EXECUCAO}
+         LEFT JOIN iteracoes it ON it.issue = i.id
        WHERE e.iniciada_em >= $inicio AND e.iniciada_em < $fim AND ($projeto IS NULL OR i.projeto = $projeto)
        GROUP BY i.id ORDER BY i.id`,
     )

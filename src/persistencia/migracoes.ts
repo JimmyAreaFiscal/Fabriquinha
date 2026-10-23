@@ -379,4 +379,15 @@ export const MIGRACOES: readonly string[] = [
   // A reprovação de testes, fitness, SonarQube ou hooks devolve o ticket ao agente (devolverTicket) até um limite de
   // devoluções seguidas, que o C9 do Auditor zera.
   "ALTER TABLE ticket ADD COLUMN devolucoes INTEGER CHECK (devolucoes > 0);",
+  `ALTER TABLE projeto ADD COLUMN efforts TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(efforts));`,
+  // O modelo da Auditoria do Histórico, global (não pertence a nenhum projeto): nulo, usa o padrão do pi.
+  `ALTER TABLE configuracao ADD COLUMN auditoria_provedor TEXT;
+  ALTER TABLE configuracao ADD COLUMN auditoria_modelo TEXT CHECK ((auditoria_provedor IS NULL) = (auditoria_modelo IS NULL));`,
+  // Iterações humanas (F6 §7): cada mensagem do Auditor ao agente, resposta a diálogo ou reabertura C9. Sem backfill.
+  `CREATE TABLE iteracao (
+    id     INTEGER PRIMARY KEY,
+    ticket INTEGER NOT NULL REFERENCES ticket(id),
+    tipo   TEXT NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),
+    em     TEXT NOT NULL
+  );`,
 ];

@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno, existe } from "../dominio/erros.ts";
+import type { Modelo } from "../dominio/primitivos.ts";
 import { intervalo, mesPorExtenso, metricasPorMes } from "../metricas/periodo.ts";
 import { type MetricasIssue, metricasDaIssue } from "../metricas/issue.ts";
 import { raizDo } from "../persistencia/banco.ts";
@@ -59,13 +60,23 @@ function qualidadeDaIssue(m: MetricasIssue): number[] {
 
 /**
  * Grava em `dir` o que o agente da auditoria lê: `auditoria.json`, `sessoes/<nomeDoHistorico>` de cada sessão de
- * `lista` e o `indice.md` com as sessões, os custos do mês e a qualidade por issue.
+ * `lista` e o `indice.md` com as sessões, os custos do mês e a qualidade por issue. O `pedido` do Auditor, se houver,
+ * vai no `auditoria.json`.
  */
-export function prepararAuditoria(banco: DatabaseSync, dir: string, mes: string, lista: SessaoDoHistorico[]): void {
+export function prepararAuditoria(
+  banco: DatabaseSync,
+  dir: string,
+  mes: string,
+  lista: SessaoDoHistorico[],
+  pedido?: string,
+): void {
   const projetos: Record<string, number> = {};
   for (const s of lista) projetos[s.projeto] = (projetos[s.projeto] ?? 0) + 1;
   mkdirSync(join(dir, "sessoes"), { recursive: true });
-  writeFileSync(join(dir, "auditoria.json"), JSON.stringify({ mes, sessoes: lista.length, projetos }, null, 2) + "\n");
+  writeFileSync(
+    join(dir, "auditoria.json"),
+    JSON.stringify({ mes, sessoes: lista.length, projetos, ...(pedido && { pedido }) }, null, 2) + "\n",
+  );
   for (const s of lista) writeFileSync(join(dir, "sessoes", nomeDoHistorico(s)), exportarHistorico(banco, s.sessao));
 
   const { inicio, fim } = intervalo(mes);
@@ -138,6 +149,8 @@ export function prepararAuditoria(banco: DatabaseSync, dir: string, mes: string,
 export interface OpcoesDaAuditoria {
   /** Minutos sem mensagem até o pi parar (F4 §3, §6.6); a próxima mensagem o retoma na mesma sessão. */
   ociosidadeMin: number;
+  /** O modelo da Auditoria na Configuração; sem ele, o pi usa o padrão dele. */
+  modelo?: Modelo | null;
 }
 
 export type EstadoDaAuditoria = "rodando" | "conversa";
@@ -164,8 +177,8 @@ export const indiceDaAuditoria = (banco: DatabaseSync, sessao: string): string =
 export const estadoDaAuditoria = (sessao: string): EstadoDaAuditoria =>
   (situacao(sessao)?.ocupado ?? tarefas.has(sessao)) ? "rodando" : "conversa";
 
-/** `prompt.md`: o mês e os caminhos antes do texto fixo da auditoria. */
-function promptDaAuditoria(dir: string, mes: string): string {
+/** `prompt.md`: o mês e os caminhos, o pedido do Auditor (se houver) e o texto fixo da auditoria. */
+function promptDaAuditoria(dir: string, mes: string, pedido?: string): string {
   const fixo = readFileSync(new URL("auditoria.md", import.meta.url), "utf8");
   return [
     `# Auditoria de ${mesPorExtenso(mes)} (${mes})`,
@@ -174,6 +187,16 @@ function promptDaAuditoria(dir: string, mes: string): string {
     `- Índice: ${join(dir, "indice.md")}`,
     `- Sessões: ${join(dir, "sessoes")}/`,
     "",
+    ...(pedido
+      ? [
+          "## Pedido do Auditor",
+          "",
+          pedido,
+          "",
+          "O pedido é o foco da auditoria: oriente por ele as tarefas dos subagentes e cada seção da resposta.",
+          "",
+        ]
+      : []),
     fixo,
   ].join("\n");
 }
@@ -183,11 +206,16 @@ function promptDaAuditoria(dir: string, mes: string): string {
  * motivo da falha, ou `undefined`, quando o pi para. O pgid fica em `<pasta>/pgid` enquanto o pi vive, para o
  * reinício do serviço matá-lo (`recuperarAuditorias`).
  */
-function subir(raiz: string, sessao: string, prompt: string, ociosidadeMin: number): Promise<string | undefined> {
+function subir(
+  raiz: string,
+  sessao: string,
+  prompt: string,
+  { ociosidadeMin, modelo }: OpcoesDaAuditoria,
+): Promise<string | undefined> {
   const dir = dirDaAuditoria(raiz, sessao);
   const log = join(dir, "log");
   const pgid = join(dir, "pgid");
-  const args = argumentosDaAuditoria(raiz, sessao);
+  const args = argumentosDaAuditoria(raiz, sessao, modelo);
   anotar(log, `pi ${args.join(" ")}`);
   const tarefa = rodarPi({
     execucao: { id: sessao, sessaoPi: sessao, modo: "consulta" },
@@ -233,23 +261,22 @@ export async function iniciarAuditoria(
   banco: DatabaseSync,
   mes: string,
   lista: SessaoDoHistorico[],
-  { ociosidadeMin }: OpcoesDaAuditoria,
+  opcoes: OpcoesDaAuditoria,
+  pedido?: string,
 ): Promise<string> {
   const raiz = raizDo(banco);
   const sessao = randomUUID();
   const dir = dirDaAuditoria(raiz, sessao);
   mkdirSync(join(dir, "vazio"), { recursive: true });
   try {
-    prepararAuditoria(banco, dir, mes, lista);
-    const prompt = promptDaAuditoria(dir, mes);
+    prepararAuditoria(banco, dir, mes, lista, pedido);
+    const prompt = promptDaAuditoria(dir, mes, pedido);
     writeFileSync(join(dir, "prompt.md"), prompt);
     const comeco = Promise.withResolvers<true>();
     const desassinar = assinarSessao(sessao, (evento) => {
       if (evento.type === "agent_start") comeco.resolve(true);
     });
-    const resultado = await Promise.race([comeco.promise, subir(raiz, sessao, prompt, ociosidadeMin)]).finally(
-      desassinar,
-    );
+    const resultado = await Promise.race([comeco.promise, subir(raiz, sessao, prompt, opcoes)]).finally(desassinar);
     // ponytail: sem `agent_start`, o `rodarPi` só resolve com `undefined` se alguém encerra a sessão; vira texto da falha.
     if (resultado !== true) {
       // A pasta, com o log, é apagada no catch: a causa (o stderr do pi) vai na mensagem, sem citar o log.
@@ -271,6 +298,8 @@ export interface Auditoria {
   /** Quantas sessões o agente recebeu e quantas por projeto. */
   sessoes: number;
   projetos: Record<string, number>;
+  /** O pedido do Auditor ao abrir a auditoria; ausente quando não houve. */
+  pedido?: string;
   estado: EstadoDaAuditoria;
   /** O que já aconteceu, do JSONL da sessão do pi; o `prompt.md` vai marcado com `fabriquinha: true`. */
   conversa: unknown[];
@@ -282,9 +311,9 @@ export interface Auditoria {
 export function abrirAuditoria(banco: DatabaseSync, sessao: string): Auditoria {
   const raiz = raizDo(banco);
   const dir = pastaExistente(raiz, sessao);
-  const { mes, sessoes, projetos } = JSON.parse(readFileSync(join(dir, "auditoria.json"), "utf8")) as Pick<
+  const { mes, sessoes, projetos, pedido } = JSON.parse(readFileSync(join(dir, "auditoria.json"), "utf8")) as Pick<
     Auditoria,
-    "mes" | "sessoes" | "projetos"
+    "mes" | "sessoes" | "projetos" | "pedido"
   >;
   const prompt = readFileSync(join(dir, "prompt.md"), "utf8");
   const ehPrompt = (mensagem: unknown): boolean => {
@@ -298,6 +327,7 @@ export function abrirAuditoria(banco: DatabaseSync, sessao: string): Auditoria {
     rotulo: mesPorExtenso(mes),
     sessoes,
     projetos,
+    ...(pedido && { pedido }),
     estado: estadoDaAuditoria(sessao),
     conversa: conversa.map((e, i) => (i === primeira && ehPrompt(e.message) ? { ...e, fabriquinha: true } : e)),
     assinar: (ouvinte) =>
@@ -319,7 +349,7 @@ export function enviarNaAuditoria(
   banco: DatabaseSync,
   sessao: string,
   mensagem: string,
-  { ociosidadeMin }: OpcoesDaAuditoria,
+  opcoes: OpcoesDaAuditoria,
 ): void {
   const raiz = raizDo(banco);
   pastaExistente(raiz, sessao);
@@ -330,7 +360,7 @@ export function enviarNaAuditoria(
   if (viva) mandar(sessao, { type: "prompt", message: mensagem });
   else if (tarefas.has(sessao)) {
     throw new ErroDeRegra("o agente da auditoria ainda está parando", "tente de novo em alguns segundos");
-  } else void subir(raiz, sessao, mensagem, ociosidadeMin);
+  } else void subir(raiz, sessao, mensagem, opcoes);
 }
 
 /** Manda `abort` ao agente da auditoria que trabalha. */

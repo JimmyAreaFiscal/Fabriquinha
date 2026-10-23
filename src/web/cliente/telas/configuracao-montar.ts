@@ -1,12 +1,13 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Modelo } from "../../../dominio/primitivos.ts";
+import type { Effort, Modelo } from "../../../dominio/primitivos.ts";
 import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
 import {
   agendador,
+  auditoria,
   confirmacaoDeRemover,
   type Erros,
   errosDoZod,
@@ -56,6 +57,10 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
     const modelo = modeloDoSeletor(s.value);
     if (modelo) modelos[s.name.slice("modelos.".length) as keyof Rascunho["modelos"]] = modelo;
   }
+  const efforts: NonNullable<Rascunho["efforts"]> = {};
+  for (const s of form.querySelectorAll<HTMLSelectElement>('select[name^="efforts."]')) {
+    if (s.value) efforts[s.name.slice("efforts.".length) as keyof typeof efforts] = s.value as Effort;
+  }
   return {
     nome: valor(form, '[name="nome"]'),
     repo: valor(form, '[name="repo"]'),
@@ -70,6 +75,7 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
       descricao: valor(linha, '[data-campo="descricao"]'),
     })),
     modelos,
+    efforts,
     linkProduto: valor(form, '[name="linkProduto"]'),
   };
 }
@@ -94,12 +100,37 @@ function montarAgendador(
   const form = main.querySelector<HTMLFormElement>("[data-agendador]");
   form?.addEventListener("submit", (evento) => {
     evento.preventDefault();
-    const dados = lerAgendador(form);
+    const dados = { ...lerAgendador(form), modeloAuditoria: estado.modeloAuditoria }; // o formulário posta a configuração inteira
     ocupar(form, "Salvando…");
     api("/api/configuracao", postar(dados))
       .then(() => montarConfiguracao(main, {}, signal))
       .catch((error_: unknown) => {
         if (!signal.aborted) montarAgendador(main, signal, menuHtml, { ...estado, ...dados }, errosDe(error_));
+      });
+  });
+}
+
+/** O modelo da Auditoria: posta a configuração gravada inteira com o modelo escolhido; o 422 aparece no campo. */
+function montarAuditoria(
+  main: HTMLElement,
+  signal: AbortSignal,
+  menuHtml: string,
+  estado: EstadoDaConfiguracao,
+  modelos: readonly Modelo[],
+  erros: Erros,
+): void {
+  main.innerHTML = pagina(menuHtml, auditoria(estado, modelos, erros));
+  const form = main.querySelector<HTMLFormElement>("[data-auditoria]");
+  form?.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    const { agendadorAtivo, intervaloMin, timeoutMin, ociosidadeMin } = estado;
+    const modeloAuditoria = modeloDoSeletor(valor(form, '[name="modeloAuditoria"]'));
+    ocupar(form, "Salvando…");
+    api("/api/configuracao", postar({ agendadorAtivo, intervaloMin, timeoutMin, ociosidadeMin, modeloAuditoria }))
+      .then(() => montarConfiguracao(main, {}, signal))
+      .catch((error_: unknown) => {
+        if (!signal.aborted)
+          montarAuditoria(main, signal, menuHtml, { ...estado, modeloAuditoria }, modelos, errosDe(error_));
       });
   });
 }
@@ -280,6 +311,10 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
   const menuHtml = menu(estado, projetos, sel);
   if (sel.tipo === "agendador") {
     montarAgendador(main, signal, menuHtml, estado, new Map());
+    return;
+  }
+  if (sel.tipo === "auditoria") {
+    montarAuditoria(main, signal, menuHtml, estado, await api<Modelo[]>("/api/modelos", { signal }), new Map());
     return;
   }
   const salvo = sel.tipo === "projeto" ? projetos.find((p) => p.nome === sel.nome) : undefined;

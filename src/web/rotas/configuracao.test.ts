@@ -108,6 +108,7 @@ test("configuração: o F4 §3 com a próxima busca só ligado e as execuções 
     intervaloMin: 5,
     timeoutMin: 120,
     ociosidadeMin: 30,
+    modeloAuditoria: null,
     proximaBusca: null,
     emAndamento: [],
   });
@@ -126,7 +127,7 @@ test("configuração: o F4 §3 com a próxima busca só ligado e as execuções 
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
       VALUES (10, 8, 'autonomo', 's2', 'em_andamento', '2026-10-12T14:21:00.000Z');
   `);
-  const salvo = { agendadorAtivo: true, intervaloMin: 10, timeoutMin: 60, ociosidadeMin: 15 };
+  const salvo = { agendadorAtivo: true, intervaloMin: 10, timeoutMin: 60, ociosidadeMin: 15, modeloAuditoria: null };
   assert.deepEqual(await chamar("POST", "/api/configuracao", salvo), {
     ...salvo,
     proximaBusca: PROXIMA.toISOString(),
@@ -135,6 +136,45 @@ test("configuração: o F4 §3 com a próxima busca só ligado e as execuções 
       { execucao: 10, ticket: 8, issue: 4, iniciadaEm: "2026-10-12T14:21:00.000Z" },
     ],
   });
+});
+
+test("modelo da Auditoria: o par listado pelo pi grava; o que o pi não lista dá 422 e mantém o anterior; o igual ao gravado não chama o pi", async () => {
+  const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  const lido = async () => ((await chamar("GET", "/api/configuracao")) as { modeloAuditoria: unknown }).modeloAuditoria;
+  assert.deepEqual(
+    ((await chamar("POST", "/api/configuracao", { modeloAuditoria: opus })) as { modeloAuditoria: unknown })
+      .modeloAuditoria,
+    opus,
+  );
+  assert.deepEqual(await lido(), opus);
+
+  assert.deepEqual(
+    await chamar("POST", "/api/configuracao", { modeloAuditoria: { provedor: "inexistente", modelo: "xyz" } }),
+    [
+      422,
+      "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at modeloAuditoria",
+    ],
+  );
+  assert.deepEqual(await lido(), opus, "a recusa não gravou nada");
+
+  // Igual ao gravado: o pi nem é chamado (aqui, quebrado); sem modelo, volta ao padrão.
+  process.env.FABRIQUINHA_PI = "false";
+  try {
+    assert.deepEqual(
+      (
+        (await chamar("POST", "/api/configuracao", { intervaloMin: 7, modeloAuditoria: opus })) as {
+          intervaloMin: number;
+        }
+      ).intervaloMin,
+      7,
+    );
+    assert.equal(
+      ((await chamar("POST", "/api/configuracao", {})) as { modeloAuditoria: unknown }).modeloAuditoria,
+      null,
+    );
+  } finally {
+    process.env.FABRIQUINHA_PI = join(bin, "pi");
+  }
 });
 
 test("configuração inválida dá 422 com o caminho de cada campo, em português, e nada muda", async () => {
@@ -162,15 +202,16 @@ test("modelos: os pares de pi --list-models, para os seletores", async () => {
 test("cadastrar: confere, grava com a hospedagem deduzida do remoto e fixa o cursor inicial da base", async () => {
   const repo = clone();
   const salvo = { ...formulario(repo), hospedagem: "github" };
+  const lido = { ...salvo, efforts: {} };
   assert.deepEqual(await chamar("POST", "/api/projetos", { ...formulario(repo), hospedagem: "azure-devops" }), salvo);
-  assert.deepEqual(projeto(banco, "loja"), salvo);
+  assert.deepEqual(projeto(banco, "loja"), lido);
   assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
-  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...salvo, issues: 0 }]);
+  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...lido, issues: 0 }]);
   banco.exec(
     "INSERT INTO issue (id, projeto, fase, criada_em) VALUES (1, 'loja', 'registro', '2026-10-12T14:00:00.000Z')",
   );
-  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...salvo, issues: 1 }]);
-  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...salvo, issues: 1 });
+  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...lido, issues: 1 }]);
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...lido, issues: 1 });
   assert.deepEqual(await chamar("GET", "/api/projetos/nao-existe"), [
     404,
     "o projeto nao-existe não existe (confira o nome do projeto)",
@@ -243,6 +284,16 @@ test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", asyn
     502,
     `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,
   ]);
+  assert.deepEqual(await chamar("GET", "/api/projetos"), []);
+});
+
+test("effort fora dos níveis dá 422 em efforts.desenho; nada é gravado", async () => {
+  const [status, erro] = (await chamar("POST", "/api/projetos", {
+    ...formulario(clone()),
+    efforts: { desenho: "altissimo" },
+  })) as [number, string];
+  assert.equal(status, 422);
+  assert.match(erro, /→ at efforts\.desenho/);
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
 });
 

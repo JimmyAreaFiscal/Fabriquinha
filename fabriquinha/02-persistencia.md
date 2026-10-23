@@ -110,6 +110,7 @@ Consultados dentro da mesma transação, então são consistentes com o que vai 
 - As migrações 12 a 15 são da Simulação (F8, I-10): `projeto.link_produto` (12), `usuario_simulado` e `usuario_simulado_anexo` (13), `tarefa` e `tarefa_usuario` (14) e `execucao_simulada` (15).
 - A migração 16 (proposta de issue, C23 e C24 do F1) cria `proposta_issue` e `ix_proposta_issue_ticket` e recria `sequencia` com o tipo `proposta` no CHECK (tabela nova, `INSERT … SELECT`, DROP, RENAME), preservando os valores.
   A migração 1 guarda a lista de tipos original, para a lista nova só valer a partir da 16.
+- A migração 19 acrescenta `projeto.efforts` (`TEXT NOT NULL DEFAULT '{}'`, JSON válido): o effort por etapa; projetos anteriores leem `{}`. A tabela `execucao` não muda.
 - As tabelas de outros módulos (`configuracao` no F4; `commit_ticket` e `arquivo_commit` no F5; `uso`, `retrabalho`, `comando` e `varredura_base` no F6) são definidas nas specs desses módulos e entram no mesmo arquivo de schema.
 
 ## 4. DDL (versão 1)
@@ -132,6 +133,7 @@ CREATE TABLE projeto (
   sonar_project_key TEXT NOT NULL,
   fitness           TEXT NOT NULL CHECK (json_valid(fitness) AND json_array_length(fitness) >= 1),
   modelos           TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(modelos)),
+  efforts           TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(efforts)), -- migração 19
   link_produto      TEXT -- opcional: endereço http(s) do produto no ar, para a Simulação (I-10); NULL = sem link
 );
 
@@ -358,7 +360,7 @@ Antes de servir, o F7 confere que o hash pertence a uma evidência; nunca serve 
 | `comIssue(banco, issue, nome, ator, comando)` | Aplica um comando do F1 sobre o agregado da issue e registra o comando (3.3). |
 | `registrarIssue(banco, entrada, ator)` | C1: cria a issue e o ticket de registro. |
 | `proporIssue(banco, issue, entrada, ator)` | C23: grava a proposta `pendente` e o `proporIssue` em `comando`; recusa issue cancelada. |
-| `decidirProposta(banco, proposta, entrada, ator)` | C24 numa transação só: grava a issue nova antes da atual (e do desenho reprovado), atualiza a proposta e grava `decidirProposta` em `comando`. Recusa issue cancelada. |
+| `decidirProposta(banco, proposta, entrada, ator)` | C24 numa transação só: lê `propostasDaIssue` e as passa ao domínio, grava a issue nova antes da atual (e do desenho reprovado, se o lote fechou no desenho), atualiza a proposta e grava `decidirProposta` em `comando`. Devolve também o `lote`, quando a decisão o fecha. Recusa issue cancelada. |
 | `propostasDaIssue(banco, issue)` | As propostas dos tickets da issue, da mais antiga para a mais nova. |
 | `arquivarConcluidas(banco, projeto)` | C18: uma transação só; devolve quantas issues do projeto foram arquivadas. |
 | `cancelarIssues(banco, issue, ator)` | C22: uma transação só, na issue e nas dependentes diretas e indiretas (`dependentes`); um `cancelarIssue` em `comando` por issue; devolve as issues canceladas e as execuções que terminaram. `comIssue` recusa comando sobre issue cancelada. |

@@ -89,6 +89,8 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
       "ask_user_question",
     ],
   );
+  const comEffort = argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, effort: "high", confianca: false });
+  assert.deepEqual(comEffort.slice(6, 8), ["--thinking", "high"]);
   assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: false }), [
     "--mode",
     "rpc",
@@ -166,6 +168,12 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
     "--exclude-tools",
     "edit,write,bash,powershell",
   ]);
+  // Com o modelo da Configuração, `--provider` e `--model` vêm logo depois de `--session-id`; `null` é sem modelo.
+  assert.deepEqual(argumentosDaAuditoria("/r", sessao, null), args);
+  const com = argumentosDaAuditoria("/r", sessao, { provedor: "llamacpp", modelo: "qwen3-coder-30b" });
+  assert.deepEqual(com.slice(4, 9), ["--session-id", sessao, "--provider", "llamacpp", "--model"]);
+  assert.deepEqual(com.slice(9, 11), ["qwen3-coder-30b", "-e"]);
+  assert.equal(com.length, args.length + 4);
   process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdada do serviço
   process.env.GH_TOKEN = "segredo";
   try {

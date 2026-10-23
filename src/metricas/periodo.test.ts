@@ -44,10 +44,11 @@ const consumo = (chamadas: number, input: number, output: number, custo: number)
   custo,
 });
 const ZERO = consumo(0, 0, 0, 0);
-const apoio = (execucoes: number, falhas: number, reprovacoes: number, minutos: number) => ({
+const apoio = (execucoes: number, falhas: number, reprovacoes: number, minutos: number, iteracoes = 0) => ({
   execucoes,
   falhas,
   reprovacoes,
+  iteracoes,
   duracaoMs: minutos * 60_000,
 });
 /** As 6 etapas zeradas, com as que o teste pede sobrepostas. */
@@ -320,6 +321,47 @@ test("visão por issue: só issues com execução iniciada no período; fase e n
     metricasPorIssue(banco, { projeto: "loja", de: "2026-03", ate: "2026-03" }).map((l) => l.issue),
     [3],
   );
+  banco.close();
+});
+
+/** Grava iterações do ticket nas datas dadas (F6 §5.6). */
+const iteracoes = (banco: DatabaseSync, ticket: number, tipo: string, ...quando: string[]) => {
+  for (const em of quando) inserir(banco, "iteracao", { ticket, tipo, em: local(em) });
+};
+
+test("iterações: etapa do ticket, mês do `em` no fuso do serviço, e 0 nas etapas sem iteração (CA-6)", () => {
+  const banco = cenario();
+  // 3 em janeiro (a última às 23h de 31/01, já fevereiro em UTC) e 1 em fevereiro, no registro (T-1).
+  iteracoes(banco, 1, "mensagem", "2026-01-10 10:00", "2026-01-20 10:00", "2026-01-31 23:00");
+  iteracoes(banco, 1, "mensagem", "2026-02-01 00:30");
+  iteracoes(banco, 3, "reabertura", "2026-02-05 10:00"); // desenvolvimento
+  const [jan, fev] = metricasPorMes(banco, { projeto: "loja", de: "2026-01", ate: "2026-02" });
+  const por = (m: typeof jan) => Object.fromEntries((m?.etapas ?? []).map((e) => [e.etapa, e.iteracoes]));
+  assert.deepEqual(por(jan), { registro: 3, desenho: 0, desenvolvimento: 0, revisao: 0, encerramento: 0, sessao: 0 });
+  assert.deepEqual(por(fev), { registro: 1, desenho: 0, desenvolvimento: 1, revisao: 0, encerramento: 0, sessao: 0 });
+  banco.close();
+});
+
+test("iterações: o filtro de projeto separa `loja` de todos (CA-7)", () => {
+  const banco = cenario();
+  iteracoes(banco, 1, "mensagem", "2026-01-10 10:00", "2026-01-11 10:00"); // loja
+  iteracoes(banco, 9, "dialogo", "2026-01-12 10:00", "2026-01-13 10:00", "2026-01-14 10:00", "2026-01-15 10:00");
+  iteracoes(banco, 9, "mensagem", "2026-01-16 10:00"); // outro
+  const soma = (projeto?: string) =>
+    metricasPorMes(banco, { projeto, de: "2026-01", ate: "2026-01" })[0]?.etapas.reduce((t, e) => t + e.iteracoes, 0);
+  assert.equal(soma("loja"), 2);
+  assert.equal(soma(), 7);
+  banco.close();
+});
+
+test("iterações por issue: somam as etapas dentro do período e as de fora não contam (CA-8)", () => {
+  const banco = cenario();
+  iteracoes(banco, 1, "mensagem", "2026-01-10 10:00", "2026-01-11 10:00");
+  iteracoes(banco, 3, "reabertura", "2026-01-31 23:30");
+  iteracoes(banco, 3, "reabertura", "2026-02-10 10:00"); // fora de janeiro
+  const [i1, i2] = metricasPorIssue(banco, { de: "2026-01", ate: "2026-01" });
+  assert.deepEqual([i1?.issue, i1?.iteracoes, i2?.issue, i2?.iteracoes], [1, 3, 2, 0]);
+  assert.equal(metricasPorIssue(banco, { projeto: "loja", de: "2026-01", ate: "2026-02" })[0]?.iteracoes, 4);
   banco.close();
 });
 

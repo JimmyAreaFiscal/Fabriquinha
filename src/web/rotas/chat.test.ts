@@ -3,16 +3,17 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import { avisar, encerrar } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
+import { submeter } from "../../evidencias/submissao.ts";
 import { proporIssue } from "../../persistencia/issues.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
@@ -330,29 +331,32 @@ test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o
     [b.id],
     "só a aberta continua no cartão",
   );
-  const avisos = chat.conversa.filter((e) => e.aviso);
   assert.deepEqual(
-    avisos.map((e) => e.fabriquinha),
-    [undefined],
-  );
-  assert.match(
-    textos(avisos)[0] ?? "",
-    new RegExp(
-      `^user: A Fabriquinha criou a I-${String(nova)} \\(«Tela de relatório»\\) .* ela depende da I-${String(issue)}\\. Reduza`,
-    ),
+    chat.conversa.filter((e) => e.aviso),
+    [],
+    "com a P-2 aberta, a IA não recebeu aviso",
   );
   const segundo = await postar(`/api/propostas/${String(a.id)}`, { aceita: true });
   assert.equal(segundo.status, 409);
   assert.match((segundo.corpo as { erro: string }).erro, /a proposta P-\d+ já foi decidida: aceita/);
 
+  assert.equal((await postar(`/api/issues/${String(issue)}/registro`, { aprovado: true })).status, 409);
   assert.deepEqual((await postar(`/api/propostas/${String(b.id)}`, { aceita: false })).corpo, {});
   await esperarEstado(sessao, "aguardando_humano: conversa");
   const depois = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
   assert.deepEqual(depois.propostas, []);
-  assert.match(
-    textos(depois.conversa.filter((e) => e.aviso)).at(-1) ?? "",
-    /^user: O Auditor recusou a sua proposta de issue «Outra»/,
+  const avisos = depois.conversa.filter((e) => e.aviso);
+  assert.deepEqual(
+    avisos.map((e) => e.fabriquinha),
+    [undefined],
   );
+  const aviso = textos(avisos)[0] ?? "";
+  assert.match(aviso, /^user: O Auditor decidiu as suas propostas de issue:\n/);
+  assert.match(
+    aviso,
+    new RegExp(`- P-${String(a.id)}: A Fabriquinha criou a I-${String(nova)} \\(«Tela de relatório»\\)`),
+  );
+  assert.match(aviso, new RegExp(`- P-${String(b.id)}: O Auditor recusou a sua proposta de issue «Outra»`));
 });
 
 test("diálogos: select, confirm, input e editor respondidos ou cancelados no formato do pi; corpo inválido dá 422", async () => {
@@ -364,6 +368,7 @@ test("diálogos: select, confirm, input e editor respondidos ou cancelados no fo
     ["input", { cancelado: true }, '{"cancelled":true}'],
     ["editor", { valor: "linha 1" }, '{"value":"linha 1"}'],
   ];
+  let iteracoes = 0;
   for (const [metodo, corpo, eco] of casos) {
     await postar(`/api/sessoes/${sessao}/mensagens`, { texto: `pergunte ${metodo}`, modo: "prompt" });
     await esperarEstado(sessao, "aguardando_humano: dialogo");
@@ -372,6 +377,12 @@ test("diálogos: select, confirm, input e editor respondidos ou cancelados no fo
     assert.equal((await responder(`d-${metodo}`, { valor: 1 })).status, 422);
     assert.equal((await responder(`d-${metodo}`, { valor: "a", cancelado: true })).status, 422);
     assert.equal((await responder(`d-${metodo}`, corpo)).status, 204);
+    iteracoes += 1;
+    assert.equal(
+      servico.banco.prepare("SELECT count(*) AS n FROM iteracao WHERE tipo = 'dialogo'").get()?.n,
+      iteracoes,
+      "a resposta pela rota grava a iteração",
+    );
     await esperarEstado(sessao, "aguardando_humano: conversa");
     const { conversa } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
     assert.equal(textos(conversa).at(-1), `assistant: Resposta do diálogo: ${eco}`);
@@ -437,6 +448,39 @@ test("rodando: redirecionar e abortar; sessão inexistente dá 404", async () =>
   const { conversa: depois } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
   assert.equal((depois.at(-1)?.message as { stopReason: string }).stopReason, "aborted");
   assert.equal((await postar("/api/sessoes/nada/abortar")).status, 404);
+});
+
+test("o fim de uma ferramenta do pi avisa o chat com um estado novo", async () => {
+  const [sessao] = await registro();
+  const sse = await assinar(sessao);
+  assert.equal((await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "[ao vivo]", modo: "prompt" })).status, 204);
+  await ate(() => sse.eventos.some((e) => e.type === "tool_execution_end"), "o fim da ferramenta");
+  const fim = sse.eventos.findIndex((e) => e.type === "tool_execution_end");
+  await ate(() => sse.eventos.slice(fim).some((e) => e.type === "estado"), "o estado depois da ferramenta");
+  sse.fechar();
+  assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
+  await esperarEstado(sessao, "aguardando_humano: conversa");
+});
+
+test("o cabeçalho traz a evidência submetida pelo agente; a consulta traz a lista vazia", async () => {
+  const [sessao] = await registro();
+  const { ticket, execucoes } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.deepEqual(((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).evidencias, []);
+  const execucao = execucoes[0]?.id ?? 0;
+  const arquivo = join(raiz, "execucoes", `E-${String(execucao)}`, "saida", "tela.webm");
+  mkdirSync(dirname(arquivo), { recursive: true });
+  writeFileSync(arquivo, Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02]));
+  const agente = { tipo: "agente", execucao, ticket: ticket.id } as const;
+  await submeter(servico.banco, agente, "comportamento", { descricao: "lento", comoReproduzir: ["abrir"] }, [arquivo]);
+  const { evidencias } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  assert.deepEqual(
+    evidencias.map((e) => e.tipo),
+    ["comportamento"],
+  );
+  const { corpo } = await postar(`/api/tickets/${String(ticket.id)}/consulta`);
+  const { sessao: consulta } = corpo as { sessao: string };
+  await esperarEstado(consulta, "aguardando_humano: conversa");
+  assert.deepEqual(((await pedir(`/api/sessoes/${consulta}`)).corpo as DadosDoChat).evidencias, []);
 });
 
 test("SSE: o cliente que sai enquanto o chat abre não fica assinando a sessão", async () => {

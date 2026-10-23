@@ -28,6 +28,13 @@ test("Projeto aceita preparação e modelo por etapa", () => {
   assert.deepEqual(Projeto.parse(completo), completo);
 });
 
+test("Projeto aceita efforts por etapa e sem efforts; valor fora dos níveis é recusado em efforts.<etapa>", () => {
+  const efforts = { desenho: "high", revisao: "off" };
+  assert.deepEqual(Projeto.parse({ ...valido, efforts }).efforts, efforts);
+  assert.equal(Projeto.parse(valido).efforts, undefined);
+  assert.ok(erros({ ...valido, efforts: { desenho: "altissimo" } })[0]?.startsWith("efforts.desenho:"));
+});
+
 test("linkProduto: http(s) válido passa, vazio vira ausente, o resto dá a mensagem do campo", () => {
   assert.equal(
     Projeto.parse({ ...valido, linkProduto: "https://demo.exemplo.com" }).linkProduto,

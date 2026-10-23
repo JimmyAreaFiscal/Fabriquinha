@@ -5,13 +5,20 @@
 import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { AUDITOR, type Execucao, type Issue, type PropostaIssue, type Ticket } from "../../dominio/agregado.ts";
+import {
+  AUDITOR,
+  type Evidencia,
+  type Execucao,
+  type Issue,
+  type PropostaIssue,
+  type Ticket,
+} from "../../dominio/agregado.ts";
 import { naSessaoPrincipal, ticketDe } from "../../dominio/execucao.ts";
 import { existe } from "../../dominio/erros.ts";
 import { editarIssue } from "../../dominio/issue.ts";
-import { propostasAbertas } from "../../dominio/propostas.ts";
+import { lotes, propostasAbertas } from "../../dominio/propostas.ts";
 import { Id, Motivo } from "../../dominio/primitivos.ts";
-import { abortar, responderDialogo } from "../../execucao/gerente.ts";
+import { abortar } from "../../execucao/gerente.ts";
 import {
   anexarHistorico,
   exportarHistorico,
@@ -23,6 +30,7 @@ import {
 import {
   abrirChat,
   avisoDaProposta,
+  avisoDoLote,
   concluirSessao,
   conversarSobre,
   decidirProposta,
@@ -33,6 +41,7 @@ import {
   type OpcoesInterativa,
   reabrir,
   registrarNecessidade,
+  responderNaSessao,
 } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { agregadoExistente, comIssue, issueDoTicket, propostasDaIssue } from "../../persistencia/issues.ts";
@@ -47,6 +56,8 @@ export interface CabecalhoDoChat {
   ticket: Ticket;
   /** As execuções da sessão, em ordem: dão as linhas do sistema da conversa. */
   execucoes: Execucao[];
+  /** As evidências submetidas pelo agente ao ticket (vazio na consulta): dão a mensagem da Fabriquinha de cada uma. */
+  evidencias: Pick<Evidencia, "id" | "tipo" | "em">[];
   /** As propostas de issue abertas do ticket, só no registro interativo. */
   propostas?: PropostaIssue[];
 }
@@ -74,23 +85,31 @@ function cabecalho(banco: DatabaseSync, sessao: InfoSessao): CabecalhoDoChat {
     issue: ag.issue,
     ticket: ticketDe(ag, sessao.ticket),
     execucoes: ag.execucoes.filter((e) => e.sessaoPi === sessao.sessao),
+    evidencias:
+      sessao.modo === "consulta"
+        ? []
+        : ag.evidencias
+            .filter((e) => e.ticket === sessao.ticket && e.produtor === "agente")
+            .map(({ id, tipo, em }) => ({ id, tipo, em })),
     ...(propostas && { propostas }),
   };
 }
 
 /**
  * A marca da mensagem do usuário que veio da Fabriquinha: `fabriquinha` no prompt montado por ela, que o chat mostra
- * como linha do sistema, com o link do `prompt.md`; `aviso` na mensagem de uma proposta de issue decidida, que o chat
- * mostra como mensagem da Fabriquinha. Nenhuma marca é mensagem do Auditor.
+ * como linha do sistema, com o link do `prompt.md`; `aviso` na mensagem de uma proposta de issue decidida ou de um
+ * lote de propostas já decididas, que o chat mostra como mensagem da Fabriquinha. Nenhuma marca é mensagem do Auditor.
  */
 function marcador(banco: DatabaseSync, sessao: InfoSessao): (mensagem: unknown) => Entrada | undefined {
   const ag = agregadoExistente(banco, sessao.issue);
   const prompts = promptsDaFabriquinha(raizDo(banco), ag, sessao.ticket);
-  const avisos = new Set(
-    propostasDaIssue(banco, sessao.issue)
-      .filter((p) => p.ticket === sessao.ticket && p.status !== "pendente")
-      .map((p) => avisoDaProposta(p, sessao.issue)),
-  );
+  const doTicket = propostasDaIssue(banco, sessao.issue).filter((p) => p.ticket === sessao.ticket);
+  const avisos = new Set([
+    ...doTicket.filter((p) => p.status !== "pendente").map((p) => avisoDaProposta(p, sessao.issue)),
+    ...lotes(doTicket)
+      .filter((l) => l.every((p) => p.status !== "pendente"))
+      .map((l) => avisoDoLote(l, sessao.issue)),
+  ]);
   return (mensagem) => {
     const m = mensagem as Partial<Mensagem> | undefined;
     if (m?.role !== "user") return undefined;
@@ -224,8 +243,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     caminho: "/api/sessoes/:sessao/dialogos/:id",
     tratar: async ({ banco, params, corpo }) => {
       const resposta = RespostaDialogo.parse(corpo);
-      const { execucao } = await infoDaSessao(banco, String(params.sessao));
-      responderDialogo(execucao, String(params.id), resposta);
+      await responderNaSessao(banco, String(params.sessao), String(params.id), resposta);
     },
   },
   {

@@ -111,12 +111,30 @@ test("conversa: o prompt marcado vira a linha do início, a chamada recebe o res
     ],
   );
   const [inicio, chamada, final] = mensagens;
-  assert.deepEqual(inicio, linhaDoInicio({ role: "user", timestamp: 1 }, dados()));
+  assert.deepEqual([inicio], linhaDoInicio({ role: "user", timestamp: 1 }, dados()));
   assert.equal(
-    (inicio.metadata?.custom as { html: string }).html,
+    (inicio?.metadata?.custom as { html: string }).html,
     '<div class="sistema">Auditoria de setembro de 2026 iniciada</div>',
   );
   const [parte] = chamada?.content as unknown as { artifact: { resultado?: { toolCallId?: string } } }[];
   assert.equal(parte?.artifact.resultado?.toolCallId, "c1");
   assert.deepEqual(final?.content, [{ type: "text", text: "## Custos" }]);
+});
+
+test("conversa: com pedido, o balão do Auditor vem logo abaixo da linha do início; sem pedido, só a linha", () => {
+  const prompt = {
+    type: "message",
+    fabriquinha: true,
+    message: { role: "user", content: "# Auditoria…", timestamp: 1 },
+  };
+  const [inicio, pedido, ...resto] = conversaDaAuditoria(
+    dados({ pedido: "Verifique <b>repetições</b>", conversa: [prompt] }),
+  );
+  assert.deepEqual([inicio?.id, inicio?.role], ["user-1", "system"]);
+  assert.deepEqual(
+    [pedido?.id, pedido?.role, pedido?.content],
+    ["user-1-pedido", "user", [{ type: "text", text: "Verifique <b>repetições</b>" }]],
+  );
+  assert.equal(resto.length, 0);
+  assert.equal(conversaDaAuditoria(dados({ conversa: [prompt] })).length, 1);
 });

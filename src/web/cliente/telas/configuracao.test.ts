@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   agendador,
+  auditoria,
   confirmacaoDeRemover,
   errosDoZod,
   type EstadoDaConfiguracao,
@@ -41,6 +42,7 @@ test("selecao: o item do menu pelo endereço", () => {
   assert.deepEqual(selecao("?projeto=loja%20x"), { tipo: "projeto", nome: "loja x" });
   assert.deepEqual(selecao("?projeto="), { tipo: "agendador" });
   assert.deepEqual(selecao("?novo"), { tipo: "novo" });
+  assert.deepEqual(selecao("?auditoria"), { tipo: "auditoria" });
 });
 
 test("errosDoZod: as mensagens por caminho do prettifyError; sem caminho, na raiz", () => {
@@ -59,7 +61,7 @@ test("errosDoZod: as mensagens por caminho do prettifyError; sem caminho, na rai
 });
 
 test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo; o escolhido marcado", () => {
-  const ligado = { agendadorAtivo: true, intervaloMin: 5, timeoutMin: 120, ociosidadeMin: 30 };
+  const ligado = { agendadorAtivo: true, intervaloMin: 5, timeoutMin: 120, ociosidadeMin: 30, modeloAuditoria: null };
   const azure = { ...LOJA, nome: "site<x>", hospedagem: "azure-devops" as const };
   const html = menu(ligado, [LOJA, azure], { tipo: "projeto", nome: "loja" });
   assert.match(html, /<a href="\/config">Agendador <span class="pill pill-ok">ligado<\/span><\/a>/);
@@ -72,6 +74,12 @@ test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo
 
   const desligado = menu({ ...ligado, agendadorAtivo: false }, [], { tipo: "agendador" });
   assert.match(desligado, /<a href="\/config" aria-current="page">Agendador <span class="pill pill-neutro">desligado/);
+  assert.match(html, /<a href="\/config\?auditoria">Auditoria<\/a>/);
+  assert.match(
+    menu(ligado, [], { tipo: "auditoria" }),
+    /<a href="\/config\?auditoria" aria-current="page">Auditoria<\/a>/,
+  );
+  assert.doesNotMatch(menu(ligado, [], { tipo: "auditoria" }), /<a href="\/config" aria-current/);
   assert.match(menu(ligado, [], { tipo: "novo" }), /<a class="novo" href="\/config\?novo" aria-current="page">/);
 });
 
@@ -80,6 +88,7 @@ const ESTADO: EstadoDaConfiguracao = {
   intervaloMin: 5,
   timeoutMin: 120,
   ociosidadeMin: 30,
+  modeloAuditoria: null,
   proximaBusca: "2026-10-12T17:35:00.000Z",
   emAndamento: [
     { execucao: 231, ticket: 112, issue: 38, iniciadaEm: "2026-10-12T17:24:00.000Z" },
@@ -119,6 +128,36 @@ test("agendador: interruptor, os três tempos, a próxima busca no fuso local e 
   );
 });
 
+test("auditoria: o seletor do modelo em padrão do pi, com o escolhido, com o gravado fora da lista e com o erro", () => {
+  const sem = auditoria(ESTADO, MODELOS, new Map());
+  assert.match(sem, /<h2>Auditoria<\/h2>/);
+  assert.match(sem, /<label for="campo-modeloAuditoria">Modelo da Auditoria<\/label>/);
+  assert.match(
+    sem,
+    /<select id="campo-modeloAuditoria" name="modeloAuditoria" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">/,
+  );
+  assert.match(sem, /<button type="submit" class="btn btn-primario">Salvar<\/button>/);
+
+  const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  const escolhido = auditoria({ ...ESTADO, modeloAuditoria: opus }, MODELOS, new Map());
+  assert.match(escolhido, /<select id="campo-modeloAuditoria" name="modeloAuditoria"><option value="">/);
+  assert.match(escolhido, /<option value="anthropic\/claude-opus-5-5" selected>/);
+
+  const fora = auditoria({ ...ESTADO, modeloAuditoria: { provedor: "llamacpp", modelo: "qwen" } }, MODELOS, new Map());
+  assert.match(fora, /<option value="llamacpp\/qwen" selected>llamacpp \/ qwen<\/option><\/select>/);
+
+  const erro = auditoria(
+    ESTADO,
+    MODELOS,
+    errosDoZod("✖ o modelo inexistente/xyz não existe no pi\n  → at modeloAuditoria"),
+  );
+  assert.match(erro, /aria-invalid="true" aria-describedby="campo-modeloAuditoria-erro"/);
+  assert.match(
+    erro,
+    /<span class="msg-erro" id="campo-modeloAuditoria-erro">o modelo inexistente\/xyz não existe no pi/,
+  );
+});
+
 test("projeto salvo: nome só leitura, hospedagem, as listas, as fitness e o modelo de cada etapa", () => {
   const html = formularioDeProjeto(LOJA, { issues: 1, modelos: MODELOS, erros: new Map() });
   assert.match(html, /^<h2>loja <span class="muted contagem">1 issue<\/span><button [^>]*data-remover-projeto/);
@@ -146,6 +185,35 @@ test("projeto salvo: nome só leitura, hospedagem, as listas, as fitness e o mod
   );
   assert.match(html, /<button type="submit" class="btn btn-primario">Salvar projeto<\/button>/);
   assert.match(formularioDeProjeto(LOJA, { issues: 11, modelos: MODELOS, erros: new Map() }), /11 issues/);
+});
+
+test("effort por etapa: abaixo do modelo, seis seletores em padrão do pi, as oito opções, o gravado e o erro (CA-1, CA-2, CA-3, CA-8)", () => {
+  const vazio = formularioDeProjeto({ ...LOJA, efforts: undefined }, { issues: 1, modelos: MODELOS, erros: new Map() });
+  assert.match(
+    vazio,
+    /Modelo por etapa[\s\S]*<h3>Effort por etapa <span class="nota">· o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi<\/span><\/h3><div class="modelos-grade">/,
+  );
+  assert.equal(
+    vazio.match(/<select id="campo-efforts\.\w+" name="efforts\.\w+" aria-label="Effort de [^"]+" class="padrao">/g)
+      ?.length,
+    6,
+  );
+  assert.match(vazio, /<label for="campo-efforts.sessao">Sessão em aberto<\/label>/);
+  assert.match(vazio, /aria-label="Effort de Sessão em aberto"/);
+  assert.match(
+    vazio,
+    /name="efforts.desenho" aria-label="Effort de Desenho" class="padrao"><option value="">padrão do pi<\/option><option value="off">off<\/option><option value="minimal">minimal<\/option><option value="low">low<\/option><option value="medium">medium<\/option><option value="high">high<\/option><option value="xhigh">xhigh<\/option><option value="max">max<\/option><\/select>/,
+  );
+
+  const gravado = formularioDeProjeto(
+    { ...LOJA, efforts: { desenho: "high" } },
+    { issues: 1, modelos: MODELOS, erros: errosDoZod("✖ Entrada inválida\n  → at efforts.desenho") },
+  );
+  assert.match(
+    gravado,
+    /<div class="celula erro"><select id="campo-efforts.desenho" name="efforts.desenho" aria-label="Effort de Desenho" aria-invalid="true" aria-describedby="campo-efforts.desenho-erro">.*<option value="high" selected>high<\/option>.*<\/select><span class="msg-erro" id="campo-efforts.desenho-erro">Entrada inválida<\/span>/,
+  );
+  assert.match(gravado, /name="efforts.revisao" aria-label="Effort de Revisão" class="padrao">/);
 });
 
 test("link do produto: no grupo Repositório depois do SonarQube, com a ajuda, o valor e o erro do campo", () => {

@@ -64,12 +64,22 @@ export function envioDaAuditoria(estado: Auditoria["estado"]): Envio {
   };
 }
 
-/** A linha do sistema "Auditoria de … iniciada", que ocupa o lugar do prompt montado pela Fabriquinha (`m`). */
-export const linhaDoInicio = (m: MensagemPi, dados: Pick<DadosDaAuditoria, "rotulo">): ThreadMessageLike =>
+/**
+ * A linha do sistema "Auditoria de … iniciada", que ocupa o lugar do prompt montado pela Fabriquinha (`m`), e, se o
+ * Auditor fez um pedido, logo abaixo, o pedido como balão dele.
+ */
+export const linhaDoInicio = (
+  m: MensagemPi,
+  dados: Pick<DadosDaAuditoria, "rotulo" | "pedido">,
+): ThreadMessageLike[] => [
   doSistema({
     chave: chaveDa(m),
     html: `<div class="sistema">Auditoria de ${escapar(dados.rotulo)} iniciada</div>`,
-  });
+  }),
+  ...(dados.pedido
+    ? [{ id: `${chaveDa(m)}-pedido`, role: "user" as const, content: [{ type: "text" as const, text: dados.pedido }] }]
+    : []),
+];
 
 /** A conversa do JSONL; o prompt marcado `fabriquinha` vira a linha do início. */
 export function conversaDaAuditoria(dados: DadosDaAuditoria): ThreadMessageLike[] {
@@ -79,5 +89,5 @@ export function conversaDaAuditoria(dados: DadosDaAuditoria): ThreadMessageLike[
   const resultados = new Map(
     mensagens.filter(({ m }) => m.role === "toolResult").map(({ m }) => [String(m.toolCallId), m] as const),
   );
-  return mensagens.flatMap(({ m, fabriquinha }) => (fabriquinha ? [linhaDoInicio(m, dados)] : mensagem(m, resultados)));
+  return mensagens.flatMap(({ m, fabriquinha }) => (fabriquinha ? linhaDoInicio(m, dados) : mensagem(m, resultados)));
 }

@@ -3548,6 +3548,18 @@ body:has(.pagina-chat) {
   align-items: center;
   gap: var(--s-2);
 }
+.pagina-historico .pedido-auditoria {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-bottom: var(--s-4);
+}
+.pagina-historico .pedido-auditoria textarea {
+  width: 100%;
+  field-sizing: content;
+  min-height: 2lh;
+  max-height: 12lh;
+}
 .pagina-historico .mestre {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 460px;
@@ -4033,7 +4045,7 @@ svg.barras :not(.hit) {
 }
 .kpis-mes {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--s-3);
   margin: var(--s-4) 0 var(--s-6);
 }

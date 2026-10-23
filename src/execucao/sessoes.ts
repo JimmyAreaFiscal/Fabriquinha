@@ -24,12 +24,13 @@ import {
   ticketDe,
 } from "../dominio/execucao.ts";
 import { decidirDesenho, decidirPR, decidirRegistro } from "../dominio/gates.ts";
-import { exigirPropostaAberta } from "../dominio/propostas.ts";
+import { exigirPropostaAberta, propostasAbertas } from "../dominio/propostas.ts";
 import { type Etapa, type Id, type Instante, type Modelo, motivo } from "../dominio/primitivos.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
 import { depoisDoC6 } from "../metricas/uso.ts";
 import type { Projeto } from "../dominio/projeto.ts";
 import { raizDo } from "../persistencia/banco.ts";
+import { registrarIteracao } from "../persistencia/metricas.ts";
 import { anotar, arquivoDaSessao, issueDaSessao, issuesComSessao, logDaExecucao } from "../persistencia/execucoes.ts";
 import {
   agregadoExistente,
@@ -37,6 +38,7 @@ import {
   decidirProposta as gravarDecisaoDaProposta,
   issueDoTicket,
   propostaExistente,
+  propostasDaIssue,
   registrarIssue,
 } from "../persistencia/issues.ts";
 import { projeto as lerProjeto } from "../persistencia/projetos.ts";
@@ -52,6 +54,7 @@ import {
   iniciarNaSessaoPrincipal,
   mandar,
   type Rodada,
+  responderDialogo,
   rodarExecucao,
   type Situacao,
   situacao,
@@ -450,6 +453,16 @@ export function avisoDaProposta(proposta: PropostaIssue, issue: Id): string {
   );
 }
 
+/** O aviso de um lote de propostas decididas: o da proposta, se for uma só; senão, uma linha por proposta. */
+export function avisoDoLote(lote: readonly PropostaIssue[], issue: Id): string {
+  const [unica] = lote;
+  if (unica && lote.length === 1) return avisoDaProposta(unica, issue);
+  return [
+    "O Auditor decidiu as suas propostas de issue:",
+    ...lote.map((p) => `- P-${String(p.id)}: ${avisoDaProposta(p, issue)}`),
+  ].join("\n");
+}
+
 /** Por que a sessão não recebe mensagem em cada estado (F4 §5.4). */
 const SEM_MENSAGEM: Record<string, string> = {
   dialogo: "responda o diálogo aberto pelo agente",
@@ -505,15 +518,28 @@ export async function enviar(
     throw new ErroDeRegra(`a sessão de ${t} está ${rotulo} e não recebe ${modo}`, `envie com ${aceitos.join(" ou ")}`);
   }
   const viva = situacao(sessao);
-  if (viva) {
-    mandar(viva.execucao, { type: modo, message: texto });
-    return;
+  if (viva) mandar(viva.execucao, { type: modo, message: texto });
+  else {
+    if (info.estado === "rodando") throw semPi(ag, info);
+    if (info.modo === "consulta") {
+      const fork = copiaDaPrincipal(raizDo(banco), ag, info.ticket, sessao);
+      iniciarNaConsulta(banco, info.ticket, sessao, opcoes, { prompt: () => texto, fork });
+    } else iniciarInterativa(banco, info.ticket, texto, opcoes);
   }
-  if (info.estado === "rodando") throw semPi(ag, info);
-  if (info.modo === "consulta") {
-    const fork = copiaDaPrincipal(raizDo(banco), ag, info.ticket, sessao);
-    iniciarNaConsulta(banco, info.ticket, sessao, opcoes, { prompt: () => texto, fork });
-  } else iniciarInterativa(banco, info.ticket, texto, opcoes);
+  // F6 §5.6: só a mensagem do Auditor a uma sessão interativa conta; o steer na autônoma e a consulta não.
+  if (info.modo === "interativo") registrarIteracao(banco, info.ticket, "mensagem");
+}
+
+/** A resposta do Auditor ao diálogo `id` aberto pelo agente da sessão; numa sessão interativa conta como iteração. */
+export async function responderNaSessao(
+  banco: DatabaseSync,
+  sessao: string,
+  id: string,
+  resposta: Parameters<typeof responderDialogo>[2],
+): Promise<void> {
+  const info = await infoDaSessao(banco, sessao);
+  responderDialogo(info.execucao, id, resposta);
+  if (info.modo === "interativo") registrarIteracao(banco, info.ticket, "dialogo");
 }
 
 /**
@@ -566,6 +592,12 @@ export async function decidirGate(
 ): Promise<void> {
   const [comando, decidir, devolvido] = DECIDIR[etapa];
   const ag = await agregadoAssentado(banco, issue);
+  if (propostasAbertas(ag, propostasDaIssue(banco, issue)).length > 0) {
+    throw new ErroDeRegra(
+      `há propostas de issue abertas no gate da I-${String(issue)}`,
+      "decida as propostas de issue abertas antes",
+    );
+  }
   const ticket = ag.tickets.find((t) => t.etapa === etapa && t.status === "em_execucao");
   if (ticket?.origem === "externo") {
     // O registro da IA externa não tem sessão do pi: nada a parar, descartar, avisar nem retomar. Devolvido, ela lê o
@@ -630,6 +662,7 @@ export function reabrir(banco: DatabaseSync, ticket: Id, instrucao?: string): vo
   const ag = comIssue(banco, issueDoTicket(banco, ticket), "reabrirTicket", AUDITOR, (a) =>
     reabrirTicket(a, { ticket, instrucao }, AUDITOR),
   );
+  registrarIteracao(banco, ticket, "reabertura");
   // C9 só reabre ticket que falhou, e só falha o que executou: a sessão principal existe.
   avisar(...principalDe(banco, ag, ticket));
 }
@@ -739,10 +772,10 @@ export async function pedirMudancas(
 }
 
 /**
- * C24 pelo Auditor. No registro, para o pi ocioso, grava a decisão e retoma a sessão com o aviso à IA; no gate do
- * desenho, o aceite reprova o desenho (C15) e retoma a sessão com o motivo, e a recusa só avisa a sessão. O aceite abre
- * o registro da issue nova. Recusa antes de gravar se a proposta já foi decidida ou se o agente ainda trabalha.
- * Devolve a issue criada, se houve.
+ * C24 pelo Auditor. Para o pi ocioso e grava a decisão. Só a decisão que deixa o gate sem proposta aberta retoma a IA,
+ * uma vez, com o lote: no registro, o aviso do lote; no desenho, o C15 reprovado que o fechamento do lote grava. Antes
+ * disso só avisa a sessão. O aceite abre o registro da issue nova. Recusa antes de gravar se a proposta já foi
+ * decidida. Devolve a issue criada, se houve.
  */
 export async function decidirProposta(
   banco: DatabaseSync,
@@ -754,15 +787,16 @@ export async function decidirProposta(
   const issue = issueDoTicket(banco, proposta.ticket);
   const antes = await agregadoAssentado(banco, issue);
   exigirPropostaAberta(antes, proposta);
-  const noRegistro = antes.issue.fase === "registro";
-  if (noRegistro || aceita) await pararOciosa(antes, proposta.ticket);
-  const { ag, proposta: decidida, nova } = gravarDecisaoDaProposta(banco, id, { aceita }, AUDITOR);
-  if (noRegistro) iniciarInterativa(banco, proposta.ticket, avisoDaProposta(decidida, issue), opcoes);
-  else if (aceita) {
-    // O C24 aceito no desenho grava o C15 reprovado com o motivo que cita a issue nova.
+  await pararOciosa(antes, proposta.ticket);
+  const { ag, nova, lote } = gravarDecisaoDaProposta(banco, id, { aceita }, AUDITOR);
+  if (!lote) avisar(...principalDe(banco, ag, proposta.ticket));
+  else if (antes.issue.fase === "registro") {
+    iniciarInterativa(banco, proposta.ticket, avisoDoLote(lote, issue), opcoes);
+  } else {
+    // O lote fechado no desenho grava o C15 reprovado com o motivo que lista as decisões.
     const motivoDoC15 = ag.decisoes.findLast((d) => d.gate === "desenho")?.motivo;
     iniciarInterativa(banco, proposta.ticket, `O Auditor reprovou o desenho. Motivo: ${String(motivoDoC15)}`, opcoes);
-  } else avisar(...principalDe(banco, ag, proposta.ticket));
+  }
   if (!nova) return {};
   abrirRegistro(banco, nova, opcoes);
   return { issue: nova.issue.id };

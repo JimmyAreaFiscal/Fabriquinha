@@ -115,5 +115,6 @@ test("Início com a frase do mês de todos os projetos e Projeto com os 5 cards 
     /0 \/ 0\s*registradas \/ concluídas/,
     /0 \/ 0\s*criados \/ concluídos/,
     /0 \/ 0\s*abertos \/ mergeados/,
+    /0\s*mensagens, diálogos e reaberturas/,
   ]);
 });
