@@ -384,3 +384,34 @@ test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a
   assert.equal(novo.decisoes, ag.decisoes);
   assert.equal(tk2(ag)?.status, "falhou");
 });
+
+const falhar = (ag: AgregadoDemanda, ticket_id: number) => registrarFalhaTicket(ag, { ticket_id }, { agora: t2 });
+const intacto = (fn: () => unknown, ag: AgregadoDemanda) => {
+  const antes = structuredClone(ag);
+  assert.throws(fn, ErroDeRegra);
+  assert.deepEqual(ag, antes);
+};
+
+test("T-965: ticket de planejamento falho bloqueia submissão e confirmação até o Auditor reabrir", () => {
+  const antes = falhar(emPlanejamento(), 2);
+  intacto(() => submeterPlano(antes, planoV(), agente, { agora: t2 }), antes);
+  const aberto = falhar(submetido(), 2);
+  intacto(() => confirmarAprovacaoPlanejamento(aberto, {}, AUDITOR, { agora: t2 }), aberto);
+  assert.equal(aberto.demanda.fase, "aprovacao_planejamento");
+  const reaberto = reabrirTicket(antes, { ticket_id: 2, instrucao: "retome" }, AUDITOR, { agora: t2 });
+  assert.equal(reaberto.demanda.fase, "planejamento");
+  assert.equal(submeterPlano(reaberto, planoV(), agente, { agora: t2 }).demanda.fase, "aprovacao_planejamento");
+});
+
+test("T-965: ticket da demanda falho bloqueia envio e decisão até o Auditor reabrir", () => {
+  const ag = falhar(completa(), 1);
+  intacto(() => enviarDemanda(ag, autora, { agora: t1 }), ag);
+  const reaberto = reabrirTicket(ag, { ticket_id: 1, instrucao: "retome" }, AUDITOR, { agora: t1 });
+  const env = enviarDemanda(reaberto, autora, { agora: t1 });
+  const emCurso = {
+    ...env,
+    tickets: env.tickets.map((t) => (t.ticket_id === 1 ? { ...t, status: "em_execucao" as const } : t)),
+  };
+  const falhoNoGate = falhar(emCurso, 1);
+  intacto(() => decidirDemanda(falhoNoGate, { aprovado: true }, AUDITOR, { agora: t2 }), falhoNoGate);
+});

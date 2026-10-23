@@ -27,6 +27,17 @@ const EntradaDecisao = z.discriminatedUnion("aprovado", [
   z.strictObject({ aprovado: z.literal(false), motivo: Motivo, nota: z.number().int().min(1).max(5).optional() }),
 ]);
 
+/** Ticket global falho bloqueia o seu percurso: só `reabrirTicket` (Auditor, com instrução) o libera. */
+function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): void {
+  const falho = ag.tickets.find((t) => t.etapa === etapa && t.status === "falhou");
+  if (falho !== undefined) {
+    throw new ErroDeRegra(
+      `o ticket ${String(falho.ticket_id)} da etapa ${etapa} falhou e bloqueia a demanda ${ag.demanda.id}`,
+      "o Auditor deve reabri-lo com instrução",
+    );
+  }
+}
+
 /** CA-1: cria a demanda em `registro` com a origem do autor e o ticket 1 da etapa `demanda`. */
 export function registrarDemanda(entrada: unknown, autor: AutorDemanda, ctx: ContextoDemanda): AgregadoDemanda {
   const e = EntradaRegistro.parse(entrada);
@@ -78,6 +89,7 @@ export function enviarDemanda(ag: AgregadoDemanda, autor: AutorDemanda, ctx: Con
     throw new ErroDeRegra(`a demanda ${demanda.id} já foi enviada`, "aguarde a decisão do Auditor");
   }
   exigirAutoria(demanda, autor, "enviar");
+  exigirSemFalha(ag, "demanda");
   const pendentes = pendentesDeEnvio(ag);
   if (pendentes.length > 0) {
     throw new ErroDeRegra(
@@ -107,6 +119,7 @@ export function decidirDemanda(
       "decida só na fase aprovacao_demanda, depois do envio",
     );
   }
+  exigirSemFalha(ag, "demanda");
   const ticket = ag.tickets.find((t) => t.etapa === "demanda");
   if (ticket === undefined) {
     throw new ErroDeRegra(`a demanda ${demanda.id} não tem ticket de etapa demanda`, "registre a demanda de novo");
@@ -201,6 +214,7 @@ export function submeterPlano(
     );
   }
   exigirFase(ag, "planejamento", "receber plano");
+  exigirSemFalha(ag, "planejar");
   const plano = Plano.safeParse(entrada);
   if (!plano.success) {
     throw new ErroDeRegra(
@@ -273,6 +287,7 @@ export function confirmarAprovacaoPlanejamento(
   exigirAuditor(ator, "aprovar o planejamento");
   const { nota } = EntradaAprovacao.parse(entrada);
   exigirFase(ag, "aprovacao_planejamento", "aprovar o planejamento");
+  exigirSemFalha(ag, "planejar");
   const planejamento = ticketPlanejamento(ag);
   const plano = planoSubmetido(ag, planejamento);
   const demanda_id = ag.demanda.id;
