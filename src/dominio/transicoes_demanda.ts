@@ -127,7 +127,7 @@ export function decidirDemanda(
   const decisao: DecisaoDemanda = {
     demanda_id: demanda.id,
     ticket_id: ticket.ticket_id,
-    decisao_id: ag.decisoes.length + 1,
+    decisao_id: proximaDecisaoId(ag, ticket),
     resultado: e.aprovado ? "aprovado" : "recusado",
     ...(!e.aprovado && { motivo: e.motivo }),
     ...(e.nota !== undefined && { nota: e.nota }),
@@ -179,6 +179,11 @@ function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plano {
   return Plano.parse(evidencia.dados);
 }
 
+/** A sequência de `decisao_id` é local ao ticket: máximo das decisões dele + 1 (1 sem decisão anterior). */
+function proximaDecisaoId(ag: AgregadoDemanda, ticket: TicketDemanda): number {
+  return ag.decisoes.reduce((m, d) => (d.ticket_id === ticket.ticket_id ? Math.max(m, d.decisao_id) : m), 0) + 1;
+}
+
 const decisaoDoAuditor = (
   ag: AgregadoDemanda,
   ticket: TicketDemanda,
@@ -188,7 +193,7 @@ const decisaoDoAuditor = (
 ): DecisaoDemanda => ({
   demanda_id: ag.demanda.id,
   ticket_id: ticket.ticket_id,
-  decisao_id: ag.decisoes.length + 1,
+  decisao_id: proximaDecisaoId(ag, ticket),
   resultado,
   ...extra,
   por: "auditor",

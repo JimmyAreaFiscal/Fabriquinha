@@ -270,7 +270,7 @@ test("CA-4 e CA-5: reprovar exige Auditor e motivo; registra, volta a planejamen
   assert.deepEqual(novo.decisoes.at(-1), {
     demanda_id: "I-1",
     ticket_id: 2,
-    decisao_id: 2,
+    decisao_id: 1,
     resultado: "recusado",
     motivo: "falta teste",
     por: "auditor",
@@ -281,6 +281,27 @@ test("CA-4 e CA-5: reprovar exige Auditor e motivo; registra, volta a planejamen
   // a mesma sessão retoma e resubmete, substituindo o plano
   const outro = submeterPlano(novo, planoV(), agente, { agora: t2 });
   assert.equal(outro.evidencias.filter((e) => e.tipo === "plano").length, 1);
+});
+
+test("decisao_id é local ao ticket: reprovações sucessivas avançam e a aprovação segue a sequência", () => {
+  const ag = submetido();
+  const r1 = reprovarPlanejamento(ag, { motivo: "a" }, AUDITOR, { agora: t2 });
+  const r2 = reprovarPlanejamento(submeterPlano(r1, planoV(), agente, { agora: t2 }), { motivo: "b" }, AUDITOR, {
+    agora: t2,
+  });
+  const ok = confirmarAprovacaoPlanejamento(submeterPlano(r2, planoV(), agente, { agora: t2 }), {}, AUDITOR, {
+    agora: t2,
+  });
+  assert.deepEqual(
+    ok.decisoes.map((d) => [d.ticket_id, d.decisao_id]),
+    [
+      [1, 1],
+      [2, 1],
+      [2, 2],
+      [2, 3],
+    ],
+  );
+  assert.deepEqual(ok.decisoes.slice(0, 1), ag.decisoes);
 });
 
 test("CA-6: sem a confirmação nada é criado; só o Auditor, na fase certa e com plano, confirma", () => {
@@ -357,7 +378,7 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
   assert.deepEqual(novo.decisoes.at(-1), {
     demanda_id: "I-1",
     ticket_id: 2,
-    decisao_id: 2,
+    decisao_id: 1,
     resultado: "aprovado",
     nota: 4,
     por: "auditor",
