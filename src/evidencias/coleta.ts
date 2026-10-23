@@ -2,7 +2,7 @@
 // falha direto.
 import type { DatabaseSync } from "node:sqlite";
 import type { Agregado, Contexto, Ticket, TipoEvidencia } from "../dominio/agregado.ts";
-import { ErroDeRegra } from "../dominio/erros.ts";
+import { ErroDeReprovacao } from "../dominio/erros.ts";
 import type { Etapa, Id } from "../dominio/primitivos.ts";
 import { gravarCommit } from "../persistencia/commits.ts";
 import { anotar } from "../persistencia/execucoes.ts";
@@ -28,7 +28,7 @@ const descartar: Coleta = async (_banco, _ticket, worktree, log) => {
   return undefined;
 };
 
-/** Roda o coletor e devolve o agregado se a evidência `tipo` saiu aprovada; senão, o ticket falha. */
+/** Roda o coletor e devolve o agregado se a evidência `tipo` saiu aprovada; senão, o ticket volta ao agente. */
 async function exigirAprovada(
   banco: DatabaseSync,
   ticket: Id,
@@ -38,7 +38,7 @@ async function exigirAprovada(
   const ag = await coletar(banco, ticket);
   if (!ag.evidencias.some((e) => e.ticket === ticket && e.tipo === tipo && e.aprovada === true)) {
     const t = `T-${String(ticket)}`;
-    throw new ErroDeRegra(
+    throw new ErroDeReprovacao(
       `a evidência ${tipo} de ${t} reprovou`,
       `veja o que reprovou com fabriquinha evidencia ver ${t} ${tipo} e execute o ticket de novo`,
     );

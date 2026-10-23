@@ -6,7 +6,7 @@ Usado por: F7 (telas de sessões, chat, configuração e gates).
 
 ## 1. Responsabilidade
 
-- Manter a Fabriquinha rodando como um serviço que, de tempos em tempos, procura trabalho autônomo e o executa, uma execução por issue, em paralelo (D8).
+- Manter a Fabriquinha rodando como um serviço que, de tempos em tempos, procura trabalho autônomo e o executa, uma execução por entrega e uma por issue fora das entregas, em paralelo (D8).
 - Gerenciar as sessões do pi: iniciar, conversar, responder diálogos, interromper, retomar e encerrar.
 - Dar a cada sessão um estado que diga ao Auditor se ela está rodando, se precisa dele ou se já terminou.
 - Recuperar execuções interrompidas quando o serviço reinicia.
@@ -75,31 +75,39 @@ Segredos (`SONAR_TOKEN`) continuam no ambiente do serviço (`<raiz>/ambiente`), 
 A cada `intervaloMin`, se `agendadorAtivo`:
 
 1. Para cada projeto cuja última varredura de commits humanos tem mais de 24 horas, chama `varrerBase` (F6, 4.4); falha só vai para o log.
-2. Busca os tickets elegíveis (4.1), um por issue.
-3. Para cada um, pede ao gerente de sessões para iniciá-lo: o desenho como sessão interativa (6.6), com a mensagem inicial "Vamos desenhar a solução da issue I-n."; as demais etapas em modo autônomo (6.2). A C5 de cada um roda antes do primeiro `await`; a recusa vai para o log e não para os outros.
+2. Busca os tickets elegíveis (4.1): um por entrega pronta e um por issue nas etapas fora de entrega.
+3. Para cada um, pede ao gerente de sessões para iniciá-lo em modo autônomo (6.2); o de `encerramento_demanda` não lança pi: a Fabriquinha roda as coletas da etapa (F3 §7) e chama C7. A C5 de cada um roda antes do primeiro `await`; a recusa vai para o log e não para os outros.
 
-Issues diferentes executam em paralelo (D8); dentro de cada issue, uma execução por vez (C5).
+Entregas sem dependência pendente executam em paralelo, cada uma na sua worktree, e issues diferentes também (D8); dentro de cada entrega, uma execução por vez (C5).
 
-O botão **Executar agora** de um ticket (o "Auditor → DesenharSolucao" do diagrama) pula o intervalo, mas respeita a C5 da própria issue: só fica desabilitado, dizendo qual execução está rodando, quando a issue já executa. Execução de outra issue não atrapalha.
+O botão **Executar agora** de um ticket pula o intervalo, mas respeita a C5 da própria entrega, ou da issue fora de entrega: só fica desabilitado, dizendo qual execução está rodando, quando ela já executa.
 
 ### 4.1 Tickets elegíveis
 
 ```sql
-SELECT min(t.id) AS id FROM ticket t JOIN issue i ON i.id = t.issue
+SELECT min(t.id) AS id FROM ticket t
+JOIN issue i ON i.id = t.issue
+LEFT JOIN entrega n ON n.id = t.entrega
 WHERE t.status = 'aberto'
-  AND t.etapa IN ('desenho','desenvolvimento','revisao','encerramento')  -- o desenho abre interativo
-  AND i.fase = t.etapa                       -- casamento etapa × fase (F1, 4.3)
-  AND i.arquivada_em IS NULL
-  AND NOT EXISTS (SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep
+  AND t.etapa IN ('planejamento','desenvolvimento','revisao','encerramento','revisao_demanda','encerramento_demanda')
+  AND i.arquivada_em IS NULL AND i.cancelada_em IS NULL
+  AND (   (t.entrega IS NULL AND i.fase = t.etapa)                                  -- etapa da issue (F1, 4.3)
+       OR (t.entrega IS NOT NULL AND i.fase = 'execucao' AND n.fase = t.etapa))     -- etapa da entrega
+  AND NOT EXISTS (SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep            -- deps da issue
                   WHERE d.issue = i.id AND x.fase <> 'concluida')
-  AND NOT EXISTS (SELECT 1 FROM ticket o LEFT JOIN execucao e ON e.ticket = o.id
-                  WHERE o.issue = i.id AND (o.status = 'em_execucao' OR e.resultado = 'em_andamento'))
-GROUP BY i.id
-ORDER BY i.id;
+  AND NOT EXISTS (SELECT 1 FROM entrega_dep d JOIN entrega x ON x.id = d.dep        -- deps da entrega
+                  WHERE d.entrega = t.entrega AND x.fase <> 'concluida')
+  AND NOT EXISTS (SELECT 1 FROM ticket_dep d JOIN ticket x ON x.id = d.dep          -- deps do ticket
+                  WHERE d.ticket = t.id AND x.status <> 'concluido')
+  AND NOT EXISTS (SELECT 1 FROM ticket o LEFT JOIN execucao e ON e.ticket = o.id    -- uma execução por entrega
+                  WHERE o.issue = i.id AND o.entrega IS t.entrega
+                    AND (o.status = 'em_execucao' OR e.resultado = 'em_andamento'))
+GROUP BY i.id, t.entrega
+ORDER BY i.id, t.entrega;
 ```
 
-Um ticket por issue, o mais antigo dela, da issue mais antiga à mais nova.
-A issue com ticket `em_execucao` ou execução em andamento fica de fora: a C5 a recusaria. Com `issue`, a consulta devolve só o ticket dela (o **Executar agora**).
+Um ticket por entrega, o mais antigo pronto dela, e um por issue fora de entrega, da issue mais antiga à mais nova.
+O ticket de `demanda` nunca é elegível: a IA externa trabalha nele fora da Fabriquinha.
 
 ## 5. Sessões
 
@@ -128,11 +136,12 @@ O estado é calculado; não é gravado.
 | `conversa`: sessão interativa esperando a próxima mensagem do Auditor | Responder. |
 | `dialogo`: uma extensão do pi abriu uma pergunta (`select`, `confirm`, `input`, `editor`) | Responder o formulário (5.4). |
 | `falha`: o ticket autônomo `falhou` | Ler o erro e **responder e retomar** (6.4). |
-| `gate_registro`: o agente enviou o registro (C25) e falta a decisão; conta desde o envio | Na página da issue: aprovar ou devolver (C10). |
-| `gate_desenho`: o agente enviou o desenho (C25), e a issue está em `aprovacao_desenho`; conta desde o envio | Na página da issue: ajustar os tickets propostos, aprovar ou reprovar (C11–C13, C15). |
-| `gate_pr`: o encerramento foi concluído e a issue está em `aprovacao_pr` | Dar a nota e aprovar ou reprovar o PR (C16). |
+| `gate_planejamento`: o planejador enviou a árvore (C25), e a issue está em `aprovacao_planejamento`; conta desde o envio | Na página da issue: ajustar entregas, tickets, critérios e dependências, aprovar ou reprovar (C11–C13, C15, C26–C28). |
+| `gate_pr`: o encerramento da entrega foi concluído e a entrega está em `aprovacao_pr` | Dar a nota e aprovar ou reprovar o PR da entrega (C16). |
 
-O gate de revisão não aparece aqui: quem decide é o agente revisor.
+O gate da demanda e o gate final não aparecem aqui: nenhuma sessão do pi espera por eles.
+Eles aparecem nas pendências da página inicial (F7 §4.6).
+O gate de revisão, da entrega ou da demanda, também não aparece: quem decide é o agente revisor.
 
 ### 5.3 Lista e histórico
 
@@ -150,6 +159,8 @@ O chat mostra a conversa inteira da sessão e, se houver processo vivo, os event
 |---|---|
 | Arquivo JSONL da sessão do pi | Sempre, para o que já aconteceu, inclusive quando não há processo vivo. |
 | Eventos do processo, repassados ao navegador por Server-Sent Events | Enquanto há execução em andamento. O fim de cada ferramenta do pi emite o evento `estado`, porque o CLI `fabriquinha` roda noutro processo e não alcança os ouvintes. |
+
+O fim de cada ferramenta do pi emite o evento `estado`, que faz o chat reler a página da issue. É assim que uma evidência submetida pelo CLI `fabriquinha`, que roda em outro processo e não alcança os ouvintes, aparece na coluna Artefatos sem o Auditor recarregar a página.
 
 O que o campo de mensagem faz depende do estado:
 
@@ -236,12 +247,13 @@ Ele traz o contexto; o modo de trabalhar fica nas instruções da etapa (P1).
 | Etapa | Contexto no prompt |
 |---|---|
 | todas | Projeto, issue (título, tipo, descrição), ticket (título, descrição), worktree, diretório de saída. Se houver `ticket.instrucao` (6.4), ela vem primeiro. |
-| registro | Só o projeto e as dependências informadas; o resto vem da conversa com o Auditor. |
-| desenho | Critérios de aceite e o resumo do comportamento. A reprovação (C15) chega como mensagem na mesma sessão (6.6). |
-| desenvolvimento | Resumo do desenho aprovado, arquivos previstos, fora do escopo, critérios de aceite e os tickets já concluídos. |
-| revisao | Critérios de aceite, desenho aprovado, resumo do `arquivos_alterados` e da `matriz_fitness` coletados antes do pi, e os tickets concluídos. |
-| encerramento | Resumo do desenho, das revisões e dos tickets; se o PR já existe, o motivo da última reprovação. |
-| sessao | Motivo da reprovação do PR (descrição do ticket) e a URL do PR. |
+| planejamento | Critérios de aceite, desenho da solução, arquivos previstos (o planejador atrela cada um a uma entrega, como os critérios), fora do escopo, relatório de complexidade e de impactos na arquitetura. A reprovação (C15) chega como mensagem na mesma sessão. |
+| desenvolvimento | A entrega (título, critérios e arquivos previstos atrelados), resumo do desenho, fora do escopo e os tickets da entrega já concluídos. |
+| revisao | Critérios e arquivos previstos da entrega, desenho, resumo do `arquivos_alterados` e da `matriz_fitness` coletados antes do pi, e os tickets concluídos da entrega. |
+| encerramento | A entrega, resumo do desenho, das revisões e dos tickets da entrega; se o PR já existe, o motivo da última reprovação. |
+| sessao | Motivo da reprovação do PR (descrição do ticket) e a URL do PR da entrega. |
+| revisao_demanda | Todos os critérios da demanda, a árvore com os PRs mergeados e o desenho. |
+| sessao_final | Motivo da reprovação do gate final (descrição do ticket) e a árvore × PRs × critérios × custos. |
 
 O prompt nunca fala em outros tickets nem em "continuar trabalhando".
 
@@ -273,23 +285,14 @@ A instrução fica no banco até ser consumida, então nem um reinício do servi
 
 ### 6.6 Sessões interativas e ociosidade
 
-- **Registro:** o botão **Registrar necessidade** pede o projeto, a descrição da necessidade (obrigatória) e as dependências.
-  Ele dispara C1 com a descrição, que vai ao prompt da primeira mensagem na seção "Descrição da issue", e a preparação da worktree (F5), abre o chat e envia a mensagem inicial "Vamos registrar uma necessidade no projeto X (issue I-n)".
-  A partir daí é conversa: a IA questiona a necessidade e constrói os critérios com o Auditor, e envia o registro (C25) só com o "sim" dele.
-- **Desenho:** o agendador ou o **Executar agora** abre a sessão interativa do ticket de desenho, com o contexto da etapa e a mensagem "Vamos desenhar a solução da issue I-n.".
-  A IA estuda o código sozinha e leva ao Auditor, na conversa, cada decisão relevante; envia o desenho (C25) só com o "sim" dele.
-- **Gate do registro e do desenho (`decidirGate`):** a decisão é na página da issue.
-  O F4 para o pi ocioso; aprovado, descarta o que a sessão deixou na worktree (o protótipo do desenho, F3 §7) e grava C10 ou C15; devolvido, grava a decisão com o motivo e retoma a **mesma** sessão com a mensagem "O Auditor devolveu o registro. Motivo: …" ou "O Auditor reprovou o desenho. Motivo: …".
-- **Proposta de issue (C23, C24):** a IA do registro ou do desenho propõe dividir a issue (`fabriquinha issue propor`), e o Auditor só aceita ou recusa; `decidirProposta(proposta, aceita)` confere que a proposta está pendente no gate atual e recusa antes de gravar se não estiver.
-  - **Retomada única por lote:** o F4 sempre para o pi ocioso (recusa se o agente ainda trabalha) e grava C24, mas só a decisão que deixa o gate sem proposta aberta retoma a IA, uma vez, com o lote; as anteriores só avisam a sessão. Enquanto há proposta aberta no gate, `decidirGate` (Aprovar e Devolver do registro; Aprovar e Reprovar do desenho) recusa com 409 antes de parar o pi.
-  - **No registro**, a decisão é no chat. Fechado o lote, o F4 retoma a sessão com o aviso do lote: o da proposta, se for uma só; senão, "O Auditor decidiu as suas propostas de issue:" e uma linha `- P-n: <aviso da proposta>` por proposta.
-    O aviso de aceite diz: "A Fabriquinha criou a I-n («título») a partir da sua proposta, que o Auditor aceitou; ela depende da I-m. Reduza o escopo da I-m: …". O de recusa: "O Auditor recusou a sua proposta de issue «título»…".
-    A IA ajusta a issue e as evidências na mesma sessão.
-  - **No desenho**, a decisão é no gate, na página da issue. Fechado o lote (aceites, recusas ou os dois), o C24 grava o desenho reprovado (C15) com o motivo que lista as decisões, e o F4 retoma a sessão do desenho com esse motivo. Antes disso o gate continua aberto.
-  - No aceite, nos dois casos, o F4 abre o registro da issue nova (mesma sessão interativa de **Registrar necessidade**, com a descrição que veio da mensagem da proposta).
-- **Sessão em aberto:** aparece sozinha como `aguardando_humano: conversa` quando o PR é reprovado (C16).
+- **Gate do planejamento (`decidirPlanejamento`):** a decisão é na página da issue.
+  O F4 para o pi, se ainda estiver de pé; aprovado, remove a worktree temporária do planejamento (F5) e grava C15; reprovado, grava a decisão com o motivo e retoma a **mesma** sessão em modo autônomo com a mensagem "O Auditor reprovou o planejamento. Motivo: …".
+- **Sessão final:** aparece sozinha como `aguardando_humano: conversa` quando o gate final é reprovado (C29).
+  A mensagem inicial traz o motivo.
+  Quando o Auditor clica em **Concluir sessão**, o F4 chama C7, que exige pelo menos uma entrega de correção com ticket.
+- **Sessão em aberto:** aparece sozinha como `aguardando_humano: conversa` quando o PR de uma entrega é reprovado (C16).
   A mensagem inicial traz o motivo e a URL do PR.
-  Quando o Auditor clica em **Concluir sessão**, o F4 chama C7, que exige pelo menos um ticket de desenvolvimento criado.
+  Quando o Auditor clica em **Concluir sessão**, o F4 chama C7, que exige pelo menos um ticket de desenvolvimento criado na entrega.
 - **Ociosidade:** depois de `ociosidadeMin` sem mensagem, o processo de uma sessão interativa ou de consulta é parado, e C6 grava sucesso.
   O ticket continua como estava, e a sessão continua na lista como `aguardando_humano: conversa`.
   Quando o Auditor volta e manda uma mensagem, uma nova execução retoma a mesma sessão **no mesmo modo**: uma sessão interativa volta interativa, com todas as ferramentas, e o Auditor responde normalmente.
@@ -325,7 +328,7 @@ O Auditor cancela a issue (C22, F1), e o cancelamento atinge também as dependen
 O serviço `cancelarIssue` roda nesta ordem:
 
 1. Confere o C22 (Auditor, issue não concluída nem cancelada), antes de tocar em qualquer pi.
-2. Para cada execução `em_andamento` da issue e das dependentes, `pararParaCancelar`: marca a execução como cancelada, responde `cancelled` aos diálogos pendentes e para o pi como no encerramento (6.6), esperando o processo sair.
+2. Para cada execução `em_andamento` da issue, de todas as entregas dela, e das dependentes, `pararParaCancelar`: marca a execução como cancelada, responde `cancelled` aos diálogos pendentes e para o pi como no encerramento (6.6), esperando o processo sair.
 3. Grava o C22 de todas numa transação. A execução termina em `falha` com `CANCELADA`, e o ticket que ela rodava fica `cancelado`.
 4. Para cada execução que terminou: coleta o uso como depois de qualquer C6 (F6 §3.3), anota "E-n cancelada com a I-n pelo Auditor" no log e avisa quem assina a sessão.
 
@@ -335,9 +338,13 @@ A execução marcada não grava mais nada:
 - A autônoma não grava C6, C7 nem C8 depois do pi, e a interativa não grava o C6 dela: o cancelamento já gravou o término, e a guarda do C22 recusaria o resto.
 - A sessão de uma issue cancelada é `terminada` (5.2), a principal e as de consulta.
 
+As worktrees das entregas e as temporárias da issue cancelada ficam até a limpeza do F5 (§5.3), que roda logo depois do C22.
+
 ponytail: as execuções marcadas ficam num `Set` em memória que só cresce; são poucos IDs por dia, e o reinício do serviço o esvazia (7).
 
 ## 7. Reinício do serviço
+
+Se há migração do banco pendente que precisa do Auditor (F2), o serviço sobe só o web: o agendador fica parado e toda página leva à página da migração, até o Auditor aprovar.
 
 O gerente de sessões é o único que lança o pi, então toda execução `em_andamento` encontrada quando o serviço sobe pertence a uma instância anterior.
 
@@ -358,21 +365,22 @@ ponytail: a instância única garantida pela porta torna desnecessário conferir
 ```mermaid
 sequenceDiagram
     actor A as Auditor
+    participant X as IA externa
     participant W as Web
     participant G as Gerente de sessões
     participant S as Agendador
-    A->>W: Registrar necessidade
-    W->>G: sessão interativa (registro)
-    A->>W: conversa no chat; a IA envia o registro
-    A->>W: Aprovar registro na página da issue
-    S->>G: desenho (interativo)
-    A->>W: decide junto na conversa; a IA envia o desenho
-    G-->>W: sessão aguardando_humano: gate_desenho
-    A->>W: ajusta tickets, aprova na página da issue
-    S->>G: desenvolvimento, um ticket por vez
-    S->>G: revisão, encerramento
-    G-->>W: sessão aguardando_humano: gate_pr
-    A->>W: nota e aprovação do PR
+    A->>X: conversa no harness (registro e desenho)
+    X->>W: fabriquinha demanda registrar, evidencia, enviar
+    A->>W: aprova a demanda na página da issue
+    S->>G: planejamento (autônomo)
+    G-->>W: sessão aguardando_humano: gate_planejamento
+    A->>W: ajusta a árvore, aprova na página da issue
+    S->>G: entregas prontas em paralelo; dentro de cada uma, desenvolvimento, revisão, encerramento
+    G-->>W: sessão aguardando_humano: gate_pr (por entrega)
+    A->>W: nota e aprovação de cada PR
+    S->>G: revisão da demanda (autônoma)
+    S->>W: encerramento da demanda: árvore × PRs × critérios × custos, limpeza
+    A->>W: nota e aprovação final
 ```
 
 ## 9. Conferência de modelos
@@ -400,7 +408,9 @@ Mudanças nas tabelas do F2 que vêm deste módulo:
 
 - `execucao.modo` aceita `consulta`;
 - `execucao.pgid_pi` guarda o grupo de processos do pi;
-- `ticket.instrucao` guarda a resposta do Auditor até ser consumida (6.4).
+- `ticket.instrucao` guarda a resposta do Auditor até ser consumida (6.4);
+- `ticket.entrega` liga o ticket à entrega (F1, 3.4.1);
+- `ticket_dep` e `entrega_dep` guardam as dependências entre tickets e entre entregas.
 
 | Variável de ambiente | Padrão | |
 |---|---|---|
@@ -420,10 +430,8 @@ Mudanças nas tabelas do F2 que vêm deste módulo:
 | `conversarSobre(ticket)` → nova consulta (6.5) | F7, chat |
 | `enviar(sessao, texto, modo)` | F7, chat (`prompt`, `steer`, `follow_up`, conforme 5.4) |
 | `responderDialogo(execucao, id, resposta)` / `abortar(execucao)` | F7, chat |
-| `registrarNecessidade(projeto, deps, descricao)` / `concluirSessao(ticket)` | F7 |
-| `decidirGate(issue, etapa, decisao)` (6.6) | F7, gates do registro e do desenho na página da issue |
-| `iniciarDesenho(ticket)` (6.6) | agendador e Executar agora |
-| `decidirProposta(proposta, aceita)` → `{ issue? }` (6.6) | F7, chat do registro e gate do desenho |
+| `concluirSessao(ticket)` | F7 |
+| `decidirPlanejamento(issue, decisao)` (6.6) | F7, gate do planejamento na página da issue |
 | `executarAgora(ticket)` | F7, botão Executar agora |
 | `salvarConfiguracao(config)` / `conferirModelo(modelo)` | F7, configuração |
 

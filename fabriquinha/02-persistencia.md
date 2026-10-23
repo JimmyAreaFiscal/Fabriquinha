@@ -78,7 +78,7 @@ O agregado de uma issue tem dezenas de linhas; se um dia passar de milhares, tro
 - O contexto entrega `novoId(tipo)`, que incrementa a tabela `sequencia` dentro da transação.
   Como as escritas são serializadas por `BEGIN IMMEDIATE`, não há corrida.
 - Cada tipo tem a sua sequência: `I-1` e `T-1` convivem, e o prefixo desfaz a ambiguidade.
-  Os tipos são `issue`, `ticket`, `execucao`, `decisao`, `evidencia` e `proposta` (`P-n`).
+  Os tipos são `issue`, `ticket`, `execucao`, `decisao`, `evidencia` e `entrega` (`N-n`); `proposta` (`P-n`) existiu até a migração da remoção do registro e do desenho.
 
 ### 3.5 Fatos externos fornecidos ao domínio
 
@@ -110,7 +110,12 @@ Consultados dentro da mesma transação, então são consistentes com o que vai 
 - As migrações 12 a 15 são da Simulação (F8, I-10): `projeto.link_produto` (12), `usuario_simulado` e `usuario_simulado_anexo` (13), `tarefa` e `tarefa_usuario` (14) e `execucao_simulada` (15).
 - A migração 16 (proposta de issue, C23 e C24 do F1) cria `proposta_issue` e `ix_proposta_issue_ticket` e recria `sequencia` com o tipo `proposta` no CHECK (tabela nova, `INSERT … SELECT`, DROP, RENAME), preservando os valores.
   A migração 1 guarda a lista de tipos original, para a lista nova só valer a partir da 16.
-- A migração 19 acrescenta `projeto.efforts` (`TEXT NOT NULL DEFAULT '{}'`, JSON válido): o effort por etapa; projetos anteriores leem `{}`. A tabela `execucao` não muda.
+- Uma migração que muda o significado de dados existentes é marcada `precisaAprovacao` e traz uma função de prévia que lê o banco sem alterá-lo.
+  Na abertura, as migrações sem a marca rodam como hoje; a primeira com a marca para a lista, e o F4 sobe só o web com a página de migração (F7).
+  Aprovada, a F2 copia o arquivo do banco para `<raiz>/backup/fabriquinha-<instante>.db` e roda as pendentes, cada uma na sua transação.
+- A migração da Entrega cria `entrega`, `entrega_dep`, `ticket_dep`, `ticket.entrega` e `issue.sessao_externa_ferramenta`/`issue.sessao_externa`, acrescenta o tipo `entrega` à `sequencia`, e converte cada issue em `desenvolvimento` ou adiante numa entrega única que herda a branch, o PR, os tickets e o histórico (precisa de aprovação).
+- A migração da remoção do registro e do desenho cancela as issues em `registro`, `desenho` e `aprovacao_desenho` com o motivo da troca de fluxo e remove `proposta_issue` (precisa de aprovação).
+- A migração dos custos realizados cria `uso_externo` (F6, 7).
 - As tabelas de outros módulos (`configuracao` no F4; `commit_ticket` e `arquivo_commit` no F5; `uso`, `retrabalho`, `comando` e `varredura_base` no F6) são definidas nas specs desses módulos e entram no mesmo arquivo de schema.
 
 ## 4. DDL (versão 1)
@@ -151,7 +156,7 @@ CREATE TABLE issue (
   CHECK ((fase = 'concluida') = (concluida_em IS NOT NULL)),
   CHECK (arquivada_em IS NULL OR fase = 'concluida'),
   CHECK (cancelada_em IS NULL OR fase <> 'concluida'),
-  CHECK (fase = 'registro' OR (titulo IS NOT NULL AND tipo IS NOT NULL))
+  CHECK (fase = 'registro' OR (titulo IS NOT NULL AND tipo IS NOT NULL))  -- a migração da Entrega troca 'registro' por 'demanda'
 );
 
 CREATE TABLE issue_dep (
@@ -213,7 +218,7 @@ CREATE TABLE decisao (
   id       INTEGER PRIMARY KEY,
   issue    INTEGER NOT NULL REFERENCES issue(id),
   ticket   INTEGER NOT NULL REFERENCES ticket(id),
-  gate     TEXT NOT NULL CHECK (gate IN ('registro','desenho','revisao','pr')),
+  gate     TEXT NOT NULL CHECK (gate IN ('registro','desenho','revisao','pr')),  -- gerado de Decisao.gate: hoje demanda, planejamento, revisao, pr, revisao_demanda e final
   aprovado INTEGER NOT NULL CHECK (aprovado IN (0,1)),
   motivo   TEXT CHECK (length(motivo) BETWEEN 1 AND 2000),
   nota     INTEGER CHECK (nota BETWEEN 1 AND 5),
@@ -294,7 +299,7 @@ CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa);
 CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento');
 ```
 
-A proposta de issue (migração 16) fica fora do agregado, presa ao ticket que a fez:
+A proposta de issue (migração 16) ficava fora do agregado, presa ao ticket que a fez; a migração da remoção do registro e do desenho apaga a tabela:
 
 ```sql
 CREATE TABLE proposta_issue (
@@ -313,10 +318,32 @@ CREATE TABLE proposta_issue (
 CREATE INDEX ix_proposta_issue_ticket ON proposta_issue(ticket);
 ```
 
+A Entrega, as dependências entre entregas e entre tickets e a sessão externa da issue (migração da Entrega):
+
+```sql
+CREATE TABLE entrega (
+  id           INTEGER PRIMARY KEY,
+  issue        INTEGER NOT NULL REFERENCES issue(id),
+  titulo       TEXT    NOT NULL,
+  criterios    TEXT    NOT NULL,                       -- JSON: ids CA-n
+  arquivos_previstos TEXT NOT NULL DEFAULT '[]',       -- JSON: padrões de desenho_solucao.arquivosPrevistos
+  fase         TEXT    NOT NULL CHECK (fase IN ('desenvolvimento','revisao','encerramento','aprovacao_pr','ajuste_pr','concluida')),
+  correcao     INTEGER NOT NULL DEFAULT 0 CHECK (correcao IN (0,1)),
+  criada_em    TEXT    NOT NULL,
+  iniciada_em  TEXT,
+  concluida_em TEXT,
+  CHECK ((fase = 'concluida') = (concluida_em IS NOT NULL))
+);
+CREATE TABLE entrega_dep (entrega INTEGER NOT NULL REFERENCES entrega(id), dep INTEGER NOT NULL REFERENCES entrega(id), PRIMARY KEY (entrega, dep), CHECK (entrega <> dep));
+CREATE TABLE ticket_dep  (ticket  INTEGER NOT NULL REFERENCES ticket(id),  dep INTEGER NOT NULL REFERENCES ticket(id),  PRIMARY KEY (ticket, dep),  CHECK (ticket <> dep));
+-- issue.sessao_externa_ferramenta TEXT CHECK (… IN ('pi','claude-code','codex')) e issue.sessao_externa TEXT, presentes juntas ou ausentes juntas (F1, 3.4).
+-- ticket.entrega INTEGER REFERENCES entrega(id); o índice único de "um ticket em execução" passa a ser por (issue, entrega).
+```
+
 As FKs ficam sem `ON DELETE` (comportamento `RESTRICT`), exceto `evidencia_arquivo`.
 Remover o projeto apaga `execucao_simulada`, `tarefa_usuario`, `tarefa`, `usuario_simulado_anexo` e `usuario_simulado` antes de `projeto` (`apagarLinhas`), recusa se há execução simulada pendente e apaga as pastas `<raiz>/simulacoes/<id>` (F8 5).
 Assim, apagar um ticket que já tem execução, decisão ou evidência falha no banco, e o histórico nunca some por engano.
-Os únicos tickets apagados pelo domínio (C8, C13, C15) são de desenvolvimento ainda `aberto`, sem histórico.
+Os únicos tickets apagados pelo domínio (C8, C13, C28) são de desenvolvimento ainda `aberto`, sem histórico; as únicas entregas apagadas (C8, C28) ainda não começaram.
 
 O que fica só no F1, por não caber em constraint:
 
@@ -358,10 +385,7 @@ Antes de servir, o F7 confere que o hash pertence a uma evidência; nunca serve 
 |---|---|
 | `abrir(raiz?)` | Cria a raiz, abre o banco, aplica os PRAGMAs e as migrações pendentes. |
 | `comIssue(banco, issue, nome, ator, comando)` | Aplica um comando do F1 sobre o agregado da issue e registra o comando (3.3). |
-| `registrarIssue(banco, entrada, ator)` | C1: cria a issue e o ticket de registro. |
-| `proporIssue(banco, issue, entrada, ator)` | C23: grava a proposta `pendente` e o `proporIssue` em `comando`; recusa issue cancelada. |
-| `decidirProposta(banco, proposta, entrada, ator)` | C24 numa transação só: lê `propostasDaIssue` e as passa ao domínio, grava a issue nova antes da atual (e do desenho reprovado, se o lote fechou no desenho), atualiza a proposta e grava `decidirProposta` em `comando`. Devolve também o `lote`, quando a decisão o fecha. Recusa issue cancelada. |
-| `propostasDaIssue(banco, issue)` | As propostas dos tickets da issue, da mais antiga para a mais nova. |
+| `registrarIssue(banco, entrada, ator)` | C1: cria a issue e o ticket de demanda, com a `sessaoExterna`. |
 | `arquivarConcluidas(banco, projeto)` | C18: uma transação só; devolve quantas issues do projeto foram arquivadas. |
 | `cancelarIssues(banco, issue, ator)` | C22: uma transação só, na issue e nas dependentes diretas e indiretas (`dependentes`); um `cancelarIssue` em `comando` por issue; devolve as issues canceladas e as execuções que terminaram. `comIssue` recusa comando sobre issue cancelada. |
 | `salvarProjeto(banco, projeto)` / `projeto(banco, nome)` / `projetos(banco)` | C19 e leituras. |

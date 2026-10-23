@@ -1,6 +1,6 @@
 // Ponta a ponta do ciclo do desenvolvimento, da revisão e do encerramento (F3 §7, F5 §4, §5, F1 §5.1) por
-// `executarAutonomo`, contra banco real e git real, com falsos só para os binários externos: o pi, o docker do
-// sonar-scanner, o servidor do SonarQube e o gh.
+// `executarAutonomo`, contra banco real e git real, com falsos só para os binários externos: o pi, o sonar-scanner,
+// o servidor do SonarQube e o gh.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -170,16 +170,16 @@ export default async function () {
 `,
 );
 
-// docker falso no PATH: o "scanner" só informa a tarefa do Compute Engine.
+// sonar-scanner falso no PATH: só informa a tarefa do Compute Engine.
 mkdirSync(join(base, "bin"));
 writeFileSync(
-  join(base, "bin", "docker"),
+  join(base, "bin", "sonar-scanner"),
   `#!/bin/sh
 for a; do case $a in -Dsonar.working.directory=*) w=\${a#*=};; esac; done
 printf 'ceTaskId=AX1\\n' > "$w/report-task.txt"
 `,
 );
-chmodSync(join(base, "bin", "docker"), 0o755);
+chmodSync(join(base, "bin", "sonar-scanner"), 0o755);
 process.env.PATH = `${join(base, "bin")}${delimiter}${String(process.env.PATH)}`;
 
 // SonarQube falso: no ar, tarefa pronta e as issues de `issuesSonar`; conta as análises pedidas.
@@ -450,31 +450,49 @@ test("desenvolvimento: testes, fitness e SonarQube aprovam, commit com os hooks 
   c.banco.close();
 });
 
-test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem commit; reaberto, segue até concluir", async () => {
+test("a cadeia para no primeiro reprovado e devolve o ticket ao agente, sem commit; na terceira reprovação seguida, falha", async () => {
   const c = await cenario();
-  const falhou = async (motivo: string, tipos: string[]) => {
-    await executarAutonomo(c.banco, 3, OPCOES);
-    const { ag, ticket } = c.estado(3);
-    assert.equal(ticket?.status, "falhou");
-    assert.equal(ticket.erro, motivo);
+  const reprovou = (tipo: string) =>
+    `a evidência ${tipo} de T-3 reprovou (veja o que reprovou com fabriquinha evidencia ver T-3 ${tipo} e execute o ticket de novo)`;
+  const semCommit = (tipos: string[]) => {
     assert.deepEqual(
-      ag.evidencias.filter((e) => e.ticket === 3).map((e) => e.tipo),
+      c
+        .estado(3)
+        .ag.evidencias.filter((e) => e.ticket === 3)
+        .map((e) => e.tipo),
       tipos,
     );
     assert.deepEqual(c.commits(), []);
     assert.equal(git(c.worktree, "rev-parse", "HEAD"), git(c.repo, "rev-parse", "main"), "nada foi commitado");
+  };
+  const devolveu = async (execucao: number, motivo: string, tipos: string[]) => {
+    await executarAutonomo(c.banco, 3, OPCOES);
+    const { ticket } = c.estado(3);
+    assert.equal(ticket?.status, "aberto");
+    assert.equal(ticket.devolucoes, execucao);
+    assert.equal(
+      ticket.instrucao,
+      `A Fabriquinha devolveu T-3 pela ${String(execucao)}ª vez de 2: ${motivo}. ` +
+        "Corrija o código na worktree e termine de novo; não faça commit.",
+    );
+    semCommit(tipos);
+  };
+  const falhou = async (motivo: string, tipos: string[]) => {
+    await executarAutonomo(c.banco, 3, OPCOES);
+    const { ticket } = c.estado(3);
+    assert.equal(ticket?.status, "falhou");
+    assert.equal(ticket.erro, motivo);
+    semCommit(tipos);
     c.reabrir(3);
   };
-  const reprovou = (tipo: string) =>
-    `a evidência ${tipo} de T-3 reprovou (veja o que reprovou com fabriquinha evidencia ver T-3 ${tipo} e execute o ticket de novo)`;
 
   process.env.SAIDA_TESTES = "1";
-  await falhou(reprovou("execucao_testes"), ["execucao_testes"]);
+  await devolveu(1, reprovou("execucao_testes"), ["execucao_testes"]);
   assert.equal(analises, 0);
 
   delete process.env.SAIDA_TESTES;
   process.env.SAIDA_FITNESS = "1";
-  await falhou(reprovou("matriz_fitness"), ["execucao_testes", "matriz_fitness"]);
+  await devolveu(2, reprovou("matriz_fitness"), ["execucao_testes", "matriz_fitness"]);
   assert.equal(analises, 0, "o SonarQube não roda depois da fitness reprovada");
 
   delete process.env.SAIDA_FITNESS;
@@ -483,7 +501,9 @@ test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem co
 
   issuesSonar = [];
   process.env.HOOK_REPROVA = "1";
-  await falhou(
+  // O C9 do Auditor zerou as devoluções: o hook que reprova devolve de novo.
+  await devolveu(
+    1,
     "o git commit saiu com código 1, com os hooks do repositório: lint: 2 erros em cache.ts " +
       "(corrija o que a saída aponta e execute o ticket de novo; a Fabriquinha nunca pula os hooks)",
     ["execucao_testes", "matriz_fitness", "relatorio_sonar"],
@@ -496,22 +516,21 @@ test("a cadeia para no primeiro reprovado, e o ticket falha com o motivo, sem co
   c.banco.close();
 });
 
-test("T-4 não executa com T-3 falhou: o trabalho de T-3 sem commit não vai para o commit de outro ticket", async () => {
+test("T-4 não executa com T-3 devolvido: o trabalho de T-3 sem commit não vai para o commit de outro ticket", async () => {
   const c = await cenario();
   issuesSonar = [{ component: "loja:cache.ts", rule: "ts:S1", severity: "MAJOR", message: "ruim" }];
   await executarAutonomo(c.banco, 3, OPCOES);
-  assert.equal(c.estado(3).ticket?.status, "falhou");
+  assert.equal(c.estado(3).ticket?.status, "aberto");
   issuesSonar = [];
 
   process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });
   await assert.rejects(executarAutonomo(c.banco, 4, OPCOES), {
     message:
-      "T-4 só executa depois dos tickets de desenvolvimento anteriores da I-1, e T-3 está falhou " +
+      "T-4 só executa depois dos tickets de desenvolvimento anteriores da I-1, e T-3 está aberto " +
       "(conclua T-3 antes)",
   });
   assert.equal(c.estado(4).ticket?.status, "aberto");
 
-  c.reabrir(3);
   process.env.FALSO_PI_ESCREVE = "{}";
   await executarAutonomo(c.banco, 3, OPCOES);
   process.env.FALSO_PI_ESCREVE = JSON.stringify({ "metrica.ts": "2\n" });

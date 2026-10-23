@@ -11,6 +11,7 @@ Usado por: F3 (relatório de produtividade e seção 10 do PR) e F7 (métricas n
 - Definir cada métrica do diagrama como uma leitura sobre fatos já gravados.
 - Gerar o relatório de produtividade do SDLC de uma issue, em JSON e HTML.
 - Somar consumo e volume de trabalho por mês, por projeto ou no total (5.7).
+- Somar aos custos da Fabriquinha os custos realizados fora dela, na demanda, por ferramenta e modelo, sem contar a mesma sessão de ferramenta duas vezes.
 
 O F6 só lê e deriva.
 Não muda estado do processo e não barra ticket: métrica nunca é gate.
@@ -19,13 +20,14 @@ Não muda estado do processo e não barra ticket: métrica nunca é gate.
 
 | # | Etapa | Métrica do diagrama | Definição | Fonte |
 |---|---|---|---|---|
-| M1 | todas | Tokens por modelo e custo | Soma de input, output, cacheRead, cacheWrite e custo das chamadas de LLM da sessão, por execução × provedor/modelo (3). | `uso` |
-| M2 | registro | Correções do Auditor | Devoluções no gate de registro + ajustes que o próprio Auditor fez na issue durante o registro (5.1). | `decisao`, `comando` |
-| M3 | desenho | Correções no desenho | Reprovações no gate de desenho + ajustes que o próprio Auditor fez nos tickets propostos (5.1). | `decisao`, `comando` |
+| M1 | todas | Tokens por modelo e custo | Soma de input, output, cacheRead, cacheWrite e custo das chamadas de LLM, por execução × provedor/modelo (3), mais os custos realizados da demanda, por sessão de ferramenta × provedor/modelo (3.4). | `uso`, `uso_externo` |
+| M2 | demanda | Demandas recusadas | Decisões `demanda` recusadas e o custo realizado dessas demandas (5.1). | `decisao`, `uso_externo` |
+| M3 | planejamento | Correções no planejamento | Reprovações no gate de planejamento + ajustes que o próprio Auditor fez em entregas, tickets, critérios e dependências (5.1). | `decisao`, `comando` |
 | M4 | desenvolvimento | Alterações posteriores no código | Linhas escritas pelo ticket e depois removidas ou reescritas por commit de outro ticket, de qualquer issue do projeto, ou por commit humano na branch base (4). | `retrabalho` |
 | M5 | revisao | Exigências de alteração | Tickets de desenvolvimento criados pela revisão (5.2). | `ticket` |
 | M6 | revisao | Bugs em arquivos revisados | Issues `problema` registradas depois do merge que alteraram arquivo alterado pela issue revisada (5.3). | `issue`, commits do F5 |
-| M7 | encerramento | Feedback humano da qualidade | Nota de cada decisão do gate de PR (5.4). | `decisao` |
+| M7 | encerramento, encerramento_demanda | Feedback humano da qualidade | Nota de cada decisão do gate de PR de cada entrega e do gate final da demanda (5.4). | `decisao` |
+| M8 | revisao_demanda | Entregas de correção | Entregas com `correcao = true`, separadas por origem: revisão da demanda ou gate final (5.2). | `entrega` |
 | — | todas | Apoio: execuções, falhas, duração e reprovações | Contagens e somas por etapa, pedidas pela seção 10 do PR (F3, 4.6). | `execucao`, `decisao` |
 
 "Correção" é uma devolução no gate ou uma mudança que o Auditor fez com as próprias mãos no trabalho do agente.
@@ -49,13 +51,14 @@ As entradas lidas são as mesmas que o pi soma no `/session` (`getSessionStats`)
 | `message` com `role = toolResult` e `usage` | `message.usage` (trabalho de LLM feito pela ferramenta) | o da última mensagem do assistente antes dela |
 | `compaction` com `usage` | `usage` | idem |
 | `branch_summary` com `usage` | `usage` | idem |
+| `usage` (ex.: `kind = cache_warm`) | `usage` | `provider` / `model` da entrada, ou o da última mensagem do assistente antes dela |
 
 ponytail: o `usage` aninhado de ferramenta não traz o modelo, então um subagente com outro modelo é contado no modelo de quem o chamou.
 Se isso distorcer a comparação entre modelos, ler também a sessão do subagente.
 
 O custo é `usage.cost.total`, calculado pelo pi com os preços do `models.json` no instante da chamada.
-A Fabriquinha não tem tabela de preços própria.
 Modelo local (llamacpp) sai com custo 0, a não ser que o Auditor configure `cost` para ele no `models.json` do pi.
+Os custos realizados fora da Fabriquinha seguem a 3.4.
 
 ### 3.2 Janela da execução
 
@@ -78,6 +81,21 @@ A coleta é idempotente: rodar de novo dá o mesmo resultado.
 O F4 a chama logo depois de C6, inclusive para órfãs.
 Se ela falhar, o F4 anota no log da execução e segue, porque o relatório recoleta tudo antes de gerar (6.1).
 Sessão inexistente não é erro: a execução fica sem linhas em `uso` e aparece em `execucoesSemSessao`.
+
+### 3.4 Custos realizados fora da Fabriquinha
+
+A evidência `custos_realizados` da demanda (F3, 4.1) traz tokens por sessão de ferramenta e por provedor e modelo, medidos pelo plugin do harness.
+Ela é gravada em `uso_externo` no mesmo C17, e congela no envio da demanda (C25).
+
+- **Custo:** a linha do pi traz o custo pronto e ele vale como veio; nas demais, o F6 calcula com a tabela de preços.
+- **Tabela de preços:** os preços do registro de modelos do pi, para o provedor e o modelo da linha.
+  ponytail: uma fonte de preço só; se um modelo do Claude Code ou do Codex faltar no registro do pi, a tabela própria editável no web entra.
+- **Sessão única:** o par (ferramenta, sessão) pertence à primeira demanda que o submeteu.
+  A demanda seguinte que submete o mesmo par grava as linhas com tokens e custo zero e a referência à primeira, para que o total do mês não conte a sessão duas vezes.
+- **Janela:** a sessão inteira do harness, até o instante do envio.
+- **Demanda recusada:** os custos continuam somados (M2).
+
+O Cursor fica fora: no plano individual ele não guarda tokens localmente.
 
 ## 4. Retrabalho
 
@@ -142,21 +160,22 @@ Limite: se um PR da Fabriquinha for mergeado com squash pela plataforma, os comm
 
 ## 5. Métricas derivadas
 
-### 5.1 Correções do Auditor (M2, M3)
+### 5.1 Demandas recusadas (M2) e correções no planejamento (M3)
 
-C13 e C15 apagam tickets, então os ajustes do Auditor no desenho não deixariam rastro no estado.
+C13, C15 e C28 apagam tickets e entregas, então os ajustes do Auditor no planejamento não deixariam rastro no estado.
 Para medi-los, o F2 grava em `comando` uma linha a cada comando aplicado por `comIssue`, na mesma transação (7).
 Isso exige que `comIssue` receba o nome do comando e o ator.
 
 | Métrica | Devoluções | Ajustes do Auditor |
 |---|---|---|
-| M2 | decisões `registro` reprovadas | `editarIssue`, `adicionarDependencia` e `removerDependencia` com ator `auditor` na fase `registro` |
-| M3 | decisões `desenho` reprovadas | `adicionarTicketDesenvolvimento`, `editarTicket` e `removerTicket` com ator `auditor` na fase `aprovacao_desenho` |
+| M2 | decisões `demanda` recusadas, com a soma do `uso_externo` delas | — (a demanda não volta à IA) |
+| M3 | decisões `planejamento` reprovadas | `adicionarTicketDesenvolvimento`, `editarTicket`, `removerTicket`, `adicionarEntrega`, `editarEntrega` e `removerEntrega` com ator `auditor` na fase `aprovacao_planejamento` |
 
 ### 5.2 Exigências de alteração (M5)
 
-Tickets de desenvolvimento cujo `origemTicket` é um ticket de revisão da issue.
+Tickets de desenvolvimento cujo `origemTicket` é um ticket de revisão da entrega.
 O número fica estável depois que a revisão termina: só o agente da própria revisão, durante a execução, ou um C8 dela remove esses tickets (F1, C8 e C13).
+As entregas de correção (M8) são contadas à parte, pela origem: o ticket de revisão da demanda ou o de sessão final.
 
 ### 5.3 Bugs em arquivos revisados (M6)
 
@@ -167,23 +186,23 @@ Para uma issue X concluída, conta as issues Y que:
 - estão concluídas;
 - alteraram pelo menos um arquivo que X alterou (arquivos dos commits de cada uma, F5).
 
-A métrica pertence à revisão de X: o arquivo passou pela revisão e depois precisou de correção.
+A métrica pertence à revisão de X: o arquivo passou pelas revisões das entregas e da demanda e depois precisou de correção.
 
 ponytail: o nível é o de arquivo, como diz o diagrama, e um arquivo muito tocado infla a contagem.
 Nível de linha (via `retrabalho`) não pega a correção que só acrescenta código, como um `if` que faltava.
 
 ### 5.4 Nota (M7)
 
-A `nota` de cada decisão `pr` da issue, em ordem.
-Uma issue com PR reprovado e depois aprovado tem duas notas.
+A `nota` de cada decisão `pr` de cada entrega e de cada decisão `final` da issue, em ordem.
+Uma entrega com PR reprovado e depois aprovado tem duas notas; a demanda reprovada no gate final e depois aprovada também.
 
-### 5.5 Números do desenho
+### 5.5 Números da demanda e do planejamento
 
-Os números objetivos que o F3 (4.2) atribui ao F6 vêm do último ticket de desenho concluído:
+Os números objetivos que o F3 (4.1) atribui ao F6 vêm da demanda e do planejamento aprovado:
 
-- `arquivosPrevistos`: itens de `desenho_solucao.dados.arquivosPrevistos`;
-- `ticketsPropostos`: tickets de desenvolvimento com `origemTicket` igual a ele;
-- `novasDependencias` e `novosAcoplamentos`: tamanhos das listas do `relatorio_impactos_arquitetura`.
+- `arquivosPrevistos`: itens de `desenho_solucao.dados.arquivosPrevistos` da demanda;
+- `entregasPlanejadas` e `ticketsPlanejados`: entregas e tickets que existiam quando o gate de planejamento foi aprovado;
+- `novasDependencias` e `novosAcoplamentos`: tamanhos das listas do `relatorio_impactos_arquitetura` da demanda.
 
 São lidos do JSON da evidência no TypeScript.
 É um registro por issue, sem agregação, então não contraria a regra do F2 (3.6).
@@ -195,8 +214,7 @@ São lidos do JSON da evidência no TypeScript.
 | execuções | execuções dos tickets da etapa |
 | falhas | execuções com `resultado = falha` |
 | duração | soma de `terminadaEm − iniciadaEm`; nas etapas interativas inclui o tempo do Auditor |
-| reprovações | registro: C10 reprovado; desenho: C15 reprovado; revisao: decisão de revisão reprovada; encerramento: C16 reprovado |
-| iterações | ações do Auditor que chamam o agente, gravadas em `iteracao` (7): mensagem e resposta a diálogo só em sessão interativa (a que retoma a sessão parada inclusive), reabertura C9 sempre, com ou sem instrução. Não contam: decisão de gate (já está em reprovações), prompt inicial, consulta e C24. Sem histórico antes do deploy |
+| reprovações | demanda: C10 recusado; planejamento: C15 reprovado; revisao: decisão de revisão reprovada; encerramento: C16 reprovado; revisao_demanda: decisão reprovada; encerramento_demanda: C29 reprovado |
 
 ### 5.7 Visão por mês
 
@@ -247,19 +265,25 @@ A tabela "Por issue" da página de métricas: uma linha por issue com pelo menos
 ```ts
 const MetricasIssuePeriodo = z.object({
   issue: Id, projeto: Slug, titulo: Titulo.nullable(), fase: Fase,
-  consumo: Consumo,                                        // só as execuções iniciadas no período
-  execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, iteracoes: Inteiro, duracaoMs: Inteiro,
-  notaPR: z.number().int().min(1).max(5).nullable(),       // a última nota de PR da issue, de qualquer data
+  consumo: Consumo,                                        // execuções iniciadas no período + custos realizados enviados no período
+  consumoPorFase: z.object({                               // custo total da demanda, de qualquer data
+    demanda: Consumo, planejamento: Consumo, entregas: Consumo, revisaoDemanda: Consumo,
+  }),
+  entregas: Inteiro, entregasCorrecao: Inteiro,
+  execucoes: Inteiro, falhas: Inteiro, reprovacoes: Inteiro, duracaoMs: Inteiro,
+  notasPR: z.array(z.number().int().min(1).max(5)),        // a última nota de PR de cada entrega
+  notaFinal: z.number().int().min(1).max(5).nullable(),    // a última nota do gate final
 });
 ```
 
-`fase` e `notaPR` são o estado atual da issue; os demais números contam só o que caiu no período; `iteracoes` soma as de todas as etapas da issue com `em` no período.
+`fase`, `consumoPorFase`, `entregas`, `notasPR` e `notaFinal` são o estado atual da issue; os demais números contam só o que caiu no período.
 
 ## 6. Relatório de produtividade
 
 ### 6.1 Geração
 
-`relatorio(banco, issue) → { dados, html }` é chamado pelo coletor de produtividade do F3, depois do pi do encerramento.
+`relatorio(banco, issue, entrega?) → { dados, html }` é chamado pelo coletor de produtividade do F3: com `entrega`, depois do pi do encerramento da entrega; sem ela, pelo coletor da árvore × PRs × critérios × custos do encerramento da demanda.
+O relatório da entrega cobre as execuções dos tickets dela; o da demanda cobre os custos realizados, o planejamento, todas as entregas e a revisão da demanda.
 
 1. Recoleta o uso de todas as execuções terminadas da issue (3.3) e refaz o retrabalho dos seus tickets de desenvolvimento (4.2).
 2. Monta `MetricasIssue` (6.2) com `metricasDaIssue`.
@@ -291,10 +315,10 @@ const MetricasIssue = z.object({
     execucoes: Inteiro,
     modelos: z.array(Consumo.extend({ provedor: z.string(), modelo: z.string() })),
   }),
-  correcoesRegistro: z.object({ devolucoes: Inteiro, ajustesAuditor: Inteiro }),      // M2
-  correcoesDesenho: z.object({ devolucoes: Inteiro, ajustesAuditor: Inteiro }),       // M3
-  desenho: z.object({                                                                // 5.5; null antes do desenho concluído
-    arquivosPrevistos: Inteiro, ticketsPropostos: Inteiro,
+  demandaRecusada: z.object({ recusada: z.boolean(), custoRealizado: z.number().nonnegative() }), // M2
+  correcoesPlanejamento: z.object({ devolucoes: Inteiro, ajustesAuditor: Inteiro }),  // M3
+  planejamento: z.object({                                                           // 5.5; null antes do planejamento aprovado
+    arquivosPrevistos: Inteiro, entregasPlanejadas: Inteiro, ticketsPlanejados: Inteiro,
     novasDependencias: Inteiro, novosAcoplamentos: Inteiro,
   }).nullable(),
   retrabalho: z.array(z.object({                                                     // M4
@@ -303,9 +327,11 @@ const MetricasIssue = z.object({
   arquivosAlterados: Inteiro.nullable(),                                              // arquivos distintos dos commits da issue; null sem commit
   exigenciasRevisao: Inteiro,                                                         // M5
   bugsEmArquivosRevisados: Inteiro,                                                   // M6; 0 antes do merge
-  notasPR: z.array(z.number().int().min(1).max(5)),                                   // M7
+  notasPR: z.array(z.number().int().min(1).max(5)),                                   // M7, uma por decisão de PR das entregas
+  notasFinal: z.array(z.number().int().min(1).max(5)),                                // M7, uma por decisão final
+  entregasCorrecao: Inteiro,                                                          // M8
   decisoes: z.array(z.object({
-    gate: z.enum(["registro", "desenho", "revisao", "pr"]),
+    gate: z.enum(["demanda", "planejamento", "revisao", "pr", "revisao_demanda", "final"]),
     aprovado: z.boolean(), motivo: z.string().optional(), nota: z.number().int().min(1).max(5).optional(), em: Instante,
   })),
   execucoesSemSessao: z.array(Id),
@@ -329,7 +355,8 @@ ponytail: só tabelas, sem gráfico; gráfico entra quando houver visão entre i
 
 ### 6.4 Seção 10 do PR
 
-A seção "Autoria e custo" do PR (F3, 4.6) sai de `etapas`: modelos, execuções, tokens, custo e reprovações por etapa.
+A seção "Autoria e custo" do PR (F3, 4.6) sai de `etapas` do relatório da entrega: modelos, execuções, tokens, custo e reprovações por etapa.
+O custo total da demanda fica na árvore × PRs × critérios × custos.
 Condensada (F3, 4.7), vira uma linha com a soma das etapas.
 
 ## 7. Dados
@@ -372,7 +399,7 @@ CREATE TABLE comando (
   id    INTEGER PRIMARY KEY,
   issue INTEGER NOT NULL REFERENCES issue(id),
   nome  TEXT    NOT NULL,                                       -- nome do comando do F1, ex.: editarTicket
-  ator  TEXT    NOT NULL CHECK (ator IN ('auditor','agente','fabriquinha')),
+  ator  TEXT    NOT NULL CHECK (ator IN ('auditor','agente','fabriquinha','externo')),
   fase  TEXT    NOT NULL CHECK (fase IN (<Fase>)),            -- fase da issue antes do comando
   em    TEXT    NOT NULL
 );
@@ -383,6 +410,25 @@ CREATE TABLE iteracao (
   ticket INTEGER NOT NULL REFERENCES ticket(id),            -- ticket da sessão ou o reaberto
   tipo   TEXT    NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),
   em     TEXT    NOT NULL
+);
+```
+
+```sql
+-- Custos realizados da demanda (3.4), gravados com a evidência custos_realizados.
+CREATE TABLE uso_externo (
+  ticket      INTEGER NOT NULL REFERENCES ticket(id),        -- o ticket de demanda
+  ferramenta  TEXT    NOT NULL CHECK (ferramenta IN ('pi','claude-code','codex')),
+  sessao      TEXT    NOT NULL,
+  provedor    TEXT    NOT NULL,
+  modelo      TEXT    NOT NULL,
+  input       INTEGER NOT NULL CHECK (input >= 0),
+  output      INTEGER NOT NULL CHECK (output >= 0),
+  cache_read  INTEGER NOT NULL CHECK (cache_read >= 0),
+  cache_write INTEGER NOT NULL CHECK (cache_write >= 0),
+  custo       REAL    NOT NULL CHECK (custo >= 0),           -- US$: do pi, ou calculado pela tabela de preços
+  primeira    INTEGER REFERENCES ticket(id),                 -- a demanda que já contou esta sessão; linha zerada
+  PRIMARY KEY (ticket, ferramenta, sessao, provedor, modelo),
+  CHECK (primeira IS NULL OR (input + output + cache_read + cache_write = 0 AND custo = 0))
 );
 ```
 
@@ -422,7 +468,7 @@ Refazer o retrabalho de um ticket (4.2) apaga e regrava as linhas em que ele é 
 - Commits humanos: na base, um commit sem ticket reescreve 2 linhas do ticket A; espera `retrabalho(commit, null, autor, A, 2)` e o cursor avançado.
   Um merge commit não gera linha; um force-push que tira o cursor da história gera aviso e recomeça.
 - Bugs: issue `problema` registrada depois do merge de outra e tocando um arquivo dela conta 1; uma `funcionalidade` no mesmo arquivo não conta.
-- Correções: o Auditor cria um ticket, remove outro e reprova o desenho uma vez; espera `devolucoes = 1` e `ajustesAuditor = 2`.
+- Correções: o Auditor cria um ticket, remove outro e reprova o planejamento uma vez; espera `devolucoes = 1` e `ajustesAuditor = 2`.
 - Relatório: `dados` passa no schema e o HTML não tem `src` nem `href` externos.
 - Visão por mês: uma execução de 31/01 conta em janeiro; um PR aberto em janeiro e atualizado em fevereiro, depois de reprovado, conta um aberto só, em janeiro; um ticket removido no desenho não conta; o filtro por projeto exclui as issues do outro.
 

@@ -215,6 +215,23 @@ export function falharTicket(ag: Agregado, entrada: unknown, ator: Ator): Agrega
   };
 }
 
+const EntradaDevolucao = z.object({ ticket: Id, instrucao: Markdown });
+
+/**
+ * O C9 da Fabriquinha: o ticket autônomo cujo código reprovou num gate volta `aberto`, com a instrução de corrigir,
+ * para a próxima execução retomar a mesma sessão; o trabalho fica na worktree.
+ */
+export function devolverTicket(ag: Agregado, entrada: unknown, ator: Ator): Agregado {
+  exigirFabriquinha(ator, "devolver um ticket");
+  const { ticket: id, instrucao } = EntradaDevolucao.parse(entrada);
+  const ticket = ticketDe(ag, id);
+  if (modoDaEtapa(ticket.etapa) !== "autonomo" || ticket.status !== "em_execucao") {
+    throw new ErroDeRegra(`${rotuloTicket(ticket)} está ${ticket.status}`, "só se devolve ticket autônomo em execução");
+  }
+  exigirSemExecucao(ag, ticket, "devolver");
+  return trocarTicket(ag, { ...ticket, status: "aberto", instrucao, devolucoes: (ticket.devolucoes ?? 0) + 1 });
+}
+
 const EntradaReabertura = z.object({ ticket: Id, instrucao: Markdown.optional() });
 
 /** C9: ticket `aberto` de novo, sem o erro, com a resposta do Auditor para a próxima execução (F4 §6.4). */
@@ -225,7 +242,7 @@ export function reabrirTicket(ag: Agregado, entrada: unknown, ator: Ator): Agreg
   if (ticket.status !== "falhou") {
     throw new ErroDeRegra(`${rotuloTicket(ticket)} está ${ticket.status}`, "só se reabre ticket que falhou");
   }
-  const { erro: _apagado, ...resto } = ticket;
+  const { erro: _apagado, devolucoes: _zeradas, ...resto } = ticket;
   return trocarTicket(ag, { ...resto, status: "aberto", ...(instrucao !== undefined && { instrucao }) });
 }
 

@@ -273,13 +273,13 @@ test("a migração do cancelamento recria ticket com os status novos sem perder 
 
   assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
-  // A migração 17 acrescenta `enviado_em`, vazio nos tickets que já existiam.
+  // A migração 17 acrescenta `enviado_em` e a 19, `devolucoes`, vazios nos tickets que já existiam.
   assert.deepEqual(
     banco
       .prepare("SELECT * FROM ticket ORDER BY id")
       .all()
       .map((l) => ({ ...l })),
-    antes.map((l) => ({ ...l, enviado_em: null })),
+    antes.map((l) => ({ ...l, enviado_em: null, devolucoes: null })),
   );
   assert.equal(valor(banco, "SELECT count(*) FROM execucao"), 1);
   assert.equal(valor(banco, "SELECT count(*) FROM decisao"), 1);
@@ -605,8 +605,8 @@ test("novoId() tem uma sequência por tipo e só roda dentro da transação", ()
   banco.close();
 });
 
-/** A migração 19 acrescenta o effort por etapa ao projeto. */
-const VERSAO_EFFORTS = 19;
+/** A migração 20 acrescenta o effort por etapa ao projeto. */
+const VERSAO_EFFORTS = 20;
 
 test("a migração dos efforts dá {} ao projeto gravado antes dela", () => {
   const banco = new DatabaseSync(":memory:");

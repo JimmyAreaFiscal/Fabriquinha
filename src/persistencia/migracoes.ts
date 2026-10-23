@@ -376,6 +376,9 @@ export const MIGRACOES: readonly string[] = [
   INSERT INTO comando_novo SELECT * FROM comando;
   DROP TABLE comando;
   ALTER TABLE comando_novo RENAME TO comando;`,
+  // A reprovação de testes, fitness, SonarQube ou hooks devolve o ticket ao agente (devolverTicket) até um limite de
+  // devoluções seguidas, que o C9 do Auditor zera.
+  "ALTER TABLE ticket ADD COLUMN devolucoes INTEGER CHECK (devolucoes > 0);",
   `ALTER TABLE projeto ADD COLUMN efforts TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(efforts));`,
   // O modelo da Auditoria do Histórico, global (não pertence a nenhum projeto): nulo, usa o padrão do pi.
   `ALTER TABLE configuracao ADD COLUMN auditoria_provedor TEXT;

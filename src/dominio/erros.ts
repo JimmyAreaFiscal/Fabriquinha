@@ -15,6 +15,14 @@ export class ErroDeInexistente extends ErroDeRegra {
   override name = "ErroDeInexistente";
 }
 
+/**
+ * O código do agente reprovou num gate da Fabriquinha (testes, fitness, SonarQube, hooks do commit): a execução
+ * autônoma devolve o ticket ao agente para corrigir, em vez de falhá-lo.
+ */
+export class ErroDeReprovacao extends ErroDeRegra {
+  override name = "ErroDeReprovacao";
+}
+
 /** Um comando de fora (`gh`, `az`) falhou ou respondeu o que não se esperava: um ErroDeRegra que o web responde com 502. */
 export class ErroExterno extends ErroDeRegra {
   override name = "ErroExterno";
