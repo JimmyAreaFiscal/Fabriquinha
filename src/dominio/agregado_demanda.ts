@@ -43,6 +43,9 @@ export const EvidenciaDemanda = z
     message: "rodada_id e ticket_id não podem estar preenchidos juntos (use só um dono)",
   });
 
+/** Identidade da ferramenta ou sessão: a mesma regra no registro e em toda operação autorizada por autoria. */
+export const IdentidadeOrigem = z.string().trim().min(1).max(200);
+
 export const Demanda = z
   .object({
     id: DemandaId,
@@ -52,8 +55,8 @@ export const Demanda = z
     descricao: Markdown,
     fase: FaseDemanda,
     fase_alterada_em: Instante,
-    origem_ferramenta: z.string().trim().min(1).max(200),
-    origem_sessao: z.string().trim().min(1).max(200),
+    origem_ferramenta: IdentidadeOrigem,
+    origem_sessao: IdentidadeOrigem,
     enviada: z.boolean(),
     branch: z.string(),
   })

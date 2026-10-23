@@ -133,3 +133,15 @@ test("decidir: só o Auditor, só em aprovacao_demanda, e precisa do ticket da d
   const sem = { ...enviada(), tickets: [] };
   assert.throws(() => decidirDemanda(sem, { aprovado: true }, AUDITOR, { agora: t1 }), ErroDeRegra);
 });
+
+test("CA-3: o mesmo autor com espaços nas pontas registra, edita, submete e envia", () => {
+  const autor = { ferramenta: " codex ", sessao: " sessao-demo-197 " };
+  let ag = registrarDemanda(reg, autor, { agora: t0 });
+  assert.equal(ag.demanda.origem_ferramenta, "codex");
+  ag = editarDemanda(ag, { titulo: "novo" }, autor);
+  for (const tipo of ["criterios_aceite", "desenho_solucao", "custos_realizados"]) {
+    ag = submeterEvidenciaDemanda(ag, ev(tipo), autor, t0);
+  }
+  assert.equal(enviarDemanda(ag, autor, { agora: t1 }).demanda.enviada, true);
+  assert.throws(() => editarDemanda(ag, { titulo: "x" }, { ...autor, sessao: " outra " }), ErroDeEscopo);
+});

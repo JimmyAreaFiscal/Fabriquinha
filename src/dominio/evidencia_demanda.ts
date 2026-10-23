@@ -6,6 +6,7 @@ import {
   donoDe,
   EvidenciaDemanda,
   IdDono,
+  IdentidadeOrigem,
   TipoEvidenciaAgregado,
   type Demanda,
 } from "./agregado_demanda.ts";
@@ -27,7 +28,7 @@ export type TipoEvidenciaDemanda = z.infer<typeof TipoEvidenciaDemanda>;
 const livreDepoisDoEnvio = (tipo: string): boolean => tipo === "custos_realizados";
 
 /** A ferramenta e a sessão que agem; só as autoras mexem na definição antes do envio (§6). */
-export const AutorDemanda = z.object({ ferramenta: z.string(), sessao: z.string() });
+export const AutorDemanda = z.object({ ferramenta: IdentidadeOrigem, sessao: IdentidadeOrigem });
 export type AutorDemanda = z.infer<typeof AutorDemanda>;
 
 export const EntradaEvidenciaDemanda = z.object({
@@ -40,7 +41,8 @@ export type EntradaEvidenciaDemanda = z.input<typeof EntradaEvidenciaDemanda>;
 
 /** Recusa quem não é a ferramenta e a sessão autoras da demanda (CA-6). */
 export function exigirAutoria(demanda: Demanda, autor: AutorDemanda, acao: string): void {
-  if (demanda.origem_ferramenta !== autor.ferramenta || demanda.origem_sessao !== autor.sessao) {
+  const { ferramenta, sessao } = AutorDemanda.parse(autor);
+  if (demanda.origem_ferramenta !== ferramenta || demanda.origem_sessao !== sessao) {
     throw new ErroDeEscopo(
       `só a ferramenta ${demanda.origem_ferramenta} da sessão ${demanda.origem_sessao} pode ${acao} a demanda ${demanda.id}`,
       "peça a quem registrou a demanda, na mesma sessão",
