@@ -122,15 +122,27 @@ export const EntradaEvidenciaEtapa = z.object({
   aprovada: z.boolean().optional(),
   dados: z.unknown(),
 });
-export type EntradaEvidenciaEtapa = z.output<typeof EntradaEvidenciaEtapa>;
+export type EvidenciaEtapa = z.output<typeof EntradaEvidenciaEtapa>;
+export type EntradaEvidenciaEtapa = EvidenciaEtapa;
+
+const lerContexto = (contexto: ContextoEvidenciaEtapa): ContextoEvidenciaEtapa => {
+  const lido = ContextoEvidenciaEtapa.safeParse(contexto);
+  if (!lido.success) {
+    throw new ErroDeRegra(
+      `contexto de evidência inválido: ${lido.error.issues.map((i) => i.message).join("; ")}`,
+      "informe demanda_id, ticket_id e etapa válidos",
+    );
+  }
+  return lido.data;
+};
 
 /** Ticket executor da etapa; as evidências da etapa `demanda` pertencem à demanda (§8.1). */
 const donoEsperado = (c: ContextoEvidenciaEtapa): number | undefined =>
   c.etapa === "demanda" ? undefined : c.ticket_id;
 
-/** Metadados normalizados, ou erro se tipo, produtor, dono ou `aprovada` não cabem na etapa do ticket. */
-export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrada: unknown): EntradaEvidenciaEtapa {
-  const ctx = ContextoEvidenciaEtapa.parse(contexto);
+/** Metadados normalizados; produtor informado não autentica autoria e `aprovada` é calculada pelo F3. */
+export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrada: unknown): EvidenciaEtapa {
+  const ctx = lerContexto(contexto);
   const lida = EntradaEvidenciaEtapa.safeParse(entrada);
   if (!lida.success) {
     throw new ErroDeRegra(
@@ -180,20 +192,33 @@ export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrad
   return e;
 }
 
-/** Obrigatórias que faltam e tipos presentes reprovados (`aprovada === false`), na ordem do catálogo; ignora outros donos. */
+/**
+ * Pré-condição: snapshot ativo válido, com uma evidência por tipo/dono; não valida nem escolhe versões.
+ * Obrigatórias ausentes e presentes reprovadas, na ordem do catálogo. O(n), espaço O(1) pelo catálogo fixo.
+ */
 export function pendenciasDoTicket(
   contexto: ContextoEvidenciaEtapa,
-  evidencias: readonly EntradaEvidenciaEtapa[],
+  evidencias: readonly EvidenciaEtapa[],
 ): { ausentes: TipoEvidenciaEtapa[]; reprovadas: TipoEvidenciaEtapa[] } {
-  const ctx = ContextoEvidenciaEtapa.parse(contexto);
+  const ctx = lerContexto(contexto);
   const dono = donoEsperado(ctx);
-  const doTicket = evidencias.filter(
-    (e) => e.demanda_id === ctx.demanda_id && e.rodada_id === undefined && e.ticket_id === dono,
-  );
   const itens = catalogoDaEtapa(ctx.etapa);
-  const achada = (tipo: string) => doTicket.find((e) => e.tipo === tipo);
+  const catalogados = new Set(itens.map((i) => i.tipo));
+  const presentes = new Set<TipoEvidenciaEtapa>();
+  const reprovados = new Set<TipoEvidenciaEtapa>();
+  for (const e of evidencias) {
+    if (
+      e.demanda_id === ctx.demanda_id &&
+      e.rodada_id === undefined &&
+      e.ticket_id === dono &&
+      catalogados.has(e.tipo)
+    ) {
+      presentes.add(e.tipo);
+      if (e.aprovada === false) reprovados.add(e.tipo);
+    }
+  }
   return {
-    ausentes: itens.filter((i) => i.obrigatoria && !achada(i.tipo)).map((i) => i.tipo),
-    reprovadas: itens.filter((i) => achada(i.tipo)?.aprovada === false).map((i) => i.tipo),
+    ausentes: itens.filter((i) => i.obrigatoria && !presentes.has(i.tipo)).map((i) => i.tipo),
+    reprovadas: itens.filter((i) => reprovados.has(i.tipo)).map((i) => i.tipo),
   };
 }
