@@ -218,6 +218,16 @@ test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai 
   assert.equal(novo.tickets.length, 2);
 });
 
+test("CA-2: ticket de implementação sem rodada é recusado na submissão, sem mutação", () => {
+  const ag = emPlanejamento();
+  const antes = structuredClone(ag);
+  const plano = planoV();
+  const { rodada_id: _, ...semRodada } = plano.tickets[2] as Record<string, unknown>;
+  const e = planoV({ tickets: [plano.tickets[0], plano.tickets[1], semRodada] });
+  assert.throws(() => submeterPlano(ag, e, agente, { agora: t2 }), /não têm rodada/);
+  assert.deepEqual(ag, antes);
+});
+
 test("CA-2 e CA-3: submissão recusada sem mutação", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);

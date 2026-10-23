@@ -222,6 +222,14 @@ export function submeterPlano(
       "corrija o plano e submeta de novo",
     );
   }
+  // A aprovação materializa todo ticket do plano como `implementar`, e a seleção só enxerga tickets de rodada.
+  const semRodada = plano.data.tickets.filter((t) => t.rodada_id === undefined).map((t) => String(t.ticket_id));
+  if (semRodada.length > 0) {
+    throw new ErroDeRegra(
+      `os tickets ${semRodada.join(", ")} do plano não têm rodada`,
+      "informe a rodada_id de cada ticket de implementação",
+    );
+  }
   if (plano.data.demanda_id !== demanda.id) {
     throw new ErroDeRegra(
       `o plano é da demanda ${plano.data.demanda_id}, não da ${demanda.id}`,
