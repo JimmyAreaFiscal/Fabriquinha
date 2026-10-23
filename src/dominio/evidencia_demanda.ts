@@ -1,9 +1,16 @@
 // Evidência por dono da demanda SDLC (comparacao-sdlc-implementacao.md §7.4; fabriquinha/03-evidencias.md §4.1).
 // `dados` segue opaco: o schema de cada tipo é do F3.
 import { z } from "zod";
-import { AgregadoDemanda, donoDe, EvidenciaDemanda, TipoEvidenciaAgregado, type Demanda } from "./agregado_demanda.ts";
+import {
+  AgregadoDemanda,
+  donoDe,
+  EvidenciaDemanda,
+  IdDono,
+  TipoEvidenciaAgregado,
+  type Demanda,
+} from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { Id, type Instante } from "./primitivos.ts";
+import { type Instante } from "./primitivos.ts";
 
 /** Obrigatórias da demanda no envio (CA-SDLC-01). */
 export const OBRIGATORIAS_DEMANDA = ["criterios_aceite", "desenho_solucao", "custos_realizados"] as const;
@@ -26,10 +33,10 @@ export type AutorDemanda = z.infer<typeof AutorDemanda>;
 export const EntradaEvidenciaDemanda = z.object({
   tipo: TipoEvidenciaAgregado,
   dados: EvidenciaDemanda.shape.dados,
-  rodada_id: Id.optional(),
-  ticket_id: Id.optional(),
+  rodada_id: IdDono,
+  ticket_id: IdDono,
 });
-export type EntradaEvidenciaDemanda = z.infer<typeof EntradaEvidenciaDemanda>;
+export type EntradaEvidenciaDemanda = z.input<typeof EntradaEvidenciaDemanda>;
 
 /** Recusa quem não é a ferramenta e a sessão autoras da demanda (CA-6). */
 export function exigirAutoria(demanda: Demanda, autor: AutorDemanda, acao: string): void {

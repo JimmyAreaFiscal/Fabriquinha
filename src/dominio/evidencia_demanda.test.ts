@@ -104,3 +104,23 @@ test("CA-8: depois do envio entram custos e evidências de etapas posteriores, s
   assert.equal(ag.evidencias.length, 4);
   assert.equal(ag.evidencias[0], antes);
 });
+
+test("CA-11: null explícito é dono demanda, conta no envio e substitui a versão omitida", () => {
+  const nulos = { rodada_id: null, ticket_id: null };
+  let ag = submeterEvidenciaDemanda(base(), entrada("criterios_aceite", nulos), autora, em);
+  assert.equal(ag.evidencias[0]?.rodada_id, undefined);
+  assert.equal(ag.evidencias[0]?.ticket_id, undefined);
+  assert.deepEqual(pendentesDeEnvio(ag), ["desenho_solucao", "custos_realizados"]);
+  ag = submeterEvidenciaDemanda(ag, entrada("criterios_aceite", {}, 2), autora, em);
+  ag = submeterEvidenciaDemanda(ag, entrada("criterios_aceite", nulos, 3), autora, em);
+  assert.deepEqual(
+    ag.evidencias.map((e) => e.dados),
+    [{ v: 3 }],
+  );
+  const doTicket = submeterEvidenciaDemanda(ag, entrada("mensagem_pr", { rodada_id: null, ticket_id: 1 }), autora, em);
+  assert.equal(doTicket.evidencias.length, 2);
+  assert.throws(
+    () => submeterEvidenciaDemanda(ag, entrada("mensagem_pr", { rodada_id: 1, ticket_id: 1 }), autora, em),
+    ErroDeRegra,
+  );
+});

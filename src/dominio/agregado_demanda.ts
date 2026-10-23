@@ -26,12 +26,15 @@ export const DecisaoDemanda = z.object({
 /** Os tipos legados mais `custos_realizados`, que só a demanda SDLC conhece (§4.1). */
 export const TipoEvidenciaAgregado = z.enum([...TipoEvidencia.options, "custos_realizados"]);
 
+/** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
+export const IdDono = Id.nullish().transform((v) => v ?? undefined);
+
 /** Evidência de qualquer dono: `rodada_id` e `ticket_id` nulos indicam a própria demanda; `dados` segue opaco (F3 valida). */
 export const EvidenciaDemanda = z
   .object({
     demanda_id: DemandaId,
-    rodada_id: Id.optional(),
-    ticket_id: Id.optional(),
+    rodada_id: IdDono,
+    ticket_id: IdDono,
     tipo: TipoEvidenciaAgregado,
     dados: Evidencia.shape.dados,
     em: Instante,

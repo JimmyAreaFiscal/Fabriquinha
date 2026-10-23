@@ -110,3 +110,16 @@ test("uma evidência ativa por tipo e dono (CA-9)", () => {
   recusa(agregado({ evidencias: [evidencia({ demanda_id: "I-2" })] }), "outra demanda");
   recusa(agregado({ evidencias: [evidencia({ ticket_id: 9 })] }), "não existe");
 });
+
+test("CA-11: schema aceita dono null/null e normaliza para a demanda", () => {
+  const e = EvidenciaDemanda.parse({
+    demanda_id: "I-1",
+    rodada_id: null,
+    ticket_id: null,
+    tipo: "criterios_aceite",
+    dados: { v: 1 },
+    em: "2026-01-01T00:00:00Z",
+  });
+  assert.equal(donoDe(e), "demanda");
+  assert.equal(donoDe({ ...e, rodada_id: 2, ticket_id: undefined }), "rodada");
+});
