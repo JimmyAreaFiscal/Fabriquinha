@@ -605,8 +605,8 @@ test("novoId() tem uma sequência por tipo e só roda dentro da transação", ()
   banco.close();
 });
 
-/** A migração 19 acrescenta o effort por etapa ao projeto. */
-const VERSAO_EFFORTS = 19;
+/** A migração 20 acrescenta o effort por etapa ao projeto. */
+const VERSAO_EFFORTS = 20;
 
 test("a migração dos efforts dá {} ao projeto gravado antes dela", () => {
   const banco = new DatabaseSync(":memory:");

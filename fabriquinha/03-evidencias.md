@@ -17,30 +17,35 @@ Este módulo implementa o conteúdo.
 
 ## 2. Tipos de evidência
 
-São 17 tipos.
+São 21 tipos.
 `explicacao_fitness` separa o que o agente escreve do que a Fabriquinha mede, para que cada tipo tenha um produtor só.
 Na tela, ela aparece junto com `matriz_fitness`, formando a "matriz de fitness functions com explicações" do diagrama.
 
 | Etapa | Tipo | Produtor | `aprovada` |
 |---|---|---|---|
-| registro | `comportamento` | agente | — |
-| registro | `criterios_aceite` | agente | — |
-| desenho | `desenho_solucao` | agente | — |
-| desenho | `prototipo` | agente | — |
-| desenho | `relatorio_complexidade` | agente | — |
-| desenho | `relatorio_impactos_arquitetura` | agente | — |
+| demanda | `comportamento` | externo | — |
+| demanda | `criterios_aceite` | externo | — |
+| demanda | `desenho_solucao` | externo | — |
+| demanda | `prototipo` | externo | — |
+| demanda | `relatorio_complexidade` | externo | — |
+| demanda | `relatorio_impactos_arquitetura` | externo | — |
+| demanda | `custos_realizados` | externo | — |
+| planejamento | `arvore_planejamento` | fabriquinha | — |
 | desenvolvimento | `execucao_testes` | fabriquinha | todos os comandos saíram com 0 |
 | desenvolvimento | `matriz_fitness` | fabriquinha | todas as fitness functions passaram |
 | desenvolvimento | `relatorio_sonar` | fabriquinha | zero issue aberta nos arquivos alterados |
 | revisao | `arquivos_alterados` | fabriquinha | — |
 | revisao | `matriz_fitness` | fabriquinha | todas as fitness functions passaram |
 | revisao | `explicacao_fitness` | agente | — |
-| revisao | `comprovacao_criterios` | agente | todos os critérios atendidos |
+| revisao | `comprovacao_criterios` | agente | todos os critérios da entrega atendidos |
 | encerramento | `mensagem_pr` | agente | — |
 | encerramento | `aula_codigo` | agente | — |
 | encerramento | `video_demonstracao` | agente | — |
 | encerramento | `relatorio_produtividade` | fabriquinha | — |
 | encerramento | `pr_aberto` | fabriquinha | — |
+| revisao_demanda | `comprovacao_criterios` | agente | todos os critérios da demanda atendidos |
+| encerramento_demanda | `arvore_prs_criterios_custos` | fabriquinha | — |
+| encerramento_demanda | `demonstracao_limpeza` | fabriquinha | nada sobrou |
 
 `aprovada` é sempre calculada pelo F3 a partir do conteúdo; ninguém a declara.
 
@@ -87,7 +92,7 @@ Um script do agente roda numa origem opaca e não alcança o token nem as rotas 
 Trechos em `zod`, no mesmo estilo do F1.
 `Arquivos(...)` descreve os arquivos anexados na submissão; o nome original de cada um é o que o `dados` referencia.
 
-### 4.1 Registro
+### 4.1 Demanda
 
 ```ts
 // comportamento — "vídeo / código do comportamento atual e/ou do problema"
@@ -108,8 +113,6 @@ dados: z.object({
 }),
 arquivos: Arquivos({ max: 0 }),
 ```
-
-### 4.2 Desenho
 
 ```ts
 // desenho_solucao — o HTML explica a solução ao Auditor; dados guarda o que a máquina confere
@@ -186,14 +189,55 @@ Exemplos válidos: `O(1)`, `O(log n)`, `O(n)`, `O(n log n)`, `O(n^2)`, `O(n + m)
 Exemplos recusados: `O(N)` (maiúscula), `O(n²)` (sobrescrito), `O(k)` com `k` não declarado, `n log n` (sem `O(...)`).
 O parser é um descendente recursivo pequeno e leva um teste com esses exemplos.
 
-Os números objetivos do desenho não são declarados pelo agente; o F6 e o F7 os calculam:
+Os números objetivos da demanda e do planejamento não são declarados pela IA; o F6 (5.5) e o F7 os calculam:
 
 - quantos arquivos estão previstos (`arquivosPrevistos`);
-- quantos tickets de desenvolvimento foram propostos;
+- quantas entregas e quantos tickets de desenvolvimento o planejamento aprovado tem;
 - quantas dependências e quantos acoplamentos novos o relatório de impactos declara.
 
 `foraDeEscopo` torna explícito o que o desenho não vai fazer.
-O revisor usa essa lista contra a "ampliação do que deve ser feito".
+O planejador e os revisores usam essa lista contra a "ampliação do que deve ser feito".
+
+```ts
+// custos_realizados (IA externa) — o que se gastou fora da Fabriquinha para registrar e desenhar; o plugin do harness mede
+dados: z.object({
+  sessoes: z.array(z.object({
+    ferramenta: z.enum(["pi", "claude-code", "codex"]),
+    sessao: z.string().trim().min(1).max(200),      // id da sessão no harness
+    linhas: z.array(z.object({
+      provedor: z.string().trim().min(1),
+      modelo: z.string().trim().min(1),
+      input: z.number().int().nonnegative(),
+      output: z.number().int().nonnegative(),
+      cacheRead: z.number().int().nonnegative(),
+      cacheWrite: z.number().int().nonnegative(),
+      custo: z.number().nonnegative().optional(),   // só o pi traz pronto; nas demais, o F6 calcula
+    })),
+  })).min(1).refine(unicoPor("sessao"), "sessão repetida"),
+}),
+arquivos: Arquivos({ max: 0 }),
+// regras cruzadas:
+// - todo par provedor/modelo sem custo tem preço na tabela do F6 (senão: "falta o preço de <provedor>/<modelo>");
+// - sessão (ferramenta, sessao) que outra demanda já submeteu fica com as linhas zeradas e a referência à primeira (F6, 3.4).
+```
+
+O retrato vale até o envio da demanda: depois do C25, os custos não mudam.
+
+### 4.2 Planejamento
+
+```ts
+// arvore_planejamento (Fabriquinha) — gerada no envio do planejamento, a partir do banco; é o artefato do gate
+dados: z.object({
+  entregas: z.array(z.object({
+    id: Id, titulo: Titulo, criterios: z.array(z.string()), arquivosPrevistos: z.array(z.string()), deps: z.array(Id),
+    tickets: z.array(z.object({ id: Id, titulo: Titulo, deps: z.array(Id) })).min(1),
+  })).min(1),
+}),
+arquivos: Arquivos({ classes: ["html"], min: 1, max: 1 }),   // a árvore demanda → entregas → tickets, com os critérios
+```
+
+O Auditor ajusta a árvore no gate; a evidência é regerada a cada ajuste, para que a aprovada seja a que vale.
+Cada arquivo previsto no `desenho_solucao` da demanda fica em pelo menos uma entrega; o planejador o atrela como atrela os critérios.
 
 ### 4.3 Desenvolvimento (produzidas pela Fabriquinha)
 
@@ -268,11 +312,14 @@ dados: z.object({
   })),
 }),
 arquivos: Arquivos({ classes: ["video", "imagem"], min: 1 }),
-// regras cruzadas: os ids são exatamente os de criterios_aceite do registro;
+// regras cruzadas: na revisão da entrega, os ids são exatamente os critérios da entrega;
+// na revisão da demanda, exatamente os de criterios_aceite da demanda;
 // todo nome citado existe entre os anexos. aprovada = todo atendido === true
 ```
 
-`previsto` compara cada arquivo com `arquivosPrevistos` do desenho aprovado (o último ticket de desenho concluído), usando `path.matchesGlob` da biblioteca padrão do Node.
+`previsto` compara cada arquivo com os `arquivosPrevistos` da entrega (F1, 3.4.1), atrelados no planejamento a partir do `desenho_solucao` da demanda, usando `path.matchesGlob` da biblioteca padrão do Node.
+O diff é o da entrega: de `merge-base(origin/<branchBase>, HEAD)` até `HEAD` na worktree dela.
+`previstosNaoTocados` lista só os previstos da entrega.
 
 ### 4.5 Encerramento
 
@@ -293,8 +340,8 @@ dados: z.object({
 }),
 arquivos: Arquivos({ max: 0 }),
 // regras cruzadas:
-// - naoPrevistos traz exatamente os arquivos com previsto = null no arquivos_alterados da última revisão concluída;
-// - reversao é obrigatória se o relatorio_impactos_arquitetura do desenho aprovado tiver impacto ≠ "baixo".
+// - naoPrevistos traz exatamente os arquivos com previsto = null no arquivos_alterados da última revisão concluída da entrega;
+// - reversao é obrigatória se o relatorio_impactos_arquitetura da demanda tiver impacto ≠ "baixo".
 
 // aula_codigo (agente) — a lógica de cada parte do código alterado, para o Auditor estudar antes de aprovar o PR
 dados: z.object({
@@ -329,29 +376,65 @@ dados: z.object({
 arquivos: Arquivos({ classes: ["texto"], min: 1, max: 1 }),   // o corpo completo, antes de qualquer condensação
 ```
 
+### 4.5.1 Encerramento da demanda (produzidas pela Fabriquinha)
+
+```ts
+// arvore_prs_criterios_custos — montada do banco; o agente não participa
+dados: z.object({
+  entregas: z.array(z.object({
+    id: Id, titulo: Titulo, correcao: z.boolean(),
+    pr: z.object({ url: z.url(), mergeadoEm: Instante }),
+    criterios: z.array(z.string()),
+  })),
+  criterios: z.array(z.object({                 // da comprovacao_criterios da última revisão da demanda
+    id: z.string(), atendido: z.boolean(), comoVerificado: z.string(),
+  })),
+  custos: z.object({                            // US$, por fase; tokens no relatório do F6
+    demanda: z.number().nonnegative(),
+    planejamento: z.number().nonnegative(),
+    entregas: z.array(z.object({ id: Id, custo: z.number().nonnegative() })),
+    revisaoDemanda: z.number().nonnegative(),
+    total: z.number().nonnegative(),
+  }),
+}),
+arquivos: Arquivos({ classes: ["html"], min: 1, max: 1 }),
+
+// demonstracao_limpeza — a rotina de limpeza do F5 rodada de novo, e a prova de que nada sobrou
+dados: z.object({
+  worktrees: z.array(z.string()),       // `git worktree list` das entregas e das temporárias; vazia
+  pastas: z.array(z.string()),          // pastas de worktree ainda no disco; vazia
+  branchesLocais: z.array(z.string()),  // vazia
+  branchesRemotas: z.array(z.string()), // vazia
+}),
+arquivos: Arquivos({ classes: ["texto"], min: 1, max: 1 }),   // a saída dos comandos de verificação
+// aprovada = as quatro listas vazias
+```
+
+Sessões do pi, logs e evidências ficam: são o histórico da demanda.
+
 ### 4.6 Modelo do PR
 
 O PR é sempre montado pela Fabriquinha, em Markdown, porque é o que GitHub e Azure DevOps renderizam.
 As explicações em HTML continuam na Fabriquinha; o PR cita cada uma pelo número da issue, o tipo e o nome do arquivo.
 Isso responde a "PRs não padronizados" por construção.
 
-**Título:** `<feat|fix>: <titulo> [I-<n>]`, com `feat` para funcionalidade e `fix` para problema.
+**Título:** `<feat|fix>: <titulo> [I-<n>/N-<k>]`, com `feat` para funcionalidade e `fix` para problema.
 A frase é do agente e precisa ser imperativa e entendível sozinha no histórico ([Google](https://google.github.io/eng-practices/review/developer/cl-descriptions.html)).
 
 **Corpo:** as 10 seções, sempre nesta ordem e com estes títulos.
 
 | # | Seção | Fonte | Conteúdo |
 |---|---|---|---|
-| 1 | Por quê | Fabriquinha | Tipo, título e descrição da issue. O contexto vai no texto, não só num link. |
+| 1 | Por quê | Fabriquinha | Tipo, título e descrição da demanda, a entrega dentro da árvore e os critérios atrelados a ela. O contexto vai no texto, não só num link. |
 | 2 | O que mudou | agente | `oQueMudou`: o que mudou, por que desta forma e as limitações da abordagem. |
 | 3 | Decisões não óbvias | agente | `decisoesNaoObvias`, ou "Nenhuma." |
-| 4 | Fora do escopo | Fabriquinha + agente | `foraDeEscopo` do desenho aprovado e `naoFeito`, ou "Nada declarado." |
+| 4 | Fora do escopo | Fabriquinha + agente | `foraDeEscopo` do desenho da demanda e `naoFeito`, ou "Nada declarado." |
 | 5 | Arquivos alterados × desenho | Fabriquinha + agente | Tabela do `arquivos_alterados` da última revisão: arquivo, status, linhas +/−, padrão previsto ou "não previsto: <motivo>". |
 | 6 | Como revisar | agente | `comoRevisar`, numerado, em ordem de leitura. |
-| 7 | Evidências | Fabriquinha | Testes (comando, resultado, duração) e SonarQube (issues e arquivos analisados) do último ticket de desenvolvimento; fitness (resultado e explicação) da última revisão; critérios de aceite (id, atendido, como verificado, anexo); complexidade de cada fluxo (antes e depois, tempo e espaço). |
+| 7 | Evidências | Fabriquinha | Testes (comando, resultado, duração) e SonarQube (issues e arquivos analisados) do último ticket de desenvolvimento da entrega; fitness (resultado e explicação) da última revisão da entrega; critérios da entrega (id, atendido, como verificado, anexo); complexidade de cada fluxo (antes e depois, tempo e espaço). |
 | 8 | Não verificado | agente | `naoVerificado`, ou "Nada." |
 | 9 | Riscos e reversão | Fabriquinha + agente | Impacto, riscos e mitigações do relatório de impactos; `reversao` quando houver. |
-| 10 | Autoria e custo | Fabriquinha | Declara que o PR foi produzido por agentes pi e traz, por etapa: modelos, execuções, tokens, custo e reprovações (F6). |
+| 10 | Autoria e custo | Fabriquinha | Declara que o PR foi produzido por agentes pi e traz, por etapa da entrega: modelos, execuções, tokens, custo e reprovações (F6). O custo total da demanda fica no encerramento da demanda. |
 
 Quando o PR já existe (nova volta depois de um PR reprovado), a Fabriquinha atualiza o título e o corpo inteiros; não acrescenta texto ao que havia.
 
@@ -374,14 +457,14 @@ O corpo completo fica sempre anexado à evidência `pr_aberto`.
 
 Limite: quem revisa o PR no GitHub ou no Azure DevOps sem acesso à máquina do Auditor não vê os vídeos nem os HTML.
 
-## 5. Submissão pelo agente
+## 5. Submissão pelo agente e pela IA externa
 
-Comando (superfície no F7): `fabriquinha evidencia add <tipo> [--dados <arquivo.json>] [--arquivo <caminho>]...`.
+Comandos (superfície no F7): `fabriquinha evidencia add <tipo> [--dados <arquivo.json>] [--arquivo <caminho>]...` para o agente e `fabriquinha demanda evidencia I-<n> <tipo> [--dados …] [--arquivo …]...` para a IA externa.
 
 Passos, nesta ordem; o primeiro que falhar interrompe sem gravar nada:
 
-1. Resolve o ator pela execução do ambiente; o ticket precisa estar `em_execucao` (`ErroDeEscopo` se não estiver).
-2. O tipo pertence à etapa do ticket e tem produtor `agente` (F1, 3.9).
+1. Resolve o ator: pela execução do ambiente, o ticket precisa estar `em_execucao`; sem execução, é a IA externa, e o ticket é o de demanda da issue, ainda não enviado e registrado pela mesma ferramenta e sessão (`ErroDeEscopo` se não for).
+2. O tipo pertence à etapa do ticket e tem o produtor do ator: `agente` ou `externo` (F1, 3.9).
 3. Lê `dados` e valida com o schema do tipo.
    O erro sai com o caminho de cada campo, gerado por `z.prettifyError`.
    Exemplo: `dados.criterios[2].entao: obrigatório`.
@@ -392,14 +475,14 @@ Passos, nesta ordem; o primeiro que falhar interrompe sem gravar nada:
 7. Numa transação: C17 com `aprovada` calculada, `evidencia` e `evidencia_arquivo`.
 
 Submeter de novo o mesmo tipo no mesmo ticket substitui a evidência anterior.
-A submissão vale até o envio do ticket ao gate (C25): enviado, o passo 1 recusa; se o Auditor reprovar, o ticket volta sem `enviadoEm` e a troca é aceita de novo.
+A submissão vale até o envio ao gate: com `enviadoEm` o C17 recusa (agente, Fabriquinha e IA externa); só a reprovação do planejamento, que tira o `enviadoEm`, reabre a troca no planejamento; a demanda enviada não reabre.
 
 `fabriquinha evidencia schema <tipo>` imprime o JSON Schema de `dados` (gerado por `z.toJSONSchema`) e as regras de arquivo.
 A skill de cada etapa aponta para esse comando, em vez de repetir o formato.
 
 ## 6. Coletores (produzidos pela Fabriquinha)
 
-Todos rodam com `cwd` na worktree da issue, fora de transação (F2, 3.2).
+Todos rodam com `cwd` na worktree da entrega, fora de transação (F2, 3.2); os da revisão da demanda e do encerramento da demanda rodam no repositório do projeto, sem worktree de entrega.
 Cada comando configurado no projeto roda como `/bin/sh -c "<comando>"`, então aceita `&&`, pipes e variáveis de ambiente.
 Passou = código de saída 0; qualquer outro código, ou estouro de tempo, é reprovação.
 Cada comando externo tem limite de 30 minutos; ao estourar, o processo é morto e o resultado conta como reprovado.
@@ -410,11 +493,14 @@ ponytail: o log guarda os últimos 5 MiB; se precisar do início, guardar as dua
 |---|---|---|
 | Testes | Roda cada comando de `projeto.testes`, todos, mesmo depois de uma falha, para o agente ver o quadro inteiro na próxima tentativa. | Comando não encontrado conta como reprovado. |
 | SonarQube | Mesma regra do seu `sonar_gate.py`, em TypeScript: confere `api/system/status`, roda o `sonar-scanner-cli` em Docker sobre a worktree, espera a tarefa do Compute Engine e busca as issues abertas nos arquivos alterados contra `HEAD` (versionados e não versionados). `SONAR_HOST_URL` e `SONAR_TOKEN` vêm do ambiente da Fabriquinha. | SonarQube fora do ar ou scanner falhando: o ticket falha com a mensagem e o comando para subir o servidor. |
-| Arquivos alterados | `git diff --numstat` e `--name-status` de `merge-base(base, HEAD)` até `HEAD` (F5) e cruzamento com `arquivosPrevistos`. | — |
+| Arquivos alterados | `git diff --numstat` e `--name-status` de `merge-base(base, HEAD)` até `HEAD` (F5) e cruzamento com os `arquivosPrevistos` da entrega. | — |
 | Preparação | Não é evidência: o F5 roda `projeto.preparacao` ao criar a worktree. | Falha: a execução falha com o log. |
 | Fitness | Roda cada `projeto.fitness[].comando`, todas. No desenvolvimento entra no gate; na revisão vira a matriz que o agente explica. | Comando não encontrado conta como reprovado. |
 | Produtividade | Pede o relatório ao F6 e registra. | — |
 | PR | Recebe do F5 o PR criado ou atualizado e registra. | Falha do `gh`/`az` faz o ticket falhar com a saída do comando. |
+| Árvore do planejamento | Lê do banco as entregas, os tickets, os critérios e as dependências e gera o HTML. Roda no C25 do planejamento e a cada ajuste do Auditor no gate. | — |
+| Árvore × PRs × Critérios × Custos | Lê do banco a árvore, os PRs mergeados, a comprovação da última revisão da demanda e os custos do F6, e gera o HTML. | — |
+| Limpeza | Roda de novo a rotina idempotente de limpeza do F5 (§5.3) para todas as entregas e worktrees temporárias da issue e registra o que ainda existe. | Falha ao remover: o ticket falha com o caminho e o comando. |
 
 Assim como no `sonar_gate.py`, issue antiga num arquivo alterado também barra: quem mexe no arquivo deixa o arquivo limpo.
 Código de teste é excluído no servidor (`sonar.global.exclusions`), como hoje.
@@ -426,18 +512,21 @@ O F4 chama estes passos antes e depois de cada execução autônoma; nas etapas 
 
 | Etapa | Antes do pi | Depois do pi |
 |---|---|---|
-| registro | — | descartar alterações (F5), no gate aprovado (F4, 6.6) |
-| desenho | — | descartar alterações (F5), no gate aprovado (F4, 6.6) |
-| desenvolvimento | — | testes → se aprovada, fitness → se aprovada, SonarQube → se aprovada, commit (F5) |
+| demanda | — (não há pi) | — |
+| planejamento | worktree temporária da base atualizada (F5) | árvore do planejamento, no C25; remoção da worktree temporária, no gate aprovado |
+| desenvolvimento | worktree da entrega, na primeira execução dela (F5) | testes → se aprovada, fitness → se aprovada, SonarQube → se aprovada, commit (F5) |
 | revisao | arquivos alterados; fitness | descartar alterações (F5) |
-| encerramento | — | descartar alterações (F5); produtividade (F6); push e PR (F5); verificação do PR: conflito e CI (F5 §5.1) |
+| encerramento | — | descartar alterações (F5); produtividade da entrega (F6); push e PR (F5); verificação do PR: conflito e CI (F5 §5.1) |
 | sessao | — | descartar alterações (F5) |
+| revisao_demanda | worktree temporária da base atualizada (F5) | remoção da worktree temporária |
+| encerramento_demanda | — (não há pi) | limpeza; árvore × PRs × critérios × custos |
+| sessao_final | worktree temporária da base atualizada (F5) | remoção da worktree temporária |
 
 **Só o ticket de desenvolvimento muda código.**
 Nas demais etapas, a Fabriquinha descarta as alterações da worktree ao fim da execução, depois de as evidências já estarem guardadas.
 Isso cobre três coisas:
 
-- o protótipo do desenho pode mexer no código para gravar o vídeo, sem vazar para os commits;
+- o planejador e o revisor da demanda leem o código sem vazar nada, porque a worktree deles é temporária;
 - a revisão não altera funcionalidade ("revisão altera funcionalidades ou problemas não envolvidos");
 - o encerramento não sobe lixo no PR ("trabalhos encerrados sem limpeza").
 
@@ -448,6 +537,8 @@ Lixo que chegou a ser commitado em algum ticket de desenvolvimento aparece no re
 | Etapa | Regra |
 |---|---|
 | revisao | Aprovar exige `comprovacao_criterios.aprovada` (todos os critérios atendidos) e `matriz_fitness.aprovada` (todas as fitness passaram). |
+| revisao_demanda | Aprovar exige `comprovacao_criterios.aprovada` sobre todos os critérios da demanda. |
+| encerramento_demanda | Exige `demonstracao_limpeza.aprovada`; o que sobrou é removido de novo antes de reprovar a coleta. |
 
 A segunda regra é a resposta direta a "complexidade elevada é enviada para PR".
 Com ela, uma fitness function vermelha obriga a revisão a reprovar e gerar ticket.

@@ -18,20 +18,22 @@ Quem precisa de um fato externo (uma dependência concluída, uma execução em 
 | Termo | Significado |
 |---|---|
 | Projeto | Repositório git gerenciado pela Fabriquinha, com a sua configuração de testes, SonarQube e fitness functions. |
-| Issue | Uma necessidade registrada. Atravessa as fases do SDLC até o PR aprovado. |
+| Issue | Uma demanda registrada. Atravessa as fases da demanda até o gate final. |
+| Demanda | O conteúdo da issue que a IA externa registra: título, tipo, descrição, os artefatos do registro e do desenho e os custos realizados. |
+| Entrega | Um conjunto de tickets de desenvolvimento da issue que vira um PR. Tem critérios de aceite atrelados, worktree, branch e fases próprias. |
 | Fase | Onde a issue está no SDLC. Só muda por comando do domínio. |
 | Ticket | Uma unidade de trabalho de uma etapa. Toda sessão de agente executa exatamente um ticket. |
-| Etapa | O tipo do ticket: `registro`, `desenho`, `desenvolvimento`, `revisao`, `encerramento` ou `sessao`. |
+| Etapa | O tipo do ticket: `demanda`, `planejamento`, `desenvolvimento`, `revisao`, `encerramento`, `sessao`, `revisao_demanda`, `encerramento_demanda` ou `sessao_final`. |
 | Execução | Um processo pi rodando um ticket. Um ticket pode ter várias execuções. |
 | Evidência | O que comprova o trabalho de um ticket. Os metadados ficam aqui; o conteúdo é validado no F3. |
-| Decisão | O veredito de um gate: registro, desenho, revisão ou PR. |
+| Decisão | O veredito de um gate: demanda, planejamento, revisão, PR, revisão da demanda ou final. |
 | Ator | Quem pede o comando: Auditor, agente (sempre preso a uma execução) ou a própria Fabriquinha. |
 
 ## 3. Data classes
 
 Os schemas são escritos em `zod` (D2) e geram os tipos TypeScript.
 Os trechos abaixo mostram campos e validações; não são o código final.
-IDs são inteiros gerados pela persistência e exibidos com prefixo: `I-12` (issue), `T-34` (ticket), `E-7` (execução), `D-3` (decisão).
+IDs são inteiros gerados pela persistência e exibidos com prefixo: `I-12` (issue), `N-5` (entrega), `T-34` (ticket), `E-7` (execução), `D-3` (decisão).
 
 ### 3.1 Primitivos
 
@@ -47,11 +49,20 @@ const Modelo = z.object({
   modelo: z.string().trim().min(1).max(200),
 });
 
-const Etapa = z.enum(["registro", "desenho", "desenvolvimento", "revisao", "encerramento", "sessao"]);
-const Fase = z.enum([
-  "registro", "desenho", "aprovacao_desenho", "desenvolvimento",
-  "revisao", "encerramento", "aprovacao_pr", "ajuste_pr", "concluida",
+const Etapa = z.enum([
+  "demanda", "planejamento",
+  "desenvolvimento", "revisao", "encerramento", "sessao",
+  "revisao_demanda", "encerramento_demanda", "sessao_final",
 ]);
+const Fase = z.enum([
+  "demanda", "aprovacao_demanda", "planejamento", "aprovacao_planejamento",
+  "execucao", "revisao_demanda", "encerramento_demanda", "aprovacao_final", "ajuste_final", "concluida",
+]);
+const FaseEntrega = z.enum([
+  "desenvolvimento", "revisao", "encerramento", "aprovacao_pr", "ajuste_pr", "concluida",
+]);
+const Ferramenta = z.enum(["pi", "claude-code", "codex"]);
+const EtapaDeEntrega = ["desenvolvimento", "revisao", "encerramento", "sessao"] as const;
 ```
 
 ### 3.2 Ator
@@ -61,11 +72,15 @@ const Ator = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("auditor") }),
   z.object({ tipo: z.literal("agente"), execucao: Id, ticket: Id }),
   z.object({ tipo: z.literal("fabriquinha") }),
+  z.object({ tipo: z.literal("externo"), ferramenta: Ferramenta, sessao: z.string().trim().min(1) }),
 ]);
 ```
 
 O agente é sempre identificado pela execução que a Fabriquinha abriu para ele (F4 passa o ID por variável de ambiente).
 Um agente só age sobre o próprio ticket e sobre a issue desse ticket, e só enquanto a sua execução está em andamento.
+O `externo` é a IA de fora da Fabriquinha que chama o CLI sem execução.
+Ela é identificada pela ferramenta e pelo identificador da sessão do harness, que o CLI lê do ambiente (F7, 3.2).
+Ela só lê e altera as issues registradas pela mesma ferramenta e sessão (`sessaoExterna`), e só até o envio da demanda (C25).
 
 ### 3.3 Projeto
 
@@ -93,8 +108,7 @@ const Projeto = z.object({
 | `testes` | Pelo menos um comando. Todos precisam sair com código 0 ("aprovação dos testes, todos"). |
 | `sonar` | Obrigatório: a evidência do SonarQube é obrigatória na implementação. |
 | `fitness` | Pelo menos uma: sem linhas, a matriz não comprova nada. Rodam no gate de desenvolvimento e na revisão. |
-| `modelos` | Provedor + modelo por etapa. Opcional: etapa sem entrada usa o padrão do pi. A existência do par é conferida no cadastro pelo F4 (`pi --list-models`). |
-| `efforts` | Effort (raciocínio da IA) por etapa, um dos níveis de `pi --thinking`. Opcional: etapa sem entrada usa o padrão do pi. Só o schema valida; o valor fora dos níveis é recusado com o caminho `efforts.<etapa>`. |
+| `modelos` | Provedor + modelo por etapa executada pelo pi (todas, menos `demanda` e `encerramento_demanda`). Opcional: etapa sem entrada usa o padrão do pi. A existência do par é conferida no cadastro pelo F4 (`pi --list-models`). |
 
 ### 3.4 Issue
 
@@ -106,6 +120,7 @@ const Issue = z.object({
   tipo: z.enum(["funcionalidade", "problema"]).nullable(),
   descricao: Markdown.default(""),
   fase: Fase,
+  sessaoExterna: z.object({ ferramenta: Ferramenta, sessao: z.string().trim().min(1) }).optional(),
   deps: z.array(Id).default([]),
   criadaEm: Instante,
   concluidaEm: Instante.optional(),
@@ -116,13 +131,45 @@ const Issue = z.object({
 
 | Campo | Regra |
 |---|---|
-| `titulo`, `tipo` | Podem faltar só na fase `registro`; o gate de registro exige os dois. |
-| `tipo` | `funcionalidade` exige protótipo no desenho; `problema` alimenta a métrica de bugs em arquivos revisados (F6). |
-| `titulo`, `tipo`, `descricao` | Ficam congelados depois do registro. Isso combate o "desvio e ampliação do que deve ser feito". |
-| `deps` | Issues de qualquer projeto. Sem ciclo e sem autorreferência. Nenhum ticket autônomo da issue roda enquanto alguma dependência não estiver `concluida`. |
+| `titulo`, `tipo` | Obrigatórios desde o registro: a IA externa chega com a demanda escrita. O schema mantém `nullable` só para as issues históricas. |
+| `tipo` | `funcionalidade` exige protótipo na demanda; `problema` alimenta a métrica de bugs em arquivos revisados (F6). |
+| `titulo`, `tipo`, `descricao` | Ficam congelados depois do envio da demanda. Isso combate o "desvio e ampliação do que deve ser feito". |
+| `deps` | Issues de qualquer projeto. Sem ciclo e sem autorreferência. O planejamento só roda quando todas as dependências estão `concluida`. |
 | `concluidaEm` | Presente se e somente se `fase = concluida`. |
 | `arquivadaEm` | Só em issue `concluida`. Arquivar não apaga nada; a issue some do board e continua acessível por opção explícita. |
 | `canceladaEm` | Só em issue que não está `concluida` (C22). A fase fica onde parou; a issue cancelada não muda mais e nada dela é apagado. |
+| `sessaoExterna` | A ferramenta e a sessão do harness que registraram a demanda (C1). Ausente só nas issues históricas. Só esse `externo` lê e altera a issue até o envio. |
+
+### 3.4.1 Entrega
+
+```ts
+const Entrega = z.object({
+  id: Id,                                   // N-n
+  issue: Id,
+  titulo: Titulo,
+  criterios: z.array(z.string().regex(/^CA-\d+$/)).min(1),
+  arquivosPrevistos: z.array(z.string().min(1)).default([]),
+  deps: z.array(Id).default([]),            // entregas da mesma issue
+  fase: FaseEntrega,
+  correcao: z.boolean().default(false),
+  criadaEm: Instante,
+  iniciadaEm: Instante.optional(),
+  concluidaEm: Instante.optional(),
+});
+```
+
+| Campo | Regra |
+|---|---|
+| `criterios` | Ids da evidência `criterios_aceite` da demanda. Cada critério da demanda está em exatamente uma entrega que não é de correção. A entrega de correção cita os critérios que reabre. |
+| `arquivosPrevistos` | Os arquivos previstos no `desenho_solucao` da demanda que cabem a esta entrega, atrelados pelo planejador como os critérios. O `arquivos_alterados` da revisão da entrega compara com eles (F3). |
+| `deps` | Entregas da mesma issue, sem ciclo. A entrega só começa quando todas as dependências estão `concluida`, isto é, mergeadas. |
+| `fase` | Só muda por comando. Nasce em `desenvolvimento`; enquanto `iniciadaEm` falta, nenhum ticket dela rodou. |
+| `correcao` | Criada pela revisão da demanda (C14 da revisão da demanda) ou pela sessão final; nasce liberada, sem gate de planejamento. |
+| `iniciadaEm` | Quando a primeira execução dela começou; é quando o F5 cria a worktree e a branch a partir da base atualizada. |
+| `concluidaEm` | Presente se e somente se `fase = concluida`: o PR dela foi aprovado e mergeado. |
+
+Antes do gate de planejamento aprovado, a árvore (entregas, tickets, critérios, arquivos previstos e dependências) é livre para o planejador e o Auditor.
+Depois dele, a árvore congela: nenhuma entrega é criada, editada ou removida, salvo a entrega de correção.
 
 ### 3.5 Ticket
 
@@ -130,12 +177,14 @@ const Issue = z.object({
 const Ticket = z.object({
   id: Id,
   issue: Id,
+  entrega: Id.optional(),
   etapa: Etapa,
   titulo: Titulo,
   descricao: Markdown.default(""),
   status: z.enum(["aberto", "em_execucao", "concluido", "falhou", "fechado", "cancelado"]),
-  origem: z.enum(["fabriquinha", "agente", "auditor"]),
+  origem: z.enum(["fabriquinha", "agente", "auditor", "externo"]),
   origemTicket: Id.optional(),
+  deps: z.array(Id).default([]),
   modelo: Modelo.optional(),
   instrucao: Markdown.optional(),
   erro: z.string().max(2000).optional(),
@@ -148,7 +197,9 @@ const Ticket = z.object({
 | Campo | Regra |
 |---|---|
 | `etapa` | Só `desenvolvimento` pode ser criado por agente ou Auditor; as demais etapas nascem de transições. |
-| `enviadoEm` | Só em `registro` e `desenho`: quando o agente enviou o resultado à aprovação (C25). Sai quando o Auditor devolve (C10, C15 reprovados). |
+| `entrega` | Presente se e somente se a etapa é `desenvolvimento`, `revisao`, `encerramento` ou `sessao`. |
+| `enviadoEm` | Só em `demanda` e `planejamento`: quando a IA externa ou o planejador enviou o resultado à aprovação (C25). No planejamento, sai quando o Auditor reprova (C15). |
+| `deps` | Só em `desenvolvimento`: tickets da mesma entrega, sem ciclo. O ticket só começa quando todas estão `concluido`. Ticket removido sai das dependências de quem dependia dele. |
 | `origemTicket` | Ticket cuja execução criou este. Obrigatório quando `origem = agente`. Alimenta "exigências de alteração" (origem numa revisão) no F6. |
 | `modelo` | Override do modelo da etapa só para este ticket. Só o Auditor define, porque modelo é custo por execução. |
 | `instrucao` | Resposta do Auditor a uma falha (C9). Abre o prompt da próxima execução e é consumida por C5 (F4, 6.4). |
@@ -156,7 +207,7 @@ const Ticket = z.object({
 | `concluidoEm` | Presente se e somente se `status = concluido`. |
 | `fechado`, `cancelado` | Só pelo C22: `fechado` é o ticket `aberto` ou `falhou` de uma issue cancelada (sem `erro`); `cancelado` é o que estava `em_execucao`. Não voltam a mudar. |
 
-A ordem de execução dos tickets de desenvolvimento é a ordem de criação; não há dependência entre tickets.
+Dentro da entrega, o próximo ticket de desenvolvimento é o primeiro aberto, em ordem de criação, cujas dependências estão concluídas.
 
 ### 3.6 Execução
 
@@ -176,7 +227,7 @@ const Execucao = z.object({
 
 | Regra |
 |---|
-| `registro`, `desenho` e `sessao` rodam em modo `interativo`; as demais etapas, em `autonomo`, inclusive quando o Auditor dispara à mão. O desenho é iniciado pelo agendador, como as autônomas, e conversa com o Auditor nas decisões relevantes. |
+| `sessao_final` roda em modo `interativo`; as demais etapas executadas pelo pi, em `autonomo`, inclusive quando o Auditor dispara à mão. `demanda` não tem execução: a IA externa trabalha fora. `encerramento_demanda` não tem execução: é a Fabriquinha que produz as evidências. |
 | `consulta` é uma conversa do Auditor sobre a sessão de qualquer ticket, sem as ferramentas embutidas de escrita (`edit`, `write`, `bash`); não muda o estado do ticket (C21). |
 | `terminadaEm` está presente se e somente se `resultado ≠ em_andamento`; `erro`, se e somente se `resultado = falha`. |
 | `modelo` é o par pedido ao pi nesta execução (3.10); ausente quando valeu o padrão do pi. O consumo real por modelo vem da sessão (F6). |
@@ -188,8 +239,9 @@ const Execucao = z.object({
 const Decisao = z.object({
   id: Id,
   issue: Id,
+  entrega: Id.optional(),
   ticket: Id,
-  gate: z.enum(["registro", "desenho", "revisao", "pr"]),
+  gate: z.enum(["demanda", "planejamento", "revisao", "pr", "revisao_demanda", "final"]),
   aprovado: z.boolean(),
   motivo: Motivo.optional(),
   nota: z.number().int().min(1).max(5).optional(),
@@ -200,10 +252,11 @@ const Decisao = z.object({
 
 | Regra |
 |---|
-| `por = agente` se e somente se `gate = revisao`. |
+| `por = agente` se e somente se `gate ∈ {revisao, revisao_demanda}`. |
 | `motivo` é obrigatório quando `aprovado = false`. |
-| `nota` é obrigatória se e somente se `gate = pr`, aprovado ou não: é o "feedback humano da qualidade". |
-| `ticket` aponta o ticket cujo resultado foi julgado: o de registro, o de desenho, o de revisão ou o de encerramento. |
+| `nota` é obrigatória se e somente se `gate ∈ {pr, final}`, aprovado ou não: é o "feedback humano da qualidade", do PR e da demanda. |
+| `entrega` está presente se e somente se `gate ∈ {revisao, pr}`. |
+| `ticket` aponta o ticket cujo resultado foi julgado: o de demanda, o de planejamento, o de revisão, o de encerramento da entrega, o de revisão da demanda ou o de encerramento da demanda. |
 | Uma decisão de revisão por ticket; registrar outra durante a mesma execução substitui a anterior. |
 
 ### 3.8 Evidência (metadados)
@@ -212,7 +265,7 @@ const Decisao = z.object({
 const Evidencia = z.object({
   ticket: Id,
   tipo: TipoEvidencia,
-  produtor: z.enum(["agente", "fabriquinha"]),
+  produtor: z.enum(["agente", "externo", "fabriquinha"]),
   aprovada: z.boolean().optional(),
   em: Instante,
 });
@@ -222,55 +275,38 @@ O conteúdo (`dados` e arquivos) e o schema de cada tipo ficam no F3.
 `aprovada` existe nos tipos em que o conteúdo tem um resultado binário (testes, SonarQube, matriz de fitness, comprovação de critérios) e é sempre calculada pelo F3; ninguém a declara.
 Há no máximo uma evidência por par (ticket, tipo); submeter de novo substitui.
 
-### 3.8.1 Proposta de issue
-
-A IA do registro ou do desenho que percebe uma mudança maior que 30 arquivos propõe uma issue nova; o Auditor aceita ou recusa.
-A proposta é um fato preso ao ticket que a fez e fica fora do agregado (como o commit do F5): o agregado da issue não a carrega.
-
-```ts
-const PropostaIssue = z.object({
-  id: Id,                                   // P-n
-  ticket: Id,                               // o ticket de registro ou desenho que a fez
-  titulo: Titulo,
-  mensagem: Markdown,                       // não vazia; vira a descrição da issue nova
-  arquivos: z.number().int().nonnegative(), // estimativa da IA
-  status: z.enum(["pendente", "aceita", "recusada"]),
-  issueCriada: Id.optional(),               // só quando aceita
-  em: Instante,
-  decididaEm: Instante.optional(),          // só quando decidida
-});
-```
-
-A regra dos 30 arquivos vive nas skills (orientação à IA).
-Nenhum código a compara com 30 e nenhum gate, comando ou validação barra a issue por passar disso.
-
 ### 3.9 Catálogo de evidências por etapa
 
 O catálogo é regra de negócio e mora aqui; o F3 implementa os schemas e os coletores.
 
 | Etapa | Tipo | Produtor | Obrigatória |
 |---|---|---|---|
-| registro | `comportamento` (vídeo e/ou código) | agente | sim |
-| registro | `criterios_aceite` | agente | sim |
-| desenho | `desenho_solucao` | agente | sim |
-| desenho | `prototipo` (protótipo + vídeo/print) | agente | se `tipo = funcionalidade` |
-| desenho | `relatorio_complexidade` | agente | sim |
-| desenho | `relatorio_impactos_arquitetura` | agente | sim |
+| demanda | `comportamento` (vídeo e/ou código) | externo | sim |
+| demanda | `criterios_aceite` | externo | sim |
+| demanda | `desenho_solucao` | externo | sim |
+| demanda | `prototipo` (protótipo + vídeo/print) | externo | se `tipo = funcionalidade` |
+| demanda | `relatorio_complexidade` | externo | sim |
+| demanda | `relatorio_impactos_arquitetura` | externo | sim |
+| demanda | `custos_realizados` | externo | sim |
+| planejamento | `arvore_planejamento` | fabriquinha | sim, gerada no envio |
 | desenvolvimento | `execucao_testes` | fabriquinha | sim, com `aprovada = true` |
 | desenvolvimento | `matriz_fitness` | fabriquinha | sim, com `aprovada = true` |
 | desenvolvimento | `relatorio_sonar` | fabriquinha | sim, com `aprovada = true` (D6) |
 | revisao | `arquivos_alterados` | fabriquinha | sim |
 | revisao | `matriz_fitness` | fabriquinha | sim |
 | revisao | `explicacao_fitness` | agente | sim, uma explicação por linha da matriz |
-| revisao | `comprovacao_criterios` | agente | sim |
+| revisao | `comprovacao_criterios` | agente | sim, dos critérios da entrega |
 | encerramento | `mensagem_pr` | agente | sim |
-| encerramento | `aula_codigo` (a lógica de cada trecho alterado; o HTML a Fabriquinha gera do git) | agente | sim |
-| encerramento | `video_demonstracao` (o sistema funcionando, só pelo cliente) | agente | não: só quando a mudança aparece no cliente, e quem decide é o agente |
-| encerramento | `relatorio_produtividade` | fabriquinha | sim |
+| encerramento | `aula_codigo` | agente | sim |
+| encerramento | `video_demonstracao` | agente | não: só quando a mudança aparece no cliente, e quem decide é o agente |
+| encerramento | `relatorio_produtividade` | fabriquinha | sim, da entrega |
 | encerramento | `pr_aberto` | fabriquinha | sim |
-| sessao | — | — | — |
+| revisao_demanda | `comprovacao_criterios` | agente | sim, de todos os critérios da demanda |
+| encerramento_demanda | `arvore_prs_criterios_custos` | fabriquinha | sim |
+| encerramento_demanda | `demonstracao_limpeza` | fabriquinha | sim |
+| sessao, sessao_final | — | — | — |
 
-O agente não pode submeter tipo cujo produtor é a Fabriquinha (princípio 2 da visão geral).
+O agente e a IA externa não podem submeter tipo cujo produtor é a Fabriquinha (princípio 2 da visão geral).
 
 ### 3.10 Escolha do modelo
 
@@ -286,21 +322,40 @@ O F4 resolve o modelo de cada execução nesta ordem e passa o par ao pi (`--pro
 
 ```mermaid
 stateDiagram-v2
-    [*] --> registro
-    registro --> desenho: gate registro aprovado
-    desenho --> aprovacao_desenho: desenho enviado (C25)
-    aprovacao_desenho --> desenvolvimento: gate desenho aprovado
-    aprovacao_desenho --> desenho: gate desenho reprovado
-    desenvolvimento --> revisao: último ticket de desenvolvimento concluído
+    [*] --> demanda
+    demanda --> aprovacao_demanda: demanda enviada (C25)
+    aprovacao_demanda --> planejamento: gate demanda aprovado
+    planejamento --> aprovacao_planejamento: planejamento enviado (C25)
+    aprovacao_planejamento --> execucao: gate planejamento aprovado
+    aprovacao_planejamento --> planejamento: gate planejamento reprovado
+    execucao --> revisao_demanda: última entrega concluída
+    revisao_demanda --> encerramento_demanda: revisão da demanda aprovada
+    revisao_demanda --> execucao: revisão da demanda reprovada (entrega de correção)
+    encerramento_demanda --> aprovacao_final: artefatos do encerramento gerados
+    aprovacao_final --> concluida: gate final aprovado
+    aprovacao_final --> ajuste_final: gate final reprovado
+    ajuste_final --> execucao: sessão final criou entrega de correção
+    concluida --> [*]
+    note right of demanda: qualquer fase, menos concluida, pode ser cancelada (C22); o gate demanda recusado cancela
+```
+
+### 4.1.1 Fases da entrega
+
+A entrega percorre o ciclo que a issue percorria até o PR.
+Ela só começa quando a issue está em `execucao` e todas as entregas de que depende estão `concluida`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> desenvolvimento
+    desenvolvimento --> revisao: último ticket de desenvolvimento da entrega concluído
     revisao --> encerramento: revisão aprovada
     revisao --> desenvolvimento: revisão reprovada
     encerramento --> aprovacao_pr: PR aberto, sem conflito e com a CI aprovada
     encerramento --> desenvolvimento: PR com conflito ou check de CI falho
     aprovacao_pr --> concluida: gate PR aprovado e merge feito
     aprovacao_pr --> ajuste_pr: gate PR reprovado
-    ajuste_pr --> desenvolvimento: sessão em aberto criou tickets
+    ajuste_pr --> desenvolvimento: sessão em aberto criou tickets na entrega
     concluida --> [*]
-    note right of registro: qualquer fase, menos concluida, pode ser cancelada (C22); a fase fica onde parou
 ```
 
 ### 4.2 Status do ticket
@@ -308,8 +363,9 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> aberto
+    [*] --> em_execucao: registrarIssue (demanda, pela IA externa)
     aberto --> em_execucao: iniciarExecucao
-    em_execucao --> concluido: concluirTicket / decidirRegistro ou decidirDesenho aprovado
+    em_execucao --> concluido: concluirTicket / decidirDemanda ou decidirPlanejamento aprovado
     em_execucao --> falhou: falharTicket
     falhou --> aberto: reabrirTicket (Auditor)
     aberto --> fechado: cancelarIssue
@@ -320,8 +376,9 @@ stateDiagram-v2
     cancelado --> [*]
 ```
 
-Ticket interativo (`registro`, `desenho`, `sessao`) nunca falha: quando o pi sai sem concluir, o ticket continua `em_execucao` e o Auditor retoma a sessão depois.
-O registro e o desenho continuam `em_execucao` também depois do envio (C25), até o Auditor decidir o gate.
+O ticket de demanda nasce `em_execucao`, sem execução: a IA externa trabalha nele até o envio, e ele fica assim até o gate da demanda.
+Ticket interativo (`sessao_final`) nunca falha: quando o pi sai sem concluir, o ticket continua `em_execucao` e o Auditor retoma a sessão depois.
+O planejamento continua `em_execucao` depois do envio (C25), até o Auditor decidir o gate.
 
 ### 4.3 Etapa × fase
 
@@ -329,12 +386,15 @@ Um ticket só inicia execução quando a fase da issue corresponde à sua etapa.
 
 | Etapa | Fase exigida |
 |---|---|
-| registro | `registro` |
-| desenho | `desenho` |
-| desenvolvimento | `desenvolvimento` |
-| revisao | `revisao` |
-| encerramento | `encerramento` |
-| sessao | `ajuste_pr` |
+| demanda | issue em `demanda` |
+| planejamento | issue em `planejamento` |
+| desenvolvimento | issue em `execucao` e entrega em `desenvolvimento` |
+| revisao | issue em `execucao` e entrega em `revisao` |
+| encerramento | issue em `execucao` e entrega em `encerramento` |
+| sessao | issue em `execucao` e entrega em `ajuste_pr` |
+| revisao_demanda | issue em `revisao_demanda` |
+| encerramento_demanda | issue em `encerramento_demanda` |
+| sessao_final | issue em `ajuste_final` |
 
 ## 5. Comandos
 
@@ -345,31 +405,33 @@ F2 carrega o agregado, aplica o comando e grava tudo numa transação só.
 
 | # | Comando | Ator | Pré-condições | Efeito |
 |---|---|---|---|---|
-| C1 | `registrarIssue(projeto, deps, descricao?, titulo?)` | Auditor | projeto existe; deps existem e não formam ciclo; descrição opcional, até 1.000 palavras; título opcional (só o C24 o informa) | Issue em `registro`, sem tipo e sem título (salvo o informado), com a descrição informada (vazia se omitida); Ticket `registro` aberto. |
-| C2 | `editarIssue(issue, {titulo, tipo, descricao})` | agente do registro ou Auditor | fase `registro` | Atualiza os campos. |
-| C3 | `adicionarDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida`; dep existe; sem ciclo; não é a própria issue | Adiciona; idempotente. |
-| C4 | `removerDependencia(issue, dep)` | agente do registro ou Auditor | fase ≠ `concluida` | Remove; idempotente. |
-| C5 | `iniciarExecucao(ticket, modo, sessaoPi)` | Fabriquinha | fase × etapa (4.3); modo × etapa (3.6); nenhum ticket da issue com execução em andamento; autônomo: ticket `aberto`, deps da issue concluídas; interativo: ticket `aberto` ou `em_execucao`, e o desenho `aberto` também exige as deps concluídas | Ticket `em_execucao`; nova Execução `em_andamento`; consome `ticket.instrucao`. |
+| C1 | `registrarIssue(projeto, deps, titulo, tipo, descricao)` | IA externa | ferramenta e sessão do harness identificadas (3.2); projeto existe; deps existem e não formam ciclo; descrição até 1.000 palavras | Issue em `demanda`, com título, tipo, descrição e `sessaoExterna`; Ticket `demanda` `em_execucao`, com `origem = externo`. |
+| C2 | `editarIssue(issue, {titulo, tipo, descricao})` | IA externa que registrou a issue | fase `demanda`; demanda não enviada | Atualiza os campos. |
+| C3 | `adicionarDependencia(issue, dep)` | IA externa que registrou a issue até o envio; Auditor | fase ∈ {`demanda`, `aprovacao_demanda`, `planejamento`, `aprovacao_planejamento`}; dep existe; sem ciclo; não é a própria issue | Adiciona; idempotente. |
+| C4 | `removerDependencia(issue, dep)` | IA externa que registrou a issue até o envio; Auditor | idem C3 | Remove; idempotente. |
+| C5 | `iniciarExecucao(ticket, modo, sessaoPi)` | Fabriquinha | fase × etapa (4.3); modo × etapa (3.6); nenhum ticket da mesma entrega com execução em andamento, ou, fora de entrega, nenhum da issue; autônomo: ticket `aberto`, deps do ticket concluídas, deps da entrega concluídas; planejamento: deps da issue concluídas; interativo: ticket `aberto` ou `em_execucao` | Ticket `em_execucao`; nova Execução `em_andamento`; consome `ticket.instrucao`; na primeira execução da entrega, grava `iniciadaEm`. |
 | C6 | `terminarExecucao(execucao, resultado, erro)` | Fabriquinha | execução `em_andamento` | Grava resultado e término. O ticket não muda. |
 | C7 | `concluirTicket(ticket)` | Fabriquinha | ticket `em_execucao`; sem execução em andamento; evidências obrigatórias (3.9); regras da etapa (tabela abaixo) | Ticket `concluido` e a transição da etapa. |
-| C8 | `falharTicket(ticket, erro)` | Fabriquinha | ticket autônomo `em_execucao`; sem execução em andamento | Ticket `falhou`; remove os tickets de desenvolvimento ainda abertos que ele criou e a decisão de revisão dele. |
+| C8 | `falharTicket(ticket, erro)` | Fabriquinha | ticket autônomo `em_execucao`; sem execução em andamento | Ticket `falhou`; remove os tickets de desenvolvimento e as entregas ainda não iniciadas que ele criou, e a decisão de revisão dele. |
 | C9 | `reabrirTicket(ticket, instrucao)` | Auditor | ticket `falhou` | Ticket `aberto`; apaga `erro`; grava `instrucao` quando informada. |
-| C10 | `decidirRegistro(issue, aprovado, motivo)` | Auditor | fase `registro`; ticket de registro enviado (C25) e sem execução em andamento; aprovado: título, tipo e evidências do registro presentes | Grava a Decisão. Aprovado: ticket de registro `concluido`, fase `desenho`, novo Ticket `desenho`. Reprovado: o ticket perde o `enviadoEm`; F4 retoma a mesma sessão com o motivo. |
-| C11 | `adicionarTicketDesenvolvimento(issue, titulo, descricao, modelo)` | agente de `desenho`, `revisao` ou `sessao` da mesma issue; Auditor na fase `aprovacao_desenho` | `modelo` só quando o ator é o Auditor | Ticket `desenvolvimento` aberto, com `origem` e `origemTicket`. |
-| C12 | `editarTicket(ticket, {titulo, descricao})` | quem pode criá-lo (C11) | ticket `desenvolvimento` `aberto`; o agente só edita os que a sua execução criou | Atualiza. |
-| C13 | `removerTicket(ticket)` | idem C12 | idem C12 | Remove. |
-| C14 | `registrarDecisaoRevisao(ticket, aprovado, motivo)` | agente da revisão | ticket `revisao` `em_execucao` | Grava ou substitui a Decisão de revisão. |
-| C15 | `decidirDesenho(issue, aprovado, motivo)` | Auditor | fase `aprovacao_desenho`; ticket de desenho enviado (C25) e sem execução em andamento; aprovado: há ticket de desenvolvimento aberto | Grava a Decisão. Aprovado: ticket de desenho `concluido`, fase `desenvolvimento`. Reprovado: fase `desenho`, o ticket perde o `enviadoEm` e os tickets propostos ficam; F4 retoma a mesma sessão com o motivo. |
-| C16 | `decidirPR(issue, aprovado, nota, motivo)` | Auditor | fase `aprovacao_pr`; aprovado: o merge já foi feito (F5 chama depois do merge) | Grava a Decisão. Aprovado: fase `concluida`, `concluidaEm`. Reprovado: fase `ajuste_pr`, novo Ticket `sessao` com o motivo na descrição. |
-| C17 | `registrarEvidencia(ticket, tipo, aprovada)` | agente do ticket, para tipo de produtor agente; Fabriquinha, para os demais | ticket `em_execucao` e sem `enviadoEm` (enviado ao gate, só volta se o Auditor reprovar); o tipo pertence à etapa do ticket (3.9) | Grava ou substitui os metadados. O conteúdo já foi validado pelo F3. |
+| C10 | `decidirDemanda(issue, aprovado, motivo)` | Auditor | fase `aprovacao_demanda`; ticket de demanda enviado (C25) | Grava a Decisão. Aprovado: ticket de demanda `concluido`, fase `planejamento`, novo Ticket `planejamento`. Recusado: aplica o C22 com o motivo; a demanda não volta à IA. |
+| C11 | `adicionarTicketDesenvolvimento(entrega, titulo, descricao, deps, modelo)` | agente de `planejamento` da issue antes do envio; agente de `revisao` ou `sessao` da mesma entrega; agente de `revisao_demanda` ou `sessao_final` numa entrega de correção que ele criou; Auditor na fase `aprovacao_planejamento` | `modelo` só quando o ator é o Auditor; deps na mesma entrega e sem ciclo; fora do planejamento, a entrega não está `concluida` | Ticket `desenvolvimento` aberto, com `origem` e `origemTicket`. |
+| C12 | `editarTicket(ticket, {titulo, descricao, deps})` | quem pode criá-lo (C11) | ticket `desenvolvimento` `aberto`; o agente só edita os que a sua execução criou | Atualiza. |
+| C13 | `removerTicket(ticket)` | idem C12 | idem C12 | Remove e o tira das dependências de quem dependia dele. |
+| C14 | `registrarDecisaoRevisao(ticket, aprovado, motivo)` | agente da revisão da entrega ou da revisão da demanda | ticket `revisao` ou `revisao_demanda` `em_execucao` | Grava ou substitui a Decisão de revisão. |
+| C15 | `decidirPlanejamento(issue, aprovado, motivo)` | Auditor | fase `aprovacao_planejamento`; ticket de planejamento enviado (C25) e sem execução em andamento; aprovado: todo critério da demanda numa entrega e toda entrega com pelo menos um ticket | Grava a Decisão. Aprovado: ticket de planejamento `concluido`, fase `execucao`, a árvore congela. Reprovado: fase `planejamento`, o ticket perde o `enviadoEm` e a árvore proposta fica; F4 retoma a mesma sessão com o motivo. |
+| C16 | `decidirPR(entrega, aprovado, nota, motivo)` | Auditor | entrega em `aprovacao_pr`; aprovado: o merge já foi feito (F5 chama depois do merge) | Grava a Decisão. Aprovado: entrega `concluida`, `concluidaEm`; se era a última não concluída, fase `revisao_demanda` e novo Ticket `revisao_demanda`. Reprovado: entrega em `ajuste_pr`, novo Ticket `sessao` da entrega com o motivo na descrição. |
+| C17 | `registrarEvidencia(ticket, tipo, aprovada)` | agente do ticket ou a IA externa que registrou a issue, para o tipo do seu produtor; Fabriquinha, para os demais | ticket `em_execucao` e não enviado; o tipo pertence à etapa do ticket (3.9) | Grava ou substitui os metadados. O conteúdo já foi validado pelo F3. |
 | C18 | `arquivarConcluidas(projeto)` | Auditor | — | `arquivadaEm` em toda issue `concluida` do projeto ainda não arquivada. |
 | C19 | `registrarProjeto(projeto)` / `editarProjeto(projeto)` | Auditor | schema 3.3; F5 já conferiu repo, branch e remoto; F4 já conferiu os modelos | Grava. |
 | C21 | `iniciarConsulta(ticket, sessaoPi)` | Auditor | o ticket já tem sessão principal; nenhuma execução do ticket em andamento (índice do F2); `sessaoPi` é a nova sessão copiada dela | Nova Execução em modo `consulta`. O ticket não muda. |
 | C20 | `definirModeloTicket(ticket, modelo \| null)` | Auditor | ticket não concluído e sem execução em andamento | Define ou remove o override; vale a partir da próxima execução. |
-| C22 | `cancelarIssue(issue)` | Auditor | fase ≠ `concluida`; ainda não cancelada | `canceladaEm`; tickets `aberto` e `falhou` viram `fechado` (sem `erro`), o `em_execucao` vira `cancelado`; execução `em_andamento` termina em `falha` com o erro `issue cancelada pelo Auditor`. A F2 aplica o mesmo comando a toda issue que dependa dela, direta ou indiretamente e de qualquer projeto, numa transação só; as issues de que ela depende não mudam. |
-| C23 | `proporIssue(issue, titulo, mensagem, arquivos)` | agente de `registro` ou `desenho` da issue (o Auditor não) | execução do agente `em_andamento` e não consulta | Cria a Proposta `pendente`, presa ao ticket do agente (3.8.1). A issue não muda. |
-| C24 | `decidirProposta(proposta, aceita)` | Auditor | proposta `pendente` (senão `a proposta P-n já foi decidida: …`); o ticket dela está no gate atual: o de registro com a issue em `registro`, ou o desenho enviado (em execução) com a issue em `aprovacao_desenho` | Recusada: só marca a proposta. Aceita: aplica o C1 (mesmo projeto, `deps [issue atual]`, `titulo`, `descricao = mensagem`) e marca a proposta `aceita` com `issueCriada`. Quando nenhuma outra proposta do gate segue aberta, devolve o `lote` fechado: o último de `lotes(propostas do ticket)`, com a decidida já atualizada. `lotes` é função pura, sem coluna nova: percorre por id e começa um lote novo quando a proposta nasce depois do maior `decididaEm` do lote corrente, com todas as do lote decididas. No desenho, o C15 reprovado só se aplica quando o lote fecha (aceites, recusas ou os dois; o Auditor decidiu divergir do CA-8 do registro nesse ponto): com um só aceite, o motivo é `A Fabriquinha criou a I-n («título») a partir da proposta de issue aceita pelo Auditor. Refaça o desenho sem o que a I-n assumiu; leia a descrição dela com fabriquinha issue ver I-n.`; senão, `O Auditor decidiu as propostas de issue do desenho:` + uma linha por proposta (`- P-n «título»: aceita; a Fabriquinha criou a I-m a partir dela (leia com fabriquinha issue ver I-m).` ou `- P-n «título»: recusada; a parte dela continua na I-k.`) + `Ajuste o desenho conforme essas decisões.` |
-| C25 | `enviarParaAprovacao(ticket)` | agente do próprio ticket de `registro` ou `desenho`, com a execução em andamento | ainda não enviado; registro: título, tipo e evidências; desenho: evidências e pelo menos um ticket de desenvolvimento criado por ele | `enviadoEm`; o desenho vai à fase `aprovacao_desenho`. O agente só envia depois de o Auditor confirmar na conversa (instrução da etapa). |
+| C22 | `cancelarIssue(issue, motivo?)` | Auditor; Fabriquinha pelo C10 recusado | fase ≠ `concluida`; ainda não cancelada | `canceladaEm`; tickets `aberto` e `falhou` viram `fechado` (sem `erro`), os `em_execucao` viram `cancelado`; toda execução `em_andamento` da issue termina em `falha` com o erro `issue cancelada pelo Auditor`. Não existe cancelar uma entrega sozinha. A F2 aplica o mesmo comando a toda issue que dependa dela, direta ou indiretamente e de qualquer projeto, numa transação só; as issues de que ela depende não mudam. |
+| C25 | `enviarParaAprovacao(ticket)` | IA externa que registrou a issue, no ticket de `demanda`; agente do próprio ticket de `planejamento`, com a execução em andamento | ainda não enviado; demanda: evidências de 3.9; planejamento: todo critério numa entrega e toda entrega com pelo menos um ticket | `enviadoEm`; a demanda vai à fase `aprovacao_demanda`; o planejamento gera a `arvore_planejamento` e vai à fase `aprovacao_planejamento`. |
+| C26 | `adicionarEntrega(issue, titulo, criterios, arquivosPrevistos, deps)` | agente de `planejamento` antes do envio; Auditor em `aprovacao_planejamento`; agente de `revisao_demanda` ou `sessao_final` (entrega de correção) | critérios existem na demanda; arquivos previstos constam do `desenho_solucao`; deps da mesma issue e sem ciclo; fora do planejamento, só como correção | Entrega em `desenvolvimento`; `correcao = true` quando criada fora do planejamento. |
+| C27 | `editarEntrega(entrega, {titulo, criterios, arquivosPrevistos, deps})` | quem pode criá-la (C26) | entrega sem `iniciadaEm`; antes do gate de planejamento aprovado, ou entrega de correção criada pelo mesmo ticket | Atualiza. |
+| C28 | `removerEntrega(entrega)` | idem C27 | idem C27 | Remove a entrega, os tickets dela e a tira das dependências de quem dependia dela. |
+| C29 | `decidirFinal(issue, aprovado, nota, motivo)` | Auditor | fase `aprovacao_final` | Grava a Decisão. Aprovado: fase `concluida`, `concluidaEm`. Reprovado: fase `ajuste_final`, novo Ticket `sessao_final` com o motivo na descrição. |
 
 Depois do C22 a F2 recusa qualquer outro comando sobre a issue (`a I-n está cancelada e não muda mais`).
 Tokens, custo, tickets, execuções, decisões e evidências continuam consultáveis e contando nas métricas.
@@ -378,25 +440,30 @@ Tokens, custo, tickets, execuções, decisões e evidências continuam consultá
 
 | Etapa | Regra adicional | Transição |
 |---|---|---|
-| desenvolvimento | tem commit registrado (F5) | se não sobrar ticket de desenvolvimento não concluído na issue: fase `revisao` e novo Ticket `revisao`; senão, a fase continua |
-| revisao | tem Decisão de revisão; aprovada ⇒ não criou tickets, `comprovacao_criterios.aprovada` e `matriz_fitness.aprovada` (F3, seção 8); reprovada ⇒ criou pelo menos um | aprovada: fase `encerramento` e novo Ticket `encerramento`; reprovada: fase `desenvolvimento` |
-| encerramento | `ctx.problemasPR` presente (a coleta verificou o PR, F5 §5.1) | sem conflito e sem check falho: fase `aprovacao_pr`; com conflito ou check falho: fase `desenvolvimento` e novo Ticket `desenvolvimento` (origem `fabriquinha`) que resolve o conflito com a base ou corrige os checks |
-| sessao | criou pelo menos um ticket de desenvolvimento | fase `desenvolvimento` |
-| registro | não usa C7; conclui por C10 | — |
-| desenho | não usa C7; conclui por C15 | — |
+| desenvolvimento | tem commit registrado (F5) | se não sobrar ticket de desenvolvimento não concluído na entrega: entrega em `revisao` e novo Ticket `revisao` da entrega; senão, a entrega continua |
+| revisao | tem Decisão de revisão; aprovada ⇒ não criou tickets, `comprovacao_criterios.aprovada` e `matriz_fitness.aprovada` (F3, seção 8); reprovada ⇒ criou pelo menos um | aprovada: entrega em `encerramento` e novo Ticket `encerramento` da entrega; reprovada: entrega em `desenvolvimento` |
+| encerramento | `ctx.problemasPR` presente (a coleta verificou o PR, F5 §5.1) | sem conflito e sem check falho: entrega em `aprovacao_pr`; com conflito ou check falho: entrega em `desenvolvimento` e novo Ticket `desenvolvimento` (origem `fabriquinha`) que resolve o conflito com a base ou corrige os checks |
+| sessao | criou pelo menos um ticket de desenvolvimento na entrega | entrega em `desenvolvimento` |
+| revisao_demanda | tem Decisão de revisão; aprovada ⇒ não criou entrega e `comprovacao_criterios.aprovada`; reprovada ⇒ criou pelo menos uma entrega de correção com ticket | aprovada: fase `encerramento_demanda` e novo Ticket `encerramento_demanda`; reprovada: fase `execucao` |
+| encerramento_demanda | `arvore_prs_criterios_custos` e `demonstracao_limpeza` presentes | fase `aprovacao_final` |
+| sessao_final | criou pelo menos uma entrega de correção com ticket | fase `execucao` |
+| demanda | não usa C7; conclui por C10 | — |
+| planejamento | não usa C7; conclui por C15 | — |
 
 ## 6. Invariantes
 
 Valem depois de qualquer comando; F2 reforça as que cabem em constraint de banco.
 
-1. No máximo um ticket `em_execucao` por issue.
-2. Etapas diferentes de `desenvolvimento` têm no máximo um ticket não concluído por issue.
-3. No máximo uma execução `em_andamento` por issue.
-4. Dependências entre issues não formam ciclo.
-5. Fora da fase `registro`, a issue tem título e tipo.
+1. No máximo um ticket `em_execucao` por entrega; fora de entrega, no máximo um por issue, e nunca junto com um de entrega.
+2. Etapas diferentes de `desenvolvimento` têm no máximo um ticket não concluído por entrega (as de entrega) ou por issue (as demais).
+3. No máximo uma execução `em_andamento` por entrega; fora de entrega, no máximo uma por issue.
+4. Dependências entre issues, entre entregas e entre tickets não formam ciclo; entre entregas, só na mesma issue; entre tickets, só na mesma entrega.
+5. Toda issue tem título e tipo, salvo as históricas anteriores à D12.
 6. `arquivadaEm` implica `fase = concluida`.
-7. Toda decisão de gate humano tem `por = auditor`; a de revisão tem `por = agente`.
+7. Toda decisão de gate humano tem `por = auditor`; a de revisão e a de revisão da demanda têm `por = agente`.
 8. `canceladaEm` implica `fase ≠ concluida`; issue cancelada não tem ticket `aberto`, `falhou` ou `em_execucao`, nem execução `em_andamento`.
+9. Fora das fases `demanda`, `aprovacao_demanda` e `planejamento`, todo critério da demanda está em exatamente uma entrega que não é de correção.
+10. A issue em `revisao_demanda` ou adiante tem todas as entregas `concluida`.
 
 ## 7. Erros
 
@@ -415,3 +482,5 @@ O agente lê esse texto e corrige sem precisar adivinhar (Feedback.txt, item 1).
   O CLI não tem comando de Auditor (D9), mas um agente determinado poderia ler o `web.url` com o token ou escrever direto no banco.
   Isolamento de verdade exige rodar o pi com outro usuário ou em contêiner; fica fora desta versão.
 - Não há exclusão de issue (Q2). Uma issue registrada por engano se cancela (C22), mas continua no histórico.
+- A identidade da IA externa é a ferramenta e o identificador da sessão do harness que o CLI lê do ambiente (3.2), sem segredo.
+  Ela basta para uma IA não alterar por engano a demanda de outra sessão, mas não impede quem forjar as variáveis de ambiente; o mesmo vale para o agente.

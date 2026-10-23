@@ -7,11 +7,11 @@ Usado por: F3 (diff, descarte, commit, PR), F4 (worktree antes de cada execuçã
 ## 1. Responsabilidade
 
 - Conferir, no cadastro, que o projeto é um repositório git utilizável e descobrir onde ele é hospedado.
-- Dar a cada issue a sua worktree e a sua branch (princípio 7), com as dependências instaladas.
+- Dar a cada entrega a sua worktree e a sua branch (princípio 7), com as dependências instaladas, e ao planejamento, à revisão da demanda e à sessão final uma worktree temporária só para leitura.
 - Fazer o commit de cada ticket de desenvolvimento aprovado no gate e registrar o que ele mudou.
 - Descartar o que as outras etapas alteraram.
 - Abrir, atualizar e fazer o merge do PR no GitHub ou no Azure DevOps.
-- Limpar worktree e branches quando a issue termina ("trabalhos encerrados sem limpeza").
+- Limpar worktree e branches quando a entrega é mergeada, e provar no encerramento da demanda que nada sobrou ("trabalhos encerrados sem limpeza").
 
 Todo comando externo (`git`, `gh`, `az`) roda com `spawn` e argumentos em lista, sem shell.
 Assim, título de ticket e corpo de PR nunca são interpretados como comando.
@@ -40,13 +40,16 @@ Qualquer outro host (GitHub Enterprise, GitLab, Bitbucket) é recusado no cadast
 A hospedagem descoberta é gravada em `projeto.hospedagem` (F1, 3.3).
 `gh` e `az repos ... --detect true` descobrem dono, organização e repositório pelo próprio remoto, então não há mais nada a guardar.
 
-## 3. Worktree da issue
+## 3. Worktree da entrega
 
-| Item | Valor |
-|---|---|
-| Caminho | `<raiz>/worktrees/<projeto>/I-<n>` |
-| Branch | `fabriquinha/I-<n>` |
-| Ponto de partida | `origin/<branchBase>`, buscado com `git fetch` na criação |
+| Item | Entrega | Temporária (planejamento, revisão da demanda, sessão final) |
+|---|---|---|
+| Caminho | `<raiz>/worktrees/<projeto>/I-<n>/N-<k>` | `<raiz>/worktrees/<projeto>/I-<n>/T-<t>` |
+| Branch | `fabriquinha/I-<n>-N-<k>` | nenhuma: `git worktree add --detach` |
+| Ponto de partida | `origin/<branchBase>`, buscado com `git fetch` quando a entrega começa (todas as dependências já mergeadas) | `origin/<branchBase>`, buscado com `git fetch` na criação |
+
+Entregas sem dependência pendente têm worktrees ao mesmo tempo, uma por entrega.
+A entrega dependente só ganha a worktree depois do merge das dependências, partindo da base que já as contém; não há PR empilhado.
 
 A worktree fica **fora** do repositório de propósito.
 Dentro dele, o test runner e o mutation testing do próprio repositório varreriam as worktrees; foi o que levou ao ajuste do `.worktrees` no Stryker do issues-local.
@@ -55,24 +58,26 @@ Dentro dele, o test runner e o mutation testing do próprio repositório varreri
 
 ```mermaid
 stateDiagram-v2
-    [*] --> criada: registro (F4, 6.6)
+    [*] --> criada: primeira execução da entrega (C5)
     criada --> preparada: projeto.preparacao OK
     criada --> criada: preparação falhou (mostra o log; tenta de novo na próxima execução)
     preparada --> preparada: commits dos tickets de desenvolvimento
-    preparada --> removida: PR mergeado (C16 aprovado)
+    preparada --> removida: PR da entrega mergeado (C16 aprovado)
     removida --> [*]
 ```
 
-`garantirWorktree`, chamado pelo F4 antes de toda execução:
+`garantirWorktree(projeto, ticket)`, chamado pelo F4 antes de toda execução:
 
 1. Se a worktree existe e está preparada, devolve o caminho.
-2. Se não existe e a branch também não existe: `git fetch origin <branchBase>` e `git worktree add -b fabriquinha/I-<n> <caminho> origin/<branchBase>`.
-3. Se não existe, mas a branch existe (alguém apagou a pasta): `git worktree prune` e `git worktree add <caminho> fabriquinha/I-<n>`.
-4. Só no início do desenho (`atualizarBase`), com a branch já existente: `git fetch origin <branchBase>` (quando falha, o ticket falha e o `HEAD` não muda) e `git merge --no-edit origin/<branchBase>` na worktree. Se o merge falha, roda `git merge --abort` e o ticket falha com o conflito e a pasta a resolver; o commit próprio da issue fica. As retomadas do desenho e as outras etapas não atualizam.
+2. Se não existe e a branch também não existe: `git fetch origin <branchBase>` e `git worktree add -b fabriquinha/I-<n>-N-<k> <caminho> origin/<branchBase>`.
+3. Se não existe, mas a branch existe (alguém apagou a pasta, ou o serviço reiniciou): `git worktree prune` e `git worktree add <caminho> fabriquinha/I-<n>-N-<k>`.
+4. Temporária: `git fetch origin <branchBase>` e `git worktree add --detach <caminho> origin/<branchBase>`; se já existe (retomada), devolve o caminho.
 5. Roda a preparação (3.2) sempre que a worktree acabou de ser criada ou a última preparação falhou.
 6. Se buscou a base no passo 2 ou 4, chama `varrerBase` (F6, 4.4); falha só vai para o log.
 
-Se a branch `fabriquinha/I-<n>` já existe sem pertencer à issue (sobra de outra instalação), o F5 recusa e pede ao Auditor para removê-la; nunca sobrescreve.
+Se a branch `fabriquinha/I-<n>-N-<k>` já existe sem pertencer à entrega (sobra de outra instalação), o F5 recusa e pede ao Auditor para removê-la; nunca sobrescreve.
+
+`removerTemporaria(projeto, ticket)` roda `git worktree remove --force <caminho>` e `git worktree prune`; o F4 chama no gate do planejamento aprovado e ao fim da revisão da demanda e da sessão final.
 
 ### 3.2 Preparação
 
@@ -80,8 +85,8 @@ Se a branch `fabriquinha/I-<n>` já existe sem pertencer à issue (sobra de outr
 - Limite de 30 minutos por comando, como os coletores do F3.
 - O log vai para `<raiz>/execucoes/E-<n>/log` da execução que pediu a worktree.
 - A preparação precisa poder rodar de novo sem estrago (`npm ci`, `uv sync`), porque roda outra vez depois de uma falha.
-- Ela roda de novo quando o merge do passo 4 de 3.1 muda o `HEAD`, porque a base pode ter mudado as dependências.
-- Ela não roda de novo quando o agente muda dependências no meio da issue; nesse caso, o próprio agente instala o que adicionou.
+- A worktree da entrega nasce da base atualizada e não é atualizada depois; conflito com a base aparece na verificação do PR (5.1) e volta como ticket de desenvolvimento.
+- Ela não roda de novo quando o agente muda dependências no meio da entrega; nesse caso, o próprio agente instala o que adicionou.
 
 ### 3.3 Descarte
 
@@ -129,7 +134,7 @@ Três camadas garantem isso:
 |---|---|---|
 | Sem credencial | O pi roda sem as credenciais do `gh` e do `az` (F4, 6.1.2). Os comandos de PR da Fabriquinha rodam no ambiente do serviço, que está autenticado. | `gh pr create`, `az repos pr create` e chamadas de API feitas pelo CLI |
 | Guarda no pi | A extensão `guarda` (P1) recusa, no evento `tool_call`, comando bash que crie, edite ou faça merge de PR (`gh pr create\|new\|edit\|merge`, `az repos pr create\|update`, `gh api` em `/pulls`). A mensagem diz: "Somente a Fabriquinha cria PR; termine o ticket e ela publica no encerramento." | a tentativa, com uma resposta que o agente entende |
-| Conferência | Antes de criar o PR (5.1), o F5 lista os PRs da branch `fabriquinha/I-<n>` na hospedagem. Se existir um que não está na evidência `pr_aberto`, o encerramento falha com "PR criado fora da Fabriquinha: <url>; feche-o e reabra o ticket". | o que escapou das duas primeiras |
+| Conferência | Antes de criar o PR (5.1), o F5 lista os PRs da branch `fabriquinha/I-<n>-N-<k>` na hospedagem. Se existir um que não está na evidência `pr_aberto`, o encerramento falha com "PR criado fora da Fabriquinha: <url>; feche-o e reabra o ticket". | o que escapou das duas primeiras |
 
 Limite: o agente roda com o mesmo usuário do sistema que o Auditor (F1, seção 8).
 Um agente determinado poderia ler o token salvo do `gh` e chamar a API direto; a conferência é o que pega esse caso.
@@ -138,8 +143,8 @@ Um agente determinado poderia ler o token salvo do `gh` e chamar a API direto; a
 
 No encerramento, depois do descarte (F3, seção 7):
 
-1. `git push -u origin fabriquinha/I-<n>`, depois `git fetch origin <branchBase>` e `varrerBase` (F6, 4.4), cuja falha só vai para o log.
-2. Se a issue ainda não tem PR, cria; se já tem (nova volta depois de um PR reprovado), atualiza título e corpo inteiros (F3, 4.6).
+1. `git push -u origin fabriquinha/I-<n>-N-<k>`, depois `git fetch origin <branchBase>` e `varrerBase` (F6, 4.4), cuja falha só vai para o log.
+2. Se a entrega ainda não tem PR, cria; se já tem (nova volta depois de um PR reprovado), atualiza título e corpo inteiros (F3, 4.6).
 3. Lê o número e a URL e devolve ao F3, que grava `pr_aberto`.
 4. Verifica o PR: lê na plataforma o conflito com a `branchBase` e os checks de CI, e espera a plataforma decidir.
    - Com conflito, devolve na hora (os checks não importam).
@@ -151,11 +156,11 @@ No encerramento, depois do descarte (F3, seção 7):
 
 | Ação | GitHub | Azure DevOps |
 |---|---|---|
-| Criar | `gh pr create --base <branchBase> --head fabriquinha/I-<n> --title <t> --body-file <arquivo>` | `az repos pr create --detect true --source-branch fabriquinha/I-<n> --target-branch <branchBase> --title <t> --description <corpo> --output json` |
+| Criar | `gh pr create --base <branchBase> --head fabriquinha/I-<n>-N-<k> --title <t> --body-file <arquivo>` | `az repos pr create --detect true --source-branch fabriquinha/I-<n>-N-<k> --target-branch <branchBase> --title <t> --description <corpo> --output json` |
 | Atualizar | `gh pr edit <n> --title <t> --body-file <arquivo>` | `az repos pr update --id <n> --title <t> --description <corpo> --output json` |
 | Ler estado | `gh pr view <n> --json number,url,state` | `az repos pr show --id <n> --output json` |
 | Ler situação | `gh pr view <n> --json mergeable,statusCheckRollup` | `az repos pr show --id <n> --output json` (`mergeStatus`) e `az repos pr policy list --id <n> --detect true --output json` |
-| Listar PRs da branch (5.0) | `gh pr list --head fabriquinha/I-<n> --state all --json number,url` | `az repos pr list --detect true --source-branch fabriquinha/I-<n> --status all --output json` |
+| Listar PRs da branch (5.0) | `gh pr list --head fabriquinha/I-<n>-N-<k> --state all --json number,url` | `az repos pr list --detect true --source-branch fabriquinha/I-<n>-N-<k> --status all --output json` |
 
 O corpo vem do F3 já condensado para o limite da hospedagem (F3, 4.7).
 
@@ -181,7 +186,7 @@ Quando o Auditor aprova o PR no web, o F5 faz o merge **antes** de C16; C16 só 
    - GitHub: `gh pr merge <n> --merge`;
    - Azure DevOps: `az repos pr update --id <n> --status completed --squash false --delete-source-branch true`.
 3. Lê o estado de novo; só segue se estiver mergeado (`MERGED` no GitHub, `completed` no Azure DevOps).
-4. C16 aprovado, e depois a limpeza (5.3).
+4. C16 aprovado, e depois a limpeza da entrega (5.3).
 
 Se o merge não acontece (conflito com a base, política de branch, revisor obrigatório ou build pendente), nenhuma decisão é gravada.
 O web mostra a mensagem da plataforma.
@@ -192,24 +197,27 @@ A Fabriquinha nunca atualiza a branch sozinha, porque só ticket de desenvolvime
 
 ### 5.3 Limpeza
 
-Depois do merge:
+Depois do merge de cada entrega:
 
 ```
-git -C <repo> worktree remove --force <caminho>
-git -C <repo> branch -D fabriquinha/I-<n>
-git -C <repo> push origin --delete fabriquinha/I-<n>    # ignora "não existe": o Azure já pode ter apagado
+git -C <repo> worktree remove --force <caminho da entrega>
+git -C <repo> branch -D fabriquinha/I-<n>-N-<k>
+git -C <repo> push origin --delete fabriquinha/I-<n>-N-<k>    # ignora "não existe": o Azure já pode ter apagado
 git -C <repo> worktree prune
 ```
 
-Evidências, sessões do pi e logs ficam: são o histórico da issue.
-Uma falha na limpeza não desfaz a aprovação; vira aviso no web com o comando que falhou.
+A rotina é idempotente: o que já não existe é ignorado.
+O encerramento da demanda a roda de novo para todas as entregas e worktrees temporárias da issue, e também depois do C22, e registra o que sobrou na `demonstracao_limpeza` (F3, 4.5.1).
 
-Na mesma fila do projeto, depois do `prune`, a `main` local (a `branchBase`) avança até `origin/<base>` só por fast-forward, sem stash, reset nem merge commit. Sem `refs/heads/<base>` local, não há o que fazer. Com a base em checkout (`git worktree list --porcelain`), roda `git merge --ff-only` nessa pasta; sem checkout, confere `git merge-base --is-ancestor` e roda `git update-ref` com o sha antigo. Quando não dá (a base tem commits que `origin/<base>` não tem, ou o merge colide com alterações locais), o encerramento conclui e a resposta traz o aviso "a <base> local não foi atualizada com origin/<base>", com o motivo e a saída do git. O aviso fica só na resposta.
+Evidências, sessões do pi e logs ficam: são o histórico da demanda.
+Uma falha na limpeza depois do merge não desfaz a aprovação; vira aviso no web com o comando que falhou, e a demonstração do encerramento a pega de novo.
+
+Na mesma fila do projeto, depois do `prune`, a `main` local (a `branchBase`) avança até `origin/<base>` só por fast-forward, sem stash, reset nem merge commit. Sem `refs/heads/<base>` local, não há o que fazer. Com a base em checkout (`git worktree list --porcelain`), roda `git merge --ff-only` nessa pasta; sem checkout, confere `git merge-base --is-ancestor` e roda `git update-ref` com o sha antigo. Quando não dá (a base tem commits que `origin/<base>` não tem, ou o merge colide com alterações locais), a limpeza conclui e a resposta traz o aviso "a <base> local não foi atualizada com origin/<base>", com o motivo e a saída do git. O aviso fica só na resposta.
 
 ## 6. Concorrência
 
 Todos os comandos git de um mesmo repositório passam por uma fila em memória por projeto, no próprio serviço.
-Como só o serviço roda git (F4, seção 2), isso basta para que uma worktree sendo criada no registro não dispute os locks de referência com o commit de uma execução autônoma.
+Como só o serviço roda git (F4, seção 2), isso basta para que worktrees de entregas paralelas sendo criadas não disputem os locks de referência com o commit de outra entrega.
 
 ponytail: fila em memória, válida porque há uma instância só (D10).
 
@@ -245,13 +253,14 @@ O PR não tem tabela: número, URL e estado ficam na evidência `pr_aberto` (F3)
 | Função | Quem chama |
 |---|---|
 | `conferirProjeto(dados)` → `{ hospedagem }` ou erro | F7, antes de C19 |
-| `garantirWorktree(projeto, issue)` → caminho | F4, antes de toda execução |
+| `garantirWorktree(projeto, ticket)` → caminho | F4, antes de toda execução; da entrega ou temporária, conforme a etapa |
+| `removerTemporaria(projeto, ticket)` | F4, no gate do planejamento aprovado e ao fim da revisão da demanda e da sessão final |
 | `descartarAlteracoes(worktree)` → caminhos removidos | F3, depois do pi nas etapas sem código |
-| `commitarTicket(projeto, issue, ticket)` → `{ sha, arquivos }` | F3, depois dos gates de desenvolvimento |
-| `diffDaIssue(projeto, issue)` → arquivos alterados desde `merge-base(origin/<branchBase>, HEAD)` | F3, coletor de arquivos alterados |
-| `publicarPR(projeto, issue, titulo, corpo)` → `{ id, url }` | F3, coletor do PR |
-| `mergearPR(projeto, issue)` | F7, gate do PR |
-| `limpar(projeto, issue)` | F7, depois de C16 aprovado |
+| `commitarTicket(projeto, entrega, ticket)` → `{ sha, arquivos }` | F3, depois dos gates de desenvolvimento |
+| `diffDaEntrega(projeto, entrega)` → arquivos alterados desde `merge-base(origin/<branchBase>, HEAD)` | F3, coletor de arquivos alterados |
+| `publicarPR(projeto, entrega, titulo, corpo)` → `{ id, url }` | F3, coletor do PR |
+| `mergearPR(projeto, entrega)` | F7, gate do PR |
+| `limpar(projeto, issue, entrega?)` → o que sobrou | F7, depois de C16 aprovado (uma entrega); F3, no encerramento da demanda e depois do C22 (todas) |
 | `heatmapDo(projeto, agora?)` → `Heatmap` ou erro | F7, rota do heatmap da página Projetos |
 
 ## 9. Verificação

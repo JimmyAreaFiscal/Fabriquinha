@@ -1,6 +1,6 @@
 // Ponta a ponta do ciclo do desenvolvimento, da revisão e do encerramento (F3 §7, F5 §4, §5, F1 §5.1) por
-// `executarAutonomo`, contra banco real e git real, com falsos só para os binários externos: o pi, o docker do
-// sonar-scanner, o servidor do SonarQube e o gh.
+// `executarAutonomo`, contra banco real e git real, com falsos só para os binários externos: o pi, o sonar-scanner,
+// o servidor do SonarQube e o gh.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -170,16 +170,16 @@ export default async function () {
 `,
 );
 
-// docker falso no PATH: o "scanner" só informa a tarefa do Compute Engine.
+// sonar-scanner falso no PATH: só informa a tarefa do Compute Engine.
 mkdirSync(join(base, "bin"));
 writeFileSync(
-  join(base, "bin", "docker"),
+  join(base, "bin", "sonar-scanner"),
   `#!/bin/sh
 for a; do case $a in -Dsonar.working.directory=*) w=\${a#*=};; esac; done
 printf 'ceTaskId=AX1\\n' > "$w/report-task.txt"
 `,
 );
-chmodSync(join(base, "bin", "docker"), 0o755);
+chmodSync(join(base, "bin", "sonar-scanner"), 0o755);
 process.env.PATH = `${join(base, "bin")}${delimiter}${String(process.env.PATH)}`;
 
 // SonarQube falso: no ar, tarefa pronta e as issues de `issuesSonar`; conta as análises pedidas.

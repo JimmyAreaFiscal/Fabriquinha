@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { tmpdir, userInfo } from "node:os";
+import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
@@ -34,18 +34,21 @@ writeFileSync(join(base, "gitconfig"), "[user]\n\tname = Auditor\n\temail = audi
 process.env.GIT_CONFIG_GLOBAL = join(base, "gitconfig");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
-// docker falso no PATH: grava os argumentos e o token que recebeu e imita o scanner conforme DOCKER_FALSO.
+// sonar-scanner falso no PATH: grava os argumentos, a pasta e o ambiente que recebeu e imita o scanner conforme
+// SCANNER_FALSO.
 const bin = join(base, "bin");
-const ARGS = join(base, "docker.args");
+const ARGS = join(base, "scanner.args");
 mkdirSync(bin);
 writeFileSync(
-  join(bin, "docker"),
+  join(bin, "sonar-scanner"),
   `#!/bin/sh
 printf '%s\\n' "$@" > "${ARGS}"
+pwd > "${ARGS}.cwd"
+printf '%s' "$SONAR_HOST_URL" > "${ARGS}.host"
 printf '%s' "$SONAR_TOKEN" > "${ARGS}.token"
 for a; do case $a in -Dsonar.working.directory=*) w=\${a#*=};; -Dproject.settings=*) c=\${a#*=};; esac; done
 cat "$c" > "${ARGS}.settings"
-case $DOCKER_FALSO in
+case $SCANNER_FALSO in
   falha) echo "INFO: Scanner"; echo "ERROR: Not authorized" >&2; exit 3;;
   dorme) exec sleep 5;;
   sem-tarefa) echo "projectKey=loja" > "$w/report-task.txt";;
@@ -54,7 +57,7 @@ case $DOCKER_FALSO in
 esac
 `,
 );
-chmodSync(join(bin, "docker"), 0o755);
+chmodSync(join(bin, "sonar-scanner"), 0o755);
 process.env.PATH = `${bin}${delimiter}${String(process.env.PATH)}`;
 
 // SonarQube falso: responde conforme `sonar` e registra os pedidos.
@@ -112,7 +115,7 @@ beforeEach(() => {
   pedidos = [];
   process.env.SONAR_HOST_URL = HOST;
   process.env.SONAR_TOKEN = "segredo";
-  delete process.env.DOCKER_FALSO;
+  delete process.env.SCANNER_FALSO;
 });
 
 const fabriquinha: Ator = { tipo: "fabriquinha" };
@@ -224,34 +227,17 @@ test("analisa a worktree, espera o Compute Engine e registra as issues dos arqui
   const basic = `Basic ${Buffer.from("segredo:").toString("base64")}`;
   assert.deepEqual(new Set(pedidos.map((p) => p.autorizacao)), new Set([basic]));
 
-  // Worktree e .git no mesmo caminho absoluto; o token vai pelo ambiente, nunca na linha de comando.
+  // O scanner roda na worktree, no host (nenhum docker); o host e o token vão pelo ambiente, nunca na linha de comando.
   const args = readFileSync(ARGS, "utf8").trimEnd().split("\n");
   const trabalho = args.find((a) => a.startsWith("-Dsonar.working.directory="))?.split("=")[1] ?? "";
   assert.equal(dirname(trabalho), dirname(worktree));
-  const { uid, gid } = userInfo();
   assert.deepEqual(args, [
-    "run",
-    "--rm",
-    "--add-host=host.docker.internal:host-gateway",
-    "--user",
-    `${String(uid)}:${String(gid)}`,
-    "-e",
-    `SONAR_HOST_URL=${HOST}`,
-    "-e",
-    "SONAR_TOKEN",
-    "-v",
-    `${worktree}:${worktree}`,
-    "-v",
-    `${join(worktree, ".git")}:${join(worktree, ".git")}`,
-    "-v",
-    `${trabalho}:${trabalho}`,
-    "-w",
-    worktree,
-    "sonarsource/sonar-scanner-cli",
     "-Dsonar.projectKey=loja-key",
     `-Dsonar.working.directory=${trabalho}`,
     `-Dproject.settings=${join(trabalho, "vazio.properties")}`,
   ]);
+  assert.equal(realpathSync(readFileSync(`${ARGS}.cwd`, "utf8").trimEnd()), realpathSync(worktree));
+  assert.equal(readFileSync(`${ARGS}.host`, "utf8"), HOST);
   // O sonar-project.properties da worktree, que o agente edita, não vale: o scanner lê um arquivo vazio.
   assert.equal(readFileSync(`${ARGS}.settings`, "utf8"), "");
   assert.equal(readFileSync(`${ARGS}.token`, "utf8"), "segredo");
@@ -302,8 +288,6 @@ async function falha(banco: DatabaseSync, mensagem: string | RegExp, opcoes = {}
 }
 
 const SUBIR = "docker compose -f ~/Documents/Projetos/SonarQube/docker-compose.yml up -d";
-const NOS_DOIS =
-  "SONAR_HOST_URL precisa resolver no host e no contêiner do scanner, e localhost não serve: use host.docker.internal";
 
 test("SonarQube fora do ar: falha com o comando para subir o servidor, sem rodar o scanner", async () => {
   const { banco } = cenario();
@@ -334,28 +318,21 @@ test("SonarQube fora do ar: falha com o comando para subir o servidor, sem rodar
 
 test("scanner falhando ou passando do limite: falha com a saída e o comando para subir o servidor", async () => {
   const { banco, worktree } = cenario();
-  process.env.DOCKER_FALSO = "falha";
+  process.env.SCANNER_FALSO = "falha";
   await falha(
     banco,
-    `o sonar-scanner saiu com código 3: INFO: Scanner\nERROR: Not authorized (${NOS_DOIS}; se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
+    `o sonar-scanner saiu com código 3: INFO: Scanner\nERROR: Not authorized (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
   );
-  process.env.DOCKER_FALSO = "dorme";
-  await falha(
-    banco,
-    `o sonar-scanner passou do tempo limite (${NOS_DOIS}; se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
-    {
-      limiteMs: 200,
-    },
-  );
-  process.env.DOCKER_FALSO = "sem-tarefa";
+  process.env.SCANNER_FALSO = "dorme";
+  await falha(banco, `o sonar-scanner passou do tempo limite (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`, {
+    limiteMs: 200,
+  });
+  process.env.SCANNER_FALSO = "sem-tarefa";
   const semTarefa =
     "o sonar-scanner terminou sem informar a tarefa do Compute Engine, report-task.txt ausente ou sem ceTaskId";
-  await falha(banco, `${semTarefa} (${NOS_DOIS}; se o SonarQube estiver fora do ar, suba com: ${SUBIR})`);
-  process.env.DOCKER_FALSO = "sem-relatorio";
-  await falha(
-    banco,
-    `${semTarefa}: INFO: EXECUTION SUCCESS (${NOS_DOIS}; se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
-  );
+  await falha(banco, `${semTarefa} (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`);
+  process.env.SCANNER_FALSO = "sem-relatorio";
+  await falha(banco, `${semTarefa}: INFO: EXECUTION SUCCESS (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`);
   assert.deepEqual(semSobra(worktree), []);
   banco.close();
 });
@@ -368,7 +345,7 @@ test("Compute Engine falhando, cancelado, parado na fila ou recusando o token: f
   sonar.tarefas = [{ status: "CANCELED" }];
   await falha(banco, `o SonarQube não processou a análise: CANCELED ${dica}`);
   sonar.tarefas = [{ status: "PENDING" }];
-  // O limite vale também para o scanner: folga para o docker falso terminar antes dele numa máquina carregada.
+  // O limite vale também para o scanner: folga para o scanner falso terminar antes dele numa máquina carregada.
   await falha(banco, `a análise passou do tempo limite na fila do SonarQube ${dica}`, {
     limiteMs: 1000,
     intervaloMs: 5,
@@ -383,7 +360,7 @@ test("Compute Engine falhando, cancelado, parado na fila ou recusando o token: f
 
 test("resposta que não é JSON ou fora do formato esperado: falha sem registrar, apontando o SONAR_HOST_URL", async () => {
   const { banco } = cenario();
-  const dica = `(confira se SONAR_HOST_URL aponta para o SonarQube; ${NOS_DOIS})`;
+  const dica = "(confira se SONAR_HOST_URL aponta para o SonarQube)";
   sonar.crus = { "/api/system/status": "<html>outro serviço</html>" };
   await falha(banco, `a resposta de ${HOST}/api/system/status não é a esperada do SonarQube ${dica}`);
   sonar.crus = { "/api/issues/search": JSON.stringify({ issues: [] }) };
@@ -395,7 +372,7 @@ test("sem SONAR_HOST_URL ou SONAR_TOKEN no ambiente, ou com ticket inexistente: 
   const { banco } = cenario();
   const ambiente =
     "SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente da Fabriquinha (defina os dois em <raiz>/ambiente e " +
-    `reinicie o serviço; ${NOS_DOIS})`;
+    "reinicie o serviço)";
   delete process.env.SONAR_TOKEN;
   await falha(banco, ambiente);
   process.env.SONAR_TOKEN = "segredo";

@@ -1,7 +1,6 @@
 // Coletor do SonarQube (F3 §6): a regra do `sonar_gate.py` da skill `commit` do Auditor, em TypeScript. Analisa a
 // worktree da issue e registra `relatorio_sonar`, aprovado só com zero issue aberta nos arquivos alterados.
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { setTimeout as esperar } from "node:timers/promises";
@@ -23,8 +22,6 @@ const SUBIR = "docker compose -f ~/Documents/Projetos/SonarQube/docker-compose.y
 const PAGINA = 500;
 /** `api/issues/search` não pagina além disso. */
 const LIMITE_DA_API = 10_000;
-const URL_NOS_DOIS =
-  "SONAR_HOST_URL precisa resolver no host e no contêiner do scanner, e localhost não serve: use host.docker.internal";
 
 export interface OpcoesSonar {
   /** Tempo máximo do scanner e, à parte, da espera pelo Compute Engine (F3 §6: 30 minutos). */
@@ -74,7 +71,7 @@ function cliente(host: string, token: string): Api {
     if (!lido.success) {
       throw new ErroDeRegra(
         `a resposta de ${host}/api/${caminho} não é a esperada do SonarQube`,
-        `confira se SONAR_HOST_URL aponta para o SonarQube; ${URL_NOS_DOIS}`,
+        "confira se SONAR_HOST_URL aponta para o SonarQube",
       );
     }
     return lido.data;
@@ -82,53 +79,26 @@ function cliente(host: string, token: string): Api {
 }
 
 /**
- * Roda o `sonar-scanner-cli` em Docker e devolve o id da tarefa do Compute Engine. A worktree, o `.git` principal
- * (que o `.git` da worktree aponta) e a pasta de trabalho entram no mesmo caminho absoluto, para o scanner ler o
- * `.gitignore` pelo SCM. `project.settings` aponta para um arquivo vazio: o `sonar-project.properties` da worktree,
- * que o agente pode editar, fica de fora (com `sonar.exclusions=**` ele zeraria a análise e aprovaria o gate); o que
- * vale é a configuração do servidor (F3 §6).
- * ponytail: Docker Desktop só compartilha `$HOME`, e a raiz padrão (`~/fabriquinha`) está nele; a pasta de trabalho
- * fica ao lado da worktree, no mesmo disco compartilhado.
- * ponytail: ao estourar o limite, o SIGKILL leva o `docker run`, não o contêiner, que termina sozinho (`--rm`).
+ * Roda o `sonar-scanner` do PATH na worktree e devolve o id da tarefa do Compute Engine. O scanner roda no host, não
+ * em Docker: nenhum contêiner além do servidor, e o processo Java não disputa a memória da VM do Docker Desktop.
+ * `project.settings` aponta para um arquivo vazio: o `sonar-project.properties` da worktree, que o agente pode
+ * editar, fica de fora (com `sonar.exclusions=**` ele zeraria a análise e aprovaria o gate); o que vale é a
+ * configuração do servidor (F3 §6). O host e o token vão pelo ambiente: o token não aparece na lista de processos.
  */
-async function escanear(host: string, worktree: string, comum: string, chave: string, limiteMs: number) {
+async function escanear(host: string, token: string, worktree: string, chave: string, limiteMs: number) {
   const trabalho = mkdtempSync(join(dirname(worktree), ".sonar-"));
   try {
     const configuracao = join(trabalho, "vazio.properties");
     writeFileSync(configuracao, "");
-    const { uid, gid } = userInfo();
     const r = await executar(
-      "docker",
-      [
-        "run",
-        "--rm",
-        "--add-host=host.docker.internal:host-gateway",
-        "--user",
-        `${String(uid)}:${String(gid)}`,
-        "-e",
-        `SONAR_HOST_URL=${host}`,
-        // Sem valor: o docker copia do ambiente, e o token não aparece na lista de processos.
-        "-e",
-        "SONAR_TOKEN",
-        "-v",
-        `${worktree}:${worktree}`,
-        "-v",
-        `${comum}:${comum}`,
-        "-v",
-        `${trabalho}:${trabalho}`,
-        "-w",
-        worktree,
-        "sonarsource/sonar-scanner-cli",
-        `-Dsonar.projectKey=${chave}`,
-        `-Dsonar.working.directory=${trabalho}`,
-        `-Dproject.settings=${configuracao}`,
-      ],
-      { limiteMs },
+      "sonar-scanner",
+      [`-Dsonar.projectKey=${chave}`, `-Dsonar.working.directory=${trabalho}`, `-Dproject.settings=${configuracao}`],
+      { cwd: worktree, env: { ...process.env, SONAR_HOST_URL: host, SONAR_TOKEN: token }, limiteMs },
     );
     // ponytail: stdout e depois stderr, só o fim; o log inteiro do scanner não cabe na mensagem do ticket.
     const saida = (r.saida + r.erro).trim().slice(-2000);
     const detalhe = saida ? `: ${saida}` : "";
-    const dica = `${URL_NOS_DOIS}; se o SonarQube estiver fora do ar, suba com: ${SUBIR}`;
+    const dica = `se o SonarQube estiver fora do ar, suba com: ${SUBIR}`;
     if (r.codigo !== 0) {
       const motivo = r.limiteEstourado ? "passou do tempo limite" : `saiu com código ${String(r.codigo)}`;
       throw new ErroDeRegra(`o sonar-scanner ${motivo}${detalhe}`, dica);
@@ -189,7 +159,7 @@ export async function coletarSonar(
   if (!host || !token) {
     throw new ErroDeRegra(
       "SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente da Fabriquinha",
-      `defina os dois em <raiz>/ambiente e reinicie o serviço; ${URL_NOS_DOIS}`,
+      "defina os dois em <raiz>/ambiente e reinicie o serviço",
     );
   }
   const api = cliente(host, token);
@@ -199,17 +169,14 @@ export async function coletarSonar(
   // Alterados contra HEAD: versionados (staged ou não) e não versionados fora do .gitignore. `-z`: o caminho cru.
   const raiz = raizDo(banco);
   const worktree = caminhoDaWorktree(raiz, nome, issue);
-  const { comum, arquivos } = await naFilaDoProjeto(raiz, nome, async () => {
+  const arquivos = await naFilaDoProjeto(raiz, nome, async () => {
     const nomes = async (...args: string[]) => (await exigirGit(worktree, ...args)).split("\0").filter(Boolean);
     const versionados = await nomes("diff", "--name-only", "-z", "HEAD");
     const novos = await nomes("ls-files", "--others", "--exclude-standard", "-z");
-    return {
-      comum: (await exigirGit(worktree, "rev-parse", "--path-format=absolute", "--git-common-dir")).trim(),
-      arquivos: [...new Set([...versionados, ...novos])].sort((a, b) => a.localeCompare(b)),
-    };
+    return [...new Set([...versionados, ...novos])].sort((a, b) => a.localeCompare(b));
   });
 
-  const ceTaskId = await escanear(host, worktree, comum, chave, limiteMs);
+  const ceTaskId = await escanear(host, token, worktree, chave, limiteMs);
   await esperarTarefa(api, host, ceTaskId, limiteMs, intervaloMs);
 
   // Busca as issues do projeto inteiro e filtra pelos arquivos alterados: pedir por componente falha (HTTP 400)

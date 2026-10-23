@@ -18,11 +18,12 @@ Ele resolve o ator, converte a entrada, chama o comando e traduz o erro.
 | Onde | Para quê | Quem |
 |---|---|---|
 | CLI | Consultar e registrar o trabalho do próprio ticket. | agente, com `FABRIQUINHA_EXECUCAO` |
+| CLI | Registrar a demanda, com as evidências e os custos, e enviá-la ao gate. | IA externa (pi, Claude Code ou Codex), sem `FABRIQUINHA_EXECUCAO` (`demanda`) |
 | CLI | Subir o serviço e abrir o web. | sistema operacional e Auditor (`servidor`, `abrir`) |
-| Web | Toda operação do Auditor: configuração, projetos, registro, sessões e chat, evidências, gates, métricas, arquivamento. | Auditor, no navegador, com token |
+| Web | Toda operação do Auditor: configuração, projetos, gates, sessões e chat, evidências, gates, métricas, arquivamento. | Auditor, no navegador, com token |
 
 O CLI não tem nenhum comando de Auditor que mude estado (D9).
-Um agente que apague a variável de ambiente não ganha poder de Auditor no CLI: só consegue `servidor` (que não sobe uma segunda instância, F4 2) e `abrir`.
+Um agente que apague a variável de ambiente não ganha poder de Auditor no CLI: só consegue `servidor` (que não sobe uma segunda instância, F4 2), `abrir` e os comandos de `demanda`, que só alcançam as demandas não enviadas da sessão de harness em que ele está.
 
 ## 3. CLI
 
@@ -31,10 +32,10 @@ Um agente que apague a variável de ambiente não ganha poder de Auditor no CLI:
 | Situação | O que o CLI aceita |
 |---|---|
 | `FABRIQUINHA_EXECUCAO` presente | Os comandos da tabela 3.2 permitidos à etapa do ticket. A execução precisa estar `em_andamento`, senão `ErroDeEscopo` ("a execução E-7 já terminou"). `servidor` e `abrir` são recusados. |
-| variável ausente | Só `servidor`, `abrir` e `--help`. Qualquer outro comando sai com `ErroDeEscopo`: "este comando é do agente; o Auditor usa o web". |
+| variável ausente | `servidor`, `abrir`, `demanda` e `--help`. Os comandos de `demanda` exigem a sessão do harness no ambiente: `PI_SESSION_ID` (pi), `CLAUDE_CODE_SESSION_ID` (Claude Code) ou `CODEX_THREAD_ID` (Codex); o CLI monta o ator `externo` com a ferramenta e a sessão (F1, 3.2), e sem nenhuma delas sai com `ErroDeEscopo`: "rode pela skill registrar-demanda no seu harness". Qualquer outro comando sai com `ErroDeEscopo`: "este comando é do agente; o Auditor usa o web". |
 
 O F1 confere o escopo de cada comando (próprio ticket, própria issue); o CLI só repassa o ator.
-As leituras (`issue ver`, `ticket ver`, `evidencia ver`) alcançam a issue do ticket, as issues de que ela depende e as que dependem dela (as `dependentes` da F2), para o desenho refeito ler a issue nova; fora disso, `ErroDeEscopo`.
+As leituras (`issue ver`, `ticket ver`, `evidencia ver`) alcançam a issue do ticket, as issues de que ela depende e as que dependem dela (as `dependentes` da F2), para o planejador ler as issues relacionadas; fora disso, `ErroDeEscopo`.
 
 ### 3.2 Comandos
 
@@ -44,16 +45,19 @@ As leituras (`issue ver`, `ticket ver`, `evidencia ver`) alcançam a issue do ti
 | `abrir` | F4, 2 | — (sem a variável) |
 | `projeto ver` | leitura | todas |
 | `issue ver I-n` | leitura | todas |
-| `issue editar I-n [--titulo <t>] [--tipo <funcionalidade\|problema>] [--descricao <arquivo>]` | C2 | registro |
-| `issue propor I-n --titulo <t> --arquivos <n> --descricao <arquivo>` | C23 (`--arquivos` inteiro ≥ 0, sem comparação com 30; a regra dos 30 arquivos mora nas skills) | registro, desenho |
-| `issue cancelar I-n` | C22 (o agente recebe `ErroDeEscopo`, saída 1; só o Auditor cancela, no web) | desenho, desenvolvimento, revisao, encerramento, registro, sessao |
-| `issue dep add I-n I-m` / `issue dep rm I-n I-m` | C3, C4 | registro |
+| `issue editar …` | — | sai: a demanda é editada pela IA externa com `demanda editar` |
+| `issue cancelar I-n` | C22 (o agente recebe `ErroDeEscopo`, saída 1; só o Auditor cancela, no web) | todas |
+| `issue dep add I-n I-m` / `issue dep rm I-n I-m` | — | sai: as dependências da demanda vão em `demanda registrar` e `demanda editar` |
 | `ticket ver T-n` | leitura | todas |
-| `ticket criar I-n --titulo <t> [--descricao <arquivo>]` | C11 | desenho, revisao, sessao |
-| `ticket editar T-n [--titulo <t>] [--descricao <arquivo>]` | C12 | desenho, revisao, sessao |
-| `ticket remover T-n` | C13 | desenho, revisao, sessao |
-| `ticket enviar T-n` | C25 (envia o resultado à aprovação do Auditor, depois de ele confirmar na conversa) | registro, desenho |
-| `revisao decidir T-n aprovar\|reprovar [--motivo <texto>]` | C14 | revisao |
+| `entrega ver N-n` | leitura | todas |
+| `entrega criar I-n --titulo <t> --criterios <CA-1,CA-2> [--arquivos <glob,glob>] [--deps <N-1,N-2>]` | C26 | planejamento, revisao_demanda, sessao_final |
+| `entrega editar N-n [--titulo <t>] [--criterios …] [--arquivos …] [--deps …]` | C27 | planejamento, revisao_demanda, sessao_final |
+| `entrega remover N-n` | C28 | planejamento, revisao_demanda, sessao_final |
+| `ticket criar N-n --titulo <t> [--descricao <arquivo>] [--deps <T-1,T-2>]` | C11 (o ticket nasce na entrega) | planejamento, revisao, sessao, revisao_demanda, sessao_final |
+| `ticket editar T-n [--titulo <t>] [--descricao <arquivo>] [--deps …]` | C12 | idem |
+| `ticket remover T-n` | C13 | idem |
+| `ticket enviar T-n` | C25 (envia a árvore à aprovação do Auditor) | planejamento |
+| `revisao decidir T-n aprovar\|reprovar [--motivo <texto>]` | C14 | revisao, revisao_demanda |
 | `evidencia add <tipo> [--dados <arquivo.json>] [--arquivo <caminho>]...` | C17 (F3, 5); `aula_codigo` vai só com `--dados`, e a Fabriquinha gera o HTML | todas, conforme o catálogo |
 | `evidencia schema <tipo>` | leitura (F3, 5) | todas |
 | `evidencia ver T-n <tipo>` | leitura | todas |
@@ -61,6 +65,19 @@ As leituras (`issue ver`, `ticket ver`, `evidencia ver`) alcançam a issue do ti
 `projeto ver` sem argumento mostra o projeto da execução.
 `evidencia ver` devolve o `dados` e o caminho absoluto de cada arquivo no armazenamento do F2, para o agente abrir um HTML ou log com as próprias ferramentas.
 O agente não escolhe modelo (C11 e C20 do Auditor ficam no web) nem cria PR (F5, 5.0).
+
+Comandos da IA externa, sem `FABRIQUINHA_EXECUCAO` (ator `externo`):
+
+| Comando | F1 |
+|---|---|
+| `demanda registrar --projeto <p> --titulo <t> --tipo <funcionalidade\|problema> [--descricao <arquivo>] [--deps <I-1,I-2>]` | C1 |
+| `demanda editar I-n [--titulo …] [--tipo …] [--descricao …] [--deps …]` | C2, C3, C4, até o envio |
+| `demanda evidencia I-n <tipo> [--dados <arquivo.json>] [--arquivo <caminho>]...` | C17 (F3, 5) |
+| `demanda schema <tipo>` | leitura (F3, 5) |
+| `demanda enviar I-n` | C25 |
+| `demanda ver I-n` | leitura, só das demandas registradas pela mesma ferramenta e sessão |
+
+Toda `demanda` além de `registrar` e `schema` só alcança as issues cuja `sessaoExterna` é a do ambiente (F1, 3.4); outra sessão recebe `ErroDeEscopo`.
 
 `servidor` sobe o serviço do F4 (seção 2).
 `abrir` lê `<raiz>/web.url` e abre o navegador nesse endereço; sem o arquivo, diz que o serviço não está rodando.
@@ -119,9 +136,9 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `GET /api/projetos/:nome/issues?concluidas=&arquivadas=&canceladas=` | Issues do projeto com os seus tickets e as sessões ativas, para a página do projeto (4.4). |
 | `GET /api/metricas?projeto=&de=&ate=` | `MetricasMes[]` (F6, 5.7), um por mês de `de` a `ate`, no formato `AAAA-MM`; padrão: os 11 meses anteriores mais o mês corrente; no máximo 24 meses; sem `projeto`, todos. |
 | `GET /api/metricas/issues?projeto=&de=&ate=` | `metricasPorIssue` (F6, 5.8): uma linha por issue com execução no período. |
-| `GET /api/issues/:id` | Agregado da issue, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). No gate do desenho traz também `propostas`, as propostas de issue abertas. |
+| `GET /api/issues/:id` | Agregado da issue com as entregas, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). |
 | `GET /api/sessoes?escopo=ativas\|historico&projeto=&issue=&etapa=` | Sessões com estado e motivo (F4, 5.2). |
-| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). No registro interativo traz `propostas`, as propostas de issue abertas do ticket; a mensagem de aviso da Fabriquinha sobre uma proposta decidida, ou sobre um lote todo decidido, vem marcada `aviso`. |
+| `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). |
 | `GET /api/sessoes/:sessao/eventos` | Server-Sent Events com os eventos do processo vivo e as mudanças de estado (F4, 5.4). |
 | `GET /api/sessoes/:sessao/historico.md` | Exportação do histórico em Markdown, como download (F4, 6.8). |
 | `GET /api/execucoes/:id/log` e `/prompt` | O `log` e o `prompt.md` da execução (F4, 6.1.2), como texto. |
@@ -150,16 +167,14 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `POST /api/projetos/:nome/tarefas` | Cria a Tarefa: `{ texto, n, usuarios }` (`NovaTarefa`, F8 3). Campo inválido dá 422 com o caminho do campo (`texto`, `n`, `usuarios`); usuário que não é do projeto, 409; projeto inexistente, 404. |
 | `POST /api/tarefas/:id/executar` | Executa a Tarefa (F8 5): enfileira N execuções por usuário alocado e responde 204 já; elas rodam em segundo plano, uma por vez. Sem link do produto, 409 com "Informe o link do produto na Configuração do projeto"; Tarefa com execução pendente, 409; Tarefa inexistente, 404. |
 
-**Registro e issue**
+**Demanda e issue**
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/registros` `{ projeto, deps, descricao }` | `registrarNecessidade` (F4, 6.6): C1 com a descrição, que é obrigatória (vazia ou só espaços dá 422 antes de gravar), worktree e sessão interativa. Devolve a sessão para o cliente abrir o chat. |
-| `POST /api/issues/:id` `{ titulo?, tipo?, descricao? }` | C2 do Auditor, só na fase `registro`. |
-| `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor. |
+| `POST /api/issues/:id/deps` `{ dep }` / `DELETE /api/issues/:id/deps/:dep` | C3, C4 do Auditor, até o gate de planejamento aprovado. |
 | `POST /api/issues/:id/cancelar` | `cancelarIssue` (F4, cancelamento; C22): a issue e as dependentes, diretas e indiretas, de qualquer projeto. 409 na concluída ou já cancelada, 403 fora do Auditor. |
-| `POST /api/issues/:id/registro` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C10 do registro enviado. Devolver retoma a mesma sessão com o motivo como mensagem ao agente. 409 se há propostas de issue abertas no gate. |
-| `POST /api/propostas/:id` `{ aceita }` | `decidirProposta` (F4, 6.6): C24 pelo Auditor. Devolve `{ issue? }`, a issue criada no aceite. 409 se a proposta já foi decidida ou o agente ainda trabalha, 404 se não existe, 422 se `aceita` não é booleano. Só a decisão que deixa o gate sem proposta aberta retoma a IA, uma vez: no registro com o aviso do lote; no desenho reprovando o desenho (C15) com o motivo que lista as decisões. |
+| `POST /api/issues/:id/demanda` `{ aprovado, motivo? }` | C10: aprova ou recusa a demanda enviada; recusar exige o motivo e cancela em cascata (C22). |
+| `GET /api/migracao` / `POST /api/migracao` | A prévia da migração pendente e a aprovação do Auditor (F2, 3.7): backup, migração e o agendador liberado. |
 | `GET /api/projetos/:nome/heatmap` | Heatmap de alterações da base nos últimos 12 meses (`heatmapDo`, F5 §11): `{ branch, desde, ate, raiz, commits }`, com a árvore inteira de pastas e arquivos. Projeto inexistente dá 404; pasta do repositório ou branch base ausente dá 409 com motivo e correção. |
 | `POST /api/projetos/:nome/arquivar` | C18 do projeto; devolve quantas issues foram arquivadas. |
 
@@ -167,11 +182,14 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 
 | Rota | O que faz |
 |---|---|
-| `POST /api/issues/:id/tickets` `{ titulo, descricao, modelo? }` | C11 do Auditor (fase `aprovacao_desenho`). |
-| `POST /api/tickets/:id` `{ titulo?, descricao? }` | C12 do Auditor. |
+| `POST /api/issues/:id/entregas` `{ titulo, criterios, arquivosPrevistos, deps }` | C26 do Auditor (fase `aprovacao_planejamento`). |
+| `POST /api/entregas/:id` `{ titulo?, criterios?, arquivosPrevistos?, deps? }` / `DELETE /api/entregas/:id` | C27, C28 do Auditor. |
+| `POST /api/entregas/:id/tickets` `{ titulo, descricao, deps, modelo? }` | C11 do Auditor (fase `aprovacao_planejamento`). |
+| `POST /api/tickets/:id` `{ titulo?, descricao?, deps? }` | C12 do Auditor. |
 | `DELETE /api/tickets/:id` | C13 do Auditor. |
-| `POST /api/issues/:id/desenho` `{ aprovado, motivo? }` | `decidirGate` (F4, 6.6): C15 do desenho enviado. Reprovar retoma a mesma sessão com o motivo como mensagem ao agente. 409 se há propostas de issue abertas no gate. |
-| `POST /api/issues/:id/pr` | Pendente: a decisão do PR é tomada na hospedagem (4.6). |
+| `POST /api/issues/:id/planejamento` `{ aprovado, motivo? }` | `decidirPlanejamento` (F4, 6.6): C15. Reprovar retoma a mesma sessão com o motivo. |
+| `GET /api/entregas/:id/pr` / `POST /api/entregas/:id/pr` `{ aprovado, nota, motivo? }` | O estado do PR da entrega na plataforma e a decisão do Auditor (C16), com nota obrigatória: aprovar faz o merge (F5, 5.2) e a limpeza da entrega; reprovar abre a sessão em aberto da entrega. |
+| `POST /api/issues/:id/final` `{ aprovado, nota, motivo? }` | C29: nota obrigatória; reprovar abre a sessão final. |
 | `POST /api/tickets/:id/reabrir` `{ instrucao? }` | C9: responder e retomar (F4, 6.4). |
 | `POST /api/tickets/:id/modelo` `{ modelo \| null }` | C20, com `conferirModelo` (F4, 9). |
 | `POST /api/tickets/:id/executar` | `executarAgora` (F4, 4). |
@@ -238,32 +256,34 @@ Se o projeto do caminho não for o da issue, o cliente troca o caminho pelo cert
 
 Duas peças se repetem entre as páginas:
 
-- **Trilho de fases:** as 8 fases do F1 (menos `concluida`) em linha, agrupadas pelas 5 etapas do processo (Registrar, Desenhar, Implementar, Revisar, Encerrar).
-  As fases de gate (`aprovacao_desenho`, `aprovacao_pr`) são losangos; as demais, círculos.
+- **Trilho de fases:** as fases da issue do F1 (menos `concluida`) em linha, agrupadas pelas etapas do processo (Demanda, Planejar, Executar, Revisar, Encerrar).
+  As fases de gate (`aprovacao_demanda`, `aprovacao_planejamento`, `aprovacao_final`) são losangos; as demais, círculos.
+  Na fase `execucao`, o trilho mostra abaixo uma linha por entrega, com o trilho da entrega (desenvolvimento, revisão, encerramento, PR) e o losango de `aprovacao_pr`.
   Fases passadas ficam verdes; a atual fica maior e com a cor do estado: âmbar quando aguarda o Auditor, vermelho em falha, azul quando roda.
 - **Caixa:** uma janela sobreposta grande (`<dialog>`) que abre um artefato ou as execuções de um ticket sem sair da página; fecha com Esc ou clicando fora.
 
 **Início** (`/home`) — foco na decisão
 
-1. Cabeçalho com **Registrar necessidade**, que pede projeto, descrição (obrigatória) e dependências e abre o chat do registro.
+1. Cabeçalho com "Demandas entram pela skill `registrar-demanda` no seu harness (pi, Claude Code ou Codex)".
 2. Métricas do mês corrente de todos os projetos (F6, 5.7) numa frase: custo, tokens, issues registradas e concluídas, tickets criados e concluídos, PRs abertos e mergeados, com link para **Métricas**.
 3. **Aguarda você:** um card grande por sessão `aguardando_humano` (F4, 5.2), da mais antiga para a mais nova.
    - Cada card: o motivo em destaque, a issue com título, uma frase do que falta, projeto, ticket, etapa, modo e há quanto tempo.
-   - Um botão com a ação do motivo, que abre o chat, ou a página da issue nos gates: **Responder e retomar** (falha), **Ver o PR**, **Avaliar desenho**, **Avaliar registro**, **Responder** (conversa ou diálogo).
+   - Um botão com a ação do motivo, que abre o chat, ou a página da issue nos gates: **Responder e retomar** (falha), **Avaliar demanda**, **Avaliar planejamento**, **Avaliar PR** (por entrega), **Avaliação final**, **Responder** (conversa ou diálogo).
+   - O gate da demanda e o gate final, que não têm sessão (F4, 5.2), entram como cards próprios, pela fase da issue.
 4. **Rodando:** uma linha por sessão `rodando`, com modo, issue, título e o que o agente está fazendo, ticket e etapa, modelo e tempo; clicar abre o chat.
 5. **Board:** as issues não concluídas de todos os projetos, uma coluna por fase, agrupadas sob as 5 etapas; as colunas de gate são hachuradas e marcadas "gate".
-   - Cartão: `I-n`, projeto, título (ou "sem título" no registro) e o ticket não concluído, com etapa e status; clicar abre a issue.
+   - Cartão: `I-n`, projeto, título e o ticket não concluído, com etapa e status; clicar abre a issue.
    - Marcas no cartão: **aguarda você**, com o motivo; **em execução**, com o tempo decorrido; **bloqueada por I-x**, quando há dependência não concluída.
 6. Atualiza sozinha a cada 5 segundos enquanto a aba está visível.
 
 **Projeto** (`/projects/:projeto`) — trilho de fases
 
-1. Cabeçalho: seletor de projeto, link **Editar na Configuração** e **Registrar necessidade**, com o projeto já escolhido.
+1. Cabeçalho: seletor de projeto e link **Editar na Configuração**.
    Abaixo dele, as abas **Issues** (esta página, ativa) e **Heatmap** (`/projects/:projeto/heatmap`), links de verdade.
 2. Métricas do mês corrente só do projeto (F6, 5.7), em 6 cards: custo (com chamadas de LLM), tokens (entrada, saída e cache), issues, tickets, PRs e iterações (mensagens, diálogos e reaberturas).
 3. Barra com a contagem (em andamento, concluídas, arquivadas, canceladas), as opções explícitas **Mostrar concluídas**, **Mostrar arquivadas** e **Mostrar canceladas** (Q2) e **Arquivar concluídas** (C18 do projeto, com confirmação que diz quantas serão arquivadas e que nada é apagado).
 4. Cabeçalho das colunas do trilho (etapas e fases) fixo no topo ao rolar.
-5. Uma linha por issue: título, `I-n`, tipo, dependência que bloqueia, PR e progresso dos tickets (concluídos/total), o trilho de fases e, à direita, a sessão ativa com estado e link para o chat.
+5. Uma linha por issue: título, `I-n`, tipo, dependência que bloqueia, PRs das entregas (mergeados/total) e progresso dos tickets (concluídos/total), o trilho de fases e, à direita, a sessão ativa com estado e link para o chat.
    A cancelada só aparece com **Mostrar canceladas**, apagada, com "cancelada em dd/mm" e o trilho neutro; fica fora de "em andamento" e não bloqueia as que dependem dela.
 6. Clicar na linha abre a gaveta com os tickets: etapa, `T-n`, título, status, modelo (★ quando é override do ticket, C20) e sessão.
    As issues que aguardam o Auditor ou falharam já vêm com a gaveta aberta.
@@ -291,13 +311,13 @@ Na página ficam só vídeo, cards, tabelas, a descrição e o corpo do PR; o re
 
 1. Cabeçalho: caminho (Projetos › projeto › `I-n`), título (com a pílula **Cancelada** quando for o caso) e o trilho de fases; na cancelada o marco da fase em que a issue parou fica neutro.
 2. Coluna da esquerda, fixa ao rolar:
-   - **Detalhes:** projeto, tipo, criada em, PR (link) e dependências com a fase de cada uma, com adicionar e remover enquanto a issue não estiver concluída nem cancelada (C3, C4); **Cancelada em** quando for o caso.
+   - **Detalhes:** projeto, tipo, criada em, entregas, cada uma com a fase e o link do PR, e dependências com a fase de cada uma, com adicionar e remover até o planejamento aprovado (C3, C4); **Cancelada em** quando for o caso.
      No pé do card, **Cancelar issue** (C22) abre um diálogo que diz que a issue sai do andamento e que nada é apagado, e lista os efeitos: os tickets abertos ou que falharam, que serão fechados, a execução em andamento, que será parada, e as dependentes (link, projeto e fase), que serão canceladas junto; **Voltar** ou **Cancelar issue**. Na concluída o botão fica desabilitado, com "A I-n está concluída e não pode ser cancelada."; na cancelada some, e também a **Ação do Auditor**;
    - **Descrição** em Markdown, recolhida com **ver tudo**;
-   - **Tickets e sessões:** linha do tempo dos tickets em ordem de criação, com etapa, status e as sessões de cada um (principal e consultas) com link para o chat.
+   - **Tickets e sessões:** os tickets agrupados por entrega, em ordem de criação, com os de planejamento, revisão da demanda e sessão final fora dos grupos; cada um com etapa, status, as dependências (nos de desenvolvimento) e as sessões (principal e consultas) com link para o chat.
      Clicar no ticket abre na caixa a descrição e as execuções: modo, resultado, início, duração, custo, erro e links do log e do prompt.
 3. Coluna da direita:
-   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket `aberto` e elegível do agendador (o desenho abre a sessão interativa), desabilitado com o motivo ("a I-n já tem a execução E-n em andamento") só quando a própria issue executa; os **Avisos do encerramento** logo depois de encerrar (a limpeza que falhou ou a `main` local que não avançou, com a saída do git, só na resposta) e, depois de recarregar, o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
+   - **Ação do Auditor**, só quando existe: o painel do gate da fase; **Executar agora** para ticket `aberto` e elegível do agendador, desabilitado com o motivo ("a N-n já tem a execução E-n em andamento") só quando a própria entrega, ou a issue fora de entrega, executa; os **Avisos do encerramento** logo depois de encerrar (a limpeza que falhou ou a `main` local que não avançou, com a saída do git, só na resposta) e, depois de recarregar, o aviso de limpeza que falhou (F5, 5.3), com o comando a rodar.
    - **Artefatos:** uma linha por etapa e ticket, do mais recente ao mais antigo, com um card pequeno por evidência (classe do conteúdo — HTML, IMG, VÍDEO, TABELA, TEXTO, JSON — nome e um ponto verde ou vermelho quando a evidência tem `aprovada`).
      Clicar abre a evidência na caixa (4.5), com **abrir em nova aba** e **baixar**.
 4. As métricas da issue não ficam nesta página: a tabela por issue fica em **Métricas** e o relatório de produtividade é um artefato do encerramento.
@@ -308,9 +328,17 @@ A página da issue não se atualiza sozinha, para não apagar o que o Auditor es
 
 | Gate | Mostra | Ações |
 |---|---|---|
-| Registro (`registro`, depois do envio do agente, C25) | Título, tipo, descrição, `comportamento` e a tabela de `criterios_aceite`, e as evidências que faltam. | **Aprovar registro** (C10); **Devolver**, habilitado só com o motivo, que volta à mesma sessão. |
-| Desenho (`aprovacao_desenho`) | 4 cards: arquivos previstos, tickets propostos, acoplamentos novos e impacto na arquitetura (F6, 5.5). Tabela de critérios de aceite. Tabela de tickets de desenvolvimento propostos, cada um com seletor de modelo (padrão da etapa ou override, C20), **Editar** e **Remover**, e **+ Novo ticket** (C11 a C13). As quatro evidências do desenho ficam nos artefatos. Um **cartão de proposta de issue** por proposta aberta da IA (C23): rótulo "Proposta de issue", `T-n` do ticket que a fez, "~n arquivos estimados · limite de 30 por PR" (em destaque acima de 30), título, mensagem em Markdown sem HTML e a frase do efeito. Com proposta aberta, o bloco de decisão dá lugar à instrução «Decida as propostas de issue antes de aprovar ou reprovar o desenho.» | **Aceitar** e **Recusar** a proposta (C24, `POST /api/propostas/:id`); sem proposta aberta, **Aprovar desenho** (C15) e **Reprovar**, habilitado só com o motivo, que volta à mesma sessão do desenho. |
-| PR (`aprovacao_pr`) | Link do PR com o estado na hospedagem, vídeo de demonstração (ou o aviso de que a mudança não aparece no cliente), 4 cards de produtividade, a aula do código (card que abre na caixa) (custo, tokens, execuções e falhas, reprovações), corpo completo do PR (anexo de `pr_aberto`) em Markdown, tabela de comprovação dos critérios e tabela de fitness functions com explicações. | Nenhuma decisão no web: a revisão, o merge e o pedido de mudanças são feitos no próprio PR, com o botão **Abrir PR**. Como a Fabriquinha fica sabendo da decisão está pendente (4.6). |
+| Demanda (`aprovacao_demanda`) | Título, tipo, descrição, `comportamento`, a tabela de `criterios_aceite`, 3 cards (arquivos previstos, acoplamentos novos e impacto na arquitetura, F6 5.5) e o custo realizado por ferramenta. As evidências do desenho ficam nos artefatos. | **Aprovar demanda** (C10); **Recusar**, habilitado só com o motivo, que avisa que a issue e as dependentes serão canceladas e que a demanda não volta. |
+| Planejamento (`aprovacao_planejamento`) | A árvore (`arvore_planejamento`): cada entrega com título, critérios e arquivos previstos atrelados, dependências e tickets (com dependências e seletor de modelo, C20); os critérios ainda sem entrega em destaque. | **+ Nova entrega**, **Editar**, **Remover** (C26 a C28); **+ Novo ticket**, **Editar**, **Remover** (C11 a C13); **Aprovar planejamento** (C15), desabilitado enquanto houver critério sem entrega ou entrega sem ticket; **Reprovar**, habilitado só com o motivo, que volta à mesma sessão. |
+| PR (`aprovacao_pr`, por entrega) | Link do PR com o estado na hospedagem, vídeo de demonstração (ou o aviso de que a mudança não aparece no cliente), 4 cards de produtividade da entrega, a aula do código, corpo completo do PR, tabela de comprovação dos critérios da entrega e tabela de fitness functions com explicações. | Nota de 1 a 5 obrigatória; **Aprovar e mergear** (C16, F5 5.2); **Pedir mudanças**, habilitado só com o motivo, que abre a sessão em aberto da entrega; **Abrir PR**. |
+| Final (`aprovacao_final`) | A árvore × PRs × critérios × custos e a demonstração de limpeza. | Nota de 1 a 5 obrigatória; **Concluir demanda** (C29); **Reprovar**, habilitado só com o motivo, que abre a sessão final. |
+
+**Migração** (`/migration`) — só existe com migração pendente que precisa do Auditor (F2, 3.7)
+
+1. Toda outra página redireciona para cá enquanto houver migração pendente; o agendador está parado.
+2. A prévia: uma tabela por efeito ("vira demanda com uma entrega", "cancelada pela troca de fluxo"), com `I-n`, projeto, título e fase atual.
+3. **Aprovar migração** copia o banco para o backup, migra e libera o agendador; a página mostra o caminho do backup.
+   Falha mostra o erro e o caminho do backup, e o banco fica como estava.
 
 **Métricas** (`/metrics`) — mês em foco contra a média
 
@@ -321,7 +349,7 @@ A página da issue não se atualiza sozinha, para não apagar o que o Auditor es
 3. 6 cards do mês em foco, cada um com o valor, a média dos meses anteriores e a variação em %: custo, tokens, issues concluídas (de quantas registradas), tickets concluídos (de quantos criados), PRs mergeados (de quantos abertos) e nota média dos PRs (de 5, com quantas notas).
    Mês sem nota mostra "—" e fica fora da média.
 4. **Evolução por mês** do card escolhido: uma coluna por mês, o mês em foco destacado, os meses da média num tom e uma linha horizontal na altura da média; passar o mouse mostra os valores, clicar numa coluna muda o foco e **ver tabela** troca o gráfico pela tabela.
-5. **Por etapa:** tabela do mês em foco contra a média, uma linha por etapa (registro a sessão em aberto): custo em barras duplas com a variação, e tokens, execuções, falhas, reprovações, iterações e duração média no formato "mês / média". A linha **Total** no rodapé traz o custo (mês, média e variação), as colunas de contagem somadas ("mês / soma das médias", média "—" sem meses anteriores) e a duração média ponderada pelas execuções.
+5. **Por etapa:** tabela do mês em foco contra a média, uma linha por etapa (demanda a sessão final): custo em barras duplas com a variação, e tokens, execuções, falhas, reprovações e duração média no formato "mês / média".
 6. **Por modelo:** custo e tokens por tipo de cada provedor + modelo no mês em foco.
 7. **Por issue:** tabela das issues com execução no período, ordenável pelo cabeçalho: issue (link), título, projeto (só com "todos"), fase, custo, tokens, execuções, falhas, reprovações, iterações, duração e nota do PR, com uma linha de total.
 
@@ -342,23 +370,20 @@ As cores dos gráficos seguem a paleta categórica validada para o fundo escuro 
 2. Conversa, à esquerda, desenhada em React com o assistant-ui (`chat-conversa.tsx`; o servidor empacota só os `.tsx` com esbuild, no primeiro pedido, e o resto do cliente segue TypeScript sem build). A página tem a altura da janela: só a lista de mensagens e a coluna da direita rolam, e a área de envio fica fixa no pé:
    - linhas do sistema (execução iniciada, concluída, diálogo aberto) entre traços;
    - mensagens do agente (balão à esquerda) e do Auditor (balão à direita) em Markdown, sem rótulo de quem fala;
-   - a mensagem de aviso da Fabriquinha sobre uma proposta de issue decidida, marcada `aviso`, com o rótulo "Fabriquinha";
-   - a mensagem da Fabriquinha de cada evidência que o agente submeteu ao ticket ("Evidência **Protótipo** submetida; o card está em Artefatos"), vinda do banco e ordenada por instante; a de uma evidência substituída some ao recarregar, e a consulta não as mostra;
    - raciocínio recolhido;
    - cada chamada de ferramenta como bloco recolhível: nome, argumentos e um resumo do resultado (por exemplo "✗ 3 de 214"), com a saída em fonte monoespaçada cortada com **ver tudo**;
    - eventos ao vivo pelo SSE, com o texto do agente chegando em fluxo e cursor piscando;
    - rolagem automática para o fim, que pausa quando o Auditor sobe para ler.
-   - no registro interativo, entre a conversa e o envio, um **cartão de proposta de issue** por proposta aberta (o mesmo do gate do desenho, abaixo), redesenhado a cada estado;
 3. Área de envio, fixa no pé da página, conforme o estado (F4, 5.4); o campo Mensagem é o compositor do assistant-ui, e o resto (diálogos, retomada, avisos) segue HTML:
    - rodando: **Redirecionar** (`steer`) ou **Enfileirar** (`follow_up`), **Abortar** e **Enviar**;
    - diálogo de extensão: o pedido do agente com o formulário (`select` como itens numerados e clicáveis, nenhum pré-marcado, e o clique já responde; na pergunta da ferramenta `perguntar` o `select` ganha **Outros** no fim, com campo de texto obrigatório, e a múltipla escolha usa caixas de seleção; `confirm` como Sim/Não, `input` como texto, `editor` como área de texto), **Cancelar** sempre e **Responder** quando há texto ou múltipla escolha a enviar;
    - falha: o erro em destaque na conversa e, no envio, instrução para a próxima tentativa, seletor de modelo (C20) e **Responder e retomar** (C9);
-   - conversa (interativa): **Enviar**; na sessão em aberto, também **Concluir sessão**;
-   - gates do registro e do desenho: o aviso de que o agente enviou o resultado e de que a decisão fica na página da issue;
+   - conversa (interativa): **Enviar**; na sessão em aberto e na sessão final, também **Concluir sessão**;
+   - gate do planejamento: o aviso de que o agente enviou a árvore e de que a decisão fica na página da issue;
    - terminada: só leitura, com **Exportar histórico** e **Conversar sobre esta sessão**.
    Em todo estado que aceita mensagem: **+ Anexar histórico** (seletor de sessões, F4, 6.8), com os anexos como etiquetas removíveis, e a dica "Enter envia · Shift+Enter quebra linha".
 4. Coluna da direita:
-   - na conversa do registro, o formulário de C2 (título, tipo, descrição) para o Auditor corrigir direto o que o agente registrou; nos gates, o aviso com **Decidir na página da issue**;
+   - nos gates, o aviso com **Decidir na página da issue**;
    - o contexto da issue: `I-n` e projeto, o trilho de fases compacto, os tickets da issue com o ticket desta sessão marcado e link para o chat dos outros, os artefatos como cards que abrem na caixa e **Abrir a issue**.
 
 **Configuração** (`/config`) — menu lateral
@@ -419,8 +444,6 @@ Quando um deles ficar difícil de ler, ganha a sua tabela.
 
 ### 4.6 Pendências
 
-- **PR manual:** a aprovação, o merge e o pedido de mudanças são feitos no próprio PR (decisão do Auditor ao prototipar a página da issue).
-  Até decidir como a Fabriquinha fica sabendo da decisão, ficam em aberto: a rota `POST /api/issues/:id/pr`, o C16 (F1), o `mergearPR` (F5, 5.2), a origem do motivo de um pedido de mudança, o momento da nota de 1 a 5 (M7) e a limpeza depois do merge (F5, 5.3).
 - **Gates no chat:** decidido: todos os gates ficam na página da issue; o chat mostra só o aviso com o link.
 
 ## 5. Leituras
@@ -470,10 +493,10 @@ As leituras de tela são estas:
   - criar um Usuário Simulado, anexar um arquivo, ver o tamanho em bytes e removê-lo;
   - criar uma Tarefa em Simulação alocada a um Usuário Simulado, e os erros de N e de alocação;
   - executar a Tarefa (pi falso e produto local): sem link, o erro no cartão; com link, as execuções concluídas, o relatório com as duas seções e o link fora do ar;
-  - registrar uma necessidade pelo chat, o agente enviar e aprovar o registro na página da issue;
+  - registrar uma demanda pelo CLI, como a IA externa, e aprovar a demanda na página da issue;
+  - ajustar e aprovar o planejamento, ver duas entregas rodando em paralelo, aprovar os PRs com nota e concluir a demanda no gate final;
   - acompanhar uma sessão autônoma ao vivo, redirecioná-la e responder a um diálogo de extensão;
   - responder e retomar um ticket que falhou;
-  - aprovar um desenho com um ticket ajustado;
   - (pendente, 4.6) o caminho do PR depois que a decisão na hospedagem for definida;
   - abrir uma consulta pelo histórico com o histórico de outra sessão anexado;
   - abrir um artefato e as execuções de um ticket na caixa, e fechá-la com Esc;
