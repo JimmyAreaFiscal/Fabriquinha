@@ -73,6 +73,12 @@ export function submeterEvidenciaDemanda(
     );
   }
   const nova = evidencia.data;
+  if (nova.tipo === "plano") {
+    throw new ErroDeEscopo(
+      `a evidência plano da demanda ${demanda.id} só entra por submeterPlano`,
+      "o agente de planejamento submete o plano; depois da aprovação ele fica congelado",
+    );
+  }
   const daDemanda = donoDe(nova) === "demanda";
   if (daDemanda && !TipoEvidenciaDemanda.safeParse(nova.tipo).success) {
     throw new ErroDeRegra(

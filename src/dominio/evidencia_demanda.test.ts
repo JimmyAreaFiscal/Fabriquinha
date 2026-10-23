@@ -29,6 +29,11 @@ const base = (enviada = false): AgregadoDemanda => ({
   tickets: [{ demanda_id: "I-1", ticket_id: 1, etapa: "demanda", status: "aberto", status_alterado_em: em }],
   decisoes: [],
   evidencias: [],
+  rodadas: [],
+  dependencias_rodada: [],
+  criterios_citados: [],
+  dependencias_ticket: [],
+  caminhos_ticket: [],
 });
 const entrada = (tipo: string, extra: Record<string, unknown> = {}, v = 1) => ({
   tipo: tipo as never,
@@ -123,4 +128,11 @@ test("CA-11: null explícito é dono demanda, conta no envio e substitui a vers�
     () => submeterEvidenciaDemanda(ag, entrada("mensagem_pr", { rodada_id: 1, ticket_id: 1 }), autora, em),
     ErroDeRegra,
   );
+});
+
+test("plano não entra pelo envio genérico, nem antes nem depois do envio", () => {
+  for (const enviada of [false, true]) {
+    const ag = base(enviada);
+    assert.throws(() => submeterEvidenciaDemanda(ag, entrada("plano", { ticket_id: 1 }), autora, em), ErroDeEscopo);
+  }
 });

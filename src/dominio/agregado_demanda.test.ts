@@ -123,3 +123,56 @@ test("CA-11: schema aceita dono null/null e normaliza para a demanda", () => {
   assert.equal(donoDe(e), "demanda");
   assert.equal(donoDe({ ...e, rodada_id: 2, ticket_id: undefined }), "rodada");
 });
+
+const rodada = (rodada_id = 1, m: Record<string, unknown> = {}) => ({
+  demanda_id: "I-1",
+  rodada_id,
+  titulo: "r",
+  fase: "desenvolvimento",
+  e2e: false,
+  branch: `fabriquinha/I-1-${String(rodada_id)}`,
+  ...m,
+});
+
+test("estado materializado do plano: rodadas, critérios, caminhos e dependências", () => {
+  const rodadaDoTicket = (id: number) => ticket(id, { rodada_id: 1 });
+  assert.ok(
+    AgregadoDemanda.safeParse(
+      agregado({
+        rodadas: [rodada(1), rodada(2)],
+        tickets: [rodadaDoTicket(1), rodadaDoTicket(2), ticket(3, { modelo_provedor: "p", modelo_nome: "m" })],
+        dependencias_rodada: [{ demanda_id: "I-1", rodada_id: 2, depende_rodada_id: 1 }],
+        criterios_citados: [{ demanda_id: "I-1", rodada_id: 1, criterio_id: "CA-1" }],
+        dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
+        caminhos_ticket: [{ demanda_id: "I-1", ticket_id: 1, caminho: "src/a.ts" }],
+      }),
+    ).success,
+  );
+  const d = (m: Record<string, unknown>) => ({ demanda_id: "I-1", ...m });
+  recusa(agregado({ rodadas: [rodada(1), rodada(1)] }), "rodada 1 se repete");
+  recusa(agregado({ rodadas: [rodada(1, { demanda_id: "I-2" })] }), "outra demanda");
+  recusa(agregado({ rodadas: [rodada(1, { branch: "x" })] }), "branch da rodada");
+  recusa(agregado({ tickets: [ticket(1, { rodada_id: 9 })] }), "rodada 9, que não existe");
+  recusa(agregado({ tickets: [ticket(1, { modelo_nome: "m" })] }), "juntos");
+  recusa(agregado({ caminhos_ticket: [{ ...d({ ticket_id: 1, caminho: "a" }), demanda_id: "I-2" }] }), "outra demanda");
+  recusa(
+    agregado({ rodadas: [rodada(1)], dependencias_rodada: [d({ rodada_id: 1, depende_rodada_id: 1 })] }),
+    "de si mesma",
+  );
+  recusa(
+    agregado({ rodadas: [rodada(1)], dependencias_rodada: [d({ rodada_id: 1, depende_rodada_id: 2 })] }),
+    "não existe",
+  );
+  recusa(agregado({ criterios_citados: [d({ rodada_id: 3, criterio_id: "CA-1" })] }), "rodada 3, que não existe");
+  recusa(agregado({ caminhos_ticket: [d({ ticket_id: 7, caminho: "a" })] }), "ticket 7, que não existe");
+  recusa(agregado({ dependencias_ticket: [d({ ticket_id: 1, depende_ticket_id: 1 })] }), "de si mesmo");
+  recusa(agregado({ dependencias_ticket: [d({ ticket_id: 1, depende_ticket_id: 7 })] }), "ticket que não existe");
+  recusa(
+    agregado({
+      rodadas: [rodada(1), rodada(2)],
+      tickets: [ticket(1, { rodada_id: 1 }), ticket(2, { rodada_id: 2 })],
+      dependencias_ticket: [d({ ticket_id: 2, depende_ticket_id: 1 })],
+    }),
+    "mesma rodada",
+  );
+});
