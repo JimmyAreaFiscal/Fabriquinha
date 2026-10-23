@@ -23,7 +23,12 @@ const sessao = (id: string, ticket_id = 1, demanda_id = "D-1"): Sessao => ({
   modo: "autonomo",
   conversa_referencia: `conv-${id}`,
 });
-const exec = (id: string, sessao_id: string): ExecucaoSessao => ({ id, sessao_id, inicio: "2026-01-01T10:00:00Z" });
+const exec = (id: string, sessao_id: string): ExecucaoSessao => ({
+  id,
+  sessao_id,
+  inicio: "2026-01-01T10:00:00Z",
+  falha: false,
+});
 const uso = (execucao_id: string, modelo_nome: string, tokens: number, custo?: number): UsoModeloExecucao => ({
   execucao_id,
   modelo_provedor: "anthropic",
@@ -49,7 +54,11 @@ test("CA-1: schema da sessão", () => {
 });
 
 test("CA-2: schemas de execução e uso", () => {
-  assert.ok(ExecucaoSessao.safeParse({ ...exec("e1", "s1"), fim: "2026-01-01T11:00:00Z", falha: "erro" }).success);
+  const fim = "2026-01-01T11:00:00Z";
+  assert.ok(ExecucaoSessao.safeParse({ ...exec("e1", "s1"), fim, falha: true }).success);
+  assert.ok(ExecucaoSessao.safeParse({ ...exec("e1", "s1"), fim, falha: false }).success);
+  assert.ok(!ExecucaoSessao.safeParse({ ...exec("e1", "s1"), fim, falha: "quebrou" }).success);
+  assert.ok(!ExecucaoSessao.safeParse({ ...exec("e1", "s1"), falha: undefined }).success);
   assert.ok(!ExecucaoSessao.safeParse({ ...exec("e1", "s1"), inicio: "ontem" }).success);
   assert.ok(UsoModeloExecucao.safeParse(uso("e1", "m", 5)).success);
   assert.ok(UsoModeloExecucao.safeParse(uso("e1", "m", 5, 0.5)).success);
@@ -74,7 +83,7 @@ test("CA-3: dois tickets e duas sessões no mesmo ticket", () => {
 
 test("CA-4: retomar cria execução distinta e preserva a conversa", () => {
   const sessoes = [sessao("s1")];
-  const e1 = encerrarExecucao(iniciarExecucao(sessoes, [], exec("e1", "s1")), "e1", "2026-01-01T11:00:00Z");
+  const e1 = encerrarExecucao(iniciarExecucao(sessoes, [], exec("e1", "s1")), "e1", "2026-01-01T11:00:00Z", false);
   const e2 = retomarSessao(sessoes, e1, exec("e2", "s1"));
   assert.deepEqual(
     e2.map((e) => e.id),
@@ -96,17 +105,17 @@ test("CA-5: recusa segunda execução sem fim, sessão ou id inválidos", () => 
 });
 
 test("CA-6: fim ausente é não encerrada; encerrar grava fim e falha", () => {
-  const aberta = { ...exec("e1", "s1"), falha: "erro" };
-  assert.equal(estadoExecucao(aberta), "em_andamento");
+  assert.equal(estadoExecucao({ ...exec("e1", "s1"), falha: true }), "em_andamento");
+  assert.equal(estadoExecucao({ ...exec("e1", "s1"), falha: false }), "em_andamento");
   assert.equal(estadoExecucao(exec("e1", "s1")), "em_andamento");
-  const ok = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z"));
+  const ok = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false));
   assert.equal(estadoExecucao(ok), "sucesso");
-  const ruim = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", "quebrou"));
-  assert.deepEqual([ruim.fim, ruim.falha, estadoExecucao(ruim)], ["2026-01-01T11:00:00Z", "quebrou", "falha"]);
-  const outras = encerrarExecucao([exec("e0", "s1"), exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z");
+  const ruim = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", true));
+  assert.deepEqual([ruim.fim, ruim.falha, estadoExecucao(ruim)], ["2026-01-01T11:00:00Z", true, "falha"]);
+  const outras = encerrarExecucao([exec("e0", "s1"), exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false);
   assert.equal(primeiro(outras).fim, undefined);
-  assert.throws(() => encerrarExecucao([ok], "e1", "2026-01-01T12:00:00Z"), regra);
-  assert.throws(() => encerrarExecucao([], "e1", "2026-01-01T12:00:00Z"), regra);
+  assert.throws(() => encerrarExecucao([ok], "e1", "2026-01-01T12:00:00Z", false), regra);
+  assert.throws(() => encerrarExecucao([], "e1", "2026-01-01T12:00:00Z", false), regra);
   assert.ok(new ErroDeRegra("x") instanceof Error);
 });
 

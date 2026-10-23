@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ModoExecucao } from "./agregado.ts";
 import { TicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
-import { Instante, Motivo } from "./primitivos.ts";
+import { Instante } from "./primitivos.ts";
 
 const IdTexto = z.string().trim().min(1);
 const Tokens = z.number().int().nonnegative();
@@ -20,7 +20,8 @@ export const ExecucaoSessao = z.object({
   sessao_id: IdTexto,
   inicio: Instante,
   fim: Instante.optional(),
-  falha: Motivo.optional(),
+  /** Só vale com `fim`: false é sucesso, true é falha. */
+  falha: z.boolean(),
 });
 
 /** Tokens e custo pertencem ao uso da execução, nunca à sessão. `custo` ausente é desconhecido, não zero. */
@@ -59,7 +60,7 @@ export const criarSessao = (sessoes: readonly Sessao[], nova: Sessao): Sessao[] 
 
 /** Fim ausente é não encerrada: `falha` sozinha não indica sucesso. */
 export const estadoExecucao = (e: ExecucaoSessao): EstadoExecucaoSessao =>
-  e.fim === undefined ? "em_andamento" : e.falha === undefined ? "sucesso" : "falha";
+  e.fim === undefined ? "em_andamento" : e.falha ? "falha" : "sucesso";
 
 const abrir = (
   sessoes: readonly Sessao[],
@@ -92,7 +93,7 @@ export const encerrarExecucao = (
   execucoes: readonly ExecucaoSessao[],
   id: string,
   fim: string,
-  falha?: string,
+  falha: boolean,
 ): ExecucaoSessao[] => {
   const alvo = execucoes.find((e) => e.id === id);
   if (!alvo) throw new ErroDeRegra(`execução ${id} não existe`);
