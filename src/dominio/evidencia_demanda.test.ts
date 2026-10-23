@@ -129,3 +129,10 @@ test("CA-11: null explícito é dono demanda, conta no envio e substitui a vers�
     ErroDeRegra,
   );
 });
+
+test("plano não entra pelo envio genérico, nem antes nem depois do envio", () => {
+  for (const enviada of [false, true]) {
+    const ag = base(enviada);
+    assert.throws(() => submeterEvidenciaDemanda(ag, entrada("plano", { ticket_id: 1 }), autora, em), ErroDeEscopo);
+  }
+});
