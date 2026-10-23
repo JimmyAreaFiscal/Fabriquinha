@@ -1,8 +1,9 @@
 // Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar e decidir.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { type Ator, exigirAuditor, TipoIssue } from "./agregado.ts";
+import { type Ator, exigirAuditor, exigirFabriquinha, TipoIssue } from "./agregado.ts";
 import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
+import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { AutorDemanda, exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
@@ -405,4 +406,114 @@ export function reabrirTicket(
   const { ticket_id, instrucao } = EntradaReabertura.parse(entrada);
   const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser reaberto");
   return comStatus(ag, ticket, { status: "aberto", instrucao, status_alterado_em: ctx.agora });
+}
+
+const EntradaDemanda = z.strictObject({ demanda_id: DemandaId });
+const RefRevisaoDemanda = { demanda_id: DemandaId, ticket_id: Id };
+const EntradaRevisaoDemanda = z.discriminatedUnion("aprovado", [
+  z.strictObject({ ...RefRevisaoDemanda, aprovado: z.literal(true) }),
+  z.strictObject({ ...RefRevisaoDemanda, aprovado: z.literal(false), exigencias: Motivo, plano: z.unknown() }),
+]);
+
+function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string): void {
+  if (demanda_id !== ag.demanda.id) {
+    throw new ErroDeRegra(`a referência é da demanda ${demanda_id}, não da ${ag.demanda.id}`, "use o demanda_id certo");
+  }
+}
+
+/** Recusa se resta rodada fora de `concluida`, implementação não concluída ou ticket ativo/falho (menos o `ignorar`). */
+function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
+  const rodada = ag.rodadas.find((r) => r.fase !== "concluida");
+  if (rodada !== undefined) {
+    throw new ErroDeRegra(
+      `a rodada ${String(rodada.rodada_id)} está em ${rodada.fase}`,
+      "todas as rodadas precisam estar concluida",
+    );
+  }
+  const pendente = ag.tickets.find(
+    (t) =>
+      t.ticket_id !== ignorar &&
+      (["aberto", "em_execucao", "falhou"].includes(t.status) ||
+        (t.etapa === "implementar" && t.status !== "concluido")),
+  );
+  if (pendente !== undefined) {
+    throw new ErroDeRegra(
+      `o ticket ${String(pendente.ticket_id)} está ${pendente.status}`,
+      "conclua todo o trabalho pendente antes da revisão integral",
+    );
+  }
+}
+
+const novoTicketGlobal = (ag: AgregadoDemanda, etapa: TicketDemanda["etapa"], agora: Instante): TicketDemanda => ({
+  demanda_id: ag.demanda.id,
+  ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
+  etapa,
+  status: "aberto",
+  status_alterado_em: agora,
+});
+
+/** CA-12: só a Fabriquinha; com todas as rodadas concluídas e nada pendente, abre `revisar_demanda` e vai a `revisao_demanda`. */
+export function iniciarRevisaoDemanda(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirFabriquinha(ator, "iniciar a revisão integral da demanda");
+  exigirDemandaDaEntrada(ag, EntradaDemanda.parse(entrada).demanda_id);
+  exigirFase(ag, "execucao", "iniciar a revisão integral");
+  exigirSemPendencias(ag);
+  return {
+    ...ag,
+    demanda: { ...ag.demanda, fase: "revisao_demanda", fase_alterada_em: ctx.agora },
+    tickets: [...ag.tickets, novoTicketGlobal(ag, "revisar_demanda", ctx.agora)],
+  };
+}
+
+/**
+ * CA-13 e CA-14: só o agente do `revisar_demanda` atual. Reprovada, as exigências vão em `motivo` e o plano corretivo
+ * cria só rodadas novas (as integradas ficam como estão) e a demanda volta a `execucao`; aprovada, abre
+ * `encerrar_demanda` e vai a `encerramento`. Decisão, fechamento do revisor e efeitos andam juntos.
+ */
+export function registrarRevisaoDemanda(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  const e = EntradaRevisaoDemanda.parse(entrada);
+  exigirDemandaDaEntrada(ag, e.demanda_id);
+  exigirFase(ag, "revisao_demanda", "receber a revisão integral");
+  const revisores = ag.tickets.filter((t) => t.etapa === "revisar_demanda");
+  const ticket = revisores.find((t) => t.ticket_id === Math.max(...revisores.map((x) => x.ticket_id)));
+  if (ticket?.ticket_id !== e.ticket_id || (ticket.status !== "aberto" && ticket.status !== "em_execucao")) {
+    throw new ErroDeRegra(
+      `o ticket ${String(e.ticket_id)} não é o revisar_demanda ativo`,
+      "use o ticket atual da revisão",
+    );
+  }
+  if (ator.tipo !== "agente" || ator.ticket !== ticket.ticket_id) {
+    throw new ErroDeEscopo("só o agente do ticket revisar_demanda atual decide a revisão", "peça à sessão de revisão");
+  }
+  exigirSemPendencias(ag, ticket.ticket_id);
+  const decisao: DecisaoDemanda = {
+    demanda_id: ag.demanda.id,
+    ticket_id: ticket.ticket_id,
+    decisao_id: proximaDecisaoId(ag, ticket),
+    resultado: e.aprovado ? "aprovado" : "recusado",
+    ...(!e.aprovado && { motivo: e.exigencias }),
+    por: "agente",
+    em: ctx.agora,
+  };
+  // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.
+  const base = e.aprovado ? ag : materializarRodadasCorretivas(ag, e.plano, ctx.agora);
+  const fechado = base.tickets.map((t) =>
+    t.ticket_id === ticket.ticket_id ? { ...t, status: "concluido" as const, status_alterado_em: ctx.agora } : t,
+  );
+  return {
+    ...base,
+    demanda: { ...base.demanda, fase: e.aprovado ? "encerramento" : "execucao", fase_alterada_em: ctx.agora },
+    tickets: e.aprovado ? [...fechado, novoTicketGlobal(base, "encerrar_demanda", ctx.agora)] : fechado,
+    decisoes: [...ag.decisoes, decisao],
+  };
 }
