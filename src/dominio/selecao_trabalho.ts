@@ -1,17 +1,18 @@
 // Seleção determinística de trabalho da demanda SDLC (comparacao-sdlc-implementacao.md §4.1): o agente não escolhe.
 import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
 
-/** Por rodada elegível, o ticket `aberto` de menor `ticket_id` com dependências concluídas; ticket global falho bloqueia tudo. */
+/** Por rodada em `desenvolvimento`, o `implementar` aberto de menor `ticket_id` com dependências concluídas; global em execução ou falho bloqueia tudo. */
 export function selecionarTrabalho(ag: AgregadoDemanda): TicketDemanda[] {
   if (ag.demanda.fase !== "execucao") return [];
   const status = new Map(ag.tickets.map((t) => [t.ticket_id, t.status]));
-  if (ag.tickets.some((t) => t.rodada_id === undefined && t.status === "falhou")) return [];
+  if (ag.tickets.some((t) => t.rodada_id === undefined && (t.status === "falhou" || t.status === "em_execucao")))
+    return [];
   const concluida = new Set(ag.rodadas.filter((r) => r.fase === "concluida").map((r) => r.rodada_id));
   const dependeDe = (de: number, quem: { rodada_id: number; depende_rodada_id: number }[]) =>
     quem.filter((d) => d.rodada_id === de).map((d) => d.depende_rodada_id);
   const escolhidos: TicketDemanda[] = [];
-  for (const rodada of ag.rodadas) {
-    const tickets = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id);
+  for (const rodada of ag.rodadas.filter((r) => r.fase === "desenvolvimento")) {
+    const tickets = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "implementar");
     const livre =
       dependeDe(rodada.rodada_id, ag.dependencias_rodada).every((d) => concluida.has(d)) &&
       !tickets.some((t) => t.status === "em_execucao" || t.status === "falhou");
