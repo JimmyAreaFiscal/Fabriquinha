@@ -6,7 +6,12 @@ import { ErroDeEscopo } from "./erros.ts";
 import {
   conferirPullRequestRodada,
   concluirImplementacoesRodada,
+  concluirSessaoRodada,
+  confirmarAprovacaoPullRequest,
+  registrarCorrecoesSessao,
   registrarRevisaoRodada,
+  reprovarPullRequestRodada,
+  validarAprovacaoPullRequest,
 } from "./transicoes_rodada.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
@@ -298,4 +303,194 @@ test("novo ciclo abre tickets novos e preserva o histórico", () => {
   );
   // o revisor antigo não decide mais
   recusa(ag4, () => registrarRevisaoRodada(ag4, { ...ref, ticket_id: 3, aprovado: true }, agente(3), ctx));
+});
+
+const emGate = (status = "aberto") =>
+  montar("aprovacao_pull_request", [
+    tk(2, "implementar", "concluido"),
+    tk(3, "revisar_rodada", "concluido"),
+    tk(4, "encerrar_rodada", status),
+  ]);
+const emSessao = (extra: object[] = [], status = "aberto") =>
+  montar("sessao", [
+    tk(2, "implementar", "concluido"),
+    tk(3, "revisar_rodada", "concluido"),
+    tk(4, "encerrar_rodada", "concluido"),
+    tk(5, "sessao_em_aberto", status),
+    ...extra,
+  ]);
+const fase = (ag: AgregadoDemanda) => ag.rodadas.map((r) => r.fase);
+
+test("CA-7: reprovar o PR registra recusa sem nota, conclui o gate e abre a sessão", () => {
+  const ag = emGate();
+  const antes = structuredClone(ag);
+  const novo = reprovarPullRequestRodada(ag, { ...ref, ticket_id: 4, motivo: " ajustar " }, AUDITOR, ctx);
+  assert.deepEqual(ag, antes);
+  assert.deepEqual(fase(novo), ["sessao", "desenvolvimento"]);
+  assert.deepEqual(
+    novo.tickets.slice(3).map((t) => [t.ticket_id, t.etapa, t.status]),
+    [
+      [4, "encerrar_rodada", "concluido"],
+      [5, "sessao_em_aberto", "aberto"],
+    ],
+  );
+  assert.deepEqual(novo.decisoes, [
+    { demanda_id: D, ticket_id: 4, decisao_id: 1, resultado: "recusado", motivo: "ajustar", por: "auditor", em: t1 },
+  ]);
+  // repetição após a mudança de fase não duplica decisão
+  recusa(novo, () => reprovarPullRequestRodada(novo, { ...ref, ticket_id: 4, motivo: "x" }, AUDITOR, ctx));
+});
+
+test("CA-6: reprovar sem motivo, com nota, por outro ator ou fora do gate é recusado", () => {
+  const ag = emGate();
+  const ok = { ...ref, ticket_id: 4, motivo: "x" };
+  for (const entrada of [
+    { ...ok, motivo: " " },
+    { ...ref, ticket_id: 4 },
+    { ...ok, nota: 3 },
+    { ...ok, ticket_id: 3 },
+  ]) {
+    recusa(ag, () => reprovarPullRequestRodada(ag, entrada, AUDITOR, ctx));
+  }
+  for (const ator of [FABRIQUINHA, agente(4)]) {
+    recusa(ag, () => reprovarPullRequestRodada(ag, ok, ator, ctx), ErroDeEscopo);
+  }
+  const falho = emGate("falhou");
+  recusa(falho, () => reprovarPullRequestRodada(falho, ok, AUDITOR, ctx));
+  const enc = emEncerramento();
+  recusa(enc, () => reprovarPullRequestRodada(enc, ok, AUDITOR, ctx));
+});
+
+test("sessão: Auditor e agente da sessão registram correções sem executar nem mudar de fase", () => {
+  const ag = emSessao();
+  const entrada = { ...ref, ticket_id: 5, correcoes: [correcao()] };
+  for (const ator of [AUDITOR, agente(5)]) {
+    const novo = registrarCorrecoesSessao(ag, entrada, ator, ctx);
+    assert.deepEqual(fase(novo), ["sessao", "desenvolvimento"]);
+    assert.deepEqual(
+      novo.tickets.slice(5).map((t) => [t.ticket_id, t.etapa, t.status]),
+      [[6, "implementar", "aberto"]],
+    );
+  }
+  for (const ator of [FABRIQUINHA, agente(2)]) {
+    recusa(ag, () => registrarCorrecoesSessao(ag, entrada, ator, ctx), ErroDeEscopo);
+  }
+  recusa(ag, () => registrarCorrecoesSessao(ag, { ...entrada, correcoes: [] }, AUDITOR, ctx));
+  recusa(ag, () => registrarCorrecoesSessao(ag, { ...entrada, ticket_id: 4 }, AUDITOR, ctx));
+  const dev = emDesenvolvimento();
+  recusa(dev, () => registrarCorrecoesSessao(dev, { ...entrada, ticket_id: 2 }, AUDITOR, ctx));
+});
+
+test("CA-8: concluir a sessão sem ticket novo, com ticket antigo ou em execução é recusado", () => {
+  const ok = { ...ref, ticket_id: 5 };
+  const sem = emSessao();
+  recusa(sem, () => concluirSessaoRodada(sem, ok, AUDITOR, ctx));
+  // implementar aberto anterior à sessão é histórico e não conta
+  const antigo = montar("sessao", [
+    tk(2, "implementar", "aberto"),
+    tk(3, "revisar_rodada", "concluido"),
+    tk(4, "encerrar_rodada", "concluido"),
+    tk(5, "sessao_em_aberto", "aberto"),
+  ]);
+  recusa(antigo, () => concluirSessaoRodada(antigo, ok, AUDITOR, ctx));
+  const rodando = emSessao([tk(6, "implementar", "aberto"), tk(7, "implementar", "em_execucao")]);
+  recusa(rodando, () => concluirSessaoRodada(rodando, ok, AUDITOR, ctx));
+  const com = emSessao([tk(6, "implementar", "aberto")]);
+  for (const ator of [FABRIQUINHA, agente(5)]) {
+    recusa(com, () => concluirSessaoRodada(com, ok, ator, ctx), ErroDeEscopo);
+  }
+  recusa(com, () => concluirSessaoRodada(com, { ...ok, ticket_id: 4 }, AUDITOR, ctx));
+  const fim = emSessao([tk(6, "implementar", "aberto")], "concluido");
+  recusa(fim, () => concluirSessaoRodada(fim, ok, AUDITOR, ctx));
+});
+
+test("CA-9: concluir a sessão com correção nova volta a desenvolvimento e libera o ticket", () => {
+  const ag = registrarCorrecoesSessao(emSessao(), { ...ref, ticket_id: 5, correcoes: [correcao()] }, AUDITOR, ctx);
+  const novo = concluirSessaoRodada(ag, { ...ref, ticket_id: 5 }, AUDITOR, ctx);
+  assert.deepEqual(fase(novo), ["desenvolvimento", "desenvolvimento"]);
+  assert.deepEqual(
+    novo.tickets.slice(4).map((t) => [t.ticket_id, t.etapa, t.status]),
+    [
+      [5, "sessao_em_aberto", "concluido"],
+      [6, "implementar", "aberto"],
+    ],
+  );
+  assert.deepEqual(novo.decisoes, []);
+});
+
+const aprovacao = (extra = {}) => ({ ...ref, ticket_id: 4, nota: 4, ...extra });
+const integracao = (extra = {}) => ({
+  ...ref,
+  ticket_id: 4,
+  confirmada: true,
+  branch_destino: `fabriquinha/${D}`,
+  ...extra,
+});
+
+test("CA-6: validar a aprovação aceita notas 1 a 5 sem efeito e recusa o resto", () => {
+  const ag = emGate();
+  const antes = structuredClone(ag);
+  for (const nota of [1, 5]) {
+    assert.deepEqual(validarAprovacaoPullRequest(ag, aprovacao({ nota }), AUDITOR), aprovacao({ nota }));
+  }
+  assert.deepEqual(ag, antes);
+  for (const nota of [undefined, 0, 6, 3.5, "3"]) {
+    recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao({ nota }), AUDITOR));
+  }
+  recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao({ extra: 1 }), AUDITOR));
+  for (const ator of [FABRIQUINHA, agente(4)]) {
+    recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao(), ator), ErroDeEscopo);
+  }
+  const enc = emEncerramento();
+  recusa(enc, () => validarAprovacaoPullRequest(enc, aprovacao(), AUDITOR));
+  const obsoleto = montar("aprovacao_pull_request", [
+    tk(4, "encerrar_rodada", "concluido"),
+    tk(5, "encerrar_rodada", "aberto"),
+  ]);
+  recusa(obsoleto, () => validarAprovacaoPullRequest(obsoleto, aprovacao(), AUDITOR));
+});
+
+test("CA-11: confirmada a integração, grava a aprovação com a nota e conclui a rodada", () => {
+  for (const nota of [1, 5]) {
+    const ag = emGate();
+    const antes = structuredClone(ag);
+    const novo = confirmarAprovacaoPullRequest(ag, aprovacao({ nota }), AUDITOR, {
+      agora: t1,
+      integracao: integracao(),
+    });
+    assert.deepEqual(ag, antes);
+    assert.deepEqual(fase(novo), ["concluida", "desenvolvimento"]);
+    assert.equal(novo.tickets.find((t) => t.ticket_id === 4)?.status, "concluido");
+    assert.deepEqual(novo.decisoes, [
+      { demanda_id: D, ticket_id: 4, decisao_id: 1, resultado: "aprovado", nota, por: "auditor", em: t1 },
+    ]);
+    // repetição após a conclusão não duplica a decisão
+    recusa(novo, () =>
+      confirmarAprovacaoPullRequest(novo, aprovacao({ nota }), AUDITOR, { agora: t1, integracao: integracao() }),
+    );
+  }
+});
+
+test("CA-10: sem confirmação, falha, divergência ou entrada inválida nada é registrado", () => {
+  const ag = emGate();
+  const confirma =
+    (entrada: unknown, i: unknown, ator: Ator = AUDITOR) =>
+    () =>
+      confirmarAprovacaoPullRequest(ag, entrada, ator, { agora: t1, integracao: i });
+  for (const i of [
+    undefined,
+    null,
+    integracao({ confirmada: false }),
+    integracao({ confirmada: undefined }),
+    integracao({ demanda_id: "I-2" }),
+    integracao({ rodada_id: 2 }),
+    integracao({ ticket_id: 3 }),
+    integracao({ branch_destino: `fabriquinha/${D}-1` }),
+    integracao({ extra: 1 }),
+  ]) {
+    recusa(ag, confirma(aprovacao(), i));
+  }
+  recusa(ag, confirma(aprovacao({ nota: 6 }), integracao()));
+  recusa(ag, confirma(aprovacao(), integracao(), FABRIQUINHA), ErroDeEscopo);
+  recusa(ag, () => confirmarAprovacaoPullRequest(ag, aprovacao(), AUDITOR, ctx));
 });
