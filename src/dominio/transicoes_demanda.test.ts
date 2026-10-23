@@ -223,8 +223,12 @@ test("CA-2: ticket de implementação sem rodada é recusado na submissão, sem 
   const antes = structuredClone(ag);
   const plano = planoV();
   const { rodada_id: _, ...semRodada } = plano.tickets[2] as Record<string, unknown>;
-  const e = planoV({ tickets: [plano.tickets[0], plano.tickets[1], semRodada] });
+  const e = planoV({
+    tickets: [plano.tickets[0], plano.tickets[1], semRodada, { ...semRodada, ticket_id: 9, rodada_id: 2 }],
+  });
   assert.throws(() => submeterPlano(ag, e, agente, { agora: t2 }), /não têm rodada/);
+  const vazia = planoV({ tickets: [plano.tickets[0], plano.tickets[1]] });
+  assert.throws(() => submeterPlano(ag, vazia, agente, { agora: t2 }), /rodada 2 não tem ticket/);
   assert.deepEqual(ag, antes);
 });
 
@@ -319,6 +323,7 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
         rodada_id: 2,
         depende: [{ demanda_id: "I-1", ticket_id: 4 }],
       },
+      { demanda_id: "I-1", ticket_id: 7, titulo: "d", descricao: "d", rodada_id: 1 },
     ],
   });
   const ag = submeterPlano(emPlanejamento(), plano, agente, { agora: t2 });
@@ -343,6 +348,7 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
       [3, "a", 2, "implementar", "aberto", "high"],
       [4, "b", 2, "implementar", "aberto", undefined],
       [5, "c", 2, "implementar", "aberto", undefined],
+      [6, "d", 1, "implementar", "aberto", undefined],
     ],
   );
   assert.deepEqual(novo.dependencias_ticket, [{ demanda_id: "I-1", ticket_id: 5, depende_ticket_id: 3 }]);

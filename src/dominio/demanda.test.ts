@@ -20,6 +20,7 @@ const plano = (mudanca: Record<string, unknown> = {}) => ({
       rodada_id: 1,
       depende: [{ demanda_id: "I-1", ticket_id: 2 }],
     },
+    { demanda_id: "I-1", ticket_id: 4, titulo: "t4", descricao: "d", rodada_id: 2 },
   ],
   ...mudanca,
 });
@@ -138,7 +139,17 @@ test("ticket do plano: caminhos relativos, par de modelo e effort válidos", () 
   recusa(plano({ tickets: [{ ...tk(1), effort: "enorme" }] }), "");
   recusa(plano({ tickets: [{ ...tk(1), titulo: "" }] }), "");
   assert.ok(
-    Plano.safeParse(plano({ tickets: [{ ...tk(1), modelo_provedor: "openai", modelo_nome: "gpt", effort: "high" }] }))
-      .success,
+    Plano.safeParse(
+      plano({
+        rodadas: [rd(1)],
+        tickets: [{ ...tk(1, 1), modelo_provedor: "openai", modelo_nome: "gpt", effort: "high" }],
+      }),
+    ).success,
   );
+});
+
+test("CA-2: rodada declarada sem ticket é recusada, mas a demanda pode ter zero rodadas", () => {
+  recusa(plano({ rodadas: [rd(1), rd(2)], tickets: [tk(1, 1)] }), "rodada 2 não tem ticket");
+  recusa(plano({ rodadas: [rd(1)], tickets: [tk(1)] }), "rodada 1 não tem ticket");
+  assert.ok(Plano.safeParse(plano({ rodadas: [], tickets: [tk(1)] })).success);
 });

@@ -115,6 +115,10 @@ export const Plano = z
         erro(`o ticket ${String(t.ticket_id)} está na rodada ${String(t.rodada_id)}, que não existe`);
       tickets.set(t.ticket_id, t.rodada_id);
     }
+    for (const r of plano.rodadas) {
+      if (!plano.tickets.some((t) => t.rodada_id === r.rodada_id))
+        erro(`a rodada ${String(r.rodada_id)} não tem ticket de implementação`);
+    }
     const grafoTickets = new Map<string, string[]>();
     for (const t of plano.tickets) {
       for (const d of t.depende) {
