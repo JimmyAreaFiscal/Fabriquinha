@@ -232,21 +232,37 @@ test("projetos são isolados e campos comuns são compartilhados com o formato l
   });
 });
 
-test("leitura é um snapshot: escrita concorrente só aparece depois", () => {
+test("leitura é um snapshot: substituição commitada entre os SELECTs só aparece na leitura seguinte", () => {
   comBanco((banco, raiz) => {
     gravarConfiguracaoProjeto(banco, completa);
+    const nova = {
+      ...minima(),
+      branch_base: "dev",
+      linguagens: [{ caminho: "web", linguagem: "ts", comando_teste: "t" }],
+    };
     const leitor = new DatabaseSync(join(raiz, "fabriquinha.db"));
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- preserva o método para restaurar; chamada usa .call(leitor).
+    const prepare = leitor.prepare;
+    let escreveu = false;
     try {
-      leitor.exec("BEGIN");
-      const primeira = leitor.prepare("SELECT count(*) AS n FROM linguagem_projeto").get()?.n;
-      gravarConfiguracaoProjeto(banco, minima());
-      assert.equal(leitor.prepare("SELECT count(*) AS n FROM linguagem_projeto").get()?.n, primeira);
-      leitor.exec("COMMIT");
-      assert.equal(configuracaoProjeto(leitor, "a")?.linguagens.length, 1);
+      assert.equal(leitor.prepare("PRAGMA journal_mode").get()?.journal_mode, "wal");
+      // Instrumentação local: outra conexão commita B depois do SELECT base e antes do de linguagens.
+      leitor.prepare = (sql: string) => {
+        if (sql.includes("FROM linguagem_projeto") && !escreveu) {
+          escreveu = true;
+          gravarConfiguracaoProjeto(banco, nova);
+        }
+        return prepare.call(leitor, sql);
+      };
+      assert.deepEqual(configuracaoProjeto(leitor, "a"), canonica);
+      assert.ok(escreveu);
+      assert.equal(leitor.isTransaction, false);
+      assert.deepEqual(configuracaoProjeto(leitor, "a"), Projeto.parse(nova));
+      assert.equal(leitor.isTransaction, false);
     } finally {
+      leitor.prepare = prepare;
       leitor.close();
     }
-    assert.ok(Projeto.safeParse(configuracaoProjeto(banco, "a")).success);
   });
 });
 
