@@ -13,7 +13,7 @@ import {
   TipoEvidencia,
   TipoIssue,
 } from "../dominio/agregado.ts";
-import { Etapa, Fase, TipoId } from "../dominio/primitivos.ts";
+import { Effort, Etapa, EtapaTicket, Fase, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
 import { StatusExecucaoSimulada } from "../dominio/simulacao.ts";
 import { StatusArquivo } from "./commits.ts";
@@ -389,5 +389,53 @@ export const MIGRACOES: readonly string[] = [
     ticket INTEGER NOT NULL REFERENCES ticket(id),
     tipo   TEXT NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),
     em     TEXT NOT NULL
+  );`,
+  // Configuração SDLC do projeto (comparacao-sdlc §7.1), aditiva: as colunas legadas seguem valendo e não há backfill.
+  // A ordem dos arrays vem das chaves (sem coluna de posição); os mínimos de filhos ficam no schema de domínio.
+  `ALTER TABLE projeto ADD COLUMN cursor_commit_humano TEXT CHECK (cursor_commit_humano IS NULL OR length(cursor_commit_humano) > 0);
+  CREATE TABLE configuracao_etapa_projeto (
+    projeto         TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    etapa           TEXT NOT NULL CHECK (etapa IN (${listaSql(EtapaTicket)})),
+    modelo_provedor TEXT CHECK (modelo_provedor IS NULL OR length(modelo_provedor) > 0),
+    modelo_nome     TEXT CHECK (modelo_nome IS NULL OR length(modelo_nome) > 0),
+    effort          TEXT CHECK (effort IS NULL OR effort IN (${listaSql(Effort)})),
+    PRIMARY KEY (projeto, etapa),
+    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))
+  );
+  CREATE TABLE comando_preparacao_projeto (
+    projeto TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    ordem   INTEGER NOT NULL CHECK (typeof(ordem) = 'integer' AND ordem > 0),
+    comando TEXT NOT NULL CHECK (length(comando) > 0),
+    PRIMARY KEY (projeto, ordem)
+  );
+  CREATE TABLE fitness_function_projeto (
+    projeto   TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    nome      TEXT NOT NULL CHECK (length(nome) > 0),
+    comando   TEXT NOT NULL CHECK (length(comando) > 0),
+    descricao TEXT NOT NULL CHECK (length(descricao) > 0),
+    PRIMARY KEY (projeto, nome)
+  );
+  CREATE TABLE linguagem_projeto (
+    projeto        TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    caminho        TEXT NOT NULL CHECK (length(caminho) > 0),
+    linguagem      TEXT NOT NULL CHECK (length(linguagem) > 0),
+    comando_teste  TEXT NOT NULL CHECK (length(comando_teste) > 0),
+    PRIMARY KEY (projeto, caminho)
+  );
+  CREATE TABLE configuracao_e2e (
+    projeto           TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    caminho_linguagem TEXT NOT NULL,
+    comando_build     TEXT NOT NULL CHECK (length(comando_build) > 0),
+    comando_execucao  TEXT NOT NULL CHECK (length(comando_execucao) > 0),
+    codigo_falha      INTEGER NOT NULL CHECK (typeof(codigo_falha) = 'integer' AND codigo_falha BETWEEN 1 AND 255),
+    PRIMARY KEY (projeto, caminho_linguagem),
+    FOREIGN KEY (projeto, caminho_linguagem) REFERENCES linguagem_projeto(projeto, caminho) ON DELETE CASCADE
+  );
+  CREATE TABLE glob_e2e (
+    projeto           TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    caminho_linguagem TEXT NOT NULL,
+    glob              TEXT NOT NULL CHECK (length(glob) > 0),
+    PRIMARY KEY (projeto, caminho_linguagem, glob),
+    FOREIGN KEY (projeto, caminho_linguagem) REFERENCES configuracao_e2e(projeto, caminho_linguagem) ON DELETE CASCADE
   );`,
 ];
