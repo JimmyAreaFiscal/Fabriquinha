@@ -13,7 +13,8 @@ import {
   TipoEvidencia,
   TipoIssue,
 } from "../dominio/agregado.ts";
-import { Effort, Etapa, EtapaTicket, Fase, TipoId } from "../dominio/primitivos.ts";
+import { TipoEvidenciaAgregado } from "../dominio/agregado_demanda.ts";
+import { Effort, Etapa, EtapaTicket, Fase, FaseDemanda, FaseRodada, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
 import { StatusExecucaoSimulada } from "../dominio/simulacao.ts";
 import { StatusArquivo } from "./commits.ts";
@@ -438,4 +439,108 @@ export const MIGRACOES: readonly string[] = [
     PRIMARY KEY (projeto, caminho_linguagem, glob),
     FOREIGN KEY (projeto, caminho_linguagem) REFERENCES configuracao_e2e(projeto, caminho_linguagem) ON DELETE CASCADE
   );`,
+  // Agregado da demanda SDLC (comparacao-sdlc §7.2 e §7.4), aditivo: o legado segue intacto e sem backfill. Toda FK de
+  // rodada ou ticket leva `demanda_id`; o banco garante autorreferência, FK e mesma rodada, mas não ciclo (isso é do domínio).
+  `CREATE TABLE demanda (
+    id                TEXT PRIMARY KEY,
+    projeto           TEXT NOT NULL REFERENCES projeto(nome),
+    titulo            TEXT NOT NULL,
+    tipo              TEXT NOT NULL CHECK (tipo IN (${listaSql(TipoIssue)})),
+    descricao         TEXT NOT NULL,
+    fase              TEXT NOT NULL CHECK (fase IN (${listaSql(FaseDemanda)})),
+    fase_alterada_em  TEXT NOT NULL,
+    origem_ferramenta TEXT NOT NULL,
+    origem_sessao     TEXT NOT NULL,
+    enviada           INTEGER NOT NULL CHECK (enviada IN (0,1)),
+    branch            TEXT NOT NULL
+  );
+  CREATE TABLE rodada (
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    rodada_id  INTEGER NOT NULL,
+    titulo     TEXT NOT NULL,
+    fase       TEXT NOT NULL CHECK (fase IN (${listaSql(FaseRodada)})),
+    e2e        INTEGER NOT NULL CHECK (e2e IN (0,1)),
+    branch     TEXT NOT NULL,
+    PRIMARY KEY (demanda_id, rodada_id)
+  );
+  CREATE TABLE dependencia_rodada (
+    demanda_id        TEXT NOT NULL,
+    rodada_id         INTEGER NOT NULL,
+    depende_rodada_id INTEGER NOT NULL,
+    PRIMARY KEY (demanda_id, rodada_id, depende_rodada_id),
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),
+    FOREIGN KEY (demanda_id, depende_rodada_id) REFERENCES rodada(demanda_id, rodada_id),
+    CHECK (rodada_id <> depende_rodada_id)
+  );
+  CREATE TABLE criterio_citado_rodada (
+    demanda_id  TEXT NOT NULL,
+    rodada_id   INTEGER NOT NULL,
+    criterio_id TEXT NOT NULL,
+    PRIMARY KEY (demanda_id, rodada_id, criterio_id),
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id)
+  );
+  CREATE TABLE ticket_demanda (
+    demanda_id         TEXT NOT NULL REFERENCES demanda(id),
+    ticket_id          INTEGER NOT NULL,
+    etapa              TEXT NOT NULL CHECK (etapa IN (${listaSql(EtapaTicket)})),
+    status             TEXT NOT NULL CHECK (status IN (${listaSql(StatusTicket)})),
+    status_alterado_em TEXT NOT NULL,
+    rodada_id          INTEGER,
+    titulo             TEXT,
+    descricao          TEXT,
+    modelo_provedor    TEXT,
+    modelo_nome        TEXT,
+    effort             TEXT CHECK (effort IS NULL OR effort IN (${listaSql(Effort)})),
+    instrucao          TEXT,
+    PRIMARY KEY (demanda_id, ticket_id),
+    UNIQUE (demanda_id, ticket_id, rodada_id),
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),
+    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))
+  );
+  -- rodada_id derivada e NOT NULL: sem rodada (ticket de demanda) ou rodadas diferentes, a FK composta recusa.
+  CREATE TABLE dependencia_ticket (
+    demanda_id        TEXT NOT NULL,
+    ticket_id         INTEGER NOT NULL,
+    depende_ticket_id INTEGER NOT NULL,
+    rodada_id         INTEGER NOT NULL,
+    PRIMARY KEY (demanda_id, ticket_id, depende_ticket_id),
+    FOREIGN KEY (demanda_id, ticket_id, rodada_id) REFERENCES ticket_demanda(demanda_id, ticket_id, rodada_id),
+    FOREIGN KEY (demanda_id, depende_ticket_id, rodada_id) REFERENCES ticket_demanda(demanda_id, ticket_id, rodada_id),
+    CHECK (ticket_id <> depende_ticket_id)
+  );
+  CREATE TABLE caminho_ticket (
+    demanda_id TEXT NOT NULL,
+    ticket_id  INTEGER NOT NULL,
+    caminho    TEXT NOT NULL,
+    PRIMARY KEY (demanda_id, ticket_id, caminho),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+  CREATE TABLE decisao_ticket (
+    demanda_id TEXT NOT NULL,
+    ticket_id  INTEGER NOT NULL,
+    decisao_id INTEGER NOT NULL,
+    resultado  TEXT NOT NULL CHECK (resultado IN ('aprovado','recusado')),
+    nota       INTEGER CHECK (nota BETWEEN 1 AND 5),
+    motivo     TEXT,
+    por        TEXT NOT NULL CHECK (por IN ('auditor','agente')),
+    em         TEXT NOT NULL,
+    PRIMARY KEY (demanda_id, ticket_id, decisao_id),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+  CREATE TABLE evidencia_demanda (
+    id         TEXT PRIMARY KEY,
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    rodada_id  INTEGER,
+    ticket_id  INTEGER,
+    tipo       TEXT NOT NULL CHECK (tipo IN (${listaSql(TipoEvidenciaAgregado)})),
+    dados      TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(dados)),
+    em         TEXT NOT NULL,
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    CHECK (rodada_id IS NULL OR ticket_id IS NULL)
+  );
+  -- Nova submissão do mesmo tipo pelo mesmo dono substitui a anterior; um índice por dono.
+  CREATE UNIQUE INDEX ux_evidencia_demanda_demanda ON evidencia_demanda(demanda_id, tipo) WHERE rodada_id IS NULL AND ticket_id IS NULL;
+  CREATE UNIQUE INDEX ux_evidencia_demanda_rodada ON evidencia_demanda(demanda_id, rodada_id, tipo) WHERE rodada_id IS NOT NULL;
+  CREATE UNIQUE INDEX ux_evidencia_demanda_ticket ON evidencia_demanda(demanda_id, ticket_id, tipo) WHERE ticket_id IS NOT NULL;`,
 ];
