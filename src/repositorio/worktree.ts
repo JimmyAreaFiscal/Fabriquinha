@@ -132,7 +132,7 @@ export async function garantirWorktree(
 }
 
 /** F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git. */
-async function preparar(caminho: string, comandos: readonly string[], log: string): Promise<void> {
+export async function preparar(caminho: string, comandos: readonly string[], log: string): Promise<void> {
   for (const comando of comandos) {
     anotar(log, `preparação: ${comando}`);
     const r = await executarNoShell(comando, caminho, { limiteLog: LIMITE_LOG_PREPARACAO });
