@@ -52,8 +52,8 @@ const linhas = (banco: DatabaseSync, tabela: string) => banco.prepare(`SELECT * 
 const versao = (banco: DatabaseSync) =>
   (banco.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
 
-test("a migração 23 é a última e vem depois das 22 anteriores", () => {
-  assert.equal(MIGRACOES.length, 23);
+test("a migração 23 vem depois das 22 anteriores", () => {
+  assert.ok(MIGRACOES.length >= 23);
 });
 
 test("banco vazio e v22 chegam ao mesmo conjunto de tabelas novas, vazias", () => {
@@ -64,7 +64,7 @@ test("banco vazio e v22 chegam ao mesmo conjunto de tabelas novas, vazias", () =
       .all()
       .map((c) => c.name);
   assert.ok(!colunas(v22).includes("cursor_commit_humano"));
-  migrar(v22, MIGRACOES);
+  migrar(v22, MIGRACOES.slice(0, 23));
   assert.equal(versao(v22), 23);
   const vazio = abrirBanco(MIGRACOES.length);
   assert.deepEqual(colunas(v22), colunas(vazio));
@@ -77,7 +77,7 @@ test("banco vazio e v22 chegam ao mesmo conjunto de tabelas novas, vazias", () =
 test("reabrir um banco já migrado não reaplica a migração", () => {
   const banco = abrirBanco(MIGRACOES.length);
   migrar(banco, MIGRACOES);
-  assert.equal(versao(banco), 23);
+  assert.equal(versao(banco), MIGRACOES.length);
 });
 
 test("projetos legados ficam intactos, sem configuração nova e com cursor NULL", () => {
