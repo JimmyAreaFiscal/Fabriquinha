@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { AgregadoDemanda, DecisaoDemanda, EvidenciaDemanda } from "../dominio/agregado_demanda.ts";
+import type { ProgressoEncerramento } from "../dominio/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { migrar } from "./banco.ts";
@@ -212,4 +213,89 @@ test("CA-11: nova evidência do mesmo tipo e dono substitui a anterior", () => {
     [{ v: 42 }],
   );
   assert.equal(b.prepare("SELECT count(*) AS n FROM evidencia_demanda").get()?.n, 3);
+});
+
+// Progresso do encerramento (comparacao-sdlc §5): precisa da fase encerramento e de um resolver_conflito para o conflito.
+const emEncerramento = (b: DatabaseSync, encerramento?: ProgressoEncerramento) =>
+  comDemanda(b, "I-1", (ag) => ({
+    ...ag,
+    demanda: { ...ag.demanda, fase: "encerramento" },
+    tickets: [...ag.tickets, { ...ticket(5), etapa: "resolver_conflito" }],
+    ...(encerramento && { encerramento }),
+  }));
+const progresso = (extra: Partial<ProgressoEncerramento> = {}): ProgressoEncerramento => ({
+  demanda_id: "I-1",
+  pr: { numero: 7, url: "https://x/pr/7" },
+  branch: "fabriquinha/I-1",
+  base: "main",
+  sha_verificado: "abc123",
+  limpeza_pendente: [],
+  ...extra,
+});
+const linhas = (b: DatabaseSync, tabela: string) => b.prepare(`SELECT * FROM ${tabela}`).all();
+
+test("encerramento: ida e volta campo a campo, com e sem os opcionais", () => {
+  const b = comBase();
+  const cheio = progresso({
+    integracao: { sha: "def456" },
+    limpeza_pendente: ["branch-a", "branch-b"],
+    conflito_pendente: { ticket_id: 5 },
+    falha: { etapa: "limpeza", motivo: "m" },
+  });
+  assert.deepEqual(emEncerramento(b, cheio).encerramento, cheio);
+  assert.deepEqual(carregarDemanda(b, "I-1").encerramento, cheio);
+  const minimo = { demanda_id: "I-1", branch: "fabriquinha/I-1", base: "main", limpeza_pendente: [] };
+  comDemanda(b, "I-1", (ag) => ({ ...ag, encerramento: minimo }));
+  assert.deepEqual(carregarDemanda(b, "I-1").encerramento, minimo);
+  assert.deepEqual(linhas(b, "limpeza_pendente_encerramento"), []);
+  assert.equal("encerramento" in carregarDemanda(comBase(), "I-1"), false);
+});
+
+test("encerramento: confirmar a integração é só UPDATE e as pendências ficam em linhas próprias", () => {
+  const b = comBase();
+  emEncerramento(b, progresso());
+  const ops: string[] = [];
+  const prepare = b.prepare.bind(b);
+  b.prepare = (sql: string) => {
+    ops.push(sql.split(" ")[0] ?? "");
+    return prepare(sql);
+  };
+  comDemanda(b, "I-1", (ag) => ({
+    ...ag,
+    encerramento: { ...progresso(), integracao: { sha: "def456" }, limpeza_pendente: ["branch-a", "branch-b"] },
+  }));
+  assert.equal(ops.includes("DELETE"), false);
+  assert.deepEqual(
+    linhas(b, "limpeza_pendente_encerramento").map((l) => l.limpeza_pendente),
+    ["branch-a", "branch-b"],
+  );
+  assert.deepEqual(carregarDemanda(b, "I-1").encerramento?.limpeza_pendente, ["branch-a", "branch-b"]);
+  assert.equal(ops.filter((o) => o === "UPDATE").length, 1);
+});
+
+test("encerramento: o banco recusa progresso duplicado, de demanda inexistente, conflito alheio e pendência repetida", () => {
+  const b = comBase();
+  emEncerramento(b, progresso({ integracao: { sha: "s" }, limpeza_pendente: ["branch-a"] }));
+  const antes = carregarDemanda(b, "I-1");
+  const recusaGravar = (esperado: RegExp, sql: string) => {
+    assert.throws(() => {
+      b.exec(sql);
+    }, esperado);
+    assert.deepEqual(carregarDemanda(b, "I-1"), antes);
+  };
+  recusaGravar(
+    /constraint/i,
+    "INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('I-1', 'b', 'main')",
+  );
+  recusaGravar(
+    /FOREIGN KEY/,
+    "INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('I-9', 'b', 'main')",
+  );
+  recusaGravar(/constraint/i, "INSERT INTO limpeza_pendente_encerramento VALUES ('I-1', 'branch-a')");
+  assert.equal(linhas(b, "limpeza_pendente_encerramento").length, 1);
+  assert.throws(
+    () => comDemanda(b, "I-1", (ag) => ({ ...ag, encerramento: progresso({ conflito_pendente: { ticket_id: 99 } }) })),
+    /FOREIGN KEY/,
+  );
+  assert.deepEqual(carregarDemanda(b, "I-1"), antes);
 });

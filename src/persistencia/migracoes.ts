@@ -14,6 +14,7 @@ import {
   TipoIssue,
 } from "../dominio/agregado.ts";
 import { TipoEvidenciaAgregado } from "../dominio/agregado_demanda.ts";
+import { ProgressoEncerramento } from "../dominio/encerramento_demanda.ts";
 import { Effort, Etapa, EtapaTicket, Fase, FaseDemanda, FaseRodada, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
 import { StatusExecucaoSimulada } from "../dominio/simulacao.ts";
@@ -543,4 +544,54 @@ export const MIGRACOES: readonly string[] = [
   CREATE UNIQUE INDEX ux_evidencia_demanda_demanda ON evidencia_demanda(demanda_id, tipo) WHERE rodada_id IS NULL AND ticket_id IS NULL;
   CREATE UNIQUE INDEX ux_evidencia_demanda_rodada ON evidencia_demanda(demanda_id, rodada_id, tipo) WHERE rodada_id IS NOT NULL;
   CREATE UNIQUE INDEX ux_evidencia_demanda_ticket ON evidencia_demanda(demanda_id, ticket_id, tipo) WHERE ticket_id IS NOT NULL;`,
+  // Progresso do encerramento e sessões (comparacao-sdlc §5 e §7.3), aditivo: sem backfill e sem tocar nas tabelas legadas.
+  `CREATE TABLE encerramento_demanda (
+    demanda_id        TEXT PRIMARY KEY REFERENCES demanda(id),
+    pr_numero         INTEGER CHECK (pr_numero IS NULL OR (typeof(pr_numero) = 'integer' AND pr_numero > 0)),
+    pr_url            TEXT CHECK (pr_url IS NULL OR length(pr_url) > 0),
+    branch            TEXT NOT NULL,
+    base              TEXT NOT NULL CHECK (length(base) > 0),
+    sha_verificado    TEXT CHECK (sha_verificado IS NULL OR length(sha_verificado) > 0),
+    integracao_sha    TEXT CHECK (integracao_sha IS NULL OR length(integracao_sha) > 0),
+    conflito_ticket_id INTEGER,
+    falha_etapa       TEXT CHECK (falha_etapa IS NULL OR falha_etapa IN (${listaSql(ProgressoEncerramento.shape.falha.unwrap().shape.etapa)})),
+    falha_motivo      TEXT CHECK (falha_motivo IS NULL OR length(falha_motivo) > 0),
+    FOREIGN KEY (demanda_id, conflito_ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    CHECK ((pr_numero IS NULL) = (pr_url IS NULL)),
+    CHECK (integracao_sha IS NULL OR pr_numero IS NOT NULL),
+    CHECK ((falha_etapa IS NULL) = (falha_motivo IS NULL))
+  );
+  CREATE TABLE limpeza_pendente_encerramento (
+    demanda_id       TEXT NOT NULL REFERENCES encerramento_demanda(demanda_id),
+    limpeza_pendente TEXT NOT NULL CHECK (length(limpeza_pendente) > 0),
+    PRIMARY KEY (demanda_id, limpeza_pendente)
+  );
+  CREATE TABLE sessao (
+    id                  TEXT PRIMARY KEY CHECK (length(id) > 0),
+    demanda_id          TEXT NOT NULL,
+    ticket_id           INTEGER NOT NULL,
+    modo                TEXT NOT NULL CHECK (modo IN (${listaSql(ModoExecucao)})),
+    conversa_referencia TEXT NOT NULL CHECK (length(conversa_referencia) > 0),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+  CREATE INDEX ix_sessao_ticket ON sessao(demanda_id, ticket_id);
+  CREATE TABLE execucao_sessao (
+    id        TEXT PRIMARY KEY CHECK (length(id) > 0),
+    sessao_id TEXT NOT NULL REFERENCES sessao(id),
+    inicio    TEXT NOT NULL,
+    fim       TEXT,
+    falha     INTEGER NOT NULL CHECK (falha IN (0,1))
+  );
+  CREATE INDEX ix_execucao_sessao_sessao ON execucao_sessao(sessao_id);
+  CREATE TABLE uso_modelo_execucao (
+    execucao_id          TEXT NOT NULL REFERENCES execucao_sessao(id),
+    modelo_provedor      TEXT NOT NULL CHECK (length(modelo_provedor) > 0),
+    modelo_nome          TEXT NOT NULL CHECK (length(modelo_nome) > 0),
+    tokens_entrada       INTEGER NOT NULL CHECK (typeof(tokens_entrada) = 'integer' AND tokens_entrada >= 0),
+    tokens_saida         INTEGER NOT NULL CHECK (typeof(tokens_saida) = 'integer' AND tokens_saida >= 0),
+    tokens_cache_leitura INTEGER NOT NULL CHECK (typeof(tokens_cache_leitura) = 'integer' AND tokens_cache_leitura >= 0),
+    tokens_cache_escrita INTEGER NOT NULL CHECK (typeof(tokens_cache_escrita) = 'integer' AND tokens_cache_escrita >= 0),
+    custo                REAL CHECK (custo IS NULL OR custo >= 0),
+    PRIMARY KEY (execucao_id, modelo_provedor, modelo_nome)
+  );`,
 ];

@@ -12,6 +12,9 @@ type Linha = Record<string, SQLInputValue>;
 const semNulos = (linha: Record<string, unknown>) =>
   Object.fromEntries(Object.entries(linha).filter(([, valor]) => valor !== null));
 
+/** Um grupo de colunas opcionais que existe por inteiro ou não existe (`pr`, `integracao`, ...). */
+const grupo = (campos: Record<string, unknown>) => (Object.values(campos).includes(null) ? null : campos);
+
 const bit = (b: boolean) => Number(b);
 
 interface Tabela {
@@ -63,6 +66,33 @@ const TABELAS: readonly Tabela[] = [
         effort: t.effort ?? null,
         instrucao: t.instrucao ?? null,
       })),
+  },
+  {
+    nome: "encerramento_demanda",
+    chave: ["demanda_id"],
+    linhas: ({ encerramento: e }) =>
+      e
+        ? [
+            {
+              demanda_id: e.demanda_id,
+              pr_numero: e.pr?.numero ?? null,
+              pr_url: e.pr?.url ?? null,
+              branch: e.branch,
+              base: e.base,
+              sha_verificado: e.sha_verificado ?? null,
+              integracao_sha: e.integracao?.sha ?? null,
+              conflito_ticket_id: e.conflito_pendente?.ticket_id ?? null,
+              falha_etapa: e.falha?.etapa ?? null,
+              falha_motivo: e.falha?.motivo ?? null,
+            },
+          ]
+        : [],
+  },
+  {
+    nome: "limpeza_pendente_encerramento",
+    chave: ["demanda_id", "limpeza_pendente"],
+    linhas: ({ encerramento: e }) =>
+      e?.limpeza_pendente.map((limpeza_pendente) => ({ demanda_id: e.demanda_id, limpeza_pendente })) ?? [],
   },
   {
     nome: "dependencia_ticket",
@@ -140,7 +170,21 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
   if (!demanda) return undefined;
   const filhas = (tabela: string) =>
     banco.prepare(`SELECT * FROM ${tabela} WHERE demanda_id = ? ORDER BY rowid`).all(id);
+  const enc = banco.prepare("SELECT * FROM encerramento_demanda WHERE demanda_id = ?").get(id);
   return AgregadoDemanda.parse({
+    ...(enc && {
+      encerramento: semNulos({
+        demanda_id: id,
+        pr: grupo({ numero: enc.pr_numero, url: enc.pr_url }),
+        branch: enc.branch,
+        base: enc.base,
+        sha_verificado: enc.sha_verificado,
+        integracao: grupo({ sha: enc.integracao_sha }),
+        limpeza_pendente: filhas("limpeza_pendente_encerramento").map((l) => l.limpeza_pendente),
+        conflito_pendente: grupo({ ticket_id: enc.conflito_ticket_id }),
+        falha: grupo({ etapa: enc.falha_etapa, motivo: enc.falha_motivo }),
+      }),
+    }),
     demanda: { ...demanda, enviada: demanda.enviada === 1 },
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
     dependencias_rodada: filhas("dependencia_rodada"),

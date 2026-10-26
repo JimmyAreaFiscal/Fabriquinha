@@ -85,14 +85,13 @@ const recusa = (b: DatabaseSync, sql: string, padrao: RegExp) => {
 };
 
 test("CA-1: migrar v23 → v24 só acrescenta as tabelas novas e deixa as legadas iguais", () => {
-  assert.equal(MIGRACOES.length, 24);
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES.slice(0, V23));
   b.exec(LEGADO);
   const antes = fotografia(b);
   assert.equal(versao(b), V23);
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, 24));
   assert.equal(versao(b), 24);
   assert.deepEqual(
     fotografia(b).filter(([t]) => !NOVAS.includes(String(t))),
