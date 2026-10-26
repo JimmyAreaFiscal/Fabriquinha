@@ -176,3 +176,30 @@ test("estado materializado do plano: rodadas, critérios, caminhos e dependênci
     "mesma rodada",
   );
 });
+
+test("encerramento: ausente continua válido e cada invariante recusa", () => {
+  const enc = (m: Record<string, unknown> = {}) => ({
+    demanda_id: "I-1",
+    branch: "fabriquinha/I-1",
+    base: "develop",
+    limpeza_pendente: [],
+    ...m,
+  });
+  const emEncerramento = (encerramento: unknown, tickets = [ticket()]) =>
+    agregado({ demanda: demanda({ fase: "encerramento" }), tickets, encerramento });
+  assert.ok(AgregadoDemanda.safeParse(agregado()).success);
+  assert.ok(AgregadoDemanda.safeParse(emEncerramento(enc())).success);
+  assert.ok(AgregadoDemanda.safeParse({ ...emEncerramento(enc()), demanda: demanda({ fase: "concluida" }) }).success);
+  recusa(agregado({ encerramento: enc() }), "só existe nas fases");
+  recusa(emEncerramento(enc({ demanda_id: "I-2", branch: "fabriquinha/I-2" })), "outra demanda");
+  recusa(emEncerramento(enc({ branch: "main" })), "branch do encerramento");
+  recusa(emEncerramento(enc({ integracao: { sha: "d" } })), "exige o PR");
+  recusa(emEncerramento(enc({ limpeza_pendente: ["a"] })), "exige a integração");
+  recusa(emEncerramento(enc({ conflito_pendente: { ticket_id: 1 } })), "resolver_conflito existente");
+  recusa(emEncerramento(enc({ conflito_pendente: { ticket_id: 9 } })), "resolver_conflito existente");
+  const resolver = ticket(2, { etapa: "resolver_conflito" });
+  assert.ok(
+    AgregadoDemanda.safeParse(emEncerramento(enc({ conflito_pendente: { ticket_id: 2 } }), [ticket(), resolver]))
+      .success,
+  );
+});
