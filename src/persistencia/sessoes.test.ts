@@ -41,8 +41,8 @@ const uso = (extra: Partial<UsoModeloExecucao> = {}): UsoModeloExecucao => ({
   tokens_cache_escrita: 0,
   ...extra,
 });
-const gravar = (b: DatabaseSync, s: Sessao[], e: ExecucaoSessao[], u: UsoModeloExecucao[]) =>
-  comSessoesDoTicket(b, ref, (x) => ({
+const gravar = (b: DatabaseSync, s: Sessao[], e: ExecucaoSessao[], u: UsoModeloExecucao[], r = ref) =>
+  comSessoesDoTicket(b, r, (x) => ({
     sessoes: [...x.sessoes, ...s],
     execucoes: [...x.execucoes, ...e],
     usos: u.reduce(registrarUso, x.usos),
@@ -82,17 +82,28 @@ test("CA-10, CA-13, CA-14: FK ou CHECK desfazem a gravação inteira", () => {
     assert.deepEqual(carregarSessoesDaDemanda(b, "I-1"), { sessoes: [], execucoes: [], usos: [] });
     assert.equal(b.isTransaction, false);
   };
-  recusa(() => gravar(b, [sessao("s2", 99)], [], []), /FOREIGN KEY/);
-  recusa(() => gravar(b, [sessao()], [execucao()], [uso({ execucao_id: "inexistente" })]), /FOREIGN KEY/);
-  recusa(() => gravar(b, [sessao()], [execucao()], [uso({ tokens_saida: -1 })]), /Number|too_small|>=/i);
+  recusa(() => gravar(b, [sessao("s2", 99)], [], [], { demanda_id: "I-1", ticket_id: 99 }), /FOREIGN KEY/);
+  recusa(() => gravar(b, [sessao()], [execucao()], [uso({ execucao_id: "inexistente" })]), /não é de uma execução/);
+  // sem passar por registrarUso: a CHECK do banco recusa depois de sessão e execução já inseridas
+  recusa(
+    () =>
+      comSessoesDoTicket(b, ref, () => ({
+        sessoes: [sessao()],
+        execucoes: [execucao()],
+        usos: [uso({ tokens_saida: -1 })],
+      })),
+    /CHECK/,
+  );
 });
 
 test("CA-15: carregar por demanda e o total do ticket sobre o que foi lido", () => {
   const b = banco();
+  const ref2 = { demanda_id: "I-1", ticket_id: 2 };
   const s = [sessao(), sessao("s2", 2)];
   const e = [execucao(), execucao("e2", "s2")];
   const u = [uso({ custo: 1 }), uso({ execucao_id: "e2", tokens_entrada: 7 })];
-  gravar(b, s, e, u);
+  gravar(b, [sessao()], [execucao()], [u[0] as never]);
+  gravar(b, [sessao("s2", 2)], [execucao("e2", "s2")], [u[1] as never], ref2);
   const ticket = carregarSessoesDoTicket(b, ref);
   assert.equal(ticket.sessoes.length, 1);
   const antes = totalDoTicket(s, e, u, ref);
@@ -103,5 +114,47 @@ test("CA-15: carregar por demanda e o total do ticket sobre o que foi lido", () 
     () =>
       comSessoesDoTicket(b, ref, (x) => ({ ...x, execucoes: iniciarExecucao(x.sessoes, x.execucoes, execucao("e3")) })),
     /sem fim/,
+  );
+});
+
+const noTicket2 = { demanda_id: "I-1", ticket_id: 2 };
+const comEncerrada = () => {
+  const b = banco();
+  gravar(b, [sessao()], [execucao()], [uso()]);
+  comSessoesDoTicket(b, ref, (x) => ({ ...x, execucoes: encerrarExecucao(x.execucoes, "e1", em, false) }));
+  return { b, antes: carregarSessoesDoTicket(b, ref) };
+};
+
+test("id de sessão repetido em outro ticket falha e o ticket original não muda", () => {
+  const { b, antes } = comEncerrada();
+  assert.throws(() => comSessoesDoTicket(b, noTicket2, (x) => ({ ...x, sessoes: [...x.sessoes, sessao("s1", 2)] })));
+  assert.deepEqual(carregarSessoesDoTicket(b, ref), antes);
+});
+
+test("id de execução repetido em outro ticket falha e o fim da original fica", () => {
+  const { b, antes } = comEncerrada();
+  assert.throws(() =>
+    comSessoesDoTicket(b, noTicket2, (x) => {
+      const sessoes = [...x.sessoes, sessao("s9", 2)];
+      return { ...x, sessoes, execucoes: iniciarExecucao(sessoes, x.execucoes, execucao("e1", "s9")) };
+    }),
+  );
+  assert.deepEqual(carregarSessoesDoTicket(b, ref), antes);
+});
+
+test("uso de execução de outro ticket é recusado sem alterar o uso original", () => {
+  const { b, antes } = comEncerrada();
+  assert.throws(() =>
+    comSessoesDoTicket(b, noTicket2, (x) => ({ ...x, usos: registrarUso(x.usos, uso({ tokens_entrada: 1 })) })),
+  );
+  assert.deepEqual(carregarSessoesDoTicket(b, ref), antes);
+});
+
+test("sessão de outro ticket e execução de sessão fora do resultado são recusadas", () => {
+  const b = banco();
+  assert.throws(() => comSessoesDoTicket(b, ref, (x) => ({ ...x, sessoes: [sessao("s2", 2)] })), /não é do ticket/);
+  assert.throws(
+    () => comSessoesDoTicket(b, ref, (x) => ({ ...x, execucoes: [execucao("e2", "s7")] })),
+    /sessão do ticket/,
   );
 });

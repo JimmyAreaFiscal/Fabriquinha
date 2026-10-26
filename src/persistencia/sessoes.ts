@@ -3,6 +3,7 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { z } from "zod";
 import type { TicketRef } from "../dominio/demanda.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../dominio/sessoes.ts";
 import { escrever } from "./banco.ts";
 
@@ -54,17 +55,37 @@ export const carregarSessoesDoTicket = (banco: DatabaseSync, ref: z.infer<typeof
 export const carregarSessoesDaDemanda = (banco: DatabaseSync, demandaId: string): EstadoSessoes =>
   carregar(banco, demandaId, null);
 
-function upsert(banco: DatabaseSync, tabela: string, chave: readonly string[], linhas: Linha[]): void {
+/** Linha já carregada (chave em `existentes`) é atualizada; linha nova é INSERT simples, então id de outro ticket falha por PK. */
+function gravar(
+  banco: DatabaseSync,
+  tabela: string,
+  chave: readonly string[],
+  linhas: Linha[],
+  existentes: Set<string>,
+): void {
   for (const linha of linhas) {
     const colunas = Object.keys(linha);
+    const insert = `INSERT INTO ${tabela} (${colunas.join(", ")}) VALUES (${colunas.map((c) => "$" + c).join(", ")})`;
     const sets = colunas.filter((c) => !chave.includes(c)).map((c) => `${c} = excluded.${c}`);
+    const existe = existentes.has(JSON.stringify(chave.map((c) => linha[c])));
     banco
-      .prepare(
-        `INSERT INTO ${tabela} (${colunas.join(", ")}) VALUES (${colunas.map((c) => "$" + c).join(", ")})
-         ON CONFLICT (${chave.join(", ")}) DO UPDATE SET ${sets.join(", ")}`,
-      )
+      .prepare(existe ? `${insert} ON CONFLICT (${chave.join(", ")}) DO UPDATE SET ${sets.join(", ")}` : insert)
       .run(linha);
   }
+}
+
+const chaves = (chave: readonly string[], linhas: readonly object[]): Set<string> =>
+  new Set(linhas.map((l) => JSON.stringify(chave.map((c) => (l as Linha)[c]))));
+
+function validar(ref: z.infer<typeof TicketRef>, { sessoes, execucoes, usos }: EstadoSessoes): void {
+  const s = sessoes.find((s) => s.demanda_id !== ref.demanda_id || s.ticket_id !== ref.ticket_id);
+  if (s) throw new ErroDeRegra(`sessão ${s.id} não é do ticket ${ref.demanda_id}/${String(ref.ticket_id)}`);
+  const ids = new Set(sessoes.map((s) => s.id));
+  const e = execucoes.find((e) => !ids.has(e.sessao_id));
+  if (e) throw new ErroDeRegra(`execução ${e.id} não é de uma sessão do ticket`);
+  const execIds = new Set(execucoes.map((e) => e.id));
+  const u = usos.find((u) => !execIds.has(u.execucao_id));
+  if (u) throw new ErroDeRegra(`uso da execução ${u.execucao_id} não é de uma execução do ticket`);
 }
 
 /** Carrega as sessões do ticket, aplica a transição pura e grava o resultado numa transação só (erro desfaz tudo). */
@@ -74,19 +95,24 @@ export const comSessoesDoTicket = (
   transicao: (estado: EstadoSessoes) => EstadoSessoes,
 ): EstadoSessoes =>
   escrever(banco, () => {
-    const depois = transicao(carregarSessoesDoTicket(banco, ref));
-    upsert(banco, "sessao", ["id"], depois.sessoes);
-    upsert(
+    const antes = carregarSessoesDoTicket(banco, ref);
+    const depois = transicao(antes);
+    validar(ref, depois);
+    gravar(banco, "sessao", ["id"], depois.sessoes, chaves(["id"], antes.sessoes));
+    gravar(
       banco,
       "execucao_sessao",
       ["id"],
       depois.execucoes.map((e) => ({ ...e, fim: e.fim ?? null, falha: Number(e.falha) })),
+      chaves(["id"], antes.execucoes),
     );
-    upsert(
+    const chaveUso = ["execucao_id", "modelo_provedor", "modelo_nome"];
+    gravar(
       banco,
       "uso_modelo_execucao",
-      ["execucao_id", "modelo_provedor", "modelo_nome"],
+      chaveUso,
       depois.usos.map((u) => ({ ...u, custo: u.custo ?? null })),
+      chaves(chaveUso, antes.usos),
     );
     return depois;
   });
