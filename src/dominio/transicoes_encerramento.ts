@@ -1,10 +1,11 @@
-// Transições do encerramento final da demanda (comparacao-sdlc-implementacao.md §5): tentativa, retomada e conflito.
+// Transições do encerramento final da demanda (comparacao-sdlc-implementacao.md §5): tentativa, retomada, conflito, falhas, integração e conclusão.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; cada uma recebe o que a aplicação observou fora do domínio.
 import { z } from "zod";
 import { type Ator, exigirFabriquinha } from "./agregado.ts";
 import { AgregadoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
 import { branchDemanda, DemandaId } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
+import { Motivo } from "./primitivos.ts";
 import {
   comStatus,
   type ContextoDemanda,
@@ -28,6 +29,21 @@ const EntradaResolucao = z.strictObject({
   sonar: z.boolean(),
   sha: Texto,
 });
+
+const EntradaFalha = z.strictObject({
+  demanda_id: DemandaId,
+  etapa: z.enum(["check_final", "integracao", "limpeza"]),
+  motivo: Motivo,
+  limpeza_pendente: z.array(Texto).default([]),
+});
+const EntradaIntegracao = z.strictObject({
+  demanda_id: DemandaId,
+  confirmada: z.boolean(),
+  sha: Texto,
+  limpeza_pendente: z.array(Texto),
+});
+const EntradaSolicitacao = z.strictObject({ demanda_id: DemandaId });
+const EntradaConclusao = z.strictObject({ demanda_id: DemandaId, limpeza_pendente: z.array(Texto).length(0) });
 
 /** O ticket mais recente da etapa (os tickets são anexados em ordem de id). */
 const ticketAtual = (ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): TicketDemanda | undefined =>
@@ -150,5 +166,135 @@ export function concluirResolucaoConflito(
   return AgregadoDemanda.parse({
     ...comStatus(ag, resolver, { status: "concluido", status_alterado_em: ctx.agora }),
     encerramento: { ...ag.encerramento, sha_verificado: e.sha },
+  });
+}
+
+/** Progresso gravado (a base e a branch só nascem na tentativa) com o ticket `encerrar_demanda` em tentativa ativa. */
+function exigirTentativaAtiva(ag: AgregadoDemanda, acao: string) {
+  const atual = exigirEncerramento(ag, acao);
+  if (ag.encerramento === undefined || (atual.status !== "aberto" && atual.status !== "em_execucao")) {
+    throw new ErroDeRegra(
+      `a demanda ${ag.demanda.id} não tem tentativa de encerramento ativa para ${acao}`,
+      "registre a tentativa antes; o Auditor reabre o ticket falho",
+    );
+  }
+  return { atual, enc: ag.encerramento };
+}
+
+/**
+ * CA-6, CA-9, CA-11 e CA-13: registra a falha da etapa e falha `encerrar_demanda`. O que já foi feito fica (PR, SHA,
+ * integração); a limpeza grava as pendências. A mesma falha repetida devolve o agregado igual.
+ */
+export function registrarFalhaEncerramento(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirFabriquinha(ator, "registrar a falha do encerramento");
+  const e = EntradaFalha.parse(entrada);
+  exigirDemandaDaEntrada(ag, e.demanda_id);
+  const falha = { etapa: e.etapa, motivo: e.motivo };
+  const anterior = ag.encerramento;
+  const repetida =
+    exigirEncerramento(ag, "registrar a falha do encerramento").status === "falhou" &&
+    anterior?.falha?.etapa === falha.etapa &&
+    anterior.falha.motivo === falha.motivo &&
+    (e.etapa !== "limpeza" || anterior.limpeza_pendente.join("\n") === e.limpeza_pendente.join("\n"));
+  if (repetida) return ag;
+  const { atual, enc } = exigirTentativaAtiva(ag, "registrar a falha do encerramento");
+  const integrada = enc.integracao !== undefined;
+  if (
+    e.etapa === "limpeza" ? !integrada || e.limpeza_pendente.length === 0 : integrada || e.limpeza_pendente.length > 0
+  ) {
+    throw new ErroDeRegra(
+      `a falha de ${e.etapa} não cabe no progresso da demanda ${ag.demanda.id}`,
+      e.etapa === "limpeza" ? "limpeza falha só após a integração, com pendências" : "a integração já foi confirmada",
+    );
+  }
+  if (e.etapa === "integracao" && enc.pr === undefined) {
+    throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes");
+  }
+  return AgregadoDemanda.parse({
+    ...comStatus(ag, atual, { status: "falhou", status_alterado_em: ctx.agora }),
+    encerramento: { ...enc, falha, ...(e.etapa === "limpeza" && { limpeza_pendente: e.limpeza_pendente }) },
+  });
+}
+
+/** CA-10: guarda sem efeito antes de integrar; com integração confirmada recusa e deixa só a limpeza pendente. */
+export function solicitarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator: Ator): AgregadoDemanda {
+  exigirFabriquinha(ator, "solicitar a integração");
+  exigirDemandaDaEntrada(ag, EntradaSolicitacao.parse(entrada).demanda_id);
+  const { enc } = exigirTentativaAtiva(ag, "solicitar a integração");
+  if (enc.integracao !== undefined) {
+    throw new ErroDeRegra(
+      `a demanda ${ag.demanda.id} já integrou na base (${enc.integracao.sha})`,
+      `não integre de novo; falta só a limpeza: ${enc.limpeza_pendente.join(", ") || "nada"}`,
+    );
+  }
+  if (enc.pr === undefined) {
+    throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes de integrar");
+  }
+  return ag;
+}
+
+/**
+ * CA-7, CA-8 e CA-13: só a confirmação externa com o SHA marca a integração como feita; grava as pendências de limpeza e
+ * limpa a falha de integração. Repetir a mesma confirmação devolve igual; outro SHA recusa.
+ */
+export function registrarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator: Ator): AgregadoDemanda {
+  exigirFabriquinha(ator, "registrar a integração");
+  const e = EntradaIntegracao.parse(entrada);
+  exigirDemandaDaEntrada(ag, e.demanda_id);
+  if (!e.confirmada) {
+    throw new ErroDeRegra("a integração não foi confirmada fora do domínio", "só registre a integração confirmada");
+  }
+  const ja = ag.encerramento?.integracao;
+  if (ja !== undefined) {
+    exigirEncerramento(ag, "registrar a integração");
+    if (ja.sha === e.sha) return ag;
+    throw new ErroDeRegra(
+      `a demanda ${ag.demanda.id} já integrou com o SHA ${ja.sha}`,
+      "não registre outra integração",
+    );
+  }
+  const { enc } = exigirTentativaAtiva(ag, "registrar a integração");
+  if (enc.pr === undefined) {
+    throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes de integrar");
+  }
+  const { falha, ...resto } = enc;
+  return AgregadoDemanda.parse({
+    ...ag,
+    encerramento: {
+      ...resto,
+      integracao: { sha: e.sha },
+      limpeza_pendente: e.limpeza_pendente,
+      // O progresso não afirma falha superada: só a falha de integração some, a de check_final já não existe aqui.
+      ...(falha !== undefined && falha.etapa !== "integracao" && { falha }),
+    },
+  });
+}
+
+/** CA-12 e CA-13: integração e limpeza confirmadas; a demanda fica `concluida` e o histórico não muda. */
+export function concluirEncerramento(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirFabriquinha(ator, "concluir o encerramento");
+  const e = EntradaConclusao.parse(entrada);
+  exigirDemandaDaEntrada(ag, e.demanda_id);
+  if (ag.demanda.fase === "concluida" && ag.encerramento?.integracao !== undefined) return ag;
+  const { atual, enc } = exigirTentativaAtiva(ag, "concluir o encerramento");
+  if (enc.integracao === undefined) {
+    throw new ErroDeRegra(`a demanda ${ag.demanda.id} não integrou na base`, "conclua só após a integração");
+  }
+  const { falha: _, ...resto } = enc;
+  const concluido = comStatus(ag, atual, { status: "concluido", status_alterado_em: ctx.agora });
+  return AgregadoDemanda.parse({
+    ...concluido,
+    demanda: { ...concluido.demanda, fase: "concluida", fase_alterada_em: ctx.agora },
+    encerramento: { ...resto, limpeza_pendente: [] },
   });
 }

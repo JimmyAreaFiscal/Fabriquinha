@@ -4,10 +4,14 @@ import { AUDITOR, FABRIQUINHA } from "./agregado.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
+  concluirEncerramento,
   concluirResolucaoConflito,
   podeTentarEncerramento,
   registrarConflitoEncerramento,
+  registrarFalhaEncerramento,
+  registrarIntegracao,
   registrarTentativaEncerramento,
+  solicitarIntegracao,
 } from "./transicoes_encerramento.ts";
 import { reabrirTicket } from "./transicoes_demanda.ts";
 
@@ -190,4 +194,128 @@ test("resolução recusa verificação incompleta, sem conflito, resolver conclu
   regra(() => concluirResolucaoConflito(emConflito("concluido"), resolucao({ sha: "outro" }), FABRIQUINHA, c));
   regra(() => concluirResolucaoConflito(emConflito(), resolucao({ demanda_id: "I-2" }), FABRIQUINHA, c));
   assert.throws(() => concluirResolucaoConflito(emConflito(), resolucao(), AUDITOR, c), ErroDeEscopo);
+});
+
+const falhaEnt = (m: Record<string, unknown> = {}) => ({ demanda_id: D, etapa: "check_final", motivo: "x", ...m });
+const integEnt = (m: Record<string, unknown> = {}) => ({
+  demanda_id: D,
+  confirmada: true,
+  sha: "i1",
+  limpeza_pendente: ["branch", "worktree"],
+  ...m,
+});
+const integrada = (m: Record<string, unknown> = {}, status = "aberto") =>
+  comProgresso({ integracao: { sha: "i1" }, limpeza_pendente: ["branch"], ...m }, status);
+
+test("CA-6: falha do check final falha o ticket sem integrar, limpar nem abrir implementação; repetida é igual", () => {
+  const ag = comProgresso({}, "em_execucao");
+  const novo = registrarFalhaEncerramento(ag, falhaEnt(), FABRIQUINHA, c);
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
+  assert.equal(novo.tickets.length, 2);
+  assert.equal(novo.demanda.fase, "encerramento");
+  assert.equal(novo.encerramento?.integracao, undefined);
+  assert.deepEqual(novo.encerramento?.limpeza_pendente, []);
+  assert.deepEqual(novo.encerramento.falha, { etapa: "check_final", motivo: "x" });
+  assert.deepEqual(registrarFalhaEncerramento(novo, falhaEnt(), FABRIQUINHA, c), novo);
+  regra(() => registrarFalhaEncerramento(novo, falhaEnt({ motivo: "outro" }), FABRIQUINHA, c));
+});
+
+test("CA-9: falha da integração preserva PR e SHA e não marca a integração", () => {
+  const novo = registrarFalhaEncerramento(comProgresso(), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c);
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
+  assert.deepEqual(novo.encerramento?.pr, pr);
+  assert.equal(novo.encerramento.sha_verificado, "s1");
+  assert.equal(novo.encerramento.integracao, undefined);
+  regra(() => registrarFalhaEncerramento(montar(), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c));
+});
+
+test("CA-11: falha parcial da limpeza mantém a integração e grava as pendências; repetida é igual", () => {
+  const ag = integrada();
+  const novo = registrarFalhaEncerramento(
+    ag,
+    falhaEnt({ etapa: "limpeza", limpeza_pendente: ["worktree"] }),
+    FABRIQUINHA,
+    c,
+  );
+  assert.deepEqual(novo.encerramento?.integracao, { sha: "i1" });
+  assert.deepEqual(novo.encerramento.limpeza_pendente, ["worktree"]);
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
+  const rep = falhaEnt({ etapa: "limpeza", limpeza_pendente: ["worktree"] });
+  assert.deepEqual(registrarFalhaEncerramento(novo, rep, FABRIQUINHA, c), novo);
+  const outra = falhaEnt({ etapa: "limpeza", limpeza_pendente: ["branch"] });
+  regra(() => registrarFalhaEncerramento(novo, outra, FABRIQUINHA, c));
+});
+
+test("falha recusa etapa incompatível com o progresso, sem progresso, outro ator e fase errada", () => {
+  regra(() => registrarFalhaEncerramento(integrada(), falhaEnt(), FABRIQUINHA, c));
+  regra(() => registrarFalhaEncerramento(comProgresso(), falhaEnt({ etapa: "limpeza" }), FABRIQUINHA, c));
+  regra(() => registrarFalhaEncerramento(integrada(), falhaEnt({ etapa: "limpeza" }), FABRIQUINHA, c));
+  regra(() => registrarFalhaEncerramento(comProgresso(), falhaEnt({ limpeza_pendente: ["x"] }), FABRIQUINHA, c));
+  regra(() => registrarFalhaEncerramento(montar(), falhaEnt(), FABRIQUINHA, c));
+  regra(() => registrarFalhaEncerramento(montar({}, "aberto", "execucao"), falhaEnt(), FABRIQUINHA, c));
+  regra(() =>
+    registrarFalhaEncerramento(comProgresso({ pr: undefined }), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c),
+  );
+  assert.throws(() => registrarFalhaEncerramento(comProgresso(), falhaEnt(), AUDITOR, c), ErroDeEscopo);
+});
+
+test("CA-7: integração sem confirmação recusa e o progresso fica igual", () => {
+  const ag = comProgresso();
+  const antes = structuredClone(ag);
+  regra(() => registrarIntegracao(ag, integEnt({ confirmada: false }), FABRIQUINHA));
+  assert.deepEqual(ag, antes);
+});
+
+test("CA-8 e CA-13: integração confirmada grava SHA e limpeza e limpa a falha de integração; repetida é igual", () => {
+  const ag = comProgresso({ falha: { etapa: "integracao", motivo: "x" } });
+  const novo = registrarIntegracao(ag, integEnt(), FABRIQUINHA);
+  assert.deepEqual(novo.encerramento?.integracao, { sha: "i1" });
+  assert.deepEqual(novo.encerramento.limpeza_pendente, ["branch", "worktree"]);
+  assert.equal(novo.encerramento.falha, undefined);
+  assert.deepEqual(registrarIntegracao(novo, integEnt(), FABRIQUINHA), novo);
+  regra(() => registrarIntegracao(novo, integEnt({ sha: "i2" }), FABRIQUINHA));
+});
+
+test("integração mantém falha de outra etapa e recusa sem PR, sem progresso, ticket falho e outro ator", () => {
+  const outra = comProgresso({ falha: { etapa: "limpeza", motivo: "x" } });
+  assert.equal(registrarIntegracao(outra, integEnt(), FABRIQUINHA).encerramento?.falha?.etapa, "limpeza");
+  regra(() => registrarIntegracao(comProgresso({ pr: undefined }), integEnt(), FABRIQUINHA));
+  regra(() => registrarIntegracao(montar(), integEnt(), FABRIQUINHA));
+  regra(() => registrarIntegracao(comProgresso({}, "falhou"), integEnt(), FABRIQUINHA));
+  regra(() => registrarIntegracao(montar({}, "aberto", "execucao"), integEnt(), FABRIQUINHA));
+  regra(() => registrarIntegracao(comProgresso(), integEnt({ demanda_id: "I-2" }), FABRIQUINHA));
+  assert.throws(() => registrarIntegracao(comProgresso(), integEnt(), AUDITOR), ErroDeEscopo);
+});
+
+test("CA-10: solicitar integração é guarda sem efeito; com integração confirmada recusa citando só a limpeza", () => {
+  const ag = comProgresso();
+  assert.deepEqual(solicitarIntegracao(ag, { demanda_id: D }, FABRIQUINHA), ag);
+  assert.throws(
+    () => solicitarIntegracao(integrada(), { demanda_id: D }, FABRIQUINHA),
+    (e: unknown) => e instanceof ErroDeRegra && e.message.includes("falta só a limpeza: branch"),
+  );
+  regra(() => solicitarIntegracao(integrada({ limpeza_pendente: [] }), { demanda_id: D }, FABRIQUINHA));
+  regra(() => solicitarIntegracao(comProgresso({ pr: undefined }), { demanda_id: D }, FABRIQUINHA));
+  regra(() => solicitarIntegracao(montar(), { demanda_id: D }, FABRIQUINHA));
+  assert.throws(() => solicitarIntegracao(ag, { demanda_id: D }, AUDITOR), ErroDeEscopo);
+});
+
+test("CA-12 e CA-13: concluir encerramento deixa a demanda concluida com o histórico; repetir é igual", () => {
+  const ag = integrada({ falha: { etapa: "limpeza", motivo: "x" } }, "em_execucao");
+  const novo = concluirEncerramento(ag, { demanda_id: D, limpeza_pendente: [] }, FABRIQUINHA, c);
+  assert.equal(novo.demanda.fase, "concluida");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "concluido");
+  assert.equal(novo.tickets.length, 2);
+  assert.deepEqual(novo.decisoes, []);
+  assert.deepEqual(novo.encerramento?.limpeza_pendente, []);
+  assert.equal(novo.encerramento.falha, undefined);
+  assert.deepEqual(concluirEncerramento(novo, { demanda_id: D, limpeza_pendente: [] }, FABRIQUINHA, c), novo);
+});
+
+test("concluir encerramento recusa sem integração, com limpeza pendente, ticket falho e outro ator", () => {
+  const fim = { demanda_id: D, limpeza_pendente: [] };
+  regra(() => concluirEncerramento(comProgresso(), fim, FABRIQUINHA, c));
+  regra(() => concluirEncerramento(integrada({}, "falhou"), fim, FABRIQUINHA, c));
+  assert.throws(() => concluirEncerramento(integrada(), { ...fim, limpeza_pendente: ["x"] }, FABRIQUINHA, c));
+  assert.throws(() => concluirEncerramento(integrada(), fim, AUDITOR, c), ErroDeEscopo);
 });
