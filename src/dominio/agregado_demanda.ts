@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { Evidencia, TipoAtor, TipoEvidencia, TipoIssue } from "./agregado.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
+import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import {
   Effort,
   EtapaTicket,
@@ -121,6 +122,7 @@ export const AgregadoDemanda = z
     criterios_citados: z.array(CriterioCitadoRodada).default([]),
     dependencias_ticket: z.array(DependenciaTicket).default([]),
     caminhos_ticket: z.array(CaminhoDoTicket).default([]),
+    encerramento: ProgressoEncerramento.optional(),
   })
   .superRefine((ag, ctx) => {
     const erro = (message: string) => {
@@ -174,6 +176,18 @@ export const AgregadoDemanda = z
         erro(`${nome} cita ticket que não existe`);
       else if (rodada === undefined || rodada !== rodadaDe.get(d.depende_ticket_id))
         erro(`${nome} exige a mesma rodada`);
+    }
+    const enc = ag.encerramento;
+    if (enc !== undefined) {
+      if (ag.demanda.fase !== "encerramento" && ag.demanda.fase !== "concluida")
+        erro("o progresso do encerramento só existe nas fases encerramento e concluida");
+      if (enc.demanda_id !== id) erro(`o progresso do encerramento é de outra demanda (${enc.demanda_id})`);
+      const conflito = enc.conflito_pendente?.ticket_id;
+      if (
+        conflito !== undefined &&
+        !ag.tickets.some((t) => t.ticket_id === conflito && t.etapa === "resolver_conflito")
+      )
+        erro(`o conflito pendente cita o ticket ${String(conflito)}, que não é um resolver_conflito existente`);
     }
     const decisoes = new Set<string>();
     for (const d of ag.decisoes) {

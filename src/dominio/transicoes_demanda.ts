@@ -150,7 +150,7 @@ const EntradaAprovacao = z.strictObject({ nota: z.number().int().min(1).max(5).o
 // A definição congelada guarda os `CA-n` em `dados.criterios[].id` (F3); o resto do payload não interessa aqui.
 const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
 
-function exigirFase(ag: AgregadoDemanda, fase: FaseDemanda, acao: string): void {
+export function exigirFase(ag: AgregadoDemanda, fase: FaseDemanda, acao: string): void {
   const { demanda } = ag;
   if (demanda.fase !== fase) {
     throw new ErroDeRegra(`a demanda ${demanda.id} está em ${demanda.fase} e não pode ${acao}`, `só na fase ${fase}`);
@@ -377,7 +377,11 @@ function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDe
   return ticket;
 }
 
-const comStatus = (ag: AgregadoDemanda, alvo: TicketDemanda, extra: Partial<TicketDemanda>): AgregadoDemanda => ({
+export const comStatus = (
+  ag: AgregadoDemanda,
+  alvo: TicketDemanda,
+  extra: Partial<TicketDemanda>,
+): AgregadoDemanda => ({
   ...ag,
   tickets: ag.tickets.map((t) => (t === alvo ? { ...t, ...extra } : t)),
 });
@@ -415,7 +419,7 @@ const EntradaRevisaoDemanda = z.discriminatedUnion("aprovado", [
   z.strictObject({ ...RefRevisaoDemanda, aprovado: z.literal(false), exigencias: Motivo, plano: z.unknown() }),
 ]);
 
-function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string): void {
+export function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string): void {
   if (demanda_id !== ag.demanda.id) {
     throw new ErroDeRegra(`a referência é da demanda ${demanda_id}, não da ${ag.demanda.id}`, "use o demanda_id certo");
   }
@@ -444,7 +448,11 @@ function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
   }
 }
 
-const novoTicketGlobal = (ag: AgregadoDemanda, etapa: TicketDemanda["etapa"], agora: Instante): TicketDemanda => ({
+export const novoTicketGlobal = (
+  ag: AgregadoDemanda,
+  etapa: TicketDemanda["etapa"],
+  agora: Instante,
+): TicketDemanda => ({
   demanda_id: ag.demanda.id,
   ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
   etapa,
