@@ -5,7 +5,10 @@ import type { Projeto } from "./configuracao_projeto.ts";
 import type { Effort } from "./primitivos.ts";
 
 type Origem = "ticket" | "etapa" | "padrao";
-type ParModelo = { provedor: string; nome: string };
+interface ParModelo {
+  provedor: string;
+  nome: string;
+}
 type Campos = Pick<TicketDemanda, "modelo_provedor" | "modelo_nome" | "effort">;
 
 /** O par provedor + nome da fonte, `undefined` se não tem modelo; metade do par é erro. */
