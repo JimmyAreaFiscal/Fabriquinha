@@ -43,7 +43,7 @@ const EntradaIntegracao = z.strictObject({
   limpeza_pendente: z.array(Texto),
 });
 const EntradaSolicitacao = z.strictObject({ demanda_id: DemandaId });
-const EntradaConclusao = z.strictObject({ demanda_id: DemandaId, limpeza_pendente: z.array(Texto).length(0) });
+const EntradaConclusao = z.strictObject({ demanda_id: DemandaId, limpeza_pendente: z.array(Texto) });
 
 /** O ticket mais recente da etapa (os tickets são anexados em ordem de id). */
 const ticketAtual = (ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): TicketDemanda | undefined =>
@@ -212,6 +212,12 @@ export function registrarFalhaEncerramento(
       e.etapa === "limpeza" ? "limpeza falha só após a integração, com pendências" : "a integração já foi confirmada",
     );
   }
+  if (e.etapa === "limpeza" && !e.limpeza_pendente.every((p) => enc.limpeza_pendente.includes(p))) {
+    throw new ErroDeRegra(
+      `a limpeza pendente da demanda ${ag.demanda.id} é ${enc.limpeza_pendente.join(", ")}`,
+      "informe só pendências que ainda restam",
+    );
+  }
   if (e.etapa === "integracao" && enc.pr === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes");
   }
@@ -289,6 +295,12 @@ export function concluirEncerramento(
   const { atual, enc } = exigirTentativaAtiva(ag, "concluir o encerramento");
   if (enc.integracao === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não integrou na base`, "conclua só após a integração");
+  }
+  if (e.limpeza_pendente.length > 0) {
+    throw new ErroDeRegra(
+      `ainda há limpeza pendente: ${e.limpeza_pendente.join(", ")}`,
+      "conclua só com a limpeza feita",
+    );
   }
   const { falha: _, ...resto } = enc;
   const concluido = comStatus(ag, atual, { status: "concluido", status_alterado_em: ctx.agora });
