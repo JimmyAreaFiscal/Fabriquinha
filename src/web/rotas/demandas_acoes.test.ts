@@ -94,7 +94,7 @@ const plano = {
  * I-206 num dos três gates: `demanda` (aprovação da demanda), `planejamento` (plano submetido) ou `pr` (R2 com o PR 1
  * aberto, branches no origin e worktrees prontas). A I-207 depende dela e está em planejamento.
  */
-async function cenario(gate: "demanda" | "planejamento" | "pr") {
+async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true) {
   const c = cenarioDemanda();
   const banco = abrir(c.raiz);
   banco
@@ -166,7 +166,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr") {
   return {
     c,
     banco,
-    ...(await servir(banco)),
+    ...(await servir(banco, comExecutarDemanda)),
     ag: () => carregarDemanda(banco, DEMANDA),
     fase: (id = DEMANDA) => carregarDemanda(banco, id).demanda.fase,
     registro,
@@ -401,4 +401,88 @@ test("CA-36: decisão de outra origem recebe 403 e a demanda não muda", async (
   });
   assert.equal(r.status, 403);
   assert.equal(fase(), "aprovacao_demanda");
+});
+
+const POST = { metodo: "POST" };
+const encerramentoIntegrado = (demanda_id: string) => ({
+  demanda_id,
+  branch: `fabriquinha/${demanda_id}`,
+  base: "main",
+  sha_verificado: "abc",
+  pr: { numero: 9, url: "https://pr/9" },
+  limpeza_pendente: [],
+  integracao: { sha: "def" },
+});
+
+test("CA-28: reabrir o ticket falho grava a instrução e o ticket volta a aberto", async () => {
+  const { pedir, banco, ag } = await cenario("demanda");
+  banco.exec("UPDATE ticket_demanda SET status = 'falhou' WHERE ticket_id = 1");
+  const r = await pedir("/api/demandas/tickets/I-206.T1/reabrir", {
+    ...POST,
+    corpo: { instrucao: "trate a lista vazia" },
+  });
+  assert.equal(r.status, 200);
+  const t = ag().tickets[0];
+  assert.deepEqual([t?.status, t?.instrucao], ["aberto", "trate a lista vazia"]);
+  assert.equal(r.json<{ ticket: { instrucao: string } }>().ticket.instrucao, "trate a lista vazia");
+});
+
+test("CA-29: reabrir sem instrução pede a instrução e o ticket continua falho", async () => {
+  const { pedir, banco, ag } = await cenario("demanda");
+  banco.exec("UPDATE ticket_demanda SET status = 'falhou' WHERE ticket_id = 1");
+  const r = await pedir("/api/demandas/tickets/I-206.T1/reabrir", { ...POST, corpo: { instrucao: " " } });
+  assert.equal(r.status, 422);
+  assert.match(erro(r), /informe o motivo da reabertura/);
+  assert.equal(ag().tickets[0]?.status, "falhou");
+  const rodada = await pedir("/api/demandas/tickets/I-206.R1/reabrir", { ...POST, corpo: { instrucao: "x" } });
+  assert.match(erro(rodada), /I-206\.R1 não é um ticket/);
+});
+
+test("CA-30: Executar agora entrega o ticket ao agendador e responde 204", async () => {
+  const { pedir, executados } = await cenario("demanda");
+  const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
+  assert.equal(r.status, 204);
+  assert.deepEqual(executados, [{ demanda_id: "I-206", ticket_id: 1 }]);
+});
+
+test("Executar agora sem o agendador das demandas devolve erro claro", async () => {
+  const { pedir } = await cenario("demanda", false);
+  const r = await pedir("/api/demandas/tickets/I-206.T1/executar", POST);
+  assert.equal(r.status, 409);
+  assert.match(erro(r), /não executa tickets de demanda/);
+});
+
+test("CA-32: cancelar leva a dependente e o histórico fica", async () => {
+  const { pedir, fase, ag } = await cenario("demanda");
+  const r = await pedir("/api/demandas/I-206/cancelar", POST);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
+  assert.deepEqual([fase("I-206"), fase("I-207")], ["cancelada", "cancelada"]);
+  assert.equal(ag().tickets.length, 1);
+});
+
+test("CA-33: cancelar depois da integração confirmada é recusado e a demanda não muda", async () => {
+  const { pedir, banco, fase } = await cenario("demanda");
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    demanda: { ...ag.demanda, fase: "encerramento" },
+    encerramento: encerramentoIntegrado("I-206"),
+  }));
+  const r = await pedir("/api/demandas/I-206/cancelar", POST);
+  assert.equal(r.status, 409);
+  assert.match(erro(r), /integração confirmada/);
+  assert.equal(fase(), "encerramento");
+});
+
+test("CA-34 e CA-35: arquivar só a concluída", async () => {
+  const { pedir, banco, fase } = await cenario("demanda");
+  const recusa = await pedir("/api/demandas/I-206/arquivar", POST);
+  assert.equal(recusa.status, 409);
+  assert.match(erro(recusa), /só demanda concluída pode ser arquivada/);
+  assert.equal(fase(), "aprovacao_demanda");
+  banco.exec("UPDATE demanda SET fase = 'concluida' WHERE id = 'I-206'");
+  const r = await pedir("/api/demandas/I-206/arquivar", POST);
+  assert.equal(r.status, 200);
+  assert.equal(r.json<{ demanda: { demanda: { fase: string } } }>().demanda.demanda.fase, "arquivada");
+  assert.equal(fase(), "arquivada");
 });

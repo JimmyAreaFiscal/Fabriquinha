@@ -3,15 +3,16 @@
 import { z } from "zod";
 import { AUDITOR } from "../../dominio/agregado.ts";
 import { formatarRodadaRef, interpretarRef } from "../../dominio/demanda.ts";
+import { reabrirTicket } from "../../dominio/transicoes_demanda.ts";
 import { ErroDeRegra, existe } from "../../dominio/erros.ts";
 import { aprovarPRRodada } from "../../execucao/aprovacao_pr_rodada.ts";
 import type { RefRodada } from "../../execucao/encerramento_rodada.ts";
-import { decidir } from "../../execucao/gestao_demandas.ts";
+import { arquivar, cancelar, decidir } from "../../execucao/gestao_demandas.ts";
 import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../../execucao/planejamento.ts";
 import { concluirSessaoAjustes, enviarMensagemAjustes, reprovarPRRodada } from "../../execucao/sessao_ajustes.ts";
 import { lerConversa } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
-import { carregarDemanda } from "../../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../persistencia/demandas.ts";
 import { configuracao } from "../../persistencia/servico.ts";
 import { carregarSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import type { Pedido, Rota } from "../rotas.ts";
@@ -110,6 +111,44 @@ function mensagem(pedido: Pedido): void {
 
 const concluir = (pedido: Pedido) => concluirSessaoAjustes(pedido.banco, refDaRodada(pedido), AUDITOR);
 
+/** O `:ref` do caminho como ticket (`I-206.T3`). */
+function refDoTicket({ params }: Pedido) {
+  const ref = interpretarRef(String(params.ref));
+  if (!("ticket_id" in ref))
+    throw new ErroDeRegra(`${String(params.ref)} não é um ticket`, "use o endereço do ticket, como I-206.T3");
+  return ref;
+}
+
+const Reabertura = z.object({ instrucao: Motivo("da reabertura, como instrução para o ticket") });
+
+function reabrir(pedido: Pedido) {
+  const { demanda_id, ticket_id } = refDoTicket(pedido);
+  const { instrucao } = Reabertura.parse(pedido.corpo);
+  const ag = comDemanda(pedido.banco, demanda_id, (d) => reabrirTicket(d, { ticket_id, instrucao }, AUDITOR, agora()));
+  return {
+    ticket: existe(
+      ag.tickets.find((t) => t.ticket_id === ticket_id),
+      "ticket não encontrado",
+      "confira o endereço",
+    ),
+  };
+}
+
+async function executar(pedido: Pedido): Promise<void> {
+  const { agendador } = pedido;
+  if (!agendador.executarAgoraDemanda)
+    throw new ErroDeRegra(
+      "o agendador não executa tickets de demanda",
+      "suba a Fabriquinha com o serviço (fabriquinha servir)",
+    );
+  await agendador.executarAgoraDemanda(refDoTicket(pedido));
+}
+
+const cancelamento = ({ banco, params }: Pedido) => cancelar(banco, String(params.id), AUDITOR, agora());
+const arquivamento = ({ banco, params }: Pedido) => ({
+  demanda: arquivar(banco, String(params.id), AUDITOR, agora()),
+});
+
 export const ROTAS_DAS_ACOES_DE_DEMANDA: Rota[] = [
   { metodo: "POST", caminho: "/api/demandas/:id/decisao", tratar: decisaoDaDemanda },
   { metodo: "POST", caminho: "/api/demandas/:id/planejamento/decisao", tratar: decisaoDoPlanejamento },
@@ -117,4 +156,8 @@ export const ROTAS_DAS_ACOES_DE_DEMANDA: Rota[] = [
   { metodo: "GET", caminho: "/api/demandas/rodadas/:ref/ajustes", tratar: conversa },
   { metodo: "POST", caminho: "/api/demandas/rodadas/:ref/ajustes/mensagens", tratar: mensagem },
   { metodo: "POST", caminho: "/api/demandas/rodadas/:ref/ajustes/concluir", tratar: concluir },
+  { metodo: "POST", caminho: "/api/demandas/tickets/:ref/reabrir", tratar: reabrir },
+  { metodo: "POST", caminho: "/api/demandas/tickets/:ref/executar", tratar: executar },
+  { metodo: "POST", caminho: "/api/demandas/:id/cancelar", tratar: cancelamento },
+  { metodo: "POST", caminho: "/api/demandas/:id/arquivar", tratar: arquivamento },
 ];

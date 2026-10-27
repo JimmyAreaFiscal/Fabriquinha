@@ -124,7 +124,7 @@ export async function cenarioDemandas() {
 }
 
 /** O servidor web de verdade sobre `banco`, numa porta livre, com um agendador falso que só anota o que lhe pedem. */
-export async function servir(banco: DatabaseSync) {
+export async function servir(banco: DatabaseSync, comExecutarDemanda = true) {
   const executados: { demanda_id: string; ticket_id: number }[] = [];
   const agendador = {
     proximaBusca: () => new Date(),
@@ -134,6 +134,7 @@ export async function servir(banco: DatabaseSync) {
       return Promise.resolve();
     },
   };
+  if (!comExecutarDemanda) delete (agendador as { executarAgoraDemanda?: unknown }).executarAgoraDemanda;
   const servidor = createServer();
   servidor.listen(0, "127.0.0.1");
   await once(servidor, "listening");
