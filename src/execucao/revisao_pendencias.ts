@@ -1,7 +1,7 @@
 // Confere a aprovação de uma revisão pela evidência (comparacao-sdlc-implementacao.md §§4, 8): `aprovada` é derivada dos
 // `dados` na hora, sem I/O. Recusa citando a evidência, a fitness, o achado ou o cenário que impede a aprovação.
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
-import { type EvidenciaEtapa, pendenciasDoTicket } from "../dominio/evidencia_etapa.ts";
+import { catalogoDaEtapa, type EvidenciaEtapa, pendenciasDoTicket } from "../dominio/evidencia_etapa.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { type SchemaEvidencia, schemaDe, schemaDeEtapa } from "../evidencias/schemas.ts";
 
@@ -52,6 +52,8 @@ export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void 
   const doTicket = ag.evidencias.filter((e) => e.ticket_id === ticket_id && e.rodada_id === undefined);
   const evidencias: EvidenciaEtapa[] = [];
   for (const e of doTicket) {
+    const produtor = catalogoDaEtapa(etapa).find((i) => i.tipo === e.tipo)?.produtor;
+    if (produtor === undefined) continue; // tipo fora do catálogo da etapa não entra na conferência
     const dados = e.dados as Dados;
     if ((e.tipo === "testes_estresse" || e.tipo === "analise_seguranca") && dados.aplicavel === false) {
       const resultado = schemaDeEtapa(e.tipo).dados.safeParse(dados);
@@ -67,7 +69,7 @@ export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void 
       rodada_id: undefined,
       ticket_id,
       tipo: e.tipo,
-      produtor: "agente",
+      produtor,
       aprovada: APROVADA[e.tipo]?.(dados),
       dados,
     });

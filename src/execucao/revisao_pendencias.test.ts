@@ -75,6 +75,24 @@ test("integral aprovada, inclusive com não se aplica justificado (CA-16)", () =
   conferirAprovacao(integral({ aplicavel: false, justificativa: "sem carga", cenarios: [] }, seguranca("baixa")), 7);
 });
 
+test("tipo fora do catálogo da etapa é ignorado", () => {
+  const base = rodada(ok, comprov(true));
+  const extra = ag("revisar_rodada", {
+    arquivos_alterados: {},
+    matriz_fitness: ok,
+    explicacao_fitness: {},
+    comprovacao_criterios: comprov(true),
+    testes_estresse: estresse("quebrou"),
+    analise_seguranca: { aplicavel: false, justificativa: "", cenarios: [], ameacas: [], achados: [] },
+  });
+  conferirAprovacao(base, 7);
+  conferirAprovacao(extra, 7);
+  recusa(
+    ag("revisar_rodada", { matriz_fitness: ok, testes_estresse: estresse("quebrou") }),
+    "comprovacao_criterios ausente",
+  );
+});
+
 test("ticket inexistente", () => {
   recusa({ ...rodada(ok, comprov(true)), tickets: [] }, "não existe");
 });
