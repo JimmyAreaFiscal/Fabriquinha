@@ -8,7 +8,7 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
 import { hospedagemFalsa } from "./hospedagem-falsa.test.ts";
-import { estadoPR, lerPR, publicarPR, publicarPRDe, verificarPR } from "./pr.ts";
+import { estadoPR, integrarPR, lerPR, publicarPR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
 after(() => {
@@ -420,7 +420,7 @@ test("estadoPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no
     });
     hospedagem.mudar(1, { estado: "mergeado" });
     const quando = tipo === "github" ? "2026-10-11T13:00:00.000Z" : "2026-10-11T13:00:00.123Z";
-    assert.deepEqual(await ler(), { estado: "mergeado", url: `${url}1`, mergeadoEm: quando });
+    assert.deepEqual(await ler(), { estado: "mergeado", url: `${url}1`, mergeadoEm: quando, mergeSha: "abc" });
     hospedagem.mudar(1, { estado: "fechado" });
     assert.deepEqual(await ler(), { estado: "fechado", url: `${url}1` });
     hospedagem.zerar();
@@ -771,4 +771,54 @@ test("lerPR: o estado do PR pelo id", async () => {
 
   assert.equal(leitura.estado, "aberto");
   assert.equal(leitura.url, `${URL_GH}1`);
+});
+
+test("integrarPR: merge commit pela hospedagem no GitHub e no Azure DevOps, e o SHA vem da releitura", async () => {
+  for (const tipo of ["github", "azure-devops"] as const) {
+    const c = cenario(tipo);
+    git(c.repo, "push", "-q", "origin", BRANCH);
+    hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+
+    const sha = await integrarPR({ repo: c.repo, hospedagem: tipo }, "1");
+
+    assert.equal(git(c.bare, "rev-parse", "refs/heads/main"), sha);
+    assert.deepEqual(git(c.bare, "rev-list", "--parents", "-n", "1", sha).split(" ").slice(1), [
+      git(c.repo, "rev-parse", "main"),
+      c.head,
+    ]);
+    const pedidos = () =>
+      hospedagem.chamadas().filter((ch) => ch.args.includes("merge") || ch.args.includes("completed"));
+    assert.deepEqual(
+      pedidos().map((ch) => ch.args),
+      [
+        tipo === "github"
+          ? ["pr", "merge", "1", "--merge"]
+          : ["repos", "pr", "update", "--id", "1", "--status", "completed"],
+      ],
+    );
+
+    // Já mergeado: devolve o SHA sem pedir outro merge.
+    assert.equal(await integrarPR({ repo: c.repo, hospedagem: tipo }, "1"), sha);
+    assert.equal(pedidos().length, 1);
+    hospedagem.zerar();
+  }
+});
+
+test("integrarPR: a recusa da hospedagem é ErroExterno e o merge não confirmado também", async () => {
+  const c = cenario();
+  const projeto = { repo: c.repo, hospedagem: "github" as const };
+  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+  hospedagem.falhar("pr merge", "not mergeable");
+  await recusa(
+    integrarPR(projeto, "1"),
+    "gh pr merge saiu com código 1: not mergeable (confira o acesso do gh à hospedagem e execute o ticket de novo)",
+    ErroExterno,
+  );
+  hospedagem.zerar();
+  hospedagem.responder("pr view", JSON.stringify({ state: "MERGED", url: `${URL_GH}1`, mergedAt: null }));
+  await recusa(
+    integrarPR(projeto, "1"),
+    "a hospedagem não confirmou o merge do PR 1 (confira o PR na plataforma e tente de novo)",
+    ErroExterno,
+  );
 });
