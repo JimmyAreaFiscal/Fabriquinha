@@ -74,10 +74,12 @@ interface Opcoes {
   variante?: string;
   /** O serviço cria a worktree da demanda (ticket global); senão ela já existe, para os tickets de rodada. */
   semWorktree?: boolean;
+  /** Comando de preparação da worktree (padrão `true`). */
+  preparacao?: string;
 }
 
 /** Projeto `loja` configurado, demanda I-1 em execução (rodadas 1 e 2) e a worktree da demanda criada. */
-async function cenario({ etapas = [], variante, semWorktree }: Opcoes = {}) {
+async function cenario({ etapas = [], variante, semWorktree, preparacao = "true" }: Opcoes = {}) {
   const c = cenarioDemanda();
   const banco = abrir(c.raiz);
   abertos.push(banco);
@@ -94,7 +96,7 @@ async function cenario({ etapas = [], variante, semWorktree }: Opcoes = {}) {
     raiz_git: c.repo,
     hospedagem: "github",
     etapas,
-    preparacao: [{ ordem: 1, comando: "true" }],
+    preparacao: [{ ordem: 1, comando: preparacao }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
@@ -374,6 +376,16 @@ test("CA-8: interromper manda SIGTERM ao grupo do pi e a execução falha como i
   assert.notEqual(e?.fim, null);
   assert.equal(e?.falha, true);
   assert.equal(e.erro, "interrompida pelo Auditor");
+});
+
+test("CA-8: interromper durante a preparação da worktree encerra interrompida e o pi recebe o término ao subir", async () => {
+  const { banco, sessoes } = await cenario({ semWorktree: true, preparacao: "sleep 1" });
+  const { fim } = iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1 });
+  await dormir(300);
+  interromperExecucaoDemanda(banco, ref(3));
+  await fim;
+  const [e] = sessoes(3).execucoes;
+  assert.deepEqual([e?.falha, e?.erro, e?.fim !== null], [true, "interrompida pelo Auditor", true]);
 });
 
 test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrada direto", async () => {

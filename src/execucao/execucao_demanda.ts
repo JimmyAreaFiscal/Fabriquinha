@@ -75,7 +75,10 @@ function worktreeDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string)
 
 /** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */
 function gravarGrupo({ banco, ref, execucao }: Conducao, pgid: number): void {
-  ativas.set(execucao.id, { pgid });
+  const viva = { ...ativas.get(execucao.id), pgid };
+  ativas.set(execucao.id, viva);
+  // Interrompida durante a preparação: o pi que acaba de subir recebe o término já.
+  if (viva.interrompida) sinalNoGrupo(pgid, "SIGTERM");
   comSessoesDoTicket(banco, ref, (estado) => ({
     ...estado,
     execucoes: estado.execucoes.map((e) => (e.id === execucao.id ? { ...e, grupo_processo: pgid } : e)),
