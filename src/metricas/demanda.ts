@@ -2,11 +2,11 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import {
-  custosExternosDaDemanda,
   decisoesDaDemanda,
   demandaExiste,
   type DonoDaLinha,
   execucoesDaDemanda,
+  linhasExternasDaDemanda,
   rodadasDaDemanda,
   ticketsDaDemanda,
   type UsoDaExecucao,
@@ -56,8 +56,8 @@ export interface MetricasDaDemanda {
   total: Escopo;
   rodadas: (Escopo & { rodadaId: number; conformidade: Conformidade | null })[];
   semRodada: Escopo;
-  /** Custo das sessões externas de `custos_realizados`, fora do interno. */
-  custoExterno: Custo;
+  /** Custo das sessões externas de `custos_realizados` (e quantas são), fora do interno. */
+  custoExterno: Custo & { sessoes: number };
 }
 
 export const somarCustos = (custos: (number | null)[]): Custo => ({
@@ -89,6 +89,7 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
   const execucoes = execucoesDaDemanda(banco, demandaId);
   const tickets = ticketsDaDemanda(banco, demandaId);
   const decisoes = decisoesDaDemanda(banco, demandaId);
+  const externas = linhasExternasDaDemanda(banco, demandaId);
 
   const contagens = (dono: (l: DonoDaLinha) => boolean): Contagens => {
     const u = uso.filter(dono);
@@ -126,6 +127,9 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
       conformidade: conformidadeDaRodada(banco, demandaId, rodadaId),
     })),
     semRodada: escopo((l) => l.rodadaId === null),
-    custoExterno: somarCustos(custosExternosDaDemanda(banco, demandaId)),
+    custoExterno: {
+      ...somarCustos(externas.map((l) => l.custo)),
+      sessoes: new Set(externas.map((l) => `${l.ferramenta}\0${l.sessao}`)).size,
+    },
   };
 }

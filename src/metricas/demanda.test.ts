@@ -184,8 +184,26 @@ test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a deman
   ).run(JSON.stringify(dados), "2026-01-01T00:00:00.000Z");
   b.exec("INSERT INTO sessao_externa_demanda VALUES ('codex', 'a', 'I-1'), ('codex', 'de-outra', 'I-2')");
   const m = metricasDaDemanda(b, "I-1");
-  assert.deepEqual(m.custoExterno, { conhecido: 3, incompleto: true });
+  assert.deepEqual(m.custoExterno, { conhecido: 3, incompleto: true, sessoes: 1 });
   assert.deepEqual(m.total.custo, { conhecido: 1, incompleto: false });
+});
+
+test("CA-7: evidência de custos malformada ou de rodada/ticket não conta linhas", () => {
+  const b = banco();
+  b.exec("INSERT INTO sessao_externa_demanda VALUES ('codex', 'a', 'I-1')");
+  const grava = (id: string, dados: string, rodada: string, ticket: string, tipo = "custos_realizados") => {
+    b.exec(`INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em)
+      VALUES ('${id}', 'I-1', ${rodada}, ${ticket}, '${tipo}', '${dados}', ${T})`);
+  };
+  const vazio = { conhecido: 0, incompleto: false, sessoes: 0 };
+  grava("c2", '{"sessoes":{"a":1}}', "NULL", "NULL");
+  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
+  b.exec("DELETE FROM evidencia_demanda");
+  grava("c3", '{"sessoes":[{"ferramenta":"codex","sessao":"a","linhas":5}]}', "NULL", "NULL");
+  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
+  b.exec("DELETE FROM evidencia_demanda");
+  grava("c4", '{"sessoes":[{"ferramenta":"codex","sessao":"a","linhas":[{"custo":9}]}]}', "1", "NULL");
+  assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
 });
 
 test("CA-14: média só das notas dos PRs de rodada aprovados com nota", () => {

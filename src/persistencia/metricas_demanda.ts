@@ -151,15 +151,37 @@ export const rodadasDaDemanda = (banco: DatabaseSync, demandaId: string): number
     .all(demandaId)
     .map((l) => Number(l.rodada_id));
 
-/** Custo de cada linha de `custos_realizados` (`null` = desconhecido) das sessões externas cuja dona é a demanda. */
-export const custosExternosDaDemanda = (banco: DatabaseSync, demandaId: string): (number | null)[] =>
+export interface LinhaExterna {
+  ferramenta: string;
+  sessao: string;
+  /** `null` = desconhecido. */
+  custo: number | null;
+}
+
+/** Linhas de `custos_realizados` da demanda (evidência sem rodada nem ticket) das sessões externas cuja dona é a demanda; evidência malformada não conta (o banco já garante JSON válido). */
+export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string): LinhaExterna[] =>
   banco
     .prepare(
-      `SELECT json_extract(l.value, '$.custo') AS custo
+      `SELECT x.ferramenta, x.sessao, json_extract(l.value, '$.custo') AS custo
        FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s, json_each(s.value, '$.linhas') l
        JOIN sessao_externa_demanda x ON x.demanda_id = e.demanda_id
          AND x.ferramenta = json_extract(s.value, '$.ferramenta') AND x.sessao = json_extract(s.value, '$.sessao')
-       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados'`,
+       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND e.rodada_id IS NULL AND e.ticket_id IS NULL
+         AND json_type(e.dados, '$.sessoes') = 'array'
+         AND json_type(s.value, '$.linhas') = 'array'`,
     )
     .all(demandaId)
-    .map((l) => (l.custo === null ? null : Number(l.custo)));
+    .map((l) => ({
+      ferramenta: l.ferramenta as string,
+      sessao: l.sessao as string,
+      custo: typeof l.custo === "number" ? l.custo : null,
+    }));
+
+export const projetoExiste = (banco: DatabaseSync, nome: string): boolean =>
+  banco.prepare("SELECT 1 FROM projeto WHERE nome = ?").get(nome) !== undefined;
+
+export const demandasDoProjeto = (banco: DatabaseSync, projeto: string): string[] =>
+  banco
+    .prepare("SELECT id FROM demanda WHERE projeto = ? ORDER BY id")
+    .all(projeto)
+    .map((l) => l.id as string);
