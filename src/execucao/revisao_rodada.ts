@@ -1,6 +1,8 @@
 // Revisão de rodada (comparacao-sdlc-implementacao.md §§4, 6): as evidências que cabem à Fabriquinha antes do pi.
 import { matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import type { Ator } from "../dominio/agregado.ts";
+import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { branchDemanda, branchRodada } from "../dominio/demanda.ts";
 import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
@@ -14,6 +16,9 @@ import { type Anexo, gravarAnexos } from "../persistencia/evidencia_demanda.ts";
 import { arquivosDe } from "../repositorio/commit.ts";
 import { garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { exigirGit } from "../repositorio/worktree.ts";
+import { registrarRevisaoRodada } from "../dominio/transicoes_rodada.ts";
+import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
+import { conferirAprovacao } from "./revisao_pendencias.ts";
 
 type Dados = EntradaEvidenciaDemanda["dados"];
 
@@ -106,4 +111,36 @@ export async function prepararRevisaoRodada(
       gravarAnexos(banco, { demanda_id, ticket_id, tipo: "matriz_fitness" }, anexos);
     },
   );
+}
+
+/** Reserva e executa o `revisar_rodada` atual da rodada, com as evidências da Fabriquinha preparadas antes do pi. */
+export async function conduzirRevisaoRodada(
+  banco: DatabaseSync,
+  ref: { demanda_id: string; rodada_id: number },
+  opcoes: Omit<OpcoesRevisao, "preparar">,
+): Promise<ResultadoRevisao> {
+  const { demanda_id, rodada_id } = ref;
+  const doRodada = carregarDemanda(banco, demanda_id).tickets.filter(
+    (t) => t.rodada_id === rodada_id && t.etapa === "revisar_rodada",
+  );
+  const { ticket_id } = encontrado(
+    doRodada.at(-1), // o atual é o de maior ticket_id
+    `a rodada ${String(rodada_id)} de ${demanda_id} não tem ticket revisar_rodada`,
+    "confira a rodada",
+  );
+  const alvo = { demanda_id, ticket_id };
+  return conduzirRevisao(banco, alvo, { ...opcoes, preparar: () => prepararRevisaoRodada(banco, alvo) });
+}
+
+/** Aplica a decisão do agente; a aprovação só passa com as evidências em ordem (a recusa desfaz tudo). */
+export function decidirRevisaoRodada(
+  banco: DatabaseSync,
+  entrada: { aprovado: boolean; demanda_id: string; ticket_id: number; [campo: string]: unknown },
+  ator: Ator,
+): AgregadoDemanda {
+  return comDemanda(banco, entrada.demanda_id, (ag) => {
+    const novo = registrarRevisaoRodada(ag, entrada, ator, { agora: new Date().toISOString() });
+    if (entrada.aprovado) conferirAprovacao(ag, entrada.ticket_id);
+    return novo;
+  });
 }
