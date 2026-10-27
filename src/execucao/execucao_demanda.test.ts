@@ -1,5 +1,6 @@
 // Execução do ticket da demanda com banco real, git real e um pi falso que fala o protocolo RPC (CA-1 a CA-7, CA-11 a CA-14).
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,14 +8,15 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
-import { ErroDeInexistente } from "../dominio/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
-import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
+import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
-import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-exec-demanda-"));
@@ -360,4 +362,43 @@ test("a coleta de uso que falha vai para o log e não impede o encerramento", as
 test("a recusa é síncrona: ticket inexistente", async () => {
   const { banco } = await cenario();
   assert.throws(() => iniciarExecucaoDemanda(banco, ref(99), { limiteMin: 1 }), ErroDeInexistente);
+});
+
+test("CA-8: interromper manda SIGTERM ao grupo do pi e a execução falha como interrompida", async () => {
+  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  while (sessoes(1).execucoes[0]?.grupo_processo === undefined) await dormir(20);
+  interromperExecucaoDemanda(banco, ref(1));
+  await fim;
+  const [e] = sessoes(1).execucoes;
+  assert.notEqual(e?.fim, null);
+  assert.equal(e?.falha, true);
+  assert.equal(e.erro, "interrompida pelo Auditor");
+});
+
+test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrada direto", async () => {
+  const { banco, sessoes } = await cenario();
+  const filho = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
+  const pgid = filho.pid ?? 0;
+  const morreu = new Promise((r) => filho.on("exit", r));
+  comSessoesDoTicket(banco, ref(1), (estado) => {
+    const sessao = { ...ref(1), id: "s-orfa", modo: "autonomo" as const, conversa_referencia: "s-orfa" };
+    const sessoesNovas = criarSessao(estado.sessoes, sessao);
+    const execucao = { id: "e-orfa", sessao_id: "s-orfa", inicio: em, falha: false, grupo_processo: pgid };
+    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+  });
+  interromperExecucaoDemanda(banco, ref(1));
+  await morreu;
+  const [e] = sessoes(1).execucoes;
+  assert.deepEqual([e?.falha, e?.erro, e?.fim !== null], [true, "interrompida pelo Auditor", true]);
+});
+
+test("CA-9: sem execução aberta a interrupção é recusada e nada muda", async () => {
+  const { banco, sessoes } = await cenario();
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  const antes = sessoes(1);
+  assert.throws(() => {
+    interromperExecucaoDemanda(banco, ref(1));
+  }, ErroDeRegra);
+  assert.deepEqual(sessoes(1), antes);
 });

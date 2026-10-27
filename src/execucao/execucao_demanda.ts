@@ -25,7 +25,8 @@ import { raizDo } from "../persistencia/banco.ts";
 import { configuracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { anotar, arquivoDaSessao } from "../persistencia/execucoes.ts";
-import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
+import { sinalNoGrupo } from "../processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { rodarPi } from "./gerente.ts";
 import { ambientePi, confianca } from "./pi.ts";
@@ -42,7 +43,9 @@ export interface OpcoesExecucaoDemanda {
 }
 
 /** Execuções com condutor vivo neste serviço, por id, com o grupo de processo do pi depois de lançado. */
-const ativas = new Map<string, { pgid?: number }>();
+const ativas = new Map<string, { pgid?: number; interrompida?: boolean }>();
+
+const INTERROMPIDA = "interrompida pelo Auditor";
 
 interface Conducao {
   banco: DatabaseSync;
@@ -78,8 +81,10 @@ function gravarGrupo({ banco, ref, execucao }: Conducao, pgid: number): void {
   }));
 }
 
+type Encerravel = Pick<Conducao, "banco" | "ref" | "sessao" | "execucao">;
+
 /** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
-function coletarUso(c: Conducao, fim: string, log: string): UsoModeloExecucao[] {
+function coletarUso(c: Encerravel, fim: string, log: string): UsoModeloExecucao[] {
   try {
     const arquivo = arquivoDaSessao(raizDo(c.banco), c.sessao.id);
     const somas = arquivo ? somar(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim)) : [];
@@ -101,7 +106,7 @@ function coletarUso(c: Conducao, fim: string, log: string): UsoModeloExecucao[] 
 }
 
 /** O único escritor do encerramento: fim, falha, erro e uso na mesma transação; não toca ticket, etapa nem gate. */
-function encerrar(c: Conducao, falha: string | undefined, log: string): void {
+function encerrar(c: Encerravel, falha: string | undefined, log: string): void {
   const fim = new Date().toISOString();
   const usos = coletarUso(c, fim, log);
   comSessoesDoTicket(c.banco, c.ref, (estado) => ({
@@ -161,6 +166,8 @@ async function conduzir(c: Conducao): Promise<void> {
   } catch (error_) {
     falha = mensagem(error_);
   }
+  // Interrompida pelo Auditor: o pi saiu pelo SIGTERM, mas a causa verdadeira é a interrupção.
+  if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
   ativas.delete(execucao.id);
   encerrar(c, falha, log);
 }
@@ -220,4 +227,30 @@ export function iniciarExecucaoDemanda(
   });
   ativas.set(execucao.id, {});
   return { id: execucao.id, fim: conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes }) };
+}
+
+/**
+ * Interrompe a execução aberta do ticket. Com condutor vivo, o SIGTERM no grupo faz o condutor gravar a falha; órfã
+ * (sem condutor, ex.: serviço reiniciado), SIGKILL e encerra direto. Sem execução aberta, recusa antes de escrever.
+ */
+export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef): void {
+  const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
+  const execucao = existe(
+    execucoes.find((e) => e.fim == null),
+    `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não tem execução em andamento`,
+    "só se interrompe uma execução aberta",
+  );
+  const viva = ativas.get(execucao.id);
+  if (viva) {
+    viva.interrompida = true;
+    if (viva.pgid !== undefined) sinalNoGrupo(viva.pgid, "SIGTERM");
+    return;
+  }
+  if (execucao.grupo_processo !== undefined) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
+  const sessao = existe(
+    sessoes.find((s) => s.id === execucao.sessao_id),
+    `a execução ${execucao.id} não tem sessão`,
+    "confira o banco",
+  );
+  encerrar({ banco, ref, sessao, execucao }, INTERROMPIDA, join(raizDo(banco), "execucoes", `E-${execucao.id}`, "log"));
 }
