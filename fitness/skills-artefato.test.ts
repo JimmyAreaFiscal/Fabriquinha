@@ -17,6 +17,8 @@ const MAX_DESCRICAO = 1024;
 const SECOES = ["Para que serve", "Como produzir", "Estrutura", "Antes de submeter"];
 /** Evidências do catálogo novo (SDLC por demandas) que já têm skill e schema; o CLI ainda não as liga ao catálogo antigo. */
 const DO_CATALOGO_NOVO = ["artefato-plano", "artefato-testes-estresse", "artefato-analise-seguranca"];
+/** Skills do fluxo externo (CLI da ferramenta de fora): não são de evidência de agente e têm forma própria. */
+const EXTERNAS = ["demanda-externa"];
 const DE_ARTEFATO = new Set([...Etapa.options.flatMap(skillsDaEtapa), ...DO_CATALOGO_NOVO]);
 
 /** O valor de `chave` no frontmatter, numa linha só, como as skills do pacote o escrevem. */
@@ -34,9 +36,10 @@ function problemas(skills: string): string[] {
     const nome = campo(frontmatter, "name");
     if (nome !== dir) achados.push(`${dir}: name ${String(nome)} difere do diretório`);
     if (!NOME.test(dir) || dir.length > MAX_NOME) achados.push(`${dir}: nome inválido para o pi`);
-    if (!DE_ARTEFATO.has(dir)) achados.push(`${dir}: não é de evidência de produtor agente`);
     const descricao = campo(frontmatter, "description") ?? "";
     if (!descricao || descricao.length > MAX_DESCRICAO) achados.push(`${dir}: description vazia ou longa`);
+    if (EXTERNAS.includes(dir)) continue;
+    if (!DE_ARTEFATO.has(dir)) achados.push(`${dir}: não é de evidência de produtor agente`);
     const titulos = linhas.filter((l) => l.startsWith("## ")).map((l) => l.slice(3).trim());
     if (titulos.join("|") !== SECOES.join("|")) achados.push(`${dir}: seções ${titulos.join(", ")}`);
   }
