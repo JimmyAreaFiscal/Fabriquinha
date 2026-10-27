@@ -1,5 +1,6 @@
 // Contratos SDLC puros (comparacao-sdlc-implementacao.md §2.2, §2.3, §4.1 e §7.2): identidades, branches e plano.
 import { z } from "zod";
+import { ErroDeRegra } from "./erros.ts";
 import { Effort, Id, Markdown, Modelo, Titulo } from "./primitivos.ts";
 
 // Letras + hífen + número (`I-196`): sem `/`, `.`, `..`, espaço ou `-` duplo, e sem colidir `fabriquinha/{demanda}-{rodada}`
@@ -19,6 +20,36 @@ export const branchRodada = (demandaId: string, rodadaId: number): string => {
   const ref = RodadaRef.parse({ demanda_id: demandaId, rodada_id: rodadaId });
   return `fabriquinha/${ref.demanda_id}-${String(ref.rodada_id)}`;
 };
+
+const FORMAS = "use `{demanda}.T{n}` para ticket ou `{demanda}.R{n}` para rodada, como I-206.T3 ou I-206.R2";
+
+const formatar = (schema: typeof TicketRef | typeof RodadaRef, ref: unknown, letra: string, campo: string): string => {
+  const r = schema.safeParse(ref);
+  if (!r.success)
+    throw new ErroDeRegra(`referência inválida: ${r.error.issues.map((i) => i.message).join("; ")}`, FORMAS);
+  const v = r.data as Record<string, string | number>;
+  return `${String(v.demanda_id)}.${letra}${String(v[campo])}`;
+};
+
+/** Endereço público do ticket: `I-206.T3`. */
+export const formatarTicketRef = (ref: z.infer<typeof TicketRef>): string => formatar(TicketRef, ref, "T", "ticket_id");
+/** Endereço público da rodada: `I-206.R2`. */
+export const formatarRodadaRef = (ref: z.infer<typeof RodadaRef>): string => formatar(RodadaRef, ref, "R", "rodada_id");
+
+const SUFIXO = /^([TR])([1-9][0-9]*)$/;
+
+/** Interpreta `I-206.T3` ou `I-206.R2`; sem forma curta nem dedução da demanda pelo contexto. O chamador distingue por `"ticket_id" in ref`. */
+export function interpretarRef(texto: string): z.infer<typeof TicketRef> | z.infer<typeof RodadaRef> {
+  const ponto = texto.lastIndexOf(".");
+  const demanda = DemandaId.safeParse(texto.slice(0, Math.max(ponto, 0)));
+  const sufixo = SUFIXO.exec(texto.slice(ponto + 1));
+  const numero = Number(sufixo?.[2]);
+  if (ponto < 0 || !demanda.success || !sufixo || !Number.isSafeInteger(numero) || !Id.safeParse(numero).success)
+    throw new ErroDeRegra(`endereço ${JSON.stringify(texto)} inválido`, FORMAS);
+  return sufixo[1] === "T"
+    ? { demanda_id: demanda.data, ticket_id: numero }
+    : { demanda_id: demanda.data, rodada_id: numero };
+}
 
 /** Os nós de um ciclo em `grafo`, ou `undefined` se ele é acíclico (busca em profundidade com pilha). */
 function acharCiclo(grafo: Map<string, string[]>): string[] | undefined {
