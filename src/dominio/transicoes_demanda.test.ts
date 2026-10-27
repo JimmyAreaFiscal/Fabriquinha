@@ -750,10 +750,10 @@ test("CA-1, CA-2: devolução abaixo do limite volta a aberto com a instrução 
 test("CA-3, CA-13: na 3ª reprovação falha com o motivo e bloqueia a seleção até a reabertura", () => {
   const ag = devolver(emDevolucao("implementar", "em_execucao", 2));
   assert.deepEqual([tk3(ag)?.status, tk3(ag)?.motivo_falha], ["falhou", "corrija os testes"]);
-  assert.deepEqual(selecionarTrabalho(ag), []);
+  assert.deepEqual(selecionarTrabalho(ag, true), []);
   const global = devolver(emDevolucao("resolver_conflito", "em_execucao", 2));
   assert.deepEqual([tk3(global)?.status, tk3(global)?.motivo_falha], ["falhou", "corrija os testes"]);
-  assert.deepEqual(selecionarTrabalho(global), []);
+  assert.deepEqual(selecionarTrabalho(global, true), []);
 });
 
 test("CA-4, CA-7: falha de infraestrutura grava o motivo sem mexer no contador; sem motivo é recusada", () => {

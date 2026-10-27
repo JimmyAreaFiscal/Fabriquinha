@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { branchDemanda, branchRodada, DecisaoRef, DemandaId, Plano, RodadaRef, TicketIdentidade } from "./demanda.ts";
+import {
+  branchDemanda,
+  branchRodada,
+  DecisaoRef,
+  DemandaId,
+  formatarRodadaRef,
+  formatarTicketRef,
+  interpretarRef,
+  Plano,
+  RodadaRef,
+  TicketIdentidade,
+} from "./demanda.ts";
+import { ErroDeRegra } from "./erros.ts";
 
 const plano = (mudanca: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
@@ -155,4 +167,48 @@ test("CA-2: rodada declarada sem ticket é recusada, mas a demanda pode ter zero
   recusa(plano({ rodadas: [rd(1), rd(2)], tickets: [tk(1, 1)] }), "rodada 2 não tem ticket");
   recusa(plano({ rodadas: [rd(1)], tickets: [tk(1)] }), "rodada 1 não tem ticket");
   assert.ok(Plano.safeParse(plano({ rodadas: [], tickets: [tk(1)] })).success);
+});
+
+test("CA-1 a CA-3: formata o endereço público e recusa referência inválida", () => {
+  assert.equal(formatarTicketRef({ demanda_id: "I-206", ticket_id: 3 }), "I-206.T3");
+  assert.equal(formatarRodadaRef({ demanda_id: "I-206", rodada_id: 2 }), "I-206.R2");
+  for (const f of [
+    () => formatarTicketRef({ demanda_id: "../I-206", ticket_id: 3 }),
+    () => formatarTicketRef({ demanda_id: "I-206", ticket_id: 0 }),
+    () => formatarRodadaRef({ demanda_id: "I-206", rodada_id: 0 }),
+  ])
+    assert.throws(f, (e) => e instanceof ErroDeRegra && e.message.includes("I-206.T3"));
+});
+
+test("CA-4 a CA-8: interpreta e formata são inversos", () => {
+  assert.deepEqual(interpretarRef("I-206.T3"), { demanda_id: "I-206", ticket_id: 3 });
+  assert.deepEqual(interpretarRef("I-206.R2"), { demanda_id: "I-206", rodada_id: 2 });
+  for (const t of ["I-206.T3", "I-206.R2", "I-1.T10"]) {
+    const ref = interpretarRef(t);
+    assert.equal("ticket_id" in ref ? formatarTicketRef(ref) : formatarRodadaRef(ref), t);
+  }
+});
+
+test("CA-9 a CA-13: interpretar recusa entrada inválida com a forma certa", () => {
+  for (const ruim of [
+    "T3",
+    "R2",
+    "T-3",
+    "I-206.T0",
+    "I-206.T03",
+    "I-206.R02",
+    "I-206.X3",
+    "I-206.t3",
+    "I-206. T3",
+    "I-206.T 3",
+    " I-206.T3",
+    "I-206.T3\n",
+    "I-206.T99999999999999999999",
+    "",
+  ])
+    assert.throws(
+      () => interpretarRef(ruim),
+      (e) => e instanceof ErroDeRegra && e.message.includes("I-206.T3"),
+      ruim,
+    );
 });

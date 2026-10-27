@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR } from "./agregado.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
-import { selecionarTrabalho } from "./selecao_trabalho.ts";
+import { selecionarTrabalho, selecionarTrabalhoGlobal } from "./selecao_trabalho.ts";
 import { concluirSessaoRodada, registrarCorrecoesSessao, reprovarPullRequestRodada } from "./transicoes_rodada.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
@@ -42,8 +42,8 @@ const montar = (extra: Record<string, unknown>, fase = "execucao") =>
     tickets: [],
     ...extra,
   });
-const ids = (extra: Record<string, unknown>, fase?: string) =>
-  selecionarTrabalho(montar(extra, fase)).map((t) => t.ticket_id);
+const ids = (extra: Record<string, unknown>, fase?: string, pred = true) =>
+  selecionarTrabalho(montar(extra, fase), pred).map((t) => t.ticket_id);
 const dep = (rodada_id: number, depende_rodada_id: number) => ({ demanda_id: "I-1", rodada_id, depende_rodada_id });
 
 test("fora de execucao nada é elegível", () => {
@@ -88,11 +88,116 @@ test("CA-15: só rodadas em desenvolvimento devolvem ticket, qualquer que seja a
   }
 });
 
-test("CA-15: só a etapa implementar é elegível e controle não bloqueia nem concorre", () => {
+test("CA-3: em desenvolvimento só o implementar é elegível; sessao_em_aberto nunca sai", () => {
   const rodadas = [rd(1)];
   assert.deepEqual(ids({ rodadas, tickets: [tk(2, 1, "aberto", "revisar_rodada")] }), []);
   assert.deepEqual(ids({ rodadas, tickets: [tk(2, 1, "aberto", "encerrar_rodada"), tk(3, 1)] }), [3]);
   assert.deepEqual(ids({ rodadas, tickets: [tk(2, 1, "aberto", "sessao_em_aberto")] }), []);
+});
+
+test("CA-2, CA-4: rodada em revisao devolve revisar_rodada; em encerramento, encerrar_rodada", () => {
+  assert.deepEqual(ids({ rodadas: [rd(1, "revisao")], tickets: [tk(2, 1, "aberto", "revisar_rodada")] }), [2]);
+  assert.deepEqual(ids({ rodadas: [rd(1, "encerramento")], tickets: [tk(2, 1, "aberto", "encerrar_rodada")] }), [2]);
+  assert.deepEqual(ids({ rodadas: [rd(1, "revisao")], tickets: [tk(2, 1, "aberto", "encerrar_rodada")] }), []);
+});
+
+test("CA-1, CA-17: planejar aberto sai com predecessoras satisfeitas; pendentes não devolvem", () => {
+  const extra = { tickets: [tk(5, undefined, "aberto", "planejar"), tk(4, undefined, "aberto", "planejar")] };
+  assert.deepEqual(ids(extra, "planejamento"), [4]);
+  assert.deepEqual(ids(extra, "planejamento", false), []);
+});
+
+const encerrando = (resolver: string, conflito = true) => ({
+  rodadas: [rd(1, "concluida")],
+  tickets: [tk(2, undefined, "aberto", "encerrar_demanda"), tk(3, undefined, resolver, "resolver_conflito")],
+  encerramento: {
+    demanda_id: "I-1",
+    branch: "fabriquinha/I-1",
+    base: "develop",
+    limpeza_pendente: [],
+    ...(conflito ? { conflito_pendente: { ticket_id: 3 } } : {}),
+  },
+});
+
+test("CA-5, CA-6, CA-7: encerrar_demanda só sem conflito pendente; resolver_conflito aberto sai", () => {
+  assert.deepEqual(ids(encerrando("concluido"), "encerramento"), [2]);
+  assert.deepEqual(ids(encerrando("concluido", false), "encerramento"), [2]);
+  assert.deepEqual(ids(encerrando("aberto"), "encerramento"), [3]);
+  assert.deepEqual(ids(encerrando("em_execucao"), "encerramento"), []);
+});
+
+test("CA-8, CA-9: revisar_demanda só com todas as rodadas concluídas", () => {
+  const tickets = [tk(2, undefined, "aberto", "revisar_demanda")];
+  assert.deepEqual(ids({ rodadas: [rd(1, "concluida"), rd(2)], tickets }, "revisao_demanda"), []);
+  assert.deepEqual(ids({ rodadas: [rd(1, "concluida"), rd(2, "concluida")], tickets }, "revisao_demanda"), [2]);
+});
+
+test("na mesma demanda, tickets globais saem por id", () => {
+  const ag = {
+    ...encerrando("aberto", false),
+    tickets: [tk(5, undefined, "aberto", "resolver_conflito"), tk(2, undefined, "aberto", "encerrar_demanda")],
+  };
+  const d = demandaNum("I-1", ag, "encerramento");
+  assert.deepEqual(
+    selecionarTrabalhoGlobal([d], { limite: 9, emAndamento: 0 }).map((t) => t.ticket_id),
+    [2, 5],
+  );
+});
+
+test("demanda não sai fora das fases com etapa automática", () => {
+  assert.deepEqual(ids({ tickets: [tk(2, undefined, "aberto", "demanda")] }, "registro"), []);
+});
+
+const demandaNum = (id: string, extra: Record<string, unknown>, fase = "execucao") => {
+  const ag = montar(extra, fase);
+  return {
+    agregado: {
+      ...ag,
+      demanda: { ...ag.demanda, id, branch: `fabriquinha/${id}` },
+      rodadas: ag.rodadas.map((r) => ({ ...r, demanda_id: id })),
+      tickets: ag.tickets.map((t) => ({ ...t, demanda_id: id })),
+    },
+    predecessoras_satisfeitas: true,
+  };
+};
+const umImplementar = { rodadas: [rd(1)], tickets: [tk(2, 1)] };
+const globais = (n: number, limite: number, emAndamento: number) =>
+  selecionarTrabalhoGlobal(
+    Array.from({ length: n }, (_, i) => demandaNum(`I-${String(i + 1)}`, umImplementar)),
+    { limite, emAndamento },
+  ).map((t) => t.demanda_id);
+
+test("CA-13, CA-14: o limite global descontado o que está em andamento; sem vagas, nada", () => {
+  assert.deepEqual(globais(3, 3, 1), ["I-1", "I-2"]);
+  assert.deepEqual(globais(2, 2, 2), []);
+  assert.deepEqual(globais(2, 1, 5), []);
+});
+
+test("CA-15: desempate por demanda (numérica), rodada e ticket", () => {
+  const i1 = demandaNum("I-1", { rodadas: [rd(1), rd(2)], tickets: [tk(9, 2), tk(7, 1)] });
+  const i2 = demandaNum("I-2", { rodadas: [rd(1)], tickets: [tk(3, 1)] });
+  const i10 = demandaNum("I-10", umImplementar);
+  const sel = selecionarTrabalhoGlobal([i10, i2, i1], { limite: 3, emAndamento: 1 });
+  assert.deepEqual(
+    sel.map((t) => [t.demanda_id, t.ticket_id]),
+    [
+      ["I-1", 7],
+      ["I-1", 9],
+    ],
+  );
+  const mesmoNumero = selecionarTrabalhoGlobal([demandaNum("X-1", umImplementar), demandaNum("A-1", umImplementar)], {
+    limite: 2,
+    emAndamento: 0,
+  });
+  assert.deepEqual(
+    mesmoNumero.map((t) => t.demanda_id),
+    ["A-1", "X-1"],
+  );
+  const global = demandaNum("I-3", { tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejamento");
+  assert.deepEqual(
+    selecionarTrabalhoGlobal([global, i1], { limite: 9, emAndamento: 0 }).map((t) => t.ticket_id),
+    [7, 9, 1],
+  );
 });
 
 test("CA-15: trabalho global aberto não concorre; em execução ou falho bloqueia as rodadas", () => {
@@ -111,7 +216,7 @@ test("reprovação do PR → sessão sem implementação → correção nova →
   });
   const sessao = reprovarPullRequestRodada(gate, { ...ref, ticket_id: 3, motivo: "ajustar" }, AUDITOR, ctx);
   assert.deepEqual(
-    selecionarTrabalho(sessao).map((t) => t.ticket_id),
+    selecionarTrabalho(sessao, true).map((t) => t.ticket_id),
     [4],
   );
   const sessaoTicket = sessao.tickets.find((t) => t.etapa === "sessao_em_aberto")?.ticket_id ?? 0;
@@ -126,12 +231,12 @@ test("reprovação do PR → sessão sem implementação → correção nova →
     ctx,
   );
   assert.deepEqual(
-    selecionarTrabalho(corrigida).map((t) => t.ticket_id),
+    selecionarTrabalho(corrigida, true).map((t) => t.ticket_id),
     [4],
   );
   const volta = concluirSessaoRodada(corrigida, { ...ref, ticket_id: sessaoTicket }, AUDITOR, ctx);
   assert.deepEqual(
-    selecionarTrabalho(volta).map((t) => t.ticket_id),
+    selecionarTrabalho(volta, true).map((t) => t.ticket_id),
     [6, 4],
   );
 });

@@ -8,7 +8,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { CATALOGO } from "../dominio/evidencia.ts";
 import type { ModoExecucao } from "../dominio/agregado.ts";
-import type { Effort, Etapa, Modelo } from "../dominio/primitivos.ts";
+import type { Effort, Etapa, EtapaTicket, Modelo } from "../dominio/primitivos.ts";
 import { ambienteSemCredenciais, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 
@@ -24,11 +24,12 @@ export const PACOTE = fileURLToPath(new URL("../../pacote-pi", import.meta.url))
 /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
 export const binarioPi = (): string => process.env.FABRIQUINHA_PI || "pi";
 
-/** Skills de artefato da etapa (P1 §5.1): uma por evidência de produtor agente; o nome sai do tipo. */
+/** O nome da skill de artefato (P1 §5.1) de uma evidência: sai do tipo. */
+export const skillDoTipo = (tipo: string): string => "artefato-" + tipo.replace(/^relatorio_/, "").replaceAll("_", "-");
+
+/** Skills de artefato da etapa (P1 §5.1): uma por evidência de produtor agente. */
 export const skillsDaEtapa = (etapa: Etapa): string[] =>
-  CATALOGO.filter((c) => c.etapa === etapa && c.produtor === "agente").map(
-    (c) => "artefato-" + c.tipo.replace(/^relatorio_/, "").replaceAll("_", "-"),
-  );
+  CATALOGO.filter((c) => c.etapa === etapa && c.produtor === "agente").map((c) => skillDoTipo(c.tipo));
 
 /**
  * F4 §6.1.1: a decisão de confiança mais próxima de `repo` (o próprio caminho ou um pai) no `trust.json` do pi, que
@@ -48,7 +49,9 @@ export function confianca(repo: string): boolean | undefined {
 export interface Lancamento {
   raiz: string;
   sessaoPi: string;
-  etapa: Etapa;
+  etapa: Etapa | EtapaTicket;
+  /** As skills do lançamento; sem ela, as da etapa legada. */
+  skills?: string[];
   modelo: Modelo | undefined;
   effort?: Effort;
   confianca: boolean | undefined;
@@ -75,7 +78,7 @@ export const argumentosPi = (l: Lancamento): string[] => [
   l.sessaoPi,
   ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.modelo] : []),
   ...(l.effort ? ["--thinking", l.effort] : []),
-  ...skillsDaEtapa(l.etapa).flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
+  ...(l.skills ?? skillsDaEtapa(l.etapa as Etapa)).flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
   "-e",
   join(PACOTE, "extensions", "guarda.ts"),
   "-e",

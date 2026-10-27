@@ -6,7 +6,7 @@ import { ErroDeRegra } from "./erros.ts";
 import type { FaseDemanda } from "./primitivos.ts";
 import { type ContextoDemanda, exigirFase } from "./transicoes_demanda.ts";
 
-const FASES_TERMINADAS: readonly FaseDemanda[] = ["concluida", "arquivada", "cancelada"];
+export const FASES_TERMINADAS: readonly FaseDemanda[] = ["concluida", "arquivada", "cancelada"];
 
 /** CA-1 a CA-7: só o Auditor, antes da integração confirmada; aberto/falhou viram fechado e em_execucao vira cancelado. */
 export function cancelarDemanda(ag: AgregadoDemanda, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda {
