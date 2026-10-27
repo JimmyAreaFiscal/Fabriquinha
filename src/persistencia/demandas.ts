@@ -2,9 +2,8 @@
 // issues.ts. Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira.
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
-import { AgregadoDemanda, type Demanda } from "../dominio/agregado_demanda.ts";
-import { encontrado } from "../dominio/erros.ts";
-import { branchDemanda } from "../dominio/demanda.ts";
+import { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
+import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
 import { escrever, novoId } from "./banco.ts";
 
 type Linha = Record<string, SQLInputValue>;
@@ -222,16 +221,20 @@ export const criarDemanda = (banco: DatabaseSync, agregado: AgregadoDemanda): Ag
     return agregado;
   });
 
-/** Demanda nova: o ID e a branch saem da sequência `issue` (D09), na mesma transação; erro desfaz também a sequência. */
-export const criarDemandaNova = (banco: DatabaseSync, entrada: Omit<Demanda, "id" | "branch">): AgregadoDemanda =>
+/**
+ * Demanda nova: a persistência só aloca o ID da sequência `issue` (D09); `montar` monta o agregado com ele. Erro em
+ * `montar`, no ID devolvido ou na gravação desfaz a transação, sequência incluída.
+ */
+export const criarDemandaNova = (banco: DatabaseSync, montar: (id: string) => AgregadoDemanda): AgregadoDemanda =>
   escrever(banco, () => {
     const id = `I-${String(novoId(banco, "issue"))}`;
-    const agregado = AgregadoDemanda.parse({
-      demanda: { ...entrada, id, branch: branchDemanda(id) },
-      tickets: [],
-      decisoes: [],
-      evidencias: [],
-    });
+    const agregado = montar(id);
+    if (agregado.demanda.id !== id) {
+      throw new ErroDeRegra(
+        `o agregado montado tem o ID ${agregado.demanda.id}, mas a sequência alocou ${id}`,
+        `monte a demanda com o id recebido (${id})`,
+      );
+    }
     gravarDiferenca(banco, undefined, agregado);
     return agregado;
   });
