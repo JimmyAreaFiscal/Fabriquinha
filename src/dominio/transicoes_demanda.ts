@@ -4,7 +4,7 @@ import { z } from "zod";
 import { type Ator, exigirAuditor, exigirFabriquinha, TipoIssue } from "./agregado.ts";
 import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
 import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
-import { branchDemanda, branchRodada, DemandaId, Plano } from "./demanda.ts";
+import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { AutorDemanda, exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
 import { type FaseDemanda, Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
@@ -370,15 +370,15 @@ const EntradaDevolucao = z.strictObject({
 });
 export const MAX_DEVOLUCOES = 2;
 
-function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDemanda["status"], acao: string) {
+export function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDemanda["status"], acao: string) {
   const ticket = existe(
     ag.tickets.find((t) => t.ticket_id === ticket_id),
-    `o ticket ${String(ticket_id)} não existe`,
+    `o ticket ${formatarTicketRef({ demanda_id: ag.demanda.id, ticket_id })} não existe`,
     "use um ticket da demanda",
   );
   if (ticket.status !== status) {
     throw new ErroDeRegra(
-      `o ticket ${String(ticket_id)} está ${ticket.status} e não pode ${acao}`,
+      `o ticket ${formatarTicketRef(ticket)} está ${ticket.status} e não pode ${acao}`,
       `só ticket ${status}`,
     );
   }
@@ -394,7 +394,7 @@ export const comStatus = (
   tickets: ag.tickets.map((t) => (t === alvo ? { ...t, ...extra } : t)),
 });
 
-function exigirDemandaEmAndamento(ag: AgregadoDemanda, acao: string): void {
+export function exigirDemandaEmAndamento(ag: AgregadoDemanda, acao: string): void {
   if (FASES_ENCERRADAS.includes(ag.demanda.fase)) {
     throw new ErroDeRegra(
       `a demanda ${ag.demanda.id} está em ${ag.demanda.fase}`,
