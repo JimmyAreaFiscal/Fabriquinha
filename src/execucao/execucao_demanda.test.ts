@@ -548,6 +548,20 @@ test("CA-12: reinício falha as revisões e o encerrar_rodada em encerramento; o
   );
 });
 
+test("CA-12: reinício falha o planejar com execução aberta, com a demanda em planejamento", async () => {
+  const { banco } = await cenario();
+  banco.exec("UPDATE demanda SET fase = 'planejamento' WHERE id = 'I-1'");
+  emExecucao(banco, 3);
+  comSessoesDoTicket(banco, ref(3), (estado) => {
+    const sessao = { ...ref(3), id: "s-p", modo: "autonomo" as const, conversa_referencia: "p" };
+    const sessoesNovas = criarSessao(estado.sessoes, sessao);
+    const execucao = { id: "p", sessao_id: sessao.id, inicio: em, falha: false };
+    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+  });
+  recuperarExecucoesDemanda(banco);
+  assert.equal(statusDe(banco, 3)?.status, "falhou");
+});
+
 test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {
   const { c, banco } = await cenario({ semWorktree: true });
   banco.prepare("UPDATE projeto SET repo = '/nao/existe' WHERE nome = 'loja'").run();
