@@ -8,7 +8,7 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
 import { hospedagemFalsa } from "./hospedagem-falsa.test.ts";
-import { estadoPR, publicarPR, verificarPR } from "./pr.ts";
+import { estadoPR, lerPR, publicarPR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
 after(() => {
@@ -693,4 +693,82 @@ test("verificarPR: os estados do gh e do az viram aprovado, falho ou andamento; 
       "(confira a versão do az; os estados conhecidos são conflicts, succeeded, queued, notSet)",
     ErroExterno,
   );
+});
+
+const RODADA = "fabriquinha/I-206-2";
+const DEMANDA = "fabriquinha/I-206";
+const MARCA_RODADA = "<!-- fabriquinha I-206.T7 -->";
+
+/** A rodada com um commit sobre a branch da demanda, que só existe localmente. */
+function cenarioRodada() {
+  const c = cenario();
+  git(c.repo, "branch", DEMANDA, "main");
+  git(c.repo, "branch", "-m", BRANCH, RODADA);
+  const publicar = (conferir: (head: string) => void, publicarBase = true) =>
+    publicarPRDe(
+      join(dirname(c.repo), "raiz"),
+      { nome: "loja", repo: c.repo, hospedagem: "github" },
+      { branch: RODADA, base: DEMANDA, publicarBase },
+      { titulo: "feat: R [I-206.R2]", corpo: `${MARCA_RODADA}\ncorpo`, conhecidos: [], marca: MARCA_RODADA },
+      conferir,
+      () => Promise.resolve(),
+      c.log,
+    );
+  const noRemoto = (ref: string) => git(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${ref}`);
+  return { ...c, publicar, noRemoto };
+}
+
+test("alvo da rodada: PR da branch da rodada para a da demanda, que sobe antes, nunca para a base do projeto", async () => {
+  const c = cenarioRodada();
+  const vistos: string[] = [];
+
+  const pr = await c.publicar((head) => {
+    vistos.push(head);
+  });
+
+  assert.deepEqual(pr, { id: "1", url: `${URL_GH}1`, branch: RODADA, head: c.head });
+  assert.deepEqual(vistos, [c.head]);
+  assert.deepEqual(
+    hospedagem.prs().map((p) => [p.head, p.base]),
+    [[RODADA, DEMANDA]],
+  );
+  assert.equal(c.noRemoto(RODADA), c.head);
+  assert.equal(c.noRemoto(DEMANDA), git(c.repo, "rev-parse", "main"));
+});
+
+test("alvo da rodada: sem publicarBase, a demanda não sobe; o PR com a marca e a base da demanda é adotado", async () => {
+  const c = cenarioRodada();
+  hospedagem.abrir({ head: RODADA, base: DEMANDA, titulo: "x", corpo: `${MARCA_RODADA}\nantes`, estado: "aberto" });
+
+  const pr = await c.publicar(() => undefined, false);
+
+  assert.equal(pr.id, "1");
+  assert.equal(c.noRemoto(DEMANDA), "");
+  assert.deepEqual(
+    hospedagem.prs().map((p) => [p.titulo, p.corpo]),
+    [["feat: R [I-206.R2]", `${MARCA_RODADA}\ncorpo`]],
+  );
+});
+
+test("alvo da rodada: o gancho de commits recusa antes do push e de qualquer PR", async () => {
+  const c = cenarioRodada();
+
+  await recusa(
+    c.publicar(() => {
+      throw new ErroDeRegra("commit solto", "desfaça");
+    }),
+    "commit solto (desfaça)",
+  );
+  assert.equal(c.noRemoto(RODADA), "");
+  assert.equal(c.noRemoto(DEMANDA), "");
+  assert.deepEqual(hospedagem.prs(), []);
+});
+
+test("lerPR: o estado do PR pelo id", async () => {
+  hospedagem.abrir({ head: RODADA, base: DEMANDA, titulo: "x", corpo: "", estado: "aberto" });
+
+  const leitura = await lerPR({ repo: base, hospedagem: "github" }, "1");
+
+  assert.equal(leitura.estado, "aberto");
+  assert.equal(leitura.url, `${URL_GH}1`);
 });

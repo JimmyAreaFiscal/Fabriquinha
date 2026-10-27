@@ -366,15 +366,49 @@ export async function publicarPR(
   varrerBase: () => Promise<void>,
   log: string,
 ): Promise<{ id: string; url: string; branch: string; head: string }> {
-  const { repo } = projeto;
-  const cli = CLIS[projeto.hospedagem];
   const rotulo = `I-${String(issue)}`;
   const branch = `fabriquinha/${rotulo}`;
+  const conferirCommits = (head: string) => {
+    if (pr.registrado(head)) return;
+    throw new ErroDeRegra(
+      `a branch ${branch} está no commit ${head.slice(0, 12)}, que nenhum ticket de desenvolvimento da ${rotulo} ` +
+        "registrou: um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
+      `desfaça com git -C ${caminhoDaWorktree(raiz, projeto.nome, issue)} reset --hard HEAD~1, repetindo até a ` +
+        `HEAD ser um commit [${rotulo}/T-<m>] da Fabriquinha, e reabra o ticket`,
+    );
+  };
+  const alvo = { branch, base: projeto.branchBase, publicarBase: false };
+  return publicarPRDe(raiz, projeto, alvo, pr, conferirCommits, varrerBase, log);
+}
+
+/** A origem e o destino do PR; `publicarBase` empurra também a base, que pode nunca ter ido ao remoto (branch da demanda). */
+export interface AlvoDoPR {
+  branch: string;
+  base: string;
+  publicarBase: boolean;
+}
+
+/**
+ * O núcleo de `publicarPR` (passos 1 a 4 acima) para qualquer origem e destino. `conferirCommits(head)` roda na fila git,
+ * antes do push, e lança ErroDeRegra para recusar a publicação.
+ */
+export async function publicarPRDe(
+  raiz: string,
+  projeto: Pick<Projeto, "nome" | "repo" | "hospedagem">,
+  alvo: AlvoDoPR,
+  pr: { titulo: string; corpo: string; conhecidos: readonly string[]; marca: string },
+  conferirCommits: (head: string) => void | Promise<void>,
+  varrerBase: () => Promise<void>,
+  log: string,
+): Promise<{ id: string; url: string; branch: string; head: string }> {
+  const { repo } = projeto;
+  const { branch, base } = alvo;
+  const cli = CLIS[projeto.hospedagem];
 
   const existentes = await cli.listar(repo, branch);
   // Mergeado não é adotável: o código já entrou na base sem passar pelo encerramento.
   const adotavel = (p: PRNaHospedagem) =>
-    p.corpo.includes(pr.marca) && p.base === projeto.branchBase && !p.deFork && p.estado !== "mergeado";
+    p.corpo.includes(pr.marca) && p.base === base && !p.deFork && p.estado !== "mergeado";
   const deFora = existentes.filter((p) => !pr.conhecidos.includes(p.id) && !adotavel(p));
   const mergeado = deFora.find((p) => p.estado === "mergeado");
   if (mergeado) {
@@ -389,14 +423,8 @@ export async function publicarPR(
 
   const head = await naFilaDoProjeto(raiz, projeto.nome, async () => {
     const sha = (await exigirGit(repo, "rev-parse", `refs/heads/${branch}`)).trim();
-    if (!pr.registrado(sha)) {
-      throw new ErroDeRegra(
-        `a branch ${branch} está no commit ${sha.slice(0, 12)}, que nenhum ticket de desenvolvimento da ${rotulo} ` +
-          "registrou: um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
-        `desfaça com git -C ${caminhoDaWorktree(raiz, projeto.nome, issue)} reset --hard HEAD~1, repetindo até a ` +
-          `HEAD ser um commit [${rotulo}/T-<m>] da Fabriquinha, e reabra o ticket`,
-      );
-    }
+    await conferirCommits(sha);
+    if (alvo.publicarBase) await exigirGit(repo, "push", "origin", `refs/heads/${base}:refs/heads/${base}`);
     await exigirGit(repo, "push", "-u", "origin", `refs/heads/${branch}:refs/heads/${branch}`);
     return sha;
   });
@@ -406,10 +434,10 @@ export async function publicarPR(
   });
 
   // O conhecido sempre vence: um adotável mais novo só conta quando a issue ainda não registrou PR algum.
-  const alvo = existentes.find((p) => p.id === pr.conhecidos.at(-1)) ?? existentes.find(adotavel);
-  if (!alvo) return { ...(await cli.criar(repo, projeto.branchBase, branch, pr.titulo, pr.corpo)), branch, head };
-  if (alvo.estado === "fechado") await cli.reabrir(repo, alvo.id);
-  return { ...(await cli.atualizar(repo, alvo, pr.titulo, pr.corpo)), branch, head };
+  const existente = existentes.find((p) => p.id === pr.conhecidos.at(-1)) ?? existentes.find(adotavel);
+  if (!existente) return { ...(await cli.criar(repo, base, branch, pr.titulo, pr.corpo)), branch, head };
+  if (existente.estado === "fechado") await cli.reabrir(repo, existente.id);
+  return { ...(await cli.atualizar(repo, existente, pr.titulo, pr.corpo)), branch, head };
 }
 
 /**
@@ -425,7 +453,12 @@ export async function estadoPR(
     `a I-${String(ag.issue.id)} ainda não tem PR`,
     "o encerramento publica o PR",
   );
-  const leitura = await CLIS[projeto.hospedagem].ler(projeto.repo, pr.dados.id as string);
+  return lerPR(projeto, pr.dados.id as string);
+}
+
+/** O estado do PR `id`, lido agora na plataforma. */
+export async function lerPR(projeto: Pick<Projeto, "repo" | "hospedagem">, id: string): Promise<LeituraDoPR> {
+  const leitura = await CLIS[projeto.hospedagem].ler(projeto.repo, id);
   return { ...leitura, lidoEm: new Date().toISOString() };
 }
 
