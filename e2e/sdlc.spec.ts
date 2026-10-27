@@ -110,6 +110,29 @@ test("a configuração inválida não grava e mostra o erro no campo ou no grupo
   await expect(preparacao.getByText("ordem repetida")).toBeVisible();
 });
 
+test("um POST direto com effort inexistente responde 422 no campo da etapa e não grava", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  configurar(fabriquinha.raiz);
+  const url = `${fabriquinha.base}/api/projetos/loja/configuracao-sdlc`;
+  const lerEtapa = async () =>
+    ((await (await pagina.request.get(url)).json()) as { configuracao: { etapas: { effort: string }[] } }).configuracao;
+  const configuracao = await lerEtapa();
+  configuracao.etapas[0] = { ...configuracao.etapas[0], effort: "inexistente" };
+  const resposta = await pagina.request.post(url, {
+    headers: { "Sec-Fetch-Site": "same-origin" },
+    data: configuracao,
+  });
+  expect(resposta.status()).toBe(422);
+  const corpo = await resposta.text();
+  expect(corpo).toContain("etapas");
+  expect(corpo).toContain("effort");
+  expect(corpo).toContain("use um valor do domínio");
+  expect((await lerEtapa()).etapas[0]?.effort).toBe("high");
+});
+
 test("o erro aparece sob o controle sem deslocar a linha", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
   configurar(fabriquinha.raiz);
