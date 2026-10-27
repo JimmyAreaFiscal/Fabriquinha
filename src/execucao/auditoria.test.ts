@@ -164,6 +164,8 @@ if (env.FALSO_PI === "morre") {
   process.exit(3);
 }
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
+// Variante assenta: trabalha sem responder e, ao receber o SIGTERM do fim, ainda assenta antes de sair.
+if (env.FALSO_PI === "assenta") process.on("SIGTERM", () => { emitir({ type: "agent_settled" }); setTimeout(() => process.exit(0), 50); });
 const guardar = (message) =>
   appendFileSync(sessao, JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
 const responder = (texto, stopReason = "stop") => {
@@ -185,7 +187,7 @@ process.stdin.setEncoding("utf8").on("data", (parte) => {
       const usuario = { role: "user", content: c.message, timestamp: Date.now() };
       emitir({ type: "message_end", message: usuario });
       guardar(usuario);
-      if (env.FALSO_PI !== "espera") responder("## Oportunidades de melhoria\\n(scout)");
+      if (env.FALSO_PI !== "espera" && env.FALSO_PI !== "assenta") responder("## Oportunidades de melhoria\\n(scout)");
     }
     if (c.type === "abort") {
       emitir({ type: "response", command: "abort", success: true });
@@ -214,7 +216,7 @@ interface Rodada {
 }
 
 /** Uma nova rodada do pi falso: o registro zerado e a variante. */
-function pifalso(variante: "conversa" | "espera" | "morre"): Rodada {
+function pifalso(variante: "conversa" | "espera" | "morre" | "assenta"): Rodada {
   rmSync(process.env.FALSO_PI_REGISTRO ?? "", { force: true });
   process.env.FALSO_PI = variante;
   return {
@@ -442,6 +444,16 @@ test("enviarNaAuditoria recusa com o agente trabalhando; abortarAuditoria o para
   const conversa = abrirAuditoria(banco, sessao).conversa as { message?: { stopReason?: string } }[];
   assert.equal(conversa.at(-1)?.message?.stopReason, "aborted");
   await parar(sessao);
+});
+
+test("parar a auditoria com o agente trabalhando: o assentar que chega depois do fim não arma relógio de ociosidade", async () => {
+  pifalso("assenta");
+  const sessao = await iniciarAuditoria(banco, "2026-09", await sessoesDoMes(banco, "2026-09"), { ociosidadeMin: 60 });
+  const relogios = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
+  const antes = relogios();
+  await parar(sessao);
+  await dormir(200);
+  assert.ok(relogios() <= antes, "um relógio de 60 min ficou armado e seguraria o processo");
 });
 
 test("iniciarAuditoria: se o pi não sobe, lança ErroExterno e não deixa pasta nem JSONL (CA-10)", async () => {
