@@ -384,3 +384,12 @@ test("ticket criar recusa endereço que não é de rodada", async () => {
     assert.match(s.err, /I-206\.R2/);
   }
 });
+
+test("ticket criar recusa rodada de outra demanda sem gravar e mostra a rodada do próprio ticket", async () => {
+  const { env } = cenarioDeRevisao("execucao", "sessao", "sessao_em_aberto");
+  const antes = (await lerDemanda(env)).tickets.length;
+  const s = await cli(env, ["ticket", "criar", "I-999.R2", "--titulo", "Corretivo de outra demanda"]);
+  assert.deepEqual([s.codigo, s.out], [1, ""]);
+  assert.match(s.err, /I-999\.R2 é de outra demanda.*I-206\.R2/s);
+  assert.equal((await lerDemanda(env)).tickets.length, antes);
+});

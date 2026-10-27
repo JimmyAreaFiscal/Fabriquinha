@@ -192,18 +192,23 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
     opcoes: { titulo: { type: "string" } },
     rodar({ banco, agente, pos, op }) {
       const texto = String(pos[0]);
+      const { demanda_id } = agente;
+      const proprioTicket = encontrado(
+        carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === agente.ticket_id),
+        `o ticket ${proprio(agente)} não existe`,
+        "confira a execução",
+      );
+      const forma = `use a rodada do seu ticket, ${formatarRodadaRef({ demanda_id, rodada_id: Number(proprioTicket.rodada_id) })}`;
       let ref;
       try {
         ref = interpretarRef(texto);
       } catch {
-        throw new ErroDeRegra(`${texto} não é um endereço de rodada`, "use a rodada do seu ticket, como I-206.R2");
+        throw new ErroDeRegra(`${texto} não é um endereço de rodada`, forma);
       }
-      if (!("rodada_id" in ref)) {
-        throw new ErroDeRegra(`${texto} é um ticket, não uma rodada`, "use a rodada do seu ticket, como I-206.R2");
-      }
+      if (!("rodada_id" in ref)) throw new ErroDeRegra(`${texto} é um ticket, não uma rodada`, forma);
+      if (ref.demanda_id !== demanda_id) throw new ErroDeEscopo(`${texto} é de outra demanda`, forma);
       const titulo = op.titulo as string | undefined;
       if (titulo === undefined) throw new ErroDeRegra("falta o título do ticket corretivo", "passe --titulo <texto>");
-      const { demanda_id } = agente;
       const antes = new Set(carregarDemanda(banco, demanda_id).tickets.map((t) => t.ticket_id));
       const depois = gravar(banco, agente, (ag) =>
         registrarCorrecoesSessao(
