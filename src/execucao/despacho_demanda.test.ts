@@ -338,5 +338,5 @@ test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue par
   demanda(outro.banco, 2, { rodadas: ["encerramento"], tickets: [{ etapa: "encerrar_rodada", rodada: 1 }] });
   delete process.env.FALSO_PI;
   await Promise.all(despacharDemandas(outro.banco, outro.config));
-  assert.notEqual(status(outro.banco, 2, 1), "falhou");
+  assert.equal(status(outro.banco, 2, 1), "falhou"); // conclusão recusada: não fica preso em execução
 });

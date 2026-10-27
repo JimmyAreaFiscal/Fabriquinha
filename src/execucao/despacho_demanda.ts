@@ -9,7 +9,7 @@ import { ErroDeRegra, existe } from "../dominio/erros.ts";
 import { reservarTicket } from "../dominio/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../dominio/selecao_trabalho.ts";
 import { escrever } from "../persistencia/banco.ts";
-import { comDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../persistencia/despacho_demanda.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { type Configuracao, limiteParalelismo } from "../persistencia/servico.ts";
@@ -44,8 +44,14 @@ async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: 
     falharTicketDemanda(banco, t, erro);
     return;
   }
-  // O erro da publicação já falha o ticket dentro de `concluirEncerramentoRodada`; aqui só sobe ao log.
-  return concluirEncerramentoRodada(banco, rodada);
+  try {
+    return await concluirEncerramentoRodada(banco, rodada);
+  } catch (erro) {
+    // A publicação já falha o ticket por dentro; a recusa antes dela (documentação, estado) o deixaria preso em execução.
+    const atual = carregarDemanda(banco, t.demanda_id).tickets.find((x) => x.ticket_id === t.ticket_id);
+    if (atual?.status === "em_execucao") falharTicketDemanda(banco, t, (erro as Error).message);
+    throw erro;
+  }
 }
 
 /**
