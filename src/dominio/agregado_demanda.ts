@@ -179,8 +179,8 @@ export const AgregadoDemanda = z
     }
     const enc = ag.encerramento;
     if (enc !== undefined) {
-      if (ag.demanda.fase !== "encerramento" && ag.demanda.fase !== "concluida")
-        erro("o progresso do encerramento só existe nas fases encerramento e concluida");
+      if (!["encerramento", "concluida", "cancelada", "arquivada"].includes(ag.demanda.fase))
+        erro("o progresso do encerramento só existe nas fases encerramento, concluida, cancelada e arquivada");
       if (enc.demanda_id !== id) erro(`o progresso do encerramento é de outra demanda (${enc.demanda_id})`);
       const conflito = enc.conflito_pendente?.ticket_id;
       if (
