@@ -6,7 +6,12 @@ import { encerrarExecucao, iniciarExecucao, registrarUso, totalDoTicket } from "
 import type { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../dominio/sessoes.ts";
 import { migrar } from "./banco.ts";
 import { MIGRACOES } from "./migracoes.ts";
-import { carregarSessoesDaDemanda, carregarSessoesDoTicket, comSessoesDoTicket } from "./sessoes.ts";
+import {
+  carregarSessoesDaDemanda,
+  carregarSessoesDoTicket,
+  comSessoesDoTicket,
+  execucoesAbertasDaDemanda,
+} from "./sessoes.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const em = "2026-01-01T00:00:00.000Z";
@@ -187,4 +192,15 @@ test("CA-3: effort inválido falha com ErroDeRegra citando o campo e não altera
     (e) => e instanceof ErroDeRegra && e.message.includes("effort"),
   );
   assert.equal(JSON.stringify(b.prepare("SELECT * FROM execucao_sessao").all()), antes);
+});
+
+test("CA-10: execuções abertas de qualquer ticket, com grupo de processo nulo ou gravado; as encerradas ficam de fora", () => {
+  const b = banco();
+  gravar(b, [sessao("s1")], [execucao("e1"), { ...execucao("e2"), grupo_processo: 4321 }], []);
+  gravar(b, [sessao("s2", 2)], [execucao("e3", "s2")], [], noTicket2);
+  comSessoesDoTicket(b, ref, (x) => ({ ...x, execucoes: encerrarExecucao(x.execucoes, "e1", em, false) }));
+  assert.deepEqual(execucoesAbertasDaDemanda(b), [
+    { id: "e2", sessao_id: "s1", demanda_id: "I-1", ticket_id: 1, grupo_processo: 4321 },
+    { id: "e3", sessao_id: "s2", demanda_id: "I-1", ticket_id: 2, grupo_processo: null },
+  ]);
 });

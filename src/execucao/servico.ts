@@ -27,6 +27,7 @@ import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
 import { recuperarAuditorias } from "./auditoria.ts";
 import { executarAutonomo } from "./autonoma.ts";
+import { recuperarExecucoesDemanda } from "./execucao_demanda.ts";
 import { iniciarDesenho } from "./sessoes.ts";
 
 const REINICIADO = "serviço reiniciado";
@@ -85,6 +86,7 @@ function recuperar(banco: DatabaseSync): void {
     );
   }
   for (const pgid of falharPendentes(banco, REINICIADO)) sinalNoGrupo(pgid, "SIGKILL");
+  recuperarExecucoesDemanda(banco);
 }
 
 /**

@@ -25,7 +25,7 @@ import { raizDo } from "../persistencia/banco.ts";
 import { configuracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { anotar, arquivoDaSessao } from "../persistencia/execucoes.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket, execucoesAbertasDaDemanda } from "../persistencia/sessoes.ts";
 import { sinalNoGrupo } from "../processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { rodarPi } from "./gerente.ts";
@@ -46,6 +46,7 @@ export interface OpcoesExecucaoDemanda {
 const ativas = new Map<string, { pgid?: number; interrompida?: boolean }>();
 
 const INTERROMPIDA = "interrompida pelo Auditor";
+const REINICIADO = "serviço reiniciado";
 
 interface Conducao {
   banco: DatabaseSync;
@@ -234,7 +235,7 @@ export function iniciarExecucaoDemanda(
  * (sem condutor, ex.: serviço reiniciado), SIGKILL e encerra direto. Sem execução aberta, recusa antes de escrever.
  */
 export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef): void {
-  const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
+  const { execucoes } = carregarSessoesDoTicket(banco, ref);
   const execucao = existe(
     execucoes.find((e) => e.fim == null),
     `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não tem execução em andamento`,
@@ -246,11 +247,29 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
     if (viva.pgid !== undefined) sinalNoGrupo(viva.pgid, "SIGTERM");
     return;
   }
-  if (execucao.grupo_processo !== undefined) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
-  const sessao = existe(
-    sessoes.find((s) => s.id === execucao.sessao_id),
-    `a execução ${execucao.id} não tem sessão`,
+  encerrarOrfa(banco, ref, execucao.id, INTERROMPIDA);
+}
+
+/** Execução aberta sem condutor: SIGKILL no grupo gravado e encerra com falha, sem tocar ticket, etapa nem gate. */
+function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, erro: string): void {
+  const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
+  const execucao = existe(
+    execucoes.find((e) => e.id === id),
+    `a execução ${id} não existe`,
     "confira o banco",
   );
-  encerrar({ banco, ref, sessao, execucao }, INTERROMPIDA, join(raizDo(banco), "execucoes", `E-${execucao.id}`, "log"));
+  if (execucao.grupo_processo != null) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
+  const sessao = existe(
+    sessoes.find((s) => s.id === execucao.sessao_id),
+    `a execução ${id} não tem sessão`,
+    "confira o banco",
+  );
+  encerrar({ banco, ref, sessao, execucao }, erro, join(raizDo(banco), "execucoes", `E-${id}`, "log"));
+}
+
+/** Reinício do serviço (§4.2): toda execução aberta é de uma instância anterior e falha, sem avançar etapa nem gate. */
+export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
+  for (const { id, demanda_id, ticket_id } of execucoesAbertasDaDemanda(banco)) {
+    encerrarOrfa(banco, { demanda_id, ticket_id }, id, REINICIADO);
+  }
 }

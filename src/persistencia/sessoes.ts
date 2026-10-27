@@ -137,3 +137,21 @@ export const comSessoesDoTicket = (
     );
     return depois;
   });
+
+export interface ExecucaoAberta {
+  id: string;
+  sessao_id: string;
+  demanda_id: string;
+  ticket_id: number;
+  grupo_processo: number | null;
+}
+
+/** As execuções sem fim de qualquer ticket: no reinício do serviço, todas são de uma instância anterior. */
+export const execucoesAbertasDaDemanda = (banco: DatabaseSync): ExecucaoAberta[] =>
+  banco
+    .prepare(
+      `SELECT e.id, e.sessao_id, s.demanda_id, s.ticket_id, e.grupo_processo
+         FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id WHERE e.fim IS NULL ORDER BY e.rowid`,
+    )
+    .all()
+    .map((l) => ({ ...l }) as unknown as ExecucaoAberta);

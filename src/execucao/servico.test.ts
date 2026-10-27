@@ -292,6 +292,36 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   await s.parar();
 });
 
+test("CA-10, CA-14: reinício encerra a execução aberta da demanda como falha, sem mexer no ticket", async () => {
+  const raiz = novaRaiz();
+  const banco = abrir(raiz);
+  const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
+  const saiu = once(pi, "exit");
+  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('d', '/nao/existe', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]');
+    INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+      VALUES ('I-1', 1, 'planejar', 'em_execucao', '${AGORA}');
+    INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');`);
+  banco
+    .prepare("INSERT INTO execucao_sessao (id, sessao_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', ?, 0, ?)")
+    .run(AGORA, pi.pid ?? null);
+  banco.close();
+
+  const s = await subir(raiz);
+  assert.deepEqual(await saiu, [null, "SIGKILL"]);
+  assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM execucao_sessao").get(), {
+    falha: 1,
+    erro: "serviço reiniciado",
+  });
+  assert.notEqual(s.banco.prepare("SELECT fim FROM execucao_sessao").get()?.fim, null);
+  assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM ticket_demanda").get(), {
+    etapa: "planejar",
+    status: "em_execucao",
+  });
+  await s.parar();
+});
+
 test("reinício: as execuções simuladas pendentes falham e o pi delas é morto; as terminadas ficam", async () => {
   const raiz = novaRaiz();
   const banco = abrir(raiz);

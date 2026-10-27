@@ -16,7 +16,7 @@ import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
-import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import { interromperExecucaoDemanda, iniciarExecucaoDemanda, recuperarExecucoesDemanda } from "./execucao_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-exec-demanda-"));
@@ -401,4 +401,33 @@ test("CA-9: sem execução aberta a interrupção é recusada e nada muda", asyn
     interromperExecucaoDemanda(banco, ref(1));
   }, ErroDeRegra);
   assert.deepEqual(sessoes(1), antes);
+});
+
+test("CA-10, CA-14: reinício mata o grupo gravado, falha as abertas (com ou sem grupo) e não toca o ticket", async () => {
+  const { banco, sessoes } = await cenario();
+  const filho = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
+  const morreu = new Promise((r) => filho.on("exit", r));
+  const abrirOrfa = (ticket: number, id: string, grupo_processo?: number) =>
+    comSessoesDoTicket(banco, ref(ticket), (estado) => {
+      const sessao = { ...ref(ticket), id: `s-${id}`, modo: "autonomo" as const, conversa_referencia: id };
+      const sessoesNovas = criarSessao(estado.sessoes, sessao);
+      const execucao = {
+        id,
+        sessao_id: sessao.id,
+        inicio: em,
+        falha: false,
+        ...(grupo_processo && { grupo_processo }),
+      };
+      return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+    });
+  abrirOrfa(1, "e-com-grupo", filho.pid);
+  abrirOrfa(2, "e-sem-grupo");
+  const antes = carregarDemanda(banco, "I-1");
+  recuperarExecucoesDemanda(banco);
+  await morreu;
+  for (const t of [1, 2]) {
+    const [e] = sessoes(t).execucoes;
+    assert.deepEqual([e?.falha, e?.erro, e?.fim !== null], [true, "serviço reiniciado", true]);
+  }
+  assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
 });
