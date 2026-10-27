@@ -239,15 +239,20 @@ export const criarDemandaNova = (banco: DatabaseSync, montar: (id: string) => Ag
     return agregado;
   });
 
-/** Carrega a demanda, aplica a transição do domínio e grava a diferença numa transação só. */
+/**
+ * Carrega a demanda, aplica a transição do domínio e grava a diferença numa transação só. `aposGravar` roda ainda
+ * dentro dela, depois da diferença (é como anexos e sessões externas entram junto da evidência).
+ */
 export const comDemanda = (
   banco: DatabaseSync,
   id: string,
   transicao: (agregado: AgregadoDemanda) => AgregadoDemanda,
+  aposGravar?: (depois: AgregadoDemanda) => void,
 ): AgregadoDemanda =>
   escrever(banco, () => {
     const antes = existente(banco, id);
     const depois = transicao(antes);
     gravarDiferenca(banco, antes, depois);
+    aposGravar?.(depois);
     return depois;
   });

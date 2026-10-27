@@ -1,6 +1,6 @@
 // Migrações do banco (F2 §3.7): lista ordenada; a posição + 1 é a versão gravada em `PRAGMA user_version`.
 // Só se acrescenta ao fim; migração já aplicada não muda.
-import type { z } from "zod";
+import { z } from "zod";
 import {
   Decisao,
   GateDecisao,
@@ -23,6 +23,9 @@ import { StatusArquivo } from "./commits.ts";
 /** Lista de um `CHECK ... IN (...)` gerada de um enum zod, para o banco e o domínio não divergirem. */
 export const listaSql = (enumeracao: z.ZodEnum): string =>
   enumeracao.options.map((v) => `'${String(v).replaceAll("'", "''")}'`).join(",");
+
+/** Lista de tipos congelada da migração 24: a partir da 30 o CHECK acompanha `TipoEvidenciaAgregado`. */
+const TIPOS_EVIDENCIA_MIGRACAO_24 = z.enum([...TipoEvidencia.options, "custos_realizados", "plano"]);
 
 export const MIGRACOES: readonly string[] = [
   // A lista é fixa: o tipo `proposta` entra na migração 16, que recria `sequencia`.
@@ -533,7 +536,7 @@ export const MIGRACOES: readonly string[] = [
     demanda_id TEXT NOT NULL REFERENCES demanda(id),
     rodada_id  INTEGER,
     ticket_id  INTEGER,
-    tipo       TEXT NOT NULL CHECK (tipo IN (${listaSql(TipoEvidenciaAgregado)})),
+    tipo       TEXT NOT NULL CHECK (tipo IN (${listaSql(TIPOS_EVIDENCIA_MIGRACAO_24)})),
     dados      TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(dados)),
     em         TEXT NOT NULL,
     FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),
@@ -646,4 +649,38 @@ export const MIGRACOES: readonly string[] = [
   );
   CREATE INDEX ix_retrabalho_demanda_origem ON retrabalho_demanda(demanda_id, ticket_origem_id);
   CREATE INDEX ix_retrabalho_demanda_alterador ON retrabalho_demanda(demanda_id, ticket_id);`,
+  // Anexos e sessões externas da evidência da demanda (D10) e tipos de etapa novos no CHECK: recria evidencia_demanda preservando linhas.
+  `CREATE TABLE evidencia_demanda_nova (
+    id         TEXT PRIMARY KEY,
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    rodada_id  INTEGER,
+    ticket_id  INTEGER,
+    tipo       TEXT NOT NULL CHECK (tipo IN (${listaSql(TipoEvidenciaAgregado)})),
+    dados      TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(dados)),
+    em         TEXT NOT NULL,
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    CHECK (rodada_id IS NULL OR ticket_id IS NULL)
+  );
+  INSERT INTO evidencia_demanda_nova SELECT id, demanda_id, rodada_id, ticket_id, tipo, dados, em FROM evidencia_demanda ORDER BY rowid;
+  DROP TABLE evidencia_demanda;
+  ALTER TABLE evidencia_demanda_nova RENAME TO evidencia_demanda;
+  CREATE UNIQUE INDEX ux_evidencia_demanda_demanda ON evidencia_demanda(demanda_id, tipo) WHERE rodada_id IS NULL AND ticket_id IS NULL;
+  CREATE UNIQUE INDEX ux_evidencia_demanda_rodada ON evidencia_demanda(demanda_id, rodada_id, tipo) WHERE rodada_id IS NOT NULL;
+  CREATE UNIQUE INDEX ux_evidencia_demanda_ticket ON evidencia_demanda(demanda_id, ticket_id, tipo) WHERE ticket_id IS NOT NULL;
+  CREATE TABLE arquivo_evidencia (
+    evidencia_id TEXT NOT NULL REFERENCES evidencia_demanda(id) ON DELETE CASCADE,
+    ordem        INTEGER NOT NULL CHECK (ordem >= 1),
+    caminho      TEXT NOT NULL,
+    sha256       TEXT NOT NULL,
+    mime         TEXT NOT NULL,
+    bytes        INTEGER NOT NULL CHECK (bytes >= 0),
+    PRIMARY KEY (evidencia_id, ordem)
+  );
+  CREATE TABLE sessao_externa_demanda (
+    ferramenta TEXT NOT NULL,
+    sessao     TEXT NOT NULL,
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    PRIMARY KEY (ferramenta, sessao)
+  );`,
 ];

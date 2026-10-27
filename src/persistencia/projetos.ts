@@ -189,6 +189,7 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
       banco
         .prepare(
           `SELECT sha256 FROM evidencia_arquivo WHERE sha256 IN (SELECT value FROM json_each($anexos))
+           UNION SELECT sha256 FROM arquivo_evidencia WHERE sha256 IN (SELECT value FROM json_each($anexos))
            UNION SELECT sha256 FROM usuario_simulado_anexo WHERE sha256 IN (SELECT value FROM json_each($anexos))`,
         )
         .all({ anexos: JSON.stringify(anexos) }) as { sha256: string }[]

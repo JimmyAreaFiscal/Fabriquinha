@@ -7,7 +7,10 @@ import {
   donoDe,
   EvidenciaDemanda,
   TicketDemanda,
+  TipoEvidenciaAgregado,
 } from "./agregado_demanda.ts";
+import { TipoEvidencia } from "./agregado.ts";
+import { TipoEvidenciaEtapa } from "./evidencia_etapa.ts";
 
 const em = "2026-01-01T00:00:00Z";
 const demanda = (m: Record<string, unknown> = {}) => ({
@@ -230,4 +233,10 @@ test("encerramento: ausente continua válido e cada invariante recusa", () => {
     AgregadoDemanda.safeParse(emEncerramento(enc({ conflito_pendente: { ticket_id: 2 } }), [ticket(), resolver]))
       .success,
   );
+});
+
+test("TipoEvidenciaAgregado é a união, sem repetição, de TipoEvidencia e TipoEvidenciaEtapa", () => {
+  const uniao = [...new Set([...TipoEvidencia.options, ...TipoEvidenciaEtapa.options])];
+  assert.deepEqual([...TipoEvidenciaAgregado.options].sort(), uniao.sort());
+  assert.equal(new Set(TipoEvidenciaAgregado.options).size, TipoEvidenciaAgregado.options.length);
 });

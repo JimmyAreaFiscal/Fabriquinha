@@ -562,3 +562,50 @@ test("os exemplos json de cada skill passam pelo schema do tipo (CA-9)", () => {
       assert.deepEqual(recusadosEtapa(tipo as TipoSchemaEtapa, JSON.parse(json ?? "")), []);
   }
 });
+
+const LINHA = {
+  provedor: "anthropic",
+  modelo: "m",
+  tokens_entrada: 1,
+  tokens_saida: 2,
+  tokens_cache_leitura: 0,
+  tokens_cache_escrita: 0,
+};
+const mensagens = (dados: unknown) => {
+  const r = schemaDeEtapa("custos_realizados").dados.safeParse(dados);
+  return r.success ? [] : r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
+};
+
+test("custos_realizados: CA-8, campo faltante nomeado com como corrigir", () => {
+  for (const [campo, como] of [
+    ["ferramenta", "ferramenta externa"],
+    ["sessao", "id da sessão no harness"],
+  ] as const) {
+    const sessao = { ferramenta: "claude", sessao: "s1", linhas: [LINHA], [campo]: undefined };
+    const [m] = mensagens({ sessoes: [sessao] });
+    assert.match(m ?? "", new RegExp(`^sessoes.0.${campo}: ${campo} é obrigatório: .*${como}`));
+  }
+  assert.match(mensagens({})[0] ?? "", /sessoes é obrigatório/);
+  assert.match(mensagens({ sessoes: [{ ferramenta: "c", sessao: "s", linhas: [] }] })[0] ?? "", /linhas é obrigatório/);
+});
+
+test("custos_realizados: CA-9, tokens negativos, ausentes ou fracionados nomeiam o campo", () => {
+  const com = (linha: object) => mensagens({ sessoes: [{ ferramenta: "c", sessao: "s", linhas: [linha] }] });
+  assert.match(com({ ...LINHA, tokens_entrada: -1 })[0] ?? "", /tokens_entrada não pode ser negativo/);
+  assert.match(com({ ...LINHA, tokens_saida: 1.5 })[0] ?? "", /tokens_saida deve ser inteiro/);
+  assert.match(com({ ...LINHA, tokens_cache_leitura: undefined })[0] ?? "", /tokens_cache_leitura é obrigatório/);
+  assert.match(com({ ...LINHA, custo: -1 })[0] ?? "", /custo não pode ser negativo/);
+});
+
+test("custos_realizados: CA-10, custo ausente fica null e nunca 0; sessão repetida é recusada", () => {
+  const { dados } = schemaDeEtapa("custos_realizados");
+  const sessao = { ferramenta: "c", sessao: "s", linhas: [LINHA, { ...LINHA, custo: 0.5 }] };
+  const ok = dados.parse({ sessoes: [sessao] }) as { sessoes: { linhas: { custo: number | null }[] }[] };
+  assert.deepEqual(
+    ok.sessoes[0]?.linhas.map((l) => l.custo),
+    [null, 0.5],
+  );
+  assert.match(mensagens({ sessoes: [sessao, sessao] })[0] ?? "", /sessão repetida/);
+  assert.deepEqual(schemaDeEtapa("custos_realizados").arquivos.max, 0);
+  assert.equal(Object.keys(jsonSchemaDeEtapa("custos_realizados").dados.properties ?? {}).join(), "sessoes");
+});
