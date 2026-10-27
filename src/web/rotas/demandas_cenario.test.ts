@@ -120,6 +120,11 @@ export async function cenarioDemandas() {
   criarDemanda(banco, demanda("I-207", "planejamento"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
 
+  return { banco, ...(await servir(banco)), conteudos };
+}
+
+/** O servidor web de verdade sobre `banco`, numa porta livre, com um agendador falso que só anota o que lhe pedem. */
+export async function servir(banco: DatabaseSync) {
   const executados: { demanda_id: string; ticket_id: number }[] = [];
   const agendador = {
     proximaBusca: () => new Date(),
@@ -176,5 +181,5 @@ export async function cenarioDemandas() {
     };
   }
 
-  return { banco, pedir, executados, conteudos };
+  return { pedir, executados };
 }
