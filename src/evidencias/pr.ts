@@ -151,7 +151,8 @@ function neutralizar(texto: string, cru: boolean): string {
   return linhas.join("\n") + (cerca === undefined ? "" : `\n${cerca}`);
 }
 
-const leitor = markdownit({ html: true });
+// html: true é preciso para o parser reconhecer HTML; o resultado nunca é renderizado.
+const leitor = markdownit({ html: true }); // NOSONAR
 /** Se o `markdown-it` (CommonMark, como o GitHub e o Azure DevOps) acha HTML no Markdown. */
 const temHtml = (markdown: string): boolean =>
   leitor
@@ -172,20 +173,20 @@ const temHtml = (markdown: string): boolean =>
  * aplicado a ele) passa pelo `markdown-it`: se sobrou HTML, cada `<` fora de bloco cercado vira `&lt;`.
  * ponytail: a linha recuada em 4 espaços (bloco recuado) também fica.
  */
-function neutro(texto: string, montar = (s: string): string => s): string {
+export function neutro(texto: string, montar = (s: string): string => s): string {
   const cru = montar(neutralizar(texto, true));
   return temHtml(cru) ? montar(neutralizar(texto, false)) : cru;
 }
 
 /** Uma linha de item de lista: continuação recuada, para texto de várias linhas não sair da lista. */
 const item = (texto: string): string => `- ${neutro(texto).replaceAll("\n", "\n  ")}`;
-const lista = (itens: readonly string[], vazio: string): string =>
+export const lista = (itens: readonly string[], vazio: string): string =>
   itens.length === 0 ? vazio : itens.map(item).join("\n");
 /**
  * Célula de tabela Markdown: uma linha só, sem `|` que abra outra coluna. Varreduras lineares, sem regex: o texto vem
  * do agente, e `\\*\|` ou `\s*\n\s*` voltariam atrás em tempo quadrático numa sequência longa de barras ou espaços.
  */
-const celula = (texto: string): string => neutro(texto, colunaSo);
+export const celula = (texto: string): string => neutro(texto, colunaSo);
 function colunaSo(neutralizado: string): string {
   // O pipe só fica escapado atrás de um número ímpar de barras: o `\|` do agente já está escapado, e `\\|` seria
   // uma barra literal seguida de um pipe que divide a coluna.
@@ -203,11 +204,11 @@ function colunaSo(neutralizado: string): string {
     .filter(Boolean)
     .join(" ");
 }
-const tabela = (cabecalho: readonly string[], linhas: readonly (readonly string[])[]): string =>
+export const tabela = (cabecalho: readonly string[], linhas: readonly (readonly string[])[]): string =>
   [cabecalho, cabecalho.map(() => "---"), ...linhas].map((l) => `| ${l.join(" | ")} |`).join("\n");
-const plural = (n: number, um: string, varios: string): string => `${inteiro(n)} ${n === 1 ? um : varios}`;
+export const plural = (n: number, um: string, varios: string): string => `${inteiro(n)} ${n === 1 ? um : varios}`;
 /** Texto em código inline. */
-const codigo = (texto: string): string => `\`${texto}\``;
+export const codigo = (texto: string): string => `\`${texto}\``;
 function issueDoSonar(i: Sonar["issues"][number]): string {
   const onde = i.linha === undefined ? i.arquivo : `${i.arquivo}:${String(i.linha)}`;
   return `${codigo(onde)} ${i.regra} (${i.severidade}): ${i.mensagem}`;
