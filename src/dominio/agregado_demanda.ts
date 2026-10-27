@@ -62,8 +62,19 @@ export const DecisaoDemanda = z.object({
   em: Instante,
 });
 
-/** Os tipos legados mais `custos_realizados` e `plano` (do ticket de planejamento), que só a demanda SDLC conhece (§4.1). */
-export const TipoEvidenciaAgregado = z.enum([...TipoEvidencia.options, "custos_realizados", "plano"]);
+/**
+ * Os tipos legados, `custos_realizados` e `plano` (§4.1) e os quatro tipos de etapa novos. A lista é literal:
+ * importar `evidencia_etapa.ts` criaria ciclo; o teste garante que é a união com `TipoEvidenciaEtapa`.
+ */
+export const TipoEvidenciaAgregado = z.enum([
+  ...TipoEvidencia.options,
+  "custos_realizados",
+  "plano",
+  "testes_estresse",
+  "analise_seguranca",
+  "arvore_prs_criterios_custos",
+  "demonstracao_limpeza",
+]);
 
 /** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
 export const IdDono = Id.nullish().transform((v) => v ?? undefined);
