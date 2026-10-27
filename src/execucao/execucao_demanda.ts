@@ -1,0 +1,223 @@
+// Serviço Execução da demanda (comparacao-sdlc-implementacao.md §§4.1, 4.2, 6 e 7.3): junta sessão, execução, worktree,
+// prompt e pi para um ticket da demanda. Só conduz a execução: ticket, etapa e gate nunca mudam aqui (CA-14).
+import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
+import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
+import type { Projeto } from "../dominio/configuracao_projeto.ts";
+import { encontrado, existe, mensagem } from "../dominio/erros.ts";
+import { resolverModeloEffort } from "../dominio/resolucao_ticket.ts";
+import {
+  criarSessao,
+  encerrarExecucao,
+  iniciarExecucao,
+  registrarUso,
+  retomarSessao,
+  type ExecucaoSessao,
+  type Sessao,
+  type UsoModeloExecucao,
+} from "../dominio/sessoes.ts";
+import { varrerBase } from "../metricas/retrabalho.ts";
+import { somar } from "../metricas/uso.ts";
+import { raizDo } from "../persistencia/banco.ts";
+import { configuracaoProjeto } from "../persistencia/configuracao_projeto.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { anotar, arquivoDaSessao } from "../persistencia/execucoes.ts";
+import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
+import { rodarPi } from "./gerente.ts";
+import { ambientePi, confianca } from "./pi.ts";
+import { argumentosPiDemanda } from "./pi_demanda.ts";
+import { type ContextoDemanda, montarPromptDemanda } from "./prompt_demanda.ts";
+
+type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
+
+export interface OpcoesExecucaoDemanda {
+  limiteMin: number;
+  modo?: Exclude<ModoExecucao, "consulta">;
+  /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
+  retomada?: ContextoDemanda["retomada"];
+}
+
+/** Execuções com condutor vivo neste serviço, por id, com o grupo de processo do pi depois de lançado. */
+const ativas = new Map<string, { pgid?: number }>();
+
+interface Conducao {
+  banco: DatabaseSync;
+  ref: TicketRef;
+  ag: AgregadoDemanda;
+  ticket: TicketDemanda;
+  projeto: Projeto;
+  sessao: Sessao;
+  execucao: ExecucaoSessao;
+  opcoes: OpcoesExecucaoDemanda;
+}
+
+/** O ticket de rodada roda na worktree da rodada; o global (sem rodada), na da demanda. */
+function worktreeDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
+  const raiz = raizDo(banco);
+  const worktree = {
+    nome: projeto.nome,
+    repo: projeto.raiz_git,
+    branchBase: projeto.branch_base,
+    preparacao: projeto.preparacao.map((c) => c.comando),
+  };
+  return ticket.rodada_id === undefined
+    ? garantirWorktreeDemanda(raiz, worktree, ag.demanda.id, log, () => varrerBase(banco, projeto.nome))
+    : garantirWorktreeRodada(raiz, worktree, { demanda_id: ag.demanda.id, rodada_id: ticket.rodada_id }, log);
+}
+
+/** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */
+function gravarGrupo({ banco, ref, execucao }: Conducao, pgid: number): void {
+  ativas.set(execucao.id, { pgid });
+  comSessoesDoTicket(banco, ref, (estado) => ({
+    ...estado,
+    execucoes: estado.execucoes.map((e) => (e.id === execucao.id ? { ...e, grupo_processo: pgid } : e)),
+  }));
+}
+
+/** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
+function coletarUso(c: Conducao, fim: string, log: string): UsoModeloExecucao[] {
+  try {
+    const arquivo = arquivoDaSessao(raizDo(c.banco), c.sessao.id);
+    const somas = arquivo ? somar(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim)) : [];
+    return somas.map((s) => ({
+      execucao_id: c.execucao.id,
+      modelo_provedor: s.provedor,
+      modelo_nome: s.modelo,
+      tokens_entrada: s.input,
+      tokens_saida: s.output,
+      tokens_cache_leitura: s.cacheRead,
+      tokens_cache_escrita: s.cacheWrite,
+      ...(!s.semCusto && { custo: s.custo }),
+    }));
+  } catch (error_) {
+    // Métrica nunca impede o encerramento.
+    anotar(log, `coleta de uso falhou: ${mensagem(error_)}`);
+    return [];
+  }
+}
+
+/** O único escritor do encerramento: fim, falha, erro e uso na mesma transação; não toca ticket, etapa nem gate. */
+function encerrar(c: Conducao, falha: string | undefined, log: string): void {
+  const fim = new Date().toISOString();
+  const usos = coletarUso(c, fim, log);
+  comSessoesDoTicket(c.banco, c.ref, (estado) => ({
+    ...estado,
+    execucoes: encerrarExecucao(
+      estado.execucoes.map((e) => (e.id === c.execucao.id && falha !== undefined ? { ...e, erro: falha } : e)),
+      c.execucao.id,
+      fim,
+      falha !== undefined,
+    ),
+    usos: usos.reduce((acc, u) => registrarUso(acc, u), estado.usos),
+  }));
+}
+
+async function conduzir(c: Conducao): Promise<void> {
+  const raiz = raizDo(c.banco);
+  const { execucao, sessao, projeto, opcoes } = c;
+  const dir = join(raiz, "execucoes", `E-${execucao.id}`);
+  const log = join(dir, "log");
+  let falha: string | undefined;
+  try {
+    // `gh` e `az` olham diretórios vazios: o agente não acha credencial de hospedagem.
+    for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
+    anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
+    const worktree = await worktreeDoTicket(c, log);
+    const prompt = montarPromptDemanda({
+      ag: c.ag,
+      ticket: c.ticket,
+      projeto: { nome: projeto.nome, branch_base: projeto.branch_base },
+      worktree,
+      saida: join(dir, "saida"),
+      retomada: opcoes.retomada,
+    });
+    writeFileSync(join(dir, "prompt.md"), prompt);
+    const args = argumentosPiDemanda({
+      raiz,
+      sessaoPi: sessao.id,
+      confianca: confianca(projeto.raiz_git),
+      modo: sessao.modo,
+      ticket: c.ticket,
+      etapasDoProjeto: projeto.etapas,
+    });
+    anotar(log, `pi ${args.join(" ")}`);
+    falha = await rodarPi({
+      execucao: { id: execucao.id, sessaoPi: sessao.id, modo: sessao.modo },
+      args,
+      cwd: worktree,
+      env: ambientePi(raiz, execucao.id, dir),
+      log,
+      prompt,
+      limiteMin: opcoes.limiteMin,
+      // Sem pid (o pi nem subiu) não há grupo a gravar; o `saiu` do pi relata o erro.
+      aoLancar: (pgid) => {
+        if (Number.isInteger(pgid)) gravarGrupo(c, pgid);
+      },
+    });
+  } catch (error_) {
+    falha = mensagem(error_);
+  }
+  ativas.delete(execucao.id);
+  encerrar(c, falha, log);
+}
+
+/**
+ * Inicia o ticket da demanda (sessão nova) ou o retoma (a mesma sessão e conversa, §7.3). Síncrona até gravar a execução
+ * aberta: a recusa lança já. O pi roda em segundo plano; `fim` resolve com a execução encerrada e o uso gravado.
+ */
+export function iniciarExecucaoDemanda(
+  banco: DatabaseSync,
+  ref: TicketRef,
+  opcoes: OpcoesExecucaoDemanda,
+): { id: string; fim: Promise<void> } {
+  const ag = carregarDemanda(banco, ref.demanda_id);
+  const ticket = encontrado(
+    ag.tickets.find((t) => t.ticket_id === ref.ticket_id),
+    `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não existe`,
+    "confira o endereço do ticket",
+  );
+  const projeto = existe(
+    configuracaoProjeto(banco, ag.demanda.projeto),
+    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
+    "configure o projeto",
+  );
+  const { modelo, effort } = resolverModeloEffort(
+    ticket,
+    projeto.etapas.find((e) => e.etapa === ticket.etapa),
+  );
+  const abrir = (sessao_id: string): ExecucaoSessao => ({
+    id: randomUUID(),
+    sessao_id,
+    inicio: new Date().toISOString(),
+    falha: false,
+    ...(modelo.valor && { modelo_provedor: modelo.valor.provedor, modelo_nome: modelo.valor.nome }),
+    ...(effort.valor && { effort: effort.valor }),
+  });
+  let sessao!: Sessao;
+  let execucao!: ExecucaoSessao;
+  comSessoesDoTicket(banco, ref, (estado) => {
+    const existente = estado.sessoes[0];
+    if (existente) {
+      sessao = existente;
+      execucao = abrir(sessao.id);
+      return { ...estado, execucoes: retomarSessao(estado.sessoes, estado.execucoes, execucao) };
+    }
+    const id = randomUUID();
+    sessao = {
+      demanda_id: ref.demanda_id,
+      ticket_id: ref.ticket_id,
+      id,
+      modo: opcoes.modo ?? "autonomo",
+      conversa_referencia: id,
+    };
+    execucao = abrir(id);
+    const sessoes = criarSessao(estado.sessoes, sessao);
+    return { ...estado, sessoes, execucoes: iniciarExecucao(sessoes, estado.execucoes, execucao) };
+  });
+  ativas.set(execucao.id, {});
+  return { id: execucao.id, fim: conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes }) };
+}
