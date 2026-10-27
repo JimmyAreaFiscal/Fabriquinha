@@ -61,10 +61,13 @@ function exigirEncerramento(ag: AgregadoDemanda, acao: string) {
 const resolverPendente = (ag: AgregadoDemanda): TicketDemanda | undefined =>
   ag.tickets.find((t) => t.ticket_id === ag.encerramento?.conflito_pendente?.ticket_id);
 
+const conflitoLiberado = (ag: AgregadoDemanda): boolean =>
+  ag.encerramento?.conflito_pendente === undefined || resolverPendente(ag)?.status === "concluido";
+
 /** Elegibilidade para a aplicação: `encerrar_demanda` aberto e, havendo conflito, o `resolver_conflito` concluído. */
 export function podeTentarEncerramento(ag: AgregadoDemanda): boolean {
   if (ag.demanda.fase !== "encerramento" || ticketAtual(ag, "encerrar_demanda")?.status !== "aberto") return false;
-  return ag.encerramento?.conflito_pendente === undefined || resolverPendente(ag)?.status === "concluido";
+  return conflitoLiberado(ag);
 }
 
 /**
@@ -75,8 +78,9 @@ export function registrarTentativaEncerramento(ag: AgregadoDemanda, entrada: unk
   exigirFabriquinha(ator, "registrar a tentativa de encerramento");
   const e = EntradaTentativa.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
-  exigirEncerramento(ag, "registrar a tentativa de encerramento");
-  if (!podeTentarEncerramento(ag)) {
+  const atual = exigirEncerramento(ag, "registrar a tentativa de encerramento");
+  // o agendador reserva o ticket (em_execucao) antes de despachar
+  if (!(atual.status === "aberto" || atual.status === "em_execucao") || !conflitoLiberado(ag)) {
     throw new ErroDeRegra(
       `a demanda ${ag.demanda.id} não está liberada para nova tentativa de encerramento`,
       "o Auditor reabre o ticket falho; o conflito só libera com o resolver_conflito concluído",

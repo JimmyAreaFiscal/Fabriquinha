@@ -126,6 +126,26 @@ test("tentativa recusa quando podeTentarEncerramento é falso, outro ator, outra
   assert.throws(() => registrarTentativaEncerramento(montar(), tentativa({ extra: 1 }), FABRIQUINHA));
 });
 
+test("tentativa aceita o encerrar_demanda reservado (em_execucao) e mantém as demais regras", () => {
+  const novo = registrarTentativaEncerramento(montar({}, "em_execucao"), tentativa(), FABRIQUINHA);
+  assert.deepEqual(novo.encerramento?.pr, pr);
+  regra(() => registrarTentativaEncerramento(montar({}, "concluido"), tentativa(), FABRIQUINHA));
+  regra(() => registrarTentativaEncerramento(emConflito("aberto"), tentativa(), FABRIQUINHA));
+  const reservadoEmConflito = (r: string) => {
+    const ag = emConflito(r);
+    return {
+      ...ag,
+      tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, status: "em_execucao" as const } : t)),
+    };
+  };
+  regra(() => registrarTentativaEncerramento(reservadoEmConflito("aberto"), tentativa(), FABRIQUINHA));
+  assert.equal(
+    registrarTentativaEncerramento(reservadoEmConflito("concluido"), tentativa(), FABRIQUINHA).encerramento
+      ?.conflito_pendente,
+    undefined,
+  );
+});
+
 test("podeTentarEncerramento: sem conflito, resolver aberto/falho/concluído, encerrar falhou, fase errada, sem ticket", () => {
   assert.equal(podeTentarEncerramento(montar()), true);
   assert.equal(podeTentarEncerramento(comProgresso()), true);
