@@ -8,9 +8,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
+import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { criarDemanda } from "../persistencia/demandas.ts";
+import { comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { principal } from "./cli.ts";
 
@@ -247,6 +248,45 @@ function cenarioDeRevisao(fase: string, faseRodada: string, etapa: string, naRod
   return { banco, env: { ...env, FABRIQUINHA_EXECUCAO: "exec-9" } };
 }
 
+const COMPROVACAO = { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] };
+const EVIDENCIAS_RODADA: [string, object][] = [
+  ["arquivos_alterados", { base: "a", head: "b", arquivos: [], previstosNaoTocados: [] }],
+  ["matriz_fitness", { linhas: [{ nome: "f", comando: "c", codigoSaida: 0, log: "f.log" }] }],
+  ["explicacao_fitness", { explicacoes: [] }],
+  ["comprovacao_criterios", COMPROVACAO],
+];
+const EVIDENCIAS_INTEGRAL: [string, object][] = [
+  ["comprovacao_criterios", COMPROVACAO],
+  [
+    "testes_estresse",
+    {
+      aplicavel: true,
+      justificativa: "",
+      cenarios: [{ nome: "n", objetivo: "o", comando: "c", resultado: "passou", observado: "ok" }],
+    },
+  ],
+  [
+    "analise_seguranca",
+    { aplicavel: true, justificativa: "", ameacas: [{ descricao: "d", mitigacao: "m" }], achados: [] },
+  ],
+];
+
+/** Submete ao ticket as evidências que o serviço de Revisão confere na aprovação. */
+function evidenciar(banco: DatabaseSync, ticket_id: number, lista: [string, object][]) {
+  comDemanda(banco, "I-206", (ag) =>
+    lista.reduce(
+      (a, [tipo, dados]) =>
+        submeterEvidenciaDemanda(
+          a,
+          { tipo, dados, ticket_id } as never,
+          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          em,
+        ),
+      ag,
+    ),
+  );
+}
+
 const lerDemanda = async (env: NodeJS.ProcessEnv) =>
   JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {
     rodadas: { rodada: string; fase: string }[];
@@ -256,6 +296,7 @@ const lerDemanda = async (env: NodeJS.ProcessEnv) =>
 
 test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leitura mostra", async () => {
   const { banco, env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  evidenciar(banco, 9, EVIDENCIAS_RODADA);
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.equal(s.err, "");
   assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", rodada: "I-206.R2", resultado: "aprovado" });
@@ -269,6 +310,26 @@ test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leit
     ["I-206.T9", "I-206.R2", "aprovado", "agente"],
   );
   assert.ok(decisao?.em);
+});
+
+test("CA-10: aprovar a revisão de rodada sem evidências lista as quatro ausentes e a rodada segue em revisao", async () => {
+  const { env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
+  assert.equal(s.codigo, 1);
+  for (const t of EVIDENCIAS_RODADA) assert.match(s.err, new RegExp(`${t[0]} ausente`));
+  assert.equal((await lerDemanda(env)).rodadas[0]?.fase, "revisao");
+});
+
+test("CA-9 e CA-11: a revisão integral exige as três evidências e, com elas, vai a encerramento", async () => {
+  const { banco, env } = cenarioDeRevisao("revisao_demanda", "concluida", "revisar_demanda", false);
+  const sem = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
+  assert.equal(sem.codigo, 1);
+  for (const t of EVIDENCIAS_INTEGRAL) assert.match(sem.err, new RegExp(`${t[0]} ausente`));
+  evidenciar(banco, 9, EVIDENCIAS_INTEGRAL);
+  const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
+  assert.equal(s.err, "");
+  assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", resultado: "aprovado" });
+  assert.equal(banco.prepare("SELECT fase FROM demanda").get()?.fase, "encerramento");
 });
 
 test("revisão de rodada reprovada completa as correções com demanda, rodada e ticket local", async () => {
