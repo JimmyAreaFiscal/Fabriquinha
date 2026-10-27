@@ -1,5 +1,5 @@
 // Serviço Execução da demanda (comparacao-sdlc-implementacao.md §§4.1, 4.2, 6 e 7.3): junta sessão, execução, worktree,
-// prompt e pi para um ticket da demanda. Só conduz a execução: ticket, etapa e gate nunca mudam aqui (CA-14).
+// prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pelo fechamento (`fechamento_ticket.ts`).
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,6 +28,7 @@ import { anotar, arquivoDaSessao } from "../persistencia/execucoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket, execucoesAbertasDaDemanda } from "../persistencia/sessoes.ts";
 import { sinalNoGrupo } from "../processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
+import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
 import { rodarPi } from "./gerente.ts";
 import { ambientePi, confianca } from "./pi.ts";
 import { argumentosPiDemanda } from "./pi_demanda.ts";
@@ -40,6 +41,8 @@ export interface OpcoesExecucaoDemanda {
   modo?: Exclude<ModoExecucao, "consulta">;
   /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
   retomada?: ContextoDemanda["retomada"];
+  /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
+  fechar?: typeof fecharTicketDemanda;
 }
 
 /** Execuções com condutor vivo neste serviço, por id, com o grupo de processo do pi depois de lançado. */
@@ -174,6 +177,16 @@ async function conduzir(c: Conducao): Promise<void> {
   if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
   ativas.delete(execucao.id);
   encerrar(c, falha, log);
+  try {
+    await (opcoes.fechar ?? fecharTicketDemanda)(c.banco, c.ref, { falha, execucao: execucao.id });
+  } catch (error_) {
+    anotar(log, `fechamento falhou: ${mensagem(error_)}`);
+    try {
+      falharTicketDemanda(c.banco, c.ref, `fechamento falhou: ${mensagem(error_)}`);
+    } catch (erroFalha) {
+      anotar(log, `falhar o ticket também falhou: ${mensagem(erroFalha)}`);
+    }
+  }
 }
 
 /**
@@ -253,7 +266,7 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
   encerrarOrfa(banco, ref, execucao.id, INTERROMPIDA);
 }
 
-/** Execução aberta sem condutor: SIGKILL no grupo gravado e encerra com falha, sem tocar ticket, etapa nem gate. */
+/** Execução aberta sem condutor: SIGKILL no grupo gravado, encerra com falha e falha o ticket em execução, sem tocar etapa nem gate. */
 function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, erro: string): void {
   const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
   const execucao = existe(
@@ -268,6 +281,7 @@ function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, erro: str
     "confira o banco",
   );
   encerrar({ banco, ref, sessao, execucao }, erro, join(raizDo(banco), "execucoes", `E-${id}`, "log"));
+  falharTicketDemanda(banco, ref, erro);
 }
 
 /** Reinício do serviço (§4.2): toda execução aberta é de uma instância anterior e falha, sem avançar etapa nem gate. */
@@ -275,4 +289,12 @@ export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
   for (const { id, demanda_id, ticket_id } of execucoesAbertasDaDemanda(banco)) {
     encerrarOrfa(banco, { demanda_id, ticket_id }, id, REINICIADO);
   }
+  // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
+  // ticket `em_execucao` não sairia mais. ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
+  const presos = banco
+    .prepare(
+      "SELECT demanda_id, ticket_id FROM ticket_demanda WHERE status = 'em_execucao' AND etapa IN ('implementar', 'resolver_conflito')",
+    )
+    .all() as unknown as TicketRef[];
+  for (const { demanda_id, ticket_id } of presos) falharTicketDemanda(banco, { demanda_id, ticket_id }, REINICIADO);
 }

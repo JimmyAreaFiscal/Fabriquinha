@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ErroDeRegra, ErroDeReprovacao } from "../dominio/erros.ts";
+import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarCommit } from "../persistencia/commits.ts";
 import { registrarIssue } from "../persistencia/issues.ts";
@@ -161,7 +161,7 @@ test("hook que reprova, ou passa do limite, reprova o ticket com o fim da saída
   writeFileSync(join(c.worktree, ".git", "hooks", "pre-commit"), "#!/bin/sh\necho comecei\nexec sleep 5\n");
   await assert.rejects(
     commitarTicket(c.banco, "loja", issue, ticket, 300),
-    new ErroDeReprovacao("o git commit passou de 0.005 minutos, com os hooks do repositório: comecei", dica),
+    new ErroExterno("o git commit passou de 0.005 minutos, com os hooks do repositório: comecei", dica),
   );
   assert.equal(c.head(), antes);
 });
