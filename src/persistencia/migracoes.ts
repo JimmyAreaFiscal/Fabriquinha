@@ -594,4 +594,6 @@ export const MIGRACOES: readonly string[] = [
     custo                REAL CHECK (custo IS NULL OR custo >= 0),
     PRIMARY KEY (execucao_id, modelo_provedor, modelo_nome)
   );`,
+  `ALTER TABLE ticket_demanda ADD COLUMN devolucoes INTEGER NOT NULL DEFAULT 0 CHECK (devolucoes BETWEEN 0 AND 2);
+  ALTER TABLE ticket_demanda ADD COLUMN motivo_falha TEXT CHECK (motivo_falha IS NULL OR length(motivo_falha) > 0);`,
 ];

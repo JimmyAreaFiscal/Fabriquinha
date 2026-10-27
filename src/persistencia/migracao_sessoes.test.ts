@@ -53,11 +53,11 @@ const recusa = (sql: string, padrao: RegExp) => {
 };
 
 test("CA-16: migrar v24 → v25 só acrescenta as tabelas novas", () => {
-  assert.equal(MIGRACOES.length, 25);
+  assert.ok(MIGRACOES.length >= 25);
   const b = real();
   const antes = fotografia(b);
   assert.equal(versao(b), 24);
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, 25));
   assert.equal(versao(b), 25);
   assert.deepEqual(
     fotografia(b).filter(([t]) => !NOVAS.includes(String(t))),

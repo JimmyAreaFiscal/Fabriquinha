@@ -4,12 +4,15 @@ import { type Ator, AUDITOR, EXTERNO, FABRIQUINHA } from "./agregado.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { submeterEvidenciaDemanda } from "./evidencia_demanda.ts";
+import { selecionarTrabalho } from "./selecao_trabalho.ts";
 import {
   confirmarAprovacaoPlanejamento,
   decidirDemanda,
   editarDemanda,
   enviarDemanda,
+  devolverTicket,
   iniciarRevisaoDemanda,
+  MAX_DEVOLUCOES,
   reabrirTicket,
   registrarDemanda,
   registrarFalhaTicket,
@@ -145,6 +148,7 @@ test("decidir: só o Auditor, só em aprovacao_demanda, e precisa do ticket da d
     etapa: "planejar" as const,
     status: "aberto" as const,
     status_alterado_em: t0,
+    devolucoes: 0,
   };
   const dois = decidirDemanda({ ...env, tickets: [...env.tickets, outro] }, { aprovado: true }, AUDITOR, { agora: t1 });
   assert.deepEqual(dois.tickets[1], outro);
@@ -209,7 +213,14 @@ const emPlanejamento = (): AgregadoDemanda => {
     ...aprovada,
     tickets: [
       ...aprovada.tickets,
-      { demanda_id: "I-1", ticket_id: 2, etapa: "planejar", status: "em_execucao", status_alterado_em: t1 },
+      {
+        demanda_id: "I-1",
+        ticket_id: 2,
+        etapa: "planejar",
+        status: "em_execucao",
+        status_alterado_em: t1,
+        devolucoes: 0,
+      },
     ],
   };
 };
@@ -418,15 +429,15 @@ const emExecucao = (status: string): AgregadoDemanda => {
 
 test("CA-16: a falha põe o ticket em falhou sem mudar fase nem decisões; recusa outro status e demanda encerrada", () => {
   const ag = emExecucao("em_execucao");
-  const novo = registrarFalhaTicket(ag, { ticket_id: 2 }, { agora: t2 });
+  const novo = registrarFalhaTicket(ag, { ticket_id: 2, motivo: "m" }, { agora: t2 });
   assert.equal(tk2(novo)?.status, "falhou");
   assert.equal(tk2(novo)?.status_alterado_em, t2);
   assert.equal(novo.demanda, ag.demanda);
   assert.equal(novo.decisoes, ag.decisoes);
-  assert.throws(() => registrarFalhaTicket(novo, { ticket_id: 2 }, { agora: t2 }), ErroDeRegra);
-  assert.throws(() => registrarFalhaTicket(ag, { ticket_id: 9 }, { agora: t2 }), ErroDeRegra);
+  assert.throws(() => registrarFalhaTicket(novo, { ticket_id: 2, motivo: "m" }, { agora: t2 }), ErroDeRegra);
+  assert.throws(() => registrarFalhaTicket(ag, { ticket_id: 9, motivo: "m" }, { agora: t2 }), ErroDeRegra);
   const fim = { ...ag, demanda: { ...ag.demanda, fase: "concluida" as const } };
-  assert.throws(() => registrarFalhaTicket(fim, { ticket_id: 2 }, { agora: t2 }), ErroDeRegra);
+  assert.throws(() => registrarFalhaTicket(fim, { ticket_id: 2, motivo: "m" }, { agora: t2 }), ErroDeRegra);
 });
 
 test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a instrução", () => {
@@ -441,7 +452,8 @@ test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a
   assert.equal(tk2(ag)?.status, "falhou");
 });
 
-const falhar = (ag: AgregadoDemanda, ticket_id: number) => registrarFalhaTicket(ag, { ticket_id }, { agora: t2 });
+const falhar = (ag: AgregadoDemanda, ticket_id: number) =>
+  registrarFalhaTicket(ag, { ticket_id, motivo: "m" }, { agora: t2 });
 const intacto = (fn: () => unknown, ag: AgregadoDemanda) => {
   const antes = structuredClone(ag);
   assert.throws(fn, ErroDeRegra);
@@ -536,6 +548,7 @@ test("CA-12: todas as rodadas concluídas abrem revisar_demanda e vão a revisao
     ticket_id: 3,
     etapa: "revisar_demanda",
     status: "aberto",
+    devolucoes: 0,
     status_alterado_em: t2,
   });
 });
@@ -701,4 +714,78 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
       [7, 1, "aprovado"],
     ],
   );
+});
+
+// Demanda em execução com os tickets 3 e 4 (implementar, rodada 1) abertos, mais o global 99 da etapa dada.
+const emDevolucao = (
+  etapa: "implementar" | "resolver_conflito" | "revisar_demanda",
+  status: string,
+  devolucoes = 0,
+) => {
+  const base = confirmarAprovacaoPlanejamento(submetido(), {}, AUDITOR, { agora: t2 });
+  const global = etapa !== "implementar";
+  return {
+    ...base,
+    tickets: base.tickets.map((t) =>
+      t.ticket_id === 3
+        ? { ...t, etapa, status: status as never, devolucoes, ...(global && { rodada_id: undefined }) }
+        : t,
+    ),
+  };
+};
+const tk3 = (ag: AgregadoDemanda) => ag.tickets.find((t) => t.ticket_id === 3);
+const id = () => 3;
+const devolver = (ag: AgregadoDemanda, ator: Ator = FABRIQUINHA) =>
+  devolverTicket(ag, { ticket_id: id(), instrucao: "corrija os testes" }, ator, { agora: t2 });
+
+test("CA-1, CA-2: devolução abaixo do limite volta a aberto com a instrução e o contador + 1", () => {
+  assert.equal(MAX_DEVOLUCOES, 2);
+  for (const etapa of ["implementar", "resolver_conflito"] as const) {
+    const um = devolver(emDevolucao(etapa, "em_execucao"));
+    assert.deepEqual([tk3(um)?.status, tk3(um)?.instrucao, tk3(um)?.devolucoes], ["aberto", "corrija os testes", 1]);
+    assert.equal(tk3(devolver(emDevolucao(etapa, "em_execucao", 1)))?.devolucoes, 2);
+  }
+});
+
+test("CA-3, CA-13: na 3ª reprovação falha com o motivo e bloqueia a seleção até a reabertura", () => {
+  const ag = devolver(emDevolucao("implementar", "em_execucao", 2));
+  assert.deepEqual([tk3(ag)?.status, tk3(ag)?.motivo_falha], ["falhou", "corrija os testes"]);
+  assert.deepEqual(selecionarTrabalho(ag), []);
+  const global = devolver(emDevolucao("resolver_conflito", "em_execucao", 2));
+  assert.deepEqual([tk3(global)?.status, tk3(global)?.motivo_falha], ["falhou", "corrija os testes"]);
+  assert.deepEqual(selecionarTrabalho(global), []);
+});
+
+test("CA-4, CA-7: falha de infraestrutura grava o motivo sem mexer no contador; sem motivo é recusada", () => {
+  const ag = emDevolucao("implementar", "em_execucao");
+  const novo = registrarFalhaTicket(ag, { ticket_id: id(), motivo: "timeout" }, { agora: t2 });
+  assert.deepEqual([tk3(novo)?.status, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes], ["falhou", "timeout", 0]);
+  for (const e of [{ ticket_id: id() }, { ticket_id: id(), motivo: " " }]) {
+    assert.throws(() => registrarFalhaTicket(ag, e, { agora: t2 }));
+  }
+  assert.equal(tk3(ag)?.status, "em_execucao");
+});
+
+test("CA-5, CA-6, CA-12: devolução recusada em etapa, status ou ator errados", () => {
+  intacto(() => devolver(emDevolucao("revisar_demanda", "em_execucao")), emDevolucao("revisar_demanda", "em_execucao"));
+  const aberto = emDevolucao("implementar", "aberto");
+  intacto(() => devolver(aberto), aberto);
+  const ag = emDevolucao("implementar", "em_execucao");
+  for (const ator of [AUDITOR, { tipo: "agente", execucao: 1, ticket: id() } as Ator]) {
+    assert.throws(() => devolver(ag, ator), ErroDeEscopo);
+  }
+  assert.deepEqual([tk3(ag)?.status, tk3(ag)?.devolucoes], ["em_execucao", 0]);
+  const fim = { ...ag, demanda: { ...ag.demanda, fase: "concluida" as const } };
+  intacto(() => devolver(fim), fim);
+});
+
+test("CA-8, CA-9: reabrir limpa motivo e contador sem tocar em decisões e evidências", () => {
+  const falho = devolver(emDevolucao("implementar", "em_execucao", 2));
+  const novo = reabrirTicket(falho, { ticket_id: id(), instrucao: "tente" }, AUDITOR, { agora: t2 });
+  assert.deepEqual(
+    [tk3(novo)?.status, tk3(novo)?.instrucao, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes],
+    ["aberto", "tente", undefined, 0],
+  );
+  assert.equal(novo.decisoes, falho.decisoes);
+  assert.equal(novo.evidencias, falho.evidencias);
 });
