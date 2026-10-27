@@ -12,6 +12,7 @@ import { montarInicio } from "./telas/inicio-montar.ts";
 import { montarIssue } from "./telas/issue-montar.ts";
 import { montarMetricas } from "./telas/metricas-montar.ts";
 import { montarProjeto } from "./telas/projeto-montar.ts";
+import { montarSdlc } from "./telas/sdlc-montar.ts";
 import { montarSimulacao } from "./telas/simulacao-montar.ts";
 
 /**
@@ -32,6 +33,7 @@ const MONTAR: Record<Pagina, Montar> = {
   auditoria: montarAuditoria,
   configuracao: montarConfiguracao,
   simulacao: montarSimulacao,
+  sdlc: montarSdlc,
 };
 
 const cabeca = elemento("[data-navegacao]", HTMLElement);

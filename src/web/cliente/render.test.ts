@@ -97,6 +97,8 @@ test("navegação fixa marca a página atual e mostra quem aguarda só quando h�
     ["/home", "/projects", "/simulation", "/metrics", "/history", "/config"],
   );
   assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
+  assert.match(navegacao("sdlc", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
+  assert.equal(TITULOS.sdlc, "Configuração SDLC");
   assert.match(navegacao("heatmap", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.doesNotMatch(navegacao("inicio", 0), /contador/);
   assert.match(navegacao("inicio", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
