@@ -157,6 +157,17 @@ test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com a
   assert.equal(ag.tickets.filter((t) => t.etapa === "revisar_rodada").length, 1);
 });
 
+test("CA-4: o Sonar no formato real (logs vazios) grava o relatório como anexo", async () => {
+  const c = await cenario();
+  await fechar(c, 1, coletor([...todas(true).slice(0, 2), { ...verif("relatorio_sonar", true), logs: [] }]));
+  assert.equal(c.status(1)?.status, "concluido");
+  const anexo = c.banco.prepare("SELECT caminho FROM arquivo_evidencia WHERE caminho LIKE 'relatorio_sonar%'").all();
+  assert.deepEqual(
+    anexo.map((a) => a.caminho),
+    ["relatorio_sonar.log"],
+  );
+});
+
 test("a rodada só avança com a última implementação; ticket concluído só tenta a rodada", async () => {
   const c = await cenario({
     tickets: [

@@ -70,7 +70,10 @@ function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificac
   const autor = { ferramenta: "fabriquinha", sessao: execucao };
   const guardadas = verificacoes.map((v) => ({
     v,
-    anexos: v.logs.map((l) => ({ caminho: l.nome, mime: MIME_TEXTO, ...guardarBytes(banco, Buffer.from(l.texto)) })),
+    // O Sonar devolve `logs: []`; o relatório (`dados`) vira o anexo, para a evidência nunca ficar sem log.
+    anexos: (v.logs.length ? v.logs : [{ nome: `${v.tipo}.log`, texto: JSON.stringify(v.dados, null, 2) }]).map(
+      (l) => ({ caminho: l.nome, mime: MIME_TEXTO, ...guardarBytes(banco, Buffer.from(l.texto)) }),
+    ),
   }));
   comDemanda(
     banco,
