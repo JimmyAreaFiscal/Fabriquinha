@@ -83,19 +83,37 @@ export function migrar(banco: DatabaseSync, migracoes: readonly string[]): void 
 const versao = (banco: DatabaseSync): number =>
   (banco.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
 
+const emTransacao = (banco: DatabaseSync): boolean => banco.isTransaction; // fora do narrowing do TS
+let profundidade = 0; // escritas aninhadas em andamento; dá o nome único do SAVEPOINT
+
 /**
  * Roda `trabalho` numa transação de escrita. `BEGIN IMMEDIATE` pega o lock no início, então duas escritas
  * nunca entram em deadlock ao promover o lock. Erro faz ROLLBACK e propaga o erro original.
+ * Reentrante: dentro de uma transação aberta usa SAVEPOINT, e o erro desfaz só a parte interna.
  * Nada aqui dentro pode esperar I/O externo (pi, git, testes): isso roda antes, fora da transação.
  */
 export function escrever<T>(banco: DatabaseSync, trabalho: () => T): T {
+  if (banco.isTransaction) {
+    const ponto = `sp_${String(++profundidade)}`;
+    banco.exec(`SAVEPOINT ${ponto}`);
+    try {
+      const resultado = trabalho();
+      banco.exec(`RELEASE ${ponto}`);
+      return resultado;
+    } catch (error_) {
+      banco.exec(`ROLLBACK TO ${ponto}; RELEASE ${ponto}`);
+      throw error_;
+    } finally {
+      profundidade--;
+    }
+  }
   banco.exec("BEGIN IMMEDIATE");
   try {
     const resultado = trabalho();
     banco.exec("COMMIT");
     return resultado;
   } catch (error_) {
-    if (banco.isTransaction) banco.exec("ROLLBACK");
+    if (emTransacao(banco)) banco.exec("ROLLBACK"); // o COMMIT pode ter falhado com a transação ainda aberta
     throw error_;
   }
 }

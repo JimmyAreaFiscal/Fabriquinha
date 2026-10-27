@@ -578,6 +578,49 @@ test("escrever() faz ROLLBACK e propaga o erro original", () => {
   banco.close();
 });
 
+test("escrever() aninhada: a interna confirma junto da externa, com novoId", () => {
+  const banco = abrir(raizTemp());
+  const ids = escrever(banco, () => [novoId(banco, "issue"), escrever(banco, () => novoId(banco, "issue"))]);
+  assert.deepEqual(ids, [1, 2]);
+  assert.equal(banco.isTransaction, false);
+  assert.equal(valor(banco, "SELECT valor FROM sequencia WHERE nome = 'issue'"), 2);
+  banco.close();
+});
+
+test("escrever() aninhada: erro na interna desfaz só a interna e a externa segue", () => {
+  const banco = abrir(raizTemp());
+  const original = new Error("interna");
+  escrever(banco, () => {
+    novoId(banco, "issue");
+    assert.throws(
+      () =>
+        escrever(banco, () => {
+          novoId(banco, "issue");
+          escrever(banco, () => novoId(banco, "ticket"));
+          throw original;
+        }),
+      (erro) => erro === original,
+    );
+    assert.equal(banco.isTransaction, true);
+  });
+  assert.equal(valor(banco, "SELECT valor FROM sequencia WHERE nome = 'issue'"), 1);
+  assert.equal(valor(banco, "SELECT count(*) FROM sequencia WHERE nome = 'ticket'"), 0);
+  banco.close();
+});
+
+test("escrever() aninhada: erro na externa desfaz as duas", () => {
+  const banco = abrir(raizTemp());
+  assert.throws(() => {
+    escrever(banco, () => {
+      escrever(banco, () => novoId(banco, "issue"));
+      throw new Error("externa");
+    });
+  }, /externa/);
+  assert.equal(banco.isTransaction, false);
+  assert.equal(valor(banco, "SELECT count(*) FROM sequencia"), 0);
+  banco.close();
+});
+
 test("escrever() desfaz e propaga quando o próprio COMMIT falha", () => {
   const banco = abrir(raizTemp());
   banco.exec(

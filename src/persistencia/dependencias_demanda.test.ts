@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { predecessorasPendentes } from "../dominio/dependencia_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
-import { migrar } from "./banco.ts";
+import { escrever, migrar } from "./banco.ts";
 import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDaDemanda,
@@ -105,4 +108,36 @@ test("o banco recusa autorreferência", () => {
   assert.throws(() => {
     b.exec("INSERT INTO dependencia_demanda VALUES ('I-1', 'I-1')");
   }, /constraint/i);
+});
+
+test("dependentesNaoConcluidasDaDemanda dentro de escrever não fecha a transação; outra conexão fica travada", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fabriquinha-dep-"));
+  const b = new DatabaseSync(join(dir, "f.db"));
+  const outra = new DatabaseSync(join(dir, "f.db"));
+  try {
+    b.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL");
+    migrar(b, MIGRACOES);
+    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('a', '/repo/a', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]')`);
+    for (const id of ["I-1", "I-2"]) {
+      b.exec(
+        `INSERT INTO demanda VALUES ('${id}', 'a', 't', 'problema', 'd', 'registro', ${T}, 'f', 's', 0, 'fabriquinha/${id}')`,
+      );
+    }
+    outra.exec("PRAGMA busy_timeout = 0; PRAGMA foreign_keys = ON");
+    escrever(b, () => {
+      assert.deepEqual(dependentesNaoConcluidasDaDemanda(b, "I-1"), []);
+      assert.equal(b.isTransaction, true);
+      assert.throws(() => {
+        registrarDependenciaDemanda(outra, "I-2", "I-1");
+      }, /database is locked/);
+    });
+    assert.equal(b.isTransaction, false);
+    registrarDependenciaDemanda(outra, "I-2", "I-1");
+    assert.deepEqual(dependentesNaoConcluidasDaDemanda(b, "I-1"), ["I-2"]);
+  } finally {
+    b.close();
+    outra.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
