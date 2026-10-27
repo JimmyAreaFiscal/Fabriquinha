@@ -30,6 +30,10 @@ import {
   registrarIssue,
 } from "../persistencia/issues.ts";
 import { projeto } from "../persistencia/projetos.ts";
+import { COMANDOS_DEMANDA as LEITURAS_DEMANDA, type ComandoDemanda, resolverAgenteDemanda } from "./agente_demanda.ts";
+import { COMANDOS_EVIDENCIA_DEMANDA } from "./evidencia_agente_demanda.ts";
+
+const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [...LEITURAS_DEMANDA, ...COMANDOS_EVIDENCIA_DEMANDA];
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */
 export interface Io {
@@ -500,16 +504,25 @@ const COMANDOS: readonly Comando[] = [
 export const comandoDoNavegador = (plataforma: NodeJS.Platform): string =>
   plataforma === "darwin" ? "open" : "xdg-open";
 
-const uso = (c: Comando): string =>
+/** O que `uso`, `ajuda` e `argumentosDe` leem de um comando, do agente legado ou da demanda. */
+type Forma = Pick<ComandoDemanda, "palavras" | "argumentos" | "opcoesDeUso" | "opcoes">;
+
+const uso = (c: Forma): string =>
   ["  fabriquinha", ...c.palavras, ...c.argumentos, ...(c.opcoesDeUso ? [c.opcoesDeUso] : [])].join(" ");
 
 /** A ajuda do grupo (`issue`, `ticket`...), ou a inteira se não há grupo conhecido. */
 function ajuda(grupo?: string): string {
-  const doGrupo = COMANDOS.filter((c) => c.palavras[0] === grupo);
-  const comandos = doGrupo.length > 0 ? doGrupo : COMANDOS;
+  const doGrupo = (cs: readonly Forma[]) => cs.filter((c) => c.palavras[0] === grupo);
+  const conhecido = doGrupo(COMANDOS).length + doGrupo(COMANDOS_DEMANDA).length > 0;
+  const escolher = <T extends Forma>(cs: readonly T[]) => (conhecido ? doGrupo(cs) : cs);
+  const daDemanda = escolher(COMANDOS_DEMANDA);
   return [
     "Uso:",
-    ...comandos.map(uso),
+    ...escolher(COMANDOS).map(uso),
+    ...(daDemanda.length > 0
+      ? ["", "Agente de uma execução da demanda (tickets e rodadas pelo endereço, como I-206.T3 e I-206.R2):"]
+      : []),
+    ...daDemanda.map(uso),
     "",
     "Com FABRIQUINHA_EXECUCAO, só os comandos do agente; sem ela, só servidor, abrir, necessidade e --help.",
     "IDs aceitam I-12 ou 12; --descricao e --dados leem de um arquivo, ou do stdin com -.",
@@ -529,6 +542,23 @@ function resolverAgente(banco: DatabaseSync, valor: string): Agente {
     );
   }
   return { ator: { tipo: "agente", execucao: execucao.execucao, ticket }, issue, projeto: nome };
+}
+
+/** O comando do agente da demanda: o banco e o agente resolvidos de `execucao`, que o `principal` já viu ser da demanda. */
+async function rodarDaDemanda(comando: ComandoDemanda, resto: string[], io: Io, execucao: string): Promise<unknown> {
+  const chamada = argumentosDe(comando, resto);
+  return comBanco(io, (banco) =>
+    comando.rodar({
+      ...chamada,
+      stdin: io.stdin,
+      banco,
+      agente: encontrado(
+        resolverAgenteDemanda(banco, execucao),
+        `a execução ${execucao} não existe`,
+        "confira FABRIQUINHA_EXECUCAO",
+      ),
+    }),
+  );
 }
 
 /** O ator decide antes dos argumentos (F7 §3.1): o comando de outro ator é ErroDeEscopo, com ou sem argumento certo. */
@@ -556,7 +586,7 @@ async function rodar(comando: Comando, resto: string[], io: Io): Promise<unknown
 }
 
 /** Os argumentos de `comando` lidos com `parseArgs` estrito (F7 §3.3). */
-function argumentosDe(comando: Comando, resto: string[]): Pick<Chamada, "pos" | "op"> {
+function argumentosDe(comando: Forma, resto: string[]): Pick<Chamada, "pos" | "op"> {
   let lidos;
   try {
     lidos = parseArgs({ args: resto, options: comando.opcoes ?? {}, strict: true, allowPositionals: true });
@@ -572,7 +602,11 @@ function argumentosDe(comando: Comando, resto: string[]): Pick<Chamada, "pos" | 
 
 /** Uma linha só: o `ZodError` vem pelo `z.prettifyError`, com o caminho de cada campo (F3 §5). */
 const umaLinha = (erro: unknown): string =>
-  (erro instanceof ZodError ? z.prettifyError(erro) : mensagem(erro)).replaceAll(/\s*\n\s*/g, " ");
+  (erro instanceof ZodError ? z.prettifyError(erro) : mensagem(erro))
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" ");
 
 /** Roda `fabriquinha <args>` e devolve o código de saída: 0 sucesso, 1 erro, 2 uso inválido (F7 §3.3). */
 export async function principal(args: readonly string[], io: Io): Promise<number> {
@@ -582,10 +616,22 @@ export async function principal(args: readonly string[], io: Io): Promise<number
     return 0;
   }
   try {
-    const comando = COMANDOS.find((c) => c.palavras.every((p, i) => args[i] === p));
+    // A execução da demanda (execucao_sessao) tem a sua tabela de comandos; qualquer outra segue a legada.
+    const execucao = io.env.FABRIQUINHA_EXECUCAO;
+    const daDemanda =
+      execucao && (await comBanco(io, (banco) => resolverAgenteDemanda(banco, execucao) !== undefined))
+        ? execucao
+        : undefined;
+    const achar = <T extends Forma>(tabela: readonly T[]) =>
+      tabela.find((c) => c.palavras.every((p, i) => args[i] === p));
+    const comando = daDemanda === undefined ? achar(COMANDOS) : achar(COMANDOS_DEMANDA);
     if (!comando)
       throw new ErroDeUso(grupo === undefined ? "falta o comando" : `comando desconhecido: ${args.join(" ")}`);
-    const resultado = await rodar(comando, args.slice(comando.palavras.length), io);
+    const resto = args.slice(comando.palavras.length);
+    const resultado =
+      daDemanda === undefined
+        ? await rodar(comando as Comando, resto, io)
+        : await rodarDaDemanda(comando as ComandoDemanda, resto, io, daDemanda);
     if (resultado !== undefined) io.stdout.write(`${JSON.stringify(resultado)}\n`);
     return 0;
   } catch (error_) {

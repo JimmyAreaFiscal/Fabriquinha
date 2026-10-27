@@ -92,7 +92,7 @@ function classificar(caminho: string, fd: number, bytes: number): { classe: Clas
 }
 
 /** De onde os anexos podem vir (F3 §3.2), e o que a recusa diz: `fora` completa "está fora", `copie` é o destino. */
-interface Origens {
+export interface Origens {
   readonly worktree: string;
   readonly saida: string;
   readonly fora: string;
@@ -153,10 +153,10 @@ function abrir(caminho: string, origens: Origens): number {
  * cruzadas do tipo, em `cruzar` (5); e só então a guarda (6). A classe é conferida na cópia privada que
  * `guardarArquivos` faz, e não no arquivo do agente: o que fica guardado é o que foi validado.
  */
-function guardarAnexos(
+export function guardarAnexos(
   banco: DatabaseSync,
   caminhos: readonly string[],
-  tipo: TipoEvidencia,
+  tipo: string,
   regra: RegraArquivos,
   origens: Origens,
   cruzar: () => void,
