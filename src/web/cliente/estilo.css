@@ -4073,3 +4073,97 @@ svg.barras :not(.hit) {
     grid-auto-columns: 56px;
   }
 }
+
+/* Configuração SDLC do projeto: grade de linhas com rótulo de 18 px, controles de 34 px e o erro em posição absoluta
+   sob o controle, com o espaço reservado na célula, de modo que o erro nunca desloque a linha. */
+.link-sdlc {
+  margin-bottom: var(--s-4);
+}
+.painel-config .grupo > .msg-erro {
+  display: block;
+  margin-bottom: var(--s-1);
+}
+.sdlc-linha {
+  display: grid;
+  gap: 0 var(--s-2);
+  align-items: start;
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--line);
+}
+.sdlc-linha .celula {
+  position: relative;
+  gap: 0;
+  padding-bottom: 22px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.sdlc-linha label {
+  height: 18px;
+  line-height: 18px;
+}
+.sdlc-linha input,
+.sdlc-linha select {
+  height: 34px;
+}
+.sdlc-linha > .btn,
+.sdlc-linha > .sdlc-nome {
+  height: 34px;
+  margin-top: 18px;
+}
+.sdlc-nome {
+  display: flex;
+  align-items: center;
+  font-size: var(--fs-sm);
+}
+.sdlc-linha .msg-erro {
+  position: absolute;
+  top: 54px;
+  left: 0;
+  right: 0;
+  line-height: 18px;
+}
+.sdlc-projeto {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.sdlc-etapa {
+  grid-template-columns: 150px repeat(3, minmax(0, 1fr));
+}
+.sdlc-preparacao {
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+}
+.sdlc-fitness {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.5fr) auto;
+}
+.sdlc-linguagens {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+}
+.sdlc-e2e {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 140px auto;
+}
+.sdlc-globs {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+}
+.vazio-sdlc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-5);
+}
+@media (max-width: 700px) {
+  .sdlc-linha {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sdlc-linha .celula {
+    padding-bottom: 18px;
+  }
+  .sdlc-linha .msg-erro {
+    top: 52px;
+  }
+  .sdlc-linha > .btn {
+    justify-self: start;
+  }
+  .sdlc-linha > .sdlc-nome {
+    margin-top: 0;
+  }
+}

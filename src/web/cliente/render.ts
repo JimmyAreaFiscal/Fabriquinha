@@ -139,7 +139,7 @@ export function ha(desde: string, agora: Date): string {
 /** Navegação fixa: caminho, rótulo e as páginas em que o item fica marcado. */
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio"]],
-  ["/projects", "Projetos", ["projeto", "heatmap", "issue"]],
+  ["/projects", "Projetos", ["projeto", "heatmap", "issue", "sdlc"]],
   ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico", "auditoria"]],
@@ -230,6 +230,7 @@ export const TITULOS: Record<Pagina, string> = {
   auditoria: "Auditoria",
   configuracao: "Configuração",
   simulacao: "Simulação",
+  sdlc: "Configuração SDLC",
 };
 
 /** Página ainda sem conteúdo: só o cabeçalho com o título. */

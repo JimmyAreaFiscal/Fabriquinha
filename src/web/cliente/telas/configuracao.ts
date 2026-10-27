@@ -85,10 +85,15 @@ export const ETAPAS: readonly (readonly [Etapa, string])[] = [
 ];
 
 // O cliente não importa valores de src/dominio (os .ts vão ao navegador só sem os tipos): os níveis saem das chaves.
-const EFFORTS = Object.keys({ off: 0, minimal: 0, low: 0, medium: 0, high: 0, xhigh: 0, max: 0 } satisfies Record<
-  Effort,
-  0
->);
+export const EFFORTS = Object.keys({
+  off: 0,
+  minimal: 0,
+  low: 0,
+  medium: 0,
+  high: 0,
+  xhigh: 0,
+  max: 0,
+} satisfies Record<Effort, 0>);
 
 const atual = (sim: boolean): string => (sim ? ' aria-current="page"' : "");
 
@@ -246,7 +251,11 @@ export function formularioDeProjeto(
   const rodape =
     (falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "") +
     `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
-  return `<h2>${titulo}</h2><form class="form" data-projeto novalidate>
+  // Fora do h2: o título acessível do formulário continua "<nome> <n> issues".
+  const sdlc = novo
+    ? ""
+    : `<p class="link-sdlc"><a class="link" href="/projects/${encodeURIComponent(p.nome)}/sdlc">Configuração SDLC do projeto</a></p>`;
+  return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
 <div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branchBase", "Branch base", p.branchBase, { mono: true })}${texto(erros, "repo", "Caminho do repositório", p.repo, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div>${texto(erros, "sonar.projectKey", "Projeto no SonarQube", p.sonar.projectKey, { mono: true, extra: ' placeholder="projectKey"', ajuda: "o token fica em <code>&lt;raiz&gt;/ambiente</code>, fora do banco" })}${texto(erros, "linkProduto", "Link do produto", p.linkProduto ?? "", { classe: " largo", mono: true, extra: ' placeholder="https://produto.exemplo.com"', ajuda: "opcional; endereço http(s) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa" })}</div></div>
 <div class="grupo"><h3>Preparação e testes</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}${lista(erros, "testes", "Testes", "pelo menos um; todos precisam sair com 0", p.testes)}</div></div>
 ${fitness(erros, p.fitness)}

@@ -304,6 +304,15 @@ test("o botão Remover só existe no projeto salvo", () => {
   assert.doesNotMatch(formularioDeProjeto(NOVO, { modelos: MODELOS, erros: new Map() }), /data-remover-projeto/);
 });
 
+test("formularioDeProjeto liga à configuração SDLC fora do h2, só no projeto salvo", () => {
+  const salvo = formularioDeProjeto(LOJA, { issues: 1, modelos: MODELOS, erros: new Map() });
+  assert.match(
+    salvo,
+    /<\/h2><p class="link-sdlc"><a class="link" href="\/projects\/loja\/sdlc">Configuração SDLC do projeto<\/a>/,
+  );
+  assert.doesNotMatch(formularioDeProjeto(NOVO, { modelos: [], erros: new Map() }), /sdlc/);
+});
+
 test("confirmacaoDeRemover: o nome escapado, o plural das issues, Cancelar e Remover projeto", () => {
   const um = confirmacaoDeRemover("<demo>", 1);
   assert.match(um, /<h2 id="titulo-remover">Remover o projeto &#60;demo&#62;<\/h2>/);
