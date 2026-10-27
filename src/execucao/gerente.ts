@@ -391,6 +391,8 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     // Autônoma (F4 §6.7): só o tempo ativo conta; o relógio para enquanto algum diálogo espera o Auditor.
     // Interativa (F4 §6.6): a ociosidade conta do zero cada vez que o agente assenta sem diálogo pendente.
     const acertarRelogio = () => {
+      // Depois do fim, eventos atrasados do pi não armam relógio novo: ele seguraria o processo à toa.
+      if (feito) return;
       if (autonoma) {
         if (pendentes.size > 0 && relogio) {
           clearTimeout(relogio);
