@@ -272,12 +272,15 @@ async function publicarEConferir(
           ),
         ]
       : []),
-    ...problemas.checksFalhos.map(({ nome }, i) =>
+    ...problemas.checksFalhos.map(({ nome, url }, i) =>
       correcao(
         ref,
         i + 1 + Number(problemas.conflito),
         `Corrigir o check ${nome} do PR da ${refRodada}`,
-        `O check ${nome} falhou no PR ${publicado.url} da ${refRodada}. Corrija a causa.`,
+        `O check ${nome} falhou no PR ${publicado.url} da ${refRodada}${[url]
+          .filter((u): u is string => Boolean(u))
+          .map((u) => ` (${u})`)
+          .join("")}. Corrija a causa.`,
       ),
     ),
   ];

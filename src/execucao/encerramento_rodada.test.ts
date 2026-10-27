@@ -336,6 +336,10 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
       .map((t) => t.titulo),
     ["Corrigir o check lint do PR da I-206.R2", "Corrigir o check ci/teste do PR da I-206.R2"],
   );
+  assert.match(
+    ag().tickets.find((t) => t.titulo === "Corrigir o check lint do PR da I-206.R2")?.descricao ?? "",
+    /https:\/\/ci.exemplo.com\/lint/,
+  );
 });
 
 test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a marca do ticket atual", async () => {
