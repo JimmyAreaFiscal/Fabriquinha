@@ -289,4 +289,12 @@ export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
   for (const { id, demanda_id, ticket_id } of execucoesAbertasDaDemanda(banco)) {
     encerrarOrfa(banco, { demanda_id, ticket_id }, id, REINICIADO);
   }
+  // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
+  // ticket `em_execucao` não sairia mais. ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
+  const presos = banco
+    .prepare(
+      "SELECT demanda_id, ticket_id FROM ticket_demanda WHERE status = 'em_execucao' AND etapa IN ('implementar', 'resolver_conflito')",
+    )
+    .all() as unknown as TicketRef[];
+  for (const { demanda_id, ticket_id } of presos) falharTicketDemanda(banco, { demanda_id, ticket_id }, REINICIADO);
 }

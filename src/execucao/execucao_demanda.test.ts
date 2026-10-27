@@ -521,3 +521,13 @@ test("interrupção do Auditor e reinício falham o ticket em execução", async
   assert.equal(statusDe(banco, 1)?.motivo_falha, "interrompida pelo Auditor");
   assert.equal(statusDe(banco, 2)?.motivo_falha, "serviço reiniciado");
 });
+
+test("reinício falha o ticket em execução cuja execução já foi encerrada (fechamento interrompido)", async () => {
+  const { banco } = await cenario();
+  emExecucao(banco, 1);
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1, fechar: () => Promise.resolve() }).fim;
+  assert.equal(statusDe(banco, 1)?.status, "em_execucao");
+  recuperarExecucoesDemanda(banco);
+  assert.equal(statusDe(banco, 1)?.status, "falhou");
+  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+});
