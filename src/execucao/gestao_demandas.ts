@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { Ator } from "../dominio/agregado.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
-import { arquivarDemanda } from "../dominio/cancelamento_demanda.ts";
+import { arquivarDemanda, cancelarDemanda } from "../dominio/cancelamento_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import {
   type AutorDemanda,
@@ -13,14 +13,25 @@ import {
   submeterEvidenciaDemanda,
   TipoEvidenciaDemanda,
 } from "../dominio/evidencia_demanda.ts";
-import { type ContextoDemanda, editarDemanda, enviarDemanda, registrarDemanda } from "../dominio/transicoes_demanda.ts";
+import {
+  type ContextoDemanda,
+  decidirDemanda,
+  editarDemanda,
+  enviarDemanda,
+  registrarDemanda,
+} from "../dominio/transicoes_demanda.ts";
 import { type Classe, LIMITE, type RegraArquivos, schemaDe, schemaDeEtapa } from "../evidencias/schemas.ts";
 import { guardarBytes } from "../persistencia/arquivos.ts";
 import { escrever } from "../persistencia/banco.ts";
 import { carregarDemanda, comDemanda, criarDemandaNova } from "../persistencia/demandas.ts";
-import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
+import {
+  dependentesNaoConcluidasDaDemanda,
+  registrarDependenciaDemanda,
+} from "../persistencia/dependencias_demanda.ts";
 import { gravarAnexos, registrarSessoesExternas } from "../persistencia/evidencia_demanda.ts";
 import { projeto } from "../persistencia/projetos.ts";
+import { execucoesAbertasDaDemanda } from "../persistencia/sessoes.ts";
+import { interromperExecucaoDemanda } from "./execucao_demanda.ts";
 
 /** Um anexo já em memória: abrir o arquivo do disco, com a defesa de origem, é de quem chama. */
 const Anexo = z.object({
@@ -87,6 +98,63 @@ export const enviar = (banco: DatabaseSync, id: string, autor: AutorDemanda, ctx
 
 export const arquivar = (banco: DatabaseSync, id: string, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda =>
   traduzir(() => comDemanda(banco, id, (ag) => arquivarDemanda(ag, ator, ctx)));
+
+/**
+ * CA-16 a CA-26: decide ou cancela a demanda e, se ela terminou `cancelada`, cancela as dependentes não terminadas na
+ * mesma transação (a leitura das dependentes é interna, sem janela para dependente nova). Só depois do commit as
+ * execuções abertas das canceladas são interrompidas, uma vez por ticket.
+ */
+function cancelando(
+  banco: DatabaseSync,
+  id: string,
+  ator: Ator,
+  ctx: ContextoDemanda,
+  transicao: (ag: AgregadoDemanda) => AgregadoDemanda,
+): { demanda: AgregadoDemanda; canceladas: string[] } {
+  const { demanda, canceladas } = escrever(banco, () => {
+    const dependentes = dependentesNaoConcluidasDaDemanda(banco, id);
+    const principal = comDemanda(banco, id, transicao);
+    if (principal.demanda.fase !== "cancelada") return { demanda: principal, canceladas: [] };
+    for (const d of dependentes) comDemanda(banco, d, (ag) => cancelarDemanda(ag, ator, ctx));
+    return { demanda: principal, canceladas: [id, ...dependentes] };
+  });
+  const abertas = execucoesAbertasDaDemanda(banco).filter((e) => canceladas.includes(e.demanda_id));
+  const tickets = new Map(
+    abertas.map(({ demanda_id, ticket_id }) => [`${demanda_id}.${String(ticket_id)}`, { demanda_id, ticket_id }]),
+  );
+  for (const ref of tickets.values()) interromperExecucaoDemanda(banco, ref);
+  return { demanda, canceladas };
+}
+
+/** CA-16 a CA-20: só o Auditor; aprovar não cascateia, recusar cancela a demanda e as dependentes. */
+export const decidir = (
+  banco: DatabaseSync,
+  id: string,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): { demanda: AgregadoDemanda; canceladas: string[] } =>
+  traduzir(() =>
+    cancelando(banco, id, ator, ctx, (ag) => {
+      try {
+        return decidirDemanda(ag, entrada, ator, ctx);
+      } catch (erro) {
+        if (erro instanceof z.ZodError && erro.issues.some((i) => i.path[0] === "motivo")) {
+          throw new ErroDeRegra("informe o motivo da recusa", "recuse com o motivo");
+        }
+        throw erro;
+      }
+    }),
+  );
+
+/** CA-21 a CA-26: só o Auditor, até a integração confirmada; o histórico fica intacto. */
+export const cancelar = (
+  banco: DatabaseSync,
+  id: string,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): { demanda: AgregadoDemanda; canceladas: string[] } =>
+  traduzir(() => cancelando(banco, id, ator, ctx, (ag) => cancelarDemanda(ag, ator, ctx)));
 
 /** F3 §3.1 pelo mime informado; a classificação pelos bytes é de quem abre o arquivo. */
 const CLASSES_DO_MIME: readonly [prefixo: string, classe: Classe][] = [

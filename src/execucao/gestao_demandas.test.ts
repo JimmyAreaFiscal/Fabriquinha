@@ -1,4 +1,4 @@
-// Gestão de Demandas em banco temporário real (CA-1 a CA-15, CA-27, CA-28 e CA-29 dos seis fluxos deste arquivo).
+// Gestão de Demandas em banco temporário real (CA-1 a CA-29).
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,6 +10,7 @@ import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../dominio/erros.t
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import * as gestao from "./gestao_demandas.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gestao-demandas-"));
@@ -304,8 +305,170 @@ test("CA-28: arquivar fora de concluida é recusado", () => {
   assert.equal(carregarDemanda(b, id).demanda.fase, "aprovacao_demanda");
 });
 
-test("CA-29: o módulo exporta as operações de registro, edição, dependência, evidência, envio e arquivamento", () => {
-  for (const nome of ["registrar", "editar", "registrarDependencia", "submeterEvidencia", "enviar", "arquivar"]) {
+test("CA-29: o módulo exporta as operações de registro, edição, dependência, evidência, envio, decisão, cancelamento e arquivamento", () => {
+  const nomes = [
+    "registrar",
+    "editar",
+    "registrarDependencia",
+    "submeterEvidencia",
+    "enviar",
+    "decidir",
+    "cancelar",
+    "arquivar",
+  ];
+  for (const nome of nomes) {
     assert.equal(typeof (gestao as Record<string, unknown>)[nome], "function", nome);
   }
+});
+
+const fase = (b: DatabaseSync, id: string) => carregarDemanda(b, id).demanda.fase;
+const poFase = (b: DatabaseSync, id: string, f: string) =>
+  b.prepare("UPDATE demanda SET fase = ? WHERE id = ?").run(f, id);
+const aguardando = (b: DatabaseSync, dependencias?: string[]) => {
+  const id = registrar(b, dependencias);
+  completar(b, id);
+  gestao.enviar(b, id, autor, ctx);
+  return id;
+};
+const aprovar = { aprovado: true };
+const recusar = { aprovado: false, motivo: "fora do escopo" };
+
+test("CA-16: aprovar leva a planejamento, grava a decisão e não cascateia", () => {
+  const b = novoBanco();
+  const a = aguardando(b);
+  const dep = registrar(b, [a]);
+  const { demanda, canceladas } = gestao.decidir(b, a, aprovar, AUDITOR, ctx);
+  assert.equal(demanda.demanda.fase, "planejamento");
+  assert.deepEqual(canceladas, []);
+  assert.equal(demanda.decisoes[0]?.resultado, "aprovado");
+  assert.equal(fase(b, dep), "registro");
+});
+
+test("CA-17: recusar com motivo cancela a demanda e as dependentes elegíveis", () => {
+  const b = novoBanco();
+  const a = aguardando(b);
+  const dep = registrar(b, [a]);
+  const feita = registrar(b, [a]);
+  poFase(b, feita, "concluida");
+  const { demanda, canceladas } = gestao.decidir(b, a, recusar, AUDITOR, ctx);
+  assert.equal(demanda.demanda.fase, "cancelada");
+  assert.deepEqual(canceladas, [a, dep]);
+  assert.equal(fase(b, dep), "cancelada");
+  assert.equal(fase(b, feita), "concluida");
+});
+
+test("CA-18: recusar sem motivo pede o motivo; outros erros de entrada seguem o padrão", () => {
+  const b = novoBanco();
+  const a = aguardando(b);
+  assert.throws(() => gestao.decidir(b, a, { aprovado: false }, AUDITOR, ctx), /informe o motivo da recusa/);
+  assert.throws(() => gestao.decidir(b, a, { aprovado: "x" }, AUDITOR, ctx), ErroDeRegra);
+  assert.equal(fase(b, a), "aprovacao_demanda");
+});
+
+test("CA-19: o autor não decide", () => {
+  const b = novoBanco();
+  const a = aguardando(b);
+  assert.throws(() => gestao.decidir(b, a, aprovar, { tipo: "agente", execucao: 1, ticket: 1 }, ctx), /Auditor/);
+  assert.equal(fase(b, a), "aprovacao_demanda");
+});
+
+test("CA-20: demanda em registro não espera decisão", () => {
+  const b = novoBanco();
+  const a = registrar(b);
+  assert.throws(() => gestao.decidir(b, a, aprovar, AUDITOR, ctx), /não espera decisão/);
+  assert.equal(fase(b, a), "registro");
+});
+
+test("CA-21: cancelar leva dependentes diretas e indiretas de outros projetos e poupa as terminadas", () => {
+  const b = novoBanco();
+  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+    VALUES ('outro', '/repo/o', 'main', 'github', '["t"]', 'k2', '[{"nome":"f","comando":"c","descricao":"d"}]')`);
+  const a = registrar(b);
+  const bb = registrar(b, [a]);
+  const c = gestao.registrar(
+    b,
+    { projeto: "outro", titulo: "T", tipo: "funcionalidade", descricao: "D", dependencias: [bb] },
+    autor,
+    ctx,
+  ).demanda.id;
+  const d = registrar(b, [a]);
+  const e = registrar(b, [a]);
+  poFase(b, d, "concluida");
+  poFase(b, e, "arquivada");
+  poFase(b, a, "execucao");
+  const { canceladas } = gestao.cancelar(b, a, AUDITOR, ctx);
+  assert.deepEqual([...canceladas].sort(), [a, bb, c].sort());
+  assert.deepEqual(
+    [a, bb, c, d, e].map((i) => fase(b, i)),
+    ["cancelada", "cancelada", "cancelada", "concluida", "arquivada"],
+  );
+});
+
+test("CA-22: a execução órfã de uma dependente é interrompida e fica com o fim gravado", () => {
+  const b = novoBanco();
+  const a = registrar(b);
+  const dep = registrar(b, [a]);
+  const ref = { demanda_id: dep, ticket_id: 1 };
+  comSessoesDoTicket(b, ref, (x) => ({
+    ...x,
+    sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
+    execucoes: [{ id: "e1", sessao_id: "s1", inicio: ctx.agora, falha: false }],
+  }));
+  const alheia = registrar(b);
+  const refAlheia = { demanda_id: alheia, ticket_id: 1 };
+  comSessoesDoTicket(b, refAlheia, (x) => ({
+    ...x,
+    sessoes: [{ id: "s2", ...refAlheia, modo: "autonomo", conversa_referencia: "c" }],
+    execucoes: [{ id: "e2", sessao_id: "s2", inicio: ctx.agora, falha: false }],
+  }));
+  gestao.cancelar(b, a, AUDITOR, ctx);
+  assert.equal(carregarSessoesDoTicket(b, refAlheia).execucoes[0]?.fim, null);
+  const [exec] = carregarSessoesDoTicket(b, ref).execucoes;
+  assert.ok(exec?.fim);
+});
+
+test("CA-23: o autor não cancela", () => {
+  const b = novoBanco();
+  const a = registrar(b);
+  assert.throws(() => gestao.cancelar(b, a, { tipo: "agente", execucao: 1, ticket: 1 }, ctx), /Auditor/);
+  assert.equal(fase(b, a), "registro");
+});
+
+test("CA-24: demanda terminada não se cancela (a integração confirmada é regra do domínio)", () => {
+  const b = novoBanco();
+  const a = registrar(b);
+  poFase(b, a, "concluida");
+  assert.throws(() => gestao.cancelar(b, a, AUDITOR, ctx), /já terminou/);
+  assert.equal(fase(b, a), "concluida");
+});
+
+test("CA-25: cancelar mantém decisões, evidências e execuções", () => {
+  const b = novoBanco();
+  const a = aguardando(b);
+  const ref = { demanda_id: a, ticket_id: 1 };
+  comSessoesDoTicket(b, ref, (x) => ({
+    ...x,
+    sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
+    execucoes: [{ id: "e1", sessao_id: "s1", inicio: ctx.agora, falha: false, fim: ctx.agora }],
+  }));
+  gestao.decidir(b, a, aprovar, AUDITOR, ctx);
+  const antes = { ag: carregarDemanda(b, a), ex: carregarSessoesDoTicket(b, ref).execucoes };
+  const { demanda } = gestao.cancelar(b, a, AUDITOR, ctx);
+  assert.deepEqual(demanda.decisoes, antes.ag.decisoes);
+  assert.deepEqual(demanda.evidencias, antes.ag.evidencias);
+  assert.deepEqual(carregarSessoesDoTicket(b, ref).execucoes, antes.ex);
+});
+
+test("CA-26: falha na gravação de uma dependente desfaz a demanda e todas as dependentes", () => {
+  const b = novoBanco();
+  const a = registrar(b);
+  const bb = registrar(b, [a]);
+  const c = registrar(b, [a]);
+  b.exec(`CREATE TRIGGER falha BEFORE UPDATE OF fase ON demanda WHEN NEW.id = '${c}' AND NEW.fase = 'cancelada'
+    BEGIN SELECT RAISE(ABORT, 'falhou'); END`);
+  assert.throws(() => gestao.cancelar(b, a, AUDITOR, ctx), /falhou/);
+  assert.deepEqual(
+    [a, bb, c].map((i) => fase(b, i)),
+    ["registro", "registro", "registro"],
+  );
 });
