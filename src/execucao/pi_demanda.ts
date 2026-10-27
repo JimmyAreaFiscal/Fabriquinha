@@ -8,7 +8,7 @@ import type { EtapaTicket } from "../dominio/primitivos.ts";
 import { resolverModeloEffort } from "../dominio/resolucao_ticket.ts";
 import { argumentosPi, PACOTE, skillDoTipo, type Lancamento } from "./pi.ts";
 
-const existe = (skill: string): boolean => existsSync(join(PACOTE, "skills", skill));
+const existe = (skill: string, pacote: string): boolean => existsSync(join(pacote, "skills", skill));
 
 const doAgente = (etapa: EtapaTicket): string[] =>
   catalogoDaEtapa(etapa)
@@ -16,14 +16,15 @@ const doAgente = (etapa: EtapaTicket): string[] =>
     .map((c) => skillDoTipo(c.tipo));
 
 /** As skills de artefato da etapa nova: as do catálogo que existem no pacote; as ausentes são `skillsPendentes`. */
-export const skillsDaEtapaDemanda = (etapa: EtapaTicket): string[] => doAgente(etapa).filter(existe);
+export const skillsDaEtapaDemanda = (etapa: EtapaTicket, pacote = PACOTE): string[] =>
+  doAgente(etapa).filter((s) => existe(s, pacote));
 
 /** As skills que o catálogo exige e o pacote ainda não tem, em ordem estável (a do catálogo) e sem repetição. */
-export const skillsPendentes = (): string[] => [
+export const skillsPendentes = (pacote = PACOTE): string[] => [
   ...new Set(
     CATALOGO_ETAPAS.filter((c) => c.produtor === "agente")
       .map((c) => skillDoTipo(c.tipo))
-      .filter((s) => !existe(s)),
+      .filter((s) => !existe(s, pacote)),
   ),
 ];
 
