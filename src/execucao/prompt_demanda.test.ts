@@ -97,6 +97,8 @@ test("seção de evidências e skills vêm do catálogo", () => {
   assert.ok(montar("encerrar_rodada").includes("`video_demonstracao` (opcional)"));
   const vazia = montar("sessao_em_aberto");
   assert.ok(vazia.includes("não tem evidência do agente") && vazia.includes("não produz evidência"));
+  assert.match(vazia, /ticket corretivo da rodada I-206\.R2[^]*antes de concluir/);
+  assert.ok(!vazia.includes("descartadas"));
 });
 
 test("ticket 3 da I-206 na rodada 2 só usa os endereços públicos (CA-10)", () => {

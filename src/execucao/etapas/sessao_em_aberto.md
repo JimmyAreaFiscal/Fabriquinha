@@ -6,10 +6,10 @@
 
 1. Leia o PR e o que o Auditor pediu.
 2. Converse com o Auditor até entender cada ajuste.
-3. Resuma o que ficou combinado, um ajuste por item.
+3. Registre cada ajuste combinado como um ticket corretivo da rodada {rodada}, um por ajuste, na ordem em que devem ser feitos. Pelo menos um ticket corretivo registrado é obrigatório antes de concluir a conversa; resumo na conversa não basta.
 
-**Entregas:** o resumo dos ajustes combinados, na conversa. Esta etapa não tem evidência.
+**Entregas:** os tickets corretivos da rodada {rodada}, um por ajuste combinado. Esta etapa não tem evidência.
 
-**Quando parar:** quando o Auditor concluir a sessão.
+**Quando parar:** só depois que os tickets corretivos estiverem registrados e o Auditor concluir a sessão.
 
-**O que não fazer:** não implemente os ajustes por conta própria (as alterações da worktree são descartadas), não crie nem altere PR, não faça commit nem push e não mexa em nada fora do ticket {ticket}. Refira-se a tickets e rodadas só pelos endereços públicos.
+**O que não fazer:** não implemente os ajustes por conta própria, não integre, não crie nem altere PR, não faça commit nem push e não mexa em nada fora do ticket {ticket}. Refira-se a tickets e rodadas só pelos endereços públicos.
