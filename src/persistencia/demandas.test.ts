@@ -6,7 +6,7 @@ import type { ProgressoEncerramento } from "../dominio/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { migrar } from "./banco.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "./demandas.ts";
+import { carregarDemanda, comDemanda, criarDemanda, criarDemandaNova } from "./demandas.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -299,4 +299,23 @@ test("encerramento: o banco recusa progresso duplicado, de demanda inexistente, 
     /FOREIGN KEY/,
   );
   assert.deepEqual(carregarDemanda(b, "I-1"), antes);
+});
+
+const { id: _id, branch: _branch, ...demandaSemId } = completo().demanda;
+
+test("CA-9: demanda nova recebe I-{n} da sequência issue", () => {
+  const b = banco();
+  b.exec("INSERT INTO sequencia (nome, valor) VALUES ('issue', 216)");
+  const criada = criarDemandaNova(b, demandaSemId);
+  assert.equal(criada.demanda.id, "I-217");
+  assert.equal(criada.demanda.branch, "fabriquinha/I-217");
+  assert.deepEqual(carregarDemanda(b, "I-217"), criada);
+  assert.equal(b.prepare("SELECT valor FROM sequencia WHERE nome = 'issue'").get()?.valor, 217);
+});
+
+test("CA-10: erro na criação desfaz a demanda e a sequência", () => {
+  const b = banco();
+  assert.throws(() => criarDemandaNova(b, { ...demandaSemId, projeto: "inexistente" }));
+  assert.equal(b.prepare("SELECT count(*) AS n FROM demanda").get()?.n, 0);
+  assert.equal(criarDemandaNova(b, demandaSemId).demanda.id, "I-1");
 });

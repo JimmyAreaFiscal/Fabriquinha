@@ -2,9 +2,10 @@
 // issues.ts. Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira.
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
-import { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
+import { AgregadoDemanda, type Demanda } from "../dominio/agregado_demanda.ts";
 import { encontrado } from "../dominio/erros.ts";
-import { escrever } from "./banco.ts";
+import { branchDemanda } from "../dominio/demanda.ts";
+import { escrever, novoId } from "./banco.ts";
 
 type Linha = Record<string, SQLInputValue>;
 
@@ -217,6 +218,20 @@ export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemand
 /** Grava a demanda nova com tudo o que o agregado traz, numa transação só. */
 export const criarDemanda = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
   escrever(banco, () => {
+    gravarDiferenca(banco, undefined, agregado);
+    return agregado;
+  });
+
+/** Demanda nova: o ID e a branch saem da sequência `issue` (D09), na mesma transação; erro desfaz também a sequência. */
+export const criarDemandaNova = (banco: DatabaseSync, entrada: Omit<Demanda, "id" | "branch">): AgregadoDemanda =>
+  escrever(banco, () => {
+    const id = `I-${String(novoId(banco, "issue"))}`;
+    const agregado = AgregadoDemanda.parse({
+      demanda: { ...entrada, id, branch: branchDemanda(id) },
+      tickets: [],
+      decisoes: [],
+      evidencias: [],
+    });
     gravarDiferenca(banco, undefined, agregado);
     return agregado;
   });

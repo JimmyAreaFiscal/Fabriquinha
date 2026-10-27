@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import { encerrarExecucao, iniciarExecucao, registrarUso, totalDoTicket } from "../dominio/sessoes.ts";
 import type { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../dominio/sessoes.ts";
 import { migrar } from "./banco.ts";
@@ -157,4 +158,33 @@ test("sessão de outro ticket e execução de sessão fora do resultado são rec
     () => comSessoesDoTicket(b, ref, (x) => ({ ...x, execucoes: [execucao("e2", "s7")] })),
     /sessão do ticket/,
   );
+});
+
+test("CA-1, CA-2: controle da execução volta igual; ausente volta sem a chave", () => {
+  const b = banco();
+  const completa: ExecucaoSessao = {
+    ...execucao(),
+    grupo_processo: 4321,
+    erro: "falhou no pi",
+    modelo_provedor: "claude-bridge",
+    modelo_nome: "claude-sonnet-5-5",
+    effort: "high",
+  };
+  gravar(b, [sessao()], [completa, execucao("e2")], []);
+  const { execucoes } = carregarSessoesDoTicket(b, ref);
+  assert.deepEqual(execucoes[0], { ...completa, fim: null });
+  const nua = execucoes[1] ?? {};
+  for (const c of ["grupo_processo", "erro", "modelo_provedor", "modelo_nome", "effort"]) assert.equal(c in nua, false);
+});
+
+test("CA-3: effort inválido falha com ErroDeRegra citando o campo e não altera nada", () => {
+  const b = banco();
+  gravar(b, [sessao()], [execucao()], []);
+  const antes = JSON.stringify(b.prepare("SELECT * FROM execucao_sessao").all());
+  const ruim = { ...execucao("e2"), effort: "turbo" } as unknown as ExecucaoSessao;
+  assert.throws(
+    () => gravar(b, [], [ruim], []),
+    (e) => e instanceof ErroDeRegra && e.message.includes("effort"),
+  );
+  assert.equal(JSON.stringify(b.prepare("SELECT * FROM execucao_sessao").all()), antes);
 });

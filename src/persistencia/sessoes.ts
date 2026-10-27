@@ -15,6 +15,10 @@ export interface EstadoSessoes {
 
 type Linha = Record<string, SQLInputValue>;
 
+/** No banco o ausente é NULL; no domínio, campo opcional sem a chave. */
+const semNulos = (linha: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(linha).filter(([, valor]) => valor !== null));
+
 /** `ticketId` nulo carrega a demanda inteira. */
 function carregar(banco: DatabaseSync, demandaId: string, ticketId: number | null): EstadoSessoes {
   const filtro = { demanda_id: demandaId, ticket_id: ticketId };
@@ -33,7 +37,8 @@ function carregar(banco: DatabaseSync, demandaId: string, ticketId: number | nul
         ),
       execucoes: z.array(ExecucaoSessao).parse(
         ler(`SELECT * FROM execucao_sessao WHERE ${dasSessoes} ORDER BY rowid`).map((e) => ({
-          ...e,
+          ...semNulos(e),
+          fim: e.fim, // fim NULL segue como null: é execução aberta
           falha: e.falha === 1,
         })),
       ),
@@ -83,6 +88,13 @@ function validar(ref: z.infer<typeof TicketRef>, { sessoes, execucoes, usos }: E
   const ids = new Set(sessoes.map((s) => s.id));
   const e = execucoes.find((e) => !ids.has(e.sessao_id));
   if (e) throw new ErroDeRegra(`execução ${e.id} não é de uma sessão do ticket`);
+  for (const x of execucoes) {
+    const r = ExecucaoSessao.safeParse(x);
+    if (!r.success)
+      throw new ErroDeRegra(
+        `execução ${x.id} inválida: ${r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
+      );
+  }
   const execIds = new Set(execucoes.map((e) => e.id));
   const u = usos.find((u) => !execIds.has(u.execucao_id));
   if (u) throw new ErroDeRegra(`uso da execução ${u.execucao_id} não é de uma execução do ticket`);
@@ -103,7 +115,16 @@ export const comSessoesDoTicket = (
       banco,
       "execucao_sessao",
       ["id"],
-      depois.execucoes.map((e) => ({ ...e, fim: e.fim ?? null, falha: Number(e.falha) })),
+      depois.execucoes.map((e) => ({
+        ...e,
+        fim: e.fim ?? null,
+        falha: Number(e.falha),
+        grupo_processo: e.grupo_processo ?? null,
+        erro: e.erro ?? null,
+        modelo_provedor: e.modelo_provedor ?? null,
+        modelo_nome: e.modelo_nome ?? null,
+        effort: e.effort ?? null,
+      })),
       chaves(["id"], antes.execucoes),
     );
     const chaveUso = ["execucao_id", "modelo_provedor", "modelo_nome"];

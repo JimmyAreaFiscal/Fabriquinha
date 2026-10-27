@@ -603,4 +603,11 @@ export const MIGRACOES: readonly string[] = [
     PRIMARY KEY (demanda_id, depende_demanda_id),
     CHECK (demanda_id <> depende_demanda_id)
   );`,
+  // Controle da execução de sessão e limite global de paralelismo (D04), aditivo: sem backfill.
+  `ALTER TABLE execucao_sessao ADD COLUMN grupo_processo INTEGER CHECK (grupo_processo IS NULL OR (typeof(grupo_processo) = 'integer' AND grupo_processo > 0));
+  ALTER TABLE execucao_sessao ADD COLUMN erro TEXT CHECK (erro IS NULL OR length(erro) > 0);
+  ALTER TABLE execucao_sessao ADD COLUMN modelo_provedor TEXT CHECK (modelo_provedor IS NULL OR length(modelo_provedor) > 0);
+  ALTER TABLE execucao_sessao ADD COLUMN modelo_nome TEXT CHECK (modelo_nome IS NULL OR length(modelo_nome) > 0) CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL));
+  ALTER TABLE execucao_sessao ADD COLUMN effort TEXT CHECK (effort IS NULL OR effort IN (${listaSql(Effort)}));
+  ALTER TABLE configuracao ADD COLUMN limite_paralelismo INTEGER NOT NULL DEFAULT 4 CHECK (typeof(limite_paralelismo) = 'integer' AND limite_paralelismo > 0);`,
 ];
