@@ -13,7 +13,7 @@ interface Usage {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  cost: { total: number };
+  cost?: { total?: number };
 }
 
 /** O `usage` de cada subagente da extensão `subagents` (P1 §2.2): `cost` já é o total, e `turns` conta as chamadas. */
@@ -49,6 +49,8 @@ type Soma = Modelo & {
   cacheRead: number;
   cacheWrite: number;
   custo: number;
+  /** Alguma parcela não trouxe `cost.total`: o custo do modelo é desconhecido, não zero. */
+  semCusto: boolean;
 };
 
 const DESCONHECIDO = "desconhecido";
@@ -72,7 +74,7 @@ interface Parcela {
   dono: Modelo;
   chamadas: number;
   uso: Omit<Usage, "cost">;
-  custo: number;
+  custo: number | undefined;
 }
 
 /** A linha como entrada da sessão, ou `undefined` se não é JSON: a última fica pela metade quando o pi é morto. */
@@ -96,7 +98,7 @@ function usageProprio(e: Entrada, m: Mensagem | undefined): Usage | null | undef
  */
 function parcelas(e: Entrada, m: Mensagem | undefined, ultimo: Modelo): Parcela[] {
   const u = usageProprio(e, m);
-  const lista: Parcela[] = u ? [{ dono: ultimo, chamadas: 1, uso: u, custo: u.cost.total }] : [];
+  const lista: Parcela[] = u ? [{ dono: ultimo, chamadas: 1, uso: u, custo: u.cost?.total }] : [];
   if (m?.role !== "toolResult" || m.toolName !== "subagent") return lista;
   for (const r of m.details?.results ?? []) {
     if (r.usage.turns === 0) continue; // o subagente não chegou a chamar o modelo
@@ -115,7 +117,7 @@ function parcelas(e: Entrada, m: Mensagem | undefined, ultimo: Modelo): Parcela[
  * só as de `timestamp` dentro de `[inicio, fim]` (F6 §3.1, §3.2). O uso sem modelo próprio fica com o último
  * assistente da sessão, mesmo que ele esteja fora da janela.
  */
-function somar(texto: string, inicio: number, fim: number): Soma[] {
+export function somar(texto: string, inicio: number, fim: number): Soma[] {
   const somas = new Map<string, Soma>();
   let ultimo: Modelo = { provedor: DESCONHECIDO, modelo: DESCONHECIDO };
   for (const linha of texto.split("\n")) {
@@ -135,6 +137,7 @@ function somar(texto: string, inicio: number, fim: number): Soma[] {
         cacheRead: 0,
         cacheWrite: 0,
         custo: 0,
+        semCusto: false,
       };
       somas.set(chave, {
         ...s,
@@ -143,7 +146,8 @@ function somar(texto: string, inicio: number, fim: number): Soma[] {
         output: s.output + uso.output,
         cacheRead: s.cacheRead + uso.cacheRead,
         cacheWrite: s.cacheWrite + uso.cacheWrite,
-        custo: s.custo + custo,
+        custo: s.custo + (custo ?? 0),
+        semCusto: s.semCusto || custo === undefined,
       });
     }
   }
