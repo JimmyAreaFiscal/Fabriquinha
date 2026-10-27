@@ -192,7 +192,14 @@ test("encerramento: ausente continua válido e cada invariante recusa", () => {
   assert.ok(AgregadoDemanda.safeParse({ ...emEncerramento(enc()), demanda: demanda({ fase: "concluida" }) }).success);
   for (const fase of ["cancelada", "arquivada"])
     assert.ok(AgregadoDemanda.safeParse({ ...emEncerramento(enc()), demanda: demanda({ fase }) }).success);
-  for (const fase of ["registro", "aprovacao_demanda", "planejamento", "aprovacao_planejamento", "execucao", "revisao_demanda"])
+  for (const fase of [
+    "registro",
+    "aprovacao_demanda",
+    "planejamento",
+    "aprovacao_planejamento",
+    "execucao",
+    "revisao_demanda",
+  ])
     recusa({ ...emEncerramento(enc()), demanda: demanda({ fase }) }, "só existe nas fases");
   recusa(agregado({ encerramento: enc() }), "só existe nas fases");
   recusa(emEncerramento(enc({ demanda_id: "I-2", branch: "fabriquinha/I-2" })), "outra demanda");
