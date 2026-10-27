@@ -610,4 +610,40 @@ export const MIGRACOES: readonly string[] = [
   ALTER TABLE execucao_sessao ADD COLUMN modelo_nome TEXT CHECK (modelo_nome IS NULL OR length(modelo_nome) > 0) CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL));
   ALTER TABLE execucao_sessao ADD COLUMN effort TEXT CHECK (effort IS NULL OR effort IN (${listaSql(Effort)}));
   ALTER TABLE configuracao ADD COLUMN limite_paralelismo INTEGER NOT NULL DEFAULT 4 CHECK (typeof(limite_paralelismo) = 'integer' AND limite_paralelismo > 0);`,
+  // Commit, arquivos e retrabalho do ticket da demanda (§8, §10.1), aditivo: convive com as tabelas legadas, sem backfill.
+  `CREATE TABLE commit_ticket_demanda (
+    sha        TEXT PRIMARY KEY CHECK (length(sha) IN (40, 64)),
+    demanda_id TEXT NOT NULL,
+    ticket_id  INTEGER NOT NULL,
+    mensagem   TEXT NOT NULL,
+    em         TEXT NOT NULL,
+    UNIQUE (demanda_id, ticket_id),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+  CREATE TABLE arquivo_commit_demanda (
+    sha              TEXT NOT NULL REFERENCES commit_ticket_demanda(sha),
+    caminho          TEXT NOT NULL,
+    caminho_anterior TEXT,
+    status           TEXT NOT NULL CHECK (status IN (${listaSql(StatusArquivo)})),
+    adicionadas      INTEGER CHECK (adicionadas >= 0),
+    removidas        INTEGER CHECK (removidas >= 0),
+    PRIMARY KEY (sha, caminho),
+    CHECK ((status = 'R') = (caminho_anterior IS NOT NULL))
+  );
+  CREATE INDEX ix_arquivo_commit_demanda_caminho ON arquivo_commit_demanda(caminho);
+  CREATE TABLE retrabalho_demanda (
+    commit_alterador TEXT    NOT NULL,
+    demanda_id       TEXT    NOT NULL,
+    ticket_id        INTEGER,
+    autor            TEXT,
+    ticket_origem_id INTEGER NOT NULL,
+    linhas           INTEGER NOT NULL CHECK (linhas >= 1),
+    PRIMARY KEY (commit_alterador, demanda_id, ticket_origem_id),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    FOREIGN KEY (demanda_id, ticket_origem_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    CHECK (ticket_id IS NULL OR ticket_id <> ticket_origem_id),
+    CHECK ((ticket_id IS NULL) = (autor IS NOT NULL))
+  );
+  CREATE INDEX ix_retrabalho_demanda_origem ON retrabalho_demanda(demanda_id, ticket_origem_id);
+  CREATE INDEX ix_retrabalho_demanda_alterador ON retrabalho_demanda(demanda_id, ticket_id);`,
 ];

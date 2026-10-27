@@ -24,7 +24,7 @@ test("CA-4: v27 com execuções → 28 devolve as execuções iguais, sem os cam
     .prepare("SELECT * FROM execucao_sessao")
     .all()
     .map((l) => ({ ...l }));
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, V27 + 1));
   assert.equal(versao(b), V27 + 1);
   const depois = b
     .prepare("SELECT * FROM execucao_sessao")
