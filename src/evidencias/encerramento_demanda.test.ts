@@ -131,8 +131,8 @@ test("custo conhecido x incompleto, externos separados dos internos", () => {
   const a = montarArvorePRs(agregado(), [sessao(3), sessao(8)], [exec(3), exec(8)], [uso(3, 1.5), uso(8)]);
   assert.deepEqual(a.rodadas[0]?.tickets[0]?.custo, { valor: 1.5, situacao: "conhecido" });
   assert.deepEqual(a.rodadas[1]?.tickets[0]?.custo, { valor: 0, situacao: "incompleto" });
-  // T7 e T1 sem nenhum uso: incompletos, nunca zero conhecido.
-  assert.equal(a.rodadas[0].tickets[1]?.custo.situacao, "incompleto");
+  // T7 sem sessão (conduzido pela Fabriquinha): conhecido, não torna o total incompleto.
+  assert.deepEqual(a.rodadas[0].tickets[1]?.custo, { valor: 0, situacao: "conhecido" });
   assert.deepEqual(a.custos.internos, { valor: 1.5, situacao: "incompleto" });
   assert.deepEqual(
     a.custos.externos.sessoes.map((s) => s.custo),
@@ -147,6 +147,11 @@ test("custo conhecido x incompleto, externos separados dos internos", () => {
 test("ticket com todo uso medido é conhecido", () => {
   const a = montarArvorePRs(agregado(), [sessao(3)], [exec(3)], [uso(3, 2)]);
   assert.deepEqual(a.rodadas[0]?.tickets[0]?.custo, { valor: 2, situacao: "conhecido" });
+});
+
+test("ticket sem sessão não torna o total interno incompleto (CA-14)", () => {
+  const a = montarArvorePRs(agregado(), [sessao(3), sessao(8)], [exec(3), exec(8)], [uso(3, 0.75), uso(8, 0.5)]);
+  assert.deepEqual(a.custos.internos, { valor: 1.25, situacao: "conhecido" });
 });
 
 test("limpeza: sobras reprovam e removidas aprovam", () => {

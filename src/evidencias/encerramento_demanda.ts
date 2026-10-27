@@ -72,7 +72,18 @@ export function montarArvorePRs(
   execucoes: readonly ExecucaoSessao[],
   usos: readonly UsoModeloExecucao[],
 ): ArvorePRsCriteriosCustos {
-  const internos = produtividadeDaRodada(sessoes, execucoes, usos, ag.tickets);
+  const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, ag.tickets);
+  // Ticket conduzido sem agente (sem sessão) não consumiu nada: custo zero conhecido, não incompleto.
+  const comSessao = new Set(
+    sessoes
+      .filter((s) => s.demanda_id === ag.demanda.id)
+      .map((s) => formatarTicketRef({ demanda_id: s.demanda_id, ticket_id: s.ticket_id })),
+  );
+  const internos = {
+    tickets: relatorio.tickets.map((t) => ({ ...t, custoIncompleto: t.custoIncompleto && comSessao.has(t.ticket) })),
+    total: { custo: relatorio.total.custo, custoIncompleto: false },
+  };
+  internos.total.custoIncompleto = internos.tickets.some((t) => t.custoIncompleto);
   const rodadaDe = new Map(ag.tickets.map((t) => [formatarTicketRef(t), t.rodada_id]));
   const doRodada = (rodada: number | undefined) =>
     internos.tickets

@@ -188,7 +188,7 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
     custos: { internos: { situacao: string }; externos: { total: { valor: number } } };
   };
   assert.equal(arvore.sha_integracao, pr.mergeSha);
-  assert.equal(arvore.custos.internos.situacao, "incompleto");
+  assert.equal(arvore.custos.internos.situacao, "conhecido");
   assert.equal(arvore.custos.externos.total.valor, 0);
 });
 
