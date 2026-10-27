@@ -60,11 +60,12 @@ function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
 
 /** Configuração SDLC do projeto, lida num snapshot só; `undefined` se o projeto não existe ou não tem configuração nova. */
 export function configuracaoProjeto(banco: DatabaseSync, nome: string): Projeto | undefined {
-  banco.exec("BEGIN");
+  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
+  if (propria) banco.exec("BEGIN");
   try {
     return ler(banco, nome);
   } finally {
-    banco.exec("COMMIT");
+    if (propria) banco.exec("COMMIT");
   }
 }
 

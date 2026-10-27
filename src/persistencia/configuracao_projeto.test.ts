@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { Projeto } from "../dominio/configuracao_projeto.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
-import { abrir } from "./banco.ts";
+import { abrir, escrever } from "./banco.ts";
 import { projeto, projetos, registrarProjeto } from "./projetos.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "./configuracao_projeto.ts";
 
@@ -107,6 +107,16 @@ test("ida e volta completa, com listas na ordem canônica", () => {
   comBanco((banco) => {
     assert.deepEqual(gravarConfiguracaoProjeto(banco, completa), canonica);
     assert.deepEqual(configuracaoProjeto(banco, "a"), canonica);
+  });
+});
+
+test("a leitura dentro de uma escrita faz parte dela, sem abrir outra transação", () => {
+  comBanco((banco) => {
+    gravarConfiguracaoProjeto(banco, completa);
+    assert.deepEqual(
+      escrever(banco, () => configuracaoProjeto(banco, "a")),
+      canonica,
+    );
   });
 });
 

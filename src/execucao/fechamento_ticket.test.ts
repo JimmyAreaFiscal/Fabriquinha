@@ -194,8 +194,16 @@ test("só implementar e resolver_conflito em execução são fechados", async ()
   });
   await fechar(c, 1, naoColeta, "x");
   await fechar(c, 2, naoColeta, "x");
-  falharTicketDemanda(c.banco, ref(1), "x");
   assert.deepEqual([c.status(1)?.status, c.status(2)?.status], ["em_execucao", "aberto"]);
+});
+
+test("falharTicketDemanda falha o ticket em execução de qualquer etapa e ignora o que não está em execução", async () => {
+  const c = await cenario({
+    tickets: [ticket(1, "planejar", "em_execucao"), ticket(2, "implementar", "aberto", { rodada_id: 1 })],
+  });
+  falharTicketDemanda(c.banco, ref(1), "x");
+  falharTicketDemanda(c.banco, ref(2), "x");
+  assert.deepEqual([c.status(1)?.status, c.status(1)?.motivo_falha, c.status(2)?.status], ["falhou", "x", "aberto"]);
 });
 
 test("CA-6: a primeira reprovação técnica devolve ao agente com o relatório e o fim do log", async () => {

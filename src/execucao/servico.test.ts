@@ -13,6 +13,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { ZodError } from "zod";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { abrir, raizDo } from "../persistencia/banco.ts";
+import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { agregado } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import {
@@ -292,7 +293,7 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   await s.parar();
 });
 
-test("CA-10, CA-14: reinício encerra a execução aberta da demanda como falha, sem mexer no ticket", async () => {
+test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer na fase", async () => {
   const raiz = novaRaiz();
   const banco = abrir(raiz);
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
@@ -301,7 +302,7 @@ test("CA-10, CA-14: reinício encerra a execução aberta da demanda como falha,
       VALUES ('d', '/nao/existe', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]');
     INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
-      VALUES ('I-1', 1, 'planejar', 'em_execucao', '${AGORA}');
+      VALUES ('I-1', 1, 'implementar', 'em_execucao', '${AGORA}');
     INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');`);
   banco
     .prepare("INSERT INTO execucao_sessao (id, sessao_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', ?, 0, ?)")
@@ -316,9 +317,11 @@ test("CA-10, CA-14: reinício encerra a execução aberta da demanda como falha,
   });
   assert.notEqual(s.banco.prepare("SELECT fim FROM execucao_sessao").get()?.fim, null);
   assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM ticket_demanda").get(), {
-    etapa: "planejar",
-    status: "em_execucao",
+    etapa: "implementar",
+    status: "falhou",
+    motivo_falha: "serviço reiniciado",
   });
+  assert.equal(s.banco.prepare("SELECT fase FROM demanda").get()?.fase, "execucao");
   await s.parar();
 });
 
@@ -677,5 +680,64 @@ test("executarAgora: não espera o agendador, inicia com outra issue rodando e r
   );
   await falhouNaWorktree(s.banco, 2);
   assert.deepEqual(ticketsElegiveis(s.banco), [], "T-2 falhou: T-3 espera ele concluir (C5)");
+  await s.parar();
+});
+
+/** Projeto `p` com configuração do SDLC (repositório inexistente) e a demanda I-`n` em execução com um `implementar` aberto. */
+function demandaEmExecucao(banco: DatabaseSync, n: number): void {
+  if (!banco.prepare("SELECT 1 FROM projeto WHERE nome = 'p'").get()) {
+    projeto(banco, "p", "/nao/existe");
+    banco.prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('p', ?, ?)").run("a".repeat(40), AGORA);
+  }
+  if (!configuracaoProjeto(banco, "p")) {
+    gravarConfiguracaoProjeto(banco, {
+      nome: "p",
+      branch_base: "main",
+      chave_sonarqube: "p",
+      raiz_git: "/nao/existe",
+      hospedagem: "github",
+      etapas: [],
+      preparacao: [],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    });
+  }
+  const id = `I-${String(n)}`;
+  banco.exec(`INSERT INTO demanda VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO rodada VALUES ('${id}', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/${id}-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+      VALUES ('${id}', 1, 'implementar', 'aberto', '${AGORA}', 1)`);
+}
+
+const statusDemanda = (banco: DatabaseSync, id: string) =>
+  banco.prepare("SELECT status FROM ticket_demanda WHERE demanda_id = ? AND ticket_id = 1").get(id)?.status;
+
+test("CA-14: o ciclo inicia o ticket da issue como hoje e despacha a demanda no mesmo ciclo", async (t) => {
+  const minuto = relogio(t);
+  const s = await subir();
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
+  issue(s.banco, 1, "revisao");
+  ticket(s.banco, 1, 1, "revisao");
+  demandaEmExecucao(s.banco, 1);
+  minuto();
+  assert.equal(estado(s.banco, 1).status, "em_execucao");
+  assert.equal(statusDemanda(s.banco, "I-1"), "em_execucao");
+  await falhouNaWorktree(s.banco, 1);
+  await ate(() => statusDemanda(s.banco, "I-1") === "falhou");
+  await s.parar();
+});
+
+test("executarAgoraDemanda: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
+  const s = await subir();
+  demandaEmExecucao(s.banco, 1);
+  s.banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+    VALUES ('I-1', 2, 'implementar', 'aberto', '${AGORA}', 1)`);
+  await assert.rejects(
+    s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 2 }),
+    /o ticket T2 .*vem antes|vem antes/,
+  );
+  await s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 1 });
+  assert.equal(statusDemanda(s.banco, "I-1"), "em_execucao");
+  await ate(() => statusDemanda(s.banco, "I-1") === "falhou");
   await s.parar();
 });
