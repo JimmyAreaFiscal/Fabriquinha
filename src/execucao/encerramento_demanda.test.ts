@@ -388,6 +388,12 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
   assert.equal(existsSync(c.rodada), false);
   assert.deepEqual(await pendenciasDeLimpeza(c.raiz, c.projeto, ag), []);
   assert.equal(c.noRemoto("develop"), "develop");
+  const limpeza = ag.evidencias.findLast((e) => e.tipo === "demonstracao_limpeza")?.dados as {
+    removidas: unknown[];
+    sobras: unknown[];
+  };
+  assert.equal(limpeza.removidas.length, 6);
+  assert.deepEqual(limpeza.sobras, []);
 });
 
 test("CA-16: fora de encerramento, ou sem o encerrar_demanda em execução, recusa sem efeito externo", async () => {

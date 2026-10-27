@@ -95,8 +95,19 @@ export async function conduzirEncerramentoDemanda(
     ).limpeza_pendente;
     const feito = await limparDemanda(raiz, hospedagem, pendentes);
     const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(hospedagem, feito.removidos))];
-    if (sobras.length > 0) return falhar("limpeza", `a limpeza deixou: ${sobras.join(", ")}`, sobras);
-    gravarEvidencias(banco, demanda_id, ticket.ticket_id, montarDemonstracaoLimpeza(feito.removidos, sobras));
+    // A passada anterior (falha parcial) já gravou o que removeu; a demonstração final soma as duas.
+    const anterior = carregarDemanda(banco, demanda_id).evidencias.findLast(
+      (e) => e.ticket_id === ticket.ticket_id && e.tipo === "demonstracao_limpeza",
+    );
+    const antes = ((anterior?.dados as DemonstracaoLimpeza | undefined)?.removidas ?? []).map(
+      (r) => `${r.tipo}:${r.alvo}`,
+    );
+    const demonstracao = montarDemonstracaoLimpeza([...new Set([...antes, ...feito.removidos])], sobras);
+    if (sobras.length > 0) {
+      gravarEvidencias(banco, demanda_id, ticket.ticket_id, demonstracao, false);
+      return falhar("limpeza", `a limpeza deixou: ${sobras.join(", ")}`, sobras);
+    }
+    gravarEvidencias(banco, demanda_id, ticket.ticket_id, demonstracao);
     return aplicar((a) => concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, contexto()));
   };
 
@@ -196,11 +207,12 @@ function gravarEvidencias(
   demanda_id: string,
   ticket_id: number,
   limpeza: DemonstracaoLimpeza,
+  completa = true,
 ): void {
   const ag = carregarDemanda(banco, demanda_id);
   const { sessoes, execucoes, usos } = carregarSessoesDaDemanda(banco, demanda_id);
   const dados = {
-    arvore_prs_criterios_custos: montarArvorePRs(ag, sessoes, execucoes, usos),
+    ...(completa && { arvore_prs_criterios_custos: montarArvorePRs(ag, sessoes, execucoes, usos) }),
     demonstracao_limpeza: limpeza,
   };
   const evidencias = (Object.keys(dados) as (keyof typeof dados)[]).map((tipo) => {
