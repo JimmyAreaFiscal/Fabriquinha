@@ -1,6 +1,7 @@
 // evidencia schema/add do agente da demanda contra banco real numa raiz temporária (CA-4 a CA-9, CA-15): I-206 em
 // planejamento, com o planejar (T1) e a revisão integral (T5) em execução, e o T3/T4 de implementação.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -39,8 +40,37 @@ const SEGURANCA = {
   achados: [{ descricao: "a", severidade: "baixa", recomendacao: "m" }],
 };
 
+const git = (cwd: string, ...args: string[]) =>
+  execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" }).trim();
+
+// A worktree da rodada 1 de verdade: a.ts tem 3 linhas, 2 delas mudadas entre base e head.
+const RODADA = (raiz: string) => join(raiz, "worktrees", "loja", "I-206", "rodadas", "1");
+let ALTERADOS: object = {};
+
+function worktreeDaRodada(raiz: string): void {
+  const dir = RODADA(raiz);
+  mkdirSync(dir, { recursive: true });
+  git(dir, "init", "-q");
+  writeFileSync(join(dir, "a.ts"), "x\ny\nz\n");
+  git(dir, "add", ".");
+  git(dir, "commit", "-qm", "base");
+  const baseSha = git(dir, "rev-parse", "HEAD");
+  writeFileSync(join(dir, "a.ts"), "x\nY\nZ\n");
+  git(dir, "commit", "-qam", "head");
+  ALTERADOS = {
+    base: baseSha,
+    head: git(dir, "rev-parse", "HEAD"),
+    arquivos: [
+      { caminho: "a.ts", status: "M", adicionadas: 2, removidas: 2, previsto: "src/**" },
+      { caminho: "b.ts", status: "A", adicionadas: 1, removidas: 0, previsto: null },
+    ],
+    previstosNaoTocados: [],
+  };
+}
+
 function cenario() {
   const raiz = mkdtempSync(join(base, "raiz-"));
+  worktreeDaRodada(raiz);
   const banco = abrir(raiz);
   banco
     .prepare(
@@ -71,16 +101,29 @@ function cenario() {
       enviada: true,
       branch: "fabriquinha/I-206",
     },
-    rodadas: [],
+    rodadas: [
+      { demanda_id: "I-206", rodada_id: 1, titulo: "r1", fase: "revisao", e2e: false, branch: "fabriquinha/I-206-1" },
+    ],
     dependencias_rodada: [],
-    criterios_citados: [],
-    tickets: [ticket(1, "planejar"), ticket(4, "implementar"), ticket(5, "revisar_demanda")],
+    criterios_citados: [{ demanda_id: "I-206", rodada_id: 1, criterio_id: "CA-1" }],
+    tickets: [
+      ticket(1, "planejar"),
+      ticket(4, "implementar"),
+      ticket(5, "revisar_demanda"),
+      ticket(6, "revisar_rodada", { rodada_id: 1 }),
+      ticket(7, "encerrar_rodada", { rodada_id: 1 }),
+      ticket(8, "revisar_rodada", { rodada_id: 1, status: "concluido" }),
+    ],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
-    evidencias: [{ demanda_id: "I-206", tipo: "criterios_aceite", em, dados: { criterios: [{ id: "CA-1" }] } }],
+    evidencias: [
+      { demanda_id: "I-206", tipo: "criterios_aceite", em, dados: { criterios: [{ id: "CA-1" }, { id: "CA-2" }] } },
+      { demanda_id: "I-206", ticket_id: 6, tipo: "matriz_fitness", em, dados: { linhas: [{ nome: "f" }] } },
+      { demanda_id: "I-206", ticket_id: 8, tipo: "arquivos_alterados", em, dados: ALTERADOS },
+    ],
   } as unknown as AgregadoDemanda);
-  for (const t of [1, 4, 5]) abrirExecucao(banco, `exec-${String(t)}`, t);
+  for (const t of [1, 4, 5, 6, 7]) abrirExecucao(banco, `exec-${String(t)}`, t);
   return { raiz, banco, env: (t: number) => ({ FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: `exec-${String(t)}` }) };
 }
 
@@ -116,8 +159,8 @@ async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = "") {
 
 const gravadas = (banco: DatabaseSync) =>
   banco
-    .prepare("SELECT ticket_id, tipo FROM evidencia_demanda WHERE tipo <> 'criterios_aceite'")
-    .all()
+    .prepare("SELECT ticket_id, tipo FROM evidencia_demanda WHERE em <> ?")
+    .all(em)
     .map((l) => ({ ...l }));
 
 function json(raiz: string, dados: unknown): string {
@@ -241,7 +284,7 @@ test("tipo que o agente não submete, ou de outra etapa, é recusado", async () 
   const outro = await cli(env(5), ["evidencia", "add", "I-206.T5", "pr_aberto", "--dados", dados]);
   assert.equal(
     outro.err,
-    "pr_aberto não é evidência que o agente submete (use um de plano, testes_estresse, analise_seguranca)\n",
+    "pr_aberto não é evidência que o agente submete (use um de plano, explicacao_fitness, comprovacao_criterios, mensagem_pr, aula_codigo, video_demonstracao, testes_estresse, analise_seguranca)\n",
   );
   const etapa = await cli(env(4), ["evidencia", "add", "I-206.T4", "plano", "--dados", json(raiz, PLANO)]);
   assert.match(etapa.err, /T-4 \(implementar\) não aceita evidência plano/);
@@ -283,4 +326,116 @@ test("evidencia schema devolve o JSON Schema e as regras de arquivo; tipo descon
   assert.deepEqual(lido.arquivos.classes, ["texto"]);
   const ruim = await cli(env(5), ["evidencia", "schema", "nada"]);
   assert.match(ruim.err, /nada não é evidência que o agente submete/);
+});
+
+const rodar = (env: NodeJS.ProcessEnv, t: number, tipo: string, dados: object, ...arquivos: string[]) =>
+  cli(env, [
+    "evidencia",
+    "add",
+    `I-206.T${String(t)}`,
+    tipo,
+    "--dados",
+    json(env.FABRIQUINHA_ROOT ?? "", dados),
+    ...arquivos.flatMap((a) => ["--arquivo", a]),
+  ]);
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+
+const anexos = (banco: DatabaseSync) =>
+  banco
+    .prepare("SELECT caminho FROM arquivo_evidencia ORDER BY caminho")
+    .all()
+    .map((a) => a.caminho);
+
+function arquivoNaSaida(raiz: string, exec: number, nome: string, conteudo: string | Buffer): string {
+  const saida = join(raiz, "execucoes", `E-exec-${String(exec)}`, "saida");
+  mkdirSync(saida, { recursive: true });
+  const caminho = join(saida, nome);
+  writeFileSync(caminho, conteudo);
+  return caminho;
+}
+
+test("explicacao_fitness sem anexo: cruza com a matriz do ticket, e linha faltando é reprovada", async () => {
+  const { env, banco } = cenario();
+  const ruim = await rodar(env(6), 6, "explicacao_fitness", { explicacoes: [{ nome: "g", explicacao: "e" }] });
+  assert.match(ruim.err, /explicacao_fitness explica \[g\], e a matriz_fitness de T-6 tem as linhas \[f\]/);
+  assert.deepEqual(gravadas(banco), []);
+  const ok = await rodar(env(6), 6, "explicacao_fitness", { explicacoes: [{ nome: "f", explicacao: "e" }] });
+  assert.deepEqual([ok.codigo, ok.err], [0, ""]);
+  assert.deepEqual(gravadas(banco), [{ ticket_id: 6, tipo: "explicacao_fitness" }]);
+});
+
+test("comprovacao_criterios: anexo obrigatório, critérios só os da rodada, aprovada derivada, na revisão de rodada e na integral", async () => {
+  const { raiz, env, banco } = cenario();
+  const comprovacao = (atendido: boolean, ids = ["CA-1"]) => ({
+    criterios: ids.map((id) => ({ id, atendido, comoVerificado: "v", arquivos: ["cena.png"] })),
+  });
+  const sem = await rodar(env(6), 6, "comprovacao_criterios", comprovacao(true));
+  assert.match(sem.err, /precisa de pelo menos 1 arquivo/);
+  const png = arquivoNaSaida(raiz, 6, "cena.png", PNG);
+  const demais = await rodar(env(6), 6, "comprovacao_criterios", comprovacao(true, ["CA-1", "CA-2"]), png);
+  assert.match(demais.err, /comprova \[CA-1, CA-2\], e os critérios de aceite do registro são \[CA-1\]/);
+  const ok = await rodar(env(6), 6, "comprovacao_criterios", comprovacao(false), png);
+  assert.deepEqual([ok.codigo, ok.err], [0, ""]);
+  assert.equal((JSON.parse(ok.out) as { aprovada: boolean }).aprovada, false);
+  assert.deepEqual(anexos(banco), ["cena.png"]);
+  const integral = await rodar(
+    env(5),
+    5,
+    "comprovacao_criterios",
+    comprovacao(true, ["CA-1", "CA-2"]),
+    arquivoNaSaida(raiz, 5, "cena.png", PNG),
+  );
+  assert.equal((JSON.parse(integral.out) as { aprovada: boolean }).aprovada, true);
+});
+
+test("mensagem_pr cruza com os não previstos da última revisão e pede reversão; sem anexo", async () => {
+  const { env, banco } = cenario();
+  const msg = (naoPrevistos: object[]) => ({
+    titulo: "Adiciona a",
+    oQueMudou: "m",
+    decisoesNaoObvias: [],
+    naoFeito: [],
+    naoPrevistos,
+    comoRevisar: ["a"],
+    naoVerificado: [],
+  });
+  const ruim = await rodar(env(7), 7, "mensagem_pr", msg([]));
+  assert.match(ruim.err, /explica os não previstos \[\], e a última revisão concluída tem \[b.ts\]/);
+  const ok = await rodar(env(7), 7, "mensagem_pr", msg([{ caminho: "b.ts", motivo: "novo" }]));
+  assert.deepEqual([ok.codigo, ok.err], [0, ""]);
+  assert.deepEqual(gravadas(banco), [{ ticket_id: 7, tipo: "mensagem_pr" }]);
+});
+
+test("aula_codigo: o agente envia só trechos e a Fabriquinha gera o HTML; anexo do agente e trecho fora do diff são recusados", async () => {
+  const { raiz, env, banco } = cenario();
+  const trecho = (inicio: number, fim: number) => ({
+    trechos: [{ arquivo: "a.ts", inicio, fim, oQueFaz: "f", porQue: "p", decisaoDoDesenho: "d" }],
+  });
+  const comAnexo = await rodar(env(7), 7, "aula_codigo", trecho(2, 3), arquivoNaSaida(raiz, 7, "x.html", "<html>"));
+  assert.match(comAnexo.err, /aula_codigo não aceita anexo do agente/);
+  const fora = await rodar(env(7), 7, "aula_codigo", trecho(1, 1));
+  assert.match(fora.err, /não toca nenhuma linha alterada/);
+  assert.deepEqual(gravadas(banco), []);
+  const ok = await rodar(env(7), 7, "aula_codigo", trecho(2, 3));
+  assert.deepEqual([ok.codigo, ok.err], [0, ""]);
+  assert.deepEqual(anexos(banco), ["aula.html"]);
+  assert.deepEqual(gravadas(banco), [{ ticket_id: 7, tipo: "aula_codigo" }]);
+});
+
+test("video_demonstracao exige um vídeo; anexo do worktree da rodada é aceito e fora dela é recusado", async () => {
+  const { raiz, env, banco } = cenario();
+  const sem = await rodar(env(7), 7, "video_demonstracao", { roteiro: "r" });
+  assert.match(sem.err, /precisa de pelo menos 1 arquivo/);
+  const mp4 = join(RODADA(raiz), "demo.mp4");
+  writeFileSync(mp4, Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypmp42"), Buffer.alloc(16)]));
+  const ok = await rodar(env(7), 7, "video_demonstracao", { roteiro: "r" }, mp4);
+  assert.deepEqual([ok.codigo, ok.err], [0, ""]);
+  assert.deepEqual(anexos(banco), ["demo.mp4"]);
+  const demanda = join(raiz, "worktrees", "loja", "I-206", "demanda");
+  mkdirSync(demanda, { recursive: true });
+  const alheio = join(demanda, "demo.mp4");
+  writeFileSync(alheio, "x");
+  const fora = await rodar(env(7), 7, "video_demonstracao", { roteiro: "r" }, alheio);
+  assert.match(fora.err, /está fora da worktree do ticket e do diretório de saída/);
 });

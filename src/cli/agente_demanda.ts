@@ -7,6 +7,7 @@ import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
 import { formatarRodadaRef, formatarTicketRef, interpretarRef } from "../dominio/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado } from "../dominio/erros.ts";
+import { CATALOGO_ETAPAS } from "../dominio/evidencia_etapa.ts";
 import { type SchemaEvidencia, schemaDe, schemaDeEtapa, type TipoSchemaEtapa } from "../evidencias/schemas.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { projeto } from "../persistencia/projetos.ts";
@@ -83,12 +84,17 @@ function demandaPropria(a: AgenteDemanda, texto: string): void {
   }
 }
 
-export const TIPOS_DA_ETAPA: readonly string[] = ["plano", "testes_estresse", "analise_seguranca"];
+const TIPOS_NOVOS = ["plano", "testes_estresse", "analise_seguranca"];
+
+/** Os tipos de produtor agente do catálogo das etapas: os únicos que o agente submete. */
+export const TIPOS_DA_ETAPA: readonly string[] = [
+  ...new Set(CATALOGO_ETAPAS.filter((i) => i.produtor === "agente").map((i) => i.tipo)),
+];
 
 export function schemaDoTipo(tipo: string): SchemaEvidencia | undefined {
   const legado = TipoEvidencia.safeParse(tipo);
   if (legado.success) return schemaDe(legado.data);
-  return TIPOS_DA_ETAPA.includes(tipo) ? schemaDeEtapa(tipo as TipoSchemaEtapa) : undefined;
+  return TIPOS_NOVOS.includes(tipo) ? schemaDeEtapa(tipo as TipoSchemaEtapa) : undefined;
 }
 
 const publico = ({ demanda_id, ticket_id, rodada_id, ...resto }: TicketDemanda) => ({
