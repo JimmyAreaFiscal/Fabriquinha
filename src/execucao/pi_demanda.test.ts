@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { EtapaTicket } from "../dominio/primitivos.ts";
@@ -29,12 +32,37 @@ test("modelo e effort: ticket, senão etapa do projeto, senão nenhum flag (CA-4
   for (const f of ["--provider", "--model", "--thinking"]) assert.deepEqual(flags(c, f), []);
 });
 
-test("skills ausentes do pacote ficam de fora e entram nas pendências (CA-12)", () => {
-  assert.deepEqual(skillsPendentes(), ["artefato-plano", "artefato-testes-estresse", "artefato-analise-seguranca"]);
-  assert.deepEqual(skillsDaEtapaDemanda("planejar"), []);
-  assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda"), ["artefato-comprovacao-criterios"]);
-  for (const etapa of EtapaTicket.options)
-    for (const s of skillsDaEtapaDemanda(etapa)) assert.ok(!skillsPendentes().includes(s));
+test("pacote real: nada pendente e skills na ordem do catálogo (CA-12)", () => {
+  assert.deepEqual(skillsPendentes(), []);
+  assert.deepEqual(skillsDaEtapaDemanda("planejar"), ["artefato-plano"]);
+  assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda"), [
+    "artefato-comprovacao-criterios",
+    "artefato-testes-estresse",
+    "artefato-analise-seguranca",
+  ]);
+  for (const etapa of ["planejar", "revisar_demanda"] as const) {
+    const args = argumentosPiDemanda({ ...base, ticket: ticket({ etapa }), etapasDoProjeto: [] });
+    assert.deepEqual(
+      flags(args, "--skill"),
+      skillsDaEtapaDemanda(etapa).map((s) => `${PACOTE}/skills/${s}`),
+    );
+  }
+});
+
+test("pacote com skills faltando: as ausentes ficam pendentes, sem repetição (CA-12)", () => {
+  const pacote = mkdtempSync(join(tmpdir(), "pacote-"));
+  try {
+    mkdirSync(join(pacote, "skills", "artefato-comprovacao-criterios"), { recursive: true });
+    const pendentes = skillsPendentes(pacote);
+    assert.ok(pendentes.includes("artefato-plano"));
+    assert.ok(!pendentes.includes("artefato-comprovacao-criterios"));
+    assert.equal(new Set(pendentes).size, pendentes.length);
+    assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda", pacote), ["artefato-comprovacao-criterios"]);
+    for (const etapa of EtapaTicket.options)
+      for (const s of skillsDaEtapaDemanda(etapa, pacote)) assert.ok(!pendentes.includes(s));
+  } finally {
+    rmSync(pacote, { recursive: true, force: true });
+  }
 });
 
 test("etapas legadas: sem skills, os argumentos são os de sempre (CA-8)", () => {

@@ -1,7 +1,9 @@
 // Conteúdo de cada tipo de evidência (F3 §3.1, §4): o schema de `dados` e as regras dos arquivos.
 import { z } from "zod";
 import type { Agregado, Evidencia, TipoEvidencia } from "../dominio/agregado.ts";
+import { Plano } from "../dominio/demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
+import type { TipoEvidenciaEtapa } from "../dominio/evidencia_etapa.ts";
 import { type Etapa, type Id, Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
 import { MetricasIssue } from "../metricas/issue.ts";
@@ -509,5 +511,99 @@ export const schemaDe = (tipo: TipoEvidencia): SchemaEvidencia => SCHEMAS[tipo];
 /** O formato que o agente envia (`fabriquinha evidencia schema <tipo>`): JSON Schema de `dados` e as regras de arquivo. */
 export function jsonSchemaDe(tipo: TipoEvidencia): { dados: z.core.JSONSchema.BaseSchema; arquivos: RegraArquivos } {
   const { dados, arquivos } = schemaDe(tipo);
+  return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
+}
+
+/**
+ * "Não se aplica" só com justificativa; aplicável, a lista de `itens` não pode ficar vazia. `campo` é a lista do tipo
+ * (`cenarios`, `ameacas`) e `listas` as que ficam vazias quando não se aplica.
+ */
+function conferirAplicabilidade(
+  d: { aplicavel: boolean; justificativa?: string | undefined } & Record<string, unknown>,
+  ctx: z.RefinementCtx,
+  campo: string,
+  listas: readonly string[],
+): void {
+  const erro = (message: string, path: string) => {
+    ctx.addIssue({ code: "custom", message, path: [path] });
+  };
+  if (d.aplicavel) {
+    if ((d[campo] as unknown[]).length === 0) erro(`aplicavel é true: informe pelo menos um item em ${campo}`, campo);
+    return;
+  }
+  if (d.justificativa === undefined) erro("aplicavel é false: justifique por que não se aplica", "justificativa");
+  for (const lista of listas) {
+    if ((d[lista] as unknown[]).length > 0) erro(`aplicavel é false: ${lista} deve ficar vazia`, lista);
+  }
+}
+
+const Justificativa = Texto.optional().meta({ description: "obrigatória se aplicavel é false" });
+
+const TestesEstresse = z
+  .object({
+    aplicavel: z.boolean(),
+    justificativa: Justificativa,
+    cenarios: z.array(
+      z.object({
+        nome: Titulo,
+        objetivo: Texto,
+        comando: z.string().trim().min(1),
+        resultado: z.enum(["passou", "quebrou"]),
+        observado: Texto,
+      }),
+    ),
+  })
+  .superRefine((d, ctx) => {
+    conferirAplicabilidade(d, ctx, "cenarios", ["cenarios"]);
+  });
+
+const AnaliseSeguranca = z
+  .object({
+    aplicavel: z.boolean(),
+    justificativa: Justificativa,
+    ameacas: z.array(z.object({ descricao: Texto, mitigacao: Texto })),
+    achados: z.array(
+      z.object({
+        descricao: Texto,
+        severidade: z.enum(["baixa", "media", "alta", "critica"]),
+        arquivo: CaminhoRelativo.optional(),
+        recomendacao: Texto,
+      }),
+    ),
+  })
+  .superRefine((d, ctx) => {
+    conferirAplicabilidade(d, ctx, "ameacas", ["ameacas", "achados"]);
+  });
+
+const LOGS_OPCIONAIS = Arquivos({ classes: ["texto"] });
+
+/** As evidências do catálogo novo (SDLC por demandas) que já têm schema; o CLI ainda não as liga a `TipoEvidencia`. */
+const SCHEMAS_ETAPA: Record<
+  Extract<TipoEvidenciaEtapa, "plano" | "testes_estresse" | "analise_seguranca">,
+  SchemaEvidencia
+> = {
+  // O cruzamento do plano com a demanda congelada é da camada que submete.
+  plano: tipado({ dados: Plano, arquivos: Arquivos({ max: 0 }) }),
+  testes_estresse: tipado({
+    dados: TestesEstresse,
+    arquivos: LOGS_OPCIONAIS,
+    aprovada: ({ cenarios }) => cenarios.every((c) => c.resultado === "passou"),
+  }),
+  analise_seguranca: tipado({
+    dados: AnaliseSeguranca,
+    arquivos: LOGS_OPCIONAIS,
+    aprovada: ({ achados }) => achados.every((a) => a.severidade === "baixa" || a.severidade === "media"),
+  }),
+};
+
+export type TipoSchemaEtapa = keyof typeof SCHEMAS_ETAPA;
+
+export const schemaDeEtapa = (tipo: TipoSchemaEtapa): SchemaEvidencia => SCHEMAS_ETAPA[tipo];
+
+export function jsonSchemaDeEtapa(tipo: TipoSchemaEtapa): {
+  dados: z.core.JSONSchema.BaseSchema;
+  arquivos: RegraArquivos;
+} {
+  const { dados, arquivos } = schemaDeEtapa(tipo);
   return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
 }

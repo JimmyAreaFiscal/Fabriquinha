@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { z, ZodError } from "zod";
 import { type Agregado, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { jsonSchemaDe, schemaDe, simbolosDe } from "./schemas.ts";
+import {
+  jsonSchemaDe,
+  jsonSchemaDeEtapa,
+  schemaDe,
+  schemaDeEtapa,
+  simbolosDe,
+  type TipoSchemaEtapa,
+} from "./schemas.ts";
 
 const caminhos = (erro: unknown) => (erro as ZodError).issues.map((i) => i.path.join("."));
 
@@ -445,4 +453,112 @@ test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o co
   assert.deepEqual(schemaDe("pr_aberto").arquivos, { classes: ["texto"], min: 1, max: 1 });
   assert.deepEqual(recusados("relatorio_produtividade", {}).slice(0, 2), ["issue", "geradoEm"]);
   assert.deepEqual(schemaDe("relatorio_produtividade").arquivos, HTML_UNICO);
+});
+
+const recusadosEtapa = (tipo: TipoSchemaEtapa, dados: unknown): string[] => {
+  const r = schemaDeEtapa(tipo).dados.safeParse(dados);
+  return r.success ? [] : r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
+};
+
+const RODADA = { demanda_id: "I-1", titulo: "Rodada", e2e: false, criterios: ["CA-1"], depende: [] };
+const PLANO = {
+  demanda_id: "I-1",
+  criterios: ["CA-1"],
+  rodadas: [
+    { ...RODADA, rodada_id: 1 },
+    { ...RODADA, rodada_id: 2, depende: [{ demanda_id: "I-1", rodada_id: 1 }] },
+  ],
+  tickets: [1, 2].map((n) => ({ demanda_id: "I-1", ticket_id: n, rodada_id: n, titulo: "T", descricao: "d" })),
+};
+
+test("plano: o Plano do domínio, sem anexos (CA-1 a CA-3)", () => {
+  const r = schemaDeEtapa("plano").dados.safeParse(PLANO);
+  assert.equal(r.success, true);
+  assert.equal(r.data.demanda_id, "I-1");
+  assert.deepEqual(schemaDeEtapa("plano").arquivos.max, 0);
+  assert.equal("aprovada" in schemaDeEtapa("plano"), false);
+
+  const rodadas = (i: number, mudanca: object) => PLANO.rodadas.map((r, n) => (n === i ? { ...r, ...mudanca } : r));
+  assert.deepEqual(recusadosEtapa("plano", { ...PLANO, rodadas: rodadas(0, { criterios: ["CA-9"] }) }), [
+    ": a rodada 1 cita o CA-9, que a demanda não tem",
+  ]);
+  const ciclo = rodadas(0, { depende: [{ demanda_id: "I-1", rodada_id: 2 }] });
+  assert.deepEqual(recusadosEtapa("plano", { ...PLANO, rodadas: ciclo }), [
+    ": as rodadas 1 → 2 formam um ciclo de dependência",
+  ]);
+});
+
+const CENARIO = { nome: "Carga", objetivo: "aguenta", comando: "npm run carga", resultado: "passou", observado: "ok" };
+const ACHADO = { descricao: "falha", severidade: "baixa", recomendacao: "corrigir" };
+const aprovada = (tipo: TipoSchemaEtapa, dados: unknown) =>
+  schemaDeEtapa(tipo).aprovada?.(schemaDeEtapa(tipo).dados.parse(dados));
+
+test("testes_estresse: aprovada = nenhum cenário quebrou; não se aplica exige justificativa (CA-4, CA-5)", () => {
+  const com = (resultado: string) => ({ aplicavel: true, cenarios: [{ ...CENARIO, resultado }] });
+  assert.equal(aprovada("testes_estresse", com("passou")), true);
+  assert.equal(aprovada("testes_estresse", com("quebrou")), false);
+  assert.deepEqual(
+    recusadosEtapa("testes_estresse", com("talvez")).map((m) => m.split(":")[0]),
+    ["cenarios.0.resultado"],
+  );
+  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: false, cenarios: [] }), [
+    "justificativa: aplicavel é false: justifique por que não se aplica",
+  ]);
+  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: false, justificativa: "x", cenarios: [] }), []);
+  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: false, justificativa: "x", cenarios: [CENARIO] }), [
+    "cenarios: aplicavel é false: cenarios deve ficar vazia",
+  ]);
+  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: true, cenarios: [] }), [
+    "cenarios: aplicavel é true: informe pelo menos um item em cenarios",
+  ]);
+});
+
+test("analise_seguranca: aprovada = nenhum achado alto ou crítico (CA-6 a CA-8)", () => {
+  const com = (...severidades: string[]) => ({
+    aplicavel: true,
+    ameacas: [{ descricao: "a", mitigacao: "m" }],
+    achados: severidades.map((severidade) => ({ ...ACHADO, severidade })),
+  });
+  assert.equal(aprovada("analise_seguranca", com()), true);
+  assert.equal(aprovada("analise_seguranca", com("baixa", "media")), true);
+  assert.equal(aprovada("analise_seguranca", com("baixa", "alta")), false);
+  assert.equal(aprovada("analise_seguranca", com("critica")), false);
+  assert.deepEqual(
+    recusadosEtapa("analise_seguranca", com("grave")).map((m) => m.split(":")[0]),
+    ["achados.0.severidade"],
+  );
+  assert.deepEqual(recusadosEtapa("analise_seguranca", { aplicavel: false, ameacas: [], achados: [] }), [
+    "justificativa: aplicavel é false: justifique por que não se aplica",
+  ]);
+  assert.deepEqual(
+    recusadosEtapa("analise_seguranca", { aplicavel: false, justificativa: "x", ameacas: [], achados: [ACHADO] }),
+    ["achados: aplicavel é false: achados deve ficar vazia"],
+  );
+  assert.deepEqual(recusadosEtapa("analise_seguranca", { ...com(), ameacas: [] }), [
+    "ameacas: aplicavel é true: informe pelo menos um item em ameacas",
+  ]);
+});
+
+test("jsonSchemaDeEtapa publica o JSON Schema de dados e as regras de arquivo", () => {
+  for (const tipo of ["plano", "testes_estresse", "analise_seguranca"] as const) {
+    const { dados, arquivos } = jsonSchemaDeEtapa(tipo);
+    assert.deepEqual(arquivos, schemaDeEtapa(tipo).arquivos);
+    assert.deepEqual(dados, z.toJSONSchema(schemaDeEtapa(tipo).dados, { io: "input" }));
+  }
+  assert.deepEqual(jsonSchemaDeEtapa("testes_estresse").dados.required, ["aplicavel", "cenarios"]);
+});
+
+test("os exemplos json de cada skill passam pelo schema do tipo (CA-9)", () => {
+  const skills = {
+    plano: "plano",
+    testes_estresse: "testes-estresse",
+    analise_seguranca: "analise-seguranca",
+  } as const;
+  for (const [tipo, pasta] of Object.entries(skills)) {
+    const texto = readFileSync(new URL(`../../pacote-pi/skills/artefato-${pasta}/SKILL.md`, import.meta.url), "utf8");
+    const exemplos = [...texto.matchAll(/```json\n([\s\S]*?)\n```/g)];
+    assert.ok(exemplos.length > 0, pasta);
+    for (const [, json] of exemplos)
+      assert.deepEqual(recusadosEtapa(tipo as TipoSchemaEtapa, JSON.parse(json ?? "")), []);
+  }
 });
