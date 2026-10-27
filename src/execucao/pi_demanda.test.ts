@@ -29,10 +29,14 @@ test("modelo e effort: ticket, senão etapa do projeto, senão nenhum flag (CA-4
   for (const f of ["--provider", "--model", "--thinking"]) assert.deepEqual(flags(c, f), []);
 });
 
-test("skills ausentes do pacote ficam de fora e entram nas pendências (CA-12)", () => {
-  assert.deepEqual(skillsPendentes(), ["artefato-plano", "artefato-testes-estresse", "artefato-analise-seguranca"]);
-  assert.deepEqual(skillsDaEtapaDemanda("planejar"), []);
-  assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda"), ["artefato-comprovacao-criterios"]);
+test("com as skills no pacote, nada fica pendente (CA-12)", () => {
+  assert.deepEqual(skillsPendentes(), []);
+  assert.deepEqual(skillsDaEtapaDemanda("planejar"), ["artefato-plano"]);
+  assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda"), [
+    "artefato-comprovacao-criterios",
+    "artefato-testes-estresse",
+    "artefato-analise-seguranca",
+  ]);
   for (const etapa of EtapaTicket.options)
     for (const s of skillsDaEtapaDemanda(etapa)) assert.ok(!skillsPendentes().includes(s));
 });
