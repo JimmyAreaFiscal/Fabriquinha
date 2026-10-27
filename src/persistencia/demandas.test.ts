@@ -6,7 +6,7 @@ import type { ProgressoEncerramento } from "../dominio/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { registrarDemanda } from "../dominio/transicoes_demanda.ts";
-import { migrar } from "./banco.ts";
+import { escrever, migrar } from "./banco.ts";
 import { carregarDemanda, comDemanda, criarDemanda, criarDemandaNova } from "./demandas.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
@@ -335,4 +335,15 @@ test("agregado com ID diferente do alocado é recusado e desfaz a sequência", (
   assert.throws(() => criarDemandaNova(b, () => registrar("I-9")), /monte a demanda com o id recebido \(I-1\)/);
   assert.equal(b.prepare("SELECT count(*) AS n FROM demanda").get()?.n, 0);
   assert.equal(criarDemandaNova(b, registrar).demanda.id, "I-1");
+});
+
+test("carregarDemanda dentro de escrever lê na transação aberta e não a fecha", () => {
+  const b = comBase();
+  const lida = escrever(b, () => {
+    const ag = carregarDemanda(b, "I-1");
+    assert.equal(b.isTransaction, true);
+    return ag;
+  });
+  assert.deepEqual(lida, carregarDemanda(b, "I-1"));
+  assert.equal(b.isTransaction, false);
 });

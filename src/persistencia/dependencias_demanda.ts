@@ -54,7 +54,8 @@ export function predecessorasDaDemanda(banco: DatabaseSync, id: string): { deman
 
 /** As dependentes de `id` (diretas e indiretas) que ainda não terminaram, lidas num snapshot só. */
 export function dependentesNaoConcluidasDaDemanda(banco: DatabaseSync, id: string): string[] {
-  banco.exec("BEGIN");
+  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
+  if (propria) banco.exec("BEGIN");
   try {
     const fases = new Map(
       banco
@@ -64,6 +65,6 @@ export function dependentesNaoConcluidasDaDemanda(banco: DatabaseSync, id: strin
     );
     return dependentesNaoConcluidas(arestas(banco), fases, id);
   } finally {
-    banco.exec("COMMIT");
+    if (propria) banco.exec("COMMIT");
   }
 }

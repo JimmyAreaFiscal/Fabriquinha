@@ -206,11 +206,12 @@ const existente = (banco: DatabaseSync, id: string): AgregadoDemanda =>
 
 /** O agregado da demanda, lido num snapshot só; demanda inexistente dá `ErroDeInexistente`. */
 export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemanda {
-  banco.exec("BEGIN");
+  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
+  if (propria) banco.exec("BEGIN");
   try {
     return existente(banco, id);
   } finally {
-    banco.exec("COMMIT");
+    if (propria) banco.exec("COMMIT");
   }
 }
 
