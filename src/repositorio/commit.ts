@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Issue, Ticket } from "../dominio/agregado.ts";
-import { ErroDeRegra, ErroDeReprovacao } from "../dominio/erros.ts";
+import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import type { Projeto } from "../dominio/projeto.ts";
 import { raizDo } from "../persistencia/banco.ts";
@@ -142,11 +142,16 @@ export async function commitar(
       },
     );
     if (r.codigo !== 0) {
-      const motivo = r.limiteEstourado
-        ? `passou de ${String(limiteMs / 60_000)} minutos`
-        : `saiu com código ${String(r.codigo)}`;
+      const saida = (r.saida + r.erro).trim().slice(-FIM_DA_SAIDA);
+      // Hook travado é infraestrutura, não reprovação do código do agente.
+      if (r.limiteEstourado) {
+        throw new ErroExterno(
+          `o git commit passou de ${String(limiteMs / 60_000)} minutos, com os hooks do repositório: ${saida}`,
+          "corrija o que a saída aponta e execute o ticket de novo; a Fabriquinha nunca pula os hooks",
+        );
+      }
       throw new ErroDeReprovacao(
-        `o git commit ${motivo}, com os hooks do repositório: ${(r.saida + r.erro).trim().slice(-FIM_DA_SAIDA)}`,
+        `o git commit saiu com código ${String(r.codigo)}, com os hooks do repositório: ${saida}`,
         "corrija o que a saída aponta e execute o ticket de novo; a Fabriquinha nunca pula os hooks",
       );
     }

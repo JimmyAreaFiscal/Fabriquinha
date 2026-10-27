@@ -314,20 +314,52 @@ test("commit com evidência reprovada gravada falha por infraestrutura", async (
   assert.match(c.status(1)?.motivo_falha ?? "", /reprovadas: execucao_testes, matriz_fitness, relatorio_sonar/);
 });
 
-test("o hook que reprova o commit falha o ticket com a saída; outro erro propaga", async () => {
-  const c = await cenario();
+function hook(c: Awaited<ReturnType<typeof cenario>>, corpo: string) {
   const hooks = join(c.worktree, "..", "hooks");
-  mkdirSync(hooks);
-  writeFileSync(join(hooks, "pre-commit"), "#!/bin/sh\necho lint quebrou\nexit 1\n");
+  mkdirSync(hooks, { recursive: true });
+  writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${corpo}\n`);
   chmodSync(join(hooks, "pre-commit"), 0o755);
   gitCenario(c.worktree, "config", "core.hooksPath", hooks);
+}
+
+test("o hook que reprova o commit devolve o ticket com a saída, sem commit; na 3ª falha; outro erro propaga", async () => {
+  const c = await cenario();
+  hook(c, "echo lint quebrou\nexit 1");
   await fechar(c, 1, coletor(todas(true)));
-  assert.match(c.status(1)?.motivo_falha ?? "", /lint quebrou/);
+  const t = c.status(1);
+  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.match(t?.instrucao ?? "", /lint quebrou/);
+  assert.deepEqual(c.commits(), []);
+
+  const e = await cenario();
+  hook(e, "echo lint quebrou\nexit 1");
+  e.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 1");
+  await fechar(e, 1, coletor(todas(true)));
+  assert.equal(e.status(1)?.status, "falhou");
+  assert.match(e.status(1)?.motivo_falha ?? "", /lint quebrou/);
 
   const d = await cenario({ tickets: [ticket(1, "implementar", "em_execucao", { rodada_id: 1 })] });
   d.banco.exec(`INSERT INTO commit_ticket_demanda (sha, demanda_id, ticket_id, mensagem, em)
     VALUES ('${"a".repeat(40)}', 'I-1', 1, 'outro', '${em}')`);
   await assert.rejects(fechar(d, 1, coletor(todas(true))), /já tem commit/);
+});
+
+test("resolver_conflito com o hook reprovado é devolvido, sem commit", async () => {
+  const c = await cenario({ conflito: true });
+  hook(c, "echo lint quebrou\nexit 1");
+  await fechar(c, 3, coletor(todas(true)));
+  const t = c.status(3);
+  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual(c.commits(), []);
+});
+
+test("o commit que passa do limite falha por infraestrutura, sem devolução", async () => {
+  const c = await cenario();
+  hook(c, "exec sleep 5");
+  await fechar(c, 1, { ...coletor(todas(true)), limiteCommitMs: 300 });
+  const t = c.status(1);
+  assert.deepEqual([t?.status, t?.devolucoes], ["falhou", 0]);
+  assert.match(t?.motivo_falha ?? "", /^falha de infraestrutura/);
 });
 
 test("problema commita como fix; sem deps o coletor real roda e o Sonar sem ambiente é infraestrutura", async () => {

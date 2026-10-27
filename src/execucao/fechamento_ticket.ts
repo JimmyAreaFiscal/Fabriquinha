@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../dominio/conclusao_ticket.ts";
-import { ErroDeReprovacao, existe } from "../dominio/erros.ts";
+import { ErroDeReprovacao, ErroExterno, existe } from "../dominio/erros.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { type EvidenciaEtapa, pendenciasDoTicket } from "../dominio/evidencia_etapa.ts";
 import { concluirImplementacoesRodada } from "../dominio/transicoes_rodada.ts";
@@ -27,6 +27,8 @@ type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
 export interface DepsFechamento {
   coletarVerificacoes?: typeof coletarVerificacoes;
   opcoes?: OpcoesSonar;
+  /** Limite do `git commit`; o padrão é o dos comandos do projeto. */
+  limiteCommitMs?: number;
 }
 
 /** Caracteres do fim dos logs que vão à instrução de devolução. */
@@ -180,15 +182,26 @@ export async function fecharTicketDemanda(
   }
   let commit;
   try {
-    commit = await commitarTicketDemanda(banco, ref, {
-      worktree,
-      tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
-      titulo: ticket.titulo ?? ag.demanda.titulo,
-    });
+    commit = await commitarTicketDemanda(
+      banco,
+      ref,
+      {
+        worktree,
+        tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
+        titulo: ticket.titulo ?? ag.demanda.titulo,
+      },
+      deps.limiteCommitMs,
+    );
   } catch (erro) {
-    // ponytail: o hook que reprova o commit falha o ticket; devolver ao agente fica para quando pedirem.
-    if (!(erro instanceof ErroDeReprovacao)) throw erro;
-    falhar(erro.message);
+    if (erro instanceof ErroDeReprovacao) {
+      comDemanda(banco, ref.demanda_id, (a) =>
+        devolverTicket(a, { ticket_id: ref.ticket_id, instrucao: erro.message }, FABRIQUINHA, contexto()),
+      );
+    } else if (erro instanceof ErroExterno) {
+      falhar(`falha de infraestrutura: ${erro.message}`);
+    } else {
+      throw erro;
+    }
     return;
   }
   comDemanda(banco, ref.demanda_id, (a) =>

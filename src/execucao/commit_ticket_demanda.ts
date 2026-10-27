@@ -39,12 +39,13 @@ export async function commitarTicketDemanda(
   banco: DatabaseSync,
   ref: Ref,
   { worktree, tipo, titulo }: { worktree: string; tipo: "feat" | "fix"; titulo: string },
+  limiteMs = LIMITE_COMANDO_MS,
 ): Promise<Commit> {
   let commit = await acharCommitTicketDemanda(worktree, ref);
   if (!commit) {
     await exigirGit(worktree, "add", "-A");
     const semAlteracao = (await git(worktree, "diff", "--cached", "--quiet")).codigo === 0;
-    await commitar(worktree, `${tipo}: ${titulo} ${marcaDe(ref)}`, { emendar: false, semAlteracao }, LIMITE_COMANDO_MS);
+    await commitar(worktree, `${tipo}: ${titulo} ${marcaDe(ref)}`, { emendar: false, semAlteracao }, limiteMs);
     commit = await lerCommit(worktree, (await exigirGit(worktree, "rev-parse", "HEAD")).trim());
   }
   gravarCommitDemanda(banco, ref.demanda_id, ref.ticket_id, commit);
