@@ -12,6 +12,8 @@ export interface Agendador {
   proximaBusca(): Date;
   /** O "Executar agora" (F4 §4), que só o serviço sabe iniciar. */
   executarAgora(ticket: Id): Promise<void>;
+  /** O "Executar agora" do ticket de uma demanda; opcional para os testes das outras rotas. */
+  executarAgoraDemanda?(ref: { demanda_id: string; ticket_id: number }): Promise<void>;
 }
 export interface Pedido {
   banco: DatabaseSync;

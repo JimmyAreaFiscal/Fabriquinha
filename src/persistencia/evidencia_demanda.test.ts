@@ -9,7 +9,7 @@ import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { caminhoArquivo, guardarBytes } from "./arquivos.ts";
 import { abrir } from "./banco.ts";
 import { comDemanda } from "./demandas.ts";
-import { gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
+import { anexosDaDemanda, gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
 import { removerProjeto } from "./projetos.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-evidencia-demanda-"));
@@ -126,4 +126,27 @@ test("CA-11 a CA-13: sessão de outra demanda vira aviso; resubmeter regrava; na
   for (const tabela of ["execucao_sessao", "uso_modelo_execucao"]) {
     assert.equal(b.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n, 0);
   }
+});
+
+test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => {
+  const b = novoBanco();
+  const a = anexoDe(b, "a.txt", "um");
+  const c = anexoDe(b, "c.txt", "dois!");
+  submeter(b, [a, c]);
+  b.exec(`INSERT INTO rodada VALUES ('I-1', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+      VALUES ('I-1', 1, 'implementar', 'aberto', ${T}, 1);
+    INSERT INTO evidencia_demanda VALUES ('e-r', 'I-1', 1, NULL, 'comportamento', '{}', ${T});
+    INSERT INTO evidencia_demanda VALUES ('e-t', 'I-1', NULL, 1, 'comportamento', '{}', ${T});`);
+  for (const dono of ["e-r", "e-t"]) {
+    b.prepare("INSERT INTO arquivo_evidencia VALUES (?, 1, 'x.txt', ?, 'text/plain', 2)").run(dono, a.sha256);
+  }
+  const x = { nome: "x.txt", mime: "text/plain", bytes: 2, sha256: a.sha256, tipo: "comportamento" };
+  assert.deepEqual(anexosDaDemanda(b, "I-1"), [
+    { nome: "a.txt", mime: "text/plain", bytes: 2, sha256: a.sha256, tipo: "custos_realizados" },
+    { nome: "c.txt", mime: "text/plain", bytes: 5, sha256: c.sha256, tipo: "custos_realizados" },
+    { ...x, rodada_id: 1 },
+    { ...x, ticket_id: 1 },
+  ]);
+  assert.deepEqual(anexosDaDemanda(b, "I-2"), []);
 });
