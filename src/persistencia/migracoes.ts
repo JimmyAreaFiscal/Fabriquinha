@@ -596,4 +596,11 @@ export const MIGRACOES: readonly string[] = [
   );`,
   `ALTER TABLE ticket_demanda ADD COLUMN devolucoes INTEGER NOT NULL DEFAULT 0 CHECK (devolucoes BETWEEN 0 AND 2);
   ALTER TABLE ticket_demanda ADD COLUMN motivo_falha TEXT CHECK (motivo_falha IS NULL OR length(motivo_falha) > 0);`,
+  // Dependência entre demandas (§7.2), aditiva: ciclo e "enviada" são do domínio; o banco garante FK, PK e autorreferência.
+  `CREATE TABLE dependencia_demanda (
+    demanda_id         TEXT NOT NULL REFERENCES demanda(id),
+    depende_demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    PRIMARY KEY (demanda_id, depende_demanda_id),
+    CHECK (demanda_id <> depende_demanda_id)
+  );`,
 ];

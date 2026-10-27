@@ -21,7 +21,7 @@ export const branchRodada = (demandaId: string, rodadaId: number): string => {
 };
 
 /** Os nós de um ciclo em `grafo`, ou `undefined` se ele é acíclico (busca em profundidade com pilha). */
-function acharCiclo(grafo: Map<string, string[]>): string[] | undefined {
+export function acharCiclo(grafo: Map<string, string[]>): string[] | undefined {
   const feitos = new Set<string>();
   const visitar = (no: string, pilha: string[]): string[] | undefined => {
     const i = pilha.indexOf(no);
