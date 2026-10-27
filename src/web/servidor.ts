@@ -23,12 +23,14 @@ import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
 import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
 import { ROTAS_DO_PR } from "./rotas/pr.ts";
 import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
+import { ROTAS_DA_CONFIGURACAO_SDLC } from "./rotas/sdlc.ts";
 import { ROTAS_DA_SIMULACAO } from "./rotas/simulacao.ts";
 
 /** A tabela das rotas da API (F7 §4.2), uma lista por tela. */
 export const ROTAS: Rota[] = [
   ...ROTAS_DO_HISTORICO,
   ...ROTAS_DA_CONFIGURACAO,
+  ...ROTAS_DA_CONFIGURACAO_SDLC,
   ...ROTAS_DA_ISSUE,
   ...ROTAS_DO_CHAT,
   ...ROTAS_DA_AUDITORIA,
