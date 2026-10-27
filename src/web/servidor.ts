@@ -16,6 +16,7 @@ import type { Agendador, Rota } from "./rotas.ts";
 import { ROTAS_DA_AUDITORIA } from "./rotas/auditoria.ts";
 import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
+import { ROTAS_DAS_DEMANDAS } from "./rotas/demandas.ts";
 import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
 import { ROTAS_DO_HISTORICO } from "./rotas/historico.ts";
 import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
@@ -32,6 +33,7 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DA_CONFIGURACAO,
   ...ROTAS_DA_CONFIGURACAO_SDLC,
   ...ROTAS_DA_ISSUE,
+  ...ROTAS_DAS_DEMANDAS,
   ...ROTAS_DO_CHAT,
   ...ROTAS_DA_AUDITORIA,
   ...ROTAS_DO_DESENHO,
