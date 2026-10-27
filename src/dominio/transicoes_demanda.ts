@@ -360,7 +360,15 @@ const EntradaReabertura = z.strictObject({
   ticket_id: Id,
   instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
 });
-const EntradaFalha = z.strictObject({ ticket_id: Id });
+const EntradaFalha = z.strictObject({
+  ticket_id: Id,
+  motivo: Markdown.refine((t) => t.trim() !== "", "informe o motivo"),
+});
+const EntradaDevolucao = z.strictObject({
+  ticket_id: Id,
+  instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
+});
+export const MAX_DEVOLUCOES = 2;
 
 function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDemanda["status"], acao: string) {
   const ticket = existe(
@@ -386,17 +394,52 @@ export const comStatus = (
   tickets: ag.tickets.map((t) => (t === alvo ? { ...t, ...extra } : t)),
 });
 
-/** CA-16: o ticket em execução passa a `falhou`; a fase e os gates da demanda não mudam. */
-export function registrarFalhaTicket(ag: AgregadoDemanda, entrada: unknown, ctx: ContextoDemanda): AgregadoDemanda {
-  const { ticket_id } = EntradaFalha.parse(entrada);
+function exigirDemandaEmAndamento(ag: AgregadoDemanda, acao: string): void {
   if (FASES_ENCERRADAS.includes(ag.demanda.fase)) {
     throw new ErroDeRegra(
       `a demanda ${ag.demanda.id} está em ${ag.demanda.fase}`,
-      "só falha ticket de demanda em andamento",
+      `só ${acao} ticket de demanda em andamento`,
     );
   }
+}
+
+/** CA-16, CA-4 e CA-7: o ticket em execução passa a `falhou` com o motivo; a fase e os gates da demanda não mudam. */
+export function registrarFalhaTicket(ag: AgregadoDemanda, entrada: unknown, ctx: ContextoDemanda): AgregadoDemanda {
+  const { ticket_id, motivo } = EntradaFalha.parse(entrada);
+  exigirDemandaEmAndamento(ag, "falhar");
   const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "falhar");
-  return comStatus(ag, ticket, { status: "falhou", status_alterado_em: ctx.agora });
+  return comStatus(ag, ticket, { status: "falhou", motivo_falha: motivo, status_alterado_em: ctx.agora });
+}
+
+/**
+ * CA-1 a CA-3, CA-5, CA-6, CA-12 e CA-13 (D05): só a Fabriquinha devolve, só `implementar`/`resolver_conflito` em
+ * execução. Abaixo do limite volta a `aberto` com a instrução; no limite falha com ela como motivo.
+ */
+export function devolverTicket(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirFabriquinha(ator, "devolver um ticket por reprovação técnica");
+  const { ticket_id, instrucao } = EntradaDevolucao.parse(entrada);
+  exigirDemandaEmAndamento(ag, "devolver");
+  const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "ser devolvido");
+  if (ticket.etapa !== "implementar" && ticket.etapa !== "resolver_conflito") {
+    throw new ErroDeRegra(
+      `o ticket ${String(ticket_id)} é da etapa ${ticket.etapa} e não admite devolução técnica`,
+      "só implementar e resolver_conflito",
+    );
+  }
+  const alterado = ctx.agora;
+  return ticket.devolucoes >= MAX_DEVOLUCOES
+    ? comStatus(ag, ticket, { status: "falhou", motivo_falha: instrucao, status_alterado_em: alterado })
+    : comStatus(ag, ticket, {
+        status: "aberto",
+        instrucao,
+        devolucoes: ticket.devolucoes + 1,
+        status_alterado_em: alterado,
+      });
 }
 
 /** CA-13 a CA-15: só o Auditor, com instrução; o ticket volta a `aberto` (elegível na próxima seleção), sem iniciar execução. */
@@ -409,7 +452,13 @@ export function reabrirTicket(
   exigirAuditor(ator, "reabrir um ticket");
   const { ticket_id, instrucao } = EntradaReabertura.parse(entrada);
   const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser reaberto");
-  return comStatus(ag, ticket, { status: "aberto", instrucao, status_alterado_em: ctx.agora });
+  const { motivo_falha: _motivo, ...resto } = ticket;
+  return {
+    ...ag,
+    tickets: ag.tickets.map((t) =>
+      t === ticket ? { ...resto, status: "aberto", instrucao, devolucoes: 0, status_alterado_em: ctx.agora } : t,
+    ),
+  };
 }
 
 const EntradaDemanda = z.strictObject({ demanda_id: DemandaId });
@@ -457,6 +506,7 @@ export const novoTicketGlobal = (
   ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
   etapa,
   status: "aberto",
+  devolucoes: 0,
   status_alterado_em: agora,
 });
 

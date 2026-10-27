@@ -65,6 +65,7 @@ const TABELAS: readonly Tabela[] = [
         modelo_nome: t.modelo_nome ?? null,
         effort: t.effort ?? null,
         instrucao: t.instrucao ?? null,
+        motivo_falha: t.motivo_falha ?? null,
       })),
   },
   {

@@ -33,6 +33,9 @@ export const TicketDemanda = z.object({
   effort: Effort.optional(),
   // Instrução do Auditor ao reabrir um ticket falho; a sessão que o retomar a lê (§4.2).
   instrucao: Markdown.optional(),
+  // Reprovações técnicas devolvidas ao agente (D05, no máximo 2) e o porquê de o ticket ter falhado.
+  devolucoes: z.number().int().min(0).max(2).default(0),
+  motivo_falha: Markdown.optional(),
 });
 
 export const RodadaDemanda = z.object({
@@ -145,6 +148,8 @@ export const AgregadoDemanda = z
         erro(`o ticket ${String(t.ticket_id)} cita a rodada ${String(t.rodada_id)}, que não existe`);
       if ((t.modelo_provedor === undefined) !== (t.modelo_nome === undefined))
         erro(`o ticket ${String(t.ticket_id)} precisa de modelo_provedor e modelo_nome juntos`);
+      if (t.motivo_falha !== undefined && t.status !== "falhou")
+        erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou`);
       rodadaDe.set(t.ticket_id, t.rodada_id);
     }
     const tickets = new Set(rodadaDe.keys());

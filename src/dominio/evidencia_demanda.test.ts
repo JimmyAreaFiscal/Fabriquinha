@@ -26,7 +26,9 @@ const base = (enviada = false): AgregadoDemanda => ({
     enviada,
     branch: "fabriquinha/I-1",
   },
-  tickets: [{ demanda_id: "I-1", ticket_id: 1, etapa: "demanda", status: "aberto", status_alterado_em: em }],
+  tickets: [
+    { demanda_id: "I-1", ticket_id: 1, etapa: "demanda", status: "aberto", status_alterado_em: em, devolucoes: 0 },
+  ],
   decisoes: [],
   evidencias: [],
   rodadas: [],

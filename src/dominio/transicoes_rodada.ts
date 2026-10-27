@@ -92,6 +92,7 @@ const novoTicket = (
   rodada_id: rodada.rodada_id,
   etapa,
   status: "aberto",
+  devolucoes: 0,
   status_alterado_em: agora,
 });
 

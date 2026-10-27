@@ -16,6 +16,7 @@ const ticket = (ticket_id: number, rodada_id?: number) => ({
   etapa: "implementar" as const,
   status: "aberto" as const,
   status_alterado_em: em,
+  devolucoes: 0,
   ...(rodada_id === undefined ? {} : { rodada_id }),
 });
 // Sem as chaves de dono ausentes: é assim que o carregamento devolve a evidência (campo omitido).
@@ -68,7 +69,7 @@ const completo = (): AgregadoDemanda => ({
       instrucao: "refaça",
     },
     ticket(2, 1),
-    ticket(3, 2),
+    { ...ticket(3, 2), status: "falhou" as const, devolucoes: 2, motivo_falha: "testes reprovaram" },
     { ...ticket(4), etapa: "demanda" },
   ],
   dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
