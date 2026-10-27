@@ -387,6 +387,17 @@ test("sem a variável, todo comando além de servidor, abrir e --help sai com Er
   c.banco.close();
 });
 
+test("CA-16 e CA-17: o agente legado segue na tabela de hoje; a ajuda não tem comando de implementação e o da demanda é desconhecido", async () => {
+  const c = cenario("desenvolvimento");
+  const ticket = json(await cli(c.env, ["ticket", "ver", "T-1"]));
+  assert.equal(ticket.id, 1);
+  usoInvalido(await cli(c.env, ["demanda", "ver", "I-1"]), "comando desconhecido: demanda ver I-1", "demanda");
+  const ajuda = (await cli(c.env, ["--help"])).out;
+  assert.match(ajuda, /^ {2}fabriquinha demanda ver I-<n>$/m);
+  assert.doesNotMatch(ajuda, /implementa/i);
+  c.banco.close();
+});
+
 test("issue cancelar: o agente recebe saída 1 e a fase não muda", async () => {
   const c = cenario("desenho");
   falha(await cli(c.env, ["issue", "cancelar", "I-1"]), "só o Auditor pode cancelar a I-1 (peça ao Auditor pelo web)");
