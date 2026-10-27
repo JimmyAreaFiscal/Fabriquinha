@@ -5,8 +5,9 @@ import type { AgregadoDemanda, DecisaoDemanda, EvidenciaDemanda } from "../domin
 import type { ProgressoEncerramento } from "../dominio/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
+import { registrarDemanda } from "../dominio/transicoes_demanda.ts";
 import { migrar } from "./banco.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "./demandas.ts";
+import { carregarDemanda, comDemanda, criarDemanda, criarDemandaNova } from "./demandas.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -299,4 +300,39 @@ test("encerramento: o banco recusa progresso duplicado, de demanda inexistente, 
     /FOREIGN KEY/,
   );
   assert.deepEqual(carregarDemanda(b, "I-1"), antes);
+});
+
+const entrada = { projeto: "p", titulo: "t", tipo: "funcionalidade", descricao: "d" };
+const autor = { ferramenta: "claude", sessao: "s1" };
+const registrar = (id: string) => registrarDemanda({ ...entrada, id }, autor, { agora: em });
+
+test("CA-9: demanda nova recebe I-{n} da sequência issue", () => {
+  const b = banco();
+  b.exec("INSERT INTO sequencia (nome, valor) VALUES ('issue', 216)");
+  const criada = criarDemandaNova(b, registrar);
+  assert.equal(criada.demanda.id, "I-217");
+  assert.equal(criada.demanda.branch, "fabriquinha/I-217");
+  assert.equal(criada.demanda.origem_sessao, "s1");
+  assert.deepEqual(
+    criada.tickets.map((t) => [t.ticket_id, t.etapa]),
+    [[1, "demanda"]],
+  );
+  assert.deepEqual(carregarDemanda(b, "I-217"), criada);
+  assert.equal(b.prepare("SELECT valor FROM sequencia WHERE nome = 'issue'").get()?.valor, 217);
+});
+
+test("CA-10: erro na criação desfaz a demanda e a sequência", () => {
+  const b = banco();
+  assert.throws(() =>
+    criarDemandaNova(b, (id) => registrarDemanda({ ...entrada, id, projeto: "inexistente" }, autor, { agora: em })),
+  );
+  assert.equal(b.prepare("SELECT count(*) AS n FROM demanda").get()?.n, 0);
+  assert.equal(criarDemandaNova(b, registrar).demanda.id, "I-1");
+});
+
+test("agregado com ID diferente do alocado é recusado e desfaz a sequência", () => {
+  const b = banco();
+  assert.throws(() => criarDemandaNova(b, () => registrar("I-9")), /monte a demanda com o id recebido \(I-1\)/);
+  assert.equal(b.prepare("SELECT count(*) AS n FROM demanda").get()?.n, 0);
+  assert.equal(criarDemandaNova(b, registrar).demanda.id, "I-1");
 });

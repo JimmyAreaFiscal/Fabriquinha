@@ -174,3 +174,20 @@ test("CA-8: totais sem duplicar execuções e com custo ausente", () => {
 test("CA-9: tokens e custo não são campos da sessão", () => {
   assert.deepEqual(Object.keys(Sessao.shape).sort(), ["conversa_referencia", "demanda_id", "id", "modo", "ticket_id"]);
 });
+
+test("controle da execução: campos opcionais e par do modelo", () => {
+  const completa = {
+    ...exec("e1", "s1"),
+    grupo_processo: 4321,
+    erro: "falhou no pi",
+    modelo_provedor: "claude-bridge",
+    modelo_nome: "claude-sonnet-5-5",
+    effort: "high",
+  };
+  assert.ok(ExecucaoSessao.safeParse(completa).success);
+  assert.ok(!ExecucaoSessao.safeParse({ ...completa, modelo_nome: undefined }).success);
+  assert.ok(!ExecucaoSessao.safeParse({ ...completa, modelo_provedor: undefined }).success);
+  assert.ok(!ExecucaoSessao.safeParse({ ...completa, effort: "turbo" }).success);
+  assert.ok(!ExecucaoSessao.safeParse({ ...completa, grupo_processo: 0 }).success);
+  assert.ok(!ExecucaoSessao.safeParse({ ...completa, erro: " " }).success);
+});

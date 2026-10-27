@@ -3,8 +3,8 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
-import { encontrado } from "../dominio/erros.ts";
-import { escrever } from "./banco.ts";
+import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
+import { escrever, novoId } from "./banco.ts";
 
 type Linha = Record<string, SQLInputValue>;
 
@@ -217,6 +217,24 @@ export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemand
 /** Grava a demanda nova com tudo o que o agregado traz, numa transação só. */
 export const criarDemanda = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
   escrever(banco, () => {
+    gravarDiferenca(banco, undefined, agregado);
+    return agregado;
+  });
+
+/**
+ * Demanda nova: a persistência só aloca o ID da sequência `issue` (D09); `montar` monta o agregado com ele. Erro em
+ * `montar`, no ID devolvido ou na gravação desfaz a transação, sequência incluída.
+ */
+export const criarDemandaNova = (banco: DatabaseSync, montar: (id: string) => AgregadoDemanda): AgregadoDemanda =>
+  escrever(banco, () => {
+    const id = `I-${String(novoId(banco, "issue"))}`;
+    const agregado = montar(id);
+    if (agregado.demanda.id !== id) {
+      throw new ErroDeRegra(
+        `o agregado montado tem o ID ${agregado.demanda.id}, mas a sequência alocou ${id}`,
+        `monte a demanda com o id recebido (${id})`,
+      );
+    }
     gravarDiferenca(banco, undefined, agregado);
     return agregado;
   });

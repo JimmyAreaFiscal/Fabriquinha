@@ -1,7 +1,8 @@
 // Configuração do serviço e as consultas do agendador e do reinício (F4 §3, §4, §4.1, §7, §10).
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { type Id, Modelo } from "../dominio/primitivos.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
+import { Id, Modelo } from "../dominio/primitivos.ts";
 
 export const Configuracao = z.strictObject({
   agendadorAtivo: z.boolean().default(false),
@@ -29,6 +30,17 @@ export function configuracao(banco: DatabaseSync): Configuracao {
         ? null
         : { provedor: String(l.auditoria_provedor), modelo: String(l.auditoria_modelo) },
   };
+}
+
+/** Limite global de paralelismo (D04): todas as demandas juntas. Fora de `Configuracao`, que a web grava inteira. */
+export const limiteParalelismo = (banco: DatabaseSync): number =>
+  (banco.prepare("SELECT limite_paralelismo FROM configuracao").get() as { limite_paralelismo: number })
+    .limite_paralelismo;
+
+export function alterarLimiteParalelismo(banco: DatabaseSync, n: number): void {
+  if (!Id.safeParse(n).success)
+    throw new ErroDeRegra(`limite de paralelismo inválido: ${String(n)}`, "use um inteiro maior que zero");
+  banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(n);
 }
 
 /** Grava a configuração inteira; campo ausente volta ao padrão. */

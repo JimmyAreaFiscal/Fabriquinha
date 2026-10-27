@@ -17,8 +17,11 @@ import { adicionarTicketDesenvolvimento } from "../dominio/tickets.ts";
 import { abrir } from "./banco.ts";
 import { comIssue, registrarIssue } from "./issues.ts";
 import { registrarProjeto } from "./projetos.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import {
+  alterarLimiteParalelismo,
   autonomasEmAndamento,
+  limiteParalelismo,
   configuracao,
   execucoesEmAndamento,
   salvarConfiguracao,
@@ -225,5 +228,22 @@ test("não elegível: etapa interativa, fase que não casa, dependência aberta 
     terminarExecucao(a, { execucao: consulta, resultado: "sucesso" }, fabriquinha, ctx),
   );
   assert.deepEqual(ticketsElegiveis(banco), [cacheI3], "a consulta terminou: a I-3 volta a ser elegível");
+  banco.close();
+});
+
+test("CA-6, CA-7, CA-8: limite de paralelismo tem padrão, altera e recusa inválido", () => {
+  const banco = novoBanco();
+  assert.equal(limiteParalelismo(banco), 4);
+  alterarLimiteParalelismo(banco, 3);
+  alterarLimiteParalelismo(banco, 5);
+  assert.equal(limiteParalelismo(banco), 5);
+  alterarLimiteParalelismo(banco, 3);
+  for (const ruim of [0, -1, 1.5, "dois"]) {
+    assert.throws(() => {
+      alterarLimiteParalelismo(banco, ruim as number);
+    }, ErroDeRegra);
+  }
+  assert.equal(limiteParalelismo(banco), 3);
+  assert.equal(configuracao(banco).intervaloMin, 5, "só a coluna do limite muda");
   banco.close();
 });

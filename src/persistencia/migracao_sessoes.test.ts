@@ -42,7 +42,7 @@ const banco = (): DatabaseSync => {
   b.exec(`INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('D-1', 'b', 'main');
     INSERT INTO limpeza_pendente_encerramento VALUES ('D-1', 'branch-a');
     INSERT INTO sessao VALUES ('s1', 'D-1', 1, 'autonomo', 'c');
-    INSERT INTO execucao_sessao VALUES ('e1', 's1', ${T}, NULL, 0);
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e1', 's1', ${T}, NULL, 0);
     INSERT INTO uso_modelo_execucao VALUES ('e1', 'p', 'm', 1, 1, 1, 1, NULL);`);
   return b;
 };
@@ -90,7 +90,10 @@ test("CA-10, CA-11, CA-13: sessões, execuções e usos", () => {
   recusa("INSERT INTO sessao VALUES ('s2', 'D-1', 99, 'autonomo', 'c')", /FOREIGN KEY/);
   recusa("INSERT INTO sessao VALUES ('s2', 'D-1', 5, 'autonomo', 'c')", /FOREIGN KEY/);
   recusa("INSERT INTO sessao VALUES ('s2', 'D-1', 1, 'outro', 'c')", /CHECK/);
-  recusa(`INSERT INTO execucao_sessao VALUES ('e2', 'nao', ${T}, NULL, 0)`, /FOREIGN KEY/);
+  recusa(
+    `INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e2', 'nao', ${T}, NULL, 0)`,
+    /FOREIGN KEY/,
+  );
   recusa("INSERT INTO uso_modelo_execucao VALUES ('e1', 'p', 'm', 1, 1, 1, 1, NULL)", /PRIMARY KEY|UNIQUE/);
   recusa("INSERT INTO uso_modelo_execucao VALUES ('e1', 'p', 'n', 1, -1, 1, 1, NULL)", /CHECK/);
   recusa("INSERT INTO uso_modelo_execucao VALUES ('e1', 'p', 'n', 1, 1, 1, 1, -0.1)", /CHECK/);
