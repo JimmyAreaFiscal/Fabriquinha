@@ -115,7 +115,7 @@ export async function cenarioRevisao({ integral = false, falha = false } = {}) {
     criterios_citados: [],
     tickets: [
       ticket(1, "implementar", { rodada_id: 1, status: "concluido" }),
-      ticket(2, "revisar_rodada", { rodada_id: 1 }),
+      ticket(2, "revisar_rodada", { rodada_id: 1, ...(integral && { status: "concluido" }) }),
       ticket(3, "revisar_demanda"),
     ],
     dependencias_ticket: [],
