@@ -36,16 +36,19 @@ export const formatarTicketRef = (ref: z.infer<typeof TicketRef>): string => for
 /** Endereço público da rodada: `I-206.R2`. */
 export const formatarRodadaRef = (ref: z.infer<typeof RodadaRef>): string => formatar(RodadaRef, ref, "R", "rodada_id");
 
-const ENDERECO = /^([A-Za-z]{1,16}-[1-9][0-9]{0,9})\.([TR])([1-9][0-9]*)$/;
+const SUFIXO = /^([TR])([1-9][0-9]*)$/;
 
 /** Interpreta `I-206.T3` ou `I-206.R2`; sem forma curta nem dedução da demanda pelo contexto. O chamador distingue por `"ticket_id" in ref`. */
 export function interpretarRef(texto: string): z.infer<typeof TicketRef> | z.infer<typeof RodadaRef> {
-  const m = ENDERECO.exec(texto);
-  const [, demanda_id, letra, n] = m ?? [];
-  const numero = Number(n);
-  if (demanda_id === undefined || !Number.isSafeInteger(numero))
+  const ponto = texto.lastIndexOf(".");
+  const demanda = DemandaId.safeParse(texto.slice(0, Math.max(ponto, 0)));
+  const sufixo = SUFIXO.exec(texto.slice(ponto + 1));
+  const numero = Number(sufixo?.[2]);
+  if (ponto < 0 || !demanda.success || !sufixo || !Number.isSafeInteger(numero) || !Id.safeParse(numero).success)
     throw new ErroDeRegra(`endereço ${JSON.stringify(texto)} inválido`, FORMAS);
-  return letra === "T" ? { demanda_id, ticket_id: numero } : { demanda_id, rodada_id: numero };
+  return sufixo[1] === "T"
+    ? { demanda_id: demanda.data, ticket_id: numero }
+    : { demanda_id: demanda.data, rodada_id: numero };
 }
 
 /** Os nós de um ciclo em `grafo`, ou `undefined` se ele é acíclico (busca em profundidade com pilha). */
