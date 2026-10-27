@@ -6,8 +6,7 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { carregarDemanda } from "./demandas.ts";
 import { predecessorasDaDemanda } from "./dependencias_demanda.ts";
 
-// Encerramento (encerrar_demanda e resolver_conflito) fica de fora do despacho por enquanto.
-const FASES_LIDAS = "('planejamento', 'execucao', 'revisao_demanda')";
+const FASES_LIDAS = "('planejamento', 'execucao', 'revisao_demanda', 'encerramento')";
 
 export interface DemandaParaDespacho {
   agregado: AgregadoDemanda;
@@ -25,7 +24,7 @@ function noSnapshot<T>(banco: DatabaseSync, ler: () => T): T {
   }
 }
 
-/** Demandas em planejamento, execução e revisão da demanda, com o agregado e se as predecessoras já satisfazem. */
+/** Demandas em planejamento, execução, revisão da demanda e encerramento, com o agregado e se as predecessoras já satisfazem. */
 export const demandasParaDespacho = (banco: DatabaseSync): DemandaParaDespacho[] =>
   noSnapshot(banco, () =>
     banco

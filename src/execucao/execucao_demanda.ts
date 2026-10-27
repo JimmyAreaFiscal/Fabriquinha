@@ -295,7 +295,7 @@ export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
   const presos = banco
     .prepare(
       `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE status = 'em_execucao' AND (
-         etapa IN ('implementar', 'resolver_conflito', 'revisar_rodada', 'revisar_demanda')
+         etapa IN ('implementar', 'resolver_conflito', 'encerrar_demanda', 'revisar_rodada', 'revisar_demanda')
          OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
            WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.fase = 'encerramento')))`,
     )

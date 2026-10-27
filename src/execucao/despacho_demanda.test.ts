@@ -287,10 +287,10 @@ test("executar agora recusa demanda fora das fases lidas, ticket inexistente e l
   const { banco, config } = await cenario(1);
   demanda(banco, 2, { rodadas: ["desenvolvimento"], tickets: [implementar(1)] });
   demanda(banco, 3, { rodadas: ["desenvolvimento"], tickets: [implementar(1)] });
-  demanda(banco, 4, { fase: "encerramento", tickets: [{ etapa: "encerrar_demanda" }] });
+  demanda(banco, 4, { fase: "concluida", tickets: [{ etapa: "encerrar_demanda" }] });
   const agora = (demanda_id: string, ticket_id: number) =>
     executarAgoraDemanda(banco, { demanda_id, ticket_id }, config, deps);
-  assert.throws(() => agora("I-4", 1), /não está em planejamento, execução nem revisão/);
+  assert.throws(() => agora("I-4", 1), /não está em planejamento, execução, revisão da demanda nem encerramento/);
   assert.throws(() => agora("I-2", 9), /não existe/);
   await agora("I-2", 1);
   assert.throws(() => agora("I-3", 1), /limite global de paralelismo está ocupado/);
@@ -339,4 +339,65 @@ test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue par
   delete process.env.FALSO_PI;
   await Promise.all(despacharDemandas(outro.banco, outro.config));
   assert.equal(status(outro.banco, 2, 1), "falhou"); // conclusão recusada: não fica preso em execução
+});
+
+const encerrar = (status = "aberto"): TicketSpec => ({ etapa: "encerrar_demanda", status });
+
+test("CA-1 e CA-12: o ciclo reserva o encerrar_demanda sem abrir agente; a falha do encerramento falha o ticket", async () => {
+  const { banco, config } = await cenario(3);
+  demanda(banco, 2, { fase: "encerramento", rodadas: ["concluida"], tickets: [encerrar()] });
+  const fins = despacharDemandas(banco, config);
+  assert.deepEqual([status(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 0]);
+  await Promise.all(fins);
+  assert.equal(status(banco, 2, 1), "falhou");
+  assert.equal(carregarDemanda(banco, "I-2").demanda.fase, "encerramento");
+});
+
+test("a recusa do encerramento que não falhou o ticket não o deixa preso em execução", async (t) => {
+  silenciar(t);
+  const { banco, config } = await cenario(3);
+  demanda(banco, 2, { fase: "encerramento", rodadas: ["concluida"], tickets: [encerrar()] });
+  banco.exec("DELETE FROM linguagem_projeto;"); // sem a configuração do SDLC
+  await Promise.all(despacharDemandas(banco, config));
+  assert.equal(status(banco, 2, 1), "falhou");
+});
+
+test("CA-3 e CA-4: executar agora no encerrar_demanda reserva sem agente; com o limite ocupado, recusa", async () => {
+  const { banco, config } = await cenario(1);
+  demanda(banco, 2, { fase: "encerramento", rodadas: ["concluida"], tickets: [encerrar()] });
+  demanda(banco, 3, { fase: "encerramento", rodadas: ["concluida"], tickets: [encerrar()] });
+  const agora = (n: number) => executarAgoraDemanda(banco, { demanda_id: `I-${String(n)}`, ticket_id: 1 }, config);
+  const fim = agora(2);
+  assert.deepEqual([status(banco, 2, 1), execucoes(banco, 2, 1)], ["em_execucao", 0]);
+  assert.throws(() => agora(3), /limite global de paralelismo está ocupado/);
+  assert.equal(status(banco, 3, 1), "aberto");
+  await fim;
+});
+
+test("CA-5: o encerrar_demanda em execução ocupa a vaga do limite 1", async () => {
+  const { banco, config } = await cenario(1);
+  demanda(banco, 2, { fase: "encerramento", rodadas: ["concluida"], tickets: [encerrar("em_execucao")] });
+  demanda(banco, 3, { rodadas: ["desenvolvimento"], tickets: [implementar(1)] });
+  await Promise.all(despacharDemandas(banco, config, deps));
+  assert.equal(status(banco, 3, 1), "aberto");
+});
+
+test("CA-7 e CA-10: o resolver_conflito aberto é reservado com execução aberta; o encerrar_demanda seguinte entra sozinho", async () => {
+  const { banco, config } = await cenario(3);
+  demanda(banco, 2, {
+    fase: "encerramento",
+    rodadas: ["concluida"],
+    tickets: [{ etapa: "resolver_conflito" }, encerrar()],
+  });
+  await Promise.all(despacharDemandas(banco, config, deps));
+  assert.deepEqual([status(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
+
+  demanda(banco, 3, {
+    fase: "encerramento",
+    rodadas: ["concluida"],
+    tickets: [{ etapa: "resolver_conflito", status: "concluido" }, encerrar()],
+  });
+  const fins = despacharDemandas(banco, config, deps);
+  assert.deepEqual([status(banco, 3, 2), execucoes(banco, 3, 2)], ["em_execucao", 0]);
+  await Promise.all(fins);
 });
