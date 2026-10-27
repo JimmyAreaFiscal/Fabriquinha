@@ -149,6 +149,15 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
           rodada: formatarRodadaRef({ demanda_id, rodada_id }),
           ...r,
         })),
+        // A rodada vem do ticket decidido: a decisão não a guarda.
+        decisoes: ag.decisoes.map(({ demanda_id, ticket_id, decisao_id, ...d }) => {
+          const rodada_id = ag.tickets.find((t) => t.ticket_id === ticket_id)?.rodada_id;
+          return {
+            ticket: formatarTicketRef({ demanda_id, ticket_id }),
+            ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id }) }),
+            ...d,
+          };
+        }),
         tickets: ag.tickets.map((t) => ({
           ...publico(t),
           // Só o próprio ticket mostra evidências: o nome, quando foi e a `aprovada` que o schema do tipo deriva.

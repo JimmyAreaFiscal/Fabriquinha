@@ -251,6 +251,7 @@ const lerDemanda = async (env: NodeJS.ProcessEnv) =>
   JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {
     rodadas: { rodada: string; fase: string }[];
     tickets: { ticket: string; status: string; etapa: string }[];
+    decisoes: { ticket: string; rodada?: string; resultado: string; motivo?: string; por: string; em: string }[];
   };
 
 test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leitura mostra", async () => {
@@ -262,6 +263,12 @@ test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leit
   assert.equal(lida.rodadas[0]?.fase, "encerramento");
   assert.equal(lida.tickets.find((t) => t.ticket === "I-206.T9")?.status, "concluido");
   assert.equal(banco.prepare("SELECT resultado FROM decisao_ticket WHERE ticket_id = 9").get()?.resultado, "aprovado");
+  const decisao = lida.decisoes[0];
+  assert.deepEqual(
+    [decisao?.ticket, decisao?.rodada, decisao?.resultado, decisao?.por],
+    ["I-206.T9", "I-206.R2", "aprovado", "agente"],
+  );
+  assert.ok(decisao?.em);
 });
 
 test("revisão de rodada reprovada completa as correções com demanda, rodada e ticket local", async () => {
@@ -305,7 +312,13 @@ test("CA-11: reprovar a revisão integral registra a decisão com o motivo", asy
   assert.equal(s.err, "");
   assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", resultado: "recusado" });
   assert.equal(banco.prepare("SELECT motivo FROM decisao_ticket WHERE ticket_id = 9").get()?.motivo, "falta");
-  assert.equal((await lerDemanda(env)).rodadas.length, 2);
+  const lida = await lerDemanda(env);
+  assert.equal(lida.rodadas.length, 2);
+  const decisao = lida.decisoes[0];
+  assert.deepEqual(
+    [decisao?.ticket, decisao?.rodada, decisao?.resultado, decisao?.motivo],
+    ["I-206.T9", undefined, "recusado", "falta"],
+  );
 });
 
 test("CA-12: veredito fora de aprovar|reprovar diz as duas formas e não grava", async () => {
