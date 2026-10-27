@@ -1,5 +1,6 @@
 // Fechamento do ticket `implementar` e do `resolver_conflito` depois da resposta do agente (comparacao-sdlc-implementacao.md
-// §6, D05, D06): verifica, grava as evidências, commita e conclui, ou devolve, ou falha. O agente não submete nada.
+// §6, D05, D06): verifica, grava as evidências, commita e conclui, ou devolve, ou falha. A devolução da D05 (até 2
+// vezes, falha na 3ª) vale para as duas etapas; só a infraestrutura falha direto. O agente não submete nada.
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
@@ -160,10 +161,6 @@ export async function fecharTicketDemanda(
     const reprovadas = verificacoes.filter((v) => !v.aprovada);
     if (reprovadas.length > 0) {
       const relatorio = relatorioDeReprovacao(reprovadas);
-      if (ticket.etapa === "resolver_conflito") {
-        falhar(relatorio);
-        return;
-      }
       comDemanda(banco, ref.demanda_id, (a) =>
         devolverTicket(a, { ticket_id: ref.ticket_id, instrucao: relatorio }, FABRIQUINHA, contexto()),
       );

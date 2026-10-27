@@ -257,12 +257,22 @@ test("CA-12 e CA-13: resolver_conflito aprovado conclui e o encerramento volta a
   );
 });
 
-test("CA-14: resolver_conflito reprovado falha o ticket com o motivo, sem devolução", async () => {
+test("CA-14: resolver_conflito reprovado é devolvido ao agente, sem commit", async () => {
   const c = await cenario({ conflito: true });
   await fechar(c, 3, coletor([verif("execucao_testes", false, "t reprovou"), ...todas(true).slice(1)]));
   const t = c.status(3);
-  assert.deepEqual([t?.status, t?.devolucoes], ["falhou", 0]);
-  assert.match(t?.motivo_falha ?? "", /^- execucao_testes: t reprovou/);
+  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.match(t?.instrucao ?? "", /^- execucao_testes: t reprovou/);
+  assert.deepEqual(c.commits(), []);
+});
+
+test("CA-14: resolver_conflito já devolvido duas vezes falha com o relatório no motivo", async () => {
+  const c = await cenario({ conflito: true });
+  c.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 3");
+  await fechar(c, 3, coletor([verif("execucao_testes", false, "t reprovou"), ...todas(true).slice(1)]));
+  const t = c.status(3);
+  assert.equal(t?.status, "falhou");
+  assert.match(t.motivo_falha ?? "", /^- execucao_testes: t reprovou/);
 });
 
 test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit nem evidência", async () => {
