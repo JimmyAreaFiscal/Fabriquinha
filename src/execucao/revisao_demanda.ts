@@ -24,7 +24,7 @@ export async function conduzirRevisaoIntegral(
   const { ticket_id } = encontrado(
     carregarDemanda(banco, demanda_id).tickets.findLast((t) => t.etapa === "revisar_demanda"), // o atual é o de maior ticket_id
     `a demanda ${demanda_id} não tem ticket revisar_demanda`,
-    "inicie a revisão integral",
+    "inicie a revisão integral da demanda antes de conduzi-la",
   );
   return conduzirRevisao(banco, { demanda_id, ticket_id }, opcoes);
 }

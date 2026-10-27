@@ -3,7 +3,7 @@ import { matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Ator } from "../dominio/agregado.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
-import { branchDemanda, branchRodada } from "../dominio/demanda.ts";
+import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { verificarFitness } from "../evidencias/verificacoes_comandos.ts";
@@ -31,16 +31,19 @@ export async function prepararRevisaoRodada(
   const ag = carregarDemanda(banco, demanda_id);
   const { rodada_id } = encontrado(
     ag.tickets.find((t) => t.ticket_id === ticket_id),
-    `o ticket ${demanda_id}.T${String(ticket_id)} não existe`,
-    "confira o endereço do ticket",
+    `o ticket ${formatarTicketRef(ref)} não existe`,
+    "use um ticket da demanda",
   );
   if (rodada_id === undefined) {
-    throw new ErroDeRegra(`o ticket ${demanda_id}.T${String(ticket_id)} não é de uma rodada`, "use o revisar_rodada");
+    throw new ErroDeRegra(
+      `o ticket ${formatarTicketRef(ref)} não é de uma rodada`,
+      "use o ticket revisar_rodada de uma rodada da demanda",
+    );
   }
   const projeto = encontrado(
     configuracaoProjeto(banco, ag.demanda.projeto),
     `o projeto ${ag.demanda.projeto} não tem configuração`,
-    "configure o projeto",
+    `cadastre a configuração do projeto ${ag.demanda.projeto}`,
   );
 
   const worktree = await garantirWorktreeRodada(
@@ -125,8 +128,8 @@ export async function conduzirRevisaoRodada(
   );
   const { ticket_id } = encontrado(
     doRodada.at(-1), // o atual é o de maior ticket_id
-    `a rodada ${String(rodada_id)} de ${demanda_id} não tem ticket revisar_rodada`,
-    "confira a rodada",
+    `a rodada ${formatarRodadaRef(ref)} não tem ticket revisar_rodada`,
+    "use uma rodada da demanda que esteja em revisão",
   );
   const alvo = { demanda_id, ticket_id };
   return conduzirRevisao(banco, alvo, { ...opcoes, preparar: () => prepararRevisaoRodada(banco, alvo) });

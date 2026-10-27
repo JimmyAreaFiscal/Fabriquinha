@@ -1,6 +1,7 @@
 // Confere a aprovação de uma revisão pela evidência (comparacao-sdlc-implementacao.md §§4, 8): `aprovada` é derivada dos
 // `dados` na hora, sem I/O. Recusa citando a evidência, a fitness, o achado ou o cenário que impede a aprovação.
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
+import { formatarTicketRef } from "../dominio/demanda.ts";
 import { catalogoDaEtapa, type EvidenciaEtapa, pendenciasDoTicket } from "../dominio/evidencia_etapa.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { type SchemaEvidencia, schemaDe, schemaDeEtapa } from "../evidencias/schemas.ts";
@@ -47,7 +48,11 @@ function detalhe(tipo: string, dados: Dados): string {
 /** Lança ErroDeRegra se as evidências do ticket não sustentam a aprovação; senão não faz nada. */
 export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void {
   const ticket = ag.tickets.find((t) => t.ticket_id === ticket_id);
-  if (ticket === undefined) throw new ErroDeRegra(`o ticket ${String(ticket_id)} não existe na demanda`);
+  if (ticket === undefined)
+    throw new ErroDeRegra(
+      `o ticket ${formatarTicketRef({ demanda_id: ag.demanda.id, ticket_id })} não existe`,
+      "use um ticket da demanda",
+    );
   const { demanda_id, etapa } = ticket;
   const doTicket = ag.evidencias.filter((e) => e.ticket_id === ticket_id && e.rodada_id === undefined);
   const evidencias: EvidenciaEtapa[] = [];
@@ -81,7 +86,7 @@ export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void 
   ];
   if (motivos.length > 0) {
     throw new ErroDeRegra(
-      `a aprovação do ticket ${String(ticket_id)} foi recusada: ${motivos.join("; ")}`,
+      `a aprovação do ticket ${formatarTicketRef({ demanda_id, ticket_id })} foi recusada: ${motivos.join("; ")}`,
       "corrija a evidência e decida de novo, ou reprove",
     );
   }

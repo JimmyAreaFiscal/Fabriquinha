@@ -2,6 +2,7 @@
 // Fabriquinha, roda o pi e, se a execução falhou, registra a falha no ticket. Nunca grava a decisão (CA-2, CA-12).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { formatarTicketRef } from "../dominio/demanda.ts";
 import { encontrado, mensagem } from "../dominio/erros.ts";
 import { reservarTicket } from "../dominio/reserva_ticket.ts";
 import { registrarFalhaTicket } from "../dominio/transicoes_demanda.ts";
@@ -27,8 +28,8 @@ export async function conduzirRevisao(
   const { demanda_id, ticket_id } = ref;
   const { instrucao } = encontrado(
     carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
-    `o ticket ${demanda_id}.T${String(ticket_id)} não existe`,
-    "confira o endereço do ticket",
+    `o ticket ${formatarTicketRef(ref)} não existe`,
+    "use um ticket da demanda",
   );
   comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, agora(), true));
   const falhar = (motivo: string): ResultadoRevisao => {

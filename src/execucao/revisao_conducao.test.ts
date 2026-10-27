@@ -82,5 +82,8 @@ test("ticket reaberto leva a instrução ao prompt como reabertura", async () =>
 
 test("ticket inexistente é recusado", async () => {
   const { banco } = await cenarioRevisao();
-  await assert.rejects(conduzirRevisao(banco, { demanda_id: "I-1", ticket_id: 99 }, { limiteMin: 1 }), /não existe/);
+  await assert.rejects(
+    conduzirRevisao(banco, { demanda_id: "I-1", ticket_id: 99 }, { limiteMin: 1 }),
+    /I-1.T99 não existe/,
+  );
 });

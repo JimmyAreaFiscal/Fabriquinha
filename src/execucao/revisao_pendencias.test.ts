@@ -16,9 +16,10 @@ const seguranca = (severidade: string) => ({
 });
 const ag = (etapa: string, evidencias: Record<string, unknown>): AgregadoDemanda =>
   ({
-    tickets: [{ ticket_id: 7, demanda_id: "D-1", etapa }],
+    demanda: { id: "I-1" },
+    tickets: [{ ticket_id: 7, demanda_id: "I-1", etapa }],
     evidencias: Object.entries(evidencias).map(([tipo, dados]) => ({
-      demanda_id: "D-1",
+      demanda_id: "I-1",
       ticket_id: 7,
       tipo,
       dados,
@@ -94,5 +95,5 @@ test("tipo fora do catálogo da etapa é ignorado", () => {
 });
 
 test("ticket inexistente", () => {
-  recusa({ ...rodada(ok, comprov(true)), tickets: [] }, "não existe");
+  recusa({ ...rodada(ok, comprov(true)), tickets: [] }, "I-1.T7 não existe");
 });

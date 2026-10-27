@@ -97,8 +97,8 @@ test("recusa ticket inexistente, global e projeto sem configuração", async () 
   const sem = await cenarioRevisao();
   sem.banco.exec("DELETE FROM linguagem_projeto");
   await assert.rejects(prepararRevisaoRodada(sem.banco, REF_RODADA), /não tem configuração/);
-  await assert.rejects(prepararRevisaoRodada(banco, { demanda_id: "I-1", ticket_id: 99 }), /não existe/);
-  await assert.rejects(prepararRevisaoRodada(banco, REF_GLOBAL), /não é de uma rodada/);
+  await assert.rejects(prepararRevisaoRodada(banco, { demanda_id: "I-1", ticket_id: 99 }), /I-1.T99 não existe/);
+  await assert.rejects(prepararRevisaoRodada(banco, REF_GLOBAL), /I-1.T3 não é de uma rodada/);
 });
 
 test("CA-3: renomeação casa o previsto pelo caminho antigo", async () => {
@@ -201,6 +201,6 @@ test("conduzirRevisaoRodada recusa rodada sem revisar_rodada", async () => {
   const { banco } = await cenarioRevisao();
   await assert.rejects(
     conduzirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 9 }, { limiteMin: 1 }),
-    /não tem ticket revisar_rodada/,
+    /I-1.R9 não tem ticket revisar_rodada/,
   );
 });
