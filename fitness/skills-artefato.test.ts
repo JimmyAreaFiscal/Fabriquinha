@@ -15,7 +15,9 @@ const NOME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MAX_NOME = 64;
 const MAX_DESCRICAO = 1024;
 const SECOES = ["Para que serve", "Como produzir", "Estrutura", "Antes de submeter"];
-const DE_ARTEFATO = new Set(Etapa.options.flatMap(skillsDaEtapa));
+/** Evidências do catálogo novo (SDLC por demandas) que já têm skill e schema; o CLI ainda não as liga ao catálogo antigo. */
+const DO_CATALOGO_NOVO = ["artefato-plano", "artefato-testes-estresse", "artefato-analise-seguranca"];
+const DE_ARTEFATO = new Set([...Etapa.options.flatMap(skillsDaEtapa), ...DO_CATALOGO_NOVO]);
 
 /** O valor de `chave` no frontmatter, numa linha só, como as skills do pacote o escrevem. */
 const campo = (frontmatter: string, chave: string): string | undefined =>
