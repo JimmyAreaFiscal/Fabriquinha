@@ -39,6 +39,8 @@ interface CliDePR {
   atualizar(repo: string, pr: PRNaHospedagem, titulo: string, corpo: string): Promise<{ id: string; url: string }>;
   reabrir(repo: string, id: string): Promise<void>;
   ler(repo: string, id: string): Promise<Omit<LeituraDoPR, "lidoEm">>;
+  /** Pede à hospedagem o merge commit do PR na base. */
+  integrar(repo: string, id: string): Promise<void>;
   situacao(repo: string, id: string): Promise<SituacaoDoPR>;
 }
 
@@ -54,6 +56,8 @@ export interface LeituraDoPR {
   url: string;
   /** Só no PR mergeado, quando a plataforma informa. */
   mergeadoEm?: string;
+  /** Só no PR mergeado, quando a plataforma informa: o commit do merge na base. */
+  mergeSha?: string;
   lidoEm: string;
 }
 
@@ -178,7 +182,15 @@ const DataDaPlataforma = z.iso.datetime({ offset: true });
 /** A data da plataforma no formato do domínio, só no PR mergeado que a traz. */
 const mergeadoEm = (estado: PRNaHospedagem["estado"], data: string | null | undefined) =>
   estado === "mergeado" && data ? { mergeadoEm: new Date(data).toISOString() } : {};
-const PrGh = z.object({ state: z.string(), url: z.string(), mergedAt: DataDaPlataforma.nullable() });
+/** O SHA do merge, só no PR mergeado que o traz. */
+const mergeSha = (estado: PRNaHospedagem["estado"], sha: string | undefined) =>
+  estado === "mergeado" && sha ? { mergeSha: sha } : {};
+const PrGh = z.object({
+  state: z.string(),
+  url: z.string(),
+  mergedAt: DataDaPlataforma.nullable(),
+  mergeCommit: z.object({ oid: z.string() }).nullish(),
+});
 const SituacaoGh = z.object({
   mergeable: z.string(),
   statusCheckRollup: z.array(
@@ -239,7 +251,10 @@ const github: CliDePR = {
     const args = ["pr", "view", id, "--json", "state,url,mergedAt,mergeCommit"];
     const p = lerJson(await rodar("gh", args, repo, LER_DE_NOVO), PrGh, "gh pr view", LER_DE_NOVO);
     const estado = estadoDe("gh", ESTADO_GH, p.state);
-    return { estado, url: p.url, ...mergeadoEm(estado, p.mergedAt) };
+    return { estado, url: p.url, ...mergeadoEm(estado, p.mergedAt), ...mergeSha(estado, p.mergeCommit?.oid) };
+  },
+  async integrar(repo, id) {
+    await rodar("gh", ["pr", "merge", id, "--merge"], repo);
   },
   async situacao(repo, id) {
     const args = ["pr", "view", id, "--json", "mergeable,statusCheckRollup"];
@@ -264,6 +279,7 @@ const PrAz = z.object({
   repository: z.object({ webUrl: z.string() }),
   /** `null` enquanto o PR está ativo. */
   closedDate: DataDaPlataforma.nullish(),
+  lastMergeCommit: z.object({ commitId: z.string() }).nullish(),
 });
 type PrAz = z.infer<typeof PrAz>;
 /** O `url` do az é o da API; o da página do PR sai do repositório. */
@@ -301,7 +317,15 @@ const azure: CliDePR = {
     const saida = await rodar("az", ["repos", "pr", "show", "--id", id, "--output", "json"], repo, LER_DE_NOVO);
     const p = lerJson(saida, PrAz, "az repos pr show", LER_DE_NOVO);
     const estado = estadoDe("az", ESTADO_AZ, p.status);
-    return { url: doAz(p).url, estado, ...mergeadoEm(estado, p.closedDate) };
+    return {
+      url: doAz(p).url,
+      estado,
+      ...mergeadoEm(estado, p.closedDate),
+      ...mergeSha(estado, p.lastMergeCommit?.commitId),
+    };
+  },
+  async integrar(repo, id) {
+    await rodar("az", ["repos", "pr", "update", "--id", id, "--status", "completed"], repo);
   },
   async situacao(repo, id) {
     const pr = await rodar("az", ["repos", "pr", "show", "--id", id, "--output", "json"], repo);
@@ -460,6 +484,27 @@ export async function estadoPR(
 export async function lerPR(projeto: Pick<Projeto, "repo" | "hospedagem">, id: string): Promise<LeituraDoPR> {
   const leitura = await CLIS[projeto.hospedagem].ler(projeto.repo, id);
   return { ...leitura, lidoEm: new Date().toISOString() };
+}
+
+/**
+ * Integra o PR `id` na base com merge commit pela hospedagem e devolve o SHA do merge, confirmado pela releitura.
+ * PR já mergeado não é integrado de novo: devolve o SHA dele. Falha da hospedagem, ou merge que a releitura não
+ * confirma, lança ErroExterno.
+ */
+export async function integrarPR(projeto: Pick<Projeto, "repo" | "hospedagem">, id: string): Promise<string> {
+  const cli = CLIS[projeto.hospedagem];
+  let leitura = await cli.ler(projeto.repo, id);
+  if (leitura.estado !== "mergeado") {
+    await cli.integrar(projeto.repo, id);
+    leitura = await cli.ler(projeto.repo, id);
+  }
+  if (leitura.estado !== "mergeado" || !leitura.mergeSha) {
+    throw new ErroExterno(
+      `a hospedagem não confirmou o merge do PR ${id}`,
+      "confira o PR na plataforma e tente de novo",
+    );
+  }
+  return leitura.mergeSha;
 }
 
 export interface OpcoesVerificacao {

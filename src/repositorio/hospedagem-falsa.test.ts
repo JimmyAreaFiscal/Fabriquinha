@@ -17,6 +17,8 @@ export interface PRFalso {
   estado: "aberto" | "fechado" | "mergeado";
   /** A branch de origem vem de um fork. */
   fork?: boolean;
+  /** O commit do merge, quando o merge foi feito pelo falso. */
+  mergeSha?: string;
   /** Padrão: sem conflito. */
   conflito?: boolean | "calculando";
   /** Padrão: um check `ci` aprovado. */
@@ -34,8 +36,10 @@ interface Estado {
 
 /** O PR guardado como cada CLI o mostra; `az repos pr update` recusa PR fechado e a API REST do gh, não, como o PR real. */
 const SCRIPT = `#!/usr/bin/env node
-import { readFileSync, writeFileSync } from "node:fs";
-import { basename } from "node:path";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 const cli = basename(process.argv[1]);
 const args = process.argv.slice(2);
 const arquivo = process.env.FALSO_HOSPEDAGEM;
@@ -69,6 +73,7 @@ const az = (p) => ({
   // Como o az real: os campos sem valor vêm como null, não ausentes.
   forkSource: p.fork ? { name: "refs/heads/" + p.head } : null,
   closedDate: p.estado === "aberto" ? null : "2026-10-11T13:00:00.1234567Z",
+  lastMergeCommit: p.estado === "mergeado" ? { commitId: p.mergeSha ?? "abc" } : null,
   mergeStatus: { true: "conflicts", false: "succeeded", calculando: "queued" }[String(conflito(p))],
   url: "https://dev.azure.com/org/_apis/git/pullRequests/" + p.id,
   repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
@@ -112,6 +117,27 @@ const editar = (p, titulo, corpo) => {
   }
   Object.assign(p, { titulo, corpo });
 };
+// O merge commit de verdade: clona o origin, junta o head na base e empurra; o PR passa a mergeado com o SHA.
+const integrar = (p) => {
+  if (p.estado !== "aberto") {
+    process.stderr.write("o PR não está aberto");
+    process.exit(1);
+  }
+  const git = (cwd, ...a) => execFileSync("git", ["-c", "user.name=Hospedagem", "-c", "user.email=h@exemplo.com", ...a], { cwd, stdio: "pipe" }).toString().trim();
+  const origem = git(process.cwd(), "remote", "get-url", "origin");
+  const tmp = mkdtempSync(join(tmpdir(), "hospedagem-merge-"));
+  try {
+    git(tmp, "clone", "-q", origem, "c");
+    const c = join(tmp, "c");
+    git(c, "checkout", "-q", p.base);
+    git(c, "merge", "-q", "--no-ff", "-m", "Merge PR " + p.id, "origin/" + p.head);
+    git(c, "push", "-q", "origin", p.base);
+    p.mergeSha = git(c, "rev-parse", "HEAD");
+    p.estado = "mergeado";
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+};
 let resposta;
 switch (comando) {
   case "pr list":
@@ -134,10 +160,14 @@ switch (comando) {
       state: gh(pr(args[2])).state,
       url: gh(pr(args[2])).url,
       mergedAt: pr(args[2]).estado === "mergeado" ? MERGE : null,
-      mergeCommit: pr(args[2]).estado === "mergeado" ? { oid: "abc" } : null,
+      mergeCommit: pr(args[2]).estado === "mergeado" ? { oid: pr(args[2]).mergeSha ?? "abc" } : null,
       mergeable: { true: "CONFLICTING", false: "MERGEABLE", calculando: "UNKNOWN" }[String(conflito(pr(args[2])))],
       statusCheckRollup: rollup(pr(args[2])),
     });
+    break;
+  case "pr merge":
+    integrar(pr(args[2]));
+    resposta = "";
     break;
   case "pr reopen":
     pr(args[2]).estado = "aberto";
@@ -159,6 +189,7 @@ switch (comando) {
     break;
   case "repos pr update":
     if (opcao("--status") === "active") pr(opcao("--id")).estado = "aberto";
+    else if (opcao("--status") === "completed") integrar(pr(opcao("--id")));
     else editar(pr(opcao("--id")), opcao("--title"), opcao("--description"));
     resposta = JSON.stringify(az(pr(opcao("--id"))));
     break;
@@ -243,6 +274,7 @@ if (import.meta.main) {
           targetRefName: "refs/heads/main",
           forkSource: { name: "refs/heads/b" },
           closedDate: "2026-10-11T13:00:00.1234567Z",
+          lastMergeCommit: null,
           mergeStatus: "succeeded",
           url: "https://dev.azure.com/org/_apis/git/pullRequests/1",
           repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
