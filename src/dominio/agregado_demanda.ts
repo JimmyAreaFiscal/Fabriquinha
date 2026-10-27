@@ -148,8 +148,8 @@ export const AgregadoDemanda = z
         erro(`o ticket ${String(t.ticket_id)} cita a rodada ${String(t.rodada_id)}, que não existe`);
       if ((t.modelo_provedor === undefined) !== (t.modelo_nome === undefined))
         erro(`o ticket ${String(t.ticket_id)} precisa de modelo_provedor e modelo_nome juntos`);
-      if (t.motivo_falha !== undefined && t.status !== "falhou")
-        erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou`);
+      if (t.motivo_falha !== undefined && t.status !== "falhou" && t.status !== "fechado")
+        erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou ou fechado`);
       rodadaDe.set(t.ticket_id, t.rodada_id);
     }
     const tickets = new Set(rodadaDe.keys());

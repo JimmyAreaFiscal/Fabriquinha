@@ -94,6 +94,15 @@ test("CA-2: tickets aberto/falhou fecham, em_execucao cancela e concluido fica",
   );
 });
 
+test("cancela com ticket falhou que tem motivo_falha: fecha e preserva o motivo", () => {
+  const ag = montar("execucao", {
+    tickets: [{ ...tk(3, "implementar", "falhou"), motivo_falha: "timeout do modelo" }],
+  });
+  const r = cancelarDemanda(ag, AUDITOR, c);
+  assert.equal(r.demanda.fase, "cancelada");
+  assert.deepEqual([r.tickets[0]?.status, r.tickets[0]?.motivo_falha], ["fechado", "timeout do modelo"]);
+});
+
 test("CA-3 e CA-7: histórico intacto, entrada não mutada e encerramento sem integração relido", () => {
   const ag = montar("encerramento", { decisoes: [decisao], encerramento: prog({ limpeza_pendente: [] }) });
   const antes = structuredClone(ag);

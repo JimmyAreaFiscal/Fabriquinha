@@ -86,7 +86,11 @@ test("devolucoes (0..2, padrão 0) e motivo_falha só em falhou, sem exigi-lo (C
       agregado({ tickets: [ticket(1, { status: "falhou", motivo_falha: "m", devolucoes: 2 })] }),
     ).success,
   );
-  recusa(agregado({ tickets: [ticket(1, { motivo_falha: "m" })] }), "só tem motivo_falha quando falhou");
+  recusa(agregado({ tickets: [ticket(1, { motivo_falha: "m" })] }), "só tem motivo_falha quando falhou ou fechado");
+  // fechado preserva o motivo como histórico (cancelamento de ticket falho)
+  assert.ok(
+    AgregadoDemanda.safeParse(agregado({ tickets: [ticket(1, { status: "fechado", motivo_falha: "m" })] })).success,
+  );
 });
 
 test("dono da evidência: demanda, rodada ou ticket, nunca rodada e ticket juntos (CA-10, CA-11)", () => {
