@@ -577,11 +577,61 @@ const AnaliseSeguranca = z
 
 const LOGS_OPCIONAIS = Arquivos({ classes: ["texto"] });
 
+/** Contador de tokens: inteiro não negativo, com a mensagem que orienta a ferramenta externa. */
+const Tokens = (campo: string) =>
+  z
+    .number({ error: `${campo} é obrigatório: informe o total de tokens como inteiro >= 0` })
+    .int(`${campo} deve ser inteiro: informe o total de tokens sem fração`)
+    .nonnegative(`${campo} não pode ser negativo: informe 0 se não houve tokens`);
+
+/** Texto obrigatório de `custos_realizados`: a mensagem diz o campo e como corrigir. */
+const Obrigatorio = (campo: string, como: string) =>
+  z
+    .string({ error: `${campo} é obrigatório: ${como}` })
+    .trim()
+    .min(1, `${campo} é obrigatório: ${como}`);
+
+// Custo externo (D10): uma sessão da ferramenta fora da Fabriquinha, com linhas por provedor/modelo. Custo ausente é
+// desconhecido (null), nunca 0, e não há tabela de preços.
+const CustosRealizados = z.object({
+  sessoes: z
+    .array(
+      z.object({
+        ferramenta: Obrigatorio("ferramenta", "informe a ferramenta externa usada, como claude ou codex"),
+        sessao: Obrigatorio("sessao", "informe o id da sessão no harness da ferramenta"),
+        linhas: z
+          .array(
+            z.object({
+              provedor: Obrigatorio("provedor", "informe o provedor do modelo, como anthropic"),
+              modelo: Obrigatorio("modelo", "informe o nome do modelo usado"),
+              tokens_entrada: Tokens("tokens_entrada"),
+              tokens_saida: Tokens("tokens_saida"),
+              tokens_cache_leitura: Tokens("tokens_cache_leitura"),
+              tokens_cache_escrita: Tokens("tokens_cache_escrita"),
+              custo: z
+                .number()
+                .nonnegative("custo não pode ser negativo: omita o campo se o custo é desconhecido")
+                .nullish()
+                .transform((c) => c ?? null)
+                .meta({ description: "custo em dólares; omita se desconhecido (fica null, nunca 0)" }),
+            }),
+          )
+          .min(1, "linhas é obrigatório: informe pelo menos uma linha por provedor/modelo"),
+      }),
+      { error: "sessoes é obrigatório: informe a lista de sessões externas" },
+    )
+    .refine(
+      (sessoes) => new Set(sessoes.map((s) => `${s.ferramenta}\0${s.sessao}`)).size === sessoes.length,
+      "sessão repetida: informe cada sessao uma vez só, juntando as linhas dela",
+    ),
+});
+
 /** As evidências do catálogo novo (SDLC por demandas) que já têm schema; o CLI ainda não as liga a `TipoEvidencia`. */
 const SCHEMAS_ETAPA: Record<
-  Extract<TipoEvidenciaEtapa, "plano" | "testes_estresse" | "analise_seguranca">,
+  Extract<TipoEvidenciaEtapa, "plano" | "testes_estresse" | "analise_seguranca"> | "custos_realizados",
   SchemaEvidencia
 > = {
+  custos_realizados: tipado({ dados: CustosRealizados, arquivos: Arquivos({ max: 0 }) }),
   // O cruzamento do plano com a demanda congelada é da camada que submete.
   plano: tipado({ dados: Plano, arquivos: Arquivos({ max: 0 }) }),
   testes_estresse: tipado({

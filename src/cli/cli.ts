@@ -30,7 +30,10 @@ import {
   registrarIssue,
 } from "../persistencia/issues.ts";
 import { projeto } from "../persistencia/projetos.ts";
-import { COMANDOS_DEMANDA, type ComandoDemanda, resolverAgenteDemanda } from "./agente_demanda.ts";
+import { COMANDOS_DEMANDA as LEITURAS_DEMANDA, type ComandoDemanda, resolverAgenteDemanda } from "./agente_demanda.ts";
+import { COMANDOS_EVIDENCIA_DEMANDA } from "./evidencia_agente_demanda.ts";
+
+const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [...LEITURAS_DEMANDA, ...COMANDOS_EVIDENCIA_DEMANDA];
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */
 export interface Io {
@@ -547,6 +550,7 @@ async function rodarDaDemanda(comando: ComandoDemanda, resto: string[], io: Io, 
   return comBanco(io, (banco) =>
     comando.rodar({
       ...chamada,
+      stdin: io.stdin,
       banco,
       agente: encontrado(
         resolverAgenteDemanda(banco, execucao),

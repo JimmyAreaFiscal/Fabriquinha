@@ -4,7 +4,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ParseArgsOptionsConfig } from "node:util";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
-import { TipoEvidencia } from "../dominio/agregado.ts";
+import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
 import { formatarRodadaRef, formatarTicketRef, interpretarRef } from "../dominio/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado } from "../dominio/erros.ts";
 import { type SchemaEvidencia, schemaDe, schemaDeEtapa, type TipoSchemaEtapa } from "../evidencias/schemas.ts";
@@ -23,6 +23,7 @@ export interface AgenteDemanda {
 export interface ChamadaDemanda {
   readonly banco: DatabaseSync;
   readonly agente: AgenteDemanda;
+  readonly stdin: NodeJS.ReadableStream;
   readonly pos: readonly string[];
   readonly op: Readonly<Record<string, string | string[] | undefined>>;
 }
@@ -57,10 +58,10 @@ export function resolverAgenteDemanda(banco: DatabaseSync, execucao: string): Ag
   };
 }
 
-const proprio = (a: AgenteDemanda): string => formatarTicketRef(a);
+export const proprio = (a: AgenteDemanda): string => formatarTicketRef(a);
 
 /** O ticket de `texto`, que só pode ser o do agente; `T-3` e outras formas erram mostrando o endereço certo. */
-function ticketProprio(a: AgenteDemanda, texto: string): void {
+export function ticketProprio(a: AgenteDemanda, texto: string, agir = false): void {
   const forma = `use o endereço do seu ticket, ${proprio(a)}`;
   let ref;
   try {
@@ -70,7 +71,9 @@ function ticketProprio(a: AgenteDemanda, texto: string): void {
   }
   if (!("ticket_id" in ref)) throw new ErroDeRegra(`${texto} é uma rodada, não um ticket`, forma);
   if (formatarTicketRef(ref) !== proprio(a)) {
-    throw new ErroDeEscopo("o agente só lê o próprio ticket", `leia ${proprio(a)}`);
+    throw agir
+      ? new ErroDeEscopo("o agente só age no próprio ticket", `aja em ${proprio(a)}`)
+      : new ErroDeEscopo("o agente só lê o próprio ticket", `leia ${proprio(a)}`);
   }
 }
 
@@ -80,9 +83,9 @@ function demandaPropria(a: AgenteDemanda, texto: string): void {
   }
 }
 
-const TIPOS_DA_ETAPA: readonly string[] = ["plano", "testes_estresse", "analise_seguranca"];
+export const TIPOS_DA_ETAPA: readonly string[] = ["plano", "testes_estresse", "analise_seguranca"];
 
-function schemaDoTipo(tipo: string): SchemaEvidencia | undefined {
+export function schemaDoTipo(tipo: string): SchemaEvidencia | undefined {
   const legado = TipoEvidencia.safeParse(tipo);
   if (legado.success) return schemaDe(legado.data);
   return TIPOS_DA_ETAPA.includes(tipo) ? schemaDeEtapa(tipo as TipoSchemaEtapa) : undefined;
@@ -141,3 +144,10 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
     },
   },
 ];
+
+/**
+ * O ator que as transições da demanda pedem. Elas leem só `tipo` e `ticket`, mas o tipo `Ator` exige `execucao`
+ * numérico, que a execução da demanda (id texto) não tem: o campo fica ausente, nunca 0.
+ * shortcut: cast até o domínio aceitar `Ator` sem `execucao`; some quando quem mexe em src/dominio trocar o tipo.
+ */
+export const paraDominio = (a: AgenteDemanda): Ator => ({ tipo: "agente", ticket: a.ticket_id }) as unknown as Ator;
