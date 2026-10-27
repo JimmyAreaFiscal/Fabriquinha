@@ -114,7 +114,7 @@ function agenteCommitou(worktree: string, head: string): ErroDeRegra {
  * `git commit` com os hooks, sem credenciais e com limite; `emendar` refaz a HEAD (`--amend`), e `semAlteracao`
  * aceita o commit vazio.
  */
-async function commitar(
+export async function commitar(
   worktree: string,
   mensagem: string,
   { emendar, semAlteracao }: { emendar: boolean; semAlteracao: boolean },
