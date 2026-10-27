@@ -11,7 +11,7 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
@@ -442,4 +442,82 @@ test("CA-10, CA-14: reinício mata o grupo gravado, falha as abertas (com ou sem
     assert.deepEqual([e?.falha, e?.erro, e?.fim !== null], [true, "serviço reiniciado", true]);
   }
   assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
+});
+
+const emExecucao = (banco: DatabaseSync, ticket_id: number) =>
+  comDemanda(banco, "I-1", (ag) => ({
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.ticket_id === ticket_id ? { ...t, status: "em_execucao" as const } : t)),
+  }));
+const statusDe = (banco: DatabaseSync, ticket_id: number) =>
+  carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === ticket_id);
+
+test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem devolução", async () => {
+  const { banco } = await cenario({ variante: "erro" });
+  emExecucao(banco, 1);
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  const ag = carregarDemanda(banco, "I-1");
+  const t = ag.tickets.find((x) => x.ticket_id === 1);
+  assert.equal(t?.status, "falhou");
+  assert.match(t.motivo_falha ?? "", /limite de uso/);
+  assert.equal(t.devolucoes, 0);
+  assert.equal(ag.evidencias.length, 0);
+});
+
+test("o fechamento recebe a falha e o fim só resolve depois dele", async () => {
+  const { banco } = await cenario({ variante: "erro" });
+  const chamadas: unknown[] = [];
+  await iniciarExecucaoDemanda(banco, ref(1), {
+    limiteMin: 1,
+    fechar: async (_b, r, o) => {
+      await dormir(20);
+      chamadas.push([r, o.falha]);
+    },
+  }).fim;
+  assert.equal(chamadas.length, 1);
+  assert.match((chamadas[0] as [unknown, string])[1], /limite de uso/);
+});
+
+test("erro do fechamento vai ao log e falha o ticket com o motivo", async () => {
+  const { banco, c } = await cenario();
+  emExecucao(banco, 1);
+  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), {
+    limiteMin: 1,
+    fechar: () => Promise.reject(new Error("boom")),
+  });
+  await fim;
+  assert.match(readFileSync(join(c.raiz, "execucoes", `E-${id}`, "log"), "utf8"), /fechamento falhou: boom/);
+  assert.equal(statusDe(banco, 1)?.status, "falhou");
+  assert.match(statusDe(banco, 1)?.motivo_falha ?? "", /boom/);
+});
+
+test("erro do fechamento com falhar também falhando só é anotado", async () => {
+  const { banco, c } = await cenario();
+  const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), {
+    limiteMin: 1,
+    fechar: () => {
+      banco.exec("PRAGMA query_only = ON");
+      return Promise.reject(new Error("boom"));
+    },
+  });
+  await fim;
+  assert.match(readFileSync(join(c.raiz, "execucoes", `E-${id}`, "log"), "utf8"), /também falhou/);
+});
+
+test("interrupção do Auditor e reinício falham o ticket em execução", async () => {
+  const { banco } = await cenario();
+  for (const t of [1, 2]) emExecucao(banco, t);
+  const abrirOrfa = (ticket: number, id: string) =>
+    comSessoesDoTicket(banco, ref(ticket), (estado) => {
+      const sessao = { ...ref(ticket), id: `s-${id}`, modo: "autonomo" as const, conversa_referencia: id };
+      const sessoesNovas = criarSessao(estado.sessoes, sessao);
+      const execucao = { id, sessao_id: sessao.id, inicio: em, falha: false };
+      return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+    });
+  abrirOrfa(1, "e1");
+  abrirOrfa(2, "e2");
+  interromperExecucaoDemanda(banco, ref(1));
+  recuperarExecucoesDemanda(banco);
+  assert.equal(statusDe(banco, 1)?.motivo_falha, "interrompida pelo Auditor");
+  assert.equal(statusDe(banco, 2)?.motivo_falha, "serviço reiniciado");
 });

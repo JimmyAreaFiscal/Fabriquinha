@@ -41,6 +41,8 @@ export interface OpcoesExecucaoDemanda {
   modo?: Exclude<ModoExecucao, "consulta">;
   /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
   retomada?: ContextoDemanda["retomada"];
+  /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
+  fechar?: typeof fecharTicketDemanda;
 }
 
 /** Execuções com condutor vivo neste serviço, por id, com o grupo de processo do pi depois de lançado. */
@@ -175,7 +177,16 @@ async function conduzir(c: Conducao): Promise<void> {
   if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
   ativas.delete(execucao.id);
   encerrar(c, falha, log);
-  await fecharTicketDemanda(c.banco, c.ref, { falha, execucao: execucao.id });
+  try {
+    await (opcoes.fechar ?? fecharTicketDemanda)(c.banco, c.ref, { falha, execucao: execucao.id });
+  } catch (error_) {
+    anotar(log, `fechamento falhou: ${mensagem(error_)}`);
+    try {
+      falharTicketDemanda(c.banco, c.ref, `fechamento falhou: ${mensagem(error_)}`);
+    } catch (erroFalha) {
+      anotar(log, `falhar o ticket também falhou: ${mensagem(erroFalha)}`);
+    }
+  }
 }
 
 /**
