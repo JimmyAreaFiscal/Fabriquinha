@@ -132,26 +132,24 @@ async function esperarTarefa(api: Api, host: string, id: string, limiteMs: numbe
   }
 }
 
+/** Alterados contra HEAD: versionados (staged ou não) e não versionados fora do .gitignore. `-z`: o caminho cru. */
+export async function arquivosAlterados(worktree: string): Promise<string[]> {
+  const nomes = async (...args: string[]) => (await exigirGit(worktree, ...args)).split("\0").filter(Boolean);
+  const versionados = await nomes("diff", "--name-only", "-z", "HEAD");
+  const novos = await nomes("ls-files", "--others", "--exclude-standard", "-z");
+  return [...new Set([...versionados, ...novos])].sort((a, b) => a.localeCompare(b));
+}
+
 /**
- * Coleta e registra (C17, produtor `fabriquinha`) o `relatorio_sonar` do ticket, com a worktree da issue analisada.
- * Issue antiga num arquivo alterado também barra, como no `sonar_gate.py`. SonarQube fora do ar ou scanner falhando
- * lança ErroDeRegra com o comando para subir o servidor; quem chama falha o ticket com a mensagem.
+ * Núcleo sem banco: checa o ambiente e o servidor, lista os arquivos alterados via `listarArquivos`, escaneia a
+ * worktree, espera o Compute Engine e devolve as issues abertas nos arquivos alterados. Falhas viram ErroDeRegra.
  */
-export async function coletarSonar(
-  banco: DatabaseSync,
-  ticket: Id,
+export async function analisarSonar(
+  chave: string,
+  worktree: string,
+  listarArquivos: () => Promise<string[]>,
   { limiteMs = 30 * 60_000, intervaloMs = 2000 }: OpcoesSonar = {},
-): Promise<Agregado> {
-  const ag = agregadoDoTicket(banco, ticket);
-  const config = ag && projeto(banco, ag.issue.projeto);
-  if (!ag || !config) {
-    throw new ErroDeInexistente(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
-  }
-  const issue = ag.issue.id;
-  const {
-    nome,
-    sonar: { projectKey: chave },
-  } = config;
+) {
   // Barras do fim fora sem regex: `\/+$` voltaria atrás em tempo quadrático numa sequência longa de `/` no meio.
   let host = process.env.SONAR_HOST_URL || "";
   while (host.endsWith("/")) host = host.slice(0, -1);
@@ -166,16 +164,7 @@ export async function coletarSonar(
   const { status } = await api(Status, "system/status");
   if (status !== "UP") throw new ErroDeRegra(`o SonarQube em ${host} está ${status}`, `suba com: ${SUBIR}`);
 
-  // Alterados contra HEAD: versionados (staged ou não) e não versionados fora do .gitignore. `-z`: o caminho cru.
-  const raiz = raizDo(banco);
-  const worktree = caminhoDaWorktree(raiz, nome, issue);
-  const arquivos = await naFilaDoProjeto(raiz, nome, async () => {
-    const nomes = async (...args: string[]) => (await exigirGit(worktree, ...args)).split("\0").filter(Boolean);
-    const versionados = await nomes("diff", "--name-only", "-z", "HEAD");
-    const novos = await nomes("ls-files", "--others", "--exclude-standard", "-z");
-    return [...new Set([...versionados, ...novos])].sort((a, b) => a.localeCompare(b));
-  });
-
+  const arquivos = await listarArquivos();
   const ceTaskId = await escanear(host, token, worktree, chave, limiteMs);
   await esperarTarefa(api, host, ceTaskId, limiteMs, intervaloMs);
 
@@ -183,7 +172,7 @@ export async function coletarSonar(
   // quando o lote mistura arquivos de código e de teste (sonar.tests).
   // ponytail: a API pagina até LIMITE_DA_API issues; projeto com mais que isso precisa filtrar no servidor.
   const alterados = new Set(arquivos.map((arquivo) => `${chave}:${arquivo}`));
-  const achados = [];
+  const issues = [];
   for (let p = 1; ; p++) {
     const pagina = await api(Issues, "issues/search", {
       components: chave,
@@ -192,7 +181,7 @@ export async function coletarSonar(
       p: String(p),
     });
     for (const i of pagina.issues.filter((x) => alterados.has(x.component))) {
-      achados.push({
+      issues.push({
         arquivo: i.component.slice(chave.length + 1),
         ...(i.line !== undefined && { linha: i.line }),
         regra: i.rule,
@@ -202,6 +191,37 @@ export async function coletarSonar(
     }
     if (p * PAGINA >= Math.min(pagina.paging.total, LIMITE_DA_API)) break;
   }
+  return { ceTaskId, arquivos, issues };
+}
+
+/**
+ * Coleta e registra (C17, produtor `fabriquinha`) o `relatorio_sonar` do ticket, com a worktree da issue analisada.
+ * Issue antiga num arquivo alterado também barra, como no `sonar_gate.py`. SonarQube fora do ar ou scanner falhando
+ * lança ErroDeRegra com o comando para subir o servidor; quem chama falha o ticket com a mensagem.
+ */
+export async function coletarSonar(banco: DatabaseSync, ticket: Id, opcoes: OpcoesSonar = {}): Promise<Agregado> {
+  const ag = agregadoDoTicket(banco, ticket);
+  const config = ag && projeto(banco, ag.issue.projeto);
+  if (!ag || !config) {
+    throw new ErroDeInexistente(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
+  }
+  const issue = ag.issue.id;
+  const {
+    nome,
+    sonar: { projectKey: chave },
+  } = config;
+  const raiz = raizDo(banco);
+  const worktree = caminhoDaWorktree(raiz, nome, issue);
+  const {
+    ceTaskId,
+    arquivos,
+    issues: achados,
+  } = await analisarSonar(
+    chave,
+    worktree,
+    () => naFilaDoProjeto(raiz, nome, () => arquivosAlterados(worktree)),
+    opcoes,
+  );
 
   const dados = schemaDe("relatorio_sonar").dados.parse({
     projectKey: chave,
