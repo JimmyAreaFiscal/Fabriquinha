@@ -111,7 +111,7 @@ export const argumentosDaAuditoria = (raiz: string, sessao: string, modelo?: Mod
  * F4 §6.1.2: o ambiente do serviço sem credenciais, com `gh` e `az` apontando para um diretório vazio da execução, e
  * as variáveis da Fabriquinha.
  */
-export const ambientePi = (raiz: string, execucao: number, dir: string): NodeJS.ProcessEnv => ({
+export const ambientePi = (raiz: string, execucao: number | string, dir: string): NodeJS.ProcessEnv => ({
   ...ambienteSemCredenciais(process.env, join(dir, "vazio")),
   FABRIQUINHA_EXECUCAO: String(execucao),
   FABRIQUINHA_ROOT: raiz,

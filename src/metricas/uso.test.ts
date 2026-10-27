@@ -11,7 +11,7 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { dirDaExecucao } from "../persistencia/execucoes.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
-import { coletarUso, depoisDoC6 } from "./uso.ts";
+import { coletarUso, depoisDoC6, somar } from "./uso.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-uso-"));
 after(() => {
@@ -332,4 +332,20 @@ test("depoisDoC6: coleta; uma falha só vai para o log da execução, ou para o 
     /^\d{4}-\d\d-\d\dT\S+Z fabriquinha: E-9: coleta de uso falhou: .*E-9 não existe/,
   );
   b.close();
+});
+
+test("somar marca semCusto quando alguma parcela do modelo não traz cost.total (CA-13)", () => {
+  const sem = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 };
+  const texto = (...us: object[]) =>
+    us.map((u, i) => assistente(`10:0${String(i)}:00`, "anthropic", "m", u)).join("\n");
+  const janela = [Date.parse(em("10:00:00")), Date.parse(em("10:59:00"))] as const;
+
+  const informado = somar(texto(usage(1, 1, 0, 0, 0.5)), ...janela);
+  assert.deepEqual([informado[0]?.custo, informado[0]?.semCusto], [0.5, false]);
+
+  const ausente = somar(texto(sem), ...janela);
+  assert.deepEqual([ausente[0]?.custo, ausente[0]?.semCusto], [0, true]);
+
+  const parcial = somar(texto(usage(1, 1, 0, 0, 0.5), { ...sem, cost: {} }), ...janela);
+  assert.deepEqual([parcial[0]?.custo, parcial[0]?.semCusto], [0.5, true]);
 });
