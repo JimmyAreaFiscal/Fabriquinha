@@ -172,6 +172,7 @@ async function conduzir(c: Conducao): Promise<void> {
     });
   } catch (error_) {
     falha = mensagem(error_);
+    anotar(log, `preparação falhou: ${falha}`);
   }
   // Interrompida pelo Auditor: o pi saiu pelo SIGTERM, mas a causa verdadeira é a interrupção.
   if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
@@ -290,10 +291,13 @@ export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
     encerrarOrfa(banco, { demanda_id, ticket_id }, id, REINICIADO);
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
-  // ticket `em_execucao` não sairia mais. ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
+  // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
   const presos = banco
     .prepare(
-      "SELECT demanda_id, ticket_id FROM ticket_demanda WHERE status = 'em_execucao' AND etapa IN ('implementar', 'resolver_conflito')",
+      `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE status = 'em_execucao' AND (
+         etapa IN ('implementar', 'resolver_conflito', 'revisar_rodada', 'revisar_demanda')
+         OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
+           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.fase = 'encerramento')))`,
     )
     .all() as unknown as TicketRef[];
   for (const { demanda_id, ticket_id } of presos) falharTicketDemanda(banco, { demanda_id, ticket_id }, REINICIADO);

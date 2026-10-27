@@ -10,8 +10,10 @@ import { formatarRodadaRef, formatarTicketRef, interpretarRef } from "../dominio
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../dominio/erros.ts";
 import { CATALOGO_ETAPAS } from "../dominio/evidencia_etapa.ts";
 import { type SchemaEvidencia, schemaDe, schemaDeEtapa, type TipoSchemaEtapa } from "../evidencias/schemas.ts";
-import { registrarCorrecoesSessao, registrarRevisaoRodada } from "../dominio/transicoes_rodada.ts";
-import { registrarRevisaoDemanda } from "../dominio/transicoes_demanda.ts";
+import { registrarCorrecoesSessao } from "../dominio/transicoes_rodada.ts";
+import { decidirRevisaoIntegral } from "../execucao/revisao_demanda.ts";
+import { decidirRevisaoRodada } from "../execucao/revisao_rodada.ts";
+import { escrever } from "../persistencia/banco.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { projeto } from "../persistencia/projetos.ts";
 
@@ -272,12 +274,13 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
         };
       }
       const entrada = { demanda_id, ticket_id, aprovado, ...extra };
-      const agora = new Date().toISOString();
-      gravar(banco, agente, (ag) =>
-        ticket.etapa === "revisar_rodada"
-          ? registrarRevisaoRodada(ag, { ...entrada, rodada_id: rodada }, paraDominio(agente), { agora })
-          : registrarRevisaoDemanda(ag, entrada, paraDominio(agente), { agora }),
-      );
+      // o serviço de Revisão já grava a diferença: aqui só reconfere a execução na mesma transação
+      escrever(banco, () => {
+        resolverAgenteDemanda(banco, agente.execucao);
+        return ticket.etapa === "revisar_rodada"
+          ? decidirRevisaoRodada(banco, { ...entrada, rodada_id: rodada }, paraDominio(agente))
+          : decidirRevisaoIntegral(banco, entrada, paraDominio(agente));
+      });
       return {
         ticket: proprio(agente),
         ...(rodada !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id: rodada }) }),

@@ -1,7 +1,7 @@
 // Execução do ticket da demanda com banco real, git real e um pi falso que fala o protocolo RPC (CA-1 a CA-7, CA-11 a CA-14).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -530,4 +530,42 @@ test("reinício falha o ticket em execução cuja execução já foi encerrada (
   recuperarExecucoesDemanda(banco);
   assert.equal(statusDe(banco, 1)?.status, "falhou");
   assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+});
+
+test("CA-12: reinício falha as revisões e o encerrar_rodada em encerramento; o gate do PR e o planejar ficam", async () => {
+  const { banco } = await cenario();
+  banco.exec(`UPDATE rodada SET fase = 'encerramento' WHERE rodada_id = 1;
+    UPDATE rodada SET fase = 'aprovacao_pull_request' WHERE rodada_id = 2;
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id) VALUES
+      ('I-1', 8, 'revisar_rodada', 'em_execucao', '${em}', 1),
+      ('I-1', 9, 'encerrar_rodada', 'em_execucao', '${em}', 1),
+      ('I-1', 10, 'encerrar_rodada', 'em_execucao', '${em}', 2)`);
+  for (const t of [3, 4]) emExecucao(banco, t); // planejar e revisar_demanda
+  recuperarExecucoesDemanda(banco);
+  assert.deepEqual(
+    [3, 4, 8, 9, 10].map((t) => statusDe(banco, t)?.status),
+    ["em_execucao", "falhou", "falhou", "falhou", "em_execucao"],
+  );
+});
+
+test("CA-12: reinício falha o planejar com execução aberta, com a demanda em planejamento", async () => {
+  const { banco } = await cenario();
+  banco.exec("UPDATE demanda SET fase = 'planejamento' WHERE id = 'I-1'");
+  emExecucao(banco, 3);
+  comSessoesDoTicket(banco, ref(3), (estado) => {
+    const sessao = { ...ref(3), id: "s-p", modo: "autonomo" as const, conversa_referencia: "p" };
+    const sessoesNovas = criarSessao(estado.sessoes, sessao);
+    const execucao = { id: "p", sessao_id: sessao.id, inicio: em, falha: false };
+    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+  });
+  recuperarExecucoesDemanda(banco);
+  assert.equal(statusDe(banco, 3)?.status, "falhou");
+});
+
+test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {
+  const { c, banco } = await cenario({ semWorktree: true });
+  banco.prepare("UPDATE projeto SET repo = '/nao/existe' WHERE nome = 'loja'").run();
+  await iniciarExecucaoDemanda(banco, ref(7), { limiteMin: 1 }).fim;
+  const [dir] = readdirSync(join(c.raiz, "execucoes"));
+  assert.match(readFileSync(join(c.raiz, "execucoes", String(dir), "log"), "utf8"), /preparação falhou: /);
 });

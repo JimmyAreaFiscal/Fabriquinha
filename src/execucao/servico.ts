@@ -27,6 +27,7 @@ import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
 import { recuperarAuditorias } from "./auditoria.ts";
 import { executarAutonomo } from "./autonoma.ts";
+import { despacharDemandas, executarAgoraDemanda } from "./despacho_demanda.ts";
 import { recuperarExecucoesDemanda } from "./execucao_demanda.ts";
 import { iniciarDesenho } from "./sessoes.ts";
 
@@ -38,6 +39,8 @@ export interface Servico {
   porta: number;
   /** F4 §4: inicia o ticket já, sem esperar o agendador; recusa se a própria issue já executa (C5). */
   executarAgora(ticket: Id): Promise<void>;
+  /** O "Executar agora" do ticket de uma demanda: mesma elegibilidade e limite do ciclo; recusa com o motivo. */
+  executarAgoraDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<void>;
   /** Quando o agendador procura trabalho de novo, se estiver ligado (F7 §4.4, Configuração). */
   proximaBusca(): Date;
   parar(): Promise<void>;
@@ -171,6 +174,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
           varredura = undefined;
         });
       for (const ticket of ticketsElegiveis(banco)) executarTicket(banco, ticket, c).catch(noLog);
+      void despacharDemandas(banco, c);
     } catch (error_) {
       noLog(error_);
     }
@@ -186,6 +190,16 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     banco,
     porta,
     executarAgora,
+    // Síncrono até a reserva, como o `executarAgora`: a recusa vira rejeição e a etapa segue em segundo plano.
+    executarAgoraDemanda: (ref) => {
+      try {
+        void executarAgoraDemanda(banco, ref, configuracao(banco));
+        return Promise.resolve();
+      } catch (error_) {
+        const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)
+        return Promise.reject(erro);
+      }
+    },
     proximaBusca,
     async parar() {
       clearInterval(relogio);

@@ -42,10 +42,10 @@ function ticketFechavel(ag: AgregadoDemanda, ticket_id: number): TicketDemanda |
   return t?.etapa === "implementar" || t?.etapa === "resolver_conflito" ? t : undefined;
 }
 
-/** Falha o ticket em execução com o motivo, sem coletar, devolver nem gravar evidência; síncrona para os encerramentos órfãos. */
+/** Falha o ticket em execução, de qualquer etapa, com o motivo, sem coletar, devolver nem gravar evidência; síncrona para os encerramentos órfãos. */
 export function falharTicketDemanda(banco: DatabaseSync, ref: Ref, motivo: string): void {
   comDemanda(banco, ref.demanda_id, (ag) =>
-    ticketFechavel(ag, ref.ticket_id)?.status === "em_execucao"
+    ag.tickets.find((t) => t.ticket_id === ref.ticket_id)?.status === "em_execucao"
       ? registrarFalhaTicket(ag, { ticket_id: ref.ticket_id, motivo }, contexto())
       : ag,
   );
