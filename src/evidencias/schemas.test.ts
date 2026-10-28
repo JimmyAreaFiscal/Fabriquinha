@@ -4,14 +4,15 @@ import { test } from "node:test";
 import { z, ZodError } from "zod";
 import { type Agregado, TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import {
-  jsonSchemaDe,
-  jsonSchemaDeEtapa,
-  schemaDe,
-  schemaDeEtapa,
-  simbolosDe,
-  type TipoSchemaEtapa,
-} from "./schemas.ts";
+import { type SchemaEvidencia, schemaDe, schemaDeEtapa, simbolosDe, type TipoSchemaEtapa } from "./schemas.ts";
+
+/** O que `fabriquinha evidencia schema <tipo>` publica: o JSON Schema de `dados` e as regras de arquivo. */
+const publicado = ({ dados, arquivos }: SchemaEvidencia) => ({
+  dados: z.toJSONSchema(dados, { io: "input" }),
+  arquivos,
+});
+const jsonSchemaDe = (tipo: TipoEvidencia) => publicado(schemaDe(tipo));
+const jsonSchemaDeEtapa = (tipo: TipoSchemaEtapa) => publicado(schemaDeEtapa(tipo));
 
 const caminhos = (erro: unknown) => (erro as ZodError).issues.map((i) => i.path.join("."));
 
@@ -52,7 +53,7 @@ test("criterios_aceite: critérios CA-n com dado, quando e então, sem id repeti
   });
 });
 
-test("jsonSchemaDe publica o JSON Schema de dados (z.toJSONSchema) e as regras de arquivo", () => {
+test("o schema publicado traz o JSON Schema de dados (z.toJSONSchema) e as regras de arquivo", () => {
   const { dados, arquivos } = jsonSchemaDe("criterios_aceite");
   assert.deepEqual(arquivos, schemaDe("criterios_aceite").arquivos);
   assert.deepEqual(dados, z.toJSONSchema(schemaDe("criterios_aceite").dados, { io: "input" }));
@@ -257,7 +258,7 @@ test("relatorio_impactos_arquitetura: impacto, dependências, acoplamentos e ris
   assert.deepEqual(schemaDe("relatorio_impactos_arquitetura").arquivos, HTML_UNICO);
 });
 
-test("jsonSchemaDe dos tipos do desenho: o que o agente precisa saber, incluindo a gramática Big-O", () => {
+test("o schema publicado dos tipos do desenho: o que o agente precisa saber, incluindo a gramática Big-O", () => {
   assert.deepEqual(jsonSchemaDe("desenho_solucao").dados.required, ["resumo", "arquivosPrevistos"]);
   assert.deepEqual(jsonSchemaDe("prototipo").arquivos, schemaDe("prototipo").arquivos);
   assert.match(JSON.stringify(jsonSchemaDe("relatorio_complexidade").dados), /Gramática: bigO = /);
@@ -314,6 +315,31 @@ test("comprovacao_criterios: cada critério atendido ou não, como foi verificad
     ["criterios.0.id", "criterios.0.atendido", "criterios.0.comoVerificado", "criterios.0.arquivos"],
   );
   assert.deepEqual(schemaDe("comprovacao_criterios").arquivos, { classes: ["video", "imagem"], min: 1 });
+});
+
+test("comprovacao_criterios, regras cruzadas: os critérios de aceite, e cada anexo citado presente", () => {
+  const schema = schemaDe("comprovacao_criterios");
+  const ag = {
+    evidencias: [{ ticket: 1, tipo: "criterios_aceite", dados: { criterios: [{ id: "CA-1" }] } }],
+  } as unknown as Agregado;
+  const cruzar = (criterios: object[], anexos: string[]) => () =>
+    schema.cruzar?.(schema.dados.parse({ criterios }), { ag, ticket: 3, anexos });
+  const criterio = { id: "CA-1", atendido: true, comoVerificado: "busquei", arquivos: ["busca.webm"] };
+  cruzar([criterio], ["busca.webm"])();
+  assert.throws(
+    cruzar([criterio], ["outro.webm"]),
+    new ErroDeRegra(
+      "comprovacao_criterios cita busca.webm, que não está entre os anexos",
+      "anexe cada arquivo citado com --arquivo <caminho>, com o mesmo nome",
+    ),
+  );
+  assert.throws(
+    cruzar([{ ...criterio, id: "CA-2" }], ["busca.webm"]),
+    new ErroDeRegra(
+      "comprovacao_criterios comprova [CA-2], e os critérios de aceite do registro são [CA-1]",
+      "submeta exatamente uma comprovação por critério de aceite",
+    ),
+  );
 });
 
 const MENSAGEM = {
@@ -451,7 +477,7 @@ test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o co
     "head",
   ]);
   assert.deepEqual(schemaDe("pr_aberto").arquivos, { classes: ["texto"], min: 1, max: 1 });
-  assert.deepEqual(recusados("relatorio_produtividade", {}).slice(0, 2), ["issue", "geradoEm"]);
+  assert.deepEqual(recusados("relatorio_produtividade", {}), []);
   assert.deepEqual(schemaDe("relatorio_produtividade").arquivos, HTML_UNICO);
 });
 
@@ -539,7 +565,7 @@ test("analise_seguranca: aprovada = nenhum achado alto ou crítico (CA-6 a CA-8)
   ]);
 });
 
-test("jsonSchemaDeEtapa publica o JSON Schema de dados e as regras de arquivo", () => {
+test("o schema publicado da etapa traz o JSON Schema de dados e as regras de arquivo", () => {
   for (const tipo of ["plano", "testes_estresse", "analise_seguranca"] as const) {
     const { dados, arquivos } = jsonSchemaDeEtapa(tipo);
     assert.deepEqual(arquivos, schemaDeEtapa(tipo).arquivos);

@@ -1,8 +1,8 @@
-// Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-22, 23 e 25 (histórico, cancelamento e avaliação): migração de uma
-// base legada, cancelamento e arquivamento com dependentes e execução em andamento (D08) e a avaliação de melhoria com o
-// achado encaminhado (D12). Banco sempre numa raiz temporária; git real, pi falso.
+// Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-23 e 25 (cancelamento e avaliação): cancelamento e arquivamento
+// com dependentes e execução em andamento (D08) e a avaliação de melhoria com o achado encaminhado (D12). Banco sempre
+// numa raiz temporária; git real, pi falso.
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
@@ -17,14 +17,10 @@ import {
 import { encerrar, situacao } from "../src/execucao/gerente.ts";
 import * as gestao from "../src/execucao/gestao_demandas.ts";
 import { metricasDaDemanda } from "../src/metricas/demanda.ts";
-import { backfillDemandas } from "../src/persistencia/backfill_demanda.ts";
-import { abrir, migrar } from "../src/persistencia/banco.ts";
 import { achadoDaDemanda } from "../src/persistencia/avaliacoes.ts";
 import { predecessorasDaDemanda } from "../src/persistencia/dependencias_demanda.ts";
-import { MIGRACOES } from "../src/persistencia/migracoes.ts";
 import { alterarLimiteParalelismo, configuracao } from "../src/persistencia/servico.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
-import { montarFixture } from "../src/persistencia/fixture_backfill.test.ts";
 import {
   abrirPortao,
   agente,
@@ -43,104 +39,6 @@ const ler = (b: DatabaseSync, sql: string) =>
     .prepare(sql)
     .all()
     .map((l) => ({ ...l }));
-
-test("CA-SDLC-22: migração de base legada preserva histórico e referências, sem gate ou merge fictício e sem apagar nada", (t) => {
-  // A base nasce na versão anterior às demandas (sem migração nova); `abrir` aplica as migrações que faltam.
-  const raiz = realpathSync(mkdtempSync(join(base, "legada-")));
-  const antesDasDemandas = MIGRACOES.findIndex((m) => m.includes("CREATE TABLE demanda ("));
-  assert.ok(antesDasDemandas > 0);
-  const legada = new DatabaseSync(join(raiz, "fabriquinha.db"));
-  migrar(legada, MIGRACOES.slice(0, antesDasDemandas));
-  // issues em fases distintas, anexos, sessões (execuções com uso), commits e PRs (decisão e evidência `pr_aberto`):
-  // as linhas do banco legado de referência, copiadas tabela a tabela.
-  const origem = montarFixture();
-  const TABELAS_LEGADAS = [
-    "projeto",
-    "issue",
-    "issue_dep",
-    "ticket",
-    "decisao",
-    "commit_ticket",
-    "arquivo_commit",
-    "retrabalho",
-    "execucao",
-    "uso",
-    "evidencia",
-    "evidencia_arquivo",
-  ];
-  legada.exec("PRAGMA foreign_keys = OFF");
-  for (const tabela of TABELAS_LEGADAS) {
-    const colunas = ler(legada, `PRAGMA table_info(${tabela})`).map((c) => String(c.name));
-    for (const linha of ler(origem, `SELECT ${colunas.join(", ")} FROM ${tabela} ORDER BY rowid`)) {
-      legada
-        .prepare(`INSERT INTO ${tabela} (${colunas.join(", ")}) VALUES (${colunas.map(() => "?").join(", ")})`)
-        .run(...(colunas.map((c) => linha[c]) as (string | number | null)[]));
-    }
-  }
-  legada.close();
-  origem.close();
-
-  const banco = abrir(raiz);
-  t.after(() => {
-    banco.close();
-  });
-  const legado = () => TABELAS_LEGADAS.map((tabela) => ler(banco, `SELECT * FROM ${tabela} ORDER BY rowid`));
-  const antes = legado();
-  const relatorio = backfillDemandas(banco);
-
-  // Nada apagado nem alterado no legado; toda issue virou demanda, com a fase correspondente.
-  assert.deepEqual(legado(), antes);
-  assert.deepEqual(relatorio.naoMigradas, []);
-  assert.deepEqual(
-    ler(banco, "SELECT id, fase FROM demanda ORDER BY CAST(substr(id, 3) AS INTEGER)").map((d) => [d.id, d.fase]),
-    [
-      ["I-1", "concluida"],
-      ["I-2", "arquivada"],
-      ["I-3", "cancelada"],
-      ["I-4", "cancelada"],
-      ["I-5", "execucao"],
-      ["I-6", "registro"],
-      ["I-7", "planejamento"],
-      ["I-8", "aprovacao_planejamento"],
-      ["I-9", "execucao"],
-      ["I-10", "execucao"],
-    ],
-  );
-  // Referências: dependências nos dois sentidos, commits e anexos chegam com as mesmas chaves.
-  assert.deepEqual(
-    ler(banco, "SELECT demanda_id, depende_demanda_id FROM dependencia_demanda ORDER BY rowid").map((d) => [
-      d.demanda_id,
-      d.depende_demanda_id,
-    ]),
-    [
-      ["I-1", "I-5"],
-      ["I-2", "I-1"],
-      ["I-5", "I-1"],
-    ],
-  );
-  assert.deepEqual(
-    ler(banco, "SELECT sha FROM commit_ticket_demanda ORDER BY sha").map((x) => x.sha),
-    ler(banco, "SELECT sha FROM commit_ticket ORDER BY sha").map((x) => x.sha),
-  );
-  assert.equal(
-    ler(banco, "SELECT COUNT(*) AS n FROM arquivo_evidencia")[0]?.n,
-    ler(banco, "SELECT COUNT(*) AS n FROM evidencia_arquivo")[0]?.n,
-  );
-  assert.deepEqual(
-    ler(banco, "SELECT id FROM sessao ORDER BY id").length,
-    ler(banco, "SELECT DISTINCT sessao_pi FROM execucao").length,
-  );
-  // Nenhum gate nem merge fictício: as decisões são só as do legado e nenhum encerramento (merge) nasceu.
-  assert.equal(
-    ler(banco, "SELECT COUNT(*) AS n FROM decisao_ticket")[0]?.n,
-    ler(banco, "SELECT COUNT(*) AS n FROM decisao")[0]?.n,
-  );
-  assert.equal(ler(banco, "SELECT COUNT(*) AS n FROM encerramento_demanda")[0]?.n, 0);
-  assert.equal(
-    ler(banco, "SELECT COUNT(*) AS n FROM evidencia_demanda WHERE tipo IN ('merge', 'integracao')")[0]?.n,
-    0,
-  );
-});
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);

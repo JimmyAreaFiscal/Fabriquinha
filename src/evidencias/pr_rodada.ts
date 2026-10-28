@@ -4,8 +4,7 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
-import { dolares, inteiro } from "../metricas/relatorio.ts";
-import { codigo, lista, neutro, plural, tabela } from "./pr.ts";
+import { codigo, dolares, inteiro, lista, neutro, plural, tabela } from "./pr.ts";
 import type { ProdutividadeRodada } from "./produtividade_rodada.ts";
 
 // Os campos de `mensagem_pr` que o PR da rodada usa (schema do F3).

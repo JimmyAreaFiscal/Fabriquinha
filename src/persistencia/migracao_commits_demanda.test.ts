@@ -31,7 +31,7 @@ test("CA-12: v28 → v29 deixa dados e esquema legados idênticos e as constrain
         .map((l) => ({ ...l })),
     }));
   const antes = ler();
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, 32)); // o esquema anterior à remoção do fluxo legado, com retrabalho legado
   assert.deepEqual(ler(), antes);
 
   const recusa = (sql: string) => {

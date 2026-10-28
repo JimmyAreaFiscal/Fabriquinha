@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { formatarTicketRef } from "../dominio/demanda.ts";
 import { registrarRetrabalhoDemanda } from "../metricas/retrabalho.ts";
 import { noLog } from "../persistencia/execucoes.ts";
-import { type Commit } from "../persistencia/commits.ts";
+import type { Commit } from "../persistencia/commits.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { arquivosDe, commitar } from "../repositorio/commit.ts";
 import { exigirGit } from "../repositorio/worktree.ts";

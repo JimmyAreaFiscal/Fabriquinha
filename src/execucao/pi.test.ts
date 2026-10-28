@@ -23,7 +23,6 @@ import {
   confianca,
   divisorJsonl,
   lancarPi,
-  skillsDaEtapa,
 } from "./pi.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pi-")));
@@ -40,31 +39,18 @@ test("framing: divide só em \\n, junta pedaços, tira \\r final e mantém U+202
   assert.deepEqual(JSON.parse(evento), { type: "message_end", texto: "a\u2028b\u2029c" });
 });
 
-test("skills de artefato da etapa: uma por evidência de agente, com o nome do P1", () => {
-  assert.deepEqual(skillsDaEtapa("registro"), ["artefato-comportamento", "artefato-criterios-aceite"]);
-  assert.deepEqual(skillsDaEtapa("desenho"), [
-    "artefato-desenho-solucao",
-    "artefato-prototipo",
-    "artefato-complexidade",
-    "artefato-impactos-arquitetura",
-  ]);
-  assert.deepEqual(skillsDaEtapa("desenvolvimento"), []);
-  assert.deepEqual(skillsDaEtapa("revisao"), ["artefato-explicacao-fitness", "artefato-comprovacao-criterios"]);
-  assert.deepEqual(skillsDaEtapa("encerramento"), [
-    "artefato-mensagem-pr",
-    "artefato-aula-codigo",
-    "artefato-video-demonstracao",
-  ]);
-  assert.deepEqual(skillsDaEtapa("sessao"), []);
-});
-
 test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e confiança; sem prompt de sistema extra", () => {
   // O pacote vem do próprio repositório, ao lado de `src/`.
   assert.equal(existsSync(join(PACOTE, "extensions", "guarda.ts")), true);
   assert.equal(existsSync(join(PACOTE, "extensions", "pergunta.ts")), true);
   const comum = { raiz: "/r", sessaoPi: "s-1", modo: "autonomo" as const };
   assert.deepEqual(
-    argumentosPi({ ...comum, etapa: "registro", modelo: { provedor: "anthropic", modelo: "m 1" }, confianca: true }),
+    argumentosPi({
+      ...comum,
+      skills: ["artefato-comportamento", "artefato-criterios-aceite"],
+      modelo: { provedor: "anthropic", modelo: "m 1" },
+      confianca: true,
+    }),
     [
       "--mode",
       "rpc",
@@ -89,9 +75,9 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
       "ask_user_question",
     ],
   );
-  const comEffort = argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, effort: "high", confianca: false });
+  const comEffort = argumentosPi({ ...comum, skills: [], modelo: undefined, effort: "high", confianca: false });
   assert.deepEqual(comEffort.slice(6, 8), ["--thinking", "high"]);
-  assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: false }), [
+  assert.deepEqual(argumentosPi({ ...comum, skills: [], modelo: undefined, confianca: false }), [
     "--mode",
     "rpc",
     "--session-dir",
@@ -106,7 +92,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     "--exclude-tools",
     "ask_user_question",
   ]);
-  assert.deepEqual(argumentosPi({ ...comum, etapa: "sessao", modelo: undefined, confianca: undefined }).slice(-3), [
+  assert.deepEqual(argumentosPi({ ...comum, skills: [], modelo: undefined, confianca: undefined }).slice(-3), [
     `${PACOTE}/extensions/pergunta.ts`,
     "--exclude-tools",
     "ask_user_question",
@@ -114,7 +100,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
   // F4 §6.5: a consulta abre copiando a sessão principal e retoma sem copiar; em ambas, sem as ferramentas de escrita.
   const consulta = {
     ...comum,
-    etapa: "sessao" as const,
+    skills: [],
     modelo: undefined,
     confianca: undefined,
     modo: "consulta" as const,
@@ -186,12 +172,12 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdada do serviço
   process.env.GH_TOKEN = "segredo";
   try {
-    const env = ambienteDaAuditoria("/r", `/r/auditorias/${sessao}`);
+    const env = ambienteDaAuditoria("/r", `/r/avaliacoes/${sessao}`);
     assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
     assert.equal(env.GH_TOKEN, undefined);
     assert.deepEqual(
       [env.FABRIQUINHA_ROOT, env.FABRIQUINHA_AUDITORIA, env.GH_CONFIG_DIR],
-      ["/r", "1", `/r/auditorias/${sessao}/vazio`],
+      ["/r", "1", `/r/avaliacoes/${sessao}/vazio`],
     );
   } finally {
     delete process.env.FABRIQUINHA_EXECUCAO;

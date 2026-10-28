@@ -59,10 +59,7 @@ function repositorio(raiz: string, nome: string) {
       branchBase: "main",
       hospedagem: "github",
       preparacao: [],
-      testes: ["false"],
       sonar: { projectKey: nome },
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-      modelos: {},
     });
     banco.close();
   };

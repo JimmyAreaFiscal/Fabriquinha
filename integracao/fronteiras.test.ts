@@ -148,7 +148,7 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
   const args = argumentosPi({
     raiz: c.raiz,
     sessaoPi: "s-1",
-    etapa: "implementar",
+    skills: [],
     modelo: { provedor: etapaGravada?.modelo_provedor ?? "", modelo: etapaGravada?.modelo_nome ?? "" },
     effort: etapaGravada?.effort,
     confianca: true,

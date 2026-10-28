@@ -68,7 +68,7 @@ const NOVAS = [
 const banco = (): DatabaseSync => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, 32)); // o esquema anterior à remoção do fluxo legado, que LEGADO usa
   b.exec(`${LEGADO}
     INSERT INTO demanda VALUES ('D-1', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 0, 'fabriquinha/D-1');
     INSERT INTO rodada VALUES ('D-1', 1, 't', 'desenvolvimento', 0, 'fabriquinha/D-1-1'), ('D-1', 2, 't', 'desenvolvimento', 0, 'fabriquinha/D-1-2');

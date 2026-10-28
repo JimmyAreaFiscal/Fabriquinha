@@ -1,4 +1,4 @@
-// Configuração do serviço e as consultas do agendador e do reinício (F4 §3, §4, §4.1, §7, §10).
+// Configuração do serviço (F4 §3, §10).
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { ErroDeRegra } from "../dominio/erros.ts";
@@ -13,8 +13,6 @@ export const Configuracao = z.strictObject({
 });
 export type Configuracao = z.infer<typeof Configuracao>;
 
-/** As etapas que rodam em modo autônomo (F1 §3.6); as fases delas têm o mesmo nome (F1 §4.3). */
-const AUTONOMAS = "('desenvolvimento','revisao','encerramento')";
 export function configuracao(banco: DatabaseSync): Configuracao {
   const l = banco.prepare("SELECT * FROM configuracao").get() as Record<string, number | string | null>;
   return {
@@ -58,20 +56,3 @@ export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Confi
     );
   return c;
 }
-
-/** F4 §7: as execuções em andamento, com a issue e o grupo de processos do pi. */
-export const execucoesEmAndamento = (banco: DatabaseSync): { id: Id; issue: Id; pgid: number | null }[] =>
-  banco
-    .prepare(
-      `SELECT e.id, t.issue, e.pgid_pi AS pgid FROM execucao e JOIN ticket t ON t.id = e.ticket
-       WHERE e.resultado = 'em_andamento' ORDER BY e.id`,
-    )
-    .all()
-    .map((l) => ({ id: Number(l.id), issue: Number(l.issue), pgid: l.pgid === null ? null : Number(l.pgid) }));
-
-/** Tickets autônomos `em_execucao`; sem execução em andamento, nada mais os tira desse estado (F4 §7). */
-export const ticketsAutonomosEmExecucao = (banco: DatabaseSync): { id: Id; issue: Id }[] =>
-  banco
-    .prepare(`SELECT id, issue FROM ticket WHERE status = 'em_execucao' AND etapa IN ${AUTONOMAS} ORDER BY id`)
-    .all()
-    .map((l) => ({ id: Number(l.id), issue: Number(l.issue) }));

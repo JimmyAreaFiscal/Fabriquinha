@@ -8,40 +8,23 @@ const AGORA = new Date(2026, 9, 15, 12, 0);
 const em = new Date(2026, 9, 1, 12, 0).toISOString();
 
 const projeto = (nome: string) =>
-  `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness, modelos)
-    VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '["npm test"]', '${nome}', '[{"nome":"f","comando":"true","descricao":"d"}]', '{}');`;
+  `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
 
-/** Uma issue com um ticket concluído e uma execução de US$ 10; a de `fase` `registro` ainda não tem título. */
-function issue(id: number, nome: string, fase: string, andamento = false): string {
-  const registro = fase === "registro";
-  const concluida = fase === "concluida";
-  const resultado = andamento ? "em_andamento" : "sucesso";
-  return `INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em, concluida_em)
-      VALUES (${String(id)}, '${nome}', ${registro ? "NULL, NULL" : `'Issue ${String(id)}', 'problema'`}, '${fase}', '${em}', ${concluida ? `'${em}'` : "NULL"});
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
-      VALUES (${String(id)}, ${String(id)}, 'desenvolvimento', 'Ticket', '${andamento ? "em_execucao" : "concluido"}', 'fabriquinha', '${em}', ${andamento ? "NULL" : `'${em}'`});
-    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
-      VALUES (${String(id)}, ${String(id)}, 'consulta', '${crypto.randomUUID()}', '${resultado}', '${em}', ${andamento ? "NULL" : `'${em}'`});
-    INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo)
-      VALUES (${String(id)}, 'anthropic', 'claude-sonnet-5-5', 10, 1000, 500, 0, 0, 10);`;
-}
-
-/** Uma demanda do projeto com uma execução de `custo` dólares, que a página Métricas lê. */
-const demanda = (id: string, nome: string, custo: number) =>
+/** Uma demanda do projeto com uma execução de `custo` dólares, que a página Métricas lê; `andamento`, ainda aberta. */
+const demanda = (id: string, nome: string, custo: number, andamento = false) =>
   `INSERT INTO demanda VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'execucao', '${em}', 'f', 's', 1, 'fabriquinha/${id}');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em}');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', '${andamento ? "em_execucao" : "aberto"}', '${em}');
     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv-${id}');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${em}', '${em}', 0);
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${em}', ${andamento ? "NULL" : `'${em}'`}, 0);
     INSERT INTO uso_modelo_execucao VALUES ('x-${id}', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, ${String(custo)});`;
 
-/** `demo`: 4 issues em fases diferentes (US$ 40); `outro`: 1 (US$ 10); `ocupado`: 1 com execução em andamento. */
+/** `demo`: uma demanda de US$ 40; `outro`: uma de US$ 10; `ocupado`: uma com execução em andamento. */
 function semear(raiz: string): void {
   const banco = abrir(raiz);
   banco.exec(`
     ${projeto("demo")} ${projeto("outro")} ${projeto("ocupado")}
-    ${issue(1, "demo", "registro")} ${issue(2, "demo", "desenho")} ${issue(3, "demo", "desenvolvimento")}
-    ${issue(4, "demo", "concluida")} ${issue(5, "outro", "desenvolvimento")} ${issue(6, "ocupado", "desenvolvimento", true)}
-    ${demanda("I-91", "demo", 40)} ${demanda("I-92", "outro", 10)}
+    ${demanda("I-91", "demo", 40)} ${demanda("I-92", "outro", 10)} ${demanda("I-93", "ocupado", 0, true)}
   `);
   banco.close();
 }

@@ -10,6 +10,8 @@ import { abrir, escrever, migrar, novoId } from "./banco.ts";
 import { listaSql, MIGRACOES } from "./migracoes.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-banco-"));
+/** As migrações antigas são conferidas no esquema anterior à remoção do fluxo legado (migração 33), que as apagaria. */
+const VERSAO_ANTES_DA_REMOCAO = 32;
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
@@ -87,8 +89,8 @@ test("abrir() aplica as migrações e grava a versão; reabrir não reaplica", (
 test("a coluna projeto.link_produto é opcional", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]')`,
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+     VALUES ('p', '/r', 'main', 'github', 'k')`,
   );
   assert.equal(valor(banco, "SELECT link_produto FROM projeto"), null);
   banco.close();
@@ -112,8 +114,8 @@ test("o modelo da Auditoria na configuração: nasce nulo e o CHECK exige proved
 test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuário existentes, anexo com hash e tamanho válidos", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+     VALUES ('p', '/r', 'main', 'github', 'k');
      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd')`,
   );
   const sha = "a".repeat(64);
@@ -138,8 +140,8 @@ test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuár
 test("as tabelas da Tarefa: N de 1 a 20, projeto e usuário existentes, alocação única", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+     VALUES ('p', '/r', 'main', 'github', 'k');
      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd')`,
   );
   const falha = (sql: string, erro: RegExp) => {
@@ -162,8 +164,8 @@ test("as tabelas da Tarefa: N de 1 a 20, projeto e usuário existentes, alocaç�
 test("a tabela da execução simulada: status válido, falhou exige erro, concluída exige relatório JSON, tarefa e usuário existentes", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-     VALUES ('p', '/r', 'main', 'github', '["t"]', 'k', '[{}]');
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+     VALUES ('p', '/r', 'main', 'github', 'k');
      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd');
      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'p', 't', 1, 'x')`,
   );
@@ -269,9 +271,9 @@ test("a migração do cancelamento recria ticket com os status novos sem perder 
     banco.exec("UPDATE ticket SET status = 'fechado' WHERE id = 2");
   }, /CHECK/);
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES_DA_REMOCAO));
 
-  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length);
+  assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_ANTES_DA_REMOCAO);
   assert.equal(valor(banco, "PRAGMA foreign_keys"), 1);
   // A migração 17 acrescenta `enviado_em` e a 19, `devolucoes`, vazios nos tickets que já existiam.
   assert.deepEqual(
@@ -409,9 +411,9 @@ test("a migração do envio (C25) devolve à execução o desenho que esperava o
     PRAGMA ignore_check_constraints = OFF;
   `);
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES_DA_REMOCAO));
 
-  assert.equal(valor(banco, "PRAGMA user_version"), MIGRACOES.length);
+  assert.equal(valor(banco, "PRAGMA user_version"), VERSAO_ANTES_DA_REMOCAO);
   assert.deepEqual(
     banco
       .prepare("SELECT id, status, concluido_em, enviado_em FROM ticket ORDER BY id")
@@ -517,7 +519,7 @@ test("migrar() desfaz a migração e religa as FKs quando ela deixa referência 
 
   assert.throws(
     () => {
-      migrar(banco, MIGRACOES);
+      migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES_DA_REMOCAO));
     },
     (erro) => erro instanceof ErroDeRegra && erro.message.includes("deixou 1 referência(s) órfã(s)"),
   );

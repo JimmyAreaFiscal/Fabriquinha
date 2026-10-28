@@ -1,20 +1,12 @@
 // Coletor do SonarQube (F3 §6): a regra do `sonar_gate.py` da skill `commit` do Auditor, em TypeScript. Analisa a
-// worktree da issue e registra `relatorio_sonar`, aprovado só com zero issue aberta nos arquivos alterados.
+// worktree e devolve as issues abertas nos arquivos alterados: o `relatorio_sonar` só aprova com zero.
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
-import { type Agregado, FABRIQUINHA } from "../dominio/agregado.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
-import { registrarEvidencia } from "../dominio/evidencia.ts";
-import type { Id } from "../dominio/primitivos.ts";
-import { raizDo } from "../persistencia/banco.ts";
-import { agregadoDoTicket, comIssue } from "../persistencia/issues.ts";
-import { projeto } from "../persistencia/projetos.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import { executar } from "../processo.ts";
-import { caminhoDaWorktree, exigirGit, naFilaDoProjeto } from "../repositorio/worktree.ts";
-import { schemaDe } from "./schemas.ts";
+import { exigirGit } from "../repositorio/worktree.ts";
 
 // ponytail: o servidor local do Auditor, o mesmo comando do sonar_gate.py; vira configuração se a Fabriquinha
 // rodar noutra máquina.
@@ -192,49 +184,4 @@ export async function analisarSonar(
     if (p * PAGINA >= Math.min(pagina.paging.total, LIMITE_DA_API)) break;
   }
   return { ceTaskId, arquivos, issues };
-}
-
-/**
- * Coleta e registra (C17, produtor `fabriquinha`) o `relatorio_sonar` do ticket, com a worktree da issue analisada.
- * Issue antiga num arquivo alterado também barra, como no `sonar_gate.py`. SonarQube fora do ar ou scanner falhando
- * lança ErroDeRegra com o comando para subir o servidor; quem chama falha o ticket com a mensagem.
- */
-export async function coletarSonar(banco: DatabaseSync, ticket: Id, opcoes: OpcoesSonar = {}): Promise<Agregado> {
-  const ag = agregadoDoTicket(banco, ticket);
-  const config = ag && projeto(banco, ag.issue.projeto);
-  if (!ag || !config) {
-    throw new ErroDeInexistente(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
-  }
-  const issue = ag.issue.id;
-  const {
-    nome,
-    sonar: { projectKey: chave },
-  } = config;
-  const raiz = raizDo(banco);
-  const worktree = caminhoDaWorktree(raiz, nome, issue);
-  const {
-    ceTaskId,
-    arquivos,
-    issues: achados,
-  } = await analisarSonar(
-    chave,
-    worktree,
-    () => naFilaDoProjeto(raiz, nome, () => arquivosAlterados(worktree)),
-    opcoes,
-  );
-
-  const dados = schemaDe("relatorio_sonar").dados.parse({
-    projectKey: chave,
-    ceTaskId,
-    arquivosAnalisados: arquivos,
-    issues: achados,
-  });
-  return comIssue(banco, issue, "registrarEvidencia", FABRIQUINHA, (ag, ctx) =>
-    registrarEvidencia(
-      ag,
-      { ticket, tipo: "relatorio_sonar", aprovada: achados.length === 0, dados, arquivos: [] },
-      FABRIQUINHA,
-      ctx,
-    ),
-  );
 }

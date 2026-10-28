@@ -7,43 +7,21 @@ const valido = {
   repo: "/home/auditor/fabriquinha",
   branchBase: "main",
   hospedagem: "github",
-  testes: ["npm test"],
   sonar: { projectKey: "Fabriquinha" },
-  fitness: [{ nome: "dominio-sem-io", comando: "npm run fitness", descricao: "o domínio não faz I/O" }],
 };
 const erros = (entrada: unknown) =>
   Projeto.safeParse(entrada).error?.issues.map((i) => `${i.path.join(".")}: ${i.message}`) ?? [];
 
-test("Projeto mínimo válido ganha preparação e modelos vazios", () => {
-  assert.deepEqual(Projeto.parse(valido), { ...valido, preparacao: [], modelos: {} });
+test("Projeto mínimo válido ganha preparação vazia", () => {
+  assert.deepEqual(Projeto.parse(valido), { ...valido, preparacao: [] });
 });
 
-test("o cadastro sem os campos do fluxo legado ganha o padrão que a tabela aceita", () => {
-  const { testes: _, fitness: __, ...semLegado } = valido;
-  assert.deepEqual(Projeto.parse(semLegado), {
-    ...semLegado,
-    preparacao: [],
-    testes: ["true"],
-    fitness: [{ nome: "legado", comando: "true", descricao: "coluna do fluxo legado" }],
-    modelos: {},
-  });
-});
-
-test("Projeto aceita preparação e modelo por etapa", () => {
-  const completo = {
-    ...valido,
-    hospedagem: "azure-devops",
-    preparacao: ["npm ci"],
-    modelos: { desenho: { provedor: "openai", modelo: "gpt-5" }, revisao: { provedor: "llamacpp", modelo: "qwen" } },
-  };
+test("Projeto aceita preparação; os campos do fluxo legado são recusados", () => {
+  const completo = { ...valido, hospedagem: "azure-devops", preparacao: ["npm ci"] };
   assert.deepEqual(Projeto.parse(completo), completo);
-});
-
-test("Projeto aceita efforts por etapa e sem efforts; valor fora dos níveis é recusado em efforts.<etapa>", () => {
-  const efforts = { desenho: "high", revisao: "off" };
-  assert.deepEqual(Projeto.parse({ ...valido, efforts }).efforts, efforts);
-  assert.equal(Projeto.parse(valido).efforts, undefined);
-  assert.ok(erros({ ...valido, efforts: { desenho: "altissimo" } })[0]?.startsWith("efforts.desenho:"));
+  for (const legado of ["testes", "fitness", "modelos", "efforts"]) {
+    assert.equal(Projeto.safeParse({ ...valido, [legado]: [] }).success, false, legado);
+  }
 });
 
 test("linkProduto: http(s) válido passa, vazio vira ausente, o resto dá a mensagem do campo", () => {
@@ -70,16 +48,8 @@ test("Projeto recusa cada campo fora da regra, com o caminho do campo", () => {
     [{ branchBase: "" }, "branchBase"],
     [{ hospedagem: "gitlab" }, "hospedagem"],
     [{ preparacao: ["  "] }, "preparacao.0"],
-    [{ testes: [] }, "testes"],
-    [{ testes: [" "] }, "testes.0"],
     [{ sonar: { projectKey: "" } }, "sonar.projectKey"],
     [{ sonar: undefined }, "sonar"],
-    [{ fitness: [] }, "fitness"],
-    [{ fitness: [{ nome: "x", comando: "c", descricao: "d".repeat(301) }] }, "fitness.0.descricao"],
-    [{ fitness: [{ nome: "x", comando: " ", descricao: "d" }] }, "fitness.0.comando"],
-    [{ fitness: [{ nome: "X", comando: "c", descricao: "d" }] }, "fitness.0.nome"],
-    [{ modelos: { implementacao: { provedor: "openai", modelo: "gpt" } } }, "modelos"],
-    [{ modelos: { desenho: { provedor: "OpenAI", modelo: "gpt" } } }, "modelos.desenho.provedor"],
   ];
   for (const [troca, esperado] of casos) {
     const achados = erros({ ...valido, ...troca });
@@ -88,11 +58,4 @@ test("Projeto recusa cada campo fora da regra, com o caminho do campo", () => {
       `${JSON.stringify(troca)} deveria dar ${esperado}, deu ${JSON.stringify(achados)}`,
     );
   }
-});
-
-test("Projeto recusa fitness function com nome repetido", () => {
-  const f = { nome: "a", comando: "c", descricao: "d" };
-  assert.deepEqual(erros({ ...valido, fitness: [f, { ...f, comando: "outro" }] }), [
-    "fitness: nome de fitness function repetido",
-  ]);
 });

@@ -24,8 +24,8 @@ const quem = { ferramenta: "claude", sessao: "s1" };
 
 const novoBanco = () => {
   const b = abrir(mkdtempSync(join(base, "raiz-")));
-  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-    VALUES ('p', '/repo/p', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]');
+  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    VALUES ('p', '/repo/p', 'main', 'github', 'k');
     INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');`);
   return b;
@@ -102,12 +102,11 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
   const b = novoBanco();
   const a = anexoDe(b, "a.txt", "um");
   submeter(b, [a]);
-  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('q', '/repo/q', 'main', 'github', '["t"]', 'k', '[{"nome":"f","comando":"c","descricao":"d"}]');
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (9, 'q', 't', 'funcionalidade', 'registro', 't');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em) VALUES (9, 9, 'registro', 't', 'aberto', 'auditor', 't');
-    INSERT INTO evidencia (id, ticket, tipo, produtor, em) VALUES (9, 9, 'comportamento', 'agente', 't');
-    INSERT INTO evidencia_arquivo VALUES (9, 'a.txt', '${a.sha256}', 'text/plain', 2);`);
+  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('q', '/repo/q', 'main', 'github', 'k');
+    INSERT INTO demanda VALUES ('I-9', 'q', 't', 'problema', 'd', 'execucao', 't', 'f', 's', 1, 'fabriquinha/I-9');
+    INSERT INTO evidencia_demanda VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
+    INSERT INTO arquivo_evidencia VALUES ('e9', 1, 'a.txt', '${a.sha256}', 'text/plain', 2);`);
   await removerProjeto(b, "q");
   assert.equal(existsSync(caminhoArquivo(b, a.sha256)), true);
 });

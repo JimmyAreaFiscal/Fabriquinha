@@ -1,5 +1,5 @@
-// Rotas da configuração SDLC do projeto (comparacao-sdlc §7.1): lê e grava o `Projeto` do domínio novo, que convive
-// com o cadastro legado (`/api/projetos/:nome`) até o cutover.
+// Rotas da configuração SDLC do projeto (comparacao-sdlc §7.1): lê e grava o `Projeto` do domínio novo, ao lado do
+// cadastro do projeto (`/api/projetos/:nome`).
 import { z } from "zod";
 import { Projeto } from "../../dominio/configuracao_projeto.ts";
 import { encontrado } from "../../dominio/erros.ts";

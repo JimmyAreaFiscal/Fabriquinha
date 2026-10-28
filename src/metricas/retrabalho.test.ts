@@ -7,11 +7,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { abrir } from "../persistencia/banco.ts";
-import { gravarCommit } from "../persistencia/commits.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { projetosAVarrer } from "../persistencia/retrabalho.ts";
-import { registrarRetrabalho, registrarRetrabalhoDemanda, varrerBase } from "./retrabalho.ts";
+import { registrarRetrabalhoDemanda, varrerBase } from "./retrabalho.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-retrabalho-")));
 after(() => {
@@ -42,14 +41,9 @@ function cenario() {
     repo,
     branchBase: "main",
     hospedagem: "github",
-    testes: ["true"],
     sonar: { projectKey: "loja" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
   });
   const agora = new Date().toISOString();
-  banco
-    .prepare("INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'I', 'problema', ?, ?)")
-    .run("desenvolvimento", agora);
   banco
     .prepare(
       "INSERT INTO demanda VALUES ('I-1', 'loja', 't', 'problema', 'd', 'execucao', ?, 'f', 's', 1, 'fabriquinha/I-1')",
@@ -62,12 +56,6 @@ function cenario() {
          VALUES ('I-1', ?, 'implementar', 'aberto', ?)`,
       )
       .run(id, agora);
-    banco
-      .prepare(
-        `INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
-         VALUES (?, 1, 'desenvolvimento', 'T', 'concluido', 'fabriquinha', ?, ?)`,
-      )
-      .run(id, agora, agora);
   }
 
   /**
@@ -83,7 +71,6 @@ function cenario() {
     git(repo, "-c", `user.name=${autor}`, "-c", `user.email=${autor.toLowerCase()}@exemplo.com`, "commit", "-qm", "c");
     const sha = git(repo, "rev-parse", "HEAD");
     if (ticket !== undefined) {
-      gravarCommit(banco, ticket, { sha, mensagem: "c", em: agora, arquivos: [] });
       gravarCommitDemanda(banco, "I-1", ticket, { sha, mensagem: "c", em: agora, arquivos: [] });
     }
     return sha;
@@ -103,9 +90,13 @@ function cenario() {
         )
         .all()
         .map((l) => ({ ...l })),
+    /** O retrabalho entre os tickets da I-1, sem as colunas da demanda. */
     retrabalho: () =>
       banco
-        .prepare("SELECT * FROM retrabalho ORDER BY commit_alterador, ticket_origem")
+        .prepare(
+          `SELECT commit_alterador, ticket_id AS ticket, autor, ticket_origem_id AS ticket_origem, linhas
+           FROM retrabalho_demanda ORDER BY commit_alterador, ticket_origem_id`,
+        )
         .all()
         .map((l) => ({ ...l })),
     cursor: () =>
@@ -132,9 +123,9 @@ test("retrabalho: A cria um arquivo, B reescreve 3 linhas e acrescenta 5; espera
     2,
   );
 
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 3)]);
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 3)], "idempotente");
   c.banco.close();
 });
@@ -146,8 +137,8 @@ test("retrabalho entre vários tickets: cada ticket de origem vira uma linha, e 
   const so = c.commitar({ "a.txt": linhas("a1", "a2", "a3", "novo"), "c.txt": "c\n" }, 3);
   const d = c.commitar({ "a.txt": linhas("D1", "a2", "a3", "novo"), "b.txt": null }, 4);
 
-  await registrarRetrabalho(c.banco, 3, so);
-  await registrarRetrabalho(c.banco, 4, d);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 3, so);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 4, d);
   assert.deepEqual(c.retrabalho(), [deTicket(d, 4, 1, 1), deTicket(d, 4, 2, 2)].sort(porSha));
   c.banco.close();
 });
@@ -159,7 +150,7 @@ test("arquivo removido conta todas as linhas", async () => {
   const c = cenario();
   c.commitar({ "a.txt": linhas("a1", "a2", "a3", "a4") }, 1);
   const b = c.commitar({ "a.txt": null }, 2);
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 4)]);
   c.banco.close();
 });
@@ -170,7 +161,7 @@ test("arquivo renomeado usa o caminho antigo e conta só as linhas reescritas", 
   git(c.repo, "mv", "a.txt", "nome novo.txt");
   const b = c.commitar({ "nome novo.txt": linhas("a1", "B2", "a3", "a4", "a5") }, 2);
   assert.match(git(c.repo, "show", "-M", "--name-status", "--format=", b), /^R\d+/, "o git vê a renomeação");
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 1)]);
   c.banco.close();
 });
@@ -192,11 +183,14 @@ test("blame.ignoreRevsFile da configuração global, sem o arquivo no repositór
   c.commitar({ "a.txt": linhas("a1", "a2") }, 1);
   const b = c.commitar({ "a.txt": linhas("B1", "a2") }, 2);
   assert.throws(() => git(c.repo, "blame", "HEAD~1", "--", "a.txt"), /could not open object name list/);
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 1)]);
   // Na configuração do próprio repositório, o blame ainda falha, e o erro diz por quê.
   git(c.repo, "config", "blame.ignoreRevsFile", ".git-blame-ignore-revs");
-  await assert.rejects(registrarRetrabalho(c.banco, 2, b), /git blame falhou em .*could not open object name list/);
+  await assert.rejects(
+    registrarRetrabalhoDemanda(c.banco, "I-1", 2, b),
+    /git blame falhou em .*could not open object name list/,
+  );
   c.banco.close();
 });
 
@@ -204,7 +198,7 @@ test("caminho com caractere de glob é literal", async () => {
   const c = cenario();
   c.commitar({ "a.txt": linhas("a1", "a2", "a3", "a4"), "[a].txt": "x\n" }, 1);
   const b = c.commitar({ "a.txt": linhas("a1", "a2", "a3", "B4"), "[a].txt": "y\n" }, 2);
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 2)]);
   c.banco.close();
 });
@@ -226,7 +220,7 @@ test("arquivo binário e submódulo são ignorados", async () => {
   c.commitar({ ".gitattributes": "*.bin diff=texto\n", "a.bin": Buffer.from([0, 1, 2, 10, 3, 10]) }, 1);
   git(c.repo, "update-index", "--cacheinfo", `160000,${dois},sub`);
   const b = c.commitar({ "a.bin": Buffer.from([0, 9, 9, 10, 3, 10]) }, 2);
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), []);
   c.banco.close();
 });
@@ -235,12 +229,12 @@ test("linha de commit humano é ignorada; um ticket nunca conta retrabalho sobre
   const c = cenario();
   c.commitar({ "humano.txt": linhas("A1", "h2", "h3") }, 1);
   const b = c.commitar({ "humano.txt": linhas("B1", "B2", "h3") }, 2);
-  await registrarRetrabalho(c.banco, 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 1)]);
   // O commit de A mudou a linha de uma pessoa: não é retrabalho de ticket nenhum.
-  await registrarRetrabalho(c.banco, 1, git(c.repo, "rev-parse", "HEAD~1"));
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 1, git(c.repo, "rev-parse", "HEAD~1"));
   // As linhas de A, contadas para o próprio A, ficariam fora do CHECK do F6 §7.
-  await registrarRetrabalho(c.banco, 1, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 1, b);
   assert.deepEqual(c.retrabalho(), [deTicket(b, 2, 1, 1)]);
   c.banco.close();
 });
@@ -276,12 +270,6 @@ test("CA-11: o segundo ticket da demanda reescreve linhas do primeiro e vai para
 test("demanda inexistente é erro", async () => {
   const c = cenario();
   await assert.rejects(registrarRetrabalhoDemanda(c.banco, "I-99", 1, "0".repeat(40)), /a demanda I-99 não existe/);
-  c.banco.close();
-});
-
-test("ticket inexistente é erro", async () => {
-  const c = cenario();
-  await assert.rejects(registrarRetrabalho(c.banco, 99, "0".repeat(40)), /o ticket T-99 não existe/);
   c.banco.close();
 });
 
@@ -338,7 +326,6 @@ test("commit humano na base reescreve 2 linhas de A: retrabalho(commit, null, au
   // Sem nada novo, a varredura só renova a data.
   await varrerBase(c.banco, "loja");
   assert.equal(c.retrabalhoDemanda().length, 1);
-  assert.deepEqual(c.retrabalho(), []);
   c.banco.close();
 });
 
@@ -380,9 +367,7 @@ test("projetosAVarrer: os sem varredura e os varridos há mais de 24 horas, em o
       repo: `/repo/${nome}`,
       branchBase: "main",
       hospedagem: "github",
-      testes: ["true"],
       sonar: { projectKey: nome },
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     });
   };
   cadastrar("velho");

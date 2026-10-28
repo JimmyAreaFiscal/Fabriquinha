@@ -14,8 +14,8 @@ const em = (mes: string) => new Date(`${mes}-01T12:00:00`).toISOString();
 function semear(raiz: string): void {
   const banco = abrir(raiz);
   const projeto = (nome: string) =>
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness, modelos)
-      VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '["npm test"]', '${nome}', '[{"nome":"f","comando":"true","descricao":"d"}]', '{}');`;
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
   const demanda = (id: string, nome: string, titulo: string, mes: string) =>
     `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', 'problema', 'd', 'execucao', '${em(mes)}', 'f', 's', 1, 'b-${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
@@ -117,8 +117,8 @@ function semearNumerosGrandes(raiz: string): void {
   const sha = (letra: string) => letra.repeat(40);
   const execucoes = Array.from({ length: 1_200 }, (_, i) => `('x${String(i)}', 's1', '${em(M0)}', '${em(M0)}', 0)`);
   banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness, modelos)
-      VALUES ('loja', '/nao/existe/loja', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]', '{}');
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
     INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${em(M0)}'), ('I-1', 2, 'implementar', 'concluido', '${em(M0)}');

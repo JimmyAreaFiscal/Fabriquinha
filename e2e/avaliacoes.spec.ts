@@ -4,8 +4,8 @@ import { expect, projeto, test } from "./apoio.ts";
 
 const FIM = "2026-10-12T12:00:00.000Z";
 const SEMEAR_PROJETO = (nome: string) =>
-  `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-     VALUES ('${nome}', '/r/${nome}', 'main', 'github', '["t"]', '${nome}', '[{"nome":"f","comando":"c","descricao":"d"}]');`;
+  `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+     VALUES ('${nome}', '/r/${nome}', 'main', 'github', '${nome}');`;
 const SEMEAR_DEMANDA = (id: string, projeto_: string) =>
   `INSERT INTO demanda VALUES ('${id}', '${projeto_}', 'Demanda ${id}', 'problema', 'd', 'execucao', '${FIM}', 'f', 's', 1, 'fabriquinha/${id}');
    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${FIM}');

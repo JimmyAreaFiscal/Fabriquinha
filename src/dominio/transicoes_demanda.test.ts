@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type Ator, AUDITOR, EXTERNO, FABRIQUINHA } from "./agregado.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "./agregado.ts";
+
+const EXTERNO: Ator = { tipo: "externo" };
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { submeterEvidenciaDemanda } from "./evidencia_demanda.ts";

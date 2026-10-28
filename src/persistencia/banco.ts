@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { TipoId } from "../dominio/primitivos.ts";
-import { MIGRACOES } from "./migracoes.ts";
+import { type Migracao, MIGRACOES } from "./migracoes.ts";
 
 /** A raiz da Fabriquinha: `$FABRIQUINHA_ROOT`, padrão `~/fabriquinha` (F2 §2). */
 export const raizPadrao = (env: NodeJS.ProcessEnv = process.env): string =>
@@ -43,7 +43,7 @@ export const raizDo = (banco: DatabaseSync): string =>
   dirname((banco.prepare("PRAGMA database_list").get() as { file: string }).file);
 
 /** Aplica em ordem as migrações ainda não aplicadas, cada uma na sua transação; a versão fica em `user_version`. */
-export function migrar(banco: DatabaseSync, migracoes: readonly string[]): void {
+export function migrar(banco: DatabaseSync, migracoes: readonly Migracao[]): void {
   const inicial = versao(banco);
   if (inicial > migracoes.length) {
     throw new ErroDeRegra(
@@ -61,9 +61,10 @@ export function migrar(banco: DatabaseSync, migracoes: readonly string[]): void 
     while (pendente) {
       pendente = escrever(banco, () => {
         const atual = versao(banco);
-        const sql = migracoes[atual];
-        if (sql === undefined) return false;
-        banco.exec(sql);
+        const migracao = migracoes[atual];
+        if (migracao === undefined) return false;
+        if (typeof migracao === "string") banco.exec(migracao);
+        else migracao(banco);
         banco.exec(`PRAGMA user_version = ${String(atual + 1)}`);
         const orfas = banco.prepare("PRAGMA foreign_key_check").all();
         if (orfas.length > 0) {

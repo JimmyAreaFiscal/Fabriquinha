@@ -87,9 +87,7 @@ function cenario(texto: string, n: number, usuarios = ["Dona Maria"], linkProdut
     repo: "/repos/p",
     branchBase: "main",
     hospedagem: "github",
-    testes: ["npm test"],
     sonar: { projectKey: "p" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linkProduto,
   });
   const alocados = usuarios.map((nome) => criarUsuarioSimulado(banco, "p", { nome, descricao: DESCRICAO }));

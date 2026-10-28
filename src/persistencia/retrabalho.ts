@@ -1,6 +1,5 @@
-// Gravação e leitura do retrabalho e do cursor da varredura de commits humanos (F6 §4, §7).
+// O retrabalho dos commits humanos da base e o cursor da varredura deles (F6 §4, §7).
 import type { DatabaseSync } from "node:sqlite";
-import type { Id } from "../dominio/primitivos.ts";
 import { escrever } from "./banco.ts";
 import { gravarRetrabalhoExterno, type LinhasPorDemanda } from "./commits_demanda.ts";
 
@@ -9,24 +8,6 @@ export interface CommitHumano {
   sha: string;
   autor: string;
   linhas: LinhasPorDemanda;
-}
-
-/**
- * `INSERT OR REPLACE`: a base que volta a um ponto anterior e depois traz de novo os mesmos commits não trava a
- * varredura com chave repetida.
- */
-const inserir = (banco: DatabaseSync) =>
-  banco.prepare(
-    `INSERT OR REPLACE INTO retrabalho (commit_alterador, ticket, autor, ticket_origem, linhas) VALUES (?, ?, ?, ?, ?)`,
-  );
-
-/** F6 §4.2, passo 4: numa transação, troca as linhas em que o ticket é o alterador pelas de `linhas`. */
-export function gravarRetrabalho(banco: DatabaseSync, ticket: Id, sha: string, linhas: Map<Id, number>): void {
-  escrever(banco, () => {
-    banco.prepare("DELETE FROM retrabalho WHERE ticket = ?").run(ticket);
-    const linha = inserir(banco);
-    for (const [origem, n] of linhas) linha.run(sha, ticket, null, origem, n);
-  });
 }
 
 /** O último `sha` da base que a varredura do projeto viu, se ela já rodou. */

@@ -10,14 +10,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { avisar, encerrar, situacao } from "../../execucao/gerente.ts";
+import { avisar, situacao } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import type { DadosDoChatDemanda } from "./chat.ts";
 import { criarDemanda } from "../../persistencia/demandas.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execucao/execucao_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
-import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import { demanda } from "./demandas_cenario.test.ts";
 
@@ -58,18 +57,10 @@ before(async () => {
     branchBase: "main",
     hospedagem: "github",
     preparacao: [],
-    // Sem SONAR_HOST_URL, a coleta depois do pi do desenvolvimento falha o ticket sem depender do SonarQube da máquina;
-    // uma reprovação o devolveria ao agente.
-    testes: ["true"],
     sonar: { projectKey: "loja" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    modelos: {},
   });
 });
 after(async () => {
-  // Os pis interativos ociosos ficariam vivos até a ociosidade: param aqui, e o C6 de cada um vem antes de fechar.
-  for (const { id } of execucoesEmAndamento(servico.banco)) encerrar(id);
-  await ate(() => execucoesEmAndamento(servico.banco).length === 0, "o C6 das sessões");
   await servico.parar();
   rmSync(base, { recursive: true, force: true });
 });

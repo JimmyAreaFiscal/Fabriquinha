@@ -41,8 +41,8 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
   abertos.push(banco);
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-       VALUES ('loja', ?, 'integracao', 'github', '["t"]', 'k', '[{"nome":"f"}]')`,
+      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
     )
     .run(c.repo);
   gravarConfiguracaoProjeto(banco, {

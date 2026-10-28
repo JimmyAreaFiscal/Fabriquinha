@@ -6,7 +6,6 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import type { TipoEvidenciaEtapa } from "../dominio/evidencia_etapa.ts";
 import { type Etapa, type Id, Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
-import { MetricasIssue } from "../metricas/issue.ts";
 
 /** F3 §3.1: a classe vem dos bytes iniciais, nunca da extensão. */
 export const Classe = z.enum(["video", "imagem", "html", "texto"]);
@@ -489,9 +488,9 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
     dados: z.object({ roteiro: Texto }),
     arquivos: Arquivos({ classes: ["video"], min: 1, max: 1 }),
   },
-  // Produzidas pela Fabriquinha no encerramento (F3 §4.5): o relatório do F6 com o HTML, e o PR com o corpo completo,
-  // antes de qualquer condensação (§4.7).
-  relatorio_produtividade: { dados: MetricasIssue, arquivos: HTML_UNICO },
+  // Produzidas pela Fabriquinha no encerramento da rodada: a produtividade (produtividade_rodada.ts), que nunca passa
+  // por aqui, e o PR com o corpo completo, antes de qualquer condensação (F3 §4.7).
+  relatorio_produtividade: { dados: z.record(z.string(), z.unknown()), arquivos: HTML_UNICO },
   pr_aberto: {
     dados: z.object({
       hospedagem: Hospedagem,
@@ -507,12 +506,6 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
 };
 
 export const schemaDe = (tipo: TipoEvidencia): SchemaEvidencia => SCHEMAS[tipo];
-
-/** O formato que o agente envia (`fabriquinha evidencia schema <tipo>`): JSON Schema de `dados` e as regras de arquivo. */
-export function jsonSchemaDe(tipo: TipoEvidencia): { dados: z.core.JSONSchema.BaseSchema; arquivos: RegraArquivos } {
-  const { dados, arquivos } = schemaDe(tipo);
-  return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
-}
 
 /**
  * "Não se aplica" só com justificativa; aplicável, a lista de `itens` não pode ficar vazia. `campo` é a lista do tipo
@@ -649,11 +642,3 @@ const SCHEMAS_ETAPA: Record<
 export type TipoSchemaEtapa = keyof typeof SCHEMAS_ETAPA;
 
 export const schemaDeEtapa = (tipo: TipoSchemaEtapa): SchemaEvidencia => SCHEMAS_ETAPA[tipo];
-
-export function jsonSchemaDeEtapa(tipo: TipoSchemaEtapa): {
-  dados: z.core.JSONSchema.BaseSchema;
-  arquivos: RegraArquivos;
-} {
-  const { dados, arquivos } = schemaDeEtapa(tipo);
-  return { dados: z.toJSONSchema(dados, { io: "input" }), arquivos };
-}

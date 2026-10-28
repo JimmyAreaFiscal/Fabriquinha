@@ -6,9 +6,8 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { CATALOGO } from "../dominio/evidencia.ts";
 import type { ModoExecucao } from "../dominio/agregado.ts";
-import type { Effort, Etapa, EtapaTicket, Modelo } from "../dominio/primitivos.ts";
+import type { Effort, Modelo } from "../dominio/primitivos.ts";
 import { ambienteSemCredenciais, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 
@@ -26,10 +25,6 @@ export const binarioPi = (): string => process.env.FABRIQUINHA_PI || "pi";
 
 /** O nome da skill de artefato (P1 §5.1) de uma evidência: sai do tipo. */
 export const skillDoTipo = (tipo: string): string => "artefato-" + tipo.replace(/^relatorio_/, "").replaceAll("_", "-");
-
-/** Skills de artefato da etapa (P1 §5.1): uma por evidência de produtor agente. */
-export const skillsDaEtapa = (etapa: Etapa): string[] =>
-  CATALOGO.filter((c) => c.etapa === etapa && c.produtor === "agente").map((c) => skillDoTipo(c.tipo));
 
 /**
  * F4 §6.1.1: a decisão de confiança mais próxima de `repo` (o próprio caminho ou um pai) no `trust.json` do pi, que
@@ -49,9 +44,8 @@ export function confianca(repo: string): boolean | undefined {
 export interface Lancamento {
   raiz: string;
   sessaoPi: string;
-  etapa: Etapa | EtapaTicket;
-  /** As skills do lançamento; sem ela, as da etapa legada. */
-  skills?: string[];
+  /** As skills de artefato da etapa (P1 §5.1). */
+  skills: string[];
   modelo: Modelo | undefined;
   effort?: Effort;
   confianca: boolean | undefined;
@@ -78,7 +72,7 @@ export const argumentosPi = (l: Lancamento): string[] => [
   l.sessaoPi,
   ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.modelo] : []),
   ...(l.effort ? ["--thinking", l.effort] : []),
-  ...(l.skills ?? skillsDaEtapa(l.etapa as Etapa)).flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
+  ...l.skills.flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
   "-e",
   join(PACOTE, "extensions", "guarda.ts"),
   "-e",
@@ -212,7 +206,7 @@ export function lancarPi(
 }
 
 /**
- * O ambiente da auditoria `dir` (`<raiz>/auditorias/<sessão>`): como o da execução, mas sem `FABRIQUINHA_EXECUCAO`,
+ * O ambiente da auditoria `dir` (`<raiz>/avaliacoes/<sessão>`): como o da execução, mas sem `FABRIQUINHA_EXECUCAO`,
  * porque ela não é de nenhum ticket, e com `FABRIQUINHA_AUDITORIA`, que liga a regra do `scout` na guarda.
  */
 export function ambienteDaAuditoria(raiz: string, dir: string): NodeJS.ProcessEnv {

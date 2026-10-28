@@ -18,38 +18,25 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { z, ZodError } from "zod";
-import { type Ator, EXTERNO, type TipoIssue } from "../dominio/agregado.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
-import { evidenciasFaltando, registrarEvidencia } from "../dominio/evidencia.ts";
-import { iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
-import { decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
-import { editarIssue } from "../dominio/issue.ts";
-import { adicionarTicketDesenvolvimento } from "../dominio/tickets.ts";
+import type { TipoEvidencia } from "../dominio/agregado.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
-import { registrarProjeto } from "../persistencia/projetos.ts";
-import { submeter, submeterExterno } from "./submissao.ts";
+import { schemaDe } from "./schemas.ts";
+import { guardarAnexos } from "./submissao.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-submissao-"));
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-const auditor: Ator = { tipo: "auditor" };
-const fabriquinha: Ator = { tipo: "fabriquinha" };
-const agente: Ator = { tipo: "agente", execucao: 1, ticket: 1 };
 const MiB = 1024 * 1024;
-const AGORA = "2026-10-15T12:00:00.000Z";
 
 const WEBM = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01, 0x02]);
 const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from("ftypisom")]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
-const HTML = "﻿ \n<!DOCTYPE html><html><body>oi</body></html>";
-const COMPORTAMENTO = { descricao: "  login lento  ", comoReproduzir: ["abrir", "entrar"], extra: 1 };
-const CRITERIO = { id: "CA-1", dado: "um usuário", quando: "entra", entao: "vê o painel" };
+const HTML = "\ufeff \n<!DOCTYPE html><html><body>oi</body></html>";
 
 interface Cenario {
   raiz: string;
@@ -60,28 +47,10 @@ interface Cenario {
   arquivo(pasta: string, nome: string, conteudo: string | Buffer, tamanho?: number): string;
 }
 
-/** I-1 do projeto `loja` em `registro`, com o ticket T-1 rodando na E-1 (interativa), a worktree e a saída. */
+/** O banco, a worktree do ticket e a saída da execução, de onde os anexos podem vir. */
 function cenario(): Cenario {
   const raiz = mkdtempSync(join(base, "raiz-"));
   const banco = abrir(raiz);
-  registrarProjeto(banco, {
-    nome: "loja",
-    repo: "/repos/loja",
-    branchBase: "main",
-    hospedagem: "github",
-    testes: ["npm test"],
-    sonar: { projectKey: "loja" },
-    fitness: [{ nome: "f", comando: "c", descricao: "d" }],
-  });
-  registrarIssue(banco, { projeto: "loja" }, auditor);
-  comIssue(banco, 1, "iniciarExecucao", fabriquinha, (ag, ctx) =>
-    iniciarExecucao(
-      ag,
-      { ticket: 1, modo: "interativo", sessaoPi: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
-      fabriquinha,
-      ctx,
-    ),
-  );
   const worktree = join(raiz, "worktrees", "loja", "I-1");
   const saida = join(raiz, "execucoes", "E-1", "saida");
   mkdirSync(worktree, { recursive: true });
@@ -101,108 +70,70 @@ function cenario(): Cenario {
   };
 }
 
-const sha = (conteudo: string | Buffer) => createHash("sha256").update(conteudo).digest("hex");
-const contar = (banco: DatabaseSync, tabela: string) =>
-  (banco.prepare(`SELECT count(*) AS n FROM ${tabela}`).get() as { n: number }).n;
+/** Os anexos de `tipo` guardados como a submissão da evidência os guarda, da worktree ou da saída. */
+const submeter = (c: Cenario, tipo: TipoEvidencia, caminhos: readonly string[], cruzar = () => undefined) =>
+  Promise.resolve().then(() =>
+    guardarAnexos(
+      c.banco,
+      caminhos,
+      tipo,
+      schemaDe(tipo).arquivos,
+      {
+        worktree: c.worktree,
+        saida: c.saida,
+        fora: "da worktree da issue e do diretório de saída",
+        copie: `$FABRIQUINHA_SAIDA (${c.saida})`,
+      },
+      cruzar,
+    ),
+  );
 
-/** Recusa com a mensagem e sem gravar nada: nem evidência, nem arquivo guardado. */
-async function recusa(
-  c: Cenario,
-  trabalho: () => Promise<unknown>,
-  classe: typeof ErroDeRegra | typeof ErroDeEscopo,
-  msg: string,
-) {
+const sha = (conteudo: string | Buffer) => createHash("sha256").update(conteudo).digest("hex");
+
+/** Recusa com a mensagem e sem guardar arquivo algum. */
+async function recusa(c: Cenario, trabalho: () => Promise<unknown>, classe: typeof ErroDeRegra, msg: string) {
   await assert.rejects(trabalho, (e) => e instanceof classe && e.message === msg);
-  assert.equal(contar(c.banco, "evidencia"), 0);
   const arquivos = join(c.raiz, "arquivos");
   assert.deepEqual(existsSync(arquivos) ? readdirSync(arquivos) : [], []);
 }
 
-test("submeter valida, guarda os arquivos por conteúdo e grava comportamento com os dados do schema", async () => {
+test("guarda os anexos por conteúdo, com nome, classe e tamanho, depois de cruzar", async () => {
   const c = cenario();
   const video = c.arquivo(c.saida, "tela.webm", WEBM);
   const log = c.arquivo(c.worktree, "erro.log", "Error: timeout\n");
-  const ag = await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [video, log]);
-
-  assert.deepEqual(agregado(c.banco, 1), ag);
-  const [evidencia] = ag.evidencias;
-  assert.deepEqual(
-    { ...evidencia, em: undefined },
-    {
-      id: 1,
-      ticket: 1,
-      tipo: "comportamento",
-      produtor: "agente",
-      dados: { descricao: "login lento", comoReproduzir: ["abrir", "entrar"] },
-      arquivos: [
-        { nome: "tela.webm", mime: "video/webm", sha256: sha(WEBM), bytes: WEBM.length },
-        { nome: "erro.log", mime: "text/plain; charset=utf-8", sha256: sha("Error: timeout\n"), bytes: 15 },
-      ],
-      em: undefined,
-    },
-  );
+  assert.deepEqual(await submeter(c, "comportamento", [video, log]), [
+    { nome: "tela.webm", mime: "video/webm", sha256: sha(WEBM), bytes: WEBM.length },
+    { nome: "erro.log", mime: "text/plain; charset=utf-8", sha256: sha("Error: timeout\n"), bytes: 15 },
+  ]);
   assert.deepEqual(readFileSync(caminhoArquivo(c.banco, sha(WEBM))), WEBM);
-  assert.equal(c.banco.prepare("SELECT ator FROM comando WHERE nome = 'registrarEvidencia'").get()?.ator, "agente");
-  c.banco.close();
-});
-
-test("resubmeter o mesmo tipo substitui a evidência; o arquivo antigo continua guardado", async () => {
-  const c = cenario();
-  const primeiro = c.arquivo(c.saida, "a.webm", WEBM);
-  await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [primeiro]);
-  const segundo = c.arquivo(c.saida, "b.mp4", MP4);
-  const ag = await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [segundo]);
-
-  assert.deepEqual(
-    ag.evidencias.map((e) => [e.id, e.arquivos.map((a) => [a.nome, a.mime])]),
-    [[2, [["b.mp4", "video/mp4"]]]],
+  // A regra cruzada que recusa vem antes da guarda: nada fica guardado.
+  const outro = c.arquivo(c.saida, "outro.webm", MP4);
+  const cruzamento = new ErroDeRegra("o cruzamento recusou", "corrija");
+  await assert.rejects(
+    submeter(c, "comportamento", [outro], () => {
+      throw cruzamento;
+    }),
+    cruzamento,
   );
-  assert.equal(contar(c.banco, "evidencia_arquivo"), 1);
-  assert.equal(existsSync(caminhoArquivo(c.banco, sha(WEBM))), true);
+  assert.equal(existsSync(caminhoArquivo(c.banco, sha(MP4))), false);
   c.banco.close();
 });
 
 test("criterios_aceite não aceita arquivo; comportamento exige pelo menos um", async () => {
   const c = cenario();
-  const dados = { criterios: [CRITERIO] };
   await recusa(
     c,
-    () => submeter(c.banco, agente, "criterios_aceite", dados, [c.arquivo(c.worktree, "x.txt", "x")]),
+    () => submeter(c, "criterios_aceite", [c.arquivo(c.worktree, "x.txt", "x")]),
     ErroDeRegra,
     "criterios_aceite aceita no máximo 0 arquivo(s), e vieram 1 (submeta sem os excedentes)",
   );
   await recusa(
     c,
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, []),
+    () => submeter(c, "comportamento", []),
     ErroDeRegra,
     "comportamento precisa de pelo menos 1 arquivo(s), e veio 0 (anexe com --arquivo <caminho>)",
   );
-  assert.equal(
-    (await submeter(c.banco, agente, "criterios_aceite", dados, [])).evidencias[0]?.tipo,
-    "criterios_aceite",
-  );
-  c.banco.close();
-});
-
-test("dados fora do schema: ZodError com o caminho de cada campo a partir de dados (z.prettifyError)", async () => {
-  const c = cenario();
-  const dados = { criterios: [CRITERIO, { ...CRITERIO, id: "CA-2" }, { ...CRITERIO, id: "CA3", entao: undefined }] };
-  let erro: unknown;
-  try {
-    await submeter(c.banco, agente, "criterios_aceite", dados, []);
-  } catch (error_) {
-    erro = error_;
-  }
-  assert.ok(erro instanceof ZodError);
-  const texto = z.prettifyError(erro);
-  assert.match(texto, /→ at dados\.criterios\[2\]\.id/);
-  assert.match(texto, /→ at dados\.criterios\[2\]\.entao/);
-  await assert.rejects(() => submeter(c.banco, agente, "comportamento", undefined, []), ZodError);
-  await assert.rejects(
-    () => submeter(c.banco, agente, "video", {}, []),
-    (e) => e instanceof ZodError && z.prettifyError(e).includes("→ at tipo"),
-  );
-  assert.equal(contar(c.banco, "evidencia"), 0);
+  assert.deepEqual(await submeter(c, "criterios_aceite", []), []);
   c.banco.close();
 });
 
@@ -218,7 +149,7 @@ test("origem: só da worktree ou da saída, pelo caminho real do descritor; link
   for (const link of ["atalho.txt", "link.txt"]) {
     await recusa(
       c,
-      () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [join(c.worktree, link)]),
+      () => submeter(c, "comportamento", [join(c.worktree, link)]),
       ErroDeRegra,
       `${join(c.worktree, link)} é um link simbólico (anexe o próprio arquivo, não um link para ele)`,
     );
@@ -228,15 +159,15 @@ test("origem: só da worktree ou da saída, pelo caminho real do descritor; link
   const viaPasta = join(c.worktree, "pasta", "segredo.txt");
   await recusa(
     c,
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [viaPasta]),
+    () => submeter(c, "comportamento", [viaPasta]),
     ErroDeRegra,
     `${viaPasta} está ${foraDaSaida} ${solucao}`,
   );
   const subindo = join(c.worktree, "..", "..", "..", "segredo.txt");
-  await assert.rejects(() => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [subindo]), /fora da worktree/);
+  await assert.rejects(() => submeter(c, "comportamento", [subindo]), /fora da worktree/);
   await recusa(
     c,
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [join(c.worktree, "nao-existe.txt")]),
+    () => submeter(c, "comportamento", [join(c.worktree, "nao-existe.txt")]),
     ErroDeRegra,
     `${join(c.worktree, "nao-existe.txt")} não existe (confira o caminho do arquivo)`,
   );
@@ -246,7 +177,7 @@ test("origem: só da worktree ou da saída, pelo caminho real do descritor; link
   for (const especial of [join(c.worktree, "src"), fifo]) {
     await recusa(
       c,
-      () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [especial]),
+      () => submeter(c, "comportamento", [especial]),
       ErroDeRegra,
       `${especial} não é um arquivo regular (anexe um arquivo comum)`,
     );
@@ -256,18 +187,18 @@ test("origem: só da worktree ou da saída, pelo caminho real do descritor; link
   chmodSync(semLeitura, 0o000);
   await recusa(
     c,
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [semLeitura]),
+    () => submeter(c, "comportamento", [semLeitura]),
     ErroDeRegra,
     `sem permissão para ler ${semLeitura} (dê permissão de leitura ao arquivo)`,
   );
   // Outros erros de abertura sobem como vieram.
-  await assert.rejects(() => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [join(semLeitura, "x")]), {
+  await assert.rejects(() => submeter(c, "comportamento", [join(semLeitura, "x")]), {
     code: "ENOTDIR",
   });
   const grande = c.arquivo(c.worktree, "grande.bin", "", 500 * 1024 * 1024 + 1);
   await recusa(
     c,
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [grande]),
+    () => submeter(c, "comportamento", [grande]),
     ErroDeRegra,
     `${grande} tem 500.0 MiB, e nenhum anexo passa de 500.0 MiB (reduza o arquivo)`,
   );
@@ -275,9 +206,7 @@ test("origem: só da worktree ou da saída, pelo caminho real do descritor; link
   symlinkSync(c.saida, join(c.worktree, "saida"));
   const viaSaida = join(c.worktree, "saida", "real.txt");
   assert.deepEqual(
-    (await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [viaSaida])).evidencias[0]?.arquivos.map(
-      (a) => a.nome,
-    ),
+    (await submeter(c, "comportamento", [viaSaida])).map((a) => a.nome),
     ["real.txt"],
   );
   // A saída trocada por um link para fora não leva a origem junto: as raízes não são resolvidas pelo nome.
@@ -285,13 +214,13 @@ test("origem: só da worktree ou da saída, pelo caminho real do descritor; link
   symlinkSync(c.raiz, c.saida);
   const viaSaidaTrocada = join(c.saida, "segredo.txt");
   await assert.rejects(
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [viaSaidaTrocada]),
+    () => submeter(c, "comportamento", [viaSaidaTrocada]),
     (e) => e instanceof ErroDeRegra && e.message === `${viaSaidaTrocada} está ${foraDaSaida} ${solucao}`,
   );
   // Sem o diretório de saída, a worktree continua valendo.
   rmSync(c.saida);
   const daWorktree = c.arquivo(c.worktree, "passo.txt", "passo 2");
-  assert.equal((await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [daWorktree])).evidencias.length, 1);
+  assert.equal((await submeter(c, "comportamento", [daWorktree])).length, 1);
   c.banco.close();
 });
 
@@ -314,8 +243,7 @@ async function corrida(
     for (let i = 0; i < vezes; i++) {
       let desfecho: string;
       try {
-        const ag = await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [join(c.worktree, "x.txt")]);
-        const [anexo] = ag.evidencias[0]?.arquivos ?? [];
+        const [anexo] = await submeter(c, "comportamento", [join(c.worktree, "x.txt")]);
         assert.ok(anexo);
         desfecho = guardado({
           conteudo: readFileSync(caminhoArquivo(c.banco, anexo.sha256), "utf8"),
@@ -374,7 +302,7 @@ test("regressão TOCTOU: reescrever o anexo no mesmo inode durante a submissão 
 test("classe pelos bytes iniciais, não pela extensão, e o limite de cada classe", async () => {
   const c = cenario();
   const tentar = (nome: string, conteudo: string | Buffer, tamanho?: number) => () =>
-    submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [c.arquivo(c.saida, nome, conteudo, tamanho)]);
+    submeter(c, "comportamento", [c.arquivo(c.saida, nome, conteudo, tamanho)]);
   const caminho = (nome: string) => join(c.saida, nome);
 
   await recusa(
@@ -421,9 +349,8 @@ test("classe pelos bytes iniciais, não pela extensão, e o limite de cada class
     c.arquivo(c.saida, "no-limite.txt", "a".repeat(5 * MiB)),
     c.arquivo(c.saida, "vazio.txt", ""),
   ];
-  const ag = await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, nos);
   assert.deepEqual(
-    ag.evidencias[0]?.arquivos.map((a) => [a.nome, a.mime, a.bytes]),
+    (await submeter(c, "comportamento", nos)).map((a) => [a.nome, a.mime, a.bytes]),
     [
       ["filme.mp4", "video/mp4", MP4.length],
       ["no-limite.txt", "text/plain; charset=utf-8", 5 * MiB],
@@ -439,410 +366,29 @@ test("nomes de anexo: únicos na submissão e de até 200 caracteres", async () 
   const b = c.arquivo(c.saida, "passos.txt", "2");
   await recusa(
     c,
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [a, b]),
+    () => submeter(c, "comportamento", [a, b]),
     ErroDeRegra,
     "dois anexos se chamam passos.txt (renomeie um deles)",
   );
   const longo = "a".repeat(201);
   await recusa(
     c,
-    () => submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [c.arquivo(c.saida, longo, "1")]),
+    () => submeter(c, "comportamento", [c.arquivo(c.saida, longo, "1")]),
     ErroDeRegra,
     `o nome ${longo} passa de 200 caracteres (renomeie o arquivo)`,
   );
   c.banco.close();
 });
 
-test("escopo: só o agente do ticket em execução, com tipo da etapa e produzido por agente", async () => {
+test("prototipo precisa de pelo menos um vídeo ou print entre os anexos", async () => {
   const c = cenario();
-  const log = c.arquivo(c.worktree, "passos.txt", "1");
-  const enviar =
-    (ator: Ator, tipo = "comportamento") =>
-    () =>
-      submeter(c.banco, ator, tipo, COMPORTAMENTO, [log]);
+  const pagina = c.arquivo(c.saida, "pagina.html", HTML);
   await recusa(
     c,
-    enviar(auditor),
-    ErroDeEscopo,
-    "só o agente do ticket submete evidência (a Fabriquinha registra as dela nos coletores)",
-  );
-  await recusa(
-    c,
-    enviar(fabriquinha),
-    ErroDeEscopo,
-    "só o agente do ticket submete evidência (a Fabriquinha registra as dela nos coletores)",
-  );
-  await recusa(
-    c,
-    enviar({ tipo: "agente", execucao: 1, ticket: 9 }),
-    ErroDeEscopo,
-    "o ticket T-9 não existe (confira a execução em FABRIQUINHA_EXECUCAO)",
-  );
-  await recusa(
-    c,
-    enviar(agente, "desenho_solucao"),
+    () => submeter(c, "prototipo", [pagina]),
     ErroDeRegra,
-    "desenho_solucao não é evidência da etapa registro (a etapa registro aceita: comportamento, criterios_aceite)",
-  );
-  comIssue(c.banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
-    terminarExecucao(ag, { execucao: 1, resultado: "sucesso" }, fabriquinha, ctx),
-  );
-  await recusa(c, enviar(agente), ErroDeEscopo, "a execução E-1 já terminou (peça ao Auditor uma nova execução)");
-  c.banco.close();
-});
-
-const desenhista: Ator = { tipo: "agente", execucao: 2, ticket: 2 };
-const SOLUCAO = {
-  resumo: "cache na busca",
-  arquivosPrevistos: [{ caminho: "src/busca/*.ts", acao: "alterar", motivo: "lê do cache" }],
-};
-const COMPLEXIDADE = {
-  variaveis: [{ simbolo: "n", significado: "itens do catálogo" }],
-  fluxos: [{ nome: "Busca", gatilho: "GET /busca", situacao: "novo", depois: { tempo: "O(log n)", espaco: "O(n)" } }],
-};
-const IMPACTOS = { impacto: "baixo", novasDependencias: [], novosAcoplamentos: [], riscos: [] };
-
-/** O cenário com o registro aprovado: I-1 do tipo `tipo` em `desenho`, com T-2 rodando na E-2 (interativa). */
-async function noDesenho(tipo: TipoIssue): Promise<Cenario & { saida2: string }> {
-  const c = cenario();
-  await submeter(c.banco, agente, "comportamento", COMPORTAMENTO, [c.arquivo(c.saida, "tela.webm", WEBM)]);
-  await submeter(c.banco, agente, "criterios_aceite", { criterios: [CRITERIO] }, []);
-  comIssue(c.banco, 1, "editarIssue", auditor, (ag) => editarIssue(ag, { titulo: "Busca lenta", tipo }, auditor));
-  comIssue(c.banco, 1, "enviarParaAprovacao", agente, (ag, ctx) => enviarParaAprovacao(ag, { ticket: 1 }, agente, ctx));
-  comIssue(c.banco, 1, "terminarExecucao", fabriquinha, (ag, ctx) =>
-    terminarExecucao(ag, { execucao: 1, resultado: "sucesso" }, fabriquinha, ctx),
-  );
-  comIssue(c.banco, 1, "decidirRegistro", auditor, (ag, ctx) => decidirRegistro(ag, { aprovado: true }, auditor, ctx));
-  comIssue(c.banco, 1, "iniciarExecucao", fabriquinha, (ag, ctx) =>
-    iniciarExecucao(
-      ag,
-      { ticket: 2, modo: "interativo", sessaoPi: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c" },
-      fabriquinha,
-      ctx,
-    ),
-  );
-  const saida2 = join(c.raiz, "execucoes", "E-2", "saida");
-  mkdirSync(saida2, { recursive: true });
-  return { ...c, saida2 };
-}
-
-test("desenho: o agente submete as quatro evidências; prototipo só é obrigatório na funcionalidade", async () => {
-  for (const tipo of ["funcionalidade", "problema"] as const) {
-    const c = await noDesenho(tipo);
-    const html = (nome: string) => c.arquivo(c.saida2, nome, HTML);
-    const desenho = () => {
-      const ag = agregado(c.banco, 1);
-      assert.ok(ag);
-      const ticket = ag.tickets.find((t) => t.id === 2);
-      assert.ok(ticket);
-      return evidenciasFaltando(ag, ticket);
-    };
-    assert.deepEqual(desenho(), [
-      "desenho_solucao",
-      ...(tipo === "funcionalidade" ? ["prototipo"] : []),
-      "relatorio_complexidade",
-      "relatorio_impactos_arquitetura",
-    ]);
-    await submeter(c.banco, desenhista, "desenho_solucao", SOLUCAO, [html("desenho.html")]);
-    await submeter(c.banco, desenhista, "relatorio_complexidade", COMPLEXIDADE, [html("fluxos.html")]);
-    const ag = await submeter(c.banco, desenhista, "relatorio_impactos_arquitetura", IMPACTOS, [html("impactos.html")]);
-    assert.deepEqual(desenho(), tipo === "funcionalidade" ? ["prototipo"] : []);
-    assert.deepEqual(
-      ag.evidencias.filter((e) => e.ticket === 2).map((e) => [e.tipo, e.arquivos.map((a) => a.mime)]),
-      [
-        ["desenho_solucao", ["text/html; charset=utf-8"]],
-        ["relatorio_complexidade", ["text/html; charset=utf-8"]],
-        ["relatorio_impactos_arquitetura", ["text/html; charset=utf-8"]],
-      ],
-    );
-    assert.deepEqual(ag.evidencias.find((e) => e.tipo === "desenho_solucao")?.dados, { ...SOLUCAO, foraDeEscopo: [] });
-
-    // Na issue de problema o protótipo é opcional, mas aceito.
-    const prototipo = [c.arquivo(c.saida2, "demo.webm", WEBM), c.arquivo(c.worktree, "demo.ts", "export {};\n")];
-    await submeter(c.banco, desenhista, "prototipo", { descricao: "tela nova" }, prototipo);
-    assert.deepEqual(desenho(), []);
-    c.banco.close();
-  }
-});
-
-test("prototipo: depois do envio ao gate a submissão é recusada e a evidência anterior continua", async () => {
-  const c = await noDesenho("funcionalidade");
-  const html = (nome: string) => c.arquivo(c.saida2, nome, HTML);
-  const print = c.arquivo(c.saida2, "tela.png", PNG);
-  await submeter(c.banco, desenhista, "desenho_solucao", SOLUCAO, [html("desenho.html")]);
-  await submeter(c.banco, desenhista, "relatorio_complexidade", COMPLEXIDADE, [html("fluxos.html")]);
-  await submeter(c.banco, desenhista, "relatorio_impactos_arquitetura", IMPACTOS, [html("impactos.html")]);
-  await submeter(c.banco, desenhista, "prototipo", { descricao: "tela nova" }, [print]);
-  comIssue(c.banco, 1, "adicionarTicketDesenvolvimento", desenhista, (ag, ctx) =>
-    adicionarTicketDesenvolvimento(ag, { titulo: "Cache" }, desenhista, ctx),
-  );
-  comIssue(c.banco, 1, "enviarParaAprovacao", desenhista, (ag, ctx) =>
-    enviarParaAprovacao(ag, { ticket: 2 }, desenhista, ctx),
-  );
-
-  const outro = c.arquivo(c.saida2, "outra.png", JPEG);
-  await assert.rejects(
-    submeter(c.banco, desenhista, "prototipo", { descricao: "outra" }, [outro]),
-    (e) => e instanceof ErroDeRegra && e.message.startsWith("T-2 está enviado à aprovação, não em execução"),
-  );
-  const ag = agregado(c.banco, 1);
-  assert.deepEqual(
-    ag?.evidencias.filter((e) => e.tipo === "prototipo").map((e) => e.dados),
-    [{ descricao: "tela nova" }],
-  );
-  c.banco.close();
-});
-
-test("prototipo precisa de um vídeo ou print; os relatórios do desenho, de exatamente um HTML", async () => {
-  const c = await noDesenho("funcionalidade");
-  const recusar = async (tipo: string, dados: unknown, caminhos: string[], msg: string) => {
-    const evidencias = contar(c.banco, "evidencia");
-    await assert.rejects(
-      () => submeter(c.banco, desenhista, tipo, dados, caminhos),
-      (e) => e instanceof ErroDeRegra && e.message === msg,
-    );
-    assert.equal(contar(c.banco, "evidencia"), evidencias);
-  };
-  const guardados = () => readdirSync(join(c.raiz, "arquivos"), { recursive: true }).length;
-  const antes = guardados();
-  const pagina = c.arquivo(c.saida2, "demo.html", HTML);
-  const codigo = c.arquivo(c.saida2, "demo.ts", "export {};\n");
-  await recusar(
-    "prototipo",
-    { descricao: "tela nova" },
-    [pagina, codigo],
     "protótipo precisa de pelo menos um vídeo ou print (anexe também um arquivo video ou imagem)",
   );
-  // A recusa vem antes de guardar: nenhum dos dois anexos ficou.
-  assert.equal(guardados(), antes);
-  const print = c.arquivo(c.saida2, "tela.png", PNG);
-  const ag = await submeter(c.banco, desenhista, "prototipo", { descricao: "tela nova" }, [pagina, print]);
-  assert.deepEqual(
-    ag.evidencias.at(-1)?.arquivos.map((a) => a.mime),
-    ["text/html; charset=utf-8", "image/png"],
-  );
-
-  await recusar(
-    "desenho_solucao",
-    SOLUCAO,
-    [print],
-    `${print} é imagem, e desenho_solucao aceita só html (anexe um arquivo de uma dessas classes)`,
-  );
-  await recusar(
-    "relatorio_complexidade",
-    COMPLEXIDADE,
-    [pagina, c.arquivo(c.saida2, "outro.html", HTML)],
-    "relatorio_complexidade aceita no máximo 1 arquivo(s), e vieram 2 (submeta sem os excedentes)",
-  );
-  await recusar(
-    "relatorio_impactos_arquitetura",
-    IMPACTOS,
-    [],
-    "relatorio_impactos_arquitetura precisa de pelo menos 1 arquivo(s), e veio 0 (anexe com --arquivo <caminho>)",
-  );
+  assert.equal((await submeter(c, "prototipo", [pagina, c.arquivo(c.saida, "tela.png", PNG)])).length, 2);
   c.banco.close();
-});
-
-test("relatorio_complexidade com símbolo não declarado: ZodError no caminho do Big-O a partir de dados", async () => {
-  const c = await noDesenho("problema");
-  const fluxo = { ...COMPLEXIDADE.fluxos[0], depois: { tempo: "O(n * k)", espaco: "O(n²)" } };
-  let erro: unknown;
-  try {
-    await submeter(c.banco, desenhista, "relatorio_complexidade", { ...COMPLEXIDADE, fluxos: [fluxo] }, []);
-  } catch (error_) {
-    erro = error_;
-  }
-  assert.ok(erro instanceof ZodError);
-  assert.equal(
-    z.prettifyError(erro),
-    "✖ fora da gramática Big-O (ex.: O(1), O(n log n), O(n^2), O(n + m))\n  → at dados.fluxos[0].depois.espaco\n" +
-      "✖ k não está declarado em variaveis\n  → at dados.fluxos[0].depois.tempo",
-  );
-  c.banco.close();
-});
-
-const RODADO = { comando: "c", codigoSaida: 0, estourou: false, duracaoMs: 1 };
-
-/**
- * O cenário na revisão, com T-2 rodando na E-2. A revisão real só nasce do desenvolvimento (provado em
- * execucao/desenvolvimento.test.ts); aqui o T-2 vira revisão por UPDATE. `fitness`: as linhas da matriz que a
- * Fabriquinha coletou antes do pi; vazio, ela não foi coletada.
- */
-async function naRevisao(fitness: string[]): Promise<Cenario & { saida2: string }> {
-  const c = await noDesenho("problema");
-  c.banco.exec("UPDATE issue SET fase = 'revisao'; UPDATE ticket SET etapa = 'revisao' WHERE id = 2");
-  if (fitness.length > 0) {
-    const linhas = fitness.map((nome) => ({ nome, descricao: "d", ...RODADO, log: `${nome}.log` }));
-    comIssue(c.banco, 1, "registrarEvidencia", fabriquinha, (ag, ctx) =>
-      registrarEvidencia(
-        ag,
-        { ticket: 2, tipo: "matriz_fitness", aprovada: true, dados: { linhas }, arquivos: [] },
-        fabriquinha,
-        ctx,
-      ),
-    );
-  }
-  return c;
-}
-
-const revisor = desenhista;
-
-test("explicacao_fitness: exatamente uma explicação por linha da matriz_fitness do próprio ticket", async () => {
-  const c = await naRevisao(["complexidade", "camadas"]);
-  const explicar = (...nomes: string[]) =>
-    submeter(
-      c.banco,
-      revisor,
-      "explicacao_fitness",
-      { explicacoes: nomes.map((nome) => ({ nome, explicacao: "ok" })) },
-      [],
-    );
-  const recusar = async (nomes: string[], msg: string) => {
-    await assert.rejects(
-      () => explicar(...nomes),
-      (e) => e instanceof ErroDeRegra && e.message === msg,
-    );
-  };
-  const tem =
-    "e a matriz_fitness de T-2 tem as linhas [camadas, complexidade] " +
-    "(submeta exatamente uma explicação por linha da matriz)";
-  await recusar(["complexidade"], `explicacao_fitness explica [complexidade], ${tem}`);
-  await recusar(
-    ["complexidade", "camadas", "camadas"],
-    `explicacao_fitness explica [camadas, camadas, complexidade], ${tem}`,
-  );
-  await recusar(["complexidade", "cobertura"], `explicacao_fitness explica [cobertura, complexidade], ${tem}`);
-  const ag = await explicar("camadas", "complexidade");
-  const e = ag.evidencias.find((x) => x.tipo === "explicacao_fitness");
-  assert.deepEqual([e?.produtor, e?.aprovada], ["agente", undefined]);
-  c.banco.close();
-
-  const semMatriz = await naRevisao([]);
-  await assert.rejects(
-    () =>
-      submeter(semMatriz.banco, revisor, "explicacao_fitness", { explicacoes: [{ nome: "f", explicacao: "ok" }] }, []),
-    (e) =>
-      e instanceof ErroDeRegra &&
-      e.message.startsWith("explicacao_fitness explica [f], e a matriz_fitness de T-2 tem as linhas []"),
-  );
-  semMatriz.banco.close();
-});
-
-test("comprovacao_criterios: os critérios do registro, cada anexo citado presente; aprovada se todos atendidos", async () => {
-  const c = await naRevisao(["f"]);
-  const print = c.arquivo(c.saida2, "ca-1.png", PNG);
-  const video = c.arquivo(c.saida2, "ca-1.webm", WEBM);
-  const comprovar = (criterios: object[], anexos = [print]) =>
-    submeter(c.banco, revisor, "comprovacao_criterios", { criterios }, anexos);
-  const criterio = (troca: object = {}) => ({
-    id: "CA-1",
-    atendido: true,
-    comoVerificado: "busquei mil itens",
-    arquivos: ["ca-1.png"],
-    ...troca,
-  });
-  const recusar = async (criterios: object[], msg: string) => {
-    const guardados = readdirSync(join(c.raiz, "arquivos"), { recursive: true }).length;
-    await assert.rejects(
-      () => comprovar(criterios),
-      (e) => e instanceof ErroDeRegra && e.message === msg,
-    );
-    assert.equal(readdirSync(join(c.raiz, "arquivos"), { recursive: true }).length, guardados, "nada guardado");
-  };
-  const exatos =
-    "e os critérios de aceite do registro são [CA-1] (submeta exatamente uma comprovação por critério de aceite)";
-  await recusar([], `comprovacao_criterios comprova [], ${exatos}`);
-  // F3 §5: os arquivos (passo 4) são validados antes das regras cruzadas (passo 5).
-  const pagina = c.arquivo(c.saida2, "ca-1.html", HTML);
-  await assert.rejects(
-    () => comprovar([], [pagina]),
-    (e) =>
-      e instanceof ErroDeRegra &&
-      e.message ===
-        `${pagina} é html, e comprovacao_criterios aceita só video ou imagem (anexe um arquivo de uma dessas classes)`,
-  );
-  await recusar([criterio(), criterio({ id: "CA-2" })], `comprovacao_criterios comprova [CA-1, CA-2], ${exatos}`);
-  await recusar([criterio(), criterio()], `comprovacao_criterios comprova [CA-1, CA-1], ${exatos}`);
-  await recusar(
-    [criterio({ arquivos: ["ca-1.png", "ca-1.webm", "ca-1.webm"] })],
-    "comprovacao_criterios cita ca-1.webm, que não está entre os anexos " +
-      "(anexe cada arquivo citado com --arquivo <caminho>, com o mesmo nome)",
-  );
-
-  const aprovada = () => agregado(c.banco, 1)?.evidencias.find((e) => e.tipo === "comprovacao_criterios")?.aprovada;
-  await comprovar([criterio({ atendido: false })]);
-  assert.equal(aprovada(), false);
-  await comprovar([criterio({ arquivos: ["ca-1.png", "ca-1.webm"] })], [print, video]);
-  assert.equal(aprovada(), true);
-  c.banco.close();
-});
-
-test("aula_codigo: a Fabriquinha gera o HTML do git da worktree e o anexa; anexo do agente é recusado", async () => {
-  const c = await naRevisao([]);
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-c", "user.name=A", "-c", "user.email=a@a", ...args], { cwd: c.worktree })
-      .toString()
-      .trim();
-  git("init", "-q");
-  writeFileSync(join(c.worktree, "busca.ts"), "antes\n");
-  git("add", ".");
-  git("commit", "-q", "-m", "base");
-  const base = git("rev-parse", "HEAD");
-  writeFileSync(join(c.worktree, "busca.ts"), "depois\n");
-  git("commit", "-q", "-am", "issue");
-  const arquivos = [{ caminho: "busca.ts", status: "M", adicionadas: 1, removidas: 1, previsto: null }];
-  const dados = JSON.stringify({ base, head: git("rev-parse", "HEAD"), arquivos, previstosNaoTocados: [] });
-  // A revisão T-3 concluída deu o diff; o T-2 vira o encerramento.
-  c.banco.exec(`UPDATE issue SET fase = 'encerramento'; UPDATE ticket SET etapa = 'encerramento' WHERE id = 2;
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
-      VALUES (3, 1, 'revisao', 'Revisar', 'concluido', 'fabriquinha', '${AGORA}', '${AGORA}');
-    INSERT INTO evidencia (ticket, tipo, produtor, dados, em) VALUES (3, 'arquivos_alterados', 'fabriquinha', '${dados}', '${AGORA}');`);
-  const aula = {
-    trechos: [{ arquivo: "busca.ts", inicio: 1, fim: 1, oQueFaz: "o", porQue: "p", decisaoDoDesenho: "d" }],
-  };
-  const encerrador: Ator = { tipo: "agente", execucao: 2, ticket: 2 };
-
-  await assert.rejects(
-    submeter(c.banco, encerrador, "aula_codigo", aula, [c.arquivo(c.saida2, "minha.html", HTML)]),
-    (e) =>
-      e instanceof ErroDeRegra &&
-      e.message === "aula_codigo não aceita anexo do agente (a Fabriquinha gera o HTML; submeta só --dados)",
-  );
-  const ag = await submeter(c.banco, encerrador, "aula_codigo", aula, []);
-  const evidencia = ag.evidencias.find((e) => e.tipo === "aula_codigo");
-  assert.deepEqual(
-    evidencia?.arquivos.map((a) => [a.nome, a.mime]),
-    [["aula.html", "text/html; charset=utf-8"]],
-  );
-  const [anexo] = evidencia.arquivos;
-  assert.ok(anexo, "a aula tem o HTML");
-  const html = readFileSync(caminhoArquivo(c.banco, anexo.sha256), "utf8");
-  assert.match(html, /<tr class="mudou"><td class="n">1<\/td><td class="m">\+<\/td><td class="c">depois<\/td><\/tr>/);
-  c.banco.close();
-});
-
-test("IA externa: submete no registro que registrou, com anexo da pasta dela; fora dela e em issue alheia é recusado", async () => {
-  const c = cenario();
-  registrarIssue(c.banco, { projeto: "loja", titulo: "Busca lenta", tipo: "problema" }, EXTERNO);
-  const pasta = mkdtempSync(join(base, "pasta-"));
-  const video = c.arquivo(pasta, "tela.webm", WEBM);
-  const ag = await submeterExterno(c.banco, 2, pasta, "comportamento", COMPORTAMENTO, [video]);
-  assert.deepEqual(
-    ag.evidencias.map((e) => [e.ticket, e.tipo, e.produtor, e.arquivos.map((a) => a.nome)]),
-    [[2, "comportamento", "agente", ["tela.webm"]]],
-  );
-  assert.equal(readFileSync(caminhoArquivo(c.banco, sha(WEBM))).equals(WEBM), true);
-
-  const fora = c.arquivo(c.saida, "fora.webm", WEBM);
-  await assert.rejects(
-    submeterExterno(c.banco, 2, pasta, "comportamento", COMPORTAMENTO, [fora]),
-    (e) =>
-      e instanceof ErroDeRegra &&
-      e.message === `${fora} está fora de ${pasta}, onde você rodou o comando (copie-o para ${pasta})`,
-  );
-  await assert.rejects(
-    submeterExterno(c.banco, 1, pasta, "comportamento", COMPORTAMENTO, [video]),
-    (e) => e instanceof ErroDeEscopo && e.message.startsWith("a IA externa não pode registrar evidência na I-1 ("),
-  );
-  assert.equal(contar(c.banco, "evidencia"), 1);
 });

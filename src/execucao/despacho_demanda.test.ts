@@ -81,8 +81,8 @@ async function cenario(limite: number, real = false) {
   const repo = real ? c.repo : "/nao/existe";
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-       VALUES ('loja', ?, 'integracao', 'github', '["t"]', 'k', '[{"nome":"f"}]')`,
+      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
     )
     .run(repo);
   gravarConfiguracaoProjeto(banco, {

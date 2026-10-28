@@ -19,10 +19,7 @@ const projeto = (nome: string, linkProduto?: string): ProjetoListado => ({
   branchBase: "main",
   hospedagem: "github",
   preparacao: [],
-  testes: ["npm test"],
   sonar: { projectKey: nome },
-  fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-  modelos: {},
   linkProduto,
 });
 

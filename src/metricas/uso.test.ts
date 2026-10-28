@@ -1,60 +1,11 @@
-// Coleta de uso (F6 §3, §10) contra banco real e sessões JSONL no formato que o pi grava: entradas com `type`, `id`,
+// Soma de uso (F6 §3, §10) sobre sessões JSONL no formato que o pi grava: entradas com `type`, `id`,
 // `parentId` e `timestamp` ISO; `message.usage` com `cost.total`; e o `details.results[].usage` da extensão
 // `subagents` do Auditor, com `cost` já somado e `turns`.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
-import { after, test } from "node:test";
-import { ErroDeRegra } from "../dominio/erros.ts";
-import { abrir } from "../persistencia/banco.ts";
-import { dirDaExecucao } from "../persistencia/execucoes.ts";
-import { registrarProjeto } from "../persistencia/projetos.ts";
-import { coletarUso, depoisDoC6, somar } from "./uso.ts";
-
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-uso-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+import { test } from "node:test";
+import { somar } from "./uso.ts";
 
 const SESSAO = "019f7639-8a5d-7794-9dd5-03edad5607ab";
-
-/** Banco com a I-1 e o T-1 de desenvolvimento; as execuções vão direto em SQL, já no estado que o teste pede. */
-function banco(): { banco: DatabaseSync; raiz: string } {
-  const raiz = mkdtempSync(join(base, "raiz-"));
-  const b = abrir(raiz);
-  registrarProjeto(b, {
-    nome: "p",
-    repo: "/nao/existe",
-    branchBase: "main",
-    hospedagem: "github",
-    testes: ["npm test"],
-    sonar: { projectKey: "p" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-  });
-  b.prepare(
-    "INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'p', 'I', 'problema', 'desenvolvimento', ?)",
-  ).run("2026-10-11T09:00:00.000Z");
-  b.prepare(
-    `INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-     VALUES (1, 1, 'desenvolvimento', 'T', 'em_execucao', 'fabriquinha', ?)`,
-  ).run("2026-10-11T09:00:00.000Z");
-  return { banco: b, raiz };
-}
-
-function execucao(b: DatabaseSync, id: number, iniciada: string, terminada: string | null, sessao = SESSAO): void {
-  b.prepare(
-    `INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
-     VALUES (?, 1, 'interativo', ?, ?, NULL, ?, ?)`,
-  ).run(id, sessao, terminada === null ? "em_andamento" : "sucesso", iniciada, terminada);
-}
-
-/** Grava a sessão como o pi: `<raiz>/sessoes/<timestamp>_<id>.jsonl`. */
-function sessao(raiz: string, linhas: string[], nome = `2026-10-11T10-00-00-000Z_${SESSAO}.jsonl`): void {
-  mkdirSync(join(raiz, "sessoes"), { recursive: true });
-  writeFileSync(join(raiz, "sessoes", nome), linhas.join("\n") + "\n");
-}
 
 let seq = 0;
 const em = (hora: string) => `2026-10-11T${hora}.000Z`;
@@ -97,14 +48,20 @@ const subagente = (model: string | undefined, input: number, cost: number, turns
   usage: { input, output: 1, cacheRead: 2, cacheWrite: 3, cost, turns },
 });
 
-const linhasDeUso = (b: DatabaseSync, execucao: number) =>
-  b
-    .prepare(
-      `SELECT provedor, modelo, chamadas, input, output, cache_read, cache_write, round(custo, 6) AS custo
-       FROM uso WHERE execucao = ? ORDER BY provedor, modelo`,
-    )
-    .all(execucao)
-    .map((l) => ({ ...l }));
+/** A soma da janela `[inicio, fim]` no formato das colunas de uso, em ordem de provedor e modelo. */
+const linhasDeUso = (linhas: string[], inicio: string, fim: string) =>
+  somar(linhas.join("\n"), Date.parse(inicio), Date.parse(fim))
+    .map((s) => ({
+      provedor: s.provedor,
+      modelo: s.modelo,
+      chamadas: s.chamadas,
+      input: s.input,
+      output: s.output,
+      cache_read: s.cacheRead,
+      cache_write: s.cacheWrite,
+      custo: Math.round(s.custo * 1e6) / 1e6,
+    }))
+    .toSorted((x, y) => x.provedor.localeCompare(y.provedor) || x.modelo.localeCompare(y.modelo));
 
 /**
  * Sessão principal de um ticket com duas execuções: E-1 em [10:00, 10:30] e E-2 em [11:00, 11:30]. Uma entrada antes
@@ -209,32 +166,14 @@ const E2 = [
   },
 ];
 
-test("soma por provedor e modelo só a janela de cada execução da sessão compartilhada, e recoletar dá o mesmo", () => {
-  const { banco: b, raiz } = banco();
-  execucao(b, 1, em("10:00:00"), em("10:30:00"));
-  execucao(b, 2, em("11:00:00"), em("11:30:00"));
-  // Outra sessão no diretório não atrapalha.
-  sessao(raiz, [assistente("10:01:00", "x", "y", usage(1, 1, 1, 1, 1))], "2026-10-11T10-00-00-000Z_outra.jsonl");
-  sessao(raiz, SESSAO_COMPARTILHADA());
-
-  coletarUso(b, 1);
-  coletarUso(b, 2);
-  assert.deepEqual(linhasDeUso(b, 1), E1);
-  assert.deepEqual(linhasDeUso(b, 2), E2);
-
-  // Idempotente: uma linha velha some, e a soma não dobra.
-  b.prepare("INSERT INTO uso VALUES (1, 'velho', 'modelo', 1, 1, 1, 1, 1, 1)").run();
-  coletarUso(b, 1);
-  coletarUso(b, 1);
-  assert.deepEqual(linhasDeUso(b, 1), E1);
-  assert.deepEqual(linhasDeUso(b, 2), E2);
-  b.close();
+test("soma por provedor e modelo só a janela de cada execução da sessão compartilhada", () => {
+  assert.deepEqual(linhasDeUso(SESSAO_COMPARTILHADA(), em("10:00:00"), em("10:30:00")), E1);
+  assert.deepEqual(linhasDeUso(SESSAO_COMPARTILHADA(), em("11:00:00"), em("11:30:00")), E2);
+  assert.deepEqual(linhasDeUso([], em("10:00:00"), em("10:30:00")), []);
 });
 
 test("sem assistente antes, o uso fica com modelo desconhecido; subagente sem provedor ou sem chamada", () => {
-  const { banco: b, raiz } = banco();
-  execucao(b, 1, em("10:00:00"), em("10:30:00"));
-  sessao(raiz, [
+  const linhas = [
     entrada("10:00:01", { type: "compaction", summary: "…", usage: usage(1, 1, 1, 1, 0.1) }),
     resultado("10:00:02", "subagent", {
       details: {
@@ -243,9 +182,8 @@ test("sem assistente antes, o uso fica com modelo desconhecido; subagente sem pr
         results: [subagente("claude-haiku-4-5", 5, 0.2, 1), subagente("anthropic/claude-haiku-4-5", 0, 0, 0)],
       },
     }),
-  ]);
-  coletarUso(b, 1);
-  assert.deepEqual(linhasDeUso(b, 1), [
+  ];
+  assert.deepEqual(linhasDeUso(linhas, em("10:00:00"), em("10:30:00")), [
     {
       provedor: "desconhecido",
       modelo: "claude-haiku-4-5",
@@ -267,71 +205,6 @@ test("sem assistente antes, o uso fica com modelo desconhecido; subagente sem pr
       custo: 0.1,
     },
   ]);
-  b.close();
-});
-
-test("sessão inexistente não é erro: a execução fica sem linhas em uso", () => {
-  const { banco: b, raiz } = banco();
-  execucao(b, 1, em("10:00:00"), em("10:30:00"));
-  b.prepare("INSERT INTO uso VALUES (1, 'velho', 'modelo', 1, 1, 1, 1, 1, 1)").run();
-  coletarUso(b, 1); // nem o diretório de sessões existe
-  assert.deepEqual(linhasDeUso(b, 1), []);
-  sessao(raiz, [], "2026-10-11T10-00-00-000Z_outra.jsonl");
-  coletarUso(b, 1);
-  assert.deepEqual(linhasDeUso(b, 1), []);
-  b.close();
-});
-
-test("recusa execução inexistente, em andamento ou com mais de um arquivo de sessão, sem mexer em uso", () => {
-  const { banco: b, raiz } = banco();
-  execucao(b, 1, em("10:00:00"), em("10:30:00"));
-  execucao(b, 2, em("11:00:00"), null, crypto.randomUUID());
-  assert.throws(() => {
-    coletarUso(b, 9);
-  }, /a execução E-9 não existe/);
-  assert.throws(() => {
-    coletarUso(b, 2);
-  }, /a E-2 ainda está em andamento/);
-
-  b.prepare("INSERT INTO uso VALUES (1, 'velho', 'modelo', 1, 1, 1, 1, 1, 1)").run();
-  sessao(raiz, SESSAO_COMPARTILHADA());
-  sessao(raiz, SESSAO_COMPARTILHADA(), `2026-10-12T10-00-00-000Z_${SESSAO}.jsonl`);
-  assert.throws(
-    () => {
-      coletarUso(b, 1);
-    },
-    (erro: unknown) => erro instanceof ErroDeRegra && /a sessão .* tem 2 arquivos/.test(erro.message),
-  );
-  assert.equal(linhasDeUso(b, 1).length, 1);
-  b.close();
-});
-
-test("depoisDoC6: coleta; uma falha só vai para o log da execução, ou para o stderr se nem o log existe", (t) => {
-  const { banco: b, raiz } = banco();
-  execucao(b, 1, em("10:00:00"), em("10:30:00"));
-  execucao(b, 2, em("11:00:00"), em("11:30:00"), crypto.randomUUID());
-  sessao(raiz, SESSAO_COMPARTILHADA());
-  depoisDoC6(b, 1);
-  assert.deepEqual(linhasDeUso(b, 1), E1);
-
-  sessao(raiz, SESSAO_COMPARTILHADA(), `2026-10-12T10-00-00-000Z_${SESSAO}.jsonl`);
-  mkdirSync(dirDaExecucao(raiz, 1), { recursive: true });
-  depoisDoC6(b, 1);
-  assert.match(
-    readFileSync(join(dirDaExecucao(raiz, 1), "log"), "utf8"),
-    /^\S+ coleta de uso falhou: ErroDeRegra: a sessão \S+ tem 2 arquivos .*\n$/,
-  );
-  assert.deepEqual(linhasDeUso(b, 1), E1, "a falha não apaga a coleta anterior");
-
-  const stderr = t.mock.method(console, "error", () => undefined);
-  depoisDoC6(b, 9); // nem execução, nem diretório
-  assert.equal(stderr.mock.callCount(), 1);
-  // O formato do log do serviço: horário, "fabriquinha:" e a mensagem.
-  assert.match(
-    String(stderr.mock.calls[0]?.arguments.join(" ")),
-    /^\d{4}-\d\d-\d\dT\S+Z fabriquinha: E-9: coleta de uso falhou: .*E-9 não existe/,
-  );
-  b.close();
 });
 
 test("somar marca semCusto quando alguma parcela do modelo não traz cost.total (CA-13)", () => {

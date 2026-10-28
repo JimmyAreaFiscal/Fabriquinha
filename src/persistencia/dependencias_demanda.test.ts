@@ -22,8 +22,8 @@ const banco = (demandas: Record<string, { projeto?: string; fase?: string; envia
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
   for (const nome of ["a", "b"]) {
-    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('${nome}', '/repo/${nome}', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]')`);
+    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('${nome}', '/repo/${nome}', 'main', 'github', 'k')`);
   }
   for (const [id, { projeto = "a", fase = "registro", enviada = 0 }] of Object.entries(demandas)) {
     b.exec(
@@ -117,8 +117,8 @@ test("dependentesNaoConcluidasDaDemanda dentro de escrever não fecha a transaç
   try {
     b.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL");
     migrar(b, MIGRACOES);
-    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('a', '/repo/a', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]')`);
+    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('a', '/repo/a', 'main', 'github', 'k')`);
     for (const id of ["I-1", "I-2"]) {
       b.exec(
         `INSERT INTO demanda VALUES ('${id}', 'a', 't', 'problema', 'd', 'registro', ${T}, 'f', 's', 0, 'fabriquinha/${id}')`,

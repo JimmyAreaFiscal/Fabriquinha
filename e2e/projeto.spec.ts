@@ -10,8 +10,8 @@ test("CA-5: o projeto sem Registrar necessidade nem issues; o heatmap e a simula
 }, info: TestInfo) => {
   projeto(fabriquinha.raiz);
   const banco = abrir(fabriquinha.raiz);
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-    VALUES ('site', '/nao/existe/site', 'main', 'github', '["true"]', 'site', '[{"nome":"f","comando":"true","descricao":"d"}]')`);
+  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    VALUES ('site', '/nao/existe/site', 'main', 'github', 'site')`);
   banco.close();
   const erros: string[] = [];
   pagina.on("console", (m) => {

@@ -25,10 +25,7 @@ const LOJA: ProjetoListado = {
   branchBase: "main",
   hospedagem: "github",
   preparacao: ["npm ci"],
-  testes: [],
   sonar: { projectKey: "loja" },
-  fitness: [],
-  modelos: {},
 };
 
 const MODELOS = [

@@ -18,8 +18,8 @@ function banco(): DatabaseSync {
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
   for (const nome of ["loja", "site"])
-    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('${nome}', '/repo/${nome}', 'main', 'github', '["t"]', '${nome}', '[{"nome":"f"}]')`);
+    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('${nome}', '/repo/${nome}', 'main', 'github', '${nome}')`);
   const demanda = (id: string, projeto: string, fase: string, alterada: string) => {
     b.exec(
       `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', '${fase}', '${alterada}', 'f', 's', 1, 'b-${id}')`,

@@ -25,9 +25,7 @@ registrarProjeto(banco, {
   repo: "/repos/fabriquinha",
   branchBase: "main",
   hospedagem: "github",
-  testes: ["npm test"],
   sonar: { projectKey: "Fabriquinha" },
-  fitness: [{ nome: "f", comando: "true", descricao: "d" }],
 });
 
 /** Chama a rota como o servidor: o valor devolvido, ou `[status, mensagem]` do erro traduzido. */

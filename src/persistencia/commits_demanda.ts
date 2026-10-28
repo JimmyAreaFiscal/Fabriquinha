@@ -1,4 +1,4 @@
-// Commit, arquivos e retrabalho do ticket da demanda (comparacao-sdlc-implementacao.md §8, §10.1), ao lado do legado.
+// Commit, arquivos e retrabalho do ticket da demanda (comparacao-sdlc-implementacao.md §8, §10.1).
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { escrever } from "./banco.ts";

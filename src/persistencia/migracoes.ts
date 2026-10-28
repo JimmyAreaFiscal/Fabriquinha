@@ -1,5 +1,6 @@
 // Migrações do banco (F2 §3.7): lista ordenada; a posição + 1 é a versão gravada em `PRAGMA user_version`.
 // Só se acrescenta ao fim; migração já aplicada não muda.
+import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import {
   Decisao,
@@ -18,6 +19,7 @@ import { ProgressoEncerramento } from "../dominio/encerramento_demanda.ts";
 import { Effort, Etapa, EtapaTicket, Fase, FaseDemanda, FaseRodada, TipoId } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
 import { StatusExecucaoSimulada } from "../dominio/simulacao.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import { StatusArquivo } from "./commits.ts";
 
 /** Lista de um `CHECK ... IN (...)` gerada de um enum zod, para o banco e o domínio não divergirem. */
@@ -27,7 +29,106 @@ export const listaSql = (enumeracao: z.ZodEnum): string =>
 /** Lista de tipos congelada da migração 24: a partir da 30 o CHECK acompanha `TipoEvidenciaAgregado`. */
 const TIPOS_EVIDENCIA_MIGRACAO_24 = z.enum([...TipoEvidencia.options, "custos_realizados", "plano"]);
 
-export const MIGRACOES: readonly string[] = [
+/** Uma migração é SQL ou, quando precisa conferir algo e recusar com orientação, uma função; roda na transação do `migrar`. */
+export type Migracao = string | ((banco: DatabaseSync) => void);
+
+/** As tabelas do fluxo legado que a migração 33 apaga, depois de copiar iterações e propostas. */
+const TABELAS_LEGADAS = [
+  "issue",
+  "issue_dep",
+  "ticket",
+  "comando",
+  "execucao",
+  "decisao",
+  "evidencia",
+  "evidencia_arquivo",
+  "commit_ticket",
+  "arquivo_commit",
+  "uso",
+  "retrabalho",
+  "proposta_issue",
+  "iteracao",
+];
+
+/** O ticket legado é o ticket da demanda `I-<issue>` com o mesmo número, como o cutover (I-245) o copiou. */
+const TICKET_DA_DEMANDA =
+  "JOIN ticket t ON t.id = x.ticket JOIN ticket_demanda td ON td.demanda_id = 'I-' || t.issue AND td.ticket_id = t.id";
+
+const COPIAR_PARA_A_DEMANDA = `CREATE TABLE iteracao_demanda (
+    id         INTEGER PRIMARY KEY,
+    demanda_id TEXT NOT NULL,
+    ticket_id  INTEGER NOT NULL,
+    tipo       TEXT NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),
+    em         TEXT NOT NULL,
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+  CREATE TABLE proposta_demanda (
+    id                INTEGER PRIMARY KEY,
+    demanda_id        TEXT NOT NULL,
+    ticket_id         INTEGER NOT NULL,
+    titulo            TEXT NOT NULL CHECK (length(titulo) BETWEEN 1 AND 120),
+    mensagem          TEXT NOT NULL CHECK (length(trim(mensagem)) >= 1),
+    arquivos          INTEGER NOT NULL CHECK (arquivos >= 0),
+    status            TEXT NOT NULL CHECK (status IN ('pendente','aceita','recusada')),
+    demanda_criada_id TEXT REFERENCES demanda(id),
+    em                TEXT NOT NULL,
+    decidida_em       TEXT,
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    CHECK ((status = 'aceita') = (demanda_criada_id IS NOT NULL)),
+    CHECK ((status = 'pendente') = (decidida_em IS NULL))
+  );
+  INSERT INTO iteracao_demanda SELECT x.id, td.demanda_id, td.ticket_id, x.tipo, x.em FROM iteracao x ${TICKET_DA_DEMANDA} ORDER BY x.id;
+  INSERT INTO proposta_demanda
+    SELECT x.id, td.demanda_id, td.ticket_id, x.titulo, x.mensagem, x.arquivos, x.status, 'I-' || x.issue_criada, x.em,
+           x.decidida_em
+      FROM proposta_issue x ${TICKET_DA_DEMANDA} ORDER BY x.id;
+  -- O retrabalho que o legado gravou depois do cutover (commits humanos varridos antes da I-247 R1) completa o da demanda;
+  -- o que o cutover já copiou fica como está, e o ticket sem par na demanda cai na conferência de FK do \`migrar\`.
+  INSERT OR IGNORE INTO retrabalho_demanda
+    (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+    SELECT r.commit_alterador, 'I-' || o.issue, r.ticket, r.autor, r.ticket_origem, r.linhas,
+           CASE WHEN r.ticket IS NOT NULL THEN 'I-' || a.issue END
+      FROM retrabalho r JOIN ticket o ON o.id = r.ticket_origem LEFT JOIN ticket a ON a.id = r.ticket
+      ORDER BY r.rowid;`;
+
+/**
+ * Remoção do fluxo legado (I-247, comparacao-sdlc §10): recusa sem tocar em nada se alguma issue não virou demanda;
+ * copia iterações e propostas para tabelas da demanda, conferindo as contagens, completa o retrabalho da demanda e só
+ * então apaga as tabelas e as colunas legadas do projeto. A sequência `issue` fica: ela dá o I-<n> das demandas.
+ */
+function removerFluxoLegado(banco: DatabaseSync): void {
+  const semDemanda = banco
+    .prepare("SELECT 'I-' || id AS id FROM issue WHERE 'I-' || id NOT IN (SELECT id FROM demanda) ORDER BY issue.id")
+    .all()
+    .map((l) => String(l.id));
+  if (semDemanda.length > 0) {
+    throw new ErroDeRegra(
+      `${semDemanda.join(", ")} sem demanda correspondente: esta versão apaga o fluxo legado e não migra mais issues`,
+      "suba a versão anterior da Fabriquinha, que migra as issues para demandas na subida, e depois esta de novo",
+    );
+  }
+  banco.exec(COPIAR_PARA_A_DEMANDA);
+  for (const [legada, nova] of [
+    ["iteracao", "iteracao_demanda"],
+    ["proposta_issue", "proposta_demanda"],
+  ] as const) {
+    const contar = (tabela: string) => Number(banco.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n);
+    if (contar(legada) !== contar(nova)) {
+      throw new ErroDeRegra(
+        `a migração copiou ${String(contar(nova))} das ${String(contar(legada))} linhas de ${legada}: há ticket legado sem ticket da demanda`,
+        "restaure o banco do backup e relate o problema",
+      );
+    }
+  }
+  banco.exec(TABELAS_LEGADAS.map((tabela) => `DROP TABLE ${tabela};`).join("\n"));
+  banco.exec(
+    ["testes", "fitness", "modelos", "efforts"]
+      .map((coluna) => `ALTER TABLE projeto DROP COLUMN ${coluna};`)
+      .join("\n"),
+  );
+}
+
+export const MIGRACOES: readonly Migracao[] = [
   // A lista é fixa: o tipo `proposta` entra na migração 16, que recria `sequencia`.
   `CREATE TABLE sequencia (
     nome  TEXT PRIMARY KEY CHECK (nome IN ('issue','ticket','execucao','decisao','evidencia')),
@@ -776,4 +877,5 @@ export const MIGRACOES: readonly string[] = [
     custo                REAL CHECK (custo IS NULL OR custo >= 0),
     PRIMARY KEY (avaliacao_id, modelo_provedor, modelo_nome)
   );`,
+  removerFluxoLegado,
 ];

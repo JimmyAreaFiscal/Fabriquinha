@@ -28,7 +28,7 @@ test("CA-12: v26 → v27 só acrescenta dependencia_demanda e deixa as linhas ex
         .map((l) => ({ ...l })),
     );
   const antes = ler();
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, 27));
   assert.deepEqual(ler(), antes);
   const colunas = b
     .prepare("PRAGMA table_info(dependencia_demanda)")
