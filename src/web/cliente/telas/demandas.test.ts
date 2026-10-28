@@ -157,7 +157,8 @@ test("os tickets ficam na rodada ou nos globais, pelo endereço público, com de
   assert.match(r1 ?? "", /id="I-206\.R1"[\s\S]*I-206\.T1[\s\S]*Implementação[\s\S]*Falhou/);
   assert.match(r1 ?? "", /Motivo da falha:<\/strong> quebrou/);
   assert.match(r1 ?? "", /Instrução:<\/strong> refaça/);
-  assert.match(r1 ?? "", /Recusado<\/strong> por agente: falta teste do caminho de erro/);
+  assert.match(r1 ?? "", /Recusado<\/strong> por Agente: falta teste do caminho de erro/);
+  assert.match(html, /Recusado<\/strong> por Auditor: x/);
   assert.match(r1 ?? "", /nota 4/);
   assert.match(r1 ?? "", /Aprovação do PR/);
   assert.match(r1 ?? "", /href="https:\/\/pr\/7" target="_blank" rel="noopener">PR #7/);

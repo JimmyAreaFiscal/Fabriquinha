@@ -148,7 +148,7 @@ type Pagina = DadosDaPagina;
 
 /** A decisão do ticket: resultado, nota e motivo (CA-11). */
 const decisao = (d: Pagina["decisoes"][number]): string =>
-  `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por)}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
+  `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por.charAt(0).toUpperCase() + d.por.slice(1))}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
 
 /** O bloco delimitado de um gate ou formulário de ação: título em caixa alta e borda na cor do estado. */
 export const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
