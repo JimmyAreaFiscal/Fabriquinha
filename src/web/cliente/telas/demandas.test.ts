@@ -273,3 +273,16 @@ test("integração feita e limpeza falha: concluída e falhou, nunca nada integr
     /Limpeza<\/strong> <span class="pill pill-ok">Feito/,
   );
 });
+
+test("o gate da demanda traz Aprovar e Recusar com o motivo, ligados à rota da decisão (CA-14 a CA-16)", () => {
+  const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_demanda" } }));
+  assert.match(html, /<textarea id="motivo-decisao"/);
+  assert.match(html, /data-gate="false" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Recusar</);
+  assert.match(html, /data-gate="true" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Aprovar</);
+});
+
+test("o gate do planejamento usa a rota do planejamento (CA-17 a CA-19)", () => {
+  const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" } }));
+  assert.match(html, /data-caminho="\/api\/demandas\/[^"]*\/planejamento\/decisao"[^>]*>Reprovar planejamento</);
+  assert.match(html, />Aprovar planejamento</);
+});

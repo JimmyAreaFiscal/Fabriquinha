@@ -214,12 +214,38 @@ function encerramento({ passos, limpeza_pendente: pendentes, falha }: Pagina["en
   return secao("titulo-encerramento", "Encerramento final", `${resumo}<ul class="dm-passos">${itens.join("")}</ul>`);
 }
 
+/** Os gates que a fase pede: a rota da decisão e os rótulos dos dois botões. */
+const GATES: Partial<Record<FaseDemanda, { titulo: string; rota: string; aprovar: string; recusar: string }>> = {
+  aprovacao_demanda: { titulo: "Decisão da demanda", rota: "decisao", aprovar: "Aprovar", recusar: "Recusar" },
+  aprovacao_planejamento: {
+    titulo: "Decisão do planejamento",
+    rota: "planejamento/decisao",
+    aprovar: "Aprovar planejamento",
+    recusar: "Reprovar planejamento",
+  },
+};
+
+/** O formulário do gate da fase atual (CA-14 a CA-19); fora de um gate, nada. O motivo só vale para recusar. */
+function gate({ id, fase }: Pagina["demanda"]): string {
+  const g = GATES[fase];
+  if (!g) return "";
+  const campo = `motivo-${g.rota.replaceAll("/", "-")}`;
+  const botao = (aprovado: boolean, rotulo: string) =>
+    `<button type="button" class="btn btn-grande ${aprovado ? "btn-primario" : "btn-reprovar"}" data-gate="${String(aprovado)}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
+  return secao(
+    "titulo-gate",
+    g.titulo,
+    `<div class="dm-gate"><label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div></div>`,
+  );
+}
+
 export function pagina(p: DadosDaPagina): string {
   const { demanda: d } = p;
   const globais = p.tickets.filter((t) => t.rodada === undefined);
   return `<a class="link" href="/demandas">← Demandas</a>
   <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
     <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
+  ${gate(d)}
   ${
     p.dependencias.length > 0
       ? secao(

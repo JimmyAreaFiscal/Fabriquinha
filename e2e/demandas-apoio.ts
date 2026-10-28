@@ -1,6 +1,8 @@
 // Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts.
 import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import { abrir } from "../src/persistencia/banco.ts";
+import { join } from "node:path";
+import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { guardarBytes } from "../src/persistencia/arquivos.ts";
 import { criarDemanda } from "../src/persistencia/demandas.ts";
 import { gravarAnexos } from "../src/persistencia/evidencia_demanda.ts";
@@ -52,6 +54,19 @@ const demanda = (id: string, fase: string, resto: object = {}): AgregadoDemanda 
     ...resto,
   }) as unknown as AgregadoDemanda;
 
+/** A demanda no gate de aprovação: o ticket `demanda` em execução, que a decisão conclui. */
+const comTicketDeDemanda = (id: string): AgregadoDemanda =>
+  demanda(id, "aprovacao_demanda", {
+    tickets: [{ ...ticket(id, 1, "demanda", 1, "em_execucao"), rodada_id: undefined }],
+  });
+
+/** A I-214 aguardando a aprovação da demanda, com o ticket `demanda` em execução que a decisão conclui. */
+export function semearGateDaDemanda(raiz: string): void {
+  const banco = abrir(raiz);
+  criarDemanda(banco, comTicketDeDemanda("I-214"));
+  banco.close();
+}
+
 /**
  * I-206 em execução: R1 aguardando o PR 7 (aberto) e R2 sem PR, com o T3 em execução. I-207 em execução, com o T1 da R1
  * falho e dependente da I-206. I-208 aguardando a aprovação da demanda.
@@ -85,7 +100,7 @@ export function semearDemandas(raiz: string): void {
       tickets: [ticket("I-207", 1, "implementar", 1, "falhou")],
     }),
   );
-  criarDemanda(banco, demanda("I-208", "aprovacao_demanda"));
+  criarDemanda(banco, comTicketDeDemanda("I-208"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
   banco.close();
 }
@@ -160,5 +175,50 @@ export function semearPaginaDaDemanda(raiz: string): void {
   ]);
   criarDemanda(banco, demanda("I-211", "execucao"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-210', 'I-211')");
+  banco.close();
+}
+
+/** A demanda no gate do planejamento: o ticket `planejar` em execução e o plano submetido, com uma rodada. */
+const comPlano = (id: string): AgregadoDemanda =>
+  demanda(id, "aprovacao_planejamento", {
+    tickets: [{ ...ticket(id, 1, "planejar", 1, "em_execucao"), rodada_id: undefined }],
+    evidencias: [
+      {
+        demanda_id: id,
+        tipo: "criterios_aceite",
+        dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] },
+        em,
+      },
+      {
+        demanda_id: id,
+        ticket_id: 1,
+        tipo: "plano",
+        dados: {
+          demanda_id: id,
+          criterios: ["CA-1"],
+          rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
+          tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
+        },
+        em,
+      },
+    ],
+  });
+
+/** I-212 e I-213 com o planejamento aguardando aprovação. */
+export function semearPlanejamento(raiz: string): void {
+  const banco = abrir(raiz);
+  gravarConfiguracaoProjeto(banco, {
+    nome: "loja",
+    branch_base: "main",
+    chave_sonarqube: "loja",
+    raiz_git: join(raiz, "loja"),
+    hospedagem: "github",
+    etapas: [],
+    preparacao: [{ ordem: 1, comando: "true" }],
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+  });
+  criarDemanda(banco, comPlano("I-212"));
+  criarDemanda(banco, comPlano("I-213"));
   banco.close();
 }

@@ -1,7 +1,7 @@
 // Quadro e página da demanda no DOM: leem a API e desenham com `quadro` e `pagina`. O app.ts redesenha só o quadro a
-// cada 5 s; a página não tem formulário nem ação (os gates são da I-238). Os testes de ponta a ponta (e2e/) os exercitam.
+// cada 5 s; a página decide os gates da demanda e do planejamento. Os testes de ponta a ponta (e2e/) os exercitam.
 import type { Parametros } from "../caminhos.ts";
-import { abrirCaixa, api, ErroDaApi } from "../dom.ts";
+import { abrirCaixa, api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
 import { type DadosDaPagina, type DadosDoQuadro, pagina, quadro } from "./demandas.ts";
 
@@ -15,21 +15,33 @@ export async function montarDemandas(main: HTMLElement, params: Parametros, sign
 const NAO_ENCONTRADA =
   '<div class="cabeca-pagina"><h1>Demanda não encontrada</h1></div><p class="muted">Esta demanda não existe. <a class="link" href="/demandas">Ir para as demandas</a></p>';
 
-export async function montarDemanda(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
+/** Lê a demanda e redesenha a página com o que a API devolve; o 404 vira a página de não encontrada. */
+async function carregar(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<boolean> {
   let dados: DadosDaPagina;
   try {
     dados = await api<DadosDaPagina>(`/api/demandas/${encodeURIComponent(params.demanda ?? "")}`, { signal });
   } catch (erro) {
     if (!(erro instanceof ErroDaApi && erro.status === 404)) throw erro;
     main.innerHTML = NAO_ENCONTRADA;
-    return;
+    return false;
   }
   main.innerHTML = pagina(dados);
-  // A imagem do anexo abre na caixa; os demais anexos seguem o link, em nova aba. O ouvinte sai com a página.
+  return true;
+}
+
+export async function montarDemanda(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
+  if (!(await carregar(main, params, signal))) return;
+  // O ouvinte sai com a página. A imagem do anexo abre na caixa; os demais anexos seguem o link, em nova aba.
   main.addEventListener(
     "click",
     (evento) => {
-      const link = evento.target instanceof Element ? evento.target.closest<HTMLAnchorElement>("a[data-imagem]") : null;
+      const alvo = evento.target instanceof Element ? evento.target : null;
+      const botao = alvo?.closest<HTMLButtonElement>("button[data-gate]");
+      if (botao) {
+        void decidir(botao, main, params, signal);
+        return;
+      }
+      const link = alvo?.closest<HTMLAnchorElement>("a[data-imagem]");
       if (!link || evento.button !== 0 || evento.ctrlKey || evento.metaKey || evento.shiftKey) return;
       evento.preventDefault();
       const nome = link.dataset.imagem ?? "";
@@ -37,4 +49,40 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
     },
     { signal },
   );
+}
+
+/**
+ * Envia a decisão do gate. Recusar sem motivo não vai ao servidor: a mensagem fica junto ao campo. Com ou sem erro do
+ * servidor, a página se redesenha com a fase atual; o erro fica no aviso, com a orientação que ele devolveu.
+ */
+async function decidir(
+  botao: HTMLButtonElement,
+  main: HTMLElement,
+  params: Parametros,
+  signal: AbortSignal,
+): Promise<void> {
+  const aprovado = botao.dataset.gate === "true";
+  const campo = main.querySelector<HTMLTextAreaElement>(`#${CSS.escape(botao.dataset.campo ?? "")}`);
+  const motivo = campo?.value.trim() ?? "";
+  const erro = campo?.nextElementSibling;
+  if (!aprovado && motivo === "") {
+    if (erro) {
+      erro.textContent = "O motivo é obrigatório para recusar.";
+      (erro as HTMLElement).hidden = false;
+    }
+    return;
+  }
+  avisar();
+  for (const b of main.querySelectorAll<HTMLButtonElement>("button[data-gate]")) b.disabled = true;
+  try {
+    await api(botao.dataset.caminho ?? "", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(aprovado ? { aprovado } : { aprovado, motivo }),
+      signal,
+    });
+  } catch (falha) {
+    mostrarErro(falha);
+  }
+  if (!signal.aborted) await carregar(main, params, signal);
 }

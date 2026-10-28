@@ -1,7 +1,13 @@
 // Quadro de demandas (T-1289, CA-1 a CA-7): aberto pelo menu, com as rodadas, os PRs, os bloqueios e o trabalho ativo;
 // prints a 1440 e 375 px (o último sem rolagem horizontal).
 import { projeto } from "./apoio.ts";
-import { semearDemandaOciosa, semearDemandas, semearPaginaDaDemanda } from "./demandas-apoio.ts";
+import {
+  semearDemandaOciosa,
+  semearDemandas,
+  semearGateDaDemanda,
+  semearPaginaDaDemanda,
+  semearPlanejamento,
+} from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";
 
 const cartao = (pagina: import("@playwright/test").Page, id: string) =>
@@ -143,4 +149,84 @@ test("o cartão do quadro leva à página da demanda", async ({ pagina, fabriqui
   await expect(pagina).toHaveURL(/\/demandas\/I-\d+$/);
   await pagina.getByRole("link", { name: "← Demandas" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
+});
+
+const fase = (pagina: import("@playwright/test").Page) => pagina.locator(".dm-cabeca .pill");
+
+test("CA-14 a CA-16: o gate da demanda aprova, recusa sem motivo não envia e recusa com motivo", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  projeto(fabriquinha.raiz);
+  semearGateDaDemanda(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-214`);
+  await pagina.setViewportSize({ width: 375, height: 900 });
+  await expect(pagina.getByRole("button", { name: "Aprovar" })).toBeVisible();
+  await expect(pagina.getByRole("button", { name: "Recusar" })).toBeVisible();
+  expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await info.attach("gate-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  // CA-15: motivo vazio, a mensagem junto ao campo e a fase não muda.
+  await pagina.getByRole("button", { name: "Recusar" }).click();
+  await expect(pagina.locator("#motivo-decisao-erro")).toHaveText("O motivo é obrigatório para recusar.");
+  await expect(fase(pagina)).toHaveText("Aprovação da demanda");
+
+  // CA-16: com o motivo, a fase devolvida e os botões somem.
+  await pagina.getByLabel(/Motivo/).fill("escopo incompleto");
+  await pagina.getByRole("button", { name: "Recusar" }).click();
+  await expect(pagina.getByRole("button", { name: "Recusar" })).toHaveCount(0);
+  await expect(fase(pagina)).not.toHaveText("Aprovação da demanda");
+});
+
+test("CA-17 a CA-19: o gate do planejamento aprova e reprova, e a reprovação pede o motivo", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  semearPlanejamento(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-212`);
+  await pagina.getByRole("button", { name: "Reprovar planejamento" }).click();
+  await expect(pagina.locator("#motivo-planejamento-decisao-erro")).toHaveText("O motivo é obrigatório para recusar.");
+  await expect(fase(pagina)).toHaveText("Aprovação do planejamento");
+  await pagina.getByLabel(/Motivo/).fill("falta o caso de erro");
+  await pagina.getByRole("button", { name: "Reprovar planejamento" }).click();
+  await expect(pagina.getByRole("button", { name: "Reprovar planejamento" })).toHaveCount(0);
+  await expect(fase(pagina)).not.toHaveText("Aprovação do planejamento");
+
+  await pagina.goto(`${fabriquinha.base}/demandas/I-213`);
+  await pagina.getByRole("button", { name: "Aprovar planejamento" }).click();
+  await expect(pagina.getByRole("button", { name: "Aprovar planejamento" })).toHaveCount(0);
+  await expect(fase(pagina)).not.toHaveText("Aprovação do planejamento");
+});
+
+test("CA-30: a página desatualizada mostra a orientação do servidor e a fase atual", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  semearGateDaDemanda(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-214`);
+  await expect(pagina.getByRole("button", { name: "Aprovar" })).toBeVisible();
+  // Outra aba aprova a demanda.
+  await pagina.evaluate(() =>
+    fetch("/api/demandas/I-214/decisao", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aprovado: true }),
+    }),
+  );
+  await pagina.getByRole("button", { name: "Aprovar" }).click();
+  await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
+  await expect(pagina.locator("[data-aviso]")).toBeVisible();
+  await expect(pagina.getByRole("button", { name: "Aprovar" })).toHaveCount(0);
+  await expect(fase(pagina)).not.toHaveText("Aprovação da demanda");
+});
+
+test("CA-14: Aprovar a demanda mostra a fase devolvida e os botões somem", async ({ pagina, fabriquinha }) => {
+  projeto(fabriquinha.raiz);
+  semearGateDaDemanda(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-214`);
+  await pagina.getByRole("button", { name: "Aprovar" }).click();
+  await expect(pagina.getByRole("button", { name: "Aprovar" })).toHaveCount(0);
+  await expect(fase(pagina)).not.toHaveText("Aprovação da demanda");
 });
