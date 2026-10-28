@@ -17,6 +17,57 @@ writeFileSync(piParado, '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso &
   mode: 0o755,
 });
 
+// Um pi que ignora o SIGTERM: só o SIGKILL do `parar`, passado o limite, o encerra.
+const piTeimoso = join(mkdtempSync(join(tmpdir(), "pi-teimoso-")), "pi");
+writeFileSync(
+  piTeimoso,
+  '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso && exit 0\ntrap \'\' TERM\nexec sleep 40\n',
+  {
+    mode: 0o755,
+  },
+);
+
+test.describe("I-246 CA-4", () => {
+  test.use({ pi: piTeimoso });
+  test("pi que ignora o SIGTERM: o serviço o mata no limite, sai limpo, e a subida seguinte mostra Falhou", async ({
+    pagina,
+    fabriquinha,
+  }) => {
+    test.setTimeout(60_000);
+    projeto(fabriquinha.raiz);
+    semearTicketAberto(fabriquinha.raiz);
+    await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+    await pagina.getByRole("button", { name: "Executar agora" }).click();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+
+    let pgid: number | null = null;
+    while (pgid === null) {
+      await dormir(50);
+      const banco = abrir(fabriquinha.raiz);
+      pgid = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
+      banco.close();
+    }
+
+    const inicio = Date.now();
+    const saiu = once(fabriquinha.servico, "exit");
+    sinalNoGrupo(pgid, "SIGTERM");
+    fabriquinha.servico.kill("SIGTERM");
+    const codigo = (await saiu)[0] as number | null;
+    expect(Date.now() - inicio).toBeLessThan(13_000);
+    expect(codigo).toBe(0);
+    expect(fabriquinha.stderr()).not.toContain("database is not open");
+    expect(fabriquinha.stderr()).not.toMatch(/Error/);
+    expect(() => process.kill(-pgid, 0)).toThrow(/ESRCH/);
+
+    const nova = await fabriquinha.reiniciar();
+    await pagina.goto(nova.link);
+    await pagina.goto(`${nova.base}/demandas/I-216`);
+    const ticket = pagina.locator(".dm-ticket", { hasText: "I-216.T1" });
+    await expect(ticket).toContainText("Falhou");
+    await expect(ticket).toContainText("serviço reiniciado");
+  });
+});
+
 test.describe("I-246", () => {
   test.use({ pi: piParado });
   test("CA-1, CA-2: SIGTERM com ticket em execução sai limpo, e a subida seguinte o mostra Falhou", async ({

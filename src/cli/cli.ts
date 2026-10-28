@@ -44,6 +44,8 @@ export interface Io {
   readonly stderr: { write(texto: string): unknown };
   /** Resolve quando o `servidor` deve parar (SIGINT ou SIGTERM). */
   parada(): Promise<unknown>;
+  /** Encerra o processo depois da parada do `servidor`: o que sobrar vivo (timers, filhos) não o segura. */
+  sair?(): void;
 }
 
 /** O agente da execução, a issue do próprio ticket e o projeto dela, que `projeto ver` mostra. */
@@ -164,6 +166,7 @@ const COMANDOS: readonly Comando[] = [
       io.stdout.write(`${JSON.stringify({ porta: servico.porta })}\n`);
       await parou;
       await servico.parar();
+      io.sair?.();
     },
   },
   {

@@ -656,12 +656,14 @@ test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket 
   await fim;
 });
 
-test("I-246 CA-4: condutor que não termina no limite não prende o aguardarCondutores", async () => {
+test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço reiniciado' e nada fica vivo", async () => {
   const { banco, sessoes } = await cenario({ variante: "dorme" });
-  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  emExecucao(banco, 1);
+  iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const grupo = await grupoDoPi(sessoes, 1);
   await aguardarCondutores(50);
-  assert.equal(sessoes(1).execucoes[0]?.fim, null);
-  process.kill(-grupo, "SIGKILL");
-  await fim;
+  const [execucao] = sessoes(1).execucoes;
+  assert.notEqual(execucao?.fim, null);
+  assert.equal(execucao?.erro, "serviço reiniciado");
+  assert.throws(() => process.kill(-grupo, 0), { code: "ESRCH" });
 });

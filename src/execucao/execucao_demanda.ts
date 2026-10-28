@@ -265,17 +265,21 @@ export function iniciarExecucaoDemanda(
 
 /**
  * Parada do serviço: espera os condutores em curso por até `limiteMs`, para gravarem o fim da execução com o banco
- * ainda aberto. Quem falha por causa da parada termina como "serviço reiniciado". Passado o limite, volta assim mesmo:
- * a subida seguinte recupera o que ficou aberto.
+ * ainda aberto. Passado o limite, mata o grupo dos pi que restaram (SIGKILL) e espera os condutores gravarem a falha:
+ * quem falha por causa da parada termina como "serviço reiniciado".
  */
 export async function aguardarCondutores(limiteMs: number): Promise<void> {
   parando = true;
   let timer: NodeJS.Timeout | undefined;
-  const limite = new Promise<void>((pronto) => {
-    timer = setTimeout(pronto, limiteMs);
+  const limite = new Promise<"limite">((pronto) => {
+    timer = setTimeout(pronto, limiteMs, "limite");
   });
-  await Promise.race([Promise.allSettled(condutores), limite]);
+  const resultado = await Promise.race([Promise.allSettled(condutores), limite]);
   clearTimeout(timer);
+  if (resultado === "limite") {
+    for (const { pgid } of ativas.values()) if (pgid !== undefined) sinalNoGrupo(pgid, "SIGKILL");
+    await Promise.allSettled(condutores);
+  }
   parando = false;
 }
 
