@@ -14,11 +14,15 @@ import { Socket } from "node:net";
 import { avisar, encerrar } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import { submeter } from "../../evidencias/submissao.ts";
+import type { DadosDoChatDemanda } from "./chat.ts";
+import { criarDemanda } from "../../persistencia/demandas.ts";
 import { proporIssue } from "../../persistencia/issues.ts";
+import { comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import type { Pedido } from "../rotas.ts";
 import { type CabecalhoDoChat, type DadosDoChat, ROTAS_DO_CHAT } from "./chat.ts";
+import { demanda } from "./demandas_cenario.test.ts";
 import type { PainelRegistro } from "./issue.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
@@ -616,4 +620,69 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
     `attachment; filename="historico-T-900-consulta-${consulta}.md"`,
   );
   assert.equal((await baixar("nada")).status, 404);
+});
+
+test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviço da demanda; id desconhecido segue o das issues", async () => {
+  const em = "2026-01-01T00:00:00.000Z";
+  criarDemanda(
+    servico.banco,
+    demanda("I-310", "planejamento", {
+      tickets: [
+        {
+          demanda_id: "I-310",
+          ticket_id: 1,
+          etapa: "planejar",
+          status: "em_execucao",
+          status_alterado_em: em,
+          devolucoes: 0,
+        },
+      ],
+    }),
+  );
+  comSessoesDoTicket(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
+    ...e,
+    sessoes: [{ demanda_id: "I-310", ticket_id: 1, id: "sd-310", modo: "interativo", conversa_referencia: "sd-310" }],
+    execucoes: [{ id: "ed-310", sessao_id: "sd-310", inicio: em, fim: em, falha: false }],
+  }));
+  mkdirSync(join(raiz, "sessoes"), { recursive: true });
+  const mensagem = (role: string, text: string) => ({
+    type: "message",
+    message: { role, content: [{ type: "text", text }] },
+  });
+  writeFileSync(
+    join(raiz, "sessoes", "2026-01-01T00-00-00-000Z_sd-310.jsonl"),
+    [mensagem("user", "planeje"), mensagem("assistant", "Qual a prioridade?")]
+      .map((l) => JSON.stringify(l))
+      .join("\n") + "\n",
+  );
+
+  const chat = (await pedir("/api/sessoes/sd-310")).corpo as DadosDoChatDemanda;
+  assert.deepEqual(
+    [chat.origem, chat.demanda, chat.rodada, chat.ticket, chat.etapa, chat.sessao.estado, chat.sessao.motivo],
+    ["demanda", "I-310", undefined, "I-310.T1", "planejar", "aguardando_humano", "conversa"],
+  );
+  assert.deepEqual(textos(chat.conversa), ["user: planeje", "assistant: Qual a prioridade?"]);
+
+  const sse = await assinar("sd-310");
+  await ate(() => sse.eventos.length > 0, "o retrato");
+  const [retrato] = sse.eventos as [Evento & DadosDoChatDemanda];
+  assert.deepEqual([retrato.type, retrato.origem, retrato.conversa.length], ["chat", "demanda", 2]);
+  avisar("sd-310", join(raiz, "log"));
+  await ate(() => sse.eventos.length > 1, "o estado novo");
+  assert.deepEqual([sse.eventos[1]?.type, sse.eventos[1]?.origem], ["estado", "demanda"]);
+  sse.fechar();
+
+  const baixado = await fetch(`${origem}/api/sessoes/sd-310/historico.md`, { headers: { cookie: cookie() } });
+  assert.equal(baixado.status, 200);
+  assert.equal(baixado.headers.get("content-type"), "text/markdown; charset=utf-8");
+  assert.equal(baixado.headers.get("content-disposition"), 'attachment; filename="historico-I-310.T1.md"');
+  assert.match(
+    await baixado.text(),
+    /^# Histórico da sessão I-310.T1 \(planejar\)[\s\S]*## Auditor\n\nplaneje[\s\S]*## Agente\n\nQual a prioridade\?/,
+  );
+
+  // CA-7: a sessão que nem a demanda nem as issues conhecem.
+  const nada = await pedir("/api/sessoes/sd-nada");
+  assert.equal(nada.status, 404);
+  assert.match(JSON.stringify(nada.corpo), /a sessão sd-nada não existe[\s\S]*confira o endereço do chat/);
 });
