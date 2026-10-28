@@ -9,6 +9,8 @@
 // - "eco: <texto>": responde exatamente <texto>;
 // - "# Auditoria" (o prompt da auditoria do Histórico, F4): chama `subagent` com três tarefas `scout`, recebe o
 //   resultado e responde com as quatro seções; uma pergunta depois cai na resposta padrão;
+// - "Modo de trabalhar: revisar rodada|demanda": como o revisor, submete as evidências e roda `revisao decidir ... aprovar`
+//   pelo CLI `fabriquinha`; com "[sem decidir]" na demanda, sai sem decidir;
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro com o "sim" do Auditor, edita a issue,
 //   submete as evidências e envia o registro à aprovação pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz
 //   "registre", e não conta;
@@ -262,6 +264,37 @@ function desenhar(): void {
   cli("ticket", "enviar", ticketDoPrompt());
 }
 
+/** Como o revisor: as evidências do ticket (do prompt) e, sem "[sem decidir]", a decisão de aprovar. */
+function revisar(texto: string): void {
+  const saida = String(process.env.FABRIQUINHA_SAIDA);
+  const ticket = /revisao decidir (I-\d+\.T\d+) aprovar/.exec(texto)?.[1] ?? "";
+  const evidencia = (tipo: string, dados: object, ...anexos: string[]) => {
+    writeFileSync(join(saida, `${tipo}.json`), JSON.stringify(dados));
+    cli(
+      "evidencia",
+      "add",
+      ticket,
+      tipo,
+      "--dados",
+      join(saida, `${tipo}.json`),
+      ...anexos.flatMap((a) => ["--arquivo", a]),
+    );
+  };
+  writeFileSync(join(saida, "prova.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const comprovacao = {
+    criterios: [{ id: "CA-1", atendido: true, comoVerificado: "li o código", arquivos: ["prova.png"] }],
+  };
+  if (texto.includes("Modo de trabalhar: revisar rodada")) {
+    evidencia("explicacao_fitness", { explicacoes: [{ nome: "f", explicacao: "passou" }] });
+  } else {
+    const nao = { aplicavel: false, justificativa: "não há carga nem entrada externa" };
+    evidencia("testes_estresse", { ...nao, cenarios: [] });
+    evidencia("analise_seguranca", { ...nao, ameacas: [], achados: [] });
+  }
+  evidencia("comprovacao_criterios", comprovacao, join(saida, "prova.png"));
+  if (!texto.includes("[sem decidir]")) cli("revisao", "decidir", ticket, "aprovar");
+}
+
 /** Como o agente da auditoria: três tarefas `scout` em paralelo, o resultado e as seções da resposta. */
 function auditar(): void {
   const tasks = ["Oportunidades de melhoria", "Custos", "Qualidade"].map((analise) => ({
@@ -312,6 +345,12 @@ async function aoPrompt(texto: string): Promise<void> {
   const pergunta = /pergunte (select|confirm|input|editor|perguntar|multipla)/.exec(texto)?.[1];
   if (texto.startsWith("# Auditoria")) {
     auditar();
+    emitir({ type: "agent_settled" });
+    return;
+  }
+  if (texto.includes("Modo de trabalhar: revisar ")) {
+    revisar(texto);
+    responder("Revisei.");
     emitir({ type: "agent_settled" });
     return;
   }

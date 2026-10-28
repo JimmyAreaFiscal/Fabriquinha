@@ -1,5 +1,6 @@
 // Condução de uma revisão (comparacao-sdlc-implementacao.md §§4.2, 6): reserva o ticket, prepara as evidências da
-// Fabriquinha, roda o pi e, se a execução falhou, registra a falha no ticket. Nunca grava a decisão (CA-2, CA-12).
+// Fabriquinha, roda o pi e, se a execução falhou ou terminou sem a decisão, registra a falha no ticket. Nunca grava a
+// decisão (CA-2, CA-12): quem a grava é o agente, por `revisao decidir`.
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";
@@ -15,7 +16,7 @@ export interface OpcoesRevisao extends Pick<OpcoesExecucaoDemanda, "limiteMin" |
   preparar?: () => void | Promise<void>;
 }
 
-export type ResultadoRevisao = "aguardando_decisao" | "falhou";
+export type ResultadoRevisao = "decidida" | "falhou";
 
 const agora = () => ({ agora: new Date().toISOString() });
 
@@ -26,11 +27,13 @@ export async function conduzirRevisao(
   opcoes: OpcoesRevisao,
 ): Promise<ResultadoRevisao> {
   const { demanda_id, ticket_id } = ref;
-  const { instrucao } = encontrado(
-    carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
-    `o ticket ${formatarTicketRef(ref)} não existe`,
-    "use um ticket da demanda",
-  );
+  const doTicket = () =>
+    encontrado(
+      carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
+      `o ticket ${formatarTicketRef(ref)} não existe`,
+      "use um ticket da demanda",
+    );
+  const { instrucao } = doTicket();
   comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, agora(), true));
   const falhar = (motivo: string): ResultadoRevisao => {
     comDemanda(banco, demanda_id, (ag) => registrarFalhaTicket(ag, { ticket_id, motivo }, agora()));
@@ -48,5 +51,7 @@ export async function conduzirRevisao(
   await fim;
   // `erro` só é gravado na execução que falhou.
   const erro = carregarSessoesDoTicket(banco, ref).execucoes.find((e) => e.id === id)?.erro;
-  return erro === undefined ? "aguardando_decisao" : falhar(erro);
+  if (erro !== undefined) return falhar(erro);
+  // A decisão conclui o ticket; ainda em execução, o revisor saiu sem decidir e o ticket ficaria preso.
+  return doTicket().status === "em_execucao" ? falhar("a revisão terminou sem registrar a decisão") : "decidida";
 }
