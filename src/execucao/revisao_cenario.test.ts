@@ -16,11 +16,15 @@ const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-revisao-"));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
 delete process.env.FABRIQUINHA_PORTA;
 
-/** pi falso: anota a pasta em $FALSO_PI_REGISTRO e assenta; com $FALSO_PI=erro responde com stopReason de erro. */
+/**
+ * pi falso: anota a pasta em $FALSO_PI_REGISTRO e assenta; com $FALSO_PI=erro responde com stopReason de erro e, com
+ * $FALSO_PI=reprovar, decide pelo CLI `fabriquinha revisao decidir` antes de assentar, como o revisor.
+ */
 const pi = join(temporario, "pi.mjs");
 writeFileSync(
   pi,
   `#!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync } from "node:fs";
 const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
@@ -31,6 +35,11 @@ process.stdin.setEncoding("utf8").on("data", (parte) => {
   resto = linhas.pop();
   if (!linhas.some((l) => JSON.parse(l).type === "prompt")) return;
   const erro = process.env.FALSO_PI === "erro";
+  if (process.env.FALSO_PI === "reprovar") {
+    const correcoes = JSON.stringify([{ ticket_id: 1, titulo: "corrige", descricao: "d", caminhos: [], depende: [] }]);
+    execFileSync(process.execPath, [process.env.FALSO_PI_CLI, "revisao", "decidir", process.env.FALSO_PI_TICKET, "reprovar",
+      "--motivo", "falta teste", "--correcoes", correcoes]);
+  }
   const message = { role: "assistant", content: [], provider: "p", model: "m", stopReason: erro ? "error" : "stop",
     usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } },
     ...(erro && { errorMessage: "limite de uso" }) };
@@ -57,7 +66,7 @@ export const REF_GLOBAL = { demanda_id: "I-1", ticket_id: 3 };
  * Projeto `loja`, demanda I-1. Padrão: em execução, rodada 1 em `revisao` (implementar T1 concluído, revisar_rodada
  * T2 aberto), com a worktree da demanda criada. Com `integral`: em `revisao_demanda`, rodada 1 concluída, revisar_demanda T3 aberto.
  */
-export async function cenarioRevisao({ integral = false, falha = false } = {}) {
+export async function cenarioRevisao({ integral = false, falha = false, reprova = false } = {}) {
   const c = cenarioDemanda();
   const banco = abrir(c.raiz);
   abertos.push(banco);
@@ -127,7 +136,10 @@ export async function cenarioRevisao({ integral = false, falha = false } = {}) {
   const registro = join(c.dir, "registro.txt");
   process.env.FABRIQUINHA_PI = pi;
   process.env.FALSO_PI_REGISTRO = registro;
+  process.env.FALSO_PI_CLI = join(import.meta.dirname, "..", "cli", "fabriquinha.ts");
+  process.env.FALSO_PI_TICKET = "I-1.T2";
   if (falha) process.env.FALSO_PI = "erro";
+  else if (reprova) process.env.FALSO_PI = "reprovar";
   else delete process.env.FALSO_PI;
   return {
     c,
