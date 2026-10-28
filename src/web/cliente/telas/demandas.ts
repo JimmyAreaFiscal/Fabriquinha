@@ -3,6 +3,7 @@
 import type { EtapaTicket, FaseDemanda, FaseRodada } from "../../../dominio/primitivos.ts";
 import {
   caminhoDaDemanda,
+  caminhoDaSessao,
   escapar,
   FASE_DA_DEMANDA,
   FASE_DA_RODADA,
@@ -101,6 +102,7 @@ export interface DadosDaPagina {
     ref: string;
     etapa: EtapaTicket;
     status: StatusTicket;
+    sessao?: string;
     rodada?: string;
     titulo?: string;
     instrucao?: string;
@@ -168,7 +170,7 @@ function acaoDoTicket({ ref, status }: Pagina["tickets"][number]): string {
 function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): string {
   const minhas = decisoes.filter((d) => d.ticket === t.ref);
   return `<li class="dm-ticket">
-    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span></div>
+    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>${t.sessao === undefined ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`}</div>
     ${t.titulo === undefined ? "" : `<p class="dm-texto">${escapar(t.titulo)}</p>`}
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
     ${t.motivo_falha === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo_falha)}</p>`}

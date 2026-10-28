@@ -5,6 +5,8 @@
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Execucao } from "../../../dominio/agregado.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
+import type { ExecucaoSessao } from "../../../dominio/sessoes.ts";
+import type { CabecalhoDemanda, MotivoDemanda } from "../../../execucao/sessoes_demanda.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
@@ -24,7 +26,19 @@ import {
   rotuloTicket,
   situacaoDasFases,
 } from "../render.ts";
+import { ETAPA_DO_TICKET } from "./demandas.ts";
 import { cardDaEvidencia, cartaoDaProposta, comCard, NOME } from "./issue.ts";
+
+/** O cabeçalho do chat: o de uma sessão de ticket de issue ou o de uma sessão de ticket da demanda (`origem: "demanda"`). */
+export type Cabecalho = CabecalhoDoChat | CabecalhoDemanda;
+export type Dados = Cabecalho & { conversa: Entrada[] };
+
+export const daDemanda = (c: Cabecalho): c is CabecalhoDemanda => "origem" in c;
+
+const caminhoDaPaginaDaDemanda = (id: string): string => `/demandas/${encodeURIComponent(id)}`;
+
+/** `E-7` na issue; na demanda, o começo do uuid da execução. */
+const rotuloDaExecucao = (id: number | string): string => `E-${typeof id === "string" ? id.slice(0, 8) : String(id)}`;
 
 /** Um bloco do `content` de uma mensagem do pi. */
 export interface Bloco {
@@ -64,17 +78,18 @@ export const textoDe = (m: MensagemPi): string =>
     .map((b) => String(b.text))
     .join("\n");
 
-const MOTIVOS: Record<NonNullable<CabecalhoDoChat["sessao"]["motivo"]>, string> = {
+const MOTIVOS: Record<NonNullable<CabecalhoDoChat["sessao"]["motivo"]> | MotivoDemanda, string> = {
   conversa: "conversa",
   dialogo: "diálogo",
   falha: "falha",
   gate_registro: "gate do registro",
   gate_desenho: "gate do desenho",
   gate_pr: "gate do PR",
+  gate_demanda: "gate da demanda",
 };
 
 /** O estado da sessão (F4 §5.2) como etiqueta: azul rodando, âmbar aguardando, vermelho na falha. */
-export function etiquetaDoEstado({ estado, motivo }: CabecalhoDoChat["sessao"]): string {
+export function etiquetaDoEstado({ estado, motivo }: Pick<Cabecalho["sessao"], "estado" | "motivo">): string {
   if (estado === "rodando") return '<span class="pill pill-rodando">rodando</span>';
   if (estado === "terminada") return '<span class="pill pill-neutro">terminada</span>';
   const classe = motivo === "falha" ? "pill-falha" : "pill-aguarda";
@@ -82,8 +97,8 @@ export function etiquetaDoEstado({ estado, motivo }: CabecalhoDoChat["sessao"]):
 }
 
 /** O modelo da sessão: o da última execução, senão o da última resposta do agente, senão o padrão do pi. */
-export function modeloDe(c: CabecalhoDoChat, conversa: readonly Entrada[]): string {
-  const fixado = c.execucoes.at(-1)?.modelo;
+export function modeloDe(c: Cabecalho, conversa: readonly Entrada[]): string {
+  const fixado = daDemanda(c) ? c.sessao.modelo : c.execucoes.at(-1)?.modelo;
   if (fixado) return nomeDoModelo(fixado);
   const resposta = conversa.map((e) => e.message as MensagemPi | undefined).findLast((m) => m?.role === "assistant");
   return resposta?.model
@@ -99,7 +114,8 @@ const exportar = (sessao: string, classe: string, rotulo = "Exportar"): string =
  * Barra de estado (F7 §4.4, item 1): issue, ticket, etapa e modo, estado, modelo, a execução com log e prompt,
  * **Exportar** e **Conversar sobre**.
  */
-export function barraDeEstado(c: CabecalhoDoChat, modelo: string): string {
+export function barraDeEstado(c: Cabecalho, modelo: string): string {
+  if (daDemanda(c)) return barraDaDemanda(c, modelo);
   const { sessao, issue } = c;
   const e = String(sessao.execucao);
   const titulo = issue.titulo ?? "sem título";
@@ -117,10 +133,26 @@ export function barraDeEstado(c: CabecalhoDoChat, modelo: string): string {
   );
 }
 
+/** A barra da sessão do ticket da demanda (D09): demanda, rodada se houver, ticket, etapa e modo, estado, modelo, execução e Exportar. */
+function barraDaDemanda(c: CabecalhoDemanda, modelo: string): string {
+  const { sessao, demanda, rodada, ticket, etapa: e } = c;
+  return (
+    `<div class="estado-sessao">` +
+    `<a class="issue" href="${caminhoDaPaginaDaDemanda(demanda)}"><span class="id">${escapar(demanda)}</span></a>` +
+    (rodada === undefined ? "" : `<span class="sep">│</span><span class="id">${escapar(rodada)}</span>`) +
+    `<span class="sep">│</span><span class="id">${escapar(ticket)}</span>` +
+    `<span class="muted">${ETAPA_DO_TICKET[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
+    rotuloDoModelo(modelo) +
+    `<div class="direita"><span class="muted pequeno">${rotuloDaExecucao(sessao.execucao)}</span>` +
+    `${exportar(sessao.sessao, "link")}</div></div>`
+  );
+}
+
 const sistema = (html: string): string => `<div class="sistema">${html}</div>`;
 
 /** As linhas do sistema de uma execução: quando começou e, se já terminou, como terminou. */
-export function linhasDaExecucao(e: Execucao, i: number): (Item & { em: string })[] {
+export function linhasDaExecucao(e: Execucao | ExecucaoSessao, i: number): (Item & { em: string })[] {
+  if ("sessao_id" in e) return linhasDaExecucaoDaDemanda(e);
   const n = `E-${String(e.id)}`;
   // O prompt da etapa (F4 §6.3) abre a sessão e cada execução autônoma; a retomada interativa leva só a mensagem.
   const rotulo = i === 0 || e.modo === "autonomo" ? "prompt da etapa" : "prompt";
@@ -142,18 +174,28 @@ export function linhasDaExecucao(e: Execucao, i: number): (Item & { em: string }
   return [...linhas, { chave: `fim-${n}`, em: e.terminadaEm, html: sistema(fim) }];
 }
 
+/** Na demanda, sem link de log nem de prompt: as rotas `/api/execucoes/:id/*` são das issues. */
+function linhasDaExecucaoDaDemanda(e: ExecucaoSessao): (Item & { em: string })[] {
+  const n = rotuloDaExecucao(e.id);
+  const inicio = { chave: `inicio-${n}`, em: e.inicio, html: sistema(`Execução ${n} iniciada`) };
+  if (e.fim == null) return [inicio];
+  const fim = e.falha ? `Execução ${n} falhou: ${escapar(e.erro)}` : `Execução ${n} encerrada`;
+  return [inicio, { chave: `fim-${n}`, em: e.fim, html: sistema(fim) }];
+}
+
 /**
  * O erro da falha em destaque no fim da conversa (F7 §4.4, item 3): a última execução, o erro do ticket (C8) e o que
  * ficou. Nada fora da falha.
  */
-export function erroDaFalha({ sessao, ticket }: CabecalhoDoChat): Item[] {
+export function erroDaFalha(c: Cabecalho): Item[] {
+  const { sessao } = c;
   if (sessao.motivo !== "falha") return [];
-  const e = `E-${String(sessao.execucao)}`;
-  const erro = escapar(String(ticket.erro).replace(/\.$/, ""));
+  const e = rotuloDaExecucao(sessao.execucao);
+  const [erro, ticket] = daDemanda(c) ? [c.erro, c.ticket] : [c.ticket.erro, rotuloTicket(c.ticket.id)];
   return [
     {
       chave: `falha-${e}`,
-      html: `<div class="erro-bloco" role="alert"><strong>Execução ${e} falhou:</strong> ${erro}. O ticket ${rotuloTicket(ticket.id)} ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>`,
+      html: `<div class="erro-bloco" role="alert"><strong>Execução ${e} falhou:</strong> ${escapar(String(erro).replace(/\.$/, ""))}. O ticket ${ticket} ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>`,
     },
   ];
 }
@@ -230,8 +272,10 @@ export const linhasDaEvidencia = (e: CabecalhoDoChat["evidencias"][number]): Ite
 });
 
 /** Os cartões das propostas de issue abertas do registro, entre a conversa e o envio. */
-export const propostasDoChat = (c: CabecalhoDoChat): string =>
-  (c.propostas ?? []).map((p) => cartaoDaProposta(p, false, c.issue.id)).join("");
+export const propostasDoChat = (c: Cabecalho): string =>
+  (daDemanda(c) ? [] : (c.propostas ?? []))
+    .map((p) => cartaoDaProposta(p, false, (c as CabecalhoDoChat).issue.id))
+    .join("");
 
 /** A chamada de ferramenta como parte do assistant-ui; o bloco do pi e o resultado vão inteiros em `artifact`. */
 const parteDaChamada = (b: Bloco, resultado?: MensagemPi): Parte => ({
@@ -292,7 +336,7 @@ export const chaveDa = (m: MensagemPi): string => `${String(m.role)}-${String(m.
  * A conversa inteira (F7 §4.4, item 2): as mensagens do JSONL e as linhas das execuções, por instante, e no fim o
  * erro da falha e os diálogos abertos. O prompt montado pela Fabriquinha não aparece: a linha da execução tem o link dele.
  */
-export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): ThreadMessageLike[] {
+export function conversa(c: Cabecalho, entradas: readonly Entrada[]): ThreadMessageLike[] {
   const mensagens = entradas.flatMap((e) =>
     e.type === "message"
       ? [{ em: String(e.timestamp), m: e.message as MensagemPi, fabriquinha: e.fabriquinha, aviso: e.aviso }]
@@ -306,7 +350,10 @@ export function conversa(c: CabecalhoDoChat, entradas: readonly Entrada[]): Thre
       em,
       lista: fabriquinha ? [] : mensagem(m, resultados, aviso === true),
     })),
-    ...[...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)), ...c.evidencias.map(linhasDaEvidencia)].map((l) => ({
+    ...[
+      ...(c.execucoes as (Execucao | ExecucaoSessao)[]).flatMap((e, i) => linhasDaExecucao(e, i)),
+      ...(daDemanda(c) ? [] : c.evidencias.map(linhasDaEvidencia)),
+    ].map((l) => ({
       em: l.em,
       lista: [doSistema(l)],
     })),
@@ -465,8 +512,15 @@ const retomar =
  */
 export type Envio = { html: string } | { placeholder: string; linha: string };
 
-export function envio(c: CabecalhoDoChat, modo: ModoEnvio): Envio {
+export function envio(c: Cabecalho, modo: ModoEnvio): Envio {
   const { sessao } = c;
+  const demanda = daDemanda(c);
+  const paginaDaDemanda = (aviso: string): Envio => ({
+    html: fim(
+      aviso,
+      `<a class="btn btn-primario" href="${caminhoDaPaginaDaDemanda((c as CabecalhoDemanda).demanda)}">Abrir a demanda</a>`,
+    ),
+  });
   const [pendente] = sessao.dialogos;
   if (pendente) return { html: dialogo(pendente) };
   if (sessao.estado === "terminada") {
@@ -474,12 +528,21 @@ export function envio(c: CabecalhoDoChat, modo: ModoEnvio): Envio {
       html: fim(
         "Sessão terminada; a conversa fica só para leitura.",
         exportar(sessao.sessao, "btn", "Exportar histórico") +
-          '<button type="button" class="btn btn-primario" data-consulta>Conversar sobre esta sessão</button>',
+          (demanda
+            ? ""
+            : '<button type="button" class="btn btn-primario" data-consulta>Conversar sobre esta sessão</button>'),
       ),
     };
   }
-  if (sessao.motivo === "falha") return { html: retomar };
+  if (sessao.motivo === "falha") {
+    return demanda
+      ? paginaDaDemanda("O ticket falhou; reabra-o na página da demanda, com a instrução para a próxima tentativa.")
+      : { html: retomar };
+  }
   const rodando = sessao.estado === "rodando";
+  if (sessao.motivo === "gate_demanda") {
+    return paginaDaDemanda("O plano espera a sua aprovação; decida na página da demanda.");
+  }
   if (!rodando && sessao.motivo !== "conversa") {
     return {
       html: fim(
@@ -497,14 +560,14 @@ export function envio(c: CabecalhoDoChat, modo: ModoEnvio): Envio {
   const acoes = [
     rodando ? '<button type="button" class="btn btn-perigo" data-abortar>Abortar</button>' : "",
     // C14 só na conversa da sessão em aberto (F7 §4.4): não rodando e não numa consulta.
-    !rodando && sessao.modo === "interativo" && sessao.etapa === "sessao"
+    !daDemanda(c) && !rodando && c.sessao.modo === "interativo" && c.sessao.etapa === "sessao"
       ? '<button type="button" class="btn" data-concluir>Concluir sessão</button>'
       : "",
     '<button class="btn btn-primario">Enviar</button>',
   ].join("");
   return {
     placeholder: rodando ? "Mensagem para o agente enquanto ele trabalha" : "Responda ao agente",
-    linha: `${segmento}${ANEXAR}${DICA}<div class="direita">${acoes}</div>`,
+    linha: `${segmento}${demanda ? "" : ANEXAR}${DICA}<div class="direita">${acoes}</div>`,
   };
 }
 
@@ -532,7 +595,8 @@ const ROTULO_DO_GATE: Record<string, string> = {
  * A coluna da direita (F7 §4.4, item 4): na conversa do registro, o formulário de C2; nos gates, só o aviso que leva à
  * página da issue, onde o Auditor decide.
  */
-export function lateral(c: CabecalhoDoChat): string {
+export function lateral(c: Cabecalho): string {
+  if (daDemanda(c)) return "";
   const { sessao, issue } = c;
   const gate = ROTULO_DO_GATE[String(sessao.motivo)];
   if (gate) {

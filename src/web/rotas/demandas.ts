@@ -92,6 +92,15 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   const { demanda } = ag;
   const { ticket, rodada } = ref(id);
   const anexos = anexosDaDemanda(banco, id);
+  // Uma leitura por demanda; com mais de uma sessão no ticket, vale a mais recente.
+  const sessoes = new Map(
+    (
+      banco.prepare("SELECT ticket_id, id FROM sessao WHERE demanda_id = ? ORDER BY rowid").all(id) as {
+        ticket_id: number;
+        id: string;
+      }[]
+    ).map((s) => [s.ticket_id, s.id]),
+  );
   return {
     demanda: { id, projeto: demanda.projeto, titulo: demanda.titulo, fase: demanda.fase },
     rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase })),
@@ -99,6 +108,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       ref: ticket(t.ticket_id),
       etapa: t.etapa,
       status: t.status,
+      ...(sessoes.has(t.ticket_id) && { sessao: sessoes.get(t.ticket_id) }),
       ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
       ...(t.titulo !== undefined && { titulo: t.titulo }),
       ...(t.instrucao !== undefined && { instrucao: t.instrucao }),

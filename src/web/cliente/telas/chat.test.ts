@@ -3,6 +3,8 @@ import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Evidencia, Execucao, Ticket } from "../../../dominio/agregado.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
+import type { ExecucaoSessao } from "../../../dominio/sessoes.ts";
+import type { CabecalhoDemanda } from "../../../execucao/sessoes_demanda.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
 import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
@@ -756,4 +758,100 @@ test("evidência submetida: balão da Fabriquinha com o nome do tipo, por instan
   assert.deepEqual(ordem([e]), ["inicio-E-7", "evidencia-5", "fim-E-7"]);
   assert.deepEqual(ordem([{ ...e, id: 6 }]), ["inicio-E-7", "evidencia-6", "fim-E-7"], "a antiga não volta");
   assert.deepEqual(ordem([]), ["inicio-E-7", "fim-E-7"], "sem evidência, sem balão");
+});
+
+// ——— sessão de ticket da demanda (I-239) ———
+
+const execDemanda = (e: Partial<ExecucaoSessao> = {}): ExecucaoSessao => ({
+  id: "abcdef12-0000-4000-8000-000000000001",
+  sessao_id: "s",
+  inicio: T0,
+  falha: false,
+  ...e,
+});
+
+const daDemanda = (sessao: Partial<CabecalhoDemanda["sessao"]> = {}, extra: Partial<CabecalhoDemanda> = {}) =>
+  ({
+    origem: "demanda",
+    sessao: {
+      sessao: "s/1",
+      projeto: "loja",
+      modo: "interativo",
+      execucao: "abcdef12-0000-4000-8000-000000000001",
+      estado: "aguardando_humano",
+      motivo: "conversa",
+      desde: T0,
+      dialogos: [],
+      ...sessao,
+    },
+    demanda: "I-239",
+    ticket: "I-239.T1",
+    etapa: "planejar",
+    execucoes: [execDemanda({ fim: T0 })],
+    ...extra,
+  }) satisfies CabecalhoDemanda;
+
+test("demanda: etiqueta do gate e modelo fixado na sessão", () => {
+  assert.equal(
+    etiquetaDoEstado({ estado: "aguardando_humano", motivo: "gate_demanda" }),
+    '<span class="pill pill-aguarda">aguarda você · gate da demanda</span>',
+  );
+  const modelo = { provedor: "llamacpp", modelo: "qwen" };
+  assert.equal(modeloDe(daDemanda({ modelo }), []), "llamacpp / qwen");
+  assert.equal(modeloDe(daDemanda(), []), "modelo padrão do pi");
+});
+
+test("demanda: a barra cita demanda, rodada, ticket, etapa, modo, estado, execução e Exportar, sem log nem prompt", () => {
+  const html = barraDeEstado(daDemanda({}, { rodada: "I-239.R1" }), "m");
+  assert.match(html, /<a class="issue" href="\/demandas\/I-239"><span class="id">I-239<\/span><\/a>/);
+  assert.match(html, /<span class="id">I-239.R1<\/span><span class="sep">│<\/span><span class="id">I-239.T1<\/span>/);
+  assert.match(html, /Planejamento · interativa<\/span><span class="pill pill-aguarda">aguarda você · conversa/);
+  assert.match(html, /E-abcdef12<\/span><a class="link" href="\/api\/sessoes\/s%2F1\/historico.md" download>Exportar/);
+  assert.doesNotMatch(html, /log|prompt|Conversar sobre/);
+  assert.doesNotMatch(barraDeEstado(daDemanda(), "m"), /I-239.R1/);
+});
+
+test("demanda: linhas da execução sem link de log ou prompt; erro da falha com o motivo do ticket", () => {
+  const aberta = linhasDaExecucao(execDemanda(), 0);
+  assert.deepEqual(
+    aberta.map((l) => [l.chave, l.em]),
+    [["inicio-E-abcdef12", T0]],
+  );
+  assert.doesNotMatch(String(aberta[0]?.html), /href/);
+  const fim = "2026-10-11T10:05:00.000Z";
+  assert.match(String(linhasDaExecucao(execDemanda({ fim }), 0)[1]?.html), /E-abcdef12 encerrada/);
+  assert.match(
+    String(linhasDaExecucao(execDemanda({ fim, falha: true, erro: "<x>" }), 0)[1]?.html),
+    /falhou: &#60;x&#62;/,
+  );
+  const falha = daDemanda({ estado: "aguardando_humano", motivo: "falha" }, { erro: "quebrou." });
+  assert.match(String(erroDaFalha(falha)[0]?.html), /E-abcdef12 falhou:<\/strong> quebrou\. O ticket I-239.T1 ficou/);
+  assert.deepEqual(erroDaFalha(daDemanda()), []);
+});
+
+test("demanda: a conversa traz as linhas da execução e nada da issue; sem propostas nem coluna ao lado", () => {
+  const itens = conversa(daDemanda({}, { execucoes: [execDemanda({ fim: T0 })] }), []);
+  assert.deepEqual(
+    itens.map((i) => i.id),
+    ["inicio-E-abcdef12", "fim-E-abcdef12"],
+  );
+  assert.equal(propostasDoChat(daDemanda()), "");
+  assert.equal(lateral(daDemanda()), "");
+});
+
+test("demanda: o envio conforme o estado, sem anexar, concluir nem retomada", () => {
+  const html = (e: Envio) => ("html" in e ? e.html : e.linha);
+  const conversando = envio(daDemanda(), "steer");
+  assert.ok("linha" in conversando);
+  assert.doesNotMatch(conversando.linha, /Anexar|data-concluir/);
+  const rodando = envio(daDemanda({ estado: "rodando", motivo: undefined }), "steer");
+  assert.match(html(rodando), /data-abortar/);
+  assert.doesNotMatch(html(rodando), /Anexar/);
+  const falha = html(envio(daDemanda({ motivo: "falha" }), "steer"));
+  assert.match(falha, /href="\/demandas\/I-239">Abrir a demanda/);
+  assert.doesNotMatch(falha, /data-retomar/);
+  assert.match(html(envio(daDemanda({ motivo: "gate_demanda" }), "steer")), /aprovação.*href="\/demandas\/I-239"/);
+  const terminada = html(envio(daDemanda({ estado: "terminada", motivo: undefined }), "steer"));
+  assert.match(terminada, /Exportar histórico/);
+  assert.doesNotMatch(terminada, /data-consulta/);
 });

@@ -18,7 +18,14 @@ interface Evidencia {
 }
 interface Pagina {
   rodadas: unknown[];
-  tickets: { ref: string; etapa: string; titulo?: string; motivo_falha?: string; instrucao?: string }[];
+  tickets: {
+    ref: string;
+    etapa: string;
+    sessao?: string;
+    titulo?: string;
+    motivo_falha?: string;
+    instrucao?: string;
+  }[];
   decisoes: { ticket: string; resultado: string; motivo?: string; nota?: number }[];
   evidencias: Evidencia[];
   encerramento: { passos: { feito: boolean }[] };
@@ -114,6 +121,20 @@ test("CA-6: a página traz cada ticket com o endereço público e a etapa", asyn
     ],
   );
   assert.equal(tickets[2]?.titulo, "implementa");
+});
+
+test("CA-16 e CA-17: a página traz a sessão mais recente só nos tickets que têm sessão", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const nova = banco.prepare(
+    "INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-206', 3, 'autonomo', 'c')",
+  );
+  nova.run("s-antiga");
+  nova.run("s-nova");
+  const { tickets } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(
+    tickets.map((t) => t.sessao),
+    [undefined, undefined, "s-nova", undefined, undefined],
+  );
 });
 
 test("a página traz o motivo da falha e a instrução do ticket", async () => {
