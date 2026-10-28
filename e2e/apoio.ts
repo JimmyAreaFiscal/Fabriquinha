@@ -83,12 +83,15 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
       let log = "";
       const servico = spawn(
         process.execPath,
-        ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "servidor.ts"), raiz],
+        ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../src/cli/fabriquinha.ts"), "servidor"],
         {
           env: {
             ...process.env,
+            // O serviço sobe como o systemd o sobe, sem a execução de um agente herdada.
+            FABRIQUINHA_EXECUCAO: "",
             // Sem SonarQube, a coleta depois do pi do desenvolvimento falha o ticket; uma reprovação o devolveria ao agente.
             SONAR_HOST_URL: "",
+            FABRIQUINHA_ROOT: raiz,
             FABRIQUINHA_PORTA: "0",
             FABRIQUINHA_PI: pi,
             PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),

@@ -21,7 +21,7 @@ import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
 import { recuperarAuditorias } from "./auditoria.ts";
 import { despacharDemandas, executarAgoraDemanda } from "./despacho_demanda.ts";
-import { aguardarCondutores, recuperarExecucoesDemanda } from "./execucao_demanda.ts";
+import { aguardarCondutores, marcarParada, recuperarExecucoesDemanda } from "./execucao_demanda.ts";
 
 const REINICIADO = "serviço reiniciado";
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
@@ -167,6 +167,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     executarAgoraDemanda: executarAgoraDaDemanda,
     proximaBusca,
     async parar() {
+      marcarParada();
       clearInterval(relogio);
       const fechou = new Promise((pronto) => web.close(pronto));
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.

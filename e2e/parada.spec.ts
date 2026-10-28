@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
+import type { Page } from "@playwright/test";
+import { carregarDemanda } from "../src/persistencia/demandas.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { sinalNoGrupo } from "../src/processo.ts";
@@ -68,51 +70,70 @@ test.describe("I-246 CA-4", () => {
   });
 });
 
+/** Executa o ticket e espera o grupo do pi gravado. */
+async function executarEEsperarPi(pagina: Page, raiz: string, base: string): Promise<number> {
+  await pagina.goto(`${base}/demandas/I-216`);
+  await pagina.getByRole("button", { name: "Executar agora" }).click();
+  await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+  let pgid: number | null = null;
+  while (pgid === null) {
+    await dormir(50);
+    const banco = abrir(raiz);
+    pgid = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
+    banco.close();
+  }
+  return pgid;
+}
+
+/** Logo depois da saída do serviço, antes de subir de novo: o fim e o motivo já estão no banco (não é a subida que os preenche). */
+function conferirFimGravado(raiz: string): void {
+  const banco = abrir(raiz);
+  const { execucoes } = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
+  const ticket = carregarDemanda(banco, "I-216").tickets.find((t) => t.ticket_id === 1);
+  banco.close();
+  expect(execucoes).toHaveLength(1);
+  expect(execucoes[0]?.fim).not.toBeNull();
+  expect(execucoes[0]?.erro).toBe("serviço reiniciado");
+  expect(ticket?.status).toBe("falhou");
+  expect(ticket?.motivo_falha).toBe("serviço reiniciado");
+}
+
 test.describe("I-246", () => {
   test.use({ pi: piParado });
-  test("CA-1, CA-2: SIGTERM com ticket em execução sai limpo, e a subida seguinte o mostra Falhou", async ({
-    pagina,
-    fabriquinha,
-  }) => {
-    projeto(fabriquinha.raiz);
-    semearTicketAberto(fabriquinha.raiz);
-    await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
-    await pagina.getByRole("button", { name: "Executar agora" }).click();
-    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+  for (const [nome, adiantoMs] of [
+    ["SIGTERM simultâneo no pi e no serviço", 0],
+    ["pi recebe o SIGTERM 200 ms antes do serviço", 200],
+  ] as const) {
+    test(`CA-1, CA-2: ${nome}: sai limpo, grava o fim, e a subida seguinte o mostra Falhou`, async ({
+      pagina,
+      fabriquinha,
+    }) => {
+      projeto(fabriquinha.raiz);
+      semearTicketAberto(fabriquinha.raiz);
+      const pgid = await executarEEsperarPi(pagina, fabriquinha.raiz, fabriquinha.base);
 
-    let pgid: number | null = null;
-    while (pgid === null) {
-      await dormir(50);
-      const banco = abrir(fabriquinha.raiz);
-      pgid = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
-      banco.close();
-    }
+      // Como o systemd: o pi e o serviço recebem o SIGTERM juntos.
+      const saiu = once(fabriquinha.servico, "exit");
+      sinalNoGrupo(pgid, "SIGTERM");
+      if (adiantoMs > 0) await dormir(adiantoMs);
+      fabriquinha.servico.kill("SIGTERM");
+      const codigo = (await saiu)[0] as number | null;
+      expect(codigo).toBe(0);
+      expect(fabriquinha.stderr()).not.toContain("database is not open");
+      expect(fabriquinha.stderr()).not.toMatch(/Error/);
+      conferirFimGravado(fabriquinha.raiz);
 
-    // Como o systemd: o pi e o serviço recebem o SIGTERM juntos.
-    const saiu = once(fabriquinha.servico, "exit");
-    sinalNoGrupo(pgid, "SIGTERM");
-    fabriquinha.servico.kill("SIGTERM");
-    const codigo = (await saiu)[0] as number | null;
-    expect(codigo).toBe(0);
-    expect(fabriquinha.stderr()).not.toContain("database is not open");
-    expect(fabriquinha.stderr()).not.toMatch(/Error/);
+      const nova = await fabriquinha.reiniciar();
+      await pagina.goto(nova.link);
+      await pagina.goto(`${nova.base}/demandas/I-216`);
+      const ticket = pagina.locator(".dm-ticket", { hasText: "I-216.T1" });
+      await expect(ticket).toContainText("Falhou");
+      await expect(ticket).toContainText("serviço reiniciado");
 
-    const nova = await fabriquinha.reiniciar();
-    await pagina.goto(nova.link);
-    await pagina.goto(`${nova.base}/demandas/I-216`);
-    const ticket = pagina.locator(".dm-ticket", { hasText: "I-216.T1" });
-    await expect(ticket).toContainText("Falhou");
-    await expect(ticket).toContainText("serviço reiniciado");
-
-    const banco = abrir(fabriquinha.raiz);
-    const { execucoes } = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
-    banco.close();
-    expect(execucoes).toHaveLength(1);
-    expect(execucoes[0]?.fim).not.toBeNull();
-
-    await pagina.getByLabel(/Instrução/).fill("refazer depois da parada");
-    await pagina.getByRole("button", { name: "Reabrir" }).click();
-    await expect(pagina.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
-    await expect(pagina.getByText("Falhou", { exact: true })).toHaveCount(0);
-  });
+      await pagina.getByLabel(/Instrução/).fill("refazer depois da parada");
+      await pagina.getByRole("button", { name: "Reabrir" }).click();
+      await expect(pagina.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
+      await expect(pagina.getByText("Falhou", { exact: true })).toHaveCount(0);
+    });
+  }
 });

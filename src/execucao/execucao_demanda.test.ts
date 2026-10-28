@@ -656,6 +656,16 @@ test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket 
   await fim;
 });
 
+test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serviço reiniciado'", async () => {
+  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  emExecucao(banco, 1);
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  process.kill(-(await grupoDoPi(sessoes, 1)), "SIGTERM");
+  await fim;
+  assert.equal(sessoes(1).execucoes[0]?.erro, "serviço reiniciado");
+  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+});
+
 test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço reiniciado' e nada fica vivo", async () => {
   const { banco, sessoes } = await cenario({ variante: "dorme" });
   emExecucao(banco, 1);
