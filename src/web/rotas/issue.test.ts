@@ -91,7 +91,7 @@ const pedir = (
 
 const pagina = async (id = 1) => (await (await pedir(`/api/issues/${String(id)}`)).json()) as PaginaDaIssue;
 
-test("GET /api/issues/:id: agregado, projeto, dependências com a fase, sessões, custos, limpeza e Executar agora", async () => {
+test("GET /api/issues/:id: agregado, projeto, dependências com a fase, sessões, custos, limpeza", async () => {
   const p = await pagina();
   assert.equal(p.issue.titulo, "Busca");
   assert.equal(p.issue.descricao, "**rápida**");
@@ -109,14 +109,9 @@ test("GET /api/issues/:id: agregado, projeto, dependências com a fase, sessões
   assert.deepEqual(p.custos, { 1: 1.75 });
   assert.deepEqual(p.limpeza, []);
   assert.deepEqual(p.percorridas, [], "semeada direto no banco, a issue ainda não teve comando");
-  assert.deepEqual([p.executar?.ticket.id, p.executar?.ocupada], [2, undefined]);
-  servico.banco.exec(`INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
-    VALUES (9, 2, 'autonomo', '${crypto.randomUUID()}', 'em_andamento', '${AGORA}')`);
-  assert.match(String((await pagina()).executar?.ocupada), /já tem a execução E-9 em andamento/);
-  servico.banco.exec("DELETE FROM execucao WHERE id = 9");
+  assert.equal("executar" in p, false, "a página não oferece mais o Executar agora");
 
   const concluida = await pagina(2);
-  assert.equal(concluida.executar, undefined, "sem ticket elegível, sem Executar agora");
   assert.deepEqual(concluida.limpeza, [
     `git -C /nao/existe worktree remove --force ${caminhoDaWorktree(raiz, "loja", 2)}`,
   ]);
@@ -127,6 +122,14 @@ test("GET /api/issues/:id: agregado, projeto, dependências com a fase, sessões
     [404, { erro: "a issue I-99 não existe (confira o número da issue)" }],
   );
   assert.equal((await pedir("/api/issues/I-1")).status, 422);
+});
+
+test("CA-6: POST /api/tickets/:id/executar não cria execucao e o ticket segue aberto", async () => {
+  const conta = () => servico.banco.prepare("SELECT count(*) AS n FROM execucao").get();
+  const antes = conta();
+  assert.equal((await pedir("/api/tickets/2/executar", { method: "POST" })).ok, false);
+  assert.deepEqual(conta(), antes);
+  assert.equal(servico.banco.prepare("SELECT status FROM ticket WHERE id = 2").get()?.status, "aberto");
 });
 
 test("dependências: C3 adiciona e C4 remove pelo Auditor; ciclo dá 409 e corpo inválido 422", async () => {

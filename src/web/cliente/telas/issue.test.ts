@@ -346,24 +346,9 @@ test("PR, aprovada e reprovada nos cards", () => {
   assert.doesNotMatch(html, /Explicação das fitness/, "entra na tabela da matriz_fitness");
 });
 
-test("Ação do Auditor: Executar agora habilitado, desabilitado com o motivo da própria issue, e o aviso da limpeza", () => {
+test("Ação do Auditor: sem botão Executar agora (CA-7), e o aviso da limpeza", () => {
   const p = exemplo();
-  const t3 = ticketDe(p, 3);
   assert.equal(acaoDoAuditor(p), "");
-  const livre = acaoDoAuditor({ ...p, executar: { ticket: t3 } });
-  assert.match(livre, /^<div class="acao-auditor" aria-label="Ação do Auditor" role="region">/);
-  assert.match(livre, /<span class="mono">T-3<\/span> · Cache &#60;img[^<]* · desenvolvimento/);
-  assert.match(
-    livre,
-    /<button type="button" class="btn btn-primario" data-acao="executar" data-executar="3">Executar agora/,
-  );
-  assert.doesNotMatch(livre, /bloqueio/);
-
-  const motivo = "a I-1 já tem a execução E-9 em andamento";
-  const ocupada = acaoDoAuditor({ ...p, executar: { ticket: t3, ocupada: motivo } });
-  assert.match(ocupada, new RegExp(`data-executar="3" disabled title="${motivo}">`));
-  assert.match(ocupada, /<p class="bloqueio">a I-1 já tem a execução/);
-
   const limpeza = acaoDoAuditor({
     ...p,
     limpeza: ["git -C /repo worktree remove --force /w/I-1", "git -C /repo worktree prune"],

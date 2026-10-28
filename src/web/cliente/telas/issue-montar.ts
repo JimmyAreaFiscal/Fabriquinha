@@ -186,11 +186,6 @@ const ACOES: Record<string, (c: Contexto) => void | Promise<void>> = {
     form.hidden = false;
     form.querySelector("input")?.focus();
   },
-  executar: async ({ alvo, remontar }) => {
-    (alvo as HTMLButtonElement).disabled = true;
-    await api(`/api/tickets/${String(alvo.dataset.executar)}/executar`, enviarJson("POST"));
-    await remontar();
-  },
   "cancelar-issue": ({ raiz }) => {
     raiz.querySelector<HTMLDialogElement>("[data-dialogo-cancelar]")?.showModal();
   },

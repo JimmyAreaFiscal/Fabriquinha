@@ -11,12 +11,11 @@ import {
   AUDITOR,
   type PropostaIssue,
   registroExterno,
-  type Ticket,
   type TipoEvidencia,
 } from "../../dominio/agregado.ts";
 import { encontrado, existe } from "../../dominio/erros.ts";
 import { evidenciasFaltando } from "../../dominio/evidencia.ts";
-import { jaTemExecucao, ticketDe } from "../../dominio/execucao.ts";
+import { ticketDe } from "../../dominio/execucao.ts";
 import { adicionarDependencia, removerDependencia } from "../../dominio/issue.ts";
 import { propostasAbertas } from "../../dominio/propostas.ts";
 import { type Fase, Id } from "../../dominio/primitivos.ts";
@@ -36,7 +35,6 @@ import {
 } from "../../persistencia/issues.ts";
 import { custoPorExecucao } from "../../persistencia/metricas.ts";
 import { projeto } from "../../persistencia/projetos.ts";
-import { ticketsElegiveis } from "../../persistencia/servico.ts";
 import { limpezaPendente } from "../../repositorio/worktree.ts";
 import { ErroHttp } from "../erros.ts";
 import { type Rota, IdDoCaminho } from "../rotas.ts";
@@ -87,8 +85,6 @@ export interface PaginaDaIssue extends Agregado {
   custos: Record<string, number>;
   /** Os comandos da limpeza que falhou (F5 §5.3), para o Auditor rodar. */
   limpeza: string[];
-  /** O ticket do **Executar agora**, se há um elegível; `ocupada` diz por que ele está desabilitado (a execução da própria issue). */
-  executar?: { ticket: Ticket; ocupada?: string };
   /** Os números do desenho (F6 §5.5), só no gate do desenho; `null` com as evidências faltando ou malformadas. */
   desenho?: MetricasIssue["desenho"];
   /** O painel do gate do registro, só quando a sessão do registro, ou o registro da IA externa, aguarda a decisão (C10). */
@@ -107,9 +103,6 @@ export const projetoDa = (banco: DatabaseSync, ag: Agregado): Projeto =>
 async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue> {
   const ag = agregadoExistente(banco, id);
   const doProjeto = projetoDa(banco, ag);
-  const rodando = ag.execucoes.find((e) => e.modo === "autonomo" && e.resultado === "em_andamento");
-  const ticketId = rodando?.ticket ?? ticketsElegiveis(banco, id)[0];
-  const ticket = ag.tickets.find((t) => t.id === ticketId);
   const todas = [
     ...(await sessoes(banco, { escopo: "ativas", issue: id })),
     ...(await sessoes(banco, { escopo: "historico", issue: id })),
@@ -131,7 +124,6 @@ async function paginaDaIssue(banco: DatabaseSync, id: Id): Promise<PaginaDaIssue
     sessoes: todas,
     custos: custoPorExecucao(banco, id),
     limpeza: limpezaPendente(raizDo(banco), doProjeto, ag.issue),
-    ...(ticket && { executar: { ticket, ...(rodando && { ocupada: jaTemExecucao(ag, rodando) }) } }),
     ...(ag.issue.fase === "aprovacao_desenho" && {
       desenho: numerosDoDesenho(ag),
       propostas: propostasAbertas(ag, propostasDaIssue(banco, id)),
