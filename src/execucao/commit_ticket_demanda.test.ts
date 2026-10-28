@@ -36,7 +36,7 @@ function cenario() {
   migrar(banco, MIGRACOES);
   const t = "'2026-01-01T00:00:00.000Z'";
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-    VALUES ('p', '/repo/p', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]')`);
+    VALUES ('p', '${worktree}', 'main', 'github', '["t"]', 'k', '[{"nome":"f","comando":"true","descricao":"d"}]')`);
   banco.exec(
     `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1')`,
   );
@@ -96,5 +96,22 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
   assert.deepEqual(
     c.arquivos.map((a) => a.caminho),
     ["o.txt"],
+  );
+});
+
+test("o commit do ticket grava o retrabalho sobre as linhas do ticket anterior", async () => {
+  const { worktree, banco } = cenario();
+  escreve(worktree, "a.txt", "a\nb\nc\nd\ne\n");
+  await commitarTicketDemanda(banco, ref(1), { worktree, tipo: "feat", titulo: "Um" });
+  escreve(worktree, "a.txt", "a\nb\nX\nY\nZ\n");
+  await commitarTicketDemanda(banco, ref(2), { worktree, tipo: "feat", titulo: "Dois" });
+  assert.deepEqual(
+    banco
+      .prepare(
+        "SELECT ticket_id AS alterador_ticket_id, ticket_origem_id AS origem_ticket_id, linhas FROM retrabalho_demanda",
+      )
+      .all()
+      .map((l) => ({ ...l })),
+    [{ alterador_ticket_id: 2, origem_ticket_id: 1, linhas: 3 }],
   );
 });

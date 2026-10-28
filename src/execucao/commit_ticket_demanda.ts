@@ -1,6 +1,8 @@
 // Commit do ticket da demanda (comparacao-sdlc-implementacao.md §6), idempotente pela marca `[I-n.Tm]` na mensagem.
 import type { DatabaseSync } from "node:sqlite";
 import { formatarTicketRef } from "../dominio/demanda.ts";
+import { registrarRetrabalhoDemanda } from "../metricas/retrabalho.ts";
+import { noLog } from "../persistencia/execucoes.ts";
 import { type Commit } from "../persistencia/commits.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { arquivosDe, commitar } from "../repositorio/commit.ts";
@@ -49,5 +51,7 @@ export async function commitarTicketDemanda(
     commit = await lerCommit(worktree, (await exigirGit(worktree, "rev-parse", "HEAD")).trim());
   }
   gravarCommitDemanda(banco, ref.demanda_id, ref.ticket_id, commit);
+  // O retrabalho do commit do ticket (F6 §4.2); a falha só vai para o log.
+  await registrarRetrabalhoDemanda(banco, ref.demanda_id, ref.ticket_id, commit.sha).catch(noLog);
   return commit;
 }
