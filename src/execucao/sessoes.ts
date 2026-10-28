@@ -618,15 +618,6 @@ export async function decidirGate(
 }
 
 /**
- * F4 §4: o agendador (ou o Executar agora) abre o desenho como sessão interativa: o agente estuda a issue sozinho e
- * conversa com o Auditor nas decisões. Devolve a sessão.
- */
-export function iniciarDesenho(banco: DatabaseSync, ticket: Id, opcoes: OpcoesInterativa): string {
-  const i = `I-${String(issueDoTicket(banco, ticket))}`;
-  return iniciarInterativa(banco, ticket, `Vamos desenhar a solução da issue ${i}.`, opcoes, true);
-}
-
-/**
  * F3 §7 nas etapas interativas (registro, desenho e sessão em aberto), que não mudam código: descarta o que ficou na
  * worktree, com o log da última execução do ticket. Vem antes do comando que encerra a etapa: se falhar, nada muda.
  * Sem worktree (a preparação falhou antes de criá-la, ou ela foi apagada), não há o que descartar.

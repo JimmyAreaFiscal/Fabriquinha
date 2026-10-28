@@ -1,5 +1,5 @@
-// Página da issue (F7 §4.4, §4.5, §7): leitura, tickets e execuções, artefatos na caixa, dependências, Executar agora,
-// aviso de limpeza, o caminho direto numa aba nova e o script de um HTML de evidência que não alcança a API.
+// Página da issue (F7 §4.4, §4.5, §7): leitura, tickets e execuções, artefatos na caixa, dependências, aviso de
+// limpeza, o caminho direto numa aba nova e o script de um HTML de evidência que não alcança a API.
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -252,49 +252,6 @@ test("adiciona e remove dependências sem sair da página; o erro aparece no avi
   await deps.getByRole("link", { name: "I-3" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/loja/issues/I-3`);
   await expect(pagina.getByRole("heading", { level: 1 })).toHaveText("I-3Outra");
-});
-
-test("Executar agora: habilitado com outra issue rodando, desabilitado com a execução da própria issue; depois inicia o ticket", async ({
-  pagina,
-  fabriquinha,
-}) => {
-  semear(fabriquinha.raiz);
-  const banco = abrir(fabriquinha.raiz);
-  banco.exec(`
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-      VALUES (9, 3, 'desenvolvimento', 'Outro', 'em_execucao', 'auditor', '${AGORA}');
-    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
-      VALUES (9, 9, 'autonomo', '${randomUUID()}', 'em_andamento', '${AGORA}');
-  `);
-  await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
-  const acao = pagina.getByRole("region", { name: "Ação do Auditor" });
-  await expect(acao).toContainText("T-3 · Rota /home com o board · desenvolvimento");
-  const executar = acao.getByRole("button", { name: "Executar agora" });
-  await expect(executar).toBeEnabled();
-  await expect(acao).not.toContainText("já há uma execução autônoma em andamento");
-
-  banco.exec(`
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-      VALUES (10, 1, 'desenvolvimento', 'Da própria', 'em_execucao', 'auditor', '${AGORA}');
-    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em)
-      VALUES (10, 10, 'autonomo', '${randomUUID()}', 'em_andamento', '${AGORA}');
-  `);
-  await pagina.reload();
-  await expect(executar).toBeDisabled();
-  await expect(acao).toContainText("a I-1 já tem a execução E-10 em andamento");
-
-  banco.exec(`
-    UPDATE execucao SET resultado = 'sucesso', terminada_em = '${AGORA}' WHERE id = 10;
-    UPDATE ticket SET status = 'concluido', concluido_em = '${AGORA}' WHERE id = 10;
-  `);
-  banco.close();
-  await pagina.reload();
-  await expect(executar).toBeEnabled();
-  await executar.click();
-  // O ticket começou, e a página relida não oferece mais o botão habilitado: rodando, ele fica desabilitado; já
-  // falho (o comando de testes do projeto falha), ele some.
-  await expect(pagina.locator(".linha-tempo > li").nth(2)).toHaveClass(/em_execucao|falhou/);
-  await expect(acao.getByRole("button", { name: "Executar agora", disabled: false })).toHaveCount(0);
 });
 
 test("issue concluída com a limpeza que falhou mostra o comando que falhou", async ({ pagina, fabriquinha }) => {

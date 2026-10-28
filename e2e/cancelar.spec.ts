@@ -1,5 +1,5 @@
 // Cancelar a issue pela página dela (F7 §4.4; C22): a confirmação, o estado Cancelada, os tickets fechados, a dependente
-// que vai junto, a execução viva parada pelo pi falso e a issue concluída que não se cancela.
+// que vai junto e a issue concluída que não se cancela.
 import { expect, projeto, test } from "./apoio.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
@@ -46,37 +46,6 @@ test("cancela a issue no desenho: ticket fechado, dependente cancelada e nada ap
   await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-2`);
   await expect(pagina.locator(".titulo-issue .pill-cancelada")).toHaveText("Cancelada");
   await expect(pagina.locator(".linha-tempo .pill")).toHaveText("fechado");
-});
-
-test("cancela com a execução viva: o ticket fica cancelado e a sessão termina", async ({ pagina, fabriquinha }) => {
-  projeto(
-    fabriquinha.raiz,
-    `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
-       VALUES (1, 'loja', 'Timeout no checkout com cupom', 'problema', '[ao vivo]', 'desenvolvimento', '${AGORA}');
-     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-       VALUES (1, 1, 'desenvolvimento', 'Buscar cupons sem N+1', 'aberto', 'fabriquinha', '${AGORA}');`,
-  );
-  const executar = await pagina.request.post(`${fabriquinha.base}/api/tickets/1/executar`, {
-    headers: { "Sec-Fetch-Site": "same-origin" },
-  });
-  expect(executar.status()).toBe(204);
-  await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
-  await expect(pagina.locator(".linha-tempo .pill").first()).toHaveText("em execução");
-
-  await pagina.getByRole("button", { name: "Cancelar issue" }).click();
-  await expect(pagina.locator("[data-dialogo-cancelar] .efeitos")).toContainText(
-    "A execução em andamento de T-1 será parada",
-  );
-  await pagina.locator("[data-confirmar-cancelar]").click();
-  await expect(pagina.locator(".titulo-issue .pill-cancelada")).toHaveText("Cancelada");
-  await expect(pagina.locator(".linha-tempo .pill").first()).toHaveText("cancelado");
-
-  const ativas = await pagina.request.get(`${fabriquinha.base}/api/sessoes?escopo=ativas`);
-  expect(await ativas.json()).toEqual([]);
-  const log = async () => (await (await pagina.request.get(`${fabriquinha.base}/api/execucoes/1/log`)).text()).length;
-  const tamanho = await log();
-  await pagina.waitForTimeout(700);
-  expect(await log()).toBe(tamanho);
 });
 
 test("issue concluída: botão desabilitado e o motivo", async ({ pagina, fabriquinha }) => {

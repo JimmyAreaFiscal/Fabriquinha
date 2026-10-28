@@ -51,18 +51,20 @@ export function recusarBloqueadas(banco: DatabaseSync): void {
        FROM issue i WHERE ${EM_ANDAMENTO} ORDER BY i.id`,
     )
     .all() as unknown as Bloqueio[];
-  const motivos = bloqueios.flatMap(({ n, tickets, execucoes }) =>
-    tickets !== null || execucoes !== null
-      ? [
-          `I-${String(n)} tem execução ativa (ticket ${tickets ?? "-"}, execução ${execucoes ?? "-"}): pare o serviço ou espere as execuções terminarem`,
-        ]
-      : [],
-  );
+  const motivos = bloqueios.flatMap(({ n, tickets, execucoes }) => [
+    ...(tickets === null
+      ? []
+      : [
+          `I-${String(n)}: a sessão do ticket ${tickets} está aberta; na versão anterior da Fabriquinha, envie a sessão ou cancele a issue, e suba de novo`,
+        ]),
+    ...(execucoes === null
+      ? []
+      : [
+          `I-${String(n)} tem execução ativa (execução ${execucoes}): pare o serviço ou espere as execuções terminarem`,
+        ]),
+  ]);
   if (motivos.length > 0)
-    throw new ErroDeRegra(
-      `migração recusada, nada foi gravado: ${motivos.join("; ")}`,
-      "resolva as issues citadas e rode o backfill de novo",
-    );
+    throw new ErroDeRegra(`migração recusada, nada foi gravado: ${motivos.join("; ")}`, "suba o serviço de novo");
 }
 
 interface Proposta {
