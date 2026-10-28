@@ -34,7 +34,7 @@ test("traz o campo, o erro e os botões com os ids e data- que o DOM usa", () =>
   const html = sessaoDeAjustes("I-5.R1", []);
   assert.match(html, /<label for="ajuste-I-5\.R1">Mensagem ao agente<\/label><textarea id="ajuste-I-5\.R1"/);
   assert.match(html, /id="ajuste-I-5\.R1-erro" role="alert" hidden/);
-  assert.match(html, /data-ajuste="atualizar"[^>]*>Atualizar a conversa</);
+  assert.doesNotMatch(html, /atualizar/i);
   assert.match(html, /data-ajuste="enviar"[^>]*>Enviar</);
   assert.match(
     html,

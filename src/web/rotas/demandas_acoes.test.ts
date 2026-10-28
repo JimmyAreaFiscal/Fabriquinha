@@ -353,6 +353,8 @@ const entradas = async ({ pedir }: Cenario) =>
 
 test("o prompt de abertura vai marcado; a mensagem com o pi vivo e a do Auditor com o pi parado não", async () => {
   const c = await comSessao();
+  const lida = (await c.pedir("/api/demandas/rodadas/I-206.R2/ajustes")).json<{ sessao: string }>().sessao;
+  assert.equal(lida, (c.banco.prepare("SELECT id FROM sessao WHERE ticket_id = 9").get() as { id: string }).id);
   const abertura = (await entradas(c)).find((e) => e.message.role === "user");
   assert.equal(abertura?.fabriquinha, true);
   assert.match(abertura.message.content, /Motivo: cobertura abaixo do combinado/);

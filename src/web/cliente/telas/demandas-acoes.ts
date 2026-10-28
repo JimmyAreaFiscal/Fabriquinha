@@ -30,7 +30,7 @@ export function sessaoDeAjustes(ref: string, conversa: readonly Entrada[] | stri
         : '<p class="muted vazio">A conversa ainda não tem mensagens.</p>';
   return blocoDeAcao(
     `Sessão de ajustes de ${escapar(ref)}`,
-    `${corpoDaConversa}<div class="dm-botoes"><button type="button" class="btn" data-ajuste="atualizar" data-ref="${escapar(ref)}">Atualizar a conversa</button></div>
+    `${corpoDaConversa}
     <label for="${campo}">Mensagem ao agente</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span>
     <div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-ajuste="enviar" data-ref="${escapar(ref)}">Enviar</button>
     <button type="button" class="btn btn-grande" data-ajuste="concluir" data-ref="${escapar(ref)}" data-caminho="/api/demandas/rodadas/${encodeURIComponent(ref)}/ajustes/concluir">Concluir a sessão</button></div>`,

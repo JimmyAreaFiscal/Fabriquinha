@@ -121,8 +121,8 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Só os dois do gate do PR (R1), os três da sessão de ajustes (R2), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button")).toHaveCount(9);
+  // Só os dois do gate do PR (R1), os dois da sessão de ajustes (R2: Enviar e Concluir), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button")).toHaveCount(8);
 
   // CA-10: clicar no print abre a imagem na caixa.
   await pagina.getByRole("link", { name: "print.png" }).click();
@@ -373,9 +373,12 @@ test.describe("CA-14: concluir a sessão de ajustes", () => {
     await pagina.getByLabel(/Motivo/).fill("falta teste");
     await pagina.getByRole("button", { name: "Reprovar PR" }).click();
     const secao = pagina.locator("#ajustes-I-215\\.R1");
-    await secao.getByLabel("Mensagem ao agente").fill("ajustar o teste de login");
+    // A primeira resposta do agente (ao prompt de abertura) chega sem recarregar: a conversa ainda não existia.
+    await expect(secao.locator(".dm-msg-agente")).toContainText("pronto");
+    await secao.getByLabel("Mensagem ao agente").fill("eco: ajustei o teste de login");
     await secao.getByRole("button", { name: "Enviar" }).click();
-    await expect(secao).toContainText("ajustar o teste de login");
+    await expect(secao.locator(".dm-msg-auditor")).toContainText("eco: ajustei o teste de login");
+    await expect(secao.locator(".dm-msg-agente").last()).toContainText("ajustei o teste de login");
 
     await secao.getByRole("button", { name: "Concluir a sessão" }).click();
     await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();

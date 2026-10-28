@@ -125,6 +125,7 @@ function conversa(pedido: Pedido) {
       .map((p) => readFileSync(p, "utf8")),
   );
   return {
+    sessao: sessao.id,
     conversa: marcarPrompts(lerConversa(raiz, sessao.id), prompts, mensagensRetomadas(pedido.banco, ref)),
   };
 }
