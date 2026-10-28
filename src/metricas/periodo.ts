@@ -3,16 +3,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { GateDecisao } from "../dominio/agregado.ts";
-import { Etapa, Fase, Id, Slug, Titulo } from "../dominio/primitivos.ts";
-import {
-  execucoesPorMes,
-  type Fato,
-  fatosPorMes,
-  type Intervalo,
-  issuesNoPeriodo,
-  usoPorMes,
-} from "../persistencia/metricas.ts";
-import { Consumo, ConsumoModelo, consumo, consumoDe, ETAPA_DO_GATE, Inteiro, Nota } from "./issue.ts";
+import { Etapa, Slug } from "../dominio/primitivos.ts";
+import { execucoesPorMes, type Fato, fatosPorMes, type Intervalo, usoPorMes } from "../persistencia/metricas.ts";
+import { Consumo, ConsumoModelo, consumo, consumoDe, ETAPA_DO_GATE, Inteiro } from "./issue.ts";
 
 export const Mes = z.string().regex(/^[1-9]\d{3}-(0[1-9]|1[0-2])$/); // AAAA-MM; o `Date` do JS leva os anos 0 a 99 para 1900
 
@@ -35,19 +28,8 @@ export const MetricasMes = z.object({
   etapas: z.array(Consumo.extend({ etapa: Etapa, ...Apoio })), // "Por etapa" da página de métricas
 });
 
-export const MetricasIssuePeriodo = z.object({
-  issue: Id,
-  projeto: Slug,
-  titulo: Titulo.nullable(),
-  fase: Fase,
-  consumo: Consumo, // só as execuções iniciadas no período
-  ...Apoio,
-  notaPR: Nota.nullable(), // a nota do encerramento, de qualquer data; null se a issue não foi encerrada
-});
-
 export type Periodo = z.input<typeof Periodo>;
 export type MetricasMes = z.infer<typeof MetricasMes>;
-export type MetricasIssuePeriodo = z.infer<typeof MetricasIssuePeriodo>;
 
 /** O mês `AAAA-MM` de um instante, no fuso do serviço. */
 export const mesDe = (d: Date): string => `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -115,29 +97,4 @@ export function metricasPorMes(banco: DatabaseSync, filtro: Periodo): MetricasMe
       }),
     });
   });
-}
-
-/**
- * F6 §5.8: uma linha por issue com pelo menos uma execução iniciada no período, consultas incluídas; `fase` e
- * `notaPR` são o estado atual, e os demais números contam só o que caiu no período.
- */
-export function metricasPorIssue(banco: DatabaseSync, filtro: Periodo): MetricasIssuePeriodo[] {
-  const { projeto = null, de, ate } = Periodo.parse(filtro);
-  const periodo = { inicio: intervalo(de).inicio, fim: intervalo(ate).fim };
-  return issuesNoPeriodo(banco, periodo, projeto).map(
-    ({ issue, projeto: p, titulo, fase, execucoes, falhas, reprovacoes, iteracoes, duracaoMs, notaPR, ...soma }) =>
-      MetricasIssuePeriodo.parse({
-        issue,
-        projeto: p,
-        titulo,
-        fase,
-        consumo: consumoDe(soma),
-        execucoes,
-        falhas,
-        reprovacoes,
-        iteracoes,
-        duracaoMs,
-        notaPR,
-      }),
-  );
 }

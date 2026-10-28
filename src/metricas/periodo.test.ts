@@ -16,7 +16,7 @@ import { removerTicket } from "../dominio/tickets.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { arquivarConcluidas, comIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
-import { mesPorExtenso, metricasPorIssue, metricasPorMes } from "./periodo.ts";
+import { mesPorExtenso, metricasPorMes } from "./periodo.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-periodo-"));
 after(() => {
@@ -296,34 +296,6 @@ test("visão por mês: a virada do ano e a média das notas do mês", () => {
   banco.close();
 });
 
-test("visão por issue: só issues com execução iniciada no período; fase e nota são as atuais", () => {
-  const banco = cenario();
-  const i1 = { issue: 1, projeto: "loja", titulo: "Login lento", fase: "concluida", notaPR: 4 };
-  assert.deepEqual(metricasPorIssue(banco, { de: "2026-01", ate: "2026-02" }), [
-    // Inclui a consulta; a reprovação do PR é de fevereiro.
-    { ...i1, consumo: consumo(5, 180, 18, 0.875), ...apoio(4, 1, 1, 30 + 40 + 5 + 60) },
-    {
-      issue: 2,
-      projeto: "outro",
-      titulo: null,
-      fase: "registro",
-      consumo: consumo(1, 1, 1, 1),
-      ...apoio(1, 0, 0, 10),
-      notaPR: null,
-    },
-  ]);
-  // Só janeiro: a nota de fevereiro aparece (estado atual), mas a reprovação de fevereiro não conta.
-  assert.deepEqual(metricasPorIssue(banco, { projeto: "loja", de: "2026-01", ate: "2026-01" }), [
-    { ...i1, consumo: consumo(3, 150, 15, 0.5), ...apoio(2, 1, 0, 30 + 40) },
-  ]);
-  // A I-3 só executa em março.
-  assert.deepEqual(
-    metricasPorIssue(banco, { projeto: "loja", de: "2026-03", ate: "2026-03" }).map((l) => l.issue),
-    [3],
-  );
-  banco.close();
-});
-
 /** Grava iterações do ticket nas datas dadas (F6 §5.6). */
 const iteracoes = (banco: DatabaseSync, ticket: number, tipo: string, ...quando: string[]) => {
   for (const em of quando) inserir(banco, "iteracao", { ticket, tipo, em: local(em) });
@@ -354,24 +326,13 @@ test("iterações: o filtro de projeto separa `loja` de todos (CA-7)", () => {
   banco.close();
 });
 
-test("iterações por issue: somam as etapas dentro do período e as de fora não contam (CA-8)", () => {
-  const banco = cenario();
-  iteracoes(banco, 1, "mensagem", "2026-01-10 10:00", "2026-01-11 10:00");
-  iteracoes(banco, 3, "reabertura", "2026-01-31 23:30");
-  iteracoes(banco, 3, "reabertura", "2026-02-10 10:00"); // fora de janeiro
-  const [i1, i2] = metricasPorIssue(banco, { de: "2026-01", ate: "2026-01" });
-  assert.deepEqual([i1?.issue, i1?.iteracoes, i2?.issue, i2?.iteracoes], [1, 3, 2, 0]);
-  assert.equal(metricasPorIssue(banco, { projeto: "loja", de: "2026-01", ate: "2026-02" })[0]?.iteracoes, 4);
-  banco.close();
-});
-
-test("issues arquivadas contam normalmente nas duas visões: arquivar só tira do board", () => {
+test("issues arquivadas contam normalmente na visão por mês: arquivar só tira do board", () => {
   const banco = cenario();
   const periodo = { projeto: "loja", de: "2026-01", ate: "2026-03" };
-  const antes = [metricasPorMes(banco, periodo), metricasPorIssue(banco, periodo)];
+  const antes = metricasPorMes(banco, periodo);
   assert.equal(arquivarConcluidas(banco, "loja", AUDITOR), 1); // a I-1
   assert.notEqual(banco.prepare("SELECT arquivada_em FROM issue WHERE id = 1").get()?.arquivada_em, null);
-  assert.deepEqual([metricasPorMes(banco, periodo), metricasPorIssue(banco, periodo)], antes);
+  assert.deepEqual(metricasPorMes(banco, periodo), antes);
   banco.close();
 });
 
@@ -384,7 +345,6 @@ test("período inválido: mês fora do formato ou `de` depois de `ate`", () => {
     { projeto: "Loja", de: "2026-01", ate: "2026-01" },
   ]) {
     assert.throws(() => metricasPorMes(banco, periodo), ZodError);
-    assert.throws(() => metricasPorIssue(banco, periodo), ZodError);
   }
   banco.close();
 });

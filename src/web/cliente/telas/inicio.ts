@@ -3,7 +3,7 @@
 import type { Ticket } from "../../../dominio/agregado.ts";
 import type { Fase, Id, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { MetricasMes } from "../../../metricas/periodo.ts";
+import type { MetricasMesDemanda } from "../../../metricas/periodo_demanda.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import {
   caminhoDaIssue,
@@ -31,7 +31,7 @@ import type { ProjetoListado } from "./configuracao.ts";
 export interface DadosDoInicio {
   sessoes: readonly InfoSessao[];
   board: readonly IssueDoBoard[];
-  mes: MetricasMes;
+  mes: MetricasMesDemanda;
 }
 
 const tituloDa = (issue: IssueDoBoard | undefined): string => issue?.titulo ?? "sem título";

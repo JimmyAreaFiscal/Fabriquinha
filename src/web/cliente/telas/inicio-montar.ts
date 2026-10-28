@@ -1,7 +1,7 @@
 // Início (F7 §4.4) no DOM: lê as sessões ativas e o board, desenha com as funções puras de inicio.ts e abre o
 // Registrar necessidade na caixa. O app.ts o redesenha a cada 5 s. Os testes de ponta a ponta (e2e/) o exercitam.
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { MetricasMes } from "../../../metricas/periodo.ts";
+import type { MetricasMesDemanda } from "../../../metricas/periodo_demanda.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, elemento, irPara, mostrarErro } from "../dom.ts";
@@ -63,7 +63,7 @@ export async function montarInicio(main: HTMLElement, _params: Parametros, signa
   const [sessoes, board, [mes]] = await Promise.all([
     api<InfoSessao[]>("/api/sessoes?escopo=ativas", { signal }),
     api<IssueDoBoard[]>("/api/board", { signal }),
-    api<[MetricasMes]>(`/api/metricas?de=${atual}&ate=${atual}`, { signal }),
+    api<[MetricasMesDemanda]>(`/api/metricas?de=${atual}&ate=${atual}`, { signal }),
   ]);
   const rolagem = main.querySelector(".board-etapas")?.scrollLeft ?? 0;
   main.innerHTML = inicio({ sessoes, board, mes }, new Date());

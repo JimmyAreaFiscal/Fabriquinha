@@ -1,4 +1,4 @@
-// Métricas (F7 §4.4, §7): mudar o mês em foco faz a média usar só os meses anteriores a ele; o gráfico mostra a dica
+// Métricas (F7 §4.4, §7), lidas das tabelas da demanda: mudar o mês em foco faz a média usar só os meses anteriores a ele; o gráfico mostra a dica
 // e troca o foco no clique; o Início mostra a frase do mês e o Projeto, os 5 cards do mês.
 import { abrir } from "../src/persistencia/banco.ts";
 import { expect, test } from "./apoio.ts";
@@ -16,24 +16,22 @@ function semear(raiz: string): void {
   const projeto = (nome: string) =>
     `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness, modelos)
       VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '["npm test"]', '${nome}', '[{"nome":"f","comando":"true","descricao":"d"}]', '{}');`;
-  const execucao = (id: number, ticket: number, mes: string, custo: number) =>
-    `INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
-      VALUES (${String(id)}, ${String(ticket)}, 'autonomo', '${crypto.randomUUID()}', 'sucesso', '${em(mes)}', '${em(mes)}');
-    INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo)
-      VALUES (${String(id)}, 'anthropic', 'claude-sonnet-5-5', 10, ${String(custo * 1000)}, 500, 0, 0, ${String(custo)});`;
+  const demanda = (id: string, nome: string, titulo: string, mes: string) =>
+    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', 'problema', 'd', 'execucao', '${em(mes)}', 'f', 's', 1, 'b-${id}');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
+  const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
+    `INSERT INTO sessao VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x${String(id)}', 's${String(id)}', '${em(mes)}', '${em(mes)}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('x${String(id)}', 'anthropic', 'claude-sonnet-5-5', ${String(custo * 1000)}, 500, 0, 0, ${String(custo)});`;
   banco.exec(`
     ${projeto("loja")}
     ${projeto("site")}
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'Busca por SKU', 'problema', 'desenvolvimento', '${em(M2)}');
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (2, 'site', 'Página de contato', 'problema', 'desenvolvimento', '${em(M0)}');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-      VALUES (1, 1, 'desenvolvimento', 'Cache', 'aberto', 'fabriquinha', '${em(M2)}');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-      VALUES (2, 2, 'desenvolvimento', 'Formulário', 'aberto', 'fabriquinha', '${em(M0)}');
-    ${execucao(1, 1, M2, 10)}
-    ${execucao(2, 1, M1, 20)}
-    ${execucao(3, 1, M0, 60)}
-    ${execucao(4, 2, M0, 5)}
+    ${demanda("I-1", "loja", "Busca por SKU", M2)}
+    ${demanda("I-2", "site", "Página de contato", M0)}
+    ${execucao(1, "I-1", M2, 10)}
+    ${execucao(2, "I-1", M1, 20)}
+    ${execucao(3, "I-1", M0, 60)}
+    ${execucao(4, "I-2", M0, 5)}
   `);
   banco.close();
 }
@@ -84,15 +82,15 @@ test("mudar o mês em foco: a média passa a usar só os meses anteriores a ele"
   await pagina.getByRole("button", { name: "ver gráfico" }).click();
   await expect(colunas).toHaveCount(3);
 
-  // Por issue, de todos os projetos, com o total; o projeto filtra tudo.
-  const issues = pagina.locator(".tabela-issues");
-  await expect(issues.locator("tbody tr")).toHaveCount(2);
-  await expect(issues.locator("tfoot")).toContainText("2 issues");
-  await expect(issues.locator("tfoot")).toContainText("US$ 95,00");
+  // Por demanda, de todos os projetos, com o total; o projeto filtra tudo.
+  const demandas = pagina.locator(".tabela-demandas");
+  await expect(demandas.locator("tbody tr")).toHaveCount(2);
+  await expect(demandas.locator("tfoot")).toContainText("2 demandas");
+  await expect(demandas.locator("tfoot")).toContainText("US$ 95,00");
   // O foco continua no primeiro mês, que o período ainda contém (metricas-foco.spec.ts).
   await pagina.getByLabel("Projeto", { exact: true }).selectOption("loja");
-  await expect(issues.locator("tbody tr")).toHaveCount(1);
-  await expect(issues.locator("tfoot")).toContainText("US$ 90,00");
+  await expect(demandas.locator("tbody tr")).toHaveCount(1);
+  await expect(demandas.locator("tfoot")).toContainText("US$ 90,00");
   await expect(custo).toHaveText(/US\$ 10,00\s*sem meses anteriores/);
 });
 
@@ -110,11 +108,11 @@ test("Início com a frase do mês de todos os projetos e Projeto com os 5 cards 
 
   await pagina.goto(`${fabriquinha.base}/projects/loja`);
   await expect(pagina.locator(".kpis-mes .kpi")).toHaveText([
-    /US\$ 60,00\s*10 chamadas de LLM/,
+    /US\$ 60,00\s*1 execução/,
     /60,5 mil\s*60,0 mil entrada · 500 saída · 0 cache/,
     /0 \/ 0\s*registradas \/ concluídas/,
     /0 \/ 0\s*criados \/ concluídos/,
     /0 \/ 0\s*abertos \/ mergeados/,
-    /0\s*mensagens, diálogos e reaberturas/,
+    /0 \/ 0\s*linhas alteradas \/ adicionadas/,
   ]);
 });

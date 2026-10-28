@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Ticket } from "../../../dominio/agregado.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { MetricasMes } from "../../../metricas/periodo.ts";
+import type { MetricasMesDemanda } from "../../../metricas/periodo_demanda.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { formularioDeRegistro, inicio } from "./inicio.ts";
@@ -11,15 +11,23 @@ const AGORA = new Date("2026-10-12T15:00:00.000Z");
 const ha = (min: number) => new Date(AGORA.getTime() - min * 60_000).toISOString();
 
 /** O mês corrente de `GET /api/metricas`, para a frase do Início e os cards do Projeto. */
-const MES: MetricasMes = {
+const MES: MetricasMesDemanda = {
   mes: "2026-10",
   projeto: null,
-  consumo: { chamadas: 3, tokens: { input: 1200, output: 300, cacheRead: 0, cacheWrite: 0 }, custo: 1.5 },
-  modelos: [],
-  issues: { registradas: 2, concluidas: 1 },
+  total: {
+    execucoes: 3,
+    falhas: 0,
+    duracaoMs: 0,
+    tokens: { entrada: 1200, saida: 300, cacheLeitura: 0, cacheEscrita: 0 },
+    custo: { conhecido: 1.5, incompleto: false },
+    modelos: [],
+  },
+  niveis: [],
+  demandas: { registradas: 2, concluidas: 1 },
   tickets: { criados: 4, concluidos: 3 },
   prs: { abertos: 1, mergeados: 0 },
-  notaPR: { media: null, notas: 0 },
+  nota: { media: null, notas: 0 },
+  retrabalho: { adicionadas: 40, alteradas: 10, porHumanos: 2 },
   etapas: [],
 };
 
@@ -234,7 +242,7 @@ test("board: colunas por fase sob as 5 etapas, gates hachurados, cartões com ti
   assert.match(texto(vazio), /Rodando 0 Nenhuma sessão rodando\. Board 0 issues em andamento /);
   assert.match(
     texto(vazio),
-    /^Início \+ Registrar necessidade Outubro de 2026, todos os projetos: US\$ 1,50 · 1,5 mil tokens · issues 2 registradas, 1 concluídas .* Métricas → Aguarda você/,
+    /^Início \+ Registrar necessidade Outubro de 2026, todos os projetos: US\$ 1,50 · 1,5 mil tokens · demandas 2 registradas, 1 concluídas .* Métricas → Aguarda você/,
   );
   assert.deepEqual(
     [...vazio.matchAll(/<div class="etapa" style="grid-column: span (\d)">([^<]+)</g)].map((m) => [m[2], m[1]]),

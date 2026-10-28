@@ -9,6 +9,8 @@ import { submeterEvidencia } from "../src/execucao/gestao_demandas.ts";
 import { alterarLimiteParalelismo } from "../src/persistencia/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { metricasDaDemanda } from "../src/metricas/demanda.ts";
+import { mesDe } from "../src/metricas/periodo.ts";
+import { metricasDemandaPorMes } from "../src/metricas/periodo_demanda.ts";
 import {
   abrirPortao,
   agente,
@@ -101,6 +103,18 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
     ],
   );
   assert.deepEqual(demandaTotal.custo, { conhecido: 3, incompleto: true });
+
+  // A página Métricas lê o mesmo: as mesmas execuções (a retomada não duplica o uso) e o custo desconhecido sinalizado.
+  const meses = metricasDemandaPorMes(c.banco, { de: mesDe(new Date(primeira.inicio)), ate: mesDe(new Date()) });
+  assert.equal(
+    meses.reduce((n, mes) => n + mes.total.execucoes, 0),
+    demandaTotal.execucoes,
+  );
+  assert.deepEqual(
+    meses.flatMap((mes) => mes.total.modelos).map((m) => [m.modelo, m.entrada, m.custo]),
+    demandaTotal.modelos.map((m) => [m.modelo, m.entrada, m.custo]),
+  );
+  assert.ok(meses.some((mes) => mes.total.custo.incompleto));
 });
 
 test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo externo fica no escopo dela e não aciona gate", async (t) => {

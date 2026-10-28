@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Ticket } from "../../../dominio/agregado.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { MetricasMes } from "../../../metricas/periodo.ts";
+import type { MetricasMesDemanda } from "../../../metricas/periodo_demanda.ts";
 import type { IssueDoProjeto, ListaDoProjeto } from "../../rotas/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
@@ -33,15 +33,23 @@ const projeto = (nome: string): ProjetoListado => ({
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 
 /** O mês corrente de `GET /api/metricas`, para a frase do Início e os cards do Projeto. */
-const MES: MetricasMes = {
+const MES: MetricasMesDemanda = {
   mes: "2026-10",
   projeto: null,
-  consumo: { chamadas: 3, tokens: { input: 1200, output: 300, cacheRead: 0, cacheWrite: 0 }, custo: 1.5 },
-  modelos: [],
-  issues: { registradas: 2, concluidas: 1 },
+  total: {
+    execucoes: 3,
+    falhas: 0,
+    duracaoMs: 0,
+    tokens: { entrada: 1200, saida: 300, cacheLeitura: 0, cacheEscrita: 0 },
+    custo: { conhecido: 1.5, incompleto: false },
+    modelos: [],
+  },
+  niveis: [],
+  demandas: { registradas: 2, concluidas: 1 },
   tickets: { criados: 4, concluidos: 3 },
   prs: { abertos: 1, mergeados: 0 },
-  notaPR: { media: null, notas: 0 },
+  nota: { media: null, notas: 0 },
+  retrabalho: { adicionadas: 40, alteradas: 10, porHumanos: 2 },
   etapas: [],
 };
 
@@ -129,7 +137,7 @@ test("cabeçalho com o seletor, Editar na Configuração e Registrar; barra com 
   assert.match(html, /<span class="contagem">0 em andamento · 0 concluídas · 0 arquivadas · 0 canceladas<\/span>/);
   assert.match(
     html,
-    /<\/nav>\s*<div class="kpis-mes">\s*<div class="kpi superficie"><span class="rotulo">Custo · outubro<\/span><span class="kpi-valor">US\$ 1,50<\/span><span class="kpi-sub">3 chamadas de LLM/,
+    /<\/nav>\s*<div class="kpis-mes">\s*<div class="kpi superficie"><span class="rotulo">Custo · outubro<\/span><span class="kpi-valor">US\$ 1,50<\/span><span class="kpi-sub">3 execuções/,
   );
   assert.match(html, /<input type="checkbox" data-mostrar="concluidas"> Mostrar concluídas/);
   assert.match(html, /<input type="checkbox" data-mostrar="canceladas"> Mostrar canceladas/);

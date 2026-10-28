@@ -26,6 +26,14 @@ function issue(id: number, nome: string, fase: string, andamento = false): strin
       VALUES (${String(id)}, 'anthropic', 'claude-sonnet-5-5', 10, 1000, 500, 0, 0, 10);`;
 }
 
+/** Uma demanda do projeto com uma execução de `custo` dólares, que a página Métricas lê. */
+const demanda = (id: string, nome: string, custo: number) =>
+  `INSERT INTO demanda VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'execucao', '${em}', 'f', 's', 1, 'b-${id}');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em}');
+    INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv-${id}');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${em}', '${em}', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('x-${id}', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, ${String(custo)});`;
+
 /** `demo`: 4 issues em fases diferentes (US$ 40); `outro`: 1 (US$ 10); `ocupado`: 1 com execução em andamento. */
 function semear(raiz: string): void {
   const banco = abrir(raiz);
@@ -33,6 +41,7 @@ function semear(raiz: string): void {
     ${projeto("demo")} ${projeto("outro")} ${projeto("ocupado")}
     ${issue(1, "demo", "registro")} ${issue(2, "demo", "desenho")} ${issue(3, "demo", "desenvolvimento")}
     ${issue(4, "demo", "concluida")} ${issue(5, "outro", "desenvolvimento")} ${issue(6, "ocupado", "desenvolvimento", true)}
+    ${demanda("I-91", "demo", 40)} ${demanda("I-92", "outro", 10)}
   `);
   banco.close();
 }
@@ -71,8 +80,8 @@ test("remover: cancelar não apaga; confirmar tira o projeto de todas as telas e
   await expect(pagina.locator('[data-f="projeto"] option[value="outro"]')).toHaveCount(1);
   await pagina.goto(`${fabriquinha.base}/metrics`);
   await expect(pagina.getByLabel("Projeto", { exact: true }).locator('option[value="demo"]')).toHaveCount(0);
-  // CA-6: o custo de `outro` (US$ 10) e o de `ocupado` (US$ 10) ficam; o de `demo` (US$ 40) saiu.
-  await expect(pagina.locator(".tabela-issues tfoot")).toContainText("US$ 20,00");
+  // CA-6: o custo da demanda de `outro` (US$ 10) fica; o da de `demo` (US$ 40) saiu.
+  await expect(pagina.locator(".tabela-demandas tfoot")).toContainText("US$ 10,00");
   expect((await pagina.request.get(`${fabriquinha.base}/api/projetos/demo`)).status()).toBe(404);
 });
 
