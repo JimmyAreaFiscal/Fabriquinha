@@ -248,6 +248,24 @@ test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão co
   assert.match(prompts().at(-1) ?? "", /Motivo: faltam critérios na rodada 2/);
 });
 
+test("CA-1: com o pi vivo e ocioso, a reprovação manda o motivo à mesma sessão", async () => {
+  const { banco, prompts } = cenario({ status: "em_execucao" });
+  const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
+  while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 100)); // o pi assenta: ocioso, à espera do gate
+  submeterPlanejamento(banco, "I-1", plano(), agente);
+  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  while (prompts().length < 2) await new Promise((r) => setTimeout(r, 20));
+  assert.match(prompts()[1] ?? "", /Motivo: faltam critérios na rodada 2/);
+  await fim;
+});
+
+test("a reprovação sem sessão do planejar só grava a decisão", () => {
+  const { banco, prompts } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
+  reprovarPlanejamentoDemanda(banco, "I-1", "falta");
+  assert.deepEqual(prompts(), []);
+});
+
 test("CA-8: motivo vazio recusa a reprovação e nada é registrado", () => {
   const { banco } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
   assert.throws(() => reprovarPlanejamentoDemanda(banco, "I-1", "   "));

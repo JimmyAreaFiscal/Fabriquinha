@@ -346,6 +346,17 @@ test("planejar reprovado é retomado antes da seleção, mesmo com o limite 1, e
   assert.equal(despacharDemandas(banco, config, deps).length, 1); // já retomado: só o implementar entra
 });
 
+test("CA-2: planejar reprovado com execução aberta (pi vivo) não é retomado", async () => {
+  const { banco, config } = await cenario(1);
+  demanda(banco, 1, { fase: "planejamento", tickets: [{ etapa: "planejar", status: "em_execucao" }] });
+  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por, em)
+    VALUES ('I-1', 1, 1, 'recusado', 'refaça o plano', 'auditor', '${em}')`);
+  banco.exec("INSERT INTO sessao VALUES ('S-1', 'I-1', 1, 'interativo', 'ref')");
+  banco.exec(`INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('E-1', 'S-1', '${em}', NULL, 0)`);
+  for (let i = 0; i < 2; i++) assert.equal(despacharDemandas(banco, config, deps).length, 0);
+  assert.equal(execucoes(banco, 1, 1), 1);
+});
+
 test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue para a conferência", async (t) => {
   silenciar(t); // a conferência recusa: o agente falso não entrega a documentação
   const { banco, config } = await cenario(3, true);
