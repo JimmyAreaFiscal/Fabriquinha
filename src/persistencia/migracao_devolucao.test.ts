@@ -18,7 +18,19 @@ test("CA-11: v25 → v26 preenche devolucoes 0 e motivo_falha nulo nos tickets e
   const antes = b.prepare("SELECT * FROM ticket_demanda").all();
   migrar(b, MIGRACOES);
   const [linha] = b.prepare("SELECT * FROM ticket_demanda").all();
-  assert.deepEqual({ ...linha }, { ...antes[0], devolucoes: 0, motivo_falha: null });
+  assert.deepEqual(
+    { ...linha },
+    {
+      ...antes[0],
+      devolucoes: 0,
+      motivo_falha: null,
+      criado_em: null,
+      concluido_em: null,
+      enviado_em: null,
+      origem: null,
+      origem_ticket_id: null,
+    },
+  );
   assert.throws(() => {
     b.exec("UPDATE ticket_demanda SET devolucoes = 3");
   });

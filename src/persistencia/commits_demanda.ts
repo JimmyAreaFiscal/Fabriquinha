@@ -80,11 +80,12 @@ const inserirRetrabalho = (
   linhas: Map<number, number>,
 ) => {
   const insere = banco.prepare(
-    `INSERT OR REPLACE INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   try {
-    for (const [origem, n] of linhas) insere.run(sha, demandaId, ticketId, autor, origem, n);
+    for (const [origem, n] of linhas)
+      insere.run(sha, demandaId, ticketId, autor, origem, n, ticketId === null ? null : demandaId);
   } catch {
     throw new ErroDeRegra(`retrabalho inválido na demanda ${demandaId}`, "os tickets precisam existir na demanda");
   }
@@ -99,7 +100,9 @@ export function gravarRetrabalhoDoTicket(
   linhas: Map<number, number>,
 ): void {
   escrever(banco, () => {
-    banco.prepare("DELETE FROM retrabalho_demanda WHERE demanda_id = ? AND ticket_id = ?").run(demandaId, ticketId);
+    banco
+      .prepare("DELETE FROM retrabalho_demanda WHERE alterador_demanda_id = ? AND ticket_id = ?")
+      .run(demandaId, ticketId);
     inserirRetrabalho(banco, demandaId, sha, ticketId, null, linhas);
   });
 }
@@ -120,6 +123,7 @@ export function gravarRetrabalhoExterno(
 export interface RetrabalhoDoTicket {
   commitAlterador: string;
   ticketAlterador?: number;
+  demandaAlteradora?: string;
   autor?: string;
   linhas: number;
 }
@@ -128,12 +132,15 @@ export interface RetrabalhoDoTicket {
 export const retrabalhoDoTicket = (banco: DatabaseSync, demandaId: string, origem: number): RetrabalhoDoTicket[] =>
   banco
     .prepare(
-      `SELECT commit_alterador, ticket_id, autor, linhas FROM retrabalho_demanda
+      `SELECT commit_alterador, ticket_id, alterador_demanda_id, autor, linhas FROM retrabalho_demanda
        WHERE demanda_id = ? AND ticket_origem_id = ? ORDER BY rowid`,
     )
     .all(demandaId, origem)
     .map((l) => ({
       commitAlterador: l.commit_alterador as string,
       ...(l.ticket_id === null ? { autor: l.autor as string } : { ticketAlterador: l.ticket_id as number }),
+      ...(l.alterador_demanda_id === null || l.alterador_demanda_id === demandaId
+        ? {}
+        : { demandaAlteradora: l.alterador_demanda_id as string }),
       linhas: l.linhas as number,
     }));

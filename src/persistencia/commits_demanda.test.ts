@@ -136,6 +136,16 @@ test("CA-9: o retrabalho traz o ticket alterador", () => {
   assert.deepEqual(retrabalhoDoTicket(b, "D", 1), [{ commitAlterador: sha("a"), ticketAlterador: 2, linhas: 5 }]);
 });
 
+test("o alterador de outra demanda aparece em demandaAlteradora e a regravação não apaga o dele", () => {
+  const b = banco();
+  b.exec(`INSERT INTO retrabalho_demanda VALUES ('${sha("b")}', 'D', 1, NULL, 3, 4, 'E')`);
+  gravarRetrabalhoDoTicket(b, "D", 1, sha("a"), new Map([[2, 1]]));
+  assert.deepEqual(retrabalhoDoTicket(b, "D", 3), [
+    { commitAlterador: sha("b"), ticketAlterador: 1, demandaAlteradora: "E", linhas: 4 },
+  ]);
+  assert.deepEqual(retrabalhoDoTicket(b, "D", 2), [{ commitAlterador: sha("a"), ticketAlterador: 1, linhas: 1 }]);
+});
+
 test("CA-10: o retrabalho externo traz o autor, e regravar não duplica", () => {
   const b = banco();
   gravarRetrabalhoExterno(b, "D", sha("a"), "Ana", new Map([[1, 3]]));

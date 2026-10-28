@@ -15,11 +15,15 @@ test("CA-12: v26 → v27 só acrescenta dependencia_demanda e deixa as linhas ex
     INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'aberto', ${T});`);
-  const tabelas = ["projeto", "demanda", "ticket_demanda"];
+  const consultas = [
+    "SELECT * FROM projeto",
+    "SELECT * FROM demanda",
+    "SELECT demanda_id, ticket_id, etapa, status, status_alterado_em FROM ticket_demanda",
+  ];
   const ler = () =>
-    tabelas.map((t) =>
+    consultas.map((q) =>
       b
-        .prepare(`SELECT * FROM ${t}`)
+        .prepare(q)
         .all()
         .map((l) => ({ ...l })),
     );
