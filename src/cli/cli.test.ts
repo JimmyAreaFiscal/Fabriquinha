@@ -25,6 +25,8 @@ interface Saida {
   err: string;
 }
 
+let saidas = 0;
+
 /** Roda o CLI no processo do teste, com `env` no lugar do ambiente e `stdin` como entrada. */
 async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = ""): Promise<Saida> {
   let out = "";
@@ -35,6 +37,7 @@ async function cli(env: NodeJS.ProcessEnv, args: string[], stdin = ""): Promise<
     stdout: { write: (t: string) => (out += t) },
     stderr: { write: (t: string) => (err += t) },
     parada: () => Promise.resolve(),
+    sair: () => saidas++,
   });
   return { codigo, out, err };
 }
@@ -162,6 +165,7 @@ test("servidor sobe o serviço na raiz e para na parada; não sobe uma segunda i
   const s = await cli({ FABRIQUINHA_ROOT: raiz }, ["servidor"]);
   assert.deepEqual(s, { codigo: 0, out: `{"porta":${process.env.FABRIQUINHA_PORTA}}\n`, err: "" });
   assert.ok(existsSync(join(raiz, "fabriquinha.db")));
+  assert.equal(saidas, 1);
 
   const ocupada = createServer().listen(Number(process.env.FABRIQUINHA_PORTA), "127.0.0.1");
   await new Promise((pronto) => ocupada.once("listening", pronto));

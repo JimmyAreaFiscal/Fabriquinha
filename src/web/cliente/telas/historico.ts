@@ -76,8 +76,7 @@ const pilula = (r: Resultado): string => `<span class="pill ${RESULTADOS[r][1]}"
 
 const linha = (s: SessaoDeDemanda, selecionada: string): string =>
   `<button type="button" class="linha" data-sel="${escapar(s.sessao)}" aria-selected="${String(s.sessao === selecionada)}">` +
-  `<span class="hora">${hora(new Date(s.desde))}</span><span class="id">${s.demanda}</span>` +
-  `<span class="id esconde">${s.ticket}</span>` +
+  `<span class="hora">${hora(new Date(s.desde))}</span><span class="id">${s.ticket}</span>` +
   `<span class="meio">${escapar(s.titulo)} <span class="muted">· ${etapa(s.etapa)} · ${MODO_DA_SESSAO[s.modo]}</span></span>` +
   `<span class="esconde">${pilula(s.resultado)}</span></button>`;
 
@@ -91,7 +90,7 @@ export function listaDoHistorico(lista: readonly SessaoDeDemanda[], selecionada:
   const secoes = [...dias].map(
     ([d, ss]) => `<section class="dia"><h3>${d}</h3>${ss.map((s) => linha(s, selecionada)).join("")}</section>`,
   );
-  return `<div class="mestre"><div>${secoes.join("")}</div><aside class="previa superficie" data-previa aria-label="Prévia da sessão"><p class="muted">Carregando a sessão…</p></aside></div>`;
+  return `<div class="mestre"><div class="sessoes">${secoes.join("")}</div><aside class="previa superficie" data-previa aria-label="Prévia da sessão"><p class="muted">Carregando a sessão…</p></aside></div>`;
 }
 
 /** Um pedaço do fim da conversa: uma chamada de ferramenta com o resultado, ou quem falou e o texto. */

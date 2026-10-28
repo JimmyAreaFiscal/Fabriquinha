@@ -30,6 +30,8 @@ export interface Io {
   readonly stderr: { write(texto: string): unknown };
   /** Resolve quando o `servidor` deve parar (SIGINT ou SIGTERM). */
   parada(): Promise<unknown>;
+  /** Encerra o processo depois da parada do `servidor`: o que sobrar vivo (timers, filhos) não o segura. */
+  sair?(): void;
 }
 
 /** Um comando do serviço: sem argumentos, sem banco aberto pelo CLI. */
@@ -61,6 +63,7 @@ const COMANDOS_DO_SERVICO: readonly ComandoDoServico[] = [
       io.stdout.write(`${JSON.stringify({ porta: servico.porta })}\n`);
       await parou;
       await servico.parar();
+      io.sair?.();
     },
   },
   {

@@ -187,12 +187,9 @@ test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corr
 
 test("CA-1: conduzirRevisaoRodada reserva o revisar_rodada, prepara e roda o pi na worktree da rodada", async () => {
   const { c, banco, pastas } = await cenarioRevisao();
-  assert.equal(
-    await conduzirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 1 }, { limiteMin: 1 }),
-    "aguardando_decisao",
-  );
+  assert.equal(await conduzirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 1 }, { limiteMin: 1 }), "falhou");
   const ag = carregarDemanda(banco, "I-1");
-  assert.equal(ag.tickets.find((t) => t.ticket_id === 2)?.status, "em_execucao");
+  assert.equal(ag.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
   assert.equal(evidencia(banco, "matriz_fitness").length, 1);
   assert.deepEqual(pastas(), [caminhoDaWorktreeRodada(c.raiz, "loja", { demanda_id: "I-1", rodada_id: 1 })]);
 });

@@ -3543,33 +3543,27 @@ body:has(.pagina-chat) {
   font-size: var(--fs-sm);
   color: var(--muted);
 }
-.pagina-historico .filtros .auditar {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-.pagina-historico .pedido-auditoria {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  margin-bottom: var(--s-4);
-}
-.pagina-historico .pedido-auditoria textarea {
-  width: 100%;
-  field-sizing: content;
-  min-height: 2lh;
-  max-height: 12lh;
-}
 .pagina-historico .mestre {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 460px;
   gap: var(--s-5);
   align-items: start;
 }
+/* As colunas são da lista inteira (os dias e as linhas em subgrid): o endereço do ticket ocupa o que o mais longo pede
+   e os títulos começam juntos em todas as linhas. */
+.pagina-historico .sessoes {
+  display: grid;
+  grid-template-columns: 46px max-content minmax(0, 1fr) max-content;
+  column-gap: var(--s-3);
+}
 .pagina-historico .dia {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
   margin-bottom: var(--s-4);
 }
 .pagina-historico .dia h3 {
+  grid-column: 1 / -1;
   font-size: var(--fs-xs);
   color: var(--muted);
   text-transform: uppercase;
@@ -3579,10 +3573,10 @@ body:has(.pagina-chat) {
 .pagina-historico .linha {
   all: unset;
   box-sizing: border-box;
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 46px 52px 52px minmax(0, 1fr) 120px 90px;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: var(--s-3);
   width: 100%;
   height: 42px;
   padding: 0 var(--s-3);
@@ -3611,10 +3605,6 @@ body:has(.pagina-chat) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.pagina-historico .linha .num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .pagina-historico .previa {
   position: sticky;
@@ -3661,8 +3651,8 @@ body:has(.pagina-chat) {
     position: static;
     max-height: none;
   }
-  .pagina-historico .linha {
-    grid-template-columns: 46px 52px minmax(0, 1fr) 90px;
+  .pagina-historico .sessoes {
+    grid-template-columns: 46px max-content minmax(0, 1fr);
   }
   .pagina-historico .linha .esconde {
     display: none;
@@ -3754,10 +3744,15 @@ body:has(.pagina-chat) {
   font-size: var(--fs-sm);
 }
 
+/* Os 7 cards com o Custo em duas colunas: 2 + 1 + 1 e 1 + 1 + 1 + 1 nas 4 colunas, e 2, 1 + 1, 1 + 1, 1 + 1 nas 2 até
+   1100 px; nenhum fica sozinho numa linha, e cada legenda cabe inteira ao lado do valor. No celular, um por linha. */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s-3);
+}
+.kpis .kpi:first-child {
+  grid-column: span 2;
 }
 .kpis .kpi {
   all: unset;
@@ -4071,6 +4066,14 @@ svg.barras :not(.hit) {
   .regua {
     overflow-x: auto;
     grid-auto-columns: 56px;
+  }
+}
+@media (max-width: 700px) {
+  .kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .kpis .kpi:first-child {
+    grid-column: auto;
   }
 }
 

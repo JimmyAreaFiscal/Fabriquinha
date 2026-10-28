@@ -19,22 +19,32 @@ const estado = (banco: Parameters<typeof carregarDemanda>[0], ticket_id: number)
   };
 };
 
-test("CA-1: o ticket da rodada fica em_execucao e o pi roda na worktree da rodada", async () => {
+const SEM_DECISAO = "a revisão terminou sem registrar a decisão";
+
+test("CA-1: o pi roda na worktree da rodada e, sem decisão, o ticket falha com o motivo", async () => {
   const { c, banco, pastas } = await cenarioRevisao();
   const quando: string[] = [];
   const r = await conduzirRevisao(banco, REF_RODADA, {
     limiteMin: 1,
     preparar: () => void quando.push(estado(banco, 2).ticket?.status ?? ""),
   });
-  assert.equal(r, "aguardando_decisao");
+  assert.equal(r, "falhou");
   assert.deepEqual(quando, ["em_execucao"]);
-  assert.equal(estado(banco, 2).ticket?.status, "em_execucao");
+  assert.deepEqual([estado(banco, 2).ticket?.status, estado(banco, 2).ticket?.motivo_falha], ["falhou", SEM_DECISAO]);
   assert.deepEqual(pastas(), [caminhoDaWorktreeRodada(c.raiz, "loja", { demanda_id: "I-1", rodada_id: 1 })]);
 });
 
-test("CA-11: o ticket global roda na worktree da demanda", async () => {
+test("CA-3: o revisor que decide deixa o ticket concluído, sem falha", async () => {
+  const { banco } = await cenarioRevisao({ reprova: true });
+  assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "decidida");
+  const e = estado(banco, 2);
+  assert.deepEqual([e.ticket?.status, e.decisoes], ["concluido", 1]);
+});
+
+test("CA-11: o ticket global roda na worktree da demanda e, sem decisão, falha", async () => {
   const { c, banco, pastas } = await cenarioRevisao({ integral: true });
-  assert.equal(await conduzirRevisao(banco, REF_GLOBAL, { limiteMin: 1 }), "aguardando_decisao");
+  assert.equal(await conduzirRevisao(banco, REF_GLOBAL, { limiteMin: 1 }), "falhou");
+  assert.equal(estado(banco, 3).ticket?.motivo_falha, SEM_DECISAO);
   assert.deepEqual(pastas(), [caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1")]);
 });
 
@@ -73,7 +83,7 @@ test("ticket reaberto leva a instrução ao prompt como reabertura", async () =>
     reabrirTicket(ag, { ticket_id: 2, instrucao: "refaça com atenção" }, AUDITOR, { agora: new Date().toISOString() }),
   );
   delete process.env.FALSO_PI;
-  assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "aguardando_decisao");
+  assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "falhou");
   const prompts = readdirSync(`${c.raiz}/execucoes`).map((d) =>
     readFileSync(`${c.raiz}/execucoes/${d}/prompt.md`, "utf8"),
   );

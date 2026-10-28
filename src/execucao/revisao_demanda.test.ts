@@ -70,8 +70,8 @@ test("CA-10: com todas as rodadas concluídas a demanda vai a revisao_demanda co
 
 test("CA-11: o pi roda na worktree da demanda", async () => {
   const { c, banco, pastas } = await cenarioRevisao({ integral: true });
-  assert.equal(await conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), "aguardando_decisao");
-  assert.equal(estado(banco).tickets.find((t) => t.ticket_id === 3)?.status, "em_execucao");
+  assert.equal(await conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), "falhou");
+  assert.equal(estado(banco).tickets.find((t) => t.ticket_id === 3)?.status, "falhou");
   assert.deepEqual(pastas(), [caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1")]);
 });
 

@@ -107,3 +107,68 @@ test("Projeto com os 5 cards do mês", async ({ pagina, fabriquinha }) => {
     /0 \/ 0\s*linhas alteradas \/ adicionadas/,
   ]);
 });
+
+/**
+ * loja com números grandes no mês corrente: US$ 1.351,76 com uma execução sem custo, 24.929 de 289.424 linhas
+ * alteradas e mais de mil execuções; o mês anterior tem custo, para os cards mostrarem a média e a variação.
+ */
+function semearNumerosGrandes(raiz: string): void {
+  const banco = abrir(raiz);
+  const sha = (letra: string) => letra.repeat(40);
+  const execucoes = Array.from({ length: 1_200 }, (_, i) => `('x${String(i)}', 's1', '${em(M0)}', '${em(M0)}', 0)`);
+  banco.exec(`
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness, modelos)
+      VALUES ('loja', '/nao/existe/loja', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]', '{}');
+    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+      ('I-1', 1, 'implementar', 'concluido', '${em(M0)}'), ('I-1', 2, 'implementar', 'concluido', '${em(M0)}');
+    INSERT INTO sessao VALUES ('s1', 'I-1', 1, 'autonomo', 'conv1');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ${execucoes.join(", ")},
+      ('anterior', 's1', '${em(M1)}', '${em(M1)}', 0);
+    INSERT INTO uso_modelo_execucao VALUES
+      ('x0', 'anthropic', 'claude-sonnet-5-5', 52000000, 900000, 0, 0, 1351.76),
+      ('x1', 'anthropic', 'claude-sonnet-5-5', 1000, 10, 0, 0, NULL),
+      ('anterior', 'anthropic', 'claude-sonnet-5-5', 30000000, 500000, 0, 0, 980.4);
+    INSERT INTO commit_ticket_demanda VALUES ('${sha("a")}', 'I-1', 1, 'm', '${em(M0)}');
+    INSERT INTO arquivo_commit_demanda (sha, caminho, status, adicionadas, removidas)
+      VALUES ('${sha("a")}', 'a.ts', 'A', 289424, 0);
+    INSERT INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
+      VALUES ('${sha("b")}', 'I-1', 2, NULL, 1, 24929, 'I-1');
+  `);
+  banco.close();
+}
+
+test("cards do mês: cada legenda inteira ao lado do valor e nenhum card órfão, a 1440 px e empilhados a 375 px", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  semearNumerosGrandes(fabriquinha.raiz);
+  await pagina.clock.setFixedTime(AGORA);
+  await pagina.goto(`${fabriquinha.base}/metrics`);
+  const cards = pagina.locator(".kpis .kpi");
+  await expect(cards.first()).toContainText("US$ 1.351,76 * custo incompleto");
+  await expect(cards.last()).toContainText("24.929 de 289.424 adicionadas");
+
+  for (const largura of [1440, 375]) {
+    await pagina.setViewportSize({ width: largura, height: 900 });
+    const { linhas, legendasQuebradas, larguraDaGrade } = await pagina.locator(".kpis").evaluate((grade) => {
+      const caixas = [...grade.querySelectorAll(".kpi")].map((c) => c.getBoundingClientRect());
+      // Cada linha da grade: a soma das larguras dos cards e dos vãos entre eles.
+      const porLinha = Map.groupBy(caixas, (c) => Math.round(c.top));
+      return {
+        linhas: [...porLinha.values()].map(
+          (cs) => Math.max(...cs.map((c) => c.right)) - Math.min(...cs.map((c) => c.left)),
+        ),
+        // A legenda inline que quebra vira mais de um retângulo.
+        legendasQuebradas: [...grade.querySelectorAll(".kpi-valor small")].filter((s) => s.getClientRects().length > 1)
+          .length,
+        larguraDaGrade: grade.getBoundingClientRect().width,
+      };
+    });
+    // Toda linha ocupa a largura inteira: nenhum card sobra sozinho com espaço vazio ao lado.
+    for (const ocupada of linhas) expect(ocupada, `${String(largura)} px`).toBeCloseTo(larguraDaGrade, 0);
+    expect(legendasQuebradas, `${String(largura)} px`).toBe(0);
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await pagina.locator(".kpis").screenshot({ path: info.outputPath(`cards-${String(largura)}.png`) });
+  }
+});

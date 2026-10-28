@@ -235,6 +235,18 @@ test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () =>
   assert.deepEqual(calcular(aberta, { ...viva, ocupado: false }), ["aguardando_humano", "conversa", viva.desde]);
 });
 
+test("CA-7: sessão parada de demanda concluída, cancelada ou arquivada vale terminada, qualquer que seja o ticket", () => {
+  const { banco } = cenario();
+  const estadoDe = (id: string) => cabecalhoDaDemanda(banco, id)?.sessao.estado;
+  for (const fase of ["concluida", "cancelada", "arquivada"]) {
+    banco.prepare("UPDATE demanda SET fase = ? WHERE id = 'I-300'").run(fase);
+    // Conversa de planejamento, ticket que falhou e autônoma parada: nenhuma espera mais o Auditor.
+    assert.deepEqual(["s1", "s3", "s5"].map(estadoDe), ["terminada", "terminada", "terminada"], fase);
+  }
+  // A demanda aberta no gate do plano segue esperando o Auditor.
+  assert.equal(estadoDe("s301"), "aguardando_humano");
+});
+
 test("CA-7 e CA-14: id que não é de sessão da demanda não dá nada", () => {
   const { banco } = cenario();
   assert.equal(cabecalhoDaDemanda(banco, "nao-existe"), undefined);

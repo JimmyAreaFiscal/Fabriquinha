@@ -2,15 +2,28 @@
 // no chat e o agente segue; abortar, exportar e o link na página da demanda; prints a 1440 e 375 px sem rolagem
 // horizontal. A demanda é semeada aqui mesmo, em planejamento, com o ticket `planejar` aberto.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { criarDemanda } from "../src/persistencia/demandas.ts";
+import { falharTicketDemanda } from "../src/execucao/fechamento_ticket.ts";
+import { submeterPlanejamento } from "../src/execucao/planejamento.ts";
 import { expect, type Fabriquinha, projeto, test } from "./apoio.ts";
 import { semearTicketAberto } from "./demandas-apoio.ts";
+
+/** Mata o pi cujo diretório de trabalho está na raiz (a execução da demanda não grava o pgid). */
+function matarPiDaRaiz(raiz: string): void {
+  for (const pid of readdirSync("/proc").filter((p) => /^\d+$/.test(p))) {
+    try {
+      if (readlinkSync(`/proc/${pid}/cwd`).startsWith(join(raiz, "worktrees"))) process.kill(Number(pid), "SIGKILL");
+    } catch {
+      // o processo saiu ou não é nosso
+    }
+  }
+}
 
 const em = "2026-10-11T12:00:00.000Z";
 
@@ -51,7 +64,14 @@ function semear(raiz: string, descricao: string): void {
       { demanda_id: "I-230", ticket_id: 1, etapa: "planejar", status: "aberto", status_alterado_em: em, devolucoes: 0 },
     ],
     decisoes: [],
-    evidencias: [],
+    evidencias: [
+      {
+        demanda_id: "I-230",
+        tipo: "criterios_aceite",
+        dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] },
+        em,
+      },
+    ],
     rodadas: [],
     dependencias_rodada: [],
     criterios_citados: [],
@@ -180,4 +200,120 @@ test("abortar uma implementação autônoma tira a barra de «rodando» sem reca
   await expect(barra.locator(".pill")).toHaveText("rodando");
   await pagina.getByRole("button", { name: "Abortar" }).click();
   await expect(barra.locator(".pill")).toHaveText("aguarda você · falha");
+});
+
+test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão, sem erro no log", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  semear(fabriquinha.raiz, "planeje");
+  await abrirOChat(pagina, fabriquinha);
+  const chat = pagina.url();
+  const barra = pagina.locator(".estado-sessao");
+  await expect(barra.locator(".pill")).toHaveText("aguarda você · conversa");
+
+  // O agente submete o plano e fica ocioso, à espera do gate.
+  const banco = abrir(fabriquinha.raiz);
+  const plano = {
+    demanda_id: "I-230",
+    criterios: ["CA-1"],
+    rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
+    tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
+  };
+  submeterPlanejamento(banco, "I-230", plano, { tipo: "agente", execucao: 1, ticket: 1 });
+  banco.close();
+
+  await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
+  await pagina.getByLabel(/Motivo/).fill("falta o caso de erro");
+  await pagina.getByRole("button", { name: "Reprovar planejamento" }).click();
+  await expect(pagina.getByRole("button", { name: "Reprovar planejamento" })).toHaveCount(0);
+
+  // CA-1: o motivo entra na mesma conversa e o agente volta a trabalhar.
+  await pagina.goto(chat);
+  const conversa = pagina.locator("[data-conversa]");
+  await expect(conversa.locator(".msg.voce").last()).toContainText("falta o caso de erro");
+  await expect(conversa.locator(".msg.agente")).toHaveCount(2);
+
+  // CA-2: uma única execução na sessão (o despacho não abre outra por cima do pi vivo).
+  const leitura = abrir(fabriquinha.raiz);
+  const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM execucao_sessao").get() as { n: number };
+  leitura.close();
+  expect(n).toBe(1);
+});
+
+test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", async ({ pagina, fabriquinha }) => {
+  projeto(fabriquinha.raiz);
+  semear(fabriquinha.raiz, "planeje");
+  await abrirOChat(pagina, fabriquinha);
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
+
+  const banco = abrir(fabriquinha.raiz);
+  const plano = {
+    demanda_id: "I-230",
+    criterios: ["CA-1"],
+    rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
+    tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
+  };
+  submeterPlanejamento(banco, "I-230", plano, { tipo: "agente", execucao: 1, ticket: 1 });
+  banco.close();
+
+  await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
+  await pagina.getByRole("button", { name: "Aprovar planejamento" }).click();
+  await expect(pagina.getByRole("button", { name: "Aprovar planejamento" })).toHaveCount(0);
+
+  // CA-4: a execução ganha o fim e nenhuma fica aberta.
+  await expect(() => {
+    const leitura = abrir(fabriquinha.raiz);
+    const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+    leitura.close();
+    expect(n).toBe(0);
+  }).toPass();
+});
+
+test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão com o motivo", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  semear(fabriquinha.raiz, "planeje");
+  await abrirOChat(pagina, fabriquinha);
+  const chat = pagina.url();
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
+
+  const banco = abrir(fabriquinha.raiz);
+  const plano = {
+    demanda_id: "I-230",
+    criterios: ["CA-1"],
+    rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
+    tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
+  };
+  submeterPlanejamento(banco, "I-230", plano, { tipo: "agente", execucao: 1, ticket: 1 });
+  banco.close();
+
+  // Sem pi vivo, como depois de um reinício: o pi morre e o planejar fica Falhou com o gate aberto.
+  matarPiDaRaiz(fabriquinha.raiz);
+  await expect(() => {
+    const leitura = abrir(fabriquinha.raiz);
+    const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+    leitura.close();
+    expect(n).toBe(0);
+  }).toPass();
+  const reinicio = abrir(fabriquinha.raiz);
+  falharTicketDemanda(reinicio, { demanda_id: "I-230", ticket_id: 1 }, "serviço reiniciado");
+  reinicio.close();
+
+  await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
+  await pagina.getByLabel(/Motivo/).fill("falta o caso de erro");
+  await pagina.getByRole("button", { name: "Reprovar planejamento" }).click();
+  await expect(pagina.getByRole("button", { name: "Reprovar planejamento" })).toHaveCount(0);
+
+  // O despacho (Executar agora) retoma a mesma sessão com o motivo.
+  await pagina.getByRole("button", { name: "Executar agora" }).click();
+  await pagina.goto(chat);
+  await expect(pagina.locator("[data-conversa] .msg.voce").last()).toContainText("falta o caso de erro");
+  const leitura = abrir(fabriquinha.raiz);
+  const { n } = leitura.prepare("SELECT COUNT(DISTINCT sessao_id) AS n FROM execucao_sessao").get() as { n: number };
+  leitura.close();
+  expect(n).toBe(1);
 });

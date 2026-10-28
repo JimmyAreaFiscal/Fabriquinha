@@ -21,9 +21,11 @@ import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
 import { recuperarAuditorias } from "./auditoria.ts";
 import { despacharDemandas, executarAgoraDemanda } from "./despacho_demanda.ts";
-import { recuperarExecucoesDemanda } from "./execucao_demanda.ts";
+import { aguardarCondutores, marcarParada, recuperarExecucoesDemanda } from "./execucao_demanda.ts";
 
 const REINICIADO = "serviço reiniciado";
+/** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
+const LIMITE_PARADA_MS = 10_000;
 
 export interface Servico {
   banco: DatabaseSync;
@@ -165,6 +167,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     executarAgoraDemanda: executarAgoraDaDemanda,
     proximaBusca,
     async parar() {
+      marcarParada();
       clearInterval(relogio);
       const fechou = new Promise((pronto) => web.close(pronto));
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
@@ -173,6 +176,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       // F7 §3.2: sem o link de entrada, o `abrir` diz que o serviço não está rodando em vez de abrir um link morto.
       rmSync(join(raiz, "web.url"), { force: true });
       await varredura;
+      await aguardarCondutores(LIMITE_PARADA_MS);
       banco.close();
     },
   };
