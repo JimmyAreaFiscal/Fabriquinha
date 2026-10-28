@@ -29,7 +29,11 @@ export interface DepsFechamento {
   opcoes?: OpcoesSonar;
   /** Limite do `git commit`; o padrão é o dos comandos do projeto. */
   limiteCommitMs?: number;
+  /** O serviço está parando: o que a coleta ou o commit devolverem é efeito da parada, não do ticket. */
+  parada?: () => boolean;
 }
+
+const REINICIADO = "serviço reiniciado";
 
 /** Caracteres do fim dos logs que vão à instrução de devolução. */
 const FIM_DO_LOG = 2000;
@@ -156,6 +160,10 @@ export async function fecharTicketDemanda(
       worktree,
       opcoes: deps.opcoes,
     });
+    if (deps.parada?.()) {
+      falhar(REINICIADO);
+      return;
+    }
     if (verificacoes.some((v) => v.aprovada === undefined)) {
       const motivos = verificacoes.flatMap((v) => v.falhas.filter((f) => f.classe === "infraestrutura"));
       falhar(`falha de infraestrutura:\n${motivos.map((f) => `- ${f.motivo}`).join("\n")}`);
@@ -195,7 +203,8 @@ export async function fecharTicketDemanda(
       deps.limiteCommitMs,
     );
   } catch (erro) {
-    if (erro instanceof ErroDeReprovacao) {
+    if (deps.parada?.()) falhar(REINICIADO);
+    else if (erro instanceof ErroDeReprovacao) {
       comDemanda(banco, ref.demanda_id, (a) =>
         devolverTicket(a, { ticket_id: ref.ticket_id, instrucao: erro.message }, FABRIQUINHA, contexto()),
       );
@@ -204,6 +213,10 @@ export async function fecharTicketDemanda(
     } else {
       throw erro;
     }
+    return;
+  }
+  if (deps.parada?.()) {
+    falhar(REINICIADO);
     return;
   }
   comDemanda(banco, ref.demanda_id, (a) =>

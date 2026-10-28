@@ -1,6 +1,6 @@
 // Execução do ticket da demanda com banco real, git real e um pi falso que fala o protocolo RPC (CA-1 a CA-7, CA-11 a CA-14).
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -700,5 +700,23 @@ test("I-246 CA-4: parada durante a preparação: o pi não é lançado e o ticke
   assert.equal(sessoes(1).execucoes[0]?.erro, "serviço reiniciado");
   assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
   assert.deepEqual(registro(), []);
+  await aguardarCondutores(1000); // desfaz a parada para os testes seguintes
+});
+
+test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha 'serviço reiniciado', sem devolução nem evidência", async () => {
+  const { banco, sessoes } = await cenario();
+  banco.prepare("UPDATE linguagem_projeto SET comando_teste = 'sleep 31' WHERE projeto = 'loja'").run();
+  emExecucao(banco, 1);
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  while (spawnSync("pgrep", ["-f", "sleep 31"]).status !== 0) await dormir(50); // a coleta está nos testes
+  marcarParada();
+  spawnSync("pkill", ["-TERM", "-f", "sleep 31"]); // como o cgroup do systemd
+  await fim;
+  const ticket = carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === 1);
+  assert.equal(ticket?.status, "falhou");
+  assert.equal(ticket.motivo_falha, "serviço reiniciado");
+  assert.equal(ticket.devolucoes, 0);
+  assert.equal(carregarDemanda(banco, "I-1").evidencias.length, 0);
+  assert.equal(sessoes(1).execucoes[0]?.fim == null, false);
   await aguardarCondutores(1000); // desfaz a parada para os testes seguintes
 });

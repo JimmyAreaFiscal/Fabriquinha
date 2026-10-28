@@ -180,3 +180,43 @@ for (const [nome, preparacao, sinalNosFilhos] of [
     });
   });
 }
+
+// I-246.R3 CA-2, CA-4: o pi termina bem e o serviço para durante a coleta dos testes: o SIGTERM do cgroup mata o comando
+// de testes, e a saída dele não vira devolução nem falha de infraestrutura.
+test.describe("I-246.T15 parada durante a coleta das verificações", () => {
+  test("sai limpo e a página da demanda mostra Falhou com 'serviço reiniciado'", async ({ pagina, fabriquinha }) => {
+    test.setTimeout(60_000);
+    projeto(fabriquinha.raiz);
+    semearTicketAberto(fabriquinha.raiz);
+    const banco = abrir(fabriquinha.raiz);
+    banco.prepare("UPDATE linguagem_projeto SET comando_teste = 'sleep 31' WHERE projeto = 'loja'").run();
+    banco.close();
+    await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+    await pagina.getByRole("button", { name: "Executar agora" }).click();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    // O comando de testes do projeto está rodando: a coleta começou.
+    for (;;) {
+      try {
+        execFileSync("pgrep", ["-f", "sleep 31"], { stdio: "ignore" });
+        break;
+      } catch {
+        await dormir(100);
+      }
+    }
+
+    const saiu = once(fabriquinha.servico, "exit");
+    execFileSync("pkill", ["-TERM", "-f", "sleep 31"]);
+    fabriquinha.servico.kill("SIGTERM");
+    const codigo = (await saiu)[0] as number | null;
+    expect(codigo).toBe(0);
+    expect(fabriquinha.stderr()).not.toContain("database is not open");
+    expect(fabriquinha.stderr()).not.toMatch(/Error/);
+
+    const nova = await fabriquinha.reiniciar();
+    await pagina.goto(nova.link);
+    await pagina.goto(`${nova.base}/demandas/I-216`);
+    const ticket = pagina.locator(".dm-ticket", { hasText: "I-216.T1" });
+    await expect(ticket).toContainText("Falhou");
+    await expect(ticket).toContainText("serviço reiniciado");
+  });
+});
