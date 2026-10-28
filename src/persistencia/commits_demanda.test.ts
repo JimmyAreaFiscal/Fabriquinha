@@ -15,6 +15,7 @@ import { MIGRACOES } from "./migracoes.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const sha = (c: string) => c.repeat(40);
+const em = (demanda: string, linhas: [number, number][]) => new Map([[demanda, new Map(linhas)]]);
 
 const banco = () => {
   const b = new DatabaseSync(":memory:");
@@ -124,22 +125,22 @@ test("commit de ticket inexistente é recusado", () => {
 
 test("CA-8: regravar o retrabalho do ticket troca as linhas", () => {
   const b = banco();
-  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), new Map([[1, 5]]));
-  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), new Map([[3, 2]]));
+  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), em("D", [[1, 5]]));
+  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), em("D", [[3, 2]]));
   assert.deepEqual(retrabalhoDoTicket(b, "D", 1), []);
   assert.deepEqual(retrabalhoDoTicket(b, "D", 3), [{ commitAlterador: sha("a"), ticketAlterador: 2, linhas: 2 }]);
 });
 
 test("CA-9: o retrabalho traz o ticket alterador", () => {
   const b = banco();
-  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), new Map([[1, 5]]));
+  gravarRetrabalhoDoTicket(b, "D", 2, sha("a"), em("D", [[1, 5]]));
   assert.deepEqual(retrabalhoDoTicket(b, "D", 1), [{ commitAlterador: sha("a"), ticketAlterador: 2, linhas: 5 }]);
 });
 
 test("o alterador de outra demanda aparece em demandaAlteradora e a regravação não apaga o dele", () => {
   const b = banco();
   b.exec(`INSERT INTO retrabalho_demanda VALUES ('${sha("b")}', 'D', 1, NULL, 3, 4, 'E')`);
-  gravarRetrabalhoDoTicket(b, "D", 1, sha("a"), new Map([[2, 1]]));
+  gravarRetrabalhoDoTicket(b, "D", 1, sha("a"), em("D", [[2, 1]]));
   assert.deepEqual(retrabalhoDoTicket(b, "D", 3), [
     { commitAlterador: sha("b"), ticketAlterador: 1, demandaAlteradora: "E", linhas: 4 },
   ]);
@@ -148,8 +149,8 @@ test("o alterador de outra demanda aparece em demandaAlteradora e a regravação
 
 test("CA-10: o retrabalho externo traz o autor, e regravar não duplica", () => {
   const b = banco();
-  gravarRetrabalhoExterno(b, "D", sha("a"), "Ana", new Map([[1, 3]]));
-  gravarRetrabalhoExterno(b, "D", sha("a"), "Ana", new Map([[1, 3]]));
+  gravarRetrabalhoExterno(b, sha("a"), "Ana", em("D", [[1, 3]]));
+  gravarRetrabalhoExterno(b, sha("a"), "Ana", em("D", [[1, 3]]));
   assert.deepEqual(retrabalhoDoTicket(b, "D", 1), [{ commitAlterador: sha("a"), autor: "Ana", linhas: 3 }]);
 });
 
@@ -161,14 +162,14 @@ test("CA-11: origem de outra demanda é recusada e nada fica gravado", () => {
       "D",
       2,
       sha("a"),
-      new Map([
+      em("D", [
         [3, 1],
         [9, 4],
       ]),
     );
   }, ErroDeRegra);
   assert.throws(() => {
-    gravarRetrabalhoExterno(b, "D", sha("a"), "Ana", new Map([[9, 4]]));
+    gravarRetrabalhoExterno(b, sha("a"), "Ana", em("D", [[9, 4]]));
   }, ErroDeRegra);
   assert.equal(b.prepare("SELECT 1 FROM retrabalho_demanda").all().length, 0);
 });

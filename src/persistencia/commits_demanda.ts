@@ -7,6 +7,18 @@ import type { ArquivoCommit, Commit } from "./commits.ts";
 const donoDe = (banco: DatabaseSync, sha: string) =>
   banco.prepare("SELECT demanda_id, ticket_id FROM commit_ticket_demanda WHERE sha = ?").get(sha);
 
+/** O ticket da demanda que registrou o commit `sha`, se algum registrou. */
+export function donoDoCommitDemanda(
+  banco: DatabaseSync,
+  sha: string,
+): { demandaId: string; ticketId: number } | undefined {
+  const d = donoDe(banco, sha);
+  return d && { demandaId: d.demanda_id as string, ticketId: d.ticket_id as number };
+}
+
+/** Algum ticket de demanda registrou o commit `sha`. */
+export const commitRegistradoDemanda = (banco: DatabaseSync, sha: string): boolean => donoDe(banco, sha) !== undefined;
+
 /** Grava o commit e os arquivos do ticket; o mesmo sha no mesmo ticket não escreve nada. */
 export function gravarCommitDemanda(
   banco: DatabaseSync,
@@ -71,52 +83,54 @@ export function commitDoTicketDemanda(banco: DatabaseSync, demandaId: string, ti
   return { ...c, arquivos };
 }
 
+/** As linhas reescritas por ticket de origem, agrupadas pela demanda dele (origem → quantidade). */
+export type LinhasPorDemanda = Map<string, Map<number, number>>;
+
 const inserirRetrabalho = (
   banco: DatabaseSync,
-  demandaId: string,
   sha: string,
-  ticketId: number | null,
+  alterador: { demandaId: string; ticketId: number } | null,
   autor: string | null,
-  linhas: Map<number, number>,
+  linhas: LinhasPorDemanda,
 ) => {
   const insere = banco.prepare(
     `INSERT OR REPLACE INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   try {
-    for (const [origem, n] of linhas)
-      insere.run(sha, demandaId, ticketId, autor, origem, n, ticketId === null ? null : demandaId);
+    for (const [demandaId, porTicket] of linhas)
+      for (const [origem, n] of porTicket)
+        insere.run(sha, demandaId, alterador?.ticketId ?? null, autor, origem, n, alterador?.demandaId ?? null);
   } catch {
-    throw new ErroDeRegra(`retrabalho inválido na demanda ${demandaId}`, "os tickets precisam existir na demanda");
+    throw new ErroDeRegra(`retrabalho inválido no commit ${sha}`, "os tickets precisam existir na demanda");
   }
 };
 
-/** Troca as linhas em que o ticket é o alterador pelas de `linhas` (origem → quantidade). */
+/** Troca as linhas em que o ticket é o alterador pelas de `linhas`. */
 export function gravarRetrabalhoDoTicket(
   banco: DatabaseSync,
   demandaId: string,
   ticketId: number,
   sha: string,
-  linhas: Map<number, number>,
+  linhas: LinhasPorDemanda,
 ): void {
   escrever(banco, () => {
     banco
       .prepare("DELETE FROM retrabalho_demanda WHERE alterador_demanda_id = ? AND ticket_id = ?")
       .run(demandaId, ticketId);
-    inserirRetrabalho(banco, demandaId, sha, ticketId, null, linhas);
+    inserirRetrabalho(banco, sha, { demandaId, ticketId }, null, linhas);
   });
 }
 
 /** Grava as linhas de um commit humano de `autor`. */
 export function gravarRetrabalhoExterno(
   banco: DatabaseSync,
-  demandaId: string,
   sha: string,
   autor: string,
-  linhas: Map<number, number>,
+  linhas: LinhasPorDemanda,
 ): void {
   escrever(banco, () => {
-    inserirRetrabalho(banco, demandaId, sha, null, autor, linhas);
+    inserirRetrabalho(banco, sha, null, autor, linhas);
   });
 }
 

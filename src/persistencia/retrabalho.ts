@@ -2,12 +2,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Id } from "../dominio/primitivos.ts";
 import { escrever } from "./banco.ts";
+import { gravarRetrabalhoExterno, type LinhasPorDemanda } from "./commits_demanda.ts";
 
 /** As linhas que um commit humano da base reescreveu, por ticket de origem (F6 §4.4). */
 export interface CommitHumano {
   sha: string;
   autor: string;
-  linhas: Map<Id, number>;
+  linhas: LinhasPorDemanda;
 }
 
 /**
@@ -38,8 +39,7 @@ export const cursorDaBase = (banco: DatabaseSync, projeto: string): string | und
 /** F6 §4.4, passos 4 e 5: as linhas dos commits humanos e o cursor novo, na mesma transação. */
 export function gravarVarredura(banco: DatabaseSync, projeto: string, cursor: string, humanos: CommitHumano[]): void {
   escrever(banco, () => {
-    const linha = inserir(banco);
-    for (const h of humanos) for (const [origem, n] of h.linhas) linha.run(h.sha, null, h.autor, origem, n);
+    for (const h of humanos) gravarRetrabalhoExterno(banco, h.sha, h.autor, h.linhas);
     banco
       .prepare(
         `INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES (?, ?, ?)

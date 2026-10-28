@@ -3,7 +3,7 @@
 import type { Ticket } from "../../../dominio/agregado.ts";
 import type { Id, Modelo } from "../../../dominio/primitivos.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { MetricasMes } from "../../../metricas/periodo.ts";
+import type { MetricasMesDemanda } from "../../../metricas/periodo_demanda.ts";
 import type { IssueDoProjeto, ListaDoProjeto } from "../../rotas/projeto.ts";
 import {
   caminhoDaIssue,
@@ -184,7 +184,7 @@ export function paginaDoProjeto(
   projetos: readonly ProjetoListado[],
   nome: string,
   { issues, sessoes, contagem }: ListaDoProjeto,
-  mes: MetricasMes,
+  mes: MetricasMesDemanda,
   escolhas: Escolhas,
   agora: Date,
 ): string {

@@ -1,5 +1,5 @@
-// Rota das sessões (F7 §4.2; F4 §5.3) chamada como o servidor a chama, contra um banco de verdade: as ativas como o
-// F4 as lista e as terminadas do Histórico com o título da issue, o resultado e o custo.
+// Rota das sessões (F7 §4.2) chamada como o servidor a chama, contra um banco de verdade: as ativas e as terminadas do
+// Histórico lidas das tabelas da demanda, as migradas pelo backfill inclusive.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import type { ServerResponse } from "node:http";
@@ -7,13 +7,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { CANCELADA } from "../../dominio/agregado.ts";
-import { ABORTADA } from "../../execucao/gerente.ts";
 import { abrir } from "../../persistencia/banco.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
-import type { SessaoDoHistorico } from "./historico.ts";
+import type { SessaoDeDemanda } from "./historico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-historico-"));
 after(() => {
@@ -21,17 +19,11 @@ after(() => {
 });
 
 const T0 = "2026-10-11T12:00:00.000Z";
-const S1 = "11111111-1111-4111-8111-111111111111";
-const S2 = "22222222-2222-4222-8222-222222222222";
-const S3 = "33333333-3333-4333-8333-333333333333";
-const S4 = "44444444-4444-4444-8444-444444444444";
-const S5 = "55555555-5555-4555-8555-555555555555";
-const S6 = "66666666-6666-4666-8666-666666666666";
 
 /**
- * I-1 da loja no desenvolvimento: T-1 de desenho concluído em duas execuções (S1, a última com sucesso, e uma
- * consulta S2 que o Auditor abortou) e T-2 aberto, ativo (S3). I-2 do site, com T-3 de registro concluído e a
- * execução que falhou com o pi abortando sozinho, sem o Auditor (S4), e uma consulta que caiu (S5). Custos em `uso`.
+ * I-1 da loja, com a rodada R1: T1 de implementação concluído em duas execuções da sessão s1 (a primeira falhou) e T2
+ * de planejamento aberto, com a sessão s2 rodando. I-2 do site: T1 de planejamento concluído, cuja sessão s3 termina
+ * com falha, e a consulta s4 do mesmo ticket, que terminou bem.
  */
 let banco: DatabaseSync;
 beforeEach(() => {
@@ -40,24 +32,25 @@ beforeEach(() => {
     INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness) VALUES
       ('loja', '/r/loja', 'main', 'github', '["t"]', 'loja', '[{"nome":"f","comando":"c","descricao":"d"}]'),
       ('site', '/r/site', 'main', 'github', '["t"]', 'site', '[{"nome":"f","comando":"c","descricao":"d"}]');
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES
-      (1, 'loja', 'Timeout no checkout', 'problema', 'desenvolvimento', '${T0}'),
-      (2, 'site', 'Modo escuro', 'funcionalidade', 'desenho', '${T0}');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em) VALUES
-      (1, 1, 'desenho', 'Desenhar', 'concluido', 'fabriquinha', '${T0}', '2026-10-11T12:30:00.000Z'),
-      (2, 1, 'desenvolvimento', 'Buscar cupons', 'aberto', 'fabriquinha', '${T0}', NULL),
-      (3, 2, 'registro', 'Registrar', 'concluido', 'fabriquinha', '${T0}', '2026-10-11T13:00:00.000Z');
-    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em) VALUES
-      (1, 1, 'autonomo', '${S1}', 'falha', 'tempo limite', '${T0}', '2026-10-11T12:10:00.000Z'),
-      (2, 1, 'autonomo', '${S1}', 'sucesso', NULL, '2026-10-11T12:20:00.000Z', '2026-10-11T12:30:00.000Z'),
-      (3, 1, 'consulta', '${S2}', 'falha', '${ABORTADA}', '2026-10-11T14:00:00.000Z', '2026-10-11T14:05:00.000Z'),
-      (4, 2, 'interativo', '${S3}', 'sucesso', NULL, '${T0}', '2026-10-11T12:01:00.000Z'),
-      (5, 3, 'interativo', '${S4}', 'falha', 'o agente parou com stopReason aborted', '${T0}', '2026-10-11T13:00:00.000Z'),
-      (6, 3, 'consulta', '${S5}', 'sucesso', NULL, '2026-10-11T15:00:00.000Z', '2026-10-11T15:01:00.000Z');
-    INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo) VALUES
-      (1, 'anthropic', 'claude-opus-5-5', 1, 1, 1, 0, 0, 0.5),
-      (2, 'anthropic', 'claude-opus-5-5', 1, 1, 1, 0, 0, 0.25),
-      (2, 'anthropic', 'claude-sonnet-5-5', 1, 1, 1, 0, 0, 0.125);
+    INSERT INTO demanda VALUES
+      ('I-1', 'loja', 'Timeout no checkout', 'problema', 'd', 'execucao', '${T0}', 'f', 's', 1, 'fabriquinha/I-1'),
+      ('I-2', 'site', 'Modo escuro', 'funcionalidade', 'd', 'planejamento', '${T0}', 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO rodada VALUES ('I-1', 1, 'Leitura', 'desenvolvimento', 0, 'fabriquinha/I-1-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id) VALUES
+      ('I-1', 1, 'implementar', 'concluido', '${T0}', 1),
+      ('I-1', 2, 'planejar', 'em_execucao', '${T0}', NULL),
+      ('I-2', 1, 'planejar', 'concluido', '${T0}', NULL);
+    INSERT INTO sessao VALUES
+      ('s1', 'I-1', 1, 'autonomo', 'c1'),
+      ('s2', 'I-1', 2, 'interativo', 'c2'),
+      ('s3', 'I-2', 1, 'autonomo', 'c3'),
+      ('s4', 'I-2', 1, 'consulta', 'c4');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, modelo_provedor, modelo_nome) VALUES
+      ('x1', 's1', '${T0}', '2026-10-11T12:10:00.000Z', 1, NULL, NULL),
+      ('x2', 's1', '2026-10-11T12:20:00.000Z', '2026-10-11T12:30:00.000Z', 0, 'anthropic', 'claude-opus-5-5'),
+      ('x3', 's2', '2026-10-11T12:40:00.000Z', NULL, 0, NULL, NULL),
+      ('x4', 's3', '${T0}', '2026-10-11T13:00:00.000Z', 1, NULL, NULL),
+      ('x5', 's4', '2026-10-11T15:00:00.000Z', '2026-10-11T15:01:00.000Z', 0, NULL, NULL);
   `);
 });
 
@@ -81,54 +74,62 @@ async function sessoes(query: string): Promise<unknown> {
 }
 
 const resumo = (lista: unknown) =>
-  (lista as SessaoDoHistorico[]).map(({ sessao, titulo, resultado, custo, desde }) => [
+  (lista as SessaoDeDemanda[]).map(({ sessao, titulo, ticket, resultado, desde }) => [
     sessao,
     titulo,
+    ticket,
     resultado,
-    custo,
     desde,
   ]);
 
-test("histórico: a execução da issue cancelada tem o resultado cancelada", async () => {
-  banco.exec(`
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em, cancelada_em)
-      VALUES (3, 'site', 'Por engano', 'funcionalidade', 'desenho', '${T0}', '2026-10-11T16:01:00.000Z');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-      VALUES (4, 3, 'desenho', 'Desenhar', 'cancelado', 'fabriquinha', '${T0}');
-    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
-      VALUES (7, 4, 'autonomo', '${S6}', 'falha', '${CANCELADA}', '2026-10-11T16:00:00.000Z', '2026-10-11T16:01:00.000Z');
-  `);
-  const lista = resumo(await sessoes("escopo=historico&projeto=site"));
-  assert.deepEqual(lista.at(-1), [S6, "Por engano", "cancelada", 0, "2026-10-11T16:01:00.000Z"]);
-});
-
-test("histórico: as terminadas com o título da issue, o resultado da última execução e o custo das execuções", async () => {
+test("histórico: as terminadas com demanda, ticket, resultado da última execução e datas, da mais antiga para a mais recente", async () => {
   assert.deepEqual(resumo(await sessoes("escopo=historico")), [
-    [S1, "Timeout no checkout", "concluida", 0.875, "2026-10-11T12:30:00.000Z"],
-    [S4, "Modo escuro", "falha", 0, "2026-10-11T13:00:00.000Z"],
-    [S2, "Timeout no checkout", "abortada", 0, "2026-10-11T14:05:00.000Z"],
-    [S5, "Modo escuro", "concluida", 0, "2026-10-11T15:01:00.000Z"],
+    [`s1`, "Timeout no checkout", "I-1.T1", "concluida", "2026-10-11T12:30:00.000Z"],
+    [`s3`, "Modo escuro", "I-2.T1", "falha", "2026-10-11T13:00:00.000Z"],
+    [`s4`, "Modo escuro", "I-2.T1", "concluida", "2026-10-11T15:01:00.000Z"],
   ]);
-  assert.deepEqual(resumo(await sessoes("escopo=historico&projeto=site&etapa=registro")), [
-    [S4, "Modo escuro", "falha", 0, "2026-10-11T13:00:00.000Z"],
-    [S5, "Modo escuro", "concluida", 0, "2026-10-11T15:01:00.000Z"],
-  ]);
+  const [s1] = (await sessoes("escopo=historico&projeto=loja")) as SessaoDeDemanda[];
   assert.deepEqual(
-    resumo(await sessoes("escopo=historico&issue=1")).map(([s]) => s),
-    [S1, S2],
+    [s1?.demanda, s1?.rodada, s1?.etapa, s1?.modo, s1?.modelo, s1?.inicio, s1?.fim],
+    [
+      "I-1",
+      "I-1.R1",
+      "implementar",
+      "autonomo",
+      { provedor: "anthropic", modelo: "claude-opus-5-5" },
+      T0,
+      "2026-10-11T12:30:00.000Z",
+    ],
   );
 });
 
-test("ativas: as sessões como o F4 as calcula, sem o que só o histórico mostra", async () => {
-  const ativas = (await sessoes("escopo=ativas")) as Record<string, unknown>[];
+test("histórico: filtra por projeto, demanda e etapa", async () => {
+  const ids = async (query: string) => resumo(await sessoes(query)).map(([s]) => s);
+  assert.deepEqual(await ids("escopo=historico&projeto=site"), ["s3", "s4"]);
+  assert.deepEqual(await ids("escopo=historico&demanda=I-1"), ["s1"]);
+  assert.deepEqual(await ids("escopo=historico&etapa=planejar"), ["s3", "s4"]);
+  assert.deepEqual(await ids("escopo=historico&projeto=loja&etapa=planejar"), []);
+});
+
+test("ativas: as sessões de demanda em andamento, sem as terminadas", async () => {
+  const ativas = (await sessoes("escopo=ativas")) as SessaoDeDemanda[];
   assert.deepEqual(
-    ativas.map((s) => [s.sessao, s.motivo, "resultado" in s]),
-    [[S3, "conversa", false]],
+    ativas.map((s) => [s.sessao, s.estado, s.ticket, s.etapa]),
+    [["s2", "rodando", "I-1.T2", "planejar"]],
   );
+});
+
+test("ativas: o ticket que falhou aguarda o Auditor, com o motivo", async () => {
+  banco.exec(
+    "UPDATE ticket_demanda SET status = 'falhou', motivo_falha = 'testes falharam' WHERE demanda_id = 'I-1' AND ticket_id = 2",
+  );
+  banco.exec("UPDATE execucao_sessao SET fim = '2026-10-11T12:50:00.000Z', falha = 1 WHERE id = 'x3'");
+  const [s2] = (await sessoes("escopo=ativas")) as SessaoDeDemanda[];
+  assert.deepEqual([s2?.sessao, s2?.estado, s2?.motivo, s2?.resultado], ["s2", "aguardando_humano", "falha", "falha"]);
 });
 
 test("filtro inválido dá 422", async () => {
-  for (const query of ["escopo=todas", "escopo=historico&issue=I-1", "escopo=historico&etapa=teste"]) {
+  for (const query of ["escopo=todas", "escopo=historico&demanda=1", "escopo=historico&etapa=desenho"]) {
     assert.equal(((await sessoes(query)) as [number])[0], 422, query);
   }
 });

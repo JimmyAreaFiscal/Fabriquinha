@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
+import { FASES_TERMINADAS } from "../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
 import type { EtapaTicket, Instante, Modelo } from "../dominio/primitivos.ts";
@@ -99,8 +100,9 @@ function carregar(banco: DatabaseSync, ref: TicketRef, id: string): Carregada {
 type Calculado = [Estado, MotivoDemanda | undefined, Instante];
 
 /**
- * O estado da sessão: diálogo pendente espera o Auditor; execução aberta com o pi trabalhando roda; parada, o ticket
- * decide (falha, terminada) e a autônoma ainda roda; a interativa espera a conversa, ou o gate de aprovação do plano.
+ * O estado da sessão: diálogo pendente espera o Auditor; execução aberta com o pi trabalhando roda; parada, a demanda
+ * encerrada (concluída, cancelada, arquivada) termina, o ticket decide (falha, terminada) e a autônoma ainda roda; a
+ * interativa espera a conversa, ou o gate de aprovação do plano.
  */
 export function calcular(c: Carregada, viva: Situacao | undefined): Calculado {
   const { ag, ticket, sessao } = c;
@@ -110,6 +112,7 @@ export function calcular(c: Carregada, viva: Situacao | undefined): Calculado {
   if (ultima.fim == null && viva?.ocupado !== false) return ["rodando", undefined, viva?.desde ?? ultima.inicio];
   // Sem fim, só o pi ocioso chega aqui, e ele tem `desde`.
   const parada = viva?.desde ?? String(ultima.fim);
+  if (FASES_TERMINADAS.includes(ag.demanda.fase)) return ["terminada", undefined, parada];
   if (ticket.status === "falhou") return ["aguardando_humano", "falha", parada];
   if (ticket.status === "concluido") return ["terminada", undefined, parada];
   if (sessao.modo === "autonomo") return ["rodando", undefined, parada];

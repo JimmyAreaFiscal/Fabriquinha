@@ -188,3 +188,186 @@ export const demandasDoProjeto = (banco: DatabaseSync, projeto: string): string[
     .prepare("SELECT id FROM demanda WHERE projeto = ? ORDER BY id")
     .all(projeto)
     .map((l) => l.id as string);
+
+// ——— Métricas por mês e projeto (a página Métricas): linhas cruas do período, agrupadas em src/metricas/periodo_demanda.ts ———
+
+/** O período `[inicio, fim)` de instantes UTC e o projeto (`null` = todos). */
+export interface Recorte {
+  inicio: string;
+  fim: string;
+  projeto: string | null;
+}
+
+const NO_RECORTE = "($projeto IS NULL OR d.projeto = $projeto)";
+const parametros = (r: Recorte) => ({ inicio: r.inicio, fim: r.fim, projeto: r.projeto });
+
+export interface ExecucaoNoPeriodo {
+  execucao: string;
+  sessao: string;
+  ticket: number;
+  /** `null` = ticket de demanda, sem rodada. */
+  rodada: number | null;
+  demanda: string;
+  projeto: string;
+  titulo: string;
+  fase: string;
+  etapa: string;
+  inicio: string;
+  falha: boolean;
+  /** 0 enquanto não terminou; um relógio que volta não deixa negativa. */
+  duracaoMs: number;
+}
+
+/** Cada execução vale uma vez, no mês em que começou: a retomada de uma sessão é uma execução nova. */
+export const execucoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): ExecucaoNoPeriodo[] =>
+  banco
+    .prepare(
+      `SELECT e.id, e.sessao_id, s.ticket_id, t.rodada_id, d.id AS demanda, d.projeto, d.titulo, d.fase, t.etapa,
+         e.inicio, e.falha,
+         MAX(0, ROUND((julianday(COALESCE(e.fim, e.inicio)) - julianday(e.inicio)) * 86400000)) AS duracao_ms
+       FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
+         JOIN ticket_demanda t ON t.demanda_id = s.demanda_id AND t.ticket_id = s.ticket_id
+         JOIN demanda d ON d.id = s.demanda_id
+       WHERE e.inicio >= $inicio AND e.inicio < $fim AND ${NO_RECORTE} ORDER BY e.inicio, e.id`,
+    )
+    .all(parametros(recorte))
+    .map((l) => ({
+      execucao: l.id as string,
+      sessao: l.sessao_id as string,
+      ticket: Number(l.ticket_id),
+      rodada: rodadaDe(l),
+      demanda: l.demanda as string,
+      projeto: l.projeto as string,
+      titulo: l.titulo as string,
+      fase: l.fase as string,
+      etapa: l.etapa as string,
+      inicio: l.inicio as string,
+      falha: l.falha === 1,
+      duracaoMs: Number(l.duracao_ms),
+    }));
+
+export type UsoNoPeriodo = Omit<UsoDaExecucao, keyof DonoDaLinha> & { execucao: string };
+
+export const usoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): UsoNoPeriodo[] =>
+  banco
+    .prepare(
+      `SELECT u.execucao_id, u.modelo_provedor, u.modelo_nome, u.tokens_entrada, u.tokens_saida,
+         u.tokens_cache_leitura, u.tokens_cache_escrita, u.custo
+       FROM uso_modelo_execucao u JOIN execucao_sessao e ON e.id = u.execucao_id
+         JOIN sessao s ON s.id = e.sessao_id JOIN demanda d ON d.id = s.demanda_id
+       WHERE e.inicio >= $inicio AND e.inicio < $fim AND ${NO_RECORTE} ORDER BY u.rowid`,
+    )
+    .all(parametros(recorte))
+    .map((l) => ({
+      execucao: l.execucao_id as string,
+      provedor: l.modelo_provedor as string,
+      modelo: l.modelo_nome as string,
+      entrada: Number(l.tokens_entrada),
+      saida: Number(l.tokens_saida),
+      cacheLeitura: Number(l.tokens_cache_leitura),
+      cacheEscrita: Number(l.tokens_cache_escrita),
+      custo: l.custo === null ? null : Number(l.custo),
+    }));
+
+export type Fato = "demandasRegistradas" | "demandasConcluidas" | "ticketsCriados" | "ticketsConcluidos";
+
+/**
+ * Quando cada fato aconteceu. A demanda e o ticket novos não gravam `criado_em` nem `concluido_em` (só o backfill grava),
+ * então caem na primeira evidência da demanda e na última mudança de status.
+ * shortcut: ticket novo conta como criado quando mudou de status pela última vez, gravar `criado_em` no domínio se isso incomodar.
+ */
+export const fatosNoPeriodo = (banco: DatabaseSync, recorte: Recorte): { fato: Fato; em: string }[] =>
+  banco
+    .prepare(
+      `WITH fatos (fato, em, demanda) AS (
+         SELECT 'demandasRegistradas', COALESCE(h.criada_em, (SELECT MIN(em) FROM evidencia_demanda WHERE demanda_id = d.id),
+           d.fase_alterada_em), d.id FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id
+         UNION ALL SELECT 'demandasConcluidas', COALESCE(h.concluida_em, d.fase_alterada_em), d.id
+           FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id WHERE d.fase = 'concluida'
+         UNION ALL SELECT 'ticketsCriados', COALESCE(t.criado_em, t.status_alterado_em), t.demanda_id FROM ticket_demanda t
+         UNION ALL SELECT 'ticketsConcluidos', COALESCE(t.concluido_em, t.status_alterado_em), t.demanda_id
+           FROM ticket_demanda t WHERE t.status = 'concluido'
+       )
+       SELECT f.fato, f.em FROM fatos f JOIN demanda d ON d.id = f.demanda
+       WHERE f.em >= $inicio AND f.em < $fim AND ${NO_RECORTE}`,
+    )
+    .all(parametros(recorte))
+    .map((l) => ({ fato: l.fato as Fato, em: l.em as string }));
+
+export interface PrNoPeriodo {
+  em: string;
+  mergeado: boolean;
+}
+
+/**
+ * Um PR por rodada, no mês do primeiro `pr_aberto` dela (o do ticket, nas rodadas novas, ou o da própria rodada, nas migradas).
+ * Mergeado quando a rodada tem `encerrar_rodada` aprovado: por coorte, nunca passa dos abertos.
+ */
+export const prsNoPeriodo = (banco: DatabaseSync, recorte: Recorte): PrNoPeriodo[] =>
+  banco
+    .prepare(
+      `SELECT p.em, p.mergeado FROM (
+         SELECT e.demanda_id, MIN(e.em) AS em, EXISTS (
+           SELECT 1 FROM decisao_ticket x JOIN ticket_demanda te ON te.demanda_id = x.demanda_id AND te.ticket_id = x.ticket_id
+           WHERE x.demanda_id = e.demanda_id AND te.rodada_id = COALESCE(e.rodada_id, t.rodada_id)
+             AND te.etapa = 'encerrar_rodada' AND x.resultado != 'recusado') AS mergeado
+         FROM evidencia_demanda e LEFT JOIN ticket_demanda t ON t.demanda_id = e.demanda_id AND t.ticket_id = e.ticket_id
+         WHERE e.tipo = 'pr_aberto' GROUP BY e.demanda_id, COALESCE(e.rodada_id, t.rodada_id)
+       ) p JOIN demanda d ON d.id = p.demanda_id
+       WHERE p.em >= $inicio AND p.em < $fim AND ${NO_RECORTE}`,
+    )
+    .all(parametros(recorte))
+    .map((l) => ({ em: l.em as string, mergeado: l.mergeado === 1 }));
+
+export interface DecisaoNoPeriodo extends DonoDaLinha {
+  demanda: string;
+  em: string;
+  recusada: boolean;
+  nota: number | null;
+}
+
+export const decisoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): DecisaoNoPeriodo[] =>
+  banco
+    .prepare(
+      `SELECT ${DONO}, x.demanda_id, x.em, x.resultado, x.nota FROM decisao_ticket x
+       JOIN ticket_demanda t ON t.demanda_id = x.demanda_id AND t.ticket_id = x.ticket_id
+       JOIN demanda d ON d.id = x.demanda_id
+       WHERE x.em >= $inicio AND x.em < $fim AND ${NO_RECORTE}`,
+    )
+    .all(parametros(recorte))
+    .map((l) => ({
+      etapa: l.etapa as string,
+      rodadaId: rodadaDe(l),
+      demanda: l.demanda_id as string,
+      em: l.em as string,
+      recusada: l.resultado === "recusado",
+      nota: l.nota === null ? null : Number(l.nota),
+    }));
+
+export interface RetrabalhoNoPeriodo {
+  em: string;
+  adicionadas: number;
+  alteradas: number;
+  porHumanos: number;
+}
+
+/** M4 (comparacao-sdlc §8): por commit de ticket do período, as linhas que ele adicionou e as que outro ticket ou uma pessoa alterou depois. */
+export const retrabalhoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): RetrabalhoNoPeriodo[] =>
+  banco
+    .prepare(
+      `SELECT c.em,
+         (SELECT COALESCE(SUM(a.adicionadas), 0) FROM arquivo_commit_demanda a WHERE a.sha = c.sha) AS adicionadas,
+         (SELECT COALESCE(SUM(r.linhas), 0) FROM retrabalho_demanda r
+           WHERE r.demanda_id = c.demanda_id AND r.ticket_origem_id = c.ticket_id) AS alteradas,
+         (SELECT COALESCE(SUM(r.linhas), 0) FROM retrabalho_demanda r
+           WHERE r.demanda_id = c.demanda_id AND r.ticket_origem_id = c.ticket_id AND r.ticket_id IS NULL) AS por_humanos
+       FROM commit_ticket_demanda c JOIN demanda d ON d.id = c.demanda_id
+       WHERE c.em >= $inicio AND c.em < $fim AND ${NO_RECORTE}`,
+    )
+    .all(parametros(recorte))
+    .map((l) => ({
+      em: l.em as string,
+      adicionadas: Number(l.adicionadas),
+      alteradas: Number(l.alteradas),
+      porHumanos: Number(l.por_humanos),
+    }));

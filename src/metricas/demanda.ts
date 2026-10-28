@@ -72,7 +72,7 @@ export const somarCustos = (custos: (number | null)[]): Custo => ({
   incompleto: custos.includes(null),
 });
 
-function agruparModelos(uso: UsoDaExecucao[]): UsoDoModelo[] {
+export function agruparModelos(uso: Omit<UsoDaExecucao, keyof DonoDaLinha>[]): UsoDoModelo[] {
   const porModelo = new Map<string, UsoDoModelo>();
   for (const { provedor, modelo, entrada, saida, cacheLeitura, cacheEscrita, custo } of uso) {
     const m = porModelo.get(`${provedor}\0${modelo}`);

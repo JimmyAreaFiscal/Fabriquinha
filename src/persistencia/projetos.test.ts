@@ -422,3 +422,93 @@ test("removerProjeto: falha ao apagar no disco vira aviso e não desfaz o banco"
   );
   banco.close();
 });
+
+const TABELAS_DEMANDA = [
+  "avaliacao",
+  "avaliacao_demanda",
+  "achado_avaliacao",
+  "uso_avaliacao",
+  "retrabalho_demanda",
+  "arquivo_commit_demanda",
+  "commit_ticket_demanda",
+  "uso_modelo_historico",
+  "uso_modelo_execucao",
+  "execucao_sessao",
+  "sessao",
+  "sessao_externa_demanda",
+  "decisao_ticket_historico",
+  "decisao_ticket",
+  "arquivo_evidencia",
+  "evidencia_historico",
+  "evidencia_demanda",
+  "limpeza_pendente_encerramento",
+  "encerramento_demanda",
+  "dependencia_ticket",
+  "caminho_ticket",
+  "ticket_demanda",
+  "criterio_citado_rodada",
+  "dependencia_rodada",
+  "rodada",
+  "dependencia_demanda",
+  "demanda_historico",
+  "demanda",
+];
+const contagensDemanda = (banco: DatabaseSync) =>
+  TABELAS_DEMANDA.map((t) => Number(banco.prepare(`SELECT count(*) AS n FROM ${t}`).get()?.n));
+
+/** Uma demanda com duas rodadas e dois tickets de implementação, com linha em toda tabela da demanda. */
+function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
+  registrarProjeto(banco, { ...exemplo, nome, repo: `/repos/${nome}` });
+  const digitos = d.slice(2);
+  const [sha1, sha2, sha3] = [digitos.padStart(40, "a"), digitos.padStart(40, "c"), digitos.padStart(64, "9")];
+  banco.exec(`
+    INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'execucao', 't', 'x', 's', 0, 'b');
+    INSERT INTO demanda VALUES ('${d}2', '${nome}', 't', 'funcionalidade', 'd', 'execucao', 't', 'x', 's', 0, 'b');
+    INSERT INTO dependencia_demanda VALUES ('${d}2', '${d}');
+    INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('${d}', 't');
+    INSERT INTO rodada VALUES ('${d}', 1, 't', 'desenvolvimento', 0, 'b');
+    INSERT INTO rodada VALUES ('${d}', 2, 't', 'desenvolvimento', 0, 'b');
+    INSERT INTO dependencia_rodada VALUES ('${d}', 2, 1);
+    INSERT INTO criterio_citado_rodada VALUES ('${d}', 1, 'CA-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+      VALUES ('${d}', 1, 'implementar', 'concluido', 't', 1), ('${d}', 2, 'implementar', 'concluido', 't', 1);
+    INSERT INTO dependencia_ticket VALUES ('${d}', 2, 1, 1);
+    INSERT INTO caminho_ticket VALUES ('${d}', 1, 'src');
+    INSERT INTO decisao_ticket VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
+    INSERT INTO decisao_ticket_historico VALUES ('${d}', 1, 1, 'registro');
+    INSERT INTO evidencia_demanda VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
+    INSERT INTO evidencia_historico VALUES ('${d}e', 1, 'agente');
+    INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a', '${sha3}', 'text/plain', 1);
+    INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('${d}', 'b', 'main');
+    INSERT INTO limpeza_pendente_encerramento VALUES ('${d}', 'x');
+    INSERT INTO sessao VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
+    INSERT INTO sessao_externa_demanda VALUES ('pi', '${d}x', '${d}');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, falha) VALUES ('${d}x1', '${d}s', 't', 0);
+    INSERT INTO uso_modelo_execucao VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
+    INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
+    INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');
+    INSERT INTO arquivo_commit_demanda VALUES ('${sha1}', 'f', NULL, 'A', 1, 0);
+    INSERT INTO retrabalho_demanda VALUES ('${sha2}', '${d}', 2, NULL, 1, 1, '${d}');
+    INSERT INTO avaliacao VALUES ('${d}av', '${nome}', '2026-01-01', '2026-01-02', 'p', 't');
+    INSERT INTO avaliacao_demanda VALUES ('${d}av', '${d}');
+    INSERT INTO achado_avaliacao VALUES ('${d}av', 1, 't', 'd', 'e', '${d}');
+    INSERT INTO uso_avaliacao VALUES ('${d}av', 'p', 'm', 1, 1, 1, 0, 0, NULL);
+  `);
+}
+
+test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave estrangeira e deixa as do outro", async () => {
+  const banco = novoBanco();
+  popularDemanda(banco, "outro", "I-9001");
+  const antes = contagensDemanda(banco);
+  popularDemanda(banco, "demo", "I-9101");
+  // demanda do outro projeto que depende da do projeto removido, e retrabalho dela sobre o ticket do removido
+  banco.exec(`
+    INSERT INTO dependencia_demanda VALUES ('I-9001', 'I-9101');
+    INSERT INTO avaliacao_demanda VALUES ('I-9001av', 'I-9101');
+  `);
+  await removerProjeto(banco, "demo");
+  banco.exec("DELETE FROM dependencia_demanda WHERE depende_demanda_id = 'I-9101'"); // não existe mais: já tem de ter saído
+  assert.deepEqual(contagensDemanda(banco), antes);
+  assert.equal(existsSync(caminhoArquivo(banco, "9101".padStart(64, "9"))), false);
+  banco.close();
+});

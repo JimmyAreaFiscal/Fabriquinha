@@ -2,7 +2,7 @@
 // projeto.ts, abre e fecha as gavetas, arquiva as concluídas (C18) e abre o Registrar necessidade com o projeto. O
 // app.ts a redesenha a cada 5 s. Os testes de ponta a ponta (e2e/) a exercitam.
 import type { Id } from "../../../dominio/primitivos.ts";
-import type { MetricasMes } from "../../../metricas/periodo.ts";
+import type { MetricasMesDemanda } from "../../../metricas/periodo_demanda.ts";
 import type { IssueDoBoard } from "../../rotas/inicio.ts";
 import type { ListaDoProjeto } from "../../rotas/projeto.ts";
 import type { Parametros } from "../caminhos.ts";
@@ -60,7 +60,7 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
   const atual = mesDe(new Date());
   const [lista, [mes]] = await Promise.all([
     api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/issues?${filtro}`, { signal }),
-    api<[MetricasMes]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),
+    api<[MetricasMesDemanda]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),
   ]);
   // Com o seletor ou a confirmação abertos, o redesenho os fecharia nas mãos do Auditor: espera ele sair.
   if (document.activeElement?.matches("[data-projeto]") || main.querySelector("dialog[open]")) return;

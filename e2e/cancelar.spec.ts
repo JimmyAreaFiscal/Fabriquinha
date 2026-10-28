@@ -77,7 +77,12 @@ test("no projeto a cancelada sai do andamento e volta apagada; os cards de custo
      INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
        VALUES (1, 1, 'autonomo', '${crypto.randomUUID()}', 'sucesso', '${instante}', '${instante}');
      INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo)
-       VALUES (1, 'anthropic', 'claude-sonnet-5-5', 10, 4000, 500, 0, 0, 4);`,
+       VALUES (1, 'anthropic', 'claude-sonnet-5-5', 10, 4000, 500, 0, 0, 4);
+     INSERT INTO demanda VALUES ('I-91', 'loja', 'Demanda', 'problema', 'd', 'execucao', '${instante}', 'f', 's', 1, 'b-I-91');
+     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('I-91', 1, 'implementar', 'aberto', '${instante}');
+     INSERT INTO sessao VALUES ('s-91', 'I-91', 1, 'autonomo', 'conv-91');
+     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-91', 's-91', '${instante}', '${instante}', 0);
+     INSERT INTO uso_modelo_execucao VALUES ('x-91', 'anthropic', 'claude-sonnet-5-5', 4000, 500, 0, 0, 4);`,
   );
   await pagina.clock.setFixedTime(agora);
   await pagina.goto(`${fabriquinha.base}/projects/loja`);
