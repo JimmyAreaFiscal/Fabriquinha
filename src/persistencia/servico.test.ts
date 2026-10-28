@@ -20,7 +20,6 @@ import { registrarProjeto } from "./projetos.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import {
   alterarLimiteParalelismo,
-  autonomasEmAndamento,
   limiteParalelismo,
   configuracao,
   execucoesEmAndamento,
@@ -184,11 +183,8 @@ test("elegíveis: um ticket por issue, o mais antigo dela, da issue mais antiga 
   assert.ok(indice < cache);
   assert.deepEqual(ticketsElegiveis(banco), [indice, i2.desenho], "CA-3: da I-1 só o mais antigo");
   assert.deepEqual(ticketsElegiveis(banco, i2.issue), [i2.desenho], "com issue, só os dela");
-  assert.deepEqual(autonomasEmAndamento(banco), []);
 
   const execucao = iniciar(banco, i1.issue, indice, "autonomo");
-  assert.partialDeepStrictEqual(autonomasEmAndamento(banco), [{ execucao, ticket: indice, issue: i1.issue }]);
-  assert.match(String(autonomasEmAndamento(banco)[0]?.iniciadaEm), /^\d{4}-\d\d-\d\dT/);
   assert.deepEqual(ticketsElegiveis(banco), [i2.desenho], "CA-2: a I-1 está ocupada; a I-2 segue");
   assert.deepEqual(ticketsElegiveis(banco, i1.issue), []);
   comIssue(banco, i1.issue, "terminarExecucao", fabriquinha, (a, ctx) =>
@@ -197,7 +193,6 @@ test("elegíveis: um ticket por issue, o mais antigo dela, da issue mais antiga 
   comIssue(banco, i1.issue, "falharTicket", fabriquinha, (a) =>
     falharTicket(a, { ticket: indice, erro: "pi saiu" }, fabriquinha),
   );
-  assert.deepEqual(autonomasEmAndamento(banco), []);
   assert.deepEqual(ticketsElegiveis(banco), [i2.desenho], "o que falhou trava os seguintes da I-1 até concluir (C5)");
   banco.close();
 });

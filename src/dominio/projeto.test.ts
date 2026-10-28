@@ -18,6 +18,17 @@ test("Projeto mínimo válido ganha preparação e modelos vazios", () => {
   assert.deepEqual(Projeto.parse(valido), { ...valido, preparacao: [], modelos: {} });
 });
 
+test("o cadastro sem os campos do fluxo legado ganha o padrão que a tabela aceita", () => {
+  const { testes: _, fitness: __, ...semLegado } = valido;
+  assert.deepEqual(Projeto.parse(semLegado), {
+    ...semLegado,
+    preparacao: [],
+    testes: ["true"],
+    fitness: [{ nome: "legado", comando: "true", descricao: "coluna do fluxo legado" }],
+    modelos: {},
+  });
+});
+
 test("Projeto aceita preparação e modelo por etapa", () => {
   const completo = {
     ...valido,

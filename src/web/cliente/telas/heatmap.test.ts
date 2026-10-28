@@ -14,7 +14,6 @@ const projeto = (nome: string): ProjetoListado => ({
   sonar: { projectKey: nome },
   fitness: [],
   modelos: {},
-  issues: 0,
 });
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 

@@ -67,14 +67,26 @@ test("o link do produto é gravado, relido e apagado ao editar com o campo vazio
   banco.close();
 });
 
-test("efforts: gravado, relido, e volta a {} ao editar sem eles; valor fora dos níveis é recusado sem gravar", () => {
+test("o cadastro sem os campos do fluxo legado grava os padrões nas colunas NOT NULL; a edição não as toca", () => {
   const banco = novoBanco();
-  registrarProjeto(banco, { ...exemplo, efforts: { desenho: "high" } });
-  assert.deepEqual(projeto(banco, "fabriquinha")?.efforts, { desenho: "high" });
-  assert.throws(() => editarProjeto(banco, { ...exemplo, efforts: { desenho: "altissimo" } }), ZodError);
-  assert.deepEqual(projeto(banco, "fabriquinha")?.efforts, { desenho: "high" });
-  editarProjeto(banco, exemplo);
-  assert.deepEqual(projeto(banco, "fabriquinha")?.efforts, {});
+  const { testes: _, fitness: __, modelos: ___, ...semLegado } = exemplo;
+  registrarProjeto(banco, semLegado);
+  const colunas = () =>
+    banco
+      .prepare("SELECT testes, sonar_project_key, fitness, modelos, efforts FROM projeto WHERE nome = 'fabriquinha'")
+      .get();
+  const padrao = {
+    testes: '["true"]',
+    fitness: '[{"nome":"legado","comando":"true","descricao":"coluna do fluxo legado"}]',
+    modelos: "{}",
+    efforts: "{}",
+  };
+  assert.deepEqual({ ...colunas() }, { ...padrao, sonar_project_key: "Fabriquinha" });
+  // A chave do SonarQube é da configuração SDLC: editar o cadastro não a troca.
+  banco.prepare("UPDATE projeto SET sonar_project_key = 'da-sdlc' WHERE nome = 'fabriquinha'").run();
+  editarProjeto(banco, { ...semLegado, sonar: { projectKey: "outra" }, branchBase: "develop" });
+  assert.deepEqual({ ...colunas() }, { ...padrao, sonar_project_key: "da-sdlc" });
+  assert.equal(projeto(banco, "fabriquinha")?.branchBase, "develop");
   banco.close();
 });
 
@@ -89,7 +101,7 @@ test("registrarProjeto recusa nome que já existe, sem mexer no projeto", () => 
   banco.close();
 });
 
-test("editarProjeto substitui a configuração inteira, inclusive sem mudança", () => {
+test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
   assert.deepEqual(editarProjeto(banco, exemplo), exemplo);
@@ -99,10 +111,6 @@ test("editarProjeto substitui a configuração inteira, inclusive sem mudança",
     branchBase: "develop",
     hospedagem: "azure-devops" as const,
     preparacao: [],
-    testes: ["make test"],
-    sonar: { projectKey: "Outra" },
-    fitness: [{ nome: "f", comando: "make f", descricao: "d" }],
-    modelos: {},
   };
   editarProjeto(banco, editado);
   assert.deepEqual(projetos(banco), [{ ...editado, efforts: {} }]);
@@ -118,9 +126,9 @@ test("editarProjeto recusa projeto que não existe, sem criá-lo", () => {
 
 test("registrar e editar recusam o schema do F1 sem gravar nada", () => {
   const banco = novoBanco();
-  assert.throws(() => registrarProjeto(banco, { ...exemplo, testes: [] }), ZodError);
+  assert.throws(() => registrarProjeto(banco, { ...exemplo, repo: "relativo" }), ZodError);
   registrarProjeto(banco, exemplo);
-  assert.throws(() => editarProjeto(banco, { ...exemplo, testes: [] }), ZodError);
+  assert.throws(() => editarProjeto(banco, { ...exemplo, repo: "relativo" }), ZodError);
   assert.deepEqual(projetos(banco), [lido]);
   banco.close();
 });

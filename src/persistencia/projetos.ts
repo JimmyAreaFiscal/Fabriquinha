@@ -54,7 +54,10 @@ function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p
         `edite o projeto ${String(dono.nome)} em vez de cadastrar outro para o mesmo repositório`,
       );
     }
-    const { changes } = banco.prepare(sql).run({
+    const comando = banco.prepare(sql);
+    // A edição não toca as colunas legadas: os parâmetros que o `sql` não usa ficam de fora.
+    comando.setAllowUnknownNamedParameters(true);
+    const { changes } = comando.run({
       nome: p.nome,
       repo: p.repo,
       branch_base: p.branchBase,
@@ -86,14 +89,16 @@ export const registrarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto
     },
   );
 
-/** C19: substitui a configuração de um projeto que já existe; o nome é a chave e não muda. */
+/**
+ * C19: substitui o cadastro de um projeto que já existe; o nome é a chave e não muda. As colunas legadas e a chave do
+ * SonarQube (da configuração SDLC) ficam como estão.
+ */
 export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
   gravar(
     banco,
     entrada,
     `UPDATE projeto SET repo = $repo, branch_base = $branch_base, hospedagem = $hospedagem, preparacao = $preparacao,
-       testes = $testes, sonar_project_key = $sonar_project_key, fitness = $fitness, modelos = $modelos,
-       efforts = $efforts, link_produto = $link_produto
+       link_produto = $link_produto
      WHERE nome = $nome`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre-o na Configuração");
@@ -109,10 +114,6 @@ export function projeto(banco: DatabaseSync, nome: string): Projeto | undefined 
 export function projetos(banco: DatabaseSync): Projeto[] {
   return (banco.prepare("SELECT * FROM projeto ORDER BY nome").all() as unknown as Linha[]).map(deLinha);
 }
-
-/** Quantas issues o projeto tem, inclusive concluídas e arquivadas: o número ao lado do nome na Configuração. */
-export const issuesDoProjeto = (banco: DatabaseSync, nome: string): number =>
-  Number(banco.prepare("SELECT count(*) AS n FROM issue WHERE projeto = ?").get(nome)?.n);
 
 const DOS_TICKETS = "SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue WHERE i.projeto = $p";
 const DAS_EXECUCOES = `SELECT id FROM execucao WHERE ticket IN (${DOS_TICKETS})`;

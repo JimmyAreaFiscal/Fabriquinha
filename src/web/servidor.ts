@@ -196,7 +196,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
     if (confere(url.searchParams.get("token"))) {
       resposta.setHeader("Set-Cookie", `${COOKIE}=${token.toString()}; HttpOnly; SameSite=Strict; Path=/`);
     }
-    resposta.writeHead(303, { Location: "/home" }).end();
+    resposta.writeHead(303, { Location: "/demandas" }).end();
   }
 
   async function api(pedido: IncomingMessage, url: URL, resposta: ServerResponse, corpo: unknown): Promise<void> {

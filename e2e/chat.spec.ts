@@ -1,27 +1,22 @@
-// Chat (F7 §4.4; F4 §5.4, §6.4 a §6.8) com o pi falso: o campo Mensagem, os diálogos e as perguntas do agente.
+// Chat (F7 §4.4; F4 §5.4) da sessão de ticket da demanda com o pi falso: o campo Mensagem, os diálogos e as perguntas do
+// agente. A sessão é a do planejamento da I-230, aberta pelo Executar agora (demandas-apoio.ts).
 import type { Page } from "@playwright/test";
 import { expect, type Fabriquinha, projeto, test } from "./apoio.ts";
+import { abrirOChatDoPlanejamento, semearPlanejamentoComPi } from "./demandas-apoio.ts";
 
-/** A sessão de registro de uma necessidade nova, aberta no chat: aguarda o Auditor, que ainda não escreveu nada. */
-async function abrirRegistro(pagina: Page, { base, raiz }: Fabriquinha): Promise<string> {
-  projeto(raiz);
-  const { sessao } = await pagina.evaluate(async () => {
-    const r = await fetch("/api/registros", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projeto: "loja", descricao: "Exportar pedidos em CSV" }),
-    });
-    return (await r.json()) as { sessao: string };
-  });
-  await pagina.goto(`${base}/sessions/${sessao}`);
-  return sessao;
+/** O chat do planejamento da I-230, que respondeu ao prompt e aguarda o Auditor; devolve a sessão. */
+async function abrirConversa(pagina: Page, fabriquinha: Fabriquinha): Promise<string> {
+  projeto(fabriquinha.raiz);
+  semearPlanejamentoComPi(fabriquinha.raiz, "Exportar pedidos em CSV");
+  await abrirOChatDoPlanejamento(pagina, fabriquinha);
+  return decodeURIComponent(new URL(pagina.url()).pathname.slice("/sessions/".length));
 }
 
 test("o campo Mensagem: só espaços não envia, Shift+Enter quebra a linha e o texto do agente é Markdown seguro", async ({
   pagina,
   fabriquinha,
 }) => {
-  await abrirRegistro(pagina, fabriquinha);
+  await abrirConversa(pagina, fabriquinha);
   const conversa = pagina.locator("[data-conversa]");
   const mensagem = pagina.locator("form[data-envio]").getByRole("textbox", { name: "Mensagem" });
   await expect(conversa.locator(".msg")).toHaveText(["pronto"]);
@@ -60,7 +55,7 @@ test("diálogo confirm cancelado; o mesmo diálogo respondido em outra aba avisa
   pagina,
   fabriquinha,
 }) => {
-  const sessao = await abrirRegistro(pagina, fabriquinha);
+  const sessao = await abrirConversa(pagina, fabriquinha);
   const conversa = pagina.locator("[data-conversa]");
   const mensagem = pagina.getByRole("textbox", { name: "Mensagem" });
 
@@ -100,9 +95,9 @@ test("diálogo confirm cancelado; o mesmo diálogo respondido em outra aba avisa
   await expect(segunda).toHaveURL(`${fabriquinha.base}/sessions/${sessao}`);
 });
 
-/** Abre no chat do registro o `select` da `perguntar` (única ou múltipla) e devolve o diálogo e a última resposta do agente. */
+/** Abre no chat do planejamento o `select` da `perguntar` (única ou múltipla) e devolve o diálogo e a última resposta do agente. */
 async function perguntarNoChat(pagina: Page, fabriquinha: Fabriquinha, tipo: "perguntar" | "multipla") {
-  await abrirRegistro(pagina, fabriquinha);
+  await abrirConversa(pagina, fabriquinha);
   await pagina.getByRole("textbox", { name: "Mensagem" }).fill(`pergunte ${tipo}`);
   await pagina.getByRole("textbox", { name: "Mensagem" }).press("Enter");
   const dialogo = pagina.locator("form.dialogo-ext");
@@ -179,13 +174,4 @@ test("perguntar de múltipla escolha: marcar, «Outros» e Responder enviam a li
   await expect(dialogo).toHaveCount(0);
   // O Markdown da resposta tira as barras do JSON; o que chegou ao pi é a lista dos dois textos.
   await expect(resposta).toContainText('["Maior desconto primeiro","e desempate pelo código"]');
-});
-
-test("+ Anexar histórico sem outra sessão: a caixa avisa e nenhuma etiqueta nasce", async ({ pagina, fabriquinha }) => {
-  await abrirRegistro(pagina, fabriquinha);
-  const envio = pagina.locator("form[data-envio]");
-  await envio.getByRole("button", { name: "+ Anexar histórico" }).click();
-  const caixa = pagina.getByRole("dialog", { name: "Anexar histórico" });
-  await expect(caixa).toContainText("Nenhuma outra sessão para anexar.");
-  await expect(envio.locator(".anexo")).toHaveCount(0);
 });

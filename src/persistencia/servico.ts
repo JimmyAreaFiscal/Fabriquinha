@@ -88,23 +88,6 @@ export function ticketsElegiveis(banco: DatabaseSync, issue?: Id): Id[] {
     .map((l) => Number(l.id));
 }
 
-/** As execuções autônomas em andamento (uma por issue), da mais antiga à mais nova, com o ticket, a issue e quando começaram. */
-export const autonomasEmAndamento = (
-  banco: DatabaseSync,
-): { execucao: Id; ticket: Id; issue: Id; iniciadaEm: string }[] =>
-  banco
-    .prepare(
-      `SELECT e.id, e.ticket, t.issue, e.iniciada_em FROM execucao e JOIN ticket t ON t.id = e.ticket
-       WHERE e.modo = 'autonomo' AND e.resultado = 'em_andamento' ORDER BY e.id`,
-    )
-    .all()
-    .map((l) => ({
-      execucao: Number(l.id),
-      ticket: Number(l.ticket),
-      issue: Number(l.issue),
-      iniciadaEm: String(l.iniciada_em),
-    }));
-
 /** F4 §7: as execuções em andamento, com a issue e o grupo de processos do pi. */
 export const execucoesEmAndamento = (banco: DatabaseSync): { id: Id; issue: Id; pgid: number | null }[] =>
   banco

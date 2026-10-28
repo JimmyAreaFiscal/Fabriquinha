@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   agendador,
-  auditoria,
   confirmacaoDeRemover,
   errosDoZod,
   type EstadoDaConfiguracao,
   formularioDeProjeto,
   menu,
+  modeloDasAvaliacoes,
   NOVO,
   pagina,
   type ProjetoListado,
@@ -25,11 +25,10 @@ const LOJA: ProjetoListado = {
   branchBase: "main",
   hospedagem: "github",
   preparacao: ["npm ci"],
-  testes: ["npm test"],
+  testes: [],
   sonar: { projectKey: "loja" },
-  fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura <mínima>." }],
-  modelos: { desenho: { provedor: "anthropic", modelo: "claude-opus-5-5" } },
-  issues: 1,
+  fitness: [],
+  modelos: {},
 };
 
 const MODELOS = [
@@ -42,7 +41,7 @@ test("selecao: o item do menu pelo endereço", () => {
   assert.deepEqual(selecao("?projeto=loja%20x"), { tipo: "projeto", nome: "loja x" });
   assert.deepEqual(selecao("?projeto="), { tipo: "agendador" });
   assert.deepEqual(selecao("?novo"), { tipo: "novo" });
-  assert.deepEqual(selecao("?auditoria"), { tipo: "auditoria" });
+  assert.deepEqual(selecao("?avaliacoes"), { tipo: "avaliacoes" });
 });
 
 test("errosDoZod: as mensagens por caminho do prettifyError; sem caminho, na raiz", () => {
@@ -74,12 +73,13 @@ test("menu: Agendador com a marca, um link por projeto com a hospedagem e o novo
 
   const desligado = menu({ ...ligado, agendadorAtivo: false }, [], { tipo: "agendador" });
   assert.match(desligado, /<a href="\/config" aria-current="page">Agendador <span class="pill pill-neutro">desligado/);
-  assert.match(html, /<a href="\/config\?auditoria">Auditoria<\/a>/);
+  assert.match(html, /<a href="\/config\?avaliacoes">Avaliações<\/a>/);
+  assert.doesNotMatch(html, /Auditoria/);
   assert.match(
-    menu(ligado, [], { tipo: "auditoria" }),
-    /<a href="\/config\?auditoria" aria-current="page">Auditoria<\/a>/,
+    menu(ligado, [], { tipo: "avaliacoes" }),
+    /<a href="\/config\?avaliacoes" aria-current="page">Avaliações<\/a>/,
   );
-  assert.doesNotMatch(menu(ligado, [], { tipo: "auditoria" }), /<a href="\/config" aria-current/);
+  assert.doesNotMatch(menu(ligado, [], { tipo: "avaliacoes" }), /<a href="\/config" aria-current/);
   assert.match(menu(ligado, [], { tipo: "novo" }), /<a class="novo" href="\/config\?novo" aria-current="page">/);
 });
 
@@ -90,14 +90,10 @@ const ESTADO: EstadoDaConfiguracao = {
   ociosidadeMin: 30,
   modeloAuditoria: null,
   proximaBusca: "2026-10-12T17:35:00.000Z",
-  emAndamento: [
-    { execucao: 231, ticket: 112, issue: 38, iniciadaEm: "2026-10-12T17:24:00.000Z" },
-    { execucao: 232, ticket: 120, issue: 40, iniciadaEm: "2026-10-12T17:25:00.000Z" },
-  ],
 };
 
-test("agendador: interruptor, os três tempos, a próxima busca no fuso local e a execução com há quanto tempo", () => {
-  const html = agendador(ESTADO, new Map(), new Date("2026-10-12T17:30:30.000Z"));
+test("agendador: interruptor, os três tempos e a próxima busca no fuso local; sem painel de execuções autônomas (CA-13)", () => {
+  const html = agendador(ESTADO, new Map());
   assert.match(html, /<input type="checkbox" name="agendadorAtivo" checked>/);
   assert.match(
     html,
@@ -105,33 +101,26 @@ test("agendador: interruptor, os três tempos, a próxima busca no fuso local e 
   );
   assert.match(html, /name="timeoutMin" value="120" min="10"/);
   assert.match(html, /name="ociosidadeMin" value="30" min="5"/);
-  assert.match(html, /Próxima busca às <b>14:35<\/b>/);
-  assert.match(html, /<span>Executando <b>E-231<\/b> · I-38 · T-112 · há 6\u00a0min<\/span>/);
-  assert.match(html, /<span>Executando <b>E-232<\/b> · I-40 · T-120 · há 5\u00a0min<\/span>/);
-  assert.doesNotMatch(html, /Nenhuma execução autônoma/);
-
-  const em = (agora: string) => agendador(ESTADO, new Map(), new Date(agora));
-  assert.match(em("2026-10-12T17:24:59.000Z"), /há menos\u00a0de\u00a01\u00a0min/);
-  assert.match(em("2026-10-12T19:29:00.000Z"), /há 2\u00a0h\u00a05\u00a0min/);
+  assert.match(html, /<div class="status-ag"><span>Próxima busca às <b>14:35<\/b><\/span><\/div>/);
+  assert.doesNotMatch(html, /Executando|execução autônoma|I-\d|T-\d/);
 
   const parado = agendador(
-    { ...ESTADO, agendadorAtivo: false, proximaBusca: null, emAndamento: [] },
+    { ...ESTADO, agendadorAtivo: false, proximaBusca: null },
     errosDoZod("✖ Pequeno demais: esperava que o número fosse >= 1\n  → at intervaloMin"),
-    new Date(),
   );
   assert.match(parado, /<input type="checkbox" name="agendadorAtivo">/);
   assert.match(parado, /Desligado: <b>não procura tickets<\/b>/);
-  assert.match(parado, /Nenhuma execução autônoma em andamento/);
   assert.match(
     parado,
     /<div class="num-campo erro">.*aria-invalid="true" aria-describedby="campo-intervaloMin-erro"> min<\/span><span class="msg-erro" id="campo-intervaloMin-erro">Pequeno demais: esperava que o número fosse &#62;= 1<\/span><\/div>/,
   );
 });
 
-test("auditoria: o seletor do modelo em padrão do pi, com o escolhido, com o gravado fora da lista e com o erro", () => {
-  const sem = auditoria(ESTADO, MODELOS, new Map());
-  assert.match(sem, /<h2>Auditoria<\/h2>/);
-  assert.match(sem, /<label for="campo-modeloAuditoria">Modelo da Auditoria<\/label>/);
+test("avaliações: o seletor do modelo em padrão do pi, com o escolhido, com o gravado fora da lista e com o erro", () => {
+  const sem = modeloDasAvaliacoes(ESTADO, MODELOS, new Map());
+  assert.match(sem, /<h2>Avaliações<\/h2><form class="form" data-avaliacoes novalidate>/);
+  assert.match(sem, /<label for="campo-modeloAuditoria">Modelo das avaliações<\/label>/);
+  assert.match(sem, /vale para as avaliações iniciadas em Avaliações/);
   assert.match(
     sem,
     /<select id="campo-modeloAuditoria" name="modeloAuditoria" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">/,
@@ -139,14 +128,18 @@ test("auditoria: o seletor do modelo em padrão do pi, com o escolhido, com o gr
   assert.match(sem, /<button type="submit" class="btn btn-primario">Salvar<\/button>/);
 
   const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
-  const escolhido = auditoria({ ...ESTADO, modeloAuditoria: opus }, MODELOS, new Map());
+  const escolhido = modeloDasAvaliacoes({ ...ESTADO, modeloAuditoria: opus }, MODELOS, new Map());
   assert.match(escolhido, /<select id="campo-modeloAuditoria" name="modeloAuditoria"><option value="">/);
   assert.match(escolhido, /<option value="anthropic\/claude-opus-5-5" selected>/);
 
-  const fora = auditoria({ ...ESTADO, modeloAuditoria: { provedor: "llamacpp", modelo: "qwen" } }, MODELOS, new Map());
+  const fora = modeloDasAvaliacoes(
+    { ...ESTADO, modeloAuditoria: { provedor: "llamacpp", modelo: "qwen" } },
+    MODELOS,
+    new Map(),
+  );
   assert.match(fora, /<option value="llamacpp\/qwen" selected>llamacpp \/ qwen<\/option><\/select>/);
 
-  const erro = auditoria(
+  const erro = modeloDasAvaliacoes(
     ESTADO,
     MODELOS,
     errosDoZod("✖ o modelo inexistente/xyz não existe no pi\n  → at modeloAuditoria"),
@@ -158,82 +151,42 @@ test("auditoria: o seletor do modelo em padrão do pi, com o escolhido, com o gr
   );
 });
 
-test("projeto salvo: nome só leitura, hospedagem, as listas, as fitness e o modelo de cada etapa", () => {
-  const html = formularioDeProjeto(LOJA, { issues: 1, modelos: MODELOS, erros: new Map() });
-  assert.match(html, /^<h2>loja <span class="muted contagem">1 issue<\/span><button [^>]*data-remover-projeto/);
+test("projeto salvo: nome só leitura, hospedagem e preparação; sem testes, SonarQube, fitness, modelos e efforts (CA-13)", () => {
+  const html = formularioDeProjeto(LOJA, { novo: false, erros: new Map() });
+  assert.match(html, /^<h2>loja<button [^>]*data-remover-projeto/);
   assert.match(html, /aria-label="Remover o projeto loja">Remover<\/button><\/h2>/);
   assert.match(html, /<input id="campo-nome" name="nome" value="loja" readonly>/);
   assert.match(html, /<input id="campo-hospedagem" value="GitHub" readonly>/);
   assert.match(
     html,
-    /<input class="mono" value="npm ci" placeholder="npm ci" aria-label="Preparação da worktree: comando 1">/,
+    /<h3>Preparação<\/h3>.*<input class="mono" value="npm ci" placeholder="npm ci" aria-label="Preparação da worktree: comando 1">/,
   );
-  assert.match(html, /<input class="mono" value="npm test" placeholder="npm test" aria-label="Testes: comando 1">/);
-  assert.match(html, /data-campo="descricao" value="Cobertura &#60;mínima&#62;."/);
+  assert.doesNotMatch(html, /[Tt]estes|SonarQube|sonar|[Ff]itness|[Mm]odelo|[Ee]ffort|issue/);
   assert.match(
     html,
-    /<select id="campo-modelos.desenho" name="modelos.desenho"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5" selected>anthropic \/ claude-opus-5-5<\/option><option value="anthropic\/claude-sonnet-5-5">/,
-  );
-  assert.match(
-    html,
-    /<select id="campo-modelos.revisao" name="modelos.revisao" class="padrao"><option value="">padrão/,
-  );
-  assert.match(html, /<label for="campo-modelos.sessao">Sessão em aberto<\/label>/);
-  assert.match(
-    html,
-    /<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.<\/span><button/,
+    /<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch e o remoto.<\/span><button/,
   );
   assert.match(html, /<button type="submit" class="btn btn-primario">Salvar projeto<\/button>/);
-  assert.match(formularioDeProjeto(LOJA, { issues: 11, modelos: MODELOS, erros: new Map() }), /11 issues/);
 });
 
-test("effort por etapa: abaixo do modelo, seis seletores em padrão do pi, as oito opções, o gravado e o erro (CA-1, CA-2, CA-3, CA-8)", () => {
-  const vazio = formularioDeProjeto({ ...LOJA, efforts: undefined }, { issues: 1, modelos: MODELOS, erros: new Map() });
-  assert.match(
-    vazio,
-    /Modelo por etapa[\s\S]*<h3>Effort por etapa <span class="nota">· o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi<\/span><\/h3><div class="modelos-grade">/,
-  );
-  assert.equal(
-    vazio.match(/<select id="campo-efforts\.\w+" name="efforts\.\w+" aria-label="Effort de [^"]+" class="padrao">/g)
-      ?.length,
-    6,
-  );
-  assert.match(vazio, /<label for="campo-efforts.sessao">Sessão em aberto<\/label>/);
-  assert.match(vazio, /aria-label="Effort de Sessão em aberto"/);
-  assert.match(
-    vazio,
-    /name="efforts.desenho" aria-label="Effort de Desenho" class="padrao"><option value="">padrão do pi<\/option><option value="off">off<\/option><option value="minimal">minimal<\/option><option value="low">low<\/option><option value="medium">medium<\/option><option value="high">high<\/option><option value="xhigh">xhigh<\/option><option value="max">max<\/option><\/select>/,
-  );
-
-  const gravado = formularioDeProjeto(
-    { ...LOJA, efforts: { desenho: "high" } },
-    { issues: 1, modelos: MODELOS, erros: errosDoZod("✖ Entrada inválida\n  → at efforts.desenho") },
-  );
-  assert.match(
-    gravado,
-    /<div class="celula erro"><select id="campo-efforts.desenho" name="efforts.desenho" aria-label="Effort de Desenho" aria-invalid="true" aria-describedby="campo-efforts.desenho-erro">.*<option value="high" selected>high<\/option>.*<\/select><span class="msg-erro" id="campo-efforts.desenho-erro">Entrada inválida<\/span>/,
-  );
-  assert.match(gravado, /name="efforts.revisao" aria-label="Effort de Revisão" class="padrao">/);
-});
-
-test("link do produto: no grupo Repositório depois do SonarQube, com a ajuda, o valor e o erro do campo", () => {
+test("link do produto: no grupo Repositório ao lado da hospedagem, com a ajuda, o valor e o erro do campo", () => {
   const html = formularioDeProjeto(
     { ...LOJA, linkProduto: "https://demo.exemplo.com" },
-    { issues: 1, modelos: MODELOS, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at linkProduto") },
+    { novo: false, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at linkProduto") },
   );
   assert.match(
     html,
-    /id="campo-sonar.projectKey".*<div class="campo largo erro"><label for="campo-linkProduto">Link do produto<\/label><input class="mono" id="campo-linkProduto" name="linkProduto" value="https:\/\/demo.exemplo.com" placeholder="https:\/\/produto.exemplo.com" aria-invalid="true" aria-describedby="campo-linkProduto-erro"><span class="msg-erro" id="campo-linkProduto-erro">Informe um link http\(s\) válido<\/span><span class="ajuda">opcional; endereço http\(s\) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa<\/span>/,
+    /id="campo-hospedagem".*<div class="campo erro"><label for="campo-linkProduto">Link do produto<\/label><input class="mono" id="campo-linkProduto" name="linkProduto" value="https:\/\/demo.exemplo.com" placeholder="https:\/\/produto.exemplo.com" aria-invalid="true" aria-describedby="campo-linkProduto-erro"><span class="msg-erro" id="campo-linkProduto-erro">Informe um link http\(s\) válido<\/span><span class="ajuda">opcional; endereço http\(s\) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa<\/span>/,
   );
-  assert.match(formularioDeProjeto(NOVO, { modelos: [], erros: new Map() }), /name="linkProduto" value=""/);
+  assert.match(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /name="linkProduto" value=""/);
 });
 
 test("o bloco dos usuários simulados só existe no projeto salvo, depois do formulário", () => {
   assert.match(
-    formularioDeProjeto(LOJA, { issues: 1, modelos: MODELOS, erros: new Map() }),
+    formularioDeProjeto(LOJA, { novo: false, erros: new Map() }),
     /<\/form><section class="usuarios-simulados" data-usuarios-simulados [^>]*><\/section>$/,
   );
-  assert.doesNotMatch(formularioDeProjeto(NOVO, { modelos: MODELOS, erros: new Map() }), /data-usuarios-simulados/);
+  assert.doesNotMatch(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /data-usuarios-simulados/);
 });
 
 const VAZIO = { rascunho: { nome: "", descricao: "" }, erros: new Map(), falhasDeAnexo: new Map<number, string>() };
@@ -301,36 +254,24 @@ test("usuários simulados: o erro de cada campo fica abaixo dele, a recusa do se
 });
 
 test("o botão Remover só existe no projeto salvo", () => {
-  assert.doesNotMatch(formularioDeProjeto(NOVO, { modelos: MODELOS, erros: new Map() }), /data-remover-projeto/);
+  assert.doesNotMatch(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /data-remover-projeto/);
 });
 
 test("formularioDeProjeto liga à configuração SDLC fora do h2, só no projeto salvo", () => {
-  const salvo = formularioDeProjeto(LOJA, { issues: 1, modelos: MODELOS, erros: new Map() });
+  const salvo = formularioDeProjeto(LOJA, { novo: false, erros: new Map() });
   assert.match(
     salvo,
     /<\/h2><p class="link-sdlc"><a class="link" href="\/projects\/loja\/sdlc">Configuração SDLC do projeto<\/a>/,
   );
-  assert.doesNotMatch(formularioDeProjeto(NOVO, { modelos: [], erros: new Map() }), /sdlc/);
+  assert.doesNotMatch(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /sdlc/);
 });
 
-test("confirmacaoDeRemover: o nome escapado, o plural das issues, Cancelar e Remover projeto", () => {
-  const um = confirmacaoDeRemover("<demo>", 1);
-  assert.match(um, /<h2 id="titulo-remover">Remover o projeto &#60;demo&#62;<\/h2>/);
-  assert.match(um, /O projeto <strong>&#60;demo&#62;<\/strong> e 1 issue serão apagados/);
-  assert.match(um, /<button class="btn">Cancelar<\/button>/);
-  assert.match(um, /data-confirmar-remover>Remover projeto<\/button>/);
-  assert.match(confirmacaoDeRemover("demo", 4), /e 4 issues serão apagados/);
-});
-
-test("o modelo gravado que o pi deixou de listar continua no seletor, escolhido", () => {
-  const html = formularioDeProjeto(
-    { ...LOJA, modelos: { desenho: { provedor: "llamacpp", modelo: "qwen" } } },
-    { issues: 0, modelos: MODELOS, erros: new Map() },
-  );
-  assert.match(
-    html,
-    /claude-sonnet-5-5<\/option><option value="llamacpp\/qwen" selected>llamacpp \/ qwen<\/option><\/select>/,
-  );
+test("confirmacaoDeRemover: o nome escapado, o que sai junto, Cancelar e Remover projeto", () => {
+  const html = confirmacaoDeRemover("<demo>");
+  assert.match(html, /<h2 id="titulo-remover">Remover o projeto &#60;demo&#62;<\/h2>/);
+  assert.match(html, /O projeto <strong>&#60;demo&#62;<\/strong> será apagado com as demandas, em qualquer fase,/);
+  assert.match(html, /<button class="btn">Cancelar<\/button>/);
+  assert.match(html, /data-confirmar-remover>Remover projeto<\/button>/);
 });
 
 test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo e quantos no rodapé", () => {
@@ -338,15 +279,10 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
     [
       "✖ use letras minúsculas\n  → at nome",
       "✖ caminho absoluto\n  → at repo",
-      "✖ Pequeno demais\n  → at testes",
       "✖ Pequeno demais\n  → at preparacao[0]",
-      "✖ nome de fitness function repetido\n  → at fitness",
-      "✖ Pequeno demais\n  → at fitness[0].comando",
-      "✖ o modelo x/y não existe no pi\n  → at modelos.revisao",
-      "✖ Texto inválido\n  → at modelos.desenho.provedor",
     ].join("\n"),
   );
-  const html = formularioDeProjeto({ ...NOVO, preparacao: [""] }, { modelos: MODELOS, erros });
+  const html = formularioDeProjeto({ ...NOVO, preparacao: [""] }, { novo: true, erros });
   assert.match(html, /^<h2>Novo projeto<\/h2>/);
   assert.match(
     html,
@@ -356,41 +292,27 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
   assert.match(html, /<input id="campo-hospedagem" value="deduzida do remoto ao salvar" readonly>/);
   assert.match(
     html,
-    /<div class="campo erro" data-lista="testes">.*<span class="msg-erro" id="campo-testes-erro">Pequeno demais<\/span><button type="button" class="link" data-adicionar="testes">/,
-  );
-  assert.match(
-    html,
     /<div class="item-lista erro"><input class="mono" value="" placeholder="npm ci" aria-label="Preparação da worktree: comando 1" aria-invalid="true" aria-describedby="campo-preparacao\[0\]-erro">/,
   );
   assert.match(
     html,
-    /<div class="lista erro">.*<span class="msg-erro" id="campo-fitness-erro">nome de fitness function repetido<\/span><button type="button" class="link" data-adicionar="fitness">/,
-  );
-  assert.match(html, /<div class="celula erro"><input class="mono" data-campo="comando"/);
-  assert.match(
-    html,
-    /<div class="celula erro"><select id="campo-modelos.revisao" name="modelos.revisao" class="padrao" aria-invalid="true"/,
-  );
-  assert.match(html, /<span class="msg-erro" id="campo-modelos.desenho-erro">Texto inválido<\/span>/);
-  assert.match(
-    html,
-    /<span class="msg-erro">8 campos com erro<\/span><button type="button" class="btn" data-cancelar>Cancelar<\/button><button type="submit" class="btn btn-primario">Cadastrar projeto/,
+    /<span class="msg-erro">3 campos com erro<\/span><button type="button" class="btn" data-cancelar>Cancelar<\/button><button type="submit" class="btn btn-primario">Cadastrar projeto/,
   );
   assert.match(
-    formularioDeProjeto(NOVO, { modelos: [], erros: errosDoZod("✖ caminho absoluto\n  → at repo") }),
+    formularioDeProjeto(NOVO, { novo: true, erros: errosDoZod("✖ caminho absoluto\n  → at repo") }),
     /<span class="msg-erro">1 campo com erro<\/span>/,
   );
 });
 
 test("a falha que não é de campo (F5, C19) fica no rodapé, junto da nota e da contagem, que ficam", () => {
   const html = formularioDeProjeto(NOVO, {
-    modelos: [],
+    novo: true,
     erros: new Map([["nome", ["obrigatório"]]]),
     falha: "o gh não está autenticado <x>",
   });
   assert.match(
     html,
-    /<div class="rodape-form"><span class="msg-erro falha" role="alert">o gh não está autenticado &#60;x&#62;<\/span><span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.<\/span><span class="msg-erro">1 campo com erro<\/span><button/,
+    /<div class="rodape-form"><span class="msg-erro falha" role="alert">o gh não está autenticado &#60;x&#62;<\/span><span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch e o remoto.<\/span><span class="msg-erro">1 campo com erro<\/span><button/,
   );
 });
 
