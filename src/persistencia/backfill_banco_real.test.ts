@@ -24,9 +24,9 @@ test("CA-14: backfill sobre a cópia do banco real", { skip: origem === undefine
   })();
   try {
     const issues = banco
-      .prepare("SELECT 'I-' || id AS id FROM issue ORDER BY id")
+      .prepare("SELECT id FROM issue ORDER BY id")
       .all()
-      .map((l) => l.id as string);
+      .map((l) => `I-${String(l.id)}`);
     // Issue com PR do legado ou execução ativa recusa a migração inteira: a prova então é a recusa citando cada uma.
     let relatorio: ReturnType<typeof backfillDemandas> | undefined;
     let recusa: string | undefined;
