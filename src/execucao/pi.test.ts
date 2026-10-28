@@ -174,6 +174,15 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   assert.deepEqual(com.slice(4, 9), ["--session-id", sessao, "--provider", "llamacpp", "--model"]);
   assert.deepEqual(com.slice(9, 11), ["qwen3-coder-30b", "-e"]);
   assert.equal(com.length, args.length + 4);
+  // Extensões extras entram depois da guarda, antes de `--exclude-tools`.
+  const extra = argumentosDaAuditoria("/r", sessao, null, ["achado.ts"]);
+  assert.deepEqual(extra.slice(6, 10), [
+    "-e",
+    `${PACOTE}/extensions/guarda.ts`,
+    "-e",
+    `${PACOTE}/extensions/achado.ts`,
+  ]);
+  assert.equal(extra.length, args.length + 2);
   process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdada do serviço
   process.env.GH_TOKEN = "segredo";
   try {
