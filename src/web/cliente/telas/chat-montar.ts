@@ -107,6 +107,11 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       anexos: etiquetasDeAnexo(anexos),
       propostas: propostasDoChat(cabecalho),
       aoEnviar: enviar,
+      ...(daDemanda(cabecalho) && {
+        aoVazio: () => {
+          avisar("escreva a mensagem");
+        },
+      }),
     });
     // As etiquetas do formulário de retomada (HTML pronto de chat.ts) ficam por nossa conta; as do compositor, do React.
     const daRetomada = areaDeEnvio.querySelector<HTMLElement>("[data-retomar] [data-anexos]");

@@ -115,6 +115,7 @@ test("o planejamento pergunta, o Auditor responde no chat e o agente segue; link
   // CA-9: vazio não entra na conversa.
   await envio.fill("   ");
   await envio.press("Enter");
+  await expect(pagina.locator("[data-aviso]")).toHaveText("escreva a mensagem");
   await expect(conversa.locator(".msg.voce")).toHaveCount(0);
   await envio.fill("eco: então a validade vale");
   await envio.press("Enter");
