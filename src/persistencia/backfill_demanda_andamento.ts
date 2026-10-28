@@ -20,9 +20,11 @@ const DESTINOS = {
   desenvolvimento: { demanda: "execucao", rodada: "desenvolvimento", enviada: 1 },
   revisao: { demanda: "execucao", rodada: "revisao", enviada: 1 },
   encerramento: { demanda: "execucao", rodada: "encerramento", enviada: 1 },
+  aprovacao_pr: { demanda: "execucao", rodada: "aprovacao_pull_request", enviada: 1 },
+  ajuste_pr: { demanda: "execucao", rodada: "sessao", enviada: 1 },
 } as const satisfies Record<string, Destino>;
 
-/** Onde a issue em andamento cai no modelo novo; só vale para fase que `recusarBloqueadas` deixou passar. */
+/** Onde a issue em andamento cai no modelo novo; vale para toda fase de issue em andamento. */
 export const destinoDe = (fase: string): Destino => DESTINOS[fase as keyof typeof DESTINOS];
 
 const EM_ANDAMENTO =
@@ -30,21 +32,18 @@ const EM_ANDAMENTO =
 
 interface Bloqueio {
   n: number;
-  fase: string;
-  pr: number;
   tickets: string | null;
   execucoes: string | null;
 }
 
 /**
- * Tudo ou nada: reúne as issues em andamento sem demanda que não migram (PR do fluxo legado, ticket ou execução ativa)
+ * Tudo ou nada: reúne as issues em andamento sem demanda que não migram (ticket ou execução ativa)
  * e lança um só erro citando cada uma. O ticket de registro ou desenho já enviado espera o Auditor e não conta como ativo.
  */
 export function recusarBloqueadas(banco: DatabaseSync): void {
   const bloqueios = banco
     .prepare(
-      `SELECT i.id AS n, i.fase,
-              EXISTS (SELECT 1 FROM evidencia e JOIN ticket t ON t.id = e.ticket WHERE t.issue = i.id AND e.tipo = 'pr_aberto') AS pr,
+      `SELECT i.id AS n,
               (SELECT group_concat('T-' || t.id, ', ') FROM ticket t
                 WHERE t.issue = i.id AND t.status = 'em_execucao' AND t.enviado_em IS NULL) AS tickets,
               (SELECT group_concat('E-' || e.id, ', ') FROM execucao e JOIN ticket t ON t.id = e.ticket
@@ -52,16 +51,13 @@ export function recusarBloqueadas(banco: DatabaseSync): void {
        FROM issue i WHERE ${EM_ANDAMENTO} ORDER BY i.id`,
     )
     .all() as unknown as Bloqueio[];
-  const motivos = bloqueios.flatMap(({ n, fase, pr, tickets, execucoes }) => [
-    ...(pr === 1 || fase === "aprovacao_pr" || fase === "ajuste_pr"
-      ? [`I-${String(n)} (${fase}) tem PR no fluxo legado: conclua o PR no fluxo legado antes do cutover`]
-      : []),
-    ...(tickets !== null || execucoes !== null
+  const motivos = bloqueios.flatMap(({ n, tickets, execucoes }) =>
+    tickets !== null || execucoes !== null
       ? [
           `I-${String(n)} tem execução ativa (ticket ${tickets ?? "-"}, execução ${execucoes ?? "-"}): pare o serviço ou espere as execuções terminarem`,
         ]
-      : []),
-  ]);
+      : [],
+  );
   if (motivos.length > 0)
     throw new ErroDeRegra(
       `migração recusada, nada foi gravado: ${motivos.join("; ")}`,

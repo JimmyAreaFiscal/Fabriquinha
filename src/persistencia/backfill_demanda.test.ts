@@ -374,6 +374,7 @@ test("CA-8, CA-11: dependências nos dois sentidos, toda issue migrada e contage
     [5, 6, 7, 8, 9, 10].map((n, i) => ({
       issue: `I-${String(n)}`,
       fase: ["desenvolvimento", "registro", "desenho", "aprovacao_desenho", "revisao", "encerramento"][i],
+      pr: false,
     })),
   );
   assert.equal(r.antes.demanda, 0);

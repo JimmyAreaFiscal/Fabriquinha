@@ -67,3 +67,12 @@ test("branch da rodada de outro dono é recusada", async () => {
   git(c.repo, "branch", "fabriquinha/I-7-1");
   await assert.rejects(migrarGitEmVoo(c.raiz, c.projeto, [{ issue: "I-7" }]), /não pertence à rodada 1 de I-7/);
 });
+
+test("com PR aberto a branch da issue fica na cabeça, só troca de dono", async () => {
+  const { c, topo } = legada();
+  const [r] = await migrarGitEmVoo(c.raiz, c.projeto, [{ issue: "I-7", pr: true }]);
+  assert.deepEqual(r, { issue: "I-7", criouRodada: true, moveuDemanda: false, removeuWorktree: true });
+  assert.equal(git(c.repo, "rev-parse", "fabriquinha/I-7"), topo);
+  assert.equal(git(c.repo, "rev-parse", "fabriquinha/I-7-1"), topo);
+  assert.equal(marca(c.repo, "fabriquinha/I-7"), `demanda:${caminhoDaWorktreeDemanda(c.raiz, "loja", "I-7")}`);
+});

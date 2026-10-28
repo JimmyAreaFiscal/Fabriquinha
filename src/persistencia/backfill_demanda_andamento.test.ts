@@ -161,31 +161,65 @@ const recusa = (b: DatabaseSync, ...trechos: RegExp[]) => {
   assert.equal(b.isTransaction, false);
 };
 
-for (const [nome, sql] of [
-  ["aprovacao_pr", "UPDATE issue SET fase = 'aprovacao_pr' WHERE id = 9"],
-  ["ajuste_pr", "UPDATE issue SET fase = 'ajuste_pr' WHERE id = 9"],
-  [
-    "PR aberto em outra fase",
-    "INSERT INTO evidencia (ticket, tipo, produtor, dados, em) VALUES (20, 'pr_aberto', 'fabriquinha', '{}', '2026-01-10T00:00:00.000Z')",
-  ],
-] as const) {
-  test(`CA-7: ${nome} recusa a migração inteira, mandando concluir o PR no legado`, () => {
-    const b = montarFixture();
-    b.exec(sql);
-    recusa(b, /I-9 .*PR.*conclua o PR no fluxo legado antes do cutover/);
-  });
-}
+const comPr = (b: DatabaseSync, fase: string) => {
+  b.exec(`UPDATE issue SET fase = '${fase}' WHERE id = 9;
+    INSERT INTO evidencia (ticket, tipo, produtor, dados, em) VALUES (20, 'pr_aberto', 'fabriquinha', '{"n":9}', '2026-01-10T00:00:00.000Z')`);
+};
+
+test("CA-5, CA-10: revisão com PR aberto: rodada 1 em revisão, branch e PR preservados, emVoo marca o PR", () => {
+  const b = montarFixture();
+  comPr(b, "revisao");
+  const r = backfillDemandas(b);
+  assert.deepEqual(fases(b, "I-9").rodadas, [{ rodada_id: 1, fase: "revisao", branch: "fabriquinha/I-9-1" }]);
+  assert.equal(fases(b, "I-9").demanda?.branch, "fabriquinha/I-9");
+  assert.deepEqual(ler(b, "SELECT rodada_id, ticket_id, dados FROM evidencia_demanda WHERE demanda_id = 'I-9'"), [
+    { rodada_id: 1, ticket_id: null, dados: '{"n":9}' },
+  ]);
+  assert.deepEqual(
+    r.emVoo.filter((v) => v.pr),
+    [{ issue: "I-9", fase: "revisao", pr: true }],
+  );
+});
+
+test("CA-7: aprovação do PR com PR aberto vira a rodada 1 no gate, com o encerramento em execução e sem decisão nova", () => {
+  const b = montarFixture();
+  comPr(b, "aprovacao_pr");
+  b.exec(
+    "INSERT INTO ticket (id, issue, etapa, titulo, descricao, status, origem, criado_em, concluido_em) VALUES (99, 9, 'encerramento', 'Encerrar', 'r', 'concluido', 'fabriquinha', '2026-01-11T00:00:00.000Z', '2026-01-12T00:00:00.000Z')",
+  );
+  backfillDemandas(b);
+  assert.deepEqual(fases(b, "I-9").rodadas, [
+    { rodada_id: 1, fase: "aprovacao_pull_request", branch: "fabriquinha/I-9-1" },
+  ]);
+  assert.deepEqual(ler(b, "SELECT etapa, status, rodada_id FROM ticket_demanda WHERE ticket_id = 99"), [
+    { etapa: "encerrar_rodada", status: "em_execucao", rodada_id: 1 },
+  ]);
+  assert.equal(ler(b, "SELECT 1 FROM decisao_ticket WHERE demanda_id = 'I-9'").length, 0);
+  assert.equal(ler(b, "SELECT 1 FROM evidencia_demanda WHERE demanda_id = 'I-9' AND rodada_id = 1").length, 1);
+});
+
+test("CA-7: ajuste do PR com PR aberto vira a rodada 1 na sessão de ajustes, com a sessão aberta", () => {
+  const b = montarFixture();
+  comPr(b, "ajuste_pr");
+  b.exec(
+    "INSERT INTO ticket (id, issue, etapa, titulo, descricao, status, origem, criado_em) VALUES (99, 9, 'sessao', 'Ajustar o PR', 'mude', 'aberto', 'fabriquinha', '2026-01-11T00:00:00.000Z')",
+  );
+  backfillDemandas(b);
+  assert.deepEqual(fases(b, "I-9").rodadas, [{ rodada_id: 1, fase: "sessao", branch: "fabriquinha/I-9-1" }]);
+  assert.deepEqual(ler(b, "SELECT etapa, status, rodada_id FROM ticket_demanda WHERE ticket_id = 99"), [
+    { etapa: "sessao_em_aberto", status: "aberto", rodada_id: 1 },
+  ]);
+});
 
 test("CA-9, CA-13: execução ativa recusa citando a issue e a execução, e nenhuma dependência é criada", () => {
   const b = montarFixture();
   b.exec(`UPDATE ticket SET status = 'em_execucao' WHERE id = 10;
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em) VALUES (7, 20, 'autonomo', 'pi-20', 'em_andamento', '2026-01-10T00:00:00.000Z');
-    UPDATE issue SET fase = 'ajuste_pr' WHERE id = 10`);
+    `);
   recusa(
     b,
     /I-5 tem execução ativa \(ticket T-10, execução -\).*pare o serviço ou espere/,
     /I-9 tem execução ativa \(ticket -, execução E-7\)/,
-    /I-10 \(ajuste_pr\)/,
   );
   assert.deepEqual(ler(b, "SELECT * FROM dependencia_demanda"), []);
 });

@@ -14,11 +14,11 @@ export interface MigracaoGit {
   removeuWorktree: boolean;
 }
 
-/** `emVoo` é o de `Relatorio`; issue sem a branch `fabriquinha/I-n` (ainda sem desenvolvimento) não tem o que migrar. */
+/** `emVoo` é o de `Relatorio` (`pr`: a branch da issue é a cabeça do PR aberto e fica onde está); issue sem a branch `fabriquinha/I-n` (ainda sem desenvolvimento) não tem o que migrar. */
 export function migrarGitEmVoo(
   raiz: string,
   projeto: Pick<Projeto, "nome" | "repo" | "branchBase">,
-  emVoo: readonly { issue: string }[],
+  emVoo: readonly { issue: string; pr?: boolean }[],
 ): Promise<MigracaoGit[]> {
   const { repo } = projeto;
   const marca = async (branch: string): Promise<string> =>
@@ -27,18 +27,18 @@ export function migrarGitEmVoo(
     (await exigirGit(repo, "for-each-ref", "--format=%(refname)", `refs/heads/${branch}`)).trim() !== "";
 
   return naFilaDoProjeto(raiz, projeto.nome, async () => {
-    const alvos: { issue: string; legada: string; pasta: string }[] = [];
-    for (const { issue } of emVoo) {
+    const alvos: { issue: string; pr: boolean; legada: string; pasta: string }[] = [];
+    for (const { issue, pr = false } of emVoo) {
       const legada = branchDemanda(issue);
       if (!(await existe(legada))) continue;
       const pasta = caminhoDaWorktree(raiz, projeto.nome, Number(issue.slice(2)));
       // Suja: recusa antes de alterar qualquer issue.
       if (existsSync(pasta)) await verificarLimpa(pasta);
-      alvos.push({ issue, legada, pasta });
+      alvos.push({ issue, pr, legada, pasta });
     }
 
     const resultado: MigracaoGit[] = [];
-    for (const { issue, legada, pasta } of alvos) {
+    for (const { issue, pr, legada, pasta } of alvos) {
       const rodada = branchRodada(issue, 1);
       const donoRodada = `rodada:${caminhoDaWorktreeRodada(raiz, projeto.nome, { demanda_id: issue, rodada_id: 1 })}`;
       const donoDemanda = `demanda:${caminhoDaWorktreeDemanda(raiz, projeto.nome, issue)}`;
@@ -66,15 +66,18 @@ export function migrarGitEmVoo(
       await exigirGit(repo, "worktree", "prune");
 
       if ((await marca(legada)) !== donoDemanda) {
-        const base = await exigirGit(
-          repo,
-          "merge-base",
-          `refs/heads/${rodada}`,
-          `refs/remotes/origin/${projeto.branchBase}`,
-        );
-        await exigirGit(repo, "branch", "-f", legada, base.trim());
+        // Com PR aberto a branch é a cabeça dele: voltá-la à base fecharia o PR, então só muda de dono.
+        if (!pr) {
+          const base = await exigirGit(
+            repo,
+            "merge-base",
+            `refs/heads/${rodada}`,
+            `refs/remotes/origin/${projeto.branchBase}`,
+          );
+          await exigirGit(repo, "branch", "-f", legada, base.trim());
+          r.moveuDemanda = true;
+        }
         await exigirGit(repo, "config", `branch.${legada}.fabriquinha`, donoDemanda);
-        r.moveuDemanda = true;
       }
       resultado.push(r);
     }

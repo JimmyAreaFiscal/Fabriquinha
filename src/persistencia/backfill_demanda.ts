@@ -31,8 +31,8 @@ export interface Relatorio {
   depois: Record<string, number>;
   /** Sempre vazio: toda issue é migrada ou a migração inteira é recusada. */
   naoMigradas: { issue: string; motivo: string }[];
-  /** As issues que estavam em andamento no cutover, com a fase legada de onde saíram. */
-  emVoo: { issue: string; fase: string }[];
+  /** As issues que estavam em andamento no cutover, com a fase legada de onde saíram e se têm PR aberto (a branch dela não volta à base). */
+  emVoo: { issue: string; fase: string; pr: boolean }[];
 }
 
 const contar = (banco: DatabaseSync): Record<string, number> =>
@@ -111,14 +111,22 @@ function migrarIssue(banco: DatabaseSync, issue: Issue): void {
        SELECT $id, id,
               CASE etapa WHEN 'registro' THEN 'demanda' WHEN 'desenho' THEN 'planejar' WHEN 'desenvolvimento' THEN 'implementar'
                          WHEN 'revisao' THEN 'revisar_rodada' WHEN 'encerramento' THEN 'encerrar_rodada' ELSE 'sessao_em_aberto' END,
-              CASE WHEN status = 'em_execucao' AND enviado_em IS NOT NULL THEN 'concluido' ELSE status END,
+              CASE WHEN status = 'em_execucao' AND enviado_em IS NOT NULL THEN 'concluido'
+                   WHEN $gate AND id = (SELECT MAX(id) FROM ticket WHERE issue = $n AND etapa = 'encerramento') THEN 'em_execucao'
+                   ELSE status END,
               COALESCE(concluido_em, enviado_em, criado_em),
-              CASE WHEN etapa = 'desenvolvimento' AND $rodada THEN 1 END, titulo, descricao,
+              CASE WHEN etapa <> 'registro' AND etapa <> 'desenho' AND $rodada THEN 1 END, titulo, descricao,
               modelo_provedor, modelo_nome, instrucao, COALESCE(devolucoes, 0), erro,
               criado_em, concluido_em, enviado_em, origem, origem_ticket
        FROM ticket WHERE issue = $n AND NOT ($propostas AND etapa = 'desenvolvimento') ORDER BY id`,
     )
-    .run({ id, n, rodada: Number(rodada !== undefined), propostas: Number(destino?.propostas === true) });
+    .run({
+      id,
+      n,
+      rodada: Number(rodada !== undefined),
+      propostas: Number(destino?.propostas === true),
+      gate: Number(issue.fase === "aprovacao_pr"),
+    });
   banco
     .prepare(
       `INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por, em)
@@ -230,8 +238,8 @@ function migrarEvidencias(banco: DatabaseSync, id: string, n: number, comRodada:
 
 /**
  * Migra todas as issues para demandas `I-{n}`: as encerradas (concluídas, canceladas, arquivadas) e as em andamento, com
- * a rodada 1 no lugar do desenvolvimento em curso. Idempotente por issue: a que já tem demanda é pulada. Issue com PR do
- * legado ou execução ativa recusa a migração inteira. Um erro desfaz tudo. Não toca nas tabelas legadas.
+ * a rodada 1 no lugar do desenvolvimento em curso. Idempotente por issue: a que já tem demanda é pulada. Issue com
+ * execução ativa recusa a migração inteira. Um erro desfaz tudo. Não toca nas tabelas legadas.
  */
 export function backfillDemandas(banco: DatabaseSync): Relatorio {
   return escrever(banco, () => {
@@ -242,7 +250,14 @@ export function backfillDemandas(banco: DatabaseSync): Relatorio {
     const issues = banco.prepare("SELECT id, fase, cancelada_em FROM issue ORDER BY id").all() as unknown as Issue[];
     for (const issue of issues) {
       const id = `I-${String(issue.id)}`;
-      if (emAndamento(issue)) emVoo.push({ issue: id, fase: issue.fase });
+      if (emAndamento(issue)) {
+        const pr = banco
+          .prepare(
+            "SELECT 1 FROM evidencia e JOIN ticket t ON t.id = e.ticket WHERE t.issue = ? AND e.tipo = 'pr_aberto'",
+          )
+          .get(issue.id);
+        emVoo.push({ issue: id, fase: issue.fase, pr: pr !== undefined });
+      }
       if (!banco.prepare("SELECT 1 FROM demanda WHERE id = ?").get(id)) {
         citando(id, () => {
           migrarIssue(banco, issue);
