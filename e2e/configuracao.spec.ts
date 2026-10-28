@@ -1,8 +1,11 @@
-// Configuração (F7 §4.4): cadastrar um projeto com um campo inválido, corrigir, salvar e ligar o agendador.
+// Configuração (F7 §4.4; I-247 CA-13): cadastrar um projeto com um campo inválido, corrigir, salvar e ligar o
+// agendador; o cadastro sem testes, SonarQube, fitness, modelos e efforts grava o padrão nas colunas legadas.
+import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "./apoio.ts";
+import { abrir } from "../src/persistencia/banco.ts";
+import { expect, fotografar, test } from "./apoio.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
 
@@ -21,54 +24,29 @@ function clone(raiz: string): string {
   return realpathSync(repo);
 }
 
-test("cadastra um projeto com um campo inválido, corrige, salva e liga o agendador", async ({
+test("cadastra um projeto com um campo inválido, corrige, salva e liga o agendador; sem os campos legados (CA-13)", async ({
   pagina,
   fabriquinha,
-}) => {
+}, info: TestInfo) => {
   const repo = clone(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/config`);
   await expect(pagina).toHaveTitle("Configuração · Fabriquinha");
   const menu = pagina.getByRole("navigation", { name: "Configuração" });
   await expect(menu.getByRole("link", { name: "Agendador" })).toHaveAttribute("aria-current", "page");
   await expect(menu.getByRole("link", { name: "Agendador" })).toContainText("desligado");
+  await expect(pagina.locator(".status-ag")).toHaveText("Desligado: não procura tickets");
 
   await menu.getByRole("link", { name: "+ Novo projeto" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/config?novo`);
   await expect(pagina.getByRole("heading", { name: "Novo projeto" })).toBeVisible();
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("deduzida do remoto ao salvar");
+  const formulario = pagina.locator("form[data-projeto]");
+  await expect(formulario.locator("h3")).toHaveText(["Repositório", "Preparação"]);
+  await expect(formulario).not.toContainText(/Testes|SonarQube|Fitness|Modelo|Effort/);
   await pagina.getByLabel("Nome", { exact: true }).fill("Loja X");
   await pagina.getByLabel("Caminho do repositório").fill(repo);
-  await pagina.getByLabel("Projeto no SonarQube").fill("loja");
-  await pagina.getByLabel("Testes: comando 1").fill("npm test");
-  await pagina.getByRole("button", { name: "+ comando" }).first().click();
+  await pagina.getByRole("button", { name: "+ comando" }).click();
   await pagina.getByLabel("Preparação da worktree: comando 1").fill("npm ci");
-  await pagina.getByLabel("Fitness function 1: nome").fill("cobertura");
-  await pagina.getByLabel("Fitness function 1: comando").fill("npm run cobertura");
-  await pagina.getByLabel("Fitness function 1: descrição").fill("Rotas novas com cobertura mínima.");
-  // O seletor vem de GET /api/modelos (o pi falso lista dois); vazio é o padrão do pi, apagado.
-  const desenho = pagina.getByLabel("Desenho", { exact: true });
-  await expect(desenho.locator("option")).toHaveText([
-    "padrão do pi",
-    "anthropic / claude-opus-5-5",
-    "anthropic / claude-sonnet-5-5",
-  ]);
-  await expect(desenho).toHaveClass("padrao");
-  await desenho.selectOption("anthropic/claude-opus-5-5");
-  await expect(desenho).not.toHaveClass("padrao");
-  // O effort de cada etapa fica ao lado do modelo; vazio é o padrão do pi.
-  const effortDesenho = pagina.getByLabel("Effort de Desenho");
-  await expect(effortDesenho.locator("option")).toHaveText([
-    "padrão do pi",
-    "off",
-    "minimal",
-    "low",
-    "medium",
-    "high",
-    "xhigh",
-    "max",
-  ]);
-  await expect(effortDesenho).toHaveClass("padrao");
-  await effortDesenho.selectOption("high");
 
   await pagina.getByRole("button", { name: "Cadastrar projeto" }).click();
   const nome = pagina.getByLabel("Nome", { exact: true });
@@ -78,42 +56,62 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   );
   await expect(pagina.locator(".rodape-form")).toContainText("1 campo com erro");
   await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
-  await expect(desenho).toHaveValue("anthropic/claude-opus-5-5");
 
   await nome.fill("loja");
   await pagina.getByRole("button", { name: "Cadastrar projeto" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/config?projeto=loja`);
-  await expect(pagina.getByRole("heading", { name: "loja 0 issues" })).toBeVisible();
+  await expect(pagina.getByRole("heading", { level: 2, name: /^loja/ })).toBeVisible();
   await expect(menu.getByRole("link", { name: "loja" })).toHaveAttribute("aria-current", "page");
   await expect(menu.getByRole("link", { name: "loja" })).toContainText("GitHub");
   await expect(pagina.getByLabel("Nome", { exact: true })).toHaveAttribute("readonly", "");
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("GitHub");
-  await expect(pagina.getByLabel("Desenho", { exact: true })).toHaveValue("anthropic/claude-opus-5-5");
-  await expect(pagina.getByLabel("Effort de Desenho")).toHaveValue("high");
-  await expect(pagina.getByLabel("Effort de Revisão")).toHaveValue("");
-  await expect(pagina.getByLabel("Effort de Revisão")).toHaveClass("padrao");
+  await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
   await expect(pagina.getByRole("button", { name: "Salvar projeto" })).toBeVisible();
+  // As colunas legadas seguem NOT NULL até a rodada 3: o cadastro gravou o padrão nelas.
+  const banco = abrir(fabriquinha.raiz);
+  expect({
+    ...banco
+      .prepare("SELECT testes, sonar_project_key, fitness, modelos, efforts FROM projeto WHERE nome = 'loja'")
+      .get(),
+  }).toEqual({
+    testes: '["true"]',
+    sonar_project_key: "loja",
+    fitness: '[{"nome":"legado","comando":"true","descricao":"coluna do fluxo legado"}]',
+    modelos: "{}",
+    efforts: "{}",
+  });
+  banco.close();
+  for (const largura of [1440, 375]) {
+    await pagina.setViewportSize({ width: largura, height: 900 });
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await fotografar(pagina, info, `configuracao-projeto-${String(largura)}`);
+  }
+  await pagina.setViewportSize({ width: 1440, height: 900 });
 
   await menu.getByRole("link", { name: "Agendador" }).click();
   await expect(pagina.getByText("Desligado: não procura tickets")).toBeVisible();
-  await pagina.getByText("procura tickets abertos e executa um por issue").click();
+  await pagina.getByText("procura tickets abertos das demandas e os executa").click();
   await pagina.getByRole("spinbutton", { name: "Procurar a cada" }).fill("10");
   await pagina.getByRole("button", { name: "Salvar" }).click();
   await expect(menu.getByRole("link", { name: "Agendador" })).toContainText("ligado");
-  await expect(pagina.getByText(/^Próxima busca às \d\d:\d\d$/)).toBeVisible();
-  await expect(pagina.getByText("Nenhuma execução autônoma em andamento")).toBeVisible();
+  await expect(pagina.locator(".status-ag")).toHaveText(/^Próxima busca às \d\d:\d\d$/);
   await expect(pagina.getByRole("spinbutton", { name: "Procurar a cada" })).toHaveValue("10");
   await expect(pagina.getByRole("checkbox", { name: /Agendador/ })).toBeChecked();
+  for (const largura of [1440, 375]) {
+    await pagina.setViewportSize({ width: largura, height: 900 });
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await fotografar(pagina, info, `configuracao-agendador-${String(largura)}`);
+  }
 });
 
-test("escolhe o Modelo da Auditoria, salva, recarrega e vê o mesmo; salvar o Agendador não o apaga", async ({
+test("escolhe o modelo das avaliações, salva, recarrega e vê o mesmo; salvar o Agendador não o apaga", async ({
   pagina,
   fabriquinha,
 }) => {
-  await pagina.goto(`${fabriquinha.base}/config?auditoria`);
+  await pagina.goto(`${fabriquinha.base}/config?avaliacoes`);
   const menu = pagina.getByRole("navigation", { name: "Configuração" });
-  await expect(menu.getByRole("link", { name: "Auditoria" })).toHaveAttribute("aria-current", "page");
-  const modelo = pagina.getByLabel("Modelo da Auditoria");
+  await expect(menu.getByRole("link", { name: "Avaliações" })).toHaveAttribute("aria-current", "page");
+  const modelo = pagina.getByLabel("Modelo das avaliações");
   await expect(modelo).toHaveValue("");
   await expect(modelo).toHaveClass("padrao");
   await modelo.selectOption("anthropic/claude-sonnet-5-5");
@@ -121,7 +119,7 @@ test("escolhe o Modelo da Auditoria, salva, recarrega e vê o mesmo; salvar o Ag
   await expect(pagina.getByRole("button", { name: "Salvar" })).toBeEnabled();
 
   await pagina.reload();
-  await expect(pagina.getByLabel("Modelo da Auditoria")).toHaveValue("anthropic/claude-sonnet-5-5");
+  await expect(pagina.getByLabel("Modelo das avaliações")).toHaveValue("anthropic/claude-sonnet-5-5");
   const gravada = await pagina.request.get(`${fabriquinha.base}/api/configuracao`);
   expect(((await gravada.json()) as { modeloAuditoria: unknown }).modeloAuditoria).toEqual({
     provedor: "anthropic",
@@ -132,6 +130,6 @@ test("escolhe o Modelo da Auditoria, salva, recarrega e vê o mesmo; salvar o Ag
   await pagina.getByRole("spinbutton", { name: "Procurar a cada" }).fill("7");
   await pagina.getByRole("button", { name: "Salvar" }).click();
   await expect(pagina.getByRole("spinbutton", { name: "Procurar a cada" })).toHaveValue("7");
-  await menu.getByRole("link", { name: "Auditoria" }).click();
-  await expect(pagina.getByLabel("Modelo da Auditoria")).toHaveValue("anthropic/claude-sonnet-5-5");
+  await menu.getByRole("link", { name: "Avaliações" }).click();
+  await expect(pagina.getByLabel("Modelo das avaliações")).toHaveValue("anthropic/claude-sonnet-5-5");
 });

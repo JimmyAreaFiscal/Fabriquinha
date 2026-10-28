@@ -6,7 +6,6 @@ import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
 import { caminhoDaAvaliacao } from "../render.ts";
-import { modeloDaAuditoria } from "./auditoria.ts";
 import {
   achadosDaAvaliacao,
   type AvaliacaoListada,
@@ -20,7 +19,7 @@ import {
   listaDasAvaliacoes,
   paginaDasAvaliacoes,
 } from "./avaliacoes.ts";
-import { chaveDa, comResultado, emFluxo, mensagem, type MensagemPi } from "./chat.ts";
+import { chaveDa, comResultado, emFluxo, mensagem, type MensagemPi, modeloDaConversa } from "./chat.ts";
 import type * as ModuloDaConversa from "./chat-conversa.tsx";
 import { postar } from "./chat-montar.ts";
 import type { ProjetoListado } from "./configuracao.ts";
@@ -135,7 +134,6 @@ export function montarAvaliacao(main: HTMLElement, params: Parametros, signal: A
     conversaReact.desenharConversa(areaDaConversa, {
       mensagens: fluxo ? [...mensagens, emFluxo(fluxo.texto, fluxo.raciocinio)] : mensagens,
       envio: envioDaAvaliacao(dados.estado),
-      anexos: "",
       aoEnviar: enviar,
     });
   }
@@ -152,7 +150,7 @@ export function montarAvaliacao(main: HTMLElement, params: Parametros, signal: A
   function retrato(lido: DadosDaAvaliacao): void {
     vistas.clear();
     fluxo = undefined;
-    modelo = modeloDaAuditoria(lido.conversa);
+    modelo = modeloDaConversa(lido.conversa);
     mensagens = conversaDaAvaliacao(lido);
     for (const { id: chave } of mensagens) vistas.add(String(chave));
     for (const e of lido.conversa as { message?: MensagemPi }[]) if (e.message) vistas.add(chaveDa(e.message));
@@ -177,7 +175,7 @@ export function montarAvaliacao(main: HTMLElement, params: Parametros, signal: A
     else if (evento.fabriquinha && dados) mensagens = [...mensagens, ...linhaDoInicioDaAvaliacao(m, dados)];
     else mensagens = [...mensagens, ...mensagem(m)];
     if (m.role === "assistant" && dados) {
-      modelo = modeloDaAuditoria([evento]);
+      modelo = modeloDaConversa([evento]);
       barra.innerHTML = barraDaAvaliacao(dados, modelo);
     }
     desenhar();

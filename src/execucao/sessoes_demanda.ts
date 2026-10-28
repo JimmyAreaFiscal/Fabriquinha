@@ -1,6 +1,6 @@
 // Chat das sessões dos tickets da demanda (comparacao-sdlc-implementacao.md §9.1): acha a sessão em `sessao`, calcula o
-// estado, monta o cabeçalho com os endereços públicos, abre a conversa com o fluxo ao vivo e exporta o histórico. O
-// chat das issues (`sessoes.ts`) segue à parte; as rotas tentam esta sessão primeiro e caem naquele caminho.
+// estado, monta o cabeçalho com os endereços públicos, abre a conversa com o fluxo ao vivo e exporta o histórico. A
+// leitura do JSONL e a mensagem em Markdown servem também à avaliação e à sessão de ajustes.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -12,13 +12,89 @@ import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
 import type { EtapaTicket, Instante, Modelo } from "../dominio/primitivos.ts";
 import type { ExecucaoSessao, Sessao } from "../dominio/sessoes.ts";
 import { raizDo } from "../persistencia/banco.ts";
+import { arquivoDaSessao } from "../persistencia/execucoes.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
 import { abortar, type Dialogo, assinar, mandar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
-import { emMarkdown, type Mensagem, texto } from "./historico.ts";
 import type { EventoPi } from "./pi.ts";
-import { type Estado, lerConversa, type ModoEnvio } from "./sessoes.ts";
+
+/** O estado de uma sessão (F4 §5.2). */
+export type Estado = "rodando" | "aguardando_humano" | "terminada";
+
+/** Como a mensagem do Auditor chega ao pi: nova, redirecionando ou enfileirada. */
+export type ModoEnvio = "prompt" | "steer" | "follow_up";
+
+/** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
+export function lerConversa(raiz: string, sessao: string): unknown[] {
+  const arquivo = arquivoDaSessao(raiz, sessao);
+  if (!arquivo) return [];
+  return readFileSync(arquivo, "utf8")
+    .split("\n")
+    .flatMap((linha) => {
+      try {
+        return [JSON.parse(linha) as unknown];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** ponytail: o corte é fixo (F4 §6.8); se algum resultado longo fizer falta, aumentar o limite. */
+const CORTE = 2000;
+
+interface Bloco {
+  type?: string;
+  text?: string;
+  name?: string;
+  arguments?: unknown;
+}
+
+/** A parte de uma mensagem do pi que o histórico mostra (formato da sessão do pi). */
+export interface Mensagem {
+  role?: string;
+  content: string | Bloco[];
+  toolName?: string;
+  isError?: boolean;
+  provider?: string;
+  model?: string;
+}
+
+const blocos = (m: Mensagem): Bloco[] =>
+  typeof m.content === "string" ? [{ type: "text", text: m.content }] : m.content;
+
+/** O texto da mensagem; imagens e raciocínio ficam de fora. */
+export const texto = (m: Mensagem): string =>
+  blocos(m)
+    .filter((b) => b.type === "text")
+    .map((b) => String(b.text))
+    .join("\n");
+
+/** Bloco de código com uma cerca maior que qualquer sequência de crases do conteúdo, para ele não fechá-la. */
+function cerca(conteudo: string, lingua = ""): string {
+  const crases = "`".repeat(Math.max(2, ...(conteudo.match(/`+/g) ?? []).map((c) => c.length)) + 1);
+  return `${crases}${lingua}\n${conteudo}\n${crases}`;
+}
+
+const cortar = (t: string): string =>
+  t.length <= CORTE ? t : `${t.slice(0, CORTE)}\n… (cortado em ${String(CORTE)} de ${String(t.length)} caracteres)`;
+
+/** Uma mensagem em Markdown: Fabriquinha, Auditor e agente na íntegra, chamadas e resultados cortados. */
+export function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
+  if (m.role === "user") return [`## ${daFabriquinha.has(texto(m)) ? "Fabriquinha" : "Auditor"}\n\n${texto(m)}`];
+  if (m.role === "toolResult") {
+    const erro = m.isError ? " (erro)" : "";
+    return [`**Resultado de \`${String(m.toolName)}\`${erro}**\n\n${cerca(cortar(texto(m)))}`];
+  }
+  if (m.role !== "assistant") return [];
+  const chamadas = blocos(m).filter((b) => b.type === "toolCall");
+  return [
+    `## Agente\n\n${texto(m)}`.trimEnd(),
+    ...chamadas.map(
+      (c) => `**Chamada de \`${String(c.name)}\`**\n\n${cerca(JSON.stringify(c.arguments ?? {}, null, 2), "json")}`,
+    ),
+  ];
+}
 
 export type MotivoDemanda = "conversa" | "dialogo" | "falha" | "gate_demanda";
 

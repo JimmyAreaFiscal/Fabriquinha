@@ -1,19 +1,19 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Effort, Modelo } from "../../../dominio/primitivos.ts";
+import type { Modelo } from "../../../dominio/primitivos.ts";
 import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
 import { modeloDoSeletor } from "../render.ts";
 import {
   agendador,
-  auditoria,
   confirmacaoDeRemover,
   type Erros,
   errosDoZod,
   type EstadoDaConfiguracao,
   formularioDeProjeto,
   menu,
+  modeloDasAvaliacoes,
   NOVO,
   type OpcoesDosUsuarios,
   pagina,
@@ -48,34 +48,14 @@ const lerAgendador = (form: HTMLFormElement) => ({
   ociosidadeMin: Number(valor(form, '[name="ociosidadeMin"]')),
 });
 
-/** O que o formulário do projeto tem agora, no formato do F1 §3.3 sem a hospedagem. */
+/** O que o formulário do projeto tem agora, no formato do F1 §3.3 sem a hospedagem nem os campos do fluxo legado. */
 function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): Rascunho {
-  const itens = (campo: string) =>
-    [...form.querySelectorAll<HTMLInputElement>(`[data-lista="${campo}"] input`)].map((i) => i.value);
-  const modelos: Rascunho["modelos"] = {};
-  for (const s of form.querySelectorAll<HTMLSelectElement>('select[name^="modelos."]')) {
-    const modelo = modeloDoSeletor(s.value);
-    if (modelo) modelos[s.name.slice("modelos.".length) as keyof Rascunho["modelos"]] = modelo;
-  }
-  const efforts: NonNullable<Rascunho["efforts"]> = {};
-  for (const s of form.querySelectorAll<HTMLSelectElement>('select[name^="efforts."]')) {
-    if (s.value) efforts[s.name.slice("efforts.".length) as keyof typeof efforts] = s.value as Effort;
-  }
   return {
     nome: valor(form, '[name="nome"]'),
     repo: valor(form, '[name="repo"]'),
     branchBase: valor(form, '[name="branchBase"]'),
     ...(hospedagem && { hospedagem }),
-    preparacao: itens("preparacao"),
-    testes: itens("testes"),
-    sonar: { projectKey: valor(form, '[name="sonar.projectKey"]') },
-    fitness: [...form.querySelectorAll("[data-fitness]")].map((linha) => ({
-      nome: valor(linha, '[data-campo="nome"]'),
-      comando: valor(linha, '[data-campo="comando"]'),
-      descricao: valor(linha, '[data-campo="descricao"]'),
-    })),
-    modelos,
-    efforts,
+    preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
     linkProduto: valor(form, '[name="linkProduto"]'),
   };
 }
@@ -96,7 +76,7 @@ function montarAgendador(
   estado: EstadoDaConfiguracao,
   erros: Erros,
 ): void {
-  main.innerHTML = pagina(menuHtml, agendador(estado, erros, new Date()));
+  main.innerHTML = pagina(menuHtml, agendador(estado, erros));
   const form = main.querySelector<HTMLFormElement>("[data-agendador]");
   form?.addEventListener("submit", (evento) => {
     evento.preventDefault();
@@ -110,8 +90,8 @@ function montarAgendador(
   });
 }
 
-/** O modelo da Auditoria: posta a configuração gravada inteira com o modelo escolhido; o 422 aparece no campo. */
-function montarAuditoria(
+/** O modelo das avaliações: posta a configuração gravada inteira com o modelo escolhido; o 422 aparece no campo. */
+function montarModeloDasAvaliacoes(
   main: HTMLElement,
   signal: AbortSignal,
   menuHtml: string,
@@ -119,8 +99,8 @@ function montarAuditoria(
   modelos: readonly Modelo[],
   erros: Erros,
 ): void {
-  main.innerHTML = pagina(menuHtml, auditoria(estado, modelos, erros));
-  const form = main.querySelector<HTMLFormElement>("[data-auditoria]");
+  main.innerHTML = pagina(menuHtml, modeloDasAvaliacoes(estado, modelos, erros));
+  const form = main.querySelector<HTMLFormElement>("[data-avaliacoes]");
   form?.addEventListener("submit", (evento) => {
     evento.preventDefault();
     const { agendadorAtivo, intervaloMin, timeoutMin, ociosidadeMin } = estado;
@@ -130,14 +110,14 @@ function montarAuditoria(
       .then(() => montarConfiguracao(main, {}, signal))
       .catch((error_: unknown) => {
         if (!signal.aborted)
-          montarAuditoria(main, signal, menuHtml, { ...estado, modeloAuditoria }, modelos, errosDe(error_));
+          montarModeloDasAvaliacoes(main, signal, menuHtml, { ...estado, modeloAuditoria }, modelos, errosDe(error_));
       });
   });
 }
 
 /** O diálogo de remover o projeto salvo: só o DELETE apaga; ao concluir, volta a `/config` com os avisos do disco. */
 function montarRemocao(main: HTMLElement, signal: AbortSignal, salvo: ProjetoListado): void {
-  main.querySelector(".painel-config")?.insertAdjacentHTML("beforeend", confirmacaoDeRemover(salvo.nome, salvo.issues));
+  main.querySelector(".painel-config")?.insertAdjacentHTML("beforeend", confirmacaoDeRemover(salvo.nome));
   const dialogo = main.querySelector<HTMLDialogElement>("[data-dialogo-remover]");
   main.querySelector("[data-remover-projeto]")?.addEventListener("click", () => dialogo?.showModal());
   dialogo?.querySelector("[data-confirmar-remover]")?.addEventListener("click", (evento) => {
@@ -247,32 +227,25 @@ function montarProjeto(
   signal: AbortSignal,
   menuHtml: string,
   salvo: ProjetoListado | undefined,
-  modelos: readonly Modelo[],
 ): void {
   const inicial: Rascunho = salvo ?? NOVO;
   const desenhar = (p: Rascunho, erros: Erros, falha?: string): void => {
-    main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { issues: salvo?.issues, modelos, erros, falha }));
+    main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, erros, falha }));
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");
     if (!form) return;
     if (salvo) {
       montarRemocao(main, signal, salvo);
       montarUsuarios(main, signal, salvo.nome);
     }
-    form.addEventListener("change", (evento) => {
-      if (evento.target instanceof HTMLSelectElement) evento.target.classList.toggle("padrao", !evento.target.value);
-    });
     form.addEventListener("click", (evento) => {
       const alvo = evento.target instanceof Element ? evento.target : null;
       const adicionar = alvo?.closest<HTMLElement>("[data-adicionar]")?.dataset.adicionar;
-      const remover = alvo?.closest("[data-remover]")?.closest(".item-lista, [data-fitness]");
+      const remover = alvo?.closest("[data-remover]")?.closest(".item-lista");
       if (alvo?.closest("[data-cancelar]")) {
         desenhar(inicial, new Map());
-      } else if (adicionar === "fitness") {
+      } else if (adicionar === "preparacao") {
         const p = lerProjeto(form, inicial.hospedagem);
-        desenhar({ ...p, fitness: [...p.fitness, { nome: "", comando: "", descricao: "" }] }, erros);
-      } else if (adicionar === "preparacao" || adicionar === "testes") {
-        const p = lerProjeto(form, inicial.hospedagem);
-        desenhar({ ...p, [adicionar]: [...p[adicionar], ""] }, erros);
+        desenhar({ ...p, preparacao: [...p.preparacao, ""] }, erros);
       } else if (remover) {
         // Remove a linha do DOM e redesenha: os índices dos erros mudariam, então eles somem até o próximo envio.
         remover.remove();
@@ -313,8 +286,15 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
     montarAgendador(main, signal, menuHtml, estado, new Map());
     return;
   }
-  if (sel.tipo === "auditoria") {
-    montarAuditoria(main, signal, menuHtml, estado, await api<Modelo[]>("/api/modelos", { signal }), new Map());
+  if (sel.tipo === "avaliacoes") {
+    montarModeloDasAvaliacoes(
+      main,
+      signal,
+      menuHtml,
+      estado,
+      await api<Modelo[]>("/api/modelos", { signal }),
+      new Map(),
+    );
     return;
   }
   const salvo = sel.tipo === "projeto" ? projetos.find((p) => p.nome === sel.nome) : undefined;
@@ -322,5 +302,5 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
     main.innerHTML = pagina(menuHtml, projetoInexistente(sel.nome));
     return;
   }
-  montarProjeto(main, signal, menuHtml, salvo, await api<Modelo[]>("/api/modelos", { signal }));
+  montarProjeto(main, signal, menuHtml, salvo);
 }

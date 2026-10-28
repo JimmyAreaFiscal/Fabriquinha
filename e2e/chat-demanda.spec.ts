@@ -1,18 +1,14 @@
 // Chat da sessão de ticket da demanda (I-239, CA-1 a CA-19) com o pi falso: o planejamento pergunta, o Auditor responde
 // no chat e o agente segue; abortar, exportar e o link na página da demanda; prints a 1440 e 375 px sem rolagem
-// horizontal. A demanda é semeada aqui mesmo, em planejamento, com o ticket `planejar` aberto.
-import { execFileSync } from "node:child_process";
+// horizontal. A demanda é semeada em planejamento, com o ticket `planejar` aberto (demandas-apoio.ts).
 import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
-import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import { abrir } from "../src/persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { criarDemanda } from "../src/persistencia/demandas.ts";
 import { falharTicketDemanda } from "../src/execucao/fechamento_ticket.ts";
 import { submeterPlanejamento } from "../src/execucao/planejamento.ts";
-import { expect, type Fabriquinha, projeto, test } from "./apoio.ts";
-import { semearTicketAberto } from "./demandas-apoio.ts";
+import { expect, fotografar, projeto, test } from "./apoio.ts";
+import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto } from "./demandas-apoio.ts";
 
 /** Mata o pi cujo diretório de trabalho está na raiz (a execução da demanda não grava o pgid). */
 function matarPiDaRaiz(raiz: string): void {
@@ -25,78 +21,6 @@ function matarPiDaRaiz(raiz: string): void {
   }
 }
 
-const em = "2026-10-11T12:00:00.000Z";
-
-/** A I-230 em planejamento, com o ticket `planejar` aberto e a `descricao` que dirige o pi falso. */
-function semear(raiz: string, descricao: string): void {
-  // A execução parte da worktree da demanda, que precisa existir e ser da Fabriquinha.
-  const caminho = join(raiz, "worktrees/loja/I-230/demanda");
-  const repo = join(raiz, "loja");
-  execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-230", caminho, "main"], { cwd: repo });
-  execFileSync("git", ["config", "branch.fabriquinha/I-230.fabriquinha", `demanda:${caminho}`], { cwd: repo });
-  const banco = abrir(raiz);
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
-    raiz_git: repo,
-    hospedagem: "github",
-    etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
-  criarDemanda(banco, {
-    demanda: {
-      id: "I-230",
-      projeto: "loja",
-      titulo: "Cupons com prioridade",
-      tipo: "funcionalidade",
-      descricao,
-      fase: "planejamento",
-      fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "I-230",
-      enviada: true,
-      branch: "fabriquinha/I-230",
-    },
-    tickets: [
-      { demanda_id: "I-230", ticket_id: 1, etapa: "planejar", status: "aberto", status_alterado_em: em, devolucoes: 0 },
-    ],
-    decisoes: [],
-    evidencias: [
-      {
-        demanda_id: "I-230",
-        tipo: "criterios_aceite",
-        dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] },
-        em,
-      },
-    ],
-    rodadas: [],
-    dependencias_rodada: [],
-    criterios_citados: [],
-    dependencias_ticket: [],
-    caminhos_ticket: [],
-  } as unknown as AgregadoDemanda);
-  banco.close();
-}
-
-/** Executar agora, como o Auditor na página da demanda; devolve o chat da sessão assim que o ticket ganha o link. */
-async function abrirOChat(pagina: Page, { base }: Fabriquinha): Promise<void> {
-  await pagina.goto(`${base}/demandas/I-230`);
-  const ticket = pagina.locator(".dm-ticket", { hasText: "I-230.T1" });
-  // CA-17: sem sessão, sem link para o chat.
-  await expect(ticket.getByRole("link", { name: "chat →" })).toHaveCount(0);
-  await pagina.getByRole("button", { name: "Executar agora" }).click();
-  // CA-16: com a sessão, o ticket leva ao chat dela.
-  await expect(async () => {
-    await pagina.reload();
-    await expect(ticket.getByRole("link", { name: "chat →" })).toBeVisible();
-  }).toPass();
-  await ticket.getByRole("link", { name: "chat →" }).click();
-  await expect(pagina).toHaveTitle("Chat · Fabriquinha");
-}
-
 const semRolagemHorizontal = (pagina: Page) =>
   pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 
@@ -105,8 +29,8 @@ test("o planejamento pergunta, o Auditor responde no chat e o agente segue; link
   fabriquinha,
 }, info: TestInfo) => {
   projeto(fabriquinha.raiz);
-  semear(fabriquinha.raiz, "pergunte perguntar");
-  await abrirOChat(pagina, fabriquinha);
+  semearPlanejamentoComPi(fabriquinha.raiz, "pergunte perguntar");
+  await abrirOChatDoPlanejamento(pagina, fabriquinha);
 
   // CA-1 e CA-6: demanda, ticket, etapa e modo, modelo e execução na barra; sem log, prompt nem Conversar sobre.
   const barra = pagina.locator(".estado-sessao");
@@ -148,17 +72,14 @@ test("o planejamento pergunta, o Auditor responde no chat e o agente segue; link
     expect(await semRolagemHorizontal(pagina)).toBe(true);
     await expect(barra).toBeVisible();
     await expect(envio).toBeVisible();
-    await info.attach(`chat-demanda-${String(largura)}`, {
-      body: await pagina.screenshot({ fullPage: true }),
-      contentType: "image/png",
-    });
+    await fotografar(pagina, info, `chat-demanda-${String(largura)}`);
   }
 });
 
 test("abortar a execução em andamento e exportar o histórico em Markdown", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
-  semear(fabriquinha.raiz, "[ao vivo]");
-  await abrirOChat(pagina, fabriquinha);
+  semearPlanejamentoComPi(fabriquinha.raiz, "[ao vivo]");
+  await abrirOChatDoPlanejamento(pagina, fabriquinha);
 
   // CA-2 e CA-11: rodando, o Abortar para a execução e a barra deixa de mostrar «rodando».
   const barra = pagina.locator(".estado-sessao");
@@ -207,8 +128,8 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
   fabriquinha,
 }) => {
   projeto(fabriquinha.raiz);
-  semear(fabriquinha.raiz, "planeje");
-  await abrirOChat(pagina, fabriquinha);
+  semearPlanejamentoComPi(fabriquinha.raiz, "planeje");
+  await abrirOChatDoPlanejamento(pagina, fabriquinha);
   const chat = pagina.url();
   const barra = pagina.locator(".estado-sessao");
   await expect(barra.locator(".pill")).toHaveText("aguarda você · conversa");
@@ -244,8 +165,8 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
 
 test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
-  semear(fabriquinha.raiz, "planeje");
-  await abrirOChat(pagina, fabriquinha);
+  semearPlanejamentoComPi(fabriquinha.raiz, "planeje");
+  await abrirOChatDoPlanejamento(pagina, fabriquinha);
   await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
 
   const banco = abrir(fabriquinha.raiz);
@@ -276,8 +197,8 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
   fabriquinha,
 }) => {
   projeto(fabriquinha.raiz);
-  semear(fabriquinha.raiz, "planeje");
-  await abrirOChat(pagina, fabriquinha);
+  semearPlanejamentoComPi(fabriquinha.raiz, "planeje");
+  await abrirOChatDoPlanejamento(pagina, fabriquinha);
   const chat = pagina.url();
   await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
 

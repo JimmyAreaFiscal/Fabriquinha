@@ -1,4 +1,6 @@
-// Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts.
+// Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts, e
+// abre o chat do planejamento com o pi falso.
+import type { Page } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { execFileSync } from "node:child_process";
@@ -9,6 +11,7 @@ import { guardarBytes } from "../src/persistencia/arquivos.ts";
 import { registrarCorrecoesSessao } from "../src/dominio/transicoes_rodada.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../src/persistencia/demandas.ts";
 import { gravarAnexos } from "../src/persistencia/evidencia_demanda.ts";
+import { expect, type Fabriquinha } from "./apoio.ts";
 
 const em = "2026-10-11T12:00:00.000Z";
 
@@ -323,4 +326,74 @@ export function registrarCorrecaoDaSessao(raiz: string, demanda_id: string, roda
     ),
   );
   banco.close();
+}
+
+/** A I-230 em planejamento, com o ticket `planejar` aberto e a `descricao` que dirige o pi falso. */
+export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
+  // A execução parte da worktree da demanda, que precisa existir e ser da Fabriquinha.
+  const caminho = join(raiz, "worktrees/loja/I-230/demanda");
+  const repo = join(raiz, "loja");
+  execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-230", caminho, "main"], { cwd: repo });
+  execFileSync("git", ["config", "branch.fabriquinha/I-230.fabriquinha", `demanda:${caminho}`], { cwd: repo });
+  const banco = abrir(raiz);
+  gravarConfiguracaoProjeto(banco, {
+    nome: "loja",
+    branch_base: "main",
+    chave_sonarqube: "loja",
+    raiz_git: repo,
+    hospedagem: "github",
+    etapas: [],
+    preparacao: [{ ordem: 1, comando: "true" }],
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+  });
+  criarDemanda(banco, {
+    demanda: {
+      id: "I-230",
+      projeto: "loja",
+      titulo: "Cupons com prioridade",
+      tipo: "funcionalidade",
+      descricao,
+      fase: "planejamento",
+      fase_alterada_em: em,
+      origem_ferramenta: "claude",
+      origem_sessao: "I-230",
+      enviada: true,
+      branch: "fabriquinha/I-230",
+    },
+    tickets: [
+      { demanda_id: "I-230", ticket_id: 1, etapa: "planejar", status: "aberto", status_alterado_em: em, devolucoes: 0 },
+    ],
+    decisoes: [],
+    evidencias: [
+      {
+        demanda_id: "I-230",
+        tipo: "criterios_aceite",
+        dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] },
+        em,
+      },
+    ],
+    rodadas: [],
+    dependencias_rodada: [],
+    criterios_citados: [],
+    dependencias_ticket: [],
+    caminhos_ticket: [],
+  } as unknown as AgregadoDemanda);
+  banco.close();
+}
+
+/** Executar agora, como o Auditor na página da demanda; devolve o chat da sessão assim que o ticket ganha o link. */
+export async function abrirOChatDoPlanejamento(pagina: Page, { base }: Fabriquinha): Promise<void> {
+  await pagina.goto(`${base}/demandas/I-230`);
+  const ticket = pagina.locator(".dm-ticket", { hasText: "I-230.T1" });
+  // CA-17: sem sessão, sem link para o chat.
+  await expect(ticket.getByRole("link", { name: "chat →" })).toHaveCount(0);
+  await pagina.getByRole("button", { name: "Executar agora" }).click();
+  // CA-16: com a sessão, o ticket leva ao chat dela.
+  await expect(async () => {
+    await pagina.reload();
+    await expect(ticket.getByRole("link", { name: "chat →" })).toBeVisible();
+  }).toPass();
+  await ticket.getByRole("link", { name: "chat →" }).click();
+  await expect(pagina).toHaveTitle("Chat · Fabriquinha");
 }

@@ -13,18 +13,13 @@ import { noLog } from "../persistencia/execucoes.ts";
 import { casar } from "./cliente/caminhos.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
-import { ROTAS_DA_AUDITORIA } from "./rotas/auditoria.ts";
 import { ROTAS_DAS_AVALIACOES } from "./rotas/avaliacoes.ts";
 import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DAS_DEMANDAS } from "./rotas/demandas.ts";
 import { ROTAS_DAS_ACOES_DE_DEMANDA } from "./rotas/demandas_acoes.ts";
-import { ROTAS_DO_DESENHO } from "./rotas/desenho.ts";
 import { ROTAS_DO_HISTORICO } from "./rotas/historico.ts";
-import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
-import { ROTAS_DA_ISSUE } from "./rotas/issue.ts";
 import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
-import { ROTAS_DO_PR } from "./rotas/pr.ts";
 import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
 import { ROTAS_DA_CONFIGURACAO_SDLC } from "./rotas/sdlc.ts";
 import { ROTAS_DA_SIMULACAO } from "./rotas/simulacao.ts";
@@ -34,15 +29,10 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DO_HISTORICO,
   ...ROTAS_DA_CONFIGURACAO,
   ...ROTAS_DA_CONFIGURACAO_SDLC,
-  ...ROTAS_DA_ISSUE,
   ...ROTAS_DAS_DEMANDAS,
   ...ROTAS_DAS_ACOES_DE_DEMANDA,
   ...ROTAS_DO_CHAT,
-  ...ROTAS_DA_AUDITORIA,
   ...ROTAS_DAS_AVALIACOES,
-  ...ROTAS_DO_DESENHO,
-  ...ROTAS_DO_PR,
-  ...ROTAS_DO_INICIO,
   ...ROTAS_DO_PROJETO,
   ...ROTAS_DAS_METRICAS,
   ...ROTAS_DA_SIMULACAO,
@@ -196,7 +186,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
     if (confere(url.searchParams.get("token"))) {
       resposta.setHeader("Set-Cookie", `${COOKIE}=${token.toString()}; HttpOnly; SameSite=Strict; Path=/`);
     }
-    resposta.writeHead(303, { Location: "/home" }).end();
+    resposta.writeHead(303, { Location: "/demandas" }).end();
   }
 
   async function api(pedido: IncomingMessage, url: URL, resposta: ServerResponse, corpo: unknown): Promise<void> {

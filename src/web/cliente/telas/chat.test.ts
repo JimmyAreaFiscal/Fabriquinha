@@ -1,95 +1,62 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { Evidencia, Execucao, Ticket } from "../../../dominio/agregado.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
 import type { ExecucaoSessao } from "../../../dominio/sessoes.ts";
-import type { CabecalhoDemanda } from "../../../execucao/sessoes_demanda.ts";
-import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { CabecalhoDoChat, Entrada } from "../../rotas/chat.ts";
-import type { PaginaDaIssue } from "../../rotas/issue.ts";
+import type { Entrada } from "../../rotas/chat.ts";
 import {
   barraDeEstado,
+  type Cabecalho,
   chaveDa,
   comCursor,
   comResultado,
-  contextoDaIssue,
   corpoDaFerramenta,
   doSistema,
   conversa,
-  edicaoDoRegistro,
   emFluxo,
   type Envio,
   envio,
   erroDaFalha,
   etiquetaDoEstado,
-  etiquetasDeAnexo,
   ferramenta,
-  lateral,
   linhaDoDialogo,
-  linhasDaEvidencia,
   linhasDaExecucao,
   mensagem,
+  modeloDaConversa,
   modeloDe,
-  propostasDoChat,
   respostaDoDialogo,
   valorDoSelect,
-  seletorDeSessoes,
 } from "./chat.ts";
 
 const T0 = "2026-10-11T10:00:00.000Z";
 
-const execucao = (e: Partial<Execucao> = {}): Execucao => ({
-  id: 7,
-  ticket: 3,
-  modo: "autonomo",
-  sessaoPi: "00000000-0000-4000-8000-000000000001",
-  resultado: "em_andamento",
-  iniciadaEm: T0,
+const execucao = (e: Partial<ExecucaoSessao> = {}): ExecucaoSessao => ({
+  id: "abcdef12-0000-4000-8000-000000000001",
+  sessao_id: "s",
+  inicio: T0,
+  falha: false,
   ...e,
 });
 
-type Sessao = CabecalhoDoChat["sessao"];
+type Sessao = Cabecalho["sessao"];
 
-const ticket = (t: Partial<Ticket> = {}): Ticket => ({
-  id: 3,
-  issue: 4,
-  etapa: "desenvolvimento",
-  titulo: "Buscar <cupons>",
-  descricao: "",
-  status: "em_execucao",
-  origem: "fabriquinha",
-  criadoEm: T0,
-  ...t,
-});
-
-const cabecalho = (sessao: Partial<Sessao> = {}, extra: Partial<CabecalhoDoChat> = {}): CabecalhoDoChat => ({
+/** A sessão do ticket I-239.T1 (planejar), rodando, com uma execução aberta. */
+const cabecalho = (sessao: Partial<Sessao> = {}, extra: Partial<Cabecalho> = {}): Cabecalho => ({
+  origem: "demanda",
   sessao: {
-    sessao: "s",
-    issue: 4,
-    projeto: "loja api",
-    ticket: 3,
-    etapa: "desenvolvimento",
-    modo: "autonomo",
-    execucao: 7,
+    sessao: "s/1",
+    projeto: "loja",
+    modo: "interativo",
+    execucao: "abcdef12-0000-4000-8000-000000000001",
     estado: "rodando",
     desde: T0,
     dialogos: [],
     ...sessao,
   },
-  issue: {
-    id: 4,
-    projeto: "loja api",
-    titulo: "Timeout <no> checkout",
-    tipo: "problema",
-    descricao: "",
-    fase: "desenvolvimento",
-    deps: [],
-    criadaEm: T0,
-  },
-  ticket: ticket(),
+  demanda: "I-239",
+  ticket: "I-239.T1",
+  etapa: "planejar",
   execucoes: [execucao()],
-  evidencias: [],
   ...extra,
 });
 
@@ -101,8 +68,8 @@ test("etiqueta do estado: rodando, aguardando com o motivo (falha em vermelho) e
   assert.equal(etiquetaDoEstado({ ...s, estado: "terminada" }), '<span class="pill pill-neutro">terminada</span>');
   const aguarda = { ...s, estado: "aguardando_humano" as const };
   assert.equal(
-    etiquetaDoEstado({ ...aguarda, motivo: "gate_registro" }),
-    '<span class="pill pill-aguarda">aguarda você · gate do registro</span>',
+    etiquetaDoEstado({ ...aguarda, motivo: "gate_demanda" }),
+    '<span class="pill pill-aguarda">aguarda você · gate da demanda</span>',
   );
   assert.equal(
     etiquetaDoEstado({ ...aguarda, motivo: "falha" }),
@@ -111,70 +78,55 @@ test("etiqueta do estado: rodando, aguardando com o motivo (falha em vermelho) e
   assert.equal(etiquetaDoEstado(aguarda), '<span class="pill pill-aguarda">aguarda você · </span>');
 });
 
-test("modelo: o da execução, senão o da última resposta do agente, senão o padrão do pi", () => {
+test("modelo: o fixado na sessão, senão o da última resposta do agente, senão o padrão do pi", () => {
   const resposta = (model?: string): Entrada => ({
     type: "message",
     message: { role: "assistant", provider: "anthropic", ...(model && { model }) },
   });
-  const fixado = cabecalho({}, { execucoes: [execucao({ modelo: { provedor: "llamacpp", modelo: "qwen" } })] });
-  assert.equal(modeloDe(fixado, [resposta("opus")]), "llamacpp / qwen");
+  assert.equal(
+    modeloDe(cabecalho({ modelo: { provedor: "llamacpp", modelo: "qwen" } }), [resposta("opus")]),
+    "llamacpp / qwen",
+  );
   assert.equal(modeloDe(cabecalho(), [resposta("sonnet"), resposta("opus"), { type: "session" }]), "anthropic / opus");
   assert.equal(modeloDe(cabecalho(), [resposta()]), "modelo padrão do pi");
-  assert.equal(modeloDe(cabecalho({}, { execucoes: [] }), []), "modelo padrão do pi");
+  assert.equal(modeloDe(cabecalho(), []), "modelo padrão do pi");
+  // A mesma leitura serve à avaliação, que não tem cabeçalho de sessão.
+  assert.equal(modeloDaConversa([{ type: "message", message: { role: "user" } }]), "modelo padrão do pi");
+  assert.equal(
+    modeloDaConversa([resposta("sonnet"), resposta("opus"), { type: "message", message: { role: "toolResult" } }]),
+    "anthropic / opus",
+  );
 });
 
-test("barra de estado: issue com link e título escapado, ticket, etapa e modo, estado, modelo, log e prompt", () => {
-  const html = barraDeEstado(cabecalho({ etapa: "sessao", modo: "interativo" }), "anthropic / <opus>");
-  assert.match(
-    html,
-    /<a class="issue" href="\/projects\/loja%20api\/issues\/I-4"><span class="id">I-4<\/span> Timeout &#60;no&#62; checkout<\/a>/,
+test("barra de estado: demanda, rodada, ticket, etapa, modo, estado, modelo, execução e Exportar, sem log nem prompt", () => {
+  const html = barraDeEstado(
+    cabecalho({ estado: "aguardando_humano", motivo: "conversa" }, { rodada: "I-239.R1" }),
+    "anthropic / <opus>",
   );
-  assert.match(
-    html,
-    /<span class="id">T-3<\/span><span class="muted">sessão em aberto · interativa<\/span><span class="pill pill-rodando">/,
-  );
+  assert.match(html, /<a class="issue" href="\/demandas\/I-239"><span class="id">I-239<\/span><\/a>/);
+  assert.match(html, /<span class="id">I-239.R1<\/span><span class="sep">│<\/span><span class="id">I-239.T1<\/span>/);
+  assert.match(html, /Planejamento · interativa<\/span><span class="pill pill-aguarda">aguarda você · conversa/);
   assert.match(html, /<span class="modelo" title="anthropic \/ &#60;opus&#62;">anthropic \/ &#60;opus&#62;<\/span>/);
-  assert.match(
-    html,
-    /E-7<\/span><a class="link" href="\/api\/execucoes\/7\/log" target="_blank" rel="noopener">log<\/a>/,
-  );
-  assert.match(
-    html,
-    /prompt<\/a><a class="link" href="\/api\/sessoes\/s\/historico.md" download>Exportar<\/a><button type="button" class="link" data-consulta>Conversar sobre<\/button><\/div><\/div>$/,
-  );
-  const semTitulo = cabecalho({ etapa: "registro", modo: "consulta" });
-  assert.match(
-    barraDeEstado({ ...semTitulo, issue: { ...semTitulo.issue, titulo: null } }, "m"),
-    /I-4<\/span> sem título.*registro · consulta/,
-  );
+  assert.match(html, /E-abcdef12<\/span><a class="link" href="\/api\/sessoes\/s%2F1\/historico.md" download>Exportar/);
+  assert.doesNotMatch(html, /log|prompt|Conversar sobre/);
+  assert.doesNotMatch(barraDeEstado(cabecalho(), "m"), /I-239.R1/);
 });
 
-test("linhas da execução: início com o prompt e o fim conforme o resultado e o modo", () => {
-  const [inicio, fim] = linhasDaExecucao(
-    execucao({ resultado: "sucesso", terminadaEm: "2026-10-11T10:05:00.000Z" }),
-    2,
-  );
-  assert.deepEqual(inicio, {
-    chave: "inicio-E-7",
-    em: T0,
-    html: '<div class="sistema">Execução E-7 iniciada · autônoma · <a href="/api/execucoes/7/prompt" target="_blank" rel="noopener">prompt da etapa</a></div>',
+test("linhas da execução: o início e, terminada, o fim ou a falha, sem link de log nem de prompt", () => {
+  const aberta = linhasDaExecucao(execucao());
+  assert.deepEqual(aberta, [
+    { chave: "inicio-E-abcdef12", em: T0, html: '<div class="sistema">Execução E-abcdef12 iniciada</div>' },
+  ]);
+  const fim = "2026-10-11T10:05:00.000Z";
+  assert.deepEqual(linhasDaExecucao(execucao({ fim }))[1], {
+    chave: "fim-E-abcdef12",
+    em: fim,
+    html: '<div class="sistema">Execução E-abcdef12 encerrada</div>',
   });
-  assert.deepEqual(fim, {
-    chave: "fim-E-7",
-    em: "2026-10-11T10:05:00.000Z",
-    html: '<div class="sistema">Execução E-7 concluída</div>',
-  });
-  assert.equal(linhasDaExecucao(execucao(), 0).length, 1, "em andamento, só o início");
-  const retomada = linhasDaExecucao(execucao({ modo: "interativo", resultado: "sucesso", terminadaEm: T0 }), 1);
-  assert.match(String(retomada[0]?.html), /interativa · <a [^>]+>prompt<\/a>/);
-  assert.equal(retomada[1]?.html, '<div class="sistema">Execução E-7 encerrada</div>');
-  assert.match(String(linhasDaExecucao(execucao({ modo: "interativo" }), 0)[0]?.html), />prompt da etapa</);
-  const consulta = linhasDaExecucao(
-    execucao({ modo: "consulta", resultado: "falha", erro: "<pi> caiu", terminadaEm: T0 }),
-    0,
+  assert.equal(
+    linhasDaExecucao(execucao({ fim, falha: true, erro: "<pi> caiu" }))[1]?.html,
+    '<div class="sistema">Execução E-abcdef12 falhou: &#60;pi&#62; caiu</div>',
   );
-  assert.equal(consulta[0]?.html, '<div class="sistema">Execução E-7 iniciada · consulta</div>');
-  assert.equal(consulta[1]?.html, '<div class="sistema">Execução E-7 falhou: &#60;pi&#62; caiu</div>');
 });
 
 test("linha do diálogo aberto pelo agente", () => {
@@ -298,15 +250,7 @@ test("comResultado: completa só a chamada do id; o resto da conversa fica como 
 test("conversa: mensagens e linhas das execuções por instante, sem o prompt da Fabriquinha, e os diálogos no fim", () => {
   const c = cabecalho(
     { dialogos: [dialogo({ title: "Seguir?" })] },
-    {
-      execucoes: [
-        execucao({
-          resultado: "sucesso",
-          iniciadaEm: "2026-10-11T10:00:00.000Z",
-          terminadaEm: "2026-10-11T10:09:00.000Z",
-        }),
-      ],
-    },
+    { execucoes: [execucao({ inicio: "2026-10-11T10:00:00.000Z", fim: "2026-10-11T10:09:00.000Z" })] },
   );
   const entrada = (em: string, message: Record<string, unknown>, fabriquinha = false): Entrada => ({
     type: "message",
@@ -327,7 +271,7 @@ test("conversa: mensagens e linhas das execuções por instante, sem o prompt da
   ]);
   assert.deepEqual(
     itens.map((i) => i.id),
-    ["inicio-E-7", "assistant-2", "user-4", "fim-E-7", "dialogo-d1"],
+    ["inicio-E-abcdef12", "assistant-2", "user-4", "fim-E-abcdef12", "dialogo-d1"],
   );
   const [, agente] = itens;
   assert.deepEqual(partesDe(agente)[0]?.artifact?.resultado, {
@@ -375,28 +319,16 @@ test("envio rodando: redirecionar ou enfileirar, abortar e enviar", () => {
   assert.match(linha, /data-modo="follow_up" aria-pressed="true"[^>]*>Enfileirar<\/button>/);
   assert.match(linha, /Enter envia · Shift\+Enter quebra linha/);
   assert.match(linha, /data-abortar>Abortar<\/button><button class="btn btn-primario">Enviar<\/button>/);
-  assert.doesNotMatch(linha, /Concluir sessão/);
-  const interativa = compositorDe(envio(cabecalho({ etapa: "sessao", modo: "interativo" }), "steer"));
-  assert.doesNotMatch(interativa.linha, /Concluir sessão/);
+  assert.doesNotMatch(linha, /Anexar|Concluir/);
 });
 
-test("envio em conversa: só enviar; na sessão em aberto, também concluir", () => {
-  const conversa = compositorDe(
-    envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "registro" }), "steer"),
-  );
+test("envio em conversa: só enviar, sem anexar histórico nem concluir", () => {
+  const conversa = compositorDe(envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa" }), "steer"));
   assert.equal(conversa.placeholder, "Responda ao agente");
-  assert.doesNotMatch(conversa.linha, /segmento|Abortar|Concluir/);
-  const aberta = compositorDe(
-    envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "interativo" }), "steer"),
-  );
   assert.match(
-    aberta.linha,
-    /<button type="button" class="btn" data-concluir>Concluir sessão<\/button><button class="btn btn-primario">Enviar<\/button>/,
+    conversa.linha,
+    /^<span class="dica-tecla">Enter envia · Shift\+Enter quebra linha<\/span><div class="direita"><button class="btn btn-primario">Enviar<\/button><\/div>$/,
   );
-  const consulta = compositorDe(
-    envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "sessao", modo: "consulta" }), "steer"),
-  );
-  assert.doesNotMatch(consulta.linha, /Concluir/);
 });
 
 test("envio em diálogo: o formulário do método, com Cancelar e Responder", () => {
@@ -486,372 +418,38 @@ test("valorDoSelect: o texto de «Outros» na única, o JSON da lista na múltip
   assert.equal(valorDoSelect(true, [], " "), undefined);
 });
 
-test("envio nos gates: só o aviso; terminada: Exportar histórico e Conversar sobre esta sessão", () => {
+test("envio na falha e no gate: o caminho para a página da demanda; terminada: Exportar histórico", () => {
   const aviso = (sessao: Partial<Sessao>) =>
     htmlDe(envio(cabecalho({ estado: "aguardando_humano", ...sessao }), "steer"));
-  for (const motivo of ["gate_registro", "gate_desenho"] as const) {
-    assert.equal(
-      aviso({ motivo }),
-      '<div class="fim">O agente enviou o resultado à sua aprovação. Decida na página da issue; devolver traz o motivo de volta a esta conversa.</div>',
-    );
-  }
   assert.equal(
-    aviso({ motivo: "gate_pr" }),
-    '<div class="fim">A etapa terminou; a decisão do gate fica na página da issue.</div>',
+    aviso({ motivo: "falha" }),
+    '<div class="fim">O ticket falhou; reabra-o na página da demanda, com a instrução para a próxima tentativa.<div class="botoes"><a class="btn btn-primario" href="/demandas/I-239">Abrir a demanda</a></div></div>',
+  );
+  assert.match(
+    aviso({ motivo: "gate_demanda" }),
+    /O plano espera a sua aprovação; decida na página da demanda.*href="\/demandas\/I-239"/,
   );
   assert.equal(
     aviso({ estado: "terminada", sessao: "a b" }),
-    '<div class="fim">Sessão terminada; a conversa fica só para leitura.<div class="botoes"><a class="btn" href="/api/sessoes/a%20b/historico.md" download>Exportar histórico</a><button type="button" class="btn btn-primario" data-consulta>Conversar sobre esta sessão</button></div></div>',
+    '<div class="fim">Sessão terminada; a conversa fica só para leitura.<div class="botoes"><a class="btn" href="/api/sessoes/a%20b/historico.md" download>Exportar histórico</a></div></div>',
   );
 });
 
-test("envio na falha: a instrução, o seletor de modelo esperando a issue e Responder e retomar", () => {
-  const html = htmlDe(envio(cabecalho({ estado: "aguardando_humano", motivo: "falha" }), "steer"));
-  assert.match(
-    html,
-    /^<form class="compositor falha-comp" data-retomar><div class="anexos" data-anexos hidden><\/div><textarea name="texto" rows="2" aria-label="Instrução" placeholder="Instrução para a próxima tentativa \(vai antes do prompt da etapa\)"><\/textarea>/,
-  );
-  assert.match(html, /<label class="dica-tecla rotulo-modelo">Modelo <span data-seletor-modelo><select [^>]*disabled/);
-  assert.match(html, /<button class="btn btn-primario">Responder e retomar<\/button><\/div><\/div><\/form>$/);
-  // + Anexar histórico também aqui, como no protótipo: o histórico vai com a instrução (F4 §6.8).
-  assert.match(
-    html,
-    /<\/select><\/span><\/label><button type="button" class="btn btn-pequeno" data-anexar [^>]*>\+ Anexar histórico<\/button><div class="direita">/,
-  );
-});
-
-test("envio que aceita mensagem: + Anexar histórico antes da dica", () => {
-  for (const sessao of [{}, { estado: "aguardando_humano", motivo: "conversa" }] as Partial<Sessao>[]) {
-    const { linha } = compositorDe(envio(cabecalho(sessao), "steer"));
-    assert.match(linha, /data-anexar title="[^"]+">\+ Anexar histórico<\/button><span class="dica-tecla">/);
-  }
-});
-
-const info = (s: Partial<InfoSessao> = {}): InfoSessao => ({ ...cabecalho().sessao, ...s });
-
-test("anexos: etiquetas removíveis e o seletor das outras sessões, da mais recente para a mais antiga", () => {
-  const a = info({ sessao: "2a7d9999", issue: 27, ticket: 114 });
-  assert.equal(
-    etiquetasDeAnexo([a]),
-    '<span class="anexo">histórico de s-2a7d · I-27 · T-114<button type="button" data-remover-anexo="2a7d9999" title="Remover" aria-label="Remover o histórico de s-2a7d · I-27 · T-114">×</button></span>',
-  );
-  assert.equal(etiquetasDeAnexo([]), "");
-  const velha = info({ sessao: "velha", desde: "2026-10-01T00:00:00.000Z", estado: "terminada", modo: "consulta" });
-  const nova = info({ sessao: "nova", desde: "2026-10-12T00:00:00.000Z", etapa: "revisao", projeto: "<p>" });
-  const html = seletorDeSessoes([velha, a, nova, info({ sessao: "esta" })], "esta", ["2a7d9999"]);
-  assert.deepEqual(
-    [...html.matchAll(/data-anexar-sessao="([^"]+)"/g)].map((m) => m[1]),
-    ["nova", "velha"],
-  );
-  assert.match(
-    html,
-    /<button type="button" class="opcao-sessao" data-anexar-sessao="nova"><span class="id">I-4 · T-3<\/span><span>&#60;p&#62; · revisão · autônoma<\/span><span class="pill pill-rodando">rodando<\/span><span class="muted pequeno">s-nova<\/span><\/button>/,
-  );
-  assert.match(html, /consulta<\/span><span class="pill pill-neutro">terminada/);
-  assert.match(html, /^<ul class="sessoes-anexo"><li>/);
-  assert.equal(seletorDeSessoes([a], "x", ["2a7d9999"]), '<p class="muted">Nenhuma outra sessão para anexar.</p>');
-});
-
-test("erro da falha: a última execução, o erro do ticket escapado e o que ficou; nada fora da falha", () => {
+test("erro da falha: a última execução, o motivo do ticket escapado e o que ficou; nada fora da falha", () => {
   const falha = cabecalho(
-    { estado: "aguardando_humano", motivo: "falha", execucao: 9 },
-    { ticket: ticket({ status: "falhou", erro: "tempo limite de 30 min <atingido>." }) },
+    { estado: "aguardando_humano", motivo: "falha" },
+    { erro: "tempo limite de 30 min <atingido>." },
   );
   assert.deepEqual(erroDaFalha(falha), [
     {
-      chave: "falha-E-9",
-      html: '<div class="erro-bloco" role="alert"><strong>Execução E-9 falhou:</strong> tempo limite de 30 min &#60;atingido&#62;. O ticket T-3 ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>',
+      chave: "falha-E-abcdef12",
+      html: '<div class="erro-bloco" role="alert"><strong>Execução E-abcdef12 falhou:</strong> tempo limite de 30 min &#60;atingido&#62;. O ticket I-239.T1 ficou <strong>falhou</strong>; o trabalho na worktree foi mantido.</div>',
     },
   ]);
   assert.deepEqual(erroDaFalha(cabecalho()), []);
   const itens = conversa({ ...falha, sessao: { ...falha.sessao, dialogos: [dialogo({ title: "t" })] } }, []);
   assert.deepEqual(
     itens.map((i) => i.id),
-    ["inicio-E-7", "falha-E-9", "dialogo-d1"],
+    ["inicio-E-abcdef12", "falha-E-abcdef12", "dialogo-d1"],
   );
-});
-
-const evidencia = (e: Partial<Evidencia>): Evidencia => ({
-  id: 1,
-  ticket: 3,
-  tipo: "criterios_aceite",
-  dados: {},
-  arquivos: [],
-  produtor: "agente",
-  em: T0,
-  ...e,
-});
-
-const pagina = (p: Partial<PaginaDaIssue> = {}): PaginaDaIssue =>
-  ({
-    issue: { ...cabecalho().issue, fase: "desenvolvimento" },
-    percorridas: ["registro", "desenho", "aprovacao_desenho", "desenvolvimento"],
-    tickets: [
-      ticket({ id: 1, etapa: "registro", titulo: "Registrar", status: "concluido" }),
-      ticket({ id: 2, titulo: "Teste de carga", status: "aberto" }),
-      ticket({ id: 3, status: "falhou" }),
-    ],
-    evidencias: [
-      evidencia({ id: 10, ticket: 1 }),
-      evidencia({ id: 11, ticket: 1, tipo: "explicacao_fitness" }),
-      evidencia({ id: 12, ticket: 3, tipo: "desenho_solucao", aprovada: true }),
-    ],
-    sessoes: [
-      info({ sessao: "consulta-1", ticket: 1, modo: "consulta", estado: "terminada" }),
-      info({ sessao: "principal-1", ticket: 1, modo: "interativo", estado: "terminada" }),
-      info({ sessao: "s", ticket: 3, estado: "aguardando_humano", motivo: "falha" }),
-    ],
-    ...p,
-  }) as PaginaDaIssue;
-
-test("contexto da issue: I-n e projeto, trilho compacto, tickets com o desta sessão e os chats, artefatos e Abrir a issue", () => {
-  const html = contextoDaIssue(pagina(), info({ sessao: "s", ticket: 3 }));
-  assert.match(
-    html,
-    /^<section class="painel superficie contexto-issue" aria-label="Contexto da issue"><h3>I-4 · loja api<\/h3>/,
-  );
-  assert.match(
-    html,
-    /<div class="trilho-mini falha" role="img" aria-label="Fase: Desenvolvimento"><i class="feito" title="Registro"><\/i><i class="feito" title="Desenho"><\/i><i class="feito" title="Aprovação do desenho"><\/i><i class="atual" title="Desenvolvimento"><\/i><i title="Revisão"><\/i>/,
-  );
-  assert.match(
-    html,
-    /<li><span class="p concluido" aria-hidden="true"><\/span><span class="id">T-1<\/span><span class="t">Registrar<\/span><a class="link" href="\/sessions\/principal-1">chat<\/a><\/li>/,
-  );
-  assert.match(
-    html,
-    /<li><span class="p aberto" aria-hidden="true"><\/span><span class="id">T-2<\/span><span class="t">Teste de carga<\/span><\/li>/,
-  );
-  assert.match(
-    html,
-    /<li class="atual" aria-current="true"><span class="p falhou" aria-hidden="true"><\/span><span class="id">T-3<\/span><span class="t">Buscar &#60;cupons&#62;<\/span><span class="muted pequeno">esta<\/span><\/li>/,
-  );
-  assert.deepEqual(
-    [...html.matchAll(/data-evidencia="(\d+)"/g)].map((m) => m[1]),
-    ["10", "12"],
-  );
-  // Cada card diz de que ticket é: com dois tickets de desenvolvimento, os Testes de um e do outro se distinguem.
-  assert.deepEqual(
-    [...html.matchAll(/<button type="button" class="art" data-evidencia="\d+">.*?<\/button>/g)].map((m) =>
-      m[0]
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim(),
-    ),
-    ["TABELA Critérios de aceite T-1", "JSON Desenho da solução T-3"],
-  );
-  assert.match(html, /<a class="link" href="\/projects\/loja%20api\/issues\/I-4">Abrir a issue →<\/a><\/section>$/);
-
-  const concluida = contextoDaIssue(
-    pagina({
-      issue: { ...cabecalho().issue, fase: "concluida" },
-      percorridas: [
-        "registro",
-        "desenho",
-        "aprovacao_desenho",
-        "desenvolvimento",
-        "revisao",
-        "encerramento",
-        "aprovacao_pr",
-      ],
-      evidencias: [],
-      sessoes: [],
-    }),
-    info(),
-  );
-  // O ajuste do PR, que não aconteceu, fica neutro.
-  assert.match(
-    concluida,
-    /<div class="trilho-mini" role="img" aria-label="Fase: Concluída">(<i class="feito" [^>]+><\/i>){7}<i title="Ajuste do PR"><\/i><\/div>/,
-  );
-  assert.match(concluida, /<p class="muted pequeno">Nenhum artefato ainda.<\/p>/);
-});
-
-test("lateral no registro: o formulário de C2 com o que está registrado", () => {
-  const c = cabecalho({ estado: "aguardando_humano", motivo: "conversa", etapa: "registro" });
-  const registro = {
-    ...c,
-    issue: { ...c.issue, fase: "registro" as const, titulo: null, tipo: null, descricao: "a <b>" },
-  };
-  const html = lateral(registro);
-  assert.match(html, /^<form class="painel superficie" data-registro><h3>Registro · você pode corrigir direto<\/h3>/);
-  assert.match(html, /<input name="titulo" value="" autocomplete="off">/);
-  assert.match(
-    html,
-    /<select name="tipo"><option value="" selected>—<\/option><option value="funcionalidade">funcionalidade<\/option><option value="problema">problema<\/option><\/select>/,
-  );
-  assert.match(html, /<textarea name="descricao" rows="5">a &#60;b&#62;<\/textarea>/);
-  const preenchido = lateral({ ...registro, issue: { ...registro.issue, titulo: "T <1>", tipo: "problema" } });
-  assert.match(preenchido, /value="T &#60;1&#62;"/);
-  assert.match(
-    preenchido,
-    /<select name="tipo"><option value="funcionalidade">funcionalidade<\/option><option value="problema" selected>problema<\/option>/,
-  );
-  assert.equal(lateral({ ...registro, issue: { ...registro.issue, fase: "desenho" } }), "", "depois do registro, nada");
-  assert.equal(lateral(cabecalho()), "");
-});
-
-test("lateral nos gates: só o aviso com Decidir na página da issue", () => {
-  for (const [motivo, rotulo] of [
-    ["gate_registro", "Gate do registro"],
-    ["gate_desenho", "Gate do desenho"],
-    ["gate_pr", "Gate do PR"],
-  ] as const) {
-    const html = lateral(cabecalho({ estado: "aguardando_humano", motivo }));
-    assert.match(html, new RegExp(`^<section class="gate-reg" aria-label="${rotulo}">`));
-    assert.match(
-      html,
-      /<a class="btn btn-primario" href="\/projects\/loja%20api\/issues\/I-4">Decidir na página da issue<\/a>/,
-    );
-  }
-});
-
-test("edição do registro: só título e tipo preenchidos; a descrição vai sempre", () => {
-  assert.deepEqual(edicaoDoRegistro({ titulo: "  ", tipo: "", descricao: "" }), { descricao: "" });
-  assert.deepEqual(edicaoDoRegistro({ titulo: " T ", tipo: "problema", descricao: "d" }), {
-    titulo: "T",
-    tipo: "problema",
-    descricao: "d",
-  });
-});
-
-test("propostas do chat: um cartão por proposta aberta, nenhum sem elas", () => {
-  assert.equal(propostasDoChat(cabecalho()), "");
-  const proposta = {
-    id: 9,
-    ticket: 3,
-    titulo: "Parte <B>",
-    mensagem: "Tela",
-    arquivos: 31,
-    status: "pendente" as const,
-    em: T0,
-  };
-  const html = propostasDoChat(cabecalho({}, { propostas: [proposta] }));
-  assert.match(html, /Proposta de issue/);
-  assert.match(html, /Parte &#60;B&#62;/);
-  assert.match(html, /a IA da I-4 reduz o escopo/);
-});
-
-test("aviso da Fabriquinha: mensagem do usuário marcada aparece como Fabriquinha, não como você", () => {
-  const m = { role: "user", content: "A Fabriquinha criou a **I-10**", timestamp: 1 };
-  const html = (l: ThreadMessageLike[]) => (l[0]?.metadata?.custom?.html as string | undefined) ?? "";
-  const aviso = html(mensagem(m, undefined, true));
-  assert.match(aviso, /^<div class="msg fabriquinha"><span class="quem">Fabriquinha<\/span>/);
-  assert.match(aviso, /<strong>I-10<\/strong>/);
-  assert.equal(mensagem(m)[0]?.role, "user");
-  const itens = conversa(cabecalho({ estado: "aguardando_humano", motivo: "conversa" }, { execucoes: [] }), [
-    { type: "message", timestamp: T0, message: m, aviso: true },
-  ]);
-  assert.match(html(itens), /msg fabriquinha/);
-});
-
-test("evidência submetida: balão da Fabriquinha com o nome do tipo, por instante; substituída, chave nova", () => {
-  const e = { id: 5, tipo: "prototipo", em: "2026-10-11T10:00:30.000Z" } as const;
-  const linha = linhasDaEvidencia(e);
-  assert.equal(linha.chave, "evidencia-5");
-  assert.match(linha.html, /^<div class="msg fabriquinha"><span class="quem">Fabriquinha<\/span>/);
-  assert.match(linha.html, /Evidência <strong>Protótipo<\/strong> submetida; o card está em Artefatos/);
-  const ordem = (evidencias: CabecalhoDoChat["evidencias"]) =>
-    conversa(cabecalho({}, { evidencias, execucoes: [execucao({ terminadaEm: "2026-10-11T10:01:00.000Z" })] }), []).map(
-      (m) => m.id,
-    );
-  assert.deepEqual(ordem([e]), ["inicio-E-7", "evidencia-5", "fim-E-7"]);
-  assert.deepEqual(ordem([{ ...e, id: 6 }]), ["inicio-E-7", "evidencia-6", "fim-E-7"], "a antiga não volta");
-  assert.deepEqual(ordem([]), ["inicio-E-7", "fim-E-7"], "sem evidência, sem balão");
-});
-
-// ——— sessão de ticket da demanda (I-239) ———
-
-const execDemanda = (e: Partial<ExecucaoSessao> = {}): ExecucaoSessao => ({
-  id: "abcdef12-0000-4000-8000-000000000001",
-  sessao_id: "s",
-  inicio: T0,
-  falha: false,
-  ...e,
-});
-
-const daDemanda = (sessao: Partial<CabecalhoDemanda["sessao"]> = {}, extra: Partial<CabecalhoDemanda> = {}) =>
-  ({
-    origem: "demanda",
-    sessao: {
-      sessao: "s/1",
-      projeto: "loja",
-      modo: "interativo",
-      execucao: "abcdef12-0000-4000-8000-000000000001",
-      estado: "aguardando_humano",
-      motivo: "conversa",
-      desde: T0,
-      dialogos: [],
-      ...sessao,
-    },
-    demanda: "I-239",
-    ticket: "I-239.T1",
-    etapa: "planejar",
-    execucoes: [execDemanda({ fim: T0 })],
-    ...extra,
-  }) satisfies CabecalhoDemanda;
-
-test("demanda: etiqueta do gate e modelo fixado na sessão", () => {
-  assert.equal(
-    etiquetaDoEstado({ estado: "aguardando_humano", motivo: "gate_demanda" }),
-    '<span class="pill pill-aguarda">aguarda você · gate da demanda</span>',
-  );
-  const modelo = { provedor: "llamacpp", modelo: "qwen" };
-  assert.equal(modeloDe(daDemanda({ modelo }), []), "llamacpp / qwen");
-  assert.equal(modeloDe(daDemanda(), []), "modelo padrão do pi");
-});
-
-test("demanda: a barra cita demanda, rodada, ticket, etapa, modo, estado, execução e Exportar, sem log nem prompt", () => {
-  const html = barraDeEstado(daDemanda({}, { rodada: "I-239.R1" }), "m");
-  assert.match(html, /<a class="issue" href="\/demandas\/I-239"><span class="id">I-239<\/span><\/a>/);
-  assert.match(html, /<span class="id">I-239.R1<\/span><span class="sep">│<\/span><span class="id">I-239.T1<\/span>/);
-  assert.match(html, /Planejamento · interativa<\/span><span class="pill pill-aguarda">aguarda você · conversa/);
-  assert.match(html, /E-abcdef12<\/span><a class="link" href="\/api\/sessoes\/s%2F1\/historico.md" download>Exportar/);
-  assert.doesNotMatch(html, /log|prompt|Conversar sobre/);
-  assert.doesNotMatch(barraDeEstado(daDemanda(), "m"), /I-239.R1/);
-});
-
-test("demanda: linhas da execução sem link de log ou prompt; erro da falha com o motivo do ticket", () => {
-  const aberta = linhasDaExecucao(execDemanda(), 0);
-  assert.deepEqual(
-    aberta.map((l) => [l.chave, l.em]),
-    [["inicio-E-abcdef12", T0]],
-  );
-  assert.doesNotMatch(String(aberta[0]?.html), /href/);
-  const fim = "2026-10-11T10:05:00.000Z";
-  assert.match(String(linhasDaExecucao(execDemanda({ fim }), 0)[1]?.html), /E-abcdef12 encerrada/);
-  assert.match(
-    String(linhasDaExecucao(execDemanda({ fim, falha: true, erro: "<x>" }), 0)[1]?.html),
-    /falhou: &#60;x&#62;/,
-  );
-  const falha = daDemanda({ estado: "aguardando_humano", motivo: "falha" }, { erro: "quebrou." });
-  assert.match(String(erroDaFalha(falha)[0]?.html), /E-abcdef12 falhou:<\/strong> quebrou\. O ticket I-239.T1 ficou/);
-  assert.deepEqual(erroDaFalha(daDemanda()), []);
-});
-
-test("demanda: a conversa traz as linhas da execução e nada da issue; sem propostas nem coluna ao lado", () => {
-  const itens = conversa(daDemanda({}, { execucoes: [execDemanda({ fim: T0 })] }), []);
-  assert.deepEqual(
-    itens.map((i) => i.id),
-    ["inicio-E-abcdef12", "fim-E-abcdef12"],
-  );
-  assert.equal(propostasDoChat(daDemanda()), "");
-  assert.equal(lateral(daDemanda()), "");
-});
-
-test("demanda: o envio conforme o estado, sem anexar, concluir nem retomada", () => {
-  const html = (e: Envio) => ("html" in e ? e.html : e.linha);
-  const conversando = envio(daDemanda(), "steer");
-  assert.ok("linha" in conversando);
-  assert.doesNotMatch(conversando.linha, /Anexar|data-concluir/);
-  const rodando = envio(daDemanda({ estado: "rodando", motivo: undefined }), "steer");
-  assert.match(html(rodando), /data-abortar/);
-  assert.doesNotMatch(html(rodando), /Anexar/);
-  const falha = html(envio(daDemanda({ motivo: "falha" }), "steer"));
-  assert.match(falha, /href="\/demandas\/I-239">Abrir a demanda/);
-  assert.doesNotMatch(falha, /data-retomar/);
-  assert.match(html(envio(daDemanda({ motivo: "gate_demanda" }), "steer")), /aprovação.*href="\/demandas\/I-239"/);
-  const terminada = html(envio(daDemanda({ estado: "terminada", motivo: undefined }), "steer"));
-  assert.match(terminada, /Exportar histórico/);
-  assert.doesNotMatch(terminada, /data-consulta/);
 });

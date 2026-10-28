@@ -84,3 +84,19 @@ test("a fitness acusa cada desvio de forma", (t) => {
     ].sort(),
   );
 });
+
+test("CA-14: nenhuma skill do pacote cita comando removido; acima de 30 arquivos, demandas separadas com --dep", () => {
+  const skills = join(PACOTE, "skills");
+  const texto = (dir: string) => readFileSync(join(skills, dir, "SKILL.md"), "utf8");
+  for (const dir of readdirSync(skills)) {
+    assert.doesNotMatch(
+      texto(dir),
+      /fabriquinha (issue|necessidade|ticket (enviar|editar|remover)|evidencia ver)\b|`fabriquinha ticket criar`/,
+      dir,
+    );
+  }
+  for (const dir of ["artefato-criterios-aceite", "artefato-desenho-solucao"]) {
+    assert.match(texto(dir), /Mais de 30|mais de 30/, dir);
+    assert.match(texto(dir), /`fabriquinha demanda registrar \.\.\. --dep I-<n>`/, dir);
+  }
+});

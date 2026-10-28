@@ -28,7 +28,7 @@ function issue(id: number, nome: string, fase: string, andamento = false): strin
 
 /** Uma demanda do projeto com uma execução de `custo` dólares, que a página Métricas lê. */
 const demanda = (id: string, nome: string, custo: number) =>
-  `INSERT INTO demanda VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'execucao', '${em}', 'f', 's', 1, 'b-${id}');
+  `INSERT INTO demanda VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'execucao', '${em}', 'f', 's', 1, 'fabriquinha/${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em}');
     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv-${id}');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${em}', '${em}', 0);
@@ -56,9 +56,10 @@ test("remover: cancelar não apaga; confirmar tira o projeto de todas as telas e
   const menu = pagina.getByRole("navigation", { name: "Configuração" });
   const dialogo = pagina.getByRole("dialog", { name: "Remover o projeto demo" });
 
-  // CA-1: o diálogo cita o nome e as 4 issues; CA-2: Cancelar fecha e o projeto continua.
+  // CA-1: o diálogo cita o nome e o que sai junto, sem contar issues; CA-2: Cancelar fecha e o projeto continua.
+  await expect(pagina.getByRole("heading", { level: 2, name: /^demo/ })).not.toContainText("issue");
   await pagina.getByRole("button", { name: "Remover o projeto demo" }).click();
-  await expect(dialogo).toContainText("O projeto demo e 4 issues serão apagados");
+  await expect(dialogo).toContainText("O projeto demo será apagado com as demandas, em qualquer fase,");
   await dialogo.getByRole("button", { name: "Cancelar" }).click();
   await expect(dialogo).toBeHidden();
   await expect(menu.getByRole("link", { name: /^demo/ })).toBeVisible();
@@ -71,8 +72,9 @@ test("remover: cancelar não apaga; confirmar tira o projeto de todas as telas e
   await expect(menu.getByRole("link", { name: /^demo/ })).toHaveCount(0);
   await expect(menu.getByRole("link", { name: /^outro/ })).toBeVisible();
 
-  await pagina.goto(`${fabriquinha.base}/home`);
-  await expect(pagina.locator(".tag", { hasText: "demo" })).toHaveCount(0);
+  await pagina.goto(`${fabriquinha.base}/demandas`);
+  await expect(pagina.getByText("Demanda I-92")).toBeVisible();
+  await expect(pagina.getByText("Demanda I-91")).toHaveCount(0);
   await pagina.goto(`${fabriquinha.base}/projects/demo`);
   await expect(pagina.getByRole("heading", { name: "Projeto não encontrado" })).toBeVisible();
   await pagina.goto(`${fabriquinha.base}/history`);

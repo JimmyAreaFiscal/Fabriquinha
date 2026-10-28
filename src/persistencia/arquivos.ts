@@ -16,20 +16,6 @@ export function caminhoArquivo(banco: DatabaseSync, sha256: string): string {
   return join(raizDo(banco), "arquivos", sha256.slice(0, 2), sha256);
 }
 
-/**
- * O anexo com esse hash, se alguma evidência o registrou (F7 §4.3): o nome original e o mime da primeira que o
- * registrou. Só um hash registrado vira caminho de arquivo servido.
- */
-export function arquivoRegistrado(
-  banco: DatabaseSync,
-  sha256: string,
-): { nome: string; mime: string; bytes: number } | undefined {
-  const linha = banco
-    .prepare("SELECT nome, mime, bytes FROM evidencia_arquivo WHERE sha256 = ? ORDER BY rowid LIMIT 1")
-    .get(sha256);
-  return linha && { nome: String(linha.nome), mime: String(linha.mime), bytes: Number(linha.bytes) };
-}
-
 function sincronizarDiretorio(diretorio: string): void {
   const fd = openSync(diretorio, "r");
   try {

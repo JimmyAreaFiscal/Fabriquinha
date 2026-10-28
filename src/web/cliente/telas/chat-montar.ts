@@ -1,54 +1,36 @@
-// Chat no DOM (F7 §4.4): assina o SSE da sessão, desenha o retrato e acrescenta o que chega ao vivo, com a rolagem
-// automática que pausa quando o Auditor sobe, e liga à API o envio com os anexos de histórico, os diálogos, o
-// registro, o Responder e retomar, a consulta e o contexto da issue ao lado. O HTML vem de chat.ts; os testes de
-// ponta a ponta (e2e/chat.spec.ts) o exercitam no navegador.
+// Chat no DOM (F7 §4.4): assina o SSE da sessão do ticket da demanda, desenha o retrato e acrescenta o que chega ao
+// vivo, com a rolagem automática que pausa quando o Auditor sobe, e liga à API o envio, os diálogos e o aborto. O HTML
+// vem de chat.ts; os testes de ponta a ponta (e2e/chat*.spec.ts) o exercitam no navegador.
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { Execucao } from "../../../dominio/agregado.ts";
-import type { ExecucaoSessao } from "../../../dominio/sessoes.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
-import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { CabecalhoDoChat } from "../../rotas/chat.ts";
-import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { Parametros } from "../caminhos.ts";
-import { abrirCaixa, api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
-import { caminhoDaSessao, escapar, modeloDoSeletor } from "../render.ts";
+import { abrirCaixa, api, avisar, mostrarErro } from "../dom.ts";
+import { escapar } from "../render.ts";
 import {
   barraDeEstado,
   type Cabecalho,
   chaveDa,
   comResultado,
-  contextoDaIssue,
   conversa,
-  daDemanda,
   type Dados,
-  edicaoDoRegistro,
   emFluxo,
   envio,
   erroDaFalha,
-  etiquetasDeAnexo,
   doSistema,
   type Item,
-  lateral,
   linhaDoDialogo,
-  linhasDaEvidencia,
   linhasDaExecucao,
   mensagem,
   type MensagemPi,
   type ModoEnvio,
   modeloDe,
-  propostasDoChat,
   respostaDoDialogo,
   valorDoSelect,
-  seletorDeSessoes,
 } from "./chat.ts";
 import type * as ModuloDaConversa from "./chat-conversa.tsx";
-import { evidenciaNaCaixa, seletorDeModelo } from "./issue.ts";
-import { carregarTextos, modelos as modelosDoPi } from "./issue-montar.ts";
 
 const ESQUELETO =
-  '<div class="pagina-chat"><div data-barra></div><div class="chat-layout"><div data-conversa-area>' +
-  "</div>" +
-  '<aside class="lateral" aria-label="Ao lado da conversa"><div class="lado" data-lateral></div><div class="lado" data-contexto></div></aside></div></div>';
+  '<div class="pagina-chat"><div data-barra></div><div class="chat-layout"><div data-conversa-area></div></div></div>';
 
 type Evento = Record<string, unknown> & { type?: string };
 
@@ -76,24 +58,16 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   const parte = (seletor: string) => raiz.querySelector<HTMLElement>(seletor) ?? raiz;
   const barra = parte("[data-barra]");
   const areaDeEnvio = parte("[data-conversa-area]");
-  const aoLado = parte("[data-lateral]");
-  const contexto = parte("[data-contexto]");
 
   let cabecalho: Cabecalho | undefined;
   let modelo = "";
   let modo: ModoEnvio = "steer";
-  let formaDoLado = "";
   /** As chaves do retrato e das linhas do sistema, para o que chega ao vivo não repetir o que já está na tela. */
   const vistas = new Set<string>();
   /** A conversa como o assistant-ui a desenha; o que chega ao vivo entra no fim. */
   let mensagens: ThreadMessageLike[] = [];
   /** A mensagem do agente chegando em fluxo. */
   let fluxo: { texto: string; raciocinio: string } | undefined;
-  /** As sessões cujo histórico vai com a próxima mensagem (F4 §6.8). */
-  let anexos: InfoSessao[] = [];
-  /** A página da issue, para o contexto ao lado, os artefatos na caixa e o seletor de modelo da falha. */
-  let pagina: PaginaDaIssue | undefined;
-  let leituras = 0;
 
   /** O componente React da conversa; só o chat o baixa, e até chegar o estado só se acumula em `mensagens`. */
   let conversaReact: typeof ModuloDaConversa | undefined;
@@ -104,21 +78,11 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     conversaReact.desenharConversa(areaDeEnvio, {
       mensagens: fluxo ? [...mensagens, emFluxo(fluxo.texto, fluxo.raciocinio)] : mensagens,
       envio: envio(cabecalho, modo),
-      anexos: etiquetasDeAnexo(anexos),
-      propostas: propostasDoChat(cabecalho),
       aoEnviar: enviar,
-      ...(daDemanda(cabecalho) && {
-        aoVazio: () => {
-          avisar("escreva a mensagem");
-        },
-      }),
+      aoVazio: () => {
+        avisar("escreva a mensagem");
+      },
     });
-    // As etiquetas do formulário de retomada (HTML pronto de chat.ts) ficam por nossa conta; as do compositor, do React.
-    const daRetomada = areaDeEnvio.querySelector<HTMLElement>("[data-retomar] [data-anexos]");
-    if (daRetomada) {
-      daRetomada.innerHTML = etiquetasDeAnexo(anexos);
-      daRetomada.hidden = anexos.length === 0;
-    }
   }
 
   /** As linhas do sistema que ainda não estão na conversa. */
@@ -132,79 +96,37 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     fluxo = undefined;
   }
 
-  /** O envio do compositor (F4 §6.8): o modo conforme o estado e os anexos de histórico. */
+  /** O envio do compositor (F4 §6.8): o modo conforme o estado. */
   async function enviar(texto: string): Promise<void> {
     if (!cabecalho) return;
     avisar();
     const modoDoEnvio = cabecalho.sessao.estado === "rodando" ? modo : "prompt";
-    const corpo = { texto, modo: modoDoEnvio, ...(anexos.length > 0 && { anexos: anexos.map((a) => a.sessao) }) };
     try {
-      await postar(`/api/sessoes/${encodeURIComponent(sessao)}/mensagens`, corpo);
+      await postar(`/api/sessoes/${encodeURIComponent(sessao)}/mensagens`, { texto, modo: modoDoEnvio });
     } catch (error_) {
       mostrarErro(error_);
       throw error_;
     }
-    anexos = [];
-    desenhar();
   }
 
-  /** Na falha, o seletor de modelo do ticket, quando a issue e os modelos do pi chegam; guarda o valor de partida. */
-  function desenharSeletor(): void {
-    const lugar = areaDeEnvio.querySelector<HTMLElement>("[data-seletor-modelo]");
-    if (!lugar || !pagina || !cabecalho || daDemanda(cabecalho)) return;
-    const p = pagina;
-    const { ticket } = cabecalho;
-    void modelosDoPi().then((lista) => {
-      lugar.innerHTML = seletorDeModelo(p, ticket, lista);
-      const select = lugar.querySelector("select");
-      if (select) select.dataset.inicial = select.value;
-    });
-  }
-
-  /** Relê a página da issue para o contexto ao lado; a resposta de uma leitura antiga não sobrescreve a nova. */
-  function lerContexto(c: Cabecalho): void {
-    if (daDemanda(c)) return; // a sessão da demanda não tem página de issue ao lado nem seletor de modelo
-    const vez = ++leituras;
-    api<PaginaDaIssue>(`/api/issues/${String(c.issue.id)}`, { signal })
-      .then((lida) => {
-        if (vez !== leituras || !cabecalho) return;
-        pagina = lida;
-        contexto.innerHTML = contextoDaIssue(lida, c.sessao);
-        if (!areaDeEnvio.querySelector("[data-seletor-modelo] select:not([disabled])")) desenharSeletor();
-      })
-      .catch(mostrarErro);
-  }
-
-  /** Barra, conversa com o envio e coluna da direita; a coluna só muda quando a forma muda, para não apagar o que se digita. */
+  /** Barra e conversa com o envio. */
   function aplicar(c: Cabecalho): void {
     cabecalho = c;
-    // Uma execução nova com o modelo fixado (C20) troca o da barra já no início, antes da primeira resposta.
-    if (daDemanda(c) ? c.sessao.modelo : c.execucoes.at(-1)?.modelo) modelo = modeloDe(c, []);
+    // Uma execução nova com o modelo fixado troca o da barra já no início, antes da primeira resposta.
+    if (c.sessao.modelo) modelo = modeloDe(c, []);
     barra.innerHTML = barraDeEstado(c, modelo);
-    const { sessao: s } = c;
-    const doLado = JSON.stringify([s.motivo, daDemanda(c) ? c.etapa : c.sessao.etapa, daDemanda(c) ? null : c.issue]);
-    const sujo = aoLado.querySelector("[data-sujo]") !== null;
-    if (doLado !== formaDoLado && !sujo) {
-      formaDoLado = doLado;
-      aoLado.innerHTML = lateral(c);
-    }
-    if (s.estado !== "rodando") fecharFluxo();
+    if (c.sessao.estado !== "rodando") fecharFluxo();
     linhasNovas([
-      ...(c.execucoes as (Execucao | ExecucaoSessao)[]).flatMap((e, i) => linhasDaExecucao(e, i)),
-      ...(daDemanda(c) ? [] : c.evidencias.map(linhasDaEvidencia)),
+      ...c.execucoes.flatMap(linhasDaExecucao),
       ...erroDaFalha(c),
-      ...s.dialogos.map(linhaDoDialogo),
+      ...c.sessao.dialogos.map(linhaDoDialogo),
     ]);
     desenhar();
-    // O select que o Auditor já mexeu não é refeito a cada estado.
-    if (!areaDeEnvio.querySelector("[data-seletor-modelo] select:not([disabled])")) desenharSeletor();
-    lerContexto(c);
   }
 
   function retrato(dados: Dados): void {
     vistas.clear();
     fecharFluxo();
-    formaDoLado = "";
     modelo = modeloDe(dados, dados.conversa);
     mensagens = conversa(dados, dados.conversa);
     for (const { id } of mensagens) vistas.add(String(id));
@@ -221,7 +143,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     }
     vistas.add(chaveDa(m));
     if (m.role === "toolResult") mensagens = mensagens.map((x) => comResultado(x, m));
-    else if (!evento.fabriquinha) mensagens = [...mensagens, ...mensagem(m, undefined, evento.aviso === true)];
+    else if (!evento.fabriquinha) mensagens = [...mensagens, ...mensagem(m)];
     if (m.role === "assistant" && cabecalho) {
       modelo = modeloDe(cabecalho, [evento]);
       barra.innerHTML = barraDeEstado(cabecalho, modelo);
@@ -244,7 +166,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       if (signal.aborted) return;
       conversaReact = modulo;
       desenhar();
-      if (!areaDeEnvio.querySelector("[data-seletor-modelo] select:not([disabled])")) desenharSeletor();
     })
     .catch(mostrarErro);
 
@@ -268,10 +189,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (fonte.readyState === EventSource.CLOSED) api(`/api/sessoes/${encodeURIComponent(sessao)}`).catch(mostrarErro);
   };
 
-  // Registro, consulta, conclusão e retomada são só das issues.
-  const daIssue = () => cabecalho as CabecalhoDoChat | undefined;
-  const issue = () => String(daIssue()?.issue.id);
-  const ticket = () => String(daIssue()?.sessao.ticket);
   const acao = (promessa: Promise<unknown>) => {
     avisar();
     promessa.catch(mostrarErro);
@@ -291,23 +208,9 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       desenhar();
     } else if (botao.dataset.abortar !== undefined) {
       acao(postar(`/api/sessoes/${encodeURIComponent(sessao)}/abortar`));
-    } else if (botao.dataset.concluir !== undefined) {
-      acao(postar(`/api/tickets/${ticket()}/concluir-sessao`));
     } else if (botao.dataset.cancelar !== undefined) {
       acao(respondeDialogo(String(dialogoAberto), { cancelado: true }));
-    } else if (botao.dataset.acao === "aceitar-proposta" || botao.dataset.acao === "recusar-proposta") {
-      botao.disabled = true;
-      const decisao = postar(`/api/propostas/${String(botao.dataset.id)}`, {
-        aceita: botao.dataset.acao === "aceitar-proposta",
-      });
-      acao(
-        decisao.catch((error_: unknown) => {
-          botao.disabled = false;
-          throw error_;
-        }),
-      );
     } else if ("verTudo" in botao.dataset) verSaida(botao);
-    else aoClicarNaConsulta(botao);
   });
 
   const respondeDialogo = (id: string, corpo: object) =>
@@ -323,36 +226,11 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (mostrar) campo.focus();
   }
 
-  /** Conversar sobre, os anexos de histórico e os artefatos ao lado. */
-  function aoClicarNaConsulta(botao: HTMLButtonElement): void {
-    const { removerAnexo, evidencia } = botao.dataset;
-    if ("consulta" in botao.dataset) {
-      acao(
-        api<{ sessao: string }>(`/api/tickets/${ticket()}/consulta`, { method: "POST" }).then(({ sessao: nova }) => {
-          irPara(caminhoDaSessao(nova));
-        }),
-      );
-    } else if ("anexar" in botao.dataset) {
-      acao(escolherAnexo());
-    } else if (removerAnexo) {
-      anexos = anexos.filter((a) => a.sessao !== removerAnexo);
-      desenhar();
-    } else if (evidencia && pagina) {
-      const e = pagina.evidencias.find((x) => x.id === Number(evidencia));
-      if (e) {
-        abrirCaixa(evidenciaNaCaixa(pagina, e));
-        acao(carregarTextos());
-      }
-    }
-  }
-
   raiz.addEventListener("submit", (evento) => {
     evento.preventDefault();
     const form = evento.target as HTMLFormElement;
     const campos = Object.fromEntries(new FormData(form)) as Record<string, string>;
-    if (form.dataset.retomar !== undefined) {
-      acao(responderERetomar(form, String(campos.texto).trim()));
-    } else if (form.dataset.dialogo) {
+    if (form.dataset.dialogo) {
       const valor =
         form.dataset.metodo === "select"
           ? valorDoSelect(
@@ -363,16 +241,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
           : String(campos.valor);
       if (valor !== undefined)
         acao(respondeDialogo(form.dataset.dialogo, respostaDoDialogo(String(form.dataset.metodo), valor)));
-    } else if (form.dataset.registro !== undefined) {
-      const salvo = api<CabecalhoDoChat["issue"]>(`/api/issues/${issue()}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(edicaoDoRegistro({ titulo: "", tipo: "", descricao: "", ...campos })),
-      }).then((salva) => {
-        delete form.dataset.sujo;
-        if (cabecalho && !daDemanda(cabecalho)) aplicar({ ...cabecalho, issue: salva });
-      });
-      acao(salvo);
     }
   });
 
@@ -380,72 +248,6 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   raiz.addEventListener("change", (evento) => {
     const alvo = evento.target as HTMLInputElement;
     if (alvo.dataset.outros !== undefined) mostrarOutros(alvo.closest("form"), alvo.checked);
-  });
-
-  raiz.addEventListener("input", (evento) => {
-    const alvo = evento.target as HTMLElement;
-    const registro = alvo.closest<HTMLElement>("[data-registro]");
-    if (registro) registro.dataset.sujo = "";
-  });
-
-  /**
-   * Responder e retomar (F4 §6.4): C20 só quando o modelo mudou, depois C9 com a instrução e os anexos de histórico; o
-   * SSE traz o estado novo.
-   * Se C20 passar e C9 não, o modelo novo fica, e responder de novo só refaz o C9.
-   */
-  async function responderERetomar(form: HTMLFormElement, instrucao: string): Promise<void> {
-    const select = form.querySelector("select");
-    if (select && !select.disabled && select.value !== select.dataset.inicial) {
-      await postar(`/api/tickets/${ticket()}/modelo`, { modelo: modeloDoSeletor(select.value) });
-      select.dataset.inicial = select.value;
-    }
-    const comAnexos = anexos.length > 0 ? { anexos: anexos.map((a) => a.sessao) } : {};
-    await postar(`/api/tickets/${ticket()}/reabrir`, { ...(instrucao && { instrucao }), ...comAnexos });
-    anexos = [];
-    desenhar();
-  }
-
-  /** As sessões que o seletor do **+ Anexar histórico** mostra na caixa. */
-  let escolhas: InfoSessao[] = [];
-
-  /** + Anexar histórico: as outras sessões, ativas e do histórico, na caixa; escolher uma a anexa e fecha a caixa. */
-  async function escolherAnexo(): Promise<void> {
-    escolhas = (
-      await Promise.all(
-        (["ativas", "historico"] as const).map((escopo) => api<InfoSessao[]>(`/api/sessoes?escopo=${escopo}`)),
-      )
-    ).flat();
-    abrirCaixa({
-      titulo: "Anexar histórico",
-      meta: "o agente lê o histórico da sessão escolhida antes de responder",
-      estreita: true,
-      corpo: seletorDeSessoes(
-        escolhas,
-        sessao,
-        anexos.map((a) => a.sessao),
-      ),
-    });
-  }
-
-  const corpoDaCaixa = elemento("[data-caixa-corpo]", HTMLElement);
-  const aoEscolher = (evento: Event) => {
-    const alvo = evento.target instanceof Element ? evento.target.closest<HTMLElement>("[data-anexar-sessao]") : null;
-    const escolhida = escolhas.find((s) => s.sessao === alvo?.dataset.anexarSessao);
-    if (!escolhida) return;
-    anexos = [...anexos, escolhida];
-    desenhar();
-    elemento("[data-caixa]", HTMLDialogElement).close();
-    areaDeEnvio.querySelector<HTMLTextAreaElement>("textarea")?.focus();
-  };
-  corpoDaCaixa.addEventListener("click", aoEscolher, { signal });
-
-  // Enter envia; Shift+Enter quebra a linha.
-  raiz.addEventListener("keydown", (evento) => {
-    const alvo = evento.target as HTMLElement;
-    if (evento.key !== "Enter" || evento.shiftKey || evento.isComposing || !alvo.matches("[data-retomar] textarea"))
-      return;
-    evento.preventDefault();
-    alvo.closest("form")?.requestSubmit();
   });
 
   signal.addEventListener("abort", () => {

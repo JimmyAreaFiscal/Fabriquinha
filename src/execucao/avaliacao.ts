@@ -34,9 +34,8 @@ import {
   subir,
 } from "./auditoria.ts";
 import * as gestao from "./gestao_demandas.ts";
-import { emMarkdown, type Mensagem, texto } from "./historico.ts";
 import type { EventoPi } from "./pi.ts";
-import { lerConversa } from "./sessoes.ts";
+import { emMarkdown, lerConversa, type Mensagem, texto } from "./sessoes_demanda.ts";
 
 export interface EscopoDaAvaliacao {
   projeto: string;

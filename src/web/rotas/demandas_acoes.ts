@@ -11,14 +11,13 @@ import { aprovarPRRodada } from "../../execucao/aprovacao_pr_rodada.ts";
 import type { RefRodada } from "../../execucao/encerramento_rodada.ts";
 import { arquivar, cancelar, decidir } from "../../execucao/gestao_demandas.ts";
 import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../../execucao/planejamento.ts";
-import { texto, type Mensagem } from "../../execucao/historico.ts";
 import {
   concluirSessaoAjustes,
   enviarMensagemAjustes,
   mensagensRetomadas,
   reprovarPRRodada,
 } from "../../execucao/sessao_ajustes.ts";
-import { lerConversa } from "../../execucao/sessoes.ts";
+import { lerConversa, texto, type Mensagem } from "../../execucao/sessoes_demanda.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { carregarDemanda, comDemanda } from "../../persistencia/demandas.ts";
 import { configuracao } from "../../persistencia/servico.ts";

@@ -1,5 +1,5 @@
 // Rotas da Configuração (F7 §4.2): a configuração do F4 §3 com o estado do agendador, os projetos com o cadastro
-// (C19) e os modelos do pi para os seletores.
+// (C19) e os modelos do pi para o seletor das avaliações.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { encontrado, mensagem } from "../../dominio/erros.ts";
@@ -8,39 +8,27 @@ import { conferirModelo, listarModelos } from "../../execucao/modelos.ts";
 import { varrerBase } from "../../metricas/retrabalho.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { noLog } from "../../persistencia/execucoes.ts";
-import {
-  editarProjeto,
-  issuesDoProjeto,
-  projeto,
-  projetos,
-  registrarProjeto,
-  removerProjeto,
-} from "../../persistencia/projetos.ts";
-import { autonomasEmAndamento, Configuracao, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
+import { editarProjeto, projeto, projetos, registrarProjeto, removerProjeto } from "../../persistencia/projetos.ts";
+import { Configuracao, configuracao, salvarConfiguracao } from "../../persistencia/servico.ts";
 import { conferirProjeto } from "../../repositorio/cadastro.ts";
 import { removerWorktrees } from "../../repositorio/worktree.ts";
 import { ErroHttp } from "../erros.ts";
 import type { Agendador, Rota } from "../rotas.ts";
 
-/** A configuração do F4 §3 e o estado do agendador: a próxima busca (só ligado) e as execuções autônomas em andamento. */
+/** A configuração do F4 §3 e o estado do agendador: a próxima busca, só ligado. */
 function estado(banco: DatabaseSync, agendador: Agendador) {
   const c = configuracao(banco);
-  return {
-    ...c,
-    proximaBusca: c.agendadorAtivo ? agendador.proximaBusca().toISOString() : null,
-    emAndamento: autonomasEmAndamento(banco),
-  };
+  return { ...c, proximaBusca: c.agendadorAtivo ? agendador.proximaBusca().toISOString() : null };
 }
 
 /** O projeto como o formulário manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
-const DoFormulario = Projeto.extend({ hospedagem: Hospedagem.optional() });
+const DoFormulario = Projeto.omit({ testes: true, sonar: true, fitness: true, modelos: true, efforts: true }).extend({
+  hospedagem: Hospedagem.optional(),
+});
 /** O nome é a chave e não muda (C19): o do caminho vale, e o do corpo é ignorado. */
 const DaEdicao = DoFormulario.extend({ nome: z.unknown() });
 
-/**
- * C19 pelo web: confere o repositório (F5 §2; a falha é externa, 502, e nada é gravado), confere cada modelo (F4 §9;
- * o recusado vira erro do campo, 422) e grava.
- */
+/** C19 pelo web: confere o repositório (F5 §2; a falha é externa, 502, e nada é gravado) e grava. */
 async function conferirEGravar(
   banco: DatabaseSync,
   p: z.infer<typeof DoFormulario>,
@@ -49,20 +37,8 @@ async function conferirEGravar(
   const { hospedagem } = await conferirProjeto(p).catch((error_: unknown) => {
     throw new ErroHttp(502, mensagem(error_));
   });
-  const recusados = (
-    await Promise.all(
-      Object.entries(p.modelos).map(([etapa, modelo]) =>
-        conferirModelo(modelo).then(
-          () => [],
-          (error_: unknown) => [
-            { code: "custom" as const, path: ["modelos", etapa], message: mensagem(error_), input: modelo },
-          ],
-        ),
-      ),
-    )
-  ).flat();
-  if (recusados.length > 0) throw new z.ZodError(recusados);
-  return gravar(banco, { ...p, hospedagem });
+  // A chave do SonarQube é da configuração SDLC, que a edita; o cadastro começa com o nome do projeto.
+  return gravar(banco, { ...p, hospedagem, sonar: { projectKey: p.nome } });
 }
 
 /**
@@ -74,8 +50,6 @@ async function cadastrar(banco: DatabaseSync, p: z.infer<typeof DoFormulario>): 
   await varrerBase(banco, salvo.nome).catch(noLog);
   return salvo;
 }
-
-const comIssues = (banco: DatabaseSync, p: Projeto) => ({ ...p, issues: issuesDoProjeto(banco, p.nome) });
 
 export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   { metodo: "GET", caminho: "/api/configuracao", tratar: ({ banco, agendador }) => estado(banco, agendador) },
@@ -100,17 +74,14 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos",
-    tratar: ({ banco }) => projetos(banco).map((p) => comIssues(banco, p)),
+    tratar: ({ banco }) => projetos(banco),
   },
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params }) => {
       const nome = String(params.nome);
-      return comIssues(
-        banco,
-        encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "confira o nome do projeto"),
-      );
+      return encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "confira o nome do projeto");
     },
   },
   { metodo: "GET", caminho: "/api/modelos", tratar: () => listarModelos() },

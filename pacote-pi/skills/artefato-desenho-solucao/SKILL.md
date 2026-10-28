@@ -49,19 +49,17 @@ Seções do HTML, nesta ordem:
 - `motivo`: o que muda naquele arquivo e qual critério ele atende.
 - Arquivo fora da lista que acabar alterado aparece na revisão como não previsto.
 
-`foraDeEscopo`: itens concretos e próximos da solução, que alguém poderia esperar e que ficam para outra issue.
+`foraDeEscopo`: itens concretos e próximos da solução, que alguém poderia esperar e que ficam para outra demanda.
 
 ### Mais de 30 arquivos previstos
 
 Um PR que altera mais de 30 arquivos é difícil de analisar.
 
-- Com mais de 30 `arquivosPrevistos` e a alteração sem caber num só PR, proponha uma issue com a parte que sai: `fabriquinha issue propor I-<n> --titulo <título> --arquivos <estimativa> --descricao <arquivo>`.
-  A mensagem (`--descricao`) já é a descrição da issue nova, completa para quem não viu esta conversa.
-  Escolha uma parte cujos arquivos saem inteiros desta issue: a mensagem atribui à issue nova só esses arquivos. Arquivo que as duas precisam tocar fica nesta issue e não é atribuído à nova (a mensagem pode dizer que a nova depende dele).
-  Entregue o desenho inteiro mesmo assim, evidências e tickets: a proposta não bloqueia nada, e o Auditor decide a proposta (aceita ou recusa) antes de aprovar ou reprovar o desenho.
-- Com 30 ou menos, ou com mais de 30 numa alteração que cabe num PR (um glob de renomeação, por exemplo), não proponha.
-- Se o Auditor aceitou, o desenho volta reprovado com um motivo que cita a issue nova. Leia-a com `fabriquinha issue ver I-<m>` e tire dos `arquivosPrevistos`, do HTML e dos tickets todo arquivo que a mensagem dela atribui a ela.
-  Se algum desses arquivos for indispensável a esta issue, a proposta estava errada: diga isso no HTML, em vez de mantê-lo calado nos `arquivosPrevistos`.
+- Com mais de 30 `arquivosPrevistos` e a alteração sem caber num só PR, divida-a em demandas separadas: este desenho fica com uma parte, e cada parte que sai é registrada como outra demanda.
+  A demanda que precisa do que outra entrega a declara com `--dep` ao registrar: `fabriquinha demanda registrar ... --dep I-<n>` (o `--dep` repete, um por demanda de que ela depende).
+  Escolha partes cujos arquivos saem inteiros desta demanda; arquivo que duas partes precisam tocar fica numa só, e a outra depende dela pelo `--dep`.
+  Os `arquivosPrevistos`, o HTML e os tickets deste desenho ficam só com a parte desta demanda.
+- Com 30 ou menos, ou com mais de 30 numa alteração que cabe num PR (um glob de renomeação, por exemplo), não divida.
 
 ## Antes de submeter
 
@@ -72,5 +70,4 @@ Um PR que altera mais de 30 arquivos é difícil de analisar.
 - [ ] Os `arquivosPrevistos` cobrem todo arquivo que os tickets vão tocar, testes incluídos.
 - [ ] O `resumo` basta para um agente que nunca viu o HTML nem esta conversa.
 - [ ] HTML e `dados` dizem a mesma coisa: mesma lista de arquivos, mesmo fora de escopo.
-- [ ] Com mais de 30 `arquivosPrevistos` numa alteração que não cabe num PR, há uma proposta de issue.
-- [ ] No refazer depois do aceite, nenhum arquivo que a mensagem da issue nova atribui a ela continua em `arquivosPrevistos`.
+- [ ] Com mais de 30 `arquivosPrevistos` numa alteração que não cabe num PR, a mudança está dividida em demandas separadas, ligadas por `--dep`, e os `arquivosPrevistos` têm só a parte desta.

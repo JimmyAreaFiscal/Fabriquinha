@@ -222,7 +222,7 @@ test("a branch base é a mesma na configuração SDLC e na tela legada, nos dois
   await pagina.getByRole("button", { name: "Salvar" }).click();
   await expect(pagina.getByText("Configuração salva.")).toBeVisible();
   await pagina.getByRole("link", { name: "Cadastro do projeto" }).click();
-  await expect(pagina.getByRole("heading", { name: /loja 0 issues/ })).toBeVisible();
+  await expect(pagina.getByRole("heading", { level: 2, name: /^loja/ })).toBeVisible();
   await expect(pagina.getByLabel("Branch base")).toHaveValue("release");
 
   await pagina.getByLabel("Branch base").fill("main");

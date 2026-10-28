@@ -43,7 +43,7 @@ async function chamar(endereco: string): Promise<unknown> {
     try {
       return await rota.tratar({
         banco,
-        agendador: { proximaBusca: () => new Date(), executarAgora: () => Promise.resolve() },
+        agendador: { proximaBusca: () => new Date() },
         params,
         query: url.searchParams,
         corpo: undefined,

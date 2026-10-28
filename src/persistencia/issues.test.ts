@@ -22,6 +22,7 @@ import { decidirDesenho, decidirRegistro, enviarParaAprovacao } from "../dominio
 import { adicionarDependencia, editarIssue, removerDependencia } from "../dominio/issue.ts";
 import { adicionarTicketDesenvolvimento, editarTicket, removerTicket } from "../dominio/tickets.ts";
 import { abrir } from "./banco.ts";
+import { gravarCommit } from "./commits.ts";
 import {
   agregado,
   arquivarConcluidas,
@@ -154,6 +155,24 @@ test("comIssue grava a fase de antes, não a de depois", () => {
   // As fases percorridas, uma vez cada e na ordem em que a issue entrou nelas.
   comIssue(banco, issue.id, "removerDependencia", auditor, (ag) => ag);
   assert.deepEqual(fasesPercorridas(banco, issue.id), ["registro", "desenho"]);
+  banco.close();
+});
+
+test("o contexto do comando diz se o ticket tem commit registrado (C7 do desenvolvimento)", () => {
+  const banco = novoBanco();
+  const { issue, tickets } = registrarIssue(banco, { projeto: "loja" }, auditor);
+  const ticket = tickets[0]?.id ?? 0;
+  const temCommit = () => {
+    let tem = false;
+    comIssue(banco, issue.id, "editarIssue", auditor, (ag, ctx) => {
+      tem = ctx.temCommit(ticket);
+      return ag;
+    });
+    return tem;
+  };
+  assert.equal(temCommit(), false);
+  gravarCommit(banco, ticket, { sha: "a".repeat(40), mensagem: "m", em: "2026-10-11T12:00:00.000Z", arquivos: [] });
+  assert.equal(temCommit(), true);
   banco.close();
 });
 

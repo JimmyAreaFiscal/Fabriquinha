@@ -165,6 +165,17 @@ test("C5 autônomo exige ticket aberto e dependências concluídas", () => {
   );
 });
 
+test("C5 do desenvolvimento espera os tickets de desenvolvimento anteriores da issue concluírem", () => {
+  const ag = agregado("desenvolvimento", [
+    ticket(2, "desenvolvimento", "falhou", { erro: "e" }),
+    ticket(3, "desenvolvimento", "aberto"),
+  ]);
+  regra(
+    () => iniciarExecucao(ag, { ticket: 3, modo: "autonomo", sessaoPi: SESSAO }, fabriquinha, contexto()),
+    "T-3 só executa depois dos tickets de desenvolvimento anteriores da I-1, e T-2 está falhou (conclua T-2 antes)",
+  );
+});
+
 test("C5 autônomo não recusa por autônoma de outra issue, mas recusa a 2ª da mesma issue e não cria execução (CA-6)", () => {
   const inicio = { ticket: 2, modo: "autonomo", sessaoPi: SESSAO };
   const dev = (id: number) => ticket(id, "desenvolvimento", "aberto");

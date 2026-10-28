@@ -281,6 +281,25 @@ test("condensação do F3 §4.7: seção 5, depois 7, depois 10, parando assim q
   assert.ok(montarPR(ag, 5, 300).publicado.startsWith("<!-- fabriquinha I-7/T-5 -->\n\n## Por quê"));
 });
 
+test("corpo do PR de um problema, com fluxo novo, Sonar sem issue e sem reversão", () => {
+  const ag = encerrando();
+  ag.issue.tipo = "problema";
+  for (const e of ag.evidencias) {
+    const dados = e.dados as Record<string, unknown>;
+    if (e.tipo === "relatorio_complexidade") {
+      dados.fluxos = [{ nome: "Voz", situacao: "novo", depois: { tempo: "O(1)", espaco: "O(1)" } }];
+    }
+    if (e.tipo === "relatorio_sonar") dados.issues = [];
+    if (e.tipo === "execucao_testes")
+      dados.comandos = [{ comando: "npm test", codigoSaida: null, estourou: true, duracaoMs: 1 }];
+    if (e.tipo === "mensagem_pr") delete dados.reversao;
+  }
+  const { completo } = montarPR(ag, 5, LIMITE_DO_CORPO.github);
+  assert.match(completo, /\*\*Problema:\*\* Busca por voz/);
+  assert.match(completo, /estourou o tempo/);
+  assert.doesNotMatch(completo, /O\(n\) →|\*\*Reversão:\*\*|ts:S1/);
+});
+
 test("o corte não deixa meio caractere no fim", () => {
   const ag = encerrando();
   const fim = "\n\n… corpo completo em I-7, evidência pr_aberto\n";

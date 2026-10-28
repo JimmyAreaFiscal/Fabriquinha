@@ -13,21 +13,14 @@
 //   pelo CLI `fabriquinha`; com "[sem decidir]" na demanda, sai sem decidir;
 // - "# Avaliação" (a avaliação do SDLC, I-240): grava 3 achados em `achados.jsonl`, na pasta da avaliação (o cwd), ou 20
 //   se o pedido diz "[20 achados]", e responde; uma pergunta depois cai na resposta padrão;
-// - "registre" (a mensagem inteira, ou em negrito): como o agente do registro com o "sim" do Auditor, edita a issue,
-//   submete as evidências e envia o registro à aprovação pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz
-//   "registre", e não conta;
-// - "desenhe": como o agente do desenho com o "sim" do Auditor, submete as evidências, cria um ticket de
-//   desenvolvimento e envia o desenho à aprovação pelo CLI `fabriquinha`;
-// - "proponha": como o agente do registro que acha a mudança grande, propõe uma issue pelo CLI `fabriquinha`;
 // - "pergunte <select|confirm|input|editor>": abre esse diálogo; "pergunte perguntar" e "pergunte multipla" abrem o
 //   `select` dentro da ferramenta `perguntar` (única e de múltipla escolha), como o pi real;
-// - "crie um ticket": como o agente da sessão em aberto, cria um ticket de desenvolvimento pelo CLI `fabriquinha`;
 // - qualquer outro: responde $FALSO_PI_RESPOSTA (padrão "pronto") e assenta.
 // Em `--mode json` (a Simulação, I-10) não fala o protocolo: espera o EOF do stdin, como o pi real, grava o `relatorio.json` em
 // $FABRIQUINHA_SAIDA, como a ferramenta `relatar` da extensão navegador, e sai.
 // A resposta a um diálogo é ecoada numa mensagem e assenta; `abort` para a mensagem em fluxo como abortada.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 
@@ -156,116 +149,6 @@ function fecharFluxo(stopReason = "stop"): void {
 const cli = (...args: string[]) =>
   execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "cli", "fabriquinha.ts"), ...args]);
 
-/** A issue do prompt montado pela Fabriquinha (F4 §6.3). */
-const issueDoPrompt = () => /Issue: I-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
-/** O ticket da sessão, do prompt montado pela Fabriquinha (F4 §6.3). */
-const ticketDoPrompt = () => /Seu ticket: T-(\d+)/.exec(readFileSync(sessao, "utf8"))?.[1] ?? "";
-
-/** Como o agente do registro que estima mais de 30 arquivos: propõe uma issue pelo CLI (C23). */
-function proporIssue(): void {
-  const mensagem = join(String(process.env.FABRIQUINHA_SAIDA), "proposta.md");
-  writeFileSync(mensagem, "Parte B: tela de **relatório**\n");
-  cli(
-    "issue",
-    "propor",
-    `I-${issueDoPrompt()}`,
-    "--titulo",
-    "Tela de relatório",
-    "--arquivos",
-    "42",
-    "--descricao",
-    mensagem,
-  );
-}
-
-/** Como o agente do registro: título e tipo pelo CLI, e as duas evidências do registro (F3). */
-function registrar(): void {
-  const issue = issueDoPrompt();
-  const saida = String(process.env.FABRIQUINHA_SAIDA);
-  cli("issue", "editar", issue, "--titulo", "Exportar pedidos em CSV", "--tipo", "funcionalidade");
-  writeFileSync(join(saida, "hoje.txt"), "a contabilidade copia os pedidos à mão\n");
-  const comportamento = {
-    descricao: "hoje a contabilidade copia os pedidos à mão",
-    comoReproduzir: ["abrir o painel"],
-  };
-  writeFileSync(join(saida, "comportamento.json"), JSON.stringify(comportamento));
-  cli(
-    "evidencia",
-    "add",
-    "comportamento",
-    "--dados",
-    join(saida, "comportamento.json"),
-    "--arquivo",
-    join(saida, "hoje.txt"),
-  );
-  const criterios = [
-    { id: "CA-1", dado: "pedidos no mês", quando: "exporto", entao: "o CSV traz número, data, cliente e total" },
-    // Longo e com código, como os de um agente de verdade: a tabela cabe na coluna do chat sem rolar de lado.
-    {
-      id: "CA-2",
-      dado: "pedidos de outro mês em `exportarPedidos.js`",
-      quando: "o Auditor roda `node exportarPedidos.js --mes 2026-10`",
-      entao:
-        "só os do mês escolhido entram, o stderr fica vazio e o código de saída é 0; com `--mes` inválido, o stderr mostra o uso (`node exportarPedidos.js --mes <AAAA-MM>`)",
-    },
-  ];
-  writeFileSync(join(saida, "criterios.json"), JSON.stringify({ criterios }));
-  cli("evidencia", "add", "criterios_aceite", "--dados", join(saida, "criterios.json"));
-  cli("ticket", "enviar", ticketDoPrompt());
-}
-
-/** Como o agente do desenho: as evidências do desenho, um ticket de desenvolvimento e o envio à aprovação (C25). */
-function desenhar(): void {
-  const saida = String(process.env.FABRIQUINHA_SAIDA);
-  const evidencia = (tipo: string, dados: object, ...anexos: [string, string | Buffer][]) => {
-    writeFileSync(join(saida, `${tipo}.json`), JSON.stringify(dados));
-    for (const [nome, conteudo] of anexos) writeFileSync(join(saida, nome), conteudo);
-    cli(
-      "evidencia",
-      "add",
-      tipo,
-      "--dados",
-      join(saida, `${tipo}.json`),
-      ...anexos.flatMap(([nome]) => ["--arquivo", join(saida, nome)]),
-    );
-  };
-  const html = (nome: string): [string, string] => [nome, `<!doctype html><html><body>${nome}</body></html>`];
-  evidencia(
-    "desenho_solucao",
-    {
-      resumo: "exportar os pedidos do mês em CSV",
-      arquivosPrevistos: [{ caminho: "exportarPedidos.js", acao: "criar", motivo: "CA-1 e CA-2" }],
-    },
-    html("desenho.html"),
-  );
-  evidencia(
-    "relatorio_complexidade",
-    {
-      variaveis: [{ simbolo: "n", significado: "pedidos do mês" }],
-      fluxos: [
-        {
-          nome: "Exportar",
-          gatilho: "node exportarPedidos.js",
-          situacao: "novo",
-          depois: { tempo: "O(n)", espaco: "O(n)" },
-        },
-      ],
-    },
-    html("complexidade.html"),
-  );
-  evidencia(
-    "relatorio_impactos_arquitetura",
-    { impacto: "baixo", novasDependencias: [], novosAcoplamentos: [], riscos: [] },
-    html("impactos.html"),
-  );
-  evidencia("prototipo", { descricao: "o CSV de outubro" }, [
-    "prototipo.png",
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  ]);
-  cli("ticket", "criar", `I-${issueDoPrompt()}`, "--titulo", "Exportar os pedidos do mês em CSV");
-  cli("ticket", "enviar", ticketDoPrompt());
-}
-
 /** Como o revisor: as evidências do ticket (do prompt) e, sem "[sem decidir]", a decisão de aprovar. */
 function revisar(texto: string): void {
   const saida = String(process.env.FABRIQUINHA_SAIDA);
@@ -388,21 +271,8 @@ async function aoPrompt(texto: string): Promise<void> {
     else dialogo(pergunta);
     return;
   }
-  if (texto.trim() === "registre" || texto.includes("**registre**")) {
-    registrar();
-    responder("Registrei o título, o tipo, o comportamento e os critérios de aceite.");
-  } else if (texto.trim() === "desenhe") {
-    desenhar();
-    responder("Desenhei a exportação, propus o ticket e enviei à sua aprovação.");
-  } else if (texto.includes("proponha")) {
-    proporIssue();
-    responder("Propus a issue da tela de relatório.");
-  } else if (texto.startsWith("eco: ")) {
-    responder(texto.slice("eco: ".length));
-  } else if (texto.includes("crie um ticket")) {
-    cli("ticket", "criar", `I-${issueDoPrompt()}`, "--titulo", "Criar o índice da busca");
-    responder("Criei o ticket de desenvolvimento do índice.");
-  } else responder(process.env.FALSO_PI_RESPOSTA ?? "pronto");
+  if (texto.startsWith("eco: ")) responder(texto.slice("eco: ".length));
+  else responder(process.env.FALSO_PI_RESPOSTA ?? "pronto");
   emitir({ type: "agent_settled" });
 }
 

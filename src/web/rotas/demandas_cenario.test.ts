@@ -128,7 +128,6 @@ export async function servir(banco: DatabaseSync, comExecutarDemanda = true) {
   const executados: { demanda_id: string; ticket_id: number }[] = [];
   const agendador = {
     proximaBusca: () => new Date(),
-    executarAgora: () => Promise.resolve(),
     executarAgoraDemanda(ref: { demanda_id: string; ticket_id: number }) {
       executados.push(ref);
       return Promise.resolve();

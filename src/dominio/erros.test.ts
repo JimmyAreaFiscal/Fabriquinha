@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { encontrado, ErroDeEscopo, ErroDeInexistente, ErroDeRegra, ErroExterno } from "./erros.ts";
+import { encontrado, ErroDeEscopo, ErroDeInexistente, ErroDeRegra, ErroExterno, mensagem } from "./erros.ts";
 
 test("ErroDeRegra diz numa frase o que faltou e como resolver", () => {
   const erro = new ErroDeRegra(
@@ -46,4 +46,10 @@ test("ErroDeInexistente é um ErroDeRegra que o web distingue (404)", () => {
       erro.name === "ErroDeInexistente" &&
       erro.message === "a issue I-9 não existe (confira o número)",
   );
+});
+
+test("mensagem: o texto do Error, ou o valor lançado como texto quando não é Error", () => {
+  assert.equal(mensagem(new ErroDeRegra("quebrou")), "quebrou");
+  assert.equal(mensagem("texto solto"), "texto solto");
+  assert.equal(mensagem(42), "42");
 });

@@ -100,15 +100,15 @@ const matiz = async (pagina: Page, caminho: string): Promise<number> => {
   return Number(/hsl\((\d+(?:\.\d+)?)/.exec(estilo ?? "")?.[1]);
 };
 
-test("CA-1 e CA-2: a página Projetos tem as abas Issues (ativa) e Heatmap, que leva a /projects/fabriquinha/heatmap", async ({
+test("CA-1 e CA-2: a página Projetos tem as abas Visão geral (ativa) e Heatmap, que leva a /projects/fabriquinha/heatmap", async ({
   pagina,
   fabriquinha,
 }) => {
   fabriquinhaComHistorico(fabriquinha.raiz);
   await pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: "Projetos" }).click();
   const abas = pagina.getByRole("navigation", { name: "Abas do projeto" });
-  await expect(abas.getByRole("link", { name: "Issues" })).toHaveAttribute("aria-current", "page");
-  await expect(pagina.getByText("Nenhuma issue.")).toBeVisible();
+  await expect(abas.getByRole("link", { name: "Visão geral" })).toHaveAttribute("aria-current", "page");
+  await expect(pagina.locator(".kpis-mes .kpi")).toHaveCount(6);
 
   await abas.getByRole("link", { name: "Heatmap" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/fabriquinha/heatmap`);
@@ -230,7 +230,7 @@ test("CA-13: projeto inexistente mostra Projeto não encontrado com o link Ver o
   await expect(pagina.getByRole("link", { name: "Ver os projetos" })).toHaveAttribute("href", "/projects");
 });
 
-test("CA-14: repositório sumido ou sem a branch base mostra o erro com o motivo, e a aba Issues segue funcionando", async ({
+test("CA-14: repositório sumido ou sem a branch base mostra o erro com o motivo, e a aba Visão geral segue funcionando", async ({
   pagina,
   fabriquinha,
 }) => {
@@ -250,9 +250,9 @@ test("CA-14: repositório sumido ou sem a branch base mostra o erro com o motivo
   await expect(erro).toContainText("corrija o caminho do repositório do projeto na Configuração");
   await expect(pagina.locator("[data-arvore]")).toHaveCount(0);
 
-  await pagina.getByRole("navigation", { name: "Abas do projeto" }).getByRole("link", { name: "Issues" }).click();
+  await pagina.getByRole("navigation", { name: "Abas do projeto" }).getByRole("link", { name: "Visão geral" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/sumido`);
-  await expect(pagina.getByText("Nenhuma issue.")).toBeVisible();
+  await expect(pagina.locator(".kpis-mes .kpi")).toHaveCount(6);
 
   // O seletor leva ao heatmap do outro projeto, que não tem a branch base publicada.
   await pagina.goto(`${fabriquinha.base}/projects/sumido/heatmap`);

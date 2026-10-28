@@ -23,13 +23,9 @@ import { type Bloco, comCursor, corpoDaFerramenta, type Envio, type MensagemPi }
 export interface PropsDaConversa {
   mensagens: readonly ThreadMessageLike[];
   envio: Envio;
-  /** As etiquetas de anexo, em HTML (`etiquetasDeAnexo`). */
-  anexos: string;
-  /** Os cartões das propostas de issue abertas, em HTML (`propostasDoChat`). */
-  propostas?: string;
   /** Envia o texto do compositor; se falhar, o texto volta ao campo. */
   aoEnviar: (texto: string) => Promise<void>;
-  /** Chamado quando o Auditor tenta enviar o campo vazio ou só com espaços; sem ele, o envio vazio segue calado (issues). */
+  /** Chamado quando o Auditor tenta enviar o campo vazio ou só com espaços; sem ele, o envio vazio segue calado. */
   aoVazio?: () => void;
 }
 
@@ -100,7 +96,7 @@ function DaMensagem({ papel }: Readonly<{ papel: keyof typeof PAPEIS }>) {
   return <Mensagem />;
 }
 
-function Conversa({ mensagens, envio, anexos, propostas, aoEnviar, aoVazio }: Readonly<PropsDaConversa>) {
+function Conversa({ mensagens, envio, aoEnviar, aoVazio }: Readonly<PropsDaConversa>) {
   // ponytail: sem `isRunning`: o assistant-ui bloqueia o Enter enquanto roda, e o Auditor redireciona o agente rodando.
   const runtime = useExternalStoreRuntime({
     messages: mensagens,
@@ -124,7 +120,6 @@ function Conversa({ mensagens, envio, anexos, propostas, aoEnviar, aoVazio }: Re
           <ThreadPrimitive.Messages>{({ message }) => <DaMensagem papel={message.role} />}</ThreadPrimitive.Messages>
           <RolarAoEnviar />
         </ThreadPrimitive.Viewport>
-        <div data-propostas dangerouslySetInnerHTML={html(propostas ?? "")} />
         <div className="area-envio">
           {"html" in envio ? (
             <div className="envio-fixo" dangerouslySetInnerHTML={html(envio.html)} />
@@ -140,7 +135,6 @@ function Conversa({ mensagens, envio, anexos, propostas, aoEnviar, aoVazio }: Re
                   aoVazio();
               }}
             >
-              <div className="anexos" data-anexos hidden={!anexos} dangerouslySetInnerHTML={html(anexos)} />
               <ComposerPrimitive.Input name="texto" rows={2} aria-label="Mensagem" placeholder={envio.placeholder} />
               <div className="linha-1" dangerouslySetInnerHTML={html(envio.linha)} />
             </ComposerPrimitive.Root>

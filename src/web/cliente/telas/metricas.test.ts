@@ -8,7 +8,6 @@ import {
   dica,
   type EstadoDasMetricas,
   evolucao,
-  fraseDoMes,
   media,
   mesDe,
   paginaDeMetricas,
@@ -473,15 +472,10 @@ test("próxima ordem: a mesma coluna inverte; outra começa crescente no texto, 
   assert.deepEqual(proximaOrdem(["titulo", 1], "execucoes"), ["execucoes", -1]);
 });
 
-test("Início e Projeto: a frase e os 6 cards do mês corrente", () => {
+test("Projeto: os 6 cards do mês corrente", () => {
   const m = mes("2026-10", 38.42, 7, null, {
     total: { ...consumo(38.42, 2_200_000, 400_000, 6_000_000, 300_000, 902), modelos: [] },
   });
-  assert.equal(
-    texto(fraseDoMes(m)),
-    "Outubro de 2026, todos os projetos: US$ 38,42 · 8,9 M tokens · demandas 8 registradas, 7 concluídas · tickets 9 criados, 7 concluídos · PRs 8 abertos, 7 mergeados Métricas →",
-  );
-  assert.match(fraseDoMes(m), /<a href="\/metrics">Métricas →<\/a>/);
   assert.equal(
     texto(cardsDoMes(m)),
     "Custo · outubro US$ 38,42 902 execuções Tokens 8,9 M 2,2 M entrada · 400,0 mil saída · 6,3 M cache Demandas 8 / 7 registradas / concluídas Tickets 9 / 7 criados / concluídos PRs 8 / 7 abertos / mergeados Retrabalho 70 / 100 linhas alteradas / adicionadas",
@@ -491,7 +485,7 @@ test("Início e Projeto: a frase e os 6 cards do mês corrente", () => {
     /1 execução</,
   );
   const parcial = { ...m, total: { ...m.total, custo: { conhecido: 1, incompleto: true } } };
-  assert.match(texto(fraseDoMes(parcial)), /US\$ 1,00 \* ·/);
+  assert.match(texto(cardsDoMes(parcial)), /Custo · outubro US\$ 1,00 \*/);
 });
 
 test("milhares: as contagens das tabelas e dos cards do Projeto com o separador de milhar", () => {

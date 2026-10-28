@@ -1,7 +1,7 @@
 // Apoio dos testes de ponta a ponta: cada teste sobe a sua Fabriquinha, com a raiz temporária, a porta livre que ela
 // mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (pi-falso.ts), e recebe o
 // navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`.
-import { test as base, type Page } from "@playwright/test";
+import { test as base, type Page, type TestInfo } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import {
@@ -144,6 +144,13 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
 });
 
 export { expect } from "@playwright/test";
+
+/** O print da página inteira, gravado na saída do teste (test-results/) e anexado ao relatório. */
+export async function fotografar(pagina: Page, info: TestInfo, nome: string): Promise<void> {
+  const path = info.outputPath(`${nome}.png`);
+  await pagina.screenshot({ fullPage: true, path });
+  await info.attach(nome, { path, contentType: "image/png" });
+}
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
 

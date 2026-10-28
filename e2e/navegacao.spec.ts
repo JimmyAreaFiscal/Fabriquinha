@@ -1,36 +1,23 @@
-// Entrada pelo link de `web.url` e navegação entre as páginas (F7 §4.1, §4.4, §7).
+// Entrada pelo link de `web.url` e navegação entre as páginas (F7 §4.1, §4.4, §7; I-247 CA-4): a página inicial é
+// /demandas e o menu não tem Início, issue nem Auditoria.
+import type { TestInfo } from "@playwright/test";
 import { abrir } from "../src/persistencia/banco.ts";
-import { expect, test } from "./apoio.ts";
+import { expect, fotografar, test } from "./apoio.ts";
 
 const SESSAO = "0b7c5a52-3f0e-4c1e-9d3a-6f1f2b9e8a10";
-
-/** Uma sessão autônoma que falhou: aguarda o Auditor (F4 §5.2). */
-function sessaoAguardando(raiz: string): void {
-  const banco = abrir(raiz);
-  banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('loja', '/nao/existe', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]');
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'Busca', 'problema', 'desenvolvimento', '2026-10-11T12:00:00.000Z');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, erro, criado_em)
-      VALUES (1, 1, 'desenvolvimento', 'Cache', 'falhou', 'fabriquinha', 'testes falharam', '2026-10-11T12:00:00.000Z');
-    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
-      VALUES (1, 1, 'autonomo', '${SESSAO}', 'falha', 'testes falharam', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z');
-  `);
-  banco.close();
-}
 
 test("entra pelo link de web.url e navega entre as páginas pela navegação fixa, sem recarregar", async ({
   page,
   fabriquinha,
 }) => {
   await page.goto(fabriquinha.link);
-  await expect(page).toHaveURL(`${fabriquinha.base}/home`);
-  await expect(page).toHaveTitle("Início · Fabriquinha");
+  await expect(page).toHaveURL(`${fabriquinha.base}/demandas`);
+  await expect(page).toHaveTitle("Demandas · Fabriquinha");
   const nav = page.getByRole("navigation", { name: "Páginas" });
-  await expect(nav.getByRole("link", { name: "Início" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Início");
-  // O Início desenhado com o que a API respondeu: o navegador entrou, e não há aviso.
-  await expect(page.getByText("Nada aguarda você agora.")).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Demandas" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Demandas");
+  // As Demandas desenhadas com o que a API respondeu: o navegador entrou, e não há aviso.
+  await expect(page.getByText("Nenhuma demanda em andamento.")).toBeVisible();
   await expect(page.getByRole("alert")).toBeHidden();
 
   // Uma marca na janela some se a página recarregar.
@@ -39,12 +26,12 @@ test("entra pelo link de web.url e navega entre as páginas pela navegação fix
   });
   const paginas = [
     ["Projetos", "/projects", "Projetos"],
-    ["Demandas", "/demandas", "Demandas"],
     ["Simulação", "/simulation", "Simulação"],
     ["Métricas", "/metrics", "Métricas"],
     ["Histórico", "/history", "Histórico"],
+    ["Avaliações", "/evaluations", "Avaliações"],
     ["Configuração", "/config", "Configuração"],
-    ["Início", "/home", "Início"],
+    ["Demandas", "/demandas", "Demandas"],
   ] as const;
   for (const [item, caminho, titulo] of paginas) {
     await nav.getByRole("link", { name: item }).click();
@@ -61,15 +48,53 @@ test("entra pelo link de web.url e navega entre as páginas pela navegação fix
   await expect(page).toHaveURL(`${fabriquinha.base}/config`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Configuração");
   await page.goForward();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Início");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Demandas");
   expect(await page.evaluate(() => "semRecarregar" in window)).toBe(true);
+});
+
+test("CA-4: / e /entrar levam a /demandas; o menu sem Início, issue nem Auditoria abre cada página sem erro no console, a 1440 e 375 px", async ({
+  page,
+  fabriquinha,
+}, info: TestInfo) => {
+  const erros: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") erros.push(m.text());
+  });
+  page.on("pageerror", (e) => erros.push(e.message));
+  await page.goto(fabriquinha.link);
+  await expect(page).toHaveURL(`${fabriquinha.base}/demandas`);
+  await page.goto(`${fabriquinha.base}/`);
+  await expect(page).toHaveURL(`${fabriquinha.base}/demandas`);
+  const nav = page.getByRole("navigation", { name: "Páginas" });
+  await expect(nav.getByRole("link")).toHaveText([
+    "Projetos",
+    "Demandas",
+    "Simulação",
+    "Métricas",
+    "Histórico",
+    "Avaliações",
+    "Configuração",
+  ]);
+  for (const largura of [1440, 375]) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    for (const item of ["Demandas", "Avaliações", "Métricas", "Histórico", "Projetos", "Configuração"]) {
+      await nav.getByRole("link", { name: item }).click();
+      await expect(nav.getByRole("link", { name: item })).toHaveAttribute("aria-current", "page");
+      await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), item).toBe(true);
+    }
+    await nav.getByRole("link", { name: "Demandas" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Demandas");
+    await fotografar(page, info, `navegacao-demandas-${String(largura)}`);
+  }
+  expect(erros).toEqual([]);
 });
 
 test("os links são de verdade: qualquer página abre direto numa aba nova", async ({ pagina, fabriquinha }) => {
   const aba = await pagina.context().newPage();
-  await aba.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
-  await expect(aba.getByRole("heading", { level: 1 })).toHaveText("Issue");
-  await expect(aba.getByRole("link", { name: "Projetos" })).toHaveAttribute("aria-current", "page");
+  await aba.goto(`${fabriquinha.base}/metrics`);
+  await expect(aba.getByRole("heading", { level: 1 })).toHaveText("Métricas");
+  await expect(aba.getByRole("link", { name: "Métricas" })).toHaveAttribute("aria-current", "page");
 
   // Sessão que não existe: o chat abre e o aviso diz o que o servidor respondeu.
   await aba.goto(`${fabriquinha.base}/sessions/${SESSAO}`);
@@ -78,12 +103,15 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
   await expect(aba.locator('[aria-current="page"]')).toHaveCount(0);
 
   await aba.goto(`${fabriquinha.base}/`);
-  await expect(aba).toHaveURL(`${fabriquinha.base}/home`);
+  await expect(aba).toHaveURL(`${fabriquinha.base}/demandas`);
 
-  await aba.goto(`${fabriquinha.base}/nada/aqui`);
-  await expect(aba.getByRole("heading", { level: 1 })).toHaveText("Página não encontrada");
-  await aba.getByRole("link", { name: "Ir para o Início" }).click();
-  await expect(aba).toHaveURL(`${fabriquinha.base}/home`);
+  // As páginas do fluxo legado saíram: o Início, a issue e a Auditoria não existem mais.
+  for (const legado of ["/nada/aqui", "/home", "/projects/loja/issues/I-1", "/audits/abc"]) {
+    await aba.goto(`${fabriquinha.base}${legado}`);
+    await expect(aba.getByRole("heading", { level: 1 })).toHaveText("Página não encontrada");
+  }
+  await aba.getByRole("link", { name: "Ir para as Demandas" }).click();
+  await expect(aba).toHaveURL(`${fabriquinha.base}/demandas`);
 });
 
 /**
@@ -109,8 +137,11 @@ function sessaoDeDemandaAguardando(raiz: string): void {
   banco.close();
 }
 
-test("o Início da navegação conta as sessões de demanda que aguardam o Auditor", async ({ pagina, fabriquinha }) => {
-  const inicio = pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: /^Início/ });
+test("as Demandas da navegação contam as sessões de demanda que aguardam o Auditor", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  const inicio = pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: /^Demandas/ });
   await expect(inicio.locator(".contador")).toHaveCount(0);
   sessaoDeDemandaAguardando(fabriquinha.raiz);
   await pagina.getByRole("link", { name: "Métricas", exact: true }).click();
@@ -124,7 +155,7 @@ test("só o chat baixa o componente React da conversa", async ({ pagina, fabriqu
   const conversa = "/static/telas/chat-conversa.tsx";
   const nav = pagina.getByRole("navigation", { name: "Páginas" });
   for (const [item, titulo] of [
-    ["Início", "Início"],
+    ["Demandas", "Demandas"],
     ["Histórico", "Histórico"],
     ["Configuração", "Configuração"],
   ] as const) {
@@ -133,24 +164,24 @@ test("só o chat baixa o componente React da conversa", async ({ pagina, fabriqu
   }
   expect(pedidos).not.toContain(conversa);
 
-  sessaoAguardando(fabriquinha.raiz);
+  sessaoDeDemandaAguardando(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/sessions/${SESSAO}`);
-  await expect(pagina.getByRole("textbox", { name: "Instrução" })).toBeVisible();
+  await expect(pagina.getByRole("link", { name: "Abrir a demanda" })).toBeVisible();
   expect(pedidos).toContain(conversa);
 });
 
 test("sem entrar, a página abre e o aviso manda rodar fabriquinha abrir", async ({ page, fabriquinha }) => {
-  await page.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Issue");
+  await page.goto(`${fabriquinha.base}/metrics`);
+  await expect(page).toHaveTitle("Métricas · Fabriquinha");
   await expect(page.getByRole("alert")).toHaveText("o navegador não entrou nesta Fabriquinha (rode fabriquinha abrir)");
 
   // Um link velho, de antes de reiniciar o serviço, também não entra.
   await page.goto(`${fabriquinha.base}/entrar?token=antigo`);
-  await expect(page).toHaveURL(`${fabriquinha.base}/home`);
+  await expect(page).toHaveURL(`${fabriquinha.base}/demandas`);
   await expect(page.getByRole("alert")).toContainText("rode fabriquinha abrir");
 
   await page.goto(fabriquinha.link);
-  await expect(page.getByText("Nada aguarda você agora.")).toBeVisible();
+  await expect(page.getByText("Nenhuma demanda em andamento.")).toBeVisible();
   await expect(page.getByRole("alert")).toBeHidden();
 });
 

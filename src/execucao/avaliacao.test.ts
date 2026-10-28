@@ -242,6 +242,18 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   assert.throws(() => encaminharAchado(banco, id, 1), recusa(/já foi encaminhado/));
   assert.throws(() => encaminharAchado(banco, id, 9), recusa(/não existe/));
   assert.throws(() => encaminharAchado(banco, "nada", 1), ErroDeInexistente);
+  // Com o pi vivo e ocioso, a pergunta vai a ele; parando, a próxima espera ele sair.
+  await ate(() => estadoDaAvaliacao(id) === "concluida" && situacao(id) !== undefined, "o pi ocioso");
+  enviarNaAvaliacao(banco, id, "e o prazo?", opcoes);
+  await ate(() => registro().some((r) => r.comando?.message === "e o prazo?"), "a pergunta ao pi vivo");
+  await ate(() => estadoDaAvaliacao(id) === "concluida", "a resposta");
+  encerrar(id);
+  assert.throws(
+    () => {
+      enviarNaAvaliacao(banco, id, "já?", opcoes);
+    },
+    recusa(/ainda está parando/),
+  );
   await parar(id);
   cancelar();
   assert.ok(eventos.includes("agent_start"));

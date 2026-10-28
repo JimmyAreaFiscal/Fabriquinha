@@ -24,7 +24,6 @@ const projeto = (nome: string, linkProduto?: string): ProjetoListado => ({
   fitness: [{ nome: "f", comando: "true", descricao: "d" }],
   modelos: {},
   linkProduto,
-  issues: 0,
 });
 
 const maria: UsuarioSimulado = { id: 1, projeto: "fabriquinha", nome: "Dona Maria", descricao: "d", anexos: [] };

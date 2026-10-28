@@ -93,10 +93,10 @@ test("web.url: link de entrada com token de 32 bytes, só para o dono, trocado a
   );
 });
 
-test("entrar com o token grava o cookie HttpOnly e SameSite=Strict e leva ao Início", async () => {
+test("entrar com o token grava o cookie HttpOnly e SameSite=Strict e leva às Demandas (CA-4)", async () => {
   const r = await pedir(`/entrar?token=${token()}`);
   assert.equal(r.status, 303);
-  assert.equal(r.headers.location, "/home");
+  assert.equal(r.headers.location, "/demandas");
   assert.deepEqual(r.headers["set-cookie"], [`fabriquinha=${token()}; HttpOnly; SameSite=Strict; Path=/`]);
 });
 
@@ -105,14 +105,19 @@ test("entrar com token errado, de outro tamanho ou sem token não grava cookie",
   for (const consulta of [`?token=${errado}`, "?token=curto", `?token=${"é".repeat(43)}`, ""]) {
     const r = await pedir(`/entrar${consulta}`);
     assert.equal(r.status, 303);
-    assert.equal(r.headers.location, "/home");
+    assert.equal(r.headers.location, "/demandas");
     assert.equal(r.headers["set-cookie"], undefined, consulta);
   }
 });
 
 test("Host diferente de 127.0.0.1:<porta> dá 403 em qualquer caminho, antes do cookie", async () => {
   for (const host of ["localhost:" + String(process.env.FABRIQUINHA_PORTA), "evil.example", "127.0.0.1"]) {
-    for (const caminho of ["/home", "/static/estilo.css", `/entrar?token=${token()}`, "/api/sessoes?escopo=ativas"]) {
+    for (const caminho of [
+      "/demandas",
+      "/static/estilo.css",
+      `/entrar?token=${token()}`,
+      "/api/sessoes?escopo=ativas",
+    ]) {
       const r = await pedir(caminho, { headers: comCookie({ host }) });
       assert.equal(r.status, 403, `${host} ${caminho}`);
       assert.match((r.json() as { erro: string }).erro, /só 127\.0\.0\.1/);
@@ -138,7 +143,7 @@ test("mutação sem Sec-Fetch-Site ou de outra origem dá 403, mesmo com o cooki
       assert.equal(r.status, 403, `${metodo} ${String(site)}`);
     }
   }
-  assert.equal((await pedir("/home", { metodo: "POST" })).status, 403);
+  assert.equal((await pedir("/demandas", { metodo: "POST" })).status, 403);
 });
 
 test("rota inexistente dá 404 com { erro }", async () => {
@@ -148,7 +153,25 @@ test("rota inexistente dá 404 com { erro }", async () => {
   assert.deepEqual(post.json(), { erro: "POST /api/nada não existe" });
   // Rota de API com outro método também não existe.
   assert.equal((await pedir("/api/sessoes", { metodo: "DELETE", headers: mesmaOrigem() })).status, 404);
-  assert.equal((await pedir("/home", { metodo: "POST", headers: mesmaOrigem() })).status, 404);
+  assert.equal((await pedir("/demandas", { metodo: "POST", headers: mesmaOrigem() })).status, 404);
+});
+
+test("CA-3: as rotas do fluxo legado saíram e dão 404", async () => {
+  for (const [metodo, caminho] of [
+    ["GET", "/api/issues/1"],
+    ["POST", "/api/issues/1/tickets"],
+    ["GET", "/api/issues/1/pr"],
+    ["GET", "/api/board"],
+    ["POST", "/api/registros"],
+    ["POST", "/api/tickets/1/reabrir"],
+    ["POST", "/api/tickets/1/consulta"],
+    ["POST", "/api/auditorias"],
+    ["GET", "/api/projetos/loja/issues"],
+    ["GET", "/api/execucoes/1/log"],
+  ] as const) {
+    const r = await pedir(caminho, { metodo, headers: mesmaOrigem(), ...(metodo === "POST" && { corpo: "{}" }) });
+    assert.deepEqual([r.status, r.json()], [404, { erro: `${metodo} ${caminho} não existe` }], caminho);
+  }
 });
 
 test("corpo de mutação: JSON até 64 KiB; inválido ou grande demais dá 422", async () => {
@@ -205,7 +228,7 @@ test("corpo binário (anexo): application/octet-stream chega como Buffer, até 2
 
 test("caminho de página sem cookie devolve o index.html, e a chamada de API dele dá 401", async () => {
   const index = readFileSync(join(import.meta.dirname, "cliente", "index.html"), "utf8");
-  for (const caminho of ["/", "/home", "/projects/x/issues/I-1", "/sessions/abc", "/qualquer/coisa"]) {
+  for (const caminho of ["/", "/demandas", "/sessions/abc", "/qualquer/coisa"]) {
     const r = await pedir(caminho);
     assert.equal(r.status, 200, caminho);
     assert.equal(r.headers["content-type"], "text/html; charset=utf-8");

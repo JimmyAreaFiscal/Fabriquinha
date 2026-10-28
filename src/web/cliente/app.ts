@@ -3,15 +3,12 @@
 import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
 import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
-import { montarAuditoria } from "./telas/auditoria-montar.ts";
 import { montarAvaliacao, montarAvaliacoes } from "./telas/avaliacoes-montar.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
 import { montarDemanda, montarDemandas } from "./telas/demandas-montar.ts";
 import { montarHeatmap } from "./telas/heatmap-montar.ts";
 import { montarHistorico } from "./telas/historico-montar.ts";
-import { montarInicio } from "./telas/inicio-montar.ts";
-import { montarIssue } from "./telas/issue-montar.ts";
 import { montarMetricas } from "./telas/metricas-montar.ts";
 import { montarProjeto } from "./telas/projeto-montar.ts";
 import { montarSdlc } from "./telas/sdlc-montar.ts";
@@ -25,14 +22,11 @@ import { montarSimulacao } from "./telas/simulacao-montar.ts";
 type Montar = (main: HTMLElement, params: Parametros, sinal: AbortSignal) => void | Promise<void>;
 
 const MONTAR: Record<Pagina, Montar> = {
-  inicio: montarInicio,
   projeto: montarProjeto,
   heatmap: montarHeatmap,
-  issue: montarIssue,
   metricas: montarMetricas,
   historico: montarHistorico,
   chat: montarChat,
-  auditoria: montarAuditoria,
   configuracao: montarConfiguracao,
   simulacao: montarSimulacao,
   sdlc: montarSdlc,
@@ -48,7 +42,7 @@ let aguardando = 0;
 /** O da página na tela; trocar de página o aborta. */
 let pagina = new AbortController();
 
-/** Quantas sessões aguardam o Auditor, para o contador do Início. */
+/** Quantas sessões aguardam o Auditor, para o contador das Demandas. */
 async function contar(): Promise<void> {
   const ativas = await api<{ estado: string }[]>("/api/sessoes?escopo=ativas");
   aguardando = ativas.filter((s) => s.estado === "aguardando_humano").length;
@@ -56,7 +50,7 @@ async function contar(): Promise<void> {
 }
 
 function desenhar(): void {
-  if (location.pathname === "/") history.replaceState(null, "", "/home");
+  if (location.pathname === "/") history.replaceState(null, "", "/demandas");
   const rota = rotear(location.pathname);
   document.title = rota ? `${TITULOS[rota.pagina]} · Fabriquinha` : "Fabriquinha";
   cabeca.innerHTML = navegacao(rota?.pagina, aguardando);
@@ -100,7 +94,7 @@ caixa.addEventListener("click", (evento) => {
 });
 
 /** As páginas que se redesenham sozinhas (F7 §4.4). */
-const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio", "projeto", "demandas"]);
+const ATUALIZAM: ReadonlySet<Pagina> = new Set(["demandas"]);
 
 /** A cada 5 s com a aba visível, e ao voltar a ela: o contador da navegação e a página, se ela se atualiza. */
 function atualizar(): void {

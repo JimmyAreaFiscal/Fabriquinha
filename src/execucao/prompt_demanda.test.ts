@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { EtapaTicket } from "../dominio/primitivos.ts";
-import { montarPrompt } from "./prompt.ts";
 import { montarPromptDemanda } from "./prompt_demanda.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
@@ -117,48 +116,6 @@ test("etapa sem modo de trabalhar recusa nomeando a etapa (CA-9)", () => {
     () => montar("demanda"),
     (e: Error) => e.constructor === Error && e.message.includes("demanda"),
   );
-});
-
-test("o prompt legado das seis etapas segue montando (CA-8)", () => {
-  for (const etapa of ["registro", "desenho", "desenvolvimento", "revisao", "encerramento", "sessao"] as const) {
-    const t = {
-      id: 2,
-      issue: 1,
-      etapa,
-      titulo: "T",
-      descricao: "d",
-      status: "aberto",
-      origem: "fabriquinha",
-      criadoEm: AGORA,
-    };
-    const legado = {
-      issue: {
-        id: 1,
-        projeto: "loja",
-        titulo: "I",
-        tipo: "problema",
-        descricao: "d",
-        fase: etapa,
-        deps: [],
-        criadaEm: AGORA,
-      },
-      tickets: [t],
-      execucoes: [],
-      decisoes: [],
-      evidencias: [],
-    };
-    const p = montarPrompt({
-      ag: legado,
-      ticket: t,
-      instrucao: undefined,
-      projeto: { nome: "loja", branchBase: "main" },
-      worktree: "/w",
-      saida: "/s",
-      modo: "autonomo",
-    } as unknown as Parameters<typeof montarPrompt>[0]);
-    assert.ok(p.includes(readFileSync(new URL(`etapas/${etapa}.md`, import.meta.url), "utf8").trim()));
-    assert.ok(p.includes("- Seu ticket: T-2"));
-  }
 });
 
 test("sem critérios, citações, título, descrição, dependências nem caminhos, cada seção diz que está vazia", () => {
