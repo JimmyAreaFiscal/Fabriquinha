@@ -267,7 +267,7 @@ export function semearPrDaRodada(raiz: string): void {
   banco.close();
 }
 
-/** I-216 com o T1 aberto na R1 em desenvolvimento: pronto para o Executar agora. */
+/** I-216 com o T1 e o T2 abertos na R1 em desenvolvimento: só o T1 é elegível para o Executar agora. */
 export function semearTicketAberto(raiz: string): void {
   // A execução parte da worktree da demanda, que precisa existir e ser da Fabriquinha.
   const caminho = join(raiz, "worktrees/loja/I-216/demanda");
@@ -280,7 +280,7 @@ export function semearTicketAberto(raiz: string): void {
     banco,
     demanda("I-216", "execucao", {
       rodadas: [rodada("I-216", 1, "desenvolvimento")],
-      tickets: [ticket("I-216", 1, "implementar", 1, "aberto")],
+      tickets: [ticket("I-216", 1, "implementar", 1, "aberto"), ticket("I-216", 2, "implementar", 1, "aberto")],
     }),
   );
   banco.close();

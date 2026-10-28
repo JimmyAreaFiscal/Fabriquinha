@@ -332,7 +332,8 @@ test.describe("CA-26", () => {
     semearTicketAberto(fabriquinha.raiz);
     await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
     await pagina.setViewportSize({ width: 375, height: 900 });
-    await expect(pagina.getByRole("button", { name: "Executar agora" })).toBeVisible();
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(1);
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T2" }).getByRole("button")).toHaveCount(0);
     expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await info.attach("executar-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
 
@@ -342,6 +343,22 @@ test.describe("CA-26", () => {
     // Pelo menu, sem recarregar: o quadro lê o trabalho ativo antes de o pi falso terminar.
     await pagina.getByRole("link", { name: "Demandas", exact: true }).first().click();
     await expect(pagina.locator(".dm-trabalho")).toContainText("I-216.T1");
+  });
+
+  test("Executar agora na página desatualizada mostra a orientação do servidor e recarrega o status atual", async ({
+    pagina,
+    fabriquinha,
+  }) => {
+    projeto(fabriquinha.raiz);
+    semearTicketAberto(fabriquinha.raiz);
+    await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toBeVisible();
+    // Outro caminho inicia o T1 com a página aberta.
+    await pagina.evaluate(() => fetch("/api/demandas/tickets/I-216.T1/executar", { method: "POST" }));
+    await pagina.getByRole("button", { name: "Executar agora" }).click();
+    await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
   });
 });
 

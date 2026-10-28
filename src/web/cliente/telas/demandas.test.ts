@@ -107,8 +107,8 @@ test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
   const html = pagina(
     dadosDaPagina({
       tickets: [
-        { ref: "I-206.T1", etapa: "planejar", status: "em_execucao", sessao: "s/1" },
-        { ref: "I-206.T2", etapa: "implementar", status: "aberto" },
+        { ref: "I-206.T1", etapa: "planejar", status: "em_execucao", elegivel: false, sessao: "s/1" },
+        { ref: "I-206.T2", etapa: "implementar", status: "aberto", elegivel: false },
       ],
     }),
   );
@@ -129,14 +129,15 @@ test("os tickets ficam na rodada ou nos globais, pelo endereço público, com de
           ref: "I-206.T1",
           etapa: "implementar",
           status: "falhou",
+          elegivel: false,
           rodada: "I-206.R1",
           titulo: "T",
           instrucao: "refaça",
           motivo_falha: "quebrou",
         },
-        { ref: "I-206.T2", etapa: "encerrar_rodada", status: "concluido", rodada: "I-206.R1" },
-        { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", rodada: "I-206.R2" },
-        { ref: "I-206.T4", etapa: "planejar", status: "aberto" },
+        { ref: "I-206.T2", etapa: "encerrar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R1" },
+        { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", elegivel: false, rodada: "I-206.R2" },
+        { ref: "I-206.T4", etapa: "planejar", status: "aberto", elegivel: false },
       ],
       decisoes: [
         { ticket: "I-206.T1", resultado: "recusado", motivo: "falta teste do caminho de erro", por: "agente" },
@@ -165,7 +166,9 @@ test("rodada sem ticket e PR com endereço que não é http não viram link", ()
   const html = pagina(
     dadosDaPagina({
       rodadas: [{ ref: "I-206.R1", titulo: "R", fase: "revisao" }],
-      tickets: [{ ref: "I-206.T1", etapa: "encerrar_rodada", status: "concluido", rodada: "I-206.R1" }],
+      tickets: [
+        { ref: "I-206.T1", etapa: "encerrar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R1" },
+      ],
       evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T1", dados: { id: "7", url: "javascript:x" }, anexos: [] }],
     }),
   );
@@ -311,7 +314,7 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   const comTicket = pagina({
     ...base,
     rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
-    tickets: [{ ref: "I-206.T1", rodada: "I-206.R1", etapa: "implementar", status: "concluido" }],
+    tickets: [{ ref: "I-206.T1", rodada: "I-206.R1", etapa: "implementar", status: "concluido", elegivel: false }],
   });
   assert.match(comTicket, /<\/ul>\s*<div class="dm-gate"><span class="dm-gate-titulo">Aprovação do PR</);
   assert.match(html, /<option value="5">5<\/option>/);
@@ -343,9 +346,9 @@ test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {
   assert.doesNotMatch(quadro({ demandas: [d("javascript:x")], trabalho: [] }), /javascript/);
 });
 
-test("o ticket em falha traz a instrução e Reabrir; o aberto traz Executar agora (CA-24 a CA-26)", () => {
-  const com = (status: "falhou" | "aberto" | "concluido") =>
-    pagina({ ...dadosDaPagina(), tickets: [{ ref: "I-206.T3", etapa: "implementar", status }] });
+test("o ticket em falha traz a instrução e Reabrir; o aberto elegível traz Executar agora (CA-17, CA-24 a CA-26)", () => {
+  const com = (status: "falhou" | "aberto" | "concluido", elegivel = true) =>
+    pagina({ ...dadosDaPagina(), tickets: [{ ref: "I-206.T3", etapa: "implementar", status, elegivel }] });
   const falho = com("falhou");
   assert.match(falho, /<textarea id="instrucao-I-206\.T3"/);
   assert.match(falho, /dm-gate dm-gate-perigo"><span class="dm-gate-titulo">Reabrir I-206\.T3</);
@@ -357,6 +360,7 @@ test("o ticket em falha traz a instrução e Reabrir; o aberto traz Executar ago
     com("aberto"),
     /data-acao="executar" data-caminho="\/api\/demandas\/tickets\/I-206\.T3\/executar">Executar agora</,
   );
+  assert.doesNotMatch(com("aberto", false), /data-acao/);
   assert.doesNotMatch(com("concluido"), /data-acao/);
 });
 

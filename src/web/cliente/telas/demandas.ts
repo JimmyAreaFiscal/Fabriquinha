@@ -102,6 +102,7 @@ export interface DadosDaPagina {
     ref: string;
     etapa: EtapaTicket;
     status: StatusTicket;
+    elegivel: boolean;
     sessao?: string;
     rodada?: string;
     titulo?: string;
@@ -153,10 +154,10 @@ const decisao = (d: Pagina["decisoes"][number]): string =>
 const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
   `<div class="dm-gate${perigo ? " dm-gate-perigo" : ""}"${extra}><span class="dm-gate-titulo">${titulo}</span>${corpo}</div>`;
 
-/** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o que está aberto. */
-function acaoDoTicket({ ref, status }: Pagina["tickets"][number]): string {
+/** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o aberto e elegível. */
+function acaoDoTicket({ ref, status, elegivel }: Pagina["tickets"][number]): string {
   const base = `/api/demandas/tickets/${escapar(ref)}`;
-  if (status === "aberto")
+  if (status === "aberto" && elegivel)
     return `<div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="executar" data-caminho="${base}/executar">Executar agora</button></div>`;
   if (status !== "falhou") return "";
   const campo = `instrucao-${escapar(ref)}`;
