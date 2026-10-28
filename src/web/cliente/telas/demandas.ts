@@ -54,7 +54,8 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
   const aguarda =
     d.fase === "aprovacao_demanda" ||
     d.fase === "aprovacao_planejamento" ||
-    d.rodadas.some((r) => r.fase === "aprovacao_pull_request");
+    (!["cancelada", "concluida", "arquivada"].includes(d.fase) &&
+      d.rodadas.some((r) => r.fase === "aprovacao_pull_request"));
   const marcas = [
     ...(aguarda ? [`<span class="pill pill-aguarda">aguarda a decisão do Auditor</span>`] : []),
     ...d.falhos.map((f) => `<span class="pill pill-falha">ticket falho ${escapar(f.ref)}</span>`),
@@ -192,7 +193,7 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
     <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
     ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
-    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="/api/demandas/rodadas/${escapar(r.ref)}/ajustes">Sessão de ajustes de ${escapar(r.ref)}</a></p>` : ""}
+    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="/api/demandas/rodadas/${escapar(r.ref)}/ajustes" target="_blank" rel="noopener">Sessão de ajustes de ${escapar(r.ref)}</a></p>` : ""}
     ${meus.length > 0 ? `<ul class="dm-tickets">${meus.map((t) => ticket(t, p.decisoes)).join("")}</ul>` : '<p class="muted vazio">Sem tickets.</p>'}
   </section>`;
 }

@@ -309,7 +309,7 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
 
 test("a rodada em sessão de ajustes liga à conversa dos ajustes (CA-22)", () => {
   const html = pagina({ ...dadosDaPagina(), rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "sessao" }] });
-  assert.match(html, /href="\/api\/demandas\/rodadas\/I-206\.R1\/ajustes"/);
+  assert.match(html, /href="\/api\/demandas\/rodadas\/I-206\.R1\/ajustes" target="_blank" rel="noopener"/);
 });
 
 test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {
@@ -352,4 +352,12 @@ test("Arquivar só na demanda concluída; cancelada e arquivada não têm ação
   assert.doesNotMatch(com("concluida"), /Cancelar a demanda/);
   assert.doesNotMatch(com("cancelada"), /data-demanda/);
   assert.doesNotMatch(com("arquivada"), /data-demanda/);
+});
+
+test("o cartão de demanda cancelada não diz que aguarda a decisão do Auditor", () => {
+  const html = quadro({
+    demandas: [demanda("I-206", { fase: "cancelada", rodadas: [{ ref: "I-206.R1", fase: "aprovacao_pull_request" }] })],
+    trabalho: [],
+  });
+  assert.doesNotMatch(html, /aguarda a decisão/);
 });

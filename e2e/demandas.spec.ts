@@ -273,7 +273,12 @@ test("CA-22 e CA-23: reprovar o PR pede o motivo e, com ele, abre a sessão de a
 
   await pagina.getByLabel(/Motivo/).fill("falta teste");
   await pagina.getByRole("button", { name: "Reprovar PR" }).click();
-  await expect(pagina.getByRole("link", { name: /Sessão de ajustes de I-215\.R1/ })).toBeVisible();
+  const link = pagina.getByRole("link", { name: /Sessão de ajustes de I-215\.R1/ });
+  await expect(link).toBeVisible();
+  const [aba] = await Promise.all([pagina.context().waitForEvent("page"), link.click()]);
+  await aba.waitForLoadState();
+  await expect(aba.locator("body")).not.toContainText("Página não encontrada");
+  await expect(aba.locator("body")).toContainText("conversa");
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toHaveCount(0);
 });
 
