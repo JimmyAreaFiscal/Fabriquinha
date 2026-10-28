@@ -11,6 +11,7 @@ import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import {
   confirmarAprovacaoPlanejamento,
   exigirFase,
+  reabrirTicket,
   reprovarPlanejamento,
   submeterPlano,
 } from "../dominio/transicoes_demanda.ts";
@@ -21,6 +22,7 @@ import { configuracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { predecessorasDaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { anotar } from "../persistencia/execucoes.ts";
+import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import {
   caminhoDaWorktreeDemanda,
   caminhoDaWorktreeRodada,
@@ -28,6 +30,7 @@ import {
   garantirWorktreeRodada,
 } from "../repositorio/worktree-demanda.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import { encerrar, mandar, situacao } from "./gerente.ts";
 
 const contexto = () => ({ agora: new Date().toISOString() });
 
@@ -82,9 +85,29 @@ export const submeterPlanejamento = (
   ator: Ator,
 ): AgregadoDemanda => comDemanda(banco, demandaId, (ag) => submeterPlano(ag, plano, ator, contexto()));
 
-/** O Auditor reprova com motivo; a demanda volta a `planejamento` e a mesma sessão retoma com o motivo. */
-export const reprovarPlanejamentoDemanda = (banco: DatabaseSync, demandaId: string, motivo: string): AgregadoDemanda =>
-  comDemanda(banco, demandaId, (ag) => reprovarPlanejamento(ag, { motivo }, AUDITOR, contexto()));
+/**
+ * O Auditor reprova com motivo; a demanda volta a `planejamento`. Com o pi da sessão vivo e ocioso, o motivo vai a ele
+ * como prompt; sem pi vivo, o despacho retoma a mesma sessão com o motivo.
+ */
+export function reprovarPlanejamentoDemanda(banco: DatabaseSync, demandaId: string, motivo: string): AgregadoDemanda {
+  // Planejar Falhou (serviço reiniciado com o gate aberto): a reprovação o reabre com o motivo, na mesma transação.
+  const ag = comDemanda(banco, demandaId, (a) => {
+    const reprovada = reprovarPlanejamento(a, { motivo }, AUDITOR, contexto());
+    const { ticket_id, status } = ticketPlanejar(reprovada);
+    return status === "falhou"
+      ? reabrirTicket(reprovada, { ticket_id, instrucao: motivo }, AUDITOR, contexto())
+      : reprovada;
+  });
+  const { sessoes } = carregarSessoesDoTicket(banco, {
+    demanda_id: demandaId,
+    ticket_id: ticketPlanejar(ag).ticket_id,
+  });
+  const viva = sessoes[0] && situacao(sessoes[0].id);
+  if (viva && !viva.ocupado) {
+    mandar(viva.execucao, { type: "prompt", message: `Planejamento reprovado pelo Auditor. Motivo: ${motivo}` });
+  }
+  return ag;
+}
 
 /**
  * Prepara antes de confirmar (§6): garante a worktree da demanda e a de cada rodada do plano e só então grava a
@@ -137,5 +160,13 @@ export async function aprovarPlanejamentoDemanda(
       throw new ErroDeRegra(`${mensagem(erro)} (worktree ${caminho})`);
     }
   }
-  return comDemanda(banco, demandaId, (a) => confirmarAprovacaoPlanejamento(a, entrada, AUDITOR, contexto()));
+  const aprovada = comDemanda(banco, demandaId, (a) => confirmarAprovacaoPlanejamento(a, entrada, AUDITOR, contexto()));
+  // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
+  const { sessoes } = carregarSessoesDoTicket(banco, {
+    demanda_id: demandaId,
+    ticket_id: ticketPlanejar(aprovada).ticket_id,
+  });
+  const viva = sessoes[0] && situacao(sessoes[0].id);
+  if (viva) encerrar(viva.execucao);
+  return aprovada;
 }

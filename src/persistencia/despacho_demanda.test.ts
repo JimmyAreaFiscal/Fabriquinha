@@ -86,10 +86,12 @@ test("retoma o planejar reprovado e só depois de uma recusa nova", () => {
   const b = banco();
   demanda(b, "I-1", "planejamento");
   ticket(b, "I-1", 1, "planejar", "em_execucao");
-  execucao(b, "I-1", 1, "'2025-12-31T00:00:00.000Z'", T);
+  execucao(b, "I-1", 1, "'2025-12-31T00:00:00.000Z'", null);
   assert.deepEqual(retomadasDePlanejamento(b), []); // sem recusa
   decisao(b, "I-1", 1, 1, "recusado");
-  assert.deepEqual(retomadasDePlanejamento(b), ["I-1"]);
+  assert.deepEqual(retomadasDePlanejamento(b), []); // CA-2: execução aberta, o pi vivo recebe o motivo
+  b.exec(`UPDATE execucao_sessao SET fim = ${T}`);
+  assert.deepEqual(retomadasDePlanejamento(b), ["I-1"]); // CA-3: sem pi vivo, a retomada leva o motivo
   execucao(b, "I-1", 1, DEPOIS, null); // retomada: o agente saiu sem submeter, não retoma em laço
   assert.deepEqual(retomadasDePlanejamento(b), []);
   b.exec(`UPDATE execucao_sessao SET fim = ${DEPOIS}`);
