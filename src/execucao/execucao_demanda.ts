@@ -189,11 +189,18 @@ async function conduzir(c: Conducao): Promise<void> {
   if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
   // ponytail: o pi morto por sinal (código null) sem ser o Auditor é o cgroup do systemd, que pode matá-lo antes do
   // SIGTERM do serviço; um kill externo qualquer também vira "serviço reiniciado".
-  else if (falha !== undefined && (parando || falha.includes("(código null)"))) falha = REINICIADO;
+  else if (parando || falha?.includes("(código null)")) falha = REINICIADO;
   ativas.delete(execucao.id);
   encerrar(c, falha, log);
   try {
-    await (opcoes.fechar ?? fecharTicketDemanda)(c.banco, c.ref, { falha, execucao: execucao.id });
+    await (opcoes.fechar ?? fecharTicketDemanda)(
+      c.banco,
+      c.ref,
+      { falha, execucao: execucao.id },
+      {
+        parada: () => parando,
+      },
+    );
   } catch (error_) {
     anotar(log, `fechamento falhou: ${mensagem(error_)}`);
     try {

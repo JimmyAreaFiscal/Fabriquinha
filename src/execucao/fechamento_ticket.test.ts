@@ -379,3 +379,20 @@ test("problema commita como fix; sem deps o coletor real roda e o Sonar sem ambi
   await fecharTicketDemanda(d.banco, ref(1), { execucao: "E-9" });
   assert.match(d.status(1)?.motivo_falha ?? "", /^falha de infraestrutura:\n- SONAR_HOST_URL/);
 });
+
+test("I-246.T15: parada marcada depois da coleta, com o hook reprovando o commit ou depois do commit: falha 'serviço reiniciado', sem devolução", async () => {
+  // `chamada` é a consulta à parada que responde sim: 1 depois da coleta, 2 no erro do commit ou depois dele.
+  for (const [chamada, hookCorpo] of [
+    [1, undefined],
+    [2, "echo lint quebrou\nexit 1"],
+    [2, undefined],
+  ] as const) {
+    const c = await cenario();
+    if (hookCorpo) hook(c, hookCorpo);
+    let consultas = 0;
+    await fechar(c, 1, { ...coletor(todas(true)), parada: () => ++consultas === chamada });
+    const t = c.status(1);
+    assert.deepEqual([t?.status, t?.devolucoes, t?.motivo_falha], ["falhou", 0, "serviço reiniciado"]);
+    if (chamada === 1) assert.deepEqual(c.evidencias(1), []);
+  }
+});
