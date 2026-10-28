@@ -241,7 +241,7 @@ async function caminhoGit(caminho: string, nome: string): Promise<string> {
   return (await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-path", nome)).trim();
 }
 
-async function verificarLimpa(caminho: string): Promise<void> {
+export async function verificarLimpa(caminho: string): Promise<void> {
   if (
     (await exigirGit(caminho, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all")) !== ""
   ) {

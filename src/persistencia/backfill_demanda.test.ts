@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { backfillDemandas } from "./backfill_demanda.ts";
 import { carregarDemanda } from "./demandas.ts";
-import { montarFixture, SHA_3, SHA_6, SHA_HUMANO } from "./fixture_backfill.test.ts";
+import { montarFixture, SHA_3, SHA_5, SHA_6, SHA_HUMANO } from "./fixture_backfill.test.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
   b
@@ -42,7 +42,7 @@ test("CA-1, CA-3, CA-4: demandas, rodada 1 e tickets com os números e datas do 
   assert.deepEqual(
     ler(
       b,
-      "SELECT id, fase, fase_alterada_em, titulo, tipo, branch, enviada, origem_ferramenta, origem_sessao FROM demanda",
+      "SELECT id, fase, fase_alterada_em, titulo, tipo, branch, enviada, origem_ferramenta, origem_sessao FROM demanda WHERE CAST(substr(id, 3) AS INTEGER) <= 4",
     ),
     [
       {
@@ -113,7 +113,7 @@ test("CA-1, CA-3, CA-4: demandas, rodada 1 e tickets com os números e datas do 
       },
     ],
   );
-  assert.deepEqual(ler(b, "SELECT * FROM rodada"), [
+  assert.deepEqual(ler(b, "SELECT * FROM rodada WHERE demanda_id IN ('I-1', 'I-2')"), [
     {
       demanda_id: "I-1",
       rodada_id: 1,
@@ -257,7 +257,10 @@ test("CA-2: decisao_ticket tem exatamente as decisões do legado, e o gate fica 
   const b = montarFixture();
   backfillDemandas(b);
   assert.deepEqual(
-    ler(b, "SELECT decisao_id, ticket_id, resultado, nota, motivo, por, em FROM decisao_ticket ORDER BY decisao_id"),
+    ler(
+      b,
+      "SELECT decisao_id, ticket_id, resultado, nota, motivo, por, em FROM decisao_ticket WHERE demanda_id = 'I-1' ORDER BY decisao_id",
+    ),
     [
       {
         decisao_id: 1,
@@ -298,7 +301,9 @@ test("CA-2: decisao_ticket tem exatamente as decisões do legado, e o gate fica 
     ],
   );
   assert.deepEqual(
-    ler(b, "SELECT decisao_id, gate FROM decisao_ticket_historico ORDER BY decisao_id").map((l) => l.gate),
+    ler(b, "SELECT decisao_id, gate FROM decisao_ticket_historico WHERE demanda_id = 'I-1' ORDER BY decisao_id").map(
+      (l) => l.gate,
+    ),
     ["desenho", "desenho", "revisao", "pr"],
   );
 });
@@ -306,11 +311,17 @@ test("CA-2: decisao_ticket tem exatamente as decisões do legado, e o gate fica 
 test("CA-5, CA-6: commits, arquivos e retrabalho copiados, com o alterador de outra issue e o humano", () => {
   const b = montarFixture();
   backfillDemandas(b);
-  assert.deepEqual(ler(b, "SELECT sha, demanda_id, ticket_id, mensagem FROM commit_ticket_demanda"), [
-    { sha: SHA_3, demanda_id: "I-1", ticket_id: 3, mensagem: "feat: a" },
-    { sha: SHA_6, demanda_id: "I-2", ticket_id: 6, mensagem: "feat: b" },
-  ]);
-  assert.deepEqual(ler(b, "SELECT * FROM arquivo_commit_demanda"), ler(b, "SELECT * FROM arquivo_commit"));
+  assert.deepEqual(
+    ler(b, "SELECT sha, demanda_id, ticket_id, mensagem FROM commit_ticket_demanda WHERE demanda_id <> 'I-5'"),
+    [
+      { sha: SHA_3, demanda_id: "I-1", ticket_id: 3, mensagem: "feat: a" },
+      { sha: SHA_6, demanda_id: "I-2", ticket_id: 6, mensagem: "feat: b" },
+    ],
+  );
+  assert.deepEqual(
+    ler(b, `SELECT * FROM arquivo_commit_demanda WHERE sha <> '${SHA_5}'`),
+    ler(b, `SELECT * FROM arquivo_commit WHERE sha <> '${SHA_5}'`),
+  );
   assert.deepEqual(
     ler(
       b,
@@ -348,22 +359,29 @@ test("CA-5, CA-6: commits, arquivos e retrabalho copiados, com o alterador de ou
   );
 });
 
-test("CA-9, CA-10, CA-13, CA-18: dependências, em andamento, pendências e contagens do relatório", () => {
+test("CA-8, CA-11: dependências nos dois sentidos, toda issue migrada e contagens do relatório", () => {
   const b = montarFixture();
   const r = backfillDemandas(b);
-  assert.deepEqual(ler(b, "SELECT * FROM dependencia_demanda"), [{ demanda_id: "I-2", depende_demanda_id: "I-1" }]);
-  assert.equal(b.prepare("SELECT 1 FROM demanda WHERE id = 'I-5'").get(), undefined);
-  assert.deepEqual(r.naoMigradas, [{ issue: "I-5", motivo: "em andamento" }]);
-  assert.deepEqual(r.dependenciasPendentes, [
-    { de: "I-1", para: "I-5" },
-    { de: "I-5", para: "I-1" },
+  assert.deepEqual(ler(b, "SELECT * FROM dependencia_demanda"), [
+    { demanda_id: "I-1", depende_demanda_id: "I-5" },
+    { demanda_id: "I-2", depende_demanda_id: "I-1" },
+    { demanda_id: "I-5", depende_demanda_id: "I-1" },
   ]);
-  assert.deepEqual(r.retrabalhoPendente, []);
+  assert.equal((b.prepare("SELECT COUNT(*) AS n FROM demanda").get() as { n: number }).n, 10);
+  assert.deepEqual(r.naoMigradas, []);
+  assert.deepEqual(
+    r.emVoo,
+    [5, 6, 7, 8, 9, 10].map((n, i) => ({
+      issue: `I-${String(n)}`,
+      fase: ["desenvolvimento", "registro", "desenho", "aprovacao_desenho", "revisao", "encerramento"][i],
+      pr: false,
+    })),
+  );
   assert.equal(r.antes.demanda, 0);
-  assert.equal(r.depois.demanda, 4);
-  assert.equal(r.depois.ticket_demanda, 9);
+  assert.equal(r.depois.demanda, 10);
+  assert.equal(r.depois.ticket_demanda, 21); // as propostas de desenvolvimento do desenho (15, 18, 19) ficam de fora
   assert.equal(r.depois.retrabalho_demanda, 3);
-  assert.equal(r.depois.sessao, 3);
+  assert.equal(r.depois.sessao, 5);
   assert.equal(Object.keys(r.depois).length, 17);
 });
 
@@ -403,16 +421,17 @@ for (const [nome, sql, erro] of [
   });
 }
 
-test("retrabalho com alterador em issue em andamento fica no legado, sem recusar a migração", () => {
+test("retrabalho com alterador em issue em andamento entra com o alterador migrado", () => {
   const b = montarFixture();
   b.exec("INSERT INTO retrabalho VALUES ('" + "7".repeat(40) + "', 10, NULL, 3, 1)");
-  const sem = (SELECT_N: string) => (b.prepare(SELECT_N).get() as { n: number }).n;
-  const n = "SELECT COUNT(*) AS n FROM retrabalho_demanda WHERE commit_alterador = '" + "7".repeat(40) + "'";
-  const r = backfillDemandas(b);
-  assert.deepEqual(r.retrabalhoPendente, [
-    { commit: "7".repeat(40), origem: "I-1", ticketOrigem: 3, alterador: "I-5", ticketAlterador: 10 },
-  ]);
-  assert.deepEqual(backfillDemandas(b).retrabalhoPendente, r.retrabalhoPendente);
-  assert.equal(sem(n), 0);
-  assert.equal(sem("SELECT COUNT(*) AS n FROM retrabalho WHERE commit_alterador = '" + "7".repeat(40) + "'"), 1);
+  backfillDemandas(b);
+  assert.deepEqual(
+    ler(
+      b,
+      "SELECT demanda_id, ticket_id, ticket_origem_id, alterador_demanda_id FROM retrabalho_demanda WHERE commit_alterador = '" +
+        "7".repeat(40) +
+        "'",
+    ),
+    [{ demanda_id: "I-1", ticket_id: 10, ticket_origem_id: 3, alterador_demanda_id: "I-5" }],
+  );
 });
