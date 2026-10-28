@@ -19,6 +19,7 @@ import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
 import {
   aguardarCondutores,
+  marcarParada,
   interromperExecucaoDemanda,
   iniciarExecucaoDemanda,
   recuperarExecucoesDemanda,
@@ -676,4 +677,28 @@ test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço 
   assert.notEqual(execucao?.fim, null);
   assert.equal(execucao?.erro, "serviço reiniciado");
   assert.throws(() => process.kill(-grupo, 0), { code: "ESRCH" });
+});
+
+test("I-246 CA-4: condutor fora do pi que não acorda nem depois do SIGKILL: aguardarCondutores volta no limite", async () => {
+  const { banco } = await cenario({ preparacao: "sleep 1" });
+  emExecucao(banco, 1);
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  await new Promise((r) => setTimeout(r, 300)); // o condutor está na preparação
+  const inicio = Date.now();
+  await aguardarCondutores(50, 100);
+  assert.ok(Date.now() - inicio < 600);
+  await fim; // acorda com a parada já encerrada
+});
+
+test("I-246 CA-4: parada durante a preparação: o pi não é lançado e o ticket falha com 'serviço reiniciado'", async () => {
+  const { banco, sessoes, registro } = await cenario({ preparacao: "sleep 1" });
+  emExecucao(banco, 1);
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  await new Promise((r) => setTimeout(r, 300));
+  marcarParada();
+  await fim;
+  assert.equal(sessoes(1).execucoes[0]?.erro, "serviço reiniciado");
+  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+  assert.deepEqual(registro(), []);
+  await aguardarCondutores(1000); // desfaz a parada para os testes seguintes
 });

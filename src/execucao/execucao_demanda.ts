@@ -165,6 +165,8 @@ async function conduzir(c: Conducao): Promise<void> {
       ticket: c.ticket,
       etapasDoProjeto: projeto.etapas,
     });
+    // Parada em curso durante a preparação: não lança um pi novo; a falha vira "serviço reiniciado" abaixo.
+    if (parando) throw new Error(REINICIADO);
     anotar(log, `pi ${args.join(" ")}`);
     falha = await rodarPi({
       execucao: { id: execucao.id, sessaoPi: sessao.id, modo: sessao.modo },
@@ -273,19 +275,24 @@ export function marcarParada(): void {
 /**
  * Parada do serviço: espera os condutores em curso por até `limiteMs`, para gravarem o fim da execução com o banco
  * ainda aberto. Passado o limite, mata o grupo dos pi que restaram (SIGKILL) e espera os condutores gravarem a falha:
- * quem falha por causa da parada termina como "serviço reiniciado".
+ * quem falha por causa da parada termina como "serviço reiniciado". A espera depois do SIGKILL também tem limite
+ * (`aposKillMs`): o condutor fora do pi (preparação, verificações) pode não acordar; então volta assim mesmo, e a
+ * subida seguinte marca o ticket como "serviço reiniciado".
  */
-export async function aguardarCondutores(limiteMs: number): Promise<void> {
+export async function aguardarCondutores(limiteMs: number, aposKillMs = 2000): Promise<void> {
   marcarParada();
-  let timer: NodeJS.Timeout | undefined;
-  const limite = new Promise<"limite">((pronto) => {
-    timer = setTimeout(pronto, limiteMs, "limite");
-  });
-  const resultado = await Promise.race([Promise.allSettled(condutores), limite]);
-  clearTimeout(timer);
-  if (resultado === "limite") {
+  const esperar = async (ms: number) => {
+    let timer: NodeJS.Timeout | undefined;
+    const limite = new Promise<"limite">((pronto) => {
+      timer = setTimeout(pronto, ms, "limite");
+    });
+    const resultado = await Promise.race([Promise.allSettled(condutores), limite]);
+    clearTimeout(timer);
+    return resultado;
+  };
+  if ((await esperar(limiteMs)) === "limite") {
     for (const { pgid } of ativas.values()) if (pgid !== undefined) sinalNoGrupo(pgid, "SIGKILL");
-    await Promise.allSettled(condutores);
+    await esperar(aposKillMs);
   }
   parando = false;
 }
