@@ -14,15 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import {
-  caminhoDaWorktree,
-  descartarAlteracoes,
-  garantirWorktree,
-  limpar,
-  limpezaPendente,
-  naFilaDoProjeto,
-  removerWorktrees,
-} from "./worktree.ts";
+import { descartarAlteracoes, exigirGit, naFilaDoProjeto, preparar, removerWorktrees } from "./worktree.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-worktree-")));
 after(() => {
@@ -43,158 +35,61 @@ const commitar = (repo: string, arquivo: string, conteudo: string) => {
   return git(repo, "rev-parse", "HEAD");
 };
 
-/** Gancho do F6 que não faz nada: estes testes não medem a varredura. */
-const semVarredura = () => Promise.resolve();
-
 let n = 0;
-/** Clone com `origin` bare local, `main` publicada com um `.gitignore` de `node_modules/`, e uma raiz e um log novos. */
-function cenario(preparacao: string[] = []) {
+/**
+ * Clone com `origin` bare local e `main` publicada com um `.gitignore` de `node_modules/`, uma raiz e um log novos, e a
+ * worktree `<raiz>/worktrees/loja/I-1`, na branch `fabriquinha/I-1`.
+ */
+function cenario() {
   const dir = join(base, `c${String(++n)}`);
   const bare = join(dir, "origin.git");
   const repo = join(dir, "repo");
   const raiz = join(dir, "raiz");
+  const worktree = join(raiz, "worktrees", "loja", "I-1");
   mkdirSync(join(raiz, "execucoes", "E-1"), { recursive: true });
   git(base, "init", "-q", "--bare", bare);
   git(base, "clone", "-q", bare, repo);
   git(repo, "checkout", "-q", "-b", "main");
   commitar(repo, ".gitignore", "node_modules/\n");
   git(repo, "push", "-q", "origin", "main");
-  return {
-    bare,
-    repo,
-    raiz,
-    log: join(raiz, "execucoes", "E-1", "log"),
-    projeto: { nome: "loja", repo, branchBase: "main", preparacao },
-    issue: { id: 1, criadaEm: "2026-10-11T12:00:00.000Z" },
-    lerLog: () =>
-      existsSync(join(raiz, "execucoes", "E-1", "log"))
-        ? readFileSync(join(raiz, "execucoes", "E-1", "log"), "utf8")
-        : "",
-  };
+  git(repo, "worktree", "add", "-q", "-b", "fabriquinha/I-1", worktree);
+  const log = join(raiz, "execucoes", "E-1", "log");
+  return { repo, raiz, worktree, log, lerLog: () => (existsSync(log) ? readFileSync(log, "utf8") : "") };
 }
-
-/** Publica um commit novo na base pelo bare, sem passar pelo clone do projeto: só um fetch o traz. */
-function avancarOrigin(bare: string): string {
-  const outro = mkdtempSync(join(base, "outro-"));
-  git(base, "clone", "-q", "-b", "main", bare, outro);
-  const sha = commitar(outro, "novo.txt", "da base\n");
-  git(outro, "push", "-q", "origin", "main");
-  return sha;
-}
-
-test("caminho da worktree: <raiz>/worktrees/<projeto>/I-<n>", () => {
-  assert.equal(caminhoDaWorktree("/r", "loja", 12), "/r/worktrees/loja/I-12");
-});
-
-test("sem worktree nem branch: busca a base, cria fabriquinha/I-n a partir de origin/<base>, prepara em ordem e varre a base", async () => {
-  const c = cenario(["echo um > a.txt && echo saída-um", "cat a.txt; echo dois >&2"]);
-  const shaBase = avancarOrigin(c.bare);
-  let varridas = 0;
-
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, () => {
-    varridas++;
-    return Promise.resolve();
-  });
-
-  assert.equal(caminho, join(c.raiz, "worktrees", "loja", "I-1"));
-  assert.equal(git(caminho, "rev-parse", "--abbrev-ref", "HEAD"), "fabriquinha/I-1");
-  assert.equal(git(caminho, "rev-parse", "HEAD"), shaBase);
-  assert.equal(varridas, 1);
-  // /bin/sh -c com cwd na worktree, na ordem: o segundo comando lê o que o primeiro escreveu.
-  assert.match(
-    c.lerLog(),
-    /preparação: echo um > a\.txt && echo saída-um\nsaída-um\n.*preparação: cat a\.txt; echo dois >&2\num\ndois\n$/s,
-  );
-});
-
-test("worktree existente e preparada: devolve o caminho sem preparar nem buscar a base de novo", async () => {
-  const contador = join(base, "contador-preparada");
-  const c = cenario([`echo x >> ${contador}`]);
-  let varridas = 0;
-  const varrer = () => {
-    varridas++;
-    return Promise.resolve();
-  };
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer);
-  avancarOrigin(c.bare);
-
-  assert.equal(await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer), caminho);
-  assert.equal(readFileSync(contador, "utf8"), "x\n");
-  assert.equal(varridas, 1);
-  assert.equal(git(c.repo, "rev-parse", "origin/main"), git(caminho, "rev-parse", "HEAD"));
-});
-
-test("pasta apagada à mão com a branch existente: recria a worktree na mesma branch e prepara de novo", async () => {
-  const contador = join(base, "contador-apagada");
-  const c = cenario([`echo x >> ${contador}`]);
-  let varridas = 0;
-  const varrer = () => {
-    varridas++;
-    return Promise.resolve();
-  };
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer);
-  const shaTicket = commitar(caminho, "ticket.txt", "trabalho do ticket\n");
-  rmSync(caminho, { recursive: true });
-
-  assert.equal(await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer), caminho);
-  assert.equal(git(caminho, "rev-parse", "HEAD"), shaTicket);
-  assert.equal(readFileSync(contador, "utf8"), "x\nx\n");
-  assert.equal(varridas, 1);
-});
-
-test("branch fabriquinha/I-n de sobra, que não pertence à issue, é recusada e fica intocada", async () => {
-  const c = cenario();
-  git(c.repo, "branch", "fabriquinha/I-1", "main");
-  const sha = git(c.repo, "rev-parse", "fabriquinha/I-1");
-  const recusa = (erro: unknown) =>
-    erro instanceof ErroDeRegra &&
-    erro.message ===
-      `a branch fabriquinha/I-1 já existe em ${c.repo} e não pertence à I-1 desta Fabriquinha ` +
-        `(se for sobra, remova-a com git -C ${c.repo} branch -D fabriquinha/I-1; a Fabriquinha nunca a sobrescreve)`;
-
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), recusa);
-  // A mesma branch criada para outra I-1 (outra instalação, outra raiz) também é sobra.
-  git(c.repo, "config", "branch.fabriquinha/I-1.fabriquinha", `/outra/raiz/worktrees/loja/I-1 ${c.issue.criadaEm}`);
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), recusa);
-
-  assert.equal(git(c.repo, "rev-parse", "fabriquinha/I-1"), sha);
-  assert.equal(existsSync(caminhoDaWorktree(c.raiz, "loja", 1)), false);
-});
 
 test("preparação que falha para no primeiro erro, vai para o log e roda de novo na próxima vez", async () => {
   const sinal = join(base, "pode-preparar");
   const segundo = join(base, "segundo-rodou");
-  const c = cenario([`echo tentando; test -f ${sinal}`, `touch ${segundo}`]);
+  const c = cenario();
+  const comandos = [`echo tentando; test -f ${sinal}`, `touch ${segundo}`];
   const falha = (erro: unknown) =>
     erro instanceof ErroDeRegra &&
     erro.message ===
       `a preparação da worktree falhou em "echo tentando; test -f ${sinal}": saiu com código 1 ` +
         `(veja o log em ${c.log}; ela roda de novo na próxima execução)`;
 
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), falha);
+  await assert.rejects(preparar(c.worktree, comandos, c.log), falha);
   assert.equal(existsSync(segundo), false);
   assert.match(c.lerLog(), /tentando\n.*preparação falhou: saiu com código 1\n$/s);
 
   writeFileSync(sinal, "");
-  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  await preparar(c.worktree, comandos, c.log);
   assert.equal(existsSync(segundo), true);
   assert.equal(c.lerLog().match(/^tentando$/gm)?.length, 2);
 });
 
 test("erro de sintaxe na preparação vai para o log", async () => {
-  const c = cenario(["npm test ("]);
-  await assert.rejects(garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura), /saiu com código 2/);
+  const c = cenario();
+  await assert.rejects(preparar(c.worktree, ["npm test ("], c.log), /saiu com código 2/);
   assert.match(c.lerLog(), /preparação: npm test \(\n.*syntax error.*preparação falhou: saiu com código 2\n$/is);
 });
 
 test("comando de preparação que passa de 30 minutos é morto e a preparação falha", async (t) => {
-  const c = cenario(["sleep 600"]);
+  const c = cenario();
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let resultado: unknown;
-  const pedido = garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura).catch(
-    (erro: unknown) => (resultado = erro),
-  );
-  // O relógio falso anda um minuto por volta do laço de eventos real: o git roda de verdade até o sleep começar.
+  const pedido = preparar(c.worktree, ["sleep 600"], c.log).catch((erro: unknown) => (resultado = erro));
+  // O relógio falso anda um minuto por volta do laço de eventos real, depois que o comando começou.
   let minutos = 0;
   while (resultado === undefined) {
     await new Promise((pronto) => setImmediate(pronto));
@@ -209,17 +104,10 @@ test("comando de preparação que passa de 30 minutos é morto e a preparação 
   assert.ok(minutos >= 30);
 });
 
-test("falha do varrerBase só vai para o log", async () => {
-  const c = cenario();
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, () => Promise.reject(new Error("F6 fora")));
-  assert.equal(existsSync(caminho), true);
-  assert.match(c.lerLog(), /varrerBase falhou: Error: F6 fora\n$/);
-});
-
 test("comando git que falha vira ErroDeRegra com a saída do git", async () => {
   const c = cenario();
   await assert.rejects(
-    garantirWorktree(c.raiz, { ...c.projeto, branchBase: "nao-existe" }, c.issue, c.log, semVarredura),
+    exigirGit(c.repo, "fetch", "origin", "+refs/heads/nao-existe:refs/remotes/origin/nao-existe"),
     (erro: unknown) =>
       erro instanceof ErroDeRegra &&
       /^git fetch origin .* falhou em .*: fatal: couldn't find remote ref/.test(erro.message),
@@ -228,7 +116,7 @@ test("comando git que falha vira ErroDeRegra com a saída do git", async () => {
 
 test("descarte: reset --hard + clean -fd mantém ignorados, remove o novo e anota no log o que removeu", async () => {
   const c = cenario();
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  const caminho = c.worktree;
   mkdirSync(join(caminho, "node_modules", "pacote"), { recursive: true });
   writeFileSync(join(caminho, "node_modules", "pacote", "index.js"), "");
   mkdirSync(join(caminho, "pasta nova"));
@@ -272,7 +160,7 @@ test("fila por projeto: mesmo projeto em série (mesmo depois de uma falha), pro
 
 test("o descarte entra na mesma fila do projeto que a worktree", async () => {
   const c = cenario();
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
+  const caminho = c.worktree;
   writeFileSync(join(caminho, "novo.txt"), "");
   const eventos: string[] = [];
   const ocupada = naFilaDoProjeto(c.raiz, "loja", async () => {
@@ -285,169 +173,14 @@ test("o descarte entra na mesma fila do projeto que a worktree", async () => {
   assert.deepEqual(eventos, ["fila+", "fila-", "descarte"]);
 });
 
-test("limpar (F5 §5.3): varre a base, remove a worktree suja e faz prune; as branches local e remota ficam", async () => {
-  const c = cenario();
-  const worktree = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
-  writeFileSync(join(worktree, "sujo.txt"), "não commitado\n");
-  git(worktree, "push", "-q", "-u", "origin", "fabriquinha/I-1");
-  let varreuComWorktree: boolean | undefined;
-  const varrer = () => {
-    varreuComWorktree = existsSync(worktree);
-    return Promise.resolve();
-  };
-
-  assert.deepEqual(await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, varrer), []);
-  assert.equal(varreuComWorktree, true, "varreu a base antes de remover a worktree");
-  assert.equal(existsSync(worktree), false);
-  assert.doesNotMatch(git(c.repo, "worktree", "list"), /I-1/);
-  assert.equal(git(c.repo, "branch", "--list", "fabriquinha/I-1"), "fabriquinha/I-1");
-  assert.match(git(c.bare, "branch", "--list", "fabriquinha/I-1"), /fabriquinha\/I-1/);
-});
-
-test("limpar: falha da varredura vai só para o log; falha do git vira aviso com o comando", async (t) => {
-  const c = cenario();
-  const erros = t.mock.method(console, "error", () => undefined);
-  const falhou = () => Promise.reject(new Error("git fetch falhou"));
-
-  const avisos = await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, falhou);
-  const caminho = caminhoDaWorktree(c.raiz, "loja", 1);
-  assert.equal(avisos.length, 1, "o prune passa");
-  assert.match(String(avisos[0]), new RegExp(`^git -C ${c.repo} worktree remove --force ${caminho} falhou: fatal: `));
-  assert.match(String(erros.mock.calls[0]?.arguments[1]), /^varrerBase ao limpar a I-1 falhou: git fetch falhou$/);
-});
-
-/** Encerra a I-1 (sem worktree) com `origin/main` um commit à frente (`novo.txt`, "da base"), depois de `antes(repo)`. */
-async function encerrarComOriginAvancado(antes: (c: ReturnType<typeof cenario>) => void) {
-  const c = cenario();
-  git(c.repo, "branch", "registro-externo");
-  antes(c);
-  const origin = avancarOrigin(c.bare);
-  git(c.repo, "fetch", "-q", "origin");
-  const avisos = await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, semVarredura);
-  // O `worktree remove` da I-1 inexistente falha: só os avisos da base interessam.
-  return { c, origin, avisos: avisos.filter((a) => a.startsWith("a main local")) };
-}
-
-test("limpar: a main local sem checkout avança até origin/main (CA-1)", async () => {
-  const { c, origin, avisos } = await encerrarComOriginAvancado((c) =>
-    git(c.repo, "checkout", "-q", "registro-externo"),
-  );
-  assert.deepEqual(avisos, []);
-  assert.equal(git(c.repo, "rev-parse", "main"), origin);
-});
-
-test("limpar: a main local em checkout e limpa avança até origin/main (CA-2)", async () => {
-  const { c, origin, avisos } = await encerrarComOriginAvancado(() => undefined);
-  assert.deepEqual(avisos, []);
-  assert.equal(git(c.repo, "rev-parse", "HEAD"), origin);
-  assert.equal(git(c.repo, "status", "--short"), "");
-});
-
-test("limpar: com outra branch em checkout, só a main avança; a branch atual e o status ficam (CA-3)", async () => {
-  const { c, origin, avisos } = await encerrarComOriginAvancado((c) => {
-    git(c.repo, "checkout", "-q", "registro-externo");
-    writeFileSync(join(c.repo, "solto.txt"), "não rastreado\n");
-  });
-  assert.deepEqual(avisos, []);
-  assert.equal(git(c.repo, "rev-parse", "main"), origin);
-  assert.equal(git(c.repo, "branch", "--show-current"), "registro-externo");
-  assert.equal(git(c.repo, "status", "--short"), "?? solto.txt");
-});
-
-test("limpar: a main local com commit que origin/main não tem fica como está, com aviso (CA-4)", async () => {
-  let local = "";
-  const { c, avisos } = await encerrarComOriginAvancado((c) => {
-    local = commitar(c.repo, "local.txt", "só aqui\n");
-    git(c.repo, "checkout", "-q", "registro-externo");
-  });
-  assert.equal(git(c.repo, "rev-parse", "main"), local);
-  assert.deepEqual(avisos, [
-    "a main local não foi atualizada com origin/main: ela tem commits que origin/main não tem; atualize-a à mão",
-  ]);
-});
-
-test("limpar: alteração local no arquivo que o merge altera deixa a main em checkout como está, com aviso (CA-5)", async () => {
-  const c = cenario();
-  commitar(c.repo, "novo.txt", "versão local\n");
-  git(c.repo, "push", "-q", "origin", "main");
-  const antes = git(c.repo, "rev-parse", "main");
-  const outro = mkdtempSync(join(base, "outro-"));
-  git(base, "clone", "-q", "-b", "main", c.bare, outro);
-  commitar(outro, "novo.txt", "versão do PR\n");
-  git(outro, "push", "-q", "origin", "main");
-  git(c.repo, "fetch", "-q", "origin");
-  writeFileSync(join(c.repo, "novo.txt"), "alterado à mão\n");
-
-  const avisos = (await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, semVarredura)).filter((a) =>
-    a.startsWith("a main local"),
-  );
-  assert.equal(git(c.repo, "rev-parse", "main"), antes);
-  assert.equal(readFileSync(join(c.repo, "novo.txt"), "utf8"), "alterado à mão\n");
-  assert.equal(avisos.length, 1);
-  assert.match(
-    String(avisos[0]),
-    new RegExp(`^a main local não foi atualizada com origin/main, em checkout em ${c.repo}: .*novo\\.txt`, "s"),
-  );
-});
-
-test("limpar: o update-ref que falha vira aviso com a saída do git, e a main fica como está", async () => {
-  const { c, avisos } = await encerrarComOriginAvancado((c) => {
-    git(c.repo, "checkout", "-q", "registro-externo");
-    writeFileSync(join(c.repo, ".git", "refs", "heads", "main.lock"), "");
-  });
-  assert.equal(avisos.length, 1);
-  assert.match(String(avisos[0]), /^a main local não foi atualizada com origin\/main: .*main\.lock/s);
-  assert.notEqual(git(c.repo, "rev-parse", "main"), git(c.repo, "rev-parse", "origin/main"));
-});
-
-test("limpar: sem main local, não há o que atualizar nem aviso", async () => {
-  const c = cenario();
-  git(c.repo, "checkout", "-q", "-b", "registro-externo");
-  git(c.repo, "branch", "-q", "-D", "main");
-  const avisos = await limpar(c.raiz, c.projeto, { id: 1, fase: "concluida" }, semVarredura);
-  assert.deepEqual(
-    avisos.filter((a) => a.startsWith("a main local")),
-    [],
-  );
-});
-
-test("limpar só depois de encerrar a issue", async () => {
-  const c = cenario();
-  await assert.rejects(
-    limpar(c.raiz, c.projeto, { id: 1, fase: "aprovacao_pr" }, semVarredura),
-    (e) =>
-      e instanceof ErroDeRegra &&
-      e.message === "a I-1 está na fase aprovacao_pr (a worktree só é removida depois de encerrar a issue)",
-  );
-});
-
-test("limpeza pendente: a worktree da issue concluída que ficou no disco vira o comando que falhou, que basta", async () => {
-  const c = cenario();
-  const worktree = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
-  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "aprovacao_pr" }), [], "ainda não encerrada");
-  // A worktree no disco é o `remove` que falhou; o `prune` que falha depois de um `remove` que passou não deixa nada
-  // da issue para trás.
-  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [
-    `git -C ${c.repo} worktree remove --force ${worktree}`,
-  ]);
-  for (const comando of limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" })) {
-    execFileSync("sh", ["-c", comando]);
-  }
-  assert.deepEqual(limpezaPendente(c.raiz, c.projeto, { id: 1, fase: "concluida" }), [], "rodou o comando");
-  assert.doesNotMatch(execFileSync("git", ["-C", c.repo, "worktree", "list"]).toString(), /I-1/, "nada a podar");
-});
-
 test("removerWorktrees: apaga worktrees/<projeto> e faz prune; repositório, HEAD, branch e outros projetos ficam", async () => {
   const c = cenario();
-  const caminho = caminhoDaWorktree(c.raiz, "demo", 1);
-  mkdirSync(join(c.raiz, "worktrees", "demo"), { recursive: true });
   mkdirSync(join(c.raiz, "worktrees", "outro"), { recursive: true });
-  git(c.repo, "worktree", "add", "-q", "-b", "fabriquinha/I-1", caminho);
   const head = git(c.repo, "rev-parse", "HEAD");
 
-  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo }), []);
+  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "loja", repo: c.repo }), []);
 
-  assert.equal(existsSync(join(c.raiz, "worktrees", "demo")), false);
+  assert.equal(existsSync(join(c.raiz, "worktrees", "loja")), false);
   assert.equal(existsSync(join(c.raiz, "worktrees", "outro")), true);
   assert.doesNotMatch(git(c.repo, "worktree", "list"), /I-1/);
   assert.match(git(c.repo, "branch", "--list", "fabriquinha/I-1"), /fabriquinha\/I-1/);
@@ -486,92 +219,3 @@ test(
     assert.match(String(avisos[0]), new RegExp(`^não foi possível apagar ${pasta}: `));
   },
 );
-
-/** Worktree da issue já criada e preparada; `origin/main` fica um commit à frente dela, com `arquivo`. */
-async function comOriginAdiantado(c: ReturnType<typeof cenario>, arquivo = "novo.txt", conteudo = "da base\n") {
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
-  const outro = mkdtempSync(join(base, "outro-"));
-  git(base, "clone", "-q", "-b", "main", c.bare, outro);
-  const origin = commitar(outro, arquivo, conteudo);
-  git(outro, "push", "-q", "origin", "main");
-  return { caminho, origin };
-}
-const atualizar = (c: ReturnType<typeof cenario>) =>
-  garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura, true);
-
-test("atualizarBase: a worktree sem commit próprio avança até origin/main por fast-forward (CA-6)", async () => {
-  const c = cenario();
-  const { caminho, origin } = await comOriginAdiantado(c);
-
-  assert.equal(await atualizar(c), caminho);
-  assert.equal(git(caminho, "rev-list", "--count", "HEAD..origin/main"), "0");
-  assert.equal(git(caminho, "rev-parse", "HEAD"), origin);
-  assert.equal(git(caminho, "status", "--short"), "");
-});
-
-test("atualizarBase: o commit próprio da issue fica no log e a base entra por merge (CA-7)", async () => {
-  const c = cenario();
-  const { caminho } = await comOriginAdiantado(c);
-  commitar(caminho, "proprio.txt", "da issue\n");
-
-  await atualizar(c);
-
-  assert.equal(git(caminho, "rev-list", "--count", "HEAD..origin/main"), "0");
-  assert.match(git(caminho, "log", "--format=%s"), /^proprio\.txt$/m);
-  assert.equal(git(caminho, "status", "--short"), "");
-});
-
-test("atualizarBase: o conflito com origin/main aborta o merge, falha e deixa o commit próprio (CA-8)", async () => {
-  const c = cenario();
-  const { caminho } = await comOriginAdiantado(c, "conflito.txt", "da base\n");
-  const proprio = commitar(caminho, "conflito.txt", "da issue\n");
-
-  await assert.rejects(
-    atualizar(c),
-    (erro: unknown) =>
-      erro instanceof ErroDeRegra &&
-      /^o merge de origin\/main na branch fabriquinha\/I-1 falhou: .*CONFLICT/s.test(erro.message) &&
-      erro.message.includes(`resolva o conflito com origin/main em ${caminho} e execute o ticket de novo`),
-  );
-
-  assert.equal(git(caminho, "rev-parse", "HEAD"), proprio);
-  assert.match(git(caminho, "log", "--format=%s"), /^conflito\.txt$/m);
-  assert.equal(git(caminho, "status", "--short"), "");
-});
-
-test("atualizarBase: o origin inacessível falha no git fetch e o HEAD não muda (CA-9)", async () => {
-  const c = cenario();
-  const caminho = await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, semVarredura);
-  const antes = git(caminho, "rev-parse", "HEAD");
-  git(c.repo, "remote", "set-url", "origin", join(base, "nao-existe.git"));
-
-  await assert.rejects(
-    atualizar(c),
-    (erro: unknown) => erro instanceof ErroDeRegra && erro.message.includes("git fetch"),
-  );
-
-  assert.equal(git(caminho, "rev-parse", "HEAD"), antes);
-});
-
-test("atualizarBase: o merge que muda o HEAD prepara de novo; sem mudança, ou sem atualizarBase, não", async () => {
-  const contador = join(base, "contador-atualizar");
-  const c = cenario([`echo x >> ${contador}`]);
-  let varridas = 0;
-  const varrer = () => {
-    varridas++;
-    return Promise.resolve();
-  };
-  await comOriginAdiantado(c);
-  assert.equal(readFileSync(contador, "utf8"), "x\n");
-
-  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer);
-  assert.equal(readFileSync(contador, "utf8"), "x\n", "sem atualizarBase, nada muda");
-  assert.equal(varridas, 0);
-
-  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer, true);
-  assert.equal(readFileSync(contador, "utf8"), "x\nx\n", "o HEAD mudou");
-  assert.equal(varridas, 1, "o fetch do desenho também varre a base");
-
-  await garantirWorktree(c.raiz, c.projeto, c.issue, c.log, varrer, true);
-  assert.equal(readFileSync(contador, "utf8"), "x\nx\n", "o HEAD não mudou");
-});

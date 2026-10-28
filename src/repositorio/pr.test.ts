@@ -8,7 +8,7 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
 import { hospedagemFalsa } from "./hospedagem-falsa.test.ts";
-import { estadoPR, integrarPR, lerPR, publicarPR, publicarPRDe, verificarPR } from "./pr.ts";
+import { integrarPR, lerPR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
 after(() => {
@@ -61,16 +61,13 @@ function cenario(tipo: Hospedagem = "github") {
     registrados,
     varreduras: () => varreduras,
     publicar: (corpo: string, conhecidos: string[] = [], varrer = () => Promise.resolve()) =>
-      publicarPR(
+      publicarPRDe(
         join(dir, "raiz"),
-        { nome: "loja", repo, branchBase: "main", hospedagem: tipo },
-        1,
-        {
-          titulo: "feat: A [I-1]",
-          corpo: `${MARCA}\n${corpo}`,
-          conhecidos,
-          marca: MARCA,
-          registrado: (sha) => registrados.has(sha),
+        { nome: "loja", repo, hospedagem: tipo },
+        { branch: BRANCH, base: "main", publicarBase: false },
+        { titulo: "feat: A [I-1]", corpo: `${MARCA}\n${corpo}`, conhecidos, marca: MARCA },
+        (sha) => {
+          if (!registrados.has(sha)) throw new ErroDeRegra(`o commit ${sha} não foi registrado`, "reabra o ticket");
         },
         () => {
           varreduras++;
@@ -235,23 +232,6 @@ test("o PR conhecido vence um mais novo com a marca", async () => {
   );
 });
 
-test("commit que nenhum ticket de desenvolvimento registrou na branch: falha antes do push, com como desfazer", async () => {
-  const c = cenario();
-  writeFileSync(join(c.repo, "a.ts"), "do agente\n");
-  git(c.repo, "commit", "-q", "-am", "agente commitou na revisão");
-  const sha = git(c.repo, "rev-parse", "HEAD");
-
-  await recusa(
-    c.publicar("x"),
-    `a branch ${BRANCH} está no commit ${sha.slice(0, 12)}, que nenhum ticket de desenvolvimento da I-1 registrou: ` +
-      "um agente commitou fora do desenvolvimento, e esse commit não sobe no PR (desfaça com git -C " +
-      `${join(dirname(c.repo), "raiz", "worktrees", "loja", "I-1")} reset --hard HEAD~1, repetindo até a HEAD ser ` +
-      "um commit [I-1/T-<m>] da Fabriquinha, e reabra o ticket)",
-  );
-  assert.equal(c.publicado(), "");
-  assert.deepEqual(hospedagem.prs(), []);
-});
-
 test("retomada: o PR com a marca deste ticket, criado por uma execução que não o registrou, é adotado", async () => {
   const c = cenario();
   hospedagem.abrir({ head: BRANCH, base: "main", titulo: "feat: A [I-1]", corpo: `${MARCA}\nantes`, estado: "aberto" });
@@ -395,10 +375,7 @@ test("saída inesperada do CLI vira ErroDeRegra com o que veio", async () => {
   );
 });
 
-/** A issue com a evidência `pr_aberto` do PR `id`, como o encerramento a registra. */
-const comPR = (id: string) => ({ issue: { id: 1 }, evidencias: [{ tipo: "pr_aberto" as const, dados: { id } }] });
-
-test("estadoPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no Azure DevOps, lido agora", async () => {
+test("lerPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no Azure DevOps, lido agora", async () => {
   for (const [tipo, url, comando] of [
     ["github", URL_GH, ["pr", "view", "1", "--json", "state,url,mergedAt,mergeCommit"]],
     ["azure-devops", URL_AZ, ["repos", "pr", "show", "--id", "1", "--output", "json"]],
@@ -407,7 +384,7 @@ test("estadoPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no
     const projeto = { repo: c.repo, hospedagem: tipo };
     hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
     const ler = async () => {
-      const { lidoEm, ...resto } = await estadoPR(projeto, comPR("1"));
+      const { lidoEm, ...resto } = await lerPR(projeto, "1");
       assert.ok(Math.abs(Date.parse(lidoEm) - Date.now()) < 60_000, "lidoEm é agora");
       return resto;
     };
@@ -427,35 +404,31 @@ test("estadoPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no
   }
 });
 
-test("estadoPR: falha e saída inesperada do CLI viram ErroExterno com a saída; issue sem PR é ErroDeRegra", async () => {
+test("lerPR: falha e saída inesperada do CLI viram ErroExterno com a saída", async () => {
   const c = cenario();
   const projeto = { repo: c.repo, hospedagem: "github" as const };
   hospedagem.falhar("pr view", "HTTP 401: Bad credentials");
   await recusa(
-    estadoPR(projeto, comPR("1")),
+    lerPR(projeto, "1"),
     "gh pr view saiu com código 1: HTTP 401: Bad credentials (confira o acesso do gh à hospedagem e leia o estado do PR de novo)",
     ErroExterno,
   );
   hospedagem.zerar();
   hospedagem.responder("pr view", JSON.stringify({ state: "MERGED", url: `${URL_GH}1`, mergedAt: "ontem" }));
   await recusa(
-    estadoPR(projeto, comPR("1")),
+    lerPR(projeto, "1"),
     `saída inesperada de gh pr view: {"state":"MERGED","url":"${URL_GH}1","mergedAt":"ontem"} (confira a versão do CLI e leia o estado do PR de novo)`,
     ErroExterno,
   );
   hospedagem.responder("pr view", JSON.stringify({ state: "MERGED", url: `${URL_GH}1`, mergedAt: null }));
-  assert.equal((await estadoPR(projeto, comPR("1"))).mergeadoEm, undefined, "mergeado sem data");
-  await recusa(
-    estadoPR(projeto, { issue: { id: 1 }, evidencias: [] }),
-    "a I-1 ainda não tem PR (o encerramento publica o PR)",
-  );
+  assert.equal((await lerPR(projeto, "1")).mergeadoEm, undefined, "mergeado sem data");
 });
 
 test("estado de PR desconhecido do gh ou do az é erro, na leitura e na publicação, nunca aberto por padrão", async () => {
   const c = cenario();
   hospedagem.responder("pr view", JSON.stringify({ state: "DRAFT", url: `${URL_GH}1`, mergedAt: null }));
   await recusa(
-    estadoPR({ repo: c.repo, hospedagem: "github" }, comPR("1")),
+    lerPR({ repo: c.repo, hospedagem: "github" }, "1"),
     "o gh devolveu um estado de PR que a Fabriquinha não conhece: DRAFT " +
       "(confira a versão do gh; os estados conhecidos são OPEN, CLOSED, MERGED)",
     ErroExterno,

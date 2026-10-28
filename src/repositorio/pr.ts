@@ -1,17 +1,17 @@
-// PR da issue (F5 §5): conferência de PR criado fora da Fabriquinha (§5.0), publicação (§5.1) e leitura do estado
-// (§5.2) com `gh` ou `az`, no ambiente do serviço, que é o autenticado. Sempre com argumentos em lista: título e corpo nunca viram comando.
+// PR das rodadas e da demanda (F5 §5): conferência de PR criado fora da Fabriquinha (§5.0), publicação (§5.1) e
+// leitura do estado (§5.2) com `gh` ou `az`, no ambiente do serviço, que é o autenticado. Sempre com argumentos em
+// lista: título e corpo nunca viram comando.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
-import type { Evidencia, Issue, ProblemasDoPR } from "../dominio/agregado.ts";
-import { ErroDeRegra, ErroExterno, existe, mensagem } from "../dominio/erros.ts";
-import type { Id } from "../dominio/primitivos.ts";
+import type { ProblemasDoPR } from "../dominio/agregado.ts";
+import { ErroDeRegra, ErroExterno, mensagem } from "../dominio/erros.ts";
 import type { Hospedagem, Projeto } from "../dominio/projeto.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 import { executar, LIMITE_COMANDO_MS } from "../processo.ts";
-import { caminhoDaWorktree, exigirGit, naFilaDoProjeto } from "./worktree.ts";
+import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
 
 /** Um PR da branch da issue, como a hospedagem o lista. */
 interface PRNaHospedagem {
@@ -354,57 +354,6 @@ const PoliticasAz = z.array(
 
 const CLIS: Readonly<Record<Hospedagem, CliDePR>> = { github, "azure-devops": azure };
 
-/**
- * F5 §5.0 e §5.1: publica o PR da branch `fabriquinha/I-<issue>` com `titulo` e `corpo` (já condensado ao limite da
- * hospedagem) e devolve o número, a URL, a branch e o commit publicado.
- *
- * 1. Conferência: lista os PRs da branch. É da Fabriquinha o PR que é um dos `conhecidos` (os ids das evidências
- *    `pr_aberto` da issue, em ordem) ou o adotável: traz a `marca` deste ticket, vai para `branchBase`, sai deste
- *    repositório, não de um fork, e não foi mergeado. Qualquer outro foi criado fora: aberto ou mergeado, a publicação falha antes do push;
- *    fechado sem merge, não barra, que é o que a mensagem pede ao Auditor.
- * 2. Na fila git do projeto: a branch precisa estar num commit que um ticket de desenvolvimento registrou
- *    (`registrado`); commit do agente na revisão ou no encerramento não sobe. Depois, o push.
- * 3. `varrerBase` (F6 §4.4), que busca a base; a falha da varredura só vai para o `log`.
- * 4. Atualiza o PR conhecido mais recente ou, sem ele, o adotável, reabrindo-o antes se estiver fechado; sem nenhum,
- *    cria.
- *
- * Retomada: se o PR saiu, mas o registro de `pr_aberto` falhou, o PR fica fora dos conhecidos. A marca
- * (`marcaDoPR`, com o ticket de encerramento) o identifica na próxima execução do mesmo ticket, que o adota em vez de
- * barrar o encerramento para sempre. Ticket concluído não executa de novo, e o encerramento só conclui com
- * `pr_aberto`: a marca de um ticket em execução fora dos conhecidos é sempre deste caso.
- * ponytail: a marca é forjável por um agente que já furou as duas primeiras camadas do F5 §5.0, como a do commit
- * órfão (F5 §4); base e repositório de origem conferidos, o PR adotado é o que a Fabriquinha criaria, e o título e o
- * corpo são trocados inteiros.
- */
-export async function publicarPR(
-  raiz: string,
-  projeto: Pick<Projeto, "nome" | "repo" | "branchBase" | "hospedagem">,
-  issue: Id,
-  pr: {
-    titulo: string;
-    corpo: string;
-    conhecidos: readonly string[];
-    marca: string;
-    registrado: (sha: string) => boolean;
-  },
-  varrerBase: () => Promise<void>,
-  log: string,
-): Promise<{ id: string; url: string; branch: string; head: string }> {
-  const rotulo = `I-${String(issue)}`;
-  const branch = `fabriquinha/${rotulo}`;
-  const conferirCommits = (head: string) => {
-    if (pr.registrado(head)) return;
-    throw new ErroDeRegra(
-      `a branch ${branch} está no commit ${head.slice(0, 12)}, que nenhum ticket de desenvolvimento da ${rotulo} ` +
-        "registrou: um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
-      `desfaça com git -C ${caminhoDaWorktree(raiz, projeto.nome, issue)} reset --hard HEAD~1, repetindo até a ` +
-        `HEAD ser um commit [${rotulo}/T-<m>] da Fabriquinha, e reabra o ticket`,
-    );
-  };
-  const alvo = { branch, base: projeto.branchBase, publicarBase: false };
-  return publicarPRDe(raiz, projeto, alvo, pr, conferirCommits, varrerBase, log);
-}
-
 /** A origem e o destino do PR; `publicarBase` empurra também a base, que pode nunca ter ido ao remoto (branch da demanda). */
 export interface AlvoDoPR {
   branch: string;
@@ -413,8 +362,23 @@ export interface AlvoDoPR {
 }
 
 /**
- * O núcleo de `publicarPR` (passos 1 a 4 acima) para qualquer origem e destino. `conferirCommits(head)` roda na fila git,
- * antes do push, e lança ErroDeRegra para recusar a publicação.
+ * F5 §5.0 e §5.1: publica o PR de `alvo.branch` para `alvo.base` com `titulo` e `corpo` (já condensado ao limite da
+ * hospedagem) e devolve o número, a URL, a branch e o commit publicado.
+ *
+ * 1. Conferência: lista os PRs da branch. É da Fabriquinha o PR que é um dos `conhecidos` (os ids das evidências
+ *    `pr_aberto`, em ordem) ou o adotável: traz a `marca` deste ticket, vai para a base, sai deste repositório, não de
+ *    um fork, e não foi mergeado. Qualquer outro foi criado fora: aberto ou mergeado, a publicação falha antes do push;
+ *    fechado sem merge, não barra, que é o que a mensagem pede ao Auditor.
+ * 2. Na fila git do projeto, `conferirCommits(head)` recusa com ErroDeRegra o commit que não deve subir; depois, o push
+ *    (da base também, com `publicarBase`).
+ * 3. `varrerBase` (F6 §4.4), que busca a base; a falha da varredura só vai para o `log`.
+ * 4. Atualiza o PR conhecido mais recente ou, sem ele, o adotável, reabrindo-o antes se estiver fechado; sem nenhum,
+ *    cria.
+ *
+ * Retomada: se o PR saiu, mas o registro de `pr_aberto` falhou, o PR fica fora dos conhecidos. A marca o identifica na
+ * próxima execução do mesmo ticket, que o adota em vez de barrar o encerramento para sempre.
+ * ponytail: a marca é forjável por um agente que já furou as duas primeiras camadas do F5 §5.0; base e repositório de
+ * origem conferidos, o PR adotado é o que a Fabriquinha criaria, e o título e o corpo são trocados inteiros.
  */
 export async function publicarPRDe(
   raiz: string,
@@ -462,22 +426,6 @@ export async function publicarPRDe(
   if (!existente) return { ...(await cli.criar(repo, base, branch, pr.titulo, pr.corpo)), branch, head };
   if (existente.estado === "fechado") await cli.reabrir(repo, existente.id);
   return { ...(await cli.atualizar(repo, existente, pr.titulo, pr.corpo)), branch, head };
-}
-
-/**
- * F5 §5.2: o estado do PR da issue (o da última evidência `pr_aberto`, a fonte única do PR), lido agora na
- * plataforma. Uma falha do `gh` ou do `az` lança ErroExterno com a saída do comando; nada é gravado.
- */
-export async function estadoPR(
-  projeto: Pick<Projeto, "repo" | "hospedagem">,
-  ag: { issue: Pick<Issue, "id">; evidencias: readonly Pick<Evidencia, "tipo" | "dados">[] },
-): Promise<LeituraDoPR> {
-  const pr = existe(
-    ag.evidencias.findLast((e) => e.tipo === "pr_aberto"),
-    `a I-${String(ag.issue.id)} ainda não tem PR`,
-    "o encerramento publica o PR",
-  );
-  return lerPR(projeto, pr.dados.id as string);
 }
 
 /** O estado do PR `id`, lido agora na plataforma. */
