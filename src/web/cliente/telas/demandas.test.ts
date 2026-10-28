@@ -115,6 +115,12 @@ test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
   const [, t1, t2] = html.split(/(?=<li class="dm-ticket">)/);
   assert.match(String(t1), /href="\/sessions\/s%2F1">chat →/);
   assert.doesNotMatch(String(t2), /chat →/);
+  const aberta = pagina(
+    dadosDaPagina({
+      tickets: [{ ref: "I-206.T3", etapa: "sessao_em_aberto", status: "em_execucao", elegivel: false, sessao: "s/3" }],
+    }),
+  );
+  assert.doesNotMatch(aberta, /chat →/);
 });
 
 test("os tickets ficam na rodada ou nos globais, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
@@ -311,6 +317,9 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   const base = dadosDaPagina();
   const html = pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }] });
   assert.match(html, /<select id="nota-I-206\.R1"/);
+  const reprovacao = html.slice(html.indexOf("Reprovação do PR"));
+  assert.doesNotMatch(reprovacao, /<select/);
+  assert.match(reprovacao, /<textarea id="motivo-I-206\.R1"/);
   const comTicket = pagina({
     ...base,
     rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],

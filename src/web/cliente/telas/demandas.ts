@@ -171,7 +171,7 @@ function acaoDoTicket({ ref, status, elegivel }: Pagina["tickets"][number]): str
 function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): string {
   const minhas = decisoes.filter((d) => d.ticket === t.ref);
   return `<li class="dm-ticket">
-    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>${t.sessao === undefined ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`}</div>
+    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>${t.sessao === undefined || t.etapa === "sessao_em_aberto" ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`}</div>
     ${t.titulo === undefined ? "" : `<p class="dm-texto">${escapar(t.titulo)}</p>`}
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
     ${t.motivo_falha === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo_falha)}</p>`}
@@ -186,13 +186,18 @@ function gatePR(ref: string): string {
   const motivo = `motivo-${escapar(ref)}`;
   const nota = `nota-${escapar(ref)}`;
   const notas = [1, 2, 3, 4, 5].map((n) => `<option value="${String(n)}">${String(n)}</option>`).join("");
-  return blocoDeAcao(
+  const aprovar = blocoDeAcao(
     "Aprovação do PR",
-    `<label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
-    <label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select>
-    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="false" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>
-    <span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>`,
+    `<label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select><span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
+    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>`,
   );
+  const reprovar = blocoDeAcao(
+    "Reprovação do PR",
+    `<label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
+    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="false" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button></div>`,
+    true,
+  );
+  return aprovar + reprovar;
 }
 
 function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {

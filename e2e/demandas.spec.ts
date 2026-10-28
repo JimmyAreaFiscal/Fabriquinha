@@ -250,12 +250,16 @@ test("CA-20 e CA-21: aprovar o PR pede a nota e, com a nota, mostra-a na rodada"
   await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
   await pagina.setViewportSize({ width: 1440, height: 900 });
   // O gate do PR vem depois da lista de tickets da rodada.
-  expect(await pagina.locator(".dm-rodada .dm-tickets ~ .dm-gate").count()).toBe(1);
+  expect(await pagina.locator(".dm-rodada .dm-tickets ~ .dm-gate").count()).toBe(2);
   await expect(pagina.locator(".dm-gate-titulo", { hasText: "Aprovação do PR" })).toBeVisible();
   await info.attach("gate-pr-1440", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
   await pagina.setViewportSize({ width: 375, height: 900 });
   await expect(pagina.getByRole("button", { name: "Aprovar PR" })).toBeVisible();
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toBeVisible();
+  // CA-11: o formulário da reprovação tem o motivo e nenhum seletor de nota.
+  const reprovacao = pagina.locator(".dm-gate", { has: pagina.getByRole("button", { name: "Reprovar PR" }) });
+  await expect(reprovacao.getByLabel(/Motivo/)).toBeVisible();
+  await expect(reprovacao.locator("select")).toHaveCount(0);
   expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await info.attach("gate-pr-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
 
