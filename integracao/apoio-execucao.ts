@@ -135,12 +135,12 @@ export const execucoesDe = (c: Cenario, ref: { demanda_id: string; ticket_id: nu
 
 export const agora = () => new Date().toISOString();
 
-/** O ticket atual (o de maior id) da etapa na rodada 1. */
-export const atual = (c: Cenario, id: string, etapa: string) => {
+/** O ticket atual (o de maior id) da etapa na rodada (a 1, por padrão). */
+export const atual = (c: Cenario, id: string, etapa: string, rodada = 1) => {
   const t = demanda(c, id)
-    .tickets.filter((x) => x.rodada_id === 1 && x.etapa === etapa)
+    .tickets.filter((x) => x.rodada_id === rodada && x.etapa === etapa)
     .sort((a, b) => b.ticket_id - a.ticket_id)[0];
-  assert.ok(t, `ticket ${etapa} da rodada 1`);
+  assert.ok(t, `ticket ${etapa} da rodada ${String(rodada)}`);
   return t;
 };
 /** As evidências que cabem ao agente do ticket, submetidas como a ferramenta autora da demanda as enviaria. */
@@ -174,10 +174,11 @@ export async function revisar(
   c: Cenario,
   id: string,
   decisao: { aprovado: true } | { aprovado: false; exigencias: string; correcoes: object[] },
+  rodada = 1,
 ): Promise<number> {
   pi.roteirizar([{ modo: "ok" }]);
   await ciclo(c, despacho());
-  const { ticket_id, status } = atual(c, id, "revisar_rodada");
+  const { ticket_id, status } = atual(c, id, "revisar_rodada", rodada);
   assert.equal(status, "em_execucao", "a revisão espera a decisão do agente");
   if (decisao.aprovado) {
     comoAgente(c, id, ticket_id, [
@@ -187,7 +188,7 @@ export async function revisar(
   }
   decidirRevisaoRodada(
     c.banco,
-    { ...decisao, demanda_id: id, rodada_id: 1, ticket_id },
+    { ...decisao, demanda_id: id, rodada_id: rodada, ticket_id },
     { tipo: "agente", execucao: 1, ticket: ticket_id },
   );
   return ticket_id;
@@ -203,13 +204,13 @@ export const MENSAGEM_PR = {
 };
 
 /** O agendador roda o `encerrar_rodada`: o agente documenta (enquanto o pi espera) e a Fabriquinha publica e confere o PR. */
-export async function encerrar(c: Cenario, id: string): Promise<void> {
+export async function encerrar(c: Cenario, id: string, rodada = 1): Promise<void> {
   fecharPortao();
   pi.roteirizar([{ modo: "ok", agente: agenteMudo }]);
   const fins = despacharDemandas(c.banco, c.config, despacho());
   assert.equal(fins.length, 1);
   await esperar(() => pisAteAgora() === 1, "o pi receber o prompt da documentação");
-  comoAgente(c, id, atual(c, id, "encerrar_rodada").ticket_id, [
+  comoAgente(c, id, atual(c, id, "encerrar_rodada", rodada).ticket_id, [
     ["mensagem_pr", MENSAGEM_PR],
     ["aula_codigo", { resumo: "aula" }],
   ]);
