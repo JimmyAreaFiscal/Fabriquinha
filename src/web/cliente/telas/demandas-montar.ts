@@ -1,7 +1,7 @@
 // Quadro e página da demanda no DOM: leem a API e desenham com `quadro` e `pagina`. O app.ts redesenha só o quadro a
 // cada 5 s; a página decide os gates da demanda e do planejamento. Os testes de ponta a ponta (e2e/) os exercitam.
 import type { Parametros } from "../caminhos.ts";
-import { abrirCaixa, api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
+import { abrirCaixa, api, avisar, ErroDaApi, irPara, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
 import { type DadosDaPagina, type DadosDoQuadro, pagina, quadro } from "./demandas.ts";
 
@@ -36,6 +36,11 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
     "click",
     (evento) => {
       const alvo = evento.target instanceof Element ? evento.target : null;
+      const demanda = alvo?.closest<HTMLButtonElement>("button[data-demanda]");
+      if (demanda) {
+        void agirNaDemanda(demanda, main);
+        return;
+      }
       const botao = alvo?.closest<HTMLButtonElement>("button[data-gate]");
       if (botao) {
         void decidir(botao, main, params, signal);
@@ -135,4 +140,28 @@ async function agirNoTicket(
     mostrarErro(falha);
   }
   if (!signal.aborted) await carregar(main, params, signal);
+}
+
+/**
+ * Cancelar abre e fecha a confirmação sem pedido algum; confirmar ou arquivar envia e leva ao quadro, onde a demanda
+ * (e as dependentes) aparece com a fase devolvida ou some. Com erro do servidor, o aviso traz a orientação dele e a
+ * página se redesenha com a fase atual.
+ */
+async function agirNaDemanda(botao: HTMLButtonElement, main: HTMLElement): Promise<void> {
+  const acao = botao.dataset.demanda;
+  if (acao === "abrir-cancelar" || acao === "voltar") {
+    const confirmacao = main.querySelector<HTMLElement>("[data-confirmar-cancelar]");
+    if (confirmacao) confirmacao.hidden = acao === "voltar";
+    return;
+  }
+  avisar();
+  for (const b of main.querySelectorAll<HTMLButtonElement>("button[data-demanda]")) b.disabled = true;
+  try {
+    await api(botao.dataset.caminho ?? "", { method: "POST" });
+    irPara("/demandas");
+  } catch (falha) {
+    mostrarErro(falha);
+    const id = main.querySelector(".dm-cabeca .id")?.textContent ?? "";
+    main.innerHTML = pagina(await api<DadosDaPagina>(`/api/demandas/${encodeURIComponent(id)}`));
+  }
 }

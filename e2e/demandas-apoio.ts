@@ -285,3 +285,10 @@ export function semearTicketAberto(raiz: string): void {
   );
   banco.close();
 }
+
+/** A I-217 concluída, que o Auditor arquiva. */
+export function semearDemandaConcluida(raiz: string): void {
+  const banco = abrir(raiz);
+  criarDemanda(banco, demanda("I-217", "concluida"));
+  banco.close();
+}

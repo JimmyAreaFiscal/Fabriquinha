@@ -5,7 +5,7 @@ import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";
 import { carregarDemanda, listarDemandas } from "../../persistencia/demandas.ts";
-import { predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
+import { dependentesNaoConcluidasDaDemanda, predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
 import { anexosDaDemanda, lerAnexo } from "../../persistencia/evidencia_demanda.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 
@@ -131,6 +131,11 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
     })),
     encerramento: passosDoEncerramento(ag),
     dependencias: predecessorasDaDemanda(banco, id),
+    // As que o cancelamento leva junto (diretas e indiretas, ainda não terminadas).
+    dependentes: dependentesNaoConcluidasDaDemanda(banco, id).map((d) => {
+      const { titulo, fase } = carregarDemanda(banco, d).demanda;
+      return { demanda_id: d, titulo, fase };
+    }),
   };
 }
 

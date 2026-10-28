@@ -92,6 +92,7 @@ const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
   evidencias: [],
   encerramento: { passos: [], limpeza_pendente: [] },
   dependencias: [],
+  dependentes: [],
   ...resto,
 });
 
@@ -99,7 +100,7 @@ test("a página vazia traz só o cabeçalho e o link ao quadro, sem seções vaz
   const html = pagina(dadosDaPagina());
   assert.match(html, /href="\/demandas">← Demandas/);
   assert.match(html, /<h1>Demanda &#60;I-206&#62;<\/h1>/);
-  assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|<button/);
+  assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|Decisão d/);
 });
 
 test("os tickets ficam na rodada ou nos globais, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
@@ -131,7 +132,7 @@ test("os tickets ficam na rodada ou nos globais, pelo endereço público, com de
       evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T2", dados: { id: "7", url: "https://pr/7" }, anexos: [] }],
     }),
   );
-  const [r1, r2, globais] = html.split(/(?=<section)/).slice(1);
+  const [, , r1, r2, globais] = html.split(/(?=<section)/);
   assert.match(r1 ?? "", /id="I-206\.R1"[\s\S]*I-206\.T1[\s\S]*Implementação[\s\S]*Falhou/);
   assert.match(r1 ?? "", /Motivo da falha:<\/strong> quebrou/);
   assert.match(r1 ?? "", /Instrução:<\/strong> refaça/);
@@ -334,4 +335,21 @@ test("o ticket em falha traz a instrução e Reabrir; o aberto traz Executar ago
     /data-acao="executar" data-caminho="\/api\/demandas\/tickets\/I-206\.T3\/executar">Executar agora</,
   );
   assert.doesNotMatch(com("concluido"), /data-acao/);
+});
+
+test("Cancelar só abre a confirmação, que lista as dependentes que vão junto (CA-27)", () => {
+  const html = pagina(dadosDaPagina({ dependentes: [{ demanda_id: "I-207", titulo: "Dep <b>", fase: "execucao" }] }));
+  assert.match(html, /data-demanda="abrir-cancelar"[^>]*>Cancelar a demanda/);
+  assert.match(html, /data-confirmar-cancelar hidden>[\s\S]*href="\/demandas\/I-207">I-207<\/a> Dep &#60;b&#62;/);
+  assert.match(html, /data-demanda="cancelar" data-caminho="\/api\/demandas\/I-206\/cancelar"/);
+  assert.match(pagina(dadosDaPagina()), /Nenhuma outra demanda depende desta/);
+});
+
+test("Arquivar só na demanda concluída; cancelada e arquivada não têm ação (CA-29)", () => {
+  const com = (fase: DadosDaPagina["demanda"]["fase"]) =>
+    pagina(dadosDaPagina({ demanda: { id: "I-206", projeto: "loja", titulo: "T", fase } }));
+  assert.match(com("concluida"), /data-demanda="arquivar" data-caminho="\/api\/demandas\/I-206\/arquivar"/);
+  assert.doesNotMatch(com("concluida"), /Cancelar a demanda/);
+  assert.doesNotMatch(com("cancelada"), /data-demanda/);
+  assert.doesNotMatch(com("arquivada"), /data-demanda/);
 });

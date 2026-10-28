@@ -23,6 +23,7 @@ interface Pagina {
   evidencias: Evidencia[];
   encerramento: { passos: { feito: boolean }[] };
   dependencias: unknown[];
+  dependentes: { demanda_id: string; titulo: string; fase: string }[];
 }
 interface Board {
   demandas: {
@@ -218,6 +219,15 @@ test("CA-11: a I-207 traz a I-206 como dependência, com a situação dela", asy
   const r = (await pedir("/api/demandas/I-207")).json<Pagina>();
   assert.deepEqual(r.dependencias, [{ demanda_id: "I-206", fase: "execucao" }]);
   assert.deepEqual(r.rodadas, []);
+});
+
+test("CA-27: a I-206 traz a I-207 como dependente que vai junto no cancelamento", async () => {
+  const { pedir } = await cenarioDemandas();
+  const r = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.equal(r.dependentes.length, 1);
+  assert.equal(r.dependentes[0]?.demanda_id, "I-207");
+  assert.equal(typeof r.dependentes[0].titulo, "string");
+  assert.deepEqual((await pedir("/api/demandas/I-207")).json<Pagina>().dependentes, []);
 });
 
 test("CA-12: a I-999 não existe, 404 com a mensagem", async () => {

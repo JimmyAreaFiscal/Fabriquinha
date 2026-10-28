@@ -119,6 +119,7 @@ export interface DadosDaPagina {
     falha?: { etapa: "check_final" | "integracao" | "limpeza"; motivo: string };
   };
   dependencias: { demanda_id: string; fase: FaseDemanda }[];
+  dependentes: { demanda_id: string; titulo: string; fase: FaseDemanda }[];
 }
 
 /** O tipo da evidência como a página o mostra; o que não está aqui sai com a chave legível. */
@@ -264,6 +265,33 @@ function gate({ id, fase }: Pagina["demanda"]): string {
   );
 }
 
+/**
+ * Cancelar (CA-27) ou arquivar (CA-29). Cancelar só abre a confirmação, que lista as dependentes que vão junto; nada é
+ * enviado antes de confirmar.
+ */
+function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string {
+  const caminho = `/api/demandas/${escapar(id)}`;
+  const botao = (acao: string, classe: string, rotulo: string, extra = "") =>
+    `<button type="button" class="btn btn-grande ${classe}" data-demanda="${acao}"${extra}>${rotulo}</button>`;
+  if (fase === "concluida")
+    return secao(
+      "titulo-acoes",
+      "Ações",
+      `<div class="dm-botoes">${botao("arquivar", "btn-primario", "Arquivar", ` data-caminho="${caminho}/arquivar"`)}</div>`,
+    );
+  if (fase === "arquivada" || fase === "cancelada") return "";
+  const junto =
+    dependentes.length > 0
+      ? `<p class="dm-texto">Estas demandas dependem desta e serão canceladas junto:</p><ul class="dm-tickets">${dependentes.map((d) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(d.demanda_id)}">${escapar(d.demanda_id)}</a> ${escapar(d.titulo)} ${pilula(FASE_DA_DEMANDA[d.fase])}</li>`).join("")}</ul>`
+      : '<p class="dm-texto">Nenhuma outra demanda depende desta.</p>';
+  return secao(
+    "titulo-acoes",
+    "Ações",
+    `<div class="dm-botoes">${botao("abrir-cancelar", "btn-reprovar", "Cancelar a demanda")}</div>
+    <div class="dm-gate" data-confirmar-cancelar hidden><p class="dm-texto"><strong>Cancelar ${escapar(id)}?</strong></p>${junto}<div class="dm-botoes">${botao("voltar", "", "Voltar")}${botao("cancelar", "btn-reprovar", "Confirmar o cancelamento", ` data-caminho="${caminho}/cancelar"`)}</div></div>`,
+  );
+}
+
 export function pagina(p: DadosDaPagina): string {
   const { demanda: d } = p;
   const globais = p.tickets.filter((t) => t.rodada === undefined);
@@ -271,6 +299,7 @@ export function pagina(p: DadosDaPagina): string {
   <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
     <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
   ${gate(d)}
+  ${acoesDaDemanda(p)}
   ${
     p.dependencias.length > 0
       ? secao(

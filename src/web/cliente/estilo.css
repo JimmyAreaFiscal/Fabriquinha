@@ -4272,3 +4272,8 @@ svg.barras :not(.hit) {
   max-width: 100%;
   align-self: flex-start;
 }
+
+/* Demandas: a confirmação do cancelamento começa fechada (o display do gate vence o atributo hidden). */
+.dm-gate[hidden] {
+  display: none;
+}

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projeto } from "./apoio.ts";
 import {
+  semearDemandaConcluida,
   semearDemandaOciosa,
   semearDemandas,
   semearGateDaDemanda,
@@ -119,8 +120,8 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Só os botões do gate do PR da rodada (R1 em Aprovação do PR) e o Reabrir do T5 falho; a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button")).toHaveCount(3);
+  // Só os botões do gate do PR da rodada (R1 em Aprovação do PR) o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button")).toHaveCount(6);
 
   // CA-10: clicar no print abre a imagem na caixa.
   await pagina.getByRole("link", { name: "print.png" }).click();
@@ -326,4 +327,42 @@ test.describe("CA-26", () => {
     await pagina.getByRole("link", { name: "Demandas", exact: true }).first().click();
     await expect(pagina.locator(".dm-trabalho")).toContainText("I-216.T1");
   });
+});
+
+test("CA-27 e CA-28: cancelar pede a confirmação com a dependente e, confirmado, o quadro mostra as duas canceladas", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  projeto(fabriquinha.raiz);
+  semearDemandas(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-206`);
+  await pagina.setViewportSize({ width: 375, height: 900 });
+  await pagina.getByRole("button", { name: "Cancelar a demanda" }).click();
+  const confirmacao = pagina.locator("[data-confirmar-cancelar]");
+  await expect(confirmacao).toContainText("I-207");
+  await expect(pagina.getByRole("button", { name: "Confirmar o cancelamento" })).toBeVisible();
+  expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await info.attach("cancelar-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  // Voltar não cancela nada.
+  await pagina.getByRole("button", { name: "Voltar" }).click();
+  await expect(confirmacao).toBeHidden();
+  await pagina.getByRole("button", { name: "Cancelar a demanda" }).click();
+
+  await pagina.getByRole("button", { name: "Confirmar o cancelamento" }).click();
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
+  await expect(cartao(pagina, "I-206")).toContainText("Cancelada");
+  await expect(cartao(pagina, "I-207")).toContainText("Cancelada");
+});
+
+test("CA-29: arquivar a demanda concluída a tira do quadro", async ({ pagina, fabriquinha }) => {
+  projeto(fabriquinha.raiz);
+  semearDemandaConcluida(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas`);
+  await expect(cartao(pagina, "I-217")).toBeVisible();
+  await pagina.goto(`${fabriquinha.base}/demandas/I-217`);
+  await expect(pagina.getByRole("button", { name: "Cancelar a demanda" })).toHaveCount(0);
+  await pagina.getByRole("button", { name: "Arquivar" }).click();
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
+  await expect(cartao(pagina, "I-217")).toHaveCount(0);
 });
