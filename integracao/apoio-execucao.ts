@@ -169,15 +169,25 @@ export async function rodadaEmRevisao(c: Cenario): Promise<string> {
   return id;
 }
 
-/** O agendador roda o `revisar_rodada` (a Fabriquinha prepara as evidências dela); depois o agente decide. */
-export async function revisar(
-  c: Cenario,
-  id: string,
-  decisao: { aprovado: true } | { aprovado: false; exigencias: string; correcoes: object[] },
-  rodada = 1,
-): Promise<number> {
-  pi.roteirizar([{ modo: "ok" }]);
-  await ciclo(c, despacho());
+/**
+ * Despacha com o pi falso parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta, como o
+ * agente de verdade, que submete e decide antes de o pi sair (sem decisão, a revisão falha).
+ */
+export async function despacharComAgente(c: Cenario, deps: DepsDespacho, agir: () => void): Promise<void> {
+  fecharPortao();
+  pi.roteirizar([{ modo: "ok", agente: agenteMudo }]);
+  const fins = despacharDemandas(c.banco, c.config, deps);
+  assert.ok(fins.length > 0);
+  await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");
+  agir();
+  abrirPortao();
+  await Promise.all(fins);
+}
+
+type DecisaoDaRevisao = { aprovado: true } | { aprovado: false; exigencias: string; correcoes: object[] };
+
+/** O agente da revisão da `rodada`, com a execução aberta: as evidências (se aprova) e a decisão. */
+export function decidirComoRevisor(c: Cenario, id: string, decisao: DecisaoDaRevisao, rodada = 1): number {
   const { ticket_id, status } = atual(c, id, "revisar_rodada", rodada);
   assert.equal(status, "em_execucao", "a revisão espera a decisão do agente");
   if (decisao.aprovado) {
@@ -194,6 +204,15 @@ export async function revisar(
   return ticket_id;
 }
 
+/** O agendador roda o `revisar_rodada` (a Fabriquinha prepara as evidências dela) e o agente decide durante a execução. */
+export async function revisar(c: Cenario, id: string, decisao: DecisaoDaRevisao, rodada = 1): Promise<number> {
+  let revisor = 0;
+  await despacharComAgente(c, despacho(), () => {
+    revisor = decidirComoRevisor(c, id, decisao, rodada);
+  });
+  return revisor;
+}
+
 export const MENSAGEM_PR = {
   titulo: "Encerrar a rodada",
   oQueMudou: "Conduz o encerramento.",
@@ -205,17 +224,12 @@ export const MENSAGEM_PR = {
 
 /** O agendador roda o `encerrar_rodada`: o agente documenta (enquanto o pi espera) e a Fabriquinha publica e confere o PR. */
 export async function encerrar(c: Cenario, id: string, rodada = 1): Promise<void> {
-  fecharPortao();
-  pi.roteirizar([{ modo: "ok", agente: agenteMudo }]);
-  const fins = despacharDemandas(c.banco, c.config, despacho());
-  assert.equal(fins.length, 1);
-  await esperar(() => pisAteAgora() === 1, "o pi receber o prompt da documentação");
-  comoAgente(c, id, atual(c, id, "encerrar_rodada", rodada).ticket_id, [
-    ["mensagem_pr", MENSAGEM_PR],
-    ["aula_codigo", { resumo: "aula" }],
-  ]);
-  abrirPortao();
-  await Promise.all(fins);
+  await despacharComAgente(c, despacho(), () => {
+    comoAgente(c, id, atual(c, id, "encerrar_rodada", rodada).ticket_id, [
+      ["mensagem_pr", MENSAGEM_PR],
+      ["aula_codigo", { resumo: "aula" }],
+    ]);
+  });
 }
 
 /** Rodada 1 em `encerramento`, com a implementação revisada e aprovada. */
