@@ -7,7 +7,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { PACOTE, ambientePi, argumentosPi, binarioPi, skillsDaEtapa } from "../src/execucao/pi.ts";
+import { PACOTE, ambientePi, argumentosPi, binarioPi } from "../src/execucao/pi.ts";
+import { skillsDaEtapaDemanda } from "../src/execucao/pi_demanda.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));
 after(() => {
@@ -25,14 +26,14 @@ export default (pi) =>
 const sonda = join(dir, "sonda.js");
 writeFileSync(sonda, SONDA);
 
-// Uma sessão por etapa que tem skills de artefato (o desenvolvimento não tem).
-for (const etapa of ["registro", "desenho", "revisao", "encerramento"] as const) {
+// Uma sessão por etapa que tem skills de artefato.
+for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_demanda"] as const) {
   test(`o pi das execuções de ${etapa} carrega a guarda, a pergunta e as skills da etapa com a configuração do Auditor`, (t) => {
     const prompt = join(dir, `prompt-${etapa}.md`);
     const args = argumentosPi({
       raiz: dir,
       sessaoPi: `fumaca-${etapa}`,
-      etapa,
+      skills: skillsDaEtapaDemanda(etapa),
       modelo: undefined,
       confianca: undefined,
       modo: "autonomo",
@@ -62,7 +63,7 @@ for (const etapa of ["registro", "desenho", "revisao", "encerramento"] as const)
     const sistema = readFileSync(prompt, "utf8");
     // Desde o pi 1.1.0, o diretório de trabalho vem num bloco `<cwd>`.
     assert.ok(sistema.includes(`<cwd>\n${dir}\n</cwd>`), sistema);
-    for (const skill of skillsDaEtapa(etapa)) {
+    for (const skill of skillsDaEtapaDemanda(etapa)) {
       assert.ok(sistema.includes(`<name>${skill}</name>`), skill);
       assert.ok(sistema.includes(`<location>${join(PACOTE, "skills", skill, "SKILL.md")}</location>`), skill);
     }

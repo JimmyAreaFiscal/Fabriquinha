@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { EtapaTicket } from "../dominio/primitivos.ts";
-import { argumentosPi, PACOTE, skillsDaEtapa } from "./pi.ts";
+import { PACOTE } from "./pi.ts";
 import { argumentosPiDemanda, skillsDaEtapaDemanda, skillsPendentes } from "./pi_demanda.ts";
 
 const base = { raiz: "/r", sessaoPi: "s", confianca: undefined, modo: "autonomo" as const };
@@ -62,15 +62,5 @@ test("pacote com skills faltando: as ausentes ficam pendentes, sem repetição (
       for (const s of skillsDaEtapaDemanda(etapa, pacote)) assert.ok(!pendentes.includes(s));
   } finally {
     rmSync(pacote, { recursive: true, force: true });
-  }
-});
-
-test("etapas legadas: sem skills, os argumentos são os de sempre (CA-8)", () => {
-  for (const etapa of ["registro", "desenho", "desenvolvimento", "revisao", "encerramento", "sessao"] as const) {
-    const args = argumentosPi({ ...base, etapa, modelo: undefined });
-    assert.deepEqual(
-      flags(args, "--skill"),
-      skillsDaEtapa(etapa).map((s) => `${PACOTE}/skills/${s}`),
-    );
   }
 });

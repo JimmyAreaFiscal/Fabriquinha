@@ -10,10 +10,7 @@ const projeto = (nome: string): ProjetoListado => ({
   branchBase: "main",
   hospedagem: "github",
   preparacao: [],
-  testes: [],
   sonar: { projectKey: nome },
-  fitness: [],
-  modelos: {},
 });
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 

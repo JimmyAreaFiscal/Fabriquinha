@@ -28,8 +28,8 @@ function cenario() {
   const banco = abrir(raiz);
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-       VALUES ('loja', '/repos/loja', 'main', 'github', '["t"]', 'k', '[{"nome":"f","comando":"c","descricao":"d"}]')`,
+      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+       VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`,
     )
     .run();
   const ticket = (ticket_id: number, etapa: string, extra: object = {}) => ({

@@ -55,8 +55,8 @@ arquivo("desenho.html", HTML);
 const novaRaiz = (): NodeJS.ProcessEnv => {
   const raiz = mkdtempSync(join(base, "raiz-"));
   const b = abrir(raiz);
-  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-    VALUES ('fabriquinha', '/repo/f', 'main', 'github', '["t"]', 'k', '[{"nome":"f","comando":"c","descricao":"d"}]')`);
+  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    VALUES ('fabriquinha', '/repo/f', 'main', 'github', 'k')`);
   b.close();
   return { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_FERRAMENTA: "claude", FABRIQUINHA_SESSAO: "S1" };
 };

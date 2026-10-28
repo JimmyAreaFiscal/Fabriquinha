@@ -27,8 +27,8 @@ function comBanco(corpo: (banco: DatabaseSync, raiz: string) => void): void {
     for (const nome of ["a", "b"]) {
       banco
         .prepare(
-          `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, testes, sonar_project_key, fitness, modelos, efforts)
-           VALUES (?, ?, 'main', 'github', '["npm i"]', '["npm test"]', 'chave', '[{"nome":"f"}]', '{"x":1}', '{"y":2}')`,
+          `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, sonar_project_key)
+           VALUES (?, ?, 'main', 'github', '["npm i"]', 'chave')`,
         )
         .run(nome, `/repo/${nome}`);
     }
@@ -216,25 +216,15 @@ test("repo duplicado propaga o erro e preserva a configuração anterior", () =>
   });
 });
 
-test("projetos são isolados e campos comuns são compartilhados com o formato legado", () => {
+test("projetos são isolados e campos comuns são compartilhados com o cadastro", () => {
   comBanco((banco) => {
     gravarConfiguracaoProjeto(banco, completa);
     gravarConfiguracaoProjeto(banco, minima("b"));
     assert.deepEqual(configuracaoProjeto(banco, "a"), canonica);
     assert.equal(configuracaoProjeto(banco, "b")?.fitness.length, 1);
 
-    const legado = () =>
-      banco.prepare("SELECT preparacao, testes, fitness, modelos, efforts FROM projeto WHERE nome = 'a'").get();
-    assert.deepEqual(
-      { ...legado() },
-      {
-        preparacao: '["npm i"]',
-        testes: '["npm test"]',
-        fitness: '[{"nome":"f"}]',
-        modelos: '{"x":1}',
-        efforts: '{"y":2}',
-      },
-    );
+    // A preparação do cadastro fica como estava: a da configuração SDLC mora na tabela dela.
+    assert.equal(banco.prepare("SELECT preparacao FROM projeto WHERE nome = 'a'").get()?.preparacao, '["npm i"]');
     banco.exec("UPDATE projeto SET branch_base = 'outra' WHERE nome = 'a'");
     assert.equal(configuracaoProjeto(banco, "a")?.branch_base, "outra");
     gravarConfiguracaoProjeto(banco, { ...completa, branch_base: "nova" });
@@ -283,9 +273,7 @@ test("raiz_git relativa é recusada sem mutação e as leituras legadas seguem v
       repo: "/repos/loja",
       branchBase: "main",
       hospedagem: "github",
-      testes: ["npm test"],
       sonar: { projectKey: "loja" },
-      fitness: [{ nome: "dominio", comando: "npm run fitness", descricao: "Sem I/O" }],
     };
     banco.exec("DELETE FROM projeto"); // as fixtures a/b têm JSON legado inválido; aqui só dados válidos
     registrarProjeto(banco, legado);

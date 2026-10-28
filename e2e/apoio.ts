@@ -20,7 +20,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { recuperarAuditorias } from "../src/execucao/auditoria.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
-import { execucoesEmAndamento } from "../src/persistencia/servico.ts";
+import { execucoesAbertasDaDemanda } from "../src/persistencia/sessoes.ts";
 import { falharPendentes } from "../src/persistencia/simulacao.ts";
 import { sinalNoGrupo } from "../src/processo.ts";
 
@@ -55,7 +55,9 @@ async function parar(servico: ChildProcess): Promise<void> {
  */
 function matarPi(raiz: string): void {
   const banco = abrir(raiz);
-  for (const { pgid } of execucoesEmAndamento(banco)) if (pgid !== null) sinalNoGrupo(pgid, "SIGKILL");
+  for (const { grupo_processo } of execucoesAbertasDaDemanda(banco)) {
+    if (grupo_processo !== null) sinalNoGrupo(grupo_processo, "SIGKILL");
+  }
   for (const pgid of falharPendentes(banco, "fim do teste")) sinalNoGrupo(pgid, "SIGKILL");
   banco.close();
   recuperarAuditorias(raiz);
@@ -154,11 +156,7 @@ export async function fotografar(pagina: Page, info: TestInfo, nome: string): Pr
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
 
-/**
- * O projeto `loja`, com um clone de verdade e o remoto num bare local, para a worktree das execuções. O comando de
- * testes falha: toda execução do desenvolvimento que chega à coleta depois do pi falha nela, sem depender do SonarQube
- * da máquina.
- */
+/** O projeto `loja`, com um clone de verdade e o remoto num bare local, para a worktree das execuções. */
 export function projeto(raiz: string, sql = ""): void {
   const bare = join(raiz, "origin.git");
   const repo = join(raiz, "loja");
@@ -177,10 +175,7 @@ export function projeto(raiz: string, sql = ""): void {
     branchBase: "main",
     hospedagem: "github",
     preparacao: [],
-    testes: ["true"],
     sonar: { projectKey: "loja" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    modelos: {},
   });
   banco.exec(sql);
   banco.close();

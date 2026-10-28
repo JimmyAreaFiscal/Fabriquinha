@@ -195,9 +195,7 @@ test("corpo binário (anexo): application/octet-stream chega como Buffer, até 2
     repo: "/repos/loja",
     branchBase: "main",
     hospedagem: "github",
-    testes: ["npm test"],
     sonar: { projectKey: "loja" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
   });
   const { id } = criarUsuarioSimulado(servico.banco, "loja", { nome: "Dona Maria", descricao: "Contadora" });
   const binario = (corpo: Buffer, tipo = "application/octet-stream") =>
@@ -292,8 +290,8 @@ const SESSAO = "0b7c5a52-3f0e-4c1e-9d3a-6f1f2b9e8a10";
 test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inválido dá 422 com o campo", async () => {
   assert.deepEqual((await pedir("/api/sessoes?escopo=ativas", { headers: comCookie() })).json(), []);
   servico.banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('p', '/nao/existe', 'main', 'github', '["npm test"]', 'p', '[{"nome":"f","comando":"true","descricao":"d"}]');
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('p', '/nao/existe', 'main', 'github', 'p');
     INSERT INTO demanda VALUES ('I-1', 'p', 'Busca', 'problema', 'd', 'execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, motivo_falha)
       VALUES ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam');

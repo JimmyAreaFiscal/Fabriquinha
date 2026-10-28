@@ -3,11 +3,12 @@
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { formatarTicketRef } from "../dominio/demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { Projeto } from "../dominio/projeto.ts";
 import { caminhoArquivo } from "./arquivos.ts";
 import { escrever, raizDo } from "./banco.ts";
-import { dirDaExecucao, dirDaExecucaoSimulada } from "./execucoes.ts";
+import { dirDaExecucaoSimulada } from "./execucoes.ts";
 
 interface Linha {
   nome: string;
@@ -15,11 +16,7 @@ interface Linha {
   branch_base: string;
   hospedagem: string;
   preparacao: string;
-  testes: string;
   sonar_project_key: string;
-  fitness: string;
-  modelos: string;
-  efforts: string;
   link_produto: string | null;
 }
 
@@ -32,11 +29,7 @@ const deLinha = (l: Linha): Projeto =>
     branchBase: l.branch_base,
     hospedagem: l.hospedagem,
     preparacao: json(l.preparacao),
-    testes: json(l.testes),
     sonar: { projectKey: l.sonar_project_key },
-    fitness: json(l.fitness),
-    modelos: json(l.modelos),
-    efforts: json(l.efforts),
     ...(l.link_produto && { linkProduto: l.link_produto }),
   });
 
@@ -55,7 +48,7 @@ function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p
       );
     }
     const comando = banco.prepare(sql);
-    // A edição não toca as colunas legadas: os parâmetros que o `sql` não usa ficam de fora.
+    // A edição não toca a chave do SonarQube: os parâmetros que o `sql` não usa ficam de fora.
     comando.setAllowUnknownNamedParameters(true);
     const { changes } = comando.run({
       nome: p.nome,
@@ -63,11 +56,7 @@ function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p
       branch_base: p.branchBase,
       hospedagem: p.hospedagem,
       preparacao: JSON.stringify(p.preparacao),
-      testes: JSON.stringify(p.testes),
       sonar_project_key: p.sonar.projectKey,
-      fitness: JSON.stringify(p.fitness),
-      modelos: JSON.stringify(p.modelos),
-      efforts: JSON.stringify(p.efforts ?? {}),
       link_produto: p.linkProduto ?? null,
     });
     conferir(p, changes > 0);
@@ -80,9 +69,8 @@ export const registrarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto
   gravar(
     banco,
     entrada,
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, testes, sonar_project_key, fitness, modelos, efforts, link_produto)
-     VALUES ($nome, $repo, $branch_base, $hospedagem, $preparacao, $testes, $sonar_project_key, $fitness, $modelos, $efforts,
-       $link_produto)
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, sonar_project_key, link_produto)
+     VALUES ($nome, $repo, $branch_base, $hospedagem, $preparacao, $sonar_project_key, $link_produto)
      ON CONFLICT (nome) DO NOTHING`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeRegra(`já existe o projeto ${p.nome}`, "edite-o na Configuração");
@@ -90,8 +78,8 @@ export const registrarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto
   );
 
 /**
- * C19: substitui o cadastro de um projeto que já existe; o nome é a chave e não muda. As colunas legadas e a chave do
- * SonarQube (da configuração SDLC) ficam como estão.
+ * C19: substitui o cadastro de um projeto que já existe; o nome é a chave e não muda. A chave do SonarQube (da
+ * configuração SDLC) fica como está.
  */
 export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
   gravar(
@@ -115,11 +103,6 @@ export function projetos(banco: DatabaseSync): Projeto[] {
   return (banco.prepare("SELECT * FROM projeto ORDER BY nome").all() as unknown as Linha[]).map(deLinha);
 }
 
-const DOS_TICKETS = "SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue WHERE i.projeto = $p";
-const DAS_EXECUCOES = `SELECT id FROM execucao WHERE ticket IN (${DOS_TICKETS})`;
-const DOS_COMMITS = `SELECT sha FROM commit_ticket WHERE ticket IN (${DOS_TICKETS})`;
-const DAS_EVIDENCIAS = `SELECT id FROM evidencia WHERE ticket IN (${DOS_TICKETS})`;
-const DAS_ISSUES = "SELECT id FROM issue WHERE projeto = $p";
 const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";
 const DAS_DEMANDAS = "SELECT id FROM demanda WHERE projeto = $p";
 const DAS_SESSOES = `SELECT id FROM sessao WHERE demanda_id IN (${DAS_DEMANDAS})`;
@@ -132,15 +115,16 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   const p = { p: nome };
   const emAndamento = banco
     .prepare(
-      `SELECT t.id FROM ticket t JOIN issue i ON i.id = t.issue
-       WHERE i.projeto = $p AND (t.status = 'em_execucao'
-         OR EXISTS (SELECT 1 FROM execucao e WHERE e.ticket = t.id AND e.resultado = 'em_andamento'))
-       ORDER BY t.id LIMIT 1`,
+      `SELECT t.demanda_id, t.ticket_id FROM ticket_demanda t
+       WHERE t.demanda_id IN (${DAS_DEMANDAS}) AND (t.status = 'em_execucao' OR EXISTS (
+         SELECT 1 FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
+         WHERE s.demanda_id = t.demanda_id AND s.ticket_id = t.ticket_id AND e.fim IS NULL))
+       ORDER BY t.rowid LIMIT 1`,
     )
-    .get(p);
+    .get(p) as { demanda_id: string; ticket_id: number } | undefined;
   if (emAndamento) {
     throw new ErroDeRegra(
-      `o projeto ${nome} tem execução em andamento no T-${String(emAndamento.id)}`,
+      `o projeto ${nome} tem execução em andamento no ${formatarTicketRef(emAndamento)}`,
       "espere ela terminar ou pare a sessão, e remova de novo",
     );
   }
@@ -159,35 +143,21 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   const simuladas = (
     banco.prepare(`SELECT id FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS})`).all(p) as { id: number }[]
   ).map((e) => e.id);
-  const execucoes = banco.prepare(`SELECT id, sessao_pi FROM execucao WHERE id IN (${DAS_EXECUCOES})`).all(p) as {
-    id: number;
-    sessao_pi: string;
-  }[];
-  const anexos = (
-    banco.prepare(`SELECT DISTINCT sha256 FROM evidencia_arquivo WHERE evidencia IN (${DAS_EVIDENCIAS})`).all(p) as {
-      sha256: string;
+  const execucoes = (
+    banco.prepare(`SELECT id FROM execucao_sessao WHERE id IN (${DAS_EXECUCOES_SESSAO})`).all(p) as { id: string }[]
+  ).map((e) => e.id);
+  const sessoes = (
+    banco.prepare(`SELECT conversa_referencia FROM sessao WHERE id IN (${DAS_SESSOES})`).all(p) as {
+      conversa_referencia: string;
     }[]
+  ).map((s) => s.conversa_referencia);
+  const anexos = (
+    banco
+      .prepare(`SELECT DISTINCT sha256 FROM arquivo_evidencia WHERE evidencia_id IN (${DAS_EVIDENCIAS_DEMANDA})`)
+      .all(p) as { sha256: string }[]
   ).map((a) => a.sha256);
-  anexos.push(
-    ...(
-      banco
-        .prepare(`SELECT DISTINCT sha256 FROM arquivo_evidencia WHERE evidencia_id IN (${DAS_EVIDENCIAS_DEMANDA})`)
-        .all(p) as { sha256: string }[]
-    ).map((a) => a.sha256),
-  );
 
   const apagar = (tabela: string, onde: string) => banco.prepare(`DELETE FROM ${tabela} WHERE ${onde}`).run(p);
-  apagar("uso", `execucao IN (${DAS_EXECUCOES})`);
-  apagar("retrabalho", `ticket IN (${DOS_TICKETS}) OR ticket_origem IN (${DOS_TICKETS})`);
-  apagar("arquivo_commit", `sha IN (${DOS_COMMITS})`);
-  apagar("commit_ticket", `ticket IN (${DOS_TICKETS})`);
-  apagar("evidencia", `ticket IN (${DOS_TICKETS})`); // evidencia_arquivo sai por ON DELETE CASCADE
-  apagar("proposta_issue", `ticket IN (${DOS_TICKETS})`);
-  apagar("decisao", `issue IN (${DAS_ISSUES})`);
-  apagar("execucao", `ticket IN (${DOS_TICKETS})`);
-  apagar("comando", `issue IN (${DAS_ISSUES})`);
-  apagar("issue_dep", `issue IN (${DAS_ISSUES}) OR dep IN (${DAS_ISSUES})`);
-  apagar("ticket", `issue IN (${DAS_ISSUES})`);
   // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, retrabalho, achado) saem ou
   // são soltas, para não deixar FK pendurada.
   banco.prepare(`UPDATE achado_avaliacao SET demanda_id = NULL WHERE demanda_id IN (${DAS_DEMANDAS})`).run(p);
@@ -206,6 +176,8 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   apagar("execucao_sessao", `sessao_id IN (${DAS_SESSOES})`);
   apagar("sessao", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("sessao_externa_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("iteracao_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("proposta_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR demanda_criada_id IN (${DAS_DEMANDAS})`);
   apagar("decisao_ticket_historico", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("decisao_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("evidencia_demanda", `demanda_id IN (${DAS_DEMANDAS})`); // arquivo_evidencia e evidencia_historico saem por ON DELETE CASCADE
@@ -226,21 +198,19 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   apagar("tarefa", "projeto = $p");
   apagar("usuario_simulado_anexo", "usuario IN (SELECT id FROM usuario_simulado WHERE projeto = $p)");
   apagar("usuario_simulado", "projeto = $p");
-  apagar("issue", "projeto = $p");
   apagar("projeto", "nome = $p");
 
   const restam = new Set(
     (
       banco
         .prepare(
-          `SELECT sha256 FROM evidencia_arquivo WHERE sha256 IN (SELECT value FROM json_each($anexos))
-           UNION SELECT sha256 FROM arquivo_evidencia WHERE sha256 IN (SELECT value FROM json_each($anexos))
+          `SELECT sha256 FROM arquivo_evidencia WHERE sha256 IN (SELECT value FROM json_each($anexos))
            UNION SELECT sha256 FROM usuario_simulado_anexo WHERE sha256 IN (SELECT value FROM json_each($anexos))`,
         )
         .all({ anexos: JSON.stringify(anexos) }) as { sha256: string }[]
     ).map((a) => a.sha256),
   );
-  return { execucoes, simuladas, orfaos: anexos.filter((sha) => !restam.has(sha)) };
+  return { execucoes, sessoes, simuladas, orfaos: anexos.filter((sha) => !restam.has(sha)) };
 }
 
 /**
@@ -255,7 +225,7 @@ export async function removerProjeto(
   banco: DatabaseSync,
   nome: string,
 ): Promise<{ projeto: Projeto; avisos: string[] }> {
-  const { removido, execucoes, simuladas, orfaos } = escrever(banco, () => {
+  const { removido, execucoes, sessoes, simuladas, orfaos } = escrever(banco, () => {
     const removido = projeto(banco, nome);
     if (!removido) throw new ErroDeInexistente(`o projeto ${nome} não existe`, "confira o nome do projeto");
     return { removido, ...apagarLinhas(banco, nome) };
@@ -268,14 +238,15 @@ export async function removerProjeto(
       avisos.push(`não foi possível apagar ${caminho}: ${(error_ as Error).message}`);
     });
 
-  // `<instante>_<sessaoPi>.jsonl`: o instante não tem `_`, então o ID é o que vem depois do primeiro.
-  const sessoes = new Set(execucoes.map((e) => e.sessao_pi));
+  // `<instante>_<conversa>.jsonl`: o instante não tem `_`, então a conversa é o que vem depois do primeiro.
+  const conversas = new Set(sessoes);
   const dirSessoes = join(raiz, "sessoes");
   const arquivosDeSessao = (await readdir(dirSessoes).catch(() => [])).filter(
-    (arquivo) => arquivo.endsWith(".jsonl") && sessoes.has(arquivo.slice(arquivo.indexOf("_") + 1, -".jsonl".length)),
+    (arquivo) => arquivo.endsWith(".jsonl") && conversas.has(arquivo.slice(arquivo.indexOf("_") + 1, -".jsonl".length)),
   );
   await Promise.all([
-    ...execucoes.map((e) => apagar(dirDaExecucao(raiz, e.id))),
+    // A execução copiada do fluxo legado tem o id `E-<n>`, que já é o nome da pasta dela; as novas, `E-<id>`.
+    ...execucoes.map((id) => apagar(join(raiz, "execucoes", id.startsWith("E-") ? id : `E-${id}`))),
     ...simuladas.map((id) => apagar(dirDaExecucaoSimulada(raiz, id))),
     ...arquivosDeSessao.map((arquivo) => apagar(join(dirSessoes, arquivo))),
     ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),

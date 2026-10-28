@@ -2,9 +2,7 @@
 // commit de outro ticket (4.2) ou por commit humano na branch base (4.4).
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
-import type { Id } from "../dominio/primitivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
-import { ticketDoCommit } from "../persistencia/commits.ts";
 import {
   commitRegistradoDemanda,
   donoDoCommitDemanda,
@@ -12,9 +10,8 @@ import {
   type LinhasPorDemanda,
 } from "../persistencia/commits_demanda.ts";
 import { noLog } from "../persistencia/execucoes.ts";
-import { agregadoDoTicket } from "../persistencia/issues.ts";
 import { projeto as lerProjeto } from "../persistencia/projetos.ts";
-import { type CommitHumano, cursorDaBase, gravarRetrabalho, gravarVarredura } from "../persistencia/retrabalho.ts";
+import { type CommitHumano, cursorDaBase, gravarVarredura } from "../persistencia/retrabalho.ts";
 import { executar, git, LIMITE_COMANDO_MS } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto } from "../repositorio/worktree.ts";
 
@@ -87,17 +84,10 @@ async function reescritas(repo: string, pai: string, sha: string): Promise<Map<s
   return porCommit;
 }
 
-/** As linhas por commit de origem viram linhas por ticket; commit fora da Fabriquinha (humano ou anterior) não conta. */
-function dosTickets(banco: DatabaseSync, porCommit: Map<string, number>): Map<Id, number> {
-  const porTicket = new Map<Id, number>();
-  for (const [origem, n] of porCommit) {
-    const ticket = ticketDoCommit(banco, origem);
-    if (ticket !== undefined) porTicket.set(ticket, (porTicket.get(ticket) ?? 0) + n);
-  }
-  return porTicket;
-}
-
-/** O mesmo, para os tickets das demandas, agrupados pela demanda de origem. */
+/**
+ * As linhas por commit de origem viram linhas por ticket das demandas, agrupadas pela demanda de origem; commit fora da
+ * Fabriquinha (humano ou anterior) não conta.
+ */
 function dosTicketsDemanda(banco: DatabaseSync, porCommit: Map<string, number>): LinhasPorDemanda {
   const porDemanda: LinhasPorDemanda = new Map();
   for (const [origem, n] of porCommit) {
@@ -111,24 +101,10 @@ function dosTicketsDemanda(banco: DatabaseSync, porCommit: Map<string, number>):
 }
 
 /**
- * F6 §4.2: refaz o retrabalho do commit `sha` do ticket de desenvolvimento, contra o primeiro pai. Idempotente: apaga
- * as linhas em que o ticket é o alterador e grava uma por ticket de origem. Roda no repositório do projeto, que tem os
- * objetos da worktree da issue e continua lá quando ela é removida, e na fila git do projeto (F5 §6).
+ * F6 §4.2: refaz o retrabalho do commit `sha` do ticket da demanda, contra o primeiro pai: lê `commit_ticket_demanda` e
+ * grava `retrabalho_demanda`. Roda no repositório do projeto, que tem os objetos da worktree e continua lá quando ela é
+ * removida, e na fila git do projeto (F5 §6).
  */
-export async function registrarRetrabalho(banco: DatabaseSync, ticket: Id, sha: string): Promise<void> {
-  const ag = agregadoDoTicket(banco, ticket);
-  const p = ag && lerProjeto(banco, ag.issue.projeto);
-  if (p === undefined) {
-    throw new ErroDeInexistente(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
-  }
-  const porCommit = await naFilaDoProjeto(raizDo(banco), p.nome, () => reescritas(p.repo, `${sha}^`, sha));
-  const linhas = dosTickets(banco, porCommit);
-  // Um commit por ticket (D4): o pai nunca tem linha do próprio ticket; a guarda só protege o CHECK do F6 §7.
-  linhas.delete(ticket);
-  gravarRetrabalho(banco, ticket, sha, linhas);
-}
-
-/** Como `registrarRetrabalho`, para o ticket de uma demanda: lê `commit_ticket_demanda` e grava `retrabalho_demanda`. */
 export async function registrarRetrabalhoDemanda(
   banco: DatabaseSync,
   demandaId: string,

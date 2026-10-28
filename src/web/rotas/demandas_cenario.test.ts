@@ -78,8 +78,8 @@ export async function cenarioDemandas() {
   const banco: DatabaseSync = abrir(mkdtempSync(join(base, "raiz-")));
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-       VALUES ('loja', '/repos/loja', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]')`,
+      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+       VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`,
     )
     .run();
   criarDemanda(

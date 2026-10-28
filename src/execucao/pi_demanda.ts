@@ -33,7 +33,7 @@ export function argumentosPiDemanda({
   ticket,
   etapasDoProjeto,
   ...resto
-}: Omit<Lancamento, "etapa" | "skills" | "modelo" | "effort"> & {
+}: Omit<Lancamento, "skills" | "modelo" | "effort"> & {
   ticket: TicketDemanda;
   etapasDoProjeto: Projeto["etapas"];
 }): string[] {
@@ -43,7 +43,6 @@ export function argumentosPiDemanda({
   );
   return argumentosPi({
     ...resto,
-    etapa: ticket.etapa,
     skills: skillsDaEtapaDemanda(ticket.etapa),
     modelo: modelo.valor && { provedor: modelo.valor.provedor, modelo: modelo.valor.nome },
     effort: effort.valor,

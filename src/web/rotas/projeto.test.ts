@@ -27,9 +27,7 @@ beforeEach(() => {
       repo: `/repos/${nome}`,
       branchBase: "main",
       hospedagem: "github",
-      testes: ["npm test"],
       sonar: { projectKey: nome },
-      fitness: [{ nome: "f", comando: "c", descricao: "d" }],
     });
   }
 });
@@ -80,9 +78,7 @@ test("heatmap: projeto com repositório git devolve branch, janela, árvore e co
     repo,
     branchBase: "main",
     hospedagem: "github",
-    testes: ["npm test"],
     sonar: { projectKey: "git" },
-    fitness: [{ nome: "f", comando: "c", descricao: "d" }],
   });
   const mapa = (await chamar("GET", "/api/projetos/git/heatmap")) as {
     branch: string;

@@ -21,8 +21,8 @@ const banco = (): DatabaseSync => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
-  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('p', '/repo/p', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]');
+  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('p', '/repo/p', 'main', 'github', 'k');
     INSERT INTO demanda VALUES ('I-1', 'p', 't', 'funcionalidade', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'aberto', ${T}), ('I-1', 2, 'implementar', 'aberto', ${T});`);

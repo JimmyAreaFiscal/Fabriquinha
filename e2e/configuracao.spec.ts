@@ -1,5 +1,5 @@
 // Configuração (F7 §4.4; I-247 CA-13): cadastrar um projeto com um campo inválido, corrigir, salvar e ligar o
-// agendador; o cadastro sem testes, SonarQube, fitness, modelos e efforts grava o padrão nas colunas legadas.
+// agendador; o cadastro grava o projeto sem colunas do fluxo legado, com a chave do SonarQube no nome dele.
 import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
@@ -67,18 +67,16 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("GitHub");
   await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
   await expect(pagina.getByRole("button", { name: "Salvar projeto" })).toBeVisible();
-  // As colunas legadas seguem NOT NULL até a rodada 3: o cadastro gravou o padrão nelas.
   const banco = abrir(fabriquinha.raiz);
-  expect({
-    ...banco
-      .prepare("SELECT testes, sonar_project_key, fitness, modelos, efforts FROM projeto WHERE nome = 'loja'")
-      .get(),
-  }).toEqual({
-    testes: '["true"]',
+  expect({ ...banco.prepare("SELECT * FROM projeto WHERE nome = 'loja'").get() }).toEqual({
+    nome: "loja",
+    repo: expect.any(String),
+    branch_base: "main",
+    hospedagem: "github",
+    preparacao: '["npm ci"]',
     sonar_project_key: "loja",
-    fitness: '[{"nome":"legado","comando":"true","descricao":"coluna do fluxo legado"}]',
-    modelos: "{}",
-    efforts: "{}",
+    link_produto: null,
+    cursor_commit_humano: null,
   });
   banco.close();
   for (const largura of [1440, 375]) {

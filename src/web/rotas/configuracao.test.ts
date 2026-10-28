@@ -98,10 +98,7 @@ const formulario = (repo: string) => ({ nome: "loja", repo, branchBase: "main", 
 const gravado = (repo: string) => ({
   ...formulario(repo),
   hospedagem: "github",
-  testes: ["true"],
   sonar: { projectKey: "loja" },
-  fitness: [{ nome: "legado", comando: "true", descricao: "coluna do fluxo legado" }],
-  modelos: {},
 });
 
 test("configuração: o F4 §3 com a próxima busca só ligado, sem as execuções autônomas (CA-13)", async () => {
@@ -178,9 +175,9 @@ test("modelos: os pares de pi --list-models, para o seletor", async () => {
   ]);
 });
 
-test("cadastrar: confere, grava com a hospedagem deduzida do remoto e o padrão das colunas legadas, e fixa o cursor inicial da base", async () => {
+test("cadastrar: confere, grava com a hospedagem deduzida do remoto e fixa o cursor inicial da base", async () => {
   const repo = clone();
-  const lido = { ...gravado(repo), efforts: {} };
+  const lido = gravado(repo);
   assert.deepEqual(
     await chamar("POST", "/api/projetos", { ...formulario(repo), hospedagem: "azure-devops" }),
     gravado(repo),
@@ -277,23 +274,25 @@ test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", asyn
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
 });
 
-const issueComExecucao = (resultado: "em_andamento" | "sucesso") => `
-  INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'Busca', 'problema', 'desenvolvimento', '2026-10-12T14:00:00.000Z');
-  INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
-    VALUES (1, 1, 'desenvolvimento', 'Dev', '${resultado === "sucesso" ? "concluido" : "em_execucao"}', 'fabriquinha', '2026-10-12T14:00:00.000Z', ${resultado === "sucesso" ? "'2026-10-12T15:00:00.000Z'" : "NULL"});
-  INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em, terminada_em)
-    VALUES (1, 1, 'autonomo', 's', '${resultado}', '2026-10-12T14:20:00.000Z', ${resultado === "sucesso" ? "'2026-10-12T15:00:00.000Z'" : "NULL"});`;
+/** A demanda I-1 do `loja` com o ticket e a execução da sessão dele, terminada ou ainda em andamento. */
+const demandaComExecucao = (andamento: boolean) => `
+  INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+  INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+    VALUES ('I-1', 1, 'implementar', '${andamento ? "em_execucao" : "concluido"}', '2026-10-12T14:00:00.000Z');
+  INSERT INTO sessao VALUES ('s', 'I-1', 1, 'autonomo', 's');
+  INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)
+    VALUES ('e', 's', '2026-10-12T14:20:00.000Z', ${andamento ? "NULL" : "'2026-10-12T15:00:00.000Z'"}, 0);`;
 
 test("remover: apaga o projeto e tudo dele, responde { avisos } e o projeto some do GET (404 no detalhe)", async () => {
   await chamar("POST", "/api/projetos", formulario(clone()));
-  banco.exec(issueComExecucao("sucesso"));
+  banco.exec(demandaComExecucao(false));
   assert.deepEqual(await chamar("DELETE", "/api/projetos/loja"), { avisos: [] });
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
   assert.deepEqual(await chamar("GET", "/api/projetos/loja"), [
     404,
     "o projeto loja não existe (confira o nome do projeto)",
   ]);
-  assert.equal(banco.prepare("SELECT count(*) AS n FROM issue").get()?.n, 0);
+  assert.equal(banco.prepare("SELECT count(*) AS n FROM demanda").get()?.n, 0);
 });
 
 test("remover projeto que não existe dá 404 com a mensagem do projeto", async () => {
@@ -304,7 +303,7 @@ test("remover projeto que não existe dá 404 com a mensagem do projeto", async 
 
 test("remover projeto com execução em andamento dá 409 e o projeto continua", async () => {
   await chamar("POST", "/api/projetos", formulario(clone()));
-  banco.exec(issueComExecucao("em_andamento"));
+  banco.exec(demandaComExecucao(true));
   const [status, erro] = (await chamar("DELETE", "/api/projetos/loja")) as [number, string];
   assert.equal(status, 409);
   assert.match(erro, /execução em andamento/);

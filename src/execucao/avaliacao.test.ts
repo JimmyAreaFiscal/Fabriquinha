@@ -37,10 +37,10 @@ after(() => {
 const banco = abrir(raiz);
 const T = "'2026-10-10T10:00:00.000Z'";
 banco.exec(`
-  INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness) VALUES
-    ('loja', '/r/loja', 'main', 'github', '["t"]', 'loja', '[{"nome":"f","comando":"c","descricao":"d"}]'),
-    ('site', '/r/site', 'main', 'github', '["t"]', 'site', '[{"nome":"f","comando":"c","descricao":"d"}]'),
-    ('vazio', '/r/vazio', 'main', 'github', '["t"]', 'vazio', '[{"nome":"f","comando":"c","descricao":"d"}]');
+  INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES
+    ('loja', '/r/loja', 'main', 'github', 'loja'),
+    ('site', '/r/site', 'main', 'github', 'site'),
+    ('vazio', '/r/vazio', 'main', 'github', 'vazio');
 `);
 // I-10 e I-11 da loja com sessão em 10/10; I-12 da loja só em setembro; I-13 do site.
 for (const [id, projeto, fim] of [

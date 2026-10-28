@@ -16,16 +16,9 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import type { Ator } from "../dominio/agregado.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
-import { iniciarExecucao } from "../dominio/execucao.ts";
-import { abrir } from "../persistencia/banco.ts";
-import { agregado, comIssue, registrarIssue } from "../persistencia/issues.ts";
-import { registrarProjeto } from "../persistencia/projetos.ts";
-import { caminhoDaWorktree } from "../repositorio/worktree.ts";
-import { coletarSonar } from "./sonar.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
+import { analisarSonar, arquivosAlterados, type OpcoesSonar } from "./sonar.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sonar-")));
 
@@ -118,40 +111,12 @@ beforeEach(() => {
   delete process.env.SCANNER_FALSO;
 });
 
-const fabriquinha: Ator = { tipo: "fabriquinha" };
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
 
 let n = 0;
-/**
- * I-1 do projeto `loja` (chave `loja-key`) em desenvolvimento, com T-1 rodando, e a worktree: `a.ts` alterado,
- * `b.ts` intocado, `c.ts` novo e `x.log` ignorado.
- */
-function cenario(): { banco: DatabaseSync; worktree: string } {
-  const raiz = join(base, `raiz${String(++n)}`);
-  const banco = abrir(raiz);
-  registrarProjeto(banco, {
-    nome: "loja",
-    repo: "/repos/loja",
-    branchBase: "main",
-    hospedagem: "github",
-    testes: ["npm test"],
-    sonar: { projectKey: "loja-key" },
-    fitness: [{ nome: "f", comando: "c", descricao: "d" }],
-  });
-  registrarIssue(banco, { projeto: "loja" }, { tipo: "auditor" });
-  // ponytail: atalho até o desenvolvimento; as transições até lá são de outros tickets e têm os próprios testes.
-  banco.exec(
-    "UPDATE issue SET fase = 'desenvolvimento', titulo = 'Busca lenta', tipo = 'problema'; UPDATE ticket SET etapa = 'desenvolvimento'",
-  );
-  comIssue(banco, 1, "iniciarExecucao", fabriquinha, (ag, ctx) =>
-    iniciarExecucao(
-      ag,
-      { ticket: 1, modo: "autonomo", sessaoPi: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" },
-      fabriquinha,
-      ctx,
-    ),
-  );
-  const worktree = caminhoDaWorktree(raiz, "loja", 1);
+/** A worktree do projeto de chave `loja-key`: `a.ts` alterado, `b.ts` intocado, `c.ts` novo e `x.log` ignorado. */
+function cenario(): string {
+  const worktree = join(base, `raiz${String(++n)}`, "worktree");
   mkdirSync(worktree, { recursive: true });
   git(worktree, "init", "-q");
   for (const [nome, conteudo] of [
@@ -166,8 +131,12 @@ function cenario(): { banco: DatabaseSync; worktree: string } {
   writeFileSync(join(worktree, "a.ts"), "11\n");
   writeFileSync(join(worktree, "c.ts"), "3\n");
   writeFileSync(join(worktree, "x.log"), "log\n");
-  return { banco, worktree };
+  return worktree;
 }
+
+/** A análise da worktree como a revisão a pede: os arquivos alterados vêm do git dela. */
+const analisar = (worktree: string, opcoes: OpcoesSonar = {}) =>
+  analisarSonar("loja-key", worktree, () => arquivosAlterados(worktree), opcoes);
 
 const issue = (arquivo: string, line?: number) => ({
   component: `loja-key:${arquivo}`,
@@ -176,42 +145,23 @@ const issue = (arquivo: string, line?: number) => ({
   severity: "MAJOR",
   message: `problema em ${arquivo}`,
 });
-const contar = (banco: DatabaseSync) => (banco.prepare("SELECT count(*) AS n FROM evidencia").get() as { n: number }).n;
 /** Nenhuma pasta de trabalho do scanner sobrou ao lado da worktree. */
 const semSobra = (worktree: string) => readdirSync(dirname(worktree)).filter((nome) => nome.startsWith(".sonar-"));
 
-test("analisa a worktree, espera o Compute Engine e registra as issues dos arquivos alterados, página por página", async () => {
-  const { banco, worktree } = cenario();
+test("analisa a worktree, espera o Compute Engine e devolve as issues dos arquivos alterados, página por página", async () => {
+  const worktree = cenario();
   sonar.tarefas = [{ status: "PENDING" }, { status: "IN_PROGRESS" }, { status: "SUCCESS" }];
   // Página 1: uma issue em a.ts e 499 no intocado b.ts; página 2: uma em c.ts, sem linha.
   sonar.issues = [issue("a.ts", 3), ...Array.from({ length: 499 }, () => issue("b.ts", 1)), issue("c.ts")];
 
-  const ag = await coletarSonar(banco, 1, { intervaloMs: 1 });
-
-  assert.deepEqual(agregado(banco, 1), ag);
-  const [evidencia] = ag.evidencias;
-  assert.deepEqual(
-    { ...evidencia, em: undefined },
-    {
-      id: 1,
-      ticket: 1,
-      tipo: "relatorio_sonar",
-      produtor: "fabriquinha",
-      aprovada: false,
-      dados: {
-        projectKey: "loja-key",
-        ceTaskId: "AX1",
-        arquivosAnalisados: ["a.ts", "c.ts"],
-        issues: [
-          { arquivo: "a.ts", linha: 3, regra: "typescript:S1", severidade: "MAJOR", mensagem: "problema em a.ts" },
-          { arquivo: "c.ts", regra: "typescript:S1", severidade: "MAJOR", mensagem: "problema em c.ts" },
-        ],
-      },
-      arquivos: [],
-      em: undefined,
-    },
-  );
-  assert.equal(banco.prepare("SELECT ator FROM comando WHERE nome = 'registrarEvidencia'").get()?.ator, "fabriquinha");
+  assert.deepEqual(await analisar(worktree, { intervaloMs: 1 }), {
+    ceTaskId: "AX1",
+    arquivos: ["a.ts", "c.ts"],
+    issues: [
+      { arquivo: "a.ts", linha: 3, regra: "typescript:S1", severidade: "MAJOR", mensagem: "problema em a.ts" },
+      { arquivo: "c.ts", regra: "typescript:S1", severidade: "MAJOR", mensagem: "problema em c.ts" },
+    ],
+  });
 
   assert.deepEqual(
     pedidos.map((p) => [p.caminho, p.params]),
@@ -242,58 +192,50 @@ test("analisa a worktree, espera o Compute Engine e registra as issues dos arqui
   assert.equal(readFileSync(`${ARGS}.settings`, "utf8"), "");
   assert.equal(readFileSync(`${ARGS}.token`, "utf8"), "segredo");
   assert.deepEqual(semSobra(worktree), []);
-  banco.close();
 });
 
-test("sem issue nos arquivos alterados: aprovada; a barra no fim do SONAR_HOST_URL não atrapalha", async () => {
-  const { banco } = cenario();
+test("sem issue nos arquivos alterados: nenhuma; a barra no fim do SONAR_HOST_URL não atrapalha", async () => {
+  const worktree = cenario();
   process.env.SONAR_HOST_URL = `${HOST}/`;
   sonar.issues = [issue("b.ts", 1)];
 
-  const [evidencia] = (await coletarSonar(banco, 1)).evidencias;
-
-  assert.equal(evidencia?.aprovada, true);
-  assert.deepEqual(evidencia.dados.issues, []);
+  assert.deepEqual((await analisar(worktree)).issues, []);
   assert.equal(pedidos[0]?.caminho, "/api/system/status");
-  banco.close();
 });
 
 test("100 mil `/` seguidas no SONAR_HOST_URL: as do meio não travam a leitura, e as do fim saem", async () => {
-  const { banco } = cenario();
+  const worktree = cenario();
   const barras = "/".repeat(100_000);
   // Barras seguidas de outra coisa: `\/+$` voltaria atrás a cada barra. Sem token, falha antes de consultar.
   delete process.env.SONAR_TOKEN;
   process.env.SONAR_HOST_URL = `${HOST}${barras}x`;
   const inicio = Date.now();
-  await falha(banco, /^SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente/);
+  await falha(worktree, /^SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente/);
   assert.ok(Date.now() - inicio < 1000);
 
   process.env.SONAR_TOKEN = "segredo";
   process.env.SONAR_HOST_URL = `${HOST}${barras}`;
-  const [evidencia] = (await coletarSonar(banco, 1)).evidencias;
-  assert.equal(evidencia?.aprovada, true);
+  assert.deepEqual((await analisar(worktree)).issues, []);
   assert.equal(pedidos[0]?.caminho, "/api/system/status");
-  banco.close();
 });
 
-/** Falha com a mensagem exata e sem registrar nada. */
-async function falha(banco: DatabaseSync, mensagem: string | RegExp, opcoes = {}) {
-  await assert.rejects(coletarSonar(banco, 1, opcoes), (e) => {
+/** Falha com a mensagem exata. */
+async function falha(worktree: string, mensagem: string | RegExp, opcoes = {}) {
+  await assert.rejects(analisar(worktree, opcoes), (e) => {
     assert.ok(e instanceof ErroDeRegra);
     if (typeof mensagem === "string") assert.equal(e.message, mensagem);
     else assert.match(e.message, mensagem);
     return true;
   });
-  assert.equal(contar(banco), 0);
 }
 
 const SUBIR = "docker compose -f ~/Documents/Projetos/SonarQube/docker-compose.yml up -d";
 
 test("SonarQube fora do ar: falha com o comando para subir o servidor, sem rodar o scanner", async () => {
-  const { banco } = cenario();
+  const worktree = cenario();
   rmSync(ARGS, { force: true });
   sonar.status = "STARTING";
-  await falha(banco, `o SonarQube em ${HOST} está STARTING (suba com: ${SUBIR})`);
+  await falha(worktree, `o SonarQube em ${HOST} está STARTING (suba com: ${SUBIR})`);
 
   const fechado = createServer();
   fechado.listen(0, "127.0.0.1");
@@ -302,86 +244,84 @@ test("SonarQube fora do ar: falha com o comando para subir o servidor, sem rodar
   fechado.close();
   process.env.SONAR_HOST_URL = `http://127.0.0.1:${String(porta)}`;
   await falha(
-    banco,
+    worktree,
     `o SonarQube em http://127.0.0.1:${String(porta)} está inacessível: TypeError: fetch failed (suba com: ${SUBIR})`,
   );
 
   process.env.SONAR_HOST_URL = HOST;
   sonar.erros = { "/api/system/status": 503 };
   await falha(
-    banco,
+    worktree,
     `o SonarQube respondeu HTTP 503 em api/system/status: Insufficient privileges (confira o SONAR_TOKEN; se o servidor estiver fora do ar, suba com: ${SUBIR})`,
   );
   assert.equal(existsSync(ARGS), false);
-  banco.close();
 });
 
 test("scanner falhando ou passando do limite: falha com a saída e o comando para subir o servidor", async () => {
-  const { banco, worktree } = cenario();
+  const worktree = cenario();
   process.env.SCANNER_FALSO = "falha";
   await falha(
-    banco,
+    worktree,
     `o sonar-scanner saiu com código 3: INFO: Scanner\nERROR: Not authorized (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
   );
   process.env.SCANNER_FALSO = "dorme";
-  await falha(banco, `o sonar-scanner passou do tempo limite (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`, {
-    limiteMs: 200,
-  });
+  await falha(
+    worktree,
+    `o sonar-scanner passou do tempo limite (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
+    {
+      limiteMs: 200,
+    },
+  );
   process.env.SCANNER_FALSO = "sem-tarefa";
   const semTarefa =
     "o sonar-scanner terminou sem informar a tarefa do Compute Engine, report-task.txt ausente ou sem ceTaskId";
-  await falha(banco, `${semTarefa} (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`);
+  await falha(worktree, `${semTarefa} (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`);
   process.env.SCANNER_FALSO = "sem-relatorio";
-  await falha(banco, `${semTarefa}: INFO: EXECUTION SUCCESS (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`);
+  await falha(
+    worktree,
+    `${semTarefa}: INFO: EXECUTION SUCCESS (se o SonarQube estiver fora do ar, suba com: ${SUBIR})`,
+  );
   assert.deepEqual(semSobra(worktree), []);
-  banco.close();
 });
 
 test("Compute Engine falhando, cancelado, parado na fila ou recusando o token: falha sem registrar", async () => {
-  const { banco } = cenario();
+  const worktree = cenario();
   const dica = `(veja a tarefa AX1 em ${HOST}/admin/background_tasks e execute o ticket de novo)`;
   sonar.tarefas = [{ status: "FAILED", errorMessage: "Unsupported language" }];
-  await falha(banco, `o SonarQube não processou a análise: Unsupported language ${dica}`);
+  await falha(worktree, `o SonarQube não processou a análise: Unsupported language ${dica}`);
   sonar.tarefas = [{ status: "CANCELED" }];
-  await falha(banco, `o SonarQube não processou a análise: CANCELED ${dica}`);
+  await falha(worktree, `o SonarQube não processou a análise: CANCELED ${dica}`);
   sonar.tarefas = [{ status: "PENDING" }];
   // O limite vale também para o scanner: folga para o scanner falso terminar antes dele numa máquina carregada.
-  await falha(banco, `a análise passou do tempo limite na fila do SonarQube ${dica}`, {
+  await falha(worktree, `a análise passou do tempo limite na fila do SonarQube ${dica}`, {
     limiteMs: 1000,
     intervaloMs: 5,
   });
   sonar.erros = { "/api/ce/task": 403 };
   await falha(
-    banco,
+    worktree,
     `o SonarQube respondeu HTTP 403 em api/ce/task: Insufficient privileges (confira o SONAR_TOKEN; se o servidor estiver fora do ar, suba com: ${SUBIR})`,
   );
-  banco.close();
 });
 
 test("resposta que não é JSON ou fora do formato esperado: falha sem registrar, apontando o SONAR_HOST_URL", async () => {
-  const { banco } = cenario();
+  const worktree = cenario();
   const dica = "(confira se SONAR_HOST_URL aponta para o SonarQube)";
   sonar.crus = { "/api/system/status": "<html>outro serviço</html>" };
-  await falha(banco, `a resposta de ${HOST}/api/system/status não é a esperada do SonarQube ${dica}`);
+  await falha(worktree, `a resposta de ${HOST}/api/system/status não é a esperada do SonarQube ${dica}`);
   sonar.crus = { "/api/issues/search": JSON.stringify({ issues: [] }) };
-  await falha(banco, `a resposta de ${HOST}/api/issues/search não é a esperada do SonarQube ${dica}`);
-  banco.close();
+  await falha(worktree, `a resposta de ${HOST}/api/issues/search não é a esperada do SonarQube ${dica}`);
 });
 
-test("sem SONAR_HOST_URL ou SONAR_TOKEN no ambiente, ou com ticket inexistente: falha antes de consultar", async () => {
-  const { banco } = cenario();
+test("sem SONAR_HOST_URL ou SONAR_TOKEN no ambiente: falha antes de consultar", async () => {
+  const worktree = cenario();
   const ambiente =
     "SONAR_HOST_URL e SONAR_TOKEN precisam estar no ambiente da Fabriquinha (defina os dois em <raiz>/ambiente e " +
     "reinicie o serviço)";
   delete process.env.SONAR_TOKEN;
-  await falha(banco, ambiente);
+  await falha(worktree, ambiente);
   process.env.SONAR_TOKEN = "segredo";
   process.env.SONAR_HOST_URL = "";
-  await falha(banco, ambiente);
-  await assert.rejects(
-    coletarSonar(banco, 9),
-    new ErroDeInexistente("o ticket T-9 não existe", "confira o número do ticket"),
-  );
+  await falha(worktree, ambiente);
   assert.deepEqual(pedidos, []);
-  banco.close();
 });

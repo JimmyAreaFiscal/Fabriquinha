@@ -36,9 +36,7 @@ function semear(raiz: string, linkProduto?: string, usuarios: string[] = [], tar
     repo: realpathSync(repo),
     branchBase: "main",
     hospedagem: "github",
-    testes: ["npm test"],
     sonar: { projectKey: "Fabriquinha" },
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linkProduto,
   });
   const alocados = usuarios.map((nome) => criarUsuarioSimulado(banco, "fabriquinha", { nome, descricao: DESCRICAO }));

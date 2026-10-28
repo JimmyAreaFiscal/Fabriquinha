@@ -1,36 +1,11 @@
-// Submissão de evidência pelo agente (F3 §5): valida tudo, guarda os arquivos e só então roda C17 numa transação.
-import {
-  closeSync,
-  constants,
-  fstatSync,
-  mkdirSync,
-  openSync,
-  readlinkSync,
-  readSync,
-  realpathSync,
-  writeFileSync,
-} from "node:fs";
-import { basename, join, relative, sep } from "node:path";
+// Os anexos de uma evidência (F3 §5, passos 4 a 6): quantidade, nome, origem, classe e limite de cada arquivo, e a guarda.
+import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync } from "node:fs";
+import { basename, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { z } from "zod";
-import {
-  type Agregado,
-  type ArquivoEvidencia,
-  type Ator,
-  EXTERNO,
-  exigirRegistroExterno,
-  TipoEvidencia,
-} from "../dominio/agregado.ts";
-import { ErroDeEscopo, ErroDeRegra } from "../dominio/erros.ts";
-import { exigirRegistroDeEvidencia, registrarEvidencia } from "../dominio/evidencia.ts";
+import type { ArquivoEvidencia } from "../dominio/agregado.ts";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import { guardarArquivos } from "../persistencia/arquivos.ts";
-import { raizDo } from "../persistencia/banco.ts";
-import { dirDaExecucao } from "../persistencia/execucoes.ts";
-import type { Id } from "../dominio/primitivos.ts";
-import { agregadoDoTicket, agregadoExistente, comIssue } from "../persistencia/issues.ts";
-import { caminhoDaWorktree } from "../repositorio/worktree.ts";
-import { gerarAula, type Trecho } from "./aula.ts";
-import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos, schemaDe } from "./schemas.ts";
+import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos } from "./schemas.ts";
 
 const MiB = 1024 * 1024;
 const mib = (bytes: number) => `${(bytes / MiB).toFixed(1)} MiB`;
@@ -216,115 +191,4 @@ export function guardarAnexos(
   } finally {
     for (const { fd } of abertos) closeSync(fd);
   }
-}
-
-/** F3 §5: os tipos cujo anexo a Fabriquinha gera dos `dados`, com o nome dele; o agente não anexa nada. */
-const GERADOS: Partial<
-  Record<TipoEvidencia, (ag: Agregado, worktree: string, dados: Record<string, unknown>) => Promise<[string, string]>>
-> = {
-  aula_codigo: async (ag, worktree, dados) => ["aula.html", await gerarAula(ag, worktree, dados.trechos as Trecho[])],
-};
-
-/**
- * `fabriquinha evidencia add` (F3 §5): o primeiro passo que falhar interrompe sem gravar nada no banco.
- * Erro de schema em `dados` sai como `ZodError`, com o caminho de cada campo a partir de `dados`; quem mostra ao
- * agente (F7) o formata com `z.prettifyError`, como faz com qualquer erro de schema.
- */
-export async function submeter(
-  banco: DatabaseSync,
-  ator: Ator,
-  tipo: unknown,
-  dados: unknown,
-  caminhos: readonly string[],
-): Promise<Agregado> {
-  if (ator.tipo !== "agente") {
-    throw new ErroDeEscopo("só o agente do ticket submete evidência", "a Fabriquinha registra as dela nos coletores");
-  }
-  const antes = agregadoDoTicket(banco, ator.ticket);
-  if (!antes) {
-    throw new ErroDeEscopo(
-      `o ticket T-${String(ator.ticket)} não existe`,
-      "confira a execução em FABRIQUINHA_EXECUCAO",
-    );
-  }
-  // As origens partem da raiz real da Fabriquinha e nada abaixo dela é resolvido: trocar a worktree ou a saída por um
-  // link não as leva para outro lugar.
-  const raiz = realpathSync(raizDo(banco));
-  const saida = join(dirDaExecucao(raiz, ator.execucao), "saida");
-  const origens = {
-    worktree: caminhoDaWorktree(raiz, antes.issue.projeto, antes.issue.id),
-    saida,
-    fora: "da worktree da issue e do diretório de saída",
-    copie: `$FABRIQUINHA_SAIDA (${saida})`,
-  };
-  return submeterNo(banco, ator, antes, ator.ticket, origens, { tipo, dados, caminhos });
-}
-
-/**
- * `fabriquinha necessidade evidencia` (F3 §5): a submissão da IA externa no ticket de registro da issue que ela
- * registrou. Sem worktree nem saída da Fabriquinha, os anexos vêm de `pasta` (onde ela rodou o comando), real.
- */
-export async function submeterExterno(
-  banco: DatabaseSync,
-  issue: Id,
-  pasta: string,
-  tipo: unknown,
-  dados: unknown,
-  caminhos: readonly string[],
-): Promise<Agregado> {
-  const antes = agregadoExistente(banco, issue);
-  const ticket = exigirRegistroExterno(antes, `registrar evidência na I-${String(issue)}`).id;
-  const real = realpathSync(pasta);
-  const origens = { worktree: real, saida: real, fora: `de ${real}, onde você rodou o comando`, copie: real };
-  return submeterNo(banco, EXTERNO, antes, ticket, origens, { tipo, dados, caminhos });
-}
-
-/** F3 §5 a partir do passo 1, no `ticket` de `antes`, com os anexos vindos de `origens`. */
-async function submeterNo(
-  banco: DatabaseSync,
-  ator: Ator,
-  antes: Agregado,
-  ticket: Id,
-  origens: Origens,
-  { tipo, dados, caminhos }: { tipo: unknown; dados: unknown; caminhos: readonly string[] },
-): Promise<Agregado> {
-  // 1 e 2: escopo e catálogo, no estado atual; C17 confere de novo na transação.
-  const tipoValido = z.object({ tipo: TipoEvidencia }).parse({ tipo }).tipo;
-  exigirRegistroDeEvidencia(antes, ator, ticket, tipoValido);
-
-  // 3
-  const schema = schemaDe(tipoValido);
-  const validos = z.object({ dados: schema.dados }).parse({ dados }).dados;
-
-  // 4, 5 e 6: fora da transação (F2 §5.2); se a 7 falhar, sobra só arquivo sem referência. As regras cruzadas leem o
-  // agregado lido no passo 1: os fatos que elas consultam (a matriz coletada antes do pi, os critérios do registro)
-  // não mudam durante a execução.
-  let anexos = caminhos;
-  const gerar = GERADOS[tipoValido];
-  if (gerar) {
-    if (caminhos.length > 0) {
-      throw new ErroDeRegra(
-        `${tipoValido} não aceita anexo do agente`,
-        "a Fabriquinha gera o HTML; submeta só --dados",
-      );
-    }
-    const [nome, conteudo] = await gerar(antes, origens.worktree, validos);
-    const destino = join(origens.saida, nome);
-    mkdirSync(origens.saida, { recursive: true });
-    writeFileSync(destino, conteudo);
-    anexos = [destino];
-  }
-  const arquivos = guardarAnexos(banco, anexos, tipoValido, schema.arquivos, origens, () =>
-    schema.cruzar?.(validos, { ag: antes, ticket, anexos: anexos.map((c) => basename(c)) }),
-  );
-
-  // 7
-  return comIssue(banco, antes.issue.id, "registrarEvidencia", ator, (ag, ctx) =>
-    registrarEvidencia(
-      ag,
-      { ticket, tipo: tipoValido, aprovada: schema.aprovada?.(validos), dados: validos, arquivos },
-      ator,
-      ctx,
-    ),
-  );
 }

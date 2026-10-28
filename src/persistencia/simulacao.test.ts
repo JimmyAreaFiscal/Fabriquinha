@@ -37,9 +37,7 @@ function novoBanco(): DatabaseSync {
       repo: `/repos/${nome}`,
       branchBase: "main",
       hospedagem: "github",
-      testes: ["npm test"],
       sonar: { projectKey: nome },
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     });
   }
   return banco;

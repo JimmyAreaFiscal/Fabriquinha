@@ -29,9 +29,9 @@ let banco: DatabaseSync;
 beforeEach(() => {
   banco = abrir(mkdtempSync(join(base, "raiz-")));
   banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness) VALUES
-      ('loja', '/r/loja', 'main', 'github', '["t"]', 'loja', '[{"nome":"f","comando":"c","descricao":"d"}]'),
-      ('site', '/r/site', 'main', 'github', '["t"]', 'site', '[{"nome":"f","comando":"c","descricao":"d"}]');
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES
+      ('loja', '/r/loja', 'main', 'github', 'loja'),
+      ('site', '/r/site', 'main', 'github', 'site');
     INSERT INTO demanda VALUES
       ('I-1', 'loja', 'Timeout no checkout', 'problema', 'd', 'execucao', '${T0}', 'f', 's', 1, 'fabriquinha/I-1'),
       ('I-2', 'site', 'Modo escuro', 'funcionalidade', 'd', 'planejamento', '${T0}', 'f', 's', 1, 'fabriquinha/I-2');

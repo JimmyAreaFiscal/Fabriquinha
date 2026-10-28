@@ -34,8 +34,8 @@ const banco = () => {
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
   for (const nome of ["a", "b"]) {
-    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('${nome}', '/repo/${nome}', 'main', 'github', '["t"]', 'k', '[{"nome":"f"}]')`);
+    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('${nome}', '/repo/${nome}', 'main', 'github', 'k')`);
   }
   for (const [id, projeto] of Object.entries({ "I-1": "a", "I-2": "a", "I-3": "b" })) {
     b.exec(
@@ -153,7 +153,7 @@ test("migração 32 é aditiva: não altera as tabelas existentes", () => {
       .all()
       .map((l) => ({ ...l }));
   const antes = esquema();
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, 32));
   const depois = esquema();
   assert.deepEqual(
     depois.filter((l) => antes.some((a) => a.name === l.name)),

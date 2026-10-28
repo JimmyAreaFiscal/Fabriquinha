@@ -16,6 +16,9 @@ const TABELAS = [
   "glob_e2e",
 ];
 
+/** A última versão antes da remoção do fluxo legado (migração 33), que apagaria as colunas que estes testes gravam. */
+const ANTES_DA_REMOCAO = 32;
+
 const abrirBanco = (versao: number): DatabaseSync => {
   const banco = new DatabaseSync(":memory:");
   banco.exec("PRAGMA foreign_keys = ON");
@@ -32,7 +35,7 @@ const projeto = (banco: DatabaseSync, nome: string) =>
     .run(nome, `/repo/${nome}`);
 
 const migrado = (): DatabaseSync => {
-  const banco = abrirBanco(MIGRACOES.length);
+  const banco = abrirBanco(ANTES_DA_REMOCAO);
   projeto(banco, "a");
   projeto(banco, "b");
   banco.exec(`
@@ -66,7 +69,7 @@ test("banco vazio e v22 chegam ao mesmo conjunto de tabelas novas, vazias", () =
   assert.ok(!colunas(v22).includes("cursor_commit_humano"));
   migrar(v22, MIGRACOES.slice(0, 23));
   assert.equal(versao(v22), 23);
-  const vazio = abrirBanco(MIGRACOES.length);
+  const vazio = abrirBanco(ANTES_DA_REMOCAO);
   assert.deepEqual(colunas(v22), colunas(vazio));
   for (const t of TABELAS) {
     assert.deepEqual(linhas(v22, t), []);
@@ -84,7 +87,7 @@ test("projetos legados ficam intactos, sem configuração nova e com cursor NULL
   const banco = abrirBanco(V22);
   projeto(banco, "legado");
   const antes = banco.prepare("SELECT * FROM projeto").all();
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, ANTES_DA_REMOCAO));
   const depois = banco.prepare("SELECT * FROM projeto").all();
   assert.deepEqual(
     depois.map(({ cursor_commit_humano, ...resto }) => ({ ...resto })),

@@ -22,7 +22,7 @@ function estado(banco: DatabaseSync, agendador: Agendador) {
 }
 
 /** O projeto como o formulário manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
-const DoFormulario = Projeto.omit({ testes: true, sonar: true, fitness: true, modelos: true, efforts: true }).extend({
+const DoFormulario = Projeto.omit({ sonar: true }).extend({
   hospedagem: Hospedagem.optional(),
 });
 /** O nome é a chave e não muda (C19): o do caminho vale, e o do corpo é ignorado. */

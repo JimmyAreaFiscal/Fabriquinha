@@ -27,9 +27,7 @@ beforeEach(() => {
       repo: `/repos/${nome}`,
       branchBase: "main",
       hospedagem: "github",
-      testes: ["npm test"],
       sonar: { projectKey: nome },
-      fitness: [{ nome: "f", comando: "c", descricao: "d" }],
     });
   }
 });

@@ -5,17 +5,12 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { falharTicket, terminarExecucao } from "../dominio/execucao.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
-import { depoisDoC6 } from "../metricas/uso.ts";
 import { abrir, raizDo } from "../persistencia/banco.ts";
-import { backfillDemandas } from "../persistencia/backfill_demanda.ts";
 import { noLog } from "../persistencia/execucoes.ts";
-import { comIssue } from "../persistencia/issues.ts";
 import { projetosAVarrer } from "../persistencia/retrabalho.ts";
-import { configuracao, execucoesEmAndamento, ticketsAutonomosEmExecucao } from "../persistencia/servico.ts";
+import { configuracao } from "../persistencia/servico.ts";
 import { falharPendentes } from "../persistencia/simulacao.ts";
 import { sinalNoGrupo } from "../processo.ts";
 import { servirWeb } from "../web/servidor.ts";
@@ -42,26 +37,12 @@ export interface Servico {
 export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => Number(env.FABRIQUINHA_PORTA || 4317);
 
 /**
- * F4 §7: toda execução em andamento é de uma instância anterior. Mata o grupo do pi, grava C6 com falha e leva a C8 cada
- * ticket autônomo que ficou `em_execucao`: o da execução encerrada agora e também o de quem caiu entre o C6 e a
- * coleta depois do pi (F4 §6.2, passo 6), que já não tem execução em andamento. O interativo continua `em_execucao`.
- * Mata também o grupo do pi de cada auditoria, que não tem execução.
- * As execuções simuladas pendentes (F8 §4) também são de uma instância anterior: o pi delas morre e elas falham.
+ * F4 §7: toda execução em andamento é de uma instância anterior. Mata o grupo do pi de cada avaliação, que não tem
+ * execução; as execuções simuladas pendentes (F8 §4) falham com o pi delas morto; e as execuções das sessões das
+ * demandas se encerram com falha (`recuperarExecucoesDemanda`).
  */
 function recuperar(banco: DatabaseSync): void {
   recuperarAuditorias(raizDo(banco));
-  for (const e of execucoesEmAndamento(banco)) {
-    if (e.pgid !== null) sinalNoGrupo(e.pgid, "SIGKILL");
-    comIssue(banco, e.issue, "terminarExecucao", FABRIQUINHA, (ag, ctx) =>
-      terminarExecucao(ag, { execucao: e.id, resultado: "falha", erro: REINICIADO }, FABRIQUINHA, ctx),
-    );
-    depoisDoC6(banco, e.id);
-  }
-  for (const t of ticketsAutonomosEmExecucao(banco)) {
-    comIssue(banco, t.issue, "falharTicket", FABRIQUINHA, (ag) =>
-      falharTicket(ag, { ticket: t.id, erro: REINICIADO }, FABRIQUINHA),
-    );
-  }
   for (const pgid of falharPendentes(banco, REINICIADO)) sinalNoGrupo(pgid, "SIGKILL");
   recuperarExecucoesDemanda(banco);
 }
@@ -69,7 +50,7 @@ function recuperar(banco: DatabaseSync): void {
 /**
  * Sobe o serviço: ocupa `127.0.0.1:<portaDoServico>` como trava de instância única antes de tocar no banco (uma
  * segunda instância, mesmo de versão mais nova, sai com erro sem migrar nada), abre o banco, encerra as execuções da
- * instância anterior, migra as issues legadas para demandas (cutover, recusa a sessão aberta) e liga o agendador. A porta 0 escolhe uma livre, sem a trava, e o `web.url` leva a escolhida: os
+ * instância anterior e liga o agendador. A porta 0 escolhe uma livre, sem a trava, e o `web.url` leva a escolhida: os
  * testes sobem várias instâncias juntas sem disputar porta.
  */
 export async function iniciarServico(raiz: string): Promise<Servico> {
@@ -98,7 +79,6 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   try {
     aberto = abrir(raiz);
     recuperar(aberto);
-    noLog(`cutover: ${JSON.stringify(backfillDemandas(aberto))}`);
     web.on(
       "request",
       servirWeb({

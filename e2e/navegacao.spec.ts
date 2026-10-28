@@ -121,8 +121,8 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
 function sessaoDeDemandaAguardando(raiz: string): void {
   const banco = abrir(raiz);
   banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('loja', '/nao/existe', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]');
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('loja', '/nao/existe', 'main', 'github', 'loja');
     INSERT INTO demanda VALUES
       ('I-1', 'loja', 'Busca', 'problema', 'd', 'execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1'),
       ('I-2', 'loja', 'Cache', 'problema', 'd', 'concluida', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-2');

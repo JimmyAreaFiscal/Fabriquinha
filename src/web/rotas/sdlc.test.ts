@@ -20,8 +20,8 @@ after(() => {
 let banco: DatabaseSync;
 beforeEach(() => {
   banco = abrir(mkdtempSync(join(base, "raiz-")));
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-    VALUES ('loja', '/repo/loja', 'main', 'github', '["npm test"]', 'chave', '[{"nome":"f","comando":"true","descricao":"d"}]')`);
+  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    VALUES ('loja', '/repo/loja', 'main', 'github', 'chave')`);
 });
 
 /** O valor devolvido pela rota, ou `[status, mensagem]` do erro traduzido. */

@@ -1,11 +1,5 @@
 // Uso de tokens e custo por execução (F6 §3): soma, por provedor e modelo, as entradas da sessão do pi que caem na
-// janela da execução e regrava as linhas de `uso` dela.
-import { readFileSync } from "node:fs";
-import type { DatabaseSync } from "node:sqlite";
-import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
-import type { Id } from "../dominio/primitivos.ts";
-import { escrever, raizDo } from "../persistencia/banco.ts";
-import { anotar, arquivoDaSessao, logDaExecucao, noLog } from "../persistencia/execucoes.ts";
+// janela da execução.
 
 /** O `usage` das mensagens, compactações e resumos de ramo do pi. */
 interface Usage {
@@ -152,45 +146,4 @@ export function somar(texto: string, inicio: number, fim: number): Soma[] {
     }
   }
   return [...somas.values()];
-}
-
-/**
- * F6 §3.3: regrava as linhas de `uso` da execução terminada com a soma da sua janela na sessão do pi. Idempotente.
- * Sessão inexistente deixa a execução sem linhas.
- * ponytail: lê o arquivo inteiro na memória; sessões têm poucos MB. Passar a `readline` se alguma passar de centenas.
- */
-export function coletarUso(banco: DatabaseSync, execucao: Id): void {
-  const e = banco.prepare("SELECT sessao_pi, iniciada_em, terminada_em FROM execucao WHERE id = ?").get(execucao);
-  if (!e) throw new ErroDeInexistente(`a execução E-${String(execucao)} não existe`, "confira o número da execução");
-  if (e.terminada_em === null) {
-    throw new ErroDeRegra(`a E-${String(execucao)} ainda está em andamento`, "colete o uso depois do C6");
-  }
-  const arquivo = arquivoDaSessao(raizDo(banco), String(e.sessao_pi));
-  const somas = arquivo
-    ? somar(readFileSync(arquivo, "utf8"), Date.parse(String(e.iniciada_em)), Date.parse(String(e.terminada_em)))
-    : [];
-  escrever(banco, () => {
-    banco.prepare("DELETE FROM uso WHERE execucao = ?").run(execucao);
-    const inserir = banco.prepare("INSERT INTO uso VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const s of somas) {
-      inserir.run(execucao, s.provedor, s.modelo, s.chamadas, s.input, s.output, s.cacheRead, s.cacheWrite, s.custo);
-    }
-  });
-}
-
-/**
- * F4 §6.2: chamado depois de cada C6, inclusive no reinício. Coleta o uso, e uma falha só vai para o log da execução
- * (ou para o stderr do serviço, se nem o diretório dela existe): métrica nunca para o fluxo, e o relatório recoleta.
- */
-export function depoisDoC6(banco: DatabaseSync, execucao: Id): void {
-  try {
-    coletarUso(banco, execucao);
-  } catch (error_) {
-    const texto = `coleta de uso falhou: ${String(error_)}`;
-    try {
-      anotar(logDaExecucao(raizDo(banco), execucao), texto);
-    } catch {
-      noLog(`E-${String(execucao)}: ${texto}`);
-    }
-  }
 }

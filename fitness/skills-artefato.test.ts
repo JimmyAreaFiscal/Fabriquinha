@@ -1,13 +1,14 @@
 // Fitness function: a forma de toda skill de artefato do pacote P1 (§5.2, §6) e o catálogo completo: exatamente uma
-// skill por evidência de produtor agente do F1 §3.9. O pi carrega uma skill com frontmatter inválido só com aviso e
+// skill por evidência de produtor agente das etapas e por evidência da demanda. O pi carrega uma skill com frontmatter inválido só com aviso e
 // ignora em silêncio um `--skill` que não existe; uma skill fora de forma ou faltando passaria despercebida.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Etapa } from "../src/dominio/primitivos.ts";
-import { PACOTE, skillsDaEtapa } from "../src/execucao/pi.ts";
+import { TipoEvidenciaDemanda } from "../src/dominio/evidencia_demanda.ts";
+import { CATALOGO_ETAPAS } from "../src/dominio/evidencia_etapa.ts";
+import { PACOTE, skillDoTipo } from "../src/execucao/pi.ts";
 
 const MAX_LINHAS = 100;
 /** As regras de nome e descrição do pi (`core/skills.js`), que só avisa e carrega assim mesmo. */
@@ -15,11 +16,15 @@ const NOME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const MAX_NOME = 64;
 const MAX_DESCRICAO = 1024;
 const SECOES = ["Para que serve", "Como produzir", "Estrutura", "Antes de submeter"];
-/** Evidências do catálogo novo (SDLC por demandas) que já têm skill e schema; o CLI ainda não as liga ao catálogo antigo. */
-const DO_CATALOGO_NOVO = ["artefato-plano", "artefato-testes-estresse", "artefato-analise-seguranca"];
+/** A evidência da demanda que a ferramenta de fora submete sem skill: os custos vêm da própria sessão dela. */
+const SEM_SKILL: readonly string[] = ["custos_realizados"];
 /** Skills do fluxo externo (CLI da ferramenta de fora): não são de evidência de agente e têm forma própria. */
 const EXTERNAS = ["demanda-externa"];
-const DE_ARTEFATO = new Set([...Etapa.options.flatMap(skillsDaEtapa), ...DO_CATALOGO_NOVO]);
+/** As evidências de produtor agente das etapas e as da demanda, que a ferramenta de fora registra. */
+const DE_ARTEFATO = new Set([
+  ...CATALOGO_ETAPAS.filter((c) => c.produtor === "agente").map((c) => skillDoTipo(c.tipo)),
+  ...TipoEvidenciaDemanda.options.filter((tipo) => !SEM_SKILL.includes(tipo)).map(skillDoTipo),
+]);
 
 /** O valor de `chave` no frontmatter, numa linha só, como as skills do pacote o escrevem. */
 const campo = (frontmatter: string, chave: string): string | undefined =>

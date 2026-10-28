@@ -85,10 +85,7 @@ before(async () => {
       branchBase: "main",
       hospedagem: "github",
       preparacao: [],
-      testes: ["true"],
       sonar: { projectKey: nome },
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-      modelos: {},
     });
   }
   const T = "'2026-10-10T10:00:00.000Z'";
