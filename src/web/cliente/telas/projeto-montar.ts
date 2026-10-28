@@ -1,6 +1,6 @@
 // Página do projeto (F7 §4.4) no DOM: escolhe o projeto, lê as demandas com os filtros e o mês corrente dele, desenha
-// com as funções puras de projeto.ts, abre e fecha as gavetas e arquiva as concluídas. Os testes de ponta a ponta
-// (e2e/) a exercitam.
+// com as funções puras de projeto.ts, abre e fecha as gavetas e arquiva as concluídas. O app.ts a redesenha a cada 5 s.
+// Os testes de ponta a ponta (e2e/) a exercitam.
 import type { MetricasMesDemanda } from "../../../metricas/periodo_demanda.ts";
 import type { ListaDoProjeto } from "../../rotas/projeto.ts";
 import type { Parametros } from "../caminhos.ts";
@@ -77,6 +77,10 @@ export async function montarProjeto(main: HTMLElement, params: Parametros, signa
     api<ListaDoProjeto>(`/api/projetos/${encodeURIComponent(nome)}/demandas?${filtro.toString()}`, { signal }),
     api<[MetricasMesDemanda]>(`/api/metricas?projeto=${encodeURIComponent(nome)}&de=${atual}&ate=${atual}`, { signal }),
   ]);
+  // Com o seletor ou a confirmação abertos, o redesenho de 5 s os fecharia nas mãos do Auditor: espera ele sair. Se ele
+  // mudou um filtro enquanto este pedido ia, a resposta é velha: desenha o pedido do filtro novo.
+  const filtroMudou = JSON.stringify(filtrosLembrados()) !== JSON.stringify(mostrar);
+  if (filtroMudou || document.activeElement?.matches("[data-projeto]") || main.querySelector("dialog[open]")) return;
 
   const rolagem = main.querySelector(".pista-rola")?.scrollLeft ?? 0;
   main.innerHTML = paginaDoProjeto(projetos, nome, lista, mes, { mostrar, gavetas }, new Date());

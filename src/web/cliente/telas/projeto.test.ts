@@ -203,12 +203,24 @@ test("na linha da demanda, as fases passadas feitas, a atual marcada, e na execu
   ]);
   const rodadas = Array<string>(5).fill("rodadas");
   assert.deepEqual(situacoes(situacaoNaDemanda("execucao", false)), [F, F, F, F, ...rodadas, "", ""]);
-  // Depois da execução, Ajustes do PR só fica verde se alguma rodada passou por ele.
-  assert.deepEqual(situacoes(situacaoNaDemanda("revisao_demanda", false)), [F, F, F, F, F, F, F, F, "", "atual", ""]);
+  // Depois da execução, Ajustes do PR só fica verde se alguma rodada passou por ele; senão a linha passa por ele.
+  assert.deepEqual(situacoes(situacaoNaDemanda("revisao_demanda", false)), [
+    F,
+    F,
+    F,
+    F,
+    F,
+    F,
+    F,
+    F,
+    "pulada",
+    "atual",
+    "",
+  ]);
   assert.deepEqual(situacoes(situacaoNaDemanda("concluida", true)), Array<string>(11).fill(F));
 });
 
-test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde só se ela passou por ele", () => {
+test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde se ela passou por ele, pulado se não", () => {
   const fora = Array<string>(4).fill("fora");
   assert.deepEqual(situacoes(situacaoNaRodada("desenvolvimento", false)), [
     ...fora,
@@ -236,7 +248,7 @@ test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde só se e
     "feito",
     "feito",
     "feito",
-    "",
+    "pulada",
     "fora",
     "fora",
   ]);
@@ -418,7 +430,7 @@ test("a gaveta: etapa, endereço, título, status, modelo e o chat; a escolha do
   assert.deepEqual(celulas(0), [
     ["etapa-cel", "demanda"],
     ["id-cel", '<span class="id">I-4.T1</span>'],
-    ["titulo-cel", '<span class="muted">sem título</span>'],
+    ["titulo-cel", "Registrar a demanda"],
     ["status-cel", '<span class="pill pill-ok">concluído</span>'],
     ["modelo-cel", '<span class="modelo" title="padrão do pi">padrão do pi</span>'],
     ["sessao-cel", ""],
@@ -462,7 +474,7 @@ test("as encerradas apagadas, com quando saíram do andamento; a cancelada marca
     "passo feito",
     "passo feito",
     "passo gate feito",
-    "passo",
+    "passo pulada",
     "passo feito",
     "passo feito",
   ]);

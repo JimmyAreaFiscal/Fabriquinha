@@ -153,11 +153,11 @@ function estadoDaRodada(d: DemandaDoProjeto, rodada: DemandaDoProjeto["rodadas"]
 }
 
 /**
- * Como cada coluna aparece: `feito` a passada, `atual` a atual, `""` a que vem depois ou a que foi pulada (só a fase
- * passada fica verde), `rodadas` o trecho da execução na linha da demanda (as rodadas, abaixo, levam os marcos) e
- * `fora` a coluna da demanda na linha da rodada.
+ * Como cada coluna aparece: `feito` a passada, `atual` a atual, `""` a que ainda não chegou, `pulada` os Ajustes do PR
+ * que não houve (a linha passa contínua por ela), `rodadas` o trecho da execução na linha da demanda (as rodadas,
+ * abaixo, levam os marcos) e `fora` a coluna da demanda na linha da rodada.
  */
-export type Situacao = "feito" | "atual" | "" | "rodadas" | "fora";
+export type Situacao = "feito" | "atual" | "" | "pulada" | "rodadas" | "fora";
 
 /** A situação de cada coluna pela posição da coluna e da fase atual numa ordem; `concluida` passa de todas. */
 function situacaoNaOrdem<F extends string>(ordem: readonly F[], fase: F | "concluida", coluna: Coluna): Situacao {
@@ -176,7 +176,8 @@ export function situacaoNaDemanda(fase: FaseDemanda, comAjustes: boolean): Colun
   const situacao = (coluna: Coluna): Situacao => {
     if (coluna.de === "demanda") return situacaoNaOrdem(ORDEM_DA_DEMANDA, fase, coluna);
     if (trecho === "atual") return "rodadas";
-    return trecho === "feito" && (coluna.fase !== "sessao" || comAjustes) ? "feito" : "";
+    if (trecho !== "feito") return "";
+    return coluna.fase !== "sessao" || comAjustes ? "feito" : "pulada";
   };
   return COLUNAS.map((coluna) => [coluna, situacao(coluna)]);
 }
@@ -186,7 +187,7 @@ export function situacaoNaRodada(fase: FaseRodada, comAjustes: boolean): Colunas
   const situacao = (coluna: Coluna): Situacao => {
     if (coluna.de === "demanda") return "fora";
     const naOrdem = situacaoNaOrdem(ORDEM_DA_RODADA, fase, coluna);
-    return naOrdem === "feito" && coluna.fase === "sessao" && !comAjustes ? "" : naOrdem;
+    return naOrdem === "feito" && coluna.fase === "sessao" && !comAjustes ? "pulada" : naOrdem;
   };
   return COLUNAS.map((coluna) => [coluna, situacao(coluna)]);
 }
@@ -272,6 +273,19 @@ function rodadas(d: DemandaDoProjeto): string {
     .join("");
 }
 
+/** O título do ticket que não tem um: o que a etapa faz, como o antigo mostrava. */
+const TITULO_DA_ETAPA: Record<EtapaTicket, string> = {
+  demanda: "Registrar a demanda",
+  planejar: "Planejar a demanda",
+  implementar: "Implementar",
+  revisar_rodada: "Revisar a rodada",
+  encerrar_rodada: "Encerrar a rodada",
+  sessao_em_aberto: "Sessão de ajustes",
+  resolver_conflito: "Resolver o conflito",
+  revisar_demanda: "Revisar a demanda",
+  encerrar_demanda: "Encerrar a demanda",
+};
+
 /** A gaveta: os tickets da demanda, com a etapa, o endereço, o título, o status, o modelo e o chat. */
 function gaveta(d: DemandaDoProjeto): string {
   const linhas = d.tickets.map((t) => {
@@ -284,7 +298,7 @@ function gaveta(d: DemandaDoProjeto): string {
     return `<tr${encerrado ? ' class="apagada"' : ""}>
       <td class="etapa-cel">${ETAPA_DO_TICKET[t.etapa].toLowerCase()}</td>
       <td class="id-cel"><span class="id">${escapar(t.ref)}</span></td>
-      <td class="titulo-cel">${t.titulo === undefined ? '<span class="muted">sem título</span>' : escapar(t.titulo)}</td>
+      <td class="titulo-cel">${escapar(t.titulo ?? TITULO_DA_ETAPA[t.etapa])}</td>
       <td class="status-cel"><span class="pill ${PILULA_DO_STATUS[t.status]}">${STATUS_DO_TICKET[t.status]}</span></td>
       <td class="modelo-cel">${rotuloDoModelo(t.modelo ?? "padrão do pi")}</td>
       <td class="sessao-cel">${chat}</td>

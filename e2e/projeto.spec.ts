@@ -4,7 +4,7 @@
 // rolagem horizontal.
 import type { TestInfo } from "@playwright/test";
 import { abrir } from "../src/persistencia/banco.ts";
-import { semearDemandaConcluida, semearDemandas } from "./demandas-apoio.ts";
+import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 
 test("a aba Demandas: a lista com as rodadas, a gaveta, os filtros lembrados e o Arquivar concluídas", async ({
@@ -91,6 +91,32 @@ test("a aba Demandas: a lista com as rodadas, a gaveta, os filtros lembrados e o
   await pagina.getByLabel("Mostrar arquivadas").check();
   await expect(pagina.locator('[data-demanda="I-217"]')).toContainText(/arquivada em \d\d\/\d\d/);
   expect(erros).toEqual([]);
+});
+
+test("ticket sem título mostra a etapa, Ajustes do PR que não houve não quebra a linha, e a lista se atualiza sozinha", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  semearDemandas(fabriquinha.raiz);
+  semearDemandaConcluida(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/projects/loja`);
+  const i206 = pagina.locator('[data-demanda="I-206"]');
+  await expect(i206.locator(".gaveta .titulo-cel")).toHaveText(["Implementar", "Encerrar a rodada", "Implementar"]);
+  await expect(pagina.locator("main")).not.toContainText("sem título");
+
+  // A R1 aguarda o PR: Ajustes do PR ainda pode vir, fica pendente. A I-217 concluiu sem ele: a linha passa contínua.
+  const ajustes = (linha: string) => pagina.getByRole("list", { name: linha }).getByRole("listitem").nth(8);
+  await expect(ajustes("Fases da rodada I-206.R1")).toHaveClass("passo");
+  await pagina.getByLabel("Mostrar concluídas").check();
+  await expect(ajustes("Fases da demanda I-217")).toHaveClass("passo pulada");
+
+  // Sem recarregar: a demanda nova aparece no próximo redesenho, a cada 5 s.
+  const linhas = pagina.locator(".pista-item");
+  await expect(linhas).toHaveCount(4);
+  semearDemandaOciosa(fabriquinha.raiz);
+  await expect(linhas).toHaveCount(5, { timeout: 10_000 });
+  await expect(pagina.locator(".contagem")).toHaveText("4 em andamento · 1 concluída · 0 arquivadas · 0 canceladas");
 });
 
 test("Mostrar canceladas traz a cancelada, apagada, com as rodadas onde pararam", async ({ pagina, fabriquinha }) => {

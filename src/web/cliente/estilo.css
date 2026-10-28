@@ -3171,7 +3171,8 @@ svg.barras :not(.hit) {
 .trilho-fases .rodadas .marco {
   display: none;
 }
-.trilho-fases .feito .linha::before {
+.trilho-fases .feito .linha::before,
+.trilho-fases .pulada .linha::before {
   background: var(--closed);
 }
 .trilho-fases .atual .linha::before {
@@ -3198,6 +3199,14 @@ svg.barras :not(.hit) {
 .trilho-fases .feito .marco {
   background: var(--closed);
   border-color: var(--closed);
+}
+/* A etapa opcional que não houve: um ponto discreto sobre a linha contínua, que não lê como passo pendente. */
+.trilho-fases .pulada .marco {
+  width: 6px;
+  height: 6px;
+  border: 0;
+  background: var(--closed);
+  opacity: 0.45;
 }
 .trilho-fases .atual .marco {
   width: 16px;

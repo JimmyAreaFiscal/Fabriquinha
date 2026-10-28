@@ -94,7 +94,7 @@ caixa.addEventListener("click", (evento) => {
 });
 
 /** As páginas que se redesenham sozinhas (F7 §4.4). */
-const ATUALIZAM: ReadonlySet<Pagina> = new Set(["demandas"]);
+const ATUALIZAM: ReadonlySet<Pagina> = new Set(["demandas", "projeto"]);
 
 /** A cada 5 s com a aba visível, e ao voltar a ela: o contador da navegação e a página, se ela se atualiza. */
 function atualizar(): void {
