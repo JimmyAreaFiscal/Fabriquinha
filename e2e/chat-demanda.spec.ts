@@ -229,3 +229,32 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
   leitura.close();
   expect(n).toBe(1);
 });
+
+test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", async ({ pagina, fabriquinha }) => {
+  projeto(fabriquinha.raiz);
+  semear(fabriquinha.raiz, "planeje");
+  await abrirOChat(pagina, fabriquinha);
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
+
+  const banco = abrir(fabriquinha.raiz);
+  const plano = {
+    demanda_id: "I-230",
+    criterios: ["CA-1"],
+    rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
+    tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
+  };
+  submeterPlanejamento(banco, "I-230", plano, { tipo: "agente", execucao: 1, ticket: 1 });
+  banco.close();
+
+  await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
+  await pagina.getByRole("button", { name: "Aprovar planejamento" }).click();
+  await expect(pagina.getByRole("button", { name: "Aprovar planejamento" })).toHaveCount(0);
+
+  // CA-4: a execução ganha o fim e nenhuma fica aberta.
+  await expect(() => {
+    const leitura = abrir(fabriquinha.raiz);
+    const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+    leitura.close();
+    expect(n).toBe(0);
+  }).toPass();
+});

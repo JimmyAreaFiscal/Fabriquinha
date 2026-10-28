@@ -29,7 +29,7 @@ import {
   garantirWorktreeRodada,
 } from "../repositorio/worktree-demanda.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { mandar, situacao } from "./gerente.ts";
+import { encerrar, mandar, situacao } from "./gerente.ts";
 
 const contexto = () => ({ agora: new Date().toISOString() });
 
@@ -152,5 +152,13 @@ export async function aprovarPlanejamentoDemanda(
       throw new ErroDeRegra(`${mensagem(erro)} (worktree ${caminho})`);
     }
   }
-  return comDemanda(banco, demandaId, (a) => confirmarAprovacaoPlanejamento(a, entrada, AUDITOR, contexto()));
+  const aprovada = comDemanda(banco, demandaId, (a) => confirmarAprovacaoPlanejamento(a, entrada, AUDITOR, contexto()));
+  // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
+  const { sessoes } = carregarSessoesDoTicket(banco, {
+    demanda_id: demandaId,
+    ticket_id: ticketPlanejar(aprovada).ticket_id,
+  });
+  const viva = sessoes[0] && situacao(sessoes[0].id);
+  if (viva) encerrar(viva.execucao);
+  return aprovada;
 }

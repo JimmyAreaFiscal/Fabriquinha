@@ -287,6 +287,18 @@ test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara ca
   }
 });
 
+test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejamento", async () => {
+  const { banco, prompts } = cenario({ status: "em_execucao" });
+  const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
+  while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 100));
+  submeterPlanejamento(banco, "I-1", plano(), agente);
+  await aprovarPlanejamentoDemanda(banco, "I-1", {});
+  await fim;
+  const { n } = banco.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+  assert.equal(n, 0);
+});
+
 test("CA-10, CA-11: preparação que falha na rodada 2 deixa o gate aberto; corrigida, a aprovação conclui", async () => {
   const { c, banco, status } = aprovacao();
   writeFileSync(join(c.raiz, "quebra"), "");
