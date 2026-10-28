@@ -17,7 +17,7 @@ function semear(raiz: string): void {
     `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
   const demanda = (id: string, nome: string, titulo: string, mes: string) =>
-    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', 'problema', 'd', 'execucao', '${em(mes)}', 'f', 's', 1, 'b-${id}');
+    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', 'problema', 'd', 'execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
   const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
     `INSERT INTO sessao VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
