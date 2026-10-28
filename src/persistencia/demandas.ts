@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
+import { FASES_TERMINADAS } from "../dominio/cancelamento_demanda.ts";
 import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
 import { escrever, novoId } from "./banco.ts";
 
@@ -215,15 +216,19 @@ export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemand
   }
 }
 
-/** As demandas em ordem de criação; as arquivadas só com `arquivadas: true` (o board não as mostra). */
+/**
+ * As demandas em ordem de criação; as arquivadas só com `arquivadas: true` (o board não as mostra) e, com
+ * `emAndamento: true`, só as que não terminaram (o Início).
+ */
 export function listarDemandas(
   banco: DatabaseSync,
-  { arquivadas = false }: { arquivadas?: boolean } = {},
+  { arquivadas = false, emAndamento = false }: { arquivadas?: boolean; emAndamento?: boolean } = {},
 ): AgregadoDemanda[] {
   const propria = !banco.isTransaction;
   if (propria) banco.exec("BEGIN");
   try {
-    const filtro = arquivadas ? "" : "WHERE fase <> 'arquivada'";
+    const terminadas = FASES_TERMINADAS.map((f) => `'${f}'`).join(", ");
+    const filtro = emAndamento ? `WHERE fase NOT IN (${terminadas})` : arquivadas ? "" : "WHERE fase <> 'arquivada'";
     const ids = banco.prepare(`SELECT id FROM demanda ${filtro} ORDER BY rowid`).all();
     return ids.map((l) => existente(banco, String(l.id)));
   } finally {

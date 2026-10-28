@@ -17,7 +17,7 @@ const ref = (demanda_id: string) => ({
 });
 
 /** O PR da rodada que espera decisão ou ajustes: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela. */
-function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
+export function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
   if (rodada?.fase !== "aprovacao_pull_request" && rodada?.fase !== "sessao") return undefined;
   const ticket = ag.tickets.findLast((t) => t.rodada_id === rodada_id && t.etapa === "encerrar_rodada");
