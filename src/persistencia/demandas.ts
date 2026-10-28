@@ -215,6 +215,22 @@ export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemand
   }
 }
 
+/** As demandas em ordem de criação; as arquivadas só com `arquivadas: true` (o board não as mostra). */
+export function listarDemandas(
+  banco: DatabaseSync,
+  { arquivadas = false }: { arquivadas?: boolean } = {},
+): AgregadoDemanda[] {
+  const propria = !banco.isTransaction;
+  if (propria) banco.exec("BEGIN");
+  try {
+    const filtro = arquivadas ? "" : "WHERE fase <> 'arquivada'";
+    const ids = banco.prepare(`SELECT id FROM demanda ${filtro} ORDER BY rowid`).all();
+    return ids.map((l) => existente(banco, String(l.id)));
+  } finally {
+    if (propria) banco.exec("COMMIT");
+  }
+}
+
 /** Grava a demanda nova com tudo o que o agregado traz, numa transação só. */
 export const criarDemanda = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
   escrever(banco, () => {

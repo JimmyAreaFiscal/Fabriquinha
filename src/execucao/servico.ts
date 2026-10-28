@@ -124,7 +124,14 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   try {
     aberto = abrir(raiz);
     recuperar(aberto);
-    web.on("request", servirWeb({ banco: aberto, porta, agendador: { proximaBusca, executarAgora } }));
+    web.on(
+      "request",
+      servirWeb({
+        banco: aberto,
+        porta,
+        agendador: { proximaBusca, executarAgora, executarAgoraDemanda: executarAgoraDaDemanda },
+      }),
+    );
   } catch (error_) {
     aberto?.close();
     web.close();
@@ -186,20 +193,22 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     return iniciar(ticket);
   }
 
+  // Síncrono até a reserva, como o `executarAgora`: a recusa vira rejeição e a etapa segue em segundo plano.
+  function executarAgoraDaDemanda(ref: { demanda_id: string; ticket_id: number }): Promise<void> {
+    try {
+      void executarAgoraDemanda(banco, ref, configuracao(banco));
+      return Promise.resolve();
+    } catch (error_) {
+      const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)
+      return Promise.reject(erro);
+    }
+  }
+
   return {
     banco,
     porta,
     executarAgora,
-    // Síncrono até a reserva, como o `executarAgora`: a recusa vira rejeição e a etapa segue em segundo plano.
-    executarAgoraDemanda: (ref) => {
-      try {
-        void executarAgoraDemanda(banco, ref, configuracao(banco));
-        return Promise.resolve();
-      } catch (error_) {
-        const erro = error_ as Error; // os comandos e a persistência só lançam Error (F1 §7)
-        return Promise.reject(erro);
-      }
-    },
+    executarAgoraDemanda: executarAgoraDaDemanda,
     proximaBusca,
     async parar() {
       clearInterval(relogio);

@@ -7,7 +7,7 @@ import { ErroDeInexistente } from "../dominio/erros.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { registrarDemanda } from "../dominio/transicoes_demanda.ts";
 import { escrever, migrar } from "./banco.ts";
-import { carregarDemanda, comDemanda, criarDemanda, criarDemandaNova } from "./demandas.ts";
+import { carregarDemanda, comDemanda, criarDemanda, criarDemandaNova, listarDemandas } from "./demandas.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -346,4 +346,39 @@ test("carregarDemanda dentro de escrever lê na transação aberta e não a fech
   });
   assert.deepEqual(lida, carregarDemanda(b, "I-1"));
   assert.equal(b.isTransaction, false);
+});
+
+test("listarDemandas: em ordem de criação, sem arquivada por padrão e com ela no filtro", () => {
+  const b = banco();
+  const ag = completo();
+  const com = (id: string, fase: AgregadoDemanda["demanda"]["fase"]) => {
+    const t = (x: { demanda_id: string }) => ({ ...x, demanda_id: id });
+    criarDemanda(b, {
+      ...ag,
+      demanda: { ...ag.demanda, id, fase, branch: `fabriquinha/${id}` },
+      rodadas: ag.rodadas.map((r) => ({ ...t(r), branch: `fabriquinha/${id}-${String(r.rodada_id)}` })),
+      dependencias_rodada: ag.dependencias_rodada.map(t),
+      criterios_citados: ag.criterios_citados.map(t),
+      tickets: ag.tickets.map(t),
+      dependencias_ticket: ag.dependencias_ticket.map(t),
+      caminhos_ticket: ag.caminhos_ticket.map(t),
+      decisoes: ag.decisoes.map(t),
+      evidencias: ag.evidencias.map(t),
+    } as AgregadoDemanda);
+  };
+  com("I-10", "execucao");
+  com("I-2", "arquivada");
+  com("I-3", "encerramento");
+  assert.deepEqual(
+    listarDemandas(b).map((a) => a.demanda.id),
+    ["I-10", "I-3"],
+  );
+  assert.deepEqual(
+    listarDemandas(b, { arquivadas: true }).map((a) => a.demanda.id),
+    ["I-10", "I-2", "I-3"],
+  );
+  assert.equal(b.isTransaction, false);
+  escrever(b, () => {
+    assert.equal(listarDemandas(b).length, 2);
+  });
 });

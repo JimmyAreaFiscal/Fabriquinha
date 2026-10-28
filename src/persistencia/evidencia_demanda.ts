@@ -45,6 +45,34 @@ export function gravarAnexos(banco: DatabaseSync, chave: ChaveEvidencia, anexos:
   anexos.forEach((a, i) => inserir.run(id, i + 1, a.caminho, a.sha256, a.mime, a.bytes));
 }
 
+/** Um anexo com o dono (demanda, rodada ou ticket) e o tipo da evidência que o registra. */
+export interface AnexoDaDemanda extends Omit<Anexo, "caminho"> {
+  nome: string;
+  rodada_id?: number;
+  ticket_id?: number;
+  tipo: string;
+}
+
+/** Todos os anexos das evidências da demanda, na ordem de gravação da evidência e do anexo. */
+export function anexosDaDemanda(banco: DatabaseSync, id: string): AnexoDaDemanda[] {
+  const linhas = banco
+    .prepare(
+      `SELECT a.caminho, a.mime, a.bytes, a.sha256, e.rodada_id, e.ticket_id, e.tipo
+       FROM arquivo_evidencia a JOIN evidencia_demanda e ON e.id = a.evidencia_id
+       WHERE e.demanda_id = ? ORDER BY e.rowid, a.ordem`,
+    )
+    .all(id);
+  return linhas.map((l) => ({
+    nome: String(l.caminho),
+    mime: String(l.mime),
+    bytes: Number(l.bytes),
+    sha256: String(l.sha256),
+    ...(l.rodada_id !== null && { rodada_id: Number(l.rodada_id) }),
+    ...(l.ticket_id !== null && { ticket_id: Number(l.ticket_id) }),
+    tipo: String(l.tipo),
+  }));
+}
+
 /** O conteúdo do anexo com esse hash, se a evidência o registra; nunca lê um caminho que não seja do armazenamento. */
 export function lerAnexo(banco: DatabaseSync, chave: ChaveEvidencia, sha256: string): Anexo & { conteudo: Buffer } {
   const arquivo = caminhoArquivo(banco, sha256);
