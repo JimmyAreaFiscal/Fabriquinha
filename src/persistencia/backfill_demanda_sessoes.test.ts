@@ -27,7 +27,7 @@ const novas = (b: DatabaseSync) => NOVAS.map((t) => ler(b, `SELECT * FROM ${t} O
 test("CA-7: sessão por sessao_pi com modo da primeira execução; execuções ligadas à sessão do ticket", () => {
   const b = montarFixture();
   backfillDemandas(b);
-  assert.deepEqual(ler(b, "SELECT * FROM sessao ORDER BY id"), [
+  assert.deepEqual(ler(b, "SELECT * FROM sessao WHERE demanda_id IN ('I-1', 'I-2') ORDER BY id"), [
     { id: "pi-2", demanda_id: "I-1", ticket_id: 2, modo: "interativo", conversa_referencia: "pi-2" },
     { id: "pi-3", demanda_id: "I-1", ticket_id: 3, modo: "autonomo", conversa_referencia: "pi-3" },
     { id: "pi-6", demanda_id: "I-2", ticket_id: 6, modo: "autonomo", conversa_referencia: "pi-6" },
@@ -48,7 +48,7 @@ test("CA-7: sessão por sessao_pi com modo da primeira execução; execuções l
   assert.equal(t("E-1")?.grupo_processo, null); // pgid_pi = 0
   assert.equal(t("E-3")?.sessao_id, "pi-3");
   assert.deepEqual([t("E-4")?.fim, t("E-4")?.falha], [null, 0]);
-  assert.equal(t("E-5"), undefined); // issue em andamento fica de fora
+  assert.equal(t("E-5")?.sessao_id, "pi-10"); // issue em andamento também
 });
 
 test("CA-7: custo desconhecido vira NULL, custo conhecido é mantido, chamadas vão para o histórico", () => {
@@ -57,7 +57,7 @@ test("CA-7: custo desconhecido vira NULL, custo conhecido é mantido, chamadas v
   assert.deepEqual(
     ler(
       b,
-      "SELECT execucao_id e, modelo_nome m, tokens_entrada i, tokens_saida o, tokens_cache_leitura r, tokens_cache_escrita w, custo FROM uso_modelo_execucao ORDER BY e, m",
+      "SELECT execucao_id e, modelo_nome m, tokens_entrada i, tokens_saida o, tokens_cache_leitura r, tokens_cache_escrita w, custo FROM uso_modelo_execucao WHERE execucao_id IN ('E-1', 'E-2') ORDER BY e, m",
     ),
     [
       { e: "E-1", m: "opus", i: 100, o: 50, r: 10, w: 5, custo: null },
@@ -65,18 +65,27 @@ test("CA-7: custo desconhecido vira NULL, custo conhecido é mantido, chamadas v
       { e: "E-2", m: "sonnet", i: 200, o: 80, r: 0, w: 0, custo: 0.5 },
     ],
   );
-  assert.deepEqual(ler(b, "SELECT execucao_id e, modelo_nome m, chamadas FROM uso_modelo_historico ORDER BY e, m"), [
-    { e: "E-1", m: "opus", chamadas: 3 },
-    { e: "E-2", m: "haiku", chamadas: 1 },
-    { e: "E-2", m: "sonnet", chamadas: 2 },
-  ]);
+  assert.deepEqual(
+    ler(
+      b,
+      "SELECT execucao_id e, modelo_nome m, chamadas FROM uso_modelo_historico WHERE execucao_id IN ('E-1', 'E-2') ORDER BY e, m",
+    ),
+    [
+      { e: "E-1", m: "opus", chamadas: 3 },
+      { e: "E-2", m: "haiku", chamadas: 1 },
+      { e: "E-2", m: "sonnet", chamadas: 2 },
+    ],
+  );
 });
 
 test("CA-1, CA-8: pr_aberto mais recente vira da rodada 1; as demais evidências seguem o ticket, com histórico e anexos", () => {
   const b = montarFixture();
   backfillDemandas(b);
   assert.deepEqual(
-    ler(b, "SELECT id, demanda_id d, rodada_id r, ticket_id t, tipo, dados, em FROM evidencia_demanda ORDER BY id"),
+    ler(
+      b,
+      "SELECT id, demanda_id d, rodada_id r, ticket_id t, tipo, dados, em FROM evidencia_demanda WHERE demanda_id IN ('I-1', 'I-2', 'I-3') ORDER BY id",
+    ),
     [
       {
         id: "evidencia-1",
@@ -128,7 +137,7 @@ test("CA-1, CA-8: pr_aberto mais recente vira da rodada 1; as demais evidências
       { evidencia_id: "evidencia-5", aprovada: 0, produtor: "agente" },
     ],
   );
-  assert.deepEqual(ler(b, "SELECT * FROM arquivo_evidencia"), [
+  assert.deepEqual(ler(b, "SELECT * FROM arquivo_evidencia WHERE evidencia_id = 'evidencia-1'"), [
     { evidencia_id: "evidencia-1", ordem: 1, caminho: "a.png", sha256: SHA_ARQ_A, mime: "image/png", bytes: 20 },
     { evidencia_id: "evidencia-1", ordem: 2, caminho: "z.png", sha256: SHA_ARQ_Z, mime: "image/png", bytes: 10 },
   ]);

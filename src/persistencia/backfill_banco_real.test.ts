@@ -4,6 +4,7 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { ErroDeRegra } from "../dominio/erros.ts";
 import { backfillDemandas } from "./backfill_demanda.ts";
 import { abrir } from "./banco.ts";
 import { carregarDemanda } from "./demandas.ts";
@@ -12,7 +13,7 @@ const origem = process.env.FABRIQUINHA_BANCO_COPIA;
 const sha256 = (arquivo: string) => createHash("sha256").update(readFileSync(arquivo)).digest("hex");
 
 // ponytail: pulado sem a variável; a prova no banco real é manual e roda sobre uma cópia.
-test("CA-15: backfill sobre a cópia do banco real", { skip: origem === undefined }, () => {
+test("CA-14: backfill sobre a cópia do banco real", { skip: origem === undefined }, () => {
   const original = origem ?? "";
   const raiz = mkdtempSync(join(tmpdir(), "backfill-real-"));
   const hashAntes = sha256(original);
@@ -22,41 +23,42 @@ test("CA-15: backfill sobre a cópia do banco real", { skip: origem === undefine
     return abrir(raiz);
   })();
   try {
-    const encerradas = banco
-      .prepare(
-        "SELECT 'I-' || id AS id FROM issue WHERE fase = 'concluida' OR cancelada_em IS NOT NULL ORDER BY issue.id",
-      )
+    const issues = banco
+      .prepare("SELECT 'I-' || id AS id FROM issue ORDER BY id")
       .all()
       .map((l) => l.id as string);
-    const emAndamento = banco
-      .prepare(
-        "SELECT 'I-' || id AS id FROM issue WHERE NOT (fase = 'concluida' OR cancelada_em IS NOT NULL) ORDER BY issue.id",
-      )
-      .all()
-      .map((l) => l.id as string);
-
-    const primeira = backfillDemandas(banco);
-    const demandas = banco
-      .prepare("SELECT id FROM demanda ORDER BY CAST(substr(id, 3) AS INTEGER)")
-      .all()
-      .map((l) => l.id as string);
-    assert.deepEqual(demandas, encerradas);
-    assert.deepEqual(primeira.naoMigradas.map((n) => n.issue).sort(), [...emAndamento].sort());
-    for (const n of primeira.naoMigradas) assert.equal(n.motivo, "em andamento");
-    for (const id of demandas) assert.equal(carregarDemanda(banco, id).demanda.id, id);
-
-    const segunda = backfillDemandas(banco);
-    assert.deepEqual(segunda.antes, primeira.depois);
-    assert.deepEqual(segunda.depois, primeira.depois);
+    // Issue com PR do legado ou execução ativa recusa a migração inteira: a prova então é a recusa citando cada uma.
+    let relatorio: ReturnType<typeof backfillDemandas> | undefined;
+    let recusa: string | undefined;
+    try {
+      relatorio = backfillDemandas(banco);
+    } catch (e) {
+      if (!(e instanceof ErroDeRegra)) throw e;
+      recusa = e.message;
+    }
+    if (relatorio) {
+      const demandas = banco
+        .prepare("SELECT id FROM demanda ORDER BY CAST(substr(id, 3) AS INTEGER)")
+        .all()
+        .map((l) => l.id as string);
+      assert.deepEqual(demandas, issues);
+      assert.deepEqual(relatorio.naoMigradas, []);
+      for (const id of demandas) assert.equal(carregarDemanda(banco, id).demanda.id, id);
+      const segunda = backfillDemandas(banco);
+      assert.deepEqual(segunda.antes, relatorio.depois);
+      assert.deepEqual(segunda.depois, relatorio.depois);
+    } else {
+      assert.equal(banco.prepare("SELECT COUNT(*) AS n FROM demanda").get()?.n, 0);
+    }
     assert.equal(sha256(original), hashAntes);
     console.log(
       JSON.stringify({
-        encerradas: encerradas.length,
-        emAndamento: emAndamento.length,
+        issues: issues.length,
         sha256: hashAntes,
-        antes: primeira.antes,
-        depois: primeira.depois,
-        dependenciasPendentes: primeira.dependenciasPendentes.length,
+        recusa,
+        antes: relatorio?.antes,
+        depois: relatorio?.depois,
+        migradas: relatorio?.emVoo,
       }),
     );
   } finally {
