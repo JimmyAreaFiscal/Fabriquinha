@@ -177,10 +177,6 @@ function pastaExistente(raiz: string, sessao: string): string {
   return dir;
 }
 
-/** O `indice.md` da auditoria `sessao`. */
-export const indiceDaAuditoria = (banco: DatabaseSync, sessao: string): string =>
-  readFileSync(join(pastaExistente(raizDo(banco), sessao), "indice.md"), "utf8");
-
 /** O agente trabalha (ou o pi sobe ou para); parado, espera a próxima pergunta do Auditor. */
 export const estadoDaAuditoria = (sessao: string): EstadoDaAuditoria =>
   (situacao(sessao)?.ocupado ?? tarefas.has(sessao)) ? "rodando" : "conversa";

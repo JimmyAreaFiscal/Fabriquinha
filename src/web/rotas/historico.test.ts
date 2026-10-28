@@ -61,7 +61,7 @@ async function sessoes(query: string): Promise<unknown> {
   try {
     return await rota.tratar({
       banco,
-      agendador: { proximaBusca: () => new Date(), executarAgora: () => Promise.resolve() },
+      agendador: { proximaBusca: () => new Date() },
       params: {},
       query: new URLSearchParams(query),
       corpo: undefined,

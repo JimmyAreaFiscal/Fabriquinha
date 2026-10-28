@@ -10,10 +10,7 @@ import type { Parametros } from "./cliente/caminhos.ts";
 /** O que o serviço expõe do agendador ao web (F4 §4). */
 export interface Agendador {
   proximaBusca(): Date;
-  /** O "Executar agora" (F4 §4), que só o serviço sabe iniciar. */
-  /** Legado: o serviço já não o liga; a rota que o usa sai com as rotas legadas. */
-  executarAgora?(ticket: Id): Promise<void>;
-  /** O "Executar agora" do ticket de uma demanda; opcional para os testes das outras rotas. */
+  /** O "Executar agora" (F4 §4) do ticket de uma demanda, que só o serviço sabe iniciar; opcional para os testes das outras rotas. */
   executarAgoraDemanda?(ref: { demanda_id: string; ticket_id: number }): Promise<void>;
 }
 export interface Pedido {

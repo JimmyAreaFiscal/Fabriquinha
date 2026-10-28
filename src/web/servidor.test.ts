@@ -156,6 +156,24 @@ test("rota inexistente dá 404 com { erro }", async () => {
   assert.equal((await pedir("/demandas", { metodo: "POST", headers: mesmaOrigem() })).status, 404);
 });
 
+test("CA-3: as rotas do fluxo legado saíram e dão 404", async () => {
+  for (const [metodo, caminho] of [
+    ["GET", "/api/issues/1"],
+    ["POST", "/api/issues/1/tickets"],
+    ["GET", "/api/issues/1/pr"],
+    ["GET", "/api/board"],
+    ["POST", "/api/registros"],
+    ["POST", "/api/tickets/1/reabrir"],
+    ["POST", "/api/tickets/1/consulta"],
+    ["POST", "/api/auditorias"],
+    ["GET", "/api/projetos/loja/issues"],
+    ["GET", "/api/execucoes/1/log"],
+  ] as const) {
+    const r = await pedir(caminho, { metodo, headers: mesmaOrigem(), ...(metodo === "POST" && { corpo: "{}" }) });
+    assert.deepEqual([r.status, r.json()], [404, { erro: `${metodo} ${caminho} não existe` }], caminho);
+  }
+});
+
 test("corpo de mutação: JSON até 64 KiB; inválido ou grande demais dá 422", async () => {
   const invalido = await pedir("/api/nada", { metodo: "POST", headers: mesmaOrigem(), corpo: "{" });
   assert.deepEqual([invalido.status, invalido.json()], [422, { erro: "o corpo não é JSON válido" }]);

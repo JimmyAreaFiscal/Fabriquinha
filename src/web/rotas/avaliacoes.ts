@@ -15,13 +15,12 @@ import { carregarDemanda } from "../../persistencia/demandas.ts";
 import { demandasComSessaoNoPeriodo, listarAvaliacoes } from "../../persistencia/avaliacoes.ts";
 import { configuracao } from "../../persistencia/servico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
-import { opcoes } from "./chat.ts";
 
-/** As opções do chat com o modelo da Auditoria da Configuração de agora. */
-const opcoesDaAvaliacao = (banco: DatabaseSync) => ({
-  ...opcoes(banco),
-  modelo: configuracao(banco).modeloAuditoria,
-});
+/** A ociosidade e o modelo das avaliações da Configuração de agora. */
+const opcoesDaAvaliacao = (banco: DatabaseSync) => {
+  const { ociosidadeMin, modeloAuditoria } = configuracao(banco);
+  return { ociosidadeMin, modelo: modeloAuditoria };
+};
 
 const Periodo = { projeto: z.string().min(1), de: z.string(), ate: z.string() };
 const NovaAvaliacao = z.strictObject({

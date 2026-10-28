@@ -39,7 +39,7 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
     try {
       return await rota.tratar({
         banco,
-        agendador: { proximaBusca: () => new Date(), executarAgora: () => Promise.resolve() },
+        agendador: { proximaBusca: () => new Date() },
         params,
         query: new URLSearchParams(busca),
         corpo,
