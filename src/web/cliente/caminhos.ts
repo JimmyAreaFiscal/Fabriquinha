@@ -18,6 +18,7 @@ export function casar(padrao: string, caminho: string): Parametros | undefined {
 }
 
 export type Pagina =
+  | "inicio"
   | "projeto"
   | "heatmap"
   | "metricas"
@@ -31,14 +32,17 @@ export type Pagina =
   | "avaliacoes"
   | "avaliacao";
 
-/** As páginas do F7 §4.4. `/` só redireciona para `/demandas`; `/projects` e `/simulation` sem nome escolhem o projeto (ticket 29). */
+/**
+ * As páginas do F7 §4.4. `/` e `/demandas` só redirecionam para `/home` (app.ts); `/projects` e `/simulation` sem nome
+ * escolhem o projeto (ticket 29).
+ */
 const PAGINAS: readonly (readonly [string, Pagina])[] = [
+  ["/home", "inicio"],
   ["/projects", "projeto"],
   ["/projects/:projeto", "projeto"],
   ["/projects/:projeto/heatmap", "heatmap"],
   ["/projects/:projeto/sdlc", "sdlc"],
   ["/projects/:projeto/demandas", "demandas"],
-  ["/demandas", "demandas"],
   ["/demandas/:demanda", "demanda"],
   ["/simulation", "simulacao"],
   ["/simulation/:projeto", "simulacao"],

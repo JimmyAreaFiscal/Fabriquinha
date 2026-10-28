@@ -55,9 +55,9 @@ test("remover: cancelar não apaga; confirmar tira o projeto de todas as telas e
   await expect(menu.getByRole("link", { name: /^demo/ })).toHaveCount(0);
   await expect(menu.getByRole("link", { name: /^outro/ })).toBeVisible();
 
-  await pagina.goto(`${fabriquinha.base}/demandas`);
-  await expect(pagina.getByText("Demanda I-92")).toBeVisible();
-  await expect(pagina.getByText("Demanda I-91")).toHaveCount(0);
+  await pagina.goto(`${fabriquinha.base}/home`);
+  await expect(pagina.locator(".board-etapas .id", { hasText: "I-92" })).toBeVisible();
+  await expect(pagina.locator(".board-etapas .id", { hasText: "I-91" })).toHaveCount(0);
   await pagina.goto(`${fabriquinha.base}/projects/demo`);
   await expect(pagina.getByRole("heading", { name: "Projeto não encontrado" })).toBeVisible();
   await pagina.goto(`${fabriquinha.base}/history`);

@@ -8,6 +8,7 @@ import {
   dica,
   type EstadoDasMetricas,
   evolucao,
+  fraseDoMes,
   media,
   mesDe,
   paginaDeMetricas,
@@ -486,6 +487,27 @@ test("Projeto: os 6 cards do mês corrente", () => {
   );
   const parcial = { ...m, total: { ...m.total, custo: { conhecido: 1, incompleto: true } } };
   assert.match(texto(cardsDoMes(parcial)), /Custo · outubro US\$ 1,00 \*/);
+});
+
+test("Início: a frase do mês corrente de todos os projetos, com o link para as Métricas", () => {
+  const m = mes("2026-10", 1302.24, 102, null, {
+    total: { ...consumo(1302.24, 2_000_000_000, 4_500_000, 300_000_000, 0, 9), modelos: [] },
+  });
+  assert.equal(
+    texto(fraseDoMes(m)),
+    "Outubro de 2026, todos os projetos: US$ 1.302,24 · 2.304,5 M tokens · demandas 103 registradas, 102 concluídas · tickets 104 criados, 102 concluídos · PRs 103 abertos, 102 mergeados Métricas →",
+  );
+  assert.match(fraseDoMes(m), /<a href="\/metrics">Métricas →<\/a><\/p>$/);
+  // Os números com o separador de milhar, como nas Métricas.
+  const grande = mes("2026-10", 1, 0, null, {
+    demandas: { registradas: 2_470, concluidas: 1_050 },
+    tickets: { criados: 1_428, concluidos: 1_255 },
+    prs: { abertos: 1_110, mergeados: 1_070 },
+  });
+  assert.match(
+    texto(fraseDoMes(grande)),
+    /demandas 2\.470 registradas, 1\.050 concluídas · tickets 1\.428 criados, 1\.255 concluídos · PRs 1\.110 abertos, 1\.070 mergeados/,
+  );
 });
 
 test("milhares: as contagens das tabelas e dos cards do Projeto com o separador de milhar", () => {

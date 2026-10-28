@@ -14,7 +14,7 @@ export async function montarDemandas(main: HTMLElement, params: Parametros, sign
 }
 
 const NAO_ENCONTRADA =
-  '<div class="cabeca-pagina"><h1>Demanda não encontrada</h1></div><p class="muted">Esta demanda não existe. <a class="link" href="/demandas">Ir para as demandas</a></p>';
+  '<div class="cabeca-pagina"><h1>Demanda não encontrada</h1></div><p class="muted">Esta demanda não existe. <a class="link" href="/home">Ir para o Início</a></p>';
 
 /** Lê a demanda e redesenha a página com o que a API devolve; o 404 vira a página de não encontrada. */
 // Uma recarga redesenha a página: fecha o acompanhamento (releitura e EventSource) das seções da desenhada antes.
@@ -173,7 +173,7 @@ async function agirNaDemanda(botao: HTMLButtonElement, main: HTMLElement): Promi
   for (const b of main.querySelectorAll<HTMLButtonElement>("button[data-demanda]")) b.disabled = true;
   try {
     await api(botao.dataset.caminho ?? "", { method: "POST" });
-    irPara("/demandas");
+    irPara("/home");
   } catch (falha) {
     mostrarErro(falha);
     const id = main.querySelector(".dm-cabeca .id")?.textContent ?? "";

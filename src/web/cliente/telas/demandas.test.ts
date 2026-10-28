@@ -98,7 +98,7 @@ const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
 
 test("a página vazia traz só o cabeçalho e o link ao quadro, sem seções vazias", () => {
   const html = pagina(dadosDaPagina());
-  assert.match(html, /href="\/demandas">← Demandas/);
+  assert.match(html, /href="\/home">← Início/);
   assert.match(html, /<h1>Demanda &#60;I-206&#62;<\/h1>/);
   assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|Aprovação d/);
 });

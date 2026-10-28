@@ -19,6 +19,7 @@ import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DAS_DEMANDAS } from "./rotas/demandas.ts";
 import { ROTAS_DAS_ACOES_DE_DEMANDA } from "./rotas/demandas_acoes.ts";
 import { ROTAS_DO_HISTORICO } from "./rotas/historico.ts";
+import { ROTAS_DO_INICIO } from "./rotas/inicio.ts";
 import { ROTAS_DAS_METRICAS } from "./rotas/metricas.ts";
 import { ROTAS_DO_PROJETO } from "./rotas/projeto.ts";
 import { ROTAS_DA_CONFIGURACAO_SDLC } from "./rotas/sdlc.ts";
@@ -26,6 +27,7 @@ import { ROTAS_DA_SIMULACAO } from "./rotas/simulacao.ts";
 
 /** A tabela das rotas da API (F7 §4.2), uma lista por tela. */
 export const ROTAS: Rota[] = [
+  ...ROTAS_DO_INICIO,
   ...ROTAS_DO_HISTORICO,
   ...ROTAS_DA_CONFIGURACAO,
   ...ROTAS_DA_CONFIGURACAO_SDLC,
@@ -186,7 +188,7 @@ export function servirWeb({ banco, porta, agendador }: Web): RequestListener {
     if (confere(url.searchParams.get("token"))) {
       resposta.setHeader("Set-Cookie", `${COOKIE}=${token.toString()}; HttpOnly; SameSite=Strict; Path=/`);
     }
-    resposta.writeHead(303, { Location: "/demandas" }).end();
+    resposta.writeHead(303, { Location: "/home" }).end();
   }
 
   async function api(pedido: IncomingMessage, url: URL, resposta: ServerResponse, corpo: unknown): Promise<void> {

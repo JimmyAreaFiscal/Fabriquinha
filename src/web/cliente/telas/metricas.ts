@@ -1,5 +1,5 @@
 // Métricas (F7 §4.4) como funções puras: o período em meses, a página `/metrics` (mês em foco contra a média dos
-// meses anteriores do período) e os cards do mês do Projeto. O DOM e a rede ficam em
+// meses anteriores do período), a frase do mês do Início e os cards do mês do Projeto. O DOM e a rede ficam em
 // metricas-montar.ts. A comparação com a média é feita aqui, sobre a lista de meses lida das tabelas da demanda.
 import type { EtapaTicket, FaseDemanda } from "../../../dominio/primitivos.ts";
 import type { Custo } from "../../../metricas/demanda.ts";
@@ -634,7 +634,14 @@ export function paginaDeMetricas(dados: DadosDasMetricas, e: EstadoDasMetricas):
   <div class="dica" data-dica hidden></div>`;
 }
 
-// ——— o mês corrente no Projeto ———
+// ——— o mês corrente no Início e no Projeto ———
+
+/** A frase do Início (F7 §4.4): o mês corrente de todos os projetos, com as contagens como nas Métricas e o link para elas. */
+export function fraseDoMes(m: MetricasMes): string {
+  const b = (v: number) => `<b>${qtd(v)}</b>`;
+  const nome = extenso(m.mes);
+  return `<p class="frase-mes">${nome.charAt(0).toUpperCase()}${nome.slice(1)} de ${m.mes.slice(0, 4)}, todos os projetos: <b>${dinheiro(m.total.custo)}</b> · <b>${compacto(somaDosTokens(m.total))}</b> tokens · demandas ${b(m.demandas.registradas)} registradas, ${b(m.demandas.concluidas)} concluídas · tickets ${b(m.tickets.criados)} criados, ${b(m.tickets.concluidos)} concluídos · PRs ${b(m.prs.abertos)} abertos, ${b(m.prs.mergeados)} mergeados <a href="/metrics">Métricas →</a></p>`;
+}
 
 /** Os 6 cards do Projeto (F7 §4.4): o mês corrente só do projeto. */
 export function cardsDoMes(m: MetricasMes): string {

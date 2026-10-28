@@ -348,7 +348,7 @@ test("carregarDemanda dentro de escrever lê na transação aberta e não a fech
   assert.equal(b.isTransaction, false);
 });
 
-test("listarDemandas: em ordem de criação, sem arquivada por padrão e com ela no filtro", () => {
+test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela no filtro e só as em andamento no outro", () => {
   const b = banco();
   const ag = completo();
   const com = (id: string, fase: AgregadoDemanda["demanda"]["fase"]) => {
@@ -369,16 +369,22 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão e com ela
   com("I-10", "execucao");
   com("I-2", "arquivada");
   com("I-3", "encerramento");
+  com("I-4", "concluida");
+  com("I-5", "cancelada");
   assert.deepEqual(
     listarDemandas(b).map((a) => a.demanda.id),
-    ["I-10", "I-3"],
+    ["I-10", "I-3", "I-4", "I-5"],
   );
   assert.deepEqual(
     listarDemandas(b, { arquivadas: true }).map((a) => a.demanda.id),
-    ["I-10", "I-2", "I-3"],
+    ["I-10", "I-2", "I-3", "I-4", "I-5"],
+  );
+  assert.deepEqual(
+    listarDemandas(b, { emAndamento: true }).map((a) => a.demanda.id),
+    ["I-10", "I-3"],
   );
   assert.equal(b.isTransaction, false);
   escrever(b, () => {
-    assert.equal(listarDemandas(b).length, 2);
+    assert.equal(listarDemandas(b).length, 4);
   });
 });
