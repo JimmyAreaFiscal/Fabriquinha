@@ -177,3 +177,13 @@ test("sem critérios, citações, título, descrição, dependências nem caminh
   });
   assert.ok(p.includes("sem título") && p.includes("(vazio)") && p.includes("(nenhum)") && p.includes("(nenhuma)"));
 });
+
+test("as revisões pedem revisao decidir do próprio ticket como último passo (CA-1)", () => {
+  const rodada = montar("revisar_rodada");
+  assert.match(rodada, /fabriquinha revisao decidir I-206\.T3 aprovar/);
+  assert.match(rodada, /fabriquinha revisao decidir I-206\.T3 reprovar --motivo <texto> --correcoes/);
+  const demanda = montar("revisar_demanda");
+  assert.match(demanda, /fabriquinha revisao decidir I-206\.T3 aprovar/);
+  assert.match(demanda, /fabriquinha revisao decidir I-206\.T3 reprovar --motivo <texto> --plano/);
+  assert.ok(!demanda.includes("--correcoes") && !rodada.includes("--plano"));
+});
