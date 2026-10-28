@@ -286,3 +286,36 @@ test("o gate do planejamento usa a rota do planejamento (CA-17 a CA-19)", () => 
   assert.match(html, /data-caminho="\/api\/demandas\/[^"]*\/planejamento\/decisao"[^>]*>Reprovar planejamento</);
   assert.match(html, />Aprovar planejamento</);
 });
+
+test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados à rota do PR (CA-20 a CA-23)", () => {
+  const base = dadosDaPagina();
+  const html = pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }] });
+  assert.match(html, /<select id="nota-I-206\.R1"/);
+  assert.match(html, /<option value="5">5<\/option>/);
+  assert.match(
+    html,
+    /data-gate="false" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-campo="motivo-I-206\.R1">Reprovar PR</,
+  );
+  assert.match(
+    html,
+    /data-gate="true" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-nota="nota-I-206\.R1">Aprovar PR</,
+  );
+  assert.doesNotMatch(
+    pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "concluida" }] }),
+    /Aprovar PR/,
+  );
+});
+
+test("a rodada em sessão de ajustes liga à conversa dos ajustes (CA-22)", () => {
+  const html = pagina({ ...dadosDaPagina(), rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "sessao" }] });
+  assert.match(html, /href="\/api\/demandas\/rodadas\/I-206\.R1\/ajustes"/);
+});
+
+test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {
+  const d = (url: string) => ({
+    ...demanda("I-206"),
+    rodadas: [{ ref: "I-206.R1", fase: "aprovacao_pull_request" as const, pr: { id: "7", url } }],
+  });
+  assert.match(quadro({ demandas: [d("https://x/7")], trabalho: [] }), /href="https:\/\/x\/7"/);
+  assert.doesNotMatch(quadro({ demandas: [d("javascript:x")], trabalho: [] }), /javascript/);
+});

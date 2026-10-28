@@ -4266,3 +4266,9 @@ svg.barras :not(.hit) {
     flex: 1 1 100%;
   }
 }
+
+/* Demandas: o gate do PR da rodada (nota e motivo). */
+.dm-gate select {
+  max-width: 100%;
+  align-self: flex-start;
+}

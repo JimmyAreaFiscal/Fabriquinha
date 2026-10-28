@@ -7,6 +7,7 @@ import {
   semearGateDaDemanda,
   semearPaginaDaDemanda,
   semearPlanejamento,
+  semearPrDaRodada,
 } from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";
 
@@ -114,8 +115,8 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Só leitura (I-238 traz as ações) e a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button")).toHaveCount(0);
+  // Só os botões do gate do PR da rodada (R1 em Aprovação do PR); a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button")).toHaveCount(2);
 
   // CA-10: clicar no print abre a imagem na caixa.
   await pagina.getByRole("link", { name: "print.png" }).click();
@@ -229,4 +230,44 @@ test("CA-14: Aprovar a demanda mostra a fase devolvida e os botões somem", asyn
   await pagina.getByRole("button", { name: "Aprovar" }).click();
   await expect(pagina.getByRole("button", { name: "Aprovar" })).toHaveCount(0);
   await expect(fase(pagina)).not.toHaveText("Aprovação da demanda");
+});
+
+test("CA-20 e CA-21: aprovar o PR pede a nota e, com a nota, mostra-a na rodada", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  projeto(fabriquinha.raiz);
+  semearPrDaRodada(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
+  await pagina.setViewportSize({ width: 375, height: 900 });
+  await expect(pagina.getByRole("button", { name: "Aprovar PR" })).toBeVisible();
+  await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toBeVisible();
+  expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await info.attach("gate-pr-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  await pagina.getByRole("button", { name: "Aprovar PR" }).click();
+  await expect(pagina.locator("#nota-I-215\\.R1-erro")).toHaveText("Escolha a nota de 1 a 5.");
+  await expect(pagina.getByRole("button", { name: "Aprovar PR" })).toBeVisible();
+
+  await pagina.getByLabel(/Nota/).selectOption("4");
+  await pagina.getByRole("button", { name: "Aprovar PR" }).click();
+  await expect(pagina.getByRole("button", { name: "Aprovar PR" })).toHaveCount(0);
+  await expect(pagina.locator("#I-215\\.R1")).toContainText("nota 4");
+});
+
+test("CA-22 e CA-23: reprovar o PR pede o motivo e, com ele, abre a sessão de ajustes", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  projeto(fabriquinha.raiz);
+  semearPrDaRodada(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
+  await pagina.getByRole("button", { name: "Reprovar PR" }).click();
+  await expect(pagina.locator("#motivo-I-215\\.R1-erro")).toHaveText("O motivo é obrigatório para recusar.");
+  await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toBeVisible();
+
+  await pagina.getByLabel(/Motivo/).fill("falta teste");
+  await pagina.getByRole("button", { name: "Reprovar PR" }).click();
+  await expect(pagina.getByRole("link", { name: /Sessão de ajustes de I-215\.R1/ })).toBeVisible();
+  await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toHaveCount(0);
 });

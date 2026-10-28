@@ -62,13 +62,22 @@ async function decidir(
   signal: AbortSignal,
 ): Promise<void> {
   const aprovado = botao.dataset.gate === "true";
-  const campo = main.querySelector<HTMLTextAreaElement>(`#${CSS.escape(botao.dataset.campo ?? "")}`);
+  // Cada botão aponta o campo que lê: o motivo (recusar) ou a nota (aprovar o PR da rodada).
+  const doCampo = (id?: string) =>
+    id === undefined ? null : main.querySelector<HTMLInputElement>(`#${CSS.escape(id)}`);
+  const campo = doCampo(botao.dataset.campo);
   const motivo = campo?.value.trim() ?? "";
-  const erro = campo?.nextElementSibling;
-  if (!aprovado && motivo === "") {
-    if (erro) {
-      erro.textContent = "O motivo é obrigatório para recusar.";
-      (erro as HTMLElement).hidden = false;
+  const nota = doCampo(botao.dataset.nota)?.value;
+  const pendencia =
+    !aprovado && motivo === ""
+      ? { onde: campo?.nextElementSibling, texto: "O motivo é obrigatório para recusar." }
+      : aprovado && nota === ""
+        ? { onde: doCampo(`${botao.dataset.nota ?? ""}-erro`), texto: "Escolha a nota de 1 a 5." }
+        : undefined;
+  if (pendencia) {
+    if (pendencia.onde) {
+      pendencia.onde.textContent = pendencia.texto;
+      (pendencia.onde as HTMLElement).hidden = false;
     }
     return;
   }
@@ -78,7 +87,7 @@ async function decidir(
     await api(botao.dataset.caminho ?? "", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(aprovado ? { aprovado } : { aprovado, motivo }),
+      body: JSON.stringify(aprovado ? { aprovado, ...(nota && { nota: Number(nota) }) } : { aprovado, motivo }),
       signal,
     });
   } catch (falha) {

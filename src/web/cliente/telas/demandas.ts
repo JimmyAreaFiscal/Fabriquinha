@@ -40,10 +40,13 @@ export const ETAPA_DO_TICKET: Record<EtapaTicket, string> = {
 export const pilula = ([rotulo, classe]: readonly [string, string]): string =>
   `<span class="pill ${classe}">${rotulo}</span>`;
 
+const linkExterno = (url: string, texto: string): string =>
+  /^https?:\/\//.test(url)
+    ? `<a class="link" href="${escapar(url)}" target="_blank" rel="noopener">${texto} ↗</a>`
+    : texto;
+
 const rodada = (r: DemandaDoQuadro["rodadas"][number]): string => {
-  const pr = r.pr
-    ? ` <a class="link" href="${escapar(r.pr.url)}" target="_blank" rel="noopener">PR #${escapar(r.pr.id)} ↗</a>`
-    : "";
+  const pr = r.pr ? ` ${linkExterno(r.pr.url, `PR #${escapar(r.pr.id)}`)}` : "";
   return `<li><span class="id">${escapar(r.ref)}</span> ${pilula(FASE_DA_RODADA[r.fase])}${pr}</li>`;
 };
 
@@ -153,10 +156,19 @@ function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): str
   </li>`;
 }
 
-const linkExterno = (url: string, texto: string): string =>
-  /^https?:\/\//.test(url)
-    ? `<a class="link" href="${escapar(url)}" target="_blank" rel="noopener">${texto} ↗</a>`
-    : texto;
+/** O gate do PR da rodada (CA-20 a CA-23): aprovar com nota 1–5, ou reprovar com motivo e sem nota (D03). */
+function gatePR(ref: string): string {
+  const base = `/api/demandas/rodadas/${escapar(ref)}/pr`;
+  const motivo = `motivo-${escapar(ref)}`;
+  const nota = `nota-${escapar(ref)}`;
+  const notas = [1, 2, 3, 4, 5].map((n) => `<option value="${String(n)}">${String(n)}</option>`).join("");
+  return `<div class="dm-gate">
+    <label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
+    <label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select>
+    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="false" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>
+    <span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
+  </div>`;
+}
 
 function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
   const meus = p.tickets.filter((t) => t.rodada === r.ref);
@@ -167,6 +179,8 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
   return `<section class="bloco dm-rodada" id="${escapar(r.ref)}" aria-labelledby="titulo-${escapar(r.ref)}">
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
     <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
+    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
+    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="/api/demandas/rodadas/${escapar(r.ref)}/ajustes">Sessão de ajustes de ${escapar(r.ref)}</a></p>` : ""}
     ${meus.length > 0 ? `<ul class="dm-tickets">${meus.map((t) => ticket(t, p.decisoes)).join("")}</ul>` : '<p class="muted vazio">Sem tickets.</p>'}
   </section>`;
 }

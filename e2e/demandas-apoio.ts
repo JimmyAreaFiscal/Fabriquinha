@@ -1,6 +1,8 @@
 // Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts.
 import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import { abrir } from "../src/persistencia/banco.ts";
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { guardarBytes } from "../src/persistencia/arquivos.ts";
@@ -204,9 +206,8 @@ const comPlano = (id: string): AgregadoDemanda =>
     ],
   });
 
-/** I-212 e I-213 com o planejamento aguardando aprovação. */
-export function semearPlanejamento(raiz: string): void {
-  const banco = abrir(raiz);
+/** O projeto `loja` com a configuração do SDLC, que as decisões que integram exigem. */
+function configurarProjeto(banco: ReturnType<typeof abrir>, raiz: string): void {
   gravarConfiguracaoProjeto(banco, {
     nome: "loja",
     branch_base: "main",
@@ -218,7 +219,50 @@ export function semearPlanejamento(raiz: string): void {
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
+}
+
+/** I-212 e I-213 com o planejamento aguardando aprovação. */
+export function semearPlanejamento(raiz: string): void {
+  const banco = abrir(raiz);
+  configurarProjeto(banco, raiz);
   criarDemanda(banco, comPlano("I-212"));
   criarDemanda(banco, comPlano("I-213"));
+  banco.close();
+}
+
+/** I-215 com a R1 aguardando o PR 9 (aberto); o ticket `encerrar_rodada` em execução é o que a decisão conclui. */
+export function semearPrDaRodada(raiz: string): void {
+  // A reprovação grava o marco na worktree da demanda, que precisa existir.
+  execFileSync(
+    "git",
+    ["worktree", "add", "-q", "-b", "fabriquinha/I-215", join(raiz, "worktrees/loja/I-215/demanda"), "main"],
+    {
+      cwd: join(raiz, "loja"),
+    },
+  );
+  // A aprovação integra: o gh falso já vê o PR 9 mergeado, e a branch da demanda está no remoto para o fast-forward.
+  execFileSync("git", ["push", "-q", "origin", "fabriquinha/I-215"], { cwd: join(raiz, "loja") });
+  writeFileSync(
+    join(raiz, "gh-pr.json"),
+    JSON.stringify({ state: "MERGED", url: "https://exemplo.com/pr/9", mergedAt: em, mergeCommit: { oid: "abc" } }),
+  );
+  const banco = abrir(raiz);
+  configurarProjeto(banco, raiz);
+  criarDemanda(
+    banco,
+    demanda("I-215", "execucao", {
+      rodadas: [rodada("I-215", 1, "aprovacao_pull_request")],
+      tickets: [ticket("I-215", 1, "encerrar_rodada", 1, "em_execucao")],
+      evidencias: [
+        {
+          demanda_id: "I-215",
+          ticket_id: 1,
+          tipo: "pr_aberto",
+          dados: { id: "9", url: "https://exemplo.com/pr/9", branch: "fabriquinha/I-215-1", head: "abc" },
+          em,
+        },
+      ],
+    }),
+  );
   banco.close();
 }
