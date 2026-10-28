@@ -50,6 +50,11 @@ export interface OpcoesExecucaoDemanda {
 /** Execuções com condutor vivo neste serviço, por id, com o grupo de processo do pi depois de lançado. */
 const ativas = new Map<string, { pgid?: number; interrompida?: boolean }>();
 
+/** Os condutores em curso: o `parar` do serviço os espera antes de fechar o banco. */
+const condutores = new Set<Promise<void>>();
+/** Desde o início do `parar`, o pi que sai é efeito da parada do serviço. */
+let parando = false;
+
 const INTERROMPIDA = "interrompida pelo Auditor";
 const REINICIADO = "serviço reiniciado";
 
@@ -180,6 +185,9 @@ async function conduzir(c: Conducao): Promise<void> {
   }
   // Interrompida pelo Auditor: o pi saiu pelo SIGTERM, mas a causa verdadeira é a interrupção.
   if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
+  // ponytail: o pi morto por sinal (código null) sem ser o Auditor é o cgroup do systemd, que pode matá-lo antes do
+  // SIGTERM do serviço; um kill externo qualquer também vira "serviço reiniciado".
+  else if (falha !== undefined && (parando || falha.includes("(código null)"))) falha = REINICIADO;
   ativas.delete(execucao.id);
   encerrar(c, falha, log);
   try {
@@ -250,7 +258,36 @@ export function iniciarExecucaoDemanda(
     return { ...estado, sessoes, execucoes: iniciarExecucao(sessoes, estado.execucoes, execucao) };
   });
   ativas.set(execucao.id, {});
-  return { id: execucao.id, fim: conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes }) };
+  const fim = conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes });
+  condutores.add(fim);
+  const sair = () => condutores.delete(fim);
+  fim.then(sair, sair);
+  return { id: execucao.id, fim };
+}
+
+/** O `parar` do serviço chama antes de qualquer `await`: o condutor que acordar depois grava "serviço reiniciado". */
+export function marcarParada(): void {
+  parando = true;
+}
+
+/**
+ * Parada do serviço: espera os condutores em curso por até `limiteMs`, para gravarem o fim da execução com o banco
+ * ainda aberto. Passado o limite, mata o grupo dos pi que restaram (SIGKILL) e espera os condutores gravarem a falha:
+ * quem falha por causa da parada termina como "serviço reiniciado".
+ */
+export async function aguardarCondutores(limiteMs: number): Promise<void> {
+  marcarParada();
+  let timer: NodeJS.Timeout | undefined;
+  const limite = new Promise<"limite">((pronto) => {
+    timer = setTimeout(pronto, limiteMs, "limite");
+  });
+  const resultado = await Promise.race([Promise.allSettled(condutores), limite]);
+  clearTimeout(timer);
+  if (resultado === "limite") {
+    for (const { pgid } of ativas.values()) if (pgid !== undefined) sinalNoGrupo(pgid, "SIGKILL");
+    await Promise.allSettled(condutores);
+  }
+  parando = false;
 }
 
 /**
