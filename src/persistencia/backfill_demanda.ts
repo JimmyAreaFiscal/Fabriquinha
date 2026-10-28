@@ -30,6 +30,13 @@ export interface Relatorio {
   depois: Record<string, number>;
   naoMigradas: { issue: string; motivo: string }[];
   dependenciasPendentes: { de: string; para: string }[];
+  retrabalhoPendente: {
+    commit: string;
+    origem: string;
+    ticketOrigem: number;
+    alterador: string;
+    ticketAlterador: number;
+  }[];
 }
 
 const contar = (banco: DatabaseSync): Record<string, number> =>
@@ -235,7 +242,7 @@ export function backfillDemandas(banco: DatabaseSync): Relatorio {
       }
     }
     // O alterador pode estar em outra issue: o retrabalho só entra depois de todos os tickets.
-    // Alterador em issue em andamento (sem demanda) fica no legado para a migração em voo, como as dependências pendentes.
+    // Alterador em issue em andamento (sem demanda) fica no legado e entra no relatório (retrabalhoPendente), como as dependências pendentes.
     const retrabalho = banco.prepare(
       `INSERT INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
        SELECT r.commit_alterador, 'I-' || o.issue, r.ticket, r.autor, r.ticket_origem, r.linhas,
@@ -257,6 +264,17 @@ export function backfillDemandas(banco: DatabaseSync): Relatorio {
       if (existe.get(de) && existe.get(para)) cria.run(de, para);
       else dependenciasPendentes.push({ de, para });
     }
-    return { antes, depois: contar(banco), naoMigradas, dependenciasPendentes };
+    const retrabalhoPendente = banco
+      .prepare(
+        `SELECT r.commit_alterador AS "commit", 'I-' || o.issue AS origem, r.ticket_origem AS ticketOrigem,
+                'I-' || a.issue AS alterador, r.ticket AS ticketAlterador
+         FROM retrabalho r JOIN ticket o ON o.id = r.ticket_origem JOIN ticket a ON a.id = r.ticket
+         WHERE EXISTS (SELECT 1 FROM demanda d WHERE d.id = 'I-' || o.issue)
+           AND NOT EXISTS (SELECT 1 FROM demanda d WHERE d.id = 'I-' || a.issue)
+         ORDER BY r.rowid`,
+      )
+      .all()
+      .map((l) => ({ ...l })) as unknown as Relatorio["retrabalhoPendente"];
+    return { antes, depois: contar(banco), naoMigradas, dependenciasPendentes, retrabalhoPendente };
   });
 }

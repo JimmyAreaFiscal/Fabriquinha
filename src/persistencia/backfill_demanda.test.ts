@@ -358,6 +358,7 @@ test("CA-9, CA-10, CA-13, CA-18: dependências, em andamento, pendências e cont
     { de: "I-1", para: "I-5" },
     { de: "I-5", para: "I-1" },
   ]);
+  assert.deepEqual(r.retrabalhoPendente, []);
   assert.equal(r.antes.demanda, 0);
   assert.equal(r.depois.demanda, 4);
   assert.equal(r.depois.ticket_demanda, 9);
@@ -407,7 +408,11 @@ test("retrabalho com alterador em issue em andamento fica no legado, sem recusar
   b.exec("INSERT INTO retrabalho VALUES ('" + "7".repeat(40) + "', 10, NULL, 3, 1)");
   const sem = (SELECT_N: string) => (b.prepare(SELECT_N).get() as { n: number }).n;
   const n = "SELECT COUNT(*) AS n FROM retrabalho_demanda WHERE commit_alterador = '" + "7".repeat(40) + "'";
-  backfillDemandas(b);
+  const r = backfillDemandas(b);
+  assert.deepEqual(r.retrabalhoPendente, [
+    { commit: "7".repeat(40), origem: "I-1", ticketOrigem: 3, alterador: "I-5", ticketAlterador: 10 },
+  ]);
+  assert.deepEqual(backfillDemandas(b).retrabalhoPendente, r.retrabalhoPendente);
   assert.equal(sem(n), 0);
   assert.equal(sem("SELECT COUNT(*) AS n FROM retrabalho WHERE commit_alterador = '" + "7".repeat(40) + "'"), 1);
 });
