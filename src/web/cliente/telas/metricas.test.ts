@@ -493,3 +493,31 @@ test("Início e Projeto: a frase e os 6 cards do mês corrente", () => {
   const parcial = { ...m, total: { ...m.total, custo: { conhecido: 1, incompleto: true } } };
   assert.match(texto(fraseDoMes(parcial)), /US\$ 1,00 \* ·/);
 });
+
+test("milhares: as contagens das tabelas e dos cards do Projeto com o separador de milhar", () => {
+  const grande = { ...consumo(1, 0, 0, 0, 0, 24_929), falhas: 1_234, reprovacoes: 5_678 };
+  const m = mes("2026-10", 1, 24_929, null, {
+    niveis: [{ nivel: "execucao", grupos: 12_345, total: grande }],
+    etapas: ETAPAS.map((etapa) => ({ etapa, reprovacoes: 0, ...(etapa === "implementar" ? grande : consumo(0)) })),
+    retrabalho: { adicionadas: 289_424, alteradas: 24_929, porHumanos: 0 },
+  });
+  const html = texto(
+    paginaDeMetricas(
+      { ...DADOS, meses: [m], demandas: [demanda({ demanda: "I-1", ...grande })] },
+      { ...ESTADO, de: "2026-10" },
+    ),
+  );
+  // Por etapa: a linha da implementação e o Total.
+  assert.match(
+    html,
+    /Implementar .* 24\.929 \/ — 1\.234 \/ — 5\.678 \/ — .*Total .* 24\.929 \/ — 1\.234 \/ — 5\.678 \/ —/,
+  );
+  // Por nível: grupos e execuções.
+  assert.match(html, /Execução 12\.345 24\.929 /);
+  // Por demanda: a linha e o total.
+  assert.match(html, /I-1 Demanda I-1 .* 24\.929 1\.234 5\.678 .* 1 demanda .* 24\.929 1\.234 5\.678 /);
+  assert.match(
+    texto(cardsDoMes(m)),
+    /Demandas 24\.930 \/ 24\.929 .* Tickets 24\.931 \/ 24\.929 .* PRs 24\.930 \/ 24\.929 .* Retrabalho 24\.929 \/ 289\.424 /,
+  );
+});

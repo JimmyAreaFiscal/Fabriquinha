@@ -432,9 +432,9 @@ function porEtapa(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
       <td><div class="barras-cel"><i style="width:${((a.custo / maximo) * 100).toFixed(1)}%;background:var(--foco)"></i><i style="width:${(((mc ?? 0) / maximo) * 100).toFixed(1)}%;background:var(--base)"></i></div></td>
       <td class="num">${custo(a.custo)}${marca(incompleto)}</td><td class="num muted">${mm(mc, custo)}</td><td class="num">${variacao(a.custo, mc)}</td>
       <td class="num sep">${compacto(a.tokens)} <span class="muted">/ ${mm(med("tokens"), compacto)}</span></td>
-      <td class="num">${String(a.execucoes)} <span class="muted">/ ${mm(med("execucoes"), um)}</span></td>
-      <td class="num">${String(a.falhas)} <span class="muted">/ ${mm(med("falhas"), um)}</span></td>
-      <td class="num">${String(a.reprovacoes)} <span class="muted">/ ${mm(med("reprovacoes"), um)}</span></td>
+      <td class="num">${qtd(a.execucoes)} <span class="muted">/ ${mm(med("execucoes"), um)}</span></td>
+      <td class="num">${qtd(a.falhas)} <span class="muted">/ ${mm(med("falhas"), um)}</span></td>
+      <td class="num">${qtd(a.reprovacoes)} <span class="muted">/ ${mm(med("reprovacoes"), um)}</span></td>
       <td class="num">${mm(a.duracao, duracao)} <span class="muted">/ ${mm(med("duracao"), duracao)}</span></td></tr>`;
   });
   // O Total: o mês e a soma das médias de cada coluna; a duração é ponderada pelas execuções.
@@ -449,7 +449,7 @@ function porEtapa(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
   };
   const par = (campo: "execucoes" | "falhas" | "reprovacoes") => {
     const t = total(campo);
-    return `<td class="num">${String(t.atual)} <span class="muted">/ ${mm(t.med, um)}</span></td>`;
+    return `<td class="num">${qtd(t.atual)} <span class="muted">/ ${mm(t.med, um)}</span></td>`;
   };
   const tc = total("custo");
   const execAnteriores = soma((x) => x.execucoes, anteriores);
@@ -488,8 +488,8 @@ const NOME_DO_NIVEL: Record<Nivel, string> = {
 function porNivel(m: MetricasMes): string {
   const rotulo = rotuloMes(m.mes);
   const linhas = m.niveis.map(
-    (n) => `<tr><td>${NOME_DO_NIVEL[n.nivel]}</td><td class="num">${String(n.grupos)}</td>
-      <td class="num">${String(n.total.execucoes)}</td><td class="num">${compacto(somaDosTokens(n.total))}</td><td class="num">${dinheiro(n.total.custo)}</td></tr>`,
+    (n) => `<tr><td>${NOME_DO_NIVEL[n.nivel]}</td><td class="num">${qtd(n.grupos)}</td>
+      <td class="num">${qtd(n.total.execucoes)}</td><td class="num">${compacto(somaDosTokens(n.total))}</td><td class="num">${dinheiro(n.total.custo)}</td></tr>`,
   );
   const r = m.retrabalho;
   return `<section class="grafico superficie"><div class="grafico-cabeca"><h3>${rotulo}</h3><span class="sub">execução → sessão → ticket → rodada → demanda → projeto: a soma de cada nível é o total do mês</span></div>
@@ -588,7 +588,7 @@ function tabelaDeDemandas(demandas: readonly MetricasDemandaPeriodo[], e: Estado
       ${todos ? `<td class="muted">${escapar(d.projeto)}</td>` : ""}
       <td>${pilula(FASE_DA_DEMANDA[d.fase as FaseDemanda])}</td>
       <td class="num">${dinheiro(d.custo)}</td><td class="num">${compacto(somaDosTokens(d))}</td>
-      <td class="num">${String(d.execucoes)}</td><td class="num">${String(d.falhas)}</td><td class="num">${String(d.reprovacoes)}</td>
+      <td class="num">${qtd(d.execucoes)}</td><td class="num">${qtd(d.falhas)}</td><td class="num">${qtd(d.reprovacoes)}</td>
       <td class="num">${duracao(d.duracaoMs)}</td><td class="num">${d.nota === null ? "—" : numero(d.nota, 1)}</td></tr>`,
   );
   const soma = (f: (d: MetricasDemandaPeriodo) => number) => demandas.reduce((t, d) => t + f(d), 0);
@@ -598,7 +598,7 @@ function tabelaDeDemandas(demandas: readonly MetricasDemandaPeriodo[], e: Estado
   };
   return `<div class="rola"><table class="tabela tabela-demandas"><thead><tr>${th("demanda", "Demanda", false)}${th("titulo", "Título", false)}${todos ? th("projeto", "Projeto", false) : ""}${th("fase", "Fase", false)}${th("custo", "Custo")}${th("tokens", "Tokens")}${th("execucoes", "Execuções")}${th("falhas", "Falhas")}${th("reprovacoes", "Reprovações")}${th("duracao", "Duração")}${th("nota", "Nota do PR")}</tr></thead>
     <tbody>${linhas.join("")}</tbody>
-    <tfoot><tr><td colspan="${todos ? "4" : "3"}">${plural(demandas.length, "demanda", "demandas")}</td><td class="num">${dinheiro(custoTotal)}</td><td class="num">${compacto(soma((d) => somaDosTokens(d)))}</td><td class="num">${String(soma((d) => d.execucoes))}</td><td class="num">${String(soma((d) => d.falhas))}</td><td class="num">${String(soma((d) => d.reprovacoes))}</td><td class="num">${duracao(soma((d) => d.duracaoMs))}</td><td></td></tr></tfoot>
+    <tfoot><tr><td colspan="${todos ? "4" : "3"}">${plural(demandas.length, "demanda", "demandas")}</td><td class="num">${dinheiro(custoTotal)}</td><td class="num">${compacto(soma((d) => somaDosTokens(d)))}</td><td class="num">${qtd(soma((d) => d.execucoes))}</td><td class="num">${qtd(soma((d) => d.falhas))}</td><td class="num">${qtd(soma((d) => d.reprovacoes))}</td><td class="num">${duracao(soma((d) => d.duracaoMs))}</td><td></td></tr></tfoot>
     </table></div>`;
 }
 
@@ -648,7 +648,7 @@ export function cardsDoMes(m: MetricasMes): string {
   const t = m.total.tokens;
   const card = (rotulo: string, valor: string, sub: string) =>
     `<div class="kpi superficie"><span class="rotulo">${rotulo}</span><span class="kpi-valor">${valor}</span><span class="kpi-sub">${sub}</span></div>`;
-  const par = (a: number, b: number) => `${String(a)} <small class="muted">/ ${String(b)}</small>`;
+  const par = (a: number, b: number) => `${qtd(a)} <small class="muted">/ ${qtd(b)}</small>`;
   return `<div class="kpis-mes">
     ${card(`Custo · ${extenso(m.mes)}`, dinheiro(m.total.custo), plural(m.total.execucoes, "execução", "execuções"))}
     ${card("Tokens", compacto(somaDosTokens(m.total)), `${compacto(t.entrada)} entrada · ${compacto(t.saida)} saída · ${compacto(t.cacheLeitura + t.cacheEscrita)} cache`)}
