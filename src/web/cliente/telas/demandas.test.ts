@@ -103,6 +103,20 @@ test("a página vazia traz só o cabeçalho e o link ao quadro, sem seções vaz
   assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|Aprovação d/);
 });
 
+test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
+  const html = pagina(
+    dadosDaPagina({
+      tickets: [
+        { ref: "I-206.T1", etapa: "planejar", status: "em_execucao", sessao: "s/1" },
+        { ref: "I-206.T2", etapa: "implementar", status: "aberto" },
+      ],
+    }),
+  );
+  const [, t1, t2] = html.split(/(?=<li class="dm-ticket">)/);
+  assert.match(String(t1), /href="\/sessions\/s%2F1">chat →/);
+  assert.doesNotMatch(String(t2), /chat →/);
+});
+
 test("os tickets ficam na rodada ou nos globais, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
   const html = pagina(
     dadosDaPagina({

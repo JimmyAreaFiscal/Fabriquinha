@@ -11,14 +11,20 @@ import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
-import { avisar, encerrar } from "../../execucao/gerente.ts";
+import { avisar, encerrar, situacao } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import { submeter } from "../../evidencias/submissao.ts";
+import type { DadosDoChatDemanda } from "./chat.ts";
+import { criarDemanda } from "../../persistencia/demandas.ts";
 import { proporIssue } from "../../persistencia/issues.ts";
+import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
+import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execucao/execucao_demanda.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import type { Pedido } from "../rotas.ts";
 import { type CabecalhoDoChat, type DadosDoChat, ROTAS_DO_CHAT } from "./chat.ts";
+import { demanda } from "./demandas_cenario.test.ts";
 import type { PainelRegistro } from "./issue.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
@@ -616,4 +622,127 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
     `attachment; filename="historico-T-900-consulta-${consulta}.md"`,
   );
   assert.equal((await baixar("nada")).status, 404);
+});
+
+test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviço da demanda; id desconhecido segue o das issues", async () => {
+  const em = "2026-01-01T00:00:00.000Z";
+  criarDemanda(
+    servico.banco,
+    demanda("I-310", "planejamento", {
+      tickets: [
+        {
+          demanda_id: "I-310",
+          ticket_id: 1,
+          etapa: "planejar",
+          status: "em_execucao",
+          status_alterado_em: em,
+          devolucoes: 0,
+        },
+      ],
+    }),
+  );
+  comSessoesDoTicket(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
+    ...e,
+    sessoes: [{ demanda_id: "I-310", ticket_id: 1, id: "sd-310", modo: "interativo", conversa_referencia: "sd-310" }],
+    execucoes: [{ id: "ed-310", sessao_id: "sd-310", inicio: em, fim: em, falha: false }],
+  }));
+  mkdirSync(join(raiz, "sessoes"), { recursive: true });
+  const mensagem = (role: string, text: string) => ({
+    type: "message",
+    message: { role, content: [{ type: "text", text }] },
+  });
+  writeFileSync(
+    join(raiz, "sessoes", "2026-01-01T00-00-00-000Z_sd-310.jsonl"),
+    [mensagem("user", "planeje"), mensagem("assistant", "Qual a prioridade?")]
+      .map((l) => JSON.stringify(l))
+      .join("\n") + "\n",
+  );
+
+  const chat = (await pedir("/api/sessoes/sd-310")).corpo as DadosDoChatDemanda;
+  assert.deepEqual(
+    [chat.origem, chat.demanda, chat.rodada, chat.ticket, chat.etapa, chat.sessao.estado, chat.sessao.motivo],
+    ["demanda", "I-310", undefined, "I-310.T1", "planejar", "aguardando_humano", "conversa"],
+  );
+  assert.deepEqual(textos(chat.conversa), ["user: planeje", "assistant: Qual a prioridade?"]);
+
+  const sse = await assinar("sd-310");
+  await ate(() => sse.eventos.length > 0, "o retrato");
+  const [retrato] = sse.eventos as [Evento & DadosDoChatDemanda];
+  assert.deepEqual([retrato.type, retrato.origem, retrato.conversa.length], ["chat", "demanda", 2]);
+  avisar("sd-310", join(raiz, "log"));
+  await ate(() => sse.eventos.length > 1, "o estado novo");
+  assert.deepEqual([sse.eventos[1]?.type, sse.eventos[1]?.origem], ["estado", "demanda"]);
+  sse.fechar();
+
+  const baixado = await fetch(`${origem}/api/sessoes/sd-310/historico.md`, { headers: { cookie: cookie() } });
+  assert.equal(baixado.status, 200);
+  assert.equal(baixado.headers.get("content-type"), "text/markdown; charset=utf-8");
+  assert.equal(baixado.headers.get("content-disposition"), 'attachment; filename="historico-I-310.T1.md"');
+  assert.match(
+    await baixado.text(),
+    /^# Histórico da sessão I-310.T1 \(planejar\)[\s\S]*## Auditor\n\nplaneje[\s\S]*## Agente\n\nQual a prioridade\?/,
+  );
+
+  // CA-9, CA-12: texto vazio recusado no schema; steer na conversa, diálogo e aborto sem pi são recusados.
+  const vazio = await postar("/api/sessoes/sd-310/mensagens", { texto: "   ", modo: "prompt" });
+  assert.equal(vazio.status, 422);
+  assert.equal((await postar("/api/sessoes/sd-310/mensagens", { texto: "x", modo: "steer" })).status, 409);
+  assert.equal((await postar("/api/sessoes/sd-310/dialogos/d1", { valor: "x" })).status, 409);
+  assert.equal((await postar("/api/sessoes/sd-310/abortar")).status, 409);
+
+  // CA-7: a sessão que nem a demanda nem as issues conhecem.
+  const nada = await pedir("/api/sessoes/sd-nada");
+  assert.equal(nada.status, 404);
+  assert.match(JSON.stringify(nada.corpo), /a sessão sd-nada não existe[\s\S]*confira o endereço do chat/);
+});
+
+test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a mensagem e abortar", async () => {
+  gravarConfiguracaoProjeto(servico.banco, {
+    nome: "loja",
+    branch_base: "main",
+    chave_sonarqube: "loja",
+    raiz_git: join(base, "repo"),
+    hospedagem: "github",
+    etapas: [],
+    preparacao: [{ ordem: 1, comando: "true" }],
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+  });
+  const ref = { demanda_id: "I-311", ticket_id: 1 };
+  criarDemanda(
+    servico.banco,
+    demanda("I-311", "planejamento", {
+      demanda: { ...demanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
+      tickets: [
+        {
+          ...ref,
+          etapa: "planejar",
+          status: "em_execucao",
+          status_alterado_em: "2026-01-01T00:00:00.000Z",
+          devolucoes: 0,
+        },
+      ],
+    }),
+  );
+  const { fim } = iniciarExecucaoDemanda(servico.banco, ref, {
+    limiteMin: 5,
+    modo: "interativo",
+    fechar: () => Promise.resolve(),
+  });
+  const sessao = String(carregarSessoesDoTicket(servico.banco, ref).sessoes[0]?.id);
+  const dialogos = () => situacao(sessao)?.dialogos ?? [];
+  await ate(() => dialogos().length === 1, "o diálogo");
+  const resposta = await postar(`/api/sessoes/${sessao}/dialogos/${String(dialogos()[0]?.id)}`, { valor: "alta" });
+  assert.equal(resposta.status, 204);
+  await ate(() => situacao(sessao)?.ocupado === false, "o pi ocioso");
+
+  assert.equal(
+    (await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "pergunte perguntar", modo: "prompt" })).status,
+    204,
+  );
+  await ate(() => dialogos().length === 1, "o diálogo da mensagem");
+  assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
+  await ate(() => situacao(sessao)?.ocupado === false, "o aborto");
+  interromperExecucaoDemanda(servico.banco, ref);
+  await fim;
 });

@@ -43,6 +43,14 @@ import {
   registrarNecessidade,
   responderNaSessao,
 } from "../../execucao/sessoes.ts";
+import {
+  abortarDemanda,
+  abrirChatDemanda,
+  type CabecalhoDemanda,
+  enviarDemanda,
+  exportarHistoricoDemanda,
+  responderDialogoDemanda,
+} from "../../execucao/sessoes_demanda.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { agregadoExistente, comIssue, issueDoTicket, propostasDaIssue } from "../../persistencia/issues.ts";
 import { configuracao } from "../../persistencia/servico.ts";
@@ -71,6 +79,9 @@ export type Entrada = Record<string, unknown> & { fabriquinha?: true; aviso?: tr
 export interface DadosDoChat extends CabecalhoDoChat {
   conversa: Entrada[];
 }
+
+/** O chat de uma sessão de ticket da demanda: o cabeçalho com `origem: "demanda"` e a conversa. */
+export type DadosDoChatDemanda = CabecalhoDemanda & { conversa: Entrada[] };
 
 export const opcoes = (banco: DatabaseSync): OpcoesInterativa => ({ ociosidadeMin: configuracao(banco).ociosidadeMin });
 
@@ -133,12 +144,20 @@ function dadosDoChat(banco: DatabaseSync, sessao: InfoSessao, conversa: unknown[
  * como veio e `{ type: "estado" }` com o cabeçalho novo. Quem reconecta recebe o retrato inteiro de novo.
  */
 async function eventos(banco: DatabaseSync, sessao: string, resposta: ServerResponse) {
+  const escrever = (dado: object) => resposta.write(`data: ${JSON.stringify(dado)}\n\n`);
+  const cabecalhos = { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store" };
+  const daDemanda = abrirChatDemanda(banco, sessao);
+  if (daDemanda) {
+    resposta.writeHead(200, cabecalhos);
+    escrever({ type: "chat", ...daDemanda.cabecalho, conversa: daDemanda.conversa });
+    resposta.on("close", daDemanda.assinar(escrever));
+    return;
+  }
   const chat = await abrirChat(banco, sessao);
   // `abrirChat` pode esperar o C6 de um pi que está parando: quem saiu nesse meio-tempo não assina, senão a assinatura
   // ficaria para sempre, sem o `close` que a cancela.
   if (resposta.destroyed) return;
-  const escrever = (dado: object) => resposta.write(`data: ${JSON.stringify(dado)}\n\n`);
-  resposta.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store" });
+  resposta.writeHead(200, cabecalhos);
   escrever({ type: "chat", ...dadosDoChat(banco, chat.sessao, chat.conversa) });
   const cancelar = chat.assinar((evento) => {
     if (evento.type === "estado") {
@@ -206,6 +225,8 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "GET",
     caminho: "/api/sessoes/:sessao",
     tratar: async ({ banco, params }) => {
+      const daDemanda = abrirChatDemanda(banco, String(params.sessao));
+      if (daDemanda) return { ...daDemanda.cabecalho, conversa: daDemanda.conversa };
       const chat = await abrirChat(banco, String(params.sessao));
       return dadosDoChat(banco, chat.sessao, chat.conversa);
     },
@@ -221,6 +242,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     tratar: async ({ banco, params, corpo }) => {
       const { texto, modo, anexos } = NovaMensagem.parse(corpo);
       const sessao = String(params.sessao);
+      if (enviarDemanda(banco, sessao, texto, modo, opcoes(banco).ociosidadeMin)) return;
       const mensagem = anexos.length > 0 ? await anexarHistorico(banco, sessao, anexos, texto) : texto;
       await enviar(banco, sessao, mensagem, modo, opcoes(banco));
     },
@@ -229,13 +251,21 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "GET",
     caminho: "/api/sessoes/:sessao/historico.md",
     tratar: async ({ banco, params, resposta }) => {
+      const baixar = (nome: string, markdown: string) => {
+        resposta
+          .writeHead(200, {
+            "Content-Type": "text/markdown; charset=utf-8",
+            "Content-Disposition": `attachment; filename="${nome}"`,
+          })
+          .end(markdown);
+      };
+      const daDemanda = exportarHistoricoDemanda(banco, String(params.sessao));
+      if (daDemanda) {
+        baixar(daDemanda.nome, daDemanda.markdown);
+        return;
+      }
       const info = await infoDaSessao(banco, String(params.sessao));
-      resposta
-        .writeHead(200, {
-          "Content-Type": "text/markdown; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${nomeDoHistorico(info)}"`,
-        })
-        .end(exportarHistorico(banco, info.sessao));
+      baixar(nomeDoHistorico(info), exportarHistorico(banco, info.sessao));
     },
   },
   {
@@ -243,6 +273,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     caminho: "/api/sessoes/:sessao/dialogos/:id",
     tratar: async ({ banco, params, corpo }) => {
       const resposta = RespostaDialogo.parse(corpo);
+      if (responderDialogoDemanda(banco, String(params.sessao), String(params.id), resposta)) return;
       await responderNaSessao(banco, String(params.sessao), String(params.id), resposta);
     },
   },
@@ -250,6 +281,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/abortar",
     tratar: async ({ banco, params }) => {
+      if (abortarDemanda(banco, String(params.sessao))) return;
       abortar((await infoDaSessao(banco, String(params.sessao))).execucao);
     },
   },
