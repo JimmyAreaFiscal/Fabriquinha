@@ -251,10 +251,11 @@ test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
 });
 
 test("CA-12: schema do tipo com as regras de arquivo", async () => {
-  const s = jsonSchema(await cli({}, ["demanda", "schema", "custos_realizados"]));
+  const env = novaRaiz(); // sem FABRIQUINHA_ROOT, o CLI abriria o banco de ~/fabriquinha
+  const s = jsonSchema(await cli(env, ["demanda", "schema", "custos_realizados"]));
   assert.ok(s.dados.properties.sessoes);
   assert.equal(s.arquivos.max, 0);
-  assert.ok(jsonSchema(await cli({}, ["demanda", "schema", "desenho_solucao"])).arquivos.min >= 1);
+  assert.ok(jsonSchema(await cli(env, ["demanda", "schema", "desenho_solucao"])).arquivos.min >= 1);
 });
 
 test("CA-13: enviar sem desenho_solucao lista o que falta e não envia", async () => {
