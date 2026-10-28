@@ -438,7 +438,7 @@ span.mono {
   display: flex;
   gap: var(--s-2);
 }
-/* Abas da página do projeto: Issues e Heatmap. */
+/* Abas da página do projeto: Demandas e Heatmap. */
 .abas {
   display: flex;
   gap: var(--s-1);
@@ -587,8 +587,6 @@ span.mono {
   border: 1px solid var(--danger);
   border-radius: var(--r-lg);
 }
-/* O .btn-perigo do chat, sem a borda até o hover. */
-
 .btn-perigo-cheio {
   color: var(--bg);
   background: var(--danger);
@@ -2836,4 +2834,410 @@ svg.barras :not(.hit) {
   color: var(--accent);
   font-size: var(--fs-sm);
   font-weight: 600;
+}
+
+/* Projeto: a aba Demandas. A barra com a contagem e os filtros, e uma linha por demanda com a linha do tempo das 11
+   fases (as da demanda e, no trecho Implementar, as da rodada), uma sub-linha por rodada na execução e a gaveta. */
+.ferramentas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  margin: var(--s-4) 0 var(--s-3);
+}
+.ferramentas .contagem {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.alternar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.alternar input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+.alternar:has(input:checked) {
+  color: var(--ink);
+}
+.ferramentas .direita {
+  margin-left: auto;
+}
+/* O .btn-perigo do chat, sem a borda até o hover. */
+.ferramentas .btn-perigo {
+  border-color: transparent;
+}
+.ferramentas .btn-perigo:hover {
+  border-color: var(--danger-bg);
+}
+.ferramentas .btn-perigo:disabled {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+.ferramentas ~ .vazio {
+  padding: var(--s-8);
+  text-align: center;
+  color: var(--muted);
+}
+
+.pista,
+.pista-cabeca {
+  --cols: 300px repeat(11, minmax(64px, 1fr)) 210px;
+}
+/* Fixo ao rolar a página; na janela estreita, a montagem o rola junto com a lista. */
+.pista-topo {
+  position: sticky;
+  top: 48px;
+  z-index: 1;
+  overflow: hidden;
+  background: var(--bg);
+}
+.pista-cabeca,
+.pista-linha,
+.pista-rodada {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+}
+.pista-cabeca {
+  padding-top: var(--s-2);
+}
+.pista-etapa {
+  padding: 0 var(--s-1) 4px;
+  margin: 0 4px;
+  border-bottom: 2px solid var(--line);
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pista-fase {
+  padding: 6px 2px var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.25;
+}
+.pista-fase.gate {
+  color: var(--open);
+}
+.pista-item {
+  margin-bottom: var(--s-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.pista-item.aguarda {
+  border-left-color: var(--open);
+}
+.pista-item.falha {
+  border-left-color: var(--danger);
+}
+.pista-item.rodando {
+  border-left-color: var(--claimed);
+}
+.pista-linha {
+  min-height: 56px;
+  cursor: pointer;
+}
+.pista-linha:hover {
+  background: var(--surface-2);
+  border-radius: var(--r-lg);
+}
+.pista-issue {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: 0 var(--s-3) 0 var(--s-2);
+}
+.pista-issue .texto {
+  min-width: 0;
+}
+.pista-issue .titulo {
+  display: block;
+  font-weight: var(--w-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pista-issue .sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s-2);
+  align-items: center;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.pista .bloqueia {
+  font: var(--fs-xs) var(--mono);
+  color: var(--danger);
+  white-space: nowrap;
+}
+.pista .pr {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.progresso {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--fs-xs) var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.trilho-p {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.trilho-p i {
+  display: block;
+  height: 100%;
+  background: var(--closed);
+}
+.pista .apagada {
+  opacity: 0.55;
+}
+.pista .sub .cancelada {
+  color: var(--danger);
+}
+.caret {
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 10px;
+  transition: transform 0.12s;
+}
+.fechada .caret {
+  transform: rotate(-90deg);
+}
+/* A rodada, sob a demanda: o endereço alinhado ao título dela, e a linha do tempo só no trecho Implementar. */
+.pista-rodada {
+  min-height: 32px;
+}
+.pista-rodada .pista-issue {
+  padding-left: 34px;
+}
+.pista-rodada .sub {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.pista-rodada .rodada-titulo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pista-estado {
+  padding: 0 var(--s-3);
+  display: flex;
+  justify-content: flex-end;
+}
+.pista-item:not(.fechada) .pista-estado {
+  visibility: hidden;
+}
+.pista .chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.pista .chat .ir {
+  font-size: var(--fs-sm);
+  color: var(--accent);
+}
+.pista .chat:hover .ir {
+  text-decoration: underline;
+}
+.pista .quando {
+  font-size: var(--fs-xs);
+}
+.gaveta {
+  padding: 0 var(--s-3) var(--s-3) 44px;
+}
+.pista-item.fechada .gaveta {
+  display: none;
+}
+.gaveta table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.gaveta td {
+  height: 32px;
+  padding: 0 var(--s-2);
+  border-top: 1px solid var(--line);
+}
+.gaveta tr:hover td {
+  background: var(--surface-2);
+}
+.gaveta .etapa-cel {
+  width: 170px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.gaveta .id-cel {
+  width: 96px;
+}
+.gaveta .titulo-cel {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gaveta .status-cel {
+  width: 110px;
+}
+.gaveta .status-cel .pill {
+  font-size: var(--fs-xs);
+}
+.gaveta .modelo-cel {
+  width: 240px;
+  max-width: 240px;
+}
+.gaveta .sessao-cel {
+  width: 72px;
+  text-align: right;
+}
+
+/* A linha do tempo: as 11 colunas da linha; a fase atual com a cor do estado, e o nome da fase para o leitor de tela. */
+.trilho-fases {
+  display: contents;
+}
+.trilho-fases .passo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+}
+.pista-rodada .trilho-fases .passo {
+  height: 32px;
+}
+.trilho-fases .passo > span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.trilho-fases .linha {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.trilho-fases .linha::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  background: var(--line);
+}
+/* A linha começa no meio do primeiro marco e acaba no meio do último, também no trecho da rodada. */
+.trilho-fases .passo:first-child .linha::before,
+.trilho-fases .fora + .passo:not(.fora) .linha::before {
+  left: 50%;
+}
+.trilho-fases .passo:last-child .linha::before,
+.trilho-fases .passo:not(.fora):has(+ .fora) .linha::before {
+  right: 50%;
+}
+.trilho-fases .fora .linha::before,
+.trilho-fases .fora .marco,
+.trilho-fases .rodadas .marco {
+  display: none;
+}
+.trilho-fases .feito .linha::before {
+  background: var(--closed);
+}
+.trilho-fases .atual .linha::before {
+  background: linear-gradient(to right, var(--closed) 50%, var(--line) 50%);
+}
+/* Na linha da demanda em execução, o trecho das rodadas é tracejado: os marcos estão nas rodadas, abaixo. */
+.trilho-fases .rodadas .linha::before {
+  background: repeating-linear-gradient(to right, var(--closed) 0 4px, transparent 4px 8px);
+}
+.trilho-fases .marco {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--line);
+}
+.trilho-fases .gate .marco {
+  border-radius: 2px;
+  transform: rotate(45deg);
+  width: 11px;
+  height: 11px;
+}
+.trilho-fases .feito .marco {
+  background: var(--closed);
+  border-color: var(--closed);
+}
+.trilho-fases .atual .marco {
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgb(229 173 111 / 0.18);
+}
+.trilho-fases .atual.gate .marco {
+  width: 14px;
+  height: 14px;
+}
+.trilho-fases.aguarda .atual .marco {
+  background: var(--open);
+  border-color: var(--open);
+  box-shadow: 0 0 0 4px rgb(234 178 76 / 0.22);
+}
+.trilho-fases.falha .atual .marco {
+  background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px rgb(243 146 116 / 0.22);
+}
+.trilho-fases.rodando .atual .marco {
+  background: var(--claimed);
+  border-color: var(--claimed);
+  box-shadow: 0 0 0 4px rgb(142 188 233 / 0.22);
+  animation: pulsar 1.4s ease-in-out infinite;
+}
+.trilho-fases.cancelada .atual .marco {
+  background: var(--muted);
+  border-color: var(--muted);
+  box-shadow: none;
+}
+
+@media (max-width: 1100px) {
+  .pista-rola {
+    overflow-x: auto;
+  }
+  .pista,
+  .pista-cabeca {
+    min-width: 1280px;
+  }
 }
