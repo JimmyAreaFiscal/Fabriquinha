@@ -1,10 +1,11 @@
 // Métricas (F7 §4.4) como funções puras: o período em meses, a página `/metrics` (mês em foco contra a média dos
 // meses anteriores do período), a frase do mês do Início e os cards do mês do Projeto. O DOM e a rede ficam em
 // metricas-montar.ts. A comparação com a média é feita aqui, sobre a lista de meses lida das tabelas da demanda.
-import type { EtapaTicket } from "../../../dominio/primitivos.ts";
+import type { EtapaTicket, FaseDemanda } from "../../../dominio/primitivos.ts";
 import type { Custo } from "../../../metricas/demanda.ts";
 import type { MetricasDemandaPeriodo, MetricasMesDemanda, Nivel, Soma } from "../../../metricas/periodo_demanda.ts";
-import { caminhoDaDemanda, compacto, custo, duracao, escapar, plural as pluralDe } from "../render.ts";
+import { caminhoDaDemanda, compacto, custo, duracao, escapar, FASE_DA_DEMANDA, plural as pluralDe } from "../render.ts";
+import { pilula } from "./demandas.ts";
 
 type MetricasMes = MetricasMesDemanda;
 
@@ -529,9 +530,6 @@ function porModelo(m: MetricasMes): string {
 
 const TEXTO: ReadonlySet<Coluna> = new Set(["titulo", "projeto", "fase"]);
 
-/** `aprovacao_demanda` → `Aprovacao demanda`: a fase como a demanda a grava, legível. */
-const nomeDaFase = (fase: string): string => `${fase.charAt(0).toUpperCase()}${fase.slice(1).replaceAll("_", " ")}`;
-
 function valorDaColuna(d: MetricasDemandaPeriodo, c: Coluna): string | number | null {
   switch (c) {
     case "demanda":
@@ -588,7 +586,7 @@ function tabelaDeDemandas(demandas: readonly MetricasDemandaPeriodo[], e: Estado
     (d) => `<tr><td><a class="id" href="${caminhoDaDemanda(d.demanda)}">${escapar(d.demanda)}</a></td>
       <td>${escapar(d.titulo)}</td>
       ${todos ? `<td class="muted">${escapar(d.projeto)}</td>` : ""}
-      <td><span class="pill ${d.fase === "concluida" ? "pill-ok" : "fase"}">${nomeDaFase(d.fase)}</span></td>
+      <td>${pilula(FASE_DA_DEMANDA[d.fase as FaseDemanda])}</td>
       <td class="num">${dinheiro(d.custo)}</td><td class="num">${compacto(somaDosTokens(d))}</td>
       <td class="num">${String(d.execucoes)}</td><td class="num">${String(d.falhas)}</td><td class="num">${String(d.reprovacoes)}</td>
       <td class="num">${duracao(d.duracaoMs)}</td><td class="num">${d.nota === null ? "—" : numero(d.nota, 1)}</td></tr>`,

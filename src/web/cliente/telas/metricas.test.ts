@@ -427,12 +427,12 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, f
   );
   assert.match(
     html,
-    /<a class="id" href="\/demandas\/I-12">I-12<\/a><\/td>\s*<td>Demanda I-12<\/td>\s*<td class="muted">site<\/td>\s*<td><span class="pill fase">Aprovacao demanda<\/span>/,
+    /<a class="id" href="\/demandas\/I-12">I-12<\/a><\/td>\s*<td>Demanda I-12<\/td>\s*<td class="muted">site<\/td>\s*<td><span class="pill pill-aguarda">Aprovação da demanda<\/span>/,
   );
   assert.match(html, /<td class="num">US\$ 1,00 \*<\/td>/);
   assert.match(html, /<td class="num">4,0<\/td>/);
   assert.match(html, /Busca &#60;b&#62;/);
-  assert.match(html, /<span class="pill pill-ok">Concluida<\/span>/);
+  assert.match(html, /<span class="pill pill-ok">Concluída<\/span>/);
   assert.doesNotMatch(html, /Iterações/);
   assert.equal(
     texto(/<tfoot>(?:(?!<tfoot>)[\s\S])*?<\/tfoot>(?![\s\S]*<tfoot>)/.exec(html)?.[0] ?? ""),
