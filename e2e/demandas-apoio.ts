@@ -1,7 +1,9 @@
 // Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts.
 import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import { abrir } from "../src/persistencia/banco.ts";
+import { guardarBytes } from "../src/persistencia/arquivos.ts";
 import { criarDemanda } from "../src/persistencia/demandas.ts";
+import { gravarAnexos } from "../src/persistencia/evidencia_demanda.ts";
 
 const em = "2026-10-11T12:00:00.000Z";
 
@@ -92,5 +94,71 @@ export function semearDemandas(raiz: string): void {
 export function semearDemandaOciosa(raiz: string): void {
   const banco = abrir(raiz);
   criarDemanda(banco, demanda("I-209", "aprovacao_demanda"));
+  banco.close();
+}
+
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/**
+ * I-210 em encerramento, dependente da I-211 (em execução): R1 com o PR 7 e a nota 4, R2 na sessão de ajustes, o T2
+ * reprovado na revisão, o T5 falho, o T6 global e o print do PR anexado. O encerramento final integrou e a limpeza falhou.
+ */
+export function semearPaginaDaDemanda(raiz: string): void {
+  const banco = abrir(raiz);
+  const { sha256, bytes } = guardarBytes(banco, PNG);
+  const decisao = (ticket_id: number, resultado: string, resto: object) => ({
+    demanda_id: "I-210",
+    ticket_id,
+    decisao_id: ticket_id,
+    resultado,
+    por: "auditor",
+    em,
+    ...resto,
+  });
+  criarDemanda(
+    banco,
+    demanda("I-210", "encerramento", {
+      rodadas: [rodada("I-210", 1, "aprovacao_pull_request"), rodada("I-210", 2, "sessao")],
+      tickets: [
+        ticket("I-210", 1, "implementar", 1, "concluido"),
+        ticket("I-210", 2, "revisar_rodada", 1, "concluido"),
+        ticket("I-210", 3, "encerrar_rodada", 1, "concluido"),
+        ticket("I-210", 4, "implementar", 2, "concluido"),
+        { ...ticket("I-210", 5, "implementar", 2, "falhou"), motivo_falha: "o teste de erro não passou" },
+        { ...ticket("I-210", 6, "planejar", 1, "concluido"), rodada_id: undefined },
+      ],
+      decisoes: [
+        decisao(2, "recusado", { motivo: "falta teste do caminho de erro" }),
+        decisao(3, "aprovado", { nota: 4 }),
+      ],
+      evidencias: [
+        {
+          demanda_id: "I-210",
+          ticket_id: 3,
+          tipo: "pr_aberto",
+          dados: { id: "7", url: "https://exemplo.com/pr/7" },
+          em,
+        },
+      ],
+      encerramento: {
+        demanda_id: "I-210",
+        pr: { numero: 9, url: "https://exemplo.com/pr/9" },
+        branch: "fabriquinha/I-210",
+        base: "main",
+        sha_verificado: "abc123",
+        integracao: { sha: "def456" },
+        limpeza_pendente: ["worktree da rodada 1"],
+        falha: { etapa: "limpeza", motivo: "não consegui apagar a worktree" },
+      },
+    }),
+  );
+  gravarAnexos(banco, { demanda_id: "I-210", ticket_id: 3, tipo: "pr_aberto" }, [
+    { caminho: "print.png", sha256, mime: "image/png", bytes },
+  ]);
+  criarDemanda(banco, demanda("I-211", "execucao"));
+  banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-210', 'I-211')");
   banco.close();
 }

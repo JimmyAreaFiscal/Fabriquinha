@@ -6,7 +6,7 @@ import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarAuditoria } from "./telas/auditoria-montar.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
-import { montarDemandas } from "./telas/demandas-montar.ts";
+import { montarDemanda, montarDemandas } from "./telas/demandas-montar.ts";
 import { montarHeatmap } from "./telas/heatmap-montar.ts";
 import { montarHistorico } from "./telas/historico-montar.ts";
 import { montarInicio } from "./telas/inicio-montar.ts";
@@ -36,6 +36,7 @@ const MONTAR: Record<Pagina, Montar> = {
   simulacao: montarSimulacao,
   sdlc: montarSdlc,
   demandas: montarDemandas,
+  demanda: montarDemanda,
 };
 
 const cabeca = elemento("[data-navegacao]", HTMLElement);

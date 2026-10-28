@@ -1,7 +1,14 @@
 // Quadro de demandas (comparacao-sdlc §9.1) como função pura que devolve HTML: o trabalho global ativo e um cartão por
 // demanda, com as rodadas, o que espera o Auditor e o que bloqueia. O texto que vem do servidor passa por `escapar`.
 import type { EtapaTicket, FaseDemanda, FaseRodada } from "../../../dominio/primitivos.ts";
-import { escapar, FASE_DA_DEMANDA, FASE_DA_RODADA } from "../render.ts";
+import {
+  caminhoDaDemanda,
+  escapar,
+  FASE_DA_DEMANDA,
+  FASE_DA_RODADA,
+  PILULA_DO_STATUS,
+  rotuloDoStatus,
+} from "../render.ts";
 
 export interface DemandaDoQuadro {
   id: string;
@@ -18,7 +25,7 @@ export interface DadosDoQuadro {
 }
 
 /** A etapa do ticket como o quadro a mostra. */
-const ETAPA_DO_TICKET: Record<EtapaTicket, string> = {
+export const ETAPA_DO_TICKET: Record<EtapaTicket, string> = {
   demanda: "Demanda",
   planejar: "Planejamento",
   implementar: "Implementação",
@@ -30,7 +37,8 @@ const ETAPA_DO_TICKET: Record<EtapaTicket, string> = {
   resolver_conflito: "Resolução de conflito",
 };
 
-const pilula = ([rotulo, classe]: [string, string]): string => `<span class="pill ${classe}">${rotulo}</span>`;
+export const pilula = ([rotulo, classe]: readonly [string, string]): string =>
+  `<span class="pill ${classe}">${rotulo}</span>`;
 
 const rodada = (r: DemandaDoQuadro["rodadas"][number]): string => {
   const pr = r.pr
@@ -59,7 +67,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
     <div>${pilula(FASE_DA_DEMANDA[d.fase])}</div>
     ${d.rodadas.length > 0 ? `<ul class="dm-rodadas">${d.rodadas.map(rodada).join("")}</ul>` : ""}
     ${marcas.length > 0 ? `<div class="cartao-marcas">${marcas.join("")}</div>` : ""}
-    <a class="link dm-abrir" href="/demandas/${encodeURIComponent(d.id)}">abrir a demanda →</a>
+    <a class="link dm-abrir" href="${caminhoDaDemanda(d.id)}">abrir a demanda →</a>
   </article>`;
 }
 
@@ -77,4 +85,152 @@ export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
     <div class="secao-titulo"><h2 id="titulo-demandas">Demandas</h2></div>
     ${demandas.length > 0 ? `<div class="dm-grade">${demandas.map((d) => cartao(d, demandas)).join("")}</div>` : '<p class="muted vazio">Nenhuma demanda em andamento.</p>'}
   </section>`;
+}
+
+// ——— página da demanda (só leitura) ———
+
+type StatusTicket = keyof typeof PILULA_DO_STATUS;
+export interface DadosDaPagina {
+  demanda: { id: string; projeto: string; titulo: string; fase: FaseDemanda };
+  rodadas: { ref: string; titulo: string; fase: FaseRodada }[];
+  tickets: {
+    ref: string;
+    etapa: EtapaTicket;
+    status: StatusTicket;
+    rodada?: string;
+    titulo?: string;
+    instrucao?: string;
+    motivo_falha?: string;
+  }[];
+  decisoes: { ticket: string; resultado: "aprovado" | "recusado"; nota?: number; motivo?: string; por: string }[];
+  evidencias: {
+    tipo: string;
+    rodada?: string;
+    ticket?: string;
+    dados: unknown;
+    anexos: { nome: string; classe: string; link: string }[];
+  }[];
+  encerramento: {
+    passos: { passo: "verificacao" | "pr" | "integracao"; feito: boolean }[];
+    limpeza_pendente: string[];
+    falha?: { etapa: "check_final" | "integracao" | "limpeza"; motivo: string };
+  };
+  dependencias: { demanda_id: string; fase: FaseDemanda }[];
+}
+
+/** O tipo da evidência como a página o mostra; o que não está aqui sai com a chave legível. */
+const TIPO_DA_EVIDENCIA: Record<string, string> = {
+  comportamento: "Comportamento",
+  pr_aberto: "PR aberto",
+  revisao_integral: "Revisão integral",
+  plano: "Plano",
+  execucao_testes: "Testes",
+  matriz_fitness: "Fitness",
+  relatorio_sonar: "SonarQube",
+};
+const tipoDaEvidencia = (tipo: string): string => TIPO_DA_EVIDENCIA[tipo] ?? tipo.replaceAll("_", " ");
+
+const ESTADO_DO_PASSO = {
+  feito: ["Feito", "pill-ok"],
+  pendente: ["Pendente", "pill-neutro"],
+  falhou: ["Falhou", "pill-falha"],
+} as const;
+
+type Pagina = DadosDaPagina;
+
+/** A decisão do ticket: resultado, nota e motivo (CA-11). */
+const decisao = (d: Pagina["decisoes"][number]): string =>
+  `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por)}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
+
+function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): string {
+  const minhas = decisoes.filter((d) => d.ticket === t.ref);
+  return `<li class="dm-ticket">
+    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span></div>
+    ${t.titulo === undefined ? "" : `<p class="dm-texto">${escapar(t.titulo)}</p>`}
+    ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
+    ${t.motivo_falha === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo_falha)}</p>`}
+    ${minhas.length > 0 ? `<ul class="dm-decisoes">${minhas.map(decisao).join("")}</ul>` : ""}
+  </li>`;
+}
+
+const linkExterno = (url: string, texto: string): string =>
+  /^https?:\/\//.test(url)
+    ? `<a class="link" href="${escapar(url)}" target="_blank" rel="noopener">${texto} ↗</a>`
+    : texto;
+
+function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
+  const meus = p.tickets.filter((t) => t.rodada === r.ref);
+  const encerra = meus.findLast((t) => t.etapa === "encerrar_rodada");
+  const nota = p.decisoes.findLast((d) => d.ticket === encerra?.ref && d.resultado === "aprovado")?.nota;
+  const pr = p.evidencias.findLast((e) => e.tipo === "pr_aberto" && e.ticket === encerra?.ref)?.dados as
+    { id: string; url: string } | undefined;
+  return `<section class="bloco dm-rodada" id="${escapar(r.ref)}" aria-labelledby="titulo-${escapar(r.ref)}">
+    <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
+    <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
+    ${meus.length > 0 ? `<ul class="dm-tickets">${meus.map((t) => ticket(t, p.decisoes)).join("")}</ul>` : '<p class="muted vazio">Sem tickets.</p>'}
+  </section>`;
+}
+
+const secao = (id: string, titulo: string, corpo: string): string =>
+  `<section class="bloco" aria-labelledby="${id}"><div class="secao-titulo"><h2 id="${id}">${titulo}</h2></div>${corpo}</section>`;
+
+function evidencia(e: Pagina["evidencias"][number]): string {
+  const dono = e.ticket ?? e.rodada ?? "demanda";
+  const anexos = e.anexos.map(
+    (a) =>
+      `<li><a class="link" href="${escapar(a.link)}" target="_blank" rel="noopener"${a.classe === "imagem" ? ` data-imagem="${escapar(a.nome)}"` : ""}>${escapar(a.nome)}</a></li>`,
+  );
+  return `<li class="dm-evidencia">
+    <div class="dm-linha"><strong>${escapar(tipoDaEvidencia(e.tipo))}</strong> <span class="id">${escapar(dono)}</span></div>
+    ${anexos.length > 0 ? `<ul class="dm-anexos">${anexos.join("")}</ul>` : ""}
+    <details><summary>dados</summary><pre class="dm-dados">${escapar(JSON.stringify(e.dados, null, 2))}</pre></details>
+  </li>`;
+}
+
+/** O encerramento final (CA-12): só com progresso; integração feita e limpeza falha nunca viram "nada integrado". */
+function encerramento({ passos, limpeza_pendente: pendentes, falha }: Pagina["encerramento"]): string {
+  const feito = (nome: string) => passos.find((p) => p.passo === nome)?.feito === true;
+  if (!passos.some((p) => p.feito) && !falha && pendentes.length === 0) return "";
+  const limpezaFalhou = falha?.etapa === "limpeza" || pendentes.length > 0;
+  const estados: [string, keyof typeof ESTADO_DO_PASSO][] = [
+    ["Verificação", feito("verificacao") ? "feito" : falha?.etapa === "check_final" ? "falhou" : "pendente"],
+    ["PR final", feito("pr") ? "feito" : "pendente"],
+    ["Integração", feito("integracao") ? "feito" : falha?.etapa === "integracao" ? "falhou" : "pendente"],
+    ["Limpeza", limpezaFalhou ? "falhou" : feito("integracao") ? "feito" : "pendente"],
+  ];
+  const itens = estados.map(([nome, estado]) => {
+    const motivo =
+      estado === "falhou" && falha && (nome === "Limpeza") === (falha.etapa === "limpeza") ? falha : undefined;
+    const detalhe = [
+      ...(motivo ? [escapar(motivo.motivo)] : []),
+      ...(nome === "Limpeza" && pendentes.length > 0 ? [`pendente: ${pendentes.map(escapar).join(", ")}`] : []),
+    ];
+    return `<li class="dm-passo"><strong>${nome}</strong> ${pilula(ESTADO_DO_PASSO[estado])}${detalhe.length > 0 ? ` <span class="dm-texto">${detalhe.join(" · ")}</span>` : ""}</li>`;
+  });
+  const resumo =
+    feito("integracao") && limpezaFalhou
+      ? '<p class="dm-texto dm-falha">Integração concluída. Limpeza falhou: o código já foi integrado, só a limpeza precisa de atenção.</p>'
+      : "";
+  return secao("titulo-encerramento", "Encerramento final", `${resumo}<ul class="dm-passos">${itens.join("")}</ul>`);
+}
+
+export function pagina(p: DadosDaPagina): string {
+  const { demanda: d } = p;
+  const globais = p.tickets.filter((t) => t.rodada === undefined);
+  return `<a class="link" href="/demandas">← Demandas</a>
+  <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
+    <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
+  ${
+    p.dependencias.length > 0
+      ? secao(
+          "titulo-dependencias",
+          "Dependências",
+          `<ul class="dm-tickets">${p.dependencias.map((x) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(x.demanda_id)}">${escapar(x.demanda_id)}</a> ${pilula(FASE_DA_DEMANDA[x.fase])}</li>`).join("")}</ul>`,
+        )
+      : ""
+  }
+  ${p.rodadas.map((r) => rodadaDaPagina(r, p)).join("")}
+  ${globais.length > 0 ? secao("titulo-globais", "Tickets globais", `<ul class="dm-tickets">${globais.map((t) => ticket(t, p.decisoes)).join("")}</ul>`) : ""}
+  ${p.evidencias.length > 0 ? secao("titulo-evidencias", "Evidências", `<ul class="dm-tickets">${p.evidencias.map(evidencia).join("")}</ul>`) : ""}
+  ${encerramento(p.encerramento)}`;
 }

@@ -16,6 +16,10 @@ export const STATUS_DO_TICKET: Record<Ticket["status"], string> = {
   cancelado: "cancelado",
 };
 
+/** O status do ticket com inicial maiúscula (Em execução), para a página e o quadro das demandas. */
+export const rotuloDoStatus = (status: Ticket["status"]): string =>
+  STATUS_DO_TICKET[status].charAt(0).toUpperCase() + STATUS_DO_TICKET[status].slice(1);
+
 /** A fase da demanda e a da rodada (comparacao-sdlc §2.1) como as telas as mostram, com a cor da pílula. */
 export const FASE_DA_DEMANDA: Record<FaseDemanda, [rotulo: string, pilula: string]> = {
   registro: ["Registro", "pill-neutro"],
@@ -93,6 +97,7 @@ export const rotuloTicket = (id: Id): string => `T-${String(id)}`;
 
 export const caminhoDaIssue = (projeto: string, issue: Id): string =>
   `/projects/${encodeURIComponent(projeto)}/issues/${rotuloIssue(issue)}`;
+export const caminhoDaDemanda = (demanda: string): string => `/demandas/${encodeURIComponent(demanda)}`;
 export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeURIComponent(sessao)}`;
 export const caminhoDaAuditoria = (sessao: string): string => `/audits/${encodeURIComponent(sessao)}`;
 
@@ -162,7 +167,7 @@ export function ha(desde: string, agora: Date): string {
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio"]],
   ["/projects", "Projetos", ["projeto", "heatmap", "issue", "sdlc"]],
-  ["/demandas", "Demandas", ["demandas"]],
+  ["/demandas", "Demandas", ["demandas", "demanda"]],
   ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico", "auditoria"]],
@@ -255,6 +260,7 @@ export const TITULOS: Record<Pagina, string> = {
   simulacao: "Simulação",
   sdlc: "Configuração SDLC",
   demandas: "Demandas",
+  demanda: "Demanda",
 };
 
 /** Página ainda sem conteúdo: só o cabeçalho com o título. */

@@ -18,6 +18,8 @@ import {
   NAO_ENCONTRADA,
   navegacao,
   caminhoDaAuditoria,
+  caminhoDaDemanda,
+  rotuloDoStatus,
   mesPorExtenso,
   TITULOS,
   NOME_DA_ETAPA,
@@ -101,6 +103,10 @@ test("navegação fixa marca a página atual e mostra quem aguarda só quando h�
   assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
   assert.match(navegacao("demandas", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
   assert.equal(TITULOS.demandas, "Demandas");
+  assert.match(navegacao("demanda", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
+  assert.equal(TITULOS.demanda, "Demanda");
+  assert.equal(caminhoDaDemanda("I-206"), "/demandas/I-206");
+  assert.equal(rotuloDoStatus("em_execucao"), "Em execução");
   assert.match(navegacao("sdlc", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.equal(TITULOS.sdlc, "Configuração SDLC");
   assert.match(navegacao("heatmap", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
