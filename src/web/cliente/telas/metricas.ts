@@ -153,7 +153,7 @@ const METRICAS: Record<Metrica, DefMetrica> = {
     formato: qtd,
     eixo: qtd,
     par: { valor: (m) => m.demandas.registradas, nome: "registradas" },
-    extra: (m) => ` <small>de ${String(m.demandas.registradas)} registradas</small>`,
+    extra: (m) => ` <small>de ${qtd(m.demandas.registradas)} registradas</small>`,
     inteiro: true,
   },
   tickets: {
@@ -162,7 +162,7 @@ const METRICAS: Record<Metrica, DefMetrica> = {
     formato: qtd,
     eixo: qtd,
     par: { valor: (m) => m.tickets.criados, nome: "criados" },
-    extra: (m) => ` <small>de ${String(m.tickets.criados)} criados</small>`,
+    extra: (m) => ` <small>de ${qtd(m.tickets.criados)} criados</small>`,
     inteiro: true,
   },
   prs: {
@@ -171,7 +171,7 @@ const METRICAS: Record<Metrica, DefMetrica> = {
     formato: qtd,
     eixo: qtd,
     par: { valor: (m) => m.prs.abertos, nome: "abertos" },
-    extra: (m) => ` <small>de ${String(m.prs.abertos)} abertos</small>`,
+    extra: (m) => ` <small>de ${qtd(m.prs.abertos)} abertos</small>`,
     inteiro: true,
   },
   nota: {
@@ -190,7 +190,7 @@ const METRICAS: Record<Metrica, DefMetrica> = {
     formato: qtd,
     eixo: qtd,
     par: { valor: (m) => m.retrabalho.adicionadas, nome: "linhas adicionadas" },
-    extra: (m) => ` <small>de ${String(m.retrabalho.adicionadas)} adicionadas</small>`,
+    extra: (m) => ` <small>de ${qtd(m.retrabalho.adicionadas)} adicionadas</small>`,
     inteiro: true,
   },
 };

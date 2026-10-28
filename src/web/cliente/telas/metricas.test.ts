@@ -194,6 +194,22 @@ test("cards: valor, média dos anteriores e variação; mês sem nota mostra —
     ESTADO,
   );
   assert.match(texto(meia), /Demandas concluídas 2 de 3 registradas média 1,5 ▲ 33%/);
+  // As legendas "de N" com o separador de milhar, como os outros números.
+  const milhares = paginaDeMetricas(
+    {
+      ...DADOS,
+      meses: [
+        mes("2026-10", 1, 24_929, null, {
+          retrabalho: { adicionadas: 289_424, alteradas: 24_929, porHumanos: 0 },
+        }),
+      ],
+    },
+    { ...ESTADO, de: "2026-10" },
+  );
+  assert.match(
+    texto(milhares),
+    /24\.929 de 24\.930 registradas .* 24\.929 de 24\.931 criados .* 24\.929 de 24\.930 abertos .* 24\.929 de 289\.424 adicionadas/,
+  );
 });
 
 test("evolução: colunas no tom de cada mês, linha da média até o foco, valor do foco e o eixo de cada métrica", () => {
