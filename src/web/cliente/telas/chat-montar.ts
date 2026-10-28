@@ -3,19 +3,24 @@
 // registro, o Responder e retomar, a consulta e o contexto da issue ao lado. O HTML vem de chat.ts; os testes de
 // ponta a ponta (e2e/chat.spec.ts) o exercitam no navegador.
 import type { ThreadMessageLike } from "@assistant-ui/react";
+import type { Execucao } from "../../../dominio/agregado.ts";
+import type { ExecucaoSessao } from "../../../dominio/sessoes.ts";
 import type { Dialogo } from "../../../execucao/gerente.ts";
 import type { InfoSessao } from "../../../execucao/sessoes.ts";
-import type { CabecalhoDoChat, DadosDoChat } from "../../rotas/chat.ts";
+import type { CabecalhoDoChat } from "../../rotas/chat.ts";
 import type { PaginaDaIssue } from "../../rotas/issue.ts";
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
 import { caminhoDaSessao, escapar, modeloDoSeletor } from "../render.ts";
 import {
   barraDeEstado,
+  type Cabecalho,
   chaveDa,
   comResultado,
   contextoDaIssue,
   conversa,
+  daDemanda,
+  type Dados,
   edicaoDoRegistro,
   emFluxo,
   envio,
@@ -74,7 +79,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   const aoLado = parte("[data-lateral]");
   const contexto = parte("[data-contexto]");
 
-  let cabecalho: CabecalhoDoChat | undefined;
+  let cabecalho: Cabecalho | undefined;
   let modelo = "";
   let modo: ModoEnvio = "steer";
   let formaDoLado = "";
@@ -102,6 +107,11 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
       anexos: etiquetasDeAnexo(anexos),
       propostas: propostasDoChat(cabecalho),
       aoEnviar: enviar,
+      ...(daDemanda(cabecalho) && {
+        aoVazio: () => {
+          avisar("escreva a mensagem");
+        },
+      }),
     });
     // As etiquetas do formulário de retomada (HTML pronto de chat.ts) ficam por nossa conta; as do compositor, do React.
     const daRetomada = areaDeEnvio.querySelector<HTMLElement>("[data-retomar] [data-anexos]");
@@ -141,7 +151,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   /** Na falha, o seletor de modelo do ticket, quando a issue e os modelos do pi chegam; guarda o valor de partida. */
   function desenharSeletor(): void {
     const lugar = areaDeEnvio.querySelector<HTMLElement>("[data-seletor-modelo]");
-    if (!lugar || !pagina || !cabecalho) return;
+    if (!lugar || !pagina || !cabecalho || daDemanda(cabecalho)) return;
     const p = pagina;
     const { ticket } = cabecalho;
     void modelosDoPi().then((lista) => {
@@ -152,26 +162,27 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   }
 
   /** Relê a página da issue para o contexto ao lado; a resposta de uma leitura antiga não sobrescreve a nova. */
-  function lerContexto(c: CabecalhoDoChat): void {
+  function lerContexto(c: Cabecalho): void {
+    if (daDemanda(c)) return; // a sessão da demanda não tem página de issue ao lado nem seletor de modelo
     const vez = ++leituras;
     api<PaginaDaIssue>(`/api/issues/${String(c.issue.id)}`, { signal })
       .then((lida) => {
         if (vez !== leituras || !cabecalho) return;
         pagina = lida;
-        contexto.innerHTML = contextoDaIssue(lida, cabecalho.sessao);
+        contexto.innerHTML = contextoDaIssue(lida, c.sessao);
         if (!areaDeEnvio.querySelector("[data-seletor-modelo] select:not([disabled])")) desenharSeletor();
       })
       .catch(mostrarErro);
   }
 
   /** Barra, conversa com o envio e coluna da direita; a coluna só muda quando a forma muda, para não apagar o que se digita. */
-  function aplicar(c: CabecalhoDoChat): void {
+  function aplicar(c: Cabecalho): void {
     cabecalho = c;
     // Uma execução nova com o modelo fixado (C20) troca o da barra já no início, antes da primeira resposta.
-    if (c.execucoes.at(-1)?.modelo) modelo = modeloDe(c, []);
+    if (daDemanda(c) ? c.sessao.modelo : c.execucoes.at(-1)?.modelo) modelo = modeloDe(c, []);
     barra.innerHTML = barraDeEstado(c, modelo);
     const { sessao: s } = c;
-    const doLado = JSON.stringify([s.motivo, s.etapa, c.issue]);
+    const doLado = JSON.stringify([s.motivo, daDemanda(c) ? c.etapa : c.sessao.etapa, daDemanda(c) ? null : c.issue]);
     const sujo = aoLado.querySelector("[data-sujo]") !== null;
     if (doLado !== formaDoLado && !sujo) {
       formaDoLado = doLado;
@@ -179,8 +190,8 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     }
     if (s.estado !== "rodando") fecharFluxo();
     linhasNovas([
-      ...c.execucoes.flatMap((e, i) => linhasDaExecucao(e, i)),
-      ...c.evidencias.map(linhasDaEvidencia),
+      ...(c.execucoes as (Execucao | ExecucaoSessao)[]).flatMap((e, i) => linhasDaExecucao(e, i)),
+      ...(daDemanda(c) ? [] : c.evidencias.map(linhasDaEvidencia)),
       ...erroDaFalha(c),
       ...s.dialogos.map(linhaDoDialogo),
     ]);
@@ -190,7 +201,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     lerContexto(c);
   }
 
-  function retrato(dados: DadosDoChat): void {
+  function retrato(dados: Dados): void {
     vistas.clear();
     fecharFluxo();
     formaDoLado = "";
@@ -240,8 +251,8 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
   const fonte = new EventSource(`/api/sessoes/${encodeURIComponent(sessao)}/eventos`);
   fonte.onmessage = (mensagemSse) => {
     const evento = JSON.parse(String(mensagemSse.data)) as Evento;
-    if (evento.type === "chat") retrato(evento as Evento & DadosDoChat);
-    else if (evento.type === "estado") aplicar(evento as Evento & CabecalhoDoChat);
+    if (evento.type === "chat") retrato(evento as Evento & Dados);
+    else if (evento.type === "estado") aplicar(evento as Evento & Cabecalho);
     else if (evento.type === "message_end") aoFimDaMensagem(evento);
     else if (evento.type === "message_update") aoFluxo(evento);
     else if (evento.type === "message_start" && (evento.message as MensagemPi).role === "assistant") {
@@ -257,8 +268,10 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     if (fonte.readyState === EventSource.CLOSED) api(`/api/sessoes/${encodeURIComponent(sessao)}`).catch(mostrarErro);
   };
 
-  const issue = () => String(cabecalho?.issue.id);
-  const ticket = () => String(cabecalho?.sessao.ticket);
+  // Registro, consulta, conclusão e retomada são só das issues.
+  const daIssue = () => cabecalho as CabecalhoDoChat | undefined;
+  const issue = () => String(daIssue()?.issue.id);
+  const ticket = () => String(daIssue()?.sessao.ticket);
   const acao = (promessa: Promise<unknown>) => {
     avisar();
     promessa.catch(mostrarErro);
@@ -279,7 +292,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
     } else if (botao.dataset.abortar !== undefined) {
       acao(postar(`/api/sessoes/${encodeURIComponent(sessao)}/abortar`));
     } else if (botao.dataset.concluir !== undefined) {
-      acao(postar(`/api/tickets/${String(cabecalho?.sessao.ticket)}/concluir-sessao`));
+      acao(postar(`/api/tickets/${ticket()}/concluir-sessao`));
     } else if (botao.dataset.cancelar !== undefined) {
       acao(respondeDialogo(String(dialogoAberto), { cancelado: true }));
     } else if (botao.dataset.acao === "aceitar-proposta" || botao.dataset.acao === "recusar-proposta") {
@@ -357,7 +370,7 @@ export function montarChat(main: HTMLElement, params: Parametros, signal: AbortS
         body: JSON.stringify(edicaoDoRegistro({ titulo: "", tipo: "", descricao: "", ...campos })),
       }).then((salva) => {
         delete form.dataset.sujo;
-        if (cabecalho) aplicar({ ...cabecalho, issue: salva });
+        if (cabecalho && !daDemanda(cabecalho)) aplicar({ ...cabecalho, issue: salva });
       });
       acao(salvo);
     }

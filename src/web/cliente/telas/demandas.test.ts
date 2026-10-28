@@ -103,6 +103,26 @@ test("a página vazia traz só o cabeçalho e o link ao quadro, sem seções vaz
   assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|Aprovação d/);
 });
 
+test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
+  const html = pagina(
+    dadosDaPagina({
+      tickets: [
+        { ref: "I-206.T1", etapa: "planejar", status: "em_execucao", elegivel: false, sessao: "s/1" },
+        { ref: "I-206.T2", etapa: "implementar", status: "aberto", elegivel: false },
+      ],
+    }),
+  );
+  const [, t1, t2] = html.split(/(?=<li class="dm-ticket">)/);
+  assert.match(String(t1), /href="\/sessions\/s%2F1">chat →/);
+  assert.doesNotMatch(String(t2), /chat →/);
+  const aberta = pagina(
+    dadosDaPagina({
+      tickets: [{ ref: "I-206.T3", etapa: "sessao_em_aberto", status: "em_execucao", elegivel: false, sessao: "s/3" }],
+    }),
+  );
+  assert.doesNotMatch(aberta, /chat →/);
+});
+
 test("os tickets ficam na rodada ou nos globais, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
   const html = pagina(
     dadosDaPagina({
@@ -115,14 +135,15 @@ test("os tickets ficam na rodada ou nos globais, pelo endereço público, com de
           ref: "I-206.T1",
           etapa: "implementar",
           status: "falhou",
+          elegivel: false,
           rodada: "I-206.R1",
           titulo: "T",
           instrucao: "refaça",
           motivo_falha: "quebrou",
         },
-        { ref: "I-206.T2", etapa: "encerrar_rodada", status: "concluido", rodada: "I-206.R1" },
-        { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", rodada: "I-206.R2" },
-        { ref: "I-206.T4", etapa: "planejar", status: "aberto" },
+        { ref: "I-206.T2", etapa: "encerrar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R1" },
+        { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", elegivel: false, rodada: "I-206.R2" },
+        { ref: "I-206.T4", etapa: "planejar", status: "aberto", elegivel: false },
       ],
       decisoes: [
         { ticket: "I-206.T1", resultado: "recusado", motivo: "falta teste do caminho de erro", por: "agente" },
@@ -136,7 +157,8 @@ test("os tickets ficam na rodada ou nos globais, pelo endereço público, com de
   assert.match(r1 ?? "", /id="I-206\.R1"[\s\S]*I-206\.T1[\s\S]*Implementação[\s\S]*Falhou/);
   assert.match(r1 ?? "", /Motivo da falha:<\/strong> quebrou/);
   assert.match(r1 ?? "", /Instrução:<\/strong> refaça/);
-  assert.match(r1 ?? "", /Recusado<\/strong> por agente: falta teste do caminho de erro/);
+  assert.match(r1 ?? "", /Recusado<\/strong> por Agente: falta teste do caminho de erro/);
+  assert.match(html, /Recusado<\/strong> por Auditor: x/);
   assert.match(r1 ?? "", /nota 4/);
   assert.match(r1 ?? "", /Aprovação do PR/);
   assert.match(r1 ?? "", /href="https:\/\/pr\/7" target="_blank" rel="noopener">PR #7/);
@@ -151,7 +173,9 @@ test("rodada sem ticket e PR com endereço que não é http não viram link", ()
   const html = pagina(
     dadosDaPagina({
       rodadas: [{ ref: "I-206.R1", titulo: "R", fase: "revisao" }],
-      tickets: [{ ref: "I-206.T1", etapa: "encerrar_rodada", status: "concluido", rodada: "I-206.R1" }],
+      tickets: [
+        { ref: "I-206.T1", etapa: "encerrar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R1" },
+      ],
       evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T1", dados: { id: "7", url: "javascript:x" }, anexos: [] }],
     }),
   );
@@ -294,10 +318,13 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   const base = dadosDaPagina();
   const html = pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }] });
   assert.match(html, /<select id="nota-I-206\.R1"/);
+  const reprovacao = html.slice(html.indexOf("Reprovação do PR"));
+  assert.doesNotMatch(reprovacao, /<select/);
+  assert.match(reprovacao, /<textarea id="motivo-I-206\.R1"/);
   const comTicket = pagina({
     ...base,
     rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
-    tickets: [{ ref: "I-206.T1", rodada: "I-206.R1", etapa: "implementar", status: "concluido" }],
+    tickets: [{ ref: "I-206.T1", rodada: "I-206.R1", etapa: "implementar", status: "concluido", elegivel: false }],
   });
   assert.match(comTicket, /<\/ul>\s*<div class="dm-gate"><span class="dm-gate-titulo">Aprovação do PR</);
   assert.match(html, /<option value="5">5<\/option>/);
@@ -315,9 +342,10 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   );
 });
 
-test("a rodada em sessão de ajustes liga à conversa dos ajustes (CA-22)", () => {
+test("a rodada em sessão de ajustes liga à seção da conversa, no mesmo documento (CA-10)", () => {
   const html = pagina({ ...dadosDaPagina(), rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "sessao" }] });
-  assert.match(html, /href="\/api\/demandas\/rodadas\/I-206\.R1\/ajustes" target="_blank" rel="noopener"/);
+  assert.match(html, /<a class="link" href="#ajustes-I-206\.R1">Sessão de ajustes ↓<\/a>/);
+  assert.match(html, /<div id="ajustes-I-206\.R1" data-ajustes="I-206\.R1"><\/div>/);
 });
 
 test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {
@@ -329,9 +357,9 @@ test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {
   assert.doesNotMatch(quadro({ demandas: [d("javascript:x")], trabalho: [] }), /javascript/);
 });
 
-test("o ticket em falha traz a instrução e Reabrir; o aberto traz Executar agora (CA-24 a CA-26)", () => {
-  const com = (status: "falhou" | "aberto" | "concluido") =>
-    pagina({ ...dadosDaPagina(), tickets: [{ ref: "I-206.T3", etapa: "implementar", status }] });
+test("o ticket em falha traz a instrução e Reabrir; o aberto elegível traz Executar agora (CA-17, CA-24 a CA-26)", () => {
+  const com = (status: "falhou" | "aberto" | "concluido", elegivel = true) =>
+    pagina({ ...dadosDaPagina(), tickets: [{ ref: "I-206.T3", etapa: "implementar", status, elegivel }] });
   const falho = com("falhou");
   assert.match(falho, /<textarea id="instrucao-I-206\.T3"/);
   assert.match(falho, /dm-gate dm-gate-perigo"><span class="dm-gate-titulo">Reabrir I-206\.T3</);
@@ -343,6 +371,7 @@ test("o ticket em falha traz a instrução e Reabrir; o aberto traz Executar ago
     com("aberto"),
     /data-acao="executar" data-caminho="\/api\/demandas\/tickets\/I-206\.T3\/executar">Executar agora</,
   );
+  assert.doesNotMatch(com("aberto", false), /data-acao/);
   assert.doesNotMatch(com("concluido"), /data-acao/);
 });
 

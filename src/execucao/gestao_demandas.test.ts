@@ -251,6 +251,26 @@ test("CA-12: sessão já contada em outra demanda vira aviso e não é contada d
   assert.deepEqual({ ...b.prepare("SELECT demanda_id FROM sessao_externa_demanda").get() }, { demanda_id: a });
 });
 
+test("CA-SDLC-24: custos_realizados com rodada_id vira evidência da rodada e não substitui o da demanda", () => {
+  const b = novoBanco();
+  const id = registrar(b);
+  completar(b, id);
+  b.exec(`INSERT INTO rodada VALUES ('${id}', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/${id}-1')`);
+  const entrada = { tipo: "custos_realizados", dados: custos("ext-r1"), rodada_id: 1, arquivos: [] };
+  gestao.submeterEvidencia(b, id, entrada as gestao.EntradaEvidencia, autor, ctx);
+  assert.deepEqual(
+    evidencias(b, id, "custos_realizados").map((e) => e.rodada_id),
+    [undefined, 1],
+  );
+  assert.deepEqual(
+    b
+      .prepare("SELECT sessao FROM sessao_externa_demanda ORDER BY sessao")
+      .all()
+      .map((l) => l.sessao),
+    ["ext-r1", "ext1"],
+  );
+});
+
 test("CA-13: envio sem as obrigatórias lista as faltantes", () => {
   const b = novoBanco();
   const id = registrar(b);

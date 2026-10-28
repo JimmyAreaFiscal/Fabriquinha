@@ -3,6 +3,7 @@
 import type { EtapaTicket, FaseDemanda, FaseRodada } from "../../../dominio/primitivos.ts";
 import {
   caminhoDaDemanda,
+  caminhoDaSessao,
   escapar,
   FASE_DA_DEMANDA,
   FASE_DA_RODADA,
@@ -101,6 +102,8 @@ export interface DadosDaPagina {
     ref: string;
     etapa: EtapaTicket;
     status: StatusTicket;
+    elegivel: boolean;
+    sessao?: string;
     rodada?: string;
     titulo?: string;
     instrucao?: string;
@@ -145,16 +148,16 @@ type Pagina = DadosDaPagina;
 
 /** A decisão do ticket: resultado, nota e motivo (CA-11). */
 const decisao = (d: Pagina["decisoes"][number]): string =>
-  `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por)}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
+  `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por.charAt(0).toUpperCase() + d.por.slice(1))}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
 
 /** O bloco delimitado de um gate ou formulário de ação: título em caixa alta e borda na cor do estado. */
-const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
+export const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
   `<div class="dm-gate${perigo ? " dm-gate-perigo" : ""}"${extra}><span class="dm-gate-titulo">${titulo}</span>${corpo}</div>`;
 
-/** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o que está aberto. */
-function acaoDoTicket({ ref, status }: Pagina["tickets"][number]): string {
+/** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o aberto e elegível. */
+function acaoDoTicket({ ref, status, elegivel }: Pagina["tickets"][number]): string {
   const base = `/api/demandas/tickets/${escapar(ref)}`;
-  if (status === "aberto")
+  if (status === "aberto" && elegivel)
     return `<div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="executar" data-caminho="${base}/executar">Executar agora</button></div>`;
   if (status !== "falhou") return "";
   const campo = `instrucao-${escapar(ref)}`;
@@ -168,7 +171,7 @@ function acaoDoTicket({ ref, status }: Pagina["tickets"][number]): string {
 function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): string {
   const minhas = decisoes.filter((d) => d.ticket === t.ref);
   return `<li class="dm-ticket">
-    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span></div>
+    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>${t.sessao === undefined || t.etapa === "sessao_em_aberto" ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`}</div>
     ${t.titulo === undefined ? "" : `<p class="dm-texto">${escapar(t.titulo)}</p>`}
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
     ${t.motivo_falha === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo_falha)}</p>`}
@@ -183,13 +186,18 @@ function gatePR(ref: string): string {
   const motivo = `motivo-${escapar(ref)}`;
   const nota = `nota-${escapar(ref)}`;
   const notas = [1, 2, 3, 4, 5].map((n) => `<option value="${String(n)}">${String(n)}</option>`).join("");
-  return blocoDeAcao(
+  const aprovar = blocoDeAcao(
     "Aprovação do PR",
-    `<label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
-    <label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select>
-    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="false" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>
-    <span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>`,
+    `<label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select><span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
+    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>`,
   );
+  const reprovar = blocoDeAcao(
+    "Reprovação do PR",
+    `<label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
+    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="false" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button></div>`,
+    true,
+  );
+  return aprovar + reprovar;
 }
 
 function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
@@ -202,7 +210,7 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
     <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
     ${meus.length > 0 ? `<ul class="dm-tickets">${meus.map((t) => ticket(t, p.decisoes)).join("")}</ul>` : '<p class="muted vazio">Sem tickets.</p>'}
-    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="/api/demandas/rodadas/${escapar(r.ref)}/ajustes" target="_blank" rel="noopener">Sessão de ajustes de ${escapar(r.ref)}</a></p>` : ""}
+    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="#ajustes-${escapar(r.ref)}">Sessão de ajustes ↓</a></p><div id="ajustes-${escapar(r.ref)}" data-ajustes="${escapar(r.ref)}"></div>` : ""}
     ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
   </section>`;
 }

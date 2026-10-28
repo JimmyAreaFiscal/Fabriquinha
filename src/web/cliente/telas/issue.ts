@@ -189,17 +189,6 @@ function tickets(p: PaginaDaIssue): string {
 
 // ——— coluna da direita ———
 
-function executarAgora(p: PaginaDaIssue): string {
-  if (!p.executar) return "";
-  const { ticket, ocupada } = p.executar;
-  const id = String(ticket.id);
-  return `<section class="painel-acao">
-    <div class="painel-linha"><span class="rotulo">Executar agora</span><span class="muted"><span class="mono">${rotuloTicket(ticket.id)}</span> · ${escapar(ticket.titulo)} · ${etapa(ticket.etapa)}</span>
-      <button type="button" class="btn btn-primario" data-acao="executar" data-executar="${id}"${ocupada ? ` disabled title="${escapar(ocupada)}"` : ""}>Executar agora</button></div>
-    ${ocupada ? `<p class="bloqueio">${escapar(ocupada)}</p>` : ""}
-  </section>`;
-}
-
 /**
  * Os avisos do encerramento (F5 §5.3): logo depois de encerrar, o que falhou na limpeza ou na `main` local, com a
  * saída do git (`avisos`, da resposta do encerramento); depois, o comando da limpeza a rodar, lido do disco.
@@ -560,7 +549,6 @@ export const PAINEIS: ((p: PaginaDaIssue, extras: Extras) => string)[] = [
   gateDoRegistro,
   gateDoDesenho,
   gateDoPR,
-  executarAgora,
   limpeza,
 ];
 

@@ -18,7 +18,15 @@ interface Evidencia {
 }
 interface Pagina {
   rodadas: unknown[];
-  tickets: { ref: string; etapa: string; titulo?: string; motivo_falha?: string; instrucao?: string }[];
+  tickets: {
+    ref: string;
+    etapa: string;
+    sessao?: string;
+    titulo?: string;
+    motivo_falha?: string;
+    instrucao?: string;
+    elegivel: boolean;
+  }[];
   decisoes: { ticket: string; resultado: string; motivo?: string; nota?: number }[];
   evidencias: Evidencia[];
   encerramento: { passos: { feito: boolean }[] };
@@ -114,6 +122,67 @@ test("CA-6: a página traz cada ticket com o endereço público e a etapa", asyn
     ],
   );
   assert.equal(tickets[2]?.titulo, "implementa");
+});
+
+test("o ticket é elegível só se a seleção o escolheria agora", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const elegiveis = async (id: string) =>
+    (await pedir(`/api/demandas/${id}`)).json<Pagina>().tickets.map((t) => [t.ref, t.elegivel]);
+  // Fase sem seleção: nenhum ticket da I-206 (R2 aguarda o PR).
+  assert.ok((await elegiveis("I-206")).every(([, e]) => e === false));
+  // Dois abertos na mesma rodada: só o de menor id.
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    rodadas: ag.rodadas.map((r) => (r.rodada_id === 2 ? { ...r, fase: "desenvolvimento" } : r)),
+    tickets: ag.tickets.flatMap((t) =>
+      t.ticket_id === 3
+        ? [
+            { ...t, status: "aberto" as const },
+            { ...t, ticket_id: 6, status: "aberto" as const },
+          ]
+        : [t],
+    ),
+  }));
+  const execucao = await elegiveis("I-206");
+  assert.deepEqual(
+    execucao.filter(([, e]) => e).map(([r]) => r),
+    ["I-206.T3"],
+  );
+  assert.deepEqual(
+    execucao.find(([r]) => r === "I-206.T6"),
+    ["I-206.T6", false],
+  );
+  // Predecessora pendente bloqueia o planejamento; concluída, libera.
+  comDemanda(banco, "I-207", (ag) => ({
+    ...ag,
+    tickets: [
+      {
+        demanda_id: "I-207",
+        ticket_id: 1,
+        etapa: "planejar",
+        status: "aberto",
+        status_alterado_em: "2026-01-01T00:00:00.000Z",
+        devolucoes: 0,
+      },
+    ],
+  }));
+  assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", false]]);
+  banco.exec("UPDATE demanda SET fase = 'concluida' WHERE id = 'I-206'");
+  assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", true]]);
+});
+
+test("CA-16 e CA-17: a página traz a sessão mais recente só nos tickets que têm sessão", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const nova = banco.prepare(
+    "INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-206', 3, 'autonomo', 'c')",
+  );
+  nova.run("s-antiga");
+  nova.run("s-nova");
+  const { tickets } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(
+    tickets.map((t) => t.sessao),
+    [undefined, undefined, "s-nova", undefined, undefined],
+  );
 });
 
 test("a página traz o motivo da falha e a instrução do ticket", async () => {

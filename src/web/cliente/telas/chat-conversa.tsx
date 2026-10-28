@@ -29,6 +29,8 @@ export interface PropsDaConversa {
   propostas?: string;
   /** Envia o texto do compositor; se falhar, o texto volta ao campo. */
   aoEnviar: (texto: string) => Promise<void>;
+  /** Chamado quando o Auditor tenta enviar o campo vazio ou só com espaços; sem ele, o envio vazio segue calado (issues). */
+  aoVazio?: () => void;
 }
 
 const html = (h: string) => ({ __html: h });
@@ -98,7 +100,7 @@ function DaMensagem({ papel }: Readonly<{ papel: keyof typeof PAPEIS }>) {
   return <Mensagem />;
 }
 
-function Conversa({ mensagens, envio, anexos, propostas, aoEnviar }: Readonly<PropsDaConversa>) {
+function Conversa({ mensagens, envio, anexos, propostas, aoEnviar, aoVazio }: Readonly<PropsDaConversa>) {
   // ponytail: sem `isRunning`: o assistant-ui bloqueia o Enter enquanto roda, e o Auditor redireciona o agente rodando.
   const runtime = useExternalStoreRuntime({
     messages: mensagens,
@@ -127,7 +129,17 @@ function Conversa({ mensagens, envio, anexos, propostas, aoEnviar }: Readonly<Pr
           {"html" in envio ? (
             <div className="envio-fixo" dangerouslySetInnerHTML={html(envio.html)} />
           ) : (
-            <ComposerPrimitive.Root className="compositor" data-envio>
+            <ComposerPrimitive.Root
+              className="compositor"
+              data-envio
+              onSubmit={() => {
+                if (aoVazio && !runtime.thread.composer.getState().text.trim()) aoVazio();
+              }}
+              onKeyDown={(e) => {
+                if (aoVazio && e.key === "Enter" && !e.shiftKey && !runtime.thread.composer.getState().text.trim())
+                  aoVazio();
+              }}
+            >
               <div className="anexos" data-anexos hidden={!anexos} dangerouslySetInnerHTML={html(anexos)} />
               <ComposerPrimitive.Input name="texto" rows={2} aria-label="Mensagem" placeholder={envio.placeholder} />
               <div className="linha-1" dangerouslySetInnerHTML={html(envio.linha)} />

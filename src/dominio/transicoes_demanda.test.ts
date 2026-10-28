@@ -124,6 +124,14 @@ test("CA-4: o Auditor aprova e a demanda vai a planejamento", () => {
     em: t1,
   });
   assert.equal(ag.tickets[0]?.status, "concluido");
+  assert.deepEqual(ag.tickets[1], {
+    demanda_id: "I-1",
+    ticket_id: 2,
+    etapa: "planejar",
+    status: "aberto",
+    status_alterado_em: t1,
+    devolucoes: 0,
+  });
   assert.equal(env.demanda.fase, "aprovacao_demanda");
 });
 
@@ -211,17 +219,7 @@ const emPlanejamento = (): AgregadoDemanda => {
   });
   return {
     ...aprovada,
-    tickets: [
-      ...aprovada.tickets,
-      {
-        demanda_id: "I-1",
-        ticket_id: 2,
-        etapa: "planejar",
-        status: "em_execucao",
-        status_alterado_em: t1,
-        devolucoes: 0,
-      },
-    ],
+    tickets: aprovada.tickets.map((t) => (t.etapa === "planejar" ? { ...t, status: "em_execucao" as const } : t)),
   };
 };
 const submetido = () => submeterPlano(emPlanejamento(), planoV(), agente, { agora: t2 });

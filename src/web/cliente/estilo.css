@@ -4466,3 +4466,43 @@ svg.barras :not(.hit) {
     height: 70vh;
   }
 }
+
+/* Demandas: a conversa da sessão de ajustes; sem rolagem horizontal em telas estreitas. */
+.dm-conversa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.dm-msg {
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow-wrap: anywhere;
+}
+.dm-msg > :first-child {
+  margin-top: 0;
+}
+.dm-msg > :last-child {
+  margin-bottom: 0;
+}
+.dm-msg pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.dm-msg-auditor {
+  align-self: flex-end;
+  border-color: var(--accent);
+}
+.dm-msg-agente {
+  align-self: flex-start;
+  background: var(--surface);
+}
+.dm-msg-autor {
+  display: block;
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}

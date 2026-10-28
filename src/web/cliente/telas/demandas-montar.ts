@@ -3,6 +3,7 @@
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, avisar, ErroDaApi, irPara, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
+import { acompanharAjustes, agirNaSessao } from "./demandas-acoes-montar.ts";
 import { type DadosDaPagina, type DadosDoQuadro, pagina, quadro } from "./demandas.ts";
 
 export async function montarDemandas(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
@@ -16,7 +17,11 @@ const NAO_ENCONTRADA =
   '<div class="cabeca-pagina"><h1>Demanda não encontrada</h1></div><p class="muted">Esta demanda não existe. <a class="link" href="/demandas">Ir para as demandas</a></p>';
 
 /** Lê a demanda e redesenha a página com o que a API devolve; o 404 vira a página de não encontrada. */
+// Uma recarga redesenha a página: fecha o acompanhamento (releitura e EventSource) das seções da desenhada antes.
+const acompanhamentos = new WeakMap<HTMLElement, AbortController>();
+
 async function carregar(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<boolean> {
+  acompanhamentos.get(main)?.abort();
   let dados: DadosDaPagina;
   try {
     dados = await api<DadosDaPagina>(`/api/demandas/${encodeURIComponent(params.demanda ?? "")}`, { signal });
@@ -25,7 +30,12 @@ async function carregar(main: HTMLElement, params: Parametros, signal: AbortSign
     main.innerHTML = NAO_ENCONTRADA;
     return false;
   }
+  const acompanhamento = new AbortController();
+  acompanhamentos.set(main, acompanhamento);
+  const fim = AbortSignal.any([signal, acompanhamento.signal]);
   main.innerHTML = pagina(dados);
+  for (const secao of main.querySelectorAll<HTMLElement>("[data-ajustes]"))
+    acompanharAjustes(secao, fim).catch(mostrarErro);
   return true;
 }
 
@@ -36,6 +46,11 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
     "click",
     (evento) => {
       const alvo = evento.target instanceof Element ? evento.target : null;
+      const ajuste = alvo?.closest<HTMLButtonElement>("button[data-ajuste]");
+      if (ajuste) {
+        void agirNaSessao(ajuste, signal, () => carregar(main, params, signal));
+        return;
+      }
       const demanda = alvo?.closest<HTMLButtonElement>("button[data-demanda]");
       if (demanda) {
         void agirNaDemanda(demanda, main);

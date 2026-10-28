@@ -20,6 +20,8 @@ export interface Custo {
   incompleto: boolean;
 }
 
+export type CustoExterno = Custo & { sessoes: number };
+
 export interface UsoDoModelo {
   provedor: string;
   modelo: string;
@@ -54,11 +56,16 @@ export interface Escopo extends Contagens {
 
 export interface MetricasDaDemanda {
   total: Escopo;
-  rodadas: (Escopo & { rodadaId: number; conformidade: Conformidade | null })[];
+  rodadas: (Escopo & { rodadaId: number; conformidade: Conformidade | null; custoExterno: CustoExterno })[];
   semRodada: Escopo;
   /** Custo das sessões externas de `custos_realizados` (e quantas são), fora do interno. */
-  custoExterno: Custo & { sessoes: number };
+  custoExterno: CustoExterno;
 }
+
+const custoExterno = (linhas: { ferramenta: string; sessao: string; custo: number | null }[]): CustoExterno => ({
+  ...somarCustos(linhas.map((l) => l.custo)),
+  sessoes: new Set(linhas.map((l) => `${l.ferramenta}\0${l.sessao}`)).size,
+});
 
 export const somarCustos = (custos: (number | null)[]): Custo => ({
   conhecido: custos.reduce<number>((s, c) => s + (c ?? 0), 0),
@@ -125,11 +132,9 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
       rodadaId,
       ...escopo((l) => l.rodadaId === rodadaId),
       conformidade: conformidadeDaRodada(banco, demandaId, rodadaId),
+      custoExterno: custoExterno(externas.filter((l) => l.rodadaId === rodadaId)),
     })),
     semRodada: escopo((l) => l.rodadaId === null),
-    custoExterno: {
-      ...somarCustos(externas.map((l) => l.custo)),
-      sessoes: new Set(externas.map((l) => `${l.ferramenta}\0${l.sessao}`)).size,
-    },
+    custoExterno: custoExterno(externas),
   };
 }

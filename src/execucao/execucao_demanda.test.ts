@@ -10,6 +10,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
+import { assinar } from "./gerente.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
@@ -270,6 +271,18 @@ test("CA-7: devolução e reabertura levam o motivo ao prompt", async () => {
   assert.match(reabertura ?? "", /## Reabertura[\s\S]*Motivo: faltou X/);
 });
 
+test("a opção mensagem é o prompt da retomada, sem remontar o contexto", async () => {
+  const { banco, sessoes, registro } = await cenario();
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1, mensagem: "segue assim" }).fim;
+  const prompts = registro()
+    .filter((r) => r.evento === "prompt")
+    .map((r) => r.mensagem);
+  assert.equal(prompts[1], "segue assim");
+  assert.equal(sessoes(1).sessoes.length, 1);
+  assert.equal(sessoes(1).execucoes.length, 2);
+});
+
 test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e custo", async () => {
   const { banco, sessoes, c } = await cenario();
   const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
@@ -376,6 +389,33 @@ test("CA-8: interromper manda SIGTERM ao grupo do pi e a execução falha como i
   assert.notEqual(e?.fim, null);
   assert.equal(e?.falha, true);
   assert.equal(e.erro, "interrompida pelo Auditor");
+});
+
+test("o ouvinte da sessão recebe `estado` depois do fim gravado, no fim normal e na interrupção órfã", async () => {
+  const { banco, sessoes } = await cenario();
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const sessao = sessoes(1).sessoes[0]?.id ?? "";
+  let fimNoUltimoEstado: string | null | undefined = undefined;
+  const parar = assinar(sessao, (e) => {
+    if (e.type === "estado") fimNoUltimoEstado = sessoes(1).execucoes[0]?.fim;
+  });
+  await fim;
+  assert.ok(fimNoUltimoEstado);
+  parar();
+  // Órfã: aberta sem condutor, a interrupção avisa depois de encerrar.
+  const orfa = await cenario();
+  comSessoesDoTicket(orfa.banco, ref(2), (estado) => {
+    const s = { ...ref(2), id: "s-aviso", modo: "autonomo" as const, conversa_referencia: "s-aviso" };
+    const sessoesNovas = criarSessao(estado.sessoes, s);
+    const execucao = { id: "e-aviso", sessao_id: "s-aviso", inicio: em, falha: false };
+    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+  });
+  let aberta: boolean | undefined;
+  assinar("s-aviso", (e) => {
+    if (e.type === "estado") aberta = orfa.sessoes(2).execucoes[0]?.fim == null;
+  });
+  interromperExecucaoDemanda(orfa.banco, ref(2));
+  assert.equal(aberta, false);
 });
 
 test("CA-8: interromper durante a preparação da worktree encerra interrompida e o pi recebe o término ao subir", async () => {

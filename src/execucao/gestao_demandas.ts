@@ -42,6 +42,7 @@ const Anexo = z.object({
 const EntradaEvidencia = z.object({
   tipo: TipoEvidenciaDemanda,
   dados: z.unknown(),
+  rodada_id: z.number().int().positive().optional(),
   arquivos: z.array(Anexo).default([]),
 });
 export type EntradaEvidencia = z.input<typeof EntradaEvidencia>;
@@ -211,7 +212,7 @@ export const submeterEvidencia = (
   ctx: ContextoDemanda,
 ): { demanda: AgregadoDemanda; avisos: string[] } =>
   traduzir(() => {
-    const { tipo, dados, arquivos } = EntradaEvidencia.parse(entrada);
+    const { tipo, dados, arquivos, rodada_id } = EntradaEvidencia.parse(entrada);
     const schema = tipo === "custos_realizados" ? schemaDeEtapa(tipo) : schemaDe(tipo);
     const lidos = schema.dados.safeParse(dados);
     if (!lidos.success) {
@@ -219,16 +220,18 @@ export const submeterEvidencia = (
     }
     conferirAnexos(tipo, schema.arquivos, arquivos);
     const submeter = (ag: AgregadoDemanda) =>
-      submeterEvidenciaDemanda(ag, { tipo, dados: lidos.data as EntradaEvidenciaDemanda["dados"] }, autor, ctx.agora);
+      submeterEvidenciaDemanda(
+        ag,
+        { tipo, rodada_id, dados: lidos.data as EntradaEvidenciaDemanda["dados"] },
+        autor,
+        ctx.agora,
+      );
     submeter(carregarDemanda(banco, id)); // recusa antes de guardar qualquer byte
     const guardados = arquivos.map((a) => ({ caminho: a.nome, mime: a.mime, ...guardarBytes(banco, a.conteudo) }));
     let avisos: string[] = [];
     const demanda = comDemanda(banco, id, submeter, () => {
-      gravarAnexos(banco, { demanda_id: id, tipo }, guardados);
-      if (tipo === "custos_realizados") {
-        const { sessoes } = lidos.data as { sessoes: { ferramenta: string; sessao: string }[] };
-        ({ avisos } = registrarSessoesExternas(banco, id, sessoes));
-      }
+      gravarAnexos(banco, { demanda_id: id, rodada_id, tipo }, guardados);
+      if (tipo === "custos_realizados") ({ avisos } = registrarSessoesExternas(banco, id));
     });
     return { demanda, avisos };
   });

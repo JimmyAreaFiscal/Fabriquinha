@@ -63,6 +63,8 @@ interface TicketSpec {
   rodada?: number;
   status?: string;
   id?: number;
+  instrucao?: string;
+  devolucoes?: number;
 }
 interface DemandaSpec {
   fase?: string;
@@ -135,7 +137,8 @@ function demanda(banco: DatabaseSync, n: number, { fase = "execucao", rodadas = 
       etapa: t.etapa,
       status: t.status ?? "aberto",
       status_alterado_em: em,
-      devolucoes: 0,
+      devolucoes: t.devolucoes ?? 0,
+      ...(t.instrucao !== undefined && { instrucao: t.instrucao }),
       ...(t.rodada !== undefined && { rodada_id: t.rodada }),
     })),
     dependencias_ticket: [],
@@ -176,6 +179,23 @@ test("CA-1: o ciclo reserva o implementar elegível e cria a execução aberta",
   demanda(banco, 2, { rodadas: ["desenvolvimento"], tickets: [implementar(1)] });
   await Promise.all(despacharDemandas(banco, config, deps));
   assert.deepEqual([status(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
+});
+
+test("a instrução do ticket aberto vai à execução: devolução técnica (D05) ou reabertura do Auditor", async () => {
+  const { banco, config } = await cenario(3);
+  demanda(banco, 2, { rodadas: ["desenvolvimento"], tickets: [{ ...implementar(1), instrucao: "x", devolucoes: 1 }] });
+  demanda(banco, 3, { rodadas: ["desenvolvimento"], tickets: [{ ...implementar(1), instrucao: "y" }] });
+  demanda(banco, 4, { rodadas: ["desenvolvimento"], tickets: [implementar(1)] });
+  const retomadas: unknown[] = [];
+  await Promise.all(
+    despacharDemandas(banco, config, {
+      iniciarExecucao: (b, ref, opcoes) => {
+        retomadas.push(opcoes.retomada);
+        return iniciarFalso(b, ref, opcoes);
+      },
+    }),
+  );
+  assert.deepEqual(retomadas, [{ tipo: "devolucao", motivo: "x" }, { tipo: "reabertura", motivo: "y" }, undefined]);
 });
 
 test("CA-2: com o limite global de 2, só dois de três tickets de demandas diferentes entram", async () => {

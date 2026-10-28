@@ -29,7 +29,7 @@ import { carregarSessoesDoTicket, comSessoesDoTicket, execucoesAbertasDaDemanda 
 import { sinalNoGrupo } from "../processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
-import { rodarPi } from "./gerente.ts";
+import { avisar, rodarPi } from "./gerente.ts";
 import { ambientePi, confianca } from "./pi.ts";
 import { argumentosPiDemanda } from "./pi_demanda.ts";
 import { type ContextoDemanda, montarPromptDemanda } from "./prompt_demanda.ts";
@@ -41,6 +41,8 @@ export interface OpcoesExecucaoDemanda {
   modo?: Exclude<ModoExecucao, "consulta">;
   /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
   retomada?: ContextoDemanda["retomada"];
+  /** Mensagem do Auditor ao retomar a sessão interativa: é o prompt da execução, sem remontar o contexto. */
+  mensagem?: string;
   /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
   fechar?: typeof fecharTicketDemanda;
 }
@@ -139,14 +141,16 @@ async function conduzir(c: Conducao): Promise<void> {
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
     anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
     const worktree = await worktreeDoTicket(c, log);
-    const prompt = montarPromptDemanda({
-      ag: c.ag,
-      ticket: c.ticket,
-      projeto: { nome: projeto.nome, branch_base: projeto.branch_base },
-      worktree,
-      saida: join(dir, "saida"),
-      retomada: opcoes.retomada,
-    });
+    const prompt =
+      opcoes.mensagem ??
+      montarPromptDemanda({
+        ag: c.ag,
+        ticket: c.ticket,
+        projeto: { nome: projeto.nome, branch_base: projeto.branch_base },
+        worktree,
+        saida: join(dir, "saida"),
+        retomada: opcoes.retomada,
+      });
     writeFileSync(join(dir, "prompt.md"), prompt);
     const args = argumentosPiDemanda({
       raiz,
@@ -188,6 +192,8 @@ async function conduzir(c: Conducao): Promise<void> {
       anotar(log, `falhar o ticket também falhou: ${mensagem(erroFalha)}`);
     }
   }
+  // O último `estado` do SSE sai com o pi, antes do fim gravado e do fechamento: o chat precisa do cabeçalho novo.
+  avisar(sessao.id, log);
 }
 
 /**
@@ -281,8 +287,10 @@ function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, erro: str
     `a execução ${id} não tem sessão`,
     "confira o banco",
   );
-  encerrar({ banco, ref, sessao, execucao }, erro, join(raizDo(banco), "execucoes", `E-${id}`, "log"));
+  const log = join(raizDo(banco), "execucoes", `E-${id}`, "log");
+  encerrar({ banco, ref, sessao, execucao }, erro, log);
   falharTicketDemanda(banco, ref, erro);
+  avisar(sessao.id, log);
 }
 
 /** Reinício do serviço (§4.2): toda execução aberta é de uma instância anterior e falha, sem avançar etapa nem gate. */

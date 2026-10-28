@@ -1,7 +1,7 @@
 // Sessão de ajustes do PR reprovado (comparacao-sdlc-implementacao.md §§4 e 6): reprova o PR da rodada e abre na hora a
 // conversa do Auditor com o agente, que só registra tickets corretivos. A conversa não implementa nem integra: os SHAs
 // da rodada e da demanda são gravados ao abrir e restaurados quando a execução termina e quando a sessão conclui.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { type Ator, exigirAuditor } from "../dominio/agregado.ts";
@@ -37,6 +37,15 @@ const fins = new Map<string, Promise<void>>();
 
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
+
+const arquivoDasMensagens = (banco: DatabaseSync, ref: RefRodada): string =>
+  join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.mensagens.json`);
+
+/** Os textos que o Auditor mandou com o pi parado, em ordem: depois só existem dentro do prompt montado da retomada. */
+export function mensagensRetomadas(banco: DatabaseSync, ref: RefRodada): string[] {
+  const arquivo = arquivoDasMensagens(banco, ref);
+  return existsSync(arquivo) ? (JSON.parse(readFileSync(arquivo, "utf8")) as string[]) : [];
+}
 
 /** O `encerrar_rodada` atual (o de maior id) da rodada e o `pr_aberto` dele. */
 function prDaRodada(ag: AgregadoDemanda, ref: RefRodada) {
@@ -163,6 +172,10 @@ export function enviarMensagemAjustes(
     return;
   }
   executar(banco, ref, ticket, opcoes, { tipo: "reabertura", motivo: texto });
+  // Depois de executar: uma retomada recusada não deixa mensagem gravada.
+  const arquivo = arquivoDasMensagens(banco, ref);
+  mkdirSync(dirname(arquivo), { recursive: true });
+  writeFileSync(arquivo, JSON.stringify([...mensagensRetomadas(banco, ref), texto]));
 }
 
 /** Conclui a sessão (só o Auditor, com correção registrada): encerra o pi ocioso, restaura as branches e volta ao desenvolvimento. */

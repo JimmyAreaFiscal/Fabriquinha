@@ -11,14 +11,20 @@ import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
-import { avisar, encerrar } from "../../execucao/gerente.ts";
+import { avisar, encerrar, situacao } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import { submeter } from "../../evidencias/submissao.ts";
+import type { DadosDoChatDemanda } from "./chat.ts";
+import { criarDemanda } from "../../persistencia/demandas.ts";
 import { proporIssue } from "../../persistencia/issues.ts";
+import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
+import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execucao/execucao_demanda.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import type { Pedido } from "../rotas.ts";
 import { type CabecalhoDoChat, type DadosDoChat, ROTAS_DO_CHAT } from "./chat.ts";
+import { demanda } from "./demandas_cenario.test.ts";
 import type { PainelRegistro } from "./issue.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
@@ -233,65 +239,6 @@ test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, envio a
   assert.equal(((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).issue.fase, "desenho");
   assert.equal((await postar("/api/issues/abc/registro", { aprovado: true })).status, 422);
   sse.fechar();
-});
-
-test("desenho interativo: Executar agora abre a conversa; o envio leva ao gate; reprovar volta à mesma sessão", async () => {
-  const [registrando, issue] = await registro();
-  const mensagem = (sessao: string, texto: string) =>
-    postar(`/api/sessoes/${sessao}/mensagens`, { texto, modo: "prompt" });
-  assert.equal((await mensagem(registrando, "registre")).status, 204);
-  await esperarEstado(registrando, "aguardando_humano: gate_registro");
-  assert.equal((await postar(`/api/issues/${String(issue)}/registro`, { aprovado: true })).status, 204);
-
-  interface Pagina {
-    issue: { fase: string };
-    tickets: { id: number; etapa: string; status: string }[];
-  }
-  const pagina = async () =>
-    (await pedir(`/api/issues/${String(issue)}`)).corpo as Pagina & {
-      sessoes: { sessao: string; ticket: number }[];
-    };
-  const desenho = (await pagina()).tickets.find((t) => t.etapa === "desenho")?.id ?? 0;
-  assert.equal((await postar(`/api/tickets/${String(desenho)}/executar`)).status, 204);
-  await ate(async () => (await pagina()).sessoes.some((s) => s.ticket === desenho), "a sessão do desenho");
-  const sessao = String((await pagina()).sessoes.find((s) => s.ticket === desenho)?.sessao);
-  await esperarEstado(sessao, "aguardando_humano: conversa");
-  const aberta = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
-  assert.equal(aberta.execucoes[0]?.modo, "interativo");
-  assert.match(
-    textos(aberta.conversa)[0] ?? "",
-    new RegExp(`Vamos desenhar a solução da issue I-${String(issue)}\\.\\n$`),
-  );
-
-  assert.equal((await mensagem(sessao, "desenhe")).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: gate_desenho");
-  assert.equal((await pagina()).issue.fase, "aprovacao_desenho");
-  assert.equal((await mensagem(sessao, "mais uma")).status, 409, "o gate não recebe mensagem");
-
-  const decidir = `/api/issues/${String(issue)}/desenho`;
-  assert.equal((await postar(decidir, { aprovado: false })).status, 422);
-  assert.equal((await postar(decidir, { aprovado: false, motivo: "use streaming" })).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: conversa");
-  const devolvido = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
-  assert.ok(textos(devolvido.conversa).includes("user: O Auditor reprovou o desenho. Motivo: use streaming"));
-  const reprovada = await pagina();
-  assert.equal(reprovada.issue.fase, "desenho");
-  assert.deepEqual(
-    reprovada.tickets.filter((t) => t.etapa !== "registro").map((t) => [t.id, t.etapa, t.status]),
-    [
-      [desenho, "desenho", "em_execucao"],
-      [desenho + 1, "desenvolvimento", "aberto"],
-    ],
-    "o mesmo ticket de desenho, com o ticket que ele propôs",
-  );
-
-  assert.equal((await mensagem(sessao, "desenhe")).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: gate_desenho");
-  assert.equal((await postar(decidir, { aprovado: true })).status, 204);
-  await esperarEstado(sessao, "terminada");
-  const aprovada = await pagina();
-  assert.equal(aprovada.issue.fase, "desenvolvimento");
-  assert.equal(aprovada.tickets.find((t) => t.id === desenho)?.status, "concluido");
 });
 
 test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o aviso marcado, 409; recusar", async () => {
@@ -510,27 +457,24 @@ test("concluir só a sessão em aberto; entrada inválida dá 422 e sessão ou t
 
 test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra sessão anexado; histórico em Markdown", async () => {
   const t0 = "2026-10-11T12:00:00.000Z";
+  const sessao = crypto.randomUUID();
   servico.banco.exec(
     `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
        VALUES (900, 'loja', 'Timeout no checkout', 'problema', '', 'desenvolvimento', '${t0}');
-     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-       VALUES (900, 900, 'desenvolvimento', 'Buscar cupons', 'aberto', 'fabriquinha', '${t0}');`,
+     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, erro, criado_em)
+       VALUES (900, 900, 'desenvolvimento', 'Buscar cupons', 'falhou', 'fabriquinha', 'a execução caiu', '${t0}');
+     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
+       VALUES (900, 900, 'autonomo', '${sessao}', 'falha', 'a execução caiu', '${t0}', '${t0}');`,
+  );
+  mkdirSync(join(raiz, "sessoes"), { recursive: true });
+  const conversa = (role: string, text: string) =>
+    JSON.stringify({ type: "message", message: { role, content: [{ type: "text", text }] } });
+  writeFileSync(
+    join(raiz, "sessoes", `2026-10-11T12-00-00-000Z_${sessao}.jsonl`),
+    `${conversa("user", "busque os cupons")}\n${conversa("assistant", "feito")}\n`,
   );
   const dados = async (s: string) => (await pedir(`/api/sessoes/${s}`)).corpo as DadosDoChat;
-  const executarEsperandoFalha = async (execucoes: number) => {
-    assert.equal((await postar("/api/tickets/900/executar")).status, 204);
-    let sessao = "";
-    await ate(async () => {
-      const [s] = (await pedir("/api/sessoes?escopo=ativas&issue=900")).corpo as { sessao: string }[];
-      sessao = s?.sessao ?? "";
-      return sessao !== "" && (await estado(sessao)) === "aguardando_humano: falha";
-    }, "o ticket falhar");
-    assert.equal((await dados(sessao)).execucoes.length, execucoes);
-    return sessao;
-  };
-
-  // O SonarQube não está configurado na coleta depois do pi, e o ticket falha: a sessão espera a resposta do Auditor.
-  const sessao = await executarEsperandoFalha(1);
+  await esperarEstado(sessao, "aguardando_humano: falha");
   const falha = await dados(sessao);
   assert.equal(falha.ticket.status, "falhou");
   assert.ok(falha.ticket.erro);
@@ -555,15 +499,7 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
   assert.equal((await postar("/api/tickets/900/reabrir", { instrucao: 3 })).status, 422);
   assert.equal((await postar("/api/tickets/999/reabrir", {})).status, 404);
 
-  // A próxima execução, na mesma sessão, leva a instrução antes do prompt da etapa e roda com o modelo novo.
-  assert.equal(await executarEsperandoFalha(2), sessao);
-  const segunda = (await dados(sessao)).execucoes[1];
-  assert.ok(segunda);
-  assert.deepEqual(segunda.modelo, modelo);
-  assert.match(
-    (await pedir(`/api/execucoes/${String(segunda.id)}/prompt`)).texto,
-    /# Instrução do Auditor\n\nordene pela validade/,
-  );
+  servico.banco.exec("UPDATE ticket SET status = 'falhou', erro = 'caiu de novo' WHERE id = 900");
   // Responder e retomar com o histórico de outra sessão anexado (F4 §6.8): o anexo vai na instrução da próxima tentativa.
   const [outra] = await registro();
   const { ticket: doRegistro, issue: daOutra } = (await dados(outra)).sessao;
@@ -616,4 +552,127 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
     `attachment; filename="historico-T-900-consulta-${consulta}.md"`,
   );
   assert.equal((await baixar("nada")).status, 404);
+});
+
+test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviço da demanda; id desconhecido segue o das issues", async () => {
+  const em = "2026-01-01T00:00:00.000Z";
+  criarDemanda(
+    servico.banco,
+    demanda("I-310", "planejamento", {
+      tickets: [
+        {
+          demanda_id: "I-310",
+          ticket_id: 1,
+          etapa: "planejar",
+          status: "em_execucao",
+          status_alterado_em: em,
+          devolucoes: 0,
+        },
+      ],
+    }),
+  );
+  comSessoesDoTicket(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
+    ...e,
+    sessoes: [{ demanda_id: "I-310", ticket_id: 1, id: "sd-310", modo: "interativo", conversa_referencia: "sd-310" }],
+    execucoes: [{ id: "ed-310", sessao_id: "sd-310", inicio: em, fim: em, falha: false }],
+  }));
+  mkdirSync(join(raiz, "sessoes"), { recursive: true });
+  const mensagem = (role: string, text: string) => ({
+    type: "message",
+    message: { role, content: [{ type: "text", text }] },
+  });
+  writeFileSync(
+    join(raiz, "sessoes", "2026-01-01T00-00-00-000Z_sd-310.jsonl"),
+    [mensagem("user", "planeje"), mensagem("assistant", "Qual a prioridade?")]
+      .map((l) => JSON.stringify(l))
+      .join("\n") + "\n",
+  );
+
+  const chat = (await pedir("/api/sessoes/sd-310")).corpo as DadosDoChatDemanda;
+  assert.deepEqual(
+    [chat.origem, chat.demanda, chat.rodada, chat.ticket, chat.etapa, chat.sessao.estado, chat.sessao.motivo],
+    ["demanda", "I-310", undefined, "I-310.T1", "planejar", "aguardando_humano", "conversa"],
+  );
+  assert.deepEqual(textos(chat.conversa), ["user: planeje", "assistant: Qual a prioridade?"]);
+
+  const sse = await assinar("sd-310");
+  await ate(() => sse.eventos.length > 0, "o retrato");
+  const [retrato] = sse.eventos as [Evento & DadosDoChatDemanda];
+  assert.deepEqual([retrato.type, retrato.origem, retrato.conversa.length], ["chat", "demanda", 2]);
+  avisar("sd-310", join(raiz, "log"));
+  await ate(() => sse.eventos.length > 1, "o estado novo");
+  assert.deepEqual([sse.eventos[1]?.type, sse.eventos[1]?.origem], ["estado", "demanda"]);
+  sse.fechar();
+
+  const baixado = await fetch(`${origem}/api/sessoes/sd-310/historico.md`, { headers: { cookie: cookie() } });
+  assert.equal(baixado.status, 200);
+  assert.equal(baixado.headers.get("content-type"), "text/markdown; charset=utf-8");
+  assert.equal(baixado.headers.get("content-disposition"), 'attachment; filename="historico-I-310.T1.md"');
+  assert.match(
+    await baixado.text(),
+    /^# Histórico da sessão I-310.T1 \(planejar\)[\s\S]*## Auditor\n\nplaneje[\s\S]*## Agente\n\nQual a prioridade\?/,
+  );
+
+  // CA-9, CA-12: texto vazio recusado no schema; steer na conversa, diálogo e aborto sem pi são recusados.
+  const vazio = await postar("/api/sessoes/sd-310/mensagens", { texto: "   ", modo: "prompt" });
+  assert.equal(vazio.status, 422);
+  assert.equal((await postar("/api/sessoes/sd-310/mensagens", { texto: "x", modo: "steer" })).status, 409);
+  assert.equal((await postar("/api/sessoes/sd-310/dialogos/d1", { valor: "x" })).status, 409);
+  assert.equal((await postar("/api/sessoes/sd-310/abortar")).status, 409);
+
+  // CA-7: a sessão que nem a demanda nem as issues conhecem.
+  const nada = await pedir("/api/sessoes/sd-nada");
+  assert.equal(nada.status, 404);
+  assert.match(JSON.stringify(nada.corpo), /a sessão sd-nada não existe[\s\S]*confira o endereço do chat/);
+});
+
+test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a mensagem e abortar", async () => {
+  gravarConfiguracaoProjeto(servico.banco, {
+    nome: "loja",
+    branch_base: "main",
+    chave_sonarqube: "loja",
+    raiz_git: join(base, "repo"),
+    hospedagem: "github",
+    etapas: [],
+    preparacao: [{ ordem: 1, comando: "true" }],
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+  });
+  const ref = { demanda_id: "I-311", ticket_id: 1 };
+  criarDemanda(
+    servico.banco,
+    demanda("I-311", "planejamento", {
+      demanda: { ...demanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
+      tickets: [
+        {
+          ...ref,
+          etapa: "planejar",
+          status: "em_execucao",
+          status_alterado_em: "2026-01-01T00:00:00.000Z",
+          devolucoes: 0,
+        },
+      ],
+    }),
+  );
+  const { fim } = iniciarExecucaoDemanda(servico.banco, ref, {
+    limiteMin: 5,
+    modo: "interativo",
+    fechar: () => Promise.resolve(),
+  });
+  const sessao = String(carregarSessoesDoTicket(servico.banco, ref).sessoes[0]?.id);
+  const dialogos = () => situacao(sessao)?.dialogos ?? [];
+  await ate(() => dialogos().length === 1, "o diálogo");
+  const resposta = await postar(`/api/sessoes/${sessao}/dialogos/${String(dialogos()[0]?.id)}`, { valor: "alta" });
+  assert.equal(resposta.status, 204);
+  await ate(() => situacao(sessao)?.ocupado === false, "o pi ocioso");
+
+  assert.equal(
+    (await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "pergunte perguntar", modo: "prompt" })).status,
+    204,
+  );
+  await ate(() => dialogos().length === 1, "o diálogo da mensagem");
+  assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
+  await ate(() => situacao(sessao)?.ocupado === false, "o aborto");
+  interromperExecucaoDemanda(servico.banco, ref);
+  await fim;
 });
