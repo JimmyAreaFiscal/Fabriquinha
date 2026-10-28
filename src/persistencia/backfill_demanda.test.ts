@@ -362,7 +362,7 @@ test("CA-9, CA-10, CA-13, CA-18: dependências, em andamento, pendências e cont
   assert.equal(r.depois.demanda, 4);
   assert.equal(r.depois.ticket_demanda, 9);
   assert.equal(r.depois.retrabalho_demanda, 3);
-  assert.equal(r.depois.sessao, 0);
+  assert.equal(r.depois.sessao, 3);
   assert.equal(Object.keys(r.depois).length, 17);
 });
 

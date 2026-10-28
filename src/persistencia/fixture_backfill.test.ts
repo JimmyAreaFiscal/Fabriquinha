@@ -6,10 +6,12 @@ import { MIGRACOES } from "./migracoes.ts";
 export const SHA_3 = "3".repeat(40);
 export const SHA_6 = "6".repeat(40);
 export const SHA_HUMANO = "9".repeat(40);
+export const SHA_ARQ_A = "a".repeat(64);
+export const SHA_ARQ_Z = "b".repeat(64);
 const T = (dia: number) => `'2026-01-${String(dia).padStart(2, "0")}T00:00:00.000Z'`;
 
 /**
- * I-1 concluída (PR, commits, devoluções, retrabalho), I-2 arquivada (depende da I-1), I-3 cancelada no desenho,
+ * I-1 concluída (PR, commits, devoluções, retrabalho, execuções, uso, evidências e anexos), I-2 arquivada (depende da I-1), I-3 cancelada no desenho,
  * I-4 cancelada no registro (sem título), I-5 em andamento (dependências com a I-1 nos dois sentidos).
  */
 export function montarFixture(): DatabaseSync {
@@ -50,6 +52,27 @@ export function montarFixture(): DatabaseSync {
       ('${SHA_6}', 6, NULL, 3, 4),
       ('${SHA_3}', 3, NULL, 4, 2),
       ('${SHA_HUMANO}', NULL, 'Ana', 3, 7);
+    INSERT INTO execucao (id, ticket, modo, sessao_pi, modelo_provedor, modelo_nome, pgid_pi, resultado, erro, iniciada_em, terminada_em) VALUES
+      (1, 2, 'interativo', 'pi-2', 'anthropic', 'opus', 0, 'sucesso', NULL, ${T(2)}, ${T(3)}),
+      (2, 3, 'autonomo', 'pi-3', 'anthropic', 'sonnet', 4242, 'falha', 'caiu', ${T(4)}, ${T(4)}),
+      (3, 3, 'consulta', 'pi-3', NULL, NULL, NULL, 'sucesso', NULL, ${T(5)}, ${T(5)}),
+      (4, 6, 'autonomo', 'pi-6', NULL, NULL, NULL, 'em_andamento', NULL, ${T(8)}, NULL),
+      (5, 10, 'autonomo', 'pi-10', NULL, NULL, NULL, 'sucesso', NULL, ${T(5)}, ${T(5)});
+    INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo) VALUES
+      (1, 'anthropic', 'opus', 3, 100, 50, 10, 5, 0),
+      (2, 'anthropic', 'sonnet', 2, 200, 80, 0, 0, 0.5),
+      (2, 'anthropic', 'haiku', 1, 0, 0, 0, 0, 0),
+      (5, 'anthropic', 'sonnet', 1, 1, 1, 1, 1, 0);
+    INSERT INTO evidencia (id, ticket, tipo, produtor, aprovada, dados, em) VALUES
+      (1, 2, 'desenho_solucao', 'agente', 1, '{"a":1}', ${T(3)}),
+      (2, 3, 'pr_aberto', 'fabriquinha', NULL, '{"n":1}', ${T(6)}),
+      (3, 5, 'pr_aberto', 'fabriquinha', 1, '{"n":2}', ${T(9)}),
+      (4, 6, 'pr_aberto', 'fabriquinha', NULL, '{}', ${T(8)}),
+      (5, 8, 'desenho_solucao', 'agente', 0, '{}', ${T(4)}),
+      (6, 10, 'comportamento', 'agente', NULL, '{}', ${T(5)});
+    INSERT INTO evidencia_arquivo (evidencia, nome, sha256, mime, bytes) VALUES
+      (1, 'z.png', '${SHA_ARQ_Z}', 'image/png', 10), (1, 'a.png', '${SHA_ARQ_A}', 'image/png', 20),
+      (6, 'x.txt', '${"d".repeat(64)}', 'text/plain', 0);
   `);
   return b;
 }

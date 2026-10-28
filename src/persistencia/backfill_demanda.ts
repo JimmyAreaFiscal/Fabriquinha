@@ -1,5 +1,5 @@
 // Backfill das issues encerradas para o modelo de demandas (comparacao-sdlc-implementacao.md §2.2, §10): só lê o legado
-// e grava `demanda`, rodada 1, tickets, decisões, commits, retrabalho e dependências, tudo numa transação.
+// e grava `demanda`, rodada 1, tickets, decisões, commits, retrabalho, dependências, sessões, uso e evidências, tudo numa transação.
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { escrever } from "./banco.ts";
@@ -131,6 +131,84 @@ function migrarIssue(banco: DatabaseSync, { id: n, cancelada_em }: Issue): void 
        SELECT a.sha, a.caminho, a.caminho_anterior, a.status, a.adicionadas, a.removidas
        FROM arquivo_commit a JOIN commit_ticket c ON c.sha = a.sha JOIN ticket t ON t.id = c.ticket
        WHERE t.issue = ? ORDER BY a.rowid`,
+    )
+    .run(n);
+  migrarSessoes(banco, id, n);
+  migrarEvidencias(banco, id, n, comRodada);
+}
+
+/** Uma sessão por `sessao_pi` (ticket e modo da primeira execução), com as execuções e o uso por modelo. */
+function migrarSessoes(banco: DatabaseSync, id: string, n: number): void {
+  const p = { id, n };
+  banco
+    .prepare(
+      `INSERT OR IGNORE INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia)
+       SELECT e.sessao_pi, $id, e.ticket, e.modo, e.sessao_pi
+       FROM execucao e JOIN ticket t ON t.id = e.ticket
+       WHERE t.issue = $n AND e.id = (SELECT MIN(x.id) FROM execucao x WHERE x.sessao_pi = e.sessao_pi) ORDER BY e.id`,
+    )
+    .run(p);
+  banco
+    .prepare(
+      `INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, erro, grupo_processo, modelo_provedor, modelo_nome)
+       SELECT 'E-' || e.id, e.sessao_pi, e.iniciada_em, e.terminada_em, e.resultado = 'falha', e.erro,
+              CASE WHEN e.pgid_pi > 0 THEN e.pgid_pi END, e.modelo_provedor, e.modelo_nome
+       FROM execucao e JOIN ticket t ON t.id = e.ticket WHERE t.issue = ? ORDER BY e.id`,
+    )
+    .run(n);
+  // Custo 0 com tokens é o pi sem preço do modelo: desconhecido (NULL), não zero.
+  banco
+    .prepare(
+      `INSERT INTO uso_modelo_execucao (execucao_id, modelo_provedor, modelo_nome, tokens_entrada, tokens_saida,
+                                        tokens_cache_leitura, tokens_cache_escrita, custo)
+       SELECT 'E-' || u.execucao, u.provedor, u.modelo, u.input, u.output, u.cache_read, u.cache_write,
+              CASE WHEN u.custo = 0 AND u.input + u.output + u.cache_read + u.cache_write > 0 THEN NULL ELSE u.custo END
+       FROM uso u JOIN execucao e ON e.id = u.execucao JOIN ticket t ON t.id = e.ticket
+       WHERE t.issue = ? ORDER BY u.rowid`,
+    )
+    .run(n);
+  banco
+    .prepare(
+      `INSERT INTO uso_modelo_historico (execucao_id, modelo_provedor, modelo_nome, chamadas)
+       SELECT 'E-' || u.execucao, u.provedor, u.modelo, u.chamadas
+       FROM uso u JOIN execucao e ON e.id = u.execucao JOIN ticket t ON t.id = e.ticket
+       WHERE t.issue = ? ORDER BY u.rowid`,
+    )
+    .run(n);
+}
+
+/** Evidências do ticket (o `pr_aberto` mais recente da issue com rodada vai para a rodada 1) e seus anexos por SHA-256. */
+function migrarEvidencias(banco: DatabaseSync, id: string, n: number, comRodada: boolean): void {
+  const pr = comRodada
+    ? (banco
+        .prepare(
+          `SELECT e.id FROM evidencia e JOIN ticket t ON t.id = e.ticket
+           WHERE t.issue = ? AND e.tipo = 'pr_aberto' ORDER BY e.em DESC, e.id DESC LIMIT 1`,
+        )
+        .get(n) as { id: number } | undefined)
+    : undefined;
+  const p = { id, n, pr: pr?.id ?? null };
+  banco
+    .prepare(
+      `INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em)
+       SELECT 'evidencia-' || e.id, $id, CASE WHEN e.id = $pr THEN 1 END, CASE WHEN e.id <> COALESCE($pr, -1) THEN e.ticket END,
+              e.tipo, e.dados, e.em
+       FROM evidencia e JOIN ticket t ON t.id = e.ticket WHERE t.issue = $n ORDER BY e.id`,
+    )
+    .run(p);
+  banco
+    .prepare(
+      `INSERT INTO evidencia_historico (evidencia_id, aprovada, produtor)
+       SELECT 'evidencia-' || e.id, e.aprovada, e.produtor
+       FROM evidencia e JOIN ticket t ON t.id = e.ticket WHERE t.issue = ? ORDER BY e.id`,
+    )
+    .run(n);
+  banco
+    .prepare(
+      `INSERT INTO arquivo_evidencia (evidencia_id, ordem, caminho, sha256, mime, bytes)
+       SELECT 'evidencia-' || a.evidencia, ROW_NUMBER() OVER (PARTITION BY a.evidencia ORDER BY a.nome), a.nome, a.sha256, a.mime, a.bytes
+       FROM evidencia_arquivo a JOIN evidencia e ON e.id = a.evidencia JOIN ticket t ON t.id = e.ticket
+       WHERE t.issue = ? ORDER BY a.evidencia, a.nome`,
     )
     .run(n);
 }
