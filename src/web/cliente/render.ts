@@ -172,7 +172,7 @@ const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico", "auditoria"]],
-  ["/evaluations", "Avaliações", ["avaliacoes"]],
+  ["/evaluations", "Avaliações", ["avaliacoes", "avaliacao"]],
   ["/config", "Configuração", ["configuracao"]],
 ];
 
@@ -264,6 +264,7 @@ export const TITULOS: Record<Pagina, string> = {
   demandas: "Demandas",
   demanda: "Demanda",
   avaliacoes: "Avaliações",
+  avaliacao: "Avaliação",
 };
 
 /** Página ainda sem conteúdo: só o cabeçalho com o título. */
