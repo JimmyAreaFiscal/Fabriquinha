@@ -86,18 +86,25 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
   await expect(aba).toHaveURL(`${fabriquinha.base}/home`);
 });
 
-/** Uma sessão de demanda cujo ticket falhou: aguarda o Auditor. */
+/**
+ * Duas sessões de demanda cujo ticket falhou: a da I-1, em execução, aguarda o Auditor; a da I-2, migrada de uma demanda
+ * já concluída, terminou.
+ */
 function sessaoDeDemandaAguardando(raiz: string): void {
   const banco = abrir(raiz);
   banco.exec(`
     INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
       VALUES ('loja', '/nao/existe', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]');
-    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, motivo_falha)
-      VALUES ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam');
-    INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)
-      VALUES ('x1', '${SESSAO}', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1);
+    INSERT INTO demanda VALUES
+      ('I-1', 'loja', 'Busca', 'problema', 'd', 'execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1'),
+      ('I-2', 'loja', 'Cache', 'problema', 'd', 'concluida', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, motivo_falha) VALUES
+      ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam'),
+      ('I-2', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam');
+    INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1'), ('s-i2', 'I-2', 1, 'autonomo', 'c2');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES
+      ('x1', '${SESSAO}', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1),
+      ('x2', 's-i2', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1);
   `);
   banco.close();
 }
