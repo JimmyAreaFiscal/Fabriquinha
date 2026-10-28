@@ -25,7 +25,15 @@ interface Pagina {
   dependencias: unknown[];
 }
 interface Board {
-  demandas: { id: string; projeto: string; titulo: string; fase: string; rodadas: unknown[]; bloqueios: unknown[] }[];
+  demandas: {
+    id: string;
+    projeto: string;
+    titulo: string;
+    fase: string;
+    rodadas: unknown[];
+    bloqueios: unknown[];
+    falhos: unknown[];
+  }[];
   trabalho: unknown[];
 }
 const comportamento = (evidencias: Evidencia[]): Evidencia => {
@@ -78,6 +86,17 @@ test("o board não mostra a demanda arquivada", async () => {
   banco.exec("UPDATE demanda SET fase = 'arquivada' WHERE id = 'I-207'");
   const ids = (await pedir("/api/demandas")).json<Board>().demandas.map((d: { id: string }) => d.id);
   assert.deepEqual(ids, ["I-206"]);
+});
+
+test("CA-3 (T-1289): o board traz os tickets falhos com o endereço público e a etapa", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const falhosDe = async () => (await pedir("/api/demandas")).json<Board>().demandas[0]?.falhos;
+  assert.deepEqual(await falhosDe(), []);
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.ticket_id === 3 ? { ...t, status: "falhou" } : t)),
+  }));
+  assert.deepEqual(await falhosDe(), [{ ref: "I-206.T3", etapa: "implementar" }]);
 });
 
 test("CA-6: a página traz cada ticket com o endereço público e a etapa", async () => {
