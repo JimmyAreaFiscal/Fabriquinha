@@ -45,7 +45,7 @@ const execucao = (b: DatabaseSync, id: string, n: number, inicio: string, fim: s
   );
 };
 
-test("CA-1 a CA-6: lê só planejamento, execução e revisão, com as predecessoras", () => {
+test("CA-1 a CA-6: lê só planejamento, execução, revisão e encerramento, com as predecessoras", () => {
   const b = banco();
   demanda(b, "I-4", "execucao");
   demanda(b, "I-6", "planejamento");
@@ -59,6 +59,7 @@ test("CA-1 a CA-6: lê só planejamento, execução e revisão, com as predecess
     ["I-4", true],
     ["I-6", false],
     ["I-7", false],
+    ["I-8", true],
   ]);
   assert.equal(b.isTransaction, false);
 });
@@ -78,7 +79,7 @@ test("ocupação: conta em_execucao nas fases lidas e ignora gates humanos", () 
   ticket(b, "I-3", 1, "encerrar_rodada", "em_execucao", 1);
   demanda(b, "I-4", "encerramento");
   ticket(b, "I-4", 1, "encerrar_demanda", "em_execucao");
-  assert.equal(ocupacaoDoLimite(b), 2); // I-1.T1 e o encerrar_rodada de I-3
+  assert.equal(ocupacaoDoLimite(b), 3); // I-1.T1, o encerrar_rodada de I-3 e o encerrar_demanda de I-4
 });
 
 test("retoma o planejar reprovado e só depois de uma recusa nova", () => {

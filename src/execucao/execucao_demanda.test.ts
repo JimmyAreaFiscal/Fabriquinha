@@ -569,3 +569,17 @@ test("CA-7: o motivo da falha de preparação vai ao log da execução", async (
   const [dir] = readdirSync(join(c.raiz, "execucoes"));
   assert.match(readFileSync(join(c.raiz, "execucoes", String(dir), "log"), "utf8"), /preparação falhou: /);
 });
+
+test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em execução; a demanda segue em encerramento", async () => {
+  const { banco } = await cenario();
+  banco.exec(`UPDATE demanda SET fase = 'encerramento' WHERE id = 'I-1';
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+      ('I-1', 11, 'encerrar_demanda', 'em_execucao', '${em}'),
+      ('I-1', 12, 'resolver_conflito', 'em_execucao', '${em}')`);
+  recuperarExecucoesDemanda(banco);
+  assert.deepEqual(
+    [11, 12].map((t) => statusDe(banco, t)?.status),
+    ["falhou", "falhou"],
+  );
+  assert.equal(banco.prepare("SELECT fase FROM demanda WHERE id = 'I-1'").get()?.fase, "encerramento");
+});

@@ -15,6 +15,7 @@ import { noLog } from "../persistencia/execucoes.ts";
 import { type Configuracao, limiteParalelismo } from "../persistencia/servico.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
+import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { iniciarOuRetomarPlanejamento } from "./planejamento.ts";
@@ -24,6 +25,8 @@ import { conduzirRevisaoRodada } from "./revisao_rodada.ts";
 export interface DepsDespacho {
   /** Início da execução do `implementar`; injetável nos testes para não subir o pi (padrão: `iniciarExecucaoDemanda`). */
   iniciarExecucao?: typeof iniciarExecucaoDemanda;
+  /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
+  verificacao?: DepsEncerramentoDemanda["verificacao"];
 }
 
 /** Espera a etapa em segundo plano; o erro vai ao log, então a promessa devolvida nunca rejeita. */
@@ -44,10 +47,14 @@ async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: 
     falharTicketDemanda(banco, t, erro);
     return;
   }
+  return falharSePreso(banco, t, () => concluirEncerramentoRodada(banco, rodada));
+}
+
+/** Roda `etapa`; se ela recusar sem falhar o ticket (documentação, estado), falha-o para não ficar preso em execução. */
+async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: () => Promise<T>): Promise<T> {
   try {
-    return await concluirEncerramentoRodada(banco, rodada);
+    return await etapa();
   } catch (erro) {
-    // A publicação já falha o ticket por dentro; a recusa antes dela (documentação, estado) o deixaria preso em execução.
     const atual = carregarDemanda(banco, t.demanda_id).tickets.find((x) => x.ticket_id === t.ticket_id);
     if (atual?.status === "em_execucao") falharTicketDemanda(banco, t, (erro as Error).message);
     throw erro;
@@ -62,16 +69,21 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
   const { demanda_id, ticket_id } = t;
   const limiteMin = c.timeoutMin;
   if (t.etapa === "planejar") return iniciarOuRetomarPlanejamento(banco, demanda_id, limiteMin).fim;
-  if (t.etapa === "implementar") {
+  if (t.etapa === "implementar" || t.etapa === "resolver_conflito" || t.etapa === "encerrar_demanda") {
     const ctx = { agora: new Date().toISOString() };
     comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, ctx, true));
+    if (t.etapa === "encerrar_demanda") {
+      return falharSePreso(banco, t, () =>
+        conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
+      );
+    }
     return (deps.iniciarExecucao ?? iniciarExecucaoDemanda)(banco, t, { limiteMin }).fim;
   }
   if (t.etapa === "revisar_rodada") {
     return conduzirRevisaoRodada(banco, rodadaDe(t), { limiteMin });
   }
   if (t.etapa === "revisar_demanda") return conduzirRevisaoIntegral(banco, demanda_id, { limiteMin });
-  return encerrarRodada(banco, t, limiteMin); // a seleção só devolve as cinco etapas acima
+  return encerrarRodada(banco, t, limiteMin); // a seleção só devolve as sete etapas acima
 }
 
 /** Roda `inicio` numa transação (a recusa síncrona desfaz a reserva) e acompanha a etapa; o que falhar vai ao log. */
@@ -128,7 +140,7 @@ export function executarAgoraDemanda(
   return escrever(banco, () => {
     const { agregado, predecessoras_satisfeitas } = existe(
       demandasParaDespacho(banco).find((d) => d.agregado.demanda.id === ref.demanda_id),
-      `a demanda ${ref.demanda_id} não está em planejamento, execução nem revisão da demanda`,
+      `a demanda ${ref.demanda_id} não está em planejamento, execução, revisão da demanda nem encerramento`,
       "só se executa agora o ticket de uma demanda dessas fases",
     );
     const ticket = existe(
