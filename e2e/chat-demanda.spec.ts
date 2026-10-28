@@ -10,6 +10,7 @@ import { abrir } from "../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { criarDemanda } from "../src/persistencia/demandas.ts";
 import { expect, type Fabriquinha, projeto, test } from "./apoio.ts";
+import { semearTicketAberto } from "./demandas-apoio.ts";
 
 const em = "2026-10-11T12:00:00.000Z";
 
@@ -156,4 +157,26 @@ test("abortar a execução em andamento e exportar o histórico em Markdown", as
   // CA-7 e CA-14: sessão que não existe.
   await pagina.goto(`${fabriquinha.base}/sessions/inexistente`);
   await expect(pagina.locator("body")).toContainText("a sessão inexistente não existe");
+});
+
+test("abortar uma implementação autônoma tira a barra de «rodando» sem recarregar", async ({ pagina, fabriquinha }) => {
+  projeto(fabriquinha.raiz);
+  semearTicketAberto(fabriquinha.raiz);
+  const banco = abrir(fabriquinha.raiz);
+  banco.prepare("UPDATE demanda SET descricao = '[ao vivo]' WHERE id = 'I-216'").run();
+  banco.close();
+  await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+  await pagina.getByRole("button", { name: "Executar agora" }).click();
+  const ticket = pagina.locator(".dm-ticket", { hasText: "I-216.T1" });
+  await expect(async () => {
+    await pagina.reload();
+    await expect(ticket.getByRole("link", { name: "chat →" })).toBeVisible();
+  }).toPass();
+  await ticket.getByRole("link", { name: "chat →" }).click();
+
+  // CA-11: o fim da execução avisa o chat; a barra sai de «rodando» sem recarregar.
+  const barra = pagina.locator(".estado-sessao");
+  await expect(barra.locator(".pill")).toHaveText("rodando");
+  await pagina.getByRole("button", { name: "Abortar" }).click();
+  await expect(barra.locator(".pill")).toHaveText("aguarda você · falha");
 });
