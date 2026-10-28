@@ -30,7 +30,9 @@ export type Pagina =
   | "simulacao"
   | "sdlc"
   | "demandas"
-  | "demanda";
+  | "demanda"
+  | "avaliacoes"
+  | "avaliacao";
 
 /** As páginas do F7 §4.4. `/` só redireciona para `/home`; `/projects` e `/simulation` sem nome escolhem o projeto (ticket 29). */
 const PAGINAS: readonly (readonly [string, Pagina])[] = [
@@ -49,6 +51,8 @@ const PAGINAS: readonly (readonly [string, Pagina])[] = [
   ["/history", "historico"],
   ["/sessions/:sessao", "chat"],
   ["/audits/:sessao", "auditoria"],
+  ["/evaluations", "avaliacoes"],
+  ["/evaluations/:avaliacao", "avaliacao"],
   ["/config", "configuracao"],
 ];
 

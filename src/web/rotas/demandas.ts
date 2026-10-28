@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";
+import { achadoDaDemanda } from "../../persistencia/avaliacoes.ts";
 import { selecionarTrabalho } from "../../dominio/selecao_trabalho.ts";
 import { carregarDemanda, listarDemandas } from "../../persistencia/demandas.ts";
 import { dependentesNaoConcluidasDaDemanda, predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
@@ -93,6 +94,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   const { demanda } = ag;
   const { ticket, rodada } = ref(id);
   const anexos = anexosDaDemanda(banco, id);
+  const achado = achadoDaDemanda(banco, id);
   // Uma leitura por demanda; com mais de uma sessão no ticket, vale a mais recente.
   const sessoes = new Map(
     (
@@ -110,6 +112,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
     ).map((t) => t.ticket_id),
   );
   return {
+    ...(achado && { origem: { avaliacao: achado.avaliacao_id, achado: achado.achado_id, titulo: achado.titulo } }),
     demanda: { id, projeto: demanda.projeto, titulo: demanda.titulo, fase: demanda.fase },
     rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase })),
     tickets: ag.tickets.map((t) => ({

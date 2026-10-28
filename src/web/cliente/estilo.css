@@ -4298,6 +4298,179 @@ svg.barras :not(.hit) {
   display: none;
 }
 
+/* Avaliações (D12): formulário de disparo e lista; a 375 px a lista vira blocos, sem rolagem horizontal. */
+.pagina-avaliacoes .disparo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+  padding: var(--s-4);
+}
+.pagina-avaliacoes .disparo label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.pagina-avaliacoes .disparo :is(select, input[type="date"]) {
+  height: 30px;
+  padding: 0 var(--s-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color-scheme: dark;
+}
+.pagina-avaliacoes .demandas-do-periodo,
+.pagina-avaliacoes .pedido {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pagina-avaliacoes .demandas-do-periodo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+}
+.pagina-avaliacoes .demandas-do-periodo legend {
+  margin-bottom: var(--s-1);
+  padding: 0;
+  color: var(--muted);
+}
+.pagina-avaliacoes .disparo .pedido {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1);
+  text-align: left;
+}
+.pagina-avaliacoes .pedido textarea {
+  align-self: stretch;
+  width: 100%;
+  field-sizing: content;
+  min-height: 2lh;
+  max-height: 12lh;
+}
+.pagina-avaliacoes .lista-avaliacoes {
+  display: flex;
+  flex-direction: column;
+}
+.pagina-avaliacoes .linha-avaliacao {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 120px 100px;
+  gap: var(--s-3);
+  align-items: center;
+  padding: var(--s-2) var(--s-3);
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.pagina-avaliacoes .linha-avaliacao:hover {
+  background: var(--surface);
+}
+.pagina-avaliacoes .linha-avaliacao .projeto {
+  overflow-wrap: anywhere;
+}
+.pagina-avaliacoes .linha-avaliacao .num {
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .pagina-avaliacoes .linha-avaliacao {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .pagina-avaliacoes .linha-avaliacao .periodo,
+  .pagina-avaliacoes .linha-avaliacao .projeto {
+    grid-column: 1 / -1;
+  }
+  .pagina-avaliacoes .linha-avaliacao .num {
+    text-align: right;
+  }
+}
+
+/* Avaliação (D12): escopo e achados à esquerda, a conversa à direita; abaixo de 1100 px, em coluna, sem rolagem horizontal. */
+.pagina:has(> .pagina-avaliacao) {
+  padding: 0;
+}
+.avaliacao-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+  padding: var(--s-5) var(--s-6);
+}
+.avaliacao-layout [data-conversa-area] {
+  position: sticky;
+  top: 64px;
+  height: calc(100vh - 140px);
+  min-height: 420px;
+}
+.coluna-achados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+.pagina-avaliacao .escopo {
+  padding: var(--s-3) var(--s-4);
+}
+.pagina-avaliacao .escopo h3 {
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.pagina-avaliacao .escopo dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pagina-avaliacao .achados {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.pagina-avaliacao .achado {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: var(--s-3) var(--s-4);
+  overflow-wrap: anywhere;
+}
+.pagina-avaliacao .achado :is(h3, p) {
+  margin: 0;
+}
+.pagina-avaliacao .achado h3 {
+  font-size: var(--fs-md, 1em);
+}
+.pagina-avaliacao .achado .evidencia {
+  font-size: var(--fs-sm);
+}
+.pagina-avaliacao .rodape-achado {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 1100px) {
+  .avaliacao-layout {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--s-4);
+  }
+  .avaliacao-layout [data-conversa-area] {
+    position: static;
+    height: 70vh;
+  }
+}
+
 /* Demandas: a conversa da sessão de ajustes; sem rolagem horizontal em telas estreitas. */
 .dm-conversa {
   display: flex;

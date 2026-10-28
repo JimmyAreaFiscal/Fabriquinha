@@ -99,6 +99,7 @@ export const caminhoDaIssue = (projeto: string, issue: Id): string =>
   `/projects/${encodeURIComponent(projeto)}/issues/${rotuloIssue(issue)}`;
 export const caminhoDaDemanda = (demanda: string): string => `/demandas/${encodeURIComponent(demanda)}`;
 export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeURIComponent(sessao)}`;
+export const caminhoDaAvaliacao = (avaliacao: string): string => `/evaluations/${encodeURIComponent(avaliacao)}`;
 export const caminhoDaAuditoria = (sessao: string): string => `/audits/${encodeURIComponent(sessao)}`;
 
 /** O mês `AAAA-MM` por extenso, em português: `setembro de 2026`. O mesmo texto de `mesPorExtenso` do servidor. */
@@ -171,6 +172,7 @@ const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico", "auditoria"]],
+  ["/evaluations", "Avaliações", ["avaliacoes", "avaliacao"]],
   ["/config", "Configuração", ["configuracao"]],
 ];
 
@@ -261,6 +263,8 @@ export const TITULOS: Record<Pagina, string> = {
   sdlc: "Configuração SDLC",
   demandas: "Demandas",
   demanda: "Demanda",
+  avaliacoes: "Avaliações",
+  avaliacao: "Avaliação",
 };
 
 /** Página ainda sem conteúdo: só o cabeçalho com o título. */
