@@ -47,7 +47,12 @@ test("CA-14: backfill sobre a cópia do banco real", { skip: origem === undefine
       const segunda = backfillDemandas(banco);
       assert.deepEqual(segunda.antes, relatorio.depois);
       assert.deepEqual(segunda.depois, relatorio.depois);
+      assert.deepEqual(segunda.emVoo, relatorio.emVoo);
+      assert.deepEqual(segunda.naoMigradas, relatorio.naoMigradas);
     } else {
+      // A recusa cita cada issue bloqueada e deixa as tabelas novas como estavam.
+      for (const bloqueada of recusa?.match(/I-\d+/g) ?? []) assert.ok(issues.includes(bloqueada));
+      assert.ok(recusa?.match(/I-\d+/));
       assert.equal(banco.prepare("SELECT COUNT(*) AS n FROM demanda").get()?.n, 0);
     }
     assert.equal(sha256(original), hashAntes);
@@ -58,7 +63,8 @@ test("CA-14: backfill sobre a cópia do banco real", { skip: origem === undefine
         recusa,
         antes: relatorio?.antes,
         depois: relatorio?.depois,
-        migradas: relatorio?.emVoo,
+        migradas: relatorio ? issues : [],
+        emVoo: relatorio?.emVoo,
       }),
     );
   } finally {
