@@ -1,5 +1,8 @@
 // Quadro de demandas (T-1289, CA-1 a CA-7): aberto pelo menu, com as rodadas, os PRs, os bloqueios e o trabalho ativo;
 // prints a 1440 e 375 px (o último sem rolagem horizontal).
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { projeto } from "./apoio.ts";
 import {
   semearDemandaOciosa,
@@ -8,6 +11,7 @@ import {
   semearPaginaDaDemanda,
   semearPlanejamento,
   semearPrDaRodada,
+  semearTicketAberto,
 } from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";
 
@@ -115,8 +119,8 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Só os botões do gate do PR da rodada (R1 em Aprovação do PR); a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button")).toHaveCount(2);
+  // Só os botões do gate do PR da rodada (R1 em Aprovação do PR) e o Reabrir do T5 falho; a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button")).toHaveCount(3);
 
   // CA-10: clicar no print abre a imagem na caixa.
   await pagina.getByRole("link", { name: "print.png" }).click();
@@ -270,4 +274,56 @@ test("CA-22 e CA-23: reprovar o PR pede o motivo e, com ele, abre a sessão de a
   await pagina.getByRole("button", { name: "Reprovar PR" }).click();
   await expect(pagina.getByRole("link", { name: /Sessão de ajustes de I-215\.R1/ })).toBeVisible();
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toHaveCount(0);
+});
+
+test("CA-24 e CA-25: reabrir o ticket em falha pede a instrução e, com ela, tira o ticket da falha", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  projeto(fabriquinha.raiz);
+  semearDemandas(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-207`);
+  await pagina.setViewportSize({ width: 375, height: 900 });
+  await expect(pagina.getByRole("button", { name: "Reabrir" })).toBeVisible();
+  expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await info.attach("reabrir-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  await pagina.getByRole("button", { name: "Reabrir" }).click();
+  await expect(pagina.locator("[id='instrucao-I-207.T1-erro']")).toHaveText("A instrução é obrigatória para reabrir.");
+  await expect(pagina.getByText("Falhou", { exact: true })).toBeVisible();
+
+  await pagina.getByLabel(/Instrução/).fill("refazer o teste do caminho de erro");
+  await pagina.getByRole("button", { name: "Reabrir" }).click();
+  await expect(pagina.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
+  await expect(pagina.getByText("Falhou", { exact: true })).toHaveCount(0);
+  await expect(pagina.getByText("refazer o teste do caminho de erro")).toBeVisible();
+});
+
+// Um pi que não termina, para o ticket seguir em execução enquanto o teste confere a página e o quadro.
+const piParado = join(mkdtempSync(join(tmpdir(), "pi-parado-")), "pi");
+writeFileSync(piParado, '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso && exit 0\nexec sleep 60\n', {
+  mode: 0o755,
+});
+
+test.describe("CA-26", () => {
+  test.use({ pi: piParado });
+  test("CA-26: Executar agora põe o ticket em execução na página e no trabalho ativo do quadro", async ({
+    pagina,
+    fabriquinha,
+  }, info) => {
+    projeto(fabriquinha.raiz);
+    semearTicketAberto(fabriquinha.raiz);
+    await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+    await pagina.setViewportSize({ width: 375, height: 900 });
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toBeVisible();
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await info.attach("executar-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
+
+    await pagina.getByRole("button", { name: "Executar agora" }).click();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
+    // Pelo menu, sem recarregar: o quadro lê o trabalho ativo antes de o pi falso terminar.
+    await pagina.getByRole("link", { name: "Demandas", exact: true }).first().click();
+    await expect(pagina.locator(".dm-trabalho")).toContainText("I-216.T1");
+  });
 });

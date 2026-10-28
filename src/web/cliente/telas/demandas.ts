@@ -145,6 +145,16 @@ type Pagina = DadosDaPagina;
 const decisao = (d: Pagina["decisoes"][number]): string =>
   `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por)}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
 
+/** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o que está aberto. */
+function acaoDoTicket({ ref, status }: Pagina["tickets"][number]): string {
+  const base = `/api/demandas/tickets/${escapar(ref)}`;
+  if (status === "aberto")
+    return `<div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="executar" data-caminho="${base}/executar">Executar agora</button></div>`;
+  if (status !== "falhou") return "";
+  const campo = `instrucao-${escapar(ref)}`;
+  return `<div class="dm-gate"><label for="${campo}">Instrução (obrigatória para reabrir)</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="reabrir" data-caminho="${base}/reabrir" data-campo="${campo}">Reabrir</button></div></div>`;
+}
+
 function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): string {
   const minhas = decisoes.filter((d) => d.ticket === t.ref);
   return `<li class="dm-ticket">
@@ -153,6 +163,7 @@ function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): str
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
     ${t.motivo_falha === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo_falha)}</p>`}
     ${minhas.length > 0 ? `<ul class="dm-decisoes">${minhas.map(decisao).join("")}</ul>` : ""}
+    ${acaoDoTicket(t)}
   </li>`;
 }
 

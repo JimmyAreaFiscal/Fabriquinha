@@ -266,3 +266,22 @@ export function semearPrDaRodada(raiz: string): void {
   );
   banco.close();
 }
+
+/** I-216 com o T1 aberto na R1 em desenvolvimento: pronto para o Executar agora. */
+export function semearTicketAberto(raiz: string): void {
+  // A execução parte da worktree da demanda, que precisa existir e ser da Fabriquinha.
+  const caminho = join(raiz, "worktrees/loja/I-216/demanda");
+  const repo = join(raiz, "loja");
+  execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-216", caminho, "main"], { cwd: repo });
+  execFileSync("git", ["config", "branch.fabriquinha/I-216.fabriquinha", `demanda:${caminho}`], { cwd: repo });
+  const banco = abrir(raiz);
+  configurarProjeto(banco, raiz);
+  criarDemanda(
+    banco,
+    demanda("I-216", "execucao", {
+      rodadas: [rodada("I-216", 1, "desenvolvimento")],
+      tickets: [ticket("I-216", 1, "implementar", 1, "aberto")],
+    }),
+  );
+  banco.close();
+}

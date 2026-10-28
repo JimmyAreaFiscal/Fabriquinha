@@ -41,6 +41,11 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
         void decidir(botao, main, params, signal);
         return;
       }
+      const acao = alvo?.closest<HTMLButtonElement>("button[data-acao]");
+      if (acao) {
+        void agirNoTicket(acao, main, params, signal);
+        return;
+      }
       const link = alvo?.closest<HTMLAnchorElement>("a[data-imagem]");
       if (!link || evento.button !== 0 || evento.ctrlKey || evento.metaKey || evento.shiftKey) return;
       evento.preventDefault();
@@ -88,6 +93,42 @@ async function decidir(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(aprovado ? { aprovado, ...(nota && { nota: Number(nota) }) } : { aprovado, motivo }),
+      signal,
+    });
+  } catch (falha) {
+    mostrarErro(falha);
+  }
+  if (!signal.aborted) await carregar(main, params, signal);
+}
+
+/**
+ * Reabrir (com instrução) ou executar agora um ticket. Instrução vazia não vai ao servidor; com ou sem erro dele, a
+ * página se redesenha com o status atual.
+ */
+async function agirNoTicket(
+  botao: HTMLButtonElement,
+  main: HTMLElement,
+  params: Parametros,
+  signal: AbortSignal,
+): Promise<void> {
+  const reabrir = botao.dataset.acao === "reabrir";
+  const campo = reabrir ? main.querySelector<HTMLTextAreaElement>(`#${CSS.escape(botao.dataset.campo ?? "")}`) : null;
+  const instrucao = campo?.value.trim() ?? "";
+  if (reabrir && instrucao === "") {
+    const erro = campo?.nextElementSibling as HTMLElement | null;
+    if (erro) {
+      erro.textContent = "A instrução é obrigatória para reabrir.";
+      erro.hidden = false;
+    }
+    return;
+  }
+  avisar();
+  for (const b of main.querySelectorAll<HTMLButtonElement>("button[data-acao]")) b.disabled = true;
+  try {
+    await api(botao.dataset.caminho ?? "", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reabrir ? { instrucao } : {}),
       signal,
     });
   } catch (falha) {

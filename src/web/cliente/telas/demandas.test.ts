@@ -319,3 +319,19 @@ test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {
   assert.match(quadro({ demandas: [d("https://x/7")], trabalho: [] }), /href="https:\/\/x\/7"/);
   assert.doesNotMatch(quadro({ demandas: [d("javascript:x")], trabalho: [] }), /javascript/);
 });
+
+test("o ticket em falha traz a instrução e Reabrir; o aberto traz Executar agora (CA-24 a CA-26)", () => {
+  const com = (status: "falhou" | "aberto" | "concluido") =>
+    pagina({ ...dadosDaPagina(), tickets: [{ ref: "I-206.T3", etapa: "implementar", status }] });
+  const falho = com("falhou");
+  assert.match(falho, /<textarea id="instrucao-I-206\.T3"/);
+  assert.match(
+    falho,
+    /data-acao="reabrir" data-caminho="\/api\/demandas\/tickets\/I-206\.T3\/reabrir" data-campo="instrucao-I-206\.T3">Reabrir</,
+  );
+  assert.match(
+    com("aberto"),
+    /data-acao="executar" data-caminho="\/api\/demandas\/tickets\/I-206\.T3\/executar">Executar agora</,
+  );
+  assert.doesNotMatch(com("concluido"), /data-acao/);
+});
