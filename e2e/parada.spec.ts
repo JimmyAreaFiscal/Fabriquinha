@@ -3,6 +3,7 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
@@ -137,3 +138,45 @@ test.describe("I-246", () => {
     });
   }
 });
+
+// I-246.R2 CA-4: o condutor ainda na preparação da worktree (pi não lançado) também não prende o `parar`.
+for (const [nome, preparacao, sinalNosFilhos] of [
+  ["preparação sleep 25, SIGTERM só no serviço", "sleep 25", false],
+  ["preparação que ignora o SIGTERM, SIGTERM no serviço e nos filhos", "trap '' TERM; sleep 25", true],
+] as const) {
+  test.describe(`I-246 CA-4 preparação: ${nome}`, () => {
+    test.use({ pi: piParado });
+    test("sai no limite, sem erro, sem pi lançado, e a subida seguinte mostra Falhou", async ({
+      pagina,
+      fabriquinha,
+    }) => {
+      test.setTimeout(60_000);
+      projeto(fabriquinha.raiz);
+      semearTicketAberto(fabriquinha.raiz);
+      const banco = abrir(fabriquinha.raiz);
+      banco.prepare("UPDATE comando_preparacao_projeto SET comando = ? WHERE projeto = 'loja'").run(preparacao);
+      banco.close();
+      await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+      await pagina.getByRole("button", { name: "Executar agora" }).click();
+      await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+      await dormir(1000); // a preparação está rodando
+
+      const inicio = Date.now();
+      const saiu = once(fabriquinha.servico, "exit");
+      if (sinalNosFilhos) execFileSync("pkill", ["-TERM", "-P", String(fabriquinha.servico.pid)], { stdio: "ignore" });
+      fabriquinha.servico.kill("SIGTERM");
+      const codigo = (await saiu)[0] as number | null;
+      expect(Date.now() - inicio).toBeLessThan(10_000 + 2_000 + 3_000);
+      expect(codigo).toBe(0);
+      expect(fabriquinha.stderr()).not.toContain("database is not open");
+      expect(fabriquinha.stderr()).not.toMatch(/Error/);
+
+      const nova = await fabriquinha.reiniciar();
+      await pagina.goto(nova.link);
+      await pagina.goto(`${nova.base}/demandas/I-216`);
+      const ticket = pagina.locator(".dm-ticket", { hasText: "I-216.T1" });
+      await expect(ticket).toContainText("Falhou");
+      await expect(ticket).toContainText("serviço reiniciado");
+    });
+  });
+}
