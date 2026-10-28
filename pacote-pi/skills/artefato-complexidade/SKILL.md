@@ -29,13 +29,13 @@ Símbolos em minúsculas, expoente com `^`, sempre dentro de `O(...)`; `log` é 
 
 `variaveis`, um item por símbolo:
 
-- `significado`: o que o símbolo conta, com a unidade do domínio: "issues do projeto", "linhas do arquivo de sessão".
+- `significado`: o que o símbolo conta, com a unidade do domínio: "demandas do projeto", "linhas do arquivo de sessão".
 - Todo símbolo usado num Big-O está declarado, e todo declarado é usado.
 
 `fluxos`, um item por caminho:
 
 - `nome`: o mesmo título que o fluxo tem no HTML.
-- `gatilho`: o que inicia o fluxo, pelo nome real: `GET /api/issues/:id`, `fabriquinha ticket criar`.
+- `gatilho`: o que inicia o fluxo, pelo nome real: `GET /api/demandas/:id`, `fabriquinha demanda registrar`.
 - `situacao`: `novo` ou `alterado`; `antes` só em fluxo `alterado`, e então obrigatório.
 - `depois`: o total do fluxo com a solução.
 

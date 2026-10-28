@@ -7,7 +7,7 @@ description: Use ao produzir a evidência `criterios_aceite` da Fabriquinha.
 
 ## Para que serve
 
-O Auditor lê os critérios para aprovar o registro: eles dizem o que "pronto" significa para esta issue.
+O Auditor lê os critérios para aprovar o registro: eles dizem o que "pronto" significa para esta demanda.
 Depois, cada etapa trabalha só com eles, sem a conversa do registro: o desenho propõe a solução que os atende, o desenvolvimento os implementa e a revisão verifica cada um e grava a prova.
 
 Um critério é um **contrato verificável**: quem nunca viu a conversa executa o critério e chega a "atendido" ou "não atendido", sem interpretar.
@@ -28,7 +28,7 @@ A Fabriquinha monta a frase "dado …, quando …, então …", então escreva c
 
 `dado`: o estado de partida, concreto.
 
-- Bom: "um projeto com branch base `main` e nenhuma issue aberta".
+- Bom: "um projeto com branch base `main` e nenhuma demanda aberta".
 - Fraco: "o sistema configurado".
 
 `quando`: uma única ação, de quem age.
@@ -38,21 +38,20 @@ A Fabriquinha monta a frase "dado …, quando …, então …", então escreva c
 
 `entao`: o resultado observável e conferível: texto exato na tela, valor gravado, código de saída, arquivo criado.
 
-- Bom: "a issue passa para a etapa desenho e o botão some".
+- Bom: "a demanda passa para o planejamento e o botão some".
 - Fraco: "funciona corretamente", "é rápido", "a experiência melhora".
 
-Um número entra só com unidade e limite: "responde em até 2 s com 1.000 issues".
+Um número entra só com unidade e limite: "responde em até 2 s com 1.000 demandas".
 
 ### Mudança de mais de 30 arquivos
 
 Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arquivos a mudança pedida altera, testes incluídos.
 
-- Acima de 30, proponha uma issue com a parte que sai: `fabriquinha issue propor I-<n> --titulo <título> --arquivos <estimativa> --descricao <arquivo>`.
-  O título diz a parte que sai; a mensagem (`--descricao`) já é a descrição da issue nova, completa para quem não viu a conversa; a estimativa é o número de arquivos dessa parte.
-  Atribua à issue nova só o que sai inteiro desta: arquivo que as duas precisam tocar fica nesta issue e não é atribuído à nova (a mensagem pode dizer que a nova depende dele).
-- Com 30 ou menos, não proponha.
-- A proposta não bloqueia nada: o Auditor aceita ou recusa no chat, e você segue o registro normalmente. Só a Fabriquinha cria a issue.
-- Depois do aviso da Fabriquinha de que a issue nova foi criada, tire da descrição, do comportamento e dos critérios o que ela assumiu, na mesma sessão, e submeta de novo as evidências. Se a proposta foi recusada, mantenha o escopo.
+- Acima de 30, divida a mudança em demandas separadas, cada uma com até 30 arquivos: esta fica com uma parte, e cada parte que sai é registrada como outra demanda.
+  A demanda que precisa do que outra entrega a declara com `--dep` ao registrar: `fabriquinha demanda registrar ... --dep I-<n>` (o `--dep` repete, um por demanda de que ela depende).
+  Cada demanda leva a descrição completa para quem não viu a conversa e só os critérios da parte dela.
+  Arquivo que duas partes precisam tocar fica numa só; a outra depende dela pelo `--dep`.
+- Com 30 ou menos, não divida.
 
 ## Antes de submeter
 
@@ -62,4 +61,4 @@ Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arq
 - [ ] Os critérios descrevem o comportamento visto de fora; a solução interna fica para o desenho.
 - [ ] Os termos são os do produto e do código (nomes de tela, comando, campo), os mesmos da conversa com o Auditor.
 - [ ] O Auditor reconhece nos critérios tudo o que pediu, e só o que pediu.
-- [ ] Se a mudança passa de 30 arquivos, há uma proposta de issue; se não passa, não há.
+- [ ] Se a mudança passa de 30 arquivos, ela está dividida em demandas separadas, ligadas por `--dep`; se não passa, é uma só.
