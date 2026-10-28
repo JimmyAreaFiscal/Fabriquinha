@@ -8,9 +8,10 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarCommit } from "../persistencia/commits.ts";
+import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { projetosAVarrer } from "../persistencia/retrabalho.ts";
-import { registrarRetrabalho, varrerBase } from "./retrabalho.ts";
+import { registrarRetrabalho, registrarRetrabalhoDemanda, varrerBase } from "./retrabalho.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-retrabalho-")));
 after(() => {
@@ -49,7 +50,18 @@ function cenario() {
   banco
     .prepare("INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'loja', 'I', 'problema', ?, ?)")
     .run("desenvolvimento", agora);
+  banco
+    .prepare(
+      "INSERT INTO demanda VALUES ('I-1', 'loja', 't', 'problema', 'd', 'execucao', ?, 'f', 's', 1, 'fabriquinha/I-1')",
+    )
+    .run(agora);
   for (const id of [1, 2, 3, 4]) {
+    banco
+      .prepare(
+        `INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+         VALUES ('I-1', ?, 'implementar', 'aberto', ?)`,
+      )
+      .run(id, agora);
     banco
       .prepare(
         `INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em)
@@ -70,7 +82,10 @@ function cenario() {
     git(repo, "add", "-A");
     git(repo, "-c", `user.name=${autor}`, "-c", `user.email=${autor.toLowerCase()}@exemplo.com`, "commit", "-qm", "c");
     const sha = git(repo, "rev-parse", "HEAD");
-    if (ticket !== undefined) gravarCommit(banco, ticket, { sha, mensagem: "c", em: agora, arquivos: [] });
+    if (ticket !== undefined) {
+      gravarCommit(banco, ticket, { sha, mensagem: "c", em: agora, arquivos: [] });
+      gravarCommitDemanda(banco, "I-1", ticket, { sha, mensagem: "c", em: agora, arquivos: [] });
+    }
     return sha;
   };
   commitar({ "humano.txt": linhas("h1", "h2", "h3") });
@@ -81,6 +96,13 @@ function cenario() {
     repo,
     commitar,
     publicar: () => git(repo, "push", "-q", "origin", "main"),
+    retrabalhoDemanda: () =>
+      banco
+        .prepare(
+          "SELECT commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id FROM retrabalho_demanda ORDER BY commit_alterador, ticket_origem_id",
+        )
+        .all()
+        .map((l) => ({ ...l })),
     retrabalho: () =>
       banco
         .prepare("SELECT * FROM retrabalho ORDER BY commit_alterador, ticket_origem")
@@ -223,6 +245,40 @@ test("linha de commit humano é ignorada; um ticket nunca conta retrabalho sobre
   c.banco.close();
 });
 
+test("CA-11: o segundo ticket da demanda reescreve linhas do primeiro e vai para retrabalho_demanda, idempotente", async () => {
+  const c = cenario();
+  c.commitar({ "a.txt": linhas(...DEZ) }, 1);
+  const b = c.commitar({ "a.txt": linhas("l1", "B2", "l3", "l4", "B5", "l6", "l7", "l8", "B9", "l10", "n1") }, 2);
+  const esperado = [
+    {
+      commit_alterador: b,
+      demanda_id: "I-1",
+      ticket_id: 2,
+      autor: null,
+      ticket_origem_id: 1,
+      linhas: 3,
+      alterador_demanda_id: "I-1",
+    },
+  ];
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 2, b);
+  assert.deepEqual(c.retrabalhoDemanda(), esperado);
+  // O ticket nunca conta retrabalho sobre si mesmo.
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 1, b);
+  assert.deepEqual(c.retrabalhoDemanda(), esperado);
+  // Linha de commit humano não conta.
+  const h = c.commitar({ "humano.txt": linhas("H1", "h2", "h3") }, 3);
+  await registrarRetrabalhoDemanda(c.banco, "I-1", 3, h);
+  assert.deepEqual(c.retrabalhoDemanda(), esperado);
+  c.banco.close();
+});
+
+test("demanda inexistente é erro", async () => {
+  const c = cenario();
+  await assert.rejects(registrarRetrabalhoDemanda(c.banco, "I-99", 1, "0".repeat(40)), /a demanda I-99 não existe/);
+  c.banco.close();
+});
+
 test("ticket inexistente é erro", async () => {
   const c = cenario();
   await assert.rejects(registrarRetrabalho(c.banco, 99, "0".repeat(40)), /o ticket T-99 não existe/);
@@ -237,7 +293,7 @@ test("varrerBase sem cursor só grava o sha atual de origin/<base> e não conta 
 
   await varrerBase(c.banco, "loja");
   assert.equal(c.cursor().ultimo_sha, git(c.repo, "rev-parse", "origin/main"));
-  assert.deepEqual(c.retrabalho(), []);
+  assert.deepEqual(c.retrabalhoDemanda(), []);
   c.banco.close();
 });
 
@@ -264,8 +320,16 @@ test("commit humano na base reescreve 2 linhas de A: retrabalho(commit, null, au
   c.publicar();
 
   await varrerBase(c.banco, "loja");
-  assert.deepEqual(c.retrabalho(), [
-    { commit_alterador: humano, ticket: null, autor: "Maria <maria@exemplo.com>", ticket_origem: 1, linhas: 2 },
+  assert.deepEqual(c.retrabalhoDemanda(), [
+    {
+      commit_alterador: humano,
+      demanda_id: "I-1",
+      ticket_id: null,
+      autor: "Maria <maria@exemplo.com>",
+      ticket_origem_id: 1,
+      linhas: 2,
+      alterador_demanda_id: null,
+    },
   ]);
   const depois = c.cursor();
   assert.equal(depois.ultimo_sha, git(c.repo, "rev-parse", "main"));
@@ -273,7 +337,8 @@ test("commit humano na base reescreve 2 linhas de A: retrabalho(commit, null, au
 
   // Sem nada novo, a varredura só renova a data.
   await varrerBase(c.banco, "loja");
-  assert.equal(c.retrabalho().length, 1);
+  assert.equal(c.retrabalhoDemanda().length, 1);
+  assert.deepEqual(c.retrabalho(), []);
   c.banco.close();
 });
 
@@ -290,7 +355,7 @@ test("force-push que tira o cursor da história gera aviso e recomeça do sha at
   await varrerBase(c.banco, "loja");
 
   assert.equal(c.cursor().ultimo_sha, git(c.repo, "rev-parse", "main"));
-  assert.deepEqual(c.retrabalho(), []);
+  assert.deepEqual(c.retrabalhoDemanda(), []);
   assert.equal(avisos.mock.callCount(), 1);
   assert.match(String(avisos.mock.calls[0]?.arguments.join(" ")), /a base main do projeto loja foi reescrita/);
   c.banco.close();

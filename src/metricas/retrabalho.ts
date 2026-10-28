@@ -4,7 +4,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { raizDo } from "../persistencia/banco.ts";
-import { commitRegistrado, ticketDoCommit } from "../persistencia/commits.ts";
+import { ticketDoCommit } from "../persistencia/commits.ts";
+import {
+  commitRegistradoDemanda,
+  donoDoCommitDemanda,
+  gravarRetrabalhoDoTicket,
+  type LinhasPorDemanda,
+} from "../persistencia/commits_demanda.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import { agregadoDoTicket } from "../persistencia/issues.ts";
 import { projeto as lerProjeto } from "../persistencia/projetos.ts";
@@ -45,8 +51,8 @@ async function blame(repo: string, args: string[]): Promise<string> {
  * do caminho antigo em `pai`, o commit de origem de cada linha. Arquivo binário não tem hunk e fica de fora.
  * ponytail: mudança só de espaço conta; com formatador inflando o número, passar `-w` no diff e no blame.
  */
-async function reescritas(banco: DatabaseSync, repo: string, pai: string, sha: string): Promise<Map<Id, number>> {
-  const porTicket = new Map<Id, number>();
+async function reescritas(repo: string, pai: string, sha: string): Promise<Map<string, number>> {
+  const porCommit = new Map<string, number>();
   const raw = (await exigirGit(repo, "diff", "--raw", "-z", "-M", pai, sha)).split("\0");
   for (let i = 0; raw[i];) {
     // `:<modo antes> <modo depois> <objeto> <objeto> <status>`, e um caminho, ou dois na renomeação.
@@ -75,12 +81,33 @@ async function reescritas(banco: DatabaseSync, repo: string, pai: string, sha: s
     if (intervalos.length === 0) continue;
     const origens = await blame(repo, ["--porcelain", ...intervalos, pai, "--", String(caminhos[0])]);
     for (const [, origem] of origens.matchAll(LINHA_BLAME)) {
-      // Linha de commit fora da Fabriquinha (humano ou histórico anterior) não conta.
-      const ticket = ticketDoCommit(banco, String(origem));
-      if (ticket !== undefined) porTicket.set(ticket, (porTicket.get(ticket) ?? 0) + 1);
+      porCommit.set(String(origem), (porCommit.get(String(origem)) ?? 0) + 1);
     }
   }
+  return porCommit;
+}
+
+/** As linhas por commit de origem viram linhas por ticket; commit fora da Fabriquinha (humano ou anterior) não conta. */
+function dosTickets(banco: DatabaseSync, porCommit: Map<string, number>): Map<Id, number> {
+  const porTicket = new Map<Id, number>();
+  for (const [origem, n] of porCommit) {
+    const ticket = ticketDoCommit(banco, origem);
+    if (ticket !== undefined) porTicket.set(ticket, (porTicket.get(ticket) ?? 0) + n);
+  }
   return porTicket;
+}
+
+/** O mesmo, para os tickets das demandas, agrupados pela demanda de origem. */
+function dosTicketsDemanda(banco: DatabaseSync, porCommit: Map<string, number>): LinhasPorDemanda {
+  const porDemanda: LinhasPorDemanda = new Map();
+  for (const [origem, n] of porCommit) {
+    const dono = donoDoCommitDemanda(banco, origem);
+    if (dono === undefined) continue;
+    const tickets = porDemanda.get(dono.demandaId) ?? new Map<number, number>();
+    tickets.set(dono.ticketId, (tickets.get(dono.ticketId) ?? 0) + n);
+    porDemanda.set(dono.demandaId, tickets);
+  }
+  return porDemanda;
 }
 
 /**
@@ -94,10 +121,32 @@ export async function registrarRetrabalho(banco: DatabaseSync, ticket: Id, sha: 
   if (p === undefined) {
     throw new ErroDeInexistente(`o ticket T-${String(ticket)} não existe`, "confira o número do ticket");
   }
-  const linhas = await naFilaDoProjeto(raizDo(banco), p.nome, () => reescritas(banco, p.repo, `${sha}^`, sha));
+  const porCommit = await naFilaDoProjeto(raizDo(banco), p.nome, () => reescritas(p.repo, `${sha}^`, sha));
+  const linhas = dosTickets(banco, porCommit);
   // Um commit por ticket (D4): o pai nunca tem linha do próprio ticket; a guarda só protege o CHECK do F6 §7.
   linhas.delete(ticket);
   gravarRetrabalho(banco, ticket, sha, linhas);
+}
+
+/** Como `registrarRetrabalho`, para o ticket de uma demanda: lê `commit_ticket_demanda` e grava `retrabalho_demanda`. */
+export async function registrarRetrabalhoDemanda(
+  banco: DatabaseSync,
+  demandaId: string,
+  ticketId: number,
+  sha: string,
+): Promise<void> {
+  const projeto = (
+    banco.prepare("SELECT projeto FROM demanda WHERE id = ?").get(demandaId) as { projeto: string } | undefined
+  )?.projeto;
+  const p = projeto === undefined ? undefined : lerProjeto(banco, projeto);
+  if (p === undefined) {
+    throw new ErroDeInexistente(`a demanda ${demandaId} não existe`, "confira o número da demanda");
+  }
+  const porCommit = await naFilaDoProjeto(raizDo(banco), p.nome, () => reescritas(p.repo, `${sha}^`, sha));
+  const linhas = dosTicketsDemanda(banco, porCommit);
+  // Um commit por ticket: o pai nunca tem linha do próprio ticket; a guarda só protege o CHECK da tabela.
+  linhas.get(demandaId)?.delete(ticketId);
+  gravarRetrabalhoDoTicket(banco, demandaId, ticketId, sha, linhas);
 }
 
 /**
@@ -136,8 +185,9 @@ export async function varrerBase(banco: DatabaseSync, projeto: string): Promise<
       for (const registro of log.split("\0").filter(Boolean)) {
         const [sha = "", pais = "", autor = ""] = registro.split("\n");
         // Commit de ticket já contou em 4.2; commit raiz (história sem relação trazida por merge) não reescreve nada.
-        if (commitRegistrado(banco, sha) || pais === "") continue;
-        humanos.push({ sha, autor, linhas: await reescritas(banco, p.repo, String(pais.split(" ")[0]), sha) });
+        if (commitRegistradoDemanda(banco, sha) || pais === "") continue;
+        const porCommit = await reescritas(p.repo, String(pais.split(" ")[0]), sha);
+        humanos.push({ sha, autor, linhas: dosTicketsDemanda(banco, porCommit) });
       }
     }
     gravarVarredura(banco, projeto, atual, humanos);
