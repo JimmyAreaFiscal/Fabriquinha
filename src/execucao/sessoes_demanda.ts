@@ -7,16 +7,17 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
-import { encontrado } from "../dominio/erros.ts";
+import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
 import type { EtapaTicket, Instante, Modelo } from "../dominio/primitivos.ts";
 import type { ExecucaoSessao, Sessao } from "../dominio/sessoes.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { type Dialogo, assinar, type Situacao, situacao } from "./gerente.ts";
+import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
+import { abortar, type Dialogo, assinar, mandar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
 import { emMarkdown, type Mensagem, texto } from "./historico.ts";
 import type { EventoPi } from "./pi.ts";
-import { type Estado, lerConversa } from "./sessoes.ts";
+import { type Estado, lerConversa, type ModoEnvio } from "./sessoes.ts";
 
 export type MotivoDemanda = "conversa" | "dialogo" | "falha" | "gate_demanda";
 
@@ -230,4 +231,62 @@ export function exportarHistoricoDemanda(
     nome: `historico-${enderecoDoTicket}.md`,
     markdown: [cabecalho, ...mensagens.flatMap((m) => emMarkdown(m, daFabriquinha))].join("\n\n") + "\n",
   };
+}
+
+/** Envia a mensagem do Auditor; `false` se o id não é de uma sessão da demanda. */
+export function enviarDemanda(
+  banco: DatabaseSync,
+  id: string,
+  texto: string,
+  modo: ModoEnvio,
+  limiteMin: number,
+): boolean {
+  const ref = donoDaSessao(banco, id);
+  if (!ref) return false;
+  const c = carregar(banco, ref, id);
+  const viva = situacao(id);
+  const [estado, motivo] = calcular(c, viva);
+  const rotulo = motivo ? `${estado}: ${motivo}` : estado;
+  const aceitos: ModoEnvio[] = estado === "rodando" ? ["steer", "follow_up"] : motivo === "conversa" ? ["prompt"] : [];
+  if (!aceitos.includes(modo)) {
+    throw new ErroDeRegra(
+      `a sessão de ${formatarTicketRef(c.ticket)} está ${rotulo} e não recebe ${modo}`,
+      aceitos.length > 0 ? `envie com ${aceitos.join(" ou ")}` : SEM_MENSAGEM[motivo ?? estado],
+    );
+  }
+  // Em conversa, o pi vivo está ocioso.
+  if (estado === "rodando" || viva) mandar(ultimaDe(c).id, { type: modo, message: texto });
+  else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto });
+  return true;
+}
+
+const SEM_MENSAGEM: Record<string, string> = {
+  dialogo: "responda o diálogo aberto pelo agente",
+  falha: "reabra o ticket na página da demanda",
+  gate_demanda: "decida o gate na página da demanda",
+  terminada: "a sessão é só leitura",
+};
+
+/** Responde o diálogo `dialogo` do agente; `false` se o id não é de uma sessão da demanda. */
+export function responderDialogoDemanda(
+  banco: DatabaseSync,
+  id: string,
+  dialogo: string,
+  resposta: Parameters<typeof responderDialogo>[2],
+): boolean {
+  const ref = donoDaSessao(banco, id);
+  if (!ref) return false;
+  responderDialogo(ultimaDe(carregar(banco, ref, id)).id, dialogo, resposta);
+  return true;
+}
+
+/** Aborta a execução em andamento (pi vivo: `abort`; aberta sem pi: interrupção); `false` se o id não é da demanda. */
+export function abortarDemanda(banco: DatabaseSync, id: string): boolean {
+  const ref = donoDaSessao(banco, id);
+  if (!ref) return false;
+  const ultima = ultimaDe(carregar(banco, ref, id));
+  if (situacao(id)) abortar(ultima.id);
+  else if (ultima.fim == null) interromperExecucaoDemanda(banco, ref);
+  else throw new ErroDeRegra("não há execução para abortar", "a sessão não está rodando");
+  return true;
 }

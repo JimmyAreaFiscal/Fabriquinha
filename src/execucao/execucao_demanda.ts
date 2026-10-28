@@ -41,6 +41,8 @@ export interface OpcoesExecucaoDemanda {
   modo?: Exclude<ModoExecucao, "consulta">;
   /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
   retomada?: ContextoDemanda["retomada"];
+  /** Mensagem do Auditor ao retomar a sessão interativa: é o prompt da execução, sem remontar o contexto. */
+  mensagem?: string;
   /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
   fechar?: typeof fecharTicketDemanda;
 }
@@ -139,14 +141,16 @@ async function conduzir(c: Conducao): Promise<void> {
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
     anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
     const worktree = await worktreeDoTicket(c, log);
-    const prompt = montarPromptDemanda({
-      ag: c.ag,
-      ticket: c.ticket,
-      projeto: { nome: projeto.nome, branch_base: projeto.branch_base },
-      worktree,
-      saida: join(dir, "saida"),
-      retomada: opcoes.retomada,
-    });
+    const prompt =
+      opcoes.mensagem ??
+      montarPromptDemanda({
+        ag: c.ag,
+        ticket: c.ticket,
+        projeto: { nome: projeto.nome, branch_base: projeto.branch_base },
+        worktree,
+        saida: join(dir, "saida"),
+        retomada: opcoes.retomada,
+      });
     writeFileSync(join(dir, "prompt.md"), prompt);
     const args = argumentosPiDemanda({
       raiz,

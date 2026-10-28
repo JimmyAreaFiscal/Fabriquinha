@@ -18,11 +18,14 @@ import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { avisar, situacao } from "./gerente.ts";
 import {
+  abortarDemanda,
   abrirChatDemanda,
   cabecalhoDaDemanda,
   calcular,
   type Carregada,
+  enviarDemanda,
   exportarHistoricoDemanda,
+  responderDialogoDemanda,
 } from "./sessoes_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -376,4 +379,69 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   const parada = cabecalhoDaDemanda(banco, sessao);
   assert.equal(parada?.sessao.estado, "aguardando_humano");
   assert.equal(parada.sessao.motivo, "conversa");
+});
+
+test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abortar", async () => {
+  const { banco } = cenario();
+  criarDemanda(
+    banco,
+    demanda("I-303", "planejamento", "pergunte perguntar", [ticket("I-303", 1, "planejar", "em_execucao")]),
+  );
+  const ref = { demanda_id: "I-303", ticket_id: 1 };
+  const { fim } = iniciarExecucaoDemanda(banco, ref, {
+    limiteMin: 5,
+    modo: "interativo",
+    fechar: () => Promise.resolve(),
+  });
+  const sessao = String(carregarSessoesDoTicket(banco, ref).sessoes[0]?.id);
+
+  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  assert.throws(
+    () => enviarDemanda(banco, sessao, "oi", "prompt", 5),
+    /aguardando_humano: dialogo e não recebe prompt/,
+  );
+  const dialogo = String(situacao(sessao)?.dialogos[0]?.id);
+  assert.equal(responderDialogoDemanda(banco, sessao, dialogo, { value: "alta" }), true);
+  await ate(() => situacao(sessao)?.dialogos.length === 0 && situacao(sessao)?.ocupado === false);
+
+  // Conversa com o pi vivo ocioso: a mensagem vai ao mesmo pi, sem nova execução.
+  assert.throws(() => enviarDemanda(banco, sessao, "oi", "steer", 5), /não recebe steer.*envie com prompt/);
+  // O pi vivo recebe a mensagem sem nova execução e volta a perguntar; o aborto vai a ele.
+  assert.equal(enviarDemanda(banco, sessao, "pergunte perguntar de novo", "prompt", 5), true);
+  assert.equal(carregarSessoesDoTicket(banco, ref).execucoes.length, 1);
+  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  assert.equal(abortarDemanda(banco, sessao), true);
+  await ate(() => situacao(sessao)?.dialogos.length === 0 && situacao(sessao)?.ocupado === false);
+  assert.notEqual(cabecalhoDaDemanda(banco, sessao)?.sessao.estado, "rodando");
+  interromperExecucaoDemanda(banco, ref);
+  await fim;
+
+  // Sem pi e sem execução aberta: o prompt é a mensagem e a mesma sessão é retomada.
+  assert.equal(enviarDemanda(banco, sessao, "retoma", "prompt", 5), true);
+  const execucoes = carregarSessoesDoTicket(banco, ref).execucoes;
+  assert.equal(execucoes.length, 2);
+  assert.equal(execucoes.at(-1)?.sessao_id, sessao);
+  await ate(() => situacao(sessao)?.ocupado === false);
+  interromperExecucaoDemanda(banco, ref);
+  await ate(() => carregarSessoesDoTicket(banco, ref).execucoes.at(-1)?.fim != null);
+});
+
+test("CA-12: abortar sem execução em andamento avisa; órfã é interrompida; outros estados recusam o envio", () => {
+  const { banco } = cenario();
+  assert.throws(() => abortarDemanda(banco, "s4"), /não há execução para abortar/);
+  // Execução aberta sem pi (serviço reiniciado): interrompe e falha o ticket.
+  assert.throws(() => enviarDemanda(banco, "s2", "x", "steer", 5), /não tem pi rodando/);
+  assert.equal(abortarDemanda(banco, "s2"), true);
+  assert.equal(cabecalhoDaDemanda(banco, "s2")?.sessao.motivo, "falha");
+  assert.throws(() => enviarDemanda(banco, "s3", "x", "prompt", 5), /falha e não recebe prompt/);
+  assert.throws(() => enviarDemanda(banco, "s4", "x", "prompt", 5), /terminada e não recebe prompt/);
+  assert.throws(() => enviarDemanda(banco, "s301", "x", "prompt", 5), /gate_demanda/);
+  assert.throws(() => responderDialogoDemanda(banco, "s4", "d", { value: "x" }), /não tem pi rodando/);
+  for (const f of [
+    () => enviarDemanda(banco, "nao-existe", "x", "prompt", 5),
+    () => responderDialogoDemanda(banco, "nao-existe", "d", { value: "x" }),
+    () => abortarDemanda(banco, "nao-existe"),
+  ]) {
+    assert.equal(f(), false);
+  }
 });

@@ -43,7 +43,14 @@ import {
   registrarNecessidade,
   responderNaSessao,
 } from "../../execucao/sessoes.ts";
-import { abrirChatDemanda, type CabecalhoDemanda, exportarHistoricoDemanda } from "../../execucao/sessoes_demanda.ts";
+import {
+  abortarDemanda,
+  abrirChatDemanda,
+  type CabecalhoDemanda,
+  enviarDemanda,
+  exportarHistoricoDemanda,
+  responderDialogoDemanda,
+} from "../../execucao/sessoes_demanda.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { agregadoExistente, comIssue, issueDoTicket, propostasDaIssue } from "../../persistencia/issues.ts";
 import { configuracao } from "../../persistencia/servico.ts";
@@ -235,6 +242,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     tratar: async ({ banco, params, corpo }) => {
       const { texto, modo, anexos } = NovaMensagem.parse(corpo);
       const sessao = String(params.sessao);
+      if (enviarDemanda(banco, sessao, texto, modo, opcoes(banco).ociosidadeMin)) return;
       const mensagem = anexos.length > 0 ? await anexarHistorico(banco, sessao, anexos, texto) : texto;
       await enviar(banco, sessao, mensagem, modo, opcoes(banco));
     },
@@ -265,6 +273,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     caminho: "/api/sessoes/:sessao/dialogos/:id",
     tratar: async ({ banco, params, corpo }) => {
       const resposta = RespostaDialogo.parse(corpo);
+      if (responderDialogoDemanda(banco, String(params.sessao), String(params.id), resposta)) return;
       await responderNaSessao(banco, String(params.sessao), String(params.id), resposta);
     },
   },
@@ -272,6 +281,7 @@ export const ROTAS_DO_CHAT: Rota[] = [
     metodo: "POST",
     caminho: "/api/sessoes/:sessao/abortar",
     tratar: async ({ banco, params }) => {
+      if (abortarDemanda(banco, String(params.sessao))) return;
       abortar((await infoDaSessao(banco, String(params.sessao))).execucao);
     },
   },

@@ -270,6 +270,18 @@ test("CA-7: devolução e reabertura levam o motivo ao prompt", async () => {
   assert.match(reabertura ?? "", /## Reabertura[\s\S]*Motivo: faltou X/);
 });
 
+test("a opção mensagem é o prompt da retomada, sem remontar o contexto", async () => {
+  const { banco, sessoes, registro } = await cenario();
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1, mensagem: "segue assim" }).fim;
+  const prompts = registro()
+    .filter((r) => r.evento === "prompt")
+    .map((r) => r.mensagem);
+  assert.equal(prompts[1], "segue assim");
+  assert.equal(sessoes(1).sessoes.length, 1);
+  assert.equal(sessoes(1).execucoes.length, 2);
+});
+
 test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e custo", async () => {
   const { banco, sessoes, c } = await cenario();
   const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });

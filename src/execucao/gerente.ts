@@ -175,7 +175,7 @@ export const dialogosPendentes = (execucao: Id): Dialogo[] => [...(vivas.get(exe
 
 /** Responde um diálogo pendente (`extension_ui_response` do RPC do pi): `value`, `confirmed` ou `cancelled`. */
 export function responderDialogo(
-  execucao: Id,
+  execucao: Id | string,
   id: string,
   resposta: { value: string } | { confirmed: boolean } | { cancelled: true },
 ): void {

@@ -11,13 +11,15 @@ import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
-import { avisar, encerrar } from "../../execucao/gerente.ts";
+import { avisar, encerrar, situacao } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import { submeter } from "../../evidencias/submissao.ts";
 import type { DadosDoChatDemanda } from "./chat.ts";
 import { criarDemanda } from "../../persistencia/demandas.ts";
 import { proporIssue } from "../../persistencia/issues.ts";
-import { comSessoesDoTicket } from "../../persistencia/sessoes.ts";
+import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
+import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execucao/execucao_demanda.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { execucoesEmAndamento } from "../../persistencia/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import type { Pedido } from "../rotas.ts";
@@ -681,8 +683,66 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
     /^# Histórico da sessão I-310.T1 \(planejar\)[\s\S]*## Auditor\n\nplaneje[\s\S]*## Agente\n\nQual a prioridade\?/,
   );
 
+  // CA-9, CA-12: texto vazio recusado no schema; steer na conversa, diálogo e aborto sem pi são recusados.
+  const vazio = await postar("/api/sessoes/sd-310/mensagens", { texto: "   ", modo: "prompt" });
+  assert.equal(vazio.status, 422);
+  assert.equal((await postar("/api/sessoes/sd-310/mensagens", { texto: "x", modo: "steer" })).status, 409);
+  assert.equal((await postar("/api/sessoes/sd-310/dialogos/d1", { valor: "x" })).status, 409);
+  assert.equal((await postar("/api/sessoes/sd-310/abortar")).status, 409);
+
   // CA-7: a sessão que nem a demanda nem as issues conhecem.
   const nada = await pedir("/api/sessoes/sd-nada");
   assert.equal(nada.status, 404);
   assert.match(JSON.stringify(nada.corpo), /a sessão sd-nada não existe[\s\S]*confira o endereço do chat/);
+});
+
+test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a mensagem e abortar", async () => {
+  gravarConfiguracaoProjeto(servico.banco, {
+    nome: "loja",
+    branch_base: "main",
+    chave_sonarqube: "loja",
+    raiz_git: join(base, "repo"),
+    hospedagem: "github",
+    etapas: [],
+    preparacao: [{ ordem: 1, comando: "true" }],
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+  });
+  const ref = { demanda_id: "I-311", ticket_id: 1 };
+  criarDemanda(
+    servico.banco,
+    demanda("I-311", "planejamento", {
+      demanda: { ...demanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
+      tickets: [
+        {
+          ...ref,
+          etapa: "planejar",
+          status: "em_execucao",
+          status_alterado_em: "2026-01-01T00:00:00.000Z",
+          devolucoes: 0,
+        },
+      ],
+    }),
+  );
+  const { fim } = iniciarExecucaoDemanda(servico.banco, ref, {
+    limiteMin: 5,
+    modo: "interativo",
+    fechar: () => Promise.resolve(),
+  });
+  const sessao = String(carregarSessoesDoTicket(servico.banco, ref).sessoes[0]?.id);
+  const dialogos = () => situacao(sessao)?.dialogos ?? [];
+  await ate(() => dialogos().length === 1, "o diálogo");
+  const resposta = await postar(`/api/sessoes/${sessao}/dialogos/${String(dialogos()[0]?.id)}`, { valor: "alta" });
+  assert.equal(resposta.status, 204);
+  await ate(() => situacao(sessao)?.ocupado === false, "o pi ocioso");
+
+  assert.equal(
+    (await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "pergunte perguntar", modo: "prompt" })).status,
+    204,
+  );
+  await ate(() => dialogos().length === 1, "o diálogo da mensagem");
+  assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
+  await ate(() => situacao(sessao)?.ocupado === false, "o aborto");
+  interromperExecucaoDemanda(servico.banco, ref);
+  await fim;
 });
