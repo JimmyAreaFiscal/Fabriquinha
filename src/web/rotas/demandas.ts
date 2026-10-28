@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";
+import { selecionarTrabalho } from "../../dominio/selecao_trabalho.ts";
 import { carregarDemanda, listarDemandas } from "../../persistencia/demandas.ts";
 import { dependentesNaoConcluidasDaDemanda, predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
 import { anexosDaDemanda, lerAnexo } from "../../persistencia/evidencia_demanda.ts";
@@ -101,6 +102,13 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       }[]
     ).map((s) => [s.ticket_id, s.id]),
   );
+  const predecessoras = predecessorasDaDemanda(banco, id);
+  const elegiveis = new Set(
+    selecionarTrabalho(
+      ag,
+      predecessoras.every((p) => satisfazDependencia(p.fase)),
+    ).map((t) => t.ticket_id),
+  );
   return {
     demanda: { id, projeto: demanda.projeto, titulo: demanda.titulo, fase: demanda.fase },
     rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase })),
@@ -108,6 +116,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       ref: ticket(t.ticket_id),
       etapa: t.etapa,
       status: t.status,
+      elegivel: elegiveis.has(t.ticket_id),
       ...(sessoes.has(t.ticket_id) && { sessao: sessoes.get(t.ticket_id) }),
       ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
       ...(t.titulo !== undefined && { titulo: t.titulo }),
@@ -140,7 +149,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
         }),
     })),
     encerramento: passosDoEncerramento(ag),
-    dependencias: predecessorasDaDemanda(banco, id),
+    dependencias: predecessoras,
     // As que o cancelamento leva junto (diretas e indiretas, ainda não terminadas).
     dependentes: dependentesNaoConcluidasDaDemanda(banco, id).map((d) => {
       const { titulo, fase } = carregarDemanda(banco, d).demanda;

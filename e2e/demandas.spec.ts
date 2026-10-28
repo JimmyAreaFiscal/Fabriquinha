@@ -12,6 +12,7 @@ import {
   semearPaginaDaDemanda,
   semearPlanejamento,
   semearPrDaRodada,
+  registrarCorrecaoDaSessao,
   semearTicketAberto,
 } from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";
@@ -120,8 +121,8 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Só os botões do gate do PR da rodada (R1 em Aprovação do PR) o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button")).toHaveCount(6);
+  // Só os dois do gate do PR (R1), os dois da sessão de ajustes (R2: Enviar e Concluir), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button")).toHaveCount(8);
 
   // CA-10: clicar no print abre a imagem na caixa.
   await pagina.getByRole("link", { name: "print.png" }).click();
@@ -249,12 +250,16 @@ test("CA-20 e CA-21: aprovar o PR pede a nota e, com a nota, mostra-a na rodada"
   await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
   await pagina.setViewportSize({ width: 1440, height: 900 });
   // O gate do PR vem depois da lista de tickets da rodada.
-  expect(await pagina.locator(".dm-rodada .dm-tickets ~ .dm-gate").count()).toBe(1);
+  expect(await pagina.locator(".dm-rodada .dm-tickets ~ .dm-gate").count()).toBe(2);
   await expect(pagina.locator(".dm-gate-titulo", { hasText: "Aprovação do PR" })).toBeVisible();
   await info.attach("gate-pr-1440", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
   await pagina.setViewportSize({ width: 375, height: 900 });
   await expect(pagina.getByRole("button", { name: "Aprovar PR" })).toBeVisible();
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toBeVisible();
+  // CA-11: o formulário da reprovação tem o motivo e nenhum seletor de nota.
+  const reprovacao = pagina.locator(".dm-gate", { has: pagina.getByRole("button", { name: "Reprovar PR" }) });
+  await expect(reprovacao.getByLabel(/Motivo/)).toBeVisible();
+  await expect(reprovacao.locator("select")).toHaveCount(0);
   expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await info.attach("gate-pr-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
 
@@ -281,12 +286,7 @@ test("CA-22 e CA-23: reprovar o PR pede o motivo e, com ele, abre a sessão de a
 
   await pagina.getByLabel(/Motivo/).fill("falta teste");
   await pagina.getByRole("button", { name: "Reprovar PR" }).click();
-  const link = pagina.getByRole("link", { name: /Sessão de ajustes de I-215\.R1/ });
-  await expect(link).toBeVisible();
-  const [aba] = await Promise.all([pagina.context().waitForEvent("page"), link.click()]);
-  await aba.waitForLoadState();
-  await expect(aba.locator("body")).not.toContainText("Página não encontrada");
-  await expect(aba.locator("body")).toContainText("conversa");
+  await expect(pagina.getByRole("link", { name: "Sessão de ajustes ↓" })).toHaveAttribute("href", "#ajustes-I-215.R1");
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toHaveCount(0);
 });
 
@@ -332,7 +332,8 @@ test.describe("CA-26", () => {
     semearTicketAberto(fabriquinha.raiz);
     await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
     await pagina.setViewportSize({ width: 375, height: 900 });
-    await expect(pagina.getByRole("button", { name: "Executar agora" })).toBeVisible();
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(1);
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T2" }).getByRole("button")).toHaveCount(0);
     expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await info.attach("executar-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
 
@@ -342,6 +343,58 @@ test.describe("CA-26", () => {
     // Pelo menu, sem recarregar: o quadro lê o trabalho ativo antes de o pi falso terminar.
     await pagina.getByRole("link", { name: "Demandas", exact: true }).first().click();
     await expect(pagina.locator(".dm-trabalho")).toContainText("I-216.T1");
+  });
+
+  test("Executar agora na página desatualizada mostra a orientação do servidor e recarrega o status atual", async ({
+    pagina,
+    fabriquinha,
+  }) => {
+    projeto(fabriquinha.raiz);
+    semearTicketAberto(fabriquinha.raiz);
+    await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toBeVisible();
+    // Outro caminho inicia o T1 com a página aberta.
+    await pagina.evaluate(() => fetch("/api/demandas/tickets/I-216.T1/executar", { method: "POST" }));
+    await pagina.getByRole("button", { name: "Executar agora" }).click();
+    await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
+  });
+});
+
+test.describe("CA-14: concluir a sessão de ajustes", () => {
+  test("sem correção mostra a orientação e a sessão continua; com a correção, a rodada sai da sessão", async ({
+    pagina,
+    fabriquinha,
+  }, info) => {
+    projeto(fabriquinha.raiz);
+    semearPrDaRodada(fabriquinha.raiz);
+    await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
+    await pagina.getByLabel(/Motivo/).fill("falta teste");
+    await pagina.getByRole("button", { name: "Reprovar PR" }).click();
+    const secao = pagina.locator("#ajustes-I-215\\.R1");
+    // A primeira resposta do agente (ao prompt de abertura) chega sem recarregar: a conversa ainda não existia.
+    await expect(secao.locator(".dm-msg-agente")).toContainText("pronto");
+    await secao.getByLabel("Mensagem ao agente").fill("eco: ajustei o teste de login");
+    await secao.getByRole("button", { name: "Enviar" }).click();
+    await expect(secao.locator(".dm-msg-auditor")).toContainText("eco: ajustei o teste de login");
+    await expect(secao.locator(".dm-msg-agente").last()).toContainText("ajustei o teste de login");
+
+    await secao.getByRole("button", { name: "Concluir a sessão" }).click();
+    await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
+    await expect(pagina.locator("#I-215\\.R1")).toContainText("Sessão de ajustes");
+
+    registrarCorrecaoDaSessao(fabriquinha.raiz, "I-215", 1);
+    await secao.getByRole("button", { name: "Concluir a sessão" }).click();
+    await expect(pagina.locator("#I-215\\.R1")).not.toContainText("Sessão de ajustes");
+    for (const largura of [1440, 375]) {
+      await pagina.setViewportSize({ width: largura, height: 900 });
+      expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await info.attach(`concluir-${String(largura)}`, {
+        body: await pagina.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
   });
 });
 
