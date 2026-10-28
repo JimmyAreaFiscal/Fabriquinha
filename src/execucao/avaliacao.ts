@@ -34,7 +34,7 @@ import {
   subir,
 } from "./auditoria.ts";
 import * as gestao from "./gestao_demandas.ts";
-import { emMarkdown, type Mensagem } from "./historico.ts";
+import { emMarkdown, type Mensagem, texto } from "./historico.ts";
 import type { EventoPi } from "./pi.ts";
 import { lerConversa } from "./sessoes.ts";
 
@@ -233,16 +233,31 @@ export async function iniciarAvaliacao(
 export const estadoDaAvaliacao = (id: string): EstadoDaAvaliacao =>
   estadoDaAuditoria(id) === "rodando" ? "rodando" : "concluida";
 
-/** A avaliação `id` com o escopo, os achados, o uso, o estado e a conversa até agora. */
+/** A avaliação `id` com o escopo, os achados, o uso, o estado e a conversa; o `prompt.md` vai marcado `fabriquinha: true`. */
 export function abrir(banco: DatabaseSync, id: string) {
+  const dados = abrirAvaliacao(banco, id); // recusa a inexistente antes de ler a pasta
+  const raiz = raizDo(banco);
+  const prompt = readFileSync(join(dirDaAvaliacao(raiz, id), "prompt.md"), "utf8");
+  const ehPrompt = (mensagem: unknown): boolean => {
+    const m = mensagem as Partial<Mensagem> | undefined;
+    return m?.role === "user" && texto(m as Mensagem) === prompt;
+  };
+  const eventos = lerConversa(raiz, id) as { message?: unknown }[];
+  const primeira = eventos.findIndex((e) => (e.message as { role?: string } | undefined)?.role === "user");
   return {
-    ...abrirAvaliacao(banco, id),
+    ...dados,
     estado: estadoDaAvaliacao(id),
-    conversa: lerConversa(raizDo(banco), id),
+    conversa: eventos.map((e, i) =>
+      i === primeira && ehPrompt(e.message) ? { ...e, fabriquinha: true } : e,
+    ) as unknown[],
     /** Os eventos ao vivo, com `{ type: "estado", estado }` quando o estado muda. Devolve a função que cancela. */
     assinar: (ouvinte: (evento: EventoPi) => void) =>
       assinarSessao(id, (evento) => {
-        ouvinte(evento.type === "estado" ? { type: "estado", estado: estadoDaAvaliacao(id) } : evento);
+        if (evento.type === "estado") ouvinte({ type: "estado", estado: estadoDaAvaliacao(id) });
+        else
+          ouvinte(
+            evento.type === "message_end" && ehPrompt(evento.message) ? { ...evento, fabriquinha: true } : evento,
+          );
       }),
   };
 }
