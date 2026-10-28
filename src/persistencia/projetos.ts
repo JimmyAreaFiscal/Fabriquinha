@@ -120,6 +120,11 @@ const DOS_COMMITS = `SELECT sha FROM commit_ticket WHERE ticket IN (${DOS_TICKET
 const DAS_EVIDENCIAS = `SELECT id FROM evidencia WHERE ticket IN (${DOS_TICKETS})`;
 const DAS_ISSUES = "SELECT id FROM issue WHERE projeto = $p";
 const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";
+const DAS_DEMANDAS = "SELECT id FROM demanda WHERE projeto = $p";
+const DAS_SESSOES = `SELECT id FROM sessao WHERE demanda_id IN (${DAS_DEMANDAS})`;
+const DAS_EXECUCOES_SESSAO = `SELECT id FROM execucao_sessao WHERE sessao_id IN (${DAS_SESSOES})`;
+const DAS_EVIDENCIAS_DEMANDA = `SELECT id FROM evidencia_demanda WHERE demanda_id IN (${DAS_DEMANDAS})`;
+const DAS_AVALIACOES = "SELECT id FROM avaliacao WHERE projeto = $p";
 
 /** Apaga as linhas do projeto, na ordem das chaves estrangeiras, e devolve o que sobra para apagar no disco. */
 function apagarLinhas(banco: DatabaseSync, nome: string) {
@@ -162,6 +167,13 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
       sha256: string;
     }[]
   ).map((a) => a.sha256);
+  anexos.push(
+    ...(
+      banco
+        .prepare(`SELECT DISTINCT sha256 FROM arquivo_evidencia WHERE evidencia_id IN (${DAS_EVIDENCIAS_DEMANDA})`)
+        .all(p) as { sha256: string }[]
+    ).map((a) => a.sha256),
+  );
 
   const apagar = (tabela: string, onde: string) => banco.prepare(`DELETE FROM ${tabela} WHERE ${onde}`).run(p);
   apagar("uso", `execucao IN (${DAS_EXECUCOES})`);
@@ -175,6 +187,38 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   apagar("comando", `issue IN (${DAS_ISSUES})`);
   apagar("issue_dep", `issue IN (${DAS_ISSUES}) OR dep IN (${DAS_ISSUES})`);
   apagar("ticket", `issue IN (${DAS_ISSUES})`);
+  // Tabelas da demanda, filhas antes das mães. Referências de fora do projeto (dependência, retrabalho, achado) saem ou
+  // são soltas, para não deixar FK pendurada.
+  banco.prepare(`UPDATE achado_avaliacao SET demanda_id = NULL WHERE demanda_id IN (${DAS_DEMANDAS})`).run(p);
+  apagar("uso_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
+  apagar("avaliacao_demanda", `avaliacao_id IN (${DAS_AVALIACOES}) OR demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("achado_avaliacao", `avaliacao_id IN (${DAS_AVALIACOES})`);
+  apagar("avaliacao", "projeto = $p");
+  apagar("retrabalho_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR alterador_demanda_id IN (${DAS_DEMANDAS})`);
+  apagar(
+    "arquivo_commit_demanda",
+    `sha IN (SELECT sha FROM commit_ticket_demanda WHERE demanda_id IN (${DAS_DEMANDAS}))`,
+  );
+  apagar("commit_ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("uso_modelo_historico", `execucao_id IN (${DAS_EXECUCOES_SESSAO})`);
+  apagar("uso_modelo_execucao", `execucao_id IN (${DAS_EXECUCOES_SESSAO})`);
+  apagar("execucao_sessao", `sessao_id IN (${DAS_SESSOES})`);
+  apagar("sessao", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("sessao_externa_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("decisao_ticket_historico", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("decisao_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("evidencia_demanda", `demanda_id IN (${DAS_DEMANDAS})`); // arquivo_evidencia e evidencia_historico saem por ON DELETE CASCADE
+  apagar("limpeza_pendente_encerramento", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("encerramento_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("dependencia_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("caminho_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("criterio_citado_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("dependencia_rodada", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("rodada", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("dependencia_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR depende_demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("demanda_historico", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("demanda", "projeto = $p");
   apagar("varredura_base", "projeto = $p");
   apagar("execucao_simulada", `tarefa IN (${DAS_TAREFAS})`);
   apagar("tarefa_usuario", `tarefa IN (${DAS_TAREFAS})`);
