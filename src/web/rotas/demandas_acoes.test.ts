@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
+import { encerrar, situacao } from "../../execucao/gerente.ts";
 import { registrarCorrecoesSessao } from "../../dominio/transicoes_rodada.ts";
 import { abrir } from "../../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
@@ -340,6 +341,41 @@ test("CA-25: as mensagens do Auditor aparecem na conversa da sessão, na ordem e
   await ate(async () => (await conversa(c)).includes("e rode os testes"));
   const texto = await conversa(c);
   assert.ok(texto.indexOf("troque o nome da função") < texto.indexOf("e rode os testes"));
+  await concluirSessao(c, 9);
+});
+
+interface Entrada {
+  message: { role?: string; content: string };
+  fabriquinha?: true;
+}
+const entradas = async ({ pedir }: Cenario) =>
+  (await pedir("/api/demandas/rodadas/I-206.R2/ajustes")).json<{ conversa: Entrada[] }>().conversa;
+
+test("o prompt de abertura vai marcado; a mensagem com o pi vivo e a do Auditor com o pi parado não", async () => {
+  const c = await comSessao();
+  const abertura = (await entradas(c)).find((e) => e.message.role === "user");
+  assert.equal(abertura?.fabriquinha, true);
+  assert.match(abertura.message.content, /Motivo: cobertura abaixo do combinado/);
+
+  // Com o pi vivo a mensagem vai como entrada do usuário, sem marca.
+  await c.pedir(MENSAGENS, { metodo: "POST", corpo: { texto: "com o pi vivo" } });
+  await ate(async () => (await conversa(c)).includes("com o pi vivo"));
+
+  // Para o pi e manda de novo: a retomada vira o prompt montado, e a conversa mostra o texto do Auditor antes da resposta.
+  const { id: sessao } = c.banco.prepare("SELECT id FROM sessao WHERE ticket_id = 9").get() as { id: string };
+  encerrar(c.sessao);
+  await ate(async () => {
+    await c.pedir(MENSAGENS, { metodo: "POST", corpo: { texto: "com o pi parado" } });
+    return (await conversa(c)).includes("com o pi parado");
+  });
+  const lista = await entradas(c);
+  const i = lista.findIndex((e) => e.message.content === "com o pi parado");
+  assert.equal(lista[i]?.message.role, "user");
+  assert.equal(lista[i].fabriquinha, undefined);
+  assert.equal(lista[i + 1]?.message.role, "assistant");
+  assert.equal(lista.find((e) => e.message.content === "com o pi vivo")?.fabriquinha, undefined);
+  assert.equal(lista.filter((e) => e.fabriquinha).length, 1);
+  await ate(() => Promise.resolve(situacao(sessao) !== undefined));
   await concluirSessao(c, 9);
 });
 

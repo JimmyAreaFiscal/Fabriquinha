@@ -1,5 +1,7 @@
 // Ações do Auditor sobre as demandas (comparacao-sdlc §9.1): os gates (demanda, planejamento, PR da rodada) e a sessão
 // de ajustes. Cada rota valida o corpo, chama o serviço da aplicação como AUDITOR e devolve o erro dele como está.
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 import { AUDITOR } from "../../dominio/agregado.ts";
 import { formatarRodadaRef, interpretarRef } from "../../dominio/demanda.ts";
@@ -9,7 +11,13 @@ import { aprovarPRRodada } from "../../execucao/aprovacao_pr_rodada.ts";
 import type { RefRodada } from "../../execucao/encerramento_rodada.ts";
 import { arquivar, cancelar, decidir } from "../../execucao/gestao_demandas.ts";
 import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../../execucao/planejamento.ts";
-import { concluirSessaoAjustes, enviarMensagemAjustes, reprovarPRRodada } from "../../execucao/sessao_ajustes.ts";
+import { texto, type Mensagem } from "../../execucao/historico.ts";
+import {
+  concluirSessaoAjustes,
+  enviarMensagemAjustes,
+  mensagensRetomadas,
+  reprovarPRRodada,
+} from "../../execucao/sessao_ajustes.ts";
 import { lerConversa } from "../../execucao/sessoes.ts";
 import { raizDo } from "../../persistencia/banco.ts";
 import { carregarDemanda, comDemanda } from "../../persistencia/demandas.ts";
@@ -82,14 +90,43 @@ async function decisaoDoPR(pedido: Pedido) {
   return { sessao: id };
 }
 
+/**
+ * Troca o prompt montado que carrega uma mensagem do Auditor (retomada com o pi parado) pelo texto dele; os demais
+ * prompts montados ganham `fabriquinha: true`, que a tela omite.
+ * shortcut: a ligação é por `Motivo: <texto>` e pode casar com o prompt de abertura se o Auditor repetir o motivo da
+ * reprovação; upgrade: gravar o id da execução junto da mensagem.
+ */
+function marcarPrompts(entradas: unknown[], prompts: Set<string>, mensagens: string[]): unknown[] {
+  const livres = [...mensagens];
+  return entradas.map((entrada) => {
+    const m = (entrada as { message?: Mensagem } | undefined)?.message;
+    if (m?.role !== "user" || !prompts.has(texto(m))) return entrada;
+    const i = livres.findIndex((l) => texto(m).includes(`Motivo: ${l}`));
+    if (i < 0) return { ...(entrada as object), fabriquinha: true };
+    const [auditor] = livres.splice(i, 1);
+    return { ...(entrada as object), message: { ...m, content: auditor } };
+  });
+}
+
 function conversa(pedido: Pedido) {
-  const ticket = sessaoDaRodada(pedido, refDaRodada(pedido));
+  const ref = refDaRodada(pedido);
+  const ticket = sessaoDaRodada(pedido, ref);
+  const estado = carregarSessoesDoTicket(pedido.banco, ticket);
   const sessao = existe(
-    carregarSessoesDoTicket(pedido.banco, ticket).sessoes[0],
+    estado.sessoes[0],
     "a sessão de ajustes ainda não tem conversa",
     "a conversa nasce quando o pi sobe",
   );
-  return { conversa: lerConversa(raizDo(pedido.banco), sessao.id) };
+  const raiz = raizDo(pedido.banco);
+  const prompts = new Set(
+    estado.execucoes
+      .map((e) => join(raiz, "execucoes", `E-${e.id}`, "prompt.md"))
+      .filter((p) => existsSync(p))
+      .map((p) => readFileSync(p, "utf8")),
+  );
+  return {
+    conversa: marcarPrompts(lerConversa(raiz, sessao.id), prompts, mensagensRetomadas(pedido.banco, ref)),
+  };
 }
 
 const Mensagem = z.object({
