@@ -19,7 +19,8 @@ import {
   demandaEmExecucao,
   despacho,
   pi,
-  revisar,
+  decidirComoRevisor,
+  despacharComAgente,
   ticketDe,
 } from "./apoio-execucao.ts";
 import { AUTOR, ciclo, criarCenario, CTX, demanda } from "./apoio.ts";
@@ -128,8 +129,10 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
 
   // Rodada 1: revisão reprovada (devolução com correção); rodada 2: aprovada.
   const correcao = { demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir", descricao: "d", caminhos: [] };
-  await revisar(c, id, { aprovado: false, exigencias: "falta o caso X", correcoes: [correcao] }, 1);
-  await revisar(c, id, { aprovado: true }, 2);
+  await despacharComAgente(c, despacho(), () => {
+    decidirComoRevisor(c, id, { aprovado: false, exigencias: "falta o caso X", correcoes: [correcao] }, 1);
+    decidirComoRevisor(c, id, { aprovado: true }, 2);
+  });
 
   const execucaoDe = (ref: Ref) => carregarSessoesDoTicket(c.banco, ref).execucoes[0]?.id ?? "";
   usar(c.banco, r1, execucaoDe(r1), [["a", 10, 1]]);

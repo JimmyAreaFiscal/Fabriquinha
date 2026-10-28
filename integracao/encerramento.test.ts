@@ -21,6 +21,7 @@ import {
   atual,
   comoAgente,
   despacho,
+  despacharComAgente,
   encerrar,
   pi,
   revisar,
@@ -44,35 +45,37 @@ const mergesNaBase = (c: Cenario) =>
   git(c.bare, "log", "--first-parent", "--merges", "--format=%H", "main").split("\n").filter(Boolean);
 const mergesPedidos = () => gh.chamadas().filter((x) => x.args.slice(0, 2).join(" ") === "pr merge").length;
 
-/** Revisão integral: o agendador inicia e conduz a etapa; o agente (o teste) submete as evidências e decide. */
+/** Revisão integral: o agendador inicia e conduz a etapa; o agente (o teste) submete as evidências e decide durante a execução. */
 async function revisaoIntegral(c: Cenario, id: string, decisao: "aprovada" | { exigencias: string }): Promise<number> {
-  pi.roteirizar([{ modo: "ok" }]);
-  await ciclo(c, deps());
-  const revisor = ultimo(c, id, "revisar_demanda");
-  assert.equal(revisor?.status, "em_execucao", "a revisão integral espera a decisão do agente");
-  const ticket_id = revisor.ticket_id;
-  const agenteDoTicket = { tipo: "agente", execucao: 1, ticket: ticket_id } as const;
-  if (decisao === "aprovada") {
-    comoAgente(c, id, ticket_id, [
-      ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
-      ["testes_estresse", { aplicavel: false, cenarios: [], justificativa: "sem carga" }],
-      ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
-    ]);
-    decidirRevisaoIntegral(c.banco, { demanda_id: id, ticket_id, aprovado: true }, agenteDoTicket);
-  } else {
-    const plano = {
-      demanda_id: id,
-      criterios: ["CA-1"],
-      rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Corrigir o agregado", e2e: false, criterios: ["CA-1"] }],
-      tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir a integração", descricao: "d" }],
-    };
-    decidirRevisaoIntegral(
-      c.banco,
-      { demanda_id: id, ticket_id, aprovado: false, exigencias: decisao.exigencias, plano },
-      agenteDoTicket,
-    );
-  }
-  return ticket_id;
+  let revisor = 0;
+  await despacharComAgente(c, deps(), () => {
+    const ticket = ultimo(c, id, "revisar_demanda");
+    assert.equal(ticket?.status, "em_execucao", "a revisão integral espera a decisão do agente");
+    const { ticket_id } = ticket;
+    revisor = ticket_id;
+    const agenteDoTicket = { tipo: "agente", execucao: 1, ticket: ticket_id } as const;
+    if (decisao === "aprovada") {
+      comoAgente(c, id, ticket_id, [
+        ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
+        ["testes_estresse", { aplicavel: false, cenarios: [], justificativa: "sem carga" }],
+        ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
+      ]);
+      decidirRevisaoIntegral(c.banco, { demanda_id: id, ticket_id, aprovado: true }, agenteDoTicket);
+    } else {
+      const plano = {
+        demanda_id: id,
+        criterios: ["CA-1"],
+        rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Corrigir o agregado", e2e: false, criterios: ["CA-1"] }],
+        tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir a integração", descricao: "d" }],
+      };
+      decidirRevisaoIntegral(
+        c.banco,
+        { demanda_id: id, ticket_id, aprovado: false, exigencias: decisao.exigencias, plano },
+        agenteDoTicket,
+      );
+    }
+  });
+  return revisor;
 }
 
 /** Aprova o PR que o encerramento da rodada publicou, como o Auditor, e integra a rodada na demanda. */
