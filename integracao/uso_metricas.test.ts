@@ -210,3 +210,37 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   );
   assert.equal(metricasDaDemanda(c.banco, vizinha).total.custo.conhecido, 1_000_000);
 });
+
+// Pendente: o serviço `submeterEvidencia` descarta o `rodada_id` da entrada (o custo vira da demanda e substitui o anterior)
+// e `linhasExternasDaDemanda` só lê custos sem rodada. Hoje o custo externo de rodada não tem caminho na aplicação.
+test(
+  "CA-SDLC-24: custo externo de rodada aparece na própria rodada do relatório, sem entrar no custo interno",
+  {
+    skip: "custo externo de rodada some: submeterEvidencia descarta rodada_id e metricasDaDemanda só lê custos da demanda (correção a propor em issue)",
+  },
+  async (t) => {
+    const c = criarCenario(t);
+    const id = await demandaEmExecucao(c, [{ tickets: 1 }, { tickets: 1 }]);
+    const linha = {
+      provedor: "x",
+      modelo: "m",
+      tokens_entrada: 1,
+      tokens_saida: 1,
+      tokens_cache_leitura: 0,
+      tokens_cache_escrita: 0,
+      custo: 7,
+    };
+    const entrada = {
+      tipo: "custos_realizados",
+      rodada_id: 2,
+      dados: { sessoes: [{ ferramenta: "claude", sessao: "ext-r2", linhas: [linha] }] },
+    } as Parameters<typeof submeterEvidencia>[2];
+    submeterEvidencia(c.banco, id, entrada, AUTOR, CTX);
+
+    const m = metricasDaDemanda(c.banco, id);
+    const r2 = m.rodadas.find((r) => r.rodadaId === 2) as { custo: unknown; custoExterno?: unknown };
+    assert.deepEqual(r2.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
+    assert.deepEqual(r2.custo, { conhecido: 0, incompleto: false }, "o externo não entra no custo interno");
+    assert.equal(m.custoExterno.conhecido, 7, "e também não some do total externo");
+  },
+);
