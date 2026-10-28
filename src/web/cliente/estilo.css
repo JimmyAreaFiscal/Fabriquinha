@@ -4313,6 +4313,12 @@ svg.barras :not(.hit) {
   border-radius: var(--r-lg);
   overflow-wrap: anywhere;
 }
+.dm-msg > :first-child {
+  margin-top: 0;
+}
+.dm-msg > :last-child {
+  margin-bottom: 0;
+}
 .dm-msg pre {
   max-width: 100%;
   overflow-x: auto;
