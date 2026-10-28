@@ -515,10 +515,6 @@ export function agregadoDoTicket(banco: DatabaseSync, ticket: Id): Agregado | un
   return linha && agregado(banco, Number(linha.issue));
 }
 
-/** A issue do ticket `id`, para aplicar o comando do F1 ao agregado dela; ticket inexistente dá `ErroDeInexistente`. */
-export const issueDoTicket = (banco: DatabaseSync, id: Id): Id =>
-  encontrado(agregadoDoTicket(banco, id), `o ticket T-${String(id)} não existe`, "confira o número do ticket").issue.id;
-
 /**
  * As fases em que a issue já esteve, na ordem em que entrou nelas: as da tabela `comando` (a fase de antes de cada
  * comando, F6 §7), porque toda transição passa por `comIssue`. A fase atual só aparece depois do primeiro comando nela.

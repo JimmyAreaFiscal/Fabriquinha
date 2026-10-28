@@ -23,6 +23,7 @@ import {
   cabecalhoDaDemanda,
   calcular,
   type Carregada,
+  emMarkdown,
   enviarDemanda,
   exportarHistoricoDemanda,
   responderDialogoDemanda,
@@ -456,4 +457,36 @@ test("CA-12: abortar sem execução em andamento avisa; órfã é interrompida; 
   ]) {
     assert.equal(f(), false);
   }
+});
+
+test("emMarkdown: Fabriquinha, Auditor e agente na íntegra; a chamada com os argumentos e o resultado cortado em 2.000", () => {
+  const nada = new Set<string>();
+  assert.deepEqual(emMarkdown({ role: "user", content: "# Prompt" }, new Set(["# Prompt"])), [
+    "## Fabriquinha\n\n# Prompt",
+  ]);
+  assert.deepEqual(emMarkdown({ role: "user", content: [{ type: "text", text: "oi" }] }, nada), ["## Auditor\n\noi"]);
+  const longo = `\`\`\`\n${"y".repeat(2100)}`;
+  const [cortado = ""] = emMarkdown(
+    { role: "toolResult", toolName: "bash", isError: true, content: [{ type: "text", text: longo }] },
+    nada,
+  );
+  assert.match(cortado, /^\*\*Resultado de `bash` \(erro\)\*\*\n\n````\n```\n/);
+  assert.match(cortado, /\n… \(cortado em 2000 de 2104 caracteres\)\n````$/);
+  assert.deepEqual(emMarkdown({ role: "toolResult", toolName: "ls", content: "a" }, nada), [
+    "**Resultado de `ls`**\n\n```\na\n```",
+  ]);
+  const agente = {
+    role: "assistant",
+    content: [
+      { type: "text", text: "Vou ler." },
+      { type: "toolCall", name: "read", arguments: { path: "a" } },
+      { type: "toolCall", name: "ls" },
+    ],
+  };
+  assert.deepEqual(emMarkdown(agente, nada), [
+    "## Agente\n\nVou ler.",
+    '**Chamada de `read`**\n\n```json\n{\n  "path": "a"\n}\n```',
+    "**Chamada de `ls`**\n\n```json\n{}\n```",
+  ]);
+  assert.deepEqual(emMarkdown({ role: "bashExecution", content: "x" }, nada), []);
 });

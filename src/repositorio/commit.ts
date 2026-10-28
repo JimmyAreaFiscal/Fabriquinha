@@ -1,13 +1,10 @@
 // Commit do ticket de desenvolvimento (F5 §4): `git add -A`, `git commit` com os hooks do repositório e o que mudou.
-// Também o diff da issue inteira (F5 §8), que a revisão cruza com o desenho.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Issue, Ticket } from "../dominio/agregado.ts";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../dominio/erros.ts";
-import type { Id } from "../dominio/primitivos.ts";
-import type { Projeto } from "../dominio/projeto.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { type ArquivoCommit, type Commit, commitRegistrado, StatusArquivo } from "../persistencia/commits.ts";
 import { ambienteSemCredenciais, executar, git, LIMITE_COMANDO_MS } from "../processo.ts";
@@ -208,25 +205,5 @@ export async function commitarTicket(
       em: new Date().toISOString(),
       arquivos: arquivosDe(await mudou("--name-status"), await mudou("--numstat")),
     };
-  });
-}
-
-/**
- * F5 §8: o que a issue commitou desde que saiu da base, de `merge-base(origin/<branchBase>, HEAD)` até a `HEAD` da
- * worktree. Sem `fetch`: vale a base que o repositório já conhece, e o merge-base não muda se ela andou depois.
- * Alteração não commitada não entra; na revisão, só o desenvolvimento commita.
- */
-export async function diffDaIssue(
-  raiz: string,
-  projeto: Pick<Projeto, "nome" | "branchBase">,
-  issue: Id,
-): Promise<{ base: string; head: string; arquivos: ArquivoCommit[] }> {
-  const worktree = caminhoDaWorktree(raiz, projeto.nome, issue);
-  return naFilaDoProjeto(raiz, projeto.nome, async () => {
-    const head = (await exigirGit(worktree, "rev-parse", "HEAD")).trim();
-    const base = (await exigirGit(worktree, "merge-base", `refs/remotes/origin/${projeto.branchBase}`, head)).trim();
-    // `-M` explícito, como no commit: a renomeação aparece mesmo com `diff.renames` desligado.
-    const diff = (formato: string) => exigirGit(worktree, "diff", "-z", "-M", formato, base, head);
-    return { base, head, arquivos: arquivosDe(await diff("--name-status"), await diff("--numstat")) };
   });
 }

@@ -1,29 +1,17 @@
-// Gerente de sessões (F4 §2, §6): o único que lança o pi. Roda uma execução da worktree ao fim do processo com o
-// mesmo código de processo e protocolo nos modos autônomo e interativo, guarda as execuções vivas com os diálogos de
-// extensão pendentes (F4 §5.4) e repassa os eventos a quem assina a sessão.
-import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
-import { type Agregado, CANCELADA, type Execucao, FABRIQUINHA, type ModoExecucao } from "../dominio/agregado.ts";
+// Gerente de sessões (F4 §2, §6): o único que lança o pi. Roda o pi com o mesmo código de processo e protocolo nos
+// modos autônomo e interativo, guarda as execuções vivas com os diálogos de extensão pendentes (F4 §5.4) e repassa os
+// eventos a quem assina a sessão.
+import type { ModoExecucao } from "../dominio/agregado.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
-import { iniciarExecucao, naSessaoPrincipal, ticketDe } from "../dominio/execucao.ts";
 import type { Id } from "../dominio/primitivos.ts";
-import type { Projeto } from "../dominio/projeto.ts";
-import { varrerBase } from "../metricas/retrabalho.ts";
-import { raizDo } from "../persistencia/banco.ts";
-import { anotar, dirDaExecucao, gravarPgid } from "../persistencia/execucoes.ts";
-import { comIssue } from "../persistencia/issues.ts";
-import { projeto as lerProjeto } from "../persistencia/projetos.ts";
-import { executar } from "../processo.ts";
-import { garantirWorktree } from "../repositorio/worktree.ts";
-import { ambientePi, argumentosPi, binarioPi, confianca, type EventoPi, type Lancamento, lancarPi } from "./pi.ts";
+import { anotar } from "../persistencia/execucoes.ts";
+import { type EventoPi, lancarPi } from "./pi.ts";
 
 /** Diálogos que esperam resposta; `notify` e afins não esperam, e `custom` nunca chega no modo RPC (P1 §2.1). */
 const DIALOGOS = new Set(["select", "confirm", "input", "editor"]);
 
 /** O `erro` do C6 da execução autônoma que o Auditor abortou: o Histórico a mostra como abortada (F7 §4.4). */
-export const ABORTADA = "abortada pelo Auditor";
+const ABORTADA = "abortada pelo Auditor";
 
 /** Um diálogo de extensão pendente: o pedido do pi, quando chegou e, se o pi o resolve sozinho, quando expira. */
 export type Dialogo = EventoPi & { em: string; expiraEm?: string };
@@ -69,14 +57,6 @@ interface Viva extends Omit<Situacao, "dialogos"> {
 const vivas = new Map<Id | string, Viva>();
 const ouvintes = new Map<string, Set<(evento: EventoPi) => void>>();
 
-/** Execuções cujo pi já recebeu a ordem de parar, com a promessa de ele sair: o C6 delas vem logo depois. */
-const encerrando = new Map<Id | string, Promise<void>>();
-
-/** Execuções cuja issue foi cancelada (C22): não lançam pi e não gravam C6 nem C8. ponytail: o Set só cresce; poucos IDs por dia. */
-const canceladas = new Set<Id>();
-
-export const foiCancelada = (execucao: Id): boolean => canceladas.has(execucao);
-
 const vivaDaSessao = (sessao: string): Viva | undefined => [...vivas.values()].find((v) => v.sessaoPi === sessao);
 
 /**
@@ -110,9 +90,6 @@ function repassar(sessao: string, evento: EventoPi, log: string): void {
 export const avisar = (sessao: string, log: string): void => {
   repassar(sessao, { type: "estado" }, log);
 };
-
-/** O pi da execução está parando; o C6 dela vem logo depois que ele sai. */
-export const estaEncerrando = (execucao: Id | string): boolean => encerrando.has(execucao);
 
 /** A execução viva da sessão neste serviço, se há uma. */
 export function situacao(sessao: string): Situacao | undefined {
@@ -170,9 +147,6 @@ function daPergunta(evento: EventoPi, emExecucao: Iterable<Record<string, unknow
 const viva = (execucao: Id | string, solucao: string): Viva =>
   existe(vivas.get(execucao), `a execução E-${String(execucao)} não tem pi rodando`, solucao);
 
-/** Os diálogos de extensão da execução que esperam o Auditor; vazio se o pi dela não está vivo. */
-export const dialogosPendentes = (execucao: Id): Dialogo[] => [...(vivas.get(execucao)?.pendentes.values() ?? [])];
-
 /** Responde um diálogo pendente (`extension_ui_response` do RPC do pi): `value`, `confirmed` ou `cancelled`. */
 export function responderDialogo(
   execucao: Id | string,
@@ -193,20 +167,6 @@ export function abortar(execucao: Id | string): void {
   v.mandar({ type: "abort" });
 }
 
-/**
- * Marca a execução como cancelada pela issue (C22) e, se o pi dela está vivo, cancela os diálogos pendentes e o para
- * como no encerramento. Resolve quando o pi saiu; sem pi vivo, quando o que já estava parando termina.
- */
-export async function pararParaCancelar(execucao: Id): Promise<void> {
-  canceladas.add(execucao);
-  const v = vivas.get(execucao);
-  if (v) {
-    for (const id of v.pendentes.keys()) v.responder(id, { cancelled: true });
-    v.encerrar();
-  }
-  await encerrando.get(execucao);
-}
-
 /** Um comando de conversa ao pi vivo: `prompt` acorda a sessão ociosa; `steer` e `follow_up` entram no passo atual. */
 export function mandar(
   execucao: Id | string,
@@ -218,123 +178,6 @@ export function mandar(
 /** Para o pi da execução e a dá por bem terminada, como na ociosidade (F4 §6.6). */
 export function encerrar(execucao: Id | string): void {
   viva(execucao, "nada a encerrar").encerrar();
-}
-
-/**
- * C5 na sessão principal do ticket (F4 §5.1: as execuções do ticket continuam a mesma conversa; a primeira a cria).
- * Devolve o agregado, a execução em andamento e a instrução do Auditor que C5 consumiu (F4 §6.4).
- */
-export function iniciarNaSessaoPrincipal(
-  banco: DatabaseSync,
-  issue: Id,
-  ticket: Id,
-  modo: Exclude<ModoExecucao, "consulta">,
-): { ag: Agregado; execucao: Execucao; instrucao: string | undefined } {
-  let instrucao: string | undefined;
-  const ag = comIssue(banco, issue, "iniciarExecucao", FABRIQUINHA, (antes, ctx) => {
-    instrucao = ticketDe(antes, ticket).instrucao;
-    const principal = antes.execucoes.find(naSessaoPrincipal(ticket));
-    return iniciarExecucao(antes, { ticket, modo, sessaoPi: principal?.sessaoPi ?? randomUUID() }, FABRIQUINHA, ctx);
-  });
-  const execucao = existe(
-    ag.execucoes.find((e) => e.ticket === ticket && e.resultado === "em_andamento"),
-    `C5 não deixou T-${String(ticket)} em andamento`,
-    "confira o banco",
-  );
-  return { ag, execucao, instrucao };
-}
-
-export interface Rodada extends Pick<Lancamento, "fork"> {
-  banco: DatabaseSync;
-  /** O agregado logo depois de C5. */
-  ag: Agregado;
-  execucao: Execucao;
-  /**
-   * Autônoma: tempo limite de tempo ativo (F4 §6.7), que vale também para o `pi --version`.
-   * Interativa: a ociosidade depois da qual o processo para (F4 §6.6).
-   */
-  limiteMin: number;
-  /**
-   * O primeiro prompt da execução, montado com a worktree pronta (F4 §6.3), depois da coleta antes do pi (F3 §7). Sem
-   * prompt, o pi sobe ocioso, à espera da primeira mensagem do Auditor: é como a consulta abre (F4 §6.5).
-   */
-  prompt(c: { projeto: Projeto; worktree: string; saida: string }): string | undefined | Promise<string | undefined>;
-  /** Só o início do desenho: a worktree já criada recebe `origin/<base>` por merge (F5 §3.1). */
-  atualizarBase?: boolean;
-}
-
-/**
- * Do diretório da execução ao fim do pi: worktree (F5), `prompt.md`, `pi --version` e o pi em modo RPC, até
- * assentar (autônoma) ou ficar ocioso (interativa). Não grava C6: devolve a worktree e, se falhou, o motivo.
- */
-export async function rodarExecucao(r: Rodada): Promise<{ worktree: string; falha?: string }> {
-  const raiz = raizDo(r.banco);
-  const { execucao } = r;
-  const dir = dirDaExecucao(raiz, execucao.id);
-  const log = join(dir, "log");
-  const ticket = ticketDe(r.ag, execucao.ticket);
-  let worktree = "";
-  try {
-    // `gh` e `az` olham diretórios vazios: o agente não acha credencial de hospedagem (F4 §6.1.2).
-    for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
-    anotar(
-      log,
-      `E-${String(execucao.id)} iniciada: T-${String(ticket.id)}, etapa ${ticket.etapa}, modo ${execucao.modo}, ` +
-        `sessão ${execucao.sessaoPi}`,
-    );
-    avisar(execucao.sessaoPi, log);
-    const projeto = existe(
-      lerProjeto(r.banco, r.ag.issue.projeto),
-      `o projeto ${r.ag.issue.projeto} sumiu`,
-      "cadastre-o",
-    );
-    // F4 §6.1.2: a consulta de uma issue já concluída roda no repositório do projeto.
-    worktree =
-      execucao.modo === "consulta" && r.ag.issue.fase === "concluida"
-        ? projeto.repo
-        : await garantirWorktree(
-            raiz,
-            projeto,
-            r.ag.issue,
-            log,
-            () => varrerBase(r.banco, projeto.nome),
-            r.atualizarBase,
-          );
-    const prompt = await r.prompt({ projeto, worktree, saida: join(dir, "saida") });
-    if (prompt !== undefined) writeFileSync(join(dir, "prompt.md"), prompt);
-    if (canceladas.has(execucao.id)) return { worktree, falha: CANCELADA };
-    // O `pi --version` conta no limite: um pi travado não prende a issue nem a sessão.
-    const versao = await executar(binarioPi(), ["--version"], { limiteMs: r.limiteMin * 60_000 });
-    anotar(log, `pi --version: ${(versao.saida + versao.erro).trim()}`);
-    if (canceladas.has(execucao.id)) return { worktree, falha: CANCELADA };
-    if (versao.limiteEstourado) throw new Error(`tempo limite de ${String(r.limiteMin)} min em pi --version`);
-    const args = argumentosPi({
-      raiz,
-      sessaoPi: execucao.sessaoPi,
-      etapa: ticket.etapa,
-      modelo: execucao.modelo,
-      effort: projeto.efforts?.[ticket.etapa],
-      confianca: confianca(projeto.repo),
-      modo: execucao.modo,
-      fork: r.fork,
-    });
-    anotar(log, `pi ${args.join(" ")}`);
-    const falha = await rodarPi({
-      execucao,
-      args,
-      cwd: worktree,
-      env: ambientePi(raiz, execucao.id, dir),
-      log,
-      prompt,
-      limiteMin: r.limiteMin,
-      aoLancar: (pgid) => {
-        gravarPgid(r.banco, execucao.id, pgid);
-      },
-    });
-    return { worktree, ...(falha !== undefined && { falha }) };
-  } catch (error_) {
-    return { worktree, falha: mensagem(error_) };
-  }
 }
 
 export interface Processo {
@@ -380,13 +223,9 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       clearTimeout(relogio);
       for (const t of expiracoes.values()) clearTimeout(t);
       vivas.delete(id);
-      encerrando.set(
-        id,
-        pi.parar().then(() => {
-          encerrando.delete(id);
-          resolve(falha);
-        }),
-      );
+      void pi.parar().then(() => {
+        resolve(falha);
+      });
     };
     // Autônoma (F4 §6.7): só o tempo ativo conta; o relógio para enquanto algum diálogo espera o Auditor.
     // Interativa (F4 §6.6): a ociosidade conta do zero cada vez que o agente assenta sem diálogo pendente.

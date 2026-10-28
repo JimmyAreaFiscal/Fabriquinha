@@ -15,9 +15,6 @@ export type Configuracao = z.infer<typeof Configuracao>;
 
 /** As etapas que rodam em modo autônomo (F1 §3.6); as fases delas têm o mesmo nome (F1 §4.3). */
 const AUTONOMAS = "('desenvolvimento','revisao','encerramento')";
-/** As etapas que o agendador inicia (F4 §4): as autônomas e o desenho, que é interativo. */
-const AGENDADAS = "('desenho','desenvolvimento','revisao','encerramento')";
-
 export function configuracao(banco: DatabaseSync): Configuracao {
   const l = banco.prepare("SELECT * FROM configuracao").get() as Record<string, number | string | null>;
   return {
@@ -60,32 +57,6 @@ export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Confi
       c.modeloAuditoria?.modelo ?? null,
     );
   return c;
-}
-
-/**
- * F4 §4.1: os tickets elegíveis do agendador, um por issue (o mais antigo dela), da issue mais antiga à mais nova; com
- * `issue`, só o dela (o **Executar agora** da página da issue, F7 §4.4). Além da consulta da spec, pula a issue com
- * execução em andamento (consulta inclusive), com ticket em execução ou com ticket da fase que falhou: C5 a recusaria.
- */
-export function ticketsElegiveis(banco: DatabaseSync, issue?: Id): Id[] {
-  return banco
-    .prepare(
-      `SELECT min(t.id) AS id FROM ticket t JOIN issue i ON i.id = t.issue
-       WHERE t.status = 'aberto'
-         AND t.etapa IN ${AGENDADAS}
-         AND i.fase = t.etapa
-         AND i.arquivada_em IS NULL
-         AND ($issue IS NULL OR i.id = $issue)
-         AND NOT EXISTS (SELECT 1 FROM issue_dep d JOIN issue x ON x.id = d.dep
-                         WHERE d.issue = i.id AND x.fase <> 'concluida')
-         AND NOT EXISTS (SELECT 1 FROM ticket o LEFT JOIN execucao e ON e.ticket = o.id
-                         WHERE o.issue = i.id AND (o.status = 'em_execucao' OR e.resultado = 'em_andamento'))
-         AND NOT EXISTS (SELECT 1 FROM ticket f WHERE f.issue = i.id AND f.etapa = i.fase AND f.status = 'falhou')
-       GROUP BY i.id
-       ORDER BY i.id`,
-    )
-    .all({ issue: issue ?? null })
-    .map((l) => Number(l.id));
 }
 
 /** F4 §7: as execuções em andamento, com a issue e o grupo de processos do pi. */

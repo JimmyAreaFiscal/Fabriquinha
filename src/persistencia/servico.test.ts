@@ -9,7 +9,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { ZodError } from "zod";
 import type { Ator } from "../dominio/agregado.ts";
-import { falharTicket, iniciarConsulta, iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
+import { iniciarConsulta, iniciarExecucao, terminarExecucao } from "../dominio/execucao.ts";
 import { registrarEvidencia } from "../dominio/evidencia.ts";
 import { decidirDesenho, decidirRegistro, enviarParaAprovacao } from "../dominio/gates.ts";
 import { editarIssue } from "../dominio/issue.ts";
@@ -24,7 +24,6 @@ import {
   configuracao,
   execucoesEmAndamento,
   salvarConfiguracao,
-  ticketsElegiveis,
   ticketsAutonomosEmExecucao,
 } from "./servico.ts";
 
@@ -175,54 +174,26 @@ test("configuração: linha única, agendador desligado por padrão, salvar vali
   banco.close();
 });
 
-test("elegíveis: um ticket por issue, o mais antigo dela, da issue mais antiga à mais nova", () => {
+test("recuperação: os tickets autônomos em execução e as execuções em andamento, com o grupo do pi", () => {
   const banco = novoBanco();
-  const i1 = desenhada(banco, ["Índice", "Cache"]);
-  const i2 = emDesenho(banco);
-  const [indice = 0, cache = 0] = i1.desenvolvimento;
-  assert.ok(indice < cache);
-  assert.deepEqual(ticketsElegiveis(banco), [indice, i2.desenho], "CA-3: da I-1 só o mais antigo");
-  assert.deepEqual(ticketsElegiveis(banco, i2.issue), [i2.desenho], "com issue, só os dela");
-
-  const execucao = iniciar(banco, i1.issue, indice, "autonomo");
-  assert.deepEqual(ticketsElegiveis(banco), [i2.desenho], "CA-2: a I-1 está ocupada; a I-2 segue");
-  assert.deepEqual(ticketsElegiveis(banco, i1.issue), []);
-  comIssue(banco, i1.issue, "terminarExecucao", fabriquinha, (a, ctx) =>
-    terminarExecucao(a, { execucao, resultado: "falha", erro: "pi saiu" }, fabriquinha, ctx),
-  );
-  comIssue(banco, i1.issue, "falharTicket", fabriquinha, (a) =>
-    falharTicket(a, { ticket: indice, erro: "pi saiu" }, fabriquinha),
-  );
-  assert.deepEqual(ticketsElegiveis(banco), [i2.desenho], "o que falhou trava os seguintes da I-1 até concluir (C5)");
-  banco.close();
-});
-
-test("não elegível: etapa interativa, fase que não casa, dependência aberta e issue com execução ou ticket em execução", () => {
-  const banco = novoBanco();
-  registrarIssue(banco, { projeto: "loja" }, auditor); // I-1 no registro, ticket interativo
-  desenhada(banco, ["Índice"], false); // I-2 em aprovacao_desenho, com o ticket proposto aberto
-  // I-3: consulta viva sobre o desenho concluído; C5 recusaria a issue inteira.
-  const i3 = desenhada(banco, ["Cache"]);
-  const cacheI3 = i3.desenvolvimento[0] ?? 0;
-  const consulta = comIssue(banco, i3.issue, "iniciarConsulta", auditor, (a, ctx) =>
-    iniciarConsulta(a, { ticket: i3.desenho, sessaoPi: randomUUID() }, auditor, ctx),
+  // I-1: consulta viva sobre o desenho concluído.
+  const i1 = desenhada(banco, ["Cache"]);
+  const consulta = comIssue(banco, i1.issue, "iniciarConsulta", auditor, (a, ctx) =>
+    iniciarConsulta(a, { ticket: i1.desenho, sessaoPi: randomUUID() }, auditor, ctx),
   ).execucoes.at(-1)?.id;
-  // I-4: o ticket terminou o pi (C6) e está na coleta, ainda `em_execucao`; outro da issue violaria a invariante 1.
-  const i4 = desenhada(banco, ["Log", "Métrica"]);
-  const [log = 0] = i4.desenvolvimento;
-  terminar(banco, i4.issue, iniciar(banco, i4.issue, log, "autonomo"));
-  // I-5 depende da I-1, que não concluiu.
-  emDesenho(banco, [1]);
-  assert.deepEqual(ticketsElegiveis(banco), [], "CA-2, CA-7: nenhuma issue serve");
+  // I-2: o ticket terminou o pi (C6) e está na coleta, ainda `em_execucao`.
+  const i2 = desenhada(banco, ["Log"]);
+  const [log = 0] = i2.desenvolvimento;
+  terminar(banco, i2.issue, iniciar(banco, i2.issue, log, "autonomo"));
 
-  assert.deepEqual(ticketsAutonomosEmExecucao(banco), [{ id: log, issue: i4.issue }]);
-  assert.deepEqual(execucoesEmAndamento(banco), [{ id: consulta, issue: i3.issue, pgid: null }]);
+  assert.deepEqual(ticketsAutonomosEmExecucao(banco), [{ id: log, issue: i2.issue }]);
+  assert.deepEqual(execucoesEmAndamento(banco), [{ id: consulta, issue: i1.issue, pgid: null }]);
   banco.exec(`UPDATE execucao SET pgid_pi = 4242 WHERE id = ${String(consulta)}`);
   assert.equal(execucoesEmAndamento(banco)[0]?.pgid, 4242);
-  comIssue(banco, i3.issue, "terminarExecucao", fabriquinha, (a, ctx) =>
+  comIssue(banco, i1.issue, "terminarExecucao", fabriquinha, (a, ctx) =>
     terminarExecucao(a, { execucao: consulta, resultado: "sucesso" }, fabriquinha, ctx),
   );
-  assert.deepEqual(ticketsElegiveis(banco), [cacheI3], "a consulta terminou: a I-3 volta a ser elegível");
+  assert.deepEqual(execucoesEmAndamento(banco), []);
   banco.close();
 });
 

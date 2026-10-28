@@ -6,7 +6,7 @@ import type { ExecucaoSessao } from "../dominio/sessoes.ts";
 import type { EtapaTicket, Instante, Modelo } from "../dominio/primitivos.ts";
 import { encontrado } from "../dominio/erros.ts";
 import { cabecalhoDaDemanda, type MotivoDemanda } from "./sessoes_demanda.ts";
-import type { Estado } from "./sessoes.ts";
+import type { Estado } from "./sessoes_demanda.ts";
 
 export type Resultado = "concluida" | "falha";
 
