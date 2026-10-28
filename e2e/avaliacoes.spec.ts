@@ -66,6 +66,8 @@ test("dispara em /evaluations, escolhe só a I-10, vê os achados, conversa e en
   await pagina.getByLabel("Mensagem").fill("Detalhe o achado 1");
   await pagina.getByLabel("Mensagem").press("Enter");
   const conversa = pagina.locator("[data-conversa]");
+  await expect(conversa).toContainText(/Avaliação de loja .* iniciada/);
+  await expect(conversa).not.toContainText("Modo de trabalhar");
   await expect(conversa.locator(".msg.voce").last()).toContainText("Detalhe o achado 1");
   await expect(conversa.locator(".msg.agente").last()).toContainText("pronto");
   expect(pagina.url()).toBe(url);

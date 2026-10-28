@@ -108,6 +108,7 @@ process.stdin.setEncoding("utf8").on("data", (parte) => {
       emitir({ type: "response", command: "prompt", success: true });
       emitir({ type: "agent_start" });
       guardar({ role: "user", content: c.message });
+      emitir({ type: "message_end", message: { role: "user", content: c.message } });
       if (env.FALSO_PI === "espera") continue;
       const achados = join(process.cwd(), "achados.jsonl");
       if (env.FALSO_PI === "ruim") appendFileSync(achados, "{nao-json\\n");
@@ -212,11 +213,18 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   await parar(id);
   assert.equal(abrirAv(banco, id).estado, "concluida");
   assert.ok(abrirAv(banco, id).conversa.length > 1);
+  const marcadas = (abrirAv(banco, id).conversa as { fabriquinha?: boolean; message?: { role?: string } }[]).filter(
+    (e) => e.fabriquinha,
+  );
+  assert.equal(marcadas.length, 1);
+  assert.equal(marcadas[0]?.message?.role, "user");
 
   // pergunta: sobe um pi novo na mesma sessão e o uso é regravado pela soma
   const eventos: string[] = [];
   const cancelar = abrirAv(banco, id).assinar((e) =>
-    eventos.push(e.type === "estado" ? `estado:${String(e.estado)}` : String(e.type)),
+    eventos.push(
+      e.type === "estado" ? `estado:${String(e.estado)}` : `${String(e.type)}${e.fabriquinha ? ":fabriquinha" : ""}`,
+    ),
   );
   enviarNaAvaliacao(banco, id, "e o custo?", opcoes);
   await ate(() => registro().filter((r) => r.evento === "inicio").length === 2, "o segundo pi");
@@ -238,6 +246,15 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   cancelar();
   assert.ok(eventos.includes("agent_start"));
   assert.ok(eventos.includes("estado:concluida"));
+  assert.ok(!eventos.includes("message_end:fabriquinha")); // a pergunta do Auditor não é o prompt
+
+  // ao vivo, a mensagem igual ao prompt.md chega marcada
+  const ao_vivo: string[] = [];
+  const parar_ = abrirAv(banco, id).assinar((e) => ao_vivo.push(e.fabriquinha ? "marcada" : String(e.type)));
+  enviarNaAvaliacao(banco, id, readFileSync(join(dir, "prompt.md"), "utf8"), opcoes);
+  await ate(() => ao_vivo.includes("marcada"), "o prompt marcado ao vivo");
+  await parar(id);
+  parar_();
 });
 
 test("o pedido do Auditor vai ao prompt; enviar com o agente trabalhando é recusado e abortar o para", async () => {
