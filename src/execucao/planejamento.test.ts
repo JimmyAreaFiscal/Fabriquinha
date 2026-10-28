@@ -248,6 +248,41 @@ test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão co
   assert.match(prompts().at(-1) ?? "", /Motivo: faltam critérios na rodada 2/);
 });
 
+test("CA-1: com o pi vivo e ocioso, a reprovação manda o motivo à mesma sessão", async () => {
+  const { banco, prompts } = cenario({ status: "em_execucao" });
+  const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
+  while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 100)); // o pi assenta: ocioso, à espera do gate
+  submeterPlanejamento(banco, "I-1", plano(), agente);
+  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  while (prompts().length < 2) await new Promise((r) => setTimeout(r, 20));
+  assert.match(prompts()[1] ?? "", /Motivo: faltam critérios na rodada 2/);
+  await fim;
+});
+
+test("a reprovação sem sessão do planejar só grava a decisão", () => {
+  const { banco, prompts } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
+  reprovarPlanejamentoDemanda(banco, "I-1", "falta");
+  assert.deepEqual(prompts(), []);
+});
+
+test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho retoma a mesma sessão", async () => {
+  const { banco, sessoes, prompts } = cenario({ status: "em_execucao" });
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  const [sessao] = sessoes().sessoes;
+  submeterPlanejamento(banco, "I-1", plano(), agente);
+  banco.exec("UPDATE ticket_demanda SET status = 'falhou', motivo_falha = 'serviço reiniciado'");
+  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  const ticket = carregarDemanda(banco, "I-1").tickets[0] as { status: string; instrucao?: string };
+  assert.equal(ticket.status, "aberto");
+  assert.equal(ticket.instrucao, "faltam critérios na rodada 2");
+  const antes = sessoes().execucoes.length;
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  assert.deepEqual(sessoes().sessoes, [sessao]);
+  assert.equal(sessoes().execucoes.length, antes + 1);
+  assert.match(prompts().at(-1) ?? "", /Motivo: faltam critérios na rodada 2/);
+});
+
 test("CA-8: motivo vazio recusa a reprovação e nada é registrado", () => {
   const { banco } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
   assert.throws(() => reprovarPlanejamentoDemanda(banco, "I-1", "   "));
@@ -267,6 +302,18 @@ test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara ca
   for (const n of [1, 2]) {
     assert.equal(gitCenario(c.repo, "merge-base", "fabriquinha/I-1", `fabriquinha/I-1-${String(n)}`), demandaTopo);
   }
+});
+
+test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejamento", async () => {
+  const { banco, prompts } = cenario({ status: "em_execucao" });
+  const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
+  while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => setTimeout(r, 100));
+  submeterPlanejamento(banco, "I-1", plano(), agente);
+  await aprovarPlanejamentoDemanda(banco, "I-1", {});
+  await fim;
+  const { n } = banco.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+  assert.equal(n, 0);
 });
 
 test("CA-10, CA-11: preparação que falha na rodada 2 deixa o gate aberto; corrigida, a aprovação conclui", async () => {
