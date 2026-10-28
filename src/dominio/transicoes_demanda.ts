@@ -135,12 +135,26 @@ export function decidirDemanda(
     por: "auditor",
     em: ctx.agora,
   };
+  const status = e.aprovado ? ("concluido" as const) : ("cancelado" as const);
+  const decidido = ag.tickets.map((t) => (t === ticket ? { ...t, status, status_alterado_em: ctx.agora } : t));
+  // Aprovar libera o planejamento: sem o ticket `planejar` aberto a seleção não tem o que despachar.
+  const abrirPlanejar = e.aprovado && !ag.tickets.some((t) => t.etapa === "planejar");
   return {
     ...ag,
     demanda: { ...demanda, fase: e.aprovado ? "planejamento" : "cancelada", fase_alterada_em: ctx.agora },
-    tickets: ag.tickets.map((t) =>
-      t === ticket ? { ...t, status: e.aprovado ? "concluido" : "cancelado", status_alterado_em: ctx.agora } : t,
-    ),
+    tickets: abrirPlanejar
+      ? [
+          ...decidido,
+          {
+            demanda_id: demanda.id,
+            ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
+            etapa: "planejar" as const,
+            status: "aberto" as const,
+            status_alterado_em: ctx.agora,
+            devolucoes: 0,
+          },
+        ]
+      : decidido,
     decisoes: [...ag.decisoes, decisao],
   };
 }
