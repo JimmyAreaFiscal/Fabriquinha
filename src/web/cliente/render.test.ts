@@ -18,6 +18,7 @@ import {
   NAO_ENCONTRADA,
   navegacao,
   caminhoDaAuditoria,
+  caminhoDaAvaliacao,
   caminhoDaDemanda,
   rotuloDoStatus,
   mesPorExtenso,
@@ -98,10 +99,13 @@ test("navegação fixa marca a página atual e mostra quem aguarda só quando h�
   assert.match(html, /<a href="\/home">Início <span class="contador" title="sessões que aguardam você">6<\/span><\/a>/);
   assert.deepEqual(
     [...html.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]),
-    ["/home", "/projects", "/demandas", "/simulation", "/metrics", "/history", "/config"],
+    ["/home", "/projects", "/demandas", "/simulation", "/metrics", "/history", "/evaluations", "/config"],
   );
   assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
   assert.match(navegacao("demandas", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
+  assert.match(navegacao("avaliacoes", 0), /<a href="\/evaluations" aria-current="page">Avaliações<\/a>/);
+  assert.equal(TITULOS.avaliacoes, "Avaliações");
+  assert.equal(caminhoDaAvaliacao("a/b c"), "/evaluations/a%2Fb%20c");
   assert.equal(TITULOS.demandas, "Demandas");
   assert.match(navegacao("demanda", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
   assert.equal(TITULOS.demanda, "Demanda");

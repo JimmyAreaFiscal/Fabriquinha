@@ -4,6 +4,7 @@ import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
 import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarAuditoria } from "./telas/auditoria-montar.ts";
+import { montarAvaliacoes } from "./telas/avaliacoes-montar.ts";
 import { montarChat } from "./telas/chat-montar.ts";
 import { montarConfiguracao } from "./telas/configuracao-montar.ts";
 import { montarDemanda, montarDemandas } from "./telas/demandas-montar.ts";
@@ -37,6 +38,7 @@ const MONTAR: Record<Pagina, Montar> = {
   sdlc: montarSdlc,
   demandas: montarDemandas,
   demanda: montarDemanda,
+  avaliacoes: montarAvaliacoes,
 };
 
 const cabeca = elemento("[data-navegacao]", HTMLElement);
