@@ -211,15 +211,15 @@ test("CA-7: ajuste do PR com PR aberto vira a rodada 1 na sessão de ajustes, co
   ]);
 });
 
-test("CA-9, CA-13: execução ativa recusa citando a issue e a execução, e nenhuma dependência é criada", () => {
+test("CA-3, CA-9, CA-13: sessão aberta e execução ativa recusam citando a issue, o ticket e a execução, e nenhuma dependência é criada", () => {
   const b = montarFixture();
   b.exec(`UPDATE ticket SET status = 'em_execucao' WHERE id = 10;
     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, iniciada_em) VALUES (7, 20, 'autonomo', 'pi-20', 'em_andamento', '2026-01-10T00:00:00.000Z');
     `);
   recusa(
     b,
-    /I-5 tem execução ativa \(ticket T-10, execução -\).*pare o serviço ou espere/,
-    /I-9 tem execução ativa \(ticket -, execução E-7\)/,
+    /I-5: a sessão do ticket T-10 está aberta; na versão anterior da Fabriquinha, envie a sessão ou cancele a issue, e suba de novo/,
+    /I-9 tem execução ativa \(execução E-7\): pare o serviço ou espere/,
   );
   assert.deepEqual(ler(b, "SELECT * FROM dependencia_demanda"), []);
 });

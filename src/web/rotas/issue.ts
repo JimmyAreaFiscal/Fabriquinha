@@ -243,11 +243,6 @@ export const ROTAS_DA_ISSUE: Rota[] = [
       await cancelarIssue(banco, IdDoCaminho.parse(params.id));
     },
   },
-  {
-    metodo: "POST",
-    caminho: "/api/tickets/:id/executar",
-    tratar: ({ params, agendador }) => agendador.executarAgora(IdDoCaminho.parse(params.id)),
-  },
   { metodo: "GET", caminho: "/api/execucoes/:id/log", tratar: textoDaExecucao("log", "log") },
   { metodo: "GET", caminho: "/api/execucoes/:id/prompt", tratar: textoDaExecucao("prompt.md", "prompt") },
   {

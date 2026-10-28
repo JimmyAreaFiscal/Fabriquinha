@@ -12,20 +12,12 @@ import { after, beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ZodError } from "zod";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { abrir, raizDo } from "../persistencia/banco.ts";
+import { abrir } from "../persistencia/banco.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { agregado } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
-import {
-  autonomasEmAndamento,
-  configuracao,
-  execucoesEmAndamento,
-  salvarConfiguracao,
-  ticketsElegiveis,
-  ticketsAutonomosEmExecucao,
-} from "../persistencia/servico.ts";
+import { execucoesEmAndamento, salvarConfiguracao, ticketsAutonomosEmExecucao } from "../persistencia/servico.ts";
 import { criarUsuarioSimulado } from "../persistencia/simulacao.ts";
-import { caminhoDaWorktree } from "../repositorio/worktree.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-servico-"));
@@ -135,12 +127,6 @@ async function ate(condicao: () => boolean): Promise<void> {
   assert.ok(condicao(), "a condição não chegou em 5 s");
 }
 
-/** Um ticket que o agendador ou o "Executar agora" iniciou: C5 passou, e a worktree do repositório que não existe falhou. */
-async function falhouNaWorktree(banco: DatabaseSync, id: number): Promise<void> {
-  await ate(() => estado(banco, id).status === "falhou");
-  assert.match(String(estado(banco, id).erro), /falhou em \/nao\/existe/);
-}
-
 /** Relógio falso para o setInterval do agendador; devolve a batida de um minuto. */
 function relogio(t: TestContext): () => void {
   t.mock.timers.enable({ apis: ["setInterval"] });
@@ -173,6 +159,7 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   issue(s.banco, 1, "revisao");
   ticket(s.banco, 1, 1, "revisao", "em_execucao");
   execucao(s.banco, 1, 1, "autonomo");
+  ticket(s.banco, 2, 1, "desenvolvimento", "concluido");
 
   // A raiz da segunda nem existe: ela recusa pela porta sem chegar a criá-la nem a migrar o banco.
   const outraRaiz = join(base, "nunca-criada");
@@ -237,6 +224,10 @@ test("reinício: as execuções da instância anterior são encerradas conforme 
   issue(banco, 5, "desenho");
   ticket(banco, 5, 5, "desenho", "em_execucao");
   execucao(banco, 5, 5, "interativo");
+  // O cutover recusa a sessão aberta: a do registro e a do desenho já foram enviadas.
+  banco.exec("UPDATE ticket SET enviado_em = criado_em WHERE id IN (2, 5)");
+  ticket(banco, 6, 1, "desenvolvimento", "concluido");
+  ticket(banco, 7, 5, "desenvolvimento");
   // F6 §3.3: a sessão da interativa tem uma resposta; a da autônoma tem dois arquivos, e a coleta dela falha.
   const sessao = (e: number) => String(banco.prepare("SELECT sessao_pi FROM execucao WHERE id = ?").get(e)?.sessao_pi);
   mkdirSync(join(raiz, "sessoes"));
@@ -375,103 +366,6 @@ test("subida que falha ao abrir o banco ou ao recuperar libera a porta", async (
   await portaLivre();
 });
 
-test("agendador: desligado por padrão; ligado, inicia a cada intervaloMin um ticket por issue elegível", async (t) => {
-  const minuto = relogio(t);
-  const s = await subir();
-  for (const id of [1, 2, 3]) {
-    issue(s.banco, id, "revisao");
-    ticket(s.banco, id, id, "revisao");
-  }
-  for (let i = 0; i < 10; i++) minuto();
-  await dormir(50);
-  for (const id of [1, 2, 3]) assert.equal(estado(s.banco, id).status, "aberto", "CA-9: desligado, nada inicia");
-  assert.deepEqual(autonomasEmAndamento(s.banco), []);
-
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 3 });
-  minuto(); // o intervalo já passou enquanto desligado: o primeiro ciclo vem na batida seguinte
-  for (const id of [1, 2, 3]) assert.equal(estado(s.banco, id).status, "em_execucao", "CA-1: o C5 roda na batida");
-  assert.partialDeepStrictEqual(
-    autonomasEmAndamento(s.banco),
-    [
-      { execucao: 1, ticket: 1, issue: 1 },
-      { execucao: 2, ticket: 2, issue: 2 },
-      { execucao: 3, ticket: 3, issue: 3 },
-    ],
-    "uma execução por issue",
-  );
-  for (const id of [1, 2, 3]) await falhouNaWorktree(s.banco, id);
-
-  issue(s.banco, 4, "revisao");
-  ticket(s.banco, 4, 4, "revisao");
-  minuto();
-  minuto();
-  assert.equal(estado(s.banco, 4).status, "aberto", "intervalo de 3 minutos");
-  minuto();
-  await falhouNaWorktree(s.banco, 4);
-  await s.parar();
-});
-
-test("agendador e Executar agora abrem o desenho como sessão interativa, que espera o Auditor sem falhar", async (t) => {
-  const minuto = relogio(t);
-  const s = await subir();
-  for (const id of [1, 2]) {
-    issue(s.banco, id, "desenho");
-    ticket(s.banco, id, id, "desenho");
-  }
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  minuto();
-  await s.executarAgora(2).catch(() => undefined); // a I-2 já começou na batida: o C5 recusa a segunda
-  for (const id of [1, 2]) {
-    assert.equal(estado(s.banco, id).status, "em_execucao");
-    assert.equal(s.banco.prepare("SELECT modo FROM execucao WHERE ticket = ?").get(id)?.modo, "interativo");
-  }
-  assert.deepEqual(autonomasEmAndamento(s.banco), [], "nenhuma autônoma");
-  // O repositório não existe: a execução termina com falha, e o ticket interativo continua em execução.
-  await ate(() => execucoesEmAndamento(s.banco).length === 0);
-  for (const id of [1, 2]) assert.equal(estado(s.banco, id).status, "em_execucao");
-  issue(s.banco, 3, "desenho");
-  ticket(s.banco, 3, 3, "desenho");
-  await s.executarAgora(3);
-  assert.equal(s.banco.prepare("SELECT modo FROM execucao WHERE ticket = 3").get()?.modo, "interativo");
-  await ate(() => execucoesEmAndamento(s.banco).length === 0);
-  // O desenho de uma issue com worktree já criada atualiza a worktree com origin/main (F5 §3.1).
-  const dir = mkdtempSync(join(base, "repo-"));
-  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
-  const commitar = (repo: string, arquivo: string) => {
-    writeFileSync(join(repo, arquivo), arquivo);
-    git(repo, "add", arquivo);
-    git(repo, "-c", "user.name=A", "-c", "user.email=a@exemplo.com", "commit", "-q", "-m", arquivo);
-  };
-  git(dir, "init", "-q", "--bare", "origin.git");
-  git(dir, "clone", "-q", "origin.git", "w");
-  const w = join(dir, "w");
-  git(w, "checkout", "-q", "-b", "main");
-  commitar(w, "inicio");
-  git(w, "push", "-q", "origin", "main");
-  projeto(s.banco, "w", w);
-  s.banco
-    .prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('w', ?, ?)")
-    .run("a".repeat(40), new Date().toISOString());
-  s.banco
-    .prepare(
-      "INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (4, 'w', 'I-4', 'problema', 'desenho', ?)",
-    )
-    .run(AGORA);
-  ticket(s.banco, 4, 4, "desenho");
-  const worktree = caminhoDaWorktree(raizDo(s.banco), "w", 4);
-  git(w, "config", "branch.fabriquinha/I-4.fabriquinha", `${worktree} ${AGORA}`);
-  git(w, "worktree", "add", "-q", "-b", "fabriquinha/I-4", worktree, "main");
-  commitar(w, "da-base");
-  git(w, "push", "-q", "origin", "main");
-  process.env.FABRIQUINHA_PI = "false"; // sem pi: a execução termina logo depois da worktree
-  await s.executarAgora(4);
-  await ate(() => execucoesEmAndamento(s.banco).length === 0);
-  delete process.env.FABRIQUINHA_PI;
-  assert.equal(git(worktree, "rev-list", "--count", "HEAD..origin/main"), "0");
-  assert.equal(existsSync(join(worktree, "da-base")), true);
-  await s.parar();
-});
-
 test("próxima busca: a batida em que o contador chega ao intervaloMin; desligado além dele, a batida seguinte", async (t) => {
   const inicio = Date.parse("2026-10-12T14:00:00.000Z");
   t.mock.timers.enable({ apis: ["setInterval", "Date"], now: inicio });
@@ -488,93 +382,20 @@ test("próxima busca: a batida em que o contador chega ao intervaloMin; desligad
   await s.parar();
 });
 
-test("agendador inicia as issues livres e pula a que o C5 recusaria (CA-2)", async (t) => {
-  const minuto = relogio(t);
-  const s = await subir();
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "desenvolvimento");
-  ticket(s.banco, 1, 1, "desenvolvimento", "concluido");
-  ticket(s.banco, 2, 1, "desenvolvimento");
-  execucao(s.banco, 1, 1, "consulta");
-  issue(s.banco, 2, "revisao");
-  ticket(s.banco, 3, 2, "revisao", "em_execucao");
-  execucao(s.banco, 2, 3, "autonomo");
-  issue(s.banco, 3, "revisao");
-  ticket(s.banco, 4, 3, "revisao");
-  issue(s.banco, 4, "revisao");
-  ticket(s.banco, 5, 4, "revisao");
-
-  minuto();
-  assert.equal(estado(s.banco, 2).status, "aberto", "a I-1 tem uma consulta em andamento");
-  assert.equal(estado(s.banco, 4).status, "em_execucao");
-  assert.equal(estado(s.banco, 5).status, "em_execucao");
-  assert.deepEqual(
-    autonomasEmAndamento(s.banco).map((e) => e.issue),
-    [2, 3, 4],
-    "a I-2 mantém a única execução; a I-3 e a I-4 ganham a sua",
-  );
-  await falhouNaWorktree(s.banco, 4);
-  await falhouNaWorktree(s.banco, 5);
-  await s.parar();
-});
-
-test("agendador: numa issue em desenvolvimento só o ticket mais antigo inicia (CA-3)", async (t) => {
-  const minuto = relogio(t);
-  const s = await subir();
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "desenvolvimento");
-  ticket(s.banco, 1, 1, "desenvolvimento");
-  ticket(s.banco, 2, 1, "desenvolvimento");
-
-  minuto();
-  assert.equal(estado(s.banco, 1).status, "em_execucao");
-  assert.equal(estado(s.banco, 2).status, "aberto");
-  await falhouNaWorktree(s.banco, 1);
-  await s.parar();
-});
-
-test("agendador: a issue com dependência aberta espera (CA-7)", async (t) => {
-  const minuto = relogio(t);
-  const s = await subir();
-  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "revisao");
-  ticket(s.banco, 1, 1, "revisao");
-  issue(s.banco, 2, "revisao");
-  ticket(s.banco, 2, 2, "revisao");
-  issue(s.banco, 3, "registro");
-  s.banco.exec("INSERT INTO issue_dep (issue, dep) VALUES (2, 3)");
-
-  minuto();
-  assert.equal(estado(s.banco, 1).status, "em_execucao");
-  assert.equal(estado(s.banco, 2).status, "aberto");
-  await falhouNaWorktree(s.banco, 1);
-  await s.parar();
-});
-
-test("o ciclo nunca trava nem lança: erro na batida e recusa do C5 vão para o log", async (t) => {
+test("o ciclo nunca trava nem lança: erro na batida vai para o log e a batida seguinte roda", async (t) => {
   const minuto = relogio(t);
   const erros = t.mock.method(console, "error", () => undefined);
   const s = await subir();
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "revisao");
-  ticket(s.banco, 1, 1, "revisao");
+  erros.mock.resetCalls(); // a linha do cutover
 
   s.banco.exec("ALTER TABLE configuracao RENAME TO guardada");
   minuto();
   assert.equal(erros.mock.callCount(), 1);
   assert.match(String(erros.mock.calls[0]?.arguments[1]), /no such table: configuracao/);
   s.banco.exec("ALTER TABLE guardada RENAME TO configuracao");
-
-  // Uma divergência entre a consulta e o C5 (aqui, a issue que não carrega) aparece no log, sem mudar o ticket.
-  s.banco.exec(`UPDATE issue SET descricao = '${"palavra ".repeat(1001)}' WHERE id = 1`);
   minuto();
-  await ate(() => erros.mock.callCount() === 2);
-  assert.ok(erros.mock.calls[1]?.arguments[1] instanceof ZodError);
-  assert.equal(estado(s.banco, 1).status, "aberto");
-
-  s.banco.exec("UPDATE issue SET descricao = '' WHERE id = 1");
-  minuto();
-  await falhouNaWorktree(s.banco, 1);
+  assert.equal(erros.mock.callCount(), 1);
   await s.parar();
 });
 
@@ -583,8 +404,7 @@ test("agendador: varre em segundo plano a base dos projetos sem varredura há 24
   const erros = t.mock.method(console, "error", () => undefined);
   const s = await subir();
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  issue(s.banco, 1, "revisao");
-  ticket(s.banco, 1, 1, "revisao");
+  erros.mock.resetCalls(); // a linha do cutover
   // `q`: base real, com o upload-pack do `origin` lento e contando as buscas. `r`: o fetch falha.
   const dir = mkdtempSync(join(base, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
@@ -601,17 +421,11 @@ test("agendador: varre em segundo plano a base dos projetos sem varredura há 24
   const varrido = () => s.banco.prepare("SELECT em FROM varredura_base WHERE projeto = 'q'").get()?.em;
 
   minuto();
-  assert.partialDeepStrictEqual(
-    autonomasEmAndamento(s.banco),
-    [{ execucao: 1, ticket: 1 }],
-    "a batida não espera a varredura",
-  );
   minuto();
   minuto();
   await ate(() => varrido() !== undefined && erros.mock.callCount() === 1);
   assert.equal(contadas(), 1, "uma varredura só começa quando a anterior terminou");
   assert.match(String(erros.mock.calls[0]?.arguments[1]), /git fetch .* falhou em .*nao-existe/);
-  await falhouNaWorktree(s.banco, 1);
 
   // Varrido agora, `q` só volta depois de 24 horas; `r`, que falhou, é tentado de novo.
   minuto();
@@ -629,6 +443,7 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
   const s = await subir(raiz);
+  erros.mock.resetCalls(); // a linha do cutover
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
   const dir = mkdtempSync(join(base, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
@@ -649,38 +464,6 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
     git(q, "rev-parse", "HEAD"),
   );
   banco.close();
-});
-
-test("executarAgora: não espera o agendador, inicia com outra issue rodando e recusa a 2ª da mesma issue", async () => {
-  const s = await subir();
-  assert.equal(configuracao(s.banco).agendadorAtivo, false);
-  issue(s.banco, 1, "revisao");
-  ticket(s.banco, 1, 1, "revisao", "em_execucao");
-  execucao(s.banco, 1, 1, "autonomo");
-  issue(s.banco, 2, "desenvolvimento");
-  ticket(s.banco, 2, 2, "desenvolvimento");
-  ticket(s.banco, 3, 2, "desenvolvimento");
-  issue(s.banco, 3, "registro");
-  ticket(s.banco, 4, 3, "registro");
-
-  await assert.rejects(s.executarAgora(4), /T-4 é da etapa registro, que roda em modo interativo/);
-  await s.executarAgora(2);
-  assert.partialDeepStrictEqual(
-    autonomasEmAndamento(s.banco),
-    [
-      { execucao: 1, issue: 1 },
-      { execucao: 2, ticket: 2, issue: 2 },
-    ],
-    "CA-4: volta logo depois do C5, com a I-1 ainda rodando",
-  );
-  await assert.rejects(
-    s.executarAgora(3),
-    (erro: unknown) =>
-      erro instanceof ErroDeRegra && erro.message === "a I-2 já tem a execução E-2 em andamento (espere ela terminar)",
-  );
-  await falhouNaWorktree(s.banco, 2);
-  assert.deepEqual(ticketsElegiveis(s.banco), [], "T-2 falhou: T-3 espera ele concluir (C5)");
-  await s.parar();
 });
 
 /** Projeto `p` com configuração do SDLC (repositório inexistente) e a demanda I-`n` em execução com um `implementar` aberto. */
@@ -712,7 +495,7 @@ function demandaEmExecucao(banco: DatabaseSync, n: number): void {
 const statusDemanda = (banco: DatabaseSync, id: string) =>
   banco.prepare("SELECT status FROM ticket_demanda WHERE demanda_id = ? AND ticket_id = 1").get(id)?.status;
 
-test("CA-14: o ciclo inicia o ticket da issue como hoje e despacha a demanda no mesmo ciclo", async (t) => {
+test("CA-5: o relógio bate e nenhum ticket legado vira execução; a demanda é despachada", async (t) => {
   const minuto = relogio(t);
   const s = await subir();
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
@@ -720,11 +503,40 @@ test("CA-14: o ciclo inicia o ticket da issue como hoje e despacha a demanda no 
   ticket(s.banco, 1, 1, "revisao");
   demandaEmExecucao(s.banco, 1);
   minuto();
-  assert.equal(estado(s.banco, 1).status, "em_execucao");
+  assert.equal(estado(s.banco, 1).status, "aberto");
+  assert.equal(s.banco.prepare("SELECT count(*) AS n FROM execucao").get()?.n, 0);
   assert.equal(statusDemanda(s.banco, "I-1"), "em_execucao");
-  await falhouNaWorktree(s.banco, 1);
   await ate(() => statusDemanda(s.banco, "I-1") === "falhou");
   await s.parar();
+});
+
+test("cutover: a subida migra as issues, loga o relatório e a recusa libera a porta sem gravar nada", async (t) => {
+  const erros = t.mock.method(console, "error", () => undefined);
+  const raiz = novaRaiz();
+  const banco = abrir(raiz);
+  issue(banco, 1, "registro");
+  ticket(banco, 1, 1, "registro", "em_execucao");
+  banco.exec("UPDATE ticket SET enviado_em = criado_em WHERE id = 1");
+  banco.close();
+  const s = await subir(raiz);
+  const linha = erros.mock.calls.map((c) => String(c.arguments[1])).find((l) => l.startsWith("cutover: "));
+  assert.ok(linha);
+  assert.deepEqual(Object.keys(JSON.parse(linha.slice("cutover: ".length)) as object), [
+    "antes",
+    "depois",
+    "naoMigradas",
+    "emVoo",
+  ]);
+  assert.equal(s.banco.prepare("SELECT id FROM demanda").get()?.id, "I-1");
+  await s.parar();
+
+  const aberta = novaRaiz();
+  const b = abrir(aberta);
+  issue(b, 2, "registro");
+  ticket(b, 2, 2, "registro", "em_execucao");
+  b.close();
+  await assert.rejects(subir(aberta), /I-2: a sessão do ticket T-2 está aberta/);
+  await portaLivre();
 });
 
 test("executarAgoraDemanda: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {

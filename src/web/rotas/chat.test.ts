@@ -241,65 +241,6 @@ test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, envio a
   sse.fechar();
 });
 
-test("desenho interativo: Executar agora abre a conversa; o envio leva ao gate; reprovar volta à mesma sessão", async () => {
-  const [registrando, issue] = await registro();
-  const mensagem = (sessao: string, texto: string) =>
-    postar(`/api/sessoes/${sessao}/mensagens`, { texto, modo: "prompt" });
-  assert.equal((await mensagem(registrando, "registre")).status, 204);
-  await esperarEstado(registrando, "aguardando_humano: gate_registro");
-  assert.equal((await postar(`/api/issues/${String(issue)}/registro`, { aprovado: true })).status, 204);
-
-  interface Pagina {
-    issue: { fase: string };
-    tickets: { id: number; etapa: string; status: string }[];
-  }
-  const pagina = async () =>
-    (await pedir(`/api/issues/${String(issue)}`)).corpo as Pagina & {
-      sessoes: { sessao: string; ticket: number }[];
-    };
-  const desenho = (await pagina()).tickets.find((t) => t.etapa === "desenho")?.id ?? 0;
-  assert.equal((await postar(`/api/tickets/${String(desenho)}/executar`)).status, 204);
-  await ate(async () => (await pagina()).sessoes.some((s) => s.ticket === desenho), "a sessão do desenho");
-  const sessao = String((await pagina()).sessoes.find((s) => s.ticket === desenho)?.sessao);
-  await esperarEstado(sessao, "aguardando_humano: conversa");
-  const aberta = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
-  assert.equal(aberta.execucoes[0]?.modo, "interativo");
-  assert.match(
-    textos(aberta.conversa)[0] ?? "",
-    new RegExp(`Vamos desenhar a solução da issue I-${String(issue)}\\.\\n$`),
-  );
-
-  assert.equal((await mensagem(sessao, "desenhe")).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: gate_desenho");
-  assert.equal((await pagina()).issue.fase, "aprovacao_desenho");
-  assert.equal((await mensagem(sessao, "mais uma")).status, 409, "o gate não recebe mensagem");
-
-  const decidir = `/api/issues/${String(issue)}/desenho`;
-  assert.equal((await postar(decidir, { aprovado: false })).status, 422);
-  assert.equal((await postar(decidir, { aprovado: false, motivo: "use streaming" })).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: conversa");
-  const devolvido = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
-  assert.ok(textos(devolvido.conversa).includes("user: O Auditor reprovou o desenho. Motivo: use streaming"));
-  const reprovada = await pagina();
-  assert.equal(reprovada.issue.fase, "desenho");
-  assert.deepEqual(
-    reprovada.tickets.filter((t) => t.etapa !== "registro").map((t) => [t.id, t.etapa, t.status]),
-    [
-      [desenho, "desenho", "em_execucao"],
-      [desenho + 1, "desenvolvimento", "aberto"],
-    ],
-    "o mesmo ticket de desenho, com o ticket que ele propôs",
-  );
-
-  assert.equal((await mensagem(sessao, "desenhe")).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: gate_desenho");
-  assert.equal((await postar(decidir, { aprovado: true })).status, 204);
-  await esperarEstado(sessao, "terminada");
-  const aprovada = await pagina();
-  assert.equal(aprovada.issue.fase, "desenvolvimento");
-  assert.equal(aprovada.tickets.find((t) => t.id === desenho)?.status, "concluido");
-});
-
 test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o aviso marcado, 409; recusar", async () => {
   const [sessao, issue] = await registro();
   const { ticket, execucoes } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
@@ -516,27 +457,24 @@ test("concluir só a sessão em aberto; entrada inválida dá 422 e sessão ou t
 
 test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra sessão anexado; histórico em Markdown", async () => {
   const t0 = "2026-10-11T12:00:00.000Z";
+  const sessao = crypto.randomUUID();
   servico.banco.exec(
     `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em)
        VALUES (900, 'loja', 'Timeout no checkout', 'problema', '', 'desenvolvimento', '${t0}');
-     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em)
-       VALUES (900, 900, 'desenvolvimento', 'Buscar cupons', 'aberto', 'fabriquinha', '${t0}');`,
+     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, erro, criado_em)
+       VALUES (900, 900, 'desenvolvimento', 'Buscar cupons', 'falhou', 'fabriquinha', 'a execução caiu', '${t0}');
+     INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
+       VALUES (900, 900, 'autonomo', '${sessao}', 'falha', 'a execução caiu', '${t0}', '${t0}');`,
+  );
+  mkdirSync(join(raiz, "sessoes"), { recursive: true });
+  const conversa = (role: string, text: string) =>
+    JSON.stringify({ type: "message", message: { role, content: [{ type: "text", text }] } });
+  writeFileSync(
+    join(raiz, "sessoes", `2026-10-11T12-00-00-000Z_${sessao}.jsonl`),
+    `${conversa("user", "busque os cupons")}\n${conversa("assistant", "feito")}\n`,
   );
   const dados = async (s: string) => (await pedir(`/api/sessoes/${s}`)).corpo as DadosDoChat;
-  const executarEsperandoFalha = async (execucoes: number) => {
-    assert.equal((await postar("/api/tickets/900/executar")).status, 204);
-    let sessao = "";
-    await ate(async () => {
-      const [s] = (await pedir("/api/sessoes?escopo=ativas&issue=900")).corpo as { sessao: string }[];
-      sessao = s?.sessao ?? "";
-      return sessao !== "" && (await estado(sessao)) === "aguardando_humano: falha";
-    }, "o ticket falhar");
-    assert.equal((await dados(sessao)).execucoes.length, execucoes);
-    return sessao;
-  };
-
-  // O SonarQube não está configurado na coleta depois do pi, e o ticket falha: a sessão espera a resposta do Auditor.
-  const sessao = await executarEsperandoFalha(1);
+  await esperarEstado(sessao, "aguardando_humano: falha");
   const falha = await dados(sessao);
   assert.equal(falha.ticket.status, "falhou");
   assert.ok(falha.ticket.erro);
@@ -561,15 +499,7 @@ test("falha: responder e retomar (C20 e C9); consulta com o histórico de outra 
   assert.equal((await postar("/api/tickets/900/reabrir", { instrucao: 3 })).status, 422);
   assert.equal((await postar("/api/tickets/999/reabrir", {})).status, 404);
 
-  // A próxima execução, na mesma sessão, leva a instrução antes do prompt da etapa e roda com o modelo novo.
-  assert.equal(await executarEsperandoFalha(2), sessao);
-  const segunda = (await dados(sessao)).execucoes[1];
-  assert.ok(segunda);
-  assert.deepEqual(segunda.modelo, modelo);
-  assert.match(
-    (await pedir(`/api/execucoes/${String(segunda.id)}/prompt`)).texto,
-    /# Instrução do Auditor\n\nordene pela validade/,
-  );
+  servico.banco.exec("UPDATE ticket SET status = 'falhou', erro = 'caiu de novo' WHERE id = 900");
   // Responder e retomar com o histórico de outra sessão anexado (F4 §6.8): o anexo vai na instrução da próxima tentativa.
   const [outra] = await registro();
   const { ticket: doRegistro, issue: daOutra } = (await dados(outra)).sessao;
