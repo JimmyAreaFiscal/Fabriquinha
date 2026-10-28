@@ -332,9 +332,10 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   );
 });
 
-test("a rodada em sessão de ajustes liga à conversa dos ajustes (CA-22)", () => {
+test("a rodada em sessão de ajustes liga à seção da conversa, no mesmo documento (CA-10)", () => {
   const html = pagina({ ...dadosDaPagina(), rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "sessao" }] });
-  assert.match(html, /href="\/api\/demandas\/rodadas\/I-206\.R1\/ajustes" target="_blank" rel="noopener"/);
+  assert.match(html, /<a class="link" href="#ajustes-I-206\.R1">Sessão de ajustes ↓<\/a>/);
+  assert.match(html, /<div id="ajustes-I-206\.R1" data-ajustes="I-206\.R1"><\/div>/);
 });
 
 test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {

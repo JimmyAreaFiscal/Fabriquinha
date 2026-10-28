@@ -151,7 +151,7 @@ const decisao = (d: Pagina["decisoes"][number]): string =>
   `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por)}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
 
 /** O bloco delimitado de um gate ou formulário de ação: título em caixa alta e borda na cor do estado. */
-const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
+export const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
   `<div class="dm-gate${perigo ? " dm-gate-perigo" : ""}"${extra}><span class="dm-gate-titulo">${titulo}</span>${corpo}</div>`;
 
 /** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o aberto e elegível. */
@@ -205,7 +205,7 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
     <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
     ${meus.length > 0 ? `<ul class="dm-tickets">${meus.map((t) => ticket(t, p.decisoes)).join("")}</ul>` : '<p class="muted vazio">Sem tickets.</p>'}
-    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="/api/demandas/rodadas/${escapar(r.ref)}/ajustes" target="_blank" rel="noopener">Sessão de ajustes de ${escapar(r.ref)}</a></p>` : ""}
+    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="#ajustes-${escapar(r.ref)}">Sessão de ajustes ↓</a></p><div id="ajustes-${escapar(r.ref)}" data-ajustes="${escapar(r.ref)}"></div>` : ""}
     ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
   </section>`;
 }

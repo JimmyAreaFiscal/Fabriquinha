@@ -3,6 +3,7 @@
 import type { Parametros } from "../caminhos.ts";
 import { abrirCaixa, api, avisar, ErroDaApi, irPara, mostrarErro } from "../dom.ts";
 import { escapar } from "../render.ts";
+import { agirNaSessao, carregarAjustes } from "./demandas-acoes-montar.ts";
 import { type DadosDaPagina, type DadosDoQuadro, pagina, quadro } from "./demandas.ts";
 
 export async function montarDemandas(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
@@ -26,6 +27,8 @@ async function carregar(main: HTMLElement, params: Parametros, signal: AbortSign
     return false;
   }
   main.innerHTML = pagina(dados);
+  for (const secao of main.querySelectorAll<HTMLElement>("[data-ajustes]"))
+    void carregarAjustes(secao, signal).catch(mostrarErro);
   return true;
 }
 
@@ -36,6 +39,11 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
     "click",
     (evento) => {
       const alvo = evento.target instanceof Element ? evento.target : null;
+      const ajuste = alvo?.closest<HTMLButtonElement>("button[data-ajuste]");
+      if (ajuste) {
+        void agirNaSessao(ajuste, signal);
+        return;
+      }
       const demanda = alvo?.closest<HTMLButtonElement>("button[data-demanda]");
       if (demanda) {
         void agirNaDemanda(demanda, main);
