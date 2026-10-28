@@ -3,8 +3,9 @@
 import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/dominio/evidencia_demanda.ts";
 import type { Verificacao } from "../src/evidencias/verificacoes.ts";
-import type { DepsDespacho } from "../src/execucao/despacho_demanda.ts";
+import { despacharDemandas, type DepsDespacho } from "../src/execucao/despacho_demanda.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/execucao/execucao_demanda.ts";
 import { fecharTicketDemanda } from "../src/execucao/fechamento_ticket.ts";
 import {
@@ -12,8 +13,10 @@ import {
   iniciarOuRetomarPlanejamento,
   submeterPlanejamento,
 } from "../src/execucao/planejamento.ts";
+import { decidirRevisaoRodada } from "../src/execucao/revisao_rodada.ts";
+import { comDemanda } from "../src/persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
-import { base, type Cenario, demanda, demandaAprovada, esperar } from "./apoio.ts";
+import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar } from "./apoio.ts";
 import { piFalso } from "./falsos.ts";
 
 export const pi = piFalso(base);
@@ -129,3 +132,95 @@ export const statusDe = (c: Cenario, ref: { demanda_id: string; ticket_id: numbe
 export const rodadaDe = (c: Cenario, id: string, n: number) => demanda(c, id).rodadas.find((r) => r.rodada_id === n);
 export const execucoesDe = (c: Cenario, ref: { demanda_id: string; ticket_id: number }) =>
   carregarSessoesDoTicket(c.banco, ref).execucoes;
+
+export const agora = () => new Date().toISOString();
+
+/** O ticket atual (o de maior id) da etapa na rodada 1. */
+export const atual = (c: Cenario, id: string, etapa: string) => {
+  const t = demanda(c, id)
+    .tickets.filter((x) => x.rodada_id === 1 && x.etapa === etapa)
+    .sort((a, b) => b.ticket_id - a.ticket_id)[0];
+  assert.ok(t, `ticket ${etapa} da rodada 1`);
+  return t;
+};
+/** As evidências que cabem ao agente do ticket, submetidas como a ferramenta autora da demanda as enviaria. */
+export function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [string, object][]): void {
+  comDemanda(c.banco, id, (ag) =>
+    evidencias.reduce(
+      (a, [tipo, dados]) =>
+        submeterEvidenciaDemanda(
+          a,
+          { tipo, dados, ticket_id } as EntradaEvidenciaDemanda,
+          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          agora(),
+        ),
+      ag,
+    ),
+  );
+}
+
+/** Demanda em execução com a única implementação da rodada 1 feita pelo agendador: a rodada está em `revisao`. */
+export async function rodadaEmRevisao(c: Cenario): Promise<string> {
+  const id = await demandaEmExecucao(c, [{ tickets: 1 }]);
+  abrirPortao();
+  pi.roteirizar([{ modo: "ok", agente }]);
+  await ciclo(c, despacho());
+  assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
+  return id;
+}
+
+/** O agendador roda o `revisar_rodada` (a Fabriquinha prepara as evidências dela); depois o agente decide. */
+export async function revisar(
+  c: Cenario,
+  id: string,
+  decisao: { aprovado: true } | { aprovado: false; exigencias: string; correcoes: object[] },
+): Promise<number> {
+  pi.roteirizar([{ modo: "ok" }]);
+  await ciclo(c, despacho());
+  const { ticket_id, status } = atual(c, id, "revisar_rodada");
+  assert.equal(status, "em_execucao", "a revisão espera a decisão do agente");
+  if (decisao.aprovado) {
+    comoAgente(c, id, ticket_id, [
+      ["explicacao_fitness", { explicacoes: [] }],
+      ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
+    ]);
+  }
+  decidirRevisaoRodada(
+    c.banco,
+    { ...decisao, demanda_id: id, rodada_id: 1, ticket_id },
+    { tipo: "agente", execucao: 1, ticket: ticket_id },
+  );
+  return ticket_id;
+}
+
+export const MENSAGEM_PR = {
+  titulo: "Encerrar a rodada",
+  oQueMudou: "Conduz o encerramento.",
+  decisoesNaoObvias: [],
+  naoFeito: [],
+  comoRevisar: ["Leia o diff."],
+  naoVerificado: [],
+};
+
+/** O agendador roda o `encerrar_rodada`: o agente documenta (enquanto o pi espera) e a Fabriquinha publica e confere o PR. */
+export async function encerrar(c: Cenario, id: string): Promise<void> {
+  fecharPortao();
+  pi.roteirizar([{ modo: "ok", agente: agenteMudo }]);
+  const fins = despacharDemandas(c.banco, c.config, despacho());
+  assert.equal(fins.length, 1);
+  await esperar(() => pisAteAgora() === 1, "o pi receber o prompt da documentação");
+  comoAgente(c, id, atual(c, id, "encerrar_rodada").ticket_id, [
+    ["mensagem_pr", MENSAGEM_PR],
+    ["aula_codigo", { resumo: "aula" }],
+  ]);
+  abrirPortao();
+  await Promise.all(fins);
+}
+
+/** Rodada 1 em `encerramento`, com a implementação revisada e aprovada. */
+export async function rodadaEmEncerramento(c: Cenario): Promise<string> {
+  const id = await rodadaEmRevisao(c);
+  await revisar(c, id, { aprovado: true });
+  assert.equal(rodadaDe(c, id, 1)?.fase, "encerramento");
+  return id;
+}
