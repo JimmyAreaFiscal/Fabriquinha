@@ -144,7 +144,7 @@ test("fatos do mês: demandas, tickets, PRs, notas, reprovações por etapa e re
   assert.deepEqual(mar.demandas, { registradas: 2, concluidas: 1 });
   assert.deepEqual(fev.tickets, { criados: 2, concluidos: 2 });
   assert.deepEqual(mar.tickets, { criados: 2, concluidos: 1 });
-  assert.deepEqual(fev.prs, { abertos: 1, mergeados: 2 });
+  assert.deepEqual(fev.prs, { abertos: 1, mergeados: 1 });
   assert.deepEqual(fev.nota, { media: 4.5, notas: 2 });
   assert.deepEqual(jan.nota, { media: null, notas: 0 });
   assert.equal(fev.etapas.length, 9);
@@ -154,6 +154,23 @@ test("fatos do mês: demandas, tickets, PRs, notas, reprovações por etapa e re
   );
   assert.deepEqual(fev.retrabalho, { adicionadas: 30, alteradas: 15, porHumanos: 5 });
   assert.deepEqual(mar.retrabalho, { adicionadas: 0, alteradas: 0, porHumanos: 0 });
+});
+
+test("PRs por coorte do mês de abertura: o pr_aberto da rodada migrada conta, e mergeado nunca passa de aberto", () => {
+  const b = banco();
+  for (const r of [3, 4, 5])
+    b.exec(`INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'desenvolvimento', 0, 'b${String(r)}')`);
+  b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+    VALUES ('I-1', 4, 'encerrar_rodada', 'concluido', '${em("2026-03")}', 3)`);
+  // aprovado em março, PR aberto em fevereiro na própria rodada (backfill): entra na coorte de fevereiro
+  b.prepare("INSERT INTO decisao_ticket VALUES ('I-1', 4, 1, 'aprovado', NULL, NULL, 'auditor', ?)").run(em("2026-03"));
+  for (const r of [3, 4])
+    b.prepare(
+      "INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, tipo, dados, em) VALUES (?, 'I-1', ?, 'pr_aberto', '{}', ?)",
+    ).run(`ep${String(r)}`, r, em("2026-02"));
+  const meses = metricasDemandaPorMes(b, { de: "2026-02", ate: "2026-03" });
+  assert.deepEqual(ver(meses[0]).prs, { abertos: 3, mergeados: 2 }); // rodadas 1 (ticket), 3 e 4; a 5 não tem PR
+  assert.deepEqual(ver(meses[1]).prs, { abertos: 0, mergeados: 0 });
 });
 
 test("o projeto filtra tudo", () => {
@@ -192,6 +209,6 @@ test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovad
   const abr = ver(metricasDemandaPorMes(b, { de: "2026-04", ate: "2026-04" })[0]);
   assert.equal(abr.total.execucoes, 1);
   assert.deepEqual(abr.total.custo, { conhecido: 0, incompleto: false });
-  assert.deepEqual(abr.prs, { abertos: 0, mergeados: 1 });
+  assert.deepEqual(abr.prs, { abertos: 0, mergeados: 0 }); // o PR é da coorte de fevereiro
   assert.deepEqual(abr.nota, { media: null, notas: 0 });
 });

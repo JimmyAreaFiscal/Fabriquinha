@@ -269,7 +269,7 @@ export const usoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): UsoNoPeriod
       custo: l.custo === null ? null : Number(l.custo),
     }));
 
-export type Fato = "demandasRegistradas" | "demandasConcluidas" | "ticketsCriados" | "ticketsConcluidos" | "prsAbertos";
+export type Fato = "demandasRegistradas" | "demandasConcluidas" | "ticketsCriados" | "ticketsConcluidos";
 
 /**
  * Quando cada fato aconteceu. A demanda e o ticket novos não gravam `criado_em` nem `concluido_em` (só o backfill grava),
@@ -287,15 +287,37 @@ export const fatosNoPeriodo = (banco: DatabaseSync, recorte: Recorte): { fato: F
          UNION ALL SELECT 'ticketsCriados', COALESCE(t.criado_em, t.status_alterado_em), t.demanda_id FROM ticket_demanda t
          UNION ALL SELECT 'ticketsConcluidos', COALESCE(t.concluido_em, t.status_alterado_em), t.demanda_id
            FROM ticket_demanda t WHERE t.status = 'concluido'
-         UNION ALL SELECT 'prsAbertos', MIN(e.em), e.demanda_id FROM evidencia_demanda e
-           JOIN ticket_demanda t ON t.demanda_id = e.demanda_id AND t.ticket_id = e.ticket_id
-           WHERE e.tipo = 'pr_aberto' GROUP BY e.demanda_id, t.rodada_id
        )
        SELECT f.fato, f.em FROM fatos f JOIN demanda d ON d.id = f.demanda
        WHERE f.em >= $inicio AND f.em < $fim AND ${NO_RECORTE}`,
     )
     .all(parametros(recorte))
     .map((l) => ({ fato: l.fato as Fato, em: l.em as string }));
+
+export interface PrNoPeriodo {
+  em: string;
+  mergeado: boolean;
+}
+
+/**
+ * Um PR por rodada, no mês do primeiro `pr_aberto` dela (o do ticket, nas rodadas novas, ou o da própria rodada, nas migradas).
+ * Mergeado quando a rodada tem `encerrar_rodada` aprovado: por coorte, nunca passa dos abertos.
+ */
+export const prsNoPeriodo = (banco: DatabaseSync, recorte: Recorte): PrNoPeriodo[] =>
+  banco
+    .prepare(
+      `SELECT p.em, p.mergeado FROM (
+         SELECT e.demanda_id, MIN(e.em) AS em, EXISTS (
+           SELECT 1 FROM decisao_ticket x JOIN ticket_demanda te ON te.demanda_id = x.demanda_id AND te.ticket_id = x.ticket_id
+           WHERE x.demanda_id = e.demanda_id AND te.rodada_id = COALESCE(e.rodada_id, t.rodada_id)
+             AND te.etapa = 'encerrar_rodada' AND x.resultado != 'recusado') AS mergeado
+         FROM evidencia_demanda e LEFT JOIN ticket_demanda t ON t.demanda_id = e.demanda_id AND t.ticket_id = e.ticket_id
+         WHERE e.tipo = 'pr_aberto' GROUP BY e.demanda_id, COALESCE(e.rodada_id, t.rodada_id)
+       ) p JOIN demanda d ON d.id = p.demanda_id
+       WHERE p.em >= $inicio AND p.em < $fim AND ${NO_RECORTE}`,
+    )
+    .all(parametros(recorte))
+    .map((l) => ({ em: l.em as string, mergeado: l.mergeado === 1 }));
 
 export interface DecisaoNoPeriodo extends DonoDaLinha {
   demanda: string;

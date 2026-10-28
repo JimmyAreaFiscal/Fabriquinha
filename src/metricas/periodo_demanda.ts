@@ -7,6 +7,7 @@ import {
   type ExecucaoNoPeriodo,
   execucoesNoPeriodo,
   fatosNoPeriodo,
+  prsNoPeriodo,
   retrabalhoNoPeriodo,
   type UsoNoPeriodo,
   usoNoPeriodo,
@@ -114,6 +115,7 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
   const execucoes = noMes(execucoesNoPeriodo(banco, recorte), (e) => e.inicio);
   const uso = Map.groupBy(usoNoPeriodo(banco, recorte), (u) => u.execucao);
   const fatos = noMes(fatosNoPeriodo(banco, recorte), (f) => f.em);
+  const prs = noMes(prsNoPeriodo(banco, recorte), (p) => p.em);
   const decisoes = noMes(decisoesNoPeriodo(banco, recorte), (d) => d.em);
   const retrabalho = noMes(retrabalhoNoPeriodo(banco, recorte), (r) => r.em);
 
@@ -123,6 +125,7 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
     const ds = decisoes.get(mes) ?? [];
     const mergeados = ds.filter((d) => d.etapa === "encerrar_rodada" && !d.recusada);
     const notas = mergeados.flatMap((d) => (d.nota === null ? [] : [d.nota]));
+    const prsDoMes = prs.get(mes) ?? [];
     const r = retrabalho.get(mes) ?? [];
     return {
       mes,
@@ -131,7 +134,7 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
       niveis: NIVEIS.map((nivel) => porNivel(execs, nivel, uso)),
       demandas: { registradas: n("demandasRegistradas"), concluidas: n("demandasConcluidas") },
       tickets: { criados: n("ticketsCriados"), concluidos: n("ticketsConcluidos") },
-      prs: { abertos: n("prsAbertos"), mergeados: mergeados.length },
+      prs: { abertos: prsDoMes.length, mergeados: prsDoMes.filter((p) => p.mergeado).length },
       nota: { media: notas.length === 0 ? null : soma(notas) / notas.length, notas: notas.length },
       retrabalho: {
         adicionadas: soma(r.map((x) => x.adicionadas)),
