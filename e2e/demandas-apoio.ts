@@ -6,7 +6,8 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { guardarBytes } from "../src/persistencia/arquivos.ts";
-import { criarDemanda } from "../src/persistencia/demandas.ts";
+import { registrarCorrecoesSessao } from "../src/dominio/transicoes_rodada.ts";
+import { carregarDemanda, comDemanda, criarDemanda } from "../src/persistencia/demandas.ts";
 import { gravarAnexos } from "../src/persistencia/evidencia_demanda.ts";
 
 const em = "2026-10-11T12:00:00.000Z";
@@ -240,12 +241,20 @@ export function semearPrDaRodada(raiz: string): void {
       cwd: join(raiz, "loja"),
     },
   );
+  // O pi falso da sessão de ajustes só sobe em branch da Fabriquinha.
+  execFileSync(
+    "git",
+    ["config", "branch.fabriquinha/I-215.fabriquinha", `demanda:${join(raiz, "worktrees/loja/I-215/demanda")}`],
+    { cwd: join(raiz, "loja") },
+  );
   // A aprovação integra: o gh falso já vê o PR 9 mergeado, e a branch da demanda está no remoto para o fast-forward.
   execFileSync("git", ["push", "-q", "origin", "fabriquinha/I-215"], { cwd: join(raiz, "loja") });
   writeFileSync(
     join(raiz, "gh-pr.json"),
     JSON.stringify({ state: "MERGED", url: "https://exemplo.com/pr/9", mergedAt: em, mergeCommit: { oid: "abc" } }),
   );
+  // Concluir a sessão restaura a branch da rodada no head do PR, que precisa ser um commit de verdade.
+  const head = execFileSync("git", ["rev-parse", "main"], { cwd: join(raiz, "loja"), encoding: "utf8" }).trim();
   const banco = abrir(raiz);
   configurarProjeto(banco, raiz);
   criarDemanda(
@@ -258,7 +267,7 @@ export function semearPrDaRodada(raiz: string): void {
           demanda_id: "I-215",
           ticket_id: 1,
           tipo: "pr_aberto",
-          dados: { id: "9", url: "https://exemplo.com/pr/9", branch: "fabriquinha/I-215-1", head: "abc" },
+          dados: { id: "9", url: "https://exemplo.com/pr/9", branch: "fabriquinha/I-215-1", head },
           em,
         },
       ],
@@ -290,5 +299,28 @@ export function semearTicketAberto(raiz: string): void {
 export function semearDemandaConcluida(raiz: string): void {
   const banco = abrir(raiz);
   criarDemanda(banco, demanda("I-217", "concluida"));
+  banco.close();
+}
+
+/** Registra uma correção na sessão de ajustes da rodada, como o agente do ticket da sessão. */
+export function registrarCorrecaoDaSessao(raiz: string, demanda_id: string, rodada_id: number): void {
+  const banco = abrir(raiz);
+  const sessao = carregarDemanda(banco, demanda_id).tickets.find(
+    (t) => t.rodada_id === rodada_id && t.etapa === "sessao_em_aberto",
+  );
+  if (!sessao) throw new Error("a rodada não tem ticket de sessão");
+  comDemanda(banco, demanda_id, (a) =>
+    registrarCorrecoesSessao(
+      a,
+      {
+        demanda_id,
+        rodada_id,
+        ticket_id: sessao.ticket_id,
+        correcoes: [{ demanda_id, rodada_id, ticket_id: 1, titulo: "Corrigir", descricao: "Corrigir" }],
+      },
+      { tipo: "agente", execucao: 1, ticket: sessao.ticket_id },
+      { agora: em },
+    ),
+  );
   banco.close();
 }

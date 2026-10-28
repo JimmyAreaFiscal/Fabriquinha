@@ -36,4 +36,8 @@ test("traz o campo, o erro e os botões com os ids e data- que o DOM usa", () =>
   assert.match(html, /id="ajuste-I-5\.R1-erro" role="alert" hidden/);
   assert.match(html, /data-ajuste="atualizar"[^>]*>Atualizar a conversa</);
   assert.match(html, /data-ajuste="enviar"[^>]*>Enviar</);
+  assert.match(
+    html,
+    /data-ajuste="concluir" data-ref="I-5\.R1" data-caminho="\/api\/demandas\/rodadas\/I-5\.R1\/ajustes\/concluir">Concluir a sessão</,
+  );
 });

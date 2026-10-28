@@ -12,6 +12,7 @@ import {
   semearPaginaDaDemanda,
   semearPlanejamento,
   semearPrDaRodada,
+  registrarCorrecaoDaSessao,
   semearTicketAberto,
 } from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";
@@ -120,8 +121,8 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Só os botões do gate do PR da rodada (R1 em Aprovação do PR) o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button")).toHaveCount(6);
+  // Só os dois do gate do PR (R1), os três da sessão de ajustes (R2), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button")).toHaveCount(9);
 
   // CA-10: clicar no print abre a imagem na caixa.
   await pagina.getByRole("link", { name: "print.png" }).click();
@@ -281,12 +282,7 @@ test("CA-22 e CA-23: reprovar o PR pede o motivo e, com ele, abre a sessão de a
 
   await pagina.getByLabel(/Motivo/).fill("falta teste");
   await pagina.getByRole("button", { name: "Reprovar PR" }).click();
-  const link = pagina.getByRole("link", { name: /Sessão de ajustes de I-215\.R1/ });
-  await expect(link).toBeVisible();
-  const [aba] = await Promise.all([pagina.context().waitForEvent("page"), link.click()]);
-  await aba.waitForLoadState();
-  await expect(aba.locator("body")).not.toContainText("Página não encontrada");
-  await expect(aba.locator("body")).toContainText("conversa");
+  await expect(pagina.getByRole("link", { name: "Sessão de ajustes ↓" })).toHaveAttribute("href", "#ajustes-I-215.R1");
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toHaveCount(0);
 });
 
@@ -359,6 +355,39 @@ test.describe("CA-26", () => {
     await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
     await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
+  });
+});
+
+test.describe("CA-14: concluir a sessão de ajustes", () => {
+  test("sem correção mostra a orientação e a sessão continua; com a correção, a rodada sai da sessão", async ({
+    pagina,
+    fabriquinha,
+  }, info) => {
+    projeto(fabriquinha.raiz);
+    semearPrDaRodada(fabriquinha.raiz);
+    await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
+    await pagina.getByLabel(/Motivo/).fill("falta teste");
+    await pagina.getByRole("button", { name: "Reprovar PR" }).click();
+    const secao = pagina.locator("#ajustes-I-215\\.R1");
+    await secao.getByLabel("Mensagem ao agente").fill("ajustar o teste de login");
+    await secao.getByRole("button", { name: "Enviar" }).click();
+    await expect(secao).toContainText("ajustar o teste de login");
+
+    await secao.getByRole("button", { name: "Concluir a sessão" }).click();
+    await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
+    await expect(pagina.locator("#I-215\\.R1")).toContainText("Sessão de ajustes");
+
+    registrarCorrecaoDaSessao(fabriquinha.raiz, "I-215", 1);
+    await secao.getByRole("button", { name: "Concluir a sessão" }).click();
+    await expect(pagina.locator("#I-215\\.R1")).not.toContainText("Sessão de ajustes");
+    for (const largura of [1440, 375]) {
+      await pagina.setViewportSize({ width: largura, height: 900 });
+      expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await info.attach(`concluir-${String(largura)}`, {
+        body: await pagina.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
   });
 });
 

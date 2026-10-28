@@ -41,7 +41,7 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
       const alvo = evento.target instanceof Element ? evento.target : null;
       const ajuste = alvo?.closest<HTMLButtonElement>("button[data-ajuste]");
       if (ajuste) {
-        void agirNaSessao(ajuste, signal);
+        void agirNaSessao(ajuste, signal, () => carregar(main, params, signal));
         return;
       }
       const demanda = alvo?.closest<HTMLButtonElement>("button[data-demanda]");

@@ -30,15 +30,31 @@ const temTexto = (conversa: Entrada[] | undefined, texto: string): boolean =>
 
 /**
  * Atualizar relê a conversa. Enviar vazio não vai ao servidor; enviar faz o POST e relê até a mensagem aparecer (até
- * 10 × 500 ms, porque o pi grava depois de responder). O erro do servidor vai ao aviso.
+ * 10 × 500 ms, porque o pi grava depois de responder). Concluir faz o POST sem corpo e recarrega a página inteira, que
+ * mostra a fase devolvida. O erro do servidor vai ao aviso e a sessão continua.
  */
-export async function agirNaSessao(botao: HTMLButtonElement, signal: AbortSignal): Promise<void> {
+export async function agirNaSessao(
+  botao: HTMLButtonElement,
+  signal: AbortSignal,
+  recarregar: () => Promise<unknown>,
+): Promise<void> {
   const secao = botao.closest<HTMLElement>("[data-ajustes]");
   if (!secao) return;
   const ref = secao.dataset.ajustes ?? "";
   avisar();
   if (botao.dataset.ajuste === "atualizar") {
     await carregarAjustes(secao, signal).catch(mostrarErro);
+    return;
+  }
+  if (botao.dataset.ajuste === "concluir") {
+    botao.disabled = true;
+    try {
+      await api(botao.dataset.caminho ?? "", { method: "POST", signal });
+      if (!signal.aborted) await recarregar();
+    } catch (falha) {
+      mostrarErro(falha);
+      botao.disabled = false;
+    }
     return;
   }
   const campo = secao.querySelector<HTMLTextAreaElement>("textarea");
