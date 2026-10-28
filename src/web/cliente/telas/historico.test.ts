@@ -75,7 +75,7 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
   );
   assert.ok(
     html.includes(
-      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37</span><span class="id esconde">I-37.T109</span><span class="meio">Board &#60;por&#62; fase <span class="muted">· planejamento · autônoma</span></span><span class="esconde"><span class="pill pill-ok">concluída</span></span></button>',
+      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37.T109</span><span class="meio">Board &#60;por&#62; fase <span class="muted">· planejamento · autônoma</span></span><span class="esconde"><span class="pill pill-ok">concluída</span></span></button>',
     ),
   );
   assert.match(html, /data-sel="x" aria-selected="true"><span class="hora">18:47<\/span>/);

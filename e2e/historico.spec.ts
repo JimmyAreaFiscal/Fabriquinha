@@ -66,8 +66,8 @@ test("filtra por demanda, seleciona uma sessão, lê a prévia e abre o chat del
   // Da mais recente para a mais antiga, por dia; a mais recente já vem selecionada.
   await expect(pagina.locator(".dia h3")).toHaveText(["Hoje", "Ontem"]);
   const linhas = pagina.locator("button.linha");
-  await expect(linhas.nth(0)).toHaveText("14:55I-1I-1.T1Board por fase · planejamento · autônomaconcluída");
-  await expect(linhas.nth(1)).toHaveText("13:00I-2I-2.T1Timeout no checkout · planejamento · autônomafalha");
+  await expect(linhas.nth(0)).toHaveText("14:55I-1.T1Board por fase · planejamento · autônomaconcluída");
+  await expect(linhas.nth(1)).toHaveText("13:00I-2.T1Timeout no checkout · planejamento · autônomafalha");
   await expect(linhas.nth(0)).toHaveAttribute("aria-selected", "true");
   const previa = pagina.getByRole("complementary", { name: "Prévia da sessão" });
   await expect(previa.getByRole("heading")).toHaveText("Board por fase");
@@ -121,4 +121,58 @@ test("filtra por demanda, seleciona uma sessão, lê a prévia e abre o chat del
   await previa.getByRole("link", { name: "Abrir o chat" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/sessions/${S1}`);
   await expect(pagina).toHaveTitle("Chat · Fabriquinha");
+});
+
+test("o endereço do ticket fica inteiro, sem encostar no título, a 1440 e 375 px (CA-7)", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  const fim = instante(5);
+  projeto(
+    fabriquinha.raiz,
+    `INSERT INTO demanda VALUES
+       ('I-1', 'loja', 'Board por fase', 'funcionalidade', 'd', 'concluida', '${fim}', 'f', 's', 1, 'fabriquinha/I-1'),
+       ('I-247', 'loja', 'Remover o fluxo legado de issues, tickets e execuções da Fabriquinha', 'funcionalidade', 'd', 'concluida', '${fim}', 'f', 's', 1, 'fabriquinha/I-247');
+     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+       ('I-1', 1, 'planejar', 'concluido', '${fim}'),
+       ('I-247', 18, 'implementar', 'concluido', '${fim}');
+     INSERT INTO sessao VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-247', 18, 'autonomo', 'c2');
+     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES
+       ('x1', '${S1}', '${instante(20)}', '${fim}', 0),
+       ('x2', '${S2}', '${instante(10)}', '${fim}', 0);`,
+  );
+  await pagina.clock.setFixedTime(AGORA);
+  await pagina.goto(`${fabriquinha.base}/history`);
+  const linhas = pagina.locator("button.linha");
+  await expect(linhas).toHaveCount(2);
+  // Só o endereço do ticket; a prévia segue com demanda · ticket.
+  await expect(linhas.locator(".id")).toHaveText(["I-247.T18", "I-1.T1"]);
+  await expect(pagina.locator(".previa .id").first()).toHaveText("I-247 · I-247.T18");
+
+  for (const largura of [1440, 375]) {
+    await pagina.setViewportSize({ width: largura, height: 900 });
+    const medidas = await linhas.evaluateAll((botoes) =>
+      botoes.map((b) => {
+        const [endereco, titulo] = [b.querySelector(".id"), b.querySelector(".meio")] as [HTMLElement, HTMLElement];
+        return {
+          enderecoDireita: endereco.getBoundingClientRect().right,
+          enderecoVisivel: endereco.getBoundingClientRect().width > 0,
+          enderecoCortado: endereco.scrollWidth > endereco.clientWidth,
+          tituloEsquerda: titulo.getBoundingClientRect().left,
+          tituloComReticencias: getComputedStyle(titulo).textOverflow === "ellipsis",
+        };
+      }),
+    );
+    for (const m of medidas) {
+      expect(m.enderecoVisivel, `${String(largura)} px`).toBe(true);
+      expect(m.enderecoCortado, `${String(largura)} px`).toBe(false);
+      // Pelo menos o gap da linha entre o fim do endereço e o título.
+      expect(m.tituloEsquerda - m.enderecoDireita, `${String(largura)} px`).toBeGreaterThanOrEqual(8);
+      expect(m.tituloComReticencias).toBe(true);
+    }
+    // Os títulos começam na mesma coluna em todas as linhas.
+    expect(new Set(medidas.map((m) => m.tituloEsquerda)).size, `${String(largura)} px`).toBe(1);
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await pagina.screenshot({ path: info.outputPath(`historico-${String(largura)}.png`), fullPage: true });
+  }
 });
