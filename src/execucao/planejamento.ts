@@ -11,6 +11,7 @@ import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import {
   confirmarAprovacaoPlanejamento,
   exigirFase,
+  reabrirTicket,
   reprovarPlanejamento,
   submeterPlano,
 } from "../dominio/transicoes_demanda.ts";
@@ -89,7 +90,14 @@ export const submeterPlanejamento = (
  * como prompt; sem pi vivo, o despacho retoma a mesma sessão com o motivo.
  */
 export function reprovarPlanejamentoDemanda(banco: DatabaseSync, demandaId: string, motivo: string): AgregadoDemanda {
-  const ag = comDemanda(banco, demandaId, (a) => reprovarPlanejamento(a, { motivo }, AUDITOR, contexto()));
+  // Planejar Falhou (serviço reiniciado com o gate aberto): a reprovação o reabre com o motivo, na mesma transação.
+  const ag = comDemanda(banco, demandaId, (a) => {
+    const reprovada = reprovarPlanejamento(a, { motivo }, AUDITOR, contexto());
+    const { ticket_id, status } = ticketPlanejar(reprovada);
+    return status === "falhou"
+      ? reabrirTicket(reprovada, { ticket_id, instrucao: motivo }, AUDITOR, contexto())
+      : reprovada;
+  });
   const { sessoes } = carregarSessoesDoTicket(banco, {
     demanda_id: demandaId,
     ticket_id: ticketPlanejar(ag).ticket_id,

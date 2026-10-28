@@ -266,6 +266,23 @@ test("a reprovação sem sessão do planejar só grava a decisão", () => {
   assert.deepEqual(prompts(), []);
 });
 
+test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho retoma a mesma sessão", async () => {
+  const { banco, sessoes, prompts } = cenario({ status: "em_execucao" });
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  const [sessao] = sessoes().sessoes;
+  submeterPlanejamento(banco, "I-1", plano(), agente);
+  banco.exec("UPDATE ticket_demanda SET status = 'falhou', motivo_falha = 'serviço reiniciado'");
+  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  const ticket = carregarDemanda(banco, "I-1").tickets[0] as { status: string; instrucao?: string };
+  assert.equal(ticket.status, "aberto");
+  assert.equal(ticket.instrucao, "faltam critérios na rodada 2");
+  const antes = sessoes().execucoes.length;
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  assert.deepEqual(sessoes().sessoes, [sessao]);
+  assert.equal(sessoes().execucoes.length, antes + 1);
+  assert.match(prompts().at(-1) ?? "", /Motivo: faltam critérios na rodada 2/);
+});
+
 test("CA-8: motivo vazio recusa a reprovação e nada é registrado", () => {
   const { banco } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
   assert.throws(() => reprovarPlanejamentoDemanda(banco, "I-1", "   "));
