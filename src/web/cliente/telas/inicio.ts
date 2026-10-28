@@ -26,7 +26,7 @@ import { fraseDoMes } from "./metricas.ts";
 /** Cada motivo de espera: o título do cartão, a marca no board e o botão que leva aonde se decide. */
 const MOTIVOS: Record<MotivoDaEspera, { titulo: string; marca: string; acao: string }> = {
   gate_demanda: { titulo: "Gate da demanda", marca: "gate da demanda", acao: "Avaliar a demanda" },
-  gate_planejamento: { titulo: "Gate do planejamento", marca: "gate do planejamento", acao: "Avaliar o plano" },
+  gate_planejamento: { titulo: "Gate do planejamento", marca: "gate do plano", acao: "Avaliar o plano" },
   gate_pr: { titulo: "Gate do PR", marca: "gate do PR", acao: "Ver o PR" },
   ajustes: { titulo: "Ajustes do PR", marca: "ajustes do PR", acao: "Conversar" },
   falha: { titulo: "Falhou", marca: "falha", acao: "Reabrir o ticket" },
@@ -68,6 +68,10 @@ const nomeDaEtapa = (etapa: keyof typeof ETAPA_DO_TICKET): string => ETAPA_DO_TI
 
 /** O endereço do que a espera ou a sessão trata: a rodada, quando é de uma, ou a demanda. */
 const enderecoDe = (x: { demanda: string; rodada?: string }): string => x.rodada ?? x.demanda;
+
+/** O texto escapado com cada endereço (I-206, I-206.R1, I-206.T3) inteiro, que não quebra no hífen. */
+const comEnderecosInteiros = (texto: string): string =>
+  escapar(texto).replaceAll(/\bI-\d+(?:\.[RT]\d+)?\b/g, '<span class="endereco">$&</span>');
 
 /** A frase do que falta para a espera acabar. */
 function fraseDoQueFalta(e: EsperaDoAuditor): string {
@@ -118,12 +122,13 @@ function linhaDaSessaoRodando(s: SessaoRodando, agora: Date): string {
   </a>`;
 }
 
-/** As marcas do cartão, em HTML e sem repetir: em execução, aguarda você e bloqueada por I-x (que não quebra no hífen). */
+/** As marcas do cartão, em HTML (cada uma num texto só, que quebra entre as palavras) e sem repetir: em execução, aguarda você e bloqueada por I-x (que não quebra no hífen). */
 function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
   const marcas = new Map<string, [classe: string, pill: string]>();
   for (const s of dados.rodando.filter((x) => enderecoDe(x) === c.ref)) {
-    // A marca pode quebrar no cartão estreito, mas só antes da duração, que o `ha()` não deixa separar.
-    marcas.set(`em execução · ${ha(s.desde, agora).replace("há ", "")}`, ["rodando", "pill-rodando"]);
+    // No cartão estreito a marca quebra entre as palavras; da duração do `ha()`, só "menos de" se separa do "1 min".
+    const duracao = ha(s.desde, agora).replace("há ", "").replace("menos\u00a0de\u00a0", "menos de ");
+    marcas.set(`em execução · ${duracao}`, ["rodando", "pill-rodando"]);
   }
   for (const e of dados.aguarda.filter((x) => enderecoDe(x) === c.ref)) {
     marcas.set(`aguarda você · ${MOTIVOS[e.motivo].marca}`, [
@@ -141,12 +146,12 @@ function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
 function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): string {
   const marcas = marcasDoCartao(c, dados, agora);
   const classes = ["cartao", ...new Set(marcas.map(([, [classe]]) => classe))].join(" ");
-  const pills = marcas.map(([html, [, pill]]) => `<span class="pill ${pill}">${html}</span>`).join("");
+  const pills = marcas.map(([html, [, pill]]) => `<span class="pill ${pill}"><span>${html}</span></span>`).join("");
   const t = c.ticket;
   const mais = c.outros > 0 ? ` (+${String(c.outros)})` : "";
   return `<a class="${classes}" href="${caminhoDaDemanda(c.demanda)}">
     <div class="cartao-topo"><span class="id">${escapar(c.ref)}</span><span class="tag">${escapar(c.projeto)}</span></div>
-    <div class="cartao-titulo">${escapar(c.titulo)}</div>
+    <div class="cartao-titulo">${comEnderecosInteiros(c.titulo)}</div>
     ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${STATUS_DO_TICKET[t.status]}${mais}</div>` : ""}
     ${marcas.length > 0 ? `<div class="cartao-marcas">${pills}</div>` : ""}
   </a>`;
@@ -158,7 +163,7 @@ function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
     const cartoes = dados.board.filter((c) => c.coluna === chave);
     const gate = GATES.has(chave);
     return `<div class="coluna${gate ? " coluna-gate" : ""}">
-      <div class="coluna-cabeca">${nome}<span class="n">${String(cartoes.length)}</span>${gate ? '<span class="tag tag-gate">gate</span>' : ""}</div>
+      <div class="coluna-cabeca">${nome} <span class="n">${String(cartoes.length)}</span>${gate ? ' <span class="tag tag-gate">gate</span>' : ""}</div>
       <div class="coluna-corpo">${cartoes.map((c) => cartaoDoBoard(c, dados, agora)).join("") || '<span class="coluna-vazia">vazia</span>'}</div>
     </div>`;
   };

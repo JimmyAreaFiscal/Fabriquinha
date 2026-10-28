@@ -636,9 +636,9 @@ export function paginaDeMetricas(dados: DadosDasMetricas, e: EstadoDasMetricas):
 
 // ——— o mês corrente no Início e no Projeto ———
 
-/** A frase do Início (F7 §4.4): o mês corrente de todos os projetos, com o link para as Métricas. */
+/** A frase do Início (F7 §4.4): o mês corrente de todos os projetos, com as contagens como nas Métricas e o link para elas. */
 export function fraseDoMes(m: MetricasMes): string {
-  const b = (v: number) => `<b>${String(v)}</b>`;
+  const b = (v: number) => `<b>${qtd(v)}</b>`;
   const nome = extenso(m.mes);
   return `<p class="frase-mes">${nome.charAt(0).toUpperCase()}${nome.slice(1)} de ${m.mes.slice(0, 4)}, todos os projetos: <b>${dinheiro(m.total.custo)}</b> · <b>${compacto(somaDosTokens(m.total))}</b> tokens · demandas ${b(m.demandas.registradas)} registradas, ${b(m.demandas.concluidas)} concluídas · tickets ${b(m.tickets.criados)} criados, ${b(m.tickets.concluidos)} concluídos · PRs ${b(m.prs.abertos)} abertos, ${b(m.prs.mergeados)} mergeados <a href="/metrics">Métricas →</a></p>`;
 }

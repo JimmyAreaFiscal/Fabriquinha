@@ -1,6 +1,6 @@
 // Início (comparacao-sdlc §9.1, "Board com issue"): a frase do mês, o que aguarda o Auditor, o que roda e o board só com
 // as demandas em andamento, com as colunas por fase da demanda e, na execução, por fase da rodada; prints a 1440 e
-// 375 px, sem rolagem horizontal da página (o board rola dentro dele).
+// 375 px, sem rolagem horizontal da página (abaixo de 1320 px o board rola dentro dele).
 import type { Locator, Page } from "@playwright/test";
 import { abrir } from "../src/persistencia/banco.ts";
 import { fotografar, projeto } from "./apoio.ts";
@@ -18,7 +18,7 @@ function sessaoRodando(raiz: string): void {
 }
 
 const coluna = (pagina: Page, nome: string): Locator =>
-  pagina.locator(".coluna", { has: pagina.locator(".coluna-cabeca", { hasText: new RegExp(`^${nome}\\d`) }) });
+  pagina.locator(".coluna", { has: pagina.locator(".coluna-cabeca", { hasText: new RegExp(`^${nome} \\d`) }) });
 
 test("o Início mostra o que aguarda, o que roda e o board das demandas em andamento, e se atualiza sozinho", async ({
   pagina,
@@ -57,9 +57,9 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   await expect(rodando.locator(".rodando-linha")).toContainText("I-206.T3");
 
   // Board: as rodadas da execução nas colunas da fase delas; a concluída I-217 não aparece.
-  const board = pagina.getByRole("region", { name: "Board" });
-  await expect(board).toContainText("3 demandas em andamento");
-  await expect(board).not.toContainText("I-217");
+  const regiaoDoBoard = pagina.getByRole("region", { name: "Board" });
+  await expect(regiaoDoBoard).toContainText("3 demandas em andamento");
+  await expect(regiaoDoBoard).not.toContainText("I-217");
   const pr = coluna(pagina, "Aprovação do PR");
   await expect(pr.locator(".cartao")).toHaveCount(1);
   await expect(pr.locator(".cartao")).toContainText("I-206.R1");
@@ -72,25 +72,48 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   await expect(desenvolvimento.locator(".cartao").first()).toContainText("em execução ·");
   await expect(desenvolvimento.locator(".cartao").last()).toContainText("aguarda você · falha");
   await expect(desenvolvimento.locator(".cartao").last()).toContainText("bloqueada por I-206");
+  await expect(desenvolvimento.locator(".cartao").last().locator(".pill .mono")).toHaveText("I-206");
   await expect(coluna(pagina, "Aprovação da demanda").locator(".cartao")).toContainText(
     "aguarda você · gate da demanda",
   );
   await expect(pagina.locator(".coluna-gate")).toHaveCount(3);
 
-  // A 1440 e a 375 px a página não rola na horizontal: as 11 colunas rolam dentro do board.
-  for (const largura of [1440, 375]) {
+  // Nenhuma largura rola a página na horizontal nem quebra um endereço (I-206, I-206.R1, I-206.T3). A 1440 e a 1320 px
+  // as 11 colunas cabem inteiras, sem texto cortado; abaixo disso (375 px) o board rola dentro dele.
+  const board = pagina.locator(".board-etapas");
+  for (const largura of [1440, 1320, 375]) {
     await pagina.setViewportSize({ width: largura, height: 900 });
     expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    expect(await pagina.locator(".board-etapas").evaluate((etapas) => etapas.scrollWidth > etapas.clientWidth)).toBe(
-      true,
-    );
-    await fotografar(pagina, info, `inicio-${String(largura)}`);
+    const rola = await board.evaluate((etapas) => etapas.scrollWidth > etapas.clientWidth);
+    expect(rola, `o board rola a ${String(largura)} px`).toBe(largura < 1320);
+    if (largura >= 1320) {
+      const ultima = await coluna(pagina, "Encerramento da demanda").boundingBox();
+      const caixa = await board.boundingBox();
+      expect(Number(ultima?.x) + Number(ultima?.width)).toBeLessThanOrEqual(Number(caixa?.x) + Number(caixa?.width));
+      expect(
+        await board.evaluate((etapas) =>
+          [...etapas.querySelectorAll("*")]
+            .filter((e) => e.scrollWidth > e.clientWidth)
+            .map((e) => `${e.className} ${String(e.scrollWidth)}/${String(e.clientWidth)}`),
+        ),
+        "texto cortado no board",
+      ).toEqual([]);
+    }
+    expect(
+      await board.evaluate((etapas) =>
+        [...etapas.querySelectorAll(".id, .mono, .endereco")]
+          .filter((e) => e.getClientRects().length > 1)
+          .map((e) => e.textContent),
+      ),
+      "endereço quebrado no board",
+    ).toEqual([]);
+    if (largura !== 1320) await fotografar(pagina, info, `inicio-${String(largura)}`);
   }
   await pagina.setViewportSize({ width: 1440, height: 900 });
 
   // Sem recarregar, a demanda nova aparece na próxima atualização.
   semearDemandaOciosa(fabriquinha.raiz);
-  await expect(board).toContainText("4 demandas em andamento", { timeout: 10_000 });
+  await expect(regiaoDoBoard).toContainText("4 demandas em andamento", { timeout: 10_000 });
   await expect(coluna(pagina, "Aprovação da demanda").locator(".cartao .id")).toHaveText(["I-208", "I-209"]);
 
   // O cartão do que aguarda leva à página da demanda, e ela volta ao Início.

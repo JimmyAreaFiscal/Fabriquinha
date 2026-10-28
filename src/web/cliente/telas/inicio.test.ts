@@ -68,7 +68,7 @@ const cartao = (resto: Partial<CartaoDoBoard> = {}): CartaoDoBoard => ({
 
 /** O HTML de uma coluna do board, pelo nome dela. */
 const coluna = (html: string, nome: string): string =>
-  html.split(/<div class="coluna(?: coluna-gate)?">/).find((c) => c.includes(`coluna-cabeca">${nome}<`)) ?? "";
+  html.split(/<div class="coluna(?: coluna-gate)?">/).find((c) => c.includes(`coluna-cabeca">${nome} <`)) ?? "";
 
 test("sem nada em andamento: a frase do mês, nada aguarda, nada roda e as 11 colunas vazias sob as 5 etapas", () => {
   const html = inicio(dados(), agora);
@@ -86,7 +86,7 @@ test("sem nada em andamento: a frase do mês, nada aguarda, nada roda e as 11 co
   );
   assert.deepEqual(
     [
-      ...html.matchAll(/<div class="coluna-cabeca">([^<]+)<span class="n">0<\/span>(<span class="tag tag-gate">)?/g),
+      ...html.matchAll(/<div class="coluna-cabeca">([^<]+) <span class="n">0<\/span>( <span class="tag tag-gate">)?/g),
     ].map((m) => `${String(m[1])}${m[2] ? " (gate)" : ""}`),
     [
       "Registro",
@@ -237,18 +237,23 @@ test("board: o cartão na coluna da fase, com o ticket em curso e as marcas de e
   );
   assert.match(
     desenvolvimento,
-    /<span class="pill pill-rodando">em execução · menos\u00a0de\u00a01\u00a0min<\/span><span class="pill pill-falha">aguarda você · falha<\/span>/,
+    /<span class="pill pill-rodando"><span>em execução · menos de 1\u00a0min<\/span><\/span><span class="pill pill-falha"><span>aguarda você · falha<\/span>/,
   );
   const pr = coluna(html, "Aprovação do PR");
   assert.match(pr, /<a class="cartao aguarda"/);
-  assert.match(pr, /<span class="pill pill-aguarda">aguarda você · gate do PR<\/span>/);
+  assert.match(pr, /<span class="pill pill-aguarda"><span>aguarda você · gate do PR<\/span>/);
   assert.doesNotMatch(pr, /cartao-ticket/);
   const gate = coluna(html, "Aprovação da demanda");
   assert.match(gate, /<a class="cartao bloqueada" href="\/demandas\/I-207">/);
   assert.match(gate, /I-207\.T1<\/span> demanda · aberto<\/div>/);
   assert.match(
     gate,
-    /<span class="pill pill-neutro">bloqueada por <span class="mono">I-206<\/span>, <span class="mono">I-205<\/span><\/span>/,
+    /<span class="pill pill-neutro"><span>bloqueada por <span class="mono">I-206<\/span>, <span class="mono">I-205<\/span><\/span>/,
+  );
+  // O endereço no título do cartão não quebra no hífen.
+  assert.match(
+    inicio(dados({ board: [cartao({ titulo: "Corrigir I-206.R1 & I-7" })] }), agora),
+    /cartao-titulo">Corrigir <span class="endereco">I-206\.R1<\/span> &#38; <span class="endereco">I-7<\/span><\/div>/,
   );
   const revisao = coluna(html, "Revisão da demanda");
   assert.match(revisao, /<a class="cartao" href="\/demandas\/I-209">/);

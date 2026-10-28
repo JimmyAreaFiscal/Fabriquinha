@@ -2953,13 +2953,63 @@ svg.barras :not(.hit) {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-/* As 11 colunas não cabem a 1440 px: o board rola dentro dele, nunca a página. */
+/* Abaixo de 1320 px as 11 colunas não cabem: o board rola dentro dele, nunca a página. */
 .board-etapas {
   display: grid;
   grid-template-columns: repeat(11, minmax(158px, 1fr));
   gap: var(--s-2) 10px;
   overflow-x: auto;
   padding-bottom: var(--s-2);
+}
+@media (min-width: 1320px) {
+  .board-etapas {
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+    column-gap: 6px;
+  }
+  .board-etapas .coluna-cabeca {
+    padding-inline: 0;
+  }
+  .board-etapas .coluna-corpo {
+    padding: 4px;
+  }
+  .board-etapas .cartao {
+    padding: var(--s-2) 6px;
+  }
+  .board-etapas .cartao-marcas .pill {
+    padding-inline: 5px;
+  }
+}
+/* Cabeça e corpo de cada coluna nas linhas do board: as cabeças têm a altura da mais alta e os corpos se alinham. */
+.board-etapas .coluna {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+}
+.board-etapas .coluna > * {
+  min-width: 0;
+}
+/* O nome quebra entre as palavras e o número e o selo seguem na linha dele quando cabem; tudo encosta no corpo. */
+.board-etapas .coluna-cabeca {
+  display: block;
+  align-self: end;
+}
+.board-etapas .coluna-cabeca .n,
+.board-etapas .coluna-cabeca .tag-gate {
+  margin-left: 2px;
+}
+/* No cartão estreito nada é cortado: a palavra longa do título quebra e o projeto desce de linha. */
+.board-etapas .cartao-titulo {
+  overflow-wrap: anywhere;
+}
+.endereco {
+  white-space: nowrap;
+}
+.board-etapas .cartao-topo {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.board-etapas .cartao-topo .tag {
+  overflow: visible;
 }
 .coluna-cabeca {
   display: flex;
