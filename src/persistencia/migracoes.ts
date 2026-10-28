@@ -740,4 +740,40 @@ export const MIGRACOES: readonly string[] = [
   ALTER TABLE retrabalho_demanda_nova RENAME TO retrabalho_demanda;
   CREATE INDEX ix_retrabalho_demanda_origem ON retrabalho_demanda(demanda_id, ticket_origem_id);
   CREATE INDEX ix_retrabalho_demanda_alterador ON retrabalho_demanda(alterador_demanda_id, ticket_id);`,
+  // Avaliação de melhoria do SDLC sobre demandas (D12), aditiva: o achado encaminhado liga-se à demanda criada, uma só vez.
+  `CREATE TABLE avaliacao (
+    id        TEXT PRIMARY KEY CHECK (length(id) > 0),
+    projeto   TEXT NOT NULL REFERENCES projeto(nome),
+    de        TEXT NOT NULL CHECK (de GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+    ate       TEXT NOT NULL CHECK (ate GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND ate >= de),
+    pedido    TEXT NOT NULL,
+    criada_em TEXT NOT NULL
+  );
+  CREATE TABLE avaliacao_demanda (
+    avaliacao_id TEXT NOT NULL REFERENCES avaliacao(id),
+    demanda_id   TEXT NOT NULL REFERENCES demanda(id),
+    PRIMARY KEY (avaliacao_id, demanda_id)
+  );
+  CREATE TABLE achado_avaliacao (
+    avaliacao_id TEXT NOT NULL REFERENCES avaliacao(id),
+    achado_id    INTEGER NOT NULL CHECK (achado_id >= 1),
+    titulo       TEXT NOT NULL CHECK (length(titulo) > 0),
+    descricao    TEXT NOT NULL CHECK (length(descricao) > 0),
+    evidencia    TEXT NOT NULL CHECK (length(evidencia) > 0),
+    demanda_id   TEXT REFERENCES demanda(id),
+    PRIMARY KEY (avaliacao_id, achado_id)
+  );
+  CREATE UNIQUE INDEX ux_achado_avaliacao_demanda ON achado_avaliacao(demanda_id) WHERE demanda_id IS NOT NULL;
+  CREATE TABLE uso_avaliacao (
+    avaliacao_id         TEXT NOT NULL REFERENCES avaliacao(id),
+    modelo_provedor      TEXT NOT NULL CHECK (length(modelo_provedor) > 0),
+    modelo_nome          TEXT NOT NULL CHECK (length(modelo_nome) > 0),
+    chamadas             INTEGER NOT NULL CHECK (typeof(chamadas) = 'integer' AND chamadas >= 0),
+    tokens_entrada       INTEGER NOT NULL CHECK (typeof(tokens_entrada) = 'integer' AND tokens_entrada >= 0),
+    tokens_saida         INTEGER NOT NULL CHECK (typeof(tokens_saida) = 'integer' AND tokens_saida >= 0),
+    tokens_cache_leitura INTEGER NOT NULL CHECK (typeof(tokens_cache_leitura) = 'integer' AND tokens_cache_leitura >= 0),
+    tokens_cache_escrita INTEGER NOT NULL CHECK (typeof(tokens_cache_escrita) = 'integer' AND tokens_cache_escrita >= 0),
+    custo                REAL CHECK (custo IS NULL OR custo >= 0),
+    PRIMARY KEY (avaliacao_id, modelo_provedor, modelo_nome)
+  );`,
 ];

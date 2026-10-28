@@ -158,7 +158,15 @@ export type EstadoDaAuditoria = "rodando" | "conversa";
 /** O agente da auditoria vivo ou subindo/parando por sessão: no máximo um pi por sessão. */
 const tarefas = new Map<string, Promise<string | undefined>>();
 
-const dirDaAuditoria = (raiz: string, sessao: string): string => join(raiz, "auditorias", sessao);
+const dirDaAuditoria = (raiz: string, sessao: string, pasta = "auditorias"): string => join(raiz, pasta, sessao);
+
+/** O que muda na condução do pi: a pasta sob a raiz, as extensões a mais e o que sincronizar com o banco. */
+export interface Conducao {
+  pasta?: string;
+  extensoes?: string[];
+  /** Chamado a cada `agent_end` e quando o pi para; erro dele vai para o log. */
+  sincronizar?: () => void;
+}
 
 /** A pasta da auditoria `sessao`; recusa a que não existe. */
 function pastaExistente(raiz: string, sessao: string): string {
@@ -206,17 +214,30 @@ function promptDaAuditoria(dir: string, mes: string, pedido?: string): string {
  * motivo da falha, ou `undefined`, quando o pi para. O pgid fica em `<pasta>/pgid` enquanto o pi vive, para o
  * reinício do serviço matá-lo (`recuperarAuditorias`).
  */
-function subir(
+export function subir(
   raiz: string,
   sessao: string,
   prompt: string,
   { ociosidadeMin, modelo }: OpcoesDaAuditoria,
+  { pasta, extensoes, sincronizar }: Conducao = {},
 ): Promise<string | undefined> {
-  const dir = dirDaAuditoria(raiz, sessao);
+  const dir = dirDaAuditoria(raiz, sessao, pasta);
   const log = join(dir, "log");
   const pgid = join(dir, "pgid");
-  const args = argumentosDaAuditoria(raiz, sessao, modelo);
+  const args = argumentosDaAuditoria(raiz, sessao, modelo, extensoes);
   anotar(log, `pi ${args.join(" ")}`);
+  const sincronizarNoLog = (): void => {
+    try {
+      sincronizar?.();
+    } catch (error_) {
+      anotar(log, `sincronização falhou: ${String(error_)}`);
+    }
+  };
+  const desassinar = sincronizar
+    ? assinarSessao(sessao, (evento) => {
+        if (evento.type === "agent_end") sincronizarNoLog();
+      })
+    : () => undefined;
   const tarefa = rodarPi({
     execucao: { id: sessao, sessaoPi: sessao, modo: "consulta" },
     args,
@@ -235,6 +256,8 @@ function subir(
       return falha;
     })
     .finally(() => {
+      desassinar();
+      sincronizarNoLog();
       tarefas.delete(sessao);
       avisar(sessao, log);
     });
@@ -244,7 +267,7 @@ function subir(
 }
 
 /** O motivo da falha sem a dica do log, seguido das últimas linhas do `log` do pi (stderr, erro do spawn). */
-function causaDaFalha(dir: string, motivo: string): string {
+export function causaDaFalha(dir: string, motivo: string): string {
   const linhas = readFileSync(join(dir, "log"), "utf8")
     .split("\n")
     .filter((l) => l && !/^\S+ (pi |o pi da auditoria parou)/.test(l))
@@ -353,6 +376,11 @@ export function enviarNaAuditoria(
 ): void {
   const raiz = raizDo(banco);
   pastaExistente(raiz, sessao);
+  enviarNaConversa(sessao, mensagem, (prompt) => void subir(raiz, sessao, prompt, opcoes));
+}
+
+/** O envio comum à auditoria e à avaliação; `retomar` sobe um pi novo, com o pi parado, na mesma sessão. */
+export function enviarNaConversa(sessao: string, mensagem: string, retomar: (prompt: string) => void): void {
   const viva = situacao(sessao);
   if (viva?.ocupado) {
     throw new ErroDeRegra("o agente da auditoria está trabalhando", "espere a resposta, ou use Abortar");
@@ -360,7 +388,7 @@ export function enviarNaAuditoria(
   if (viva) mandar(sessao, { type: "prompt", message: mensagem });
   else if (tarefas.has(sessao)) {
     throw new ErroDeRegra("o agente da auditoria ainda está parando", "tente de novo em alguns segundos");
-  } else void subir(raiz, sessao, mensagem, opcoes);
+  } else retomar(mensagem);
 }
 
 /** Manda `abort` ao agente da auditoria que trabalha. */
@@ -373,11 +401,13 @@ export function abortarAuditoria(sessao: string): void {
  * `auditorias/<sessão>/pgid` enquanto o pi vive.
  */
 export function recuperarAuditorias(raiz: string): void {
-  const dir = join(raiz, "auditorias");
-  for (const nome of existsSync(dir) ? readdirSync(dir) : []) {
-    const pgid = join(dir, nome, "pgid");
-    if (!existsSync(pgid)) continue;
-    sinalNoGrupo(Number(readFileSync(pgid, "utf8")), "SIGKILL");
-    rmSync(pgid);
+  for (const pasta of ["auditorias", "avaliacoes"]) {
+    const dir = join(raiz, pasta);
+    for (const nome of existsSync(dir) ? readdirSync(dir) : []) {
+      const pgid = join(dir, nome, "pgid");
+      if (!existsSync(pgid)) continue;
+      sinalNoGrupo(Number(readFileSync(pgid, "utf8")), "SIGKILL");
+      rmSync(pgid);
+    }
   }
 }
