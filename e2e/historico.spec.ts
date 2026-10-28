@@ -1,5 +1,5 @@
-// Histórico (F7 §4.4; F4 §5.3): filtrar as sessões terminadas por issue, selecionar uma, ler a prévia e abrir uma
-// consulta a partir dela.
+// Histórico (F7 §4.4): filtrar as sessões terminadas das tabelas da demanda, selecionar uma, ler a prévia e abrir o
+// chat dela.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, projeto, test } from "./apoio.ts";
@@ -33,34 +33,29 @@ function conversa(raiz: string, sessao: string, ultima: string): void {
 }
 
 /**
- * Duas sessões de desenho terminadas: a da I-1, hoje às 14:55, que levou 22 min e custou US$ 1,86; e a da I-2, ontem
- * às 13:00, que falhou e foi refeita. O projeto tem um clone de verdade, para a consulta subir o pi falso.
+ * Duas sessões de planejamento terminadas: a da I-1, hoje às 14:55, que levou 22 min; e a da I-2, ontem às 13:00, que
+ * falhou e foi refeita.
  */
 function semear(raiz: string): void {
   const [fim1, fim2] = [instante(5), instante(26 * 60)];
   projeto(
     raiz,
-    `INSERT INTO issue (id, projeto, titulo, tipo, descricao, fase, criada_em) VALUES
-       (1, 'loja', 'Board por fase', 'funcionalidade', '', 'desenvolvimento', '${instante(3000)}'),
-       (2, 'loja', 'Timeout no checkout', 'problema', '', 'desenvolvimento', '${instante(3000)}');
-     INSERT INTO ticket (id, issue, etapa, titulo, status, origem, criado_em, concluido_em) VALUES
-       (1, 1, 'desenho', 'Desenhar o board', 'concluido', 'fabriquinha', '${instante(3000)}', '${fim1}'),
-       (2, 2, 'desenho', 'Desenhar a busca', 'concluido', 'fabriquinha', '${instante(3000)}', '${fim2}');
-     INSERT INTO execucao (id, ticket, modo, sessao_pi, modelo_provedor, modelo_nome, resultado, erro, iniciada_em, terminada_em) VALUES
-       (1, 1, 'autonomo', '${S1}', 'anthropic', 'claude-opus-5-5', 'sucesso', NULL, '${instante(27)}', '${fim1}'),
-       (2, 2, 'autonomo', '${S2}', NULL, NULL, 'falha', 'tempo limite de 30 min', '${instante(26 * 60 + 30)}', '${fim2}');
-     INSERT INTO sequencia (nome, valor) VALUES ('execucao', 2) ON CONFLICT (nome) DO UPDATE SET valor = 2;
-     INSERT INTO uso (execucao, provedor, modelo, chamadas, input, output, cache_read, cache_write, custo)
-       VALUES (1, 'anthropic', 'claude-opus-5-5', 3, 10, 2, 0, 0, 1.86);`,
+    `INSERT INTO demanda VALUES
+       ('I-1', 'loja', 'Board por fase', 'funcionalidade', 'd', 'planejamento', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-1'),
+       ('I-2', 'loja', 'Timeout no checkout', 'problema', 'd', 'planejamento', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-2');
+     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+       ('I-1', 1, 'planejar', 'concluido', '${fim1}'),
+       ('I-2', 1, 'planejar', 'concluido', '${fim2}');
+     INSERT INTO sessao VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-2', 1, 'autonomo', 'c2');
+     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, modelo_provedor, modelo_nome) VALUES
+       ('x1', '${S1}', '${instante(27)}', '${fim1}', 0, 'anthropic', 'claude-opus-5-5'),
+       ('x2', '${S2}', '${instante(26 * 60 + 30)}', '${fim2}', 1, NULL, NULL);`,
   );
-  conversa(raiz, S1, "Desenho submetido: **4 evidências**, 3 tickets propostos.");
+  conversa(raiz, S1, "Planejamento submetido: **4 evidências**, 3 tickets propostos.");
   conversa(raiz, S2, "Tempo esgotado.");
 }
 
-test("filtra por issue, seleciona uma sessão, lê a prévia e abre uma consulta a partir dela", async ({
-  pagina,
-  fabriquinha,
-}) => {
+test("filtra por demanda, seleciona uma sessão, lê a prévia e abre o chat dela", async ({ pagina, fabriquinha }) => {
   semear(fabriquinha.raiz);
   await pagina.clock.setFixedTime(AGORA);
   await pagina.goto(`${fabriquinha.base}/history`);
@@ -71,37 +66,37 @@ test("filtra por issue, seleciona uma sessão, lê a prévia e abre uma consulta
   // Da mais recente para a mais antiga, por dia; a mais recente já vem selecionada.
   await expect(pagina.locator(".dia h3")).toHaveText(["Hoje", "Ontem"]);
   const linhas = pagina.locator("button.linha");
-  await expect(linhas.nth(0)).toHaveText("14:55I-1T-1Board por fase · desenho · autônomaconcluídaUS$ 1,86");
-  await expect(linhas.nth(1)).toHaveText("13:00I-2T-2Timeout no checkout · desenho · autônomafalhaUS$ 0,00");
+  await expect(linhas.nth(0)).toHaveText("14:55I-1I-1.T1Board por fase · planejamento · autônomaconcluída");
+  await expect(linhas.nth(1)).toHaveText("13:00I-2I-2.T1Timeout no checkout · planejamento · autônomafalha");
   await expect(linhas.nth(0)).toHaveAttribute("aria-selected", "true");
   const previa = pagina.getByRole("complementary", { name: "Prévia da sessão" });
   await expect(previa.getByRole("heading")).toHaveText("Board por fase");
 
-  // Filtrar pela issue: só a da I-2, que fica selecionada.
-  await pagina.getByLabel("Issue").fill("I-2");
+  // Filtrar pela demanda: só a da I-2, que fica selecionada.
+  await pagina.getByRole("textbox", { name: "Demanda" }).fill("I-2");
   await expect(contagem).toHaveText("1 sessão");
   await expect(linhas).toHaveCount(1);
-  await pagina.getByLabel("Issue").fill("");
+  await pagina.getByRole("textbox", { name: "Demanda" }).fill("");
   await expect(contagem).toHaveText("2 sessões");
-  await pagina.getByLabel("Issue").fill("1");
+  await pagina.getByRole("textbox", { name: "Demanda" }).fill("1");
   await expect(contagem).toHaveText("1 sessão");
   await expect(linhas).toHaveText([/Board por fase/]);
 
   // Selecionar mostra a prévia ao lado, sem sair da página.
-  await pagina.getByLabel("Issue").fill("");
+  await pagina.getByRole("textbox", { name: "Demanda" }).fill("");
   await expect(linhas).toHaveCount(2);
   await linhas.nth(1).click();
   await expect(linhas.nth(1)).toHaveAttribute("aria-selected", "true");
   await expect(previa.getByRole("heading")).toHaveText("Timeout no checkout");
   await expect(previa.locator(".pill")).toHaveText("falha");
   await linhas.nth(0).click();
-  await expect(previa.locator(".id").first()).toHaveText("I-1 · T-1");
+  await expect(previa.locator(".id").first()).toHaveText("I-1 · I-1.T1");
   await expect(previa.locator(".fatos dd")).toHaveText([
     "loja",
-    "desenho · autônoma",
+    "planejamento · autônoma",
     "concluída",
     "Hoje 14:55 · durou 22 min",
-    "US$ 1,86 · anthropic / claude-opus-5-5",
+    "anthropic / claude-opus-5-5",
     "3",
   ]);
   const trecho = previa.locator(".trecho");
@@ -116,21 +111,14 @@ test("filtra por issue, seleciona uma sessão, lê a prévia e abre uma consulta
   await expect(caixa.locator("pre")).toContainText("suite 12: ok");
   await pagina.keyboard.press("Escape");
   await expect(caixa).toBeHidden();
-  await expect(trecho).toContainText("agenteDesenho submetido: 4 evidências, 3 tickets propostos.");
+  await expect(trecho).toContainText("agentePlanejamento submetido: 4 evidências, 3 tickets propostos.");
   await expect(trecho.locator("strong")).toHaveText("4 evidências");
   await expect(previa.getByRole("link", { name: "Abrir o chat" })).toHaveAttribute("href", `/sessions/${S1}`);
   await expect(previa.getByRole("link", { name: "Exportar" })).toHaveAttribute(
     "href",
     `/api/sessoes/${S1}/historico.md`,
   );
-
-  // Conversar sobre abre o chat da consulta, que começa com a conversa da sessão.
-  await previa.getByRole("button", { name: "Conversar sobre" }).click();
-  await expect(pagina).toHaveURL(/\/sessions\//);
-  await expect(pagina).not.toHaveURL(new RegExp(S1));
-  const barra = pagina.locator(".estado-sessao");
-  await expect(barra).toContainText("I-1 Board por fase");
-  await expect(barra).toContainText("desenho · consulta");
-  await expect(barra.locator(".pill")).toHaveText("aguarda você · conversa");
-  await expect(pagina.locator("[data-conversa] .msg.agente").last()).toContainText("Desenho submetido");
+  await previa.getByRole("link", { name: "Abrir o chat" }).click();
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/sessions/${S1}`);
+  await expect(pagina).toHaveTitle("Chat · Fabriquinha");
 });

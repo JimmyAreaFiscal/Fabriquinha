@@ -271,14 +271,15 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
   servico.banco.exec(`
     INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
       VALUES ('p', '/nao/existe', 'main', 'github', '["npm test"]', 'p', '[{"nome":"f","comando":"true","descricao":"d"}]');
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'p', 'Busca', 'problema', 'desenvolvimento', '2026-10-11T12:00:00.000Z');
-    INSERT INTO ticket (id, issue, etapa, titulo, status, origem, erro, criado_em)
-      VALUES (1, 1, 'desenvolvimento', 'Cache', 'falhou', 'fabriquinha', 'testes falharam', '2026-10-11T12:00:00.000Z');
-    INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em)
-      VALUES (1, 1, 'autonomo', '${SESSAO}', 'falha', 'testes falharam', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z');
+    INSERT INTO demanda VALUES ('I-1', 'p', 'Busca', 'problema', 'd', 'execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, motivo_falha)
+      VALUES ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam');
+    INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)
+      VALUES ('x1', '${SESSAO}', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1);
   `);
   const [sessao] = (
-    await pedir("/api/sessoes?escopo=ativas&projeto=p&issue=1&etapa=desenvolvimento", {
+    await pedir("/api/sessoes?escopo=ativas&projeto=p&demanda=I-1&etapa=implementar", {
       headers: comCookie(),
     })
   ).json() as Record<string, unknown>[];
@@ -288,11 +289,11 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
   );
   assert.deepEqual((await pedir("/api/sessoes?escopo=historico", { headers: comCookie() })).json(), []);
 
-  const r = await pedir("/api/sessoes?escopo=todas&issue=x", { headers: comCookie() });
+  const r = await pedir("/api/sessoes?escopo=todas&demanda=x", { headers: comCookie() });
   assert.equal(r.status, 422);
   const { erro } = r.json() as { erro: string };
   assert.match(erro, /→ at escopo/);
-  assert.match(erro, /→ at issue/);
+  assert.match(erro, /→ at demanda/);
 });
 
 test("rota que devolve nada dá 204; a que responde sozinha fica como está; erro inesperado dá 500 no log; erro depois de responder corta a conexão", async (t) => {

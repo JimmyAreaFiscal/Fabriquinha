@@ -5,11 +5,12 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { AUDITOR } from "../dominio/agregado.ts";
+import { AUDITOR, CANCELADA } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { registrarIssue } from "../persistencia/issues.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
+import { ABORTADA } from "./gerente.ts";
 import { anexarHistorico, exportarHistorico, noHistorico } from "./historico.ts";
 import { infoDaSessao } from "./sessoes.ts";
 
@@ -191,4 +192,17 @@ test("noHistorico: a sessão ganha o título da issue, o resultado da última ex
     VALUES (3, 'anthropic', 'claude', 1, 1, 1, 0, 0, 0.5)`);
   const [linha] = noHistorico(banco, [await infoDaSessao(banco, DESTINO)]);
   assert.deepEqual([linha?.titulo, linha?.resultado, linha?.custo], ["Busca lenta", "concluida", 0.5]);
+});
+
+test("noHistorico: a execução que falhou é falha, abortada pelo Auditor ou cancelada com a issue", async () => {
+  const sessoes = ["d", "e", "f"].map((n) => `00000000-0000-4000-8000-00000000001${n}`) as [string, string, string];
+  banco.exec(`INSERT INTO execucao (id, ticket, modo, sessao_pi, resultado, erro, iniciada_em, terminada_em) VALUES
+    (5, 2, 'autonomo', '${sessoes[0]}', 'falha', 'tempo limite', '${T0}', '${T1}'),
+    (6, 2, 'autonomo', '${sessoes[1]}', 'falha', '${ABORTADA}', '${T0}', '${T1}'),
+    (7, 2, 'autonomo', '${sessoes[2]}', 'falha', '${CANCELADA}', '${T0}', '${T1}')`);
+  const infos = await Promise.all(sessoes.map((s) => infoDaSessao(banco, s)));
+  assert.deepEqual(
+    noHistorico(banco, infos).map((l) => l.resultado),
+    ["falha", "abortada", "cancelada"],
+  );
 });

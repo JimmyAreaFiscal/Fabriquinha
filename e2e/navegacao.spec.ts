@@ -86,10 +86,26 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
   await expect(aba).toHaveURL(`${fabriquinha.base}/home`);
 });
 
-test("o Início da navegação conta as sessões que aguardam o Auditor", async ({ pagina, fabriquinha }) => {
+/** Uma sessão de demanda cujo ticket falhou: aguarda o Auditor. */
+function sessaoDeDemandaAguardando(raiz: string): void {
+  const banco = abrir(raiz);
+  banco.exec(`
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
+      VALUES ('loja', '/nao/existe', 'main', 'github', '["npm test"]', 'loja', '[{"nome":"f","comando":"true","descricao":"d"}]');
+    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, motivo_falha)
+      VALUES ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam');
+    INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)
+      VALUES ('x1', '${SESSAO}', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1);
+  `);
+  banco.close();
+}
+
+test("o Início da navegação conta as sessões de demanda que aguardam o Auditor", async ({ pagina, fabriquinha }) => {
   const inicio = pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: /^Início/ });
   await expect(inicio.locator(".contador")).toHaveCount(0);
-  sessaoAguardando(fabriquinha.raiz);
+  sessaoDeDemandaAguardando(fabriquinha.raiz);
   await pagina.getByRole("link", { name: "Métricas", exact: true }).click();
   await expect(inicio.locator(".contador")).toHaveText("1");
   await expect(inicio.locator(".contador")).toHaveAttribute("title", "sessões que aguardam você");

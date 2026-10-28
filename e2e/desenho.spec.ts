@@ -106,9 +106,6 @@ test("aprova o desenho com um ticket editado, outro com o modelo trocado, um rem
   )) {
     expect(linhas).toBe(1);
   }
-  // O gate aguarda o Auditor: o contador do Início conta a sessão.
-  const contador = pagina.locator("[data-navegacao] .contador");
-  await expect(contador).toHaveText("1");
   await expect(gate.getByRole("combobox", { name: "Modelo de T-3" })).toHaveValue("");
   await expect(gate.getByRole("option", { name: "padrão · claude-sonnet-5-5" }).first()).toBeAttached();
   await expect(gate.getByRole("button", { name: "Reprovar" })).toBeDisabled();
@@ -158,8 +155,6 @@ test("aprova o desenho com um ticket editado, outro com o modelo trocado, um rem
 
   await gate.getByRole("button", { name: "Aprovar desenho" }).click();
   await expect(gate).toBeHidden();
-  // O contador cai logo depois da ação, sem esperar a volta de 5 s.
-  await expect(contador).toBeHidden({ timeout: 1000 });
   await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveText("Desenvolvimento");
   const ag = issue(fabriquinha.raiz);
   expect(ag?.issue.fase).toBe("desenvolvimento");

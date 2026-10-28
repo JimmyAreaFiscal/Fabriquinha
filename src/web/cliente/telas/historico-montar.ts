@@ -1,17 +1,16 @@
 // Histórico (F7 §4.4) no DOM: lê as sessões terminadas com os filtros, desenha a lista com as funções puras de
-// historico.ts, mostra a prévia da escolhida e abre a consulta (C21) dela. Não se atualiza sozinho: o que terminou fica
+// historico.ts, mostra a prévia da escolhida. Não se atualiza sozinho: o que terminou fica
 // terminado. Os testes de ponta a ponta (e2e/historico.spec.ts) o exercitam.
-import type { DadosDoChat } from "../../rotas/chat.ts";
-import type { SessaoDoHistorico } from "../../rotas/historico.ts";
+import type { DadosDoChatDemanda } from "../../rotas/chat.ts";
+import type { SessaoDeDemanda } from "../../rotas/historico.ts";
 import type { Parametros } from "../caminhos.ts";
-import { api, avisar, elemento, irPara, mostrarErro } from "../dom.ts";
-import { caminhoDaAuditoria, caminhoDaSessao } from "../render.ts";
+import { api, avisar, elemento, mostrarErro } from "../dom.ts";
 import { verSaida } from "./chat-montar.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { consulta, contagem, type Filtros, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
 
 // Valem entre as visitas à página, como os filtros do projeto.
-const filtros: Filtros = { projeto: "", issue: "", etapa: "" };
+const filtros: Filtros = { projeto: "", demanda: "", etapa: "" };
 let selecionada = "";
 
 export async function montarHistorico(main: HTMLElement, _params: Parametros, signal: AbortSignal): Promise<void> {
@@ -23,13 +22,13 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
   const raiz = elemento(".pagina-historico", HTMLElement);
   const lista = elemento("[data-lista]", HTMLElement);
   const total = elemento("[data-contagem]", HTMLElement);
-  let sessoes: SessaoDoHistorico[] = [];
+  let sessoes: SessaoDeDemanda[] = [];
   /** O último pedido de sessões: a resposta de um filtro já trocado não desenha por cima da do atual. */
   let pedido = 0;
 
   /** Lê a prévia da selecionada pela rota do chat e a põe ao lado, se ela ainda é a selecionada. */
-  async function carregarPrevia(s: SessaoDoHistorico): Promise<void> {
-    const dados = await api<DadosDoChat>(`/api/sessoes/${encodeURIComponent(s.sessao)}`, { signal });
+  async function carregarPrevia(s: SessaoDeDemanda): Promise<void> {
+    const dados = await api<DadosDoChatDemanda>(`/api/sessoes/${encodeURIComponent(s.sessao)}`, { signal });
     const lugar = lista.querySelector("[data-previa]");
     if (s.sessao === selecionada && lugar) lugar.innerHTML = previa(s, dados, new Date());
   }
@@ -46,7 +45,7 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
   async function carregar(): Promise<void> {
     const n = ++pedido;
     const query = consulta(filtros);
-    const lidas = query === undefined ? [] : await api<SessaoDoHistorico[]>(`/api/sessoes?${query}`, { signal });
+    const lidas = query === undefined ? [] : await api<SessaoDeDemanda[]>(`/api/sessoes?${query}`, { signal });
     if (n !== pedido) return;
     // A API devolve da mais antiga para a mais recente (F4 §5.3).
     sessoes = lidas.toReversed();
@@ -61,49 +60,14 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
     carregar().catch(mostrarErro);
   });
 
-  /** Auditar (F4): abre o chat da auditoria do mês escolhido; se falha, a tela fica aqui com o erro do servidor. */
-  function auditar(botao: HTMLButtonElement): void {
-    botao.disabled = true;
-    avisar();
-    api<{ sessao: string }>("/api/auditorias", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mes: elemento("[data-mes]", HTMLSelectElement).value,
-        pedido: elemento("[data-pedido]", HTMLTextAreaElement).value,
-      }),
-    })
-      .then(({ sessao }) => {
-        irPara(caminhoDaAuditoria(sessao));
-      })
-      .catch((error_: unknown) => {
-        botao.disabled = false;
-        mostrarErro(error_);
-      });
-  }
-
   raiz.addEventListener("click", (evento) => {
     const alvo =
-      evento.target instanceof Element
-        ? evento.target.closest<HTMLElement>("[data-sel], [data-consulta], [data-ver-tudo], [data-auditar]")
-        : null;
-    if (alvo?.dataset.auditar !== undefined) auditar(alvo as HTMLButtonElement);
-    else if (alvo?.dataset.verTudo !== undefined) verSaida(alvo);
+      evento.target instanceof Element ? evento.target.closest<HTMLElement>("[data-sel], [data-ver-tudo]") : null;
+    if (alvo?.dataset.verTudo !== undefined) verSaida(alvo);
     else if (alvo?.dataset.sel !== undefined) {
       selecionada = alvo.dataset.sel;
       desenhar();
       lista.querySelector<HTMLElement>(`[data-sel="${CSS.escape(selecionada)}"]`)?.focus();
-    } else if (alvo?.dataset.consulta) {
-      (alvo as HTMLButtonElement).disabled = true;
-      avisar();
-      api<{ sessao: string }>(`/api/tickets/${alvo.dataset.consulta}/consulta`, { method: "POST" })
-        .then(({ sessao }) => {
-          irPara(caminhoDaSessao(sessao));
-        })
-        .catch((error_: unknown) => {
-          (alvo as HTMLButtonElement).disabled = false;
-          mostrarErro(error_);
-        });
     }
   });
 

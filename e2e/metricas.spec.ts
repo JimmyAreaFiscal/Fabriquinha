@@ -94,18 +94,9 @@ test("mudar o mês em foco: a média passa a usar só os meses anteriores a ele"
   await expect(custo).toHaveText(/US\$ 10,00\s*sem meses anteriores/);
 });
 
-test("Início com a frase do mês de todos os projetos e Projeto com os 5 cards do mês", async ({
-  pagina,
-  fabriquinha,
-}) => {
+test("Projeto com os 5 cards do mês", async ({ pagina, fabriquinha }) => {
   semear(fabriquinha.raiz);
   await pagina.clock.setFixedTime(AGORA);
-  await pagina.goto(`${fabriquinha.base}/home`);
-  const frase = pagina.locator(".frase-mes");
-  await expect(frase).toContainText(", todos os projetos: US$ 65,00 · 66,0 mil tokens");
-  await frase.getByRole("link", { name: "Métricas →" }).click();
-  await expect(pagina).toHaveURL(`${fabriquinha.base}/metrics`);
-
   await pagina.goto(`${fabriquinha.base}/projects/loja`);
   await expect(pagina.locator(".kpis-mes .kpi")).toHaveText([
     /US\$ 60,00\s*1 execução/,

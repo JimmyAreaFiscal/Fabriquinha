@@ -1,93 +1,54 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Execucao } from "../../../dominio/agregado.ts";
-import type { DadosDoChat, Entrada } from "../../rotas/chat.ts";
-import type { SessaoDoHistorico } from "../../rotas/historico.ts";
-import { consulta, contagem, dia, listaDoHistorico, mesesParaAuditar, paginaDoHistorico, previa } from "./historico.ts";
+import type { ExecucaoSessao } from "../../../dominio/sessoes.ts";
+import type { DadosDoChatDemanda, Entrada } from "../../rotas/chat.ts";
+import type { SessaoDeDemanda } from "../../rotas/historico.ts";
+import { consulta, contagem, dia, listaDoHistorico, paginaDoHistorico, previa } from "./historico.ts";
 
 process.env.TZ = "America/Sao_Paulo";
 
 const AGORA = new Date("2026-10-12T15:00:00.000Z");
 
-const sessao = (s: Partial<SessaoDoHistorico> = {}): SessaoDoHistorico => ({
+const sessao = (s: Partial<SessaoDeDemanda> = {}): SessaoDeDemanda => ({
   sessao: "a1/b2",
-  issue: 37,
   projeto: "loja <api>",
-  ticket: 109,
-  etapa: "desenho",
+  demanda: "I-37",
+  titulo: "Board <por> fase",
+  ticket: "I-37.T109",
+  etapa: "planejar",
   modo: "autonomo",
-  execucao: 7,
   estado: "terminada",
   desde: "2026-10-12T13:34:00.000Z",
-  dialogos: [],
-  titulo: "Board <por> fase",
+  inicio: "2026-10-12T13:00:00.000Z",
   resultado: "concluida",
-  custo: 1.856,
   ...s,
 });
 
-test("página: filtros de projeto, issue e etapa com o que o Auditor escolheu, e o lugar da contagem e da lista", () => {
-  const html = paginaDoHistorico(["loja", "site <pessoal>"], { projeto: "loja", issue: 'I-"2', etapa: "sessao" });
+test("página: filtros de projeto, demanda e etapa com o que o Auditor escolheu, e o lugar da contagem e da lista", () => {
+  const html = paginaDoHistorico(["loja", "site <pessoal>"], {
+    projeto: "loja",
+    demanda: 'I-"2',
+    etapa: "revisar_rodada",
+  });
   assert.match(html, /<h1>Histórico<\/h1><span class="muted">sessões terminadas, da mais recente para a mais antiga/);
   assert.match(html, /<option value="">todos<\/option><option value="loja" selected>loja<\/option>/);
   assert.match(html, /<option value="site &#60;pessoal&#62;">site &#60;pessoal&#62;<\/option>/);
-  assert.match(html, /<input data-f="issue" value="I-&#34;2" placeholder="I-29"/);
-  assert.match(html, /<option value="revisao">revisão<\/option>/);
-  assert.match(html, /<option value="sessao" selected>sessão em aberto<\/option>/);
-  assert.match(
-    html,
-    /<span class="contagem" data-contagem><\/span><span class="auditar">.*<\/span><\/div><label class="pedido-auditoria">.*<\/label><div data-lista><\/div>/,
-  );
+  assert.match(html, /<input data-f="demanda" value="I-&#34;2" placeholder="I-29"/);
+  assert.match(html, /<option value="implementar">implementação<\/option>/);
+  assert.match(html, /<option value="revisar_rodada" selected>revisão da rodada<\/option>/);
+  assert.match(html, /<span class="contagem" data-contagem><\/span><\/div><div data-lista><\/div>/);
+  assert.doesNotMatch(html, /data-auditar|data-mes|data-pedido/);
 });
 
-test("página: depois da contagem, o mês (12 meses, o corrente escolhido, sem data-f) e o botão Auditar", () => {
-  const html = paginaDoHistorico([], { projeto: "", issue: "", etapa: "" }, new Date(2026, 9, 13));
-  const grupo = /<span class="auditar">(.*?)<\/span><\/div><label class="pedido-auditoria">/.exec(html)?.[1] ?? "";
-  assert.ok(html.indexOf("data-contagem") < html.indexOf('class="auditar"'));
-  assert.match(grupo, /^<label>Mês <select data-mes><option value="2026-10" selected>outubro de 2026<\/option>/);
-  assert.equal(grupo.match(/<option /g)?.length, 12);
-  assert.equal(grupo.match(/selected/g)?.length, 1);
-  assert.match(grupo, /<option value="2025-11">novembro de 2025<\/option><\/select><\/label>/);
-  assert.match(grupo, /<button type="button" class="btn btn-primario" data-auditar>Auditar<\/button>$/);
-  assert.doesNotMatch(grupo, /data-f/);
-  assert.match(paginaDoHistorico([], { projeto: "", issue: "", etapa: "" }), /data-auditar/);
-});
-
-test("página: abaixo da barra, o Pedido opcional é um textarea de 2 linhas, sem data-f", () => {
-  const html = paginaDoHistorico([], { projeto: "", issue: "", etapa: "" });
-  const pedido = /<label class="pedido-auditoria">(.*?)<\/label>/.exec(html)?.[1] ?? "";
-  assert.ok(html.indexOf("data-auditar") < html.indexOf("pedido-auditoria"));
-  assert.match(pedido, /^Pedido <span class="muted">opcional; o que a auditoria deve investigar<\/span>/);
-  assert.match(pedido, /<textarea data-pedido rows="2" maxlength="4000" placeholder="Ex\.: verifique oportunidades/);
-  assert.doesNotMatch(pedido, /data-f/);
-});
-
-test("meses para auditar: os 12 últimos, do corrente para o mais antigo, atravessando o ano", () => {
-  assert.deepEqual(mesesParaAuditar(new Date(2026, 0, 31)), [
-    "2026-01",
-    "2025-12",
-    "2025-11",
-    "2025-10",
-    "2025-09",
-    "2025-08",
-    "2025-07",
-    "2025-06",
-    "2025-05",
-    "2025-04",
-    "2025-03",
-    "2025-02",
-  ]);
-});
-
-test("consulta: só os filtros escolhidos, a issue como I-n ou n, e nada a pedir se ela não é número", () => {
-  assert.equal(consulta({ projeto: "", issue: "", etapa: "" }), "escopo=historico");
+test("consulta: só os filtros escolhidos, a demanda como I-n ou n, e nada a pedir se ela não é número", () => {
+  assert.equal(consulta({ projeto: "", demanda: "", etapa: "" }), "escopo=historico");
   assert.equal(
-    consulta({ projeto: "loja api", issue: "i-29", etapa: "desenho" }),
-    "escopo=historico&projeto=loja+api&issue=29&etapa=desenho",
+    consulta({ projeto: "loja api", demanda: "i-29", etapa: "planejar" }),
+    "escopo=historico&projeto=loja+api&demanda=I-29&etapa=planejar",
   );
-  assert.equal(consulta({ projeto: "", issue: "29", etapa: "" }), "escopo=historico&issue=29");
-  assert.equal(consulta({ projeto: "", issue: "I-", etapa: "" }), undefined);
-  assert.equal(consulta({ projeto: "", issue: "cupom", etapa: "" }), undefined);
+  assert.equal(consulta({ projeto: "", demanda: "29", etapa: "" }), "escopo=historico&demanda=I-29");
+  assert.equal(consulta({ projeto: "", demanda: "I-", etapa: "" }), undefined);
+  assert.equal(consulta({ projeto: "", demanda: "cupom", etapa: "" }), undefined);
 });
 
 test("contagem e dia: Hoje, Ontem, a data e o ano quando não é o de agora, no fuso do navegador", () => {
@@ -102,22 +63,8 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
   const html = listaDoHistorico(
     [
       sessao(),
-      sessao({
-        sessao: "x",
-        desde: "2026-10-11T21:47:00.000Z",
-        titulo: null,
-        resultado: "falha",
-        custo: 0,
-        modo: "consulta",
-      }),
-      sessao({
-        sessao: "y",
-        desde: "2026-10-08T19:58:00.000Z",
-        resultado: "abortada",
-        etapa: "sessao",
-        modo: "interativo",
-      }),
-      sessao({ sessao: "z", desde: "2026-10-08T19:50:00.000Z", resultado: "cancelada" }),
+      sessao({ sessao: "x", desde: "2026-10-11T21:47:00.000Z", resultado: "falha", modo: "consulta" }),
+      sessao({ sessao: "y", desde: "2026-10-08T19:58:00.000Z", etapa: "sessao_em_aberto", modo: "interativo" }),
     ],
     "x",
     AGORA,
@@ -128,25 +75,22 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
   );
   assert.ok(
     html.includes(
-      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37</span><span class="id esconde">T-109</span><span class="meio">Board &#60;por&#62; fase <span class="muted">· desenho · autônoma</span></span><span class="esconde"><span class="pill pill-ok">concluída</span></span><span class="num muted">US$ 1,86</span></button>',
+      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37</span><span class="id esconde">I-37.T109</span><span class="meio">Board &#60;por&#62; fase <span class="muted">· planejamento · autônoma</span></span><span class="esconde"><span class="pill pill-ok">concluída</span></span></button>',
     ),
   );
   assert.match(html, /data-sel="x" aria-selected="true"><span class="hora">18:47<\/span>/);
-  assert.match(html, /sem título <span class="muted">· desenho · consulta<\/span>.*pill-falha">falha<.*US\$ 0,00/);
-  assert.match(html, /· sessão em aberto · interativa<\/span>.*pill-neutro">abortada</);
-  assert.match(html, /data-sel="z".*pill-neutro">cancelada</);
+  assert.match(html, /· planejamento · consulta<\/span>.*pill-falha">falha</);
+  assert.match(html, /· sessão em aberto · interativa<\/span>/);
   assert.match(html, /<aside class="previa superficie" data-previa aria-label="Prévia da sessão">/);
   assert.equal(listaDoHistorico([], "", AGORA), '<p class="muted">Nenhuma sessão com esses filtros.</p>');
 });
 
-const execucao = (e: Partial<Execucao>): Execucao => ({
-  id: 1,
-  ticket: 109,
-  modo: "autonomo",
-  sessaoPi: "00000000-0000-4000-8000-000000000001",
-  resultado: "sucesso",
-  iniciadaEm: "2026-10-12T13:00:00.000Z",
-  terminadaEm: "2026-10-12T13:12:00.000Z",
+const execucao = (e: Partial<ExecucaoSessao>): ExecucaoSessao => ({
+  id: "e1",
+  sessao_id: "a1/b2",
+  inicio: "2026-10-12T13:00:00.000Z",
+  fim: "2026-10-12T13:12:00.000Z",
+  falha: false,
   ...e,
 });
 
@@ -156,9 +100,9 @@ const msg = (message: Record<string, unknown>, extra: Partial<Entrada> = {}): En
   ...extra,
 });
 
-/** A sessão no formato do chat: só o que a prévia lê. */
-const dados = (conversa: Entrada[], execucoes: Execucao[]): DadosDoChat =>
-  ({ execucoes, conversa }) as unknown as DadosDoChat;
+/** A sessão no formato do chat da demanda: só o que a prévia lê. */
+const dados = (conversa: Entrada[], execucoes: ExecucaoSessao[]): DadosDoChatDemanda =>
+  ({ origem: "demanda", sessao: {}, execucoes, conversa }) as unknown as DadosDoChatDemanda;
 
 test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
   const conversa = [
@@ -193,15 +137,15 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
     sessao(),
     dados(conversa, [
       execucao({}),
-      execucao({ id: 2, iniciadaEm: "2026-10-12T13:20:00.000Z", terminadaEm: "2026-10-12T13:30:00.000Z" }),
-      execucao({ id: 3, terminadaEm: undefined }),
+      execucao({ id: "e2", inicio: "2026-10-12T13:20:00.000Z", fim: "2026-10-12T13:30:00.000Z" }),
+      execucao({ id: "e3", fim: undefined }),
     ]),
     AGORA,
   );
-  assert.ok(html.startsWith('<div><span class="id">I-37 · T-109</span><h2>Board &#60;por&#62; fase</h2></div>'));
+  assert.ok(html.startsWith('<div><span class="id">I-37 · I-37.T109</span><h2>Board &#60;por&#62; fase</h2></div>'));
   assert.ok(
     html.includes(
-      '<dt>Projeto</dt><dd>loja &#60;api&#62;</dd><dt>Etapa</dt><dd>desenho · autônoma</dd><dt>Resultado</dt><dd><span class="pill pill-ok">concluída</span></dd><dt>Terminada</dt><dd>Hoje 10:34 · durou 22 min</dd><dt>Custo</dt><dd>US$ 1,86 · <span class="modelo" title="anthropic / claude-opus-5-5">anthropic / claude-opus-5-5</span></dd><dt>Mensagens</dt><dd>4</dd>',
+      '<dt>Projeto</dt><dd>loja &#60;api&#62;</dd><dt>Etapa</dt><dd>planejamento · autônoma</dd><dt>Resultado</dt><dd><span class="pill pill-ok">concluída</span></dd><dt>Terminada</dt><dd>Hoje 10:34 · durou 22 min</dd><dt>Modelo</dt><dd><span class="modelo" title="anthropic / claude-opus-5-5">anthropic / claude-opus-5-5</span></dd><dt>Mensagens</dt><dd>4</dd>',
     ),
     html,
   );
@@ -217,12 +161,12 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
   );
   assert.ok(
     html.endsWith(
-      '<div class="botoes"><a class="btn btn-primario" href="/sessions/a1%2Fb2">Abrir o chat</a><button type="button" class="btn" data-consulta="109">Conversar sobre</button><a class="btn" href="/api/sessoes/a1%2Fb2/historico.md" download>Exportar</a></div>',
+      '<div class="botoes"><a class="btn btn-primario" href="/sessions/a1%2Fb2">Abrir o chat</a><a class="btn" href="/api/sessoes/a1%2Fb2/historico.md" download>Exportar</a></div>',
     ),
   );
   // O começo da conversa: a mensagem do Auditor e a chamada com o resultado que deu certo.
-  const comeco = previa(sessao({ titulo: null }), dados(conversa.slice(0, 3), []), AGORA);
-  assert.match(comeco, /<h2>sem título<\/h2>/);
+  const comeco = previa(sessao({ titulo: "Sem conversa" }), dados(conversa.slice(0, 3), []), AGORA);
+  assert.match(comeco, /<h2>Sem conversa<\/h2>/);
   assert.match(comeco, /durou 0 s/);
   assert.match(comeco, /<span class="quem">você<\/span><div class="texto md"><p>comece pelos testes<\/p>/);
   assert.match(comeco, /<dt>Mensagens<\/dt><dd>2<\/dd>/);
