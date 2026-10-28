@@ -8,6 +8,7 @@ import {
   dica,
   type EstadoDasMetricas,
   evolucao,
+  fraseDoMes,
   media,
   mesDe,
   paginaDeMetricas,
@@ -486,6 +487,17 @@ test("Projeto: os 6 cards do mês corrente", () => {
   );
   const parcial = { ...m, total: { ...m.total, custo: { conhecido: 1, incompleto: true } } };
   assert.match(texto(cardsDoMes(parcial)), /Custo · outubro US\$ 1,00 \*/);
+});
+
+test("Início: a frase do mês corrente de todos os projetos, com o link para as Métricas", () => {
+  const m = mes("2026-10", 1302.24, 102, null, {
+    total: { ...consumo(1302.24, 2_000_000_000, 4_500_000, 300_000_000, 0, 9), modelos: [] },
+  });
+  assert.equal(
+    texto(fraseDoMes(m)),
+    "Outubro de 2026, todos os projetos: US$ 1.302,24 · 2.304,5 M tokens · demandas 103 registradas, 102 concluídas · tickets 104 criados, 102 concluídos · PRs 103 abertos, 102 mergeados Métricas →",
+  );
+  assert.match(fraseDoMes(m), /<a href="\/metrics">Métricas →<\/a><\/p>$/);
 });
 
 test("milhares: as contagens das tabelas e dos cards do Projeto com o separador de milhar", () => {

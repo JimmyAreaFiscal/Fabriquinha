@@ -1,7 +1,7 @@
 // Entrada do cliente (F7 §4.4): escolhe a página pelo caminho, troca de página pela History API sem recarregar (os
 // links são `<a href>` de verdade, que também abrem em outra aba) e desenha a navegação fixa com quem aguarda.
 import { type Pagina, type Parametros, rotear } from "./caminhos.ts";
-import { api, avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
+import { avisar, elemento, mostrarErro, MUDOU } from "./dom.ts";
 import { NAO_ENCONTRADA, navegacao, TITULOS } from "./render.ts";
 import { montarAvaliacao, montarAvaliacoes } from "./telas/avaliacoes-montar.ts";
 import { montarChat } from "./telas/chat-montar.ts";
@@ -9,6 +9,7 @@ import { montarConfiguracao } from "./telas/configuracao-montar.ts";
 import { montarDemanda, montarDemandas } from "./telas/demandas-montar.ts";
 import { montarHeatmap } from "./telas/heatmap-montar.ts";
 import { montarHistorico } from "./telas/historico-montar.ts";
+import { contarOQueAguarda, montarInicio } from "./telas/inicio-montar.ts";
 import { montarMetricas } from "./telas/metricas-montar.ts";
 import { montarProjeto } from "./telas/projeto-montar.ts";
 import { montarSdlc } from "./telas/sdlc-montar.ts";
@@ -22,6 +23,7 @@ import { montarSimulacao } from "./telas/simulacao-montar.ts";
 type Montar = (main: HTMLElement, params: Parametros, sinal: AbortSignal) => void | Promise<void>;
 
 const MONTAR: Record<Pagina, Montar> = {
+  inicio: montarInicio,
   projeto: montarProjeto,
   heatmap: montarHeatmap,
   metricas: montarMetricas,
@@ -42,15 +44,17 @@ let aguardando = 0;
 /** O da página na tela; trocar de página o aborta. */
 let pagina = new AbortController();
 
-/** Quantas sessões aguardam o Auditor, para o contador das Demandas. */
+/** Quanto aguarda o Auditor, para o contador do Início. */
 async function contar(): Promise<void> {
-  const ativas = await api<{ estado: string }[]>("/api/sessoes?escopo=ativas");
-  aguardando = ativas.filter((s) => s.estado === "aguardando_humano").length;
+  aguardando = await contarOQueAguarda();
   cabeca.innerHTML = navegacao(rotear(location.pathname)?.pagina, aguardando);
 }
 
+/** Os caminhos que só levam ao Início: a raiz e a lista das demandas, que virou o board do Início. */
+const LEVAM_AO_INICIO: ReadonlySet<string> = new Set(["/", "/demandas"]);
+
 function desenhar(): void {
-  if (location.pathname === "/") history.replaceState(null, "", "/demandas");
+  if (LEVAM_AO_INICIO.has(location.pathname)) history.replaceState(null, "", "/home");
   const rota = rotear(location.pathname);
   document.title = rota ? `${TITULOS[rota.pagina]} · Fabriquinha` : "Fabriquinha";
   cabeca.innerHTML = navegacao(rota?.pagina, aguardando);
@@ -94,7 +98,7 @@ caixa.addEventListener("click", (evento) => {
 });
 
 /** As páginas que se redesenham sozinhas (F7 §4.4). */
-const ATUALIZAM: ReadonlySet<Pagina> = new Set(["demandas"]);
+const ATUALIZAM: ReadonlySet<Pagina> = new Set(["inicio", "demandas"]);
 
 /** A cada 5 s com a aba visível, e ao voltar a ela: o contador da navegação e a página, se ela se atualiza. */
 function atualizar(): void {

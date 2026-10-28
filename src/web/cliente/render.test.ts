@@ -10,6 +10,7 @@ import {
   escapar,
   FASE_DA_DEMANDA,
   FASE_DA_RODADA,
+  ha,
   modeloDoSeletor,
   NAO_ENCONTRADA,
   navegacao,
@@ -56,40 +57,46 @@ test("escapar neutraliza HTML vindo do agente", () => {
   assert.equal(escapar(3), "3");
 });
 
-test("navegação fixa marca a página atual e mostra quem aguarda só quando há", () => {
+test("navegação fixa marca a página atual e mostra no Início o que aguarda só quando há", () => {
   const html = navegacao("projeto", 6);
   assert.match(html, /<a href="\/projects" aria-current="page">Projetos<\/a>/);
-  assert.match(
-    html,
-    /<a href="\/demandas">Demandas <span class="contador" title="sessões que aguardam você">6<\/span><\/a>/,
-  );
+  assert.match(html, /<a href="\/home">Início <span class="contador" title="o que aguarda você">6<\/span><\/a>/);
   assert.deepEqual(
     [...html.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]),
-    ["/projects", "/demandas", "/simulation", "/metrics", "/history", "/evaluations", "/config"],
+    ["/home", "/projects", "/simulation", "/metrics", "/history", "/evaluations", "/config"],
   );
-  assert.doesNotMatch(html, /Início|Auditoria/);
+  assert.doesNotMatch(html, /Demandas|Auditoria/);
+  assert.match(navegacao("inicio", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
+  assert.equal(TITULOS.inicio, "Início");
   assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
-  assert.match(navegacao("demandas", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
+  assert.match(navegacao("demandas", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.match(navegacao("avaliacoes", 0), /<a href="\/evaluations" aria-current="page">Avaliações<\/a>/);
   assert.match(navegacao("avaliacao", 0), /<a href="\/evaluations" aria-current="page">Avaliações<\/a>/);
   assert.equal(TITULOS.avaliacoes, "Avaliações");
   assert.equal(caminhoDaAvaliacao("a/b c"), "/evaluations/a%2Fb%20c");
   assert.equal(TITULOS.demandas, "Demandas");
-  assert.match(navegacao("demanda", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
+  assert.match(navegacao("demanda", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
   assert.equal(TITULOS.demanda, "Demanda");
   assert.equal(caminhoDaDemanda("I-206"), "/demandas/I-206");
   assert.equal(rotuloDoStatus("em_execucao"), "Em execução");
   assert.match(navegacao("sdlc", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.equal(TITULOS.sdlc, "Configuração SDLC");
   assert.match(navegacao("heatmap", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
-  assert.doesNotMatch(navegacao("demandas", 0), /contador/);
+  assert.doesNotMatch(navegacao("inicio", 0), /contador/);
   assert.doesNotMatch(navegacao(undefined, 0), /aria-current/);
   assert.doesNotMatch(navegacao("chat", 0), /aria-current/);
   assert.match(navegacao("historico", 0), /<a href="\/history" aria-current="page">Histórico<\/a>/);
 });
 
-test("a página não encontrada leva às Demandas", () => {
-  assert.match(NAO_ENCONTRADA, /href="\/demandas">Ir para as Demandas</);
+test("a página não encontrada leva ao Início", () => {
+  assert.match(NAO_ENCONTRADA, /href="\/home">Ir para o Início</);
+});
+
+test("ha: menos de 1 min, minutos e horas, com espaços que não separam", () => {
+  const agora = new Date("2026-10-28T12:00:00.000Z");
+  assert.equal(ha("2026-10-28T11:59:30.000Z", agora), "há menos\u00a0de\u00a01\u00a0min");
+  assert.equal(ha("2026-10-28T11:15:00.000Z", agora), "há 45\u00a0min");
+  assert.equal(ha("2026-10-28T09:58:00.000Z", agora), "há 2\u00a0h\u00a02\u00a0min");
 });
 
 test("toda fase da demanda e da rodada tem rótulo e cor de pílula", () => {

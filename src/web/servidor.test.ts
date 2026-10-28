@@ -93,10 +93,10 @@ test("web.url: link de entrada com token de 32 bytes, só para o dono, trocado a
   );
 });
 
-test("entrar com o token grava o cookie HttpOnly e SameSite=Strict e leva às Demandas (CA-4)", async () => {
+test("entrar com o token grava o cookie HttpOnly e SameSite=Strict e leva ao Início", async () => {
   const r = await pedir(`/entrar?token=${token()}`);
   assert.equal(r.status, 303);
-  assert.equal(r.headers.location, "/demandas");
+  assert.equal(r.headers.location, "/home");
   assert.deepEqual(r.headers["set-cookie"], [`fabriquinha=${token()}; HttpOnly; SameSite=Strict; Path=/`]);
 });
 
@@ -105,7 +105,7 @@ test("entrar com token errado, de outro tamanho ou sem token não grava cookie",
   for (const consulta of [`?token=${errado}`, "?token=curto", `?token=${"é".repeat(43)}`, ""]) {
     const r = await pedir(`/entrar${consulta}`);
     assert.equal(r.status, 303);
-    assert.equal(r.headers.location, "/demandas");
+    assert.equal(r.headers.location, "/home");
     assert.equal(r.headers["set-cookie"], undefined, consulta);
   }
 });

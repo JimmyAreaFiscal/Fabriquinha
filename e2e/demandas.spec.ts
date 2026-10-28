@@ -1,12 +1,12 @@
-// Quadro de demandas (T-1289, CA-1 a CA-7): aberto pelo menu, com as rodadas, os PRs, os bloqueios e o trabalho ativo;
-// prints a 1440 e 375 px (o último sem rolagem horizontal).
+// Demandas (T-1289): o quadro do projeto e a página da demanda, com os gates, os tickets, a sessão de ajustes, o
+// cancelamento e o arquivamento; prints a 1440 e 375 px (o último sem rolagem horizontal). O board do Início, que tomou
+// o lugar da lista das demandas, fica em inicio.spec.ts.
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projeto } from "./apoio.ts";
 import {
   semearDemandaConcluida,
-  semearDemandaOciosa,
   semearDemandas,
   semearGateDaDemanda,
   semearPaginaDaDemanda,
@@ -16,65 +16,6 @@ import {
   semearTicketAberto,
 } from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";
-
-const cartao = (pagina: import("@playwright/test").Page, id: string) =>
-  pagina.locator(".dm-cartao", { has: pagina.locator(`.id:text-is("${id}")`) });
-
-test("o Auditor abre o quadro pelo menu e vê rodadas, PR, bloqueios e trabalho ativo", async ({
-  pagina,
-  fabriquinha,
-}, info) => {
-  projeto(fabriquinha.raiz);
-  semearDemandas(fabriquinha.raiz);
-  await pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: "Demandas" }).click();
-  await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
-  await expect(pagina.getByRole("heading", { level: 1 })).toHaveText("Demandas");
-
-  // CA-1 e CA-2: as rodadas com a fase; o link do PR só na que tem PR.
-  const i206 = cartao(pagina, "I-206");
-  await expect(i206).toContainText("Demanda I-206");
-  await expect(i206).toContainText("Execução");
-  const r1 = i206.locator("li", { hasText: "I-206.R1" });
-  await expect(r1).toContainText("Aprovação do PR");
-  await expect(r1.getByRole("link")).toHaveAttribute("href", "https://exemplo.com/pr/7");
-  await expect(r1.getByRole("link")).toHaveAttribute("target", "_blank");
-  const r2 = i206.locator("li", { hasText: "I-206.R2" });
-  await expect(r2).toContainText("Desenvolvimento");
-  await expect(r2.getByRole("link")).toHaveCount(0);
-
-  // CA-3: o ticket falho e o link da demanda.
-  const i207 = cartao(pagina, "I-207");
-  await expect(i207).toContainText("ticket falho I-207.T1");
-  await expect(i207.getByRole("link", { name: "abrir a demanda →" })).toHaveAttribute("href", "/demandas/I-207");
-  // CA-4: a dependência pendente, com o título e a fase da predecessora.
-  await expect(i207).toContainText("aguarda I-206 · Demanda I-206 · Execução");
-  // CA-5 (e a rodada que aguarda o PR): a decisão do Auditor.
-  const i208 = cartao(pagina, "I-208");
-  await expect(i208).toContainText("aguarda a decisão do Auditor");
-  await expect(i208.getByRole("link", { name: "abrir a demanda →" })).toHaveAttribute("href", "/demandas/I-208");
-  await expect(i206).toContainText("aguarda a decisão do Auditor");
-  // CA-6: o trabalho ativo.
-  await expect(pagina.getByRole("region", { name: "Trabalho ativo" })).toContainText(
-    "I-206.T3 Implementação · rodada I-206.R2",
-  );
-
-  // Sem rolagem horizontal a 375 px; prints a 1440 e 375 px.
-  for (const largura of [1440, 375]) {
-    await pagina.setViewportSize({ width: largura, height: 900 });
-    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await info.attach(`quadro-${String(largura)}`, {
-      body: await pagina.screenshot({ fullPage: true }),
-      contentType: "image/png",
-    });
-  }
-});
-
-test("CA-7: sem ticket em execução, o trabalho ativo diz que não há trabalho", async ({ pagina, fabriquinha }) => {
-  projeto(fabriquinha.raiz);
-  semearDemandaOciosa(fabriquinha.raiz);
-  await pagina.goto(`${fabriquinha.base}/demandas`);
-  await expect(pagina.getByRole("region", { name: "Trabalho ativo" })).toContainText("Não há trabalho em andamento.");
-});
 
 test("o quadro do projeto mostra só as demandas dele", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
@@ -140,22 +81,12 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   }
 });
 
-test("CA-31: a demanda que não existe mostra o aviso e o link ao quadro", async ({ pagina, fabriquinha }) => {
+test("CA-31: a demanda que não existe mostra o aviso e o link ao Início", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/demandas/I-999`);
   await expect(pagina.getByRole("heading", { level: 1 })).toHaveText("Demanda não encontrada");
-  await pagina.getByRole("link", { name: "Ir para as demandas" }).click();
-  await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
-});
-
-test("o cartão do quadro leva à página da demanda", async ({ pagina, fabriquinha }) => {
-  projeto(fabriquinha.raiz);
-  semearDemandas(fabriquinha.raiz);
-  await pagina.goto(`${fabriquinha.base}/demandas`);
-  await pagina.getByRole("link", { name: "abrir a demanda →" }).first().click();
-  await expect(pagina).toHaveURL(/\/demandas\/I-\d+$/);
-  await pagina.getByRole("link", { name: "← Demandas" }).click();
-  await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
+  await pagina.getByRole("link", { name: "Ir para o Início" }).click();
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/home`);
 });
 
 const fase = (pagina: import("@playwright/test").Page) => pagina.locator(".dm-cabeca .pill");
@@ -324,7 +255,7 @@ writeFileSync(piParado, '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso &
 
 test.describe("CA-26", () => {
   test.use({ pi: piParado });
-  test("CA-26: Executar agora põe o ticket em execução na página e no trabalho ativo do quadro", async ({
+  test("CA-26: Executar agora põe o ticket em execução na página e no Rodando do Início", async ({
     pagina,
     fabriquinha,
   }, info) => {
@@ -340,9 +271,12 @@ test.describe("CA-26", () => {
     await pagina.getByRole("button", { name: "Executar agora" }).click();
     await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
-    // Pelo menu, sem recarregar: o quadro lê o trabalho ativo antes de o pi falso terminar.
-    await pagina.getByRole("link", { name: "Demandas", exact: true }).first().click();
-    await expect(pagina.locator(".dm-trabalho")).toContainText("I-216.T1");
+    // Pelo menu, sem recarregar: o Início mostra a sessão do pi parado rodando.
+    await pagina
+      .getByRole("navigation", { name: "Páginas" })
+      .getByRole("link", { name: /^Início/ })
+      .click();
+    await expect(pagina.locator(".rodando-linha")).toContainText("I-216.T1");
   });
 
   test("Executar agora na página desatualizada mostra a orientação do servidor e recarrega o status atual", async ({
@@ -398,7 +332,7 @@ test.describe("CA-14: concluir a sessão de ajustes", () => {
   });
 });
 
-test("CA-27 e CA-28: cancelar pede a confirmação com a dependente e, confirmado, o quadro mostra as duas canceladas", async ({
+test("CA-27 e CA-28: cancelar pede a confirmação com a dependente e, confirmado, as duas saem do Início", async ({
   pagina,
   fabriquinha,
 }, info) => {
@@ -419,19 +353,22 @@ test("CA-27 e CA-28: cancelar pede a confirmação com a dependente e, confirmad
   await pagina.getByRole("button", { name: "Cancelar a demanda" }).click();
 
   await pagina.getByRole("button", { name: "Confirmar o cancelamento" }).click();
-  await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
-  await expect(cartao(pagina, "I-206")).toContainText("Cancelada");
-  await expect(cartao(pagina, "I-207")).toContainText("Cancelada");
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/home`);
+  await expect(pagina.getByText("1 demanda em andamento")).toBeVisible();
+  await expect(pagina.locator('.board-etapas .id:text-matches("^I-20[67]")')).toHaveCount(0);
 });
 
-test("CA-29: arquivar a demanda concluída a tira do quadro", async ({ pagina, fabriquinha }) => {
+test("CA-29: arquivar a demanda concluída a tira das demandas e leva ao Início", async ({ pagina, fabriquinha }) => {
   projeto(fabriquinha.raiz);
   semearDemandaConcluida(fabriquinha.raiz);
-  await pagina.goto(`${fabriquinha.base}/demandas`);
-  await expect(cartao(pagina, "I-217")).toBeVisible();
+  const demandas = async () =>
+    (
+      (await (await pagina.request.get(`${fabriquinha.base}/api/demandas`)).json()) as { demandas: { id: string }[] }
+    ).demandas.map((d) => d.id);
+  expect(await demandas()).toEqual(["I-217"]);
   await pagina.goto(`${fabriquinha.base}/demandas/I-217`);
   await expect(pagina.getByRole("button", { name: "Cancelar a demanda" })).toHaveCount(0);
   await pagina.getByRole("button", { name: "Arquivar" }).click();
-  await expect(pagina).toHaveURL(`${fabriquinha.base}/demandas`);
-  await expect(cartao(pagina, "I-217")).toHaveCount(0);
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/home`);
+  expect(await demandas()).toEqual([]);
 });

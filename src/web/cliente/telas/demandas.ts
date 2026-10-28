@@ -312,7 +312,7 @@ function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string 
 export function pagina(p: DadosDaPagina): string {
   const { demanda: d } = p;
   const globais = p.tickets.filter((t) => t.rodada === undefined);
-  return `<a class="link" href="/demandas">← Demandas</a>
+  return `<a class="link" href="/home">← Início</a>
   <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
     <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
   ${gate(d)}

@@ -23,7 +23,7 @@ test("rotear escolhe a página do F7 §4.4 pelo caminho", () => {
   assert.deepEqual(rotear("/projects/loja"), { pagina: "projeto", params: { projeto: "loja" } });
   assert.deepEqual(rotear("/projects/loja/heatmap"), { pagina: "heatmap", params: { projeto: "loja" } });
   assert.deepEqual(rotear("/projects/loja/sdlc"), { pagina: "sdlc", params: { projeto: "loja" } });
-  assert.deepEqual(rotear("/demandas"), { pagina: "demandas", params: {} });
+  assert.deepEqual(rotear("/home"), { pagina: "inicio", params: {} });
   assert.deepEqual(rotear("/demandas/I-206"), { pagina: "demanda", params: { demanda: "I-206" } });
   assert.deepEqual(rotear("/projects/loja/demandas"), { pagina: "demandas", params: { projeto: "loja" } });
   assert.deepEqual(rotear("/simulation"), { pagina: "simulacao", params: {} });
@@ -34,8 +34,8 @@ test("rotear escolhe a página do F7 §4.4 pelo caminho", () => {
   assert.deepEqual(rotear("/evaluations"), { pagina: "avaliacoes", params: {} });
   assert.deepEqual(rotear("/evaluations/a%2F1"), { pagina: "avaliacao", params: { avaliacao: "a/1" } });
   assert.deepEqual(rotear("/config"), { pagina: "configuracao", params: {} });
-  // As páginas do fluxo legado saíram: o Início, a issue e a Auditoria (CA-4).
-  for (const legado of ["/home", "/projects/loja/issues/I-3", "/audits/abc", "/nada"])
+  // As páginas do fluxo legado saíram: a issue e a Auditoria (CA-4). `/demandas` só redireciona ao Início (app.ts).
+  for (const legado of ["/demandas", "/projects/loja/issues/I-3", "/audits/abc", "/nada"])
     assert.equal(rotear(legado), undefined);
 });
 

@@ -108,10 +108,22 @@ export function compacto(n: number): string {
   return n >= 1e3 ? `${fmt(n / 1e3, 1)} mil` : fmt(n, 0);
 }
 
-/** Navegação fixa: caminho, rótulo e as páginas em que o item fica marcado. */
+/**
+ * Há quanto tempo, em minutos ou horas e minutos. A duração tem espaços não separáveis: numa coluna estreita ela
+ * desce inteira para a linha de baixo, e "1 min" nunca se separa.
+ */
+export function ha(desde: string, agora: Date): string {
+  const minutos = Math.floor((agora.getTime() - Date.parse(desde)) / 60_000);
+  let tempo = `${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;
+  if (minutos < 1) tempo = "menos de 1 min";
+  else if (minutos < 60) tempo = `${String(minutos)} min`;
+  return `há ${tempo.replaceAll(" ", "\u00a0")}`;
+}
+
+/** Navegação fixa: caminho, rótulo e as páginas em que o item fica marcado; a demanda se abre pelo board do Início. */
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
-  ["/projects", "Projetos", ["projeto", "heatmap", "sdlc"]],
-  ["/demandas", "Demandas", ["demandas", "demanda"]],
+  ["/home", "Início", ["inicio", "demanda"]],
+  ["/projects", "Projetos", ["projeto", "heatmap", "sdlc", "demandas"]],
   ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico"]],
@@ -119,13 +131,13 @@ const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/config", "Configuração", ["configuracao"]],
 ];
 
-/** O conteúdo de `<header class="nav">`: a marca e os itens, com o número de sessões que aguardam o Auditor. */
+/** O conteúdo de `<header class="nav">`: a marca e os itens, com o número do que aguarda o Auditor no Início. */
 export function navegacao(pagina: Pagina | undefined, aguardando: number): string {
   const itens = NAVEGACAO.map(([href, rotulo, paginas]) => {
     const atual = pagina !== undefined && paginas.includes(pagina) ? ' aria-current="page"' : "";
     const contador =
-      href === "/demandas" && aguardando > 0
-        ? ` <span class="contador" title="sessões que aguardam você">${String(aguardando)}</span>`
+      href === "/home" && aguardando > 0
+        ? ` <span class="contador" title="o que aguarda você">${String(aguardando)}</span>`
         : "";
     return `<a href="${href}"${atual}>${rotulo}${contador}</a>`;
   });
@@ -134,6 +146,7 @@ export function navegacao(pagina: Pagina | undefined, aguardando: number): strin
 
 /** O título de cada página, no cabeçalho e no `<title>`. */
 export const TITULOS: Record<Pagina, string> = {
+  inicio: "Início",
   projeto: "Projetos",
   heatmap: "Heatmap",
   metricas: "Métricas",
@@ -149,4 +162,4 @@ export const TITULOS: Record<Pagina, string> = {
 };
 
 export const NAO_ENCONTRADA =
-  '<div class="cabeca-pagina"><h1>Página não encontrada</h1></div><p class="muted">Este endereço não é de nenhuma página da Fabriquinha. <a class="link" href="/demandas">Ir para as Demandas</a></p>';
+  '<div class="cabeca-pagina"><h1>Página não encontrada</h1></div><p class="muted">Este endereço não é de nenhuma página da Fabriquinha. <a class="link" href="/home">Ir para o Início</a></p>';
