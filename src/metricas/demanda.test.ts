@@ -188,7 +188,25 @@ test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a deman
   assert.deepEqual(m.total.custo, { conhecido: 1, incompleto: false });
 });
 
-test("CA-7: evidência de custos malformada ou de rodada/ticket não conta linhas", () => {
+test("CA-SDLC-24: custo externo de rodada fica na rodada e soma no total externo, fora do custo interno", () => {
+  const b = banco();
+  const linha = (custo: number) => ({ provedor: "x", modelo: "m", custo });
+  const sessao = (s: string, custo: number) => ({ ferramenta: "codex", sessao: s, linhas: [linha(custo)] });
+  const grava = (id: string, rodada: string, dados: unknown) => {
+    b.exec(`INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, tipo, dados, em)
+      VALUES ('${id}', 'I-1', ${rodada}, 'custos_realizados', '${JSON.stringify(dados)}', ${T})`);
+  };
+  grava("d", "NULL", { sessoes: [sessao("a", 2)] });
+  grava("r1", "1", { sessoes: [sessao("b", 7)] });
+  b.exec("INSERT INTO sessao_externa_demanda VALUES ('codex', 'a', 'I-1'), ('codex', 'b', 'I-1')");
+  const m = metricasDaDemanda(b, "I-1");
+  assert.deepEqual(m.rodadas[0]?.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
+  assert.deepEqual(m.rodadas[1]?.custoExterno, { conhecido: 0, incompleto: false, sessoes: 0 });
+  assert.deepEqual(m.custoExterno, { conhecido: 9, incompleto: false, sessoes: 2 });
+  assert.deepEqual(m.rodadas[0].custo, { conhecido: 0, incompleto: false });
+});
+
+test("CA-7: evidência de custos malformada ou de ticket não conta linhas", () => {
   const b = banco();
   b.exec("INSERT INTO sessao_externa_demanda VALUES ('codex', 'a', 'I-1')");
   const grava = (id: string, dados: string, rodada: string, ticket: string, tipo = "custos_realizados") => {
@@ -202,7 +220,7 @@ test("CA-7: evidência de custos malformada ou de rodada/ticket não conta linha
   grava("c3", '{"sessoes":[{"ferramenta":"codex","sessao":"a","linhas":5}]}', "NULL", "NULL");
   assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
   b.exec("DELETE FROM evidencia_demanda");
-  grava("c4", '{"sessoes":[{"ferramenta":"codex","sessao":"a","linhas":[{"custo":9}]}]}', "1", "NULL");
+  grava("c4", '{"sessoes":[{"ferramenta":"codex","sessao":"a","linhas":[{"custo":9}]}]}', "NULL", "1");
   assert.deepEqual(metricasDaDemanda(b, "I-1").custoExterno, vazio);
 });
 

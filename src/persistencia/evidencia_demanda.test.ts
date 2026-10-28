@@ -112,16 +112,26 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
   assert.equal(existsSync(caminhoArquivo(b, a.sha256)), true);
 });
 
-test("CA-11 a CA-13: sessão de outra demanda vira aviso; resubmeter regrava; nada vai para a execução interna", () => {
+const custosEm = (b: DatabaseSync, id: string, demanda: string, rodada: number | null, sessoes: unknown[]) =>
+  b
+    .prepare("INSERT OR REPLACE INTO evidencia_demanda VALUES (?, ?, ?, NULL, 'custos_realizados', ?, ?)")
+    .run(id, demanda, rodada, JSON.stringify({ sessoes }), em);
+
+test("CA-11 a CA-13: sessão de outra demanda vira aviso; regrava de todas as custos da demanda, rodada inclusa; nada vai para a execução interna", () => {
   const b = novoBanco();
-  const sessoes = [quem, { ferramenta: "codex", sessao: "s2" }];
-  assert.deepEqual(registrarSessoesExternas(b, "I-1", sessoes), { avisos: [] });
-  const { avisos } = registrarSessoesExternas(b, "I-2", [quem, { ferramenta: "codex", sessao: "s3" }]);
+  b.exec("INSERT INTO rodada VALUES ('I-1', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-1')");
+  custosEm(b, "e1", "I-1", null, [quem, { ferramenta: "codex", sessao: "s2" }]);
+  custosEm(b, "e1r", "I-1", 1, [{ ferramenta: "codex", sessao: "sr" }]);
+  assert.deepEqual(registrarSessoesExternas(b, "I-1"), { avisos: [] });
+  custosEm(b, "e2", "I-2", null, [quem, { ferramenta: "codex", sessao: "s3" }]);
+  const { avisos } = registrarSessoesExternas(b, "I-2");
   assert.deepEqual(avisos, ["a sessão s1 de claude já consta na demanda I-1 e não é contada de novo para I-2"]);
-  assert.deepEqual(registrarSessoesExternas(b, "I-1", [quem]), { avisos: [] });
+  custosEm(b, "e1", "I-1", null, [quem]);
+  assert.deepEqual(registrarSessoesExternas(b, "I-1"), { avisos: [] });
   assert.deepEqual(linhas(b, "SELECT ferramenta, sessao, demanda_id FROM sessao_externa_demanda ORDER BY sessao"), [
     { ferramenta: "claude", sessao: "s1", demanda_id: "I-1" },
     { ferramenta: "codex", sessao: "s3", demanda_id: "I-2" },
+    { ferramenta: "codex", sessao: "sr", demanda_id: "I-1" },
   ]);
   for (const tabela of ["execucao_sessao", "uso_modelo_execucao"]) {
     assert.equal(b.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n, 0);

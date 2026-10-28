@@ -154,19 +154,21 @@ export const rodadasDaDemanda = (banco: DatabaseSync, demandaId: string): number
 export interface LinhaExterna {
   ferramenta: string;
   sessao: string;
+  /** Rodada dona da evidência; `null` = a própria demanda. */
+  rodadaId: number | null;
   /** `null` = desconhecido. */
   custo: number | null;
 }
 
-/** Linhas de `custos_realizados` da demanda (evidência sem rodada nem ticket) das sessões externas cuja dona é a demanda; evidência malformada não conta (o banco já garante JSON válido). */
+/** Linhas de `custos_realizados` da demanda e das rodadas dela (evidência sem ticket) das sessões externas cuja dona é a demanda; evidência malformada não conta (o banco já garante JSON válido). */
 export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string): LinhaExterna[] =>
   banco
     .prepare(
-      `SELECT x.ferramenta, x.sessao, json_extract(l.value, '$.custo') AS custo
+      `SELECT x.ferramenta, x.sessao, e.rodada_id, json_extract(l.value, '$.custo') AS custo
        FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s, json_each(s.value, '$.linhas') l
        JOIN sessao_externa_demanda x ON x.demanda_id = e.demanda_id
          AND x.ferramenta = json_extract(s.value, '$.ferramenta') AND x.sessao = json_extract(s.value, '$.sessao')
-       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND e.rodada_id IS NULL AND e.ticket_id IS NULL
+       WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND e.ticket_id IS NULL
          AND json_type(e.dados, '$.sessoes') = 'array'
          AND json_type(s.value, '$.linhas') = 'array'`,
     )
@@ -174,6 +176,7 @@ export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string):
     .map((l) => ({
       ferramenta: l.ferramenta as string,
       sessao: l.sessao as string,
+      rodadaId: rodadaDe(l),
       custo: typeof l.custo === "number" ? l.custo : null,
     }));
 
