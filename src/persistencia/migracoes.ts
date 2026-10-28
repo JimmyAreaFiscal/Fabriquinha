@@ -683,4 +683,61 @@ export const MIGRACOES: readonly string[] = [
     demanda_id TEXT NOT NULL REFERENCES demanda(id),
     PRIMARY KEY (ferramenta, sessao)
   );`,
+  // Histórico legado que o ERD não tem (§10.1) e alterador do retrabalho de outra demanda: aditivo; recria retrabalho_demanda preservando linhas.
+  `ALTER TABLE ticket_demanda ADD COLUMN criado_em TEXT;
+  ALTER TABLE ticket_demanda ADD COLUMN concluido_em TEXT;
+  ALTER TABLE ticket_demanda ADD COLUMN enviado_em TEXT;
+  ALTER TABLE ticket_demanda ADD COLUMN origem TEXT CHECK (origem IS NULL OR origem IN (${listaSql(TipoAtor)}));
+  ALTER TABLE ticket_demanda ADD COLUMN origem_ticket_id INTEGER;
+  CREATE TABLE demanda_historico (
+    demanda_id   TEXT PRIMARY KEY REFERENCES demanda(id),
+    criada_em    TEXT NOT NULL,
+    concluida_em TEXT,
+    cancelada_em TEXT,
+    arquivada_em TEXT
+  );
+  CREATE TABLE decisao_ticket_historico (
+    demanda_id TEXT NOT NULL,
+    ticket_id  INTEGER NOT NULL,
+    decisao_id INTEGER NOT NULL,
+    gate       TEXT NOT NULL CHECK (gate IN (${listaSql(GateDecisao)})),
+    PRIMARY KEY (demanda_id, ticket_id, decisao_id),
+    FOREIGN KEY (demanda_id, ticket_id, decisao_id) REFERENCES decisao_ticket(demanda_id, ticket_id, decisao_id)
+  );
+  CREATE TABLE evidencia_historico (
+    evidencia_id TEXT PRIMARY KEY REFERENCES evidencia_demanda(id) ON DELETE CASCADE,
+    aprovada     INTEGER CHECK (aprovada IN (0, 1)),
+    produtor     TEXT NOT NULL CHECK (produtor IN (${listaSql(Produtor)}))
+  );
+  CREATE TABLE uso_modelo_historico (
+    execucao_id     TEXT NOT NULL,
+    modelo_provedor TEXT NOT NULL,
+    modelo_nome     TEXT NOT NULL,
+    chamadas        INTEGER NOT NULL CHECK (chamadas >= 1),
+    PRIMARY KEY (execucao_id, modelo_provedor, modelo_nome),
+    FOREIGN KEY (execucao_id, modelo_provedor, modelo_nome) REFERENCES uso_modelo_execucao(execucao_id, modelo_provedor, modelo_nome)
+  );
+  CREATE TABLE retrabalho_demanda_nova (
+    commit_alterador     TEXT    NOT NULL,
+    demanda_id           TEXT    NOT NULL,
+    ticket_id            INTEGER,
+    autor                TEXT,
+    ticket_origem_id     INTEGER NOT NULL,
+    linhas               INTEGER NOT NULL CHECK (linhas >= 1),
+    alterador_demanda_id TEXT,
+    PRIMARY KEY (commit_alterador, demanda_id, ticket_origem_id),
+    FOREIGN KEY (alterador_demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    FOREIGN KEY (demanda_id, ticket_origem_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    CHECK ((ticket_id IS NULL) = (autor IS NOT NULL)),
+    CHECK ((ticket_id IS NULL) = (alterador_demanda_id IS NULL)),
+    CHECK (alterador_demanda_id IS NULL OR alterador_demanda_id <> demanda_id OR ticket_id <> ticket_origem_id)
+  );
+  INSERT INTO retrabalho_demanda_nova
+    SELECT commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas,
+           CASE WHEN ticket_id IS NULL THEN NULL ELSE demanda_id END
+    FROM retrabalho_demanda ORDER BY rowid;
+  DROP TABLE retrabalho_demanda;
+  ALTER TABLE retrabalho_demanda_nova RENAME TO retrabalho_demanda;
+  CREATE INDEX ix_retrabalho_demanda_origem ON retrabalho_demanda(demanda_id, ticket_origem_id);
+  CREATE INDEX ix_retrabalho_demanda_alterador ON retrabalho_demanda(alterador_demanda_id, ticket_id);`,
 ];

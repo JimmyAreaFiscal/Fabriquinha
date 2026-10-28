@@ -41,9 +41,14 @@ test("CA-12: v28 → v29 deixa dados e esquema legados idênticos e as constrain
   };
   b.exec(`INSERT INTO commit_ticket_demanda VALUES ('${SHA}', 'I-1', 1, 'm', ${T})`);
   recusa(`INSERT INTO arquivo_commit_demanda VALUES ('${SHA}', 'b.ts', NULL, 'R', 1, 1)`);
-  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', NULL, NULL, 1, 1)`);
-  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', 1, NULL, 9, 1)`);
-  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', 2, NULL, 1, 1)
-    , ('${"b".repeat(40)}', 'I-1', 1, NULL, 1, 1)`);
+  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', NULL, NULL, 1, 1, NULL)`);
+  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', 1, NULL, 9, 1, 'I-1')`);
+  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', 2, NULL, 1, 1, 'I-1')
+    , ('${"b".repeat(40)}', 'I-1', 1, NULL, 1, 1, 'I-1')`);
+  const b2 = "b".repeat(40);
+  b.exec(`INSERT INTO retrabalho_demanda VALUES ('${b2}', 'I-1', 1, NULL, 2, 1, 'I-2')`);
+  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', 1, NULL, 2, 1, 'I-9')`);
+  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', 1, 'Ana', 2, 1, 'I-1')`);
+  recusa(`INSERT INTO retrabalho_demanda VALUES ('${SHA}', 'I-1', NULL, 'Ana', 1, 1, 'I-1')`);
   recusa(`INSERT INTO commit_ticket_demanda VALUES ('${"c".repeat(40)}', 'I-2', 9, 'm', ${T})`);
 });
