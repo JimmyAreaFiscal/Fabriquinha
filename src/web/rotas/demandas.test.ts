@@ -23,9 +23,18 @@ interface Pagina {
   evidencias: Evidencia[];
   encerramento: { passos: { feito: boolean }[] };
   dependencias: unknown[];
+  dependentes: { demanda_id: string; titulo: string; fase: string }[];
 }
 interface Board {
-  demandas: { id: string; projeto: string; titulo: string; fase: string; rodadas: unknown[]; bloqueios: unknown[] }[];
+  demandas: {
+    id: string;
+    projeto: string;
+    titulo: string;
+    fase: string;
+    rodadas: unknown[];
+    bloqueios: unknown[];
+    falhos: unknown[];
+  }[];
   trabalho: unknown[];
 }
 const comportamento = (evidencias: Evidencia[]): Evidencia => {
@@ -78,6 +87,17 @@ test("o board não mostra a demanda arquivada", async () => {
   banco.exec("UPDATE demanda SET fase = 'arquivada' WHERE id = 'I-207'");
   const ids = (await pedir("/api/demandas")).json<Board>().demandas.map((d: { id: string }) => d.id);
   assert.deepEqual(ids, ["I-206"]);
+});
+
+test("CA-3 (T-1289): o board traz os tickets falhos com o endereço público e a etapa", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const falhosDe = async () => (await pedir("/api/demandas")).json<Board>().demandas[0]?.falhos;
+  assert.deepEqual(await falhosDe(), []);
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    tickets: ag.tickets.map((t) => (t.ticket_id === 3 ? { ...t, status: "falhou" } : t)),
+  }));
+  assert.deepEqual(await falhosDe(), [{ ref: "I-206.T3", etapa: "implementar" }]);
 });
 
 test("CA-6: a página traz cada ticket com o endereço público e a etapa", async () => {
@@ -199,6 +219,15 @@ test("CA-11: a I-207 traz a I-206 como dependência, com a situação dela", asy
   const r = (await pedir("/api/demandas/I-207")).json<Pagina>();
   assert.deepEqual(r.dependencias, [{ demanda_id: "I-206", fase: "execucao" }]);
   assert.deepEqual(r.rodadas, []);
+});
+
+test("CA-27: a I-206 traz a I-207 como dependente que vai junto no cancelamento", async () => {
+  const { pedir } = await cenarioDemandas();
+  const r = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.equal(r.dependentes.length, 1);
+  assert.equal(r.dependentes[0]?.demanda_id, "I-207");
+  assert.equal(typeof r.dependentes[0].titulo, "string");
+  assert.deepEqual((await pedir("/api/demandas/I-207")).json<Pagina>().dependentes, []);
 });
 
 test("CA-12: a I-999 não existe, 404 com a mensagem", async () => {

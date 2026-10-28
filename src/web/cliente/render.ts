@@ -2,7 +2,7 @@
 // ainda vazias e os formatos que mais de uma tela usa (rótulos, caminhos, datas, números). O texto que vem do servidor
 // passa sempre por `escapar`.
 import type { ModoExecucao, Ticket } from "../../dominio/agregado.ts";
-import type { Etapa, Fase, Id, Modelo } from "../../dominio/primitivos.ts";
+import type { Etapa, Fase, FaseDemanda, FaseRodada, Id, Modelo } from "../../dominio/primitivos.ts";
 import type { InfoSessao, MotivoEspera } from "../../execucao/sessoes.ts";
 import type { Pagina } from "./caminhos.ts";
 
@@ -14,6 +14,32 @@ export const STATUS_DO_TICKET: Record<Ticket["status"], string> = {
   falhou: "falhou",
   fechado: "fechado",
   cancelado: "cancelado",
+};
+
+/** O status do ticket com inicial maiúscula (Em execução), para a página e o quadro das demandas. */
+export const rotuloDoStatus = (status: Ticket["status"]): string =>
+  STATUS_DO_TICKET[status].charAt(0).toUpperCase() + STATUS_DO_TICKET[status].slice(1);
+
+/** A fase da demanda e a da rodada (comparacao-sdlc §2.1) como as telas as mostram, com a cor da pílula. */
+export const FASE_DA_DEMANDA: Record<FaseDemanda, [rotulo: string, pilula: string]> = {
+  registro: ["Registro", "pill-neutro"],
+  aprovacao_demanda: ["Aprovação da demanda", "pill-aguarda"],
+  planejamento: ["Planejamento", "pill-rodando"],
+  aprovacao_planejamento: ["Aprovação do planejamento", "pill-aguarda"],
+  execucao: ["Execução", "pill-rodando"],
+  revisao_demanda: ["Revisão da demanda", "pill-rodando"],
+  encerramento: ["Encerramento", "pill-rodando"],
+  concluida: ["Concluída", "pill-ok"],
+  arquivada: ["Arquivada", "pill-neutro"],
+  cancelada: ["Cancelada", "pill-cancelada"],
+};
+export const FASE_DA_RODADA: Record<FaseRodada, [rotulo: string, pilula: string]> = {
+  desenvolvimento: ["Desenvolvimento", "pill-rodando"],
+  revisao: ["Revisão", "pill-rodando"],
+  encerramento: ["Encerramento", "pill-rodando"],
+  aprovacao_pull_request: ["Aprovação do PR", "pill-aguarda"],
+  sessao: ["Sessão de ajustes", "pill-aguarda"],
+  concluida: ["Concluída", "pill-ok"],
 };
 
 /** A cor do status do ticket, nas pílulas comuns; em execução não pulsa, porque o ticket pode estar parado à espera. */
@@ -71,6 +97,7 @@ export const rotuloTicket = (id: Id): string => `T-${String(id)}`;
 
 export const caminhoDaIssue = (projeto: string, issue: Id): string =>
   `/projects/${encodeURIComponent(projeto)}/issues/${rotuloIssue(issue)}`;
+export const caminhoDaDemanda = (demanda: string): string => `/demandas/${encodeURIComponent(demanda)}`;
 export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeURIComponent(sessao)}`;
 export const caminhoDaAuditoria = (sessao: string): string => `/audits/${encodeURIComponent(sessao)}`;
 
@@ -140,6 +167,7 @@ export function ha(desde: string, agora: Date): string {
 const NAVEGACAO: readonly (readonly [string, string, readonly Pagina[]])[] = [
   ["/home", "Início", ["inicio"]],
   ["/projects", "Projetos", ["projeto", "heatmap", "issue", "sdlc"]],
+  ["/demandas", "Demandas", ["demandas", "demanda"]],
   ["/simulation", "Simulação", ["simulacao"]],
   ["/metrics", "Métricas", ["metricas"]],
   ["/history", "Histórico", ["historico", "auditoria"]],
@@ -231,6 +259,8 @@ export const TITULOS: Record<Pagina, string> = {
   configuracao: "Configuração",
   simulacao: "Simulação",
   sdlc: "Configuração SDLC",
+  demandas: "Demandas",
+  demanda: "Demanda",
 };
 
 /** Página ainda sem conteúdo: só o cabeçalho com o título. */

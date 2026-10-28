@@ -4167,3 +4167,133 @@ svg.barras :not(.hit) {
     margin-top: 0;
   }
 }
+
+/* Demandas: o quadro de cartões e o trabalho ativo. */
+.dm-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--s-3);
+}
+.dm-cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dm-cartao .cartao-titulo,
+.dm-cartao .cartao-topo,
+.dm-cartao .cartao-marcas {
+  margin: 0;
+}
+.dm-rodadas,
+.dm-trabalho {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+}
+.dm-rodadas li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.dm-abrir {
+  margin-top: auto;
+}
+
+/* Demandas: a página da demanda (só leitura). */
+.dm-cabeca h1,
+.dm-texto,
+.dm-rodada,
+.dm-evidencia {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.dm-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.dm-tickets,
+.dm-decisoes,
+.dm-anexos,
+.dm-passos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+}
+.dm-texto {
+  margin: var(--s-1) 0 0;
+}
+.dm-falha {
+  color: var(--danger);
+}
+.dm-dados {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Demandas: os gates da demanda e do planejamento. */
+.dm-gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  box-sizing: border-box;
+  margin: var(--s-4) 0;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-lg);
+}
+.dm-gate-perigo {
+  border-left-color: var(--danger);
+}
+.dm-gate-titulo {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dm-gate-perigo .dm-gate-titulo {
+  color: var(--danger);
+}
+.dm-gate textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.dm-botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+@media (max-width: 480px) {
+  .dm-botoes .btn {
+    flex: 1 1 100%;
+  }
+}
+
+/* Demandas: o gate do PR da rodada (nota e motivo). */
+.dm-gate select {
+  max-width: 100%;
+  align-self: flex-start;
+}
+
+/* Demandas: a confirmação do cancelamento começa fechada (o display do gate vence o atributo hidden). */
+.dm-gate[hidden] {
+  display: none;
+}

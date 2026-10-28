@@ -5,7 +5,7 @@ import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";
 import { carregarDemanda, listarDemandas } from "../../persistencia/demandas.ts";
-import { predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
+import { dependentesNaoConcluidasDaDemanda, predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
 import { anexosDaDemanda, lerAnexo } from "../../persistencia/evidencia_demanda.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 
@@ -34,6 +34,12 @@ const emExecucao = (ag: AgregadoDemanda) =>
       ...(t.rodada_id !== undefined && { rodada: ref(ag.demanda.id).rodada(t.rodada_id) }),
     }));
 
+/** Os tickets `falhou` da demanda: o que bloqueia a rodada até o Auditor reabrir. */
+const falhos = (ag: AgregadoDemanda) =>
+  ag.tickets
+    .filter((t) => t.status === "falhou")
+    .map((t) => ({ ref: ref(ag.demanda.id).ticket(t.ticket_id), etapa: t.etapa }));
+
 /** `GET /api/demandas`: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
 function board(pedido: Parameters<Rota["tratar"]>[0]) {
   const todas = listarDemandas(pedido.banco);
@@ -50,6 +56,7 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
           return { ref: ref(id).rodada(r.rodada_id), fase: r.fase, ...(pr && { pr }) };
         }),
         bloqueios: predecessorasDaDemanda(pedido.banco, id).filter((p) => !satisfazDependencia(p.fase)),
+        falhos: falhos(ag),
       };
     }),
     trabalho: todas.flatMap(emExecucao),
@@ -124,6 +131,11 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
     })),
     encerramento: passosDoEncerramento(ag),
     dependencias: predecessorasDaDemanda(banco, id),
+    // As que o cancelamento leva junto (diretas e indiretas, ainda não terminadas).
+    dependentes: dependentesNaoConcluidasDaDemanda(banco, id).map((d) => {
+      const { titulo, fase } = carregarDemanda(banco, d).demanda;
+      return { demanda_id: d, titulo, fase };
+    }),
   };
 }
 

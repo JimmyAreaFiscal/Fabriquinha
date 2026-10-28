@@ -9,6 +9,8 @@ import {
   data,
   duracao,
   escapar,
+  FASE_DA_DEMANDA,
+  FASE_DA_RODADA,
   estadoDoTrilho,
   FASES,
   etapa,
@@ -16,6 +18,8 @@ import {
   NAO_ENCONTRADA,
   navegacao,
   caminhoDaAuditoria,
+  caminhoDaDemanda,
+  rotuloDoStatus,
   mesPorExtenso,
   TITULOS,
   NOME_DA_ETAPA,
@@ -94,9 +98,15 @@ test("navegação fixa marca a página atual e mostra quem aguarda só quando h�
   assert.match(html, /<a href="\/home">Início <span class="contador" title="sessões que aguardam você">6<\/span><\/a>/);
   assert.deepEqual(
     [...html.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1]),
-    ["/home", "/projects", "/simulation", "/metrics", "/history", "/config"],
+    ["/home", "/projects", "/demandas", "/simulation", "/metrics", "/history", "/config"],
   );
   assert.match(navegacao("simulacao", 0), /<a href="\/simulation" aria-current="page">Simulação<\/a>/);
+  assert.match(navegacao("demandas", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
+  assert.equal(TITULOS.demandas, "Demandas");
+  assert.match(navegacao("demanda", 0), /<a href="\/demandas" aria-current="page">Demandas<\/a>/);
+  assert.equal(TITULOS.demanda, "Demanda");
+  assert.equal(caminhoDaDemanda("I-206"), "/demandas/I-206");
+  assert.equal(rotuloDoStatus("em_execucao"), "Em execução");
   assert.match(navegacao("sdlc", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.equal(TITULOS.sdlc, "Configuração SDLC");
   assert.match(navegacao("heatmap", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
@@ -169,4 +179,13 @@ test("trilho de issue concluída: as fases percorridas feitas, as que não acont
 test("página vazia escapa o título e a não encontrada leva ao Início", () => {
   assert.equal(paginaVazia("<b>"), '<div class="cabeca-pagina"><h1>&#60;b&#62;</h1></div>');
   assert.match(NAO_ENCONTRADA, /href="\/home"/);
+});
+
+test("toda fase da demanda e da rodada tem rótulo e cor de pílula", () => {
+  for (const [rotulo, pilula] of [...Object.values(FASE_DA_DEMANDA), ...Object.values(FASE_DA_RODADA)]) {
+    assert.match(rotulo, /^\p{Lu}/u);
+    assert.match(pilula, /^pill-/);
+  }
+  assert.equal(FASE_DA_DEMANDA.aprovacao_demanda[0], "Aprovação da demanda");
+  assert.equal(FASE_DA_RODADA.aprovacao_pull_request[0], "Aprovação do PR");
 });
