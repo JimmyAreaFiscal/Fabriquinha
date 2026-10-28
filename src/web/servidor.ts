@@ -14,6 +14,7 @@ import { casar } from "./cliente/caminhos.ts";
 import { ErroHttp, traduzir } from "./erros.ts";
 import type { Agendador, Rota } from "./rotas.ts";
 import { ROTAS_DA_AUDITORIA } from "./rotas/auditoria.ts";
+import { ROTAS_DAS_AVALIACOES } from "./rotas/avaliacoes.ts";
 import { ROTAS_DO_CHAT } from "./rotas/chat.ts";
 import { ROTAS_DA_CONFIGURACAO } from "./rotas/configuracao.ts";
 import { ROTAS_DAS_DEMANDAS } from "./rotas/demandas.ts";
@@ -38,6 +39,7 @@ export const ROTAS: Rota[] = [
   ...ROTAS_DAS_ACOES_DE_DEMANDA,
   ...ROTAS_DO_CHAT,
   ...ROTAS_DA_AUDITORIA,
+  ...ROTAS_DAS_AVALIACOES,
   ...ROTAS_DO_DESENHO,
   ...ROTAS_DO_PR,
   ...ROTAS_DO_INICIO,

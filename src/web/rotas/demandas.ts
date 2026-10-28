@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";
+import { achadoDaDemanda } from "../../persistencia/avaliacoes.ts";
 import { carregarDemanda, listarDemandas } from "../../persistencia/demandas.ts";
 import { dependentesNaoConcluidasDaDemanda, predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
 import { anexosDaDemanda, lerAnexo } from "../../persistencia/evidencia_demanda.ts";
@@ -92,7 +93,9 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   const { demanda } = ag;
   const { ticket, rodada } = ref(id);
   const anexos = anexosDaDemanda(banco, id);
+  const achado = achadoDaDemanda(banco, id);
   return {
+    ...(achado && { origem: { avaliacao: achado.avaliacao_id, achado: achado.achado_id, titulo: achado.titulo } }),
     demanda: { id, projeto: demanda.projeto, titulo: demanda.titulo, fase: demanda.fase },
     rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase })),
     tickets: ag.tickets.map((t) => ({
