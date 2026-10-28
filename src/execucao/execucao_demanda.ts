@@ -50,6 +50,11 @@ export interface OpcoesExecucaoDemanda {
 /** Execuções com condutor vivo neste serviço, por id, com o grupo de processo do pi depois de lançado. */
 const ativas = new Map<string, { pgid?: number; interrompida?: boolean }>();
 
+/** Os condutores em curso: o `parar` do serviço os espera antes de fechar o banco. */
+const condutores = new Set<Promise<void>>();
+/** Depois do `aguardarCondutores`, o pi que sai é efeito da parada do serviço. */
+let parando = false;
+
 const INTERROMPIDA = "interrompida pelo Auditor";
 const REINICIADO = "serviço reiniciado";
 
@@ -180,6 +185,7 @@ async function conduzir(c: Conducao): Promise<void> {
   }
   // Interrompida pelo Auditor: o pi saiu pelo SIGTERM, mas a causa verdadeira é a interrupção.
   if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
+  else if (parando && falha !== undefined) falha = REINICIADO;
   ativas.delete(execucao.id);
   encerrar(c, falha, log);
   try {
@@ -250,7 +256,27 @@ export function iniciarExecucaoDemanda(
     return { ...estado, sessoes, execucoes: iniciarExecucao(sessoes, estado.execucoes, execucao) };
   });
   ativas.set(execucao.id, {});
-  return { id: execucao.id, fim: conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes }) };
+  const fim = conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes });
+  condutores.add(fim);
+  const sair = () => condutores.delete(fim);
+  fim.then(sair, sair);
+  return { id: execucao.id, fim };
+}
+
+/**
+ * Parada do serviço: espera os condutores em curso por até `limiteMs`, para gravarem o fim da execução com o banco
+ * ainda aberto. Quem falha por causa da parada termina como "serviço reiniciado". Passado o limite, volta assim mesmo:
+ * a subida seguinte recupera o que ficou aberto.
+ */
+export async function aguardarCondutores(limiteMs: number): Promise<void> {
+  parando = true;
+  let timer: NodeJS.Timeout | undefined;
+  const limite = new Promise<void>((pronto) => {
+    timer = setTimeout(pronto, limiteMs);
+  });
+  await Promise.race([Promise.allSettled(condutores), limite]);
+  clearTimeout(timer);
+  parando = false;
 }
 
 /**

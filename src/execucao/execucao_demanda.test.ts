@@ -17,7 +17,12 @@ import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
-import { interromperExecucaoDemanda, iniciarExecucaoDemanda, recuperarExecucoesDemanda } from "./execucao_demanda.ts";
+import {
+  aguardarCondutores,
+  interromperExecucaoDemanda,
+  iniciarExecucaoDemanda,
+  recuperarExecucoesDemanda,
+} from "./execucao_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-exec-demanda-"));
@@ -622,4 +627,41 @@ test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em
     ["falhou", "falhou"],
   );
   assert.equal(banco.prepare("SELECT fase FROM demanda WHERE id = 'I-1'").get()?.fase, "encerramento");
+});
+
+/** Espera o pi da execução subir e devolve o grupo dele. */
+async function grupoDoPi(sessoes: (t: number) => ReturnType<typeof carregarSessoesDoTicket>, ticket: number) {
+  let grupo = sessoes(ticket).execucoes[0]?.grupo_processo;
+  while (grupo == null) {
+    await dormir(20);
+    grupo = sessoes(ticket).execucoes[0]?.grupo_processo;
+  }
+  return grupo;
+}
+
+test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket falha com 'serviço reiniciado'", async () => {
+  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  emExecucao(banco, 1);
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const grupo = await grupoDoPi(sessoes, 1);
+  const espera = aguardarCondutores(10_000);
+  process.kill(-grupo, "SIGTERM"); // como o cgroup do systemd
+  await espera;
+  const [execucao] = sessoes(1).execucoes;
+  assert.notEqual(execucao?.fim, null);
+  assert.equal(execucao?.falha, true);
+  assert.equal(execucao.erro, "serviço reiniciado");
+  assert.equal(statusDe(banco, 1)?.status, "falhou");
+  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+  await fim;
+});
+
+test("I-246 CA-4: condutor que não termina no limite não prende o aguardarCondutores", async () => {
+  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
+  const grupo = await grupoDoPi(sessoes, 1);
+  await aguardarCondutores(50);
+  assert.equal(sessoes(1).execucoes[0]?.fim, null);
+  process.kill(-grupo, "SIGKILL");
+  await fim;
 });
