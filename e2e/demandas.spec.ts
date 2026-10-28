@@ -166,6 +166,9 @@ test("CA-14 a CA-16: o gate da demanda aprova, recusa sem motivo não envia e re
   projeto(fabriquinha.raiz);
   semearGateDaDemanda(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/demandas/I-214`);
+  await pagina.setViewportSize({ width: 1440, height: 900 });
+  await expect(pagina.locator(".dm-gate-titulo", { hasText: "Aprovação da demanda" })).toBeVisible();
+  await info.attach("gate-1440", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
   await pagina.setViewportSize({ width: 375, height: 900 });
   await expect(pagina.getByRole("button", { name: "Aprovar" })).toBeVisible();
   await expect(pagina.getByRole("button", { name: "Recusar" })).toBeVisible();
@@ -244,6 +247,11 @@ test("CA-20 e CA-21: aprovar o PR pede a nota e, com a nota, mostra-a na rodada"
   projeto(fabriquinha.raiz);
   semearPrDaRodada(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
+  await pagina.setViewportSize({ width: 1440, height: 900 });
+  // O gate do PR vem depois da lista de tickets da rodada.
+  expect(await pagina.locator(".dm-rodada .dm-tickets ~ .dm-gate").count()).toBe(1);
+  await expect(pagina.locator(".dm-gate-titulo", { hasText: "Aprovação do PR" })).toBeVisible();
+  await info.attach("gate-pr-1440", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
   await pagina.setViewportSize({ width: 375, height: 900 });
   await expect(pagina.getByRole("button", { name: "Aprovar PR" })).toBeVisible();
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toBeVisible();
@@ -289,6 +297,9 @@ test("CA-24 e CA-25: reabrir o ticket em falha pede a instrução e, com ela, ti
   projeto(fabriquinha.raiz);
   semearDemandas(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/demandas/I-207`);
+  await pagina.setViewportSize({ width: 1440, height: 900 });
+  await expect(pagina.locator(".dm-gate-titulo", { hasText: "Reabrir I-207.T1" })).toBeVisible();
+  await info.attach("reabrir-1440", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
   await pagina.setViewportSize({ width: 375, height: 900 });
   await expect(pagina.getByRole("button", { name: "Reabrir" })).toBeVisible();
   expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

@@ -4251,6 +4251,26 @@ svg.barras :not(.hit) {
   flex-direction: column;
   gap: var(--s-2);
   min-width: 0;
+  box-sizing: border-box;
+  margin: var(--s-4) 0;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-lg);
+}
+.dm-gate-perigo {
+  border-left-color: var(--danger);
+}
+.dm-gate-titulo {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dm-gate-perigo .dm-gate-titulo {
+  color: var(--danger);
 }
 .dm-gate textarea {
   width: 100%;

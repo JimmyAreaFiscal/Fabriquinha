@@ -147,6 +147,10 @@ type Pagina = DadosDaPagina;
 const decisao = (d: Pagina["decisoes"][number]): string =>
   `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por)}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
 
+/** O bloco delimitado de um gate ou formulário de ação: título em caixa alta e borda na cor do estado. */
+const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
+  `<div class="dm-gate${perigo ? " dm-gate-perigo" : ""}"${extra}><span class="dm-gate-titulo">${titulo}</span>${corpo}</div>`;
+
 /** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o que está aberto. */
 function acaoDoTicket({ ref, status }: Pagina["tickets"][number]): string {
   const base = `/api/demandas/tickets/${escapar(ref)}`;
@@ -154,7 +158,11 @@ function acaoDoTicket({ ref, status }: Pagina["tickets"][number]): string {
     return `<div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="executar" data-caminho="${base}/executar">Executar agora</button></div>`;
   if (status !== "falhou") return "";
   const campo = `instrucao-${escapar(ref)}`;
-  return `<div class="dm-gate"><label for="${campo}">Instrução (obrigatória para reabrir)</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="reabrir" data-caminho="${base}/reabrir" data-campo="${campo}">Reabrir</button></div></div>`;
+  return blocoDeAcao(
+    `Reabrir ${escapar(ref)}`,
+    `<label for="${campo}">Instrução (obrigatória para reabrir)</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="reabrir" data-caminho="${base}/reabrir" data-campo="${campo}">Reabrir</button></div>`,
+    true,
+  );
 }
 
 function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): string {
@@ -175,12 +183,13 @@ function gatePR(ref: string): string {
   const motivo = `motivo-${escapar(ref)}`;
   const nota = `nota-${escapar(ref)}`;
   const notas = [1, 2, 3, 4, 5].map((n) => `<option value="${String(n)}">${String(n)}</option>`).join("");
-  return `<div class="dm-gate">
-    <label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
+  return blocoDeAcao(
+    "Aprovação do PR",
+    `<label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
     <label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select>
     <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="false" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>
-    <span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
-  </div>`;
+    <span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>`,
+  );
 }
 
 function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
@@ -192,9 +201,9 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
   return `<section class="bloco dm-rodada" id="${escapar(r.ref)}" aria-labelledby="titulo-${escapar(r.ref)}">
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
     <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
-    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
-    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="/api/demandas/rodadas/${escapar(r.ref)}/ajustes" target="_blank" rel="noopener">Sessão de ajustes de ${escapar(r.ref)}</a></p>` : ""}
     ${meus.length > 0 ? `<ul class="dm-tickets">${meus.map((t) => ticket(t, p.decisoes)).join("")}</ul>` : '<p class="muted vazio">Sem tickets.</p>'}
+    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="/api/demandas/rodadas/${escapar(r.ref)}/ajustes" target="_blank" rel="noopener">Sessão de ajustes de ${escapar(r.ref)}</a></p>` : ""}
+    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
   </section>`;
 }
 
@@ -243,9 +252,9 @@ function encerramento({ passos, limpeza_pendente: pendentes, falha }: Pagina["en
 
 /** Os gates que a fase pede: a rota da decisão e os rótulos dos dois botões. */
 const GATES: Partial<Record<FaseDemanda, { titulo: string; rota: string; aprovar: string; recusar: string }>> = {
-  aprovacao_demanda: { titulo: "Decisão da demanda", rota: "decisao", aprovar: "Aprovar", recusar: "Recusar" },
+  aprovacao_demanda: { titulo: "Aprovação da demanda", rota: "decisao", aprovar: "Aprovar", recusar: "Recusar" },
   aprovacao_planejamento: {
-    titulo: "Decisão do planejamento",
+    titulo: "Aprovação do planejamento",
     rota: "planejamento/decisao",
     aprovar: "Aprovar planejamento",
     recusar: "Reprovar planejamento",
@@ -259,10 +268,9 @@ function gate({ id, fase }: Pagina["demanda"]): string {
   const campo = `motivo-${g.rota.replaceAll("/", "-")}`;
   const botao = (aprovado: boolean, rotulo: string) =>
     `<button type="button" class="btn btn-grande ${aprovado ? "btn-primario" : "btn-reprovar"}" data-gate="${String(aprovado)}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
-  return secao(
-    "titulo-gate",
+  return blocoDeAcao(
     g.titulo,
-    `<div class="dm-gate"><label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div></div>`,
+    `<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
   );
 }
 
@@ -289,7 +297,7 @@ function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string 
     "titulo-acoes",
     "Ações",
     `<div class="dm-botoes">${botao("abrir-cancelar", "btn-reprovar", "Cancelar a demanda")}</div>
-    <div class="dm-gate" data-confirmar-cancelar hidden><p class="dm-texto"><strong>Cancelar ${escapar(id)}?</strong></p>${junto}<div class="dm-botoes">${botao("voltar", "", "Voltar")}${botao("cancelar", "btn-reprovar", "Confirmar o cancelamento", ` data-caminho="${caminho}/cancelar"`)}</div></div>`,
+    ${blocoDeAcao(`Cancelar ${escapar(id)}`, `${junto}<div class="dm-botoes">${botao("voltar", "", "Voltar")}${botao("cancelar", "btn-reprovar", "Confirmar o cancelamento", ` data-caminho="${caminho}/cancelar"`)}</div>`, true, " data-confirmar-cancelar hidden")}`,
   );
 }
 

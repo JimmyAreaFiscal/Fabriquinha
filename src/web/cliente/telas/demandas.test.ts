@@ -100,7 +100,7 @@ test("a página vazia traz só o cabeçalho e o link ao quadro, sem seções vaz
   const html = pagina(dadosDaPagina());
   assert.match(html, /href="\/demandas">← Demandas/);
   assert.match(html, /<h1>Demanda &#60;I-206&#62;<\/h1>/);
-  assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|Decisão d/);
+  assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|Aprovação d/);
 });
 
 test("os tickets ficam na rodada ou nos globais, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
@@ -277,6 +277,7 @@ test("integração feita e limpeza falha: concluída e falhou, nunca nada integr
 
 test("o gate da demanda traz Aprovar e Recusar com o motivo, ligados à rota da decisão (CA-14 a CA-16)", () => {
   const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_demanda" } }));
+  assert.match(html, /<span class="dm-gate-titulo">Aprovação da demanda<\/span>/);
   assert.match(html, /<textarea id="motivo-decisao"/);
   assert.match(html, /data-gate="false" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Recusar</);
   assert.match(html, /data-gate="true" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Aprovar</);
@@ -286,12 +287,19 @@ test("o gate do planejamento usa a rota do planejamento (CA-17 a CA-19)", () => 
   const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" } }));
   assert.match(html, /data-caminho="\/api\/demandas\/[^"]*\/planejamento\/decisao"[^>]*>Reprovar planejamento</);
   assert.match(html, />Aprovar planejamento</);
+  assert.match(html, /dm-gate-titulo">Aprovação do planejamento</);
 });
 
 test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados à rota do PR (CA-20 a CA-23)", () => {
   const base = dadosDaPagina();
   const html = pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }] });
   assert.match(html, /<select id="nota-I-206\.R1"/);
+  const comTicket = pagina({
+    ...base,
+    rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
+    tickets: [{ ref: "I-206.T1", rodada: "I-206.R1", etapa: "implementar", status: "concluido" }],
+  });
+  assert.match(comTicket, /<\/ul>\s*<div class="dm-gate"><span class="dm-gate-titulo">Aprovação do PR</);
   assert.match(html, /<option value="5">5<\/option>/);
   assert.match(
     html,
@@ -326,6 +334,7 @@ test("o ticket em falha traz a instrução e Reabrir; o aberto traz Executar ago
     pagina({ ...dadosDaPagina(), tickets: [{ ref: "I-206.T3", etapa: "implementar", status }] });
   const falho = com("falhou");
   assert.match(falho, /<textarea id="instrucao-I-206\.T3"/);
+  assert.match(falho, /dm-gate dm-gate-perigo"><span class="dm-gate-titulo">Reabrir I-206\.T3</);
   assert.match(
     falho,
     /data-acao="reabrir" data-caminho="\/api\/demandas\/tickets\/I-206\.T3\/reabrir" data-campo="instrucao-I-206\.T3">Reabrir</,
@@ -341,6 +350,7 @@ test("Cancelar só abre a confirmação, que lista as dependentes que vão junto
   const html = pagina(dadosDaPagina({ dependentes: [{ demanda_id: "I-207", titulo: "Dep <b>", fase: "execucao" }] }));
   assert.match(html, /data-demanda="abrir-cancelar"[^>]*>Cancelar a demanda/);
   assert.match(html, /data-confirmar-cancelar hidden>[\s\S]*href="\/demandas\/I-207">I-207<\/a> Dep &#60;b&#62;/);
+  assert.match(html, /dm-gate-perigo" data-confirmar-cancelar hidden><span class="dm-gate-titulo">Cancelar I-206</);
   assert.match(html, /data-demanda="cancelar" data-caminho="\/api\/demandas\/I-206\/cancelar"/);
   assert.match(pagina(dadosDaPagina()), /Nenhuma outra demanda depende desta/);
 });
