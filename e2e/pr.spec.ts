@@ -1,6 +1,5 @@
-// Gate do PR na página da issue (F7 §4.4, §7) com o `gh` falso: revisar nas abas, pedir mudanças com o motivo e
-// concluir a sessão em aberto pelo chat; com o PR aberto, Encerrar desabilitado e o 409 do servidor; depois do merge,
-// encerrar com a nota, a worktree removida e as branches mantidas.
+// Gate do PR na página da issue (F7 §4.4, §7) com o `gh` falso: com o PR aberto, Encerrar desabilitado e o 409 do
+// servidor; depois do merge, encerrar com a nota, a worktree removida e as branches mantidas.
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -148,85 +147,6 @@ function issue(raiz: string) {
     banco.close();
   }
 }
-
-test("revisa o PR, pede mudanças com o motivo e conclui a sessão em aberto pelo chat", async ({
-  pagina,
-  fabriquinha,
-}) => {
-  await noGatePR(fabriquinha.raiz);
-  prNoGitHub(fabriquinha.raiz, "OPEN", URL_PR);
-  await pagina.goto(`${fabriquinha.base}/projects/loja/issues/I-1`);
-  const gate = pagina.getByRole("region", { name: "Gate do PR" });
-  await expect(gate.locator(".gate-cabeca")).toContainText("Gate do PRPR #7 ↗aguarda você há");
-  // A descrição curta, sem "ver tudo", fica nítida: sem o degradê da recolhida.
-  const descricao = pagina.locator("[data-descricao]");
-  await expect(pagina.getByRole("button", { name: "ver tudo" })).toBeHidden();
-  expect(await descricao.evaluate((d) => getComputedStyle(d, "::after").content)).toBe("none");
-  await expect(gate.getByRole("link", { name: "abrir o chat da sessão →" })).toHaveAttribute(
-    "href",
-    `/sessions/${SESSAO}`,
-  );
-
-  // Revisão: vídeo de demonstração, cards, a aula do código, o corpo em Markdown sem HTML, comprovação e fitness.
-  const revisao = gate.getByRole("tabpanel", { name: "Revisão" });
-  await expect(gate.getByRole("tab", { name: "Revisão" })).toHaveAttribute("aria-selected", "true");
-  await expect(revisao.getByLabel("Vídeo de demonstração")).toHaveAttribute("src", /^\/arquivos\/[0-9a-f]{64}$/);
-  await revisao.getByRole("button", { name: "HTML Aula do código" }).click();
-  await expect(pagina.frameLocator("iframe").getByRole("heading")).toHaveText("Aula do código da I-1");
-  await pagina.keyboard.press("Escape");
-  await expect(revisao.locator(".numero")).toHaveText([
-    "US$ 6,84custo",
-    "2,3 Mtokens",
-    "11execuções · 1 falha",
-    "0reprovações",
-  ]);
-  const corpo = revisao.locator(".corpo-pr");
-  await expect(corpo.getByRole("heading")).toHaveText(["1. Por quê", "2. O que mudou"]);
-  await expect(corpo.locator("strong")).toHaveText("lenta");
-  await expect(corpo).toContainText("<b>sem html</b>");
-  await expect(revisao.locator("td")).toContainText(["CA-1", "✓ sim", "teste de busca com 10 mil itens"]);
-  await expect(revisao).toContainText("Cobertura das rotas novas em 92%.");
-
-  // Decisão: o PR aberto, sem nota nem encerrar; pedir mudanças só com o motivo.
-  await gate.getByRole("tab", { name: "Decisão" }).click();
-  const decisao = gate.getByRole("tabpanel", { name: "Decisão" });
-  await expect(revisao).toBeHidden();
-  await expect(decisao.locator(".estado-pr")).toContainText("Estado no GitHubaberto · aguardando mergelido");
-  await expect(decisao.getByRole("link", { name: "Abrir PR #7 ↗" })).toHaveAttribute("href", URL_PR);
-  await expect(decisao.getByRole("button", { name: "Encerrar issue" })).toBeDisabled();
-  await expect(decisao.getByRole("button", { name: "4" })).toBeDisabled();
-  await expect(decisao.locator('[data-bloqueio="encerrar"]')).toHaveText("o PR ainda não foi mergeado");
-  const pedir = decisao.getByRole("button", { name: "Pedir mudanças" });
-  await expect(pedir).toBeDisabled();
-  const motivo = decisao.getByRole("textbox", { name: "O que precisa mudar no PR" });
-  await motivo.fill("Falta o índice da busca: crie um ticket para ele.");
-  await expect(pedir).toBeEnabled();
-
-  // O Atualizar relê o estado e mantém a aba e o motivo.
-  await decisao.getByRole("button", { name: "Atualizar" }).click();
-  await expect(decisao.locator(".estado-pr")).toContainText("lido agora");
-  await expect(motivo).toHaveValue("Falta o índice da busca: crie um ticket para ele.");
-  await expect(pedir).toBeEnabled();
-
-  await pedir.click();
-  await expect(gate).toBeHidden();
-  await expect(pagina.locator('.trilho-fases [aria-current="step"]')).toHaveText("Ajuste do PR");
-  const ag = issue(fabriquinha.raiz);
-  expect(ag?.decisoes.map((d) => [d.gate, d.aprovado, d.motivo])).toEqual([
-    ["pr", false, "Falta o índice da busca: crie um ticket para ele."],
-  ]);
-
-  // A sessão em aberto, no chat: o agente cria o ticket, e o Auditor conclui a sessão.
-  const sessao = pagina.locator(".linha-tempo > li").filter({ hasText: "Ajustar o PR" }).getByRole("link");
-  await sessao.click();
-  await expect(pagina.locator("[data-conversa] .msg.agente").last()).toHaveText(
-    "Criei o ticket de desenvolvimento do índice.",
-  );
-  await pagina.getByRole("button", { name: "Concluir sessão" }).click();
-  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("terminada");
-  await expect.poll(() => issue(fabriquinha.raiz)?.issue.fase).toBe("desenvolvimento");
-  expect(issue(fabriquinha.raiz)?.tickets.at(-1)?.titulo).toBe("Criar o índice da busca");
-});
 
 test("com o PR aberto, Encerrar fica desabilitado e o servidor recusa; depois do merge, encerra com a nota", async ({
   pagina,

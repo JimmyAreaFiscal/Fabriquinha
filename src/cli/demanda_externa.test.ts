@@ -300,7 +300,7 @@ test("CA-17: decidir, cancelar e arquivar não existem", async () => {
 
 test("com FABRIQUINHA_EXECUCAO a tabela externa não vale", async () => {
   const env = { ...novaRaiz(), FABRIQUINHA_EXECUCAO: "E-1" };
-  falha(await cli(env, ["demanda", "ver", "I-1"]), 2, /comando desconhecido/);
+  falha(await cli(env, ["demanda", "registrar", "--projeto", "loja"]), 2, /comando desconhecido/);
 });
 
 test("a ajuda lista a seção externa", async () => {

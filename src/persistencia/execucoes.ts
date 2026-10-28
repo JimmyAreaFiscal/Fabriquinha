@@ -63,25 +63,3 @@ export function issueDaSessao(banco: DatabaseSync, sessaoPi: string): Id | undef
     .get(sessaoPi);
   return linha && Number(linha.issue);
 }
-
-/** A execução `id` com o ticket, a issue e o projeto dela, ou `undefined` se não existe: o agente do CLI (F7 §3.1). */
-export function execucaoDoAgente(
-  banco: DatabaseSync,
-  id: string,
-): { execucao: Id; ticket: Id; issue: Id; projeto: string; emAndamento: boolean } | undefined {
-  const linha = banco
-    .prepare(
-      `SELECT e.id, e.ticket, e.resultado, t.issue, i.projeto
-       FROM execucao e JOIN ticket t ON t.id = e.ticket JOIN issue i ON i.id = t.issue WHERE e.id = ?`,
-    )
-    .get(id);
-  return (
-    linha && {
-      execucao: Number(linha.id),
-      ticket: Number(linha.ticket),
-      issue: Number(linha.issue),
-      projeto: String(linha.projeto),
-      emAndamento: linha.resultado === "em_andamento",
-    }
-  );
-}

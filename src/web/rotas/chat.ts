@@ -34,7 +34,6 @@ import {
   concluirSessao,
   conversarSobre,
   decidirProposta,
-  decidirGate,
   enviar,
   type InfoSessao,
   infoDaSessao,
@@ -291,14 +290,6 @@ export const ROTAS_DO_CHAT: Rota[] = [
     tratar: ({ banco, params, corpo }) =>
       comIssue(banco, IdDoCaminho.parse(params.id), "editarIssue", AUDITOR, (ag) => editarIssue(ag, corpo, AUDITOR))
         .issue,
-  },
-  {
-    metodo: "POST",
-    caminho: "/api/issues/:id/registro",
-    tratar: async ({ banco, params, corpo }) => {
-      const decisao = DecisaoDoGate.parse(corpo);
-      await decidirGate(banco, IdDoCaminho.parse(params.id), "registro", decisao, opcoes(banco));
-    },
   },
   {
     metodo: "POST",

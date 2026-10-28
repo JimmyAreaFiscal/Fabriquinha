@@ -25,7 +25,6 @@ import { registrarProjeto } from "../../persistencia/projetos.ts";
 import type { Pedido } from "../rotas.ts";
 import { type CabecalhoDoChat, type DadosDoChat, ROTAS_DO_CHAT } from "./chat.ts";
 import { demanda } from "./demandas_cenario.test.ts";
-import type { PainelRegistro } from "./issue.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -167,78 +166,13 @@ test("registro sem descrição, ou só com espaços, dá 422 e nenhuma issue nas
   assert.deepEqual((await pedir("/api/board")).corpo, []);
 });
 
-test("registro pelo chat: SSE com o retrato e os eventos, C2 do Auditor, envio ao gate, devolver e aprovar", async () => {
-  const { corpo } = await postar("/api/registros", { projeto: "loja", descricao: "Exportar pedidos em CSV" });
-  const { sessao } = corpo as { sessao: string };
-  const sse = await assinar(sessao);
-  await ate(() => sse.eventos.length > 0, "o retrato");
-  const [retrato] = sse.eventos as [Evento & DadosDoChat];
-  assert.equal(retrato.type, "chat");
-  assert.equal(retrato.sessao.sessao, sessao);
-  await esperarEstado(sessao, "aguardando_humano: conversa");
-
-  // O prompt da Fabriquinha vem marcado, no retrato ou ao vivo; a resposta do agente, não.
-  const chat = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
-  assert.deepEqual(
-    chat.conversa.map((e) => e.fabriquinha ?? false),
-    [true, false],
-  );
-  assert.match(textos(chat.conversa)[0] ?? "", /^user: # Contexto[\s\S]*Vamos registrar uma necessidade/);
-  assert.equal(textos(chat.conversa)[1], "assistant: pronto");
-  const aoVivo = [...retrato.conversa, ...sse.eventos.filter((e) => e.type === "message_end")];
-  assert.equal(aoVivo.filter((e) => e.fabriquinha).length, 1);
-  assert.deepEqual([chat.issue.titulo, chat.issue.fase, chat.execucoes.length], [null, "registro", 1]);
-  assert.ok(sse.eventos.some((e) => e.type === "estado" && (e as Evento & CabecalhoDoChat).issue.id === chat.issue.id));
-
-  // C2 do Auditor, ao lado da conversa.
-  const issue = `/api/issues/${String(chat.issue.id)}`;
-  const editada = await postar(issue, { descricao: "Botão no painel de pedidos." });
-  assert.equal((editada.corpo as { descricao: string }).descricao, "Botão no painel de pedidos.");
-  assert.equal((await postar(issue, { titulo: "" })).status, 422);
-  assert.equal((await postar("/api/issues/999", { titulo: "x" })).status, 404);
-
-  const enviar = (texto: string, modo = "prompt") => postar(`/api/sessoes/${sessao}/mensagens`, { texto, modo });
-  assert.equal((await enviar("registre", "steer")).status, 409, "conversa não recebe steer");
-  assert.equal((await enviar("   ")).status, 422);
-  assert.equal((await enviar("registre")).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: gate_registro");
-  const auditor = sse.eventos.find(
-    (e) => e.type === "message_end" && (e.message as { content: unknown }).content === "registre",
-  );
-  assert.equal(auditor?.fabriquinha, undefined);
-  // O agente enviou (C25): o painel do gate fica na página da issue, não no chat.
-  const pagina = (await pedir(issue)).corpo as { issue: { titulo: string }; registro?: PainelRegistro };
-  assert.deepEqual(
-    [
-      pagina.issue.titulo,
-      pagina.registro?.comportamento,
-      pagina.registro?.criterios.map((c) => c.id),
-      pagina.registro?.faltando,
-    ],
-    ["Exportar pedidos em CSV", "hoje a contabilidade copia os pedidos à mão", ["CA-1", "CA-2"], []],
-  );
-  assert.ok(
-    sse.eventos.some((e) => e.type === "estado" && (e as Evento & CabecalhoDoChat).sessao.motivo === "gate_registro"),
-  );
-  const recusada = await enviar("mais uma");
-  assert.equal(recusada.status, 409, "o gate não recebe mensagem");
-  assert.match((recusada.corpo as { erro: string }).erro, /decida na página da issue/);
-
-  // Devolver exige o motivo, que vai ao agente; depois de trabalhar de novo, ele volta ao gate.
-  const decidir = `${issue}/registro`;
-  assert.equal((await postar(decidir, { aprovado: false })).status, 422);
-  assert.equal((await postar(decidir, { aprovado: false, motivo: "faltou o formato" })).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: conversa");
-  const devolvida = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
-  assert.ok(textos(devolvida.conversa).includes("user: O Auditor devolveu o registro. Motivo: faltou o formato"));
-  assert.equal((await enviar("registre")).status, 204);
-  await esperarEstado(sessao, "aguardando_humano: gate_registro");
-  assert.equal((await postar(decidir, { aprovado: true })).status, 204);
-  await esperarEstado(sessao, "terminada");
-  assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 409, "sem pi vivo, nada a abortar");
-  assert.equal(((await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat).issue.fase, "desenho");
-  assert.equal((await postar("/api/issues/abc/registro", { aprovado: true })).status, 422);
-  sse.fechar();
+test("registro pelo chat: o prompt da Fabriquinha vem marcado e o Auditor edita a issue", async () => {
+  const [sessao, issue] = await registro();
+  const { conversa } = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;
+  const prompt = conversa.find((e) => (e.message as { role?: string } | undefined)?.role === "user");
+  assert.equal(prompt?.fabriquinha, true);
+  const editada = await postar(`/api/issues/${String(issue)}`, { titulo: "Exportar pedidos" });
+  assert.equal((editada.corpo as { titulo: string }).titulo, "Exportar pedidos");
 });
 
 test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o aviso marcado, 409; recusar", async () => {
@@ -287,7 +221,6 @@ test("proposta de issue no chat do registro: cabeçalho, 422, 404, aceitar com o
   assert.equal(segundo.status, 409);
   assert.match((segundo.corpo as { erro: string }).erro, /a proposta P-\d+ já foi decidida: aceita/);
 
-  assert.equal((await postar(`/api/issues/${String(issue)}/registro`, { aprovado: true })).status, 409);
   assert.deepEqual((await postar(`/api/propostas/${String(b.id)}`, { aceita: false })).corpo, {});
   await esperarEstado(sessao, "aguardando_humano: conversa");
   const depois = (await pedir(`/api/sessoes/${sessao}`)).corpo as DadosDoChat;

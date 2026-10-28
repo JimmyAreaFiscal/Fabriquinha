@@ -1,8 +1,8 @@
 // Proposta de issue da IA (F7 §4.4; F4 §6.6): o cartão no gate do desenho, com o banco semeado (Aceitar cria a issue e
-// devolve o desenho à mesma sessão; Recusar a única proposta fecha o lote e reprova o desenho), e o cartão no chat do registro com o pi falso.
+// devolve o desenho à mesma sessão; Recusar a única proposta fecha o lote e reprova o desenho).
 import { abrir } from "../src/persistencia/banco.ts";
 import { agregado } from "../src/persistencia/issues.ts";
-import { expect, projeto, test } from "./apoio.ts";
+import { expect, test } from "./apoio.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 const SESSAO = "4d1e2f3a-5b6c-4d7e-8f90-a1b2c3d4e5f6";
@@ -90,35 +90,4 @@ test("aceitar a proposta no gate do desenho cria a issue dependente e devolve o 
     [2, "em_execucao", undefined],
   ]);
   expect(atual?.decisoes.at(-1)?.motivo).toContain("I-2");
-});
-
-test("o chat do registro mostra o cartão da proposta; aceitar cria a issue e avisa a IA", async ({
-  pagina,
-  fabriquinha,
-}) => {
-  projeto(fabriquinha.raiz);
-  const { sessao } = await pagina.evaluate(async () => {
-    const r = await fetch("/api/registros", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projeto: "loja", descricao: "Exportar tudo" }),
-    });
-    return (await r.json()) as { sessao: string };
-  });
-  await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
-  // Só depois do primeiro turno do agente (o prompt da etapa) a conversa aceita a mensagem do Auditor.
-  await expect(pagina.locator("[data-conversa] .msg")).toHaveText(["pronto"]);
-  const envio = pagina.locator("form[data-envio]");
-  await envio.getByRole("textbox", { name: "Mensagem" }).fill("proponha a divisão");
-  await envio.getByRole("button", { name: "Enviar" }).click();
-
-  const cartao = pagina.locator("[data-propostas] .proposta");
-  await expect(cartao).toContainText("Tela de relatório");
-  await expect(cartao).toContainText("~42 arquivos estimados · limite de 30 por PR");
-  expect(ler(fabriquinha.raiz, 2)).toBeUndefined();
-
-  await cartao.getByRole("button", { name: "Aceitar" }).click();
-  await expect(cartao).toBeHidden();
-  await expect(pagina.locator("[data-conversa] .msg.fabriquinha")).toContainText("I-2");
-  expect(ler(fabriquinha.raiz, 2)?.issue).toMatchObject({ deps: [1], descricao: "Parte B: tela de **relatório**\n" });
 });

@@ -262,7 +262,6 @@ test("toda mutação recusa campo desconhecido no corpo com 422", async () => {
     ["/api/registros", { projeto: "loja", descricao: "Exportar pedidos em CSV", ...extra }],
     ["/api/issues/3", { titulo: "Busca", ...extra }],
     ["/api/issues/1/deps", { dep: 2, ...extra }],
-    ["/api/issues/3/registro", { aprovado: true, ...extra }],
     ["/api/issues/1/desenho", { aprovado: true, ...extra }],
     ["/api/issues/1/pr", { aprovado: true, nota: 5, ...extra }],
     ["/api/tickets/2", { titulo: "Cache", ...extra }],
