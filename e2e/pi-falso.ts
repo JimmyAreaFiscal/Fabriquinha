@@ -11,6 +11,8 @@
 //   resultado e responde com as quatro seções; uma pergunta depois cai na resposta padrão;
 // - "Modo de trabalhar: revisar rodada|demanda": como o revisor, submete as evidências e roda `revisao decidir ... aprovar`
 //   pelo CLI `fabriquinha`; com "[sem decidir]" na demanda, sai sem decidir;
+// - "# Avaliação" (a avaliação do SDLC, I-240): grava 3 achados em `achados.jsonl`, na pasta da avaliação (o cwd), ou 20
+//   se o pedido diz "[20 achados]", e responde; uma pergunta depois cai na resposta padrão;
 // - "registre" (a mensagem inteira, ou em negrito): como o agente do registro com o "sim" do Auditor, edita a issue,
 //   submete as evidências e envia o registro à aprovação pelo CLI `fabriquinha`; o prompt da etapa autônoma também diz
 //   "registre", e não conta;
@@ -319,6 +321,18 @@ function auditar(): void {
   );
 }
 
+/** Como o agente da avaliação: um achado por linha em `achados.jsonl`, como a ferramenta `registrar_achado`. */
+function avaliar(texto: string): void {
+  const n = texto.includes("[20 achados]") ? 20 : 3;
+  const achados = Array.from({ length: n }, (_, i) => ({
+    titulo: `Achado ${String(i + 1)}: o prompt repete o desenho`,
+    descricao: `O prompt do desenvolvimento traz o desenho inteiro em cada ticket (${String(i + 1)}).`,
+    evidencia: `sessoes/I-10-s${String(i + 1)}.md: o desenho aparece de novo no começo da sessão`,
+  }));
+  appendFileSync(join(process.cwd(), "achados.jsonl"), achados.map((a) => `${JSON.stringify(a)}\n`).join(""));
+  responder(`Registrei ${String(n)} achados.`);
+}
+
 const DIALOGOS: Record<string, object> = {
   select: { title: "Qual ordem os cupons devem ter?", options: ["Maior desconto primeiro", "Validade mais próxima"] },
   confirm: { title: "Posso apagar o cache?", message: "Os relatórios vão ficar lentos por uma hora." },
@@ -351,6 +365,12 @@ async function aoPrompt(texto: string): Promise<void> {
   if (texto.includes("Modo de trabalhar: revisar ")) {
     revisar(texto);
     responder("Revisei.");
+    emitir({ type: "agent_settled" });
+    return;
+  }
+  if (texto.startsWith("# Avaliação")) {
+    avaliar(texto);
+    emitir({ type: "agent_end" });
     emitir({ type: "agent_settled" });
     return;
   }
