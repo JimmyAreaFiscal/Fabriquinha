@@ -66,7 +66,7 @@ export function promptsDaFabriquinha(raiz: string, ag: Agregado, ticket: Id): Se
 }
 
 /** Uma mensagem em Markdown: Fabriquinha, Auditor e agente na íntegra, chamadas e resultados cortados. */
-function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
+export function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
   if (m.role === "user") return [`## ${daFabriquinha.has(texto(m)) ? "Fabriquinha" : "Auditor"}\n\n${texto(m)}`];
   if (m.role === "toolResult") {
     const erro = m.isError ? " (erro)" : "";

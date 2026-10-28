@@ -148,3 +148,18 @@ export function vincularAchado(banco: DatabaseSync, id: string, achadoId: number
 export const achadoDaDemanda = (banco: DatabaseSync, demandaId: string) =>
   banco.prepare("SELECT avaliacao_id, achado_id, titulo FROM achado_avaliacao WHERE demanda_id = ?").get(demandaId) as
     { avaliacao_id: string; achado_id: number; titulo: string } | undefined;
+
+/** Os ids das sessões da demanda com execução terminada entre `de` e `ate` (AAAA-MM-DD, inclusivas). */
+export const sessoesDaDemandaNoPeriodo = (banco: DatabaseSync, demanda: string, de: string, ate: string): string[] =>
+  (
+    banco
+      .prepare(
+        `SELECT DISTINCT s.id FROM sessao s JOIN execucao_sessao e ON e.sessao_id = s.id
+         WHERE s.demanda_id = ? AND substr(e.fim, 1, 10) BETWEEN ? AND ? ORDER BY s.id`,
+      )
+      .all(demanda, de, ate) as { id: string }[]
+  ).map((l) => l.id);
+
+/** O projeto da demanda, ou `undefined` se ela não existe. */
+export const projetoDaDemanda = (banco: DatabaseSync, demanda: string): string | undefined =>
+  (banco.prepare("SELECT projeto FROM demanda WHERE id = ?").get(demanda) as { projeto: string } | undefined)?.projeto;
