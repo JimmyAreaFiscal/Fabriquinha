@@ -119,12 +119,12 @@ test("parar apaga o web.url: o abrir diz que o serviço não está rodando em ve
   assert.equal(existsSync(join(raiz, "web.url")), false);
 });
 
-test("reinício: o pi de uma auditoria da instância anterior é morto pelo pgid da pasta dela", async () => {
+test("reinício: o pi de uma avaliação da instância anterior é morto pelo pgid da pasta dela", async () => {
   const raiz = novaRaiz();
   abrir(raiz).close();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
-  const dir = join(raiz, "auditorias", "11111111-1111-4111-8111-111111111111");
+  const dir = join(raiz, "avaliacoes", "11111111-1111-4111-8111-111111111111");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "pgid"), String(pi.pid));
 

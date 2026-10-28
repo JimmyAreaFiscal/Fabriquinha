@@ -42,7 +42,7 @@ export interface ComandoDemanda {
   rodar(c: ChamadaDemanda): unknown;
 }
 
-/** O agente de `execucao`, ou `undefined` se ela não é de `execucao_sessao` (vale o agente legado); terminada é ErroDeEscopo. */
+/** O agente de `execucao`, ou `undefined` se ela não está em `execucao_sessao`; terminada é ErroDeEscopo. */
 export function resolverAgenteDemanda(banco: DatabaseSync, execucao: string): AgenteDemanda | undefined {
   const linha = banco
     .prepare(

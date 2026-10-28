@@ -172,12 +172,12 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   process.env.FABRIQUINHA_EXECUCAO = "9"; // nem herdada do serviço
   process.env.GH_TOKEN = "segredo";
   try {
-    const env = ambienteDaAuditoria("/r", `/r/auditorias/${sessao}`);
+    const env = ambienteDaAuditoria("/r", `/r/avaliacoes/${sessao}`);
     assert.equal(env.FABRIQUINHA_EXECUCAO, undefined);
     assert.equal(env.GH_TOKEN, undefined);
     assert.deepEqual(
       [env.FABRIQUINHA_ROOT, env.FABRIQUINHA_AUDITORIA, env.GH_CONFIG_DIR],
-      ["/r", "1", `/r/auditorias/${sessao}/vazio`],
+      ["/r", "1", `/r/avaliacoes/${sessao}/vazio`],
     );
   } finally {
     delete process.env.FABRIQUINHA_EXECUCAO;

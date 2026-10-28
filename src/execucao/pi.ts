@@ -206,7 +206,7 @@ export function lancarPi(
 }
 
 /**
- * O ambiente da auditoria `dir` (`<raiz>/auditorias/<sessão>`): como o da execução, mas sem `FABRIQUINHA_EXECUCAO`,
+ * O ambiente da auditoria `dir` (`<raiz>/avaliacoes/<sessão>`): como o da execução, mas sem `FABRIQUINHA_EXECUCAO`,
  * porque ela não é de nenhum ticket, e com `FABRIQUINHA_AUDITORIA`, que liga a regra do `scout` na guarda.
  */
 export function ambienteDaAuditoria(raiz: string, dir: string): NodeJS.ProcessEnv {

@@ -10,11 +10,11 @@ import { test } from "node:test";
 import { recuperarAuditorias } from "./auditoria.ts";
 
 test("recuperarAuditorias: mata o grupo de cada pgid, apaga o arquivo e ignora o que não tem pgid", async () => {
-  const outra = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-auditorias-")));
+  const outra = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacoes-")));
   try {
-    recuperarAuditorias(outra); // nem pasta de auditorias
-    const sem = join(outra, "auditorias", "sem-pgid");
-    const com = join(outra, "auditorias", "com-pgid");
+    recuperarAuditorias(outra); // nem pasta de avaliações
+    const sem = join(outra, "avaliacoes", "sem-pgid");
+    const com = join(outra, "avaliacoes", "com-pgid");
     mkdirSync(sem, { recursive: true });
     mkdirSync(com, { recursive: true });
     const sleep = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });

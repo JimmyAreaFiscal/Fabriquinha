@@ -111,17 +111,15 @@ export function enviarNaConversa(sessao: string, mensagem: string, retomar: (pro
 }
 
 /**
- * Na subida do serviço, mata o grupo de cada pi de auditoria que a instância anterior deixou (F4 §7): o `pgid` fica em
- * `auditorias/<sessão>/pgid` enquanto o pi vive.
+ * Na subida do serviço, mata o grupo de cada pi de avaliação que a instância anterior deixou (F4 §7): o `pgid` fica em
+ * `avaliacoes/<sessão>/pgid` enquanto o pi vive.
  */
 export function recuperarAuditorias(raiz: string): void {
-  for (const pasta of ["auditorias", "avaliacoes"]) {
-    const dir = join(raiz, pasta);
-    for (const nome of existsSync(dir) ? readdirSync(dir) : []) {
-      const pgid = join(dir, nome, "pgid");
-      if (!existsSync(pgid)) continue;
-      sinalNoGrupo(Number(readFileSync(pgid, "utf8")), "SIGKILL");
-      rmSync(pgid);
-    }
+  const dir = join(raiz, "avaliacoes");
+  for (const nome of existsSync(dir) ? readdirSync(dir) : []) {
+    const pgid = join(dir, nome, "pgid");
+    if (!existsSync(pgid)) continue;
+    sinalNoGrupo(Number(readFileSync(pgid, "utf8")), "SIGKILL");
+    rmSync(pgid);
   }
 }
