@@ -77,7 +77,11 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
         conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
       );
     }
-    return (deps.iniciarExecucao ?? iniciarExecucaoDemanda)(banco, t, { limiteMin }).fim;
+    // A instrução do ticket aberto vem da devolução técnica (D05) ou da reabertura do Auditor: vai ao prompt.
+    const retomada = t.instrucao
+      ? { tipo: t.devolucoes > 0 ? ("devolucao" as const) : ("reabertura" as const), motivo: t.instrucao }
+      : undefined;
+    return (deps.iniciarExecucao ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
   }
   if (t.etapa === "revisar_rodada") {
     return conduzirRevisaoRodada(banco, rodadaDe(t), { limiteMin });

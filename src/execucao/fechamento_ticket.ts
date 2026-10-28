@@ -98,7 +98,9 @@ function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificac
         ag,
       ),
     () => {
-      for (const { v, anexos } of guardadas) gravarAnexos(banco, { ...ref, tipo: v.tipo }, anexos);
+      for (const { v, anexos } of guardadas)
+        // Só demanda e ticket: o `ref` pode ser o ticket inteiro (com `rodada_id`), que não é a chave da evidência.
+        gravarAnexos(banco, { demanda_id: ref.demanda_id, ticket_id: ref.ticket_id, tipo: v.tipo }, anexos);
     },
   );
 }
