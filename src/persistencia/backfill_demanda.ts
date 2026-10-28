@@ -235,12 +235,14 @@ export function backfillDemandas(banco: DatabaseSync): Relatorio {
       }
     }
     // O alterador pode estar em outra issue: o retrabalho só entra depois de todos os tickets.
+    // Alterador em issue em andamento (sem demanda) fica no legado para a migração em voo, como as dependências pendentes.
     const retrabalho = banco.prepare(
       `INSERT INTO retrabalho_demanda (commit_alterador, demanda_id, ticket_id, autor, ticket_origem_id, linhas, alterador_demanda_id)
        SELECT r.commit_alterador, 'I-' || o.issue, r.ticket, r.autor, r.ticket_origem, r.linhas,
               CASE WHEN r.ticket IS NOT NULL THEN 'I-' || a.issue END
        FROM retrabalho r JOIN ticket o ON o.id = r.ticket_origem LEFT JOIN ticket a ON a.id = r.ticket
-       WHERE o.issue = ? ORDER BY r.rowid`,
+       WHERE o.issue = ? AND (a.id IS NULL OR EXISTS (SELECT 1 FROM demanda d WHERE d.id = 'I-' || a.issue))
+       ORDER BY r.rowid`,
     );
     for (const n of novas) citando(`I-${String(n)}`, () => retrabalho.run(n));
 

@@ -388,11 +388,6 @@ for (const [nome, sql, erro] of [
       "'; DELETE FROM retrabalho WHERE ticket = 6; DELETE FROM commit_ticket WHERE ticket = 6; UPDATE ticket SET etapa = 'revisao' WHERE id = 6",
     /I-2 não tem ticket de desenvolvimento/,
   ],
-  [
-    "retrabalho de alterador em andamento",
-    "INSERT INTO retrabalho VALUES ('" + "7".repeat(40) + "', 10, NULL, 3, 1)",
-    /I-1 não pôde ser migrada/,
-  ],
 ] as const) {
   test(`CA-11: ${nome} recusa citando a issue e desfaz tudo`, () => {
     const b = montarFixture();
@@ -406,3 +401,13 @@ for (const [nome, sql, erro] of [
     assert.equal(b.isTransaction, false);
   });
 }
+
+test("retrabalho com alterador em issue em andamento fica no legado, sem recusar a migração", () => {
+  const b = montarFixture();
+  b.exec("INSERT INTO retrabalho VALUES ('" + "7".repeat(40) + "', 10, NULL, 3, 1)");
+  const sem = (SELECT_N: string) => (b.prepare(SELECT_N).get() as { n: number }).n;
+  const n = "SELECT COUNT(*) AS n FROM retrabalho_demanda WHERE commit_alterador = '" + "7".repeat(40) + "'";
+  backfillDemandas(b);
+  assert.equal(sem(n), 0);
+  assert.equal(sem("SELECT COUNT(*) AS n FROM retrabalho WHERE commit_alterador = '" + "7".repeat(40) + "'"), 1);
+});
