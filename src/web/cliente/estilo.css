@@ -3744,10 +3744,15 @@ body:has(.pagina-chat) {
   font-size: var(--fs-sm);
 }
 
+/* Os 7 cards com o Custo em duas colunas: 2 + 1 + 1 e 1 + 1 + 1 + 1 nas 4 colunas, e 2, 1 + 1, 1 + 1, 1 + 1 nas 2 até
+   1100 px; nenhum fica sozinho numa linha, e cada legenda cabe inteira ao lado do valor. No celular, um por linha. */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s-3);
+}
+.kpis .kpi:first-child {
+  grid-column: span 2;
 }
 .kpis .kpi {
   all: unset;
@@ -4061,6 +4066,14 @@ svg.barras :not(.hit) {
   .regua {
     overflow-x: auto;
     grid-auto-columns: 56px;
+  }
+}
+@media (max-width: 700px) {
+  .kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .kpis .kpi:first-child {
+    grid-column: auto;
   }
 }
 
