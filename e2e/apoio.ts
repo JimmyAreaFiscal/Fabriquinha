@@ -31,6 +31,12 @@ export interface Fabriquinha {
   base: string;
   /** O link de entrada com o token, lido de `web.url`. */
   link: string;
+  /** O processo do serviço, para o teste mandar o SIGTERM e ler o código de saída. */
+  servico: ChildProcess;
+  /** Tudo o que o serviço escreveu no stderr até agora. */
+  stderr(): string;
+  /** Sobe outro serviço na mesma raiz (o primeiro já parado); devolve o endereço e o link dele. */
+  reiniciar(): Promise<{ base: string; link: string }>;
 }
 
 /** Para o serviço com SIGTERM; se não sair em 5 s, SIGKILL. */
@@ -72,40 +78,61 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
       `#!/bin/sh\nif [ "$1 $2" = "pr view" ]; then cat "${join(raiz, "gh-pr.json")}"; fi\nexit 0\n`,
     );
     chmodSync(join(bin, "gh"), 0o755);
-    let log = "";
-    const servico = spawn(
-      process.execPath,
-      ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "servidor.ts"), raiz],
-      {
-        env: {
-          ...process.env,
-          // Sem SonarQube, a coleta depois do pi do desenvolvimento falha o ticket; uma reprovação o devolveria ao agente.
-          SONAR_HOST_URL: "",
-          FABRIQUINHA_PORTA: "0",
-          FABRIQUINHA_PI: pi,
-          PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
-          GIT_CONFIG_GLOBAL: gitconfig,
-          GIT_CONFIG_NOSYSTEM: "1",
-          PATH: `${bin}:${process.env.PATH ?? ""}`,
+    /** Sobe o serviço na raiz e espera o `web.url`; `stderr()` junta o que ele escreveu até agora. */
+    async function subir(): Promise<{ servico: ChildProcess; link: string; stderr: () => string }> {
+      let log = "";
+      const servico = spawn(
+        process.execPath,
+        ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../src/cli/fabriquinha.ts"), "servidor"],
+        {
+          env: {
+            ...process.env,
+            // O serviço sobe como o systemd o sobe, sem a execução de um agente herdada.
+            FABRIQUINHA_EXECUCAO: "",
+            // Sem SonarQube, a coleta depois do pi do desenvolvimento falha o ticket; uma reprovação o devolveria ao agente.
+            SONAR_HOST_URL: "",
+            FABRIQUINHA_ROOT: raiz,
+            FABRIQUINHA_PORTA: "0",
+            FABRIQUINHA_PI: pi,
+            PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
+            GIT_CONFIG_GLOBAL: gitconfig,
+            GIT_CONFIG_NOSYSTEM: "1",
+            PATH: `${bin}:${process.env.PATH ?? ""}`,
+          },
+          stdio: ["ignore", "inherit", "pipe"],
         },
-        stdio: ["ignore", "inherit", "pipe"],
-      },
-    );
-    servico.stderr.on("data", (parte: Buffer) => {
-      log += parte.toString();
-    });
-    try {
+      );
+      servico.stderr.on("data", (parte: Buffer) => {
+        log += parte.toString();
+      });
+      atuais.push({ servico, stderr: () => log });
       // O `web.url` nasce inteiro (escrito ao lado e renomeado): existir basta.
       const arquivo = join(raiz, "web.url");
       for (let i = 0; !existsSync(arquivo); i++) {
         if (servico.exitCode !== null || i > 200) throw new Error(`a Fabriquinha não subiu:\n${log}`);
         await dormir(50);
       }
-      const link = readFileSync(arquivo, "utf8");
-      await use({ raiz, base: new URL(link).origin, link });
+      return { servico, link: readFileSync(arquivo, "utf8"), stderr: () => log };
+    }
+    const atuais: { servico: ChildProcess; stderr: () => string }[] = [];
+    try {
+      const inicial = await subir();
+      const link = inicial.link;
+      await use({
+        raiz,
+        base: new URL(link).origin,
+        link,
+        servico: inicial.servico,
+        stderr: inicial.stderr,
+        reiniciar: async () => {
+          const nova = await subir();
+          return { base: new URL(nova.link).origin, link: nova.link };
+        },
+      });
     } finally {
-      await parar(servico);
+      for (const { servico } of atuais) await parar(servico);
       matarPi(raiz);
+      const log = atuais.map((a) => a.stderr()).join("");
       if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
       rmSync(raiz, { recursive: true, force: true });
     }

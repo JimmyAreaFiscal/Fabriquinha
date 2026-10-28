@@ -13,4 +13,5 @@ process.exitCode = await principal(process.argv.slice(2), {
       process.once("SIGINT", parou);
       process.once("SIGTERM", parou);
     }),
+  sair: () => process.exit(0),
 });
