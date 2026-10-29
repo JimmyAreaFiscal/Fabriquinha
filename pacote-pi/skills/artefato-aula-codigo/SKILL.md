@@ -11,15 +11,15 @@ O Auditor estuda a aula antes de aprovar o PR: ela ensina a lógica por trás de
 Quem termina a aula entende por que o código é como é, sem ter acompanhado o desenvolvimento.
 
 Você escreve só a explicação.
-A Fabriquinha confere que cada trecho é código alterado pela issue, lê as linhas do git e gera o HTML com o código ao lado da explicação.
+A Fabriquinha confere que cada trecho é código alterado pela rodada, lê as linhas do git e gera o HTML com o código ao lado da explicação.
 
 ## Como produzir
 
-1. Leia o desenho aprovado, o `arquivos_alterados` da última revisão e o diff da issue.
+1. Leia o plano, a descrição da demanda e o diff da branch da rodada contra a branch da demanda (`fabriquinha/I-<n>`): é o diff que a última revisão da rodada gravou em `arquivos_alterados`.
 2. Escolha os trechos que contam a mudança: o ponto de entrada, a regra central, os casos de erro e o que liga as partes.
    Deixe de fora o que se entende sozinho (import, renomeação, ajuste de teste óbvio).
 3. Ordene os trechos como uma aula: do ponto de entrada até o detalhe, cada um apoiado no anterior.
-4. Para cada trecho, confira as linhas no arquivo atual: o trecho precisa tocar pelo menos uma linha alterada pela issue e ter até 60 linhas.
+4. Para cada trecho, confira as linhas no arquivo atual: o trecho precisa tocar pelo menos uma linha alterada pela rodada e ter até 60 linhas.
 5. Escreva a explicação de cada trecho e submeta só com `--dados`; o erro da Fabriquinha diz o que corrigir.
 
 ## Estrutura
@@ -30,7 +30,7 @@ A Fabriquinha confere que cada trecho é código alterado pela issue, lê as lin
 - `inicio` e `fim`: as linhas do trecho no arquivo atual, inclusive;
 - `oQueFaz`: o que o trecho faz, em uma ou duas frases;
 - `porQue`: a lógica por trás dele, o centro da aula: por que este caminho, que caso ele trata, o que quebraria sem ele;
-- `decisaoDoDesenho`: a decisão do desenho aprovado que o trecho cumpre, com as palavras do desenho;
+- `decisaoDoDesenho`: a decisão que o trecho cumpre, com as palavras de onde ela foi tomada: a descrição da demanda, o plano ou o ticket;
 - `alternativaDescartada`: opcional; outra forma que existia e por que não foi a escolhida.
 
 Escreva para quem conhece o projeto, mas não viu a conversa nem o diff.
@@ -43,5 +43,5 @@ Escreva para quem conhece o projeto, mas não viu a conversa nem o diff.
 - [ ] A ordem dos trechos conta a mudança do começo ao fim, sem saltos.
 - [ ] Todo arquivo central da mudança tem pelo menos um trecho.
 - [ ] Cada `porQue` explica uma razão, e não repete o `oQueFaz`.
-- [ ] Cada `decisaoDoDesenho` cita uma decisão que está no desenho aprovado.
+- [ ] Cada `decisaoDoDesenho` cita uma decisão que está na descrição da demanda, no plano ou no ticket.
 - [ ] Nenhum trecho passa de 60 linhas; um trecho longo vira dois.

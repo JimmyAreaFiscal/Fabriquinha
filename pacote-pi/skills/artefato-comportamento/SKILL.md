@@ -7,19 +7,17 @@ description: Use ao produzir a evidência `comportamento` da Fabriquinha.
 
 ## Para que serve
 
-O Auditor lê o comportamento para aprovar o registro: ele confere que o problema ou a lacuna é real e é o que ele relatou.
-O agente do desenho lê a `descricao` como ponto de partida, sem a conversa do registro.
-O agente da revisão reproduz o mesmo caminho para comparar o antes e o depois.
+O Auditor lê o comportamento na página da demanda para aprová-la: ele confere que o problema ou a lacuna é real e é o que foi relatado.
 
 O artefato é uma **prova**: alguém que nunca viu a conversa segue os passos e vê o mesmo resultado.
 
 ## Como produzir
 
-1. Descubra na worktree onde o comportamento acontece: a tela, o comando, o endpoint ou a função.
+1. Descubra no repositório onde o comportamento acontece: a tela, o comando, o endpoint ou a função.
 2. Reproduza o comportamento atual de verdade, rodando o projeto ou o trecho de código.
    Numa funcionalidade nova, reproduza o que acontece hoje no lugar onde ela vai entrar.
 3. Anote cada ação que você fez, na ordem, com os valores exatos que usou.
-4. Grave a prova em `$FABRIQUINHA_SAIDA`:
+4. Grave a prova na pasta onde você roda o `fabriquinha`, que é a única origem aceita para os anexos:
    - comportamento visível (tela, saída de terminal): um vídeo curto do primeiro passo até o resultado;
    - comportamento no código: um arquivo de texto com o trecho que o causa, com o caminho e as linhas de origem, e a saída que ele produz (log, erro, resultado de teste).
 5. Escreva a `descricao` e os passos em `comoReproduzir`, e confira o formato com o schema do tipo antes de submeter.
@@ -29,7 +27,7 @@ O artefato é uma **prova**: alguém que nunca viu a conversa segue os passos e 
 `descricao`:
 
 - Uma frase com o comportamento atual, como um fato observado: "Ao salvar um projeto sem branch base, a tela mostra erro 500."
-- Numa issue de problema, o que se esperava no lugar; numa funcionalidade, o que falta hoje.
+- Numa demanda de problema, o que se esperava no lugar; numa funcionalidade, o que falta hoje.
 - Onde acontece: tela, comando ou arquivo e função.
 - Condições que mudam o resultado: dados, configuração, frequência ("sempre", "só com dois projetos").
 

@@ -7,14 +7,14 @@ description: Use ao produzir a evidência `criterios_aceite` da Fabriquinha.
 
 ## Para que serve
 
-O Auditor lê os critérios para aprovar o registro: eles dizem o que "pronto" significa para esta demanda.
-Depois, cada etapa trabalha só com eles, sem a conversa do registro: o desenho propõe a solução que os atende, o desenvolvimento os implementa e a revisão verifica cada um e grava a prova.
+O Auditor lê os critérios para aprovar a demanda: eles dizem o que "pronto" significa para ela.
+Depois, os agentes da Fabriquinha recebem só a descrição e os critérios, sem a conversa do registro: o planejamento distribui os critérios entre as rodadas, a revisão de cada rodada comprova os dela e a revisão da demanda comprova todos.
 
 Um critério é um **contrato verificável**: quem nunca viu a conversa executa o critério e chega a "atendido" ou "não atendido", sem interpretar.
 
 ## Como produzir
 
-1. Liste cada resultado que o Auditor espera, a partir da conversa e do comportamento registrado.
+1. Liste cada resultado que o usuário espera, a partir da conversa e do comportamento registrado.
 2. Para cada resultado, escreva o caminho feliz e pelo menos um caminho de erro: entrada inválida, falta de permissão, recurso ausente, falha externa.
 3. Escreva cada critério no formato dado/quando/então, um comportamento observável por critério.
 4. Leia cada critério como se fosse o agente da revisão: defina como você provaria com um print ou um vídeo.
@@ -33,7 +33,7 @@ A Fabriquinha monta a frase "dado …, quando …, então …", então escreva c
 
 `quando`: uma única ação, de quem age.
 
-- Bom: "o Auditor clica em Aprovar registro sem motivo".
+- Bom: "o Auditor clica em Recusar sem motivo".
 - Fraco: "o usuário usa a tela".
 
 `entao`: o resultado observável e conferível: texto exato na tela, valor gravado, código de saída, arquivo criado.
@@ -59,6 +59,6 @@ Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arq
 - [ ] Cada critério tem um só `quando` e um só resultado; o que tiver "e também" vira dois critérios.
 - [ ] Todo resultado esperado tem pelo menos um caminho de erro coberto.
 - [ ] Os critérios descrevem o comportamento visto de fora; a solução interna fica para o desenho.
-- [ ] Os termos são os do produto e do código (nomes de tela, comando, campo), os mesmos da conversa com o Auditor.
-- [ ] O Auditor reconhece nos critérios tudo o que pediu, e só o que pediu.
+- [ ] Os termos são os do produto e do código (nomes de tela, comando, campo), os mesmos da conversa com o usuário.
+- [ ] O usuário reconhece nos critérios tudo o que pediu, e só o que pediu.
 - [ ] Se a mudança passa de 30 arquivos, ela está dividida em demandas separadas, ligadas por `--dep`; se não passa, é uma só.

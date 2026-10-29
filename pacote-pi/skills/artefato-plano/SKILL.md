@@ -8,13 +8,14 @@ description: Use ao produzir a evidência `plano` da Fabriquinha.
 ## Para que serve
 
 O plano divide a demanda aprovada em rodadas (cada uma vira um PR) e tickets de implementação.
-A Fabriquinha o valida na entrada e depois o cruza com a demanda congelada; quem executa as rodadas só enxerga este plano e os critérios.
+A Fabriquinha o valida na entrada e o cruza com a demanda congelada; o Auditor o aprova ou reprova, e quem executa as rodadas só enxerga a descrição da demanda, os critérios e o seu ticket do plano.
 
 ## Como produzir
 
 1. Leia os critérios de aceite da demanda e agrupe os que se verificam juntos: cada grupo é uma rodada.
 2. Cada rodada cita em `criterios` só `CA-n` que a demanda tem, e entrega algo que roda e se prova sozinho.
 3. Quebre cada rodada em tickets pequenos, com os `caminhos` (arquivos ou globs) que cada um toca; todo ticket de implementação fica numa rodada.
+   Arquivo alterado fora dos `caminhos` dos tickets da rodada aparece como não previsto na revisão dela.
 4. Declare `depende` só onde a ordem importa: rodada depende de rodada, ticket depende de ticket da mesma rodada. Sem ciclo.
 5. Use `e2e: true` na rodada que precisa de teste ponta a ponta.
 
