@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "pacote-pi", "fitness", "integracao", "e2e", "playwright.config.ts"]
+  "include": ["src", "pacote-pi", "fitness", "integracao", "e2e", "estresse", "playwright.config.ts"]
 }
