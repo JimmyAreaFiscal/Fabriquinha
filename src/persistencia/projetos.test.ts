@@ -103,6 +103,30 @@ test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
   banco.close();
 });
 
+test("a preparação do cadastro é gravada em comando_preparacao_projeto, a tabela que o fluxo da demanda lê", () => {
+  const banco = novoBanco();
+  const preparacaoGravada = () =>
+    banco
+      .prepare("SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = 'fabriquinha' ORDER BY ordem")
+      .all()
+      .map((l) => ({ ...l }));
+  registrarProjeto(banco, exemplo);
+  assert.deepEqual(preparacaoGravada(), [{ ordem: 1, comando: "npm ci" }]);
+  editarProjeto(banco, { ...exemplo, preparacao: ["uv venv .venv", "uv sync"] });
+  assert.deepEqual(preparacaoGravada(), [
+    { ordem: 1, comando: "uv venv .venv" },
+    { ordem: 2, comando: "uv sync" },
+  ]);
+  assert.deepEqual(projeto(banco, "fabriquinha")?.preparacao, ["uv venv .venv", "uv sync"]);
+  // A recusa reverte a transação inteira: a preparação fica a de antes.
+  recusa(
+    () => registrarProjeto(banco, { ...exemplo, repo: "/repos/outro", preparacao: ["rm -rf"] }),
+    "já existe o projeto fabriquinha (edite-o na Configuração)",
+  );
+  assert.deepEqual(projeto(banco, "fabriquinha")?.preparacao, ["uv venv .venv", "uv sync"]);
+  banco.close();
+});
+
 test("editarProjeto recusa projeto que não existe, sem criá-lo", () => {
   const banco = novoBanco();
   recusa(() => editarProjeto(banco, exemplo), "o projeto fabriquinha não existe (cadastre-o na Configuração)");
@@ -154,7 +178,6 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
     [{ nome: "''" }, /CHECK/],
     [{ nome: `'${"a".repeat(65)}'` }, /CHECK/],
     [{ hospedagem: "'gitlab'" }, /CHECK/],
-    [{ preparacao: "'nao json'" }, /CHECK/],
     [{ branch_base: "NULL" }, /NOT NULL/],
     [{ sonar_project_key: "NULL" }, /NOT NULL/],
   ];

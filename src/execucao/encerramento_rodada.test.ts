@@ -10,7 +10,7 @@ import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import { marcaDoPRRodada } from "../evidencias/pr_rodada.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
-import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
+import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
@@ -111,10 +111,10 @@ async function cenario({
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
+  substituirPreparacaoDoProjeto(banco, "loja", ["true"]);
   const ticket = (ticket_id: number, etapa: string, status: string, extra: object = {}) => ({
     demanda_id: DEMANDA,
     ticket_id,

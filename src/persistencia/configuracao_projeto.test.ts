@@ -12,7 +12,9 @@ import {
   configuracaoProjeto,
   etapasDoProjeto,
   gravarConfiguracaoProjeto,
+  preparacaoDoProjeto,
   substituirEtapasDoProjeto,
+  substituirPreparacaoDoProjeto,
 } from "./configuracao_projeto.ts";
 
 const TABELAS = [
@@ -32,8 +34,8 @@ function comBanco(corpo: (banco: DatabaseSync, raiz: string) => void): void {
     for (const nome of ["a", "b"]) {
       banco
         .prepare(
-          `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, sonar_project_key)
-           VALUES (?, ?, 'main', 'github', '["npm i"]', 'chave')`,
+          `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+           VALUES (?, ?, 'main', 'github', 'chave')`,
         )
         .run(nome, `/repo/${nome}`);
     }
@@ -108,9 +110,13 @@ const canonica = {
   globs: [completa.globs[2], completa.globs[1], completa.globs[0]],
 };
 
-/** A configuração `completa` do projeto `a`: as etapas, que são do cadastro, e o resto, que é da configuração SDLC. */
+/**
+ * A configuração `completa` do projeto `a`: as etapas e a preparação, que são do cadastro, e o resto, que é da
+ * configuração SDLC. A preparação vai direto na tabela, fora da ordem, para a leitura ordená-la.
+ */
 function gravarCompleta(banco: DatabaseSync): Projeto {
   substituirEtapasDoProjeto(banco, "a", completa.etapas);
+  banco.exec("INSERT INTO comando_preparacao_projeto VALUES ('a', 10, 'segundo'), ('a', 2, 'primeiro')");
   return gravarConfiguracaoProjeto(banco, completa);
 }
 
@@ -121,12 +127,37 @@ test("ida e volta completa, com listas na ordem canônica", () => {
   });
 });
 
-test("a gravação da configuração ignora as etapas da entrada e mantém as gravadas pelo cadastro", () => {
+test("a gravação da configuração ignora as etapas e a preparação da entrada e mantém as gravadas pelo cadastro", () => {
   comBanco((banco) => {
-    assert.deepEqual(gravarConfiguracaoProjeto(banco, completa).etapas, []);
+    const ignoradas = gravarConfiguracaoProjeto(banco, completa);
+    assert.deepEqual(ignoradas.etapas, []);
+    assert.deepEqual(ignoradas.preparacao, []);
     substituirEtapasDoProjeto(banco, "a", completa.etapas);
-    assert.deepEqual(gravarConfiguracaoProjeto(banco, { ...minima(), etapas: [] }).etapas, canonica.etapas);
+    substituirPreparacaoDoProjeto(banco, "a", ["uv sync"]);
+    const mantidas = gravarConfiguracaoProjeto(banco, { ...minima(), etapas: [], preparacao: [] });
+    assert.deepEqual(mantidas.etapas, canonica.etapas);
+    assert.deepEqual(mantidas.preparacao, [{ ordem: 1, comando: "uv sync" }]);
     assert.deepEqual(configuracaoProjeto(banco, "a")?.etapas, canonica.etapas);
+  });
+});
+
+test("preparação: lida sem a configuração SDLC, substituída sozinha na ordem 1..n; a inválida não altera nada", () => {
+  comBanco((banco) => {
+    assert.deepEqual(preparacaoDoProjeto(banco, "b"), []);
+    substituirPreparacaoDoProjeto(banco, "b", ["uv venv .venv", "uv sync"]);
+    assert.equal(configuracaoProjeto(banco, "b"), undefined);
+    assert.deepEqual(preparacaoDoProjeto(banco, "b"), ["uv venv .venv", "uv sync"]);
+
+    gravarCompleta(banco);
+    substituirPreparacaoDoProjeto(banco, "a", ["npm ci"]);
+    assert.deepEqual(configuracaoProjeto(banco, "a"), { ...canonica, preparacao: [{ ordem: 1, comando: "npm ci" }] });
+    const antes = dump(banco);
+    assert.throws(() => {
+      substituirPreparacaoDoProjeto(banco, "a", ["npm ci", ""]);
+    }, /CHECK/);
+    assert.deepEqual(dump(banco), antes);
+    assert.equal(banco.isTransaction, false);
+    assert.deepEqual(preparacaoDoProjeto(banco, "b"), ["uv venv .venv", "uv sync"]);
   });
 });
 
@@ -191,7 +222,7 @@ test("mesmo nome de linguagem em caminhos distintos e leitura após reabrir", ()
   });
 });
 
-test("substituição remove cursor e listas opcionais e mantém as etapas", () => {
+test("substituição remove cursor e listas opcionais e mantém as etapas e a preparação", () => {
   comBanco((banco) => {
     gravarCompleta(banco);
     const nova = {
@@ -206,7 +237,7 @@ test("substituição remove cursor e listas opcionais e mantém as etapas", () =
     assert.deepEqual(configuracaoProjeto(banco, "a"), lida);
     assert.equal(lida.raiz_git, "/novo");
     assert.deepEqual(lida.etapas, canonica.etapas);
-    assert.equal(banco.prepare("SELECT count(*) AS n FROM comando_preparacao_projeto").get()?.n, 0);
+    assert.deepEqual(lida.preparacao, canonica.preparacao);
     assert.equal(banco.prepare("SELECT count(*) AS n FROM glob_e2e").get()?.n, 0);
   });
 });
@@ -267,8 +298,6 @@ test("projetos são isolados e campos comuns são compartilhados com o cadastro"
     assert.deepEqual(configuracaoProjeto(banco, "a"), canonica);
     assert.equal(configuracaoProjeto(banco, "b")?.fitness.length, 1);
 
-    // A preparação do cadastro fica como estava: a da configuração SDLC mora na tabela dela.
-    assert.equal(banco.prepare("SELECT preparacao FROM projeto WHERE nome = 'a'").get()?.preparacao, '["npm i"]');
     banco.exec("UPDATE projeto SET branch_base = 'outra' WHERE nome = 'a'");
     assert.equal(configuracaoProjeto(banco, "a")?.branch_base, "outra");
     gravarConfiguracaoProjeto(banco, { ...completa, branch_base: "nova" });
@@ -301,7 +330,11 @@ test("leitura é um snapshot: substituição commitada entre os SELECTs só apar
       assert.deepEqual(configuracaoProjeto(leitor, "a"), canonica);
       assert.ok(escreveu);
       assert.equal(leitor.isTransaction, false);
-      assert.deepEqual(configuracaoProjeto(leitor, "a"), { ...Projeto.parse(nova), etapas: canonica.etapas });
+      assert.deepEqual(configuracaoProjeto(leitor, "a"), {
+        ...Projeto.parse(nova),
+        etapas: canonica.etapas,
+        preparacao: canonica.preparacao,
+      });
       assert.equal(leitor.isTransaction, false);
     } finally {
       leitor.prepare = prepare;
@@ -319,7 +352,7 @@ test("raiz_git relativa é recusada sem mutação e as leituras legadas seguem v
       hospedagem: "github",
       sonar: { projectKey: "loja" },
     };
-    banco.exec("DELETE FROM projeto"); // as fixtures a/b têm JSON legado inválido; aqui só dados válidos
+    banco.exec("DELETE FROM projeto");
     registrarProjeto(banco, legado);
     registrarProjeto(banco, { ...legado, nome: "outro", repo: "/repos/outro" });
     const sdlc = { ...minima("loja"), raiz_git: "/repos/loja" };

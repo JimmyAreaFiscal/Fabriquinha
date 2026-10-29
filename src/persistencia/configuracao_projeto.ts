@@ -14,6 +14,8 @@ const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banc
 /** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
 const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
 
+const SELECIONAR_PREPARACAO = "SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem";
+
 const SELECIONAR_ETAPAS =
   "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa";
 
@@ -34,11 +36,7 @@ function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
   return Projeto.parse({
     ...semNulos(base),
     etapas: listar(banco, SELECIONAR_ETAPAS, nome).map(semNulos),
-    preparacao: listar(
-      banco,
-      "SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem ASC",
-      nome,
-    ),
+    preparacao: listar(banco, SELECIONAR_PREPARACAO, nome),
     fitness: listar(
       banco,
       "SELECT nome, comando, descricao FROM fitness_function_projeto WHERE projeto = ? ORDER BY nome",
@@ -79,8 +77,9 @@ function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: str
 
 /**
  * Valida e substitui a configuração do projeto existente numa transação só; devolve a forma canônica relida antes do
- * COMMIT. Qualquer falha reverte escalares e listas. As etapas ficam como estão: quem as edita é o cadastro do projeto
- * na Configuração (`substituirEtapasDoProjeto`), e as de `entrada` são ignoradas.
+ * COMMIT. Qualquer falha reverte escalares e listas. As etapas e a preparação ficam como estão: quem as edita é o
+ * cadastro do projeto na Configuração (`substituirEtapasDoProjeto` e `substituirPreparacaoDoProjeto`), e as de `entrada`
+ * são ignoradas.
  */
 export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
   const p = Projeto.parse(entrada);
@@ -95,15 +94,8 @@ export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown)
       )
       .run(p.raiz_git, p.branch_base, p.hospedagem, p.chave_sonarqube, p.cursor_commit_humano ?? null, p.nome);
     if (changes === 0) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre o projeto antes");
-    for (const t of [
-      "glob_e2e",
-      "configuracao_e2e",
-      "linguagem_projeto",
-      "fitness_function_projeto",
-      "comando_preparacao_projeto",
-    ])
+    for (const t of ["glob_e2e", "configuracao_e2e", "linguagem_projeto", "fitness_function_projeto"])
       banco.prepare(`DELETE FROM ${t} WHERE projeto = ?`).run(p.nome);
-    inserir(banco, "comando_preparacao_projeto", p.nome, ["ordem", "comando"], p.preparacao);
     inserir(banco, "fitness_function_projeto", p.nome, ["nome", "comando", "descricao"], p.fitness);
     inserir(banco, "linguagem_projeto", p.nome, ["caminho", "linguagem", "comando_teste"], p.linguagens);
     inserir(
@@ -128,5 +120,18 @@ export function substituirEtapasDoProjeto(banco: DatabaseSync, nome: string, eta
   escrever(banco, () => {
     banco.prepare("DELETE FROM configuracao_etapa_projeto WHERE projeto = ?").run(nome);
     inserir(banco, "configuracao_etapa_projeto", nome, ["etapa", "modelo_provedor", "modelo_nome", "effort"], validas);
+  });
+}
+
+/** Os comandos de preparação da worktree do projeto, na ordem, mesmo sem a configuração SDLC (sem linguagens) gravada. */
+export const preparacaoDoProjeto = (banco: DatabaseSync, nome: string): string[] =>
+  listar(banco, SELECIONAR_PREPARACAO, nome).map((l) => String(l.comando));
+
+/** Substitui só a preparação do projeto, numa transação, com a ordem 1..n dos `comandos`. */
+export function substituirPreparacaoDoProjeto(banco: DatabaseSync, nome: string, comandos: string[]): void {
+  escrever(banco, () => {
+    banco.prepare("DELETE FROM comando_preparacao_projeto WHERE projeto = ?").run(nome);
+    const comandosNumerados = comandos.map((comando, indice) => ({ ordem: indice + 1, comando }));
+    inserir(banco, "comando_preparacao_projeto", nome, ["ordem", "comando"], comandosNumerados);
   });
 }

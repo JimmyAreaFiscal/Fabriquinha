@@ -9,6 +9,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
 import { carregarDemanda } from "../src/persistencia/demandas.ts";
 import { abrir } from "../src/persistencia/banco.ts";
+import { substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { sinalNoGrupo } from "../src/processo.ts";
 import { expect, projeto, test } from "./apoio.ts";
@@ -154,7 +155,7 @@ for (const [nome, preparacao, sinalNosFilhos] of [
       projeto(fabriquinha.raiz);
       semearTicketAberto(fabriquinha.raiz);
       const banco = abrir(fabriquinha.raiz);
-      banco.prepare("UPDATE comando_preparacao_projeto SET comando = ? WHERE projeto = 'loja'").run(preparacao);
+      substituirPreparacaoDoProjeto(banco, "loja", [preparacao]);
       banco.close();
       await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
       await pagina.getByRole("button", { name: "Executar agora" }).click();

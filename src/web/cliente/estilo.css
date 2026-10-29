@@ -2483,9 +2483,6 @@ svg.barras :not(.hit) {
 .sdlc-projeto {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.sdlc-preparacao {
-  grid-template-columns: 120px minmax(0, 1fr) auto;
-}
 .sdlc-fitness {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.5fr) auto;
 }

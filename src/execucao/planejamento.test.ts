@@ -8,7 +8,7 @@ import { after, test } from "node:test";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
+import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
@@ -114,10 +114,10 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: preparacao(c.raiz) }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
+  substituirPreparacaoDoProjeto(banco, "loja", [preparacao(c.raiz)]);
   const base = {
     rodadas: [],
     dependencias_rodada: [],

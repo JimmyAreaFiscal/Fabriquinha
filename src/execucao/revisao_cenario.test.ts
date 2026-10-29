@@ -6,7 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
+import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { criarDemanda } from "../persistencia/demandas.ts";
 import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
@@ -83,10 +83,10 @@ export async function cenarioRevisao({ integral = false, falha = false, reprova 
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
+  substituirPreparacaoDoProjeto(banco, "loja", ["true"]);
   const ticket = (ticket_id: number, etapa: string, extra: object = {}) => ({
     demanda_id: "I-1",
     ticket_id,
