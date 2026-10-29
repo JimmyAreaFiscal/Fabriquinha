@@ -14,11 +14,11 @@ Cada explicação é uma **leitura do log**: diz o que a fitness mediu nesta rod
 
 ## Como produzir
 
-1. Leia a evidência `matriz_fitness` que a Fabriquinha gravou neste ticket, rodada na worktree da rodada, com o `log` de cada linha.
+1. Leia a matriz na seção "Matriz de fitness functions" do seu prompt: a Fabriquinha rodou cada fitness na worktree da rodada antes da sua execução, e a seção dá o caminho do arquivo do log de cada linha.
 2. Para cada linha, entenda pelo `comando`, pela `descricao` e pelo código da fitness o que ela confere.
 3. Leia o log até achar o que decide o resultado:
    - passou: o que foi conferido e em quantos itens (arquivos, módulos, regras);
-   - falhou: a primeira violação, com o arquivo e a regra, e se o arquivo está entre os alterados da rodada;
+   - falhou: a primeira violação, com o arquivo e a regra, e se o arquivo está entre os alterados da rodada, na seção "Arquivos alterados" do seu prompt;
    - estourou o tempo ou terminou sem código de saída: onde o log parou.
 4. Ligue o resultado à rodada: que parte da mudança a fitness cobriu, ou por que ela não toca a mudança.
 5. Escreva uma explicação por linha da matriz, com o `nome` exato da linha; se os nomes não baterem, o erro da submissão lista as linhas da matriz.

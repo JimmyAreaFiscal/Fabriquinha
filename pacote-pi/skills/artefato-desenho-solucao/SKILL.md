@@ -8,8 +8,9 @@ description: Use ao produzir a evidência `desenho_solucao` da Fabriquinha.
 ## Para que serve
 
 O Auditor lê o HTML e os `dados` na página da demanda para aprová-la ou recusá-la, sem abrir o código: ele confere que a solução atende os critérios de aceite e cabe no que foi pedido.
-Os agentes da Fabriquinha recebem só a descrição e os critérios da demanda; o desenho não chega a eles.
-Por isso, toda decisão que o planejamento precisa seguir vai também na descrição da demanda.
+O agente que planeja a demanda na Fabriquinha recebe o desenho aprovado: o `resumo`, os `arquivosPrevistos`, o `foraDeEscopo` e o caminho do HTML.
+Os agentes das rodadas não o recebem: enxergam a descrição e os critérios da demanda e o próprio ticket do plano.
+Por isso, toda decisão que o planejamento precisa seguir vai no `resumo`, que ele lê sem abrir o HTML.
 
 O documento é uma **planta**: quem o lê sabe o que vai mudar, onde e por quê, antes de qualquer linha de código.
 
@@ -65,6 +66,6 @@ Um PR que altera mais de 30 arquivos é difícil de analisar.
 - [ ] Cada decisão relevante do HTML foi tomada com o usuário na conversa; nenhuma é surpresa para ele.
 - [ ] O diagrama usa os nomes reais de módulos e arquivos, os mesmos do texto e da tabela.
 - [ ] Os `arquivosPrevistos` cobrem todo arquivo que a mudança vai tocar, testes incluídos.
-- [ ] As decisões que o planejamento precisa seguir estão também na descrição da demanda.
+- [ ] As decisões que o planejamento precisa seguir estão também no `resumo`.
 - [ ] HTML e `dados` dizem a mesma coisa: mesma lista de arquivos, mesmo fora de escopo.
 - [ ] Com mais de 30 `arquivosPrevistos` numa alteração que não cabe num PR, a mudança está dividida em demandas separadas, ligadas por `--dep`, e os `arquivosPrevistos` têm só a parte desta.

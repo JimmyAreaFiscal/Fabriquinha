@@ -5,7 +5,7 @@ Esta sessão é interativa: o Auditor participa das decisões, e você pode e de
 
 **Passos:**
 
-1. Leia a descrição e os critérios de aceite da demanda {demanda}.
+1. Leia a descrição, os critérios de aceite e o desenho aprovado da demanda {demanda}, na seção "Desenho aprovado", com o HTML anexo.
 2. Estude sozinho o código da worktree que o trabalho toca.
 3. Leve ao Auditor cada decisão relevante (como dividir as rodadas, a ordem, o que fica de fora), uma por mensagem: o problema, duas ou três opções com o custo de cada uma e a sua recomendação. Espere a resposta dele antes de seguir.
 4. Monte o plano: rodadas com os critérios que cada uma atende, tickets de implementação com dependências e caminhos.

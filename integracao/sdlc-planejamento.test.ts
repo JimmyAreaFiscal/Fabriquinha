@@ -265,3 +265,14 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     agora,
   );
 });
+
+test("o planejador recebe o desenho aprovado da demanda, com o HTML anexo num arquivo que ele consegue ler", async (t) => {
+  const c = criarCenario(t);
+  pi.roteirizar();
+  const id = demandaAprovada(c);
+  await ciclaPlanejamentos(c, [id]);
+  const prompt = pi.chamadas()[0]?.prompt ?? "";
+  assert.match(prompt, /## Desenho aprovado[\s\S]*\nr\n[\s\S]*- `src\/a\.ts` \(criar\): porque/);
+  const [, html] = /- `d\.html`: `([^`]+)`/.exec(prompt) ?? [];
+  assert.equal(readFileSync(html ?? "", "utf8"), "<p>x</p>");
+});

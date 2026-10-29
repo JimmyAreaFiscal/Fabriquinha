@@ -119,6 +119,8 @@ function cenario() {
     decisoes: [],
     evidencias: [
       { demanda_id: "I-206", tipo: "criterios_aceite", em, dados: { criterios: [{ id: "CA-1" }, { id: "CA-2" }] } },
+      // Opcional da demanda, registrada pela ferramenta externa: impacto alto exige reversão na mensagem_pr.
+      { demanda_id: "I-206", tipo: "relatorio_impactos_arquitetura", em, dados: { impacto: "alto" } },
       { demanda_id: "I-206", ticket_id: 6, tipo: "matriz_fitness", em, dados: { linhas: [{ nome: "f" }] } },
       { demanda_id: "I-206", ticket_id: 8, tipo: "arquivos_alterados", em, dados: ALTERADOS },
     ],
@@ -402,7 +404,13 @@ test("mensagem_pr cruza com os não previstos da última revisão e pede revers�
   });
   const ruim = await rodar(env(7), 7, "mensagem_pr", msg([]));
   assert.match(ruim.err, /explica os não previstos \[\], e a última revisão concluída tem \[b.ts\]/);
-  const ok = await rodar(env(7), 7, "mensagem_pr", msg([{ caminho: "b.ts", motivo: "novo" }]));
+  const semReversao = await rodar(env(7), 7, "mensagem_pr", msg([{ caminho: "b.ts", motivo: "novo" }]));
+  assert.match(semReversao.err, /mensagem_pr não tem reversao, e o impacto do desenho aprovado é alto/);
+  assert.deepEqual(gravadas(banco), []);
+  const ok = await rodar(env(7), 7, "mensagem_pr", {
+    ...msg([{ caminho: "b.ts", motivo: "novo" }]),
+    reversao: "reverter o merge",
+  });
   assert.deepEqual([ok.codigo, ok.err], [0, ""]);
   assert.deepEqual(gravadas(banco), [{ ticket_id: 7, tipo: "mensagem_pr" }]);
 });

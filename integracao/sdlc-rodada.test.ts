@@ -3,7 +3,7 @@
 // temporária, o pi e o `gh` falsos; nada passa pela web. O agente (revisor e documentador) é a parte do teste que age
 // pelo domínio enquanto o pi falso espera no portão; as verificações do ticket são o único ponto injetado.
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { AUDITOR } from "../src/dominio/agregado.ts";
@@ -121,6 +121,41 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   for (const ticket of [primeira, corretivo]) assert.ok(pr.corpo.includes(`${id}.T${String(ticket.ticket_id)}`));
   const worktree = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
   assert.equal(git(worktree, "log", "--format=%s", "--grep", `\\[${id}\\.T`).split("\n").length, 2);
+});
+
+test("os agentes da rodada recebem o que a Fabriquinha apurou: o diff e a matriz de fitness com os logs na revisão, os não previstos e o impacto no encerramento", async (t) => {
+  gh.zerar();
+  const c = criarCenario(t);
+  const id = await rodadaEmEncerramento(c);
+  // O revisor explica a matriz coletada antes do pi dele: cada linha e o log dela, num arquivo que ele consegue ler.
+  const revisor = pi.chamadas()[0]?.prompt ?? "";
+  assert.match(revisor, /## Matriz de fitness functions[\s\S]*- \*\*f\*\* \(d\): `true` saiu com código 0/);
+  const [, log] = /- `f\.log`: `([^`]+)`/.exec(revisor) ?? [];
+  assert.ok(log !== undefined && existsSync(log), `o log da fitness f no disco: ${String(log)}`);
+  // E confere o diff que a Fabriquinha apurou na mesma preparação: o arquivo novo, fora dos caminhos do plano.
+  assert.match(revisor, /## Arquivos alterados[\s\S]*- `feature\.txt` \(A, \+1 −0\): não previsto/);
+
+  // O documentador justifica exatamente os arquivos alterados fora dos caminhos do plano, apurados na revisão, e sabe
+  // que o impacto alto do relatório da demanda exige a reversão. ponytail: o relatório entra direto no agregado, porque
+  // a definição congela no envio e o apoio não o registra; é o mesmo estado que a ferramenta externa deixaria.
+  comDemanda(c.banco, id, (ag) => ({
+    ...ag,
+    evidencias: [
+      ...ag.evidencias,
+      {
+        demanda_id: id,
+        rodada_id: undefined,
+        ticket_id: undefined,
+        tipo: "relatorio_impactos_arquitetura",
+        em: agora(),
+        dados: { impacto: "alto" },
+      },
+    ],
+  }));
+  await encerrar(c, id);
+  const documentador = pi.chamadas()[0]?.prompt ?? "";
+  assert.match(documentador, /## Arquivos não previstos[\s\S]*- `feature\.txt`/);
+  assert.match(documentador, /## Impacto na arquitetura\n\nalto: escreva em `reversao`/);
 });
 
 // Commita na worktree em que o pi roda: o que a conversa da sessão de ajustes não pode deixar.

@@ -12,12 +12,13 @@ A Fabriquinha o valida na entrada e o cruza com a demanda congelada; o Auditor o
 
 ## Como produzir
 
-1. Leia os critérios de aceite da demanda e agrupe os que se verificam juntos: cada grupo é uma rodada.
-2. Cada rodada cita em `criterios` só `CA-n` que a demanda tem, e entrega algo que roda e se prova sozinho.
-3. Quebre cada rodada em tickets pequenos, com os `caminhos` (arquivos ou globs) que cada um toca; todo ticket de implementação fica numa rodada.
+1. Leia o desenho aprovado na seção "Desenho aprovado" do seu prompt (o `resumo`, os `arquivosPrevistos`, o `foraDeEscopo` e o HTML): o plano segue as decisões dele.
+2. Leia os critérios de aceite da demanda e agrupe os que se verificam juntos: cada grupo é uma rodada.
+3. Cada rodada cita em `criterios` só `CA-n` que a demanda tem, e entrega algo que roda e se prova sozinho.
+4. Quebre cada rodada em tickets pequenos, com os `caminhos` (arquivos ou globs) que cada um toca, a partir dos `arquivosPrevistos` do desenho; todo ticket de implementação fica numa rodada.
    Arquivo alterado fora dos `caminhos` dos tickets da rodada aparece como não previsto na revisão dela.
-4. Declare `depende` só onde a ordem importa: rodada depende de rodada, ticket depende de ticket da mesma rodada. Sem ciclo.
-5. Use `e2e: true` na rodada que precisa de teste ponta a ponta.
+5. Declare `depende` só onde a ordem importa: rodada depende de rodada, ticket depende de ticket da mesma rodada. Sem ciclo.
+6. Use `e2e: true` na rodada que precisa de teste ponta a ponta.
 
 ## Estrutura
 
@@ -70,6 +71,7 @@ Em `depende`, cada item repete o `demanda_id` e traz o `rodada_id` ou o `ticket_
 
 ## Antes de submeter
 
+- [ ] Os `caminhos` cobrem os `arquivosPrevistos` do desenho, e nada do `foraDeEscopo` entra no plano.
 - [ ] Todo `CA-n` da demanda está em `criterios` do plano, e cada rodada cita só critérios que existem.
 - [ ] Toda rodada tem pelo menos um ticket; nenhum `rodada_id` ou `ticket_id` se repete.
 - [ ] Todo `demanda_id` é o da demanda; as dependências não formam ciclo.

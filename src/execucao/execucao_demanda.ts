@@ -23,7 +23,9 @@ import { varrerBase } from "../metricas/retrabalho.ts";
 import { somar } from "../metricas/uso.ts";
 import { raizDo } from "../persistencia/banco.ts";
 import { configuracaoProjeto } from "../persistencia/configuracao_projeto.ts";
+import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
+import { anexosDaDemanda } from "../persistencia/evidencia_demanda.ts";
 import { anotar, arquivoDaSessao } from "../persistencia/execucoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket, execucoesAbertasDaDemanda } from "../persistencia/sessoes.ts";
 import { sinalNoGrupo } from "../processo.ts";
@@ -155,6 +157,10 @@ async function conduzir(c: Conducao): Promise<void> {
         worktree,
         saida: join(dir, "saida"),
         retomada: opcoes.retomada,
+        anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({
+          ...a,
+          caminho: caminhoArquivo(c.banco, a.sha256),
+        })),
       });
     writeFileSync(join(dir, "prompt.md"), prompt);
     const args = argumentosPiDemanda({

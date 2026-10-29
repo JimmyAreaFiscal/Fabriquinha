@@ -43,13 +43,13 @@ Cada campo, a seção do PR em que entra e o que ele responde:
 
 `naoFeito`: o que um revisor esperaria encontrar e não está no PR, com o porquê; a seção Fora do escopo mostra só esta lista, e lista vazia vira "Nada declarado.".
 
-`naoPrevistos`: um item por arquivo que a última revisão da rodada marcou como não previsto (fora dos `caminhos` dos tickets do plano), com o mesmo `caminho`; se a lista não bater, o erro da submissão diz quais são; o `motivo` diz que necessidade, descoberta durante o desenvolvimento, levou à mudança.
+`naoPrevistos`: um item por arquivo que a última revisão da rodada marcou como não previsto (fora dos `caminhos` dos tickets do plano), com o mesmo `caminho`; a seção "Arquivos não previstos" do seu prompt lista exatamente esses arquivos; o `motivo` diz que necessidade, descoberta durante o desenvolvimento, levou à mudança.
 
 `comoRevisar`: passos numerados pela Fabriquinha, um por item, do arquivo que dá o contexto ao detalhe: "Comece por `src/x.ts`, a regra nova; depois `src/x.test.ts`, um teste por critério."
 
 `naoVerificado`: caminhos, plataformas ou dados que nenhum teste nem a revisão exercitou; lista vazia vira "Nada.".
 
-`reversao`: os passos para desfazer, incluindo dado migrado ou configuração; escreva-a sempre que o impacto na arquitetura não for baixo, e sem ela a seção mostra "Não declarada.".
+`reversao`: os passos para desfazer, incluindo dado migrado ou configuração; escreva-a sempre que o impacto na arquitetura não for baixo, como a seção "Impacto na arquitetura" do seu prompt indica, e sem ela a seção mostra "Não declarada.".
 
 ## Antes de submeter
 
