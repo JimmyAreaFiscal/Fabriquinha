@@ -901,4 +901,11 @@ export const MIGRACOES: readonly Migracao[] = [
     PRIMARY KEY (avaliacao_id, modelo_provedor, modelo_nome)
   );`,
   removerFluxoLegado,
+  // Preparação da worktree numa fonte só: o projeto sem comando em `comando_preparacao_projeto`, a tabela que o fluxo da
+  // demanda lê, recebe os da coluna legada `projeto.preparacao` na ordem 1..n; o que já tem fica. Depois a coluna sai.
+  `INSERT INTO comando_preparacao_projeto (projeto, ordem, comando)
+    SELECT p.nome, c.key + 1, c.value FROM projeto p, json_each(p.preparacao) c
+     WHERE NOT EXISTS (SELECT 1 FROM comando_preparacao_projeto j WHERE j.projeto = p.nome)
+     ORDER BY p.nome, c.key;
+  ALTER TABLE projeto DROP COLUMN preparacao;`,
 ];

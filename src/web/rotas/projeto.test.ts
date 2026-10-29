@@ -135,7 +135,6 @@ function semearDemandas(): void {
     chave_sonarqube: "loja",
     raiz_git: "/repos/loja",
     hospedagem: "github",
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });

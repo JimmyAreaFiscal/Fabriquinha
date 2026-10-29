@@ -222,7 +222,6 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     raiz_git: join(base, "repo"),
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });

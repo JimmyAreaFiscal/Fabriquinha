@@ -252,7 +252,6 @@ function configurarProjeto(banco: ReturnType<typeof abrir>, raiz: string): void 
     raiz_git: join(raiz, "loja"),
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
@@ -376,7 +375,6 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
     raiz_git: repo,
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });

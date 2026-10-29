@@ -11,7 +11,11 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { assinar } from "./gerente.ts";
-import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../persistencia/configuracao_projeto.ts";
+import {
+  gravarConfiguracaoProjeto,
+  substituirEtapasDoProjeto,
+  substituirPreparacaoDoProjeto,
+} from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
@@ -102,11 +106,11 @@ async function cenario({ etapas = [], variante, semWorktree, preparacao = "true"
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
-    preparacao: [{ ordem: 1, comando: preparacao }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   substituirEtapasDoProjeto(banco, "loja", etapas);
+  substituirPreparacaoDoProjeto(banco, "loja", [preparacao]);
   const ticket = (ticket_id: number, etapa: string, extra: object = {}) => ({
     demanda_id: "I-1",
     ticket_id,

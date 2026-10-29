@@ -8,6 +8,7 @@ import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { Projeto } from "../dominio/projeto.ts";
 import { caminhoArquivo } from "./arquivos.ts";
 import { escrever, raizDo } from "./banco.ts";
+import { preparacaoDoProjeto, substituirPreparacaoDoProjeto } from "./configuracao_projeto.ts";
 import { dirDaExecucaoSimulada } from "./execucoes.ts";
 
 interface Linha {
@@ -15,27 +16,25 @@ interface Linha {
   repo: string;
   branch_base: string;
   hospedagem: string;
-  preparacao: string;
   sonar_project_key: string;
   link_produto: string | null;
 }
 
-const json = (texto: string): unknown => JSON.parse(texto);
-
-const deLinha = (l: Linha): Projeto =>
+/** A preparação vem de `comando_preparacao_projeto`, a mesma tabela que o fluxo da demanda lê. */
+const deLinha = (banco: DatabaseSync, l: Linha): Projeto =>
   Projeto.parse({
     nome: l.nome,
     repo: l.repo,
     branchBase: l.branch_base,
     hospedagem: l.hospedagem,
-    preparacao: json(l.preparacao),
+    preparacao: preparacaoDoProjeto(banco, l.nome),
     sonar: { projectKey: l.sonar_project_key },
     ...(l.link_produto && { linkProduto: l.link_produto }),
   });
 
 /**
- * Valida o schema do F1 (§3.3) e grava numa transação. O repositório só pode ser de um projeto; `sql` usa os
- * parâmetros nomeados das colunas e devolve quantas linhas mudou.
+ * Valida o schema do F1 (§3.3) e grava numa transação, com a preparação da worktree. O repositório só pode ser de um
+ * projeto; `sql` usa os parâmetros nomeados das colunas e devolve quantas linhas mudou.
  */
 function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p: Projeto, mudou: boolean) => void) {
   const p = Projeto.parse(entrada);
@@ -55,11 +54,11 @@ function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p
       repo: p.repo,
       branch_base: p.branchBase,
       hospedagem: p.hospedagem,
-      preparacao: JSON.stringify(p.preparacao),
       sonar_project_key: p.sonar.projectKey,
       link_produto: p.linkProduto ?? null,
     });
     conferir(p, changes > 0);
+    substituirPreparacaoDoProjeto(banco, p.nome, p.preparacao);
   });
   return p;
 }
@@ -69,8 +68,8 @@ export const registrarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto
   gravar(
     banco,
     entrada,
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, sonar_project_key, link_produto)
-     VALUES ($nome, $repo, $branch_base, $hospedagem, $preparacao, $sonar_project_key, $link_produto)
+    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key, link_produto)
+     VALUES ($nome, $repo, $branch_base, $hospedagem, $sonar_project_key, $link_produto)
      ON CONFLICT (nome) DO NOTHING`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeRegra(`já existe o projeto ${p.nome}`, "edite-o na Configuração");
@@ -85,8 +84,7 @@ export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
   gravar(
     banco,
     entrada,
-    `UPDATE projeto SET repo = $repo, branch_base = $branch_base, hospedagem = $hospedagem, preparacao = $preparacao,
-       link_produto = $link_produto
+    `UPDATE projeto SET repo = $repo, branch_base = $branch_base, hospedagem = $hospedagem, link_produto = $link_produto
      WHERE nome = $nome`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre-o na Configuração");
@@ -95,12 +93,14 @@ export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
 
 export function projeto(banco: DatabaseSync, nome: string): Projeto | undefined {
   const linha = banco.prepare("SELECT * FROM projeto WHERE nome = ?").get(nome) as Linha | undefined;
-  return linha && deLinha(linha);
+  return linha && deLinha(banco, linha);
 }
 
 /** Todos os projetos, em ordem de nome. */
 export function projetos(banco: DatabaseSync): Projeto[] {
-  return (banco.prepare("SELECT * FROM projeto ORDER BY nome").all() as unknown as Linha[]).map(deLinha);
+  return (banco.prepare("SELECT * FROM projeto ORDER BY nome").all() as unknown as Linha[]).map((l) =>
+    deLinha(banco, l),
+  );
 }
 
 const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";

@@ -74,7 +74,6 @@ export function adicionarProjeto(c: Pick<Cenario, "banco" | "dir">, nome: string
     raiz_git: repo,
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });

@@ -8,7 +8,9 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import { migrar } from "./banco.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
-const ANTERIOR = MIGRACOES.length - 1;
+/** A versão da remoção do fluxo legado; as migrações seguintes têm teste próprio. */
+const REMOCAO = 33;
+const ANTERIOR = REMOCAO - 1;
 const T = "'2026-01-01T00:00:00.000Z'";
 const LEGADAS = [
   "issue",
@@ -76,9 +78,9 @@ test("CA-8: copia iterações, propostas e o retrabalho que faltava para a deman
   const ficam = ["demanda", "demanda_historico", "ticket_demanda", "sequencia", "varredura_base", "configuracao"];
   const antes = Object.fromEntries(ficam.map((t) => [t, ler(b, `SELECT * FROM ${t}`)]));
 
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, REMOCAO));
 
-  assert.equal(versao(b), MIGRACOES.length);
+  assert.equal(versao(b), REMOCAO);
   assert.deepEqual(ler(b, "SELECT * FROM iteracao_demanda ORDER BY id"), [
     { id: 1, demanda_id: "I-1", ticket_id: 1, tipo: "mensagem", em: "2026-01-01T00:00:00.000Z" },
     { id: 2, demanda_id: "I-1", ticket_id: 1, tipo: "reabertura", em: "2026-01-01T00:00:00.000Z" },
@@ -169,7 +171,7 @@ test("copia o modelo e o effort de cada etapa legada para as etapas do ticket, s
     INSERT INTO configuracao_etapa_projeto (projeto, etapa, effort) VALUES ('q', 'implementar', 'off');
   `);
 
-  migrar(b, MIGRACOES);
+  migrar(b, MIGRACOES.slice(0, REMOCAO));
 
   const opusNovo = { modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5" };
   const sem = { modelo_provedor: null, modelo_nome: null };
@@ -198,7 +200,7 @@ test("CA-9: issue sem demanda recusa a migração, citando a issue e orientando 
 
   assert.throws(
     () => {
-      migrar(b, MIGRACOES);
+      migrar(b, MIGRACOES.slice(0, REMOCAO));
     },
     new ErroDeRegra(
       "I-7 sem demanda correspondente: esta versão apaga o fluxo legado e não migra mais issues",
@@ -222,7 +224,7 @@ test("iteração de ticket legado sem ticket da demanda: a contagem não bate e 
 
   assert.throws(
     () => {
-      migrar(b, MIGRACOES);
+      migrar(b, MIGRACOES.slice(0, REMOCAO));
     },
     new ErroDeRegra(
       "a migração copiou 2 das 3 linhas de iteracao: há ticket legado sem ticket da demanda",

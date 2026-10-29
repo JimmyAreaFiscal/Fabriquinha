@@ -27,7 +27,7 @@ const novaRaiz = () => mkdtempSync(join(base, "raiz-"));
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 /** A versão do banco antes da migração que remove o fluxo legado. */
-const VERSAO_ANTES_DA_REMOCAO = MIGRACOES.length - 1;
+const VERSAO_ANTES_DA_REMOCAO = 32;
 
 /** Cadastra o projeto `nome` no repositório `repo`. */
 function projeto(banco: DatabaseSync, nome: string, repo: string): void {

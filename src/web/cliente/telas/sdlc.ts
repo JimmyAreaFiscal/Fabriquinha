@@ -15,14 +15,13 @@ export interface Estado {
   hospedagem: string;
   /** `cursor_commit_humano`: a tela o devolve como veio. */
   cursor: string;
-  preparacao: Linha[];
   fitness: Linha[];
   linguagens: Linha[];
   e2e: Linha[];
   globs: Linha[];
 }
 
-export type GrupoDeLista = "preparacao" | "fitness" | "linguagens" | "e2e" | "globs";
+export type GrupoDeLista = "fitness" | "linguagens" | "e2e" | "globs";
 
 /** `GET /api/projetos/:nome/configuracao-sdlc`. */
 export interface Resposta {
@@ -39,15 +38,6 @@ export const GRUPOS: readonly {
   nota: string;
   campos: readonly (readonly [string, string, boolean])[];
 }[] = [
-  {
-    chave: "preparacao",
-    titulo: "Preparação",
-    nota: "comandos que rodam, na ordem, ao criar a worktree",
-    campos: [
-      ["ordem", "Ordem", true],
-      ["comando", "Comando", true],
-    ],
-  },
   {
     chave: "fitness",
     titulo: "Fitness",
@@ -94,7 +84,7 @@ export const GRUPOS: readonly {
 export const linhaEmBranco = (chave: GrupoDeLista): Linha =>
   Object.fromEntries(GRUPOS.filter((g) => g.chave === chave).flatMap((g) => g.campos.map(([campo]) => [campo, ""])));
 
-/** O contrato em texto, sem as etapas: o modelo e o effort de cada uma se editam no cadastro do projeto. */
+/** O contrato em texto, sem as etapas e a preparação: o cadastro do projeto, na Configuração, as edita. */
 export function doProjeto(p: Projeto): Estado {
   return {
     branch_base: p.branch_base,
@@ -102,7 +92,6 @@ export function doProjeto(p: Projeto): Estado {
     raiz_git: p.raiz_git,
     hospedagem: p.hospedagem,
     cursor: p.cursor_commit_humano ?? "",
-    preparacao: p.preparacao.map((c) => ({ ordem: String(c.ordem), comando: c.comando })),
     fitness: p.fitness.map((f) => ({ ...f })),
     linguagens: p.linguagens.map((l) => ({ ...l })),
     e2e: p.e2e.map((e) => ({ ...e, codigo_falha: String(e.codigo_falha) })),
@@ -110,8 +99,8 @@ export function doProjeto(p: Projeto): Estado {
   };
 }
 
-/** O corpo do POST, sem as etapas: a gravação as mantém como o cadastro do projeto as deixou. */
-export function paraProjeto(e: Estado, nome: string): Omit<Projeto, "etapas"> {
+/** O corpo do POST, sem as etapas e a preparação: a gravação as mantém como o cadastro do projeto as deixou. */
+export function paraProjeto(e: Estado, nome: string): Omit<Projeto, "etapas" | "preparacao"> {
   return {
     nome,
     branch_base: e.branch_base,
@@ -119,7 +108,6 @@ export function paraProjeto(e: Estado, nome: string): Omit<Projeto, "etapas"> {
     raiz_git: e.raiz_git,
     hospedagem: e.hospedagem as Projeto["hospedagem"],
     ...(e.cursor && { cursor_commit_humano: e.cursor }),
-    preparacao: e.preparacao.map((l) => ({ ordem: Number(l.ordem), comando: l.comando ?? "" })),
     fitness: e.fitness as Projeto["fitness"],
     linguagens: e.linguagens as Projeto["linguagens"],
     e2e: e.e2e.map((l) => ({ ...l, codigo_falha: Number(l.codigo_falha) })) as Projeto["e2e"],
@@ -164,7 +152,7 @@ function projeto(e: Estado, erros: Erros): string {
     celula(erros, "hospedagem", "Hospedagem", e.hospedagem, { campo: "hospedagem", mono: true, leitura: true }),
   ];
   const nota =
-    "A branch base é a do cadastro do projeto, na Configuração: mudar aqui muda lá. O repositório, a hospedagem e o modelo e o effort de cada etapa só se editam no cadastro.";
+    "A branch base é a do cadastro do projeto, na Configuração: mudar aqui muda lá. O repositório, a hospedagem, a preparação da worktree e o modelo e o effort de cada etapa só se editam no cadastro.";
   return `<section class="grupo" data-grupo="projeto" aria-label="Projeto"><h3>Projeto</h3><div class="sdlc-linha sdlc-projeto">${celulas.join("")}</div><input type="hidden" data-campo="cursor" value="${escapar(e.cursor)}"><p class="ajuda">${nota}</p></section>`;
 }
 

@@ -13,7 +13,7 @@ import {
   reprovarPlanejamentoDemanda,
   submeterPlanejamento,
 } from "../src/execucao/planejamento.ts";
-import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
+import { substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar } from "./apoio.ts";
 import { piFalso } from "./falsos.ts";
@@ -129,18 +129,8 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   const id = demandaAprovada(c);
   // A preparação só falha na worktree da rodada 2, depois da demanda e da rodada 1.
   const quebra = join(c.raiz, "quebra");
-  const { banco, projeto, repo } = c;
-  gravarConfiguracaoProjeto(banco, {
-    nome: projeto,
-    branch_base: "main",
-    chave_sonarqube: `chave-${projeto}`,
-    raiz_git: repo,
-    hospedagem: "github",
-    etapas: [],
-    preparacao: [{ ordem: 1, comando: `[ -e ${quebra} ] && [ "$(basename "$PWD")" = 2 ] && exit 1; true` }],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
+  const { banco, projeto } = c;
+  substituirPreparacaoDoProjeto(banco, projeto, [`[ -e ${quebra} ] && [ "$(basename "$PWD")" = 2 ] && exit 1; true`]);
   await ciclaPlanejamentos(c, [id]);
   submeterPlanejamento(banco, id, plano(id, "r", 2), agente(1));
   writeFileSync(quebra, "");

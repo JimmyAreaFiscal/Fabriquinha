@@ -52,7 +52,6 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
