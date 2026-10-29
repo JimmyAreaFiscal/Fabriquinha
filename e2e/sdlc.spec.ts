@@ -1,13 +1,19 @@
-// Configuração SDLC do projeto (seção 7.1): abrir, editar, salvar e recarregar; erros no campo certo; Adicionar e
-// Remover; projeto sem configuração; celular de 375 px; e a branch base compartilhada com a tela legada.
+// Configuração SDLC do projeto (seção 7.1): abrir, editar, salvar e recarregar sem apagar as etapas, que são do
+// cadastro; erros no campo certo; Adicionar e Remover; projeto sem configuração; celular de 375 px; e a branch base
+// compartilhada com o cadastro do projeto na Configuração.
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
 import { abrir } from "../src/persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
+import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
-/** A configuração SDLC do projeto `loja`, com todos os grupos e duas linguagens; a segunda não tem E2E. */
+const PLANEJAR = { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "high" };
+
+/**
+ * A configuração SDLC do projeto `loja`, com todos os grupos e duas linguagens; a segunda não tem E2E. A etapa
+ * `planejar`, gravada pelo cadastro do projeto, tem modelo e effort.
+ */
 function configurar(raiz: string): void {
   const banco = abrir(raiz);
   gravarConfiguracaoProjeto(banco, {
@@ -16,7 +22,6 @@ function configurar(raiz: string): void {
     chave_sonarqube: "loja",
     raiz_git: realpathSync(join(raiz, "loja")),
     hospedagem: "github",
-    etapas: [{ etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "high" }],
     preparacao: [{ ordem: 1, comando: "npm ci" }],
     fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Rotas novas com cobertura mínima." }],
     linguagens: [
@@ -26,10 +31,24 @@ function configurar(raiz: string): void {
     e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
     globs: [{ caminho_linguagem: ".", glob: "e2e/**/*.spec.ts" }],
   });
+  substituirEtapasDoProjeto(banco, "loja", [PLANEJAR]);
   banco.close();
 }
 
-test("abre a configuração, adiciona e remove linhas, salva a branch base e vê o que salvou ao recarregar", async ({
+/** As etapas gravadas do projeto `loja`. */
+function etapasGravadas(raiz: string): unknown[] {
+  const banco = abrir(raiz);
+  const etapas = banco
+    .prepare(
+      "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = 'loja'",
+    )
+    .all()
+    .map((l) => ({ ...l }));
+  banco.close();
+  return etapas;
+}
+
+test("abre a configuração sem as etapas, adiciona e remove linhas, salva a branch base e vê o que salvou ao recarregar; as etapas do cadastro ficam", async ({
   pagina,
   fabriquinha,
 }) => {
@@ -37,11 +56,16 @@ test("abre a configuração, adiciona e remove linhas, salva a branch base e vê
   configurar(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/projects/loja/sdlc`);
   await expect(pagina).toHaveTitle("Configuração SDLC · Fabriquinha");
-  for (const grupo of ["Projeto", "Etapas", "Preparação", "Fitness", "Linguagens", "E2E", "Globs"])
+  for (const grupo of ["Projeto", "Preparação", "Fitness", "Linguagens", "E2E", "Globs"])
     await expect(pagina.getByRole("region", { name: grupo })).toBeVisible();
+  // O modelo e o effort de cada etapa se editam só no cadastro do projeto, na Configuração.
+  await expect(pagina.getByRole("region")).toHaveCount(6);
+  await expect(pagina.locator("main")).not.toContainText(/Etapas|tela legada/);
+  await expect(pagina.locator("main select")).toHaveCount(0);
+  await expect(pagina.getByRole("region", { name: "Projeto" })).toContainText(
+    "A branch base é a do cadastro do projeto, na Configuração: mudar aqui muda lá. O repositório, a hospedagem e o modelo e o effort de cada etapa só se editam no cadastro.",
+  );
   await expect(pagina.getByLabel("Branch base")).toHaveValue("develop");
-  await expect(pagina.getByLabel("Nome do modelo da etapa planejar")).toHaveValue("claude-opus-5-5");
-  await expect(pagina.getByLabel("Effort da etapa planejar")).toHaveValue("high");
   await expect(pagina.getByLabel("Comando", { exact: true }).first()).toHaveValue("npm ci");
   await expect(pagina.getByLabel("Código de falha")).toHaveValue("1");
   await expect(pagina.getByLabel("Glob", { exact: true })).toHaveValue("e2e/**/*.spec.ts");
@@ -61,6 +85,7 @@ test("abre a configuração, adiciona e remove linhas, salva a branch base e vê
   await pagina.getByLabel("Branch base").fill("release");
   await pagina.getByRole("button", { name: "Salvar" }).click();
   await expect(pagina.getByText("Configuração salva.")).toBeVisible();
+  expect(etapasGravadas(fabriquinha.raiz)).toEqual([PLANEJAR]);
   await pagina.reload();
   await expect(pagina.getByLabel("Branch base")).toHaveValue("release");
   await expect(pagina.getByRole("region", { name: "Linguagens" }).locator("[data-linha]")).toHaveCount(1);
@@ -76,20 +101,10 @@ test("a configuração inválida não grava e mostra o erro no campo ou no grupo
   await pagina.goto(`${fabriquinha.base}/projects/loja/sdlc`);
   const salvar = pagina.getByRole("button", { name: "Salvar" });
 
-  await pagina.getByLabel("Nome do modelo da etapa planejar").fill("");
-  await salvar.click();
-  const nome = pagina.getByLabel("Nome do modelo da etapa planejar");
-  await expect(nome).toHaveAttribute("aria-invalid", "true");
-  await expect(pagina.locator("#campo-etapas\\[planejar\\]\\.modelo_nome-erro")).toHaveText(
-    "informe provedor e nome do modelo juntos ou nenhum",
-  );
-  await nome.fill("claude-opus-5-5");
-
   await pagina.getByLabel("Código de falha").fill("0");
   await salvar.click();
   await expect(pagina.getByLabel("Código de falha")).toHaveAttribute("aria-invalid", "true");
   await expect(pagina.getByText("use um valor de 1 a 255")).toBeVisible();
-  await expect(nome).not.toHaveAttribute("aria-invalid", "true");
   await pagina.getByLabel("Código de falha").fill("1");
 
   const globs = pagina.getByRole("region", { name: "Globs" });
@@ -108,29 +123,6 @@ test("a configuração inválida não grava e mostra o erro no campo ou no grupo
   await nova.getByLabel("Comando").fill("npm run build");
   await salvar.click();
   await expect(preparacao.getByText("ordem repetida")).toBeVisible();
-});
-
-test("um POST direto com effort inexistente responde 422 no campo da etapa e não grava", async ({
-  pagina,
-  fabriquinha,
-}) => {
-  projeto(fabriquinha.raiz);
-  configurar(fabriquinha.raiz);
-  const url = `${fabriquinha.base}/api/projetos/loja/configuracao-sdlc`;
-  const lerEtapa = async () =>
-    ((await (await pagina.request.get(url)).json()) as { configuracao: { etapas: { effort: string }[] } }).configuracao;
-  const configuracao = await lerEtapa();
-  configuracao.etapas[0] = { ...configuracao.etapas[0], effort: "inexistente" };
-  const resposta = await pagina.request.post(url, {
-    headers: { "Sec-Fetch-Site": "same-origin" },
-    data: configuracao,
-  });
-  expect(resposta.status()).toBe(422);
-  const corpo = await resposta.text();
-  expect(corpo).toContain("etapas");
-  expect(corpo).toContain("effort");
-  expect(corpo).toContain("use um valor do domínio");
-  expect((await lerEtapa()).etapas[0]?.effort).toBe("high");
 });
 
 test("o erro aparece sob o controle sem deslocar a linha", async ({ pagina, fabriquinha }) => {
@@ -201,7 +193,7 @@ test.describe("celular", () => {
   });
 });
 
-test("a branch base é a mesma na configuração SDLC e na tela legada, nos dois sentidos", async ({
+test("a branch base é a mesma na configuração SDLC e no cadastro do projeto, nos dois sentidos", async ({
   pagina,
   fabriquinha,
 }) => {
@@ -211,7 +203,7 @@ test("a branch base é a mesma na configuração SDLC e na tela legada, nos dois
   for (const branch of ["release", "main"]) {
     execFileSync("git", ["push", "-q", "origin", `main:refs/heads/${branch}`], { cwd: repo, stdio: "pipe" });
   }
-  // O cadastro legado confere o remoto: um `origin` de cara GitHub, desviado para o bare local por `insteadOf`.
+  // O cadastro do projeto confere o remoto: um `origin` de cara GitHub, desviado para o bare local por `insteadOf`.
   const bare = join(fabriquinha.raiz, "origin.git");
   const github = "https://github.com/dono/loja.git";
   execFileSync("git", ["remote", "set-url", "origin", github], { cwd: repo, stdio: "pipe" });

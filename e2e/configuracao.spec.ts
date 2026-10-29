@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { abrir } from "../src/persistencia/banco.ts";
-import { expect, fotografar, test } from "./apoio.ts";
+import { expect, fotografar, projeto, test } from "./apoio.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
 
@@ -41,12 +41,16 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByRole("heading", { name: "Novo projeto" })).toBeVisible();
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("deduzida do remoto ao salvar");
   const formulario = pagina.locator("form[data-projeto]");
-  await expect(formulario.locator("h3")).toHaveText(["Repositório", "Preparação"]);
-  await expect(formulario).not.toContainText(/Testes|SonarQube|Fitness|Modelo|Effort/);
+  await expect(formulario.locator("h3")).toHaveText(["Repositório", "Preparação", /^Modelo e effort por etapa/]);
+  await expect(formulario).not.toContainText(/Testes|SonarQube|Fitness/);
   await pagina.getByLabel("Nome", { exact: true }).fill("Loja X");
   await pagina.getByLabel("Caminho do repositório").fill(repo);
   await pagina.getByRole("button", { name: "+ comando" }).click();
   await pagina.getByLabel("Preparação da worktree: comando 1").fill("npm ci");
+  // O projeto novo já escolhe o modelo e o effort de uma etapa; as outras ficam no padrão do pi.
+  const planejar = pagina.getByLabel("Planejar", { exact: true });
+  await planejar.selectOption("anthropic/claude-opus-5-5");
+  await pagina.getByLabel("Effort de Planejar").selectOption("high");
 
   await pagina.getByRole("button", { name: "Cadastrar projeto" }).click();
   const nome = pagina.getByLabel("Nome", { exact: true });
@@ -56,6 +60,7 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   );
   await expect(pagina.locator(".rodape-form")).toContainText("1 campo com erro");
   await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
+  await expect(planejar).toHaveValue("anthropic/claude-opus-5-5");
 
   await nome.fill("loja");
   await pagina.getByRole("button", { name: "Cadastrar projeto" }).click();
@@ -66,6 +71,9 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   await expect(pagina.getByLabel("Nome", { exact: true })).toHaveAttribute("readonly", "");
   await expect(pagina.getByLabel("Hospedagem")).toHaveValue("GitHub");
   await expect(pagina.getByLabel("Preparação da worktree: comando 1")).toHaveValue("npm ci");
+  await expect(planejar).toHaveValue("anthropic/claude-opus-5-5");
+  await expect(pagina.getByLabel("Effort de Planejar")).toHaveValue("high");
+  await expect(pagina.getByLabel("Effort de Implementar")).toHaveValue("");
   await expect(pagina.getByRole("button", { name: "Salvar projeto" })).toBeVisible();
   const banco = abrir(fabriquinha.raiz);
   expect({ ...banco.prepare("SELECT * FROM projeto WHERE nome = 'loja'").get() }).toEqual({
@@ -77,6 +85,13 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
     sonar_project_key: "loja",
     link_produto: null,
     cursor_commit_humano: null,
+  });
+  expect({ ...banco.prepare("SELECT * FROM configuracao_etapa_projeto").get() }).toEqual({
+    projeto: "loja",
+    etapa: "planejar",
+    modelo_provedor: "anthropic",
+    modelo_nome: "claude-opus-5-5",
+    effort: "high",
   });
   banco.close();
   for (const largura of [1440, 375]) {
@@ -130,4 +145,100 @@ test("escolhe o modelo das avaliações, salva, recarrega e vê o mesmo; salvar 
   await expect(pagina.getByRole("spinbutton", { name: "Procurar a cada" })).toHaveValue("7");
   await menu.getByRole("link", { name: "Avaliações" }).click();
   await expect(pagina.getByLabel("Modelo das avaliações")).toHaveValue("anthropic/claude-sonnet-5-5");
+});
+
+/** As nove etapas do ticket, na ordem do formulário. */
+const ETAPAS = [
+  "Demanda",
+  "Planejar",
+  "Implementar",
+  "Revisar rodada",
+  "Encerrar rodada",
+  "Sessão em aberto",
+  "Revisar demanda",
+  "Encerrar demanda",
+  "Resolver conflito",
+];
+
+test("escolhe o modelo e o effort de cada etapa no cadastro do projeto, salva e vê o mesmo; o modelo que o pi deixou de listar fica", async ({
+  pagina,
+  fabriquinha,
+}, info: TestInfo) => {
+  projeto(
+    fabriquinha.raiz,
+    `INSERT INTO configuracao_etapa_projeto VALUES ('loja', 'planejar', 'anthropic', 'claude-antigo', NULL),
+       ('loja', 'revisar_rodada', NULL, NULL, 'high')`,
+  );
+  // A conferência do cadastro deduz a hospedagem do remoto: um `origin` de cara GitHub, desviado para o bare local.
+  const repo = join(fabriquinha.raiz, "loja");
+  git(repo, "remote", "set-url", "origin", "https://github.com/dono/loja.git");
+  git(repo, "config", `url.${join(fabriquinha.raiz, "origin.git")}.insteadOf`, "https://github.com/dono/loja.git");
+
+  await pagina.goto(`${fabriquinha.base}/config?projeto=loja`);
+  const grupo = pagina.locator(".grupo", { has: pagina.getByRole("heading", { name: /^Modelo e effort por etapa/ }) });
+  await expect(grupo.locator("label")).toHaveText(ETAPAS);
+  // O seletor vem de GET /api/modelos (o pi falso lista dois); o gravado que o pi não lista continua nas opções.
+  const planejar = pagina.getByLabel("Planejar", { exact: true });
+  await expect(planejar).toHaveValue("anthropic/claude-antigo");
+  await expect(planejar.locator("option")).toHaveText([
+    "padrão do pi",
+    "anthropic / claude-opus-5-5",
+    "anthropic / claude-sonnet-5-5",
+    "anthropic / claude-antigo",
+  ]);
+  await expect(pagina.getByLabel("Effort de Revisar rodada")).toHaveValue("high");
+  const effortImplementar = pagina.getByLabel("Effort de Implementar");
+  await expect(effortImplementar.locator("option")).toHaveText([
+    "padrão do pi",
+    "off",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
+  const implementar = pagina.getByLabel("Implementar", { exact: true });
+  await expect(implementar).toHaveClass("padrao");
+  await implementar.selectOption("anthropic/claude-sonnet-5-5");
+  await expect(implementar).not.toHaveClass("padrao");
+  await effortImplementar.selectOption("low");
+  await expect(pagina.locator("form[data-projeto] .rodape-form")).toContainText(
+    "Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.",
+  );
+  for (const largura of [1440, 375]) {
+    await pagina.setViewportSize({ width: largura, height: 900 });
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await fotografar(pagina, info, `configuracao-etapas-${String(largura)}`);
+  }
+  await pagina.setViewportSize({ width: 1440, height: 900 });
+
+  await Promise.all([
+    pagina.waitForResponse((r) => r.url().endsWith("/api/projetos/loja") && r.request().method() === "POST"),
+    pagina.getByRole("button", { name: "Salvar projeto" }).click(),
+  ]);
+  await pagina.reload();
+  await expect(pagina.getByLabel("Implementar", { exact: true })).toHaveValue("anthropic/claude-sonnet-5-5");
+  await expect(pagina.getByLabel("Effort de Implementar")).toHaveValue("low");
+  await expect(pagina.getByLabel("Planejar", { exact: true })).toHaveValue("anthropic/claude-antigo");
+  await expect(pagina.getByLabel("Effort de Revisar rodada")).toHaveValue("high");
+  await expect(pagina.getByLabel("Effort de Demanda")).toHaveClass("padrao");
+  const banco = abrir(fabriquinha.raiz);
+  expect(
+    banco
+      .prepare("SELECT * FROM configuracao_etapa_projeto WHERE projeto = 'loja' ORDER BY etapa")
+      .all()
+      .map((l) => ({ ...l })),
+  ).toEqual([
+    {
+      projeto: "loja",
+      etapa: "implementar",
+      modelo_provedor: "anthropic",
+      modelo_nome: "claude-sonnet-5-5",
+      effort: "low",
+    },
+    { projeto: "loja", etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-antigo", effort: null },
+    { projeto: "loja", etapa: "revisar_rodada", modelo_provedor: null, modelo_nome: null, effort: "high" },
+  ]);
+  banco.close();
 });

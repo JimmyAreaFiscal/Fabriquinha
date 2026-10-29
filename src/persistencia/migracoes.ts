@@ -92,9 +92,31 @@ const COPIAR_PARA_A_DEMANDA = `CREATE TABLE iteracao_demanda (
       ORDER BY r.rowid;`;
 
 /**
+ * O modelo e o effort de cada etapa legada (`projeto.modelos`, `projeto.efforts`) nas etapas do ticket que a herdaram,
+ * só para o projeto que ainda não tem nenhuma etapa configurada: a configuração nova, se existe, vale.
+ */
+const COPIAR_MODELOS_E_EFFORTS = `WITH etapa_herdada (legada, nova) AS (VALUES
+    ('registro', 'demanda'), ('desenho', 'planejar'), ('desenvolvimento', 'implementar'),
+    ('desenvolvimento', 'resolver_conflito'), ('revisao', 'revisar_rodada'), ('revisao', 'revisar_demanda'),
+    ('encerramento', 'encerrar_rodada'), ('encerramento', 'encerrar_demanda'), ('sessao', 'sessao_em_aberto')
+  ), legado AS (
+    SELECT p.nome AS projeto, e.nova AS etapa,
+           json_extract(p.modelos, '$.' || e.legada || '.provedor') AS provedor,
+           json_extract(p.modelos, '$.' || e.legada || '.modelo') AS modelo,
+           json_extract(p.efforts, '$.' || e.legada) AS effort
+      FROM projeto p CROSS JOIN etapa_herdada e
+     WHERE NOT EXISTS (SELECT 1 FROM configuracao_etapa_projeto c WHERE c.projeto = p.nome)
+  )
+  INSERT INTO configuracao_etapa_projeto (projeto, etapa, modelo_provedor, modelo_nome, effort)
+    SELECT projeto, etapa, provedor, modelo, effort FROM legado
+     WHERE provedor IS NOT NULL OR effort IS NOT NULL
+     ORDER BY projeto, etapa;`;
+
+/**
  * Remoção do fluxo legado (I-247, comparacao-sdlc §10): recusa sem tocar em nada se alguma issue não virou demanda;
- * copia iterações e propostas para tabelas da demanda, conferindo as contagens, completa o retrabalho da demanda e só
- * então apaga as tabelas e as colunas legadas do projeto. A sequência `issue` fica: ela dá o I-<n> das demandas.
+ * copia iterações e propostas para tabelas da demanda, conferindo as contagens, completa o retrabalho da demanda, copia
+ * o modelo e o effort de cada etapa e só então apaga as tabelas e as colunas legadas do projeto. A sequência `issue`
+ * fica: ela dá o I-<n> das demandas.
  */
 function removerFluxoLegado(banco: DatabaseSync): void {
   const semDemanda = banco
@@ -121,6 +143,7 @@ function removerFluxoLegado(banco: DatabaseSync): void {
     }
   }
   banco.exec(TABELAS_LEGADAS.map((tabela) => `DROP TABLE ${tabela};`).join("\n"));
+  banco.exec(COPIAR_MODELOS_E_EFFORTS);
   banco.exec(
     ["testes", "fitness", "modelos", "efforts"]
       .map((coluna) => `ALTER TABLE projeto DROP COLUMN ${coluna};`)

@@ -156,6 +156,39 @@ test("CA-8: copia iterações, propostas e o retrabalho que faltava para a deman
   b.close();
 });
 
+test("copia o modelo e o effort de cada etapa legada para as etapas do ticket, só no projeto sem nenhuma etapa", () => {
+  const b = bancoAnterior();
+  const opus = '{"provedor":"anthropic","modelo":"claude-opus-5-5"}';
+  b.exec(`
+    UPDATE projeto SET
+      modelos = '{"registro":${opus},"desenvolvimento":{"provedor":"llamacpp","modelo":"qwen"},"sessao":${opus}}',
+      efforts = '{"desenho":"high","revisao":"low","encerramento":"max"}'
+    WHERE nome = 'p';
+    INSERT INTO projeto (nome, repo, branch_base, hospedagem, preparacao, testes, sonar_project_key, fitness, modelos, efforts)
+      VALUES ('q', '/repo/q', 'main', 'github', '[]', '["t"]', 'q', '[{"nome":"f"}]', '{"desenho":${opus}}', '{"revisao":"high"}');
+    INSERT INTO configuracao_etapa_projeto (projeto, etapa, effort) VALUES ('q', 'implementar', 'off');
+  `);
+
+  migrar(b, MIGRACOES);
+
+  const opusNovo = { modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5" };
+  const sem = { modelo_provedor: null, modelo_nome: null };
+  assert.deepEqual(ler(b, "SELECT * FROM configuracao_etapa_projeto ORDER BY projeto, etapa"), [
+    { projeto: "p", etapa: "demanda", ...opusNovo, effort: null },
+    { projeto: "p", etapa: "encerrar_demanda", ...sem, effort: "max" },
+    { projeto: "p", etapa: "encerrar_rodada", ...sem, effort: "max" },
+    { projeto: "p", etapa: "implementar", modelo_provedor: "llamacpp", modelo_nome: "qwen", effort: null },
+    { projeto: "p", etapa: "planejar", ...sem, effort: "high" },
+    { projeto: "p", etapa: "resolver_conflito", modelo_provedor: "llamacpp", modelo_nome: "qwen", effort: null },
+    { projeto: "p", etapa: "revisar_demanda", ...sem, effort: "low" },
+    { projeto: "p", etapa: "revisar_rodada", ...sem, effort: "low" },
+    { projeto: "p", etapa: "sessao_em_aberto", ...opusNovo, effort: null },
+    // O projeto que já tinha etapa configurada fica como estava.
+    { projeto: "q", etapa: "implementar", ...sem, effort: "off" },
+  ]);
+  b.close();
+});
+
 test("CA-9: issue sem demanda recusa a migração, citando a issue e orientando a versão anterior, sem apagar nada", () => {
   const b = bancoAnterior();
   b.exec(

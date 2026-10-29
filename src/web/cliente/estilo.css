@@ -1038,6 +1038,46 @@ input.erro {
   flex-basis: 100%;
 }
 
+/* Modelo e effort por etapa: o rótulo da etapa, o seletor de modelo e o de effort numa linha; vazio é o padrão do pi,
+   apagado. */
+.modelos-grade {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 360px) minmax(0, 140px);
+  gap: var(--s-1) var(--s-3);
+  align-items: center;
+  font-size: var(--fs-sm);
+}
+.modelos-cab {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.modelos-grade select {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+}
+.modelos-grade select.padrao {
+  color: var(--muted);
+}
+/* No celular, a etapa e o effort dividem a linha de cima, e o modelo, de nome longo, fica com a de baixo inteira: o
+   `dense` sobe o effort para o lado da etapa. */
+@media (max-width: 700px) {
+  .modelos-grade {
+    grid-template-columns: minmax(0, 1fr) 124px;
+    grid-auto-flow: row dense;
+  }
+  .modelos-grade > .celula {
+    grid-column: 1 / -1;
+    margin-bottom: var(--s-2);
+  }
+  .modelos-grade > .celula-effort {
+    grid-column: 2;
+    margin-bottom: 0;
+  }
+  .modelos-cab:nth-child(2) {
+    display: none;
+  }
+}
+
 /* Usuários simulados (F8 §2), abaixo do formulário do projeto. */
 .usuarios-simulados {
   display: flex;
@@ -2426,19 +2466,12 @@ svg.barras :not(.hit) {
   height: 18px;
   line-height: 18px;
 }
-.sdlc-linha input,
-.sdlc-linha select {
+.sdlc-linha input {
   height: 34px;
 }
-.sdlc-linha > .btn,
-.sdlc-linha > .sdlc-nome {
+.sdlc-linha > .btn {
   height: 34px;
   margin-top: 18px;
-}
-.sdlc-nome {
-  display: flex;
-  align-items: center;
-  font-size: var(--fs-sm);
 }
 .sdlc-linha .msg-erro {
   position: absolute;
@@ -2449,9 +2482,6 @@ svg.barras :not(.hit) {
 }
 .sdlc-projeto {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.sdlc-etapa {
-  grid-template-columns: 150px repeat(3, minmax(0, 1fr));
 }
 .sdlc-preparacao {
   grid-template-columns: 120px minmax(0, 1fr) auto;
@@ -2487,9 +2517,6 @@ svg.barras :not(.hit) {
   }
   .sdlc-linha > .btn {
     justify-self: start;
-  }
-  .sdlc-linha > .sdlc-nome {
-    margin-top: 0;
   }
 }
 

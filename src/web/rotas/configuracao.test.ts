@@ -10,6 +10,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrir } from "../../persistencia/banco.ts";
+import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import { cursorDaBase } from "../../persistencia/retrabalho.ts";
 import { casar } from "../cliente/caminhos.ts";
@@ -91,15 +92,34 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
   throw new Error(`${metodo} ${caminho} não existe`);
 }
 
-/** O cadastro como o formulário manda, sem os campos do fluxo legado (CA-13). */
-const formulario = (repo: string) => ({ nome: "loja", repo, branchBase: "main", preparacao: [] });
+/** O cadastro como o formulário manda, sem os campos do fluxo legado (CA-13) e com as etapas no padrão do pi. */
+const formulario = (repo: string) => ({
+  nome: "loja",
+  repo,
+  branchBase: "main",
+  preparacao: [],
+  modelos: {},
+  efforts: {},
+});
 
-/** O projeto gravado do `formulario`: as colunas legadas com o padrão e a chave do SonarQube com o nome. */
+/** O projeto gravado do `formulario`, como a rota o devolve: a hospedagem deduzida e a chave do SonarQube com o nome. */
 const gravado = (repo: string) => ({
   ...formulario(repo),
   hospedagem: "github",
   sonar: { projectKey: "loja" },
 });
+
+/** O `gravado` como `projeto()` o lê do banco: sem as etapas, que ficam em `configuracao_etapa_projeto`. */
+function noBanco(repo: string) {
+  const { modelos: _modelos, efforts: _efforts, ...cadastro } = gravado(repo);
+  return cadastro;
+}
+
+const etapasGravadas = () =>
+  banco
+    .prepare("SELECT * FROM configuracao_etapa_projeto ORDER BY etapa")
+    .all()
+    .map((l) => ({ ...l }));
 
 test("configuração: o F4 §3 com a próxima busca só ligado, sem as execuções autônomas (CA-13)", async () => {
   assert.deepEqual(await chamar("GET", "/api/configuracao"), {
@@ -182,7 +202,7 @@ test("cadastrar: confere, grava com a hospedagem deduzida do remoto e fixa o cur
     await chamar("POST", "/api/projetos", { ...formulario(repo), hospedagem: "azure-devops" }),
     gravado(repo),
   );
-  assert.deepEqual(projeto(banco, "loja"), lido);
+  assert.deepEqual(projeto(banco, "loja"), noBanco(repo));
   assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
   assert.deepEqual(await chamar("GET", "/api/projetos"), [lido]);
   assert.deepEqual(await chamar("GET", "/api/projetos/loja"), lido);
@@ -196,13 +216,13 @@ test("cadastrar: confere, grava com a hospedagem deduzida do remoto e fixa o cur
   ]);
 });
 
-test("CA-13: o cadastro não aceita testes, SonarQube, fitness, modelos nem efforts; nada é gravado", async () => {
+test("CA-13: o cadastro não aceita testes, SonarQube, fitness nem as etapas do fluxo legado; nada é gravado", async () => {
   const repo = clone();
   for (const legado of [
     { testes: ["npm test"] },
     { sonar: { projectKey: "loja" } },
     { fitness: [{ nome: "f", comando: "true", descricao: "d" }] },
-    { modelos: {} },
+    { modelos: { desenho: { provedor: "anthropic", modelo: "claude-opus-5-5" } } },
     { efforts: { desenho: "high" } },
   ]) {
     const [status, erro] = (await chamar("POST", "/api/projetos", { ...formulario(repo), ...legado })) as [
@@ -213,6 +233,114 @@ test("CA-13: o cadastro não aceita testes, SonarQube, fitness, modelos nem effo
     assert.match(erro, new RegExp(Object.keys(legado)[0] ?? ""));
   }
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
+});
+
+test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no GET; o modelo novo ou trocado é conferido no pi", async () => {
+  const repo = clone();
+  const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  const qwen = { provedor: "llamacpp", modelo: "qwen3-coder-30b" };
+  const escolhidos = {
+    modelos: { planejar: opus, implementar: qwen },
+    efforts: { planejar: "high", revisar_rodada: "low" },
+  };
+  assert.deepEqual(await chamar("POST", "/api/projetos", { ...formulario(repo), ...escolhidos }), {
+    ...gravado(repo),
+    ...escolhidos,
+  });
+  const linhas = [
+    {
+      projeto: "loja",
+      etapa: "implementar",
+      modelo_provedor: "llamacpp",
+      modelo_nome: "qwen3-coder-30b",
+      effort: null,
+    },
+    {
+      projeto: "loja",
+      etapa: "planejar",
+      modelo_provedor: "anthropic",
+      modelo_nome: "claude-opus-5-5",
+      effort: "high",
+    },
+    { projeto: "loja", etapa: "revisar_rodada", modelo_provedor: null, modelo_nome: null, effort: "low" },
+  ];
+  assert.deepEqual(etapasGravadas(), linhas);
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...gravado(repo), ...escolhidos });
+  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...gravado(repo), ...escolhidos }]);
+
+  // O par que o pi não lista dá 422 no campo da etapa; nem o cadastro nem as etapas mudam.
+  assert.deepEqual(
+    await chamar("POST", "/api/projetos/loja", {
+      ...formulario(repo),
+      preparacao: ["npm ci"],
+      modelos: { ...escolhidos.modelos, demanda: { provedor: "inexistente", modelo: "xyz" } },
+    }),
+    [
+      422,
+      "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at modelos.demanda",
+    ],
+  );
+  assert.deepEqual(projeto(banco, "loja")?.preparacao, []);
+  assert.deepEqual(etapasGravadas(), linhas);
+
+  // Com o pi quebrado: o modelo igual ao gravado salva sem chamá-lo, e o trocado é recusado.
+  process.env.FABRIQUINHA_PI = "false";
+  try {
+    assert.deepEqual(await chamar("POST", "/api/projetos/loja", { ...formulario(repo), modelos: { planejar: opus } }), {
+      ...gravado(repo),
+      modelos: { planejar: opus },
+    });
+    assert.deepEqual(etapasGravadas(), [
+      {
+        projeto: "loja",
+        etapa: "planejar",
+        modelo_provedor: "anthropic",
+        modelo_nome: "claude-opus-5-5",
+        effort: null,
+      },
+    ]);
+    const [status, erro] = (await chamar("POST", "/api/projetos/loja", {
+      ...formulario(repo),
+      modelos: { planejar: qwen },
+    })) as [number, string];
+    assert.equal(status, 422);
+    assert.match(erro, /o pi falhou ao listar os modelos[^]*→ at modelos\.planejar$/);
+  } finally {
+    process.env.FABRIQUINHA_PI = join(bin, "pi");
+  }
+  // Tudo no padrão do pi: nenhuma linha de etapa fica.
+  await chamar("POST", "/api/projetos/loja", formulario(repo));
+  assert.deepEqual(etapasGravadas(), []);
+});
+
+test("as etapas do cadastro e a configuração SDLC não se apagam: cada gravação substitui só o que é dela", async () => {
+  const repo = clone();
+  await chamar("POST", "/api/projetos", formulario(repo));
+  gravarConfiguracaoProjeto(banco, {
+    nome: "loja",
+    branch_base: "main",
+    chave_sonarqube: "loja",
+    raiz_git: repo,
+    hospedagem: "github",
+    fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura mínima." }],
+    linguagens: [{ caminho: ".", linguagem: "typescript", comando_teste: "npm test" }],
+  });
+  await chamar("POST", "/api/projetos/loja", { ...formulario(repo), efforts: { implementar: "max" } });
+  const lida = configuracaoProjeto(banco, "loja");
+  assert.deepEqual(lida?.etapas, [{ etapa: "implementar", effort: "max" }]);
+  assert.equal(lida.linguagens.length, 1);
+
+  const { etapas: _etapas, ...semEtapas } = lida;
+  const salva = (await chamar("POST", "/api/projetos/loja/configuracao-sdlc", {
+    ...semEtapas,
+    branch_base: "main",
+  })) as {
+    configuracao: { etapas: unknown };
+  };
+  assert.deepEqual(salva.configuracao.etapas, [{ etapa: "implementar", effort: "max" }]);
+  assert.deepEqual(etapasGravadas(), [
+    { projeto: "loja", etapa: "implementar", modelo_provedor: null, modelo_nome: null, effort: "max" },
+  ]);
 });
 
 test("editar: o nome do caminho vale, o do corpo é ignorado, o cursor da base fica; projeto que não existe dá 404", async () => {

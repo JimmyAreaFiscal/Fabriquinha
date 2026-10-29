@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrir } from "../../persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
+import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { criarDemanda } from "../../persistencia/demandas.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import { casar } from "../cliente/caminhos.ts";
@@ -135,11 +135,13 @@ function semearDemandas(): void {
     chave_sonarqube: "loja",
     raiz_git: "/repos/loja",
     hospedagem: "github",
-    etapas: [{ etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-sonnet-5-5" }],
     preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
+  substituirEtapasDoProjeto(banco, "loja", [
+    { etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-sonnet-5-5" },
+  ]);
   criarDemanda(banco, demanda("I-203", "arquivada"));
   criarDemanda(banco, demanda("I-204", "concluida"));
   criarDemanda(banco, demanda("I-205", "cancelada"));

@@ -1,6 +1,6 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Modelo } from "../../../dominio/primitivos.ts";
+import type { Effort, Modelo } from "../../../dominio/primitivos.ts";
 import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
@@ -11,12 +11,14 @@ import {
   type Erros,
   errosDoZod,
   type EstadoDaConfiguracao,
+  ETAPAS,
   formularioDeProjeto,
   menu,
   modeloDasAvaliacoes,
   NOVO,
   type OpcoesDosUsuarios,
   pagina,
+  type ProjetoCadastrado,
   type ProjetoListado,
   projetoInexistente,
   type Rascunho,
@@ -48,8 +50,19 @@ const lerAgendador = (form: HTMLFormElement) => ({
   ociosidadeMin: Number(valor(form, '[name="ociosidadeMin"]')),
 });
 
-/** O que o formulário do projeto tem agora, no formato do F1 §3.3 sem a hospedagem nem os campos do fluxo legado. */
+/**
+ * O que o formulário do projeto tem agora, no formato do F1 §3.3 sem a hospedagem nem os campos do fluxo legado, com o
+ * modelo e o effort de cada etapa; a etapa em "padrão do pi" fica de fora.
+ */
 function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): Rascunho {
+  const modelos: Rascunho["modelos"] = {};
+  const efforts: Rascunho["efforts"] = {};
+  for (const [etapa] of ETAPAS) {
+    const modelo = modeloDoSeletor(valor(form, `[name="modelos.${etapa}"]`));
+    if (modelo) modelos[etapa] = modelo;
+    const effort = valor(form, `[name="efforts.${etapa}"]`);
+    if (effort) efforts[etapa] = effort as Effort;
+  }
   return {
     nome: valor(form, '[name="nome"]'),
     repo: valor(form, '[name="repo"]'),
@@ -57,6 +70,8 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
     linkProduto: valor(form, '[name="linkProduto"]'),
+    modelos,
+    efforts,
   };
 }
 
@@ -226,17 +241,22 @@ function montarProjeto(
   main: HTMLElement,
   signal: AbortSignal,
   menuHtml: string,
-  salvo: ProjetoListado | undefined,
+  salvo: ProjetoCadastrado | undefined,
+  modelosDoPi: readonly Modelo[],
 ): void {
   const inicial: Rascunho = salvo ?? NOVO;
   const desenhar = (p: Rascunho, erros: Erros, falha?: string): void => {
-    main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, erros, falha }));
+    main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, modelosDoPi, erros, falha }));
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");
     if (!form) return;
     if (salvo) {
       montarRemocao(main, signal, salvo);
       montarUsuarios(main, signal, salvo.nome);
     }
+    // O "padrão do pi" fica apagado; escolher um modelo ou effort o acende.
+    form.addEventListener("change", (evento) => {
+      if (evento.target instanceof HTMLSelectElement) evento.target.classList.toggle("padrao", !evento.target.value);
+    });
     form.addEventListener("click", (evento) => {
       const alvo = evento.target instanceof Element ? evento.target : null;
       const adicionar = alvo?.closest<HTMLElement>("[data-adicionar]")?.dataset.adicionar;
@@ -279,7 +299,7 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
   const sel = selecao(location.search);
   const [estado, projetos] = await Promise.all([
     api<EstadoDaConfiguracao>("/api/configuracao", { signal }),
-    api<ProjetoListado[]>("/api/projetos", { signal }),
+    api<ProjetoCadastrado[]>("/api/projetos", { signal }),
   ]);
   const menuHtml = menu(estado, projetos, sel);
   if (sel.tipo === "agendador") {
@@ -302,5 +322,5 @@ export async function montarConfiguracao(main: HTMLElement, _params: Parametros,
     main.innerHTML = pagina(menuHtml, projetoInexistente(sel.nome));
     return;
   }
-  montarProjeto(main, signal, menuHtml, salvo);
+  montarProjeto(main, signal, menuHtml, salvo, await api<Modelo[]>("/api/modelos", { signal }));
 }

@@ -2,7 +2,8 @@
 // formato legado; aqui só se tocam as colunas comuns e as tabelas novas. Sem coluna de posição: a ordem vem das chaves.
 import { isAbsolute } from "node:path";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
-import { Projeto } from "../dominio/configuracao_projeto.ts";
+import { z } from "zod";
+import { ConfiguracaoEtapaProjeto, Projeto } from "../dominio/configuracao_projeto.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { escrever } from "./banco.ts";
 
@@ -12,6 +13,9 @@ const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banc
 
 /** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
 const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
+
+const SELECIONAR_ETAPAS =
+  "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa";
 
 /** Lê o projeto sem abrir transação; quem chama garante o snapshot. Sem linguagens, não há configuração nova. */
 function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
@@ -29,11 +33,7 @@ function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
   if (!base || linguagens.length === 0) return undefined;
   return Projeto.parse({
     ...semNulos(base),
-    etapas: listar(
-      banco,
-      "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa",
-      nome,
-    ).map(semNulos),
+    etapas: listar(banco, SELECIONAR_ETAPAS, nome).map(semNulos),
     preparacao: listar(
       banco,
       "SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem ASC",
@@ -78,8 +78,9 @@ function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: str
 }
 
 /**
- * Valida e substitui a configuração inteira do projeto existente numa transação só; devolve a forma canônica relida
- * antes do COMMIT. Qualquer falha reverte escalares e listas.
+ * Valida e substitui a configuração do projeto existente numa transação só; devolve a forma canônica relida antes do
+ * COMMIT. Qualquer falha reverte escalares e listas. As etapas ficam como estão: quem as edita é o cadastro do projeto
+ * na Configuração (`substituirEtapasDoProjeto`), e as de `entrada` são ignoradas.
  */
 export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
   const p = Projeto.parse(entrada);
@@ -100,16 +101,8 @@ export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown)
       "linguagem_projeto",
       "fitness_function_projeto",
       "comando_preparacao_projeto",
-      "configuracao_etapa_projeto",
     ])
       banco.prepare(`DELETE FROM ${t} WHERE projeto = ?`).run(p.nome);
-    inserir(
-      banco,
-      "configuracao_etapa_projeto",
-      p.nome,
-      ["etapa", "modelo_provedor", "modelo_nome", "effort"],
-      p.etapas,
-    );
     inserir(banco, "comando_preparacao_projeto", p.nome, ["ordem", "comando"], p.preparacao);
     inserir(banco, "fitness_function_projeto", p.nome, ["nome", "comando", "descricao"], p.fitness);
     inserir(banco, "linguagem_projeto", p.nome, ["caminho", "linguagem", "comando_teste"], p.linguagens);
@@ -122,5 +115,18 @@ export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown)
     );
     inserir(banco, "glob_e2e", p.nome, ["caminho_linguagem", "glob"], p.globs);
     return Projeto.parse(ler(banco, p.nome)); // revalida a releitura; nunca é `undefined` aqui (há ao menos uma linguagem)
+  });
+}
+
+/** O modelo e o effort de cada etapa do projeto, mesmo sem a configuração SDLC (sem linguagens) gravada. */
+export const etapasDoProjeto = (banco: DatabaseSync, nome: string): Projeto["etapas"] =>
+  z.array(ConfiguracaoEtapaProjeto).parse(listar(banco, SELECIONAR_ETAPAS, nome).map(semNulos));
+
+/** Valida e substitui só as etapas do projeto, numa transação; o resto da configuração SDLC fica como está. */
+export function substituirEtapasDoProjeto(banco: DatabaseSync, nome: string, etapas: unknown): void {
+  const validas = z.array(ConfiguracaoEtapaProjeto).parse(etapas);
+  escrever(banco, () => {
+    banco.prepare("DELETE FROM configuracao_etapa_projeto WHERE projeto = ?").run(nome);
+    inserir(banco, "configuracao_etapa_projeto", nome, ["etapa", "modelo_provedor", "modelo_nome", "effort"], validas);
   });
 }
