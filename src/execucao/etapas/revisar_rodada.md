@@ -4,7 +4,7 @@
 
 **Passos:**
 
-1. Leia o plano, os critérios da rodada {rodada} e o que a Fabriquinha coletou: os arquivos alterados e a matriz de fitness functions, que está na seção "Matriz de fitness functions" com o arquivo do log de cada linha.
+1. Leia o plano, os critérios da rodada {rodada} e o que a Fabriquinha coletou: os arquivos alterados e a matriz de fitness functions, nas seções "Arquivos alterados" e "Matriz de fitness functions", esta com o arquivo do log de cada linha.
 2. Confira o código da worktree contra o plano e contra cada critério citado.
 3. Explique o resultado de cada fitness function, inclusive as que falharam.
 4. Comprove cada critério da rodada com o que você viu no código e nos testes.

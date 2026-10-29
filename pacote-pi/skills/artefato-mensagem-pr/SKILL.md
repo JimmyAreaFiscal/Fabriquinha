@@ -49,7 +49,7 @@ Cada campo, a seção do PR em que entra e o que ele responde:
 
 `naoVerificado`: caminhos, plataformas ou dados que nenhum teste nem a revisão exercitou; lista vazia vira "Nada.".
 
-`reversao`: os passos para desfazer, incluindo dado migrado ou configuração; escreva-a sempre que o impacto na arquitetura não for baixo, e sem ela a seção mostra "Não declarada.".
+`reversao`: os passos para desfazer, incluindo dado migrado ou configuração; escreva-a sempre que o impacto na arquitetura não for baixo, como a seção "Impacto na arquitetura" do seu prompt indica, e sem ela a seção mostra "Não declarada.".
 
 ## Antes de submeter
 

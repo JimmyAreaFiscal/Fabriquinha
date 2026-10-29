@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { catalogoDaEtapa } from "../dominio/evidencia_etapa.ts";
 import type { EtapaTicket } from "../dominio/primitivos.ts";
+import { impactoExigeReversao } from "../evidencias/schemas.ts";
 import type { AnexoDaDemanda } from "../persistencia/evidencia_demanda.ts";
 import { skillsDaEtapaDemanda } from "./pi_demanda.ts";
 
@@ -78,6 +79,39 @@ function secaoMatrizFitness({ ag, ticket, anexos }: ContextoDemanda): string {
   );
 }
 
+interface ArquivosAlterados {
+  arquivos: {
+    caminho: string;
+    status: string;
+    adicionadas: number | null;
+    removidas: number | null;
+    previsto: string | null;
+  }[];
+  previstosNaoTocados: string[];
+}
+
+/** O `arquivos_alterados` que a Fabriquinha gravou no ticket revisor antes do pi dele. */
+const arquivosAlteradosDoRevisor = (ag: AgregadoDemanda, revisor: number): ArquivosAlterados | undefined =>
+  ag.evidencias.find((e) => e.tipo === "arquivos_alterados" && e.ticket_id === revisor)?.dados as
+    ArquivosAlterados | undefined;
+
+/** Revisar rodada: o diff da rodada que a Fabriquinha apurou antes do pi, cada arquivo com o caminho do plano que casou. */
+function secaoArquivosAlterados({ ag, ticket }: ContextoDemanda): string {
+  const alterados = arquivosAlteradosDoRevisor(ag, ticket.ticket_id);
+  const linhasDoDiff = (a: ArquivosAlterados["arquivos"][number]) =>
+    a.adicionadas === null ? "binário" : `+${String(a.adicionadas)} −${String(a.removidas)}`;
+  return secao(
+    "Arquivos alterados",
+    "O diff da rodada contra a branch da demanda, apurado pela Fabriquinha antes desta execução, com o caminho dos " +
+      "tickets do plano que cada arquivo casou:\n\n" +
+      ((alterados?.arquivos ?? [])
+        .map((a) => `- \`${a.caminho}\` (${a.status}, ${linhasDoDiff(a)}): ${a.previsto ?? "não previsto"}`)
+        .join("\n") || "(nenhum)") +
+      "\n\nCaminhos do plano que a rodada não tocou:\n\n" +
+      ((alterados?.previstosNaoTocados ?? []).map((c) => `- \`${c}\``).join("\n") || "(nenhum)"),
+  );
+}
+
 /**
  * Encerrar rodada: os arquivos alterados fora dos caminhos do plano, que a `mensagem_pr` justifica um a um. Vêm da
  * mesma revisão que a submissão confere: a última concluída da rodada.
@@ -87,10 +121,7 @@ function secaoArquivosNaoPrevistos({ ag, ticket }: ContextoDemanda): string {
     (t) => t.rodada_id === ticket.rodada_id && t.etapa === "revisar_rodada" && t.status === "concluido",
   );
   const arquivosAlterados = ultimaRevisaoConcluida
-    ? ((
-        ag.evidencias.find((e) => e.tipo === "arquivos_alterados" && e.ticket_id === ultimaRevisaoConcluida.ticket_id)
-          ?.dados as { arquivos: { caminho: string; previsto: string | null }[] } | undefined
-      )?.arquivos ?? [])
+    ? (arquivosAlteradosDoRevisor(ag, ultimaRevisaoConcluida.ticket_id)?.arquivos ?? [])
     : [];
   const naoPrevistos = arquivosAlterados.filter((a) => a.previsto === null).map((a) => `- \`${a.caminho}\``);
   return secao(
@@ -101,11 +132,23 @@ function secaoArquivosNaoPrevistos({ ag, ticket }: ContextoDemanda): string {
   );
 }
 
+/** Encerrar rodada: o impacto do relatório da demanda, a mesma fonte com que a submissão da `mensagem_pr` exige `reversao`. */
+function secaoImpactoArquitetura({ ag }: ContextoDemanda): string {
+  const impacto = ag.evidencias.find((e) => e.tipo === "relatorio_impactos_arquitetura")?.dados.impacto as
+    string | undefined;
+  return secao(
+    "Impacto na arquitetura",
+    impactoExigeReversao(impacto)
+      ? `${String(impacto)}: escreva em \`reversao\` da mensagem do PR como desfazer a mudança.`
+      : `${impacto ?? "a demanda não tem relatório de impactos"}: \`reversao\` é opcional na mensagem do PR.`,
+  );
+}
+
 /** As seções que só a etapa precisa, com dados que já existem quando o pi dela é lançado. */
 const SECAO_DA_ETAPA: Partial<Record<EtapaTicket, (c: ContextoDemanda) => string>> = {
   planejar: secaoDesenhoAprovado,
-  revisar_rodada: secaoMatrizFitness,
-  encerrar_rodada: secaoArquivosNaoPrevistos,
+  revisar_rodada: (c) => secaoArquivosAlterados(c) + "\n" + secaoMatrizFitness(c),
+  encerrar_rodada: (c) => secaoArquivosNaoPrevistos(c) + "\n" + secaoImpactoArquitetura(c),
 };
 
 /** O texto do modo de trabalhar da etapa, com os placeholders trocados pelos endereços públicos. */

@@ -77,6 +77,9 @@ export function daUltimaConcluida(ag: Agregado, etapa: Etapa, tipo: TipoEvidenci
   return ticket && ag.evidencias.find((e) => e.ticket === ticket.id && e.tipo === tipo);
 }
 
+/** O impacto na arquitetura que exige `reversao` na `mensagem_pr`: qualquer um declarado que não seja baixo. */
+export const impactoExigeReversao = (impacto: unknown): boolean => impacto !== undefined && impacto !== "baixo";
+
 const Criterio = z.object({
   id: z.string().regex(/^CA-\d+$/),
   dado: z.string().trim().min(1),
@@ -475,7 +478,7 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
       }
       // O relatório de impactos é opcional da própria demanda (registrado pela ferramenta externa), nunca de um ticket.
       const impacto = ag.evidencias.find((e) => e.tipo === "relatorio_impactos_arquitetura")?.dados.impacto;
-      if (reversao === undefined && impacto !== undefined && impacto !== "baixo") {
+      if (reversao === undefined && impactoExigeReversao(impacto)) {
         throw new ErroDeRegra(
           `mensagem_pr não tem reversao, e o impacto do desenho aprovado é ${impacto as string}`,
           "descreva em reversao como desfazer a mudança",

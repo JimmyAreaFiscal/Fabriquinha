@@ -145,7 +145,7 @@ test("as revisões pedem revisao decidir do próprio ticket como último passo (
   assert.ok(!demanda.includes("--correcoes") && !rodada.includes("--plano"));
 });
 
-test("cada etapa recebe o que só ela lê: o desenho no planejar, a matriz no revisar_rodada, os não previstos no encerrar_rodada", () => {
+test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a matriz no revisar_rodada, os não previstos e o impacto no encerrar_rodada", () => {
   const evidencia = (tipo: string, dados: object, ticket_id?: number) => ({
     demanda_id: "I-206",
     tipo,
@@ -187,6 +187,17 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, a matriz no re
         },
         4,
       ),
+      evidencia(
+        "arquivos_alterados",
+        {
+          arquivos: [
+            { caminho: "src/a.ts", status: "M", adicionadas: 2, removidas: 1, previsto: "src/**" },
+            { caminho: "logo.png", status: "A", adicionadas: null, removidas: null, previsto: null },
+          ],
+          previstosNaoTocados: ["src/c.ts"],
+        },
+        3,
+      ),
     ],
   } as unknown as AgregadoDemanda;
   const anexo = (nome: string, tipo: string, ticket_id?: number) => ({
@@ -227,7 +238,13 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, a matriz no re
   assert.match(revisar, /- \*\*camadas\*\* \(camadas\): `npm run fitness` saiu com código 1; log `camadas\.log`/);
   assert.match(revisar, /- \*\*ciclos\*\* \(camadas\): `npm run fitness` estourou o tempo; log `ciclos\.log`/);
   assert.ok(revisar.includes("- `camadas.log`: `/raiz/arquivos/camadas.log`") && !revisar.includes("outro.log"));
+  assert.match(revisar, /- `src\/a\.ts` \(M, \+2 −1\): src\/\*\*\n- `logo\.png` \(A, binário\): não previsto/);
+  assert.match(revisar, /não tocou:\n\n- `src\/c\.ts`/);
   assert.match(montar("revisar_rodada"), /execução:\n\n\(nenhuma\)[\s\S]*você lê:\n\n\(nenhum\)/);
+  assert.match(
+    montar("revisar_rodada"),
+    /casou:\n\n\(nenhum\)\n\nCaminhos do plano que a rodada não tocou:\n\n\(nenhum\)/,
+  );
 
   // A última revisão concluída da rodada (T5) não tem arquivos_alterados: não sobra nada a explicar.
   assert.match(
@@ -237,4 +254,14 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, a matriz no re
   const soT4 = { ...comEvidencias, tickets: comEvidencias.tickets.filter((t) => t.ticket_id === 4) };
   assert.match(montarCom(soT4, "encerrar_rodada"), /mensagem do PR:\n\n- `src\/b\.ts`\n/);
   assert.match(montar("encerrar_rodada"), /mensagem do PR:\n\n\(nenhum\)/);
+
+  // O impacto vem do relatório da própria demanda: só o que não é baixo exige reversão.
+  const comImpacto = (impacto: string) =>
+    ({ ...ag, evidencias: [evidencia("relatorio_impactos_arquitetura", { impacto })] }) as unknown as AgregadoDemanda;
+  assert.match(
+    montarCom(comImpacto("medio"), "encerrar_rodada"),
+    /## Impacto na arquitetura\n\nmedio: escreva em `reversao` da mensagem do PR como desfazer a mudança\./,
+  );
+  assert.match(montarCom(comImpacto("baixo"), "encerrar_rodada"), /baixo: `reversao` é opcional/);
+  assert.match(montar("encerrar_rodada"), /a demanda não tem relatório de impactos: `reversao` é opcional/);
 });
