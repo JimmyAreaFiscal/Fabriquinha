@@ -1,7 +1,7 @@
 // Configuração (F7 §4.4) como funções puras: o menu lateral, o agendador e o formulário de projeto, com os erros do
 // `zod` ao lado de cada campo. O DOM e a rede ficam em configuracao-montar.ts.
 import type { Hospedagem, Projeto } from "../../../dominio/projeto.ts";
-import type { Effort, Modelo } from "../../../dominio/primitivos.ts";
+import type { Effort, EtapaTicket, Modelo } from "../../../dominio/primitivos.ts";
 import type { Configuracao } from "../../../persistencia/servico.ts";
 import type { UsuarioSimulado } from "../../../persistencia/simulacao.ts";
 import { escapar, nomeDoModelo } from "../render.ts";
@@ -11,16 +11,24 @@ export interface EstadoDaConfiguracao extends Configuracao {
   proximaBusca: string | null;
 }
 
+/** O modelo e o effort de cada etapa do ticket; a etapa ausente usa o padrão do pi. */
+export interface ModelosEEfforts {
+  modelos: Partial<Record<EtapaTicket, Modelo>>;
+  efforts: Partial<Record<EtapaTicket, Effort>>;
+}
+
 /** `GET /api/projetos`: os projetos cadastrados. */
 export type ProjetoListado = Projeto;
+
+/** O projeto de `GET /api/projetos` como o formulário o lê, com o modelo e o effort de cada etapa. */
+export type ProjetoCadastrado = ProjetoListado & ModelosEEfforts;
 
 /**
  * O projeto no formulário, sem os campos do fluxo legado, que o cadastro não pede; o novo ainda não tem hospedagem (o
  * F5 a deduz do remoto ao salvar).
  */
-export type Rascunho = Pick<Projeto, "nome" | "repo" | "branchBase" | "preparacao" | "linkProduto"> & {
-  hospedagem?: Hospedagem;
-};
+export type Rascunho = Pick<Projeto, "nome" | "repo" | "branchBase" | "preparacao" | "linkProduto"> &
+  ModelosEEfforts & { hospedagem?: Hospedagem };
 
 /** O item do menu escolhido, pelo endereço: `/config`, `/config?avaliacoes`, `/config?projeto=<nome>` ou `/config?novo`. */
 export type Selecao =
@@ -34,7 +42,15 @@ export function selecao(busca: string): Selecao {
   return q.has("novo") ? { tipo: "novo" } : { tipo: "agendador" };
 }
 
-export const NOVO: Rascunho = { nome: "", repo: "", branchBase: "main", preparacao: [], linkProduto: "" };
+export const NOVO: Rascunho = {
+  nome: "",
+  repo: "",
+  branchBase: "main",
+  preparacao: [],
+  linkProduto: "",
+  modelos: {},
+  efforts: {},
+};
 
 /** As mensagens por caminho (`fitness[0].nome`) do 422, a partir do `z.prettifyError` que o servidor manda. */
 export type Erros = Map<string, string[]>;
@@ -47,7 +63,7 @@ export function errosDoZod(texto: string): Erros {
   return erros;
 }
 
-/** As mensagens do campo `caminho`, inclusive as de dentro dele (`modeloAuditoria.modelo` no seletor). */
+/** As mensagens do campo `caminho`, inclusive as de dentro dele (`modelos.planejar.modelo` no seletor da etapa). */
 const mensagensDe = (erros: Erros, caminho: string): string[] =>
   [...erros].flatMap(([c, ms]) => (c === caminho || c.startsWith(`${caminho}.`) ? ms : []));
 
@@ -78,6 +94,20 @@ export const EFFORTS = Object.keys({
   xhigh: 0,
   max: 0,
 } satisfies Record<Effort, 0>);
+
+/** As etapas do ticket, na ordem do fluxo da demanda, com o rótulo do formulário. */
+export const ROTULOS_DA_ETAPA: Record<EtapaTicket, string> = {
+  demanda: "Demanda",
+  planejar: "Planejar",
+  implementar: "Implementar",
+  revisar_rodada: "Revisar rodada",
+  encerrar_rodada: "Encerrar rodada",
+  sessao_em_aberto: "Sessão em aberto",
+  revisar_demanda: "Revisar demanda",
+  encerrar_demanda: "Encerrar demanda",
+  resolver_conflito: "Resolver conflito",
+};
+export const ETAPAS = Object.entries(ROTULOS_DA_ETAPA) as [EtapaTicket, string][];
 
 const atual = (sim: boolean): string => (sim ? ' aria-current="page"' : "");
 
@@ -116,6 +146,8 @@ export function agendador(estado: EstadoDaConfiguracao, erros: Erros): string {
 
 export interface OpcoesDoProjeto {
   novo: boolean;
+  /** Os modelos que o pi lista (`GET /api/modelos`), para o seletor de cada etapa. */
+  modelosDoPi: readonly Modelo[];
   erros: Erros;
   /** A mensagem do servidor que não é de um campo (502 do F5, 409), no rodapé. */
   falha?: string;
@@ -172,10 +204,23 @@ export function modeloDasAvaliacoes(estado: EstadoDaConfiguracao, modelos: reado
   return `<h2>Avaliações</h2><form class="form" data-avaliacoes novalidate><div class="campo"><label for="${idDe(caminho)}">Modelo das avaliações</label>${seletorDeModelo(erros, caminho, estado.modeloAuditoria, modelos)}<span class="ajuda">vazio usa o padrão do pi; vale para as avaliações iniciadas em Avaliações</span></div><div class="rodape-form"><button type="submit" class="btn btn-primario">Salvar</button></div></form>`;
 }
 
+/** Uma linha por etapa: o rótulo, o seletor de modelo e o de effort; vazio usa o padrão do pi. */
+function modelosEEffortsPorEtapa(erros: Erros, p: ModelosEEfforts, modelosDoPi: readonly Modelo[]): string {
+  const linhas = ETAPAS.map(([etapa, rotulo]) => {
+    const effortEscolhido = p.efforts[etapa];
+    const caminhoDoEffort = `efforts.${etapa}`;
+    const m = marca(erros, caminhoDoEffort);
+    const options = EFFORTS.map((e) => `<option value="${e}"${e === effortEscolhido ? " selected" : ""}>${e}</option>`);
+    const effort = `<div class="celula celula-effort${m.classe}"><select id="${idDe(caminhoDoEffort)}" name="${caminhoDoEffort}" aria-label="Effort de ${rotulo}"${effortEscolhido ? "" : ' class="padrao"'}${m.aria}><option value="">padrão do pi</option>${options.join("")}</select>${m.msg}</div>`;
+    return `<label for="${idDe(`modelos.${etapa}`)}">${rotulo}</label>${seletorDeModelo(erros, `modelos.${etapa}`, p.modelos[etapa], modelosDoPi)}${effort}`;
+  });
+  return `<div class="grupo"><h3>Modelo e effort por etapa <span class="nota">· o effort é o raciocínio da IA (pi --thinking); vazio usa o padrão do pi; o ticket pode sobrescrever</span></h3><div class="modelos-grade"><span class="modelos-cab" aria-hidden="true">Etapa</span><span class="modelos-cab" aria-hidden="true">Modelo</span><span class="modelos-cab" aria-hidden="true">Effort</span>${linhas.join("")}</div></div>`;
+}
+
 const plural = (n: number, um: string, varios: string): string => `${String(n)} ${n === 1 ? um : varios}`;
 
-/** Projeto (F7 §4.4) nos dois grupos, com o rodapé que diz o que é conferido ao salvar e quantos campos têm erro. */
-export function formularioDeProjeto(p: Rascunho, { novo, erros, falha }: OpcoesDoProjeto): string {
+/** Projeto (F7 §4.4) nos três grupos, com o rodapé que diz o que é conferido ao salvar e quantos campos têm erro. */
+export function formularioDeProjeto(p: Rascunho, { novo, modelosDoPi, erros, falha }: OpcoesDoProjeto): string {
   const titulo = novo
     ? "Novo projeto"
     : `${escapar(p.nome)}<button type="button" class="btn btn-perigo remover-projeto" data-remover-projeto aria-label="Remover o projeto ${escapar(p.nome)}">Remover</button>`;
@@ -193,7 +238,7 @@ export function formularioDeProjeto(p: Rascunho, { novo, erros, falha }: OpcoesD
   // A falha do F5 (502) ou a recusa do C19 (409) entra numa linha própria; a nota e a contagem ficam (F7 §4.4).
   const rodape =
     (falha ? `<span class="msg-erro falha" role="alert">${escapar(falha)}</span>` : "") +
-    `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch e o remoto.</span>${contagem}`;
+    `<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.</span>${contagem}`;
   // Fora do h2: o título acessível do formulário continua o nome do projeto.
   const sdlc = novo
     ? ""
@@ -201,6 +246,7 @@ export function formularioDeProjeto(p: Rascunho, { novo, erros, falha }: OpcoesD
   return `<h2>${titulo}</h2>${sdlc}<form class="form" data-projeto novalidate>
 <div class="grupo"><h3>Repositório</h3><div class="grade">${nome}${texto(erros, "branchBase", "Branch base", p.branchBase, { mono: true })}${texto(erros, "repo", "Caminho do repositório", p.repo, { classe: " largo", mono: true, extra: ' placeholder="/home/…/meu-projeto"', ajuda: "caminho absoluto; o repositório precisa ter o remoto <code>origin</code>" })}<div class="campo"><label for="campo-hospedagem">Hospedagem</label><input id="campo-hospedagem" value="${hospedagem}" readonly></div>${texto(erros, "linkProduto", "Link do produto", p.linkProduto ?? "", { mono: true, extra: ' placeholder="https://produto.exemplo.com"', ajuda: "opcional; endereço http(s) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa" })}</div></div>
 <div class="grupo"><h3>Preparação</h3><div class="grade">${lista(erros, "preparacao", "Preparação da worktree", "opcional; roda ao criar a worktree", p.preparacao)}</div></div>
+${modelosEEffortsPorEtapa(erros, p, modelosDoPi)}
 <div class="rodape-form">${rodape}<button type="button" class="btn" data-cancelar>Cancelar</button><button type="submit" class="btn btn-primario">${novo ? "Cadastrar projeto" : "Salvar projeto"}</button></div></form>${novo ? "" : '<section class="usuarios-simulados" data-usuarios-simulados aria-label="Usuários simulados"></section>'}`;
 }
 

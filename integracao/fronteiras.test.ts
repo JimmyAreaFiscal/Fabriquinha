@@ -10,7 +10,11 @@ import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/d
 import { argumentosPi } from "../src/execucao/pi.ts";
 import { submeterPlanejamento } from "../src/execucao/planejamento.ts";
 import { comDemanda } from "../src/persistencia/demandas.ts";
-import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
+import {
+  configuracaoProjeto,
+  gravarConfiguracaoProjeto,
+  substituirEtapasDoProjeto,
+} from "../src/persistencia/configuracao_projeto.ts";
 import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada } from "./apoio.ts";
 import { piFalso } from "./falsos.ts";
 
@@ -110,7 +114,6 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
     chave_sonarqube: "chave-loja",
     raiz_git: c.repo,
     hospedagem: "github",
-    etapas: [{ etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "m-1", effort: "high" }],
     preparacao: [{ ordem: 1, comando: "true" }],
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
@@ -125,11 +128,25 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
   const iscaAntes = statSync(isca);
 
   gravarConfiguracaoProjeto(c.banco, valida);
+  substituirEtapasDoProjeto(c.banco, c.projeto, [
+    { etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "m-1", effort: "high" },
+  ]);
   const antes = tabelas();
-  const etapa = (e: object) => ({ etapas: [{ etapa: "implementar", ...e }] });
+  // As etapas são do cadastro do projeto, que as grava sozinhas.
+  for (const [nome, etapa] of [
+    ["modelo incompleto", { modelo_provedor: "anthropic" }],
+    ["effort inválido", { effort: "altissimo" }],
+  ] as const) {
+    assert.throws(
+      () => {
+        substituirEtapasDoProjeto(c.banco, c.projeto, [{ etapa: "implementar", ...etapa }]);
+      },
+      Error,
+      nome,
+    );
+    assert.deepEqual(tabelas(), antes, `${nome}: nada gravado`);
+  }
   const invalidas: [string, object][] = [
-    ["modelo incompleto", etapa({ modelo_provedor: "anthropic" })],
-    ["effort inválido", etapa({ effort: "altissimo" })],
     ["E2E abaixo de 1", e2e(0)],
     ["E2E acima de 255", e2e(256)],
     ["glob com ..", e2e(1, "../isca.txt")],

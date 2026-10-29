@@ -5,10 +5,8 @@ import { api, ErroDaApi, mostrarErro } from "../dom.ts";
 import { errosDoZod } from "./configuracao.ts";
 import {
   adicionar,
-  CAMPOS_DA_ETAPA,
   CAMPOS_DO_PROJETO,
   doProjeto,
-  erroPorEtapa,
   type Estado,
   estadoInicial,
   formulario,
@@ -43,7 +41,7 @@ function ler(form: HTMLFormElement): Estado {
       ),
     ]),
   ) as Record<GrupoDeLista, Linha[]>;
-  return { ...projeto, ...listas, etapas: linhas("etapas", CAMPOS_DA_ETAPA) };
+  return { ...projeto, ...listas };
 }
 
 export async function montarSdlc(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
@@ -91,14 +89,7 @@ export async function montarSdlc(main: HTMLElement, params: Parametros, signal: 
         })
         .catch((error_: unknown) => {
           if (signal.aborted) return;
-          if (error_ instanceof ErroDaApi && error_.status === 422)
-            desenhar(
-              lido,
-              erroPorEtapa(
-                errosDoZod(error_.message),
-                corpo.etapas.map((e) => e.etapa),
-              ),
-            );
+          if (error_ instanceof ErroDaApi && error_.status === 422) desenhar(lido, errosDoZod(error_.message));
           else if (error_ instanceof ErroDaApi && error_.status !== 401)
             desenhar(lido, undefined, { falha: error_.message });
           else {

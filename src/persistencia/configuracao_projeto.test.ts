@@ -8,7 +8,12 @@ import { Projeto } from "../dominio/configuracao_projeto.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { abrir, escrever } from "./banco.ts";
 import { projeto, projetos, registrarProjeto } from "./projetos.ts";
-import { configuracaoProjeto, gravarConfiguracaoProjeto } from "./configuracao_projeto.ts";
+import {
+  configuracaoProjeto,
+  etapasDoProjeto,
+  gravarConfiguracaoProjeto,
+  substituirEtapasDoProjeto,
+} from "./configuracao_projeto.ts";
 
 const TABELAS = [
   "projeto",
@@ -103,16 +108,54 @@ const canonica = {
   globs: [completa.globs[2], completa.globs[1], completa.globs[0]],
 };
 
+/** A configuração `completa` do projeto `a`: as etapas, que são do cadastro, e o resto, que é da configuração SDLC. */
+function gravarCompleta(banco: DatabaseSync): Projeto {
+  substituirEtapasDoProjeto(banco, "a", completa.etapas);
+  return gravarConfiguracaoProjeto(banco, completa);
+}
+
 test("ida e volta completa, com listas na ordem canônica", () => {
   comBanco((banco) => {
-    assert.deepEqual(gravarConfiguracaoProjeto(banco, completa), canonica);
+    assert.deepEqual(gravarCompleta(banco), canonica);
     assert.deepEqual(configuracaoProjeto(banco, "a"), canonica);
+  });
+});
+
+test("a gravação da configuração ignora as etapas da entrada e mantém as gravadas pelo cadastro", () => {
+  comBanco((banco) => {
+    assert.deepEqual(gravarConfiguracaoProjeto(banco, completa).etapas, []);
+    substituirEtapasDoProjeto(banco, "a", completa.etapas);
+    assert.deepEqual(gravarConfiguracaoProjeto(banco, { ...minima(), etapas: [] }).etapas, canonica.etapas);
+    assert.deepEqual(configuracaoProjeto(banco, "a")?.etapas, canonica.etapas);
+  });
+});
+
+test("etapas: lidas sem a configuração SDLC, substituídas sozinhas; a inválida não altera nada", () => {
+  comBanco((banco) => {
+    assert.deepEqual(etapasDoProjeto(banco, "b"), []);
+    substituirEtapasDoProjeto(banco, "b", [{ etapa: "sessao_em_aberto", effort: "max" }]);
+    assert.equal(configuracaoProjeto(banco, "b"), undefined);
+    assert.deepEqual(etapasDoProjeto(banco, "b"), [{ etapa: "sessao_em_aberto", effort: "max" }]);
+
+    gravarCompleta(banco);
+    substituirEtapasDoProjeto(banco, "a", [{ etapa: "demanda", modelo_provedor: "p", modelo_nome: "m" }]);
+    assert.deepEqual(configuracaoProjeto(banco, "a"), {
+      ...canonica,
+      etapas: [{ etapa: "demanda", modelo_provedor: "p", modelo_nome: "m" }],
+    });
+    const antes = dump(banco);
+    assert.throws(() => {
+      substituirEtapasDoProjeto(banco, "a", [{ etapa: "planejar", modelo_provedor: "p" }]);
+    }, /modelo_nome/);
+    assert.deepEqual(dump(banco), antes);
+    assert.equal(banco.isTransaction, false);
+    assert.deepEqual(etapasDoProjeto(banco, "b"), [{ etapa: "sessao_em_aberto", effort: "max" }]);
   });
 });
 
 test("a leitura dentro de uma escrita faz parte dela, sem abrir outra transação", () => {
   comBanco((banco) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     assert.deepEqual(
       escrever(banco, () => configuracaoProjeto(banco, "a")),
       canonica,
@@ -137,7 +180,7 @@ test("configuração mínima aplica defaults e trim; opcionais ficam ausentes", 
 
 test("mesmo nome de linguagem em caminhos distintos e leitura após reabrir", () => {
   comBanco((banco, raiz) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     const outro = abrir(raiz);
     assert.deepEqual(
       configuracaoProjeto(outro, "a")?.linguagens.map((l) => l.linguagem),
@@ -148,9 +191,9 @@ test("mesmo nome de linguagem em caminhos distintos e leitura após reabrir", ()
   });
 });
 
-test("substituição remove cursor, modelo, effort e listas opcionais", () => {
+test("substituição remove cursor e listas opcionais e mantém as etapas", () => {
   comBanco((banco) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     const nova = {
       ...minima(),
       raiz_git: "/novo",
@@ -162,7 +205,8 @@ test("substituição remove cursor, modelo, effort e listas opcionais", () => {
     assert.equal(lida.cursor_commit_humano, undefined);
     assert.deepEqual(configuracaoProjeto(banco, "a"), lida);
     assert.equal(lida.raiz_git, "/novo");
-    for (const t of TABELAS.slice(1, 3)) assert.equal(banco.prepare(`SELECT count(*) AS n FROM ${t}`).get()?.n, 0);
+    assert.deepEqual(lida.etapas, canonica.etapas);
+    assert.equal(banco.prepare("SELECT count(*) AS n FROM comando_preparacao_projeto").get()?.n, 0);
     assert.equal(banco.prepare("SELECT count(*) AS n FROM glob_e2e").get()?.n, 0);
   });
 });
@@ -180,7 +224,7 @@ test("ausência: sem configuração nova ou projeto inexistente lê undefined se
 
 test("entrada inválida não altera nada", () => {
   comBanco((banco) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     const antes = dump(banco);
     assert.throws(() => gravarConfiguracaoProjeto(banco, { ...completa, linguagens: [] }));
     assert.deepEqual(dump(banco), antes);
@@ -190,7 +234,7 @@ test("entrada inválida não altera nada", () => {
 
 test("erro tardio no INSERT de glob reverte tudo e libera a transação", () => {
   comBanco((banco) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     const antes = dump(banco);
     banco.exec(`CREATE TRIGGER falha_glob BEFORE INSERT ON glob_e2e WHEN NEW.glob = 'boom'
       BEGIN SELECT RAISE(ABORT, 'falha de teste'); END`);
@@ -209,7 +253,7 @@ test("erro tardio no INSERT de glob reverte tudo e libera a transação", () => 
 
 test("repo duplicado propaga o erro e preserva a configuração anterior", () => {
   comBanco((banco) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     const antes = dump(banco);
     assert.throws(() => gravarConfiguracaoProjeto(banco, { ...minima(), raiz_git: "/repo/b" }), /UNIQUE/);
     assert.deepEqual(dump(banco), antes);
@@ -218,7 +262,7 @@ test("repo duplicado propaga o erro e preserva a configuração anterior", () =>
 
 test("projetos são isolados e campos comuns são compartilhados com o cadastro", () => {
   comBanco((banco) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     gravarConfiguracaoProjeto(banco, minima("b"));
     assert.deepEqual(configuracaoProjeto(banco, "a"), canonica);
     assert.equal(configuracaoProjeto(banco, "b")?.fitness.length, 1);
@@ -234,7 +278,7 @@ test("projetos são isolados e campos comuns são compartilhados com o cadastro"
 
 test("leitura é um snapshot: substituição commitada entre os SELECTs só aparece na leitura seguinte", () => {
   comBanco((banco, raiz) => {
-    gravarConfiguracaoProjeto(banco, completa);
+    gravarCompleta(banco);
     const nova = {
       ...minima(),
       branch_base: "dev",
@@ -257,7 +301,7 @@ test("leitura é um snapshot: substituição commitada entre os SELECTs só apar
       assert.deepEqual(configuracaoProjeto(leitor, "a"), canonica);
       assert.ok(escreveu);
       assert.equal(leitor.isTransaction, false);
-      assert.deepEqual(configuracaoProjeto(leitor, "a"), Projeto.parse(nova));
+      assert.deepEqual(configuracaoProjeto(leitor, "a"), { ...Projeto.parse(nova), etapas: canonica.etapas });
       assert.equal(leitor.isTransaction, false);
     } finally {
       leitor.prepare = prepare;

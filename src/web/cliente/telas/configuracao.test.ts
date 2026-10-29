@@ -10,7 +10,7 @@ import {
   modeloDasAvaliacoes,
   NOVO,
   pagina,
-  type ProjetoListado,
+  type ProjetoCadastrado,
   projetoInexistente,
   selecao,
   usuariosSimulados,
@@ -19,13 +19,15 @@ import {
 // A hora da próxima busca sai no fuso do navegador; aqui, um fuso fixo.
 process.env.TZ = "America/Sao_Paulo";
 
-const LOJA: ProjetoListado = {
+const LOJA: ProjetoCadastrado = {
   nome: "loja",
   repo: "/code/loja",
   branchBase: "main",
   hospedagem: "github",
   preparacao: ["npm ci"],
   sonar: { projectKey: "loja" },
+  modelos: {},
+  efforts: {},
 };
 
 const MODELOS = [
@@ -148,8 +150,8 @@ test("avaliações: o seletor do modelo em padrão do pi, com o escolhido, com o
   );
 });
 
-test("projeto salvo: nome só leitura, hospedagem e preparação; sem testes, SonarQube, fitness, modelos e efforts (CA-13)", () => {
-  const html = formularioDeProjeto(LOJA, { novo: false, erros: new Map() });
+test("projeto salvo: nome só leitura, hospedagem, preparação e etapas; sem testes, SonarQube e fitness (CA-13)", () => {
+  const html = formularioDeProjeto(LOJA, { novo: false, modelosDoPi: MODELOS, erros: new Map() });
   assert.match(html, /^<h2>loja<button [^>]*data-remover-projeto/);
   assert.match(html, /aria-label="Remover o projeto loja">Remover<\/button><\/h2>/);
   assert.match(html, /<input id="campo-nome" name="nome" value="loja" readonly>/);
@@ -158,32 +160,102 @@ test("projeto salvo: nome só leitura, hospedagem e preparação; sem testes, So
     html,
     /<h3>Preparação<\/h3>.*<input class="mono" value="npm ci" placeholder="npm ci" aria-label="Preparação da worktree: comando 1">/,
   );
-  assert.doesNotMatch(html, /[Tt]estes|SonarQube|sonar|[Ff]itness|[Mm]odelo|[Ee]ffort|issue/);
+  assert.doesNotMatch(html, /[Tt]estes|SonarQube|sonar|[Ff]itness|issue/);
   assert.match(
     html,
-    /<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch e o remoto.<\/span><button/,
+    /<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.<\/span><button/,
   );
   assert.match(html, /<button type="submit" class="btn btn-primario">Salvar projeto<\/button>/);
+});
+
+test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de effort; padrão do pi apagado", () => {
+  const html = formularioDeProjeto(
+    {
+      ...LOJA,
+      modelos: { planejar: MODELOS[0], implementar: { provedor: "llamacpp", modelo: "qwen" } },
+      efforts: { planejar: "high" },
+    },
+    { novo: false, modelosDoPi: MODELOS, erros: new Map() },
+  );
+  assert.match(
+    html,
+    /<h3>Modelo e effort por etapa <span class="nota">· o effort é o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi; o ticket pode sobrescrever<\/span><\/h3><div class="modelos-grade"><span class="modelos-cab" aria-hidden="true">Etapa<\/span><span class="modelos-cab" aria-hidden="true">Modelo<\/span><span class="modelos-cab" aria-hidden="true">Effort<\/span><label for="campo-modelos.demanda">Demanda<\/label>/,
+  );
+  assert.deepEqual(
+    [...html.matchAll(/<label for="campo-modelos\.[a-z_]+">([^<]+)<\/label>/g)].map((m) => m[1]),
+    [
+      "Demanda",
+      "Planejar",
+      "Implementar",
+      "Revisar rodada",
+      "Encerrar rodada",
+      "Sessão em aberto",
+      "Revisar demanda",
+      "Encerrar demanda",
+      "Resolver conflito",
+    ],
+  );
+  assert.match(
+    html,
+    /<select id="campo-modelos.demanda" name="modelos.demanda" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">anthropic \/ claude-opus-5-5<\/option>/,
+  );
+  assert.match(
+    html,
+    /<select id="campo-modelos.planejar" name="modelos.planejar"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5" selected>/,
+  );
+  // O gravado que o pi deixou de listar continua no seletor.
+  assert.match(html, /<option value="llamacpp\/qwen" selected>llamacpp \/ qwen<\/option><\/select>/);
+  assert.match(
+    html,
+    /<div class="celula celula-effort"><select id="campo-efforts.planejar" name="efforts.planejar" aria-label="Effort de Planejar"><option value="">padrão do pi<\/option><option value="off">off<\/option>.*<option value="high" selected>high<\/option>/,
+  );
+  assert.match(
+    html,
+    /<select id="campo-efforts.demanda" name="efforts.demanda" aria-label="Effort de Demanda" class="padrao">/,
+  );
+
+  const erro = formularioDeProjeto(LOJA, {
+    novo: false,
+    modelosDoPi: MODELOS,
+    erros: errosDoZod(
+      "✖ o modelo x/y não existe no pi\n  → at modelos.revisar_rodada\n✖ inválido\n  → at efforts.demanda",
+    ),
+  });
+  assert.match(
+    erro,
+    /<div class="celula erro"><select id="campo-modelos.revisar_rodada" name="modelos.revisar_rodada" class="padrao" aria-invalid="true" aria-describedby="campo-modelos.revisar_rodada-erro">.*<\/select><span class="msg-erro" id="campo-modelos.revisar_rodada-erro">o modelo x\/y não existe no pi<\/span><\/div>/,
+  );
+  assert.match(
+    erro,
+    /<div class="celula celula-effort erro"><select id="campo-efforts.demanda" [^>]*aria-invalid="true"[^>]*>.*?<\/select><span class="msg-erro" id="campo-efforts.demanda-erro">inválido<\/span>/,
+  );
+  assert.match(erro, /2 campos com erro/);
 });
 
 test("link do produto: no grupo Repositório ao lado da hospedagem, com a ajuda, o valor e o erro do campo", () => {
   const html = formularioDeProjeto(
     { ...LOJA, linkProduto: "https://demo.exemplo.com" },
-    { novo: false, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at linkProduto") },
+    { novo: false, modelosDoPi: MODELOS, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at linkProduto") },
   );
   assert.match(
     html,
     /id="campo-hospedagem".*<div class="campo erro"><label for="campo-linkProduto">Link do produto<\/label><input class="mono" id="campo-linkProduto" name="linkProduto" value="https:\/\/demo.exemplo.com" placeholder="https:\/\/produto.exemplo.com" aria-invalid="true" aria-describedby="campo-linkProduto-erro"><span class="msg-erro" id="campo-linkProduto-erro">Informe um link http\(s\) válido<\/span><span class="ajuda">opcional; endereço http\(s\) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa<\/span>/,
   );
-  assert.match(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /name="linkProduto" value=""/);
+  assert.match(
+    formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() }),
+    /name="linkProduto" value=""/,
+  );
 });
 
 test("o bloco dos usuários simulados só existe no projeto salvo, depois do formulário", () => {
   assert.match(
-    formularioDeProjeto(LOJA, { novo: false, erros: new Map() }),
+    formularioDeProjeto(LOJA, { novo: false, modelosDoPi: MODELOS, erros: new Map() }),
     /<\/form><section class="usuarios-simulados" data-usuarios-simulados [^>]*><\/section>$/,
   );
-  assert.doesNotMatch(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /data-usuarios-simulados/);
+  assert.doesNotMatch(
+    formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() }),
+    /data-usuarios-simulados/,
+  );
 });
 
 const VAZIO = { rascunho: { nome: "", descricao: "" }, erros: new Map(), falhasDeAnexo: new Map<number, string>() };
@@ -251,16 +323,19 @@ test("usuários simulados: o erro de cada campo fica abaixo dele, a recusa do se
 });
 
 test("o botão Remover só existe no projeto salvo", () => {
-  assert.doesNotMatch(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /data-remover-projeto/);
+  assert.doesNotMatch(
+    formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() }),
+    /data-remover-projeto/,
+  );
 });
 
 test("formularioDeProjeto liga à configuração SDLC fora do h2, só no projeto salvo", () => {
-  const salvo = formularioDeProjeto(LOJA, { novo: false, erros: new Map() });
+  const salvo = formularioDeProjeto(LOJA, { novo: false, modelosDoPi: MODELOS, erros: new Map() });
   assert.match(
     salvo,
     /<\/h2><p class="link-sdlc"><a class="link" href="\/projects\/loja\/sdlc">Configuração SDLC do projeto<\/a>/,
   );
-  assert.doesNotMatch(formularioDeProjeto(NOVO, { novo: true, erros: new Map() }), /sdlc/);
+  assert.doesNotMatch(formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() }), /sdlc/);
 });
 
 test("confirmacaoDeRemover: o nome escapado, o que sai junto, Cancelar e Remover projeto", () => {
@@ -279,7 +354,7 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
       "✖ Pequeno demais\n  → at preparacao[0]",
     ].join("\n"),
   );
-  const html = formularioDeProjeto({ ...NOVO, preparacao: [""] }, { novo: true, erros });
+  const html = formularioDeProjeto({ ...NOVO, preparacao: [""] }, { novo: true, modelosDoPi: MODELOS, erros });
   assert.match(html, /^<h2>Novo projeto<\/h2>/);
   assert.match(
     html,
@@ -296,7 +371,11 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
     /<span class="msg-erro">3 campos com erro<\/span><button type="button" class="btn" data-cancelar>Cancelar<\/button><button type="submit" class="btn btn-primario">Cadastrar projeto/,
   );
   assert.match(
-    formularioDeProjeto(NOVO, { novo: true, erros: errosDoZod("✖ caminho absoluto\n  → at repo") }),
+    formularioDeProjeto(NOVO, {
+      novo: true,
+      modelosDoPi: MODELOS,
+      erros: errosDoZod("✖ caminho absoluto\n  → at repo"),
+    }),
     /<span class="msg-erro">1 campo com erro<\/span>/,
   );
 });
@@ -304,12 +383,13 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
 test("a falha que não é de campo (F5, C19) fica no rodapé, junto da nota e da contagem, que ficam", () => {
   const html = formularioDeProjeto(NOVO, {
     novo: true,
+    modelosDoPi: MODELOS,
     erros: new Map([["nome", ["obrigatório"]]]),
     falha: "o gh não está autenticado <x>",
   });
   assert.match(
     html,
-    /<div class="rodape-form"><span class="msg-erro falha" role="alert">o gh não está autenticado &#60;x&#62;<\/span><span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch e o remoto.<\/span><span class="msg-erro">1 campo com erro<\/span><button/,
+    /<div class="rodape-form"><span class="msg-erro falha" role="alert">o gh não está autenticado &#60;x&#62;<\/span><span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.<\/span><span class="msg-erro">1 campo com erro<\/span><button/,
   );
 });
 
