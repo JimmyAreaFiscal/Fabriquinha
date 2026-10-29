@@ -37,13 +37,6 @@ Siga as skills da Fabriquinha para cada evidência, que estão no repositório d
 - `desenho_solucao` (obrigatória, com o HTML): `../../pacote-pi/skills/artefato-desenho-solucao/SKILL.md`;
 - `comportamento` (opcional, recomendada em problema): `../../pacote-pi/skills/artefato-comportamento/SKILL.md`.
 
-Elas foram escritas para o agente de dentro da Fabriquinha; aqui, quatro coisas mudam:
-
-- a prova e o HTML ficam na pasta onde você roda o `fabriquinha`, nunca fora dela (`$FABRIQUINHA_SAIDA` não existe aqui);
-- a mudança de mais de 30 arquivos vira demandas separadas, registradas por você, com `--dep` para a ordem; o `issue propor` é só do agente de dentro;
-- quem confirma o conteúdo é o usuário desta conversa;
-- os `arquivosPrevistos` são a sua melhor estimativa: o planejamento da Fabriquinha divide em rodadas e tickets.
-
 Confira o formato de cada evidência com `fabriquinha demanda schema <tipo>`.
 
 ### Custos da sessão
@@ -92,7 +85,7 @@ O passo termina com `demanda enviar` impresso com a demanda enviada.
 Diga ao usuário a demanda criada (`I-<n>`) e que ela espera o gate do Auditor na página da demanda.
 Destaque só o que ele ainda não sabe: um achado do código, uma assunção registrada, um risco.
 
-Se o Auditor recusar, leia o motivo com `fabriquinha demanda ver I-<n>`.
+Se o Auditor recusar, a demanda e as que dependem dela vão a `cancelada`: `fabriquinha demanda ver I-<n>` mostra a fase, e o motivo fica na página da demanda (`/demandas/I-<n>`).
 Depois do envio, só `custos_realizados` aceita nova submissão; o resto está congelado, e a correção vira uma demanda nova.
 
 ## Limites
