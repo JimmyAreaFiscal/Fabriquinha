@@ -122,10 +122,11 @@ test("as abas são links, com a ativa marcada, e a página do projeto abre com D
   assert.match(html, /<a href="\/projects\/loja%20%3Capi%3E" aria-current="page">Demandas<\/a>/);
 });
 
-test("o seletor, Editar na Configuração e os cards do mês em cima; sem Registrar necessidade", () => {
+test("o seletor, Editar na Configuração, Configuração SDLC e os cards do mês em cima; sem Registrar necessidade", () => {
   const html = pagina([]);
   assert.match(html, /<option>fabriquinha<\/option><option selected>loja &#60;api&#62;<\/option>/);
   assert.match(html, /<a class="editar" href="\/config\?projeto=loja%20%3Capi%3E">Editar na Configuração<\/a>/);
+  assert.match(html, /<a class="editar" href="\/projects\/loja%20%3Capi%3E\/sdlc">Configuração SDLC<\/a>/);
   assert.match(
     html,
     /<\/nav><div class="kpis-mes">\s*<div class="kpi superficie"><span class="rotulo">Custo · outubro<\/span><span class="kpi-valor">US\$ 1,50<\/span><span class="kpi-sub">3 execuções/,
