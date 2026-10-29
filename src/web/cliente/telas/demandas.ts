@@ -1,6 +1,7 @@
 // Quadro de demandas (comparacao-sdlc §9.1) como função pura que devolve HTML: o trabalho global ativo e um cartão por
 // demanda, com as rodadas, o que espera o Auditor e o que bloqueia. O texto que vem do servidor passa por `escapar`.
 import type { EtapaTicket, FaseDemanda, FaseRodada } from "../../../dominio/primitivos.ts";
+import { markdown, markdownEmLinha } from "../markdown.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,
@@ -96,7 +97,7 @@ export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
 
 type StatusTicket = keyof typeof PILULA_DO_STATUS;
 export interface DadosDaPagina {
-  demanda: { id: string; projeto: string; titulo: string; fase: FaseDemanda };
+  demanda: { id: string; projeto: string; titulo: string; tipo: string; descricao: string; fase: FaseDemanda };
   rodadas: { ref: string; titulo: string; fase: FaseRodada }[];
   tickets: {
     ref: string;
@@ -269,8 +270,119 @@ const GATES: Partial<Record<FaseDemanda, { titulo: string; rota: string; aprovar
   },
 };
 
-/** O formulário do gate da fase atual (CA-14 a CA-19); fora de um gate, nada. O motivo só vale para recusar. */
-function gate({ id, fase }: Pagina["demanda"]): string {
+// ——— o que o Auditor lê na aprovação da demanda (como o antigo gate do registro e do desenho da issue) ———
+
+interface CriterioDeAceite {
+  id: string;
+  dado: string;
+  quando: string;
+  entao: string;
+}
+interface DesenhoDaSolucao {
+  resumo: string;
+  arquivosPrevistos: { caminho: string; acao: string; motivo: string }[];
+  foraDeEscopo: string[];
+}
+type Impacto = "baixo" | "medio" | "alto";
+const IMPACTO: Record<Impacto, string> = { baixo: "baixo", medio: "médio", alto: "alto" };
+
+/** A evidência `tipo` da própria demanda (sem rodada nem ticket), a última submetida. */
+const evidenciaDaDemanda = (p: Pagina, tipo: string): Pagina["evidencias"][number] | undefined =>
+  p.evidencias.findLast((e) => e.tipo === tipo && e.rodada === undefined && e.ticket === undefined);
+
+const tabela = (cabecalho: string, linhas: string[]): string =>
+  `<div class="rola"><table class="tabela"><thead><tr>${cabecalho}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`;
+
+/** Uma célula com o texto curto do agente, em Markdown de linha. */
+const celulaDoAgente = (texto: string): string => `<td class="md">${markdownEmLinha(texto)}</td>`;
+
+/** Um card de número, com o rótulo no singular ou no plural. */
+const numero = (valor: string, rotulo: string): string =>
+  `<div class="numero"><strong>${valor}</strong><span>${rotulo}</span></div>`;
+const contagem = (n: number, um: string, varios: string): string => numero(String(n), n === 1 ? um : varios);
+
+const blocoTitulado = (titulo: string, corpo: string): string =>
+  `<div><div class="titulo-bloco">${titulo}</div>${corpo}</div>`;
+
+/** O card que abre o HTML da evidência na caixa; sem HTML anexado, nada. */
+function cardDoHtml(e: Pagina["evidencias"][number], nome: string): string {
+  const html = e.anexos.find((a) => a.classe === "html");
+  return html
+    ? `<button type="button" class="art" data-html="${escapar(html.link)}" data-nome="${escapar(nome)}"><span class="tipo">HTML</span>${nome}</button>`
+    : "";
+}
+
+/**
+ * O que o Auditor precisa para decidir a demanda: tipo, descrição e comportamento, os critérios de aceite em tabela e o
+ * desenho da solução (números, resumo, arquivos previstos, fora de escopo e o HTML, que abre na caixa). Os números do
+ * impacto só aparecem com o relatório de impactos na arquitetura.
+ */
+function oQueAAprovacaoMostra(p: Pagina): string {
+  const comportamento = evidenciaDaDemanda(p, "comportamento")?.dados as { descricao: string } | undefined;
+  const fatos =
+    `<dl class="fatos"><dt>Tipo</dt><dd><span class="tag">${escapar(p.demanda.tipo)}</span></dd>` +
+    `<dt>Descrição</dt><dd><div class="md">${markdown(p.demanda.descricao)}</div></dd>` +
+    (comportamento ? `<dt>Comportamento</dt><dd><div class="md">${markdown(comportamento.descricao)}</div></dd>` : "") +
+    "</dl>";
+  const criterios = (evidenciaDaDemanda(p, "criterios_aceite")?.dados as { criterios: CriterioDeAceite[] } | undefined)
+    ?.criterios;
+  const tabelaDeCriterios = criterios
+    ? tabela(
+        "<th>ID</th><th>Dado</th><th>Quando</th><th>Então</th>",
+        criterios.map(
+          (c) =>
+            `<tr><td class="mono">${escapar(c.id)}</td>${[c.dado, c.quando, c.entao].map(celulaDoAgente).join("")}</tr>`,
+        ),
+      )
+    : '<p class="muted">Sem critérios de aceite.</p>';
+  return `<div class="dm-aprovacao">${fatos}${blocoTitulado("Critérios de aceite", tabelaDeCriterios)}${blocoTitulado("Desenho da solução", desenhoDaSolucao(p))}</div>`;
+}
+
+function desenhoDaSolucao(p: Pagina): string {
+  const evidencia = evidenciaDaDemanda(p, "desenho_solucao");
+  if (!evidencia) return '<p class="muted">Sem desenho da solução.</p>';
+  const desenho = evidencia.dados as DesenhoDaSolucao;
+  const relatorio = evidenciaDaDemanda(p, "relatorio_impactos_arquitetura");
+  const impactos = relatorio?.dados as { impacto: Impacto; novosAcoplamentos: unknown[] } | undefined;
+  const numeros = [
+    contagem(desenho.arquivosPrevistos.length, "arquivo previsto", "arquivos previstos"),
+    ...(impactos
+      ? [
+          contagem(impactos.novosAcoplamentos.length, "acoplamento novo", "acoplamentos novos"),
+          numero(
+            `<span class="impacto-${impactos.impacto}">${IMPACTO[impactos.impacto]}</span>`,
+            "impacto na arquitetura",
+          ),
+        ]
+      : []),
+  ];
+  const arquivos = tabela(
+    "<th>Arquivo</th><th>Ação</th><th>Motivo</th>",
+    desenho.arquivosPrevistos.map(
+      (a) =>
+        `<tr><td class="mono">${escapar(a.caminho).replaceAll("/", "/<wbr>")}</td><td>${escapar(a.acao)}</td>${celulaDoAgente(a.motivo)}</tr>`,
+    ),
+  );
+  const fora =
+    desenho.foraDeEscopo.length > 0
+      ? blocoTitulado(
+          "Fora de escopo",
+          `<div class="md"><ul>${desenho.foraDeEscopo.map((f) => `<li>${markdownEmLinha(f)}</li>`).join("")}</ul></div>`,
+        )
+      : "";
+  const cards = [
+    cardDoHtml(evidencia, "Desenho da solução"),
+    ...(relatorio ? [cardDoHtml(relatorio, "Impactos na arquitetura")] : []),
+  ].join("");
+  return `<div class="dm-desenho"><div class="numeros">${numeros.join("")}</div><div class="md">${markdown(desenho.resumo)}</div>${blocoTitulado("Arquivos previstos", arquivos)}${fora}${cards === "" ? "" : `<div class="cards-art">${cards}</div>`}</div>`;
+}
+
+/**
+ * O formulário do gate da fase atual (CA-14 a CA-19); fora de um gate, nada. O motivo só vale para recusar. Na
+ * aprovação da demanda, o que o Auditor lê para decidir vem antes do motivo.
+ */
+function gate(p: Pagina): string {
+  const { id, fase } = p.demanda;
   const g = GATES[fase];
   if (!g) return "";
   const campo = `motivo-${g.rota.replaceAll("/", "-")}`;
@@ -278,7 +390,7 @@ function gate({ id, fase }: Pagina["demanda"]): string {
     `<button type="button" class="btn btn-grande ${aprovado ? "btn-primario" : "btn-reprovar"}" data-gate="${String(aprovado)}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
   return blocoDeAcao(
     g.titulo,
-    `<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
+    `${fase === "aprovacao_demanda" ? oQueAAprovacaoMostra(p) : ""}<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
   );
 }
 
@@ -315,7 +427,7 @@ export function pagina(p: DadosDaPagina): string {
   return `<a class="link" href="/home">← Início</a>
   <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
     <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
-  ${gate(d)}
+  ${gate(p)}
   ${acoesDaDemanda(p)}
   ${
     p.dependencias.length > 0

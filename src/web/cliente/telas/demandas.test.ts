@@ -85,7 +85,14 @@ test("o texto do servidor é escapado", () => {
 });
 
 const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
-  demanda: { id: "I-206", projeto: "loja", titulo: "Demanda <I-206>", fase: "execucao" },
+  demanda: {
+    id: "I-206",
+    projeto: "loja",
+    titulo: "Demanda <I-206>",
+    tipo: "funcionalidade",
+    descricao: "Corrigir <b>",
+    fase: "execucao",
+  },
   rodadas: [],
   tickets: [],
   decisoes: [],
@@ -307,6 +314,74 @@ test("o gate da demanda traz Aprovar e Recusar com o motivo, ligados à rota da 
   assert.match(html, /data-gate="true" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Aprovar</);
 });
 
+/** Uma evidência da própria demanda, sem anexos. */
+const daDemanda = (tipo: string, dados: unknown, anexos: DadosDaPagina["evidencias"][number]["anexos"] = []) => ({
+  tipo,
+  dados,
+  anexos,
+});
+const naAprovacao = (evidencias: DadosDaPagina["evidencias"]) =>
+  pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_demanda" }, evidencias }));
+const DESENHO = {
+  resumo: "Guardar o cupom na `sessao`.",
+  arquivosPrevistos: [
+    { caminho: "src/a.ts", acao: "alterar", motivo: "ler <x>" },
+    { caminho: "src/b.ts", acao: "criar", motivo: "m" },
+  ],
+  foraDeEscopo: ["cupons <expirados>"],
+};
+const HTML = { nome: "desenho.html", classe: "html", link: "/api/demandas/I-206/anexos/abc?tipo=desenho_solucao" };
+
+test("a aprovação da demanda mostra tipo, descrição, comportamento, critérios e o desenho antes do motivo", () => {
+  const html = naAprovacao([
+    daDemanda("comportamento", { descricao: "Hoje **some**", comoReproduzir: ["x"] }),
+    daDemanda("criterios_aceite", { criterios: [{ id: "CA-1", dado: "d <i>", quando: "`q`", entao: "e" }] }),
+    daDemanda("desenho_solucao", DESENHO, [{ nome: "nota.txt", classe: "texto", link: "/t" }, HTML]),
+    daDemanda("relatorio_impactos_arquitetura", {
+      impacto: "alto",
+      novosAcoplamentos: [{ de: "a", para: "b", motivo: "m" }],
+    }),
+    // A do ticket não é a da demanda.
+    { ...daDemanda("criterios_aceite", { criterios: [] }), ticket: "I-206.T1" },
+  ]);
+  assert.match(html, /<dt>Tipo<\/dt><dd><span class="tag">funcionalidade<\/span>/);
+  assert.match(html, /<dt>Descrição<\/dt><dd><div class="md"><p>Corrigir &lt;b&gt;<\/p>/);
+  assert.match(html, /<dt>Comportamento<\/dt><dd><div class="md"><p>Hoje <strong>some<\/strong>/);
+  assert.match(html, /<td class="mono">CA-1<\/td><td class="md">d &lt;i&gt;<\/td><td class="md"><code>q<\/code>/);
+  assert.match(html, /<strong>2<\/strong><span>arquivos previstos/);
+  assert.match(html, /<strong>1<\/strong><span>acoplamento novo/);
+  assert.match(html, /<span class="impacto-alto">alto<\/span><\/strong><span>impacto na arquitetura/);
+  assert.match(html, /Guardar o cupom na <code>sessao<\/code>/);
+  assert.match(html, /<td class="mono">src\/<wbr>a\.ts<\/td><td>alterar<\/td><td class="md">ler &lt;x&gt;/);
+  assert.match(html, /Fora de escopo[\s\S]*<li>cupons &lt;expirados&gt;<\/li>/);
+  assert.match(
+    html,
+    /data-html="\/api\/demandas\/I-206\/anexos\/abc\?tipo=desenho_solucao" data-nome="Desenho da solução"/,
+  );
+  // O relatório sem HTML não ganha card.
+  assert.doesNotMatch(html, /data-nome="Impactos/);
+  assert.ok(html.indexOf("dm-aprovacao") < html.indexOf('id="motivo-decisao"'));
+});
+
+test("a aprovação sem relatório de impactos mostra só os arquivos previstos; sem evidências, diz o que falta", () => {
+  const semRelatorio = naAprovacao([daDemanda("desenho_solucao", { ...DESENHO, foraDeEscopo: [] })]);
+  assert.match(semRelatorio, /<strong>2<\/strong><span>arquivos previstos/);
+  assert.doesNotMatch(semRelatorio, /impacto na arquitetura|acoplamento|Fora de escopo|Comportamento|cards-art/);
+  const comRelatorio = naAprovacao([
+    daDemanda("desenho_solucao", { ...DESENHO, arquivosPrevistos: [DESENHO.arquivosPrevistos[0]] }),
+    daDemanda("relatorio_impactos_arquitetura", { impacto: "medio", novosAcoplamentos: [] }, [HTML]),
+  ]);
+  assert.match(comRelatorio, /<strong>1<\/strong><span>arquivo previsto</);
+  assert.match(comRelatorio, /<strong>0<\/strong><span>acoplamentos novos/);
+  assert.match(comRelatorio, /data-nome="Impactos na arquitetura"/);
+  assert.doesNotMatch(comRelatorio, /data-nome="Desenho da solução"/);
+  const vazia = naAprovacao([]);
+  assert.match(vazia, /Sem critérios de aceite\./);
+  assert.match(vazia, /Sem desenho da solução\./);
+  // Fora da aprovação da demanda, nada disso.
+  assert.doesNotMatch(pagina(dadosDaPagina()), /dm-aprovacao/);
+});
+
 test("o gate do planejamento usa a rota do planejamento (CA-17 a CA-19)", () => {
   const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" } }));
   assert.match(html, /data-caminho="\/api\/demandas\/[^"]*\/planejamento\/decisao"[^>]*>Reprovar planejamento</);
@@ -386,7 +461,7 @@ test("Cancelar só abre a confirmação, que lista as dependentes que vão junto
 
 test("Arquivar só na demanda concluída; cancelada e arquivada não têm ação (CA-29)", () => {
   const com = (fase: DadosDaPagina["demanda"]["fase"]) =>
-    pagina(dadosDaPagina({ demanda: { id: "I-206", projeto: "loja", titulo: "T", fase } }));
+    pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase } }));
   assert.match(com("concluida"), /data-demanda="arquivar" data-caminho="\/api\/demandas\/I-206\/arquivar"/);
   assert.doesNotMatch(com("concluida"), /Cancelar a demanda/);
   assert.doesNotMatch(com("cancelada"), /data-demanda/);

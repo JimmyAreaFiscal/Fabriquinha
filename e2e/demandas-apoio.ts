@@ -66,10 +66,43 @@ const comTicketDeDemanda = (id: string): AgregadoDemanda =>
     tickets: [{ ...ticket(id, 1, "demanda", 1, "em_execucao"), rodada_id: undefined }],
   });
 
-/** A I-214 aguardando a aprovação da demanda, com o ticket `demanda` em execução que a decisão conclui. */
+/** Uma evidência da própria demanda I-214. */
+const daDemanda = (tipo: string, dados: object) => ({ demanda_id: "I-214", tipo, dados, em });
+
+/**
+ * A I-214 aguardando a aprovação da demanda, com o ticket `demanda` em execução que a decisão conclui, e o que o
+ * Auditor lê para decidir: descrição, comportamento, critérios, o desenho com o HTML e o relatório de impactos.
+ */
 export function semearGateDaDemanda(raiz: string): void {
   const banco = abrir(raiz);
-  criarDemanda(banco, comTicketDeDemanda("I-214"));
+  const ag = comTicketDeDemanda("I-214");
+  criarDemanda(banco, {
+    ...ag,
+    demanda: { ...ag.demanda, descricao: "O carrinho **perde** os cupons ao recarregar." },
+    evidencias: [
+      daDemanda("comportamento", { descricao: "Hoje o cupom some no F5.", comoReproduzir: ["recarregue"] }),
+      daDemanda("criterios_aceite", {
+        criterios: [
+          { id: "CA-1", dado: "um cupom aplicado", quando: "o cliente recarrega", entao: "o cupom continua" },
+        ],
+      }),
+      daDemanda("desenho_solucao", {
+        resumo: "Guardar o cupom na `sessao`.",
+        arquivosPrevistos: [{ caminho: "src/carrinho.ts", acao: "alterar", motivo: "ler o cupom da sessão" }],
+        foraDeEscopo: ["cupons expirados"],
+      }),
+      daDemanda("relatorio_impactos_arquitetura", {
+        impacto: "medio",
+        novasDependencias: [],
+        novosAcoplamentos: [{ de: "carrinho", para: "sessao", motivo: "ler o cupom" }],
+        riscos: [],
+      }),
+    ],
+  } as unknown as AgregadoDemanda);
+  const html = guardarBytes(banco, Buffer.from("<h1>Desenho do cupom</h1>"));
+  gravarAnexos(banco, { demanda_id: "I-214", tipo: "desenho_solucao" }, [
+    { caminho: "desenho.html", mime: "text/html; charset=utf-8", ...html },
+  ]);
   banco.close();
 }
 
