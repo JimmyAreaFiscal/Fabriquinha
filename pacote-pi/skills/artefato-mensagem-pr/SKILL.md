@@ -43,7 +43,7 @@ Cada campo, a seção do PR em que entra e o que ele responde:
 
 `naoFeito`: o que um revisor esperaria encontrar e não está no PR, com o porquê; a seção Fora do escopo mostra só esta lista, e lista vazia vira "Nada declarado.".
 
-`naoPrevistos`: um item por arquivo que a última revisão da rodada marcou como não previsto (fora dos `caminhos` dos tickets do plano), com o mesmo `caminho`; se a lista não bater, o erro da submissão diz quais são; o `motivo` diz que necessidade, descoberta durante o desenvolvimento, levou à mudança.
+`naoPrevistos`: um item por arquivo que a última revisão da rodada marcou como não previsto (fora dos `caminhos` dos tickets do plano), com o mesmo `caminho`; a seção "Arquivos não previstos" do seu prompt lista exatamente esses arquivos; o `motivo` diz que necessidade, descoberta durante o desenvolvimento, levou à mudança.
 
 `comoRevisar`: passos numerados pela Fabriquinha, um por item, do arquivo que dá o contexto ao detalhe: "Comece por `src/x.ts`, a regra nova; depois `src/x.test.ts`, um teste por critério."
 

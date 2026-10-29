@@ -382,18 +382,20 @@ test("mensagem_pr: só as partes do PR que exigem julgamento, com os limites do 
   assert.deepEqual(schemaDe("mensagem_pr").arquivos.max, 0);
 });
 
-/** Uma issue com o desenho T-2 (impacto `impacto`) e a revisão T-5 concluídos; `naoPrevistos`: os de previsto null. */
+/**
+ * Uma demanda com o relatório de impactos dela (impacto `impacto`; a evidência da demanda chega sem ticket, como 0) e a
+ * revisão T-5 concluída; `naoPrevistos`: os de previsto null.
+ */
 function encerrando(impacto: string, naoPrevistos: string[], revisaoConcluida = true): Agregado {
   const ticket = (id: number, etapa: string, status: string) => ({ id, etapa, status });
   const evidencia = (ticket: number, tipo: string, dados: object) => ({ ticket, tipo, dados });
   return {
     tickets: [
-      ticket(2, "desenho", "concluido"),
       ticket(5, "revisao", revisaoConcluida ? "concluido" : "falhou"),
       ticket(6, "encerramento", "em_execucao"),
     ],
     evidencias: [
-      evidencia(2, "relatorio_impactos_arquitetura", { impacto }),
+      evidencia(0, "relatorio_impactos_arquitetura", { impacto }),
       evidencia(5, "arquivos_alterados", {
         arquivos: [
           { caminho: "busca.ts", previsto: "busca.ts" },

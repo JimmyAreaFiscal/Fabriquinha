@@ -69,8 +69,8 @@ const daEvidencia = (ag: Agregado, tipo: TipoEvidencia, lista: string, campo: st
     .flatMap((e) => (e.dados[lista] as Record<string, string>[]).map((item) => String(item[campo])));
 
 /**
- * A evidência `tipo` do último ticket concluído da `etapa`: a do desenho aprovado, a da revisão que levou ao
- * encerramento, a do último ticket de desenvolvimento.
+ * A evidência `tipo` do último ticket concluído da `etapa`: a da revisão que levou ao encerramento, a do último
+ * ticket de desenvolvimento.
  */
 export function daUltimaConcluida(ag: Agregado, etapa: Etapa, tipo: TipoEvidencia): Evidencia | undefined {
   const ticket = ag.tickets.findLast((t) => t.etapa === etapa && t.status === "concluido");
@@ -473,7 +473,8 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
           "submeta em naoPrevistos exatamente um item por arquivo com previsto null no arquivos_alterados, com o motivo",
         );
       }
-      const impacto = daUltimaConcluida(ag, "desenho", "relatorio_impactos_arquitetura")?.dados.impacto;
+      // O relatório de impactos é opcional da própria demanda (registrado pela ferramenta externa), nunca de um ticket.
+      const impacto = ag.evidencias.find((e) => e.tipo === "relatorio_impactos_arquitetura")?.dados.impacto;
       if (reversao === undefined && impacto !== undefined && impacto !== "baixo") {
         throw new ErroDeRegra(
           `mensagem_pr não tem reversao, e o impacto do desenho aprovado é ${impacto as string}`,

@@ -42,7 +42,7 @@ const ticket = (etapa: string, campos: Partial<TicketDemanda> = {}) =>
     etapa,
     ...campos,
   }) as TicketDemanda;
-const base = { ag, projeto: { nome: "loja", branch_base: "main" }, worktree: "/w", saida: "/s" };
+const base = { ag, projeto: { nome: "loja", branch_base: "main" }, worktree: "/w", saida: "/s", anexos: [] };
 const montar = (
   etapa: string,
   campos: Partial<TicketDemanda> = {},
@@ -143,4 +143,98 @@ test("as revisões pedem revisao decidir do próprio ticket como último passo (
   assert.match(demanda, /fabriquinha revisao decidir I-206\.T3 aprovar/);
   assert.match(demanda, /fabriquinha revisao decidir I-206\.T3 reprovar --motivo <texto> --plano/);
   assert.ok(!demanda.includes("--correcoes") && !rodada.includes("--plano"));
+});
+
+test("cada etapa recebe o que só ela lê: o desenho no planejar, a matriz no revisar_rodada, os não previstos no encerrar_rodada", () => {
+  const evidencia = (tipo: string, dados: object, ticket_id?: number) => ({
+    demanda_id: "I-206",
+    tipo,
+    em: AGORA,
+    dados,
+    ticket_id,
+  });
+  const desenho = {
+    resumo: "Índice invertido.",
+    arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "o índice" }],
+  };
+  const linha = { descricao: "camadas", comando: "npm run fitness", duracaoMs: 1 };
+  const comEvidencias = {
+    ...ag,
+    tickets: [
+      { ticket_id: 4, rodada_id: 2, etapa: "revisar_rodada", status: "concluido" },
+      { ticket_id: 5, rodada_id: 2, etapa: "revisar_rodada", status: "concluido" },
+      { ticket_id: 6, rodada_id: 9, etapa: "revisar_rodada", status: "concluido" },
+    ],
+    evidencias: [
+      evidencia("desenho_solucao", { ...desenho, foraDeEscopo: ["o ranking"] }),
+      evidencia(
+        "matriz_fitness",
+        {
+          linhas: [
+            { ...linha, nome: "camadas", codigoSaida: 1, estourou: false, log: "camadas.log" },
+            { ...linha, nome: "ciclos", codigoSaida: null, estourou: true, log: "ciclos.log" },
+          ],
+        },
+        3,
+      ),
+      evidencia(
+        "arquivos_alterados",
+        {
+          arquivos: [
+            { caminho: "src/b.ts", previsto: null },
+            { caminho: "src/a.ts", previsto: "src/a.ts" },
+          ],
+        },
+        4,
+      ),
+    ],
+  } as unknown as AgregadoDemanda;
+  const anexo = (nome: string, tipo: string, ticket_id?: number) => ({
+    nome,
+    tipo,
+    ticket_id,
+    caminho: `/raiz/arquivos/${nome}`,
+    mime: "text/plain",
+    bytes: 1,
+    sha256: "0",
+  });
+  const anexos = [
+    anexo("d.html", "desenho_solucao"),
+    anexo("camadas.log", "matriz_fitness", 3),
+    anexo("outro.log", "matriz_fitness", 8),
+  ];
+  const montarCom = (agregado: AgregadoDemanda, etapa: string, rodada_id = 2) =>
+    montarPromptDemanda({ ...base, ag: agregado, anexos, ticket: ticket(etapa, { rodada_id }) });
+
+  const planejar = montarCom(comEvidencias, "planejar");
+  for (const trecho of [
+    "## Desenho aprovado",
+    "Índice invertido.",
+    "- `src/a.ts` (criar): o índice",
+    "- o ranking",
+    "- `d.html`: `/raiz/arquivos/d.html`",
+  ])
+    assert.ok(planejar.includes(trecho), trecho);
+  assert.ok(!planejar.includes("## Matriz de fitness functions"));
+  const semForaDeEscopo = {
+    ...comEvidencias,
+    evidencias: [evidencia("desenho_solucao", { ...desenho, foraDeEscopo: [] })],
+  };
+  assert.match(montarCom(semForaDeEscopo as unknown as AgregadoDemanda, "planejar"), /Fora de escopo:\n\n\(nada\)/);
+  assert.match(montar("planejar"), /## Desenho aprovado\n\n\(vazio\)/);
+
+  const revisar = montarCom(comEvidencias, "revisar_rodada");
+  assert.match(revisar, /- \*\*camadas\*\* \(camadas\): `npm run fitness` saiu com código 1; log `camadas\.log`/);
+  assert.match(revisar, /- \*\*ciclos\*\* \(camadas\): `npm run fitness` estourou o tempo; log `ciclos\.log`/);
+  assert.ok(revisar.includes("- `camadas.log`: `/raiz/arquivos/camadas.log`") && !revisar.includes("outro.log"));
+  assert.match(montar("revisar_rodada"), /execução:\n\n\(nenhuma\)[\s\S]*você lê:\n\n\(nenhum\)/);
+
+  // A última revisão concluída da rodada (T5) não tem arquivos_alterados: não sobra nada a explicar.
+  assert.match(
+    montarCom(comEvidencias, "encerrar_rodada"),
+    /## Arquivos não previstos[\s\S]*mensagem do PR:\n\n\(nenhum\)/,
+  );
+  const soT4 = { ...comEvidencias, tickets: comEvidencias.tickets.filter((t) => t.ticket_id === 4) };
+  assert.match(montarCom(soT4, "encerrar_rodada"), /mensagem do PR:\n\n- `src\/b\.ts`\n/);
+  assert.match(montar("encerrar_rodada"), /mensagem do PR:\n\n\(nenhum\)/);
 });
