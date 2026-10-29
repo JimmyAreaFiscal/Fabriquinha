@@ -119,6 +119,44 @@ test("CA-14 a CA-16: o gate da demanda aprova, recusa sem motivo não envia e re
   await expect(fase(pagina)).not.toHaveText("Aprovação da demanda");
 });
 
+test("o gate da demanda mostra a descrição, os critérios e o desenho, que abre na caixa", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  projeto(fabriquinha.raiz);
+  semearGateDaDemanda(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/demandas/I-214`);
+  const gate = pagina.locator(".dm-gate", { hasText: "Aprovação da demanda" });
+  await expect(gate.locator(".fatos")).toContainText("funcionalidade");
+  await expect(gate.locator(".fatos strong", { hasText: "perde" })).toBeVisible();
+  await expect(gate.locator(".fatos")).toContainText("Hoje o cupom some no F5.");
+  const criterio = gate.getByRole("row", { name: /CA-1/ });
+  await expect(criterio).toContainText("um cupom aplicado");
+  await expect(criterio).toContainText("o cliente recarrega");
+  await expect(criterio).toContainText("o cupom continua");
+  await expect(gate.locator(".numero", { hasText: "arquivo previsto" })).toContainText("1");
+  await expect(gate.locator(".numero", { hasText: "acoplamento novo" })).toContainText("1");
+  await expect(gate.locator(".numero .impacto-medio")).toHaveText("médio");
+  await expect(gate).toContainText("Guardar o cupom na sessao");
+  await expect(gate.getByRole("row", { name: /src\/carrinho\.ts/ })).toContainText("ler o cupom da sessão");
+  await expect(gate).toContainText("cupons expirados");
+
+  for (const largura of [1440, 375]) {
+    await pagina.setViewportSize({ width: largura, height: 900 });
+    expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await info.attach(`gate-conteudo-${String(largura)}`, {
+      body: await pagina.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+  }
+  await pagina.setViewportSize({ width: 1440, height: 900 });
+  await gate.getByRole("button", { name: /Desenho da solução/ }).click();
+  const caixa = pagina.locator("dialog[open]");
+  await expect(caixa.locator("[data-caixa-titulo]")).toHaveText("Desenho da solução");
+  await expect(caixa.frameLocator("iframe").getByRole("heading", { name: "Desenho do cupom" })).toBeVisible();
+  await info.attach("gate-desenho-caixa", { body: await pagina.screenshot(), contentType: "image/png" });
+});
+
 test("CA-17 a CA-19: o gate do planejamento aprova e reprova, e a reprovação pede o motivo", async ({
   pagina,
   fabriquinha,

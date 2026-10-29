@@ -367,7 +367,7 @@ export function paginaDoProjeto(
 ): string {
   const alternar = (chave: keyof Escolhas["mostrar"], rotulo: string) =>
     `<label class="alternar"><input type="checkbox" data-mostrar="${chave}"${escolhas.mostrar[chave] ? " checked" : ""}> ${rotulo}</label>`;
-  return `<div class="seletor-linha"><h1>Projeto</h1>${seletor(projetos, nome)}<a class="editar" href="/config?projeto=${encodeURIComponent(nome)}">Editar na Configuração</a></div>${abas(nome, "demandas")}${cardsDoMes(mes)}
+  return `<div class="seletor-linha"><h1>Projeto</h1>${seletor(projetos, nome)}<a class="editar" href="/config?projeto=${encodeURIComponent(nome)}">Editar na Configuração</a><a class="editar" href="${caminhoDoProjeto(nome)}/sdlc">Configuração SDLC</a></div>${abas(nome, "demandas")}${cardsDoMes(mes)}
   <div class="ferramentas">
     <span class="contagem">${String(contagem.andamento)} em andamento · ${plural(contagem.concluidas, "concluída", "concluídas")} · ${plural(contagem.arquivadas, "arquivada", "arquivadas")} · ${plural(contagem.canceladas, "cancelada", "canceladas")}</span>
     ${alternar("concluidas", "Mostrar concluídas")}

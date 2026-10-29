@@ -17,6 +17,7 @@ interface Evidencia {
   anexos: Anexo[];
 }
 interface Pagina {
+  demanda: { tipo: string; descricao: string };
   rodadas: unknown[];
   tickets: {
     ref: string;
@@ -106,6 +107,12 @@ test("CA-3 (T-1289): o board traz os tickets falhos com o endereço público e a
     tickets: ag.tickets.map((t) => (t.ticket_id === 3 ? { ...t, status: "falhou" } : t)),
   }));
   assert.deepEqual(await falhosDe(), [{ ref: "I-206.T3", etapa: "implementar" }]);
+});
+
+test("a página traz o tipo e a descrição da demanda, que o Auditor lê na aprovação", async () => {
+  const { pedir } = await cenarioDemandas();
+  const { demanda } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual([demanda.tipo, demanda.descricao], ["funcionalidade", "d"]);
 });
 
 test("CA-6: a página traz cada ticket com o endereço público e a etapa", async () => {
@@ -314,6 +321,9 @@ test("a classe do anexo pelo mime", async () => {
   const classes = async () =>
     (await pedir("/api/demandas/I-206")).json<Pagina>().evidencias.flatMap((e) => e.anexos.map((a) => a.classe));
   assert.deepEqual(await classes(), ["imagem", "video"]);
+  // O HTML que o F3 grava leva o charset (MIME_HTML).
+  mudar("text/html; charset=utf-8");
+  assert.equal((await classes())[1], "html");
   mudar("application/json");
   assert.equal((await classes())[1], "texto");
   mudar("application/zip");

@@ -41,7 +41,8 @@ async function carregar(main: HTMLElement, params: Parametros, signal: AbortSign
 
 export async function montarDemanda(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
   if (!(await carregar(main, params, signal))) return;
-  // O ouvinte sai com a página. A imagem do anexo abre na caixa; os demais anexos seguem o link, em nova aba.
+  // O ouvinte sai com a página. A imagem do anexo e o HTML do desenho abrem na caixa; os demais anexos seguem o link,
+  // em nova aba.
   main.addEventListener(
     "click",
     (evento) => {
@@ -66,6 +67,11 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
         void agirNoTicket(acao, main, params, signal);
         return;
       }
+      const html = alvo?.closest<HTMLButtonElement>("button[data-html]");
+      if (html) {
+        abrirHtmlNaCaixa(html);
+        return;
+      }
       const link = alvo?.closest<HTMLAnchorElement>("a[data-imagem]");
       if (!link || evento.button !== 0 || evento.ctrlKey || evento.metaKey || evento.shiftKey) return;
       evento.preventDefault();
@@ -74,6 +80,18 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
     },
     { signal },
   );
+}
+
+/** O HTML da evidência (o desenho, os impactos) na caixa, num iframe sandbox, como o Auditor o lia na issue. */
+function abrirHtmlNaCaixa(botao: HTMLButtonElement): void {
+  const link = botao.dataset.html ?? "";
+  const nome = botao.dataset.nome ?? "";
+  abrirCaixa({
+    titulo: nome,
+    corpo: `<div class="evidencia"><iframe sandbox="allow-scripts" src="${escapar(link)}" title="${escapar(nome)}"></iframe></div>`,
+    aba: link,
+    baixar: `${link}&baixar`,
+  });
 }
 
 /**

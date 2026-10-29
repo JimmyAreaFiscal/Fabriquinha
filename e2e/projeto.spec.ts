@@ -1,6 +1,6 @@
 // Projeto (F7 §4.4): /projects abre o primeiro projeto e depois o último visto; a aba Demandas tem os cards do mês e a
 // lista das demandas do projeto, com a linha do tempo das fases, as rodadas da execução, a gaveta de tickets, os
-// filtros lembrados e o Arquivar concluídas; o heatmap e a simulação do projeto continuam; prints a 1440 e 375 px sem
+// filtros lembrados e o Arquivar concluídas; o heatmap, a Configuração SDLC e a simulação do projeto abrem; prints a 1440 e 375 px sem
 // rolagem horizontal.
 import type { TestInfo } from "@playwright/test";
 import { abrir } from "../src/persistencia/banco.ts";
@@ -135,7 +135,10 @@ test("Mostrar canceladas traz a cancelada, apagada, com as rodadas onde pararam"
   await expect(i207.locator(".pista-rodada").getByRole("list")).toHaveClass(/cancelada/);
 });
 
-test("/projects volta ao último visto; o heatmap e a simulação do projeto abrem", async ({ pagina, fabriquinha }) => {
+test("/projects volta ao último visto; o heatmap, a Configuração SDLC e a simulação do projeto abrem", async ({
+  pagina,
+  fabriquinha,
+}) => {
   projeto(fabriquinha.raiz);
   const banco = abrir(fabriquinha.raiz);
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
@@ -152,6 +155,11 @@ test("/projects volta ao último visto; o heatmap e a simulação do projeto abr
   await pagina.goto(`${fabriquinha.base}/projects`);
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/site`);
   await pagina.getByLabel("Projeto", { exact: true }).selectOption("loja");
+
+  // A Configuração SDLC do projeto abre pelo link ao lado do seletor.
+  await pagina.getByRole("link", { name: "Configuração SDLC", exact: true }).click();
+  await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/loja/sdlc`);
+  await pagina.goBack();
 
   const abas = pagina.getByRole("navigation", { name: "Abas do projeto" });
   await abas.getByRole("link", { name: "Heatmap" }).click();

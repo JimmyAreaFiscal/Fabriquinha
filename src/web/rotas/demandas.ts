@@ -69,7 +69,7 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
 const classeDoMime = (mime: string): "imagem" | "video" | "html" | "texto" | "outro" => {
   if (mime.startsWith("image/")) return "imagem";
   if (mime.startsWith("video/")) return "video";
-  if (mime === "text/html") return "html";
+  if (mime.startsWith("text/html")) return "html";
   return mime.startsWith("text/") || mime === "application/json" ? "texto" : "outro";
 };
 
@@ -113,7 +113,14 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   );
   return {
     ...(achado && { origem: { avaliacao: achado.avaliacao_id, achado: achado.achado_id, titulo: achado.titulo } }),
-    demanda: { id, projeto: demanda.projeto, titulo: demanda.titulo, fase: demanda.fase },
+    demanda: {
+      id,
+      projeto: demanda.projeto,
+      titulo: demanda.titulo,
+      tipo: demanda.tipo,
+      descricao: demanda.descricao,
+      fase: demanda.fase,
+    },
     rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase })),
     tickets: ag.tickets.map((t) => ({
       ref: ticket(t.ticket_id),

@@ -2650,6 +2650,93 @@ svg.barras :not(.hit) {
   display: none;
 }
 
+/* Demandas: o que o Auditor lê na aprovação da demanda, como no antigo gate do registro e do desenho da issue. */
+.dm-aprovacao,
+.dm-desenho {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-width: 0;
+}
+.dm-aprovacao {
+  margin: var(--s-2) 0 var(--s-3);
+}
+.dm-desenho {
+  gap: var(--s-4);
+}
+/* O texto do agente quebra até no meio de um `código` longo: a 375 px nada empurra a página para o lado. */
+.dm-aprovacao .fatos {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+.dm-aprovacao .md {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Nos arquivos previstos, o caminho quebra nas barras para o motivo não virar uma coluna de uma palavra a 375 px. */
+.dm-desenho .tabela .mono {
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+.dm-desenho .tabela td.md {
+  min-width: 18ch;
+}
+.titulo-bloco {
+  margin-bottom: var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--w-strong);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+/* As colunas vazias ficam (auto-fill): um card só não se estica pela largura toda; a 375 px, dois por linha. */
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 40%), 1fr));
+  gap: var(--s-2);
+}
+.impacto-baixo {
+  color: var(--closed);
+}
+.impacto-medio {
+  color: var(--open);
+}
+.impacto-alto {
+  color: var(--danger);
+}
+.cards-art {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.art {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 36px;
+  padding: 0 var(--s-3);
+  font-size: var(--fs-sm);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.art:hover {
+  border-color: var(--accent);
+}
+.art:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.art .tipo {
+  font: 600 10px var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1px 4px;
+  letter-spacing: 0.04em;
+}
+
 /* Avaliações (D12): formulário de disparo e lista; a 375 px a lista vira blocos, sem rolagem horizontal. */
 .pagina-avaliacoes .disparo {
   display: flex;
