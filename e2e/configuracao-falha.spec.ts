@@ -14,7 +14,9 @@ test("a conferência que falha ao cadastrar fica no rodapé, sem apagar a nota n
 
   const rodape = pagina.locator(".rodape-form");
   await expect(rodape.getByRole("alert")).toContainText("nao-existe");
-  await expect(rodape).toContainText("Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.");
+  await expect(rodape).toContainText(
+    "Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.",
+  );
   await expect(rodape.getByRole("button", { name: "Cadastrar projeto" })).toBeEnabled();
   await expect(pagina.getByLabel("Caminho do repositório")).toHaveValue(join(fabriquinha.raiz, "nao-existe"));
 });
