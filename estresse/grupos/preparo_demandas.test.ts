@@ -5,6 +5,7 @@ import { after, before, test } from "node:test";
 import { abrir } from "../../src/persistencia/banco.ts";
 import { carregarDemanda } from "../../src/persistencia/demandas.ts";
 import { type Ambiente, subirAmbiente } from "../ambiente.ts";
+import { acoesHttpLeitura } from "./http_leitura.ts";
 import { criarPreparo, type Preparo } from "./preparo_demandas.ts";
 
 let amb: Ambiente;
@@ -112,4 +113,23 @@ test("projeto, simulação e avaliação preparados são aceitos pelas rotas", a
   const avaliacao = p.avaliacao(true);
   await chamar("POST", `/api/avaliacoes/${avaliacao}/achados/1/encaminhar`);
   await chamar("POST", `/api/avaliacoes/${p.avaliacao()}/mensagens`, { texto: "oi" });
+});
+
+test("o encaminhar funciona depois que o grupo de leitura semeia a I-1 (a sequência `issue` fica à frente)", async () => {
+  const outro = await subirAmbiente();
+  try {
+    await acoesHttpLeitura(outro);
+    const preparo = await criarPreparo(outro);
+    try {
+      const r = await fetch(`${outro.base}/api/avaliacoes/${preparo.avaliacao(true)}/achados/1/encaminhar`, {
+        method: "POST",
+        headers: { cookie: outro.cookie, "sec-fetch-site": "same-origin" },
+      });
+      assert.equal(r.status, 200, await r.text());
+    } finally {
+      preparo.fechar();
+    }
+  } finally {
+    await outro.encerrar();
+  }
 });

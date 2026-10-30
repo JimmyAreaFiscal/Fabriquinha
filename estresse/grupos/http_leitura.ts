@@ -9,7 +9,7 @@ import { guardarBytes } from "../../src/persistencia/arquivos.ts";
 import { criarAvaliacao } from "../../src/persistencia/avaliacoes.ts";
 import { abrir } from "../../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../src/persistencia/configuracao_projeto.ts";
-import { criarDemanda } from "../../src/persistencia/demandas.ts";
+import { criarDemandaNova } from "../../src/persistencia/demandas.ts";
 import { gravarAnexos } from "../../src/persistencia/evidencia_demanda.ts";
 import { registrarProjeto } from "../../src/persistencia/projetos.ts";
 import { comSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
@@ -85,49 +85,54 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
     devolucoes: 0,
   });
   const { sha256, bytes } = guardarBytes(banco, Buffer.from("<h1>Desenho</h1>"));
-  criarDemanda(banco, {
-    demanda: {
-      id: DEMANDA,
-      projeto: "loja",
-      titulo: "Demanda do estresse",
-      tipo: "funcionalidade",
-      descricao: "d",
-      fase: "execucao",
-      fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: DEMANDA,
-      enviada: true,
-      branch: `fabriquinha/${DEMANDA}`,
-    },
-    tickets: [ticket(1, "implementar", "concluido"), ticket(2, "sessao_em_aberto", "em_execucao")],
-    decisoes: [],
-    evidencias: [
-      {
-        demanda_id: DEMANDA,
-        tipo: "desenho_solucao",
-        dados: {
-          resumo: "r",
-          arquivosPrevistos: [{ caminho: "a.ts", acao: "alterar", motivo: "m" }],
-          foraDeEscopo: [],
+  // Aloca pela sequência `issue` (como o produto): gravar a I-1 sem avançá-la faz a próxima demanda nova colidir com ela.
+  criarDemandaNova(
+    banco,
+    (id) =>
+      ({
+        demanda: {
+          id,
+          projeto: "loja",
+          titulo: "Demanda do estresse",
+          tipo: "funcionalidade",
+          descricao: "d",
+          fase: "execucao",
+          fase_alterada_em: em,
+          origem_ferramenta: "claude",
+          origem_sessao: DEMANDA,
+          enviada: true,
+          branch: `fabriquinha/${DEMANDA}`,
         },
-        em,
-      },
-    ],
-    rodadas: [
-      {
-        demanda_id: DEMANDA,
-        rodada_id: 1,
-        titulo: "rodada 1",
-        fase: "sessao",
-        e2e: false,
-        branch: `fabriquinha/${DEMANDA}-1`,
-      },
-    ],
-    dependencias_rodada: [],
-    criterios_citados: [],
-    dependencias_ticket: [],
-    caminhos_ticket: [],
-  } as unknown as AgregadoDemanda);
+        tickets: [ticket(1, "implementar", "concluido"), ticket(2, "sessao_em_aberto", "em_execucao")],
+        decisoes: [],
+        evidencias: [
+          {
+            demanda_id: DEMANDA,
+            tipo: "desenho_solucao",
+            dados: {
+              resumo: "r",
+              arquivosPrevistos: [{ caminho: "a.ts", acao: "alterar", motivo: "m" }],
+              foraDeEscopo: [],
+            },
+            em,
+          },
+        ],
+        rodadas: [
+          {
+            demanda_id: DEMANDA,
+            rodada_id: 1,
+            titulo: "rodada 1",
+            fase: "sessao",
+            e2e: false,
+            branch: `fabriquinha/${DEMANDA}-1`,
+          },
+        ],
+        dependencias_rodada: [],
+        criterios_citados: [],
+        dependencias_ticket: [],
+        caminhos_ticket: [],
+      }) as unknown as AgregadoDemanda,
+  );
   gravarAnexos(banco, { demanda_id: DEMANDA, tipo: "desenho_solucao" }, [
     { caminho: "desenho.html", mime: "text/html; charset=utf-8", sha256, bytes },
   ]);
