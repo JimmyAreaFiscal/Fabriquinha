@@ -21,7 +21,7 @@ export interface AcaoMutacao {
   metodo: "POST" | "DELETE";
   /** O padrão de `ROTAS`, que é o nome da ação na tabela. */
   caminho: string;
-  /** Orçamento de p95 em ms: 3× o p95 medido nesta máquina (Linux, Node 22, SQLite local), para não virar teste instável. */
+  /** Orçamento de p95 em ms: 3× o maior p95 medido em quatro execuções completas do grupo nesta máquina (Linux, Node 22, SQLite local), para não virar teste instável. */
   orcamento: number;
   chamar(): Promise<number>;
 }
@@ -150,7 +150,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/:id/decisao",
-      114,
+      90,
       () => preparo.demandaEnviada(),
       (id) => ({
         url: `${demanda(id)}/decisao`,
@@ -164,7 +164,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/:id/planejamento/decisao",
-      22200,
+      22800,
       () => preparo.planejamentoPronto(),
       (id) => ({
         url: `${demanda(id)}/planejamento/decisao`,
@@ -178,7 +178,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/rodadas/:ref/pr",
-      6800,
+      7070,
       () => preparo.rodadaComPR(),
       (r) => ({
         url: `${rodada(r.rodada)}/pr`,
@@ -192,7 +192,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/rodadas/:ref/ajustes/mensagens",
-      186,
+      180,
       () => preparo.rodadaEmAjustes(),
       (ref) => ({
         url: `${rodada(ref)}/ajustes/mensagens`,
@@ -203,7 +203,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/rodadas/:ref/ajustes/concluir",
-      1350,
+      1600,
       () => preparo.rodadaEmAjustes(true),
       (ref) => ({
         url: `${rodada(ref)}/ajustes/concluir`,
@@ -216,7 +216,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/tickets/:ref/reabrir",
-      72,
+      90,
       () => preparo.ticketFalho(),
       (ref) => ({
         url: `/api/demandas/tickets/${ref}/reabrir`,
@@ -230,7 +230,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/tickets/:ref/executar",
-      18500,
+      20170,
       () => preparo.ticketAberto(),
       (ref) => ({
         url: `/api/demandas/tickets/${ref}/executar`,
@@ -240,7 +240,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/:id/cancelar",
-      186,
+      230,
       () => preparo.demandaEnviada(),
       (id) => ({
         url: `${demanda(id)}/cancelar`,
@@ -253,7 +253,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/demandas/:id/arquivar",
-      54,
+      60,
       () => preparo.demandaConcluida(),
       (id) => ({
         url: `${demanda(id)}/arquivar`,
@@ -266,7 +266,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/projetos/:nome/arquivar",
-      72,
+      60,
       () => preparo.projetoProprio(),
       (nome) => ({
         url: `/api/projetos/${nome}/arquivar`,
@@ -277,7 +277,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/projetos",
-      3400,
+      2920,
       async () => comOriginGitHub(await preparo.repositorioNovo()),
       (repo) => {
         const nome = `novo-${String(novo())}`;
@@ -294,7 +294,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/projetos/:nome",
-      2500,
+      2150,
       async () => {
         const nome = await preparo.projetoProprio();
         await comOriginGitHub(raizDe(nome));
@@ -309,7 +309,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "DELETE",
       "/api/projetos/:nome",
-      495,
+      1410,
       () => preparo.projetoProprio(),
       (nome) => ({
         url: `/api/projetos/${nome}`,
@@ -322,7 +322,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/projetos/:nome/configuracao-sdlc",
-      84,
+      450,
       () => preparo.projetoProprio(),
       (nome) => ({
         url: `/api/projetos/${nome}/configuracao-sdlc`,
@@ -341,7 +341,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/configuracao",
-      36,
+      30,
       () => configuracao(banco),
       (atual) => ({
         url: "/api/configuracao",
@@ -349,7 +349,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         status: 200,
       }),
     ),
-    acao("POST", "/api/projetos/:nome/usuarios-simulados", 42, novo, (n) => ({
+    acao("POST", "/api/projetos/:nome/usuarios-simulados", 50, novo, (n) => ({
       url: `/api/projetos/${p}/usuarios-simulados`,
       corpo: { nome: `usuario-${String(n)}`, descricao: "d" },
       status: 200,
@@ -357,7 +357,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/usuarios-simulados/:id/anexos",
-      120,
+      330,
       () => preparo.usuarioSimulado(),
       (id) => ({
         url: `/api/usuarios-simulados/${String(id)}/anexos?nome=a.txt`,
@@ -368,7 +368,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "DELETE",
       "/api/usuarios-simulados/:id/anexos/:nome",
-      24,
+      50,
       () => {
         const id = preparo.usuarioSimulado();
         anexar(banco, id, "a.txt", Buffer.from("x"));
@@ -379,7 +379,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/projetos/:nome/tarefas",
-      72,
+      100,
       () => preparo.usuarioSimulado(),
       (usuario) => ({
         url: `/api/projetos/${p}/tarefas`,
@@ -390,7 +390,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/tarefas/:id/executar",
-      423,
+      460,
       () => preparo.tarefa(),
       (id) => ({
         url: `/api/tarefas/${String(id)}/executar`,
@@ -400,7 +400,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/sessoes/:sessao/mensagens",
-      150,
+      200,
       () => preparo.sessaoParada(),
       (sessao) => ({
         url: `/api/sessoes/${sessao}/mensagens`,
@@ -412,7 +412,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/sessoes/:sessao/dialogos/:id",
-      153,
+      130,
       () => preparo.sessaoParada(),
       (sessao) => ({
         url: `/api/sessoes/${sessao}/dialogos/d1`,
@@ -425,7 +425,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/avaliacoes",
-      850,
+      1000,
       async () => {
         const sessao = await preparo.sessaoParada();
         return (banco.prepare("SELECT demanda_id FROM sessao WHERE id = ?").get(sessao) as { demanda_id: string })
@@ -440,7 +440,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/avaliacoes/:id/mensagens",
-      800,
+      970,
       () => preparo.avaliacao(),
       (id) => ({
         url: `/api/avaliacoes/${id}/mensagens`,
@@ -452,7 +452,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/avaliacoes/:id/abortar",
-      24,
+      30,
       () => preparo.avaliacao(),
       (id) => ({
         url: `/api/avaliacoes/${id}/abortar`,
@@ -473,7 +473,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     acao(
       "POST",
       "/api/sessoes/:sessao/abortar",
-      159,
+      290,
       () => preparo.sessaoRodando(),
       (sessao) => ({
         url: `/api/sessoes/${sessao}/abortar`,
