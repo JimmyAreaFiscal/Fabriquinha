@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { subirAmbiente } from "./ambiente.ts";
 import { acoesHttpLeitura, semMedicao } from "./grupos/http_leitura.ts";
+import { acoesHttpMutacao, semMedicao as semMedicaoMutacao } from "./grupos/http_mutacao.ts";
 import { type Medicao, medir } from "./medir.ts";
 
 const CHAMADAS = 200;
@@ -13,8 +14,10 @@ const amb = await subirAmbiente();
 let medidas: [string, Medicao][];
 let faltando: string[];
 try {
-  const acoes = await acoesHttpLeitura(amb);
-  faltando = semMedicao(acoes);
+  const leitura = await acoesHttpLeitura(amb);
+  const mutacao = await acoesHttpMutacao(amb);
+  const acoes = [...leitura, ...mutacao];
+  faltando = [...semMedicao(leitura), ...semMedicaoMutacao(mutacao)];
   medidas = [];
   for (const a of acoes) {
     const m = await medir(() => a.chamar(), { n: CHAMADAS, concorrencia: SIMULTANEAS, orcamento: a.orcamento });

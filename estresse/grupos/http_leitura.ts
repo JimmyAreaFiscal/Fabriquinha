@@ -17,9 +17,9 @@ import { exigirGit } from "../../src/repositorio/worktree.ts";
 import { ROTAS } from "../../src/web/servidor.ts";
 import type { Ambiente } from "../ambiente.ts";
 
-/** Uma rota GET medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
+/** Uma rota HTTP medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoHttp {
-  metodo: "GET";
+  metodo: "GET" | "POST" | "DELETE";
   /** O padrão de `ROTAS`, que é o nome da ação na tabela. */
   caminho: string;
   /** Orçamento de p95 em ms: 3× o p95 medido nesta máquina (Linux, Node 22, SQLite local), para não virar teste instável. */
