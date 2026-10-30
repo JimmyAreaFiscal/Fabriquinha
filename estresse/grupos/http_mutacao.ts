@@ -21,10 +21,13 @@ export interface AcaoMutacao {
   metodo: "POST" | "DELETE";
   /** O padrão de `ROTAS`, que é o nome da ação na tabela. */
   caminho: string;
-  /** Orçamento de p95 em ms: 3× o maior p95 medido em quatro execuções completas do grupo nesta máquina (Linux, Node 22, SQLite local), para não virar teste instável. */
+  /** Orçamento de p95 em ms: 3× o maior p95 medido em quatro execuções completas do grupo nesta máquina (Linux, Node 22, SQLite local), com o piso `PISO_ORCAMENTO`, para não virar teste instável. */
   orcamento: number;
   chamar(): Promise<number>;
 }
+
+/** Piso do orçamento em ms: rotas de poucas dezenas de ms variam além de 3× com a carga de fundo da máquina (pi falsos vivos, outros agentes). */
+const PISO_ORCAMENTO = 250;
 
 /** Os registros preparados por ação: tantos quantas as chamadas de `estresse.ts`. */
 const CHAMADAS = 200;
@@ -110,7 +113,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     return {
       metodo,
       caminho,
-      orcamento,
+      orcamento: Math.max(orcamento, PISO_ORCAMENTO),
       async chamar() {
         registros ??= preparar200();
         const registro = (await registros)[proximo++];
