@@ -103,11 +103,48 @@ const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
   ...resto,
 });
 
-test("a página vazia traz só o cabeçalho e o link ao quadro, sem seções vazias", () => {
+/** O trecho do HTML que começa em `marca` e vai até a próxima seção. */
+const trecho = (html: string, marca: string): string => {
+  const inicio = html.indexOf(marca);
+  assert.notEqual(inicio, -1, `${marca} não está na página`);
+  const fim = html.indexOf("<section", inicio + 1);
+  return html.slice(inicio, fim === -1 ? undefined : fim);
+};
+
+test("a página vazia traz o cabeçalho, o trilho e a descrição na lateral, sem seções vazias", () => {
   const html = pagina(dadosDaPagina());
   assert.match(html, /href="\/home">← Início/);
   assert.match(html, /<h1>Demanda &#60;I-206&#62;<\/h1>/);
-  assert.doesNotMatch(html, /Dependências|Tickets globais|Evidências|Encerramento final|Aprovação d/);
+  assert.match(html, /<span class="tag">funcionalidade<\/span><span class="pill pill-rodando">Execução/);
+  assert.match(html, /<aside class="dm-lateral" aria-label="Contexto da demanda">/);
+  assert.match(
+    html,
+    /Descrição<\/h2><div class="md dm-descricao"><p>Corrigir &lt;b&gt;<\/p>\n<\/div><button [^>]*data-expandir>ler tudo/,
+  );
+  assert.doesNotMatch(
+    html,
+    /Aguarda você|Critérios de aceite|Dependências|Antes das rodadas|Depois das rodadas|Evidências da demanda|Encerramento final|dm-gate-titulo">Aprovação/,
+  );
+});
+
+test("o trilho marca as fases feitas, a atual e os gates; concluída completa o trilho e cancelada fica sem ele", () => {
+  const com = (fase: DadosDaPagina["demanda"]["fase"]) =>
+    pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase } }));
+  const execucao = com("execucao");
+  assert.match(
+    execucao,
+    /<li class="dm-passo-trilho gate feito"><span class="dm-marco-trilho"><\/span><span>Aprovação do planejamento<\/span>/,
+  );
+  assert.match(
+    execucao,
+    /<li class="dm-passo-trilho atual" aria-current="step"><span class="dm-marco-trilho"><\/span><span>Execução</,
+  );
+  assert.match(execucao, /<li class="dm-passo-trilho"><span class="dm-marco-trilho"><\/span><span>Concluída</);
+  for (const fase of ["concluida", "arquivada"] as const) {
+    assert.equal(com(fase).match(/class="dm-passo-trilho (gate )?feito"/g)?.length, 8);
+    assert.doesNotMatch(com(fase), /aria-current/);
+  }
+  assert.doesNotMatch(com("cancelada"), /dm-trilho/);
 });
 
 test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
@@ -119,7 +156,7 @@ test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
       ],
     }),
   );
-  const [, t1, t2] = html.split(/(?=<li class="dm-ticket">)/);
+  const [, t1, t2] = html.split(/(?=<li class="dm-ticket )/);
   assert.match(String(t1), /href="\/sessions\/s%2F1">chat →/);
   assert.doesNotMatch(String(t2), /chat →/);
   const aberta = pagina(
@@ -130,7 +167,7 @@ test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
   assert.doesNotMatch(aberta, /chat →/);
 });
 
-test("os tickets ficam na rodada ou nos globais, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
+test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
   const html = pagina(
     dadosDaPagina({
       rodadas: [
@@ -138,6 +175,7 @@ test("os tickets ficam na rodada ou nos globais, pelo endereço público, com de
         { ref: "I-206.R2", titulo: "Segunda", fase: "sessao" },
       ],
       tickets: [
+        { ref: "I-206.T9", etapa: "demanda", status: "concluido", elegivel: false },
         {
           ref: "I-206.T1",
           etapa: "implementar",
@@ -150,30 +188,93 @@ test("os tickets ficam na rodada ou nos globais, pelo endereço público, com de
         },
         { ref: "I-206.T2", etapa: "encerrar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R1" },
         { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", elegivel: false, rodada: "I-206.R2" },
+        { ref: "I-206.T5", etapa: "revisar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R2" },
         { ref: "I-206.T4", etapa: "planejar", status: "aberto", elegivel: false },
       ],
       decisoes: [
         { ticket: "I-206.T1", resultado: "recusado", motivo: "falta teste do caminho de erro", por: "agente" },
         { ticket: "I-206.T2", resultado: "recusado", motivo: "x", por: "auditor" },
         { ticket: "I-206.T2", resultado: "aprovado", nota: 4, por: "auditor" },
+        { ticket: "I-206.T5", resultado: "recusado", motivo: "falta CA-2", por: "agente" },
       ],
       evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T2", dados: { id: "7", url: "https://pr/7" }, anexos: [] }],
     }),
   );
-  const [, , r1, r2, globais] = html.split(/(?=<section)/);
-  assert.match(r1 ?? "", /id="I-206\.R1"[\s\S]*I-206\.T1[\s\S]*Implementação[\s\S]*Falhou/);
-  assert.match(r1 ?? "", /Motivo da falha:<\/strong> quebrou/);
-  assert.match(r1 ?? "", /Instrução:<\/strong> refaça/);
-  assert.match(r1 ?? "", /Recusado<\/strong> por Agente: falta teste do caminho de erro/);
-  assert.match(html, /Recusado<\/strong> por Auditor: x/);
-  assert.match(r1 ?? "", /nota 4/);
-  assert.match(r1 ?? "", /Aprovação do PR/);
-  assert.match(r1 ?? "", /href="https:\/\/pr\/7" target="_blank" rel="noopener">PR #7/);
-  assert.doesNotMatch(r1 ?? "", /I-206\.T3|I-206\.T4/);
-  assert.match(r2 ?? "", /I-206\.T3[\s\S]*Em execução/);
-  assert.match(r2 ?? "", /Sessão de ajustes/);
-  assert.doesNotMatch(r2 ?? "", /nota|PR #/);
-  assert.match(globais ?? "", /Tickets globais[\s\S]*I-206\.T4[\s\S]*Aberto/);
+  const antes = trecho(html, 'aria-labelledby="titulo-antes"');
+  const r1 = trecho(html, 'id="I-206.R1"');
+  const r2 = trecho(html, 'id="I-206.R2"');
+  const depois = trecho(html, 'aria-labelledby="titulo-depois"');
+  assert.match(antes, /Antes das rodadas[\s\S]*I-206\.T9[\s\S]*Demanda/);
+  assert.doesNotMatch(antes, /I-206\.T4/);
+  assert.match(
+    r1,
+    /<li class="dm-ticket dm-marco-falhou" id="I-206\.T1">[\s\S]*Implementação<\/strong> <span>T<\/span>[\s\S]*Falhou/,
+  );
+  assert.match(r1, /Motivo da falha:<\/strong> quebrou/);
+  assert.match(r1, /Instrução:<\/strong> refaça/);
+  assert.match(
+    r1,
+    /Recusado<\/strong> por Agente: falta teste do caminho de erro<\/div><button [^>]*data-expandir>ler tudo/,
+  );
+  // Concluído e decidido: a última decisão toma o lugar do "Concluído", na pílula e no marco.
+  assert.match(
+    r1,
+    /<li class="dm-ticket dm-marco-aprovado" id="I-206\.T2">[\s\S]*<span class="pill pill-ok">Aprovado<\/span>/,
+  );
+  assert.match(r1, /Recusado<\/strong> por Auditor: x/);
+  assert.match(r1, /Aprovado<\/strong> por Auditor · nota 4<\/div><\/li>/);
+  assert.match(r1, /nota 4/);
+  assert.match(r1, /Aprovação do PR/);
+  assert.match(r1, /href="https:\/\/pr\/7" target="_blank" rel="noopener">PR #7/);
+  assert.doesNotMatch(r1, /I-206\.T3|I-206\.T4/);
+  assert.match(r2, /<li class="dm-ticket dm-marco-em_execucao" id="I-206\.T3">[\s\S]*Em execução/);
+  assert.match(
+    r2,
+    /<li class="dm-ticket dm-marco-recusado" id="I-206\.T5">[\s\S]*<span class="pill pill-falha">Recusado<\/span>/,
+  );
+  assert.match(r2, /Sessão de ajustes/);
+  assert.doesNotMatch(r2, /nota|PR #/);
+  assert.match(depois, /Depois das rodadas[\s\S]*I-206\.T4[\s\S]*Aberto/);
+  assert.ok(html.indexOf("titulo-antes") < html.indexOf('id="I-206.R1"'));
+  assert.ok(html.indexOf('id="I-206.R2"') < html.indexOf("titulo-depois"));
+});
+
+test("Aguarda você liga ao gate da fase, ao PR e à sessão da rodada e aos tickets que pedem o Auditor", () => {
+  const html = pagina(
+    dadosDaPagina({
+      demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" },
+      rodadas: [
+        { ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" },
+        { ref: "I-206.R2", titulo: "r", fase: "sessao" },
+        { ref: "I-206.R3", titulo: "r", fase: "revisao" },
+      ],
+      tickets: [
+        {
+          ref: "I-206.T1",
+          etapa: "implementar",
+          status: "falhou",
+          elegivel: false,
+          rodada: "I-206.R3",
+          titulo: "Refazer <x>",
+        },
+        { ref: "I-206.T2", etapa: "implementar", status: "aberto", elegivel: true, rodada: "I-206.R3" },
+        { ref: "I-206.T3", etapa: "implementar", status: "aberto", elegivel: false, rodada: "I-206.R3" },
+      ],
+    }),
+  );
+  const aguarda = trecho(html, "dm-aguarda");
+  assert.match(aguarda, /href="#gate">Aprovação do planejamento ↓/);
+  assert.match(aguarda, /href="#pr-I-206\.R1">Aprovação do PR · I-206\.R1 ↓/);
+  assert.match(aguarda, /href="#ajustes-I-206\.R2">Sessão de ajustes · I-206\.R2 ↓/);
+  assert.match(aguarda, /href="#I-206\.T1">Reabrir I-206\.T1 · Refazer &#60;x&#62; ↓/);
+  assert.match(aguarda, /href="#I-206\.T2">Executar I-206\.T2 ↓/);
+  assert.doesNotMatch(aguarda, /I-206\.T3|I-206\.R3/);
+  // Só o aberto elegível tem o marco em destaque.
+  assert.match(html, /<li class="dm-ticket dm-marco-elegivel" id="I-206\.T2">/);
+  assert.match(html, /<li class="dm-ticket dm-marco-aberto" id="I-206\.T3">/);
+  // Cada link tem para onde ir.
+  for (const alvo of ['id="gate"', 'id="pr-I-206.R1"', 'id="ajustes-I-206.R2"', 'id="I-206.T1"', 'id="I-206.T2"'])
+    assert.ok(html.includes(alvo), alvo);
 });
 
 test("rodada sem ticket e PR com endereço que não é http não viram link", () => {
@@ -199,9 +300,11 @@ test("as dependências trazem o link e a fase da predecessora (CA-13)", () => {
   assert.match(html, /Dependências[\s\S]*href="\/demandas\/I-205">I-205<\/a> <span class="pill pill-rodando">Execução/);
 });
 
-test("a evidência traz o tipo legível, o dono, os anexos (imagem marcada) e os dados em details (CA-10)", () => {
+test("as evidências viram chips junto de quem as gerou; o chip guarda os anexos e os dados para a caixa (CA-10)", () => {
   const html = pagina(
     dadosDaPagina({
+      rodadas: [{ ref: "I-206.R1", titulo: "R", fase: "revisao" }],
+      tickets: [{ ref: "I-206.T1", etapa: "implementar", status: "concluido", elegivel: false, rodada: "I-206.R1" }],
       evidencias: [
         {
           tipo: "comportamento",
@@ -213,20 +316,122 @@ test("a evidência traz o tipo legível, o dono, os anexos (imagem marcada) e os
           ],
         },
         { tipo: "revisao_integral", rodada: "I-206.R1", dados: {}, anexos: [] },
-        { tipo: "custos_realizados", dados: {}, anexos: [] },
+        { tipo: "desenho_solucao", dados: {}, anexos: [{ nome: "d.html", classe: "html", link: "/api/d" }] },
+        { tipo: "tipo_novo", dados: {}, anexos: [] },
       ],
     }),
   );
-  assert.match(html, /<strong>Comportamento<\/strong> <span class="id">I-206\.T1/);
-  assert.match(html, /href="\/api\/x\?a=1&#38;b=2" target="_blank" rel="noopener" data-imagem="print\.png">print\.png/);
-  assert.match(html, /href="\/api\/y" target="_blank" rel="noopener">log\.txt/);
-  assert.equal(html.match(/data-imagem/g)?.length, 1);
+  const ticket = trecho(html, 'id="I-206.T1"');
   assert.match(
-    html,
-    /<details><summary>dados<\/summary><pre class="dm-dados">\{\n {2}&#34;a&#34;: &#34;&#60;b&#62;&#34;\n\}/,
+    ticket,
+    /<button type="button" class="dm-chip" data-evidencia="Comportamento · I-206\.T1">Comportamento<\/button><template><ul class="dm-anexos"><li><a class="link" href="\/api\/x\?a=1&#38;b=2" target="_blank" rel="noopener">print\.png<\/a><\/li><li><a class="link" href="\/api\/y" target="_blank" rel="noopener">log\.txt<\/a><\/li><\/ul><pre class="dm-dados">\{\n {2}&#34;a&#34;: &#34;&#60;b&#62;&#34;\n\}<\/pre><\/template>/,
   );
-  assert.match(html, /Revisão integral<\/strong> <span class="id">I-206\.R1/);
-  assert.match(html, /custos realizados<\/strong> <span class="id">demanda/);
+  // A imagem ganha chip próprio, que abre na caixa; o log fica só na caixa da evidência.
+  assert.match(
+    ticket,
+    /<a class="dm-chip" href="\/api\/x\?a=1&#38;b=2" target="_blank" rel="noopener" data-imagem="print\.png">print\.png<\/a>/,
+  );
+  assert.equal(html.match(/data-imagem/g)?.length, 1);
+  // A da rodada fica no cabeçalho dela; sem anexos, a caixa traz só os dados.
+  assert.match(
+    trecho(html, 'id="I-206.R1"'),
+    /data-evidencia="Revisão integral · I-206\.R1">Revisão integral<\/button><template><pre class="dm-dados">\{\}<\/pre><\/template>[\s\S]*<ol class="dm-tickets dm-tempo">/,
+  );
+  const daDemanda = trecho(html, 'aria-labelledby="titulo-evidencias"');
+  assert.match(daDemanda, /Evidências da demanda/);
+  assert.match(daDemanda, /data-evidencia="Desenho da solução · demanda">Desenho da solução</);
+  assert.match(
+    daDemanda,
+    /<button type="button" class="dm-chip" data-html="\/api\/d" data-nome="Desenho da solução">Desenho da solução · HTML<\/button>/,
+  );
+  assert.match(daDemanda, /data-evidencia="tipo novo · demanda">tipo novo</);
+});
+
+test("o chip resume o resultado dos tipos que a Fabriquinha gera, em verde ou vermelho", () => {
+  const evidencia = (tipo: string, dados: unknown) => ({ tipo, ticket: "I-206.T1", dados, anexos: [] });
+  const html = pagina(
+    dadosDaPagina({
+      tickets: [{ ref: "I-206.T1", etapa: "implementar", status: "concluido", elegivel: false }],
+      evidencias: [
+        evidencia("execucao_testes", { aprovada: true }),
+        evidencia("execucao_testes", { aprovada: false }),
+        evidencia("matriz_fitness", { linhas: [{ codigoSaida: 0 }, { codigoSaida: 0 }] }),
+        evidencia("matriz_fitness", { linhas: [{ codigoSaida: 0 }, { codigoSaida: 1 }] }),
+        evidencia("relatorio_sonar", {}),
+        evidencia("relatorio_sonar", { issues: [] }),
+        evidencia("relatorio_sonar", { issues: [{}, {}] }),
+        evidencia("arquivos_alterados", {
+          arquivos: [
+            { adicionadas: 3, removidas: 1 },
+            { adicionadas: 2, removidas: 10 },
+          ],
+        }),
+        evidencia("comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true }] }),
+        evidencia("comprovacao_criterios", {
+          criterios: [
+            { id: "CA-1", atendido: true },
+            { id: "CA-2", atendido: false },
+          ],
+        }),
+      ],
+    }),
+  );
+  const chip = (classe: string, texto: string) => {
+    assert.match(html, new RegExp(`class="dm-chip${classe}" data-evidencia="[^"]*">${texto}</button>`));
+  };
+  chip(" dm-chip-ok", "Testes ✓");
+  chip(" dm-chip-falha", "Testes ✗");
+  chip(" dm-chip-ok", "Fitness 2/2");
+  chip(" dm-chip-falha", "Fitness 1/2");
+  chip("", "SonarQube");
+  chip(" dm-chip-ok", "SonarQube · 0 issues");
+  chip(" dm-chip-falha", "SonarQube · 2 issues");
+  chip("", "2 arquivos · \\+5 −11");
+  chip(" dm-chip-ok", "Critérios 1/1");
+  chip(" dm-chip-falha", "Critérios 1/2");
+});
+
+test("os critérios na lateral trazem a última comprovação e quantas vezes falharam; na aprovação, ficam só no gate", () => {
+  const criterios = {
+    tipo: "criterios_aceite",
+    dados: {
+      criterios: ["CA-1", "CA-2", "CA-3", "CA-4"].map((id) => ({
+        id,
+        dado: "d",
+        quando: "q",
+        entao: `então ${id} \`x\``,
+      })),
+    },
+    anexos: [],
+  };
+  const comprovacao = (ticket: string, atendidos: Record<string, boolean>) => ({
+    tipo: "comprovacao_criterios",
+    ticket,
+    dados: { criterios: Object.entries(atendidos).map(([id, atendido]) => ({ id, atendido })) },
+    anexos: [],
+  });
+  const evidencias = [
+    criterios,
+    comprovacao("I-206.T1", { "CA-1": false, "CA-2": false, "CA-3": true }),
+    comprovacao("I-206.T2", { "CA-1": true, "CA-2": false, "CA-3": false }),
+  ];
+  const html = trecho(pagina(dadosDaPagina({ evidencias })), 'aria-labelledby="titulo-criterios"');
+  const criterio = (id: string, classe: string, estado: string) => {
+    assert.match(
+      html,
+      new RegExp(
+        `dm-bolinha-${classe}" aria-hidden="true"></span><span class="mono">${id}</span><span class="muted">${estado}</span></div><div class="dm-ca-entao md">então ${id} <code>x</code></div>`,
+      ),
+    );
+  };
+  criterio("CA-1", "ok", "comprovado");
+  criterio("CA-2", "falha", "não comprovado em 2 comprovações");
+  criterio("CA-3", "falha", "não comprovado em 1 comprovação");
+  criterio("CA-4", "neutro", "sem comprovação");
+  const naAprovacao = pagina(
+    dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_demanda" }, evidencias }),
+  );
+  assert.doesNotMatch(naAprovacao, /titulo-criterios|titulo-descricao/);
 });
 
 const passos = (verificacao: boolean, pr: boolean, integracao: boolean): DadosDaPagina["encerramento"]["passos"] => [
@@ -401,7 +606,10 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
     rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
     tickets: [{ ref: "I-206.T1", rodada: "I-206.R1", etapa: "implementar", status: "concluido", elegivel: false }],
   });
-  assert.match(comTicket, /<\/ul>\s*<div class="dm-gate"><span class="dm-gate-titulo">Aprovação do PR</);
+  assert.match(
+    comTicket,
+    /<\/ol>\s*<div class="dm-gate" id="pr-I-206\.R1"><span class="dm-gate-titulo">Aprovação do PR</,
+  );
   assert.match(html, /<option value="5">5<\/option>/);
   assert.match(
     html,

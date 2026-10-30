@@ -47,8 +47,9 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(r2).toContainText("Sessão de ajustes");
   await expect(r2.locator("li", { hasText: "I-210.T5" })).toContainText("Falhou");
   await expect(r2).toContainText("o teste de erro não passou");
-  await expect(pagina.getByRole("region", { name: "Tickets globais" })).toContainText("I-210.T6");
-  await expect(pagina.getByRole("region", { name: "Tickets globais" })).not.toContainText("I-210.T1");
+  // O planejar global que veio depois das rodadas fecha a linha do tempo.
+  await expect(pagina.getByRole("region", { name: "Depois das rodadas" })).toContainText("I-210.T6");
+  await expect(pagina.getByRole("region", { name: "Depois das rodadas" })).not.toContainText("I-210.T1");
   await expect(pagina.locator("main")).not.toContainText(/\bT-\d+\b/);
 
   // CA-13: a dependência com a fase e o link.
@@ -62,8 +63,28 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Só os dois do gate do PR (R1), os dois da sessão de ajustes (R2: Enviar e Concluir), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button")).toHaveCount(8);
+  // Fora os chips das evidências e o "ler tudo", só os dois do gate do PR (R1), os dois da sessão de ajustes (R2: Enviar e
+  // Concluir), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button:not(.dm-chip, [data-expandir])")).toHaveCount(8);
+
+  // Aguarda você leva ao ticket falho na mesma página, sem redesenhá-la.
+  await pagina.setViewportSize({ width: 1440, height: 400 });
+  const falho = pagina.locator("#I-210\\.T5");
+  await falho.evaluate((no) => {
+    no.dataset.marca = "antes do clique";
+  });
+  await pagina
+    .getByRole("region", { name: "Aguarda você" })
+    .getByRole("link", { name: /Reabrir I-210\.T5/ })
+    .click();
+  await expect(falho).toBeInViewport();
+  await expect(falho).toHaveAttribute("data-marca", "antes do clique");
+
+  // O chip da evidência abre os dados dela na caixa.
+  await pagina.getByRole("button", { name: "PR aberto" }).click();
+  await expect(pagina.locator("dialog[open] [data-caixa-titulo]")).toHaveText("PR aberto · I-210.T3");
+  await expect(pagina.locator("dialog[open] .dm-dados")).toContainText("https://exemplo.com/pr/7");
+  await pagina.keyboard.press("Escape");
 
   // CA-10: clicar no print abre a imagem na caixa.
   await pagina.getByRole("link", { name: "print.png" }).click();
