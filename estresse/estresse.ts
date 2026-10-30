@@ -1,8 +1,9 @@
 // Entrada do `npm run estresse`: sobe o ambiente temporário, mede cada ação (200 chamadas, 20 simultâneas), imprime a
-// tabela, grava o JSON em estresse/resultados/ e sai com 1 por erro, p95 acima do orçamento ou rota sem medição.
+// tabela, grava o JSON em estresse/resultados/ e sai com 1 por erro, p95 acima do orçamento ou rota ou comando sem medição.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { subirAmbiente } from "./ambiente.ts";
+import { acoesCli, semMedicaoCli } from "./grupos/cli.ts";
 import { acoesHttpLeitura, semMedicao } from "./grupos/http_leitura.ts";
 import { type Medicao, medir } from "./medir.ts";
 
@@ -13,13 +14,20 @@ const amb = await subirAmbiente();
 let medidas: [string, Medicao][];
 let faltando: string[];
 try {
-  const acoes = await acoesHttpLeitura(amb);
-  faltando = semMedicao(acoes);
+  const http = await acoesHttpLeitura(amb);
+  faltando = semMedicao(http);
   medidas = [];
-  for (const a of acoes) {
-    const m = await medir(() => a.chamar(), { n: CHAMADAS, concorrencia: SIMULTANEAS, orcamento: a.orcamento });
-    medidas.push([`${a.metodo} ${a.caminho}`, m]);
-  }
+  const medirTodas = async (acoes: { nome: string; orcamento: number; chamar(): Promise<number> }[]) => {
+    for (const a of acoes) {
+      const m = await medir(() => a.chamar(), { n: CHAMADAS, concorrencia: SIMULTANEAS, orcamento: a.orcamento });
+      medidas.push([a.nome, m]);
+    }
+  };
+  await medirTodas(http.map((a) => ({ ...a, nome: `${a.metodo} ${a.caminho}` })));
+  // O grupo do CLI semeia centenas de demandas: só depois das rotas, para não pesar nas leituras de lista.
+  const cli = acoesCli(amb);
+  faltando.push(...semMedicaoCli(cli));
+  await medirTodas(cli);
 } finally {
   const log = await amb.encerrar();
   if (log) process.stderr.write(log);
