@@ -4,11 +4,17 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { subirAmbiente } from "./ambiente.ts";
 import { acoesCli, semMedicaoCli } from "./grupos/cli.ts";
+import {
+  acoesEtapas,
+  EXECUCOES,
+  SIMULTANEAS as SIMULTANEAS_ETAPAS,
+  semMedicao as etapasSemMedicao,
+} from "./grupos/etapas.ts";
 import { acoesHttpLeitura, semMedicao } from "./grupos/http_leitura.ts";
 import { type Medicao, medir } from "./medir.ts";
 
 const CHAMADAS = 200;
-const SIMULTANEAS = 20;
+const SIMULTANEAS_HTTP = 20;
 
 const amb = await subirAmbiente();
 let medidas: [string, Medicao][];
@@ -19,7 +25,7 @@ try {
   medidas = [];
   const medirTodas = async (acoes: { nome: string; orcamento: number; chamar(): Promise<number> }[]) => {
     for (const a of acoes) {
-      const m = await medir(() => a.chamar(), { n: CHAMADAS, concorrencia: SIMULTANEAS, orcamento: a.orcamento });
+      const m = await medir(() => a.chamar(), { n: CHAMADAS, concorrencia: SIMULTANEAS_HTTP, orcamento: a.orcamento });
       medidas.push([a.nome, m]);
     }
   };
@@ -28,6 +34,12 @@ try {
   const cli = acoesCli(amb);
   faltando.push(...semMedicaoCli(cli));
   await medirTodas(cli);
+  const etapas = acoesEtapas(amb);
+  faltando.push(...etapasSemMedicao(etapas));
+  for (const a of etapas) {
+    const m = await medir(() => a.chamar(), { n: EXECUCOES, concorrencia: SIMULTANEAS_ETAPAS, orcamento: a.orcamento });
+    medidas.push([a.etapa, m]);
+  }
 } finally {
   const log = await amb.encerrar();
   if (log) process.stderr.write(log);
