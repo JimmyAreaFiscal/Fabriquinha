@@ -40,6 +40,7 @@ test("conta erros e marca p95 acima do orçamento", async () => {
     orcamento: 0,
   });
   assert.equal(m.erros, 2);
+  assert.equal(m.primeiroErro, "500");
   assert.equal(m.p95, 5);
   assert.equal(m.acimaDoOrcamento, true);
 });

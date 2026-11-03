@@ -74,6 +74,8 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
   async function enviar(metodo: string, c: Chamada): Promise<number> {
     const inicio = performance.now();
     const corpo = Buffer.isBuffer(c.corpo) ? new Uint8Array(c.corpo) : JSON.stringify(c.corpo);
+    const falhou = (e: unknown) =>
+      new Error(`${metodo} ${c.url}: fetch falhou: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
     const r = await fetch(`${amb.base}${c.url}`, {
       method: metodo,
       headers: {
@@ -84,8 +86,12 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         }),
       },
       body: c.corpo === undefined ? undefined : corpo,
+    }).catch((e: unknown) => {
+      throw falhou(e);
     });
-    const texto = await r.text();
+    const texto = await r.text().catch((e: unknown) => {
+      throw falhou(e);
+    });
     const tempo = performance.now() - inicio;
     if (TRAVA.test(texto)) throw new Error(`${metodo} ${c.url}: banco ocupado (HTTP ${String(r.status)}): ${texto}`);
     if (r.status !== c.status)

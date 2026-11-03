@@ -43,6 +43,8 @@ const larguras = colunas.map((c, i) => Math.max(c.length, ...linhas.map((l) => (
 const formatar = (l: string[]) =>
   l.map((c, i) => (i === 0 ? c.padEnd(larguras[i] ?? 0) : c.padStart(larguras[i] ?? 0))).join("  ");
 console.log([formatar(colunas), ...linhas.map(formatar)].join("\n"));
+for (const [nome, m] of medidas)
+  if (m.primeiroErro) console.log(`Erro em ${nome} (${String(m.erros)}): ${m.primeiroErro}`);
 for (const rota of faltando) console.log(`Sem medição: ${rota}`);
 
 const pasta = join(import.meta.dirname, "resultados");
