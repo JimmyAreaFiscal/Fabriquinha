@@ -65,6 +65,16 @@ test("as oito etapas montam com contexto da demanda, da rodada, do ticket e o mo
   assert.match(montar("planejar", { rodada_id: undefined }), /não tem rodada/);
 });
 
+test("toda etapa pede leitura por faixa, edit em vez de heredoc e exploração delegada ao Explore", () => {
+  for (const etapa of NOVAS) assert.match(montar(etapa), /## Leitura e edição.*offset.*`edit`.*`Explore`/s, etapa);
+});
+
+test("revisar_rodada mostra o formato do --correcoes e pede espera num único comando", () => {
+  const rodada = montar("revisar_rodada");
+  assert.match(rodada, /\[\{"titulo": "\.\.\.", "descricao": "\.\.\.", "caminhos": \["src\/a\.ts"\]\}\]/);
+  assert.match(rodada, /espere num único comando/);
+});
+
 test("implementar e resolver_conflito não fazem commit nem PR (CA-2)", () => {
   for (const etapa of ["implementar", "resolver_conflito"])
     assert.match(montar(etapa), /não faz commit nem PR por conta própria/);

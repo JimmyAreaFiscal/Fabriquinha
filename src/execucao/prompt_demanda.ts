@@ -145,6 +145,22 @@ function secaoImpactoArquitetura({ ag }: ContextoDemanda): string {
 }
 
 /** As seções que só a etapa precisa, com dados que já existem quando o pi dela é lançado. */
+/**
+ * Tudo o que entra na conversa é reenviado a cada turno; arquivo inteiro despejado cedo é o maior custo das sessões
+ * (investigação de 2026-11-04 sobre as sessões do pi).
+ */
+const SECAO_LEITURA_ECONOMICA = secao(
+  "Leitura e edição",
+  [
+    "Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.",
+    "",
+    "- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.",
+    "- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.",
+    "- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.",
+    "- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.",
+  ].join("\n"),
+);
+
 const SECAO_DA_ETAPA: Partial<Record<EtapaTicket, (c: ContextoDemanda) => string>> = {
   planejar: secaoDesenhoAprovado,
   revisar_rodada: (c) => secaoArquivosAlterados(c) + "\n" + secaoMatrizFitness(c),
@@ -232,6 +248,7 @@ export function montarPromptDemanda(c: ContextoDemanda): string {
         ]
       : []),
     modo.trim() + "\n",
+    SECAO_LEITURA_ECONOMICA,
     secao(
       "Evidências",
       [
