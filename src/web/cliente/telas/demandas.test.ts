@@ -625,6 +625,88 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   );
 });
 
+test("o gate do PR traz o botão que abre o PR no GitHub ou no Azure DevOps, só com endereço http(s)", () => {
+  const comPR = (url: string) =>
+    pagina({
+      ...dadosDaPagina(),
+      rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
+      tickets: [
+        { ref: "I-206.T2", rodada: "I-206.R1", etapa: "encerrar_rodada", status: "em_execucao", elegivel: false },
+      ],
+      evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T2", dados: { id: "7", url }, anexos: [] }],
+    });
+  const gate = (html: string) => html.slice(html.indexOf('id="pr-I-206.R1"'));
+  assert.match(
+    gate(comPR("https://github.com/o/r/pull/7")),
+    /<a class="btn" href="https:\/\/github\.com\/o\/r\/pull\/7" target="_blank" rel="noopener">Abrir PR #7 no GitHub ↗<\/a>/,
+  );
+  assert.match(gate(comPR("https://dev.azure.com/o/p/_git/r/pullrequest/7")), />Abrir PR #7 no Azure DevOps ↗</);
+  assert.doesNotMatch(gate(comPR("javascript:alert(1)")), /Abrir PR/);
+});
+
+test("o gate do PR traz os artefatos da rodada, a última evidência de cada tipo, com os prints e o HTML", () => {
+  const html = pagina({
+    ...dadosDaPagina(),
+    rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
+    tickets: [
+      { ref: "I-206.T1", rodada: "I-206.R1", etapa: "revisar_rodada", status: "concluido", elegivel: false },
+      { ref: "I-206.T2", rodada: "I-206.R1", etapa: "revisar_rodada", status: "concluido", elegivel: false },
+      { ref: "I-206.T3", rodada: "I-206.R1", etapa: "encerrar_rodada", status: "em_execucao", elegivel: false },
+      { ref: "I-206.T4", etapa: "planejar", status: "concluido", elegivel: false },
+    ],
+    evidencias: [
+      { tipo: "plano", ticket: "I-206.T4", dados: {}, anexos: [] },
+      { tipo: "comprovacao_criterios", ticket: "I-206.T1", dados: { criterios: [{ atendido: false }] }, anexos: [] },
+      {
+        tipo: "comprovacao_criterios",
+        ticket: "I-206.T2",
+        dados: { criterios: [{ atendido: true }] },
+        anexos: [{ nome: "ca-1.png", classe: "imagem", link: "/a/1" }],
+      },
+      {
+        tipo: "aula_codigo",
+        ticket: "I-206.T3",
+        dados: {},
+        anexos: [{ nome: "aula.html", classe: "html", link: "/a/2" }],
+      },
+    ],
+  });
+  const gate = html.slice(html.indexOf('id="pr-I-206.R1"'), html.indexOf("Reprovação do PR"));
+  assert.match(gate, /<div class="titulo-bloco">Artefatos<\/div><div class="dm-chips">/);
+  assert.match(gate, /data-evidencia="Comprovação dos critérios · I-206\.T2">Critérios 1\/1</);
+  assert.doesNotMatch(gate, /Critérios 0\/1/);
+  assert.match(gate, /data-imagem="ca-1\.png"/);
+  assert.match(gate, /data-html="\/a\/2" data-nome="Aula do código">Aula do código · HTML</);
+  assert.doesNotMatch(gate, /Plano/);
+  // Sem evidência na rodada, o gate não ganha um bloco vazio.
+  const vazio = pagina({
+    ...dadosDaPagina(),
+    rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
+  });
+  assert.doesNotMatch(vazio, />Artefatos</);
+});
+
+test("o gate do planejamento traz o último plano, e não as evidências de outros tickets", () => {
+  const html = pagina({
+    ...dadosDaPagina(),
+    demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" },
+    tickets: [
+      { ref: "I-206.T1", etapa: "demanda", status: "concluido", elegivel: false },
+      { ref: "I-206.T2", etapa: "planejar", status: "concluido", elegivel: false },
+      { ref: "I-206.T3", etapa: "planejar", status: "concluido", elegivel: false },
+    ],
+    evidencias: [
+      { tipo: "plano", ticket: "I-206.T2", dados: { versao: "antiga" }, anexos: [] },
+      { tipo: "plano", ticket: "I-206.T3", dados: { versao: "nova" }, anexos: [] },
+      { tipo: "custos_realizados", ticket: "I-206.T1", dados: {}, anexos: [] },
+    ],
+  });
+  const gate = html.slice(html.indexOf('id="gate"'), html.indexOf("</textarea>"));
+  assert.match(gate, /data-evidencia="Plano · I-206\.T3">Plano</);
+  assert.match(gate, /nova/);
+  assert.doesNotMatch(gate, /antiga|Custos/);
+});
+
 test("a rodada em sessão de ajustes liga à seção da conversa, no mesmo documento (CA-10)", () => {
   const html = pagina({ ...dadosDaPagina(), rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "sessao" }] });
   assert.match(html, /<a class="link" href="#ajustes-I-206\.R1">Sessão de ajustes ↓<\/a>/);

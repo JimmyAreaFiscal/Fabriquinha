@@ -39,7 +39,10 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   const r1 = pagina.locator("#I-210\\.R1");
   await expect(r1).toContainText("Aprovação do PR");
   await expect(r1).toContainText("nota 4");
-  await expect(r1.getByRole("link", { name: /PR #7/ })).toHaveAttribute("href", "https://exemplo.com/pr/7");
+  await expect(r1.getByRole("link", { name: "PR #7 ↗", exact: true })).toHaveAttribute(
+    "href",
+    "https://exemplo.com/pr/7",
+  );
   await expect(r1.locator("li", { hasText: "I-210.T1" })).toContainText("Concluído");
   // CA-11: a decisão com o motivo escrito, no ticket.
   await expect(r1.locator("li", { hasText: "I-210.T2" })).toContainText("falta teste do caminho de erro");
@@ -80,14 +83,14 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(falho).toBeInViewport();
   await expect(falho).toHaveAttribute("data-marca", "antes do clique");
 
-  // O chip da evidência abre os dados dela na caixa.
-  await pagina.getByRole("button", { name: "PR aberto" }).click();
+  // O chip da evidência abre os dados dela na caixa, também do gate do PR, onde o Auditor decide.
+  await pagina.locator("#pr-I-210\\.R1").getByRole("button", { name: "PR aberto" }).click();
   await expect(pagina.locator("dialog[open] [data-caixa-titulo]")).toHaveText("PR aberto · I-210.T3");
   await expect(pagina.locator("dialog[open] .dm-dados")).toContainText("https://exemplo.com/pr/7");
   await pagina.keyboard.press("Escape");
 
-  // CA-10: clicar no print abre a imagem na caixa.
-  await pagina.getByRole("link", { name: "print.png" }).click();
+  // CA-10: clicar no print, junto do ticket que o gerou, abre a imagem na caixa.
+  await pagina.locator("li", { hasText: "I-210.T3" }).getByRole("link", { name: "print.png" }).click();
   await expect(pagina.locator("dialog[open] img")).toBeVisible();
   await pagina.keyboard.press("Escape");
 

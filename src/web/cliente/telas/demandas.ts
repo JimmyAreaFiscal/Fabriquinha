@@ -143,6 +143,14 @@ const TIPO_DA_EVIDENCIA: Record<string, string> = {
   desenho_solucao: "Desenho da solução",
   relatorio_impactos_arquitetura: "Impactos na arquitetura",
   custos_realizados: "Custos",
+  prototipo: "Protótipo",
+  relatorio_complexidade: "Complexidade",
+  mensagem_pr: "Mensagem do PR",
+  aula_codigo: "Aula do código",
+  video_demonstracao: "Vídeo de demonstração",
+  relatorio_produtividade: "Produtividade",
+  testes_estresse: "Testes de estresse",
+  analise_seguranca: "Análise de segurança",
 };
 const tipoDaEvidencia = (tipo: string): string => TIPO_DA_EVIDENCIA[tipo] ?? tipo.replaceAll("_", " ");
 
@@ -283,15 +291,32 @@ function ticket(t: Pagina["tickets"][number], p: Pagina): string {
 const listaDeTickets = (tickets: readonly Pagina["tickets"][number][], p: Pagina): string =>
   `<ol class="dm-tickets dm-tempo">${tickets.map((t) => ticket(t, p)).join("")}</ol>`;
 
+/** O botão que abre o PR na hospedagem, para o Auditor ler o diff antes de decidir; só com endereço http(s). */
+function botaoAbrirPR(pr: { id: string; url: string } | undefined): string {
+  if (!pr || !/^https?:\/\//.test(pr.url)) return "";
+  const hospedagem = new URL(pr.url).hostname.endsWith("github.com") ? "GitHub" : "Azure DevOps";
+  return `<p class="dm-botoes"><a class="btn" href="${escapar(pr.url)}" target="_blank" rel="noopener">Abrir PR #${escapar(pr.id)} no ${hospedagem} ↗</a></p>`;
+}
+
+/**
+ * Os artefatos que embasam a decisão, dentro do próprio gate, para o Auditor não caçá-los na linha do tempo. De cada
+ * tipo vale a última evidência: a revisão recusada antes não é o estado que está em julgamento.
+ */
+function artefatosDoGate(evidencias: readonly Evidencia[]): string {
+  const ultimaDeCadaTipo = [...new Map(evidencias.map((e) => [e.tipo, e])).values()];
+  const chips = chipsDasEvidencias(ultimaDeCadaTipo);
+  return chips === "" ? "" : blocoTitulado("Artefatos", chips);
+}
+
 /** O gate do PR da rodada (CA-20 a CA-23): aprovar com nota 1–5, ou reprovar com motivo e sem nota (D03). */
-function gatePR(ref: string): string {
+function gatePR(ref: string, pr: { id: string; url: string } | undefined, artefatos: string): string {
   const base = `/api/demandas/rodadas/${escapar(ref)}/pr`;
   const motivo = `motivo-${escapar(ref)}`;
   const nota = `nota-${escapar(ref)}`;
   const notas = [1, 2, 3, 4, 5].map((n) => `<option value="${String(n)}">${String(n)}</option>`).join("");
   const aprovar = blocoDeAcao(
     "Aprovação do PR",
-    `<label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select><span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
+    `${artefatos}${botaoAbrirPR(pr)}<label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select><span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
     <div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>`,
     false,
     ` id="pr-${escapar(ref)}"`,
@@ -317,7 +342,7 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
     ${chipsDasEvidencias(p.evidencias.filter((e) => e.rodada === r.ref && e.ticket === undefined))}
     ${meus.length > 0 ? listaDeTickets(meus, p) : '<p class="muted vazio">Sem tickets.</p>'}
     ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="#ajustes-${escapar(r.ref)}">Sessão de ajustes ↓</a></p><div id="ajustes-${escapar(r.ref)}" data-ajustes="${escapar(r.ref)}"></div>` : ""}
-    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
+    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref, pr, artefatosDoGate(p.evidencias.filter((e) => e.rodada === r.ref || meus.some((t) => t.ref === e.ticket)))) : ""}
   </section>`;
 }
 
@@ -478,11 +503,16 @@ function gate(p: Pagina): string {
   const g = GATES[fase];
   if (!g) return "";
   const campo = `motivo-${g.rota.replaceAll("/", "-")}`;
+  const planejadores = p.tickets.filter((t) => t.etapa === "planejar").map((t) => t.ref);
+  const leitura =
+    fase === "aprovacao_demanda"
+      ? oQueAAprovacaoMostra(p)
+      : artefatosDoGate(p.evidencias.filter((e) => e.ticket !== undefined && planejadores.includes(e.ticket)));
   const botao = (aprovado: boolean, rotulo: string) =>
     `<button type="button" class="btn btn-grande ${aprovado ? "btn-primario" : "btn-reprovar"}" data-gate="${String(aprovado)}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
   return blocoDeAcao(
     g.titulo,
-    `${fase === "aprovacao_demanda" ? oQueAAprovacaoMostra(p) : ""}<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
+    `${leitura}<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
     false,
     ' id="gate"',
   );
