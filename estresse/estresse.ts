@@ -1,14 +1,21 @@
 // Entrada do `npm run estresse`: sobe o ambiente temporário, mede cada ação (200 chamadas, 20 simultâneas), imprime a
-// tabela, grava o JSON em estresse/resultados/ e sai com 1 por erro, p95 acima do orçamento ou rota sem medição.
+// tabela, grava o JSON em estresse/resultados/ e sai com 1 por erro, p95 acima do orçamento ou rota ou comando sem medição.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { subirAmbiente } from "./ambiente.ts";
+import { acoesCli, semMedicaoCli } from "./grupos/cli.ts";
+import {
+  acoesEtapas,
+  EXECUCOES,
+  SIMULTANEAS as SIMULTANEAS_ETAPAS,
+  semMedicao as etapasSemMedicao,
+} from "./grupos/etapas.ts";
 import { acoesHttpLeitura, semMedicao } from "./grupos/http_leitura.ts";
 import { acoesHttpMutacao, semMedicao as semMedicaoMutacao } from "./grupos/http_mutacao.ts";
 import { type Medicao, medir } from "./medir.ts";
 
 const CHAMADAS = 200;
-const SIMULTANEAS = 20;
+const SIMULTANEAS_HTTP = 20;
 
 const amb = await subirAmbiente();
 let medidas: [string, Medicao][];
@@ -16,12 +23,25 @@ let faltando: string[];
 try {
   const leitura = await acoesHttpLeitura(amb);
   const mutacao = await acoesHttpMutacao(amb);
-  const acoes = [...leitura, ...mutacao];
+  const http = [...leitura, ...mutacao];
   faltando = [...semMedicao(leitura), ...semMedicaoMutacao(mutacao)];
   medidas = [];
-  for (const a of acoes) {
-    const m = await medir(() => a.chamar(), { n: CHAMADAS, concorrencia: SIMULTANEAS, orcamento: a.orcamento });
-    medidas.push([`${a.metodo} ${a.caminho}`, m]);
+  const medirTodas = async (acoes: { nome: string; orcamento: number; chamar(): Promise<number> }[]) => {
+    for (const a of acoes) {
+      const m = await medir(() => a.chamar(), { n: CHAMADAS, concorrencia: SIMULTANEAS_HTTP, orcamento: a.orcamento });
+      medidas.push([a.nome, m]);
+    }
+  };
+  await medirTodas(http.map((a) => ({ ...a, nome: `${a.metodo} ${a.caminho}` })));
+  // O grupo do CLI semeia centenas de demandas: só depois das rotas, para não pesar nas leituras de lista.
+  const cli = acoesCli(amb);
+  faltando.push(...semMedicaoCli(cli));
+  await medirTodas(cli);
+  const etapas = acoesEtapas(amb);
+  faltando.push(...etapasSemMedicao(etapas));
+  for (const a of etapas) {
+    const m = await medir(() => a.chamar(), { n: EXECUCOES, concorrencia: SIMULTANEAS_ETAPAS, orcamento: a.orcamento });
+    medidas.push([a.etapa, m]);
   }
 } finally {
   const log = await amb.encerrar();
