@@ -83,6 +83,11 @@ document.addEventListener("click", (evento) => {
     return;
   }
   evento.preventDefault();
+  // Link para um ponto da própria página: só rola até ele, sem trocar de página nem redesenhá-la.
+  if (link.hash !== "" && link.pathname === location.pathname && link.search === location.search) {
+    document.getElementById(decodeURIComponent(link.hash.slice(1)))?.scrollIntoView();
+    return;
+  }
   if (link.href !== location.href) history.pushState(null, "", link.href);
   desenhar();
   scrollTo(0, 0);

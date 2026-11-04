@@ -136,6 +136,21 @@ const TIPO_DA_EVIDENCIA: Record<string, string> = {
   execucao_testes: "Testes",
   matriz_fitness: "Fitness",
   relatorio_sonar: "SonarQube",
+  arquivos_alterados: "Arquivos alterados",
+  explicacao_fitness: "Explicação das fitness",
+  comprovacao_criterios: "Comprovação dos critérios",
+  criterios_aceite: "Critérios de aceite",
+  desenho_solucao: "Desenho da solução",
+  relatorio_impactos_arquitetura: "Impactos na arquitetura",
+  custos_realizados: "Custos",
+  prototipo: "Protótipo",
+  relatorio_complexidade: "Complexidade",
+  mensagem_pr: "Mensagem do PR",
+  aula_codigo: "Aula do código",
+  video_demonstracao: "Vídeo de demonstração",
+  relatorio_produtividade: "Produtividade",
+  testes_estresse: "Testes de estresse",
+  analise_seguranca: "Análise de segurança",
 };
 const tipoDaEvidencia = (tipo: string): string => TIPO_DA_EVIDENCIA[tipo] ?? tipo.replaceAll("_", " ");
 
@@ -146,10 +161,87 @@ const ESTADO_DO_PASSO = {
 } as const;
 
 type Pagina = DadosDaPagina;
+type Evidencia = Pagina["evidencias"][number];
 
-/** A decisão do ticket: resultado, nota e motivo (CA-11). */
+const DECISAO = { aprovado: ["Aprovado", "pill-ok"], recusado: ["Recusado", "pill-falha"] } as const;
+
+/** O botão que solta o texto recolhido logo antes dele; o montar o esconde quando o texto já cabe. */
+const LER_TUDO = '<button type="button" class="link dm-ler-tudo" data-expandir>ler tudo</button>';
+
+/** A decisão do ticket: resultado, nota e motivo (CA-11); o motivo longo fica recolhido em três linhas. */
 const decisao = (d: Pagina["decisoes"][number]): string =>
-  `<li class="dm-decisao"><strong>${d.resultado === "aprovado" ? "Aprovado" : "Recusado"}</strong> por ${escapar(d.por.charAt(0).toUpperCase() + d.por.slice(1))}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</li>`;
+  `<li class="dm-decisao dm-decisao-${d.resultado}"><div class="dm-recolhivel"><strong>${DECISAO[d.resultado][0]}</strong> por ${escapar(d.por.charAt(0).toUpperCase() + d.por.slice(1))}${d.nota === undefined ? "" : ` · nota ${String(d.nota)}`}${d.motivo === undefined ? "" : `: ${escapar(d.motivo)}`}</div>${d.motivo === undefined ? "" : LER_TUDO}</li>`;
+
+/**
+ * O resumo da evidência no chip: o resultado, nos tipos que a própria Fabriquinha gera; nos demais, o tipo legível.
+ * A classe pinta o chip de verde ou vermelho.
+ */
+function resumoDaEvidencia({ tipo, dados }: Evidencia): { texto: string; classe: string } {
+  const resultado = (ok: boolean, texto: string) => ({ texto, classe: ok ? " dm-chip-ok" : " dm-chip-falha" });
+  switch (tipo) {
+    case "execucao_testes": {
+      const { aprovada } = dados as { aprovada: boolean };
+      return resultado(aprovada, `Testes ${aprovada ? "✓" : "✗"}`);
+    }
+    case "matriz_fitness": {
+      const { linhas } = dados as { linhas: { codigoSaida: number }[] };
+      const passaram = linhas.filter((l) => l.codigoSaida === 0).length;
+      return resultado(passaram === linhas.length, `Fitness ${String(passaram)}/${String(linhas.length)}`);
+    }
+    case "relatorio_sonar": {
+      // Com o Sonar fora do ar, os dados vêm vazios: sem contagem de issues para mostrar.
+      const { issues } = dados as { issues?: unknown[] };
+      if (issues === undefined) return { texto: "SonarQube", classe: "" };
+      return resultado(issues.length === 0, `SonarQube · ${String(issues.length)} issues`);
+    }
+    case "arquivos_alterados": {
+      const { arquivos } = dados as { arquivos: { adicionadas: number; removidas: number }[] };
+      const soma = (campo: "adicionadas" | "removidas") => arquivos.reduce((total, a) => total + a[campo], 0);
+      return {
+        texto: `${String(arquivos.length)} arquivos · +${String(soma("adicionadas"))} −${String(soma("removidas"))}`,
+        classe: "",
+      };
+    }
+    case "comprovacao_criterios": {
+      const { criterios } = dados as { criterios: { atendido: boolean }[] };
+      const atendidos = criterios.filter((c) => c.atendido).length;
+      return resultado(atendidos === criterios.length, `Critérios ${String(atendidos)}/${String(criterios.length)}`);
+    }
+    default:
+      return { texto: tipoDaEvidencia(tipo), classe: "" };
+  }
+}
+
+/**
+ * As evidências em chips, junto de quem as gerou (CA-10). O chip abre na caixa os anexos e os dados, guardados no
+ * `<template>` ao lado; a imagem anexada e o HTML ganham chip próprio, porque são o que o Auditor quer ver.
+ */
+function chipsDasEvidencias(evidencias: readonly Evidencia[]): string {
+  const chips = evidencias.flatMap((e) => {
+    const nome = tipoDaEvidencia(e.tipo);
+    const { texto, classe } = resumoDaEvidencia(e);
+    const anexos = e.anexos.map(
+      (a) => `<li><a class="link" href="${escapar(a.link)}" target="_blank" rel="noopener">${escapar(a.nome)}</a></li>`,
+    );
+    const conteudo = `${anexos.length > 0 ? `<ul class="dm-anexos">${anexos.join("")}</ul>` : ""}<pre class="dm-dados">${escapar(JSON.stringify(e.dados, null, 2))}</pre>`;
+    return [
+      `<button type="button" class="dm-chip${classe}" data-evidencia="${escapar(`${nome} · ${e.ticket ?? e.rodada ?? "demanda"}`)}">${texto}</button><template>${conteudo}</template>`,
+      ...e.anexos
+        .filter((a) => a.classe === "imagem")
+        .map(
+          (a) =>
+            `<a class="dm-chip" href="${escapar(a.link)}" target="_blank" rel="noopener" data-imagem="${escapar(a.nome)}">${escapar(a.nome)}</a>`,
+        ),
+      ...e.anexos
+        .filter((a) => a.classe === "html")
+        .map(
+          (a) =>
+            `<button type="button" class="dm-chip" data-html="${escapar(a.link)}" data-nome="${escapar(nome)}">${escapar(nome)} · HTML</button>`,
+        ),
+    ];
+  });
+  return chips.length > 0 ? `<div class="dm-chips">${chips.join("")}</div>` : "";
+}
 
 /** O bloco delimitado de um gate ou formulário de ação: título em caixa alta e borda na cor do estado. */
 export const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
@@ -169,28 +261,65 @@ function acaoDoTicket({ ref, status, elegivel }: Pagina["tickets"][number]): str
   );
 }
 
-function ticket(t: Pagina["tickets"][number], decisoes: Pagina["decisoes"]): string {
-  const minhas = decisoes.filter((d) => d.ticket === t.ref);
-  return `<li class="dm-ticket">
-    <div class="dm-linha"><span class="id">${escapar(t.ref)}</span> <span>${ETAPA_DO_TICKET[t.etapa]}</span> <span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>${t.sessao === undefined || t.etapa === "sessao_em_aberto" ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`}</div>
-    ${t.titulo === undefined ? "" : `<p class="dm-texto">${escapar(t.titulo)}</p>`}
+/**
+ * O ticket na linha do tempo. No ticket concluído e decidido, a decisão toma o lugar do "Concluído": a revisão recusada
+ * não pode parecer sucesso. O marco da linha leva a mesma cor.
+ */
+function ticket(t: Pagina["tickets"][number], p: Pagina): string {
+  const minhas = p.decisoes.filter((d) => d.ticket === t.ref);
+  const ultima = minhas.at(-1);
+  const decidido = t.status === "concluido" && ultima !== undefined ? ultima.resultado : undefined;
+  const estado = decidido
+    ? pilula(DECISAO[decidido])
+    : `<span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>`;
+  const chat =
+    t.sessao === undefined || t.etapa === "sessao_em_aberto"
+      ? ""
+      : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`;
+  // Só o aberto elegível ganha o destaque de "é a vez do Auditor"; o aberto que espera outro ticket fica neutro.
+  const marco = decidido ?? (t.status === "aberto" && t.elegivel ? "elegivel" : t.status);
+  return `<li class="dm-ticket dm-marco-${marco}" id="${escapar(t.ref)}"><div class="dm-no">
+    <div class="dm-no-cabeca"><span class="id">${escapar(t.ref)}</span> <strong>${ETAPA_DO_TICKET[t.etapa]}</strong>${t.titulo === undefined ? "" : ` <span>${escapar(t.titulo)}</span>`}<span class="dm-no-estado">${estado}${chat}</span></div>
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
     ${t.motivo_falha === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo_falha)}</p>`}
     ${minhas.length > 0 ? `<ul class="dm-decisoes">${minhas.map(decisao).join("")}</ul>` : ""}
+    ${chipsDasEvidencias(p.evidencias.filter((e) => e.ticket === t.ref))}
     ${acaoDoTicket(t)}
-  </li>`;
+  </div></li>`;
+}
+
+const listaDeTickets = (tickets: readonly Pagina["tickets"][number][], p: Pagina): string =>
+  `<ol class="dm-tickets dm-tempo">${tickets.map((t) => ticket(t, p)).join("")}</ol>`;
+
+/** O botão que abre o PR na hospedagem, para o Auditor ler o diff antes de decidir; só com endereço http(s). */
+function botaoAbrirPR(pr: { id: string; url: string } | undefined): string {
+  if (!pr || !/^https?:\/\//.test(pr.url)) return "";
+  const hospedagem = new URL(pr.url).hostname.endsWith("github.com") ? "GitHub" : "Azure DevOps";
+  return `<p class="dm-botoes"><a class="btn" href="${escapar(pr.url)}" target="_blank" rel="noopener">Abrir PR #${escapar(pr.id)} no ${hospedagem} ↗</a></p>`;
+}
+
+/**
+ * Os artefatos que embasam a decisão, dentro do próprio gate, para o Auditor não caçá-los na linha do tempo. De cada
+ * tipo vale a última evidência: a revisão recusada antes não é o estado que está em julgamento.
+ */
+function artefatosDoGate(evidencias: readonly Evidencia[]): string {
+  const ultimaDeCadaTipo = [...new Map(evidencias.map((e) => [e.tipo, e])).values()];
+  const chips = chipsDasEvidencias(ultimaDeCadaTipo);
+  return chips === "" ? "" : blocoTitulado("Artefatos", chips);
 }
 
 /** O gate do PR da rodada (CA-20 a CA-23): aprovar com nota 1–5, ou reprovar com motivo e sem nota (D03). */
-function gatePR(ref: string): string {
+function gatePR(ref: string, pr: { id: string; url: string } | undefined, artefatos: string): string {
   const base = `/api/demandas/rodadas/${escapar(ref)}/pr`;
   const motivo = `motivo-${escapar(ref)}`;
   const nota = `nota-${escapar(ref)}`;
   const notas = [1, 2, 3, 4, 5].map((n) => `<option value="${String(n)}">${String(n)}</option>`).join("");
   const aprovar = blocoDeAcao(
     "Aprovação do PR",
-    `<label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select><span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
+    `${artefatos}${botaoAbrirPR(pr)}<label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select><span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
     <div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>`,
+    false,
+    ` id="pr-${escapar(ref)}"`,
   );
   const reprovar = blocoDeAcao(
     "Reprovação do PR",
@@ -210,27 +339,15 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
   return `<section class="bloco dm-rodada" id="${escapar(r.ref)}" aria-labelledby="titulo-${escapar(r.ref)}">
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
     <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
-    ${meus.length > 0 ? `<ul class="dm-tickets">${meus.map((t) => ticket(t, p.decisoes)).join("")}</ul>` : '<p class="muted vazio">Sem tickets.</p>'}
+    ${chipsDasEvidencias(p.evidencias.filter((e) => e.rodada === r.ref && e.ticket === undefined))}
+    ${meus.length > 0 ? listaDeTickets(meus, p) : '<p class="muted vazio">Sem tickets.</p>'}
     ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="#ajustes-${escapar(r.ref)}">Sessão de ajustes ↓</a></p><div id="ajustes-${escapar(r.ref)}" data-ajustes="${escapar(r.ref)}"></div>` : ""}
-    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref) : ""}
+    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref, pr, artefatosDoGate(p.evidencias.filter((e) => e.rodada === r.ref || meus.some((t) => t.ref === e.ticket)))) : ""}
   </section>`;
 }
 
 const secao = (id: string, titulo: string, corpo: string): string =>
   `<section class="bloco" aria-labelledby="${id}"><div class="secao-titulo"><h2 id="${id}">${titulo}</h2></div>${corpo}</section>`;
-
-function evidencia(e: Pagina["evidencias"][number]): string {
-  const dono = e.ticket ?? e.rodada ?? "demanda";
-  const anexos = e.anexos.map(
-    (a) =>
-      `<li><a class="link" href="${escapar(a.link)}" target="_blank" rel="noopener"${a.classe === "imagem" ? ` data-imagem="${escapar(a.nome)}"` : ""}>${escapar(a.nome)}</a></li>`,
-  );
-  return `<li class="dm-evidencia">
-    <div class="dm-linha"><strong>${escapar(tipoDaEvidencia(e.tipo))}</strong> <span class="id">${escapar(dono)}</span></div>
-    ${anexos.length > 0 ? `<ul class="dm-anexos">${anexos.join("")}</ul>` : ""}
-    <details><summary>dados</summary><pre class="dm-dados">${escapar(JSON.stringify(e.dados, null, 2))}</pre></details>
-  </li>`;
-}
 
 /** O encerramento final (CA-12): só com progresso; integração feita e limpeza falha nunca viram "nada integrado". */
 function encerramento({ passos, limpeza_pendente: pendentes, falha }: Pagina["encerramento"]): string {
@@ -386,13 +503,24 @@ function gate(p: Pagina): string {
   const g = GATES[fase];
   if (!g) return "";
   const campo = `motivo-${g.rota.replaceAll("/", "-")}`;
+  const planejadores = p.tickets.filter((t) => t.etapa === "planejar").map((t) => t.ref);
+  const leitura =
+    fase === "aprovacao_demanda"
+      ? oQueAAprovacaoMostra(p)
+      : artefatosDoGate(p.evidencias.filter((e) => e.ticket !== undefined && planejadores.includes(e.ticket)));
   const botao = (aprovado: boolean, rotulo: string) =>
     `<button type="button" class="btn btn-grande ${aprovado ? "btn-primario" : "btn-reprovar"}" data-gate="${String(aprovado)}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
   return blocoDeAcao(
     g.titulo,
-    `${fase === "aprovacao_demanda" ? oQueAAprovacaoMostra(p) : ""}<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
+    `${leitura}<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
+    false,
+    ' id="gate"',
   );
 }
+
+/** Um cartão da lateral: o contexto que acompanha o Auditor enquanto ele desce pela linha do tempo. */
+const cartaoLateral = (id: string, titulo: string, corpo: string): string =>
+  `<section class="superficie dm-cartao-lateral" aria-labelledby="${id}"><h2 class="titulo-bloco" id="${id}">${titulo}</h2>${corpo}</section>`;
 
 /**
  * Cancelar (CA-27) ou arquivar (CA-29). Cancelar só abre a confirmação, que lista as dependentes que vão junto; nada é
@@ -403,7 +531,7 @@ function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string 
   const botao = (acao: string, classe: string, rotulo: string, extra = "") =>
     `<button type="button" class="btn btn-grande ${classe}" data-demanda="${acao}"${extra}>${rotulo}</button>`;
   if (fase === "concluida")
-    return secao(
+    return cartaoLateral(
       "titulo-acoes",
       "Ações",
       `<div class="dm-botoes">${botao("arquivar", "btn-primario", "Arquivar", ` data-caminho="${caminho}/arquivar"`)}</div>`,
@@ -413,7 +541,7 @@ function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string 
     dependentes.length > 0
       ? `<p class="dm-texto">Estas demandas dependem desta e serão canceladas junto:</p><ul class="dm-tickets">${dependentes.map((d) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(d.demanda_id)}">${escapar(d.demanda_id)}</a> ${escapar(d.titulo)} ${pilula(FASE_DA_DEMANDA[d.fase])}</li>`).join("")}</ul>`
       : '<p class="dm-texto">Nenhuma outra demanda depende desta.</p>';
-  return secao(
+  return cartaoLateral(
     "titulo-acoes",
     "Ações",
     `<div class="dm-botoes">${botao("abrir-cancelar", "btn-reprovar", "Cancelar a demanda")}</div>
@@ -421,25 +549,139 @@ function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string 
   );
 }
 
+/** O que espera o Auditor, com o link até onde ele age: o gate da fase, o PR ou a sessão da rodada, o ticket. */
+function aguardaVoce({ demanda, rodadas, tickets }: Pagina): string {
+  const gateDaFase = GATES[demanda.fase];
+  const itens = [
+    ...(gateDaFase ? [["gate", gateDaFase.titulo]] : []),
+    ...rodadas
+      .filter((r) => r.fase === "aprovacao_pull_request" || r.fase === "sessao")
+      .map((r) => [`${r.fase === "sessao" ? "ajustes" : "pr"}-${r.ref}`, `${FASE_DA_RODADA[r.fase][0]} · ${r.ref}`]),
+    ...tickets
+      .filter((t) => t.status === "falhou" || (t.status === "aberto" && t.elegivel))
+      .map((t) => [
+        t.ref,
+        `${t.status === "falhou" ? "Reabrir" : "Executar"} ${t.ref}${t.titulo === undefined ? "" : ` · ${t.titulo}`}`,
+      ]),
+  ];
+  if (itens.length === 0) return "";
+  const links = itens.map(
+    ([alvo = "", texto = ""]) => `<li><a class="link" href="#${escapar(alvo)}">${escapar(texto)} ↓</a></li>`,
+  );
+  return `<section class="superficie dm-cartao-lateral dm-aguarda" aria-labelledby="titulo-aguarda"><h2 class="titulo-bloco" id="titulo-aguarda">Aguarda você</h2><ul class="dm-tickets">${links.join("")}</ul></section>`;
+}
+
+interface Comprovacao {
+  criterios: { id: string; atendido: boolean }[];
+}
+
+/**
+ * Os critérios de aceite com o resultado da última comprovação; o que falhou diz em quantas comprovações, para a rodada
+ * que anda em círculo saltar aos olhos.
+ */
+function criteriosDaLateral(p: Pagina): string {
+  const criterios = (evidenciaDaDemanda(p, "criterios_aceite")?.dados as { criterios: CriterioDeAceite[] } | undefined)
+    ?.criterios;
+  if (!criterios) return "";
+  const comprovacoes = p.evidencias
+    .filter((e) => e.tipo === "comprovacao_criterios")
+    .map((e) => (e.dados as Comprovacao).criterios);
+  const itens = criterios.map((c) => {
+    const resultados = comprovacoes.flatMap((lista) => lista.filter((x) => x.id === c.id).map((x) => x.atendido));
+    const ultimo = resultados.at(-1);
+    const falhas = resultados.filter((atendido) => !atendido).length;
+    const [classe, estado] =
+      ultimo === undefined
+        ? ["neutro", "sem comprovação"]
+        : ultimo
+          ? ["ok", "comprovado"]
+          : ["falha", `não comprovado em ${String(falhas)} ${falhas === 1 ? "comprovação" : "comprovações"}`];
+    return `<li><div class="dm-linha"><span class="dm-bolinha dm-bolinha-${classe}" aria-hidden="true"></span><span class="mono">${escapar(c.id)}</span><span class="muted">${estado}</span></div><div class="dm-ca-entao md">${markdownEmLinha(c.entao)}</div></li>`;
+  });
+  return cartaoLateral("titulo-criterios", "Critérios de aceite", `<ul class="dm-criterios">${itens.join("")}</ul>`);
+}
+
+/** As fases da demanda no trilho do cabeçalho; os losangos são os gates do Auditor. */
+const TRILHO: readonly [FaseDemanda, boolean][] = [
+  ["registro", false],
+  ["aprovacao_demanda", true],
+  ["planejamento", false],
+  ["aprovacao_planejamento", true],
+  ["execucao", false],
+  ["revisao_demanda", false],
+  ["encerramento", false],
+  ["concluida", false],
+];
+
+/** Onde a demanda está no caminho; concluída e arquivada completam o trilho, e a cancelada fica sem ele. */
+function trilhoDeFases(fase: FaseDemanda): string {
+  if (fase === "cancelada") return "";
+  const atual = fase === "concluida" || fase === "arquivada" ? TRILHO.length : TRILHO.findIndex(([f]) => f === fase);
+  const passos = TRILHO.map(([f, gate], i) => {
+    const classes = [
+      "dm-passo-trilho",
+      ...(gate ? ["gate"] : []),
+      ...(i < atual ? ["feito"] : i === atual ? ["atual"] : []),
+    ];
+    return `<li class="${classes.join(" ")}"${i === atual ? ' aria-current="step"' : ""}><span class="dm-marco-trilho"></span><span>${FASE_DA_DEMANDA[f][0]}</span></li>`;
+  });
+  return `<ol class="dm-trilho" aria-label="Fases da demanda">${passos.join("")}</ol>`;
+}
+
+/**
+ * A linha do tempo, na ordem dos tickets: os globais de antes da primeira rodada (demanda e planejamento), as rodadas e
+ * os globais que vieram depois delas.
+ */
+function linhaDoTempo(p: Pagina): string {
+  const primeira = p.tickets.findIndex((t) => t.rodada !== undefined);
+  const corte = primeira === -1 ? p.tickets.length : primeira;
+  const globais = (id: string, titulo: string, tickets: Pagina["tickets"]) => {
+    const deles = tickets.filter((t) => t.rodada === undefined);
+    return deles.length > 0 ? secao(id, titulo, listaDeTickets(deles, p)) : "";
+  };
+  return [
+    globais("titulo-antes", "Antes das rodadas", p.tickets.slice(0, corte)),
+    ...p.rodadas.map((r) => rodadaDaPagina(r, p)),
+    globais("titulo-depois", "Depois das rodadas", p.tickets.slice(corte)),
+  ].join("");
+}
+
+/**
+ * A página em mesa: a lateral fixa com o que aguarda o Auditor e o contexto da demanda; ao centro, o gate da fase, a
+ * linha do tempo e o encerramento. Na aprovação da demanda, o próprio gate já mostra a descrição e os critérios.
+ */
 export function pagina(p: DadosDaPagina): string {
   const { demanda: d } = p;
-  const globais = p.tickets.filter((t) => t.rodada === undefined);
-  return `<a class="link" href="/home">← Início</a>
-  <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
-    <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
-  ${gate(p)}
-  ${acoesDaDemanda(p)}
-  ${
+  const naAprovacao = d.fase === "aprovacao_demanda";
+  const evidenciasDaDemanda = chipsDasEvidencias(
+    p.evidencias.filter((e) => e.rodada === undefined && e.ticket === undefined),
+  );
+  const lateral = [
+    aguardaVoce(p),
+    naAprovacao ? "" : criteriosDaLateral(p),
+    naAprovacao
+      ? ""
+      : cartaoLateral(
+          "titulo-descricao",
+          "Descrição",
+          `<div class="md dm-descricao">${markdown(d.descricao)}</div>${LER_TUDO}`,
+        ),
     p.dependencias.length > 0
-      ? secao(
+      ? cartaoLateral(
           "titulo-dependencias",
           "Dependências",
           `<ul class="dm-tickets">${p.dependencias.map((x) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(x.demanda_id)}">${escapar(x.demanda_id)}</a> ${pilula(FASE_DA_DEMANDA[x.fase])}</li>`).join("")}</ul>`,
         )
-      : ""
-  }
-  ${p.rodadas.map((r) => rodadaDaPagina(r, p)).join("")}
-  ${globais.length > 0 ? secao("titulo-globais", "Tickets globais", `<ul class="dm-tickets">${globais.map((t) => ticket(t, p.decisoes)).join("")}</ul>`) : ""}
-  ${p.evidencias.length > 0 ? secao("titulo-evidencias", "Evidências", `<ul class="dm-tickets">${p.evidencias.map(evidencia).join("")}</ul>`) : ""}
-  ${encerramento(p.encerramento)}`;
+      : "",
+    evidenciasDaDemanda === "" ? "" : cartaoLateral("titulo-evidencias", "Evidências da demanda", evidenciasDaDemanda),
+    acoesDaDemanda(p),
+  ];
+  return `<a class="link" href="/home">← Início</a>
+  <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
+    <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span><span class="tag">${escapar(d.tipo)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
+  ${trilhoDeFases(d.fase)}
+  <div class="dm-mesa">
+    <aside class="dm-lateral" aria-label="Contexto da demanda">${lateral.join("")}</aside>
+    <div class="dm-principal">${gate(p)}${linhaDoTempo(p)}${encerramento(p.encerramento)}</div>
+  </div>`;
 }

@@ -16,6 +16,15 @@ export async function montarDemandas(main: HTMLElement, params: Parametros, sign
 const NAO_ENCONTRADA =
   '<div class="cabeca-pagina"><h1>Demanda não encontrada</h1></div><p class="muted">Esta demanda não existe. <a class="link" href="/home">Ir para o Início</a></p>';
 
+/** Desenha a página; o "ler tudo" só fica onde o texto recolhido não cabe. */
+function desenharPagina(main: HTMLElement, dados: DadosDaPagina): void {
+  main.innerHTML = pagina(dados);
+  for (const botao of main.querySelectorAll<HTMLButtonElement>("button[data-expandir]")) {
+    const texto = botao.previousElementSibling;
+    botao.hidden = texto === null || texto.scrollHeight <= texto.clientHeight;
+  }
+}
+
 /** Lê a demanda e redesenha a página com o que a API devolve; o 404 vira a página de não encontrada. */
 // Uma recarga redesenha a página: fecha o acompanhamento (releitura e EventSource) das seções da desenhada antes.
 const acompanhamentos = new WeakMap<HTMLElement, AbortController>();
@@ -33,7 +42,7 @@ async function carregar(main: HTMLElement, params: Parametros, signal: AbortSign
   const acompanhamento = new AbortController();
   acompanhamentos.set(main, acompanhamento);
   const fim = AbortSignal.any([signal, acompanhamento.signal]);
-  main.innerHTML = pagina(dados);
+  desenharPagina(main, dados);
   for (const secao of main.querySelectorAll<HTMLElement>("[data-ajustes]"))
     acompanharAjustes(secao, fim).catch(mostrarErro);
   return true;
@@ -41,8 +50,8 @@ async function carregar(main: HTMLElement, params: Parametros, signal: AbortSign
 
 export async function montarDemanda(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
   if (!(await carregar(main, params, signal))) return;
-  // O ouvinte sai com a página. A imagem do anexo e o HTML do desenho abrem na caixa; os demais anexos seguem o link,
-  // em nova aba.
+  // O ouvinte sai com a página. A imagem do anexo, o HTML do desenho e os dados de cada evidência abrem na caixa; os
+  // demais anexos seguem o link, em nova aba.
   main.addEventListener(
     "click",
     (evento) => {
@@ -65,6 +74,21 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
       const acao = alvo?.closest<HTMLButtonElement>("button[data-acao]");
       if (acao) {
         void agirNoTicket(acao, main, params, signal);
+        return;
+      }
+      const expandir = alvo?.closest<HTMLButtonElement>("button[data-expandir]");
+      if (expandir) {
+        const aberto = expandir.previousElementSibling?.classList.toggle("aberto");
+        expandir.textContent = aberto ? "recolher" : "ler tudo";
+        return;
+      }
+      const evidencia = alvo?.closest<HTMLButtonElement>("button[data-evidencia]");
+      if (evidencia) {
+        const conteudo = evidencia.nextElementSibling;
+        abrirCaixa({
+          titulo: evidencia.dataset.evidencia ?? "",
+          corpo: conteudo instanceof HTMLTemplateElement ? conteudo.innerHTML : "",
+        });
         return;
       }
       const html = alvo?.closest<HTMLButtonElement>("button[data-html]");
@@ -195,6 +219,6 @@ async function agirNaDemanda(botao: HTMLButtonElement, main: HTMLElement): Promi
   } catch (falha) {
     mostrarErro(falha);
     const id = main.querySelector(".dm-cabeca .id")?.textContent ?? "";
-    main.innerHTML = pagina(await api<DadosDaPagina>(`/api/demandas/${encodeURIComponent(id)}`));
+    desenharPagina(main, await api<DadosDaPagina>(`/api/demandas/${encodeURIComponent(id)}`));
   }
 }

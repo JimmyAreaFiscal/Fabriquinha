@@ -115,7 +115,8 @@ test("CA-2: o revisor que decide aprovar conclui o ticket e a rodada segue para 
 }) => {
   projeto(fabriquinha.raiz);
   semear(fabriquinha.raiz, "revise");
-  await executar(pagina, fabriquinha.base, "Concluído");
+  // Concluído e decidido, o ticket mostra a decisão no lugar do status; o banco confirma o concluído.
+  await executar(pagina, fabriquinha.base, "Aprovado");
   const e = estado(fabriquinha.raiz);
   expect([e.status, e.decisoes, e.rodada]).toEqual(["concluido", 1, "encerramento"]);
 });
