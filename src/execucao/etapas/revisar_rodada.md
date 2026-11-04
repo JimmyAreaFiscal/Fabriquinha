@@ -8,7 +8,9 @@
 2. Confira o código da worktree contra o plano e contra cada critério citado.
 3. Explique o resultado de cada fitness function, inclusive as que falharam.
 4. Comprove cada critério da rodada com o que você viu no código e nos testes.
-5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir {ticket} aprovar` se a rodada cumpre o que foi pedido, ou com `fabriquinha revisao decidir {ticket} reprovar --motivo <texto> --correcoes <json|->` se não cumpre; `--correcoes` leva as correções que a rodada exige, em JSON.
+5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir {ticket} aprovar` se a rodada cumpre o que foi pedido, ou com `fabriquinha revisao decidir {ticket} reprovar --motivo <texto> --correcoes <json|->` se não cumpre; `--correcoes` leva as correções que a rodada exige, em JSON, uma por ticket corretivo, como `[{"titulo": "...", "descricao": "...", "caminhos": ["src/a.ts"]}]`.
+
+Para esperar um processo (teste ao vivo, container, fila), espere num único comando até a condição ou um tempo limite, com a saída filtrada; não relance a espera turno após turno.
 
 **Entregas:** as evidências de explicação das fitness functions e de comprovação dos critérios, do ticket {ticket}.
 
