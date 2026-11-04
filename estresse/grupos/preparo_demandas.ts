@@ -1,0 +1,387 @@
+// Preparo do estresse das rotas POST e DELETE: cada função cria, no banco da raiz temporária do ambiente, um registro só
+// para uma chamada, já na fase que a rota exige (CA-2). Roda antes de medir, então o custo fica fora do tempo medido; o
+// grupo prepara as 200 chamadas de uma ação de uma vez e só então dispara. O pi é o falso do ambiente ($FABRIQUINHA_PI)
+// e o `gh` é o de `integracao/falsos.ts`, com o estado de cada PR no arquivo dele.
+// Não usa `integracao/apoio.ts`: ele registra hooks do node:test e mexe no process.env ao ser importado.
+import { randomUUID } from "node:crypto";
+import { chmodSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { AgregadoDemanda } from "../../src/dominio/agregado_demanda.ts";
+import { registrarCorrecoesSessao } from "../../src/dominio/transicoes_rodada.ts";
+import { criarAvaliacao } from "../../src/persistencia/avaliacoes.ts";
+import { abrir } from "../../src/persistencia/banco.ts";
+import { gravarConfiguracaoProjeto } from "../../src/persistencia/configuracao_projeto.ts";
+import { comDemanda, criarDemanda } from "../../src/persistencia/demandas.ts";
+import { importarAchados } from "../../src/persistencia/avaliacoes.ts";
+import { registrarProjeto } from "../../src/persistencia/projetos.ts";
+import { criarTarefa, criarUsuarioSimulado } from "../../src/persistencia/simulacao.ts";
+import { comSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
+import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/repositorio/worktree-demanda.ts";
+import { exigirGit } from "../../src/repositorio/worktree.ts";
+import { ghFalso } from "../../integracao/falsos.ts";
+import type { Ambiente } from "../ambiente.ts";
+
+const em = "2026-10-11T12:00:00.000Z";
+const CRITERIOS = ["CA-1", "CA-2"];
+
+/** O que uma rodada com PR deixa para a rota: o endereço `I-n.R1` e o número do PR na hospedagem falsa. */
+export interface RodadaComPR {
+  demanda: string;
+  rodada: string;
+  pr: number;
+}
+
+/** Os preparos de uma chamada cada; todos devolvem os ids que o caminho e o corpo da rota usam. */
+export interface Preparo {
+  /** O projeto onde os preparos nascem: git real, remoto bare local e configuração do SDLC. */
+  projeto: string;
+  /** Em `aprovacao_demanda`: decisão da demanda e cancelar. */
+  demandaEnviada(): string;
+  /** Em `concluida`: arquivar. */
+  demandaConcluida(): string;
+  /** Em `aprovacao_planejamento`, com o plano submetido: decisão do planejamento. */
+  planejamentoPronto(): string;
+  /** Em `aprovacao_pull_request`, com as branches no origin, as worktrees e o PR aberto: decisão do PR. */
+  rodadaComPR(): Promise<RodadaComPR>;
+  /** Na sessão de ajustes (rodada em `sessao`, sem pi vivo): mensagens e, com `corrigida`, concluir. */
+  rodadaEmAjustes(corrigida?: boolean): Promise<string>;
+  /** Ticket `implementar` em `falhou`, endereço `I-n.T1`: reabrir. */
+  ticketFalho(): Promise<string>;
+  /** Ticket `implementar` `aberto` de uma demanda em execução, com as worktrees prontas, `I-n.T1`: executar. */
+  ticketAberto(): Promise<string>;
+  /** Sessão interativa parada (conversa), com a rodada pronta para o pi falso: mensagem. */
+  sessaoParada(): Promise<string>;
+  /** Sessão com a execução aberta e sem pi vivo: abortar. */
+  sessaoRodando(): Promise<string>;
+  /** Um projeto próprio, para remover ou editar. */
+  projetoProprio(): Promise<string>;
+  /** Um repositório git novo (com remoto), para cadastrar um projeto. */
+  repositorioNovo(): Promise<string>;
+  /** Um Usuário Simulado sem anexos, do projeto principal. */
+  usuarioSimulado(): number;
+  /** Uma Tarefa com um usuário, do projeto principal (que tem o link do produto, então o Executar a aceita). */
+  tarefa(): number;
+  /** Uma avaliação em disco, sem pi vivo; com `achado`, com o achado 1 por encaminhar. */
+  avaliacao(achado?: boolean): string;
+  fechar(): void;
+}
+
+/** Instala o `gh` falso na frente do PATH do serviço e abre o banco da raiz do ambiente. */
+export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
+  const banco = abrir(amb.raiz);
+  const log = join(amb.raiz, "execucoes", "preparo.log");
+  mkdirSync(join(amb.raiz, "execucoes"), { recursive: true });
+  let contador = 1000;
+  const proximo = () => ++contador;
+
+  const git = (dir: string, ...args: string[]) =>
+    exigirGit(dir, "-c", "user.name=Estresse", "-c", "user.email=estresse@exemplo.com", ...args);
+
+  // O serviço achou o `gh` da raiz (o do ambiente, que não responde nada) na frente do PATH: troca-o por um que escolhe
+  // o estado pelo número do PR (`gh pr view|merge <n>`), para as aprovações simultâneas não disputarem um JSON só.
+  const hospedagem = join(amb.raiz, "hospedagem");
+  ghFalso(hospedagem);
+  const wrapper = join(amb.raiz, "bin", "gh.novo");
+  writeFileSync(
+    wrapper,
+    `#!/bin/sh\nexport FALSO_HOSPEDAGEM="${hospedagem}/pr-$3.json"\n` +
+      `[ -f "$FALSO_HOSPEDAGEM" ] || export FALSO_HOSPEDAGEM="${hospedagem}/hospedagem.json"\n` +
+      `exec "${hospedagem}/bin/gh" "$@"\n`,
+  );
+  chmodSync(wrapper, 0o755);
+  renameSync(wrapper, join(amb.raiz, "bin", "gh"));
+  let numeroDoPR = 0;
+  const abrirPR = (head: string, base: string): number => {
+    const id = ++numeroDoPR;
+    writeFileSync(
+      join(hospedagem, `pr-${String(id)}.json`),
+      JSON.stringify({
+        prs: [{ id, head, base, titulo: "t", corpo: "c", estado: "aberto" }],
+        chamadas: [],
+        falha: {},
+        saida: {},
+      }),
+    );
+    return id;
+  };
+
+  /** Um repositório git de verdade com o remoto num bare local e a `main` publicada. */
+  async function repositorio(pasta: string): Promise<{ repo: string; bare: string }> {
+    const dir = mkdtempSync(join(amb.raiz, `${pasta}-`));
+    const bare = join(dir, "origin.git");
+    const repo = join(dir, "repo");
+    mkdirSync(repo);
+    await git(dir, "init", "-q", "--bare", bare);
+    await git(repo, "init", "-q", "-b", "main");
+    writeFileSync(join(repo, "LEIAME"), "estresse\n");
+    await git(repo, "add", "LEIAME");
+    await git(repo, "commit", "-q", "-m", "início");
+    await git(repo, "remote", "add", "origin", bare);
+    await git(repo, "push", "-q", "origin", "main");
+    return { repo, bare };
+  }
+
+  async function cadastrar(nome: string) {
+    const { repo } = await repositorio(nome);
+    registrarProjeto(banco, {
+      nome,
+      repo,
+      branchBase: "main",
+      hospedagem: "github",
+      preparacao: [],
+      sonar: { projectKey: nome },
+    });
+    gravarConfiguracaoProjeto(banco, {
+      nome,
+      branch_base: "main",
+      chave_sonarqube: nome,
+      raiz_git: repo,
+      hospedagem: "github",
+      etapas: [],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    });
+    return { nome, repo, branchBase: "main", preparacao: [] };
+  }
+
+  const principal = await cadastrar("estresse");
+  // O Executar da Tarefa recusa o projeto sem o link do produto (F8): o pi falso não o abre.
+  banco.prepare("UPDATE projeto SET link_produto = ? WHERE nome = ?").run("http://127.0.0.1:9", principal.nome);
+
+  const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: string, extra: object = {}) => ({
+    demanda_id,
+    ticket_id,
+    etapa,
+    status,
+    status_alterado_em: em,
+    devolucoes: 0,
+    ...extra,
+  });
+  const rodada = (demanda_id: string, fase: string) => ({
+    demanda_id,
+    rodada_id: 1,
+    titulo: "rodada 1",
+    fase,
+    e2e: false,
+    branch: `fabriquinha/${demanda_id}-1`,
+  });
+
+  const novoId = () => `I-${String(proximo())}`;
+
+  /** Cria a demanda `fase` do projeto principal; `resto` traz tickets, rodadas, evidências... */
+  function criar(fase: string, resto: object = {}, id = novoId()): string {
+    criarDemanda(banco, {
+      demanda: {
+        id,
+        projeto: principal.nome,
+        titulo: `Demanda ${id}`,
+        tipo: "funcionalidade",
+        descricao: "d",
+        fase,
+        fase_alterada_em: em,
+        origem_ferramenta: "claude",
+        origem_sessao: id,
+        enviada: true,
+        branch: `fabriquinha/${id}`,
+      },
+      tickets: [],
+      decisoes: [],
+      evidencias: [],
+      rodadas: [],
+      dependencias_rodada: [],
+      criterios_citados: [],
+      dependencias_ticket: [],
+      caminhos_ticket: [],
+      ...resto,
+    } as unknown as AgregadoDemanda);
+    return id;
+  }
+
+  /** As worktrees da demanda e da rodada 1, como o planejamento aprovado as deixa; devolve a da rodada. */
+  async function worktrees(id: string): Promise<string> {
+    await garantirWorktreeDemanda(amb.raiz, principal, id, log, () => Promise.resolve());
+    return garantirWorktreeRodada(amb.raiz, principal, { demanda_id: id, rodada_id: 1 }, log);
+  }
+
+  /** Demanda em `execucao` com a rodada 1 na `fase`, as worktrees prontas e os tickets dados (`demanda_id` se completa). */
+  async function emExecucao(fase: string, tickets: object[], resto: object = {}) {
+    const id = novoId();
+    const dir = await worktrees(id);
+    criar(
+      "execucao",
+      { rodadas: [rodada(id, fase)], tickets: tickets.map((t) => ({ ...t, demanda_id: id })), ...resto },
+      id,
+    );
+    return { id, dir };
+  }
+
+  /** O ticket 1 `implementar` da rodada 1 com `status`, numa demanda em execução. */
+  const comTicket = async (status: string) =>
+    (await emExecucao("desenvolvimento", [ticket("", 1, "implementar", status, { rodada_id: 1 })])).id;
+
+  /** Uma sessão interativa do ticket `ticket_id` com a execução dada. */
+  function abrirSessao(demanda_id: string, ticket_id: number, aberta: boolean): string {
+    const sessao = `sd-${String(proximo())}`;
+    comSessoesDoTicket(banco, { demanda_id, ticket_id }, (e) => ({
+      ...e,
+      sessoes: [{ demanda_id, ticket_id, id: sessao, modo: "interativo", conversa_referencia: sessao }],
+      execucoes: [
+        { id: `ed-${String(proximo())}`, sessao_id: sessao, inicio: em, ...(aberta ? {} : { fim: em }), falha: false },
+      ],
+    }));
+    return sessao;
+  }
+
+  return {
+    projeto: principal.nome,
+
+    demandaEnviada() {
+      const id = novoId();
+      return criar("aprovacao_demanda", { tickets: [ticket(id, 1, "demanda", "em_execucao")] }, id);
+    },
+
+    demandaConcluida: () => criar("concluida"),
+
+    planejamentoPronto() {
+      const id = novoId();
+      const plano = {
+        demanda_id: id,
+        criterios: CRITERIOS,
+        rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "r1", e2e: false, criterios: [CRITERIOS[0]], depende: [] }],
+        tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
+      };
+      return criar(
+        "aprovacao_planejamento",
+        {
+          tickets: [ticket(id, 1, "planejar", "em_execucao")],
+          evidencias: [
+            {
+              demanda_id: id,
+              tipo: "criterios_aceite",
+              dados: { criterios: CRITERIOS.map((c) => ({ id: c, dado: "d", quando: "q", entao: "e" })) },
+              em,
+            },
+            { demanda_id: id, ticket_id: 1, tipo: "plano", dados: plano, em },
+          ],
+        },
+        id,
+      );
+    },
+
+    async rodadaComPR() {
+      const id = novoId();
+      const dir = await worktrees(id);
+      // O commit da rodada vai ao origin junto com a branch da demanda: o merge do PR é entre as duas.
+      await git(dir, "commit", "-q", "--allow-empty", "-m", "rodada 1");
+      const head = (await git(dir, "rev-parse", "HEAD")).trim();
+      await git(principal.repo, "push", "-q", "origin", `fabriquinha/${id}`, `fabriquinha/${id}-1`);
+      const pr = abrirPR(`fabriquinha/${id}-1`, `fabriquinha/${id}`);
+      const url = `https://github.com/org/loja/pull/${String(pr)}`;
+      criar(
+        "execucao",
+        {
+          rodadas: [rodada(id, "aprovacao_pull_request")],
+          tickets: [
+            ticket(id, 1, "implementar", "concluido", { rodada_id: 1 }),
+            ticket(id, 2, "encerrar_rodada", "em_execucao", { rodada_id: 1 }),
+          ],
+          evidencias: [
+            {
+              demanda_id: id,
+              ticket_id: 2,
+              tipo: "pr_aberto",
+              dados: { id: String(pr), url, branch: `fabriquinha/${id}-1`, head },
+              em,
+            },
+          ],
+        },
+        id,
+      );
+      return { demanda: id, rodada: `${id}.R1`, pr };
+    },
+
+    async rodadaEmAjustes(corrigida = false) {
+      const { id, dir } = await emExecucao("sessao", [
+        ticket("", 1, "implementar", "concluido", { rodada_id: 1 }),
+        ticket("", 2, "encerrar_rodada", "concluido", { rodada_id: 1 }),
+        ticket("", 3, "sessao_em_aberto", "em_execucao", { rodada_id: 1 }),
+      ]);
+      abrirSessao(id, 3, false);
+      // O marco que a reprovação do PR grava: as duas pontas que a conclusão restaura.
+      const marco = {
+        rodada: { branch: `fabriquinha/${id}-1`, sha: (await git(dir, "rev-parse", "HEAD")).trim() },
+        demanda: { branch: `fabriquinha/${id}`, sha: (await git(dir, "rev-parse", `fabriquinha/${id}`)).trim() },
+      };
+      writeFileSync(join(amb.raiz, "execucoes", `ajustes-${id}.R1.json`), JSON.stringify(marco));
+      if (corrigida) {
+        comDemanda(banco, id, (ag) =>
+          registrarCorrecoesSessao(
+            ag,
+            {
+              demanda_id: id,
+              rodada_id: 1,
+              ticket_id: 3,
+              correcoes: [{ demanda_id: id, rodada_id: 1, ticket_id: 1, titulo: "Corrigir", descricao: "Corrigir" }],
+            },
+            { tipo: "agente", execucao: 1, ticket: 3 },
+            { agora: em },
+          ),
+        );
+      }
+      return `${id}.R1`;
+    },
+
+    async ticketFalho() {
+      const id = await comTicket("falhou");
+      return `${id}.T1`;
+    },
+
+    async ticketAberto() {
+      return `${await comTicket("aberto")}.T1`;
+    },
+
+    async sessaoParada() {
+      const { id } = await emExecucao("sessao", [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })]);
+      return abrirSessao(id, 1, false);
+    },
+
+    async sessaoRodando() {
+      const { id } = await emExecucao("sessao", [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })]);
+      return abrirSessao(id, 1, true);
+    },
+
+    projetoProprio: async () => (await cadastrar(`proprio-${String(proximo())}`)).nome,
+
+    repositorioNovo: async () => (await repositorio("novo")).repo,
+
+    usuarioSimulado: () =>
+      criarUsuarioSimulado(banco, principal.nome, { nome: `u${String(proximo())}`, descricao: "d" }).id,
+
+    tarefa() {
+      const usuario = criarUsuarioSimulado(banco, principal.nome, { nome: `u${String(proximo())}`, descricao: "d" }).id;
+      return criarTarefa(banco, principal.nome, { texto: "t", n: 1, usuarios: [usuario] }).id;
+    },
+
+    avaliacao(achado = false) {
+      const id = randomUUID();
+      criarAvaliacao(banco, {
+        id,
+        projeto: principal.nome,
+        de: "2026-01-01",
+        ate: "2026-12-31",
+        pedido: "",
+        criada_em: em,
+        demandas: [],
+      });
+      if (achado) importarAchados(banco, id, [{ achado_id: 1, titulo: "t", descricao: "d", evidencia: "e" }]);
+      const dir = join(amb.raiz, "avaliacoes", id);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "prompt.md"), "# Avaliação\n");
+      return id;
+    },
+
+    fechar: () => {
+      banco.close();
+    },
+  };
+}

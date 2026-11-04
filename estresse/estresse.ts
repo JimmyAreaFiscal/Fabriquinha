@@ -11,6 +11,7 @@ import {
   semMedicao as etapasSemMedicao,
 } from "./grupos/etapas.ts";
 import { acoesHttpLeitura, semMedicao } from "./grupos/http_leitura.ts";
+import { acoesHttpMutacao, semMedicao as semMedicaoMutacao } from "./grupos/http_mutacao.ts";
 import { type Medicao, medir } from "./medir.ts";
 
 const CHAMADAS = 200;
@@ -20,8 +21,10 @@ const amb = await subirAmbiente();
 let medidas: [string, Medicao][];
 let faltando: string[];
 try {
-  const http = await acoesHttpLeitura(amb);
-  faltando = semMedicao(http);
+  const leitura = await acoesHttpLeitura(amb);
+  const mutacao = await acoesHttpMutacao(amb);
+  const http = [...leitura, ...mutacao];
+  faltando = [...semMedicao(leitura), ...semMedicaoMutacao(mutacao)];
   medidas = [];
   const medirTodas = async (acoes: { nome: string; orcamento: number; chamar(): Promise<number> }[]) => {
     for (const a of acoes) {
@@ -60,6 +63,8 @@ const larguras = colunas.map((c, i) => Math.max(c.length, ...linhas.map((l) => (
 const formatar = (l: string[]) =>
   l.map((c, i) => (i === 0 ? c.padEnd(larguras[i] ?? 0) : c.padStart(larguras[i] ?? 0))).join("  ");
 console.log([formatar(colunas), ...linhas.map(formatar)].join("\n"));
+for (const [nome, m] of medidas)
+  if (m.primeiroErro) console.log(`Erro em ${nome} (${String(m.erros)}): ${m.primeiroErro}`);
 for (const rota of faltando) console.log(`Sem medição: ${rota}`);
 
 const pasta = join(import.meta.dirname, "resultados");
