@@ -19,6 +19,8 @@ A Fabriquinha o valida na entrada e o cruza com a demanda congelada; o Auditor o
    Arquivo alterado fora dos `caminhos` dos tickets da rodada aparece como não previsto na revisão dela.
 5. Declare `depende` só onde a ordem importa: rodada depende de rodada, ticket depende de ticket da mesma rodada. Sem ciclo.
 6. Use `e2e: true` na rodada que precisa de teste ponta a ponta.
+7. Mantenha cada rodada em torno de 10 arquivos, testes incluídos, e nunca acima de 15: o PR dela é o que o Auditor revisa.
+   A Fabriquinha recusa o plano cuja rodada passa de 15; cada caminho literal conta um arquivo, e o padrão (`src/x/**`) conta os `arquivosPrevistos` do desenho que ele cobre.
 
 ## Estrutura
 
@@ -77,3 +79,4 @@ Em `depende`, cada item repete o `demanda_id` e traz o `rodada_id` ou o `ticket_
 - [ ] Todo `demanda_id` é o da demanda; as dependências não formam ciclo.
 - [ ] Os `caminhos` de rodadas diferentes não disputam o mesmo arquivo sem dependência entre elas.
 - [ ] Cada ticket cabe em uma sessão de trabalho e a descrição basta para quem não viu a conversa.
+- [ ] Nenhuma rodada toca mais de 15 arquivos.

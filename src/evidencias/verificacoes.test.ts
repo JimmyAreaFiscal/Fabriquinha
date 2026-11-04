@@ -116,7 +116,21 @@ test("issue aberta em arquivo alterado reprova o Sonar, tecnicamente (CA-14), e 
   const v = await coletarVerificacoes({ projeto, e2e: false, worktree });
 
   assert.deepEqual(aprovadas(v), [false, true, false]);
-  assert.deepEqual(v[2]?.falhas, [{ classe: "tecnica", motivo: "1 issue(s) aberta(s) em arquivos alterados" }]);
+  assert.deepEqual(v[2]?.falhas, [
+    {
+      classe: "tecnica",
+      motivo: "1 issue(s) aberta(s) em arquivos alterados; corrija cada uma:\n  - a.ts typescript:S1 (MAJOR): problema",
+    },
+  ]);
+});
+
+test("o motivo do Sonar traz arquivo, linha, regra, severidade e mensagem de cada issue, para o agente corrigir sem perguntar", async () => {
+  const { worktree, projeto } = cenario();
+  issues = [{ ...issue("a.ts"), line: 7, rule: "typescript:S6328", severity: "CRITICAL", message: "troque o grupo" }];
+
+  const v = await coletarVerificacoes({ projeto, e2e: false, worktree });
+
+  assert.match(v[2]?.falhas[0]?.motivo ?? "", /\n {2}- a\.ts:7 typescript:S6328 \(CRITICAL\): troque o grupo$/);
 });
 
 test("SonarQube fora do ar é infraestrutura, sem aprovação nem reprovação (CA-16)", async () => {

@@ -65,6 +65,7 @@ interface TicketSpec {
   id?: number;
   instrucao?: string;
   devolucoes?: number;
+  motivo_falha?: string;
 }
 interface DemandaSpec {
   fase?: string;
@@ -138,6 +139,7 @@ function demanda(banco: DatabaseSync, n: number, { fase = "execucao", rodadas = 
       status_alterado_em: em,
       devolucoes: t.devolucoes ?? 0,
       ...(t.instrucao !== undefined && { instrucao: t.instrucao }),
+      ...(t.motivo_falha !== undefined && { motivo_falha: t.motivo_falha }),
       ...(t.rodada !== undefined && { rodada_id: t.rodada }),
     })),
     dependencias_ticket: [],
@@ -195,6 +197,18 @@ test("a instrução do ticket aberto vai à execução: devolução técnica (D0
     }),
   );
   assert.deepEqual(retomadas, [{ tipo: "devolucao", motivo: "x" }, { tipo: "reabertura", motivo: "y" }, undefined]);
+});
+
+test("o ticket que caiu no reinício do serviço volta sozinho no ciclo seguinte, já em execução", async (t: TestContext) => {
+  const { banco, config } = await cenario(3);
+  demanda(banco, 2, {
+    rodadas: ["desenvolvimento"],
+    tickets: [{ ...implementar(1), status: "falhou", motivo_falha: "serviço reiniciado" }],
+  });
+  const log = t.mock.method(console, "error", () => undefined);
+  await Promise.all(despacharDemandas(banco, config, deps));
+  assert.deepEqual([status(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
+  assert.match(String(log.mock.calls[0]?.arguments[1]), /retomados depois de falha de infraestrutura: I-2\.T1/);
 });
 
 test("CA-2: com o limite global de 2, só dois de três tickets de demandas diferentes entram", async () => {

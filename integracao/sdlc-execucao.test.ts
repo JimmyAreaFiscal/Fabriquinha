@@ -11,6 +11,7 @@ import { AUDITOR } from "../src/dominio/agregado.ts";
 import { reabrirTicket } from "../src/dominio/transicoes_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../src/dominio/sessoes.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/execucao/despacho_demanda.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/execucao/retomada_infraestrutura.ts";
 import { recuperarExecucoesDemanda } from "../src/execucao/execucao_demanda.ts";
 import { comDemanda } from "../src/persistencia/demandas.ts";
 import { alterarLimiteParalelismo, configuracao } from "../src/persistencia/servico.ts";
@@ -162,7 +163,7 @@ const reabrir = (c: Cenario, ref: { demanda_id: string; ticket_id: number }, ins
     reabrirTicket(ag, { ticket_id: ref.ticket_id, instrucao }, AUDITOR, { agora: new Date().toISOString() }),
   );
 
-test("CA-SDLC-10: falha, timeout e reinício bloqueiam o escopo, preservam o histórico e a reabertura exige instrução sem executar na hora", async (t) => {
+test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho, o histórico fica e a reabertura exige instrução sem executar na hora", async (t) => {
   const c = criarCenario(t);
   const id = await demandaEmExecucao(c, [{ tickets: 2 }]);
   const [t1, t2] = [ticketDe(c, id, 1), ticketDe(c, id, 1, 2)];
@@ -233,6 +234,9 @@ test("CA-SDLC-10: falha, timeout e reinício bloqueiam o escopo, preservam o his
   assert.equal(final.length, 3);
   assert.equal(final.at(-1)?.erro, "serviço reiniciado");
   assert.deepEqual(final.slice(0, 2), historico);
-  bloqueado();
   assert.equal(existsSync(join(c.raiz, "execucoes")), true);
+  // O reinício não é culpa do ticket: o ciclo seguinte o devolve a aberto sozinho, sem instrução do Auditor nem executar.
+  assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco), [`${id}.T${String(t1.ticket_id)}`]);
+  assert.equal(statusDe(c, t1), "aberto");
+  assert.equal(execucoesDe(c, t1).length, 3);
 });

@@ -67,6 +67,7 @@ const TABELAS: readonly Tabela[] = [
         effort: t.effort ?? null,
         instrucao: t.instrucao ?? null,
         motivo_falha: t.motivo_falha ?? null,
+        retomadas_automaticas: t.retomadas_automaticas ?? 0,
       })),
   },
   {
@@ -191,7 +192,10 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
     dependencias_rodada: filhas("dependencia_rodada"),
     criterios_citados: filhas("criterio_citado_rodada"),
-    tickets: filhas("ticket_demanda").map(semNulos),
+    // Zero retomadas é o mesmo que nenhuma: o campo só aparece quando há o que contar.
+    tickets: filhas("ticket_demanda").map((t) =>
+      semNulos({ ...t, retomadas_automaticas: t.retomadas_automaticas || null }),
+    ),
     dependencias_ticket: filhas("dependencia_ticket"),
     caminhos_ticket: filhas("caminho_ticket"),
     decisoes: filhas("decisao_ticket").map(semNulos),

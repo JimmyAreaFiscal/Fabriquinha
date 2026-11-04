@@ -29,6 +29,7 @@ test("CA-11: v25 → v26 preenche devolucoes 0 e motivo_falha nulo nos tickets e
       enviado_em: null,
       origem: null,
       origem_ticket_id: null,
+      retomadas_automaticas: 0,
     },
   );
   assert.throws(() => {
@@ -36,5 +37,8 @@ test("CA-11: v25 → v26 preenche devolucoes 0 e motivo_falha nulo nos tickets e
   });
   assert.throws(() => {
     b.exec("UPDATE ticket_demanda SET motivo_falha = ''");
+  });
+  assert.throws(() => {
+    b.exec("UPDATE ticket_demanda SET retomadas_automaticas = -1");
   });
 });

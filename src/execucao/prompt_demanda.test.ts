@@ -80,8 +80,22 @@ test("implementar e resolver_conflito não fazem commit nem PR (CA-2)", () => {
     assert.match(montar(etapa), /não faz commit nem PR por conta própria/);
 });
 
+test("a falha de outro ticket ou do ambiente não trava: o implementar corrige e a revisão escala em vez de reprovar", () => {
+  assert.match(montar("implementar"), /Docker, containers e deploy de teste estão liberados/);
+  assert.match(
+    montar("implementar"),
+    /Se a falha vier de outro ticket ou do ambiente .* corrija a causa mesmo fora dos seus caminhos/,
+  );
+  assert.match(montar("revisar_rodada"), /Se o ambiente impedir uma verificação .* não reprove por isso/);
+  assert.match(montar("revisar_rodada"), /Pergunte ao Auditor com a ferramenta `perguntar`/);
+});
+
 test("planejar é interativa e permite perguntar ao Auditor (CA-11)", () => {
-  assert.match(montar("planejar"), /interativa.*perguntar a ele antes de submeter o plano/s);
+  assert.match(montar("planejar"), /interativa.*perguntar a ele antes de tomá-las/s);
+  assert.match(
+    montar("planejar"),
+    /Não pergunte se pode submeter: o gate de aprovação do plano é onde o Auditor decide/,
+  );
 });
 
 test("devolução e reabertura trazem o motivo (CA-7)", () => {

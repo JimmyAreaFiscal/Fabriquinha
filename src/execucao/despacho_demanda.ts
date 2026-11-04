@@ -19,6 +19,7 @@ import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./enc
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { iniciarOuRetomarPlanejamento } from "./planejamento.ts";
+import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { conduzirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 import { conduzirRevisaoRodada } from "./revisao_rodada.ts";
 
@@ -104,11 +105,15 @@ function disparar(banco: DatabaseSync, inicio: () => Promise<unknown>): Promise<
 }
 
 /**
- * Um ciclo do agendador: (1) a demanda cujas rodadas todas concluíram vai à revisão integral; (2) retomam-se os
- * planejamentos reprovados, até as vagas; (3) a seleção global escolhe o resto no que sobra do limite. Devolve as etapas
- * em segundo plano (nunca rejeitam); o ciclo não as espera.
+ * Um ciclo do agendador: (0) os tickets falhos por infraestrutura voltam a `aberto`; (1) a demanda cujas rodadas todas
+ * concluíram vai à revisão integral; (2) retomam-se os planejamentos reprovados, até as vagas; (3) a seleção global
+ * escolhe o resto no que sobra do limite. Devolve as etapas em segundo plano (nunca rejeitam); o ciclo não as espera.
  */
 export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: DepsDespacho = {}): Promise<void>[] {
+  const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco);
+  if (retomadosPorInfraestrutura.length > 0) {
+    noLog(`retomados depois de falha de infraestrutura: ${retomadosPorInfraestrutura.join(", ")}`);
+  }
   for (const { agregado: ag } of demandasParaDespacho(banco)) {
     if (ag.demanda.fase !== "execucao" || !ag.rodadas.every((r) => r.fase === "concluida")) continue;
     try {
