@@ -6,6 +6,8 @@ export interface Medicao {
   p95: number;
   max: number;
   erros: number;
+  /** Mensagem da primeira chamada com erro, para diagnóstico. */
+  primeiroErro?: string;
   orcamento: number;
   acimaDoOrcamento: boolean;
 }
@@ -14,6 +16,11 @@ export interface Medicao {
 export function percentil(ordenados: number[], p: number): number {
   if (ordenados.length === 0) return 0;
   return ordenados[Math.max(0, Math.ceil((p / 100) * ordenados.length) - 1)] ?? 0;
+}
+
+function mensagem(e: unknown): string {
+  const texto = e instanceof Error ? [e.message, e.cause instanceof Error ? e.cause.message : ""].join(" ") : String(e);
+  return texto.trim().slice(0, 400);
 }
 
 /**
@@ -27,14 +34,16 @@ export async function medir(
   const { n, concorrencia, orcamento } = opcoes;
   const tempos: number[] = [];
   let erros = 0;
+  let primeiroErro: string | undefined;
   let iniciadas = 0;
   const trabalhador = async () => {
     while (iniciadas < n) {
       iniciadas++;
       try {
         tempos.push(await acao());
-      } catch {
+      } catch (e) {
         erros++;
+        primeiroErro ??= mensagem(e);
       }
     }
   };
@@ -47,6 +56,7 @@ export async function medir(
     p95,
     max: tempos.at(-1) ?? 0,
     erros,
+    ...(primeiroErro !== undefined && { primeiroErro }),
     orcamento,
     acimaDoOrcamento: p95 > orcamento,
   };
