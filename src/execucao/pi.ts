@@ -8,7 +8,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import type { ModoExecucao } from "../dominio/agregado.ts";
 import type { Effort, Modelo } from "../dominio/primitivos.ts";
-import { ambienteSemCredenciais, sinalNoGrupo } from "../processo.ts";
+import { ambienteSemCredenciais, executar, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 
 /** Um evento ou resposta do pi: um objeto JSON por linha do stdout. */
@@ -22,6 +22,36 @@ export const PACOTE = fileURLToPath(new URL("../../pacote-pi", import.meta.url))
 
 /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
 export const binarioPi = (): string => process.env.FABRIQUINHA_PI || "pi";
+
+/**
+ * Uma chamada única do pi (`-p`) sem ferramentas, skills, contexto do projeto nem sessão: o modelo só lê o `prompt`.
+ * As extensões ficam, porque provedores como o claude-bridge são extensões do pi. Sem `modelo`, vale o padrão do pi.
+ * Devolve o stdout, ou `undefined` se o pi falhou, saiu com código diferente de 0 ou passou de `limiteMs`.
+ */
+export async function perguntarAoPiSemFerramentas(
+  prompt: string,
+  modelo: { provedor: string; nome: string } | undefined,
+  limiteMs: number,
+  rodar: typeof executar = executar,
+): Promise<string | undefined> {
+  const args = [
+    "-p",
+    "--no-session",
+    "--no-tools",
+    "--no-skills",
+    "--no-context-files",
+    "--no-prompt-templates",
+    "--no-mcp",
+    ...(modelo ? ["--model", `${modelo.provedor}/${modelo.nome}`] : []),
+    prompt,
+  ];
+  try {
+    const r = await rodar(binarioPi(), args, { limiteMs });
+    return r.codigo === 0 ? r.saida : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** O nome da skill de artefato (P1 §5.1) de uma evidência: sai do tipo. */
 export const skillDoTipo = (tipo: string): string => "artefato-" + tipo.replace(/^relatorio_/, "").replaceAll("_", "-");
