@@ -125,11 +125,12 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
         espera("dialogo", { sessao: "s/1", pergunta: "Qual ordem?" }),
         espera("dialogo", { sessao: "s2" }),
         espera("conversa", { sessao: "s3", ticket: { ref: "I-206.T5", etapa: "planejar", modo: "interativo" } }),
+        espera("revisao_parada", { erro: "a revisão integral foi recusada: o ticket 3 está fechado" }),
       ],
     }),
     agora,
   );
-  assert.match(html, /<span class="contador">11<\/span><span class="muted">da mais antiga para a mais nova<\/span>/);
+  assert.match(html, /<span class="contador">12<\/span><span class="muted">da mais antiga para a mais nova<\/span>/);
   const cartoes = html.split('<a class="decisao').slice(1);
   const motivo = (c: string) => /decisao-motivo">([^<]+)<\/span><span class="([^"]+)">([^<]+)</.exec(c)?.slice(1);
   assert.deepEqual(cartoes.map(motivo), [
@@ -144,6 +145,7 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
     ["Pergunta", "btn btn-primario btn-pequeno", "Responder →"],
     ["Pergunta", "btn btn-primario btn-pequeno", "Responder →"],
     ["Conversa", "btn btn-primario btn-pequeno", "Responder →"],
+    ["Revisão parada", "btn btn-pequeno", "Ver a demanda →"],
   ]);
   assert.deepEqual(
     cartoes.map((c) => /decisao-texto">([^<]*)</.exec(c)?.[1]),
@@ -159,14 +161,16 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
       "O agente pergunta: Qual ordem?",
       "O agente abriu uma pergunta",
       "O agente respondeu e espera você",
+      "a revisão integral foi recusada: o ticket 3 está fechado",
     ],
   );
   // Os gates, os ajustes e a falha se decidem na página da demanda; o diálogo e a conversa, no chat.
   assert.deepEqual(
     cartoes.map((c) => /^[^"]*" href="([^"]+)"/.exec(c)?.[1]),
-    [...Array<string>(8).fill("/demandas/I-206"), "/sessions/s%2F1", "/sessions/s2", "/sessions/s3"],
+    [...Array<string>(8).fill("/demandas/I-206"), "/sessions/s%2F1", "/sessions/s2", "/sessions/s3", "/demandas/I-206"],
   );
   assert.match(String(cartoes[6]), /^ superficie falha"/);
+  assert.match(String(cartoes[11]), /^ superficie falha"/);
   assert.match(String(cartoes[0]), /^ superficie"/);
   assert.match(String(cartoes[0]), /<span class="id">I-206<\/span> Busca &#60;rápida&#62;/);
   assert.match(String(cartoes[2]), /<span class="id">I-206\.R1<\/span>/);

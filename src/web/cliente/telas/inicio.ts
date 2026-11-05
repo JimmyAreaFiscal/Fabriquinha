@@ -32,7 +32,11 @@ const MOTIVOS: Record<MotivoDaEspera, { titulo: string; marca: string; acao: str
   falha: { titulo: "Falhou", marca: "falha", acao: "Reabrir o ticket" },
   dialogo: { titulo: "Pergunta", marca: "pergunta", acao: "Responder" },
   conversa: { titulo: "Conversa", marca: "responder", acao: "Responder" },
+  revisao_parada: { titulo: "Revisão parada", marca: "revisão parada", acao: "Ver a demanda" },
 };
+
+/** O que aparece em vermelho: o ticket falho e a revisão integral parada. */
+const EM_ALERTA: ReadonlySet<MotivoDaEspera> = new Set(["falha", "revisao_parada"]);
 
 /** As colunas do board, na ordem do processo; as de gate ficam hachuradas e marcadas "gate". */
 const COLUNAS: readonly (readonly [ColunaDoBoard, string])[] = [
@@ -86,6 +90,7 @@ function fraseDoQueFalta(e: EsperaDoAuditor): string {
     case "ajustes":
       return `${pr} reprovado; converse com o agente sobre os ajustes`;
     case "falha":
+    case "revisao_parada": // sempre traz o erro: a recusa da regra ou o aviso de ver o log
       return e.erro ?? "o agente falhou";
     case "dialogo":
       return e.pergunta === undefined ? "O agente abriu uma pergunta" : `O agente pergunta: ${e.pergunta}`;
@@ -97,7 +102,7 @@ function fraseDoQueFalta(e: EsperaDoAuditor): string {
 /** Cartão do que aguarda o Auditor; o cartão inteiro abre o chat da sessão ou a página da demanda, onde se decide. */
 function cartaoDaEspera(e: EsperaDoAuditor, agora: Date): string {
   const motivo = MOTIVOS[e.motivo];
-  const falhou = e.motivo === "falha";
+  const falhou = EM_ALERTA.has(e.motivo);
   const destino = e.sessao === undefined ? caminhoDaDemanda(e.demanda) : caminhoDaSessao(e.sessao);
   const ticket = e.ticket
     ? `<span class="mono">${escapar(e.ticket.ref)}</span> · ${nomeDaEtapa(e.ticket.etapa)}${e.ticket.modo ? ` · ${MODO_DA_SESSAO[e.ticket.modo]}` : ""} · `
@@ -133,7 +138,7 @@ function marcasDoCartao(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date) {
   for (const e of dados.aguarda.filter((x) => enderecoDe(x) === c.ref)) {
     marcas.set(`aguarda você · ${MOTIVOS[e.motivo].marca}`, [
       "aguarda",
-      e.motivo === "falha" ? "pill-falha" : "pill-aguarda",
+      EM_ALERTA.has(e.motivo) ? "pill-falha" : "pill-aguarda",
     ]);
   }
   if (c.bloqueios.length > 0) {
