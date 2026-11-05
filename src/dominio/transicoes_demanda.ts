@@ -539,7 +539,10 @@ export function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string):
   }
 }
 
-/** Recusa se resta rodada fora de `concluida`, implementação não concluída ou ticket ativo/falho (menos o `ignorar`). */
+/**
+ * Recusa se resta rodada fora de `concluida`, implementação não concluída ou ticket ativo/falho (menos o `ignorar`).
+ * A implementação `fechado` foi descartada (fora do plano em vigor) e não é pendência.
+ */
 function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
   const rodada = ag.rodadas.find((r) => r.fase !== "concluida");
   if (rodada !== undefined) {
@@ -552,7 +555,7 @@ function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
     (t) =>
       t.ticket_id !== ignorar &&
       (["aberto", "em_execucao", "falhou"].includes(t.status) ||
-        (t.etapa === "implementar" && t.status !== "concluido")),
+        (t.etapa === "implementar" && t.status !== "concluido" && t.status !== "fechado")),
   );
   if (pendente !== undefined) {
     throw new ErroDeRegra(

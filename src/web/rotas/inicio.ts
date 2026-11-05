@@ -3,10 +3,12 @@
 // arquivadas ficam fora; a navegação conta o que aguarda pela mesma rota.
 import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../../dominio/agregado.ts";
+import { FABRIQUINHA } from "../../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../dominio/agregado_demanda.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";
 import type { EtapaTicket, FaseDemanda, FaseRodada, Instante, StatusTicket } from "../../dominio/primitivos.ts";
+import { iniciarRevisaoDemanda } from "../../dominio/transicoes_demanda.ts";
 import { type Situacao, situacao } from "../../execucao/gerente.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../../execucao/historico_demanda.ts";
 import { mesDe } from "../../metricas/periodo.ts";
@@ -16,9 +18,12 @@ import { predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.
 import type { Rota } from "../rotas.ts";
 import { prDaRodada } from "./demandas.ts";
 
-/** Por que o Auditor é esperado: os três gates, a sessão de ajustes do PR, o ticket falho e a sessão parada nele. */
+/**
+ * Por que o Auditor é esperado: os três gates, a sessão de ajustes do PR, o ticket falho, a sessão parada nele e a
+ * revisão integral que não começou depois da última rodada.
+ */
 export type MotivoDaEspera =
-  "gate_demanda" | "gate_planejamento" | "gate_pr" | "ajustes" | "falha" | "dialogo" | "conversa";
+  "gate_demanda" | "gate_planejamento" | "gate_pr" | "ajustes" | "falha" | "dialogo" | "conversa" | "revisao_parada";
 
 /** Um ticket como o Início o mostra; `modo` é o da sessão ativa dele, quando tem. */
 export interface TicketDoInicio {
@@ -131,8 +136,43 @@ function cartoesDaDemanda(banco: DatabaseSync, ag: AgregadoDemanda, modoDe: (ref
   return [{ coluna, ref: demanda, ...identificacao, ...ticketEmCurso(globais, modoDe) }];
 }
 
-/** Os gates, as sessões de ajustes e os tickets falhos da demanda, que esperam o Auditor sem depender da sessão. */
-function esperasDaDemanda(ag: AgregadoDemanda, modoDe: (ref: string) => ModoExecucao | undefined): EsperaDoAuditor[] {
+/** O agendador abre a revisão integral a cada minuto; parada além disso, a demanda precisa do Auditor. */
+const TOLERANCIA_REVISAO_PARADA_MS = 2 * 60_000;
+
+/**
+ * Todas as rodadas concluídas, nada aberto, rodando ou falho, e a revisão integral não abriu na tolerância: a recusa
+ * que o agendador só deixa no log do serviço. O motivo é a própria regra aplicada ao agregado em memória.
+ */
+function esperaDaRevisaoParada(ag: AgregadoDemanda, agora: Date): EsperaDoAuditor[] {
+  const { id: demanda, projeto, titulo, fase, fase_alterada_em } = ag.demanda;
+  const prontaParaRevisao =
+    fase === "execucao" &&
+    ag.rodadas.length > 0 &&
+    ag.rodadas.every((r) => r.fase === "concluida") &&
+    !ag.tickets.some((t) => ["aberto", "em_execucao", "falhou"].includes(t.status));
+  if (!prontaParaRevisao) return [];
+  // Parada desde o último movimento: a mudança de fase ou o ticket que mudou por último.
+  const desde = ag.tickets.reduce(
+    (ultimo, t) => (t.status_alterado_em > ultimo ? t.status_alterado_em : ultimo),
+    fase_alterada_em,
+  );
+  if (agora.getTime() - Date.parse(desde) < TOLERANCIA_REVISAO_PARADA_MS) return [];
+  let erro = "a revisão integral não começou; veja o log do serviço (journalctl --user -u fabriquinha)";
+  try {
+    iniciarRevisaoDemanda(ag, { demanda_id: demanda }, FABRIQUINHA, { agora: agora.toISOString() });
+  } catch (recusa) {
+    // A regra só recusa com ErroDeRegra; a entrada aqui é sempre válida.
+    erro = `a revisão integral foi recusada: ${(recusa as Error).message}`;
+  }
+  return [{ motivo: "revisao_parada", demanda, projeto, titulo, erro, desde }];
+}
+
+/** Os gates, as sessões de ajustes, os tickets falhos e a revisão integral parada, que esperam o Auditor sem depender da sessão. */
+function esperasDaDemanda(
+  ag: AgregadoDemanda,
+  modoDe: (ref: string) => ModoExecucao | undefined,
+  agora: Date,
+): EsperaDoAuditor[] {
   const { id: demanda, projeto, titulo, fase, fase_alterada_em } = ag.demanda;
   const identificacao = { demanda, projeto, titulo };
   const ticketGlobal = (etapa: EtapaTicket) =>
@@ -184,7 +224,7 @@ function esperasDaDemanda(ag: AgregadoDemanda, modoDe: (ref: string) => ModoExec
       ...(t.motivo_falha !== undefined && { erro: t.motivo_falha }),
       desde: t.status_alterado_em,
     }));
-  return [...gates, ...falhos];
+  return [...gates, ...falhos, ...esperaDaRevisaoParada(ag, agora)];
 }
 
 /** O processo vivo da sessão, que só existe com o pi rodando; os testes o trocam. */
@@ -214,7 +254,8 @@ export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao)
 
 /** `GET /api/inicio`. */
 export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situacao): DadosDoInicio {
-  const mes = mesDe(new Date());
+  const agora = new Date();
+  const mes = mesDe(agora);
   // Um mês pedido, um mês devolvido.
   const [doMes] = metricasDemandaPorMes(banco, { de: mes, ate: mes }) as [MetricasMesDemanda];
   const demandas = listarDemandas(banco, { emAndamento: true });
@@ -228,7 +269,7 @@ export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situa
   return {
     mes: doMes,
     aguarda: [
-      ...demandas.flatMap((ag) => esperasDaDemanda(ag, modoDe)),
+      ...demandas.flatMap((ag) => esperasDaDemanda(ag, modoDe, agora)),
       ...sessoes.filter((s) => s.estado === "aguardando_humano").flatMap((s) => esperaDaSessao(s, situacaoDa)),
     ].toSorted((a, b) => a.desde.localeCompare(b.desde)),
     rodando: sessoes

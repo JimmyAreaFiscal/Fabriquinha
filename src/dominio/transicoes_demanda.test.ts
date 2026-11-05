@@ -596,6 +596,11 @@ test("CA-12: todas as rodadas concluídas abrem revisar_demanda e vão a revisao
   });
 });
 
+test("CA-12: implementação descartada (fechado) não impede a revisão integral", () => {
+  const ag = montarD("execucao", ["concluida"], [tkD(3, "implementar", "fechado")]);
+  assert.equal(iniciarRevisaoDemanda(ag, { demanda_id: D }, FABRIQUINHA, c2).demanda.fase, "revisao_demanda");
+});
+
 test("CA-12: recusa por fase de rodada, pendência, ator, fase e entrada, sem mutação", () => {
   const abrir = (ag: AgregadoDemanda, ator: Ator = FABRIQUINHA, e: unknown = { demanda_id: D }) => {
     recusar(ag, () => iniciarRevisaoDemanda(ag, e, ator, c2), ator === FABRIQUINHA ? Error : ErroDeEscopo);

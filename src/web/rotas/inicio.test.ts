@@ -83,7 +83,33 @@ function cenario(): DatabaseSync {
   );
   criarDemanda(banco, demanda("I-305", "revisao_demanda"));
   criarDemanda(banco, demanda("I-306", "concluida"));
-  criarDemanda(banco, demanda("I-307", "execucao", { rodadas: [rodada("I-307", 1, "concluida")] }));
+  // I-307: rodadas concluídas, mas a regra recusa a revisão integral pela implementação cancelada.
+  criarDemanda(
+    banco,
+    demanda("I-307", "execucao", {
+      rodadas: [rodada("I-307", 1, "concluida")],
+      tickets: [
+        ticket("I-307", 1, "implementar", "concluido", { rodada_id: 1 }),
+        ticket("I-307", 9, "implementar", "cancelado", { rodada_id: 1 }),
+      ],
+    }),
+  );
+  // I-308 acabou de concluir a última rodada (o agendador ainda tem o ciclo); I-309 a regra aceita, mas nada abriu.
+  for (const [id, quando] of [
+    ["I-308", new Date().toISOString()],
+    ["I-309", em(10)],
+  ] as const) {
+    criarDemanda(
+      banco,
+      demanda(id, "execucao", {
+        rodadas: [rodada(id, 1, "concluida")],
+        tickets: [
+          ticket(id, 1, "implementar", "concluido", { rodada_id: 1, status_alterado_em: quando }),
+          ticket(id, 2, "implementar", "concluido", { rodada_id: 1, status_alterado_em: em(1) }),
+        ],
+      }),
+    );
+  }
   banco.exec(`
     INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-305', 'I-303'), ('I-305', 'I-306');
     INSERT INTO sessao VALUES
@@ -110,7 +136,7 @@ const viva = (atividade?: string) => ({
   ...(atividade && { atividade }),
 });
 
-test("aguarda: gates, ajustes e falhos da demanda e a conversa parada, da espera mais antiga para a mais nova", () => {
+test("aguarda: gates, ajustes, falhos, a revisão integral parada e a conversa parada, da espera mais antiga para a mais nova", () => {
   const { aguarda } = inicio(cenario(), () => undefined);
   const comum = (id: string) => ({ demanda: id, projeto: "loja", titulo: `demanda ${id}` });
   assert.deepEqual(aguarda, [
@@ -148,6 +174,18 @@ test("aguarda: gates, ajustes e falhos da demanda e a conversa parada, da espera
     },
     { motivo: "falha", ...comum("I-304"), ticket: { ref: "I-304.T8", etapa: "encerrar_demanda" }, desde: em(8) },
     {
+      motivo: "revisao_parada",
+      ...comum("I-307"),
+      erro: "a revisão integral foi recusada: o ticket 9 está cancelado (conclua todo o trabalho pendente antes da revisão integral)",
+      desde: em(9),
+    },
+    {
+      motivo: "revisao_parada",
+      ...comum("I-309"),
+      erro: "a revisão integral não começou; veja o log do serviço (journalctl --user -u fabriquinha)",
+      desde: em(10),
+    },
+    {
       motivo: "conversa",
       ...comum("I-300"),
       ticket: { ref: "I-300.T1", etapa: "demanda", modo: "interativo" },
@@ -172,7 +210,7 @@ test("rodando: as sessões que rodam com o que o agente faz, ou o título do tic
 
 test("board: um cartão por demanda fora da execução e um por rodada aberta nela, só das em andamento", () => {
   const dados = inicio(cenario(), () => undefined);
-  assert.equal(dados.emAndamento, 7);
+  assert.equal(dados.emAndamento, 9);
   assert.deepEqual(
     dados.board.map((c) => [c.coluna, c.ref, c.ticket?.ref, c.ticket?.status, c.ticket?.modo, c.outros, c.bloqueios]),
     [
@@ -188,6 +226,8 @@ test("board: um cartão por demanda fora da execução e um por rodada aberta ne
       ["revisao_demanda", "I-305", undefined, undefined, undefined, 0, ["I-303"]],
       // Em execução sem rodada aberta: a demanda inteira no Desenvolvimento, até a revisão abrir.
       ["desenvolvimento", "I-307", undefined, undefined, undefined, 0, []],
+      ["desenvolvimento", "I-308", undefined, undefined, undefined, 0, []],
+      ["desenvolvimento", "I-309", undefined, undefined, undefined, 0, []],
     ],
   );
   assert.deepEqual(dados.board[0], {
@@ -248,6 +288,6 @@ test("GET /api/inicio responde com o mês corrente de todos os projetos", async 
   const agora = new Date();
   assert.equal(dados.mes.mes, `${String(agora.getFullYear())}-${String(agora.getMonth() + 1).padStart(2, "0")}`);
   assert.equal(dados.mes.projeto, null);
-  assert.equal(dados.aguarda.length, 8);
+  assert.equal(dados.aguarda.length, 10);
   assert.equal((await pedir("/api/inicio", { cookie: false })).status, 401);
 });
