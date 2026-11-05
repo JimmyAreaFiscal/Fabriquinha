@@ -3,7 +3,7 @@ import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 export default defineConfig(
-  { ignores: ["node_modules/", "coverage/", "prototipos/", ".scratch/"] },
+  { ignores: ["node_modules/", "coverage/", "prototipos/", ".scratch/", ".claude/"] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
