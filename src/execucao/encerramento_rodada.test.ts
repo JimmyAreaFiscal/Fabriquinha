@@ -34,9 +34,18 @@ beforeEach(() => {
   hospedagem.zerar();
 });
 
-/** pi falso mínimo: anota o prompt em $FALSO_PI_REGISTRO e responde. */
+/**
+ * pi falso mínimo: anota o prompt em $FALSO_PI_REGISTRO e responde. Na chamada única (`-p`), responde
+ * $FALSO_PI_RESUMO, ou sai com 1 sem ele.
+ */
 const PI_FALSO = `#!/usr/bin/env node
 import { appendFileSync, mkdirSync } from "node:fs";
+if (process.argv.includes("-p")) {
+  appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(process.argv.at(-1)) + "\\n");
+  if (!process.env.FALSO_PI_RESUMO) process.exit(1);
+  process.stdout.write(process.env.FALSO_PI_RESUMO + "\\n");
+  process.exit(0);
+}
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
 let resto = "";
@@ -84,6 +93,7 @@ interface Opcoes {
   semTicketEncerrar?: boolean;
   /** Um `encerrar_rodada` anterior da rodada que já registrou o PR 1. */
   anterior?: boolean;
+  descricao?: string;
 }
 
 /** Projeto `loja`, demanda I-206 em execução com a rodada 2 em encerramento, os T3 e T4 commitados e registrados. */
@@ -94,6 +104,7 @@ async function cenario({
   instrucao,
   semTicketEncerrar = false,
   anterior = false,
+  descricao = "d",
 }: Opcoes = {}) {
   const c = cenarioDemanda();
   const banco = abrir(c.raiz);
@@ -146,7 +157,7 @@ async function cenario({
       projeto: "loja",
       titulo: "Demanda",
       tipo: "funcionalidade",
-      descricao: "d",
+      descricao,
       fase: "execucao",
       fase_alterada_em: em,
       origem_ferramenta: "claude",
@@ -450,4 +461,44 @@ test("iniciar: com o ticket já em execução só roda o agente de novo, sem ins
 test("iniciar: ticket falho não roda", async () => {
   const { banco } = await cenario({ statusEncerrar: "falhou" });
   assert.throws(() => iniciarEncerramentoRodada(banco, REF, 1), /I-206\.T8 está falhou/);
+});
+
+test("corpo além do limite da hospedagem: o pi padrão resume a demanda e o custo, e as seções do mensagem_pr ficam inteiras", async () => {
+  process.env.FALSO_PI_RESUMO = "Resumo da I-206.";
+  try {
+    const { c, banco, evidencia, prompt } = await cenario({ descricao: `longa${"x".repeat(75)} `.repeat(900) });
+
+    await concluirEncerramentoRodada(banco, REF);
+
+    const corpo = hospedagem.prs()[0]?.corpo ?? "";
+    assert.ok(corpo.length <= 65_536);
+    assert.ok(corpo.startsWith(`${MARCA}\n\n## Contexto (resumido)\n\nResumo da I-206.\n\n## O que mudou`));
+    assert.match(corpo, /## Como revisar\n\n1\. Leia o diff\./);
+    assert.doesNotMatch(corpo, /longa/);
+    const resumo = prompt()
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as unknown)
+      .find((p) => typeof p === "string" && p.startsWith("Resuma"));
+    assert.match(String(resumo), /## Por quê[\s\S]*longa[\s\S]*## Autoria e custo/);
+    assert.doesNotMatch(String(resumo), /## Como revisar/);
+    assert.equal((evidencia("pr_aberto")?.dados as { condensado: boolean }).condensado, true);
+    assert.doesNotMatch(readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"), /não resumiu/);
+  } finally {
+    delete process.env.FALSO_PI_RESUMO;
+  }
+});
+
+test("corpo além do limite e o pi sem resumo: o PR vai sem o contexto, e o log diz por quê", async () => {
+  const { c, banco } = await cenario({ descricao: `longa${"x".repeat(75)} `.repeat(900) });
+
+  await concluirEncerramentoRodada(banco, REF);
+
+  const corpo = hospedagem.prs()[0]?.corpo ?? "";
+  assert.ok(corpo.startsWith(`${MARCA}\n\n## O que mudou`));
+  assert.match(corpo, /## Como revisar\n\n1\. Leia o diff\./);
+  assert.match(
+    readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"),
+    /I-206\.R2: o pi não resumiu o contexto do PR em [\d]+ caracteres; vai sem ele/,
+  );
 });

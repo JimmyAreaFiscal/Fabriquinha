@@ -29,14 +29,24 @@ export const marcaDoPRRodada = (demanda: string, ticket: Id): string =>
 const custo = (c: { custo: number; custoIncompleto: boolean }): string =>
   c.custoIncompleto ? `${dolares(c.custo)} (incompleto)` : dolares(c.custo);
 
-/** O corpo completo e o publicado, que cabe em `limite` caracteres, com remissão ao `pr_aberto` no corte. */
-export function montarPRRodada(
+/** Resume `texto` em até `limite` caracteres; `undefined` quando não conseguiu. */
+export type ResumirContexto = (texto: string, limite: number) => Promise<string | undefined>;
+
+const TITULO_DO_RESUMO = "Contexto (resumido)";
+
+/**
+ * O corpo completo e o publicado, que cabe em `limite` caracteres, com remissão ao `pr_aberto` quando condensado.
+ * Para condensar, as seções do `mensagem_pr` ficam inteiras e as da demanda e as gerais (tickets e custo) vão para
+ * `resumir`; sem resumo que caiba, elas ficam só no corpo completo, e o corte é o último recurso.
+ */
+export async function montarPRRodada(
   ag: AgregadoDemanda,
   rodada: Id,
   ticket: Id,
   relatorio: ProdutividadeRodada,
   limite: number,
-): { titulo: string; completo: string; publicado: string } {
+  resumir: ResumirContexto,
+): Promise<{ titulo: string; completo: string; publicado: string }> {
   const demanda = ag.demanda.id;
   const refRodada = formatarRodadaRef({ demanda_id: demanda, rodada_id: rodada });
   const refTicket = formatarTicketRef({ demanda_id: demanda, ticket_id: ticket });
@@ -49,8 +59,9 @@ export function montarPRRodada(
     );
   }
   const concluidos = ag.tickets.filter((t) => t.rodada_id === rodada && t.status === "concluido");
-  const secoes: [string, string][] = [
-    ["Por quê", `${neutro(ag.demanda.titulo)} (${demanda}, ${refRodada})\n\n${neutro(ag.demanda.descricao)}`],
+  // O terceiro campo marca a seção da demanda ou geral, a que o resumo substitui no corpo condensado.
+  const secoes: [string, string, boolean?][] = [
+    ["Por quê", `${neutro(ag.demanda.titulo)} (${demanda}, ${refRodada})\n\n${neutro(ag.demanda.descricao)}`, true],
     ["O que mudou", neutro(mensagem.oQueMudou)],
     ["Decisões não óbvias", lista(mensagem.decisoesNaoObvias, "Nenhuma.")],
     ["Fora do escopo", lista(mensagem.naoFeito, "Nada declarado.")],
@@ -62,6 +73,7 @@ export function montarPRRodada(
         ),
         "Nenhum.",
       ),
+      true,
     ],
     [
       "Como revisar",
@@ -95,16 +107,31 @@ export function montarPRRodada(
           ],
         ],
       )}`,
+      true,
     ],
   ];
-  const completo =
-    [marcaDoPRRodada(demanda, ticket), ...secoes.map(([titulo, texto]) => `## ${titulo}\n\n${texto.trim()}`)].join(
+  const corpo = (partes: readonly (readonly [string, string, boolean?])[]) =>
+    [marcaDoPRRodada(demanda, ticket), ...partes.map(([titulo, texto]) => `## ${titulo}\n\n${texto.trim()}`)].join(
       "\n\n",
-    ) + "\n";
+    );
+  const completo = corpo(secoes) + "\n";
   const titulo = tituloDoPRRodada(ag, rodada, mensagem.titulo);
   if (completo.length <= limite) return { titulo, completo, publicado: completo };
+
   const fim = `\n\n… corpo completo em ${refRodada}, evidência pr_aberto\n`;
+  const doPR = secoes.filter(([, , deContexto]) => !deContexto);
+  const semContexto = corpo(doPR) + fim;
+  const orcamento = limite - semContexto.length - `\n\n## ${TITULO_DO_RESUMO}\n\n`.length;
+  if (orcamento > 0) {
+    const contexto = secoes.filter(([, , deContexto]) => deContexto);
+    const resumo = await resumir(contexto.map(([t, texto]) => `## ${t}\n\n${texto.trim()}`).join("\n\n"), orcamento);
+    const neutralizado = resumo === undefined ? "" : neutro(resumo).trim();
+    if (neutralizado !== "" && neutralizado.length <= orcamento) {
+      return { titulo, completo, publicado: corpo([[TITULO_DO_RESUMO, neutralizado], ...doPR]) + fim };
+    }
+  }
+  if (semContexto.length <= limite) return { titulo, completo, publicado: semContexto };
   // Não deixa meio par de surrogates no fim do corte.
-  const publicado = completo.slice(0, limite - fim.length).replace(/[\uD800-\uDBFF]$/, "") + fim;
+  const publicado = semContexto.slice(0, limite - fim.length).replace(/[\uD800-\uDBFF]$/, "") + fim;
   return { titulo, completo, publicado };
 }

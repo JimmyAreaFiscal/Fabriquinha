@@ -3,6 +3,7 @@
 // segue esperando o Auditor no chat. Na dúvida, em erro ou sem resposta legível, escala: nunca decide no lugar dele.
 import { z } from "zod";
 import { executar } from "../processo.ts";
+import { perguntarAoPiSemFerramentas } from "./pi.ts";
 
 export interface PerguntaDoAgente {
   pergunta: string;
@@ -97,24 +98,6 @@ export async function triarPergunta(
   p: PerguntaDoAgente,
   rodar: typeof executar = executar,
 ): Promise<RespostaDoAuditorAutomatico | undefined> {
-  const pi = process.env.FABRIQUINHA_PI || "pi";
-  // Sem ferramentas, skills, contexto do projeto nem sessão: o modelo só lê a pergunta. As extensões ficam, porque
-  // provedores como o claude-bridge são extensões do pi.
-  const args = [
-    "-p",
-    "--no-session",
-    "--no-tools",
-    "--no-skills",
-    "--no-context-files",
-    "--no-prompt-templates",
-    "--no-mcp",
-    ...(modelo ? ["--model", `${modelo.provedor}/${modelo.nome}`] : []),
-    promptDaTriagem(contexto, p),
-  ];
-  try {
-    const r = await rodar(pi, args, { limiteMs: LIMITE_TRIAGEM_MS });
-    return r.codigo === 0 ? lerDecisao(r.saida, p) : undefined;
-  } catch {
-    return undefined;
-  }
+  const saida = await perguntarAoPiSemFerramentas(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
+  return saida === undefined ? undefined : lerDecisao(saida, p);
 }

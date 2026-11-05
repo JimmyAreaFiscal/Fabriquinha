@@ -29,6 +29,7 @@ import { publicarPRDe, verificarPR } from "../repositorio/pr.ts";
 import { atualizarWorktreeRodada, caminhoDaWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { exigirGit } from "../repositorio/worktree.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
+import { perguntarAoPiSemFerramentas } from "./pi.ts";
 
 export interface RefRodada {
   demanda_id: string;
@@ -36,6 +37,20 @@ export interface RefRodada {
 }
 
 const contexto = () => ({ agora: new Date().toISOString() });
+
+/** Tempo máximo do resumo do contexto do PR; passado, o PR vai sem o contexto. */
+const LIMITE_RESUMO_MS = 3 * 60_000;
+
+/** O contexto do PR (demanda, tickets e custo) resumido por uma chamada do pi com o modelo padrão. */
+async function resumirContextoDoPR(contexto: string, limite: number): Promise<string | undefined> {
+  const prompt = [
+    `Resuma, em português e em Markdown, o contexto do pull request abaixo em no máximo ${String(limite)} caracteres.`,
+    "Mantenha o porquê da demanda, os endereços (como I-206.R2 e I-206.T3) e o custo total.",
+    "Não use títulos (#). Responda só com o resumo.",
+    contexto,
+  ].join("\n\n");
+  return (await perguntarAoPiSemFerramentas(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
+}
 
 /** A rodada em `encerramento` de uma demanda em `execucao` e o `encerrar_rodada` atual (o de maior id), num dos `status`. */
 function encerramentoAtual(ag: AgregadoDemanda, ref: RefRodada, status: readonly TicketDemanda["status"][]) {
@@ -210,7 +225,20 @@ async function publicarEConferir(
     return conferir(banco, ref, ticket, { documentacao_entregue: true, conflito: true, check_falho: false, correcoes });
   }
 
-  const pr = montarPRRodada(ag, ref.rodada_id, ticket.ticket_id, relatorio, LIMITE_DO_CORPO[projeto.hospedagem]);
+  const pr = await montarPRRodada(
+    ag,
+    ref.rodada_id,
+    ticket.ticket_id,
+    relatorio,
+    LIMITE_DO_CORPO[projeto.hospedagem],
+    async (contexto, limite) => {
+      const resumo = await resumirContextoDoPR(contexto, limite);
+      if (resumo === undefined || resumo.length > limite) {
+        anotar(log, `${refRodada}: o pi não resumiu o contexto do PR em ${String(limite)} caracteres; vai sem ele`);
+      }
+      return resumo;
+    },
+  );
   const registrados = new Set(
     doRodada
       .filter((t) => t.etapa === "implementar")

@@ -2,3 +2,5 @@
 *.md
 prototipos/
 .scratch/
+# As worktrees dos agentes (.claude/worktrees) são cópias do repositório, cada uma com o próprio gate.
+.claude/
