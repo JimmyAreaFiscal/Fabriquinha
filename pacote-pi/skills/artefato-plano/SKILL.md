@@ -17,6 +17,8 @@ A Fabriquinha o valida na entrada e o cruza com a demanda congelada; o Auditor o
 3. Cada rodada cita em `criterios` só `CA-n` que a demanda tem, e entrega algo que roda e se prova sozinho.
 4. Quebre cada rodada em tickets pequenos, com os `caminhos` (arquivos ou globs) que cada um toca, a partir dos `arquivosPrevistos` do desenho; todo ticket de implementação fica numa rodada.
    Arquivo alterado fora dos `caminhos` dos tickets da rodada aparece como não previsto na revisão dela.
+   Mudança que só fica verde inteira (renomear ou mover pacotes junto com imports, testes e fitness) é um ticket só.
+   Dividida, o primeiro ticket reprova na verificação e os seguintes ficam vazios: na I-259, o T7 não passava sem `tests/` e refez o trabalho do T8 e do T9.
 5. Declare `depende` só onde a ordem importa: rodada depende de rodada, ticket depende de ticket da mesma rodada. Sem ciclo.
 6. Use `e2e: true` na rodada que precisa de teste ponta a ponta.
 7. O ideal é cada rodada tocar até 30 arquivos, testes incluídos: o PR dela é o que o Auditor revisa.
