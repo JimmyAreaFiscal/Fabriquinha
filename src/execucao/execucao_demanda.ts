@@ -45,6 +45,8 @@ export interface OpcoesExecucaoDemanda {
   modo?: Exclude<ModoExecucao, "consulta">;
   /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
   retomada?: ContextoDemanda["retomada"];
+  /** Abre sessão nova mesmo com sessão no ticket: a conversa anterior foi descartada (plano aprovado e reaberto). */
+  iniciarEmSessaoNova?: boolean;
   /** Mensagem do Auditor ao retomar a sessão interativa: é o prompt da execução, sem remontar o contexto. */
   mensagem?: string;
   /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
@@ -230,8 +232,9 @@ async function conduzir(c: Conducao): Promise<void> {
 }
 
 /**
- * Inicia o ticket da demanda (sessão nova) ou o retoma (a mesma sessão e conversa, §7.3). Síncrona até gravar a execução
- * aberta: a recusa lança já. O pi roda em segundo plano; `fim` resolve com a execução encerrada e o uso gravado.
+ * Inicia o ticket da demanda (sessão nova) ou o retoma (a sessão mais recente e a conversa dela, §7.3). Síncrona até
+ * gravar a execução aberta: a recusa lança já. O pi roda em segundo plano; `fim` resolve com a execução encerrada e o
+ * uso gravado.
  */
 export function iniciarExecucaoDemanda(
   banco: DatabaseSync,
@@ -264,7 +267,8 @@ export function iniciarExecucaoDemanda(
   let sessao!: Sessao;
   let execucao!: ExecucaoSessao;
   comSessoesDoTicket(banco, ref, (estado) => {
-    const existente = estado.sessoes[0];
+    // Com mais de uma sessão no ticket, retoma-se a mais recente.
+    const existente = opcoes.iniciarEmSessaoNova ? undefined : estado.sessoes.at(-1);
     if (existente) {
       sessao = existente;
       execucao = abrir(sessao.id);

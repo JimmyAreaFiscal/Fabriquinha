@@ -44,7 +44,7 @@ function ticketPlanejar(ag: AgregadoDemanda) {
 
 /**
  * Reserva o `planejar` (só com as predecessoras satisfeitas) e conduz a sessão interativa; com o ticket já em execução
- * só retoma a mesma sessão. Reprovada, a retomada leva o motivo da última decisão.
+ * só retoma a mesma sessão. Reprovada, a retomada leva o motivo da última decisão; reaberta, a instrução do ticket.
  */
 export function iniciarOuRetomarPlanejamento(
   banco: DatabaseSync,
@@ -65,16 +65,22 @@ export function iniciarOuRetomarPlanejamento(
       "só se inicia ou retoma o planejamento com o ticket aberto ou em execução",
     );
   }
+  const ref = { demanda_id: demandaId, ticket_id: ticket.ticket_id };
   const ultima = ag.decisoes.filter((d) => d.ticket_id === ticket.ticket_id).at(-1);
+  // A reprovação é o último fato da conversa: o motivo dela vem antes da instrução, que pode ser de uma reabertura
+  // anterior (ou a cópia do próprio motivo, quando a reprovação reabriu o ticket falho).
   const retomada =
     ultima?.resultado === "recusado"
       ? { tipo: "devolucao" as const, motivo: existe(ultima.motivo, "a reprovação não tem motivo", "confira o banco") }
-      : undefined;
-  return iniciarExecucaoDemanda(
-    banco,
-    { demanda_id: demandaId, ticket_id: ticket.ticket_id },
-    { limiteMin, modo: "interativo", retomada },
-  );
+      : ticket.instrucao
+        ? { tipo: "reabertura" as const, motivo: ticket.instrucao }
+        : undefined;
+  // Plano aprovado e depois descartado: a conversa que o produziu não volta, senão o agente reenvia o mesmo plano. O
+  // replanejamento começa em sessão nova; já começado (execução depois da aprovação), é ele que se retoma.
+  const iniciarEmSessaoNova =
+    ultima?.resultado === "aprovado" &&
+    !carregarSessoesDoTicket(banco, ref).execucoes.some((e) => e.inicio >= ultima.em);
+  return iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", retomada, iniciarEmSessaoNova });
 }
 
 /** A submissão do agente, já validada pelo CLI: o domínio revalida e leva a demanda ao gate de aprovação. */
@@ -102,7 +108,8 @@ export function reprovarPlanejamentoDemanda(banco: DatabaseSync, demandaId: stri
     demanda_id: demandaId,
     ticket_id: ticketPlanejar(ag).ticket_id,
   });
-  const viva = sessoes[0] && situacao(sessoes[0].id);
+  const atual = sessoes.at(-1);
+  const viva = atual && situacao(atual.id);
   if (viva && !viva.ocupado) {
     mandar(viva.execucao, { type: "prompt", message: `Planejamento reprovado pelo Auditor. Motivo: ${motivo}` });
   }
@@ -166,7 +173,8 @@ export async function aprovarPlanejamentoDemanda(
     demanda_id: demandaId,
     ticket_id: ticketPlanejar(aprovada).ticket_id,
   });
-  const viva = sessoes[0] && situacao(sessoes[0].id);
+  const atual = sessoes.at(-1);
+  const viva = atual && situacao(atual.id);
   if (viva) encerrar(viva.execucao);
   return aprovada;
 }

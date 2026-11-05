@@ -283,6 +283,30 @@ test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho re
   assert.match(prompts().at(-1) ?? "", /Motivo: faltam critérios na rodada 2/);
 });
 
+test("plano aprovado e reaberto com instrução replaneja em sessão nova com a instrução; a retomada fica nela", async () => {
+  const { banco, sessoes, prompts } = cenario({ status: "em_execucao" });
+  const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
+  while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
+  submeterPlanejamento(banco, "I-1", plano(), agente);
+  await aprovarPlanejamentoDemanda(banco, "I-1", {});
+  await fim;
+  const [descartada] = sessoes().sessoes;
+  // O Auditor descarta o plano aprovado (incidente da I-259): volta ao planejamento com a instrução no ticket.
+  banco.exec("UPDATE demanda SET fase = 'planejamento' WHERE id = 'I-1'");
+  banco.exec(
+    "UPDATE ticket_demanda SET status = 'aberto', instrucao = 'Refaça o plano com até 30 arquivos por rodada' WHERE etapa = 'planejar'",
+  );
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  const replanejamento = sessoes().sessoes.at(-1);
+  assert.equal(sessoes().sessoes.length, 2);
+  assert.notEqual(replanejamento?.id, descartada?.id);
+  assert.match(prompts().at(-1) ?? "", /## Reabertura[\s\S]*Motivo: Refaça o plano com até 30 arquivos por rodada/);
+  // Serviço reiniciado no meio do replanejamento: retoma a sessão nova, não abre outra nem volta à descartada.
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  assert.equal(sessoes().sessoes.length, 2);
+  assert.equal(sessoes().execucoes.at(-1)?.sessao_id, replanejamento?.id);
+});
+
 test("CA-8: motivo vazio recusa a reprovação e nada é registrado", () => {
   const { banco } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
   assert.throws(() => reprovarPlanejamentoDemanda(banco, "I-1", "   "));
