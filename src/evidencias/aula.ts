@@ -85,7 +85,7 @@ async function lerTrechos(ag: Agregado, worktree: string, trechos: readonly Trec
         `${trecho.arquivo} tem ${String(linhas.length)} linhas`,
       );
     }
-    const mudadas = linhasMudadas(await exigirGit(worktree, "diff", "-U0", base, head, "--", trecho.arquivo));
+    const mudadas = linhasMudadas(await exigirGit(worktree, "diff", "-U0", `${base}...${head}`, "--", trecho.arquivo));
     const toca = [...mudadas].some((n) => n >= trecho.inicio && n <= trecho.fim);
     if (!toca) {
       throw new ErroDeRegra(
@@ -166,7 +166,7 @@ ${trechos.map((t, i) => secao(t, i)).join("\n")}
 }
 
 /**
- * F3 §4.5: confere cada trecho contra o diff da última revisão (`base..head` do `arquivos_alterados`) e devolve o HTML
+ * F3 §4.5: confere cada trecho contra o diff da última revisão (`base...head` do `arquivos_alterados`, desde o ancestral comum) e devolve o HTML
  * da aula, que vira o anexo da evidência.
  */
 export async function gerarAula(ag: Agregado, worktree: string, trechos: readonly Trecho[]): Promise<string> {

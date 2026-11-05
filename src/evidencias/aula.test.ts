@@ -30,6 +30,12 @@ git("rm", "-q", "velho.ts");
 git("add", ".");
 git("commit", "-q", "-m", "issue");
 const head = git("rev-parse", "HEAD");
+// A branch da demanda avançou com a mesma mudança de busca.ts (o merge de outra rodada): o diff direto fica vazio.
+git("checkout", "-q", "-b", "demanda", base);
+writeFileSync(join(repo, "busca.ts"), "const a = 1;\nconst b = <b>;\nconst c = 3;\nconst d = 4;\n");
+git("commit", "-q", "-am", "outra rodada");
+const baseAvancada = git("rev-parse", "HEAD");
+git("checkout", "-q", "-");
 
 const AGORA = "2026-10-15T12:00:00.000Z";
 const revisao: Ticket = {
@@ -147,4 +153,10 @@ test("a aula recusa o que não é código alterado pela issue, dizendo onde proc
     gerarAula(ag(), repo, [trecho(), trecho({ inicio: 1, fim: 1 })]),
     recusa("busca.ts:1-1 não toca nenhuma linha alterada pela issue (as linhas alteradas de busca.ts são 2, 4)"),
   );
+});
+
+test("a aula confere o trecho contra o diff desde o ancestral comum, como o arquivos_alterados", async () => {
+  const avancada = { ...alterados, dados: { ...alterados.dados, base: baseAvancada } };
+  const html = await gerarAula(ag({ evidencias: [avancada] }), repo, [trecho()]);
+  assert.match(html, /<tr class="mudou"><td class="n">2<\/td>/);
 });
