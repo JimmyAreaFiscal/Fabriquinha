@@ -30,7 +30,7 @@ interface Pagina {
   }[];
   decisoes: { ticket: string; resultado: string; motivo?: string; nota?: number }[];
   evidencias: Evidencia[];
-  encerramento: { passos: { feito: boolean }[] };
+  encerramento: { passos: { feito: boolean }[]; aguardando_merge?: { url: string } };
   dependencias: unknown[];
   dependentes: { demanda_id: string; titulo: string; fase: string }[];
 }
@@ -279,6 +279,47 @@ test("CA-10: o progresso do encerramento com os passos feitos e o pendente", asy
     limpeza_pendente: [],
     falha: { etapa: "integracao", motivo: "conflito" },
   });
+});
+
+test("o PR final à espera do merge humano vem no encerramento e marca a demanda no quadro", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    demanda: { ...ag.demanda, fase: "encerramento" },
+    rodadas: ag.rodadas.map((r) => ({ ...r, fase: "concluida" as const })),
+    tickets: [
+      ...ag.tickets.map((t) => ({ ...t, status: "concluido" as const })),
+      {
+        demanda_id: "I-206",
+        ticket_id: 99,
+        etapa: "encerrar_demanda",
+        status: "aberto",
+        status_alterado_em: "2026-01-01T00:00:00.000Z",
+        devolucoes: 0,
+      },
+    ],
+    encerramento: {
+      demanda_id: "I-206",
+      branch: "fabriquinha/I-206",
+      base: "main",
+      sha_verificado: "abc",
+      pr: { numero: 9, url: "https://pr/9" },
+      aguardando_merge_humano: true,
+      limpeza_pendente: [],
+    },
+  }));
+  const { encerramento, tickets } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(encerramento.aguardando_merge, { url: "https://pr/9" });
+  // A seleção o escolheria, mas ele pede o merge na plataforma, não a execução.
+  assert.equal(tickets.find((t) => t.etapa === "encerrar_demanda")?.elegivel, false);
+  const { demandas } = (await pedir("/api/demandas")).json<{ demandas: { id: string; aguarda_merge: boolean }[] }>();
+  assert.deepEqual(
+    demandas.map((d) => [d.id, d.aguarda_merge]),
+    [
+      ["I-206", true],
+      ["I-207", false],
+    ],
+  );
 });
 
 test("sem encerramento, todos os passos estão pendentes", async () => {

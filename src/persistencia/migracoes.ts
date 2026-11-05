@@ -910,4 +910,6 @@ export const MIGRACOES: readonly Migracao[] = [
   ALTER TABLE projeto DROP COLUMN preparacao;`,
   // Retomadas automáticas do ticket que falhou por infraestrutura (transitória ou cota): o limite evita o laço.
   "ALTER TABLE ticket_demanda ADD COLUMN retomadas_automaticas INTEGER NOT NULL DEFAULT 0 CHECK (retomadas_automaticas >= 0);",
+  // A integração final depende do humano: o PR final verificado espera o merge dele na plataforma.
+  "ALTER TABLE encerramento_demanda ADD COLUMN aguardando_merge_humano INTEGER NOT NULL DEFAULT 0 CHECK (aguardando_merge_humano IN (0, 1));",
 ];

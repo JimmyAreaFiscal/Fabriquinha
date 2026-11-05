@@ -1,5 +1,5 @@
 // Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-14 a 17 (o encerramento): revisão integral reprovada, encerramento
-// final sem gate, queda entre o efeito externo e a gravação e limpeza que falha. O cenário é montado pelos serviços e
+// final com o merge humano, queda entre o efeito externo e a gravação e limpeza que falha. O cenário é montado pelos serviços e
 // pelo agendador, com banco e git reais numa raiz temporária, o pi e o `gh` falsos; só o agente da revisão integral é o
 // teste, que age pelo domínio enquanto o pi falso espera.
 import assert from "node:assert/strict";
@@ -96,6 +96,9 @@ async function demandaEmEncerramento(c: Cenario): Promise<string> {
   return id;
 }
 
+/** O humano aprova e integra o PR final na plataforma: a Fabriquinha não faz esse merge. */
+const integrarComoHumano = (c: Cenario, pr: number) => integrarPR({ repo: c.repo, hospedagem: "github" }, String(pr));
+
 /** O PR final já aberto na hospedagem, com a marca que o encerramento adota. */
 function abrirPRFinal(c: Cenario, id: string, extra: Partial<Omit<PRFalso, "id">>): number {
   gh.abrir({
@@ -171,7 +174,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   );
 });
 
-test("CA-SDLC-15: revisão integral aprovada encerra sem gate humano; conflito abre agente e check falho bloqueia sem integrar nem limpar", async (t) => {
+test("CA-SDLC-15: revisão integral aprovada encerra com o merge humano; conflito abre agente e check falho bloqueia sem integrar nem limpar", async (t) => {
   // Conflito: o ciclo abre o resolver_conflito, o agente resolve na worktree da demanda e o encerramento conclui.
   const c = criarCenario(t);
   const id = await demandaEmEncerramento(c);
@@ -188,6 +191,15 @@ test("CA-SDLC-15: revisão integral aprovada encerra sem gate humano; conflito a
   assert.equal(demanda(c, id).demanda.fase, "encerramento");
 
   gh.mudar(pr, { conflito: false });
+  const pedidosAntes = mergesPedidos();
+  await ciclo(c, deps());
+  await ciclo(c, deps());
+  assert.equal(demanda(c, id).encerramento?.aguardando_merge_humano, true);
+  assert.equal(ultimo(c, id, "encerrar_demanda")?.status, "aberto");
+  assert.equal(mergesNaBase(c).length, 0, "a Fabriquinha não integra o PR final");
+  assert.equal(mergesPedidos(), pedidosAntes);
+
+  await integrarComoHumano(c, pr);
   await ciclo(c, deps());
   const concluida = demanda(c, id);
   assert.equal(concluida.demanda.fase, "concluida");
@@ -241,7 +253,7 @@ test("CA-SDLC-16: queda depois do merge e antes da gravação não duplica PR, i
       FABRIQUINHA,
     ),
   );
-  const mergeSha = await integrarPR({ repo: c.repo, hospedagem: "github" }, String(pr));
+  const mergeSha = await integrarComoHumano(c, pr);
   const antes = demanda(c, id);
   assert.equal(antes.encerramento?.integracao, undefined);
   assert.equal(mergesNaBase(c).length, 1);
@@ -266,6 +278,8 @@ test("CA-SDLC-17: limpeza que falha mantém a demanda não concluída e a reaber
   const rodada = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
   git(c.repo, "worktree", "lock", rodada);
 
+  await ciclo(c, deps());
+  await integrarComoHumano(c, gh.prs().length);
   await ciclo(c, deps());
   const parcial = demanda(c, id);
   const sha = parcial.encerramento?.integracao?.sha;

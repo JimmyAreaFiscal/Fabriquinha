@@ -231,11 +231,20 @@ export function registrarFalhaEncerramento(
   });
 }
 
-/** CA-10: guarda sem efeito antes de integrar; com integração confirmada recusa e deixa só a limpeza pendente. */
-export function solicitarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator: Ator): AgregadoDemanda {
+/**
+ * CA-10: o PR final passou nas verificações; marca a espera pelo merge humano na plataforma e devolve
+ * `encerrar_demanda` a `aberto`, para o agendador reler o PR a cada ciclo. Repetir só devolve o ticket a `aberto`.
+ * Com integração confirmada recusa e deixa só a limpeza pendente.
+ */
+export function solicitarIntegracao(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
   exigirFabriquinha(ator, "solicitar a integração");
   exigirDemandaDaEntrada(ag, EntradaSolicitacao.parse(entrada).demanda_id);
-  const { enc } = exigirTentativaAtiva(ag, "solicitar a integração");
+  const { atual, enc } = exigirTentativaAtiva(ag, "solicitar a integração");
   if (enc.integracao !== undefined) {
     throw new ErroDeRegra(
       `a demanda ${ag.demanda.id} já integrou na base (${enc.integracao.sha})`,
@@ -245,7 +254,17 @@ export function solicitarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator:
   if (enc.pr === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes de integrar");
   }
-  return ag;
+  if (enc.aguardando_merge_humano && atual.status === "aberto") return ag;
+  // A falha de integração anterior (PR fechado, reaberto pelo Auditor) não vale mais: voltou-se a esperar o merge.
+  const { falha, ...resto } = enc;
+  return AgregadoDemanda.parse({
+    ...comStatus(ag, atual, { status: "aberto", status_alterado_em: ctx.agora }),
+    encerramento: {
+      ...resto,
+      aguardando_merge_humano: true,
+      ...(falha !== undefined && falha.etapa !== "integracao" && { falha }),
+    },
+  });
 }
 
 /**
@@ -272,7 +291,7 @@ export function registrarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator:
   if (enc.pr === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes de integrar");
   }
-  const { falha, ...resto } = enc;
+  const { falha, aguardando_merge_humano: _, ...resto } = enc;
   return AgregadoDemanda.parse({
     ...ag,
     encerramento: {

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { projeto } from "./apoio.ts";
 import {
+  semearDemandaAguardandoMerge,
   semearDemandaConcluida,
   semearDemandas,
   semearGateDaDemanda,
@@ -433,4 +434,41 @@ test("CA-29: arquivar a demanda concluída a tira das demandas e leva ao Início
   await pagina.getByRole("button", { name: "Arquivar" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/home`);
   expect(await demandas()).toEqual([]);
+});
+
+test("a integração final espera o merge humano: o passo leva ao PR e o quadro avisa", async ({
+  pagina,
+  fabriquinha,
+}, info) => {
+  projeto(fabriquinha.raiz);
+  semearDemandaAguardandoMerge(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/projects/loja/demandas`);
+  await expect(pagina.locator(".dm-cartao.aguarda")).toContainText("aguarda o seu merge do PR final");
+
+  await pagina.goto(`${fabriquinha.base}/demandas/I-218`);
+  await pagina.setViewportSize({ width: 1440, height: 900 });
+  const integracao = pagina
+    .getByRole("region", { name: "Encerramento final" })
+    .locator("li", { hasText: "Integração" });
+  await expect(integracao).toContainText("Aguardando você");
+  await expect(integracao.getByRole("link", { name: /aprove e integre o PR final na plataforma/ })).toHaveAttribute(
+    "href",
+    "https://exemplo.com/pr/12",
+  );
+  const aguarda = pagina.getByRole("region", { name: "Aguarda você" });
+  await expect(aguarda.getByRole("link", { name: "Integrar o PR final ↓" })).toHaveAttribute(
+    "href",
+    "#titulo-encerramento",
+  );
+  await expect(aguarda).not.toContainText("Executar");
+  await info.attach("merge-humano-1440", {
+    body: await pagina.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
+  await pagina.setViewportSize({ width: 375, height: 900 });
+  expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await info.attach("merge-humano-375", {
+    body: await pagina.screenshot({ fullPage: true }),
+    contentType: "image/png",
+  });
 });

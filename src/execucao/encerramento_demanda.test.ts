@@ -1,5 +1,7 @@
 // Encerramento final da demanda com banco real, git real e hospedagem falsa (CA-1 a CA-6, 9, 10, 12, 13 e 16 da I-231).
+// A integração final é do humano: o teste faz o merge do PR na plataforma falsa, como ele faria.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -150,10 +152,39 @@ async function cenario({
 
 const merges = () => hospedagem.chamadas().filter((x) => x.args.slice(0, 2).join(" ") === "pr merge");
 
-test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada, integra com o SHA, limpa e conclui", async () => {
+/** O humano integra o PR final na plataforma; o próximo ciclo do agendador reserva o ticket e conduz o encerramento. */
+async function integrarComoHumano(c: Awaited<ReturnType<typeof cenario>>) {
+  execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
+  c.reservar();
+  return conduzirEncerramentoDemanda(c.banco, D);
+}
+
+test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada, espera o merge humano, limpa e conclui", async () => {
   const c = await cenario();
 
-  const ag = await conduzirEncerramentoDemanda(c.banco, D);
+  const aguardando = await conduzirEncerramentoDemanda(c.banco, D);
+
+  // A Fabriquinha não integra: o ticket volta a aberto e a demanda espera o humano integrar o PR na plataforma.
+  assert.deepEqual(merges(), []);
+  assert.equal(aguardando.encerramento?.aguardando_merge_humano, true);
+  assert.equal(c.ticket()?.status, "aberto");
+  assert.equal(aguardando.demanda.fase, "encerramento");
+  assert.equal(existsSync(c.demanda), true);
+
+  // Cada ciclo, enquanto o humano não integra, só relê o PR: sem push, edição nem nova verificação.
+  const antes = hospedagem.chamadas().length;
+  c.reservar();
+  await conduzirEncerramentoDemanda(c.banco, D);
+  assert.deepEqual(
+    hospedagem
+      .chamadas()
+      .slice(antes)
+      .map((x) => x.args.slice(0, 2).join(" ")),
+    ["pr view"],
+  );
+  assert.equal(c.ticket()?.status, "aberto");
+
+  const ag = await integrarComoHumano(c);
 
   const [pr] = hospedagem.prs();
   assert.equal(hospedagem.prs().length, 1);
@@ -212,7 +243,8 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
     ] as never,
   }));
 
-  const ag = await conduzirEncerramentoDemanda(c.banco, D);
+  await conduzirEncerramentoDemanda(c.banco, D);
+  const ag = await integrarComoHumano(c);
 
   assert.deepEqual(ag.evidencias.map((e) => [e.ticket_id, e.tipo]).toSorted(), [
     [3, "arvore_prs_criterios_custos"],
@@ -327,8 +359,9 @@ test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvi
   assert.equal(podeTentarEncerramento(c.ag()), true);
   hospedagem.mudar(1, { conflito: false });
   c.reservar();
+  await conduzirEncerramentoDemanda(c.banco, D);
 
-  const ag = await conduzirEncerramentoDemanda(c.banco, D);
+  const ag = await integrarComoHumano(c);
 
   assert.equal(hospedagem.prs().length, 1);
   assert.equal(ag.encerramento?.conflito_pendente, undefined);
@@ -339,24 +372,48 @@ test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvi
   );
 });
 
-test("falha da hospedagem na integração falha o ticket em integracao, sem registrar integração nem limpar", async () => {
+test("PR final fechado sem merge falha o ticket em integracao; reaberto e integrado pelo humano, conclui", async () => {
   const c = await cenario();
-  hospedagem.falhar("pr merge", "merge bloqueado");
+  await conduzirEncerramentoDemanda(c.banco, D);
+  hospedagem.mudar(1, { estado: "fechado" });
+  c.reservar();
 
-  const ag = await conduzirEncerramentoDemanda(c.banco, D);
+  const fechado = await conduzirEncerramentoDemanda(c.banco, D);
 
   assert.equal(c.ticket()?.status, "falhou");
-  assert.equal(ag.encerramento?.falha?.etapa, "integracao");
-  assert.match(ag.encerramento.falha.motivo, /merge bloqueado/);
-  assert.equal(ag.encerramento.integracao, undefined);
+  assert.equal(fechado.encerramento?.falha?.etapa, "integracao");
+  assert.match(fechado.encerramento.falha.motivo, /fechado sem merge/);
+  assert.equal(fechado.encerramento.integracao, undefined);
   assert.equal(existsSync(c.demanda), true);
+
+  // O humano reabre o PR na plataforma, o Auditor reabre o ticket: volta a esperar, sem a falha, até o merge.
+  hospedagem.mudar(1, { estado: "aberto" });
+  c.reservar();
+  const reaberto = await conduzirEncerramentoDemanda(c.banco, D);
+  assert.equal(reaberto.encerramento?.falha, undefined);
+  assert.equal(c.ticket()?.status, "aberto");
+  assert.equal((await integrarComoHumano(c)).demanda.fase, "concluida");
+});
+
+test("leitura do PR que falha na espera devolve o ticket a aberto e sobe o erro, sem integrar", async () => {
+  const c = await cenario();
+  await conduzirEncerramentoDemanda(c.banco, D);
+  hospedagem.falhar("pr view", "rede fora");
+  c.reservar();
+
+  await assert.rejects(conduzirEncerramentoDemanda(c.banco, D), /rede fora/);
+
+  assert.equal(c.ticket()?.status, "aberto");
+  assert.equal(c.ag().encerramento?.aguardando_merge_humano, true);
+  assert.equal(c.ag().encerramento?.integracao, undefined);
 });
 
 test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto, só a limpeza pendente roda", async () => {
   const c = await cenario();
   gitCenario(c.repo, "worktree", "lock", c.rodada);
+  await conduzirEncerramentoDemanda(c.banco, D);
 
-  const parcial = await conduzirEncerramentoDemanda(c.banco, D);
+  const parcial = await integrarComoHumano(c);
 
   const sha = parcial.encerramento?.integracao?.sha;
   assert.ok(sha);

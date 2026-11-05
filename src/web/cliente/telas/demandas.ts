@@ -20,6 +20,8 @@ export interface DemandaDoQuadro {
   rodadas: { ref: string; fase: FaseRodada; pr?: { id: string; url: string } }[];
   bloqueios: { demanda_id: string; fase: FaseDemanda }[];
   falhos: { ref: string; etapa: EtapaTicket }[];
+  /** O PR final verificado espera o humano integrá-lo na plataforma. */
+  aguarda_merge: boolean;
 }
 export interface DadosDoQuadro {
   demandas: DemandaDoQuadro[];
@@ -60,6 +62,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
       d.rodadas.some((r) => r.fase === "aprovacao_pull_request"));
   const marcas = [
     ...(aguarda ? [`<span class="pill pill-aguarda">aguarda a decisão do Auditor</span>`] : []),
+    ...(d.aguarda_merge ? [`<span class="pill pill-aguarda">aguarda o seu merge do PR final</span>`] : []),
     ...d.falhos.map((f) => `<span class="pill pill-falha">ticket falho ${escapar(f.ref)}</span>`),
     ...d.bloqueios.map((b) => {
       const titulo = todas.find((o) => o.id === b.demanda_id)?.titulo;
@@ -67,7 +70,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
       return `<span class="pill pill-neutro">aguarda ${partes.map(escapar).join(" · ")}</span>`;
     }),
   ];
-  return `<article class="cartao dm-cartao${aguarda ? " aguarda" : ""}">
+  return `<article class="cartao dm-cartao${aguarda || d.aguarda_merge ? " aguarda" : ""}">
     <div class="cartao-topo"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span></div>
     <h3 class="cartao-titulo">${escapar(d.titulo)}</h3>
     <div>${pilula(FASE_DA_DEMANDA[d.fase])}</div>
@@ -122,6 +125,7 @@ export interface DadosDaPagina {
     passos: { passo: "verificacao" | "pr" | "integracao"; feito: boolean }[];
     limpeza_pendente: string[];
     falha?: { etapa: "check_final" | "integracao" | "limpeza"; motivo: string };
+    aguardando_merge?: { url: string };
   };
   dependencias: { demanda_id: string; fase: FaseDemanda }[];
   dependentes: { demanda_id: string; titulo: string; fase: FaseDemanda }[];
@@ -157,6 +161,7 @@ const tipoDaEvidencia = (tipo: string): string => TIPO_DA_EVIDENCIA[tipo] ?? tip
 const ESTADO_DO_PASSO = {
   feito: ["Feito", "pill-ok"],
   pendente: ["Pendente", "pill-neutro"],
+  aguardando: ["Aguardando você", "pill-aguarda"],
   falhou: ["Falhou", "pill-falha"],
 } as const;
 
@@ -350,14 +355,28 @@ const secao = (id: string, titulo: string, corpo: string): string =>
   `<section class="bloco" aria-labelledby="${id}"><div class="secao-titulo"><h2 id="${id}">${titulo}</h2></div>${corpo}</section>`;
 
 /** O encerramento final (CA-12): só com progresso; integração feita e limpeza falha nunca viram "nada integrado". */
-function encerramento({ passos, limpeza_pendente: pendentes, falha }: Pagina["encerramento"]): string {
+function encerramento({
+  passos,
+  limpeza_pendente: pendentes,
+  falha,
+  aguardando_merge,
+}: Pagina["encerramento"]): string {
   const feito = (nome: string) => passos.find((p) => p.passo === nome)?.feito === true;
   if (!passos.some((p) => p.feito) && !falha && pendentes.length === 0) return "";
   const limpezaFalhou = falha?.etapa === "limpeza" || pendentes.length > 0;
   const estados: [string, keyof typeof ESTADO_DO_PASSO][] = [
     ["Verificação", feito("verificacao") ? "feito" : falha?.etapa === "check_final" ? "falhou" : "pendente"],
     ["PR final", feito("pr") ? "feito" : "pendente"],
-    ["Integração", feito("integracao") ? "feito" : falha?.etapa === "integracao" ? "falhou" : "pendente"],
+    [
+      "Integração",
+      feito("integracao")
+        ? "feito"
+        : falha?.etapa === "integracao"
+          ? "falhou"
+          : aguardando_merge
+            ? "aguardando"
+            : "pendente",
+    ],
     ["Limpeza", limpezaFalhou ? "falhou" : feito("integracao") ? "feito" : "pendente"],
   ];
   const itens = estados.map(([nome, estado]) => {
@@ -365,6 +384,9 @@ function encerramento({ passos, limpeza_pendente: pendentes, falha }: Pagina["en
       estado === "falhou" && falha && (nome === "Limpeza") === (falha.etapa === "limpeza") ? falha : undefined;
     const detalhe = [
       ...(motivo ? [escapar(motivo.motivo)] : []),
+      ...(estado === "aguardando" && aguardando_merge
+        ? [linkExterno(aguardando_merge.url, "aprove e integre o PR final na plataforma")]
+        : []),
       ...(nome === "Limpeza" && pendentes.length > 0 ? [`pendente: ${pendentes.map(escapar).join(", ")}`] : []),
     ];
     return `<li class="dm-passo"><strong>${nome}</strong> ${pilula(ESTADO_DO_PASSO[estado])}${detalhe.length > 0 ? ` <span class="dm-texto">${detalhe.join(" · ")}</span>` : ""}</li>`;
@@ -550,10 +572,11 @@ function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string 
 }
 
 /** O que espera o Auditor, com o link até onde ele age: o gate da fase, o PR ou a sessão da rodada, o ticket. */
-function aguardaVoce({ demanda, rodadas, tickets }: Pagina): string {
+function aguardaVoce({ demanda, rodadas, tickets, encerramento: { aguardando_merge } }: Pagina): string {
   const gateDaFase = GATES[demanda.fase];
   const itens = [
     ...(gateDaFase ? [["gate", gateDaFase.titulo]] : []),
+    ...(aguardando_merge ? [["titulo-encerramento", "Integrar o PR final"]] : []),
     ...rodadas
       .filter((r) => r.fase === "aprovacao_pull_request" || r.fase === "sessao")
       .map((r) => [`${r.fase === "sessao" ? "ajustes" : "pr"}-${r.ref}`, `${FASE_DA_RODADA[r.fase][0]} · ${r.ref}`]),
