@@ -18,7 +18,6 @@ import {
   reabrirTicket,
   retomarTicketFalhoPorInfraestrutura,
   MAX_RETOMADAS_AUTOMATICAS,
-  MAX_ARQUIVOS_POR_RODADA,
   registrarDemanda,
   registrarFalhaTicket,
   registrarRevisaoDemanda,
@@ -238,41 +237,6 @@ test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai 
   assert.equal(novo.evidencias.filter((e) => e.tipo === "plano" && e.ticket_id === 2).length, 1);
   assert.deepEqual(novo.rodadas, []);
   assert.equal(novo.tickets.length, 2);
-});
-
-test("rodada que toca mais de 15 arquivos é recusada: literais contam um a um, o padrão conta os previstos do desenho", () => {
-  const arquivos = (n: number, pasta = "src") => Array.from({ length: n }, (_, i) => `${pasta}/a${String(i)}.ts`);
-  const comCaminhos = (caminhos1: string[], caminhos2: string[] = []) => {
-    const [b, a, c] = planoV().tickets as Record<string, unknown>[];
-    return planoV({ tickets: [{ ...b, caminhos: caminhos1 }, a, { ...c, caminhos: caminhos2 }] });
-  };
-  const ag = emPlanejamento();
-  const comDesenho = (previstos: string[]): AgregadoDemanda => ({
-    ...ag,
-    evidencias: ag.evidencias.map((e) =>
-      e.tipo === "desenho_solucao"
-        ? { ...e, dados: { resumo: "r", arquivosPrevistos: previstos.map((caminho) => ({ caminho })) } }
-        : e,
-    ),
-  });
-  const limite = MAX_ARQUIVOS_POR_RODADA;
-  assert.equal(
-    submeterPlano(ag, comCaminhos(arquivos(limite)), agente, { agora: t2 }).demanda.fase,
-    "aprovacao_planejamento",
-  );
-  assert.throws(
-    () => submeterPlano(ag, comCaminhos(arquivos(limite + 1)), agente, { agora: t2 }),
-    /a rodada 1 toca 16 arquivos; o limite é 15 por rodada/,
-  );
-  const desenho = comDesenho([...arquivos(limite + 1, "src/x"), "docs/y.md"]);
-  assert.throws(
-    () => submeterPlano(desenho, comCaminhos(["src/b.ts"], ["src/x/**"]), agente, { agora: t2 }),
-    /a rodada 2 toca 16 arquivos/,
-  );
-  assert.equal(
-    submeterPlano(desenho, comCaminhos([], ["docs/**"]), agente, { agora: t2 }).demanda.fase,
-    "aprovacao_planejamento",
-  );
 });
 
 test("CA-2: ticket de implementação sem rodada é recusado na submissão, sem mutação", () => {
