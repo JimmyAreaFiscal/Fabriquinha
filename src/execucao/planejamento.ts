@@ -117,7 +117,7 @@ export function reprovarPlanejamentoDemanda(banco: DatabaseSync, demandaId: stri
 }
 
 /**
- * Prepara antes de confirmar (§6): garante a worktree da demanda e a de cada rodada do plano e só então grava a
+ * Prepara antes de confirmar (§6): garante a worktree da demanda e a de cada rodada independente e só então grava a
  * aprovação. Falha de preparação deixa o gate aberto, vai ao log e sobe com o caminho da worktree. Repetível: o que já
  * existe é reaproveitado.
  */
@@ -151,13 +151,16 @@ export async function aprovarPlanejamentoDemanda(
       caminho: caminhoDaWorktreeDemanda(raiz, projeto.nome, demandaId),
       garantir: () => garantirWorktreeDemanda(raiz, worktree, demandaId, log, () => varrerBase(banco, projeto.nome)),
     },
-    ...plano.rodadas.map(({ rodada_id }) => {
-      const ref = { demanda_id: demandaId, rodada_id };
-      return {
-        caminho: caminhoDaWorktreeRodada(raiz, projeto.nome, ref),
-        garantir: () => garantirWorktreeRodada(raiz, worktree, ref, log),
-      };
-    }),
+    // D04: a rodada dependente nasce quando começa, da ponta da demanda já com as predecessoras integradas.
+    ...plano.rodadas
+      .filter((rodada) => rodada.depende.length === 0)
+      .map(({ rodada_id }) => {
+        const ref = { demanda_id: demandaId, rodada_id };
+        return {
+          caminho: caminhoDaWorktreeRodada(raiz, projeto.nome, ref),
+          garantir: () => garantirWorktreeRodada(raiz, worktree, ref, log),
+        };
+      }),
   ];
   for (const { caminho, garantir } of passos) {
     try {

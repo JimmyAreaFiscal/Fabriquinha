@@ -74,9 +74,9 @@ const plano = (criterios = CRITERIOS) => ({
   })),
 });
 
-/** Preparação: marca `preparado`; com o arquivo `quebra` na raiz, falha só em rodadas/2. */
+/** Preparação: marca `preparado`; com o arquivo `quebra` na raiz, falha só em rodadas/1. */
 function preparacao(raiz: string): string {
-  return `[ -e ${raiz}/quebra ] && [ "$(basename "$PWD")" = 2 ] && exit 1; touch preparado; true`;
+  return `[ -e ${raiz}/quebra ] && [ "$(basename "$PWD")" = 1 ] && exit 1; touch preparado; true`;
 }
 
 function demanda(id: string, fase: string, extra: object = {}) {
@@ -317,15 +317,16 @@ test("CA-8: motivo vazio recusa a reprovação e nada é registrado", () => {
 
 const aprovacao = () => cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
 
-test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara cada uma", async () => {
+test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara cada uma; a dependente fica para quando começar", async () => {
   const { c, banco } = aprovacao();
   await aprovarPlanejamentoDemanda(banco, "I-1", {});
   const dir = join(c.raiz, "worktrees", "loja", "I-1");
   const demandaTopo = gitCenario(c.repo, "rev-parse", "fabriquinha/I-1");
-  for (const w of ["demanda", "rodadas/1", "rodadas/2"]) assert.ok(existsSync(join(dir, w, "preparado")), w);
-  for (const n of [1, 2]) {
-    assert.equal(gitCenario(c.repo, "merge-base", "fabriquinha/I-1", `fabriquinha/I-1-${String(n)}`), demandaTopo);
-  }
+  for (const w of ["demanda", "rodadas/1"]) assert.ok(existsSync(join(dir, w, "preparado")), w);
+  assert.equal(gitCenario(c.repo, "merge-base", "fabriquinha/I-1", "fabriquinha/I-1-1"), demandaTopo);
+  // D04: a rodada 2 depende da 1 e nasce da ponta da demanda só quando começar.
+  assert.equal(existsSync(join(dir, "rodadas/2")), false);
+  assert.equal(gitCenario(c.repo, "branch", "--list", "fabriquinha/I-1-2"), "");
 });
 
 test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejamento", async () => {
@@ -340,10 +341,10 @@ test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejament
   assert.equal(n, 0);
 });
 
-test("CA-10, CA-11: preparação que falha na rodada 2 deixa o gate aberto; corrigida, a aprovação conclui", async () => {
+test("CA-10, CA-11: preparação que falha na rodada 1 deixa o gate aberto; corrigida, a aprovação conclui", async () => {
   const { c, banco, status } = aprovacao();
   writeFileSync(join(c.raiz, "quebra"), "");
-  const caminho = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "2");
+  const caminho = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "1");
   await assert.rejects(
     aprovarPlanejamentoDemanda(banco, "I-1", {}),
     (e: Error) =>
@@ -355,7 +356,7 @@ test("CA-10, CA-11: preparação que falha na rodada 2 deixa o gate aberto; corr
   assert.deepEqual([ag.demanda.fase, ag.rodadas.length, ag.tickets.length], ["aprovacao_planejamento", 0, 1]);
   assert.match(
     readFileSync(join(c.raiz, "execucoes", "planejamento-I-1.log"), "utf8"),
-    /preparação falhou em .*rodadas\/2/,
+    /preparação falhou em .*rodadas\/1/,
   );
 
   rmSync(join(c.raiz, "quebra"));

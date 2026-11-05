@@ -214,7 +214,7 @@ test("CA-16: aprovar de novo devolve a orientação do serviço e a demanda não
   assert.equal(fase(), "planejamento");
 });
 
-test("CA-17: aprovar o planejamento avança de fase e cria a worktree de cada rodada", async () => {
+test("CA-17: aprovar o planejamento avança de fase e cria a worktree de cada rodada independente", async () => {
   const { pedir, fase, c } = await cenario("planejamento");
   const r = await pedir("/api/demandas/I-206/planejamento/decisao", {
     metodo: "POST",
@@ -222,7 +222,9 @@ test("CA-17: aprovar o planejamento avança de fase e cria a worktree de cada ro
   });
   assert.equal(r.status, 200);
   assert.equal(fase(), "execucao");
-  for (const n of [1, 2]) assert.ok(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", String(n))));
+  assert.ok(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "1")));
+  // D04: a R2 depende da R1 e nasce quando começar, da ponta da demanda.
+  assert.equal(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "2")), false);
 });
 
 test("CA-18: reprovar o planejamento sem motivo pede o motivo e o planejamento continua aguardando", async () => {
