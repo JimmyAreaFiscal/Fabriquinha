@@ -1,6 +1,5 @@
 // Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar e decidir.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
-import { matchesGlob } from "node:path";
 import { z } from "zod";
 import { type Ator, exigirAuditor, exigirFabriquinha, TipoIssue } from "./agregado.ts";
 import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
@@ -216,37 +215,6 @@ const decisaoDoAuditor = (
   em: ctx.agora,
 });
 
-/** O tamanho do PR de uma rodada que o Auditor ainda consegue revisar. */
-export const MAX_ARQUIVOS_POR_RODADA = 15;
-
-const DesenhoComArquivos = z.object({ arquivosPrevistos: z.array(z.object({ caminho: z.string() })) });
-
-/** Os caminhos (arquivos ou padrões) que o desenho aprovado prevê; nenhum sem desenho. */
-function arquivosPrevistosDoDesenho(ag: AgregadoDemanda): string[] {
-  const desenho = ag.evidencias.find(
-    (e) => e.tipo === "desenho_solucao" && e.rodada_id === undefined && e.ticket_id === undefined,
-  );
-  return DesenhoComArquivos.safeParse(desenho?.dados).data?.arquivosPrevistos.map((a) => a.caminho) ?? [];
-}
-
-const ehPadrao = (caminho: string) => /[*?[{]/.test(caminho);
-
-/**
- * As rodadas cujos tickets tocam mais de MAX_ARQUIVOS_POR_RODADA arquivos, com a contagem: cada caminho literal conta
- * um; o padrão (`src/x/**`) conta os previstos do desenho que ele cobre.
- * ponytail: o previsto que é ele mesmo um padrão conta um; contar de verdade pede a worktree, que o domínio não lê.
- */
-function rodadasAcimaDoLimiteDeArquivos(plano: Plano, previstos: readonly string[]): [number, number][] {
-  return plano.rodadas.flatMap(({ rodada_id }) => {
-    const caminhos = plano.tickets.filter((t) => t.rodada_id === rodada_id).flatMap((t) => t.caminhos);
-    const arquivos = new Set([
-      ...caminhos.filter((c) => !ehPadrao(c)),
-      ...previstos.filter((p) => caminhos.some((c) => ehPadrao(c) && matchesGlob(p, c))),
-    ]);
-    return arquivos.size > MAX_ARQUIVOS_POR_RODADA ? [[rodada_id, arquivos.size] as [number, number]] : [];
-  });
-}
-
 /**
  * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejamento`. O plano precisa passar pelo `Plano` e
  * citar só `CA-n` da definição congelada; aceito, vira evidência do ticket e a demanda vai a `aprovacao_planejamento`.
@@ -297,13 +265,6 @@ export function submeterPlano(
     throw new ErroDeRegra(
       `o plano cita ${ausentes.join(", ")}, que a definição da demanda ${demanda.id} não tem`,
       "cite só os CA-n da definição congelada",
-    );
-  }
-  const grandes = rodadasAcimaDoLimiteDeArquivos(plano.data, arquivosPrevistosDoDesenho(ag));
-  if (grandes.length > 0) {
-    throw new ErroDeRegra(
-      `${grandes.map(([r, n]) => `a rodada ${String(r)} toca ${String(n)} arquivos`).join("; ")}; o limite é ${String(MAX_ARQUIVOS_POR_RODADA)} por rodada`,
-      "divida em rodadas menores: o PR de cada uma fica em torno de 10 arquivos, para o Auditor conseguir revisar",
     );
   }
   const evidencia = {
