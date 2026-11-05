@@ -61,4 +61,5 @@ Um PR que altera mais de 30 arquivos é difícil de analisar. Estime quantos arq
 - [ ] Os critérios descrevem o comportamento visto de fora; a solução interna fica para o desenho.
 - [ ] Os termos são os do produto e do código (nomes de tela, comando, campo), os mesmos da conversa com o usuário.
 - [ ] O usuário reconhece nos critérios tudo o que pediu, e só o que pediu.
+- [ ] O critério que só se cumpre com o que outra demanda entrega (código, dado, ambiente) tem essa demanda declarada com `--dep`; se ela ainda não existe, o critério sai desta demanda e vai para a outra.
 - [ ] Se a mudança passa de 30 arquivos, ela está dividida em demandas separadas, ligadas por `--dep`; se não passa, é uma só.

@@ -1,5 +1,6 @@
 // Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar e decidir.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
+import { matchesGlob } from "node:path";
 import { z } from "zod";
 import { type Ator, exigirAuditor, exigirFabriquinha, TipoIssue } from "./agregado.ts";
 import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
@@ -7,7 +8,7 @@ import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { AutorDemanda, exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { type FaseDemanda, Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { type FaseDemanda, Id, type Instante, Markdown, Modelo, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;
@@ -215,6 +216,37 @@ const decisaoDoAuditor = (
   em: ctx.agora,
 });
 
+/** O tamanho do PR de uma rodada que o Auditor ainda consegue revisar. */
+export const MAX_ARQUIVOS_POR_RODADA = 15;
+
+const DesenhoComArquivos = z.object({ arquivosPrevistos: z.array(z.object({ caminho: z.string() })) });
+
+/** Os caminhos (arquivos ou padrões) que o desenho aprovado prevê; nenhum sem desenho. */
+function arquivosPrevistosDoDesenho(ag: AgregadoDemanda): string[] {
+  const desenho = ag.evidencias.find(
+    (e) => e.tipo === "desenho_solucao" && e.rodada_id === undefined && e.ticket_id === undefined,
+  );
+  return DesenhoComArquivos.safeParse(desenho?.dados).data?.arquivosPrevistos.map((a) => a.caminho) ?? [];
+}
+
+const ehPadrao = (caminho: string) => /[*?[{]/.test(caminho);
+
+/**
+ * As rodadas cujos tickets tocam mais de MAX_ARQUIVOS_POR_RODADA arquivos, com a contagem: cada caminho literal conta
+ * um; o padrão (`src/x/**`) conta os previstos do desenho que ele cobre.
+ * ponytail: o previsto que é ele mesmo um padrão conta um; contar de verdade pede a worktree, que o domínio não lê.
+ */
+function rodadasAcimaDoLimiteDeArquivos(plano: Plano, previstos: readonly string[]): [number, number][] {
+  return plano.rodadas.flatMap(({ rodada_id }) => {
+    const caminhos = plano.tickets.filter((t) => t.rodada_id === rodada_id).flatMap((t) => t.caminhos);
+    const arquivos = new Set([
+      ...caminhos.filter((c) => !ehPadrao(c)),
+      ...previstos.filter((p) => caminhos.some((c) => ehPadrao(c) && matchesGlob(p, c))),
+    ]);
+    return arquivos.size > MAX_ARQUIVOS_POR_RODADA ? [[rodada_id, arquivos.size] as [number, number]] : [];
+  });
+}
+
 /**
  * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejamento`. O plano precisa passar pelo `Plano` e
  * citar só `CA-n` da definição congelada; aceito, vira evidência do ticket e a demanda vai a `aprovacao_planejamento`.
@@ -265,6 +297,13 @@ export function submeterPlano(
     throw new ErroDeRegra(
       `o plano cita ${ausentes.join(", ")}, que a definição da demanda ${demanda.id} não tem`,
       "cite só os CA-n da definição congelada",
+    );
+  }
+  const grandes = rodadasAcimaDoLimiteDeArquivos(plano.data, arquivosPrevistosDoDesenho(ag));
+  if (grandes.length > 0) {
+    throw new ErroDeRegra(
+      `${grandes.map(([r, n]) => `a rodada ${String(r)} toca ${String(n)} arquivos`).join("; ")}; o limite é ${String(MAX_ARQUIVOS_POR_RODADA)} por rodada`,
+      "divida em rodadas menores: o PR de cada uma fica em torno de 10 arquivos, para o Auditor conseguir revisar",
     );
   }
   const evidencia = {
@@ -452,6 +491,7 @@ export function devolverTicket(
         status: "aberto",
         instrucao,
         devolucoes: ticket.devolucoes + 1,
+        retomadas_automaticas: 0,
         status_alterado_em: alterado,
       });
 }
@@ -470,9 +510,59 @@ export function reabrirTicket(
   return {
     ...ag,
     tickets: ag.tickets.map((t) =>
-      t === ticket ? { ...resto, status: "aberto", instrucao, devolucoes: 0, status_alterado_em: ctx.agora } : t,
+      t === ticket
+        ? {
+            ...resto,
+            status: "aberto",
+            instrucao,
+            devolucoes: 0,
+            retomadas_automaticas: 0,
+            status_alterado_em: ctx.agora,
+          }
+        : t,
     ),
   };
+}
+
+export const MAX_RETOMADAS_AUTOMATICAS = 3;
+const EntradaRetomadaAutomatica = z.strictObject({
+  ticket_id: Id,
+  /** A retomada soma no limite; a do reinício do serviço não soma: não é laço, é o operador. */
+  conta: z.boolean(),
+  /** Cota estourada: o modelo reserva toma o lugar do do ticket. */
+  modelo: Modelo.optional(),
+});
+
+/**
+ * Só a Fabriquinha, só ticket `falhou`: volta a `aberto` sem o Auditor, mantendo a instrução e as devoluções da D05 (a
+ * falha não foi do agente). Recusa a que `conta` depois de MAX_RETOMADAS_AUTOMATICAS seguidas.
+ */
+export function retomarTicketFalhoPorInfraestrutura(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirFabriquinha(ator, "retomar um ticket falho por infraestrutura");
+  const { ticket_id, conta, modelo } = EntradaRetomadaAutomatica.parse(entrada);
+  exigirDemandaEmAndamento(ag, "retomar");
+  const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser retomado");
+  const retomadas = ticket.retomadas_automaticas ?? 0;
+  if (conta && retomadas >= MAX_RETOMADAS_AUTOMATICAS) {
+    throw new ErroDeRegra(
+      `o ticket ${formatarTicketRef(ticket)} já foi retomado ${String(MAX_RETOMADAS_AUTOMATICAS)} vezes seguidas`,
+      "o Auditor decide: reabra com instrução ou cancele",
+    );
+  }
+  const { motivo_falha: _motivo, ...resto } = ticket;
+  const alvo = {
+    ...resto,
+    status: "aberto" as const,
+    retomadas_automaticas: retomadas + (conta ? 1 : 0),
+    status_alterado_em: ctx.agora,
+    ...(modelo && { modelo_provedor: modelo.provedor, modelo_nome: modelo.modelo }),
+  };
+  return { ...ag, tickets: ag.tickets.map((t) => (t === ticket ? alvo : t)) };
 }
 
 const EntradaDemanda = z.strictObject({ demanda_id: DemandaId });

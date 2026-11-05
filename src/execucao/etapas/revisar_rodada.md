@@ -10,6 +10,9 @@
 4. Comprove cada critério da rodada com o que você viu no código e nos testes.
 5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir {ticket} aprovar` se a rodada cumpre o que foi pedido, ou com `fabriquinha revisao decidir {ticket} reprovar --motivo <texto> --correcoes <json|->` se não cumpre; `--correcoes` leva as correções que a rodada exige, em JSON, uma por ticket corretivo, como `[{"titulo": "...", "descricao": "...", "caminhos": ["src/a.ts"]}]`.
 
+Se o ambiente impedir uma verificação (serviço fora do ar, contêiner, credencial ausente), não reprove por isso: o ticket corretivo não conserta o ambiente e a rodada volta à revisão em laço.
+Pergunte ao Auditor com a ferramenta `perguntar`, dizendo o que falta e o que você já tentou, e siga com a resposta dele.
+
 Para esperar um processo (teste ao vivo, container, fila), espere num único comando até a condição ou um tempo limite, com a saída filtrada; não relance a espera turno após turno.
 
 **Entregas:** as evidências de explicação das fitness functions e de comprovação dos critérios, do ticket {ticket}.

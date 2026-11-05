@@ -5,6 +5,7 @@ import type { ModoExecucao } from "../dominio/agregado.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { anotar } from "../persistencia/execucoes.ts";
+import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "./auditor_automatico.ts";
 import { type EventoPi, lancarPi } from "./pi.ts";
 
 /** Diálogos que esperam resposta; `notify` e afins não esperam, e `custom` nunca chega no modo RPC (P1 §2.1). */
@@ -191,6 +192,11 @@ export interface Processo {
   limiteMin: number;
   /** Chamado com o grupo de processos do pi logo depois de lançado, para quem precisa matá-lo no reinício (F4 §7). */
   aoLancar(pgid: number): void;
+  /**
+   * Autônoma: o Auditor automático lê antes a pergunta da `perguntar` e devolve a resposta do que é banal; `undefined`
+   * deixa a pergunta com o Auditor humano. Sem a triagem, toda pergunta espera o humano.
+   */
+  triarPergunta?: (pergunta: PerguntaDoAgente) => Promise<RespostaDoAuditorAutomatico | undefined>;
 }
 
 /**
@@ -276,6 +282,26 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
         mudou();
       }
     };
+    /** Manda ao agente a resposta do Auditor automático, se o humano não respondeu antes; a escalada só vai ao log. */
+    const triar = async (
+      triagem: NonNullable<Processo["triarPergunta"]>,
+      dialogo: string,
+      args: Record<string, unknown>,
+    ) => {
+      const opcoes = ((args.options ?? []) as { label: string }[]).map((o) => o.label.trim()).filter(Boolean);
+      const pergunta = String(args.question);
+      const detalhes = typeof args.details === "string" && args.details ? { detalhes: args.details } : {};
+      const decisao = await triagem({ pergunta, ...detalhes, opcoes });
+      if (!decisao) {
+        anotar(r.log, `Auditor automático escalou ao Auditor: ${pergunta}`);
+        return;
+      }
+      if (!pendentes.has(dialogo)) return;
+      anotar(r.log, `Auditor automático respondeu "${decisao.resposta}" a "${pergunta}": ${decisao.justificativa}`);
+      estaViva.responder(dialogo, {
+        value: args.multiSelect ? JSON.stringify([decisao.resposta]) : decisao.resposta,
+      });
+    };
     const aoDialogo = (evento: EventoPi) => {
       const dialogo = String(evento.id);
       const em = Date.now();
@@ -288,6 +314,10 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
         em: new Date(em).toISOString(),
         ...(timeout !== undefined && { expiraEm: new Date(em + timeout).toISOString() }),
       });
+      const args = [...perguntas.values()].find(
+        (a) => evento.title === a.question || String(evento.title).startsWith(`${String(a.question)}\n\n`),
+      );
+      if (autonoma && r.triarPergunta && args) void triar(r.triarPergunta, dialogo, args);
       if (timeout !== undefined) {
         expiracoes.set(
           dialogo,

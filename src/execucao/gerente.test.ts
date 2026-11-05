@@ -1,13 +1,13 @@
 // Gerente (F4 §2, §5.4, §6.6, §6.7) com um pi falso de verdade: a recusa de um comando na autônoma e na interativa, o
 // relógio da autônoma parado enquanto um diálogo espera, o diálogo que expira, o aborto e a atividade do agente.
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { abortar, atividadeDo, encerrar, responderDialogo, rodarPi, situacao } from "./gerente.ts";
+import { abortar, atividadeDo, encerrar, type Processo, responderDialogo, rodarPi, situacao } from "./gerente.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerente-"));
 after(() => {
@@ -19,6 +19,7 @@ const pi = join(base, "pi.mjs");
 writeFileSync(
   pi,
   `#!/usr/bin/env node
+import { appendFileSync } from "node:fs";
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const variante = process.env.FALSO_PI;
 const assistente = (stopReason) => emitir({ type: "message_end", message: { role: "assistant", content: [], stopReason } });
@@ -34,6 +35,15 @@ function aoPrompt() {
     emitir({ type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args: { question: "Qual?" } });
     emitir({ type: "extension_ui_request", id: "s1", method: "select", title: "Qual?", options: ["a"] });
   }
+  if (variante === "pergunta_opcoes") {
+    const args = { question: "Corrijo o Sonar?", details: "S1", options: [{ label: " Sim " }, { label: "Não" }], multiSelect: true };
+    emitir({ type: "tool_execution_start", toolCallId: "p2", toolName: "perguntar", args });
+    emitir({ type: "extension_ui_request", id: "s2", method: "select", title: "Corrijo o Sonar?", options: ["Sim", "Não"] });
+  }
+  if (variante === "pergunta_livre") {
+    emitir({ type: "tool_execution_start", toolCallId: "p3", toolName: "perguntar", args: { question: "Qual handle?", details: "do dev" } });
+    emitir({ type: "extension_ui_request", id: "e3", method: "editor", title: "Qual handle?\\n\\ndo dev" });
+  }
 }
 // Como o pi que assenta ao receber o SIGTERM: o evento chega depois do fim da execução.
 process.on("SIGTERM", () => {
@@ -47,6 +57,7 @@ process.stdin.setEncoding("utf8").on("data", (parte) => {
   for (const linha of linhas) {
     const c = JSON.parse(linha);
     if (c.type === "prompt") aoPrompt();
+    if (c.type === "extension_ui_response" && c.value !== undefined) appendFileSync("respostas", c.value + "\\n");
     if (c.type === "extension_ui_response" && !c.cancelled) {
       assistente("stop");
       emitir({ type: "agent_settled" });
@@ -64,7 +75,12 @@ process.env.FABRIQUINHA_PI = pi;
 
 let n = 0;
 /** Roda o pi falso na `variante`, no `modo`, com o `limiteMin`; devolve a sessão e a promessa do fim. */
-function rodar(variante: string, modo: "autonomo" | "interativo", limiteMin = 1) {
+function rodar(
+  variante: string,
+  modo: "autonomo" | "interativo",
+  limiteMin = 1,
+  triarPergunta?: Processo["triarPergunta"],
+) {
   const sessao = `s-${String(++n)}`;
   const dir = mkdtempSync(join(base, "exec-"));
   const fim = rodarPi({
@@ -76,8 +92,9 @@ function rodar(variante: string, modo: "autonomo" | "interativo", limiteMin = 1)
     prompt: "trabalhe",
     limiteMin,
     aoLancar: () => undefined,
+    triarPergunta,
   });
-  return { sessao, fim };
+  return { sessao, fim, dir };
 }
 
 async function ate(condicao: () => boolean, oQue: string): Promise<void> {
@@ -119,6 +136,55 @@ test("autônoma: o select da perguntar vira a pergunta do chat; abortar dá a fa
   assert.equal(situacao(sessao)?.dialogos[0]?.pergunta, true);
   abortar(sessao);
   assert.equal(await fim, "abortada pelo Auditor");
+});
+
+test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o rótulo; a resposta e a regra vão ao log", async () => {
+  const perguntas: unknown[] = [];
+  const { fim, dir } = rodar("pergunta_opcoes", "autonomo", 1, (p) => {
+    perguntas.push(p);
+    return Promise.resolve({ resposta: "Sim", justificativa: "issue do Sonar se corrige" });
+  });
+  assert.equal(await fim, undefined);
+  assert.deepEqual(perguntas, [{ pergunta: "Corrijo o Sonar?", detalhes: "S1", opcoes: ["Sim", "Não"] }]);
+  assert.equal(readFileSync(join(dir, "respostas"), "utf8"), '["Sim"]\n');
+  assert.match(
+    readFileSync(join(dir, "log"), "utf8"),
+    /Auditor automático respondeu "Sim" a "Corrijo o Sonar\?": issue do Sonar/,
+  );
+
+  const simples = rodar("pergunta", "autonomo", 1, () =>
+    Promise.resolve({ resposta: "a", justificativa: "recomendada" }),
+  );
+  assert.equal(await simples.fim, undefined);
+  assert.equal(readFileSync(join(simples.dir, "respostas"), "utf8"), "a\n");
+});
+
+test("autônoma: a pergunta estratégica fica com o Auditor; a resposta dele antes da triagem vale e a triagem não repete", async () => {
+  const escalada = rodar("pergunta_livre", "autonomo", 1, (p) => {
+    assert.deepEqual(p, { pergunta: "Qual handle?", detalhes: "do dev", opcoes: [] });
+    return Promise.resolve(undefined);
+  });
+  await ate(
+    () => existsSync(join(escalada.dir, "log")) && readFileSync(join(escalada.dir, "log"), "utf8").includes("escalou"),
+    "a escalada",
+  );
+  assert.equal(situacao(escalada.sessao)?.dialogos.length, 1);
+  responderDialogo(escalada.sessao, "e3", { value: "jimmy" });
+  assert.equal(await escalada.fim, undefined);
+
+  let liberar: (r: { resposta: string; justificativa: string }) => void = () => undefined;
+  const atrasada = rodar("pergunta", "autonomo", 1, () => new Promise((pronto) => (liberar = pronto)));
+  await ate(() => situacao(atrasada.sessao)?.dialogos.length === 1, "a pergunta");
+  responderDialogo(atrasada.sessao, "s1", { value: "a" });
+  liberar({ resposta: "a", justificativa: "j" });
+  assert.equal(await atrasada.fim, undefined);
+  assert.equal(readFileSync(join(atrasada.dir, "respostas"), "utf8"), "a\n");
+
+  // Interativa: a triagem não entra.
+  const interativa = rodar("pergunta", "interativo", 1, () => assert.fail("a interativa não faz triagem"));
+  await ate(() => situacao(interativa.sessao)?.dialogos.length === 1, "a pergunta da interativa");
+  encerrar(interativa.sessao);
+  assert.equal(await interativa.fim, undefined);
 });
 
 test("encerrar a autônoma com um diálogo de tempo limite pendente para o relógio dele; o assentar depois do fim não arma relógio", async () => {

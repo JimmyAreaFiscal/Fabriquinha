@@ -908,4 +908,6 @@ export const MIGRACOES: readonly Migracao[] = [
      WHERE NOT EXISTS (SELECT 1 FROM comando_preparacao_projeto j WHERE j.projeto = p.nome)
      ORDER BY p.nome, c.key;
   ALTER TABLE projeto DROP COLUMN preparacao;`,
+  // Retomadas automáticas do ticket que falhou por infraestrutura (transitória ou cota): o limite evita o laço.
+  "ALTER TABLE ticket_demanda ADD COLUMN retomadas_automaticas INTEGER NOT NULL DEFAULT 0 CHECK (retomadas_automaticas >= 0);",
 ];

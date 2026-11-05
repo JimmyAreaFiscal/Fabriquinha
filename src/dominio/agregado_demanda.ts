@@ -36,6 +36,8 @@ export const TicketDemanda = z.object({
   // Reprovações técnicas devolvidas ao agente (D05, no máximo 2) e o porquê de o ticket ter falhado.
   devolucoes: z.number().int().min(0).max(2).default(0),
   motivo_falha: Markdown.optional(),
+  // Retomadas seguidas da Fabriquinha depois de falha de infraestrutura; a devolução e a reabertura zeram. Ausente é 0.
+  retomadas_automaticas: z.number().int().min(0).optional(),
 });
 
 export const RodadaDemanda = z.object({

@@ -7,6 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import type { Projeto } from "../dominio/configuracao_projeto.ts";
+import { formatarTicketRef } from "../dominio/demanda.ts";
 import { encontrado, existe, mensagem } from "../dominio/erros.ts";
 import { resolverModeloEffort } from "../dominio/resolucao_ticket.ts";
 import {
@@ -31,6 +32,7 @@ import { carregarSessoesDoTicket, comSessoesDoTicket, execucoesAbertasDaDemanda 
 import { sinalNoGrupo } from "../processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
+import { triarPergunta } from "./auditor_automatico.ts";
 import { avisar, rodarPi } from "./gerente.ts";
 import { ambientePi, confianca } from "./pi.ts";
 import { argumentosPiDemanda } from "./pi_demanda.ts";
@@ -182,6 +184,14 @@ async function conduzir(c: Conducao): Promise<void> {
       log,
       prompt,
       limiteMin: opcoes.limiteMin,
+      triarPergunta: (pergunta) =>
+        triarPergunta(
+          execucao.modelo_provedor && execucao.modelo_nome
+            ? { provedor: execucao.modelo_provedor, nome: execucao.modelo_nome }
+            : undefined,
+          { ticket: formatarTicketRef(c.ref), etapa: c.ticket.etapa, demanda: c.ag.demanda.titulo },
+          pergunta,
+        ),
       // Sem pid (o pi nem subiu) não há grupo a gravar; o `saiu` do pi relata o erro.
       aoLancar: (pgid) => {
         if (Number.isInteger(pgid)) gravarGrupo(c, pgid);

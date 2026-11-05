@@ -24,8 +24,20 @@ async function verificarSonar({ projeto, worktree, opcoes }: EntradaVerificacoes
       arquivos: analisados,
       issues,
     } = await analisarSonar(projeto.chave_sonarqube, worktree, () => Promise.resolve(arquivos), opcoes);
+    // Cada issue vai no motivo: é ele que chega ao agente na devolução, e só a contagem o fazia perguntar o que corrigir.
+    const listaDeIssues = issues
+      .map(
+        (i) =>
+          `\n  - ${i.arquivo}${i.linha === undefined ? "" : `:${String(i.linha)}`} ${i.regra} (${i.severidade}): ${i.mensagem}`,
+      )
+      .join("");
     const falhas: Falha[] = issues.length
-      ? [{ classe: "tecnica", motivo: `${String(issues.length)} issue(s) aberta(s) em arquivos alterados` }]
+      ? [
+          {
+            classe: "tecnica",
+            motivo: `${String(issues.length)} issue(s) aberta(s) em arquivos alterados; corrija cada uma:${listaDeIssues}`,
+          },
+        ]
       : [];
     const dados = { projectKey: projeto.chave_sonarqube, ceTaskId, arquivosAnalisados: analisados, issues };
     return { tipo, aprovada: aprovacao(falhas), falhas, dados, logs: [] } satisfies Verificacao;

@@ -36,7 +36,8 @@ delete process.env.FABRIQUINHA_PORTA;
 
 /**
  * pi falso. Anota em $FALSO_PI_REGISTRO o início (argumentos, pasta, ambiente) e o prompt, e grava a resposta na sessão
- * como o pi faz. $FALSO_PI: sucesso (padrão), sem-custo (o `usage` sem `cost`), erro e dorme (nunca assenta).
+ * como o pi faz. $FALSO_PI: sucesso (padrão), sem-custo (o `usage` sem `cost`), erro, dorme (nunca assenta) e pergunta
+ * (a `perguntar` com opções; a triagem do Auditor automático, com -p, responde "Sim").
  */
 const PI_FALSO = `#!/usr/bin/env node
 import { appendFileSync, mkdirSync } from "node:fs";
@@ -44,6 +45,12 @@ const variante = process.env.FALSO_PI ?? "sucesso";
 const anotar = (o) => appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(o) + "\\n");
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
+// A triagem do Auditor automático chama o pi uma vez, com -p: responde a decisão e sai.
+if (process.argv.includes("-p")) {
+  anotar({ evento: "triagem", argv: process.argv.slice(2) });
+  emitir({ decisao: "responder", resposta: "Sim", justificativa: "Sonar se corrige" });
+  process.exit(0);
+}
 anotar({ evento: "inicio", argv: process.argv.slice(2), cwd: process.cwd(), execucao: process.env.FABRIQUINHA_EXECUCAO });
 function assistente(stopReason) {
   const usage = { input: 10, output: 2, cacheRead: 100, cacheWrite: 3, totalTokens: 115 };
@@ -61,11 +68,22 @@ process.stdin.setEncoding("utf8").on("data", (parte) => {
   resto = linhas.pop();
   for (const linha of linhas) {
     const c = JSON.parse(linha);
+    if (c.type === "extension_ui_response") {
+      anotar({ evento: "resposta", valor: c.value });
+      assistente("stop");
+      emitir({ type: "agent_settled" });
+    }
     if (c.type !== "prompt") continue;
     anotar({ evento: "prompt", mensagem: c.message });
     emitir({ type: "response", command: "prompt", success: true });
     emitir({ type: "agent_start" });
     if (variante === "dorme") continue;
+    if (variante === "pergunta") {
+      const args = { question: "Corrijo o Sonar?", options: [{ label: "Sim" }, { label: "Não" }] };
+      emitir({ type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args });
+      emitir({ type: "extension_ui_request", id: "d1", method: "select", title: "Corrijo o Sonar?", options: ["Sim", "Não"] });
+      continue;
+    }
     assistente(variante === "erro" ? "error" : "stop");
     emitir({ type: "agent_settled" });
   }
@@ -171,7 +189,7 @@ async function cenario({ etapas = [], variante, semWorktree, preparacao = "true"
     /** O que o pi falso anotou, de todas as execuções. */
     registro: () =>
       (existsSync(registro) ? readFileSync(registro, "utf8").trim().split("\n") : []).map(
-        (l) => JSON.parse(l) as { evento: string; argv: string[]; cwd: string; mensagem: string },
+        (l) => JSON.parse(l) as { evento: string; argv: string[]; cwd: string; mensagem: string; valor?: string },
       ),
     sessoes: (ticket_id: number) => carregarSessoesDoTicket(banco, { demanda_id: "I-1", ticket_id }),
   };
@@ -234,6 +252,27 @@ test("CA-3: effort do ticket e modelo da etapa, gravados e passados ao pi", asyn
     [valorDe(argv, "--provider"), valorDe(argv, "--model"), valorDe(argv, "--thinking")],
     ["anthropic", "claude-etapa", "high"],
   );
+});
+
+test("a pergunta do agente autônomo passa pelo Auditor automático com o modelo da execução, e a resposta volta ao agente", async (t) => {
+  // O pi falso da triagem sai sozinho e gravaria a cobertura dele no relatório da suíte.
+  const cobertura = process.env.NODE_V8_COVERAGE;
+  delete process.env.NODE_V8_COVERAGE;
+  t.after(() => {
+    if (cobertura !== undefined) process.env.NODE_V8_COVERAGE = cobertura;
+  });
+  for (const etapas of [[{ etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-etapa" }], []]) {
+    const { banco, registro } = await cenario({ etapas, variante: "pergunta" });
+    await iniciarExecucaoDemanda(banco, ref(2), { limiteMin: 1 }).fim;
+    const triagem = registro().find((r) => r.evento === "triagem");
+    const argv = triagem?.argv ?? [];
+    assert.equal(
+      argv.includes("--model") ? valorDe(argv, "--model") : undefined,
+      etapas[0] && "anthropic/claude-etapa",
+    );
+    assert.match(String(triagem?.argv.at(-1)), /Ticket I-1\.T2, etapa implementar/);
+    assert.deepEqual(registro().find((r) => r.evento === "resposta")?.valor, "Sim");
+  }
 });
 
 test("CA-4: sem modelo nem effort, nada é gravado e o pi roda com o padrão", async () => {

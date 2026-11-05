@@ -16,6 +16,9 @@ import {
   iniciarRevisaoDemanda,
   MAX_DEVOLUCOES,
   reabrirTicket,
+  retomarTicketFalhoPorInfraestrutura,
+  MAX_RETOMADAS_AUTOMATICAS,
+  MAX_ARQUIVOS_POR_RODADA,
   registrarDemanda,
   registrarFalhaTicket,
   registrarRevisaoDemanda,
@@ -237,6 +240,41 @@ test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai 
   assert.equal(novo.tickets.length, 2);
 });
 
+test("rodada que toca mais de 15 arquivos é recusada: literais contam um a um, o padrão conta os previstos do desenho", () => {
+  const arquivos = (n: number, pasta = "src") => Array.from({ length: n }, (_, i) => `${pasta}/a${String(i)}.ts`);
+  const comCaminhos = (caminhos1: string[], caminhos2: string[] = []) => {
+    const [b, a, c] = planoV().tickets as Record<string, unknown>[];
+    return planoV({ tickets: [{ ...b, caminhos: caminhos1 }, a, { ...c, caminhos: caminhos2 }] });
+  };
+  const ag = emPlanejamento();
+  const comDesenho = (previstos: string[]): AgregadoDemanda => ({
+    ...ag,
+    evidencias: ag.evidencias.map((e) =>
+      e.tipo === "desenho_solucao"
+        ? { ...e, dados: { resumo: "r", arquivosPrevistos: previstos.map((caminho) => ({ caminho })) } }
+        : e,
+    ),
+  });
+  const limite = MAX_ARQUIVOS_POR_RODADA;
+  assert.equal(
+    submeterPlano(ag, comCaminhos(arquivos(limite)), agente, { agora: t2 }).demanda.fase,
+    "aprovacao_planejamento",
+  );
+  assert.throws(
+    () => submeterPlano(ag, comCaminhos(arquivos(limite + 1)), agente, { agora: t2 }),
+    /a rodada 1 toca 16 arquivos; o limite é 15 por rodada/,
+  );
+  const desenho = comDesenho([...arquivos(limite + 1, "src/x"), "docs/y.md"]);
+  assert.throws(
+    () => submeterPlano(desenho, comCaminhos(["src/b.ts"], ["src/x/**"]), agente, { agora: t2 }),
+    /a rodada 2 toca 16 arquivos/,
+  );
+  assert.equal(
+    submeterPlano(desenho, comCaminhos([], ["docs/**"]), agente, { agora: t2 }).demanda.fase,
+    "aprovacao_planejamento",
+  );
+});
+
 test("CA-2: ticket de implementação sem rodada é recusado na submissão, sem mutação", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);
@@ -450,6 +488,47 @@ test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a
   assert.equal(tk2(novo)?.instrucao, "tente de novo");
   assert.equal(novo.decisoes, ag.decisoes);
   assert.equal(tk2(ag)?.status, "falhou");
+});
+
+test("retomada automática: só a Fabriquinha, só ticket falhou; mantém instrução e devoluções e conta até o limite", () => {
+  const retomar = (ag: AgregadoDemanda, entrada: object, ator: Ator = FABRIQUINHA) =>
+    retomarTicketFalhoPorInfraestrutura(ag, { ticket_id: 2, ...entrada }, ator, { agora: t2 });
+  const base = emExecucao("falhou");
+  const ag = {
+    ...base,
+    tickets: base.tickets.map((t) =>
+      t.ticket_id === 2 ? { ...t, instrucao: "corrija", devolucoes: 1, motivo_falha: "HTTP 504" } : t,
+    ),
+  };
+  assert.throws(() => retomar(ag, { conta: true }, AUDITOR), ErroDeEscopo);
+  assert.throws(() => retomar(emExecucao("aberto"), { conta: true }), ErroDeRegra);
+  assert.throws(() => retomar({ ...ag, demanda: { ...ag.demanda, fase: "concluida" } }, { conta: true }), ErroDeRegra);
+
+  const novo = retomar(ag, { conta: true, modelo: { provedor: "anthropic", modelo: "claude-opus-5-5" } });
+  const { motivo_falha: _m, ...semFalha } = tk2(ag) ?? {};
+  assert.deepEqual(tk2(novo), {
+    ...semFalha,
+    status: "aberto",
+    retomadas_automaticas: 1,
+    status_alterado_em: t2,
+    modelo_provedor: "anthropic",
+    modelo_nome: "claude-opus-5-5",
+  });
+
+  // O reinício do serviço não conta; no limite, a que conta é recusada; a reabertura do Auditor zera.
+  const reinicio = retomar(ag, { conta: false });
+  assert.equal(tk2(reinicio)?.retomadas_automaticas, 0);
+  assert.equal(tk2(reinicio)?.modelo_provedor, tk2(ag)?.modelo_provedor);
+  const noLimite = {
+    ...ag,
+    tickets: ag.tickets.map((t) =>
+      t.ticket_id === 2 ? { ...t, retomadas_automaticas: MAX_RETOMADAS_AUTOMATICAS } : t,
+    ),
+  };
+  assert.throws(() => retomar(noLimite, { conta: true }), /retomado 3 vezes seguidas/);
+  assert.equal(tk2(retomar(noLimite, { conta: false }))?.retomadas_automaticas, MAX_RETOMADAS_AUTOMATICAS);
+  const reaberto = reabrirTicket(noLimite, { ticket_id: 2, instrucao: "x" }, AUDITOR, { agora: t2 });
+  assert.equal(tk2(reaberto)?.retomadas_automaticas, 0);
 });
 
 const falhar = (ag: AgregadoDemanda, ticket_id: number) =>
