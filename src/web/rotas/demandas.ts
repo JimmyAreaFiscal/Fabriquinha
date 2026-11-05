@@ -59,6 +59,7 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
         }),
         bloqueios: predecessorasDaDemanda(pedido.banco, id).filter((p) => !satisfazDependencia(p.fase)),
         falhos: falhos(ag),
+        aguarda_merge: ag.encerramento?.aguardando_merge_humano === true,
       };
     }),
     trabalho: todas.flatMap(emExecucao),
@@ -84,6 +85,7 @@ const passosDoEncerramento = (ag: AgregadoDemanda) => {
     ],
     limpeza_pendente: e?.limpeza_pendente ?? [],
     ...(e?.falha && { falha: e.falha }),
+    ...(e?.aguardando_merge_humano && e.pr && { aguardando_merge: { url: e.pr.url } }),
   };
 };
 
@@ -126,7 +128,9 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       ref: ticket(t.ticket_id),
       etapa: t.etapa,
       status: t.status,
-      elegivel: elegiveis.has(t.ticket_id),
+      // O encerrar_demanda à espera do merge humano não pede execução ao Auditor: pede o merge na plataforma.
+      elegivel:
+        elegiveis.has(t.ticket_id) && !(t.etapa === "encerrar_demanda" && ag.encerramento?.aguardando_merge_humano),
       ...(sessoes.has(t.ticket_id) && { sessao: sessoes.get(t.ticket_id) }),
       ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
       ...(t.titulo !== undefined && { titulo: t.titulo }),

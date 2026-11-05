@@ -10,6 +10,7 @@ const demanda = (id: string, resto: Partial<DemandaDoQuadro> = {}): DemandaDoQua
   rodadas: [],
   bloqueios: [],
   falhos: [],
+  aguarda_merge: false,
   ...resto,
 });
 
@@ -508,6 +509,31 @@ test("integração feita e limpeza falha: concluída e falhou, nunca nada integr
   assert.match(
     pagina(dadosDaPagina({ encerramento: { passos: passos(true, true, true), limpeza_pendente: [] } })),
     /Limpeza<\/strong> <span class="pill pill-ok">Feito/,
+  );
+});
+
+test("a integração à espera do merge humano: o passo, o link do PR e o Aguarda você, sem pedir a execução", () => {
+  const html = pagina(
+    dadosDaPagina({
+      demanda: { ...dadosDaPagina().demanda, fase: "encerramento" },
+      tickets: [{ ref: "I-206.T8", etapa: "encerrar_demanda", status: "aberto", elegivel: false }],
+      encerramento: {
+        passos: passos(true, true, false),
+        limpeza_pendente: [],
+        aguardando_merge: { url: "https://pr/9" },
+      },
+    }),
+  );
+  assert.match(
+    html,
+    /Integração<\/strong> <span class="pill pill-aguarda">Aguardando você<\/span> <span class="dm-texto"><a class="link" href="https:\/\/pr\/9" target="_blank" rel="noopener">aprove e integre o PR final na plataforma ↗/,
+  );
+  const aguarda = trecho(html, "dm-aguarda");
+  assert.match(aguarda, /href="#titulo-encerramento">Integrar o PR final ↓/);
+  assert.doesNotMatch(aguarda, /Executar I-206\.T8/);
+  assert.match(
+    quadro({ demandas: [demanda("I-206", { fase: "encerramento", aguarda_merge: true })], trabalho: [] }),
+    /class="cartao dm-cartao aguarda"[\s\S]*aguarda o seu merge do PR final/,
   );
 });
 

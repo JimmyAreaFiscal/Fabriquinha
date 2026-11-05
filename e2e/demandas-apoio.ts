@@ -337,6 +337,31 @@ export function semearDemandaConcluida(raiz: string): void {
   banco.close();
 }
 
+/** A I-218 em encerramento com o PR final verificado, à espera do merge humano na plataforma. */
+export function semearDemandaAguardandoMerge(raiz: string): void {
+  const banco = abrir(raiz);
+  criarDemanda(
+    banco,
+    demanda("I-218", "encerramento", {
+      rodadas: [rodada("I-218", 1, "concluida")],
+      tickets: [
+        ticket("I-218", 1, "implementar", 1, "concluido"),
+        { ...ticket("I-218", 2, "encerrar_demanda", 1, "aberto"), rodada_id: undefined },
+      ],
+      encerramento: {
+        demanda_id: "I-218",
+        pr: { numero: 12, url: "https://exemplo.com/pr/12" },
+        branch: "fabriquinha/I-218",
+        base: "main",
+        sha_verificado: "abc123",
+        aguardando_merge_humano: true,
+        limpeza_pendente: [],
+      },
+    }),
+  );
+  banco.close();
+}
+
 /** Registra uma correção na sessão de ajustes da rodada, como o agente do ticket da sessão. */
 export function registrarCorrecaoDaSessao(raiz: string, demanda_id: string, rodada_id: number): void {
   const banco = abrir(raiz);

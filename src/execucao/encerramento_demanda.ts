@@ -1,6 +1,7 @@
 // Serviço Encerramento da demanda (comparacao-sdlc-implementacao.md §§5 e 6): conduz o `encerrar_demanda` até a demanda
 // `concluida`, sem agente, gate nem nota. PR final da branch da demanda para a base do projeto (D02), conflito (D06),
-// check final, integração confirmada com SHA, limpeza por posse e evidências. Cada efeito externo é seguido da
+// check final, espera do merge humano na plataforma (a integração final depende do humano), integração confirmada com
+// SHA, limpeza por posse e evidências. Cada efeito externo é seguido da
 // transição do domínio, que decide se ele se repete (progresso recuperável).
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -35,7 +36,7 @@ import { configuracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDaDemanda } from "../persistencia/sessoes.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../repositorio/limpeza_demanda.ts";
-import { integrarPR, type OpcoesVerificacao, publicarPRDe, verificarPR } from "../repositorio/pr.ts";
+import { lerPR, type OpcoesVerificacao, publicarPRDe, verificarPR } from "../repositorio/pr.ts";
 import { exigirGit } from "../repositorio/worktree.ts";
 
 export interface DepsEncerramentoDemanda {
@@ -52,8 +53,10 @@ const contexto = () => ({ agora: new Date().toISOString() });
  * - senão publica (ou reaproveita) o PR final e registra a tentativa; erro até aqui falha o ticket e sobe;
  * - conflito com a base cria o `resolver_conflito` e devolve o ticket a `aberto`; check falho ou erro da hospedagem
  *   na verificação falha o ticket em `check_final`;
- * - integra, grava o SHA, limpa; sobras falham em `limpeza` e só elas se repetem; sem sobras, grava as evidências
- *   e conclui a demanda.
+ * - verificado, espera o humano aprovar e integrar o PR na plataforma: o ticket volta a `aberto` e cada ciclo do
+ *   agendador relê o PR, sem publicar nem verificar de novo; PR fechado sem merge falha o ticket em `integracao`;
+ * - mergeado pelo humano, grava o SHA, limpa; sobras falham em `limpeza` e só elas se repetem; sem sobras, grava as
+ *   evidências e conclui a demanda.
  */
 export async function conduzirEncerramentoDemanda(
   banco: DatabaseSync,
@@ -111,7 +114,39 @@ export async function conduzirEncerramentoDemanda(
     return aplicar((a) => concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, contexto()));
   };
 
+  // A Fabriquinha não integra o PR final: a plataforma pode exigir a aprovação do humano (Azure Repos) e o merge é dele.
+  const aguardarMergeHumano = async () => {
+    const pr = existe(
+      carregarDemanda(banco, demanda_id).encerramento?.pr,
+      `a demanda ${demanda_id} não tem PR final`,
+      "registre a tentativa antes",
+    );
+    const devolverParaEspera = () => aplicar((a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, contexto()));
+    let leitura;
+    try {
+      leitura = await lerPR(hospedagem, String(pr.numero));
+    } catch (erro) {
+      devolverParaEspera(); // a leitura que falha não é decisão do humano: o próximo ciclo relê
+      throw erro;
+    }
+    if (leitura.estado === "fechado") {
+      return falhar("integracao", `o PR final ${pr.url} foi fechado sem merge: reabra-o e integre-o na plataforma`);
+    }
+    if (leitura.estado !== "mergeado") return devolverParaEspera();
+    const sha = existe(
+      leitura.mergeSha,
+      `a hospedagem não informou o merge do PR ${pr.url}`,
+      "confira o PR na plataforma",
+    );
+    const pendentes = await pendenciasDeLimpeza(raiz, hospedagem, ag);
+    aplicar((a) =>
+      registrarIntegracao(a, { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes }, FABRIQUINHA),
+    );
+    return limpar();
+  };
+
   if (ag.encerramento?.integracao !== undefined) return limpar();
+  if (ag.encerramento?.aguardando_merge_humano) return aguardarMergeHumano();
 
   let publicado: Awaited<ReturnType<typeof publicarFinal>>;
   try {
@@ -148,18 +183,8 @@ export async function conduzirEncerramentoDemanda(
     return falhar("check_final", mensagem(erro));
   }
 
-  aplicar((a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA));
-  let sha;
-  try {
-    sha = await integrarPR(hospedagem, publicado.id);
-  } catch (erro) {
-    return falhar("integracao", mensagem(erro));
-  }
-  const pendentes = await pendenciasDeLimpeza(raiz, hospedagem, ag);
-  aplicar((a) =>
-    registrarIntegracao(a, { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes }, FABRIQUINHA),
-  );
-  return limpar();
+  aplicar((a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, contexto()));
+  return aguardarMergeHumano();
 }
 
 /** Publica o PR da branch da demanda para a base, reaproveitando o do progresso ou o marcado; só commits de ticket sobem. */

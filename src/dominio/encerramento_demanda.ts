@@ -13,6 +13,8 @@ export const ProgressoEncerramento = z
     // Base configurada do projeto (D02): nunca fixada em `main`.
     base: Texto,
     sha_verificado: Texto.optional(),
+    // O PR final passou nas verificações e espera o humano integrá-lo na plataforma: a Fabriquinha não faz esse merge.
+    aguardando_merge_humano: z.literal(true).optional(),
     integracao: z.strictObject({ sha: Texto }).optional(),
     limpeza_pendente: z.array(Texto),
     conflito_pendente: z.strictObject({ ticket_id: Id }).optional(),

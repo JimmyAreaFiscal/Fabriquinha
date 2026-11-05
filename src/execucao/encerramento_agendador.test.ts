@@ -1,6 +1,7 @@
 // Encerramento final pelo agendador (CA-15 e CA-16): git real e hospedagem falsa; só o `despacharDemandas` conduz as
-// etapas. O agente do `resolver_conflito` é falso: escreve na worktree da demanda e fecha pelo `fecharTicketDemanda`.
+// etapas, e o merge do PR final é do humano, que o teste faz na plataforma falsa. O agente do `resolver_conflito` é falso: escreve na worktree da demanda e fecha pelo `fecharTicketDemanda`.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -148,11 +149,17 @@ async function cenario() {
     /** Um ciclo do agendador, esperado até o fim das etapas que ele despachou. */
     ciclo: () => Promise.all(despacharDemandas(banco, config, deps)),
     ag: () => carregarDemanda(banco, D),
+    /** O humano aprova e integra o PR final na plataforma. */
+    integrarComoHumano: () => execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" }),
   };
 }
 
-test("CA-15: a revisão integral aprovada vai a concluida só pelo ciclo, sem decisão humana", async () => {
+test("CA-15: a revisão integral aprovada vai a concluida pelo ciclo depois do merge humano, sem decisão no gate", async () => {
   const c = await cenario();
+  await c.ciclo();
+  assert.equal(c.ag().encerramento?.aguardando_merge_humano, true);
+  assert.equal(c.ag().demanda.fase, "encerramento");
+  c.integrarComoHumano();
   await c.ciclo();
   const ag = c.ag();
   assert.equal(ag.demanda.fase, "concluida");
@@ -181,6 +188,8 @@ test("CA-16: conflito com a base cria o resolver_conflito; concluído, o ciclo t
   assert.equal(c.ag().demanda.fase, "encerramento");
 
   hospedagem.mudar(1, { conflito: false });
+  await c.ciclo();
+  c.integrarComoHumano();
   await c.ciclo();
   const ag = c.ag();
   assert.equal(ag.demanda.fase, "concluida");

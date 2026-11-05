@@ -309,17 +309,25 @@ test("integração mantém falha de outra etapa e recusa sem PR, sem progresso, 
   assert.throws(() => registrarIntegracao(comProgresso(), integEnt(), AUDITOR), ErroDeEscopo);
 });
 
-test("CA-10: solicitar integração é guarda sem efeito; com integração confirmada recusa citando só a limpeza", () => {
-  const ag = comProgresso();
-  assert.deepEqual(solicitarIntegracao(ag, { demanda_id: D }, FABRIQUINHA), ag);
+test("CA-10: solicitar integração marca a espera pelo merge humano e devolve o ticket; repetir é igual", () => {
+  const ag = comProgresso({ falha: { etapa: "integracao", motivo: "PR fechado" } }, "em_execucao");
+  const novo = solicitarIntegracao(ag, { demanda_id: D }, FABRIQUINHA, c);
+  assert.equal(novo.encerramento?.aguardando_merge_humano, true);
+  assert.equal(novo.encerramento.falha, undefined);
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "aberto");
+  assert.deepEqual(solicitarIntegracao(novo, { demanda_id: D }, FABRIQUINHA, c), novo);
+  const integrado = registrarIntegracao(novo, integEnt(), FABRIQUINHA);
+  assert.equal(integrado.encerramento?.aguardando_merge_humano, undefined);
+  const outra = comProgresso({ falha: { etapa: "limpeza", motivo: "x" } });
+  assert.equal(solicitarIntegracao(outra, { demanda_id: D }, FABRIQUINHA, c).encerramento?.falha?.etapa, "limpeza");
   assert.throws(
-    () => solicitarIntegracao(integrada(), { demanda_id: D }, FABRIQUINHA),
+    () => solicitarIntegracao(integrada(), { demanda_id: D }, FABRIQUINHA, c),
     (e: unknown) => e instanceof ErroDeRegra && e.message.includes("falta só a limpeza: branch"),
   );
-  regra(() => solicitarIntegracao(integrada({ limpeza_pendente: [] }), { demanda_id: D }, FABRIQUINHA));
-  regra(() => solicitarIntegracao(comProgresso({ pr: undefined }), { demanda_id: D }, FABRIQUINHA));
-  regra(() => solicitarIntegracao(montar(), { demanda_id: D }, FABRIQUINHA));
-  assert.throws(() => solicitarIntegracao(ag, { demanda_id: D }, AUDITOR), ErroDeEscopo);
+  regra(() => solicitarIntegracao(integrada({ limpeza_pendente: [] }), { demanda_id: D }, FABRIQUINHA, c));
+  regra(() => solicitarIntegracao(comProgresso({ pr: undefined }), { demanda_id: D }, FABRIQUINHA, c));
+  regra(() => solicitarIntegracao(montar(), { demanda_id: D }, FABRIQUINHA, c));
+  assert.throws(() => solicitarIntegracao(ag, { demanda_id: D }, AUDITOR, c), ErroDeEscopo);
 });
 
 test("CA-12 e CA-13: concluir encerramento deixa a demanda concluida com o histórico; repetir é igual", () => {
