@@ -14,6 +14,14 @@ const DIALOGOS = new Set(["select", "confirm", "input", "editor"]);
 /** O `erro` do C6 da execução autônoma que o Auditor abortou: o Histórico a mostra como abortada (F7 §4.4). */
 const ABORTADA = "abortada pelo Auditor";
 
+/**
+ * O maior silêncio do pi aceito enquanto o agente espera o modelo (ocupado, sem ferramenta rodando nem diálogo
+ * pendente). Nas 33 mil respostas dos transcritos de `~/fabriquinha/sessoes` até 2026-11-05, a mais longa levou 5,9 min
+ * do pedido ao fim, com o stream no meio, então o silêncio de verdade foi menor; a travada da I-259.T16 ficou 53 min sem
+ * evento. 15 min dá folga de 2,5 vezes sobre a mais longa sem segurar à toa a retomada automática.
+ */
+export const SILENCIO_MAXIMO_DO_MODELO_MIN = 15;
+
 /** Um diálogo de extensão pendente: o pedido do pi, quando chegou e, se o pi o resolve sozinho, quando expira. */
 export type Dialogo = EventoPi & { em: string; expiraEm?: string };
 
@@ -197,12 +205,15 @@ export interface Processo {
    * deixa a pergunta com o Auditor humano. Sem a triagem, toda pergunta espera o humano.
    */
   triarPergunta?: (pergunta: PerguntaDoAgente) => Promise<RespostaDoAuditorAutomatico | undefined>;
+  /** Padrão: SILENCIO_MAXIMO_DO_MODELO_MIN; os testes encurtam. */
+  silencioMaximoDoModeloMin?: number;
 }
 
 /**
  * Lança o pi, envia o prompt e conduz o protocolo RPC até o fim, parando o grupo do pi em qualquer desfecho.
  * Autônoma: termina no `agent_settled`, com falha se a última mensagem do assistente parou com erro ou aborto.
  * Interativa: o `agent_settled` só a deixa ociosa; ela termina bem quando a ociosidade passa ou alguém a encerra.
+ * Ambas falham como infraestrutura (o "tempo limite" que a retomada automática reconhece) se o modelo fica calado.
  * A autônoma falha se o pi recusa um comando; a interativa só anota a recusa. Ambas falham se o pi sai sozinho.
  * Resolve com o motivo da falha, ou `undefined`.
  *
@@ -222,11 +233,15 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     let restante = r.limiteMin * 60_000;
     let desde = 0;
     let relogio: NodeJS.Timeout | undefined;
+    /** As ferramentas em execução, por `toolCallId`: enquanto alguma roda, o silêncio do pi não é do modelo. */
+    const ferramentasRodando = new Set<string>();
+    let vigiaDoModelo: NodeJS.Timeout | undefined;
     let feito = false;
     const fim = (falha?: string) => {
       if (feito) return;
       feito = true;
       clearTimeout(relogio);
+      clearTimeout(vigiaDoModelo);
       for (const t of expiracoes.values()) clearTimeout(t);
       vivas.delete(id);
       void pi.parar().then(() => {
@@ -260,7 +275,22 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
         }, restante);
       }
     };
+    /**
+     * Rearma a cada evento e a cada mudança de estado: só conta enquanto se espera o modelo. O provedor que não responde
+     * não gera erro nem evento; sem o vigia, a execução esperaria o limite inteiro (horas) para falhar.
+     */
+    const rearmarVigiaDoModelo = () => {
+      clearTimeout(vigiaDoModelo);
+      if (feito || !estaViva.ocupado || ferramentasRodando.size > 0 || pendentes.size > 0) return;
+      const silencioMin = r.silencioMaximoDoModeloMin ?? SILENCIO_MAXIMO_DO_MODELO_MIN;
+      vigiaDoModelo = setTimeout(() => {
+        const falha = `o modelo ficou ${String(silencioMin)} min sem responder (tempo limite sem eventos do pi)`;
+        anotar(r.log, falha);
+        fim(falha);
+      }, silencioMin * 60_000);
+    };
     const mudou = () => {
+      rearmarVigiaDoModelo();
       acertarRelogio();
       avisar(sessaoPi, r.log);
     };
@@ -379,10 +409,12 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
           break;
         }
         case "tool_execution_start":
+          ferramentasRodando.add(String(evento.toolCallId));
           if (evento.toolName === "perguntar")
             perguntas.set(String(evento.toolCallId), evento.args as Record<string, unknown>);
           break;
         case "tool_execution_end":
+          ferramentasRodando.delete(String(evento.toolCallId));
           perguntas.delete(String(evento.toolCallId));
           // O CLI `fabriquinha` roda noutro processo e não alcança os ouvintes: o fim da ferramenta avisa o chat.
           avisar(sessaoPi, r.log);
@@ -398,6 +430,7 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
           aoAssentar();
           break;
       }
+      rearmarVigiaDoModelo();
     });
     r.aoLancar(pi.pgid);
     void pi.saiu.then((codigo) => {
