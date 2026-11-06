@@ -52,11 +52,27 @@ Nenhuma nas saídas fotografadas: os oito prompts montados, o `schema`, o sucess
 
 ## Testes apagados ou substituídos (CA-7)
 
-Base de comparação: `main` (`git diff main...HEAD`). Nenhum e2e foi apagado ou afrouxado: os quatro `e2e/*.spec.ts` alterados (`demandas`, `heatmap`, `inicio`, `navegacao`) só têm comentários reescritos (`issue` → `demanda`); `e2e/metricas.spec.ts` não mudou.
+Base de comparação desta rodada: `7ce3c2f` (merge do PR #115, que integrou a rodada I-263.R1), com `git diff 7ce3c2f..HEAD` (136 arquivos). **Não** use `git diff main...HEAD`: o ancestral comum com `main` é `a7505a2`, anterior ao PR #115, e a comparação (152 arquivos) traz junto o que a rodada I-263.R1 já integrou.
 
-### Apagados porque testavam só a cadeia de migrações 1 a 36
+Nenhum e2e foi apagado ou afrouxado: os quatro `e2e/*.spec.ts` alterados (`demandas`, `heatmap`, `inicio`, `navegacao`) só têm comentários reescritos (`issue` → `demanda`); `e2e/metricas.spec.ts` não mudou. Em `estresse/grupos/`, `etapas.ts` e `http_leitura.ts` mudaram uma linha cada (a rota `/api/metricas/demandas` e um comentário).
 
-As migrações 1 a 36 viraram a linha de base `ESQUEMA_V36`. Cada teste abaixo aplicava uma migração a um banco da versão anterior, e a cadeia não existe mais. Cobertura que fica: `src/persistencia/migracao_linha_de_base.test.ts` (CA-4: `sqlite_master` idêntico ao da cadeia, guardado em `linha_de_base_v36.snapshot.json`; CA-5: v36 sobe sem migração, v35 é recusado com orientação, sem alteração).
+Nenhum arquivo de teste foi apagado na rodada I-263.R2; só três casos saíram de arquivos que continuam (ver "Apagados nesta rodada"). As tabelas dividem o que é de cada rodada:
+
+- **Apagados nesta rodada (I-263.R2):** só o que depende de `agregado.ts`, de `Etapa`/`Fase` ou do `TipoId` com cinco valores.
+- **Já integrados pela rodada I-263.R1 (PR #115):** a cadeia de migrações 1 a 36 e os testes dela. Estão listados só para o revisor não procurá-los nesta rodada; não aparecem em `git diff 7ce3c2f..HEAD`.
+
+### Apagados nesta rodada
+
+| Teste | Motivo | Outra cobertura |
+| --- | --- | --- |
+| `primitivos.test.ts`: `Etapa e Fase têm exatamente os valores do F1` | `Etapa` e `Fase` (legados) saíram de `primitivos.ts` com `agregado.ts` | os valores de `EtapaTicket`, `FaseDemanda`, `FaseRodada` e `StatusTicket` seguem em `estados SDLC têm exatamente os valores da seção 2.1` |
+| `aula.test.ts`: título nulo (`ag({ issue: { …, titulo: null } })` espera `<h1>Aula do código da I-1</h1>`) | `AgregadoDemanda` exige título; o ramo de `gerarAula` para título nulo foi removido | o teste da aula confere o `<h1>` com o título da demanda, escapado (`Busca <rápida>`) |
+| `banco.test.ts`, em `escrever() aninhada…`: `novoId(banco, "ticket")` e a asserção de que a sequência `ticket` não existe | `TipoId` ficou só com `issue` (o renome é da 06) | o mesmo teste segue com `issue`: a interna desfeita não deixa sequência nova e a externa segue |
+| `banco.test.ts`, em `novoId()…`: a sequência independente de `ticket` (ids `[1, 1, 2]`, depois `2`) | idem; o teste virou `novoId() segue a sequência do tipo e só roda dentro da transação` (`[1, 2]`, depois `3`) | o mesmo teste, com `issue` |
+
+### Já integrados pela rodada I-263.R1 (PR #115): testes apagados porque testavam só a cadeia de migrações 1 a 36
+
+As migrações 1 a 36 viraram a linha de base `ESQUEMA_V36` no PR #115. Cada teste abaixo aplicava uma migração a um banco da versão anterior, e a cadeia não existe mais. Cobertura que fica: `src/persistencia/migracao_linha_de_base.test.ts` (CA-4: `sqlite_master` idêntico ao da cadeia, guardado em `linha_de_base_v36.snapshot.json`; CA-5: v36 sobe sem migração, v35 é recusado com orientação, sem alteração).
 
 | Teste | Casos apagados | Outra cobertura |
 | --- | --- | --- |
@@ -74,24 +90,22 @@ As migrações 1 a 36 viraram a linha de base `ESQUEMA_V36`. Cada teste abaixo a
 | `migracao_remocao_legado.test.ts` | CA-8 copia iterações, propostas e retrabalho para a demanda antes de apagar o legado; copia modelo e effort das etapas legadas; CA-9 `issue` sem demanda recusa a migração; iteração sem ticket da demanda desfaz a migração | nenhuma: o cutover já rodou no único banco real (v36); CA-5 recusa banco anterior à v36 |
 | `migracao_sessoes.test.ts` | CA-16 v24 → v25 só acrescenta; CA-3, 4, 5, 7 progresso do encerramento; CA-10, 11, 13 sessões, execuções e usos | CA-4; `sessoes.test.ts` (FK, CHECK) e `despacho_demanda.test.ts` |
 
-### Apagados porque o enum ou o código saiu
+Também do PR #115 (não são desta rodada):
 
 | Teste | Motivo | Outra cobertura |
 | --- | --- | --- |
-| `primitivos.test.ts`: `Etapa e Fase têm exatamente os valores do F1` | `Etapa` e `Fase` (legados) saíram de `primitivos.ts` com `agregado.ts` | os valores de `EtapaTicket`, `FaseDemanda`, `FaseRodada` e `StatusTicket` seguem em `estados SDLC têm exatamente os valores da seção 2.1` |
-| `banco.test.ts`: `as listas dos CHECK ... IN (...) vêm dos enums zod` | comparava `listaSql(Etapa)`, `listaSql(Fase)` e `listaSql(TipoId)` com os CHECK; `listaSql` e os enums legados saíram. Ficou `a sequência só aceita os tipos de id conhecidos`, sem a comparação com o enum | CA-4 compara o SQL literal com o da cadeia |
-| `banco.test.ts`: `novoId() tem uma sequência por tipo…` | `TipoId` ficou só com `issue` (o renome é da 06); sem o caso de `ticket`, virou `novoId() segue a sequência do tipo e só roda dentro da transação`. O `escrever() aninhada…` também perdeu o id de `ticket` | o mesmo teste, com `issue` |
-| `aula.test.ts`: título nulo (`ag({ issue: { …, titulo: null } })` espera `<h1>Aula do código da I-1</h1>`) | `AgregadoDemanda` exige título; o ramo de `gerarAula` para título nulo foi removido | o teste da aula confere o `<h1>` com o título da demanda, escapado (`Busca <rápida>`) |
+| `banco.test.ts`: `as listas dos CHECK ... IN (...) vêm dos enums zod` | comparava `listaSql(Etapa)`, `listaSql(Fase)` e `listaSql(TipoId)` com os CHECK das migrações; `listaSql` saiu com elas. Ficou `a sequência só aceita os tipos de id conhecidos`, sem a comparação com o enum | CA-4 compara o SQL literal com o da cadeia |
+| `servico.test.ts`: `…a issue sem demanda trava a subida (CA-9)` | virou `…o banco anterior à v36 é recusado sem alteração`; `bancoComIssueLegada` virou `bancoComDemanda` | CA-5 de `migracao_linha_de_base.test.ts` |
+| `banco.test.ts` (demais) | versões esperadas somam `VERSAO_LINHA_DE_BASE`; a recusa de banco mais novo usa v40 contra 38; a falha de migração espera `table projeto already exists` | o mesmo teste |
 
-### Substituídos (mesma regra, outro nome ou entrada)
+### Substituídos nesta rodada (mesma regra, outro nome ou entrada)
 
 | Teste | O que mudou |
 | --- | --- |
 | `aula.test.ts` | Ticket, evidência e agregado passam a ser `TicketDemanda`, `EvidenciaDemanda` e `AgregadoDemanda.parse(...)`, no lugar do `Agregado` legado montado à mão; `…pela issue` → `…pela demanda`. Mesmas asserções, menos a do título nulo |
 | `schemas.test.ts` | `Agregado` → `AgregadoDemanda`; `ticket` → `ticket_id`; etapas `revisao`/`encerramento` → `revisar_rodada`/`encerrar_rodada`; evidência da demanda sem ticket é `undefined`, não `0`; `TipoEvidencia` vem de `schemas.ts` |
 | `submissao.test.ts` | `TipoEvidencia` vem de `schemas.ts`; mensagem `…worktree da demanda…` |
-| `servico.test.ts` | `…a issue sem demanda trava a subida (CA-9)` virou `…o banco anterior à v36 é recusado sem alteração` (a subida só falha pela recusa de versão e o arquivo não muda); `bancoComIssueLegada` virou `bancoComDemanda`; `subida sobre o banco migrado…` confere que não há tabela `iss*` |
-| `banco.test.ts` (demais) | versões esperadas somam `VERSAO_LINHA_DE_BASE`; a recusa de banco mais novo usa v40 contra 38; a falha de migração espera `table projeto already exists` |
+| `servico.test.ts` | `subida sobre o banco migrado…` confere que não há tabela `iss*` (antes, só `issue`) |
 | `cli.test.ts`, `agente_demanda.test.ts`, `prompt_demanda.test.ts` | o grupo `issue`, removido do CLI, é montado por concatenação ou `[i]ssue` para o `grep` do CA-2 não acusar o teste; as mesmas recusas, mais `necessidade` |
 | `servidor.test.ts`, `caminhos.test.ts` | as mesmas URLs legadas com 404, montadas por concatenação (CA-2); `caminhos.test.ts` usa `/projects/:projeto/demandas/:demanda` e confere que `/projects/loja/demandas/I-3` não roteia |
 | `metricas.test.ts` | `/api/metricas/issues` → `/api/metricas/demandas`, mesmo corpo (CA-3) |
@@ -103,4 +117,13 @@ As migrações 1 a 36 viraram a linha de base `ESQUEMA_V36`. Cada teste abaixo a
 
 ### Novos nesta rodada
 
-`fitness/foto-base.test.ts` (prompts e saídas do CLI contra a base anterior) e `src/persistencia/migracao_linha_de_base.test.ts` (CA-4 e CA-5).
+`fitness/foto-base.test.ts` (prompts e saídas do CLI contra a base anterior). `src/persistencia/migracao_linha_de_base.test.ts` (CA-4 e CA-5) é do PR #115.
+
+## Não é desta rodada (I-263.R3) e ainda não foi verificado
+
+- **Exports sem importador e exports só de teste** (`DecisaoRef`, `classificarSaidaE2E`, `estadoExecucao`, `submeterPlanejamento`, `alterarLimiteParalelismo`, `skillsPendentes`, `metricas/projeto.ts` e os demais da demanda): continuam exportados, com os testes que os usam. Nenhum teste foi apagado por isso.
+- **Parâmetro `fork` de `execucao/pi.ts`:** continua (linhas 87 e 111).
+- **`fitness/sem-export-morto.test.ts`** (CA-6): não existe; `npm run fitness` não o roda.
+- **CA-8:** `npm run check`, `npm run integracao`, `npm run e2e`, SonarQube, CG-7 (cópia do banco real) e CG-9 (deploy) não foram verificados por este documento; valem os resultados que a Fabriquinha coleta.
+
+`fabriquinha/07-interfaces.md` foi restaurado à versão da base (`git diff 7ce3c2f..HEAD -- fabriquinha` é vazio); o PR não deve alegar mudança nele.
