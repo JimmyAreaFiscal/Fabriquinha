@@ -101,21 +101,21 @@ test("GET /api/metricas: 422 para mês inválido, `de` depois de `ate` ou mais d
   const [, mensagem] = (await chamar("/api/metricas?de=2024-03&ate=2026-03")) as [number, string];
   assert.match(mensagem, /no máximo 24 meses/);
   assert.equal(((await chamar("/api/metricas?de=2024-04&ate=2026-03")) as unknown[]).length, 24);
-  const [status] = (await chamar("/api/metricas/issues?ate=2026-13")) as [number, string];
+  const [status] = (await chamar("/api/metricas/demandas?ate=2026-13")) as [number, string];
   assert.equal(status, 422);
 });
 
-test("GET /api/metricas/issues: as demandas com execução no período", async () => {
-  assert.deepEqual(await chamar("/api/metricas/issues"), []);
+test("GET /api/metricas/demandas: as demandas com execução no período", async () => {
+  assert.deepEqual(await chamar("/api/metricas/demandas"), []);
   demandaComExecucao("I-1", "loja");
   demandaComExecucao("I-2", "site");
-  const todas = (await chamar("/api/metricas/issues")) as MetricasDemandaPeriodo[];
+  const todas = (await chamar("/api/metricas/demandas")) as MetricasDemandaPeriodo[];
   assert.deepEqual(
     todas.map((d) => d.demanda),
     ["I-1", "I-2"],
   );
   const site = (await chamar(
-    `/api/metricas/issues?projeto=site&de=${mes(0)}&ate=${mes(0)}`,
+    `/api/metricas/demandas?projeto=site&de=${mes(0)}&ate=${mes(0)}`,
   )) as MetricasDemandaPeriodo[];
   assert.deepEqual(
     site.map((d) => [d.demanda, d.custo.conhecido]),

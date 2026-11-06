@@ -1,5 +1,5 @@
 // Entrada pelo link de `web.url` e navegação entre as páginas (F7 §4.1, §4.4, §7): a página inicial é o Início, em
-// /home, e o menu não tem Demandas, issue nem Auditoria.
+// /home, e o menu não tem Demandas nem Auditoria.
 import type { TestInfo } from "@playwright/test";
 import { abrir } from "../src/persistencia/banco.ts";
 import { expect, fotografar, test } from "./apoio.ts";
@@ -107,7 +107,7 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
   await aba.goto(`${fabriquinha.base}/`);
   await expect(aba).toHaveURL(`${fabriquinha.base}/home`);
 
-  // As páginas do fluxo legado saíram: a issue e a Auditoria não existem mais.
+  // As páginas do fluxo legado saíram: a página da demanda antiga e a Auditoria não existem mais.
   for (const legado of ["/nada/aqui", "/projects/loja/issues/I-1", "/audits/abc"]) {
     await aba.goto(`${fabriquinha.base}${legado}`);
     await expect(aba.getByRole("heading", { level: 1 })).toHaveText("Página não encontrada");

@@ -73,7 +73,7 @@ const etiquetaDoEstado = (estado: EstadoDaAvaliacao): string =>
 /** Barra de estado: **Avaliação** e o projeto, o período, o estado, o modelo e o link da lista. */
 export function barraDaAvaliacao(d: DadosDaAvaliacao, modelo: string): string {
   return (
-    `<div class="estado-sessao"><span class="issue"><span class="id">Avaliação</span> ${escapar(d.projeto)}</span>` +
+    `<div class="estado-sessao"><span class="demanda"><span class="id">Avaliação</span> ${escapar(d.projeto)}</span>` +
     `<span class="sep">│</span><span class="muted">${dataBr(d.de)} a ${dataBr(d.ate)}</span>` +
     `${etiquetaDoEstado(d.estado)}${rotuloDoModelo(modelo)}` +
     `<div class="direita"><a class="link" href="/evaluations">todas as avaliações</a></div></div>`

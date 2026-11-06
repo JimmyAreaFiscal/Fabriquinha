@@ -265,7 +265,7 @@ function rodadas(d: DemandaDoProjeto): string {
   return d.rodadas
     .map(
       (r) => `<div class="pista-rodada">
-      <div class="pista-issue"><span class="sub"><span class="id">${escapar(r.ref)}</span><span class="rodada-titulo" title="${escapar(r.titulo)}">${escapar(r.titulo)}</span>${r.pr ? linkDoPr(r.pr) : ""}</span></div>
+      <div class="pista-demanda"><span class="sub"><span class="id">${escapar(r.ref)}</span><span class="rodada-titulo" title="${escapar(r.titulo)}">${escapar(r.titulo)}</span>${r.pr ? linkDoPr(r.pr) : ""}</span></div>
       ${linhaDoTempo(situacaoNaRodada(r.fase, passouPelosAjustes(d, r.ref)), estadoDaRodada(d, r), `Fases da rodada ${escapar(r.ref)}`)}
       <div></div>
     </div>`,
@@ -316,7 +316,7 @@ function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: Date): string 
   const classes = ["pista-item", estado, !aberta && "fechada", encerrada && "apagada"];
   return `<div class="${classes.filter(Boolean).join(" ")}" data-demanda="${escapar(d.id)}">
     <div class="pista-linha" data-gaveta>
-      <div class="pista-issue"><button type="button" class="caret" aria-expanded="${String(aberta)}" aria-label="Tickets de ${escapar(d.id)}">▼</button><div class="texto">
+      <div class="pista-demanda"><button type="button" class="caret" aria-expanded="${String(aberta)}" aria-label="Tickets de ${escapar(d.id)}">▼</button><div class="texto">
         <a class="titulo" href="${caminhoDaDemanda(d.id)}">${escapar(d.titulo)}</a>
         <span class="sub">${marcas(d)}</span>
       </div></div>

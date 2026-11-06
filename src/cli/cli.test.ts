@@ -76,7 +76,7 @@ function desconhecido(s: Saida, args: readonly string[]): void {
   assert.match(s.err, /^Uso:$/m);
 }
 
-/** Os comandos da tabela legada (issue, ticket, necessidade, evidência e revisão da issue), que saíram do CLI. */
+/** Os comandos da tabela legada (issue, ticket, necessidade, evidência e revisão), que saíram do CLI. */
 const LEGADOS: readonly string[][] = [
   ["issue", "ver", "I-1"],
   ["issue", "editar", "I-1", "--titulo", "Busca lenta"],

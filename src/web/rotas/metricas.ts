@@ -22,7 +22,7 @@ export const ROTAS_DAS_METRICAS: Rota[] = [
   },
   {
     metodo: "GET",
-    caminho: "/api/metricas/issues", // o caminho antigo: a rota é a mesma, as linhas são demandas
+    caminho: "/api/metricas/demandas",
     tratar: ({ banco, query }) => metricasPorDemanda(banco, filtro(query)),
   },
 ];

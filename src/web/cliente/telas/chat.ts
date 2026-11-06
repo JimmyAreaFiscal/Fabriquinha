@@ -94,7 +94,7 @@ export function barraDeEstado(c: Cabecalho, modelo: string): string {
   const { sessao, demanda, rodada, ticket, etapa: e } = c;
   return (
     `<div class="estado-sessao">` +
-    `<a class="issue" href="${caminhoDaPaginaDaDemanda(demanda)}"><span class="id">${escapar(demanda)}</span></a>` +
+    `<a class="demanda" href="${caminhoDaPaginaDaDemanda(demanda)}"><span class="id">${escapar(demanda)}</span></a>` +
     (rodada === undefined ? "" : `<span class="sep">│</span><span class="id">${escapar(rodada)}</span>`) +
     `<span class="sep">│</span><span class="id">${escapar(ticket)}</span>` +
     `<span class="muted">${ETAPA_DO_TICKET[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +

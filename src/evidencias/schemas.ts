@@ -414,7 +414,7 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
     }),
     arquivos: LOGS,
   },
-  // Produzida pela Fabriquinha (F3 §4.3, §6): aprovada = nenhuma issue aberta nos arquivos alterados.
+  // Produzida pela Fabriquinha (F3 §4.3, §6): aprovada = nenhuma issue do Sonar aberta nos arquivos alterados.
   relatorio_sonar: {
     dados: z.object({
       projectKey: z.string(),
