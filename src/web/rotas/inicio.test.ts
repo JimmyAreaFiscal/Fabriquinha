@@ -278,6 +278,8 @@ test("esperaDaSessao: o diálogo traz a pergunta do processo vivo; a falha e a s
   assert.equal(esperaDaSessao(sessao, () => undefined)[0]?.pergunta, undefined);
   assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "falha" }, comPergunta), []);
   assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "conversa", etapa: "sessao_em_aberto" }, comPergunta), []);
+  // A pergunta do agente na sessão de ajustes só aparece aqui: a espera da demanda não a mostra.
+  assert.equal(esperaDaSessao({ ...sessao, etapa: "sessao_em_aberto" }, comPergunta)[0]?.pergunta, "Qual ordem?");
 });
 
 test("GET /api/inicio responde com o mês corrente de todos os projetos", async () => {

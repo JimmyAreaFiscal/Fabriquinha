@@ -200,17 +200,6 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     ),
     acao(
       "POST",
-      "/api/demandas/rodadas/:ref/ajustes/mensagens",
-      180,
-      () => preparo.rodadaEmAjustes(),
-      (ref) => ({
-        url: `${rodada(ref)}/ajustes/mensagens`,
-        corpo: { texto: "ajuste" },
-        status: 204,
-      }),
-    ),
-    acao(
-      "POST",
       "/api/demandas/rodadas/:ref/ajustes/concluir",
       1600,
       () => preparo.rodadaEmAjustes(true),

@@ -8,14 +8,23 @@ import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { causaDeInfraestrutura } from "./retomada_infraestrutura.ts";
-import { abortar, atividadeDo, encerrar, type Processo, responderDialogo, rodarPi, situacao } from "./gerente.ts";
+import {
+  abortar,
+  atividadeDo,
+  encerrar,
+  mandar,
+  type Processo,
+  responderDialogo,
+  rodarPi,
+  situacao,
+} from "./gerente.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerente-"));
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-/** pi falso: responde ao prompt conforme $FALSO_PI (recusa, dialogo, pergunta ou trabalha sem fim) e ao `abort`. */
+/** pi falso: responde ao prompt conforme $FALSO_PI (recusa, ocupado, dialogo, pergunta ou trabalha sem fim) e ao `abort`. */
 const pi = join(base, "pi.mjs");
 writeFileSync(
   pi,
@@ -24,7 +33,11 @@ import { appendFileSync } from "node:fs";
 const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const variante = process.env.FALSO_PI;
 const assistente = (stopReason) => emitir({ type: "message_end", message: { role: "assistant", content: [], stopReason } });
+let prompts = 0;
 function aoPrompt() {
+  // Como o pi que já trabalha: o segundo prompt é recusado e o primeiro segue rodando.
+  if (variante === "ocupado" && ++prompts > 1)
+    return emitir({ type: "response", command: "prompt", success: false, error: "Agent is already processing." });
   if (variante === "recusa") return emitir({ type: "response", command: "prompt", success: false, error: "modelo inexistente" });
   emitir({ type: "response", command: "prompt", success: true });
   emitir({ type: "agent_start" });
@@ -125,6 +138,19 @@ test("autônoma: o pi que recusa o prompt falha na hora, sem esperar o tempo lim
 test("interativa: a recusa do prompt só fica no log, a sessão fica ociosa e termina bem quando encerrada", async () => {
   const { sessao, fim } = rodar("recusa", "interativo");
   await ate(() => situacao(sessao)?.ocupado === false, "a sessão ociosa");
+  encerrar(sessao);
+  assert.equal(await fim, undefined);
+});
+
+test("interativa: o prompt recusado porque o agente já trabalha não deixa a sessão ociosa", async () => {
+  const { sessao, fim, dir } = rodar("ocupado", "interativo");
+  mandar(sessao, { type: "prompt", message: "mais uma" });
+  await ate(
+    () =>
+      existsSync(join(dir, "log")) && readFileSync(join(dir, "log"), "utf8").includes("Agent is already processing"),
+    "a recusa no log",
+  );
+  assert.equal(situacao(sessao)?.ocupado, true);
   encerrar(sessao);
   assert.equal(await fim, undefined);
 });

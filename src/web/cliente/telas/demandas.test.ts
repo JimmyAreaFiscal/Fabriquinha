@@ -148,7 +148,7 @@ test("o trilho marca as fases feitas, a atual e os gates; concluída completa o 
   assert.doesNotMatch(com("cancelada"), /dm-trilho/);
 });
 
-test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
+test("só o ticket com sessão leva ao chat dela, inclusive a sessão de ajustes (CA-16, CA-17)", () => {
   const html = pagina(
     dadosDaPagina({
       tickets: [
@@ -165,7 +165,7 @@ test("só o ticket com sessão leva ao chat dela (CA-16, CA-17)", () => {
       tickets: [{ ref: "I-206.T3", etapa: "sessao_em_aberto", status: "em_execucao", elegivel: false, sessao: "s/3" }],
     }),
   );
-  assert.doesNotMatch(aberta, /chat →/);
+  assert.match(aberta, /href="\/sessions\/s%2F3">chat →/);
 });
 
 test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereço público, com decisão, motivo e nota (CA-8, CA-9, CA-11)", () => {
@@ -733,10 +733,25 @@ test("o gate do planejamento traz o último plano, e não as evidências de outr
   assert.doesNotMatch(gate, /antiga|Custos/);
 });
 
-test("a rodada em sessão de ajustes liga à seção da conversa, no mesmo documento (CA-10)", () => {
-  const html = pagina({ ...dadosDaPagina(), rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "sessao" }] });
-  assert.match(html, /<a class="link" href="#ajustes-I-206\.R1">Sessão de ajustes ↓<\/a>/);
-  assert.match(html, /<div id="ajustes-I-206\.R1" data-ajustes="I-206\.R1"><\/div>/);
+test("a sessão de ajustes leva ao chat da sessão do ticket e conclui pela página (CA-10)", () => {
+  const rodadas = [{ ref: "I-206.R1", titulo: "r", fase: "sessao" as const }];
+  const ticket = {
+    ref: "I-206.T3",
+    etapa: "sessao_em_aberto" as const,
+    status: "aberto" as const,
+    elegivel: false,
+    rodada: "I-206.R1",
+  };
+  const html = pagina({ ...dadosDaPagina({ tickets: [{ ...ticket, sessao: "s/3" }] }), rodadas });
+  const secao = html.slice(html.indexOf('<div id="ajustes-I-206.R1">'));
+  assert.match(secao, /Sessão de ajustes de I-206\.R1/);
+  assert.match(secao, /<a class="btn btn-grande btn-primario" href="\/sessions\/s%2F3">Abrir a sessão →<\/a>/);
+  assert.match(secao, /data-acao="concluir" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/ajustes\/concluir"/);
+  assert.doesNotMatch(secao, /<textarea/);
+
+  const semSessao = pagina({ ...dadosDaPagina({ tickets: [ticket] }), rodadas });
+  assert.match(semSessao, /A conversa começa quando o pi da sessão sobe/);
+  assert.doesNotMatch(semSessao, /Abrir a sessão/);
 });
 
 test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {

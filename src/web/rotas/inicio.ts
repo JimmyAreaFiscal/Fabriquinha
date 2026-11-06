@@ -232,10 +232,10 @@ type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
 
 /**
  * A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa. A falha, o gate do
- * planejamento e a conversa da sessão de ajustes já vêm da demanda, sem repetir.
+ * planejamento e a conversa da sessão de ajustes já vêm da demanda, sem repetir; o diálogo dela, não.
  */
 export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): EsperaDoAuditor[] {
-  if ((s.motivo !== "dialogo" && s.motivo !== "conversa") || s.etapa === "sessao_em_aberto") return [];
+  if (s.motivo !== "dialogo" && (s.motivo !== "conversa" || s.etapa === "sessao_em_aberto")) return [];
   const pergunta = s.motivo === "dialogo" ? situacaoDa(s.sessao)?.dialogos[0]?.title : undefined;
   return [
     {

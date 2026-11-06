@@ -213,7 +213,6 @@ export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
     acao("/api/demandas", "/api/demandas", 36),
     acao("/api/demandas/:id", `/api/demandas/${DEMANDA}`, 37),
     acao("/api/demandas/:id/anexos/:sha256", `/api/demandas/${DEMANDA}/anexos/${d.sha256}?tipo=desenho_solucao`, 20),
-    acao("/api/demandas/rodadas/:ref/ajustes", `/api/demandas/rodadas/${DEMANDA}.R1/ajustes`, 51),
     acao("/api/sessoes/:sessao", `/api/sessoes/${SESSAO}`, 49),
     acao("/api/sessoes/:sessao/eventos", `/api/sessoes/${SESSAO}/eventos`, 54, true),
     acao("/api/sessoes/:sessao/historico.md", `/api/sessoes/${SESSAO}/historico.md`, 51),
