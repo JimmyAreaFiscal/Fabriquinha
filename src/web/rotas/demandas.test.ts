@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { guardarBytes } from "../../persistencia/arquivos.ts";
 import { comDemanda } from "../../persistencia/demandas.ts";
 import { gravarAnexos } from "../../persistencia/evidencia_demanda.ts";
-import { cenarioDemandas } from "./demandas_cenario.test.ts";
+import { cenarioDemandas } from "./demandas_cenario.ts";
 
 interface Anexo {
   nome: string;
