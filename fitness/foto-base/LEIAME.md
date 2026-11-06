@@ -96,7 +96,7 @@ As migrações 1 a 36 viraram a linha de base `ESQUEMA_V36`. Cada teste abaixo a
 | `servidor.test.ts`, `caminhos.test.ts` | as mesmas URLs legadas com 404, montadas por concatenação (CA-2); `caminhos.test.ts` usa `/projects/:projeto/demandas/:demanda` e confere que `/projects/loja/demandas/I-3` não roteia |
 | `metricas.test.ts` | `/api/metricas/issues` → `/api/metricas/demandas`, mesmo corpo (CA-3) |
 | `pr.test.ts` | URL da saída inesperada do `gh` com `.../discussions/9`; é dado de entrada |
-| `configuracao.test.ts` | o `doesNotMatch` da tela deixou de procurar `issue`, que não existe mais no produto |
+| `configuracao.test.ts` | o `doesNotMatch` da tela continua procurando o termo legado, escrito `[i]ssue` para o `grep` do CA-2 não acusar o teste |
 | `chat.test.ts` | classe `issue` → `demanda` no link da demanda |
 | `erros.test.ts`, `web/erros.test.ts` | mensagem `a issue I-9…` → `a demanda I-9…` |
 | `dominio/*.test.ts`, `execucao/*.test.ts`, `metricas/retrabalho.test.ts`, `integracao/*.test.ts` | só o `import` (de `agregado.ts` para `ator.ts`) e comentários; nenhuma asserção mudou |
