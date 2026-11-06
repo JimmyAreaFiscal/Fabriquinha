@@ -35,11 +35,6 @@ const rodada = (fitness: unknown, comprovacao: unknown) =>
 const integral = (e: unknown, s: unknown) =>
   ag("revisar_demanda", { comprovacao_criterios: comprov(true), testes_estresse: e, analise_seguranca: s });
 const ok = { linhas: [linha("a", 0)] };
-const aprova = (a: AgregadoDemanda) => {
-  assert.doesNotThrow(() => {
-    conferirAprovacao(a, 7);
-  });
-};
 const recusa = (a: AgregadoDemanda, ...trechos: string[]) => {
   assert.throws(
     () => {
@@ -50,7 +45,9 @@ const recusa = (a: AgregadoDemanda, ...trechos: string[]) => {
 };
 
 test("rodada aprovada com tudo em ordem (CA-7)", () => {
-  aprova(rodada(ok, comprov(true)));
+  assert.doesNotThrow(() => {
+    conferirAprovacao(rodada(ok, comprov(true)), 7);
+  });
 });
 
 test("recusa citando a fitness que falhou (CA-5)", () => {
@@ -77,8 +74,12 @@ test("recusa não se aplica sem justificativa (CA-15)", () => {
 });
 
 test("integral aprovada, inclusive com não se aplica justificado (CA-16)", () => {
-  aprova(integral(estresse("passou"), seguranca("media")));
-  aprova(integral({ aplicavel: false, justificativa: "sem carga", cenarios: [] }, seguranca("baixa")));
+  assert.doesNotThrow(() => {
+    conferirAprovacao(integral(estresse("passou"), seguranca("media")), 7);
+  });
+  assert.doesNotThrow(() => {
+    conferirAprovacao(integral({ aplicavel: false, justificativa: "sem carga", cenarios: [] }, seguranca("baixa")), 7);
+  });
 });
 
 test("tipo fora do catálogo da etapa é ignorado", () => {
@@ -91,8 +92,12 @@ test("tipo fora do catálogo da etapa é ignorado", () => {
     testes_estresse: estresse("quebrou"),
     analise_seguranca: { aplicavel: false, justificativa: "", cenarios: [], ameacas: [], achados: [] },
   });
-  aprova(base);
-  aprova(extra);
+  assert.doesNotThrow(() => {
+    conferirAprovacao(base, 7);
+  });
+  assert.doesNotThrow(() => {
+    conferirAprovacao(extra, 7);
+  });
   recusa(
     ag("revisar_rodada", { matriz_fitness: ok, testes_estresse: estresse("quebrou") }),
     "comprovacao_criterios ausente",
