@@ -56,9 +56,9 @@ async function chamar(endereco: string): Promise<unknown> {
 }
 
 /** Uma demanda do projeto, registrada agora, com um ticket, uma sessão e uma execução de US$ 2 que acabou de começar. */
-function demandaComExecucao(id: string, projeto: string): void {
+function demandaComExecucao(id: string, projeto: string, tipo = "problema"): void {
   const agoraIso = new Date().toISOString();
-  banco.exec(`INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título', 'problema', 'd', 'execucao', '${agoraIso}', 'f', 's', 1, 'b-${id}');
+  banco.exec(`INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título', '${tipo}', 'd', 'execucao', '${agoraIso}', 'f', 's', 1, 'b-${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'planejar', 'concluido', '${agoraIso}');
     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${agoraIso}', '${agoraIso}', 0);
@@ -121,4 +121,37 @@ test("GET /api/metricas/demandas: as demandas com execução no período", async
     site.map((d) => [d.demanda, d.custo.conhecido]),
     [["I-2", 2]],
   );
+});
+
+test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos", async () => {
+  demandaComExecucao("I-1", "loja", "problema");
+  demandaComExecucao("I-2", "site", "funcionalidade");
+  const corpo = await chamar("/api/metricas/demandas");
+  const execucaoDeUmaDemanda = {
+    execucoes: 1,
+    falhas: 0,
+    duracaoMs: 0,
+    tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0 },
+    custo: { conhecido: 2, incompleto: false },
+  };
+  assert.deepEqual(corpo, [
+    {
+      demanda: "I-1",
+      projeto: "loja",
+      titulo: "Título",
+      fase: "execucao",
+      reprovacoes: 0,
+      nota: null,
+      ...execucaoDeUmaDemanda,
+    },
+    {
+      demanda: "I-2",
+      projeto: "site",
+      titulo: "Título",
+      fase: "execucao",
+      reprovacoes: 0,
+      nota: null,
+      ...execucaoDeUmaDemanda,
+    },
+  ]);
 });

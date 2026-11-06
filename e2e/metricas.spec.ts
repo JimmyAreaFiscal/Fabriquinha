@@ -10,14 +10,14 @@ const [M2, M1, M0] = ["2026-08", "2026-09", "2026-10"];
 /** O dia 1º do mês ao meio-dia, no fuso local (o do serviço), como o banco grava: em UTC. */
 const em = (mes: string) => new Date(`${mes}-01T12:00:00`).toISOString();
 
-/** loja: I-1 com execuções de US$ 10, 20 e 60 nos três últimos meses; site: I-2 com US$ 5 no mês corrente. */
+/** loja: I-1 (problema) com execuções de US$ 10, 20 e 60 nos três últimos meses; site: I-2 (funcionalidade) com US$ 5 no mês corrente. */
 function semear(raiz: string): void {
   const banco = abrir(raiz);
   const projeto = (nome: string) =>
     `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
-  const demanda = (id: string, nome: string, titulo: string, mes: string) =>
-    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', 'problema', 'd', 'execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
+  const demanda = (id: string, nome: string, titulo: string, tipo: string, mes: string) =>
+    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
   const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
     `INSERT INTO sessao VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
@@ -26,8 +26,8 @@ function semear(raiz: string): void {
   banco.exec(`
     ${projeto("loja")}
     ${projeto("site")}
-    ${demanda("I-1", "loja", "Busca por SKU", M2)}
-    ${demanda("I-2", "site", "Página de contato", M0)}
+    ${demanda("I-1", "loja", "Busca por SKU", "problema", M2)}
+    ${demanda("I-2", "site", "Página de contato", "funcionalidade", M0)}
     ${execucao(1, "I-1", M2, 10)}
     ${execucao(2, "I-1", M1, 20)}
     ${execucao(3, "I-1", M0, 60)}
@@ -85,6 +85,12 @@ test("mudar o mês em foco: a média passa a usar só os meses anteriores a ele"
   // Por demanda, de todos os projetos, com o total; o projeto filtra tudo.
   const demandas = pagina.locator(".tabela-demandas");
   await expect(demandas.locator("tbody tr")).toHaveCount(2);
+  await expect(demandas.locator('tbody tr:has-text("I-1")')).toContainText(
+    /Busca por SKU\s+loja\s+Execução\s+US\$ 90,00/,
+  );
+  await expect(demandas.locator('tbody tr:has-text("I-2")')).toContainText(
+    /Página de contato\s+site\s+Execução\s+US\$ 5,00/,
+  );
   await expect(demandas.locator("tfoot")).toContainText("2 demandas");
   await expect(demandas.locator("tfoot")).toContainText("US$ 95,00");
   // O foco continua no primeiro mês, que o período ainda contém (metricas-foco.spec.ts).
