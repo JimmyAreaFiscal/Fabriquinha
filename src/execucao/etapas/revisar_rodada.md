@@ -10,7 +10,9 @@
 4. Comprove cada critério da rodada com o que você viu no código e nos testes.
 5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir {ticket} aprovar` se a rodada cumpre o que foi pedido, ou com `fabriquinha revisao decidir {ticket} reprovar --motivo <texto> --correcoes <json|->` se não cumpre; `--correcoes` leva as correções que a rodada exige, em JSON, uma por ticket corretivo, como `[{"titulo": "...", "descricao": "...", "caminhos": ["src/a.ts"]}]`.
 
-Se o ambiente impedir uma verificação (serviço fora do ar, contêiner, credencial ausente), não reprove por isso: o ticket corretivo não conserta o ambiente e a rodada volta à revisão em laço.
+**Fica fora da revisão:** o quality gate do SonarQube (a Fabriquinha o confere nos tickets e o Auditor, no gate do PR), o PR (nasce no encerramento da rodada, depois da revisão), o deploy e a cópia do banco real (do Auditor e do operador). Nada disso é motivo de pergunta nem de reprovação. Critério que só se comprova por eles vai na evidência como "verificado fora da revisão: <por quem>", e você decide pelo resto.
+
+Se o ambiente impedir outra verificação (serviço da rodada fora do ar, contêiner, dúvida de escopo), não reprove por isso: o ticket corretivo não conserta o ambiente e a rodada volta à revisão em laço.
 Pergunte ao Auditor com a ferramenta `perguntar`, dizendo o que falta e o que você já tentou, e siga com a resposta dele.
 
 Para esperar um processo (teste ao vivo, container, fila), espere num único comando até a condição ou um tempo limite, com a saída filtrada; não relance a espera turno após turno.

@@ -86,8 +86,25 @@ test("a falha de outro ticket ou do ambiente não trava: o implementar corrige e
     montar("implementar"),
     /Se a falha vier de outro ticket ou do ambiente .* corrija a causa mesmo fora dos seus caminhos/,
   );
-  assert.match(montar("revisar_rodada"), /Se o ambiente impedir uma verificação .* não reprove por isso/);
+  assert.match(
+    montar("revisar_rodada"),
+    /Se o ambiente impedir outra verificação \(serviço da rodada fora do ar, contêiner, dúvida de escopo\), não reprove por isso/,
+  );
   assert.match(montar("revisar_rodada"), /Pergunte ao Auditor com a ferramenta `perguntar`/);
+  for (const etapa of ["revisar_rodada", "revisar_demanda"]) {
+    const prompt = montar(etapa);
+    assert.match(
+      prompt,
+      /\*\*Fica fora da revisão:\*\* o quality gate do SonarQube \(a Fabriquinha o confere nos tickets e o Auditor, no gate do PR\), o PR \(/,
+    );
+    assert.match(
+      prompt,
+      /o deploy e a cópia do banco real \(do Auditor e do operador\)\. Nada disso é motivo de pergunta nem de reprovação\./,
+    );
+    assert.match(prompt, /"verificado fora da revisão: <por quem>", e você decide pelo resto\./);
+  }
+  assert.match(montar("revisar_rodada"), /o PR \(nasce no encerramento da rodada, depois da revisão\)/);
+  assert.match(montar("revisar_demanda"), /o PR \(o PR final ainda não existe nesta revisão\)/);
 });
 
 test("planejar é interativa e permite perguntar ao Auditor (CA-11)", () => {
