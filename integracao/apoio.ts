@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
-import { AUDITOR } from "../src/dominio/agregado.ts";
+import { AUDITOR } from "../src/dominio/ator.ts";
 import { type AutorDemanda } from "../src/dominio/evidencia_demanda.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/execucao/despacho_demanda.ts";
 import * as gestao from "../src/execucao/gestao_demandas.ts";

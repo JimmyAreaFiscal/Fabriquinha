@@ -6,7 +6,7 @@ import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { AUDITOR } from "../src/dominio/agregado.ts";
+import { AUDITOR } from "../src/dominio/ator.ts";
 import { predecessorasPendentes } from "../src/dominio/dependencia_demanda.ts";
 import {
   abrir as abrirAvaliacao,

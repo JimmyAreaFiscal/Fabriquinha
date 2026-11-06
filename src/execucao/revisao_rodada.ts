@@ -1,7 +1,7 @@
 // Revisão de rodada (comparacao-sdlc-implementacao.md §§4, 6): as evidências que cabem à Fabriquinha antes do pi.
 import { matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../dominio/agregado.ts";
+import type { Ator } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { encontrado, ErroDeRegra } from "../dominio/erros.ts";

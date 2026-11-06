@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { Ator } from "../src/dominio/agregado.ts";
+import type { Ator } from "../src/dominio/ator.ts";
 import { interromperExecucaoDemanda } from "../src/execucao/execucao_demanda.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/execucao/despacho_demanda.ts";
 import {

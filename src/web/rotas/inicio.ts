@@ -2,8 +2,8 @@
 // aguarda o Auditor, as sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e
 // arquivadas ficam fora; a navegação conta o que aguarda pela mesma rota.
 import type { DatabaseSync } from "node:sqlite";
-import type { ModoExecucao } from "../../dominio/agregado.ts";
-import { FABRIQUINHA } from "../../dominio/agregado.ts";
+import { FABRIQUINHA } from "../../dominio/ator.ts";
+import type { ModoExecucao } from "../../dominio/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../dominio/agregado_demanda.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";

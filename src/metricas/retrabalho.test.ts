@@ -293,7 +293,7 @@ test("commit humano na base reescreve 2 linhas de A: retrabalho(commit, null, au
   const nove = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"];
   c.commitar({ "a.txt": linhas(...nove) }, 1);
   const humano = c.commitar({ "a.txt": linhas("H1", "H2", ...nove.slice(2), "mais") }, undefined, "Maria");
-  // Um ticket de outra issue reescreve as outras duas, numa branch mergeada com merge commit: nem o commit de
+  // Um ticket de outra demanda reescreve as outras duas, numa branch mergeada com merge commit: nem o commit de
   // ticket (já contado em 4.2) nem o merge (cujo diff contra o primeiro pai mostra as duas linhas) geram linha.
   git(c.repo, "checkout", "-q", "-b", "outra", "HEAD~1");
   c.commitar({ "a.txt": linhas("a1", "a2", "a3", "a4", "a5", "T6", "a7", "T8", "a9") }, 2);

@@ -2,9 +2,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { z, ZodError } from "zod";
-import { type Agregado, TipoEvidencia } from "../dominio/agregado.ts";
+import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { type SchemaEvidencia, schemaDe, schemaDeEtapa, simbolosDe, type TipoSchemaEtapa } from "./schemas.ts";
+import {
+  type SchemaEvidencia,
+  schemaDe,
+  schemaDeEtapa,
+  simbolosDe,
+  TipoEvidencia,
+  type TipoSchemaEtapa,
+} from "./schemas.ts";
 
 /** O que `fabriquinha evidencia schema <tipo>` publica: o JSON Schema de `dados` e as regras de arquivo. */
 const publicado = ({ dados, arquivos }: SchemaEvidencia) => ({
@@ -320,8 +327,8 @@ test("comprovacao_criterios: cada critério atendido ou não, como foi verificad
 test("comprovacao_criterios, regras cruzadas: os critérios de aceite, e cada anexo citado presente", () => {
   const schema = schemaDe("comprovacao_criterios");
   const ag = {
-    evidencias: [{ ticket: 1, tipo: "criterios_aceite", dados: { criterios: [{ id: "CA-1" }] } }],
-  } as unknown as Agregado;
+    evidencias: [{ ticket_id: 1, tipo: "criterios_aceite", dados: { criterios: [{ id: "CA-1" }] } }],
+  } as unknown as AgregadoDemanda;
   const cruzar = (criterios: object[], anexos: string[]) => () =>
     schema.cruzar?.(schema.dados.parse({ criterios }), { ag, ticket: 3, anexos });
   const criterio = { id: "CA-1", atendido: true, comoVerificado: "busquei", arquivos: ["busca.webm"] };
@@ -383,19 +390,19 @@ test("mensagem_pr: só as partes do PR que exigem julgamento, com os limites do 
 });
 
 /**
- * Uma demanda com o relatório de impactos dela (impacto `impacto`; a evidência da demanda chega sem ticket, como 0) e a
+ * Uma demanda com o relatório de impactos dela (impacto `impacto`; a evidência da demanda chega sem ticket) e a
  * revisão T-5 concluída; `naoPrevistos`: os de previsto null.
  */
-function encerrando(impacto: string, naoPrevistos: string[], revisaoConcluida = true): Agregado {
-  const ticket = (id: number, etapa: string, status: string) => ({ id, etapa, status });
-  const evidencia = (ticket: number, tipo: string, dados: object) => ({ ticket, tipo, dados });
+function encerrando(impacto: string, naoPrevistos: string[], revisaoConcluida = true): AgregadoDemanda {
+  const ticket = (ticket_id: number, etapa: string, status: string) => ({ ticket_id, etapa, status });
+  const evidencia = (ticket_id: number | undefined, tipo: string, dados: object) => ({ ticket_id, tipo, dados });
   return {
     tickets: [
-      ticket(5, "revisao", revisaoConcluida ? "concluido" : "falhou"),
-      ticket(6, "encerramento", "em_execucao"),
+      ticket(5, "revisar_rodada", revisaoConcluida ? "concluido" : "falhou"),
+      ticket(6, "encerrar_rodada", "em_execucao"),
     ],
     evidencias: [
-      evidencia(0, "relatorio_impactos_arquitetura", { impacto }),
+      evidencia(undefined, "relatorio_impactos_arquitetura", { impacto }),
       evidencia(5, "arquivos_alterados", {
         arquivos: [
           { caminho: "busca.ts", previsto: "busca.ts" },
@@ -403,13 +410,13 @@ function encerrando(impacto: string, naoPrevistos: string[], revisaoConcluida = 
         ],
       }),
     ],
-  } as unknown as Agregado;
+  } as unknown as AgregadoDemanda;
 }
 
 test("mensagem_pr, regras cruzadas: naoPrevistos são os da última revisão; reversao obrigatória com impacto ≠ baixo", () => {
-  const cruzar = (ag: Agregado, dados: object) => () =>
+  const cruzar = (ag: AgregadoDemanda, dados: object) => () =>
     schemaDe("mensagem_pr").cruzar?.(schemaDe("mensagem_pr").dados.parse(dados), { ag, ticket: 6, anexos: [] });
-  const recusa = (ag: Agregado, dados: object, msg: string) => {
+  const recusa = (ag: AgregadoDemanda, dados: object, msg: string) => {
     assert.throws(cruzar(ag, dados), (e) => e instanceof ErroDeRegra && e.message === msg);
   };
 

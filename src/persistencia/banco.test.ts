@@ -314,7 +314,7 @@ test("escrever() aninhada: erro na interna desfaz só a interna e a externa segu
       () =>
         escrever(banco, () => {
           novoId(banco, "issue");
-          escrever(banco, () => novoId(banco, "ticket"));
+          escrever(banco, () => novoId(banco, "issue"));
           throw original;
         }),
       (erro) => erro === original,
@@ -322,7 +322,6 @@ test("escrever() aninhada: erro na interna desfaz só a interna e a externa segu
     assert.equal(banco.isTransaction, true);
   });
   assert.equal(valor(banco, "SELECT valor FROM sequencia WHERE nome = 'issue'"), 1);
-  assert.equal(valor(banco, "SELECT count(*) FROM sequencia WHERE nome = 'ticket'"), 0);
   banco.close();
 });
 
@@ -354,13 +353,13 @@ test("escrever() desfaz e propaga quando o próprio COMMIT falha", () => {
   banco.close();
 });
 
-test("novoId() tem uma sequência por tipo e só roda dentro da transação", () => {
+test("novoId() segue a sequência do tipo e só roda dentro da transação", () => {
   const banco = abrir(raizTemp());
-  const ids = escrever(banco, () => [novoId(banco, "issue"), novoId(banco, "ticket"), novoId(banco, "issue")]);
-  assert.deepEqual(ids, [1, 1, 2]);
+  const ids = escrever(banco, () => [novoId(banco, "issue"), novoId(banco, "issue")]);
+  assert.deepEqual(ids, [1, 2]);
   assert.equal(
-    escrever(banco, () => novoId(banco, "ticket")),
-    2,
+    escrever(banco, () => novoId(banco, "issue")),
+    3,
   );
   assert.throws(() => novoId(banco, "issue"), /fora de transação/);
   banco.close();

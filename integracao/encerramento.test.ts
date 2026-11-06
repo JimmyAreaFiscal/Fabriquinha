@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../src/dominio/agregado.ts";
+import { AUDITOR, FABRIQUINHA } from "../src/dominio/ator.ts";
 import { reabrirTicket } from "../src/dominio/transicoes_demanda.ts";
 import { registrarTentativaEncerramento } from "../src/dominio/transicoes_encerramento.ts";
 import { marcaDoPRFinal } from "../src/evidencias/encerramento_demanda.ts";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "./agregado.ts";
+import { AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { concluirTicketImplementar } from "./conclusao_ticket.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";

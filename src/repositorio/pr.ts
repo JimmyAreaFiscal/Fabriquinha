@@ -6,14 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
-import type { ProblemasDoPR } from "../dominio/agregado.ts";
 import { ErroDeRegra, ErroExterno, mensagem } from "../dominio/erros.ts";
 import type { Hospedagem, Projeto } from "../dominio/projeto.ts";
 import { anotar } from "../persistencia/execucoes.ts";
 import { executar, LIMITE_COMANDO_MS } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
 
-/** Um PR da branch da issue, como a hospedagem o lista. */
+/** Um PR da branch da demanda, como a hospedagem o lista. */
 interface PRNaHospedagem {
   id: string;
   url: string;
@@ -24,6 +23,12 @@ interface PRNaHospedagem {
   base: string;
   /** A branch de origem é de outro repositório (fork) com o mesmo nome. */
   deFork: boolean;
+}
+
+/** O que impede o PR de ir ao gate (F5 §5.1, passo 4): conflito com a base e checks de CI que terminaram falhos. */
+interface ProblemasDoPR {
+  conflito: boolean;
+  checksFalhos: readonly { nome: string; url?: string }[];
 }
 
 /** Os comandos de PR de uma hospedagem (F5 §5.1), rodados em `repo`, de onde o CLI descobre o repositório remoto. */
@@ -403,7 +408,7 @@ export async function publicarPRDe(
     throw new ErroDeRegra(
       `PR criado fora da Fabriquinha e já mergeado: ${mergeado.url}`,
       "a Fabriquinha não publica sobre ele; o Auditor resolve na plataforma, revertendo o merge se o código não " +
-        "devia ter entrado, e decide o destino da issue",
+        "devia ter entrado, e decide o destino da demanda",
     );
   }
   const aberto = deFora.find((p) => p.estado === "aberto");
@@ -421,7 +426,7 @@ export async function publicarPRDe(
     anotar(log, `varrerBase falhou: ${mensagem(error_)}`);
   });
 
-  // O conhecido sempre vence: um adotável mais novo só conta quando a issue ainda não registrou PR algum.
+  // O conhecido sempre vence: um adotável mais novo só conta quando a demanda ainda não registrou PR algum.
   const existente = existentes.find((p) => p.id === pr.conhecidos.at(-1)) ?? existentes.find(adotavel);
   if (!existente) return { ...(await cli.criar(repo, base, branch, pr.titulo, pr.corpo)), branch, head };
   if (existente.estado === "fechado") await cli.reabrir(repo, existente.id);

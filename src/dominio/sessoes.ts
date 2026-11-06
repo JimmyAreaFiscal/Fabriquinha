@@ -1,10 +1,12 @@
 // Sessão, execução da sessão e uso por modelo (comparacao-sdlc-implementacao.md §7.3). Funções puras sobre arrays:
-// quem chama persiste o resultado. `ExecucaoSessao` não substitui a `Execucao` legada de agregado.ts.
+// quem chama persiste o resultado. `ExecucaoSessao` registra uma execução do pi dentro da sessão.
 import { z } from "zod";
-import { ModoExecucao } from "./agregado.ts";
 import { TicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { Effort, Id, Instante } from "./primitivos.ts";
+
+export const ModoExecucao = z.enum(["autonomo", "interativo", "consulta"]);
+export type ModoExecucao = z.infer<typeof ModoExecucao>;
 
 const IdTexto = z.string().trim().min(1);
 const Tokens = z.number().int().nonnegative();

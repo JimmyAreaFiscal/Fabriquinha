@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { ModoExecucao } from "../dominio/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { FASES_TERMINADAS } from "../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
@@ -145,7 +145,7 @@ export interface Carregada {
 
 type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
 
-/** O ticket dono da sessão; `undefined` se o id não é de uma sessão da demanda (então vale o caminho das issues). */
+/** O ticket dono da sessão; `undefined` se o id não é de uma sessão da demanda. */
 const donoDaSessao = (banco: DatabaseSync, id: string): TicketRef | undefined =>
   banco.prepare("SELECT demanda_id, ticket_id FROM sessao WHERE id = ?").get(id) as TicketRef | undefined;
 

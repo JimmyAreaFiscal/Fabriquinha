@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type Ator } from "../src/dominio/agregado.ts";
+import { type Ator } from "../src/dominio/ator.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/dominio/evidencia_demanda.ts";
 import { argumentosPi } from "../src/execucao/pi.ts";
 import { submeterPlanejamento } from "../src/execucao/planejamento.ts";

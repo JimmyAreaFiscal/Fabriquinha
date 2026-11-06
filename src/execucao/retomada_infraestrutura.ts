@@ -2,7 +2,7 @@
 // rede, tempo, SonarQube fora do ar) e a cota estourada do provedor não são culpa do ticket nem decisão do Auditor. A
 // cada ciclo do agendador, a Fabriquinha devolve esses tickets a `aberto`; a seleção global os escolhe como os demais.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";
 import type { Modelo } from "../dominio/primitivos.ts";

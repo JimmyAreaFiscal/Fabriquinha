@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../src/dominio/agregado.ts";
+import { AUDITOR } from "../src/dominio/ator.ts";
 import { reabrirTicket } from "../src/dominio/transicoes_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../src/dominio/sessoes.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/execucao/despacho_demanda.ts";

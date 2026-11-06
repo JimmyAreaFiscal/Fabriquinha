@@ -2,8 +2,8 @@
 // concluídas e o heatmap do projeto.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { AUDITOR, type TipoIssue } from "../../dominio/agregado.ts";
-import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
+import type { AgregadoDemanda, TipoDemanda } from "../../dominio/agregado_demanda.ts";
+import { AUDITOR } from "../../dominio/ator.ts";
 import { satisfazDependencia } from "../../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../dominio/demanda.ts";
 import { encontrado } from "../../dominio/erros.ts";
@@ -22,7 +22,7 @@ import type { Rota } from "../rotas.ts";
 export interface DemandaDoProjeto {
   id: string;
   titulo: string;
-  tipo: TipoIssue;
+  tipo: TipoDemanda;
   fase: FaseDemanda;
   faseAlteradaEm: string;
   /** As predecessoras ainda em andamento: a cancelada já cancelou esta junto, e não bloqueia mais nada. */
