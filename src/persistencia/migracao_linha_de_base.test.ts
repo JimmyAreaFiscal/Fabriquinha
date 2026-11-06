@@ -7,8 +7,9 @@ import { migrar } from "./banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
 /**
- * O `sqlite_master` (tabelas, índices e CHECK) de um banco criado pela cadeia de migrações 1 a 36, capturado antes de ela
- * ser apagada. Em 2026-11-06 foi conferido que a linha de base gera o mesmo conteúdo do banco criado pela cadeia (57 itens).
+ * O `sqlite_master` inteiro (tabelas, índices, CHECK e os itens internos `sqlite_*`) de um banco criado pela cadeia de
+ * migrações 1 a 36, capturado antes de ela ser apagada. Em 2026-11-06 foi conferido que a linha de base gera o mesmo
+ * conteúdo do banco criado pela cadeia: 100 itens, 0 diferenças.
  */
 const ESQUEMA_DA_CADEIA_1_A_36 = JSON.parse(
   readFileSync(new URL("linha_de_base_v36.snapshot.json", import.meta.url), "utf8"),
@@ -17,7 +18,7 @@ const ESQUEMA_DA_CADEIA_1_A_36 = JSON.parse(
 const versao = (banco: DatabaseSync) => banco.prepare("PRAGMA user_version").get()?.user_version;
 const esquema = (banco: DatabaseSync) =>
   banco
-    .prepare("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
+    .prepare("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name")
     .all()
     .map((linha) => ({ ...linha }));
 

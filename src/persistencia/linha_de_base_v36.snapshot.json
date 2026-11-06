@@ -264,6 +264,264 @@
     "sql": "CREATE TABLE sessao_externa_demanda (\n    ferramenta TEXT NOT NULL,\n    sessao     TEXT NOT NULL,\n    demanda_id TEXT NOT NULL REFERENCES demanda(id),\n    PRIMARY KEY (ferramenta, sessao)\n  )"
   },
   {
+    "type": "index",
+    "name": "sqlite_autoindex_achado_avaliacao_1",
+    "tbl_name": "achado_avaliacao",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_arquivo_commit_demanda_1",
+    "tbl_name": "arquivo_commit_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_arquivo_evidencia_1",
+    "tbl_name": "arquivo_evidencia",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_avaliacao_1",
+    "tbl_name": "avaliacao",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_avaliacao_demanda_1",
+    "tbl_name": "avaliacao_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_caminho_ticket_1",
+    "tbl_name": "caminho_ticket",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_comando_preparacao_projeto_1",
+    "tbl_name": "comando_preparacao_projeto",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_commit_ticket_demanda_1",
+    "tbl_name": "commit_ticket_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_commit_ticket_demanda_2",
+    "tbl_name": "commit_ticket_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_configuracao_e2e_1",
+    "tbl_name": "configuracao_e2e",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_configuracao_etapa_projeto_1",
+    "tbl_name": "configuracao_etapa_projeto",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_criterio_citado_rodada_1",
+    "tbl_name": "criterio_citado_rodada",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_decisao_ticket_1",
+    "tbl_name": "decisao_ticket",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_decisao_ticket_historico_1",
+    "tbl_name": "decisao_ticket_historico",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_demanda_1",
+    "tbl_name": "demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_demanda_historico_1",
+    "tbl_name": "demanda_historico",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_dependencia_demanda_1",
+    "tbl_name": "dependencia_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_dependencia_rodada_1",
+    "tbl_name": "dependencia_rodada",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_dependencia_ticket_1",
+    "tbl_name": "dependencia_ticket",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_encerramento_demanda_1",
+    "tbl_name": "encerramento_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_evidencia_demanda_1",
+    "tbl_name": "evidencia_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_evidencia_historico_1",
+    "tbl_name": "evidencia_historico",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_execucao_sessao_1",
+    "tbl_name": "execucao_sessao",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_fitness_function_projeto_1",
+    "tbl_name": "fitness_function_projeto",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_glob_e2e_1",
+    "tbl_name": "glob_e2e",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_limpeza_pendente_encerramento_1",
+    "tbl_name": "limpeza_pendente_encerramento",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_linguagem_projeto_1",
+    "tbl_name": "linguagem_projeto",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_projeto_1",
+    "tbl_name": "projeto",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_projeto_2",
+    "tbl_name": "projeto",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_retrabalho_demanda_1",
+    "tbl_name": "retrabalho_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_rodada_1",
+    "tbl_name": "rodada",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_sequencia_1",
+    "tbl_name": "sequencia",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_sessao_1",
+    "tbl_name": "sessao",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_sessao_externa_demanda_1",
+    "tbl_name": "sessao_externa_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_tarefa_usuario_1",
+    "tbl_name": "tarefa_usuario",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_ticket_demanda_1",
+    "tbl_name": "ticket_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_ticket_demanda_2",
+    "tbl_name": "ticket_demanda",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_uso_avaliacao_1",
+    "tbl_name": "uso_avaliacao",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_uso_modelo_execucao_1",
+    "tbl_name": "uso_modelo_execucao",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_uso_modelo_historico_1",
+    "tbl_name": "uso_modelo_historico",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_usuario_simulado_1",
+    "tbl_name": "usuario_simulado",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_usuario_simulado_anexo_1",
+    "tbl_name": "usuario_simulado_anexo",
+    "sql": null
+  },
+  {
+    "type": "index",
+    "name": "sqlite_autoindex_varredura_base_1",
+    "tbl_name": "varredura_base",
+    "sql": null
+  },
+  {
     "type": "table",
     "name": "tarefa",
     "tbl_name": "tarefa",
