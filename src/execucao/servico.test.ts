@@ -236,7 +236,9 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
   for (const vez of [1, 2]) {
     const s = await subir(raiz);
     const tabelas = s.banco
-      .prepare("SELECT name FROM sqlite_master WHERE name IN ('issue', 'demanda_historico', 'sequencia') ORDER BY name")
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE name LIKE 'iss%' OR name IN ('demanda_historico', 'sequencia') ORDER BY name",
+      )
       .all()
       .map((l) => l.name);
     assert.deepEqual(tabelas, ["demanda_historico", "sequencia"], `subida ${String(vez)}`);

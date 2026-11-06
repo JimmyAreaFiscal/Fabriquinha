@@ -229,7 +229,7 @@ test("agente da demanda: comando fora da tabela da demanda é uso inválido; a a
   assert.match(ajuda.out, /fabriquinha demanda ver I-<n>/);
   assert.doesNotMatch(ajuda.out, /implementa/i);
   const grupo = await cli(env, ["demanda", "--help"]);
-  assert.doesNotMatch(grupo.out, /fabriquinha (ticket|issue)/);
+  assert.doesNotMatch(grupo.out, /fabriquinha (ticket|necessidade)/);
 });
 
 /** Demanda I-206 em `fase`, rodada 2 em `faseRodada`, e a execução `exec-9` aberta no ticket 9 (de `etapa`, da rodada 2 se `naRodada`). */
