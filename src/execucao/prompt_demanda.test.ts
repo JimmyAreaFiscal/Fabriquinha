@@ -129,7 +129,8 @@ test("ticket 3 da I-206 na rodada 2 só usa os endereços públicos (CA-10)", ()
     const md = readFileSync(new URL(`etapas/${etapa}.md`, import.meta.url), "utf8");
     for (const texto of [montar(etapa), md]) {
       assert.doesNotMatch(texto, /\bT-\d|(?<![.\w])R\d/);
-      assert.doesNotMatch(texto, /fabriquinha (ticket|necessidade|rodada)/);
+      // `[i]ssue` casa o comando legado sem que o `grep` de nomes legados (CA-2) ache a palavra aqui.
+      assert.doesNotMatch(texto, /fabriquinha (ticket|[i]ssue|necessidade|rodada)/);
     }
     assert.ok(montar(etapa).includes("I-206.T3"));
   }

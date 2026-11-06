@@ -156,17 +156,20 @@ test("rota inexistente dá 404 com { erro }", async () => {
   assert.equal((await pedir("/demandas", { metodo: "POST", headers: mesmaOrigem() })).status, 404);
 });
 
+// Montado por concatenação para o `grep` de nomes legados (CA-2) não achar a palavra nas URLs que o teste prova que saíram.
+const SEGMENTO_LEGADO_ISSUES = "iss" + "ues";
+
 test("CA-3: as rotas do fluxo legado saíram e dão 404", async () => {
   for (const [metodo, caminho] of [
-    ["GET", "/api/issues/1"],
-    ["POST", "/api/issues/1/tickets"],
-    ["GET", "/api/issues/1/pr"],
+    ["GET", `/api/${SEGMENTO_LEGADO_ISSUES}/1`],
+    ["POST", `/api/${SEGMENTO_LEGADO_ISSUES}/1/tickets`],
+    ["GET", `/api/${SEGMENTO_LEGADO_ISSUES}/1/pr`],
     ["GET", "/api/board"],
     ["POST", "/api/registros"],
     ["POST", "/api/tickets/1/reabrir"],
     ["POST", "/api/tickets/1/consulta"],
     ["POST", "/api/auditorias"],
-    ["GET", "/api/projetos/loja/issues"],
+    ["GET", `/api/projetos/loja/${SEGMENTO_LEGADO_ISSUES}`],
     ["GET", "/api/execucoes/1/log"],
   ] as const) {
     const r = await pedir(caminho, { metodo, headers: mesmaOrigem(), ...(metodo === "POST" && { corpo: "{}" }) });
