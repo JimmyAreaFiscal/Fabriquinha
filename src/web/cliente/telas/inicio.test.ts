@@ -213,7 +213,7 @@ test("board: o cartão na coluna da fase, com o ticket em curso e as marcas de e
       rodando: [sessao()],
       board: [
         cartao({
-          ticket: { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", modo: "autonomo" },
+          ticket: { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", modo: "autonomo", piAtivo: true },
           outros: 1,
         }),
         cartao({ coluna: "aprovacao_pull_request", ref: "I-206.R1" }),
@@ -237,7 +237,7 @@ test("board: o cartão na coluna da fase, com o ticket em curso e as marcas de e
   assert.match(desenvolvimento, /<span class="id">I-206\.R2<\/span><span class="tag">loja<\/span>/);
   assert.match(
     desenvolvimento,
-    /<div class="cartao-ticket"><span class="mono">I-206\.T3<\/span> implementação · autônoma · em execução \(\+1\)<\/div>/,
+    /<div class="cartao-ticket"><span class="mono">I-206\.T3<\/span> implementação · autônoma · sessão pi ativa \(\+1\)<\/div>/,
   );
   assert.match(
     desenvolvimento,

@@ -335,7 +335,9 @@ test.describe("CA-26", () => {
     await info.attach("executar-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
 
     await pagina.getByRole("button", { name: "Executar agora" }).click();
-    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
     // Pelo menu, sem recarregar: o Início mostra a sessão do pi parado rodando.
     await pagina
@@ -357,7 +359,9 @@ test.describe("CA-26", () => {
     await pagina.evaluate(() => fetch("/api/demandas/tickets/I-216.T1/executar", { method: "POST" }));
     await pagina.getByRole("button", { name: "Executar agora" }).click();
     await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
-    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
   });
 });

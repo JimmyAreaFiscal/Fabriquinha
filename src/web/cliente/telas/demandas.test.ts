@@ -20,16 +20,22 @@ test("sem trabalho nem demandas, o quadro diz que não há nada em vez de ficar 
   assert.match(html, /Nenhuma demanda em andamento\./);
 });
 
-test("o trabalho ativo traz o ticket, a etapa e a rodada, quando há (CA-6)", () => {
+test("o trabalho ativo traz o ticket, a etapa, a rodada, quando há, e se é o pi ou o sistema que roda (CA-6)", () => {
   const html = quadro({
     demandas: [],
     trabalho: [
-      { ref: "I-206.T3", etapa: "implementar", rodada: "I-206.R2" },
+      { ref: "I-206.T3", etapa: "implementar", rodada: "I-206.R2", pi_ativo: true },
       { ref: "I-206.T5", etapa: "planejar" },
     ],
   });
-  assert.match(html, /I-206\.T3<\/span> Implementação · rodada <span class="id">I-206\.R2/);
-  assert.match(html, /I-206\.T5<\/span> Planejamento<\/li>/);
+  assert.match(
+    html,
+    /I-206\.T3<\/span> Implementação · rodada <span class="id">I-206\.R2<\/span> <span class="pill pill-rodando">Sessão pi ativa<\/span><\/li>/,
+  );
+  assert.match(
+    html,
+    /I-206\.T5<\/span> Planejamento <span class="pill pill-rodando sem-pulso">Em execução \(sistema\)<\/span><\/li>/,
+  );
 });
 
 test("o cartão traz o título, a fase, as rodadas e o link do PR só na rodada que tem PR (CA-1, CA-2)", () => {

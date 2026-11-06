@@ -18,7 +18,7 @@ import {
   nomeDoModelo,
   plural,
   rotuloDoModelo,
-  STATUS_DO_TICKET,
+  statusDoTicket,
 } from "../render.ts";
 import { ETAPA_DO_TICKET } from "./demandas.ts";
 import { fraseDoMes } from "./metricas.ts";
@@ -157,7 +157,7 @@ function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): str
   return `<a class="${classes}" href="${caminhoDaDemanda(c.demanda)}">
     <div class="cartao-topo"><span class="id">${escapar(c.ref)}</span><span class="tag">${escapar(c.projeto)}</span></div>
     <div class="cartao-titulo">${comEnderecosInteiros(c.titulo)}</div>
-    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${STATUS_DO_TICKET[t.status]}${mais}</div>` : ""}
+    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${statusDoTicket(t.status, t.piAtivo)}${mais}</div>` : ""}
     ${marcas.length > 0 ? `<div class="cartao-marcas">${pills}</div>` : ""}
   </a>`;
 }

@@ -15,6 +15,7 @@ import {
   NAO_ENCONTRADA,
   navegacao,
   nomeDoModelo,
+  pilulaDoStatus,
   plural,
   rotuloDoStatus,
   TITULOS,
@@ -78,7 +79,13 @@ test("navegação fixa marca a página atual e mostra no Início o que aguarda s
   assert.match(navegacao("demanda", 0), /<a href="\/home" aria-current="page">Início<\/a>/);
   assert.equal(TITULOS.demanda, "Demanda");
   assert.equal(caminhoDaDemanda("I-206"), "/demandas/I-206");
-  assert.equal(rotuloDoStatus("em_execucao"), "Em execução");
+  // O `em_execucao` separa o pi rodando do sistema (testes, CI, espera): só o pi pulsa.
+  assert.equal(rotuloDoStatus("em_execucao"), "Em execução (sistema)");
+  assert.equal(rotuloDoStatus("em_execucao", true), "Sessão pi ativa");
+  assert.equal(rotuloDoStatus("falhou", true), "Falhou");
+  assert.equal(pilulaDoStatus("em_execucao"), "pill-rodando sem-pulso");
+  assert.equal(pilulaDoStatus("em_execucao", true), "pill-rodando");
+  assert.equal(pilulaDoStatus("aberto", true), "pill-neutro");
   assert.match(navegacao("sdlc", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.equal(TITULOS.sdlc, "Configuração SDLC");
   assert.match(navegacao("heatmap", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);

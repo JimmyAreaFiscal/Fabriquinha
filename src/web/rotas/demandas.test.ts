@@ -23,6 +23,7 @@ interface Pagina {
     ref: string;
     etapa: string;
     sessao?: string;
+    pi_ativo?: true;
     titulo?: string;
     motivo_falha?: string;
     instrucao?: string;
@@ -89,6 +90,25 @@ test("CA-5: o trabalho global ativo traz o ticket em execução com a etapa e a 
   assert.deepEqual((await pedir("/api/demandas")).json<Board>().trabalho, [
     { ref: "I-206.T3", etapa: "implementar", rodada: "I-206.R2" },
   ]);
+});
+
+test("o trabalho ativo e a página marcam `pi_ativo` só quando o pi subiu, não na preparação da worktree", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  banco.exec(`INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s', 'I-206', 3, 'autonomo', 'c');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e', 's', '2026-01-01T00:00:00.000Z', NULL, 0)`);
+  // Execução aberta sem o grupo do pi: a preparação da worktree, que é o sistema.
+  assert.deepEqual((await pedir("/api/demandas")).json<Board>().trabalho, [
+    { ref: "I-206.T3", etapa: "implementar", rodada: "I-206.R2" },
+  ]);
+  banco.exec("UPDATE execucao_sessao SET grupo_processo = 4242 WHERE id = 'e'");
+  assert.deepEqual((await pedir("/api/demandas")).json<Board>().trabalho, [
+    { ref: "I-206.T3", etapa: "implementar", rodada: "I-206.R2", pi_ativo: true },
+  ]);
+  const { tickets } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(
+    tickets.filter((t) => t.pi_ativo).map((t) => t.ref),
+    ["I-206.T3"],
+  );
 });
 
 test("o board não mostra a demanda arquivada", async () => {

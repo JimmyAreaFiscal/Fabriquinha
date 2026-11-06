@@ -9,10 +9,11 @@ import {
   caminhoDaSessao,
   diaMes,
   escapar,
-  PILULA_DO_STATUS,
+  pilulaDoStatus,
+  rotuloDoStatus,
   plural,
   rotuloDoModelo,
-  STATUS_DO_TICKET,
+  statusDoTicket,
 } from "../render.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import { ETAPA_DO_TICKET } from "./demandas.ts";
@@ -221,8 +222,7 @@ function destaque(d: DemandaDoProjeto, estado: EstadoDaLinha | undefined, agora:
   }
   const ticket = estado && d.tickets.find((t) => t.status === STATUS_DO_DESTAQUE[estado]);
   if (!ticket) return "";
-  const [pilula, rotulo] = ticket.status === "falhou" ? ["pill-falha", "Falhou"] : ["pill-rodando", "Rodando"];
-  const conteudo = `<span class="pill ${pilula}">${rotulo}</span><span class="muted quando">${ha(ticket.statusAlteradoEm, agora)}</span>`;
+  const conteudo = `<span class="pill ${pilulaDoStatus(ticket.status, ticket.piAtivo)}">${rotuloDoStatus(ticket.status, ticket.piAtivo)}</span><span class="muted quando">${ha(ticket.statusAlteradoEm, agora)}</span>`;
   return ticket.sessao === undefined
     ? `<span class="chat">${conteudo}</span>`
     : `<a class="chat" href="${caminhoDaSessao(ticket.sessao)}">${conteudo}<span class="ir">chat →</span></a>`;
@@ -299,7 +299,7 @@ function gaveta(d: DemandaDoProjeto): string {
       <td class="etapa-cel">${ETAPA_DO_TICKET[t.etapa].toLowerCase()}</td>
       <td class="id-cel"><span class="id">${escapar(t.ref)}</span></td>
       <td class="titulo-cel">${escapar(t.titulo ?? TITULO_DA_ETAPA[t.etapa])}</td>
-      <td class="status-cel"><span class="pill ${PILULA_DO_STATUS[t.status]}">${STATUS_DO_TICKET[t.status]}</span></td>
+      <td class="status-cel"><span class="pill ${pilulaDoStatus(t.status, t.piAtivo)}">${statusDoTicket(t.status, t.piAtivo)}</span></td>
       <td class="modelo-cel">${rotuloDoModelo(t.modelo ?? "padrão do pi")}</td>
       <td class="sessao-cel">${chat}</td>
     </tr>`;

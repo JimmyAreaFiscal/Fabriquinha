@@ -14,6 +14,7 @@ import { configuracaoProjeto } from "../../persistencia/configuracao_projeto.ts"
 import { carregarDemanda } from "../../persistencia/demandas.ts";
 import { predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
 import { projeto } from "../../persistencia/projetos.ts";
+import { ticketsComPiAtivo } from "../../persistencia/sessoes.ts";
 import { heatmapDo } from "../../repositorio/heatmap.ts";
 import type { Rota } from "../rotas.ts";
 
@@ -37,6 +38,8 @@ export interface DemandaDoProjeto {
     /** `provedor / modelo` do ticket, senão o da etapa no projeto; sem ele, vale o padrão do pi. */
     modelo?: string;
     sessao?: string;
+    /** Com execução de pi aberta: o `em_execucao` é o pi, não o sistema. */
+    piAtivo?: true;
   }[];
 }
 
@@ -76,6 +79,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
     ).map((s) => [s.ticket_id, s.id]),
   );
   const rodada = (rodada_id: number) => formatarRodadaRef({ demanda_id: id, rodada_id });
+  const comPiAtivo = ticketsComPiAtivo(banco);
   return {
     id,
     titulo: ag.demanda.titulo,
@@ -95,8 +99,9 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
         etapas.find((e) => e.etapa === t.etapa),
       ).modelo.valor;
       const sessao = sessoes.get(t.ticket_id);
+      const ticketRef = formatarTicketRef({ demanda_id: id, ticket_id: t.ticket_id });
       return {
-        ref: formatarTicketRef({ demanda_id: id, ticket_id: t.ticket_id }),
+        ref: ticketRef,
         etapa: t.etapa,
         status: t.status,
         statusAlteradoEm: t.status_alterado_em,
@@ -104,6 +109,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
         ...(t.titulo !== undefined && { titulo: t.titulo }),
         ...(modelo && { modelo: `${modelo.provedor} / ${modelo.nome}` }),
         ...(sessao !== undefined && { sessao }),
+        ...(comPiAtivo.has(ticketRef) && { piAtivo: true as const }),
       };
     }),
   };

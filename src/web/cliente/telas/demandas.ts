@@ -9,6 +9,7 @@ import {
   FASE_DA_DEMANDA,
   FASE_DA_RODADA,
   PILULA_DO_STATUS,
+  pilulaDoStatus,
   rotuloDoStatus,
 } from "../render.ts";
 
@@ -25,7 +26,7 @@ export interface DemandaDoQuadro {
 }
 export interface DadosDoQuadro {
   demandas: DemandaDoQuadro[];
-  trabalho: { ref: string; etapa: EtapaTicket; rodada?: string }[];
+  trabalho: { ref: string; etapa: EtapaTicket; rodada?: string; pi_ativo?: true }[];
 }
 
 /** A etapa do ticket como o quadro a mostra. */
@@ -83,7 +84,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
 export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
   const ativo = trabalho.map(
     (t) =>
-      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`}</li>`,
+      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoStatus("em_execucao", t.pi_ativo)}">${rotuloDoStatus("em_execucao", t.pi_ativo)}</span></li>`,
   );
   return `<div class="cabeca-pagina"><h1>Demandas</h1></div>
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-trabalho">
@@ -108,6 +109,7 @@ export interface DadosDaPagina {
     status: StatusTicket;
     elegivel: boolean;
     sessao?: string;
+    pi_ativo?: true;
     rodada?: string;
     titulo?: string;
     instrucao?: string;
@@ -276,7 +278,7 @@ function ticket(t: Pagina["tickets"][number], p: Pagina): string {
   const decidido = t.status === "concluido" && ultima !== undefined ? ultima.resultado : undefined;
   const estado = decidido
     ? pilula(DECISAO[decidido])
-    : `<span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>`;
+    : `<span class="pill ${pilulaDoStatus(t.status, t.pi_ativo)}">${rotuloDoStatus(t.status, t.pi_ativo)}</span>`;
   const chat = t.sessao === undefined ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`;
   // Só o aberto elegível ganha o destaque de "é a vez do Auditor"; o aberto que espera outro ticket fica neutro.
   const marco = decidido ?? (t.status === "aberto" && t.elegivel ? "elegivel" : t.status);

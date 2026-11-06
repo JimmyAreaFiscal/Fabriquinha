@@ -118,12 +118,12 @@ function cenario(): DatabaseSync {
       ('s-titulo', 'I-303', 5, 'autonomo', 'c5'),
       ('s-falha', 'I-303', 6, 'autonomo', 'c6'),
       ('s-viva', 'I-303', 7, 'autonomo', 'c7');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES
-      ('x1', 's-conversa', '${em(0)}', '${em(40)}', 0),
-      ('x3', 's-ajustes', '${em(0)}', '${em(41)}', 0),
-      ('x5', 's-titulo', '${em(30)}', NULL, 0),
-      ('x6', 's-falha', '${em(0)}', '${em(6)}', 1),
-      ('x7', 's-viva', '${em(31)}', NULL, 0);
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES
+      ('x1', 's-conversa', '${em(0)}', '${em(40)}', 0, NULL),
+      ('x3', 's-ajustes', '${em(0)}', '${em(41)}', 0, NULL),
+      ('x5', 's-titulo', '${em(30)}', NULL, 0, 4242),
+      ('x6', 's-falha', '${em(0)}', '${em(6)}', 1, NULL),
+      ('x7', 's-viva', '${em(31)}', NULL, 0, NULL);
   `);
   return banco;
 }
@@ -229,6 +229,11 @@ test("board: um cartão por demanda fora da execução e um por rodada aberta ne
       ["desenvolvimento", "I-308", undefined, undefined, undefined, 0, []],
       ["desenvolvimento", "I-309", undefined, undefined, undefined, 0, []],
     ],
+  );
+  // Só o ticket com o pi no ar (execução aberta e grupo gravado) marca `piAtivo`.
+  assert.deepEqual(
+    dados.board.filter((c) => c.ticket?.piAtivo).map((c) => c.ticket?.ref),
+    ["I-303.T5"],
   );
   assert.deepEqual(dados.board[0], {
     coluna: "registro",
