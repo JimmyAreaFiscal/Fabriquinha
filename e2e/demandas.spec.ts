@@ -67,9 +67,9 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).toContainText("Limpeza falhou");
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
-  // Fora os chips das evidências e o "ler tudo", só os dois do gate do PR (R1), os dois da sessão de ajustes (R2: Enviar e
-  // Concluir), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
-  await expect(pagina.locator("main button:not(.dm-chip, [data-expandir])")).toHaveCount(8);
+  // Fora os chips das evidências e o "ler tudo", só os dois do gate do PR (R1), o Concluir da sessão de ajustes (R2; a
+  // conversa é no chat), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
+  await expect(pagina.locator("main button:not(.dm-chip, [data-expandir])")).toHaveCount(7);
 
   // Aguarda você leva ao ticket falho na mesma página, sem redesenhá-la.
   await pagina.setViewportSize({ width: 1440, height: 400 });
@@ -280,7 +280,10 @@ test("CA-22 e CA-23: reprovar o PR pede o motivo e, com ele, abre a sessão de a
 
   await pagina.getByLabel(/Motivo/).fill("falta teste");
   await pagina.getByRole("button", { name: "Reprovar PR" }).click();
-  await expect(pagina.getByRole("link", { name: "Sessão de ajustes ↓" })).toHaveAttribute("href", "#ajustes-I-215.R1");
+  await expect(pagina.locator("#ajustes-I-215\\.R1").getByRole("link", { name: "Abrir a sessão →" })).toHaveAttribute(
+    "href",
+    /^\/sessions\//,
+  );
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toHaveCount(0);
 });
 
@@ -332,7 +335,9 @@ test.describe("CA-26", () => {
     await info.attach("executar-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
 
     await pagina.getByRole("button", { name: "Executar agora" }).click();
-    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
     // Pelo menu, sem recarregar: o Início mostra a sessão do pi parado rodando.
     await pagina
@@ -354,29 +359,49 @@ test.describe("CA-26", () => {
     await pagina.evaluate(() => fetch("/api/demandas/tickets/I-216.T1/executar", { method: "POST" }));
     await pagina.getByRole("button", { name: "Executar agora" }).click();
     await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
-    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
     await expect(pagina.getByRole("button", { name: "Executar agora" })).toHaveCount(0);
   });
 });
 
-test.describe("CA-14: concluir a sessão de ajustes", () => {
-  test("sem correção mostra a orientação e a sessão continua; com a correção, a rodada sai da sessão", async ({
+test.describe("CA-14: conversar e concluir a sessão de ajustes", () => {
+  test("a pergunta do agente chega ao Auditor no chat da sessão; sem correção a sessão continua; com ela, a rodada sai da sessão", async ({
     pagina,
     fabriquinha,
   }, info) => {
     projeto(fabriquinha.raiz);
     semearPrDaRodada(fabriquinha.raiz);
     await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
-    await pagina.getByLabel(/Motivo/).fill("falta teste");
+    // O motivo vai ao prompt de abertura; com ele, o pi falso pergunta pela `perguntar`, como o agente da I-260.T39.
+    await pagina.getByLabel(/Motivo/).fill("pergunte perguntar");
     await pagina.getByRole("button", { name: "Reprovar PR" }).click();
     const secao = pagina.locator("#ajustes-I-215\\.R1");
-    // A primeira resposta do agente (ao prompt de abertura) chega sem recarregar: a conversa ainda não existia.
-    await expect(secao.locator(".dm-msg-agente")).toContainText("pronto");
-    await secao.getByLabel("Mensagem ao agente").fill("eco: ajustei o teste de login");
-    await secao.getByRole("button", { name: "Enviar" }).click();
-    await expect(secao.locator(".dm-msg-auditor")).toContainText("eco: ajustei o teste de login");
-    await expect(secao.locator(".dm-msg-agente").last()).toContainText("ajustei o teste de login");
+    await expect(
+      pagina.locator(".dm-ticket", { hasText: "Sessão em aberto" }).getByRole("link", { name: "chat →" }),
+    ).toBeVisible();
 
+    await secao.getByRole("link", { name: "Abrir a sessão →" }).click();
+    const dialogo = pagina.locator("form.dialogo-ext");
+    await expect(dialogo).toContainText("Qual ordem os cupons devem ter?");
+    const chat = pagina.url();
+
+    // O Início também aponta a pergunta do agente da sessão de ajustes, e leva ao chat.
+    await pagina.goto(`${fabriquinha.base}/home`);
+    await expect(pagina.locator("main")).toContainText("O agente pergunta: Qual ordem os cupons devem ter?");
+    await pagina.goto(chat);
+    await dialogo.getByRole("button", { name: "Validade mais próxima" }).click();
+    const conversa = pagina.locator("[data-conversa]");
+    await expect(conversa.locator(".msg.agente").last()).toHaveText(
+      'Resposta do diálogo: {"value":"Validade mais próxima"}',
+    );
+    await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · conversa");
+    await pagina.getByRole("textbox", { name: "Mensagem" }).fill("eco: ajustei o teste de login");
+    await pagina.getByRole("button", { name: "Enviar" }).click();
+    await expect(conversa.locator(".msg.agente").last()).toHaveText("ajustei o teste de login");
+
+    await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
     await secao.getByRole("button", { name: "Concluir a sessão" }).click();
     await expect(pagina.locator("[data-aviso]")).not.toBeEmpty();
     await expect(pagina.locator("#I-215\\.R1")).toContainText("Sessão de ajustes");

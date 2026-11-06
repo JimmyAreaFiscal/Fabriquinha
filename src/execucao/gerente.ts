@@ -305,10 +305,11 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
         fim(recusa);
         return;
       }
-      // Na interativa a recusa já chegou ao chat; um `steer` que cruzou o `agent_settled` não derruba a sessão.
+      // Na interativa a recusa já chegou ao chat; um `steer` que cruzou o `agent_settled` não derruba a sessão. O prompt
+      // recusado devolve o estado de antes dele: o pi que o recusa por já estar trabalhando continua ocupado.
       anotar(r.log, recusa);
       if (evento.command === "prompt") {
-        ocupar(false);
+        ocupar(ocupadoAntesDoPrompt);
         mudou();
       }
     };
@@ -382,6 +383,8 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
 
     /** O último evento foi o `message_end` de uma mensagem do agente. */
     let agenteTerminou = false;
+    /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
+    let ocupadoAntesDoPrompt = false;
     const pi = lancarPi(r.args, r, (evento) => {
       if (agenteTerminou) estaViva.naoGravadas = [];
       agenteTerminou = false;
@@ -457,6 +460,7 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       mandar(comando) {
         pi.enviar(comando);
         if (comando.type === "prompt") {
+          ocupadoAntesDoPrompt = estaViva.ocupado;
           ocupar(true);
           mudou();
         }

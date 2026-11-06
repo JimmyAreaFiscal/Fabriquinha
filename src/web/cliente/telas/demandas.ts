@@ -9,6 +9,7 @@ import {
   FASE_DA_DEMANDA,
   FASE_DA_RODADA,
   PILULA_DO_STATUS,
+  pilulaDoStatus,
   rotuloDoStatus,
 } from "../render.ts";
 
@@ -25,7 +26,7 @@ export interface DemandaDoQuadro {
 }
 export interface DadosDoQuadro {
   demandas: DemandaDoQuadro[];
-  trabalho: { ref: string; etapa: EtapaTicket; rodada?: string }[];
+  trabalho: { ref: string; etapa: EtapaTicket; rodada?: string; pi_ativo?: true }[];
 }
 
 /** A etapa do ticket como o quadro a mostra. */
@@ -83,7 +84,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
 export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
   const ativo = trabalho.map(
     (t) =>
-      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`}</li>`,
+      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoStatus("em_execucao", t.pi_ativo)}">${rotuloDoStatus("em_execucao", t.pi_ativo)}</span></li>`,
   );
   return `<div class="cabeca-pagina"><h1>Demandas</h1></div>
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-trabalho">
@@ -108,6 +109,7 @@ export interface DadosDaPagina {
     status: StatusTicket;
     elegivel: boolean;
     sessao?: string;
+    pi_ativo?: true;
     rodada?: string;
     titulo?: string;
     instrucao?: string;
@@ -276,11 +278,8 @@ function ticket(t: Pagina["tickets"][number], p: Pagina): string {
   const decidido = t.status === "concluido" && ultima !== undefined ? ultima.resultado : undefined;
   const estado = decidido
     ? pilula(DECISAO[decidido])
-    : `<span class="pill ${PILULA_DO_STATUS[t.status]}">${rotuloDoStatus(t.status)}</span>`;
-  const chat =
-    t.sessao === undefined || t.etapa === "sessao_em_aberto"
-      ? ""
-      : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`;
+    : `<span class="pill ${pilulaDoStatus(t.status, t.pi_ativo)}">${rotuloDoStatus(t.status, t.pi_ativo)}</span>`;
+  const chat = t.sessao === undefined ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`;
   // Só o aberto elegível ganha o destaque de "é a vez do Auditor"; o aberto que espera outro ticket fica neutro.
   const marco = decidido ?? (t.status === "aberto" && t.elegivel ? "elegivel" : t.status);
   return `<li class="dm-ticket dm-marco-${marco}" id="${escapar(t.ref)}"><div class="dm-no">
@@ -335,6 +334,25 @@ function gatePR(ref: string, pr: { id: string; url: string } | undefined, artefa
   return aprovar + reprovar;
 }
 
+/**
+ * A sessão de ajustes do PR reprovado: a conversa (mensagens, perguntas do agente, trabalho) acontece no chat da sessão
+ * do ticket; aqui ficam o caminho até ele e a conclusão, que é do Auditor.
+ */
+function sessaoDeAjustes(ref: string, sessao: string | undefined): string {
+  const abrir =
+    sessao === undefined
+      ? '<p class="muted vazio">A conversa começa quando o pi da sessão sobe.</p>'
+      : `<p class="dm-texto">Converse com o agente, responda às perguntas dele e acompanhe o trabalho no chat da sessão.</p>`;
+  const botaoAbrir =
+    sessao === undefined
+      ? ""
+      : `<a class="btn btn-grande btn-primario" href="${caminhoDaSessao(sessao)}">Abrir a sessão →</a>`;
+  return `<div id="ajustes-${escapar(ref)}">${blocoDeAcao(
+    `Sessão de ajustes de ${escapar(ref)}`,
+    `${abrir}<div class="dm-botoes">${botaoAbrir}<button type="button" class="btn btn-grande" data-acao="concluir" data-caminho="/api/demandas/rodadas/${encodeURIComponent(ref)}/ajustes/concluir">Concluir a sessão</button></div>`,
+  )}</div>`;
+}
+
 function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
   const meus = p.tickets.filter((t) => t.rodada === r.ref);
   const encerra = meus.findLast((t) => t.etapa === "encerrar_rodada");
@@ -346,7 +364,7 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
     <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
     ${chipsDasEvidencias(p.evidencias.filter((e) => e.rodada === r.ref && e.ticket === undefined))}
     ${meus.length > 0 ? listaDeTickets(meus, p) : '<p class="muted vazio">Sem tickets.</p>'}
-    ${r.fase === "sessao" ? `<p class="dm-texto"><a class="link" href="#ajustes-${escapar(r.ref)}">Sessão de ajustes ↓</a></p><div id="ajustes-${escapar(r.ref)}" data-ajustes="${escapar(r.ref)}"></div>` : ""}
+    ${r.fase === "sessao" ? sessaoDeAjustes(r.ref, meus.findLast((t) => t.etapa === "sessao_em_aberto")?.sessao) : ""}
     ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref, pr, artefatosDoGate(p.evidencias.filter((e) => e.rodada === r.ref || meus.some((t) => t.ref === e.ticket)))) : ""}
   </section>`;
 }

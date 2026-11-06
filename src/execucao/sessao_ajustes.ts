@@ -1,10 +1,11 @@
 // Sessão de ajustes do PR reprovado (comparacao-sdlc-implementacao.md §§4 e 6): reprova o PR da rodada e abre na hora a
-// conversa do Auditor com o agente, que só registra tickets corretivos. A conversa não implementa nem integra: os SHAs
-// da rodada e da demanda são gravados ao abrir e restaurados quando a execução termina e quando a sessão conclui.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// conversa do Auditor com o agente, que só registra tickets corretivos. A conversa acontece no chat da sessão do ticket.
+// Ela não implementa nem integra: os SHAs da rodada e da demanda são gravados ao abrir e restaurados quando a execução
+// termina e quando a sessão conclui.
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, exigirAuditor } from "../dominio/agregado.ts";
+import type { Ator } from "../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { existe } from "../dominio/erros.ts";
@@ -16,7 +17,7 @@ import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { descartarAlteracoes, exigirGit } from "../repositorio/worktree.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { encerrar, mandar, situacao } from "./gerente.ts";
+import { encerrar, situacao } from "./gerente.ts";
 import type { RefRodada } from "./encerramento_rodada.ts";
 
 type Opcoes = Pick<OpcoesExecucaoDemanda, "limiteMin">;
@@ -37,15 +38,6 @@ const fins = new Map<string, Promise<void>>();
 
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
-
-const arquivoDasMensagens = (banco: DatabaseSync, ref: RefRodada): string =>
-  join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.mensagens.json`);
-
-/** Os textos que o Auditor mandou com o pi parado, em ordem: depois só existem dentro do prompt montado da retomada. */
-export function mensagensRetomadas(banco: DatabaseSync, ref: RefRodada): string[] {
-  const arquivo = arquivoDasMensagens(banco, ref);
-  return existsSync(arquivo) ? (JSON.parse(readFileSync(arquivo, "utf8")) as string[]) : [];
-}
 
 /** O `encerrar_rodada` atual (o de maior id) da rodada e o `pr_aberto` dele. */
 function prDaRodada(ag: AgregadoDemanda, ref: RefRodada) {
@@ -99,18 +91,19 @@ function execucaoViva(banco: DatabaseSync, ticket: TicketDemanda): string | numb
   return situacao(sessao.id)?.execucao;
 }
 
-/** Retoma ou inicia a execução interativa do ticket da sessão; ao terminar, restaura as branches. */
+/**
+ * Inicia ou retoma a execução interativa do ticket da sessão; ao terminar, restaura as branches em vez de fechar o
+ * ticket, que só conclui com a sessão.
+ */
 function executar(
   banco: DatabaseSync,
   ref: RefRodada,
   ticket: TicketDemanda,
-  opcoes: Opcoes,
-  retomada: OpcoesExecucaoDemanda["retomada"],
+  opcoes: Opcoes & Pick<OpcoesExecucaoDemanda, "retomada" | "mensagem">,
 ): { id: string; fim: Promise<void> } {
   const { id, fim } = iniciarExecucaoDemanda(banco, ticket, {
     ...opcoes,
     modo: "interativo",
-    retomada,
     fechar: () => restaurar(banco, ref),
   });
   fins.set(`${ref.demanda_id}.${String(ref.rodada_id)}`, fim);
@@ -147,35 +140,34 @@ export async function reprovarPRRodada(
 
   const depois = comDemanda(banco, ref.demanda_id, (a) => reprovarPullRequestRodada(a, entrada, ator, contexto()));
   const sessao = sessaoDaRodada(depois, ref);
-  return executar(banco, ref, sessao, opcoes, {
-    tipo: "reabertura",
-    motivo:
-      `Esta é a sessão de ajustes da rodada ${formatarRodadaRef(ref)} (ticket ${formatarTicketRef(sessao)}): ` +
-      `converse e registre tickets corretivos, sem implementar nem integrar.\n` +
-      `O Auditor reprovou o PR ${pr.url} da rodada. Motivo: ${motivo}`,
+  return executar(banco, ref, sessao, {
+    ...opcoes,
+    retomada: {
+      tipo: "reabertura",
+      motivo:
+        `Esta é a sessão de ajustes da rodada ${formatarRodadaRef(ref)} (ticket ${formatarTicketRef(sessao)}): ` +
+        `converse e registre tickets corretivos, sem implementar nem integrar.\n` +
+        `O Auditor reprovou o PR ${pr.url} da rodada. Motivo: ${motivo}`,
+    },
   });
 }
 
-/** Mensagem do Auditor ao agente: vai ao pi vivo; sem pi vivo, retoma a mesma sessão com a mensagem. */
-export function enviarMensagemAjustes(
+/**
+ * Retoma a sessão de ajustes parada com a mensagem do Auditor, enviada pelo chat da sessão. A mensagem é o prompt, como
+ * em qualquer retomada interativa; o fim da execução restaura as branches.
+ */
+export function retomarSessaoAjustes(
   banco: DatabaseSync,
-  ref: RefRodada,
-  texto: string,
-  ator: Ator,
+  ticket: TicketDemanda,
+  mensagem: string,
   opcoes: Opcoes,
 ): void {
-  exigirAuditor(ator, "conversar na sessão de ajustes");
-  const ticket = sessaoDaRodada(carregarDemanda(banco, ref.demanda_id), ref);
-  const viva = execucaoViva(banco, ticket);
-  if (viva !== undefined) {
-    mandar(viva, { type: "prompt", message: texto });
-    return;
-  }
-  executar(banco, ref, ticket, opcoes, { tipo: "reabertura", motivo: texto });
-  // Depois de executar: uma retomada recusada não deixa mensagem gravada.
-  const arquivo = arquivoDasMensagens(banco, ref);
-  mkdirSync(dirname(arquivo), { recursive: true });
-  writeFileSync(arquivo, JSON.stringify([...mensagensRetomadas(banco, ref), texto]));
+  const rodada_id = existe(
+    ticket.rodada_id,
+    `o ticket ${formatarTicketRef(ticket)} não é de rodada`,
+    "confira o banco",
+  );
+  executar(banco, { demanda_id: ticket.demanda_id, rodada_id }, ticket, { ...opcoes, mensagem });
 }
 
 /** Conclui a sessão (só o Auditor, com correção registrada): encerra o pi ocioso, restaura as branches e volta ao desenvolvimento. */

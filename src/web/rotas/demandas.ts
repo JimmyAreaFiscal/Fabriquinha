@@ -9,6 +9,7 @@ import { selecionarTrabalho } from "../../dominio/selecao_trabalho.ts";
 import { carregarDemanda, listarDemandas } from "../../persistencia/demandas.ts";
 import { dependentesNaoConcluidasDaDemanda, predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
 import { anexosDaDemanda, lerAnexo } from "../../persistencia/evidencia_demanda.ts";
+import { ticketsComPiAtivo } from "../../persistencia/sessoes.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 
 const ref = (demanda_id: string) => ({
@@ -26,15 +27,19 @@ export function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string
   return pr && { id: pr.id, url: pr.url };
 }
 
-/** Os tickets `em_execucao` da demanda, com a rodada quando têm. */
-const emExecucao = (ag: AgregadoDemanda) =>
+/** Os tickets `em_execucao` da demanda, com a rodada quando têm e `pi_ativo` quando é o pi que roda. */
+const emExecucao = (ag: AgregadoDemanda, comPiAtivo: ReadonlySet<string>) =>
   ag.tickets
     .filter((t) => t.status === "em_execucao")
-    .map((t) => ({
-      ref: ref(ag.demanda.id).ticket(t.ticket_id),
-      etapa: t.etapa,
-      ...(t.rodada_id !== undefined && { rodada: ref(ag.demanda.id).rodada(t.rodada_id) }),
-    }));
+    .map((t) => {
+      const ticketRef = ref(ag.demanda.id).ticket(t.ticket_id);
+      return {
+        ref: ticketRef,
+        etapa: t.etapa,
+        ...(t.rodada_id !== undefined && { rodada: ref(ag.demanda.id).rodada(t.rodada_id) }),
+        ...(comPiAtivo.has(ticketRef) && { pi_ativo: true }),
+      };
+    });
 
 /** Os tickets `falhou` da demanda: o que bloqueia a rodada até o Auditor reabrir. */
 const falhos = (ag: AgregadoDemanda) =>
@@ -45,6 +50,7 @@ const falhos = (ag: AgregadoDemanda) =>
 /** `GET /api/demandas`: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
 function board(pedido: Parameters<Rota["tratar"]>[0]) {
   const todas = listarDemandas(pedido.banco);
+  const comPiAtivo = ticketsComPiAtivo(pedido.banco);
   return {
     demandas: todas.map((ag) => {
       const { id, projeto, titulo, fase } = ag.demanda;
@@ -62,7 +68,7 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
         aguarda_merge: ag.encerramento?.aguardando_merge_humano === true,
       };
     }),
-    trabalho: todas.flatMap(emExecucao),
+    trabalho: todas.flatMap((ag) => emExecucao(ag, comPiAtivo)),
   };
 }
 
@@ -106,6 +112,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       }[]
     ).map((s) => [s.ticket_id, s.id]),
   );
+  const comPiAtivo = ticketsComPiAtivo(banco);
   const predecessoras = predecessorasDaDemanda(banco, id);
   const elegiveis = new Set(
     selecionarTrabalho(
@@ -132,6 +139,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       elegivel:
         elegiveis.has(t.ticket_id) && !(t.etapa === "encerrar_demanda" && ag.encerramento?.aguardando_merge_humano),
       ...(sessoes.has(t.ticket_id) && { sessao: sessoes.get(t.ticket_id) }),
+      ...(comPiAtivo.has(ticket(t.ticket_id)) && { pi_ativo: true }),
       ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
       ...(t.titulo !== undefined && { titulo: t.titulo }),
       ...(t.instrucao !== undefined && { instrucao: t.instrucao }),

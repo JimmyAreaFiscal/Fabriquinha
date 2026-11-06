@@ -2,7 +2,7 @@
 // operam sobre o que foi lido; `comSessoesDoTicket` é a única forma de mutar e grava por upsert, nunca apaga.
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { z } from "zod";
-import type { TicketRef } from "../dominio/demanda.ts";
+import { formatarTicketRef, type TicketRef } from "../dominio/demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../dominio/sessoes.ts";
 import { escrever } from "./banco.ts";
@@ -155,3 +155,14 @@ export const execucoesAbertasDaDemanda = (banco: DatabaseSync): ExecucaoAberta[]
     )
     .all()
     .map((l) => ({ ...l }) as unknown as ExecucaoAberta);
+
+/**
+ * Os tickets (`I-n.Tm`) com o pi no ar: execução aberta e com o grupo do pi gravado. A execução abre antes da preparação
+ * da worktree e o grupo só é gravado quando o pi sobe; a coleta de evidências roda depois que ela fecha.
+ */
+export const ticketsComPiAtivo = (banco: DatabaseSync): Set<string> =>
+  new Set(
+    execucoesAbertasDaDemanda(banco)
+      .filter((e) => e.grupo_processo !== null)
+      .map(({ demanda_id, ticket_id }) => formatarTicketRef({ demanda_id, ticket_id })),
+  );

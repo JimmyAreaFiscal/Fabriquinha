@@ -15,9 +15,17 @@ export const STATUS_DO_TICKET: Record<Ticket["status"], string> = {
   cancelado: "cancelado",
 };
 
-/** O status do ticket com inicial maiúscula (Em execução), para a página e o quadro das demandas. */
-export const rotuloDoStatus = (status: Ticket["status"]): string =>
-  STATUS_DO_TICKET[status].charAt(0).toUpperCase() + STATUS_DO_TICKET[status].slice(1);
+/** O status do ticket como as telas o mostram: o `em_execucao` separa o pi rodando do sistema (testes, CI, espera). */
+export const statusDoTicket = (status: Ticket["status"], piAtivo = false): string => {
+  if (status !== "em_execucao") return STATUS_DO_TICKET[status];
+  return piAtivo ? "sessão pi ativa" : "em execução (sistema)";
+};
+
+/** O status do ticket com inicial maiúscula (Sessão pi ativa), para a página e o quadro das demandas. */
+export const rotuloDoStatus = (status: Ticket["status"], piAtivo = false): string => {
+  const rotulo = statusDoTicket(status, piAtivo);
+  return rotulo.charAt(0).toUpperCase() + rotulo.slice(1);
+};
 
 /** A fase da demanda e a da rodada (comparacao-sdlc §2.1) como as telas as mostram, com a cor da pílula. */
 export const FASE_DA_DEMANDA: Record<FaseDemanda, [rotulo: string, pilula: string]> = {
@@ -50,6 +58,10 @@ export const PILULA_DO_STATUS: Record<Ticket["status"], string> = {
   fechado: "pill-neutro",
   cancelado: "pill-neutro",
 };
+
+/** A pílula do status: só o pi rodando pulsa; o `em_execucao` sem pi pode estar parado à espera. */
+export const pilulaDoStatus = (status: Ticket["status"], piAtivo = false): string =>
+  status === "em_execucao" && piAtivo ? "pill-rodando" : PILULA_DO_STATUS[status];
 
 /** O modo da sessão (F4 §5.1), no feminino de "sessão autônoma". */
 export const MODO_DA_SESSAO: Record<ModoExecucao, string> = {

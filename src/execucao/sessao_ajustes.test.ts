@@ -16,13 +16,9 @@ import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
-import { encerrar, situacao } from "./gerente.ts";
-import {
-  concluirSessaoAjustes,
-  enviarMensagemAjustes,
-  mensagensRetomadas,
-  reprovarPRRodada,
-} from "./sessao_ajustes.ts";
+import { situacao } from "./gerente.ts";
+import { concluirSessaoAjustes, reprovarPRRodada } from "./sessao_ajustes.ts";
+import { enviarDemanda } from "./sessoes_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ajustes-")));
@@ -238,17 +234,18 @@ test("CA-17 e CA-18: o que o agente commita ou integra na conversa é desfeito a
   assert.ok(c.raiz);
 });
 
-test("CA-16: a mensagem do Auditor vai ao pi vivo e a resposta fica na mesma conversa", async () => {
+test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na mesma conversa", async () => {
   const { banco, prompts, ag } = await cenario();
   await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, LIMITE);
   await ate(() => prompts().length === 1);
+  const sessao = prompts()[0]?.sessao ?? "";
+  await ate(() => situacao(sessao)?.ocupado === false);
 
-  enviarMensagemAjustes(banco, REF, "Cobre o erro de rede também", AUDITOR, LIMITE);
+  enviarDemanda(banco, sessao, "Cobre o erro de rede também", "prompt", 5);
 
   await ate(() => prompts().length === 2);
   assert.equal(prompts()[1]?.mensagem, "Cobre o erro de rede também");
-  assert.equal(prompts()[1]?.sessao, prompts()[0]?.sessao);
-  assert.deepEqual(mensagensRetomadas(banco, REF), []); // pi vivo: nada é gravado
+  assert.equal(prompts()[1]?.sessao, sessao);
 
   // CA-20 e CA-22: sem correção, ou pelo agente, a conclusão é recusada e a sessão segue aberta.
   await assert.rejects(concluirSessaoAjustes(banco, REF, AUDITOR), /trabalho corretivo/);
@@ -261,37 +258,24 @@ test("CA-16: a mensagem do Auditor vai ao pi vivo e a resposta fica na mesma con
   assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.status, "concluido");
 });
 
-test("sem pi vivo, a mensagem retoma a mesma sessão; sem sessão ou como agente, recusa", async () => {
-  const { banco, prompts, ag } = await cenario();
+test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesma sessão e o fim dela desfaz o que o agente fez", async () => {
+  const { banco, prompts, ag, sha, head, sujo } = await cenario(
+    `git {id} commit --allow-empty -qm indevido && echo x > sujo.txt && git -C {demanda} {id} commit --allow-empty -qm integrado`,
+  );
+  const demanda = sha(BRANCH_DEMANDA);
   const { fim } = await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, { limiteMin: 0.02 });
   await fim;
+  const sessao = prompts()[0]?.sessao ?? "";
 
-  enviarMensagemAjustes(banco, REF, "Voltei", AUDITOR, LIMITE);
+  enviarDemanda(banco, sessao, "Voltei", "prompt", 0.02);
 
   await ate(() => prompts().length === 2);
-  assert.equal(prompts()[1]?.sessao, prompts()[0]?.sessao);
-  assert.match(prompts()[1]?.mensagem ?? "", /Voltei/);
-  assert.deepEqual(mensagensRetomadas(banco, REF), ["Voltei"]);
-  // Repetida depois que o pi parou de novo: grava a segunda, em ordem (enquanto o pi vive, a mensagem só vai a ele).
-  const viva = situacao(prompts()[0]?.sessao ?? "")?.execucao;
-  assert.ok(viva !== undefined);
-  encerrar(viva);
-  await ate(() => {
-    try {
-      enviarMensagemAjustes(banco, REF, "Voltei", AUDITOR, LIMITE);
-    } catch {
-      // a execução anterior ainda não fechou: tenta de novo
-    }
-    return mensagensRetomadas(banco, REF).length === 2;
-  });
-  assert.deepEqual(mensagensRetomadas(banco, REF), ["Voltei", "Voltei"]);
-  assert.throws(() => {
-    enviarMensagemAjustes(banco, REF, "x", { tipo: "agente", execucao: 1, ticket: 9 }, LIMITE);
-  }, ErroDeEscopo);
-  assert.throws(() => {
-    enviarMensagemAjustes(banco, { ...REF, rodada_id: 1 }, "x", AUDITOR, LIMITE);
-  }, /não tem sessão de ajustes/);
-  await ate(() => situacao(prompts()[0]?.sessao ?? "") !== undefined); // concluir só encerra o pi já vivo
+  assert.equal(prompts()[1]?.sessao, sessao);
+  assert.equal(prompts()[1]?.mensagem, "Voltei");
+  // A restauração volta a rodada, a demanda e a worktree depois que o pi para.
+  await ate(() => situacao(sessao) === undefined && sha(BRANCH_DEMANDA) === demanda && !sujo());
+  assert.equal(sha(BRANCH_RODADA), head);
+  assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.status, "aberto");
   await concluirComCorrecao(banco, ag);
 });
 

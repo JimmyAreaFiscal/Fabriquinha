@@ -42,7 +42,9 @@ test.describe("I-246 CA-4", () => {
     semearTicketAberto(fabriquinha.raiz);
     await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
     await pagina.getByRole("button", { name: "Executar agora" }).click();
-    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
 
     let pgid: number | null = null;
     while (pgid === null) {
@@ -76,7 +78,9 @@ test.describe("I-246 CA-4", () => {
 async function executarEEsperarPi(pagina: Page, raiz: string, base: string): Promise<number> {
   await pagina.goto(`${base}/demandas/I-216`);
   await pagina.getByRole("button", { name: "Executar agora" }).click();
-  await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+  await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+    /Sessão pi ativa|Em execução \(sistema\)/,
+  );
   let pgid: number | null = null;
   while (pgid === null) {
     await dormir(50);
@@ -159,7 +163,8 @@ for (const [nome, preparacao, sinalNosFilhos] of [
       banco.close();
       await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
       await pagina.getByRole("button", { name: "Executar agora" }).click();
-      await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+      // A preparação da worktree roda antes do pi: o ticket está em execução pelo sistema.
+      await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução (sistema)");
       await dormir(1000); // a preparação está rodando
 
       const inicio = Date.now();
@@ -194,7 +199,9 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
     banco.close();
     await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
     await pagina.getByRole("button", { name: "Executar agora" }).click();
-    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução");
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
+      /Sessão pi ativa|Em execução \(sistema\)/,
+    );
     // O comando de testes do projeto está rodando: a coleta começou.
     for (;;) {
       try {
@@ -204,6 +211,9 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
         await dormir(100);
       }
     }
+    // Na coleta o pi já saiu: o ticket segue em execução pelo sistema.
+    await pagina.reload();
+    await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução (sistema)");
 
     const saiu = once(fabriquinha.servico, "exit");
     execFileSync("pkill", ["-TERM", "-f", "sleep 31"]);

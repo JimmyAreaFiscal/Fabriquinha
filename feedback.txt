@@ -1,0 +1,8 @@
+1) Há uma demora muito grande e gasto muito grande de tokens para gerar vídeos do Encerramento. Deve-se criar uma ferramenta e um playbook específico para cumprir o vídeo 
+
+2) Quando há inconsistência de conflict merge, o que acontece é que se cria um ticket de resolução que acaba retornando para dev -> review -> encerramento, gerando um gasto muito maior e retrabalho para testar o que já havia sido testado. Deve-se ter algum meio de só resolver o conflito de forma simplificada 
+
+3) Deve-se adicionar um Graphyio ou algo similar para já deixar o repositório pré-explorado para o pi-dev, de forma que se evite fazer a IA retornar tudo de novo a cada nova sessão 
+
+4) Deve-se ter métricas de quantidade de abertura de artefatos, para saber se os artefatos estão sendo válidos; deve-se também tentar isolar a criação de artefatos em sessões novas, para poder mensurar o custo de cada artefato no máximo possível 
+

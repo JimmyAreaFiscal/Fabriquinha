@@ -7,12 +7,12 @@ import { fotografar, projeto } from "./apoio.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";
 
-/** A sessão autônoma do I-206.T3 com a execução aberta: roda. */
+/** A sessão autônoma do I-206.T3 com a execução aberta e o grupo do pi gravado: o pi roda. */
 function sessaoRodando(raiz: string): void {
   const banco = abrir(raiz);
   banco.exec(`
     INSERT INTO sessao VALUES ('s-i206-t3', 'I-206', 3, 'autonomo', 'c1');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x1', 's-i206-t3', '${new Date().toISOString()}', NULL, 0);
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES ('x1', 's-i206-t3', '${new Date().toISOString()}', NULL, 0, 4242);
   `);
   banco.close();
 }
@@ -67,7 +67,7 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   const desenvolvimento = coluna(pagina, "Desenvolvimento");
   await expect(desenvolvimento.locator(".cartao .id")).toHaveText(["I-206.R2", "I-207.R1"]);
   await expect(desenvolvimento.locator(".cartao").first()).toContainText(
-    "I-206.T3 implementação · autônoma · em execução",
+    "I-206.T3 implementação · autônoma · sessão pi ativa",
   );
   await expect(desenvolvimento.locator(".cartao").first()).toContainText("em execução ·");
   await expect(desenvolvimento.locator(".cartao").last()).toContainText("aguarda você · falha");

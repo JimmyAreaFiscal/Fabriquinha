@@ -16,6 +16,7 @@ import { arquivoDaSessao } from "../persistencia/execucoes.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
+import { retomarSessaoAjustes } from "./sessao_ajustes.ts";
 import { abortar, type Dialogo, assinar, mandar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
 import type { EventoPi } from "./pi.ts";
 
@@ -333,8 +334,9 @@ export function enviarDemanda(
       aceitos.length > 0 ? `envie com ${aceitos.join(" ou ")}` : SEM_MENSAGEM[motivo ?? estado],
     );
   }
-  // Em conversa, o pi vivo está ocioso.
+  // Em conversa, o pi vivo está ocioso. A sessão de ajustes retoma pelo caminho dela, que restaura as branches no fim.
   if (estado === "rodando" || viva) mandar(ultimaDe(c).id, { type: modo, message: texto });
+  else if (c.ticket.etapa === "sessao_em_aberto") retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
   else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto });
   return true;
 }

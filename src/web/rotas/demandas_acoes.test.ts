@@ -287,18 +287,24 @@ async function concluirSessao({ pedir, banco }: Cenario, ticket_id: number) {
   return pedir("/api/demandas/rodadas/I-206.R2/ajustes/concluir", { metodo: "POST" });
 }
 
-/** A sessão de ajustes aberta pela reprovação do PR; o ticket dela é o 9. */
+/** A sessão de ajustes aberta pela reprovação do PR; o ticket dela é o 9. `execucao` é a execução que a abriu. */
 async function comSessao() {
   const c = await cenario("pr");
   const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: false, motivo: "cobertura abaixo do combinado" } });
   assert.equal(r.status, 200);
-  // Com o pi já de pé, a mensagem vai a ele; antes disso o serviço recusaria a sessão ainda sem execução viva.
-  await ate(async () => (await conversa(c)).includes("cobertura abaixo do combinado"));
-  return { ...c, sessao: r.json<{ sessao: string }>().sessao };
+  const { id: sessao } = c.banco.prepare("SELECT id FROM sessao WHERE ticket_id = 9").get() as { id: string };
+  // A conversa é a do chat da sessão do ticket; o pi de pé e ocioso espera o Auditor.
+  await ate(async () => (await chat(c, sessao)).sessao.motivo === "conversa");
+  return { ...c, execucao: r.json<{ sessao: string }>().sessao, sessao };
 }
 
-const conversa = async ({ pedir }: Cenario) =>
-  JSON.stringify((await pedir("/api/demandas/rodadas/I-206.R2/ajustes")).json<{ conversa: unknown[] }>().conversa);
+interface Entrada {
+  message?: { role?: string; content: unknown };
+  fabriquinha?: true;
+}
+const chat = async ({ pedir }: Cenario, sessao: string) =>
+  (await pedir(`/api/sessoes/${sessao}`)).json<{ sessao: { motivo?: string }; conversa: Entrada[] }>();
+const conversa = async (c: Cenario, sessao: string) => JSON.stringify((await chat(c, sessao)).conversa);
 async function ate(condicao: () => Promise<boolean>): Promise<void> {
   for (let i = 0; i < 500 && !(await condicao()); i++) await dormir(20);
   assert.ok(await condicao(), "a condição não se cumpriu a tempo");
@@ -331,66 +337,42 @@ test("CA-24: reprovar o PR com motivo e nota diz que a reprovação não leva no
   assert.equal(rodada(c)?.fase, "aprovacao_pull_request");
 });
 
-const MENSAGENS = "/api/demandas/rodadas/I-206.R2/ajustes/mensagens";
+const execucoesAbertas = ({ banco }: Cenario) =>
+  (banco.prepare("SELECT count(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number }).n;
 
-test("CA-25: as mensagens do Auditor aparecem na conversa da sessão, na ordem em que foram enviadas", async () => {
+test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e com ele parado", async () => {
   const c = await comSessao();
-  for (const texto of ["troque o nome da função", "e rode os testes"]) {
-    const r = await c.pedir(MENSAGENS, { metodo: "POST", corpo: { texto } });
-    assert.equal(r.status, 204);
-  }
-  await ate(async () => (await conversa(c)).includes("e rode os testes"));
-  const texto = await conversa(c);
-  assert.ok(texto.indexOf("troque o nome da função") < texto.indexOf("e rode os testes"));
-  await concluirSessao(c, 9);
-});
-
-interface Entrada {
-  message: { role?: string; content: string };
-  fabriquinha?: true;
-}
-const entradas = async ({ pedir }: Cenario) =>
-  (await pedir("/api/demandas/rodadas/I-206.R2/ajustes")).json<{ conversa: Entrada[] }>().conversa;
-
-test("o prompt de abertura vai marcado; a mensagem com o pi vivo e a do Auditor com o pi parado não", async () => {
-  const c = await comSessao();
-  const lida = (await c.pedir("/api/demandas/rodadas/I-206.R2/ajustes")).json<{ sessao: string }>().sessao;
-  assert.equal(lida, (c.banco.prepare("SELECT id FROM sessao WHERE ticket_id = 9").get() as { id: string }).id);
-  const abertura = (await entradas(c)).find((e) => e.message.role === "user");
+  const mensagens = `/api/sessoes/${c.sessao}/mensagens`;
+  const abertura = (await chat(c, c.sessao)).conversa.find((e) => e.message?.role === "user");
   assert.equal(abertura?.fabriquinha, true);
-  assert.match(abertura.message.content, /Motivo: cobertura abaixo do combinado/);
+  assert.match(String(abertura.message?.content), /Motivo: cobertura abaixo do combinado/);
 
-  // Com o pi vivo a mensagem vai como entrada do usuário, sem marca.
-  await c.pedir(MENSAGENS, { metodo: "POST", corpo: { texto: "com o pi vivo" } });
-  await ate(async () => (await conversa(c)).includes("com o pi vivo"));
+  // Com o pi vivo e ocioso, a mensagem vai a ele.
+  assert.equal(
+    (await c.pedir(mensagens, { metodo: "POST", corpo: { texto: "com o pi vivo", modo: "prompt" } })).status,
+    204,
+  );
+  await ate(async () => (await conversa(c, c.sessao)).includes("com o pi vivo"));
 
-  // Para o pi e manda de novo: a retomada vira o prompt montado, e a conversa mostra o texto do Auditor antes da resposta.
-  const { id: sessao } = c.banco.prepare("SELECT id FROM sessao WHERE ticket_id = 9").get() as { id: string };
-  encerrar(c.sessao);
-  await ate(async () => {
-    await c.pedir(MENSAGENS, { metodo: "POST", corpo: { texto: "com o pi parado" } });
-    return (await conversa(c)).includes("com o pi parado");
-  });
-  const lista = await entradas(c);
-  const i = lista.findIndex((e) => e.message.content === "com o pi parado");
-  assert.equal(lista[i]?.message.role, "user");
-  assert.equal(lista[i].fabriquinha, undefined);
-  assert.equal(lista[i + 1]?.message.role, "assistant");
-  assert.equal(lista.find((e) => e.message.content === "com o pi vivo")?.fabriquinha, undefined);
+  // Com o pi parado, a mensagem retoma a mesma sessão, e a sessão segue aberta depois que essa execução termina.
+  encerrar(c.execucao);
+  await ate(() => Promise.resolve(execucoesAbertas(c) === 0));
+  assert.equal(
+    (await c.pedir(mensagens, { metodo: "POST", corpo: { texto: "com o pi parado", modo: "prompt" } })).status,
+    204,
+  );
+  await ate(async () => (await conversa(c, c.sessao)).includes("com o pi parado"));
+  const retomada = c.banco
+    .prepare("SELECT id FROM execucao_sessao WHERE sessao_id = ? ORDER BY inicio DESC LIMIT 1")
+    .get(c.sessao) as { id: string };
+  await ate(() => Promise.resolve(situacao(c.sessao) !== undefined));
+  encerrar(retomada.id);
+  await ate(() => Promise.resolve(execucoesAbertas(c) === 0));
+  assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.status, "aberto");
+  assert.equal(rodada(c)?.fase, "sessao");
+  const lista = (await chat(c, c.sessao)).conversa;
+  assert.equal(lista.find((e) => e.message?.content === "com o pi parado")?.fabriquinha, undefined);
   assert.equal(lista.filter((e) => e.fabriquinha).length, 1);
-  await ate(() => Promise.resolve(situacao(sessao) !== undefined));
-  await concluirSessao(c, 9);
-});
-
-test("CA-26: mensagem vazia é recusada e a conversa não muda", async () => {
-  const c = await comSessao();
-  const antes = await conversa(c);
-  for (const corpo of [{ texto: "  " }, {}]) {
-    const r = await c.pedir(MENSAGENS, { metodo: "POST", corpo });
-    assert.equal(r.status, 422);
-    assert.match(erro(r), /informe o texto da mensagem/);
-  }
-  assert.equal(await conversa(c), antes);
   await concluirSessao(c, 9);
 });
 
@@ -400,29 +382,18 @@ test("CA-27: concluir a sessão a deixa concluída e ela não aceita mais mensag
   assert.equal(r.status, 200);
   assert.equal(rodada(c)?.fase, "desenvolvimento");
   assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.status, "concluido");
-  const depois = await c.pedir(MENSAGENS, { metodo: "POST", corpo: { texto: "mais uma" } });
+  const depois = await c.pedir(`/api/sessoes/${c.sessao}/mensagens`, {
+    metodo: "POST",
+    corpo: { texto: "mais uma", modo: "prompt" },
+  });
   assert.equal(depois.status, 409);
-  assert.match(erro(depois), /não tem sessão de ajustes aberta/);
 });
 
-test("a mensagem é recusada se o ticket da sessão não está ativo", async () => {
-  const c = await comSessao();
-  c.banco.exec("UPDATE ticket_demanda SET status = 'falhou' WHERE ticket_id = 9");
-  const r = await c.pedir(MENSAGENS, { metodo: "POST", corpo: { texto: "oi" } });
-  assert.equal(r.status, 409);
-  c.banco.exec("UPDATE ticket_demanda SET status = 'aberto' WHERE ticket_id = 9");
-  await concluirSessao(c, 9);
-});
-
-test("a rodada sem sessão de ajustes é recusada e o endereço precisa ser de rodada", async () => {
+test("a rodada sem sessão de ajustes não conclui e o endereço precisa ser de rodada", async () => {
   const c = await cenario("pr");
-  const sem = await c.pedir("/api/demandas/rodadas/I-206.R2/ajustes");
+  const sem = await c.pedir("/api/demandas/rodadas/I-206.R2/ajustes/concluir", { metodo: "POST" });
   assert.equal(sem.status, 409);
   assert.match(erro(sem), /I-206\.R2 não tem sessão de ajustes/);
-  c.banco.exec("UPDATE ticket_demanda SET etapa = 'sessao_em_aberto' WHERE ticket_id = 3");
-  const semConversa = await c.pedir("/api/demandas/rodadas/I-206.R2/ajustes");
-  assert.equal(semConversa.status, 409);
-  assert.match(erro(semConversa), /ainda não tem conversa/);
   const ticket = await c.pedir("/api/demandas/rodadas/I-206.T3/pr", {
     metodo: "POST",
     corpo: { aprovado: true, nota: 4 },

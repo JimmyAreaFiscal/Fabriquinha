@@ -79,11 +79,6 @@ test("a rodada com PR reprovado abre a sessão de ajustes pelo próprio serviço
   assert.equal(fases(demanda)[1], "sessao");
 });
 
-test("a sessão de ajustes recebe mensagem", async () => {
-  const rodada = await p.rodadaEmAjustes();
-  await chamar("POST", `/api/demandas/rodadas/${rodada}/ajustes/mensagens`, { texto: "oi" });
-});
-
 test("a sessão de ajustes com a correção registrada conclui", async () => {
   const rodada = await p.rodadaEmAjustes(true);
   await chamar("POST", `/api/demandas/rodadas/${rodada}/ajustes/concluir`);

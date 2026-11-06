@@ -43,7 +43,7 @@ export interface Preparo {
   planejamentoPronto(): string;
   /** Em `aprovacao_pull_request`, com as branches no origin, as worktrees e o PR aberto: decisão do PR. */
   rodadaComPR(): Promise<RodadaComPR>;
-  /** Na sessão de ajustes (rodada em `sessao`, sem pi vivo): mensagens e, com `corrigida`, concluir. */
+  /** Na sessão de ajustes (rodada em `sessao`, sem pi vivo): com `corrigida`, concluir. */
   rodadaEmAjustes(corrigida?: boolean): Promise<string>;
   /** Ticket `implementar` em `falhou`, endereço `I-n.T1`: reabrir. */
   ticketFalho(): Promise<string>;

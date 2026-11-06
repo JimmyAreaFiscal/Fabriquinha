@@ -165,7 +165,8 @@ function semearDemandas(): void {
     }),
   );
   banco.exec(
-    "INSERT INTO sessao VALUES ('s-antiga', 'I-206', 4, 'autonomo', 'c1'), ('s-nova', 'I-206', 4, 'autonomo', 'c2')",
+    `INSERT INTO sessao VALUES ('s-antiga', 'I-206', 4, 'autonomo', 'c1'), ('s-nova', 'I-206', 4, 'autonomo', 'c2');
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES ('e-nova', 's-nova', '${em}', NULL, 0, 4242)`,
   );
   criarDemanda(banco, demanda("I-207", "planejamento"));
   banco.exec(`INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id)
@@ -186,7 +187,7 @@ test("demandas: só as em andamento, das mais novas às mais antigas, com a cont
   assert.deepEqual(vazio, { demandas: [], contagem: { andamento: 0, concluidas: 0, arquivadas: 0, canceladas: 0 } });
 });
 
-test("demandas: as rodadas com o PR e os tickets com o modelo efetivo e a sessão mais recente", async () => {
+test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão mais recente e o pi ativo", async () => {
   semearDemandas();
   const { demandas } = (await chamar("GET", "/api/projetos/loja/demandas")) as ListaDoProjeto;
   const i206 = demandas[1];
@@ -225,6 +226,7 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo e a sessã
       rodada: "I-206.R2",
       modelo: "llamacpp / qwen3-coder-30b",
       sessao: "s-nova",
+      piAtivo: true,
     },
   ]);
 });

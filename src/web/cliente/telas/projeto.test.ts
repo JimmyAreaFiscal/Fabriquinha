@@ -303,7 +303,10 @@ test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a l
       titulo: "Busca <rápida>",
       tipo: "problema",
       bloqueadaPor: ["I-5", "I-6"],
-      tickets: [ticket("I-7.T1", "demanda", "concluido"), ticket("I-7.T2", "planejar", "em_execucao")],
+      tickets: [
+        ticket("I-7.T1", "demanda", "concluido"),
+        ticket("I-7.T2", "planejar", "em_execucao", { piAtivo: true }),
+      ],
     }),
   ]);
   const linha = linhaDe(html, "I-7");
@@ -324,7 +327,7 @@ test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a l
   assert.match(html, /class="pista-item rodando fechada"/);
   assert.match(
     linha,
-    /<div class="pista-estado"><span class="chat"><span class="pill pill-rodando">Rodando<\/span><span class="muted quando">há 5\u00a0min<\/span><\/span><\/div>/,
+    /<div class="pista-estado"><span class="chat"><span class="pill pill-rodando">Sessão pi ativa<\/span><span class="muted quando">há 5\u00a0min<\/span><\/span><\/div>/,
   );
 });
 

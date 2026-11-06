@@ -15,6 +15,7 @@ import { mesDe } from "../../metricas/periodo.ts";
 import { type MetricasMesDemanda, metricasDemandaPorMes } from "../../metricas/periodo_demanda.ts";
 import { listarDemandas } from "../../persistencia/demandas.ts";
 import { predecessorasDaDemanda } from "../../persistencia/dependencias_demanda.ts";
+import { ticketsComPiAtivo } from "../../persistencia/sessoes.ts";
 import type { Rota } from "../rotas.ts";
 import { prDaRodada } from "./demandas.ts";
 
@@ -31,6 +32,8 @@ export interface TicketDoInicio {
   etapa: EtapaTicket;
   status: StatusTicket;
   modo?: ModoExecucao;
+  /** Com execução de pi aberta: o `em_execucao` é o pi, não o sistema. */
+  piAtivo?: true;
 }
 
 /** O ticket de uma espera: sem o status, que a espera já diz pelo motivo. */
@@ -91,16 +94,33 @@ export interface DadosDoInicio {
 const TERMINADO: ReadonlySet<StatusTicket> = new Set(["concluido", "fechado", "cancelado"]);
 
 /** O ticket em curso de uma lista e quantos outros ainda não terminaram. */
-function ticketEmCurso(tickets: readonly TicketDemanda[], modoDe: (ref: string) => ModoExecucao | undefined) {
+function ticketEmCurso(
+  tickets: readonly TicketDemanda[],
+  modoDe: (ref: string) => ModoExecucao | undefined,
+  comPiAtivo: ReadonlySet<string>,
+) {
   const abertos = tickets.filter((t) => !TERMINADO.has(t.status));
   const [ticket] = abertos.toSorted((a, b) => Number(a.status === "aberto") - Number(b.status === "aberto"));
-  return { ...(ticket && { ticket: ticketDoInicio(ticket, modoDe) }), outros: Math.max(abertos.length - 1, 0) };
+  return {
+    ...(ticket && { ticket: ticketDoInicio(ticket, modoDe, comPiAtivo) }),
+    outros: Math.max(abertos.length - 1, 0),
+  };
 }
 
-function ticketDoInicio(t: TicketDemanda, modoDe: (ref: string) => ModoExecucao | undefined): TicketDoInicio {
+function ticketDoInicio(
+  t: TicketDemanda,
+  modoDe: (ref: string) => ModoExecucao | undefined,
+  comPiAtivo: ReadonlySet<string> = new Set(),
+): TicketDoInicio {
   const ref = formatarTicketRef(t);
   const modo = modoDe(ref);
-  return { ref, etapa: t.etapa, status: t.status, ...(modo && { modo }) };
+  return {
+    ref,
+    etapa: t.etapa,
+    status: t.status,
+    ...(modo && { modo }),
+    ...(comPiAtivo.has(ref) && { piAtivo: true }),
+  };
 }
 
 /**
@@ -113,7 +133,12 @@ const COLUNA_DA_FASE: Partial<Record<FaseDemanda, ColunaDoBoard>> = {
 };
 
 /** Os cartões da demanda: um por rodada que não concluiu, na execução; senão, um só, o da demanda. */
-function cartoesDaDemanda(banco: DatabaseSync, ag: AgregadoDemanda, modoDe: (ref: string) => ModoExecucao | undefined) {
+function cartoesDaDemanda(
+  banco: DatabaseSync,
+  ag: AgregadoDemanda,
+  modoDe: (ref: string) => ModoExecucao | undefined,
+  comPiAtivo: ReadonlySet<string>,
+) {
   const { id: demanda, projeto, titulo, fase } = ag.demanda;
   const bloqueios = predecessorasDaDemanda(banco, demanda)
     .filter((p) => !satisfazDependencia(p.fase))
@@ -128,12 +153,13 @@ function cartoesDaDemanda(banco: DatabaseSync, ag: AgregadoDemanda, modoDe: (ref
       ...ticketEmCurso(
         ag.tickets.filter((t) => t.rodada_id === r.rodada_id),
         modoDe,
+        comPiAtivo,
       ),
     }));
   }
   const coluna = COLUNA_DA_FASE[fase] ?? (fase as ColunaDoBoard);
   const globais = ag.tickets.filter((t) => t.rodada_id === undefined);
-  return [{ coluna, ref: demanda, ...identificacao, ...ticketEmCurso(globais, modoDe) }];
+  return [{ coluna, ref: demanda, ...identificacao, ...ticketEmCurso(globais, modoDe, comPiAtivo) }];
 }
 
 /** O agendador abre a revisão integral a cada minuto; parada além disso, a demanda precisa do Auditor. */
@@ -232,10 +258,10 @@ type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
 
 /**
  * A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa. A falha, o gate do
- * planejamento e a conversa da sessão de ajustes já vêm da demanda, sem repetir.
+ * planejamento e a conversa da sessão de ajustes já vêm da demanda, sem repetir; o diálogo dela, não.
  */
 export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): EsperaDoAuditor[] {
-  if ((s.motivo !== "dialogo" && s.motivo !== "conversa") || s.etapa === "sessao_em_aberto") return [];
+  if (s.motivo !== "dialogo" && (s.motivo !== "conversa" || s.etapa === "sessao_em_aberto")) return [];
   const pergunta = s.motivo === "dialogo" ? situacaoDa(s.sessao)?.dialogos[0]?.title : undefined;
   return [
     {
@@ -263,6 +289,7 @@ export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situa
   const sessoes = demandas.flatMap((ag) => sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id }));
   const modos = new Map(sessoes.map((s) => [s.ticket, s.modo]));
   const modoDe = (ref: string) => modos.get(ref);
+  const comPiAtivo = ticketsComPiAtivo(banco);
   const tituloDoTicket = new Map(
     demandas.flatMap((ag) => ag.tickets.map((t) => [formatarTicketRef(t), t.titulo] as const)),
   );
@@ -279,7 +306,7 @@ export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situa
         return { ...s, ...(fazendo !== undefined && { fazendo }) };
       }),
     emAndamento: demandas.length,
-    board: demandas.flatMap((ag) => cartoesDaDemanda(banco, ag, modoDe)),
+    board: demandas.flatMap((ag) => cartoesDaDemanda(banco, ag, modoDe, comPiAtivo)),
   };
 }
 

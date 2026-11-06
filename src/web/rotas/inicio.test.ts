@@ -118,12 +118,12 @@ function cenario(): DatabaseSync {
       ('s-titulo', 'I-303', 5, 'autonomo', 'c5'),
       ('s-falha', 'I-303', 6, 'autonomo', 'c6'),
       ('s-viva', 'I-303', 7, 'autonomo', 'c7');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES
-      ('x1', 's-conversa', '${em(0)}', '${em(40)}', 0),
-      ('x3', 's-ajustes', '${em(0)}', '${em(41)}', 0),
-      ('x5', 's-titulo', '${em(30)}', NULL, 0),
-      ('x6', 's-falha', '${em(0)}', '${em(6)}', 1),
-      ('x7', 's-viva', '${em(31)}', NULL, 0);
+    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES
+      ('x1', 's-conversa', '${em(0)}', '${em(40)}', 0, NULL),
+      ('x3', 's-ajustes', '${em(0)}', '${em(41)}', 0, NULL),
+      ('x5', 's-titulo', '${em(30)}', NULL, 0, 4242),
+      ('x6', 's-falha', '${em(0)}', '${em(6)}', 1, NULL),
+      ('x7', 's-viva', '${em(31)}', NULL, 0, NULL);
   `);
   return banco;
 }
@@ -230,6 +230,11 @@ test("board: um cartão por demanda fora da execução e um por rodada aberta ne
       ["desenvolvimento", "I-309", undefined, undefined, undefined, 0, []],
     ],
   );
+  // Só o ticket com o pi no ar (execução aberta e grupo gravado) marca `piAtivo`.
+  assert.deepEqual(
+    dados.board.filter((c) => c.ticket?.piAtivo).map((c) => c.ticket?.ref),
+    ["I-303.T5"],
+  );
   assert.deepEqual(dados.board[0], {
     coluna: "registro",
     ref: "I-300",
@@ -278,6 +283,8 @@ test("esperaDaSessao: o diálogo traz a pergunta do processo vivo; a falha e a s
   assert.equal(esperaDaSessao(sessao, () => undefined)[0]?.pergunta, undefined);
   assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "falha" }, comPergunta), []);
   assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "conversa", etapa: "sessao_em_aberto" }, comPergunta), []);
+  // A pergunta do agente na sessão de ajustes só aparece aqui: a espera da demanda não a mostra.
+  assert.equal(esperaDaSessao({ ...sessao, etapa: "sessao_em_aberto" }, comPergunta)[0]?.pergunta, "Qual ordem?");
 });
 
 test("GET /api/inicio responde com o mês corrente de todos os projetos", async () => {
