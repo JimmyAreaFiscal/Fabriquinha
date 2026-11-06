@@ -13,7 +13,7 @@ import { carregarDemanda, comDemanda, criarDemanda } from "../../persistencia/de
 import { hospedagemFalsa } from "../../repositorio/hospedagem-falsa.test.ts";
 import { cenarioDemanda, commitarCenario, gitCenario } from "../../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/worktree-demanda.ts";
-import { demanda, servir } from "./demandas_cenario.test.ts";
+import { demanda, servir } from "./demandas_cenario.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-acoes-web-")));
