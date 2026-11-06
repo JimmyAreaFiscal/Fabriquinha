@@ -18,6 +18,12 @@ git worktree remove --force /tmp/base
 
 O mesmo `gerar.ts` roda no código da rodada. `fitness/foto-base.test.ts` o roda e exige que o resultado seja a foto da base com só as trocas de texto declaradas nele.
 
+## Divergência com o CG-4 e decisão do Auditor
+
+O CG-4 pede a foto de prompts e saída do CLI **antes** da mudança. Esta foi gerada **depois**, a partir do commit-base `7ce3c2f`, que é anterior à mudança e não muda; por isso a comparação é reproduzível (veja "Como foi gerada").
+
+**Decisão do Auditor (2026-11-06): foto aceita.** O Auditor regerou a foto em `7ce3c2f`, conferiu que é idêntica à do PR (36 arquivos) e declarou que a divergência não é motivo de reprovação. As diferenças intencionais estão em `DIFERENCAS_INTENCIONAIS`, em `fitness/foto-base.test.ts`. Nenhuma mudança de código ou ticket adicional foi pedida.
+
 ## O que a foto cobre
 
 - `textos/`: `avaliacao.md` (a parte fixa do prompt da avaliação, que `promptDaAvaliacao` junta a um cabeçalho que a rodada não tocou), `etapas/*.md` e as skills (`skills/` e `pacote-pi/skills/`).
