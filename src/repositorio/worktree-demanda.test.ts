@@ -22,7 +22,9 @@ function contratoObrigatorio(c: Cenario) {
   // @ts-expect-error varrerBase é obrigatório
   return garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log);
 }
-assert.equal(typeof contratoObrigatorio, "function");
+test("o gancho varrerBase é obrigatório na garantia da worktree da demanda", () => {
+  assert.equal(typeof contratoObrigatorio, "function");
+});
 
 test("nomes, caminhos absolutos irmãos e identidades inválidas antes de I/O", async () => {
   assert.equal(branch, "fabriquinha/D-1");

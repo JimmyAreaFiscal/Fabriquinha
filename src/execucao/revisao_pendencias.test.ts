@@ -35,6 +35,11 @@ const rodada = (fitness: unknown, comprovacao: unknown) =>
 const integral = (e: unknown, s: unknown) =>
   ag("revisar_demanda", { comprovacao_criterios: comprov(true), testes_estresse: e, analise_seguranca: s });
 const ok = { linhas: [linha("a", 0)] };
+const aprova = (a: AgregadoDemanda) => {
+  assert.doesNotThrow(() => {
+    conferirAprovacao(a, 7);
+  });
+};
 const recusa = (a: AgregadoDemanda, ...trechos: string[]) => {
   assert.throws(
     () => {
@@ -45,7 +50,7 @@ const recusa = (a: AgregadoDemanda, ...trechos: string[]) => {
 };
 
 test("rodada aprovada com tudo em ordem (CA-7)", () => {
-  conferirAprovacao(rodada(ok, comprov(true)), 7);
+  aprova(rodada(ok, comprov(true)));
 });
 
 test("recusa citando a fitness que falhou (CA-5)", () => {
@@ -72,8 +77,8 @@ test("recusa não se aplica sem justificativa (CA-15)", () => {
 });
 
 test("integral aprovada, inclusive com não se aplica justificado (CA-16)", () => {
-  conferirAprovacao(integral(estresse("passou"), seguranca("media")), 7);
-  conferirAprovacao(integral({ aplicavel: false, justificativa: "sem carga", cenarios: [] }, seguranca("baixa")), 7);
+  aprova(integral(estresse("passou"), seguranca("media")));
+  aprova(integral({ aplicavel: false, justificativa: "sem carga", cenarios: [] }, seguranca("baixa")));
 });
 
 test("tipo fora do catálogo da etapa é ignorado", () => {
@@ -86,8 +91,8 @@ test("tipo fora do catálogo da etapa é ignorado", () => {
     testes_estresse: estresse("quebrou"),
     analise_seguranca: { aplicavel: false, justificativa: "", cenarios: [], ameacas: [], achados: [] },
   });
-  conferirAprovacao(base, 7);
-  conferirAprovacao(extra, 7);
+  aprova(base);
+  aprova(extra);
   recusa(
     ag("revisar_rodada", { matriz_fitness: ok, testes_estresse: estresse("quebrou") }),
     "comprovacao_criterios ausente",

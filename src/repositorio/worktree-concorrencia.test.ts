@@ -174,8 +174,9 @@ test("preparação da rodada não ocupa a fila", async () => {
   const garantia = garantirWorktreeRodada(c.raiz, barreira.projeto, ref, c.log);
   await barreira.comecou();
   await mutacaoLivre(c);
+  assert.equal(git(c.repo, "config", "teste.livre"), "sim");
   await barreira.liberar();
-  await garantia;
+  await assert.doesNotReject(garantia);
 });
 
 test("preparação após atualização por merge não ocupa a fila", async () => {
