@@ -135,7 +135,7 @@ A exceção é o anexo de Usuário Simulado: `Content-Type: application/octet-st
 | `GET /api/board` | Issues não concluídas de todos os projetos, para o board do Início (4.4). |
 | `GET /api/projetos/:nome/issues?concluidas=&arquivadas=&canceladas=` | Issues do projeto com os seus tickets e as sessões ativas, para a página do projeto (4.4). |
 | `GET /api/metricas?projeto=&de=&ate=` | `MetricasMes[]` (F6, 5.7), um por mês de `de` a `ate`, no formato `AAAA-MM`; padrão: os 11 meses anteriores mais o mês corrente; no máximo 24 meses; sem `projeto`, todos. |
-| `GET /api/metricas/demandas?projeto=&de=&ate=` | `metricasPorDemanda` (F6, 5.8): uma linha por demanda com execução no período. |
+| `GET /api/metricas/issues?projeto=&de=&ate=` | `metricasPorIssue` (F6, 5.8): uma linha por issue com execução no período. |
 | `GET /api/issues/:id` | Agregado da issue com as entregas, projeto, metadados das evidências com os arquivos, as sessões dos tickets e avisos de limpeza (F5, 5.3). |
 | `GET /api/sessoes?escopo=ativas\|historico&projeto=&issue=&etapa=` | Sessões com estado e motivo (F4, 5.2). |
 | `GET /api/sessoes/:sessao` | Metadados da sessão e a conversa até agora (F4, 5.4). |
