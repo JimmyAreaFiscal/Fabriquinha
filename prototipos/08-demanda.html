@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demanda · protótipo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <!--
+    PROTÓTIPO DESCARTÁVEL — três variantes da página da demanda, alternáveis por ?variant=A|B|C e pela barra flutuante (← →).
+    Dados reais da I-251 (copiados em 2026-10-30, só leitura). Nenhuma ação chama a API.
+  -->
+  <style>
+    h3 { font-size: var(--fs-md); }
+    code { font-family: var(--mono); font-size: 0.92em; background: var(--surface-2); padding: 1px 4px; border-radius: var(--r-sm); overflow-wrap: anywhere; }
+    .link { color: var(--accent); font-size: var(--fs-sm); background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }
+    .link:hover { text-decoration: underline; }
+    .migalha { font-size: var(--fs-sm); color: var(--muted); }
+    .migalha a:hover { color: var(--ink); }
+    .titulo-demanda { font-size: var(--fs-2xl); line-height: 1.25; margin: var(--s-2) 0 var(--s-2); }
+    .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+    .md { max-width: 72ch; }
+    .md h2 { font-size: var(--fs-md); margin: var(--s-4) 0 var(--s-1); }
+    .md p, .md ul { margin: var(--s-1) 0; }
+    .md ul { padding-left: var(--s-5); }
+    .titulo-bloco { margin-bottom: var(--s-2); font-size: var(--fs-xs); font-weight: var(--w-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; font-size: var(--fs-xs); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); white-space: nowrap; }
+    .chip.ok { color: var(--closed); border-color: #34502b; }
+    .chip.nok { color: var(--danger); border-color: #5c3022; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .aberto-total .clamp { -webkit-line-clamp: unset; }
+
+    /* Trilho de fases (herdado do 03-issue). */
+    .trilho { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); margin-top: var(--s-4); }
+    .passo { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .passo .linha { position: relative; width: 100%; height: 18px; display: flex; align-items: center; justify-content: center; }
+    .passo .linha::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--line); }
+    .passo:first-child .linha::before { left: 50%; }
+    .passo:last-child .linha::before { right: 50%; }
+    .passo.feito .linha::before { background: var(--closed); }
+    .passo.atual .linha::before { background: linear-gradient(to right, var(--closed) 50%, var(--line) 50%); }
+    .marco { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--line); }
+    .gate .marco { border-radius: 2px; transform: rotate(45deg); width: 11px; height: 11px; }
+    .feito .marco { background: var(--closed); border-color: var(--closed); }
+    .atual .marco { width: 16px; height: 16px; background: var(--claimed); border-color: var(--claimed); box-shadow: 0 0 0 4px rgb(142 188 233 / 0.2); }
+    .passo > span { font-size: var(--fs-xs); color: var(--muted); text-align: center; line-height: 1.25; }
+    .passo.atual > span { color: var(--claimed); font-weight: var(--w-strong); }
+    .trilho.compacto { margin-top: 0; }
+    .trilho.compacto .passo > span { display: none; }
+
+    /* Matriz de critérios × revisões. */
+    .matriz { border-collapse: collapse; font-size: var(--fs-sm); width: 100%; }
+    .matriz th, .matriz td { padding: 6px var(--s-3); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .matriz th { font-weight: var(--w-strong); color: var(--muted); font-size: var(--fs-xs); }
+    .matriz td.c { text-align: center; width: 64px; font-family: var(--mono); }
+    .matriz .sim { color: var(--closed); }
+    .matriz .nao { color: var(--danger); }
+    .matriz tr:last-child td { border-bottom: 0; }
+
+    /* ——— Variante A: foco no próximo passo ——— */
+    .va { max-width: 960px; margin: 0 auto; }
+    .va section { margin-top: var(--s-8); }
+    .proximo { margin-top: var(--s-6); padding: var(--s-5); background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: var(--r-lg); display: grid; grid-template-columns: 1fr auto; gap: var(--s-2) var(--s-6); align-items: start; }
+    .proximo h2 { font-size: var(--fs-lg); }
+    .proximo .btn { height: 40px; padding: 0 var(--s-5); font-size: var(--fs-md); }
+    .alerta { grid-column: 1 / -1; margin-top: var(--s-3); padding: var(--s-3) var(--s-4); background: var(--open-bg); border: 1px solid #5a4720; border-radius: var(--r-md); font-size: var(--fs-sm); }
+    .alerta strong { color: var(--open); }
+    .tentativas { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+    .tentativas > li + li { border-top: 1px solid var(--line); }
+    .tentativas summary { display: grid; grid-template-columns: 110px 1fr auto; gap: var(--s-3); align-items: center; padding: var(--s-3) var(--s-4); cursor: pointer; list-style: none; }
+    .tentativas summary::-webkit-details-marker { display: none; }
+    .tentativas summary:hover { background: var(--surface-2); }
+    .tentativas .corpo { padding: 0 var(--s-4) var(--s-4) calc(110px + var(--s-4) + var(--s-3)); display: flex; flex-direction: column; gap: var(--s-3); font-size: var(--fs-sm); }
+    .tentativas .subticket { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: baseline; }
+    .perigo { margin-top: var(--s-8); padding-top: var(--s-5); border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: var(--s-4); font-size: var(--fs-sm); }
+    .btn-perigo { color: var(--danger); border-color: #5c3022; background: transparent; }
+
+    /* ——— Variante B: mesa com lateral ——— */
+    .vb { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--s-8); align-items: start; max-width: 1280px; margin: 0 auto; }
+    .vb .lateral { position: sticky; top: 64px; max-height: calc(100vh - 80px); overflow: auto; display: flex; flex-direction: column; gap: var(--s-3); }
+    .vb .cartao-lateral { padding: var(--s-3) var(--s-4); }
+    .fatos { display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--s-3); margin: 0; font-size: var(--fs-sm); }
+    .fatos dt { color: var(--muted); }
+    .fatos dd { margin: 0; }
+    .vb .descricao { max-height: 160px; overflow: hidden; position: relative; font-size: var(--fs-sm); }
+    .vb .descricao.aberta { max-height: none; }
+    .vb .descricao:not(.aberta)::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 48px; background: linear-gradient(transparent, var(--surface)); }
+    .lista-ca { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); }
+    .lista-ca li { display: grid; grid-template-columns: 14px 44px 1fr; gap: 6px; align-items: baseline; }
+    .bolinha { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .bolinha.sim { background: var(--closed); }
+    .bolinha.nao { background: var(--danger); }
+    .tempo { list-style: none; margin: 0; padding: 0; position: relative; }
+    .tempo::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+    .tempo > li { position: relative; padding: 0 0 var(--s-4) var(--s-8); }
+    .tempo > li::before { content: ""; position: absolute; left: 2px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--muted); box-sizing: border-box; }
+    .tempo > li.concluido::before { background: var(--closed); border-color: var(--closed); }
+    .tempo > li.recusado::before { background: var(--danger); border-color: var(--danger); }
+    .tempo > li.aberto::before { border-color: var(--accent); box-shadow: 0 0 0 4px rgb(229 173 111 / 0.2); }
+    .tempo .no { padding: var(--s-3) var(--s-4); }
+    .tempo .no.destaque { border-color: var(--accent); }
+    .tempo .cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
+    .tempo .cab .direita { margin-left: auto; display: flex; gap: var(--s-3); align-items: baseline; }
+    .tempo .divisor { padding: var(--s-2) 0 var(--s-3) var(--s-8); }
+
+    /* ——— Variante C: tabela densa + painel ——— */
+    .vc .topo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-4); align-items: end; }
+    .kpis { display: flex; gap: var(--s-2); }
+    .kpi { padding: var(--s-2) var(--s-3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); min-width: 108px; }
+    .kpi strong { display: block; font-size: var(--fs-xl); line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .kpi strong.ruim { color: var(--danger); }
+    .kpi span { font-size: var(--fs-xs); color: var(--muted); }
+    .abas { display: flex; gap: var(--s-1); margin-top: var(--s-6); border-bottom: 1px solid var(--line); }
+    .abas button { all: unset; cursor: pointer; padding: var(--s-2) var(--s-3); font-size: var(--fs-sm); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .abas button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+    .abas .n { font-family: var(--mono); font-size: var(--fs-xs); color: var(--muted); margin-left: 4px; }
+    .mestre { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: var(--s-4); margin-top: var(--s-4); align-items: start; padding-bottom: 72px; }
+    .tabela-t { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .tabela-t th { text-align: left; font-size: var(--fs-xs); color: var(--muted); font-weight: var(--w-strong); padding: 6px var(--s-3); border-bottom: 1px solid var(--line); }
+    .tabela-t td { padding: 8px var(--s-3); border-bottom: 1px solid var(--line); vertical-align: middle; }
+    .tabela-t tbody tr { cursor: pointer; }
+    .tabela-t tbody tr:hover { background: var(--surface); }
+    .tabela-t tbody tr[aria-selected="true"] { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+    .tabela-t .grupo td { cursor: default; background: transparent; font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: var(--w-strong); padding-top: var(--s-4); }
+    .tabela-t .resumo { max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .res-ok { color: var(--closed); } .res-nok { color: var(--danger); }
+    .painel { position: sticky; top: 64px; max-height: calc(100vh - 150px); overflow: auto; padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); font-size: var(--fs-sm); }
+    .painel h2 { font-size: var(--fs-lg); }
+    .ca-det { display: grid; grid-template-columns: 52px 1fr; gap: var(--s-2); padding: var(--s-2) 0; border-top: 1px solid var(--line); }
+    .barra-acao { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; align-items: center; gap: var(--s-4); padding: var(--s-3) var(--s-6); background: var(--surface); border-top: 1px solid var(--line); font-size: var(--fs-sm); }
+    .barra-acao .direita { margin-left: auto; display: flex; gap: var(--s-2); }
+
+    @media (max-width: 1100px) {
+      .vb { grid-template-columns: 1fr; }
+      .vb .lateral { position: static; max-height: none; }
+      .mestre { grid-template-columns: 1fr; }
+      .painel { position: static; max-height: none; }
+      .vc .topo { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      .pagina { padding: var(--s-4); }
+      .trilho .passo > span { display: none; }
+      .proximo { grid-template-columns: 1fr; }
+      .tentativas summary { grid-template-columns: 1fr auto; }
+      .tentativas summary .muted { display: none; }
+      .tentativas .corpo { padding-left: var(--s-4); }
+      .kpis { flex-wrap: wrap; }
+      .tabela-t .esconde { display: none; }
+      .barra-acao { padding: var(--s-3) var(--s-4); }
+      .barra-acao .texto, .barra-acao .btn:not(.btn-primario) { display: none; }
+      .matriz .muted { display: none; }
+      .matriz th, .matriz td { padding: 6px var(--s-2); }
+      .matriz td.c { width: auto; }
+    }
+
+    /* Barra do protótipo: propositalmente fora do visual da página. */
+    .switcher { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); z-index: 9; display: flex; align-items: center; gap: var(--s-2); padding: 6px 8px; background: #f4efe6; color: #141311; border-radius: 999px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.5); font-size: var(--fs-sm); font-weight: var(--w-strong); }
+    .switcher button { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; }
+    .switcher button:hover { background: #ddd5c6; }
+    .switcher span { padding: 0 var(--s-2); white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <span class="marca">Fabriquinha</span>
+    <nav aria-label="Páginas">
+      <a href="01-inicio.html" aria-current="page">Início <span class="contador">3</span></a>
+      <a href="02-projeto.html">Projetos</a><a href="#">Simulação</a><a href="04-metricas.html">Métricas</a>
+      <a href="05-historico.html">Histórico</a><a href="#">Avaliações</a><a href="07-configuracao.html">Configuração</a>
+    </nav>
+  </header>
+  <main class="pagina" id="raiz"></main>
+  <div class="switcher" role="toolbar" aria-label="Variantes do protótipo">
+    <button type="button" id="ant" aria-label="Variante anterior">←</button><span id="rotulo-variante"></span><button type="button" id="prox" aria-label="Próxima variante">→</button>
+  </div>
+
+  <script>
+  const DADOS = {"demanda": {"id": "I-251", "projeto": "aira-backend", "titulo": "Progresso da Análise deixa de ser espelhado no Redis", "tipo": "problema", "descricao": "## Problema\n\nA Análise grava o progresso de cada execução num HASH do Redis (`analysis:runstate:task_execution:{analysis_id}`), mas nada no sistema lê esse dado.\nO método `get_state` de `src/analises/analise/execucao/task_execution/application/services/task_computation_service.py:298` não tem nenhum chamador em `src/`.\nO progresso que a interface consome é o snapshot durável, gravado pelo `progress_callback`; o espelho no Redis é uma cópia que só se escreve.\n\nCódigo envolvido:\n\n- `src/analises/analise/execucao/task_execution/infra/run_state/redis_run_state_store.py` e `redis_run_state_store_factory.py`;\n- `src/analises/analise/execucao/task_execution/application/ports/outbound/run_state_store_factory.py`;\n- `src/shared/pipeline/run_state.py` (protocolo `RunProgressWriter`);\n- `_with_run_state_mirror` e `get_state` em `task_computation_service.py`;\n- `_get_run_state_redis_client` em `src/analises/analise/ciclo_de_vida/bootstrap/container.py`.\n\nEsta demanda é a primeira de três que trocam Celery, gevent e o broker Redis pelo Azure Service Bus com KEDA.\nEla é independente das outras duas: remove um consumidor do Redis que não tem função.\n\n## Decisões travadas com o usuário\n\n- O run-state da Análise é removido inteiro, junto com o protocolo `RunProgressWriter`.\n- O Redis continua existindo: o cache de projeção de `servidores` (`src/servidores/infra/cache/redis_projection_cache.py`) segue nele.\n\n## Assunções a confirmar\n\n- Nenhum cliente externo (frontend, AIRA-Automações) lê as chaves `analysis:runstate:*` direto no Redis; a busca cobriu só este repositório.\n- O snapshot durável de progresso (o `progress_callback`) continua exatamente como está.\n\n## Fora de escopo\n\n- A troca do broker (I-252 e I-253).\n- O cache de projeção de `servidores` no Redis.\n- A documentação (ADR-ANALYSIS-018 e o addendum do run-state): só o usuário escreve em `docs/`.\n", "fase": "execucao"}, "criterios": [{"id": "CA-1", "dado": "o stack de development no ar e um Redis local sem nenhuma chave `analysis:runstate:*`", "quando": "uma Análise de um Objeto de Controle executa até o fim", "entao": "`redis-cli --scan --pattern 'analysis:runstate:*'` não devolve nenhuma chave"}, {"id": "CA-2", "dado": "a mesma Análise do CA-1 e uma execução do mesmo Processo feita na `main`", "quando": "as duas Análises terminam", "entao": "o documento da Análise no Cosmos registra os mesmos marcos de progresso nas duas execuções"}, {"id": "CA-3", "dado": "o repositório depois da mudança", "quando": "se roda `grep -rnE 'run_state|RunProgressWriter|runstate' src/`", "entao": "a busca não encontra nenhuma ocorrência"}, {"id": "CA-4", "dado": "o repositório depois da mudança", "quando": "se rodam `ruff check`, o mypy e `pytest tests/unit tests/integration tests/component tests/fitness`", "entao": "todos terminam com código de saída 0"}, {"id": "CA-5", "dado": "o Redis fora do ar em development", "quando": "uma Análise executa", "entao": "a Análise conclui normalmente, sem nenhum log `run_state.*`"}], "rodadas": [{"ref": "I-251.R1", "titulo": "Remover o run-state da Análise no Redis", "fase": "desenvolvimento"}], "tickets": [{"ref": "I-251.T1", "etapa": "demanda", "status": "concluido", "elegivel": false, "decisao": {"resultado": "aprovado", "por": "auditor", "motivo": null}}, {"ref": "I-251.T2", "etapa": "planejar", "status": "concluido", "elegivel": false, "sessao": "0da24601-03e0-42f6-a252-47fdc3520626", "decisao": {"resultado": "aprovado", "por": "auditor", "motivo": null}, "ev": {}}, {"ref": "I-251.T3", "etapa": "implementar", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "titulo": "Remover o run-state do código e dos testes", "sessao": "8e9592fa-1444-45af-bf40-e78519885b01", "ev": {"testes": {"ok": true, "ms": 153344}, "fitness": {"ok": 6, "total": 6}, "sonar": {"ok": true, "issues": 0}}}, {"ref": "I-251.T4", "etapa": "implementar", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "titulo": "Tirar o run-state da documentação dos módulos em src/", "sessao": "56ec37b0-2cc2-4ff3-8f4d-bdb2d0a4e6fa", "ev": {"testes": {"ok": true, "ms": 137721}, "fitness": {"ok": 6, "total": 6}, "sonar": {"ok": true, "issues": 0}}}, {"ref": "I-251.T5", "etapa": "revisar_rodada", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "sessao": "e7bcba35-4d67-45d1-9b40-7fb5ccd357b4", "decisao": {"resultado": "recusado", "por": "agente", "motivo": "CA-3 e CA-4 comprovados; seis fitness functions aprovadas. CA-1, CA-2 e CA-5 não comprovados: falta configuração de development isolado nesta worktree e não foram executados Análise real, comparação Cosmos com main nem execução com Redis indisponível. Revisão estática não substitui os experimentos exigidos."}, "ev": {"diff": {"n": 20, "add": 59, "rem": 819}, "fitness": {"ok": 6, "total": 6}, "ca": {"CA-1": false, "CA-2": false, "CA-3": true, "CA-4": true, "CA-5": false}, "imagens": ["ca-1-2-5-bloqueio.png", "ca-3-grep.png", "ca-4-gates.png"], "comoVerificado": {"CA-1": "Verifiquei a pré-condição de development nesta worktree: test -f deployment/development/.env.development retornou 1 (ausente); a skill local indicada para provisionamento também está ausente. Não provisionei stack sem configuração isolada nem usei os containers de outro ambiente. Não executei Análise nem redis-cli após conclusão. Esperado: Análise concluída e scan sem analysis:runstate:*; observado: experimento bloqueado, não comprovado. A remoção estática dos escritores é contexto, não substitui o experimento.", "CA-2": "O development isolado desta worktree não está configurado (.env.development ausente, test retornou 1). Não executei o mesmo Processo nesta branch e na main, nem obtive documentos Cosmos das duas execuções. Esperado: mesmos marcos duráveis; observado: comparação real indisponível. No diff, o callback segue diretamente para _build_transitions e analysis_progress_reporter.py não foi alterado; isso é evidência estática de preservação, não prova da igualdade exigida.", "CA-3": "Executei grep -rnE 'run_state|RunProgressWriter|runstate' src/ na worktree I-251.R1. Não houve saída e o código foi 1, que neste comando significa nenhuma ocorrência. A busca incluiu Python e markdown, como exigido.", "CA-4": "Executei .venv/bin/ruff check (All checks passed!, exit 0), .venv/bin/mypy src (692 arquivos, exit 0) e .venv/bin/python -m pytest tests/unit tests/integration tests/component tests/fitness -q -o addopts='' --import-mode=importlib -p no:cacheprovider (4572 passed em 87,33 s, exit 0). Foram desativados caches de Ruff/mypy e reports padrão de pytest para não gerar alterações no código. O anexo apresenta a transcrição resumida dos resultados dos três logs integrais desta execução.", "CA-5": "A configuração de development isolado está ausente nesta worktree. Não desliguei o Redis de outro ambiente nem executei uma Análise com Redis indisponível. Esperado: conclusão normal sem logs run_state.*; observado: experimento não executável com as pré-condições disponíveis. A ausência dos escritores e logs no código não demonstra a conclusão sob indisponibilidade; o broker Redis continua no escopo existente."}}}, {"ref": "I-251.T6", "etapa": "implementar", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "titulo": "Comprovar CA-1, CA-2 e CA-5 em development isolado", "sessao": "693339c3-1c33-4d16-8fce-814eb7a67cb7", "ev": {"testes": {"ok": true, "ms": 148773}, "fitness": {"ok": 6, "total": 6}, "sonar": {"ok": true, "issues": 0}}}, {"ref": "I-251.T7", "etapa": "revisar_rodada", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "sessao": "8511e79d-3d17-4aa5-88e8-0d747f9d7638", "decisao": {"resultado": "recusado", "por": "agente", "motivo": "As seis fitness functions passaram; CA-3 e CA-4 comprovados (Ruff, mypy e 4572 testes com saída 0). CA-1, CA-2 e CA-5 não comprovados: falta configuração gerada de development nesta worktree; stack existente usa outro checkout; nenhuma Análise real, comparação Cosmos com main ou execução sem Redis foi realizada. I-251.T6 tem commit vazio e não supriu a comprovação runtime. Evidências submetidas em I-251.T7; nenhuma regressão funcional concreta identificada no diff."}, "ev": {"diff": {"n": 20, "add": 59, "rem": 819}, "fitness": {"ok": 6, "total": 6}, "ca": {"CA-1": false, "CA-2": false, "CA-3": true, "CA-4": true, "CA-5": false}, "imagens": ["ca-3.png", "ca-4.png", "ca-1-2-5-bloqueio.png"], "comoVerificado": {"CA-1": "Inspecionei as pré-condições nesta worktree: AIRA_DEV_OWNER está preenchido, mas config.dev.generated.json e a skill de ambiente isolado indicada pelo projeto estão ausentes. O HTTP development existente monta src de outro checkout. Não iniciei Análise nem executei scan antes/depois: esperado Redis sem analysis:runstate:* após execução completa; observado experimento bloqueado, não comprovado.", "CA-2": "Sem ambiente pronto desta worktree, não executei Análise nem obtive documentos Cosmos dela e da main para o mesmo Processo. O diff preserva o callback e a política durável, mas isso não prova igualdade dos marcos. O teste test_progress_callback_receives_each_emission chama emit_progress diretamente, não exercita TaskComputationService.run. Esperado comparar marcos reais; observado comparação não executada.", "CA-3": "Executei grep -rnE 'run_state|RunProgressWriter|runstate' src/ nesta worktree. Nenhuma linha retornada e código 1 (nenhuma correspondência). Confirmei a remoção dos arquivos, imports, factory, get_state e wrapper; o cache de servidores e o broker não foram alterados.", "CA-4": "Executei .venv/bin/ruff check: All checks passed!, código 0; .venv/bin/mypy src: Success: no issues found in 692 source files, código 0; .venv/bin/python -m pytest tests/unit tests/integration tests/component tests/fitness -q --import-mode=importlib -o addopts=\"\": 4572 passed in 81.26s, código 0. Mesmas quatro camadas solicitadas, sem falhas.", "CA-5": "Não desliguei Redis nem usei containers de outro checkout. Faltam configuração gerada e skill de isolamento nesta worktree; não houve Análise real com Redis indisponível nem coleta dos logs dessa execução. Esperado conclusão normal sem run_state.*; observado experimento não executado. Remover o adapter prova apenas ausência estática do espelho; Redis continua no broker/backend e no cache de servidores, portanto não se pode inferir independência geral da Análise."}}}, {"ref": "I-251.T8", "etapa": "implementar", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "titulo": "Comprovar CA-1, CA-2 e CA-5 com execuções reais e anexos verificáveis", "sessao": "1c73760d-4a8f-4a51-b31f-70e4ad819d99", "ev": {"testes": {"ok": true, "ms": 142407}, "fitness": {"ok": 6, "total": 6}, "sonar": {"ok": true, "issues": 0}}}, {"ref": "I-251.T9", "etapa": "revisar_rodada", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "sessao": "f926157a-b2c9-4c9b-b0ca-25158a9d30d7", "decisao": {"resultado": "recusado", "por": "agente", "motivo": "As seis fitness functions passaram; CA-3 e CA-4 comprovados nesta revisão (Ruff, mypy e 4572 testes com saída 0). CA-1, CA-2 e CA-5 não comprovados: configuração gerada ausente nesta worktree, stack ativo monta outro checkout e nenhuma Análise real, comparação Cosmos com main ou execução sem Redis foi realizada. I-251.T8 é commit vazio e não supre a prova runtime. Evidências submetidas em I-251.T9. Não foi identificada regressão funcional concreta no diff."}, "ev": {"diff": {"n": 20, "add": 59, "rem": 819}, "fitness": {"ok": 6, "total": 6}, "ca": {"CA-1": false, "CA-2": false, "CA-3": true, "CA-4": true, "CA-5": false}, "imagens": ["ca-3.png", "ca-4.png", "ca-1-2-5-ambiente.png"], "comoVerificado": {"CA-1": "Nesta worktree há .env.development com AIRA_DEV_OWNER definido, mas não há config.dev.generated.json nem a skill de isolamento indicada em AGENTS.md. docker inspect mostra API e worker montando outro checkout (python-3-15), não esta rodada. Não se resetou esse stack nem se desligou seu Redis. Esperado: Análise completa com scan analysis:runstate:* vazio antes/depois. Observado: somente diagnóstico de ambiente; não houve Análise nem scan associado nesta execução. O commit de I-251.T8 não altera arquivos e não fornece prova runtime. A imagem é transcrição do diagnóstico, não da conclusão da Análise.", "CA-2": "Nesta worktree há .env.development com AIRA_DEV_OWNER definido, mas não há config.dev.generated.json nem a skill de isolamento indicada em AGENTS.md. docker inspect mostra API e worker montando outro checkout (python-3-15), não esta rodada. Não se resetou esse stack nem se desligou seu Redis. Esperado: mesmo Processo executado nesta rodada e na main com marcos iguais nos documentos Cosmos. Observado: nenhuma das duas execuções nem comparação Cosmos foi realizada nesta revisão. O diff preserva o callback e sua persistência, mas isso não substitui a comparação exigida. A imagem mostra apenas o bloqueio.", "CA-3": "Executei grep -rnE 'run_state|RunProgressWriter|runstate' src/ nesta worktree, sem filtro de extensão: nenhuma linha retornada, saída 1 (sem correspondências). A imagem transcreve a saída capturada. Diff confirma exclusão de store, factory, port, protocolo e wiring.", "CA-4": "Executei .venv/bin/ruff check (All checks passed!, saída 0), .venv/bin/mypy src (Success: no issues found in 692 source files, saída 0) e .venv/bin/python -m pytest tests/unit tests/integration tests/component tests/fitness -q -o addopts=\"\" --import-mode=importlib (4572 passed in 77.40s, saída 0). O override de addopts remove apenas relatórios/cobertura e verbosidade padrão; as quatro camadas exigidas foram executadas. A imagem transcreve a saída completa capturada.", "CA-5": "Nesta worktree há .env.development com AIRA_DEV_OWNER definido, mas não há config.dev.generated.json nem a skill de isolamento indicada em AGENTS.md. docker inspect mostra API e worker montando outro checkout (python-3-15), não esta rodada. Não se resetou esse stack nem se desligou seu Redis. Esperado: Análise concluída com Redis indisponível e sem logs run_state.*. Observado: experimento não realizado; desligar Redis do stack de outro checkout seria indevido. O broker Redis foi preservado e seu efeito precisa ser explicitado na prova. Ausência literal de referências em src/ não comprova conclusão runtime."}}}, {"ref": "I-251.T10", "etapa": "implementar", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "titulo": "Entregar prova runtime verificável dos CA-1, CA-2 e CA-5", "sessao": "51a11ebe-a04a-463a-b56e-05270039e220", "ev": {"testes": {"ok": true, "ms": 147133}, "fitness": {"ok": 6, "total": 6}, "sonar": {"ok": true, "issues": 0}}}, {"ref": "I-251.T11", "etapa": "revisar_rodada", "status": "concluido", "elegivel": false, "rodada": "I-251.R1", "sessao": "4ee7062e-82f7-491c-95ff-af4d197c85eb", "decisao": {"resultado": "recusado", "por": "agente", "motivo": "As seis fitness functions passaram; CA-3 e CA-4 comprovados nesta revisão: Ruff e mypy com saída 0 e 4572 testes aprovados. CA-1, CA-2 e CA-5 não comprovados: a configuração gerada existe, mas API e worker ativos montam outro checkout (python-3-15). Não houve Análise real desta revisão, comparação Cosmos com main nem execução sem Redis. Não foi identificado bug funcional na remoção do espelho; a documentação em src/ afirma independência Redis de forma ampla apesar do broker/backend Redis preservados. As duas evidências foram aceitas em I-251.T11, com impedimentos e resultados registrados."}, "ev": {"diff": {"n": 20, "add": 59, "rem": 819}, "fitness": {"ok": 6, "total": 6}, "ca": {"CA-1": false, "CA-2": false, "CA-3": true, "CA-4": true, "CA-5": false}, "imagens": ["ca-3-busca.png", "ca-4-verificacoes.png", "ca-1-ca-2-ca-5-ambiente.png"], "comoVerificado": {"CA-1": "Verifiquei nesta execução o ambiente por docker inspect e /health (HTTP 200). AIRA_DEV_OWNER está definido e config.dev.generated.json existe, mas API e worker ativos montam src/ e configuração do checkout python-3-15, não desta worktree. Não alterei esse stack nem executei deploy/reset: a skill de isolamento exigida também está ausente no caminho indicado. Esperado: Análise desta revisão concluída e scans Redis antes/depois vazios; observado: ambiente de outro checkout, sem execução nem scans que comprovem CA-1. O anexo demonstra o impedimento, não o resultado runtime.", "CA-2": "Inspecionei ambiente e diff: o serviço agora entrega progress_callback diretamente às transições e o reporter e a persistência Cosmos não foram alterados. Isso é contexto estático, não comparação experimental. API e worker ativos montam python-3-15; não executei o mesmo Processo nesta worktree e na main nem obtive dois documentos Cosmos. Esperado: mesmos marcos de progresso nas duas Análises concluídas; observado: comparação não realizada por falta de stack desta revisão utilizável sem interferir no outro checkout. Anexo registra as montagens e health.", "CA-3": "Executei grep -rnE 'run_state|RunProgressWriter|runstate' src/ nesta worktree, sem restringir extensão. Nenhuma linha retornada; exit 1, que significa ausência de correspondências (não erro de execução). O anexo ca-3-busca.png mostra comando e resultado.", "CA-4": "Executei .venv/bin/ruff check (All checks passed!, saída 0), .venv/bin/mypy src (Success: no issues found in 692 source files, saída 0) e .venv/bin/python -m pytest tests/unit tests/integration tests/component tests/fitness -q --import-mode=importlib -o addopts=\"\" (4572 passed in 78.26s, saída 0). Addopts foi neutralizado apenas para não gerar relatórios de cobertura na worktree; as quatro árvores exigidas foram executadas. Anexo mostra os resultados finais reais.", "CA-5": "Verifiquei por docker inspect que API/worker ativos pertencem ao checkout python-3-15. Não desliguei seu Redis nem executei Análise sem Redis nesta worktree; logo não há conclusão nem logs runtime para comprovar ausência de run_state.*. O diff remove os logs/cliente do espelho, mas shared/workers/config.py mantém broker_url e result_backend no Redis: isso impede inferir independência integral do Redis. Esperado: Análise concluída em development com Redis fora do ar e sem esses logs; observado: experimento não realizado para não afetar outro stack. Anexo comprova o impedimento de ambiente."}}}, {"ref": "I-251.T12", "etapa": "implementar", "status": "aberto", "elegivel": true, "rodada": "I-251.R1", "titulo": "Disponibilizar ambiente da revisão e comprovar CA-1, CA-2 e CA-5", "instrucao": "Continue", "sessao": "0f35a8e6-1618-4559-8c82-1dd554fea29f"}], "desenho": {"resumo": "Remover o espelho de progresso da Análise no Redis (run-state), que só é escrito e nunca lido.\n\n- Apagar a pasta `task_execution/infra/run_state/`, o port `run_state_store_factory.py` e `shared/pipeline/run_state.py`.\n- Em `task_computation_service.py`: remover `_with_run_state_mirror`, `get_state` e o parâmetro `run_state_writer`; o `progress_callback` passa direto, sem embrulho.\n- Em `ciclo_de_vida/bootstrap/container.py`: remover `_get_run_state_redis_client` e a injeção do `RedisRunStateStoreFactory`.\n- O snapshot durável de progresso não muda.\n- O cliente Redis assíncrono (`shared/workers/connection.py:get_async_redis_connection`) fica, porque o cache de `servidores` o usa.", "arquivos": 10}, "custos": {"saida": 23514, "cache": 2300059, "modelo": "claude-opus-5-5"}};
+
+  // ——— utilidades ———
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const emLinha = (s) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  function md(texto) {
+    let html = "", lista = false;
+    for (const linha of texto.split("\n")) {
+      const item = linha.match(/^- (.*)/);
+      if (item && !lista) { html += "<ul>"; lista = true; }
+      if (!item && lista) { html += "</ul>"; lista = false; }
+      if (item) html += `<li>${emLinha(item[1])}</li>`;
+      else if (linha.startsWith("## ")) html += `<h2>${emLinha(linha.slice(3))}</h2>`;
+      else if (linha.trim()) html += `<p>${emLinha(linha)}</p>`;
+    }
+    return html + (lista ? "</ul>" : "");
+  }
+  const curto = (ref) => ref.split(".").pop();
+  const ETAPA = { demanda: "Demanda", planejar: "Planejamento", implementar: "Implementação", revisar_rodada: "Revisão da rodada" };
+  const FASES = [
+    ["registro", "Registro"], ["aprovacao_demanda", "Aprovação da demanda", true], ["planejamento", "Planejamento"],
+    ["aprovacao_planejamento", "Aprovação do planejamento", true], ["execucao", "Execução"], ["revisao_demanda", "Revisão da demanda"],
+    ["encerramento", "Encerramento"], ["concluida", "Concluída"],
+  ];
+  const { demanda, criterios, tickets, rodadas, custos, desenho } = DADOS;
+  const revisoes = tickets.filter((t) => t.etapa === "revisar_rodada");
+  const proximo = tickets.find((t) => t.status === "aberto" && t.elegivel);
+  const ultimaRevisao = revisoes.at(-1);
+  const casFalhosSempre = criterios.map((c) => c.id).filter((id) => revisoes.every((r) => r.ev?.ca?.[id] === false));
+  const comprovados = criterios.filter((c) => ultimaRevisao?.ev?.ca?.[c.id]).length;
+  const listaHumana = (xs) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} e ${xs.at(-1)}` : xs.join("");
+
+  // As tentativas da rodada: os tickets de implementação seguidos da revisão que os julga.
+  function tentativasDaRodada(rodada) {
+    const grupos = []; let atual = [];
+    for (const t of tickets.filter((x) => x.rodada === rodada)) {
+      atual.push(t);
+      if (t.etapa === "revisar_rodada") { grupos.push(atual); atual = []; }
+    }
+    if (atual.length) grupos.push(atual);
+    return grupos;
+  }
+
+  function trilho(compacto = false) {
+    const i = FASES.findIndex(([f]) => f === demanda.fase);
+    return `<div class="trilho${compacto ? " compacto" : ""}" aria-label="Fase: ${esc(FASES[i][1])}">${FASES.map(([, rotulo, gate], j) =>
+      `<div class="passo${gate ? " gate" : ""}${j < i ? " feito" : j === i ? " atual" : ""}"${j === i ? ' aria-current="step"' : ""}><div class="linha"><span class="marco"></span></div><span>${rotulo}</span></div>`).join("")}</div>`;
+  }
+
+  function chipsDeEvidencia(ev) {
+    if (!ev) return "";
+    const c = [];
+    if (ev.testes) c.push(`<span class="chip ${ev.testes.ok ? "ok" : "nok"}">testes ${ev.testes.ok ? "✓" : "✗"} · ${Math.round(ev.testes.ms / 1000)}s</span>`);
+    if (ev.fitness) c.push(`<span class="chip ${ev.fitness.ok === ev.fitness.total ? "ok" : "nok"}">fitness ${ev.fitness.ok}/${ev.fitness.total}</span>`);
+    if (ev.sonar) c.push(`<span class="chip ${ev.sonar.ok ? "ok" : "nok"}">sonar ${ev.sonar.issues} issues</span>`);
+    if (ev.diff) c.push(`<span class="chip">${ev.diff.n} arquivos · <span style="color:var(--closed)">+${ev.diff.add}</span> <span style="color:var(--danger)">−${ev.diff.rem}</span></span>`);
+    if (ev.ca) c.push(...Object.entries(ev.ca).map(([id, ok]) => `<span class="chip ${ok ? "ok" : "nok"}">${id} ${ok ? "✓" : "✗"}</span>`));
+    if (ev.imagens) c.push(...ev.imagens.map((n) => `<a class="chip" href="#">▣ ${esc(n)}</a>`));
+    return `<div class="chips">${c.join("")}</div>`;
+  }
+
+  function matrizDeCriterios() {
+    return `<div class="superficie" style="overflow-x:auto"><table class="matriz"><thead><tr><th>Critério</th>${revisoes.map((r) => `<th style="text-align:center">${curto(r.ref)}</th>`).join("")}</tr></thead><tbody>${criterios.map((c) =>
+      `<tr><td><strong class="mono">${c.id}</strong> <span class="muted">${emLinha(c.entao)}</span></td>${revisoes.map((r) => {
+        const ok = r.ev?.ca?.[c.id];
+        return `<td class="c ${ok ? "sim" : "nao"}" title="${esc(r.ev?.comoVerificado?.[c.id] ?? "")}">${ok ? "✓" : "✗"}</td>`;
+      }).join("")}</tr>`).join("")}</tbody></table></div>`;
+  }
+
+  const cabecalho = () => `<div class="migalha"><a href="01-inicio.html">Início</a> / <a href="02-projeto.html">${esc(demanda.projeto)}</a> / <span class="mono">${esc(demanda.id)}</span></div>
+    <h1 class="titulo-demanda">${esc(demanda.titulo)}</h1>
+    <div class="meta"><span class="id">${esc(demanda.id)}</span><span class="tag">${esc(demanda.projeto)}</span><span class="tag">${esc(demanda.tipo)}</span><span class="pill pill-rodando">Execução</span><span class="muted" style="font-size:var(--fs-sm)">· rodada ${curto(rodadas[0].ref)} em desenvolvimento</span></div>`;
+
+  const alertaDeRepeticao = () => casFalhosSempre.length && revisoes.length > 1
+    ? `<div class="alerta"><strong>A rodada está andando em círculo.</strong> ${revisoes.length} revisões seguidas recusaram pelo mesmo motivo: ${listaHumana(casFalhosSempre)} nunca foram comprovados. Executar de novo com “Continue” tende a repetir o resultado.</div>`
+    : "";
+
+  // ——— Variante A: um só fluxo, do que pede decisão para o histórico ———
+  function varianteA() {
+    const grupos = tentativasDaRodada(rodadas[0].ref);
+    const linhas = grupos.map((g, i) => {
+      const rev = g.find((t) => t.etapa === "revisar_rodada");
+      const impl = g.filter((t) => t.etapa === "implementar");
+      const estado = rev ? `<span class="pill pill-falha">Recusada</span>` : `<span class="pill pill-neutro">Aberta</span>`;
+      return `<li><details${rev ? "" : " open"}><summary><span class="mono">Tentativa ${i + 1}</span><span>${esc(impl.map((t) => t.titulo).join(" · "))}<span class="muted"> — ${g.map((t) => curto(t.ref)).join(" → ")}</span></span>${estado}</summary>
+        <div class="corpo">${impl.map((t) => `<div><div class="subticket"><span class="id">${curto(t.ref)}</span> Implementação <a class="link" href="#">chat →</a></div>${chipsDeEvidencia(t.ev)}</div>`).join("")}
+        ${rev ? `<div><div class="subticket"><span class="id">${curto(rev.ref)}</span> Revisão <a class="link" href="#">chat →</a></div>${chipsDeEvidencia(rev.ev)}<p class="md" style="margin:var(--s-2) 0 0">${emLinha(rev.decisao.motivo)}</p></div>` : ""}</div></details></li>`;
+    });
+    const antes = tickets.filter((t) => !t.rodada).map((t) => `<li><details><summary><span class="mono">${curto(t.ref)}</span><span>${ETAPA[t.etapa]} <span class="muted">— aprovado pelo Auditor</span></span><span class="pill pill-ok">Aprovado</span></summary><div class="corpo"><a class="link" href="#">chat →</a></div></details></li>`);
+    return `<div class="va">${cabecalho()}${trilho()}
+      <div class="proximo">
+        <div><div class="titulo-bloco">Próximo passo · ${curto(proximo.ref)}</div><h2>${esc(proximo.titulo)}</h2><p class="muted" style="margin:var(--s-1) 0 0;font-size:var(--fs-sm)">Implementação aberta, com a instrução “${esc(proximo.instrucao)}”.</p></div>
+        <div class="chips" style="align-self:center"><button class="btn">Mudar instrução</button><button class="btn btn-primario">Executar agora</button></div>
+        ${alertaDeRepeticao()}
+      </div>
+      <section><div class="secao-titulo"><h2>Critérios de aceite</h2><span class="muted" style="font-size:var(--fs-sm)">${comprovados} de ${criterios.length} comprovados na última revisão</span></div>${matrizDeCriterios()}</section>
+      <section><div class="secao-titulo"><h2>Rodada ${curto(rodadas[0].ref)} · ${esc(rodadas[0].titulo)}</h2></div><ul class="tentativas">${linhas.reverse().join("")}</ul></section>
+      <section><div class="secao-titulo"><h2>Antes da rodada</h2></div><ul class="tentativas">${antes.reverse().join("")}</ul></section>
+      <section><details><summary class="secao-titulo" style="cursor:pointer"><h2>Descrição e desenho</h2></summary><div class="md">${md(demanda.descricao)}<h2>Desenho da solução</h2>${md(desenho.resumo)}</div></details></section>
+      <div class="perigo"><span class="muted">Cancelar encerra a demanda e as que dependem dela.</span><button class="btn btn-perigo">Cancelar a demanda</button></div>
+    </div>`;
+  }
+
+  // ——— Variante B: lateral com o contexto fixo, linha do tempo no centro ———
+  function varianteB() {
+    const no = (t) => {
+      const recusado = t.decisao?.resultado === "recusado";
+      const classe = t.status === "aberto" ? "aberto" : recusado ? "recusado" : "concluido";
+      const resultado = t.decisao ? `<span class="${recusado ? "res-nok" : "res-ok"}">${recusado ? "✗ Recusado" : "✓ Aprovado"}</span>` : t.status === "aberto" ? `<span class="pill pill-neutro">Aberto</span>` : `<span class="muted">concluído</span>`;
+      const motivo = t.decisao?.motivo ? `<p class="clamp" style="margin:var(--s-2) 0 0;font-size:var(--fs-sm)">${emLinha(t.decisao.motivo)}</p><button class="link" onclick="this.closest('.no').classList.toggle('aberto-total')">ler tudo</button>` : "";
+      const acao = t.status === "aberto" ? `<div class="chips" style="margin-top:var(--s-3)"><button class="btn">Mudar instrução</button><button class="btn btn-primario">Executar agora</button></div>` : "";
+      return `<li class="${classe}"${t === proximo ? ' id="proximo"' : ""}><div class="no superficie${t === proximo ? " destaque" : ""}">
+        <div class="cab"><span class="id">${curto(t.ref)}</span><strong>${ETAPA[t.etapa]}</strong>${t.titulo ? `<span>${esc(t.titulo)}</span>` : ""}<span class="direita">${resultado}<a class="link" href="#">chat →</a></span></div>
+        ${t.instrucao ? `<p class="muted" style="margin:var(--s-1) 0 0;font-size:var(--fs-sm)">Instrução: “${esc(t.instrucao)}”</p>` : ""}
+        ${t.ev ? `<div style="margin-top:var(--s-2)">${chipsDeEvidencia(t.ev)}</div>` : ""}${motivo}${acao}</div></li>`;
+    };
+    const globais = tickets.filter((t) => !t.rodada);
+    const daRodada = tickets.filter((t) => t.rodada);
+    return `${cabecalho()}${trilho()}
+      <div class="vb" style="margin-top:var(--s-6)">
+        <aside class="lateral">
+          ${proximo ? `<div class="superficie cartao-lateral" style="border-color:var(--accent)"><div class="titulo-bloco">Aguarda você</div><p style="margin:0 0 var(--s-2);font-size:var(--fs-sm)"><span class="id">${curto(proximo.ref)}</span> ${esc(proximo.titulo)}</p><a class="link" href="#proximo">ir para o ticket ↓</a></div>` : ""}
+          <div class="superficie cartao-lateral"><div class="titulo-bloco">Critérios de aceite</div><ul class="lista-ca">${criterios.map((c) => {
+            const ok = ultimaRevisao?.ev?.ca?.[c.id];
+            return `<li title="${esc(c.entao)}"><span class="bolinha ${ok ? "sim" : "nao"}"></span><span class="mono">${c.id}</span><span class="muted">${ok ? "comprovado" : `falhou em ${revisoes.filter((r) => r.ev?.ca?.[c.id] === false).length} revisões`}</span></li>`;
+          }).join("")}</ul></div>
+          <div class="superficie cartao-lateral"><div class="titulo-bloco">Descrição</div><div class="descricao md">${md(demanda.descricao)}</div><button class="link" onclick="const d=this.previousElementSibling;d.classList.toggle('aberta');this.textContent=d.classList.contains('aberta')?'recolher':'ler tudo'">ler tudo</button></div>
+          <div class="superficie cartao-lateral"><dl class="fatos"><dt>Tipo</dt><dd>${esc(demanda.tipo)}</dd><dt>Projeto</dt><dd>${esc(demanda.projeto)}</dd><dt>Desenho</dt><dd>${desenho.arquivos} arquivos previstos · <a class="link" href="#">abrir</a></dd><dt>Tokens</dt><dd class="mono">${(custos.saida / 1000).toFixed(1)}k saída</dd></dl></div>
+          <button class="btn btn-perigo" style="align-self:flex-start">Cancelar a demanda</button>
+        </aside>
+        <div>
+          ${casFalhosSempre.length ? `<div class="alerta" style="margin:0 0 var(--s-5)">${alertaDeRepeticao().replace(/^<div class="alerta">|<\/div>$/g, "")}</div>` : ""}
+          <ol class="tempo">${globais.map(no).join("")}<li class="divisor titulo-bloco" style="padding-left:var(--s-8)">Rodada ${curto(rodadas[0].ref)} · ${esc(rodadas[0].titulo)}</li>${daRodada.map(no).join("")}</ol>
+        </div>
+      </div>`;
+  }
+
+  // ——— Variante C: abas, tabela densa e painel de detalhe; a ação vive numa barra fixa ———
+  let abaC = "tickets", selecionado = proximo?.ref;
+  function varianteC() {
+    const resultado = (t) => t.decisao ? (t.decisao.resultado === "recusado" ? `<span class="res-nok">✗ recusado</span>` : `<span class="res-ok">✓ aprovado</span>`) : t.status === "aberto" ? `<span class="pill pill-neutro">aberto</span>` : `<span class="muted">✓ feito</span>`;
+    const resumo = (t) => t.titulo ?? (t.decisao?.motivo ? t.decisao.motivo : "—");
+    const linha = (t) => `<tr data-ref="${t.ref}" aria-selected="${t.ref === selecionado}"><td class="mono muted">${curto(t.ref)}</td><td style="white-space:nowrap">${ETAPA[t.etapa]}</td><td class="resumo">${emLinha(resumo(t))}</td><td style="white-space:nowrap">${resultado(t)}</td><td class="esconde" style="white-space:nowrap">${t.ev?.ca ? `${Object.values(t.ev.ca).filter(Boolean).length}/${criterios.length} CA` : ""}</td></tr>`;
+    const t = tickets.find((x) => x.ref === selecionado);
+    const painel = t ? `<aside class="painel superficie">
+        <div><div class="titulo-bloco">${esc(t.ref)} · ${ETAPA[t.etapa]}</div><h2>${esc(t.titulo ?? (t.decisao ? `Decisão: ${t.decisao.resultado}` : ETAPA[t.etapa]))}</h2></div>
+        <div class="chips">${resultado(t)}<a class="link" href="#">abrir o chat →</a></div>
+        ${t.instrucao ? `<p style="margin:0">Instrução atual: “${esc(t.instrucao)}”</p>` : ""}
+        ${t.ev ? `<div><div class="titulo-bloco">Evidências</div>${chipsDeEvidencia({ ...t.ev, ca: undefined })}</div>` : ""}
+        ${t.decisao?.motivo ? `<div><div class="titulo-bloco">Motivo</div><p class="md" style="margin:0">${emLinha(t.decisao.motivo)}</p></div>` : ""}
+        ${t.ev?.comoVerificado ? `<div><div class="titulo-bloco">Critérios nesta revisão</div>${Object.entries(t.ev.comoVerificado).map(([id, como]) => `<div class="ca-det"><span class="mono ${t.ev.ca[id] ? "res-ok" : "res-nok"}">${id} ${t.ev.ca[id] ? "✓" : "✗"}</span><span class="clamp" title="${esc(como)}">${emLinha(como)}</span></div>`).join("")}</div>` : ""}
+      </aside>` : "";
+    const corpo = {
+      tickets: `<div class="mestre"><div style="overflow-x:auto"><table class="tabela-t"><thead><tr><th>#</th><th>Etapa</th><th>Título / resultado</th><th>Status</th><th class="esconde">CA</th></tr></thead><tbody>
+        <tr class="grupo"><td colspan="5">Rodada ${curto(rodadas[0].ref)} · ${esc(rodadas[0].titulo)}</td></tr>${tickets.filter((x) => x.rodada).reverse().map(linha).join("")}
+        <tr class="grupo"><td colspan="5">Tickets globais</td></tr>${tickets.filter((x) => !x.rodada).reverse().map(linha).join("")}</tbody></table></div>${painel}</div>`,
+      criterios: `<div style="margin-top:var(--s-4);max-width:960px;padding-bottom:72px">${matrizDeCriterios()}</div>`,
+      descricao: `<div class="md" style="margin-top:var(--s-4);padding-bottom:72px">${md(demanda.descricao)}<h2>Desenho da solução</h2>${md(desenho.resumo)}</div>`,
+    }[abaC];
+    const aba = (id, rotulo, n) => `<button role="tab" data-aba="${id}" aria-selected="${abaC === id}">${rotulo}${n === undefined ? "" : `<span class="n">${n}</span>`}</button>`;
+    return `<div class="vc"><div class="topo"><div>${cabecalho()}</div><div class="kpis">
+        <div class="kpi"><strong>${tentativasDaRodada(rodadas[0].ref).length}</strong><span>tentativas na rodada</span></div>
+        <div class="kpi"><strong class="ruim">${revisoes.filter((r) => r.decisao?.resultado === "recusado").length}</strong><span>revisões recusadas</span></div>
+        <div class="kpi"><strong>${comprovados}/${criterios.length}</strong><span>critérios comprovados</span></div></div></div>
+      <div style="margin-top:var(--s-4);max-width:720px">${trilho(true)}</div>
+      <div class="abas" role="tablist">${aba("tickets", "Tickets", tickets.length)}${aba("criterios", "Critérios de aceite", criterios.length)}${aba("descricao", "Descrição e desenho")}</div>
+      ${corpo}
+      ${proximo ? `<div class="barra-acao"><span class="pill pill-aguarda">Aguarda você</span><span class="texto"><span class="id">${curto(proximo.ref)}</span> ${esc(proximo.titulo)}</span><span class="texto res-nok" title="${esc(casFalhosSempre.join(", "))}">${casFalhosSempre.length ? `· ${revisoes.length} recusas seguidas pelo mesmo motivo` : ""}</span><span class="direita"><button class="btn btn-perigo">Cancelar demanda</button><button class="btn">Mudar instrução</button><button class="btn btn-primario">Executar agora</button></span></div>` : ""}
+    </div>`;
+  }
+
+  // ——— troca de variante ———
+  const VARIANTES = [["A", "Foco no próximo passo", varianteA], ["B", "Mesa com lateral", varianteB], ["C", "Tabela e painel", varianteC]];
+  let atual = Math.max(0, VARIANTES.findIndex(([k]) => k === new URLSearchParams(location.search).get("variant")));
+  function desenhar() {
+    const [chave, nome, render] = VARIANTES[atual];
+    document.getElementById("raiz").innerHTML = render();
+    document.getElementById("rotulo-variante").textContent = `${chave} — ${nome}`;
+    document.querySelector(".switcher").style.bottom = chave === "C" && proximo ? "76px" : "20px";
+  }
+  function ir(passo) {
+    atual = (atual + passo + VARIANTES.length) % VARIANTES.length;
+    history.replaceState(null, "", `?variant=${VARIANTES[atual][0]}`);
+    desenhar(); scrollTo(0, 0);
+  }
+  document.getElementById("ant").onclick = () => ir(-1);
+  document.getElementById("prox").onclick = () => ir(1);
+  addEventListener("keydown", (e) => {
+    if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+    if (e.key === "ArrowLeft") ir(-1);
+    if (e.key === "ArrowRight") ir(1);
+  });
+  document.getElementById("raiz").addEventListener("click", (e) => {
+    const linha = e.target.closest("tr[data-ref]"), aba = e.target.closest("[data-aba]");
+    if (linha) { selecionado = linha.dataset.ref; desenhar(); }
+    if (aba) { abaC = aba.dataset.aba; desenhar(); }
+  });
+  desenhar();
+  </script>
+</body>
+</html>
