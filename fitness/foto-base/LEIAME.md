@@ -35,7 +35,6 @@ Todas trocam "issue" por "demanda" (o fluxo de issues foi desligado no cutover d
 | Foto | Antes | Depois |
 | --- | --- | --- |
 | `textos/src/execucao/avaliacao.md.txt` | `não crie issue, demanda, ticket` | `não crie demanda, ticket` |
-| `textos/skills/registrar-necessidade/SKILL.md.txt` | `abrir demanda, issue ou ticket` | `abrir demanda ou ticket` |
 | `textos/pacote-pi/skills/artefato-impactos-arquitetura/SKILL.md.txt` | `A página da issue mostra` | `A página da demanda mostra` |
 | `cli/aula-e-demanda.txt` | `...alterada pela issue`, `...alterado pela issue`, `a issue não tem revisão concluída` | os mesmos com `demanda` |
 | `cli/aula.html.txt` | `foram alteradas pela issue.` | `foram alteradas pela demanda.` |

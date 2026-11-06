@@ -62,12 +62,6 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     motivo: `${MOTIVO_NOME_NOVO}; "issue" e "demanda" na mesma lista era redundância`,
   },
   {
-    arquivo: "textos/skills/registrar-necessidade/SKILL.md.txt",
-    de: "registrar, abrir demanda, issue ou ticket",
-    para: "registrar, abrir demanda ou ticket",
-    motivo: `${MOTIVO_NOME_NOVO}; o pedido "abrir issue" não existe mais`,
-  },
-  {
     arquivo: "textos/pacote-pi/skills/artefato-impactos-arquitetura/SKILL.md.txt",
     de: "A página da issue mostra",
     para: "A página da demanda mostra",

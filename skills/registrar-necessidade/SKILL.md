@@ -1,6 +1,6 @@
 ---
 name: registrar-necessidade
-description: Registra na Fabriquinha uma necessidade relatada pelo usuário (problema, bug, incômodo ou funcionalidade) como demanda, com os critérios de aceite, o desenho da solução e os custos da sessão, questionando antes de escrever. Use quando o usuário pedir para registrar, abrir demanda ou ticket, ou levar uma necessidade à Fabriquinha.
+description: Registra na Fabriquinha uma necessidade relatada pelo usuário (problema, bug, incômodo ou funcionalidade) como demanda, com os critérios de aceite, o desenho da solução e os custos da sessão, questionando antes de escrever. Use quando o usuário pedir para registrar, abrir demanda, issue ou ticket, ou levar uma necessidade à Fabriquinha.
 ---
 
 # Registrar necessidade na Fabriquinha
