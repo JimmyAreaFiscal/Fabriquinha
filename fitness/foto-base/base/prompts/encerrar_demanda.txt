@@ -1,0 +1,70 @@
+# Contexto
+
+- Projeto: loja (branch base main)
+- Worktree (diretório de trabalho): /w
+- Diretório de saída (`$FABRIQUINHA_SAIDA`): /s
+
+## Demanda
+
+I-206, Busca (problema)
+
+A busca demora.
+
+## Critérios de aceite da demanda
+
+- **CA-2**: dado d, quando e, então f.
+
+## Rodada
+
+I-206.R2, Índice (fase desenvolvimento)
+
+Critérios citados:
+
+- **CA-2**: dado d, quando e, então f.
+
+## Ticket
+
+I-206.T3, Fazer (etapa encerrar_demanda)
+
+Detalhe.
+
+Dependências:
+
+- I-206.T1
+
+Caminhos:
+
+- `src/a.ts`
+
+## Modo de trabalhar: encerrar demanda
+
+**Objetivo:** acompanhar o encerramento da demanda I-206, no ticket I-206.T3, enquanto a Fabriquinha reúne a árvore de PRs, os critérios e os custos e confere que nada sobrou.
+
+**Passos:**
+
+1. Leia o resumo da demanda I-206 e o que a Fabriquinha já produziu.
+2. Se algo no encerramento exigir explicação, responda ao Auditor na conversa.
+
+**Entregas:** nenhuma do agente: as evidências desta etapa são produzidas pela Fabriquinha.
+
+**Quando parar:** quando o encerramento terminar; termine a sua resposta.
+
+**O que não fazer:** não mude o código, não faça commit nem push, não crie nem altere PR e não mexa em nada fora do ticket I-206.T3. Refira-se a tickets e rodadas só pelos endereços públicos.
+
+## Leitura e edição
+
+Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
+
+- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.
+- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.
+- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
+- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
+
+## Evidências
+
+Esta etapa não tem evidência do agente.
+
+A Fabriquinha produz:
+
+- `arvore_prs_criterios_custos`
+- `demonstracao_limpeza`
