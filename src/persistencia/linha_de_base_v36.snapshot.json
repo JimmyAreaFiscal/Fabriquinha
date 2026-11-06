@@ -1,0 +1,344 @@
+[
+  {
+    "type": "table",
+    "name": "achado_avaliacao",
+    "tbl_name": "achado_avaliacao",
+    "sql": "CREATE TABLE achado_avaliacao (\n    avaliacao_id TEXT NOT NULL REFERENCES avaliacao(id),\n    achado_id    INTEGER NOT NULL CHECK (achado_id >= 1),\n    titulo       TEXT NOT NULL CHECK (length(titulo) > 0),\n    descricao    TEXT NOT NULL CHECK (length(descricao) > 0),\n    evidencia    TEXT NOT NULL CHECK (length(evidencia) > 0),\n    demanda_id   TEXT REFERENCES demanda(id),\n    PRIMARY KEY (avaliacao_id, achado_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "arquivo_commit_demanda",
+    "tbl_name": "arquivo_commit_demanda",
+    "sql": "CREATE TABLE arquivo_commit_demanda (\n    sha              TEXT NOT NULL REFERENCES commit_ticket_demanda(sha),\n    caminho          TEXT NOT NULL,\n    caminho_anterior TEXT,\n    status           TEXT NOT NULL CHECK (status IN ('A','M','D','R')),\n    adicionadas      INTEGER CHECK (adicionadas >= 0),\n    removidas        INTEGER CHECK (removidas >= 0),\n    PRIMARY KEY (sha, caminho),\n    CHECK ((status = 'R') = (caminho_anterior IS NOT NULL))\n  )"
+  },
+  {
+    "type": "table",
+    "name": "arquivo_evidencia",
+    "tbl_name": "arquivo_evidencia",
+    "sql": "CREATE TABLE arquivo_evidencia (\n    evidencia_id TEXT NOT NULL REFERENCES evidencia_demanda(id) ON DELETE CASCADE,\n    ordem        INTEGER NOT NULL CHECK (ordem >= 1),\n    caminho      TEXT NOT NULL,\n    sha256       TEXT NOT NULL,\n    mime         TEXT NOT NULL,\n    bytes        INTEGER NOT NULL CHECK (bytes >= 0),\n    PRIMARY KEY (evidencia_id, ordem)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "avaliacao",
+    "tbl_name": "avaliacao",
+    "sql": "CREATE TABLE avaliacao (\n    id        TEXT PRIMARY KEY CHECK (length(id) > 0),\n    projeto   TEXT NOT NULL REFERENCES projeto(nome),\n    de        TEXT NOT NULL CHECK (de GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),\n    ate       TEXT NOT NULL CHECK (ate GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND ate >= de),\n    pedido    TEXT NOT NULL,\n    criada_em TEXT NOT NULL\n  )"
+  },
+  {
+    "type": "table",
+    "name": "avaliacao_demanda",
+    "tbl_name": "avaliacao_demanda",
+    "sql": "CREATE TABLE avaliacao_demanda (\n    avaliacao_id TEXT NOT NULL REFERENCES avaliacao(id),\n    demanda_id   TEXT NOT NULL REFERENCES demanda(id),\n    PRIMARY KEY (avaliacao_id, demanda_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "caminho_ticket",
+    "tbl_name": "caminho_ticket",
+    "sql": "CREATE TABLE caminho_ticket (\n    demanda_id TEXT NOT NULL,\n    ticket_id  INTEGER NOT NULL,\n    caminho    TEXT NOT NULL,\n    PRIMARY KEY (demanda_id, ticket_id, caminho),\n    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "comando_preparacao_projeto",
+    "tbl_name": "comando_preparacao_projeto",
+    "sql": "CREATE TABLE comando_preparacao_projeto (\n    projeto TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,\n    ordem   INTEGER NOT NULL CHECK (typeof(ordem) = 'integer' AND ordem > 0),\n    comando TEXT NOT NULL CHECK (length(comando) > 0),\n    PRIMARY KEY (projeto, ordem)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "commit_ticket_demanda",
+    "tbl_name": "commit_ticket_demanda",
+    "sql": "CREATE TABLE commit_ticket_demanda (\n    sha        TEXT PRIMARY KEY CHECK (length(sha) IN (40, 64)),\n    demanda_id TEXT NOT NULL,\n    ticket_id  INTEGER NOT NULL,\n    mensagem   TEXT NOT NULL,\n    em         TEXT NOT NULL,\n    UNIQUE (demanda_id, ticket_id),\n    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "configuracao",
+    "tbl_name": "configuracao",
+    "sql": "CREATE TABLE configuracao (\n    id               INTEGER PRIMARY KEY CHECK (id = 1),\n    agendador_ativo  INTEGER NOT NULL DEFAULT 0 CHECK (agendador_ativo IN (0,1)),\n    intervalo_min    INTEGER NOT NULL DEFAULT 5   CHECK (intervalo_min BETWEEN 1 AND 1440),\n    timeout_min      INTEGER NOT NULL DEFAULT 120 CHECK (timeout_min BETWEEN 10 AND 1440),\n    ociosidade_min   INTEGER NOT NULL DEFAULT 30  CHECK (ociosidade_min BETWEEN 5 AND 1440)\n  , auditoria_provedor TEXT, auditoria_modelo TEXT CHECK ((auditoria_provedor IS NULL) = (auditoria_modelo IS NULL)), limite_paralelismo INTEGER NOT NULL DEFAULT 4 CHECK (typeof(limite_paralelismo) = 'integer' AND limite_paralelismo > 0))"
+  },
+  {
+    "type": "table",
+    "name": "configuracao_e2e",
+    "tbl_name": "configuracao_e2e",
+    "sql": "CREATE TABLE configuracao_e2e (\n    projeto           TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,\n    caminho_linguagem TEXT NOT NULL,\n    comando_build     TEXT NOT NULL CHECK (length(comando_build) > 0),\n    comando_execucao  TEXT NOT NULL CHECK (length(comando_execucao) > 0),\n    codigo_falha      INTEGER NOT NULL CHECK (typeof(codigo_falha) = 'integer' AND codigo_falha BETWEEN 1 AND 255),\n    PRIMARY KEY (projeto, caminho_linguagem),\n    FOREIGN KEY (projeto, caminho_linguagem) REFERENCES linguagem_projeto(projeto, caminho) ON DELETE CASCADE\n  )"
+  },
+  {
+    "type": "table",
+    "name": "configuracao_etapa_projeto",
+    "tbl_name": "configuracao_etapa_projeto",
+    "sql": "CREATE TABLE configuracao_etapa_projeto (\n    projeto         TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,\n    etapa           TEXT NOT NULL CHECK (etapa IN ('demanda','planejar','implementar','revisar_rodada','encerrar_rodada','sessao_em_aberto','revisar_demanda','encerrar_demanda','resolver_conflito')),\n    modelo_provedor TEXT CHECK (modelo_provedor IS NULL OR length(modelo_provedor) > 0),\n    modelo_nome     TEXT CHECK (modelo_nome IS NULL OR length(modelo_nome) > 0),\n    effort          TEXT CHECK (effort IS NULL OR effort IN ('off','minimal','low','medium','high','xhigh','max')),\n    PRIMARY KEY (projeto, etapa),\n    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))\n  )"
+  },
+  {
+    "type": "table",
+    "name": "criterio_citado_rodada",
+    "tbl_name": "criterio_citado_rodada",
+    "sql": "CREATE TABLE criterio_citado_rodada (\n    demanda_id  TEXT NOT NULL,\n    rodada_id   INTEGER NOT NULL,\n    criterio_id TEXT NOT NULL,\n    PRIMARY KEY (demanda_id, rodada_id, criterio_id),\n    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "decisao_ticket",
+    "tbl_name": "decisao_ticket",
+    "sql": "CREATE TABLE decisao_ticket (\n    demanda_id TEXT NOT NULL,\n    ticket_id  INTEGER NOT NULL,\n    decisao_id INTEGER NOT NULL,\n    resultado  TEXT NOT NULL CHECK (resultado IN ('aprovado','recusado')),\n    nota       INTEGER CHECK (nota BETWEEN 1 AND 5),\n    motivo     TEXT,\n    por        TEXT NOT NULL CHECK (por IN ('auditor','agente')),\n    em         TEXT NOT NULL,\n    PRIMARY KEY (demanda_id, ticket_id, decisao_id),\n    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "decisao_ticket_historico",
+    "tbl_name": "decisao_ticket_historico",
+    "sql": "CREATE TABLE decisao_ticket_historico (\n    demanda_id TEXT NOT NULL,\n    ticket_id  INTEGER NOT NULL,\n    decisao_id INTEGER NOT NULL,\n    gate       TEXT NOT NULL CHECK (gate IN ('registro','desenho','revisao','pr')),\n    PRIMARY KEY (demanda_id, ticket_id, decisao_id),\n    FOREIGN KEY (demanda_id, ticket_id, decisao_id) REFERENCES decisao_ticket(demanda_id, ticket_id, decisao_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "demanda",
+    "tbl_name": "demanda",
+    "sql": "CREATE TABLE demanda (\n    id                TEXT PRIMARY KEY,\n    projeto           TEXT NOT NULL REFERENCES projeto(nome),\n    titulo            TEXT NOT NULL,\n    tipo              TEXT NOT NULL CHECK (tipo IN ('funcionalidade','problema')),\n    descricao         TEXT NOT NULL,\n    fase              TEXT NOT NULL CHECK (fase IN ('registro','aprovacao_demanda','planejamento','aprovacao_planejamento','execucao','revisao_demanda','encerramento','concluida','arquivada','cancelada')),\n    fase_alterada_em  TEXT NOT NULL,\n    origem_ferramenta TEXT NOT NULL,\n    origem_sessao     TEXT NOT NULL,\n    enviada           INTEGER NOT NULL CHECK (enviada IN (0,1)),\n    branch            TEXT NOT NULL\n  )"
+  },
+  {
+    "type": "table",
+    "name": "demanda_historico",
+    "tbl_name": "demanda_historico",
+    "sql": "CREATE TABLE demanda_historico (\n    demanda_id   TEXT PRIMARY KEY REFERENCES demanda(id),\n    criada_em    TEXT NOT NULL,\n    concluida_em TEXT,\n    cancelada_em TEXT,\n    arquivada_em TEXT\n  )"
+  },
+  {
+    "type": "table",
+    "name": "dependencia_demanda",
+    "tbl_name": "dependencia_demanda",
+    "sql": "CREATE TABLE dependencia_demanda (\n    demanda_id         TEXT NOT NULL REFERENCES demanda(id),\n    depende_demanda_id TEXT NOT NULL REFERENCES demanda(id),\n    PRIMARY KEY (demanda_id, depende_demanda_id),\n    CHECK (demanda_id <> depende_demanda_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "dependencia_rodada",
+    "tbl_name": "dependencia_rodada",
+    "sql": "CREATE TABLE dependencia_rodada (\n    demanda_id        TEXT NOT NULL,\n    rodada_id         INTEGER NOT NULL,\n    depende_rodada_id INTEGER NOT NULL,\n    PRIMARY KEY (demanda_id, rodada_id, depende_rodada_id),\n    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),\n    FOREIGN KEY (demanda_id, depende_rodada_id) REFERENCES rodada(demanda_id, rodada_id),\n    CHECK (rodada_id <> depende_rodada_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "dependencia_ticket",
+    "tbl_name": "dependencia_ticket",
+    "sql": "CREATE TABLE dependencia_ticket (\n    demanda_id        TEXT NOT NULL,\n    ticket_id         INTEGER NOT NULL,\n    depende_ticket_id INTEGER NOT NULL,\n    rodada_id         INTEGER NOT NULL,\n    PRIMARY KEY (demanda_id, ticket_id, depende_ticket_id),\n    FOREIGN KEY (demanda_id, ticket_id, rodada_id) REFERENCES ticket_demanda(demanda_id, ticket_id, rodada_id),\n    FOREIGN KEY (demanda_id, depende_ticket_id, rodada_id) REFERENCES ticket_demanda(demanda_id, ticket_id, rodada_id),\n    CHECK (ticket_id <> depende_ticket_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "encerramento_demanda",
+    "tbl_name": "encerramento_demanda",
+    "sql": "CREATE TABLE encerramento_demanda (\n    demanda_id        TEXT PRIMARY KEY REFERENCES demanda(id),\n    pr_numero         INTEGER CHECK (pr_numero IS NULL OR (typeof(pr_numero) = 'integer' AND pr_numero > 0)),\n    pr_url            TEXT CHECK (pr_url IS NULL OR length(pr_url) > 0),\n    branch            TEXT NOT NULL,\n    base              TEXT NOT NULL CHECK (length(base) > 0),\n    sha_verificado    TEXT CHECK (sha_verificado IS NULL OR length(sha_verificado) > 0),\n    integracao_sha    TEXT CHECK (integracao_sha IS NULL OR length(integracao_sha) > 0),\n    conflito_ticket_id INTEGER,\n    falha_etapa       TEXT CHECK (falha_etapa IS NULL OR falha_etapa IN ('check_final','integracao','limpeza')),\n    falha_motivo      TEXT CHECK (falha_motivo IS NULL OR length(falha_motivo) > 0), aguardando_merge_humano INTEGER NOT NULL DEFAULT 0 CHECK (aguardando_merge_humano IN (0, 1)),\n    FOREIGN KEY (demanda_id, conflito_ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),\n    CHECK ((pr_numero IS NULL) = (pr_url IS NULL)),\n    CHECK (integracao_sha IS NULL OR pr_numero IS NOT NULL),\n    CHECK ((falha_etapa IS NULL) = (falha_motivo IS NULL))\n  )"
+  },
+  {
+    "type": "table",
+    "name": "evidencia_demanda",
+    "tbl_name": "evidencia_demanda",
+    "sql": "CREATE TABLE \"evidencia_demanda\" (\n    id         TEXT PRIMARY KEY,\n    demanda_id TEXT NOT NULL REFERENCES demanda(id),\n    rodada_id  INTEGER,\n    ticket_id  INTEGER,\n    tipo       TEXT NOT NULL CHECK (tipo IN ('comportamento','criterios_aceite','desenho_solucao','prototipo','relatorio_complexidade','relatorio_impactos_arquitetura','execucao_testes','matriz_fitness','relatorio_sonar','arquivos_alterados','explicacao_fitness','comprovacao_criterios','mensagem_pr','aula_codigo','video_demonstracao','relatorio_produtividade','pr_aberto','custos_realizados','plano','testes_estresse','analise_seguranca','arvore_prs_criterios_custos','demonstracao_limpeza')),\n    dados      TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(dados)),\n    em         TEXT NOT NULL,\n    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),\n    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),\n    CHECK (rodada_id IS NULL OR ticket_id IS NULL)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "evidencia_historico",
+    "tbl_name": "evidencia_historico",
+    "sql": "CREATE TABLE evidencia_historico (\n    evidencia_id TEXT PRIMARY KEY REFERENCES evidencia_demanda(id) ON DELETE CASCADE,\n    aprovada     INTEGER CHECK (aprovada IN (0, 1)),\n    produtor     TEXT NOT NULL CHECK (produtor IN ('agente','fabriquinha'))\n  )"
+  },
+  {
+    "type": "table",
+    "name": "execucao_sessao",
+    "tbl_name": "execucao_sessao",
+    "sql": "CREATE TABLE execucao_sessao (\n    id        TEXT PRIMARY KEY CHECK (length(id) > 0),\n    sessao_id TEXT NOT NULL REFERENCES sessao(id),\n    inicio    TEXT NOT NULL,\n    fim       TEXT,\n    falha     INTEGER NOT NULL CHECK (falha IN (0,1))\n  , grupo_processo INTEGER CHECK (grupo_processo IS NULL OR (typeof(grupo_processo) = 'integer' AND grupo_processo > 0)), erro TEXT CHECK (erro IS NULL OR length(erro) > 0), modelo_provedor TEXT CHECK (modelo_provedor IS NULL OR length(modelo_provedor) > 0), modelo_nome TEXT CHECK (modelo_nome IS NULL OR length(modelo_nome) > 0) CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL)), effort TEXT CHECK (effort IS NULL OR effort IN ('off','minimal','low','medium','high','xhigh','max')))"
+  },
+  {
+    "type": "table",
+    "name": "execucao_simulada",
+    "tbl_name": "execucao_simulada",
+    "sql": "CREATE TABLE execucao_simulada (\n    id           INTEGER PRIMARY KEY,\n    tarefa       INTEGER NOT NULL REFERENCES tarefa(id),\n    usuario      INTEGER NOT NULL REFERENCES usuario_simulado(id),\n    status       TEXT NOT NULL CHECK (status IN ('na_fila','em_andamento','concluida','falhou')),\n    relatorio    TEXT CHECK (relatorio IS NULL OR json_valid(relatorio)),\n    erro         TEXT,\n    pgid         INTEGER,\n    iniciada_em  TEXT,\n    terminada_em TEXT,\n    CHECK ((status = 'falhou') = (erro IS NOT NULL)),\n    CHECK ((status = 'concluida') = (relatorio IS NOT NULL))\n  )"
+  },
+  {
+    "type": "table",
+    "name": "fitness_function_projeto",
+    "tbl_name": "fitness_function_projeto",
+    "sql": "CREATE TABLE fitness_function_projeto (\n    projeto   TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,\n    nome      TEXT NOT NULL CHECK (length(nome) > 0),\n    comando   TEXT NOT NULL CHECK (length(comando) > 0),\n    descricao TEXT NOT NULL CHECK (length(descricao) > 0),\n    PRIMARY KEY (projeto, nome)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "glob_e2e",
+    "tbl_name": "glob_e2e",
+    "sql": "CREATE TABLE glob_e2e (\n    projeto           TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,\n    caminho_linguagem TEXT NOT NULL,\n    glob              TEXT NOT NULL CHECK (length(glob) > 0),\n    PRIMARY KEY (projeto, caminho_linguagem, glob),\n    FOREIGN KEY (projeto, caminho_linguagem) REFERENCES configuracao_e2e(projeto, caminho_linguagem) ON DELETE CASCADE\n  )"
+  },
+  {
+    "type": "table",
+    "name": "iteracao_demanda",
+    "tbl_name": "iteracao_demanda",
+    "sql": "CREATE TABLE iteracao_demanda (\n    id         INTEGER PRIMARY KEY,\n    demanda_id TEXT NOT NULL,\n    ticket_id  INTEGER NOT NULL,\n    tipo       TEXT NOT NULL CHECK (tipo IN ('mensagem','dialogo','reabertura')),\n    em         TEXT NOT NULL,\n    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)\n  )"
+  },
+  {
+    "type": "index",
+    "name": "ix_arquivo_commit_demanda_caminho",
+    "tbl_name": "arquivo_commit_demanda",
+    "sql": "CREATE INDEX ix_arquivo_commit_demanda_caminho ON arquivo_commit_demanda(caminho)"
+  },
+  {
+    "type": "index",
+    "name": "ix_execucao_sessao_sessao",
+    "tbl_name": "execucao_sessao",
+    "sql": "CREATE INDEX ix_execucao_sessao_sessao ON execucao_sessao(sessao_id)"
+  },
+  {
+    "type": "index",
+    "name": "ix_execucao_simulada_pendente",
+    "tbl_name": "execucao_simulada",
+    "sql": "CREATE INDEX ix_execucao_simulada_pendente ON execucao_simulada(tarefa) WHERE status IN ('na_fila', 'em_andamento')"
+  },
+  {
+    "type": "index",
+    "name": "ix_execucao_simulada_tarefa",
+    "tbl_name": "execucao_simulada",
+    "sql": "CREATE INDEX ix_execucao_simulada_tarefa ON execucao_simulada(tarefa)"
+  },
+  {
+    "type": "index",
+    "name": "ix_retrabalho_demanda_alterador",
+    "tbl_name": "retrabalho_demanda",
+    "sql": "CREATE INDEX ix_retrabalho_demanda_alterador ON retrabalho_demanda(alterador_demanda_id, ticket_id)"
+  },
+  {
+    "type": "index",
+    "name": "ix_retrabalho_demanda_origem",
+    "tbl_name": "retrabalho_demanda",
+    "sql": "CREATE INDEX ix_retrabalho_demanda_origem ON retrabalho_demanda(demanda_id, ticket_origem_id)"
+  },
+  {
+    "type": "index",
+    "name": "ix_sessao_ticket",
+    "tbl_name": "sessao",
+    "sql": "CREATE INDEX ix_sessao_ticket ON sessao(demanda_id, ticket_id)"
+  },
+  {
+    "type": "index",
+    "name": "ix_tarefa_projeto",
+    "tbl_name": "tarefa",
+    "sql": "CREATE INDEX ix_tarefa_projeto ON tarefa(projeto)"
+  },
+  {
+    "type": "table",
+    "name": "limpeza_pendente_encerramento",
+    "tbl_name": "limpeza_pendente_encerramento",
+    "sql": "CREATE TABLE limpeza_pendente_encerramento (\n    demanda_id       TEXT NOT NULL REFERENCES encerramento_demanda(demanda_id),\n    limpeza_pendente TEXT NOT NULL CHECK (length(limpeza_pendente) > 0),\n    PRIMARY KEY (demanda_id, limpeza_pendente)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "linguagem_projeto",
+    "tbl_name": "linguagem_projeto",
+    "sql": "CREATE TABLE linguagem_projeto (\n    projeto        TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,\n    caminho        TEXT NOT NULL CHECK (length(caminho) > 0),\n    linguagem      TEXT NOT NULL CHECK (length(linguagem) > 0),\n    comando_teste  TEXT NOT NULL CHECK (length(comando_teste) > 0),\n    PRIMARY KEY (projeto, caminho)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "projeto",
+    "tbl_name": "projeto",
+    "sql": "CREATE TABLE projeto (\n    nome              TEXT PRIMARY KEY CHECK (length(nome) BETWEEN 1 AND 64),\n    repo              TEXT NOT NULL UNIQUE,\n    branch_base       TEXT NOT NULL,\n    hospedagem        TEXT NOT NULL CHECK (hospedagem IN ('github','azure-devops')),\n    sonar_project_key TEXT NOT NULL,\n    link_produto TEXT, cursor_commit_humano TEXT CHECK (cursor_commit_humano IS NULL OR length(cursor_commit_humano) > 0))"
+  },
+  {
+    "type": "table",
+    "name": "proposta_demanda",
+    "tbl_name": "proposta_demanda",
+    "sql": "CREATE TABLE proposta_demanda (\n    id                INTEGER PRIMARY KEY,\n    demanda_id        TEXT NOT NULL,\n    ticket_id         INTEGER NOT NULL,\n    titulo            TEXT NOT NULL CHECK (length(titulo) BETWEEN 1 AND 120),\n    mensagem          TEXT NOT NULL CHECK (length(trim(mensagem)) >= 1),\n    arquivos          INTEGER NOT NULL CHECK (arquivos >= 0),\n    status            TEXT NOT NULL CHECK (status IN ('pendente','aceita','recusada')),\n    demanda_criada_id TEXT REFERENCES demanda(id),\n    em                TEXT NOT NULL,\n    decidida_em       TEXT,\n    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),\n    CHECK ((status = 'aceita') = (demanda_criada_id IS NOT NULL)),\n    CHECK ((status = 'pendente') = (decidida_em IS NULL))\n  )"
+  },
+  {
+    "type": "table",
+    "name": "retrabalho_demanda",
+    "tbl_name": "retrabalho_demanda",
+    "sql": "CREATE TABLE \"retrabalho_demanda\" (\n    commit_alterador     TEXT    NOT NULL,\n    demanda_id           TEXT    NOT NULL,\n    ticket_id            INTEGER,\n    autor                TEXT,\n    ticket_origem_id     INTEGER NOT NULL,\n    linhas               INTEGER NOT NULL CHECK (linhas >= 1),\n    alterador_demanda_id TEXT,\n    PRIMARY KEY (commit_alterador, demanda_id, ticket_origem_id),\n    FOREIGN KEY (alterador_demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),\n    FOREIGN KEY (demanda_id, ticket_origem_id) REFERENCES ticket_demanda(demanda_id, ticket_id),\n    CHECK ((ticket_id IS NULL) = (autor IS NOT NULL)),\n    CHECK ((ticket_id IS NULL) = (alterador_demanda_id IS NULL)),\n    CHECK (alterador_demanda_id IS NULL OR alterador_demanda_id <> demanda_id OR ticket_id <> ticket_origem_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "rodada",
+    "tbl_name": "rodada",
+    "sql": "CREATE TABLE rodada (\n    demanda_id TEXT NOT NULL REFERENCES demanda(id),\n    rodada_id  INTEGER NOT NULL,\n    titulo     TEXT NOT NULL,\n    fase       TEXT NOT NULL CHECK (fase IN ('desenvolvimento','revisao','encerramento','aprovacao_pull_request','sessao','concluida')),\n    e2e        INTEGER NOT NULL CHECK (e2e IN (0,1)),\n    branch     TEXT NOT NULL,\n    PRIMARY KEY (demanda_id, rodada_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "sequencia",
+    "tbl_name": "sequencia",
+    "sql": "CREATE TABLE \"sequencia\" (\n    nome  TEXT PRIMARY KEY CHECK (nome IN ('issue','ticket','execucao','decisao','evidencia','proposta')),\n    valor INTEGER NOT NULL CHECK (valor >= 0)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "sessao",
+    "tbl_name": "sessao",
+    "sql": "CREATE TABLE sessao (\n    id                  TEXT PRIMARY KEY CHECK (length(id) > 0),\n    demanda_id          TEXT NOT NULL,\n    ticket_id           INTEGER NOT NULL,\n    modo                TEXT NOT NULL CHECK (modo IN ('autonomo','interativo','consulta')),\n    conversa_referencia TEXT NOT NULL CHECK (length(conversa_referencia) > 0),\n    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "sessao_externa_demanda",
+    "tbl_name": "sessao_externa_demanda",
+    "sql": "CREATE TABLE sessao_externa_demanda (\n    ferramenta TEXT NOT NULL,\n    sessao     TEXT NOT NULL,\n    demanda_id TEXT NOT NULL REFERENCES demanda(id),\n    PRIMARY KEY (ferramenta, sessao)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "tarefa",
+    "tbl_name": "tarefa",
+    "sql": "CREATE TABLE tarefa (\n    id        INTEGER PRIMARY KEY,\n    projeto   TEXT NOT NULL REFERENCES projeto(nome),\n    texto     TEXT NOT NULL CHECK (length(texto) BETWEEN 1 AND 2000),\n    n         INTEGER NOT NULL CHECK (n BETWEEN 1 AND 20),\n    criada_em TEXT NOT NULL\n  )"
+  },
+  {
+    "type": "table",
+    "name": "tarefa_usuario",
+    "tbl_name": "tarefa_usuario",
+    "sql": "CREATE TABLE tarefa_usuario (\n    tarefa  INTEGER NOT NULL REFERENCES tarefa(id),\n    usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),\n    PRIMARY KEY (tarefa, usuario)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "ticket_demanda",
+    "tbl_name": "ticket_demanda",
+    "sql": "CREATE TABLE ticket_demanda (\n    demanda_id         TEXT NOT NULL REFERENCES demanda(id),\n    ticket_id          INTEGER NOT NULL,\n    etapa              TEXT NOT NULL CHECK (etapa IN ('demanda','planejar','implementar','revisar_rodada','encerrar_rodada','sessao_em_aberto','revisar_demanda','encerrar_demanda','resolver_conflito')),\n    status             TEXT NOT NULL CHECK (status IN ('aberto','em_execucao','concluido','falhou','fechado','cancelado')),\n    status_alterado_em TEXT NOT NULL,\n    rodada_id          INTEGER,\n    titulo             TEXT,\n    descricao          TEXT,\n    modelo_provedor    TEXT,\n    modelo_nome        TEXT,\n    effort             TEXT CHECK (effort IS NULL OR effort IN ('off','minimal','low','medium','high','xhigh','max')),\n    instrucao          TEXT, devolucoes INTEGER NOT NULL DEFAULT 0 CHECK (devolucoes BETWEEN 0 AND 2), motivo_falha TEXT CHECK (motivo_falha IS NULL OR length(motivo_falha) > 0), criado_em TEXT, concluido_em TEXT, enviado_em TEXT, origem TEXT CHECK (origem IS NULL OR origem IN ('auditor','agente','fabriquinha','externo')), origem_ticket_id INTEGER, retomadas_automaticas INTEGER NOT NULL DEFAULT 0 CHECK (retomadas_automaticas >= 0),\n    PRIMARY KEY (demanda_id, ticket_id),\n    UNIQUE (demanda_id, ticket_id, rodada_id),\n    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),\n    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))\n  )"
+  },
+  {
+    "type": "table",
+    "name": "uso_avaliacao",
+    "tbl_name": "uso_avaliacao",
+    "sql": "CREATE TABLE uso_avaliacao (\n    avaliacao_id         TEXT NOT NULL REFERENCES avaliacao(id),\n    modelo_provedor      TEXT NOT NULL CHECK (length(modelo_provedor) > 0),\n    modelo_nome          TEXT NOT NULL CHECK (length(modelo_nome) > 0),\n    chamadas             INTEGER NOT NULL CHECK (typeof(chamadas) = 'integer' AND chamadas >= 0),\n    tokens_entrada       INTEGER NOT NULL CHECK (typeof(tokens_entrada) = 'integer' AND tokens_entrada >= 0),\n    tokens_saida         INTEGER NOT NULL CHECK (typeof(tokens_saida) = 'integer' AND tokens_saida >= 0),\n    tokens_cache_leitura INTEGER NOT NULL CHECK (typeof(tokens_cache_leitura) = 'integer' AND tokens_cache_leitura >= 0),\n    tokens_cache_escrita INTEGER NOT NULL CHECK (typeof(tokens_cache_escrita) = 'integer' AND tokens_cache_escrita >= 0),\n    custo                REAL CHECK (custo IS NULL OR custo >= 0),\n    PRIMARY KEY (avaliacao_id, modelo_provedor, modelo_nome)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "uso_modelo_execucao",
+    "tbl_name": "uso_modelo_execucao",
+    "sql": "CREATE TABLE uso_modelo_execucao (\n    execucao_id          TEXT NOT NULL REFERENCES execucao_sessao(id),\n    modelo_provedor      TEXT NOT NULL CHECK (length(modelo_provedor) > 0),\n    modelo_nome          TEXT NOT NULL CHECK (length(modelo_nome) > 0),\n    tokens_entrada       INTEGER NOT NULL CHECK (typeof(tokens_entrada) = 'integer' AND tokens_entrada >= 0),\n    tokens_saida         INTEGER NOT NULL CHECK (typeof(tokens_saida) = 'integer' AND tokens_saida >= 0),\n    tokens_cache_leitura INTEGER NOT NULL CHECK (typeof(tokens_cache_leitura) = 'integer' AND tokens_cache_leitura >= 0),\n    tokens_cache_escrita INTEGER NOT NULL CHECK (typeof(tokens_cache_escrita) = 'integer' AND tokens_cache_escrita >= 0),\n    custo                REAL CHECK (custo IS NULL OR custo >= 0),\n    PRIMARY KEY (execucao_id, modelo_provedor, modelo_nome)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "uso_modelo_historico",
+    "tbl_name": "uso_modelo_historico",
+    "sql": "CREATE TABLE uso_modelo_historico (\n    execucao_id     TEXT NOT NULL,\n    modelo_provedor TEXT NOT NULL,\n    modelo_nome     TEXT NOT NULL,\n    chamadas        INTEGER NOT NULL CHECK (chamadas >= 1),\n    PRIMARY KEY (execucao_id, modelo_provedor, modelo_nome),\n    FOREIGN KEY (execucao_id, modelo_provedor, modelo_nome) REFERENCES uso_modelo_execucao(execucao_id, modelo_provedor, modelo_nome)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "usuario_simulado",
+    "tbl_name": "usuario_simulado",
+    "sql": "CREATE TABLE usuario_simulado (\n    id        INTEGER PRIMARY KEY,\n    projeto   TEXT NOT NULL REFERENCES projeto(nome),\n    nome      TEXT NOT NULL,\n    descricao TEXT NOT NULL,\n    UNIQUE (projeto, nome)\n  )"
+  },
+  {
+    "type": "table",
+    "name": "usuario_simulado_anexo",
+    "tbl_name": "usuario_simulado_anexo",
+    "sql": "CREATE TABLE usuario_simulado_anexo (\n    usuario INTEGER NOT NULL REFERENCES usuario_simulado(id),\n    nome    TEXT NOT NULL,\n    sha256  TEXT NOT NULL CHECK (length(sha256) = 64),\n    bytes   INTEGER NOT NULL CHECK (bytes >= 0),\n    PRIMARY KEY (usuario, nome)\n  )"
+  },
+  {
+    "type": "index",
+    "name": "ux_achado_avaliacao_demanda",
+    "tbl_name": "achado_avaliacao",
+    "sql": "CREATE UNIQUE INDEX ux_achado_avaliacao_demanda ON achado_avaliacao(demanda_id) WHERE demanda_id IS NOT NULL"
+  },
+  {
+    "type": "index",
+    "name": "ux_evidencia_demanda_demanda",
+    "tbl_name": "evidencia_demanda",
+    "sql": "CREATE UNIQUE INDEX ux_evidencia_demanda_demanda ON evidencia_demanda(demanda_id, tipo) WHERE rodada_id IS NULL AND ticket_id IS NULL"
+  },
+  {
+    "type": "index",
+    "name": "ux_evidencia_demanda_rodada",
+    "tbl_name": "evidencia_demanda",
+    "sql": "CREATE UNIQUE INDEX ux_evidencia_demanda_rodada ON evidencia_demanda(demanda_id, rodada_id, tipo) WHERE rodada_id IS NOT NULL"
+  },
+  {
+    "type": "index",
+    "name": "ux_evidencia_demanda_ticket",
+    "tbl_name": "evidencia_demanda",
+    "sql": "CREATE UNIQUE INDEX ux_evidencia_demanda_ticket ON evidencia_demanda(demanda_id, ticket_id, tipo) WHERE ticket_id IS NOT NULL"
+  },
+  {
+    "type": "table",
+    "name": "varredura_base",
+    "tbl_name": "varredura_base",
+    "sql": "CREATE TABLE varredura_base (\n    projeto    TEXT PRIMARY KEY REFERENCES projeto(nome),\n    ultimo_sha TEXT NOT NULL CHECK (length(ultimo_sha) IN (40, 64)),\n    em         TEXT NOT NULL\n  )"
+  }
+]
