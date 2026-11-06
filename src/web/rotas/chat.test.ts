@@ -18,7 +18,7 @@ import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_proje
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execucao/execucao_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
-import { demanda } from "./demandas_cenario.test.ts";
+import { demanda } from "./demandas_cenario.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
