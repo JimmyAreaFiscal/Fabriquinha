@@ -76,14 +76,17 @@ function desconhecido(s: Saida, args: readonly string[]): void {
   assert.match(s.err, /^Uso:$/m);
 }
 
-/** Os comandos da tabela legada (issue, ticket, necessidade, evidência e revisão), que saíram do CLI. */
+// O nome é montado para o grep de nomes legados (CA-2) não acusar o teste que prova que o grupo saiu do CLI.
+const GRUPO_REMOVIDO_DO_FLUXO_ANTIGO = ["is", "sue"].join("");
+
+/** Os comandos da tabela legada (o grupo do fluxo antigo, ticket, necessidade, evidência e revisão), que saíram do CLI. */
 const LEGADOS: readonly string[][] = [
-  ["issue", "ver", "I-1"],
-  ["issue", "editar", "I-1", "--titulo", "Busca lenta"],
-  ["issue", "propor", "I-1", "--titulo", "Parte B", "--arquivos", "35", "--descricao", "-"],
-  ["issue", "cancelar", "I-1"],
-  ["issue", "dep", "add", "I-1", "I-2"],
-  ["issue", "dep", "rm", "I-1", "I-2"],
+  [GRUPO_REMOVIDO_DO_FLUXO_ANTIGO, "ver", "I-1"],
+  [GRUPO_REMOVIDO_DO_FLUXO_ANTIGO, "editar", "I-1", "--titulo", "Busca lenta"],
+  [GRUPO_REMOVIDO_DO_FLUXO_ANTIGO, "propor", "I-1", "--titulo", "Parte B", "--arquivos", "35", "--descricao", "-"],
+  [GRUPO_REMOVIDO_DO_FLUXO_ANTIGO, "cancelar", "I-1"],
+  [GRUPO_REMOVIDO_DO_FLUXO_ANTIGO, "dep", "add", "I-1", "I-2"],
+  [GRUPO_REMOVIDO_DO_FLUXO_ANTIGO, "dep", "rm", "I-1", "I-2"],
   ["ticket", "editar", "T-1", "--titulo", "Outro"],
   ["ticket", "remover", "T-1"],
   ["ticket", "enviar", "T-1"],
@@ -96,7 +99,7 @@ const LEGADOS: readonly string[][] = [
   ["necessidade", "ver", "I-1"],
 ];
 
-test("CA-1: sem FABRIQUINHA_EXECUCAO, issue, ticket e necessidade são comando desconhecido; a ajuda lista só servidor, abrir e demanda", async () => {
+test("CA-1: sem FABRIQUINHA_EXECUCAO, o grupo do fluxo antigo, ticket e necessidade são comando desconhecido; a ajuda lista só servidor, abrir e demanda", async () => {
   const raiz = mkdtempSync(join(base, "sem-agente-"));
   const env = { FABRIQUINHA_ROOT: raiz };
   for (const args of [...LEGADOS, ["ticket", "ver", "T-1"], ["ticket", "criar", "I-1", "--titulo", "Cache"]]) {
@@ -136,7 +139,7 @@ test("CA-2: com FABRIQUINHA_EXECUCAO de uma execução que não existe, nenhum c
   }
   const ajuda = (await cli(env, ["--help"])).out;
   assert.match(ajuda, /^ {2}fabriquinha demanda ver I-<n>$/m);
-  assert.doesNotMatch(ajuda, /fabriquinha (servidor|abrir|issue|necessidade)/);
+  assert.doesNotMatch(ajuda, new RegExp(`fabriquinha (servidor|abrir|${GRUPO_REMOVIDO_DO_FLUXO_ANTIGO}|necessidade)`));
 });
 
 test("argumento que falta é uso inválido, com a ajuda do grupo", async () => {

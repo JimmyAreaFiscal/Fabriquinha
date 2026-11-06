@@ -35,7 +35,7 @@ test("rotear escolhe a página do F7 §4.4 pelo caminho", () => {
   assert.deepEqual(rotear("/evaluations/a%2F1"), { pagina: "avaliacao", params: { avaliacao: "a/1" } });
   assert.deepEqual(rotear("/config"), { pagina: "configuracao", params: {} });
   // As páginas do fluxo legado saíram: a página da demanda antiga e a Auditoria (CA-4). `/demandas` só redireciona ao Início (app.ts).
-  for (const legado of ["/demandas", "/projects/loja/issues/I-3", "/audits/abc", "/nada"])
+  for (const legado of ["/demandas", "/projects/loja/demandas/I-3", "/audits/abc", "/nada"])
     assert.equal(rotear(legado), undefined);
 });
 

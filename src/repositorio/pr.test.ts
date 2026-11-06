@@ -359,10 +359,10 @@ test("saída inesperada do CLI vira ErroDeRegra com o que veio", async () => {
     "saída inesperada de gh pr list: não é JSON (confira a versão do CLI e execute o ticket de novo)",
   );
   hospedagem.zerar();
-  hospedagem.responder("pr create", "Warning: 1 uncommitted change\nhttps://github.com/org/loja/issues/9\n");
+  hospedagem.responder("pr create", "Warning: 1 uncommitted change\nhttps://github.com/org/loja/discussions/9\n");
   await recusa(
     c.publicar("x"),
-    "saída inesperada de gh pr create: https://github.com/org/loja/issues/9 (confira a versão do gh)",
+    "saída inesperada de gh pr create: https://github.com/org/loja/discussions/9 (confira a versão do gh)",
   );
   hospedagem.zerar();
   hospedagem.responder("pr create", "Warning: 1 uncommitted change\nhttps://github.com/org/loja/pull/9\n");
