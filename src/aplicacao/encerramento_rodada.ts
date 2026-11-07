@@ -160,7 +160,7 @@ function conferir(
  * Conclui o `encerrar_rodada` em execução até a conferência do PR. Repetível: o ticket não muda antes dela.
  * 1. Sem `mensagem_pr` e `aula_codigo` do ticket, o domínio recusa a conferência e o ticket segue em execução.
  * 2. Grava o `relatorio_produtividade`.
- * 3. Incorpora a ponta da demanda (D04); conflito volta a `desenvolvimento` com uma correção por arquivo, sem PR.
+ * 3. Incorpora a ponta da demanda (D04); conflito volta a `desenvolvimento` com uma correção para o merge, sem PR.
  * 4. Publica (ou atualiza, pela marca do ticket) o PR da branch da rodada para a da demanda e grava o `pr_aberto`.
  * 5. Confere conflito e checks do PR: com problema volta a `desenvolvimento`, sem ele vai ao gate.
  * Erro de 2 a 5 falha o ticket com a mensagem e sobe; o `pr_aberto` só existe com o PR publicado.
@@ -213,15 +213,18 @@ async function publicarEConferir(
   };
   const atualizacao = await atualizarWorktreeRodada(raiz, worktree, ref, log);
   if (atualizacao.status === "conflito") {
-    const correcoes = atualizacao.arquivos.map((arquivo, i) =>
+    // Um merge, um corretivo: quem resolve um arquivo resolve o merge inteiro, e um por arquivo rodava os outros à toa.
+    const arquivosEmConflito = atualizacao.arquivos.join(", ");
+    const correcoes = [
       correcao(
         ref,
-        i + 1,
-        `Resolver o conflito de ${arquivo} com ${demanda.branch}`,
-        `A ${refRodada} não incorpora a ponta de ${demanda.branch}: ${arquivo} conflita. Resolva o conflito na rodada.`,
-        [arquivo],
+        1,
+        `Resolver o conflito da ${refRodada} com ${demanda.branch}`,
+        `A ${refRodada} não incorpora a ponta de ${demanda.branch}: ${arquivosEmConflito} conflita(m). ` +
+          "Resolva o conflito de todos na rodada.",
+        atualizacao.arquivos,
       ),
-    );
+    ];
     return conferir(banco, ref, ticket, { documentacao_entregue: true, conflito: true, check_falho: false, correcoes });
   }
 
