@@ -13,7 +13,7 @@ import { ErroDeRegra, ErroDeEscopo } from "../dominio/erros.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
+import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { aprovarPRRodada } from "./aprovacao_pr_rodada.ts";
