@@ -237,6 +237,11 @@ test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy
   for (const [variante, etapa, saida] of [
     ["pergunta_banco", "implementar", foraDaRevisao],
     ["pergunta_sonar", "revisar_rodada", oferta],
+    [
+      "pergunta_banco",
+      "revisar_demanda",
+      '{"decisao":"responder","resposta":"Faça login na conta do Sonar e confira o projeto","justificativa":"banal"}',
+    ],
   ] as const) {
     const escalada = rodar(variante, "autonomo", 1, triagemComSaida(etapa, saida));
     await ate(

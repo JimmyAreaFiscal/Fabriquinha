@@ -67,7 +67,15 @@ test("lê a última decisão válida da saída; escalar, rótulo fora das opçõ
     resposta: "Usar a verificação anterior",
     justificativa: "regra",
   });
-  for (const oferta of ["Use a credencial do bot", "Peça acesso ao Sonar", "Faça o deploy", "Autentique o gh"]) {
+  for (const oferta of [
+    "Use a credencial do bot",
+    "Peça acesso ao Sonar",
+    "Faça o deploy",
+    "Autentique o gh",
+    "Faça login na conta do Sonar e confira o projeto",
+    "Acesse o painel",
+    "Use o token do bot",
+  ]) {
     assert.equal(lerDecisao(responder(oferta), livre, "implementar"), undefined, oferta);
   }
   assert.equal(

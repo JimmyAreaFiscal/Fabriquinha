@@ -33,7 +33,7 @@ const ETAPAS_DE_REVISAO = ["revisar_rodada", "revisar_demanda"];
 
 // Rede de segurança do código: o modelo pode errar e mandar "responder" com uma oferta de acesso; aqui isso escala.
 // shortcut: palavras-chave, com falso positivo que só escala; trocar por classificação do modelo se escalar demais.
-const OFERTA_DE_ACESSO = /credencia|acesso|deploy|autentic|autentiqu/i;
+const OFERTA_DE_ACESSO = /credencia|acess|deploy|autentic|autentiqu|login|logue|logar|senha|token|conta d/i;
 
 const REGRAS = `Você é o Auditor automático da Fabriquinha. Um agente que executa um ticket sozinho fez uma pergunta ao Auditor humano.
 Responda você só o que for banal; escale o que for estratégico.
