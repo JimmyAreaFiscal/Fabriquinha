@@ -8,7 +8,8 @@ import { ZodError } from "zod";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo } from "./arquivos.ts";
-import { editarProjeto, projeto, registrarProjeto } from "./projetos.ts";
+import { editarProjeto, registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
+import { projeto } from "./projetos.ts";
 import {
   anexar,
   criarTarefa,

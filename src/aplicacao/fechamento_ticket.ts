@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../nucleo/conclusao_ticket.ts";
-import { ErroDeReprovacao, ErroExterno, existe } from "../nucleo/erros.ts";
+import { ErroDeReprovacao, ErroExterno } from "../nucleo/erros.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_etapa.ts";
 import { concluirImplementacoesRodada } from "../nucleo/transicoes_rodada.ts";
@@ -16,7 +16,7 @@ import type { OpcoesSonar } from "./evidencias/sonar.ts";
 import { MIME_TEXTO } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { guardarBytes } from "../armazenamento/arquivos.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
@@ -140,11 +140,7 @@ export async function fecharTicketDemanda(
   const falhar = (motivo: string): void => {
     falharTicketDemanda(banco, ref, motivo);
   };
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const { rodada_id } = ticket;
   const worktree =
     rodada_id === undefined

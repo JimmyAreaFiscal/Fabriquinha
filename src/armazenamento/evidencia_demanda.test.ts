@@ -9,7 +9,7 @@ import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { caminhoArquivo, guardarBytes } from "./arquivos.ts";
 import { carregarDemanda, comDemanda } from "./demandas.ts";
 import { anexosDaDemanda, gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
-import { removerProjeto } from "./projetos.ts";
+import { removerProjeto } from "../aplicacao/projeto/cadastro.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 

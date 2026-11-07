@@ -2,19 +2,24 @@
 // (C19), o modelo e o effort de cada etapa, e os modelos do pi para os seletores.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { encontrado, mensagem } from "../../../nucleo/erros.ts";
+import { mensagem } from "../../../nucleo/erros.ts";
 import { ConfiguracaoAgente, type Modelo } from "../../../nucleo/configuracao_agente.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
 import { conferirModelo, listarModelos } from "../../../infra/agente/modelos.ts";
 import { varrerBase } from "../../../aplicacao/retrabalho.ts";
-import { escrever, raizDo } from "../../../armazenamento/banco.ts";
+import { escrever } from "../../../armazenamento/banco.ts";
 import { etapasDoProjeto, substituirEtapasDoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { noLog } from "../../../infra/registro.ts";
-import { editarProjeto, projeto, projetos, registrarProjeto, removerProjeto } from "../../../armazenamento/projetos.ts";
+import {
+  editarProjeto,
+  projetoExistente,
+  projetos,
+  registrarProjeto,
+  removerProjeto,
+} from "../../../aplicacao/projeto/cadastro.ts";
 import { Configuracao, configuracao, salvarConfiguracao } from "../../../armazenamento/servico.ts";
 import { conferirProjeto } from "../../../infra/repositorio/cadastro.ts";
-import { removerWorktrees } from "../../../infra/repositorio/worktree.ts";
 import { ErroHttp } from "../erros.ts";
 import type { Agendador, Rota } from "../rotas.ts";
 
@@ -146,10 +151,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params }) => {
       const nome = String(params.nome);
-      return comConfiguracoes(
-        banco,
-        encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "confira o nome do projeto"),
-      );
+      return comConfiguracoes(banco, projetoExistente(banco, nome));
     },
   },
   { metodo: "GET", caminho: "/api/modelos", tratar: () => listarModelos() },
@@ -168,8 +170,8 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     metodo: "DELETE",
     caminho: "/api/projetos/:nome",
     tratar: async ({ banco, params }) => {
-      const { projeto: p, avisos } = await removerProjeto(banco, String(params.nome));
-      return { avisos: [...avisos, ...(await removerWorktrees(raizDo(banco), { nome: p.nome, raiz_git: p.repo }))] };
+      const { avisos } = await removerProjeto(banco, String(params.nome));
+      return { avisos };
     },
   },
 ];

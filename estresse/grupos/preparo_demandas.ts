@@ -14,7 +14,7 @@ import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_
 import { comDemanda } from "../../src/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { importarAchados } from "../../src/armazenamento/avaliacoes.ts";
-import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { criarTarefa, criarUsuarioSimulado } from "../../src/armazenamento/simulacao.ts";
 import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/infra/repositorio/worktree-demanda.ts";

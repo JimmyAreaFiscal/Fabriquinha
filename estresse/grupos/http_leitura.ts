@@ -11,7 +11,7 @@ import { abrir } from "../../src/armazenamento/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_projeto.ts";
 import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../src/armazenamento/evidencia_demanda.ts";
-import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";

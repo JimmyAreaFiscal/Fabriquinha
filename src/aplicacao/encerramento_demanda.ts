@@ -32,7 +32,7 @@ import {
 import { varrerBase } from "./retrabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { carregarSessoesDaDemanda } from "../armazenamento/sessoes.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
@@ -71,11 +71,7 @@ export async function conduzirEncerramentoDemanda(
       "só se encerra a demanda em encerramento, com o encerrar_demanda reservado pelo agendador",
     );
   }
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   mkdirSync(join(raiz, "execucoes"), { recursive: true });
   const log = join(raiz, "execucoes", `encerramento-${demanda_id}.log`);

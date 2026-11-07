@@ -26,7 +26,7 @@ import { situacao } from "../../src/aplicacao/gerente.ts";
 import { abrir } from "../../src/armazenamento/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda } from "../../src/armazenamento/demandas.ts";
-import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { configuracao } from "../../src/armazenamento/servico.ts";
 import { carregarSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import { integrarPR } from "../../src/infra/repositorio/pr.ts";

@@ -7,7 +7,7 @@ import { formatarRodadaRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { confirmarAprovacaoPullRequest, validarAprovacaoPullRequest } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { integrarPR } from "../infra/repositorio/pr.ts";
 import { caminhoDaWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
@@ -56,11 +56,7 @@ export async function aprovarPRRodada(
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const { branch } = ag.demanda;
   await integrarPR(projeto, pr.dados.id as string);

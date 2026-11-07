@@ -9,7 +9,7 @@ import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucle
 import { verificarFitness } from "./evidencias/verificacoes_comandos.ts";
 import { schemaDe } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { guardarBytes } from "../armazenamento/arquivos.ts";
 import { type Anexo, gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
@@ -42,11 +42,7 @@ export async function prepararRevisaoRodada(
       "use o ticket revisar_rodada de uma rodada da demanda",
     );
   }
-  const projeto = encontrado(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração`,
-    `cadastre a configuração do projeto ${ag.demanda.projeto}`,
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
 
   const worktree = await garantirWorktreeRodada(
     raizDo(banco),

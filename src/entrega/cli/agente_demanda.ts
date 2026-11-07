@@ -22,7 +22,7 @@ import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
 import { decidirRevisaoRodada } from "../../aplicacao/revisao_rodada.ts";
 import { escrever } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
-import { projeto } from "../../armazenamento/projetos.ts";
+import { projetoExistente } from "../../aplicacao/projeto/cadastro.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
 
 /** Onde um agente age: o Ator que ele é (`trabalho_id` é o id de `execucao_sessao`), a sessão e o ticket composto que ele roda. */
@@ -146,8 +146,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
   {
     palavras: ["projeto", "ver"],
     argumentos: [],
-    rodar: ({ banco, agente }) =>
-      encontrado(projeto(banco, agente.projeto), `o projeto ${agente.projeto} não existe`, "confira a execução"),
+    rodar: ({ banco, agente }) => projetoExistente(banco, agente.projeto, "confira a execução"),
   },
   {
     palavras: ["demanda", "ver"],

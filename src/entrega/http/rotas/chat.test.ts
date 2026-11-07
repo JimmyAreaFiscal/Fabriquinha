@@ -17,7 +17,7 @@ import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-t
 import { gravarConfiguracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../../aplicacao/execucao_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../../armazenamento/sessoes.ts";
-import { registrarProjeto } from "../../../armazenamento/projetos.ts";
+import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));

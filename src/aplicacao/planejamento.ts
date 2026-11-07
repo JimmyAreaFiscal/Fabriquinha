@@ -13,7 +13,7 @@ import { confirmarAprovacaoPlanejamento, reabrirTicket, reprovarPlanejamento } f
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { varrerBase } from "./retrabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { anotar } from "../infra/registro.ts";
@@ -119,11 +119,7 @@ export async function aprovarPlanejamentoDemanda(
   const plano = Plano.parse(
     ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticketPlanejar(ag).ticket_id)?.dados,
   );
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   mkdirSync(join(raiz, "execucoes"), { recursive: true });
   const log = join(raiz, "execucoes", `planejamento-${demandaId}.log`);
