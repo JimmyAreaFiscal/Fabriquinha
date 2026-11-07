@@ -63,7 +63,7 @@ function acrescentar(ag: AgregadoDemanda, plano: Plano, agora: Instante, novasRo
         etapa: "implementar",
         status: "aberto",
         status_alterado_em: agora,
-        criado_por: FABRIQUINHA, // shortcut: a I-266.R3 grava o Agente revisor como autor do ticket corretivo
+        criado_por: FABRIQUINHA, // shortcut: o autor é a Fabriquinha, não o Agente revisor; trocar na I-266.R3
         configuracao_agente,
       })),
     ],
