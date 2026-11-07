@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
-import { PACOTE } from "./pi.ts";
+import { catalogoDaEtapa } from "../dominio/evidencia_etapa.ts";
+import { EtapaTicket } from "../dominio/primitivos.ts";
+import { PACOTE, skillDoTipo } from "./pi.ts";
 import { argumentosPiDemanda, skillsDaEtapaDemanda } from "./pi_demanda.ts";
 
 const base = { raiz: "/r", sessaoPi: "s", confianca: undefined, modo: "autonomo" as const };
@@ -45,6 +47,16 @@ test("pacote real: skills na ordem do catálogo (CA-12)", () => {
       skillsDaEtapaDemanda(etapa).map((s) => `${PACOTE}/skills/${s}`),
     );
   }
+});
+
+test("pacote real: toda skill de agente do catálogo existe, em todas as etapas (CA-12)", () => {
+  for (const etapa of EtapaTicket.options) {
+    const doCatalogo = catalogoDaEtapa(etapa)
+      .filter((item) => item.produtor === "agente")
+      .map((item) => skillDoTipo(item.tipo));
+    assert.deepEqual(skillsDaEtapaDemanda(etapa), doCatalogo, `skills ausentes no pacote para ${etapa}`);
+  }
+  assert.ok(EtapaTicket.options.includes("encerrar_rodada"));
 });
 
 test("pacote com skills faltando: só as presentes entram (CA-12)", () => {
