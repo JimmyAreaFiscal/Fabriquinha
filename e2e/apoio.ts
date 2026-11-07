@@ -4,19 +4,10 @@
 import { test as base, type Page, type TestInfo } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
+import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { recuperarAuditorias } from "../src/execucao/auditoria.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
@@ -67,7 +58,9 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
   /** O binário do pi que a Fabriquinha usa (`FABRIQUINHA_PI`); o falso, a menos que o teste troque com `test.use`. */
   pi: [join(import.meta.dirname, "pi-falso.ts"), { option: true }],
   fabriquinha: async ({ pi }, use) => {
-    const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-e2e-"));
+    // O serviço é quem usa o banco: aqui a raiz só nasce migrada, e fechar() a apaga no fim.
+    const { raiz, banco, fechar } = abrirBancoTemporario();
+    banco.close();
     // git e pi sem a configuração do usuário da máquina.
     const gitconfig = join(raiz, "gitconfig");
     writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.com\n");
@@ -136,7 +129,7 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
       matarPi(raiz);
       const log = atuais.map((a) => a.stderr()).join("");
       if (log.trim()) console.log(`stderr da Fabriquinha:\n${log}`);
-      rmSync(raiz, { recursive: true, force: true });
+      fechar();
     }
   },
   pagina: async ({ page, fabriquinha }, use) => {
