@@ -2,8 +2,8 @@
 // Sobe o ambiente de verdade e confere que cada preparo deixa a rota que o usa responder o esperado (CA-2).
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import { abrir } from "../../src/persistencia/banco.ts";
-import { carregarDemanda } from "../../src/persistencia/demandas.ts";
+import { abrir } from "../../src/armazenamento/banco.ts";
+import { carregarDemanda } from "../../src/armazenamento/demandas.ts";
 import { type Ambiente, subirAmbiente } from "../ambiente.ts";
 import { acoesHttpLeitura } from "./http_leitura.ts";
 import { criarPreparo, type Preparo } from "./preparo_demandas.ts";

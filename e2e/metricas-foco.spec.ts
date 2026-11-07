@@ -1,6 +1,6 @@
 // Métricas (F7 §4.4, item 2): o mês em foco escolhido com um clique continua o mesmo ao trocar só o projeto, e volta
 // ao último mês quando o período novo não o contém mais.
-import { abrir } from "../src/persistencia/banco.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
 import { expect, test } from "./apoio.ts";
 
 test("trocar o projeto mantém o mês em foco; um período que não o contém leva o foco ao último mês", async ({

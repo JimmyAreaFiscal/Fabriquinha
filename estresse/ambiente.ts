@@ -53,7 +53,11 @@ export async function subirAmbiente(): Promise<Ambiente> {
   let log = "";
   const servico = spawn(
     process.execPath,
-    ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../src/cli/fabriquinha.ts"), "servidor"],
+    [
+      "--disable-warning=ExperimentalWarning",
+      join(import.meta.dirname, "../src/composicao/fabriquinha.ts"),
+      "servidor",
+    ],
     {
       env: {
         ...process.env,

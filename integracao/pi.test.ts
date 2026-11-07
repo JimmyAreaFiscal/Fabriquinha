@@ -7,8 +7,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { PACOTE, ambientePi, argumentosPi, binarioPi } from "../src/execucao/pi.ts";
-import { skillsDaEtapaDemanda } from "../src/execucao/pi_demanda.ts";
+import { PACOTE, ambientePi, argumentosPi, binarioPi } from "../src/infra/agente/pi.ts";
+import { skillsDaEtapaDemanda } from "../src/aplicacao/pi_demanda.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));
 after(() => {

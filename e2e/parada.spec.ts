@@ -7,11 +7,11 @@ import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { carregarDemanda } from "../src/persistencia/demandas.ts";
-import { abrir } from "../src/persistencia/banco.ts";
-import { substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
-import { sinalNoGrupo } from "../src/processo.ts";
+import { carregarDemanda } from "../src/armazenamento/demandas.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
+import { substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { sinalNoGrupo } from "../src/infra/processo.ts";
 import { expect, projeto, test } from "./apoio.ts";
 import { semearTicketAberto } from "./demandas-apoio.ts";
 

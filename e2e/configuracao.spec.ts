@@ -4,7 +4,7 @@ import type { TestInfo } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { abrir } from "../src/persistencia/banco.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });

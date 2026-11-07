@@ -15,15 +15,15 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
-import { principal } from "../../src/cli/cli.ts";
-import type { AgregadoDemanda, TicketDemanda } from "../../src/dominio/agregado_demanda.ts";
-import { EtapaTicket } from "../../src/dominio/primitivos.ts";
-import { criarSessao, iniciarExecucao } from "../../src/dominio/sessoes.ts";
-import { montarPromptDemanda } from "../../src/execucao/prompt_demanda.ts";
-import { abrir } from "../../src/persistencia/banco.ts";
+import { principal } from "../../src/entrega/cli/cli.ts";
+import type { AgregadoDemanda, TicketDemanda } from "../../src/nucleo/agregado_demanda.ts";
+import { EtapaTicket } from "../../src/nucleo/primitivos.ts";
+import { criarSessao, iniciarExecucao } from "../../src/nucleo/sessoes.ts";
+import { montarPromptDemanda } from "../../src/aplicacao/prompt_demanda.ts";
+import { abrir } from "../../src/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { comSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
-import { publicarPRDe } from "../../src/repositorio/pr.ts";
+import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { publicarPRDe } from "../../src/infra/repositorio/pr.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
 const pastaDeSaida = resolve(process.argv[2] ?? "");
@@ -54,12 +54,16 @@ function arquivosMarkdown(pasta: string): string[] {
 }
 
 for (const caminho of [
-  "src/execucao/avaliacao.md",
-  ...arquivosMarkdown("src/execucao/etapas"),
+  "src/aplicacao/avaliacao.md",
+  ...arquivosMarkdown("src/aplicacao/etapas"),
   ...arquivosMarkdown("skills"),
   ...arquivosMarkdown("pacote-pi/skills"),
 ]) {
-  gravarFoto(join("textos", caminho), readFileSync(join(raizDoCodigo, caminho), "utf8"));
+  // A foto da base guarda os textos sob o caminho antigo (src/execucao/); só a leitura segue o caminho novo.
+  gravarFoto(
+    join("textos", caminho.replace("src/aplicacao/", "src/execucao/")),
+    readFileSync(join(raizDoCodigo, caminho), "utf8"),
+  );
 }
 
 // 2. O prompt montado de cada etapa, com o contexto fixo.

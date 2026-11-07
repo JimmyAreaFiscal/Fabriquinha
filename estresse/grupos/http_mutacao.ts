@@ -6,13 +6,13 @@
 import { Buffer } from "node:buffer";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ROTAS } from "../../src/web/servidor.ts";
-import { abrir } from "../../src/persistencia/banco.ts";
-import { carregarDemanda } from "../../src/persistencia/demandas.ts";
-import { projeto } from "../../src/persistencia/projetos.ts";
-import { configuracao } from "../../src/persistencia/servico.ts";
-import { exigirGit } from "../../src/repositorio/worktree.ts";
-import { anexar } from "../../src/persistencia/simulacao.ts";
+import { ROTAS } from "../../src/entrega/http/servidor.ts";
+import { abrir } from "../../src/armazenamento/banco.ts";
+import { carregarDemanda } from "../../src/armazenamento/demandas.ts";
+import { projeto } from "../../src/armazenamento/projetos.ts";
+import { configuracao } from "../../src/armazenamento/servico.ts";
+import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
+import { anexar } from "../../src/armazenamento/simulacao.ts";
 import type { Ambiente } from "../ambiente.ts";
 import { criarPreparo } from "./preparo_demandas.ts";
 

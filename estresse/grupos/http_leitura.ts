@@ -4,17 +4,17 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgregadoDemanda } from "../../src/dominio/agregado_demanda.ts";
-import { guardarBytes } from "../../src/persistencia/arquivos.ts";
-import { criarAvaliacao } from "../../src/persistencia/avaliacoes.ts";
-import { abrir } from "../../src/persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../../src/persistencia/configuracao_projeto.ts";
-import { criarDemandaNova } from "../../src/persistencia/demandas.ts";
-import { gravarAnexos } from "../../src/persistencia/evidencia_demanda.ts";
-import { registrarProjeto } from "../../src/persistencia/projetos.ts";
-import { comSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
-import { exigirGit } from "../../src/repositorio/worktree.ts";
-import { ROTAS } from "../../src/web/servidor.ts";
+import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
+import { guardarBytes } from "../../src/armazenamento/arquivos.ts";
+import { criarAvaliacao } from "../../src/armazenamento/avaliacoes.ts";
+import { abrir } from "../../src/armazenamento/banco.ts";
+import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_projeto.ts";
+import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
+import { gravarAnexos } from "../../src/armazenamento/evidencia_demanda.ts";
+import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
+import { ROTAS } from "../../src/entrega/http/servidor.ts";
 import type { Ambiente } from "../ambiente.ts";
 
 /** Uma rota HTTP medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */

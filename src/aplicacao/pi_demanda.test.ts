@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
+import { EtapaTicket } from "../nucleo/primitivos.ts";
+import { PACOTE, skillDoTipo } from "../infra/agente/pi.ts";
+import { argumentosPiDemanda, skillsDaEtapaDemanda } from "./pi_demanda.ts";
+
+const base = { raiz: "/r", sessaoPi: "s", confianca: undefined, modo: "autonomo" as const };
+const ticket = (campos: Partial<TicketDemanda> = {}) =>
+  ({ etapa: "implementar", ...campos }) as unknown as TicketDemanda;
+const daEtapa = { etapa: "implementar" as const, modelo_provedor: "p2", modelo_nome: "m2", effort: "low" as const };
+const flags = (args: string[], flag: string) => args.flatMap((a, i) => (args[i - 1] === flag ? [a] : []));
+
+test("revisar_rodada traz só as duas skills do catálogo (CA-3)", () => {
+  const args = argumentosPiDemanda({ ...base, ticket: ticket({ etapa: "revisar_rodada" }), etapasDoProjeto: [] });
+  assert.deepEqual(
+    flags(args, "--skill"),
+    ["artefato-explicacao-fitness", "artefato-comprovacao-criterios"].map((s) => `${PACOTE}/skills/${s}`),
+  );
+});
+
+test("modelo e effort: ticket, senão etapa do projeto, senão nenhum flag (CA-4 a CA-6)", () => {
+  const doTicket = ticket({ modelo_provedor: "p1", modelo_nome: "m1", effort: "high" });
+  const a = argumentosPiDemanda({ ...base, ticket: doTicket, etapasDoProjeto: [daEtapa] });
+  assert.deepEqual([flags(a, "--provider"), flags(a, "--model"), flags(a, "--thinking")], [["p1"], ["m1"], ["high"]]);
+  const b = argumentosPiDemanda({ ...base, ticket: ticket(), etapasDoProjeto: [daEtapa] });
+  assert.deepEqual([flags(b, "--provider"), flags(b, "--model"), flags(b, "--thinking")], [["p2"], ["m2"], ["low"]]);
+  const c = argumentosPiDemanda({ ...base, ticket: ticket(), etapasDoProjeto: [{ etapa: "planejar" }] });
+  for (const f of ["--provider", "--model", "--thinking"]) assert.deepEqual(flags(c, f), []);
+});
+
+test("pacote real: skills na ordem do catálogo (CA-12)", () => {
+  assert.deepEqual(skillsDaEtapaDemanda("planejar"), ["artefato-plano"]);
+  assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda"), [
+    "artefato-comprovacao-criterios",
+    "artefato-testes-estresse",
+    "artefato-analise-seguranca",
+  ]);
+  for (const etapa of ["planejar", "revisar_demanda"] as const) {
+    const args = argumentosPiDemanda({ ...base, ticket: ticket({ etapa }), etapasDoProjeto: [] });
+    assert.deepEqual(
+      flags(args, "--skill"),
+      skillsDaEtapaDemanda(etapa).map((s) => `${PACOTE}/skills/${s}`),
+    );
+  }
+});
+
+test("pacote real: toda skill de agente do catálogo existe, em todas as etapas (CA-12)", () => {
+  for (const etapa of EtapaTicket.options) {
+    const doCatalogo = catalogoDaEtapa(etapa)
+      .filter((item) => item.produtor === "agente")
+      .map((item) => skillDoTipo(item.tipo));
+    assert.deepEqual(skillsDaEtapaDemanda(etapa), doCatalogo, `skills ausentes no pacote para ${etapa}`);
+  }
+  assert.ok(EtapaTicket.options.includes("encerrar_rodada"));
+});
+
+test("pacote com skills faltando: só as presentes entram (CA-12)", () => {
+  const pacote = mkdtempSync(join(tmpdir(), "pacote-"));
+  try {
+    mkdirSync(join(pacote, "skills", "artefato-comprovacao-criterios"), { recursive: true });
+    assert.deepEqual(skillsDaEtapaDemanda("planejar", pacote), []);
+    assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda", pacote), ["artefato-comprovacao-criterios"]);
+  } finally {
+    rmSync(pacote, { recursive: true, force: true });
+  }
+});

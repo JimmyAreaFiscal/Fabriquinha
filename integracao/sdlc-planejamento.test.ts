@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { Ator } from "../src/dominio/ator.ts";
-import { interromperExecucaoDemanda } from "../src/execucao/execucao_demanda.ts";
-import { despacharDemandas, executarAgoraDemanda } from "../src/execucao/despacho_demanda.ts";
-import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../src/execucao/planejamento.ts";
-import { substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
+import type { Ator } from "../src/nucleo/ator.ts";
+import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
+import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despacho_demanda.ts";
+import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../src/aplicacao/planejamento.ts";
+import { substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 

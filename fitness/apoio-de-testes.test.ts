@@ -13,13 +13,13 @@ const PASTAS_SO_COM_ARQUIVOS_DE_TESTE = ["src", "pacote-pi"];
 const PASTAS_DE_APOIO_A_TESTE = ["integracao", "e2e", "estresse", "apoio-testes"];
 const REFERENCIA_AO_SERVICO_REAL = /4317|~\/fabriquinha|homedir\(\)[^;]*["'/]fabriquinha/;
 // Estes dois testes fixam os padrões de produção (porta do serviço, raiz de `abrir()`) sem subir o serviço nem tocar o banco real.
-const ARQUIVOS_QUE_FIXAM_O_PADRAO_DE_PRODUCAO = ["src/execucao/servico.test.ts", "src/persistencia/banco.test.ts"];
+const ARQUIVOS_QUE_FIXAM_O_PADRAO_DE_PRODUCAO = ["src/composicao/servico.test.ts", "src/armazenamento/banco.test.ts"];
 
 const PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO = ["src", "pacote-pi", "integracao", "e2e", "estresse"];
 // Estes dois testam o próprio `banco.ts` e a linha de base de migração: precisam abrir o banco numa raiz que eles controlam.
 const ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO = [
-  "src/persistencia/banco.test.ts",
-  "src/persistencia/migracao_linha_de_base.test.ts",
+  "src/armazenamento/banco.test.ts",
+  "src/armazenamento/migracao_linha_de_base.test.ts",
 ];
 
 const PASTAS_QUE_NAO_IMPORTAM_TESTE = ["src", "pacote-pi", "integracao", "e2e", "apoio-testes", "fitness", "estresse"];
@@ -87,8 +87,8 @@ test("autoteste: acusa pelo caminho a porta 4317, o texto ~/fabriquinha e homedi
     escrever("estresse/limpo.ts", 'const raiz = join(tmpdir(), "fabriquinha-estresse");\n');
     // Fora do alcance da regra: código de produção, teste sem sufixo em src/ e as exceções listadas.
     escrever("src/a/producao.ts", "const PORTA = 4317;\n");
-    escrever("src/execucao/servico.test.ts", "assert.equal(portaDoServico({}), 4317);\n");
-    escrever("src/persistencia/banco.test.ts", "// usa ~/fabriquinha\n");
+    escrever("src/composicao/servico.test.ts", "assert.equal(portaDoServico({}), 4317);\n");
+    escrever("src/armazenamento/banco.test.ts", "// usa ~/fabriquinha\n");
     escrever("e2e/node_modules/x/index.ts", "4317\n");
 
     assert.deepEqual(acharArquivosDeTesteQueReferenciamOServicoReal(raiz), [
@@ -123,8 +123,8 @@ test("autoteste: acusa pelo caminho o arquivo com mkdtemp e abrir(, e poupa as e
     escrever("src/a/so_mkdtemp.test.ts", "mkdtempSync(tmp);\n");
     escrever("src/a/so_abrir.test.ts", "abrir(raiz);\n");
     escrever("src/a/pr.test.ts", "mkdtempSync(tmp);\nhospedagem.abrirPr({});\n");
-    escrever("src/persistencia/banco.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
-    escrever("src/persistencia/migracao_linha_de_base.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
+    escrever("src/armazenamento/banco.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
+    escrever("src/armazenamento/migracao_linha_de_base.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
     escrever("e2e/node_modules/x/index.ts", "mkdtemp abrir(\n");
 
     assert.deepEqual(acharArquivosQueMontamBancoProprio(raiz), [
