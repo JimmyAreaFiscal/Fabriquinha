@@ -1,5 +1,5 @@
 // Rotas do chat (F7 §4.2) contra o serviço de verdade, numa raiz temporária e numa porta livre, com git real e o pi
-// falso do e2e: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
+// falso único: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
 // que não é de uma demanda dá 404.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -7,18 +7,18 @@ import { once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { avisar, situacao } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import type { DadosDoChatDemanda } from "./chat.ts";
-import { criarDemanda } from "../../persistencia/demandas.ts";
+import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execucao/execucao_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
-import { demanda } from "./demandas_cenario.ts";
+import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -26,7 +26,7 @@ writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.co
 process.env.GIT_CONFIG_GLOBAL = gitconfig;
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 process.env.PI_CODING_AGENT_DIR = join(base, "pi-agent");
-process.env.FABRIQUINHA_PI = resolve(import.meta.dirname, "../../../e2e/pi-falso.ts");
+instalarPiFalso(base).roteirizar([{ marcas: true }]);
 
 let servico: Servico;
 let origem: string;
@@ -129,9 +129,9 @@ const textos = (conversa: Record<string, unknown>[]) =>
 
 test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviço da demanda", async () => {
   const em = "2026-01-01T00:00:00.000Z";
-  criarDemanda(
+  gravarAgregadoPronto(
     servico.banco,
-    demanda("I-310", "planejamento", {
+    montarAgregadoDemanda("I-310", "planejamento", {
       tickets: [
         {
           demanda_id: "I-310",
@@ -226,10 +226,10 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   const ref = { demanda_id: "I-311", ticket_id: 1 };
-  criarDemanda(
+  gravarAgregadoPronto(
     servico.banco,
-    demanda("I-311", "planejamento", {
-      demanda: { ...demanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
+    montarAgregadoDemanda("I-311", "planejamento", {
+      demanda: { ...montarAgregadoDemanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
       tickets: [
         {
           ...ref,

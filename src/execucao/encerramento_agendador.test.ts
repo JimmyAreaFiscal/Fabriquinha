@@ -8,16 +8,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { criarSessao, encerrarExecucao, iniciarExecucao } from "../dominio/sessoes.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { configuracao } from "../persistencia/servico.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
-import { cenarioDemanda, commitarCenario } from "../repositorio/worktree-cenarios.ts";
+import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
+import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import type { Verificacao } from "../evidencias/verificacoes.ts";
 import { despacharDemandas, type DepsDespacho } from "./despacho_demanda.ts";
@@ -42,8 +43,8 @@ const BRANCH = "fabriquinha/I-206";
 
 /** Demanda em encerramento (revisão integral aprovada), com a rodada concluída e o `encerrar_demanda` aberto. */
 async function cenario() {
-  const c = cenarioDemanda([], "develop");
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste([], "develop");
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -71,7 +72,7 @@ async function cenario() {
     devolucoes: 0,
     ...extra,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: D,
       projeto: "loja",
@@ -99,7 +100,7 @@ async function cenario() {
   } as unknown as AgregadoDemanda);
   const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log, () => Promise.resolve());
   await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
-  const sha = commitarCenario(demanda, "a.txt", "a\n");
+  const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 
   const aprovada = (tipo: Verificacao["tipo"]): Verificacao => ({
@@ -170,7 +171,7 @@ test("CA-15: a revisão integral aprovada vai a concluida pelo ciclo depois do m
 
 test("CA-16: conflito com a base cria o resolver_conflito; concluído, o ciclo tenta o encerramento de novo e conclui", async () => {
   const c = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH,
     base: "develop",
     titulo: "x",

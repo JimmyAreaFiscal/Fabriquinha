@@ -3,20 +3,22 @@
 // com git real e um pi falso.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { configuracao } from "../persistencia/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
 import { despacharDemandas, type DepsDespacho, executarAgoraDemanda } from "./despacho_demanda.ts";
 
@@ -25,33 +27,7 @@ const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-despacho-"));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
 delete process.env.FABRIQUINHA_PORTA;
 
-/** pi falso: assenta; com $FALSO_PI=erro responde com stopReason de erro. */
-const pi = join(temporario, "pi.mjs");
-writeFileSync(
-  pi,
-  `#!/usr/bin/env node
-import { appendFileSync, mkdirSync } from "node:fs";
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  if (!linhas.some((l) => JSON.parse(l).type === "prompt")) return;
-  const erro = process.env.FALSO_PI === "erro";
-  const message = { role: "assistant", content: [], provider: "p", model: "m", stopReason: erro ? "error" : "stop",
-    usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0 } },
-    ...(erro && { errorMessage: "limite de uso" }) };
-  mkdirSync(arg("--session-dir"), { recursive: true });
-  appendFileSync(arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl",
-    JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
-  emitir({ type: "response", command: "prompt", success: true });
-  emitir({ type: "message_end", message });
-  emitir({ type: "agent_settled" });
-});
-`,
-);
-chmodSync(pi, 0o755);
+const piFalso = instalarPiFalso(temporario);
 
 const abertos: DatabaseSync[] = [];
 after(() => {
@@ -76,8 +52,8 @@ interface DemandaSpec {
 
 /** Banco novo; `real` usa o repositório git de verdade (e a worktree da demanda I-2), senão o repositório não existe. */
 async function cenario(limite: number, real = false) {
-  const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste();
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   const repo = real ? c.repo : "/nao/existe";
   banco
@@ -98,7 +74,7 @@ async function cenario(limite: number, real = false) {
   });
   banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
   if (real) {
-    process.env.FABRIQUINHA_PI = pi;
+    process.env.FABRIQUINHA_PI = piFalso.caminho;
     await garantirWorktreeDemanda(c.raiz, c.projeto, "I-2", c.log, () => Promise.resolve());
   }
   return { c, banco, config: configuracao(banco) };
@@ -107,7 +83,7 @@ async function cenario(limite: number, real = false) {
 /** A demanda I-`n`. Os tickets sem `id` recebem 1, 2... pela ordem. */
 function demanda(banco: DatabaseSync, n: number, { fase = "execucao", rodadas = [], tickets = [] }: DemandaSpec): void {
   const id = `I-${String(n)}`;
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id,
       projeto: "loja",
@@ -374,13 +350,13 @@ test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue par
   silenciar(t); // a conferência recusa: o agente falso não entrega a documentação
   const { banco, config } = await cenario(3, true);
   demanda(banco, 2, { rodadas: ["encerramento"], tickets: [{ etapa: "encerrar_rodada", rodada: 1 }] });
-  process.env.FALSO_PI = "erro";
+  piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   await Promise.all(despacharDemandas(banco, config));
   assert.equal(status(banco, 2, 1), "falhou");
 
   const outro = await cenario(3, true);
   demanda(outro.banco, 2, { rodadas: ["encerramento"], tickets: [{ etapa: "encerrar_rodada", rodada: 1 }] });
-  delete process.env.FALSO_PI;
+  piFalso.roteirizar([{}]);
   await Promise.all(despacharDemandas(outro.banco, outro.config));
   assert.equal(status(outro.banco, 2, 1), "falhou"); // conclusão recusada: não fica preso em execução
 });

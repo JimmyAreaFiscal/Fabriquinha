@@ -1,14 +1,12 @@
 // Retomada automática do ticket falho por infraestrutura, contra banco real em raiz temporária.
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../dominio/transicoes_rodada.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { causaDeInfraestrutura, modeloReserva, retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 
 test("classifica a falha: reinício, cota e transitória são infraestrutura; o resto fica para o ticket ou o Auditor", () => {
@@ -48,8 +46,10 @@ test("o modelo reserva é o do outro provedor, no mesmo nível; sem modelo ou pr
 const falhouEm = "2026-01-01T00:00:00.000Z";
 const minutosDepois = (n: number) => new Date(Date.parse(falhouEm) + n * 60_000);
 
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
+
 function cenario() {
-  const banco = abrir(mkdtempSync(join(tmpdir(), "fabriquinha-retomada-")));
+  const { banco } = abrirBancoTemporario();
   banco
     .prepare(
       `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
@@ -79,7 +79,7 @@ function cenario() {
     ["implementar", "aberto", undefined],
     ["implementar", "falhou", "HTTP 502"],
   ];
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-1",
       projeto: "loja",

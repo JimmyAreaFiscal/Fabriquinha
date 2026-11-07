@@ -1,9 +1,7 @@
 // Demandas (T-1289): o quadro do projeto e a página da demanda, com os gates, os tickets, a sessão de ajustes, o
 // cancelamento e o arquivamento; prints a 1440 e 375 px (o último sem rolagem horizontal). O board do Início, que tomou
 // o lugar da lista das demandas, fica em inicio.spec.ts.
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { projeto } from "./apoio.ts";
 import {
   semearDemandaAguardandoMerge,
@@ -314,13 +312,10 @@ test("CA-24 e CA-25: reabrir o ticket em falha pede a instrução e, com ela, ti
 });
 
 // Um pi que não termina, para o ticket seguir em execução enquanto o teste confere a página e o quadro.
-const piParado = join(mkdtempSync(join(tmpdir(), "pi-parado-")), "pi");
-writeFileSync(piParado, '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso && exit 0\nexec sleep 60\n', {
-  mode: 0o755,
-});
+const roteiroDoPiParado: PassoPi[] = [{ termina: "trava" }];
 
 test.describe("CA-26", () => {
-  test.use({ pi: piParado });
+  test.use({ roteiroDoPi: roteiroDoPiParado });
   test("CA-26: Executar agora põe o ticket em execução na página e no Rodando do Início", async ({
     pagina,
     fabriquinha,

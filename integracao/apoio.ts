@@ -7,12 +7,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
+import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../src/dominio/ator.ts";
 import { type AutorDemanda } from "../src/dominio/evidencia_demanda.ts";
 import { submeterPlano } from "../src/dominio/transicoes_demanda.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/execucao/despacho_demanda.ts";
 import * as gestao from "../src/execucao/gestao_demandas.ts";
-import { abrir } from "../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda } from "../src/persistencia/demandas.ts";
 import { type Configuracao, configuracao } from "../src/persistencia/servico.ts";
@@ -90,16 +90,11 @@ export function adicionarProjeto(c: Pick<Cenario, "banco" | "dir">, nome: string
   return { repo, bare };
 }
 
-/** Cenário novo numa raiz temporária própria, removida (com o banco fechado) quando o teste `t` termina (CA-3). */
+/** Cenário novo numa raiz temporária própria (banco, repositórios e execuções), removida (com o banco fechado) quando o teste `t` termina (CA-3). */
 export function criarCenario(t: TestContext, projeto = "loja"): Cenario {
-  const dir = realpathSync(mkdtempSync(join(base, "cenario-")));
-  const raiz = join(dir, "raiz");
-  mkdirSync(raiz);
-  const banco = abrir(raiz);
-  t.after(() => {
-    banco.close();
-    rmSync(dir, { recursive: true, force: true });
-  });
+  const { raiz, banco, fechar } = abrirBancoTemporario();
+  t.after(fechar);
+  const dir = realpathSync(raiz);
   const { repo, bare } = adicionarProjeto({ banco, dir }, projeto);
   return { raiz, banco, projeto, repo, bare, dir, config: configuracao(banco) };
 }

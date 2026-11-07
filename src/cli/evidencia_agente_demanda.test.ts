@@ -2,23 +2,19 @@
 // planejamento, com o planejar (T1) e a revisão integral (T5) em execução, e o T3/T4 de implementação.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
-import { after, test } from "node:test";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
-import { abrir } from "../persistencia/banco.ts";
-import { criarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { principal } from "./cli.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-evidencia-demanda-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const em = "2026-01-01T00:00:00.000Z";
 
@@ -69,9 +65,8 @@ function worktreeDaRodada(raiz: string): void {
 }
 
 function cenario() {
-  const raiz = mkdtempSync(join(base, "raiz-"));
+  const { raiz, banco } = abrirBancoTemporario();
   worktreeDaRodada(raiz);
-  const banco = abrir(raiz);
   banco
     .prepare(
       `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
@@ -87,7 +82,7 @@ function cenario() {
     devolucoes: 0,
     ...extra,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-206",
       projeto: "loja",

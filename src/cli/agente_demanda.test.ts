@@ -1,31 +1,25 @@
 // CLI do agente da demanda contra banco real numa raiz temporária (CA-1, CA-2, CA-3, CA-15): demanda I-206 com três
 // tickets, o T3 em execução; os comandos rodam pelo `principal`, como o agente os chama.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
-import { after, test } from "node:test";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
-import { abrir } from "../persistencia/banco.ts";
-import { comDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { principal } from "./cli.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-agente-demanda-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const em = "2026-01-01T00:00:00.000Z";
 
 /** Projeto `loja`, demanda I-206 com T1 (planejar), T3 e T4 (implementar, rodada 2) e a execução `exec-3` aberta no T3. */
 function cenario() {
-  const raiz = mkdtempSync(join(base, "raiz-"));
-  const banco = abrir(raiz);
+  const { raiz, banco } = abrirBancoTemporario();
   banco
     .prepare(
       `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
@@ -41,7 +35,7 @@ function cenario() {
     devolucoes: 0,
     ...extra,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-206",
       projeto: "loja",

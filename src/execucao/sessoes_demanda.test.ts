@@ -1,20 +1,22 @@
 // Leitura das sessões dos tickets da demanda no chat (I-239, CA-1 a CA-7, CA-13 e CA-14) com banco real; o fluxo ao vivo
-// e o diálogo vêm do pi falso do e2e.
+// e o diálogo vêm do pi falso único.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import type { ExecucaoSessao, Sessao } from "../dominio/sessoes.ts";
 import { encontrado } from "../dominio/erros.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { avisar, situacao } from "./gerente.ts";
 import {
@@ -33,7 +35,7 @@ import {
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sessoes-demanda-")));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
-process.env.FABRIQUINHA_PI = resolve(import.meta.dirname, "../../e2e/pi-falso.ts");
+instalarPiFalso(temporario).roteirizar([{ marcas: true }]);
 delete process.env.FABRIQUINHA_PORTA;
 
 const abertos: DatabaseSync[] = [];
@@ -96,8 +98,8 @@ const mensagem = (role: string, texto: string, extra: object = {}) => ({
  * falhou), T4 concluído e T5 autônomo parado; a I-301 está no gate do plano. Cada sessão é `s<ticket>`.
  */
 function cenario() {
-  const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste();
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -115,7 +117,7 @@ function cenario() {
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-300", "planejamento", "d", [
       ticket("I-300", 1, "planejar", "em_execucao"),
@@ -125,7 +127,10 @@ function cenario() {
       ticket("I-300", 5, "implementar", "em_execucao", { rodada_id: 1 }),
     ]),
   );
-  criarDemanda(banco, demanda("I-301", "aprovacao_planejamento", "d", [ticket("I-301", 1, "planejar", "em_execucao")]));
+  gravarAgregadoPronto(
+    banco,
+    demanda("I-301", "aprovacao_planejamento", "d", [ticket("I-301", 1, "planejar", "em_execucao")]),
+  );
   const semear = (
     demanda_id: string,
     ticket_id: number,
@@ -352,7 +357,7 @@ async function ate(condicao: () => boolean): Promise<void> {
 
 test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diálogo e as mensagens ao vivo", async () => {
   const { banco } = cenario();
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-302", "planejamento", "pergunte perguntar", [ticket("I-302", 1, "planejar", "em_execucao")]),
   );
@@ -396,7 +401,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
 
 test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abortar", async () => {
   const { banco } = cenario();
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-303", "planejamento", "pergunte perguntar", [ticket("I-303", 1, "planejar", "em_execucao")]),
   );

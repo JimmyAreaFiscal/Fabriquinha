@@ -6,7 +6,8 @@ import type { Page } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../src/persistencia/demandas.ts";
+import { carregarDemanda } from "../src/persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
 const em = "2026-10-11T12:00:00.000Z";
@@ -41,7 +42,7 @@ function semear(raiz: string, descricao: string, integral = false): void {
     rodada_id: etapa === "revisar_demanda" ? undefined : 1,
     devolucoes: 0,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-250",
       projeto: "loja",

@@ -1,19 +1,12 @@
 // Configuração do serviço (F4 §3, §10).
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { after, test } from "node:test";
+import { test } from "node:test";
 import { ZodError } from "zod";
-import { abrir } from "./banco.ts";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { configuracao, limiteParalelismo, salvarConfiguracao } from "./servico.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-servico-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
-
-const novoBanco = () => abrir(mkdtempSync(join(base, "raiz-")));
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
+const novoBanco = () => abrirBancoTemporario().banco;
 
 test("configuração: linha única, agendador desligado por padrão, salvar validado por zod", () => {
   const banco = novoBanco();

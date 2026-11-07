@@ -2,30 +2,26 @@
 // chama, contra um banco de verdade.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import type { ServerResponse } from "node:http";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { after, beforeEach, test } from "node:test";
-import { abrir } from "../../persistencia/banco.ts";
+import { beforeEach, test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../../persistencia/configuracao_projeto.ts";
-import { criarDemanda } from "../../persistencia/demandas.ts";
+import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 import type { ListaDoProjeto } from "./projeto.ts";
-import { demanda } from "./demandas_cenario.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-projeto-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 let banco: DatabaseSync;
+let raiz: string;
 beforeEach(() => {
-  banco = abrir(mkdtempSync(join(base, "raiz-")));
+  ({ banco, raiz } = abrirBancoTemporario());
   for (const nome of ["loja", "site"]) {
     registrarProjeto(banco, {
       nome,
@@ -70,7 +66,7 @@ test("heatmap: projeto inexistente dá 404, repositório inexistente dá 409 com
 });
 
 test("heatmap: projeto com repositório git devolve branch, janela, árvore e commits", async () => {
-  const repo = mkdtempSync(join(base, "repo-"));
+  const repo = mkdtempSync(join(raiz, "repo-"));
   const git = (...args: string[]) =>
     execFileSync("git", ["-c", "user.name=A", "-c", "user.email=a@x", ...args], { cwd: repo, stdio: "pipe" });
   git("init", "-q", "-b", "main");
@@ -141,12 +137,12 @@ function semearDemandas(): void {
   substituirEtapasDoProjeto(banco, "loja", [
     { etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-sonnet-5-5" },
   ]);
-  criarDemanda(banco, demanda("I-203", "arquivada"));
-  criarDemanda(banco, demanda("I-204", "concluida"));
-  criarDemanda(banco, demanda("I-205", "cancelada"));
-  criarDemanda(
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-203", "arquivada"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-204", "concluida"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-205", "cancelada"));
+  gravarAgregadoPronto(
     banco,
-    demanda("I-206", "execucao", {
+    montarAgregadoDemanda("I-206", "execucao", {
       rodadas: [rodada("I-206", 1, "concluida"), rodada("I-206", 2, "desenvolvimento")],
       tickets: [
         ticket("I-206", 1, "planejar"),
@@ -168,7 +164,7 @@ function semearDemandas(): void {
     `INSERT INTO sessao VALUES ('s-antiga', 'I-206', 4, 'autonomo', 'c1'), ('s-nova', 'I-206', 4, 'autonomo', 'c2');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES ('e-nova', 's-nova', '${em}', NULL, 0, 4242)`,
   );
-  criarDemanda(banco, demanda("I-207", "planejamento"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejamento"));
   banco.exec(`INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id)
     VALUES ('I-207', 'I-206'), ('I-207', 'I-205'), ('I-207', 'I-204')`);
 }
@@ -245,7 +241,7 @@ test("demandas: os filtros trazem as concluídas, as arquivadas e as canceladas"
 
 test("Arquivar concluídas: arquiva as concluídas do projeto e só elas", async () => {
   semearDemandas();
-  criarDemanda(banco, demanda("I-208", "concluida"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-208", "concluida"));
   banco.exec("UPDATE demanda SET projeto = 'site' WHERE id = 'I-208'");
   assert.deepEqual(await chamar("POST", "/api/projetos/loja/arquivar"), { arquivadas: 1 });
   const { contagem } = (await chamar("GET", "/api/projetos/loja/demandas")) as ListaDoProjeto;

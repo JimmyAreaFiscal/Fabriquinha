@@ -1,23 +1,13 @@
 // Avaliação de melhoria do SDLC: escopo, recusas, achados, uso fora das métricas, encaminhamento, contra banco real e pi falso.
 import assert from "node:assert/strict";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import { metricasDaDemanda } from "../metricas/demanda.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { recuperarAuditorias } from "./auditoria.ts";
 import {
   abortarAvaliacao,
@@ -29,12 +19,9 @@ import {
 } from "./avaliacao.ts";
 import { encerrar, situacao } from "./gerente.ts";
 
-const raiz = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacao-")));
-after(() => {
-  rmSync(raiz, { recursive: true, force: true });
-});
-
-const banco = abrir(raiz);
+const { raiz: raizTemporaria, banco, fechar } = abrirBancoTemporario();
+after(fechar);
+const raiz = realpathSync(raizTemporaria);
 const T = "'2026-10-10T10:00:00.000Z'";
 banco.exec(`
   INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES
@@ -68,92 +55,28 @@ writeFileSync(
     .join("\n") + "\n",
 );
 
-/**
- * pi falso: anota início e comandos; a cada prompt responde com uso (0,5 de custo) e, se $FALSO_PI é "conversa", grava
- * dois achados em achados.jsonl (só no primeiro prompt); "ruim" grava uma linha inválida; "espera" não responde;
- * "morre" sai com erro antes de qualquer evento.
- */
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-const anotar = (o) => appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(o) + "\\n");
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-const env = process.env;
-anotar({ evento: "inicio", argv: process.argv.slice(2), cwd: process.cwd() });
-const dir = arg("--session-dir");
-const id = arg("--session-id");
-mkdirSync(dir, { recursive: true });
-if (env.FALSO_PI === "morre-sem-sessao") {
-  process.stderr.write("erro: nenhum modelo configurado\\n");
-  process.exit(3);
-}
-const existente = readdirSync(dir).find((nome) => nome.endsWith("_" + id + ".jsonl"));
-const sessao = join(dir, existente ?? "2026-10-11T10-00-00-000Z_" + id + ".jsonl");
-if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n");
-if (env.FALSO_PI === "morre") {
-  process.stderr.write("erro: nenhum modelo configurado\\n");
-  process.exit(3);
-}
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const guardar = (message) =>
-  appendFileSync(sessao, JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    anotar({ evento: "comando", comando: c });
-    if (c.type === "prompt") {
-      emitir({ type: "response", command: "prompt", success: true });
-      emitir({ type: "agent_start" });
-      guardar({ role: "user", content: c.message });
-      emitir({ type: "message_end", message: { role: "user", content: c.message } });
-      if (env.FALSO_PI === "espera") continue;
-      const achados = join(process.cwd(), "achados.jsonl");
-      if (env.FALSO_PI === "ruim") appendFileSync(achados, "{nao-json\\n");
-      if (env.FALSO_PI === "conversa" && !existsSync(achados))
-        for (const n of [1, 2]) appendFileSync(achados, JSON.stringify({ titulo: "Achado " + n, descricao: "desc " + n, evidencia: "ev " + n }) + "\\n");
-      const message = { role: "assistant", provider: "p", model: "m", content: [{ type: "text", text: "ok" }], stopReason: "stop",
-        usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, ...(env.FALSO_PI === "semcusto" ? {} : { cost: { total: 0.5 } }) } };
-      guardar(message);
-      emitir({ type: "message_end", message });
-      emitir({ type: "agent_end" });
-      emitir({ type: "agent_settled" });
-    }
-    if (c.type === "abort") {
-      emitir({ type: "response", command: "abort", success: true });
-      emitir({ type: "agent_settled" });
-    }
-  }
-});
-`;
-const pi = join(raiz, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
-process.env.FABRIQUINHA_PI = pi;
-process.env.FALSO_PI_REGISTRO = join(raiz, "registro.jsonl");
+const piFalso = instalarPiFalso(raiz);
+const resposta: PassoPi = {
+  resposta: "ok",
+  modelo: { provedor: "p", modelo: "m" },
+  custo: 0.5,
+  uso: { output: 5 },
+  fimDoAgente: true,
+  cabecalhoDaSessao: true,
+};
+const achados = [1, 2]
+  .map(
+    (numero) =>
+      JSON.stringify({
+        titulo: `Achado ${String(numero)}`,
+        descricao: `desc ${String(numero)}`,
+        evidencia: `ev ${String(numero)}`,
+      }) + "\n",
+  )
+  .join("");
 
 const opcoes = { ociosidadeMin: 5 };
-const registro = () =>
-  existsSync(process.env.FALSO_PI_REGISTRO ?? "")
-    ? readFileSync(process.env.FALSO_PI_REGISTRO ?? "", "utf8")
-        .split("\n")
-        .slice(0, -1)
-        .map(
-          (l) =>
-            JSON.parse(l) as {
-              evento: string;
-              argv: string[];
-              cwd: string;
-              comando?: { type: string; message: string };
-            },
-        )
-    : [];
-const pifalso = (variante: string) => {
-  rmSync(process.env.FALSO_PI_REGISTRO ?? "", { force: true });
-  process.env.FALSO_PI = variante;
-};
+const registro = () => piFalso.registro();
 async function ate(condicao: () => boolean, oQue: string): Promise<void> {
   for (let espera = 0; !condicao(); espera += 20) {
     assert.ok(espera < 10_000, `${oQue} não aconteceu em 10 s`);
@@ -168,7 +91,7 @@ const recusa = (mensagem: RegExp) => (e: unknown) => e instanceof ErroDeRegra &&
 const escopo = { projeto: "loja", de: "2026-10-01", ate: "2026-10-31" };
 
 test("recusa o escopo sem demanda com sessão, citando período e projeto (CA-2), e a demanda de outro projeto ou sem sessão (CA-5)", async () => {
-  pifalso("conversa");
+  piFalso.roteirizar([{ ...resposta, escreve: { "achados.jsonl": achados } }, resposta]);
   await assert.rejects(
     iniciarAvaliacao(banco, { ...escopo, projeto: "vazio" }, opcoes),
     recusa(/vazio.*2026-10-01.*2026-10-31/),
@@ -184,7 +107,7 @@ test("recusa o escopo sem demanda com sessão, citando período e projeto (CA-2)
 
 test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, conversa e encaminha (CA-1, 3, 4, 7, 8, 9, 10, 13, 14, 15)", async () => {
   const antes = JSON.stringify(metricasDaDemanda(banco, "I-10"));
-  pifalso("conversa");
+  piFalso.roteirizar([{ ...resposta, escreve: { "achados.jsonl": achados } }, resposta]);
   const id = await iniciarAvaliacao(banco, { ...escopo, demandas: ["I-10", "I-10"] }, opcoes);
   await ate(
     () => banco.prepare("SELECT count(*) AS n FROM achado_avaliacao").get()?.n === 2,
@@ -199,6 +122,7 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   assert.match(readFileSync(join(dir, "indice.md"), "utf8"), /sessoes\/I-10-s-I-10\.md/);
   const [inicio] = registro();
   assert.equal(inicio?.cwd, dir);
+  assert.ok(inicio.argv);
   assert.ok(inicio.argv.includes("achado.ts") || inicio.argv.some((a) => a.endsWith("achado.ts")));
   assert.match(inicio.argv.join(" "), /--exclude-tools edit,write,bash,powershell/);
 
@@ -270,7 +194,7 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
 });
 
 test("o pedido do Auditor vai ao prompt; enviar com o agente trabalhando é recusado e abortar o para", async () => {
-  pifalso("espera");
+  piFalso.roteirizar([{ ...resposta, termina: "nunca" }]);
   const id = await iniciarAvaliacao(
     banco,
     { ...escopo, demandas: ["I-11", "I-10"], pedido: "  foque no custo  " },
@@ -292,7 +216,7 @@ test("o pedido do Auditor vai ao prompt; enviar com o agente trabalhando é recu
 });
 
 test("sincronização com falha vai para o log e não para o serviço", async () => {
-  pifalso("ruim");
+  piFalso.roteirizar([{ ...resposta, anexa: { "achados.jsonl": "{nao-json\n" } }]);
   const id = await iniciarAvaliacao(banco, escopo, opcoes);
   const log = join(raiz, "avaliacoes", id, "log");
   await ate(() => readFileSync(log, "utf8").includes("sincronização falhou"), "o aviso no log");
@@ -304,7 +228,16 @@ for (const variante of ["morre", "morre-sem-sessao"])
     const antes = readdirSync(join(raiz, "avaliacoes")).length;
     const jsonls = readdirSync(join(raiz, "sessoes")).length;
     const avaliacoes = banco.prepare("SELECT count(*) AS n FROM avaliacao").get()?.n;
-    pifalso(variante);
+    piFalso.roteirizar([
+      {
+        ...resposta,
+        sai: {
+          codigo: 3,
+          stderr: "erro: nenhum modelo configurado",
+          quando: variante === "morre" ? "ao_iniciar" : "antes_da_sessao",
+        },
+      },
+    ]);
     await assert.rejects(
       iniciarAvaliacao(banco, escopo, opcoes),
       (e: unknown) => e instanceof ErroExterno && e.message.includes("nenhum modelo configurado"),
@@ -315,7 +248,7 @@ for (const variante of ["morre", "morre-sem-sessao"])
   });
 
 test("uso sem custo informado fica com custo desconhecido", async () => {
-  pifalso("semcusto");
+  piFalso.roteirizar([{ ...resposta, custo: null }]);
   const id = await iniciarAvaliacao(banco, escopo, opcoes);
   await ate(() => abrirAv(banco, id).uso.length === 1, "o uso");
   assert.equal(abrirAv(banco, id).uso[0]?.custo, null);

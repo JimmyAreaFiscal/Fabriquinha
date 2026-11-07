@@ -1,66 +1,35 @@
 // Executor da Simulação (F8 §5) contra banco real, um servidor HTTP local no lugar do produto e um pi falso
-// ($FABRIQUINHA_PI): um script que grava o que recebeu e, conforme a marca no prompt, entrega ou não o relatório.
+// roteirizado: grava o que recebeu e entrega ou não o relatório conforme o passo.
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer as servidorHttp, type Server } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { after, before, test } from "node:test";
+import { after, before, beforeEach, test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
 import { SEM_LINK } from "../dominio/simulacao.ts";
 import { PACOTE } from "../execucao/pi.ts";
-import { abrir, raizDo } from "../persistencia/banco.ts";
+import { raizDo } from "../persistencia/banco.ts";
 import { dirDaExecucaoSimulada } from "../persistencia/execucoes.ts";
 import { editarProjeto, projeto, registrarProjeto } from "../persistencia/projetos.ts";
 import { anexar, criarTarefa, criarUsuarioSimulado, tarefas } from "../persistencia/simulacao.ts";
 import { conferirLink, executarTarefa } from "./executor.ts";
 
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-executor-"));
 
-/**
- * O pi falso. Grava em `args.json` (na pasta da execução) o que recebeu e, em `$FALSO_PI_ORDEM`, quando começou e
- * terminou. O que faz depende de uma marca no prompt, que é o último argumento: `[sem relatório]` sai sem entregar,
- * `[lixo]` entrega um arquivo que não é relatório, `[demora]` não termina sozinho; sem marca, entrega o relatório.
- * Como o pi real em `--mode json`, só começa depois do EOF do stdin: se o executor não o fecha, nada conclui.
- */
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-const args = process.argv.slice(2);
-const prompt = args.at(-1);
-console.log(JSON.stringify({ type: "agent_start" })); // o --mode json fala JSONL no stdout
-await new Promise((pronto) => process.stdin.resume().on("end", pronto));
-const saida = process.env.FABRIQUINHA_SAIDA;
-writeFileSync("args.json", JSON.stringify({
-  args,
-  link: process.env.FABRIQUINHA_LINK,
-  saida,
-  token: process.env.GH_TOKEN ?? null,
-  arquivos: readdirSync(".").sort(),
-}));
-appendFileSync(process.env.FALSO_PI_ORDEM, "ini\\n");
-if (prompt.includes("[demora]")) setInterval(() => undefined, 1000);
-else {
-  await new Promise((pronto) => setTimeout(pronto, 40));
-  if (prompt.includes("[lixo]")) writeFileSync(join(saida, "relatorio.json"), "isso não é json");
-  else if (!prompt.includes("[sem relatório]")) {
-    writeFileSync(join(saida, "relatorio.json"), JSON.stringify({ usabilidade: ["O botão Enviar é pequeno"], bugs: [] }));
-  }
-  appendFileSync(process.env.FALSO_PI_ORDEM, "fim\\n");
-}
-`;
-
 const ordem = join(base, "ordem");
-const pi = join(base, "pi-falso.mjs");
+let piFalso: PiFalso;
 let produto: Server;
 let link: string;
 const antes = { ...process.env };
 
 before(async () => {
-  writeFileSync(pi, PI_FALSO);
-  chmodSync(pi, 0o755);
-  process.env.FABRIQUINHA_PI = pi;
+  piFalso = instalarPiFalso(base);
+  process.env.FABRIQUINHA_ROOT = join(base, "raiz");
   process.env.FALSO_PI_ORDEM = ordem;
   process.env.GH_TOKEN = "segredo";
   produto = servidorHttp((_, resposta) => {
@@ -77,11 +46,23 @@ after(async () => {
   rmSync(base, { recursive: true, force: true });
 });
 
+beforeEach(() => {
+  piFalso.roteirizar([
+    {
+      simulacao: {
+        relatorio: { usabilidade: ["O botão Enviar é pequeno"], bugs: [] },
+        demoraMs: 40,
+        registraArgs: true,
+      },
+    },
+  ]);
+});
+
 const DESCRICAO = "Contadora de 60 anos, pouca familiaridade com sistemas web";
 
 /** Um banco com o projeto `p` (com `linkProduto`), os usuários `usuarios` e uma Tarefa de `n` execuções para todos. */
 function cenario(texto: string, n: number, usuarios = ["Dona Maria"], linkProduto = link) {
-  const banco = abrir(mkdtempSync(join(base, "raiz-")));
+  const { banco } = abrirBancoTemporario();
   registrarProjeto(banco, {
     nome: "p",
     repo: "/repos/p",
@@ -257,6 +238,9 @@ test("sem relatório válido a execução falha com a mensagem, e a seguinte rod
   for (const marca of ["[sem relatório]", "[lixo]"]) {
     writeFileSync(ordem, "");
     const { banco, tarefa } = cenario(`Registrar ${marca}`, 2);
+    piFalso.roteirizar([
+      { simulacao: { relatorio: marca === "[lixo]" ? "isso não é json" : null, demoraMs: 40, registraArgs: true } },
+    ]);
     await executarTarefa(banco, tarefa, { timeoutMin: 1 });
     assert.deepEqual(
       execucoes(banco).map((e) => [e.status, e.erro, e.relatorio]),
@@ -270,6 +254,7 @@ test("sem relatório válido a execução falha com a mensagem, e a seguinte rod
 test("passado timeoutMin o pi é parado e a execução falha", async () => {
   writeFileSync(ordem, "");
   const { banco, tarefa } = cenario("Registrar [demora]", 1);
+  piFalso.roteirizar([{ simulacao: { nuncaTermina: true, registraArgs: true } }]);
   await executarTarefa(banco, tarefa, { timeoutMin: 0.001 });
   assert.deepEqual(
     execucoes(banco).map((e) => [e.status, e.erro]),

@@ -10,8 +10,9 @@ import type { Verificacao } from "../evidencias/verificacoes.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { commitDoTicketDemanda } from "../persistencia/commits_demanda.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
-import { cenarioDemanda, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 import { falharTicketDemanda, fecharTicketDemanda } from "./fechamento_ticket.ts";
@@ -56,7 +57,7 @@ interface Opcoes {
 }
 
 async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = {}) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const banco = abrir(c.raiz);
   banco
     .prepare(
@@ -74,7 +75,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: D,
       projeto: "loja",
@@ -127,7 +128,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
       .all(n)
       .map((l) => l.tipo);
   const status = (n: number) => carregarDemanda(banco, D).tickets.find((t) => t.ticket_id === n);
-  const commits = () => gitCenario(worktree, "log", "--format=%s", "--grep", "\\[I-1\\.T").split("\n").filter(Boolean);
+  const commits = () => rodarGit(worktree, "log", "--format=%s", "--grep", "\\[I-1\\.T").split("\n").filter(Boolean);
   return { banco, worktree, evidencias, status, commits, ag: () => carregarDemanda(banco, D) };
 }
 
@@ -144,7 +145,7 @@ test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com a
     registrado?.arquivos.map((a) => [a.caminho, a.adicionadas]),
     [["novo.txt", 2]],
   );
-  assert.match(gitCenario(c.worktree, "show", "--stat", "--format=", "HEAD"), /novo\.txt\s+\|\s+2 \+\+/);
+  assert.match(rodarGit(c.worktree, "show", "--stat", "--format=", "HEAD"), /novo\.txt\s+\|\s+2 \+\+/);
   assert.deepEqual(c.evidencias(1), ["execucao_testes", "matriz_fitness", "relatorio_sonar"]);
   const anexos = c.banco.prepare("SELECT caminho FROM arquivo_evidencia ORDER BY caminho").all();
   assert.deepEqual(
@@ -234,7 +235,7 @@ const semAlteracao = (c: Awaited<ReturnType<typeof cenario>>) => {
   rmSync(join(c.worktree, "novo.txt"));
 };
 const marcaDoTicket = (c: Awaited<ReturnType<typeof cenario>>) =>
-  gitCenario(c.worktree, "log", "--fixed-strings", "--grep", "[I-1.T1]", "--format=%H");
+  rodarGit(c.worktree, "log", "--fixed-strings", "--grep", "[I-1.T1]", "--format=%H");
 
 test("implementar sem alteração na worktree é devolvido, sem commit", async () => {
   const c = await cenario();
@@ -263,14 +264,14 @@ test("implementar sem alteração já devolvido duas vezes falha, e a rodada seg
 test("resolver_conflito com merge sem alteração commita o merge e conclui", async () => {
   const c = await cenario({ conflito: true });
   semAlteracao(c);
-  gitCenario(c.worktree, "checkout", "-qb", "outra");
-  gitCenario(c.worktree, "commit", "-q", "--allow-empty", "-m", "outra");
-  gitCenario(c.worktree, "checkout", "-q", "fabriquinha/I-1");
-  gitCenario(c.worktree, "merge", "--no-ff", "--no-commit", "outra");
+  rodarGit(c.worktree, "checkout", "-qb", "outra");
+  rodarGit(c.worktree, "commit", "-q", "--allow-empty", "-m", "outra");
+  rodarGit(c.worktree, "checkout", "-q", "fabriquinha/I-1");
+  rodarGit(c.worktree, "merge", "--no-ff", "--no-commit", "outra");
   await fechar(c, 3, coletor(todas(true)));
   assert.equal(c.status(3)?.status, "concluido");
-  assert.equal(gitCenario(c.worktree, "log", "-1", "--format=%P").trim().split(" ").length, 2);
-  assert.match(gitCenario(c.worktree, "log", "-1", "--format=%B"), /\[I-1\.T3\]/);
+  assert.equal(rodarGit(c.worktree, "log", "-1", "--format=%P").trim().split(" ").length, 2);
+  assert.match(rodarGit(c.worktree, "log", "-1", "--format=%B"), /\[I-1\.T3\]/);
 });
 
 test("CA-9 e CA-10: falha da execução falha o ticket sem coletar nem gravar evidência", async () => {
@@ -380,7 +381,7 @@ function hook(c: Awaited<ReturnType<typeof cenario>>, corpo: string) {
   mkdirSync(hooks, { recursive: true });
   writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${corpo}\n`);
   chmodSync(join(hooks, "pre-commit"), 0o755);
-  gitCenario(c.worktree, "config", "core.hooksPath", hooks);
+  rodarGit(c.worktree, "config", "core.hooksPath", hooks);
 }
 
 test("o hook que reprova o commit devolve o ticket com a saída, sem commit; na 3ª falha; outro erro propaga", async () => {

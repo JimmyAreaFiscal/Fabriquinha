@@ -3,13 +3,15 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { principal } from "./cli.ts";
 import { COMANDOS_DEMANDA_EXTERNA, ErroDeUso } from "./demanda_externa.ts";
 
+const novoBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-demanda-externa-"));
 const pasta = mkdtempSync(join(base, "pasta-"));
 const cwd = process.cwd();
@@ -52,12 +54,12 @@ arquivo("desenho.json", DESENHO);
 arquivo("custos.json", CUSTOS);
 arquivo("desenho.html", HTML);
 
+const bancoDaRaiz = new Map<string | undefined, DatabaseSync>();
 const novaRaiz = (): NodeJS.ProcessEnv => {
-  const raiz = mkdtempSync(join(base, "raiz-"));
-  const b = abrir(raiz);
+  const { raiz, banco: b } = novoBancoTemporario();
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('fabriquinha', '/repo/f', 'main', 'github', 'k')`);
-  b.close();
+  bancoDaRaiz.set(raiz, b);
   return { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_FERRAMENTA: "claude", FABRIQUINHA_SESSAO: "S1" };
 };
 
@@ -201,9 +203,9 @@ test("CA-10: evidência com anexo guarda o arquivo por SHA-256 e a demanda a lis
     ev.arquivos.map((a: { nome: string }) => a.nome),
     ["desenho.html"],
   );
-  const b = abrir(env.FABRIQUINHA_ROOT);
+  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
+  assert.ok(b);
   assert.equal(readFileSync(caminhoArquivo(b, ev.arquivos[0]?.sha256 ?? ""), "utf8"), HTML);
-  b.close();
 });
 
 test("anexo fora da pasta do comando é recusado", async () => {
@@ -228,13 +230,13 @@ test("CA-11: custos depois do envio, sem custo informado", async () => {
     await cli(env, ["demanda", "evidencia", id, "custos_realizados", "--dados", "-"], JSON.stringify(CUSTOS)),
   );
   assert.equal(r.evidencias.filter((e: { tipo: string }) => e.tipo === "custos_realizados").length, 1);
-  const b = abrir(env.FABRIQUINHA_ROOT);
+  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
+  assert.ok(b);
   const linha = b.prepare("SELECT dados FROM evidencia_demanda WHERE tipo = 'custos_realizados'").get();
   assert.equal(
     (JSON.parse(String(linha?.dados)) as { sessoes: { linhas: { custo: null }[] }[] }).sessoes[0]?.linhas[0]?.custo,
     null,
   );
-  b.close();
 });
 
 test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
@@ -251,7 +253,7 @@ test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
 });
 
 test("CA-12: schema do tipo com as regras de arquivo", async () => {
-  const env = novaRaiz(); // sem FABRIQUINHA_ROOT, o CLI abriria o banco de ~/fabriquinha
+  const env = novaRaiz(); // sem FABRIQUINHA_ROOT, o CLI abriria o banco real da Fabriquinha
   const s = jsonSchema(await cli(env, ["demanda", "schema", "custos_realizados"]));
   assert.ok(s.dados.properties.sessoes);
   assert.equal(s.arquivos.max, 0);

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { conferirModelo, listarModelos } from "./modelos.ts";
 
@@ -11,24 +12,17 @@ after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-// pi falso via $FABRIQUINHA_PI (F4 §12): anota os argumentos e imprime a tabela, aproximada como a busca do pi.
-const pi = join(base, "pi");
-const argumentos = join(base, "argumentos");
-writeFileSync(
-  pi,
-  `#!/bin/sh
-printf '%s\\n' "$@" > "${argumentos}"
-[ -n "$FALSO_PI_ERRO" ] && { echo "$FALSO_PI_ERRO" >&2; exit 1; }
-cat <<'TABELA'
-provider      model                context  max-out  thinking  images
+// A busca aproximada do pi devolve a tabela toda, inclusive o modelo com espaços.
+const piFalso = instalarPiFalso(base);
+process.env.FABRIQUINHA_ROOT = base;
+const tabela = `provider      model                context  max-out  thinking  images
 openai-codex  gpt-5.6-luna         272K     128K     yes       yes
 openai-codex  gpt-6-luna           272K     128K     yes       yes
 llamacpp      qwen3 coder (local)  32.8K    8.2K     yes       no
-TABELA
-`,
-);
-chmodSync(pi, 0o755);
-process.env.FABRIQUINHA_PI = pi;
+`;
+piFalso.roteirizar([{ listaDeModelos: { tabela } }]);
+symlinkSync(piFalso.caminho, join(base, "pi"));
+const argumentos = () => piFalso.registro().at(-1)?.argv;
 
 const recusa = async (provedor: string, modelo: string, mensagem: string) => {
   await assert.rejects(
@@ -39,9 +33,9 @@ const recusa = async (provedor: string, modelo: string, mensagem: string) => {
 
 test("aceita o par listado exatamente e passa a busca como um argumento só", async () => {
   await conferirModelo({ provedor: "openai-codex", modelo: "gpt-6-luna" });
-  assert.deepEqual(readFileSync(argumentos, "utf8"), "--list-models\nopenai-codex/gpt-6-luna\n");
+  assert.deepEqual(argumentos(), ["--list-models", "openai-codex/gpt-6-luna"]);
   await conferirModelo({ provedor: "llamacpp", modelo: "qwen3 coder (local)" });
-  assert.deepEqual(readFileSync(argumentos, "utf8"), "--list-models\nllamacpp/qwen3 coder (local)\n");
+  assert.deepEqual(argumentos(), ["--list-models", "llamacpp/qwen3 coder (local)"]);
 });
 
 test("recusa o que a busca aproximada do pi lista, mas não é o par exato", async () => {
@@ -58,11 +52,11 @@ test("listarModelos: todos os pares da tabela do pi, sem busca, para os seletore
     { provedor: "openai-codex", modelo: "gpt-6-luna" },
     { provedor: "llamacpp", modelo: "qwen3 coder (local)" },
   ]);
-  assert.deepEqual(readFileSync(argumentos, "utf8"), "--list-models\n");
+  assert.deepEqual(argumentos(), ["--list-models"]);
 });
 
 test("recusa quando o pi falha, com o stderr dele", async () => {
-  process.env.FALSO_PI_ERRO = "sem configuração";
+  piFalso.roteirizar([{ listaDeModelos: { stderr: "sem configuração", codigo: 1 } }]);
   try {
     await recusa(
       "openai-codex",
@@ -70,7 +64,7 @@ test("recusa quando o pi falha, com o stderr dele", async () => {
       "o pi falhou ao listar os modelos: sem configuração (confira o pi rodando pi --list-models)",
     );
   } finally {
-    delete process.env.FALSO_PI_ERRO;
+    piFalso.roteirizar([{ listaDeModelos: { tabela } }]);
   }
 });
 
@@ -88,6 +82,6 @@ test("sem $FABRIQUINHA_PI usa pi do PATH; binário ausente diz como resolver", a
     );
   } finally {
     process.env.PATH = pathOriginal;
-    process.env.FABRIQUINHA_PI = pi;
+    process.env.FABRIQUINHA_PI = piFalso.caminho;
   }
 });

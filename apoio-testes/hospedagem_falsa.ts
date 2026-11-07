@@ -1,11 +1,6 @@
-// Apoio de teste: `gh` e `az` falsos para a frente do PATH (F5 §9), importados pelos testes de PR. O nome termina em
-// .test.ts para ficar fora da cobertura, como todo código de teste; o teste próprio confere o formato de cada CLI.
-import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+// `gh` e `az` falsos para a frente do PATH (F5 §9), usados pelos testes de PR; o teste próprio confere o formato de cada CLI.
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import { test } from "node:test";
 
 /** Um PR guardado pela hospedagem falsa, no vocabulário da Fabriquinha. */
 export interface PRFalso {
@@ -229,7 +224,7 @@ export function hospedagemFalsa(dir: string) {
     prs: () => ler().prs,
     chamadas: () => ler().chamadas,
     /** Acrescenta um PR, como se alguém o tivesse aberto na plataforma. */
-    abrir(pr: Omit<PRFalso, "id">) {
+    abrirPr(pr: Omit<PRFalso, "id">) {
       const estado = ler();
       estado.prs.push({ ...pr, id: estado.prs.length + 1 });
       gravar(estado);
@@ -250,48 +245,4 @@ export function hospedagemFalsa(dir: string) {
       gravar(estado);
     },
   };
-}
-
-// Só quando o runner roda este arquivo: importado por outro teste, ele não repete o teste lá.
-if (import.meta.main) {
-  test("gh e az falsos: o mesmo PR no formato de cada CLI, e PR fechado não é editado", () => {
-    const dir = mkdtempSync(join(tmpdir(), "fabriquinha-hospedagem-"));
-    try {
-      const h = hospedagemFalsa(dir);
-      h.zerar();
-      h.abrir({ head: "b", base: "main", titulo: "t", corpo: "", estado: "fechado", fork: true });
-      const rodar = (cli: string, ...args: string[]) => execFileSync(cli, args, { stdio: "pipe" }).toString();
-      assert.deepEqual(JSON.parse(rodar("gh", "pr", "list", "--head", "b")), [
-        {
-          number: 1,
-          url: "https://github.com/org/loja/pull/1",
-          state: "CLOSED",
-          body: "",
-          baseRefName: "main",
-          isCrossRepository: true,
-        },
-      ]);
-      assert.deepEqual(JSON.parse(rodar("az", "repos", "pr", "list", "--source-branch", "b")), [
-        {
-          pullRequestId: 1,
-          status: "abandoned",
-          description: null,
-          targetRefName: "refs/heads/main",
-          forkSource: { name: "refs/heads/b" },
-          closedDate: "2026-10-11T13:00:00.1234567Z",
-          lastMergeCommit: null,
-          mergeStatus: "succeeded",
-          url: "https://dev.azure.com/org/_apis/git/pullRequests/1",
-          repository: { url: "https://dev.azure.com/org/loja/_apis/git/repositories/loja" },
-        },
-      ]);
-      assert.throws(() => rodar("az", "repos", "pr", "update", "--id", "1", "--title", "x", "--description", "y"));
-      assert.deepEqual(
-        h.chamadas().map((c) => c.cli),
-        ["gh", "az", "az"],
-      );
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
 }

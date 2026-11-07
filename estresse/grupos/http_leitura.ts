@@ -2,7 +2,7 @@
 // ambiente (leitura não os altera, então a preparação fica fora do tempo medido). O tempo vai do envio do pedido ao fim do
 // corpo; nas rotas de SSE, até o primeiro evento. `semMedicao` confere a cobertura contra a tabela do produto.
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgregadoDemanda } from "../../src/dominio/agregado_demanda.ts";
 import { guardarBytes } from "../../src/persistencia/arquivos.ts";
@@ -39,7 +39,8 @@ interface Dados {
 
 /** O projeto `loja` com um repositório git de verdade e o remoto num bare local (o heatmap lê `origin/main`) e a configuração do SDLC. */
 async function semearProjeto(raiz: string, banco: ReturnType<typeof abrir>): Promise<void> {
-  const repo = mkdtempSync(join(raiz, "loja-"));
+  const repo = join(raiz, "loja");
+  mkdirSync(repo);
   const bare = join(raiz, "origin.git");
   const git = (dir: string, ...args: string[]) =>
     exigirGit(dir, "-c", "user.name=Estresse", "-c", "user.email=estresse@exemplo.com", ...args);

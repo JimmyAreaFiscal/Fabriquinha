@@ -1,20 +1,12 @@
 // Grupo do estresse das etapas do agendador: uma ação por `src/execucao/etapas/*.md`. Cada execução monta o próprio
-// cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa pasta da raiz do ambiente e leva a
-// demanda à fase da etapa fora do tempo medido, com o pi falso e o `gh` falso de integracao/falsos.ts. O tempo vai do
+// cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz temporária e leva a
+// demanda à fase da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
 // despacho do ticket até ele assentar concluído; `sessao_em_aberto` vai da abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  readlinkSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { AUDITOR } from "../../src/dominio/ator.ts";
 import { submeterPlano } from "../../src/dominio/transicoes_demanda.ts";
 import { registrarCorrecoesSessao } from "../../src/dominio/transicoes_rodada.ts";
@@ -42,7 +34,8 @@ import { registrarProjeto } from "../../src/persistencia/projetos.ts";
 import { configuracao } from "../../src/persistencia/servico.ts";
 import { carregarSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
 import { exigirGit } from "../../src/repositorio/worktree.ts";
-import { ghFalso, piFalso } from "../../integracao/falsos.ts";
+import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
+import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../ambiente.ts";
 
 /** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então menos que as 200/20 do HTTP. */
@@ -65,7 +58,7 @@ const agora = () => new Date().toISOString();
 /** Um cenário: banco e repositórios próprios, para as execuções simultâneas não dividirem estado. */
 interface Cenario {
   dir: string;
-  raiz: string;
+  fechar: () => void;
   banco: ReturnType<typeof abrir>;
   projeto: string;
   repo: string;
@@ -99,11 +92,10 @@ async function esperar(condicao: () => boolean, descricao: string, limiteMs = 30
   }
 }
 
-/** Quantos prompts o pi falso recebeu em worktrees deste cenário (o registro é lido linha a linha: outros pi escrevem nele). */
-const chamadas = (c: Cenario): number =>
-  readFileSync(String(process.env.FALSO_PI_CHAMADAS), "utf8")
-    .split("\n")
-    .filter((l) => l.includes(`"cwd":"${c.dir}`)).length;
+let piFalsoInstalado: PiFalso;
+
+/** Quantos prompts o pi falso recebeu em worktrees deste cenário (o registro é compartilhado: outros pi escrevem nele). */
+const chamadas = (c: Cenario): number => piFalsoInstalado.prompts().filter(({ cwd }) => cwd.startsWith(c.dir)).length;
 
 // O "agente" do pi falso, comum às etapas: espera o portão do cenário (o `executar` o abre) e, com `escreve`, mexe na worktree.
 const AGENTE = `import { appendFileSync, existsSync } from "node:fs";
@@ -123,7 +115,7 @@ FALSO_HOSPEDAGEM="$d/hospedagem.json" exec "$d/bin/gh" "$@"
 `;
 
 /** Prepara o processo: git, pi e `gh` isolados da máquina (como integracao/apoio.ts) e o pi falso com o agente comum. */
-function prepararProcesso(amb: Ambiente): string {
+function prepararProcesso(amb: Ambiente): void {
   const raiz = join(amb.raiz, "etapas");
   mkdirSync(join(raiz, "pi-agent"), { recursive: true });
   writeFileSync(join(raiz, "gitconfig"), "[user]\n\tname = Estresse\n\temail = estresse@exemplo.com\n");
@@ -136,16 +128,12 @@ function prepararProcesso(amb: Ambiente): string {
   chmodSync(join(raiz, "gh", "gh"), 0o755);
   process.env.PATH = `${join(raiz, "gh")}:${process.env.PATH ?? ""}`;
   writeFileSync(join(raiz, "agente.mjs"), AGENTE);
-  piFalso(raiz).roteirizar([{ modo: "ok", agente: join(raiz, "agente.mjs") }]);
-  return raiz;
+  piFalsoInstalado = instalarPiFalso(raiz).roteirizar([{ agente: join(raiz, "agente.mjs") }]);
 }
 
-async function criarCenario(pasta: string): Promise<Cenario> {
-  const dir = mkdtempSync(join(pasta, "c-"));
-  const raiz = join(dir, "raiz");
-  mkdirSync(raiz);
+async function criarCenario(): Promise<Cenario> {
+  const { raiz: dir, banco, fechar } = abrirBancoTemporario();
   writeFileSync(join(dir, ".cenario"), "");
-  const banco = abrir(raiz);
   const bare = join(dir, "loja.git");
   const repo = join(dir, "loja");
   mkdirSync(repo);
@@ -178,7 +166,7 @@ async function criarCenario(pasta: string): Promise<Cenario> {
   const path = process.env.PATH;
   const gh = ghFalso(dir);
   process.env.PATH = path;
-  return { dir, raiz, banco, projeto: "loja", repo, config: configuracao(banco), gh };
+  return { dir, fechar, banco, projeto: "loja", repo, config: configuracao(banco), gh };
 }
 
 const portao = (c: Cenario, aberto: boolean) => {
@@ -445,7 +433,7 @@ const ETAPAS: Record<string, Preparar> = {
     async (c) => {
       const id = await emEncerramentoDemanda(c);
       // Um PR final em conflito: o primeiro ciclo abre o `resolver_conflito`, que o ciclo medido executa.
-      c.gh.abrir({
+      c.gh.abrirPr({
         head: carregarDemanda(c.banco, id).demanda.branch,
         base: "main",
         titulo: "velho",
@@ -547,15 +535,15 @@ async function limpar(c: Cenario): Promise<string[]> {
   } catch (erro) {
     sobras.push(`git: ${(erro as Error).message}`);
   }
-  rmSync(c.dir, { recursive: true, force: true });
+  c.fechar();
   return sobras;
 }
 
 /** Uma execução da etapa: prepara, mede, confere o ticket e a limpeza; erro em qualquer passo conta como erro da etapa. */
-async function executarEtapa(pasta: string, etapa: string): Promise<number> {
+async function executarEtapa(etapa: string): Promise<number> {
   const preparar = ETAPAS[etapa];
   if (!preparar) throw new Error(`etapa sem preparação: ${etapa}`);
-  const c = await criarCenario(pasta);
+  const c = await criarCenario();
   let tempo = 0;
   let erro: Error | undefined;
   try {
@@ -576,11 +564,11 @@ async function executarEtapa(pasta: string, etapa: string): Promise<number> {
 
 /** Prepara o ambiente e devolve uma ação por etapa conhecida. O orçamento de cada uma fica ao lado dela. */
 export function acoesEtapas(amb: Ambiente): AcaoEtapa[] {
-  const pasta = prepararProcesso(amb);
+  prepararProcesso(amb);
   const acao = (etapa: string, orcamento: number): AcaoEtapa => ({
     etapa,
     orcamento,
-    chamar: () => executarEtapa(pasta, etapa),
+    chamar: () => executarEtapa(etapa),
   });
   return [
     acao("planejar", 6930),

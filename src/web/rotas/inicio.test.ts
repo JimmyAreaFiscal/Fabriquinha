@@ -1,20 +1,14 @@
 // Rota do Início: o mês, o que aguarda o Auditor, o que roda e o board das demandas em andamento, sobre um banco real.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { after, test } from "node:test";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { SessaoDeDemanda } from "../../execucao/historico_demanda.ts";
-import { abrir } from "../../persistencia/banco.ts";
-import { criarDemanda } from "../../persistencia/demandas.ts";
-import { demanda, servir } from "./demandas_cenario.ts";
+import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
 import { type DadosDoInicio, esperaDaSessao, inicio } from "./inicio.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-inicio-web-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const em = (minuto: number) => `2026-01-01T00:${String(minuto).padStart(2, "0")}:00.000Z`;
 
@@ -44,18 +38,21 @@ const rodada = (demanda_id: string, rodada_id: number, fase: string) => ({
  * fora.
  */
 function cenario(): DatabaseSync {
-  const banco = abrir(mkdtempSync(join(base, "raiz-")));
+  const { banco } = abrirBancoTemporario();
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`);
-  criarDemanda(banco, demanda("I-300", "registro", { tickets: [ticket("I-300", 1, "demanda", "aberto")] }));
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
-    demanda("I-301", "aprovacao_demanda", { tickets: [ticket("I-301", 1, "demanda", "em_execucao")] }),
+    montarAgregadoDemanda("I-300", "registro", { tickets: [ticket("I-300", 1, "demanda", "aberto")] }),
   );
-  criarDemanda(banco, demanda("I-302", "aprovacao_planejamento"));
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
-    demanda("I-303", "execucao", {
+    montarAgregadoDemanda("I-301", "aprovacao_demanda", { tickets: [ticket("I-301", 1, "demanda", "em_execucao")] }),
+  );
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-302", "aprovacao_planejamento"));
+  gravarAgregadoPronto(
+    banco,
+    montarAgregadoDemanda("I-303", "execucao", {
       rodadas: [
         rodada("I-303", 1, "concluida"),
         rodada("I-303", 2, "aprovacao_pull_request"),
@@ -77,16 +74,16 @@ function cenario(): DatabaseSync {
       ],
     }),
   );
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
-    demanda("I-304", "encerramento", { tickets: [ticket("I-304", 8, "encerrar_demanda", "falhou")] }),
+    montarAgregadoDemanda("I-304", "encerramento", { tickets: [ticket("I-304", 8, "encerrar_demanda", "falhou")] }),
   );
-  criarDemanda(banco, demanda("I-305", "revisao_demanda"));
-  criarDemanda(banco, demanda("I-306", "concluida"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-305", "revisao_demanda"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-306", "concluida"));
   // I-307: rodadas concluídas, mas a regra recusa a revisão integral pela implementação cancelada.
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
-    demanda("I-307", "execucao", {
+    montarAgregadoDemanda("I-307", "execucao", {
       rodadas: [rodada("I-307", 1, "concluida")],
       tickets: [
         ticket("I-307", 1, "implementar", "concluido", { rodada_id: 1 }),
@@ -99,9 +96,9 @@ function cenario(): DatabaseSync {
     ["I-308", new Date().toISOString()],
     ["I-309", em(10)],
   ] as const) {
-    criarDemanda(
+    gravarAgregadoPronto(
       banco,
-      demanda(id, "execucao", {
+      montarAgregadoDemanda(id, "execucao", {
         rodadas: [rodada(id, 1, "concluida")],
         tickets: [
           ticket(id, 1, "implementar", "concluido", { rodada_id: 1, status_alterado_em: quando }),

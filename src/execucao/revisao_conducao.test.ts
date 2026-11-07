@@ -7,7 +7,7 @@ import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { reabrirTicket } from "../dominio/transicoes_demanda.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { conduzirRevisao } from "./revisao_conducao.ts";
-import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "./revisao_cenario.ts";
+import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "../../apoio-testes/cenarios_de_demanda.ts";
 
 const estado = (banco: Parameters<typeof carregarDemanda>[0], ticket_id: number) => {
   const ag = carregarDemanda(banco, "I-1");
@@ -35,7 +35,23 @@ test("CA-1: o pi roda na worktree da rodada e, sem decisão, o ticket falha com 
 });
 
 test("CA-3: o revisor que decide deixa o ticket concluído, sem falha", async () => {
-  const { banco } = await cenarioRevisao({ reprova: true });
+  const { banco, piFalso } = await cenarioRevisao();
+  piFalso.roteirizar([
+    {
+      cli: [
+        [
+          "revisao",
+          "decidir",
+          "I-1.T2",
+          "reprovar",
+          "--motivo",
+          "falta teste",
+          "--correcoes",
+          JSON.stringify([{ ticket_id: 1, titulo: "corrige", descricao: "d", caminhos: [], depende: [] }]),
+        ],
+      ],
+    },
+  ]);
   assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "decidida");
   const e = estado(banco, 2);
   assert.deepEqual([e.ticket?.status, e.decisoes], ["concluido", 1]);
@@ -49,7 +65,8 @@ test("CA-11: o ticket global roda na worktree da demanda e, sem decisão, falha"
 });
 
 test("CA-2: pi com falha deixa o ticket falhou, sem decisão e com a rodada em revisao", async () => {
-  const { banco } = await cenarioRevisao({ falha: true });
+  const { banco, piFalso } = await cenarioRevisao();
+  piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "falhou");
   const e = estado(banco, 2);
   assert.deepEqual(
@@ -59,7 +76,8 @@ test("CA-2: pi com falha deixa o ticket falhou, sem decisão e com a rodada em r
 });
 
 test("CA-12: pi com falha na revisão integral deixa a demanda em revisao_demanda", async () => {
-  const { banco } = await cenarioRevisao({ integral: true, falha: true });
+  const { banco, piFalso } = await cenarioRevisao({ integral: true });
+  piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   assert.equal(await conduzirRevisao(banco, REF_GLOBAL, { limiteMin: 1 }), "falhou");
   const e = estado(banco, 3);
   assert.deepEqual([e.ticket?.status, e.fase, e.decisoes], ["falhou", "revisao_demanda", 0]);
@@ -77,12 +95,13 @@ test("preparação que lança falha o ticket sem rodar o pi", async () => {
 });
 
 test("ticket reaberto leva a instrução ao prompt como reabertura", async () => {
-  const { c, banco } = await cenarioRevisao({ falha: true });
+  const { c, banco, piFalso } = await cenarioRevisao();
+  piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 });
   comDemanda(banco, "I-1", (ag) =>
     reabrirTicket(ag, { ticket_id: 2, instrucao: "refaça com atenção" }, AUDITOR, { agora: new Date().toISOString() }),
   );
-  delete process.env.FALSO_PI;
+  piFalso.roteirizar([{}]);
   assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "falhou");
   const prompts = readdirSync(`${c.raiz}/execucoes`).map((d) =>
     readFileSync(`${c.raiz}/execucoes/${d}/prompt.md`, "utf8"),

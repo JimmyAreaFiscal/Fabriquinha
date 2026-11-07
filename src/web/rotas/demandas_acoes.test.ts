@@ -1,19 +1,21 @@
 // Ações do Auditor sobre as demandas (CA-13 a CA-27 e CA-36) contra o servidor web de verdade, com git real e pi falso.
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { encerrar, situacao } from "../../execucao/gerente.ts";
 import { registrarCorrecoesSessao } from "../../dominio/transicoes_rodada.ts";
-import { abrir } from "../../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../../persistencia/demandas.ts";
-import { hospedagemFalsa } from "../../repositorio/hospedagem-falsa.test.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../../repositorio/worktree-cenarios.ts";
+import { carregarDemanda, comDemanda } from "../../persistencia/demandas.ts";
+import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/worktree-demanda.ts";
-import { demanda, servir } from "./demandas_cenario.ts";
+import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-acoes-web-")));
@@ -26,35 +28,6 @@ beforeEach(() => {
 after(() => {
   rmSync(temporario, { recursive: true, force: true });
 });
-
-// pi falso: grava no JSONL da sessão cada prompt recebido (como o pi) e a resposta, e assenta sem encerrar.
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, mkdirSync } from "node:fs";
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0.01 } };
-    const resposta = { role: "assistant", content: [], provider: "anthropic", model: "claude-teste", stopReason: "stop", usage };
-    mkdirSync(arg("--session-dir"), { recursive: true });
-    const arquivo = arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl";
-    const entrada = (message) => JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n";
-    appendFileSync(arquivo, entrada({ role: "user", content: c.message }) + entrada(resposta));
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    emitir({ type: "message_end", message: resposta });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
 
 const DEMANDA = "I-206";
 const BRANCH_DEMANDA = "fabriquinha/I-206";
@@ -96,8 +69,8 @@ const plano = {
  * aberto, branches no origin e worktrees prontas). A I-207 depende dela e está em planejamento.
  */
 async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true) {
-  const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste();
+  const { banco } = abrirBancoTemporario(c.raiz);
   banco
     .prepare(
       `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
@@ -115,11 +88,11 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   const resto: Record<string, unknown> = {
-    demanda: { ...demanda(DEMANDA, "").demanda, fase: "aprovacao_demanda" },
+    demanda: { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "aprovacao_demanda" },
     tickets: [ticket(1, "demanda", "em_execucao")],
   };
   if (gate === "planejamento") {
-    resto.demanda = { ...demanda(DEMANDA, "").demanda, fase: "aprovacao_planejamento" };
+    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "aprovacao_planejamento" };
     resto.tickets = [ticket(1, "planejar", "em_execucao")];
     resto.evidencias = [
       {
@@ -133,10 +106,10 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   }
   if (gate === "pr") {
     await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
-    const head = commitarCenario(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
-    gitCenario(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
-    hospedagem.abrir({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
-    resto.demanda = { ...demanda(DEMANDA, "").demanda, fase: "execucao" };
+    const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
+    rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
+    hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
+    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "execucao" };
     resto.rodadas = [
       { ...REF, titulo: "r2", fase: "aprovacao_pull_request", e2e: false, branch: BRANCH_RODADA },
       { demanda_id: DEMANDA, rodada_id: 1, titulo: "r1", fase: "concluida", e2e: false, branch: "fabriquinha/I-206-1" },
@@ -156,20 +129,24 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     ];
   }
   const { demanda: cabecalho, ...outros } = resto;
-  const ag = demanda(DEMANDA, "", outros);
-  criarDemanda(banco, { ...ag, demanda: cabecalho } as typeof ag);
-  criarDemanda(banco, demanda("I-207", "planejamento"));
+  const ag = montarAgregadoDemanda(DEMANDA, "", outros);
+  gravarAgregadoPronto(banco, { ...ag, demanda: cabecalho } as typeof ag);
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejamento"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
 
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
+  instalarPiFalso(c.dir).roteirizar([
+    {
+      resposta: "",
+      modelo: { provedor: "anthropic", modelo: "claude-teste" },
+      uso: { input: 1, output: 1, totalTokens: 2 },
+    },
+  ]);
   return {
     c,
     banco,
     ...(await servir(banco, comExecutarDemanda)),
     ag: () => carregarDemanda(banco, DEMANDA),
     fase: (id = DEMANDA) => carregarDemanda(banco, id).demanda.fase,
-    registro,
   };
 }
 

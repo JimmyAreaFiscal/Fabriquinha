@@ -21,7 +21,7 @@ import { EtapaTicket } from "../../src/dominio/primitivos.ts";
 import { criarSessao, iniciarExecucao } from "../../src/dominio/sessoes.ts";
 import { montarPromptDemanda } from "../../src/execucao/prompt_demanda.ts";
 import { abrir } from "../../src/persistencia/banco.ts";
-import { criarDemanda } from "../../src/persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { comSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
 import { publicarPRDe } from "../../src/repositorio/pr.ts";
 
@@ -146,7 +146,7 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     devolucoes: 0,
     ...extra,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-206",
       projeto: "loja",

@@ -1,6 +1,6 @@
 // Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-20 e 24 (uso e métricas): sessão retomada com dois modelos e custo
 // desconhecido, e o relatório da demanda com rodadas, revisões e custos externos. O cenário é montado pelos serviços e
-// pelo agendador, com banco e git reais numa raiz temporária e o pi falso; o uso por modelo, que o pi falso não emite, entra
+// pelo agendador, com banco e git reais numa raiz temporária e o pi falso; o uso por modelo, que o pi falso aqui não emite (`uso: null`), entra
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -58,7 +58,7 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
   const id = await demandaEmExecucao(c, [{ tickets: 1 }]);
   const ref = ticketDe(c, id, 1);
   abrirPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente, uso: null }]);
   await ciclo(c, despacho());
 
   // A primeira tentativa foi do agendador; a retomada é uma execução nova na mesma sessão.
@@ -123,7 +123,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   const id = await demandaEmExecucao(c, [{ tickets: 1 }, { tickets: 1 }]);
   const [r1, r2] = [ticketDe(c, id, 1), ticketDe(c, id, 2)];
   abrirPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente, uso: null }]);
   await ciclo(c, despacho());
 
   // Rodada 1: revisão reprovada (devolução com correção); rodada 2: aprovada.

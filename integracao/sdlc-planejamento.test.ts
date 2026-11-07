@@ -12,9 +12,9 @@ import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../src/
 import { substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
-import { piFalso } from "./falsos.ts";
+import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
-const pi = piFalso(base);
+const pi = instalarPiFalso(base);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
@@ -46,10 +46,10 @@ const plano = (id: string, titulo: string, rodadas = 1) => ({
  * a interrupção, e o `planejar` segue em execução esperando o plano. Devolve o número da execução de cada uma.
  */
 async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> {
-  const antes = pi.chamadas().length;
+  const antes = pi.prompts().length;
   const fins = despacharDemandas(c.banco, c.config);
   assert.equal(fins.length, ids.length, "o ciclo deveria iniciar só o planejamento de cada demanda");
-  await esperar(() => pi.chamadas().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
+  await esperar(() => pi.prompts().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
   for (const id of ids) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: PLANEJAR });
   await Promise.all(fins);
   return ids.map((id) => carregarSessoesDoTicket(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
@@ -99,7 +99,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
     estado.execucoes.map((e) => e.sessao_id),
     [sessao?.id, sessao?.id],
   );
-  assert.match(pi.chamadas().at(-1)?.prompt ?? "", /Motivo: faltam critérios na rodada 1/);
+  assert.match(pi.prompts().at(-1)?.prompt ?? "", /Motivo: faltam critérios na rodada 1/);
   assert.equal(demanda(c, id).tickets.filter((x) => x.etapa === "planejar").length, 1);
   semDesenvolvimento(c, id);
 
@@ -130,7 +130,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   await ciclaPlanejamentos(c, [id]);
   submeterPlanoDoAgente(banco, id, plano(id, "r", 2), agente(1));
   writeFileSync(quebra, "");
-  const chamadas = pi.chamadas().length;
+  const chamadas = pi.prompts().length;
 
   await assert.rejects(aprovarPlanejamentoDemanda(banco, id, { nota: 4 }), /a preparação da worktree falhou/);
   const ag = demanda(c, id);
@@ -150,7 +150,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   );
   // Nenhuma execução de rodada: o agendador não tem o que despachar e o pi não recebe mais nada.
   assert.equal(despacharDemandas(banco, c.config).length, 0);
-  assert.equal(pi.chamadas().length, chamadas);
+  assert.equal(pi.prompts().length, chamadas);
 
   // Corrigida a causa, a mesma aprovação conclui.
   rmSync(quebra);
@@ -215,7 +215,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
   // Escrita: falhar o implementar de A (rodada 1) não toca em nada de B.
   const antesB = demanda(c, b);
   const tA = dono(a).tickets.find((x) => x.etapa === "implementar");
-  pi.roteirizar([{ modo: "erro" }]);
+  pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await executarAgoraDemanda(c.banco, { demanda_id: a, ticket_id: tA?.ticket_id ?? 0 }, c.config);
   assert.equal(dono(a).tickets.find((x) => x.ticket_id === tA?.ticket_id)?.status, "falhou");
   assert.deepEqual(demanda(c, b), antesB);
@@ -257,7 +257,7 @@ test("o planejador recebe o desenho aprovado da demanda, com o HTML anexo num ar
   pi.roteirizar();
   const id = demandaAprovada(c);
   await ciclaPlanejamentos(c, [id]);
-  const prompt = pi.chamadas()[0]?.prompt ?? "";
+  const prompt = pi.prompts()[0]?.prompt ?? "";
   assert.match(prompt, /## Desenho aprovado[\s\S]*\nr\n[\s\S]*- `src\/a\.ts` \(criar\): porque/);
   const [, html] = /- `d\.html`: `([^`]+)`/.exec(prompt) ?? [];
   assert.equal(readFileSync(html ?? "", "utf8"), "<p>x</p>");

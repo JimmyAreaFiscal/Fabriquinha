@@ -47,7 +47,7 @@ const correcao = (id: string, titulo: string) => ({
 function prComProblema(c: Cenario, id: string, problema: "check" | "conflito"): void {
   const { branch } = rodadaDe(c, id, 1) ?? { branch: "" };
   gh.zerar();
-  gh.abrir({
+  gh.abrirPr({
     head: branch,
     base: demanda(c, id).demanda.branch,
     titulo: "velho",
@@ -100,7 +100,7 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   assert.equal(corretivo.titulo, "Tratar o caso X");
 
   // A correção executa pelo agendador, como qualquer implementação, e a rodada volta à revisão com um revisor novo.
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   await ciclo(c, despacho());
   assert.equal(statusDe(c, corretivo), "concluido");
   assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
@@ -128,7 +128,7 @@ test("os agentes da rodada recebem o que a Fabriquinha apurou: o diff e a matriz
   const c = criarCenario(t);
   const id = await rodadaEmEncerramento(c);
   // O revisor explica a matriz coletada antes do pi dele: cada linha e o log dela, num arquivo que ele consegue ler.
-  const revisor = pi.chamadas()[0]?.prompt ?? "";
+  const revisor = pi.prompts()[0]?.prompt ?? "";
   assert.match(revisor, /## Matriz de fitness functions[\s\S]*- \*\*f\*\* \(d\): `true` saiu com código 0/);
   const [, log] = /- `f\.log`: `([^`]+)`/.exec(revisor) ?? [];
   assert.ok(log !== undefined && existsSync(log), `o log da fitness f no disco: ${String(log)}`);
@@ -153,7 +153,7 @@ test("os agentes da rodada recebem o que a Fabriquinha apurou: o diff e a matriz
     ],
   }));
   await encerrar(c, id);
-  const documentador = pi.chamadas()[0]?.prompt ?? "";
+  const documentador = pi.prompts()[0]?.prompt ?? "";
   assert.match(documentador, /## Arquivos não previstos[\s\S]*- `feature\.txt`/);
   assert.match(documentador, /## Impacto na arquitetura\n\nalto: escreva em `reversao`/);
 });
@@ -182,7 +182,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   assert.equal(gh.prs().length, 1);
 
   let aprovada = false;
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   await ciclo(
     c,
     despacho(() => aprovada),
@@ -194,7 +194,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
     c,
     despacho(() => aprovada),
   );
-  assert.match(pi.chamadas().at(-1)?.prompt ?? "", /execucao_testes: reprovado no teste/);
+  assert.match(pi.prompts().at(-1)?.prompt ?? "", /execucao_testes: reprovado no teste/);
   assert.equal(statusDe(c, corretivo), "concluido");
   assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
 
@@ -229,13 +229,13 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   const [rodadaAntes, demandaAntes] = [ponta(branchRodada), ponta(branchDemanda)];
 
   fecharPortao();
-  pi.roteirizar([{ modo: "ok", agente: intruso }]);
+  pi.roteirizar([{ agente: intruso }]);
   const chamadasAntes = pisAteAgora();
   const sessao = await reprovarPRRodada(humana.banco, ref, "o PR mistura duas mudanças", AUDITOR, {
     limiteMin: humana.config.timeoutMin,
   });
   await esperar(() => pisAteAgora() === chamadasAntes + 1, "o pi da conversa receber o prompt sem esperar o agendador");
-  assert.match(pi.chamadas().at(-1)?.prompt ?? "", /sessão de ajustes[\s\S]*o PR mistura duas mudanças/);
+  assert.match(pi.prompts().at(-1)?.prompt ?? "", /sessão de ajustes[\s\S]*o PR mistura duas mudanças/);
   assert.equal(rodadaDe(humana, idHumana, 1)?.fase, "sessao");
   const gate = atual(humana, idHumana, "encerrar_rodada").ticket_id;
   const reprovacao = demanda(humana, idHumana).decisoes.find((d) => d.ticket_id === gate);

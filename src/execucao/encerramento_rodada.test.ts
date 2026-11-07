@@ -1,20 +1,22 @@
 // Encerramento da rodada com banco real, git real, pi falso e hospedagem falsa (CA-2 a CA-12 da I-227).
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import { marcaDoPRRodada } from "../evidencias/pr_rodada.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   caminhoDaWorktreeRodada,
   garantirWorktreeDemanda,
@@ -33,44 +35,6 @@ const hospedagem = hospedagemFalsa(temporario);
 beforeEach(() => {
   hospedagem.zerar();
 });
-
-/**
- * pi falso mínimo: anota o prompt em $FALSO_PI_REGISTRO e responde. Na chamada única (`-p`), responde
- * $FALSO_PI_RESUMO, ou sai com 1 sem ele.
- */
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, mkdirSync } from "node:fs";
-if (process.argv.includes("-p")) {
-  appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(process.argv.at(-1)) + "\\n");
-  if (!process.env.FALSO_PI_RESUMO) process.exit(1);
-  process.stdout.write(process.env.FALSO_PI_RESUMO + "\\n");
-  process.exit(0);
-}
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(c.message) + "\\n");
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    const usage = { input: 10, output: 2, cacheRead: 100, cacheWrite: 3, totalTokens: 115, cost: { total: 0.01 } };
-    const message = { role: "assistant", content: [], provider: "anthropic", model: "claude-teste", stopReason: "stop", usage };
-    mkdirSync(arg("--session-dir"), { recursive: true });
-    appendFileSync(arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl",
-      JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
-    emitir({ type: "message_end", message });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
 
 const abertos: DatabaseSync[] = [];
 after(() => {
@@ -106,8 +70,8 @@ async function cenario({
   anterior = false,
   descricao = "d",
 }: Opcoes = {}) {
-  const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste();
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -151,7 +115,7 @@ async function cenario({
     comoRevisar: ["Leia o diff."],
     naoVerificado: [],
   };
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: DEMANDA,
       projeto: "loja",
@@ -192,7 +156,7 @@ async function cenario({
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   /** Commita na rodada e, com `ticket`, registra o commit como desse ticket de implementação. */
   const commitarNaRodada = (arquivo: string, ticket?: number) => {
-    const sha = commitarCenario(rodada, arquivo, `${arquivo}\n`);
+    const sha = commitarArquivo(rodada, arquivo, `${arquivo}\n`);
     if (ticket !== undefined) {
       const mensagem = `feat: ${arquivo} [I-206/T-${String(ticket)}]`;
       gravarCommitDemanda(banco, DEMANDA, ticket, { sha, mensagem, em, arquivos: [] });
@@ -201,12 +165,11 @@ async function cenario({
   };
   commitarNaRodada("a.txt", 3);
   commitarNaRodada("b.txt", 4);
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
-  process.env.FALSO_PI_REGISTRO = registro;
+  const piFalso = instalarPiFalso(c.dir);
   return {
     c,
     banco,
+    piFalso,
     rodada,
     demanda,
     commitarNaRodada,
@@ -214,8 +177,12 @@ async function cenario({
     ticket: () => carregarDemanda(banco, DEMANDA).tickets.find((t) => t.ticket_id === 8),
     evidencia: (tipo: string) =>
       carregarDemanda(banco, DEMANDA).evidencias.find((e) => e.tipo === tipo && e.ticket_id === 8),
-    prompt: () => readFileSync(registro, "utf8"),
-    noRemoto: (branch: string) => gitCenario(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`),
+    prompt: () =>
+      piFalso
+        .prompts()
+        .map((entrada) => entrada.prompt)
+        .join("\n"),
+    noRemoto: (branch: string) => rodarGit(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`),
     fase: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.fase,
   };
 }
@@ -230,8 +197,8 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     prs.map((p) => [p.head, p.base]),
     [[BRANCH_RODADA, BRANCH_DEMANDA]],
   );
-  assert.equal(noRemoto(BRANCH_RODADA), gitCenario(rodada, "rev-parse", "HEAD"));
-  assert.equal(noRemoto(BRANCH_DEMANDA), gitCenario(c.repo, "rev-parse", BRANCH_DEMANDA));
+  assert.equal(noRemoto(BRANCH_RODADA), rodarGit(rodada, "rev-parse", "HEAD"));
+  assert.equal(noRemoto(BRANCH_DEMANDA), rodarGit(c.repo, "rev-parse", BRANCH_DEMANDA));
   assert.equal(ag().rodadas[0]?.fase, "aprovacao_pull_request");
   assert.equal(ticket()?.status, "em_execucao");
   const pr = prs[0];
@@ -246,7 +213,7 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     url: "https://github.com/org/loja/pull/1",
     branch: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
-    head: gitCenario(rodada, "rev-parse", "HEAD"),
+    head: rodarGit(rodada, "rev-parse", "HEAD"),
     corpoCompleto: pr.corpo,
     condensado: false,
   });
@@ -269,18 +236,18 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
 
 test("CA-3: a ponta nova da demanda entra na rodada antes do PR, e o merge da D04 não barra a publicação", async () => {
   const { banco, demanda, rodada, noRemoto } = await cenario();
-  const nova = commitarCenario(demanda, "da-demanda.txt", "nova\n");
+  const nova = commitarArquivo(demanda, "da-demanda.txt", "nova\n");
 
   await concluirEncerramentoRodada(banco, REF);
 
-  gitCenario(rodada, "merge-base", "--is-ancestor", nova, "HEAD");
-  assert.equal(noRemoto(BRANCH_RODADA), gitCenario(rodada, "rev-parse", "HEAD"));
+  rodarGit(rodada, "merge-base", "--is-ancestor", nova, "HEAD");
+  assert.equal(noRemoto(BRANCH_RODADA), rodarGit(rodada, "rev-parse", "HEAD"));
   assert.equal(hospedagem.prs().length, 1);
 });
 
 test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvimento com o arquivo em conflito", async () => {
   const { banco, demanda, ag, fase, noRemoto } = await cenario();
-  commitarCenario(demanda, "a.txt", "da demanda\n");
+  commitarArquivo(demanda, "a.txt", "da demanda\n");
 
   await concluirEncerramentoRodada(banco, REF);
 
@@ -300,7 +267,7 @@ test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvi
 
 test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: volta a desenvolvimento e conclui o ticket", async () => {
   const { banco, ag, ticket, evidencia, fase } = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",
@@ -325,7 +292,7 @@ test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: vo
 
 test("CA-6: check de CI falho volta a desenvolvimento com uma correção por check, sem chegar ao gate", async () => {
   const { banco, ag, fase } = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",
@@ -355,7 +322,7 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
 
 test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a marca do ticket atual", async () => {
   const { banco, fase } = await cenario({ anterior: true });
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",
@@ -372,7 +339,7 @@ test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a ma
 
 test("CA-9: commit que nenhum ticket registrou falha antes do push, diz como desfazer e não cria PR", async () => {
   const { banco, rodada, ticket, evidencia, noRemoto, c } = await cenario();
-  const orfao = commitarCenario(rodada, "fora.txt", "fora\n");
+  const orfao = commitarArquivo(rodada, "fora.txt", "fora\n");
 
   await assert.rejects(
     concluirEncerramentoRodada(banco, REF),
@@ -464,29 +431,25 @@ test("iniciar: ticket falho não roda", async () => {
 });
 
 test("corpo além do limite da hospedagem: o pi padrão resume a demanda e o custo, e as seções do mensagem_pr ficam inteiras", async () => {
-  process.env.FALSO_PI_RESUMO = "Resumo da I-206.";
-  try {
-    const { c, banco, evidencia, prompt } = await cenario({ descricao: `longa${"x".repeat(75)} `.repeat(900) });
+  const { c, banco, evidencia, piFalso } = await cenario({ descricao: `longa${"x".repeat(75)} `.repeat(900) });
+  piFalso.roteirizar([{ chamadaUnica: { saida: "Resumo da I-206." } }]);
 
-    await concluirEncerramentoRodada(banco, REF);
+  await concluirEncerramentoRodada(banco, REF);
 
-    const corpo = hospedagem.prs()[0]?.corpo ?? "";
-    assert.ok(corpo.length <= 65_536);
-    assert.ok(corpo.startsWith(`${MARCA}\n\n## Contexto (resumido)\n\nResumo da I-206.\n\n## O que mudou`));
-    assert.match(corpo, /## Como revisar\n\n1\. Leia o diff\./);
-    assert.doesNotMatch(corpo, /longa/);
-    const resumo = prompt()
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as unknown)
-      .find((p) => typeof p === "string" && p.startsWith("Resuma"));
-    assert.match(String(resumo), /## Por quê[\s\S]*longa[\s\S]*## Autoria e custo/);
-    assert.doesNotMatch(String(resumo), /## Como revisar/);
-    assert.equal((evidencia("pr_aberto")?.dados as { condensado: boolean }).condensado, true);
-    assert.doesNotMatch(readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"), /não resumiu/);
-  } finally {
-    delete process.env.FALSO_PI_RESUMO;
-  }
+  const corpo = hospedagem.prs()[0]?.corpo ?? "";
+  assert.ok(corpo.length <= 65_536);
+  assert.ok(corpo.startsWith(`${MARCA}\n\n## Contexto (resumido)\n\nResumo da I-206.\n\n## O que mudou`));
+  assert.match(corpo, /## Como revisar\n\n1\. Leia o diff\./);
+  assert.doesNotMatch(corpo, /longa/);
+  const resumo = piFalso
+    .registro()
+    .filter((entrada) => entrada.evento === "chamada_unica")
+    .map((entrada) => entrada.argv?.at(-1))
+    .find((prompt) => prompt?.startsWith("Resuma"));
+  assert.match(String(resumo), /## Por quê[\s\S]*longa[\s\S]*## Autoria e custo/);
+  assert.doesNotMatch(String(resumo), /## Como revisar/);
+  assert.equal((evidencia("pr_aberto")?.dados as { condensado: boolean }).condensado, true);
+  assert.doesNotMatch(readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"), /não resumiu/);
 });
 
 test("corpo além do limite e o pi sem resumo: o PR vai sem o contexto, e o log diz por quê", async () => {

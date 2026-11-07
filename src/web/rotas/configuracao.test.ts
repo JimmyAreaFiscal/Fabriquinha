@@ -9,7 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { abrir } from "../../persistencia/banco.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import { cursorDaBase } from "../../persistencia/retrabalho.ts";
@@ -28,24 +29,21 @@ writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.co
 process.env.GIT_CONFIG_GLOBAL = gitconfig;
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
-// gh autenticado e pi com dois modelos, na frente do PATH e em $FABRIQUINHA_PI.
+// gh autenticado na frente do PATH e pi com dois modelos.
 const bin = join(base, "bin");
 mkdirSync(bin);
 writeFileSync(join(bin, "gh"), "#!/bin/sh\nexit 0\n");
-writeFileSync(
-  join(bin, "pi"),
-  `#!/bin/sh
-cat <<'TABELA'
-provider   model              context  max-out  thinking  images
-anthropic  claude-opus-5-5    200K     64K      yes       yes
-llamacpp   qwen3-coder-30b    32.8K    8.2K     yes       no
-TABELA
-`,
-);
 chmodSync(join(bin, "gh"), 0o755);
-chmodSync(join(bin, "pi"), 0o755);
 process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
-process.env.FABRIQUINHA_PI = join(bin, "pi");
+const piFalso = instalarPiFalso(base);
+const modelos: PassoPi = {
+  listaDeModelos: {
+    tabela:
+      "provider   model              context  max-out  thinking  images\n" +
+      "anthropic  claude-opus-5-5    200K     64K      yes       yes\n" +
+      "llamacpp   qwen3-coder-30b    32.8K    8.2K     yes       no\n",
+  },
+};
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
 
@@ -63,9 +61,11 @@ function clone(): string {
   return repo;
 }
 
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 let banco: DatabaseSync;
 beforeEach(() => {
-  banco = abrir(mkdtempSync(join(base, "raiz-")));
+  banco = abrirBancoTemporario().banco;
+  piFalso.roteirizar([modelos]);
 });
 
 const PROXIMA = new Date("2026-10-12T14:35:00.000Z");
@@ -154,7 +154,7 @@ test("modelo das avaliações: o par listado pelo pi grava; o que o pi não list
   assert.deepEqual(await lido(), opus, "a recusa não gravou nada");
 
   // Igual ao gravado: o pi nem é chamado (aqui, quebrado); sem modelo, volta ao padrão.
-  process.env.FABRIQUINHA_PI = "false";
+  piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
   try {
     assert.deepEqual(
       (
@@ -169,7 +169,7 @@ test("modelo das avaliações: o par listado pelo pi grava; o que o pi não list
       null,
     );
   } finally {
-    process.env.FABRIQUINHA_PI = join(bin, "pi");
+    piFalso.roteirizar([modelos]);
   }
 });
 
@@ -284,7 +284,7 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
   assert.deepEqual(etapasGravadas(), linhas);
 
   // Com o pi quebrado: o modelo igual ao gravado salva sem chamá-lo, e o trocado é recusado.
-  process.env.FABRIQUINHA_PI = "false";
+  piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
   try {
     assert.deepEqual(await chamar("POST", "/api/projetos/loja", { ...formulario(repo), modelos: { planejar: opus } }), {
       ...gravado(repo),
@@ -306,7 +306,7 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
     assert.equal(status, 422);
     assert.match(erro, /o pi falhou ao listar os modelos[^]*→ at modelos\.planejar$/);
   } finally {
-    process.env.FABRIQUINHA_PI = join(bin, "pi");
+    piFalso.roteirizar([modelos]);
   }
   // Tudo no padrão do pi: nenhuma linha de etapa fica.
   await chamar("POST", "/api/projetos/loja", formulario(repo));

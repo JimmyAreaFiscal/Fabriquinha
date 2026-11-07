@@ -4,14 +4,15 @@
 // e o `gh` é o de `integracao/falsos.ts`, com o estado de cada PR no arquivo dele.
 // Não usa `integracao/apoio.ts`: ele registra hooks do node:test e mexe no process.env ao ser importado.
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgregadoDemanda } from "../../src/dominio/agregado_demanda.ts";
 import { registrarCorrecoesSessao } from "../../src/dominio/transicoes_rodada.ts";
 import { criarAvaliacao } from "../../src/persistencia/avaliacoes.ts";
 import { abrir } from "../../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../src/persistencia/configuracao_projeto.ts";
-import { comDemanda, criarDemanda } from "../../src/persistencia/demandas.ts";
+import { comDemanda } from "../../src/persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { importarAchados } from "../../src/persistencia/avaliacoes.ts";
 import { registrarProjeto } from "../../src/persistencia/projetos.ts";
 import { criarTarefa, criarUsuarioSimulado } from "../../src/persistencia/simulacao.ts";
@@ -107,7 +108,8 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
   /** Um repositório git de verdade com o remoto num bare local e a `main` publicada. */
   async function repositorio(pasta: string): Promise<{ repo: string; bare: string }> {
-    const dir = mkdtempSync(join(amb.raiz, `${pasta}-`));
+    const dir = join(amb.raiz, `${pasta}-${String(proximo())}`);
+    mkdirSync(dir);
     const bare = join(dir, "origin.git");
     const repo = join(dir, "repo");
     mkdirSync(repo);
@@ -170,7 +172,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
   /** Cria a demanda `fase` do projeto principal; `resto` traz tickets, rodadas, evidências... */
   function criar(fase: string, resto: object = {}, id = novoId()): string {
-    criarDemanda(banco, {
+    gravarAgregadoPronto(banco, {
       demanda: {
         id,
         projeto: principal.nome,

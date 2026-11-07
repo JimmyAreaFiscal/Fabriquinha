@@ -6,14 +6,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { AUDITOR } from "../dominio/ator.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../dominio/erros.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
-import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { aprovarPRRodada } from "./aprovacao_pr_rodada.ts";
 
@@ -36,8 +37,8 @@ const BRANCH_RODADA = "fabriquinha/I-206-2";
 
 /** Demanda I-206 com a rodada 2 no gate do PR: commit na rodada, ambas as branches no origin, PR 1 aberto. */
 async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao_pull_request", semPR = false) {
-  const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste();
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -64,7 +65,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
     devolucoes: 0,
     rodada_id: 2,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: DEMANDA,
       projeto: "loja",
@@ -103,9 +104,9 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
   } as unknown as AgregadoDemanda);
   await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
-  const commitDaRodada = commitarCenario(rodada, "a.txt", "a\n");
-  gitCenario(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
-  hospedagem.abrir({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
+  const commitDaRodada = commitarArquivo(rodada, "a.txt", "a\n");
+  rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
+  hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
   return {
     c,
     banco,
@@ -113,8 +114,8 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
     ag: () => carregarDemanda(banco, DEMANDA),
     fase: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.fase,
     ticket: () => carregarDemanda(banco, DEMANDA).tickets.find((t) => t.ticket_id === 8),
-    demandaLocal: () => gitCenario(c.repo, "rev-parse", BRANCH_DEMANDA),
-    demandaRemota: () => gitCenario(c.bare, "rev-parse", BRANCH_DEMANDA),
+    demandaLocal: () => rodarGit(c.repo, "rev-parse", BRANCH_DEMANDA),
+    demandaRemota: () => rodarGit(c.bare, "rev-parse", BRANCH_DEMANDA),
   };
 }
 
@@ -123,7 +124,7 @@ test("CA-1 a CA-4: aprova com nota 4, integra, avança a demanda e conclui a rod
 
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
 
-  gitCenario(c.repo, "merge-base", "--is-ancestor", commitDaRodada, BRANCH_DEMANDA);
+  rodarGit(c.repo, "merge-base", "--is-ancestor", commitDaRodada, BRANCH_DEMANDA);
   assert.equal(demandaLocal(), demandaRemota());
   assert.equal(fase(), "concluida");
   assert.equal(ticket()?.status, "concluido");

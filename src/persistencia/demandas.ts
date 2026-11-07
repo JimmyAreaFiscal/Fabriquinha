@@ -242,14 +242,6 @@ export function listarDemandas(
   }
 }
 
-/** Grava a demanda nova com tudo o que o agregado traz, numa transação só. */
-/** @testes atalho dos testes de persistência para gravar um agregado pronto */
-export const criarDemanda = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
-  escrever(banco, () => {
-    gravarDiferenca(banco, undefined, agregado);
-    return agregado;
-  });
-
 /**
  * Demanda nova: a persistência só aloca o ID da sequência `issue` (D09); `montar` monta o agregado com ele. Erro em
  * `montar`, no ID devolvido ou na gravação desfaz a transação, sequência incluída.

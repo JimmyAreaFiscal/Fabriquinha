@@ -6,12 +6,13 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { abrir } from "../persistencia/banco.ts";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
 import { projetosAVarrer } from "../persistencia/retrabalho.ts";
 import { registrarRetrabalhoDemanda, varrerBase } from "./retrabalho.ts";
 
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-retrabalho-")));
 after(() => {
   rmSync(base, { recursive: true, force: true });
@@ -35,7 +36,7 @@ function cenario() {
   git(base, "init", "-q", "--bare", bare);
   git(base, "clone", "-q", bare, repo);
   git(repo, "checkout", "-q", "-b", "main");
-  const banco = abrir(join(dir, "raiz"));
+  const { banco } = abrirBancoTemporario();
   registrarProjeto(banco, {
     nome: "loja",
     repo,

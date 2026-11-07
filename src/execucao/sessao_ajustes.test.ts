@@ -1,20 +1,22 @@
 // Sessão de ajustes do PR reprovado com banco real, git real (origin bare) e pi falso (CA-12 a CA-23 e CA-25 da I-229).
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ZodError } from "zod";
 import { AUDITOR } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeEscopo } from "../dominio/erros.ts";
 import { registrarCorrecoesSessao } from "../dominio/transicoes_rodada.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { situacao } from "./gerente.ts";
 import { concluirSessaoAjustes, reprovarPRRodada } from "./sessao_ajustes.ts";
@@ -24,37 +26,6 @@ const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ajustes-")));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
 delete process.env.FABRIQUINHA_PORTA;
-
-/** pi falso: anota cada prompt em $FALSO_PI_REGISTRO, roda $FALSO_PI_SHELL na pasta dele (o agente "mexendo" no git) e responde. */
-const PI_FALSO = `#!/usr/bin/env node
-import { execSync } from "node:child_process";
-import { appendFileSync, mkdirSync } from "node:fs";
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify({ sessao: arg("--session-id"), mensagem: c.message }) + "\\n");
-    if (process.env.FALSO_PI_SHELL) execSync(process.env.FALSO_PI_SHELL, { stdio: "ignore" });
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    const usage = { input: 10, output: 2, cacheRead: 100, cacheWrite: 3, totalTokens: 115, cost: { total: 0.01 } };
-    const message = { role: "assistant", content: [], provider: "anthropic", model: "claude-teste", stopReason: "stop", usage };
-    mkdirSync(arg("--session-dir"), { recursive: true });
-    appendFileSync(arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl",
-      JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
-    emitir({ type: "message_end", message });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
 
 const abertos: DatabaseSync[] = [];
 after(() => {
@@ -71,8 +42,8 @@ const URL_PR = "https://github.com/org/loja/pull/1";
 
 /** Demanda I-206 com a rodada 2 no gate do PR (ticket 8) e as duas worktrees prontas. */
 async function cenario(shell = "") {
-  const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste();
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -101,9 +72,9 @@ async function cenario(shell = "") {
   });
   await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
-  const head = commitarCenario(rodada, "a.txt", "a\n");
+  const head = commitarArquivo(rodada, "a.txt", "a\n");
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: DEMANDA,
       projeto: "loja",
@@ -138,22 +109,18 @@ async function cenario(shell = "") {
       },
     ],
   } as unknown as AgregadoDemanda);
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
-  process.env.FALSO_PI_REGISTRO = registro;
   const id = ["-c", "user.name=t", "-c", "user.email=t@t"];
-  process.env.FALSO_PI_SHELL = shell.replaceAll("{id}", id.join(" ")).replaceAll("{demanda}", demanda);
+  const piFalso = instalarPiFalso(c.dir).roteirizar([
+    { shell: shell.replaceAll("{id}", id.join(" ")).replaceAll("{demanda}", demanda) },
+  ]);
   return {
     c,
     banco,
     head,
-    sha: (branch: string) => gitCenario(c.repo, "rev-parse", branch),
+    sha: (branch: string) => rodarGit(c.repo, "rev-parse", branch),
     sujo: () => existsSync(join(rodada, "sujo.txt")),
     ag: () => carregarDemanda(banco, DEMANDA),
-    prompts: () =>
-      (existsSync(registro) ? readFileSync(registro, "utf8").trim().split("\n") : [])
-        .filter(Boolean)
-        .map((l) => JSON.parse(l) as { sessao: string; mensagem: string }),
+    prompts: () => piFalso.prompts(),
     marco: () => join(c.raiz, "execucoes", "ajustes-I-206.R2.json"),
   };
 }
@@ -182,7 +149,7 @@ test("CA-12, CA-14, CA-15, CA-23 e CA-25: reprovar registra a recusa, abre a ses
     [9],
   );
   await ate(() => prompts().length === 1);
-  const mensagem = prompts()[0]?.mensagem ?? "";
+  const mensagem = prompts()[0]?.prompt ?? "";
   for (const esperado of [MOTIVO, URL_PR, "I-206.R2", "I-206.T9"]) assert.match(mensagem, new RegExp(esperado));
   assert.doesNotMatch(mensagem, /\bT-\d/);
   await concluirComCorrecao(banco, ag);
@@ -244,7 +211,7 @@ test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na
   enviarDemanda(banco, sessao, "Cobre o erro de rede também", "prompt", 5);
 
   await ate(() => prompts().length === 2);
-  assert.equal(prompts()[1]?.mensagem, "Cobre o erro de rede também");
+  assert.equal(prompts()[1]?.prompt, "Cobre o erro de rede também");
   assert.equal(prompts()[1]?.sessao, sessao);
 
   // CA-20 e CA-22: sem correção, ou pelo agente, a conclusão é recusada e a sessão segue aberta.
@@ -271,7 +238,7 @@ test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesm
 
   await ate(() => prompts().length === 2);
   assert.equal(prompts()[1]?.sessao, sessao);
-  assert.equal(prompts()[1]?.mensagem, "Voltei");
+  assert.equal(prompts()[1]?.prompt, "Voltei");
   // A restauração volta a rodada, a demanda e a worktree depois que o pi para.
   await ate(() => situacao(sessao) === undefined && sha(BRANCH_DEMANDA) === demanda && !sujo());
   assert.equal(sha(BRANCH_RODADA), head);

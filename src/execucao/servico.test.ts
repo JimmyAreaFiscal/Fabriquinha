@@ -3,15 +3,15 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { after, beforeEach, type TestContext, test } from "node:test";
+import { beforeEach, type TestContext, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { abrir, escrever, migrar, novoId } from "../persistencia/banco.ts";
+import { escrever, migrar, novoId } from "../persistencia/banco.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { MIGRACOES } from "../persistencia/migracoes.ts";
 import { registrarProjeto } from "../persistencia/projetos.ts";
@@ -19,11 +19,13 @@ import { salvarConfiguracao } from "../persistencia/servico.ts";
 import { criarUsuarioSimulado } from "../persistencia/simulacao.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-servico-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
-const novaRaiz = () => mkdtempSync(join(base, "raiz-"));
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
+/** Uma raiz com o banco já migrado e fechado, para o serviço abrir. */
+const novaRaiz = () => {
+  const { raiz, banco } = abrirBancoTemporario();
+  banco.close();
+  return raiz;
+};
 
 const AGORA = "2026-10-11T12:00:00.000Z";
 
@@ -94,7 +96,7 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   assert.match(await (await fetch(`http://127.0.0.1:${porta}/home`)).text(), /^<!doctype html>/, "a porta serve o web");
 
   // A raiz da segunda nem existe: ela recusa pela porta sem chegar a criá-la nem a migrar o banco.
-  const outraRaiz = join(base, "nunca-criada");
+  const outraRaiz = join(raiz, "nunca-criada");
   await assert.rejects(
     iniciarServico(outraRaiz),
     (erro: unknown) =>
@@ -119,7 +121,6 @@ test("parar apaga o web.url: o abrir diz que o serviço não está rodando em ve
 
 test("reinício: o pi de uma avaliação da instância anterior é morto pelo pgid da pasta dela", async () => {
   const raiz = novaRaiz();
-  abrir(raiz).close();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
   const dir = join(raiz, "avaliacoes", "11111111-1111-4111-8111-111111111111");
@@ -132,8 +133,7 @@ test("reinício: o pi de uma avaliação da instância anterior é morto pelo pg
 });
 
 test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer na fase", async () => {
-  const raiz = novaRaiz();
-  const banco = abrir(raiz);
+  const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
@@ -164,8 +164,7 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
 });
 
 test("reinício: as execuções simuladas pendentes falham e o pi delas é morto; as terminadas ficam", async () => {
-  const raiz = novaRaiz();
-  const banco = abrir(raiz);
+  const { raiz, banco } = abrirBancoTemporario();
   projeto(banco, "sim", "/nao/existe");
   criarUsuarioSimulado(banco, "sim", { nome: "Dona Maria", descricao: "d" });
   banco.exec(`INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'sim', 't', 1, 'x');
@@ -207,7 +206,7 @@ function bancoComDemanda(raiz: string): DatabaseSync {
 }
 
 test("subida que falha ao abrir o banco ou ao migrar libera a porta; o banco anterior à v36 é recusado sem alteração", async () => {
-  const arquivo = join(base, "raiz-que-e-arquivo");
+  const arquivo = join(novaRaiz(), "raiz-que-e-arquivo");
   writeFileSync(arquivo, "");
   await assert.rejects(subir(arquivo), /EEXIST|ENOTDIR/);
   await portaLivre();
@@ -249,7 +248,7 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
     [],
     "a subida não chama o backfill",
   );
-  const banco = abrir(raiz);
+  const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
   assert.equal(
     escrever(banco, () => novoId(banco, "issue")),
     2,
@@ -292,10 +291,11 @@ test("o ciclo nunca trava nem lança: erro na batida vai para o log e a batida s
 test("agendador: varre em segundo plano a base dos projetos sem varredura há 24 horas, sem sobrepor varreduras", async (t) => {
   const minuto = relogio(t);
   const erros = t.mock.method(console, "error", () => undefined);
-  const s = await subir();
+  const raiz = novaRaiz();
+  const s = await subir(raiz);
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
   // `q`: base real, com o upload-pack do `origin` lento e contando as buscas. `r`: o fetch falha.
-  const dir = mkdtempSync(join(base, "repo-"));
+  const dir = mkdtempSync(join(raiz, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
   git(dir, "init", "-q", "--bare", "origin.git");
   git(dir, "clone", "-q", "origin.git", "q");
@@ -333,7 +333,7 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
   const raiz = novaRaiz();
   const s = await subir(raiz);
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
-  const dir = mkdtempSync(join(base, "repo-"));
+  const dir = mkdtempSync(join(raiz, "repo-"));
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString().trim();
   git(dir, "init", "-q", "--bare", "origin.git");
   git(dir, "clone", "-q", "origin.git", "q");
@@ -346,7 +346,7 @@ test("parar espera a varredura em andamento antes de fechar o banco", async (t) 
   minuto();
   await s.parar();
   assert.equal(erros.mock.callCount(), 0);
-  const banco = abrir(raiz);
+  const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
   assert.equal(
     banco.prepare("SELECT ultimo_sha FROM varredura_base WHERE projeto = 'q'").get()?.ultimo_sha,
     git(q, "rev-parse", "HEAD"),

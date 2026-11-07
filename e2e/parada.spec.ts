@@ -1,12 +1,12 @@
 // Parar o serviço com um ticket de demanda em execução (I-246, CA-1 a CA-3): o systemd manda o SIGTERM ao cgroup
 // inteiro, então o serviço e o pi recebem o sinal juntos. A parada sai limpa e o ticket falha com "serviço reiniciado".
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
+import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { carregarDemanda } from "../src/persistencia/demandas.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
@@ -16,23 +16,13 @@ import { expect, projeto, test } from "./apoio.ts";
 import { semearTicketAberto } from "./demandas-apoio.ts";
 
 // Um pi que não termina sozinho: só o sinal o encerra.
-const piParado = join(mkdtempSync(join(tmpdir(), "pi-parado-")), "pi");
-writeFileSync(piParado, '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso && exit 0\nexec sleep 60\n', {
-  mode: 0o755,
-});
+const roteiroDoPiParado: PassoPi[] = [{ termina: "trava" }];
 
 // Um pi que ignora o SIGTERM: só o SIGKILL do `parar`, passado o limite, o encerra.
-const piTeimoso = join(mkdtempSync(join(tmpdir(), "pi-teimoso-")), "pi");
-writeFileSync(
-  piTeimoso,
-  '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso && exit 0\ntrap \'\' TERM\nexec sleep 40\n',
-  {
-    mode: 0o755,
-  },
-);
+const roteiroDoPiTeimoso: PassoPi[] = [{ termina: "trava", sigterm: "ignora" }];
 
 test.describe("I-246 CA-4", () => {
-  test.use({ pi: piTeimoso });
+  test.use({ roteiroDoPi: roteiroDoPiTeimoso });
   test("pi que ignora o SIGTERM: o serviço o mata no limite, sai limpo, e a subida seguinte mostra Falhou", async ({
     pagina,
     fabriquinha,
@@ -105,7 +95,7 @@ function conferirFimGravado(raiz: string): void {
 }
 
 test.describe("I-246", () => {
-  test.use({ pi: piParado });
+  test.use({ roteiroDoPi: roteiroDoPiParado });
   for (const [nome, adiantoMs] of [
     ["SIGTERM simultâneo no pi e no serviço", 0],
     ["pi recebe o SIGTERM 200 ms antes do serviço", 200],
@@ -150,7 +140,7 @@ for (const [nome, preparacao, sinalNosFilhos] of [
   ["preparação que ignora o SIGTERM, SIGTERM no serviço e nos filhos", "trap '' TERM; sleep 25", true],
 ] as const) {
   test.describe(`I-246 CA-4 preparação: ${nome}`, () => {
-    test.use({ pi: piParado });
+    test.use({ roteiroDoPi: roteiroDoPiParado });
     test("sai no limite, sem erro, sem pi lançado, e a subida seguinte mostra Falhou", async ({
       pagina,
       fabriquinha,
@@ -195,7 +185,7 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
     projeto(fabriquinha.raiz);
     semearTicketAberto(fabriquinha.raiz);
     const banco = abrir(fabriquinha.raiz);
-    const arquivoComPidDaColeta = join(mkdtempSync(join(tmpdir(), "coleta-")), "coleta.pid");
+    const arquivoComPidDaColeta = join(fabriquinha.raiz, "coleta.pid");
     banco
       .prepare("UPDATE linguagem_projeto SET comando_teste = ? WHERE projeto = 'loja'")
       .run(`sh -c 'echo $$ > ${arquivoComPidDaColeta}; exec sleep 31'`);

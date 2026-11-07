@@ -1,19 +1,21 @@
 // Serviço de planejamento com banco real, git real em repositório temporário e pi falso mínimo (CA-1 a CA-13).
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { submeterPlano } from "../dominio/transicoes_demanda.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { cenarioDemanda, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import * as servico from "./planejamento.ts";
 import {
   aprovarPlanejamentoDemanda,
@@ -25,28 +27,6 @@ const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
 delete process.env.FABRIQUINHA_PORTA;
-
-// pi falso mínimo: anota cada prompt e assenta sem encerrar (a sessão interativa termina por ociosidade).
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync } from "node:fs";
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify({ mensagem: c.message }) + "\\n");
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
 
 const abertos: DatabaseSync[] = [];
 after(() => {
@@ -96,10 +76,10 @@ function demanda(id: string, fase: string, extra: object = {}) {
   };
 }
 
-/** Projeto `loja`, demanda I-1 na fase dada com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-0. */
+/** Projeto `loja`, demanda I-1 na fase dada com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-2. */
 function cenario({ fase = "planejamento", status = "aberto", comPlano = false, predecessora = "concluida" } = {}) {
-  const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const c = criarRepositorioDeTeste();
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -125,14 +105,14 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
     dependencias_ticket: [],
     caminhos_ticket: [],
   };
-  criarDemanda(banco, {
-    demanda: demanda("I-0", predecessora),
+  gravarAgregadoPronto(banco, {
+    demanda: demanda("I-2", predecessora),
     tickets: [],
     decisoes: [],
     evidencias: [],
     ...base,
   } as unknown as AgregadoDemanda);
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: demanda("I-1", fase, { enviada: false }),
     tickets: [{ demanda_id: "I-1", ticket_id: 1, etapa: "planejar", status, status_alterado_em: em, devolucoes: 0 }],
     decisoes: [],
@@ -147,18 +127,13 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
     ],
     ...base,
   } as unknown as AgregadoDemanda);
-  registrarDependenciaDemanda(banco, "I-1", "I-0"); // só antes do envio
+  registrarDependenciaDemanda(banco, "I-1", "I-2"); // só antes do envio
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-1'");
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
-  process.env.FALSO_PI_REGISTRO = registro;
+  const piFalso = instalarPiFalso(c.dir);
   return {
     c,
     banco,
-    prompts: () =>
-      (existsSync(registro) ? readFileSync(registro, "utf8").trim().split("\n") : []).map(
-        (l) => (JSON.parse(l) as { mensagem: string }).mensagem,
-      ),
+    prompts: () => piFalso.prompts().map((entrada) => entrada.prompt),
     sessoes: () => carregarSessoesDoTicket(banco, { demanda_id: "I-1", ticket_id: 1 }),
     status: () => carregarDemanda(banco, "I-1").tickets[0]?.status,
   };
@@ -330,12 +305,12 @@ test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara ca
   const { c, banco } = aprovacao();
   await aprovarPlanejamentoDemanda(banco, "I-1", {});
   const dir = join(c.raiz, "worktrees", "loja", "I-1");
-  const demandaTopo = gitCenario(c.repo, "rev-parse", "fabriquinha/I-1");
+  const demandaTopo = rodarGit(c.repo, "rev-parse", "fabriquinha/I-1");
   for (const w of ["demanda", "rodadas/1"]) assert.ok(existsSync(join(dir, w, "preparado")), w);
-  assert.equal(gitCenario(c.repo, "merge-base", "fabriquinha/I-1", "fabriquinha/I-1-1"), demandaTopo);
+  assert.equal(rodarGit(c.repo, "merge-base", "fabriquinha/I-1", "fabriquinha/I-1-1"), demandaTopo);
   // D04: a rodada 2 depende da 1 e nasce da ponta da demanda só quando começar.
   assert.equal(existsSync(join(dir, "rodadas/2")), false);
-  assert.equal(gitCenario(c.repo, "branch", "--list", "fabriquinha/I-1-2"), "");
+  assert.equal(rodarGit(c.repo, "branch", "--list", "fabriquinha/I-1-2"), "");
 });
 
 test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejamento", async () => {

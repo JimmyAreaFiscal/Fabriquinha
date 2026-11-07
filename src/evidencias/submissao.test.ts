@@ -6,7 +6,6 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -14,20 +13,16 @@ import {
   truncateSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { after, test } from "node:test";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { schemaDe, type TipoEvidencia } from "./schemas.ts";
 import { guardarAnexos } from "./submissao.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-submissao-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const MiB = 1024 * 1024;
 
@@ -48,8 +43,7 @@ interface Cenario {
 
 /** O banco, a worktree do ticket e a saída da execução, de onde os anexos podem vir. */
 function cenario(): Cenario {
-  const raiz = mkdtempSync(join(base, "raiz-"));
-  const banco = abrir(raiz);
+  const { raiz, banco } = abrirBancoTemporario();
   const worktree = join(raiz, "worktrees", "loja", "I-1");
   const saida = join(raiz, "execucoes", "E-1", "saida");
   mkdirSync(worktree, { recursive: true });

@@ -13,9 +13,9 @@ import { decidirRevisaoRodada } from "../src/execucao/revisao_rodada.ts";
 import { comDemanda } from "../src/persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
-import { piFalso } from "./falsos.ts";
+import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
-export const pi = piFalso(base);
+export const pi = instalarPiFalso(base);
 
 // O "agente" do pi falso: espera o portão (o teste o abre) e então escreve na worktree, sem submeter nada.
 export const portao = join(base, "portao");
@@ -46,7 +46,7 @@ export const fecharPortao = () => {
 export const abrirPortao = () => {
   writeFileSync(portao, "");
 };
-export const pisAteAgora = () => pi.chamadas().length;
+export const pisAteAgora = () => pi.prompts().length;
 
 const verif = (tipo: Verificacao["tipo"], aprovada: boolean): Verificacao => ({
   tipo,
@@ -76,10 +76,10 @@ export interface RodadaPlano {
 /** Demanda aprovada, planejada e com o plano aprovado (as worktrees prontas): em `execucao`, com os tickets abertos. */
 export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Promise<string> {
   const id = demandaAprovada(c);
-  pi.roteirizar();
+  pi.roteirizar([{ uso: null }]);
   // Só o planejamento desta demanda: um ciclo do agendador despacharia o trabalho das outras.
   const { fim } = iniciarOuRetomarPlanejamento(c.banco, id, c.config.timeoutMin);
-  await esperar(() => pi.chamadas().length >= 1, "o pi receber o prompt do planejamento");
+  await esperar(() => pi.prompts().length >= 1, "o pi receber o prompt do planejamento");
   interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
   await fim;
   let ticket_id = 0;
@@ -159,7 +159,7 @@ export function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias
 export async function rodadaEmRevisao(c: Cenario): Promise<string> {
   const id = await demandaEmExecucao(c, [{ tickets: 1 }]);
   abrirPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente, uso: null }]);
   await ciclo(c, despacho());
   assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
   return id;
@@ -171,7 +171,7 @@ export async function rodadaEmRevisao(c: Cenario): Promise<string> {
  */
 export async function despacharComAgente(c: Cenario, deps: DepsDespacho, agir: () => void): Promise<void> {
   fecharPortao();
-  pi.roteirizar([{ modo: "ok", agente: agenteMudo }]);
+  pi.roteirizar([{ agente: agenteMudo, uso: null }]);
   const fins = despacharDemandas(c.banco, c.config, deps);
   assert.ok(fins.length > 0);
   await esperar(() => pisAteAgora() === fins.length, "cada pi receber o prompt");

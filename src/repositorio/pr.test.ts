@@ -7,7 +7,7 @@ import { after, beforeEach, test } from "node:test";
 import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
-import { hospedagemFalsa } from "./hospedagem-falsa.test.ts";
+import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { integrarPR, lerPR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
@@ -136,7 +136,7 @@ test("GitHub: sem PR, publica a branch, varre a base e cria o PR com o corpo por
 
 test("GitHub: PR já publicado e fechado é reaberto antes de ter título e corpo trocados inteiros", async () => {
   const c = cenario();
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "feat: velho [I-1]", corpo: "velho", estado: "fechado" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "feat: velho [I-1]", corpo: "velho", estado: "fechado" });
 
   const pr = await c.publicar("novo", ["1"]);
 
@@ -157,8 +157,8 @@ test("GitHub: PR já publicado e fechado é reaberto antes de ter título e corp
 
 test("conferência: PR da branch fora das evidências barra antes do push; fechado, não barra mais", async () => {
   const c = cenario();
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "pelo agente", corpo: "", estado: "aberto" });
-  hospedagem.abrir({ head: "outra", base: "main", titulo: "de outra branch", corpo: "", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "pelo agente", corpo: "", estado: "aberto" });
+  hospedagem.abrirPr({ head: "outra", base: "main", titulo: "de outra branch", corpo: "", estado: "aberto" });
 
   await recusa(c.publicar("x"), `PR criado fora da Fabriquinha: ${URL_GH}1 (feche-o e reabra o ticket)`);
   assert.equal(c.publicado(), "", "nada foi publicado");
@@ -181,8 +181,15 @@ test("conferência: PR da branch fora das evidências barra antes do push; fecha
 test("a marca só adota PR deste repositório e para a base; fechado com a marca e base errada nunca é reaberto", async () => {
   const c = cenario();
   // Um agente com o token forja a marca num PR para outra base, e um fork abre o seu com a mesma branch.
-  hospedagem.abrir({ head: BRANCH, base: "producao", titulo: "x", corpo: `${MARCA}\nforjado`, estado: "fechado" });
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "x", corpo: `${MARCA}\nfork`, estado: "fechado", fork: true });
+  hospedagem.abrirPr({ head: BRANCH, base: "producao", titulo: "x", corpo: `${MARCA}\nforjado`, estado: "fechado" });
+  hospedagem.abrirPr({
+    head: BRANCH,
+    base: "main",
+    titulo: "x",
+    corpo: `${MARCA}\nfork`,
+    estado: "fechado",
+    fork: true,
+  });
 
   const pr = await c.publicar("nosso");
 
@@ -204,7 +211,7 @@ test("a marca só adota PR deste repositório e para a base; fechado com a marca
 
 test("PR com a marca já mergeado não é adotado: cai na mensagem do PR de fora mergeado", async () => {
   const c = cenario();
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "x", corpo: `${MARCA}\nmergeado`, estado: "mergeado" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "x", corpo: `${MARCA}\nmergeado`, estado: "mergeado" });
 
   await recusa(
     c.publicar("x"),
@@ -220,8 +227,8 @@ test("PR com a marca já mergeado não é adotado: cai na mensagem do PR de fora
 
 test("o PR conhecido vence um mais novo com a marca", async () => {
   const c = cenario();
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "x", corpo: "conhecido", estado: "aberto" });
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "x", corpo: `${MARCA}\nmais novo`, estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "x", corpo: "conhecido", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "x", corpo: `${MARCA}\nmais novo`, estado: "aberto" });
 
   const pr = await c.publicar("atual", ["1"]);
 
@@ -234,7 +241,13 @@ test("o PR conhecido vence um mais novo com a marca", async () => {
 
 test("retomada: o PR com a marca deste ticket, criado por uma execução que não o registrou, é adotado", async () => {
   const c = cenario();
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "feat: A [I-1]", corpo: `${MARCA}\nantes`, estado: "aberto" });
+  hospedagem.abrirPr({
+    head: BRANCH,
+    base: "main",
+    titulo: "feat: A [I-1]",
+    corpo: `${MARCA}\nantes`,
+    estado: "aberto",
+  });
 
   const pr = await c.publicar("depois");
 
@@ -248,8 +261,8 @@ test("retomada: o PR com a marca deste ticket, criado por uma execução que nã
 test("Azure DevOps: cria pelo az com --detect e a URL da página; depois reabre e atualiza o mesmo PR", async () => {
   const c = cenario("azure-devops");
   // Um PR de fora, abandonado e sem descrição, não barra; um de fork com a marca não é adotado.
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "pelo agente", corpo: "", estado: "fechado" });
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "fork", corpo: MARCA, estado: "fechado", fork: true });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "pelo agente", corpo: "", estado: "fechado" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "fork", corpo: MARCA, estado: "fechado", fork: true });
 
   const criado = await c.publicar("corpo");
   assert.deepEqual(criado, { id: "3", url: `${URL_AZ}3`, branch: BRANCH, head: c.head });
@@ -382,7 +395,7 @@ test("lerPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no Az
   ] as const) {
     const c = cenario(tipo);
     const projeto = { repo: c.repo, hospedagem: tipo };
-    hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+    hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
     const ler = async () => {
       const { lidoEm, ...resto } = await lerPR(projeto, "1");
       assert.ok(Math.abs(Date.parse(lidoEm) - Date.now()) < 60_000, "lidoEm é agora");
@@ -434,7 +447,7 @@ test("estado de PR desconhecido do gh ou do az é erro, na leitura e na publica�
     ErroExterno,
   );
   const az = cenario("azure-devops");
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
   const lista = JSON.parse(execFileSync("az", ["repos", "pr", "list", "--source-branch", BRANCH]).toString()) as {
     status: string;
   }[];
@@ -450,9 +463,9 @@ test("estado de PR desconhecido do gh ou do az é erro, na leitura e na publica�
 const HOSPEDAGENS = ["github", "azure-devops"] as const;
 const RAPIDO = { intervaloMs: 10, carenciaMs: 0 };
 /** Um PR aberto na hospedagem falsa, verificado com o `repo` do cenário. */
-function verificar(tipo: Hospedagem, pr: Partial<Parameters<typeof hospedagem.abrir>[0]>, opcoes = RAPIDO) {
+function verificar(tipo: Hospedagem, pr: Partial<Parameters<typeof hospedagem.abrirPr>[0]>, opcoes = RAPIDO) {
   const c = cenario(tipo);
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto", ...pr });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto", ...pr });
   return { c, resultado: verificarPR({ repo: c.repo, hospedagem: tipo }, "1", c.log, opcoes) };
 }
 
@@ -576,7 +589,7 @@ test("verificarPR: a falha do CLI sai com a saída do comando; nada é devolvido
   );
   const az = cenario("azure-devops");
   const projetoAz = { repo: az.repo, hospedagem: "azure-devops" as const };
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
   hospedagem.falhar("repos pr policy list", "Please run 'az login'");
   await recusa(
     verificarPR(projetoAz, "1", az.log),
@@ -637,7 +650,7 @@ test("verificarPR: os estados do gh e do az viram aprovado, falho ou andamento; 
 
   const az = cenario("azure-devops");
   const projetoAz = { repo: az.repo, hospedagem: "azure-devops" as const };
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
   const politica = (status: string, tipo: string, settings?: object) => ({
     status,
     configuration: { type: { displayName: tipo }, ...(settings && { settings }) },
@@ -717,7 +730,7 @@ test("alvo da rodada: PR da branch da rodada para a da demanda, que sobe antes, 
 
 test("alvo da rodada: sem publicarBase, a demanda não sobe; o PR com a marca e a base da demanda é adotado", async () => {
   const c = cenarioRodada();
-  hospedagem.abrir({ head: RODADA, base: DEMANDA, titulo: "x", corpo: `${MARCA_RODADA}\nantes`, estado: "aberto" });
+  hospedagem.abrirPr({ head: RODADA, base: DEMANDA, titulo: "x", corpo: `${MARCA_RODADA}\nantes`, estado: "aberto" });
 
   const pr = await c.publicar(() => undefined, false);
 
@@ -744,7 +757,7 @@ test("alvo da rodada: o gancho de commits recusa antes do push e de qualquer PR"
 });
 
 test("lerPR: o estado do PR pelo id", async () => {
-  hospedagem.abrir({ head: RODADA, base: DEMANDA, titulo: "x", corpo: "", estado: "aberto" });
+  hospedagem.abrirPr({ head: RODADA, base: DEMANDA, titulo: "x", corpo: "", estado: "aberto" });
 
   const leitura = await lerPR({ repo: base, hospedagem: "github" }, "1");
 
@@ -756,7 +769,7 @@ test("integrarPR: merge commit pela hospedagem no GitHub e no Azure DevOps, e o 
   for (const tipo of ["github", "azure-devops"] as const) {
     const c = cenario(tipo);
     git(c.repo, "push", "-q", "origin", BRANCH);
-    hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+    hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
 
     const sha = await integrarPR({ repo: c.repo, hospedagem: tipo }, "1");
 
@@ -786,7 +799,7 @@ test("integrarPR: merge commit pela hospedagem no GitHub e no Azure DevOps, e o 
 test("integrarPR: a recusa da hospedagem é ErroExterno e o merge não confirmado também", async () => {
   const c = cenario();
   const projeto = { repo: c.repo, hospedagem: "github" as const };
-  hospedagem.abrir({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
   hospedagem.falhar("pr merge", "not mergeable");
   await recusa(
     integrarPR(projeto, "1"),
