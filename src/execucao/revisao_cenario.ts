@@ -9,7 +9,7 @@ import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { criarDemanda } from "../persistencia/demandas.ts";
-import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -30,7 +30,7 @@ export const REF_GLOBAL = { demanda_id: "I-1", ticket_id: 3 };
  * T2 aberto), com a worktree da demanda criada. Com `integral`: em `revisao_demanda`, rodada 1 concluída, revisar_demanda T3 aberto.
  */
 export async function cenarioRevisao({ integral = false } = {}) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco

@@ -12,7 +12,7 @@ import { registrarCorrecoesSessao } from "../../dominio/transicoes_rodada.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../../persistencia/demandas.ts";
 import { hospedagemFalsa } from "../../repositorio/hospedagem-falsa.test.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/worktree-demanda.ts";
 import { demanda, servir } from "./demandas_cenario.ts";
 
@@ -68,7 +68,7 @@ const plano = {
  * aberto, branches no origin e worktrees prontas). A I-207 depende dela e está em planejamento.
  */
 async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   banco
     .prepare(
@@ -105,8 +105,8 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   }
   if (gate === "pr") {
     await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
-    const head = commitarCenario(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
-    gitCenario(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
+    const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
+    rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
     hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
     resto.demanda = { ...demanda(DEMANDA, "").demanda, fase: "execucao" };
     resto.rodadas = [

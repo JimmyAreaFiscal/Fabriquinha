@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { branchDemanda, branchRodada } from "../dominio/demanda.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "./limpeza_demanda.ts";
-import { cenarioDemanda, gitCenario as git } from "./worktree-cenarios.ts";
+import { criarRepositorioDeTeste, rodarGit as git } from "../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeRodada, garantirWorktreeDemanda, garantirWorktreeRodada } from "./worktree-demanda.ts";
 
 const ref = { demanda_id: "D-1", rodada_id: 1 };
@@ -13,7 +13,7 @@ const bd = branchDemanda("D-1");
 const br = branchRodada("D-1", 1);
 
 async function cenario() {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log, () => Promise.resolve());
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
   git(c.repo, "branch", "alheia", "integracao");

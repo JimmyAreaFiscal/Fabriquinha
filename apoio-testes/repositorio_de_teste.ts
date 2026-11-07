@@ -4,6 +4,12 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const diretoriosAbertos = new Set<string>();
+// Os testes não precisam chamar `fechar()`: o que sobrar é apagado ao fim do processo de teste.
+process.on("exit", () => {
+  for (const dir of diretoriosAbertos) rmSync(dir, { recursive: true, force: true });
+});
+
 const IDENTIDADE_DE_TESTE = ["user.name=Teste", "user.email=teste@exemplo.com"];
 
 /** O ambiente de um processo git que não lê o gitconfig do operador nem o do sistema; vale por chamada, não é global. */
@@ -34,6 +40,7 @@ export function commitarArquivo(repo: string, arquivo: string, conteudo: string)
  */
 export function criarRepositorioDeTeste(preparacao: string[] = [], branchBase = "integracao") {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-repositorio-")));
+  diretoriosAbertos.add(dir);
   const bare = join(dir, "origin.git");
   const repo = join(dir, "repo");
   const raiz = join(dir, "raiz");

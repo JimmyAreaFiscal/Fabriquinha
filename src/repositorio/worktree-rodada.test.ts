@@ -5,7 +5,11 @@ import { test } from "node:test";
 import { setTimeout } from "node:timers/promises";
 import { branchDemanda, branchRodada } from "../dominio/demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
-import { cenarioDemanda, commitarCenario as commit, gitCenario as git } from "./worktree-cenarios.ts";
+import {
+  criarRepositorioDeTeste,
+  commitarArquivo as commit,
+  rodarGit as git,
+} from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   atualizarWorktreeRodada,
   caminhoDaWorktreeRodada,
@@ -18,14 +22,14 @@ const ref = { demanda_id: "D-1", rodada_id: 1 };
 const bd = branchDemanda(ref.demanda_id);
 const br = branchRodada(ref.demanda_id, ref.rodada_id);
 const chave = `branch.${br}.fabriquinha`;
-type Cenario = ReturnType<typeof cenarioDemanda>;
+type Cenario = ReturnType<typeof criarRepositorioDeTeste>;
 const caminho = (c: Cenario, rodada_id = 1) => caminhoDaWorktreeRodada(c.raiz, c.projeto.nome, { ...ref, rodada_id });
 const garantir = (c: Cenario) => garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
 const atualizar = (c: Cenario) => atualizarWorktreeRodada(c.raiz, c.projeto, ref, c.log);
 const metadado = (p: string, nome = "fabriquinha-preparada") =>
   git(p, "rev-parse", "--path-format=absolute", "--git-path", nome);
 async function cenario() {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log, () => Promise.resolve());
   return { ...c, demanda };
 }
@@ -62,7 +66,7 @@ const snapshot = (c: Cenario) => ({
 });
 
 test("identificadores inválidos recusados antes de I/O em ambas operações", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const antes = snapshot(c);
   for (const r of [
     { ...ref, demanda_id: "../D-1" },
@@ -80,7 +84,7 @@ test("identificadores inválidos recusados antes de I/O em ambas operações", a
 });
 
 test("demanda obrigatória: ausente, removida, movida ou checkout incorreto não é recriada", async () => {
-  const vazio = cenarioDemanda();
+  const vazio = criarRepositorioDeTeste();
   await assert.rejects(garantir(vazio), /obrigatória ausente/);
   for (const tipo of ["removida", "movida", "checkout", "ref-ausente"]) {
     const c = await cenario();
@@ -209,7 +213,7 @@ test("symlink, pasta ocupada, aninhamento e checkout estrangeiro são recusados"
       if (tipo === "branch") git(p, "checkout", "-b", "humana");
       else {
         git(c.repo, "worktree", "remove", p);
-        const outro = cenarioDemanda();
+        const outro = criarRepositorioDeTeste();
         git(outro.repo, "worktree", "add", "-b", br, p);
       }
     }

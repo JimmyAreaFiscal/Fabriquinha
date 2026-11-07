@@ -17,7 +17,7 @@ import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { configuracao } from "../persistencia/servico.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
-import { cenarioDemanda, commitarCenario } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import type { Verificacao } from "../evidencias/verificacoes.ts";
 import { despacharDemandas, type DepsDespacho } from "./despacho_demanda.ts";
@@ -42,7 +42,7 @@ const BRANCH = "fabriquinha/I-206";
 
 /** Demanda em encerramento (revisão integral aprovada), com a rodada concluída e o `encerrar_demanda` aberto. */
 async function cenario() {
-  const c = cenarioDemanda([], "develop");
+  const c = criarRepositorioDeTeste([], "develop");
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
@@ -99,7 +99,7 @@ async function cenario() {
   } as unknown as AgregadoDemanda);
   const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log, () => Promise.resolve());
   await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
-  const sha = commitarCenario(demanda, "a.txt", "a\n");
+  const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 
   const aprovada = (tipo: Verificacao["tipo"]): Verificacao => ({

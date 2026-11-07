@@ -11,7 +11,7 @@ import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { commitDoTicketDemanda } from "../persistencia/commits_demanda.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
-import { cenarioDemanda, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 import { falharTicketDemanda, fecharTicketDemanda } from "./fechamento_ticket.ts";
@@ -56,7 +56,7 @@ interface Opcoes {
 }
 
 async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = {}) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const banco = abrir(c.raiz);
   banco
     .prepare(
@@ -127,7 +127,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
       .all(n)
       .map((l) => l.tipo);
   const status = (n: number) => carregarDemanda(banco, D).tickets.find((t) => t.ticket_id === n);
-  const commits = () => gitCenario(worktree, "log", "--format=%s", "--grep", "\\[I-1\\.T").split("\n").filter(Boolean);
+  const commits = () => rodarGit(worktree, "log", "--format=%s", "--grep", "\\[I-1\\.T").split("\n").filter(Boolean);
   return { banco, worktree, evidencias, status, commits, ag: () => carregarDemanda(banco, D) };
 }
 
@@ -144,7 +144,7 @@ test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com a
     registrado?.arquivos.map((a) => [a.caminho, a.adicionadas]),
     [["novo.txt", 2]],
   );
-  assert.match(gitCenario(c.worktree, "show", "--stat", "--format=", "HEAD"), /novo\.txt\s+\|\s+2 \+\+/);
+  assert.match(rodarGit(c.worktree, "show", "--stat", "--format=", "HEAD"), /novo\.txt\s+\|\s+2 \+\+/);
   assert.deepEqual(c.evidencias(1), ["execucao_testes", "matriz_fitness", "relatorio_sonar"]);
   const anexos = c.banco.prepare("SELECT caminho FROM arquivo_evidencia ORDER BY caminho").all();
   assert.deepEqual(
@@ -326,7 +326,7 @@ function hook(c: Awaited<ReturnType<typeof cenario>>, corpo: string) {
   mkdirSync(hooks, { recursive: true });
   writeFileSync(join(hooks, "pre-commit"), `#!/bin/sh\n${corpo}\n`);
   chmodSync(join(hooks, "pre-commit"), 0o755);
-  gitCenario(c.worktree, "config", "core.hooksPath", hooks);
+  rodarGit(c.worktree, "config", "core.hooksPath", hooks);
 }
 
 test("o hook que reprova o commit devolve o ticket com a saída, sem commit; na 3ª falha; outro erro propaga", async () => {

@@ -7,7 +7,7 @@ import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
-import { commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   caminhoDaWorktreeDemanda,
   caminhoDaWorktreeRodada,
@@ -22,14 +22,14 @@ const evidencia = (banco: Parameters<typeof carregarDemanda>[0], tipo: string) =
 /** Cria a worktree da rodada, commita A/M/D nela e avança a branch da demanda depois. */
 async function rodadaComAlteracoes(c: Awaited<ReturnType<typeof cenarioRevisao>>["c"]) {
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
-  commitarCenario(rodada, "novo.ts", "a\n");
+  commitarArquivo(rodada, "novo.ts", "a\n");
   writeFileSync(join(rodada, "base.txt"), "base\nmais\n");
-  gitCenario(rodada, "commit", "-qam", "m");
-  gitCenario(rodada, "rm", "-q", "base.txt");
-  commitarCenario(rodada, "outro.md", "x\n");
+  rodarGit(rodada, "commit", "-qam", "m");
+  rodarGit(rodada, "rm", "-q", "base.txt");
+  commitarArquivo(rodada, "outro.md", "x\n");
   const demanda = caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1");
-  const ponta = commitarCenario(demanda, "da-demanda.txt", "d\n");
-  return { rodada, ponta, head: gitCenario(rodada, "rev-parse", "HEAD") };
+  const ponta = commitarArquivo(demanda, "da-demanda.txt", "d\n");
+  return { rodada, ponta, head: rodarGit(rodada, "rev-parse", "HEAD") };
 }
 
 test("CA-3: base na ponta da demanda (mesmo avançada), head na rodada, A/M/D e previsto", async () => {
@@ -53,7 +53,7 @@ test("CA-3: arquivo modificado aparece como M", async () => {
   const { c, banco } = await cenarioRevisao();
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
   writeFileSync(join(rodada, "base.txt"), "base\nmais\n");
-  gitCenario(rodada, "commit", "-qam", "m");
+  rodarGit(rodada, "commit", "-qam", "m");
   await prepararRevisaoRodada(banco, REF_RODADA);
   const dados = evidencia(banco, "arquivos_alterados")[0]?.dados as { arquivos: object[] };
   assert.deepEqual(dados.arquivos, [
@@ -105,8 +105,8 @@ test("CA-3: renomeação casa o previsto pelo caminho antigo", async () => {
   const { c, banco } = await cenarioRevisao();
   banco.exec("INSERT INTO caminho_ticket VALUES ('I-1', 1, 'base.txt')");
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: "I-1", rodada_id: 1 }, c.log);
-  gitCenario(rodada, "mv", "base.txt", "nome.txt");
-  gitCenario(rodada, "commit", "-qam", "r");
+  rodarGit(rodada, "mv", "base.txt", "nome.txt");
+  rodarGit(rodada, "commit", "-qam", "r");
   await prepararRevisaoRodada(banco, REF_RODADA);
   const dados = evidencia(banco, "arquivos_alterados")[0]?.dados as { arquivos: object[]; previstosNaoTocados: [] };
   assert.deepEqual(dados.arquivos, [

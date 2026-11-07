@@ -17,7 +17,7 @@ import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { configuracao } from "../persistencia/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
 import { despacharDemandas, type DepsDespacho, executarAgoraDemanda } from "./despacho_demanda.ts";
 
@@ -51,7 +51,7 @@ interface DemandaSpec {
 
 /** Banco novo; `real` usa o repositório git de verdade (e a worktree da demanda I-2), senão o repositório não existe. */
 async function cenario(limite: number, real = false) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   const repo = real ? c.repo : "/nao/existe";

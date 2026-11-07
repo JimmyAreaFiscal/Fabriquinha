@@ -20,7 +20,7 @@ import {
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
 import {
   aguardarCondutores,
@@ -57,7 +57,7 @@ interface Opcoes {
 
 /** Projeto `loja` configurado, demanda I-1 em execução (rodadas 1 e 2) e a worktree da demanda criada. */
 async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes = {}) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco

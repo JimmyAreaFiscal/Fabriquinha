@@ -17,7 +17,7 @@ import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
 import { pendenciasDeLimpeza } from "../repositorio/limpeza_demanda.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { conduzirEncerramentoDemanda } from "./encerramento_demanda.ts";
 
@@ -57,7 +57,7 @@ async function cenario({
   semTicket = false,
   encerramento,
 }: Opcoes = {}) {
-  const c = cenarioDemanda([], "develop");
+  const c = criarRepositorioDeTeste([], "develop");
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
@@ -116,7 +116,7 @@ async function cenario({
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   /** Commita na demanda e, com `ticket`, registra o commit como desse ticket. */
   const commitar = (arquivo: string, ticketId?: number) => {
-    const sha = commitarCenario(demanda, arquivo, `${arquivo}\n`);
+    const sha = commitarArquivo(demanda, arquivo, `${arquivo}\n`);
     if (ticketId !== undefined) {
       gravarCommitDemanda(banco, D, ticketId, {
         sha,
@@ -128,9 +128,9 @@ async function cenario({
     return sha;
   };
   commitar("a.txt", 3);
-  gitCenario(c.repo, "push", "-q", "origin", BRANCH_RODADA);
-  gitCenario(c.repo, "branch", "alheia", "develop");
-  gitCenario(c.repo, "push", "-q", "origin", "alheia");
+  rodarGit(c.repo, "push", "-q", "origin", BRANCH_RODADA);
+  rodarGit(c.repo, "branch", "alheia", "develop");
+  rodarGit(c.repo, "push", "-q", "origin", "alheia");
   return {
     ...c,
     banco,
@@ -139,8 +139,7 @@ async function cenario({
     commitar,
     ag: () => carregarDemanda(banco, D),
     ticket: () => carregarDemanda(banco, D).tickets.find((t) => t.ticket_id === 8),
-    noRemoto: (branch: string) =>
-      gitCenario(c.bare, "for-each-ref", "--format=%(refname:short)", `refs/heads/${branch}`),
+    noRemoto: (branch: string) => rodarGit(c.bare, "for-each-ref", "--format=%(refname:short)", `refs/heads/${branch}`),
     /** Como o agendador: reserva o `encerrar_demanda` aberto. */
     reservar: () =>
       comDemanda(banco, D, (a) => ({
@@ -202,7 +201,7 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
   assert.equal(c.noRemoto("alheia"), "alheia");
   assert.equal(c.noRemoto(BRANCH_DEMANDA), "");
   assert.equal(c.noRemoto(BRANCH_RODADA), "");
-  assert.equal(gitCenario(c.repo, "branch", "--list", "develop", "alheia", "fabriquinha/*").split("\n").length, 2);
+  assert.equal(rodarGit(c.repo, "branch", "--list", "develop", "alheia", "fabriquinha/*").split("\n").length, 2);
   assert.equal(existsSync(c.demanda) || existsSync(c.rodada), false);
   const tipos = ag.evidencias.filter((e) => e.ticket_id === 8).map((e) => e.tipo);
   assert.deepEqual(tipos.toSorted(), ["arvore_prs_criterios_custos", "demonstracao_limpeza"]);
@@ -410,7 +409,7 @@ test("leitura do PR que falha na espera devolve o ticket a aberto e sobe o erro,
 
 test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto, só a limpeza pendente roda", async () => {
   const c = await cenario();
-  gitCenario(c.repo, "worktree", "lock", c.rodada);
+  rodarGit(c.repo, "worktree", "lock", c.rodada);
   await conduzirEncerramentoDemanda(c.banco, D);
 
   const parcial = await integrarComoHumano(c);
@@ -428,7 +427,7 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
   assert.equal(merges().length, 1);
 
   // O Auditor reabre; o agendador reserva.
-  gitCenario(c.repo, "worktree", "unlock", c.rodada);
+  rodarGit(c.repo, "worktree", "unlock", c.rodada);
   comDemanda(c.banco, D, (a) => ({
     ...a,
     tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, status: "em_execucao" as const } : t)),
