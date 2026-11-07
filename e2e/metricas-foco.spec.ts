@@ -12,7 +12,7 @@ test("trocar o projeto mantém o mês em foco; um período que não o contém le
   banco.exec(
     ["loja", "site"]
       .map(
-        (nome) => `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+        (nome) => `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
           VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`,
       )
       .join("\n"),

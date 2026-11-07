@@ -124,6 +124,7 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/projeto.ts", import: "SQL .prepare(", demanda: "20" },
   { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/configuracao_projeto.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/projetos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/retrabalho.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/simulacao.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../infra/registro.ts", demanda: "20" },

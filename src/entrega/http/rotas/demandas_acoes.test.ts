@@ -74,7 +74,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   const { banco } = abrirBancoTemporario(c.raiz);
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', ?, 'integracao', 'github', 'k')`,
     )
     .run(c.repo);

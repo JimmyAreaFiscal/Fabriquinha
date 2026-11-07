@@ -136,7 +136,7 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('d', '/nao/existe', 'main', 'github', 'k');
     INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
@@ -199,7 +199,7 @@ test("reinício: as execuções simuladas pendentes falham e o pi delas é morto
 function bancoComDemanda(raiz: string): DatabaseSync {
   const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
   migrar(banco, MIGRACOES);
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
     INSERT INTO sequencia (nome, valor) VALUES ('demanda', 1);`);
   return banco;

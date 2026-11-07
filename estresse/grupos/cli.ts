@@ -167,7 +167,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
   try {
     banco
       .prepare(
-        "INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES ('cli', ?, 'main', 'github', 'cli')",
+        "INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('cli', ?, 'main', 'github', 'cli')",
       )
       .run(amb.raiz);
     // O grupo HTTP semeia demandas com id escolhido (I-1001 em diante), fora da sequência: avança-a além do maior número.

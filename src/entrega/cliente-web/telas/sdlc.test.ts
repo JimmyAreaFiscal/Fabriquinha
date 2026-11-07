@@ -10,7 +10,6 @@ const FABRIQUINHA: Projeto = {
   chave_sonarqube: "fab",
   raiz_git: "/code/fab",
   hospedagem: "github",
-  cursor_commit_humano: "abc123",
   etapas: [
     { etapa: "planejar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude" }, effort: "high" } },
     { etapa: "revisar_demanda", configuracao_agente: { effort: "low" } },
@@ -23,7 +22,8 @@ const FABRIQUINHA: Projeto = {
 };
 
 test("doProjeto e paraProjeto: a conversão de ida e volta devolve o contrato sem as etapas e a preparação, que são do cadastro", () => {
-  const estado = doProjeto(FABRIQUINHA);
+  const estado = doProjeto(FABRIQUINHA, "abc123");
+  assert.equal(estado.cursor, "abc123");
   assert.equal("etapas" in estado, false);
   assert.equal("preparacao" in estado, false);
   assert.deepEqual(estado.e2e[0]?.codigo_falha, "1");
@@ -31,9 +31,8 @@ test("doProjeto e paraProjeto: a conversão de ida e volta devolve o contrato se
   assert.deepEqual(paraProjeto(estado, "fabriquinha"), doCadastroDaSdlc);
 });
 
-test("paraProjeto omite o cursor vazio e usa o nome do caminho", () => {
-  const { cursor_commit_humano: _, ...semCursor } = FABRIQUINHA;
-  const estado = { ...doProjeto(semCursor), cursor: "" };
+test("paraProjeto não manda o cursor, que é da varredura, e usa o nome do caminho", () => {
+  const estado = doProjeto(FABRIQUINHA, "abc123");
   const corpo = paraProjeto(estado, "outro");
   assert.equal(corpo.nome, "outro");
   assert.equal("cursor_commit_humano" in corpo, false);
@@ -74,7 +73,7 @@ test("vazio diz que não há configuração e o estado inicial abre uma fitness 
 });
 
 test("formulario mostra os cinco grupos com os valores, Adicionar por grupo e Remover por linha; as etapas e a preparação não", () => {
-  const html = formulario("fabriquinha", doProjeto(FABRIQUINHA), { erros: new Map() });
+  const html = formulario("fabriquinha", doProjeto(FABRIQUINHA, "abc123"), { erros: new Map() });
   for (const g of ["Projeto", "Fitness", "Linguagens", "E2E", "Globs"])
     assert.match(html, new RegExp(`data-grupo="[a-z0-9]+" aria-label="${g}"`));
   assert.equal(html.match(/data-grupo=/g)?.length, 5);

@@ -2,6 +2,7 @@
 // As migrações 1 a 36 viraram a linha de base `ESQUEMA_V36`; só se acrescenta ao fim de `MIGRACOES` (a primeira é a 37),
 // e migração já aplicada não muda.
 import type { DatabaseSync } from "node:sqlite";
+import { ErroDeRegra } from "../nucleo/erros.ts";
 
 /** Versão do banco que a linha de base entrega: a última migração que a cadeia antiga aplicava. */
 export const VERSAO_LINHA_DE_BASE = 36;
@@ -582,5 +583,45 @@ ALTER TABLE configuracao_etapa_projeto_nova RENAME TO configuracao_etapa_projeto
 ALTER TABLE sequencia_nova RENAME TO sequencia;
 `;
 
+const TABELAS_DA_CONFIGURACAO_DO_PROJETO = [
+  "configuracao_etapa_projeto",
+  "comando_preparacao_projeto",
+  "fitness_function_projeto",
+  "linguagem_projeto",
+  "configuracao_e2e",
+  "glob_e2e",
+];
+
+/**
+ * A 39 dá ao projeto os nomes do vocabulário único: `repo` vira `raiz_git` e `sonar_project_key`, `chave_sonarqube`. O
+ * `cursor_commit_humano` é estado da varredura de commits humanos: passa para `varredura_base.ultimo_sha` e sai de
+ * `projeto`. Projeto que já tem varredura mantém o cursor dela (é o que a varredura usa); o cursor copiado leva `em` na
+ * época, para a próxima varredura rodar. Confere que as tabelas da configuração do projeto não mudaram de tamanho, e
+ * recusa (desfazendo a transação) se mudaram.
+ */
+const MIGRACAO_39_PROJETO_UNICO: Migracao = (banco) => {
+  const contarLinhas = () =>
+    TABELAS_DA_CONFIGURACAO_DO_PROJETO.map(
+      (tabela) => (banco.prepare(`SELECT count(*) AS n FROM ${tabela}`).get() as { n: number }).n,
+    );
+  const antes = contarLinhas();
+  banco.exec(`
+ALTER TABLE projeto RENAME COLUMN repo TO raiz_git;
+ALTER TABLE projeto RENAME COLUMN sonar_project_key TO chave_sonarqube;
+INSERT INTO varredura_base (projeto, ultimo_sha, em)
+  SELECT nome, cursor_commit_humano, '1970-01-01T00:00:00.000Z' FROM projeto WHERE cursor_commit_humano IS NOT NULL ORDER BY rowid
+  ON CONFLICT (projeto) DO NOTHING;
+ALTER TABLE projeto DROP COLUMN cursor_commit_humano;
+`);
+  const depois = contarLinhas();
+  const mudou = TABELAS_DA_CONFIGURACAO_DO_PROJETO.filter((_, i) => antes[i] !== depois[i]);
+  if (mudou.length > 0) {
+    throw new ErroDeRegra(
+      `a migração 39 mudou o número de linhas de ${mudou.join(", ")}`,
+      "restaure o banco do backup e relate o problema",
+    );
+  }
+};
+
 /** As migrações depois da linha de base: a primeira é a 37. */
-export const MIGRACOES: readonly Migracao[] = [MIGRACAO_37_AUTORIA, MIGRACAO_38_ESTADO];
+export const MIGRACOES: readonly Migracao[] = [MIGRACAO_37_AUTORIA, MIGRACAO_38_ESTADO, MIGRACAO_39_PROJETO_UNICO];

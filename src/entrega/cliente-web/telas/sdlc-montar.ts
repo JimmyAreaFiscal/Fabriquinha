@@ -46,11 +46,11 @@ function ler(form: HTMLFormElement): Estado {
 
 export async function montarSdlc(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
   const nome = params.projeto ?? "";
-  const { configurada, configuracao } = await api<Resposta>(
+  const { configurada, configuracao, cursor_commit_humano } = await api<Resposta>(
     `/api/projetos/${encodeURIComponent(nome)}/configuracao-sdlc`,
     { signal },
   );
-  const rascunho = doProjeto(configuracao);
+  const rascunho = doProjeto(configuracao, cursor_commit_humano);
 
   const desenhar = (
     estado: Estado,

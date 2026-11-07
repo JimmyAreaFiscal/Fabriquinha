@@ -65,7 +65,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
   abertos.push(banco);
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', ?, 'integracao', 'github', 'k')`,
     )
     .run(c.repo);
@@ -627,7 +627,7 @@ test("CA-12: reinício falha o planejar com execução aberta, com a demanda em 
 
 test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {
   const { c, banco } = await cenario({ semWorktree: true });
-  banco.prepare("UPDATE projeto SET repo = '/nao/existe' WHERE nome = 'loja'").run();
+  banco.prepare("UPDATE projeto SET raiz_git = '/nao/existe' WHERE nome = 'loja'").run();
   await iniciarExecucaoDemanda(banco, ref(7), { limiteMin: 1 }).fim;
   const [dir] = readdirSync(join(c.raiz, "execucoes"));
   assert.match(readFileSync(join(c.raiz, "execucoes", String(dir), "log"), "utf8"), /preparação falhou: /);

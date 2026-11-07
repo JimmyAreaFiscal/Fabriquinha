@@ -13,7 +13,7 @@ export interface Estado {
   /** Só leitura aqui (quem edita é o cadastro do projeto, na Configuração). */
   raiz_git: string;
   hospedagem: string;
-  /** `cursor_commit_humano`: a tela o devolve como veio. */
+  /** O cursor da varredura de commits humanos (`varredura_base`): a tela o mostra como veio e não o grava. */
   cursor: string;
   fitness: Linha[];
   linguagens: Linha[];
@@ -27,6 +27,7 @@ export type GrupoDeLista = "fitness" | "linguagens" | "e2e" | "globs";
 export interface Resposta {
   configurada: boolean;
   configuracao: Projeto;
+  cursor_commit_humano?: string;
 }
 
 export const CAMPOS_DO_PROJETO = ["branch_base", "chave_sonarqube", "raiz_git", "hospedagem", "cursor"] as const;
@@ -86,13 +87,13 @@ export const linhaEmBranco = (chave: GrupoDeLista): Linha =>
   Object.fromEntries(GRUPOS.filter((g) => g.chave === chave).flatMap((g) => g.campos.map(([campo]) => [campo, ""])));
 
 /** O contrato em texto, sem as etapas e a preparação: o cadastro do projeto, na Configuração, as edita. */
-export function doProjeto(p: Projeto): Estado {
+export function doProjeto(p: Projeto, cursor = ""): Estado {
   return {
     branch_base: p.branch_base,
     chave_sonarqube: p.chave_sonarqube,
     raiz_git: p.raiz_git,
     hospedagem: p.hospedagem,
-    cursor: p.cursor_commit_humano ?? "",
+    cursor,
     fitness: p.fitness.map((f) => ({ ...f })),
     linguagens: p.linguagens.map((l) => ({ ...l })),
     e2e: p.e2e.map((e) => ({ ...e, codigo_falha: String(e.codigo_falha) })),
@@ -108,7 +109,6 @@ export function paraProjeto(e: Estado, nome: string): Omit<Projeto, "etapas" | "
     chave_sonarqube: e.chave_sonarqube,
     raiz_git: e.raiz_git,
     hospedagem: e.hospedagem as Projeto["hospedagem"],
-    ...(e.cursor && { cursor_commit_humano: e.cursor }),
     fitness: e.fitness as Projeto["fitness"],
     linguagens: e.linguagens as Projeto["linguagens"],
     e2e: e.e2e.map((l) => ({ ...l, codigo_falha: Number(l.codigo_falha) })) as Projeto["e2e"],

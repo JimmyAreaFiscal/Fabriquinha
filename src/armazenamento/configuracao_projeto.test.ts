@@ -32,7 +32,7 @@ function comBanco(corpo: (banco: DatabaseSync, raiz: string) => void): void {
     for (const nome of ["a", "b"]) {
       banco
         .prepare(
-          `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+          `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
            VALUES (?, ?, 'main', 'github', 'chave')`,
         )
         .run(nome, `/repo/${nome}`);
@@ -58,7 +58,6 @@ const minima = (nome = "a") => ({
 
 const completa = {
   ...minima(),
-  cursor_commit_humano: "abc",
   etapas: [
     { etapa: "planejar", configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" } },
     { etapa: "implementar", configuracao_agente: { effort: "low" } },
@@ -238,7 +237,6 @@ test("substituição remove cursor e listas opcionais e mantém as etapas e a pr
       chave_sonarqube: "k2",
     };
     const lida = gravarConfiguracaoProjeto(banco, nova);
-    assert.equal(lida.cursor_commit_humano, undefined);
     assert.deepEqual(configuracaoProjeto(banco, "a"), lida);
     assert.equal(lida.raiz_git, "/novo");
     assert.deepEqual(lida.etapas, canonica.etapas);
@@ -276,7 +274,6 @@ test("erro tardio no INSERT de glob reverte tudo e libera a transação", () => 
       BEGIN SELECT RAISE(ABORT, 'falha de teste'); END`);
     const nova = {
       ...minima(),
-      cursor_commit_humano: "novo",
       e2e: [{ caminho_linguagem: ".", comando_build: "b", comando_execucao: "e", codigo_falha: 3 }],
       globs: [{ caminho_linguagem: ".", glob: "boom" }],
     };

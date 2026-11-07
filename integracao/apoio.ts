@@ -72,7 +72,7 @@ export function adicionarProjeto(c: Pick<Cenario, "banco" | "dir">, nome: string
   git(repo, "push", "-q", "origin", branchBase);
   c.banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES (?, ?, ?, 'github', ?)`,
     )
     .run(nome, repo, branchBase, `chave-${nome}`);

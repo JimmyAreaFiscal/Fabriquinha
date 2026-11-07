@@ -296,7 +296,7 @@ const SESSAO = "0b7c5a52-3f0e-4c1e-9d3a-6f1f2b9e8a10";
 test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inválido dá 422 com o campo", async () => {
   assert.deepEqual((await pedir("/api/sessoes?escopo=ativas", { headers: comCookie() })).json(), []);
   servico.banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
     INSERT INTO demanda VALUES ('I-1', 'p', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, motivo_falha)

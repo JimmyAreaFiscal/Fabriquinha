@@ -26,10 +26,7 @@ const etapasGravadas = (banco: DatabaseSync, nome: string): Linha[] =>
 /** Lê o projeto sem abrir transação; quem chama garante o snapshot. Sem linguagens, não há configuração nova. */
 function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
   const base = banco
-    .prepare(
-      `SELECT nome, branch_base, sonar_project_key AS chave_sonarqube, repo AS raiz_git, hospedagem, cursor_commit_humano
-       FROM projeto WHERE nome = ?`,
-    )
+    .prepare("SELECT nome, branch_base, chave_sonarqube, raiz_git, hospedagem FROM projeto WHERE nome = ?")
     .get(nome);
   const linguagens = listar(
     banco,
@@ -87,16 +84,13 @@ function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: str
  */
 export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
   const p = Projeto.parse(entrada);
-  // `projeto.repo` é compartilhada com o formato legado, que exige caminho absoluto: recusar antes de gravar.
+  // `projeto.raiz_git` é compartilhada com o formato legado, que exige caminho absoluto: recusar antes de gravar.
   if (!isAbsolute(p.raiz_git))
     throw new ErroDeRegra(`raiz_git ${p.raiz_git} não é absoluta`, "informe um caminho absoluto");
   return escrever(banco, () => {
     const { changes } = banco
-      .prepare(
-        `UPDATE projeto SET repo = ?, branch_base = ?, hospedagem = ?, sonar_project_key = ?, cursor_commit_humano = ?
-         WHERE nome = ?`,
-      )
-      .run(p.raiz_git, p.branch_base, p.hospedagem, p.chave_sonarqube, p.cursor_commit_humano ?? null, p.nome);
+      .prepare("UPDATE projeto SET raiz_git = ?, branch_base = ?, hospedagem = ?, chave_sonarqube = ? WHERE nome = ?")
+      .run(p.raiz_git, p.branch_base, p.hospedagem, p.chave_sonarqube, p.nome);
     if (changes === 0) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre o projeto antes");
     for (const t of ["glob_e2e", "configuracao_e2e", "linguagem_projeto", "fitness_function_projeto"])
       banco.prepare(`DELETE FROM ${t} WHERE projeto = ?`).run(p.nome);
