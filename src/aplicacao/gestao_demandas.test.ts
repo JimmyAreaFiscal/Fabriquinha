@@ -335,7 +335,7 @@ test("CA-28: arquivar fora de concluida é recusado", () => {
   const id = registrar(b);
   completar(b, id);
   gestao.enviar(b, id, autor, ctx);
-  assert.throws(() => gestao.arquivar(b, id, AUDITOR, ctx), /só demanda concluída/);
+  assert.throws(() => gestao.arquivar(b, id, AUDITOR, ctx), /só no estado concluida/);
   assert.equal(carregarDemanda(b, id).demanda.estado, "gate_demanda");
 });
 

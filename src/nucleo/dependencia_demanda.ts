@@ -1,6 +1,7 @@
 // Dependência entre demandas (comparacao-sdlc-implementacao.md §3 e §7.2): grafo próprio, fora do AgregadoDemanda.
 // Funções puras sobre as arestas; ler e gravar é da persistência.
-import { ESTADOS_TERMINADOS, satisfazDependencia } from "./cancelamento_demanda.ts";
+import { satisfazDependencia } from "./cancelamento_demanda.ts";
+import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { acharCiclo } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import type { EstadoDemanda } from "./primitivos.ts";
@@ -65,6 +66,6 @@ export function dependentesNaoConcluidas(
   // ponytail: concluída no meio do caminho não corta a busca; a dependente dela ainda é cancelada se não terminou.
   return [...achadas].filter((d) => {
     const estado = estados.get(d);
-    return estado !== undefined && !ESTADOS_TERMINADOS.includes(estado);
+    return estado !== undefined && !CICLO_DA_DEMANDA.ehTerminal(estado);
   });
 }

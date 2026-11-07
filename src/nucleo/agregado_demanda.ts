@@ -1,6 +1,7 @@
 // Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4).
 import { z } from "zod";
 import { Ator, AtorExterno } from "./ator.ts";
+import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
@@ -212,7 +213,7 @@ export const AgregadoDemanda = z
     }
     const enc = ag.encerramento;
     if (enc !== undefined) {
-      if (!["encerrar_demanda", "concluida", "cancelada", "arquivada"].includes(ag.demanda.estado))
+      if (ag.demanda.estado !== "encerrar_demanda" && !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado))
         erro("o progresso do encerramento só existe nos estados encerrar_demanda, concluida, cancelada e arquivada");
       if (enc.demanda_id !== id) erro(`o progresso do encerramento é de outra demanda (${enc.demanda_id})`);
       const conflito = enc.conflito_pendente?.ticket_id;

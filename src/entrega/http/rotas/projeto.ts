@@ -4,11 +4,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { AgregadoDemanda, TipoDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { AUDITOR } from "../../../nucleo/ator.ts";
-import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../nucleo/ciclos.ts";
 import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { encontrado } from "../../../nucleo/erros.ts";
-import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
+import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { configuracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
@@ -24,6 +24,10 @@ export interface DemandaDoProjeto {
   titulo: string;
   tipo: TipoDemanda;
   estado: EstadoDemanda;
+  terminal: boolean;
+  satisfazDependencia: boolean;
+  /** O estado em que a linha do tempo marca a demanda; ver `estadoNaLinhaDoTempo`. */
+  estadoNaLinhaDoTempo: EstadoDemanda;
   estadoAlteradoEm: string;
   /** As predecessoras ainda em andamento: a cancelada já cancelou esta junto, e não bloqueia mais nada. */
   bloqueadaPor: string[];
@@ -32,6 +36,8 @@ export interface DemandaDoProjeto {
     ref: string;
     etapa: EtapaTicket;
     estado: EstadoTicket;
+    terminal: boolean;
+    satisfazDependencia: boolean;
     estadoAlteradoEm: string;
     rodada?: string;
     titulo?: string;
@@ -66,6 +72,28 @@ function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: 
   return pr && { id: pr.id, url: pr.url };
 }
 
+/** O estado da demanda em que o trabalho da Etapa acontece; as Etapas das rodadas e do conflito acontecem em `em_execucao`. */
+const estadoDaEtapa = (etapa: EtapaTicket): EstadoDemanda =>
+  EstadoDemanda.options.find((estado) => etapaDoEstado(estado) === etapa) ?? "em_execucao";
+
+/**
+ * O estado que a linha do tempo marca: o da demanda em andamento; o da Etapa mais adiantada dos tickets na cancelada,
+ * que não guarda onde parou; e `concluida` (tudo feito) na concluída e na arquivada.
+ * ponytail: a cancelada num gate aparece no estado do ticket, o de antes; um histórico de estados a acertaria.
+ */
+/** @testes função pura da rota, testada sem banco */
+export function estadoNaLinhaDoTempo({ demanda, tickets }: AgregadoDemanda): EstadoDemanda {
+  if (CICLO_DA_DEMANDA.satisfazDependencia(demanda.estado)) return "concluida";
+  if (CICLO_DA_DEMANDA.estaEmAndamento(demanda.estado)) return demanda.estado;
+  return tickets
+    .map((t) => estadoDaEtapa(t.etapa))
+    .reduce<EstadoDemanda>(
+      (maisAdiantado, estado) =>
+        EstadoDemanda.options.indexOf(estado) > EstadoDemanda.options.indexOf(maisAdiantado) ? estado : maisAdiantado,
+      "entender_e_desenhar",
+    );
+}
+
 function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
   const ag = carregarDemanda(banco, id);
   const etapas = configuracaoProjeto(banco, ag.demanda.projeto)?.etapas ?? [];
@@ -85,9 +113,12 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
     titulo: ag.demanda.titulo,
     tipo: ag.demanda.tipo,
     estado: ag.demanda.estado,
+    terminal: CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado),
+    satisfazDependencia: CICLO_DA_DEMANDA.satisfazDependencia(ag.demanda.estado),
+    estadoNaLinhaDoTempo: estadoNaLinhaDoTempo(ag),
     estadoAlteradoEm: ag.demanda.estado_alterado_em,
     bloqueadaPor: predecessorasDaDemanda(banco, id)
-      .filter((p) => !satisfazDependencia(p.estado) && p.estado !== "cancelada")
+      .filter((p) => CICLO_DA_DEMANDA.estaEmAndamento(p.estado))
       .map((p) => p.demanda_id),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDaRodada(ag, r.rodada_id);
@@ -105,6 +136,8 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
         ref: ticketRef,
         etapa: t.etapa,
         estado: t.estado,
+        terminal: CICLO_DO_TICKET.ehTerminal(t.estado),
+        satisfazDependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
         estadoAlteradoEm: t.estado_alterado_em,
         ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
         ...(t.titulo !== undefined && { titulo: t.titulo }),
@@ -143,7 +176,7 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
     // ponytail: um agregado por demanda mostrada, como o quadro das demandas; uma consulta só quando a página pesar.
     demandas: todas.filter((d) => mostrarDoEstado[d.estado] ?? true).map((d) => demandaDoProjeto(banco, d.id)),
     contagem: {
-      andamento: todas.length - contagem.concluidas - contagem.arquivadas - contagem.canceladas,
+      andamento: todas.filter((d) => CICLO_DA_DEMANDA.estaEmAndamento(d.estado)).length,
       ...contagem,
     },
   };

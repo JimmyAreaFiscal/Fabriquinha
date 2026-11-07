@@ -5,15 +5,11 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { Plano } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
-import {
-  confirmarAprovacaoPlanejamento,
-  exigirFase,
-  reabrirTicket,
-  reprovarPlanejamento,
-} from "../nucleo/transicoes_demanda.ts";
+import { confirmarAprovacaoPlanejamento, reabrirTicket, reprovarPlanejamento } from "../nucleo/transicoes_demanda.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { varrerBase } from "./retrabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -51,7 +47,7 @@ export function iniciarOuRetomarPlanejamento(
   limiteMin: number,
 ): { id: string; fim: Promise<void> } {
   const ag = carregarDemanda(banco, demandaId);
-  exigirFase(ag, "planejar", "iniciar o planejamento");
+  CICLO_DA_DEMANDA.exigir(ag.demanda, "planejar");
   const ticket = ticketPlanejar(ag);
   if (ticket.estado === "aberto") {
     const satisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, demandaId)).length === 0;

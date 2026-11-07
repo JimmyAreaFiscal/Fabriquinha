@@ -3,12 +3,13 @@
 import { z } from "zod";
 import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
 import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./ator.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { Modelo } from "./configuracao_agente.ts";
 import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { type EstadoDemanda, Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;
@@ -104,7 +105,7 @@ export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDem
       "submeta cada uma e envie de novo",
     );
   }
-  return { ...ag, demanda: { ...demanda, enviada: true, estado: "gate_demanda", estado_alterado_em: ctx.agora } };
+  return { ...ag, demanda: { ...CICLO_DA_DEMANDA.mudar(demanda, "gate_demanda", ctx.agora), enviada: true } };
 }
 
 /**
@@ -141,15 +142,14 @@ export function decidirDemanda(
     por: AUDITOR,
     em: ctx.agora,
   };
-  const estadoDecidido = e.aprovado ? ("concluido" as const) : ("cancelado" as const);
   const decidido = ag.tickets.map((t) =>
-    t === ticket ? { ...t, estado: estadoDecidido, estado_alterado_em: ctx.agora } : t,
+    t === ticket ? CICLO_DO_TICKET.mudar(t, e.aprovado ? "concluido" : "cancelado", ctx.agora) : t,
   );
   // Aprovar libera o planejamento: sem o ticket `planejar` aberto a seleção não tem o que despachar.
   const abrirPlanejar = e.aprovado && !ag.tickets.some((t) => t.etapa === "planejar");
   return {
     ...ag,
-    demanda: { ...demanda, estado: e.aprovado ? "planejar" : "cancelada", estado_alterado_em: ctx.agora },
+    demanda: CICLO_DA_DEMANDA.mudar(demanda, e.aprovado ? "planejar" : "cancelada", ctx.agora),
     tickets: abrirPlanejar
       ? [
           ...decidido,
@@ -172,16 +172,6 @@ const EntradaReprovacao = z.strictObject({ motivo: Motivo });
 const EntradaAprovacao = z.strictObject({ nota: z.number().int().min(1).max(5).optional() });
 // A definição congelada guarda os `CA-n` em `dados.criterios[].id` (F3); o resto do payload não interessa aqui.
 const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
-
-export function exigirFase(ag: AgregadoDemanda, estado: EstadoDemanda, acao: string): void {
-  const { demanda } = ag;
-  if (demanda.estado !== estado) {
-    throw new ErroDeRegra(
-      `a demanda ${demanda.id} está em ${demanda.estado} e não pode ${acao}`,
-      `só no estado ${estado}`,
-    );
-  }
-}
 
 function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
   const ticket = ag.tickets.find((t) => t.etapa === "planejar");
@@ -245,7 +235,7 @@ export function submeterPlano(
       "peça à sessão de planejamento",
     );
   }
-  exigirFase(ag, "planejar", "receber plano");
+  CICLO_DA_DEMANDA.exigir(demanda, "planejar");
   exigirSemFalha(ag, "planejar");
   const plano = Plano.safeParse(entrada);
   if (!plano.success) {
@@ -290,7 +280,7 @@ export function submeterPlano(
   };
   return {
     ...ag,
-    demanda: { ...demanda, estado: "gate_planejamento", estado_alterado_em: ctx.agora },
+    demanda: CICLO_DA_DEMANDA.mudar(demanda, "gate_planejamento", ctx.agora),
     evidencias: [...ag.evidencias.filter((e) => !(e.tipo === "plano" && e.ticket_id === ticket.ticket_id)), evidencia],
   };
 }
@@ -304,12 +294,12 @@ export function reprovarPlanejamento(
 ): AgregadoDemanda {
   exigirAtor(ator, "reprovar o planejamento", "auditor");
   const { motivo } = EntradaReprovacao.parse(entrada);
-  exigirFase(ag, "gate_planejamento", "reprovar o planejamento");
+  CICLO_DA_DEMANDA.exigir(ag.demanda, "gate_planejamento");
   const ticket = ticketPlanejamento(ag);
   planoSubmetido(ag, ticket);
   return {
     ...ag,
-    demanda: { ...ag.demanda, estado: "planejar", estado_alterado_em: ctx.agora },
+    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "planejar", ctx.agora),
     decisoes: [...ag.decisoes, decisaoDoAuditor(ag, ticket, "recusado", { motivo }, ctx)],
   };
 }
@@ -327,7 +317,7 @@ export function confirmarAprovacaoPlanejamento(
 ): AgregadoDemanda {
   exigirAtor(ator, "aprovar o planejamento", "auditor");
   const { nota } = EntradaAprovacao.parse(entrada);
-  exigirFase(ag, "gate_planejamento", "aprovar o planejamento");
+  CICLO_DA_DEMANDA.exigir(ag.demanda, "gate_planejamento");
   exigirSemFalha(ag, "planejar");
   const planejamento = ticketPlanejamento(ag);
   const plano = planoSubmetido(ag, planejamento);
@@ -338,9 +328,9 @@ export function confirmarAprovacaoPlanejamento(
   const id = (n: number): number => existe(novoId.get(n), `o ticket ${String(n)} não está no plano`, "valide o plano");
   return AgregadoDemanda.parse({
     ...ag,
-    demanda: { ...ag.demanda, estado: "em_execucao", estado_alterado_em: ctx.agora },
+    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "em_execucao", ctx.agora),
     tickets: [
-      ...ag.tickets.map((t) => (t === planejamento ? { ...t, estado: "concluido", estado_alterado_em: ctx.agora } : t)),
+      ...ag.tickets.map((t) => (t === planejamento ? CICLO_DO_TICKET.mudar(t, "concluido", ctx.agora) : t)),
       ...planos.map(({ ticket_id, rodada_id, titulo, descricao, configuracao_agente }) => ({
         demanda_id,
         ticket_id: id(ticket_id),
@@ -382,7 +372,6 @@ export function confirmarAprovacaoPlanejamento(
   });
 }
 
-const ESTADOS_ENCERRADOS: readonly EstadoDemanda[] = ["concluida", "arquivada", "cancelada"];
 const EntradaReabertura = z.strictObject({
   ticket_id: Id,
   instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
@@ -398,32 +387,38 @@ const EntradaDevolucao = z.strictObject({
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const MAX_DEVOLUCOES = 2;
 
-export function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, estado: TicketDemanda["estado"], acao: string) {
-  const ticket = existe(
+export function ticketDaDemanda(ag: AgregadoDemanda, ticket_id: number): TicketDemanda {
+  return existe(
     ag.tickets.find((t) => t.ticket_id === ticket_id),
     `o ticket ${formatarTicketRef({ demanda_id: ag.demanda.id, ticket_id })} não existe`,
     "use um ticket da demanda",
   );
-  if (ticket.estado !== estado) {
-    throw new ErroDeRegra(
-      `o ticket ${formatarTicketRef(ticket)} está ${ticket.estado} e não pode ${acao}`,
-      `só ticket ${estado}`,
-    );
-  }
-  return ticket;
 }
 
-export const comStatus = (
+/**
+ * O agregado com o ticket `alvo` levado a `para` pelo ciclo; `extra` entra junto (motivo, instrução, contadores).
+ * Voltar a `aberto` descarta o `motivo_falha`: a falha anterior já foi superada.
+ */
+export function mudarTicket(
   ag: AgregadoDemanda,
   alvo: TicketDemanda,
-  extra: Partial<TicketDemanda>,
-): AgregadoDemanda => ({
-  ...ag,
-  tickets: ag.tickets.map((t) => (t === alvo ? { ...t, ...extra } : t)),
-});
+  para: TicketDemanda["estado"],
+  agora: Instante,
+  extra: Partial<TicketDemanda> = {},
+): AgregadoDemanda {
+  return {
+    ...ag,
+    tickets: ag.tickets.map((t) => {
+      if (t.ticket_id !== alvo.ticket_id) return t;
+      const mudado = { ...CICLO_DO_TICKET.mudar(t, para, agora), ...extra };
+      if (para === "aberto") delete mudado.motivo_falha;
+      return mudado;
+    }),
+  };
+}
 
 export function exigirDemandaEmAndamento(ag: AgregadoDemanda, acao: string): void {
-  if (ESTADOS_ENCERRADOS.includes(ag.demanda.estado)) {
+  if (!CICLO_DA_DEMANDA.estaEmAndamento(ag.demanda.estado)) {
     throw new ErroDeRegra(
       `a demanda ${ag.demanda.id} está em ${ag.demanda.estado}`,
       `só ${acao} ticket de demanda em andamento`,
@@ -435,8 +430,9 @@ export function exigirDemandaEmAndamento(ag: AgregadoDemanda, acao: string): voi
 export function registrarFalhaTicket(ag: AgregadoDemanda, entrada: unknown, ctx: ContextoDemanda): AgregadoDemanda {
   const { ticket_id, motivo } = EntradaFalha.parse(entrada);
   exigirDemandaEmAndamento(ag, "falhar");
-  const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "falhar");
-  return comStatus(ag, ticket, { estado: "falhou", motivo_falha: motivo, estado_alterado_em: ctx.agora });
+  const ticket = ticketDaDemanda(ag, ticket_id);
+  CICLO_DO_TICKET.exigir(ticket, "em_execucao");
+  return mudarTicket(ag, ticket, "falhou", ctx.agora, { motivo_falha: motivo });
 }
 
 /**
@@ -452,22 +448,20 @@ export function devolverTicket(
   exigirAtor(ator, "devolver um ticket por reprovação técnica", "fabriquinha");
   const { ticket_id, instrucao } = EntradaDevolucao.parse(entrada);
   exigirDemandaEmAndamento(ag, "devolver");
-  const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "ser devolvido");
+  const ticket = ticketDaDemanda(ag, ticket_id);
+  CICLO_DO_TICKET.exigir(ticket, "em_execucao");
   if (ticket.etapa !== "implementar" && ticket.etapa !== "resolver_conflito") {
     throw new ErroDeRegra(
       `o ticket ${String(ticket_id)} é da etapa ${ticket.etapa} e não admite devolução técnica`,
       "só implementar e resolver_conflito",
     );
   }
-  const alterado = ctx.agora;
   return ticket.devolucoes >= MAX_DEVOLUCOES
-    ? comStatus(ag, ticket, { estado: "falhou", motivo_falha: instrucao, estado_alterado_em: alterado })
-    : comStatus(ag, ticket, {
-        estado: "aberto",
+    ? mudarTicket(ag, ticket, "falhou", ctx.agora, { motivo_falha: instrucao })
+    : mudarTicket(ag, ticket, "aberto", ctx.agora, {
         instrucao,
         devolucoes: ticket.devolucoes + 1,
         retomadas_automaticas: 0,
-        estado_alterado_em: alterado,
       });
 }
 
@@ -480,23 +474,9 @@ export function reabrirTicket(
 ): AgregadoDemanda {
   exigirAtor(ator, "reabrir um ticket", "auditor");
   const { ticket_id, instrucao } = EntradaReabertura.parse(entrada);
-  const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser reaberto");
-  const { motivo_falha: _motivo, ...resto } = ticket;
-  return {
-    ...ag,
-    tickets: ag.tickets.map((t) =>
-      t === ticket
-        ? {
-            ...resto,
-            estado: "aberto",
-            instrucao,
-            devolucoes: 0,
-            retomadas_automaticas: 0,
-            estado_alterado_em: ctx.agora,
-          }
-        : t,
-    ),
-  };
+  const ticket = ticketDaDemanda(ag, ticket_id);
+  CICLO_DO_TICKET.exigir(ticket, "falhou");
+  return mudarTicket(ag, ticket, "aberto", ctx.agora, { instrucao, devolucoes: 0, retomadas_automaticas: 0 });
 }
 
 export const MAX_RETOMADAS_AUTOMATICAS = 3;
@@ -521,7 +501,8 @@ export function retomarTicketFalhoPorInfraestrutura(
   exigirAtor(ator, "retomar um ticket falho por infraestrutura", "fabriquinha");
   const { ticket_id, conta, modelo } = EntradaRetomadaAutomatica.parse(entrada);
   exigirDemandaEmAndamento(ag, "retomar");
-  const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser retomado");
+  const ticket = ticketDaDemanda(ag, ticket_id);
+  CICLO_DO_TICKET.exigir(ticket, "falhou");
   const retomadas = ticket.retomadas_automaticas ?? 0;
   if (conta && retomadas >= MAX_RETOMADAS_AUTOMATICAS) {
     throw new ErroDeRegra(
@@ -529,15 +510,10 @@ export function retomarTicketFalhoPorInfraestrutura(
       "o Auditor decide: reabra com instrução ou cancele",
     );
   }
-  const { motivo_falha: _motivo, ...resto } = ticket;
-  const alvo = {
-    ...resto,
-    estado: "aberto" as const,
+  return mudarTicket(ag, ticket, "aberto", ctx.agora, {
     retomadas_automaticas: retomadas + (conta ? 1 : 0),
-    estado_alterado_em: ctx.agora,
     ...(modelo && { configuracao_agente: { ...ticket.configuracao_agente, modelo } }),
-  };
-  return { ...ag, tickets: ag.tickets.map((t) => (t === ticket ? alvo : t)) };
+  });
 }
 
 const EntradaDemanda = z.strictObject({ demanda_id: DemandaId });
@@ -567,7 +543,8 @@ function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
   const pendente = ag.tickets.find(
     (t) =>
       t.ticket_id !== ignorar &&
-      (["aberto", "em_execucao", "falhou"].includes(t.estado) ||
+      (CICLO_DO_TICKET.estaEmAndamento(t.estado) ||
+        t.estado === "falhou" ||
         (t.etapa === "implementar" && t.estado !== "concluido")),
   );
   if (pendente !== undefined) {
@@ -601,11 +578,11 @@ export function iniciarRevisaoDemanda(
 ): AgregadoDemanda {
   exigirAtor(ator, "iniciar a revisão integral da demanda", "fabriquinha");
   exigirDemandaDaEntrada(ag, EntradaDemanda.parse(entrada).demanda_id);
-  exigirFase(ag, "em_execucao", "iniciar a revisão integral");
+  CICLO_DA_DEMANDA.exigir(ag.demanda, "em_execucao");
   exigirSemPendencias(ag);
   return {
     ...ag,
-    demanda: { ...ag.demanda, estado: "revisar_demanda", estado_alterado_em: ctx.agora },
+    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "revisar_demanda", ctx.agora),
     tickets: [...ag.tickets, novoTicketGlobal(ag, "revisar_demanda", ctx.agora)],
   };
 }
@@ -623,10 +600,10 @@ export function registrarRevisaoDemanda(
 ): AgregadoDemanda {
   const e = EntradaRevisaoDemanda.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
-  exigirFase(ag, "revisar_demanda", "receber a revisão integral");
+  CICLO_DA_DEMANDA.exigir(ag.demanda, "revisar_demanda");
   const revisores = ag.tickets.filter((t) => t.etapa === "revisar_demanda");
   const ticket = revisores.find((t) => t.ticket_id === Math.max(...revisores.map((x) => x.ticket_id)));
-  if (ticket?.ticket_id !== e.ticket_id || (ticket.estado !== "aberto" && ticket.estado !== "em_execucao")) {
+  if (ticket?.ticket_id !== e.ticket_id || !CICLO_DO_TICKET.estaEmAndamento(ticket.estado)) {
     throw new ErroDeRegra(
       `o ticket ${String(e.ticket_id)} não é o revisar_demanda ativo`,
       "use o ticket atual da revisão",
@@ -648,15 +625,11 @@ export function registrarRevisaoDemanda(
   // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.
   const base = e.aprovado ? ag : materializarRodadasCorretivas(ag, e.plano, ator, ctx.agora);
   const comRevisaoConcluida = base.tickets.map((t) =>
-    t.ticket_id === ticket.ticket_id ? { ...t, estado: "concluido" as const, estado_alterado_em: ctx.agora } : t,
+    t.ticket_id === ticket.ticket_id ? CICLO_DO_TICKET.mudar(t, "concluido", ctx.agora) : t,
   );
   return {
     ...base,
-    demanda: {
-      ...base.demanda,
-      estado: e.aprovado ? "encerrar_demanda" : "em_execucao",
-      estado_alterado_em: ctx.agora,
-    },
+    demanda: CICLO_DA_DEMANDA.mudar(base.demanda, e.aprovado ? "encerrar_demanda" : "em_execucao", ctx.agora),
     tickets: e.aprovado
       ? [...comRevisaoConcluida, novoTicketGlobal(base, "encerrar_demanda", ctx.agora)]
       : comRevisaoConcluida,

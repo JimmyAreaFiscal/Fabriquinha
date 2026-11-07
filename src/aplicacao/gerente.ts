@@ -62,7 +62,7 @@ interface Viva extends Omit<Situacao, "dialogos"> {
   sessaoPi: string;
   pendentes: Map<string, Dialogo>;
   /** Os eventos da mensagem que o pi está escrevendo, do `message_start` em diante: ela só vai ao JSONL no fim. */
-  emAndamento: EventoPi[];
+  eventosDaMensagemEmEscrita: EventoPi[];
   /**
    * Os `message_end` que o JSONL pode ainda não ter. O pi 0.84.4 emite o `message_end` antes de gravar a mensagem e,
    * numa sessão sem resposta do agente, só grava quando a primeira chega: qualquer evento depois do `message_end` de
@@ -90,7 +90,7 @@ export function assinar(sessao: string, ouvinte: (evento: EventoPi) => void): ()
   const lista = ouvintes.get(sessao) ?? new Set();
   ouvintes.set(sessao, lista.add(ouvinte));
   const viva = vivaDaSessao(sessao);
-  for (const evento of [...(viva?.naoGravadas ?? []), ...(viva?.emAndamento ?? [])]) ouvinte(evento);
+  for (const evento of [...(viva?.naoGravadas ?? []), ...(viva?.eventosDaMensagemEmEscrita ?? [])]) ouvinte(evento);
   return () => {
     lista.delete(ouvinte);
     if (lista.size === 0) ouvintes.delete(sessao);
@@ -422,16 +422,16 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       estaViva.atividade = atividadeDo(evento) ?? estaViva.atividade;
       switch (evento.type) {
         case "message_start":
-          estaViva.emAndamento = [evento];
+          estaViva.eventosDaMensagemEmEscrita = [evento];
           break;
         case "message_update":
-          estaViva.emAndamento.push(evento);
+          estaViva.eventosDaMensagemEmEscrita.push(evento);
           break;
         case "response":
           if (evento.success === false) aoRecusar(evento);
           break;
         case "message_end": {
-          estaViva.emAndamento = [];
+          estaViva.eventosDaMensagemEmEscrita = [];
           estaViva.naoGravadas.push(evento);
           // `message` ausente ou nulo não derruba o ouvinte: vale como mensagem sem papel.
           const mensagem = (evento.message ?? {}) as Mensagem;
@@ -475,7 +475,7 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       ocupado: r.prompt !== undefined,
       desde: new Date().toISOString(),
       pendentes,
-      emAndamento: [],
+      eventosDaMensagemEmEscrita: [],
       naoGravadas: [],
       abortada: false,
       responder(dialogo, resposta) {

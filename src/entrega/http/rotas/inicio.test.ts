@@ -220,7 +220,7 @@ test("rodando: as sessões que rodam com o que o agente faz, ou o título do tic
 
 test("board: um cartão por demanda fora da execução e um por rodada aberta nela, só das em andamento", () => {
   const dados = inicio(cenario(), () => undefined);
-  assert.equal(dados.emAndamento, 9);
+  assert.equal(dados.quantidadeEmAndamento, 9);
   assert.deepEqual(
     dados.board.map((c) => [c.coluna, c.ref, c.ticket?.ref, c.ticket?.estado, c.ticket?.modo, c.outros, c.bloqueios]),
     [

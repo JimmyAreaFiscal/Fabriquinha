@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
+import { CICLO_DA_RODADA } from "./ciclos.ts";
 import { ErroDeEscopo } from "./erros.ts";
 import { reabrirTicket } from "./transicoes_demanda.ts";
 import {
@@ -622,4 +623,44 @@ test("CA-10: sem confirmação, falha, divergência ou entrada inválida nada é
   recusa(ag, confirma(aprovacao(), integracao(), FABRIQUINHA));
   recusa(ag, confirma(aprovacao(), integracao(), agente(4)), ErroDeEscopo);
   recusa(ag, () => confirmarAprovacaoPullRequest(ag, aprovacao(), AUDITOR, ctx));
+});
+
+// Cada par de→para do ciclo da rodada, feito pela função de produção que o realiza, com o instante injetado.
+const FUNCAO_DE_PRODUCAO_DE_CADA_TRANSICAO: Record<string, () => AgregadoDemanda> = {
+  "implementar→revisar_rodada": () => concluirImplementacoesRodada(emDesenvolvimento(), ref, FABRIQUINHA, ctx),
+  "revisar_rodada→encerrar_rodada": () =>
+    registrarRevisaoRodada(emRevisao(), { ...ref, ticket_id: 3, aprovado: true }, agente(3), ctx),
+  "revisar_rodada→implementar": () => registrarRevisaoRodada(emRevisao(), reprovada(), agente(3), ctx),
+  "encerrar_rodada→gate_pr": () => conferirPullRequestRodada(emEncerramento(), conferencia(), FABRIQUINHA, ctx),
+  "encerrar_rodada→implementar": () =>
+    conferirPullRequestRodada(
+      emEncerramento(),
+      conferencia({ conflito: true, correcoes: [correcao()] }),
+      FABRIQUINHA,
+      ctx,
+    ),
+  "gate_pr→ajustar_resultado": () =>
+    reprovarPullRequestRodada(emGate(), { ...ref, ticket_id: 4, motivo: "ajustar" }, AUDITOR, ctx),
+  "gate_pr→concluida": () =>
+    confirmarAprovacaoPullRequest(emGate(), aprovacao(), AUDITOR, { agora: t1, integracao: integracao() }),
+  "ajustar_resultado→implementar": () =>
+    concluirSessaoRodada(
+      registrarCorrecoesSessao(emSessao(), { ...ref, ticket_id: 5, correcoes: [correcao()] }, AUDITOR, ctx),
+      { ...ref, ticket_id: 5 },
+      AUDITOR,
+      ctx,
+    ),
+};
+
+test("CA-4: cada transição declarada em CICLO_DA_RODADA grava o estado destino e o instante da mudança", () => {
+  const declaradas = Object.entries(CICLO_DA_RODADA.transicoes).flatMap(([de, destinos]) =>
+    destinos.map((para) => `${de}→${para}`),
+  );
+  assert.deepEqual(declaradas.sort(), Object.keys(FUNCAO_DE_PRODUCAO_DE_CADA_TRANSICAO).sort());
+  for (const par of declaradas) {
+    const [, para] = par.split("→");
+    const rodada = FUNCAO_DE_PRODUCAO_DE_CADA_TRANSICAO[par]?.().rodadas.find((r) => r.rodada_id === 1);
+    assert.equal(rodada?.estado, para, par);
+    assert.equal(rodada?.estado_alterado_em, t1, par);
+  }
 });

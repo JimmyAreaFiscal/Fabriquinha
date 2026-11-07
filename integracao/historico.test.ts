@@ -92,7 +92,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.throws(() => gestao.cancelar(c.banco, terminada, AUDITOR, CTX), /já terminou/);
 
   // Arquivar só vale para concluída, e a arquivada satisfaz a dependência de quem a esperava (D08).
-  assert.throws(() => gestao.arquivar(c.banco, a, AUDITOR, CTX), /só demanda concluída/);
+  assert.throws(() => gestao.arquivar(c.banco, a, AUDITOR, CTX), /só no estado concluida/);
   assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(c.banco, dependeDaFeita)), []);
   gestao.arquivar(c.banco, feita, AUDITOR, CTX);
   assert.equal(demanda(c, feita).demanda.estado, "arquivada");

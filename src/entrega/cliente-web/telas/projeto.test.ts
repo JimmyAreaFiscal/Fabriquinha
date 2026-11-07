@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import type { DemandaDoProjeto, ListaDoProjeto } from "../../http/rotas/projeto.ts";
 import type { ProjetoListado } from "./configuracao.ts";
 import {
@@ -10,7 +11,6 @@ import {
   type Escolhas,
   escolherProjeto,
   estadoDaDemanda,
-  estadoNaLinhaDoTempo,
   ha,
   paginaDoProjeto,
   projetoNaoEncontrado,
@@ -69,6 +69,8 @@ const ticket = (
   ref,
   etapa,
   estado: status,
+  terminal: CICLO_DO_TICKET.ehTerminal(status),
+  satisfazDependencia: CICLO_DO_TICKET.satisfazDependencia(status),
   estadoAlteradoEm: "2026-10-28T11:55:00.000Z",
   ...resto,
 });
@@ -78,6 +80,13 @@ const demanda = (id: string, estado: DemandaDoProjeto["estado"], resto: Partial<
     titulo: `Demanda ${id}`,
     tipo: "funcionalidade",
     estado,
+    terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
+    satisfazDependencia: CICLO_DA_DEMANDA.satisfazDependencia(estado),
+    estadoNaLinhaDoTempo: CICLO_DA_DEMANDA.satisfazDependencia(estado)
+      ? "concluida"
+      : CICLO_DA_DEMANDA.estaEmAndamento(estado)
+        ? estado
+        : "entender_e_desenhar",
     estadoAlteradoEm: "2026-10-03T12:00:00",
     bloqueadaPor: [],
     rodadas: [],
@@ -277,18 +286,6 @@ test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde se ela p
   ]);
 });
 
-test("a cancelada marca a etapa mais adiantada dos tickets; a arquivada, tudo feito", () => {
-  assert.equal(estadoNaLinhaDoTempo({ estado: "cancelada", tickets: [] }), "entender_e_desenhar");
-  const tickets = [
-    ticket("I-1.T3", "implementar", "cancelado"),
-    ticket("I-1.T1", "entender_e_desenhar", "concluido"),
-    ticket("I-1.T2", "planejar", "concluido"),
-  ];
-  assert.equal(estadoNaLinhaDoTempo({ estado: "cancelada", tickets }), "em_execucao");
-  assert.equal(estadoNaLinhaDoTempo({ estado: "arquivada", tickets }), "concluida");
-  assert.equal(estadoNaLinhaDoTempo({ estado: "planejar", tickets }), "planejar");
-});
-
 test("o estado da demanda: a falha antes do gate, o gate antes do que roda; encerrada sem cor", () => {
   const rodando = [ticket("I-1.T1", "planejar", "em_execucao")];
   assert.equal(estadoDaDemanda(demanda("I-1", "cancelada", { tickets: rodando })), "cancelada");
@@ -472,6 +469,7 @@ test("as encerradas apagadas, com quando saíram do andamento; a cancelada marca
     demanda("I-1", "concluida"),
     demanda("I-2", "arquivada"),
     demanda("I-3", "cancelada", {
+      estadoNaLinhaDoTempo: "em_execucao",
       rodadas: [{ ref: "I-3.R1", titulo: "r", estado: "revisar_rodada" }],
       tickets: [ticket("I-3.T1", "implementar", "em_execucao", { rodada: "I-3.R1" })],
     }),

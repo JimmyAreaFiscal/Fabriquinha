@@ -97,47 +97,19 @@ const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
   ["Encerrar", 1],
 ];
 
-/** O estado em que a etapa do ticket acontece: dá onde a demanda cancelada parou. */
-const ESTADO_DA_ETAPA: Record<EtapaTicket, EstadoDemanda> = {
-  entender_e_desenhar: "entender_e_desenhar",
-  planejar: "planejar",
-  implementar: "em_execucao",
-  revisar_rodada: "em_execucao",
-  encerrar_rodada: "em_execucao",
-  ajustar_resultado: "em_execucao",
-  resolver_conflito: "em_execucao",
-  revisar_demanda: "revisar_demanda",
-  encerrar_demanda: "encerrar_demanda",
-};
-
-/**
- * O estado que a linha do tempo marca: a da demanda em andamento; a da etapa mais adiantada dos tickets na cancelada,
- * que não guarda onde parou; e `concluida` (tudo feito) na concluída e na arquivada.
- * ponytail: a cancelada num gate aparece no estado do ticket, a de antes; um histórico de estados a acertaria.
- */
-/** @testes função pura da tela, testada sem montar o DOM */
-export function estadoNaLinhaDoTempo(d: Pick<DemandaDoProjeto, "estado" | "tickets">): EstadoDemanda {
-  if (d.estado === "arquivada") return "concluida";
-  if (d.estado !== "cancelada") return d.estado;
-  return d.tickets
-    .map((t) => ESTADO_DA_ETAPA[t.etapa])
-    .reduce<EstadoDemanda>(
-      (maisAdiantada, estado) =>
-        ORDEM_DA_DEMANDA.indexOf(estado) > ORDEM_DA_DEMANDA.indexOf(maisAdiantada) ? estado : maisAdiantada,
-      "entender_e_desenhar",
-    );
-}
-
 /** A cor do marco atual e da borda da linha: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
 type EstadoDaLinha = "falha" | "aguarda" | "rodando" | "cancelada";
 
 const GATES_DA_RODADA: ReadonlySet<EstadoRodada> = new Set(["gate_pr", "ajustar_resultado"]);
 
+/** A demanda que terminou sem satisfazer a dependência de quem a espera: a cancelada. */
+const foiCancelada = (d: Pick<DemandaDoProjeto, "terminal" | "satisfazDependencia">): boolean =>
+  d.terminal && !d.satisfazDependencia;
+
 /** O estado da demanda: ticket falho, gate da demanda, do planejamento ou do PR, ou ticket em execução. */
 /** @testes função pura da tela, testada sem montar o DOM */
 export function estadoDaDemanda(d: DemandaDoProjeto): EstadoDaLinha | undefined {
-  if (d.estado === "cancelada") return "cancelada";
-  if (d.estado === "concluida" || d.estado === "arquivada") return undefined;
+  if (d.terminal) return foiCancelada(d) ? "cancelada" : undefined;
   if (d.tickets.some((t) => t.estado === "falhou")) return "falha";
   const noGate =
     d.estado === "gate_demanda" ||
@@ -149,7 +121,7 @@ export function estadoDaDemanda(d: DemandaDoProjeto): EstadoDaLinha | undefined 
 
 /** O estado da rodada, pelos tickets dela; na demanda cancelada, apagado. */
 function estadoDaRodada(d: DemandaDoProjeto, rodada: DemandaDoProjeto["rodadas"][number]): EstadoDaLinha | undefined {
-  if (d.estado === "cancelada") return "cancelada";
+  if (foiCancelada(d)) return "cancelada";
   const tickets = d.tickets.filter((t) => t.rodada === rodada.ref);
   if (tickets.some((t) => t.estado === "falhou")) return "falha";
   if (GATES_DA_RODADA.has(rodada.estado)) return "aguarda";
@@ -165,7 +137,8 @@ type Situacao = "feito" | "atual" | "" | "pulada" | "rodadas" | "fora";
 
 /** A situação de cada coluna pela posição da coluna e do estado atual numa ordem; `concluida` passa de todas. */
 function situacaoNaOrdem<F extends string>(ordem: readonly F[], estado: F | "concluida", coluna: Coluna): Situacao {
-  const atual = estado === "concluida" ? ordem.length : ordem.indexOf(estado);
+  const posicao = ordem.indexOf(estado as F);
+  const atual = posicao === -1 ? ordem.length : posicao;
   const indice = ordem.indexOf(coluna.estado as F);
   if (indice === atual) return "atual";
   return indice < atual ? "feito" : "";
@@ -234,17 +207,22 @@ function destaque(d: DemandaDoProjeto, estado: EstadoDaLinha | undefined, agora:
     : `<a class="chat" href="${caminhoDaSessao(ticket.sessao)}">${conteudo}<span class="ir">chat →</span></a>`;
 }
 
+/** Como cada estado de quem saiu do andamento diz quando: o rótulo e a classe do texto. */
+const SAIDA_DO_ANDAMENTO: Partial<Record<EstadoDemanda, { rotulo: string; classe: string }>> = {
+  cancelada: { rotulo: "cancelada", classe: ' class="cancelada"' },
+  arquivada: { rotulo: "arquivada", classe: "" },
+  concluida: { rotulo: "concluída", classe: "" },
+};
+
 /** Quando a demanda saiu do andamento: cancelada, arquivada ou concluída. */
 function quando(d: DemandaDoProjeto): string {
-  const dia = diaMes(new Date(d.estadoAlteradoEm));
-  if (d.estado === "cancelada") return `<span class="cancelada">cancelada em ${dia}</span>`;
-  if (d.estado === "arquivada") return `<span>arquivada em ${dia}</span>`;
-  return d.estado === "concluida" ? `<span>concluída em ${dia}</span>` : "";
+  const saida = SAIDA_DO_ANDAMENTO[d.estado];
+  return saida ? `<span${saida.classe}>${saida.rotulo} em ${diaMes(new Date(d.estadoAlteradoEm))}</span>` : "";
 }
 
 /** O que fica sob o título: `I-n`, tipo, a dependência que bloqueia, o progresso e quando saiu do andamento. */
 function marcas(d: DemandaDoProjeto): string {
-  const feitos = d.tickets.filter((t) => t.estado === "concluido").length;
+  const feitos = d.tickets.filter((t) => t.satisfazDependencia).length;
   const largura = String((100 * feitos) / Math.max(1, d.tickets.length));
   const partes = [`<span class="id">${escapar(d.id)}</span>`, `<span class="tag">${d.tipo}</span>`];
   if (d.bloqueadaPor.length > 0) {
@@ -295,7 +273,7 @@ const TITULO_DA_ETAPA: Record<EtapaTicket, string> = {
 /** A gaveta: os tickets da demanda, com a etapa, o endereço, o título, o estado, o modelo e o chat. */
 function gaveta(d: DemandaDoProjeto): string {
   const linhas = d.tickets.map((t) => {
-    const encerrado = t.estado === "concluido" || t.estado === "cancelado";
+    const encerrado = t.terminal;
     // A sessão de ajustes conversa na página da demanda, não no chat.
     const chat =
       t.sessao === undefined || t.etapa === "ajustar_resultado"
@@ -317,9 +295,8 @@ function gaveta(d: DemandaDoProjeto): string {
 function linha(d: DemandaDoProjeto, { gavetas }: Escolhas, agora: Date): string {
   const corDaLinha = estadoDaDemanda(d);
   const aberta = gavetas.get(d.id) ?? (corDaLinha === "aguarda" || corDaLinha === "falha");
-  const estado = estadoNaLinhaDoTempo(d);
-  const encerrada = !ORDEM_DA_DEMANDA.includes(d.estado);
-  const classes = ["pista-item", corDaLinha, !aberta && "fechada", encerrada && "apagada"];
+  const estado = d.estadoNaLinhaDoTempo;
+  const classes = ["pista-item", corDaLinha, !aberta && "fechada", d.terminal && "apagada"];
   return `<div class="${classes.filter(Boolean).join(" ")}" data-demanda="${escapar(d.id)}">
     <div class="pista-linha" data-gaveta>
       <div class="pista-demanda"><button type="button" class="caret" aria-expanded="${String(aberta)}" aria-label="Tickets de ${escapar(d.id)}">▼</button><div class="texto">

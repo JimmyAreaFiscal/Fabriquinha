@@ -140,7 +140,7 @@ test("na mesma demanda, tickets globais saem por id", () => {
   };
   const d = demandaNum("I-1", ag, "encerrar_demanda");
   assert.deepEqual(
-    selecionarTrabalhoGlobal([d], { limite: 9, emAndamento: 0 }).map((t) => t.ticket_id),
+    selecionarTrabalhoGlobal([d], { limite: 9, vagasOcupadas: 0 }).map((t) => t.ticket_id),
     [2, 5],
   );
 });
@@ -162,10 +162,10 @@ const demandaNum = (id: string, extra: Record<string, unknown>, estado = "em_exe
   };
 };
 const umImplementar = { rodadas: [rd(1)], tickets: [tk(2, 1)] };
-const globais = (n: number, limite: number, emAndamento: number) =>
+const globais = (n: number, limite: number, vagasOcupadas: number) =>
   selecionarTrabalhoGlobal(
     Array.from({ length: n }, (_, i) => demandaNum(`I-${String(i + 1)}`, umImplementar)),
-    { limite, emAndamento },
+    { limite, vagasOcupadas },
   ).map((t) => t.demanda_id);
 
 test("CA-13, CA-14: o limite global descontado o que está em andamento; sem vagas, nada", () => {
@@ -178,7 +178,7 @@ test("CA-15: desempate por demanda (numérica), rodada e ticket", () => {
   const i1 = demandaNum("I-1", { rodadas: [rd(1), rd(2)], tickets: [tk(9, 2), tk(7, 1)] });
   const i2 = demandaNum("I-2", { rodadas: [rd(1)], tickets: [tk(3, 1)] });
   const i10 = demandaNum("I-10", umImplementar);
-  const sel = selecionarTrabalhoGlobal([i10, i2, i1], { limite: 3, emAndamento: 1 });
+  const sel = selecionarTrabalhoGlobal([i10, i2, i1], { limite: 3, vagasOcupadas: 1 });
   assert.deepEqual(
     sel.map((t) => [t.demanda_id, t.ticket_id]),
     [
@@ -188,7 +188,7 @@ test("CA-15: desempate por demanda (numérica), rodada e ticket", () => {
   );
   const mesmoNumero = selecionarTrabalhoGlobal([demandaNum("X-1", umImplementar), demandaNum("A-1", umImplementar)], {
     limite: 2,
-    emAndamento: 0,
+    vagasOcupadas: 0,
   });
   assert.deepEqual(
     mesmoNumero.map((t) => t.demanda_id),
@@ -196,7 +196,7 @@ test("CA-15: desempate por demanda (numérica), rodada e ticket", () => {
   );
   const global = demandaNum("I-3", { tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejar");
   assert.deepEqual(
-    selecionarTrabalhoGlobal([global, i1], { limite: 9, emAndamento: 0 }).map((t) => t.ticket_id),
+    selecionarTrabalhoGlobal([global, i1], { limite: 9, vagasOcupadas: 0 }).map((t) => t.ticket_id),
     [7, 9, 1],
   );
 });
