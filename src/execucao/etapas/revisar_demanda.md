@@ -10,6 +10,8 @@
 4. Analise a segurança do que mudou: entradas externas, permissões, dados sensíveis e dependências.
 5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir {ticket} aprovar` se a demanda cumpre o que foi pedido, ou com `fabriquinha revisao decidir {ticket} reprovar --motivo <texto> --plano <json|->` se não cumpre; `--plano` leva o plano de correção da demanda, em JSON.
 
+**Fica fora da revisão:** o quality gate do SonarQube (a Fabriquinha o confere nos tickets e o Auditor, no gate do PR), o PR (o PR final ainda não existe nesta revisão), o deploy e a cópia do banco real (do Auditor e do operador). Nada disso é motivo de pergunta nem de reprovação. Critério que só se comprova por eles vai na evidência como "verificado fora da revisão: <por quem>", e você decide pelo resto.
+
 **Entregas:** as evidências de comprovação dos critérios da demanda, de testes de estresse e de análise de segurança, do ticket {ticket}.
 
 **Quando parar:** depois de registrar a decisão com `revisao decidir`; termine a sua resposta.
