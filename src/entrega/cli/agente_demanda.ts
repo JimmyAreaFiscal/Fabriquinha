@@ -299,6 +299,6 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
 /**
  * O ator que as transições da demanda pedem. Elas leem só `tipo` e `ticket`, mas o tipo `Ator` exige `execucao`
  * numérico, que a execução da demanda (id texto) não tem: o campo fica ausente, nunca 0.
- * shortcut: cast até o domínio aceitar `Ator` sem `execucao`; some quando quem mexe em src/dominio trocar o tipo.
+ * shortcut: cast até o domínio aceitar `Ator` sem `execucao`; some quando quem mexe em src/nucleo trocar o tipo.
  */
 export const paraDominio = (a: AgenteDemanda): Ator => ({ tipo: "agente", ticket: a.ticket_id }) as unknown as Ator;

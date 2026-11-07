@@ -83,7 +83,7 @@ export function marca(erros: Erros, caminho: string, prefixo?: string): { classe
 
 const HOSPEDAGEM: Record<Hospedagem, string> = { github: "GitHub", "azure-devops": "Azure DevOps" };
 
-// O cliente não importa valores de src/dominio (os .ts vão ao navegador só sem os tipos): os níveis saem das chaves.
+// O cliente não importa valores de src/nucleo (os .ts vão ao navegador só sem os tipos): os níveis saem das chaves.
 const EFFORTS = Object.keys({
   off: 0,
   minimal: 0,
