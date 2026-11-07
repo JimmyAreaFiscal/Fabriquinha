@@ -286,6 +286,13 @@ function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [stri
   );
 }
 
+/** O Agente da execução aberta do ticket: o `trabalho_id` é o `execucao_sessao.id` dela. */
+function agenteDaExecucaoAberta(c: Cenario, demanda_id: string, ticket_id: number): Ator {
+  const aberta = carregarSessoesDoTicket(c.banco, { demanda_id, ticket_id }).execucoes.find((e) => !e.fim);
+  if (!aberta) throw new Error(`o ticket ${String(ticket_id)} não tem execução aberta`);
+  return { tipo: "agente", trabalho_id: aberta.id };
+}
+
 const comprovacao = ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }] as [
   string,
   object,
@@ -298,7 +305,7 @@ const revisarRodada = (c: Cenario, id: string) =>
     decidirRevisaoRodada(
       c.banco,
       { aprovado: true, demanda_id: id, rodada_id: 1, ticket_id },
-      { tipo: "agente", trabalho_id: "execucao-1" },
+      agenteDaExecucaoAberta(c, id, ticket_id),
     );
   });
 
@@ -332,7 +339,7 @@ const revisarDemanda = (c: Cenario, id: string) =>
     decidirRevisaoIntegral(
       c.banco,
       { demanda_id: id, ticket_id, aprovado: true },
-      { tipo: "agente", trabalho_id: "execucao-1" },
+      agenteDaExecucaoAberta(c, id, ticket_id),
     );
   });
 

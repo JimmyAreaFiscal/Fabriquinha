@@ -240,7 +240,7 @@ async function conduzir(c: Conducao): Promise<void> {
     await (opcoes.fechar ?? fecharTicketDemanda)(
       c.banco,
       c.ref,
-      { falha, execucao: execucao.id },
+      { falha },
       {
         parada: () => parando,
       },

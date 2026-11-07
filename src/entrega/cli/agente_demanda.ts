@@ -18,6 +18,7 @@ import {
 } from "../../nucleo/schemas.ts";
 import { registrarCorrecoesSessao } from "../../nucleo/transicoes_rodada.ts";
 import { decidirRevisaoIntegral } from "../../aplicacao/revisao_demanda.ts";
+import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
 import { decidirRevisaoRodada } from "../../aplicacao/revisao_rodada.ts";
 import { escrever } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
@@ -129,6 +130,7 @@ async function lerJson(opcao: string, valor: string, stdin: NodeJS.ReadableStrea
 const gravar = (banco: DatabaseSync, a: EscopoDoAgente, transicao: (ag: AgregadoDemanda) => AgregadoDemanda) =>
   comDemanda(banco, a.demanda_id, (ag) => {
     resolverEscopoDoAgente(banco, a.ator.trabalho_id);
+    exigirTrabalhoDoTicket(banco, a.ator, a);
     return transicao(ag);
   });
 

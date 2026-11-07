@@ -17,12 +17,14 @@ import { integrarPR } from "../src/infra/repositorio/pr.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   agente,
+  agenteDaExecucaoAberta,
   agora,
   atual,
   comoAgente,
   despacho,
   despacharComAgente,
   encerrar,
+  execucoesDe,
   pi,
   revisar,
   rodadaDe,
@@ -53,7 +55,7 @@ async function revisaoIntegral(c: Cenario, id: string, decisao: "aprovada" | { e
     assert.equal(ticket?.status, "em_execucao", "a revisão integral espera a decisão do agente");
     const { ticket_id } = ticket;
     revisor = ticket_id;
-    const agenteDoTicket = { tipo: "agente", trabalho_id: "execucao-1" } as const;
+    const agenteDoTicket = agenteDaExecucaoAberta(c, { demanda_id: id, ticket_id });
     if (decisao === "aprovada") {
       comoAgente(c, id, ticket_id, [
         ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
@@ -129,7 +131,13 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   );
   assert.deepEqual(
     ag.decisoes.filter((d) => d.ticket_id === primeira).map((d) => [d.resultado, d.motivo, d.por]),
-    [["recusado", "falta tratar a integração entre as partes", { tipo: "agente", trabalho_id: "execucao-1" }]],
+    [
+      [
+        "recusado",
+        "falta tratar a integração entre as partes",
+        { tipo: "agente", trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: primeira }).at(-1)?.id },
+      ],
+    ],
   );
 
   // A rodada corretiva percorre o ciclo completo: implementação, revisão, PR e aprovação do Auditor.

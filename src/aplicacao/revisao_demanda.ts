@@ -7,6 +7,7 @@ import { iniciarRevisaoDemanda, registrarRevisaoDemanda } from "../nucleo/transi
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
+import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 
 /** Todas as rodadas concluídas: a demanda vai a `revisao_demanda` com o `revisar_demanda` aberto. */
 export function iniciarRevisaoIntegral(banco: DatabaseSync, demanda_id: string): AgregadoDemanda {
@@ -36,6 +37,7 @@ export function decidirRevisaoIntegral(
   ator: Ator,
 ): AgregadoDemanda {
   return comDemanda(banco, entrada.demanda_id, (ag) => {
+    exigirTrabalhoDoTicket(banco, ator, entrada);
     const novo = registrarRevisaoDemanda(ag, entrada, ator, { agora: new Date().toISOString() });
     if (entrada.aprovado) conferirAprovacao(ag, entrada.ticket_id);
     return novo;

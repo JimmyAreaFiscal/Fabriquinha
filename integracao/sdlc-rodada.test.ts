@@ -3,14 +3,15 @@
 // temporária, o pi e o `gh` falsos; nada passa pela web. O agente (revisor e documentador) é a parte do teste que age
 // pelo domínio enquanto o pi falso espera no portão; as verificações do ticket são o único ponto injetado.
 import assert from "node:assert/strict";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../src/nucleo/ator.ts";
+import { Ator, AUDITOR } from "../src/nucleo/ator.ts";
 import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/aplicacao/evidencias/pr_rodada.ts";
 import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
+import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../src/aplicacao/gerente.ts";
 import { concluirSessaoAjustes, reprovarPRRodada } from "../src/aplicacao/sessao_ajustes.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
@@ -20,6 +21,7 @@ import {
   atual,
   despacho,
   encerrar,
+  execucoesDe,
   fecharPortao,
   pi,
   pisAteAgora,
@@ -30,6 +32,7 @@ import {
   statusDe,
 } from "./apoio-execucao.ts";
 import { AUTOR, base, type Cenario, ciclo, criarCenario, demanda, esperar, git } from "./apoio.ts";
+import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { ghFalso } from "./falsos.ts";
 
 const gh = ghFalso(base);
@@ -75,6 +78,41 @@ function corretivoAntesDoGate(c: Cenario, id: string, titulo: RegExp) {
   return corretivo;
 }
 
+/** O agente da correção chama a `perguntar` e fica parado até a resposta; o Auditor automático (um `pi -p`) responde "Sim". */
+const agenteQuePergunta: PassoPi[] = [
+  {
+    agente,
+    termina: "nunca",
+    eventos: [
+      {
+        type: "tool_execution_start",
+        toolCallId: "p1",
+        toolName: "perguntar",
+        args: { question: "Sigo com o caso X?", options: [{ label: "Sim" }, { label: "Não" }] },
+      },
+      {
+        type: "extension_ui_request",
+        id: "d1",
+        method: "select",
+        title: "Sigo com o caso X?",
+        options: ["Sim", "Não"],
+      },
+    ],
+  },
+  { chamadaUnica: { saida: { decisao: "responder", resposta: "Sim", justificativa: "é o caso da correção" } } },
+];
+
+/** Os atores das colunas de autoria, como o banco os guarda (sem passar pelo agregado): `prefixo_tipo`, `_trabalho_id`... */
+function atoresDasColunas(c: Cenario, tabela: string, prefixo: string): unknown[] {
+  const linhas = c.banco.prepare(`SELECT * FROM ${tabela}`).all() as Record<string, unknown>[];
+  return linhas.map((linha) => {
+    const colunas = Object.entries(linha).filter(
+      ([coluna, valor]) => coluna.startsWith(`${prefixo}_`) && valor !== null,
+    );
+    return Object.fromEntries(colunas.map(([coluna, valor]) => [coluna.slice(prefixo.length + 1), valor]));
+  });
+}
+
 test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, que percorrem nova revisão e o encerramento", async (t) => {
   gh.zerar();
   const c = criarCenario(t);
@@ -92,17 +130,41 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   assert.equal(statusDe(c, { demanda_id: id, ticket_id: reprovada }), "concluido");
   assert.deepEqual(
     ag.decisoes.filter((d) => d.ticket_id === reprovada).map((d) => [d.resultado, d.motivo, d.por]),
-    [["recusado", "falta tratar o caso X", { tipo: "agente", trabalho_id: "execucao-1" }]],
+    [
+      [
+        "recusado",
+        "falta tratar o caso X",
+        { tipo: "agente", trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: reprovada }).at(-1)?.id },
+      ],
+    ],
   );
   const corretivo = atual(c, id, "implementar");
   assert.ok(corretivo.ticket_id > reprovada);
   assert.equal(corretivo.status, "aberto");
   assert.equal(corretivo.titulo, "Tratar o caso X");
+  // I-266.T6: o ticket corretivo é do Agente revisor; a Fabriquinha só o materializa.
+  assert.deepEqual(corretivo.criado_por, {
+    tipo: "agente",
+    trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: reprovada }).at(-1)?.id,
+  });
 
   // A correção executa pelo agendador, como qualquer implementação, e a rodada volta à revisão com um revisor novo.
-  pi.roteirizar([{ agente }]);
+  pi.roteirizar(agenteQuePergunta);
   await ciclo(c, despacho());
   assert.equal(statusDe(c, corretivo), "concluido");
+  // I-266.T7: a resposta do Auditor automático fica registrada como Agente da execução em curso, não como Auditor.
+  const execucaoDaCorrecao = execucoesDe(c, corretivo).at(-1)?.id;
+  const linhaDaResposta = readFileSync(join(c.raiz, "execucoes", `E-${String(execucaoDaCorrecao)}`, "log"), "utf8")
+    .split("\n")
+    .find((linha) => linha.includes(PREFIXO_DA_RESPOSTA_AUTOMATICA));
+  assert.ok(linhaDaResposta, "a resposta do Auditor automático está no log da execução");
+  const resposta = JSON.parse(
+    linhaDaResposta.slice(
+      linhaDaResposta.indexOf(PREFIXO_DA_RESPOSTA_AUTOMATICA) + PREFIXO_DA_RESPOSTA_AUTOMATICA.length,
+    ),
+  ) as RespostaAutomatica;
+  assert.equal(resposta.resposta, "Sim");
+  assert.deepEqual(resposta.ator, { tipo: "agente", trabalho_id: execucaoDaCorrecao });
   assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
   const nova = atual(c, id, "revisar_rodada");
   assert.ok(nova.ticket_id > corretivo.ticket_id);
@@ -121,6 +183,21 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   for (const ticket of [primeira, corretivo]) assert.ok(pr.corpo.includes(`${id}.T${String(ticket.ticket_id)}`));
   const worktree = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
   assert.equal(git(worktree, "log", "--format=%s", "--grep", `\\[${id}\\.T`).split("\n").length, 2);
+
+  // I-266.T6: a evidência que a própria Fabriquinha grava tem sempre o autor `fabriquinha`, nunca o da demanda.
+  const evidenciasDaFabriquinha = demanda(c, id).evidencias.filter((e) => e.tipo === "execucao_testes");
+  assert.ok(evidenciasDaFabriquinha.length > 0);
+  for (const e of evidenciasDaFabriquinha) assert.deepEqual(e.autor, { tipo: "fabriquinha" });
+
+  // Relidas do banco, todas as autorias são Atores válidos (a transição não tem coluna de ator: vale a da decisão ou da evidência).
+  const relidas = [
+    ...atoresDasColunas(c, "decisao_ticket", "por"),
+    ...atoresDasColunas(c, "ticket_demanda", "criado_por"),
+    ...atoresDasColunas(c, "evidencia_demanda", "autor"),
+    ...atoresDasColunas(c, "demanda", "criada_por").map((externo) => ({ tipo: "externo", ...(externo as object) })),
+  ];
+  assert.ok(relidas.length > 0);
+  for (const ator of relidas) Ator.parse(ator);
 });
 
 test("os agentes da rodada recebem o que a Fabriquinha apurou: o diff e a matriz de fitness com os logs na revisão, os não previstos e o impacto no encerramento", async (t) => {

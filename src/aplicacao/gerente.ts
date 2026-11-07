@@ -1,6 +1,7 @@
 // Gerente de sessões (F4 §2, §6): o único que lança o pi. Roda o pi com o mesmo código de processo e protocolo nos
 // modos autônomo e interativo, guarda as execuções vivas com os diálogos de extensão pendentes (F4 §5.4) e repassa os
 // eventos a quem assina a sessão.
+import type { Ator } from "../nucleo/ator.ts";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
 import type { Id } from "../nucleo/primitivos.ts";
@@ -21,6 +22,18 @@ const ABORTADA = "abortada pelo Auditor";
  * evento. 15 min dá folga de 2,5 vezes sobre a mais longa sem segurar à toa a retomada automática.
  */
 const SILENCIO_MAXIMO_DO_MODELO_MIN = 15;
+
+/**
+ * A resposta do Auditor automático a uma chamada de `perguntar`: ela vai ao log numa linha com este prefixo e ao chat, e
+ * o autor é o Agente da execução em curso, não o Auditor (CONCEITOS.md §15).
+ */
+export interface RespostaAutomatica extends RespostaDoAuditorAutomatico {
+  ator: Extract<Ator, { tipo: "agente" }>;
+  /** O `toolCallId` da chamada de `perguntar` que ela respondeu. */
+  chamada: string;
+  pergunta: string;
+}
+export const PREFIXO_DA_RESPOSTA_AUTOMATICA = "resposta automática ";
 
 /** Um diálogo de extensão pendente: o pedido do pi, quando chegou e, se o pi o resolve sozinho, quando expira. */
 export type Dialogo = EventoPi & { em: string; expiraEm?: string };
@@ -319,6 +332,7 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     const triar = async (
       triagem: NonNullable<Processo["triarPergunta"]>,
       dialogo: string,
+      chamada: string,
       args: Record<string, unknown>,
     ) => {
       const opcoesComRotulo = ((args.options ?? []) as { label: string; description?: string }[])
@@ -337,6 +351,14 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       }
       if (!pendentes.has(dialogo)) return;
       anotar(r.log, `Auditor automático respondeu "${decisao.resposta}" a "${pergunta}": ${decisao.justificativa}`);
+      const registro: RespostaAutomatica = {
+        ...decisao,
+        ator: { tipo: "agente", trabalho_id: String(r.execucao.id) },
+        chamada,
+        pergunta,
+      };
+      anotar(r.log, `${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(registro)}`);
+      repassar(sessaoPi, { type: "resposta_automatica", ...registro }, r.log);
       estaViva.responder(dialogo, {
         value: args.multiSelect ? JSON.stringify([decisao.resposta]) : decisao.resposta,
       });
@@ -353,10 +375,10 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
         em: new Date(em).toISOString(),
         ...(timeout !== undefined && { expiraEm: new Date(em + timeout).toISOString() }),
       });
-      const args = [...perguntas.values()].find(
-        (a) => evento.title === a.question || String(evento.title).startsWith(`${String(a.question)}\n\n`),
+      const chamada = [...perguntas].find(
+        ([, a]) => evento.title === a.question || String(evento.title).startsWith(`${String(a.question)}\n\n`),
       );
-      if (autonoma && r.triarPergunta && args) void triar(r.triarPergunta, dialogo, args);
+      if (autonoma && r.triarPergunta && chamada) void triar(r.triarPergunta, dialogo, ...chamada);
       if (timeout !== undefined) {
         expiracoes.set(
           dialogo,

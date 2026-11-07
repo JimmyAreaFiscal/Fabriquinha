@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FABRIQUINHA } from "./ator.ts";
+import { type Ator, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { materializarCorrecoesRodada, materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
@@ -8,6 +8,7 @@ import { ErroDeRegra } from "./erros.ts";
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
 const D = "I-1";
+const REVISOR: Ator = { tipo: "agente", trabalho_id: "E-revisor" };
 const tk = (ticket_id: number, rodada_id: number | undefined, extra = {}) => ({
   demanda_id: D,
   ticket_id,
@@ -98,6 +99,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
       }),
       t(2, 5, { status: "concluido", etapa: "revisar_rodada" }),
     ],
+    REVISOR,
     t1,
   );
   assert.deepEqual(ag, antes);
@@ -111,7 +113,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
   );
   assert.deepEqual(
     novo.tickets.slice(4).map((ticket) => ticket.criado_por),
-    [{ tipo: "fabriquinha" }, { tipo: "fabriquinha" }],
+    [REVISOR, REVISOR],
   );
   const novo22 = novo.tickets[5];
   assert.deepEqual(novo22?.configuracao_agente, { modelo: { provedor: "anthropic", nome: "m" }, effort: "high" });
@@ -123,26 +125,39 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
 });
 
 test("rodada: recusa vazio, referência alheia, rodada inexistente e ticket de outra rodada ou global", () => {
-  recusa(() => materializarCorrecoesRodada(base(), ref, [], t1), "vazia");
-  recusa(() => materializarCorrecoesRodada(base(), { ...ref, demanda_id: "I-2" }, [t(1, 5)], t1), "I-2");
-  recusa(() => materializarCorrecoesRodada(base(), { ...ref, rodada_id: 6 }, [t(1, 6)], t1), "não existe");
-  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 1)], t1), "não é da rodada 5");
-  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, undefined)], t1), "não é da rodada 5");
-  recusa(() => materializarCorrecoesRodada(base(), ref, [{ ...t(1, 5), demanda_id: "I-2" }], t1), "outra demanda");
-  recusa(() => materializarCorrecoesRodada(base(), ref, "x", t1), "inválida");
+  recusa(() => materializarCorrecoesRodada(base(), ref, [], REVISOR, t1), "vazia");
+  recusa(() => materializarCorrecoesRodada(base(), { ...ref, demanda_id: "I-2" }, [t(1, 5)], REVISOR, t1), "I-2");
+  recusa(() => materializarCorrecoesRodada(base(), { ...ref, rodada_id: 6 }, [t(1, 6)], REVISOR, t1), "não existe");
+  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 1)], REVISOR, t1), "não é da rodada 5");
+  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, undefined)], REVISOR, t1), "não é da rodada 5");
+  recusa(
+    () => materializarCorrecoesRodada(base(), ref, [{ ...t(1, 5), demanda_id: "I-2" }], REVISOR, t1),
+    "outra demanda",
+  );
+  recusa(() => materializarCorrecoesRodada(base(), ref, "x", REVISOR, t1), "inválida");
 });
 
 test("rodada: recusa caminho inseguro, duplicata, ciclo, dependência fora do fragmento e modelo incompleto", () => {
   for (const caminho of ["/abs", "../fora", "a\\b", "C:/x"]) {
-    recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5, { caminhos: [caminho] })], t1), "inválida");
+    recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5, { caminhos: [caminho] })], REVISOR, t1), "inválida");
   }
-  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5), t(1, 5)], t1), "se repete");
-  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5, { caminhos: ["a", "a"] })], t1), "repete caminho");
-  const dep = (a: number, b: number) => t(a, 5, { depende: [{ demanda_id: D, ticket_id: b }] });
-  recusa(() => materializarCorrecoesRodada(base(), ref, [dep(1, 2), dep(2, 1)], t1), "ciclo");
-  recusa(() => materializarCorrecoesRodada(base(), ref, [dep(1, 9)], t1), "não existe"); // ticket 9 é do agregado
+  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5), t(1, 5)], REVISOR, t1), "se repete");
   recusa(
-    () => materializarCorrecoesRodada(base(), ref, [t(1, 5, { configuracao_agente: { modelo: { nome: "m" } } })], t1),
+    () => materializarCorrecoesRodada(base(), ref, [t(1, 5, { caminhos: ["a", "a"] })], REVISOR, t1),
+    "repete caminho",
+  );
+  const dep = (a: number, b: number) => t(a, 5, { depende: [{ demanda_id: D, ticket_id: b }] });
+  recusa(() => materializarCorrecoesRodada(base(), ref, [dep(1, 2), dep(2, 1)], REVISOR, t1), "ciclo");
+  recusa(() => materializarCorrecoesRodada(base(), ref, [dep(1, 9)], REVISOR, t1), "não existe"); // ticket 9 é do agregado
+  recusa(
+    () =>
+      materializarCorrecoesRodada(
+        base(),
+        ref,
+        [t(1, 5, { configuracao_agente: { modelo: { nome: "m" } } })],
+        REVISOR,
+        t1,
+      ),
     "esperava um texto",
   );
 });
@@ -172,7 +187,7 @@ const plano = (extra = {}) => ({
 test("integral: acrescenta rodadas novas com IDs e vínculos remapeados, sem tocar no antigo", () => {
   const ag = base();
   const antes = structuredClone(ag);
-  const novo = materializarRodadasCorretivas(ag, plano(), t1);
+  const novo = materializarRodadasCorretivas(ag, plano(), REVISOR, t1);
   assert.deepEqual(ag, antes);
   assert.deepEqual(novo.rodadas.slice(0, 2), ag.rodadas);
   assert.deepEqual(
@@ -210,38 +225,50 @@ test("integral: acrescenta rodadas novas com IDs e vínculos remapeados, sem toc
   assert.deepEqual(novo.caminhos_ticket.slice(1), [{ demanda_id: D, ticket_id: 22, caminho: "n.ts" }]);
   assert.deepEqual(
     novo.tickets.slice(4).map((ticket) => ticket.criado_por),
-    [{ tipo: "fabriquinha" }, { tipo: "fabriquinha" }, { tipo: "fabriquinha" }],
+    [REVISOR, REVISOR, REVISOR],
   );
   assert.deepEqual(novo.evidencias, ag.evidencias);
   assert.equal(novo.demanda.fase, "execucao");
 });
 
 test("integral: recusa vazio, demanda alheia, global, rodada sem ticket, escopo e grafos inválidos", () => {
-  recusa(() => materializarRodadasCorretivas(base(), plano({ rodadas: [], tickets: [] }), t1), "não tem rodadas");
-  recusa(() => materializarRodadasCorretivas(base(), plano({ demanda_id: "I-2" }), t1), "outra demanda");
+  recusa(
+    () => materializarRodadasCorretivas(base(), plano({ rodadas: [], tickets: [] }), REVISOR, t1),
+    "não tem rodadas",
+  );
+  recusa(() => materializarRodadasCorretivas(base(), plano({ demanda_id: "I-2" }), REVISOR, t1), "outra demanda");
   const alheio = {
     ...plano(),
     demanda_id: "I-2",
     rodadas: [{ ...rodadaP(1), demanda_id: "I-2" }],
     tickets: [{ ...t(3, 1), demanda_id: "I-2" }],
   };
-  recusa(() => materializarRodadasCorretivas(base(), alheio, t1), "I-2");
+  recusa(() => materializarRodadasCorretivas(base(), alheio, REVISOR, t1), "I-2");
   recusa(
     () =>
-      materializarRodadasCorretivas(base(), plano({ rodadas: [rodadaP(2)], tickets: [t(3, 2), t(4, undefined)] }), t1),
+      materializarRodadasCorretivas(
+        base(),
+        plano({ rodadas: [rodadaP(2)], tickets: [t(3, 2), t(4, undefined)] }),
+        REVISOR,
+        t1,
+      ),
     "não tem rodada",
   );
   recusa(
-    () => materializarRodadasCorretivas(base(), plano({ tickets: [t(3, 2)] }), t1),
+    () => materializarRodadasCorretivas(base(), plano({ tickets: [t(3, 2)] }), REVISOR, t1),
     "não tem ticket de implementação",
   );
-  recusa(() => materializarRodadasCorretivas(base(), plano({ criterios: ["CA-1", "CA-2", "CA-9"] }), t1), "CA-9");
-  recusa(() => materializarRodadasCorretivas(base(), plano({ criterios: [] }), t1), "a demanda não tem");
+  recusa(
+    () => materializarRodadasCorretivas(base(), plano({ criterios: ["CA-1", "CA-2", "CA-9"] }), REVISOR, t1),
+    "CA-9",
+  );
+  recusa(() => materializarRodadasCorretivas(base(), plano({ criterios: [] }), REVISOR, t1), "a demanda não tem");
   recusa(
     () =>
       materializarRodadasCorretivas(
         base(),
         plano({ rodadas: [rodadaP(1, { depende: [{ demanda_id: D, rodada_id: 5 }] }), rodadaP(2)] }),
+        REVISOR,
         t1,
       ),
     "não existe",
@@ -256,15 +283,19 @@ test("integral: recusa vazio, demanda alheia, global, rodada sem ticket, escopo 
             rodadaP(2, { depende: [{ demanda_id: D, rodada_id: 1 }] }),
           ],
         }),
+        REVISOR,
         t1,
       ),
     "ciclo",
   );
-  recusa(() => materializarRodadasCorretivas(base(), plano({ rodadas: [rodadaP(1), rodadaP(1)] }), t1), "se repete");
-  recusa(() => materializarRodadasCorretivas(base(), "x", t1), "inválida");
+  recusa(
+    () => materializarRodadasCorretivas(base(), plano({ rodadas: [rodadaP(1), rodadaP(1)] }), REVISOR, t1),
+    "se repete",
+  );
+  recusa(() => materializarRodadasCorretivas(base(), "x", REVISOR, t1), "inválida");
 });
 
 test("integral: sem definição congelada nenhum CA é aceito", () => {
   const ag = { ...base(), evidencias: [] };
-  assert.throws(() => materializarRodadasCorretivas(ag, plano(), t1), ErroDeRegra);
+  assert.throws(() => materializarRodadasCorretivas(ag, plano(), REVISOR, t1), ErroDeRegra);
 });

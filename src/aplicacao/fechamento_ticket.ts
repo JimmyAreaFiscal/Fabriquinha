@@ -2,7 +2,7 @@
 // §6, D05, D06): verifica, grava as evidências, commita e conclui, ou devolve, ou falha. A devolução da D05 (até 2
 // vezes, falha na 3ª) vale para as duas etapas; só a infraestrutura falha direto. O agente não submete nada.
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, FABRIQUINHA } from "../nucleo/ator.ts";
+import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../nucleo/conclusao_ticket.ts";
 import { ErroDeReprovacao, ErroExterno, existe } from "../nucleo/erros.ts";
@@ -73,9 +73,7 @@ function concluirRodada(ag: AgregadoDemanda, { demanda_id, rodada_id }: TicketDe
 }
 
 /** Grava as três evidências do ticket com os logs de cada uma como anexos, numa transação só. */
-function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificacao[], execucao: string): void {
-  // shortcut: autor externo provisório, como era; a I-266.R3 troca por FABRIQUINHA.
-  const autor: Ator = { tipo: "externo", ferramenta: "fabriquinha", sessao: execucao };
+function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificacao[]): void {
   const guardadas = verificacoes.map((v) => ({
     v,
     // O Sonar devolve `logs: []`; o relatório (`dados`) vira o anexo, para a evidência nunca ficar sem log.
@@ -97,7 +95,7 @@ function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificac
               // ponytail: a evidência da demanda não tem coluna `aprovada`; ela vai nos `dados`.
               dados: { ...v.dados, aprovada: v.aprovada } as EntradaEvidenciaDemanda["dados"],
             },
-            autor,
+            FABRIQUINHA,
             contexto().agora,
           ),
         ag,
@@ -125,7 +123,7 @@ function relatorioDeReprovacao(reprovadas: Verificacao[]): string {
 export async function fecharTicketDemanda(
   banco: DatabaseSync,
   ref: Ref,
-  { falha, execucao }: { falha?: string; execucao: string },
+  { falha }: { falha?: string },
   deps: DepsFechamento = {},
 ): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
@@ -170,7 +168,7 @@ export async function fecharTicketDemanda(
       falhar(`falha de infraestrutura:\n${motivos.map((f) => `- ${f.motivo}`).join("\n")}`);
       return;
     }
-    gravarEvidencias(banco, ref, verificacoes, execucao);
+    gravarEvidencias(banco, ref, verificacoes);
     const reprovadas = verificacoes.filter((v) => !v.aprovada);
     if (reprovadas.length > 0) {
       const relatorio = relatorioDeReprovacao(reprovadas);

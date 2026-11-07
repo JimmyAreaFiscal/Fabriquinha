@@ -143,6 +143,7 @@ test("CA-2: reprovação grava as exigências, cria a correção e volta a desen
   const novo = registrarRevisaoRodada(ag, reprovada(), agenteRevisor, ctx);
   assert.strictEqual(novo.decisoes[0]?.por, agenteRevisor);
   assert.deepEqual(ag, antes);
+  assert.deepEqual(novo.tickets.at(-1)?.criado_por, agenteRevisor);
   assert.deepEqual(
     novo.rodadas.map((r) => r.fase),
     ["desenvolvimento", "desenvolvimento"],
@@ -351,6 +352,7 @@ test("CA-4: conflito, check falho ou ambos exigem correções e voltam a desenvo
         [5, "implementar", "aberto"],
       ],
     );
+    assert.deepEqual(novo.tickets.at(-1)?.criado_por, FABRIQUINHA);
     assert.deepEqual(novo.decisoes, []);
   }
 });
@@ -467,6 +469,7 @@ test("sessão: Auditor e agente da sessão registram correções sem executar ne
   for (const ator of [AUDITOR, agente(5)]) {
     const novo = registrarCorrecoesSessao(ag, entrada, ator, ctx);
     assert.deepEqual(fase(novo), ["sessao", "desenvolvimento"]);
+    assert.deepEqual(novo.tickets.at(-1)?.criado_por, ator);
     assert.deepEqual(
       novo.tickets.slice(5).map((t) => [t.ticket_id, t.etapa, t.status]),
       [[6, "implementar", "aberto"]],
