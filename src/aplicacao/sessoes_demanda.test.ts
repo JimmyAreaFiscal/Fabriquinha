@@ -338,6 +338,35 @@ test("I-266.T7: a resposta de `perguntar` que o Auditor automático deu é do Ag
   );
 });
 
+test("I-266.T29: as linhas livres do gerente que citam o prefixo da resposta automática não quebram o chat", () => {
+  const { banco, c } = cenario();
+  conversaDoPlanejamento(c.raiz);
+  const agente = { tipo: "agente", trabalho_id: "e-s1-I-300" };
+  const pergunta = `Mudo a ${PREFIXO_DA_RESPOSTA_AUTOMATICA}do gerente?`;
+  const registro = { ator: agente, chamada: "auto", pergunta, resposta: "Sim", justificativa: "j" };
+  const semAtor = { ator: { tipo: "invalido" }, chamada: "humana", pergunta, resposta: "Não", justificativa: "j" };
+  const em = "2026-01-01T00:00:00.000Z";
+  writeFileSync(
+    join(c.raiz, "execucoes", "E-e-s1-I-300", "log"),
+    [
+      `${em} Auditor automático escalou ao Auditor: ${pergunta}`,
+      `${em} Auditor automático respondeu "Sim" a "${pergunta}": j`,
+      `${em} ${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(registro)}`,
+      `${em} ${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(semAtor)}`,
+    ].join("\n") + "\n",
+  );
+  const resposta = (toolCallId: string) =>
+    mensagem("toolResult", "User answered: Sim", { toolCallId, toolName: "perguntar" });
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s1.jsonl"),
+    [resposta("auto"), resposta("humana")].map((l) => JSON.stringify(l)).join("\n") + "\n",
+  );
+  assert.deepEqual(
+    abrirChatDemanda(banco, "s1")?.conversa.map((e) => e.ator),
+    [agente, { tipo: "auditor" }],
+  );
+});
+
 test("CA-13: o histórico em Markdown segue a ordem da conversa, com o nome do ticket", () => {
   const { banco, c } = cenario();
   conversaDoPlanejamento(c.raiz);
