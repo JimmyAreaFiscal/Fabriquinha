@@ -153,7 +153,7 @@ export const test = base.extend<{
 
 export { expect } from "@playwright/test";
 
-/** O print da página inteira, gravado na saída do teste (test-results/) e anexado ao relatório. */
+/** O print da página inteira, gravado na saída do teste (o `outputDir` do playwright.config.ts) e anexado ao relatório. */
 export async function fotografar(pagina: Page, info: TestInfo, nome: string): Promise<void> {
   const path = info.outputPath(`${nome}.png`);
   await pagina.screenshot({ fullPage: true, path });
