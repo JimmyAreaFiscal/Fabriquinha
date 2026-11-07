@@ -12,7 +12,8 @@ import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import { marcaDoPRRodada } from "../evidencias/pr_rodada.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -114,7 +115,7 @@ async function cenario({
     comoRevisar: ["Leia o diff."],
     naoVerificado: [],
   };
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: DEMANDA,
       projeto: "loja",

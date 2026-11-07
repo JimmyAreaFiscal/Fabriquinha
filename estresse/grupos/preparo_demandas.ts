@@ -11,7 +11,8 @@ import { registrarCorrecoesSessao } from "../../src/dominio/transicoes_rodada.ts
 import { criarAvaliacao } from "../../src/persistencia/avaliacoes.ts";
 import { abrir } from "../../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../src/persistencia/configuracao_projeto.ts";
-import { comDemanda, criarDemanda } from "../../src/persistencia/demandas.ts";
+import { comDemanda } from "../../src/persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { importarAchados } from "../../src/persistencia/avaliacoes.ts";
 import { registrarProjeto } from "../../src/persistencia/projetos.ts";
 import { criarTarefa, criarUsuarioSimulado } from "../../src/persistencia/simulacao.ts";
@@ -171,7 +172,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
   /** Cria a demanda `fase` do projeto principal; `resto` traz tickets, rodadas, evidências... */
   function criar(fase: string, resto: object = {}, id = novoId()): string {
-    criarDemanda(banco, {
+    gravarAgregadoPronto(banco, {
       demanda: {
         id,
         projeto: principal.nome,

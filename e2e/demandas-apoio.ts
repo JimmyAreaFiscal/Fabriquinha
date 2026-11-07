@@ -9,7 +9,8 @@ import { join } from "node:path";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { guardarBytes } from "../src/persistencia/arquivos.ts";
 import { registrarCorrecoesSessao } from "../src/dominio/transicoes_rodada.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../src/persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../src/persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { gravarAnexos } from "../src/persistencia/evidencia_demanda.ts";
 import { expect, type Fabriquinha } from "./apoio.ts";
 
@@ -76,7 +77,7 @@ const daDemanda = (tipo: string, dados: object) => ({ demanda_id: "I-214", tipo,
 export function semearGateDaDemanda(raiz: string): void {
   const banco = abrir(raiz);
   const ag = comTicketDeDemanda("I-214");
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     ...ag,
     demanda: { ...ag.demanda, descricao: "O carrinho **perde** os cupons ao recarregar." },
     evidencias: [
@@ -112,7 +113,7 @@ export function semearGateDaDemanda(raiz: string): void {
  */
 export function semearDemandas(raiz: string): void {
   const banco = abrir(raiz);
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-206", "execucao", {
       rodadas: [rodada("I-206", 1, "aprovacao_pull_request"), rodada("I-206", 2, "desenvolvimento")],
@@ -132,14 +133,14 @@ export function semearDemandas(raiz: string): void {
       ],
     }),
   );
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-207", "execucao", {
       rodadas: [rodada("I-207", 1, "desenvolvimento")],
       tickets: [ticket("I-207", 1, "implementar", 1, "falhou")],
     }),
   );
-  criarDemanda(banco, comTicketDeDemanda("I-208"));
+  gravarAgregadoPronto(banco, comTicketDeDemanda("I-208"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
   banco.close();
 }
@@ -147,7 +148,7 @@ export function semearDemandas(raiz: string): void {
 /** Uma demanda sem ticket algum: nada em execução. */
 export function semearDemandaOciosa(raiz: string): void {
   const banco = abrir(raiz);
-  criarDemanda(banco, demanda("I-209", "aprovacao_demanda"));
+  gravarAgregadoPronto(banco, demanda("I-209", "aprovacao_demanda"));
   banco.close();
 }
 
@@ -172,7 +173,7 @@ export function semearPaginaDaDemanda(raiz: string): void {
     em,
     ...resto,
   });
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-210", "encerramento", {
       rodadas: [rodada("I-210", 1, "aprovacao_pull_request"), rodada("I-210", 2, "sessao")],
@@ -212,7 +213,7 @@ export function semearPaginaDaDemanda(raiz: string): void {
   gravarAnexos(banco, { demanda_id: "I-210", ticket_id: 3, tipo: "pr_aberto" }, [
     { caminho: "print.png", sha256, mime: "image/png", bytes },
   ]);
-  criarDemanda(banco, demanda("I-211", "execucao"));
+  gravarAgregadoPronto(banco, demanda("I-211", "execucao"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-210', 'I-211')");
   banco.close();
 }
@@ -261,8 +262,8 @@ function configurarProjeto(banco: ReturnType<typeof abrir>, raiz: string): void 
 export function semearPlanejamento(raiz: string): void {
   const banco = abrir(raiz);
   configurarProjeto(banco, raiz);
-  criarDemanda(banco, comPlano("I-212"));
-  criarDemanda(banco, comPlano("I-213"));
+  gravarAgregadoPronto(banco, comPlano("I-212"));
+  gravarAgregadoPronto(banco, comPlano("I-213"));
   banco.close();
 }
 
@@ -292,7 +293,7 @@ export function semearPrDaRodada(raiz: string): void {
   const head = execFileSync("git", ["rev-parse", "main"], { cwd: join(raiz, "loja"), encoding: "utf8" }).trim();
   const banco = abrir(raiz);
   configurarProjeto(banco, raiz);
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-215", "execucao", {
       rodadas: [rodada("I-215", 1, "aprovacao_pull_request")],
@@ -320,7 +321,7 @@ export function semearTicketAberto(raiz: string): void {
   execFileSync("git", ["config", "branch.fabriquinha/I-216.fabriquinha", `demanda:${caminho}`], { cwd: repo });
   const banco = abrir(raiz);
   configurarProjeto(banco, raiz);
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-216", "execucao", {
       rodadas: [rodada("I-216", 1, "desenvolvimento")],
@@ -333,14 +334,14 @@ export function semearTicketAberto(raiz: string): void {
 /** A I-217 concluída, que o Auditor arquiva. */
 export function semearDemandaConcluida(raiz: string): void {
   const banco = abrir(raiz);
-  criarDemanda(banco, demanda("I-217", "concluida"));
+  gravarAgregadoPronto(banco, demanda("I-217", "concluida"));
   banco.close();
 }
 
 /** A I-218 em encerramento com o PR final verificado, à espera do merge humano na plataforma. */
 export function semearDemandaAguardandoMerge(raiz: string): void {
   const banco = abrir(raiz);
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-218", "encerramento", {
       rodadas: [rodada("I-218", 1, "concluida")],
@@ -403,7 +404,7 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-230",
       projeto: "loja",

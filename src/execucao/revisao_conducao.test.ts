@@ -7,7 +7,7 @@ import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { reabrirTicket } from "../dominio/transicoes_demanda.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { conduzirRevisao } from "./revisao_conducao.ts";
-import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "./revisao_cenario.ts";
+import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "../../apoio-testes/cenarios_de_demanda.ts";
 
 const estado = (banco: Parameters<typeof carregarDemanda>[0], ticket_id: number) => {
   const ag = carregarDemanda(banco, "I-1");

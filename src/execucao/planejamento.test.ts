@@ -11,7 +11,8 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { submeterPlano } from "../dominio/transicoes_demanda.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -75,7 +76,7 @@ function demanda(id: string, fase: string, extra: object = {}) {
   };
 }
 
-/** Projeto `loja`, demanda I-1 na fase dada com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-0. */
+/** Projeto `loja`, demanda I-1 na fase dada com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-2. */
 function cenario({ fase = "planejamento", status = "aberto", comPlano = false, predecessora = "concluida" } = {}) {
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
@@ -104,14 +105,14 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
     dependencias_ticket: [],
     caminhos_ticket: [],
   };
-  criarDemanda(banco, {
-    demanda: demanda("I-0", predecessora),
+  gravarAgregadoPronto(banco, {
+    demanda: demanda("I-2", predecessora),
     tickets: [],
     decisoes: [],
     evidencias: [],
     ...base,
   } as unknown as AgregadoDemanda);
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: demanda("I-1", fase, { enviada: false }),
     tickets: [{ demanda_id: "I-1", ticket_id: 1, etapa: "planejar", status, status_alterado_em: em, devolucoes: 0 }],
     decisoes: [],
@@ -126,7 +127,7 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
     ],
     ...base,
   } as unknown as AgregadoDemanda);
-  registrarDependenciaDemanda(banco, "I-1", "I-0"); // só antes do envio
+  registrarDependenciaDemanda(banco, "I-1", "I-2"); // só antes do envio
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-1'");
   const piFalso = instalarPiFalso(c.dir);
   return {

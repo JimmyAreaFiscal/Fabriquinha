@@ -7,7 +7,8 @@ import { ErroDeInexistente } from "../dominio/erros.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { registrarDemanda } from "../dominio/transicoes_demanda.ts";
 import { escrever, migrar } from "./banco.ts";
-import { carregarDemanda, comDemanda, criarDemanda, criarDemandaNova, listarDemandas } from "./demandas.ts";
+import { carregarDemanda, comDemanda, criarDemandaNova, listarDemandas } from "./demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -95,7 +96,7 @@ const banco = (): DatabaseSync => {
 const comBase = (enviada = true) => {
   const b = banco();
   const ag = completo();
-  criarDemanda(b, { ...ag, demanda: { ...ag.demanda, enviada, fase: enviada ? "execucao" : "registro" } });
+  gravarAgregadoPronto(b, { ...ag, demanda: { ...ag.demanda, enviada, fase: enviada ? "execucao" : "registro" } });
   return b;
 };
 
@@ -111,7 +112,7 @@ const recusa = (mudar: (ag: AgregadoDemanda) => Partial<AgregadoDemanda>) => {
 test("CA-2: grava e carrega um agregado igual", () => {
   const b = banco();
   const ag = completo();
-  criarDemanda(b, ag);
+  gravarAgregadoPronto(b, ag);
   assert.deepEqual(carregarDemanda(b, "I-1"), ag);
 });
 
@@ -353,7 +354,7 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
   const ag = completo();
   const com = (id: string, fase: AgregadoDemanda["demanda"]["fase"]) => {
     const t = (x: { demanda_id: string }) => ({ ...x, demanda_id: id });
-    criarDemanda(b, {
+    gravarAgregadoPronto(b, {
       ...ag,
       demanda: { ...ag.demanda, id, fase, branch: `fabriquinha/${id}` },
       rodadas: ag.rodadas.map((r) => ({ ...t(r), branch: `fabriquinha/${id}-${String(r.rodada_id)}` })),

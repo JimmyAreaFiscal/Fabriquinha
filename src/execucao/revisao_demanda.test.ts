@@ -5,7 +5,7 @@ import type { Ator } from "../dominio/ator.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
-import { cenarioRevisao } from "./revisao_cenario.ts";
+import { cenarioRevisao } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { conduzirRevisaoIntegral, decidirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];

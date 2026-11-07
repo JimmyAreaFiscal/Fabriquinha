@@ -10,11 +10,12 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { encerrar, situacao } from "../../execucao/gerente.ts";
 import { registrarCorrecoesSessao } from "../../dominio/transicoes_rodada.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../../persistencia/demandas.ts";
+import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../repositorio/hospedagem-falsa.test.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/worktree-demanda.ts";
-import { demanda, servir } from "./demandas_cenario.ts";
+import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-acoes-web-")));
@@ -87,11 +88,11 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   const resto: Record<string, unknown> = {
-    demanda: { ...demanda(DEMANDA, "").demanda, fase: "aprovacao_demanda" },
+    demanda: { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "aprovacao_demanda" },
     tickets: [ticket(1, "demanda", "em_execucao")],
   };
   if (gate === "planejamento") {
-    resto.demanda = { ...demanda(DEMANDA, "").demanda, fase: "aprovacao_planejamento" };
+    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "aprovacao_planejamento" };
     resto.tickets = [ticket(1, "planejar", "em_execucao")];
     resto.evidencias = [
       {
@@ -108,7 +109,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
     rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
     hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
-    resto.demanda = { ...demanda(DEMANDA, "").demanda, fase: "execucao" };
+    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "execucao" };
     resto.rodadas = [
       { ...REF, titulo: "r2", fase: "aprovacao_pull_request", e2e: false, branch: BRANCH_RODADA },
       { demanda_id: DEMANDA, rodada_id: 1, titulo: "r1", fase: "concluida", e2e: false, branch: "fabriquinha/I-206-1" },
@@ -128,9 +129,9 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     ];
   }
   const { demanda: cabecalho, ...outros } = resto;
-  const ag = demanda(DEMANDA, "", outros);
-  criarDemanda(banco, { ...ag, demanda: cabecalho } as typeof ag);
-  criarDemanda(banco, demanda("I-207", "planejamento"));
+  const ag = montarAgregadoDemanda(DEMANDA, "", outros);
+  gravarAgregadoPronto(banco, { ...ag, demanda: cabecalho } as typeof ag);
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejamento"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
 
   instalarPiFalso(c.dir).roteirizar([

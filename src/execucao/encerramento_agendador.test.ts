@@ -13,7 +13,8 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { criarSessao, encerrarExecucao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { configuracao } from "../persistencia/servico.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
@@ -71,7 +72,7 @@ async function cenario() {
     devolucoes: 0,
     ...extra,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: D,
       projeto: "loja",

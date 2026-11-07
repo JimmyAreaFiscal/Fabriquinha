@@ -14,7 +14,8 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import { concluirResolucaoConflito, podeTentarEncerramento } from "../dominio/transicoes_encerramento.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
 import { pendenciasDeLimpeza } from "../repositorio/limpeza_demanda.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -85,7 +86,7 @@ async function cenario({
     devolucoes: 0,
     ...extra,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: D,
       projeto: "loja",

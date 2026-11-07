@@ -14,7 +14,8 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeEscopo } from "../dominio/erros.ts";
 import { registrarCorrecoesSessao } from "../dominio/transicoes_rodada.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { situacao } from "./gerente.ts";
@@ -73,7 +74,7 @@ async function cenario(shell = "") {
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const head = commitarArquivo(rodada, "a.txt", "a\n");
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: DEMANDA,
       projeto: "loja",

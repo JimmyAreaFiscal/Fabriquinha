@@ -13,7 +13,8 @@ import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { configuracao } from "../persistencia/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
@@ -82,7 +83,7 @@ async function cenario(limite: number, real = false) {
 /** A demanda I-`n`. Os tickets sem `id` recebem 1, 2... pela ordem. */
 function demanda(banco: DatabaseSync, n: number, { fase = "execucao", rodadas = [], tickets = [] }: DemandaSpec): void {
   const id = `I-${String(n)}`;
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id,
       projeto: "loja",
