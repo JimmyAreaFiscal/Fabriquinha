@@ -75,6 +75,24 @@ test("revisar_rodada mostra o formato do --correcoes e pede espera num único co
   assert.match(rodada, /espere num único comando/);
 });
 
+test("as revisões só reprovam por defeito material; o resto vira observação e, na dúvida, aprova (CA-1, CA-2, CA-3)", () => {
+  for (const etapa of ["revisar_rodada", "revisar_demanda"]) {
+    const prompt = montar(etapa);
+    assert.match(
+      prompt,
+      /\*\*O que reprova:\*\* só defeito material, demonstrado por um caso concreto \(entrada, comando ou arquivo:linha e o resultado errado\): critério de aceite da (rodada|demanda) não cumprido; bug de comportamento; teste ou verificação existente removido sem cobertura equivalente; `npm run check`, integração ou e2e falhando; mudança fora do escopo do plano que altera comportamento\./,
+      etapa,
+    );
+    assert.match(
+      prompt,
+      /Todo o resto é observação: redação de texto, comentário ou nome que não fere gravemente o AGENTS\.md; corpo do PR, inventário, foto ou evidência a completar; sugestão de robustez ou caso-limite além do que o critério pede; item que pertence a outra rodada\. Para observação, aprove e registre-a na evidência de comprovação, para o Auditor ver no gate do PR\. Na dúvida entre material e observação, aprove e registre a observação\./,
+      etapa,
+    );
+    assert.match(prompt, /Cada correção (do plano )?cita o critério ou o defeito material que a justifica\./, etapa);
+    assert.ok(prompt.indexOf("**O que reprova:**") < prompt.indexOf("**Fica fora da revisão:**"), etapa);
+  }
+});
+
 test("implementar e resolver_conflito não fazem commit nem PR (CA-2)", () => {
   for (const etapa of ["implementar", "resolver_conflito"])
     assert.match(montar(etapa), /não faz commit nem PR por conta própria/);
