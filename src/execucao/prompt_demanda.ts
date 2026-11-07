@@ -20,6 +20,8 @@ export interface ContextoDemanda {
   retomada?: { tipo: "devolucao" | "reabertura"; motivo: string };
   /** Os anexos das evidências da demanda: a seção da etapa dá o caminho dos que o agente precisa ler. */
   anexos: readonly AnexoNoDisco[];
+  /** As perguntas respondidas na sessão de cada ticket (por `ticket_id`); a seção de revisões anteriores as lista. */
+  perguntasDasRevisoesAnteriores?: ReadonlyMap<number, readonly { pergunta: string; resposta: string }[]>;
 }
 
 const secao = (titulo: string, texto: string): string => `## ${titulo}\n\n${texto.trim() || "(vazio)"}\n`;
@@ -144,6 +146,43 @@ function secaoImpactoArquitetura({ ag }: ContextoDemanda): string {
   );
 }
 
+/**
+ * Revisar rodada: o que cada ticket anterior da rodada recusou (revisão ou gate do PR), os corretivos que a recusa gerou
+ * (`implementar` até a revisão seguinte) e as perguntas que ela fez com resposta; a revisão confere isso e não reabre.
+ */
+function secaoRevisoesAnteriores({ ag, ticket, perguntasDasRevisoesAnteriores }: ContextoDemanda): string {
+  const endereco = (id: number) => `${ag.demanda.id}.T${String(id)}`;
+  const daRodada = ag.tickets.filter((t) => t.rodada_id === ticket.rodada_id);
+  const idsDasRevisoes = daRodada.filter((t) => t.etapa === "revisar_rodada").map((t) => t.ticket_id);
+  const entradas = ag.decisoes
+    .filter((d) => d.resultado === "recusado" && d.ticket_id < ticket.ticket_id)
+    .flatMap((d) => {
+      const recusado = daRodada.find((t) => t.ticket_id === d.ticket_id);
+      return recusado ? [{ decisao: d, etapa: recusado.etapa }] : [];
+    })
+    .sort((a, b) => a.decisao.ticket_id - b.decisao.ticket_id)
+    .map(({ decisao, etapa }) => {
+      const proximaRevisao = Math.min(...idsDasRevisoes.filter((id) => id > decisao.ticket_id), Infinity);
+      const corretivos = daRodada
+        .filter((t) => t.etapa === "implementar" && t.ticket_id > decisao.ticket_id && t.ticket_id < proximaRevisao)
+        .map((t) => endereco(t.ticket_id));
+      const perguntas = (perguntasDasRevisoesAnteriores?.get(decisao.ticket_id) ?? []).map(
+        (p) => `  - Pergunta: ${p.pergunta}\n    Resposta: ${p.resposta}`,
+      );
+      return [
+        `- ${endereco(decisao.ticket_id)} (${etapa}), recusado: ${String(decisao.motivo)}`,
+        ...(corretivos.length ? [`  - Corretivos: ${corretivos.join(", ")}`] : []),
+        ...perguntas,
+      ].join("\n");
+    });
+  return secao(
+    "Revisões anteriores da rodada",
+    "Decisões recusadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não " +
+      "reabra o que já foi decidido:\n\n" +
+      (entradas.join("\n") || "(nenhuma)"),
+  );
+}
+
 /** As seções que só a etapa precisa, com dados que já existem quando o pi dela é lançado. */
 /**
  * Tudo o que entra na conversa é reenviado a cada turno; arquivo inteiro despejado cedo é o maior custo das sessões
@@ -163,7 +202,7 @@ const SECAO_LEITURA_ECONOMICA = secao(
 
 const SECAO_DA_ETAPA: Partial<Record<EtapaTicket, (c: ContextoDemanda) => string>> = {
   planejar: secaoDesenhoAprovado,
-  revisar_rodada: (c) => secaoArquivosAlterados(c) + "\n" + secaoMatrizFitness(c),
+  revisar_rodada: (c) => secaoRevisoesAnteriores(c) + "\n" + secaoArquivosAlterados(c) + "\n" + secaoMatrizFitness(c),
   encerrar_rodada: (c) => secaoArquivosNaoPrevistos(c) + "\n" + secaoImpactoArquitetura(c),
 };
 
