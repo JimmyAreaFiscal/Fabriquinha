@@ -75,6 +75,14 @@ test("revisar_rodada mostra o formato do --correcoes e pede espera num único co
   assert.match(rodada, /espere num único comando/);
 });
 
+test("o passo do --correcoes exige mudança em arquivos da worktree e exclui PR, Sonar, deploy e cópia do banco (I-295 CA-5)", () => {
+  const passo = montar("revisar_rodada")
+    .split("\n")
+    .find((linha) => linha.includes("`--correcoes` leva"));
+  assert.match(passo ?? "", /Cada correção do `--correcoes` pede mudança em arquivos da worktree/);
+  assert.match(passo ?? "", /corpo do PR, Sonar, deploy e cópia do banco não são correção/);
+});
+
 test("as revisões só reprovam por defeito material; o resto vira observação e, na dúvida, aprova (CA-1, CA-2, CA-3)", () => {
   for (const etapa of ["revisar_rodada", "revisar_demanda"]) {
     const prompt = montar(etapa);
@@ -159,6 +167,15 @@ test("devolução e reabertura trazem o motivo (CA-7)", () => {
     /## Reabertura[\s\S]*Motivo: faltou X/,
   );
   assert.ok(!montar("implementar").includes("Motivo:"));
+});
+
+test("o ticket devolvido por falta de alteração traz o motivo no prompt (I-295 CA-3)", () => {
+  const motivo =
+    "o ticket I-1.T5 terminou sem alteração na worktree e não gera commit vazio: faça nos arquivos da worktree a correção que o ticket pede";
+  assert.match(
+    montar("implementar", {}, { tipo: "devolucao", motivo }),
+    /## Devolução[\s\S]*Motivo: .*terminou sem alteração na worktree/,
+  );
 });
 
 test("seção de evidências e skills vêm do catálogo", () => {
