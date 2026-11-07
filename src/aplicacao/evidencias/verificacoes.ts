@@ -57,7 +57,13 @@ export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise
   let sonarEmAndamento: Promise<Verificacao> | undefined;
   const iniciarSonar = () => (sonarEmAndamento ??= verificarSonar(entrada, arquivos));
   const comandos = { ...entrada, arquivos, limiteMs: entrada.opcoes?.limiteMs };
-  const testes = await verificarTestes({ ...comandos, aoTerminarAsLinguagens: iniciarSonar });
+  const testes = await verificarTestes({
+    ...comandos,
+    aoTerminarAsLinguagens: () => {
+      // A falha sobe quando o Sonar é esperado, abaixo; o allSettled só a trata se o E2E lançar antes dessa espera.
+      void Promise.allSettled([iniciarSonar()]);
+    },
+  });
   const [fitness, sonar] = await Promise.all([verificarFitness(comandos), iniciarSonar()]);
   return [testes, fitness, sonar];
 }
