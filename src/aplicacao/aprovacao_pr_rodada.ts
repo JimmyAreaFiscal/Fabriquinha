@@ -92,15 +92,19 @@ const aprovaPRDaRodadaSozinho = (projeto: string, env: NodeJS.ProcessEnv): boole
 /**
  * Logo depois do encerramento: no projeto que a ligou, a Fabriquinha aprova o PR da rodada que chegou ao gate, porque
  * chegar a ele já exige a revisão aprovada e o PR sem conflito nem check falho. O Auditor fica com o PR final da demanda.
- * A falha só vai ao log e deixa o gate aberto para o Auditor; fora do gate ou sem a opção, nada acontece.
+ * A falha só vai ao log e deixa o gate aberto para o Auditor; fora do gate ou sem a opção, nada acontece. Devolve a
+ * demanda aprovada, ou `ag` como veio.
  */
 export async function aprovarPRRodadaSeAutomatico(
   banco: DatabaseSync,
   ag: AgregadoDemanda,
   ref: RefRodada,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<void> {
+): Promise<AgregadoDemanda> {
   const noGate = ag.rodadas.some((r) => r.rodada_id === ref.rodada_id && r.fase === "aprovacao_pull_request");
-  if (!noGate || !aprovaPRDaRodadaSozinho(ag.demanda.projeto, env)) return;
-  await aprovarPRRodada(banco, ref, undefined, FABRIQUINHA).catch(noLog);
+  if (!noGate || !aprovaPRDaRodadaSozinho(ag.demanda.projeto, env)) return ag;
+  return aprovarPRRodada(banco, ref, undefined, FABRIQUINHA).catch((erro: unknown) => {
+    noLog(erro);
+    return ag;
+  });
 }

@@ -200,9 +200,7 @@ async function conduzir(c: Conducao): Promise<void> {
         ...(c.ticket.etapa === "revisar_rodada" && {
           perguntasDasRevisoesAnteriores: perguntasDosTicketsRecusadosDaRodada(c),
         }),
-        ...((c.ticket.etapa === "revisar_rodada" || c.ticket.etapa === "revisar_demanda") && {
-          commitsDosTickets: commitsDosTickets(c),
-        }),
+        commitsDosTickets: commitsDosTickets(c), // só as revisões leem
         anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({
           ...a,
           caminho: caminhoArquivo(c.banco, a.sha256),

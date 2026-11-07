@@ -28,6 +28,7 @@ import { carregarSessoesDaDemanda } from "../armazenamento/sessoes.ts";
 import { publicarPRDe, verificarPR } from "../infra/repositorio/pr.ts";
 import { atualizarWorktreeRodada, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
+import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { perguntarAoPiSemFerramentas } from "../infra/agente/pi.ts";
 
@@ -163,6 +164,7 @@ function conferir(
  * 3. Incorpora a ponta da demanda (D04); conflito volta a `desenvolvimento` com uma correção para o merge, sem PR.
  * 4. Publica (ou atualiza, pela marca do ticket) o PR da branch da rodada para a da demanda e grava o `pr_aberto`.
  * 5. Confere conflito e checks do PR: com problema volta a `desenvolvimento`, sem ele vai ao gate.
+ * 6. No projeto com a aprovação automática, o PR que chegou ao gate é aprovado ali mesmo.
  * Erro de 2 a 5 falha o ticket com a mensagem e sobe; o `pr_aberto` só existe com o PR publicado.
  */
 export async function concluirEncerramentoRodada(banco: DatabaseSync, ref: RefRodada): Promise<AgregadoDemanda> {
@@ -172,14 +174,16 @@ export async function concluirEncerramentoRodada(banco: DatabaseSync, ref: RefRo
   if (!entregue("mensagem_pr") || !entregue("aula_codigo")) {
     return conferir(banco, ref, ticket, { documentacao_entregue: false, conflito: false, check_falho: false });
   }
+  let conferido: AgregadoDemanda;
   try {
-    return await publicarEConferir(banco, ag, ref, rodada.branch, ticket);
+    conferido = await publicarEConferir(banco, ag, ref, rodada.branch, ticket);
   } catch (erro) {
     comDemanda(banco, ref.demanda_id, (a) =>
       registrarFalhaTicket(a, { ticket_id: ticket.ticket_id, motivo: motivo(mensagem(erro)) }, contexto()),
     );
     throw erro;
   }
+  return aprovarPRRodadaSeAutomatico(banco, conferido, ref);
 }
 
 async function publicarEConferir(
