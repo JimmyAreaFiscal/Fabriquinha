@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { executar } from "../processo.ts";
-import { lerDecisao, promptDaTriagem, triarPergunta } from "./auditor_automatico.ts";
+import { lerDecisao, promptDaTriagem, RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 
 const contexto = { ticket: "I-7.T3", etapa: "implementar", demanda: "Cadastro" };
 const comOpcoes = { pergunta: "Corrijo a issue S6328?", detalhes: "no a.ts:7", opcoes: ["Sim", "Não"] };
@@ -19,19 +19,52 @@ test("o prompt traz as regras, o ticket, a pergunta, os detalhes e as opções",
   );
 });
 
+test("o prompt da etapa de revisão lista o que fica fora da revisão; deploy de teste não é banal e oferta de acesso escala", () => {
+  const prompt = promptDaTriagem({ ...contexto, etapa: "revisar_rodada" }, comOpcoes);
+  assert.match(
+    prompt,
+    /Fora da revisão \(só em revisar_rodada e revisar_demanda\):\n- pergunta sobre Sonar, PR, deploy, cópia do banco, credencial ou ambiente de teste: .*\n\{"decisao":"fora_da_revisao",/,
+  );
+  const banal = prompt.slice(prompt.indexOf("Banal"), prompt.indexOf("Fora da revisão"));
+  assert.doesNotMatch(banal, /deploy de teste/);
+  assert.match(banal, /docker ou containers: permitido/);
+  assert.match(
+    prompt,
+    /Estratégico \(escale\):\n- toda opção ou resposta que ofereça credencial, acesso ou deploy de teste ao agente;/,
+  );
+});
+
+test("fora da revisão responde o texto fixo nas etapas de revisão, mesmo fora das opções, e escala nas outras", () => {
+  const foraDaRevisao = '{"decisao":"fora_da_revisao","justificativa":"pede Sonar"}';
+  const esperada = { resposta: RESPOSTA_FORA_DA_REVISAO, justificativa: "pede Sonar" };
+  assert.equal(
+    RESPOSTA_FORA_DA_REVISAO,
+    "Fica fora da revisão; registre como verificado fora da revisão e decida pelo resto.",
+  );
+  assert.deepEqual(lerDecisao(foraDaRevisao, comOpcoes, "revisar_rodada"), esperada);
+  assert.deepEqual(lerDecisao(foraDaRevisao, livre, "revisar_demanda"), esperada);
+  assert.equal(lerDecisao(foraDaRevisao, comOpcoes, "implementar"), undefined);
+});
+
 test("lê a última decisão válida da saída; escalar, rótulo fora das opções ou saída ilegível escalam", () => {
   const responder = (resposta: string) => JSON.stringify({ decisao: "responder", resposta, justificativa: "regra" });
-  assert.deepEqual(lerDecisao(`ruído do provedor\n{"x":1}\n${responder("Sim")}\nmais ruído`, comOpcoes), {
-    resposta: "Sim",
-    justificativa: "regra",
-  });
-  assert.deepEqual(lerDecisao(responder("use o handle fixo"), livre), {
+  assert.deepEqual(
+    lerDecisao(`ruído do provedor\n{"x":1}\n${responder("Sim")}\nmais ruído`, comOpcoes, "implementar"),
+    {
+      resposta: "Sim",
+      justificativa: "regra",
+    },
+  );
+  assert.deepEqual(lerDecisao(responder("use o handle fixo"), livre, "implementar"), {
     resposta: "use o handle fixo",
     justificativa: "regra",
   });
-  assert.equal(lerDecisao(responder("Talvez"), comOpcoes), undefined);
-  assert.equal(lerDecisao('{"decisao":"escalar","justificativa":"muda o critério"}', comOpcoes), undefined);
-  assert.equal(lerDecisao("não sei", comOpcoes), undefined);
+  assert.equal(lerDecisao(responder("Talvez"), comOpcoes, "implementar"), undefined);
+  assert.equal(
+    lerDecisao('{"decisao":"escalar","justificativa":"muda o critério"}', comOpcoes, "implementar"),
+    undefined,
+  );
+  assert.equal(lerDecisao("não sei", comOpcoes, "implementar"), undefined);
 });
 
 test("chama o pi uma vez, sem ferramentas e com o modelo do ticket; código diferente de 0 ou erro escalam", async () => {
