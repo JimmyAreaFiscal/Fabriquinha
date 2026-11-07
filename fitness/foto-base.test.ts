@@ -30,6 +30,8 @@ const PASSOS_DO_REVISAR_RODADA_DA_BASE =
   "2. Confira o código da worktree contra o plano e contra cada critério citado.\n3. Explique o resultado de cada fitness function, inclusive as que falharam.\n4. Comprove cada critério da rodada com o que você viu no código e nos testes.\n5. Depois";
 const PASSOS_DO_REVISAR_RODADA_COM_REVISOES_ANTERIORES =
   '2. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos (`git log --grep` do endereço de cada um) regrediu algo. O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre: não pergunte de novo nem reprove por isso. Isso não impede reprovar de novo um motivo anterior que continua sem correção: se o corretivo não o resolveu, reprove e registre o motivo.\n3. Confira o código da worktree contra o plano e contra cada critério citado.\n4. Explique o resultado de cada fitness function, inclusive as que falharam.\n5. Comprove cada critério da rodada com o que você viu no código e nos testes.\n6. Depois';
+const MOTIVO_CORRECAO_MUDA_ARQUIVO =
+  "I-295: cada correção do --correcoes pede mudança em arquivos da worktree, pois o implementar sem alteração é devolvido";
 const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
   {
     arquivo: "cli/aula-e-demanda.txt",
@@ -84,6 +86,12 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     de: PASSOS_DO_REVISAR_RODADA_DA_BASE,
     para: PASSOS_DO_REVISAR_RODADA_COM_REVISOES_ANTERIORES,
     motivo: MOTIVO_REVISOES_ANTERIORES,
+  })),
+  ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
+    arquivo,
+    de: "o defeito material que a justifica.",
+    para: "o defeito material que a justifica. Cada correção do `--correcoes` pede mudança em arquivos da worktree; corpo do PR, Sonar, deploy e cópia do banco não são correção.",
+    motivo: MOTIVO_CORRECAO_MUDA_ARQUIVO,
   })),
 ];
 

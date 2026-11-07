@@ -1,6 +1,8 @@
 // Commit do ticket da demanda (comparacao-sdlc-implementacao.md §6), idempotente pela marca `[I-n.Tm]` na mensagem.
 import type { DatabaseSync } from "node:sqlite";
+import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";
+import { ErroDeReprovacao } from "../dominio/erros.ts";
 import { registrarRetrabalhoDemanda } from "../metricas/retrabalho.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 import type { Commit } from "../persistencia/commits.ts";
@@ -35,18 +37,29 @@ export async function acharCommitTicketDemanda(worktree: string, ref: Ref): Prom
 /**
  * `git add -A` e commit `feat|fix: <título> [I-n.Tm]` com os hooks e sem credenciais; se o commit do ticket já
  * existe (queda antes da gravação), reaproveita. Grava o commit e os arquivos e o devolve.
- * No `resolver_conflito`, o commit conclui o merge em andamento na worktree.
+ * No `resolver_conflito`, o commit conclui o merge em andamento na worktree, mesmo sem alteração; o `implementar`
+ * sem alteração não gera commit vazio e é recusado com `ErroDeReprovacao`.
  */
 export async function commitarTicketDemanda(
   banco: DatabaseSync,
   ref: Ref,
-  { worktree, tipo, titulo }: { worktree: string; tipo: "feat" | "fix"; titulo: string },
+  {
+    worktree,
+    tipo,
+    titulo,
+    etapa,
+  }: { worktree: string; tipo: "feat" | "fix"; titulo: string; etapa: TicketDemanda["etapa"] },
   limiteMs = LIMITE_COMANDO_MS,
 ): Promise<Commit> {
   let commit = await acharCommitTicketDemanda(worktree, ref);
   if (!commit) {
     await exigirGit(worktree, "add", "-A");
     const semAlteracao = (await git(worktree, "diff", "--cached", "--quiet")).codigo === 0;
+    if (semAlteracao && etapa === "implementar") {
+      throw new ErroDeReprovacao(
+        `o ticket ${formatarTicketRef(ref)} terminou sem alteração na worktree e não gera commit vazio: faça nos arquivos da worktree a correção que o ticket pede; o corpo do PR nasce da mensagem do PR no encerramento da rodada e não muda nesta etapa`,
+      );
+    }
     await commitar(worktree, `${tipo}: ${titulo} ${marcaDe(ref)}`, { emendar: false, semAlteracao }, limiteMs);
     commit = await lerCommit(worktree, (await exigirGit(worktree, "rev-parse", "HEAD")).trim());
   }
