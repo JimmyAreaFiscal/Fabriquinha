@@ -24,7 +24,9 @@ export const TicketDemanda = z.object({
   status: StatusTicket,
   status_alterado_em: Instante,
   // Quem criou o ticket; o `externo` não se grava (o banco guarda só o tipo e o trabalho).
-  criado_por: Ator,
+  criado_por: Ator.refine((ator): boolean => ator.tipo !== "externo", {
+    message: "o ticket não é criado por um ator externo",
+  }),
   // Só os tickets criados pelo plano os têm (§7.2); os de demanda e planejamento nascem sem eles.
   rodada_id: Id.optional(),
   titulo: Titulo.optional(),

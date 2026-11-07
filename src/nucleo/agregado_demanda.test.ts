@@ -105,6 +105,12 @@ test("criado_por, autor e por são obrigatórios e validam a identidade do ator"
   }
 });
 
+test("criado_por do ticket recusa o externo, que o banco não consegue reler", () => {
+  const externo = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
+  assert.equal(TicketDemanda.safeParse(ticket(1, { criado_por: externo })).success, false);
+  assert.ok(EvidenciaDemanda.safeParse(evidencia({ autor: externo })).success);
+});
+
 test("criada_por exige um externo com ferramenta Slug e sessão não vazia", () => {
   for (const identidade of [
     undefined,
