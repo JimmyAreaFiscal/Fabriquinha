@@ -1,7 +1,7 @@
 // Grupo do estresse das etapas do agendador: uma ação por `src/aplicacao/etapas/*.md`. Cada execução monta o próprio
 // cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz temporária e leva a
-// demanda à fase da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
-// despacho do ticket até ele assentar concluído; `sessao_em_aberto` vai da abertura da sessão à primeira resposta do pi.
+// demanda à estado da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
+// despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -79,7 +79,7 @@ const ticket = (c: Cenario, id: string, etapa: string) => {
   if (!t) throw new Error(`sem ticket ${etapa}`);
   return t;
 };
-const concluido = (c: Cenario, id: string, etapa: string) => ticket(c, id, etapa).status === "concluido";
+const concluido = (c: Cenario, id: string, etapa: string) => ticket(c, id, etapa).estado === "concluido";
 
 async function esperar(condicao: () => boolean, descricao: string, limiteMs = 30_000): Promise<void> {
   const fim = Date.now() + limiteMs;
@@ -202,7 +202,7 @@ const custos = {
   ],
 };
 
-/** Demanda registrada, enviada e aprovada pelo Auditor: em `planejamento`, com o `planejar` (ticket 2) aberto. */
+/** Demanda registrada, enviada e aprovada pelo Auditor: em `planejar`, com o `planejar` (ticket 2) aberto. */
 function demandaAprovada(c: Cenario): string {
   const ctx = { agora: agora() };
   const id = gestao.registrar(
@@ -467,7 +467,7 @@ const ETAPAS: Record<string, Preparar> = {
     await integrarPR({ repo: c.repo, hospedagem: "github" }, String(pr.numero));
     await ciclo(c);
   }),
-  sessao_em_aberto: async (c) => {
+  ajustar_resultado: async (c) => {
     const id = await comPR(c);
     portao(c, true);
     const ref = { demanda_id: id, rodada_id: 1 };
@@ -477,7 +477,7 @@ const ETAPAS: Record<string, Preparar> = {
         const antes = chamadas(c);
         await reprovarPRRodada(c.banco, ref, "o PR mistura duas mudanças", AUDITOR, { limiteMin: c.config.timeoutMin });
         await esperar(() => {
-          const { ticket_id } = ticket(c, id, "sessao_em_aberto");
+          const { ticket_id } = ticket(c, id, "ajustar_resultado");
           const sessao = carregarSessoesDoTicket(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
           return chamadas(c) > antes && sessao !== undefined && situacao(sessao.id)?.ocupado === false;
         }, "a primeira resposta do pi");
@@ -486,7 +486,7 @@ const ETAPAS: Record<string, Preparar> = {
       concluido: () => respondeu,
       // A conversa só registra correções: conclui-la encerra o pi ocioso.
       encerrar: async () => {
-        const { ticket_id } = ticket(c, id, "sessao_em_aberto");
+        const { ticket_id } = ticket(c, id, "ajustar_resultado");
         const correcao = {
           demanda_id: id,
           ticket_id: 1,
@@ -593,7 +593,7 @@ export function acoesEtapas(amb: Ambiente): AcaoEtapa[] {
     acao("resolver_conflito", 4910),
     acao("revisar_demanda", 3160),
     acao("encerrar_demanda", 7710),
-    acao("sessao_em_aberto", 7440),
+    acao("ajustar_resultado", 7440),
   ];
 }
 

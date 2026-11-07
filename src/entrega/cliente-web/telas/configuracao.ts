@@ -95,12 +95,12 @@ const EFFORTS = Object.keys({
 
 /** As etapas do ticket, na ordem do fluxo da demanda, com o rótulo do formulário. */
 const ROTULOS_DA_ETAPA: Record<EtapaTicket, string> = {
-  demanda: "Demanda",
+  entender_e_desenhar: "Demanda",
   planejar: "Planejar",
   implementar: "Implementar",
   revisar_rodada: "Revisar rodada",
   encerrar_rodada: "Encerrar rodada",
-  sessao_em_aberto: "Sessão em aberto",
+  ajustar_resultado: "Sessão em aberto",
   revisar_demanda: "Revisar demanda",
   encerrar_demanda: "Encerrar demanda",
   resolver_conflito: "Resolver conflito",
@@ -303,7 +303,7 @@ export function usuariosSimulados(
 
 /** A confirmação de remover o projeto, que não tem volta: o nome e o que sai junto. */
 export const confirmacaoDeRemover = (nome: string): string =>
-  `<dialog class="dialogo" data-dialogo-remover aria-labelledby="titulo-remover"><h2 id="titulo-remover">Remover o projeto ${escapar(nome)}</h2><p>O projeto <strong>${escapar(nome)}</strong> será apagado com as demandas, em qualquer fase, e os tickets, as sessões, as evidências, as decisões e o custo delas. Saem do disco as worktrees e as pastas de execução; o repositório original não é tocado. Não dá para desfazer.</p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-perigo-cheio" data-confirmar-remover>Remover projeto</button></form></dialog>`;
+  `<dialog class="dialogo" data-dialogo-remover aria-labelledby="titulo-remover"><h2 id="titulo-remover">Remover o projeto ${escapar(nome)}</h2><p>O projeto <strong>${escapar(nome)}</strong> será apagado com as demandas, em qualquer estado, e os tickets, as sessões, as evidências, as decisões e o custo delas. Saem do disco as worktrees e as pastas de execução; o repositório original não é tocado. Não dá para desfazer.</p><form method="dialog" class="dialogo-botoes"><button class="btn">Cancelar</button><button type="button" class="btn btn-perigo-cheio" data-confirmar-remover>Remover projeto</button></form></dialog>`;
 
 /** A página: o cabeçalho, o menu e o painel do item escolhido. */
 export const pagina = (menuHtml: string, painel: string): string =>

@@ -16,25 +16,26 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: st
   demanda_id,
   ticket_id,
   etapa,
-  status,
-  status_alterado_em: em(ticket_id),
+  estado: status,
+  estado_alterado_em: em(ticket_id),
   criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
 
-const rodada = (demanda_id: string, rodada_id: number, fase: string) => ({
+const rodada = (demanda_id: string, rodada_id: number, estado: string) => ({
   demanda_id,
   rodada_id,
   titulo: `rodada ${String(rodada_id)}`,
-  fase,
+  estado,
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/${demanda_id}-${String(rodada_id)}`,
 });
 
 /**
  * Uma demanda em cada lugar do board: I-300 no registro (com a conversa interativa parada), I-301 e I-302 nos gates da
- * demanda e do plano, I-303 em execução com uma rodada em cada fase, I-304 no encerramento com o ticket global falho e
+ * demanda e do plano, I-303 em execução com uma rodada em cada estado, I-304 no encerramento com o ticket global falho e
  * I-305 na revisão, bloqueada pela I-303, e I-307 em execução com a única rodada concluída. A I-306 concluiu e fica
  * fora.
  */
@@ -44,27 +45,31 @@ function cenario(): DatabaseSync {
     VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`);
   gravarAgregadoPronto(
     banco,
-    montarAgregadoDemanda("I-300", "registro", { tickets: [ticket("I-300", 1, "demanda", "aberto")] }),
+    montarAgregadoDemanda("I-300", "entender_e_desenhar", {
+      tickets: [ticket("I-300", 1, "entender_e_desenhar", "aberto")],
+    }),
   );
   gravarAgregadoPronto(
     banco,
-    montarAgregadoDemanda("I-301", "aprovacao_demanda", { tickets: [ticket("I-301", 1, "demanda", "em_execucao")] }),
+    montarAgregadoDemanda("I-301", "gate_demanda", {
+      tickets: [ticket("I-301", 1, "entender_e_desenhar", "em_execucao")],
+    }),
   );
-  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-302", "aprovacao_planejamento"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-302", "gate_planejamento"));
   gravarAgregadoPronto(
     banco,
-    montarAgregadoDemanda("I-303", "execucao", {
+    montarAgregadoDemanda("I-303", "em_execucao", {
       rodadas: [
         rodada("I-303", 1, "concluida"),
-        rodada("I-303", 2, "aprovacao_pull_request"),
-        rodada("I-303", 3, "sessao"),
-        rodada("I-303", 4, "desenvolvimento"),
-        rodada("I-303", 5, "aprovacao_pull_request"),
+        rodada("I-303", 2, "gate_pr"),
+        rodada("I-303", 3, "ajustar_resultado"),
+        rodada("I-303", 4, "implementar"),
+        rodada("I-303", 5, "gate_pr"),
       ],
       tickets: [
         ticket("I-303", 1, "implementar", "concluido", { rodada_id: 1 }),
         ticket("I-303", 2, "encerrar_rodada", "concluido", { rodada_id: 2 }),
-        ticket("I-303", 3, "sessao_em_aberto", "em_execucao", { rodada_id: 3 }),
+        ticket("I-303", 3, "ajustar_resultado", "em_execucao", { rodada_id: 3 }),
         ticket("I-303", 4, "implementar", "aberto", { rodada_id: 4 }),
         ticket("I-303", 5, "implementar", "em_execucao", { rodada_id: 4, titulo: "Busca por cupom" }),
         ticket("I-303", 6, "implementar", "falhou", { rodada_id: 4, motivo_falha: "testes falharam" }),
@@ -84,14 +89,14 @@ function cenario(): DatabaseSync {
   );
   gravarAgregadoPronto(
     banco,
-    montarAgregadoDemanda("I-304", "encerramento", { tickets: [ticket("I-304", 8, "encerrar_demanda", "falhou")] }),
+    montarAgregadoDemanda("I-304", "encerrar_demanda", { tickets: [ticket("I-304", 8, "encerrar_demanda", "falhou")] }),
   );
-  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-305", "revisao_demanda"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-305", "revisar_demanda"));
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-306", "concluida"));
   // I-307: rodadas concluídas, mas a regra recusa a revisão integral pela implementação cancelada.
   gravarAgregadoPronto(
     banco,
-    montarAgregadoDemanda("I-307", "execucao", {
+    montarAgregadoDemanda("I-307", "em_execucao", {
       rodadas: [rodada("I-307", 1, "concluida")],
       tickets: [
         ticket("I-307", 1, "implementar", "concluido", { rodada_id: 1 }),
@@ -106,11 +111,11 @@ function cenario(): DatabaseSync {
   ] as const) {
     gravarAgregadoPronto(
       banco,
-      montarAgregadoDemanda(id, "execucao", {
+      montarAgregadoDemanda(id, "em_execucao", {
         rodadas: [rodada(id, 1, "concluida")],
         tickets: [
-          ticket(id, 1, "implementar", "concluido", { rodada_id: 1, status_alterado_em: quando }),
-          ticket(id, 2, "implementar", "concluido", { rodada_id: 1, status_alterado_em: em(1) }),
+          ticket(id, 1, "implementar", "concluido", { rodada_id: 1, estado_alterado_em: quando }),
+          ticket(id, 2, "implementar", "concluido", { rodada_id: 1, estado_alterado_em: em(1) }),
         ],
       }),
     );
@@ -148,11 +153,11 @@ test("aguarda: gates, ajustes, falhos, a revisão integral parada e a conversa p
     {
       motivo: "gate_demanda",
       ...comum("I-301"),
-      ticket: { ref: "I-301.T1", etapa: "demanda" },
+      ticket: { ref: "I-301.T1", etapa: "entender_e_desenhar" },
       desde: "2026-01-01T00:00:00.000Z",
     },
     { motivo: "gate_planejamento", ...comum("I-302"), desde: "2026-01-01T00:00:00.000Z" },
-    // A R5 aguarda o PR sem o encerramento da rodada: conta desde a fase da demanda.
+    // A R5 aguarda o PR sem o encerramento da rodada: conta desde o estado da demanda.
     { motivo: "gate_pr", ...comum("I-303"), rodada: "I-303.R5", desde: "2026-01-01T00:00:00.000Z" },
     {
       motivo: "gate_pr",
@@ -166,7 +171,7 @@ test("aguarda: gates, ajustes, falhos, a revisão integral parada e a conversa p
       motivo: "ajustes",
       ...comum("I-303"),
       rodada: "I-303.R3",
-      ticket: { ref: "I-303.T3", etapa: "sessao_em_aberto", modo: "interativo" },
+      ticket: { ref: "I-303.T3", etapa: "ajustar_resultado", modo: "interativo" },
       desde: em(3),
     },
     {
@@ -193,7 +198,7 @@ test("aguarda: gates, ajustes, falhos, a revisão integral parada e a conversa p
     {
       motivo: "conversa",
       ...comum("I-300"),
-      ticket: { ref: "I-300.T1", etapa: "demanda", modo: "interativo" },
+      ticket: { ref: "I-300.T1", etapa: "entender_e_desenhar", modo: "interativo" },
       sessao: "s-conversa",
       desde: em(40),
     },
@@ -217,22 +222,22 @@ test("board: um cartão por demanda fora da execução e um por rodada aberta ne
   const dados = inicio(cenario(), () => undefined);
   assert.equal(dados.emAndamento, 9);
   assert.deepEqual(
-    dados.board.map((c) => [c.coluna, c.ref, c.ticket?.ref, c.ticket?.status, c.ticket?.modo, c.outros, c.bloqueios]),
+    dados.board.map((c) => [c.coluna, c.ref, c.ticket?.ref, c.ticket?.estado, c.ticket?.modo, c.outros, c.bloqueios]),
     [
-      ["registro", "I-300", "I-300.T1", "aberto", "interativo", 0, []],
-      ["aprovacao_demanda", "I-301", "I-301.T1", "em_execucao", undefined, 0, []],
-      ["aprovacao_planejamento", "I-302", undefined, undefined, undefined, 0, []],
-      ["aprovacao_pull_request", "I-303.R2", undefined, undefined, undefined, 0, []],
-      ["sessao", "I-303.R3", "I-303.T3", "em_execucao", "interativo", 0, []],
+      ["entender_e_desenhar", "I-300", "I-300.T1", "aberto", "interativo", 0, []],
+      ["gate_demanda", "I-301", "I-301.T1", "em_execucao", undefined, 0, []],
+      ["gate_planejamento", "I-302", undefined, undefined, undefined, 0, []],
+      ["gate_pr", "I-303.R2", undefined, undefined, undefined, 0, []],
+      ["ajustar_resultado", "I-303.R3", "I-303.T3", "em_execucao", "interativo", 0, []],
       // O em execução e o falho antes do aberto, na ordem dos tickets.
-      ["desenvolvimento", "I-303.R4", "I-303.T5", "em_execucao", "autonomo", 3, []],
-      ["aprovacao_pull_request", "I-303.R5", undefined, undefined, undefined, 0, []],
+      ["implementar", "I-303.R4", "I-303.T5", "em_execucao", "autonomo", 3, []],
+      ["gate_pr", "I-303.R5", undefined, undefined, undefined, 0, []],
       ["encerramento_demanda", "I-304", "I-304.T8", "falhou", undefined, 0, []],
-      ["revisao_demanda", "I-305", undefined, undefined, undefined, 0, ["I-303"]],
+      ["revisar_demanda", "I-305", undefined, undefined, undefined, 0, ["I-303"]],
       // Em execução sem rodada aberta: a demanda inteira no Desenvolvimento, até a revisão abrir.
-      ["desenvolvimento", "I-307", undefined, undefined, undefined, 0, []],
-      ["desenvolvimento", "I-308", undefined, undefined, undefined, 0, []],
-      ["desenvolvimento", "I-309", undefined, undefined, undefined, 0, []],
+      ["implementar", "I-307", undefined, undefined, undefined, 0, []],
+      ["implementar", "I-308", undefined, undefined, undefined, 0, []],
+      ["implementar", "I-309", undefined, undefined, undefined, 0, []],
     ],
   );
   // Só o ticket com o pi no ar (execução aberta e grupo gravado) marca `piAtivo`.
@@ -241,12 +246,12 @@ test("board: um cartão por demanda fora da execução e um por rodada aberta ne
     ["I-303.T5"],
   );
   assert.deepEqual(dados.board[0], {
-    coluna: "registro",
+    coluna: "entender_e_desenhar",
     ref: "I-300",
     demanda: "I-300",
     projeto: "loja",
     titulo: "demanda I-300",
-    ticket: { ref: "I-300.T1", etapa: "demanda", status: "aberto", modo: "interativo" },
+    ticket: { ref: "I-300.T1", etapa: "entender_e_desenhar", estado: "aberto", modo: "interativo" },
     outros: 0,
     bloqueios: [],
   });
@@ -287,9 +292,9 @@ test("esperaDaSessao: o diálogo traz a pergunta do processo vivo; a falha e a s
   ]);
   assert.equal(esperaDaSessao(sessao, () => undefined)[0]?.pergunta, undefined);
   assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "falha" }, comPergunta), []);
-  assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "conversa", etapa: "sessao_em_aberto" }, comPergunta), []);
+  assert.deepEqual(esperaDaSessao({ ...sessao, motivo: "conversa", etapa: "ajustar_resultado" }, comPergunta), []);
   // A pergunta do agente na sessão de ajustes só aparece aqui: a espera da demanda não a mostra.
-  assert.equal(esperaDaSessao({ ...sessao, etapa: "sessao_em_aberto" }, comPergunta)[0]?.pergunta, "Qual ordem?");
+  assert.equal(esperaDaSessao({ ...sessao, etapa: "ajustar_resultado" }, comPergunta)[0]?.pergunta, "Qual ordem?");
 });
 
 test("GET /api/inicio responde com o mês corrente de todos os projetos", async () => {

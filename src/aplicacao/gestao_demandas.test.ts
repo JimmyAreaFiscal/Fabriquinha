@@ -88,7 +88,7 @@ test("CA-1: registra a demanda I-n em registro, com a origem do autor e sem evid
     ctx,
   );
   assert.match(ag.demanda.id, /^I-\d+$/);
-  assert.equal(ag.demanda.fase, "registro");
+  assert.equal(ag.demanda.estado, "entender_e_desenhar");
   assert.deepEqual(ag.demanda.criada_por, autor);
   assert.deepEqual(ag.tickets[0]?.criado_por, { tipo: "fabriquinha" });
   assert.deepEqual(ag.evidencias, []);
@@ -179,7 +179,7 @@ test("CA-7: outra sessão não envia a demanda", () => {
   const id = registrar(b);
   completar(b, id);
   assert.throws(() => gestao.enviar(b, id, outra, ctx), ErroDeEscopo);
-  assert.equal(carregarDemanda(b, id).demanda.fase, "registro");
+  assert.equal(carregarDemanda(b, id).demanda.estado, "entender_e_desenhar");
 });
 
 test("CA-8: outra sessão não submete evidência", () => {
@@ -264,7 +264,9 @@ test("CA-SDLC-24: custos_realizados com rodada_id vira evidência da rodada e n�
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
-  b.exec(`INSERT INTO rodada VALUES ('${id}', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/${id}-1')`);
+  b.exec(
+    `INSERT INTO rodada VALUES ('${id}', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/${id}-1')`,
+  );
   const entrada = { tipo: "custos_realizados", dados: custos("ext-r1"), rodada_id: 1, arquivos: [] };
   gestao.submeterEvidencia(b, id, entrada as gestao.EntradaEvidencia, autor, ctx);
   assert.deepEqual(
@@ -291,12 +293,12 @@ test("CA-13: envio sem as obrigatórias lista as faltantes", () => {
   assert.equal(carregarDemanda(b, id).demanda.enviada, false);
 });
 
-test("CA-14: com as três obrigatórias, enviar vai a aprovacao_demanda", () => {
+test("CA-14: com as três obrigatórias, enviar vai a gate_demanda", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
   const ag = gestao.enviar(b, id, autor, ctx);
-  assert.equal(ag.demanda.fase, "aprovacao_demanda");
+  assert.equal(ag.demanda.estado, "gate_demanda");
   assert.equal(carregarDemanda(b, id).demanda.enviada, true);
 });
 
@@ -315,14 +317,17 @@ test("CA-15: depois do envio criterios_aceite está congelado e custos_realizado
   assert.equal((custo?.dados as ReturnType<typeof custos>).sessoes[0]?.sessao, "ext2");
 });
 
-test("CA-27: arquivar demanda concluída muda só a fase", () => {
+test("CA-27: arquivar demanda concluída muda só o estado", () => {
   const b = novoBanco();
   const id = registrar(b);
-  b.prepare("UPDATE demanda SET fase = 'concluida' WHERE id = ?").run(id);
+  b.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(id);
   const antes = carregarDemanda(b, id);
   const ag = gestao.arquivar(b, id, AUDITOR, ctx);
-  assert.equal(ag.demanda.fase, "arquivada");
-  assert.deepEqual({ ...ag.demanda, fase: 0, fase_alterada_em: 0 }, { ...antes.demanda, fase: 0, fase_alterada_em: 0 });
+  assert.equal(ag.demanda.estado, "arquivada");
+  assert.deepEqual(
+    { ...ag.demanda, estado: 0, estado_alterado_em: 0 },
+    { ...antes.demanda, estado: 0, estado_alterado_em: 0 },
+  );
 });
 
 test("CA-28: arquivar fora de concluida é recusado", () => {
@@ -331,7 +336,7 @@ test("CA-28: arquivar fora de concluida é recusado", () => {
   completar(b, id);
   gestao.enviar(b, id, autor, ctx);
   assert.throws(() => gestao.arquivar(b, id, AUDITOR, ctx), /só demanda concluída/);
-  assert.equal(carregarDemanda(b, id).demanda.fase, "aprovacao_demanda");
+  assert.equal(carregarDemanda(b, id).demanda.estado, "gate_demanda");
 });
 
 test("CA-29: o módulo exporta as operações de registro, edição, evidência, envio, decisão, cancelamento e arquivamento", () => {
@@ -341,9 +346,9 @@ test("CA-29: o módulo exporta as operações de registro, edição, evidência,
   }
 });
 
-const fase = (b: DatabaseSync, id: string) => carregarDemanda(b, id).demanda.fase;
-const poFase = (b: DatabaseSync, id: string, f: string) =>
-  b.prepare("UPDATE demanda SET fase = ? WHERE id = ?").run(f, id);
+const estado = (b: DatabaseSync, id: string) => carregarDemanda(b, id).demanda.estado;
+const poEstado = (b: DatabaseSync, id: string, f: string) =>
+  b.prepare("UPDATE demanda SET estado = ? WHERE id = ?").run(f, id);
 const aguardando = (b: DatabaseSync, dependencias?: string[]) => {
   const id = registrar(b, dependencias);
   completar(b, id);
@@ -358,10 +363,10 @@ test("CA-16: aprovar leva a planejamento, grava a decisão e não cascateia", ()
   const a = aguardando(b);
   const dep = registrar(b, [a]);
   const { demanda, canceladas } = gestao.decidir(b, a, aprovar, AUDITOR, ctx);
-  assert.equal(demanda.demanda.fase, "planejamento");
+  assert.equal(demanda.demanda.estado, "planejar");
   assert.deepEqual(canceladas, []);
   assert.equal(demanda.decisoes[0]?.resultado, "aprovado");
-  assert.equal(fase(b, dep), "registro");
+  assert.equal(estado(b, dep), "entender_e_desenhar");
 });
 
 test("CA-17: recusar com motivo cancela a demanda e as dependentes elegíveis", () => {
@@ -369,12 +374,12 @@ test("CA-17: recusar com motivo cancela a demanda e as dependentes elegíveis", 
   const a = aguardando(b);
   const dep = registrar(b, [a]);
   const feita = registrar(b, [a]);
-  poFase(b, feita, "concluida");
+  poEstado(b, feita, "concluida");
   const { demanda, canceladas } = gestao.decidir(b, a, recusar, AUDITOR, ctx);
-  assert.equal(demanda.demanda.fase, "cancelada");
+  assert.equal(demanda.demanda.estado, "cancelada");
   assert.deepEqual(canceladas, [a, dep]);
-  assert.equal(fase(b, dep), "cancelada");
-  assert.equal(fase(b, feita), "concluida");
+  assert.equal(estado(b, dep), "cancelada");
+  assert.equal(estado(b, feita), "concluida");
 });
 
 test("CA-18: recusar sem motivo pede o motivo; outros erros de entrada seguem o padrão", () => {
@@ -382,21 +387,21 @@ test("CA-18: recusar sem motivo pede o motivo; outros erros de entrada seguem o 
   const a = aguardando(b);
   assert.throws(() => gestao.decidir(b, a, { aprovado: false }, AUDITOR, ctx), /informe o motivo da recusa/);
   assert.throws(() => gestao.decidir(b, a, { aprovado: "x" }, AUDITOR, ctx), ErroDeRegra);
-  assert.equal(fase(b, a), "aprovacao_demanda");
+  assert.equal(estado(b, a), "gate_demanda");
 });
 
 test("CA-19: o autor não decide", () => {
   const b = novoBanco();
   const a = aguardando(b);
   assert.throws(() => gestao.decidir(b, a, aprovar, { tipo: "agente", trabalho_id: "1" }, ctx), /Auditor/);
-  assert.equal(fase(b, a), "aprovacao_demanda");
+  assert.equal(estado(b, a), "gate_demanda");
 });
 
 test("CA-20: demanda em registro não espera decisão", () => {
   const b = novoBanco();
   const a = registrar(b);
   assert.throws(() => gestao.decidir(b, a, aprovar, AUDITOR, ctx), /não espera decisão/);
-  assert.equal(fase(b, a), "registro");
+  assert.equal(estado(b, a), "entender_e_desenhar");
 });
 
 test("CA-21: cancelar leva dependentes diretas e indiretas de outros projetos e poupa as terminadas", () => {
@@ -413,13 +418,13 @@ test("CA-21: cancelar leva dependentes diretas e indiretas de outros projetos e 
   ).demanda.id;
   const d = registrar(b, [a]);
   const e = registrar(b, [a]);
-  poFase(b, d, "concluida");
-  poFase(b, e, "arquivada");
-  poFase(b, a, "execucao");
+  poEstado(b, d, "concluida");
+  poEstado(b, e, "arquivada");
+  poEstado(b, a, "em_execucao");
   const { canceladas } = gestao.cancelar(b, a, AUDITOR, ctx);
   assert.deepEqual([...canceladas].sort(), [a, bb, c].sort());
   assert.deepEqual(
-    [a, bb, c, d, e].map((i) => fase(b, i)),
+    [a, bb, c, d, e].map((i) => estado(b, i)),
     ["cancelada", "cancelada", "cancelada", "concluida", "arquivada"],
   );
 });
@@ -451,15 +456,15 @@ test("CA-23: o autor não cancela", () => {
   const b = novoBanco();
   const a = registrar(b);
   assert.throws(() => gestao.cancelar(b, a, { tipo: "agente", trabalho_id: "1" }, ctx), /Auditor/);
-  assert.equal(fase(b, a), "registro");
+  assert.equal(estado(b, a), "entender_e_desenhar");
 });
 
 test("CA-24: demanda terminada não se cancela (a integração confirmada é regra do domínio)", () => {
   const b = novoBanco();
   const a = registrar(b);
-  poFase(b, a, "concluida");
+  poEstado(b, a, "concluida");
   assert.throws(() => gestao.cancelar(b, a, AUDITOR, ctx), /já terminou/);
-  assert.equal(fase(b, a), "concluida");
+  assert.equal(estado(b, a), "concluida");
 });
 
 test("CA-25: cancelar mantém decisões, evidências e execuções", () => {
@@ -484,11 +489,11 @@ test("CA-26: falha na gravação de uma dependente desfaz a demanda e todas as d
   const a = registrar(b);
   const bb = registrar(b, [a]);
   const c = registrar(b, [a]);
-  b.exec(`CREATE TRIGGER falha BEFORE UPDATE OF fase ON demanda WHEN NEW.id = '${c}' AND NEW.fase = 'cancelada'
+  b.exec(`CREATE TRIGGER falha BEFORE UPDATE OF estado ON demanda WHEN NEW.id = '${c}' AND NEW.estado = 'cancelada'
     BEGIN SELECT RAISE(ABORT, 'falhou'); END`);
   assert.throws(() => gestao.cancelar(b, a, AUDITOR, ctx), /falhou/);
   assert.deepEqual(
-    [a, bb, c].map((i) => fase(b, i)),
-    ["registro", "registro", "registro"],
+    [a, bb, c].map((i) => estado(b, i)),
+    ["entender_e_desenhar", "entender_e_desenhar", "entender_e_desenhar"],
   );
 });

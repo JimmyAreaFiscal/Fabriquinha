@@ -3,13 +3,15 @@
 import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Ator } from "../src/nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
 import type { Verificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
+import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { fecharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
 import { aprovarPlanejamentoDemanda, iniciarOuRetomarPlanejamento } from "../src/aplicacao/planejamento.ts";
+import { decidirRevisaoIntegral } from "../src/aplicacao/revisao_demanda.ts";
 import { decidirRevisaoRodada } from "../src/aplicacao/revisao_rodada.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
@@ -74,9 +76,8 @@ export interface RodadaPlano {
   tickets: number;
 }
 
-/** Demanda aprovada, planejada e com o plano aprovado (as worktrees prontas): em `execucao`, com os tickets abertos. */
-export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Promise<string> {
-  const id = demandaAprovada(c);
+/** Demanda aprovada que o `planejar` planejou: o plano está submetido e a demanda espera o Auditor em `gate_planejamento`. */
+export async function planejarDemanda(c: Cenario, id: string, rodadas: RodadaPlano[]): Promise<void> {
   pi.roteirizar([{ uso: null }]);
   // Só o planejamento desta demanda: um ciclo do agendador despacharia o trabalho das outras.
   const { fim } = iniciarOuRetomarPlanejamento(c.banco, id, c.config.timeoutMin);
@@ -111,8 +112,15 @@ export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Pro
     },
     { tipo: "agente", trabalho_id: "execucao-1" },
   );
+  assert.equal(demanda(c, id).demanda.estado, "gate_planejamento");
+}
+
+/** Demanda aprovada, planejada e com o plano aprovado (as worktrees prontas): em `em_execucao`, com os tickets abertos. */
+export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Promise<string> {
+  const id = demandaAprovada(c);
+  await planejarDemanda(c, id, rodadas);
   await aprovarPlanejamentoDemanda(c.banco, id, {});
-  assert.equal(demanda(c, id).demanda.fase, "execucao");
+  assert.equal(demanda(c, id).demanda.estado, "em_execucao");
   return id;
 }
 
@@ -125,7 +133,7 @@ export const ticketDe = (c: Cenario, id: string, rodada: number, n = 1) => {
   return { demanda_id: id, ticket_id: t.ticket_id };
 };
 export const statusDe = (c: Cenario, ref: { demanda_id: string; ticket_id: number }) =>
-  demanda(c, ref.demanda_id).tickets.find((t) => t.ticket_id === ref.ticket_id)?.status;
+  demanda(c, ref.demanda_id).tickets.find((t) => t.ticket_id === ref.ticket_id)?.estado;
 export const rodadaDe = (c: Cenario, id: string, n: number) => demanda(c, id).rodadas.find((r) => r.rodada_id === n);
 export const execucoesDe = (c: Cenario, ref: { demanda_id: string; ticket_id: number }) =>
   carregarSessoesDoTicket(c.banco, ref).execucoes;
@@ -162,7 +170,7 @@ export async function rodadaEmRevisao(c: Cenario): Promise<string> {
   abrirPortao();
   pi.roteirizar([{ agente, uso: null }]);
   await ciclo(c, despacho());
-  assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
   return id;
 }
 
@@ -192,7 +200,7 @@ type DecisaoDaRevisao = { aprovado: true } | { aprovado: false; exigencias: stri
 
 /** O agente da revisão da `rodada`, com a execução aberta: as evidências (se aprova) e a decisão. */
 export function decidirComoRevisor(c: Cenario, id: string, decisao: DecisaoDaRevisao, rodada = 1): number {
-  const { ticket_id, status } = atual(c, id, "revisar_rodada", rodada);
+  const { ticket_id, estado: status } = atual(c, id, "revisar_rodada", rodada);
   assert.equal(status, "em_execucao", "a revisão espera a decisão do agente");
   if (decisao.aprovado) {
     comoAgente(c, id, ticket_id, [
@@ -240,6 +248,61 @@ export async function encerrar(c: Cenario, id: string, rodada = 1): Promise<void
 export async function rodadaEmEncerramento(c: Cenario): Promise<string> {
   const id = await rodadaEmRevisao(c);
   await revisar(c, id, { aprovado: true });
-  assert.equal(rodadaDe(c, id, 1)?.fase, "encerramento");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "encerrar_rodada");
   return id;
+}
+
+/** O despacho com a espera do PR encurtada: o `gh` falso responde na hora. */
+export const despachoComEsperaCurta = (): DepsDespacho => ({
+  ...despacho(),
+  verificacao: { intervaloMs: 1, carenciaMs: 0, limiteMs: 5000 },
+});
+
+/** O ticket mais novo da etapa na demanda (sem rodada, como o `revisar_demanda`). */
+const ultimoDaEtapa = (c: Cenario, id: string, etapa: string) =>
+  demanda(c, id)
+    .tickets.filter((t) => t.etapa === etapa)
+    .at(-1);
+
+/** Revisão integral: o agendador inicia e conduz a etapa; o agente (o teste) submete as evidências e decide durante a execução. */
+export async function revisaoIntegral(
+  c: Cenario,
+  id: string,
+  decisao: "aprovada" | { exigencias: string },
+): Promise<number> {
+  let revisor = 0;
+  await despacharComAgente(c, despachoComEsperaCurta(), () => {
+    const ticket = ultimoDaEtapa(c, id, "revisar_demanda");
+    assert.equal(ticket?.estado, "em_execucao", "a revisão integral espera a decisão do agente");
+    const { ticket_id } = ticket;
+    revisor = ticket_id;
+    const agenteDoTicket = agenteDaExecucaoAberta(c, { demanda_id: id, ticket_id });
+    if (decisao === "aprovada") {
+      comoAgente(c, id, ticket_id, [
+        ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
+        ["testes_estresse", { aplicavel: false, cenarios: [], justificativa: "sem carga" }],
+        ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
+      ]);
+      decidirRevisaoIntegral(c.banco, { demanda_id: id, ticket_id, aprovado: true }, agenteDoTicket);
+    } else {
+      const plano = {
+        demanda_id: id,
+        criterios: ["CA-1"],
+        rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Corrigir o agregado", e2e: false, criterios: ["CA-1"] }],
+        tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir a integração", descricao: "d" }],
+      };
+      decidirRevisaoIntegral(
+        c.banco,
+        { demanda_id: id, ticket_id, aprovado: false, exigencias: decisao.exigencias, plano },
+        agenteDoTicket,
+      );
+    }
+  });
+  return revisor;
+}
+
+/** Aprova o PR que o encerramento da rodada publicou, como o Auditor, e integra a rodada na demanda. */
+export async function aprovarRodada(c: Cenario, id: string, rodada: number): Promise<void> {
+  await aprovarPRRodada(c.banco, { demanda_id: id, rodada_id: rodada }, 4, AUDITOR);
+  assert.equal(rodadaDe(c, id, rodada)?.estado, "concluida");
 }

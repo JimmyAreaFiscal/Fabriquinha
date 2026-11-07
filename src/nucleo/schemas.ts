@@ -99,7 +99,7 @@ export function daUltimaConcluida(
   etapa: EtapaTicket,
   tipo: TipoEvidencia,
 ): EvidenciaDemanda | undefined {
-  const ticket = ag.tickets.findLast((t) => t.etapa === etapa && t.status === "concluido");
+  const ticket = ag.tickets.findLast((t) => t.etapa === etapa && t.estado === "concluido");
   return ticket && ag.evidencias.find((e) => e.ticket_id === ticket.ticket_id && e.tipo === tipo);
 }
 

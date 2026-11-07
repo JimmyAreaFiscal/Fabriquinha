@@ -23,11 +23,11 @@ const tk = (ticket_id: number, etapa: string, status: string) => ({
   demanda_id: D,
   ticket_id,
   etapa,
-  status,
-  status_alterado_em: t0,
+  estado: status,
+  estado_alterado_em: t0,
   criado_por: FABRIQUINHA,
 });
-const montar = (m: Record<string, unknown> = {}, status = "aberto", fase = "encerramento") =>
+const montar = (m: Record<string, unknown> = {}, status = "aberto", estado = "encerrar_demanda") =>
   AgregadoDemanda.parse({
     demanda: {
       id: D,
@@ -35,13 +35,13 @@ const montar = (m: Record<string, unknown> = {}, status = "aberto", fase = "ence
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: t0,
+      estado,
+      estado_alterado_em: t0,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },
-    tickets: [tk(1, "demanda", "concluido"), tk(2, "encerrar_demanda", status)],
+    tickets: [tk(1, "entender_e_desenhar", "concluido"), tk(2, "encerrar_demanda", status)],
     decisoes: [],
     evidencias: [],
     ...m,
@@ -61,7 +61,7 @@ const comProgresso = (m: Record<string, unknown> = {}, status = "aberto") => mon
 const emConflito = (statusResolver = "aberto") =>
   montar({
     tickets: [
-      tk(1, "demanda", "concluido"),
+      tk(1, "entender_e_desenhar", "concluido"),
       tk(2, "encerrar_demanda", "aberto"),
       tk(3, "resolver_conflito", statusResolver),
     ],
@@ -117,10 +117,10 @@ test("tentativa aceita limpa conflito_pendente e falha de check_final, mas mant�
   );
 });
 
-test("tentativa recusa quando podeTentarEncerramento é falso, outro ator, outra demanda e fase errada", () => {
+test("tentativa recusa quando podeTentarEncerramento é falso, outro ator, outra demanda e estado errado", () => {
   regra(() => registrarTentativaEncerramento(emConflito("aberto"), tentativa(), FABRIQUINHA));
   regra(() => registrarTentativaEncerramento(montar({}, "falhou"), tentativa(), FABRIQUINHA));
-  regra(() => registrarTentativaEncerramento(montar({}, "aberto", "execucao"), tentativa(), FABRIQUINHA));
+  regra(() => registrarTentativaEncerramento(montar({}, "aberto", "em_execucao"), tentativa(), FABRIQUINHA));
   regra(() => registrarTentativaEncerramento(montar(), tentativa({ demanda_id: "I-2" }), FABRIQUINHA));
   assert.throws(() => registrarTentativaEncerramento(montar(), tentativa(), AUDITOR), ErroDeEscopo);
   assert.throws(() => registrarTentativaEncerramento(montar(), tentativa({ extra: 1 }), FABRIQUINHA));
@@ -135,7 +135,7 @@ test("tentativa aceita o encerrar_demanda reservado (em_execucao) e mantém as d
     const ag = emConflito(r);
     return {
       ...ag,
-      tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, status: "em_execucao" as const } : t)),
+      tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, estado: "em_execucao" as const } : t)),
     };
   };
   regra(() => registrarTentativaEncerramento(reservadoEmConflito("aberto"), tentativa(), FABRIQUINHA));
@@ -146,7 +146,7 @@ test("tentativa aceita o encerrar_demanda reservado (em_execucao) e mantém as d
   );
 });
 
-test("podeTentarEncerramento: sem conflito, resolver aberto/falho/concluído, encerrar falhou, fase errada, sem ticket", () => {
+test("podeTentarEncerramento: sem conflito, resolver aberto/falho/concluído, encerrar falhou, estado errado, sem ticket", () => {
   assert.equal(podeTentarEncerramento(montar()), true);
   assert.equal(podeTentarEncerramento(comProgresso()), true);
   assert.equal(podeTentarEncerramento(emConflito("concluido")), true);
@@ -154,8 +154,8 @@ test("podeTentarEncerramento: sem conflito, resolver aberto/falho/concluído, en
   assert.equal(podeTentarEncerramento(emConflito("falhou")), false);
   assert.equal(podeTentarEncerramento(montar({}, "falhou")), false);
   assert.equal(podeTentarEncerramento(montar({}, "em_execucao")), false);
-  assert.equal(podeTentarEncerramento(montar({}, "aberto", "execucao")), false);
-  assert.equal(podeTentarEncerramento(montar({ tickets: [tk(1, "demanda", "concluido")] })), false);
+  assert.equal(podeTentarEncerramento(montar({}, "aberto", "em_execucao")), false);
+  assert.equal(podeTentarEncerramento(montar({ tickets: [tk(1, "entender_e_desenhar", "concluido")] })), false);
   const reaberto = reabrirTicket(emConflito("falhou"), { ticket_id: 3, instrucao: "refaça" }, AUDITOR, c);
   assert.equal(podeTentarEncerramento(reaberto), false);
 });
@@ -164,22 +164,22 @@ test("CA-4: conflito cria resolver_conflito aberto, grava conflito_pendente e de
   const ag = comProgresso({}, "em_execucao");
   const novo = registrarConflitoEncerramento(ag, { demanda_id: D }, FABRIQUINHA, c);
   assert.deepEqual(
-    novo.tickets.map((t) => [t.ticket_id, t.etapa, t.status]),
+    novo.tickets.map((t) => [t.ticket_id, t.etapa, t.estado]),
     [
-      [1, "demanda", "concluido"],
+      [1, "entender_e_desenhar", "concluido"],
       [2, "encerrar_demanda", "aberto"],
       [3, "resolver_conflito", "aberto"],
     ],
   );
   assert.deepEqual(novo.encerramento?.conflito_pendente, { ticket_id: 3 });
-  assert.equal(novo.demanda.fase, "encerramento");
+  assert.equal(novo.demanda.estado, "encerrar_demanda");
   assert.equal(novo.encerramento.integracao, undefined);
   assert.deepEqual(novo.decisoes, []);
   assert.deepEqual(novo.dependencias_ticket, []);
   assert.equal(ag.tickets.length, 2);
 });
 
-test("conflito: repetir não cria segundo ticket; recusa sem progresso, com integração, ticket inativo e fase errada", () => {
+test("conflito: repetir não cria segundo ticket; recusa sem progresso, com integração, ticket inativo e estado errado", () => {
   const um = registrarConflitoEncerramento(comProgresso(), { demanda_id: D }, FABRIQUINHA, c);
   assert.deepEqual(registrarConflitoEncerramento(um, { demanda_id: D }, FABRIQUINHA, c), um);
   regra(() => registrarConflitoEncerramento(montar(), { demanda_id: D }, FABRIQUINHA, c));
@@ -187,7 +187,7 @@ test("conflito: repetir não cria segundo ticket; recusa sem progresso, com inte
     registrarConflitoEncerramento(comProgresso({ integracao: { sha: "i" } }), { demanda_id: D }, FABRIQUINHA, c),
   );
   regra(() => registrarConflitoEncerramento(comProgresso({}, "falhou"), { demanda_id: D }, FABRIQUINHA, c));
-  regra(() => registrarConflitoEncerramento(montar({}, "aberto", "execucao"), { demanda_id: D }, FABRIQUINHA, c));
+  regra(() => registrarConflitoEncerramento(montar({}, "aberto", "em_execucao"), { demanda_id: D }, FABRIQUINHA, c));
   regra(() => registrarConflitoEncerramento(montar({ tickets: [] }), { demanda_id: D }, FABRIQUINHA, c));
   assert.throws(() => registrarConflitoEncerramento(comProgresso(), { demanda_id: D }, AUDITOR, c), ErroDeEscopo);
 });
@@ -195,8 +195,8 @@ test("conflito: repetir não cria segundo ticket; recusa sem progresso, com inte
 test("CA-5: resolução verificada conclui o resolver, grava o SHA e libera a tentativa sem decisão", () => {
   const ag = emConflito("em_execucao");
   const novo = concluirResolucaoConflito(ag, resolucao(), FABRIQUINHA, c);
-  assert.equal(novo.tickets.find((t) => t.ticket_id === 3)?.status, "concluido");
-  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "aberto");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 3)?.estado, "concluido");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "aberto");
   assert.equal(novo.encerramento?.sha_verificado, "s2");
   assert.deepEqual(novo.decisoes, []);
   assert.equal(novo.tickets.length, 3);
@@ -230,9 +230,9 @@ const integrada = (m: Record<string, unknown> = {}, status = "aberto") =>
 test("CA-6: falha do check final falha o ticket sem integrar, limpar nem abrir implementação; repetida é igual", () => {
   const ag = comProgresso({}, "em_execucao");
   const novo = registrarFalhaEncerramento(ag, falhaEnt(), FABRIQUINHA, c);
-  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "falhou");
   assert.equal(novo.tickets.length, 2);
-  assert.equal(novo.demanda.fase, "encerramento");
+  assert.equal(novo.demanda.estado, "encerrar_demanda");
   assert.equal(novo.encerramento?.integracao, undefined);
   assert.deepEqual(novo.encerramento?.limpeza_pendente, []);
   assert.deepEqual(novo.encerramento.falha, { etapa: "check_final", motivo: "x" });
@@ -242,7 +242,7 @@ test("CA-6: falha do check final falha o ticket sem integrar, limpar nem abrir i
 
 test("CA-9: falha da integração preserva PR e SHA e não marca a integração", () => {
   const novo = registrarFalhaEncerramento(comProgresso(), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c);
-  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "falhou");
   assert.deepEqual(novo.encerramento?.pr, pr);
   assert.equal(novo.encerramento.sha_verificado, "s1");
   assert.equal(novo.encerramento.integracao, undefined);
@@ -259,7 +259,7 @@ test("CA-11: falha parcial da limpeza mantém a integração e grava as pendênc
   );
   assert.deepEqual(novo.encerramento?.integracao, { sha: "i1" });
   assert.deepEqual(novo.encerramento.limpeza_pendente, ["worktree"]);
-  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "falhou");
   const rep = falhaEnt({ etapa: "limpeza", limpeza_pendente: ["worktree"] });
   assert.deepEqual(registrarFalhaEncerramento(novo, rep, FABRIQUINHA, c), novo);
   const outra = falhaEnt({ etapa: "limpeza", limpeza_pendente: ["branch"] });
@@ -268,13 +268,13 @@ test("CA-11: falha parcial da limpeza mantém a integração e grava as pendênc
   regra(() => registrarFalhaEncerramento(ag, nova, FABRIQUINHA, c));
 });
 
-test("falha recusa etapa incompatível com o progresso, sem progresso, outro ator e fase errada", () => {
+test("falha recusa etapa incompatível com o progresso, sem progresso, outro ator e estado errado", () => {
   regra(() => registrarFalhaEncerramento(integrada(), falhaEnt(), FABRIQUINHA, c));
   regra(() => registrarFalhaEncerramento(comProgresso(), falhaEnt({ etapa: "limpeza" }), FABRIQUINHA, c));
   regra(() => registrarFalhaEncerramento(integrada(), falhaEnt({ etapa: "limpeza" }), FABRIQUINHA, c));
   regra(() => registrarFalhaEncerramento(comProgresso(), falhaEnt({ limpeza_pendente: ["x"] }), FABRIQUINHA, c));
   regra(() => registrarFalhaEncerramento(montar(), falhaEnt(), FABRIQUINHA, c));
-  regra(() => registrarFalhaEncerramento(montar({}, "aberto", "execucao"), falhaEnt(), FABRIQUINHA, c));
+  regra(() => registrarFalhaEncerramento(montar({}, "aberto", "em_execucao"), falhaEnt(), FABRIQUINHA, c));
   regra(() =>
     registrarFalhaEncerramento(comProgresso({ pr: undefined }), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c),
   );
@@ -304,7 +304,7 @@ test("integração mantém falha de outra etapa e recusa sem PR, sem progresso, 
   regra(() => registrarIntegracao(comProgresso({ pr: undefined }), integEnt(), FABRIQUINHA));
   regra(() => registrarIntegracao(montar(), integEnt(), FABRIQUINHA));
   regra(() => registrarIntegracao(comProgresso({}, "falhou"), integEnt(), FABRIQUINHA));
-  regra(() => registrarIntegracao(montar({}, "aberto", "execucao"), integEnt(), FABRIQUINHA));
+  regra(() => registrarIntegracao(montar({}, "aberto", "em_execucao"), integEnt(), FABRIQUINHA));
   regra(() => registrarIntegracao(comProgresso(), integEnt({ demanda_id: "I-2" }), FABRIQUINHA));
   assert.throws(() => registrarIntegracao(comProgresso(), integEnt(), AUDITOR), ErroDeEscopo);
 });
@@ -314,7 +314,7 @@ test("CA-10: solicitar integração marca a espera pelo merge humano e devolve o
   const novo = solicitarIntegracao(ag, { demanda_id: D }, FABRIQUINHA, c);
   assert.equal(novo.encerramento?.aguardando_merge_humano, true);
   assert.equal(novo.encerramento.falha, undefined);
-  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "aberto");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "aberto");
   assert.deepEqual(solicitarIntegracao(novo, { demanda_id: D }, FABRIQUINHA, c), novo);
   const integrado = registrarIntegracao(novo, integEnt(), FABRIQUINHA);
   assert.equal(integrado.encerramento?.aguardando_merge_humano, undefined);
@@ -333,8 +333,8 @@ test("CA-10: solicitar integração marca a espera pelo merge humano e devolve o
 test("CA-12 e CA-13: concluir encerramento deixa a demanda concluida com o histórico; repetir é igual", () => {
   const ag = integrada({ falha: { etapa: "limpeza", motivo: "x" } }, "em_execucao");
   const novo = concluirEncerramento(ag, { demanda_id: D, limpeza_pendente: [] }, FABRIQUINHA, c);
-  assert.equal(novo.demanda.fase, "concluida");
-  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.status, "concluido");
+  assert.equal(novo.demanda.estado, "concluida");
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "concluido");
   assert.equal(novo.tickets.length, 2);
   assert.deepEqual(novo.decisoes, []);
   assert.deepEqual(novo.encerramento?.limpeza_pendente, []);
@@ -374,7 +374,7 @@ test("ponta a ponta: tentativa, conflito, resolução, falha, reabertura, integr
   );
   ag = reabrirTicket(ag, { ticket_id: 2, instrucao: "limpe o que falta" }, AUDITOR, c);
   ag = concluirEncerramento(ag, { ...fim, limpeza_pendente: [] }, FABRIQUINHA, c);
-  assert.equal(ag.demanda.fase, "concluida");
+  assert.equal(ag.demanda.estado, "concluida");
   assert.deepEqual(ag.encerramento?.integracao, { sha: "i1" });
   assert.equal(ag.encerramento.falha, undefined);
 });

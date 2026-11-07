@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
 import type { Ator } from "../src/nucleo/ator.ts";
-import type { FaseDemanda } from "../src/nucleo/primitivos.ts";
+import type { EstadoDemanda } from "../src/nucleo/primitivos.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
 import { criarDemandaNova } from "../src/armazenamento/demandas.ts";
 import { garantirWorktreeDemanda } from "../src/infra/repositorio/worktree-demanda.ts";
@@ -18,24 +18,25 @@ export const montarTicket = (demanda_id: string, ticket_id: number, etapa: strin
   demanda_id,
   ticket_id,
   etapa,
-  status: "aberto",
-  status_alterado_em: INSTANTE_DO_CENARIO,
+  estado: "aberto",
+  estado_alterado_em: INSTANTE_DO_CENARIO,
   criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
 
-export const montarRodada = (demanda_id: string, rodada_id: number, fase: string) => ({
+export const montarRodada = (demanda_id: string, rodada_id: number, estado: string) => ({
   demanda_id,
   rodada_id,
   titulo: `rodada ${String(rodada_id)}`,
-  fase,
+  estado,
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/${demanda_id}-${String(rodada_id)}`,
 });
 
-/** Uma demanda `fase` do projeto `loja`, sem rodadas nem tickets além dos de `resto`. */
-export const montarAgregadoDemanda = (id: string, fase: string, resto: object = {}): AgregadoDemanda =>
+/** Uma demanda `estado` do projeto `loja`, sem rodadas nem tickets além dos de `resto`. */
+export const montarAgregadoDemanda = (id: string, estado: string, resto: object = {}): AgregadoDemanda =>
   ({
     demanda: {
       id,
@@ -43,10 +44,10 @@ export const montarAgregadoDemanda = (id: string, fase: string, resto: object = 
       titulo: `demanda ${id}`,
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: INSTANTE_DO_CENARIO,
+      estado,
+      estado_alterado_em: INSTANTE_DO_CENARIO,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
-      enviada: fase !== "registro",
+      enviada: estado !== "entender_e_desenhar",
       branch: `fabriquinha/${id}`,
     },
     tickets: [],
@@ -60,66 +61,71 @@ export const montarAgregadoDemanda = (id: string, fase: string, resto: object = 
     ...resto,
   }) as unknown as AgregadoDemanda;
 
-const concluido = { status: "concluido" };
+const concluido = { estado: "concluido" };
 
 /**
- * A demanda `id` como o Ciclo de Vida a deixa em `fase`: T1 `demanda`, T2 `planejar`, T3 `implementar` da R1, T4
- * `revisar_demanda` e T5 `encerrar_demanda`, cada um aberto na sua fase e concluído nas seguintes; a R1 nasce em
- * `desenvolvimento` e fica `concluida` quando a revisão da demanda começa. Cancelada, tem o T5 cancelado.
+ * A demanda `id` como o Ciclo de Vida a deixa em `estado`: T1 `demanda`, T2 `planejar`, T3 `implementar` da R1, T4
+ * `revisar_demanda` e T5 `encerrar_demanda`, cada um aberto na sua estado e concluído nas seguintes; a R1 nasce em
+ * `implementar` e fica `concluida` quando a revisão da demanda começa. Cancelada, tem o T5 cancelado.
  */
-export function agregadoNaFase(id: string, fase: FaseDemanda): AgregadoDemanda {
-  const indice = (f: FaseDemanda) => FASES_DO_CICLO.indexOf(f);
-  const adiante = (limite: FaseDemanda) => indice(fase) > indice(limite);
+export function agregadoNoEstado(id: string, estado: EstadoDemanda): AgregadoDemanda {
+  const indice = (f: EstadoDemanda) => ESTADOS_DO_CICLO.indexOf(f);
+  const adiante = (limite: EstadoDemanda) => indice(estado) > indice(limite);
   const tickets = [
-    montarTicket(id, 1, "demanda", fase === "registro" ? { status: "em_execucao" } : concluido),
-    ...(indice(fase) >= indice("planejamento")
-      ? [montarTicket(id, 2, "planejar", adiante("planejamento") ? concluido : {})]
+    montarTicket(
+      id,
+      1,
+      "entender_e_desenhar",
+      estado === "entender_e_desenhar" ? { estado: "em_execucao" } : concluido,
+    ),
+    ...(indice(estado) >= indice("planejar")
+      ? [montarTicket(id, 2, "planejar", adiante("planejar") ? concluido : {})]
       : []),
-    ...(indice(fase) >= indice("execucao")
-      ? [montarTicket(id, 3, "implementar", { rodada_id: 1, ...(adiante("execucao") && concluido) })]
+    ...(indice(estado) >= indice("em_execucao")
+      ? [montarTicket(id, 3, "implementar", { rodada_id: 1, ...(adiante("em_execucao") && concluido) })]
       : []),
-    ...(indice(fase) >= indice("revisao_demanda")
-      ? [montarTicket(id, 4, "revisar_demanda", adiante("revisao_demanda") ? concluido : {})]
+    ...(indice(estado) >= indice("revisar_demanda")
+      ? [montarTicket(id, 4, "revisar_demanda", adiante("revisar_demanda") ? concluido : {})]
       : []),
-    ...(indice(fase) >= indice("encerramento")
+    ...(indice(estado) >= indice("encerrar_demanda")
       ? [
           montarTicket(
             id,
             5,
             "encerrar_demanda",
-            fase === "cancelada" ? { status: "cancelado" } : adiante("encerramento") ? concluido : {},
+            estado === "cancelada" ? { estado: "cancelado" } : adiante("encerrar_demanda") ? concluido : {},
           ),
         ]
       : []),
   ];
   const rodadas =
-    indice(fase) >= indice("execucao")
-      ? [montarRodada(id, 1, adiante("execucao") ? "concluida" : "desenvolvimento")]
+    indice(estado) >= indice("em_execucao")
+      ? [montarRodada(id, 1, adiante("em_execucao") ? "concluida" : "implementar")]
       : [];
-  return montarAgregadoDemanda(id, fase, { tickets, rodadas });
+  return montarAgregadoDemanda(id, estado, { tickets, rodadas });
 }
 
-// A ordem do Ciclo de Vida; as fases terminais vêm por último, na ordem em que se alcançam a partir do encerramento.
-const FASES_DO_CICLO: readonly FaseDemanda[] = [
-  "registro",
-  "aprovacao_demanda",
-  "planejamento",
-  "aprovacao_planejamento",
-  "execucao",
-  "revisao_demanda",
-  "encerramento",
+// A ordem do Ciclo de Vida; os estados terminais vêm por último, na ordem em que se alcançam a partir do encerramento.
+const ESTADOS_DO_CICLO: readonly EstadoDemanda[] = [
+  "entender_e_desenhar",
+  "gate_demanda",
+  "planejar",
+  "gate_planejamento",
+  "em_execucao",
+  "revisar_demanda",
+  "encerrar_demanda",
   "concluida",
   "arquivada",
   "cancelada",
 ];
 
 /**
- * I-1 em execução, como a revisão a encontra: R1 em `revisao` (implementar T1 concluído, revisar_rodada T2 aberto) e
- * o revisar_demanda T3 aberto. Com `integral`: em `revisao_demanda`, R1 concluída e o T2 concluído.
+ * I-1 em execução, como a revisão a encontra: R1 em `revisar_rodada` (implementar T1 concluído, revisar_rodada T2 aberto) e
+ * o revisar_demanda T3 aberto. Com `integral`: em `revisar_demanda`, R1 concluída e o T2 concluído.
  */
 export function agregadoEmRevisao({ integral = false } = {}): AgregadoDemanda {
-  return montarAgregadoDemanda("I-1", integral ? "revisao_demanda" : "execucao", {
-    rodadas: [montarRodada("I-1", 1, integral ? "concluida" : "revisao")],
+  return montarAgregadoDemanda("I-1", integral ? "revisar_demanda" : "em_execucao", {
+    rodadas: [montarRodada("I-1", 1, integral ? "concluida" : "revisar_rodada")],
     tickets: [
       montarTicket("I-1", 1, "implementar", { rodada_id: 1, ...concluido }),
       montarTicket("I-1", 2, "revisar_rodada", { rodada_id: 1, ...(integral && concluido) }),
@@ -141,12 +147,12 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
     em: INSTANTE_DO_CENARIO,
     ...resto,
   });
-  return montarAgregadoDemanda(id, "execucao", {
-    rodadas: [montarRodada(id, 1, "concluida"), montarRodada(id, 2, "aprovacao_pull_request")],
+  return montarAgregadoDemanda(id, "em_execucao", {
+    rodadas: [montarRodada(id, 1, "concluida"), montarRodada(id, 2, "gate_pr")],
     tickets: [
       montarTicket(id, 1, "implementar", { rodada_id: 1, ...concluido }),
       montarTicket(id, 2, "encerrar_rodada", { rodada_id: 1, ...concluido }),
-      montarTicket(id, 3, "implementar", { rodada_id: 2, status: "em_execucao", titulo: "implementa" }),
+      montarTicket(id, 3, "implementar", { rodada_id: 2, estado: "em_execucao", titulo: "implementa" }),
       montarTicket(id, 4, "encerrar_rodada", { rodada_id: 2, ...concluido }),
       montarTicket(id, 5, "planejar", concluido),
     ],
@@ -202,18 +208,18 @@ export function abrirTrabalhoDoAgente(banco: DatabaseSync, ref: { demanda_id: st
  */
 export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda {
   const numero = Number(agregado.demanda.id.replace("I-", ""));
-  const anterior = banco.prepare("SELECT valor FROM sequencia WHERE nome = 'issue'").get() as
+  const anterior = banco.prepare("SELECT valor FROM sequencia WHERE nome = 'demanda'").get() as
     { valor: number } | undefined;
   banco
     .prepare(
-      "INSERT INTO sequencia (nome, valor) VALUES ('issue', ?) ON CONFLICT (nome) DO UPDATE SET valor = excluded.valor",
+      "INSERT INTO sequencia (nome, valor) VALUES ('demanda', ?) ON CONFLICT (nome) DO UPDATE SET valor = excluded.valor",
     )
     .run(numero - 1);
   try {
     return criarDemandaNova(banco, () => agregado);
   } finally {
-    if (anterior) banco.prepare("UPDATE sequencia SET valor = ? WHERE nome = 'issue'").run(anterior.valor);
-    else banco.exec("DELETE FROM sequencia WHERE nome = 'issue'");
+    if (anterior) banco.prepare("UPDATE sequencia SET valor = ? WHERE nome = 'demanda'").run(anterior.valor);
+    else banco.exec("DELETE FROM sequencia WHERE nome = 'demanda'");
   }
 }
 

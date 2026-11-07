@@ -12,19 +12,20 @@ const tk = (ticket_id: number, rodada_id: number | undefined, status = "aberto",
   ticket_id,
   rodada_id,
   etapa,
-  status,
-  status_alterado_em: t0,
+  estado: status,
+  estado_alterado_em: t0,
   criado_por: FABRIQUINHA,
 });
-const rd = (rodada_id: number, fase = "desenvolvimento") => ({
+const rd = (rodada_id: number, estado = "implementar") => ({
   demanda_id: "I-1",
   rodada_id,
   titulo: "r",
-  fase,
+  estado,
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/I-1-${String(rodada_id)}`,
 });
-const montar = (extra: Record<string, unknown>, fase = "execucao") =>
+const montar = (extra: Record<string, unknown>, estado = "em_execucao") =>
   AgregadoDemanda.parse({
     demanda: {
       id: "I-1",
@@ -32,8 +33,8 @@ const montar = (extra: Record<string, unknown>, fase = "execucao") =>
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: t0,
+      estado,
+      estado_alterado_em: t0,
       criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: "fabriquinha/I-1",
@@ -45,7 +46,7 @@ const montar = (extra: Record<string, unknown>, fase = "execucao") =>
   });
 const reservar = (ag: AgregadoDemanda, ticket_id: number, pred = true) =>
   reservarTicket(ag, { ticket_id }, FABRIQUINHA, { agora: t1 }, pred);
-const status = (ag: AgregadoDemanda, id: number) => ag.tickets.find((t) => t.ticket_id === id)?.status;
+const status = (ag: AgregadoDemanda, id: number) => ag.tickets.find((t) => t.ticket_id === id)?.estado;
 /** Recusa citando o endereço público `trecho`, nunca `T-n`; o agregado de entrada segue intacto. */
 const recusa = (ag: AgregadoDemanda, id: number, trecho: RegExp, pred = true) => {
   const antes = structuredClone(ag);
@@ -60,12 +61,12 @@ test("CA-1: reserva o ticket elegível da rodada em desenvolvimento", () => {
   const ag = montar({ rodadas: [rd(1)], tickets: [tk(2, 1)] });
   const novo = reservar(ag, 2);
   assert.equal(status(novo, 2), "em_execucao");
-  assert.equal(novo.tickets[0]?.status_alterado_em, t1);
+  assert.equal(novo.tickets[0]?.estado_alterado_em, t1);
   assert.equal(status(ag, 2), "aberto");
 });
 
 test("CA-2: reserva o ticket de planejar com as predecessoras satisfeitas", () => {
-  const ag = montar({ tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejamento");
+  const ag = montar({ tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejar");
   assert.equal(status(reservar(ag, 1), 1), "em_execucao");
 });
 
@@ -84,7 +85,7 @@ test("CA-4: reservar de novo é recusado citando o endereço e o status", () => 
 });
 
 test("CA-5: predecessora não satisfeita recusa o planejar", () => {
-  recusa(montar({ tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejamento"), 1, /predecessoras/, false);
+  recusa(montar({ tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejar"), 1, /predecessoras/, false);
 });
 
 test("CA-6: dependência de ticket não concluído cita o endereço dele", () => {
@@ -114,8 +115,12 @@ test("ticket aberto de menor id vem antes", () => {
   recusa(montar({ rodadas: [rd(1)], tickets: [tk(2, 1), tk(3, 1)] }), 3, /I-1\.T2 aberto vem antes/);
 });
 
-test("etapa fora da fase da rodada cai no motivo geral", () => {
-  recusa(montar({ rodadas: [rd(1, "revisao")], tickets: [tk(2, 1)] }), 2, /etapa implementar não é a do trabalho/);
+test("etapa fora do estado da rodada cai no motivo geral", () => {
+  recusa(
+    montar({ rodadas: [rd(1, "revisar_rodada")], tickets: [tk(2, 1)] }),
+    2,
+    /etapa implementar não é a do trabalho/,
+  );
 });
 
 test("demanda encerrada e ticket inexistente são recusados", () => {

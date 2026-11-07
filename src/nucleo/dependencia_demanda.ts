@@ -1,9 +1,9 @@
 // Dependência entre demandas (comparacao-sdlc-implementacao.md §3 e §7.2): grafo próprio, fora do AgregadoDemanda.
 // Funções puras sobre as arestas; ler e gravar é da persistência.
-import { FASES_TERMINADAS, satisfazDependencia } from "./cancelamento_demanda.ts";
+import { ESTADOS_TERMINADOS, satisfazDependencia } from "./cancelamento_demanda.ts";
 import { acharCiclo } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
-import type { FaseDemanda } from "./primitivos.ts";
+import type { EstadoDemanda } from "./primitivos.ts";
 
 /** `demanda_id` só pode começar o planejamento depois de `depende_demanda_id` satisfeita. */
 export interface DependenciaDemanda {
@@ -42,13 +42,14 @@ export function registrarDependencia(
 }
 
 /** CA-9 e CA-10: os ids das predecessoras que ainda não satisfazem a dependência (D08: arquivada satisfaz). */
-export const predecessorasPendentes = (predecessoras: readonly { demanda_id: string; fase: FaseDemanda }[]): string[] =>
-  predecessoras.filter((p) => !satisfazDependencia(p.fase)).map((p) => p.demanda_id);
+export const predecessorasPendentes = (
+  predecessoras: readonly { demanda_id: string; estado: EstadoDemanda }[],
+): string[] => predecessoras.filter((p) => !satisfazDependencia(p.estado)).map((p) => p.demanda_id);
 
 /** CA-11: as dependentes de `id`, diretas e indiretas, que ainda não terminaram. */
 export function dependentesNaoConcluidas(
   arestas: readonly DependenciaDemanda[],
-  fases: ReadonlyMap<string, FaseDemanda>,
+  estados: ReadonlyMap<string, EstadoDemanda>,
   id: string,
 ): string[] {
   const achadas = new Set<string>();
@@ -63,7 +64,7 @@ export function dependentesNaoConcluidas(
   }
   // ponytail: concluída no meio do caminho não corta a busca; a dependente dela ainda é cancelada se não terminou.
   return [...achadas].filter((d) => {
-    const fase = fases.get(d);
-    return fase !== undefined && !FASES_TERMINADAS.includes(fase);
+    const estado = estados.get(d);
+    return estado !== undefined && !ESTADOS_TERMINADOS.includes(estado);
   });
 }

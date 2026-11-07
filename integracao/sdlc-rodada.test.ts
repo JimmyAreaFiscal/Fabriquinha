@@ -64,8 +64,8 @@ function prComProblema(c: Cenario, id: string, problema: "check" | "conflito"): 
 /** O corretivo aberto (o `implementar` de maior id) e a verificação de que o PR ainda não chegou ao gate. */
 function corretivoAntesDoGate(c: Cenario, id: string, titulo: RegExp) {
   const rodada = rodadaDe(c, id, 1);
-  assert.equal(rodada?.fase, "desenvolvimento");
-  assert.equal(atual(c, id, "encerrar_rodada").status, "concluido");
+  assert.equal(rodada?.estado, "implementar");
+  assert.equal(atual(c, id, "encerrar_rodada").estado, "concluido");
   const encerramentos = demanda(c, id).tickets.filter((x) => x.etapa === "encerrar_rodada");
   assert.deepEqual(
     demanda(c, id).decisoes.filter((d) => encerramentos.some((x) => x.ticket_id === d.ticket_id)),
@@ -73,7 +73,7 @@ function corretivoAntesDoGate(c: Cenario, id: string, titulo: RegExp) {
     "sem decisão humana no gate do PR",
   );
   const corretivo = atual(c, id, "implementar");
-  assert.equal(corretivo.status, "aberto");
+  assert.equal(corretivo.estado, "aberto");
   assert.match(corretivo.titulo ?? "", titulo);
   return corretivo;
 }
@@ -126,7 +126,7 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
     correcoes: [correcao(id, "Tratar o caso X")],
   });
   const ag = demanda(c, id);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "desenvolvimento");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "implementar");
   assert.equal(statusDe(c, { demanda_id: id, ticket_id: reprovada }), "concluido");
   assert.deepEqual(
     ag.decisoes.filter((d) => d.ticket_id === reprovada).map((d) => [d.resultado, d.motivo, d.por]),
@@ -140,7 +140,7 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   );
   const corretivo = atual(c, id, "implementar");
   assert.ok(corretivo.ticket_id > reprovada);
-  assert.equal(corretivo.status, "aberto");
+  assert.equal(corretivo.estado, "aberto");
   assert.equal(corretivo.titulo, "Tratar o caso X");
   // I-266.T6: o ticket corretivo é do Agente revisor; a Fabriquinha só o materializa.
   assert.deepEqual(corretivo.criado_por, {
@@ -165,17 +165,17 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   ) as RespostaAutomatica;
   assert.equal(resposta.resposta, "Sim");
   assert.deepEqual(resposta.ator, { tipo: "agente", trabalho_id: execucaoDaCorrecao });
-  assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
   const nova = atual(c, id, "revisar_rodada");
   assert.ok(nova.ticket_id > corretivo.ticket_id);
-  assert.equal(nova.status, "aberto");
+  assert.equal(nova.estado, "aberto");
 
   // Nova revisão aprovada leva ao encerramento, que publica o PR da rodada com as duas implementações.
   const aprovada = await revisar(c, id, { aprovado: true });
   assert.equal(aprovada, nova.ticket_id);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "encerramento");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "encerrar_rodada");
   await encerrar(c, id);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "aprovacao_pull_request");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
   const [pr] = gh.prs();
   assert.equal(gh.prs().length, 1);
   assert.equal(pr?.head, rodadaDe(c, id, 1)?.branch);
@@ -247,7 +247,7 @@ test("aprovação automática ligada para o projeto: o encerramento pelo agendad
 
   await encerrar(c, id);
 
-  assert.equal(rodadaDe(c, id, 1)?.fase, "concluida");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   assert.equal(gh.prs()[0]?.estado, "mergeado");
   const gate = atual(c, id, "encerrar_rodada").ticket_id;
   const decisao = demanda(c, id).decisoes.find((d) => d.ticket_id === gate);
@@ -287,7 +287,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
     despacho(() => aprovada),
   );
   const devolvido = demanda(c, id).tickets.find((x) => x.ticket_id === corretivo.ticket_id);
-  assert.deepEqual([devolvido?.status, devolvido?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([devolvido?.estado, devolvido?.devolucoes], ["aberto", 1]);
   aprovada = true;
   await ciclo(
     c,
@@ -295,16 +295,16 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   );
   assert.match(pi.prompts().at(-1)?.prompt ?? "", /execucao_testes: reprovado no teste/);
   assert.equal(statusDe(c, corretivo), "concluido");
-  assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
 
   // Revista e reencerrada, com o check já verde, a rodada chega ao gate; a nota do PR (D03) fecha a rodada.
   await revisar(c, id, { aprovado: true });
   gh.mudar(1, { checks: [{ nome: "ci", estado: "aprovado" }] });
   await encerrar(c, id);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "aprovacao_pull_request");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
   assert.equal(gh.prs().length, 1);
   await aprovarPRRodada(c.banco, { demanda_id: id, rodada_id: 1 }, 4, AUDITOR);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "concluida");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   assert.equal(demanda(c, id).decisoes.find((d) => d.ticket_id === atual(c, id, "encerrar_rodada").ticket_id)?.nota, 4);
 
   // Conflito do PR: mesma regra, com a correção de resolver o conflito.
@@ -319,7 +319,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   const idHumana = await rodadaEmEncerramento(humana);
   gh.zerar();
   await encerrar(humana, idHumana);
-  assert.equal(rodadaDe(humana, idHumana, 1)?.fase, "aprovacao_pull_request");
+  assert.equal(rodadaDe(humana, idHumana, 1)?.estado, "gate_pr");
   const ref = { demanda_id: idHumana, rodada_id: 1 };
   const worktree = caminhoDaWorktreeRodada(humana.raiz, humana.projeto, ref);
   const ponta = (branch: string) => git(humana.repo, "rev-parse", `refs/heads/${branch}`);
@@ -335,7 +335,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   });
   await esperar(() => pisAteAgora() === chamadasAntes + 1, "o pi da conversa receber o prompt sem esperar o agendador");
   assert.match(pi.prompts().at(-1)?.prompt ?? "", /sessão de ajustes[\s\S]*o PR mistura duas mudanças/);
-  assert.equal(rodadaDe(humana, idHumana, 1)?.fase, "sessao");
+  assert.equal(rodadaDe(humana, idHumana, 1)?.estado, "ajustar_resultado");
   const gate = atual(humana, idHumana, "encerrar_rodada").ticket_id;
   const reprovacao = demanda(humana, idHumana).decisoes.find((d) => d.ticket_id === gate);
   assert.deepEqual(
@@ -346,7 +346,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   assert.equal(despacharDemandas(humana.banco, humana.config, despacho()).length, 0);
 
   // A conversa só registra correções: o que ela commitou é desfeito ao concluir, e nada é implementado nem integrado.
-  const { ticket_id } = atual(humana, idHumana, "sessao_em_aberto");
+  const { ticket_id } = atual(humana, idHumana, "ajustar_resultado");
   comDemanda(humana.banco, idHumana, (ag) =>
     registrarCorrecoesSessao(
       ag,
@@ -357,8 +357,8 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   );
   await concluirSessaoAjustes(humana.banco, ref, AUDITOR);
   await sessao.fim;
-  assert.equal(rodadaDe(humana, idHumana, 1)?.fase, "desenvolvimento");
-  assert.equal(atual(humana, idHumana, "implementar").status, "aberto");
+  assert.equal(rodadaDe(humana, idHumana, 1)?.estado, "implementar");
+  assert.equal(atual(humana, idHumana, "implementar").estado, "aberto");
   assert.equal(ponta(branchRodada), rodadaAntes);
   assert.equal(ponta(branchDemanda), demandaAntes);
   assert.equal(git(worktree, "status", "--porcelain"), "");

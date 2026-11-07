@@ -71,7 +71,7 @@ Nenhum arquivo de teste foi apagado na rodada I-263.R2; só três casos saíram 
 
 | Teste | Motivo | Outra cobertura |
 | --- | --- | --- |
-| `primitivos.test.ts`: `Etapa e Fase têm exatamente os valores do F1` | `Etapa` e `Fase` (legados) saíram de `primitivos.ts` com `agregado.ts` | os valores de `EtapaTicket`, `FaseDemanda`, `FaseRodada` e `StatusTicket` seguem em `estados SDLC têm exatamente os valores da seção 2.1` |
+| `primitivos.test.ts`: `Etapa e Fase têm exatamente os valores do F1` | `Etapa` e `Fase` (legados) saíram de `primitivos.ts` com `agregado.ts` | os valores de `EtapaTicket`, `EstadoDemanda`, `EstadoRodada` e `EstadoTicket` seguem em `estados SDLC têm exatamente os valores da seção 2.1` |
 | `aula.test.ts`: título nulo (`ag({ issue: { …, titulo: null } })` espera `<h1>Aula do código da I-1</h1>`) | `AgregadoDemanda` exige título; o ramo de `gerarAula` para título nulo foi removido | o teste da aula confere o `<h1>` com o título da demanda, escapado (`Busca <rápida>`) |
 | `banco.test.ts`, em `escrever() aninhada…`: `novoId(banco, "ticket")` e a asserção de que a sequência `ticket` não existe | `TipoId` ficou só com `issue` (o renome é da 06) | o mesmo teste segue com `issue`: a interna desfeita não deixa sequência nova e a externa segue |
 | `banco.test.ts`, em `novoId()…`: a sequência independente de `ticket` (ids `[1, 1, 2]`, depois `2`) | idem; o teste virou `novoId() segue a sequência do tipo e só roda dentro da transação` (`[1, 2]`, depois `3`) | o mesmo teste, com `issue` |
@@ -142,3 +142,11 @@ Não foi refeita nesta rodada.
 - **CA-8:** `npm run check`, `npm run integracao`, `npm run e2e`, SonarQube e CG-9 (deploy) não foram verificados por este documento (o CG-7 está na seção anterior); valem os resultados que a Fabriquinha coleta.
 
 `fabriquinha/07-interfaces.md` foi restaurado à versão da base (`git diff 7ce3c2f..HEAD -- fabriquinha` é vazio); o PR não deve alegar mudança nele.
+
+## I-267.R1: estado no lugar de fase e status
+
+A `base/` **não** foi regerada: segue sendo a foto do commit `7ce3c2f`, antes das mudanças de I-263.R2 e de I-267.R1.
+A I-267.R1 renomeou `fase` e `status` para `estado` (com o nome da Etapa) e a etapa `sessao_em_aberto` para `ajustar_resultado`.
+Por isso o `gerar.ts` já não roda no commit-base (ele monta o agregado com os campos novos) e a comparação passou a declarar
+em `fitness/foto-base.test.ts`: os dois arquivos renomeados (`ARQUIVOS_RENOMEADOS`) e as trocas de texto (`(fase desenvolvimento)`
+→ `(estado implementar)` nos prompts, os campos do JSON de `demanda ver` e `mostra a fase` → `mostra o estado` na skill).

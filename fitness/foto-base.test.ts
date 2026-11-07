@@ -52,7 +52,58 @@ const PASSO_3_DO_REVISAR_DEMANDA =
 const emPromptETexto = (etapa: string) => [`prompts/${etapa}.txt`, `textos/src/execucao/etapas/${etapa}.md.txt`];
 const MOTIVO_CORRECAO_MUDA_ARQUIVO =
   "I-295: cada correção do --correcoes pede mudança em arquivos da worktree, pois o implementar sem alteração é devolvido";
+// I-267.R1: Demanda, Rodada e Ticket passam a ter `estado` (no lugar de `fase` e `status`) com o nome da Etapa, e a etapa
+// `sessao_em_aberto` vira `ajustar_resultado`. A foto da base é a de antes da rodada; os nomes novos entram aqui.
+const MOTIVO_ESTADO_COM_NOME_DA_ETAPA =
+  "I-267.R1: fase e status viram estado, com o nome da Etapa corrente (fase desenvolvimento vira estado implementar)";
+const MOTIVO_ETAPA_RENOMEADA = "I-267.R1: a etapa sessao_em_aberto passa a se chamar ajustar_resultado";
+/** O arquivo da foto da base que passa a ter outro nome na foto atual. */
+const ARQUIVOS_RENOMEADOS: Readonly<Record<string, string>> = {
+  "prompts/sessao_em_aberto.txt": "prompts/ajustar_resultado.txt",
+  "textos/src/execucao/etapas/sessao_em_aberto.md.txt": "textos/src/execucao/etapas/ajustar_resultado.md.txt",
+};
+const PROMPTS_DA_BASE = [
+  "implementar",
+  "planejar",
+  "encerrar_demanda",
+  "sessao_em_aberto",
+  "resolver_conflito",
+  "revisar_rodada",
+  "encerrar_rodada",
+  "revisar_demanda",
+].map((etapa) => `prompts/${etapa}.txt`);
 const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
+  ...PROMPTS_DA_BASE.map((arquivo) => ({
+    arquivo,
+    de: "(fase desenvolvimento)",
+    para: "(estado implementar)",
+    motivo: MOTIVO_ESTADO_COM_NOME_DA_ETAPA,
+  })),
+  {
+    arquivo: "prompts/sessao_em_aberto.txt",
+    de: "(etapa sessao_em_aberto)",
+    para: "(etapa ajustar_resultado)",
+    motivo: MOTIVO_ETAPA_RENOMEADA,
+  },
+  ...(
+    [
+      ['"fase":"planejamento","fase_alterada_em"', '"estado":"planejar","estado_alterado_em"'],
+      ['"fase":"revisao","e2e"', '"estado":"revisar_rodada","estado_alterado_em":"<DATA>","e2e"'],
+      ['"status":"em_execucao","status_alterado_em"', '"estado":"em_execucao","estado_alterado_em"'],
+      ['"status":"concluido","status_alterado_em"', '"estado":"concluido","estado_alterado_em"'],
+    ] as const
+  ).map(([de, para]) => ({
+    arquivo: "cli/aula-e-demanda.txt",
+    de,
+    para,
+    motivo: MOTIVO_ESTADO_COM_NOME_DA_ETAPA,
+  })),
+  {
+    arquivo: "textos/skills/registrar-necessidade/SKILL.md.txt",
+    de: "mostra a fase,",
+    para: "mostra o estado,",
+    motivo: MOTIVO_ESTADO_COM_NOME_DA_ETAPA,
+  },
   {
     arquivo: "cli/aula-e-demanda.txt",
     de: "não toca nenhuma linha alterada pela issue",
@@ -196,10 +247,16 @@ test("a foto atual de prompts e saídas do CLI é a da base anterior com só as 
   );
 
   const arquivosDaBase = listarArquivos(PASTA_DA_FOTO_DA_BASE);
-  assert.deepEqual(listarArquivos(PASTA_DA_FOTO_ATUAL), arquivosDaBase, "o conjunto de fotos mudou");
+  const arquivoAtualDe = (arquivo: string) => ARQUIVOS_RENOMEADOS[arquivo] ?? arquivo;
+  assert.deepEqual(
+    listarArquivos(PASTA_DA_FOTO_ATUAL),
+    arquivosDaBase.map(arquivoAtualDe).sort(),
+    "o conjunto de fotos mudou",
+  );
   for (const arquivo of arquivosDaBase) {
     const esperado = aplicarDiferencasIntencionais(arquivo, readFileSync(join(PASTA_DA_FOTO_DA_BASE, arquivo), "utf8"));
-    assert.equal(readFileSync(join(PASTA_DA_FOTO_ATUAL, arquivo), "utf8"), esperado, `${arquivo} difere da base`);
+    const atual = readFileSync(join(PASTA_DA_FOTO_ATUAL, arquivoAtualDe(arquivo)), "utf8");
+    assert.equal(atual, esperado, `${arquivo} difere da base`);
   }
 });
 

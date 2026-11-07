@@ -62,7 +62,7 @@ const completa = {
   etapas: [
     { etapa: "planejar", configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" } },
     { etapa: "implementar", configuracao_agente: { effort: "low" } },
-    { etapa: "demanda" },
+    { etapa: "entender_e_desenhar" },
   ],
   preparacao: [
     { ordem: 10, comando: "segundo" },
@@ -90,7 +90,7 @@ const completa = {
 const canonica = {
   ...completa,
   etapas: [
-    { etapa: "demanda" },
+    { etapa: "entender_e_desenhar" },
     { etapa: "implementar", configuracao_agente: { effort: "low" } },
     { etapa: "planejar", configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" } },
   ],
@@ -161,19 +161,19 @@ test("preparação: lida sem a configuração SDLC, substituída sozinha na orde
 test("etapas: lidas sem a configuração SDLC, substituídas sozinhas; a inválida não altera nada", () => {
   comBanco((banco) => {
     assert.deepEqual(etapasDoProjeto(banco, "b"), []);
-    substituirEtapasDoProjeto(banco, "b", [{ etapa: "sessao_em_aberto", configuracao_agente: { effort: "max" } }]);
+    substituirEtapasDoProjeto(banco, "b", [{ etapa: "ajustar_resultado", configuracao_agente: { effort: "max" } }]);
     assert.equal(configuracaoProjeto(banco, "b"), undefined);
     assert.deepEqual(etapasDoProjeto(banco, "b"), [
-      { etapa: "sessao_em_aberto", configuracao_agente: { effort: "max" } },
+      { etapa: "ajustar_resultado", configuracao_agente: { effort: "max" } },
     ]);
 
     gravarCompleta(banco);
     substituirEtapasDoProjeto(banco, "a", [
-      { etapa: "demanda", configuracao_agente: { modelo: { provedor: "p", nome: "m" } } },
+      { etapa: "entender_e_desenhar", configuracao_agente: { modelo: { provedor: "p", nome: "m" } } },
     ]);
     assert.deepEqual(configuracaoProjeto(banco, "a"), {
       ...canonica,
-      etapas: [{ etapa: "demanda", configuracao_agente: { modelo: { provedor: "p", nome: "m" } } }],
+      etapas: [{ etapa: "entender_e_desenhar", configuracao_agente: { modelo: { provedor: "p", nome: "m" } } }],
     });
     const antes = dump(banco);
     assert.throws(() => {
@@ -184,7 +184,7 @@ test("etapas: lidas sem a configuração SDLC, substituídas sozinhas; a inváli
     assert.deepEqual(dump(banco), antes);
     assert.equal(banco.isTransaction, false);
     assert.deepEqual(etapasDoProjeto(banco, "b"), [
-      { etapa: "sessao_em_aberto", configuracao_agente: { effort: "max" } },
+      { etapa: "ajustar_resultado", configuracao_agente: { effort: "max" } },
     ]);
   });
 });

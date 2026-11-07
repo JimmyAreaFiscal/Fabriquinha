@@ -8,7 +8,7 @@ import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { encontrado } from "../../../nucleo/erros.ts";
-import type { EtapaTicket, FaseDemanda, FaseRodada, StatusTicket } from "../../../nucleo/primitivos.ts";
+import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { configuracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
@@ -23,16 +23,16 @@ export interface DemandaDoProjeto {
   id: string;
   titulo: string;
   tipo: TipoDemanda;
-  fase: FaseDemanda;
-  faseAlteradaEm: string;
+  estado: EstadoDemanda;
+  estadoAlteradoEm: string;
   /** As predecessoras ainda em andamento: a cancelada já cancelou esta junto, e não bloqueia mais nada. */
   bloqueadaPor: string[];
-  rodadas: { ref: string; titulo: string; fase: FaseRodada; pr?: { id: string; url: string } }[];
+  rodadas: { ref: string; titulo: string; estado: EstadoRodada; pr?: { id: string; url: string } }[];
   tickets: {
     ref: string;
     etapa: EtapaTicket;
-    status: StatusTicket;
-    statusAlteradoEm: string;
+    estado: EstadoTicket;
+    estadoAlteradoEm: string;
     rodada?: string;
     titulo?: string;
     /** `provedor / modelo` do ticket, senão o da etapa no projeto; sem ele, vale o padrão do pi. */
@@ -58,7 +58,7 @@ const Filtro = z.object({
 const projetoExistente = (banco: DatabaseSync, nome: string) =>
   encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "escolha um projeto cadastrado na Configuração");
 
-/** O PR da rodada: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela, em qualquer fase. */
+/** O PR da rodada: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela, em qualquer estado. */
 function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const ticket = ag.tickets.findLast((t) => t.rodada_id === rodada_id && t.etapa === "encerrar_rodada");
   const pr = ag.evidencias.findLast((e) => e.ticket_id === ticket?.ticket_id && e.tipo === "pr_aberto")?.dados as
@@ -84,14 +84,14 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
     id,
     titulo: ag.demanda.titulo,
     tipo: ag.demanda.tipo,
-    fase: ag.demanda.fase,
-    faseAlteradaEm: ag.demanda.fase_alterada_em,
+    estado: ag.demanda.estado,
+    estadoAlteradoEm: ag.demanda.estado_alterado_em,
     bloqueadaPor: predecessorasDaDemanda(banco, id)
-      .filter((p) => !satisfazDependencia(p.fase) && p.fase !== "cancelada")
+      .filter((p) => !satisfazDependencia(p.estado) && p.estado !== "cancelada")
       .map((p) => p.demanda_id),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDaRodada(ag, r.rodada_id);
-      return { ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase, ...(pr && { pr }) };
+      return { ref: rodada(r.rodada_id), titulo: r.titulo, estado: r.estado, ...(pr && { pr }) };
     }),
     tickets: ag.tickets.map((t) => {
       const { modelo } = resolverConfiguracaoAgente({
@@ -104,8 +104,8 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
       return {
         ref: ticketRef,
         etapa: t.etapa,
-        status: t.status,
-        statusAlteradoEm: t.status_alterado_em,
+        estado: t.estado,
+        estadoAlteradoEm: t.estado_alterado_em,
         ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
         ...(t.titulo !== undefined && { titulo: t.titulo }),
         ...(modelo && { modelo: `${modelo.provedor} / ${modelo.nome}` }),
@@ -116,11 +116,11 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
   };
 }
 
-/** As demandas do projeto, das mais novas para as mais antigas, só com o id e a fase. */
+/** As demandas do projeto, das mais novas para as mais antigas, só com o id e o estado. */
 const situacaoDasDemandas = (banco: DatabaseSync, nome: string) =>
-  banco.prepare("SELECT id, fase FROM demanda WHERE projeto = ? ORDER BY rowid DESC").all(nome) as {
+  banco.prepare("SELECT id, estado FROM demanda WHERE projeto = ? ORDER BY rowid DESC").all(nome) as {
     id: string;
-    fase: FaseDemanda;
+    estado: EstadoDemanda;
   }[];
 
 /** As em andamento sempre; as concluídas, as arquivadas e as canceladas só quando pedidas. */
@@ -128,8 +128,8 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
   projetoExistente(banco, nome);
   const filtro = Filtro.parse(Object.fromEntries(query));
   const todas = situacaoDasDemandas(banco, nome);
-  const quantas = (fase: FaseDemanda) => todas.filter((d) => d.fase === fase).length;
-  const mostrarDaFase: Partial<Record<FaseDemanda, boolean>> = {
+  const quantas = (estado: EstadoDemanda) => todas.filter((d) => d.estado === estado).length;
+  const mostrarDoEstado: Partial<Record<EstadoDemanda, boolean>> = {
     concluida: filtro.concluidas,
     arquivada: filtro.arquivadas,
     cancelada: filtro.canceladas,
@@ -141,7 +141,7 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
   };
   return {
     // ponytail: um agregado por demanda mostrada, como o quadro das demandas; uma consulta só quando a página pesar.
-    demandas: todas.filter((d) => mostrarDaFase[d.fase] ?? true).map((d) => demandaDoProjeto(banco, d.id)),
+    demandas: todas.filter((d) => mostrarDoEstado[d.estado] ?? true).map((d) => demandaDoProjeto(banco, d.id)),
     contagem: {
       andamento: todas.length - contagem.concluidas - contagem.arquivadas - contagem.canceladas,
       ...contagem,
@@ -152,7 +152,7 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
 /** Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. */
 function arquivarConcluidas(banco: DatabaseSync, nome: string): { arquivadas: number } {
   projetoExistente(banco, nome);
-  const concluidas = situacaoDasDemandas(banco, nome).filter((d) => d.fase === "concluida");
+  const concluidas = situacaoDasDemandas(banco, nome).filter((d) => d.estado === "concluida");
   for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: new Date().toISOString() });
   return { arquivadas: concluidas.length };
 }

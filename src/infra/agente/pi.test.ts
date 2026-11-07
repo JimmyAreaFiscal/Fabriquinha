@@ -253,8 +253,8 @@ test("fecharStdin: o pi recebe o EOF do stdin; sem ele, o stdin segue aberto", a
   process.env.FABRIQUINHA_ROOT = base;
   try {
     // O pi só termina no EOF; sem fecharStdin, ficaria preso até o parar().
-    const fechado = lancarPi([], { cwd: base, env: process.env, log, fecharStdin: true }, () => undefined);
-    assert.equal(await fechado.saiu, 0);
+    const piFechado = lancarPi([], { cwd: base, env: process.env, log, fecharStdin: true }, () => undefined);
+    assert.equal(await piFechado.saiu, 0);
     const aberto = lancarPi([], { cwd: base, env: process.env, log }, () => undefined);
     const preso = await Promise.race([aberto.saiu, dormir(200, "preso")]);
     assert.equal(preso, "preso");

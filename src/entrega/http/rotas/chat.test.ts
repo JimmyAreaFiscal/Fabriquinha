@@ -131,14 +131,14 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
   const em = "2026-01-01T00:00:00.000Z";
   gravarAgregadoPronto(
     servico.banco,
-    montarAgregadoDemanda("I-310", "planejamento", {
+    montarAgregadoDemanda("I-310", "planejar", {
       tickets: [
         {
           demanda_id: "I-310",
           ticket_id: 1,
           etapa: "planejar",
-          status: "em_execucao",
-          status_alterado_em: em,
+          estado: "em_execucao",
+          estado_alterado_em: em,
           criado_por: { tipo: "fabriquinha" },
           devolucoes: 0,
         },
@@ -229,14 +229,14 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
   const ref = { demanda_id: "I-311", ticket_id: 1 };
   gravarAgregadoPronto(
     servico.banco,
-    montarAgregadoDemanda("I-311", "planejamento", {
-      demanda: { ...montarAgregadoDemanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
+    montarAgregadoDemanda("I-311", "planejar", {
+      demanda: { ...montarAgregadoDemanda("I-311", "planejar").demanda, descricao: "pergunte perguntar" },
       tickets: [
         {
           ...ref,
           etapa: "planejar",
-          status: "em_execucao",
-          status_alterado_em: "2026-01-01T00:00:00.000Z",
+          estado: "em_execucao",
+          estado_alterado_em: "2026-01-01T00:00:00.000Z",
           criado_por: { tipo: "fabriquinha" },
           devolucoes: 0,
         },

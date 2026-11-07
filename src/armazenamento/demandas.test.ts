@@ -17,8 +17,8 @@ const ticket = (ticket_id: number, rodada_id?: number) => ({
   demanda_id: "I-1",
   ticket_id,
   etapa: "implementar" as const,
-  status: "aberto" as const,
-  status_alterado_em: em,
+  estado: "aberto" as const,
+  estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" as const },
   devolucoes: 0,
   ...(rodada_id === undefined ? {} : { rodada_id }),
@@ -39,7 +39,8 @@ const rodada = (rodada_id: number) => ({
   demanda_id: "I-1",
   rodada_id,
   titulo: "r",
-  fase: "desenvolvimento" as const,
+  estado: "implementar" as const,
+  estado_alterado_em: em,
   e2e: rodada_id === 1,
   branch: `fabriquinha/I-1-${String(rodada_id)}`,
 });
@@ -52,8 +53,8 @@ const completo = (): AgregadoDemanda => ({
     titulo: "t",
     tipo: "funcionalidade",
     descricao: "d",
-    fase: "execucao",
-    fase_alterada_em: em,
+    estado: "em_execucao",
+    estado_alterado_em: em,
     criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
     enviada: true,
     branch: "fabriquinha/I-1",
@@ -70,8 +71,8 @@ const completo = (): AgregadoDemanda => ({
       instrucao: "refaça",
     },
     ticket(2, 1),
-    { ...ticket(3, 2), status: "falhou" as const, devolucoes: 2, motivo_falha: "testes reprovaram" },
-    { ...ticket(4), etapa: "demanda" },
+    { ...ticket(3, 2), estado: "falhou" as const, devolucoes: 2, motivo_falha: "testes reprovaram" },
+    { ...ticket(4), etapa: "entender_e_desenhar" },
   ],
   dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
   caminhos_ticket: [{ demanda_id: "I-1", ticket_id: 1, caminho: "src/a.ts" }],
@@ -98,7 +99,10 @@ const banco = (): DatabaseSync => {
 const comBase = (enviada = true) => {
   const b = banco();
   const ag = completo();
-  gravarAgregadoPronto(b, { ...ag, demanda: { ...ag.demanda, enviada, fase: enviada ? "execucao" : "registro" } });
+  gravarAgregadoPronto(b, {
+    ...ag,
+    demanda: { ...ag.demanda, enviada, estado: enviada ? "em_execucao" : "entender_e_desenhar" },
+  });
   return b;
 };
 
@@ -175,8 +179,8 @@ test("grava só a diferença: atualiza, apaga e insere", () => {
   const b = comBase();
   const depois = comDemanda(b, "I-1", (ag) => ({
     ...ag,
-    demanda: { ...ag.demanda, fase: "encerramento" },
-    tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, status: "concluido" } : t)),
+    demanda: { ...ag.demanda, estado: "encerrar_demanda" },
+    tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, estado: "concluido" } : t)),
     caminhos_ticket: [],
     decisoes: ag.decisoes.slice(1),
     evidencias: ag.evidencias.map((e) => (e.ticket_id === 2 ? { ...e, dados: { v: 9 } } : e)),
@@ -273,11 +277,11 @@ test("CA-11: nova evidência do mesmo tipo e dono substitui a anterior", () => {
   assert.equal(b.prepare("SELECT count(*) AS n FROM evidencia_demanda").get()?.n, 3);
 });
 
-// Progresso do encerramento (comparacao-sdlc §5): precisa da fase encerramento e de um resolver_conflito para o conflito.
+// Progresso do encerramento (comparacao-sdlc §5): precisa do estado encerramento e de um resolver_conflito para o conflito.
 const emEncerramento = (b: DatabaseSync, encerramento?: ProgressoEncerramento) =>
   comDemanda(b, "I-1", (ag) => ({
     ...ag,
-    demanda: { ...ag.demanda, fase: "encerramento" },
+    demanda: { ...ag.demanda, estado: "encerrar_demanda" },
     tickets: [...ag.tickets, { ...ticket(5), etapa: "resolver_conflito" }],
     ...(encerramento && { encerramento }),
   }));
@@ -364,17 +368,17 @@ const registrar = (id: string) => registrarDemanda({ ...entrada, id }, autor, { 
 
 test("CA-9: demanda nova recebe I-{n} da sequência issue", () => {
   const b = banco();
-  b.exec("INSERT INTO sequencia (nome, valor) VALUES ('issue', 216)");
+  b.exec("INSERT INTO sequencia (nome, valor) VALUES ('demanda', 216)");
   const criada = criarDemandaNova(b, registrar);
   assert.equal(criada.demanda.id, "I-217");
   assert.equal(criada.demanda.branch, "fabriquinha/I-217");
   assert.equal(criada.demanda.criada_por.sessao, "s1");
   assert.deepEqual(
     criada.tickets.map((t) => [t.ticket_id, t.etapa]),
-    [[1, "demanda"]],
+    [[1, "entender_e_desenhar"]],
   );
   assert.deepEqual(carregarDemanda(b, "I-217"), criada);
-  assert.equal(b.prepare("SELECT valor FROM sequencia WHERE nome = 'issue'").get()?.valor, 217);
+  assert.equal(b.prepare("SELECT valor FROM sequencia WHERE nome = 'demanda'").get()?.valor, 217);
 });
 
 test("CA-10: erro na criação desfaz a demanda e a sequência", () => {
@@ -407,11 +411,11 @@ test("carregarDemanda dentro de escrever lê na transação aberta e não a fech
 test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela no filtro e só as em andamento no outro", () => {
   const b = banco();
   const ag = completo();
-  const com = (id: string, fase: AgregadoDemanda["demanda"]["fase"]) => {
+  const com = (id: string, estado: AgregadoDemanda["demanda"]["estado"]) => {
     const t = (x: { demanda_id: string }) => ({ ...x, demanda_id: id });
     gravarAgregadoPronto(b, {
       ...ag,
-      demanda: { ...ag.demanda, id, fase, branch: `fabriquinha/${id}` },
+      demanda: { ...ag.demanda, id, estado, branch: `fabriquinha/${id}` },
       rodadas: ag.rodadas.map((r) => ({ ...t(r), branch: `fabriquinha/${id}-${String(r.rodada_id)}` })),
       dependencias_rodada: ag.dependencias_rodada.map(t),
       criterios_citados: ag.criterios_citados.map(t),
@@ -422,9 +426,9 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
       evidencias: ag.evidencias.map(t),
     } as AgregadoDemanda);
   };
-  com("I-10", "execucao");
+  com("I-10", "em_execucao");
   com("I-2", "arquivada");
-  com("I-3", "encerramento");
+  com("I-3", "encerrar_demanda");
   com("I-4", "concluida");
   com("I-5", "cancelada");
   assert.deepEqual(

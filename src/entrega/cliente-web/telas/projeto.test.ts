@@ -10,7 +10,7 @@ import {
   type Escolhas,
   escolherProjeto,
   estadoDaDemanda,
-  faseNaLinhaDoTempo,
+  estadoNaLinhaDoTempo,
   ha,
   paginaDoProjeto,
   projetoNaoEncontrado,
@@ -63,22 +63,22 @@ type Ticket = DemandaDoProjeto["tickets"][number];
 const ticket = (
   ref: string,
   etapa: Ticket["etapa"],
-  status: Ticket["status"],
+  status: Ticket["estado"],
   resto: Partial<Ticket> = {},
 ): Ticket => ({
   ref,
   etapa,
-  status,
-  statusAlteradoEm: "2026-10-28T11:55:00.000Z",
+  estado: status,
+  estadoAlteradoEm: "2026-10-28T11:55:00.000Z",
   ...resto,
 });
-const demanda = (id: string, fase: DemandaDoProjeto["fase"], resto: Partial<DemandaDoProjeto> = {}) =>
+const demanda = (id: string, estado: DemandaDoProjeto["estado"], resto: Partial<DemandaDoProjeto> = {}) =>
   ({
     id,
     titulo: `Demanda ${id}`,
     tipo: "funcionalidade",
-    fase,
-    faseAlteradaEm: "2026-10-03T12:00:00",
+    estado,
+    estadoAlteradoEm: "2026-10-03T12:00:00",
     bloqueadaPor: [],
     rodadas: [],
     tickets: [],
@@ -164,8 +164,8 @@ test("a confirmação do Arquivar concluídas diz quantas e que nada é apagado"
   );
 });
 
-test("o cabeçalho tem as 5 etapas sobre as 11 fases, com Implementar sobre as 5 da rodada e os gates em âmbar", () => {
-  const html = pagina([demanda("I-1", "registro")]);
+test("o cabeçalho tem as 5 etapas sobre as 11 estados, com Implementar sobre as 5 da rodada e os gates em âmbar", () => {
+  const html = pagina([demanda("I-1", "entender_e_desenhar")]);
   assert.deepEqual(
     [...html.matchAll(/<div class="pista-etapa" style="grid-column: span (\d+)">(\w+)<\/div>/g)].map((m) => [
       m[2],
@@ -180,16 +180,28 @@ test("o cabeçalho tem as 5 etapas sobre as 11 fases, com Implementar sobre as 5
     ],
   );
   assert.deepEqual(
-    [...html.matchAll(/<div class="pista-fase gate">([^<]+)<\/div>/g)].map((m) => m[1]),
+    [...html.matchAll(/<div class="pista-coluna gate">([^<]+)<\/div>/g)].map((m) => m[1]),
     ["Aprovação da demanda", "Aprovação do planejamento", "Aprovação do PR"],
   );
-  assert.equal([...html.matchAll(/<div class="pista-fase( gate)?">/g)].length, 11);
+  assert.equal([...html.matchAll(/<div class="pista-coluna( gate)?">/g)].length, 11);
 });
 
-test("na linha da demanda, as fases passadas feitas, a atual marcada, e na execução o trecho das rodadas", () => {
+test("na linha da demanda, os estados passadas feitas, a atual marcada, e na execução o trecho das rodadas", () => {
   const F = "feito";
-  assert.deepEqual(situacoes(situacaoNaDemanda("registro", false)), ["atual", "", "", "", "", "", "", "", "", "", ""]);
-  assert.deepEqual(situacoes(situacaoNaDemanda("aprovacao_planejamento", false)), [
+  assert.deepEqual(situacoes(situacaoNaDemanda("entender_e_desenhar", false)), [
+    "atual",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]);
+  assert.deepEqual(situacoes(situacaoNaDemanda("gate_planejamento", false)), [
     F,
     F,
     F,
@@ -203,9 +215,9 @@ test("na linha da demanda, as fases passadas feitas, a atual marcada, e na execu
     "",
   ]);
   const rodadas = Array<string>(5).fill("rodadas");
-  assert.deepEqual(situacoes(situacaoNaDemanda("execucao", false)), [F, F, F, F, ...rodadas, "", ""]);
+  assert.deepEqual(situacoes(situacaoNaDemanda("em_execucao", false)), [F, F, F, F, ...rodadas, "", ""]);
   // Depois da execução, Ajustes do PR só fica verde se alguma rodada passou por ele; senão a linha passa por ele.
-  assert.deepEqual(situacoes(situacaoNaDemanda("revisao_demanda", false)), [
+  assert.deepEqual(situacoes(situacaoNaDemanda("revisar_demanda", false)), [
     F,
     F,
     F,
@@ -223,7 +235,7 @@ test("na linha da demanda, as fases passadas feitas, a atual marcada, e na execu
 
 test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde se ela passou por ele, pulado se não", () => {
   const fora = Array<string>(4).fill("fora");
-  assert.deepEqual(situacoes(situacaoNaRodada("desenvolvimento", false)), [
+  assert.deepEqual(situacoes(situacaoNaRodada("implementar", false)), [
     ...fora,
     "atual",
     "",
@@ -233,7 +245,7 @@ test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde se ela p
     "fora",
     "fora",
   ]);
-  assert.deepEqual(situacoes(situacaoNaRodada("sessao", false)), [
+  assert.deepEqual(situacoes(situacaoNaRodada("ajustar_resultado", false)), [
     ...fora,
     "feito",
     "feito",
@@ -266,15 +278,15 @@ test("na linha da rodada, só o trecho das rodadas; Ajustes do PR verde se ela p
 });
 
 test("a cancelada marca a etapa mais adiantada dos tickets; a arquivada, tudo feito", () => {
-  assert.equal(faseNaLinhaDoTempo({ fase: "cancelada", tickets: [] }), "registro");
+  assert.equal(estadoNaLinhaDoTempo({ estado: "cancelada", tickets: [] }), "entender_e_desenhar");
   const tickets = [
     ticket("I-1.T3", "implementar", "cancelado"),
-    ticket("I-1.T1", "demanda", "concluido"),
+    ticket("I-1.T1", "entender_e_desenhar", "concluido"),
     ticket("I-1.T2", "planejar", "concluido"),
   ];
-  assert.equal(faseNaLinhaDoTempo({ fase: "cancelada", tickets }), "execucao");
-  assert.equal(faseNaLinhaDoTempo({ fase: "arquivada", tickets }), "concluida");
-  assert.equal(faseNaLinhaDoTempo({ fase: "planejamento", tickets }), "planejamento");
+  assert.equal(estadoNaLinhaDoTempo({ estado: "cancelada", tickets }), "em_execucao");
+  assert.equal(estadoNaLinhaDoTempo({ estado: "arquivada", tickets }), "concluida");
+  assert.equal(estadoNaLinhaDoTempo({ estado: "planejar", tickets }), "planejar");
 });
 
 test("o estado da demanda: a falha antes do gate, o gate antes do que roda; encerrada sem cor", () => {
@@ -283,28 +295,28 @@ test("o estado da demanda: a falha antes do gate, o gate antes do que roda; ence
   assert.equal(estadoDaDemanda(demanda("I-1", "concluida")), undefined);
   assert.equal(estadoDaDemanda(demanda("I-1", "arquivada")), undefined);
   assert.equal(
-    estadoDaDemanda(demanda("I-1", "aprovacao_demanda", { tickets: [ticket("I-1.T1", "demanda", "falhou")] })),
+    estadoDaDemanda(demanda("I-1", "gate_demanda", { tickets: [ticket("I-1.T1", "entender_e_desenhar", "falhou")] })),
     "falha",
   );
-  assert.equal(estadoDaDemanda(demanda("I-1", "aprovacao_demanda", { tickets: rodando })), "aguarda");
-  assert.equal(estadoDaDemanda(demanda("I-1", "aprovacao_planejamento")), "aguarda");
-  const rodada = (fase: DemandaDoProjeto["rodadas"][number]["fase"]) => ({ ref: "I-1.R1", titulo: "r", fase });
-  assert.equal(estadoDaDemanda(demanda("I-1", "execucao", { rodadas: [rodada("sessao")] })), "aguarda");
+  assert.equal(estadoDaDemanda(demanda("I-1", "gate_demanda", { tickets: rodando })), "aguarda");
+  assert.equal(estadoDaDemanda(demanda("I-1", "gate_planejamento")), "aguarda");
+  const rodada = (estado: DemandaDoProjeto["rodadas"][number]["estado"]) => ({ ref: "I-1.R1", titulo: "r", estado });
+  assert.equal(estadoDaDemanda(demanda("I-1", "em_execucao", { rodadas: [rodada("ajustar_resultado")] })), "aguarda");
   assert.equal(
-    estadoDaDemanda(demanda("I-1", "execucao", { rodadas: [rodada("revisao")], tickets: rodando })),
+    estadoDaDemanda(demanda("I-1", "em_execucao", { rodadas: [rodada("revisar_rodada")], tickets: rodando })),
     "rodando",
   );
-  assert.equal(estadoDaDemanda(demanda("I-1", "planejamento")), undefined);
+  assert.equal(estadoDaDemanda(demanda("I-1", "planejar")), undefined);
 });
 
 test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a linha do tempo com a cor do estado", () => {
   const html = pagina([
-    demanda("I-7", "planejamento", {
+    demanda("I-7", "planejar", {
       titulo: "Busca <rápida>",
       tipo: "problema",
       bloqueadaPor: ["I-5", "I-6"],
       tickets: [
-        ticket("I-7.T1", "demanda", "concluido"),
+        ticket("I-7.T1", "entender_e_desenhar", "concluido"),
         ticket("I-7.T2", "planejar", "em_execucao", { piAtivo: true }),
       ],
     }),
@@ -316,7 +328,7 @@ test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a l
     linha,
     /<span class="id">I-7<\/span><span class="tag">problema<\/span><span class="bloqueia">bloqueada por I-5, I-6<\/span><span class="progresso" title="tickets concluídos">1\/2<span class="trilho-p"><i style="width:50%"><\/i><\/span><\/span><\/span>/,
   );
-  assert.match(linha, /<ol class="trilho-fases rodando" aria-label="Fases da demanda I-7">/);
+  assert.match(linha, /<ol class="trilho-estados rodando" aria-label="Fases da demanda I-7">/);
   assert.match(
     linha,
     /<li class="passo atual" aria-current="step"><span class="linha"><span class="marco"><\/span><\/span><span>Planejamento<\/span><\/li>/,
@@ -333,15 +345,15 @@ test("a linha da demanda: título com link, I-n, tipo, bloqueio, progresso e a l
 
 test("na execução, uma sub-linha por rodada com o endereço, o título, o PR e a linha do tempo dela", () => {
   const html = pagina([
-    demanda("I-9", "execucao", {
+    demanda("I-9", "em_execucao", {
       rodadas: [
-        { ref: "I-9.R1", titulo: "Base <a>", fase: "concluida", pr: { id: "7", url: "https://pr/7" } },
-        { ref: "I-9.R2", titulo: "Tela", fase: "aprovacao_pull_request", pr: { id: "8", url: "javascript:x" } },
-        { ref: "I-9.R3", titulo: "Ajustes", fase: "desenvolvimento" },
-        { ref: "I-9.R4", titulo: "Erros", fase: "revisao" },
+        { ref: "I-9.R1", titulo: "Base <a>", estado: "concluida", pr: { id: "7", url: "https://pr/7" } },
+        { ref: "I-9.R2", titulo: "Tela", estado: "gate_pr", pr: { id: "8", url: "javascript:x" } },
+        { ref: "I-9.R3", titulo: "Ajustes", estado: "implementar" },
+        { ref: "I-9.R4", titulo: "Erros", estado: "revisar_rodada" },
       ],
       tickets: [
-        ticket("I-9.T1", "sessao_em_aberto", "concluido", { rodada: "I-9.R1" }),
+        ticket("I-9.T1", "ajustar_resultado", "concluido", { rodada: "I-9.R1" }),
         ticket("I-9.T2", "implementar", "em_execucao", { rodada: "I-9.R3" }),
         ticket("I-9.T3", "implementar", "concluido", { rodada: "I-9.R4" }),
       ],
@@ -364,10 +376,10 @@ test("na execução, uma sub-linha por rodada com o endereço, o título, o PR e
     "passo gate feito",
     "passo feito",
   ]);
-  assert.match(rodadas[0] ?? "", /<ol class="trilho-fases" aria-label="Fases da rodada I-9\.R1">/);
-  assert.match(rodadas[1] ?? "", /<ol class="trilho-fases aguarda"/);
-  assert.match(rodadas[2] ?? "", /<ol class="trilho-fases rodando"/);
-  assert.match(rodadas[3] ?? "", /<ol class="trilho-fases" /);
+  assert.match(rodadas[0] ?? "", /<ol class="trilho-estados" aria-label="Fases da rodada I-9\.R1">/);
+  assert.match(rodadas[1] ?? "", /<ol class="trilho-estados aguarda"/);
+  assert.match(rodadas[2] ?? "", /<ol class="trilho-estados rodando"/);
+  assert.match(rodadas[3] ?? "", /<ol class="trilho-estados" /);
   // A linha da demanda leva o trecho das rodadas, sem marco; aguarda o PR, a gaveta começa aberta.
   assert.deepEqual(passos(linha.slice(0, linha.indexOf("pista-rodada"))).slice(4, 9), [
     "passo rodadas",
@@ -385,14 +397,14 @@ test("na execução, uma sub-linha por rodada com o endereço, o título, o PR e
 
 test("a falha: borda vermelha, gaveta aberta, a rodada falha e o destaque com o chat do ticket", () => {
   const html = pagina([
-    demanda("I-3", "execucao", {
-      rodadas: [{ ref: "I-3.R1", titulo: "r", fase: "desenvolvimento" }],
+    demanda("I-3", "em_execucao", {
+      rodadas: [{ ref: "I-3.R1", titulo: "r", estado: "implementar" }],
       tickets: [ticket("I-3.T1", "implementar", "falhou", { rodada: "I-3.R1", sessao: "s/1" })],
     }),
   ]);
   assert.match(html, /class="pista-item falha"/);
   assert.match(html, /aria-expanded="true" aria-label="Tickets de I-3"/);
-  assert.match(html, /<div class="pista-rodada">[\s\S]*<ol class="trilho-fases falha"/);
+  assert.match(html, /<div class="pista-rodada">[\s\S]*<ol class="trilho-estados falha"/);
   assert.match(
     html,
     /<a class="chat" href="\/sessions\/s%2F1"><span class="pill pill-falha">Falhou<\/span><span class="muted quando">há 5\u00a0min<\/span><span class="ir">chat →<\/span><\/a>/,
@@ -402,19 +414,19 @@ test("a falha: borda vermelha, gaveta aberta, a rodada falha e o destaque com o 
 test("a gaveta: etapa, endereço, título, status, modelo e o chat; a escolha do Auditor vale sobre o padrão", () => {
   const html = pagina(
     [
-      demanda("I-4", "execucao", {
+      demanda("I-4", "em_execucao", {
         tickets: [
-          ticket("I-4.T1", "demanda", "concluido"),
+          ticket("I-4.T1", "entender_e_desenhar", "concluido"),
           ticket("I-4.T2", "implementar", "aberto", {
             titulo: "Cache <x>",
             modelo: "anthropic / claude",
             sessao: "s1",
           }),
-          ticket("I-4.T3", "sessao_em_aberto", "fechado", { sessao: "s2" }),
+          ticket("I-4.T3", "ajustar_resultado", "cancelado", { sessao: "s2" }),
           ticket("I-4.T4", "revisar_rodada", "cancelado"),
         ],
       }),
-      demanda("I-5", "aprovacao_demanda"),
+      demanda("I-5", "gate_demanda"),
     ],
     {
       ...SEM_ESCOLHAS,
@@ -460,7 +472,7 @@ test("as encerradas apagadas, com quando saíram do andamento; a cancelada marca
     demanda("I-1", "concluida"),
     demanda("I-2", "arquivada"),
     demanda("I-3", "cancelada", {
-      rodadas: [{ ref: "I-3.R1", titulo: "r", fase: "revisao" }],
+      rodadas: [{ ref: "I-3.R1", titulo: "r", estado: "revisar_rodada" }],
       tickets: [ticket("I-3.T1", "implementar", "em_execucao", { rodada: "I-3.R1" })],
     }),
   ]);
@@ -483,7 +495,7 @@ test("as encerradas apagadas, com quando saíram do andamento; a cancelada marca
     "passo feito",
   ]);
   // A cancelada na execução mostra as rodadas onde pararam, apagadas, e nenhum destaque.
-  assert.match(linhaDe(html, "I-3"), /<div class="pista-rodada">[\s\S]*<ol class="trilho-fases cancelada"/);
+  assert.match(linhaDe(html, "I-3"), /<div class="pista-rodada">[\s\S]*<ol class="trilho-estados cancelada"/);
   assert.match(linhaDe(html, "I-3"), /<div class="pista-estado"><\/div>/);
 });
 

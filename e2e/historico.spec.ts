@@ -41,9 +41,9 @@ function semear(raiz: string): void {
   projeto(
     raiz,
     `INSERT INTO demanda VALUES
-       ('I-1', 'loja', 'Board por fase', 'funcionalidade', 'd', 'planejamento', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-1'),
-       ('I-2', 'loja', 'Timeout no checkout', 'problema', 'd', 'planejamento', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-2');
-     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+       ('I-1', 'loja', 'Board por fase', 'funcionalidade', 'd', 'planejar', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-1'),
+       ('I-2', 'loja', 'Timeout no checkout', 'problema', 'd', 'planejar', '${instante(3000)}', 'f', 's', 1, 'fabriquinha/I-2');
+     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
        ('I-1', 1, 'planejar', 'concluido', '${fim1}'),
        ('I-2', 1, 'planejar', 'concluido', '${fim2}');
      INSERT INTO sessao VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-2', 1, 'autonomo', 'c2');
@@ -133,7 +133,7 @@ test("o endereço do ticket fica inteiro, sem encostar no título, a 1440 e 375 
     `INSERT INTO demanda VALUES
        ('I-1', 'loja', 'Board por fase', 'funcionalidade', 'd', 'concluida', '${fim}', 'f', 's', 1, 'fabriquinha/I-1'),
        ('I-247', 'loja', 'Remover o fluxo legado de issues, tickets e execuções da Fabriquinha', 'funcionalidade', 'd', 'concluida', '${fim}', 'f', 's', 1, 'fabriquinha/I-247');
-     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
        ('I-1', 1, 'planejar', 'concluido', '${fim}'),
        ('I-247', 18, 'implementar', 'concluido', '${fim}');
      INSERT INTO sessao VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-247', 18, 'autonomo', 'c2');

@@ -275,11 +275,14 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
     await chamar("POST", "/api/projetos/loja", {
       ...formulario(repo),
       preparacao: ["npm ci"],
-      configuracoes: { ...escolhidos.configuracoes, demanda: { modelo: { provedor: "inexistente", nome: "xyz" } } },
+      configuracoes: {
+        ...escolhidos.configuracoes,
+        entender_e_desenhar: { modelo: { provedor: "inexistente", nome: "xyz" } },
+      },
     }),
     [
       422,
-      "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at configuracoes.demanda.modelo",
+      "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at configuracoes.entender_e_desenhar.modelo",
     ],
   );
   assert.deepEqual(projeto(banco, "loja")?.preparacao, []);
@@ -421,8 +424,8 @@ test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", asyn
 
 /** A demanda I-1 do `loja` com o ticket e a execução da sessão dele, terminada ou ainda em andamento. */
 const demandaComExecucao = (andamento: boolean) => `
-  INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
-  INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+  INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+  INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
     VALUES ('I-1', 1, 'implementar', '${andamento ? "em_execucao" : "concluido"}', '2026-10-12T14:00:00.000Z');
   INSERT INTO sessao VALUES ('s', 'I-1', 1, 'autonomo', 's');
   INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)

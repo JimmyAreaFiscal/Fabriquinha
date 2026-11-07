@@ -37,7 +37,7 @@ const BRANCH_DEMANDA = "fabriquinha/I-206";
 const BRANCH_RODADA = "fabriquinha/I-206-2";
 
 /** Demanda I-206 com a rodada 2 no gate do PR: commit na rodada, ambas as branches no origin, PR 1 aberto. */
-async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao_pull_request", semPR = false) {
+async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = false) {
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
@@ -61,8 +61,8 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
     demanda_id: DEMANDA,
     ticket_id,
     etapa,
-    status,
-    status_alterado_em: em,
+    estado: status,
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     rodada_id: 2,
@@ -74,13 +74,22 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
       titulo: "Demanda",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "execucao",
-      fase_alterada_em: em,
+      estado: "em_execucao",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
-    rodadas: [{ ...REF, titulo: "r2", fase, e2e: false, branch: BRANCH_RODADA }],
+    rodadas: [
+      {
+        ...REF,
+        titulo: "r2",
+        estado,
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: BRANCH_RODADA,
+      },
+    ],
     dependencias_rodada: [],
     criterios_citados: [],
     tickets: [
@@ -114,7 +123,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
     banco,
     commitDaRodada,
     ag: () => carregarDemanda(banco, DEMANDA),
-    fase: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.fase,
+    estado: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.estado,
     ticket: () => carregarDemanda(banco, DEMANDA).tickets.find((t) => t.ticket_id === 8),
     demandaLocal: () => rodarGit(c.repo, "rev-parse", BRANCH_DEMANDA),
     demandaRemota: () => rodarGit(c.bare, "rev-parse", BRANCH_DEMANDA),
@@ -122,14 +131,14 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
 }
 
 test("CA-1 a CA-4: aprova com nota 4, integra, avança a demanda e conclui a rodada e o ticket", async () => {
-  const { c, banco, ag, fase, ticket, commitDaRodada, demandaLocal, demandaRemota } = await cenario();
+  const { c, banco, ag, estado, ticket, commitDaRodada, demandaLocal, demandaRemota } = await cenario();
 
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
 
   rodarGit(c.repo, "merge-base", "--is-ancestor", commitDaRodada, BRANCH_DEMANDA);
   assert.equal(demandaLocal(), demandaRemota());
-  assert.equal(fase(), "concluida");
-  assert.equal(ticket()?.status, "concluido");
+  assert.equal(estado(), "concluida");
+  assert.equal(ticket()?.estado, "concluido");
   assert.deepEqual(
     ag().decisoes.map((d) => [d.resultado, d.nota, d.por]),
     [["aprovado", 4, AUDITOR]],
@@ -137,40 +146,40 @@ test("CA-1 a CA-4: aprova com nota 4, integra, avança a demanda e conclui a rod
 });
 
 test("CA-5 e CA-6: nota fora de 1 a 5 ou ausente é recusada sem integrar", async () => {
-  const { banco, fase, demandaLocal } = await cenario();
+  const { banco, estado, demandaLocal } = await cenario();
   const antes = demandaLocal();
 
   await assert.rejects(aprovarPRRodada(banco, REF, 6, AUDITOR));
   await assert.rejects(aprovarPRRodada(banco, REF, undefined, AUDITOR));
 
-  assert.equal(fase(), "aprovacao_pull_request");
+  assert.equal(estado(), "gate_pr");
   assert.equal(demandaLocal(), antes);
   assert.equal(hospedagem.prs()[0]?.estado, "aberto");
 });
 
 test("CA-7 e CA-8: a hospedagem recusa a integração, o gate fica, e a nova tentativa conclui", async () => {
-  const { banco, ag, fase, ticket } = await cenario();
-  hospedagem.mudar(1, { estado: "fechado" });
+  const { banco, ag, estado, ticket } = await cenario();
+  hospedagem.fecharPr(1);
 
   await assert.rejects(aprovarPRRodada(banco, REF, 4, AUDITOR), /pr merge/);
 
-  assert.equal(fase(), "aprovacao_pull_request");
-  assert.equal(ticket()?.status, "em_execucao");
+  assert.equal(estado(), "gate_pr");
+  assert.equal(ticket()?.estado, "em_execucao");
   assert.deepEqual(ag().decisoes, []);
 
   hospedagem.mudar(1, { estado: "aberto" });
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
-  assert.equal(fase(), "concluida");
+  assert.equal(estado(), "concluida");
 });
 
 test("CA-8: PR já mergeado pela hospedagem (queda após a integração) não integra de novo", async () => {
-  const { c, banco, fase, demandaRemota } = await cenario();
+  const { c, banco, estado, demandaRemota } = await cenario();
   execFileSync("gh", ["pr", "merge", "1", "--merge"], { cwd: c.repo, stdio: "pipe" });
   const mergeado = demandaRemota();
 
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
 
-  assert.equal(fase(), "concluida");
+  assert.equal(estado(), "concluida");
   assert.equal(demandaRemota(), mergeado);
   assert.equal(hospedagem.chamadas().filter((x) => x.args[1] === "merge").length, 1);
 });
@@ -198,35 +207,35 @@ test("rodada concluída sem decisão aprovada recusa a aprovação", async () =>
 test("rodada inexistente ou sem PR publicado é recusada", async () => {
   const { banco } = await cenario();
   await assert.rejects(aprovarPRRodada(banco, { ...REF, rodada_id: 9 }, 4, AUDITOR), /não existe/);
-  const sem = await cenario("aprovacao_pull_request", true);
+  const sem = await cenario("gate_pr", true);
   await assert.rejects(aprovarPRRodada(sem.banco, REF, 4, AUDITOR), /não tem PR publicado/);
 });
 
 test("CA-11: o agente da rodada não aprova", async () => {
-  const { banco, fase } = await cenario();
+  const { banco, estado } = await cenario();
 
   await assert.rejects(aprovarPRRodada(banco, REF, 4, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
 
-  assert.equal(fase(), "aprovacao_pull_request");
+  assert.equal(estado(), "gate_pr");
   assert.deepEqual(hospedagem.chamadas(), []);
 });
 
 test("CA-24: a mesma função serve a web e ao agendador (Auditor como ator) e conclui a rodada", async () => {
-  const { banco, fase } = await cenario();
+  const { banco, estado } = await cenario();
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
-  assert.equal(fase(), "concluida");
+  assert.equal(estado(), "concluida");
 });
 
 const LIGADA = { FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA: "outro, loja" };
 
 test("aprovação automática ligada para o projeto: integra o PR que chegou ao gate e conclui a rodada sem nota", async () => {
-  const { c, banco, ag, fase, commitDaRodada, demandaLocal, demandaRemota } = await cenario();
+  const { c, banco, ag, estado, commitDaRodada, demandaLocal, demandaRemota } = await cenario();
 
   await aprovarPRRodadaSeAutomatico(banco, ag(), REF, LIGADA);
 
   rodarGit(c.repo, "merge-base", "--is-ancestor", commitDaRodada, BRANCH_DEMANDA);
   assert.equal(demandaLocal(), demandaRemota());
-  assert.equal(fase(), "concluida");
+  assert.equal(estado(), "concluida");
   assert.deepEqual(
     ag().decisoes.map((d) => [d.resultado, d.nota, d.motivo]),
     [["aprovado", undefined, MOTIVO_APROVACAO_AUTOMATICA_PR]],
@@ -234,22 +243,22 @@ test("aprovação automática ligada para o projeto: integra o PR que chegou ao 
 });
 
 test("sem a opção, com outro projeto nela ou fora do gate, a aprovação automática não faz nada", async () => {
-  const { banco, ag, fase } = await cenario();
+  const { banco, ag, estado } = await cenario();
   for (const env of [{}, { FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA: "lojas,outro" }]) {
     await aprovarPRRodadaSeAutomatico(banco, ag(), REF, env);
   }
   await aprovarPRRodadaSeAutomatico(banco, { ...ag(), rodadas: [] }, REF, LIGADA);
 
-  assert.equal(fase(), "aprovacao_pull_request");
+  assert.equal(estado(), "gate_pr");
   assert.deepEqual(hospedagem.chamadas(), []);
 });
 
 test("a hospedagem recusa a integração automática: o gate fica aberto para o Auditor, sem lançar", async () => {
-  const { banco, ag, fase } = await cenario();
-  hospedagem.mudar(1, { estado: "fechado" });
+  const { banco, ag, estado } = await cenario();
+  hospedagem.fecharPr(1);
 
   await aprovarPRRodadaSeAutomatico(banco, ag(), REF, LIGADA);
 
-  assert.equal(fase(), "aprovacao_pull_request");
+  assert.equal(estado(), "gate_pr");
   assert.deepEqual(ag().decisoes, []);
 });

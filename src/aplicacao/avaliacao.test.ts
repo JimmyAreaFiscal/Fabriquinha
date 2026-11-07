@@ -37,8 +37,8 @@ for (const [id, projeto, fim] of [
   ["I-13", "site", "2026-10-10T11:00:00.000Z"],
 ] as const) {
   banco.exec(
-    `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
-     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
+    `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
+     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
      INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
      INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '${fim}', 0);`,
   );
@@ -156,7 +156,7 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   assert.equal(registro().find((r) => r.comando?.message === "e o custo?")?.comando?.type, "prompt");
 
   const demanda = encaminharAchado(banco, id, 1);
-  assert.equal(demanda.demanda.fase, "registro");
+  assert.equal(demanda.demanda.estado, "entender_e_desenhar");
   assert.equal(demanda.demanda.titulo, "Achado 1");
   assert.equal(demanda.demanda.projeto, "loja");
   assert.match(demanda.demanda.descricao, /desc 1[\s\S]*ev 1[\s\S]*achado 1/);

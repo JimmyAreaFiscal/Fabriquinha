@@ -13,8 +13,8 @@ const projeto = (nome: string) =>
 
 /** Uma demanda do projeto com uma execução de `custo` dólares, que a página Métricas lê; `andamento`, ainda aberta. */
 const demanda = (id: string, nome: string, custo: number, andamento = false) =>
-  `INSERT INTO demanda VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'execucao', '${em}', 'f', 's', 1, 'fabriquinha/${id}');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', '${andamento ? "em_execucao" : "aberto"}', '${em}');
+  `INSERT INTO demanda VALUES ('${id}', '${nome}', 'Demanda ${id}', 'problema', 'd', 'em_execucao', '${em}', 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', '${andamento ? "em_execucao" : "aberto"}', '${em}');
     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv-${id}');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${em}', ${andamento ? "NULL" : `'${em}'`}, 0);
     INSERT INTO uso_modelo_execucao VALUES ('x-${id}', 'anthropic', 'claude-sonnet-5-5', 1000, 500, 0, 0, ${String(custo)});`;
@@ -42,7 +42,7 @@ test("remover: cancelar não apaga; confirmar tira o projeto de todas as telas e
   // CA-1: o diálogo cita o nome e o que sai junto, sem contar issues; CA-2: Cancelar fecha e o projeto continua.
   await expect(pagina.getByRole("heading", { level: 2, name: /^demo/ })).not.toContainText("issue");
   await pagina.getByRole("button", { name: "Remover o projeto demo" }).click();
-  await expect(dialogo).toContainText("O projeto demo será apagado com as demandas, em qualquer fase,");
+  await expect(dialogo).toContainText("O projeto demo será apagado com as demandas, em qualquer estado,");
   await dialogo.getByRole("button", { name: "Cancelar" }).click();
   await expect(dialogo).toBeHidden();
   await expect(menu.getByRole("link", { name: /^demo/ })).toBeVisible();

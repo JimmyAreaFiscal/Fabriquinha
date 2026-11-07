@@ -1,6 +1,6 @@
 // Evidência do agente de uma execução da demanda (comparacao-sdlc-implementacao.md §6): `evidencia schema <tipo>` e
 // `evidencia add I-<n>.T<m> <tipo>`. Valida na fronteira (ticket próprio, etapa, produtor, schema do tipo, anexos) e
-// grava dentro de `comDemanda`, que reconfere execução aberta e status. Implementar não tem comando: a Fabriquinha
+// grava dentro de `comDemanda`, que reconfere execução aberta e estado. Implementar não tem comando: a Fabriquinha
 // coleta e conclui.
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -46,9 +46,9 @@ function ticketAberto(ag: ReturnType<typeof carregarDemanda>, a: EscopoDoAgente)
     `o ticket ${proprio(a)} não existe`,
     "confira a execução",
   );
-  if (ticket.status !== "aberto" && ticket.status !== "em_execucao") {
+  if (ticket.estado !== "aberto" && ticket.estado !== "em_execucao") {
     throw new ErroDeRegra(
-      `o ticket ${proprio(a)} está ${ticket.status} e não recebe evidência`,
+      `o ticket ${proprio(a)} está ${ticket.estado} e não recebe evidência`,
       "siga com o seu ticket",
     );
   }

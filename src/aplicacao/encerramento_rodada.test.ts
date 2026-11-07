@@ -52,7 +52,7 @@ interface Opcoes {
   /** Os dois primeiros tickets de implementação e a documentação entregue pelo agente (padrão: sim). */
   documentacao?: boolean;
   statusEncerrar?: "aberto" | "em_execucao" | "falhou";
-  fase?: "encerramento" | "desenvolvimento";
+  estado?: "encerrar_rodada" | "implementar";
   instrucao?: string;
   semTicketEncerrar?: boolean;
   /** Um `encerrar_rodada` anterior da rodada que já registrou o PR 1. */
@@ -64,7 +64,7 @@ interface Opcoes {
 async function cenario({
   documentacao = true,
   statusEncerrar = "em_execucao",
-  fase = "encerramento",
+  estado = "encerrar_rodada",
   instrucao,
   semTicketEncerrar = false,
   anterior = false,
@@ -94,8 +94,8 @@ async function cenario({
     demanda_id: DEMANDA,
     ticket_id,
     etapa,
-    status,
-    status_alterado_em: em,
+    estado: status,
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     rodada_id: 2,
@@ -124,13 +124,22 @@ async function cenario({
       titulo: "Demanda",
       tipo: "funcionalidade",
       descricao,
-      fase: "execucao",
-      fase_alterada_em: em,
+      estado: "em_execucao",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
-    rodadas: [{ ...REF, titulo: "r2", fase, e2e: false, branch: BRANCH_RODADA }],
+    rodadas: [
+      {
+        ...REF,
+        titulo: "r2",
+        estado,
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: BRANCH_RODADA,
+      },
+    ],
     dependencias_rodada: [],
     criterios_citados: [],
     tickets: [
@@ -184,7 +193,7 @@ async function cenario({
         .map((entrada) => entrada.prompt)
         .join("\n"),
     noRemoto: (branch: string) => rodarGit(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`),
-    fase: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.fase,
+    estado: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.estado,
   };
 }
 
@@ -200,8 +209,8 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
   );
   assert.equal(noRemoto(BRANCH_RODADA), rodarGit(rodada, "rev-parse", "HEAD"));
   assert.equal(noRemoto(BRANCH_DEMANDA), rodarGit(c.repo, "rev-parse", BRANCH_DEMANDA));
-  assert.equal(ag().rodadas[0]?.fase, "aprovacao_pull_request");
-  assert.equal(ticket()?.status, "em_execucao");
+  assert.equal(ag().rodadas[0]?.estado, "gate_pr");
+  assert.equal(ticket()?.estado, "em_execucao");
   const pr = prs[0];
   assert.ok(pr);
   assert.equal(pr.titulo, "feat: Encerrar a rodada [I-206.R2]");
@@ -249,7 +258,7 @@ test("CA-3: a ponta nova da demanda entra na rodada antes do PR, e o merge da D0
 });
 
 test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvimento com um corretivo para o merge", async () => {
-  const { banco, demanda, ag, fase, noRemoto } = await cenario();
+  const { banco, demanda, ag, estado, noRemoto } = await cenario();
   commitarArquivo(demanda, "a.txt", "da demanda\n");
   commitarArquivo(demanda, "b.txt", "da demanda\n");
 
@@ -257,7 +266,7 @@ test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvi
 
   assert.deepEqual(hospedagem.prs(), []);
   assert.equal(noRemoto(BRANCH_RODADA), "");
-  assert.equal(fase(), "desenvolvimento");
+  assert.equal(estado(), "implementar");
   const corretivos = ag().tickets.filter((t) => t.ticket_id > 8);
   assert.equal(corretivos.length, 1);
   const [corretivo] = corretivos;
@@ -269,11 +278,11 @@ test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvi
       .sort(),
     ["a.txt", "b.txt"],
   );
-  assert.equal(ag().tickets.find((t) => t.ticket_id === 8)?.status, "concluido");
+  assert.equal(ag().tickets.find((t) => t.ticket_id === 8)?.estado, "concluido");
 });
 
 test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: volta a desenvolvimento e conclui o ticket", async () => {
-  const { banco, ag, ticket, evidencia, fase } = await cenario();
+  const { banco, ag, ticket, evidencia, estado } = await cenario();
   hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
@@ -290,15 +299,15 @@ test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: vo
   assert.equal(prs[0]?.titulo, "feat: Encerrar a rodada [I-206.R2]");
   assert.equal(evidencia("pr_aberto")?.dados.id, "1");
   assert.equal(evidencia("pr_aberto")?.dados.url, "https://github.com/org/loja/pull/1");
-  assert.equal(fase(), "desenvolvimento");
-  assert.equal(ticket()?.status, "concluido");
+  assert.equal(estado(), "implementar");
+  assert.equal(ticket()?.estado, "concluido");
   const corretivo = ag().tickets.find((t) => t.ticket_id > 8);
   assert.match(corretivo?.titulo ?? "", /conflito do PR da I-206\.R2/);
   assert.doesNotMatch(corretivo?.descricao ?? "", /T-\d/);
 });
 
 test("CA-6: check de CI falho volta a desenvolvimento com uma correção por check, sem chegar ao gate", async () => {
-  const { banco, ag, fase } = await cenario();
+  const { banco, ag, estado } = await cenario();
   hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
@@ -314,7 +323,7 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
 
   await concluirEncerramentoRodada(banco, REF);
 
-  assert.equal(fase(), "desenvolvimento");
+  assert.equal(estado(), "implementar");
   assert.deepEqual(
     ag()
       .tickets.filter((t) => t.ticket_id > 8)
@@ -328,7 +337,7 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
 });
 
 test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a marca do ticket atual", async () => {
-  const { banco, fase } = await cenario({ anterior: true });
+  const { banco, estado } = await cenario({ anterior: true });
   hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
@@ -341,7 +350,7 @@ test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a ma
 
   assert.equal(hospedagem.prs().length, 1);
   assert.equal(hospedagem.prs()[0]?.titulo, "feat: Encerrar a rodada [I-206.R2]");
-  assert.equal(fase(), "aprovacao_pull_request");
+  assert.equal(estado(), "gate_pr");
 });
 
 test("CA-9: commit que nenhum ticket registrou falha antes do push, diz como desfazer e não cria PR", async () => {
@@ -359,12 +368,12 @@ test("CA-9: commit que nenhum ticket registrou falha antes do push, diz como des
 
   assert.equal(noRemoto(BRANCH_RODADA), "");
   assert.deepEqual(hospedagem.prs(), []);
-  assert.equal(ticket()?.status, "falhou");
+  assert.equal(ticket()?.estado, "falhou");
   assert.equal(evidencia("pr_aberto"), undefined);
 });
 
 test("commit da base publicada trazido por merge para a rodada não é órfão", async () => {
-  const { banco, rodada, c, fase } = await cenario();
+  const { banco, rodada, c, estado } = await cenario();
   commitarArquivo(c.repo, "da-base.txt", "base nova\n");
   rodarGit(c.repo, "push", "-q", "origin", "integracao");
   rodarGit(rodada, "fetch", "-q", "origin", "integracao");
@@ -372,11 +381,11 @@ test("commit da base publicada trazido por merge para a rodada não é órfão",
 
   await concluirEncerramentoRodada(banco, REF);
 
-  assert.equal(fase(), "aprovacao_pull_request");
+  assert.equal(estado(), "gate_pr");
 });
 
 test("CA-10: a hospedagem recusa o PR, o ticket falha com a saída do comando e o pr_aberto não é gravado", async () => {
-  const { banco, ticket, evidencia, fase } = await cenario();
+  const { banco, ticket, evidencia, estado } = await cenario();
   hospedagem.falhar("pr create", "GraphQL: sem permissão");
 
   await assert.rejects(
@@ -384,10 +393,10 @@ test("CA-10: a hospedagem recusa o PR, o ticket falha com a saída do comando e 
     (e: unknown) => e instanceof ErroExterno && e.message.includes("GraphQL: sem permissão"),
   );
 
-  assert.equal(ticket()?.status, "falhou");
+  assert.equal(ticket()?.estado, "falhou");
   assert.match(ticket()?.motivo_falha ?? "", /GraphQL: sem permissão/);
   assert.equal(evidencia("pr_aberto"), undefined);
-  assert.equal(fase(), "encerramento");
+  assert.equal(estado(), "encerrar_rodada");
 });
 
 test("CA-11: sem a documentação do agente o domínio recusa a conferência; o ticket segue em execução e nada é publicado", async () => {
@@ -398,14 +407,14 @@ test("CA-11: sem a documentação do agente o domínio recusa a conferência; o 
     (e: unknown) => e instanceof ErroDeRegra && e.message.startsWith("a documentação ainda não foi entregue"),
   );
 
-  assert.equal(ticket()?.status, "em_execucao");
+  assert.equal(ticket()?.estado, "em_execucao");
   assert.equal(evidencia("relatorio_produtividade"), undefined);
   assert.deepEqual(hospedagem.chamadas(), []);
 });
 
 test("pré-condições: rodada fora de encerramento, rodada ou ticket inexistente e ticket fora de execução recusam sem efeito", async () => {
-  const fora = await cenario({ fase: "desenvolvimento" });
-  await assert.rejects(concluirEncerramentoRodada(fora.banco, REF), /está em desenvolvimento e a demanda em execucao/);
+  const fora = await cenario({ estado: "implementar" });
+  await assert.rejects(concluirEncerramentoRodada(fora.banco, REF), /está em implementar e a demanda em em_execucao/);
 
   const inexistente = await cenario();
   await assert.rejects(
@@ -418,7 +427,7 @@ test("pré-condições: rodada fora de encerramento, rodada ou ticket inexistent
 
   const aberto = await cenario({ statusEncerrar: "aberto" });
   await assert.rejects(concluirEncerramentoRodada(aberto.banco, REF), /I-206\.T8 está aberto/);
-  assert.equal(aberto.ticket()?.status, "aberto");
+  assert.equal(aberto.ticket()?.estado, "aberto");
   assert.deepEqual(hospedagem.chamadas(), []);
 });
 
@@ -428,7 +437,7 @@ test("iniciar: reserva o encerrar_rodada aberto, roda o agente na worktree da ro
   const { fim } = iniciarEncerramentoRodada(banco, REF, 1);
   await fim;
 
-  assert.equal(ticket()?.status, "em_execucao");
+  assert.equal(ticket()?.estado, "em_execucao");
   const { sessoes, execucoes } = carregarSessoesDoTicket(banco, { demanda_id: DEMANDA, ticket_id: 8 });
   assert.equal(sessoes.length, 1);
   assert.equal(execucoes[0]?.falha, false);
@@ -440,7 +449,7 @@ test("iniciar: com o ticket já em execução só roda o agente de novo, sem ins
 
   await iniciarEncerramentoRodada(banco, REF, 1).fim;
 
-  assert.equal(ticket()?.status, "em_execucao");
+  assert.equal(ticket()?.estado, "em_execucao");
   assert.doesNotMatch(prompt(), /Reabertura/);
 });
 

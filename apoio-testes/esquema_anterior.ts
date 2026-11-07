@@ -1,0 +1,122 @@
+// O esquema anterior à migração 38 (I-267.R1): os valores antigos de estado, o mapeamento para os novos e a volta de um
+// banco migrado para esse esquema, para o teste que precisa de uma demanda em cada valor antigo antes de migrar.
+import { DatabaseSync } from "node:sqlite";
+import { migrar } from "../src/armazenamento/banco.ts";
+import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "../src/armazenamento/migracoes.ts";
+
+/** O valor antigo → o novo, por tabela (as etapas valem para `ticket_demanda` e `configuracao_etapa_projeto`). */
+export const ESTADO_NOVO_DA_DEMANDA: Readonly<Record<string, string>> = {
+  registro: "entender_e_desenhar",
+  aprovacao_demanda: "gate_demanda",
+  planejamento: "planejar",
+  aprovacao_planejamento: "gate_planejamento",
+  execucao: "em_execucao",
+  revisao_demanda: "revisar_demanda",
+  encerramento: "encerrar_demanda",
+  concluida: "concluida",
+  arquivada: "arquivada",
+  cancelada: "cancelada",
+};
+export const ESTADO_NOVO_DA_RODADA: Readonly<Record<string, string>> = {
+  desenvolvimento: "implementar",
+  revisao: "revisar_rodada",
+  encerramento: "encerrar_rodada",
+  aprovacao_pull_request: "gate_pr",
+  sessao: "ajustar_resultado",
+  concluida: "concluida",
+};
+export const ESTADO_NOVO_DO_TICKET: Readonly<Record<string, string>> = {
+  aberto: "aberto",
+  em_execucao: "em_execucao",
+  concluido: "concluido",
+  falhou: "falhou",
+  fechado: "cancelado",
+  cancelado: "cancelado",
+};
+export const ETAPA_NOVA: Readonly<Record<string, string>> = {
+  demanda: "entender_e_desenhar",
+  planejar: "planejar",
+  implementar: "implementar",
+  revisar_rodada: "revisar_rodada",
+  encerrar_rodada: "encerrar_rodada",
+  sessao_em_aberto: "ajustar_resultado",
+  revisar_demanda: "revisar_demanda",
+  encerrar_demanda: "encerrar_demanda",
+  resolver_conflito: "resolver_conflito",
+};
+
+/** Os valores antigos que não são terminais (de onde uma demanda ainda chega a `concluida`), cada um com o novo. */
+export const ESTADOS_DA_DEMANDA_EM_ANDAMENTO = Object.entries(ESTADO_NOVO_DA_DEMANDA).slice(0, 7);
+export const ESTADOS_DA_RODADA_EM_ANDAMENTO = Object.entries(ESTADO_NOVO_DA_RODADA).slice(0, 5);
+
+/** `CASE coluna WHEN 'novo' THEN 'antigo' ... END`: a volta do mapeamento (os terminais e o resto passam como estão). */
+function voltaDoMapeamento(coluna: string, novoDoAntigo: Readonly<Record<string, string>>): string {
+  const casos = Object.entries(novoDoAntigo)
+    .filter(([antigo, novo]) => antigo !== novo && antigo !== "fechado")
+    .map(([antigo, novo]) => `WHEN '${novo}' THEN '${antigo}'`);
+  return `CASE ${coluna} ${casos.join(" ")} ELSE ${coluna} END`;
+}
+
+/** O `CREATE TABLE` de `tabela` no esquema anterior, com o nome trocado para `nome`. */
+function criacaoAnterior(esquemaAnterior: DatabaseSync, tabela: string, nome: string): string {
+  const linha = esquemaAnterior.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(tabela);
+  return String(linha?.sql).replace(new RegExp(`^CREATE TABLE "?${tabela}"?`), `CREATE TABLE ${nome}`);
+}
+
+/**
+ * Devolve o banco migrado (e aberto) ao esquema da versão 37: recria `demanda`, `rodada`, `ticket_demanda`,
+ * `configuracao_etapa_projeto` e `sequencia` com as colunas e os valores antigos e volta o `user_version`. O próximo
+ * `abrir()` aplica a migração 38 sobre as linhas que o teste montou. O que a 38 perdeu (`enviado_em`, `origem_ticket_id`,
+ * a hora da Rodada) volta vazio ou some, e `fechado` não volta: ficou `cancelado`.
+ */
+export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
+  const esquemaAnterior = new DatabaseSync(":memory:");
+  esquemaAnterior.exec(ESQUEMA_V36);
+  esquemaAnterior.exec(`PRAGMA user_version = ${String(VERSAO_LINHA_DE_BASE)}`);
+  migrar(esquemaAnterior, MIGRACOES.slice(0, 1));
+
+  const colunas = (tabela: string) =>
+    (esquemaAnterior.prepare(`PRAGMA table_info(${tabela})`).all() as { name: string }[]).map((c) => c.name);
+  const copiar = (tabela: string, expressoes: Readonly<Record<string, string>>) => {
+    const antigas = colunas(tabela);
+    const nova = `${tabela}_antiga`;
+    const selecao = antigas.map((coluna) => expressoes[coluna] ?? coluna);
+    banco.exec(criacaoAnterior(esquemaAnterior, tabela, nova));
+    banco.exec(
+      `INSERT INTO ${nova} (${antigas.join(", ")}) SELECT ${selecao.join(", ")} FROM ${tabela} ORDER BY rowid`,
+    );
+  };
+
+  banco.exec("PRAGMA foreign_keys = OFF");
+  banco.exec("BEGIN");
+  try {
+    copiar("demanda", {
+      fase: voltaDoMapeamento("estado", ESTADO_NOVO_DA_DEMANDA),
+      fase_alterada_em: "estado_alterado_em",
+    });
+    copiar("rodada", { fase: voltaDoMapeamento("estado", ESTADO_NOVO_DA_RODADA) });
+    copiar("ticket_demanda", {
+      etapa: voltaDoMapeamento("etapa", ETAPA_NOVA),
+      status: "estado",
+      status_alterado_em: "estado_alterado_em",
+      enviado_em: "NULL",
+      origem_ticket_id: "NULL",
+    });
+    copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
+    copiar("sequencia", { nome: "CASE nome WHEN 'demanda' THEN 'issue' ELSE nome END" });
+    for (const tabela of ["ticket_demanda", "rodada", "demanda", "configuracao_etapa_projeto", "sequencia"]) {
+      banco.exec(`DROP TABLE ${tabela}`);
+    }
+    for (const tabela of ["demanda", "rodada", "ticket_demanda", "configuracao_etapa_projeto", "sequencia"]) {
+      banco.exec(`ALTER TABLE ${tabela}_antiga RENAME TO ${tabela}`);
+    }
+    banco.exec(`PRAGMA user_version = ${String(VERSAO_LINHA_DE_BASE + 1)}`);
+    banco.exec("COMMIT");
+  } catch (erro) {
+    banco.exec("ROLLBACK");
+    throw erro;
+  } finally {
+    banco.exec("PRAGMA foreign_keys = ON");
+    esquemaAnterior.close();
+  }
+}

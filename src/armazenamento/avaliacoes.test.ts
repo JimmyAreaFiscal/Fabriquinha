@@ -39,8 +39,8 @@ const banco = () => {
   }
   for (const [id, projeto] of Object.entries({ "I-1": "a", "I-2": "a", "I-3": "b" })) {
     b.exec(
-      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
-       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
+      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
+       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
        INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');`,
     );
   }

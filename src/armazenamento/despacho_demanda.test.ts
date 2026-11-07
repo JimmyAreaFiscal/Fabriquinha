@@ -16,17 +16,19 @@ const banco = () => {
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   return b;
 };
-const demanda = (b: DatabaseSync, id: string, fase: string) => {
+const demanda = (b: DatabaseSync, id: string, estado: string) => {
   b.exec(
-    `INSERT INTO demanda VALUES ('${id}', 'p', 't', 'problema', 'd', '${fase}', ${T}, 'f', 's', 1, 'fabriquinha/${id}')`,
+    `INSERT INTO demanda VALUES ('${id}', 'p', 't', 'problema', 'd', '${estado}', ${T}, 'f', 's', 1, 'fabriquinha/${id}')`,
   );
 };
-const rodada = (b: DatabaseSync, id: string, fase: string) => {
-  b.exec(`INSERT INTO rodada VALUES ('${id}', 1, 'r', '${fase}', 0, 'fabriquinha/${id}-1')`);
+const rodada = (b: DatabaseSync, id: string, estado: string) => {
+  b.exec(
+    `INSERT INTO rodada VALUES ('${id}', 1, 'r', '${estado}', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/${id}-1')`,
+  );
 };
 const ticket = (b: DatabaseSync, id: string, n: number, etapa: string, status: string, rodadaId?: number) => {
   b.exec(
-    `INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+    `INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
      VALUES ('${id}', ${String(n)}, '${etapa}', '${status}', ${T}, ${rodadaId === undefined ? "NULL" : String(rodadaId)})`,
   );
 };
@@ -47,11 +49,11 @@ const execucao = (b: DatabaseSync, id: string, n: number, inicio: string, fim: s
 
 test("CA-1 a CA-6: lê só planejamento, execução, revisão e encerramento, com as predecessoras", () => {
   const b = banco();
-  demanda(b, "I-4", "execucao");
-  demanda(b, "I-6", "planejamento");
-  demanda(b, "I-7", "revisao_demanda");
-  demanda(b, "I-8", "encerramento");
-  demanda(b, "I-9", "aprovacao_planejamento");
+  demanda(b, "I-4", "em_execucao");
+  demanda(b, "I-6", "planejar");
+  demanda(b, "I-7", "revisar_demanda");
+  demanda(b, "I-8", "encerrar_demanda");
+  demanda(b, "I-9", "gate_planejamento");
   b.exec("INSERT INTO dependencia_demanda VALUES ('I-6', 'I-4')");
   b.exec("INSERT INTO dependencia_demanda VALUES ('I-7', 'I-8')");
   const lidas = demandasParaDespacho(b).map((d) => [d.agregado.demanda.id, d.predecessoras_satisfeitas]);
@@ -64,27 +66,27 @@ test("CA-1 a CA-6: lê só planejamento, execução, revisão e encerramento, co
   assert.equal(b.isTransaction, false);
 });
 
-test("ocupação: conta em_execucao nas fases lidas e ignora gates humanos", () => {
+test("ocupação: conta em_execucao nos estados lidos e ignora gates humanos", () => {
   const b = banco();
-  demanda(b, "I-1", "execucao");
-  rodada(b, "I-1", "desenvolvimento");
+  demanda(b, "I-1", "em_execucao");
+  rodada(b, "I-1", "implementar");
   ticket(b, "I-1", 1, "implementar", "em_execucao", 1);
   ticket(b, "I-1", 2, "implementar", "aberto", 1);
-  ticket(b, "I-1", 3, "sessao_em_aberto", "em_execucao", 1);
-  demanda(b, "I-2", "execucao");
-  rodada(b, "I-2", "aprovacao_pull_request");
+  ticket(b, "I-1", 3, "ajustar_resultado", "em_execucao", 1);
+  demanda(b, "I-2", "em_execucao");
+  rodada(b, "I-2", "gate_pr");
   ticket(b, "I-2", 1, "encerrar_rodada", "em_execucao", 1);
-  demanda(b, "I-3", "execucao");
-  rodada(b, "I-3", "encerramento");
+  demanda(b, "I-3", "em_execucao");
+  rodada(b, "I-3", "encerrar_rodada");
   ticket(b, "I-3", 1, "encerrar_rodada", "em_execucao", 1);
-  demanda(b, "I-4", "encerramento");
+  demanda(b, "I-4", "encerrar_demanda");
   ticket(b, "I-4", 1, "encerrar_demanda", "em_execucao");
   assert.equal(ocupacaoDoLimite(b), 3); // I-1.T1, o encerrar_rodada de I-3 e o encerrar_demanda de I-4
 });
 
 test("retoma o planejar reprovado e só depois de uma recusa nova", () => {
   const b = banco();
-  demanda(b, "I-1", "planejamento");
+  demanda(b, "I-1", "planejar");
   ticket(b, "I-1", 1, "planejar", "em_execucao");
   execucao(b, "I-1", 1, "'2025-12-31T00:00:00.000Z'", null);
   assert.deepEqual(retomadasDePlanejamento(b), []); // sem recusa
@@ -102,8 +104,8 @@ test("retoma o planejar reprovado e só depois de uma recusa nova", () => {
 
 test("ocupação ignora o planejar reprovado sem execução aberta, mas conta o que roda", () => {
   const b = banco();
-  demanda(b, "I-1", "planejamento");
-  demanda(b, "I-2", "planejamento");
+  demanda(b, "I-1", "planejar");
+  demanda(b, "I-2", "planejar");
   ticket(b, "I-1", 1, "planejar", "em_execucao");
   ticket(b, "I-2", 1, "planejar", "em_execucao");
   execucao(b, "I-1", 1, T, T);

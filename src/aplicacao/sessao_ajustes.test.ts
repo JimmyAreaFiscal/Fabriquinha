@@ -65,8 +65,8 @@ async function cenario(shell = "") {
     demanda_id: DEMANDA,
     ticket_id,
     etapa,
-    status,
-    status_alterado_em: em,
+    estado: status,
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     rodada_id: 2,
@@ -82,13 +82,22 @@ async function cenario(shell = "") {
       titulo: "Demanda",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "execucao",
-      fase_alterada_em: em,
+      estado: "em_execucao",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
-    rodadas: [{ ...REF, titulo: "r2", fase: "aprovacao_pull_request", e2e: false, branch: BRANCH_RODADA }],
+    rodadas: [
+      {
+        ...REF,
+        titulo: "r2",
+        estado: "gate_pr",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: BRANCH_RODADA,
+      },
+    ],
     dependencias_rodada: [],
     criterios_citados: [],
     tickets: [
@@ -144,9 +153,9 @@ test("CA-12, CA-14, CA-15, CA-23 e CA-25: reprovar registra a recusa, abre a ses
     depois.decisoes.map((d) => [d.resultado, d.motivo, d.nota]),
     [["recusado", MOTIVO, undefined]],
   );
-  assert.equal(depois.rodadas[0]?.fase, "sessao");
+  assert.equal(depois.rodadas[0]?.estado, "ajustar_resultado");
   assert.deepEqual(
-    depois.tickets.filter((t) => t.etapa === "sessao_em_aberto").map((t) => t.ticket_id),
+    depois.tickets.filter((t) => t.etapa === "ajustar_resultado").map((t) => t.ticket_id),
     [9],
   );
   await ate(() => prompts().length === 1);
@@ -170,7 +179,7 @@ async function concluirComCorrecao(banco: DatabaseSync, ag: () => AgregadoDemand
       { agora: em },
     ),
   );
-  assert.ok(ag().tickets.some((t) => t.etapa === "implementar" && t.status === "aberto"));
+  assert.ok(ag().tickets.some((t) => t.etapa === "implementar" && t.estado === "aberto"));
   return concluirSessaoAjustes(banco, REF, AUDITOR);
 }
 
@@ -183,7 +192,7 @@ test("CA-13: reprovar sem motivo, ou como agente, é recusado sem abrir a sessã
     ErroDeEscopo,
   );
 
-  assert.equal(ag().rodadas[0]?.fase, "aprovacao_pull_request");
+  assert.equal(ag().rodadas[0]?.estado, "gate_pr");
   assert.equal(existsSync(marco()), false);
 });
 
@@ -218,12 +227,12 @@ test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na
   // CA-20 e CA-22: sem correção, ou pelo agente, a conclusão é recusada e a sessão segue aberta.
   await assert.rejects(concluirSessaoAjustes(banco, REF, AUDITOR), /trabalho corretivo/);
   await assert.rejects(concluirSessaoAjustes(banco, REF, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
-  assert.equal(ag().rodadas[0]?.fase, "sessao");
+  assert.equal(ag().rodadas[0]?.estado, "ajustar_resultado");
 
   // CA-19 e CA-21: com a correção registrada, o Auditor conclui e a rodada volta ao desenvolvimento.
   await concluirComCorrecao(banco, ag);
-  assert.equal(ag().rodadas[0]?.fase, "desenvolvimento");
-  assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.status, "concluido");
+  assert.equal(ag().rodadas[0]?.estado, "implementar");
+  assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.estado, "concluido");
 });
 
 test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesma sessão e o fim dela desfaz o que o agente fez", async () => {
@@ -243,7 +252,7 @@ test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesm
   // A restauração volta a rodada, a demanda e a worktree depois que o pi para.
   await ate(() => situacao(sessao) === undefined && sha(BRANCH_DEMANDA) === demanda && !sujo());
   assert.equal(sha(BRANCH_RODADA), head);
-  assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.status, "aberto");
+  assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.estado, "aberto");
   await concluirComCorrecao(banco, ag);
 });
 

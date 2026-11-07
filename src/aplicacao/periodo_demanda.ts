@@ -55,7 +55,7 @@ export interface MetricasDemandaPeriodo extends Soma {
   demanda: string;
   projeto: string;
   titulo: string;
-  fase: string;
+  estado: string;
   reprovacoes: number;
   /** Média das notas do encerramento de rodada dadas no período; `null` sem nota. */
   nota: number | null;
@@ -159,7 +159,7 @@ const mesesEntre = (de: string, ate: string): number => {
   return indice(ate) - indice(de) + 1;
 };
 
-/** Uma linha por demanda com pelo menos uma execução iniciada no período; `fase` é a atual e o resto só conta o período. */
+/** Uma linha por demanda com pelo menos uma execução iniciada no período; `estado` é a atual e o resto só conta o período. */
 export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): MetricasDemandaPeriodo[] {
   const { projeto = null, de, ate } = Periodo.parse(filtro);
   const recorte = { inicio: intervalo(de).inicio, fim: intervalo(ate).fim, projeto };
@@ -167,7 +167,7 @@ export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): Metric
   const decisoes = Map.groupBy(decisoesNoPeriodo(banco, recorte), (d) => d.demanda);
   return [...Map.groupBy(execucoesNoPeriodo(banco, recorte), (e) => e.demanda).values()]
     .map((execs) => {
-      const [{ demanda, projeto: p, titulo, fase }] = execs as [ExecucaoNoPeriodo, ...ExecucaoNoPeriodo[]];
+      const [{ demanda, projeto: p, titulo, estado }] = execs as [ExecucaoNoPeriodo, ...ExecucaoNoPeriodo[]];
       const ds = decisoes.get(demanda) ?? [];
       const notas = ds.flatMap((d) =>
         d.etapa === "encerrar_rodada" && !d.recusada && d.nota !== null ? [d.nota] : [],
@@ -176,7 +176,7 @@ export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): Metric
         demanda,
         projeto: p,
         titulo,
-        fase,
+        estado,
         ...somar(execs, uso),
         reprovacoes: ds.filter((d) => d.recusada).length,
         nota: notas.length === 0 ? null : soma(notas) / notas.length,

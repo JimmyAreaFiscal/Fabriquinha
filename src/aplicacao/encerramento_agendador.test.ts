@@ -67,8 +67,8 @@ async function cenario() {
     demanda_id: D,
     ticket_id,
     etapa,
-    status,
-    status_alterado_em: em,
+    estado: status,
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
@@ -80,13 +80,23 @@ async function cenario() {
       titulo: "Demanda",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "encerramento",
-      fase_alterada_em: em,
+      estado: "encerrar_demanda",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH,
     },
-    rodadas: [{ demanda_id: D, rodada_id: 1, titulo: "r1", fase: "concluida", e2e: false, branch: `${BRANCH}-1` }],
+    rodadas: [
+      {
+        demanda_id: D,
+        rodada_id: 1,
+        titulo: "r1",
+        estado: "concluida",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: `${BRANCH}-1`,
+      },
+    ],
     dependencias_rodada: [],
     criterios_citados: [],
     tickets: [
@@ -159,12 +169,12 @@ test("CA-15: a revisão integral aprovada vai a concluida pelo ciclo depois do m
   const c = await cenario();
   await c.ciclo();
   assert.equal(c.ag().encerramento?.aguardando_merge_humano, true);
-  assert.equal(c.ag().demanda.fase, "encerramento");
+  assert.equal(c.ag().demanda.estado, "encerrar_demanda");
   c.integrarComoHumano();
   await c.ciclo();
   const ag = c.ag();
-  assert.equal(ag.demanda.fase, "concluida");
-  assert.equal(ag.tickets.find((t) => t.etapa === "encerrar_demanda")?.status, "concluido");
+  assert.equal(ag.demanda.estado, "concluida");
+  assert.equal(ag.tickets.find((t) => t.etapa === "encerrar_demanda")?.estado, "concluido");
   assert.deepEqual(ag.decisoes, []);
   assert.equal(hospedagem.prs().length, 1);
 });
@@ -181,19 +191,19 @@ test("CA-16: conflito com a base cria o resolver_conflito; concluído, o ciclo t
   });
   await c.ciclo();
   const resolver = c.ag().tickets.find((t) => t.etapa === "resolver_conflito");
-  assert.equal(resolver?.status, "aberto");
-  assert.equal(c.ag().demanda.fase, "encerramento");
+  assert.equal(resolver?.estado, "aberto");
+  assert.equal(c.ag().demanda.estado, "encerrar_demanda");
 
   await c.ciclo();
-  assert.equal(c.ag().tickets.find((t) => t.etapa === "resolver_conflito")?.status, "concluido");
-  assert.equal(c.ag().demanda.fase, "encerramento");
+  assert.equal(c.ag().tickets.find((t) => t.etapa === "resolver_conflito")?.estado, "concluido");
+  assert.equal(c.ag().demanda.estado, "encerrar_demanda");
 
   hospedagem.mudar(1, { conflito: false });
   await c.ciclo();
   c.integrarComoHumano();
   await c.ciclo();
   const ag = c.ag();
-  assert.equal(ag.demanda.fase, "concluida");
+  assert.equal(ag.demanda.estado, "concluida");
   assert.deepEqual(ag.decisoes, []);
   assert.equal(hospedagem.prs().length, 1);
   assert.equal(

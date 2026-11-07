@@ -49,7 +49,7 @@ function ticketFechavel(ag: AgregadoDemanda, ticket_id: number): TicketDemanda |
 /** Falha o ticket em execução, de qualquer etapa, com o motivo, sem coletar, devolver nem gravar evidência; síncrona para os encerramentos órfãos. */
 export function falharTicketDemanda(banco: DatabaseSync, ref: Ref, motivo: string): void {
   comDemanda(banco, ref.demanda_id, (ag) =>
-    ag.tickets.find((t) => t.ticket_id === ref.ticket_id)?.status === "em_execucao"
+    ag.tickets.find((t) => t.ticket_id === ref.ticket_id)?.estado === "em_execucao"
       ? registrarFalhaTicket(ag, { ticket_id: ref.ticket_id, motivo }, contexto())
       : ag,
   );
@@ -65,9 +65,9 @@ const evidenciasDoTicket = (ag: AgregadoDemanda, ticket_id: number): EvidenciaEt
 function concluirRodada(ag: AgregadoDemanda, { demanda_id, rodada_id }: TicketDemanda): AgregadoDemanda {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
   const pendente = ag.tickets.some(
-    (t) => t.rodada_id === rodada_id && t.etapa === "implementar" && t.status !== "concluido",
+    (t) => t.rodada_id === rodada_id && t.etapa === "implementar" && t.estado !== "concluido",
   );
-  return rodada?.fase === "desenvolvimento" && !pendente
+  return rodada?.estado === "implementar" && !pendente
     ? concluirImplementacoesRodada(ag, { demanda_id, rodada_id }, FABRIQUINHA, contexto())
     : ag;
 }
@@ -128,11 +128,11 @@ export async function fecharTicketDemanda(
 ): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = ticketFechavel(ag, ref.ticket_id);
-  if (ticket?.status === "concluido" && ticket.etapa === "implementar") {
+  if (ticket?.estado === "concluido" && ticket.etapa === "implementar") {
     comDemanda(banco, ref.demanda_id, (a) => concluirRodada(a, ticket));
     return;
   }
-  if (ticket?.status !== "em_execucao") return;
+  if (ticket?.estado !== "em_execucao") return;
   if (falha !== undefined) {
     falharTicketDemanda(banco, ref, falha);
     return;

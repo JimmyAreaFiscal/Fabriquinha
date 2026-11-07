@@ -298,8 +298,8 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
   servico.banco.exec(`
     INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
-    INSERT INTO demanda VALUES ('I-1', 'p', 'Busca', 'problema', 'd', 'execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, motivo_falha)
+    INSERT INTO demanda VALUES ('I-1', 'p', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, motivo_falha)
       VALUES ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam');
     INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)

@@ -46,10 +46,10 @@ test("CA-6: aceita diamante sem ciclo", () => {
 
 test("CA-9 e CA-10: concluída e arquivada satisfazem; o resto fica pendente", () => {
   const pendentes = predecessorasPendentes([
-    { demanda_id: "I-1", fase: "execucao" },
-    { demanda_id: "I-5", fase: "arquivada" },
-    { demanda_id: "I-6", fase: "concluida" },
-    { demanda_id: "I-7", fase: "cancelada" },
+    { demanda_id: "I-1", estado: "em_execucao" },
+    { demanda_id: "I-5", estado: "arquivada" },
+    { demanda_id: "I-6", estado: "concluida" },
+    { demanda_id: "I-7", estado: "cancelada" },
   ]);
   assert.deepEqual(pendentes, ["I-1", "I-7"]);
 });
@@ -62,10 +62,10 @@ test("CA-11: dependentes diretas e indiretas não concluídas, sem repetir", () 
     aresta("I-3", "I-1"),
     aresta("I-8", "I-2"),
   ];
-  const fases = new Map([
-    ["I-2", "execucao"],
-    ["I-3", "registro"],
+  const estados = new Map([
+    ["I-2", "em_execucao"],
+    ["I-3", "entender_e_desenhar"],
     ["I-4", "concluida"],
   ] as const);
-  assert.deepEqual(dependentesNaoConcluidas(arestas, fases, "I-1").toSorted(), ["I-2", "I-3"]);
+  assert.deepEqual(dependentesNaoConcluidas(arestas, estados, "I-1").toSorted(), ["I-2", "I-3"]);
 });

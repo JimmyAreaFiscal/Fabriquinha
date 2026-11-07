@@ -48,7 +48,7 @@ const enviada = () => enviarDemanda(completa(), autora, { agora: t1 });
 
 test("CA-1: registrar cria a demanda em registro com origem e ticket 1", () => {
   const ag = registrada();
-  assert.equal(ag.demanda.fase, "registro");
+  assert.equal(ag.demanda.estado, "entender_e_desenhar");
   assert.equal(ag.demanda.enviada, false);
   assert.equal(ag.demanda.criada_por.ferramenta, "claude");
   assert.equal(ag.demanda.criada_por.sessao, "s1");
@@ -56,7 +56,7 @@ test("CA-1: registrar cria a demanda em registro com origem e ticket 1", () => {
   assert.equal(ag.demanda.branch, "fabriquinha/I-1");
   assert.deepEqual(
     ag.tickets.map((t) => [t.ticket_id, t.etapa]),
-    [[1, "demanda"]],
+    [[1, "entender_e_desenhar"]],
   );
   assert.throws(() => registrarDemanda({ ...reg, titulo: "" }, autora, { agora: t0 }));
 });
@@ -93,11 +93,11 @@ test("CA-2: envio incompleto lista todas as pendências e não muda nada", () =>
   assert.deepEqual(ag, antes);
 });
 
-test("CA-3: envio completo congela e vai a aprovacao_demanda; reenvio é recusado", () => {
+test("CA-3: envio completo congela e vai a gate_demanda; reenvio é recusado", () => {
   const env = enviada();
   assert.equal(env.demanda.enviada, true);
-  assert.equal(env.demanda.fase, "aprovacao_demanda");
-  assert.equal(env.demanda.fase_alterada_em, t1);
+  assert.equal(env.demanda.estado, "gate_demanda");
+  assert.equal(env.demanda.estado_alterado_em, t1);
   assert.throws(() => enviarDemanda(env, autora, { agora: t1 }), ErroDeRegra);
   assert.throws(() => submeterEvidenciaDemanda(env, ev("criterios_aceite"), autora, t1), ErroDeRegra);
 });
@@ -118,7 +118,7 @@ test("CA-8: depois do envio entram custos, decisão e evidência de ticket sem m
 test("CA-4: o Auditor aprova e a demanda vai a planejamento", () => {
   const env = enviada();
   const ag = decidirDemanda(env, { aprovado: true, nota: 5 }, AUDITOR, { agora: t1 });
-  assert.equal(ag.demanda.fase, "planejamento");
+  assert.equal(ag.demanda.estado, "planejar");
   assert.deepEqual(ag.decisoes[0], {
     demanda_id: "I-1",
     ticket_id: 1,
@@ -128,31 +128,31 @@ test("CA-4: o Auditor aprova e a demanda vai a planejamento", () => {
     por: AUDITOR,
     em: t1,
   });
-  assert.equal(ag.tickets[0]?.status, "concluido");
+  assert.equal(ag.tickets[0]?.estado, "concluido");
   assert.deepEqual(ag.tickets[1], {
     demanda_id: "I-1",
     ticket_id: 2,
     etapa: "planejar",
-    status: "aberto",
-    status_alterado_em: t1,
+    estado: "aberto",
+    estado_alterado_em: t1,
     criado_por: FABRIQUINHA,
     devolucoes: 0,
   });
-  assert.equal(env.demanda.fase, "aprovacao_demanda");
+  assert.equal(env.demanda.estado, "gate_demanda");
 });
 
 test("CA-5: recusa exige motivo, registra e cancela sem novo ticket", () => {
   const env = enviada();
   assert.throws(() => decidirDemanda(env, { aprovado: false }, AUDITOR, { agora: t1 }));
   const ag = decidirDemanda(env, { aprovado: false, motivo: "fora do escopo" }, AUDITOR, { agora: t1 });
-  assert.equal(ag.demanda.fase, "cancelada");
+  assert.equal(ag.demanda.estado, "cancelada");
   assert.equal(ag.decisoes[0]?.resultado, "recusado");
   assert.equal(ag.decisoes[0].motivo, "fora do escopo");
   assert.equal(ag.tickets.length, 1);
-  assert.equal(ag.tickets[0]?.status, "cancelado");
+  assert.equal(ag.tickets[0]?.estado, "cancelado");
 });
 
-test("decidir: só o Auditor, só em aprovacao_demanda, e precisa do ticket da demanda", () => {
+test("decidir: só o Auditor, só em gate_demanda, e precisa do ticket da demanda", () => {
   assert.throws(() => decidirDemanda(enviada(), { aprovado: true }, EXTERNO, { agora: t1 }), ErroDeEscopo);
   assert.throws(() => decidirDemanda(registrada(), { aprovado: true }, AUDITOR, { agora: t1 }), ErroDeRegra);
   const env = enviada();
@@ -160,8 +160,8 @@ test("decidir: só o Auditor, só em aprovacao_demanda, e precisa do ticket da d
     demanda_id: "I-1",
     ticket_id: 2,
     etapa: "planejar" as const,
-    status: "aberto" as const,
-    status_alterado_em: t0,
+    estado: "aberto" as const,
+    estado_alterado_em: t0,
     criado_por: FABRIQUINHA,
     devolucoes: 0,
   };
@@ -226,17 +226,17 @@ const emPlanejamento = (): AgregadoDemanda => {
   });
   return {
     ...aprovada,
-    tickets: aprovada.tickets.map((t) => (t.etapa === "planejar" ? { ...t, status: "em_execucao" as const } : t)),
+    tickets: aprovada.tickets.map((t) => (t.etapa === "planejar" ? { ...t, estado: "em_execucao" as const } : t)),
   };
 };
 const submetido = () => submeterPlano(emPlanejamento(), planoV(), agente, { agora: t2 });
 
-test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai a aprovacao_planejamento", () => {
+test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai a gate_planejamento", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);
   const novo = submeterPlano(ag, planoV(), agente, { agora: t2 });
   assert.deepEqual(ag, antes);
-  assert.equal(novo.demanda.fase, "aprovacao_planejamento");
+  assert.equal(novo.demanda.estado, "gate_planejamento");
   assert.equal(novo.evidencias.filter((e) => e.tipo === "plano" && e.ticket_id === 2).length, 1);
   assert.deepEqual(novo.evidencias.find((e) => e.tipo === "plano")?.autor, agente);
   assert.deepEqual(novo.rodadas, []);
@@ -305,7 +305,7 @@ test("CA-4 e CA-5: reprovar exige Auditor e motivo; registra, volta a planejamen
   assert.throws(() => reprovarPlanejamento(semPlano, { motivo: "x" }, AUDITOR, { agora: t2 }), /plano submetido/);
   assert.deepEqual(ag, antes);
   const novo = reprovarPlanejamento(ag, { motivo: "falta teste" }, AUDITOR, { agora: t2 });
-  assert.equal(novo.demanda.fase, "planejamento");
+  assert.equal(novo.demanda.estado, "planejar");
   assert.deepEqual(novo.decisoes.at(-1), {
     demanda_id: "I-1",
     ticket_id: 2,
@@ -343,7 +343,7 @@ test("decisao_id é local ao ticket: reprovações sucessivas avançam e a aprov
   assert.deepEqual(ok.decisoes.slice(0, 1), ag.decisoes);
 });
 
-test("CA-6: sem a confirmação nada é criado; só o Auditor, na fase certa e com plano, confirma", () => {
+test("CA-6: sem a confirmação nada é criado; só o Auditor, no estado certo e com plano, confirma", () => {
   const ag = submetido();
   assert.equal(ag.decisoes.length, 1);
   assert.equal(ag.rodadas.length, 0);
@@ -389,19 +389,19 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
   const novo = confirmarAprovacaoPlanejamento(ag, { nota: 4 }, AUDITOR, { agora: t2 });
   assert.deepEqual(ag, antes);
   assert.deepEqual(base.rodadas, []);
-  assert.equal(novo.demanda.fase, "execucao");
+  assert.equal(novo.demanda.estado, "em_execucao");
   assert.deepEqual(
-    novo.rodadas.map((r) => [r.rodada_id, r.fase, r.e2e, r.branch]),
+    novo.rodadas.map((r) => [r.rodada_id, r.estado, r.e2e, r.branch]),
     [
-      [1, "desenvolvimento", false, "fabriquinha/I-1-1"],
-      [2, "desenvolvimento", true, "fabriquinha/I-1-2"],
+      [1, "implementar", false, "fabriquinha/I-1-1"],
+      [2, "implementar", true, "fabriquinha/I-1-2"],
     ],
   );
   assert.deepEqual(novo.dependencias_rodada, [{ demanda_id: "I-1", rodada_id: 2, depende_rodada_id: 1 }]);
   assert.deepEqual(novo.criterios_citados, [{ demanda_id: "I-1", rodada_id: 1, criterio_id: "CA-1" }]);
   // IDs do plano (4, 5, 6) são renumerados depois dos existentes (1, 2), na mesma ordem
   assert.deepEqual(
-    novo.tickets.slice(2).map((t) => [t.ticket_id, t.titulo, t.rodada_id, t.etapa, t.status, t.configuracao_agente]),
+    novo.tickets.slice(2).map((t) => [t.ticket_id, t.titulo, t.rodada_id, t.etapa, t.estado, t.configuracao_agente]),
     [
       [3, "a", 2, "implementar", "aberto", { modelo: { provedor: "p", nome: "m" }, effort: "high" }],
       [4, "b", 2, "implementar", "aberto", undefined],
@@ -411,7 +411,7 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
   );
   assert.deepEqual(novo.dependencias_ticket, [{ demanda_id: "I-1", ticket_id: 5, depende_ticket_id: 3 }]);
   assert.deepEqual(novo.caminhos_ticket, [{ demanda_id: "I-1", ticket_id: 4, caminho: "src/b.ts" }]);
-  assert.equal(novo.tickets[1]?.status, "concluido");
+  assert.equal(novo.tickets[1]?.estado, "concluido");
   assert.deepEqual(novo.decisoes.at(-1), {
     demanda_id: "I-1",
     ticket_id: 2,
@@ -429,21 +429,21 @@ const emExecucao = (status: string): AgregadoDemanda => {
   const ag = emPlanejamento();
   return {
     ...ag,
-    demanda: { ...ag.demanda, fase: "execucao" },
-    tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, status: status as never } : t)),
+    demanda: { ...ag.demanda, estado: "em_execucao" },
+    tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, estado: status as never } : t)),
   };
 };
 
-test("CA-16: a falha põe o ticket em falhou sem mudar fase nem decisões; recusa outro status e demanda encerrada", () => {
+test("CA-16: a falha põe o ticket em falhou sem mudar estado nem decisões; recusa outro status e demanda encerrada", () => {
   const ag = emExecucao("em_execucao");
   const novo = registrarFalhaTicket(ag, { ticket_id: 2, motivo: "m" }, { agora: t2 });
-  assert.equal(tk2(novo)?.status, "falhou");
-  assert.equal(tk2(novo)?.status_alterado_em, t2);
+  assert.equal(tk2(novo)?.estado, "falhou");
+  assert.equal(tk2(novo)?.estado_alterado_em, t2);
   assert.equal(novo.demanda, ag.demanda);
   assert.equal(novo.decisoes, ag.decisoes);
   assert.throws(() => registrarFalhaTicket(novo, { ticket_id: 2, motivo: "m" }, { agora: t2 }), ErroDeRegra);
   assert.throws(() => registrarFalhaTicket(ag, { ticket_id: 9, motivo: "m" }, { agora: t2 }), ErroDeRegra);
-  const fim = { ...ag, demanda: { ...ag.demanda, fase: "concluida" as const } };
+  const fim = { ...ag, demanda: { ...ag.demanda, estado: "concluida" as const } };
   assert.throws(() => registrarFalhaTicket(fim, { ticket_id: 2, motivo: "m" }, { agora: t2 }), ErroDeRegra);
 });
 
@@ -453,10 +453,10 @@ test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a
   assert.throws(() => reabrirTicket(ag, { ticket_id: 2, instrucao: "x" }, agente, { agora: t2 }), ErroDeEscopo);
   assert.throws(() => reabrirTicket(emExecucao("aberto"), { ticket_id: 2, instrucao: "x" }, AUDITOR, { agora: t2 }));
   const novo = reabrirTicket(ag, { ticket_id: 2, instrucao: "tente de novo" }, AUDITOR, { agora: t2 });
-  assert.equal(tk2(novo)?.status, "aberto");
+  assert.equal(tk2(novo)?.estado, "aberto");
   assert.equal(tk2(novo)?.instrucao, "tente de novo");
   assert.equal(novo.decisoes, ag.decisoes);
-  assert.equal(tk2(ag)?.status, "falhou");
+  assert.equal(tk2(ag)?.estado, "falhou");
 });
 
 test("retomada automática: só a Fabriquinha, só ticket falhou; mantém instrução e devoluções e conta até o limite", () => {
@@ -479,15 +479,18 @@ test("retomada automática: só a Fabriquinha, só ticket falhou; mantém instru
   };
   assert.throws(() => retomar(ag, { conta: true }, AUDITOR), ErroDeEscopo);
   assert.throws(() => retomar(emExecucao("aberto"), { conta: true }), ErroDeRegra);
-  assert.throws(() => retomar({ ...ag, demanda: { ...ag.demanda, fase: "concluida" } }, { conta: true }), ErroDeRegra);
+  assert.throws(
+    () => retomar({ ...ag, demanda: { ...ag.demanda, estado: "concluida" } }, { conta: true }),
+    ErroDeRegra,
+  );
 
   const novo = retomar(ag, { conta: true, modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } });
   const { motivo_falha: _m, ...semFalha } = tk2(ag) ?? {};
   assert.deepEqual(tk2(novo), {
     ...semFalha,
-    status: "aberto",
+    estado: "aberto",
     retomadas_automaticas: 1,
-    status_alterado_em: t2,
+    estado_alterado_em: t2,
     configuracao_agente: { effort: "high", modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } },
   });
 
@@ -520,10 +523,10 @@ test("T-965: ticket de planejamento falho bloqueia submissão e confirmação at
   intacto(() => submeterPlano(antes, planoV(), agente, { agora: t2 }), antes);
   const aberto = falhar(submetido(), 2);
   intacto(() => confirmarAprovacaoPlanejamento(aberto, {}, AUDITOR, { agora: t2 }), aberto);
-  assert.equal(aberto.demanda.fase, "aprovacao_planejamento");
+  assert.equal(aberto.demanda.estado, "gate_planejamento");
   const reaberto = reabrirTicket(antes, { ticket_id: 2, instrucao: "retome" }, AUDITOR, { agora: t2 });
-  assert.equal(reaberto.demanda.fase, "planejamento");
-  assert.equal(submeterPlano(reaberto, planoV(), agente, { agora: t2 }).demanda.fase, "aprovacao_planejamento");
+  assert.equal(reaberto.demanda.estado, "planejar");
+  assert.equal(submeterPlano(reaberto, planoV(), agente, { agora: t2 }).demanda.estado, "gate_planejamento");
 });
 
 test("T-965: ticket da demanda falho bloqueia envio e decisão até o Auditor reabrir", () => {
@@ -533,7 +536,7 @@ test("T-965: ticket da demanda falho bloqueia envio e decisão até o Auditor re
   const env = enviarDemanda(reaberto, autora, { agora: t1 });
   const emCurso = {
     ...env,
-    tickets: env.tickets.map((t) => (t.ticket_id === 1 ? { ...t, status: "em_execucao" as const } : t)),
+    tickets: env.tickets.map((t) => (t.ticket_id === 1 ? { ...t, estado: "em_execucao" as const } : t)),
   };
   const falhoNoGate = falhar(emCurso, 1);
   intacto(() => decidirDemanda(falhoNoGate, { aprovado: true }, AUDITOR, { agora: t2 }), falhoNoGate);
@@ -546,27 +549,28 @@ const tkD = (ticket_id: number, etapa: string, status: string, rodada_id?: numbe
   ticket_id,
   rodada_id,
   etapa,
-  status,
-  status_alterado_em: t0,
+  estado: status,
+  estado_alterado_em: t0,
   criado_por: FABRIQUINHA,
 });
-const rodadaD = (rodada_id: number, fase: string) => ({
+const rodadaD = (rodada_id: number, estado: string) => ({
   demanda_id: D,
   rodada_id,
   titulo: "r",
-  fase,
+  estado,
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/${D}-${String(rodada_id)}`,
 });
-const montarD = (fase = "execucao", fases = ["concluida"], extra: object[] = []): AgregadoDemanda =>
+const montarD = (estado = "em_execucao", estados = ["concluida"], extra: object[] = []): AgregadoDemanda =>
   AgregadoDemanda.parse({
-    demanda: { ...registrada().demanda, enviada: true, fase },
+    demanda: { ...registrada().demanda, enviada: true, estado },
     decisoes: [],
     evidencias: [{ demanda_id: D, tipo: "criterios_aceite", dados: criterios, autor: autora, em: t0 }],
-    tickets: [tkD(1, "demanda", "concluido"), tkD(2, "implementar", "concluido", 1), ...extra],
-    rodadas: fases.map((f, i) => rodadaD(i + 1, f)),
+    tickets: [tkD(1, "entender_e_desenhar", "concluido"), tkD(2, "implementar", "concluido", 1), ...extra],
+    rodadas: estados.map((f, i) => rodadaD(i + 1, f)),
   });
-const emRevisaoD = () => montarD("revisao_demanda", ["concluida"], [tkD(3, "revisar_demanda", "em_execucao")]);
+const emRevisaoD = () => montarD("revisar_demanda", ["concluida"], [tkD(3, "revisar_demanda", "em_execucao")]);
 const corretivo = (m: Record<string, unknown> = {}) => ({
   demanda_id: D,
   criterios: ["CA-2"],
@@ -591,42 +595,37 @@ const recusar = (ag: AgregadoDemanda, fn: () => unknown, erro: new (...a: never[
   assert.deepEqual(ag, antes);
 };
 
-test("CA-12: todas as rodadas concluídas abrem revisar_demanda e vão a revisao_demanda", () => {
+test("CA-12: todas as rodadas concluídas abrem revisar_demanda e vão a revisar_demanda", () => {
   const ag = montarD();
   const antes = structuredClone(ag);
   const novo = iniciarRevisaoDemanda(ag, { demanda_id: D }, FABRIQUINHA, c2);
   assert.deepEqual(ag, antes);
-  assert.equal(novo.demanda.fase, "revisao_demanda");
-  assert.equal(novo.demanda.fase_alterada_em, t2);
+  assert.equal(novo.demanda.estado, "revisar_demanda");
+  assert.equal(novo.demanda.estado_alterado_em, t2);
   assert.deepEqual(novo.tickets.slice(0, 2), ag.tickets);
   assert.deepEqual(novo.tickets[2], {
     demanda_id: D,
     ticket_id: 3,
     etapa: "revisar_demanda",
-    status: "aberto",
+    estado: "aberto",
     devolucoes: 0,
-    status_alterado_em: t2,
+    estado_alterado_em: t2,
     criado_por: FABRIQUINHA,
   });
 });
 
-test("CA-12: implementação descartada (fechado) não impede a revisão integral", () => {
-  const ag = montarD("execucao", ["concluida"], [tkD(3, "implementar", "fechado")]);
-  assert.equal(iniciarRevisaoDemanda(ag, { demanda_id: D }, FABRIQUINHA, c2).demanda.fase, "revisao_demanda");
-});
-
-test("CA-12: recusa por fase de rodada, pendência, ator, fase e entrada, sem mutação", () => {
+test("CA-12: recusa por estado de rodada, pendência, ator, estado e entrada, sem mutação", () => {
   const abrir = (ag: AgregadoDemanda, ator: Ator = FABRIQUINHA, e: unknown = { demanda_id: D }) => {
     recusar(ag, () => iniciarRevisaoDemanda(ag, e, ator, c2), ator === FABRIQUINHA ? Error : ErroDeEscopo);
   };
-  for (const fase of ["desenvolvimento", "revisao", "encerramento", "aprovacao_pull_request", "sessao"]) {
-    abrir(montarD("execucao", ["concluida", fase]));
+  for (const estado of ["implementar", "revisar_rodada", "encerrar_rodada", "gate_pr", "ajustar_resultado"]) {
+    abrir(montarD("em_execucao", ["concluida", estado]));
   }
   for (const status of ["aberto", "em_execucao", "falhou"]) {
-    abrir(montarD("execucao", ["concluida"], [tkD(3, "revisar_rodada", status, 1)]));
+    abrir(montarD("em_execucao", ["concluida"], [tkD(3, "revisar_rodada", status, 1)]));
   }
-  abrir(montarD("execucao", ["concluida"], [tkD(3, "implementar", "cancelado", 1)]));
-  abrir(montarD("revisao_demanda"));
+  abrir(montarD("em_execucao", ["concluida"], [tkD(3, "implementar", "cancelado", 1)]));
+  abrir(montarD("revisar_demanda"));
   abrir(montarD(), AUDITOR);
   abrir(montarD(), agente);
   abrir(montarD(), FABRIQUINHA, { demanda_id: "I-2" });
@@ -639,19 +638,19 @@ test("CA-13: reprovação cria só rodadas novas, preserva as integradas e o pla
   const antes = structuredClone(ag);
   const novo = registrarRevisaoDemanda(ag, revisao(), ag3, c2);
   assert.deepEqual(ag, antes);
-  assert.equal(novo.demanda.fase, "execucao");
+  assert.equal(novo.demanda.estado, "em_execucao");
   assert.deepEqual(novo.rodadas.slice(0, 1), ag.rodadas);
   assert.deepEqual(
-    novo.rodadas.map((r) => [r.rodada_id, r.fase]),
+    novo.rodadas.map((r) => [r.rodada_id, r.estado]),
     [
       [1, "concluida"],
-      [2, "desenvolvimento"],
+      [2, "implementar"],
     ],
   );
   assert.deepEqual(
-    novo.tickets.map((t) => [t.ticket_id, t.etapa, t.status, t.rodada_id]),
+    novo.tickets.map((t) => [t.ticket_id, t.etapa, t.estado, t.rodada_id]),
     [
-      [1, "demanda", "concluido", undefined],
+      [1, "entender_e_desenhar", "concluido", undefined],
       [2, "implementar", "concluido", 1],
       [3, "revisar_demanda", "concluido", undefined],
       [4, "implementar", "aberto", 2],
@@ -671,7 +670,7 @@ test("CA-13: reprovação cria só rodadas novas, preserva as integradas e o pla
   assert.deepEqual(novo.evidencias, ag.evidencias);
 });
 
-test("CA-13: reprovação recusada sem mutação (exigências, plano, ticket, ator, fase e pendência)", () => {
+test("CA-13: reprovação recusada sem mutação (exigências, plano, ticket, ator, estado e pendência)", () => {
   const ag = emRevisaoD();
   const tenta = (m: Record<string, unknown>, ator: Ator = ag3, erro: new (...a: never[]) => Error = Error) => {
     recusar(ag, () => registrarRevisaoDemanda(ag, revisao(m), ator, c2), erro);
@@ -695,19 +694,19 @@ test("CA-13: reprovação recusada sem mutação (exigências, plano, ticket, at
   assert.deepEqual(ag, antesDaRecusa);
   tenta({}, AUDITOR, ErroDeEscopo);
   tenta({}, FABRIQUINHA, ErroDeEscopo);
-  const exec = montarD("execucao", ["concluida"], [tkD(3, "revisar_demanda", "em_execucao")]);
+  const exec = montarD("em_execucao", ["concluida"], [tkD(3, "revisar_demanda", "em_execucao")]);
   recusar(exec, () => registrarRevisaoDemanda(exec, revisao(), ag3, c2));
-  const feito = montarD("revisao_demanda", ["concluida"], [tkD(3, "revisar_demanda", "concluido")]);
+  const feito = montarD("revisar_demanda", ["concluida"], [tkD(3, "revisar_demanda", "concluido")]);
   recusar(feito, () => registrarRevisaoDemanda(feito, revisao(), ag3, c2));
   const pendencias = [
-    montarD("revisao_demanda", ["concluida", "revisao"], [tkD(3, "revisar_demanda", "em_execucao")]),
+    montarD("revisar_demanda", ["concluida", "revisar_rodada"], [tkD(3, "revisar_demanda", "em_execucao")]),
     montarD(
-      "revisao_demanda",
+      "revisar_demanda",
       ["concluida"],
       [tkD(3, "revisar_demanda", "em_execucao"), tkD(4, "implementar", "aberto", 1)],
     ),
     montarD(
-      "revisao_demanda",
+      "revisar_demanda",
       ["concluida"],
       [tkD(3, "revisar_demanda", "em_execucao"), tkD(4, "encerrar_rodada", "falhou", 1)],
     ),
@@ -720,12 +719,12 @@ test("CA-13: reprovação recusada sem mutação (exigências, plano, ticket, at
 test("CA-14: aprovação conclui a revisão, abre encerrar_demanda e vai a encerramento sem outro efeito", () => {
   const ag = emRevisaoD();
   const novo = registrarRevisaoDemanda(ag, aprovacaoD(), ag3, c2);
-  assert.equal(novo.demanda.fase, "encerramento");
+  assert.equal(novo.demanda.estado, "encerrar_demanda");
   assert.deepEqual(novo.rodadas, ag.rodadas);
   assert.deepEqual(
-    novo.tickets.map((t) => [t.ticket_id, t.etapa, t.status]),
+    novo.tickets.map((t) => [t.ticket_id, t.etapa, t.estado]),
     [
-      [1, "demanda", "concluido"],
+      [1, "entender_e_desenhar", "concluido"],
       [2, "implementar", "concluido"],
       [3, "revisar_demanda", "concluido"],
       [4, "encerrar_demanda", "aberto"],
@@ -745,7 +744,7 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
   // implementação concluída por fixture da aplicação
   const impl = {
     ...rep,
-    tickets: rep.tickets.map((t) => (t.ticket_id === 4 ? { ...t, status: "concluido" as const } : t)),
+    tickets: rep.tickets.map((t) => (t.ticket_id === 4 ? { ...t, estado: "concluido" as const } : t)),
   };
   const r = { demanda_id: D, rodada_id: 2 };
   const emRevisao = concluirImplementacoesRodada(impl, r, FABRIQUINHA, c2);
@@ -763,14 +762,14 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
     integracao: { ...r, ticket_id: 6, confirmada: true, branch_destino: "fabriquinha/I-1" },
   });
   assert.deepEqual(
-    integrada.rodadas.map((x) => x.fase),
+    integrada.rodadas.map((x) => x.estado),
     ["concluida", "concluida"],
   );
   const segunda = iniciarRevisaoDemanda(integrada, { demanda_id: D }, FABRIQUINHA, c2);
-  assert.equal(segunda.demanda.fase, "revisao_demanda");
+  assert.equal(segunda.demanda.estado, "revisar_demanda");
   const ag7: Ator = { tipo: "agente", trabalho_id: "3" };
   const fim = registrarRevisaoDemanda(segunda, aprovacaoD(7), ag7, c2);
-  assert.equal(fim.demanda.fase, "encerramento");
+  assert.equal(fim.demanda.estado, "encerrar_demanda");
   assert.equal(fim.tickets.at(-1)?.etapa, "encerrar_demanda");
   assert.deepEqual(
     fim.decisoes.map((d) => [d.ticket_id, d.decisao_id, d.resultado]),
@@ -795,7 +794,7 @@ const emDevolucao = (
     ...base,
     tickets: base.tickets.map((t) =>
       t.ticket_id === 3
-        ? { ...t, etapa, status: status as never, devolucoes, ...(global && { rodada_id: undefined }) }
+        ? { ...t, etapa, estado: status as never, devolucoes, ...(global && { rodada_id: undefined }) }
         : t,
     ),
   };
@@ -809,28 +808,28 @@ test("CA-1, CA-2: devolução abaixo do limite volta a aberto com a instrução 
   assert.equal(MAX_DEVOLUCOES, 2);
   for (const etapa of ["implementar", "resolver_conflito"] as const) {
     const um = devolver(emDevolucao(etapa, "em_execucao"));
-    assert.deepEqual([tk3(um)?.status, tk3(um)?.instrucao, tk3(um)?.devolucoes], ["aberto", "corrija os testes", 1]);
+    assert.deepEqual([tk3(um)?.estado, tk3(um)?.instrucao, tk3(um)?.devolucoes], ["aberto", "corrija os testes", 1]);
     assert.equal(tk3(devolver(emDevolucao(etapa, "em_execucao", 1)))?.devolucoes, 2);
   }
 });
 
 test("CA-3, CA-13: na 3ª reprovação falha com o motivo e bloqueia a seleção até a reabertura", () => {
   const ag = devolver(emDevolucao("implementar", "em_execucao", 2));
-  assert.deepEqual([tk3(ag)?.status, tk3(ag)?.motivo_falha], ["falhou", "corrija os testes"]);
+  assert.deepEqual([tk3(ag)?.estado, tk3(ag)?.motivo_falha], ["falhou", "corrija os testes"]);
   assert.deepEqual(selecionarTrabalho(ag, true), []);
   const global = devolver(emDevolucao("resolver_conflito", "em_execucao", 2));
-  assert.deepEqual([tk3(global)?.status, tk3(global)?.motivo_falha], ["falhou", "corrija os testes"]);
+  assert.deepEqual([tk3(global)?.estado, tk3(global)?.motivo_falha], ["falhou", "corrija os testes"]);
   assert.deepEqual(selecionarTrabalho(global, true), []);
 });
 
 test("CA-4, CA-7: falha de infraestrutura grava o motivo sem mexer no contador; sem motivo é recusada", () => {
   const ag = emDevolucao("implementar", "em_execucao");
   const novo = registrarFalhaTicket(ag, { ticket_id: id(), motivo: "timeout" }, { agora: t2 });
-  assert.deepEqual([tk3(novo)?.status, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes], ["falhou", "timeout", 0]);
+  assert.deepEqual([tk3(novo)?.estado, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes], ["falhou", "timeout", 0]);
   for (const e of [{ ticket_id: id() }, { ticket_id: id(), motivo: " " }]) {
     assert.throws(() => registrarFalhaTicket(ag, e, { agora: t2 }));
   }
-  assert.equal(tk3(ag)?.status, "em_execucao");
+  assert.equal(tk3(ag)?.estado, "em_execucao");
 });
 
 test("CA-5, CA-6, CA-12: devolução recusada em etapa, status ou ator errados", () => {
@@ -841,8 +840,8 @@ test("CA-5, CA-6, CA-12: devolução recusada em etapa, status ou ator errados",
   for (const ator of [AUDITOR, { tipo: "agente", trabalho_id: "1" } as Ator]) {
     assert.throws(() => devolver(ag, ator), ErroDeEscopo);
   }
-  assert.deepEqual([tk3(ag)?.status, tk3(ag)?.devolucoes], ["em_execucao", 0]);
-  const fim = { ...ag, demanda: { ...ag.demanda, fase: "concluida" as const } };
+  assert.deepEqual([tk3(ag)?.estado, tk3(ag)?.devolucoes], ["em_execucao", 0]);
+  const fim = { ...ag, demanda: { ...ag.demanda, estado: "concluida" as const } };
   intacto(() => devolver(fim), fim);
 });
 
@@ -850,7 +849,7 @@ test("CA-8, CA-9: reabrir limpa motivo e contador sem tocar em decisões e evid�
   const falho = devolver(emDevolucao("implementar", "em_execucao", 2));
   const novo = reabrirTicket(falho, { ticket_id: id(), instrucao: "tente" }, AUDITOR, { agora: t2 });
   assert.deepEqual(
-    [tk3(novo)?.status, tk3(novo)?.instrucao, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes],
+    [tk3(novo)?.estado, tk3(novo)?.instrucao, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes],
     ["aberto", "tente", undefined, 0],
   );
   assert.equal(novo.decisoes, falho.decisoes);

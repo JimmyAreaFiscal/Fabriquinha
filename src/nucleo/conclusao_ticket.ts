@@ -40,5 +40,5 @@ export function concluirTicketImplementar(
       "complete as verificações da aplicação e tente de novo",
     );
   }
-  return comStatus(ag, ticket, { status: "concluido", devolucoes: 0, status_alterado_em: ctx.agora });
+  return comStatus(ag, ticket, { estado: "concluido", devolucoes: 0, estado_alterado_em: ctx.agora });
 }

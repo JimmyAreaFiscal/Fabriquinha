@@ -20,8 +20,8 @@ const base = (enviada = false): AgregadoDemanda => ({
     titulo: "t",
     tipo: "funcionalidade",
     descricao: "d",
-    fase: enviada ? "aprovacao_demanda" : "registro",
-    fase_alterada_em: em,
+    estado: enviada ? "gate_demanda" : "entender_e_desenhar",
+    estado_alterado_em: em,
     criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
     enviada,
     branch: "fabriquinha/I-1",
@@ -30,9 +30,9 @@ const base = (enviada = false): AgregadoDemanda => ({
     {
       demanda_id: "I-1",
       ticket_id: 1,
-      etapa: "demanda",
-      status: "aberto",
-      status_alterado_em: em,
+      etapa: "entender_e_desenhar",
+      estado: "aberto",
+      estado_alterado_em: em,
       criado_por: FABRIQUINHA,
       devolucoes: 0,
     },
@@ -148,7 +148,7 @@ test("CA-7: depois do envio a definição fica congelada, inclusive para a autor
 
 test("CA-8: depois do envio entram custos e evidências de etapas posteriores, sem mexer na definição", () => {
   let ag = submeterEvidenciaDemanda(base(), entrada("criterios_aceite"), autora, em);
-  ag = { ...ag, demanda: { ...ag.demanda, enviada: true, fase: "aprovacao_demanda" } };
+  ag = { ...ag, demanda: { ...ag.demanda, enviada: true, estado: "gate_demanda" } };
   const antes = ag.evidencias[0];
   ag = submeterEvidenciaDemanda(ag, entrada("custos_realizados"), outra, em);
   ag = submeterEvidenciaDemanda(ag, entrada("mensagem_pr", { ticket_id: 1 }), outra, em);

@@ -5,15 +5,15 @@ import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import {
+  EstadoDemanda,
+  EstadoRodada,
+  EstadoTicket,
   EtapaTicket,
-  FaseDemanda,
-  FaseRodada,
   Id,
   Instante,
   Markdown,
   Motivo,
   Slug,
-  StatusTicket,
   Titulo,
 } from "./primitivos.ts";
 
@@ -21,8 +21,8 @@ export const TicketDemanda = z.object({
   demanda_id: DemandaId,
   ticket_id: Id,
   etapa: EtapaTicket,
-  status: StatusTicket,
-  status_alterado_em: Instante,
+  estado: EstadoTicket,
+  estado_alterado_em: Instante,
   // Quem criou o ticket; o `externo` não se grava (o banco guarda só o tipo e o trabalho).
   criado_por: Ator.refine((ator): boolean => ator.tipo !== "externo", {
     message: "o ticket não é criado por um ator externo",
@@ -45,7 +45,8 @@ export const RodadaDemanda = z.object({
   demanda_id: DemandaId,
   rodada_id: Id,
   titulo: Titulo,
-  fase: FaseRodada,
+  estado: EstadoRodada,
+  estado_alterado_em: Instante,
   e2e: z.boolean(),
   branch: z.string(),
 });
@@ -123,8 +124,8 @@ export const Demanda = z
     titulo: Titulo,
     tipo: TipoDemanda,
     descricao: Markdown,
-    fase: FaseDemanda,
-    fase_alterada_em: Instante,
+    estado: EstadoDemanda,
+    estado_alterado_em: Instante,
     criada_por: AtorExterno,
     enviada: z.boolean(),
     branch: z.string(),
@@ -175,8 +176,8 @@ export const AgregadoDemanda = z
       if (rodadaDe.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
       if (t.rodada_id !== undefined && !rodadas.has(t.rodada_id))
         erro(`o ticket ${String(t.ticket_id)} cita a rodada ${String(t.rodada_id)}, que não existe`);
-      if (t.motivo_falha !== undefined && t.status !== "falhou" && t.status !== "fechado")
-        erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou ou fechado`);
+      if (t.motivo_falha !== undefined && t.estado !== "falhou" && t.estado !== "cancelado")
+        erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou ou cancelado`);
       rodadaDe.set(t.ticket_id, t.rodada_id);
     }
     const tickets = new Set(rodadaDe.keys());
@@ -211,8 +212,8 @@ export const AgregadoDemanda = z
     }
     const enc = ag.encerramento;
     if (enc !== undefined) {
-      if (!["encerramento", "concluida", "cancelada", "arquivada"].includes(ag.demanda.fase))
-        erro("o progresso do encerramento só existe nas fases encerramento, concluida, cancelada e arquivada");
+      if (!["encerrar_demanda", "concluida", "cancelada", "arquivada"].includes(ag.demanda.estado))
+        erro("o progresso do encerramento só existe nos estados encerrar_demanda, concluida, cancelada e arquivada");
       if (enc.demanda_id !== id) erro(`o progresso do encerramento é de outra demanda (${enc.demanda_id})`);
       const conflito = enc.conflito_pendente?.ticket_id;
       if (

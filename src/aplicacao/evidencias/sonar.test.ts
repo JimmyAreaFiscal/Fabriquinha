@@ -237,11 +237,11 @@ test("SonarQube fora do ar: falha com o comando para subir o servidor, sem rodar
   sonar.status = "STARTING";
   await falha(worktree, `o SonarQube em ${HOST} está STARTING (suba com: ${SUBIR})`);
 
-  const fechado = createServer();
-  fechado.listen(0, "127.0.0.1");
-  await once(fechado, "listening");
-  const porta = (fechado.address() as AddressInfo).port;
-  fechado.close();
+  const servidorFechado = createServer();
+  servidorFechado.listen(0, "127.0.0.1");
+  await once(servidorFechado, "listening");
+  const porta = (servidorFechado.address() as AddressInfo).port;
+  servidorFechado.close();
   process.env.SONAR_HOST_URL = `http://127.0.0.1:${String(porta)}`;
   await falha(
     worktree,

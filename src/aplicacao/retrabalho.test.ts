@@ -47,13 +47,13 @@ function cenario() {
   const agora = new Date().toISOString();
   banco
     .prepare(
-      "INSERT INTO demanda VALUES ('I-1', 'loja', 't', 'problema', 'd', 'execucao', ?, 'f', 's', 1, 'fabriquinha/I-1')",
+      "INSERT INTO demanda VALUES ('I-1', 'loja', 't', 'problema', 'd', 'em_execucao', ?, 'f', 's', 1, 'fabriquinha/I-1')",
     )
     .run(agora);
   for (const id of [1, 2, 3, 4]) {
     banco
       .prepare(
-        `INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+        `INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
          VALUES ('I-1', ?, 'implementar', 'aberto', ?)`,
       )
       .run(id, agora);

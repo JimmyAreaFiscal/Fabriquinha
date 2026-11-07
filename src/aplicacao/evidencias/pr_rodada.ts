@@ -59,7 +59,7 @@ export async function montarPRRodada(
       "o agente entrega a mensagem_pr antes da publicação",
     );
   }
-  const concluidos = ag.tickets.filter((t) => t.rodada_id === rodada && t.status === "concluido");
+  const concluidos = ag.tickets.filter((t) => t.rodada_id === rodada && t.estado === "concluido");
   // O terceiro campo marca a seção da demanda ou geral, a que o resumo substitui no corpo condensado.
   const secoes: [string, string, boolean?][] = [
     ["Por quê", `${neutro(ag.demanda.titulo)} (${demanda}, ${refRodada})\n\n${neutro(ag.demanda.descricao)}`, true],

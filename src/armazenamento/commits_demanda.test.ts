@@ -24,7 +24,7 @@ const banco = () => {
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   for (const d of ["D", "E"]) {
     b.exec(
-      `INSERT INTO demanda VALUES ('${d}', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/${d}')`,
+      `INSERT INTO demanda VALUES ('${d}', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${d}')`,
     );
   }
   for (const [d, n] of [
@@ -34,7 +34,7 @@ const banco = () => {
     ["E", 1],
     ["E", 9],
   ] as const) {
-    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('${d}', ${String(n)}, 'implementar', 'aberto', ${T})`);
   }
   return b;

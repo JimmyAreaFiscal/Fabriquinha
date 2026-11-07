@@ -394,7 +394,7 @@ test("mensagem_pr: só as partes do PR que exigem julgamento, com os limites do 
  * revisão T-5 concluída; `naoPrevistos`: os de previsto null.
  */
 function encerrando(impacto: string, naoPrevistos: string[], revisaoConcluida = true): AgregadoDemanda {
-  const ticket = (ticket_id: number, etapa: string, status: string) => ({ ticket_id, etapa, status });
+  const ticket = (ticket_id: number, etapa: string, estado: string) => ({ ticket_id, etapa, estado });
   const evidencia = (ticket_id: number | undefined, tipo: string, dados: object) => ({ ticket_id, tipo, dados });
   return {
     tickets: [

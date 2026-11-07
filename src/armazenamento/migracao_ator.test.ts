@@ -59,7 +59,7 @@ test("a migração 37 troca as colunas de autoria sem perder nem inventar linhas
     .map((linha) => ({ ...linha }));
   const contagensAntes = contagens(banco);
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, 1));
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_LINHA_DE_BASE + 1);
   const demandasDepois = banco
@@ -104,7 +104,7 @@ test("a migração 37 troca as colunas de autoria sem perder nem inventar linhas
 
 test("depois da migração 37 o banco recusa autoria incoerente", () => {
   const banco = bancoNaVersao36();
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, 1));
   const recusa = (sql: string) => {
     assert.throws(() => {
       banco.exec(sql);

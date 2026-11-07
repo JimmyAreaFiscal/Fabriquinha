@@ -116,7 +116,7 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
   const emAndamento = banco
     .prepare(
       `SELECT t.demanda_id, t.ticket_id FROM ticket_demanda t
-       WHERE t.demanda_id IN (${DAS_DEMANDAS}) AND (t.status = 'em_execucao' OR EXISTS (
+       WHERE t.demanda_id IN (${DAS_DEMANDAS}) AND (t.estado = 'em_execucao' OR EXISTS (
          SELECT 1 FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
          WHERE s.demanda_id = t.demanda_id AND s.ticket_id = t.ticket_id AND e.fim IS NULL))
        ORDER BY t.rowid LIMIT 1`,
@@ -214,7 +214,7 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
 }
 
 /**
- * Remove o projeto e tudo o que depende dele, em qualquer fase (I-4): primeiro o banco, numa transação; depois,
+ * Remove o projeto e tudo o que depende dele, em qualquer estado (I-4): primeiro o banco, numa transação; depois,
  * com o banco já commitado, as pastas de execução, as sessões do pi e os anexos que nenhum outro projeto usa.
  * Falha no disco vira aviso: o banco não volta atrás.
  * ponytail: janela de corrida. Uma submissão de outro projeto com o mesmo conteúdo copia o anexo fora da transação

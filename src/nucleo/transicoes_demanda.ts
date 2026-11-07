@@ -8,7 +8,7 @@ import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { type FaseDemanda, Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { type EstadoDemanda, Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;
@@ -31,7 +31,7 @@ const EntradaDecisao = z.discriminatedUnion("aprovado", [
 
 /** Ticket global falho bloqueia o seu percurso: só `reabrirTicket` (Auditor, com instrução) o libera. */
 function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): void {
-  const falho = ag.tickets.find((t) => t.etapa === etapa && t.status === "falhou");
+  const falho = ag.tickets.find((t) => t.etapa === etapa && t.estado === "falhou");
   if (falho !== undefined) {
     throw new ErroDeRegra(
       `o ticket ${String(falho.ticket_id)} da etapa ${etapa} falhou e bloqueia a demanda ${ag.demanda.id}`,
@@ -40,14 +40,14 @@ function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): voi
   }
 }
 
-/** CA-1: cria a demanda em `registro` com o autor externo em `criada_por` e o ticket 1 da etapa `demanda`. */
+/** CA-1: cria a demanda em `entender_e_desenhar` com o autor externo em `criada_por` e o ticket 1 da etapa `entender_e_desenhar`. */
 export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   const e = EntradaRegistro.parse(entrada);
   return AgregadoDemanda.parse({
     demanda: {
       ...e,
-      fase: "registro",
-      fase_alterada_em: ctx.agora,
+      estado: "entender_e_desenhar",
+      estado_alterado_em: ctx.agora,
       criada_por: AtorExterno.parse(autor),
       enviada: false,
       branch: branchDemanda(e.id),
@@ -56,9 +56,9 @@ export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDem
       {
         demanda_id: e.id,
         ticket_id: 1,
-        etapa: "demanda",
-        status: "em_execucao",
-        status_alterado_em: ctx.agora,
+        etapa: "entender_e_desenhar",
+        estado: "em_execucao",
+        estado_alterado_em: ctx.agora,
         criado_por: FABRIQUINHA,
       },
     ],
@@ -89,14 +89,14 @@ export function editarDemanda(ag: AgregadoDemanda, entrada: unknown, autor: Ator
   });
 }
 
-/** CA-2 e CA-3: sem as obrigatórias recusa listando todas; completa, congela e vai a `aprovacao_demanda`. */
+/** CA-2 e CA-3: sem as obrigatórias recusa listando todas; completa, congela e vai a `gate_demanda`. */
 export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   const { demanda } = ag;
   if (demanda.enviada) {
     throw new ErroDeRegra(`a demanda ${demanda.id} já foi enviada`, "aguarde a decisão do Auditor");
   }
   exigirAutoria(demanda, autor, "enviar");
-  exigirSemFalha(ag, "demanda");
+  exigirSemFalha(ag, "entender_e_desenhar");
   const pendentes = pendentesDeEnvio(ag);
   if (pendentes.length > 0) {
     throw new ErroDeRegra(
@@ -104,11 +104,11 @@ export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDem
       "submeta cada uma e envie de novo",
     );
   }
-  return { ...ag, demanda: { ...demanda, enviada: true, fase: "aprovacao_demanda", fase_alterada_em: ctx.agora } };
+  return { ...ag, demanda: { ...demanda, enviada: true, estado: "gate_demanda", estado_alterado_em: ctx.agora } };
 }
 
 /**
- * CA-4 e CA-5: o Auditor aprova (vai a `planejamento`) ou recusa com motivo (vai a `cancelada`, sem desenho interno).
+ * CA-4 e CA-5: o Auditor aprova (vai a `planejar`) ou recusa com motivo (vai a `cancelada`, sem desenho interno).
  * A decisão e o fechamento do ticket da demanda andam juntos.
  */
 export function decidirDemanda(
@@ -120,14 +120,14 @@ export function decidirDemanda(
   exigirAtor(ator, "decidir a demanda", "auditor");
   const e = EntradaDecisao.parse(entrada);
   const { demanda } = ag;
-  if (demanda.fase !== "aprovacao_demanda") {
+  if (demanda.estado !== "gate_demanda") {
     throw new ErroDeRegra(
-      `a demanda ${demanda.id} está em ${demanda.fase} e não espera decisão`,
-      "decida só na fase aprovacao_demanda, depois do envio",
+      `a demanda ${demanda.id} está em ${demanda.estado} e não espera decisão`,
+      "decida só no estado gate_demanda, depois do envio",
     );
   }
-  exigirSemFalha(ag, "demanda");
-  const ticket = ag.tickets.find((t) => t.etapa === "demanda");
+  exigirSemFalha(ag, "entender_e_desenhar");
+  const ticket = ag.tickets.find((t) => t.etapa === "entender_e_desenhar");
   if (ticket === undefined) {
     throw new ErroDeRegra(`a demanda ${demanda.id} não tem ticket de etapa demanda`, "registre a demanda de novo");
   }
@@ -141,13 +141,15 @@ export function decidirDemanda(
     por: AUDITOR,
     em: ctx.agora,
   };
-  const status = e.aprovado ? ("concluido" as const) : ("cancelado" as const);
-  const decidido = ag.tickets.map((t) => (t === ticket ? { ...t, status, status_alterado_em: ctx.agora } : t));
+  const estadoDecidido = e.aprovado ? ("concluido" as const) : ("cancelado" as const);
+  const decidido = ag.tickets.map((t) =>
+    t === ticket ? { ...t, estado: estadoDecidido, estado_alterado_em: ctx.agora } : t,
+  );
   // Aprovar libera o planejamento: sem o ticket `planejar` aberto a seleção não tem o que despachar.
   const abrirPlanejar = e.aprovado && !ag.tickets.some((t) => t.etapa === "planejar");
   return {
     ...ag,
-    demanda: { ...demanda, fase: e.aprovado ? "planejamento" : "cancelada", fase_alterada_em: ctx.agora },
+    demanda: { ...demanda, estado: e.aprovado ? "planejar" : "cancelada", estado_alterado_em: ctx.agora },
     tickets: abrirPlanejar
       ? [
           ...decidido,
@@ -155,8 +157,8 @@ export function decidirDemanda(
             demanda_id: demanda.id,
             ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
             etapa: "planejar" as const,
-            status: "aberto" as const,
-            status_alterado_em: ctx.agora,
+            estado: "aberto" as const,
+            estado_alterado_em: ctx.agora,
             criado_por: FABRIQUINHA,
             devolucoes: 0,
           },
@@ -171,10 +173,13 @@ const EntradaAprovacao = z.strictObject({ nota: z.number().int().min(1).max(5).o
 // A definição congelada guarda os `CA-n` em `dados.criterios[].id` (F3); o resto do payload não interessa aqui.
 const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
 
-export function exigirFase(ag: AgregadoDemanda, fase: FaseDemanda, acao: string): void {
+export function exigirFase(ag: AgregadoDemanda, estado: EstadoDemanda, acao: string): void {
   const { demanda } = ag;
-  if (demanda.fase !== fase) {
-    throw new ErroDeRegra(`a demanda ${demanda.id} está em ${demanda.fase} e não pode ${acao}`, `só na fase ${fase}`);
+  if (demanda.estado !== estado) {
+    throw new ErroDeRegra(
+      `a demanda ${demanda.id} está em ${demanda.estado} e não pode ${acao}`,
+      `só no estado ${estado}`,
+    );
   }
 }
 
@@ -223,8 +228,8 @@ const decisaoDoAuditor = (
 });
 
 /**
- * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejamento`. O plano precisa passar pelo `Plano` e
- * citar só `CA-n` da definição congelada; aceito, vira evidência do ticket e a demanda vai a `aprovacao_planejamento`.
+ * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `Plano` e
+ * citar só `CA-n` da definição congelada; aceito, vira evidência do ticket e a demanda vai a `gate_planejamento`.
  */
 export function submeterPlano(
   ag: AgregadoDemanda,
@@ -240,7 +245,7 @@ export function submeterPlano(
       "peça à sessão de planejamento",
     );
   }
-  exigirFase(ag, "planejamento", "receber plano");
+  exigirFase(ag, "planejar", "receber plano");
   exigirSemFalha(ag, "planejar");
   const plano = Plano.safeParse(entrada);
   if (!plano.success) {
@@ -285,12 +290,12 @@ export function submeterPlano(
   };
   return {
     ...ag,
-    demanda: { ...demanda, fase: "aprovacao_planejamento", fase_alterada_em: ctx.agora },
+    demanda: { ...demanda, estado: "gate_planejamento", estado_alterado_em: ctx.agora },
     evidencias: [...ag.evidencias.filter((e) => !(e.tipo === "plano" && e.ticket_id === ticket.ticket_id)), evidencia],
   };
 }
 
-/** CA-4 e CA-5: o Auditor reprova com motivo; a decisão é registrada e a demanda volta a `planejamento` com o mesmo ticket. */
+/** CA-4 e CA-5: o Auditor reprova com motivo; a decisão é registrada e a demanda volta a `planejar` com o mesmo ticket. */
 export function reprovarPlanejamento(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -299,19 +304,19 @@ export function reprovarPlanejamento(
 ): AgregadoDemanda {
   exigirAtor(ator, "reprovar o planejamento", "auditor");
   const { motivo } = EntradaReprovacao.parse(entrada);
-  exigirFase(ag, "aprovacao_planejamento", "reprovar o planejamento");
+  exigirFase(ag, "gate_planejamento", "reprovar o planejamento");
   const ticket = ticketPlanejamento(ag);
   planoSubmetido(ag, ticket);
   return {
     ...ag,
-    demanda: { ...ag.demanda, fase: "planejamento", fase_alterada_em: ctx.agora },
+    demanda: { ...ag.demanda, estado: "planejar", estado_alterado_em: ctx.agora },
     decisoes: [...ag.decisoes, decisaoDoAuditor(ag, ticket, "recusado", { motivo }, ctx)],
   };
 }
 
 /**
  * CA-6 e CA-7: chamada pela aplicação só depois de preparar os recursos externos; sem a chamada nada muda. Cria
- * rodadas, tickets de implementação e vínculos do plano, registra a aprovação e vai a `execucao`. Os `ticket_id` do
+ * rodadas, tickets de implementação e vínculos do plano, registra a aprovação e vai a `em_execucao`. Os `ticket_id` do
  * plano são renumerados depois dos já existentes (mesma ordem), pois o agente não vê os IDs da demanda.
  */
 export function confirmarAprovacaoPlanejamento(
@@ -322,7 +327,7 @@ export function confirmarAprovacaoPlanejamento(
 ): AgregadoDemanda {
   exigirAtor(ator, "aprovar o planejamento", "auditor");
   const { nota } = EntradaAprovacao.parse(entrada);
-  exigirFase(ag, "aprovacao_planejamento", "aprovar o planejamento");
+  exigirFase(ag, "gate_planejamento", "aprovar o planejamento");
   exigirSemFalha(ag, "planejar");
   const planejamento = ticketPlanejamento(ag);
   const plano = planoSubmetido(ag, planejamento);
@@ -333,9 +338,9 @@ export function confirmarAprovacaoPlanejamento(
   const id = (n: number): number => existe(novoId.get(n), `o ticket ${String(n)} não está no plano`, "valide o plano");
   return AgregadoDemanda.parse({
     ...ag,
-    demanda: { ...ag.demanda, fase: "execucao", fase_alterada_em: ctx.agora },
+    demanda: { ...ag.demanda, estado: "em_execucao", estado_alterado_em: ctx.agora },
     tickets: [
-      ...ag.tickets.map((t) => (t === planejamento ? { ...t, status: "concluido", status_alterado_em: ctx.agora } : t)),
+      ...ag.tickets.map((t) => (t === planejamento ? { ...t, estado: "concluido", estado_alterado_em: ctx.agora } : t)),
       ...planos.map(({ ticket_id, rodada_id, titulo, descricao, configuracao_agente }) => ({
         demanda_id,
         ticket_id: id(ticket_id),
@@ -343,8 +348,8 @@ export function confirmarAprovacaoPlanejamento(
         titulo,
         descricao,
         etapa: "implementar",
-        status: "aberto",
-        status_alterado_em: ctx.agora,
+        estado: "aberto",
+        estado_alterado_em: ctx.agora,
         criado_por: FABRIQUINHA,
         configuracao_agente,
       })),
@@ -357,7 +362,8 @@ export function confirmarAprovacaoPlanejamento(
       demanda_id,
       rodada_id: r.rodada_id,
       titulo: r.titulo,
-      fase: "desenvolvimento",
+      estado: "implementar",
+      estado_alterado_em: ctx.agora,
       e2e: r.e2e,
       branch: branchRodada(demanda_id, r.rodada_id),
     })),
@@ -376,7 +382,7 @@ export function confirmarAprovacaoPlanejamento(
   });
 }
 
-const FASES_ENCERRADAS: readonly FaseDemanda[] = ["concluida", "arquivada", "cancelada"];
+const ESTADOS_ENCERRADOS: readonly EstadoDemanda[] = ["concluida", "arquivada", "cancelada"];
 const EntradaReabertura = z.strictObject({
   ticket_id: Id,
   instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
@@ -392,16 +398,16 @@ const EntradaDevolucao = z.strictObject({
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const MAX_DEVOLUCOES = 2;
 
-export function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDemanda["status"], acao: string) {
+export function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, estado: TicketDemanda["estado"], acao: string) {
   const ticket = existe(
     ag.tickets.find((t) => t.ticket_id === ticket_id),
     `o ticket ${formatarTicketRef({ demanda_id: ag.demanda.id, ticket_id })} não existe`,
     "use um ticket da demanda",
   );
-  if (ticket.status !== status) {
+  if (ticket.estado !== estado) {
     throw new ErroDeRegra(
-      `o ticket ${formatarTicketRef(ticket)} está ${ticket.status} e não pode ${acao}`,
-      `só ticket ${status}`,
+      `o ticket ${formatarTicketRef(ticket)} está ${ticket.estado} e não pode ${acao}`,
+      `só ticket ${estado}`,
     );
   }
   return ticket;
@@ -417,20 +423,20 @@ export const comStatus = (
 });
 
 export function exigirDemandaEmAndamento(ag: AgregadoDemanda, acao: string): void {
-  if (FASES_ENCERRADAS.includes(ag.demanda.fase)) {
+  if (ESTADOS_ENCERRADOS.includes(ag.demanda.estado)) {
     throw new ErroDeRegra(
-      `a demanda ${ag.demanda.id} está em ${ag.demanda.fase}`,
+      `a demanda ${ag.demanda.id} está em ${ag.demanda.estado}`,
       `só ${acao} ticket de demanda em andamento`,
     );
   }
 }
 
-/** CA-16, CA-4 e CA-7: o ticket em execução passa a `falhou` com o motivo; a fase e os gates da demanda não mudam. */
+/** CA-16, CA-4 e CA-7: o ticket em execução passa a `falhou` com o motivo; o estado e os gates da demanda não mudam. */
 export function registrarFalhaTicket(ag: AgregadoDemanda, entrada: unknown, ctx: ContextoDemanda): AgregadoDemanda {
   const { ticket_id, motivo } = EntradaFalha.parse(entrada);
   exigirDemandaEmAndamento(ag, "falhar");
   const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "falhar");
-  return comStatus(ag, ticket, { status: "falhou", motivo_falha: motivo, status_alterado_em: ctx.agora });
+  return comStatus(ag, ticket, { estado: "falhou", motivo_falha: motivo, estado_alterado_em: ctx.agora });
 }
 
 /**
@@ -455,13 +461,13 @@ export function devolverTicket(
   }
   const alterado = ctx.agora;
   return ticket.devolucoes >= MAX_DEVOLUCOES
-    ? comStatus(ag, ticket, { status: "falhou", motivo_falha: instrucao, status_alterado_em: alterado })
+    ? comStatus(ag, ticket, { estado: "falhou", motivo_falha: instrucao, estado_alterado_em: alterado })
     : comStatus(ag, ticket, {
-        status: "aberto",
+        estado: "aberto",
         instrucao,
         devolucoes: ticket.devolucoes + 1,
         retomadas_automaticas: 0,
-        status_alterado_em: alterado,
+        estado_alterado_em: alterado,
       });
 }
 
@@ -482,11 +488,11 @@ export function reabrirTicket(
       t === ticket
         ? {
             ...resto,
-            status: "aberto",
+            estado: "aberto",
             instrucao,
             devolucoes: 0,
             retomadas_automaticas: 0,
-            status_alterado_em: ctx.agora,
+            estado_alterado_em: ctx.agora,
           }
         : t,
     ),
@@ -526,9 +532,9 @@ export function retomarTicketFalhoPorInfraestrutura(
   const { motivo_falha: _motivo, ...resto } = ticket;
   const alvo = {
     ...resto,
-    status: "aberto" as const,
+    estado: "aberto" as const,
     retomadas_automaticas: retomadas + (conta ? 1 : 0),
-    status_alterado_em: ctx.agora,
+    estado_alterado_em: ctx.agora,
     ...(modelo && { configuracao_agente: { ...ticket.configuracao_agente, modelo } }),
   };
   return { ...ag, tickets: ag.tickets.map((t) => (t === ticket ? alvo : t)) };
@@ -549,25 +555,24 @@ export function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string):
 
 /**
  * Recusa se resta rodada fora de `concluida`, implementação não concluída ou ticket ativo/falho (menos o `ignorar`).
- * A implementação `fechado` foi descartada (fora do plano em vigor) e não é pendência.
  */
 function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
-  const rodada = ag.rodadas.find((r) => r.fase !== "concluida");
+  const rodada = ag.rodadas.find((r) => r.estado !== "concluida");
   if (rodada !== undefined) {
     throw new ErroDeRegra(
-      `a rodada ${String(rodada.rodada_id)} está em ${rodada.fase}`,
+      `a rodada ${String(rodada.rodada_id)} está em ${rodada.estado}`,
       "todas as rodadas precisam estar concluida",
     );
   }
   const pendente = ag.tickets.find(
     (t) =>
       t.ticket_id !== ignorar &&
-      (["aberto", "em_execucao", "falhou"].includes(t.status) ||
-        (t.etapa === "implementar" && t.status !== "concluido" && t.status !== "fechado")),
+      (["aberto", "em_execucao", "falhou"].includes(t.estado) ||
+        (t.etapa === "implementar" && t.estado !== "concluido")),
   );
   if (pendente !== undefined) {
     throw new ErroDeRegra(
-      `o ticket ${String(pendente.ticket_id)} está ${pendente.status}`,
+      `o ticket ${String(pendente.ticket_id)} está ${pendente.estado}`,
       "conclua todo o trabalho pendente antes da revisão integral",
     );
   }
@@ -581,13 +586,13 @@ export const novoTicketGlobal = (
   demanda_id: ag.demanda.id,
   ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
   etapa,
-  status: "aberto",
+  estado: "aberto",
   devolucoes: 0,
-  status_alterado_em: agora,
+  estado_alterado_em: agora,
   criado_por: FABRIQUINHA,
 });
 
-/** CA-12: só a Fabriquinha; com todas as rodadas concluídas e nada pendente, abre `revisar_demanda` e vai a `revisao_demanda`. */
+/** CA-12: só a Fabriquinha; com todas as rodadas concluídas e nada pendente, abre `revisar_demanda` e vai a `revisar_demanda`. */
 export function iniciarRevisaoDemanda(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -596,19 +601,19 @@ export function iniciarRevisaoDemanda(
 ): AgregadoDemanda {
   exigirAtor(ator, "iniciar a revisão integral da demanda", "fabriquinha");
   exigirDemandaDaEntrada(ag, EntradaDemanda.parse(entrada).demanda_id);
-  exigirFase(ag, "execucao", "iniciar a revisão integral");
+  exigirFase(ag, "em_execucao", "iniciar a revisão integral");
   exigirSemPendencias(ag);
   return {
     ...ag,
-    demanda: { ...ag.demanda, fase: "revisao_demanda", fase_alterada_em: ctx.agora },
+    demanda: { ...ag.demanda, estado: "revisar_demanda", estado_alterado_em: ctx.agora },
     tickets: [...ag.tickets, novoTicketGlobal(ag, "revisar_demanda", ctx.agora)],
   };
 }
 
 /**
  * CA-13 e CA-14: só o agente do `revisar_demanda` atual. Reprovada, as exigências vão em `motivo` e o plano corretivo
- * cria só rodadas novas (as integradas ficam como estão) e a demanda volta a `execucao`; aprovada, abre
- * `encerrar_demanda` e vai a `encerramento`. Decisão, fechamento do revisor e efeitos andam juntos.
+ * cria só rodadas novas (as integradas ficam como estão) e a demanda volta a `em_execucao`; aprovada, abre
+ * `encerrar_demanda` e vai a `encerrar_demanda`. Decisão, fechamento do revisor e efeitos andam juntos.
  */
 export function registrarRevisaoDemanda(
   ag: AgregadoDemanda,
@@ -618,10 +623,10 @@ export function registrarRevisaoDemanda(
 ): AgregadoDemanda {
   const e = EntradaRevisaoDemanda.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
-  exigirFase(ag, "revisao_demanda", "receber a revisão integral");
+  exigirFase(ag, "revisar_demanda", "receber a revisão integral");
   const revisores = ag.tickets.filter((t) => t.etapa === "revisar_demanda");
   const ticket = revisores.find((t) => t.ticket_id === Math.max(...revisores.map((x) => x.ticket_id)));
-  if (ticket?.ticket_id !== e.ticket_id || (ticket.status !== "aberto" && ticket.status !== "em_execucao")) {
+  if (ticket?.ticket_id !== e.ticket_id || (ticket.estado !== "aberto" && ticket.estado !== "em_execucao")) {
     throw new ErroDeRegra(
       `o ticket ${String(e.ticket_id)} não é o revisar_demanda ativo`,
       "use o ticket atual da revisão",
@@ -642,13 +647,19 @@ export function registrarRevisaoDemanda(
   };
   // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.
   const base = e.aprovado ? ag : materializarRodadasCorretivas(ag, e.plano, ator, ctx.agora);
-  const fechado = base.tickets.map((t) =>
-    t.ticket_id === ticket.ticket_id ? { ...t, status: "concluido" as const, status_alterado_em: ctx.agora } : t,
+  const comRevisaoConcluida = base.tickets.map((t) =>
+    t.ticket_id === ticket.ticket_id ? { ...t, estado: "concluido" as const, estado_alterado_em: ctx.agora } : t,
   );
   return {
     ...base,
-    demanda: { ...base.demanda, fase: e.aprovado ? "encerramento" : "execucao", fase_alterada_em: ctx.agora },
-    tickets: e.aprovado ? [...fechado, novoTicketGlobal(base, "encerrar_demanda", ctx.agora)] : fechado,
+    demanda: {
+      ...base.demanda,
+      estado: e.aprovado ? "encerrar_demanda" : "em_execucao",
+      estado_alterado_em: ctx.agora,
+    },
+    tickets: e.aprovado
+      ? [...comRevisaoConcluida, novoTicketGlobal(base, "encerrar_demanda", ctx.agora)]
+      : comRevisaoConcluida,
     decisoes: [...ag.decisoes, decisao],
   };
 }

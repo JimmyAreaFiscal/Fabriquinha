@@ -50,7 +50,7 @@ export function modeloReserva(modeloAtual: Modelo | undefined): Modelo | undefin
 
 /** A falha transitória já esperou 2, 8 e 32 minutos antes da 1ª, 2ª e 3ª retomadas: dá tempo de o serviço voltar. */
 const esperouOBastante = (t: TicketDemanda, agora: Date): boolean =>
-  agora.getTime() - Date.parse(t.status_alterado_em) >= 2 * 4 ** (t.retomadas_automaticas ?? 0) * 60_000;
+  agora.getTime() - Date.parse(t.estado_alterado_em) >= 2 * 4 ** (t.retomadas_automaticas ?? 0) * 60_000;
 
 /**
  * Devolve a `aberto` os tickets falhos por infraestrutura das demandas em andamento: o do reinício sempre e na hora; o
@@ -61,7 +61,7 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, agora = new D
   const retomados: string[] = [];
   for (const { agregado: ag } of demandasParaDespacho(banco)) {
     for (const t of ag.tickets) {
-      const causa = t.status === "falhou" && t.motivo_falha ? causaDeInfraestrutura(t.motivo_falha) : undefined;
+      const causa = t.estado === "falhou" && t.motivo_falha ? causaDeInfraestrutura(t.motivo_falha) : undefined;
       if (causa === undefined) continue;
       const conta = causa !== "reinicio";
       if (conta && (t.retomadas_automaticas ?? 0) >= MAX_RETOMADAS_AUTOMATICAS) continue;

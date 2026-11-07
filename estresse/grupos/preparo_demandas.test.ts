@@ -35,54 +35,54 @@ async function chamar(metodo: "POST" | "DELETE", caminho: string, corpo?: unknow
   return r.status;
 }
 
-/** A fase e as fases das rodadas que o banco guarda agora, lidas por outra conexão. */
-function fases(id: string): string[] {
+/** A estado e os estados das rodadas que o banco guarda agora, lidas por outra conexão. */
+function estados(id: string): string[] {
   const banco = abrir(amb.raiz);
   try {
     const ag = carregarDemanda(banco, id);
-    return [ag.demanda.fase, ...ag.rodadas.map((r) => r.fase)];
+    return [ag.demanda.estado, ...ag.rodadas.map((r) => r.estado)];
   } finally {
     banco.close();
   }
 }
 
-test("a decisão, o cancelamento e o arquivamento agem sobre a demanda na fase exigida", async () => {
+test("a decisão, o cancelamento e o arquivamento agem sobre a demanda no estado exigido", async () => {
   const [a, b] = [p.demandaEnviada(), p.demandaEnviada()];
   assert.notEqual(a, b);
-  assert.deepEqual(fases(a), ["aprovacao_demanda"]);
+  assert.deepEqual(estados(a), ["gate_demanda"]);
   await chamar("POST", `/api/demandas/${a}/decisao`, { aprovado: true });
-  assert.deepEqual(fases(a), ["planejamento"]);
+  assert.deepEqual(estados(a), ["planejar"]);
   await chamar("POST", `/api/demandas/${b}/cancelar`);
-  assert.deepEqual(fases(b), ["cancelada"]);
+  assert.deepEqual(estados(b), ["cancelada"]);
   const c = p.demandaConcluida();
   await chamar("POST", `/api/demandas/${c}/arquivar`);
-  assert.deepEqual(fases(c), ["arquivada"]);
+  assert.deepEqual(estados(c), ["arquivada"]);
 });
 
 test("o planejamento pronto é aprovado e vira execução", async () => {
   const id = p.planejamentoPronto();
-  assert.deepEqual(fases(id), ["aprovacao_planejamento"]);
+  assert.deepEqual(estados(id), ["gate_planejamento"]);
   await chamar("POST", `/api/demandas/${id}/planejamento/decisao`, { aprovado: true });
-  assert.equal(fases(id)[0], "execucao");
+  assert.equal(estados(id)[0], "em_execucao");
 });
 
 test("a rodada com PR é aprovada pela hospedagem falsa e concluída", async () => {
   const { demanda, rodada } = await p.rodadaComPR();
-  assert.deepEqual(fases(demanda), ["execucao", "aprovacao_pull_request"]);
+  assert.deepEqual(estados(demanda), ["em_execucao", "gate_pr"]);
   await chamar("POST", `/api/demandas/rodadas/${rodada}/pr`, { aprovado: true, nota: 4 });
-  assert.equal(fases(demanda)[1], "concluida");
+  assert.equal(estados(demanda)[1], "concluida");
 });
 
 test("a rodada com PR reprovado abre a sessão de ajustes pelo próprio serviço", async () => {
   const { demanda, rodada } = await p.rodadaComPR();
   await chamar("POST", `/api/demandas/rodadas/${rodada}/pr`, { aprovado: false, motivo: "falta teste" });
-  assert.equal(fases(demanda)[1], "sessao");
+  assert.equal(estados(demanda)[1], "ajustar_resultado");
 });
 
 test("a sessão de ajustes com a correção registrada conclui", async () => {
   const rodada = await p.rodadaEmAjustes(true);
   await chamar("POST", `/api/demandas/rodadas/${rodada}/ajustes/concluir`);
-  assert.equal(fases(rodada.split(".")[0] ?? "")[1], "desenvolvimento");
+  assert.equal(estados(rodada.split(".")[0] ?? "")[1], "implementar");
 });
 
 test("reabrir e executar acham o ticket na situação certa", async () => {

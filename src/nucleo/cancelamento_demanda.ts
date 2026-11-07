@@ -3,18 +3,18 @@
 import { type Ator, exigirAtor } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
-import type { FaseDemanda } from "./primitivos.ts";
+import type { EstadoDemanda } from "./primitivos.ts";
 import { type ContextoDemanda, exigirFase } from "./transicoes_demanda.ts";
 
-export const FASES_TERMINADAS: readonly FaseDemanda[] = ["concluida", "arquivada", "cancelada"];
+export const ESTADOS_TERMINADOS: readonly EstadoDemanda[] = ["concluida", "arquivada", "cancelada"];
 
-/** CA-1 a CA-7: só o Auditor, antes da integração confirmada; aberto/falhou viram fechado e em_execucao vira cancelado. */
+/** CA-1 a CA-7: só o Auditor, antes da integração confirmada; aberto, falhou e em_execucao viram cancelado. */
 export function cancelarDemanda(ag: AgregadoDemanda, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   exigirAtor(ator, "cancelar a demanda", "auditor");
   const { demanda } = ag;
-  if (FASES_TERMINADAS.includes(demanda.fase)) {
+  if (ESTADOS_TERMINADOS.includes(demanda.estado)) {
     throw new ErroDeRegra(
-      `a demanda ${demanda.id} já terminou (${demanda.fase})`,
+      `a demanda ${demanda.id} já terminou (${demanda.estado})`,
       "só demanda em andamento é cancelada",
     );
   }
@@ -26,22 +26,24 @@ export function cancelarDemanda(ag: AgregadoDemanda, ator: Ator, ctx: ContextoDe
   }
   return AgregadoDemanda.parse({
     ...ag,
-    demanda: { ...demanda, fase: "cancelada", fase_alterada_em: ctx.agora },
+    demanda: { ...demanda, estado: "cancelada", estado_alterado_em: ctx.agora },
     tickets: ag.tickets.map((t) => {
-      if (t.status === "aberto" || t.status === "falhou")
-        return { ...t, status: "fechado", status_alterado_em: ctx.agora };
-      if (t.status === "em_execucao") return { ...t, status: "cancelado", status_alterado_em: ctx.agora };
+      if (t.estado === "aberto" || t.estado === "falhou" || t.estado === "em_execucao")
+        return { ...t, estado: "cancelado", estado_alterado_em: ctx.agora };
       return t;
     }),
   });
 }
 
-/** CA-8 a CA-10: só o Auditor, só em `concluida`; muda apenas a fase. */
+/** CA-8 a CA-10: só o Auditor, só em `concluida`; muda apenas o estado. */
 export function arquivarDemanda(ag: AgregadoDemanda, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   exigirAtor(ator, "arquivar a demanda", "auditor");
   exigirFase(ag, "concluida", "ser arquivada: só demanda concluída pode ser arquivada");
-  return AgregadoDemanda.parse({ ...ag, demanda: { ...ag.demanda, fase: "arquivada", fase_alterada_em: ctx.agora } });
+  return AgregadoDemanda.parse({
+    ...ag,
+    demanda: { ...ag.demanda, estado: "arquivada", estado_alterado_em: ctx.agora },
+  });
 }
 
 /** CA-11 e CA-12: `arquivada` tem os mesmos efeitos de `concluida` para quem depende da demanda. */
-export const satisfazDependencia = (fase: FaseDemanda): boolean => fase === "concluida" || fase === "arquivada";
+export const satisfazDependencia = (estado: EstadoDemanda): boolean => estado === "concluida" || estado === "arquivada";

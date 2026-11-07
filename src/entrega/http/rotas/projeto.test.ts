@@ -106,17 +106,18 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, extra: obj
   demanda_id,
   ticket_id,
   etapa,
-  status: "concluido",
-  status_alterado_em: em,
+  estado: "concluido",
+  estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
-const rodada = (demanda_id: string, rodada_id: number, fase: string) => ({
+const rodada = (demanda_id: string, rodada_id: number, estado: string) => ({
   demanda_id,
   rodada_id,
   titulo: `rodada ${String(rodada_id)}`,
-  fase,
+  estado,
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/${demanda_id}-${String(rodada_id)}`,
 });
@@ -143,15 +144,15 @@ function semearDemandas(): void {
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-205", "cancelada"));
   gravarAgregadoPronto(
     banco,
-    montarAgregadoDemanda("I-206", "execucao", {
-      rodadas: [rodada("I-206", 1, "concluida"), rodada("I-206", 2, "desenvolvimento")],
+    montarAgregadoDemanda("I-206", "em_execucao", {
+      rodadas: [rodada("I-206", 1, "concluida"), rodada("I-206", 2, "implementar")],
       tickets: [
         ticket("I-206", 1, "planejar"),
         ticket("I-206", 2, "implementar", { rodada_id: 1, titulo: "Cache" }),
         ticket("I-206", 3, "encerrar_rodada", { rodada_id: 1 }),
         ticket("I-206", 4, "implementar", {
           rodada_id: 2,
-          status: "em_execucao",
+          estado: "em_execucao",
           configuracao_agente: { modelo: { provedor: "llamacpp", nome: "qwen3-coder-30b" } },
         }),
       ],
@@ -171,7 +172,7 @@ function semearDemandas(): void {
     `INSERT INTO sessao VALUES ('s-antiga', 'I-206', 4, 'autonomo', 'c1'), ('s-nova', 'I-206', 4, 'autonomo', 'c2');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES ('e-nova', 's-nova', '${em}', NULL, 0, 4242)`,
   );
-  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejamento"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejar"));
   banco.exec(`INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id)
     VALUES ('I-207', 'I-206'), ('I-207', 'I-205'), ('I-207', 'I-204')`);
 }
@@ -196,20 +197,20 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
   const i206 = demandas[1];
   assert.ok(i206);
   assert.deepEqual(
-    [i206.titulo, i206.tipo, i206.fase, i206.faseAlteradaEm],
-    ["demanda I-206", "funcionalidade", "execucao", em],
+    [i206.titulo, i206.tipo, i206.estado, i206.estadoAlteradoEm],
+    ["demanda I-206", "funcionalidade", "em_execucao", em],
   );
   assert.deepEqual(i206.rodadas, [
-    { ref: "I-206.R1", titulo: "rodada 1", fase: "concluida", pr: { id: "7", url: "https://pr/7" } },
-    { ref: "I-206.R2", titulo: "rodada 2", fase: "desenvolvimento" },
+    { ref: "I-206.R1", titulo: "rodada 1", estado: "concluida", pr: { id: "7", url: "https://pr/7" } },
+    { ref: "I-206.R2", titulo: "rodada 2", estado: "implementar" },
   ]);
   assert.deepEqual(i206.tickets, [
-    { ref: "I-206.T1", etapa: "planejar", status: "concluido", statusAlteradoEm: em },
+    { ref: "I-206.T1", etapa: "planejar", estado: "concluido", estadoAlteradoEm: em },
     {
       ref: "I-206.T2",
       etapa: "implementar",
-      status: "concluido",
-      statusAlteradoEm: em,
+      estado: "concluido",
+      estadoAlteradoEm: em,
       rodada: "I-206.R1",
       titulo: "Cache",
       modelo: "anthropic / claude-sonnet-5-5",
@@ -217,15 +218,15 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
     {
       ref: "I-206.T3",
       etapa: "encerrar_rodada",
-      status: "concluido",
-      statusAlteradoEm: em,
+      estado: "concluido",
+      estadoAlteradoEm: em,
       rodada: "I-206.R1",
     },
     {
       ref: "I-206.T4",
       etapa: "implementar",
-      status: "em_execucao",
-      statusAlteradoEm: em,
+      estado: "em_execucao",
+      estadoAlteradoEm: em,
       rodada: "I-206.R2",
       modelo: "llamacpp / qwen3-coder-30b",
       sessao: "s-nova",
@@ -256,7 +257,7 @@ test("Arquivar concluídas: arquiva as concluídas do projeto e só elas", async
   // O site, sem configuração do SDLC, segue com a concluída dele.
   const site = (await chamar("GET", "/api/projetos/site/demandas?concluidas=true")) as ListaDoProjeto;
   assert.deepEqual(
-    site.demandas.map((d) => [d.id, d.fase]),
+    site.demandas.map((d) => [d.id, d.estado]),
     [["I-208", "concluida"]],
   );
   assert.deepEqual(await chamar("POST", "/api/projetos/loja/arquivar"), { arquivadas: 0 });

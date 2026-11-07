@@ -30,7 +30,7 @@ test("CA-SDLC-13: integração que falha não conclui a rodada, não grava a apr
   const c = criarCenario(t);
   const id = await rodadaEmEncerramento(c);
   await encerrar(c, id);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "aprovacao_pull_request");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
   const ref = { demanda_id: id, rodada_id: 1 };
   const gate = atual(c, id, "encerrar_rodada").ticket_id;
   const antes = demanda(c, id);
@@ -39,10 +39,10 @@ test("CA-SDLC-13: integração que falha não conclui a rodada, não grava a apr
   await assert.rejects(aprovarPRRodada(c.banco, ref, 5, AUDITOR), /merge recusado pela hospedagem/);
 
   const depois = demanda(c, id);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "aprovacao_pull_request");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
   assert.equal(
-    depois.tickets.find((x) => x.ticket_id === gate)?.status,
-    antes.tickets.find((x) => x.ticket_id === gate)?.status,
+    depois.tickets.find((x) => x.ticket_id === gate)?.estado,
+    antes.tickets.find((x) => x.ticket_id === gate)?.estado,
   );
   assert.deepEqual(depois.decisoes, antes.decisoes, "nenhuma aprovação efetiva gravada");
   assert.equal(gh.prs()[0]?.estado, "aberto");
@@ -66,7 +66,7 @@ test("D04: a rodada dependente nasce da ponta da demanda quando começa, já com
   await revisar(c, id, { aprovado: true });
   await encerrar(c, id);
   await aprovarPRRodada(c.banco, { demanda_id: id, rodada_id: 1 }, 5, AUDITOR);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "concluida");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   const pontaComR1 = git(c.repo, "rev-parse", `refs/heads/${demanda(c, id).demanda.branch}`);
 
   abrirPortao();

@@ -156,13 +156,14 @@ const decidir = (banco: Parameters<typeof carregarDemanda>[0], extra: object) =>
     { demanda_id: "I-1", rodada_id: 1, ticket_id: 2, ...extra } as never,
     revisorDaRodada(banco),
   );
-const rodadaFase = (banco: Parameters<typeof carregarDemanda>[0]) => carregarDemanda(banco, "I-1").rodadas[0]?.fase;
+const estadoDaPrimeiraRodada = (banco: Parameters<typeof carregarDemanda>[0]) =>
+  carregarDemanda(banco, "I-1").rodadas[0]?.estado;
 
 test("CA-5: aprovação recusada por fitness que falha; a rodada continua em revisao", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 1, true);
   assert.throws(() => decidir(banco, { aprovado: true }), /matriz_fitness.*fitness que falhou: f/);
-  assert.equal(rodadaFase(banco), "revisao");
+  assert.equal(estadoDaPrimeiraRodada(banco), "revisar_rodada");
 });
 
 test("CA-6: aprovação recusada por comprovacao_criterios ausente ou reprovada", async () => {
@@ -171,7 +172,7 @@ test("CA-6: aprovação recusada por comprovacao_criterios ausente ou reprovada"
   assert.throws(() => decidir(banco, { aprovado: true }), /comprovacao_criterios ausente/);
   evidenciar(banco, 0, false);
   assert.throws(() => decidir(banco, { aprovado: true }), /comprovacao_criterios reprovada/);
-  assert.equal(rodadaFase(banco), "revisao");
+  assert.equal(estadoDaPrimeiraRodada(banco), "revisar_rodada");
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });
 
@@ -180,8 +181,8 @@ test("CA-7: aprovada vai a encerramento com encerrar_rodada aberto", async () =>
   evidenciar(banco, 0, true);
   decidir(banco, { aprovado: true });
   const ag = carregarDemanda(banco, "I-1");
-  assert.equal(rodadaFase(banco), "encerramento");
-  assert.equal(ag.tickets.find((t) => t.etapa === "encerrar_rodada")?.status, "aberto");
+  assert.equal(estadoDaPrimeiraRodada(banco), "encerrar_rodada");
+  assert.equal(ag.tickets.find((t) => t.etapa === "encerrar_rodada")?.estado, "aberto");
   assert.deepEqual(ag.decisoes[0]?.por, revisorDaRodada(banco));
 });
 
@@ -196,8 +197,8 @@ test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corr
     ],
   });
   const ag = carregarDemanda(banco, "I-1");
-  assert.equal(rodadaFase(banco), "desenvolvimento");
-  assert.equal(ag.tickets.filter((t) => t.etapa === "implementar" && t.status === "aberto").length, 1);
+  assert.equal(estadoDaPrimeiraRodada(banco), "implementar");
+  assert.equal(ag.tickets.filter((t) => t.etapa === "implementar" && t.estado === "aberto").length, 1);
   assert.equal(ag.decisoes[0]?.motivo, "corrigir o lint");
 });
 
@@ -223,11 +224,11 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
 
   const ticketsAntes = carregarDemanda(banco, "I-1").tickets.length;
   reprovar();
-  assert.equal(ticketRevisor()?.status, "falhou");
+  assert.equal(ticketRevisor()?.estado, "falhou");
   assert.ok(ticketRevisor()?.motivo_falha?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
   assert.match(ticketRevisor()?.motivo_falha ?? "", /um[\s\S]*dois[\s\S]*três/);
   assert.equal(carregarDemanda(banco, "I-1").tickets.length, ticketsAntes);
-  assert.equal(rodadaFase(banco), "revisao");
+  assert.equal(estadoDaPrimeiraRodada(banco), "revisar_rodada");
 
   const reabrir = () =>
     comDemanda(banco, "I-1", (a) =>
@@ -237,20 +238,20 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
     );
   reabrir();
   reprovar();
-  assert.equal(ticketRevisor()?.status, "falhou");
+  assert.equal(ticketRevisor()?.estado, "falhou");
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 4);
 
   reabrir();
   evidenciar(banco, 0, true);
   decidir(banco, { aprovado: true });
-  assert.equal(rodadaFase(banco), "encerramento");
+  assert.equal(estadoDaPrimeiraRodada(banco), "encerrar_rodada");
 });
 
 test("CA-1: conduzirRevisaoRodada reserva o revisar_rodada, prepara e roda o pi na worktree da rodada", async () => {
   const { c, banco, pastas } = await cenarioRevisao();
   assert.equal(await conduzirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 1 }, { limiteMin: 1 }), "falhou");
   const ag = carregarDemanda(banco, "I-1");
-  assert.equal(ag.tickets.find((t) => t.ticket_id === 2)?.status, "falhou");
+  assert.equal(ag.tickets.find((t) => t.ticket_id === 2)?.estado, "falhou");
   assert.equal(evidencia(banco, "matriz_fitness").length, 1);
   assert.deepEqual(pastas(), [caminhoDaWorktreeRodada(c.raiz, "loja", { demanda_id: "I-1", rodada_id: 1 })]);
 });
