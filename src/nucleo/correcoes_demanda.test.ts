@@ -94,9 +94,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
       t(7, 5, {
         caminhos: ["x.ts"],
         depende: [{ demanda_id: D, ticket_id: 2 }],
-        modelo_provedor: "anthropic",
-        modelo_nome: "m",
-        effort: "high",
+        configuracao_agente: { modelo: { provedor: "anthropic", nome: "m" }, effort: "high" },
       }),
       t(2, 5, { status: "concluido", etapa: "revisar_rodada" }),
     ],
@@ -116,7 +114,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
     [{ tipo: "fabriquinha" }, { tipo: "fabriquinha" }],
   );
   const novo22 = novo.tickets[5];
-  assert.deepEqual([novo22?.modelo_provedor, novo22?.modelo_nome, novo22?.effort], ["anthropic", "m", "high"]);
+  assert.deepEqual(novo22?.configuracao_agente, { modelo: { provedor: "anthropic", nome: "m" }, effort: "high" });
   assert.deepEqual(novo.dependencias_ticket.slice(1), [{ demanda_id: D, ticket_id: 22, depende_ticket_id: 21 }]);
   assert.deepEqual(novo.caminhos_ticket.slice(1), [{ demanda_id: D, ticket_id: 22, caminho: "x.ts" }]);
   assert.deepEqual(novo.rodadas, ag.rodadas);
@@ -143,7 +141,10 @@ test("rodada: recusa caminho inseguro, duplicata, ciclo, dependência fora do fr
   const dep = (a: number, b: number) => t(a, 5, { depende: [{ demanda_id: D, ticket_id: b }] });
   recusa(() => materializarCorrecoesRodada(base(), ref, [dep(1, 2), dep(2, 1)], t1), "ciclo");
   recusa(() => materializarCorrecoesRodada(base(), ref, [dep(1, 9)], t1), "não existe"); // ticket 9 é do agregado
-  recusa(() => materializarCorrecoesRodada(base(), ref, [t(1, 5, { modelo_nome: "m" })], t1), "juntos");
+  recusa(
+    () => materializarCorrecoesRodada(base(), ref, [t(1, 5, { configuracao_agente: { modelo: { nome: "m" } } })], t1),
+    "esperava um texto",
+  );
 });
 
 const rodadaP = (rodada_id: number, extra = {}) => ({
@@ -163,7 +164,7 @@ const plano = (extra = {}) => ({
   tickets: [
     t(4, 2, { caminhos: ["n.ts"], depende: [{ demanda_id: D, ticket_id: 3 }] }),
     t(3, 2),
-    t(8, 1, { effort: "low", modelo_provedor: "openai", modelo_nome: "g" }),
+    t(8, 1, { configuracao_agente: { effort: "low", modelo: { provedor: "openai", nome: "g" } } }),
   ],
   ...extra,
 });
@@ -190,7 +191,15 @@ test("integral: acrescenta rodadas novas com IDs e vínculos remapeados, sem toc
     ],
   );
   assert.deepEqual(
-    novo.tickets.slice(4).map((x) => [x.ticket_id, x.rodada_id, x.status, x.effort, x.modelo_nome]),
+    novo.tickets
+      .slice(4)
+      .map((x) => [
+        x.ticket_id,
+        x.rodada_id,
+        x.status,
+        x.configuracao_agente?.effort,
+        x.configuracao_agente?.modelo?.nome,
+      ]),
     [
       [21, 7, "aberto", undefined, undefined],
       [22, 7, "aberto", undefined, undefined],

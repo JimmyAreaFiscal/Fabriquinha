@@ -1,7 +1,8 @@
 // Configuração (F7 §4.4) como funções puras: o menu lateral, o agendador e o formulário de projeto, com os erros do
 // `zod` ao lado de cada campo. O DOM e a rede ficam em configuracao-montar.ts.
 import type { Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
-import type { Effort, EtapaTicket, Modelo } from "../../../nucleo/primitivos.ts";
+import type { ConfiguracaoAgente, Modelo } from "../../../nucleo/configuracao_agente.ts";
+import type { Effort, EtapaTicket } from "../../../nucleo/primitivos.ts";
 import type { Configuracao } from "../../../armazenamento/servico.ts";
 import type { UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
 import { escapar, nomeDoModelo } from "../render.ts";
@@ -12,23 +13,22 @@ export interface EstadoDaConfiguracao extends Configuracao {
 }
 
 /** O modelo e o effort de cada etapa do ticket; a etapa ausente usa o padrão do pi. */
-interface ModelosEEfforts {
-  modelos: Partial<Record<EtapaTicket, Modelo>>;
-  efforts: Partial<Record<EtapaTicket, Effort>>;
+interface ConfiguracoesPorEtapa {
+  configuracoes: Partial<Record<EtapaTicket, ConfiguracaoAgente>>;
 }
 
 /** `GET /api/projetos`: os projetos cadastrados. */
 export type ProjetoListado = Projeto;
 
 /** O projeto de `GET /api/projetos` como o formulário o lê, com o modelo e o effort de cada etapa. */
-export type ProjetoCadastrado = ProjetoListado & ModelosEEfforts;
+export type ProjetoCadastrado = ProjetoListado & ConfiguracoesPorEtapa;
 
 /**
  * O projeto no formulário, sem os campos do fluxo legado, que o cadastro não pede; o novo ainda não tem hospedagem (o
  * F5 a deduz do remoto ao salvar).
  */
 export type Rascunho = Pick<Projeto, "nome" | "repo" | "branchBase" | "preparacao" | "linkProduto"> &
-  ModelosEEfforts & { hospedagem?: Hospedagem };
+  ConfiguracoesPorEtapa & { hospedagem?: Hospedagem };
 
 /** O item do menu escolhido, pelo endereço: `/config`, `/config?avaliacoes`, `/config?projeto=<nome>` ou `/config?novo`. */
 type Selecao = { tipo: "agendador" } | { tipo: "avaliacoes" } | { tipo: "projeto"; nome: string } | { tipo: "novo" };
@@ -47,8 +47,7 @@ export const NOVO: Rascunho = {
   branchBase: "main",
   preparacao: [],
   linkProduto: "",
-  modelos: {},
-  efforts: {},
+  configuracoes: {},
 };
 
 /** As mensagens por caminho (`fitness[0].nome`) do 422, a partir do `z.prettifyError` que o servidor manda. */
@@ -62,7 +61,7 @@ export function errosDoZod(texto: string): Erros {
   return erros;
 }
 
-/** As mensagens do campo `caminho`, inclusive as de dentro dele (`modelos.planejar.modelo` no seletor da etapa). */
+/** As mensagens do campo `caminho`, inclusive as de dentro dele (`configuracoes.planejar.modelo` no seletor da etapa). */
 const mensagensDe = (erros: Erros, caminho: string): string[] =>
   [...erros].flatMap(([c, ms]) => (c === caminho || c.startsWith(`${caminho}.`) ? ms : []));
 
@@ -152,7 +151,7 @@ interface OpcoesDoProjeto {
   falha?: string;
 }
 
-const par = (m: Modelo): string => `${m.provedor}/${m.modelo}`;
+const par = (m: Modelo): string => `${m.provedor}/${m.nome}`;
 
 /** Um campo de texto com rótulo, ajuda e o erro do caminho. */
 function texto(
@@ -204,14 +203,15 @@ export function modeloDasAvaliacoes(estado: EstadoDaConfiguracao, modelos: reado
 }
 
 /** Uma linha por etapa: o rótulo, o seletor de modelo e o de effort; vazio usa o padrão do pi. */
-function modelosEEffortsPorEtapa(erros: Erros, p: ModelosEEfforts, modelosDoPi: readonly Modelo[]): string {
+function modelosEEffortsPorEtapa(erros: Erros, p: ConfiguracoesPorEtapa, modelosDoPi: readonly Modelo[]): string {
   const linhas = ETAPAS.map(([etapa, rotulo]) => {
-    const effortEscolhido = p.efforts[etapa];
-    const caminhoDoEffort = `efforts.${etapa}`;
+    const effortEscolhido = p.configuracoes[etapa]?.effort;
+    const caminhoDoModelo = `configuracoes.${etapa}.modelo`;
+    const caminhoDoEffort = `configuracoes.${etapa}.effort`;
     const m = marca(erros, caminhoDoEffort);
     const options = EFFORTS.map((e) => `<option value="${e}"${e === effortEscolhido ? " selected" : ""}>${e}</option>`);
     const effort = `<div class="celula celula-effort${m.classe}"><select id="${idDe(caminhoDoEffort)}" name="${caminhoDoEffort}" aria-label="Effort de ${rotulo}"${effortEscolhido ? "" : ' class="padrao"'}${m.aria}><option value="">padrão do pi</option>${options.join("")}</select>${m.msg}</div>`;
-    return `<label for="${idDe(`modelos.${etapa}`)}">${rotulo}</label>${seletorDeModelo(erros, `modelos.${etapa}`, p.modelos[etapa], modelosDoPi)}${effort}`;
+    return `<label for="${idDe(caminhoDoModelo)}">${rotulo}</label>${seletorDeModelo(erros, caminhoDoModelo, p.configuracoes[etapa]?.modelo, modelosDoPi)}${effort}`;
   });
   return `<div class="grupo"><h3>Modelo e effort por etapa <span class="nota">· o effort é o raciocínio da IA (pi --thinking); vazio usa o padrão do pi; o ticket pode sobrescrever</span></h3><div class="modelos-grade"><span class="modelos-cab" aria-hidden="true">Etapa</span><span class="modelos-cab" aria-hidden="true">Modelo</span><span class="modelos-cab" aria-hidden="true">Effort</span>${linhas.join("")}</div></div>`;
 }

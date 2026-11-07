@@ -4,9 +4,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { type Modelo, resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
-import type { Modelo } from "../nucleo/primitivos.ts";
-import { resolverModeloEffort } from "../nucleo/resolucao_ticket.ts";
 import { MAX_RETOMADAS_AUTOMATICAS, retomarTicketFalhoPorInfraestrutura } from "../nucleo/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
 import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
@@ -35,17 +34,17 @@ export function causaDeInfraestrutura(motivo: string): CausaDeInfraestrutura | u
 // provedor, no mesmo nível); vira configuração do projeto quando entrar outro provedor.
 const claudeParaCodex = (nome: string): Modelo => ({
   provedor: "openai-codex",
-  modelo: nome.includes("opus") ? "gpt-6.1-sol" : "gpt-6-luna",
+  nome: nome.includes("opus") ? "gpt-6.1-sol" : "gpt-6-luna",
 });
 const MODELO_RESERVA: Record<string, (nome: string) => Modelo> = {
   "claude-bridge": claudeParaCodex,
   anthropic: claudeParaCodex,
-  "openai-codex": () => ({ provedor: "claude-bridge", modelo: "claude-opus-5-5" }),
+  "openai-codex": () => ({ provedor: "claude-bridge", nome: "claude-opus-5-5" }),
 };
 
 /** O modelo do outro provedor para o ticket cuja cota estourou; `undefined` sem modelo resolvido ou sem reserva. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function modeloReserva(modeloAtual: { provedor: string; nome: string } | undefined): Modelo | undefined {
+export function modeloReserva(modeloAtual: Modelo | undefined): Modelo | undefined {
   return modeloAtual && MODELO_RESERVA[modeloAtual.provedor]?.(modeloAtual.nome);
 }
 
@@ -70,7 +69,12 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, agora = new D
       let modelo: Modelo | undefined;
       if (causa === "cota") {
         const etapa = configuracaoProjeto(banco, ag.demanda.projeto)?.etapas.find((e) => e.etapa === t.etapa);
-        modelo = modeloReserva(resolverModeloEffort(t, etapa).modelo.valor);
+        const { modelo: modeloResolvido } = resolverConfiguracaoAgente({
+          ticket: t.configuracao_agente,
+          etapaDoProjeto: etapa?.configuracao_agente,
+          padrao: {},
+        });
+        modelo = modeloReserva(modeloResolvido);
         if (!modelo) continue;
       }
       try {

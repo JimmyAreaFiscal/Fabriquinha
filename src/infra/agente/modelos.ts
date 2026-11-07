@@ -1,7 +1,7 @@
-// Conferência de modelos (F4 §9): o par provedor + modelo precisa existir no pi, para ser recusado no formulário
+// Conferência de modelos (F4 §9): o par provedor + nome precisa existir no pi, para ser recusado no formulário
 // e não no meio de uma execução. A mesma tabela alimenta os seletores do web (F7 §4.2, `GET /api/modelos`).
 import { ErroDeRegra } from "../../nucleo/erros.ts";
-import type { Modelo } from "../../nucleo/primitivos.ts";
+import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import { executar } from "../processo.ts";
 
 /** Os pares da tabela de `pi --list-models [busca]`; a busca do pi é aproximada. */
@@ -20,18 +20,18 @@ async function modelosDoPi(...busca: string[]): Promise<Modelo[]> {
     .split("\n")
     .slice(1)
     .flatMap((linha) => {
-      const [provedor, modelo] = linha.trim().split(/\s{2,}/);
-      return provedor && modelo ? [{ provedor, modelo }] : [];
+      const [provedor, nome] = linha.trim().split(/\s{2,}/);
+      return provedor && nome ? [{ provedor, nome }] : [];
     });
 }
 
 /** Todos os pares que o pi conhece. */
 export const listarModelos = (): Promise<Modelo[]> => modelosDoPi();
 
-/** Recusa o par que `pi --list-models "<provedor>/<modelo>"` não lista exatamente. */
-export async function conferirModelo({ provedor, modelo }: Modelo): Promise<void> {
-  const par = `${provedor}/${modelo}`;
-  if (!(await modelosDoPi(par)).some((m) => m.provedor === provedor && m.modelo === modelo)) {
+/** Recusa o par que `pi --list-models "<provedor>/<nome>"` não lista exatamente. */
+export async function conferirModelo({ provedor, nome }: Modelo): Promise<void> {
+  const par = `${provedor}/${nome}`;
+  if (!(await modelosDoPi(par)).some((m) => m.provedor === provedor && m.nome === nome)) {
     throw new ErroDeRegra(`o modelo ${par} não existe no pi`, "escolha um par listado por pi --list-models");
   }
 }

@@ -203,9 +203,7 @@ const planoV = (m: Record<string, unknown> = {}) => ({
       titulo: "a",
       descricao: "d",
       rodada_id: 1,
-      modelo_provedor: "p",
-      modelo_nome: "m",
-      effort: "high",
+      configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" },
     },
     {
       demanda_id: "I-1",
@@ -373,9 +371,7 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
         descricao: "d",
         rodada_id: 2,
         depende: [],
-        modelo_provedor: "p",
-        modelo_nome: "m",
-        effort: "high",
+        configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" },
       },
       {
         demanda_id: "I-1",
@@ -405,9 +401,9 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
   assert.deepEqual(novo.criterios_citados, [{ demanda_id: "I-1", rodada_id: 1, criterio_id: "CA-1" }]);
   // IDs do plano (4, 5, 6) são renumerados depois dos existentes (1, 2), na mesma ordem
   assert.deepEqual(
-    novo.tickets.slice(2).map((t) => [t.ticket_id, t.titulo, t.rodada_id, t.etapa, t.status, t.effort]),
+    novo.tickets.slice(2).map((t) => [t.ticket_id, t.titulo, t.rodada_id, t.etapa, t.status, t.configuracao_agente]),
     [
-      [3, "a", 2, "implementar", "aberto", "high"],
+      [3, "a", 2, "implementar", "aberto", { modelo: { provedor: "p", nome: "m" }, effort: "high" }],
       [4, "b", 2, "implementar", "aberto", undefined],
       [5, "c", 2, "implementar", "aberto", undefined],
       [6, "d", 1, "implementar", "aberto", undefined],
@@ -470,28 +466,35 @@ test("retomada automática: só a Fabriquinha, só ticket falhou; mantém instru
   const ag = {
     ...base,
     tickets: base.tickets.map((t) =>
-      t.ticket_id === 2 ? { ...t, instrucao: "corrija", devolucoes: 1, motivo_falha: "HTTP 504" } : t,
+      t.ticket_id === 2
+        ? {
+            ...t,
+            instrucao: "corrija",
+            devolucoes: 1,
+            motivo_falha: "HTTP 504",
+            configuracao_agente: { effort: "high" as const },
+          }
+        : t,
     ),
   };
   assert.throws(() => retomar(ag, { conta: true }, AUDITOR), ErroDeEscopo);
   assert.throws(() => retomar(emExecucao("aberto"), { conta: true }), ErroDeRegra);
   assert.throws(() => retomar({ ...ag, demanda: { ...ag.demanda, fase: "concluida" } }, { conta: true }), ErroDeRegra);
 
-  const novo = retomar(ag, { conta: true, modelo: { provedor: "anthropic", modelo: "claude-opus-5-5" } });
+  const novo = retomar(ag, { conta: true, modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } });
   const { motivo_falha: _m, ...semFalha } = tk2(ag) ?? {};
   assert.deepEqual(tk2(novo), {
     ...semFalha,
     status: "aberto",
     retomadas_automaticas: 1,
     status_alterado_em: t2,
-    modelo_provedor: "anthropic",
-    modelo_nome: "claude-opus-5-5",
+    configuracao_agente: { effort: "high", modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } },
   });
 
   // O reinício do serviço não conta; no limite, a que conta é recusada; a reabertura do Auditor zera.
   const reinicio = retomar(ag, { conta: false });
   assert.equal(tk2(reinicio)?.retomadas_automaticas, 0);
-  assert.equal(tk2(reinicio)?.modelo_provedor, tk2(ag)?.modelo_provedor);
+  assert.deepEqual(tk2(reinicio)?.configuracao_agente, tk2(ag)?.configuracao_agente);
   const noLimite = {
     ...ag,
     tickets: ag.tickets.map((t) =>

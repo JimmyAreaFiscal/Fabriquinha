@@ -42,10 +42,10 @@ test("formatos: duração, custo e compacto", () => {
 
 test("caminhos e rótulos: o chat e o modelo", () => {
   assert.equal(caminhoDaSessao("a/b c"), "/sessions/a%2Fb%20c");
-  assert.equal(nomeDoModelo({ provedor: "anthropic", modelo: "claude" }), "anthropic / claude");
+  assert.equal(nomeDoModelo({ provedor: "anthropic", nome: "claude" }), "anthropic / claude");
   assert.deepEqual(modeloDoSeletor("openrouter/anthropic/claude"), {
     provedor: "openrouter",
-    modelo: "anthropic/claude",
+    nome: "anthropic/claude",
   });
   assert.deepEqual([modeloDoSeletor(""), modeloDoSeletor("/sem-provedor")], [null, null]);
 });

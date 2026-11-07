@@ -10,6 +10,7 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import type { ConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { assinar } from "./gerente.ts";
 import {
@@ -32,6 +33,7 @@ import {
 } from "./execucao_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
+const MODELO_DA_ETAPA = { provedor: "anthropic", nome: "claude-etapa" };
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-exec-demanda-"));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
 delete process.env.FABRIQUINHA_PORTA;
@@ -49,7 +51,7 @@ after(() => {
 });
 
 interface Opcoes {
-  etapas?: { etapa: string; modelo_provedor?: string; modelo_nome?: string; effort?: string }[];
+  etapas?: { etapa: string; configuracao_agente?: ConfiguracaoAgente }[];
   /** O serviço cria a worktree da demanda (ticket global); senão ela já existe, para os tickets de rodada. */
   semWorktree?: boolean;
   /** Comando de preparação da worktree (padrão `true`). */
@@ -114,7 +116,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     criterios_citados: [],
     tickets: [
       ticket(1, "implementar", { rodada_id: 2 }),
-      ticket(2, "implementar", { rodada_id: 2, effort: "high" }),
+      ticket(2, "implementar", { rodada_id: 2, configuracao_agente: { effort: "high" } }),
       ticket(3, "planejar"),
       ticket(4, "revisar_demanda"),
       ticket(5, "encerrar_demanda"),
@@ -186,11 +188,10 @@ test("CA-2: retomar o ticket usa a mesma sessão e passa o identificador ao pi",
 
 test("CA-3: effort do ticket e modelo da etapa, gravados e passados ao pi", async () => {
   const { banco, sessoes, registro } = await cenario({
-    etapas: [{ etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-etapa", effort: "low" }],
+    etapas: [{ etapa: "implementar", configuracao_agente: { modelo: MODELO_DA_ETAPA, effort: "low" } }],
   });
   await iniciarExecucaoDemanda(banco, ref(2), { limiteMin: 1 }).fim;
-  const e = sessoes(2).execucoes[0];
-  assert.deepEqual([e?.modelo_provedor, e?.modelo_nome, e?.effort], ["anthropic", "claude-etapa", "high"]);
+  assert.deepEqual(sessoes(2).execucoes[0]?.configuracao_agente, { modelo: MODELO_DA_ETAPA, effort: "high" });
   const argv = registro()[0]?.argv ?? [];
   assert.deepEqual(
     [valorDe(argv, "--provider"), valorDe(argv, "--model"), valorDe(argv, "--thinking")],
@@ -205,7 +206,7 @@ test("a pergunta do agente autônomo passa pelo Auditor automático com o modelo
   t.after(() => {
     if (cobertura !== undefined) process.env.NODE_V8_COVERAGE = cobertura;
   });
-  for (const etapas of [[{ etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-etapa" }], []]) {
+  for (const etapas of [[{ etapa: "implementar", configuracao_agente: { modelo: MODELO_DA_ETAPA } }], []]) {
     const { banco, registro, piFalso } = await cenario({ etapas });
     piFalso.roteirizar([
       {
@@ -244,8 +245,7 @@ test("a pergunta do agente autônomo passa pelo Auditor automático com o modelo
 test("CA-4: sem modelo nem effort, nada é gravado e o pi roda com o padrão", async () => {
   const { banco, sessoes, registro } = await cenario();
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
-  const e = sessoes(1).execucoes[0];
-  assert.deepEqual([e?.modelo_provedor, e?.modelo_nome, e?.effort], [undefined, undefined, undefined]);
+  assert.equal(sessoes(1).execucoes[0]?.configuracao_agente, undefined);
   const argv = registro()[0]?.argv ?? [];
   for (const opcao of ["--provider", "--model", "--thinking"]) assert.equal(argv.includes(opcao), false);
 });

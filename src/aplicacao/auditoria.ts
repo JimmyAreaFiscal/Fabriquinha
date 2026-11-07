@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import type { Modelo } from "../nucleo/primitivos.ts";
+import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
 import { assinar as assinarSessao, avisar, mandar, rodarPi, situacao } from "./gerente.ts";

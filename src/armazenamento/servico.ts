@@ -1,7 +1,7 @@
 // Configuração do serviço (F4 §3, §10).
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import { Modelo } from "../nucleo/primitivos.ts";
+import { Modelo } from "../nucleo/configuracao_agente.ts";
 
 export const Configuracao = z.strictObject({
   agendadorAtivo: z.boolean().default(false),
@@ -22,7 +22,7 @@ export function configuracao(banco: DatabaseSync): Configuracao {
     modeloAuditoria:
       l.auditoria_provedor === null
         ? null
-        : { provedor: String(l.auditoria_provedor), modelo: String(l.auditoria_modelo) },
+        : { provedor: String(l.auditoria_provedor), nome: String(l.auditoria_modelo) },
   };
 }
 
@@ -45,7 +45,7 @@ export function salvarConfiguracao(banco: DatabaseSync, entrada: unknown): Confi
       c.timeoutMin,
       c.ociosidadeMin,
       c.modeloAuditoria?.provedor ?? null,
-      c.modeloAuditoria?.modelo ?? null,
+      c.modeloAuditoria?.nome ?? null,
     );
   return c;
 }

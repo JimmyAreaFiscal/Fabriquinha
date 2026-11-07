@@ -186,7 +186,7 @@ test("rodando: a linha da sessão com o modo, o que o agente faz, o ticket, o mo
   const html = inicio(
     dados({
       rodando: [
-        sessao({ fazendo: "lendo src/<a>.ts", modelo: { provedor: "anthropic", modelo: "claude-opus-4-5" } }),
+        sessao({ fazendo: "lendo src/<a>.ts", modelo: { provedor: "anthropic", nome: "claude-opus-4-5" } }),
         sessao({ sessao: "s2", modo: "interativo" }),
       ],
     }),

@@ -23,7 +23,7 @@ test("configuração: linha única, agendador desligado por padrão, salvar vali
     intervaloMin: 1,
     timeoutMin: 1440,
     ociosidadeMin: 5,
-    modeloAuditoria: { provedor: "anthropic", modelo: "claude-opus-5-5" },
+    modeloAuditoria: { provedor: "anthropic", nome: "claude-opus-5-5" },
   };
   assert.deepEqual(salvarConfiguracao(banco, nova), nova);
   assert.deepEqual(configuracao(banco), nova);
@@ -38,7 +38,7 @@ test("configuração: linha única, agendador desligado por padrão, salvar vali
 
   for (const errada of [
     { modeloAuditoria: { provedor: "anthropic" } },
-    { modeloAuditoria: { provedor: "Maiúscula", modelo: "m" } },
+    { modeloAuditoria: { provedor: "Maiúscula", nome: "m" } },
     { intervaloMin: 0 },
     { timeoutMin: 9 },
     { ociosidadeMin: 1441 },

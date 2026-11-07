@@ -54,7 +54,7 @@ function acrescentar(ag: AgregadoDemanda, plano: Plano, agora: Instante, novasRo
     ...ag,
     tickets: [
       ...ag.tickets,
-      ...tickets.map(({ ticket_id, rodada_id, titulo, descricao, modelo_provedor, modelo_nome, effort }) => ({
+      ...tickets.map(({ ticket_id, rodada_id, titulo, descricao, configuracao_agente }) => ({
         demanda_id,
         ticket_id: t(ticket_id),
         rodada_id: r(existe(rodada_id, "ticket sem rodada", "informe a rodada_id")),
@@ -64,9 +64,7 @@ function acrescentar(ag: AgregadoDemanda, plano: Plano, agora: Instante, novasRo
         status: "aberto",
         status_alterado_em: agora,
         criado_por: FABRIQUINHA, // shortcut: a I-266.R3 grava o Agente revisor como autor do ticket corretivo
-        modelo_provedor,
-        modelo_nome,
-        effort,
+        configuracao_agente,
       })),
     ],
     dependencias_ticket: [

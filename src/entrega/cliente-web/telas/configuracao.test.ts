@@ -26,13 +26,12 @@ const LOJA: ProjetoCadastrado = {
   hospedagem: "github",
   preparacao: ["npm ci"],
   sonar: { projectKey: "loja" },
-  modelos: {},
-  efforts: {},
+  configuracoes: {},
 };
 
 const MODELOS = [
-  { provedor: "anthropic", modelo: "claude-opus-5-5" },
-  { provedor: "anthropic", modelo: "claude-sonnet-5-5" },
+  { provedor: "anthropic", nome: "claude-opus-5-5" },
+  { provedor: "anthropic", nome: "claude-sonnet-5-5" },
 ];
 
 test("selecao: o item do menu pelo endereço", () => {
@@ -126,13 +125,13 @@ test("avaliações: o seletor do modelo em padrão do pi, com o escolhido, com o
   );
   assert.match(sem, /<button type="submit" class="btn btn-primario">Salvar<\/button>/);
 
-  const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
   const escolhido = modeloDasAvaliacoes({ ...ESTADO, modeloAuditoria: opus }, MODELOS, new Map());
   assert.match(escolhido, /<select id="campo-modeloAuditoria" name="modeloAuditoria"><option value="">/);
   assert.match(escolhido, /<option value="anthropic\/claude-opus-5-5" selected>/);
 
   const fora = modeloDasAvaliacoes(
-    { ...ESTADO, modeloAuditoria: { provedor: "llamacpp", modelo: "qwen" } },
+    { ...ESTADO, modeloAuditoria: { provedor: "llamacpp", nome: "qwen" } },
     MODELOS,
     new Map(),
   );
@@ -172,17 +171,19 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
   const html = formularioDeProjeto(
     {
       ...LOJA,
-      modelos: { planejar: MODELOS[0], implementar: { provedor: "llamacpp", modelo: "qwen" } },
-      efforts: { planejar: "high" },
+      configuracoes: {
+        planejar: { modelo: MODELOS[0], effort: "high" },
+        implementar: { modelo: { provedor: "llamacpp", nome: "qwen" } },
+      },
     },
     { novo: false, modelosDoPi: MODELOS, erros: new Map() },
   );
   assert.match(
     html,
-    /<h3>Modelo e effort por etapa <span class="nota">· o effort é o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi; o ticket pode sobrescrever<\/span><\/h3><div class="modelos-grade"><span class="modelos-cab" aria-hidden="true">Etapa<\/span><span class="modelos-cab" aria-hidden="true">Modelo<\/span><span class="modelos-cab" aria-hidden="true">Effort<\/span><label for="campo-modelos.demanda">Demanda<\/label>/,
+    /<h3>Modelo e effort por etapa <span class="nota">· o effort é o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi; o ticket pode sobrescrever<\/span><\/h3><div class="modelos-grade"><span class="modelos-cab" aria-hidden="true">Etapa<\/span><span class="modelos-cab" aria-hidden="true">Modelo<\/span><span class="modelos-cab" aria-hidden="true">Effort<\/span><label for="campo-configuracoes.demanda.modelo">Demanda<\/label>/,
   );
   assert.deepEqual(
-    [...html.matchAll(/<label for="campo-modelos\.[a-z_]+">([^<]+)<\/label>/g)].map((m) => m[1]),
+    [...html.matchAll(/<label for="campo-configuracoes\.[a-z_]+\.modelo">([^<]+)<\/label>/g)].map((m) => m[1]),
     [
       "Demanda",
       "Planejar",
@@ -197,37 +198,37 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
   );
   assert.match(
     html,
-    /<select id="campo-modelos.demanda" name="modelos.demanda" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">anthropic \/ claude-opus-5-5<\/option>/,
+    /<select id="campo-configuracoes.demanda.modelo" name="configuracoes.demanda.modelo" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">anthropic \/ claude-opus-5-5<\/option>/,
   );
   assert.match(
     html,
-    /<select id="campo-modelos.planejar" name="modelos.planejar"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5" selected>/,
+    /<select id="campo-configuracoes.planejar.modelo" name="configuracoes.planejar.modelo"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5" selected>/,
   );
   // O gravado que o pi deixou de listar continua no seletor.
   assert.match(html, /<option value="llamacpp\/qwen" selected>llamacpp \/ qwen<\/option><\/select>/);
   assert.match(
     html,
-    /<div class="celula celula-effort"><select id="campo-efforts.planejar" name="efforts.planejar" aria-label="Effort de Planejar"><option value="">padrão do pi<\/option><option value="off">off<\/option>.*<option value="high" selected>high<\/option>/,
+    /<div class="celula celula-effort"><select id="campo-configuracoes.planejar.effort" name="configuracoes.planejar.effort" aria-label="Effort de Planejar"><option value="">padrão do pi<\/option><option value="off">off<\/option>.*<option value="high" selected>high<\/option>/,
   );
   assert.match(
     html,
-    /<select id="campo-efforts.demanda" name="efforts.demanda" aria-label="Effort de Demanda" class="padrao">/,
+    /<select id="campo-configuracoes.demanda.effort" name="configuracoes.demanda.effort" aria-label="Effort de Demanda" class="padrao">/,
   );
 
   const erro = formularioDeProjeto(LOJA, {
     novo: false,
     modelosDoPi: MODELOS,
     erros: errosDoZod(
-      "✖ o modelo x/y não existe no pi\n  → at modelos.revisar_rodada\n✖ inválido\n  → at efforts.demanda",
+      "✖ o modelo x/y não existe no pi\n  → at configuracoes.revisar_rodada.modelo\n✖ inválido\n  → at configuracoes.demanda.effort",
     ),
   });
   assert.match(
     erro,
-    /<div class="celula erro"><select id="campo-modelos.revisar_rodada" name="modelos.revisar_rodada" class="padrao" aria-invalid="true" aria-describedby="campo-modelos.revisar_rodada-erro">.*<\/select><span class="msg-erro" id="campo-modelos.revisar_rodada-erro">o modelo x\/y não existe no pi<\/span><\/div>/,
+    /<div class="celula erro"><select id="campo-configuracoes.revisar_rodada.modelo" name="configuracoes.revisar_rodada.modelo" class="padrao" aria-invalid="true" aria-describedby="campo-configuracoes.revisar_rodada.modelo-erro">.*<\/select><span class="msg-erro" id="campo-configuracoes.revisar_rodada.modelo-erro">o modelo x\/y não existe no pi<\/span><\/div>/,
   );
   assert.match(
     erro,
-    /<div class="celula celula-effort erro"><select id="campo-efforts.demanda" [^>]*aria-invalid="true"[^>]*>.*?<\/select><span class="msg-erro" id="campo-efforts.demanda-erro">inválido<\/span>/,
+    /<div class="celula celula-effort erro"><select id="campo-configuracoes.demanda.effort" [^>]*aria-invalid="true"[^>]*>.*?<\/select><span class="msg-erro" id="campo-configuracoes.demanda.effort-erro">inválido<\/span>/,
   );
   assert.match(erro, /2 campos com erro/);
 });
