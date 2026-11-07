@@ -3,7 +3,9 @@ import { test } from "node:test";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./agregado.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo } from "./erros.ts";
+import { reabrirTicket } from "./transicoes_demanda.ts";
 import {
+  PREFIXO_TERCEIRA_REPROVACAO,
   conferirPullRequestRodada,
   concluirImplementacoesRodada,
   concluirSessaoRodada,
@@ -155,6 +157,69 @@ test("CA-2: reprovação grava as exigências, cria a correção e volta a desen
       em: t1,
     },
   ]);
+});
+
+const recusado = (ticket_id: number, decisao_id: number, motivo: string) => ({
+  demanda_id: D,
+  ticket_id,
+  decisao_id,
+  resultado: "recusado",
+  motivo,
+  por: "agente",
+  em: t0,
+});
+const comRecusas = (ag: AgregadoDemanda, ...decisoes: object[]) => AgregadoDemanda.parse({ ...ag, decisoes });
+
+test("CA-1: a terceira reprovação da rodada falha o ticket, sem corretivos, com os três motivos", () => {
+  // duas reprovações em revisores anteriores da rodada e a terceira no atual
+  const ag = comRecusas(
+    montar("revisao", [
+      tk(2, "implementar", "concluido"),
+      tk(3, "revisar_rodada", "concluido"),
+      tk(4, "implementar", "concluido"),
+      tk(5, "revisar_rodada", "concluido"),
+      tk(6, "implementar", "concluido"),
+      tk(7, "revisar_rodada", "em_execucao"),
+    ]),
+    recusado(3, 1, "primeiro"),
+    recusado(5, 1, "segundo"),
+  );
+  const antes = structuredClone(ag);
+  const novo = registrarRevisaoRodada(ag, reprovada({ ticket_id: 7, exigencias: "terceiro" }), agente(7), ctx);
+  assert.deepEqual(ag, antes);
+  assert.equal(novo.tickets.length, ag.tickets.length);
+  const falho = novo.tickets.find((t) => t.ticket_id === 7);
+  assert.equal(falho?.status, "falhou");
+  assert.ok(falho.motivo_falha?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
+  for (const motivo of ["primeiro", "segundo", "terceiro"]) assert.match(falho.motivo_falha ?? "", new RegExp(motivo));
+  assert.equal(novo.rodadas[0]?.fase, "revisao");
+  assert.deepEqual(novo.decisoes.at(-1), { ...recusado(7, 1, "terceiro"), em: t1 });
+});
+
+test("CA-3: reaberto pelo Auditor, o mesmo ticket decide de novo: aprova ou falha outra vez, sem corretivos", () => {
+  const falhou = comRecusas(emRevisao(), recusado(3, 1, "a"), recusado(3, 2, "b"));
+  const terceira = registrarRevisaoRodada(falhou, reprovada({ exigencias: "c" }), agente(3), ctx);
+  assert.equal(terceira.decisoes.at(-1)?.decisao_id, 3);
+  const reaberto = reabrirTicket(terceira, { ticket_id: 3, instrucao: "aceite o achado" }, AUDITOR, ctx);
+
+  const aprovado = registrarRevisaoRodada(reaberto, { ...ref, ticket_id: 3, aprovado: true }, agente(3), ctx);
+  assert.equal(aprovado.rodadas[0]?.fase, "encerramento");
+  assert.equal(aprovado.decisoes.at(-1)?.decisao_id, 4);
+
+  const outra = registrarRevisaoRodada(reaberto, reprovada({ exigencias: "d" }), agente(3), ctx);
+  const ticket = outra.tickets.find((t) => t.ticket_id === 3);
+  assert.equal(ticket?.status, "falhou");
+  assert.ok(ticket.motivo_falha?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
+  assert.equal(outra.tickets.length, reaberto.tickets.length);
+  assert.equal(outra.decisoes.at(-1)?.decisao_id, 4);
+});
+
+test("CA-2: com uma recusa anterior na rodada, a reprovação ainda cria a correção", () => {
+  const ag = comRecusas(emRevisao(), recusado(3, 1, "a"));
+  const novo = registrarRevisaoRodada(ag, reprovada(), agente(3), ctx);
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 3)?.status, "concluido");
+  assert.equal(novo.tickets.at(-1)?.etapa, "implementar");
+  assert.equal(novo.rodadas[0]?.fase, "desenvolvimento");
 });
 
 test("CA-2: reprovação sem exigências, sem correções ou inválida não muda nada", () => {
