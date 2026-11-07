@@ -28,7 +28,12 @@ import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { anexosDaDemanda } from "../persistencia/evidencia_demanda.ts";
 import { anotar, arquivoDaSessao } from "../persistencia/execucoes.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket, execucoesAbertasDaDemanda } from "../persistencia/sessoes.ts";
+import {
+  carregarSessoesDaDemanda,
+  carregarSessoesDoTicket,
+  comSessoesDoTicket,
+  execucoesAbertasDaDemanda,
+} from "../persistencia/sessoes.ts";
 import { sinalNoGrupo } from "../processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
@@ -37,6 +42,7 @@ import { avisar, rodarPi } from "./gerente.ts";
 import { ambientePi, confianca } from "./pi.ts";
 import { argumentosPiDemanda } from "./pi_demanda.ts";
 import { type ContextoDemanda, montarPromptDemanda } from "./prompt_demanda.ts";
+import { perguntasRespondidasNaSessao } from "./sessoes_demanda.ts";
 
 type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
 
@@ -141,6 +147,25 @@ function encerrar(c: Encerravel, falha: string | undefined, log: string): void {
   }));
 }
 
+/** As perguntas respondidas nas sessões de cada ticket anterior da rodada que foi recusado, por ticket (só a revisão da rodada as lê). */
+function perguntasDosTicketsRecusadosDaRodada({
+  banco,
+  ag,
+  ticket,
+}: Conducao): ContextoDemanda["perguntasDasRevisoesAnteriores"] {
+  const raiz = raizDo(banco);
+  const { sessoes } = carregarSessoesDaDemanda(banco, ag.demanda.id);
+  const idsDaRodada = new Set(ag.tickets.filter((t) => t.rodada_id === ticket.rodada_id).map((t) => t.ticket_id));
+  return new Map(
+    ag.decisoes
+      .filter((d) => d.resultado === "recusado" && d.ticket_id < ticket.ticket_id && idsDaRodada.has(d.ticket_id))
+      .map((d) => [
+        d.ticket_id,
+        sessoes.filter((s) => s.ticket_id === d.ticket_id).flatMap((s) => perguntasRespondidasNaSessao(raiz, s.id)),
+      ]),
+  );
+}
+
 async function conduzir(c: Conducao): Promise<void> {
   const raiz = raizDo(c.banco);
   const { execucao, sessao, projeto, opcoes } = c;
@@ -161,6 +186,9 @@ async function conduzir(c: Conducao): Promise<void> {
         worktree,
         saida: join(dir, "saida"),
         retomada: opcoes.retomada,
+        ...(c.ticket.etapa === "revisar_rodada" && {
+          perguntasDasRevisoesAnteriores: perguntasDosTicketsRecusadosDaRodada(c),
+        }),
         anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({
           ...a,
           caminho: caminhoArquivo(c.banco, a.sha256),
