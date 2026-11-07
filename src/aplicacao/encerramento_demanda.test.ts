@@ -63,7 +63,7 @@ async function cenario({
   abertos.push(banco);
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', ?, 'develop', 'github', 'k')`,
     )
     .run(c.repo);

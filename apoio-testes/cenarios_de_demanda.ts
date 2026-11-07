@@ -182,7 +182,7 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
 export function cadastrarProjetoLoja(banco: DatabaseSync, repo = "/repos/loja", branchBase = "main"): void {
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', ?, ?, 'github', 'k')`,
     )
     .run(repo, branchBase);

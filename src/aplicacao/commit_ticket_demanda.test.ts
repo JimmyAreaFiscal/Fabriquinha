@@ -36,7 +36,7 @@ function cenario() {
   banco.exec("PRAGMA foreign_keys = ON");
   migrar(banco, MIGRACOES);
   const t = "'2026-01-01T00:00:00.000Z'";
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('p', '${worktree}', 'main', 'github', 'k')`);
   banco.exec(
     `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1')`,

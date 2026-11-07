@@ -20,7 +20,7 @@ const outra = { tipo: "externo" as const, ferramenta: "claude", sessao: "S2" };
 
 const novoBanco = () => {
   const b = abrirBancoTemporario().banco;
-  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('fabriquinha', '/repo/f', 'main', 'github', 'k')`);
   return b;
 };
@@ -406,7 +406,7 @@ test("CA-20: demanda em registro não espera decisão", () => {
 
 test("CA-21: cancelar leva dependentes diretas e indiretas de outros projetos e poupa as terminadas", () => {
   const b = novoBanco();
-  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('outro', '/repo/o', 'main', 'github', 'k2')`);
   const a = registrar(b);
   const bb = registrar(b, [a]);

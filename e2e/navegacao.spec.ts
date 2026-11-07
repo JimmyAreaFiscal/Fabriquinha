@@ -123,7 +123,7 @@ test("os links são de verdade: qualquer página abre direto numa aba nova", asy
 function sessaoDeDemandaAguardando(raiz: string): void {
   const banco = abrir(raiz);
   banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('loja', '/nao/existe', 'main', 'github', 'loja');
     INSERT INTO demanda VALUES
       ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1'),

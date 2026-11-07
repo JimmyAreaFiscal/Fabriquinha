@@ -21,7 +21,7 @@ const banco = (demandas: Record<string, { projeto?: string; estado?: string; env
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
   for (const nome of ["a", "b"]) {
-    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('${nome}', '/repo/${nome}', 'main', 'github', 'k')`);
   }
   for (const [id, { projeto = "a", estado = "entender_e_desenhar", enviada = 0 }] of Object.entries(demandas)) {
@@ -96,7 +96,7 @@ test("dependentesNaoConcluidasDaDemanda dentro de escrever não fecha a transaç
   try {
     b.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL");
     migrar(b, MIGRACOES);
-    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('a', '/repo/a', 'main', 'github', 'k')`);
     for (const id of ["I-1", "I-2"]) {
       b.exec(

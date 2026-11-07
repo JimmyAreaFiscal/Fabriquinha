@@ -23,7 +23,7 @@ let banco: DatabaseSync;
 beforeEach(() => {
   banco = abrirBancoTemporario().banco;
   banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES
+    INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES
       ('loja', '/r/loja', 'main', 'github', 'loja'),
       ('site', '/r/site', 'main', 'github', 'site');
     INSERT INTO demanda VALUES

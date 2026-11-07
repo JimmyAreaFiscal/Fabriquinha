@@ -64,7 +64,7 @@ function criacaoAnterior(esquemaAnterior: DatabaseSync, tabela: string, nome: st
 }
 
 /**
- * Devolve o banco migrado (e aberto) ao esquema da versão 37: recria `demanda`, `rodada`, `ticket_demanda`,
+ * Devolve o banco migrado (e aberto) ao esquema da versão 37: devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
  * `configuracao_etapa_projeto` e `sequencia` com as colunas e os valores antigos e volta o `user_version`. O próximo
  * `abrir()` aplica a migração 38 sobre as linhas que o teste montou. O que a 38 perdeu (`enviado_em`, `origem_ticket_id`,
  * a hora da Rodada) volta vazio ou some, e `fechado` não volta: ficou `cancelado`.
@@ -110,6 +110,12 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
     for (const tabela of ["demanda", "rodada", "ticket_demanda", "configuracao_etapa_projeto", "sequencia"]) {
       banco.exec(`ALTER TABLE ${tabela}_antiga RENAME TO ${tabela}`);
     }
+    // A 39 renomeou duas colunas de `projeto` e tirou o cursor: o cursor fica só em `varredura_base`, onde a 39 o deixa.
+    banco.exec(`
+      ALTER TABLE projeto RENAME COLUMN raiz_git TO repo;
+      ALTER TABLE projeto RENAME COLUMN chave_sonarqube TO sonar_project_key;
+      ALTER TABLE projeto ADD COLUMN cursor_commit_humano TEXT CHECK (cursor_commit_humano IS NULL OR length(cursor_commit_humano) > 0);
+    `);
     banco.exec(`PRAGMA user_version = ${String(VERSAO_LINHA_DE_BASE + 1)}`);
     banco.exec("COMMIT");
   } catch (erro) {

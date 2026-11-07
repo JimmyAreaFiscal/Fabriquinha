@@ -22,7 +22,8 @@ const glob = { caminho_linguagem: ".", glob: "e2e/**/*.ts" };
 const aceita = (extra: object) => Projeto.safeParse({ ...valido, ...extra }).success;
 
 test("CA-1: projeto válido; mesma linguagem em caminhos diferentes; legado intacto", () => {
-  assert.ok(aceita({ cursor_commit_humano: "abc" }));
+  assert.ok(aceita({}));
+  assert.equal(aceita({ cursor_commit_humano: "abc" }), false); // o cursor é da varredura (`varredura_base`), não do projeto
   assert.ok(aceita({ linguagens: [...valido.linguagens, { ...valido.linguagens[0], caminho: "web" }] }));
   assert.equal(ProjetoLegado.safeParse(valido).success, false);
 });

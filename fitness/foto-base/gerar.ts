@@ -147,7 +147,7 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
   const banco = abrir(raiz);
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`,
     )
     .run();

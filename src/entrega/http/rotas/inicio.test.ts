@@ -41,7 +41,7 @@ const rodada = (demanda_id: string, rodada_id: number, estado: string) => ({
  */
 function cenario(): DatabaseSync {
   const { banco } = abrirBancoTemporario();
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`);
   gravarAgregadoPronto(
     banco,

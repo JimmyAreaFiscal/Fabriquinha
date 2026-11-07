@@ -5,6 +5,7 @@ import { Projeto } from "../../../nucleo/configuracao_projeto.ts";
 import { encontrado } from "../../../nucleo/erros.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { projeto } from "../../../armazenamento/projetos.ts";
+import { cursorDaBase } from "../../../armazenamento/retrabalho.ts";
 import type { Rota } from "../rotas.ts";
 
 /** Troca a mensagem do zod por uma orientação; as regras do domínio (`custom`) já vêm em português e ficam. */
@@ -31,10 +32,13 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
     tratar: ({ banco, params }) => {
       const nome = String(params.nome);
       const configuracao = configuracaoProjeto(banco, nome);
-      if (configuracao) return { configurada: true, configuracao };
+      const cursor = cursorDaBase(banco, nome);
+      const comCursor = cursor === undefined ? {} : { cursor_commit_humano: cursor };
+      if (configuracao) return { configurada: true, configuracao, ...comCursor };
       const legado = encontrado(projeto(banco, nome), naoExiste(nome), "confira o nome do projeto");
       return {
         configurada: false,
+        ...comCursor,
         configuracao: {
           nome,
           branch_base: legado.branchBase,

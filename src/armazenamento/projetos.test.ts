@@ -64,9 +64,9 @@ test("a edição não toca a chave do SonarQube, que é da configuração SDLC",
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
   const chave = () =>
-    banco.prepare("SELECT sonar_project_key FROM projeto WHERE nome = 'fabriquinha'").get()?.sonar_project_key;
+    banco.prepare("SELECT chave_sonarqube FROM projeto WHERE nome = 'fabriquinha'").get()?.chave_sonarqube;
   assert.equal(chave(), "Fabriquinha");
-  banco.prepare("UPDATE projeto SET sonar_project_key = 'da-sdlc' WHERE nome = 'fabriquinha'").run();
+  banco.prepare("UPDATE projeto SET chave_sonarqube = 'da-sdlc' WHERE nome = 'fabriquinha'").run();
   editarProjeto(banco, { ...exemplo, sonar: { projectKey: "outra" }, branchBase: "develop" });
   assert.equal(chave(), "da-sdlc");
   assert.equal(projeto(banco, "fabriquinha")?.branchBase, "develop");
@@ -163,10 +163,10 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
   const inserir = (troca: Record<string, string>) => {
     const linha = {
       nome: "'p'",
-      repo: "'/r'",
+      raiz_git: "'/r'",
       branch_base: "'main'",
       hospedagem: "'github'",
-      sonar_project_key: "'k'",
+      chave_sonarqube: "'k'",
       ...troca,
     };
     banco.exec(`INSERT INTO projeto (${Object.keys(linha).join(",")}) VALUES (${Object.values(linha).join(",")})`);
@@ -176,7 +176,7 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
     [{ nome: `'${"a".repeat(65)}'` }, /CHECK/],
     [{ hospedagem: "'gitlab'" }, /CHECK/],
     [{ branch_base: "NULL" }, /NOT NULL/],
-    [{ sonar_project_key: "NULL" }, /NOT NULL/],
+    [{ chave_sonarqube: "NULL" }, /NOT NULL/],
   ];
   for (const [troca, erro] of violacoes) {
     assert.throws(() => {
@@ -186,9 +186,9 @@ test("as constraints da tabela projeto valem no banco, não só no schema", () =
   inserir({});
   assert.throws(() => {
     inserir({ nome: "'q'" });
-  }, /UNIQUE constraint failed: projeto.repo/);
+  }, /UNIQUE constraint failed: projeto.raiz_git/);
   assert.throws(() => {
-    inserir({ repo: "'/s'" });
+    inserir({ raiz_git: "'/s'" });
   }, /UNIQUE constraint failed: projeto.nome/);
   banco.close();
 });

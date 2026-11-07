@@ -14,7 +14,7 @@ const abrirBancoTemporario = fabricaDeBancosTemporarios();
 let banco: DatabaseSync;
 beforeEach(() => {
   banco = abrirBancoTemporario().banco;
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('loja', '/repo/loja', 'main', 'github', 'chave')`);
 });
 
@@ -89,6 +89,14 @@ test("POST grava com o nome do caminho e o GET devolve o gravado", async () => {
   assert.equal(resposta.configurada, true);
   assert.equal(resposta.configuracao.nome, "loja");
   assert.deepEqual(await chamar("GET", URL), resposta);
+});
+
+test("GET devolve o cursor da varredura de commits humanos, com ou sem configuração", async () => {
+  const cursor = "a".repeat(40);
+  banco.prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('loja', ?, 't')").run(cursor);
+  assert.equal(((await chamar("GET", URL)) as { cursor_commit_humano: string }).cursor_commit_humano, cursor);
+  await chamar("POST", URL, valida());
+  assert.equal(((await chamar("GET", URL)) as { cursor_commit_humano: string }).cursor_commit_humano, cursor);
 });
 
 test("404 quando o projeto não existe, na leitura e na gravação", async () => {

@@ -53,7 +53,6 @@ export const Projeto = z
     chave_sonarqube: Texto,
     raiz_git: Texto,
     hospedagem: Hospedagem,
-    cursor_commit_humano: Texto.optional(),
     etapas: z.array(ConfiguracaoEtapaProjeto).default([]),
     preparacao: z.array(ComandoPreparacaoProjeto).default([]),
     fitness: z.array(FitnessFunctionProjeto).min(1),

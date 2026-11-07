@@ -13,10 +13,10 @@ import { dirDaExecucaoSimulada } from "../infra/registro.ts";
 
 interface Linha {
   nome: string;
-  repo: string;
+  raiz_git: string;
   branch_base: string;
   hospedagem: string;
-  sonar_project_key: string;
+  chave_sonarqube: string;
   link_produto: string | null;
 }
 
@@ -24,11 +24,11 @@ interface Linha {
 const deLinha = (banco: DatabaseSync, l: Linha): Projeto =>
   Projeto.parse({
     nome: l.nome,
-    repo: l.repo,
+    repo: l.raiz_git,
     branchBase: l.branch_base,
     hospedagem: l.hospedagem,
     preparacao: preparacaoDoProjeto(banco, l.nome),
-    sonar: { projectKey: l.sonar_project_key },
+    sonar: { projectKey: l.chave_sonarqube },
     ...(l.link_produto && { linkProduto: l.link_produto }),
   });
 
@@ -39,7 +39,7 @@ const deLinha = (banco: DatabaseSync, l: Linha): Projeto =>
 function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p: Projeto, mudou: boolean) => void) {
   const p = Projeto.parse(entrada);
   escrever(banco, () => {
-    const dono = banco.prepare("SELECT nome FROM projeto WHERE repo = ? AND nome <> ?").get(p.repo, p.nome);
+    const dono = banco.prepare("SELECT nome FROM projeto WHERE raiz_git = ? AND nome <> ?").get(p.repo, p.nome);
     if (dono) {
       throw new ErroDeRegra(
         `o repositório ${p.repo} já é do projeto ${String(dono.nome)}`,
@@ -51,10 +51,10 @@ function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p
     comando.setAllowUnknownNamedParameters(true);
     const { changes } = comando.run({
       nome: p.nome,
-      repo: p.repo,
+      raiz_git: p.repo,
       branch_base: p.branchBase,
       hospedagem: p.hospedagem,
-      sonar_project_key: p.sonar.projectKey,
+      chave_sonarqube: p.sonar.projectKey,
       link_produto: p.linkProduto ?? null,
     });
     conferir(p, changes > 0);
@@ -68,8 +68,8 @@ export const registrarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto
   gravar(
     banco,
     entrada,
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key, link_produto)
-     VALUES ($nome, $repo, $branch_base, $hospedagem, $sonar_project_key, $link_produto)
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto)
+     VALUES ($nome, $raiz_git, $branch_base, $hospedagem, $chave_sonarqube, $link_produto)
      ON CONFLICT (nome) DO NOTHING`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeRegra(`já existe o projeto ${p.nome}`, "edite-o na Configuração");
@@ -84,7 +84,7 @@ export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
   gravar(
     banco,
     entrada,
-    `UPDATE projeto SET repo = $repo, branch_base = $branch_base, hospedagem = $hospedagem, link_produto = $link_produto
+    `UPDATE projeto SET raiz_git = $raiz_git, branch_base = $branch_base, hospedagem = $hospedagem, link_produto = $link_produto
      WHERE nome = $nome`,
     (p, mudou) => {
       if (!mudou) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre-o na Configuração");
