@@ -70,25 +70,31 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
         (declaracao): declaracao is ts.ExportSpecifier =>
           ts.isExportSpecifier(declaracao) && !declaracao.parent.parent.moduleSpecifier,
       );
+      const declaracoesExportadasDiretamente = (simbolo.declarations ?? []).filter(
+        (declaracao) => declaracao.getSourceFile() === arquivoFonte && !ts.isExportSpecifier(declaracao),
+      );
       const declaracoes = [
-        ...(simbolo.declarations ?? []).filter(
-          (declaracao) => declaracao.getSourceFile() === arquivoFonte && !ts.isExportSpecifier(declaracao),
-        ),
+        ...declaracoesExportadasDiretamente,
         ...especificadoresLocais
           .map((especificador) => verificadorDeTipos.getExportSpecifierLocalTargetSymbol(especificador))
           .filter((simboloLocal) => simboloLocal && !(simboloLocal.flags & ts.SymbolFlags.Alias))
           .flatMap((simboloLocal) => simboloLocal?.declarations ?? []),
       ];
       const nomes = declaracoes.map((declaracao) => ts.getNameOfDeclaration(declaracao) ?? declaracao);
+      // Em `export { x as a, x as b }` cada nome exportado tem os seus importadores: a busca parte do nome exportado, não de `x`.
+      const nomesExportados = [
+        ...declaracoesExportadasDiretamente.map((declaracao) => ts.getNameOfDeclaration(declaracao) ?? declaracao),
+        ...especificadoresLocais.map((especificador) => especificador.name),
+      ];
       const arquivosQueReferenciam = new Set(
-        nomes
+        nomesExportados
           .flatMap(
             (nome) =>
               servicoDeLinguagem.getReferencesAtPosition(arquivoFonte.fileName, nome.getStart(arquivoFonte)) ?? [],
           )
           .filter((referencia) => referencia.fileName !== arquivoFonte.fileName && !ehReexport(programa, referencia))
           .map((referencia) => relative(raiz, referencia.fileName))
-          .concat(consumidoresDoNamespaceInteiro.get(arquivoFonte.fileName) ?? []),
+          .concat(consumidoresDoNamespaceInteiro.get(resolverAlias(verificadorDeTipos, simbolo)) ?? []),
       );
       if ([...arquivosQueReferenciam].some((arquivo) => !ehArquivoDeTeste(arquivo))) continue;
       const justificativas = [
@@ -109,31 +115,39 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
   return achados.sort();
 }
 
-// `import * as m` usado além de `m.x` (ex.: `Object.values(m)`) consome todos os exports do módulo importado.
-function acharConsumidoresDoNamespaceInteiro(raiz: string, programa: ts.Program): Map<string, string[]> {
+function resolverAlias(verificadorDeTipos: ts.TypeChecker, simbolo: ts.Symbol): ts.Symbol {
+  return simbolo.flags & ts.SymbolFlags.Alias ? verificadorDeTipos.getAliasedSymbol(simbolo) : simbolo;
+}
+
+// `import * as m` usado além de `m.x` (ex.: `Object.values(m)`) consome todos os exports do módulo importado,
+// inclusive os que ele reexporta: a chave é a declaração original de cada export.
+function acharConsumidoresDoNamespaceInteiro(raiz: string, programa: ts.Program): Map<ts.Symbol, string[]> {
   const verificadorDeTipos = programa.getTypeChecker();
-  const consumidores = new Map<string, string[]>();
+  const consumidores = new Map<ts.Symbol, string[]>();
   for (const arquivoFonte of programa.getSourceFiles()) {
     for (const importacao of arquivoFonte.statements.filter(ts.isImportDeclaration)) {
       const vinculo = importacao.importClause?.namedBindings;
       if (!vinculo || !ts.isNamespaceImport(vinculo)) continue;
-      const arquivoImportado = verificadorDeTipos
-        .getSymbolAtLocation(importacao.moduleSpecifier)
-        ?.declarations?.[0]?.getSourceFile().fileName;
-      if (!arquivoImportado) continue;
+      const simboloDoModuloImportado = verificadorDeTipos.getSymbolAtLocation(importacao.moduleSpecifier);
+      if (!simboloDoModuloImportado) continue;
       const simboloDoNamespace = verificadorDeTipos.getSymbolAtLocation(vinculo.name);
       const usadoComoObjeto = (no: ts.Node): boolean =>
         (ts.isIdentifier(no) &&
           no !== vinculo.name &&
           verificadorDeTipos.getSymbolAtLocation(no) === simboloDoNamespace &&
           !(ts.isPropertyAccessExpression(no.parent) && no.parent.expression === no) &&
+          !(
+            ts.isElementAccessExpression(no.parent) &&
+            no.parent.expression === no &&
+            ts.isStringLiteralLike(no.parent.argumentExpression)
+          ) &&
           !(ts.isQualifiedName(no.parent) && no.parent.left === no)) ||
         ts.forEachChild(no, usadoComoObjeto) === true;
-      if (usadoComoObjeto(arquivoFonte))
-        consumidores.set(arquivoImportado, [
-          ...(consumidores.get(arquivoImportado) ?? []),
-          relative(raiz, arquivoFonte.fileName),
-        ]);
+      if (!usadoComoObjeto(arquivoFonte)) continue;
+      for (const exportado of verificadorDeTipos.getExportsOfModule(simboloDoModuloImportado)) {
+        const original = resolverAlias(verificadorDeTipos, exportado);
+        consumidores.set(original, [...(consumidores.get(original) ?? []), relative(raiz, arquivoFonte.fileName)]);
+      }
     }
   }
   return consumidores;
@@ -312,6 +326,100 @@ test("a fitness acusa export local via `export { x }` e reconhece namespace cons
       "src/local.ts:1 semImportador: sem importador",
       "src/local.ts:2 soNoTesteSemMarca: só de teste, falta /** @testes justificativa */",
       "src/parcial.ts:2 naoUsado: sem importador",
+    ],
+  );
+});
+
+test("a fitness trata acesso por colchetes, nomes exportados do mesmo valor e namespace de reexport", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  for (const pasta of ["src", "pacote-pi"]) mkdirSync(join(raiz, pasta), { recursive: true });
+  const escrever = (arquivo: string, linhas: string[]): void => {
+    writeFileSync(join(raiz, arquivo), linhas.join("\n"));
+  };
+  escrever("src/parcial.ts", ["export const usado = 1;", "export const naoUsado = 2;"]);
+  escrever("src/aliases.ts", ["const valor = 1;", "export { valor as a, valor as b };"]);
+  escrever("src/original.ts", ["export const viaReexport = 1;", "export const outroViaReexport = 2;"]);
+  escrever("src/reexporta.ts", ['export * from "./original.ts";']);
+  escrever("src/consumidor.ts", [
+    'import * as parcial from "./parcial.ts";',
+    'import { a } from "./aliases.ts";',
+    'import * as reexporta from "./reexporta.ts";',
+    'export const consumidor = [parcial["usado"], a, Object.values(reexporta)];',
+  ]);
+  escrever("src/consumidor.test.ts", ['import { consumidor } from "./consumidor.ts";', "console.log(consumidor);"]);
+
+  assert.deepEqual(
+    acharExportsMortos(raiz, {
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      allowImportingTsExtensions: true,
+      noEmit: true,
+    }),
+    [
+      "src/aliases.ts:1 b: sem importador",
+      "src/consumidor.ts:4 consumidor: só de teste, falta /** @testes justificativa */",
+      "src/parcial.ts:2 naoUsado: sem importador",
+    ],
+  );
+});
+
+test("a fitness trata tipo, default, cadeia de reexport, reexport renomeado, namespace reexportado, import dinâmico e ponto de entrada", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  for (const pasta of ["src/cli", "pacote-pi"]) mkdirSync(join(raiz, pasta), { recursive: true });
+  const escrever = (arquivo: string, linhas: string[]): void => {
+    writeFileSync(join(raiz, arquivo), linhas.join("\n"));
+  };
+  escrever("src/tipos.ts", [
+    "export type Usado = number;",
+    "export interface Forma { lado: number }",
+    "export type TipoMorto = string;",
+  ]);
+  escrever("src/padrao.ts", ["export default function calcular(): number { return 1; }"]);
+  escrever("src/padrao-morto.ts", ["export default 2;"]);
+  escrever("src/origem.ts", [
+    "export const naCadeia = 1;",
+    "export const foraDaCadeia = 2;",
+    "export const renomeado = 3;",
+  ]);
+  escrever("src/meio.ts", [
+    'export { naCadeia, foraDaCadeia } from "./origem.ts";',
+    'export { renomeado as apelido } from "./origem.ts";',
+  ]);
+  escrever("src/fim.ts", ['export { naCadeia } from "./meio.ts";']);
+  escrever("src/espaco.ts", ["export const doEspaco = 1;"]);
+  escrever("src/agrupa.ts", ['export * as espaco from "./espaco.ts";']);
+  escrever("src/dinamico.ts", ["export const carregado = 1;", "export const naoCarregado = 2;"]);
+  escrever("src/cli/fabriquinha.ts", [
+    'import type { Usado, Forma } from "../tipos.ts";',
+    'import calcular from "../padrao.ts";',
+    'import { naCadeia } from "../fim.ts";',
+    'import { apelido } from "../meio.ts";',
+    'import { espaco } from "../agrupa.ts";',
+    'const dinamico = await import("../dinamico.ts");',
+    "const forma: Forma = { lado: 1 };",
+    "const usado: Usado = calcular();",
+    "export const daEntrada = [forma, usado, naCadeia, apelido, espaco.doEspaco, dinamico.carregado];",
+  ]);
+
+  assert.deepEqual(
+    acharExportsMortos(raiz, {
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      allowImportingTsExtensions: true,
+      noEmit: true,
+      target: ts.ScriptTarget.ES2022,
+    }),
+    [
+      "src/dinamico.ts:2 naoCarregado: sem importador",
+      "src/origem.ts:2 foraDaCadeia: sem importador",
+      "src/padrao-morto.ts:1 default: sem importador",
+      "src/tipos.ts:3 TipoMorto: sem importador",
     ],
   );
 });
