@@ -1,7 +1,7 @@
 // Sessões dos tickets da demanda para o Histórico e para o contador da navegação (comparacao-sdlc-implementacao.md
 // §9.1): lê `sessao` e o estado que o chat calcula; as sessões migradas pelo backfill entram como as novas.
 import type { DatabaseSync } from "node:sqlite";
-import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { ModoExecucao } from "../dominio/sessoes.ts";
 import type { ExecucaoSessao } from "../dominio/sessoes.ts";
 import type { EtapaTicket, Instante, Modelo } from "../dominio/primitivos.ts";
 import { encontrado } from "../dominio/erros.ts";
@@ -31,7 +31,7 @@ export interface SessaoDeDemanda {
   resultado: Resultado;
 }
 
-export interface FiltroSessoesDemanda {
+interface FiltroSessoesDemanda {
   escopo: "ativas" | "historico";
   projeto?: string;
   demanda?: string;

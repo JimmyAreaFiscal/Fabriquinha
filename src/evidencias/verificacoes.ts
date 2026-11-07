@@ -7,7 +7,7 @@ import { aprovacao, type Falha, type Verificacao, verificarFitness, verificarTes
 
 export type { Falha, Verificacao } from "./verificacoes_comandos.ts";
 
-export interface EntradaVerificacoes {
+interface EntradaVerificacoes {
   projeto: Projeto;
   /** A rodada está marcada com e2e. */
   e2e: boolean;

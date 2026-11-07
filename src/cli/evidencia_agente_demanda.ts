@@ -7,10 +7,8 @@ import { basename, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import { z } from "zod";
-import type { Agregado } from "../dominio/agregado.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra, encontrado, mensagem } from "../dominio/erros.ts";
-import type { Etapa } from "../dominio/primitivos.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { validarEvidenciaDaEtapa } from "../dominio/evidencia_etapa.ts";
 import { submeterPlano } from "../dominio/transicoes_demanda.ts";
@@ -82,37 +80,22 @@ function origensDe(banco: DatabaseSync, a: AgenteDemanda, ticket: TicketDemanda)
   };
 }
 
-const ETAPA_LEGADA: Partial<Record<string, Etapa>> = {
-  planejar: "desenho",
-  implementar: "desenvolvimento",
-  revisar_rodada: "revisao",
-};
-
 /**
- * O agregado da demanda na forma que as regras cruzadas e `gerarAula` (legado) leem: tickets, evidências e o que a
- * rodada cobre. Com `rodada`, só os tickets dela (e os sem rodada) e os critérios que ela cita.
- * shortcut: cast parcial, só os campos que essas funções consultam; trocar pelo agregado novo quando elas migrarem.
+ * O agregado da demanda como as regras cruzadas e `gerarAula` o leem: só os tickets da rodada (e os sem rodada) e, nos
+ * critérios de aceite, só os que ela cita. Sem rodada, o agregado inteiro.
  */
-function comoLegado(ag: AgregadoDemanda, rodada?: number): Agregado {
+function agregadoDaRodada(ag: AgregadoDemanda, rodada?: number): AgregadoDemanda {
+  if (rodada === undefined) return ag;
   const citados = ag.criterios_citados.filter((c) => c.rodada_id === rodada).map((c) => c.criterio_id);
   return {
-    issue: { id: Number(ag.demanda.id.split("-")[1]), projeto: ag.demanda.projeto, titulo: ag.demanda.titulo },
-    tickets: ag.tickets
-      .filter((t) => rodada === undefined || t.rodada_id === undefined || t.rodada_id === rodada)
-      .map((t) => ({
-        id: t.ticket_id,
-        etapa: ETAPA_LEGADA[t.etapa] ?? "encerramento",
-        status: t.status,
-      })),
-    evidencias: ag.evidencias.map((e) => ({
-      ticket: e.ticket_id ?? 0,
-      tipo: e.tipo,
-      dados:
-        rodada !== undefined && e.tipo === "criterios_aceite"
-          ? { criterios: (e.dados.criterios as { id: string }[]).filter((c) => citados.includes(c.id)) }
-          : e.dados,
-    })),
-  } as unknown as Agregado;
+    ...ag,
+    tickets: ag.tickets.filter((t) => t.rodada_id === undefined || t.rodada_id === rodada),
+    evidencias: ag.evidencias.map((e) =>
+      e.tipo === "criterios_aceite"
+        ? { ...e, dados: { criterios: (e.dados.criterios as { id: string }[]).filter((c) => citados.includes(c.id)) } }
+        : e,
+    ),
+  };
 }
 
 export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
@@ -144,7 +127,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
       );
       let caminhos = (op.arquivo ?? []) as string[];
       const origens = origensDe(banco, agente, ticket);
-      const legado = comoLegado(carregarDemanda(banco, demanda_id), ticket.rodada_id);
+      const agregado = agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id);
       if (tipo === "aula_codigo") {
         if (caminhos.length > 0) {
           throw new ErroDeRegra(
@@ -152,7 +135,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
             "a Fabriquinha gera o HTML; submeta só --dados",
           );
         }
-        const html = await gerarAula(legado, origens.worktree, validos.trechos as Trecho[]);
+        const html = await gerarAula(agregado, origens.worktree, validos.trechos as Trecho[]);
         mkdirSync(origens.saida, { recursive: true });
         const aula = join(origens.saida, "aula.html");
         writeFileSync(aula, html);
@@ -160,7 +143,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
       }
       // Fora da transação: se ela falhar, sobra só arquivo sem referência (F2 §5.2).
       const anexos = guardarAnexos(banco, caminhos, tipo, schema.arquivos, origens, () =>
-        schema.cruzar?.(validos, { ag: legado, ticket: ticket_id, anexos: caminhos.map((c) => basename(c)) }),
+        schema.cruzar?.(validos, { ag: agregado, ticket: ticket_id, anexos: caminhos.map((c) => basename(c)) }),
       );
       const agora = new Date().toISOString();
       comDemanda(

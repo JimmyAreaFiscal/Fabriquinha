@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { TipoId } from "../dominio/primitivos.ts";
-import { type Migracao, MIGRACOES } from "./migracoes.ts";
+import { ESQUEMA_V36, type Migracao, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
 /** A raiz da Fabriquinha: `$FABRIQUINHA_ROOT`, padrão `~/fabriquinha` (F2 §2). */
 export const raizPadrao = (env: NodeJS.ProcessEnv = process.env): string =>
@@ -42,16 +42,28 @@ export function abrir(raiz = raizPadrao()): DatabaseSync {
 export const raizDo = (banco: DatabaseSync): string =>
   dirname((banco.prepare("PRAGMA database_list").get() as { file: string }).file);
 
-/** Aplica em ordem as migrações ainda não aplicadas, cada uma na sua transação; a versão fica em `user_version`. */
+/**
+ * Leva o banco à versão atual: banco vazio (versão 0) recebe a linha de base `ESQUEMA_V36`, banco de versão 1 a 35 é
+ * recusado, e as `migracoes` (a primeira é a 37) ainda não aplicadas rodam em ordem, cada uma na sua transação.
+ * A versão fica em `user_version`.
+ */
+/** @testes os testes aplicam migrações próprias para provar o mecanismo */
 export function migrar(banco: DatabaseSync, migracoes: readonly Migracao[]): void {
   const inicial = versao(banco);
-  if (inicial > migracoes.length) {
+  const versaoAtual = VERSAO_LINHA_DE_BASE + migracoes.length;
+  if (inicial > versaoAtual) {
     throw new ErroDeRegra(
-      `o banco está na versão ${String(inicial)}, mais nova que a ${String(migracoes.length)} que esta Fabriquinha conhece`,
+      `o banco está na versão ${String(inicial)}, mais nova que a ${String(versaoAtual)} que esta Fabriquinha conhece`,
       "atualize a Fabriquinha antes de abrir este banco",
     );
   }
-  if (inicial === migracoes.length) return; // em dia: nem pega o lock
+  if (inicial > 0 && inicial < VERSAO_LINHA_DE_BASE) {
+    throw new ErroDeRegra(
+      `o banco está na versão ${String(inicial)}, anterior à ${String(VERSAO_LINHA_DE_BASE)} que esta Fabriquinha exige`,
+      `suba a Fabriquinha da versão anterior à linha de base (I-263) para o banco chegar à v${String(VERSAO_LINHA_DE_BASE)}, e depois esta`,
+    );
+  }
+  if (inicial === versaoAtual) return; // em dia: nem pega o lock
   // As FKs ficam desligadas fora da transação (o PRAGMA não vale dentro dela), porque recriar uma tabela com DROP/RENAME
   // falha com FK ligada. Em troca, `foreign_key_check` confere antes do COMMIT.
   // A versão é relida dentro do lock: dois processos abrindo juntos não aplicam a mesma migração duas vezes.
@@ -61,23 +73,33 @@ export function migrar(banco: DatabaseSync, migracoes: readonly Migracao[]): voi
     while (pendente) {
       pendente = escrever(banco, () => {
         const atual = versao(banco);
-        const migracao = migracoes[atual];
+        if (atual === 0) {
+          banco.exec(ESQUEMA_V36);
+          concluirMigracao(banco, VERSAO_LINHA_DE_BASE);
+          return true;
+        }
+        const migracao = migracoes[atual - VERSAO_LINHA_DE_BASE];
         if (migracao === undefined) return false;
         if (typeof migracao === "string") banco.exec(migracao);
         else migracao(banco);
-        banco.exec(`PRAGMA user_version = ${String(atual + 1)}`);
-        const orfas = banco.prepare("PRAGMA foreign_key_check").all();
-        if (orfas.length > 0) {
-          throw new ErroDeRegra(
-            `a migração ${String(atual + 1)} deixou ${String(orfas.length)} referência(s) órfã(s) no banco`,
-            "restaure o banco do backup e relate o problema",
-          );
-        }
+        concluirMigracao(banco, atual + 1);
         return true;
       });
     }
   } finally {
     banco.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
+/** Grava a versão e recusa (desfazendo a transação) a migração que deixou referência órfã. */
+function concluirMigracao(banco: DatabaseSync, versaoNova: number): void {
+  banco.exec(`PRAGMA user_version = ${String(versaoNova)}`);
+  const orfas = banco.prepare("PRAGMA foreign_key_check").all();
+  if (orfas.length > 0) {
+    throw new ErroDeRegra(
+      `a migração ${String(versaoNova)} deixou ${String(orfas.length)} referência(s) órfã(s) no banco`,
+      "restaure o banco do backup e relate o problema",
+    );
   }
 }
 

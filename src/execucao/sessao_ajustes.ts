@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../dominio/agregado.ts";
+import type { Ator } from "../dominio/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { existe } from "../dominio/erros.ts";

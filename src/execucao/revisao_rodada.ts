@@ -1,7 +1,7 @@
 // Revisão de rodada (comparacao-sdlc-implementacao.md §§4, 6): as evidências que cabem à Fabriquinha antes do pi.
 import { matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../dominio/agregado.ts";
+import type { Ator } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { encontrado, ErroDeRegra } from "../dominio/erros.ts";
@@ -23,6 +23,7 @@ import { conferirAprovacao } from "./revisao_pendencias.ts";
 type Dados = EntradaEvidenciaDemanda["dados"];
 
 /** `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui). */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function prepararRevisaoRodada(
   banco: DatabaseSync,
   ref: { demanda_id: string; ticket_id: number },

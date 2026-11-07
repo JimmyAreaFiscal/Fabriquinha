@@ -1,7 +1,7 @@
 // Revisão integral com git real temporário e pi falso (CA-9 a CA-17).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Ator } from "../dominio/agregado.ts";
+import type { Ator } from "../dominio/ator.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../repositorio/worktree-demanda.ts";

@@ -157,10 +157,10 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
         "INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES ('cli', ?, 'main', 'github', 'cli')",
       )
       .run(amb.raiz);
-    // O grupo HTTP semeia demandas com id escolhido, fora da sequência: gasta um número por demanda já existente.
-    const existentes = Number(banco.prepare("SELECT COUNT(*) AS n FROM demanda").get()?.n);
+    // O grupo HTTP semeia demandas com id escolhido (I-1001 em diante), fora da sequência: avança-a além do maior número.
+    const maiorNumero = Number(banco.prepare("SELECT MAX(CAST(SUBSTR(id, 3) AS INTEGER)) AS n FROM demanda").get()?.n);
     escrever(banco, () => {
-      for (let k = 0; k < existentes; k++) novoId(banco, "issue");
+      while (novoId(banco, "issue") <= maiorNumero);
     });
     for (let i = 0; i < CHAMADAS * 3; i++) {
       const entrada = { projeto: "cli", titulo: "Demanda do estresse", tipo: "funcionalidade", descricao: "d" };

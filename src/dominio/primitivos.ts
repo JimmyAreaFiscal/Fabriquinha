@@ -35,22 +35,9 @@ export const Modelo = z.object({
   modelo: z.string().trim().min(1).max(200),
 });
 
-export const Etapa = z.enum(["registro", "desenho", "desenvolvimento", "revisao", "encerramento", "sessao"]);
 // Os níveis de `pi --thinking`.
 export const Effort = z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
-export const Fase = z.enum([
-  "registro",
-  "desenho",
-  "aprovacao_desenho",
-  "desenvolvimento",
-  "revisao",
-  "encerramento",
-  "aprovacao_pr",
-  "ajuste_pr",
-  "concluida",
-]);
-
-// Estados SDLC (comparacao-sdlc-implementacao.md §2.1, D01); independentes entre si e dos enums legados acima.
+// Estados SDLC (comparacao-sdlc-implementacao.md §2.1, D01); independentes entre si.
 export const FaseDemanda = z.enum([
   "registro",
   "aprovacao_demanda",
@@ -85,14 +72,12 @@ export const EtapaTicket = z.enum([
 export const StatusTicket = z.enum(["aberto", "em_execucao", "concluido", "falhou", "fechado", "cancelado"]);
 
 // Cada tipo tem a sua sequência de IDs (F2 §3.4); o contexto dos comandos entrega `novoId(tipo)`.
-export const TipoId = z.enum(["issue", "ticket", "execucao", "decisao", "evidencia", "proposta"]);
+export const TipoId = z.enum(["issue"]);
 
 export type Id = z.infer<typeof Id>;
 export type Instante = z.infer<typeof Instante>;
 export type Modelo = z.infer<typeof Modelo>;
-export type Etapa = z.infer<typeof Etapa>;
 export type Effort = z.infer<typeof Effort>;
-export type Fase = z.infer<typeof Fase>;
 export type TipoId = z.infer<typeof TipoId>;
 export type FaseDemanda = z.infer<typeof FaseDemanda>;
 export type FaseRodada = z.infer<typeof FaseRodada>;

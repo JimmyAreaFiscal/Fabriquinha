@@ -14,7 +14,7 @@ export interface PerguntaDoAgente {
   descricoes?: string[];
 }
 
-export interface ContextoDaPergunta {
+interface ContextoDaPergunta {
   /** Endereço público do ticket (`I-12.T3`), a etapa e o título da demanda. */
   ticket: string;
   etapa: string;
@@ -27,7 +27,10 @@ export interface RespostaDoAuditorAutomatico {
   justificativa: string;
 }
 
-/** A resposta fixa à pergunta sobre verificação que fica fora da revisão; o modelo só classifica, o texto é do código. */
+/**
+ * A resposta fixa à pergunta sobre verificação que fica fora da revisão; o modelo só classifica, o texto é do código.
+ * @testes o teste do gerente confere que o agente recebe exatamente este texto (I-292 CA-1, CA-2)
+ */
 export const RESPOSTA_FORA_DA_REVISAO =
   "Fica fora da revisão; registre como verificado fora da revisão e decida pelo resto.";
 
@@ -70,6 +73,7 @@ ou
 {"decisao":"escalar","justificativa":"<por que é decisão do Auditor humano>"}`;
 
 /** O prompt da triagem: as regras, o ticket e a pergunta com as opções. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function promptDaTriagem(contexto: ContextoDaPergunta, p: PerguntaDoAgente): string {
   const opcoes =
     p.opcoes.length > 0
@@ -96,6 +100,7 @@ const Decisao = z.discriminatedUnion("decisao", [
  * revisão, com a resposta fixa (mesmo com opções); em outra etapa, escala. Resposta que ofereça credencial, acesso ou
  * deploy de teste também escala.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: string): RespostaDoAuditorAutomatico | undefined {
   const decisao = saida
     .split("\n")

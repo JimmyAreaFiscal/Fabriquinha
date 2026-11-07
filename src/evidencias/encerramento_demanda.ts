@@ -14,7 +14,7 @@ const Custo = z.strictObject({
 });
 const Texto = z.string().min(1);
 
-export const ArvorePRsCriteriosCustos = z.strictObject({
+const ArvorePRsCriteriosCustos = z.strictObject({
   demanda: Texto,
   base: Texto.nullable(),
   pr_final: z.strictObject({ numero: z.number().int().positive(), url: Texto }).nullable(),
@@ -39,7 +39,7 @@ export const ArvorePRsCriteriosCustos = z.strictObject({
     }),
   }),
 });
-export type ArvorePRsCriteriosCustos = z.infer<typeof ArvorePRsCriteriosCustos>;
+type ArvorePRsCriteriosCustos = z.infer<typeof ArvorePRsCriteriosCustos>;
 
 const ItemLimpeza = z.strictObject({
   tipo: z.enum(["worktree", "branch_local", "branch_remota"]),

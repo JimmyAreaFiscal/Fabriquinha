@@ -8,7 +8,7 @@ description: Use ao produzir a evidência `relatorio_impactos_arquitetura` da Fa
 ## Para que serve
 
 O Auditor lê o relatório para aprovar o desenho: ele confere o que a solução muda na estrutura do projeto e o risco que aceita ao aprovar.
-A página da issue mostra o impacto e a contagem de acoplamentos novos; o PR traz o impacto, os riscos e as mitigações para quem revisa.
+A página da demanda mostra o impacto e a contagem de acoplamentos novos; o PR traz o impacto, os riscos e as mitigações para quem revisa.
 Com impacto `medio` ou `alto`, a mensagem do PR passa a exigir um plano de reversão.
 
 ## Como produzir

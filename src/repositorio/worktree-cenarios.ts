@@ -14,9 +14,11 @@ writeFileSync(config, "[user]\n name = Teste\n email = teste@exemplo.com\n");
 process.env.GIT_CONFIG_GLOBAL = config;
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
+/** @testes montagem de repositório de cenário usada só pelos testes de worktree */
 export const gitCenario = (cwd: string, ...args: string[]): string =>
   execFileSync("/usr/bin/git", args, { cwd, stdio: "pipe" }).toString().trim();
 
+/** @testes montagem de repositório de cenário usada só pelos testes de worktree */
 export function commitarCenario(repo: string, arquivo: string, conteudo: string): string {
   writeFileSync(join(repo, arquivo), conteudo);
   gitCenario(repo, "add", arquivo);
@@ -24,6 +26,7 @@ export function commitarCenario(repo: string, arquivo: string, conteudo: string)
   return gitCenario(repo, "rev-parse", "HEAD");
 }
 
+/** @testes montagem de repositório de cenário usada só pelos testes de worktree */
 export function cenarioDemanda(preparacao: string[] = [], branchBase = "integracao") {
   const dir = mkdtempSync(join(temporario, "cenario-"));
   const bare = join(dir, "origin.git");

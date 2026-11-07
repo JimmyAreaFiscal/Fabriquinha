@@ -1,6 +1,6 @@
 // Conclusão do ticket `implementar` da demanda SDLC (comparacao-sdlc-implementacao.md §4 e D05): em_execucao → concluido.
 import { z } from "zod";
-import { type Ator, exigirFabriquinha } from "./agregado.ts";
+import { type Ator, exigirFabriquinha } from "./ator.ts";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
 import { formatarTicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";

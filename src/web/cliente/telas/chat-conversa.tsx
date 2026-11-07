@@ -20,7 +20,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { markdown } from "../markdown.ts";
 import { type Bloco, comCursor, corpoDaFerramenta, type Envio, type MensagemPi } from "./chat.ts";
 
-export interface PropsDaConversa {
+interface PropsDaConversa {
   mensagens: readonly ThreadMessageLike[];
   envio: Envio;
   /** Envia o texto do compositor; se falhar, o texto volta ao campo. */

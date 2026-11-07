@@ -15,7 +15,7 @@ import { dirDaExecucaoSimulada } from "../persistencia/execucoes.ts";
 import { enfileirar, gravarPgid, marcar, paraRodar, type UsuarioSimulado } from "../persistencia/simulacao.ts";
 import { ambienteSemCredenciais, executar } from "../processo.ts";
 
-export interface OpcoesDaSimulacao {
+interface OpcoesDaSimulacao {
   /** Tempo máximo de cada execução, em minutos (o mesmo da execução autônoma, F4 §3). */
   timeoutMin: number;
 }
@@ -24,6 +24,7 @@ const FERRAMENTAS = "ver_tela,clicar,digitar,tecla,rolar,relatar";
 const SEM_RELATORIO = "o agente não entregou o relatório";
 
 /** O produto responde? Qualquer resposta HTTP basta, até 500: a página quebrada é achado do relatório. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function conferirLink(link: string): Promise<boolean> {
   try {
     await fetch(link, { method: "HEAD", signal: AbortSignal.timeout(15_000) });

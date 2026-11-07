@@ -1,7 +1,7 @@
 // Ciclo da rodada (comparacao-sdlc-implementacao.md §4): implementações concluídas, revisão e conferência técnica do PR.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { type Ator, exigirAuditor, exigirFabriquinha } from "./agregado.ts";
+import { type Ator, exigirAuditor, exigirFabriquinha } from "./ator.ts";
 import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
@@ -33,10 +33,10 @@ const EntradaAprovacaoPR = z.strictObject({ ...TicketRef, nota: z.number().int()
 const Integracao = z.strictObject({ ...TicketRef, confirmada: z.boolean(), branch_destino: z.string() });
 
 /** Contexto da confirmação: `integracao` vem da aplicação (a integração em git acontece fora do domínio). */
-export interface ContextoConfirmacao extends ContextoDemanda {
+interface ContextoConfirmacao extends ContextoDemanda {
   readonly integracao?: unknown;
 }
-export type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR>;
+type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR>;
 
 const maximo = (ns: number[]): number => ns.reduce((m, n) => Math.max(m, n), 0);
 

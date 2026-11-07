@@ -13,6 +13,7 @@ import {
   rotuloDoStatus,
 } from "../render.ts";
 
+/** @testes tipo que o teste usa para montar a entrada */
 export interface DemandaDoQuadro {
   id: string;
   projeto: string;
@@ -251,7 +252,7 @@ function chipsDasEvidencias(evidencias: readonly Evidencia[]): string {
 }
 
 /** O bloco delimitado de um gate ou formulário de ação: título em caixa alta e borda na cor do estado. */
-export const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
+const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
   `<div class="dm-gate${perigo ? " dm-gate-perigo" : ""}"${extra}><span class="dm-gate-titulo">${titulo}</span>${corpo}</div>`;
 
 /** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o aberto e elegível. */
@@ -427,7 +428,7 @@ const GATES: Partial<Record<FaseDemanda, { titulo: string; rota: string; aprovar
   },
 };
 
-// ——— o que o Auditor lê na aprovação da demanda (como o antigo gate do registro e do desenho da issue) ———
+// ——— o que o Auditor lê na aprovação da demanda ———
 
 interface CriterioDeAceite {
   id: string;

@@ -1,0 +1,95 @@
+# Contexto
+
+- Projeto: loja (branch base main)
+- Worktree (diretório de trabalho): /w
+- Diretório de saída (`$FABRIQUINHA_SAIDA`): /s
+
+## Demanda
+
+I-206, Busca (problema)
+
+A busca demora.
+
+## Critérios de aceite da demanda
+
+- **CA-2**: dado d, quando e, então f.
+
+## Rodada
+
+I-206.R2, Índice (fase desenvolvimento)
+
+Critérios citados:
+
+- **CA-2**: dado d, quando e, então f.
+
+## Ticket
+
+I-206.T3, Fazer (etapa encerrar_rodada)
+
+Detalhe.
+
+Dependências:
+
+- I-206.T1
+
+Caminhos:
+
+- `src/a.ts`
+
+## Arquivos não previstos
+
+Alterados fora dos caminhos dos tickets do plano, segundo a última revisão concluída da rodada; explique exatamente estes em `naoPrevistos` da mensagem do PR:
+
+(nenhum)
+
+## Impacto na arquitetura
+
+a demanda não tem relatório de impactos: `reversao` é opcional na mensagem do PR.
+
+## Modo de trabalhar: encerrar rodada
+
+**Objetivo:** preparar o que a Fabriquinha publica no PR da rodada I-206.R2 da demanda I-206 e o que o Auditor estuda para aprová-lo.
+
+**Passos:**
+
+1. Leia o plano, as revisões e os tickets concluídos da rodada I-206.R2.
+2. Escreva a mensagem do PR: explique cada arquivo não previsto no plano, listado na seção "Arquivos não previstos", e, se o impacto na arquitetura não for baixo (seção "Impacto na arquitetura"), diga como desfazer a mudança.
+3. Escreva a aula do código: a lógica por trás de cada parte alterada, trecho a trecho, na ordem de leitura.
+4. Se a mudança aparece no cliente (frontend), grave o vídeo de demonstração usando só o cliente; se não aparece, não grave vídeo.
+
+**Entregas:** a mensagem do PR e a aula do código do ticket I-206.T3, mais o vídeo de demonstração quando a mudança aparece no cliente.
+A Fabriquinha monta o PR com a sua mensagem, faz o push e o publica depois de você.
+
+**Quando parar:** quando as evidências estiverem aceitas; termine a sua resposta.
+
+**O que não fazer:** não crie nem altere PR, não faça commit nem push, não mude o código (as alterações da worktree são descartadas) e não mexa em nada fora do ticket I-206.T3. Refira-se a tickets e rodadas só pelos endereços públicos.
+
+## Leitura e edição
+
+Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
+
+- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.
+- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.
+- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
+- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
+
+## Evidências
+
+Você submete (`fabriquinha evidencia schema <tipo>` mostra o formato; `fabriquinha evidencia add <tipo> --dados <arquivo.json> --arquivo <caminho>...` submete):
+
+- `mensagem_pr`
+- `aula_codigo`
+- `video_demonstracao` (opcional)
+
+A Fabriquinha produz:
+
+- `relatorio_produtividade`
+- `pr_aberto`
+
+## Skills de artefato
+
+Leia a skill de cada evidência antes de produzi-la:
+
+- `artefato-mensagem-pr`
+- `artefato-aula-codigo`
+- `artefato-video-demonstracao`

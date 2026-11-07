@@ -1,6 +1,6 @@
 // Reserva do ticket da demanda SDLC (comparacao-sdlc-implementacao.md §4.1): aberto → em_execucao, só se a seleção o escolhe.
 import { z } from "zod";
-import { type Ator, exigirFabriquinha } from "./agregado.ts";
+import { type Ator, exigirFabriquinha } from "./ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";

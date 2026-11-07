@@ -8,7 +8,7 @@ import { predecessorasDaDemanda } from "./dependencias_demanda.ts";
 
 const FASES_LIDAS = "('planejamento', 'execucao', 'revisao_demanda', 'encerramento')";
 
-export interface DemandaParaDespacho {
+interface DemandaParaDespacho {
   agregado: AgregadoDemanda;
   predecessoras_satisfeitas: boolean;
 }

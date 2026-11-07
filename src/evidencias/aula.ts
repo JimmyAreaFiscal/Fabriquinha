@@ -1,6 +1,6 @@
 // Aula do código (F3 §4.5): o agente escreve a explicação de cada trecho; a Fabriquinha confere que o trecho é código
-// alterado pela issue e gera o HTML com o código lido do git, nunca copiado pelo agente (princípio 2).
-import type { Agregado } from "../dominio/agregado.ts";
+// alterado pela demanda e gera o HTML com o código lido do git, nunca copiado pelo agente (princípio 2).
+import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { exigirGit } from "../repositorio/worktree.ts";
 import { daUltimaConcluida } from "./schemas.ts";
@@ -21,13 +21,14 @@ interface Alterado {
   adicionadas: number | null;
 }
 
-/** Um trecho com o código da `head` e as linhas dele que a issue adicionou ou mudou. */
+/** Um trecho com o código da `head` e as linhas dele que a demanda adicionou ou mudou. */
 interface TrechoLido extends Trecho {
   linhas: string[];
   mudadas: ReadonlySet<number>;
 }
 
 /** As linhas do lado novo que o diff `-U0` adicionou ou mudou, pelos cabeçalhos `@@ -a,b +c,d @@`. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function linhasMudadas(diff: string): Set<number> {
   const mudadas = new Set<number>();
   for (const [, inicio, quantas] of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
@@ -38,6 +39,7 @@ export function linhasMudadas(diff: string): Set<number> {
 }
 
 /** `1-3, 7, 9-12`: as faixas de linhas, para o agente achar um trecho válido. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function faixas(linhas: ReadonlySet<number>): string {
   const ordenadas = [...linhas].toSorted((a, b) => a - b);
   const partes: string[] = [];
@@ -58,11 +60,11 @@ const esc = (texto: string): string =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
-/** Lê cada trecho na `head` da última revisão e recusa o que não é código alterado pela issue. */
-async function lerTrechos(ag: Agregado, worktree: string, trechos: readonly Trecho[]): Promise<TrechoLido[]> {
-  const revisao = daUltimaConcluida(ag, "revisao", "arquivos_alterados");
+/** Lê cada trecho na `head` da última revisão e recusa o que não é código alterado pela demanda. */
+async function lerTrechos(ag: AgregadoDemanda, worktree: string, trechos: readonly Trecho[]): Promise<TrechoLido[]> {
+  const revisao = daUltimaConcluida(ag, "revisar_rodada", "arquivos_alterados");
   if (!revisao) {
-    throw new ErroDeRegra("a issue não tem revisão concluída com arquivos_alterados", "a aula vem depois da revisão");
+    throw new ErroDeRegra("a demanda não tem revisão concluída com arquivos_alterados", "a aula vem depois da revisão");
   }
   const { base, head, arquivos } = revisao.dados as unknown as { base: string; head: string; arquivos: Alterado[] };
   const lidos: TrechoLido[] = [];
@@ -71,7 +73,7 @@ async function lerTrechos(ag: Agregado, worktree: string, trechos: readonly Trec
     const alterado = arquivos.find((a) => a.caminho === trecho.arquivo && a.status !== "D");
     if (!alterado) {
       throw new ErroDeRegra(
-        `${trecho.arquivo} não é um arquivo criado ou alterado pela issue`,
+        `${trecho.arquivo} não é um arquivo criado ou alterado pela demanda`,
         `escolha um da lista: ${arquivos.map((a) => a.caminho).join(", ")}`,
       );
     }
@@ -89,7 +91,7 @@ async function lerTrechos(ag: Agregado, worktree: string, trechos: readonly Trec
     const toca = [...mudadas].some((n) => n >= trecho.inicio && n <= trecho.fim);
     if (!toca) {
       throw new ErroDeRegra(
-        `${local} não toca nenhuma linha alterada pela issue`,
+        `${local} não toca nenhuma linha alterada pela demanda`,
         `as linhas alteradas de ${trecho.arquivo} são ${faixas(mudadas)}`,
       );
     }
@@ -120,9 +122,8 @@ ${codigo(t)}
 </section>`;
 }
 
-function html(ag: Agregado, trechos: readonly TrechoLido[]): string {
-  const issue = `I-${String(ag.issue.id)}`;
-  const titulo = ag.issue.titulo === null ? issue : `${issue}: ${esc(ag.issue.titulo)}`;
+function html(ag: AgregadoDemanda, trechos: readonly TrechoLido[]): string {
+  const titulo = `${ag.demanda.id}: ${esc(ag.demanda.titulo)}`;
   const sumario = trechos
     .map((t, i) => `<li><a href="#t${String(i + 1)}"><code>${esc(t.arquivo)}</code></a> — ${esc(t.oQueFaz)}</li>`)
     .join("");
@@ -131,7 +132,7 @@ function html(ag: Agregado, trechos: readonly TrechoLido[]): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aula do código da ${issue}</title>
+<title>Aula do código da ${ag.demanda.id}</title>
 <style>
 :root { --texto: #1f2328; --fraco: #59636e; --fundo: #fff; --caixa: #f6f8fa; --borda: #d0d7de; --mudou: #e6ffec; --marca: #1a7f37; }
 @media (prefers-color-scheme: dark) { :root { --texto: #e6edf3; --fraco: #9198a1; --fundo: #0d1117; --caixa: #151b23; --borda: #3d444d; --mudou: #12261e; --marca: #3fb950; } }
@@ -157,7 +158,7 @@ dt { font-weight: 600; } dd { margin: 0; white-space: pre-wrap; }
 </head>
 <body>
 <h1>Aula do código da ${titulo}</h1>
-<p class="nota">Os trechos estão na ordem de leitura. O código vem do git; as linhas marcadas com + foram alteradas pela issue.</p>
+<p class="nota">Os trechos estão na ordem de leitura. O código vem do git; as linhas marcadas com + foram alteradas pela demanda.</p>
 <ol class="sumario">${sumario}</ol>
 ${trechos.map((t, i) => secao(t, i)).join("\n")}
 </body>
@@ -169,6 +170,6 @@ ${trechos.map((t, i) => secao(t, i)).join("\n")}
  * F3 §4.5: confere cada trecho contra o diff da última revisão (`base...head` do `arquivos_alterados`, desde o ancestral comum) e devolve o HTML
  * da aula, que vira o anexo da evidência.
  */
-export async function gerarAula(ag: Agregado, worktree: string, trechos: readonly Trecho[]): Promise<string> {
+export async function gerarAula(ag: AgregadoDemanda, worktree: string, trechos: readonly Trecho[]): Promise<string> {
   return html(ag, await lerTrechos(ag, worktree, trechos));
 }

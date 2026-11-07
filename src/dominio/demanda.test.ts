@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
   branchDemanda,
   branchRodada,
-  DecisaoRef,
   DemandaId,
   formatarRodadaRef,
   formatarTicketRef,
@@ -69,8 +68,6 @@ test("mesmo número local em demandas distintas gera identidades e branches dist
     TicketIdentidade.parse({ demanda_id: "I-2", ticket_id: 1 }),
   );
   assert.equal(TicketIdentidade.parse({ demanda_id: "I-1", ticket_id: 1 }).rodada_id, undefined);
-  assert.ok(DecisaoRef.safeParse({ demanda_id: "I-1", ticket_id: 1, decisao_id: 1 }).success);
-  assert.ok(!DecisaoRef.safeParse({ ticket_id: 1, decisao_id: 1 }).success);
   assert.equal(branchDemanda("I-196"), "fabriquinha/I-196");
   assert.equal(branchRodada("I-1", 1), "fabriquinha/I-1-1");
   assert.notEqual(branchRodada("I-1", 1), branchRodada("I-2", 1));

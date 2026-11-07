@@ -15,7 +15,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
-import { AUDITOR } from "../../src/dominio/agregado.ts";
+import { AUDITOR } from "../../src/dominio/ator.ts";
+import { submeterPlano } from "../../src/dominio/transicoes_demanda.ts";
 import { registrarCorrecoesSessao } from "../../src/dominio/transicoes_rodada.ts";
 import {
   type AutorDemanda,
@@ -29,7 +30,7 @@ import { type DepsDespacho, despacharDemandas } from "../../src/execucao/despach
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/execucao/execucao_demanda.ts";
 import { fecharTicketDemanda } from "../../src/execucao/fechamento_ticket.ts";
 import * as gestao from "../../src/execucao/gestao_demandas.ts";
-import { aprovarPlanejamentoDemanda, submeterPlanejamento } from "../../src/execucao/planejamento.ts";
+import { aprovarPlanejamentoDemanda } from "../../src/execucao/planejamento.ts";
 import { decidirRevisaoIntegral } from "../../src/execucao/revisao_demanda.ts";
 import { decidirRevisaoRodada } from "../../src/execucao/revisao_rodada.ts";
 import { reprovarPRRodada, concluirSessaoAjustes } from "../../src/execucao/sessao_ajustes.ts";
@@ -236,16 +237,14 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
   await esperar(() => chamadas(c) > antes, "o pi receber o prompt do planejamento");
   interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: 2 });
   await fim;
-  submeterPlanejamento(
-    c.banco,
-    id,
-    {
-      demanda_id: id,
-      criterios: ["CA-1"],
-      rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Rodada 1", e2e: false, criterios: ["CA-1"], depende: [] }],
-      tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Ticket 1.1", descricao: "d" }],
-    },
-    { tipo: "agente", execucao: 1, ticket: 2 },
+  const plano = {
+    demanda_id: id,
+    criterios: ["CA-1"],
+    rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Rodada 1", e2e: false, criterios: ["CA-1"], depende: [] }],
+    tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Ticket 1.1", descricao: "d" }],
+  };
+  comDemanda(c.banco, id, (ag) =>
+    submeterPlano(ag, plano, { tipo: "agente", execucao: 1, ticket: 2 }, { agora: agora() }),
   );
   await aprovarPlanejamentoDemanda(c.banco, id, {});
 }

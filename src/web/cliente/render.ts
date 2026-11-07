@@ -1,12 +1,12 @@
 // Peças comuns do cliente (F7 §4.4) como funções puras que devolvem HTML: a navegação fixa, a página não encontrada e
 // os formatos que mais de uma tela usa (rótulos, caminhos, datas, números). O texto que vem do servidor passa sempre
 // por `escapar`.
-import type { ModoExecucao, Ticket } from "../../dominio/agregado.ts";
-import type { FaseDemanda, FaseRodada, Modelo } from "../../dominio/primitivos.ts";
+import type { FaseDemanda, FaseRodada, Modelo, StatusTicket } from "../../dominio/primitivos.ts";
+import type { ModoExecucao } from "../../dominio/sessoes.ts";
 import type { Pagina } from "./caminhos.ts";
 
 /** O status do ticket (F1 §3.5) como as telas o mostram. */
-export const STATUS_DO_TICKET: Record<Ticket["status"], string> = {
+const STATUS_DO_TICKET: Record<StatusTicket, string> = {
   aberto: "aberto",
   em_execucao: "em execução",
   concluido: "concluído",
@@ -16,13 +16,13 @@ export const STATUS_DO_TICKET: Record<Ticket["status"], string> = {
 };
 
 /** O status do ticket como as telas o mostram: o `em_execucao` separa o pi rodando do sistema (testes, CI, espera). */
-export const statusDoTicket = (status: Ticket["status"], piAtivo = false): string => {
+export const statusDoTicket = (status: StatusTicket, piAtivo = false): string => {
   if (status !== "em_execucao") return STATUS_DO_TICKET[status];
   return piAtivo ? "sessão pi ativa" : "em execução (sistema)";
 };
 
 /** O status do ticket com inicial maiúscula (Sessão pi ativa), para a página e o quadro das demandas. */
-export const rotuloDoStatus = (status: Ticket["status"], piAtivo = false): string => {
+export const rotuloDoStatus = (status: StatusTicket, piAtivo = false): string => {
   const rotulo = statusDoTicket(status, piAtivo);
   return rotulo.charAt(0).toUpperCase() + rotulo.slice(1);
 };
@@ -50,7 +50,7 @@ export const FASE_DA_RODADA: Record<FaseRodada, [rotulo: string, pilula: string]
 };
 
 /** A cor do status do ticket, nas pílulas comuns; em execução não pulsa, porque o ticket pode estar parado à espera. */
-export const PILULA_DO_STATUS: Record<Ticket["status"], string> = {
+export const PILULA_DO_STATUS: Record<StatusTicket, string> = {
   aberto: "pill-neutro",
   em_execucao: "pill-rodando sem-pulso",
   concluido: "pill-ok",
@@ -60,7 +60,7 @@ export const PILULA_DO_STATUS: Record<Ticket["status"], string> = {
 };
 
 /** A pílula do status: só o pi rodando pulsa; o `em_execucao` sem pi pode estar parado à espera. */
-export const pilulaDoStatus = (status: Ticket["status"], piAtivo = false): string =>
+export const pilulaDoStatus = (status: StatusTicket, piAtivo = false): string =>
   status === "em_execucao" && piAtivo ? "pill-rodando" : PILULA_DO_STATUS[status];
 
 /** O modo da sessão (F4 §5.1), no feminino de "sessão autônoma". */

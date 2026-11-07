@@ -19,7 +19,7 @@ export interface Conformidade {
 }
 
 /** Renome conta pelo caminho novo, e o anterior só entra se estava no plano; exclusão já vem pelo caminho excluído. */
-export function conformidade(planejados: string[], arquivos: ArquivoDaRodada[]): Conformidade {
+function conformidade(planejados: string[], arquivos: ArquivoDaRodada[]): Conformidade {
   const planejado = new Set(planejados);
   const alterado = new Set<string>();
   for (const a of arquivos) {

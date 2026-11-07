@@ -15,7 +15,7 @@ import { guardarBytes } from "./arquivos.ts";
 import { escrever } from "./banco.ts";
 import { projeto } from "./projetos.ts";
 
-export interface Anexo {
+interface Anexo {
   nome: string;
   sha256: string;
   bytes: number;
@@ -231,7 +231,7 @@ export function enfileirar(banco: DatabaseSync, tarefa: Id): { execucoes: Id[]; 
   });
 }
 
-export type Marca =
+type Marca =
   | { status: "em_andamento" }
   | { status: "concluida"; relatorio: RelatorioSimulacao }
   | { status: "falhou"; erro: string };

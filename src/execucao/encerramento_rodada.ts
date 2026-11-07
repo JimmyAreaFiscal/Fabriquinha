@@ -4,7 +4,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import type { AgregadoDemanda, EvidenciaDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
 import { predecessorasPendentes } from "../dominio/dependencia_demanda.ts";

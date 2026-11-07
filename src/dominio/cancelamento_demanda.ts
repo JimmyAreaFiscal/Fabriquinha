@@ -1,6 +1,6 @@
 // Cancelar e arquivar a demanda SDLC (comparacao-sdlc-implementacao.md §3, decisão D08 do Auditor).
 // Funções puras no estilo de transicoes_demanda.ts; interromper a execução e cascatear às dependentes é da aplicação.
-import { type Ator, exigirAuditor } from "./agregado.ts";
+import { type Ator, exigirAuditor } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import type { FaseDemanda } from "./primitivos.ts";

@@ -14,7 +14,7 @@ export function sinalNoGrupo(pgid: number, sinal: NodeJS.Signals): void {
   }
 }
 
-export interface Saida {
+interface Saida {
   codigo: number | null;
   saida: string;
   erro: string;
@@ -22,7 +22,7 @@ export interface Saida {
   limiteEstourado: boolean;
 }
 
-export interface Opcoes {
+interface Opcoes {
   env?: NodeJS.ProcessEnv;
   cwd?: string;
   /** Tempo máximo; passado ele, o grupo de processos inteiro leva SIGKILL (o que o shell lançou inclusive). */
@@ -79,6 +79,7 @@ export function executar(
  * mensagens e saídas lidas pelo texto (como a do `clean`) nunca vêm traduzidas. Passado `limiteMs`, o grupo do git
  * é morto e o stderr diz por quê: um `fetch` parado nunca prende a execução.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function gitComLimite(limiteMs: number, dir: string, ...args: string[]): Promise<Saida> {
   const r = await executar("git", ["-C", dir, ...args], {
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },

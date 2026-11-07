@@ -7,7 +7,7 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../dominio/sessoes.ts";
 import { escrever } from "./banco.ts";
 
-export interface EstadoSessoes {
+interface EstadoSessoes {
   sessoes: Sessao[];
   execucoes: ExecucaoSessao[];
   usos: UsoModeloExecucao[];
@@ -138,7 +138,7 @@ export const comSessoesDoTicket = (
     return depois;
   });
 
-export interface ExecucaoAberta {
+interface ExecucaoAberta {
   id: string;
   sessao_id: string;
   demanda_id: string;

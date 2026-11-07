@@ -6,7 +6,7 @@ import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { AUDITOR } from "../src/dominio/agregado.ts";
+import { AUDITOR } from "../src/dominio/ator.ts";
 import { predecessorasPendentes } from "../src/dominio/dependencia_demanda.ts";
 import {
   abrir as abrirAvaliacao,
@@ -19,7 +19,7 @@ import * as gestao from "../src/execucao/gestao_demandas.ts";
 import { metricasDaDemanda } from "../src/metricas/demanda.ts";
 import { achadoDaDemanda } from "../src/persistencia/avaliacoes.ts";
 import { predecessorasDaDemanda } from "../src/persistencia/dependencias_demanda.ts";
-import { alterarLimiteParalelismo, configuracao } from "../src/persistencia/servico.ts";
+import { configuracao } from "../src/persistencia/servico.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import {
   abrirPortao,
@@ -31,7 +31,7 @@ import {
   statusDe,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { base, criarCenario, CTX, demanda, esperar, registrarExterna } from "./apoio.ts";
+import { base, criarCenario, CTX, demanda, esperar, gravarLimiteParalelismo, registrarExterna } from "./apoio.ts";
 import { despacharDemandas } from "../src/execucao/despacho_demanda.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
@@ -42,7 +42,7 @@ const ler = (b: DatabaseSync, sql: string) =>
 
 test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, arquivada satisfaz dependência e o histórico fica", async (t) => {
   const c = criarCenario(t);
-  alterarLimiteParalelismo(c.banco, 4);
+  gravarLimiteParalelismo(c.banco, 4);
   const config = configuracao(c.banco);
   const a = await demandaEmExecucao(c, [{ tickets: 1 }]);
   const alheia = await demandaEmExecucao(c, [{ tickets: 1 }]);

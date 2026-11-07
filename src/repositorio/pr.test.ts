@@ -32,7 +32,7 @@ const URL_GH = "https://github.com/org/loja/pull/";
 const URL_AZ = "https://dev.azure.com/org/loja/_git/loja/pullrequest/";
 
 let n = 0;
-/** Clone com `origin` bare, `main` publicada e a branch da issue com um commit só local. */
+/** Clone com `origin` bare, `main` publicada e a branch da demanda com um commit só local. */
 function cenario(tipo: Hospedagem = "github") {
   const dir = join(base, `c${String(++n)}`);
   const bare = join(dir, "origin.git");
@@ -75,7 +75,7 @@ function cenario(tipo: Hospedagem = "github") {
         },
         log,
       ),
-    /** O commit da branch da issue no `origin`, ou "" se ela não foi publicada. */
+    /** O commit da branch da demanda no `origin`, ou "" se ela não foi publicada. */
     publicado: () => git(bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${BRANCH}`),
   };
 }
@@ -169,7 +169,7 @@ test("conferência: PR da branch fora das evidências barra antes do push; fecha
   await recusa(
     c.publicar("x"),
     `PR criado fora da Fabriquinha e já mergeado: ${URL_GH}1 (a Fabriquinha não publica sobre ele; o Auditor ` +
-      "resolve na plataforma, revertendo o merge se o código não devia ter entrado, e decide o destino da issue)",
+      "resolve na plataforma, revertendo o merge se o código não devia ter entrado, e decide o destino da demanda)",
   );
 
   hospedagem.mudar(1, { estado: "fechado" });
@@ -209,7 +209,7 @@ test("PR com a marca já mergeado não é adotado: cai na mensagem do PR de fora
   await recusa(
     c.publicar("x"),
     `PR criado fora da Fabriquinha e já mergeado: ${URL_GH}1 (a Fabriquinha não publica sobre ele; o Auditor ` +
-      "resolve na plataforma, revertendo o merge se o código não devia ter entrado, e decide o destino da issue)",
+      "resolve na plataforma, revertendo o merge se o código não devia ter entrado, e decide o destino da demanda)",
   );
   assert.equal(c.publicado(), "");
   assert.deepEqual(
@@ -359,10 +359,10 @@ test("saída inesperada do CLI vira ErroDeRegra com o que veio", async () => {
     "saída inesperada de gh pr list: não é JSON (confira a versão do CLI e execute o ticket de novo)",
   );
   hospedagem.zerar();
-  hospedagem.responder("pr create", "Warning: 1 uncommitted change\nhttps://github.com/org/loja/issues/9\n");
+  hospedagem.responder("pr create", "Warning: 1 uncommitted change\nhttps://github.com/org/loja/discussions/9\n");
   await recusa(
     c.publicar("x"),
-    "saída inesperada de gh pr create: https://github.com/org/loja/issues/9 (confira a versão do gh)",
+    "saída inesperada de gh pr create: https://github.com/org/loja/discussions/9 (confira a versão do gh)",
   );
   hospedagem.zerar();
   hospedagem.responder("pr create", "Warning: 1 uncommitted change\nhttps://github.com/org/loja/pull/9\n");

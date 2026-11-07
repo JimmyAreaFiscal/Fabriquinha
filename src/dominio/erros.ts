@@ -10,7 +10,7 @@ export class ErroDeRegra extends Error {
   }
 }
 
-/** O ID pedido (issue, ticket, sessão, execução, projeto) não existe: um ErroDeRegra que o web responde com 404. */
+/** O ID pedido (demanda, ticket, sessão, execução, projeto) não existe: um ErroDeRegra que o web responde com 404. */
 export class ErroDeInexistente extends ErroDeRegra {
   override name = "ErroDeInexistente";
 }

@@ -7,7 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ZodError } from "zod";
-import { AUDITOR } from "../dominio/agregado.ts";
+import { AUDITOR } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeEscopo } from "../dominio/erros.ts";
 import { registrarCorrecoesSessao } from "../dominio/transicoes_rodada.ts";

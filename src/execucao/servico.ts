@@ -22,6 +22,7 @@ const REINICIADO = "serviço reiniciado";
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
 
+/** @testes tipo que o teste usa para montar a entrada */
 export interface Servico {
   banco: DatabaseSync;
   /** A porta em que o serviço escuta: a pedida, ou a que ele escolheu na porta 0. */
@@ -34,6 +35,7 @@ export interface Servico {
 }
 
 /** A porta do serviço e trava de instância única: `$FABRIQUINHA_PORTA`, padrão 4317 (F4 §10). */
+/** @testes o teste confere a leitura da porta do ambiente */
 export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => Number(env.FABRIQUINHA_PORTA || 4317);
 
 /**

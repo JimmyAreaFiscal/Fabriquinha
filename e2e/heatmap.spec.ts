@@ -1,4 +1,4 @@
-// Heatmap (F7 §4.4, issue I-7): a aba Heatmap da página Projetos, lida do git da base de repositórios com commits
+// Heatmap (F7 §4.4, demanda I-7): a aba Heatmap da página Projetos, lida do git da base de repositórios com commits
 // datados em relação a hoje (a janela é de 12 meses). CA-1 a CA-15.
 import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";

@@ -3,7 +3,6 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   type DependenciaDemanda,
   dependentesNaoConcluidas,
-  exigirRemovivel,
   registrarDependencia,
 } from "../dominio/dependencia_demanda.ts";
 import { encontrado } from "../dominio/erros.ts";
@@ -29,15 +28,6 @@ export const registrarDependenciaDemanda = (banco: DatabaseSync, demandaId: stri
     banco
       .prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES (?, ?)")
       .run(nova.demanda_id, nova.depende_demanda_id);
-  });
-};
-
-export const removerDependenciaDemanda = (banco: DatabaseSync, demandaId: string, dependeId: string): void => {
-  escrever(banco, () => {
-    exigirRemovivel(arestas(banco), demandaDe(banco, demandaId), dependeId);
-    banco
-      .prepare("DELETE FROM dependencia_demanda WHERE demanda_id = ? AND depende_demanda_id = ?")
-      .run(demandaId, dependeId);
   });
 };
 

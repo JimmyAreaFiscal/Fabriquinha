@@ -5,11 +5,17 @@ import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
-import { type Ator, TipoEvidencia } from "../dominio/agregado.ts";
+import type { Ator } from "../dominio/ator.ts";
 import { formatarRodadaRef, formatarTicketRef, interpretarRef } from "../dominio/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../dominio/erros.ts";
 import { CATALOGO_ETAPAS } from "../dominio/evidencia_etapa.ts";
-import { type SchemaEvidencia, schemaDe, schemaDeEtapa, type TipoSchemaEtapa } from "../evidencias/schemas.ts";
+import {
+  type SchemaEvidencia,
+  schemaDe,
+  schemaDeEtapa,
+  TipoEvidencia,
+  type TipoSchemaEtapa,
+} from "../evidencias/schemas.ts";
 import { registrarCorrecoesSessao } from "../dominio/transicoes_rodada.ts";
 import { decidirRevisaoIntegral } from "../execucao/revisao_demanda.ts";
 import { decidirRevisaoRodada } from "../execucao/revisao_rodada.ts";
