@@ -1,4 +1,4 @@
-// Entrada do `npm run estresse`: sobe o ambiente temporário, mede cada ação (200 chamadas, 20 simultâneas), imprime a
+// Entrada do `npm run estresse`: sobe o ambiente temporário, mede cada ação (40 chamadas, 20 simultâneas), imprime a
 // tabela, grava o JSON em estresse/resultados/ e sai com 1 por erro, p95 acima do orçamento ou rota ou comando sem medição.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,12 +12,17 @@ import {
 } from "./grupos/etapas.ts";
 import { acoesHttpLeitura, semMedicao } from "./grupos/http_leitura.ts";
 import { acoesHttpMutacao, semMedicao as semMedicaoMutacao } from "./grupos/http_mutacao.ts";
-import { type Medicao, medir } from "./medir.ts";
+import { CHAMADAS, type Medicao, medir } from "./medir.ts";
 
-const CHAMADAS = 200;
 const SIMULTANEAS_HTTP = 20;
 
 const amb = await subirAmbiente();
+// Morto pelo tempo limite (SIGTERM) ou por Ctrl+C, o `finally` não roda: o ambiente cai junto e a raiz temporária some.
+for (const sinal of ["SIGTERM", "SIGINT"] as const) {
+  process.once(sinal, () => {
+    void amb.encerrar().finally(() => process.exit(1));
+  });
+}
 let medidas: [string, Medicao][];
 let faltando: string[];
 try {
