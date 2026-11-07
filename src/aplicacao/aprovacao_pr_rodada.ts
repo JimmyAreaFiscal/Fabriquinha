@@ -1,7 +1,7 @@
 // Aprovação do PR da rodada pelo Auditor (comparacao-sdlc-implementacao.md §§4 e 6): validar, integrar na hospedagem,
 // avançar a demanda local, confirmar e registrar. A hospedagem é a fonte da verdade, então repetir a decisão é seguro.
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, exigirAuditor } from "../nucleo/ator.ts";
+import { type Ator, exigirAuditor, FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
@@ -12,9 +12,13 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { integrarPR } from "../infra/repositorio/pr.ts";
 import { caminhoDaWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit, naFilaDoProjeto } from "../infra/repositorio/worktree.ts";
+import { noLog } from "../infra/registro.ts";
 import type { RefRodada } from "./encerramento_rodada.ts";
 
-/** Aprova o PR da rodada com `nota`. Falha antes da confirmação não grava nada: o gate segue aberto para nova tentativa. */
+/**
+ * Aprova o PR da rodada com `nota` (o Auditor) ou sem ela (a Fabriquinha, na aprovação automática). Falha antes da
+ * confirmação não grava nada: o gate segue aberto para nova tentativa.
+ */
 export async function aprovarPRRodada(
   banco: DatabaseSync,
   ref: RefRodada,
@@ -34,7 +38,7 @@ export async function aprovarPRRodada(
     `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
     "confira o estado da rodada",
   );
-  const entrada = { ...ref, ticket_id: ticket.ticket_id, nota };
+  const entrada = { ...ref, ticket_id: ticket.ticket_id, ...(nota !== undefined && { nota }) };
 
   if (rodada.fase === "concluida") {
     exigirAuditor(ator, "aprovar o PR da rodada");
@@ -73,4 +77,30 @@ export async function aprovarPRRodada(
       integracao: { ...ref, ticket_id: ticket.ticket_id, confirmada: true, branch_destino: branch },
     }),
   );
+}
+
+/**
+ * Os projetos que aprovam sozinhos o PR da rodada: `$FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA`, nomes separados por
+ * vírgula (vem do `ambiente` do serviço). Ausente, nenhum: o Auditor decide todo gate, como sempre.
+ */
+const aprovaPRDaRodadaSozinho = (projeto: string, env: NodeJS.ProcessEnv): boolean =>
+  (env.FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA ?? "")
+    .split(",")
+    .map((nome) => nome.trim())
+    .includes(projeto);
+
+/**
+ * Logo depois do encerramento: no projeto que a ligou, a Fabriquinha aprova o PR da rodada que chegou ao gate, porque
+ * chegar a ele já exige a revisão aprovada e o PR sem conflito nem check falho. O Auditor fica com o PR final da demanda.
+ * A falha só vai ao log e deixa o gate aberto para o Auditor; fora do gate ou sem a opção, nada acontece.
+ */
+export async function aprovarPRRodadaSeAutomatico(
+  banco: DatabaseSync,
+  ag: AgregadoDemanda,
+  ref: RefRodada,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
+  const noGate = ag.rodadas.some((r) => r.rodada_id === ref.rodada_id && r.fase === "aprovacao_pull_request");
+  if (!noGate || !aprovaPRDaRodadaSozinho(ag.demanda.projeto, env)) return;
+  await aprovarPRRodada(banco, ref, undefined, FABRIQUINHA).catch(noLog);
 }

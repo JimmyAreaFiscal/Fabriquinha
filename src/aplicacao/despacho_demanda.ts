@@ -14,6 +14,7 @@ import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from 
 import { noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
 import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
@@ -39,8 +40,11 @@ const rodadaDe = (t: TicketDemanda) => ({
   rodada_id: existe(t.rodada_id, `o ticket ${formatarTicketRef(t)} não é de uma rodada`, "use um ticket de rodada"),
 });
 
-/** Encerra a rodada: conduz o agente e, ao fim, confere e publica o PR; a falha do agente ou da publicação falha o ticket. */
-async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: number): Promise<unknown> {
+/**
+ * Encerra a rodada: conduz o agente e, ao fim, confere e publica o PR; a falha do agente ou da publicação falha o ticket.
+ * No projeto com a aprovação automática, o PR que chegou ao gate é aprovado em seguida.
+ */
+async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: number): Promise<void> {
   const rodada = rodadaDe(t);
   const { id, fim } = iniciarEncerramentoRodada(banco, rodada, limiteMin);
   await fim;
@@ -49,7 +53,8 @@ async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: 
     falharTicketDemanda(banco, t, erro);
     return;
   }
-  return falharSePreso(banco, t, () => concluirEncerramentoRodada(banco, rodada));
+  const encerrada = await falharSePreso(banco, t, () => concluirEncerramentoRodada(banco, rodada));
+  await aprovarPRRodadaSeAutomatico(banco, encerrada, rodada);
 }
 
 /** Roda `etapa`; se ela recusar sem falhar o ticket (documentação, estado), falha-o para não ficar preso em execução. */
