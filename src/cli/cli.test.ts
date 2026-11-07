@@ -153,7 +153,7 @@ test("--help de um grupo imprime só a ajuda dele no stdout", async () => {
   assert.doesNotMatch(s.out, /fabriquinha (servidor|abrir)/);
 });
 
-/** Uma porta livre em 127.0.0.1, para o serviço de teste não disputar a 4317 de outro serviço. */
+/** Uma porta livre em 127.0.0.1, para o serviço de teste não disputar a porta padrão de outro serviço. */
 async function portaLivre(): Promise<number> {
   const s = createServer().listen(0, "127.0.0.1");
   await new Promise((pronto) => s.once("listening", pronto));
@@ -202,7 +202,7 @@ test("abrir lê web.url e abre o navegador; sem o arquivo, diz que o serviço n�
     `o serviço não está rodando: falta ${join(raiz, "web.url")} (suba-o com fabriquinha servidor)`,
   );
 
-  const url = "http://127.0.0.1:4317/entrar?token=abc";
+  const url = "http://127.0.0.1:8123/entrar?token=abc";
   writeFileSync(join(raiz, "web.url"), `${url}\n`);
   assert.deepEqual(json(await cli(env, ["abrir"])), { url });
   while (!existsSync(aberto)) await dormir(10);

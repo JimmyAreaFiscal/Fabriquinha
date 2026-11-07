@@ -1,6 +1,6 @@
 // Ambiente do estresse: uma Fabriquinha numa raiz temporária, na porta livre que ela mesma escolhe (FABRIQUINHA_PORTA=0,
-// nunca a 4317), com o pi falso do e2e ($FABRIQUINHA_PI) e o agendador desligado (o padrão de uma raiz nova). Nada toca
-// em ~/fabriquinha. Subida como a de e2e/apoio.ts, git isolado como o de integracao/apoio.ts.
+// nunca a porta padrão), com o pi falso do e2e ($FABRIQUINHA_PI) e o agendador desligado (o padrão de uma raiz nova). Nada toca
+// na raiz real da Fabriquinha. Subida como a de e2e/apoio.ts, git isolado como o de integracao/apoio.ts.
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
 import {
