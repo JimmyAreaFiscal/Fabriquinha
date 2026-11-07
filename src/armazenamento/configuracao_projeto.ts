@@ -4,10 +4,10 @@ import { isAbsolute } from "node:path";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { z } from "zod";
 import { ConfiguracaoEtapaProjeto, Projeto } from "../nucleo/configuracao_projeto.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
+import { ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever } from "./banco.ts";
 import { colunasDaConfiguracaoAgente } from "./configuracao_agente.ts";
-import { configuracaoProjeto } from "./projetos.ts";
+import { configuracaoProjeto, projetoExistente } from "./projetos.ts";
 
 // A leitura é de `projetos.ts`; as telas da Configuração ainda importam daqui (fronteiras.test.ts).
 export { configuracaoProjeto, etapasDoProjeto } from "./projetos.ts";
@@ -34,10 +34,10 @@ export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown)
   if (!isAbsolute(p.raiz_git))
     throw new ErroDeRegra(`raiz_git ${p.raiz_git} não é absoluta`, "informe um caminho absoluto");
   return escrever(banco, () => {
-    const { changes } = banco
+    projetoExistente(banco, p.nome, "cadastre o projeto antes");
+    banco
       .prepare("UPDATE projeto SET raiz_git = ?, branch_base = ?, hospedagem = ?, chave_sonarqube = ? WHERE nome = ?")
       .run(p.raiz_git, p.branch_base, p.hospedagem, p.chave_sonarqube, p.nome);
-    if (changes === 0) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre o projeto antes");
     for (const t of ["glob_e2e", "configuracao_e2e", "linguagem_projeto", "fitness_function_projeto"])
       banco.prepare(`DELETE FROM ${t} WHERE projeto = ?`).run(p.nome);
     inserir(banco, "fitness_function_projeto", p.nome, ["nome", "comando", "descricao"], p.fitness);

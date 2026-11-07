@@ -10,7 +10,7 @@ import {
   type LinhasPorDemanda,
 } from "../armazenamento/commits_demanda.ts";
 import { noLog } from "../infra/registro.ts";
-import { projeto as lerProjeto } from "../armazenamento/projetos.ts";
+import { projeto as lerProjeto, projetoExistente } from "../armazenamento/projetos.ts";
 import { type CommitHumano, cursorDaBase, gravarVarredura } from "../armazenamento/retrabalho.ts";
 import { executar, git, LIMITE_COMANDO_MS } from "../infra/processo.ts";
 import { exigirGit, naFilaDoProjeto } from "../infra/repositorio/worktree.ts";
@@ -132,8 +132,7 @@ export async function registrarRetrabalhoDemanda(
  * rodam no repositório principal, na fila do projeto (F5 §6), como a criação de worktree e o commit.
  */
 export async function varrerBase(banco: DatabaseSync, projeto: string): Promise<void> {
-  const p = lerProjeto(banco, projeto);
-  if (p === undefined) throw new ErroDeInexistente(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
+  const p = projetoExistente(banco, projeto, "cadastre-o na Configuração");
   const ref = `refs/remotes/origin/${p.branchBase}`;
   await naFilaDoProjeto(raizDo(banco), projeto, async () => {
     // Refspec explícita, como na criação de worktree: um branchBase começando com "-" nunca vira opção do git.
