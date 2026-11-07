@@ -9,12 +9,12 @@ import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { recuperarAuditorias } from "../src/execucao/auditoria.ts";
-import { abrir } from "../src/persistencia/banco.ts";
-import { registrarProjeto } from "../src/persistencia/projetos.ts";
-import { execucoesAbertasDaDemanda } from "../src/persistencia/sessoes.ts";
-import { falharPendentes } from "../src/persistencia/simulacao.ts";
-import { sinalNoGrupo } from "../src/processo.ts";
+import { recuperarAuditorias } from "../src/aplicacao/auditoria.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
+import { registrarProjeto } from "../src/armazenamento/projetos.ts";
+import { execucoesAbertasDaDemanda } from "../src/armazenamento/sessoes.ts";
+import { falharPendentes } from "../src/armazenamento/simulacao.ts";
+import { sinalNoGrupo } from "../src/infra/processo.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */
@@ -86,7 +86,11 @@ export const test = base.extend<{
       let log = "";
       const servico = spawn(
         process.execPath,
-        ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../src/cli/fabriquinha.ts"), "servidor"],
+        [
+          "--disable-warning=ExperimentalWarning",
+          join(import.meta.dirname, "../src/composicao/fabriquinha.ts"),
+          "servidor",
+        ],
         {
           env: {
             ...process.env,

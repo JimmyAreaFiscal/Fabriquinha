@@ -5,16 +5,16 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR, FABRIQUINHA } from "../src/dominio/ator.ts";
-import { reabrirTicket } from "../src/dominio/transicoes_demanda.ts";
-import { registrarTentativaEncerramento } from "../src/dominio/transicoes_encerramento.ts";
-import { marcaDoPRFinal } from "../src/evidencias/encerramento_demanda.ts";
-import { aprovarPRRodada } from "../src/execucao/aprovacao_pr_rodada.ts";
-import type { DepsDespacho } from "../src/execucao/despacho_demanda.ts";
-import { decidirRevisaoIntegral } from "../src/execucao/revisao_demanda.ts";
-import { comDemanda } from "../src/persistencia/demandas.ts";
-import { integrarPR } from "../src/repositorio/pr.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/repositorio/worktree-demanda.ts";
+import { AUDITOR, FABRIQUINHA } from "../src/nucleo/ator.ts";
+import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
+import { registrarTentativaEncerramento } from "../src/nucleo/transicoes_encerramento.ts";
+import { marcaDoPRFinal } from "../src/aplicacao/evidencias/encerramento_demanda.ts";
+import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
+import type { DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
+import { decidirRevisaoIntegral } from "../src/aplicacao/revisao_demanda.ts";
+import { comDemanda } from "../src/armazenamento/demandas.ts";
+import { integrarPR } from "../src/infra/repositorio/pr.ts";
+import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   agente,
   agora,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FaseDemanda } from "../src/dominio/primitivos.ts";
-import { carregarDemanda, criarDemandaNova } from "../src/persistencia/demandas.ts";
+import { FaseDemanda } from "../src/nucleo/primitivos.ts";
+import { carregarDemanda, criarDemandaNova } from "../src/armazenamento/demandas.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import {
   agregadoComPullRequestAberto,

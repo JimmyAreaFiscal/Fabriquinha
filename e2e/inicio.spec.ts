@@ -2,7 +2,7 @@
 // as demandas em andamento, com as colunas por fase da demanda e, na execução, por fase da rodada; prints a 1440 e
 // 375 px, sem rolagem horizontal da página (abaixo de 1320 px o board rola dentro dele).
 import type { Locator, Page } from "@playwright/test";
-import { abrir } from "../src/persistencia/banco.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
 import { fotografar, projeto } from "./apoio.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
 import { expect, test } from "./apoio.ts";

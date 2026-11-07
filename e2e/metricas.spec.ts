@@ -1,6 +1,6 @@
 // Métricas (F7 §4.4, §7), lidas das tabelas da demanda: mudar o mês em foco faz a média usar só os meses anteriores a ele; o gráfico mostra a dica
 // e troca o foco no clique; o Início mostra a frase do mês e o Projeto, os 5 cards do mês.
-import { abrir } from "../src/persistencia/banco.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
 import { expect, test } from "./apoio.ts";
 
 /** O agora do navegador, fixo em outubro de 2026: o mês corrente é M0, e o período padrão vai de nov/25 a out/26. */

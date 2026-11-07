@@ -5,15 +5,15 @@ import assert from "node:assert/strict";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type Ator } from "../src/dominio/ator.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/dominio/evidencia_demanda.ts";
-import { argumentosPi } from "../src/execucao/pi.ts";
-import { comDemanda } from "../src/persistencia/demandas.ts";
+import { type Ator } from "../src/nucleo/ator.ts";
+import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
+import { argumentosPi } from "../src/infra/agente/pi.ts";
+import { comDemanda } from "../src/armazenamento/demandas.ts";
 import {
   configuracaoProjeto,
   gravarConfiguracaoProjeto,
   substituirEtapasDoProjeto,
-} from "../src/persistencia/configuracao_projeto.ts";
+} from "../src/armazenamento/configuracao_projeto.ts";
 import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada, submeterPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 

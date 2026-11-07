@@ -4,12 +4,12 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { retomarSessao, registrarUso, totalDoTicket } from "../src/dominio/sessoes.ts";
-import { submeterEvidencia } from "../src/execucao/gestao_demandas.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/persistencia/sessoes.ts";
-import { metricasDaDemanda } from "../src/metricas/demanda.ts";
-import { mesDe } from "../src/metricas/periodo.ts";
-import { metricasDemandaPorMes } from "../src/metricas/periodo_demanda.ts";
+import { retomarSessao, registrarUso, totalDoTicket } from "../src/nucleo/sessoes.ts";
+import { submeterEvidencia } from "../src/aplicacao/gestao_demandas.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
+import { mesDe } from "../src/nucleo/periodo.ts";
+import { metricasDemandaPorMes } from "../src/aplicacao/periodo_demanda.ts";
 import {
   abrirPortao,
   agente,

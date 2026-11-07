@@ -4,10 +4,10 @@
 import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
-import { abrir } from "../src/persistencia/banco.ts";
-import { falharTicketDemanda } from "../src/execucao/fechamento_ticket.ts";
-import { submeterPlano } from "../src/dominio/transicoes_demanda.ts";
-import { comDemanda } from "../src/persistencia/demandas.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
+import { falharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
+import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
+import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto } from "./demandas-apoio.ts";
 

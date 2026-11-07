@@ -8,14 +8,14 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
-import { AUDITOR, type Ator } from "../src/dominio/ator.ts";
-import { type AutorDemanda } from "../src/dominio/evidencia_demanda.ts";
-import { submeterPlano } from "../src/dominio/transicoes_demanda.ts";
-import { despacharDemandas, type DepsDespacho } from "../src/execucao/despacho_demanda.ts";
-import * as gestao from "../src/execucao/gestao_demandas.ts";
-import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda } from "../src/persistencia/demandas.ts";
-import { type Configuracao, configuracao } from "../src/persistencia/servico.ts";
+import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
+import { type AutorDemanda } from "../src/nucleo/evidencia_demanda.ts";
+import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
+import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
+import * as gestao from "../src/aplicacao/gestao_demandas.ts";
+import { gravarConfiguracaoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
+import { type Configuracao, configuracao } from "../src/armazenamento/servico.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
 export const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-integracao-")));

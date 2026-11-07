@@ -1,4 +1,4 @@
-// Grupo do estresse das etapas do agendador: uma ação por `src/execucao/etapas/*.md`. Cada execução monta o próprio
+// Grupo do estresse das etapas do agendador: uma ação por `src/aplicacao/etapas/*.md`. Cada execução monta o próprio
 // cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz temporária e leva a
 // demanda à fase da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
 // despacho do ticket até ele assentar concluído; `sessao_em_aberto` vai da abertura da sessão à primeira resposta do pi.
@@ -7,33 +7,33 @@ import { chmodSync, mkdirSync, readdirSync, readlinkSync, rmSync, writeFileSync 
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
-import { AUDITOR } from "../../src/dominio/ator.ts";
-import { submeterPlano } from "../../src/dominio/transicoes_demanda.ts";
-import { registrarCorrecoesSessao } from "../../src/dominio/transicoes_rodada.ts";
+import { AUDITOR } from "../../src/nucleo/ator.ts";
+import { submeterPlano } from "../../src/nucleo/transicoes_demanda.ts";
+import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
 import {
   type AutorDemanda,
   type EntradaEvidenciaDemanda,
   submeterEvidenciaDemanda,
-} from "../../src/dominio/evidencia_demanda.ts";
-import { marcaDoPRFinal } from "../../src/evidencias/encerramento_demanda.ts";
-import type { Verificacao } from "../../src/evidencias/verificacoes.ts";
-import { aprovarPRRodada } from "../../src/execucao/aprovacao_pr_rodada.ts";
-import { type DepsDespacho, despacharDemandas } from "../../src/execucao/despacho_demanda.ts";
-import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/execucao/execucao_demanda.ts";
-import { fecharTicketDemanda } from "../../src/execucao/fechamento_ticket.ts";
-import * as gestao from "../../src/execucao/gestao_demandas.ts";
-import { aprovarPlanejamentoDemanda } from "../../src/execucao/planejamento.ts";
-import { decidirRevisaoIntegral } from "../../src/execucao/revisao_demanda.ts";
-import { decidirRevisaoRodada } from "../../src/execucao/revisao_rodada.ts";
-import { reprovarPRRodada, concluirSessaoAjustes } from "../../src/execucao/sessao_ajustes.ts";
-import { situacao } from "../../src/execucao/gerente.ts";
-import { abrir } from "../../src/persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../../src/persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda } from "../../src/persistencia/demandas.ts";
-import { registrarProjeto } from "../../src/persistencia/projetos.ts";
-import { configuracao } from "../../src/persistencia/servico.ts";
-import { carregarSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
-import { exigirGit } from "../../src/repositorio/worktree.ts";
+} from "../../src/nucleo/evidencia_demanda.ts";
+import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
+import type { Verificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
+import { aprovarPRRodada } from "../../src/aplicacao/aprovacao_pr_rodada.ts";
+import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
+import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
+import { fecharTicketDemanda } from "../../src/aplicacao/fechamento_ticket.ts";
+import * as gestao from "../../src/aplicacao/gestao_demandas.ts";
+import { aprovarPlanejamentoDemanda } from "../../src/aplicacao/planejamento.ts";
+import { decidirRevisaoIntegral } from "../../src/aplicacao/revisao_demanda.ts";
+import { decidirRevisaoRodada } from "../../src/aplicacao/revisao_rodada.ts";
+import { reprovarPRRodada, concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
+import { situacao } from "../../src/aplicacao/gerente.ts";
+import { abrir } from "../../src/armazenamento/banco.ts";
+import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_projeto.ts";
+import { carregarDemanda, comDemanda } from "../../src/armazenamento/demandas.ts";
+import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { configuracao } from "../../src/armazenamento/servico.ts";
+import { carregarSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../ambiente.ts";
@@ -44,14 +44,14 @@ export const SIMULTANEAS = 5;
 
 /** Uma etapa medida: `chamar` faz uma execução e devolve o tempo em ms, ou lança quando o ticket não assenta concluído. */
 export interface AcaoEtapa {
-  /** O nome do arquivo em `src/execucao/etapas/`, sem `.md`. */
+  /** O nome do arquivo em `src/aplicacao/etapas/`, sem `.md`. */
   etapa: string;
   /** Orçamento de p95 em ms: 3× o maior p95 de duas medições de 20 execuções com 5 simultâneas nesta máquina (Linux, Node 22, SQLite e git locais), para não virar teste instável. */
   orcamento: number;
   chamar(): Promise<number>;
 }
 
-const PASTA_ETAPAS = join(import.meta.dirname, "../../src/execucao/etapas");
+const PASTA_ETAPAS = join(import.meta.dirname, "../../src/aplicacao/etapas");
 const AUTOR: AutorDemanda = { ferramenta: "claude", sessao: "S1" };
 const agora = () => new Date().toISOString();
 
@@ -582,7 +582,7 @@ export function acoesEtapas(amb: Ambiente): AcaoEtapa[] {
   ];
 }
 
-/** As etapas de `src/execucao/etapas/` que nenhuma ação mede; vazio quando a cobertura está completa. */
+/** As etapas de `src/aplicacao/etapas/` que nenhuma ação mede; vazio quando a cobertura está completa. */
 export function semMedicao(acoes: readonly AcaoEtapa[]): string[] {
   const medidas = new Set(acoes.map((a) => a.etapa));
   return readdirSync(PASTA_ETAPAS)

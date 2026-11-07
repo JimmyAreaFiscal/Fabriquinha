@@ -7,16 +7,16 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../src/dominio/ator.ts";
-import { reabrirTicket } from "../src/dominio/transicoes_demanda.ts";
-import { criarSessao, iniciarExecucao } from "../src/dominio/sessoes.ts";
-import { despacharDemandas, executarAgoraDemanda } from "../src/execucao/despacho_demanda.ts";
-import { retomarFalhasDeInfraestrutura } from "../src/execucao/retomada_infraestrutura.ts";
-import { recuperarExecucoesDemanda } from "../src/execucao/execucao_demanda.ts";
-import { comDemanda } from "../src/persistencia/demandas.ts";
-import { configuracao } from "../src/persistencia/servico.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/persistencia/sessoes.ts";
-import { caminhoDaWorktreeRodada } from "../src/repositorio/worktree-demanda.ts";
+import { AUDITOR } from "../src/nucleo/ator.ts";
+import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
+import { criarSessao, iniciarExecucao } from "../src/nucleo/sessoes.ts";
+import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despacho_demanda.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
+import { recuperarExecucoesDemanda } from "../src/aplicacao/execucao_demanda.ts";
+import { comDemanda } from "../src/armazenamento/demandas.ts";
+import { configuracao } from "../src/armazenamento/servico.ts";
+import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,

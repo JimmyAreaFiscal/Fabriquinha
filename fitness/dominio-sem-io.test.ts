@@ -23,8 +23,8 @@ function violacoes(dominio: string): string[] {
   return achadas;
 }
 
-test("src/dominio não importa I/O, banco nem outros módulos da Fabriquinha", () => {
-  assert.deepEqual(violacoes(resolve(import.meta.dirname, "../src/dominio")), []);
+test("src/nucleo não importa I/O, banco nem outros módulos da Fabriquinha", () => {
+  assert.deepEqual(violacoes(resolve(import.meta.dirname, "../src/nucleo")), []);
 });
 
 test("a fitness acusa cada tipo de import proibido e aceita os permitidos", (t) => {

@@ -6,10 +6,10 @@ import { createServer, request } from "node:http";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
-import { guardarBytes } from "../src/persistencia/arquivos.ts";
-import { raizDo } from "../src/persistencia/banco.ts";
-import { gravarAnexos } from "../src/persistencia/evidencia_demanda.ts";
-import { servirWeb } from "../src/web/servidor.ts";
+import { guardarBytes } from "../src/armazenamento/arquivos.ts";
+import { raizDo } from "../src/armazenamento/banco.ts";
+import { gravarAnexos } from "../src/armazenamento/evidencia_demanda.ts";
+import { servirWeb } from "../src/entrega/http/servidor.ts";
 import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
 import {
   agregadoComPullRequestAberto,
