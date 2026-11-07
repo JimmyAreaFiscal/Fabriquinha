@@ -281,16 +281,17 @@ const PrAz = z.object({
   targetRefName: z.string(),
   /** Preenchido quando a branch de origem é de um fork; `null` senão. */
   forkSource: z.unknown().optional(),
-  repository: z.object({ webUrl: z.string() }),
+  /** O `az repos pr list` não traz o `webUrl`; só a `url` da API. */
+  repository: z.object({ url: z.string(), webUrl: z.string().nullish() }),
   /** `null` enquanto o PR está ativo. */
   closedDate: DataDaPlataforma.nullish(),
   lastMergeCommit: z.object({ commitId: z.string() }).nullish(),
 });
 type PrAz = z.infer<typeof PrAz>;
-/** O `url` do az é o da API; o da página do PR sai do repositório. */
+/** O `url` do az é o da API; o da página do PR sai do repositório, cuja página a API também nomeia. */
 const doAz = (p: PrAz) => ({
   id: String(p.pullRequestId),
-  url: `${p.repository.webUrl}/pullrequest/${String(p.pullRequestId)}`,
+  url: `${p.repository.webUrl ?? p.repository.url.replace("/_apis/git/repositories/", "/_git/")}/pullrequest/${String(p.pullRequestId)}`,
 });
 
 const azure: CliDePR = {

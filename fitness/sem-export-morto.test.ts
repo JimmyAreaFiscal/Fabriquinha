@@ -28,6 +28,8 @@ function listarArquivosTypeScript(raiz: string, pastas: string[]): string[] {
 function ehArquivoDeTeste(caminhoRelativo: string): boolean {
   return (
     /\.test\.tsx?$/.test(caminhoRelativo) ||
+    // Os cenários são roteiro de teste e2e, fora da cobertura como no `package.json`.
+    caminhoRelativo.endsWith("_cenario.ts") ||
     PASTAS_DE_TESTE_DO_PROJETO.some((pasta) => caminhoRelativo.startsWith(`${pasta}/`))
   );
 }

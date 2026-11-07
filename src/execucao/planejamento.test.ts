@@ -218,6 +218,13 @@ test("CA-4: plano válido leva ao gate e fica como evidência do planejar", () =
   assert.deepEqual((gravado.dados as { criterios: string[] }).criterios, CRITERIOS);
 });
 
+test("CA-2: plano com critério que nenhuma rodada cita é aceito e vai ao gate", () => {
+  const { banco } = cenario({ status: "em_execucao" });
+  const umPlano = plano();
+  assert.ok(umPlano.rodadas.every((r) => !r.criterios.includes("CA-2")));
+  assert.equal(submeterPlanoDoAgente(banco, "I-1", umPlano).demanda.fase, "aprovacao_planejamento");
+});
+
 test("CA-5: plano que cita CA inexistente é recusado e nada é gravado", () => {
   const { banco } = cenario({ status: "em_execucao" });
   assert.throws(

@@ -46,7 +46,12 @@ Caminhos:
 2. Confira o código integrado da worktree contra cada critério da demanda.
 3. Exercite o que a demanda entrega sob carga e entradas extremas e registre o que quebrou ou aguentou.
 4. Analise a segurança do que mudou: entradas externas, permissões, dados sensíveis e dependências.
-5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir I-206.T3 aprovar` se a demanda cumpre o que foi pedido, ou com `fabriquinha revisao decidir I-206.T3 reprovar --motivo <texto> --plano <json|->` se não cumpre; `--plano` leva o plano de correção da demanda, em JSON.
+5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir I-206.T3 aprovar` se a demanda não tem defeito material, ou com `fabriquinha revisao decidir I-206.T3 reprovar --motivo <texto> --plano <json|->` se tem; `--plano` leva o plano de correção da demanda, em JSON. Cada correção do plano cita o critério ou o defeito material que a justifica.
+
+**O que reprova:** só defeito material, demonstrado por um caso concreto (entrada, comando ou arquivo:linha e o resultado errado): critério de aceite da demanda não cumprido; bug de comportamento; teste ou verificação existente removido sem cobertura equivalente; `npm run check`, integração ou e2e falhando; mudança fora do escopo do plano que altera comportamento.
+Todo o resto é observação: redação de texto, comentário ou nome que não fere gravemente o AGENTS.md; corpo do PR, inventário, foto ou evidência a completar; sugestão de robustez ou caso-limite além do que o critério pede; item que pertence a outra rodada. Para observação, aprove e registre-a na evidência de comprovação, para o Auditor ver no gate do PR. Na dúvida entre material e observação, aprove e registre a observação.
+
+**Fica fora da revisão:** o quality gate do SonarQube (a Fabriquinha o confere nos tickets e o Auditor, no gate do PR), o PR (o PR final ainda não existe nesta revisão), o deploy e a cópia do banco real (do Auditor e do operador). Nada disso é motivo de pergunta nem de reprovação. Critério que só se comprova por eles vai na evidência como "verificado fora da revisão: <por quem>", e você decide pelo resto.
 
 **Entregas:** as evidências de comprovação dos critérios da demanda, de testes de estresse e de análise de segurança, do ticket I-206.T3.
 

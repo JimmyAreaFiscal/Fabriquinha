@@ -1,9 +1,9 @@
 // Parar o serviço com um ticket de demanda em execução (I-246, CA-1 a CA-3): o systemd manda o SIGTERM ao cgroup
 // inteiro, então o serviço e o pi recebem o sinal juntos. A parada sai limpa e o ticket falha com "serviço reiniciado".
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
@@ -195,28 +195,29 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
     projeto(fabriquinha.raiz);
     semearTicketAberto(fabriquinha.raiz);
     const banco = abrir(fabriquinha.raiz);
-    banco.prepare("UPDATE linguagem_projeto SET comando_teste = 'sleep 31' WHERE projeto = 'loja'").run();
+    const arquivoComPidDaColeta = join(mkdtempSync(join(tmpdir(), "coleta-")), "coleta.pid");
+    banco
+      .prepare("UPDATE linguagem_projeto SET comando_teste = ? WHERE projeto = 'loja'")
+      .run(`sh -c 'echo $$ > ${arquivoComPidDaColeta}; exec sleep 31'`);
     banco.close();
+    // Processo alheio, fora da árvore do serviço, com a mesma linha de comando da coleta: não pode receber sinal.
+    const sleepAlheio = spawn("sleep", ["31"], { stdio: "ignore" });
+    sleepAlheio.unref();
     await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
     await pagina.getByRole("button", { name: "Executar agora" }).click();
     await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText(
       /Sessão pi ativa|Em execução \(sistema\)/,
     );
     // O comando de testes do projeto está rodando: a coleta começou.
-    for (;;) {
-      try {
-        execFileSync("pgrep", ["-f", "sleep 31"], { stdio: "ignore" });
-        break;
-      } catch {
-        await dormir(100);
-      }
+    while (!existsSync(arquivoComPidDaColeta) || readFileSync(arquivoComPidDaColeta, "utf8").trim() === "") {
+      await dormir(100);
     }
     // Na coleta o pi já saiu: o ticket segue em execução pelo sistema.
     await pagina.reload();
     await expect(pagina.locator(".dm-ticket", { hasText: "I-216.T1" })).toContainText("Em execução (sistema)");
 
     const saiu = once(fabriquinha.servico, "exit");
-    execFileSync("pkill", ["-TERM", "-f", "sleep 31"]);
+    process.kill(Number(readFileSync(arquivoComPidDaColeta, "utf8")), "SIGTERM");
     fabriquinha.servico.kill("SIGTERM");
     const codigo = (await saiu)[0] as number | null;
     expect(codigo).toBe(0);
@@ -229,5 +230,7 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
     const ticket = pagina.locator(".dm-ticket", { hasText: "I-216.T1" });
     await expect(ticket).toContainText("Falhou");
     await expect(ticket).toContainText("serviço reiniciado");
+    expect(sleepAlheio.exitCode ?? sleepAlheio.signalCode).toBeNull(); // o sleep alheio seguiu vivo
+    sleepAlheio.kill("SIGKILL");
   });
 });

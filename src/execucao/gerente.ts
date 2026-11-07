@@ -321,10 +321,16 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       dialogo: string,
       args: Record<string, unknown>,
     ) => {
-      const opcoes = ((args.options ?? []) as { label: string }[]).map((o) => o.label.trim()).filter(Boolean);
+      const opcoesComRotulo = ((args.options ?? []) as { label: string; description?: string }[])
+        .map((o) => ({ rotulo: o.label.trim(), descricao: o.description?.trim() ?? "" }))
+        .filter((o) => o.rotulo);
+      const opcoes = opcoesComRotulo.map((o) => o.rotulo);
+      const descricoes = opcoesComRotulo.some((o) => o.descricao)
+        ? { descricoes: opcoesComRotulo.map((o) => o.descricao) }
+        : {};
       const pergunta = String(args.question);
       const detalhes = typeof args.details === "string" && args.details ? { detalhes: args.details } : {};
-      const decisao = await triagem({ pergunta, ...detalhes, opcoes });
+      const decisao = await triagem({ pergunta, ...detalhes, opcoes, ...descricoes });
       if (!decisao) {
         anotar(r.log, `Auditor automático escalou ao Auditor: ${pergunta}`);
         return;

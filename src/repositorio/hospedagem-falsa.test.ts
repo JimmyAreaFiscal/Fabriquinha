@@ -76,8 +76,13 @@ const az = (p) => ({
   lastMergeCommit: p.estado === "mergeado" ? { commitId: p.mergeSha ?? "abc" } : null,
   mergeStatus: { true: "conflicts", false: "succeeded", calculando: "queued" }[String(conflito(p))],
   url: "https://dev.azure.com/org/_apis/git/pullRequests/" + p.id,
-  repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
+  repository: { url: "https://dev.azure.com/org/loja/_apis/git/repositories/loja", webUrl: "https://dev.azure.com/org/loja/_git/loja" },
 });
+// Como o az real (azure-devops 1.0.4): a listagem não traz o webUrl do repositório.
+const azNaLista = (p) => {
+  const { webUrl: _, ...repository } = az(p).repository;
+  return { ...az(p), repository };
+};
 const conflito = (p) => p.conflito ?? false;
 const checks = (p) => p.checks ?? [{ nome: "ci", estado: "aprovado" }];
 // O rollup do gh: CheckRun para os checks de nome com "/" e StatusContext para os demais.
@@ -174,7 +179,7 @@ switch (comando) {
     resposta = "";
     break;
   case "repos pr list":
-    resposta = JSON.stringify(estado.prs.filter((p) => p.head === opcao("--source-branch")).map(az));
+    resposta = JSON.stringify(estado.prs.filter((p) => p.head === opcao("--source-branch")).map(azNaLista));
     break;
   case "repos pr create":
     resposta = JSON.stringify(
@@ -277,7 +282,7 @@ if (import.meta.main) {
           lastMergeCommit: null,
           mergeStatus: "succeeded",
           url: "https://dev.azure.com/org/_apis/git/pullRequests/1",
-          repository: { webUrl: "https://dev.azure.com/org/loja/_git/loja" },
+          repository: { url: "https://dev.azure.com/org/loja/_apis/git/repositories/loja" },
         },
       ]);
       assert.throws(() => rodar("az", "repos", "pr", "update", "--id", "1", "--title", "x", "--description", "y"));

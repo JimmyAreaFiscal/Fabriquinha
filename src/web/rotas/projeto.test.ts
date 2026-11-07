@@ -16,7 +16,7 @@ import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 import type { ListaDoProjeto } from "./projeto.ts";
-import { demanda } from "./demandas_cenario.test.ts";
+import { demanda } from "./demandas_cenario.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-projeto-"));
 after(() => {

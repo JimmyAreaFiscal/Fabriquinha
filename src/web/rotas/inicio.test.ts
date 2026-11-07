@@ -8,7 +8,7 @@ import { after, test } from "node:test";
 import type { SessaoDeDemanda } from "../../execucao/historico_demanda.ts";
 import { abrir } from "../../persistencia/banco.ts";
 import { criarDemanda } from "../../persistencia/demandas.ts";
-import { demanda, servir } from "./demandas_cenario.test.ts";
+import { demanda, servir } from "./demandas_cenario.ts";
 import { type DadosDoInicio, esperaDaSessao, inicio } from "./inicio.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-inicio-web-"));
