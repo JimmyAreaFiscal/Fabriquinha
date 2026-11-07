@@ -28,10 +28,15 @@ const IMPORTACAO_DE_ARQUIVO_DE_TESTE = /(from |import\()["'][^"']*\.test\.ts["']
 const ARQUIVO_DESTA_FITNESS = "fitness/apoio-de-testes.test.ts";
 
 function listarArquivos(raiz: string, pasta: string): string[] {
-  return readdirSync(join(raiz, pasta), { recursive: true, withFileTypes: true })
-    .filter((entrada) => entrada.isFile())
-    .map((entrada) => relative(raiz, join(entrada.parentPath, entrada.name)))
-    .filter((caminho) => !caminho.split("/").includes("node_modules"));
+  return (
+    readdirSync(join(raiz, pasta), { recursive: true, withFileTypes: true })
+      .filter((entrada) => entrada.isFile())
+      .map((entrada) => relative(raiz, join(entrada.parentPath, entrada.name)))
+      .filter((caminho) => !caminho.split("/").includes("node_modules"))
+      // O JSON que `npm run estresse` grava (ignorado pelo git) traz a porta medida, não é teste: sem isso, rodar o
+      // estresse antes do check derrubava o próprio check.
+      .filter((caminho) => !caminho.startsWith("estresse/resultados/"))
+  );
 }
 
 function acharArquivosDeTesteQueReferenciamOServicoReal(raiz: string): string[] {
@@ -90,6 +95,7 @@ test("autoteste: acusa pelo caminho a porta 4317, o texto ~/fabriquinha e homedi
     escrever("src/composicao/servico.test.ts", "assert.equal(portaDoServico({}), 4317);\n");
     escrever("src/armazenamento/banco.test.ts", "// usa ~/fabriquinha\n");
     escrever("e2e/node_modules/x/index.ts", "4317\n");
+    escrever("estresse/resultados/medicao.json", '{"url":"http://127.0.0.1:4317/"}\n');
 
     assert.deepEqual(acharArquivosDeTesteQueReferenciamOServicoReal(raiz), [
       "apoio-testes/porta.ts",
