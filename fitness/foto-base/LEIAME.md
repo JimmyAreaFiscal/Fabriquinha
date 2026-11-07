@@ -60,7 +60,7 @@ Nenhuma nas saídas fotografadas: os oito prompts montados, o `schema`, o sucess
 
 Base de comparação desta rodada: `7ce3c2f` (merge do PR #115, que integrou a rodada I-263.R1), com `git diff 7ce3c2f..HEAD` (136 arquivos). **Não** use `git diff main...HEAD`: o ancestral comum com `main` é `a7505a2`, anterior ao PR #115, e a comparação (152 arquivos) traz junto o que a rodada I-263.R1 já integrou.
 
-Nenhum e2e foi apagado ou afrouxado: os quatro `e2e/*.spec.ts` alterados (`demandas`, `heatmap`, `inicio`, `navegacao`) só têm comentários reescritos (`issue` → `demanda`); `e2e/metricas.spec.ts` não mudou. Em `estresse/grupos/`, `etapas.ts` e `http_leitura.ts` mudaram uma linha cada (a rota `/api/metricas/demandas` e um comentário).
+Nenhum e2e foi apagado ou afrouxado: quatro `e2e/*.spec.ts` (`demandas`, `heatmap`, `inicio`, `navegacao`) só têm comentários reescritos (`issue` → `demanda`). `e2e/metricas.spec.ts` **mudou**, só para reforçar (`git diff 7ce3c2f..HEAD -- e2e/metricas.spec.ts`, ticket I-263.T38): a semeadura recebe o tipo da demanda (I-1 `problema`, I-2 `funcionalidade`, antes ambas `problema`) e o teste ganhou duas asserções, uma por linha da tabela por demanda (`Busca por SKU … loja … Execução … US$ 90,00` e `Página de contato … site … Execução … US$ 5,00`). Nenhum caso nem asserção saiu, e os números (US$ 95,00 e 2 demandas) são os mesmos: sem afrouxamento (CA-3). Em `estresse/grupos/`, `etapas.ts` e `http_leitura.ts` mudaram uma linha cada (a rota `/api/metricas/demandas` e um comentário).
 
 Nenhum arquivo de teste foi apagado na rodada I-263.R2; só três casos saíram de arquivos que continuam (ver "Apagados nesta rodada"). As tabelas dividem o que é de cada rodada:
 
@@ -125,11 +125,20 @@ Também do PR #115 (não são desta rodada):
 
 `fitness/foto-base.test.ts` (prompts e saídas do CLI contra a base anterior). `src/persistencia/migracao_linha_de_base.test.ts` (CA-4 e CA-5) é do PR #115.
 
+## CG-7 / CA-5: cópia do banco real (comprovada na rodada anterior, I-263.R1)
+
+Esta rodada não mexe em migração nem em esquema (`git diff 7ce3c2f..HEAD -- src/persistencia/migracoes.ts src/persistencia/banco.ts` é vazio), então vale a comprovação já feita sobre o banco real em v36 pela rodada I-263.R1 (PR #115). Evidências existentes, em `~/fabriquinha/execucoes/`:
+
+- `E-1608e7cd-cbc2-47ac-992d-c836626f2332/saida/validacao-banco.log` (e `validacao-banco.png`): cópia consistente do banco real, preparada só na cópia (agendadores desativados, `grupo_processo` zerado em 1.752 execuções, 1 execução aberta fechada com falha). `user_version` 36 → 36, `foreign_key_check` com 0 linhas antes e depois, nenhuma migração aplicada, esquema igual. **45 tabelas, 39.302 linhas no total, iguais antes e depois**; as contagens por tabela estão no log (ex.: `demanda` 287 → 287, `ticket_demanda` 1.677 → 1.677, `evidencia_demanda` 4.763 → 4.763, `execucao_sessao` 1.757 → 1.757).
+- `E-73cce0f9-6adb-47b3-af20-1c3941c342e7/saida/evidencias-pr-115.md` (seção "CG-7 / CA-5") e `E-200250ab-b768-41a2-9361-fbdfed34ea17/saida/ca5-copia-resultado.txt`: as mesmas verificações em cópias `VACUUM INTO` anteriores (39.169 linhas; o banco real é vivo e cresce entre cópias, por isso os totais diferem).
+
+Não foi refeita nesta rodada.
+
 ## Não é desta rodada (I-263.R3) e ainda não foi verificado
 
 - **Exports sem importador e exports só de teste** (`DecisaoRef`, `classificarSaidaE2E`, `estadoExecucao`, `submeterPlanejamento`, `alterarLimiteParalelismo`, `skillsPendentes`, `metricas/projeto.ts` e os demais da demanda): continuam exportados, com os testes que os usam. Nenhum teste foi apagado por isso.
 - **Parâmetro `fork` de `execucao/pi.ts`:** continua (linhas 87 e 111).
 - **`fitness/sem-export-morto.test.ts`** (CA-6): não existe; `npm run fitness` não o roda.
-- **CA-8:** `npm run check`, `npm run integracao`, `npm run e2e`, SonarQube, CG-7 (cópia do banco real) e CG-9 (deploy) não foram verificados por este documento; valem os resultados que a Fabriquinha coleta.
+- **CA-8:** `npm run check`, `npm run integracao`, `npm run e2e`, SonarQube e CG-9 (deploy) não foram verificados por este documento (o CG-7 está na seção anterior); valem os resultados que a Fabriquinha coleta.
 
 `fabriquinha/07-interfaces.md` foi restaurado à versão da base (`git diff 7ce3c2f..HEAD -- fabriquinha` é vazio); o PR não deve alegar mudança nele.
