@@ -80,11 +80,6 @@ export interface Lancamento {
   effort?: Effort;
   confianca: boolean | undefined;
   modo: ModoExecucao;
-  /**
-   * O arquivo da sessão principal que a consulta copia (F4 §6.5): na primeira execução dela, ou na retomada se a
-   * cópia ainda não existe.
-   */
-  fork?: string;
 }
 
 /**
@@ -108,7 +103,6 @@ export const argumentosPi = (l: Lancamento): string[] => [
   "-e",
   join(PACOTE, "extensions", "pergunta.ts"),
   ...(l.confianca === undefined ? [] : [l.confianca ? "--approve" : "--no-approve"]),
-  ...(l.fork ? ["--fork", l.fork] : []),
   "--exclude-tools",
   l.modo === "consulta" ? "ask_user_question,edit,write,bash,powershell" : "ask_user_question",
 ];

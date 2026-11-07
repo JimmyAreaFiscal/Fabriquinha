@@ -14,7 +14,7 @@ import { abrir } from "../persistencia/banco.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
-import { alterarLimiteParalelismo, configuracao } from "../persistencia/servico.ts";
+import { configuracao } from "../persistencia/servico.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
 import { cenarioDemanda, commitarCenario } from "../repositorio/worktree-cenarios.ts";
@@ -61,7 +61,7 @@ async function cenario() {
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
-  alterarLimiteParalelismo(banco, 3);
+  banco.prepare("UPDATE configuracao SET limite_paralelismo = 3").run();
   const ticket = (ticket_id: number, etapa: string, status: string, extra: object = {}) => ({
     demanda_id: D,
     ticket_id,

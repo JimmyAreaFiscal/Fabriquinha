@@ -13,7 +13,6 @@ export const CriterioId = z.string().regex(/^CA-[1-9][0-9]*$/, "use o formato CA
 export const RodadaRef = z.object({ demanda_id: DemandaId, rodada_id: Id });
 export const TicketRef = z.object({ demanda_id: DemandaId, ticket_id: Id });
 export const TicketIdentidade = TicketRef.extend({ rodada_id: Id.optional() });
-export const DecisaoRef = TicketRef.extend({ decisao_id: Id });
 
 export const branchDemanda = (demandaId: string): string => `fabriquinha/${DemandaId.parse(demandaId)}`;
 export const branchRodada = (demandaId: string, rodadaId: number): string => {

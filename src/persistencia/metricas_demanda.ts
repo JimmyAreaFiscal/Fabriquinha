@@ -180,15 +180,6 @@ export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string):
       custo: typeof l.custo === "number" ? l.custo : null,
     }));
 
-export const projetoExiste = (banco: DatabaseSync, nome: string): boolean =>
-  banco.prepare("SELECT 1 FROM projeto WHERE nome = ?").get(nome) !== undefined;
-
-export const demandasDoProjeto = (banco: DatabaseSync, projeto: string): string[] =>
-  banco
-    .prepare("SELECT id FROM demanda WHERE projeto = ? ORDER BY id")
-    .all(projeto)
-    .map((l) => l.id as string);
-
 // ——— Métricas por mês e projeto (a página Métricas): linhas cruas do período, agrupadas em src/metricas/periodo_demanda.ts ———
 
 /** O período `[inicio, fim)` de instantes UTC e o projeto (`null` = todos). */

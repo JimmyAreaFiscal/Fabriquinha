@@ -10,7 +10,7 @@ import { ROTAS } from "../../src/web/servidor.ts";
 import { abrir } from "../../src/persistencia/banco.ts";
 import { carregarDemanda } from "../../src/persistencia/demandas.ts";
 import { projeto } from "../../src/persistencia/projetos.ts";
-import { alterarLimiteParalelismo, configuracao } from "../../src/persistencia/servico.ts";
+import { configuracao } from "../../src/persistencia/servico.ts";
 import { exigirGit } from "../../src/repositorio/worktree.ts";
 import { anexar } from "../../src/persistencia/simulacao.ts";
 import type { Ambiente } from "../ambiente.ts";
@@ -63,7 +63,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
   const banco = abrir(amb.raiz);
   // Cada chamada que fala com o pi deixa um pi falso vivo até a ociosidade: sem isto, o limite global de paralelismo (D04)
   // recusaria o "executar" com 409, e a medição seria a da fila, não a da rota.
-  alterarLimiteParalelismo(banco, 100_000);
+  banco.prepare("UPDATE configuracao SET limite_paralelismo = 100000").run();
   const p = preparo.projeto;
 
   const fases = (id: string) => {

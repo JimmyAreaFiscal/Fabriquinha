@@ -4,14 +4,12 @@ import { ErroDeRegra } from "./erros.ts";
 import {
   criarSessao,
   encerrarExecucao,
-  estadoExecucao,
   ExecucaoSessao,
   iniciarExecucao,
   registrarUso,
   retomarSessao,
   Sessao,
-  totalDaDemanda,
-  totalDaSessao,
+  totalDeSessoes,
   totalDoTicket,
   UsoModeloExecucao,
 } from "./sessoes.ts";
@@ -105,13 +103,10 @@ test("CA-5: recusa segunda execução sem fim, sessão ou id inválidos", () => 
 });
 
 test("CA-6: fim ausente é não encerrada; encerrar grava fim e falha", () => {
-  assert.equal(estadoExecucao({ ...exec("e1", "s1"), falha: true }), "em_andamento");
-  assert.equal(estadoExecucao({ ...exec("e1", "s1"), falha: false }), "em_andamento");
-  assert.equal(estadoExecucao(exec("e1", "s1")), "em_andamento");
   const ok = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false));
-  assert.equal(estadoExecucao(ok), "sucesso");
+  assert.deepEqual([ok.fim, ok.falha], ["2026-01-01T11:00:00Z", false]);
   const ruim = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", true));
-  assert.deepEqual([ruim.fim, ruim.falha, estadoExecucao(ruim)], ["2026-01-01T11:00:00Z", true, "falha"]);
+  assert.deepEqual([ruim.fim, ruim.falha], ["2026-01-01T11:00:00Z", true]);
   const outras = encerrarExecucao([exec("e0", "s1"), exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false);
   assert.equal(primeiro(outras).fim, undefined);
   assert.throws(() => encerrarExecucao([ok], "e1", "2026-01-01T12:00:00Z", false), regra);
@@ -123,11 +118,10 @@ test("CA-2/5/6: fim null é execução não encerrada", () => {
   const sessoes = [sessao("s1")];
   const e1 = { ...exec("e1", "s1"), fim: null };
   assert.ok(ExecucaoSessao.safeParse(e1).success);
-  assert.equal(estadoExecucao({ ...e1, falha: true }), "em_andamento");
   assert.throws(() => iniciarExecucao(sessoes, [e1], exec("e2", "s1")), regra);
   assert.throws(() => retomarSessao(sessoes, [e1], exec("e2", "s1")), regra);
   const fechada = primeiro(encerrarExecucao([e1], "e1", "2026-01-01T11:00:00Z", false));
-  assert.deepEqual([fechada.fim, estadoExecucao(fechada)], ["2026-01-01T11:00:00Z", "sucesso"]);
+  assert.deepEqual([fechada.fim, fechada.falha], ["2026-01-01T11:00:00Z", false]);
 });
 
 test("CA-7: dois modelos e registro idempotente", () => {
@@ -152,7 +146,7 @@ test("CA-8: totais sem duplicar execuções e com custo ausente", () => {
     uso("e4", "a", 1000, 8),
     uso("fantasma", "a", 5000, 16),
   ];
-  const s1 = totalDaSessao(sessoes, execucoes, usos, "s1");
+  const s1 = totalDoTicket(sessoes, execucoes, usos, { demanda_id: "D-1", ticket_id: 1 });
   assert.deepEqual(s1, {
     tokens_entrada: 60,
     tokens_saida: 3,
@@ -161,13 +155,15 @@ test("CA-8: totais sem duplicar execuções e com custo ausente", () => {
     custo_conhecido: 3,
     custo_incompleto: true,
   });
-  const ticket = totalDoTicket(sessoes, execucoes, usos, { demanda_id: "D-1", ticket_id: 1 });
-  assert.equal(ticket.tokens_entrada, 60);
-  const demanda = totalDaDemanda(sessoes, execucoes, usos, "D-1");
+  const demanda = totalDeSessoes(
+    sessoes.filter((s) => s.demanda_id === "D-1"),
+    execucoes,
+    usos,
+  );
   assert.equal(demanda.tokens_entrada, 160);
   assert.equal(demanda.custo_conhecido, 7);
   assert.equal(demanda.custo_incompleto, true);
-  const completo = totalDaSessao(sessoes, execucoes, usos, "s2");
+  const completo = totalDoTicket(sessoes, execucoes, usos, { demanda_id: "D-1", ticket_id: 2 });
   assert.deepEqual([completo.custo_conhecido, completo.custo_incompleto], [4, false]);
 });
 

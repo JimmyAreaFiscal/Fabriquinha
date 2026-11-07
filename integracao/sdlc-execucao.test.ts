@@ -14,7 +14,7 @@ import { despacharDemandas, executarAgoraDemanda } from "../src/execucao/despach
 import { retomarFalhasDeInfraestrutura } from "../src/execucao/retomada_infraestrutura.ts";
 import { recuperarExecucoesDemanda } from "../src/execucao/execucao_demanda.ts";
 import { comDemanda } from "../src/persistencia/demandas.ts";
-import { alterarLimiteParalelismo, configuracao } from "../src/persistencia/servico.ts";
+import { configuracao } from "../src/persistencia/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { caminhoDaWorktreeRodada } from "../src/repositorio/worktree-demanda.ts";
 import {
@@ -30,7 +30,7 @@ import {
   statusDe,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { type Cenario, criarCenario, demanda, esperar, git } from "./apoio.ts";
+import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParalelismo } from "./apoio.ts";
 
 const ativosPorRodada = (c: Cenario, id: string) => {
   const porRodada = new Map<number | undefined, number>();
@@ -48,7 +48,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   const deps = despacho();
 
   // D04: o limite global vale para todas as rodadas; com 1 vaga só a primeira (R1) executa e o "executar agora" é recusado.
-  alterarLimiteParalelismo(c.banco, 1);
+  gravarLimiteParalelismo(c.banco, 1);
   const primeiro = despacharDemandas(c.banco, configuracao(c.banco), deps);
   assert.equal(primeiro.length, 1);
   assert.equal(despacharDemandas(c.banco, configuracao(c.banco), deps).length, 0);
@@ -61,7 +61,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
 
   // Com vagas: R1.T2 e R2 executam juntas; R3 (depende de R1, ainda não concluída) aguarda, e R1 não tem dois ativos.
   fecharPortao();
-  alterarLimiteParalelismo(c.banco, 4);
+  gravarLimiteParalelismo(c.banco, 4);
   const juntas = despacharDemandas(c.banco, configuracao(c.banco), deps);
   assert.equal(juntas.length, 2);
   assert.equal(statusDe(c, r1t2), "em_execucao");
@@ -90,7 +90,7 @@ test("CA-SDLC-08: agendador e executar agora disputam o mesmo ticket e só uma r
   fecharPortao();
   pi.roteirizar([{ modo: "ok", agente }]);
   const deps = despacho();
-  alterarLimiteParalelismo(c.banco, 4);
+  gravarLimiteParalelismo(c.banco, 4);
 
   // "Executar agora" da demanda d primeiro, o agendador logo depois: o ciclo reserva só o que sobra (a), não d de novo.
   const manual = executarAgoraDemanda(c.banco, td, c.config, deps);

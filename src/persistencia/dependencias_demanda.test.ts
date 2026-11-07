@@ -11,7 +11,6 @@ import {
   dependentesNaoConcluidasDaDemanda,
   predecessorasDaDemanda,
   registrarDependenciaDemanda,
-  removerDependenciaDemanda,
 } from "./dependencias_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
@@ -64,26 +63,6 @@ test("demanda inexistente, dona ou predecessora, dá ErroDeInexistente", () => {
   assert.throws(() => {
     registrarDependenciaDemanda(b, "I-1", "I-9");
   }, ErroDeInexistente);
-  assert.throws(() => {
-    removerDependenciaDemanda(b, "I-9", "I-1");
-  }, ErroDeInexistente);
-});
-
-test("CA-7: remove e a consulta devolve vazio", () => {
-  const b = banco({ "I-1": {}, "I-2": {} });
-  registrarDependenciaDemanda(b, "I-2", "I-1");
-  removerDependenciaDemanda(b, "I-2", "I-1");
-  assert.deepEqual(predecessorasDaDemanda(b, "I-2"), []);
-});
-
-test("CA-8: não remove de demanda enviada", () => {
-  const b = banco({ "I-1": {}, "I-2": {} });
-  registrarDependenciaDemanda(b, "I-2", "I-1");
-  b.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-2'");
-  assert.throws(() => {
-    removerDependenciaDemanda(b, "I-2", "I-1");
-  }, ErroDeRegra);
-  assert.equal(arestas(b), 1);
 });
 
 test("CA-9 e CA-10: predecessora pendente até ser concluída ou arquivada", () => {

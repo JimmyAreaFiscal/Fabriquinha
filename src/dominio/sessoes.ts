@@ -53,7 +53,6 @@ export const UsoModeloExecucao = z.object({
 export type Sessao = z.infer<typeof Sessao>;
 export type ExecucaoSessao = z.infer<typeof ExecucaoSessao>;
 export type UsoModeloExecucao = z.infer<typeof UsoModeloExecucao>;
-export type EstadoExecucaoSessao = "em_andamento" | "sucesso" | "falha";
 
 export interface TotalUso {
   tokens_entrada: number;
@@ -74,10 +73,6 @@ export const criarSessao = (sessoes: readonly Sessao[], nova: Sessao): Sessao[] 
 
 /** Fim null ou omitido é execução não encerrada. */
 const aberta = (e: ExecucaoSessao): boolean => e.fim == null;
-
-/** `falha` sozinha não indica sucesso enquanto não houver fim. */
-export const estadoExecucao = (e: ExecucaoSessao): EstadoExecucaoSessao =>
-  aberta(e) ? "em_andamento" : e.falha ? "falha" : "sucesso";
 
 const abrir = (
   sessoes: readonly Sessao[],
@@ -156,18 +151,6 @@ export const totalDeSessoes = (
   return total;
 };
 
-export const totalDaSessao = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
-  usos: readonly UsoModeloExecucao[],
-  id: string,
-) =>
-  totalDeSessoes(
-    sessoes.filter((s) => s.id === id),
-    execucoes,
-    usos,
-  );
-
 export const totalDoTicket = (
   sessoes: readonly Sessao[],
   execucoes: readonly ExecucaoSessao[],
@@ -176,18 +159,6 @@ export const totalDoTicket = (
 ) =>
   totalDeSessoes(
     sessoes.filter((s) => s.demanda_id === ticket.demanda_id && s.ticket_id === ticket.ticket_id),
-    execucoes,
-    usos,
-  );
-
-export const totalDaDemanda = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
-  usos: readonly UsoModeloExecucao[],
-  demandaId: string,
-) =>
-  totalDeSessoes(
-    sessoes.filter((s) => s.demanda_id === demandaId),
     execucoes,
     usos,
   );

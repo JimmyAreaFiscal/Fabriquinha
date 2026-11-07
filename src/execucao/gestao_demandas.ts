@@ -9,7 +9,6 @@ import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import {
   type AutorDemanda,
   type EntradaEvidenciaDemanda,
-  exigirAutoria,
   submeterEvidenciaDemanda,
   TipoEvidenciaDemanda,
 } from "../dominio/evidencia_demanda.ts";
@@ -83,16 +82,6 @@ export const registrar = (
 
 export const editar = (banco: DatabaseSync, id: string, entrada: unknown, autor: AutorDemanda): AgregadoDemanda =>
   traduzir(() => comDemanda(banco, id, (ag) => editarDemanda(ag, entrada, autor)));
-
-/** CA-3: só a ferramenta e a sessão autoras; o domínio recusa demanda enviada, autorreferência, repetida e ciclo. */
-export const registrarDependencia = (banco: DatabaseSync, id: string, dependeId: string, autor: AutorDemanda): void => {
-  traduzir(() => {
-    escrever(banco, () => {
-      exigirAutoria(carregarDemanda(banco, id).demanda, autor, "registrar dependência da");
-      registrarDependenciaDemanda(banco, id, dependeId);
-    });
-  });
-};
 
 export const enviar = (banco: DatabaseSync, id: string, autor: AutorDemanda, ctx: ContextoDemanda): AgregadoDemanda =>
   traduzir(() => comDemanda(banco, id, (ag) => enviarDemanda(ag, autor, ctx)));

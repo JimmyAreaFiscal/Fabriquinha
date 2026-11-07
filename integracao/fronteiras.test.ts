@@ -8,14 +8,13 @@ import { test } from "node:test";
 import { type Ator } from "../src/dominio/ator.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/dominio/evidencia_demanda.ts";
 import { argumentosPi } from "../src/execucao/pi.ts";
-import { submeterPlanejamento } from "../src/execucao/planejamento.ts";
 import { comDemanda } from "../src/persistencia/demandas.ts";
 import {
   configuracaoProjeto,
   gravarConfiguracaoProjeto,
   substituirEtapasDoProjeto,
 } from "../src/persistencia/configuracao_projeto.ts";
-import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada } from "./apoio.ts";
+import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada, submeterPlanoDoAgente } from "./apoio.ts";
 import { piFalso } from "./falsos.ts";
 
 const pi = piFalso(base);
@@ -81,8 +80,8 @@ test("CA-SDLC-19: plano com CA-n inexistente ou com dependência entre rodadas �
   });
   const antes = demanda(c, id);
 
-  assert.throws(() => submeterPlanejamento(c.banco, id, plano("CA-9"), agente), /CA-9.*não tem/);
-  assert.throws(() => submeterPlanejamento(c.banco, id, plano("CA-1", true), agente), /de outra rodada/);
+  assert.throws(() => submeterPlanoDoAgente(c.banco, id, plano("CA-9"), agente), /CA-9.*não tem/);
+  assert.throws(() => submeterPlanoDoAgente(c.banco, id, plano("CA-1", true), agente), /de outra rodada/);
 
   const depois = demanda(c, id);
   assert.equal(
