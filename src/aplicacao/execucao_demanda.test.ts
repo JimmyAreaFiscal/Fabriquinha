@@ -750,7 +750,7 @@ test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisõ
       ('I-1', 8, 'revisar_rodada', 'concluido', '${em}', 1),
       ('I-1', 9, 'revisar_rodada', 'concluido', '${em}', 1),
       ('I-1', 10, 'revisar_rodada', 'aberto', '${em}', 1);
-    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por, em) VALUES
+    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em) VALUES
       ('I-1', 8, 1, 'recusado', 'falta teste de X', 'agente', '${em}'),
       ('I-1', 9, 1, 'recusado', 'o teste de X quebrou Y', 'agente', '${em}');
     INSERT INTO sessao VALUES ('s-8', 'I-1', 8, 'autonomo', 'c8'), ('s-9', 'I-1', 9, 'autonomo', 'c9')`);

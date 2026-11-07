@@ -100,7 +100,7 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('q', '/repo/q', 'main', 'github', 'k');
     INSERT INTO demanda VALUES ('I-9', 'q', 't', 'problema', 'd', 'execucao', 't', 'f', 's', 1, 'fabriquinha/I-9');
-    INSERT INTO evidencia_demanda VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
     INSERT INTO arquivo_evidencia VALUES ('e9', 1, 'a.txt', '${a.sha256}', 'text/plain', 2);`);
   await removerProjeto(b, "q");
   assert.equal(existsSync(caminhoArquivo(b, a.sha256)), true);
@@ -108,7 +108,9 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
 
 const custosEm = (b: DatabaseSync, id: string, demanda: string, rodada: number | null, sessoes: unknown[]) =>
   b
-    .prepare("INSERT OR REPLACE INTO evidencia_demanda VALUES (?, ?, ?, NULL, 'custos_realizados', ?, ?)")
+    .prepare(
+      "INSERT OR REPLACE INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES (?, ?, ?, NULL, 'custos_realizados', ?, ?)",
+    )
     .run(id, demanda, rodada, JSON.stringify({ sessoes }), em);
 
 test("CA-11 a CA-13: sessão de outra demanda vira aviso; regrava de todas as custos da demanda, rodada inclusa; nada vai para a execução interna", () => {
@@ -140,8 +142,8 @@ test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => 
   b.exec(`INSERT INTO rodada VALUES ('I-1', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
       VALUES ('I-1', 1, 'implementar', 'aberto', ${T}, 1);
-    INSERT INTO evidencia_demanda VALUES ('e-r', 'I-1', 1, NULL, 'comportamento', '{}', ${T});
-    INSERT INTO evidencia_demanda VALUES ('e-t', 'I-1', NULL, 1, 'comportamento', '{}', ${T});`);
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e-r', 'I-1', 1, NULL, 'comportamento', '{}', ${T});
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e-t', 'I-1', NULL, 1, 'comportamento', '{}', ${T});`);
   for (const dono of ["e-r", "e-t"]) {
     b.prepare("INSERT INTO arquivo_evidencia VALUES (?, 1, 'x.txt', ?, 'text/plain', 2)").run(dono, a.sha256);
   }

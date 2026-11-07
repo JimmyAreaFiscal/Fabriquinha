@@ -32,7 +32,7 @@ const ticket = (b: DatabaseSync, id: string, n: number, etapa: string, status: s
 };
 const decisao = (b: DatabaseSync, id: string, n: number, decisaoId: number, resultado: string) => {
   b.exec(
-    `INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por, em)
+    `INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em)
      VALUES ('${id}', ${String(n)}, ${String(decisaoId)}, '${resultado}', ${resultado === "recusado" ? "'m'" : "NULL"}, 'auditor', ${T})`,
   );
 };

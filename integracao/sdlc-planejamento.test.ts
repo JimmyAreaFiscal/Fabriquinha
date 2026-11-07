@@ -236,7 +236,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     agora,
   );
   recusa(
-    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, por, em) VALUES (?, 99, 1, 'aprovado', 'auditor', ?)",
+    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, por_tipo, em) VALUES (?, 99, 1, 'aprovado', 'auditor', ?)",
     b,
     agora,
   );

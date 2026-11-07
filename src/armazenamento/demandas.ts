@@ -36,7 +36,14 @@ const TABELAS: readonly Tabela[] = [
   {
     nome: "demanda",
     chave: ["id"],
-    linhas: (ag) => [{ ...ag.demanda, enviada: bit(ag.demanda.enviada) }],
+    linhas: ({ demanda: { origem_ferramenta, origem_sessao, ...demanda } }) => [
+      {
+        ...demanda,
+        criada_por_ferramenta: origem_ferramenta,
+        criada_por_sessao: origem_sessao,
+        enviada: bit(demanda.enviada),
+      },
+    ],
   },
   {
     nome: "rodada",
@@ -107,7 +114,8 @@ const TABELAS: readonly Tabela[] = [
   {
     nome: "decisao_ticket",
     chave: ["demanda_id", "ticket_id", "decisao_id"],
-    linhas: (ag) => ag.decisoes.map((d) => ({ ...d, nota: d.nota ?? null, motivo: d.motivo ?? null })),
+    linhas: (ag) =>
+      ag.decisoes.map(({ por, ...d }) => ({ ...d, por_tipo: por, nota: d.nota ?? null, motivo: d.motivo ?? null })),
   },
   {
     nome: "evidencia_demanda",
@@ -190,7 +198,12 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
         falha: grupo({ etapa: enc.falha_etapa, motivo: enc.falha_motivo }),
       }),
     }),
-    demanda: { ...demanda, enviada: demanda.enviada === 1 },
+    demanda: {
+      ...demanda,
+      origem_ferramenta: demanda.criada_por_ferramenta,
+      origem_sessao: demanda.criada_por_sessao,
+      enviada: demanda.enviada === 1,
+    },
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
     dependencias_rodada: filhas("dependencia_rodada"),
     criterios_citados: filhas("criterio_citado_rodada"),
@@ -200,7 +213,9 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     ),
     dependencias_ticket: filhas("dependencia_ticket"),
     caminhos_ticket: filhas("caminho_ticket"),
-    decisoes: filhas("decisao_ticket").map(semNulos),
+    decisoes: filhas("decisao_ticket").map(({ por_tipo, por_trabalho_id: _, ...d }) =>
+      semNulos({ ...d, por: por_tipo }),
+    ),
     evidencias: filhas("evidencia_demanda").map(({ id: _, dados, ...e }) => ({
       ...semNulos(e),
       dados: JSON.parse(dados as string) as unknown,

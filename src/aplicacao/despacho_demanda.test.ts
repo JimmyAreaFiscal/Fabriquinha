@@ -327,7 +327,7 @@ test("planejar reprovado é retomado antes da seleção, mesmo com o limite 1, e
   const { banco, config } = await cenario(1);
   demanda(banco, 1, { fase: "planejamento", tickets: [{ etapa: "planejar", status: "em_execucao" }] });
   demanda(banco, 2, { rodadas: ["desenvolvimento"], tickets: [implementar(1)] });
-  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por, em)
+  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em)
     VALUES ('I-1', 1, 1, 'recusado', 'refaça o plano', 'auditor', '${em}')`);
   const fins = despacharDemandas(banco, config, deps);
   assert.deepEqual([execucoes(banco, 1, 1), status(banco, 2, 1)], [1, "aberto"]);
@@ -338,7 +338,7 @@ test("planejar reprovado é retomado antes da seleção, mesmo com o limite 1, e
 test("CA-2: planejar reprovado com execução aberta (pi vivo) não é retomado", async () => {
   const { banco, config } = await cenario(1);
   demanda(banco, 1, { fase: "planejamento", tickets: [{ etapa: "planejar", status: "em_execucao" }] });
-  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por, em)
+  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em)
     VALUES ('I-1', 1, 1, 'recusado', 'refaça o plano', 'auditor', '${em}')`);
   banco.exec("INSERT INTO sessao VALUES ('S-1', 'I-1', 1, 'interativo', 'ref')");
   banco.exec(`INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('E-1', 'S-1', '${em}', NULL, 0)`);
