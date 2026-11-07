@@ -50,8 +50,9 @@ const PREFIXOS_DE_RESPOSTA = ["User answered:", "User selected:"];
  */
 export function perguntasRespondidasNaSessao(raiz: string, sessao: string): { pergunta: string; resposta: string }[] {
   const mensagens = lerConversa(raiz, sessao).flatMap((entrada) => {
-    const { message } = entrada as { message?: Mensagem & { toolCallId?: string } };
-    return message ? [message] : [];
+    const message = (entrada as { message?: Mensagem & { toolCallId?: string } } | null)?.message;
+    // Linha fora da forma esperada (null, sem message, message sem content) não é conversa.
+    return typeof message?.content === "string" || Array.isArray(message?.content) ? [message] : [];
   });
   const perguntaPorChamada = new Map<string, string>();
   for (const m of mensagens.filter((m) => m.role === "assistant")) {
