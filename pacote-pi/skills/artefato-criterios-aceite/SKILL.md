@@ -28,7 +28,7 @@ A Fabriquinha monta a frase "dado …, quando …, então …", então escreva c
 
 `dado`: o estado de partida, concreto.
 
-- Bom: "um projeto com branch base `main` e nenhuma demanda aberta".
+- Bom: "um projeto com `branch_base` `main` e nenhuma demanda aberta".
 - Fraco: "o sistema configurado".
 
 `quando`: uma única ação, de quem age.

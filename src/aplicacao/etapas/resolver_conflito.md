@@ -1,11 +1,11 @@
 ## Modo de trabalhar: resolver conflito
 
-**Objetivo:** resolver, no ticket {ticket}, o conflito de merge da demanda {demanda}, trabalhando na worktree da demanda e incorporando a branch base configurada do projeto.
+**Objetivo:** resolver, no ticket {ticket}, o conflito de merge da demanda {demanda}, trabalhando na worktree da demanda e incorporando a `branch_base` configurada do projeto.
 
 **Passos:**
 
 1. Leia a descrição do ticket {ticket} e veja quais arquivos conflitam.
-2. Incorpore a branch base configurada do projeto na worktree da demanda.
+2. Incorpore a `branch_base` configurada do projeto na worktree da demanda.
 3. Resolva cada conflito preservando a intenção de ambos os lados e o que o plano e os critérios da demanda {demanda} pedem.
 4. Rode os testes e as verificações do projeto até passarem.
 
