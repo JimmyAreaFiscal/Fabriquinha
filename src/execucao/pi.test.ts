@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { after, test } from "node:test";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import {
   PACOTE,
   ambienteDaAuditoria,
@@ -217,15 +218,19 @@ test("pi que nem roda: o erro vai para o log, saiu resolve, e enviar e parar nã
 });
 
 test("stdout: cada objeto JSON vira evento; texto solto, null e número vão para o log, e o stderr também", async () => {
-  const log = join(base, "log-sh");
-  process.env.FABRIQUINHA_PI = "/bin/sh";
+  const log = join(base, "log-saida");
+  instalarPiFalso(base).roteirizar([
+    {
+      saidaDoProcesso: {
+        stdout: 'aviso solto\nnull\n5\n{"type":"agent_settled"}\n',
+        stderr: "erro\n",
+      },
+    },
+  ]);
+  process.env.FABRIQUINHA_ROOT = base;
   try {
     const eventos: unknown[] = [];
-    const pi = lancarPi(
-      ["-c", 'echo "aviso solto"; echo null; echo 5; echo \'{"type":"agent_settled"}\'; echo erro >&2'],
-      { cwd: base, env: process.env, log },
-      (e) => eventos.push(e),
-    );
+    const pi = lancarPi([], { cwd: base, env: process.env, log }, (e) => eventos.push(e));
     assert.equal(await pi.saiu, 0);
     assert.deepEqual(eventos, [{ type: "agent_settled" }]);
     const texto = readFileSync(log, "utf8");
@@ -244,16 +249,13 @@ test("stdout: cada objeto JSON vira evento; texto solto, null e número vão par
 
 test("fecharStdin: o pi recebe o EOF do stdin; sem ele, o stdin segue aberto", async () => {
   const log = join(base, "log-eof");
-  process.env.FABRIQUINHA_PI = "/bin/sh";
+  instalarPiFalso(base).roteirizar([{ saidaDoProcesso: { esperaEof: true } }]);
+  process.env.FABRIQUINHA_ROOT = base;
   try {
-    // `cat` só termina no EOF; sem fecharStdin, o pi ficaria preso até o parar().
-    const fechado = lancarPi(
-      ["-c", "cat >/dev/null"],
-      { cwd: base, env: process.env, log, fecharStdin: true },
-      () => undefined,
-    );
+    // O pi só termina no EOF; sem fecharStdin, ficaria preso até o parar().
+    const fechado = lancarPi([], { cwd: base, env: process.env, log, fecharStdin: true }, () => undefined);
     assert.equal(await fechado.saiu, 0);
-    const aberto = lancarPi(["-c", "cat >/dev/null"], { cwd: base, env: process.env, log }, () => undefined);
+    const aberto = lancarPi([], { cwd: base, env: process.env, log }, () => undefined);
     const preso = await Promise.race([aberto.saiu, dormir(200, "preso")]);
     assert.equal(preso, "preso");
     await aberto.parar();

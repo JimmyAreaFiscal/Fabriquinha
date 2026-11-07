@@ -1,11 +1,12 @@
 // Gerente (F4 §2, §5.4, §6.6, §6.7) com um pi falso de verdade: a recusa de um comando na autônoma e na interativa, o
 // relógio da autônoma parado enquanto um diálogo espera, o diálogo que expira, o aborto e a atividade do agente.
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
+import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { executar } from "../processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
@@ -26,98 +27,75 @@ after(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-/** pi falso: responde ao prompt conforme $FALSO_PI (recusa, ocupado, dialogo, pergunta ou trabalha sem fim) e ao `abort`. */
-const pi = join(base, "pi.mjs");
-writeFileSync(
-  pi,
-  `#!/usr/bin/env node
-import { appendFileSync } from "node:fs";
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const variante = process.env.FALSO_PI;
-const assistente = (stopReason) => emitir({ type: "message_end", message: { role: "assistant", content: [], stopReason } });
-let prompts = 0;
-function aoPrompt() {
-  // Como o pi que já trabalha: o segundo prompt é recusado e o primeiro segue rodando.
-  if (variante === "ocupado" && ++prompts > 1)
-    return emitir({ type: "response", command: "prompt", success: false, error: "Agent is already processing." });
-  if (variante === "recusa") return emitir({ type: "response", command: "prompt", success: false, error: "modelo inexistente" });
-  emitir({ type: "response", command: "prompt", success: true });
-  emitir({ type: "agent_start" });
-  if (variante === "dialogo") {
-    emitir({ type: "extension_ui_request", id: "c1", method: "confirm", title: "Seguir?", timeout: 150 });
-    emitir({ type: "extension_ui_request", id: "s1", method: "select", title: "Qual?", options: ["a", "b"] });
-  }
-  if (variante === "pergunta") {
-    emitir({ type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args: { question: "Qual?" } });
-    emitir({ type: "extension_ui_request", id: "s1", method: "select", title: "Qual?", options: ["a"] });
-  }
-  if (variante === "pergunta_opcoes") {
-    const args = { question: "Corrijo o Sonar?", details: "S1", options: [{ label: " Sim " }, { label: "Não" }], multiSelect: true };
-    emitir({ type: "tool_execution_start", toolCallId: "p2", toolName: "perguntar", args });
-    emitir({ type: "extension_ui_request", id: "s2", method: "select", title: "Corrijo o Sonar?", options: ["Sim", "Não"] });
-  }
-  if (variante === "pergunta_sonar") {
-    const args = { question: "Como confiro o SonarQube?", options: [{ label: "Usar a verificação anterior" }, { label: "Executar deploy de teste" }] };
-    emitir({ type: "tool_execution_start", toolCallId: "p4", toolName: "perguntar", args });
-    emitir({ type: "extension_ui_request", id: "s4", method: "select", title: "Como confiro o SonarQube?", options: ["Usar a verificação anterior", "Executar deploy de teste"] });
-  }
-  if (variante === "pergunta_sim_acesso") {
-    const args = { question: "Posso seguir?", options: [{ label: "Sim", description: "Usar a chave privada fornecida" }, { label: "Não" }] };
-    emitir({ type: "tool_execution_start", toolCallId: "p6", toolName: "perguntar", args });
-    emitir({ type: "extension_ui_request", id: "s6", method: "select", title: "Posso seguir?", options: ["Sim", "Não"] });
-  }
-  if (variante === "pergunta_banco") {
-    emitir({ type: "tool_execution_start", toolCallId: "p5", toolName: "perguntar", args: { question: "Posso usar uma cópia do banco real?" } });
-    emitir({ type: "extension_ui_request", id: "e5", method: "editor", title: "Posso usar uma cópia do banco real?" });
-  }
-  if (variante === "pergunta_livre") {
-    emitir({ type: "tool_execution_start", toolCallId: "p3", toolName: "perguntar", args: { question: "Qual handle?", details: "do dev" } });
-    emitir({ type: "extension_ui_request", id: "e3", method: "editor", title: "Qual handle?\\n\\ndo dev" });
-  }
-  // A resposta do modelo começa e não chega mais nada, como na I-259.T16.
-  if (variante === "modelo_travado") emitir({ type: "message_start", message: { role: "assistant", content: [] } });
-  // Uma ferramenta roda mais que o silêncio aceito do modelo, sem atualização parcial, e o agente termina depois.
-  if (variante === "ferramenta_longa") {
-    emitir({ type: "tool_execution_start", toolCallId: "b1", toolName: "bash", args: { command: "docker build ." } });
-    setTimeout(() => {
-      emitir({ type: "tool_execution_end", toolCallId: "b1", toolName: "bash", result: {}, isError: false });
-      assistente("stop");
-      emitir({ type: "agent_settled" });
-    }, 600);
-  }
+/** Eventos da perguntar, incluindo as opções e descrições que a triagem recebe. */
+function eventosDaPergunta(
+  id: string,
+  pergunta: string,
+  opcoes?: { label: string; description?: string }[],
+  argumentosExtras: object = {},
+  metodo = "select",
+  titulo = pergunta,
+): NonNullable<PassoPi["eventos"]> {
+  return [
+    {
+      type: "tool_execution_start",
+      toolCallId: `p-${id}`,
+      toolName: "perguntar",
+      args: { question: pergunta, ...(opcoes && { options: opcoes }), ...argumentosExtras },
+    },
+    {
+      type: "extension_ui_request",
+      id,
+      method: metodo,
+      title: titulo,
+      ...(opcoes && { options: opcoes.map((opcao) => opcao.label.trim()) }),
+    },
+  ];
 }
-// Como o pi que assenta ao receber o SIGTERM: o evento chega depois do fim da execução.
-process.on("SIGTERM", () => {
-  emitir({ type: "agent_settled" });
-  setTimeout(() => process.exit(0), 50);
+
+const pergunta: NonNullable<PassoPi["eventos"]> = [
+  { type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args: { question: "Qual?" } },
+  { type: "extension_ui_request", id: "s1", method: "select", title: "Qual?", options: ["a"] },
+];
+const perguntaBanco = eventosDaPergunta("e5", "Posso usar uma cópia do banco real?", undefined, {}, "editor");
+const perguntaSonar = eventosDaPergunta("s4", "Como confiro o SonarQube?", [
+  { label: "Usar a verificação anterior" },
+  { label: "Executar deploy de teste" },
+]);
+const perguntaAcesso = eventosDaPergunta("s6", "Posso seguir?", [
+  { label: "Sim", description: "Usar a chave privada fornecida" },
+  { label: "Não" },
+]);
+const perguntaOpcoes = eventosDaPergunta("s2", "Corrijo o Sonar?", [{ label: " Sim " }, { label: "Não" }], {
+  details: "S1",
+  multiSelect: true,
 });
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type === "prompt") aoPrompt();
-    if (c.type === "extension_ui_response" && c.value !== undefined) appendFileSync("respostas", c.value + "\\n");
-    if (c.type === "extension_ui_response" && !c.cancelled) {
-      assistente("stop");
-      emitir({ type: "agent_settled" });
-    }
-    if (c.type === "abort") {
-      assistente("aborted");
-      emitir({ type: "agent_settled" });
-    }
-  }
-});
-`,
+const perguntaLivre = eventosDaPergunta(
+  "e3",
+  "Qual handle?",
+  undefined,
+  { details: "do dev" },
+  "editor",
+  "Qual handle?\n\ndo dev",
 );
-chmodSync(pi, 0o755);
-process.env.FABRIQUINHA_PI = pi;
+const dialogos: NonNullable<PassoPi["eventos"]> = [
+  { type: "extension_ui_request", id: "c1", method: "confirm", title: "Seguir?", timeout: 150 },
+  { type: "extension_ui_request", id: "s1", method: "select", title: "Qual?", options: ["a", "b"] },
+];
+const ferramentaLonga: PassoPi = {
+  eventos: [
+    { type: "tool_execution_start", toolCallId: "b1", toolName: "bash", args: { command: "docker build ." } },
+    { pausaMs: 600 },
+    { type: "tool_execution_end", toolCallId: "b1", toolName: "bash", result: {}, isError: false },
+    // O pi que fecha uma mensagem sem `message` não derruba o ouvinte do gerente.
+    { type: "message_end" },
+  ],
+};
 
 let n = 0;
-/** Roda o pi falso na `variante`, no `modo`, com o `limiteMin`; devolve a sessão e a promessa do fim. */
+/** Roda o roteiro no `modo`, com o `limiteMin`; devolve a sessão, o registro e a promessa do fim. */
 function rodar(
-  variante: string,
+  passos: PassoPi[],
   modo: "autonomo" | "interativo",
   limiteMin = 1,
   triarPergunta?: Processo["triarPergunta"],
@@ -125,11 +103,28 @@ function rodar(
 ) {
   const sessao = `s-${String(++n)}`;
   const dir = mkdtempSync(join(base, "exec-"));
+  const piFalso = instalarPiFalso(dir).roteirizar(
+    passos.map((passo) => ({
+      termina: "nunca",
+      usuario: false,
+      sessao: false,
+      resposta: "",
+      sigterm: "assenta",
+      abortaComMensagem: true,
+      ...passo,
+    })),
+  );
+  const respostas = () =>
+    piFalso
+      .registro()
+      .filter((entrada) => entrada.comando?.type === "extension_ui_response" && entrada.comando.value !== undefined)
+      .map((entrada) => `${String(entrada.comando?.value)}\n`)
+      .join("");
   const fim = rodarPi({
     execucao: { id: sessao, sessaoPi: sessao, modo },
     args: [],
     cwd: dir,
-    env: { ...process.env, FALSO_PI: variante },
+    env: { ...process.env, FABRIQUINHA_ROOT: dir },
     log: join(dir, "log"),
     prompt: "trabalhe",
     limiteMin,
@@ -137,7 +132,7 @@ function rodar(
     triarPergunta,
     silencioMaximoDoModeloMin,
   });
-  return { sessao, fim, dir };
+  return { sessao, fim, dir, respostas };
 }
 
 async function ate(condicao: () => boolean, oQue: string): Promise<void> {
@@ -148,18 +143,21 @@ async function ate(condicao: () => boolean, oQue: string): Promise<void> {
 }
 
 test("autônoma: o pi que recusa o prompt falha na hora, sem esperar o tempo limite", async () => {
-  assert.equal(await rodar("recusa", "autonomo").fim, "o pi recusou o comando prompt: modelo inexistente");
+  assert.equal(
+    await rodar([{ recusa: "modelo inexistente" }], "autonomo").fim,
+    "o pi recusou o comando prompt: modelo inexistente",
+  );
 });
 
 test("interativa: a recusa do prompt só fica no log, a sessão fica ociosa e termina bem quando encerrada", async () => {
-  const { sessao, fim } = rodar("recusa", "interativo");
+  const { sessao, fim } = rodar([{ recusa: "modelo inexistente" }], "interativo");
   await ate(() => situacao(sessao)?.ocupado === false, "a sessão ociosa");
   encerrar(sessao);
   assert.equal(await fim, undefined);
 });
 
 test("interativa: o prompt recusado porque o agente já trabalha não deixa a sessão ociosa", async () => {
-  const { sessao, fim, dir } = rodar("ocupado", "interativo");
+  const { sessao, fim, dir } = rodar([{}, { recusa: "Agent is already processing." }], "interativo");
   mandar(sessao, { type: "prompt", message: "mais uma" });
   await ate(
     () =>
@@ -173,7 +171,7 @@ test("interativa: o prompt recusado porque o agente já trabalha não deixa a se
 
 test("autônoma: o relógio para enquanto o diálogo espera; o diálogo com tempo limite expira e o respondido segue", async () => {
   // 0,005 min = 300 ms: o diálogo fica pendente por mais tempo que isso sem a execução estourar o limite.
-  const { sessao, fim } = rodar("dialogo", "autonomo", 0.005);
+  const { sessao, fim } = rodar([{ eventos: dialogos }], "autonomo", 0.005);
   await ate(() => (situacao(sessao)?.dialogos.length ?? 0) === 2, "os dois diálogos");
   assert.ok(situacao(sessao)?.dialogos.find((d) => d.id === "c1")?.expiraEm);
   await ate(() => situacao(sessao)?.dialogos.length === 1, "a expiração do confirm");
@@ -187,7 +185,7 @@ test("autônoma: o relógio para enquanto o diálogo espera; o diálogo com temp
 });
 
 test("autônoma: o select da perguntar vira a pergunta do chat; abortar dá a falha de abortada pelo Auditor", async () => {
-  const { sessao, fim } = rodar("pergunta", "autonomo");
+  const { sessao, fim } = rodar([{ eventos: pergunta }], "autonomo");
   await ate(() => situacao(sessao)?.dialogos.length === 1, "a pergunta");
   assert.equal(situacao(sessao)?.dialogos[0]?.pergunta, true);
   abortar(sessao);
@@ -196,31 +194,31 @@ test("autônoma: o select da perguntar vira a pergunta do chat; abortar dá a fa
 
 test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o rótulo; a resposta e a regra vão ao log", async () => {
   const perguntas: unknown[] = [];
-  const { fim, dir } = rodar("pergunta_opcoes", "autonomo", 1, (p) => {
+  const { fim, dir, respostas } = rodar([{ eventos: perguntaOpcoes }], "autonomo", 1, (p) => {
     perguntas.push(p);
     return Promise.resolve({ resposta: "Sim", justificativa: "issue do Sonar se corrige" });
   });
   assert.equal(await fim, undefined);
   assert.deepEqual(perguntas, [{ pergunta: "Corrijo o Sonar?", detalhes: "S1", opcoes: ["Sim", "Não"] }]);
 
-  const descritas = rodar("pergunta_sim_acesso", "autonomo", 1, (p) => {
+  const descritas = rodar([{ eventos: perguntaAcesso }], "autonomo", 1, (p) => {
     assert.deepEqual(p.descricoes, ["Usar a chave privada fornecida", ""]);
     return Promise.resolve(undefined);
   });
   await ate(() => existsSync(join(descritas.dir, "log")), "a escalada");
   abortar(descritas.sessao);
   await descritas.fim;
-  assert.equal(readFileSync(join(dir, "respostas"), "utf8"), '["Sim"]\n');
+  assert.equal(respostas(), '["Sim"]\n');
   assert.match(
     readFileSync(join(dir, "log"), "utf8"),
     /Auditor automático respondeu "Sim" a "Corrijo o Sonar\?": issue do Sonar/,
   );
 
-  const simples = rodar("pergunta", "autonomo", 1, () =>
+  const simples = rodar([{ eventos: pergunta }], "autonomo", 1, () =>
     Promise.resolve({ resposta: "a", justificativa: "recomendada" }),
   );
   assert.equal(await simples.fim, undefined);
-  assert.equal(readFileSync(join(simples.dir, "respostas"), "utf8"), "a\n");
+  assert.equal(simples.respostas(), "a\n");
 });
 
 /** A triagem de verdade (`triarPergunta`) com o pi da triagem trocado por uma saída fixa do modelo. */
@@ -232,51 +230,51 @@ function triagemComSaida(etapa: string, saidaDoModelo: string): NonNullable<Proc
 const foraDaRevisao = '{"decisao":"fora_da_revisao","justificativa":"pede o Sonar"}';
 
 test("autônoma: a pergunta fora da revisão recebe o texto fixo, com ou sem opções, e o log registra a resposta", async () => {
-  const sonar = rodar("pergunta_sonar", "autonomo", 1, triagemComSaida("revisar_rodada", foraDaRevisao));
+  const sonar = rodar([{ eventos: perguntaSonar }], "autonomo", 1, triagemComSaida("revisar_rodada", foraDaRevisao));
   assert.equal(await sonar.fim, undefined);
-  assert.equal(readFileSync(join(sonar.dir, "respostas"), "utf8"), `${RESPOSTA_FORA_DA_REVISAO}\n`);
+  assert.equal(sonar.respostas(), `${RESPOSTA_FORA_DA_REVISAO}\n`);
   assert.match(
     readFileSync(join(sonar.dir, "log"), "utf8"),
     /Auditor automático respondeu "Fica fora da revisão; registre como verificado fora da revisão e decida pelo resto\." a "Como confiro o SonarQube\?": pede o Sonar/,
   );
 
-  const banco = rodar("pergunta_banco", "autonomo", 1, triagemComSaida("revisar_demanda", foraDaRevisao));
+  const banco = rodar([{ eventos: perguntaBanco }], "autonomo", 1, triagemComSaida("revisar_demanda", foraDaRevisao));
   assert.equal(await banco.fim, undefined);
-  assert.equal(readFileSync(join(banco.dir, "respostas"), "utf8"), `${RESPOSTA_FORA_DA_REVISAO}\n`);
+  assert.equal(banco.respostas(), `${RESPOSTA_FORA_DA_REVISAO}\n`);
 });
 
 test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy escalam, sem resposta ao agente", async () => {
   const oferta = '{"decisao":"responder","resposta":"Executar deploy de teste","justificativa":"autorizado"}';
-  for (const [variante, etapa, saida] of [
-    ["pergunta_banco", "implementar", foraDaRevisao],
-    ["pergunta_sonar", "revisar_rodada", oferta],
+  for (const [eventos, etapa, saida] of [
+    [perguntaBanco, "implementar", foraDaRevisao],
+    [perguntaSonar, "revisar_rodada", oferta],
     [
-      "pergunta_banco",
+      perguntaBanco,
       "revisar_demanda",
       '{"decisao":"responder","resposta":"Faça login na conta do Sonar e confira o projeto","justificativa":"banal"}',
     ],
     // "Sim" contextual: a descrição da opção é que oferece a chave, e a triagem a recebe.
-    ["pergunta_sim_acesso", "implementar", '{"decisao":"responder","resposta":"Sim","justificativa":"banal"}'],
+    [perguntaAcesso, "implementar", '{"decisao":"responder","resposta":"Sim","justificativa":"banal"}'],
     [
-      "pergunta_banco",
+      perguntaBanco,
       "implementar",
       '{"decisao":"responder","resposta":"Utilize a chave privada fornecida","justificativa":"banal"}',
     ],
     // Sem as palavras de credencial: ainda é orientação de acesso e não chega ao agente.
     [
-      "pergunta_banco",
+      perguntaBanco,
       "implementar",
       '{"decisao":"responder","resposta":"Entre no painel do Sonar e confira o projeto","justificativa":"banal"}',
     ],
   ] as const) {
-    const escalada = rodar(variante, "autonomo", 1, triagemComSaida(etapa, saida));
+    const escalada = rodar([{ eventos: [...eventos] }], "autonomo", 1, triagemComSaida(etapa, saida));
     await ate(
       () =>
         existsSync(join(escalada.dir, "log")) && readFileSync(join(escalada.dir, "log"), "utf8").includes("escalou"),
       "a escalada",
     );
     assert.match(readFileSync(join(escalada.dir, "log"), "utf8"), /Auditor automático escalou ao Auditor: .+\?/);
-    assert.equal(existsSync(join(escalada.dir, "respostas")), false);
+    assert.equal(escalada.respostas(), "");
     assert.equal(situacao(escalada.sessao)?.dialogos.length, 1);
     abortar(escalada.sessao);
     assert.equal(await escalada.fim, "abortada pelo Auditor");
@@ -284,7 +282,7 @@ test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy
 });
 
 test("autônoma: a pergunta estratégica fica com o Auditor; a resposta dele antes da triagem vale e a triagem não repete", async () => {
-  const escalada = rodar("pergunta_livre", "autonomo", 1, (p) => {
+  const escalada = rodar([{ eventos: perguntaLivre }], "autonomo", 1, (p) => {
     assert.deepEqual(p, { pergunta: "Qual handle?", detalhes: "do dev", opcoes: [] });
     return Promise.resolve(undefined);
   });
@@ -297,27 +295,27 @@ test("autônoma: a pergunta estratégica fica com o Auditor; a resposta dele ant
   assert.equal(await escalada.fim, undefined);
 
   let liberar: (r: { resposta: string; justificativa: string }) => void = () => undefined;
-  const atrasada = rodar("pergunta", "autonomo", 1, () => new Promise((pronto) => (liberar = pronto)));
+  const atrasada = rodar([{ eventos: pergunta }], "autonomo", 1, () => new Promise((pronto) => (liberar = pronto)));
   await ate(() => situacao(atrasada.sessao)?.dialogos.length === 1, "a pergunta");
   responderDialogo(atrasada.sessao, "s1", { value: "a" });
   liberar({ resposta: "a", justificativa: "j" });
   assert.equal(await atrasada.fim, undefined);
-  assert.equal(readFileSync(join(atrasada.dir, "respostas"), "utf8"), "a\n");
+  assert.equal(atrasada.respostas(), "a\n");
 
   // Interativa: a triagem não entra.
-  const interativa = rodar("pergunta", "interativo", 1, () => assert.fail("a interativa não faz triagem"));
+  const interativa = rodar([{ eventos: pergunta }], "interativo", 1, () => assert.fail("a interativa não faz triagem"));
   await ate(() => situacao(interativa.sessao)?.dialogos.length === 1, "a pergunta da interativa");
   encerrar(interativa.sessao);
   assert.equal(await interativa.fim, undefined);
 });
 
 test("encerrar a autônoma com um diálogo de tempo limite pendente para o relógio dele; o assentar depois do fim não arma relógio", async () => {
-  const comDialogo = rodar("dialogo", "autonomo");
+  const comDialogo = rodar([{ eventos: dialogos }], "autonomo");
   await ate(() => (situacao(comDialogo.sessao)?.dialogos.length ?? 0) === 2, "os diálogos");
   encerrar(comDialogo.sessao);
   assert.equal(await comDialogo.fim, undefined);
 
-  const trabalhando = rodar("trabalha", "interativo");
+  const trabalhando = rodar([{}], "interativo");
   await ate(() => situacao(trabalhando.sessao)?.ocupado === true, "o agente trabalhando");
   encerrar(trabalhando.sessao);
   assert.equal(await trabalhando.fim, undefined);
@@ -326,7 +324,7 @@ test("encerrar a autônoma com um diálogo de tempo limite pendente para o reló
 
 test("o modelo que para de responder no meio da resposta encerra a execução como falha de infraestrutura retomável", async () => {
   // 0,005 min = 300 ms de silêncio aceito; o limite da execução inteira (1 min) não chega a contar.
-  const { fim, dir } = rodar("modelo_travado", "autonomo", 1, undefined, 0.005);
+  const { fim, dir } = rodar([{ mensagemAberta: true }], "autonomo", 1, undefined, 0.005);
   const falha = await fim;
   assert.equal(falha, "o modelo ficou 0.005 min sem responder (tempo limite sem eventos do pi)");
   assert.equal(causaDeInfraestrutura(falha), "transitoria");
@@ -334,9 +332,12 @@ test("o modelo que para de responder no meio da resposta encerra a execução co
 });
 
 test("ferramenta longa e sessão interativa ociosa não disparam o vigia do modelo", async () => {
-  assert.equal(await rodar("ferramenta_longa", "autonomo", 1, undefined, 0.005).fim, undefined);
+  assert.equal(
+    await rodar([{ ...ferramentaLonga, termina: "assenta" }], "autonomo", 1, undefined, 0.005).fim,
+    undefined,
+  );
 
-  const ociosa = rodar("ferramenta_longa", "interativo", 1, undefined, 0.005);
+  const ociosa = rodar([{ ...ferramentaLonga, termina: "assenta" }], "interativo", 1, undefined, 0.005);
   await ate(() => situacao(ociosa.sessao)?.ocupado === false, "a sessão ociosa");
   await dormir(400);
   assert.ok(situacao(ociosa.sessao), "a sessão ociosa segue viva além do silêncio aceito");

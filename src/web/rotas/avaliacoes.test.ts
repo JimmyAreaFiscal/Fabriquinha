@@ -1,8 +1,8 @@
-// Rotas da avaliação contra o serviço de verdade, numa raiz temporária e numa porta livre, com um pi falso próprio:
+// Rotas da avaliação contra o serviço de verdade, numa raiz temporária e numa porta livre, com o pi falso único:
 // disparo e recusas, lista, detalhe, SSE, conversa, aborto, encaminhamento e a `origem` de GET /api/demandas/:id.
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,58 +12,30 @@ import { estadoDaAvaliacao } from "../../execucao/avaliacao.ts";
 import { encerrar, situacao } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
+import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacoes-rotas-")));
 process.env.PI_CODING_AGENT_DIR = join(base, "pi-agent");
 
-// Grava dois achados no primeiro prompt (a menos que $FALSO_PI seja "espera", que não responde) e responde "ok".
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-if (process.argv.includes("--version")) { console.log("0.0.0-falso"); process.exit(0); }
-const dir = arg("--session-dir");
-const id = arg("--session-id");
-mkdirSync(dir, { recursive: true });
-const existente = readdirSync(dir).find((nome) => nome.endsWith("_" + id + ".jsonl"));
-const sessao = join(dir, existente ?? "2026-10-11T10-00-00-000Z_" + id + ".jsonl");
-if (!existente) appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n");
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const guardar = (message) =>
-  appendFileSync(sessao, JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type === "prompt") {
-      emitir({ type: "response", command: "prompt", success: true });
-      emitir({ type: "agent_start" });
-      guardar({ role: "user", content: c.message });
-      if (process.env.FALSO_PI === "espera") continue;
-      const achados = join(process.cwd(), "achados.jsonl");
-      if (!existsSync(achados))
-        for (const n of [1, 2]) appendFileSync(achados, JSON.stringify({ titulo: "Achado " + n, descricao: "desc " + n, evidencia: "ev " + n }) + "\\n");
-      const message = { role: "assistant", provider: "p", model: "m", content: [{ type: "text", text: "ok" }], stopReason: "stop",
-        usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.5 } } };
-      guardar(message);
-      emitir({ type: "message_end", message });
-      emitir({ type: "agent_end" });
-      emitir({ type: "agent_settled" });
-    }
-    if (c.type === "abort") {
-      emitir({ type: "response", command: "abort", success: true });
-      emitir({ type: "agent_settled" });
-    }
-  }
-});
-`;
-const pi = join(base, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
-process.env.FABRIQUINHA_PI = pi;
-process.env.FALSO_PI = "conversa";
+const piFalso = instalarPiFalso(base);
+const resposta: PassoPi = {
+  resposta: "ok",
+  modelo: { provedor: "p", modelo: "m" },
+  custo: 0.5,
+  uso: { output: 5 },
+  fimDoAgente: true,
+  cabecalhoDaSessao: true,
+};
+const achados = [1, 2]
+  .map(
+    (numero) =>
+      JSON.stringify({
+        titulo: `Achado ${String(numero)}`,
+        descricao: `desc ${String(numero)}`,
+        evidencia: `ev ${String(numero)}`,
+      }) + "\n",
+  )
+  .join("");
 
 const raiz = join(base, "raiz");
 let servico: Servico;
@@ -159,13 +131,13 @@ test("recusas do disparo: período sem demanda, demanda de outro projeto, entrad
   assert.equal((await pedir(AV, { projeto: "loja", ...periodo, extra: 1 })).status, 422);
   assert.equal((await pedir(AV, { ...periodo })).status, 422);
 
-  process.env.FABRIQUINHA_PI = "false";
+  piFalso.roteirizar([{ sai: { codigo: 1, quando: "antes_da_sessao" } }]);
   try {
     const r = await pedir(AV, { projeto: "loja", ...periodo });
     assert.equal(r.status, 502);
     assert.match(r.corpo.erro, /o agente da avaliação não subiu/);
   } finally {
-    process.env.FABRIQUINHA_PI = pi;
+    piFalso.roteirizar();
   }
   assert.deepEqual((await pedir(AV)).corpo, []);
 });
@@ -181,6 +153,7 @@ test("demandas do período: só as com sessão, e `demandas` não é lido como :
 });
 
 test("dispara com pedido em branco, lista com estado e achados, abre o detalhe e o SSE (CA-1, 3, 4, 8, 16)", async () => {
+  piFalso.roteirizar([{ ...resposta, escreve: { "achados.jsonl": achados } }, resposta]);
   const id = await disparar({ pedido: "  ", demandas: ["I-10"] });
   await ate(() => situacao(id)?.ocupado === false, "a resposta do agente");
   await ate(() => nAchados(id) === 2, "os achados");
@@ -236,6 +209,7 @@ test("id que não é UUID dá 422; avaliação que não existe, 404", async () =
 });
 
 test("conversa, aborto, encaminhar, reencaminhar e a origem da demanda (CA-9, 10, 11, 12, 14)", async () => {
+  piFalso.roteirizar([resposta]);
   const id = ids[0] ?? "";
   assert.equal((await pedir(`${AV}/${id}/mensagens`, { texto: "  " })).status, 422);
   encerrar(id);

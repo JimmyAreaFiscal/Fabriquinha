@@ -76,7 +76,8 @@ test("CA-11: o pi roda na worktree da demanda", async () => {
 });
 
 test("CA-12: pi com falha deixa o ticket falhou e a demanda em revisao_demanda", async () => {
-  const { banco } = await cenarioRevisao({ integral: true, falha: true });
+  const { banco, piFalso } = await cenarioRevisao({ integral: true });
+  piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   assert.equal(await conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), "falhou");
   const e = estado(banco);
   assert.deepEqual([e.tickets.find((t) => t.ticket_id === 3)?.status, e.fase], ["falhou", "revisao_demanda"]);

@@ -1,11 +1,12 @@
 // Serviço de planejamento com banco real, git real em repositório temporário e pi falso mínimo (CA-1 a CA-13).
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { submeterPlano } from "../dominio/transicoes_demanda.ts";
@@ -25,28 +26,6 @@ const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
 delete process.env.FABRIQUINHA_PORTA;
-
-// pi falso mínimo: anota cada prompt e assenta sem encerrar (a sessão interativa termina por ociosidade).
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync } from "node:fs";
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify({ mensagem: c.message }) + "\\n");
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
 
 const abertos: DatabaseSync[] = [];
 after(() => {
@@ -149,16 +128,11 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
   } as unknown as AgregadoDemanda);
   registrarDependenciaDemanda(banco, "I-1", "I-0"); // só antes do envio
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-1'");
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
-  process.env.FALSO_PI_REGISTRO = registro;
+  const piFalso = instalarPiFalso(c.dir);
   return {
     c,
     banco,
-    prompts: () =>
-      (existsSync(registro) ? readFileSync(registro, "utf8").trim().split("\n") : []).map(
-        (l) => (JSON.parse(l) as { mensagem: string }).mensagem,
-      ),
+    prompts: () => piFalso.prompts().map((entrada) => entrada.prompt),
     sessoes: () => carregarSessoesDoTicket(banco, { demanda_id: "I-1", ticket_id: 1 }),
     status: () => carregarDemanda(banco, "I-1").tickets[0]?.status,
   };

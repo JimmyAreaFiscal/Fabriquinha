@@ -76,6 +76,10 @@ export interface PassoPi {
   /** Módulo (default export assíncrono) que faz o que o CLI do agente faria. */
   agente?: string;
   // --- Os outros modos
+  /** Tabela crua e falha opcional de `--list-models`; sem configuração vale a tabela padrão. */
+  listaDeModelos?: { tabela?: string; stderr?: string; codigo?: number };
+  /** Processo sem RPC: saída crua, término opcionalmente só depois do EOF do stdin. */
+  saidaDoProcesso?: { stdout?: string; stderr?: string; codigo?: number; esperaEof?: boolean };
   /** `-p`: imprime a saída (texto, ou objeto em JSON) e sai com `codigo`; sem saída, sai com 1. */
   chamadaUnica?: { saida?: string | object; codigo?: number };
   /** `--mode json`: grava o relatório em $FABRIQUINHA_SAIDA depois do EOF do stdin. */
@@ -166,13 +170,6 @@ async function executarPiFalso(): Promise<void> {
     console.log("0.0.0-falso");
     process.exit(0);
   }
-  if (argumentos.includes("--list-models")) {
-    console.log("provider   model              context  max-out  thinking  images");
-    console.log("anthropic  claude-opus-5-5    200K     64K      yes       yes");
-    console.log("anthropic  claude-sonnet-5-5  200K     64K      yes       yes");
-    process.exit(0);
-  }
-
   const caminhoDoRegistro = process.env.FALSO_PI_REGISTRO;
   const registradasNoProcesso: EntradaDoRegistro[] = [];
   const registrar = (entrada: EntradaDoRegistro) => {
@@ -192,6 +189,23 @@ async function executarPiFalso(): Promise<void> {
 
   const passoDoInicio = proximoPasso();
   registrar({ evento: "inicio", argv: argumentos, cwd: process.cwd(), execucao: process.env.FABRIQUINHA_EXECUCAO });
+
+  if (argumentos.includes("--list-models")) {
+    const { tabela, stderr, codigo } = passoDoInicio.listaDeModelos ?? {};
+    process.stdout.write(
+      tabela ??
+        "provider   model              context  max-out  thinking  images\nanthropic  claude-opus-5-5    200K     64K      yes       yes\nanthropic  claude-sonnet-5-5  200K     64K      yes       yes\n",
+    );
+    if (stderr) process.stderr.write(stderr);
+    process.exit(codigo ?? 0);
+  }
+  if (passoDoInicio.saidaDoProcesso) {
+    const { stdout, stderr, codigo, esperaEof } = passoDoInicio.saidaDoProcesso;
+    if (esperaEof) await new Promise((pronto) => process.stdin.resume().on("end", pronto));
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+    process.exit(codigo ?? 0);
+  }
 
   if (argumentos.includes("-p")) {
     registrar({ evento: "chamada_unica", argv: argumentos, cwd: process.cwd() });

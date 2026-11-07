@@ -81,6 +81,25 @@ test("--version e --list-models respondem como o pi, sem roteiro", () => {
   assert.match(modelos[1] ?? "", /^anthropic\s{2,}claude-opus-5-5\s/);
 });
 
+test("--list-models aceita tabela crua, stderr e código do roteiro", () => {
+  const tabela = "provider  model\nlocal  modelo com espaços\n";
+  const listado = rodar(["--list-models", "local/modelo"], [{ listaDeModelos: { tabela } }]);
+  assert.deepEqual([listado.status, listado.stdout], [0, tabela]);
+  const falha = rodar(["--list-models"], [{ listaDeModelos: { tabela: "", stderr: "sem configuração", codigo: 2 } }]);
+  assert.deepEqual([falha.status, falha.stdout, falha.stderr], [2, "", "sem configuração"]);
+});
+
+test("saída crua preserva stdout, stderr e código; esperaEof mantém o processo até fechar o stdin", async () => {
+  const saida = rodar([], [{ saidaDoProcesso: { stdout: "null\n5\naviso\n", stderr: "erro", codigo: 3 } }]);
+  assert.deepEqual([saida.status, saida.stdout, saida.stderr], [3, "null\n5\naviso\n", "erro"]);
+  const pi = spawn(piFalso, [], { cwd: pasta(), env: ambiente([{ saidaDoProcesso: { esperaEof: true } }]) });
+  const fim = new Promise((pronto) => pi.on("close", pronto));
+  await new Promise((pronto) => setTimeout(pronto, 200));
+  assert.equal(pi.exitCode, null);
+  pi.stdin.end();
+  assert.equal(await fim, 0);
+});
+
 test("-p imprime a saída do passo (objeto em JSON, texto cru) e sem saída sai com 1", () => {
   const decisao = rodar(["-p", "triar"], [{ chamadaUnica: { saida: { decisao: "responder", resposta: "Sim" } } }]);
   assert.deepEqual([decisao.status, JSON.parse(decisao.stdout)], [0, { decisao: "responder", resposta: "Sim" }]);
