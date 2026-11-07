@@ -131,7 +131,7 @@ async function cenario() {
       await fecharTicketDemanda(
         b,
         ref,
-        { execucao: id },
+        {},
         {
           coletarVerificacoes: () =>
             Promise.resolve((["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(aprovada)),

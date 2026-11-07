@@ -2,7 +2,7 @@
 // rodadas da revisão integral. Funções puras que só acrescentam ao agregado; fases, gates e decisões ficam nas transições.
 import { z } from "zod";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
-import { FABRIQUINHA } from "./ator.ts";
+import type { Ator } from "./ator.ts";
 import { branchRodada, Plano, RodadaRef } from "./demanda.ts";
 import { ErroDeRegra, existe } from "./erros.ts";
 import type { Instante } from "./primitivos.ts";
@@ -34,7 +34,13 @@ function exigirDemanda(ag: AgregadoDemanda, demanda_id: string): void {
 }
 
 /** Acrescenta ao agregado os tickets `implementar` abertos do plano (e, se `novasRodadas`, as suas rodadas e vínculos). */
-function acrescentar(ag: AgregadoDemanda, plano: Plano, agora: Instante, novasRodadas: boolean): AgregadoDemanda {
+function acrescentar(
+  ag: AgregadoDemanda,
+  plano: Plano,
+  criado_por: Ator,
+  agora: Instante,
+  novasRodadas: boolean,
+): AgregadoDemanda {
   const demanda_id = ag.demanda.id;
   const ticketNovo = renumerar(
     plano.tickets.map((t) => t.ticket_id),
@@ -63,7 +69,7 @@ function acrescentar(ag: AgregadoDemanda, plano: Plano, agora: Instante, novasRo
         etapa: "implementar",
         status: "aberto",
         status_alterado_em: agora,
-        criado_por: FABRIQUINHA, // shortcut: o autor é a Fabriquinha, não o Agente revisor; trocar na I-266.R3
+        criado_por,
         configuracao_agente,
       })),
     ],
@@ -113,6 +119,7 @@ export function materializarCorrecoesRodada(
   ag: AgregadoDemanda,
   rodadaRef: unknown,
   tickets: unknown,
+  criado_por: Ator,
   agora: Instante,
 ): AgregadoDemanda {
   const ref = RodadaRef.parse(rodadaRef);
@@ -140,14 +147,19 @@ export function materializarCorrecoesRodada(
     rodadas: [{ ...ref, titulo: "correções", e2e: false }],
     tickets: lista,
   });
-  return acrescentar(ag, plano, agora, false);
+  return acrescentar(ag, plano, criado_por, agora, false);
 }
 
 /**
  * Novas rodadas corretivas da revisão integral, a partir de um plano separado: IDs locais viram IDs depois dos máximos
  * atuais, com vínculos remapeados; cita só `CA-n` da definição congelada. Rodadas e plano anteriores ficam intactos.
  */
-export function materializarRodadasCorretivas(ag: AgregadoDemanda, plano: unknown, agora: Instante): AgregadoDemanda {
+export function materializarRodadasCorretivas(
+  ag: AgregadoDemanda,
+  plano: unknown,
+  criado_por: Ator,
+  agora: Instante,
+): AgregadoDemanda {
   const p = ler(Plano, plano);
   exigirDemanda(ag, p.demanda_id);
   if (p.rodadas.length === 0) {
@@ -168,5 +180,5 @@ export function materializarRodadasCorretivas(ag: AgregadoDemanda, plano: unknow
       "cite só os CA-n da definição congelada",
     );
   }
-  return acrescentar(ag, p, agora, true);
+  return acrescentar(ag, p, criado_por, agora, true);
 }

@@ -641,7 +641,7 @@ export function registrarRevisaoDemanda(
     em: ctx.agora,
   };
   // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.
-  const base = e.aprovado ? ag : materializarRodadasCorretivas(ag, e.plano, ctx.agora);
+  const base = e.aprovado ? ag : materializarRodadasCorretivas(ag, e.plano, ator, ctx.agora);
   const fechado = base.tickets.map((t) =>
     t.ticket_id === ticket.ticket_id ? { ...t, status: "concluido" as const, status_alterado_em: ctx.agora } : t,
   );

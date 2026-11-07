@@ -206,7 +206,7 @@ export function registrarRevisaoRodada(
     };
   }
   // Os mesmos erros de correção vazia ou inválida recusam antes de qualquer retorno.
-  const base = e.aprovado ? ag : materializarCorrecoesRodada(ag, e, e.correcoes, ctx.agora);
+  const base = e.aprovado ? ag : materializarCorrecoesRodada(ag, e, e.correcoes, ator, ctx.agora);
   const fechado: AgregadoDemanda = {
     ...base,
     tickets: concluir(base, ticket, ctx.agora),
@@ -243,7 +243,7 @@ export function conferirPullRequestRodada(
     }
     return { ...ag, rodadas: comFase(ag, rodada, "aprovacao_pull_request") };
   }
-  const base = materializarCorrecoesRodada(ag, e, e.correcoes ?? [], ctx.agora);
+  const base = materializarCorrecoesRodada(ag, e, e.correcoes ?? [], ator, ctx.agora);
   return { ...base, tickets: concluir(base, ticket, ctx.agora), rodadas: comFase(base, rodada, "desenvolvimento") };
 }
 
@@ -298,7 +298,7 @@ export function registrarCorrecoesSessao(
   if (ator.tipo !== "agente" && ator.tipo !== "auditor") {
     throw new ErroDeEscopo("só o Auditor ou o agente da sessão registram correções", "peça ao Auditor pelo web");
   }
-  return materializarCorrecoesRodada(ag, e, e.correcoes, ctx.agora);
+  return materializarCorrecoesRodada(ag, e, e.correcoes, ator, ctx.agora);
 }
 
 /** CA-8 e CA-9: só o Auditor, com implementar aberto criado depois da sessão e nenhuma implementação em execução. */

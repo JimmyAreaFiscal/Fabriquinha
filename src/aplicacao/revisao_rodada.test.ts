@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../nucleo/ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
@@ -50,7 +50,7 @@ test("CA-3: base na ponta da demanda (mesmo avançada), head na rodada, A/M/D e 
     { caminho: "outro.md", status: "A", adicionadas: 1, removidas: 0, previsto: null },
   ]);
   assert.deepEqual((e?.dados as { previstosNaoTocados: string[] }).previstosNaoTocados, ["nunca/*.ts"]);
-  assert.deepEqual(e?.autor, carregarDemanda(banco, "I-1").demanda.criada_por);
+  assert.deepEqual(e?.autor, FABRIQUINHA);
 });
 
 test("CA-3: arquivo modificado aparece como M", async () => {
@@ -94,7 +94,7 @@ test("CA-4: uma linha por fitness, com a saída 0 e 1 e o log como anexo; regrav
   );
   assert.match(readFileSync(caminhoArquivo(banco, String(anexos[1]?.sha256)), "utf8"), /falhou/);
   assert.equal(evidencia(banco, "arquivos_alterados").length, 1);
-  assert.deepEqual(evidencias[0]?.autor, carregarDemanda(banco, "I-1").demanda.criada_por);
+  assert.deepEqual(evidencias[0]?.autor, FABRIQUINHA);
 });
 
 test("recusa ticket inexistente, global e projeto sem configuração", async () => {

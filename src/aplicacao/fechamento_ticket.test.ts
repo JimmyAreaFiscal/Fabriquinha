@@ -133,7 +133,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
 }
 
 const fechar = (c: Awaited<ReturnType<typeof cenario>>, n: number, deps: object, falha?: string) =>
-  fecharTicketDemanda(c.banco, ref(n), { falha, execucao: "E-9" }, deps);
+  fecharTicketDemanda(c.banco, ref(n), { falha }, deps);
 
 test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com anexos e leva a rodada à revisão", async () => {
   const c = await cenario();
@@ -155,7 +155,7 @@ test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com a
   const ag = c.ag();
   assert.deepEqual(
     ag.evidencias.map((evidencia) => evidencia.autor),
-    TIPOS.map(() => ({ tipo: "externo", ferramenta: "fabriquinha", sessao: "E-9" })),
+    TIPOS.map(() => ({ tipo: "fabriquinha" })),
   );
   assert.equal(ag.rodadas[0]?.fase, "revisao");
   assert.equal(ag.tickets.filter((t) => t.etapa === "revisar_rodada").length, 1);
@@ -434,7 +434,7 @@ test("problema commita como fix; sem deps o coletor real roda e o Sonar sem ambi
   assert.deepEqual(c.commits(), ["fix: Cachear [I-1.T1]"]);
   const d = await cenario({ tipo: "problema" });
   delete process.env.SONAR_HOST_URL;
-  await fecharTicketDemanda(d.banco, ref(1), { execucao: "E-9" });
+  await fecharTicketDemanda(d.banco, ref(1), {});
   assert.match(d.status(1)?.motivo_falha ?? "", /^falha de infraestrutura:\n- SONAR_HOST_URL/);
 });
 
