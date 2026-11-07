@@ -560,6 +560,30 @@ test("perguntasRespondidasNaSessao: ignora linha null e mensagem sem content, ma
   ]);
 });
 
+test("perguntasRespondidasNaSessao: ignora bloco que não é objeto, mantendo os pares válidos", () => {
+  const { c } = cenario();
+  mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
+  const linhas = [
+    mensagem("assistant", "", {
+      content: [null, 7, "solto", chamada("a", "perguntar", { question: "Como confiro o Sonar?" })],
+    }),
+    mensagem("assistant", "", { content: [null] }),
+    { type: "message", message: { role: "toolResult", toolCallId: "x", content: [null] } },
+    { type: "message", message: { role: "user", content: "texto simples" } },
+    mensagem("toolResult", "", {
+      toolCallId: "a",
+      content: [null, { type: "text", text: "User answered: fica com o Auditor" }],
+    }),
+  ];
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s4.jsonl"),
+    linhas.map((l) => JSON.stringify(l)).join("\n") + "\n",
+  );
+  assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s4"), [
+    { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor" },
+  ]);
+});
+
 test("perguntasRespondidasNaSessao: sessão sem arquivo não tem perguntas", () => {
   const { c } = cenario();
   assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s-sem-arquivo"), []);
