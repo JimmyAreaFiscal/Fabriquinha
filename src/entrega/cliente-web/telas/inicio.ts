@@ -189,7 +189,7 @@ export function inicio(dados: DadosDoInicio, agora: Date): string {
     ${rodando.length > 0 ? `<div class="rodando-linhas superficie">${rodando.map((s) => linhaDaSessaoRodando(s, agora)).join("")}</div>` : '<p class="muted vazio">Nenhuma sessão rodando.</p>'}
   </section>
   <section class="bloco" aria-labelledby="titulo-board">
-    <div class="secao-titulo"><h2 id="titulo-board">Board</h2><span class="muted">${plural(dados.emAndamento, "demanda", "demandas")} em andamento</span></div>
+    <div class="secao-titulo"><h2 id="titulo-board">Board</h2><span class="muted">${plural(dados.quantidadeEmAndamento, "demanda", "demandas")} em andamento</span></div>
     <div class="board-etapas">${colunasDoBoard(dados, agora)}</div>
   </section>`;
 }

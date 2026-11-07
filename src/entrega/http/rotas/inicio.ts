@@ -87,7 +87,7 @@ export interface DadosDoInicio {
   aguarda: EsperaDoAuditor[];
   rodando: SessaoRodando[];
   /** As demandas em andamento, que o board distribui nos cartões. */
-  emAndamento: number;
+  quantidadeEmAndamento: number;
   board: CartaoDoBoard[];
 }
 
@@ -286,7 +286,7 @@ export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situa
   const mes = mesDe(agora);
   // Um mês pedido, um mês devolvido.
   const [doMes] = metricasDemandaPorMes(banco, { de: mes, ate: mes }) as [MetricasMesDemanda];
-  const demandas = listarDemandas(banco, { emAndamento: true });
+  const demandas = listarDemandas(banco, { soNaoTerminadas: true });
   // Só as sessões das demandas em andamento: calcular o estado de todas as do banco custa segundos.
   const sessoes = demandas.flatMap((ag) => sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id }));
   const modos = new Map(sessoes.map((s) => [s.ticket, s.modo]));
@@ -307,7 +307,7 @@ export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situa
         const fazendo = situacaoDa(s.sessao)?.atividade ?? tituloDoTicket.get(s.ticket);
         return { ...s, ...(fazendo !== undefined && { fazendo }) };
       }),
-    emAndamento: demandas.length,
+    quantidadeEmAndamento: demandas.length,
     board: demandas.flatMap((ag) => cartoesDaDemanda(banco, ag, modoDe, comPiAtivo)),
   };
 }

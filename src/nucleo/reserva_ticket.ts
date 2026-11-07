@@ -3,10 +3,11 @@ import { z } from "zod";
 import { type Ator, exigirAtor } from "./ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "./demanda.ts";
+import { CICLO_DO_TICKET } from "./ciclos.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { Id } from "./primitivos.ts";
 import { selecionarTrabalho } from "./selecao_trabalho.ts";
-import { comStatus, type ContextoDemanda, exigirDemandaEmAndamento, ticketEmStatus } from "./transicoes_demanda.ts";
+import { type ContextoDemanda, exigirDemandaEmAndamento, mudarTicket, ticketDaDemanda } from "./transicoes_demanda.ts";
 
 const EntradaReserva = z.strictObject({ ticket_id: Id });
 
@@ -56,10 +57,11 @@ export function reservarTicket(
   exigirAtor(ator, "reservar o ticket", "fabriquinha");
   const { ticket_id } = EntradaReserva.parse(entrada);
   exigirDemandaEmAndamento(ag, "reservar");
-  const ticket = ticketEmStatus(ag, ticket_id, "aberto", "ser reservado");
+  const ticket = ticketDaDemanda(ag, ticket_id);
+  CICLO_DO_TICKET.exigir(ticket, "aberto");
   if (!selecionarTrabalho(ag, predecessorasSatisfeitas).includes(ticket)) {
     const [motivo, orientacao] = impedimento(ag, ticket, predecessorasSatisfeitas);
     throw new ErroDeRegra(`o ticket ${formatarTicketRef(ticket)} não pode ser reservado: ${motivo}`, orientacao);
   }
-  return comStatus(ag, ticket, { estado: "em_execucao", estado_alterado_em: ctx.agora });
+  return mudarTicket(ag, ticket, "em_execucao", ctx.agora);
 }

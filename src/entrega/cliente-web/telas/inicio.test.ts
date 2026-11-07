@@ -25,7 +25,7 @@ const dados = (resto: Partial<DadosDoInicio> = {}): DadosDoInicio => ({
   mes,
   aguarda: [],
   rodando: [],
-  emAndamento: 0,
+  quantidadeEmAndamento: 0,
   board: [],
   ...resto,
 });
@@ -208,7 +208,7 @@ test("rodando: a linha da sessão com o modo, o que o agente faz, o ticket, o mo
 test("board: o cartão na coluna do estado, com o ticket em curso e as marcas de execução, espera e bloqueio", () => {
   const html = inicio(
     dados({
-      emAndamento: 2,
+      quantidadeEmAndamento: 2,
       aguarda: [espera("falha", { rodada: "I-206.R2" }), espera("gate_pr", { rodada: "I-206.R1" })],
       rodando: [sessao()],
       board: [

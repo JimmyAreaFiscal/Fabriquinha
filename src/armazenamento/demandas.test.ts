@@ -440,7 +440,7 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
     ["I-10", "I-2", "I-3", "I-4", "I-5"],
   );
   assert.deepEqual(
-    listarDemandas(b, { emAndamento: true }).map((a) => a.demanda.id),
+    listarDemandas(b, { soNaoTerminadas: true }).map((a) => a.demanda.id),
     ["I-10", "I-3"],
   );
   assert.equal(b.isTransaction, false);

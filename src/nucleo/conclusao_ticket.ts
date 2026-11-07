@@ -3,10 +3,11 @@ import { z } from "zod";
 import { type Ator, exigirAtor } from "./ator.ts";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
 import { formatarTicketRef } from "./demanda.ts";
+import { CICLO_DO_TICKET } from "./ciclos.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { type EvidenciaEtapa, pendenciasDoTicket } from "./evidencia_etapa.ts";
 import { Id } from "./primitivos.ts";
-import { comStatus, type ContextoDemanda, exigirDemandaEmAndamento, ticketEmStatus } from "./transicoes_demanda.ts";
+import { type ContextoDemanda, exigirDemandaEmAndamento, mudarTicket, ticketDaDemanda } from "./transicoes_demanda.ts";
 
 const EntradaConclusao = z.strictObject({ ticket_id: Id });
 
@@ -21,7 +22,8 @@ export function concluirTicketImplementar(
   exigirAtor(ator, "concluir o ticket", "fabriquinha");
   const { ticket_id } = EntradaConclusao.parse(entrada);
   exigirDemandaEmAndamento(ag, "concluir");
-  const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "ser concluído");
+  const ticket = ticketDaDemanda(ag, ticket_id);
+  CICLO_DO_TICKET.exigir(ticket, "em_execucao");
   const ref = formatarTicketRef(ticket);
   if (ticket.etapa !== "implementar") {
     throw new ErroDeRegra(
@@ -40,5 +42,5 @@ export function concluirTicketImplementar(
       "complete as verificações da aplicação e tente de novo",
     );
   }
-  return comStatus(ag, ticket, { estado: "concluido", devolucoes: 0, estado_alterado_em: ctx.agora });
+  return mudarTicket(ag, ticket, "concluido", ctx.agora, { devolucoes: 0 });
 }

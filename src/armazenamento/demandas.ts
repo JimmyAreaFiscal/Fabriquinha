@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { Ator } from "../nucleo/ator.ts";
-import { ESTADOS_TERMINADOS } from "../nucleo/cancelamento_demanda.ts";
+import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, novoId } from "./banco.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
@@ -278,18 +278,17 @@ export function carregarDemanda(banco: DatabaseSync, id: string): AgregadoDemand
 
 /**
  * As demandas em ordem de criação; as arquivadas só com `arquivadas: true` (o board não as mostra) e, com
- * `emAndamento: true`, só as que não terminaram (o Início).
+ * `soNaoTerminadas`, só as que não terminaram (o Início).
  */
 export function listarDemandas(
   banco: DatabaseSync,
-  { arquivadas = false, emAndamento = false }: { arquivadas?: boolean; emAndamento?: boolean } = {},
+  { arquivadas = false, soNaoTerminadas = false }: { arquivadas?: boolean; soNaoTerminadas?: boolean } = {},
 ): AgregadoDemanda[] {
   const propria = !banco.isTransaction;
   if (propria) banco.exec("BEGIN");
   try {
-    const terminadas = ESTADOS_TERMINADOS.map((f) => `'${f}'`).join(", ");
-    const filtro = emAndamento
-      ? `WHERE estado NOT IN (${terminadas})`
+    const filtro = soNaoTerminadas
+      ? `WHERE NOT ${CICLO_DA_DEMANDA.sqlDosTerminais("estado")}`
       : arquivadas
         ? ""
         : "WHERE estado <> 'arquivada'";

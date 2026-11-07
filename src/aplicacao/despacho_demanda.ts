@@ -131,7 +131,7 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
   );
   const escolhidos = selecionarTrabalhoGlobal(demandasParaDespacho(banco), {
     limite,
-    emAndamento: ocupacaoDoLimite(banco),
+    vagasOcupadas: ocupacaoDoLimite(banco),
   });
   return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, t, c, deps)))];
 }

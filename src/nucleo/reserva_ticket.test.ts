@@ -80,8 +80,8 @@ test("CA-3: o agente não reserva", () => {
   assert.equal(status(ag, 2), "aberto");
 });
 
-test("CA-4: reservar de novo é recusado citando o endereço e o status", () => {
-  recusa(montar({ rodadas: [rd(1)], tickets: [tk(2, 1, "em_execucao")] }), 2, /I-1\.T2 está em_execucao/);
+test("CA-4: reservar de novo é recusado citando o estado atual", () => {
+  recusa(montar({ rodadas: [rd(1)], tickets: [tk(2, 1, "em_execucao")] }), 2, /o estado atual é em_execucao/);
 });
 
 test("CA-5: predecessora não satisfeita recusa o planejar", () => {

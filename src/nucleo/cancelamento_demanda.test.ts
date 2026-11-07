@@ -143,7 +143,7 @@ test("CA-8: arquivar muda só estado e estado_alterado_em", () => {
 
 test("CA-9: só concluida pode ser arquivada", () => {
   for (const estado of [...ESTADOS_EM_ANDAMENTO, "arquivada", "cancelada"]) {
-    assert.throws(() => arquivarDemanda(montar(estado), AUDITOR, c), /só demanda concluída pode ser arquivada/);
+    assert.throws(() => arquivarDemanda(montar(estado), AUDITOR, c), /só no estado concluida/);
   }
 });
 

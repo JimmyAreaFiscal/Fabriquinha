@@ -490,7 +490,7 @@ test("CA-34 e CA-35: arquivar só a concluída", async () => {
   const { pedir, banco, estado } = await cenario("demanda");
   const recusa = await pedir("/api/demandas/I-206/arquivar", POST);
   assert.equal(recusa.status, 409);
-  assert.match(erro(recusa), /só demanda concluída pode ser arquivada/);
+  assert.match(erro(recusa), /só no estado concluida/);
   assert.equal(estado(), "gate_demanda");
   banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
   const r = await pedir("/api/demandas/I-206/arquivar", POST);
