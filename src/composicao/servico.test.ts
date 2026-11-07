@@ -14,7 +14,7 @@ import { ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, migrar, novoId } from "../armazenamento/banco.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
 import { MIGRACOES } from "../armazenamento/migracoes.ts";
-import { registrarProjeto } from "../armazenamento/projetos.ts";
+import { registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
 import { salvarConfiguracao } from "../armazenamento/servico.ts";
 import { criarUsuarioSimulado } from "../armazenamento/simulacao.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";

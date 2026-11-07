@@ -14,7 +14,7 @@ import {
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { registrarProjeto } from "../../../armazenamento/projetos.ts";
+import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";

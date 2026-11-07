@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { iniciarServico, type Servico } from "../../composicao/servico.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
-import { registrarProjeto } from "../../armazenamento/projetos.ts";
+import { registrarProjeto } from "../../aplicacao/projeto/cadastro.ts";
 import { criarUsuarioSimulado, usuariosSimulados } from "../../armazenamento/simulacao.ts";
 import { ROTAS } from "./servidor.ts";
 

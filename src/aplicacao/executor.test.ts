@@ -14,7 +14,8 @@ import { SEM_LINK } from "../nucleo/simulacao.ts";
 import { PACOTE } from "../infra/agente/pi.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../infra/registro.ts";
-import { editarProjeto, projeto, registrarProjeto } from "../armazenamento/projetos.ts";
+import { projeto } from "../armazenamento/projetos.ts";
+import { editarProjeto, registrarProjeto } from "./projeto/cadastro.ts";
 import { anexar, criarTarefa, criarUsuarioSimulado, tarefas } from "../armazenamento/simulacao.ts";
 import { conferirLink, executarTarefa } from "./executor.ts";
 

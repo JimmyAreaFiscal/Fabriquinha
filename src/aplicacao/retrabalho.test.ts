@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
-import { registrarProjeto } from "../armazenamento/projetos.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { projetosAVarrer } from "../armazenamento/retrabalho.ts";
 import { registrarRetrabalhoDemanda, varrerBase } from "./retrabalho.ts";
 

@@ -6,7 +6,8 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { Projeto } from "../nucleo/configuracao_projeto.ts";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
 import { abrir, escrever } from "./banco.ts";
-import { projeto, projetos, registrarProjeto } from "./projetos.ts";
+import { registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
+import { projeto, projetos } from "./projetos.ts";
 import {
   configuracaoProjeto,
   etapasDoProjeto,

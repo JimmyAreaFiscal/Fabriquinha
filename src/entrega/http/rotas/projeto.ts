@@ -7,13 +7,12 @@ import { AUDITOR } from "../../../nucleo/ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../nucleo/ciclos.ts";
 import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
-import { encontrado } from "../../../nucleo/erros.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
+import { projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
 import { configuracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
-import { projeto } from "../../../armazenamento/projetos.ts";
 import { ticketsComPiAtivo } from "../../../armazenamento/sessoes.ts";
 import { heatmapDo } from "../../../infra/repositorio/heatmap.ts";
 import type { Rota } from "../rotas.ts";
@@ -55,14 +54,13 @@ export interface ListaDoProjeto {
   contagem: { andamento: number; concluidas: number; arquivadas: number; canceladas: number };
 }
 
+const ORIENTACAO_PROJETO_INEXISTENTE = "escolha um projeto cadastrado na Configuração";
+
 const Filtro = z.object({
   concluidas: z.stringbool().default(false),
   arquivadas: z.stringbool().default(false),
   canceladas: z.stringbool().default(false),
 });
-
-const projetoExistente = (banco: DatabaseSync, nome: string) =>
-  encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "escolha um projeto cadastrado na Configuração");
 
 /** O PR da rodada: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela, em qualquer estado. */
 function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
@@ -158,7 +156,7 @@ const situacaoDasDemandas = (banco: DatabaseSync, nome: string) =>
 
 /** As em andamento sempre; as concluídas, as arquivadas e as canceladas só quando pedidas. */
 function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): ListaDoProjeto {
-  projetoExistente(banco, nome);
+  projetoExistente(banco, nome, ORIENTACAO_PROJETO_INEXISTENTE);
   const filtro = Filtro.parse(Object.fromEntries(query));
   const todas = situacaoDasDemandas(banco, nome);
   const quantas = (estado: EstadoDemanda) => todas.filter((d) => d.estado === estado).length;
@@ -184,7 +182,7 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
 
 /** Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. */
 function arquivarConcluidas(banco: DatabaseSync, nome: string): { arquivadas: number } {
-  projetoExistente(banco, nome);
+  projetoExistente(banco, nome, ORIENTACAO_PROJETO_INEXISTENTE);
   const concluidas = situacaoDasDemandas(banco, nome).filter((d) => d.estado === "concluida");
   for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: new Date().toISOString() });
   return { arquivadas: concluidas.length };
@@ -204,6 +202,7 @@ export const ROTAS_DO_PROJETO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome/heatmap",
-    tratar: ({ banco, params }) => heatmapDo(projetoExistente(banco, String(params.nome))),
+    tratar: ({ banco, params }) =>
+      heatmapDo(projetoExistente(banco, String(params.nome), ORIENTACAO_PROJETO_INEXISTENTE)),
   },
 ];

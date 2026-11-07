@@ -2,9 +2,8 @@
 // cadastro do projeto (`/api/projetos/:nome`).
 import { z } from "zod";
 import { Projeto } from "../../../nucleo/configuracao_projeto.ts";
-import { encontrado } from "../../../nucleo/erros.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
-import { projeto } from "../../../armazenamento/projetos.ts";
+import { projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
 import { cursorDaBase } from "../../../armazenamento/retrabalho.ts";
 import type { Rota } from "../rotas.ts";
 
@@ -23,8 +22,6 @@ function orientar(issue: z.core.$ZodIssue): z.core.$ZodIssue {
   return { ...issue, message };
 }
 
-const naoExiste = (nome: string) => `o projeto ${nome} não existe`;
-
 export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
   {
     metodo: "GET",
@@ -35,7 +32,7 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
       const cursor = cursorDaBase(banco, nome);
       const comCursor = cursor === undefined ? {} : { cursor_commit_humano: cursor };
       if (configuracao) return { configurada: true, configuracao, ...comCursor };
-      const legado = encontrado(projeto(banco, nome), naoExiste(nome), "confira o nome do projeto");
+      const legado = projetoExistente(banco, nome);
       return {
         configurada: false,
         ...comCursor,
@@ -60,7 +57,7 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
     caminho: "/api/projetos/:nome/configuracao-sdlc",
     tratar: ({ banco, params, corpo }) => {
       const nome = String(params.nome);
-      encontrado(projeto(banco, nome), naoExiste(nome), "confira o nome do projeto");
+      projetoExistente(banco, nome);
       const entrada = { ...(corpo as object), nome };
       const lida = Projeto.safeParse(entrada);
       if (!lida.success) throw new z.ZodError(lida.error.issues.map(orientar));
