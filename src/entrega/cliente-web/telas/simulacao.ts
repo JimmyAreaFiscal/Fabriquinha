@@ -40,8 +40,8 @@ const PREFIXO = "campo-tarefa";
 
 /** O que o projeto tem de link do produto: o endereço, ou o aviso de que sem ele não há Simulação. */
 const linkDoProduto = (projeto: ProjetoListado): string =>
-  projeto.linkProduto
-    ? `<span class="muted">Produto em <span class="mono">${escapar(projeto.linkProduto)}</span></span>`
+  projeto.link_produto
+    ? `<span class="muted">Produto em <span class="mono">${escapar(projeto.link_produto)}</span></span>`
     : '<span class="pill pill-aguarda sem-pulso">sem link do produto</span>';
 
 function formulario({ projeto, usuarios, rascunho, erros, falha }: DadosDaSimulacao): string {

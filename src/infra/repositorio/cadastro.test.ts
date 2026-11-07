@@ -73,9 +73,9 @@ function clone(url = "https://github.com/dono/repo.git", publicadas = ["main"], 
   return repo;
 }
 
-const recusa = async (dados: { repo: string; branchBase?: string }, mensagem: string) => {
+const recusa = async (projeto: { raiz_git: string; branch_base?: string }, mensagem: string) => {
   await assert.rejects(
-    conferirProjeto({ branchBase: "main", ...dados }),
+    conferirProjeto({ branch_base: "main", ...projeto }),
     (erro) => erro instanceof ErroDeRegra && erro.message === mensagem,
   );
 };
@@ -105,13 +105,13 @@ test("hospedagemDoRemoto aceita só os formatos do F5 §2.1", () => {
 });
 
 test("projeto no GitHub com tudo certo devolve a hospedagem e confere o gh", async () => {
-  assert.deepEqual(await conferirProjeto({ repo: clone(), branchBase: "main" }), { hospedagem: "github" });
+  assert.deepEqual(await conferirProjeto({ raiz_git: clone(), branch_base: "main" }), { hospedagem: "github" });
   assert.deepEqual(chamadas(), ["gh auth status --hostname github.com"]);
 });
 
 test("projeto no Azure DevOps confere a conta e a extensão do az", async () => {
   const repo = clone("git@ssh.dev.azure.com:v3/org/projeto/repo", ["main", "develop"]);
-  assert.deepEqual(await conferirProjeto({ repo, branchBase: "develop" }), { hospedagem: "azure-devops" });
+  assert.deepEqual(await conferirProjeto({ raiz_git: repo, branch_base: "develop" }), { hospedagem: "azure-devops" });
   assert.deepEqual(chamadas(), ["az account show", "az extension show --name azure-devops"]);
 });
 
@@ -121,22 +121,25 @@ test("1: recusa caminho que não é literalmente a raiz: barra no fim, symlink, 
   symlinkSync(repo, atalho);
   mkdirSync(join(repo, "sub"));
   for (const caminho of [`${repo}/`, atalho, join(repo, "sub")]) {
-    await recusa({ repo: caminho }, `${caminho} não é a raiz do repositório git (informe a raiz, ${repo})`);
+    await recusa({ raiz_git: caminho }, `${caminho} não é a raiz do repositório git (informe a raiz, ${repo})`);
   }
   assert.deepEqual(chamadas(), []);
 });
 
 test("1: recusa caminho que não é repositório git", async () => {
   const pasta = mkdtempSync(join(base, "solta-"));
-  await recusa({ repo: pasta }, `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`);
   await recusa(
-    { repo: join(pasta, "nao-existe") },
+    { raiz_git: pasta },
+    `${pasta} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,
+  );
+  await recusa(
+    { raiz_git: join(pasta, "nao-existe") },
     `${join(pasta, "nao-existe")} não é um repositório git (informe o caminho da raiz de um clone do projeto)`,
   );
   const repo = clone();
   mkdirSync(join(repo, "sub"));
   await recusa(
-    { repo: join(repo, "sub") },
+    { raiz_git: join(repo, "sub") },
     `${join(repo, "sub")} não é a raiz do repositório git (informe a raiz, ${repo})`,
   );
 });
@@ -144,12 +147,12 @@ test("1: recusa caminho que não é repositório git", async () => {
 test("2: recusa repositório sem user.name ou sem user.email, e para antes das conferências seguintes", async () => {
   const repo = clone("https://gitlab.com/dono/repo.git", ["main"], false);
   await recusa(
-    { repo },
+    { raiz_git: repo },
     `o repositório ${repo} não tem user.name para os commits (configure com git -C ${repo} config user.name <valor>)`,
   );
   git(repo, "config", "user.name", "Auditor");
   await recusa(
-    { repo },
+    { raiz_git: repo },
     `o repositório ${repo} não tem user.email para os commits (configure com git -C ${repo} config user.email <valor>)`,
   );
   assert.deepEqual(chamadas(), []);
@@ -158,26 +161,26 @@ test("2: recusa repositório sem user.name ou sem user.email, e para antes das c
 test("3: recusa repositório sem origin ou com origin fora do GitHub e do Azure DevOps", async () => {
   const semOrigin = clone("");
   await recusa(
-    { repo: semOrigin },
+    { raiz_git: semOrigin },
     `o repositório ${semOrigin} não tem o remoto origin (adicione com git remote add origin <url>)`,
   );
   await recusa(
-    { repo: clone("https://gitlab.com/dono/repo.git") },
+    { raiz_git: clone("https://gitlab.com/dono/repo.git") },
     "o remoto origin (https://gitlab.com/dono/repo.git) não é GitHub nem Azure DevOps (a Fabriquinha só abre PR em github.com e dev.azure.com; aponte o origin para um deles)",
   );
 });
 
 test("4: recusa branch base que não existe no origin, mesmo que outra termine com o mesmo nome", async () => {
   const repo = clone("https://github.com/dono/repo.git", ["feature/main"]);
-  await recusa({ repo }, "a branch main não existe no origin (informe uma branch base já publicada)");
+  await recusa({ raiz_git: repo }, "a branch main não existe no origin (informe uma branch base já publicada)");
   assert.deepEqual(chamadas(), []);
 });
 
-test("4: branchBase com cara de opção não vira opção do git", async () => {
+test("4: branch_base com cara de opção não vira opção do git", async () => {
   const repo = clone();
   const marca = join(base, "injetado");
   await recusa(
-    { repo, branchBase: `--upload-pack=touch ${marca}` },
+    { raiz_git: repo, branch_base: `--upload-pack=touch ${marca}` },
     `a branch --upload-pack=touch ${marca} não existe no origin (informe uma branch base já publicada)`,
   );
   assert.equal(existsSync(marca), false);
@@ -188,7 +191,7 @@ test("4: recusa quando o origin não pode ser lido, com a saída do git", async 
   const [chave = ""] = git(repo, "config", "--get-regexp", String.raw`^url\..*\.insteadof$`).split(" ");
   rmSync(chave.slice("url.".length, -".insteadof".length), { recursive: true }); // some o bare do origin
   await assert.rejects(
-    conferirProjeto({ repo, branchBase: "main" }),
+    conferirProjeto({ raiz_git: repo, branch_base: "main" }),
     (erro) =>
       erro instanceof ErroDeRegra &&
       erro.message.startsWith(`não foi possível ler o origin de ${repo}: fatal:`) &&
@@ -198,15 +201,15 @@ test("4: recusa quando o origin não pode ser lido, com a saída do git", async 
 
 test("5: recusa gh sem autenticação", async () => {
   process.env.FALSO_GH = "1";
-  await recusa({ repo: clone() }, "o gh não está autenticado (rode gh auth login)");
+  await recusa({ raiz_git: clone() }, "o gh não está autenticado (rode gh auth login)");
 });
 
 test("5: recusa az sem login e az sem a extensão azure-devops", async () => {
   const repo = clone("https://dev.azure.com/org/projeto/_git/repo");
   process.env.FALSO_AZ_CONTA = "1";
-  await recusa({ repo }, "o az não está autenticado (rode az login)");
+  await recusa({ raiz_git: repo }, "o az não está autenticado (rode az login)");
   assert.deepEqual(chamadas(), ["az account show"]);
   process.env.FALSO_AZ_CONTA = "0";
   process.env.FALSO_AZ_EXTENSAO = "1";
-  await recusa({ repo }, "falta a extensão azure-devops do az (rode az extension add --name azure-devops)");
+  await recusa({ raiz_git: repo }, "falta a extensão azure-devops do az (rode az extension add --name azure-devops)");
 });

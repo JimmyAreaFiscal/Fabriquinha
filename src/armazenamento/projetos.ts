@@ -1,116 +1,104 @@
-// Gravação e leitura das linhas de projeto (F2 §4 e §6). As recusas de negócio e o disco são do cadastro
-// (aplicacao/projeto/cadastro.ts); as conferências externas (F5 §2, F4 §9) rodam antes.
-import type { DatabaseSync } from "node:sqlite";
-import { z } from "zod";
-import { ConfiguracaoEtapaProjeto, Projeto as ProjetoComConfiguracao } from "../nucleo/configuracao_projeto.ts";
+// Leitura e gravação do projeto (F2 §4 e §6): a única que toca as linhas de `projeto` e das tabelas da sua configuração.
+// As recusas de negócio e o disco são do cadastro (aplicacao/projeto/cadastro.ts); as conferências externas (F5 §2,
+// F4 §9) rodam antes.
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { ErroDeRegra, encontrado } from "../nucleo/erros.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
+import { escrever } from "./banco.ts";
+import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
-interface Linha {
-  nome: string;
-  raiz_git: string;
-  branch_base: string;
-  hospedagem: string;
-  chave_sonarqube: string;
-  link_produto: string | null;
-}
+type Linha = Record<string, unknown>;
 
-type LinhaGenerica = Record<string, unknown>;
-
-const listar = (banco: DatabaseSync, sql: string, nome: string): LinhaGenerica[] => banco.prepare(sql).all(nome);
+const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banco.prepare(sql).all(nome);
 
 /** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
-const semNulos = (l: LinhaGenerica): LinhaGenerica =>
-  Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
+const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
 
-const SELECIONAR_PREPARACAO = "SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem";
-
-const SELECIONAR_ETAPAS =
-  "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa";
-
-const etapasGravadas = (banco: DatabaseSync, nome: string): LinhaGenerica[] =>
-  listar(banco, SELECIONAR_ETAPAS, nome).map(linhaComConfiguracaoAgente);
-
-/** Os comandos de preparação da worktree do projeto, na ordem, mesmo sem a configuração SDLC (sem linguagens) gravada. */
-const preparacaoDoProjeto = (banco: DatabaseSync, nome: string): string[] =>
-  listar(banco, SELECIONAR_PREPARACAO, nome).map((l) => String(l.comando));
-
-/** O modelo e o effort de cada etapa do projeto, mesmo sem a configuração SDLC (sem linguagens) gravada. */
-export const etapasDoProjeto = (banco: DatabaseSync, nome: string): ProjetoComConfiguracao["etapas"] =>
-  z.array(ConfiguracaoEtapaProjeto).parse(etapasGravadas(banco, nome));
-
-/** Lê o projeto sem abrir transação; quem chama garante o snapshot. Sem linguagens, não há configuração nova. */
-function lerProjetoComConfiguracao(banco: DatabaseSync, nome: string): ProjetoComConfiguracao | undefined {
-  const base = banco
-    .prepare("SELECT nome, branch_base, chave_sonarqube, raiz_git, hospedagem FROM projeto WHERE nome = ?")
-    .get(nome);
-  const linguagens = listar(
-    banco,
-    "SELECT caminho, linguagem, comando_teste FROM linguagem_projeto WHERE projeto = ? ORDER BY caminho",
-    nome,
-  );
-  if (!base || linguagens.length === 0) return undefined;
-  return ProjetoComConfiguracao.parse({
-    ...semNulos(base),
-    etapas: etapasGravadas(banco, nome),
-    preparacao: listar(banco, SELECIONAR_PREPARACAO, nome),
-    fitness: listar(
-      banco,
-      "SELECT nome, comando, descricao FROM fitness_function_projeto WHERE projeto = ? ORDER BY nome",
-      nome,
-    ),
-    linguagens,
-    e2e: listar(
-      banco,
-      "SELECT caminho_linguagem, comando_build, comando_execucao, codigo_falha FROM configuracao_e2e WHERE projeto = ? ORDER BY caminho_linguagem",
-      nome,
-    ),
-    globs: listar(
-      banco,
-      "SELECT caminho_linguagem, glob FROM glob_e2e WHERE projeto = ? ORDER BY caminho_linguagem, glob",
-      nome,
-    ),
-  });
-}
-
-/** Configuração SDLC do projeto, lida num snapshot só; `undefined` se o projeto não existe ou não tem configuração nova. */
-export function configuracaoProjeto(banco: DatabaseSync, nome: string): ProjetoComConfiguracao | undefined {
-  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
+/** Lê sem abrir transação dentro de `escrever`; fora dela, num snapshot só. */
+function noSnapshot<T>(banco: DatabaseSync, leitura: () => T): T {
+  const propria = !banco.isTransaction;
   if (propria) banco.exec("BEGIN");
   try {
-    return lerProjetoComConfiguracao(banco, nome);
+    return leitura();
   } finally {
     if (propria) banco.exec("COMMIT");
   }
 }
 
-/** A configuração SDLC do projeto, ou a recusa com a orientação: a única leitura dos casos de uso. */
-export function carregarProjeto(banco: DatabaseSync, nome: string): ProjetoComConfiguracao {
-  const projetoCarregado = configuracaoProjeto(banco, nome);
-  if (projetoCarregado === undefined)
-    throw new ErroDeRegra(`o projeto ${nome} não tem configuração do SDLC`, "configure o projeto");
-  return projetoCarregado;
+const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto";
+
+/** Monta o projeto da `linha` com as tabelas da sua configuração; quem chama garante o snapshot. */
+function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
+  const nome = String(linha.nome);
+  return Projeto.parse({
+    ...semNulos(linha),
+    etapas: listar(
+      banco,
+      "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa",
+      nome,
+    ).map(linhaComConfiguracaoAgente),
+    verificacoes: {
+      preparacao: listar(
+        banco,
+        "SELECT comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem",
+        nome,
+      ).map((l) => l.comando),
+      fitness: listar(
+        banco,
+        "SELECT nome, comando, descricao FROM fitness_function_projeto WHERE projeto = ? ORDER BY nome",
+        nome,
+      ),
+      linguagens: listar(
+        banco,
+        "SELECT caminho, linguagem, comando_teste FROM linguagem_projeto WHERE projeto = ? ORDER BY caminho",
+        nome,
+      ),
+      e2e: listar(
+        banco,
+        "SELECT caminho_linguagem, comando_build, comando_execucao, codigo_falha FROM configuracao_e2e WHERE projeto = ? ORDER BY caminho_linguagem",
+        nome,
+      ),
+      globs: listar(
+        banco,
+        "SELECT caminho_linguagem, glob FROM glob_e2e WHERE projeto = ? ORDER BY caminho_linguagem, glob",
+        nome,
+      ),
+    },
+  });
 }
 
-/** A preparação vem de `comando_preparacao_projeto`, a mesma tabela que o fluxo da demanda lê. */
-const deLinha = (banco: DatabaseSync, l: Linha): Projeto =>
-  Projeto.parse({
-    nome: l.nome,
-    repo: l.raiz_git,
-    branchBase: l.branch_base,
-    hospedagem: l.hospedagem,
-    preparacao: preparacaoDoProjeto(banco, l.nome),
-    sonar: { projectKey: l.chave_sonarqube },
-    ...(l.link_produto && { linkProduto: l.link_produto }),
+/** O projeto, ou `undefined` se não existe; lido num snapshot só. */
+export function buscarProjeto(banco: DatabaseSync, nome: string): Projeto | undefined {
+  return noSnapshot(banco, () => {
+    const linha = banco.prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto WHERE nome = ?`).get(nome);
+    return linha && montarProjeto(banco, linha);
   });
+}
 
 /** O projeto, ou ErroDeInexistente com a `orientacao`: a única checagem de "o projeto existe". */
 export const projetoExistente = (
   banco: DatabaseSync,
   nome: string,
   orientacao = "confira o nome do projeto",
-): Projeto => encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, orientacao);
+): Projeto => encontrado(buscarProjeto(banco, nome), `o projeto ${nome} não existe`, orientacao);
+
+/** O projeto com a configuração SDLC (ao menos uma linguagem), ou a recusa com a orientação: a única leitura dos casos de uso. */
+export function carregarProjeto(banco: DatabaseSync, nome: string): Projeto {
+  const projeto = buscarProjeto(banco, nome);
+  if (projeto === undefined || projeto.verificacoes.linguagens.length === 0)
+    throw new ErroDeRegra(`o projeto ${nome} não tem configuração do SDLC`, "configure o projeto");
+  return projeto;
+}
+
+/** Todos os projetos, em ordem de nome. */
+export function listarProjetos(banco: DatabaseSync): Projeto[] {
+  return noSnapshot(banco, () =>
+    banco
+      .prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto ORDER BY nome`)
+      .all()
+      .map((linha) => montarProjeto(banco, linha)),
+  );
+}
 
 /** O nome do outro projeto que já usa a `raiz_git`, se houver. */
 export function donoDoRepositorio(banco: DatabaseSync, raiz_git: string, nomeDoProjeto: string): string | undefined {
@@ -118,34 +106,73 @@ export function donoDoRepositorio(banco: DatabaseSync, raiz_git: string, nomeDoP
   return dono && String(dono.nome);
 }
 
-/** Insere o projeto; `false` se o nome já existe (nada é alterado). A preparação é gravada à parte. */
-export function inserirProjeto(banco: DatabaseSync, p: Projeto): boolean {
-  const { changes } = banco
-    .prepare(
-      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto)
-       VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (nome) DO NOTHING`,
-    )
-    .run(p.nome, p.repo, p.branchBase, p.hospedagem, p.sonar.projectKey, p.linkProduto ?? null);
-  return changes > 0;
-}
-
-/** Substitui o cadastro de um projeto que existe; a chave do SonarQube (da configuração SDLC) fica como está. */
-export function atualizarProjeto(banco: DatabaseSync, p: Projeto): void {
-  banco
-    .prepare("UPDATE projeto SET raiz_git = ?, branch_base = ?, hospedagem = ?, link_produto = ? WHERE nome = ?")
-    .run(p.repo, p.branchBase, p.hospedagem, p.linkProduto ?? null, p.nome);
-}
-
-export function projeto(banco: DatabaseSync, nome: string): Projeto | undefined {
-  const linha = banco.prepare("SELECT * FROM projeto WHERE nome = ?").get(nome) as Linha | undefined;
-  return linha && deLinha(banco, linha);
-}
-
-/** Todos os projetos, em ordem de nome. */
-export function projetos(banco: DatabaseSync): Projeto[] {
-  return (banco.prepare("SELECT * FROM projeto ORDER BY nome").all() as unknown as Linha[]).map((l) =>
-    deLinha(banco, l),
+/** Insere cada item de `itens` na `tabela`, com as colunas de `colunas` (nomes iguais às chaves do item). */
+function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: string[], itens: Linha[]): void {
+  const insert = banco.prepare(
+    `INSERT INTO ${tabela} (projeto, ${colunas.join(", ")}) VALUES (${["?", ...colunas.map(() => "?")].join(", ")})`,
   );
+  for (const item of itens) insert.run(nome, ...colunas.map((c) => (item[c] ?? null) as SQLInputValue));
+}
+
+/**
+ * Grava o projeto inteiro numa transação só: a linha e, no lugar das que havia, cada lista da configuração. Qualquer
+ * falha reverte tudo. Sem coluna de posição: a ordem das listas vem das chaves (e a da preparação, do índice).
+ */
+export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
+  const { nome, verificacoes } = projeto;
+  escrever(banco, () => {
+    banco
+      .prepare(
+        `INSERT INTO projeto (${COLUNAS_DO_PROJETO}) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (nome) DO UPDATE SET raiz_git = excluded.raiz_git, branch_base = excluded.branch_base,
+           hospedagem = excluded.hospedagem, chave_sonarqube = excluded.chave_sonarqube,
+           link_produto = excluded.link_produto`,
+      )
+      .run(
+        nome,
+        projeto.raiz_git,
+        projeto.branch_base,
+        projeto.hospedagem,
+        projeto.chave_sonarqube,
+        projeto.link_produto ?? null,
+      );
+    for (const tabela of [
+      "glob_e2e",
+      "configuracao_e2e",
+      "linguagem_projeto",
+      "fitness_function_projeto",
+      "comando_preparacao_projeto",
+      "configuracao_etapa_projeto",
+    ])
+      banco.prepare(`DELETE FROM ${tabela} WHERE projeto = ?`).run(nome);
+    inserir(
+      banco,
+      "configuracao_etapa_projeto",
+      nome,
+      ["etapa", "modelo_provedor", "modelo_nome", "effort"],
+      projeto.etapas.map(({ etapa, configuracao_agente }) => ({
+        etapa,
+        ...colunasDaConfiguracaoAgente(configuracao_agente),
+      })),
+    );
+    inserir(
+      banco,
+      "comando_preparacao_projeto",
+      nome,
+      ["ordem", "comando"],
+      verificacoes.preparacao.map((comando, indice) => ({ ordem: indice + 1, comando })),
+    );
+    inserir(banco, "fitness_function_projeto", nome, ["nome", "comando", "descricao"], verificacoes.fitness);
+    inserir(banco, "linguagem_projeto", nome, ["caminho", "linguagem", "comando_teste"], verificacoes.linguagens);
+    inserir(
+      banco,
+      "configuracao_e2e",
+      nome,
+      ["caminho_linguagem", "comando_build", "comando_execucao", "codigo_falha"],
+      verificacoes.e2e,
+    );
+    inserir(banco, "glob_e2e", nome, ["caminho_linguagem", "glob"], verificacoes.globs);
+  });
 }
 
 const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";

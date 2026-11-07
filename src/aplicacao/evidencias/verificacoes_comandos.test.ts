@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import { Projeto } from "../../nucleo/projeto.ts";
 import { type EntradaComandos, verificarFitness, verificarTestes } from "./verificacoes_comandos.ts";
 
 const worktree = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-comandos-")));
@@ -19,9 +19,11 @@ const projeto = (parcial: Record<string, unknown> = {}) =>
     chave_sonarqube: "loja",
     raiz_git: "/repos/loja",
     hospedagem: "github",
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: "true" }],
-    ...parcial,
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: "true" }],
+      ...parcial,
+    },
   });
 const entrada = (parcial: Record<string, unknown> = {}, resto: Partial<EntradaComandos> = {}): EntradaComandos => ({
   projeto: projeto(parcial),

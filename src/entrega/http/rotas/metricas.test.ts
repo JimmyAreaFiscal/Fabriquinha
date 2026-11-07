@@ -18,10 +18,10 @@ beforeEach(() => {
   for (const nome of ["loja", "site"]) {
     registrarProjeto(banco, {
       nome,
-      repo: `/repos/${nome}`,
-      branchBase: "main",
+      raiz_git: `/repos/${nome}`,
+      branch_base: "main",
       hospedagem: "github",
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
   }
 });

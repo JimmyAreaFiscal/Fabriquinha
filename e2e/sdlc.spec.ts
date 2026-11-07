@@ -5,11 +5,8 @@ import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
 import { abrir } from "../src/armazenamento/banco.ts";
-import {
-  configuracaoProjeto,
-  gravarConfiguracaoProjeto,
-  substituirEtapasDoProjeto,
-} from "../src/armazenamento/configuracao_projeto.ts";
+import { buscarProjeto, gravarProjeto } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
 /** A linha de `configuracao_etapa_projeto` da etapa `planejar` e a mesma etapa como o cadastro do projeto a entrega. */
@@ -25,21 +22,28 @@ const PLANEJAR_DO_CADASTRO = {
  */
 function configurar(raiz: string): void {
   const banco = abrir(raiz);
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "develop",
-    chave_sonarqube: "loja",
-    raiz_git: realpathSync(join(raiz, "loja")),
-    hospedagem: "github",
-    fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Rotas novas com cobertura mínima." }],
-    linguagens: [
-      { caminho: ".", linguagem: "typescript", comando_teste: "npm test" },
-      { caminho: "web", linguagem: "typescript", comando_teste: "npm run test:web" },
-    ],
-    e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
-    globs: [{ caminho_linguagem: ".", glob: "e2e/**/*.spec.ts" }],
-  });
-  substituirEtapasDoProjeto(banco, "loja", [PLANEJAR_DO_CADASTRO]);
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      nome: "loja",
+      branch_base: "develop",
+      chave_sonarqube: "loja",
+      raiz_git: realpathSync(join(raiz, "loja")),
+      hospedagem: "github",
+      etapas: [PLANEJAR_DO_CADASTRO],
+      verificacoes: {
+        fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Rotas novas com cobertura mínima." }],
+        linguagens: [
+          { caminho: ".", linguagem: "typescript", comando_teste: "npm test" },
+          { caminho: "web", linguagem: "typescript", comando_teste: "npm run test:web" },
+        ],
+        e2e: [
+          { caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 },
+        ],
+        globs: [{ caminho_linguagem: ".", glob: "e2e/**/*.spec.ts" }],
+      },
+    }),
+  );
   banco.close();
 }
 
@@ -253,7 +257,7 @@ test("a preparação salva no cadastro do projeto é a que o fluxo da demanda ro
   });
   const preparacaoDoFluxo = () => {
     const banco = abrir(fabriquinha.raiz);
-    const preparacao = configuracaoProjeto(banco, "loja")?.preparacao;
+    const preparacao = buscarProjeto(banco, "loja")?.verificacoes.preparacao;
     banco.close();
     return preparacao;
   };
@@ -267,10 +271,7 @@ test("a preparação salva no cadastro do projeto é a que o fluxo da demanda ro
     pagina.waitForResponse((r) => r.url().endsWith("/api/projetos/loja") && r.request().method() === "POST"),
     pagina.getByRole("button", { name: "Salvar projeto" }).click(),
   ]);
-  const doPainel = [
-    { ordem: 1, comando: "uv venv .venv" },
-    { ordem: 2, comando: "uv sync" },
-  ];
+  const doPainel = ["uv venv .venv", "uv sync"];
   expect(preparacaoDoFluxo()).toEqual(doPainel);
 
   await pagina.getByRole("link", { name: "Configuração SDLC do projeto" }).click();

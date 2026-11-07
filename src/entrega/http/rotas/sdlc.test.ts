@@ -4,7 +4,8 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { configuracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
+import type { Projeto } from "../../../nucleo/projeto.ts";
+import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -50,11 +51,13 @@ const valida = () => ({
   etapas: [
     { etapa: "planejar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude" }, effort: "high" } },
   ],
-  preparacao: [{ ordem: 1, comando: "npm ci" }],
-  fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura." }],
-  linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
-  e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
-  globs: [{ caminho_linguagem: ".", glob: "e2e/**" }],
+  verificacoes: {
+    preparacao: ["npm ci"],
+    fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura." }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
+    e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
+    globs: [{ caminho_linguagem: ".", glob: "e2e/**" }],
+  },
 });
 
 /** Grava e confere que a orientação está no campo certo. */
@@ -62,10 +65,16 @@ async function recusa(corpo: unknown, ...trechos: string[]): Promise<void> {
   const [status, texto] = (await chamar("POST", URL, corpo)) as [number, string];
   assert.equal(status, 422);
   for (const t of trechos) assert.ok(texto.includes(t), `${t} em ${texto}`);
-  assert.equal(configuracaoProjeto(banco, "loja"), undefined);
+  assert.deepEqual(buscarProjeto(banco, "loja")?.verificacoes, {
+    preparacao: [],
+    fitness: [],
+    linguagens: [],
+    e2e: [],
+    globs: [],
+  });
 }
 
-test("GET sem configuração devolve o rascunho do cadastro legado com listas vazias", async () => {
+test("GET sem configuração devolve o Projeto do banco com verificações vazias", async () => {
   assert.deepEqual(await chamar("GET", URL), {
     configurada: false,
     configuracao: {
@@ -75,20 +84,38 @@ test("GET sem configuração devolve o rascunho do cadastro legado com listas va
       raiz_git: "/repo/loja",
       hospedagem: "github",
       etapas: [],
-      preparacao: [],
-      fitness: [],
-      linguagens: [],
-      e2e: [],
-      globs: [],
+      verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
     },
   });
 });
 
 test("POST grava com o nome do caminho e o GET devolve o gravado", async () => {
-  const resposta = (await chamar("POST", URL, valida())) as { configurada: boolean; configuracao: { nome: string } };
+  const resposta = (await chamar("POST", URL, valida())) as { configurada: boolean; configuracao: Projeto };
   assert.equal(resposta.configurada, true);
   assert.equal(resposta.configuracao.nome, "loja");
-  assert.deepEqual(await chamar("GET", URL), resposta);
+  const { link_produto, ...semLinkProduto } = resposta.configuracao;
+  assert.equal(link_produto, undefined);
+  assert.deepEqual(await chamar("GET", URL), { configurada: true, configuracao: semLinkProduto });
+});
+
+test("POST mantém etapas, preparação e link do produto gravados no cadastro", async () => {
+  const cadastrado = {
+    ...projetoExistente(banco, "loja"),
+    etapas: [{ etapa: "implementar" as const, configuracao_agente: { effort: "low" as const } }],
+    link_produto: "https://loja.exemplo.com",
+    verificacoes: { ...projetoExistente(banco, "loja").verificacoes, preparacao: ["echo cadastro", "npm ci"] },
+  };
+  gravarProjeto(banco, cadastrado);
+  const resposta = await chamar("POST", URL, { ...valida(), link_produto: "https://ignorado.exemplo.com" });
+  const esperado = {
+    ...valida(),
+    nome: "loja",
+    etapas: cadastrado.etapas,
+    link_produto: cadastrado.link_produto,
+    verificacoes: { ...valida().verificacoes, preparacao: cadastrado.verificacoes.preparacao },
+  };
+  assert.deepEqual(resposta, { configurada: true, configuracao: esperado });
+  assert.deepEqual(projetoExistente(banco, "loja"), esperado);
 });
 
 test("GET devolve o cursor da varredura de commits humanos, com ou sem configuração", async () => {
@@ -122,28 +149,38 @@ test("422 com a orientação no campo, sem gravar", async () => {
     "preencha este campo",
   );
   await recusa(
-    { ...valida(), e2e: [{ ...valida().e2e[0], codigo_falha: 0 }] },
-    "e2e[0].codigo_falha",
+    {
+      ...valida(),
+      verificacoes: { ...valida().verificacoes, e2e: [{ ...valida().verificacoes.e2e[0], codigo_falha: 0 }] },
+    },
+    "verificacoes.e2e[0].codigo_falha",
     "use um valor de 1 a 255",
   );
-  await recusa({ ...valida(), globs: [] }, "E2E exige ao menos um glob");
+  await recusa({ ...valida(), verificacoes: { ...valida().verificacoes, globs: [] } }, "E2E exige ao menos um glob");
   await recusa(
     {
       ...valida(),
-      preparacao: [
-        { ordem: 1, comando: "a" },
-        { ordem: 1, comando: "b" },
-      ],
+      verificacoes: { ...valida().verificacoes, preparacao: [" "] },
     },
-    "preparacao",
-    "ordem repetida",
+    "verificacoes.preparacao[0]",
+    "preencha este campo",
   );
-  await recusa({ ...valida(), fitness: [] }, "fitness", "informe ao menos uma linha");
+  await recusa(
+    { ...valida(), verificacoes: { ...valida().verificacoes, fitness: [] } },
+    "verificacoes.fitness",
+    "informe ao menos uma linha",
+  );
+  await recusa(
+    { ...valida(), verificacoes: { ...valida().verificacoes, linguagens: [], e2e: [], globs: [] } },
+    "verificacoes.linguagens",
+    "informe ao menos uma linha",
+  );
   await recusa({ ...valida(), branch_base: undefined }, "branch_base", "preencha este campo");
 });
 
-test("409 quando a raiz_git é relativa", async () => {
-  const [status] = (await chamar("POST", URL, { ...valida(), raiz_git: "repo/loja" })) as [number];
-  assert.equal(status, 409);
-  assert.equal(configuracaoProjeto(banco, "loja"), undefined);
+test("422 quando a raiz_git é relativa", async () => {
+  const [status, mensagem] = (await chamar("POST", URL, { ...valida(), raiz_git: "repo/loja" })) as [number, string];
+  assert.equal(status, 422);
+  assert.match(mensagem, /caminho absoluto\n {2}→ at raiz_git/);
+  assert.equal(buscarProjeto(banco, "loja")?.raiz_git, "/repo/loja");
 });

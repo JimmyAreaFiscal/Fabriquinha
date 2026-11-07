@@ -12,6 +12,7 @@ import {
   pagina,
   type ProjetoCadastrado,
   projetoInexistente,
+  rascunhoDe,
   selecao,
   usuariosSimulados,
 } from "./configuracao.ts";
@@ -21,13 +22,28 @@ process.env.TZ = "America/Sao_Paulo";
 
 const LOJA: ProjetoCadastrado = {
   nome: "loja",
-  repo: "/code/loja",
-  branchBase: "main",
+  raiz_git: "/code/loja",
+  branch_base: "main",
   hospedagem: "github",
-  preparacao: ["npm ci"],
-  sonar: { projectKey: "loja" },
+  etapas: [],
+  verificacoes: { preparacao: ["npm ci"], fitness: [], linguagens: [], e2e: [], globs: [] },
+  chave_sonarqube: "loja",
   configuracoes: {},
 };
+
+test("rascunhoDe mantém os campos editáveis e solta apenas a preparação das verificações", () => {
+  const cadastrado = { ...LOJA, link_produto: "https://loja.exemplo.com" };
+  assert.deepEqual(rascunhoDe(cadastrado), {
+    nome: "loja",
+    raiz_git: "/code/loja",
+    branch_base: "main",
+    hospedagem: "github",
+    link_produto: "https://loja.exemplo.com",
+    preparacao: ["npm ci"],
+    configuracoes: {},
+  });
+  assert.equal(rascunhoDe(LOJA).link_produto, undefined);
+});
 
 const MODELOS = [
   { provedor: "anthropic", nome: "claude-opus-5-5" },
@@ -150,7 +166,7 @@ test("avaliações: o seletor do modelo em padrão do pi, com o escolhido, com o
 });
 
 test("projeto salvo: nome só leitura, hospedagem, preparação e etapas; sem testes, SonarQube e fitness (CA-13)", () => {
-  const html = formularioDeProjeto(LOJA, { novo: false, modelosDoPi: MODELOS, erros: new Map() });
+  const html = formularioDeProjeto(rascunhoDe(LOJA), { novo: false, modelosDoPi: MODELOS, erros: new Map() });
   assert.match(html, /^<h2>loja<button [^>]*data-remover-projeto/);
   assert.match(html, /aria-label="Remover o projeto loja">Remover<\/button><\/h2>/);
   assert.match(html, /<input id="campo-nome" name="nome" value="loja" readonly>/);
@@ -170,7 +186,7 @@ test("projeto salvo: nome só leitura, hospedagem, preparação e etapas; sem te
 test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de effort; padrão do pi apagado", () => {
   const html = formularioDeProjeto(
     {
-      ...LOJA,
+      ...rascunhoDe(LOJA),
       configuracoes: {
         planejar: { modelo: MODELOS[0], effort: "high" },
         implementar: { modelo: { provedor: "llamacpp", nome: "qwen" } },
@@ -215,7 +231,7 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
     /<select id="campo-configuracoes.entender_e_desenhar.effort" name="configuracoes.entender_e_desenhar.effort" aria-label="Effort de Demanda" class="padrao">/,
   );
 
-  const erro = formularioDeProjeto(LOJA, {
+  const erro = formularioDeProjeto(rascunhoDe(LOJA), {
     novo: false,
     modelosDoPi: MODELOS,
     erros: errosDoZod(
@@ -235,22 +251,22 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
 
 test("link do produto: no grupo Repositório ao lado da hospedagem, com a ajuda, o valor e o erro do campo", () => {
   const html = formularioDeProjeto(
-    { ...LOJA, linkProduto: "https://demo.exemplo.com" },
-    { novo: false, modelosDoPi: MODELOS, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at linkProduto") },
+    { ...rascunhoDe(LOJA), link_produto: "https://demo.exemplo.com" },
+    { novo: false, modelosDoPi: MODELOS, erros: errosDoZod("✖ Informe um link http(s) válido\n  → at link_produto") },
   );
   assert.match(
     html,
-    /id="campo-hospedagem".*<div class="campo erro"><label for="campo-linkProduto">Link do produto<\/label><input class="mono" id="campo-linkProduto" name="linkProduto" value="https:\/\/demo.exemplo.com" placeholder="https:\/\/produto.exemplo.com" aria-invalid="true" aria-describedby="campo-linkProduto-erro"><span class="msg-erro" id="campo-linkProduto-erro">Informe um link http\(s\) válido<\/span><span class="ajuda">opcional; endereço http\(s\) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa<\/span>/,
+    /id="campo-hospedagem".*<div class="campo erro"><label for="campo-link_produto">Link do produto<\/label><input class="mono" id="campo-link_produto" name="link_produto" value="https:\/\/demo.exemplo.com" placeholder="https:\/\/produto.exemplo.com" aria-invalid="true" aria-describedby="campo-link_produto-erro"><span class="msg-erro" id="campo-link_produto-erro">Informe um link http\(s\) válido<\/span><span class="ajuda">opcional; endereço http\(s\) do produto no ar, de preferência homologação. Sem ele, a Simulação não executa<\/span>/,
   );
   assert.match(
     formularioDeProjeto(NOVO, { novo: true, modelosDoPi: MODELOS, erros: new Map() }),
-    /name="linkProduto" value=""/,
+    /name="link_produto" value=""/,
   );
 });
 
 test("o bloco dos usuários simulados só existe no projeto salvo, depois do formulário", () => {
   assert.match(
-    formularioDeProjeto(LOJA, { novo: false, modelosDoPi: MODELOS, erros: new Map() }),
+    formularioDeProjeto(rascunhoDe(LOJA), { novo: false, modelosDoPi: MODELOS, erros: new Map() }),
     /<\/form><section class="usuarios-simulados" data-usuarios-simulados [^>]*><\/section>$/,
   );
   assert.doesNotMatch(
@@ -331,7 +347,7 @@ test("o botão Remover só existe no projeto salvo", () => {
 });
 
 test("formularioDeProjeto liga à configuração SDLC fora do h2, só no projeto salvo", () => {
-  const salvo = formularioDeProjeto(LOJA, { novo: false, modelosDoPi: MODELOS, erros: new Map() });
+  const salvo = formularioDeProjeto(rascunhoDe(LOJA), { novo: false, modelosDoPi: MODELOS, erros: new Map() });
   assert.match(
     salvo,
     /<\/h2><p class="link-sdlc"><a class="link" href="\/projects\/loja\/sdlc">Configuração SDLC do projeto<\/a>/,
@@ -351,7 +367,7 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
   const erros = errosDoZod(
     [
       "✖ use letras minúsculas\n  → at nome",
-      "✖ caminho absoluto\n  → at repo",
+      "✖ caminho absoluto\n  → at raiz_git",
       "✖ Pequeno demais\n  → at preparacao[0]",
     ].join("\n"),
   );
@@ -361,7 +377,7 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
     html,
     /<div class="campo erro"><label for="campo-nome">Nome<\/label><input id="campo-nome" name="nome" value="" placeholder="loja-api" aria-invalid="true" aria-describedby="campo-nome-erro"><span class="msg-erro" id="campo-nome-erro">use letras minúsculas<\/span><span class="ajuda">letras minúsculas, números e hífen; não muda depois<\/span><\/div>/,
   );
-  assert.match(html, /<div class="campo largo erro"><label for="campo-repo">/);
+  assert.match(html, /<div class="campo largo erro"><label for="campo-raiz_git">/);
   assert.match(html, /<input id="campo-hospedagem" value="deduzida do remoto ao salvar" readonly>/);
   assert.match(
     html,
@@ -375,7 +391,7 @@ test("novo projeto: o nome editável com a ajuda; os erros ao lado de cada campo
     formularioDeProjeto(NOVO, {
       novo: true,
       modelosDoPi: MODELOS,
-      erros: errosDoZod("✖ caminho absoluto\n  → at repo"),
+      erros: errosDoZod("✖ caminho absoluto\n  → at raiz_git"),
     }),
     /<span class="msg-erro">1 campo com erro<\/span>/,
   );

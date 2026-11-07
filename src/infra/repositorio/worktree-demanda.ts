@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { branchDemanda, branchRodada, DemandaId, RodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { Slug } from "../../nucleo/primitivos.ts";
-import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../nucleo/projeto.ts";
 import { anotar } from "../registro.ts";
 import { git } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto, preparar } from "./worktree.ts";
@@ -117,7 +117,7 @@ async function verificarCheckout(
   return existe;
 }
 
-type ProjetoWorktree = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "preparacao">;
+type ProjetoWorktree = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "verificacoes">;
 
 /** Cria da base configurada; uma branch própria existente nunca é avançada implicitamente. */
 export async function garantirWorktreeDemanda(
@@ -169,7 +169,7 @@ export async function garantirWorktreeDemanda(
     }
   }
   if (!existsSync(marca)) {
-    await preparar(caminho, projeto.preparacao, log);
+    await preparar(caminho, projeto.verificacoes.preparacao, log);
     writeFileSync(marca, "");
   }
   return caminho;
@@ -199,7 +199,7 @@ async function marcaPreparacao(caminho: string): Promise<string> {
 }
 
 async function prepararRodada(caminho: string, projeto: ProjetoWorktree, log: string, marca: string): Promise<void> {
-  await preparar(caminho, projeto.preparacao, log);
+  await preparar(caminho, projeto.verificacoes.preparacao, log);
   writeFileSync(marca, "");
 }
 

@@ -13,14 +13,15 @@ import {
   temPendente,
 } from "./simulacao.ts";
 
-const projeto = (nome: string, linkProduto?: string): ProjetoListado => ({
+const projeto = (nome: string, link_produto?: string): ProjetoListado => ({
   nome,
-  repo: `/repos/${nome}`,
-  branchBase: "main",
+  raiz_git: `/repos/${nome}`,
+  branch_base: "main",
   hospedagem: "github",
-  preparacao: [],
-  sonar: { projectKey: nome },
-  linkProduto,
+  etapas: [],
+  verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
+  chave_sonarqube: nome,
+  link_produto,
 });
 
 const maria: UsuarioSimulado = { id: 1, projeto: "fabriquinha", nome: "Dona Maria", descricao: "d", anexos: [] };

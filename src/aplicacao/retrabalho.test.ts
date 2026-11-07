@@ -39,10 +39,10 @@ function cenario() {
   const { banco } = abrirBancoTemporario();
   registrarProjeto(banco, {
     nome: "loja",
-    repo,
-    branchBase: "main",
+    raiz_git: repo,
+    branch_base: "main",
     hospedagem: "github",
-    sonar: { projectKey: "loja" },
+    chave_sonarqube: "loja",
   });
   const agora = new Date().toISOString();
   banco
@@ -365,10 +365,10 @@ test("projetosAVarrer: os sem varredura e os varridos há mais de 24 horas, em o
   const cadastrar = (nome: string) => {
     registrarProjeto(c.banco, {
       nome,
-      repo: `/repo/${nome}`,
-      branchBase: "main",
+      raiz_git: `/repo/${nome}`,
+      branch_base: "main",
       hospedagem: "github",
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
   };
   cadastrar("velho");

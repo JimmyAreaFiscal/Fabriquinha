@@ -11,8 +11,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
-import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
-import { projeto } from "../../../armazenamento/projetos.ts";
+import { Projeto } from "../../../nucleo/projeto.ts";
+import { buscarProjeto, gravarProjeto, projetoExistente } from "../../../armazenamento/projetos.ts";
 import { cursorDaBase } from "../../../armazenamento/retrabalho.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
@@ -95,20 +95,25 @@ async function chamar(metodo: string, caminho: string, corpo?: unknown): Promise
 /** O cadastro como o formulário manda, sem os campos do fluxo legado (CA-13) e com as etapas no padrão do pi. */
 const formulario = (repo: string) => ({
   nome: "loja",
-  repo,
-  branchBase: "main",
+  raiz_git: repo,
+  branch_base: "main",
   preparacao: [],
   configuracoes: {},
 });
 
 /** O projeto gravado do `formulario`, como a rota o devolve: a hospedagem deduzida e a chave do SonarQube com o nome. */
 const gravado = (repo: string) => ({
-  ...formulario(repo),
+  nome: "loja",
+  raiz_git: repo,
+  branch_base: "main",
   hospedagem: "github",
-  sonar: { projectKey: "loja" },
+  chave_sonarqube: "loja",
+  etapas: [],
+  verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
+  configuracoes: {},
 });
 
-/** O `gravado` como `projeto()` o lê do banco: sem as etapas, que ficam em `configuracao_etapa_projeto`. */
+/** O `gravado` como `buscarProjeto()` o lê do banco, sem a projeção do formulário. */
 function noBanco(repo: string) {
   const { configuracoes: _configuracoes, ...cadastro } = gravado(repo);
   return cadastro;
@@ -201,7 +206,7 @@ test("cadastrar: confere, grava com a hospedagem deduzida do remoto e fixa o cur
     await chamar("POST", "/api/projetos", { ...formulario(repo), hospedagem: "azure-devops" }),
     gravado(repo),
   );
-  assert.deepEqual(projeto(banco, "loja"), noBanco(repo));
+  assert.deepEqual(buscarProjeto(banco, "loja"), noBanco(repo));
   assert.equal(cursorDaBase(banco, "loja"), git(repo, "rev-parse", "HEAD"));
   assert.deepEqual(await chamar("GET", "/api/projetos"), [lido]);
   assert.deepEqual(await chamar("GET", "/api/projetos/loja"), lido);
@@ -219,7 +224,7 @@ test("CA-13: o cadastro não aceita testes, SonarQube, fitness nem as etapas do 
   const repo = clone();
   for (const legado of [
     { testes: ["npm test"] },
-    { sonar: { projectKey: "loja" } },
+    { sonar: {} },
     { fitness: [{ nome: "f", comando: "true", descricao: "d" }] },
     { configuracoes: { desenho: { modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } } } },
     { configuracoes: { desenho: { effort: "high" } } },
@@ -248,6 +253,11 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
   assert.deepEqual(await chamar("POST", "/api/projetos", { ...formulario(repo), ...escolhidos }), {
     ...gravado(repo),
     ...escolhidos,
+    etapas: [
+      { etapa: "planejar", configuracao_agente: escolhidos.configuracoes.planejar },
+      { etapa: "implementar", configuracao_agente: escolhidos.configuracoes.implementar },
+      { etapa: "revisar_rodada", configuracao_agente: escolhidos.configuracoes.revisar_rodada },
+    ],
   });
   const linhas = [
     {
@@ -267,8 +277,13 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
     { projeto: "loja", etapa: "revisar_rodada", modelo_provedor: null, modelo_nome: null, effort: "low" },
   ];
   assert.deepEqual(etapasGravadas(), linhas);
-  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...gravado(repo), ...escolhidos });
-  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...gravado(repo), ...escolhidos }]);
+  const etapas = [
+    { etapa: "implementar", configuracao_agente: escolhidos.configuracoes.implementar },
+    { etapa: "planejar", configuracao_agente: escolhidos.configuracoes.planejar },
+    { etapa: "revisar_rodada", configuracao_agente: escolhidos.configuracoes.revisar_rodada },
+  ];
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...gravado(repo), ...escolhidos, etapas });
+  assert.deepEqual(await chamar("GET", "/api/projetos"), [{ ...gravado(repo), ...escolhidos, etapas }]);
 
   // O par que o pi não lista dá 422 no campo da etapa; nem o cadastro nem as etapas mudam.
   assert.deepEqual(
@@ -285,7 +300,7 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
       "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at configuracoes.entender_e_desenhar.modelo",
     ],
   );
-  assert.deepEqual(projeto(banco, "loja")?.preparacao, []);
+  assert.deepEqual(buscarProjeto(banco, "loja")?.verificacoes.preparacao, []);
   assert.deepEqual(etapasGravadas(), linhas);
 
   // Com o pi quebrado: o modelo igual ao gravado salva sem chamá-lo, e o trocado é recusado.
@@ -299,6 +314,7 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
       {
         ...gravado(repo),
         configuracoes: { planejar: { modelo: opus } },
+        etapas: [{ etapa: "planejar", configuracao_agente: { modelo: opus } }],
       },
     );
     assert.deepEqual(etapasGravadas(), [
@@ -327,28 +343,37 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
   assert.deepEqual(etapasGravadas(), []);
   // Linha de etapa sem coluna preenchida (gravada fora do cadastro) não vira configuração no formulário.
   banco.prepare("INSERT INTO configuracao_etapa_projeto (projeto, etapa) VALUES ('loja', 'planejar')").run();
-  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...gravado(repo), configuracoes: {} });
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), {
+    ...gravado(repo),
+    configuracoes: {},
+    etapas: [{ etapa: "planejar" }],
+  });
 });
 
 test("as etapas do cadastro e a configuração SDLC não se apagam: cada gravação substitui só o que é dela", async () => {
   const repo = clone();
   await chamar("POST", "/api/projetos", formulario(repo));
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
-    raiz_git: repo,
-    hospedagem: "github",
-    fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura mínima." }],
-    linguagens: [{ caminho: ".", linguagem: "typescript", comando_teste: "npm test" }],
-  });
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      nome: "loja",
+      branch_base: "main",
+      chave_sonarqube: "loja",
+      raiz_git: repo,
+      hospedagem: "github",
+      verificacoes: {
+        fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura mínima." }],
+        linguagens: [{ caminho: ".", linguagem: "typescript", comando_teste: "npm test" }],
+      },
+    }),
+  );
   await chamar("POST", "/api/projetos/loja", {
     ...formulario(repo),
     configuracoes: { implementar: { effort: "max" } },
   });
-  const lida = configuracaoProjeto(banco, "loja");
-  assert.deepEqual(lida?.etapas, [{ etapa: "implementar", configuracao_agente: { effort: "max" } }]);
-  assert.equal(lida.linguagens.length, 1);
+  const lida = projetoExistente(banco, "loja");
+  assert.deepEqual(lida.etapas, [{ etapa: "implementar", configuracao_agente: { effort: "max" } }]);
+  assert.equal(lida.verificacoes.linguagens.length, 1);
 
   const { etapas: _etapas, ...semEtapas } = lida;
   const salva = (await chamar("POST", "/api/projetos/loja/configuracao-sdlc", {
@@ -373,10 +398,10 @@ test("editar: o nome do caminho vale, o do corpo é ignorado, o cursor da base f
   const editado = { ...formulario(repo), nome: "outro", preparacao: ["npm ci"] };
   assert.deepEqual(await chamar("POST", "/api/projetos/loja", editado), {
     ...gravado(repo),
-    preparacao: ["npm ci"],
+    verificacoes: { ...gravado(repo).verificacoes, preparacao: ["npm ci"] },
   });
-  assert.deepEqual(projeto(banco, "loja")?.preparacao, ["npm ci"]);
-  assert.equal(projeto(banco, "outro"), undefined);
+  assert.deepEqual(buscarProjeto(banco, "loja")?.verificacoes.preparacao, ["npm ci"]);
+  assert.equal(buscarProjeto(banco, "outro"), undefined);
   assert.equal(cursorDaBase(banco, "loja"), inicial);
   assert.deepEqual(await chamar("POST", "/api/projetos/nao-existe", formulario(clone())), [
     404,
@@ -395,22 +420,22 @@ test("campo inválido dá 422 com o caminho, antes de conferir o repositório; n
     erro,
     /✖ use letras minúsculas, números e hífen, começando por letra ou número \(até 64\)\n {2}→ at nome/,
   );
-  assert.match(erro, /✖ caminho absoluto\n {2}→ at repo/);
+  assert.match(erro, /✖ caminho absoluto\n {2}→ at raiz_git/);
   assert.match(erro, /→ at preparacao\[0\]/);
   assert.deepEqual(await chamar("GET", "/api/projetos"), []);
 });
 
-test("link do produto: válido é gravado, inválido dá 422 em linkProduto e o anterior fica", async () => {
+test("link do produto: válido é gravado, inválido dá 422 em link_produto e o anterior fica", async () => {
   const repo = clone();
   const link = "https://demo.exemplo.com";
-  await chamar("POST", "/api/projetos", { ...formulario(repo), linkProduto: link });
+  await chamar("POST", "/api/projetos", { ...formulario(repo), link_produto: link });
   const [status, erro] = (await chamar("POST", "/api/projetos/loja", {
     ...formulario(repo),
-    linkProduto: "isso nao e um link",
+    link_produto: "isso nao e um link",
   })) as [number, string];
   assert.equal(status, 422);
-  assert.match(erro, /✖ Informe um link http\(s\) válido, como https:\/\/produto.exemplo.com\n {2}→ at linkProduto/);
-  assert.equal(projeto(banco, "loja")?.linkProduto, link);
+  assert.match(erro, /✖ Informe um link http\(s\) válido, como https:\/\/produto.exemplo.com\n {2}→ at link_produto/);
+  assert.equal(buscarProjeto(banco, "loja")?.link_produto, link);
 });
 
 test("falha do F5 dá 502 com a mensagem da conferência; nada é gravado", async () => {

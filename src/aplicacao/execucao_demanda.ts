@@ -7,7 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
-import type { Projeto } from "../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../nucleo/projeto.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, existe, mensagem } from "../nucleo/erros.ts";
 import {

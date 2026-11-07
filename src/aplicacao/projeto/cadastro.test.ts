@@ -9,34 +9,35 @@ import { ErroDeInexistente, ErroDeRegra } from "../../nucleo/erros.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../../infra/registro.ts";
-import { projeto, projetos } from "../../armazenamento/projetos.ts";
-import { editarProjeto, registrarProjeto, removerProjeto } from "./cadastro.ts";
+import { Projeto } from "../../nucleo/projeto.ts";
+import { buscarProjeto, listarProjetos } from "../../armazenamento/projetos.ts";
+import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto, removerProjeto } from "./cadastro.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const novoBanco = () => abrirBancoTemporario().banco;
 
-const exemplo = {
+const exemplo = Projeto.parse({
   nome: "fabriquinha",
-  repo: "/repos/fabriquinha",
-  branchBase: "main",
-  hospedagem: "github" as const,
-  preparacao: ["npm ci"],
-  sonar: { projectKey: "Fabriquinha" },
-};
+  raiz_git: "/repos/fabriquinha",
+  branch_base: "main",
+  hospedagem: "github",
+  verificacoes: { preparacao: ["npm ci"] },
+  chave_sonarqube: "Fabriquinha",
+});
 const lido = exemplo;
 
-test("registrarProjeto cadastra e projeto/projetos leem de volta igual, em ordem de nome", () => {
+test("registrarProjeto cadastra e buscarProjeto/listarProjetos leem de volta igual, em ordem de nome", () => {
   const banco = novoBanco();
-  assert.equal(projeto(banco, "fabriquinha"), undefined);
-  assert.deepEqual(projetos(banco), []);
+  assert.equal(buscarProjeto(banco, "fabriquinha"), undefined);
+  assert.deepEqual(listarProjetos(banco), []);
 
-  const minimo = { ...exemplo, nome: "abc", repo: "/repos/abc", preparacao: undefined };
+  const minimo = { ...exemplo, nome: "abc", raiz_git: "/repos/abc", verificacoes: undefined };
   assert.deepEqual(registrarProjeto(banco, exemplo), exemplo);
   registrarProjeto(banco, minimo);
 
-  assert.deepEqual(projeto(banco, "fabriquinha"), lido);
+  assert.deepEqual(buscarProjeto(banco, "fabriquinha"), lido);
   assert.deepEqual(
-    projetos(banco).map((p) => [p.nome, p.preparacao]),
+    listarProjetos(banco).map((projeto) => [projeto.nome, projeto.verificacoes.preparacao]),
     [
       ["abc", []],
       ["fabriquinha", ["npm ci"]],
@@ -52,12 +53,12 @@ const recusa = (trabalho: () => unknown, mensagem: string) => {
 test("o link do produto é gravado, relido e apagado ao editar com o campo vazio", () => {
   const banco = novoBanco();
   const link = "https://demo.exemplo.com";
-  registrarProjeto(banco, { ...exemplo, linkProduto: link });
-  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, link);
-  assert.throws(() => editarProjeto(banco, { ...exemplo, linkProduto: "isso nao e um link" }), ZodError);
-  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, link);
-  assert.equal(editarProjeto(banco, { ...exemplo, linkProduto: "" }).linkProduto, undefined);
-  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, undefined);
+  registrarProjeto(banco, { ...exemplo, link_produto: link });
+  assert.equal(buscarProjeto(banco, "fabriquinha")?.link_produto, link);
+  assert.throws(() => editarProjeto(banco, { ...exemplo, link_produto: "isso nao e um link" }), ZodError);
+  assert.equal(buscarProjeto(banco, "fabriquinha")?.link_produto, link);
+  assert.equal(editarProjeto(banco, { ...exemplo, link_produto: "" }).link_produto, undefined);
+  assert.equal(buscarProjeto(banco, "fabriquinha")?.link_produto, undefined);
   banco.close();
 });
 
@@ -68,9 +69,11 @@ test("a edição não toca a chave do SonarQube, que é da configuração SDLC",
     banco.prepare("SELECT chave_sonarqube FROM projeto WHERE nome = 'fabriquinha'").get()?.chave_sonarqube;
   assert.equal(chave(), "Fabriquinha");
   banco.prepare("UPDATE projeto SET chave_sonarqube = 'da-sdlc' WHERE nome = 'fabriquinha'").run();
-  editarProjeto(banco, { ...exemplo, sonar: { projectKey: "outra" }, branchBase: "develop" });
+  const editado = editarProjeto(banco, { ...exemplo, chave_sonarqube: "outra", branch_base: "develop" });
   assert.equal(chave(), "da-sdlc");
-  assert.equal(projeto(banco, "fabriquinha")?.branchBase, "develop");
+  assert.equal(buscarProjeto(banco, "fabriquinha")?.branch_base, "develop");
+  assert.equal(editado.chave_sonarqube, "da-sdlc");
+  assert.deepEqual(editado, buscarProjeto(banco, "fabriquinha"));
   banco.close();
 });
 
@@ -78,10 +81,10 @@ test("registrarProjeto recusa nome que já existe, sem mexer no projeto", () => 
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
   recusa(
-    () => registrarProjeto(banco, { ...exemplo, repo: "/repos/outro", branchBase: "develop" }),
+    () => registrarProjeto(banco, { ...exemplo, raiz_git: "/repos/outro", branch_base: "develop" }),
     "já existe o projeto fabriquinha (edite-o na Configuração)",
   );
-  assert.deepEqual(projetos(banco), [lido]);
+  assert.deepEqual(listarProjetos(banco), [lido]);
   banco.close();
 });
 
@@ -91,13 +94,78 @@ test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
   assert.deepEqual(editarProjeto(banco, exemplo), exemplo);
   const editado = {
     ...exemplo,
-    repo: "/repos/outro-lugar",
-    branchBase: "develop",
+    raiz_git: "/repos/outro-lugar",
+    branch_base: "develop",
     hospedagem: "azure-devops" as const,
-    preparacao: [],
+    etapas: [{ etapa: "implementar" as const }],
+    verificacoes: { ...exemplo.verificacoes, preparacao: [] },
   };
-  editarProjeto(banco, editado);
-  assert.deepEqual(projetos(banco), [editado]);
+  assert.deepEqual(editarProjeto(banco, editado), editado);
+  assert.deepEqual(listarProjetos(banco), [editado]);
+  banco.close();
+});
+
+test("gravarConfiguracaoSdlc grava as verificações e preserva etapas, link e preparação do cadastro", () => {
+  const banco = novoBanco();
+  const cadastrado = registrarProjeto(banco, {
+    ...exemplo,
+    etapas: [{ etapa: "implementar", configuracao_agente: { effort: "high" } }],
+    link_produto: "https://produto.exemplo.com",
+  });
+  const configurado = Projeto.parse({
+    ...exemplo,
+    raiz_git: "/repos/configurado",
+    branch_base: "develop",
+    hospedagem: "azure-devops",
+    chave_sonarqube: "configurado",
+    etapas: [{ etapa: "planejar" }],
+    link_produto: "https://outro.exemplo.com",
+    verificacoes: {
+      preparacao: ["ignorado"],
+      fitness: [{ nome: "fitness", comando: "npm run fitness", descricao: "Arquitetura" }],
+      linguagens: [{ caminho: ".", linguagem: "typescript", comando_teste: "npm test" }],
+      e2e: [
+        { caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 },
+      ],
+      globs: [{ caminho_linguagem: ".", glob: "src/**/*.ts" }],
+    },
+  });
+  const esperado = {
+    ...configurado,
+    etapas: cadastrado.etapas,
+    link_produto: cadastrado.link_produto,
+    verificacoes: { ...configurado.verificacoes, preparacao: cadastrado.verificacoes.preparacao },
+  };
+  assert.deepEqual(gravarConfiguracaoSdlc(banco, configurado), esperado);
+  assert.deepEqual(buscarProjeto(banco, exemplo.nome), esperado);
+
+  const editado = editarProjeto(banco, {
+    ...exemplo,
+    etapas: [{ etapa: "revisar_rodada" }],
+    link_produto: "https://editado.exemplo.com",
+    verificacoes: { preparacao: ["npm install"] },
+  });
+  const cadastroEditado = {
+    ...exemplo,
+    chave_sonarqube: configurado.chave_sonarqube,
+    etapas: [{ etapa: "revisar_rodada" }],
+    link_produto: "https://editado.exemplo.com",
+    verificacoes: { ...configurado.verificacoes, preparacao: ["npm install"] },
+  };
+  assert.deepEqual(editado, cadastroEditado);
+  assert.deepEqual(buscarProjeto(banco, exemplo.nome), cadastroEditado);
+  banco.close();
+});
+
+test("gravarConfiguracaoSdlc recusa projeto inexistente com orientação para cadastrar antes", () => {
+  const banco = novoBanco();
+  assert.throws(
+    () => gravarConfiguracaoSdlc(banco, exemplo),
+    (erro) =>
+      erro instanceof ErroDeInexistente &&
+      erro.message === "o projeto fabriquinha não existe (cadastre o projeto antes)",
+  );
+  assert.deepEqual(listarProjetos(banco), []);
   banco.close();
 });
 
@@ -110,47 +178,55 @@ test("a preparação do cadastro é gravada em comando_preparacao_projeto, a tab
       .map((l) => ({ ...l }));
   registrarProjeto(banco, exemplo);
   assert.deepEqual(preparacaoGravada(), [{ ordem: 1, comando: "npm ci" }]);
-  editarProjeto(banco, { ...exemplo, preparacao: ["uv venv .venv", "uv sync"] });
+  editarProjeto(banco, {
+    ...exemplo,
+    verificacoes: { ...exemplo.verificacoes, preparacao: ["uv venv .venv", "uv sync"] },
+  });
   assert.deepEqual(preparacaoGravada(), [
     { ordem: 1, comando: "uv venv .venv" },
     { ordem: 2, comando: "uv sync" },
   ]);
-  assert.deepEqual(projeto(banco, "fabriquinha")?.preparacao, ["uv venv .venv", "uv sync"]);
+  assert.deepEqual(buscarProjeto(banco, "fabriquinha")?.verificacoes.preparacao, ["uv venv .venv", "uv sync"]);
   // A recusa reverte a transação inteira: a preparação fica a de antes.
   recusa(
-    () => registrarProjeto(banco, { ...exemplo, repo: "/repos/outro", preparacao: ["rm -rf"] }),
+    () =>
+      registrarProjeto(banco, {
+        ...exemplo,
+        raiz_git: "/repos/outro",
+        verificacoes: { ...exemplo.verificacoes, preparacao: ["rm -rf"] },
+      }),
     "já existe o projeto fabriquinha (edite-o na Configuração)",
   );
-  assert.deepEqual(projeto(banco, "fabriquinha")?.preparacao, ["uv venv .venv", "uv sync"]);
+  assert.deepEqual(buscarProjeto(banco, "fabriquinha")?.verificacoes.preparacao, ["uv venv .venv", "uv sync"]);
   banco.close();
 });
 
 test("editarProjeto recusa projeto que não existe, sem criá-lo", () => {
   const banco = novoBanco();
   recusa(() => editarProjeto(banco, exemplo), "o projeto fabriquinha não existe (cadastre-o na Configuração)");
-  assert.deepEqual(projetos(banco), []);
+  assert.deepEqual(listarProjetos(banco), []);
   banco.close();
 });
 
 test("registrar e editar recusam o schema do F1 sem gravar nada", () => {
   const banco = novoBanco();
-  assert.throws(() => registrarProjeto(banco, { ...exemplo, repo: "relativo" }), ZodError);
+  assert.throws(() => registrarProjeto(banco, { ...exemplo, raiz_git: "relativo" }), ZodError);
   registrarProjeto(banco, exemplo);
-  assert.throws(() => editarProjeto(banco, { ...exemplo, repo: "relativo" }), ZodError);
-  assert.deepEqual(projetos(banco), [lido]);
+  assert.throws(() => editarProjeto(banco, { ...exemplo, raiz_git: "relativo" }), ZodError);
+  assert.deepEqual(listarProjetos(banco), [lido]);
   banco.close();
 });
 
 test("registrar e editar recusam um repositório que já é de outro projeto", () => {
   const banco = novoBanco();
   registrarProjeto(banco, exemplo);
-  registrarProjeto(banco, { ...exemplo, nome: "outro", repo: "/repos/outro" });
+  registrarProjeto(banco, { ...exemplo, nome: "outro", raiz_git: "/repos/outro" });
   const mensagem =
     "o repositório /repos/fabriquinha já é do projeto fabriquinha (edite o projeto fabriquinha em vez de cadastrar outro para o mesmo repositório)";
   recusa(() => registrarProjeto(banco, { ...exemplo, nome: "copia" }), mensagem);
   recusa(() => editarProjeto(banco, { ...exemplo, nome: "outro" }), mensagem);
   assert.deepEqual(
-    projetos(banco).map((p) => [p.nome, p.repo]),
+    listarProjetos(banco).map((projeto) => [projeto.nome, projeto.raiz_git]),
     [
       ["fabriquinha", "/repos/fabriquinha"],
       ["outro", "/repos/outro"],
@@ -245,7 +321,7 @@ const sessaoNoDisco = (raiz: string, n: number) => join(raiz, "sessoes", `2026-0
  */
 function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number, number, number, number] {
   const raiz = raizDo(banco);
-  registrarProjeto(banco, { ...exemplo, nome, repo: `/repos/${nome}` });
+  registrarProjeto(banco, { ...exemplo, nome, raiz_git: `/repos/${nome}` });
   banco.prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES (?, ?, ?)").run(nome, "a".repeat(40), "t");
   const demandas = [0, 1, 2, 3].map((i) => {
     const id = ++contador;
@@ -312,12 +388,12 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
   const { projeto: removido, avisos } = await removerProjeto(banco, "demo");
 
   assert.equal(removido.nome, "demo");
-  assert.equal(removido.repo, "/repos/demo");
+  assert.equal(removido.raiz_git, "/repos/demo");
   assert.deepEqual(semAvisoDoGit(avisos), []);
   assert.deepEqual(contagens(banco), antes);
   assert.equal(custo(banco), custoAntes);
-  assert.equal(projeto(banco, "demo"), undefined);
-  assert.equal(projeto(banco, "outro")?.nome, "outro");
+  assert.equal(buscarProjeto(banco, "demo"), undefined);
+  assert.equal(buscarProjeto(banco, "outro")?.nome, "outro");
   for (const [i, n] of demo.entries()) {
     assert.equal(existsSync(pastaDe(raiz, execucaoDe(n, i === 0))), false);
     assert.equal(existsSync(sessaoNoDisco(raiz, n)), false);
@@ -337,7 +413,7 @@ test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o
 test("removerProjeto não apaga o arquivo que um anexo de outro projeto ainda usa", async () => {
   const banco = novoBanco();
   popular(banco, "demo", "f".repeat(64));
-  registrarProjeto(banco, { ...exemplo, nome: "outro", repo: "/repos/outro" });
+  registrarProjeto(banco, { ...exemplo, nome: "outro", raiz_git: "/repos/outro" });
   banco.exec(`
     INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('outro', 'Seu João', 'd');
     INSERT INTO usuario_simulado_anexo SELECT id, 'igual.pdf', '${"f".repeat(64)}', 1 FROM usuario_simulado WHERE projeto = 'outro';
@@ -418,7 +494,7 @@ test("removerProjeto sem demandas nem sessões no disco só apaga o projeto", as
   registrarProjeto(banco, exemplo);
   const { avisos } = await removerProjeto(banco, "fabriquinha");
   assert.deepEqual(semAvisoDoGit(avisos), []);
-  assert.deepEqual(projetos(banco), []);
+  assert.deepEqual(listarProjetos(banco), []);
   banco.close();
 });
 
@@ -446,7 +522,7 @@ test("removerProjeto: falha ao apagar no disco vira aviso e não desfaz o banco"
   } finally {
     chmodSync(join(raiz, "execucoes"), 0o700);
   }
-  assert.equal(projeto(banco, "demo"), undefined);
+  assert.equal(buscarProjeto(banco, "demo"), undefined);
   assert.deepEqual(
     contagens(banco),
     TABELAS.map(() => 0),
@@ -489,7 +565,7 @@ const contagensDemanda = (banco: DatabaseSync) =>
 
 /** Uma demanda com duas rodadas e dois tickets de implementação, com linha em toda tabela da demanda. */
 function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
-  registrarProjeto(banco, { ...exemplo, nome, repo: `/repos/${nome}` });
+  registrarProjeto(banco, { ...exemplo, nome, raiz_git: `/repos/${nome}` });
   const digitos = d.slice(2);
   const [sha1, sha2, sha3] = [digitos.padStart(40, "a"), digitos.padStart(40, "c"), digitos.padStart(64, "9")];
   banco.exec(`

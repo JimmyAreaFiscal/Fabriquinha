@@ -55,11 +55,10 @@ function repositorio(raiz: string, nome: string) {
     const banco = abrir(raiz);
     registrarProjeto(banco, {
       nome,
-      repo,
-      branchBase: "main",
+      raiz_git: repo,
+      branch_base: "main",
       hospedagem: "github",
-      preparacao: [],
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
     banco.close();
   };

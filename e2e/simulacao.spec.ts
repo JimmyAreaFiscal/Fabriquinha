@@ -33,11 +33,11 @@ function semear(raiz: string, linkProduto?: string, usuarios: string[] = [], tar
   const banco = abrir(raiz);
   registrarProjeto(banco, {
     nome: "fabriquinha",
-    repo: realpathSync(repo),
-    branchBase: "main",
+    raiz_git: realpathSync(repo),
+    branch_base: "main",
     hospedagem: "github",
-    sonar: { projectKey: "Fabriquinha" },
-    linkProduto,
+    chave_sonarqube: "Fabriquinha",
+    link_produto: linkProduto,
   });
   const alocados = usuarios.map((nome) => criarUsuarioSimulado(banco, "fabriquinha", { nome, descricao: DESCRICAO }));
   if (tarefa) criarTarefa(banco, "fabriquinha", { texto: TAREFA, n: tarefa.n, usuarios: alocados.map((u) => u.id) });

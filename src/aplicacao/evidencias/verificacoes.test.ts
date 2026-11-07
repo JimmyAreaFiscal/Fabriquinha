@@ -16,7 +16,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
-import { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import { Projeto } from "../../nucleo/projeto.ts";
 import { coletarVerificacoes } from "./verificacoes.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-verificacoes-")));
@@ -89,8 +89,10 @@ function cenario(teste = "true") {
     chave_sonarqube: "loja",
     raiz_git: "/repos/loja",
     hospedagem: "github",
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: teste }],
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: teste }],
+    },
   });
   return { worktree, projeto };
 }
@@ -107,7 +109,7 @@ test("devolve as três verificações do catálogo, aprovadas, sem issue nos arq
     ["execucao_testes", "matriz_fitness", "relatorio_sonar"],
   );
   assert.deepEqual(aprovadas(v), [true, true, true]);
-  assert.deepEqual(v[2]?.dados, { projectKey: "loja", ceTaskId: "AX1", arquivosAnalisados: ["a.ts"], issues: [] });
+  assert.deepEqual(v[2]?.dados, { chave_sonarqube: "loja", ceTaskId: "AX1", arquivosAnalisados: ["a.ts"], issues: [] });
 });
 
 test("o Sonar começa quando os testes das linguagens gravaram o lcov e roda junto com o E2E", async () => {
@@ -116,8 +118,11 @@ test("o Sonar começa quando os testes das linguagens gravaram o lcov e roda jun
   const esperaOSonar = "for i in $(seq 100); do [ -f sonar-leu-lcov ] && exit 0; sleep 0.05; done; exit 7";
   const comE2E = Projeto.parse({
     ...projeto,
-    e2e: [{ caminho_linguagem: ".", comando_build: "true", comando_execucao: esperaOSonar, codigo_falha: 7 }],
-    globs: [{ caminho_linguagem: ".", glob: "*.ts" }],
+    verificacoes: {
+      ...projeto.verificacoes,
+      e2e: [{ caminho_linguagem: ".", comando_build: "true", comando_execucao: esperaOSonar, codigo_falha: 7 }],
+      globs: [{ caminho_linguagem: ".", glob: "*.ts" }],
+    },
   });
 
   const v = await coletarVerificacoes({ projeto: comE2E, e2e: true, worktree });

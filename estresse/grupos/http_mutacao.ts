@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
 import { abrir } from "../../src/armazenamento/banco.ts";
 import { carregarDemanda } from "../../src/armazenamento/demandas.ts";
-import { projeto } from "../../src/armazenamento/projetos.ts";
+import { buscarProjeto } from "../../src/armazenamento/projetos.ts";
 import { configuracao } from "../../src/armazenamento/servico.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { anexar } from "../../src/armazenamento/simulacao.ts";
@@ -140,8 +140,8 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
   })();
   const formulario = (nome: string, repo: string) => ({
     nome,
-    repo,
-    branchBase: "main",
+    raiz_git: repo,
+    branch_base: "main",
     preparacao: [],
     configuracoes: {},
   });
@@ -155,7 +155,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     await exigirGit(repo, "config", `url.${join(dirname(repo), "origin.git")}.insteadOf`, url);
     return repo;
   };
-  const raizDe = (nome: string) => projeto(banco, nome)?.repo ?? "";
+  const raizDe = (nome: string) => buscarProjeto(banco, nome)?.raiz_git ?? "";
 
   return [
     acao(
@@ -286,7 +286,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
           corpo: formulario(nome, repo),
           status: 200,
           efeito: () => {
-            conferir(nome, projeto(banco, nome)?.nome, "projeto cadastrado");
+            conferir(nome, buscarProjeto(banco, nome)?.nome, "projeto cadastrado");
           },
         };
       },
@@ -315,7 +315,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         url: `/api/projetos/${nome}`,
         status: 200,
         efeito: () => {
-          conferir(undefined, projeto(banco, nome), `projeto ${nome} removido`);
+          conferir(undefined, buscarProjeto(banco, nome), `projeto ${nome} removido`);
         },
       }),
     ),
@@ -331,9 +331,10 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
           chave_sonarqube: nome,
           raiz_git: raizDe(nome),
           hospedagem: "github",
-          etapas: [],
-          fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-          linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+          verificacoes: {
+            fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+            linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+          },
         },
         status: 200,
       }),

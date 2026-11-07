@@ -20,9 +20,9 @@ export const hospedagemDoRemoto = (url: string): Hospedagem | undefined =>
 
 /** F5 §2: confere repositório, identidade, remoto, branch base e CLI da hospedagem, nessa ordem. */
 export async function conferirProjeto({
-  repo,
-  branchBase,
-}: Pick<Projeto, "repo" | "branchBase">): Promise<{ hospedagem: Hospedagem }> {
+  raiz_git: repo,
+  branch_base,
+}: Pick<Projeto, "raiz_git" | "branch_base">): Promise<{ hospedagem: Hospedagem }> {
   const topo = await git(repo, "rev-parse", "--show-toplevel");
   if (topo.codigo !== 0) {
     throw new ErroDeRegra(`${repo} não é um repositório git`, "informe o caminho da raiz de um clone do projeto");
@@ -54,8 +54,8 @@ export async function conferirProjeto({
     );
   }
 
-  // O padrão começa com refs/heads/: um branchBase como "--upload-pack=…" nunca vira opção do git.
-  const ref = `refs/heads/${branchBase}`;
+  // O padrão começa com refs/heads/: um branch_base como "--upload-pack=…" nunca vira opção do git.
+  const ref = `refs/heads/${branch_base}`;
   const remoto = await git(repo, "ls-remote", "--heads", "origin", ref);
   if (remoto.codigo !== 0) {
     throw new ErroDeRegra(
@@ -65,7 +65,7 @@ export async function conferirProjeto({
   }
   // ls-remote casa pelo fim do nome (main casaria feature/main): confere a ref exata.
   if (!remoto.saida.split("\n").some((linha) => linha.endsWith(`\t${ref}`))) {
-    throw new ErroDeRegra(`a branch ${branchBase} não existe no origin`, "informe uma branch base já publicada");
+    throw new ErroDeRegra(`a branch ${branch_base} não existe no origin`, "informe uma branch base já publicada");
   }
 
   await conferirCli(hospedagem);

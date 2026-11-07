@@ -8,7 +8,7 @@ import { type Modelo, resolverConfiguracaoAgente } from "../nucleo/configuracao_
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { MAX_RETOMADAS_AUTOMATICAS, retomarTicketFalhoPorInfraestrutura } from "../nucleo/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
-import { configuracaoProjeto } from "../armazenamento/projetos.ts";
+import { buscarProjeto } from "../armazenamento/projetos.ts";
 import { comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho } from "../armazenamento/despacho_demanda.ts";
 import { noLog } from "../infra/registro.ts";
@@ -68,7 +68,7 @@ export function retomarFalhasDeInfraestrutura(banco: DatabaseSync, agora = new D
       if (causa === "transitoria" && !esperouOBastante(t, agora)) continue;
       let modelo: Modelo | undefined;
       if (causa === "cota") {
-        const etapa = configuracaoProjeto(banco, ag.demanda.projeto)?.etapas.find((e) => e.etapa === t.etapa);
+        const etapa = buscarProjeto(banco, ag.demanda.projeto)?.etapas.find((e) => e.etapa === t.etapa);
         const { modelo: modeloResolvido } = resolverConfiguracaoAgente({
           ticket: t.configuracao_agente,
           etapaDoProjeto: etapa?.configuracao_agente,

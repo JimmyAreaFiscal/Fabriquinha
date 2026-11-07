@@ -9,7 +9,8 @@ import type { Ator } from "../src/nucleo/ator.ts";
 import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despacho_demanda.ts";
 import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../src/aplicacao/planejamento.ts";
-import { substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { gravarProjeto, projetoExistente } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
@@ -126,7 +127,17 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   // A preparação só falha na worktree da rodada 2, depois da demanda e da rodada 1.
   const quebra = join(c.raiz, "quebra");
   const { banco, projeto } = c;
-  substituirPreparacaoDoProjeto(banco, projeto, [`[ -e ${quebra} ] && [ "$(basename "$PWD")" = 2 ] && exit 1; true`]);
+  const projetoDoCenario = projetoExistente(banco, projeto);
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      ...projetoDoCenario,
+      verificacoes: {
+        ...projetoDoCenario.verificacoes,
+        preparacao: [`[ -e ${quebra} ] && [ "$(basename "$PWD")" = 2 ] && exit 1; true`],
+      },
+    }),
+  );
   await ciclaPlanejamentos(c, [id]);
   submeterPlanoDoAgente(banco, id, plano(id, "r", 2), agente(1));
   writeFileSync(quebra, "");

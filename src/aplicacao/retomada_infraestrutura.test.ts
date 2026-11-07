@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
-import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { causaDeInfraestrutura, modeloReserva, retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
@@ -50,25 +50,23 @@ const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 function cenario() {
   const { banco } = abrirBancoTemporario();
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
-       VALUES ('loja', '/nao/existe', 'main', 'github', 'k')`,
-    )
-    .run();
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "main",
     chave_sonarqube: "k",
     raiz_git: "/nao/existe",
     hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    etapas: [
+      {
+        etapa: "implementar",
+        configuracao_agente: { modelo: { provedor: "claude-bridge", nome: "claude-sonnet-5-5" } },
+      },
+    ],
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
-  substituirEtapasDoProjeto(banco, "loja", [
-    { etapa: "implementar", configuracao_agente: { modelo: { provedor: "claude-bridge", nome: "claude-sonnet-5-5" } } },
-  ]);
   const tickets: [string, string, string | undefined, number?][] = [
     ["implementar", "falhou", "serviço reiniciado", 3],
     ["implementar", "falhou", "falha de infraestrutura:\n- o SonarQube está inacessível"],

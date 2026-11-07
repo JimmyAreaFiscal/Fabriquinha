@@ -16,7 +16,7 @@ test("cria o clone com a branch base publicada no origin, sem tocar no ambiente 
       raiz_git: r.repo,
       branch_base: "main",
       hospedagem: "github",
-      preparacao: [{ ordem: 1, comando: "npm ci" }],
+      verificacoes: { preparacao: ["npm ci"], fitness: [], linguagens: [], e2e: [], globs: [] },
     });
     assert.equal(r.log, `${r.raiz}/log`);
   } finally {

@@ -177,11 +177,10 @@ export function projeto(raiz: string, sql = ""): void {
   const banco = abrir(raiz);
   registrarProjeto(banco, {
     nome: "loja",
-    repo: realpathSync(repo),
-    branchBase: "main",
+    raiz_git: realpathSync(repo),
+    branch_base: "main",
     hospedagem: "github",
-    preparacao: [],
-    sonar: { projectKey: "loja" },
+    chave_sonarqube: "loja",
   });
   banco.exec(sql);
   banco.close();
