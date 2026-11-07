@@ -5,7 +5,7 @@
 **Passos:**
 
 1. Leia o plano, os critérios da rodada {rodada} e o que a Fabriquinha coletou: os arquivos alterados e a matriz de fitness functions, nas seções "Arquivos alterados" e "Matriz de fitness functions", esta com o arquivo do log de cada linha.
-2. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos (`git log --grep` do endereço de cada um) regrediu algo. O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre: não pergunte de novo nem reprove por isso.
+2. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos (`git log --grep` do endereço de cada um) regrediu algo. O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre: não pergunte de novo nem reprove por isso. Isso não impede reprovar de novo um motivo anterior que continua sem correção: se o corretivo não o resolveu, reprove e registre o motivo.
 3. Confira o código da worktree contra o plano e contra cada critério citado.
 4. Explique o resultado de cada fitness function, inclusive as que falharam.
 5. Comprove cada critério da rodada com o que você viu no código e nos testes.

@@ -371,4 +371,5 @@ test("o modo do revisar_rodada manda conferir os motivos anteriores e proíbe re
     modo,
     /O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre/,
   );
+  assert.match(modo, /Isso não impede reprovar de novo um motivo anterior que continua sem correção/);
 });
