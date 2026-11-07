@@ -1,9 +1,10 @@
 // Sessão, execução da sessão e uso por modelo (comparacao-sdlc-implementacao.md §7.3). Funções puras sobre arrays:
 // quem chama persiste o resultado. `ExecucaoSessao` registra uma execução do pi dentro da sessão.
 import { z } from "zod";
+import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { TicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
-import { Effort, Id, Instante } from "./primitivos.ts";
+import { Id, Instante } from "./primitivos.ts";
 
 export const ModoExecucao = z.enum(["autonomo", "interativo", "consulta"]);
 export type ModoExecucao = z.infer<typeof ModoExecucao>;
@@ -17,26 +18,19 @@ export const Sessao = TicketRef.extend({
   conversa_referencia: IdTexto,
 });
 
-export const ExecucaoSessao = z
-  .object({
-    id: IdTexto,
-    sessao_id: IdTexto,
-    inicio: Instante,
-    fim: Instante.nullish(),
-    /** Só vale com `fim`: false é sucesso, true é falha. */
-    falha: z.boolean(),
-    /** Grupo de processo do pi, para o reinício do serviço interrompê-lo. */
-    grupo_processo: Id.optional(),
-    erro: z.string().trim().min(1).optional(),
-    /** Modelo e effort efetivos (resolverModeloEffort); o modelo vem por inteiro ou não vem. */
-    modelo_provedor: IdTexto.optional(),
-    modelo_nome: IdTexto.optional(),
-    effort: Effort.optional(),
-  })
-  .refine((e) => (e.modelo_provedor === undefined) === (e.modelo_nome === undefined), {
-    message: "modelo_provedor e modelo_nome vêm juntos",
-    path: ["modelo_provedor"],
-  });
+export const ExecucaoSessao = z.object({
+  id: IdTexto,
+  sessao_id: IdTexto,
+  inicio: Instante,
+  fim: Instante.nullish(),
+  /** Só vale com `fim`: false é sucesso, true é falha. */
+  falha: z.boolean(),
+  /** Grupo de processo do pi, para o reinício do serviço interrompê-lo. */
+  grupo_processo: Id.optional(),
+  erro: z.string().trim().min(1).optional(),
+  /** Modelo e effort efetivos (resolverConfiguracaoAgente). */
+  configuracao_agente: ConfiguracaoAgente.optional(),
+});
 
 /** Tokens e custo pertencem ao uso da execução, nunca à sessão. `custo` ausente é desconhecido, não zero. */
 export const UsoModeloExecucao = z.object({

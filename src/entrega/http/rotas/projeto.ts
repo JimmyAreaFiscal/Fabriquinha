@@ -5,10 +5,10 @@ import { z } from "zod";
 import type { AgregadoDemanda, TipoDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { AUDITOR } from "../../../nucleo/ator.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
+import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { encontrado } from "../../../nucleo/erros.ts";
 import type { EtapaTicket, FaseDemanda, FaseRodada, StatusTicket } from "../../../nucleo/primitivos.ts";
-import { resolverModeloEffort } from "../../../nucleo/resolucao_ticket.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { configuracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
@@ -94,10 +94,11 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
       return { ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase, ...(pr && { pr }) };
     }),
     tickets: ag.tickets.map((t) => {
-      const modelo = resolverModeloEffort(
-        t,
-        etapas.find((e) => e.etapa === t.etapa),
-      ).modelo.valor;
+      const { modelo } = resolverConfiguracaoAgente({
+        ticket: t.configuracao_agente,
+        etapaDoProjeto: etapas.find((e) => e.etapa === t.etapa)?.configuracao_agente,
+        padrao: {},
+      });
       const sessao = sessoes.get(t.ticket_id);
       const ticketRef = formatarTicketRef({ demanda_id: id, ticket_id: t.ticket_id });
       return {

@@ -26,15 +26,15 @@ const argumentos = () => piFalso.registro().at(-1)?.argv;
 
 const recusa = async (provedor: string, modelo: string, mensagem: string) => {
   await assert.rejects(
-    conferirModelo({ provedor, modelo }),
+    conferirModelo({ provedor, nome: modelo }),
     (erro) => erro instanceof ErroDeRegra && erro.message === mensagem,
   );
 };
 
 test("aceita o par listado exatamente e passa a busca como um argumento só", async () => {
-  await conferirModelo({ provedor: "openai-codex", modelo: "gpt-6-luna" });
+  await conferirModelo({ provedor: "openai-codex", nome: "gpt-6-luna" });
   assert.deepEqual(argumentos(), ["--list-models", "openai-codex/gpt-6-luna"]);
-  await conferirModelo({ provedor: "llamacpp", modelo: "qwen3 coder (local)" });
+  await conferirModelo({ provedor: "llamacpp", nome: "qwen3 coder (local)" });
   assert.deepEqual(argumentos(), ["--list-models", "llamacpp/qwen3 coder (local)"]);
 });
 
@@ -48,9 +48,9 @@ test("recusa o que a busca aproximada do pi lista, mas não é o par exato", asy
 
 test("listarModelos: todos os pares da tabela do pi, sem busca, para os seletores", async () => {
   assert.deepEqual(await listarModelos(), [
-    { provedor: "openai-codex", modelo: "gpt-5.6-luna" },
-    { provedor: "openai-codex", modelo: "gpt-6-luna" },
-    { provedor: "llamacpp", modelo: "qwen3 coder (local)" },
+    { provedor: "openai-codex", nome: "gpt-5.6-luna" },
+    { provedor: "openai-codex", nome: "gpt-6-luna" },
+    { provedor: "llamacpp", nome: "qwen3 coder (local)" },
   ]);
   assert.deepEqual(argumentos(), ["--list-models"]);
 });
@@ -73,7 +73,7 @@ test("sem $FABRIQUINHA_PI usa pi do PATH; binário ausente diz como resolver", a
   delete process.env.FABRIQUINHA_PI;
   process.env.PATH = `${base}:${pathOriginal ?? ""}`; // o pi falso na frente do de verdade
   try {
-    await conferirModelo({ provedor: "openai-codex", modelo: "gpt-6-luna" });
+    await conferirModelo({ provedor: "openai-codex", nome: "gpt-6-luna" });
     process.env.FABRIQUINHA_PI = join(base, "nao-existe");
     await recusa(
       "openai-codex",

@@ -1,7 +1,8 @@
 // Contrato de configuração de projeto do SDLC (seção 7.1). Convive com `projeto.ts` até a migração validada.
-// Modelo e effort aqui só têm formato: o par provedor/modelo é conferido pelo harness, não por catálogo local.
+// Modelo e effort aqui só têm formato: o par provedor/nome é conferido pelo harness, não por catálogo local.
 import { z } from "zod";
-import { Effort, EtapaTicket, Slug } from "./primitivos.ts";
+import { ConfiguracaoAgente } from "./configuracao_agente.ts";
+import { EtapaTicket, Slug } from "./primitivos.ts";
 
 const Comando = z.string().trim().min(1);
 const Texto = z.string().min(1);
@@ -15,17 +16,10 @@ const CaminhoRelativo = z
 
 const Hospedagem = z.enum(["github", "azure-devops"]);
 
-export const ConfiguracaoEtapaProjeto = z
-  .strictObject({
-    etapa: EtapaTicket,
-    modelo_provedor: Texto.optional(),
-    modelo_nome: Texto.optional(),
-    effort: Effort.optional(),
-  })
-  .refine((c) => (c.modelo_provedor === undefined) === (c.modelo_nome === undefined), {
-    message: "informe modelo_provedor e modelo_nome juntos ou nenhum",
-    path: ["modelo_nome"],
-  });
+export const ConfiguracaoEtapaProjeto = z.strictObject({
+  etapa: EtapaTicket,
+  configuracao_agente: ConfiguracaoAgente.optional(),
+});
 
 const ComandoPreparacaoProjeto = z.strictObject({ ordem: z.number().int().positive(), comando: Comando });
 

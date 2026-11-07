@@ -3,7 +3,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { encontrado, mensagem } from "../../../nucleo/erros.ts";
-import { Effort, EtapaTicket, Modelo } from "../../../nucleo/primitivos.ts";
+import { ConfiguracaoAgente, type Modelo } from "../../../nucleo/configuracao_agente.ts";
+import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
 import { conferirModelo, listarModelos } from "../../../infra/agente/modelos.ts";
 import { varrerBase } from "../../../aplicacao/retrabalho.ts";
@@ -27,49 +28,45 @@ function estado(banco: DatabaseSync, agendador: Agendador) {
 const DoFormulario = Projeto.omit({ sonar: true }).extend({
   hospedagem: Hospedagem.optional(),
   /** O modelo e o effort de cada etapa; a etapa ausente usa o padrão do pi. */
-  modelos: z.partialRecord(EtapaTicket, Modelo),
-  efforts: z.partialRecord(EtapaTicket, Effort),
+  configuracoes: z.partialRecord(EtapaTicket, ConfiguracaoAgente),
 });
 /** O nome é a chave e não muda (C19): o do caminho vale, e o do corpo é ignorado. */
 const DaEdicao = DoFormulario.extend({ nome: z.unknown() });
 
-type ModelosEEfforts = Pick<z.infer<typeof DoFormulario>, "modelos" | "efforts">;
+type Configuracoes = z.infer<typeof DoFormulario>["configuracoes"];
 
-/** As etapas gravadas do projeto no formato do formulário: o modelo e o effort, cada um pela etapa. */
-function modelosEEffortsDoProjeto(banco: DatabaseSync, nome: string): ModelosEEfforts {
-  const modelos: ModelosEEfforts["modelos"] = {};
-  const efforts: ModelosEEfforts["efforts"] = {};
-  for (const e of etapasDoProjeto(banco, nome)) {
-    if (e.modelo_provedor !== undefined && e.modelo_nome !== undefined)
-      modelos[e.etapa] = { provedor: e.modelo_provedor, modelo: e.modelo_nome };
-    if (e.effort !== undefined) efforts[e.etapa] = e.effort;
-  }
-  return { modelos, efforts };
-}
+/** As etapas gravadas do projeto no formato do formulário: a configuração do agente de cada etapa que tem uma. */
+const configuracoesDoProjeto = (banco: DatabaseSync, nome: string): Configuracoes =>
+  Object.fromEntries(
+    etapasDoProjeto(banco, nome).flatMap(({ etapa, configuracao_agente }) =>
+      configuracao_agente ? [[etapa, configuracao_agente]] : [],
+    ),
+  );
 
-/** O projeto como o formulário o lê: o cadastro com o modelo e o effort de cada etapa. */
-const comModelosEEfforts = (banco: DatabaseSync, p: Projeto) => ({ ...p, ...modelosEEffortsDoProjeto(banco, p.nome) });
+/** O projeto como o formulário o lê: o cadastro com a configuração do agente de cada etapa. */
+const comConfiguracoes = (banco: DatabaseSync, p: Projeto) => ({
+  ...p,
+  configuracoes: configuracoesDoProjeto(banco, p.nome),
+});
 
 /** As linhas de `configuracao_etapa_projeto` do formulário: só as etapas com modelo ou effort escolhido. */
-const etapasDoFormulario = ({ modelos, efforts }: ModelosEEfforts) =>
+const etapasDoFormulario = (configuracoes: Configuracoes) =>
   EtapaTicket.options.flatMap((etapa) => {
-    const modelo = modelos[etapa];
-    const effort = efforts[etapa];
-    if (!modelo && !effort) return [];
-    return [{ etapa, modelo_provedor: modelo?.provedor, modelo_nome: modelo?.modelo, effort }];
+    const configuracao_agente = configuracoes[etapa];
+    return configuracao_agente?.modelo || configuracao_agente?.effort ? [{ etapa, configuracao_agente }] : [];
   });
 
-const par = (m: Modelo | undefined): string | undefined => m && `${m.provedor}/${m.modelo}`;
+const par = (m: Modelo | undefined): string | undefined => m && `${m.provedor}/${m.nome}`;
 
 /**
  * F4 §9: o modelo novo ou trocado precisa existir no pi; o recusado vira erro do campo (422). O igual ao gravado não
  * chama o pi: o que ele deixou de listar continua salvando sem mexer.
  */
-async function conferirModelosAlterados(banco: DatabaseSync, nome: string, modelos: ModelosEEfforts["modelos"]) {
-  const gravados = modelosEEffortsDoProjeto(banco, nome).modelos;
+async function conferirModelosAlterados(banco: DatabaseSync, nome: string, configuracoes: Configuracoes) {
+  const gravadas = configuracoesDoProjeto(banco, nome);
   const alterados = EtapaTicket.options.flatMap((etapa) => {
-    const modelo = modelos[etapa];
-    return modelo && par(modelo) !== par(gravados[etapa]) ? [{ etapa, modelo }] : [];
+    const modelo = configuracoes[etapa]?.modelo;
+    return modelo && par(modelo) !== par(gravadas[etapa]?.modelo) ? [{ etapa, modelo }] : [];
   });
   const recusados = (
     await Promise.all(
@@ -77,7 +74,12 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, model
         conferirModelo(modelo).then(
           () => [],
           (error_: unknown) => [
-            { code: "custom" as const, path: ["modelos", etapa], message: mensagem(error_), input: modelo },
+            {
+              code: "custom" as const,
+              path: ["configuracoes", etapa, "modelo"],
+              message: mensagem(error_),
+              input: modelo,
+            },
           ],
         ),
       ),
@@ -91,16 +93,16 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, model
  * cadastro e as etapas numa transação só.
  */
 async function conferirEGravar(banco: DatabaseSync, p: z.infer<typeof DoFormulario>, gravar: typeof registrarProjeto) {
-  const { modelos, efforts, ...cadastro } = p;
+  const { configuracoes, ...cadastro } = p;
   const { hospedagem } = await conferirProjeto(cadastro).catch((error_: unknown) => {
     throw new ErroHttp(502, mensagem(error_));
   });
-  await conferirModelosAlterados(banco, p.nome, modelos);
+  await conferirModelosAlterados(banco, p.nome, configuracoes);
   return escrever(banco, () => {
     // A chave do SonarQube é da configuração SDLC, que a edita; o cadastro começa com o nome do projeto.
     const salvo = gravar(banco, { ...cadastro, hospedagem, sonar: { projectKey: p.nome } });
-    substituirEtapasDoProjeto(banco, salvo.nome, etapasDoFormulario({ modelos, efforts }));
-    return comModelosEEfforts(banco, salvo);
+    substituirEtapasDoProjeto(banco, salvo.nome, etapasDoFormulario(configuracoes));
+    return comConfiguracoes(banco, salvo);
   });
 }
 
@@ -123,7 +125,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
       const nova = Configuracao.parse(corpo);
       const modelo = nova.modeloAuditoria;
       const gravado = configuracao(banco).modeloAuditoria;
-      if (modelo && (modelo.provedor !== gravado?.provedor || modelo.modelo !== gravado.modelo)) {
+      if (modelo && (modelo.provedor !== gravado?.provedor || modelo.nome !== gravado.nome)) {
         await conferirModelo(modelo).catch((error_: unknown) => {
           throw new z.ZodError([
             { code: "custom", path: ["modeloAuditoria"], message: mensagem(error_), input: modelo },
@@ -137,14 +139,14 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos",
-    tratar: ({ banco }) => projetos(banco).map((p) => comModelosEEfforts(banco, p)),
+    tratar: ({ banco }) => projetos(banco).map((p) => comConfiguracoes(banco, p)),
   },
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params }) => {
       const nome = String(params.nome);
-      return comModelosEEfforts(
+      return comConfiguracoes(
         banco,
         encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "confira o nome do projeto"),
       );

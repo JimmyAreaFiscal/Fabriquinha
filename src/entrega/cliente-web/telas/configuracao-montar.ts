@@ -1,6 +1,7 @@
 // Configuração (F7 §4.4) no DOM: lê a API, desenha com as funções puras de configuracao.ts, lê os formulários e
 // mostra os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
-import type { Effort, Modelo } from "../../../nucleo/primitivos.ts";
+import type { Modelo } from "../../../nucleo/configuracao_agente.ts";
+import type { Effort } from "../../../nucleo/primitivos.ts";
 import type { UsuarioSimulado } from "../../../armazenamento/simulacao.ts";
 import type { Parametros } from "../caminhos.ts";
 import { api, avisar, ErroDaApi, mostrarErro } from "../dom.ts";
@@ -55,13 +56,13 @@ const lerAgendador = (form: HTMLFormElement) => ({
  * modelo e o effort de cada etapa; a etapa em "padrão do pi" fica de fora.
  */
 function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): Rascunho {
-  const modelos: Rascunho["modelos"] = {};
-  const efforts: Rascunho["efforts"] = {};
+  const configuracoes: Rascunho["configuracoes"] = {};
   for (const [etapa] of ETAPAS) {
-    const modelo = modeloDoSeletor(valor(form, `[name="modelos.${etapa}"]`));
-    if (modelo) modelos[etapa] = modelo;
-    const effort = valor(form, `[name="efforts.${etapa}"]`);
-    if (effort) efforts[etapa] = effort as Effort;
+    const modelo = modeloDoSeletor(valor(form, `[name="configuracoes.${etapa}.modelo"]`));
+    const effort = valor(form, `[name="configuracoes.${etapa}.effort"]`);
+    if (modelo || effort) {
+      configuracoes[etapa] = { ...(modelo && { modelo }), ...(effort && { effort: effort as Effort }) };
+    }
   }
   return {
     nome: valor(form, '[name="nome"]'),
@@ -70,8 +71,7 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
     linkProduto: valor(form, '[name="linkProduto"]'),
-    modelos,
-    efforts,
+    configuracoes,
   };
 }
 

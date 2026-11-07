@@ -1,17 +1,16 @@
 // Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4).
 import { z } from "zod";
 import { TipoAtor } from "./ator.ts";
+import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import {
-  Effort,
   EtapaTicket,
   FaseDemanda,
   FaseRodada,
   Id,
   Instante,
   Markdown,
-  Modelo,
   Motivo,
   Slug,
   StatusTicket,
@@ -28,9 +27,7 @@ export const TicketDemanda = z.object({
   rodada_id: Id.optional(),
   titulo: Titulo.optional(),
   descricao: Markdown.optional(),
-  modelo_provedor: Modelo.shape.provedor.optional(),
-  modelo_nome: Modelo.shape.modelo.optional(),
-  effort: Effort.optional(),
+  configuracao_agente: ConfiguracaoAgente.optional(),
   // Instrução do Auditor ao reabrir um ticket falho; a sessão que o retomar a lê (§4.2).
   instrucao: Markdown.optional(),
   // Reprovações técnicas devolvidas ao agente (D05, no máximo 2) e o porquê de o ticket ter falhado.
@@ -177,8 +174,6 @@ export const AgregadoDemanda = z
       if (rodadaDe.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
       if (t.rodada_id !== undefined && !rodadas.has(t.rodada_id))
         erro(`o ticket ${String(t.ticket_id)} cita a rodada ${String(t.rodada_id)}, que não existe`);
-      if ((t.modelo_provedor === undefined) !== (t.modelo_nome === undefined))
-        erro(`o ticket ${String(t.ticket_id)} precisa de modelo_provedor e modelo_nome juntos`);
       if (t.motivo_falha !== undefined && t.status !== "falhou" && t.status !== "fechado")
         erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou ou fechado`);
       rodadaDe.set(t.ticket_id, t.rodada_id);

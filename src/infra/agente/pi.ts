@@ -6,8 +6,9 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoExecucao } from "../../nucleo/sessoes.ts";
-import type { Effort, Modelo } from "../../nucleo/primitivos.ts";
+import type { Effort } from "../../nucleo/primitivos.ts";
 import { ambienteSemCredenciais, executar, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../registro.ts";
 
@@ -31,7 +32,7 @@ export const binarioPi = (): string => process.env.FABRIQUINHA_PI || "pi";
  */
 export async function perguntarAoPiSemFerramentas(
   prompt: string,
-  modelo: { provedor: string; nome: string } | undefined,
+  modelo: Modelo | undefined,
   limiteMs: number,
   rodar: typeof executar = executar,
 ): Promise<string | undefined> {
@@ -96,7 +97,7 @@ export const argumentosPi = (l: Lancamento): string[] => [
   join(l.raiz, "sessoes"),
   "--session-id",
   l.sessaoPi,
-  ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.modelo] : []),
+  ...(l.modelo ? ["--provider", l.modelo.provedor, "--model", l.modelo.nome] : []),
   ...(l.effort ? ["--thinking", l.effort] : []),
   ...l.skills.flatMap((skill) => ["--skill", join(PACOTE, "skills", skill)]),
   "-e",
@@ -124,7 +125,7 @@ export const argumentosDaAuditoria = (
   join(raiz, "sessoes"),
   "--session-id",
   sessao,
-  ...(modelo ? ["--provider", modelo.provedor, "--model", modelo.modelo] : []),
+  ...(modelo ? ["--provider", modelo.provedor, "--model", modelo.nome] : []),
   "-e",
   join(PACOTE, "extensions", "guarda.ts"),
   ...extensoes.flatMap((extensao) => ["-e", join(PACOTE, "extensions", extensao)]),

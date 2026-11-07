@@ -2,10 +2,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import type { Projeto } from "../nucleo/configuracao_projeto.ts";
 import { catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import type { EtapaTicket } from "../nucleo/primitivos.ts";
-import { resolverModeloEffort } from "../nucleo/resolucao_ticket.ts";
 import { argumentosPi, PACOTE, skillDoTipo, type Lancamento } from "../infra/agente/pi.ts";
 
 const existe = (skill: string, pacote: string): boolean => existsSync(join(pacote, "skills", skill));
@@ -28,14 +28,10 @@ export function argumentosPiDemanda({
   ticket: TicketDemanda;
   etapasDoProjeto: Projeto["etapas"];
 }): string[] {
-  const { modelo, effort } = resolverModeloEffort(
-    ticket,
-    etapasDoProjeto.find((e) => e.etapa === ticket.etapa),
-  );
-  return argumentosPi({
-    ...resto,
-    skills: skillsDaEtapaDemanda(ticket.etapa),
-    modelo: modelo.valor && { provedor: modelo.valor.provedor, modelo: modelo.valor.nome },
-    effort: effort.valor,
+  const { modelo, effort } = resolverConfiguracaoAgente({
+    ticket: ticket.configuracao_agente,
+    etapaDoProjeto: etapasDoProjeto.find((e) => e.etapa === ticket.etapa)?.configuracao_agente,
+    padrao: {},
   });
+  return argumentosPi({ ...resto, skills: skillsDaEtapaDemanda(ticket.etapa), modelo, effort });
 }

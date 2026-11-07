@@ -12,8 +12,8 @@ const FABRIQUINHA: Projeto = {
   hospedagem: "github",
   cursor_commit_humano: "abc123",
   etapas: [
-    { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude", effort: "high" },
-    { etapa: "revisar_demanda", effort: "low" },
+    { etapa: "planejar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude" }, effort: "high" } },
+    { etapa: "revisar_demanda", configuracao_agente: { effort: "low" } },
   ],
   preparacao: [{ ordem: 1, comando: "npm ci" }],
   fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura <mínima>." }],

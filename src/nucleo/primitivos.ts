@@ -30,10 +30,6 @@ export const motivo = (texto: string): string => Motivo.catch("falha sem mensage
 export const Slug = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "use letras minúsculas, números e hífen, começando por letra ou número (até 64)");
-export const Modelo = z.object({
-  provedor: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/),
-  modelo: z.string().trim().min(1).max(200),
-});
 
 // Os níveis de `pi --thinking`.
 export const Effort = z.enum(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -76,7 +72,6 @@ export const TipoId = z.enum(["issue"]);
 
 export type Id = z.infer<typeof Id>;
 export type Instante = z.infer<typeof Instante>;
-export type Modelo = z.infer<typeof Modelo>;
 export type Effort = z.infer<typeof Effort>;
 export type TipoId = z.infer<typeof TipoId>;
 export type FaseDemanda = z.infer<typeof FaseDemanda>;

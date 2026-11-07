@@ -12,7 +12,10 @@ import { argumentosPiDemanda, skillsDaEtapaDemanda } from "./pi_demanda.ts";
 const base = { raiz: "/r", sessaoPi: "s", confianca: undefined, modo: "autonomo" as const };
 const ticket = (campos: Partial<TicketDemanda> = {}) =>
   ({ etapa: "implementar", ...campos }) as unknown as TicketDemanda;
-const daEtapa = { etapa: "implementar" as const, modelo_provedor: "p2", modelo_nome: "m2", effort: "low" as const };
+const daEtapa = {
+  etapa: "implementar" as const,
+  configuracao_agente: { modelo: { provedor: "p2", nome: "m2" }, effort: "low" as const },
+};
 const flags = (args: string[], flag: string) => args.flatMap((a, i) => (args[i - 1] === flag ? [a] : []));
 
 test("revisar_rodada traz só as duas skills do catálogo (CA-3)", () => {
@@ -24,7 +27,7 @@ test("revisar_rodada traz só as duas skills do catálogo (CA-3)", () => {
 });
 
 test("modelo e effort: ticket, senão etapa do projeto, senão nenhum flag (CA-4 a CA-6)", () => {
-  const doTicket = ticket({ modelo_provedor: "p1", modelo_nome: "m1", effort: "high" });
+  const doTicket = ticket({ configuracao_agente: { modelo: { provedor: "p1", nome: "m1" }, effort: "high" } });
   const a = argumentosPiDemanda({ ...base, ticket: doTicket, etapasDoProjeto: [daEtapa] });
   assert.deepEqual([flags(a, "--provider"), flags(a, "--model"), flags(a, "--thinking")], [["p1"], ["m1"], ["high"]]);
   const b = argumentosPiDemanda({ ...base, ticket: ticket(), etapasDoProjeto: [daEtapa] });

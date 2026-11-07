@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ConfiguracaoEtapaProjeto, Projeto } from "../nucleo/configuracao_projeto.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever } from "./banco.ts";
+import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 type Linha = Record<string, unknown>;
 
@@ -18,6 +19,9 @@ const SELECIONAR_PREPARACAO = "SELECT ordem, comando FROM comando_preparacao_pro
 
 const SELECIONAR_ETAPAS =
   "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa";
+
+const etapasGravadas = (banco: DatabaseSync, nome: string): Linha[] =>
+  listar(banco, SELECIONAR_ETAPAS, nome).map(linhaComConfiguracaoAgente);
 
 /** Lê o projeto sem abrir transação; quem chama garante o snapshot. Sem linguagens, não há configuração nova. */
 function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
@@ -35,7 +39,7 @@ function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
   if (!base || linguagens.length === 0) return undefined;
   return Projeto.parse({
     ...semNulos(base),
-    etapas: listar(banco, SELECIONAR_ETAPAS, nome).map(semNulos),
+    etapas: etapasGravadas(banco, nome),
     preparacao: listar(banco, SELECIONAR_PREPARACAO, nome),
     fitness: listar(
       banco,
@@ -112,14 +116,18 @@ export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown)
 
 /** O modelo e o effort de cada etapa do projeto, mesmo sem a configuração SDLC (sem linguagens) gravada. */
 export const etapasDoProjeto = (banco: DatabaseSync, nome: string): Projeto["etapas"] =>
-  z.array(ConfiguracaoEtapaProjeto).parse(listar(banco, SELECIONAR_ETAPAS, nome).map(semNulos));
+  z.array(ConfiguracaoEtapaProjeto).parse(etapasGravadas(banco, nome));
 
 /** Valida e substitui só as etapas do projeto, numa transação; o resto da configuração SDLC fica como está. */
 export function substituirEtapasDoProjeto(banco: DatabaseSync, nome: string, etapas: unknown): void {
   const validas = z.array(ConfiguracaoEtapaProjeto).parse(etapas);
   escrever(banco, () => {
     banco.prepare("DELETE FROM configuracao_etapa_projeto WHERE projeto = ?").run(nome);
-    inserir(banco, "configuracao_etapa_projeto", nome, ["etapa", "modelo_provedor", "modelo_nome", "effort"], validas);
+    const linhas = validas.map(({ etapa, configuracao_agente }) => ({
+      etapa,
+      ...colunasDaConfiguracaoAgente(configuracao_agente),
+    }));
+    inserir(banco, "configuracao_etapa_projeto", nome, ["etapa", "modelo_provedor", "modelo_nome", "effort"], linhas);
   });
 }
 

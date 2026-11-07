@@ -6,10 +6,10 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import type { Projeto } from "../nucleo/configuracao_projeto.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, existe, mensagem } from "../nucleo/erros.ts";
-import { resolverModeloEffort } from "../nucleo/resolucao_ticket.ts";
 import {
   criarSessao,
   encerrarExecucao,
@@ -216,9 +216,7 @@ async function conduzir(c: Conducao): Promise<void> {
       limiteMin: opcoes.limiteMin,
       triarPergunta: (pergunta) =>
         triarPergunta(
-          execucao.modelo_provedor && execucao.modelo_nome
-            ? { provedor: execucao.modelo_provedor, nome: execucao.modelo_nome }
-            : undefined,
+          execucao.configuracao_agente?.modelo,
           { ticket: formatarTicketRef(c.ref), etapa: c.ticket.etapa, demanda: c.ag.demanda.titulo },
           pergunta,
         ),
@@ -280,17 +278,17 @@ export function iniciarExecucaoDemanda(
     `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
     "configure o projeto",
   );
-  const { modelo, effort } = resolverModeloEffort(
-    ticket,
-    projeto.etapas.find((e) => e.etapa === ticket.etapa),
-  );
+  const configuracaoAgente = resolverConfiguracaoAgente({
+    ticket: ticket.configuracao_agente,
+    etapaDoProjeto: projeto.etapas.find((e) => e.etapa === ticket.etapa)?.configuracao_agente,
+    padrao: {},
+  });
   const abrir = (sessao_id: string): ExecucaoSessao => ({
     id: randomUUID(),
     sessao_id,
     inicio: new Date().toISOString(),
     falha: false,
-    ...(modelo.valor && { modelo_provedor: modelo.valor.provedor, modelo_nome: modelo.valor.nome }),
-    ...(effort.valor && { effort: effort.valor }),
+    configuracao_agente: configuracaoAgente,
   });
   let sessao!: Sessao;
   let execucao!: ExecucaoSessao;

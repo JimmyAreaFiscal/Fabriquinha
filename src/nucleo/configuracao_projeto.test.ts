@@ -49,14 +49,15 @@ test("CA-3 e CA-4: preparação preserva a ordem informada e recusa repetição"
 });
 
 test("CA-5 e CA-6: modelo em par e effort do enum", () => {
-  const ok = (c: object) => ConfiguracaoEtapaProjeto.safeParse({ etapa: "implementar", ...c }).success;
+  const ok = (configuracao_agente: object) =>
+    ConfiguracaoEtapaProjeto.safeParse({ etapa: "implementar", configuracao_agente }).success;
   assert.ok(ok({}));
-  assert.ok(ok({ modelo_provedor: "qualquer", modelo_nome: "desconhecido" }));
+  assert.ok(ok({ modelo: { provedor: "qualquer", nome: "desconhecido" } }));
   assert.ok(ok({ effort: "max" }));
-  assert.ok(!ok({ modelo_provedor: "openai" }));
-  assert.ok(!ok({ modelo_nome: "gpt" }));
+  assert.ok(!ok({ modelo: { provedor: "openai" } }));
+  assert.ok(!ok({ modelo: { nome: "gpt" } }));
   assert.ok(!ok({ effort: "altissimo" }));
-  assert.ok(aceita({ etapas: [{ etapa: "implementar", effort: "low" }] }));
+  assert.ok(aceita({ etapas: [{ etapa: "implementar", configuracao_agente: { effort: "low" } }] }));
 });
 
 test("CA-7: exige ao menos uma fitness function", () => {

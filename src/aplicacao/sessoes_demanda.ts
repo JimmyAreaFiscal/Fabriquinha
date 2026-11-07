@@ -9,7 +9,8 @@ import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.
 import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
-import type { EtapaTicket, Instante, Modelo } from "../nucleo/primitivos.ts";
+import type { Modelo } from "../nucleo/configuracao_agente.ts";
+import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import type { ExecucaoSessao, Sessao } from "../nucleo/sessoes.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { arquivoDaSessao } from "../infra/registro.ts";
@@ -248,7 +249,7 @@ function montarCabecalho(c: Carregada): CabecalhoDemanda {
       projeto: ag.demanda.projeto,
       modo: sessao.modo,
       execucao: ultima.id,
-      ...(ultima.modelo_nome && { modelo: { provedor: String(ultima.modelo_provedor), modelo: ultima.modelo_nome } }),
+      ...(ultima.configuracao_agente?.modelo && { modelo: ultima.configuracao_agente.modelo }),
       estado,
       ...(motivo && { motivo }),
       desde,

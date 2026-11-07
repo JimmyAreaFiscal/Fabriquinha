@@ -3,11 +3,12 @@
 import { z } from "zod";
 import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
 import { type Ator, exigirAuditor, exigirFabriquinha } from "./ator.ts";
+import { Modelo } from "./configuracao_agente.ts";
 import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { AutorDemanda, exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
-import { type FaseDemanda, Id, type Instante, Markdown, Modelo, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { type FaseDemanda, Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;
@@ -328,7 +329,7 @@ export function confirmarAprovacaoPlanejamento(
     demanda: { ...ag.demanda, fase: "execucao", fase_alterada_em: ctx.agora },
     tickets: [
       ...ag.tickets.map((t) => (t === planejamento ? { ...t, status: "concluido", status_alterado_em: ctx.agora } : t)),
-      ...planos.map(({ ticket_id, rodada_id, titulo, descricao, modelo_provedor, modelo_nome, effort }) => ({
+      ...planos.map(({ ticket_id, rodada_id, titulo, descricao, configuracao_agente }) => ({
         demanda_id,
         ticket_id: id(ticket_id),
         rodada_id,
@@ -337,9 +338,7 @@ export function confirmarAprovacaoPlanejamento(
         etapa: "implementar",
         status: "aberto",
         status_alterado_em: ctx.agora,
-        modelo_provedor,
-        modelo_nome,
-        effort,
+        configuracao_agente,
       })),
     ],
     decisoes: [
@@ -522,7 +521,7 @@ export function retomarTicketFalhoPorInfraestrutura(
     status: "aberto" as const,
     retomadas_automaticas: retomadas + (conta ? 1 : 0),
     status_alterado_em: ctx.agora,
-    ...(modelo && { modelo_provedor: modelo.provedor, modelo_nome: modelo.modelo }),
+    ...(modelo && { configuracao_agente: { ...ticket.configuracao_agente, modelo } }),
   };
   return { ...ag, tickets: ag.tickets.map((t) => (t === ticket ? alvo : t)) };
 }

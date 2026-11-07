@@ -47,7 +47,9 @@ const valida = () => ({
   chave_sonarqube: "chave",
   raiz_git: "/repo/loja",
   hospedagem: "github",
-  etapas: [{ etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude", effort: "high" }],
+  etapas: [
+    { etapa: "planejar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude" }, effort: "high" } },
+  ],
   preparacao: [{ ordem: 1, comando: "npm ci" }],
   fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura." }],
   linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
@@ -96,19 +98,19 @@ test("404 quando o projeto não existe, na leitura e na gravação", async () =>
 
 test("422 com a orientação no campo, sem gravar", async () => {
   await recusa(
-    { ...valida(), etapas: [{ etapa: "planejar", effort: "ultra" }] },
-    "etapas[0].effort",
+    { ...valida(), etapas: [{ etapa: "planejar", configuracao_agente: { effort: "ultra" } }] },
+    "etapas[0].configuracao_agente.effort",
     "use um valor do domínio: off, minimal",
   );
   await recusa({ ...valida(), hospedagem: "svn" }, "hospedagem", "preencha este campo");
   await recusa(
-    { ...valida(), etapas: [{ etapa: "planejar", modelo_provedor: "anthropic" }] },
-    "etapas[0].modelo_nome",
+    { ...valida(), etapas: [{ etapa: "planejar", configuracao_agente: { modelo: { provedor: "anthropic" } } }] },
+    "etapas[0].configuracao_agente.modelo.nome",
     "informe provedor e nome do modelo juntos ou nenhum",
   );
   await recusa(
-    { ...valida(), etapas: [{ etapa: "planejar", modelo_provedor: "a", modelo_nome: "" }] },
-    "etapas[0].modelo_nome",
+    { ...valida(), etapas: [{ etapa: "planejar", configuracao_agente: { modelo: { provedor: "a", nome: "" } } }] },
+    "etapas[0].configuracao_agente.modelo.nome",
     "preencha este campo",
   );
   await recusa(
