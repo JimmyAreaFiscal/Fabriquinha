@@ -8,10 +8,9 @@ import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { guardarBytes } from "../../src/armazenamento/arquivos.ts";
 import { criarAvaliacao } from "../../src/armazenamento/avaliacoes.ts";
 import { abrir } from "../../src/armazenamento/banco.ts";
-import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_projeto.ts";
 import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../src/armazenamento/evidencia_demanda.ts";
-import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
@@ -53,21 +52,14 @@ async function semearProjeto(raiz: string, banco: ReturnType<typeof abrir>): Pro
   await git(repo, "push", "-q", "origin", "main");
   registrarProjeto(banco, {
     nome: "loja",
-    repo,
-    branchBase: "main",
-    hospedagem: "github",
-    preparacao: [],
-    sonar: { projectKey: "loja" },
-  });
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
     raiz_git: repo,
+    branch_base: "main",
     hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    chave_sonarqube: "loja",
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
 }
 

@@ -94,6 +94,26 @@ test("execucao_testes e matriz_fitness: comandos rodados pelos coletores, com o 
   }
 });
 
+test("relatorio_sonar usa chave_sonarqube e publica o novo campo", () => {
+  const relatorio = {
+    chave_sonarqube: "fabriquinha",
+    ceTaskId: "analise",
+    arquivosAnalisados: ["src/busca.ts"],
+    issues: [
+      { arquivo: "src/busca.ts", linha: 1, regra: "regra", severidade: "alta", mensagem: "corrigir" },
+      { arquivo: "src/busca.ts", regra: "regra", severidade: "baixa", mensagem: "rever" },
+    ],
+  };
+  assert.deepEqual(schemaDe("relatorio_sonar").dados.parse(relatorio), relatorio);
+  assert.deepEqual(recusados("relatorio_sonar", { ...relatorio, chave_sonarqube: undefined }), ["chave_sonarqube"]);
+  assert.deepEqual(jsonSchemaDe("relatorio_sonar").dados.required, [
+    "chave_sonarqube",
+    "ceTaskId",
+    "arquivosAnalisados",
+    "issues",
+  ]);
+});
+
 const HTML_UNICO = { classes: ["html"], min: 1, max: 1 };
 const PREVISTO = { caminho: "src/**/*.ts", acao: "alterar", motivo: "troca a consulta" };
 const SOLUCAO = { resumo: "cache na busca", arquivosPrevistos: [PREVISTO] };
@@ -312,9 +332,39 @@ test("explicacao_fitness: uma explicação de até 1.000 caracteres por fitness 
   assert.deepEqual(schemaDe("explicacao_fitness").arquivos.max, 0);
 });
 
+test("explicacao_fitness: regras cruzadas exigem exatamente os nomes da matriz do ticket", () => {
+  const schema = schemaDe("explicacao_fitness");
+  const agregado = {
+    evidencias: [
+      { ticket_id: 1, tipo: "matriz_fitness", dados: { linhas: [{ nome: "outra" }] } },
+      { ticket_id: 2, tipo: "matriz_fitness", dados: { linhas: [{ nome: "complexidade" }] } },
+    ],
+  } as unknown as AgregadoDemanda;
+  const cruzarExplicacoes = (nome: string) => () =>
+    schema.cruzar?.(schema.dados.parse({ explicacoes: [{ nome, explicacao: "verificada" }] }), {
+      ag: agregado,
+      ticket: 2,
+      anexos: [],
+    });
+  cruzarExplicacoes("complexidade")();
+  assert.throws(
+    cruzarExplicacoes("outra"),
+    new ErroDeRegra(
+      "explicacao_fitness explica [outra], e a matriz_fitness de T-2 tem as linhas [complexidade]",
+      "submeta exatamente uma explicação por linha da matriz",
+    ),
+  );
+});
+
 test("comprovacao_criterios: cada critério atendido ou não, como foi verificado e os anexos citados; vídeo ou print", () => {
   const criterio = { id: "CA-1", atendido: true, comoVerificado: "busquei mil itens", arquivos: ["busca.webm"] };
   assert.deepEqual(recusados("comprovacao_criterios", { criterios: [criterio] }), []);
+  const schema = schemaDe("comprovacao_criterios");
+  assert.equal(schema.aprovada?.(schema.dados.parse({ criterios: [criterio] })), true);
+  assert.equal(
+    schema.aprovada(schema.dados.parse({ criterios: [criterio, { ...criterio, id: "CA-2", atendido: false }] })),
+    false,
+  );
   assert.deepEqual(
     recusados("comprovacao_criterios", {
       criterios: [{ id: "1", atendido: "sim", comoVerificado: "", arquivos: [] }],

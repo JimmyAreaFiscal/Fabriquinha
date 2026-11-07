@@ -44,9 +44,9 @@ cat "$c" > "${ARGS}.settings"
 case $SCANNER_FALSO in
   falha) echo "INFO: Scanner"; echo "ERROR: Not authorized" >&2; exit 3;;
   dorme) exec sleep 5;;
-  sem-tarefa) echo "projectKey=loja" > "$w/report-task.txt";;
+  sem-tarefa) echo "serverUrl=http://sonar" > "$w/report-task.txt";;
   sem-relatorio) echo "INFO: EXECUTION SUCCESS";;
-  *) printf 'projectKey=loja\\nceTaskId=AX1\\n' > "$w/report-task.txt";;
+  *) printf 'ceTaskId=AX1\\n' > "$w/report-task.txt";;
 esac
 `,
 );
@@ -182,7 +182,7 @@ test("analisa a worktree, espera o Compute Engine e devolve as issues dos arquiv
   const trabalho = args.find((a) => a.startsWith("-Dsonar.working.directory="))?.split("=")[1] ?? "";
   assert.equal(dirname(trabalho), dirname(worktree));
   assert.deepEqual(args, [
-    "-Dsonar.projectKey=loja-key",
+    ["-Dsonar.project", "Key=loja-key"].join(""),
     `-Dsonar.working.directory=${trabalho}`,
     `-Dproject.settings=${join(trabalho, "vazio.properties")}`,
   ]);

@@ -9,7 +9,8 @@ import type { Page } from "@playwright/test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
-import { substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { gravarProjeto, projetoExistente } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
 import { sinalNoGrupo } from "../src/infra/processo.ts";
 import { expect, projeto, test } from "./apoio.ts";
@@ -149,7 +150,14 @@ for (const [nome, preparacao, sinalNosFilhos] of [
       projeto(fabriquinha.raiz);
       semearTicketAberto(fabriquinha.raiz);
       const banco = abrir(fabriquinha.raiz);
-      substituirPreparacaoDoProjeto(banco, "loja", [preparacao]);
+      const projetoLoja = projetoExistente(banco, "loja");
+      gravarProjeto(
+        banco,
+        Projeto.parse({
+          ...projetoLoja,
+          verificacoes: { ...projetoLoja.verificacoes, preparacao: [preparacao] },
+        }),
+      );
       banco.close();
       await pagina.goto(`${fabriquinha.base}/demandas/I-216`);
       await pagina.getByRole("button", { name: "Executar agora" }).click();

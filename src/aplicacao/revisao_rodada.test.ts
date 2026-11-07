@@ -8,7 +8,7 @@ import { ErroDeRegra } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
-import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto, gravarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -73,13 +73,16 @@ test("CA-3: arquivo modificado aparece como M", async () => {
 
 test("CA-4: uma linha por fitness, com a saída 0 e 1 e o log como anexo; regravar substitui", async () => {
   const { banco } = await cenarioRevisao();
-  const projeto = configuracaoProjeto(banco, "loja");
-  gravarConfiguracaoProjeto(banco, {
+  const projeto = carregarProjeto(banco, "loja");
+  gravarProjeto(banco, {
     ...projeto,
-    fitness: [
-      { nome: "boa", comando: "echo ok", descricao: "d" },
-      { nome: "ruim", comando: "echo falhou; exit 1", descricao: "d" },
-    ],
+    verificacoes: {
+      ...projeto.verificacoes,
+      fitness: [
+        { nome: "boa", comando: "echo ok", descricao: "d" },
+        { nome: "ruim", comando: "echo falhou; exit 1", descricao: "d" },
+      ],
+    },
   });
   await prepararRevisaoRodada(banco, REF_RODADA);
   await prepararRevisaoRodada(banco, REF_RODADA);

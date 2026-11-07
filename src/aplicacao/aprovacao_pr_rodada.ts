@@ -8,7 +8,7 @@ import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { confirmarAprovacaoPullRequest, validarAprovacaoPullRequest } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { integrarPR } from "../infra/repositorio/pr.ts";
 import { caminhoDaWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
@@ -55,14 +55,10 @@ export async function aprovarPRRodada(
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const { branch } = ag.demanda;
-  await integrarPR({ repo: projeto.raiz_git, hospedagem: projeto.hospedagem }, pr.dados.id as string);
+  await integrarPR(projeto, pr.dados.id as string);
   // A ref local da demanda só avança em fast-forward: o merge da hospedagem é o único commit novo dela.
   const demanda = caminhoDaWorktreeDemanda(raiz, projeto.nome, ag.demanda.id);
   await naFilaDoProjeto(raiz, projeto.nome, async () => {

@@ -14,7 +14,7 @@ const em = (mes: string) => new Date(`${mes}-01T12:00:00`).toISOString();
 function semear(raiz: string): void {
   const banco = abrir(raiz);
   const projeto = (nome: string) =>
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
   const demanda = (id: string, nome: string, titulo: string, tipo: string, mes: string) =>
     `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'em_execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
@@ -123,7 +123,7 @@ function semearNumerosGrandes(raiz: string): void {
   const sha = (letra: string) => letra.repeat(40);
   const execucoes = Array.from({ length: 1_200 }, (_, i) => `('x${String(i)}', 's1', '${em(M0)}', '${em(M0)}', 0)`);
   banco.exec(`
-    INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
     INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES

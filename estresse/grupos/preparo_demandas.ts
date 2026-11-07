@@ -10,11 +10,10 @@ import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
 import { criarAvaliacao } from "../../src/armazenamento/avaliacoes.ts";
 import { abrir } from "../../src/armazenamento/banco.ts";
-import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_projeto.ts";
 import { comDemanda } from "../../src/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { importarAchados } from "../../src/armazenamento/avaliacoes.ts";
-import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { criarTarefa, criarUsuarioSimulado } from "../../src/armazenamento/simulacao.ts";
 import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/infra/repositorio/worktree-demanda.ts";
@@ -110,7 +109,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
   };
 
   /** Um repositório git de verdade com o remoto num bare local e a `main` publicada. */
-  async function repositorio(pasta: string): Promise<{ repo: string; bare: string }> {
+  async function repositorio(pasta: string) {
     const dir = join(amb.raiz, `${pasta}-${String(proximo())}`);
     mkdirSync(dir);
     const bare = join(dir, "origin.git");
@@ -128,25 +127,18 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
   async function cadastrar(nome: string) {
     const { repo } = await repositorio(nome);
-    registrarProjeto(banco, {
-      nome,
-      repo,
-      branchBase: "main",
-      hospedagem: "github",
-      preparacao: [],
-      sonar: { projectKey: nome },
-    });
-    gravarConfiguracaoProjeto(banco, {
+    return registrarProjeto(banco, {
       nome,
       branch_base: "main",
       chave_sonarqube: nome,
       raiz_git: repo,
       hospedagem: "github",
       etapas: [],
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      verificacoes: {
+        fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+        linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      },
     });
-    return { nome, repo, branchBase: "main", preparacao: [] };
   }
 
   const principal = await cadastrar("estresse");
@@ -281,7 +273,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
       // O commit da rodada vai ao origin junto com a branch da demanda: o merge do PR é entre as duas.
       await git(dir, "commit", "-q", "--allow-empty", "-m", "rodada 1");
       const head = (await git(dir, "rev-parse", "HEAD")).trim();
-      await git(principal.repo, "push", "-q", "origin", `fabriquinha/${id}`, `fabriquinha/${id}-1`);
+      await git(principal.raiz_git, "push", "-q", "origin", `fabriquinha/${id}`, `fabriquinha/${id}-1`);
       const pr = abrirPR(`fabriquinha/${id}-1`, `fabriquinha/${id}`);
       const url = `https://github.com/org/loja/pull/${String(pr)}`;
       criar(

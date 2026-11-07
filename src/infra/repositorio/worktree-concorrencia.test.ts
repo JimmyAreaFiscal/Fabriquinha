@@ -152,7 +152,10 @@ function preparacaoComBarreira(c: Cenario) {
   const libera = join(c.dir, "libera.fifo");
   execFileSync("mkfifo", [inicio, libera]);
   return {
-    projeto: { ...c.projeto, preparacao: [`echo ok > ${inicio}; read _ < ${libera}`] },
+    projeto: {
+      ...c.projeto,
+      verificacoes: { ...c.projeto.verificacoes, preparacao: [`echo ok > ${inicio}; read _ < ${libera}`] },
+    },
     comecou: () => readFile(inicio, "utf8"),
     liberar: () => writeFile(libera, "x\n"),
   };

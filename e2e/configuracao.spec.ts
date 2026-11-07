@@ -78,12 +78,11 @@ test("cadastra um projeto com um campo inválido, corrige, salva e liga o agenda
   const banco = abrir(fabriquinha.raiz);
   expect({ ...banco.prepare("SELECT * FROM projeto WHERE nome = 'loja'").get() }).toEqual({
     nome: "loja",
-    repo: expect.any(String),
+    raiz_git: expect.any(String),
     branch_base: "main",
     hospedagem: "github",
-    sonar_project_key: "loja",
+    chave_sonarqube: "loja",
     link_produto: null,
-    cursor_commit_humano: null,
   });
   // A preparação vai para a tabela que o fluxo da demanda lê ao criar a worktree.
   expect({ ...banco.prepare("SELECT * FROM comando_preparacao_projeto").get() }).toEqual({

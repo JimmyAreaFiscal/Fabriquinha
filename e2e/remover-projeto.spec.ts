@@ -8,7 +8,7 @@ const AGORA = new Date(2026, 9, 15, 12, 0);
 const em = new Date(2026, 9, 1, 12, 0).toISOString();
 
 const projeto = (nome: string) =>
-  `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
 
 /** Uma demanda do projeto com uma execução de `custo` dólares, que a página Métricas lê; `andamento`, ainda aberta. */

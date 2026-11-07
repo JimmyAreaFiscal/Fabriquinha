@@ -2,12 +2,12 @@
 // rede, Salvar com os erros do 422 ao lado dos campos. Os testes de ponta a ponta (e2e/) o exercitam no navegador.
 import type { Parametros } from "../caminhos.ts";
 import { api, ErroDaApi, mostrarErro } from "../dom.ts";
-import { errosDoZod } from "./configuracao.ts";
 import {
   adicionar,
   CAMPOS_DO_PROJETO,
   doProjeto,
   type Estado,
+  errosDoServidor,
   estadoInicial,
   formulario,
   GRUPOS,
@@ -46,11 +46,11 @@ function ler(form: HTMLFormElement): Estado {
 
 export async function montarSdlc(main: HTMLElement, params: Parametros, signal: AbortSignal): Promise<void> {
   const nome = params.projeto ?? "";
-  const { configurada, configuracao } = await api<Resposta>(
+  const { configurada, configuracao, cursor_commit_humano } = await api<Resposta>(
     `/api/projetos/${encodeURIComponent(nome)}/configuracao-sdlc`,
     { signal },
   );
-  const rascunho = doProjeto(configuracao);
+  const rascunho = doProjeto(configuracao, cursor_commit_humano);
 
   const desenhar = (
     estado: Estado,
@@ -89,7 +89,7 @@ export async function montarSdlc(main: HTMLElement, params: Parametros, signal: 
         })
         .catch((error_: unknown) => {
           if (signal.aborted) return;
-          if (error_ instanceof ErroDaApi && error_.status === 422) desenhar(lido, errosDoZod(error_.message));
+          if (error_ instanceof ErroDaApi && error_.status === 422) desenhar(lido, errosDoServidor(error_.message));
           else if (error_ instanceof ErroDaApi && error_.status !== 401)
             desenhar(lido, undefined, { falha: error_.message });
           else {

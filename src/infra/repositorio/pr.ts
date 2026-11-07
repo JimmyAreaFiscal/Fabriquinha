@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
 import { ErroDeRegra, ErroExterno, mensagem } from "../../nucleo/erros.ts";
-import type { Hospedagem, Projeto } from "../../nucleo/projeto.ts";
+import type { Projeto } from "../../nucleo/projeto.ts";
 import { anotar } from "../registro.ts";
 import { executar, LIMITE_COMANDO_MS } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
@@ -358,7 +358,7 @@ const PoliticasAz = z.array(
   }),
 );
 
-const CLIS: Readonly<Record<Hospedagem, CliDePR>> = { github, "azure-devops": azure };
+const CLIS: Readonly<Record<Projeto["hospedagem"], CliDePR>> = { github, "azure-devops": azure };
 
 /** A origem e o destino do PR; `publicarBase` empurra também a base, que pode nunca ter ido ao remoto (branch da demanda). */
 interface AlvoDoPR {
@@ -388,14 +388,14 @@ interface AlvoDoPR {
  */
 export async function publicarPRDe(
   raiz: string,
-  projeto: Pick<Projeto, "nome" | "repo" | "hospedagem">,
+  projeto: Pick<Projeto, "nome" | "raiz_git" | "hospedagem">,
   alvo: AlvoDoPR,
   pr: { titulo: string; corpo: string; conhecidos: readonly string[]; marca: string },
   conferirCommits: (head: string) => void | Promise<void>,
   varrerBase: () => Promise<void>,
   log: string,
 ): Promise<{ id: string; url: string; branch: string; head: string }> {
-  const { repo } = projeto;
+  const repo = projeto.raiz_git;
   const { branch, base } = alvo;
   const cli = CLIS[projeto.hospedagem];
 
@@ -435,8 +435,8 @@ export async function publicarPRDe(
 }
 
 /** O estado do PR `id`, lido agora na plataforma. */
-export async function lerPR(projeto: Pick<Projeto, "repo" | "hospedagem">, id: string): Promise<LeituraDoPR> {
-  const leitura = await CLIS[projeto.hospedagem].ler(projeto.repo, id);
+export async function lerPR(projeto: Pick<Projeto, "raiz_git" | "hospedagem">, id: string): Promise<LeituraDoPR> {
+  const leitura = await CLIS[projeto.hospedagem].ler(projeto.raiz_git, id);
   return { ...leitura, lidoEm: new Date().toISOString() };
 }
 
@@ -445,12 +445,12 @@ export async function lerPR(projeto: Pick<Projeto, "repo" | "hospedagem">, id: s
  * PR já mergeado não é integrado de novo: devolve o SHA dele. Falha da hospedagem, ou merge que a releitura não
  * confirma, lança ErroExterno.
  */
-export async function integrarPR(projeto: Pick<Projeto, "repo" | "hospedagem">, id: string): Promise<string> {
+export async function integrarPR(projeto: Pick<Projeto, "raiz_git" | "hospedagem">, id: string): Promise<string> {
   const cli = CLIS[projeto.hospedagem];
-  let leitura = await cli.ler(projeto.repo, id);
+  let leitura = await cli.ler(projeto.raiz_git, id);
   if (leitura.estado !== "mergeado") {
-    await cli.integrar(projeto.repo, id);
-    leitura = await cli.ler(projeto.repo, id);
+    await cli.integrar(projeto.raiz_git, id);
+    leitura = await cli.ler(projeto.raiz_git, id);
   }
   if (leitura.estado !== "mergeado" || !leitura.mergeSha) {
     throw new ErroExterno(
@@ -477,7 +477,7 @@ export interface OpcoesVerificacao {
  * para o `log`; passado o limite, lança ErroExterno com o que ainda espera.
  */
 export async function verificarPR(
-  projeto: Pick<Projeto, "repo" | "hospedagem">,
+  projeto: Pick<Projeto, "raiz_git" | "hospedagem">,
   id: string,
   log: string,
   // ponytail: leitura a cada 10 s (um `gh` barato) e 1 min de carência: a CI do GitHub registra o primeiro check em
@@ -487,7 +487,7 @@ export async function verificarPR(
   const cli = CLIS[projeto.hospedagem];
   const inicio = Date.now();
   for (;;) {
-    const { conflito, checks } = await cli.situacao(projeto.repo, id);
+    const { conflito, checks } = await cli.situacao(projeto.raiz_git, id);
     if (conflito === "sim") return { conflito: true, checksFalhos: [] };
     const andamento = checks.filter((c) => c.estado === "andamento").map((c) => c.nome);
     const decidido =

@@ -11,7 +11,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
 import { marcaDoPRRodada } from "./evidencias/pr_rodada.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
-import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
@@ -73,23 +73,19 @@ async function cenario({
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
-       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
-    )
-    .run(c.repo);
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      preparacao: ["true"],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
-  substituirPreparacaoDoProjeto(banco, "loja", ["true"]);
   const ticket = (ticket_id: number, etapa: string, status: string, extra: object = {}) => ({
     demanda_id: DEMANDA,
     ticket_id,

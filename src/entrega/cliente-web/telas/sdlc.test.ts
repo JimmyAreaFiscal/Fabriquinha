@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Projeto } from "../../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../../nucleo/projeto.ts";
 import { errosDoZod } from "./configuracao.ts";
-import { adicionar, doProjeto, estadoInicial, formulario, linhaEmBranco, paraProjeto, remover, vazio } from "./sdlc.ts";
+import {
+  adicionar,
+  doProjeto,
+  errosDoServidor,
+  estadoInicial,
+  formulario,
+  linhaEmBranco,
+  paraProjeto,
+  remover,
+  vazio,
+} from "./sdlc.ts";
 
 const FABRIQUINHA: Projeto = {
   nome: "fabriquinha",
@@ -10,30 +20,32 @@ const FABRIQUINHA: Projeto = {
   chave_sonarqube: "fab",
   raiz_git: "/code/fab",
   hospedagem: "github",
-  cursor_commit_humano: "abc123",
   etapas: [
     { etapa: "planejar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude" }, effort: "high" } },
     { etapa: "revisar_demanda", configuracao_agente: { effort: "low" } },
   ],
-  preparacao: [{ ordem: 1, comando: "npm ci" }],
-  fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura <mínima>." }],
-  linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
-  e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
-  globs: [{ caminho_linguagem: ".", glob: "e2e/**/*.spec.ts" }],
+  verificacoes: {
+    preparacao: ["npm ci"],
+    fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura <mínima>." }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
+    e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
+    globs: [{ caminho_linguagem: ".", glob: "e2e/**/*.spec.ts" }],
+  },
 };
 
 test("doProjeto e paraProjeto: a conversão de ida e volta devolve o contrato sem as etapas e a preparação, que são do cadastro", () => {
-  const estado = doProjeto(FABRIQUINHA);
+  const estado = doProjeto(FABRIQUINHA, "abc123");
+  assert.equal(estado.cursor, "abc123");
   assert.equal("etapas" in estado, false);
   assert.equal("preparacao" in estado, false);
   assert.deepEqual(estado.e2e[0]?.codigo_falha, "1");
-  const { etapas: _, preparacao: __, ...doCadastroDaSdlc } = FABRIQUINHA;
-  assert.deepEqual(paraProjeto(estado, "fabriquinha"), doCadastroDaSdlc);
+  const { etapas: _, verificacoes, ...doCadastroDaSdlc } = FABRIQUINHA;
+  const { preparacao: __, ...verificacoesDaSdlc } = verificacoes;
+  assert.deepEqual(paraProjeto(estado, "fabriquinha"), { ...doCadastroDaSdlc, verificacoes: verificacoesDaSdlc });
 });
 
-test("paraProjeto omite o cursor vazio e usa o nome do caminho", () => {
-  const { cursor_commit_humano: _, ...semCursor } = FABRIQUINHA;
-  const estado = { ...doProjeto(semCursor), cursor: "" };
+test("paraProjeto não manda o cursor, que é da varredura, e usa o nome do caminho", () => {
+  const estado = doProjeto(FABRIQUINHA, "abc123");
   const corpo = paraProjeto(estado, "outro");
   assert.equal(corpo.nome, "outro");
   assert.equal("cursor_commit_humano" in corpo, false);
@@ -42,13 +54,16 @@ test("paraProjeto omite o cursor vazio e usa o nome do caminho", () => {
 test("paraProjeto manda os números em branco como 0, para o servidor recusar", () => {
   const estado = doProjeto(FABRIQUINHA);
   estado.e2e[0] = { ...estado.e2e[0], codigo_falha: "" };
-  assert.equal(paraProjeto(estado, "fabriquinha").e2e[0]?.codigo_falha, 0);
+  assert.equal(paraProjeto(estado, "fabriquinha").verificacoes.e2e[0]?.codigo_falha, 0);
 });
 
 test("adicionar põe uma linha em branco no fim do grupo e remover tira a linha pelo índice", () => {
   const estado = doProjeto({
     ...FABRIQUINHA,
-    fitness: [...FABRIQUINHA.fitness, { nome: "b", comando: "c", descricao: "d" }],
+    verificacoes: {
+      ...FABRIQUINHA.verificacoes,
+      fitness: [...FABRIQUINHA.verificacoes.fitness, { nome: "b", comando: "c", descricao: "d" }],
+    },
   });
   const mais = adicionar(estado, "fitness");
   assert.equal(mais.fitness.length, 3);
@@ -67,14 +82,14 @@ test("vazio diz que não há configuração e o estado inicial abre uma fitness 
   assert.match(html, /data-criar>Criar configuração/);
   assert.doesNotMatch(html, /data-grupo/);
   const inicial = estadoInicial(
-    doProjeto({ ...FABRIQUINHA, fitness: [], linguagens: [], e2e: [], globs: [], preparacao: [] }),
+    doProjeto({ ...FABRIQUINHA, verificacoes: { fitness: [], linguagens: [], e2e: [], globs: [], preparacao: [] } }),
   );
   assert.equal(inicial.fitness.length, 1);
   assert.equal(inicial.linguagens.length, 1);
 });
 
 test("formulario mostra os cinco grupos com os valores, Adicionar por grupo e Remover por linha; as etapas e a preparação não", () => {
-  const html = formulario("fabriquinha", doProjeto(FABRIQUINHA), { erros: new Map() });
+  const html = formulario("fabriquinha", doProjeto(FABRIQUINHA, "abc123"), { erros: new Map() });
   for (const g of ["Projeto", "Fitness", "Linguagens", "E2E", "Globs"])
     assert.match(html, new RegExp(`data-grupo="[a-z0-9]+" aria-label="${g}"`));
   assert.equal(html.match(/data-grupo=/g)?.length, 5);
@@ -110,6 +125,23 @@ test("formulario põe cada erro no campo certo, no grupo e no rodapé", () => {
     formulario("f", doProjeto(FABRIQUINHA), { erros: errosDoZod("✖ x\n  → at branch_base") }),
     /1 campo com erro/,
   );
+});
+
+test("errosDoServidor remove só o prefixo verificacoes e mantém caminhos sem prefixo e erros da raiz", () => {
+  assert.deepEqual(
+    [
+      ...errosDoServidor(
+        "✖ obrigatório\n  → at verificacoes.fitness[0].nome\n✖ inválida\n  → at branch_base\n✖ vazio\n  → at fitness\n✖ corpo inválido",
+      ),
+    ],
+    [
+      ["fitness[0].nome", ["obrigatório"]],
+      ["branch_base", ["inválida"]],
+      ["fitness", ["vazio"]],
+      ["", ["corpo inválido"]],
+    ],
+  );
+  assert.equal(errosDoServidor("não é JSON").size, 0);
 });
 
 test("formulario trata a linha com campo ausente como vazio", () => {

@@ -12,9 +12,8 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, migrar, novoId } from "../armazenamento/banco.ts";
-import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
 import { MIGRACOES } from "../armazenamento/migracoes.ts";
-import { registrarProjeto } from "../armazenamento/projetos.ts";
+import { registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
 import { salvarConfiguracao } from "../armazenamento/servico.ts";
 import { criarUsuarioSimulado } from "../armazenamento/simulacao.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
@@ -33,10 +32,14 @@ const AGORA = "2026-10-11T12:00:00.000Z";
 function projeto(banco: DatabaseSync, nome: string, repo: string): void {
   registrarProjeto(banco, {
     nome,
-    repo,
-    branchBase: "main",
+    raiz_git: repo,
+    branch_base: "main",
     hospedagem: "github",
-    sonar: { projectKey: nome },
+    chave_sonarqube: nome,
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
 }
 
@@ -136,7 +139,7 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('d', '/nao/existe', 'main', 'github', 'k');
     INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
@@ -199,7 +202,7 @@ test("reinício: as execuções simuladas pendentes falham e o pi delas é morto
 function bancoComDemanda(raiz: string): DatabaseSync {
   const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
   migrar(banco, MIGRACOES);
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
     INSERT INTO sequencia (nome, valor) VALUES ('demanda', 1);`);
   return banco;
@@ -359,19 +362,6 @@ function demandaEmExecucao(banco: DatabaseSync, n: number): void {
   if (!banco.prepare("SELECT 1 FROM projeto WHERE nome = 'p'").get()) {
     projeto(banco, "p", "/nao/existe");
     banco.prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('p', ?, ?)").run("a".repeat(40), AGORA);
-  }
-  if (!configuracaoProjeto(banco, "p")) {
-    gravarConfiguracaoProjeto(banco, {
-      nome: "p",
-      branch_base: "main",
-      chave_sonarqube: "p",
-      raiz_git: "/nao/existe",
-      hospedagem: "github",
-      etapas: [],
-      preparacao: [],
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-    });
   }
   const id = `I-${String(n)}`;
   banco.exec(`INSERT INTO demanda VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');

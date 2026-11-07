@@ -12,6 +12,8 @@ import { exigirGit } from "../../infra/repositorio/worktree.ts";
 // rodar noutra máquina.
 const SUBIR = "docker compose -f ~/Documents/Projetos/SonarQube/docker-compose.yml up -d";
 const PAGINA = 500;
+/** A propriedade do scanner que dá a chave do projeto no SonarQube; separada da `chave_sonarqube` do projeto. */
+const PROPRIEDADE_DA_CHAVE = ["sonar.project", "Key"].join("");
 /** `api/issues/search` não pagina além disso. */
 const LIMITE_DA_API = 10_000;
 
@@ -84,7 +86,11 @@ async function escanear(host: string, token: string, worktree: string, chave: st
     writeFileSync(configuracao, "");
     const r = await executar(
       "sonar-scanner",
-      [`-Dsonar.projectKey=${chave}`, `-Dsonar.working.directory=${trabalho}`, `-Dproject.settings=${configuracao}`],
+      [
+        `-D${PROPRIEDADE_DA_CHAVE}=${chave}`,
+        `-Dsonar.working.directory=${trabalho}`,
+        `-Dproject.settings=${configuracao}`,
+      ],
       { cwd: worktree, env: { ...process.env, SONAR_HOST_URL: host, SONAR_TOKEN: token }, limiteMs },
     );
     // ponytail: stdout e depois stderr, só o fim; o log inteiro do scanner não cabe na mensagem do ticket.

@@ -161,23 +161,26 @@ function somar(no: NoDoHeatmap): number {
 }
 
 /**
- * F5 §11: lê a base publicada (`refs/remotes/origin/<branchBase>`, sem fetch) e conta, por arquivo de hoje, os commits
+ * F5 §11: lê a base publicada (`refs/remotes/origin/<branch_base>`, sem fetch) e conta, por arquivo de hoje, os commits
  * não-merge dos 12 meses até `agora` que o tocam. Só lê: roda fora da fila do projeto.
  */
-export async function heatmapDo(projeto: Pick<Projeto, "repo" | "branchBase">, agora = new Date()): Promise<Heatmap> {
-  const { repo, branchBase } = projeto;
+export async function heatmapDo(
+  projeto: Pick<Projeto, "raiz_git" | "branch_base">,
+  agora = new Date(),
+): Promise<Heatmap> {
+  const { raiz_git: repo, branch_base } = projeto;
   if (!existsSync(repo)) {
     throw new ErroDeRegra(
       `o repositório ${repo} não existe mais no disco`,
       "corrija o caminho do repositório do projeto na Configuração",
     );
   }
-  const ref = `refs/remotes/origin/${branchBase}`;
+  const ref = `refs/remotes/origin/${branch_base}`;
   const ponta = await git(repo, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`);
   if (ponta.codigo !== 0) {
     throw new ErroDeRegra(
-      `a branch base ${branchBase} não existe em ${repo}`,
-      `busque-a com git fetch origin ${branchBase} ou corrija a branch base na Configuração`,
+      `a branch base ${branch_base} não existe em ${repo}`,
+      `busque-a com git fetch origin ${branch_base} ou corrija a branch base na Configuração`,
     );
   }
   const desde = new Date(agora);
@@ -198,7 +201,7 @@ export async function heatmapDo(projeto: Pick<Projeto, "repo" | "branchBase">, a
     ),
   );
   return {
-    branch: branchBase,
+    branch: branch_base,
     desde: desde.toISOString(),
     ate: agora.toISOString(),
     ...montar(basename(repo), arquivos, log, prsDos(log, ponta.saida.trim())),

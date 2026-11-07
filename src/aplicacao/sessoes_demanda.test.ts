@@ -12,7 +12,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { ExecucaoSessao, Sessao } from "../nucleo/sessoes.ts";
 import { encontrado } from "../nucleo/erros.ts";
-import { gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
@@ -102,21 +102,17 @@ function cenario() {
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
-       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
-    )
-    .run(c.repo);
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
   gravarAgregadoPronto(
     banco,

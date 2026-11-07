@@ -34,7 +34,7 @@ const banco = () => {
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
   for (const nome of ["a", "b"]) {
-    b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
       VALUES ('${nome}', '/repo/${nome}', 'main', 'github', 'k')`);
   }
   for (const [id, projeto] of Object.entries({ "I-1": "a", "I-2": "a", "I-3": "b" })) {

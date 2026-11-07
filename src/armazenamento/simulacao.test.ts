@@ -8,7 +8,8 @@ import { ZodError } from "zod";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo } from "./arquivos.ts";
-import { editarProjeto, projeto, registrarProjeto } from "./projetos.ts";
+import { editarProjeto, registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
+import { buscarProjeto } from "./projetos.ts";
 import {
   anexar,
   criarTarefa,
@@ -30,10 +31,10 @@ function novoBanco(): DatabaseSync {
   for (const nome of ["fabriquinha", "outro"]) {
     registrarProjeto(banco, {
       nome,
-      repo: `/repos/${nome}`,
-      branchBase: "main",
+      raiz_git: `/repos/${nome}`,
+      branch_base: "main",
       hospedagem: "github",
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
   }
   return banco;
@@ -213,9 +214,9 @@ test("criarTarefa recusa N e alocação inválidos, usuário de outro projeto e 
 /** O projeto `fabriquinha` com link do produto, os usuários `nomes` e uma Tarefa de `n` execuções para todos. */
 function comTarefa(n: number, nomes = ["Dona Maria"], link = "https://demo.exemplo.com") {
   const banco = novoBanco();
-  const atual = projeto(banco, "fabriquinha");
+  const atual = buscarProjeto(banco, "fabriquinha");
   assert.ok(atual);
-  if (link) editarProjeto(banco, { ...atual, linkProduto: link });
+  if (link) editarProjeto(banco, { ...atual, link_produto: link });
   const usuarios = nomes.map((nome) =>
     criarUsuarioSimulado(banco, "fabriquinha", { nome, descricao: MARIA.descricao }),
   );

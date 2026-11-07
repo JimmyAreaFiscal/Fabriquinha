@@ -24,7 +24,7 @@ after(fechar);
 const raiz = realpathSync(raizTemporaria);
 const T = "'2026-10-10T10:00:00.000Z'";
 banco.exec(`
-  INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES
+  INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES
     ('loja', '/r/loja', 'main', 'github', 'loja'),
     ('site', '/r/site', 'main', 'github', 'site'),
     ('vazio', '/r/vazio', 'main', 'github', 'vazio');

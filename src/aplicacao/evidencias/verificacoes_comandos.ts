@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
-import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../nucleo/projeto.ts";
 import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS, type Resultado } from "../../infra/processo.ts";
 import { LIMITE } from "../../nucleo/schemas.ts";
 
@@ -83,7 +83,7 @@ export function verificarTestes({
     const comandos = [];
     const logs = [];
     const falhas: Falha[] = [];
-    for (const { caminho, comando_teste: comando } of projeto.linguagens) {
+    for (const { caminho, comando_teste: comando } of projeto.verificacoes.linguagens) {
       const r = await rodar(comando, join(worktree, caminho));
       comandos.push({ ...linha(comando, r), caminho });
       logs.push({ nome: `teste-${caminho}.log`, texto: r.log });
@@ -91,8 +91,8 @@ export function verificarTestes({
       if (falha) falhas.push(falha);
     }
     aoTerminarAsLinguagens?.();
-    for (const config of e2e ? projeto.e2e : []) {
-      const globs = projeto.globs.filter((g) => g.caminho_linguagem === config.caminho_linguagem);
+    for (const config of e2e ? projeto.verificacoes.e2e : []) {
+      const globs = projeto.verificacoes.globs.filter((g) => g.caminho_linguagem === config.caminho_linguagem);
       if (!arquivos.some((a) => globs.some((g) => matchesGlob(a, g.glob)))) continue;
       const cwd = join(worktree, config.caminho_linguagem);
       const nome = `e2e-${config.caminho_linguagem}`;
@@ -132,7 +132,7 @@ export function verificarFitness({
     const linhas = [];
     const logs = [];
     const falhas: Falha[] = [];
-    for (const f of projeto.fitness) {
+    for (const f of projeto.verificacoes.fitness) {
       const r = await rodar(f.comando, worktree);
       linhas.push({ ...f, ...linha(f.comando, r) });
       logs.push({ nome: `${f.nome}.log`, texto: r.log });

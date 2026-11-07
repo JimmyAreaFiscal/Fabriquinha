@@ -86,7 +86,7 @@ test("abrir() aplica as migrações e grava a versão; reabrir não reaplica", (
 test("a coluna projeto.link_produto é opcional", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
      VALUES ('p', '/r', 'main', 'github', 'k')`,
   );
   assert.equal(valor(banco, "SELECT link_produto FROM projeto"), null);
@@ -111,7 +111,7 @@ test("o modelo da Auditoria na configuração: nasce nulo e o CHECK exige proved
 test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuário existentes, anexo com hash e tamanho válidos", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
      VALUES ('p', '/r', 'main', 'github', 'k');
      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd')`,
   );
@@ -137,7 +137,7 @@ test("as tabelas do Usuário Simulado: nome único por projeto, projeto e usuár
 test("as tabelas da Tarefa: N de 1 a 20, projeto e usuário existentes, alocação única", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
      VALUES ('p', '/r', 'main', 'github', 'k');
      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd')`,
   );
@@ -161,7 +161,7 @@ test("as tabelas da Tarefa: N de 1 a 20, projeto e usuário existentes, alocaç�
 test("a tabela da execução simulada: status válido, falhou exige erro, concluída exige relatório JSON, tarefa e usuário existentes", () => {
   const banco = abrir(raizTemp());
   banco.exec(
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+    `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
      VALUES ('p', '/r', 'main', 'github', 'k');
      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'p', 'Dona Maria', 'd');
      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'p', 't', 1, 'x')`,

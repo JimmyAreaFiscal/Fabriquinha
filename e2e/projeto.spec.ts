@@ -141,7 +141,7 @@ test("/projects volta ao último visto; o heatmap, a Configuração SDLC e a sim
 }) => {
   projeto(fabriquinha.raiz);
   const banco = abrir(fabriquinha.raiz);
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('site', '/nao/existe/site', 'main', 'github', 'site')`);
   banco.close();
   await pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: "Projetos" }).click();

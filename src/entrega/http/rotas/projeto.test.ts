@@ -8,13 +8,14 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
-import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
+import { Projeto } from "../../../nucleo/projeto.ts";
+import { gravarProjeto } from "../../../armazenamento/projetos.ts";
 import {
   gravarAgregadoPronto,
   montarAgregadoDemanda,
   montarTicket,
 } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { registrarProjeto } from "../../../armazenamento/projetos.ts";
+import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -29,10 +30,10 @@ beforeEach(() => {
   for (const nome of ["loja", "site"]) {
     registrarProjeto(banco, {
       nome,
-      repo: `/repos/${nome}`,
-      branchBase: "main",
+      raiz_git: `/repos/${nome}`,
+      branch_base: "main",
       hospedagem: "github",
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
   }
 });
@@ -80,10 +81,10 @@ test("heatmap: projeto com repositório git devolve branch, janela, árvore e co
   git("update-ref", "refs/remotes/origin/main", "HEAD");
   registrarProjeto(banco, {
     nome: "git",
-    repo,
-    branchBase: "main",
+    raiz_git: repo,
+    branch_base: "main",
     hospedagem: "github",
-    sonar: { projectKey: "git" },
+    chave_sonarqube: "git",
   });
   const mapa = (await chamar("GET", "/api/projetos/git/heatmap")) as {
     branch: string;
@@ -131,18 +132,23 @@ const rodada = (demanda_id: string, rodada_id: number, estado: string) => ({
  * desenvolvimento) e I-207 em planejamento, dependente das três últimas. A etapa `implementar` tem modelo no projeto.
  */
 function semearDemandas(): void {
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
-    raiz_git: "/repos/loja",
-    hospedagem: "github",
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
-  substituirEtapasDoProjeto(banco, "loja", [
-    { etapa: "implementar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude-sonnet-5-5" } } },
-  ]);
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      nome: "loja",
+      branch_base: "main",
+      chave_sonarqube: "loja",
+      raiz_git: "/repos/loja",
+      hospedagem: "github",
+      verificacoes: {
+        fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+        linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      },
+      etapas: [
+        { etapa: "implementar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude-sonnet-5-5" } } },
+      ],
+    }),
+  );
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-203", "arquivada"));
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-204", "concluida"));
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-205", "cancelada"));
@@ -250,6 +256,29 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
       piAtivo: true,
     },
   ]);
+});
+
+test("demandas: usa o padrão do agente se a releitura do projeto não o encontrar", async (contexto) => {
+  semearDemandas();
+  const prepararConsulta = banco.prepare.bind(banco);
+  let leiturasDoProjeto = 0;
+  contexto.mock.method(banco, "prepare", (consultaSql: string) => {
+    const consulta = prepararConsulta(consultaSql);
+    if (
+      consultaSql.startsWith(
+        "SELECT nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto FROM projeto",
+      )
+    ) {
+      leiturasDoProjeto++;
+      if (leiturasDoProjeto > 1) contexto.mock.method(consulta, "get", () => undefined);
+    }
+    return consulta;
+  });
+  const resposta = (await chamar("GET", "/api/projetos/loja/demandas")) as ListaDoProjeto;
+  const demanda = resposta.demandas.find((demanda) => demanda.id === "I-206");
+  assert.ok(demanda);
+  assert.equal(demanda.tickets.find((ticket) => ticket.ref === "I-206.T2")?.modelo, undefined);
+  assert.equal(demanda.tickets.find((ticket) => ticket.ref === "I-206.T4")?.modelo, "llamacpp / qwen3-coder-30b");
 });
 
 test("demandas: os filtros trazem as concluídas, as arquivadas e as canceladas", async () => {

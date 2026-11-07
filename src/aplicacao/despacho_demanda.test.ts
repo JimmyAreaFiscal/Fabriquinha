@@ -12,7 +12,7 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../nucleo/sessoes.ts";
-import { gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
@@ -56,21 +56,17 @@ async function cenario(limite: number, real = false) {
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   const repo = real ? c.repo : "/nao/existe";
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
-       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
-    )
-    .run(repo);
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: repo,
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
   banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
   if (real) {

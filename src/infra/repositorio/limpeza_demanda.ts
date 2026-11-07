@@ -8,7 +8,7 @@ import { git } from "../processo.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "./worktree-demanda.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
 
-type ProjetoLimpeza = Pick<Projeto, "nome" | "repo">;
+type ProjetoLimpeza = Pick<Projeto, "nome" | "raiz_git">;
 
 const refRemota = async (repo: string, branch: string): Promise<boolean> =>
   (await exigirGit(repo, "ls-remote", "--heads", "origin", `refs/heads/${branch}`)).trim() !== "";
@@ -34,10 +34,10 @@ export async function pendenciasDeLimpeza(
     .map((caminho) => `worktree:${caminho}`);
   for (const branch of [...ag.rodadas.map((r) => branchRodada(id, r.rodada_id)), branchDemanda(id)]) {
     // A posse vive na config da branch local; `branch -D` a apaga junto.
-    const posse = await exigirGit(projeto.repo, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`);
+    const posse = await exigirGit(projeto.raiz_git, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`);
     if (posse.trim() === "") continue;
-    if (await refLocal(projeto.repo, branch)) pendentes.push(`branch_local:${branch}`);
-    if (await refRemota(projeto.repo, branch)) pendentes.push(`branch_remota:${branch}`);
+    if (await refLocal(projeto.raiz_git, branch)) pendentes.push(`branch_local:${branch}`);
+    if (await refRemota(projeto.raiz_git, branch)) pendentes.push(`branch_remota:${branch}`);
   }
   return pendentes;
 }
@@ -79,7 +79,7 @@ export function limparDemanda(
   return naFilaDoProjeto(raiz, projeto.nome, async () => {
     const resultado = { removidos: [] as string[], pendentes: [] as string[] };
     for (const item of ordenados) {
-      const feito = await executar(projeto.repo, ...partir(item)).catch(() => false);
+      const feito = await executar(projeto.raiz_git, ...partir(item)).catch(() => false);
       (feito ? resultado.removidos : resultado.pendentes).push(item);
     }
     return resultado;
@@ -95,8 +95,8 @@ export async function sobrasDaDemanda(projeto: ProjetoLimpeza, removidos: readon
       tipo === "worktree"
         ? existsSync(alvo)
         : tipo === "branch_local"
-          ? await refLocal(projeto.repo, alvo)
-          : await refRemota(projeto.repo, alvo);
+          ? await refLocal(projeto.raiz_git, alvo)
+          : await refRemota(projeto.raiz_git, alvo);
     if (sobrou) sobras.push(item);
   }
   return sobras;

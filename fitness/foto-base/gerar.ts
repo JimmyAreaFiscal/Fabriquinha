@@ -147,7 +147,7 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
   const banco = abrir(raiz);
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`,
     )
     .run();
@@ -295,7 +295,7 @@ for (const estado of ["MERGED", "OPEN"]) {
   try {
     await publicarPRDe(
       join(temporaria, "raiz-pr"),
-      { nome: "loja", repo: temporaria, hospedagem: "github" },
+      { nome: "loja", raiz_git: temporaria, hospedagem: "github" },
       { branch: "fabriquinha/I-1", base: "main", publicarBase: false },
       { titulo: "feat: A [I-1]", corpo: "m\ncorpo", conhecidos: [], marca: "<!-- fabriquinha I-1/T-6 -->" },
       () => undefined,

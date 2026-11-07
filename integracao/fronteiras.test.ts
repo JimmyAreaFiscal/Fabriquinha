@@ -5,15 +5,13 @@ import assert from "node:assert/strict";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { ZodError } from "zod";
 import { type Ator } from "../src/nucleo/ator.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
 import { argumentosPi } from "../src/infra/agente/pi.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
-import {
-  configuracaoProjeto,
-  gravarConfiguracaoProjeto,
-  substituirEtapasDoProjeto,
-} from "../src/armazenamento/configuracao_projeto.ts";
+import { buscarProjeto, gravarProjeto } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada, submeterPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
@@ -113,9 +111,11 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
     chave_sonarqube: "chave-loja",
     raiz_git: c.repo,
     hospedagem: "github",
-    preparacao: [{ ordem: 1, comando: "true" }],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      preparacao: ["true"],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   };
   const e2e = (codigo_falha: number, glob = "e2e/**") => ({
     e2e: [{ caminho_linguagem: ".", comando_build: "b", comando_execucao: "e", codigo_falha }],
@@ -126,11 +126,23 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
   writeFileSync(isca, "segredo");
   const iscaAntes = statSync(isca);
 
-  gravarConfiguracaoProjeto(c.banco, valida);
-  substituirEtapasDoProjeto(c.banco, c.projeto, [
-    { etapa: "implementar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "m-1" }, effort: "high" } },
-  ]);
+  gravarProjeto(
+    c.banco,
+    Projeto.parse({
+      ...valida,
+      etapas: [
+        {
+          etapa: "implementar",
+          configuracao_agente: { modelo: { provedor: "anthropic", nome: "m-1" }, effort: "high" },
+        },
+      ],
+    }),
+  );
   const antes = tabelas();
+  assert.throws(() => {
+    gravarProjeto(c.banco, Projeto.parse({ ...valida, raiz_git: "repos/loja" }));
+  }, ZodError);
+  assert.deepEqual(tabelas(), antes, "raiz relativa: nada gravado");
   // As etapas são do cadastro do projeto, que as grava sozinhas.
   for (const [nome, etapa] of [
     ["modelo incompleto", { configuracao_agente: { modelo: { provedor: "anthropic" } } }],
@@ -138,7 +150,7 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
   ] as const) {
     assert.throws(
       () => {
-        substituirEtapasDoProjeto(c.banco, c.projeto, [{ etapa: "implementar", ...etapa }]);
+        gravarProjeto(c.banco, Projeto.parse({ ...valida, etapas: [{ etapa: "implementar", ...etapa }] }));
       },
       Error,
       nome,
@@ -146,6 +158,7 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
     assert.deepEqual(tabelas(), antes, `${nome}: nada gravado`);
   }
   const invalidas: [string, object][] = [
+    ["preparação vazia", { preparacao: [""] }],
     ["E2E abaixo de 1", e2e(0)],
     ["E2E acima de 255", e2e(256)],
     ["glob com ..", e2e(1, "../isca.txt")],
@@ -153,14 +166,26 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
     ["caminho de linguagem inválido", { linguagens: [{ caminho: "../fora", linguagem: "ts", comando_teste: "true" }] }],
   ];
   for (const [nome, mudanca] of invalidas) {
-    assert.throws(() => gravarConfiguracaoProjeto(c.banco, { ...valida, ...mudanca }), Error, nome);
+    assert.throws(
+      () => {
+        gravarProjeto(
+          c.banco,
+          Projeto.parse({
+            ...valida,
+            verificacoes: { ...valida.verificacoes, ...mudanca },
+          }),
+        );
+      },
+      Error,
+      nome,
+    );
     assert.deepEqual(tabelas(), antes, `${nome}: nada gravado`);
   }
   assert.equal(readFileSync(isca, "utf8"), "segredo");
   assert.equal(statSync(isca).mtimeMs, iscaAntes.mtimeMs);
 
   // O par de modelo gravado chega inteiro ao pi.
-  const etapaGravada = configuracaoProjeto(c.banco, c.projeto)?.etapas[0];
+  const etapaGravada = buscarProjeto(c.banco, c.projeto)?.etapas[0];
   const args = argumentosPi({
     raiz: c.raiz,
     sessaoPi: "s-1",

@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import type { MetricasDemandaPeriodo, MetricasMesDemanda } from "../../../aplicacao/periodo_demanda.ts";
-import { registrarProjeto } from "../../../armazenamento/projetos.ts";
+import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -18,10 +18,10 @@ beforeEach(() => {
   for (const nome of ["loja", "site"]) {
     registrarProjeto(banco, {
       nome,
-      repo: `/repos/${nome}`,
-      branchBase: "main",
+      raiz_git: `/repos/${nome}`,
+      branch_base: "main",
       hospedagem: "github",
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
   }
 });

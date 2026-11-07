@@ -59,7 +59,7 @@ arquivo("desenho.html", HTML);
 const bancoDaRaiz = new Map<string | undefined, DatabaseSync>();
 const novaRaiz = (): NodeJS.ProcessEnv => {
   const { raiz, banco: b } = novoBancoTemporario();
-  b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+  b.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
     VALUES ('fabriquinha', '/repo/f', 'main', 'github', 'k')`);
   bancoDaRaiz.set(raiz, b);
   return { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_FERRAMENTA: "claude", FABRIQUINHA_SESSAO: "S1" };

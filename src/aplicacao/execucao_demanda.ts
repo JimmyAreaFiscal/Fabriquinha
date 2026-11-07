@@ -7,7 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
-import type { Projeto } from "../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../nucleo/projeto.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, existe, mensagem } from "../nucleo/erros.ts";
 import {
@@ -23,7 +23,7 @@ import {
 import { varrerBase } from "./retrabalho.ts";
 import { somar } from "../nucleo/uso.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
@@ -85,15 +85,9 @@ interface Conducao {
 /** O ticket de rodada roda na worktree da rodada; o global (sem rodada), na da demanda. */
 function worktreeDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
   const raiz = raizDo(banco);
-  const worktree = {
-    nome: projeto.nome,
-    repo: projeto.raiz_git,
-    branchBase: projeto.branch_base,
-    preparacao: projeto.preparacao.map((c) => c.comando),
-  };
   return ticket.rodada_id === undefined
-    ? garantirWorktreeDemanda(raiz, worktree, ag.demanda.id, log, () => varrerBase(banco, projeto.nome))
-    : garantirWorktreeRodada(raiz, worktree, { demanda_id: ag.demanda.id, rodada_id: ticket.rodada_id }, log);
+    ? garantirWorktreeDemanda(raiz, projeto, ag.demanda.id, log, () => varrerBase(banco, projeto.nome))
+    : garantirWorktreeRodada(raiz, projeto, { demanda_id: ag.demanda.id, rodada_id: ticket.rodada_id }, log);
 }
 
 /** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */
@@ -285,11 +279,7 @@ export function iniciarExecucaoDemanda(
     `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não existe`,
     "confira o endereço do ticket",
   );
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const configuracaoAgente = resolverConfiguracaoAgente({
     ticket: ticket.configuracao_agente,
     etapaDoProjeto: projeto.etapas.find((e) => e.etapa === ticket.etapa)?.configuracao_agente,

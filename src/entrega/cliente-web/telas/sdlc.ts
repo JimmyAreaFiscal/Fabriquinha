@@ -1,8 +1,8 @@
 // Configuração SDLC do projeto (comparacao-sdlc §7.1) como funções puras: o `Estado` do formulário em texto, a
 // conversão de ida e volta com o contrato `Projeto` e o HTML dos grupos. O DOM e a rede ficam em sdlc-montar.ts.
-import type { Projeto } from "../../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../../nucleo/projeto.ts";
 import { escapar } from "../render.ts";
-import { type Erros, idDe, marca } from "./configuracao.ts";
+import { type Erros, errosDoZod, idDe, marca } from "./configuracao.ts";
 
 /** Uma linha do formulário: todo campo é o texto digitado. */
 export type Linha = Record<string, string>;
@@ -13,7 +13,7 @@ export interface Estado {
   /** Só leitura aqui (quem edita é o cadastro do projeto, na Configuração). */
   raiz_git: string;
   hospedagem: string;
-  /** `cursor_commit_humano`: a tela o devolve como veio. */
+  /** O cursor da varredura de commits humanos (`varredura_base`): a tela o mostra como veio e não o grava. */
   cursor: string;
   fitness: Linha[];
   linguagens: Linha[];
@@ -27,6 +27,7 @@ export type GrupoDeLista = "fitness" | "linguagens" | "e2e" | "globs";
 export interface Resposta {
   configurada: boolean;
   configuracao: Projeto;
+  cursor_commit_humano?: string;
 }
 
 export const CAMPOS_DO_PROJETO = ["branch_base", "chave_sonarqube", "raiz_git", "hospedagem", "cursor"] as const;
@@ -86,35 +87,45 @@ export const linhaEmBranco = (chave: GrupoDeLista): Linha =>
   Object.fromEntries(GRUPOS.filter((g) => g.chave === chave).flatMap((g) => g.campos.map(([campo]) => [campo, ""])));
 
 /** O contrato em texto, sem as etapas e a preparação: o cadastro do projeto, na Configuração, as edita. */
-export function doProjeto(p: Projeto): Estado {
+export function doProjeto(p: Projeto, cursor = ""): Estado {
   return {
     branch_base: p.branch_base,
     chave_sonarqube: p.chave_sonarqube,
     raiz_git: p.raiz_git,
     hospedagem: p.hospedagem,
-    cursor: p.cursor_commit_humano ?? "",
-    fitness: p.fitness.map((f) => ({ ...f })),
-    linguagens: p.linguagens.map((l) => ({ ...l })),
-    e2e: p.e2e.map((e) => ({ ...e, codigo_falha: String(e.codigo_falha) })),
-    globs: p.globs.map((g) => ({ ...g })),
+    cursor,
+    fitness: p.verificacoes.fitness.map((f) => ({ ...f })),
+    linguagens: p.verificacoes.linguagens.map((l) => ({ ...l })),
+    e2e: p.verificacoes.e2e.map((e) => ({ ...e, codigo_falha: String(e.codigo_falha) })),
+    globs: p.verificacoes.globs.map((g) => ({ ...g })),
   };
 }
 
+type Verificacoes = Projeto["verificacoes"];
+
 /** O corpo do POST, sem as etapas e a preparação: a gravação as mantém como o cadastro do projeto as deixou. */
-export function paraProjeto(e: Estado, nome: string): Omit<Projeto, "etapas" | "preparacao"> {
+export function paraProjeto(
+  e: Estado,
+  nome: string,
+): Omit<Projeto, "etapas" | "link_produto" | "verificacoes"> & { verificacoes: Omit<Verificacoes, "preparacao"> } {
   return {
     nome,
     branch_base: e.branch_base,
     chave_sonarqube: e.chave_sonarqube,
     raiz_git: e.raiz_git,
     hospedagem: e.hospedagem as Projeto["hospedagem"],
-    ...(e.cursor && { cursor_commit_humano: e.cursor }),
-    fitness: e.fitness as Projeto["fitness"],
-    linguagens: e.linguagens as Projeto["linguagens"],
-    e2e: e.e2e.map((l) => ({ ...l, codigo_falha: Number(l.codigo_falha) })) as Projeto["e2e"],
-    globs: e.globs as Projeto["globs"],
+    verificacoes: {
+      fitness: e.fitness as Verificacoes["fitness"],
+      linguagens: e.linguagens as Verificacoes["linguagens"],
+      e2e: e.e2e.map((l) => ({ ...l, codigo_falha: Number(l.codigo_falha) })) as Verificacoes["e2e"],
+      globs: e.globs as Verificacoes["globs"],
+    },
   };
 }
+
+/** Os erros do 422 por campo do formulário: o servidor os dá sob `verificacoes.`, e a tela os guarda sem o prefixo. */
+export const errosDoServidor = (texto: string): Erros =>
+  new Map([...errosDoZod(texto)].map(([caminho, mensagens]) => [caminho.replace(/^verificacoes\./, ""), mensagens]));
 
 export const adicionar = (e: Estado, chave: GrupoDeLista): Estado => ({
   ...e,

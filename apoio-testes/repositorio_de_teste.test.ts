@@ -11,7 +11,13 @@ test("cria o clone com a branch base publicada no origin, sem tocar no ambiente 
     assert.equal(process.env.GIT_CONFIG_GLOBAL, antes);
     assert.equal(rodarGit(r.repo, "rev-parse", "--abbrev-ref", "HEAD"), "main");
     assert.equal(rodarGit(r.bare, "rev-parse", "main"), rodarGit(r.repo, "rev-parse", "HEAD"));
-    assert.deepEqual(r.projeto, { nome: "loja", repo: r.repo, branchBase: "main", preparacao: ["npm ci"] });
+    assert.deepEqual(r.projeto, {
+      nome: "loja",
+      raiz_git: r.repo,
+      branch_base: "main",
+      hospedagem: "github",
+      verificacoes: { preparacao: ["npm ci"], fitness: [], linguagens: [], e2e: [], globs: [] },
+    });
     assert.equal(r.log, `${r.raiz}/log`);
   } finally {
     r.fechar();

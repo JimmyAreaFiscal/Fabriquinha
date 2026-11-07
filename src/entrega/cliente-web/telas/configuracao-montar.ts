@@ -22,6 +22,7 @@ import {
   type ProjetoCadastrado,
   type ProjetoListado,
   projetoInexistente,
+  rascunhoDe,
   type Rascunho,
   selecao,
   usuariosSimulados,
@@ -66,11 +67,11 @@ function lerProjeto(form: HTMLFormElement, hospedagem: Rascunho["hospedagem"]): 
   }
   return {
     nome: valor(form, '[name="nome"]'),
-    repo: valor(form, '[name="repo"]'),
-    branchBase: valor(form, '[name="branchBase"]'),
+    raiz_git: valor(form, '[name="raiz_git"]'),
+    branch_base: valor(form, '[name="branch_base"]'),
     ...(hospedagem && { hospedagem }),
     preparacao: [...form.querySelectorAll<HTMLInputElement>('[data-lista="preparacao"] input')].map((i) => i.value),
-    linkProduto: valor(form, '[name="linkProduto"]'),
+    link_produto: valor(form, '[name="link_produto"]'),
     configuracoes,
   };
 }
@@ -244,7 +245,7 @@ function montarProjeto(
   salvo: ProjetoCadastrado | undefined,
   modelosDoPi: readonly Modelo[],
 ): void {
-  const inicial: Rascunho = salvo ?? NOVO;
+  const inicial: Rascunho = salvo ? rascunhoDe(salvo) : NOVO;
   const desenhar = (p: Rascunho, erros: Erros, falha?: string): void => {
     main.innerHTML = pagina(menuHtml, formularioDeProjeto(p, { novo: !salvo, modelosDoPi, erros, falha }));
     const form = main.querySelector<HTMLFormElement>("[data-projeto]");

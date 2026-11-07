@@ -6,7 +6,8 @@ import { abrir } from "../src/armazenamento/banco.ts";
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { gravarConfiguracaoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { gravarProjeto } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { guardarBytes } from "../src/armazenamento/arquivos.ts";
 import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
 import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
@@ -257,16 +258,20 @@ const comPlano = (id: string): AgregadoDemanda =>
 
 /** O projeto `loja` com a configuração do SDLC, que as decisões que integram exigem. */
 function configurarProjeto(banco: ReturnType<typeof abrir>, raiz: string): void {
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
-    raiz_git: join(raiz, "loja"),
-    hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      nome: "loja",
+      branch_base: "main",
+      chave_sonarqube: "loja",
+      raiz_git: join(raiz, "loja"),
+      hospedagem: "github",
+      verificacoes: {
+        fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+        linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      },
+    }),
+  );
 }
 
 /** I-212 e I-213 com o planejamento aguardando aprovação. */
@@ -406,16 +411,20 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
   execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-230", caminho, "main"], { cwd: repo });
   execFileSync("git", ["config", "branch.fabriquinha/I-230.fabriquinha", `demanda:${caminho}`], { cwd: repo });
   const banco = abrir(raiz);
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
-    raiz_git: repo,
-    hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      nome: "loja",
+      branch_base: "main",
+      chave_sonarqube: "loja",
+      raiz_git: repo,
+      hospedagem: "github",
+      verificacoes: {
+        fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+        linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      },
+    }),
+  );
   gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-230",

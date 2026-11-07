@@ -13,7 +13,7 @@ import {
 } from "../nucleo/simulacao.ts";
 import { guardarBytes } from "./arquivos.ts";
 import { escrever } from "./banco.ts";
-import { projeto } from "./projetos.ts";
+import { projetoExistente } from "./projetos.ts";
 
 interface Anexo {
   nome: string;
@@ -52,7 +52,7 @@ export interface Tarefa {
 }
 
 const doProjeto = (banco: DatabaseSync, nome: string): void => {
-  encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "confira o nome do projeto");
+  projetoExistente(banco, nome);
 };
 
 const doUsuario = (banco: DatabaseSync, id: Id): void => {
@@ -212,13 +212,13 @@ const PENDENTES = "status IN ('na_fila', 'em_andamento')";
 export function enfileirar(banco: DatabaseSync, tarefa: Id): { execucoes: Id[]; link: string } {
   return escrever(banco, () => {
     const t = encontrado(
-      banco
-        .prepare("SELECT t.n, p.link_produto AS link FROM tarefa t JOIN projeto p ON p.nome = t.projeto WHERE t.id = ?")
-        .get(tarefa) as { n: number; link: string | null } | undefined,
+      banco.prepare("SELECT n, projeto FROM tarefa WHERE id = ?").get(tarefa) as
+        { n: number; projeto: string } | undefined,
       `a Tarefa ${String(tarefa)} não existe`,
       "confira a Tarefa na página Simulação",
     );
-    if (!t.link) throw new ErroDeRegra(SEM_LINK);
+    const link = projetoExistente(banco, t.projeto).link_produto;
+    if (!link) throw new ErroDeRegra(SEM_LINK);
     if (banco.prepare(`SELECT 1 FROM execucao_simulada WHERE tarefa = ? AND ${PENDENTES}`).get(tarefa)) {
       throw new ErroDeRegra("a Tarefa já está em execução", "espere ela terminar para executar de novo");
     }
@@ -227,7 +227,7 @@ export function enfileirar(banco: DatabaseSync, tarefa: Id): { execucoes: Id[]; 
     const execucoes = usuarios.flatMap(({ usuario }) =>
       Array.from({ length: t.n }, () => Number(inserir.run(tarefa, Number(usuario)).lastInsertRowid)),
     );
-    return { execucoes, link: t.link };
+    return { execucoes, link };
   });
 }
 

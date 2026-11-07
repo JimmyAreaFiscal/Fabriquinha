@@ -23,10 +23,8 @@ import { decidirRevisaoIntegral } from "../../src/aplicacao/revisao_demanda.ts";
 import { decidirRevisaoRodada } from "../../src/aplicacao/revisao_rodada.ts";
 import { reprovarPRRodada, concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
 import { situacao } from "../../src/aplicacao/gerente.ts";
-import { abrir } from "../../src/armazenamento/banco.ts";
-import { gravarConfiguracaoProjeto } from "../../src/armazenamento/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda } from "../../src/armazenamento/demandas.ts";
-import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
+import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { configuracao } from "../../src/armazenamento/servico.ts";
 import { carregarSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import { integrarPR } from "../../src/infra/repositorio/pr.ts";
@@ -53,15 +51,7 @@ const AUTOR: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
 const agora = () => new Date().toISOString();
 
 /** Um cenário: banco e repositórios próprios, para as execuções simultâneas não dividirem estado. */
-interface Cenario {
-  dir: string;
-  fechar: () => void;
-  banco: ReturnType<typeof abrir>;
-  projeto: string;
-  repo: string;
-  config: ReturnType<typeof configuracao>;
-  gh: ReturnType<typeof ghFalso>;
-}
+type Cenario = Awaited<ReturnType<typeof criarCenario>>;
 
 /** O que uma etapa prepara (fora do tempo) e executa (medido); `concluido` diz se o ticket assentou concluído. */
 interface Execucao {
@@ -132,7 +122,7 @@ function prepararProcesso(amb: Ambiente): void {
   mkdirSync(pastaDosCenarios);
 }
 
-async function criarCenario(): Promise<Cenario> {
+async function criarCenario() {
   const { raiz: dir, banco, fechar } = abrirBancoTemporario(mkdtempSync(join(pastaDosCenarios, "cenario-")));
   writeFileSync(join(dir, ".cenario"), "");
   const bare = join(dir, "loja.git");
@@ -147,21 +137,14 @@ async function criarCenario(): Promise<Cenario> {
   await exigirGit(repo, "push", "-q", "origin", "main");
   registrarProjeto(banco, {
     nome: "loja",
-    repo,
-    branchBase: "main",
-    hospedagem: "github",
-    preparacao: [],
-    sonar: { projectKey: "loja" },
-  });
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
     raiz_git: repo,
+    branch_base: "main",
     hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    chave_sonarqube: "loja",
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
   // ghFalso põe o `bin` do cenário na frente do PATH; quem escolhe o estado é o `gh` comum, então o PATH volta como estava.
   const path = process.env.PATH;
@@ -464,7 +447,7 @@ const ETAPAS: Record<string, Preparar> = {
     await ciclo(c);
     const pr = carregarDemanda(c.banco, id).encerramento?.pr;
     if (!pr) throw new Error("o encerramento não publicou o PR final");
-    await integrarPR({ repo: c.repo, hospedagem: "github" }, String(pr.numero));
+    await integrarPR({ raiz_git: c.repo, hospedagem: "github" }, String(pr.numero));
     await ciclo(c);
   }),
   ajustar_resultado: async (c) => {

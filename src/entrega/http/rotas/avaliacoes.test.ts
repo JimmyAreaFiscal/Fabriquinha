@@ -11,7 +11,7 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { estadoDaAvaliacao } from "../../../aplicacao/avaliacao.ts";
 import { encerrar, situacao } from "../../../aplicacao/gerente.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
-import { registrarProjeto } from "../../../armazenamento/projetos.ts";
+import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacoes-rotas-")));
@@ -53,11 +53,10 @@ before(async () => {
   for (const nome of ["loja", "site"]) {
     registrarProjeto(servico.banco, {
       nome,
-      repo: join(base, nome),
-      branchBase: "main",
+      raiz_git: join(base, nome),
+      branch_base: "main",
       hospedagem: "github",
-      preparacao: [],
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
   }
   const T = "'2026-10-10T10:00:00.000Z'";

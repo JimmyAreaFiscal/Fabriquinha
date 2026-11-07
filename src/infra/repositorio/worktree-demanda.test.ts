@@ -111,7 +111,7 @@ test("falha de preparação não marca, interrompe comandos e permite retry sem 
   await assert.rejects(garantir(c), /preparação.*código 7/);
   assert.equal(existsSync(marca(caminho(c))), false);
   assert.equal(existsSync(join(caminho(c), "nao-executar")), false);
-  c.projeto.preparacao = ["printf recuperado > pronto"];
+  c.projeto.verificacoes.preparacao = ["printf recuperado > pronto"];
   git(c.repo, "remote", "remove", "origin");
   await garantir(c);
   assert.equal(existsSync(marca(caminho(c))), true);

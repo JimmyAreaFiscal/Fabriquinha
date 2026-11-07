@@ -11,7 +11,7 @@ import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { recuperarAuditorias } from "../src/aplicacao/auditoria.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
-import { registrarProjeto } from "../src/armazenamento/projetos.ts";
+import { registrarProjeto } from "../src/aplicacao/projeto/cadastro.ts";
 import { execucoesAbertasDaDemanda } from "../src/armazenamento/sessoes.ts";
 import { falharPendentes } from "../src/armazenamento/simulacao.ts";
 import { sinalNoGrupo } from "../src/infra/processo.ts";
@@ -177,11 +177,10 @@ export function projeto(raiz: string, sql = ""): void {
   const banco = abrir(raiz);
   registrarProjeto(banco, {
     nome: "loja",
-    repo: realpathSync(repo),
-    branchBase: "main",
+    raiz_git: realpathSync(repo),
+    branch_base: "main",
     hospedagem: "github",
-    preparacao: [],
-    sonar: { projectKey: "loja" },
+    chave_sonarqube: "loja",
   });
   banco.exec(sql);
   banco.close();

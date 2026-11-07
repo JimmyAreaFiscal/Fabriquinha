@@ -10,7 +10,7 @@ import {
   type LinhasPorDemanda,
 } from "../armazenamento/commits_demanda.ts";
 import { noLog } from "../infra/registro.ts";
-import { projeto as lerProjeto } from "../armazenamento/projetos.ts";
+import { buscarProjeto, projetoExistente } from "../armazenamento/projetos.ts";
 import { type CommitHumano, cursorDaBase, gravarVarredura } from "../armazenamento/retrabalho.ts";
 import { executar, git, LIMITE_COMANDO_MS } from "../infra/processo.ts";
 import { exigirGit, naFilaDoProjeto } from "../infra/repositorio/worktree.ts";
@@ -114,11 +114,11 @@ export async function registrarRetrabalhoDemanda(
   const projeto = (
     banco.prepare("SELECT projeto FROM demanda WHERE id = ?").get(demandaId) as { projeto: string } | undefined
   )?.projeto;
-  const p = projeto === undefined ? undefined : lerProjeto(banco, projeto);
+  const p = projeto === undefined ? undefined : buscarProjeto(banco, projeto);
   if (p === undefined) {
     throw new ErroDeInexistente(`a demanda ${demandaId} não existe`, "confira o número da demanda");
   }
-  const porCommit = await naFilaDoProjeto(raizDo(banco), p.nome, () => reescritas(p.repo, `${sha}^`, sha));
+  const porCommit = await naFilaDoProjeto(raizDo(banco), p.nome, () => reescritas(p.raiz_git, `${sha}^`, sha));
   const linhas = dosTicketsDemanda(banco, porCommit);
   // Um commit por ticket: o pai nunca tem linha do próprio ticket; a guarda só protege o CHECK da tabela.
   linhas.get(demandaId)?.delete(ticketId);
@@ -132,24 +132,23 @@ export async function registrarRetrabalhoDemanda(
  * rodam no repositório principal, na fila do projeto (F5 §6), como a criação de worktree e o commit.
  */
 export async function varrerBase(banco: DatabaseSync, projeto: string): Promise<void> {
-  const p = lerProjeto(banco, projeto);
-  if (p === undefined) throw new ErroDeInexistente(`o projeto ${projeto} não existe`, "cadastre-o na Configuração");
-  const ref = `refs/remotes/origin/${p.branchBase}`;
+  const p = projetoExistente(banco, projeto, "cadastre-o na Configuração");
+  const ref = `refs/remotes/origin/${p.branch_base}`;
   await naFilaDoProjeto(raizDo(banco), projeto, async () => {
-    // Refspec explícita, como na criação de worktree: um branchBase começando com "-" nunca vira opção do git.
-    await exigirGit(p.repo, "fetch", "origin", `+refs/heads/${p.branchBase}:${ref}`);
-    const atual = (await exigirGit(p.repo, "rev-parse", "--verify", `${ref}^{commit}`)).trim();
+    // Refspec explícita, como na criação de worktree: um branch_base começando com "-" nunca vira opção do git.
+    await exigirGit(p.raiz_git, "fetch", "origin", `+refs/heads/${p.branch_base}:${ref}`);
+    const atual = (await exigirGit(p.raiz_git, "rev-parse", "--verify", `${ref}^{commit}`)).trim();
     const cursor = cursorDaBase(banco, projeto);
     const humanos: CommitHumano[] = [];
-    if (cursor !== undefined && (await git(p.repo, "merge-base", "--is-ancestor", cursor, atual)).codigo !== 0) {
+    if (cursor !== undefined && (await git(p.raiz_git, "merge-base", "--is-ancestor", cursor, atual)).codigo !== 0) {
       noLog(
-        `a base ${p.branchBase} do projeto ${projeto} foi reescrita ` +
+        `a base ${p.branch_base} do projeto ${projeto} foi reescrita ` +
           `(force-push): o cursor ${cursor} saiu da história, e a varredura recomeça de ${atual}`,
       );
     } else if (cursor !== undefined) {
       // `%H`, os pais e o autor, um commit por registro; sem a assinatura que `log.showSignature` poria no meio.
       const log = await exigirGit(
-        p.repo,
+        p.raiz_git,
         "log",
         "--no-merges",
         "--reverse",
@@ -162,7 +161,7 @@ export async function varrerBase(banco: DatabaseSync, projeto: string): Promise<
         const [sha = "", pais = "", autor = ""] = registro.split("\n");
         // Commit de ticket já contou em 4.2; commit raiz (história sem relação trazida por merge) não reescreve nada.
         if (commitRegistradoDemanda(banco, sha) || pais === "") continue;
-        const porCommit = await reescritas(p.repo, String(pais.split(" ")[0]), sha);
+        const porCommit = await reescritas(p.raiz_git, String(pais.split(" ")[0]), sha);
         humanos.push({ sha, autor, linhas: dosTicketsDemanda(banco, porCommit) });
       }
     }

@@ -6,11 +6,12 @@ import { caminhoDoHeatmap, calor, conteudo, cor, erroDoHeatmap, linhas, paginaDo
 
 const projeto = (nome: string): ProjetoListado => ({
   nome,
-  repo: `/repos/${nome}`,
-  branchBase: "main",
+  raiz_git: `/repos/${nome}`,
+  branch_base: "main",
   hospedagem: "github",
-  preparacao: [],
-  sonar: { projectKey: nome },
+  etapas: [],
+  verificacoes: { preparacao: [], fitness: [], linguagens: [], e2e: [], globs: [] },
+  chave_sonarqube: nome,
 });
 const PROJETOS = [projeto("fabriquinha"), projeto("loja <api>")];
 

@@ -4,7 +4,8 @@ import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
 import type { Ator } from "../src/nucleo/ator.ts";
 import type { EstadoDemanda } from "../src/nucleo/primitivos.ts";
-import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { gravarProjeto } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { criarDemandaNova } from "../src/armazenamento/demandas.ts";
 import { garantirWorktreeDemanda } from "../src/infra/repositorio/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
@@ -182,7 +183,7 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
 export function cadastrarProjetoLoja(banco: DatabaseSync, repo = "/repos/loja", branchBase = "main"): void {
   banco
     .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
        VALUES ('loja', ?, ?, 'github', 'k')`,
     )
     .run(repo, branchBase);
@@ -243,17 +244,22 @@ export async function cenarioRevisao({ integral = false } = {}) {
   const { banco, fechar } = abrirBancoTemporario(c.raiz);
   bancosDeRevisaoAbertos.add(fechar);
   cadastrarProjetoLoja(banco, c.repo, "integracao");
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "integracao",
-    chave_sonarqube: "k",
-    raiz_git: c.repo,
-    hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
-  substituirPreparacaoDoProjeto(banco, "loja", ["true"]);
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      nome: "loja",
+      branch_base: "integracao",
+      chave_sonarqube: "k",
+      raiz_git: c.repo,
+      hospedagem: "github",
+      etapas: [],
+      verificacoes: {
+        preparacao: ["true"],
+        fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+        linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      },
+    }),
+  );
   gravarAgregadoPronto(banco, agregadoEmRevisao({ integral }));
   await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log, () => Promise.resolve());
   const piFalso = instalarPiFalso(c.dir);

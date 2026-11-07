@@ -10,7 +10,7 @@ import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { submeterPlano } from "../nucleo/transicoes_demanda.ts";
-import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
@@ -85,23 +85,19 @@ function cenario({
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
-       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
-    )
-    .run(c.repo);
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      preparacao: [preparacao(c.raiz)],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
-  substituirPreparacaoDoProjeto(banco, "loja", [preparacao(c.raiz)]);
   const base = {
     rodadas: [],
     dependencias_rodada: [],

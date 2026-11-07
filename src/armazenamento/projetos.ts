@@ -1,106 +1,178 @@
-// Gravação e leitura de projetos (C19: registrar e editar; F2 §4 e §6).
-// As conferências externas (F5 §2, F4 §9) rodam antes, fora daqui.
-import { readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
-import { formatarTicketRef } from "../nucleo/demanda.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
+// Leitura e gravação do projeto (F2 §4 e §6): a única que toca as linhas de `projeto` e das tabelas da sua configuração.
+// As recusas de negócio e o disco são do cadastro (aplicacao/projeto/cadastro.ts); as conferências externas (F5 §2,
+// F4 §9) rodam antes.
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
+import { ErroDeRegra, encontrado } from "../nucleo/erros.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { caminhoArquivo } from "./arquivos.ts";
-import { escrever, raizDo } from "./banco.ts";
-import { preparacaoDoProjeto, substituirPreparacaoDoProjeto } from "./configuracao_projeto.ts";
-import { dirDaExecucaoSimulada } from "../infra/registro.ts";
+import { escrever } from "./banco.ts";
+import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
-interface Linha {
-  nome: string;
-  repo: string;
-  branch_base: string;
-  hospedagem: string;
-  sonar_project_key: string;
-  link_produto: string | null;
+type Linha = Record<string, unknown>;
+
+const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banco.prepare(sql).all(nome);
+
+/** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
+const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
+
+/** Lê sem abrir transação dentro de `escrever`; fora dela, num snapshot só. */
+function noSnapshot<T>(banco: DatabaseSync, leitura: () => T): T {
+  const propria = !banco.isTransaction;
+  if (propria) banco.exec("BEGIN");
+  try {
+    return leitura();
+  } finally {
+    if (propria) banco.exec("COMMIT");
+  }
 }
 
-/** A preparação vem de `comando_preparacao_projeto`, a mesma tabela que o fluxo da demanda lê. */
-const deLinha = (banco: DatabaseSync, l: Linha): Projeto =>
-  Projeto.parse({
-    nome: l.nome,
-    repo: l.repo,
-    branchBase: l.branch_base,
-    hospedagem: l.hospedagem,
-    preparacao: preparacaoDoProjeto(banco, l.nome),
-    sonar: { projectKey: l.sonar_project_key },
-    ...(l.link_produto && { linkProduto: l.link_produto }),
-  });
+const COLUNAS_DO_PROJETO = "nome, raiz_git, branch_base, hospedagem, chave_sonarqube, link_produto";
 
-/**
- * Valida o schema do F1 (§3.3) e grava numa transação, com a preparação da worktree. O repositório só pode ser de um
- * projeto; `sql` usa os parâmetros nomeados das colunas e devolve quantas linhas mudou.
- */
-function gravar(banco: DatabaseSync, entrada: unknown, sql: string, conferir: (p: Projeto, mudou: boolean) => void) {
-  const p = Projeto.parse(entrada);
-  escrever(banco, () => {
-    const dono = banco.prepare("SELECT nome FROM projeto WHERE repo = ? AND nome <> ?").get(p.repo, p.nome);
-    if (dono) {
-      throw new ErroDeRegra(
-        `o repositório ${p.repo} já é do projeto ${String(dono.nome)}`,
-        `edite o projeto ${String(dono.nome)} em vez de cadastrar outro para o mesmo repositório`,
-      );
-    }
-    const comando = banco.prepare(sql);
-    // A edição não toca a chave do SonarQube: os parâmetros que o `sql` não usa ficam de fora.
-    comando.setAllowUnknownNamedParameters(true);
-    const { changes } = comando.run({
-      nome: p.nome,
-      repo: p.repo,
-      branch_base: p.branchBase,
-      hospedagem: p.hospedagem,
-      sonar_project_key: p.sonar.projectKey,
-      link_produto: p.linkProduto ?? null,
-    });
-    conferir(p, changes > 0);
-    substituirPreparacaoDoProjeto(banco, p.nome, p.preparacao);
+/** Monta o projeto da `linha` com as tabelas da sua configuração; quem chama garante o snapshot. */
+function montarProjeto(banco: DatabaseSync, linha: Linha): Projeto {
+  const nome = String(linha.nome);
+  return Projeto.parse({
+    ...semNulos(linha),
+    etapas: listar(
+      banco,
+      "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa",
+      nome,
+    ).map(linhaComConfiguracaoAgente),
+    verificacoes: {
+      preparacao: listar(
+        banco,
+        "SELECT comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem",
+        nome,
+      ).map((l) => l.comando),
+      fitness: listar(
+        banco,
+        "SELECT nome, comando, descricao FROM fitness_function_projeto WHERE projeto = ? ORDER BY nome",
+        nome,
+      ),
+      linguagens: listar(
+        banco,
+        "SELECT caminho, linguagem, comando_teste FROM linguagem_projeto WHERE projeto = ? ORDER BY caminho",
+        nome,
+      ),
+      e2e: listar(
+        banco,
+        "SELECT caminho_linguagem, comando_build, comando_execucao, codigo_falha FROM configuracao_e2e WHERE projeto = ? ORDER BY caminho_linguagem",
+        nome,
+      ),
+      globs: listar(
+        banco,
+        "SELECT caminho_linguagem, glob FROM glob_e2e WHERE projeto = ? ORDER BY caminho_linguagem, glob",
+        nome,
+      ),
+    },
   });
-  return p;
 }
 
-/** C19: cadastra um projeto novo. */
-export const registrarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
-  gravar(
-    banco,
-    entrada,
-    `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key, link_produto)
-     VALUES ($nome, $repo, $branch_base, $hospedagem, $sonar_project_key, $link_produto)
-     ON CONFLICT (nome) DO NOTHING`,
-    (p, mudou) => {
-      if (!mudou) throw new ErroDeRegra(`já existe o projeto ${p.nome}`, "edite-o na Configuração");
-    },
-  );
+/** O projeto, ou `undefined` se não existe; lido num snapshot só. */
+export function buscarProjeto(banco: DatabaseSync, nome: string): Projeto | undefined {
+  return noSnapshot(banco, () => {
+    const linha = banco.prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto WHERE nome = ?`).get(nome);
+    return linha && montarProjeto(banco, linha);
+  });
+}
 
-/**
- * C19: substitui o cadastro de um projeto que já existe; o nome é a chave e não muda. A chave do SonarQube (da
- * configuração SDLC) fica como está.
- */
-export const editarProjeto = (banco: DatabaseSync, entrada: unknown): Projeto =>
-  gravar(
-    banco,
-    entrada,
-    `UPDATE projeto SET repo = $repo, branch_base = $branch_base, hospedagem = $hospedagem, link_produto = $link_produto
-     WHERE nome = $nome`,
-    (p, mudou) => {
-      if (!mudou) throw new ErroDeInexistente(`o projeto ${p.nome} não existe`, "cadastre-o na Configuração");
-    },
-  );
+/** O projeto, ou ErroDeInexistente com a `orientacao`: a única checagem de "o projeto existe". */
+export const projetoExistente = (
+  banco: DatabaseSync,
+  nome: string,
+  orientacao = "confira o nome do projeto",
+): Projeto => encontrado(buscarProjeto(banco, nome), `o projeto ${nome} não existe`, orientacao);
 
-export function projeto(banco: DatabaseSync, nome: string): Projeto | undefined {
-  const linha = banco.prepare("SELECT * FROM projeto WHERE nome = ?").get(nome) as Linha | undefined;
-  return linha && deLinha(banco, linha);
+/** O projeto com a configuração SDLC (ao menos uma linguagem), ou a recusa com a orientação: a única leitura dos casos de uso. */
+export function carregarProjeto(banco: DatabaseSync, nome: string): Projeto {
+  const projeto = buscarProjeto(banco, nome);
+  if (projeto === undefined || projeto.verificacoes.linguagens.length === 0)
+    throw new ErroDeRegra(`o projeto ${nome} não tem configuração do SDLC`, "configure o projeto");
+  return projeto;
 }
 
 /** Todos os projetos, em ordem de nome. */
-export function projetos(banco: DatabaseSync): Projeto[] {
-  return (banco.prepare("SELECT * FROM projeto ORDER BY nome").all() as unknown as Linha[]).map((l) =>
-    deLinha(banco, l),
+export function listarProjetos(banco: DatabaseSync): Projeto[] {
+  return noSnapshot(banco, () =>
+    banco
+      .prepare(`SELECT ${COLUNAS_DO_PROJETO} FROM projeto ORDER BY nome`)
+      .all()
+      .map((linha) => montarProjeto(banco, linha)),
   );
+}
+
+/** O nome do outro projeto que já usa a `raiz_git`, se houver. */
+export function donoDoRepositorio(banco: DatabaseSync, raiz_git: string, nomeDoProjeto: string): string | undefined {
+  const dono = banco.prepare("SELECT nome FROM projeto WHERE raiz_git = ? AND nome <> ?").get(raiz_git, nomeDoProjeto);
+  return dono && String(dono.nome);
+}
+
+/** Insere cada item de `itens` na `tabela`, com as colunas de `colunas` (nomes iguais às chaves do item). */
+function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: string[], itens: Linha[]): void {
+  const insert = banco.prepare(
+    `INSERT INTO ${tabela} (projeto, ${colunas.join(", ")}) VALUES (${["?", ...colunas.map(() => "?")].join(", ")})`,
+  );
+  for (const item of itens) insert.run(nome, ...colunas.map((c) => (item[c] ?? null) as SQLInputValue));
+}
+
+/**
+ * Grava o projeto inteiro numa transação só: a linha e, no lugar das que havia, cada lista da configuração. Qualquer
+ * falha reverte tudo. Sem coluna de posição: a ordem das listas vem das chaves (e a da preparação, do índice).
+ */
+export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
+  const { nome, verificacoes } = projeto;
+  escrever(banco, () => {
+    banco
+      .prepare(
+        `INSERT INTO projeto (${COLUNAS_DO_PROJETO}) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (nome) DO UPDATE SET raiz_git = excluded.raiz_git, branch_base = excluded.branch_base,
+           hospedagem = excluded.hospedagem, chave_sonarqube = excluded.chave_sonarqube,
+           link_produto = excluded.link_produto`,
+      )
+      .run(
+        nome,
+        projeto.raiz_git,
+        projeto.branch_base,
+        projeto.hospedagem,
+        projeto.chave_sonarqube,
+        projeto.link_produto ?? null,
+      );
+    for (const tabela of [
+      "glob_e2e",
+      "configuracao_e2e",
+      "linguagem_projeto",
+      "fitness_function_projeto",
+      "comando_preparacao_projeto",
+      "configuracao_etapa_projeto",
+    ])
+      banco.prepare(`DELETE FROM ${tabela} WHERE projeto = ?`).run(nome);
+    inserir(
+      banco,
+      "configuracao_etapa_projeto",
+      nome,
+      ["etapa", "modelo_provedor", "modelo_nome", "effort"],
+      projeto.etapas.map(({ etapa, configuracao_agente }) => ({
+        etapa,
+        ...colunasDaConfiguracaoAgente(configuracao_agente),
+      })),
+    );
+    inserir(
+      banco,
+      "comando_preparacao_projeto",
+      nome,
+      ["ordem", "comando"],
+      verificacoes.preparacao.map((comando, indice) => ({ ordem: indice + 1, comando })),
+    );
+    inserir(banco, "fitness_function_projeto", nome, ["nome", "comando", "descricao"], verificacoes.fitness);
+    inserir(banco, "linguagem_projeto", nome, ["caminho", "linguagem", "comando_teste"], verificacoes.linguagens);
+    inserir(
+      banco,
+      "configuracao_e2e",
+      nome,
+      ["caminho_linguagem", "comando_build", "comando_execucao", "codigo_falha"],
+      verificacoes.e2e,
+    );
+    inserir(banco, "glob_e2e", nome, ["caminho_linguagem", "glob"], verificacoes.globs);
+  });
 }
 
 const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";
@@ -110,10 +182,12 @@ const DAS_EXECUCOES_SESSAO = `SELECT id FROM execucao_sessao WHERE sessao_id IN 
 const DAS_EVIDENCIAS_DEMANDA = `SELECT id FROM evidencia_demanda WHERE demanda_id IN (${DAS_DEMANDAS})`;
 const DAS_AVALIACOES = "SELECT id FROM avaliacao WHERE projeto = $p";
 
-/** Apaga as linhas do projeto, na ordem das chaves estrangeiras, e devolve o que sobra para apagar no disco. */
-function apagarLinhas(banco: DatabaseSync, nome: string) {
-  const p = { p: nome };
-  const emAndamento = banco
+/** O primeiro ticket do projeto em execução, ou com execução de sessão aberta, se houver. */
+export function ticketEmAndamentoDoProjeto(
+  banco: DatabaseSync,
+  nome: string,
+): { demanda_id: string; ticket_id: number } | undefined {
+  return banco
     .prepare(
       `SELECT t.demanda_id, t.ticket_id FROM ticket_demanda t
        WHERE t.demanda_id IN (${DAS_DEMANDAS}) AND (t.estado = 'em_execucao' OR EXISTS (
@@ -121,25 +195,26 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
          WHERE s.demanda_id = t.demanda_id AND s.ticket_id = t.ticket_id AND e.fim IS NULL))
        ORDER BY t.rowid LIMIT 1`,
     )
-    .get(p) as { demanda_id: string; ticket_id: number } | undefined;
-  if (emAndamento) {
-    throw new ErroDeRegra(
-      `o projeto ${nome} tem execução em andamento no ${formatarTicketRef(emAndamento)}`,
-      "espere ela terminar ou pare a sessão, e remova de novo",
-    );
-  }
+    .get({ p: nome }) as { demanda_id: string; ticket_id: number } | undefined;
+}
+
+/** A primeira tarefa do projeto com execução simulada na fila ou em andamento, se houver. */
+export function tarefaComExecucaoSimuladaPendente(banco: DatabaseSync, nome: string): string | undefined {
   const pendente = banco
     .prepare(
       `SELECT tarefa FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS}) AND status IN ('na_fila', 'em_andamento')
        LIMIT 1`,
     )
-    .get(p);
-  if (pendente) {
-    throw new ErroDeRegra(
-      `o projeto ${nome} tem execução simulada pendente na Tarefa ${String(pendente.tarefa)}`,
-      "espere ela terminar, e remova de novo",
-    );
-  }
+    .get({ p: nome });
+  return pendente && String(pendente.tarefa);
+}
+
+/**
+ * Apaga as linhas do projeto, na ordem das chaves estrangeiras, e devolve o que sobra para apagar no disco. As
+ * recusas (execução em andamento) e o apagamento no disco são do cadastro.
+ */
+export function apagarProjeto(banco: DatabaseSync, nome: string) {
+  const p = { p: nome };
   const simuladas = (
     banco.prepare(`SELECT id FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS})`).all(p) as { id: number }[]
   ).map((e) => e.id);
@@ -211,45 +286,4 @@ function apagarLinhas(banco: DatabaseSync, nome: string) {
     ).map((a) => a.sha256),
   );
   return { execucoes, sessoes, simuladas, orfaos: anexos.filter((sha) => !restam.has(sha)) };
-}
-
-/**
- * Remove o projeto e tudo o que depende dele, em qualquer estado (I-4): primeiro o banco, numa transação; depois,
- * com o banco já commitado, as pastas de execução, as sessões do pi e os anexos que nenhum outro projeto usa.
- * Falha no disco vira aviso: o banco não volta atrás.
- * ponytail: janela de corrida. Uma submissão de outro projeto com o mesmo conteúdo copia o anexo fora da transação
- * (F2 §5.2); se ela cair entre a consulta dos órfãos e o `rm`, o arquivo some sob a evidência nova. É rara
- * (mesmo hash, no mesmo instante); se importar, trocar o `rm` por uma conferência no banco imediatamente antes.
- */
-export async function removerProjeto(
-  banco: DatabaseSync,
-  nome: string,
-): Promise<{ projeto: Projeto; avisos: string[] }> {
-  const { removido, execucoes, sessoes, simuladas, orfaos } = escrever(banco, () => {
-    const removido = projeto(banco, nome);
-    if (!removido) throw new ErroDeInexistente(`o projeto ${nome} não existe`, "confira o nome do projeto");
-    return { removido, ...apagarLinhas(banco, nome) };
-  });
-
-  const raiz = raizDo(banco);
-  const avisos: string[] = [];
-  const apagar = (caminho: string) =>
-    rm(caminho, { recursive: true, force: true }).catch((error_: unknown) => {
-      avisos.push(`não foi possível apagar ${caminho}: ${(error_ as Error).message}`);
-    });
-
-  // `<instante>_<conversa>.jsonl`: o instante não tem `_`, então a conversa é o que vem depois do primeiro.
-  const conversas = new Set(sessoes);
-  const dirSessoes = join(raiz, "sessoes");
-  const arquivosDeSessao = (await readdir(dirSessoes).catch(() => [])).filter(
-    (arquivo) => arquivo.endsWith(".jsonl") && conversas.has(arquivo.slice(arquivo.indexOf("_") + 1, -".jsonl".length)),
-  );
-  await Promise.all([
-    // A execução copiada do fluxo legado tem o id `E-<n>`, que já é o nome da pasta dela; as novas, `E-<id>`.
-    ...execucoes.map((id) => apagar(join(raiz, "execucoes", id.startsWith("E-") ? id : `E-${id}`))),
-    ...simuladas.map((id) => apagar(dirDaExecucaoSimulada(raiz, id))),
-    ...arquivosDeSessao.map((arquivo) => apagar(join(dirSessoes, arquivo))),
-    ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),
-  ]);
-  return { projeto: removido, avisos };
 }

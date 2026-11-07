@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/cancelamento_demanda.ts";
-import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
+import { ErroDeRegra } from "../nucleo/erros.ts";
 import {
   type EntradaEvidenciaDemanda,
   submeterEvidenciaDemanda,
@@ -27,7 +27,7 @@ import {
   registrarDependenciaDemanda,
 } from "../armazenamento/dependencias_demanda.ts";
 import { gravarAnexos, registrarSessoesExternas } from "../armazenamento/evidencia_demanda.ts";
-import { projeto } from "../armazenamento/projetos.ts";
+import { projetoExistente } from "../armazenamento/projetos.ts";
 import { execucoesAbertasDaDemanda } from "../armazenamento/sessoes.ts";
 import { interromperExecucaoDemanda } from "./execucao_demanda.ts";
 
@@ -71,9 +71,7 @@ export const registrar = (
   traduzir(() =>
     escrever(banco, () => {
       const { dependencias = [], ...dados } = entrada;
-      if (!projeto(banco, String(dados.projeto))) {
-        throw new ErroDeInexistente(`o projeto ${String(dados.projeto)} não existe`, "confira o nome do projeto");
-      }
+      projetoExistente(banco, String(dados.projeto));
       const demanda = criarDemandaNova(banco, (id) => registrarDemanda({ ...dados, id }, autor, ctx));
       for (const dependeId of dependencias) registrarDependenciaDemanda(banco, demanda.demanda.id, dependeId);
       return demanda;

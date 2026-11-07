@@ -14,7 +14,8 @@ import { SEM_LINK } from "../nucleo/simulacao.ts";
 import { PACOTE } from "../infra/agente/pi.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../infra/registro.ts";
-import { editarProjeto, projeto, registrarProjeto } from "../armazenamento/projetos.ts";
+import { buscarProjeto } from "../armazenamento/projetos.ts";
+import { editarProjeto, registrarProjeto } from "./projeto/cadastro.ts";
 import { anexar, criarTarefa, criarUsuarioSimulado, tarefas } from "../armazenamento/simulacao.ts";
 import { conferirLink, executarTarefa } from "./executor.ts";
 
@@ -60,16 +61,16 @@ beforeEach(() => {
 
 const DESCRICAO = "Contadora de 60 anos, pouca familiaridade com sistemas web";
 
-/** Um banco com o projeto `p` (com `linkProduto`), os usuários `usuarios` e uma Tarefa de `n` execuções para todos. */
-function cenario(texto: string, n: number, usuarios = ["Dona Maria"], linkProduto = link) {
+/** Um banco com o projeto `p` (com `link_produto`), os usuários `usuarios` e uma Tarefa de `n` execuções para todos. */
+function cenario(texto: string, n: number, usuarios = ["Dona Maria"], link_produto = link) {
   const { banco } = abrirBancoTemporario();
   registrarProjeto(banco, {
     nome: "p",
-    repo: "/repos/p",
-    branchBase: "main",
+    raiz_git: "/repos/p",
+    branch_base: "main",
     hospedagem: "github",
-    sonar: { projectKey: "p" },
-    linkProduto,
+    chave_sonarqube: "p",
+    link_produto,
   });
   const alocados = usuarios.map((nome) => criarUsuarioSimulado(banco, "p", { nome, descricao: DESCRICAO }));
   const tarefa = criarTarefa(banco, "p", { texto, n, usuarios: alocados.map((u) => u.id) });
@@ -285,9 +286,9 @@ test("o link vale o do momento do Executar, mesmo que a Configuração mude no m
   writeFileSync(ordem, "");
   const { banco, tarefa } = cenario("Registrar uma necessidade", 2);
   const fim = executarTarefa(banco, tarefa, { timeoutMin: 1 });
-  const atual = projeto(banco, "p");
+  const atual = buscarProjeto(banco, "p");
   assert.ok(atual);
-  editarProjeto(banco, { ...atual, linkProduto: "http://127.0.0.1:1" });
+  editarProjeto(banco, { ...atual, link_produto: "http://127.0.0.1:1" });
   await fim;
   assert.deepEqual(
     execucoes(banco).map((e) => e.status),

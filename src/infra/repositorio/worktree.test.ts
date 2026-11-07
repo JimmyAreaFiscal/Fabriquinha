@@ -178,7 +178,7 @@ test("removerWorktrees: apaga worktrees/<projeto> e faz prune; repositório, HEA
   mkdirSync(join(c.raiz, "worktrees", "outro"), { recursive: true });
   const head = git(c.repo, "rev-parse", "HEAD");
 
-  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "loja", repo: c.repo }), []);
+  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "loja", raiz_git: c.repo }), []);
 
   assert.equal(existsSync(join(c.raiz, "worktrees", "loja")), false);
   assert.equal(existsSync(join(c.raiz, "worktrees", "outro")), true);
@@ -189,13 +189,13 @@ test("removerWorktrees: apaga worktrees/<projeto> e faz prune; repositório, HEA
 
 test("removerWorktrees: sem worktrees/<projeto> no disco devolve []", async () => {
   const c = cenario();
-  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo }), []);
+  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "demo", raiz_git: c.repo }), []);
 });
 
 test("removerWorktrees: repositório que não existe mais vira o aviso do prune", async () => {
   const c = cenario();
   const repo = join(c.raiz, "sumiu");
-  const avisos = await removerWorktrees(c.raiz, { nome: "demo", repo });
+  const avisos = await removerWorktrees(c.raiz, { nome: "demo", raiz_git: repo });
   assert.equal(avisos.length, 1);
   assert.match(String(avisos[0]), new RegExp(`^git -C ${repo} worktree prune falhou: .+`));
 });
@@ -214,7 +214,7 @@ test(
       chmodSync(interna, 0o700);
     });
 
-    const avisos = await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo });
+    const avisos = await removerWorktrees(c.raiz, { nome: "demo", raiz_git: c.repo });
     assert.equal(avisos.length, 1);
     assert.match(String(avisos[0]), new RegExp(`^não foi possível apagar ${pasta}: `));
   },

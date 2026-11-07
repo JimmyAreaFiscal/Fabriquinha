@@ -13,11 +13,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { ConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { assinar } from "./gerente.ts";
-import {
-  gravarConfiguracaoProjeto,
-  substituirEtapasDoProjeto,
-  substituirPreparacaoDoProjeto,
-} from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../nucleo/sessoes.ts";
@@ -63,23 +59,19 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
-       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
-    )
-    .run(c.repo);
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    etapas,
+    verificacoes: {
+      preparacao: [preparacao],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
-  substituirEtapasDoProjeto(banco, "loja", etapas);
-  substituirPreparacaoDoProjeto(banco, "loja", [preparacao]);
   const ticket = (ticket_id: number, etapa: string, extra: object = {}) => ({
     demanda_id: "I-1",
     ticket_id,
@@ -627,7 +619,7 @@ test("CA-12: reinício falha o planejar com execução aberta, com a demanda em 
 
 test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {
   const { c, banco } = await cenario({ semWorktree: true });
-  banco.prepare("UPDATE projeto SET repo = '/nao/existe' WHERE nome = 'loja'").run();
+  banco.prepare("UPDATE projeto SET raiz_git = '/nao/existe' WHERE nome = 'loja'").run();
   await iniciarExecucaoDemanda(banco, ref(7), { limiteMin: 1 }).fim;
   const [dir] = readdirSync(join(c.raiz, "execucoes"));
   assert.match(readFileSync(join(c.raiz, "execucoes", String(dir), "log"), "utf8"), /preparação falhou: /);

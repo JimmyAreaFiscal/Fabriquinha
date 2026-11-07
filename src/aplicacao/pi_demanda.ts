@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
-import type { Projeto } from "../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../nucleo/projeto.ts";
 import { catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import type { EtapaTicket } from "../nucleo/primitivos.ts";
 import { argumentosPi, PACOTE, skillDoTipo, type Lancamento } from "../infra/agente/pi.ts";

@@ -33,7 +33,7 @@ import {
 import { varrerBase } from "./retrabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { carregarSessoesDaDemanda } from "../armazenamento/sessoes.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
@@ -72,15 +72,10 @@ export async function conduzirEncerramentoDemanda(
       "só se encerra a demanda em encerramento, com o encerrar_demanda reservado pelo agendador",
     );
   }
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   mkdirSync(join(raiz, "execucoes"), { recursive: true });
   const log = join(raiz, "execucoes", `encerramento-${demanda_id}.log`);
-  const hospedagem = { nome: projeto.nome, repo: projeto.raiz_git, hospedagem: projeto.hospedagem };
   const aplicar = (transicao: (a: AgregadoDemanda) => AgregadoDemanda) => comDemanda(banco, demanda_id, transicao);
   const falhar = (etapa: "check_final" | "integracao" | "limpeza", porque: string, limpeza_pendente: string[] = []) =>
     aplicar((a) =>
@@ -97,8 +92,8 @@ export async function conduzirEncerramentoDemanda(
       `a demanda ${demanda_id} não tem progresso de encerramento`,
       "registre a tentativa antes",
     ).limpeza_pendente;
-    const feito = await limparDemanda(raiz, hospedagem, pendentes);
-    const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(hospedagem, feito.removidos))];
+    const feito = await limparDemanda(raiz, projeto, pendentes);
+    const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(projeto, feito.removidos))];
     // A passada anterior (falha parcial) já gravou o que removeu; a demonstração final soma as duas.
     const anterior = carregarDemanda(banco, demanda_id).evidencias.findLast(
       (e) => e.ticket_id === ticket.ticket_id && e.tipo === "demonstracao_limpeza",
@@ -125,7 +120,7 @@ export async function conduzirEncerramentoDemanda(
     const devolverParaEspera = () => aplicar((a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, contexto()));
     let leitura;
     try {
-      leitura = await lerPR(hospedagem, String(pr.numero));
+      leitura = await lerPR(projeto, String(pr.numero));
     } catch (erro) {
       devolverParaEspera(); // a leitura que falha não é decisão do humano: o próximo ciclo relê
       throw erro;
@@ -139,7 +134,7 @@ export async function conduzirEncerramentoDemanda(
       `a hospedagem não informou o merge do PR ${pr.url}`,
       "confira o PR na plataforma",
     );
-    const pendentes = await pendenciasDeLimpeza(raiz, hospedagem, ag);
+    const pendentes = await pendenciasDeLimpeza(raiz, projeto, ag);
     aplicar((a) =>
       registrarIntegracao(a, { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes }, FABRIQUINHA),
     );
@@ -151,7 +146,7 @@ export async function conduzirEncerramentoDemanda(
 
   let publicado: Awaited<ReturnType<typeof publicarFinal>>;
   try {
-    publicado = await publicarFinal(banco, ag, hospedagem, projeto.branch_base, raiz, log);
+    publicado = await publicarFinal(banco, ag, projeto, projeto.branch_base, raiz, log);
     aplicar((a) =>
       registrarTentativaEncerramento(
         a,
@@ -172,7 +167,7 @@ export async function conduzirEncerramentoDemanda(
   }
 
   try {
-    const problemas = await verificarPR(hospedagem, publicado.id, log, deps.verificacao);
+    const problemas = await verificarPR(projeto, publicado.id, log, deps.verificacao);
     if (problemas.conflito) {
       return aplicar((a) => registrarConflitoEncerramento(a, { demanda_id }, FABRIQUINHA, contexto()));
     }
@@ -192,7 +187,7 @@ export async function conduzirEncerramentoDemanda(
 function publicarFinal(
   banco: DatabaseSync,
   ag: AgregadoDemanda,
-  projeto: Pick<Projeto, "nome" | "repo" | "hospedagem">,
+  projeto: Pick<Projeto, "nome" | "raiz_git" | "hospedagem">,
   base: string,
   raiz: string,
   log: string,
@@ -201,8 +196,8 @@ function publicarFinal(
   const registrados = new Set(ag.tickets.map((t) => commitDoTicketDemanda(banco, demanda.id, t.ticket_id)?.sha));
   const conferirCommits = async (head: string) => {
     // Os commits da base já estão no remoto; a ponta dele vem fresca para a comparação.
-    await exigirGit(projeto.repo, "fetch", "origin", base);
-    const novos = await exigirGit(projeto.repo, "rev-list", "--no-merges", `refs/remotes/origin/${base}..${head}`);
+    await exigirGit(projeto.raiz_git, "fetch", "origin", base);
+    const novos = await exigirGit(projeto.raiz_git, "rev-list", "--no-merges", `refs/remotes/origin/${base}..${head}`);
     const orfao = novos.split("\n").find((sha) => sha !== "" && !registrados.has(sha));
     if (orfao === undefined) return;
     throw new ErroDeRegra(

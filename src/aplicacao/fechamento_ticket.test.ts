@@ -8,7 +8,7 @@ import { podeTentarEncerramento } from "../nucleo/transicoes_encerramento.ts";
 import { selecionarTrabalho } from "../nucleo/selecao_trabalho.ts";
 import type { Verificacao } from "./evidencias/verificacoes.ts";
 import { abrir } from "../armazenamento/banco.ts";
-import { gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
@@ -60,21 +60,17 @@ interface Opcoes {
 async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = {}) {
   const c = criarRepositorioDeTeste();
   const banco = abrir(c.raiz);
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
-       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
-    )
-    .run(c.repo);
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
   gravarAgregadoPronto(banco, {
     demanda: {

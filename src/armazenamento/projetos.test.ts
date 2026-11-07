@@ -1,529 +1,525 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ZodError } from "zod";
-import type { DatabaseSync } from "node:sqlite";
-import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
-import { caminhoArquivo } from "./arquivos.ts";
-import { raizDo } from "./banco.ts";
-import { dirDaExecucaoSimulada } from "../infra/registro.ts";
-import { editarProjeto, projeto, projetos, registrarProjeto, removerProjeto } from "./projetos.ts";
-
-const abrirBancoTemporario = fabricaDeBancosTemporarios();
-const novoBanco = () => abrirBancoTemporario().banco;
-
-const exemplo = {
-  nome: "fabriquinha",
-  repo: "/repos/fabriquinha",
-  branchBase: "main",
-  hospedagem: "github" as const,
-  preparacao: ["npm ci"],
-  sonar: { projectKey: "Fabriquinha" },
-};
-const lido = exemplo;
-
-test("registrarProjeto cadastra e projeto/projetos leem de volta igual, em ordem de nome", () => {
-  const banco = novoBanco();
-  assert.equal(projeto(banco, "fabriquinha"), undefined);
-  assert.deepEqual(projetos(banco), []);
-
-  const minimo = { ...exemplo, nome: "abc", repo: "/repos/abc", preparacao: undefined };
-  assert.deepEqual(registrarProjeto(banco, exemplo), exemplo);
-  registrarProjeto(banco, minimo);
-
-  assert.deepEqual(projeto(banco, "fabriquinha"), lido);
-  assert.deepEqual(
-    projetos(banco).map((p) => [p.nome, p.preparacao]),
-    [
-      ["abc", []],
-      ["fabriquinha", ["npm ci"]],
-    ],
-  );
-  banco.close();
-});
-
-const recusa = (trabalho: () => unknown, mensagem: string) => {
-  assert.throws(trabalho, (erro) => erro instanceof ErroDeRegra && erro.message === mensagem);
-};
-
-test("o link do produto é gravado, relido e apagado ao editar com o campo vazio", () => {
-  const banco = novoBanco();
-  const link = "https://demo.exemplo.com";
-  registrarProjeto(banco, { ...exemplo, linkProduto: link });
-  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, link);
-  assert.throws(() => editarProjeto(banco, { ...exemplo, linkProduto: "isso nao e um link" }), ZodError);
-  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, link);
-  assert.equal(editarProjeto(banco, { ...exemplo, linkProduto: "" }).linkProduto, undefined);
-  assert.equal(projeto(banco, "fabriquinha")?.linkProduto, undefined);
-  banco.close();
-});
-
-test("a edição não toca a chave do SonarQube, que é da configuração SDLC", () => {
-  const banco = novoBanco();
-  registrarProjeto(banco, exemplo);
-  const chave = () =>
-    banco.prepare("SELECT sonar_project_key FROM projeto WHERE nome = 'fabriquinha'").get()?.sonar_project_key;
-  assert.equal(chave(), "Fabriquinha");
-  banco.prepare("UPDATE projeto SET sonar_project_key = 'da-sdlc' WHERE nome = 'fabriquinha'").run();
-  editarProjeto(banco, { ...exemplo, sonar: { projectKey: "outra" }, branchBase: "develop" });
-  assert.equal(chave(), "da-sdlc");
-  assert.equal(projeto(banco, "fabriquinha")?.branchBase, "develop");
-  banco.close();
-});
-
-test("registrarProjeto recusa nome que já existe, sem mexer no projeto", () => {
-  const banco = novoBanco();
-  registrarProjeto(banco, exemplo);
-  recusa(
-    () => registrarProjeto(banco, { ...exemplo, repo: "/repos/outro", branchBase: "develop" }),
-    "já existe o projeto fabriquinha (edite-o na Configuração)",
-  );
-  assert.deepEqual(projetos(banco), [lido]);
-  banco.close();
-});
-
-test("editarProjeto substitui o cadastro, inclusive sem mudança", () => {
-  const banco = novoBanco();
-  registrarProjeto(banco, exemplo);
-  assert.deepEqual(editarProjeto(banco, exemplo), exemplo);
-  const editado = {
-    ...exemplo,
-    repo: "/repos/outro-lugar",
-    branchBase: "develop",
-    hospedagem: "azure-devops" as const,
-    preparacao: [],
-  };
-  editarProjeto(banco, editado);
-  assert.deepEqual(projetos(banco), [editado]);
-  banco.close();
-});
-
-test("a preparação do cadastro é gravada em comando_preparacao_projeto, a tabela que o fluxo da demanda lê", () => {
-  const banco = novoBanco();
-  const preparacaoGravada = () =>
-    banco
-      .prepare("SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = 'fabriquinha' ORDER BY ordem")
-      .all()
-      .map((l) => ({ ...l }));
-  registrarProjeto(banco, exemplo);
-  assert.deepEqual(preparacaoGravada(), [{ ordem: 1, comando: "npm ci" }]);
-  editarProjeto(banco, { ...exemplo, preparacao: ["uv venv .venv", "uv sync"] });
-  assert.deepEqual(preparacaoGravada(), [
-    { ordem: 1, comando: "uv venv .venv" },
-    { ordem: 2, comando: "uv sync" },
-  ]);
-  assert.deepEqual(projeto(banco, "fabriquinha")?.preparacao, ["uv venv .venv", "uv sync"]);
-  // A recusa reverte a transação inteira: a preparação fica a de antes.
-  recusa(
-    () => registrarProjeto(banco, { ...exemplo, repo: "/repos/outro", preparacao: ["rm -rf"] }),
-    "já existe o projeto fabriquinha (edite-o na Configuração)",
-  );
-  assert.deepEqual(projeto(banco, "fabriquinha")?.preparacao, ["uv venv .venv", "uv sync"]);
-  banco.close();
-});
-
-test("editarProjeto recusa projeto que não existe, sem criá-lo", () => {
-  const banco = novoBanco();
-  recusa(() => editarProjeto(banco, exemplo), "o projeto fabriquinha não existe (cadastre-o na Configuração)");
-  assert.deepEqual(projetos(banco), []);
-  banco.close();
-});
-
-test("registrar e editar recusam o schema do F1 sem gravar nada", () => {
-  const banco = novoBanco();
-  assert.throws(() => registrarProjeto(banco, { ...exemplo, repo: "relativo" }), ZodError);
-  registrarProjeto(banco, exemplo);
-  assert.throws(() => editarProjeto(banco, { ...exemplo, repo: "relativo" }), ZodError);
-  assert.deepEqual(projetos(banco), [lido]);
-  banco.close();
-});
-
-test("registrar e editar recusam um repositório que já é de outro projeto", () => {
-  const banco = novoBanco();
-  registrarProjeto(banco, exemplo);
-  registrarProjeto(banco, { ...exemplo, nome: "outro", repo: "/repos/outro" });
-  const mensagem =
-    "o repositório /repos/fabriquinha já é do projeto fabriquinha (edite o projeto fabriquinha em vez de cadastrar outro para o mesmo repositório)";
-  recusa(() => registrarProjeto(banco, { ...exemplo, nome: "copia" }), mensagem);
-  recusa(() => editarProjeto(banco, { ...exemplo, nome: "outro" }), mensagem);
-  assert.deepEqual(
-    projetos(banco).map((p) => [p.nome, p.repo]),
-    [
-      ["fabriquinha", "/repos/fabriquinha"],
-      ["outro", "/repos/outro"],
-    ],
-  );
-  banco.close();
-});
-
-test("as constraints da tabela projeto valem no banco, não só no schema", () => {
-  const banco = novoBanco();
-  const inserir = (troca: Record<string, string>) => {
-    const linha = {
-      nome: "'p'",
-      repo: "'/r'",
-      branch_base: "'main'",
-      hospedagem: "'github'",
-      sonar_project_key: "'k'",
-      ...troca,
-    };
-    banco.exec(`INSERT INTO projeto (${Object.keys(linha).join(",")}) VALUES (${Object.values(linha).join(",")})`);
-  };
-  const violacoes: [Record<string, string>, RegExp][] = [
-    [{ nome: "''" }, /CHECK/],
-    [{ nome: `'${"a".repeat(65)}'` }, /CHECK/],
-    [{ hospedagem: "'gitlab'" }, /CHECK/],
-    [{ branch_base: "NULL" }, /NOT NULL/],
-    [{ sonar_project_key: "NULL" }, /NOT NULL/],
-  ];
-  for (const [troca, erro] of violacoes) {
-    assert.throws(() => {
-      inserir(troca);
-    }, erro);
-  }
-  inserir({});
-  assert.throws(() => {
-    inserir({ nome: "'q'" });
-  }, /UNIQUE constraint failed: projeto.repo/);
-  assert.throws(() => {
-    inserir({ repo: "'/s'" });
-  }, /UNIQUE constraint failed: projeto.nome/);
-  banco.close();
-});
+import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
+import { abrir, escrever } from "./banco.ts";
+import {
+  apagarProjeto,
+  buscarProjeto,
+  carregarProjeto,
+  donoDoRepositorio,
+  gravarProjeto,
+  listarProjetos,
+  projetoExistente,
+  tarefaComExecucaoSimuladaPendente,
+  ticketEmAndamentoDoProjeto,
+} from "./projetos.ts";
 
 const TABELAS = [
-  "execucao_simulada",
-  "tarefa_usuario",
-  "tarefa",
-  "usuario_simulado_anexo",
-  "usuario_simulado",
-  "uso_modelo_execucao",
-  "retrabalho_demanda",
-  "arquivo_commit_demanda",
-  "commit_ticket_demanda",
-  "arquivo_evidencia",
-  "evidencia_demanda",
-  "iteracao_demanda",
-  "proposta_demanda",
-  "decisao_ticket",
-  "execucao_sessao",
-  "sessao",
-  "dependencia_demanda",
-  "ticket_demanda",
-  "varredura_base",
-  "demanda",
   "projeto",
+  "configuracao_etapa_projeto",
+  "comando_preparacao_projeto",
+  "fitness_function_projeto",
+  "linguagem_projeto",
+  "configuracao_e2e",
+  "glob_e2e",
 ];
-const contagens = (banco: DatabaseSync) =>
-  TABELAS.map((t) => Number(banco.prepare(`SELECT count(*) AS n FROM ${t}`).get()?.n));
-const custo = (banco: DatabaseSync) =>
-  Number(banco.prepare("SELECT total(custo) AS c FROM uso_modelo_execucao").get()?.c);
-
-const SHA_COMPARTILHADO = "c".repeat(64);
-let contador = 0;
-
-/** Os IDs das execuções simuladas das Tarefas do projeto. */
-const simuladas = (banco: DatabaseSync, nome: string): number[] =>
-  banco
-    .prepare("SELECT e.id FROM execucao_simulada e JOIN tarefa t ON t.id = e.tarefa WHERE t.projeto = ?")
-    .all(nome)
-    .map((l) => Number(l.id));
-
-/** A execução da sessão da demanda `n`: a da primeira veio do fluxo legado (`E-<n>`), as outras são novas. */
-const execucaoDe = (n: number, primeira: boolean) => (primeira ? `E-${String(n)}` : `x${String(n)}`);
-/** A pasta da execução: a copiada do fluxo legado já se chama `E-<n>`; as novas, `E-<id>`. */
-const pastaDe = (raiz: string, execucao: string) =>
-  join(raiz, "execucoes", execucao.startsWith("E-") ? execucao : `E-${execucao}`);
-const sessaoNoDisco = (raiz: string, n: number) => join(raiz, "sessoes", `2026-01-01T00-00-00Z_s${String(n)}.jsonl`);
-
-/**
- * Um projeto com 4 demandas, cada uma com um ticket concluído e linhas nas tabelas dela, a execução e a sessão no
- * disco. O anexo da primeira tem o hash compartilhado entre projetos; o das outras, o `shaProprio`.
- */
-function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number, number, number, number] {
-  const raiz = raizDo(banco);
-  registrarProjeto(banco, { ...exemplo, nome, repo: `/repos/${nome}` });
-  banco.prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES (?, ?, ?)").run(nome, "a".repeat(40), "t");
-  const demandas = [0, 1, 2, 3].map((i) => {
-    const id = ++contador;
-    const n = String(id);
-    const d = `I-${n}`;
-    const execucao = execucaoDe(id, i === 0);
-    banco.exec(`
-      INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 1, 'b');
-      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
-        VALUES ('${d}', 1, 'implementar', 'concluido', 't');
-      INSERT INTO sessao VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
-      INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
-      INSERT INTO uso_modelo_execucao VALUES ('${execucao}', 'p', 'm', 1, 1, 0, 0, ${n}.5);
-      INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
-      INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a.txt', '${i === 0 ? SHA_COMPARTILHADO : shaProprio}', 'text/plain', 1);
-      INSERT INTO iteracao_demanda (demanda_id, ticket_id, tipo, em) VALUES ('${d}', 1, 'mensagem', 't');
-      INSERT INTO proposta_demanda (demanda_id, ticket_id, titulo, mensagem, arquivos, status, em)
-        VALUES ('${d}', 1, 't', 'm', 31, 'pendente', 't');
-      INSERT INTO proposta_demanda (demanda_id, ticket_id, titulo, mensagem, arquivos, status, demanda_criada_id, em, decidida_em)
-        VALUES ('${d}', 1, 't', 'm', 31, 'aceita', '${d}', 't', 't');
-      INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
-      INSERT INTO commit_ticket_demanda VALUES ('${n.padStart(40, "b")}', '${d}', 1, 'm', 't');
-      INSERT INTO arquivo_commit_demanda (sha, caminho, status) VALUES ('${n.padStart(40, "b")}', 'f', 'A');
-      INSERT INTO retrabalho_demanda VALUES ('${n.padStart(40, "d")}', '${d}', NULL, 'x', 1, 1, NULL);
-    `);
-    mkdirSync(pastaDe(raiz, execucao), { recursive: true });
-    writeFileSync(join(pastaDe(raiz, execucao), "log"), "x");
-    mkdirSync(join(raiz, "sessoes"), { recursive: true });
-    writeFileSync(sessaoNoDisco(raiz, id), "x");
-    return id;
-  }) as [number, number, number, number];
-  banco.exec(`
-    INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('${nome}', 'Dona Maria', 'd');
-    INSERT INTO usuario_simulado_anexo SELECT id, 'manual.pdf', '${shaProprio}', 1 FROM usuario_simulado WHERE projeto = '${nome}';
-    INSERT INTO tarefa (projeto, texto, n, criada_em) VALUES ('${nome}', 't', 1, 't');
-    INSERT INTO tarefa_usuario SELECT t.id, u.id FROM tarefa t, usuario_simulado u WHERE t.projeto = '${nome}' AND u.projeto = '${nome}';
-    INSERT INTO execucao_simulada (tarefa, usuario, status, erro)
-      SELECT t.id, u.id, 'falhou', 'x' FROM tarefa t, usuario_simulado u WHERE t.projeto = '${nome}' AND u.projeto = '${nome}';
-  `);
-  for (const id of simuladas(banco, nome)) {
-    mkdirSync(dirDaExecucaoSimulada(raiz, id), { recursive: true });
-    writeFileSync(join(dirDaExecucaoSimulada(raiz, id), "log"), "x");
-  }
-  for (const sha of [SHA_COMPARTILHADO, shaProprio]) {
-    mkdirSync(join(caminhoArquivo(banco, sha), ".."), { recursive: true });
-    writeFileSync(caminhoArquivo(banco, sha), "x");
-  }
-  return demandas;
-}
-
-test("removerProjeto apaga o projeto e tudo dele, no banco e no disco, e deixa o outro intacto", async () => {
-  const banco = novoBanco();
-  const raiz = raizDo(banco);
-  const outro = popular(banco, "outro", "e".repeat(64));
-  const antes = contagens(banco);
-  const custoAntes = custo(banco);
-  const demo = popular(banco, "demo", "f".repeat(64));
-  const simuladasDemo = simuladas(banco, "demo");
-  const simuladasOutro = simuladas(banco, "outro");
-  assert.equal(simuladasDemo.length + simuladasOutro.length, 2);
-  // A demanda do outro projeto que depende de uma do removido perde a dependência.
-  banco.prepare("INSERT INTO dependencia_demanda VALUES (?, ?)").run(`I-${String(outro[0])}`, `I-${String(demo[0])}`);
-
-  const { projeto: removido, avisos } = await removerProjeto(banco, "demo");
-
-  assert.equal(removido.nome, "demo");
-  assert.equal(removido.repo, "/repos/demo");
-  assert.deepEqual(avisos, []);
-  assert.deepEqual(contagens(banco), antes);
-  assert.equal(custo(banco), custoAntes);
-  assert.equal(projeto(banco, "demo"), undefined);
-  assert.equal(projeto(banco, "outro")?.nome, "outro");
-  for (const [i, n] of demo.entries()) {
-    assert.equal(existsSync(pastaDe(raiz, execucaoDe(n, i === 0))), false);
-    assert.equal(existsSync(sessaoNoDisco(raiz, n)), false);
-  }
-  for (const id of simuladasDemo) assert.equal(existsSync(dirDaExecucaoSimulada(raiz, id)), false);
-  for (const id of simuladasOutro) assert.equal(existsSync(dirDaExecucaoSimulada(raiz, id)), true);
-  assert.equal(existsSync(caminhoArquivo(banco, "f".repeat(64))), false);
-  assert.equal(existsSync(caminhoArquivo(banco, SHA_COMPARTILHADO)), true);
-  assert.equal(existsSync(caminhoArquivo(banco, "e".repeat(64))), true);
-  for (const [i, n] of outro.entries()) {
-    assert.equal(existsSync(pastaDe(raiz, execucaoDe(n, i === 0))), true);
-    assert.equal(existsSync(sessaoNoDisco(raiz, n)), true);
-  }
-  banco.close();
+const cadastro = (nome = "a") => ({
+  nome,
+  branch_base: "main",
+  chave_sonarqube: "chave",
+  raiz_git: `/repo/${nome}`,
+  hospedagem: "github",
 });
-
-test("removerProjeto não apaga o arquivo que um anexo de outro projeto ainda usa", async () => {
-  const banco = novoBanco();
-  popular(banco, "demo", "f".repeat(64));
-  registrarProjeto(banco, { ...exemplo, nome: "outro", repo: "/repos/outro" });
-  banco.exec(`
-    INSERT INTO usuario_simulado (projeto, nome, descricao) VALUES ('outro', 'Seu João', 'd');
-    INSERT INTO usuario_simulado_anexo SELECT id, 'igual.pdf', '${"f".repeat(64)}', 1 FROM usuario_simulado WHERE projeto = 'outro';
-  `);
-  await removerProjeto(banco, "demo");
-  assert.equal(existsSync(caminhoArquivo(banco, "f".repeat(64))), true);
-  banco.close();
+const minima = (nome = "a") => ({
+  ...cadastro(nome),
+  verificacoes: {
+    fitness: [{ nome: "f", comando: "  npm run f  ", descricao: "d" }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "npm test" }],
+  },
 });
-
-const recusaAsync = async (trabalho: () => Promise<unknown>, tipo: typeof ErroDeRegra, mensagem: string) => {
-  await assert.rejects(trabalho, (erro) => erro instanceof tipo && erro.message === mensagem);
+const completa = ProjetoConfigurado.parse({
+  ...minima(),
+  etapas: [
+    { etapa: "planejar", configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" } },
+    { etapa: "implementar", configuracao_agente: { effort: "low" } },
+    { etapa: "entender_e_desenhar" },
+  ],
+  verificacoes: {
+    preparacao: ["primeiro", "segundo"],
+    fitness: [
+      { nome: "z", comando: "c", descricao: "d" },
+      { nome: "a", comando: "c", descricao: "d" },
+    ],
+    linguagens: [
+      { caminho: "web", linguagem: "ts", comando_teste: "t" },
+      { caminho: "api", linguagem: "ts", comando_teste: "t" },
+    ],
+    e2e: [
+      { caminho_linguagem: "web", comando_build: "b", comando_execucao: "e", codigo_falha: 255 },
+      { caminho_linguagem: "api", comando_build: "b", comando_execucao: "e", codigo_falha: 1 },
+    ],
+    globs: [
+      { caminho_linguagem: "web", glob: "z/*" },
+      { caminho_linguagem: "api", glob: "b/*" },
+      { caminho_linguagem: "api", glob: "a/*" },
+    ],
+  },
+});
+const canonica = {
+  ...completa,
+  etapas: [completa.etapas[2], completa.etapas[1], completa.etapas[0]],
+  verificacoes: {
+    ...completa.verificacoes,
+    fitness: [completa.verificacoes.fitness[1], completa.verificacoes.fitness[0]],
+    linguagens: [completa.verificacoes.linguagens[1], completa.verificacoes.linguagens[0]],
+    e2e: [completa.verificacoes.e2e[1], completa.verificacoes.e2e[0]],
+    globs: [completa.verificacoes.globs[2], completa.verificacoes.globs[1], completa.verificacoes.globs[0]],
+  },
 };
-
-test("removerProjeto recusa projeto inexistente, sem mudar nada", async () => {
-  const banco = novoBanco();
-  popular(banco, "outro", "e".repeat(64));
-  const antes = contagens(banco);
-  await recusaAsync(
-    () => removerProjeto(banco, "fantasma"),
-    ErroDeInexistente,
-    "o projeto fantasma não existe (confira o nome do projeto)",
-  );
-  assert.deepEqual(contagens(banco), antes);
-  banco.close();
-});
-
-test("removerProjeto recusa execução em andamento e ticket em execução, sem apagar nada", async () => {
-  const banco = novoBanco();
-  const [primeira, segunda] = popular(banco, "demo", "f".repeat(64));
-  const antes = contagens(banco);
-
-  banco.prepare("UPDATE execucao_sessao SET fim = NULL WHERE id = ?").run(execucaoDe(primeira, true));
-  await recusaAsync(
-    () => removerProjeto(banco, "demo"),
-    ErroDeRegra,
-    `o projeto demo tem execução em andamento no I-${String(primeira)}.T1 (espere ela terminar ou pare a sessão, e remova de novo)`,
-  );
-  assert.deepEqual(contagens(banco), antes);
-  assert.equal(existsSync(pastaDe(raizDo(banco), execucaoDe(primeira, true))), true);
-
-  banco.prepare("UPDATE execucao_sessao SET fim = 't' WHERE id = ?").run(execucaoDe(primeira, true));
-  banco.prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ?").run(`I-${String(segunda)}`);
-  await recusaAsync(
-    () => removerProjeto(banco, "demo"),
-    ErroDeRegra,
-    `o projeto demo tem execução em andamento no I-${String(segunda)}.T1 (espere ela terminar ou pare a sessão, e remova de novo)`,
-  );
-  assert.deepEqual(contagens(banco), antes);
-  banco.close();
-});
-
-test("removerProjeto recusa execução simulada na fila ou em andamento, sem apagar nada", async () => {
-  const banco = novoBanco();
-  popular(banco, "demo", "f".repeat(64));
-  const antes = contagens(banco);
-  const [id] = simuladas(banco, "demo");
-  for (const status of ["na_fila", "em_andamento"]) {
-    banco.prepare("UPDATE execucao_simulada SET status = ?, erro = NULL").run(status);
-    await assert.rejects(
-      () => removerProjeto(banco, "demo"),
-      (falha) =>
-        falha instanceof ErroDeRegra &&
-        /^o projeto demo tem execução simulada pendente na Tarefa \d+ \(espere ela terminar, e remova de novo\)$/.test(
-          falha.message,
-        ),
-    );
-    assert.deepEqual(contagens(banco), antes);
-    assert.equal(existsSync(dirDaExecucaoSimulada(raizDo(banco), id ?? 0)), true);
-  }
-  banco.close();
-});
-
-test("removerProjeto sem demandas nem sessões no disco só apaga o projeto", async () => {
-  const banco = novoBanco();
-  registrarProjeto(banco, exemplo);
-  const { avisos } = await removerProjeto(banco, "fabriquinha");
-  assert.deepEqual(avisos, []);
-  assert.deepEqual(projetos(banco), []);
-  banco.close();
-});
-
-test("removerProjeto: falha ao apagar no disco vira aviso e não desfaz o banco", async () => {
-  const banco = novoBanco();
-  const raiz = raizDo(banco);
-  popular(banco, "demo", "f".repeat(64));
-  chmodSync(join(raiz, "execucoes"), 0o500); // sem escrita: não dá para apagar E-n dentro dela
+function comBanco(corpo: (banco: DatabaseSync, raiz: string) => void): void {
+  const { raiz, banco, fechar } = abrirBancoTemporario();
   try {
-    const { avisos } = await removerProjeto(banco, "demo");
-    assert.equal(avisos.length, 4);
-    for (const aviso of avisos) assert.match(aviso, /^não foi possível apagar .*E-[\w-]+: /);
+    for (const nome of ["a", "b"]) gravarProjeto(banco, Projeto.parse(cadastro(nome)));
+    corpo(banco, raiz);
   } finally {
-    chmodSync(join(raiz, "execucoes"), 0o700);
+    fechar();
   }
-  assert.equal(projeto(banco, "demo"), undefined);
-  assert.deepEqual(
-    contagens(banco),
-    TABELAS.map(() => 0),
+}
+const fotografarTabelas = (banco: DatabaseSync): unknown[] =>
+  TABELAS.map((tabela) => banco.prepare(`SELECT * FROM ${tabela} ORDER BY 1, 2, 3`).all());
+
+function gravarCompleta(banco: DatabaseSync): void {
+  gravarProjeto(banco, completa);
+  // A leitura ordena também a preparação já existente, mesmo que haja lacunas na posição.
+  banco.exec(
+    "DELETE FROM comando_preparacao_projeto WHERE projeto = 'a'; INSERT INTO comando_preparacao_projeto VALUES ('a', 10, 'segundo'), ('a', 2, 'primeiro')",
   );
-  banco.close();
-});
-
-const TABELAS_DEMANDA = [
-  "avaliacao",
-  "avaliacao_demanda",
-  "achado_avaliacao",
-  "uso_avaliacao",
-  "retrabalho_demanda",
-  "arquivo_commit_demanda",
-  "commit_ticket_demanda",
-  "uso_modelo_historico",
-  "uso_modelo_execucao",
-  "execucao_sessao",
-  "sessao",
-  "sessao_externa_demanda",
-  "decisao_ticket_historico",
-  "decisao_ticket",
-  "arquivo_evidencia",
-  "evidencia_historico",
-  "evidencia_demanda",
-  "limpeza_pendente_encerramento",
-  "encerramento_demanda",
-  "dependencia_ticket",
-  "caminho_ticket",
-  "ticket_demanda",
-  "criterio_citado_rodada",
-  "dependencia_rodada",
-  "rodada",
-  "dependencia_demanda",
-  "demanda_historico",
-  "demanda",
-];
-const contagensDemanda = (banco: DatabaseSync) =>
-  TABELAS_DEMANDA.map((t) => Number(banco.prepare(`SELECT count(*) AS n FROM ${t}`).get()?.n));
-
-/** Uma demanda com duas rodadas e dois tickets de implementação, com linha em toda tabela da demanda. */
-function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
-  registrarProjeto(banco, { ...exemplo, nome, repo: `/repos/${nome}` });
-  const digitos = d.slice(2);
-  const [sha1, sha2, sha3] = [digitos.padStart(40, "a"), digitos.padStart(40, "c"), digitos.padStart(64, "9")];
-  banco.exec(`
-    INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
-    INSERT INTO demanda VALUES ('${d}2', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
-    INSERT INTO dependencia_demanda VALUES ('${d}2', '${d}');
-    INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('${d}', 't');
-    INSERT INTO rodada VALUES ('${d}', 1, 't', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b');
-    INSERT INTO rodada VALUES ('${d}', 2, 't', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b');
-    INSERT INTO dependencia_rodada VALUES ('${d}', 2, 1);
-    INSERT INTO criterio_citado_rodada VALUES ('${d}', 1, 'CA-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
-      VALUES ('${d}', 1, 'implementar', 'concluido', 't', 1), ('${d}', 2, 'implementar', 'concluido', 't', 1);
-    INSERT INTO dependencia_ticket VALUES ('${d}', 2, 1, 1);
-    INSERT INTO caminho_ticket VALUES ('${d}', 1, 'src');
-    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
-    INSERT INTO decisao_ticket_historico VALUES ('${d}', 1, 1, 'registro');
-    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
-    INSERT INTO evidencia_historico VALUES ('${d}e', 1, 'agente');
-    INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a', '${sha3}', 'text/plain', 1);
-    INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('${d}', 'b', 'main');
-    INSERT INTO limpeza_pendente_encerramento VALUES ('${d}', 'x');
-    INSERT INTO sessao VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
-    INSERT INTO sessao_externa_demanda VALUES ('pi', '${d}x', '${d}');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
-    INSERT INTO uso_modelo_execucao VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
-    INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
-    INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');
-    INSERT INTO arquivo_commit_demanda VALUES ('${sha1}', 'f', NULL, 'A', 1, 0);
-    INSERT INTO retrabalho_demanda VALUES ('${sha2}', '${d}', 2, NULL, 1, 1, '${d}');
-    INSERT INTO avaliacao VALUES ('${d}av', '${nome}', '2026-01-01', '2026-01-02', 'p', 't');
-    INSERT INTO avaliacao_demanda VALUES ('${d}av', '${d}');
-    INSERT INTO achado_avaliacao VALUES ('${d}av', 1, 't', 'd', 'e', '${d}');
-    INSERT INTO uso_avaliacao VALUES ('${d}av', 'p', 'm', 1, 1, 1, 0, 0, NULL);
-  `);
 }
 
-test("removerProjeto apaga as tabelas da demanda do projeto sem erro de chave estrangeira e deixa as do outro", async () => {
-  const banco = novoBanco();
-  popularDemanda(banco, "outro", "I-9001");
-  const antes = contagensDemanda(banco);
-  popularDemanda(banco, "demo", "I-9101");
-  // demanda do outro projeto que depende da do projeto removido, e retrabalho dela sobre o ticket do removido
-  banco.exec(`
-    INSERT INTO dependencia_demanda VALUES ('I-9001', 'I-9101');
-    INSERT INTO avaliacao_demanda VALUES ('I-9001av', 'I-9101');
-  `);
-  await removerProjeto(banco, "demo");
-  banco.exec("DELETE FROM dependencia_demanda WHERE depende_demanda_id = 'I-9101'"); // não existe mais: já tem de ter saído
-  assert.deepEqual(contagensDemanda(banco), antes);
-  assert.equal(existsSync(caminhoArquivo(banco, "9101".padStart(64, "9"))), false);
-  banco.close();
+test("projetoExistente devolve o projeto cadastrado", () => {
+  comBanco((banco) => {
+    assert.deepEqual(projetoExistente(banco, "a"), Projeto.parse(cadastro()));
+  });
+});
+
+test("projetoExistente recusa o projeto inexistente, com a orientação padrão ou a de quem chama", () => {
+  comBanco((banco) => {
+    for (const [orientacao, mensagem] of [
+      [undefined, "o projeto fantasma não existe (confira o nome do projeto)"],
+      ["confira a execução", "o projeto fantasma não existe (confira a execução)"],
+    ])
+      assert.throws(
+        () => projetoExistente(banco, "fantasma", orientacao),
+        (erro) => erro instanceof ErroDeInexistente && erro.message === mensagem,
+      );
+  });
+});
+
+test("carregarProjeto recusa o projeto inexistente com a orientação de configurar", () => {
+  comBanco((banco) => {
+    assert.throws(
+      () => carregarProjeto(banco, "fantasma"),
+      (erro) =>
+        erro instanceof ErroDeRegra &&
+        erro.message === "o projeto fantasma não tem configuração do SDLC (configure o projeto)",
+    );
+    assert.throws(
+      () => carregarProjeto(banco, "a"),
+      (erro) =>
+        erro instanceof ErroDeRegra &&
+        erro.message === "o projeto a não tem configuração do SDLC (configure o projeto)",
+    );
+    gravarCompleta(banco);
+    assert.deepEqual(carregarProjeto(banco, "a"), canonica);
+  });
+});
+
+test("donoDoRepositorio acha só o outro projeto que usa o repositório; gravarProjeto atualiza o mesmo nome", () => {
+  comBanco((banco) => {
+    gravarProjeto(banco, Projeto.parse({ ...cadastro(), branch_base: "dev" }));
+    assert.equal(listarProjetos(banco).length, 2);
+    assert.equal(projetoExistente(banco, "a").branch_base, "dev");
+    assert.equal(donoDoRepositorio(banco, "/repo/a", "outro"), "a");
+    assert.equal(donoDoRepositorio(banco, "/repo/a", "a"), undefined);
+    assert.equal(donoDoRepositorio(banco, "/inexistente", "a"), undefined);
+  });
+});
+
+test("ida e volta completa, com listas na ordem canônica", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    assert.deepEqual(buscarProjeto(banco, "a"), canonica);
+    assert.deepEqual(listarProjetos(banco), [canonica, Projeto.parse(cadastro("b"))]);
+  });
+});
+
+test("a gravação SDLC mantém as etapas e a preparação gravadas pelo cadastro", () => {
+  comBanco((banco) => {
+    const ignoradas = gravarConfiguracaoSdlc(banco, completa);
+    assert.deepEqual(ignoradas.etapas, []);
+    assert.deepEqual(ignoradas.verificacoes.preparacao, []);
+    gravarProjeto(banco, { ...completa, verificacoes: { ...completa.verificacoes, preparacao: ["uv sync"] } });
+    const mantidas = gravarConfiguracaoSdlc(banco, ProjetoConfigurado.parse(minima()));
+    assert.deepEqual(mantidas.etapas, canonica.etapas);
+    assert.deepEqual(mantidas.verificacoes.preparacao, ["uv sync"]);
+    assert.deepEqual(buscarProjeto(banco, "a")?.etapas, canonica.etapas);
+  });
+});
+
+test("preparação: lida sem SDLC, substituída na ordem 1..n; a inválida não altera nada", () => {
+  comBanco((banco) => {
+    const projetoB = projetoExistente(banco, "b");
+    assert.deepEqual(projetoB.verificacoes.preparacao, []);
+    gravarProjeto(banco, {
+      ...projetoB,
+      verificacoes: { ...projetoB.verificacoes, preparacao: ["uv venv .venv", "uv sync"] },
+    });
+    assert.throws(() => carregarProjeto(banco, "b"), ErroDeRegra);
+    assert.deepEqual(projetoExistente(banco, "b").verificacoes.preparacao, ["uv venv .venv", "uv sync"]);
+    gravarCompleta(banco);
+    const projetoA = projetoExistente(banco, "a");
+    gravarProjeto(banco, { ...projetoA, verificacoes: { ...projetoA.verificacoes, preparacao: ["npm ci"] } });
+    assert.deepEqual(buscarProjeto(banco, "a"), {
+      ...canonica,
+      verificacoes: { ...canonica.verificacoes, preparacao: ["npm ci"] },
+    });
+    assert.deepEqual(
+      banco
+        .prepare("SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = 'b' ORDER BY ordem")
+        .all()
+        .map((comando) => ({ ...comando })),
+      [
+        { ordem: 1, comando: "uv venv .venv" },
+        { ordem: 2, comando: "uv sync" },
+      ],
+    );
+    const antes = fotografarTabelas(banco);
+    assert.throws(() => {
+      gravarProjeto(banco, { ...projetoA, verificacoes: { ...projetoA.verificacoes, preparacao: ["npm ci", ""] } });
+    }, /CHECK/);
+    assert.deepEqual(fotografarTabelas(banco), antes);
+    assert.equal(banco.isTransaction, false);
+    assert.deepEqual(projetoExistente(banco, "b").verificacoes.preparacao, ["uv venv .venv", "uv sync"]);
+  });
+});
+
+test("etapas: lidas sem SDLC, substituídas; a inválida não altera nada", () => {
+  comBanco((banco) => {
+    const projetoB = projetoExistente(banco, "b");
+    assert.deepEqual(projetoB.etapas, []);
+    const etapasB = Projeto.parse({
+      ...projetoB,
+      etapas: [{ etapa: "ajustar_resultado", configuracao_agente: { effort: "max" } }],
+    }).etapas;
+    gravarProjeto(banco, { ...projetoB, etapas: etapasB });
+    assert.throws(() => carregarProjeto(banco, "b"), ErroDeRegra);
+    assert.deepEqual(projetoExistente(banco, "b").etapas, etapasB);
+    gravarCompleta(banco);
+    const substituido = Projeto.parse({
+      ...completa,
+      etapas: [{ etapa: "entender_e_desenhar", configuracao_agente: { modelo: { provedor: "p", nome: "m" } } }],
+    });
+    gravarProjeto(banco, substituido);
+    assert.deepEqual(buscarProjeto(banco, "a"), { ...canonica, etapas: substituido.etapas });
+    const antes = fotografarTabelas(banco);
+    assert.throws(() => {
+      gravarProjeto(
+        banco,
+        Projeto.parse({
+          ...completa,
+          etapas: [{ etapa: "planejar", configuracao_agente: { modelo: { provedor: "p" } } }],
+        }),
+      );
+    }, /nome/);
+    assert.deepEqual(fotografarTabelas(banco), antes);
+    assert.equal(banco.isTransaction, false);
+    assert.deepEqual(projetoExistente(banco, "b").etapas, etapasB);
+  });
+});
+
+test("a leitura dentro de uma escrita faz parte dela, sem abrir outra transação", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    assert.deepEqual(
+      escrever(banco, () => buscarProjeto(banco, "a")),
+      canonica,
+    );
+    assert.deepEqual(
+      escrever(banco, () => listarProjetos(banco)),
+      [canonica, Projeto.parse(cadastro("b"))],
+    );
+  });
+});
+
+test("configuração mínima aplica defaults e trim; opcionais ficam ausentes", () => {
+  comBanco((banco) => {
+    const esperado = ProjetoConfigurado.parse(minima());
+    gravarProjeto(banco, esperado);
+    assert.deepEqual(buscarProjeto(banco, "a"), esperado);
+    assert.equal(esperado.verificacoes.fitness[0]?.comando, "npm run f");
+    assert.equal(Object.hasOwn(projetoExistente(banco, "a"), "link_produto"), false);
+  });
+});
+
+test("mesmo nome de linguagem em caminhos distintos e leitura após reabrir", () => {
+  comBanco((banco, raiz) => {
+    gravarCompleta(banco);
+    const outro = abrir(raiz);
+    try {
+      assert.deepEqual(
+        projetoExistente(outro, "a").verificacoes.linguagens.map((linguagem) => linguagem.linguagem),
+        ["ts", "ts"],
+      );
+      assert.deepEqual(buscarProjeto(outro, "a"), canonica);
+    } finally {
+      outro.close();
+    }
+  });
+});
+
+test("substituição SDLC remove listas opcionais e mantém etapas e preparação; gravação integral substitui todas", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    const nova = ProjetoConfigurado.parse({
+      ...minima(),
+      raiz_git: "/novo",
+      hospedagem: "azure-devops",
+      branch_base: "dev",
+      chave_sonarqube: "k2",
+    });
+    const lida = gravarConfiguracaoSdlc(banco, nova);
+    assert.deepEqual(buscarProjeto(banco, "a"), {
+      ...nova,
+      etapas: canonica.etapas,
+      verificacoes: { ...nova.verificacoes, preparacao: canonica.verificacoes.preparacao },
+    });
+    assert.equal(lida.raiz_git, "/novo");
+    assert.deepEqual(lida.etapas, canonica.etapas);
+    assert.deepEqual(lida.verificacoes.preparacao, canonica.verificacoes.preparacao);
+    assert.equal(banco.prepare("SELECT count(*) AS n FROM glob_e2e").get()?.n, 0);
+    gravarProjeto(banco, { ...nova, link_produto: "https://produto.exemplo.com" });
+    assert.deepEqual(buscarProjeto(banco, "a"), { ...nova, link_produto: "https://produto.exemplo.com" });
+    gravarProjeto(banco, Projeto.parse(cadastro()));
+    assert.deepEqual(buscarProjeto(banco, "a"), Projeto.parse(cadastro()));
+  });
+});
+
+test("ausência: projeto inexistente lê undefined; cadastro sem SDLC é legível; upsert insere", () => {
+  comBanco((banco) => {
+    const antes = fotografarTabelas(banco);
+    assert.deepEqual(buscarProjeto(banco, "a"), Projeto.parse(cadastro()));
+    assert.equal(buscarProjeto(banco, "nao-existe"), undefined);
+    assert.deepEqual(fotografarTabelas(banco), antes);
+    assert.throws(
+      () => gravarConfiguracaoSdlc(banco, ProjetoConfigurado.parse(minima("nao-existe"))),
+      ErroDeInexistente,
+    );
+    assert.equal(banco.isTransaction, false);
+    gravarProjeto(banco, ProjetoConfigurado.parse(minima("nao-existe")));
+    assert.deepEqual(carregarProjeto(banco, "nao-existe"), ProjetoConfigurado.parse(minima("nao-existe")));
+  });
+});
+
+test("entrada inválida é recusada pelo schema antes da gravação e não altera nada", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    const antes = fotografarTabelas(banco);
+    assert.throws(() => {
+      gravarProjeto(
+        banco,
+        ProjetoConfigurado.parse({ ...completa, verificacoes: { ...completa.verificacoes, linguagens: [] } }),
+      );
+    }, ZodError);
+    assert.deepEqual(fotografarTabelas(banco), antes);
+    assert.deepEqual(buscarProjeto(banco, "a"), canonica);
+  });
+});
+
+test("erro tardio no INSERT de glob reverte tudo e libera a transação", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    const antes = fotografarTabelas(banco);
+    banco.exec(
+      "CREATE TRIGGER falha_glob BEFORE INSERT ON glob_e2e WHEN NEW.glob = 'boom' BEGIN SELECT RAISE(ABORT, 'falha de teste'); END",
+    );
+    const nova = ProjetoConfigurado.parse({
+      ...minima(),
+      branch_base: "dev",
+      verificacoes: {
+        ...minima().verificacoes,
+        e2e: [{ caminho_linguagem: ".", comando_build: "b", comando_execucao: "e", codigo_falha: 3 }],
+        globs: [{ caminho_linguagem: ".", glob: "boom" }],
+      },
+    });
+    assert.throws(() => {
+      gravarProjeto(banco, nova);
+    }, /falha de teste/);
+    assert.equal(banco.isTransaction, false);
+    assert.deepEqual(fotografarTabelas(banco), antes);
+    assert.deepEqual(buscarProjeto(banco, "a"), canonica);
+    assert.throws(() => {
+      gravarProjeto(banco, { ...nova, nome: "novo", raiz_git: "/novo" });
+    }, /falha de teste/);
+    assert.equal(buscarProjeto(banco, "novo"), undefined);
+    assert.deepEqual(fotografarTabelas(banco), antes);
+  });
+});
+
+test("repositório duplicado propaga o erro e preserva a configuração anterior", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    const antes = fotografarTabelas(banco);
+    assert.throws(() => {
+      gravarProjeto(banco, { ...completa, raiz_git: "/repo/b" });
+    }, /UNIQUE/);
+    assert.deepEqual(fotografarTabelas(banco), antes);
+  });
+});
+
+test("projetos são isolados e campos comuns são compartilhados com o cadastro", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    gravarProjeto(banco, ProjetoConfigurado.parse(minima("b")));
+    assert.deepEqual(buscarProjeto(banco, "a"), canonica);
+    assert.equal(projetoExistente(banco, "b").verificacoes.fitness.length, 1);
+    banco.exec("UPDATE projeto SET branch_base = 'outra' WHERE nome = 'a'");
+    assert.equal(buscarProjeto(banco, "a")?.branch_base, "outra");
+    gravarProjeto(banco, { ...completa, branch_base: "nova" });
+    assert.equal(banco.prepare("SELECT branch_base FROM projeto WHERE nome = 'a'").get()?.branch_base, "nova");
+  });
+});
+
+test("leitura é um snapshot: substituição commitada entre os SELECTs só aparece na leitura seguinte", () => {
+  comBanco((banco, raiz) => {
+    gravarCompleta(banco);
+    const nova = ProjetoConfigurado.parse({
+      ...minima(),
+      branch_base: "dev",
+      verificacoes: { ...minima().verificacoes, linguagens: [{ caminho: "web", linguagem: "ts", comando_teste: "t" }] },
+    });
+    const leitor = new DatabaseSync(join(raiz, "fabriquinha.db"));
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- restauração do método; chamada usa .call(leitor).
+    const prepararConsulta = leitor.prepare;
+    let escreveu = false;
+    try {
+      assert.equal(leitor.prepare("PRAGMA journal_mode").get()?.journal_mode, "wal");
+      leitor.prepare = (sql: string) => {
+        if (sql.includes("FROM linguagem_projeto") && !escreveu) {
+          escreveu = true;
+          gravarProjeto(banco, nova);
+        }
+        return prepararConsulta.call(leitor, sql);
+      };
+      assert.deepEqual(buscarProjeto(leitor, "a"), canonica);
+      assert.ok(escreveu);
+      assert.equal(leitor.isTransaction, false);
+      assert.deepEqual(buscarProjeto(leitor, "a"), nova);
+      assert.equal(leitor.isTransaction, false);
+    } finally {
+      leitor.prepare = prepararConsulta;
+      leitor.close();
+    }
+  });
+});
+
+test("raiz_git relativa é recusada pelo schema sem mutação; cadastro e SDLC compartilham a raiz", () => {
+  comBanco((banco) => {
+    banco.exec("DELETE FROM projeto");
+    registrarProjeto(banco, cadastro("loja"));
+    registrarProjeto(banco, cadastro("outro"));
+    const sdlc = ProjetoConfigurado.parse(minima("loja"));
+    gravarConfiguracaoSdlc(banco, sdlc);
+    const antes = fotografarTabelas(banco);
+    assert.throws(
+      () => gravarConfiguracaoSdlc(banco, ProjetoConfigurado.parse({ ...sdlc, raiz_git: "repo-relativo" })),
+      (erro) => erro instanceof ZodError && erro.issues[0]?.message === "caminho absoluto",
+    );
+    assert.deepEqual(fotografarTabelas(banco), antes);
+    assert.equal(banco.isTransaction, false);
+    assert.equal(buscarProjeto(banco, "loja")?.raiz_git, "/repo/loja");
+    assert.equal(listarProjetos(banco).length, 2);
+    gravarConfiguracaoSdlc(banco, { ...sdlc, raiz_git: "/repos/nova" });
+    assert.equal(buscarProjeto(banco, "loja")?.raiz_git, "/repos/nova");
+    assert.equal(carregarProjeto(banco, "loja").raiz_git, "/repos/nova");
+  });
+});
+
+test("cadastro edita preparação sem substituir as demais verificações", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    const editado = editarProjeto(banco, { ...completa, verificacoes: { preparacao: ["npm ci"] } });
+    assert.deepEqual(editado.verificacoes, { ...canonica.verificacoes, preparacao: ["npm ci"] });
+  });
+});
+
+test("execuções pendentes são isoladas por projeto; apagarProjeto devolve referências e só anexos órfãos", () => {
+  comBanco((banco) => {
+    gravarCompleta(banco);
+    banco.exec(`
+      INSERT INTO demanda (id, projeto, titulo, tipo, descricao, estado, estado_alterado_em, criada_por_ferramenta, criada_por_sessao, enviada, branch) VALUES
+        ('I-1', 'a', 'A', 'problema', 'descrição', 'em_execucao', 'agora', 'pi', 's', 1, 'a'),
+        ('I-2', 'b', 'B', 'problema', 'descrição', 'em_execucao', 'agora', 'pi', 's', 1, 'b');
+      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
+        ('I-1', 1, 'implementar', 'aberto', 'agora'), ('I-2', 1, 'implementar', 'em_execucao', 'agora');
+      INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 'conversa');
+      INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('execucao', 's1', 'agora', NULL, 0);
+      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'a', 'Maria', 'd'), (2, 'b', 'João', 'd');
+      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'a', 't', 1, 'agora'), (2, 'b', 't', 1, 'agora');
+      INSERT INTO tarefa_usuario VALUES (1, 1), (2, 2);
+      INSERT INTO execucao_simulada (id, tarefa, usuario, status) VALUES (1, 1, 1, 'na_fila'), (2, 2, 2, 'na_fila');
+      INSERT INTO evidencia_demanda (id, demanda_id, tipo, em) VALUES ('ev1', 'I-1', 'comportamento', 'agora'), ('ev2', 'I-2', 'comportamento', 'agora');
+      INSERT INTO arquivo_evidencia VALUES
+        ('ev1', 1, 'orfao.txt', '${"a".repeat(64)}', 'text/plain', 1),
+        ('ev1', 2, 'compartilhado.txt', '${"b".repeat(64)}', 'text/plain', 1),
+        ('ev1', 3, 'usuario.txt', '${"c".repeat(64)}', 'text/plain', 1),
+        ('ev2', 1, 'compartilhado.txt', '${"b".repeat(64)}', 'text/plain', 1);
+      INSERT INTO usuario_simulado_anexo VALUES (2, 'usuario.txt', '${"c".repeat(64)}', 1);
+    `);
+    assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "a") }, { demanda_id: "I-1", ticket_id: 1 });
+    banco.exec("UPDATE execucao_sessao SET fim = 'depois'");
+    assert.equal(ticketEmAndamentoDoProjeto(banco, "a"), undefined);
+    banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'");
+    assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "a") }, { demanda_id: "I-1", ticket_id: 1 });
+    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "a"), "1");
+    banco.exec("UPDATE execucao_simulada SET status = 'em_andamento' WHERE id = 1");
+    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "a"), "1");
+    banco.exec("UPDATE execucao_simulada SET status = 'falhou', erro = 'fim' WHERE id = 1");
+    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "a"), undefined);
+    assert.deepEqual(
+      escrever(banco, () => apagarProjeto(banco, "a")),
+      {
+        execucoes: ["execucao"],
+        sessoes: ["conversa"],
+        simuladas: [1],
+        orfaos: ["a".repeat(64)],
+      },
+    );
+    assert.equal(buscarProjeto(banco, "a"), undefined);
+    assert.ok(buscarProjeto(banco, "b"));
+    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "b"), "2");
+    assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "b") }, { demanda_id: "I-2", ticket_id: 1 });
+    for (const tabela of TABELAS.slice(1))
+      assert.equal(
+        banco.prepare(`SELECT count(*) AS quantidade FROM ${tabela} WHERE projeto = 'a'`).get()?.quantidade,
+        0,
+      );
+    assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
+  });
+});
+
+test("listarProjetos vazio e apagarProjeto inexistente não inventam registros", () => {
+  comBanco((banco) => {
+    apagarProjeto(banco, "a");
+    apagarProjeto(banco, "b");
+    assert.deepEqual(listarProjetos(banco), []);
+    assert.deepEqual(apagarProjeto(banco, "fantasma"), { execucoes: [], sessoes: [], simuladas: [], orfaos: [] });
+    assert.equal(ticketEmAndamentoDoProjeto(banco, "fantasma"), undefined);
+    assert.equal(tarefaComExecucaoSimuladaPendente(banco, "fantasma"), undefined);
+  });
 });
