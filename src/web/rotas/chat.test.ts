@@ -1,5 +1,5 @@
 // Rotas do chat (F7 §4.2) contra o serviço de verdade, numa raiz temporária e numa porta livre, com git real e o pi
-// falso do e2e: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
+// falso único: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
 // que não é de uma demanda dá 404.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -7,7 +7,7 @@ import { once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { avisar, situacao } from "../../execucao/gerente.ts";
@@ -19,6 +19,7 @@ import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execuc
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import { demanda } from "./demandas_cenario.ts";
+import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
 const gitconfig = join(base, "gitconfig");
@@ -26,7 +27,7 @@ writeFileSync(gitconfig, "[user]\n\tname = Auditor\n\temail = auditor@exemplo.co
 process.env.GIT_CONFIG_GLOBAL = gitconfig;
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 process.env.PI_CODING_AGENT_DIR = join(base, "pi-agent");
-process.env.FABRIQUINHA_PI = resolve(import.meta.dirname, "../../../e2e/pi-falso.ts");
+instalarPiFalso(base).roteirizar([{ marcas: true }]);
 
 let servico: Servico;
 let origem: string;

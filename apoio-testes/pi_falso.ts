@@ -39,8 +39,8 @@ export interface PassoPi {
   eventos?: EventoDoRoteiro[];
   /** Abre uma mensagem do assistente (`message_start`) que nunca fecha, como o modelo que trava. */
   mensagemAberta?: boolean;
-  /** Assenta ao receber SIGTERM, 50 ms depois (padrão: o sinal mata o processo). */
-  sigterm?: "assenta";
+  /** Ao receber SIGTERM, assenta e sai 50 ms depois, ou o ignora (só o SIGKILL o encerra); padrão: o sinal mata o processo. */
+  sigterm?: "assenta" | "ignora";
   // --- A mensagem do assistente
   /** Texto da resposta; "" deixa o conteúdo vazio. Padrão: $FALSO_PI_RESPOSTA ou "pronto". */
   resposta?: string;
@@ -49,8 +49,8 @@ export interface PassoPi {
   erro?: string;
   /** O custo do `usage`; null o omite (padrão: 0,01). */
   custo?: number | null;
-  /** Sobrescreve os campos do `usage` (input 10, output 2, cacheRead 0, cacheWrite 0, totalTokens 12). */
-  uso?: Partial<Record<"input" | "output" | "cacheRead" | "cacheWrite" | "totalTokens", number>>;
+  /** Sobrescreve os campos do `usage` (input 10, output 2, cacheRead 0, cacheWrite 0, totalTokens 12); null omite o `usage`. */
+  uso?: Partial<Record<"input" | "output" | "cacheRead" | "cacheWrite" | "totalTokens", number>> | null;
   /** Padrão: o par de --provider/--model, ou anthropic/claude-opus-5-5. */
   modelo?: { provedor: string; modelo: string };
   /** Emite `agent_end` antes do `agent_settled`. */
@@ -76,6 +76,10 @@ export interface PassoPi {
   /** Módulo (default export assíncrono) que faz o que o CLI do agente faria. */
   agente?: string;
   // --- Os outros modos
+  /** Tabela crua e falha opcional de `--list-models`; sem configuração vale a tabela padrão. */
+  listaDeModelos?: { tabela?: string; stderr?: string; codigo?: number };
+  /** Processo sem RPC: saída crua, término opcionalmente só depois do EOF do stdin. */
+  saidaDoProcesso?: { stdout?: string; stderr?: string; codigo?: number; esperaEof?: boolean };
   /** `-p`: imprime a saída (texto, ou objeto em JSON) e sai com `codigo`; sem saída, sai com 1. */
   chamadaUnica?: { saida?: string | object; codigo?: number };
   /** `--mode json`: grava o relatório em $FABRIQUINHA_SAIDA depois do EOF do stdin. */
@@ -166,13 +170,6 @@ async function executarPiFalso(): Promise<void> {
     console.log("0.0.0-falso");
     process.exit(0);
   }
-  if (argumentos.includes("--list-models")) {
-    console.log("provider   model              context  max-out  thinking  images");
-    console.log("anthropic  claude-opus-5-5    200K     64K      yes       yes");
-    console.log("anthropic  claude-sonnet-5-5  200K     64K      yes       yes");
-    process.exit(0);
-  }
-
   const caminhoDoRegistro = process.env.FALSO_PI_REGISTRO;
   const registradasNoProcesso: EntradaDoRegistro[] = [];
   const registrar = (entrada: EntradaDoRegistro) => {
@@ -192,6 +189,23 @@ async function executarPiFalso(): Promise<void> {
 
   const passoDoInicio = proximoPasso();
   registrar({ evento: "inicio", argv: argumentos, cwd: process.cwd(), execucao: process.env.FABRIQUINHA_EXECUCAO });
+
+  if (argumentos.includes("--list-models")) {
+    const { tabela, stderr, codigo } = passoDoInicio.listaDeModelos ?? {};
+    process.stdout.write(
+      tabela ??
+        "provider   model              context  max-out  thinking  images\nanthropic  claude-opus-5-5    200K     64K      yes       yes\nanthropic  claude-sonnet-5-5  200K     64K      yes       yes\n",
+    );
+    if (stderr) process.stderr.write(stderr);
+    process.exit(codigo ?? 0);
+  }
+  if (passoDoInicio.saidaDoProcesso) {
+    const { stdout, stderr, codigo, esperaEof } = passoDoInicio.saidaDoProcesso;
+    if (esperaEof) await new Promise((pronto) => process.stdin.resume().on("end", pronto));
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+    process.exit(codigo ?? 0);
+  }
 
   if (argumentos.includes("-p")) {
     registrar({ evento: "chamada_unica", argv: argumentos, cwd: process.cwd() });
@@ -294,6 +308,7 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
   if (passo.sai?.quando === "ao_iniciar") sair(passo.sai);
 
   process.on("SIGTERM", () => {
+    if (passo.sigterm === "ignora") return;
     if (passo.sigterm === "assenta") {
       emitir({ type: "agent_settled" });
       setTimeout(() => process.exit(0), 50);
@@ -324,15 +339,17 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
     provider: passo.modelo?.provedor ?? (arg("--provider") || "anthropic"),
     model: passo.modelo?.modelo ?? (arg("--model") || "claude-opus-5-5"),
     stopReason,
-    usage: {
-      input: 10,
-      output: 2,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 12,
-      ...passo.uso,
-      ...(passo.custo !== null && { cost: { total: passo.custo ?? 0.01 } }),
-    },
+    ...(passo.uso !== null && {
+      usage: {
+        input: 10,
+        output: 2,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 12,
+        ...passo.uso,
+        ...(passo.custo !== null && { cost: { total: passo.custo ?? 0.01 } }),
+      },
+    }),
     ...(stopReason === "error" && { errorMessage: passo.erro ?? "limite de uso" }),
   });
 

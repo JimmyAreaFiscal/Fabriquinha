@@ -133,7 +133,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   );
 
   // A rodada corretiva percorre o ciclo completo: implementação, revisão, PR e aprovação do Auditor.
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   await ciclo(c, deps());
   assert.equal(rodadaDe(c, id, 2)?.fase, "revisao");
   await revisar(c, id, { aprovado: true }, 2);
@@ -155,7 +155,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   // A revisão integral se repete, num revisor novo, na worktree da demanda com o resultado das duas rodadas.
   const segunda = await revisaoIntegral(c, id, "aprovada");
   assert.ok(segunda > primeira);
-  assert.equal(pi.chamadas().at(-1)?.cwd, caminhoDaWorktreeDemanda(c.raiz, c.projeto, id));
+  assert.equal(pi.prompts().at(-1)?.cwd, caminhoDaWorktreeDemanda(c.raiz, c.projeto, id));
   const implementacoes = git(
     caminhoDaWorktreeDemanda(c.raiz, c.projeto, id),
     "log",
@@ -184,10 +184,10 @@ test("CA-SDLC-15: revisão integral aprovada encerra com o merge humano; conflit
   assert.equal(demanda(c, id).demanda.fase, "encerramento");
   assert.equal(mergesNaBase(c).length, 0);
 
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   await ciclo(c, deps());
   assert.equal(ultimo(c, id, "resolver_conflito")?.status, "concluido");
-  assert.equal(pi.chamadas().at(-1)?.cwd, caminhoDaWorktreeDemanda(c.raiz, c.projeto, id));
+  assert.equal(pi.prompts().at(-1)?.cwd, caminhoDaWorktreeDemanda(c.raiz, c.projeto, id));
   assert.equal(demanda(c, id).demanda.fase, "encerramento");
 
   gh.mudar(pr, { conflito: false });

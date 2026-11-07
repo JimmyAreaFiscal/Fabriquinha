@@ -61,7 +61,7 @@ test("D04: a rodada dependente nasce da ponta da demanda quando começa, já com
   assert.equal(git(c.repo, "branch", "--list", branchR2), "");
 
   abrirPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   await ciclo(c, despacho());
   await revisar(c, id, { aprovado: true });
   await encerrar(c, id);
@@ -70,7 +70,7 @@ test("D04: a rodada dependente nasce da ponta da demanda quando começa, já com
   const pontaComR1 = git(c.repo, "rev-parse", `refs/heads/${demanda(c, id).demanda.branch}`);
 
   abrirPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   await ciclo(c, despacho());
   assert.equal(statusDe(c, ticketDe(c, id, 2)), "concluido");
   // A R2 parte da ponta com a R1: o merge do PR da R1 é ancestral da branch dela (o git falha se não for).

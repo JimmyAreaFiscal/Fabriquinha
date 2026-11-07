@@ -1,9 +1,9 @@
 // Grupo do estresse das etapas do agendador: uma ação por `src/execucao/etapas/*.md`. Cada execução monta o próprio
 // cenário (banco, projeto e repositórios git reais, como integracao/apoio.ts) numa raiz temporária e leva a
-// demanda à fase da etapa fora do tempo medido, com o pi falso e o `gh` falso de integracao/falsos.ts. O tempo vai do
+// demanda à fase da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
 // despacho do ticket até ele assentar concluído; `sessao_em_aberto` vai da abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
-import { chmodSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
@@ -34,7 +34,8 @@ import { registrarProjeto } from "../../src/persistencia/projetos.ts";
 import { configuracao } from "../../src/persistencia/servico.ts";
 import { carregarSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
 import { exigirGit } from "../../src/repositorio/worktree.ts";
-import { ghFalso, piFalso } from "../../integracao/falsos.ts";
+import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
+import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../ambiente.ts";
 
 /** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então menos que as 200/20 do HTTP. */
@@ -91,11 +92,10 @@ async function esperar(condicao: () => boolean, descricao: string, limiteMs = 30
   }
 }
 
-/** Quantos prompts o pi falso recebeu em worktrees deste cenário (o registro é lido linha a linha: outros pi escrevem nele). */
-const chamadas = (c: Cenario): number =>
-  readFileSync(String(process.env.FALSO_PI_CHAMADAS), "utf8")
-    .split("\n")
-    .filter((l) => l.includes(`"cwd":"${c.dir}`)).length;
+let piFalsoInstalado: PiFalso;
+
+/** Quantos prompts o pi falso recebeu em worktrees deste cenário (o registro é compartilhado: outros pi escrevem nele). */
+const chamadas = (c: Cenario): number => piFalsoInstalado.prompts().filter(({ cwd }) => cwd.startsWith(c.dir)).length;
 
 // O "agente" do pi falso, comum às etapas: espera o portão do cenário (o `executar` o abre) e, com `escreve`, mexe na worktree.
 const AGENTE = `import { appendFileSync, existsSync } from "node:fs";
@@ -128,7 +128,7 @@ function prepararProcesso(amb: Ambiente): void {
   chmodSync(join(raiz, "gh", "gh"), 0o755);
   process.env.PATH = `${join(raiz, "gh")}:${process.env.PATH ?? ""}`;
   writeFileSync(join(raiz, "agente.mjs"), AGENTE);
-  piFalso(raiz).roteirizar([{ modo: "ok", agente: join(raiz, "agente.mjs") }]);
+  piFalsoInstalado = instalarPiFalso(raiz).roteirizar([{ agente: join(raiz, "agente.mjs") }]);
 }
 
 async function criarCenario(): Promise<Cenario> {

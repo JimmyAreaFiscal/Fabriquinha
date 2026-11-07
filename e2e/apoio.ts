@@ -1,5 +1,5 @@
 // Apoio dos testes de ponta a ponta: cada teste sobe a sua Fabriquinha, com a raiz temporária, a porta livre que ela
-// mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (pi-falso.ts), e recebe o
+// mesma escolhe (FABRIQUINHA_PORTA=0, sem corrida entre escolher e ocupar) e o pi falso (apoio-testes/pi_falso.ts), e recebe o
 // navegador já autenticado pelo link de `web.url`, como o Auditor depois do `abrir`.
 import { test as base, type Page, type TestInfo } from "@playwright/test";
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
@@ -8,6 +8,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFile
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
+import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { recuperarAuditorias } from "../src/execucao/auditoria.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { registrarProjeto } from "../src/persistencia/projetos.ts";
@@ -54,10 +55,17 @@ function matarPi(raiz: string): void {
   recuperarAuditorias(raiz);
 }
 
-export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: string }>({
+export const test = base.extend<{
+  fabriquinha: Fabriquinha;
+  pagina: Page;
+  pi: string;
+  roteiroDoPi: PassoPi[] | undefined;
+}>({
   /** O binário do pi que a Fabriquinha usa (`FABRIQUINHA_PI`); o falso, a menos que o teste troque com `test.use`. */
-  pi: [join(import.meta.dirname, "pi-falso.ts"), { option: true }],
-  fabriquinha: async ({ pi }, use) => {
+  pi: [join(import.meta.dirname, "../apoio-testes/pi_falso.ts"), { option: true }],
+  /** O roteiro do pi falso (`FALSO_PI_ROTEIRO`); sem ele vale o comportamento do e2e, escolhido pelo texto do prompt. */
+  roteiroDoPi: [undefined, { option: true }],
+  fabriquinha: async ({ pi, roteiroDoPi }, use) => {
     // O serviço é quem usa o banco: aqui a raiz só nasce migrada, e fechar() a apaga no fim.
     const { raiz, banco, fechar } = abrirBancoTemporario();
     banco.close();
@@ -89,6 +97,7 @@ export const test = base.extend<{ fabriquinha: Fabriquinha; pagina: Page; pi: st
             FABRIQUINHA_ROOT: raiz,
             FABRIQUINHA_PORTA: "0",
             FABRIQUINHA_PI: pi,
+            FALSO_PI_ROTEIRO: roteiroDoPi ? JSON.stringify(roteiroDoPi) : "",
             PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
             GIT_CONFIG_GLOBAL: gitconfig,
             GIT_CONFIG_NOSYSTEM: "1",

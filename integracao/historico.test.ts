@@ -2,10 +2,11 @@
 // com dependentes e execução em andamento (D08) e a avaliação de melhoria com o achado encaminhado (D12). Banco sempre
 // numa raiz temporária; git real, pi falso.
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { AUDITOR } from "../src/dominio/ator.ts";
 import { predecessorasPendentes } from "../src/dominio/dependencia_demanda.ts";
 import {
@@ -31,7 +32,7 @@ import {
   statusDe,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { base, criarCenario, CTX, demanda, esperar, gravarLimiteParalelismo, registrarExterna } from "./apoio.ts";
+import { criarCenario, CTX, demanda, esperar, gravarLimiteParalelismo, registrarExterna } from "./apoio.ts";
 import { despacharDemandas } from "../src/execucao/despacho_demanda.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
@@ -56,10 +57,10 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   c.banco.prepare("UPDATE demanda SET fase = 'concluida' WHERE id = ?").run(feita);
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   const fins = despacharDemandas(c.banco, config, despacho());
   assert.equal(fins.length, 2);
-  await esperar(() => pi.chamadas().length === 2, "os dois agentes abertos");
+  await esperar(() => pi.prompts().length === 2, "os dois agentes abertos");
   const refA = ticketDe(c, a, 1);
   const refAlheia = ticketDe(c, alheia, 1);
   const antes = demanda(c, a);
@@ -100,45 +101,27 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.throws(() => gestao.cancelar(c.banco, feita, AUDITOR, CTX), /já terminou/);
 });
 
-// pi falso da avaliação: sobe (agent_start), grava dois achados em achados.jsonl e assenta. Sem esse formato, o
-// `iniciarAvaliacao` não resolve; o pi falso comum da suíte não emite `agent_start`.
-const PI_AVALIACAO = `#!/usr/bin/env node
-import { appendFileSync, mkdirSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-const dir = arg("--session-dir");
-const id = arg("--session-id");
-mkdirSync(dir, { recursive: true });
-const sessao = join(dir, readdirSync(dir).find((n) => n.endsWith("_" + id + ".jsonl")) ?? "2026-10-11T10-00-00-000Z_" + id + ".jsonl");
-appendFileSync(sessao, JSON.stringify({ type: "session", version: 3, id }) + "\\n");
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    for (const n of [1, 2])
-      appendFileSync(join(process.cwd(), "achados.jsonl"), JSON.stringify({ titulo: "Achado " + n, descricao: "desc " + n, evidencia: "ev " + n }) + "\\n");
-    emitir({ type: "agent_end" });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
+// pi falso da avaliação: abre a sessão com o cabeçalho, grava dois achados em achados.jsonl e assenta com o `agent_end`.
+// Sem esse formato, o `iniciarAvaliacao` não resolve.
+const PASSO_DA_AVALIACAO: PassoPi = {
+  cabecalhoDaSessao: true,
+  fimDoAgente: true,
+  anexa: {
+    "achados.jsonl": [1, 2]
+      .map(
+        (n) =>
+          `${JSON.stringify({ titulo: `Achado ${String(n)}`, descricao: `desc ${String(n)}`, evidencia: `ev ${String(n)}` })}\n`,
+      )
+      .join(""),
+  },
+};
 
 test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demanda em registro, ligada a um só achado e sem fan-out", async (t) => {
   const c = criarCenario(t);
   const origem = await demandaEmExecucao(c, [{ tickets: 1 }]);
-  const piAvaliacao = join(base, "pi-avaliacao.mjs");
-  writeFileSync(piAvaliacao, PI_AVALIACAO);
-  chmodSync(piAvaliacao, 0o755);
-  const piAnterior = process.env.FABRIQUINHA_PI;
-  process.env.FABRIQUINHA_PI = piAvaliacao;
+  pi.roteirizar([PASSO_DA_AVALIACAO]);
   t.after(() => {
-    process.env.FABRIQUINHA_PI = piAnterior;
+    pi.roteirizar();
   });
 
   const id = await iniciarAvaliacao(

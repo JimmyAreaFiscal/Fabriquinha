@@ -1,12 +1,13 @@
 // Execução do ticket da demanda com banco real, git real e um pi falso que fala o protocolo RPC (CA-1 a CA-7, CA-11 a CA-14).
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
@@ -34,64 +35,12 @@ const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-exec-demanda-"));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
 delete process.env.FABRIQUINHA_PORTA;
 
-/**
- * pi falso. Anota em $FALSO_PI_REGISTRO o início (argumentos, pasta, ambiente) e o prompt, e grava a resposta na sessão
- * como o pi faz. $FALSO_PI: sucesso (padrão), sem-custo (o `usage` sem `cost`), erro, dorme (nunca assenta) e pergunta
- * (a `perguntar` com opções; a triagem do Auditor automático, com -p, responde "Sim").
- */
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, mkdirSync } from "node:fs";
-const variante = process.env.FALSO_PI ?? "sucesso";
-const anotar = (o) => appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(o) + "\\n");
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-// A triagem do Auditor automático chama o pi uma vez, com -p: responde a decisão e sai.
-if (process.argv.includes("-p")) {
-  anotar({ evento: "triagem", argv: process.argv.slice(2) });
-  emitir({ decisao: "responder", resposta: "Sim", justificativa: "Sonar se corrige" });
-  process.exit(0);
-}
-anotar({ evento: "inicio", argv: process.argv.slice(2), cwd: process.cwd(), execucao: process.env.FABRIQUINHA_EXECUCAO });
-function assistente(stopReason) {
-  const usage = { input: 10, output: 2, cacheRead: 100, cacheWrite: 3, totalTokens: 115 };
-  if (variante !== "sem-custo") usage.cost = { total: 0.01 };
-  const message = { role: "assistant", content: [], provider: "anthropic", model: "claude-teste", stopReason, usage,
-    ...(stopReason === "error" && { errorMessage: "limite de uso" }) };
-  mkdirSync(arg("--session-dir"), { recursive: true });
-  appendFileSync(arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl",
-    JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
-  emitir({ type: "message_end", message });
-}
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type === "extension_ui_response") {
-      anotar({ evento: "resposta", valor: c.value });
-      assistente("stop");
-      emitir({ type: "agent_settled" });
-    }
-    if (c.type !== "prompt") continue;
-    anotar({ evento: "prompt", mensagem: c.message });
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    if (variante === "dorme") continue;
-    if (variante === "pergunta") {
-      const args = { question: "Corrijo o Sonar?", options: [{ label: "Sim" }, { label: "Não" }] };
-      emitir({ type: "tool_execution_start", toolCallId: "p1", toolName: "perguntar", args });
-      emitir({ type: "extension_ui_request", id: "d1", method: "select", title: "Corrijo o Sonar?", options: ["Sim", "Não"] });
-      continue;
-    }
-    assistente(variante === "erro" ? "error" : "stop");
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
+const PASSO_PI: PassoPi = {
+  resposta: "",
+  usuario: false,
+  modelo: { provedor: "anthropic", modelo: "claude-teste" },
+  uso: { cacheRead: 100, cacheWrite: 3, totalTokens: 115 },
+};
 
 const abertos: DatabaseSync[] = [];
 after(() => {
@@ -100,7 +49,6 @@ after(() => {
 
 interface Opcoes {
   etapas?: { etapa: string; modelo_provedor?: string; modelo_nome?: string; effort?: string }[];
-  variante?: string;
   /** O serviço cria a worktree da demanda (ticket global); senão ela já existe, para os tickets de rodada. */
   semWorktree?: boolean;
   /** Comando de preparação da worktree (padrão `true`). */
@@ -108,7 +56,7 @@ interface Opcoes {
 }
 
 /** Projeto `loja` configurado, demanda I-1 em execução (rodadas 1 e 2) e a worktree da demanda criada. */
-async function cenario({ etapas = [], variante, semWorktree, preparacao = "true" }: Opcoes = {}) {
+async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes = {}) {
   const c = cenarioDemanda();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
@@ -178,19 +126,13 @@ async function cenario({ etapas = [], variante, semWorktree, preparacao = "true"
     evidencias: [],
   } as unknown as AgregadoDemanda);
   if (!semWorktree) await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log, () => Promise.resolve());
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
-  process.env.FALSO_PI_REGISTRO = registro;
-  if (variante) process.env.FALSO_PI = variante;
-  else delete process.env.FALSO_PI;
+  const piFalso = instalarPiFalso(c.dir).roteirizar([PASSO_PI]);
   return {
     c,
     banco,
+    piFalso,
     /** O que o pi falso anotou, de todas as execuções. */
-    registro: () =>
-      (existsSync(registro) ? readFileSync(registro, "utf8").trim().split("\n") : []).map(
-        (l) => JSON.parse(l) as { evento: string; argv: string[]; cwd: string; mensagem: string; valor?: string },
-      ),
+    registro: () => piFalso.registro(),
     sessoes: (ticket_id: number) => carregarSessoesDoTicket(banco, { demanda_id: "I-1", ticket_id }),
   };
 }
@@ -199,7 +141,8 @@ const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
 const valorDe = (argv: string[], nome: string) => argv[argv.indexOf(nome) + 1];
 
 test("CA-1: sessão ligada ao ticket e execução aberta com o grupo de processo do pi", async () => {
-  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.05 });
   let e = sessoes(1).execucoes[0];
   assert.equal(e?.id, id);
@@ -235,7 +178,7 @@ test("CA-2: retomar o ticket usa a mesma sessão e passa o identificador ao pi",
   );
   const inicios = registro().filter((r) => r.evento === "inicio");
   assert.deepEqual(
-    inicios.map((r) => valorDe(r.argv, "--session-id")),
+    inicios.map((r) => valorDe(r.argv ?? [], "--session-id")),
     [ss[0].id, ss[0].id],
   );
 });
@@ -262,16 +205,38 @@ test("a pergunta do agente autônomo passa pelo Auditor automático com o modelo
     if (cobertura !== undefined) process.env.NODE_V8_COVERAGE = cobertura;
   });
   for (const etapas of [[{ etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-etapa" }], []]) {
-    const { banco, registro } = await cenario({ etapas, variante: "pergunta" });
+    const { banco, registro, piFalso } = await cenario({ etapas });
+    piFalso.roteirizar([
+      {
+        ...PASSO_PI,
+        termina: "nunca",
+        eventos: [
+          {
+            type: "tool_execution_start",
+            toolCallId: "p1",
+            toolName: "perguntar",
+            args: { question: "Corrijo o Sonar?", options: [{ label: "Sim" }, { label: "Não" }] },
+          },
+          {
+            type: "extension_ui_request",
+            id: "d1",
+            method: "select",
+            title: "Corrijo o Sonar?",
+            options: ["Sim", "Não"],
+          },
+        ],
+      },
+      { chamadaUnica: { saida: { decisao: "responder", resposta: "Sim", justificativa: "Sonar se corrige" } } },
+    ]);
     await iniciarExecucaoDemanda(banco, ref(2), { limiteMin: 1 }).fim;
-    const triagem = registro().find((r) => r.evento === "triagem");
+    const triagem = registro().find((r) => r.evento === "chamada_unica");
     const argv = triagem?.argv ?? [];
     assert.equal(
       argv.includes("--model") ? valorDe(argv, "--model") : undefined,
       etapas[0] && "anthropic/claude-etapa",
     );
-    assert.match(String(triagem?.argv.at(-1)), /Ticket I-1\.T2, etapa implementar/);
-    assert.deepEqual(registro().find((r) => r.evento === "resposta")?.valor, "Sim");
+    assert.match(String(triagem?.argv?.at(-1)), /Ticket I-1\.T2, etapa implementar/);
+    assert.deepEqual(registro().find((r) => r.comando?.type === "extension_ui_response")?.comando?.value, "Sim");
   }
 });
 
@@ -313,8 +278,8 @@ test("CA-7: devolução e reabertura levam o motivo ao prompt", async () => {
     retomada: { tipo: "reabertura", motivo: "faltou X" },
   }).fim;
   const [primeiro, devolucao, reabertura] = registro()
-    .filter((r) => r.evento === "prompt")
-    .map((r) => r.mensagem);
+    .filter((r) => r.comando?.type === "prompt")
+    .map((r) => r.comando?.message);
   assert.doesNotMatch(primeiro ?? "", /Motivo:/);
   assert.match(devolucao ?? "", /## Devolução[\s\S]*Motivo: testes falharam/);
   assert.match(reabertura ?? "", /## Reabertura[\s\S]*Motivo: faltou X/);
@@ -325,8 +290,8 @@ test("a opção mensagem é o prompt da retomada, sem remontar o contexto", asyn
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1, mensagem: "segue assim" }).fim;
   const prompts = registro()
-    .filter((r) => r.evento === "prompt")
-    .map((r) => r.mensagem);
+    .filter((r) => r.comando?.type === "prompt")
+    .map((r) => r.comando?.message);
   assert.equal(prompts[1], "segue assim");
   assert.equal(sessoes(1).sessoes.length, 1);
   assert.equal(sessoes(1).execucoes.length, 2);
@@ -356,7 +321,8 @@ test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e cust
 });
 
 test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async () => {
-  const { banco, sessoes } = await cenario({ variante: "sem-custo" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, custo: null }]);
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
   const [uso] = sessoes(1).usos;
   assert.equal(uso?.tokens_entrada, 10);
@@ -366,7 +332,8 @@ test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async (
 });
 
 test("CA-12, CA-14: pi que falha encerra com falha e erro, sem tocar a demanda", async () => {
-  const { banco, sessoes } = await cenario({ variante: "erro" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
   const antes = carregarDemanda(banco, "I-1");
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
   const e = sessoes(1).execucoes[0];
@@ -377,7 +344,8 @@ test("CA-12, CA-14: pi que falha encerra com falha e erro, sem tocar a demanda",
 });
 
 test("CA-12, CA-14: tempo limite estourado encerra com falha e erro, sem tocar a demanda", async () => {
-  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   const antes = carregarDemanda(banco, "I-1");
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.01 }).fim;
   const e = sessoes(1).execucoes[0];
@@ -410,7 +378,8 @@ test("falha antes do pi (worktree da rodada ocupada) encerra com o erro e sem la
 });
 
 test("a coleta de uso que falha vai para o log e não impede o encerramento", async () => {
-  const { c, banco, sessoes } = await cenario({ variante: "dorme" });
+  const { c, banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   const { id, fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.02 });
   const sessao = sessoes(1).sessoes[0]?.id ?? "";
   const dir = join(c.raiz, "sessoes");
@@ -429,7 +398,8 @@ test("a recusa é síncrona: ticket inexistente", async () => {
 });
 
 test("CA-8: interromper manda SIGTERM ao grupo do pi e a execução falha como interrompida", async () => {
-  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   while (sessoes(1).execucoes[0]?.grupo_processo === undefined) await dormir(20);
   interromperExecucaoDemanda(banco, ref(1));
@@ -542,7 +512,8 @@ const statusDe = (banco: DatabaseSync, ticket_id: number) =>
   carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === ticket_id);
 
 test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem devolução", async () => {
-  const { banco } = await cenario({ variante: "erro" });
+  const { banco, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
   emExecucao(banco, 1);
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
   const ag = carregarDemanda(banco, "I-1");
@@ -554,7 +525,8 @@ test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem d
 });
 
 test("o fechamento recebe a falha e o fim só resolve depois dele", async () => {
-  const { banco } = await cenario({ variante: "erro" });
+  const { banco, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
   const chamadas: unknown[] = [];
   await iniciarExecucaoDemanda(banco, ref(1), {
     limiteMin: 1,
@@ -684,7 +656,8 @@ async function grupoDoPi(sessoes: (t: number) => ReturnType<typeof carregarSesso
 }
 
 test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket falha com 'serviço reiniciado'", async () => {
-  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   emExecucao(banco, 1);
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const grupo = await grupoDoPi(sessoes, 1);
@@ -701,7 +674,8 @@ test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket 
 });
 
 test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serviço reiniciado'", async () => {
-  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   emExecucao(banco, 1);
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   process.kill(-(await grupoDoPi(sessoes, 1)), "SIGTERM");
@@ -711,7 +685,8 @@ test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serv
 });
 
 test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço reiniciado' e nada fica vivo", async () => {
-  const { banco, sessoes } = await cenario({ variante: "dorme" });
+  const { banco, sessoes, piFalso } = await cenario();
+  piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   emExecucao(banco, 1);
   iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const grupo = await grupoDoPi(sessoes, 1);

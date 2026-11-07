@@ -1,10 +1,11 @@
 // Ações do Auditor sobre as demandas (CA-13 a CA-27 e CA-36) contra o servidor web de verdade, com git real e pi falso.
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { encerrar, situacao } from "../../execucao/gerente.ts";
 import { registrarCorrecoesSessao } from "../../dominio/transicoes_rodada.ts";
@@ -26,35 +27,6 @@ beforeEach(() => {
 after(() => {
   rmSync(temporario, { recursive: true, force: true });
 });
-
-// pi falso: grava no JSONL da sessão cada prompt recebido (como o pi) e a resposta, e assenta sem encerrar.
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, mkdirSync } from "node:fs";
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { total: 0.01 } };
-    const resposta = { role: "assistant", content: [], provider: "anthropic", model: "claude-teste", stopReason: "stop", usage };
-    mkdirSync(arg("--session-dir"), { recursive: true });
-    const arquivo = arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl";
-    const entrada = (message) => JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n";
-    appendFileSync(arquivo, entrada({ role: "user", content: c.message }) + entrada(resposta));
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    emitir({ type: "message_end", message: resposta });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
 
 const DEMANDA = "I-206";
 const BRANCH_DEMANDA = "fabriquinha/I-206";
@@ -161,15 +133,19 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   criarDemanda(banco, demanda("I-207", "planejamento"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
 
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
+  instalarPiFalso(c.dir).roteirizar([
+    {
+      resposta: "",
+      modelo: { provedor: "anthropic", modelo: "claude-teste" },
+      uso: { input: 1, output: 1, totalTokens: 2 },
+    },
+  ]);
   return {
     c,
     banco,
     ...(await servir(banco, comExecutarDemanda)),
     ag: () => carregarDemanda(banco, DEMANDA),
     fase: (id = DEMANDA) => carregarDemanda(banco, id).demanda.fase,
-    registro,
   };
 }
 

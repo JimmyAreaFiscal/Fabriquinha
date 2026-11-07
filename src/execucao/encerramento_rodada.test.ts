@@ -1,11 +1,12 @@
 // Encerramento da rodada com banco real, git real, pi falso e hospedagem falsa (CA-2 a CA-12 da I-227).
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import { marcaDoPRRodada } from "../evidencias/pr_rodada.ts";
@@ -33,44 +34,6 @@ const hospedagem = hospedagemFalsa(temporario);
 beforeEach(() => {
   hospedagem.zerar();
 });
-
-/**
- * pi falso mínimo: anota o prompt em $FALSO_PI_REGISTRO e responde. Na chamada única (`-p`), responde
- * $FALSO_PI_RESUMO, ou sai com 1 sem ele.
- */
-const PI_FALSO = `#!/usr/bin/env node
-import { appendFileSync, mkdirSync } from "node:fs";
-if (process.argv.includes("-p")) {
-  appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(process.argv.at(-1)) + "\\n");
-  if (!process.env.FALSO_PI_RESUMO) process.exit(1);
-  process.stdout.write(process.env.FALSO_PI_RESUMO + "\\n");
-  process.exit(0);
-}
-const emitir = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const arg = (nome) => process.argv[process.argv.indexOf(nome) + 1];
-let resto = "";
-process.stdin.setEncoding("utf8").on("data", (parte) => {
-  const linhas = (resto + parte).split("\\n");
-  resto = linhas.pop();
-  for (const linha of linhas) {
-    const c = JSON.parse(linha);
-    if (c.type !== "prompt") continue;
-    appendFileSync(process.env.FALSO_PI_REGISTRO, JSON.stringify(c.message) + "\\n");
-    emitir({ type: "response", command: "prompt", success: true });
-    emitir({ type: "agent_start" });
-    const usage = { input: 10, output: 2, cacheRead: 100, cacheWrite: 3, totalTokens: 115, cost: { total: 0.01 } };
-    const message = { role: "assistant", content: [], provider: "anthropic", model: "claude-teste", stopReason: "stop", usage };
-    mkdirSync(arg("--session-dir"), { recursive: true });
-    appendFileSync(arg("--session-dir") + "/2026-10-11T00-00-00-000Z_" + arg("--session-id") + ".jsonl",
-      JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message }) + "\\n");
-    emitir({ type: "message_end", message });
-    emitir({ type: "agent_settled" });
-  }
-});
-`;
-const pi = join(temporario, "pi.mjs");
-writeFileSync(pi, PI_FALSO);
-chmodSync(pi, 0o755);
 
 const abertos: DatabaseSync[] = [];
 after(() => {
@@ -201,12 +164,11 @@ async function cenario({
   };
   commitarNaRodada("a.txt", 3);
   commitarNaRodada("b.txt", 4);
-  const registro = join(c.dir, "registro.jsonl");
-  process.env.FABRIQUINHA_PI = pi;
-  process.env.FALSO_PI_REGISTRO = registro;
+  const piFalso = instalarPiFalso(c.dir);
   return {
     c,
     banco,
+    piFalso,
     rodada,
     demanda,
     commitarNaRodada,
@@ -214,7 +176,11 @@ async function cenario({
     ticket: () => carregarDemanda(banco, DEMANDA).tickets.find((t) => t.ticket_id === 8),
     evidencia: (tipo: string) =>
       carregarDemanda(banco, DEMANDA).evidencias.find((e) => e.tipo === tipo && e.ticket_id === 8),
-    prompt: () => readFileSync(registro, "utf8"),
+    prompt: () =>
+      piFalso
+        .prompts()
+        .map((entrada) => entrada.prompt)
+        .join("\n"),
     noRemoto: (branch: string) => gitCenario(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`),
     fase: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.fase,
   };
@@ -464,29 +430,25 @@ test("iniciar: ticket falho não roda", async () => {
 });
 
 test("corpo além do limite da hospedagem: o pi padrão resume a demanda e o custo, e as seções do mensagem_pr ficam inteiras", async () => {
-  process.env.FALSO_PI_RESUMO = "Resumo da I-206.";
-  try {
-    const { c, banco, evidencia, prompt } = await cenario({ descricao: `longa${"x".repeat(75)} `.repeat(900) });
+  const { c, banco, evidencia, piFalso } = await cenario({ descricao: `longa${"x".repeat(75)} `.repeat(900) });
+  piFalso.roteirizar([{ chamadaUnica: { saida: "Resumo da I-206." } }]);
 
-    await concluirEncerramentoRodada(banco, REF);
+  await concluirEncerramentoRodada(banco, REF);
 
-    const corpo = hospedagem.prs()[0]?.corpo ?? "";
-    assert.ok(corpo.length <= 65_536);
-    assert.ok(corpo.startsWith(`${MARCA}\n\n## Contexto (resumido)\n\nResumo da I-206.\n\n## O que mudou`));
-    assert.match(corpo, /## Como revisar\n\n1\. Leia o diff\./);
-    assert.doesNotMatch(corpo, /longa/);
-    const resumo = prompt()
-      .split("\n")
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as unknown)
-      .find((p) => typeof p === "string" && p.startsWith("Resuma"));
-    assert.match(String(resumo), /## Por quê[\s\S]*longa[\s\S]*## Autoria e custo/);
-    assert.doesNotMatch(String(resumo), /## Como revisar/);
-    assert.equal((evidencia("pr_aberto")?.dados as { condensado: boolean }).condensado, true);
-    assert.doesNotMatch(readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"), /não resumiu/);
-  } finally {
-    delete process.env.FALSO_PI_RESUMO;
-  }
+  const corpo = hospedagem.prs()[0]?.corpo ?? "";
+  assert.ok(corpo.length <= 65_536);
+  assert.ok(corpo.startsWith(`${MARCA}\n\n## Contexto (resumido)\n\nResumo da I-206.\n\n## O que mudou`));
+  assert.match(corpo, /## Como revisar\n\n1\. Leia o diff\./);
+  assert.doesNotMatch(corpo, /longa/);
+  const resumo = piFalso
+    .registro()
+    .filter((entrada) => entrada.evento === "chamada_unica")
+    .map((entrada) => entrada.argv?.at(-1))
+    .find((prompt) => prompt?.startsWith("Resuma"));
+  assert.match(String(resumo), /## Por quê[\s\S]*longa[\s\S]*## Autoria e custo/);
+  assert.doesNotMatch(String(resumo), /## Como revisar/);
+  assert.equal((evidencia("pr_aberto")?.dados as { condensado: boolean }).condensado, true);
+  assert.doesNotMatch(readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"), /não resumiu/);
 });
 
 test("corpo além do limite e o pi sem resumo: o PR vai sem o contexto, e o log diz por quê", async () => {

@@ -1,12 +1,13 @@
 // Leitura das sessões dos tickets da demanda no chat (I-239, CA-1 a CA-7, CA-13 e CA-14) com banco real; o fluxo ao vivo
-// e o diálogo vêm do pi falso do e2e.
+// e o diálogo vêm do pi falso único.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import type { ExecucaoSessao, Sessao } from "../dominio/sessoes.ts";
@@ -32,7 +33,7 @@ import {
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sessoes-demanda-")));
 process.env.PI_CODING_AGENT_DIR = join(temporario, "pi-agent");
-process.env.FABRIQUINHA_PI = resolve(import.meta.dirname, "../../e2e/pi-falso.ts");
+instalarPiFalso(temporario).roteirizar([{ marcas: true }]);
 delete process.env.FABRIQUINHA_PORTA;
 
 const abertos: DatabaseSync[] = [];
