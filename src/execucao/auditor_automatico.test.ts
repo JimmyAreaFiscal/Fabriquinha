@@ -75,6 +75,11 @@ test("lê a última decisão válida da saída; escalar, rótulo fora das opçõ
     "Faça login na conta do Sonar e confira o projeto",
     "Acesse o painel",
     "Use o token do bot",
+    "Entre no painel do Sonar e confira o projeto",
+    "Consulte o dashboard do Sonar",
+    "Conecte no banco de homologação",
+    "Confira o PR no GitHub",
+    "Restaure a cópia do banco no ambiente de teste",
   ]) {
     assert.equal(lerDecisao(responder(oferta), livre, "implementar"), undefined, oferta);
   }

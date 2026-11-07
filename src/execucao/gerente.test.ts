@@ -242,6 +242,12 @@ test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy
       "revisar_demanda",
       '{"decisao":"responder","resposta":"Faça login na conta do Sonar e confira o projeto","justificativa":"banal"}',
     ],
+    // Sem as palavras de credencial: ainda é orientação de acesso e não chega ao agente.
+    [
+      "pergunta_banco",
+      "implementar",
+      '{"decisao":"responder","resposta":"Entre no painel do Sonar e confira o projeto","justificativa":"banal"}',
+    ],
   ] as const) {
     const escalada = rodar(variante, "autonomo", 1, triagemComSaida(etapa, saida));
     await ate(
