@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { ErroDeRegra } from "./erros.ts";
+import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import { Id, Markdown, Titulo } from "./primitivos.ts";
 
 // Letras + hífen + número (`I-196`): sem `/`, `.`, `..`, espaço ou `-` duplo, e sem colidir `fabriquinha/{demanda}-{rodada}`
@@ -36,42 +37,6 @@ const formatar = (schema: typeof TicketRef | typeof RodadaRef, ref: unknown, let
 export const formatarTicketRef = (ref: z.infer<typeof TicketRef>): string => formatar(TicketRef, ref, "T", "ticket_id");
 /** Endereço público da rodada: `I-206.R2`. */
 export const formatarRodadaRef = (ref: z.infer<typeof RodadaRef>): string => formatar(RodadaRef, ref, "R", "rodada_id");
-
-const SUFIXO = /^([TR])([1-9][0-9]*)$/;
-
-/** Interpreta `I-206.T3` ou `I-206.R2`; sem forma curta nem dedução da demanda pelo contexto. O chamador distingue por `"ticket_id" in ref`. */
-export function interpretarRef(texto: string): z.infer<typeof TicketRef> | z.infer<typeof RodadaRef> {
-  const ponto = texto.lastIndexOf(".");
-  const demanda = DemandaId.safeParse(texto.slice(0, Math.max(ponto, 0)));
-  const sufixo = SUFIXO.exec(texto.slice(ponto + 1));
-  const numero = Number(sufixo?.[2]);
-  if (ponto < 0 || !demanda.success || !sufixo || !Number.isSafeInteger(numero) || !Id.safeParse(numero).success)
-    throw new ErroDeRegra(`endereço ${JSON.stringify(texto)} inválido`, FORMAS);
-  return sufixo[1] === "T"
-    ? { demanda_id: demanda.data, ticket_id: numero }
-    : { demanda_id: demanda.data, rodada_id: numero };
-}
-
-/** Os nós de um ciclo em `grafo`, ou `undefined` se ele é acíclico (busca em profundidade com pilha). */
-export function acharCiclo(grafo: Map<string, string[]>): string[] | undefined {
-  const feitos = new Set<string>();
-  const visitar = (no: string, pilha: string[]): string[] | undefined => {
-    const i = pilha.indexOf(no);
-    if (i >= 0) return pilha.slice(i);
-    if (feitos.has(no)) return undefined;
-    for (const dep of grafo.get(no) ?? []) {
-      const ciclo = visitar(dep, [...pilha, no]);
-      if (ciclo) return ciclo;
-    }
-    feitos.add(no);
-    return undefined;
-  };
-  for (const no of grafo.keys()) {
-    const ciclo = visitar(no, []);
-    if (ciclo) return ciclo;
-  }
-  return undefined;
-}
 
 /** Caminho relativo à raiz git: sem absoluto (POSIX ou drive Windows), barra invertida nem segmento `..`. */
 export const CaminhoTicket = z
@@ -114,7 +79,6 @@ export const Plano = z
       if (rodadas.has(r.rodada_id)) erro(`a rodada ${String(r.rodada_id)} se repete`);
       rodadas.add(r.rodada_id);
     }
-    const grafoRodadas = new Map<string, string[]>();
     for (const r of plano.rodadas) {
       for (const c of r.criterios) {
         if (!plano.criterios.includes(c)) erro(`a rodada ${String(r.rodada_id)} cita o ${c}, que a demanda não tem`);
@@ -126,13 +90,12 @@ export const Plano = z
         else if (!rodadas.has(d.rodada_id))
           erro(`a rodada ${String(r.rodada_id)} depende da rodada ${String(d.rodada_id)}, que não existe`);
       }
-      grafoRodadas.set(
-        String(r.rodada_id),
-        r.depende.map((d) => String(d.rodada_id)),
-      );
     }
-    const ciclo = acharCiclo(grafoRodadas);
-    if (ciclo) erro(`as rodadas ${ciclo.join(" → ")} formam um ciclo de dependência`);
+    const cicloDeRodadas = new GrafoDeDependencias(
+      plano.rodadas.flatMap((r) => r.depende.map((d): [number, number] => [r.rodada_id, d.rodada_id])),
+      "as rodadas",
+    ).descreverCiclo();
+    if (cicloDeRodadas) erro(cicloDeRodadas);
 
     const tickets = new Map<number, number | undefined>();
     for (const t of plano.tickets) {
@@ -147,7 +110,6 @@ export const Plano = z
       if (!plano.tickets.some((t) => t.rodada_id === r.rodada_id))
         erro(`a rodada ${String(r.rodada_id)} não tem ticket de implementação`);
     }
-    const grafoTickets = new Map<string, string[]>();
     for (const t of plano.tickets) {
       for (const d of t.depende) {
         const alvo = tickets.get(d.ticket_id);
@@ -159,13 +121,12 @@ export const Plano = z
           erro(`${nome}: ticket sem rodada não participa de dependência`);
         else if (t.rodada_id !== alvo) erro(`${nome}, de outra rodada`);
       }
-      grafoTickets.set(
-        String(t.ticket_id),
-        t.depende.map((d) => String(d.ticket_id)),
-      );
     }
-    const cicloTickets = acharCiclo(grafoTickets);
-    if (cicloTickets) erro(`os tickets ${cicloTickets.join(" → ")} formam um ciclo de dependência`);
+    const cicloDeTickets = new GrafoDeDependencias(
+      plano.tickets.flatMap((t) => t.depende.map((d): [number, number] => [t.ticket_id, d.ticket_id])),
+      "os tickets",
+    ).descreverCiclo();
+    if (cicloDeTickets) erro(cicloDeTickets);
   });
 
 export type DemandaId = z.infer<typeof DemandaId>;

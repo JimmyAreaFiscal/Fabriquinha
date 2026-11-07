@@ -206,8 +206,13 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
   const html = pagina(
     dadosDaPagina({
       rodadas: [
-        { ref: "I-206.R1", titulo: "Primeira", estado: "gate_pr" },
-        { ref: "I-206.R2", titulo: "Segunda", estado: "ajustar_resultado" },
+        {
+          ref: "I-206.R1",
+          titulo: "Primeira",
+          estado: "gate_pr",
+          ticket_atual_por_etapa: { encerrar_rodada: "I-206.T2" },
+        },
+        { ref: "I-206.R2", titulo: "Segunda", estado: "ajustar_resultado", ticket_atual_por_etapa: {} },
       ],
       tickets: [
         {
@@ -307,9 +312,9 @@ test("Aguarda você liga ao gate do estado, ao PR e à sessão da rodada e aos t
     dadosDaPagina({
       demanda: { ...dadosDaPagina().demanda, estado: "gate_planejamento" },
       rodadas: [
-        { ref: "I-206.R1", titulo: "r", estado: "gate_pr" },
-        { ref: "I-206.R2", titulo: "r", estado: "ajustar_resultado" },
-        { ref: "I-206.R3", titulo: "r", estado: "revisar_rodada" },
+        { ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: {} },
+        { ref: "I-206.R2", titulo: "r", estado: "ajustar_resultado", ticket_atual_por_etapa: {} },
+        { ref: "I-206.R3", titulo: "r", estado: "revisar_rodada", ticket_atual_por_etapa: {} },
       ],
       tickets: [
         {
@@ -358,7 +363,14 @@ test("Aguarda você liga ao gate do estado, ao PR e à sessão da rodada e aos t
 test("rodada sem ticket e PR com endereço que não é http não viram link", () => {
   const html = pagina(
     dadosDaPagina({
-      rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada" }],
+      rodadas: [
+        {
+          ref: "I-206.R1",
+          titulo: "R",
+          estado: "revisar_rodada",
+          ticket_atual_por_etapa: { encerrar_rodada: "I-206.T1" },
+        },
+      ],
       tickets: [
         {
           ref: "I-206.T1",
@@ -375,7 +387,11 @@ test("rodada sem ticket e PR com endereço que não é http não viram link", ()
   assert.doesNotMatch(html, /javascript:x" /);
   assert.match(html, /PR #7/);
   assert.match(
-    pagina(dadosDaPagina({ rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada" }] })),
+    pagina(
+      dadosDaPagina({
+        rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada", ticket_atual_por_etapa: {} }],
+      }),
+    ),
     /Sem tickets\./,
   );
 });
@@ -388,7 +404,7 @@ test("as dependências trazem o link e o estado da predecessora (CA-13)", () => 
 test("as evidências viram chips junto de quem as gerou; o chip guarda os anexos e os dados para a caixa (CA-10)", () => {
   const html = pagina(
     dadosDaPagina({
-      rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada" }],
+      rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada", ticket_atual_por_etapa: {} }],
       tickets: [
         {
           ref: "I-206.T1",
@@ -719,14 +735,17 @@ test("o gate do planejamento usa a rota do planejamento (CA-17 a CA-19)", () => 
 
 test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados à rota do PR (CA-20 a CA-23)", () => {
   const base = dadosDaPagina();
-  const html = pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }] });
+  const html = pagina({
+    ...base,
+    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: {} }],
+  });
   assert.match(html, /<select id="nota-I-206\.R1"/);
   const reprovacao = html.slice(html.indexOf("Reprovação do PR"));
   assert.doesNotMatch(reprovacao, /<select/);
   assert.match(reprovacao, /<textarea id="motivo-I-206\.R1"/);
   const comTicket = pagina({
     ...base,
-    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
+    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: {} }],
     tickets: [
       {
         ref: "I-206.T1",
@@ -752,7 +771,7 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
     /data-gate="true" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-nota="nota-I-206\.R1">Aprovar PR</,
   );
   assert.doesNotMatch(
-    pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "concluida" }] }),
+    pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "concluida", ticket_atual_por_etapa: {} }] }),
     /Aprovar PR/,
   );
 });
@@ -761,7 +780,9 @@ test("o gate do PR traz o botão que abre o PR no GitHub ou no Azure DevOps, só
   const comPR = (url: string) =>
     pagina({
       ...dadosDaPagina(),
-      rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
+      rodadas: [
+        { ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: { encerrar_rodada: "I-206.T2" } },
+      ],
       tickets: [
         {
           ref: "I-206.T2",
@@ -786,7 +807,9 @@ test("o gate do PR traz o botão que abre o PR no GitHub ou no Azure DevOps, só
 test("o gate do PR traz os artefatos da rodada, a última evidência de cada tipo, com os prints e o HTML", () => {
   const html = pagina({
     ...dadosDaPagina(),
-    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
+    rodadas: [
+      { ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: { encerrar_rodada: "I-206.T3" } },
+    ],
     tickets: [
       {
         ref: "I-206.T1",
@@ -841,7 +864,7 @@ test("o gate do PR traz os artefatos da rodada, a última evidência de cada tip
   // Sem evidência na rodada, o gate não ganha um bloco vazio.
   const vazio = pagina({
     ...dadosDaPagina(),
-    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
+    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: {} }],
   });
   assert.doesNotMatch(vazio, />Artefatos</);
 });
@@ -874,7 +897,14 @@ test("o gate do planejamento traz o último plano, e não as evidências de outr
 });
 
 test("a sessão de ajustes leva ao chat da sessão do ticket e conclui pela página (CA-10)", () => {
-  const rodadas = [{ ref: "I-206.R1", titulo: "r", estado: "ajustar_resultado" as const }];
+  const rodadas = [
+    {
+      ref: "I-206.R1",
+      titulo: "r",
+      estado: "ajustar_resultado" as const,
+      ticket_atual_por_etapa: { ajustar_resultado: "I-206.T3" },
+    },
+  ];
   const ticket = {
     ref: "I-206.T3",
     etapa: "ajustar_resultado" as const,

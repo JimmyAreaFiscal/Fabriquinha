@@ -2,9 +2,9 @@
 // de ajustes. Cada rota valida o corpo, chama o serviço da aplicação como AUDITOR e devolve o erro dele como está.
 import { z } from "zod";
 import { AUDITOR } from "../../../nucleo/ator.ts";
-import { interpretarRef } from "../../../nucleo/demanda.ts";
 import { reabrirTicket } from "../../../nucleo/transicoes_demanda.ts";
 import { ErroDeRegra, existe } from "../../../nucleo/erros.ts";
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { aprovarPRRodada } from "../../../aplicacao/aprovacao_pr_rodada.ts";
 import type { RefRodada } from "../../../aplicacao/encerramento_rodada.ts";
 import { arquivar, cancelar, decidir } from "../../../aplicacao/gestao_demandas.ts";
@@ -41,10 +41,10 @@ const agora = () => ({ agora: new Date().toISOString() });
 
 /** O `:ref` do caminho como rodada (`I-206.R2`). */
 function refDaRodada({ params }: Pedido): RefRodada {
-  const ref = interpretarRef(String(params.ref));
-  if (!("rodada_id" in ref))
+  const { demanda_id, rodada_id } = Endereco.ler(String(params.ref));
+  if (rodada_id === undefined)
     throw new ErroDeRegra(`${String(params.ref)} não é uma rodada`, "use o endereço da rodada, como I-206.R2");
-  return ref;
+  return { demanda_id, rodada_id };
 }
 
 const limite = (pedido: Pedido) => ({ limiteMin: configuracao(pedido.banco).timeoutMin });
@@ -73,10 +73,10 @@ const concluir = (pedido: Pedido) => concluirSessaoAjustes(pedido.banco, refDaRo
 
 /** O `:ref` do caminho como ticket (`I-206.T3`). */
 function refDoTicket({ params }: Pedido) {
-  const ref = interpretarRef(String(params.ref));
-  if (!("ticket_id" in ref))
+  const { demanda_id, ticket_id } = Endereco.ler(String(params.ref));
+  if (ticket_id === undefined)
     throw new ErroDeRegra(`${String(params.ref)} não é um ticket`, "use o endereço do ticket, como I-206.T3");
-  return ref;
+  return { demanda_id, ticket_id };
 }
 
 const Reabertura = z.object({ instrucao: Motivo("da reabertura, como instrução para o ticket") });

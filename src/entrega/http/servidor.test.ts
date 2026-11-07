@@ -316,11 +316,11 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
   );
   assert.deepEqual((await pedir("/api/sessoes?escopo=historico", { headers: comCookie() })).json(), []);
 
-  const r = await pedir("/api/sessoes?escopo=todas&demanda=x", { headers: comCookie() });
+  const r = await pedir("/api/sessoes?escopo=todas&etapa=x", { headers: comCookie() });
   assert.equal(r.status, 422);
   const { erro } = r.json() as { erro: string };
   assert.match(erro, /→ at escopo/);
-  assert.match(erro, /→ at demanda/);
+  assert.match(erro, /→ at etapa/);
 });
 
 test("rota que devolve nada dá 204; a que responde sozinha fica como está; erro inesperado dá 500 no log; erro depois de responder corta a conexão", async (t) => {

@@ -7,6 +7,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
+import { mensagem } from "../../nucleo/erros.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { principal } from "./cli.ts";
 import { COMANDOS_DEMANDA_EXTERNA, ErroDeUso } from "./demanda_externa.ts";
@@ -99,6 +101,16 @@ const ler = (s: Saida): unknown => {
 };
 const json = (s: Saida) => ler(s) as Visao;
 const jsonSchema = (s: Saida) => ler(s) as Schema;
+/** A mensagem com que `Endereco.ler` recusa `texto`. */
+function recusaDoEndereco(texto: string): string {
+  try {
+    Endereco.ler(texto);
+  } catch (erro) {
+    return mensagem(erro);
+  }
+  throw new Error(`${texto} deveria ser recusado`);
+}
+
 const falha = (s: Saida, codigo: number, mensagem: RegExp) => {
   assert.deepEqual([s.codigo, s.out], [codigo, ""]);
   assert.match(s.err, mensagem);
@@ -249,7 +261,15 @@ test("evidência: tipo inválido, sem --dados e JSON inválido", async () => {
     1,
     /não é um JSON válido/,
   );
-  falha(await cli(env, ["demanda", "ver", "abc"]), 2, /abc não é um I-<n>/);
+});
+
+test("CA-2: o endereço inválido sai com a mensagem de Endereco.ler e o de rodada ou ticket não é de demanda", async () => {
+  const env = novaRaiz();
+  const { codigo, out, err } = await cli(env, ["demanda", "ver", "I-x"]);
+  assert.deepEqual([codigo, out], [1, ""]);
+  assert.ok(err.includes(recusaDoEndereco("I-x")), err);
+  falha(await cli(env, ["demanda", "ver", "I-1.R2"]), 1, /I-1\.R2 não é o endereço de uma demanda/);
+  falha(await cli(env, ["demanda", "ver", "I-1.T2"]), 1, /I-1\.T2 não é o endereço de uma demanda/);
 });
 
 test("CA-12: schema do tipo com as regras de arquivo", async () => {

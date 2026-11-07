@@ -40,15 +40,14 @@ test("página: filtros de projeto, demanda e etapa com o que o Auditor escolheu,
   assert.doesNotMatch(html, /data-auditar|data-mes|data-pedido/);
 });
 
-test("consulta: só os filtros escolhidos, a demanda como I-n ou n, e nada a pedir se ela não é número", () => {
+test("consulta: só os filtros escolhidos, com a demanda como foi digitada, que a API lê", () => {
   assert.equal(consulta({ projeto: "", demanda: "", etapa: "" }), "escopo=historico");
   assert.equal(
-    consulta({ projeto: "loja api", demanda: "i-29", etapa: "planejar" }),
+    consulta({ projeto: "loja api", demanda: "I-29", etapa: "planejar" }),
     "escopo=historico&projeto=loja+api&demanda=I-29&etapa=planejar",
   );
-  assert.equal(consulta({ projeto: "", demanda: "29", etapa: "" }), "escopo=historico&demanda=I-29");
-  assert.equal(consulta({ projeto: "", demanda: "I-", etapa: "" }), undefined);
-  assert.equal(consulta({ projeto: "", demanda: "cupom", etapa: "" }), undefined);
+  assert.equal(consulta({ projeto: "", demanda: "29", etapa: "" }), "escopo=historico&demanda=29");
+  assert.equal(consulta({ projeto: "", demanda: "I-x", etapa: "" }), "escopo=historico&demanda=I-x");
 });
 
 test("contagem e dia: Hoje, Ontem, a data e o ano quando não é o de agora, no fuso do navegador", () => {

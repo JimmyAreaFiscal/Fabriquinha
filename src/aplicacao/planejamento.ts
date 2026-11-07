@@ -9,6 +9,7 @@ import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { Plano } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { confirmarAprovacaoPlanejamento, reabrirTicket, reprovarPlanejamento } from "../nucleo/transicoes_demanda.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { varrerBase } from "./retrabalho.ts";
@@ -31,7 +32,7 @@ const contexto = () => ({ agora: new Date().toISOString() });
 
 function ticketPlanejar(ag: AgregadoDemanda) {
   return existe(
-    ag.tickets.find((t) => t.etapa === "planejar"),
+    ticketAtualDaEtapa(ag, "planejar"),
     `a demanda ${ag.demanda.id} não tem ticket de etapa planejar`,
     "abra o ticket de planejamento",
   );

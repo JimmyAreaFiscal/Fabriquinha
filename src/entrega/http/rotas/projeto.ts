@@ -7,6 +7,7 @@ import { AUDITOR } from "../../../nucleo/ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../nucleo/ciclos.ts";
 import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
+import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
@@ -63,7 +64,7 @@ const Filtro = z.object({
 
 /** O PR da rodada: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela, em qualquer estado. */
 function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
-  const ticket = ag.tickets.findLast((t) => t.rodada_id === rodada_id && t.etapa === "encerrar_rodada");
+  const ticket = ticketAtualDaEtapa(ag, "encerrar_rodada", rodada_id);
   const pr = ag.evidencias.findLast((e) => e.ticket_id === ticket?.ticket_id && e.tipo === "pr_aberto")?.dados as
     { id: string; url: string } | undefined;
   return pr && { id: pr.id, url: pr.url };

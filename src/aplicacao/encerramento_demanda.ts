@@ -9,6 +9,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import { motivo } from "../nucleo/primitivos.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
@@ -64,7 +65,7 @@ export async function conduzirEncerramentoDemanda(
   deps: DepsEncerramentoDemanda = {},
 ): Promise<AgregadoDemanda> {
   const ag = carregarDemanda(banco, demanda_id);
-  const ticket = ag.tickets.findLast((t) => t.etapa === "encerrar_demanda");
+  const ticket = ticketAtualDaEtapa(ag, "encerrar_demanda");
   if (ag.demanda.estado !== "encerrar_demanda" || ticket?.estado !== "em_execucao") {
     throw new ErroDeRegra(
       `a demanda ${demanda_id} está em ${ag.demanda.estado} e o encerrar_demanda está ${ticket?.estado ?? "ausente"}`,

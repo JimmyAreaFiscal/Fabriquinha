@@ -9,6 +9,7 @@ import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
+import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
@@ -128,7 +129,7 @@ export function decidirDemanda(
     );
   }
   exigirSemFalha(ag, "entender_e_desenhar");
-  const ticket = ag.tickets.find((t) => t.etapa === "entender_e_desenhar");
+  const ticket = ticketAtualDaEtapa(ag, "entender_e_desenhar");
   if (ticket === undefined) {
     throw new ErroDeRegra(`a demanda ${demanda.id} não tem ticket de etapa demanda`, "registre a demanda de novo");
   }
@@ -151,18 +152,7 @@ export function decidirDemanda(
     ...ag,
     demanda: CICLO_DA_DEMANDA.mudar(demanda, e.aprovado ? "planejar" : "cancelada", ctx.agora),
     tickets: abrirPlanejar
-      ? [
-          ...decidido,
-          {
-            demanda_id: demanda.id,
-            ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
-            etapa: "planejar" as const,
-            estado: "aberto" as const,
-            estado_alterado_em: ctx.agora,
-            criado_por: FABRIQUINHA,
-            devolucoes: 0,
-          },
-        ]
+      ? [...decidido, criarTicket(ag, { etapa: "planejar", criado_por: FABRIQUINHA, agora: ctx.agora })]
       : decidido,
     decisoes: [...ag.decisoes, decisao],
   };
@@ -174,7 +164,7 @@ const EntradaAprovacao = z.strictObject({ nota: z.number().int().min(1).max(5).o
 const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
 
 function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
-  const ticket = ag.tickets.find((t) => t.etapa === "planejar");
+  const ticket = ticketAtualDaEtapa(ag, "planejar");
   if (ticket === undefined) {
     throw new ErroDeRegra(
       `a demanda ${ag.demanda.id} não tem ticket de etapa planejar`,
@@ -322,9 +312,9 @@ export function confirmarAprovacaoPlanejamento(
   const planejamento = ticketPlanejamento(ag);
   const plano = planoSubmetido(ag, planejamento);
   const demanda_id = ag.demanda.id;
-  const base = Math.max(...ag.tickets.map((t) => t.ticket_id));
+  const primeiroId = proximoIdDeTicket(ag);
   const planos = [...plano.tickets].sort((a, b) => a.ticket_id - b.ticket_id);
-  const novoId = new Map(planos.map((t, i) => [t.ticket_id, base + i + 1]));
+  const novoId = new Map(planos.map((t, i) => [t.ticket_id, primeiroId + i]));
   const id = (n: number): number => existe(novoId.get(n), `o ticket ${String(n)} não está no plano`, "valide o plano");
   return AgregadoDemanda.parse({
     ...ag,
@@ -555,20 +545,6 @@ function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
   }
 }
 
-export const novoTicketGlobal = (
-  ag: AgregadoDemanda,
-  etapa: TicketDemanda["etapa"],
-  agora: Instante,
-): TicketDemanda => ({
-  demanda_id: ag.demanda.id,
-  ticket_id: Math.max(...ag.tickets.map((t) => t.ticket_id)) + 1,
-  etapa,
-  estado: "aberto",
-  devolucoes: 0,
-  estado_alterado_em: agora,
-  criado_por: FABRIQUINHA,
-});
-
 /** CA-12: só a Fabriquinha; com todas as rodadas concluídas e nada pendente, abre `revisar_demanda` e vai a `revisar_demanda`. */
 export function iniciarRevisaoDemanda(
   ag: AgregadoDemanda,
@@ -583,7 +559,7 @@ export function iniciarRevisaoDemanda(
   return {
     ...ag,
     demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "revisar_demanda", ctx.agora),
-    tickets: [...ag.tickets, novoTicketGlobal(ag, "revisar_demanda", ctx.agora)],
+    tickets: [...ag.tickets, criarTicket(ag, { etapa: "revisar_demanda", criado_por: FABRIQUINHA, agora: ctx.agora })],
   };
 }
 
@@ -601,8 +577,7 @@ export function registrarRevisaoDemanda(
   const e = EntradaRevisaoDemanda.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
   CICLO_DA_DEMANDA.exigir(ag.demanda, "revisar_demanda");
-  const revisores = ag.tickets.filter((t) => t.etapa === "revisar_demanda");
-  const ticket = revisores.find((t) => t.ticket_id === Math.max(...revisores.map((x) => x.ticket_id)));
+  const ticket = ticketAtualDaEtapa(ag, "revisar_demanda");
   if (ticket?.ticket_id !== e.ticket_id || !CICLO_DO_TICKET.estaEmAndamento(ticket.estado)) {
     throw new ErroDeRegra(
       `o ticket ${String(e.ticket_id)} não é o revisar_demanda ativo`,
@@ -631,7 +606,10 @@ export function registrarRevisaoDemanda(
     ...base,
     demanda: CICLO_DA_DEMANDA.mudar(base.demanda, e.aprovado ? "encerrar_demanda" : "em_execucao", ctx.agora),
     tickets: e.aprovado
-      ? [...comRevisaoConcluida, novoTicketGlobal(base, "encerrar_demanda", ctx.agora)]
+      ? [
+          ...comRevisaoConcluida,
+          criarTicket(base, { etapa: "encerrar_demanda", criado_por: FABRIQUINHA, agora: ctx.agora }),
+        ]
       : comRevisaoConcluida,
     decisoes: [...ag.decisoes, decisao],
   };

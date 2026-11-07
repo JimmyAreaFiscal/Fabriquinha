@@ -6,9 +6,10 @@ import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { formatarRodadaRef, formatarTicketRef, interpretarRef } from "../../nucleo/demanda.ts";
+import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
 import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import {
   type SchemaEvidencia,
   schemaDe,
@@ -77,14 +78,14 @@ export const proprio = (a: EscopoDoAgente): string => formatarTicketRef(a);
 /** O ticket de `texto`, que só pode ser o do agente; `T-3` e outras formas erram mostrando o endereço certo. */
 export function ticketProprio(a: EscopoDoAgente, texto: string, agir = false): void {
   const forma = `use o endereço do seu ticket, ${proprio(a)}`;
-  let ref;
+  let endereco;
   try {
-    ref = interpretarRef(texto);
+    endereco = Endereco.ler(texto);
   } catch {
     throw new ErroDeRegra(`${texto} não é um endereço de ticket`, forma);
   }
-  if (!("ticket_id" in ref)) throw new ErroDeRegra(`${texto} é uma rodada, não um ticket`, forma);
-  if (formatarTicketRef(ref) !== proprio(a)) {
+  if (endereco.ticket_id === undefined) throw new ErroDeRegra(`${texto} não é um ticket`, forma);
+  if (endereco.toString() !== proprio(a)) {
     throw agir
       ? new ErroDeEscopo("o agente só age no próprio ticket", `aja em ${proprio(a)}`)
       : new ErroDeEscopo("o agente só lê o próprio ticket", `leia ${proprio(a)}`);
@@ -213,11 +214,11 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
       const forma = `use a rodada do seu ticket, ${formatarRodadaRef({ demanda_id, rodada_id: Number(proprioTicket.rodada_id) })}`;
       let ref;
       try {
-        ref = interpretarRef(texto);
+        ref = Endereco.ler(texto);
       } catch {
         throw new ErroDeRegra(`${texto} não é um endereço de rodada`, forma);
       }
-      if (!("rodada_id" in ref)) throw new ErroDeRegra(`${texto} é um ticket, não uma rodada`, forma);
+      if (ref.rodada_id === undefined) throw new ErroDeRegra(`${texto} não é uma rodada`, forma);
       if (ref.demanda_id !== demanda_id) throw new ErroDeEscopo(`${texto} é de outra demanda`, forma);
       const titulo = op.titulo as string | undefined;
       if (titulo === undefined) throw new ErroDeRegra("falta o título do ticket corretivo", "passe --titulo <texto>");
