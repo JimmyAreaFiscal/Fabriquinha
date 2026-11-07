@@ -466,6 +466,12 @@ test("instalarPiFalso aponta o ambiente para o pi, roteiriza e registra início,
       falso.registro().map((e) => e.evento),
       ["inicio", "comando", "inicio", "comando"],
     );
+    // Outro pi no meio da escrita de uma linha: a leitura a ignora até ela terminar.
+    writeFileSync(join(dir, "pi-registro.jsonl"), '{"evento":"inicio"}\n{"evento":"com');
+    assert.deepEqual(
+      falso.registro().map((e) => e.evento),
+      ["inicio"],
+    );
     assert.deepEqual(falso.roteirizar().registro(), []);
   } finally {
     process.env = antes;

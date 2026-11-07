@@ -7,7 +7,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { AUDITOR } from "../src/nucleo/ator.ts";
-import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR, registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/aplicacao/evidencias/pr_rodada.ts";
 import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
@@ -156,6 +156,27 @@ test("os agentes da rodada recebem o que a Fabriquinha apurou: o diff e a matriz
   const documentador = pi.prompts()[0]?.prompt ?? "";
   assert.match(documentador, /## Arquivos não previstos[\s\S]*- `feature\.txt`/);
   assert.match(documentador, /## Impacto na arquitetura\n\nalto: escreva em `reversao`/);
+});
+
+test("aprovação automática ligada para o projeto: o encerramento pelo agendador integra o PR da rodada sem o Auditor", async (t) => {
+  gh.zerar();
+  const c = criarCenario(t);
+  const id = await rodadaEmEncerramento(c);
+  process.env.FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA = c.projeto;
+  t.after(() => {
+    delete process.env.FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA;
+  });
+
+  await encerrar(c, id);
+
+  assert.equal(rodadaDe(c, id, 1)?.fase, "concluida");
+  assert.equal(gh.prs()[0]?.estado, "mergeado");
+  const gate = atual(c, id, "encerrar_rodada").ticket_id;
+  const decisao = demanda(c, id).decisoes.find((d) => d.ticket_id === gate);
+  assert.deepEqual(
+    [decisao?.resultado, decisao?.nota, decisao?.motivo],
+    ["aprovado", undefined, MOTIVO_APROVACAO_AUTOMATICA_PR],
+  );
 });
 
 // Commita na worktree em que o pi roda: o que a conversa da sessão de ajustes não pode deixar.

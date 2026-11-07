@@ -48,9 +48,22 @@ async function verificarSonar({ projeto, worktree, opcoes }: EntradaVerificacoes
   }
 }
 
-/** Roda as três verificações, sempre, na ordem do catálogo. */
+/**
+ * Roda as três verificações, sempre, e as devolve na ordem do catálogo. O Sonar lê o lcov dos testes das linguagens:
+ * começa assim que eles terminam e roda junto com o E2E e as fitness functions, que seguem em série como antes.
+ */
 export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<Verificacao[]> {
   const arquivos = await arquivosAlterados(entrada.worktree);
+  let sonarEmAndamento: Promise<Verificacao> | undefined;
+  const iniciarSonar = () => (sonarEmAndamento ??= verificarSonar(entrada, arquivos));
   const comandos = { ...entrada, arquivos, limiteMs: entrada.opcoes?.limiteMs };
-  return [await verificarTestes(comandos), await verificarFitness(comandos), await verificarSonar(entrada, arquivos)];
+  const testes = await verificarTestes({
+    ...comandos,
+    aoTerminarAsLinguagens: () => {
+      // A falha sobe quando o Sonar é esperado, abaixo; o allSettled só a trata se o E2E lançar antes dessa espera.
+      void Promise.allSettled([iniciarSonar()]);
+    },
+  });
+  const [fitness, sonar] = await Promise.all([verificarFitness(comandos), iniciarSonar()]);
+  return [testes, fitness, sonar];
 }

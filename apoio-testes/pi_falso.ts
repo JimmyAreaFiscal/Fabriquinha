@@ -126,10 +126,15 @@ export interface PiFalso {
   prompts: () => { cwd: string; prompt: string; sessao: string }[];
 }
 
+/**
+ * As entradas completas do registro. Outro pi falso pode estar no meio de um `appendFileSync` de um prompt longo: a
+ * linha sem o "\n" final ainda não terminou de ser escrita e fica para a próxima leitura.
+ */
 const lerRegistro = (caminho: string): EntradaDoRegistro[] =>
   existsSync(caminho)
     ? readFileSync(caminho, "utf8")
         .split("\n")
+        .slice(0, -1)
         .filter(Boolean)
         .map((linha) => JSON.parse(linha) as EntradaDoRegistro)
     : [];

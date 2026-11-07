@@ -16,6 +16,7 @@ import { abrir, escrever, novoId } from "../../src/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
 import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import type { Ambiente } from "../ambiente.ts";
+import { CHAMADAS } from "../medir.ts";
 
 /** Um comando do CLI medido: `chamar` roda um processo e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
 export interface AcaoCli {
@@ -26,7 +27,6 @@ export interface AcaoCli {
   chamar(): Promise<number>;
 }
 
-const CHAMADAS = 200;
 const em = "2026-10-11T12:00:00.000Z";
 const AUTOR = ["--ferramenta", "estresse", "--sessao", "s-estresse"];
 const HTML = "<!doctype html><p>Desenho</p>";
