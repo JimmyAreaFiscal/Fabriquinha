@@ -12,7 +12,12 @@ import {
 } from "../src/armazenamento/configuracao_projeto.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
+/** A linha de `configuracao_etapa_projeto` da etapa `planejar` e a mesma etapa como o cadastro do projeto a entrega. */
 const PLANEJAR = { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "high" };
+const PLANEJAR_DO_CADASTRO = {
+  etapa: "planejar",
+  configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude-opus-5-5" }, effort: "high" },
+};
 
 /**
  * A configuração SDLC do projeto `loja`, com todos os grupos e duas linguagens; a segunda não tem E2E. A etapa
@@ -34,7 +39,7 @@ function configurar(raiz: string): void {
     e2e: [{ caminho_linguagem: ".", comando_build: "npm run build", comando_execucao: "npm run e2e", codigo_falha: 1 }],
     globs: [{ caminho_linguagem: ".", glob: "e2e/**/*.spec.ts" }],
   });
-  substituirEtapasDoProjeto(banco, "loja", [PLANEJAR]);
+  substituirEtapasDoProjeto(banco, "loja", [PLANEJAR_DO_CADASTRO]);
   banco.close();
 }
 

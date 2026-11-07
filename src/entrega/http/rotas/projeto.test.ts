@@ -135,7 +135,7 @@ function semearDemandas(): void {
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   substituirEtapasDoProjeto(banco, "loja", [
-    { etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "claude-sonnet-5-5" },
+    { etapa: "implementar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude-sonnet-5-5" } } },
   ]);
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-203", "arquivada"));
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-204", "concluida"));
@@ -151,8 +151,7 @@ function semearDemandas(): void {
         ticket("I-206", 4, "implementar", {
           rodada_id: 2,
           status: "em_execucao",
-          modelo_provedor: "llamacpp",
-          modelo_nome: "qwen3-coder-30b",
+          configuracao_agente: { modelo: { provedor: "llamacpp", nome: "qwen3-coder-30b" } },
         }),
       ],
       evidencias: [

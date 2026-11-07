@@ -9,7 +9,6 @@ import {
   Id,
   Instante,
   Markdown,
-  Modelo,
   Motivo,
   Slug,
   Titulo,
@@ -54,21 +53,6 @@ test("Motivo tem de 1 a 2.000 caracteres sem contar espaço nas pontas", () => {
 test("Slug é minúsculo, com dígitos e hífen, até 64 caracteres", () => {
   aceita(Slug, "fabriquinha", "a", "0-projeto-2", "a".repeat(64));
   recusa(Slug, "", "-inicio", "Maiuscula", "com espaco", "com_sublinhado", "a".repeat(65));
-});
-
-test("Modelo é o par provedor + modelo", () => {
-  aceita(
-    Modelo,
-    { provedor: "llamacpp", modelo: "qwen3-coder" },
-    { provedor: "openai.azure_2", modelo: "gpt-5 (2026)" },
-  );
-  recusa(
-    Modelo,
-    { provedor: "OpenAI", modelo: "gpt" },
-    { provedor: "openai", modelo: " " },
-    { provedor: "openai", modelo: "x".repeat(201) },
-    { provedor: "openai" },
-  );
 });
 
 test("estados SDLC têm exatamente os valores da seção 2.1", () => {

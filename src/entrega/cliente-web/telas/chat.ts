@@ -78,7 +78,7 @@ export function modeloDaConversa(conversa: readonly unknown[]): string {
     .map((e) => e.message as MensagemPi | undefined)
     .findLast((m) => m?.role === "assistant");
   return resposta?.model
-    ? nomeDoModelo({ provedor: String(resposta.provider), modelo: resposta.model })
+    ? nomeDoModelo({ provedor: String(resposta.provider), nome: resposta.model })
     : "modelo padrão do pi";
 }
 

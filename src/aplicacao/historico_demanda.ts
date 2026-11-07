@@ -3,7 +3,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { ExecucaoSessao } from "../nucleo/sessoes.ts";
-import type { EtapaTicket, Instante, Modelo } from "../nucleo/primitivos.ts";
+import type { Modelo } from "../nucleo/configuracao_agente.ts";
+import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import { encontrado } from "../nucleo/erros.ts";
 import { cabecalhoDaDemanda, type MotivoDemanda } from "./sessoes_demanda.ts";
 import type { Estado } from "./sessoes_demanda.ts";

@@ -6,6 +6,7 @@ import { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, novoId } from "./banco.ts";
+import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 type Linha = Record<string, SQLInputValue>;
 
@@ -57,14 +58,12 @@ const TABELAS: readonly Tabela[] = [
     nome: "ticket_demanda",
     chave: ["demanda_id", "ticket_id"],
     linhas: (ag) =>
-      ag.tickets.map((t) => ({
+      ag.tickets.map(({ configuracao_agente, ...t }) => ({
         ...t,
         rodada_id: t.rodada_id ?? null,
         titulo: t.titulo ?? null,
         descricao: t.descricao ?? null,
-        modelo_provedor: t.modelo_provedor ?? null,
-        modelo_nome: t.modelo_nome ?? null,
-        effort: t.effort ?? null,
+        ...colunasDaConfiguracaoAgente(configuracao_agente),
         instrucao: t.instrucao ?? null,
         motivo_falha: t.motivo_falha ?? null,
         retomadas_automaticas: t.retomadas_automaticas ?? 0,
@@ -196,7 +195,7 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     criterios_citados: filhas("criterio_citado_rodada"),
     // Zero retomadas é o mesmo que nenhuma: o campo só aparece quando há o que contar.
     tickets: filhas("ticket_demanda").map((t) =>
-      semNulos({ ...t, retomadas_automaticas: t.retomadas_automaticas || null }),
+      semNulos({ ...linhaComConfiguracaoAgente(t), retomadas_automaticas: t.retomadas_automaticas || null }),
     ),
     dependencias_ticket: filhas("dependencia_ticket"),
     caminhos_ticket: filhas("caminho_ticket"),

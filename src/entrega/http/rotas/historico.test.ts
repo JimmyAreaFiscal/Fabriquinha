@@ -90,7 +90,7 @@ test("histórico: as terminadas com demanda, ticket, resultado da última execu�
       "I-1.R1",
       "implementar",
       "autonomo",
-      { provedor: "anthropic", modelo: "claude-opus-5-5" },
+      { provedor: "anthropic", nome: "claude-opus-5-5" },
       T0,
       "2026-10-11T12:30:00.000Z",
     ],

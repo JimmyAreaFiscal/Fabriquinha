@@ -14,7 +14,8 @@ function orientar(issue: z.core.$ZodIssue): z.core.$ZodIssue {
     if (issue.code === "invalid_value" && campo === "effort")
       return `use um valor do domínio: ${issue.values.join(", ")}`;
     if (campo === "codigo_falha") return "use um valor de 1 a 255";
-    if (campo === "modelo_nome" && issue.code === "custom") return "informe provedor e nome do modelo juntos ou nenhum";
+    if (issue.code === "invalid_type" && issue.path.at(-2) === "modelo")
+      return "informe provedor e nome do modelo juntos ou nenhum";
     if (issue.code === "too_small" && issue.origin === "array") return "informe ao menos uma linha";
     return issue.code === "custom" ? issue.message : "preencha este campo";
   })();

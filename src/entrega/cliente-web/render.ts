@@ -1,7 +1,8 @@
 // Peças comuns do cliente (F7 §4.4) como funções puras que devolvem HTML: a navegação fixa, a página não encontrada e
 // os formatos que mais de uma tela usa (rótulos, caminhos, datas, números). O texto que vem do servidor passa sempre
 // por `escapar`.
-import type { FaseDemanda, FaseRodada, Modelo, StatusTicket } from "../../nucleo/primitivos.ts";
+import type { Modelo } from "../../nucleo/configuracao_agente.ts";
+import type { FaseDemanda, FaseRodada, StatusTicket } from "../../nucleo/primitivos.ts";
 import type { ModoExecucao } from "../../nucleo/sessoes.ts";
 import type { Pagina } from "./caminhos.ts";
 
@@ -78,16 +79,16 @@ export const caminhoDaSessao = (sessao: string): string => `/sessions/${encodeUR
 export const caminhoDaAvaliacao = (avaliacao: string): string => `/evaluations/${encodeURIComponent(avaliacao)}`;
 
 /** `anthropic / claude-opus-4-5`. */
-export const nomeDoModelo = (m: Modelo): string => `${m.provedor} / ${m.modelo}`;
+export const nomeDoModelo = (m: Modelo): string => `${m.provedor} / ${m.nome}`;
 
 /** O nome do modelo na página: numa linha só, cortado com reticências se faltar espaço, e inteiro no `title`. */
 export const rotuloDoModelo = (nome: string): string =>
   `<span class="modelo" title="${escapar(nome)}">${escapar(nome)}</span>`;
 
-/** O valor de um seletor de modelo (`provedor/modelo`) como o corpo de C20, ou `null` para o padrão da etapa. */
+/** O valor de um seletor de modelo (`provedor/nome`) como o corpo de C20, ou `null` para o padrão da etapa. */
 export function modeloDoSeletor(valor: string): Modelo | null {
   const corte = valor.indexOf("/");
-  return corte > 0 ? { provedor: valor.slice(0, corte), modelo: valor.slice(corte + 1) } : null;
+  return corte > 0 ? { provedor: valor.slice(0, corte), nome: valor.slice(corte + 1) } : null;
 }
 
 /** `1 falha`, `3 falhas`; o número passa por `formato`. */

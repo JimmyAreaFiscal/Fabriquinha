@@ -84,7 +84,7 @@ test("modelo: o fixado na sessão, senão o da última resposta do agente, senã
     message: { role: "assistant", provider: "anthropic", ...(model && { model }) },
   });
   assert.equal(
-    modeloDe(cabecalho({ modelo: { provedor: "llamacpp", modelo: "qwen" } }), [resposta("opus")]),
+    modeloDe(cabecalho({ modelo: { provedor: "llamacpp", nome: "qwen" } }), [resposta("opus")]),
     "llamacpp / qwen",
   );
   assert.equal(modeloDe(cabecalho(), [resposta("sonnet"), resposta("opus"), { type: "session" }]), "anthropic / opus");

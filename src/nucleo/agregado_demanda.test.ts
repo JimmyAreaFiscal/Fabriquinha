@@ -160,7 +160,11 @@ test("estado materializado do plano: rodadas, critérios, caminhos e dependênci
     AgregadoDemanda.safeParse(
       agregado({
         rodadas: [rodada(1), rodada(2)],
-        tickets: [rodadaDoTicket(1), rodadaDoTicket(2), ticket(3, { modelo_provedor: "p", modelo_nome: "m" })],
+        tickets: [
+          rodadaDoTicket(1),
+          rodadaDoTicket(2),
+          ticket(3, { configuracao_agente: { modelo: { provedor: "p", nome: "m" } } }),
+        ],
         dependencias_rodada: [{ demanda_id: "I-1", rodada_id: 2, depende_rodada_id: 1 }],
         criterios_citados: [{ demanda_id: "I-1", rodada_id: 1, criterio_id: "CA-1" }],
         dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
@@ -173,7 +177,7 @@ test("estado materializado do plano: rodadas, critérios, caminhos e dependênci
   recusa(agregado({ rodadas: [rodada(1, { demanda_id: "I-2" })] }), "outra demanda");
   recusa(agregado({ rodadas: [rodada(1, { branch: "x" })] }), "branch da rodada");
   recusa(agregado({ tickets: [ticket(1, { rodada_id: 9 })] }), "rodada 9, que não existe");
-  recusa(agregado({ tickets: [ticket(1, { modelo_nome: "m" })] }), "juntos");
+  recusa(agregado({ tickets: [ticket(1, { configuracao_agente: { modelo: { nome: "m" } } })] }), "esperava um texto");
   recusa(agregado({ caminhos_ticket: [{ ...d({ ticket_id: 1, caminho: "a" }), demanda_id: "I-2" }] }), "outra demanda");
   recusa(
     agregado({ rodadas: [rodada(1)], dependencias_rodada: [d({ rodada_id: 1, depende_rodada_id: 1 })] }),

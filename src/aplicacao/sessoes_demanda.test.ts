@@ -155,7 +155,10 @@ function cenario() {
     }));
   };
   semear("I-300", 1, "interativo", { fim: "2026-01-01T01:00:00.000Z" });
-  semear("I-300", 2, "autonomo", { fim: null, modelo_provedor: "anthropic", modelo_nome: "claude-teste" });
+  semear("I-300", 2, "autonomo", {
+    fim: null,
+    configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude-teste" } },
+  });
   semear("I-300", 3, "autonomo", { fim: "2026-01-01T02:00:00.000Z", falha: true });
   semear("I-300", 4, "autonomo", { fim: "2026-01-01T03:00:00.000Z" });
   semear("I-300", 5, "autonomo", { fim: "2026-01-01T04:00:00.000Z" });
@@ -188,7 +191,7 @@ test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços p�
   assert.deepEqual([rodando.demanda, rodando.rodada, rodando.ticket], ["I-300", "I-300.R1", "I-300.T2"]);
   assert.deepEqual(
     [rodando.sessao.estado, rodando.sessao.motivo, rodando.sessao.desde, rodando.sessao.modelo],
-    ["rodando", undefined, em, { provedor: "anthropic", modelo: "claude-teste" }],
+    ["rodando", undefined, em, { provedor: "anthropic", nome: "claude-teste" }],
   );
   assert.deepEqual(
     rodando.execucoes.map((e) => e.id),

@@ -49,7 +49,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     argumentosPi({
       ...comum,
       skills: ["artefato-comportamento", "artefato-criterios-aceite"],
-      modelo: { provedor: "anthropic", modelo: "m 1" },
+      modelo: { provedor: "anthropic", nome: "m 1" },
       confianca: true,
     }),
     [
@@ -151,7 +151,7 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
   ]);
   // Com o modelo da Configuração, `--provider` e `--model` vêm logo depois de `--session-id`; `null` é sem modelo.
   assert.deepEqual(argumentosDaAuditoria("/r", sessao, null), args);
-  const com = argumentosDaAuditoria("/r", sessao, { provedor: "llamacpp", modelo: "qwen3-coder-30b" });
+  const com = argumentosDaAuditoria("/r", sessao, { provedor: "llamacpp", nome: "qwen3-coder-30b" });
   assert.deepEqual(com.slice(4, 9), ["--session-id", sessao, "--provider", "llamacpp", "--model"]);
   assert.deepEqual(com.slice(9, 11), ["qwen3-coder-30b", "-e"]);
   assert.equal(com.length, args.length + 4);

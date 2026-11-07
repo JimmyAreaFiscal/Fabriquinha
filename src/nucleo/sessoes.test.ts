@@ -176,14 +176,16 @@ test("controle da execução: campos opcionais e par do modelo", () => {
     ...exec("e1", "s1"),
     grupo_processo: 4321,
     erro: "falhou no pi",
-    modelo_provedor: "claude-bridge",
-    modelo_nome: "claude-sonnet-5-5",
-    effort: "high",
+    configuracao_agente: { modelo: { provedor: "claude-bridge", nome: "claude-sonnet-5-5" }, effort: "high" },
   };
   assert.ok(ExecucaoSessao.safeParse(completa).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...completa, modelo_nome: undefined }).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...completa, modelo_provedor: undefined }).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...completa, effort: "turbo" }).success);
+  assert.ok(
+    !ExecucaoSessao.safeParse({ ...completa, configuracao_agente: { modelo: { provedor: "claude-bridge" } } }).success,
+  );
+  assert.ok(
+    !ExecucaoSessao.safeParse({ ...completa, configuracao_agente: { modelo: { nome: "claude-sonnet-5-5" } } }).success,
+  );
+  assert.ok(!ExecucaoSessao.safeParse({ ...completa, configuracao_agente: { effort: "turbo" } }).success);
   assert.ok(!ExecucaoSessao.safeParse({ ...completa, grupo_processo: 0 }).success);
   assert.ok(!ExecucaoSessao.safeParse({ ...completa, erro: " " }).success);
 });

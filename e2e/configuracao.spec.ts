@@ -141,7 +141,7 @@ test("escolhe o modelo das avaliações, salva, recarrega e vê o mesmo; salvar 
   const gravada = await pagina.request.get(`${fabriquinha.base}/api/configuracao`);
   expect(((await gravada.json()) as { modeloAuditoria: unknown }).modeloAuditoria).toEqual({
     provedor: "anthropic",
-    modelo: "claude-sonnet-5-5",
+    nome: "claude-sonnet-5-5",
   });
 
   await menu.getByRole("link", { name: "Agendador" }).click();
