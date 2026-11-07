@@ -252,8 +252,18 @@ async function publicarEConferir(
       .map((t) => commitDoTicketDemanda(banco, demanda.id, t.ticket_id)?.sha),
   );
   const conferirCommits = async (head: string) => {
+    // Commit que já está na base publicada veio de trazer a base para a rodada (merge), não de um agente: não é órfão.
+    const basePublicada = `refs/remotes/origin/${projeto.branch_base}`;
+    await exigirGit(projeto.raiz_git, "fetch", "origin", `+refs/heads/${projeto.branch_base}:${basePublicada}`);
     const novos = (
-      await exigirGit(projeto.raiz_git, "rev-list", "--no-merges", `refs/heads/${demanda.branch}..${head}`)
+      await exigirGit(
+        projeto.raiz_git,
+        "rev-list",
+        "--no-merges",
+        head,
+        `^refs/heads/${demanda.branch}`,
+        `^${basePublicada}`,
+      )
     )
       .split("\n")
       .filter(Boolean);
