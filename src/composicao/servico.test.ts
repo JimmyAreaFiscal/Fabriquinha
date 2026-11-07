@@ -394,6 +394,24 @@ test("o relógio bate e a demanda é despachada", async (t) => {
   await s.parar();
 });
 
+test("a etapa que termina antecipa a busca seguinte para a próxima batida, sem esperar o intervalo inteiro", async (t) => {
+  const minuto = relogio(t);
+  const s = await subir();
+  salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 5 });
+  demandaEmExecucao(s.banco, 1);
+  for (let i = 0; i < 5; i++) minuto();
+  assert.equal(statusDemanda(s.banco, "I-1"), "em_execucao");
+  await ate(() => statusDemanda(s.banco, "I-1") === "falhou");
+  await dormir(10); // o fim da etapa chega ao agendador depois do status gravado
+
+  demandaEmExecucao(s.banco, 2);
+  assert.equal(s.proximaBusca().getTime() - Date.now() <= 60_000, true, "a próxima busca é a batida seguinte");
+  minuto();
+  assert.equal(statusDemanda(s.banco, "I-2"), "em_execucao", "buscou um minuto depois, não cinco");
+  await ate(() => statusDemanda(s.banco, "I-2") === "falhou");
+  await s.parar();
+});
+
 test("executarAgoraDemanda: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
   const s = await subir();
   demandaEmExecucao(s.banco, 1);
