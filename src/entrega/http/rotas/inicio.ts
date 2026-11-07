@@ -8,6 +8,7 @@ import type { AgregadoDemanda, TicketDemanda } from "../../../nucleo/agregado_de
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
+import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, Instante, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { iniciarRevisaoDemanda } from "../../../nucleo/transicoes_demanda.ts";
 import { type Situacao, situacao } from "../../../aplicacao/gerente.ts";
@@ -200,8 +201,6 @@ function esperasDaDemanda(
 ): EsperaDoAuditor[] {
   const { id: demanda, projeto, titulo, estado, estado_alterado_em } = ag.demanda;
   const identificacao = { demanda, projeto, titulo };
-  const ticketGlobal = (etapa: EtapaTicket) =>
-    ag.tickets.findLast((t) => t.etapa === etapa && t.rodada_id === undefined);
   const ticketDaEspera = (t: TicketDemanda | undefined) => {
     if (!t) return undefined;
     const { estado: _, ...ticket } = ticketDoInicio(t, modoDe);
@@ -212,7 +211,7 @@ function esperasDaDemanda(
     gates.push({
       motivo: "gate_demanda",
       ...identificacao,
-      ...ticketDaEspera(ticketGlobal("entender_e_desenhar")),
+      ...ticketDaEspera(ticketAtualDaEtapa(ag, "entender_e_desenhar")),
       desde: estado_alterado_em,
     });
   }
@@ -220,7 +219,7 @@ function esperasDaDemanda(
     gates.push({
       motivo: "gate_planejamento",
       ...identificacao,
-      ...ticketDaEspera(ticketGlobal("planejar")),
+      ...ticketDaEspera(ticketAtualDaEtapa(ag, "planejar")),
       desde: estado_alterado_em,
     });
   }
@@ -228,7 +227,7 @@ function esperasDaDemanda(
     if (r.estado !== "gate_pr" && r.estado !== "ajustar_resultado") continue;
     // O gate do PR conta de quando o encerramento da rodada abriu o PR; a sessão de ajustes, de quando ela abriu.
     const etapa = r.estado === "ajustar_resultado" ? "ajustar_resultado" : "encerrar_rodada";
-    const ticket = ag.tickets.findLast((t) => t.rodada_id === r.rodada_id && t.etapa === etapa);
+    const ticket = ticketAtualDaEtapa(ag, etapa, r.rodada_id);
     const pr = prDaRodada(ag, r.rodada_id);
     gates.push({
       motivo: r.estado === "ajustar_resultado" ? "ajustes" : "gate_pr",

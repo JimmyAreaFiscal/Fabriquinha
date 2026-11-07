@@ -5,7 +5,9 @@ import type { AgregadoDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
+import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
+import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { selecionarTrabalho } from "../../../nucleo/selecao_trabalho.ts";
 import { carregarDemanda, listarDemandas } from "../../../armazenamento/demandas.ts";
 import {
@@ -25,7 +27,7 @@ const ref = (demanda_id: string) => ({
 export function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
   if (rodada?.estado !== "gate_pr" && rodada?.estado !== "ajustar_resultado") return undefined;
-  const ticket = ag.tickets.findLast((t) => t.rodada_id === rodada_id && t.etapa === "encerrar_rodada");
+  const ticket = ticketAtualDaEtapa(ag, "encerrar_rodada", rodada_id);
   const pr = ag.evidencias.findLast((e) => e.ticket_id === ticket?.ticket_id && e.tipo === "pr_aberto")?.dados as
     { id: string; url: string } | undefined;
   return pr && { id: pr.id, url: pr.url };
@@ -137,7 +139,17 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       terminal: CICLO_DA_DEMANDA.ehTerminal(demanda.estado),
       arquivavel: CICLO_DA_DEMANDA.transicoes[demanda.estado].includes("arquivada"),
     },
-    rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, estado: r.estado })),
+    rodadas: ag.rodadas.map((r) => ({
+      ref: rodada(r.rodada_id),
+      titulo: r.titulo,
+      estado: r.estado,
+      ticket_atual_por_etapa: Object.fromEntries(
+        EtapaTicket.options.flatMap((etapa) => {
+          const atual = ticketAtualDaEtapa(ag, etapa, r.rodada_id);
+          return atual ? [[etapa, ticket(atual.ticket_id)]] : [];
+        }),
+      ),
+    })),
     tickets: ag.tickets.map((t) => ({
       ref: ticket(t.ticket_id),
       etapa: t.etapa,

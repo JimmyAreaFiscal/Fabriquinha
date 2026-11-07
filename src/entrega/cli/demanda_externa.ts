@@ -9,6 +9,7 @@ import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
 import { TipoEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { type SchemaEvidencia, schemaDe, schemaDeEtapa } from "../../nucleo/schemas.ts";
 import { guardarAnexos } from "../../aplicacao/evidencias/submissao.ts";
 import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
@@ -39,11 +40,13 @@ export interface ComandoExterno {
 const IDENTIDADE: ParseArgsOptionsConfig = { ferramenta: { type: "string" }, sessao: { type: "string" } };
 const USO_IDENTIDADE = "[--ferramenta <f>] [--sessao <s>]";
 
-/** `I-12` ou `12` viram `I-12`. */
+/** `I-12` ou `12` viram `I-12`; o endereço de rodada ou de ticket não é de demanda. */
 function idDe(texto: string): string {
-  const achado = /^(?:I-)?([1-9][0-9]*)$/.exec(texto);
-  if (!achado) throw new ErroDeUso(`${texto} não é um I-<n>: use I-<n> ou só o número`);
-  return `I-${String(achado[1])}`;
+  const endereco = Endereco.ler(texto);
+  if (endereco.rodada_id !== undefined || endereco.ticket_id !== undefined) {
+    throw new ErroDeRegra(`${texto} não é o endereço de uma demanda`, "use I-n, como I-206");
+  }
+  return endereco.demanda_id;
 }
 
 /** O Ator externo: a ferramenta e a sessão de origem, da opção ou, sem ela, de `FABRIQUINHA_FERRAMENTA` e `FABRIQUINHA_SESSAO`. */
