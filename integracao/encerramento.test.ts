@@ -53,7 +53,8 @@ async function demandaEmEncerramento(c: Cenario): Promise<string> {
 }
 
 /** O humano aprova e integra o PR final na plataforma: a Fabriquinha não faz esse merge. */
-const integrarComoHumano = (c: Cenario, pr: number) => integrarPR({ repo: c.repo, hospedagem: "github" }, String(pr));
+const integrarComoHumano = (c: Cenario, pr: number) =>
+  integrarPR({ raiz_git: c.repo, hospedagem: "github" }, String(pr));
 
 /** O PR final já aberto na hospedagem, com a marca que o encerramento adota. */
 function abrirPRFinal(c: Cenario, id: string, extra: Partial<Omit<PRFalso, "id">>): number {

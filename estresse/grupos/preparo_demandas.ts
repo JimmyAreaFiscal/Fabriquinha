@@ -146,7 +146,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
       fitness: [{ nome: "f", comando: "true", descricao: "d" }],
       linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
     });
-    return { nome, repo, branchBase: "main", preparacao: [] };
+    return { nome, raiz_git: repo, branch_base: "main", hospedagem: "github" as const, preparacao: [] };
   }
 
   const principal = await cadastrar("estresse");
@@ -281,7 +281,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
       // O commit da rodada vai ao origin junto com a branch da demanda: o merge do PR é entre as duas.
       await git(dir, "commit", "-q", "--allow-empty", "-m", "rodada 1");
       const head = (await git(dir, "rev-parse", "HEAD")).trim();
-      await git(principal.repo, "push", "-q", "origin", `fabriquinha/${id}`, `fabriquinha/${id}-1`);
+      await git(principal.raiz_git, "push", "-q", "origin", `fabriquinha/${id}`, `fabriquinha/${id}-1`);
       const pr = abrirPR(`fabriquinha/${id}-1`, `fabriquinha/${id}`);
       const url = `https://github.com/org/loja/pull/${String(pr)}`;
       criar(

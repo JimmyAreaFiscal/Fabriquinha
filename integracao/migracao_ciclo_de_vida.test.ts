@@ -191,7 +191,7 @@ async function encerrarDemanda(c: Cenario, id: string, deps: ReturnType<typeof d
   await ciclo(c, deps);
   await ciclo(c, deps);
   assert.equal(demanda(c, id).encerramento?.aguardando_merge_humano, true);
-  await integrarPR({ repo: c.repo, hospedagem: "github" }, String(gh.prs().length));
+  await integrarPR({ raiz_git: c.repo, hospedagem: "github" }, String(gh.prs().length));
   await ciclo(c, deps);
 }
 

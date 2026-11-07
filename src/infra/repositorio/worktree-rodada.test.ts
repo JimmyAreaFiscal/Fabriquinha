@@ -228,7 +228,7 @@ test("fast-forward, merge de dois pais e sem alteração preservam ancestrais", 
   const c = await cenario();
   const r = await garantir(c);
   const sha = commit(c.demanda, "primeiro", "demanda");
-  c.projeto.preparacao = ["printf x >> ignorado"];
+  c.projeto.preparacao = [{ ordem: 1, comando: "printf x >> ignorado" }];
   git(c.repo, "config", "core.excludesFile", join(c.dir, "ignore"));
   writeFileSync(join(c.dir, "ignore"), "ignorado\n");
   assert.deepEqual(await atualizar(c), { status: "atualizada" });
@@ -250,7 +250,10 @@ test("preparação fora da fila, falha conserva merge e garantia faz retry idemp
   const liberar = join(c.dir, "liberar");
   // Espera limitada (~30 s): se uma asserção falhar, o shell nunca fica preso até o limite de 30 min do comando.
   c.projeto.preparacao = [
-    `touch '${iniciou}'; n=0; while ! test -f '${liberar}' && [ $n -lt 3000 ]; do n=$((n+1)); sleep 0.01; done; exit 7`,
+    {
+      ordem: 1,
+      comando: `touch '${iniciou}'; n=0; while ! test -f '${liberar}' && [ $n -lt 3000 ]; do n=$((n+1)); sleep 0.01; done; exit 7`,
+    },
   ];
   const pendente = assert.rejects(atualizar(c), /preparação.*código 7/);
   try {
@@ -266,7 +269,7 @@ test("preparação fora da fila, falha conserva merge e garantia faz retry idemp
   await pendente;
   assert.equal(git(r, "rev-parse", "HEAD"), sha);
   assert.equal(existsSync(metadado(r)), false);
-  c.projeto.preparacao = ["printf recuperado"];
+  c.projeto.preparacao = [{ ordem: 1, comando: "printf recuperado" }];
   await garantir(c);
   await garantir(c);
   assert.equal(existsSync(metadado(r)), true);
@@ -428,7 +431,7 @@ test("merge recusado antes de iniciar não tenta abortar operação inexistente"
 
 test("falhas de disco da marca recebem orientação e retry sem reescrever histórico", async () => {
   const c = await cenario();
-  c.projeto.preparacao = ['mkdir "$(git rev-parse --git-path fabriquinha-preparada)"'];
+  c.projeto.preparacao = [{ ordem: 1, comando: 'mkdir "$(git rev-parse --git-path fabriquinha-preparada)"' }];
   await assert.rejects(garantir(c), (e: unknown) => e instanceof ErroDeRegra && e.message.includes("EISDIR"));
   const r = caminho(c);
   const antes = git(r, "rev-parse", "HEAD");

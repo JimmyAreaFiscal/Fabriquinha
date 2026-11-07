@@ -74,6 +74,6 @@ test("remota já ausente conta como feita; item desconhecido ou erro do git fica
   git(sem, "init", "-q");
   const r = await limparDemanda(c.raiz, c.projeto, [`branch_remota:${bd}`, "outro:x"]);
   assert.deepEqual(r, { removidos: [`branch_remota:${bd}`], pendentes: ["outro:x"] });
-  const erro = await limparDemanda(c.raiz, { ...c.projeto, repo: sem }, ["branch_remota:x"]);
+  const erro = await limparDemanda(c.raiz, { ...c.projeto, raiz_git: sem }, ["branch_remota:x"]);
   assert.deepEqual(erro.pendentes, ["branch_remota:x"]);
 });

@@ -125,18 +125,12 @@ export async function aprovarPlanejamentoDemanda(
     "configure o projeto",
   );
   const raiz = raizDo(banco);
-  const worktree = {
-    nome: projeto.nome,
-    repo: projeto.raiz_git,
-    branchBase: projeto.branch_base,
-    preparacao: projeto.preparacao.map((c) => c.comando),
-  };
   mkdirSync(join(raiz, "execucoes"), { recursive: true });
   const log = join(raiz, "execucoes", `planejamento-${demandaId}.log`);
   const passos = [
     {
       caminho: caminhoDaWorktreeDemanda(raiz, projeto.nome, demandaId),
-      garantir: () => garantirWorktreeDemanda(raiz, worktree, demandaId, log, () => varrerBase(banco, projeto.nome)),
+      garantir: () => garantirWorktreeDemanda(raiz, projeto, demandaId, log, () => varrerBase(banco, projeto.nome)),
     },
     // D04: a rodada dependente nasce quando começa, da ponta da demanda já com as predecessoras integradas.
     ...plano.rodadas
@@ -145,7 +139,7 @@ export async function aprovarPlanejamentoDemanda(
         const ref = { demanda_id: demandaId, rodada_id };
         return {
           caminho: caminhoDaWorktreeRodada(raiz, projeto.nome, ref),
-          garantir: () => garantirWorktreeRodada(raiz, worktree, ref, log),
+          garantir: () => garantirWorktreeRodada(raiz, projeto, ref, log),
         };
       }),
   ];

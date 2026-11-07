@@ -61,7 +61,10 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
   const sinal = join(base, "pode-preparar");
   const segundo = join(base, "segundo-rodou");
   const c = cenario();
-  const comandos = [`echo tentando; test -f ${sinal}`, `touch ${segundo}`];
+  const comandos = [`echo tentando; test -f ${sinal}`, `touch ${segundo}`].map((comando, i) => ({
+    ordem: i + 1,
+    comando,
+  }));
   const falha = (erro: unknown) =>
     erro instanceof ErroDeRegra &&
     erro.message ===
@@ -80,7 +83,7 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
 
 test("erro de sintaxe na preparação vai para o log", async () => {
   const c = cenario();
-  await assert.rejects(preparar(c.worktree, ["npm test ("], c.log), /saiu com código 2/);
+  await assert.rejects(preparar(c.worktree, [{ ordem: 1, comando: "npm test (" }], c.log), /saiu com código 2/);
   assert.match(c.lerLog(), /preparação: npm test \(\n.*syntax error.*preparação falhou: saiu com código 2\n$/is);
 });
 
@@ -88,7 +91,9 @@ test("comando de preparação que passa de 30 minutos é morto e a preparação 
   const c = cenario();
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let resultado: unknown;
-  const pedido = preparar(c.worktree, ["sleep 600"], c.log).catch((erro: unknown) => (resultado = erro));
+  const pedido = preparar(c.worktree, [{ ordem: 1, comando: "sleep 600" }], c.log).catch(
+    (erro: unknown) => (resultado = erro),
+  );
   // O relógio falso anda um minuto por volta do laço de eventos real, depois que o comando começou.
   let minutos = 0;
   while (resultado === undefined) {
@@ -178,7 +183,7 @@ test("removerWorktrees: apaga worktrees/<projeto> e faz prune; repositório, HEA
   mkdirSync(join(c.raiz, "worktrees", "outro"), { recursive: true });
   const head = git(c.repo, "rev-parse", "HEAD");
 
-  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "loja", repo: c.repo }), []);
+  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "loja", raiz_git: c.repo }), []);
 
   assert.equal(existsSync(join(c.raiz, "worktrees", "loja")), false);
   assert.equal(existsSync(join(c.raiz, "worktrees", "outro")), true);
@@ -189,13 +194,13 @@ test("removerWorktrees: apaga worktrees/<projeto> e faz prune; repositório, HEA
 
 test("removerWorktrees: sem worktrees/<projeto> no disco devolve []", async () => {
   const c = cenario();
-  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo }), []);
+  assert.deepEqual(await removerWorktrees(c.raiz, { nome: "demo", raiz_git: c.repo }), []);
 });
 
 test("removerWorktrees: repositório que não existe mais vira o aviso do prune", async () => {
   const c = cenario();
   const repo = join(c.raiz, "sumiu");
-  const avisos = await removerWorktrees(c.raiz, { nome: "demo", repo });
+  const avisos = await removerWorktrees(c.raiz, { nome: "demo", raiz_git: repo });
   assert.equal(avisos.length, 1);
   assert.match(String(avisos[0]), new RegExp(`^git -C ${repo} worktree prune falhou: .+`));
 });
@@ -214,7 +219,7 @@ test(
       chmodSync(interna, 0o700);
     });
 
-    const avisos = await removerWorktrees(c.raiz, { nome: "demo", repo: c.repo });
+    const avisos = await removerWorktrees(c.raiz, { nome: "demo", raiz_git: c.repo });
     assert.equal(avisos.length, 1);
     assert.match(String(avisos[0]), new RegExp(`^não foi possível apagar ${pasta}: `));
   },

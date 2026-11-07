@@ -85,15 +85,9 @@ interface Conducao {
 /** O ticket de rodada roda na worktree da rodada; o global (sem rodada), na da demanda. */
 function worktreeDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
   const raiz = raizDo(banco);
-  const worktree = {
-    nome: projeto.nome,
-    repo: projeto.raiz_git,
-    branchBase: projeto.branch_base,
-    preparacao: projeto.preparacao.map((c) => c.comando),
-  };
   return ticket.rodada_id === undefined
-    ? garantirWorktreeDemanda(raiz, worktree, ag.demanda.id, log, () => varrerBase(banco, projeto.nome))
-    : garantirWorktreeRodada(raiz, worktree, { demanda_id: ag.demanda.id, rodada_id: ticket.rodada_id }, log);
+    ? garantirWorktreeDemanda(raiz, projeto, ag.demanda.id, log, () => varrerBase(banco, projeto.nome))
+    : garantirWorktreeRodada(raiz, projeto, { demanda_id: ag.demanda.id, rodada_id: ticket.rodada_id }, log);
 }
 
 /** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */

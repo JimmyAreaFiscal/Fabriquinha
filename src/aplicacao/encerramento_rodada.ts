@@ -210,13 +210,7 @@ async function publicarEConferir(
   const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, doRodada);
   gravarEvidencia(banco, ticket, "relatorio_produtividade", relatorio);
 
-  const worktree = {
-    nome: projeto.nome,
-    repo: projeto.raiz_git,
-    branchBase: projeto.branch_base,
-    preparacao: projeto.preparacao.map((c) => c.comando),
-  };
-  const atualizacao = await atualizarWorktreeRodada(raiz, worktree, ref, log);
+  const atualizacao = await atualizarWorktreeRodada(raiz, projeto, ref, log);
   if (atualizacao.status === "conflito") {
     // Um merge, um corretivo: quem resolve um arquivo resolve o merge inteiro, e um por arquivo rodava os outros à toa.
     const arquivosEmConflito = atualizacao.arquivos.join(", ");
@@ -286,7 +280,7 @@ async function publicarEConferir(
     .map((e) => (e.dados as { id: string }).id);
   const publicado = await publicarPRDe(
     raiz,
-    { nome: projeto.nome, repo: projeto.raiz_git, hospedagem: projeto.hospedagem },
+    projeto,
     { branch: branchRodada, base: demanda.branch, publicarBase: true },
     {
       titulo: pr.titulo,
@@ -306,7 +300,7 @@ async function publicarEConferir(
   });
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
 
-  const problemas = await verificarPR({ repo: projeto.raiz_git, hospedagem: projeto.hospedagem }, publicado.id, log);
+  const problemas = await verificarPR(projeto, publicado.id, log);
   const correcoes = [
     ...(problemas.conflito
       ? [
