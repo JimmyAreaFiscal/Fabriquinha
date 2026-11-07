@@ -41,6 +41,35 @@ export function lerConversa(raiz: string, sessao: string): unknown[] {
     });
 }
 
+// Sem espaço no fim: a seleção múltipla vem como "User selected:\n- 1. ...\n- 2. ..." (pacote-pi/extensions/pergunta.ts).
+const PREFIXOS_DE_RESPOSTA = ["User answered:", "User selected:"];
+
+/**
+ * As perguntas que o agente fez com `perguntar` e que o Auditor respondeu: casa a chamada com o resultado pelo
+ * `toolCallId`. Cancelamento e resposta vazia ficam de fora; sessão sem arquivo não tem perguntas.
+ */
+export function perguntasRespondidasNaSessao(raiz: string, sessao: string): { pergunta: string; resposta: string }[] {
+  const mensagens = lerConversa(raiz, sessao).flatMap((entrada) => {
+    const { message } = entrada as { message?: Mensagem & { toolCallId?: string } };
+    return message ? [message] : [];
+  });
+  const perguntaPorChamada = new Map<string, string>();
+  for (const m of mensagens.filter((m) => m.role === "assistant")) {
+    for (const b of blocos(m)) {
+      const { id, arguments: args } = b as Bloco & { id?: string };
+      if (b.type === "toolCall" && b.name === "perguntar" && id) {
+        perguntaPorChamada.set(id, (args as { question?: string } | undefined)?.question ?? "");
+      }
+    }
+  }
+  return mensagens.flatMap((m) => {
+    const pergunta = m.role === "toolResult" && perguntaPorChamada.get(String(m.toolCallId));
+    const prefixo = PREFIXOS_DE_RESPOSTA.find((p) => texto(m).startsWith(p));
+    const resposta = prefixo ? texto(m).slice(prefixo.length).trim() : "";
+    return pergunta && resposta ? [{ pergunta, resposta }] : [];
+  });
+}
+
 /** ponytail: o corte é fixo (F4 §6.8); se algum resultado longo fizer falta, aumentar o limite. */
 const CORTE = 2000;
 
