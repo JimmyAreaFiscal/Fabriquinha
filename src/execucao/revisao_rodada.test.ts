@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../dominio/agregado.ts";
+import { AUDITOR } from "../dominio/ator.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { reabrirTicket } from "../dominio/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../dominio/transicoes_rodada.ts";
