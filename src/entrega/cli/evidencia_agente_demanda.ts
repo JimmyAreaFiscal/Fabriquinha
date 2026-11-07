@@ -15,6 +15,7 @@ import { submeterPlano } from "../../nucleo/transicoes_demanda.ts";
 import type { SchemaEvidencia } from "../../nucleo/schemas.ts";
 import { gerarAula, type Trecho } from "../../aplicacao/evidencias/aula.ts";
 import { guardarAnexos, type Origens } from "../../aplicacao/evidencias/submissao.ts";
+import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
@@ -150,6 +151,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
         demanda_id,
         (ag) => {
           resolverEscopoDoAgente(banco, agente.ator.trabalho_id); // a execução ainda está aberta?
+          exigirTrabalhoDoTicket(banco, agente.ator, agente);
           ticketAberto(ag, agente);
           return tipo === "plano"
             ? submeterPlano(ag, validos, agente.ator, { agora })

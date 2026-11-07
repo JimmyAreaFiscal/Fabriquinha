@@ -19,6 +19,7 @@ import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { registrarRevisaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
+import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 
 type Dados = EntradaEvidenciaDemanda["dados"];
 
@@ -147,6 +148,7 @@ export function decidirRevisaoRodada(
   ator: Ator,
 ): AgregadoDemanda {
   return comDemanda(banco, entrada.demanda_id, (ag) => {
+    exigirTrabalhoDoTicket(banco, ator, entrada);
     const novo = registrarRevisaoRodada(ag, entrada, ator, { agora: new Date().toISOString() });
     if (entrada.aprovado) conferirAprovacao(ag, entrada.ticket_id);
     return novo;

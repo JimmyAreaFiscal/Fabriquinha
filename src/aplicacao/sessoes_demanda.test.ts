@@ -18,7 +18,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { avisar, situacao } from "./gerente.ts";
+import { avisar, PREFIXO_DA_RESPOSTA_AUTOMATICA, situacao } from "./gerente.ts";
 import {
   abortarDemanda,
   abrirChatDemanda,
@@ -312,6 +312,29 @@ test("CA-1: a conversa do JSONL vem na ordem, com o prompt da Fabriquinha marcad
   assert.deepEqual(
     [recebidos[0]?.type, recebidos[0]?.ticket, (recebidos[0]?.sessao as { estado: string }).estado],
     ["estado", "I-300.T1", "aguardando_humano"],
+  );
+});
+
+test("I-266.T7: a resposta de `perguntar` que o Auditor automático deu é do Agente da execução; a do humano, do Auditor", () => {
+  const { banco, c } = cenario();
+  conversaDoPlanejamento(c.raiz);
+  const agente = { tipo: "agente", trabalho_id: "e-s1-I-300" };
+  const registro = { ator: agente, chamada: "auto", pergunta: "Corrijo o Sonar?", resposta: "Sim", justificativa: "j" };
+  writeFileSync(
+    join(c.raiz, "execucoes", "E-e-s1-I-300", "log"),
+    `2026-01-01T00:00:00.000Z pi\n2026-01-01T00:00:01.000Z ${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(registro)}\n`,
+  );
+  const resposta = (toolCallId: string) =>
+    mensagem("toolResult", "User answered: Sim", { toolCallId, toolName: "perguntar" });
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s1.jsonl"),
+    [resposta("auto"), resposta("humana"), mensagem("toolResult", "ok", { toolName: "bash" })]
+      .map((l) => JSON.stringify(l))
+      .join("\n") + "\n",
+  );
+  assert.deepEqual(
+    abrirChatDemanda(banco, "s1")?.conversa.map((e) => e.ator),
+    [agente, { tipo: "auditor" }, undefined],
   );
 });
 

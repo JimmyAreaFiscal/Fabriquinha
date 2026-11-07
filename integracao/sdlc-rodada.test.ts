@@ -20,6 +20,7 @@ import {
   atual,
   despacho,
   encerrar,
+  execucoesDe,
   fecharPortao,
   pi,
   pisAteAgora,
@@ -92,7 +93,13 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   assert.equal(statusDe(c, { demanda_id: id, ticket_id: reprovada }), "concluido");
   assert.deepEqual(
     ag.decisoes.filter((d) => d.ticket_id === reprovada).map((d) => [d.resultado, d.motivo, d.por]),
-    [["recusado", "falta tratar o caso X", { tipo: "agente", trabalho_id: "execucao-1" }]],
+    [
+      [
+        "recusado",
+        "falta tratar o caso X",
+        { tipo: "agente", trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: reprovada }).at(-1)?.id },
+      ],
+    ],
   );
   const corretivo = atual(c, id, "implementar");
   assert.ok(corretivo.ticket_id > reprovada);

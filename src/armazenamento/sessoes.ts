@@ -165,3 +165,11 @@ export const ticketsComPiAtivo = (banco: DatabaseSync): Set<string> =>
       .filter((e) => e.grupo_processo !== null)
       .map(({ demanda_id, ticket_id }) => formatarTicketRef({ demanda_id, ticket_id })),
   );
+
+/** O ticket da sessão da execução, ou `undefined` se a execução não existe. */
+export const ticketDaExecucao = (banco: DatabaseSync, execucao: string): z.infer<typeof TicketRef> | undefined =>
+  banco
+    .prepare(
+      "SELECT s.demanda_id, s.ticket_id FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id WHERE e.id = ?",
+    )
+    .get(execucao) as z.infer<typeof TicketRef> | undefined;

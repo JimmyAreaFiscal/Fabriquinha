@@ -2,6 +2,7 @@
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
+import type { Ator } from "../src/nucleo/ator.ts";
 import type { FaseDemanda } from "../src/nucleo/primitivos.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
 import { criarDemandaNova } from "../src/armazenamento/demandas.ts";
@@ -179,6 +180,20 @@ export function cadastrarProjetoLoja(banco: DatabaseSync, repo = "/repos/loja", 
        VALUES ('loja', ?, ?, 'github', 'k')`,
     )
     .run(repo, branchBase);
+}
+
+/** Abre (uma vez só) a execução do ticket e devolve o Agente dela: o `trabalho_id` é o `execucao_sessao.id`. */
+export function abrirTrabalhoDoAgente(banco: DatabaseSync, ref: { demanda_id: string; ticket_id: number }): Ator {
+  const trabalho_id = `e-${ref.demanda_id}-T${String(ref.ticket_id)}`;
+  banco
+    .prepare(
+      "INSERT OR IGNORE INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, ?, 'autonomo', 'c')",
+    )
+    .run(`s-${trabalho_id}`, ref.demanda_id, ref.ticket_id);
+  banco
+    .prepare("INSERT OR IGNORE INTO execucao_sessao (id, sessao_id, inicio, falha) VALUES (?, ?, ?, 0)")
+    .run(trabalho_id, `s-${trabalho_id}`, INSTANTE_DO_CENARIO);
+  return { tipo: "agente", trabalho_id };
 }
 
 /**

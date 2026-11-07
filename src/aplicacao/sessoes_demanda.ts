@@ -4,6 +4,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
@@ -18,7 +19,17 @@ import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
 import { retomarSessaoAjustes } from "./sessao_ajustes.ts";
-import { abortar, type Dialogo, assinar, mandar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
+import {
+  abortar,
+  type Dialogo,
+  assinar,
+  mandar,
+  PREFIXO_DA_RESPOSTA_AUTOMATICA,
+  type RespostaAutomatica,
+  responderDialogo,
+  type Situacao,
+  situacao,
+} from "./gerente.ts";
 import type { EventoPi } from "../infra/agente/pi.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
@@ -277,11 +288,40 @@ function promptsDaFabriquinha(raiz: string, { sessao, execucoes }: Carregada): S
   return new Set(arquivos.filter((a) => existsSync(a)).map((a) => readFileSync(a, "utf8")));
 }
 
-/** A marca da mensagem do usuário que é o prompt montado pela Fabriquinha: o chat a mostra como linha do sistema. */
-function marcador(raiz: string, c: Carregada): (mensagem: unknown) => { fabriquinha: true } | undefined {
+/** Os Agentes que o Auditor automático fez responder, por chamada de `perguntar`: o gerente os anota no log da execução. */
+function atoresDasRespostasAutomaticas(
+  raiz: string,
+  { execucoes }: Carregada,
+): Map<string, RespostaAutomatica["ator"]> {
+  const registros = execucoes
+    .map((e) => join(raiz, "execucoes", `E-${e.id}`, "log"))
+    .filter((log) => existsSync(log))
+    .flatMap((log) => readFileSync(log, "utf8").split("\n"))
+    .filter((linha) => linha.includes(PREFIXO_DA_RESPOSTA_AUTOMATICA))
+    .map(
+      (linha) =>
+        JSON.parse(
+          linha.slice(linha.indexOf(PREFIXO_DA_RESPOSTA_AUTOMATICA) + PREFIXO_DA_RESPOSTA_AUTOMATICA.length),
+        ) as RespostaAutomatica,
+    );
+  return new Map(registros.map((r) => [r.chamada, r.ator]));
+}
+
+/**
+ * A marca da mensagem: o prompt montado pela Fabriquinha vira linha do sistema no chat; a resposta de `perguntar` leva o
+ * `ator` de quem respondeu, o Agente (Auditor automático) ou o Auditor.
+ */
+function marcador(
+  raiz: string,
+  c: Carregada,
+): (mensagem: unknown) => { fabriquinha: true } | { ator: Ator } | undefined {
   const prompts = promptsDaFabriquinha(raiz, c);
+  const automaticas = atoresDasRespostasAutomaticas(raiz, c);
   return (mensagem) => {
-    const m = mensagem as Partial<Mensagem> | undefined;
+    const m = mensagem as (Partial<Mensagem> & { toolCallId?: string }) | undefined;
+    if (m?.role === "toolResult" && m.toolName === "perguntar") {
+      return { ator: automaticas.get(String(m.toolCallId)) ?? AUDITOR };
+    }
     return m?.role === "user" && prompts.has(texto(m as Mensagem)) ? { fabriquinha: true } : undefined;
   };
 }
