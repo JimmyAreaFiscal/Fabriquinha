@@ -145,18 +145,30 @@ test("/projects volta ao último visto; o heatmap, a Configuração SDLC e a sim
     VALUES ('site', '/nao/existe/site', 'main', 'github', 'site')`);
   banco.close();
   await pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: "Projetos" }).click();
+  // A URL muda na hora, mas a página do projeto só se desenha (e o último visto só é lembrado) depois das respostas da
+  // API: o seletor com o projeto, que o Início não tem, é o sinal de que ela está pronta.
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/loja`);
+  await expect(pagina.getByLabel("Projeto", { exact: true })).toHaveValue("loja");
   await expect(pagina.getByRole("button", { name: /Registrar necessidade/ })).toHaveCount(0);
   await expect(pagina.locator(".vazio")).toHaveText("Nenhuma demanda.");
 
   // O seletor troca de projeto, e /projects volta ao último visto.
   await pagina.getByLabel("Projeto", { exact: true }).selectOption("site");
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/site`);
+  await expect(pagina.getByRole("link", { name: "Configuração SDLC", exact: true })).toHaveAttribute(
+    "href",
+    "/projects/site/sdlc",
+  );
   await pagina.goto(`${fabriquinha.base}/projects`);
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/site`);
   await pagina.getByLabel("Projeto", { exact: true }).selectOption("loja");
 
-  // A Configuração SDLC do projeto abre pelo link ao lado do seletor.
+  // A Configuração SDLC do projeto abre pelo link ao lado do seletor; até a página nova se desenhar, o link ainda aponta
+  // para o projeto anterior.
+  await expect(pagina.getByRole("link", { name: "Configuração SDLC", exact: true })).toHaveAttribute(
+    "href",
+    "/projects/loja/sdlc",
+  );
   await pagina.getByRole("link", { name: "Configuração SDLC", exact: true }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/projects/loja/sdlc`);
   await pagina.goBack();

@@ -1,6 +1,6 @@
 // Fechamento do ticket da demanda com banco real e git real; só as verificações são injetadas (CA-1 a CA-16).
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
@@ -230,6 +230,50 @@ test("CA-7 e CA-8: na terceira reprovação o ticket falha e bloqueia a rodada a
   assert.deepEqual(selecionarTrabalho(c.ag(), true), []);
 });
 
+const MOTIVO_SEM_ALTERACAO = "o ticket I-1.T1 terminou sem alteração na worktree e não gera commit vazio";
+const semAlteracao = (c: Awaited<ReturnType<typeof cenario>>) => {
+  rmSync(join(c.worktree, "novo.txt"));
+};
+const marcaDoTicket = (c: Awaited<ReturnType<typeof cenario>>) =>
+  rodarGit(c.worktree, "log", "--fixed-strings", "--grep", "[I-1.T1]", "--format=%H");
+
+test("implementar sem alteração na worktree é devolvido, sem commit", async () => {
+  const c = await cenario();
+  semAlteracao(c);
+  await fechar(c, 1, coletor(todas(true)));
+  const t = c.status(1);
+  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.ok(t?.instrucao?.startsWith(MOTIVO_SEM_ALTERACAO));
+  assert.equal(marcaDoTicket(c), "");
+});
+
+test("implementar sem alteração já devolvido duas vezes falha, e a rodada segue em desenvolvimento", async () => {
+  const c = await cenario();
+  c.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 1");
+  semAlteracao(c);
+  await fechar(c, 1, coletor(todas(true)));
+  const t = c.status(1);
+  assert.equal(t?.status, "falhou");
+  assert.ok(t.motivo_falha?.startsWith(MOTIVO_SEM_ALTERACAO));
+  assert.equal(marcaDoTicket(c), "");
+  const ag = c.ag();
+  assert.equal(ag.rodadas[0]?.fase, "desenvolvimento");
+  assert.equal(ag.tickets.filter((x) => x.etapa === "revisar_rodada").length, 0);
+});
+
+test("resolver_conflito com merge sem alteração commita o merge e conclui", async () => {
+  const c = await cenario({ conflito: true });
+  semAlteracao(c);
+  rodarGit(c.worktree, "checkout", "-qb", "outra");
+  rodarGit(c.worktree, "commit", "-q", "--allow-empty", "-m", "outra");
+  rodarGit(c.worktree, "checkout", "-q", "fabriquinha/I-1");
+  rodarGit(c.worktree, "merge", "--no-ff", "--no-commit", "outra");
+  await fechar(c, 3, coletor(todas(true)));
+  assert.equal(c.status(3)?.status, "concluido");
+  assert.equal(rodarGit(c.worktree, "log", "-1", "--format=%P").trim().split(" ").length, 2);
+  assert.match(rodarGit(c.worktree, "log", "-1", "--format=%B"), /\[I-1\.T3\]/);
+});
+
 test("CA-9 e CA-10: falha da execução falha o ticket sem coletar nem gravar evidência", async () => {
   const c = await cenario();
   await fechar(c, 1, naoColeta, "timeout");
@@ -305,7 +349,12 @@ test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit
 
 test("CA-16: commit sem evidências aprovadas falha por infraestrutura", async () => {
   const c = await cenario();
-  await commitarTicketDemanda(c.banco, ref(1), { worktree: c.worktree, tipo: "feat", titulo: "Cachear" });
+  await commitarTicketDemanda(c.banco, ref(1), {
+    worktree: c.worktree,
+    tipo: "feat",
+    titulo: "Cachear",
+    etapa: "implementar",
+  });
   await fechar(c, 1, naoColeta);
   const t = c.status(1);
   assert.equal(t?.status, "falhou");
@@ -317,7 +366,12 @@ test("commit com evidência reprovada gravada falha por infraestrutura", async (
   await fechar(c, 1, coletor(todas(false)));
   assert.equal(c.status(1)?.status, "aberto"); // devolvido: as evidências reprovadas ficam gravadas
   c.banco.exec("UPDATE ticket_demanda SET status = 'em_execucao' WHERE ticket_id = 1");
-  await commitarTicketDemanda(c.banco, ref(1), { worktree: c.worktree, tipo: "feat", titulo: "Cachear" });
+  await commitarTicketDemanda(c.banco, ref(1), {
+    worktree: c.worktree,
+    tipo: "feat",
+    titulo: "Cachear",
+    etapa: "implementar",
+  });
   await fechar(c, 1, naoColeta);
   assert.match(c.status(1)?.motivo_falha ?? "", /reprovadas: execucao_testes, matriz_fitness, relatorio_sonar/);
 });

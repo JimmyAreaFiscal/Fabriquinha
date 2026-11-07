@@ -8,6 +8,7 @@ import { formatarTicketRef } from "../dominio/demanda.ts";
 import type { Modelo } from "../dominio/primitivos.ts";
 import { resolverModeloEffort } from "../dominio/resolucao_ticket.ts";
 import { MAX_RETOMADAS_AUTOMATICAS, retomarTicketFalhoPorInfraestrutura } from "../dominio/transicoes_demanda.ts";
+import { PREFIXO_TERCEIRA_REPROVACAO } from "../dominio/transicoes_rodada.ts";
 import { configuracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { comDemanda } from "../persistencia/demandas.ts";
 import { demandasParaDespacho } from "../persistencia/despacho_demanda.ts";
@@ -22,6 +23,8 @@ const TRANSITORIA =
 /** A causa da falha quando ela é de infraestrutura; `undefined` quando é do ticket ou pede o Auditor (ex.: disco cheio). */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function causaDeInfraestrutura(motivo: string): CausaDeInfraestrutura | undefined {
+  // Decisão do Auditor, não falha de ambiente: os motivos anexados podem conter texto que casaria as regras abaixo.
+  if (motivo.startsWith(PREFIXO_TERCEIRA_REPROVACAO)) return undefined;
   if (motivo === "serviço reiniciado") return "reinicio";
   if (COTA.test(motivo)) return "cota";
   // O fechamento do ticket prefixa assim o que as verificações e o commit classificaram como infraestrutura.

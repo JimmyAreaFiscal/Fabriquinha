@@ -6,7 +6,7 @@ import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } fr
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
-import { type EtapaTicket, type FaseRodada, Id, type Instante, Motivo } from "./primitivos.ts";
+import { type EtapaTicket, type FaseRodada, Id, type Instante, Motivo, palavras } from "./primitivos.ts";
 import type { ContextoDemanda } from "./transicoes_demanda.ts";
 
 const RodadaRef = { demanda_id: DemandaId, rodada_id: Id };
@@ -135,9 +135,35 @@ export function concluirImplementacoesRodada(
   };
 }
 
+/** A partir desta reprovação na rodada, o Auditor decide: os corretivos não nascem e o ticket de revisão falha. */
+const REPROVACOES_ATE_O_AUDITOR = 3;
+export const PREFIXO_TERCEIRA_REPROVACAO = "terceira reprovação da rodada: exige o Auditor";
+
+const LIMITE_PALAVRAS_DO_MOTIVO_FALHA = 1000; // o mesmo teto de `Markdown`, que valida `motivo_falha` na leitura
+const PALAVRAS_DO_AVISO_DE_OMITIDAS = 6;
+
+/** Prefixo e reprovação mais recente sempre ficam; as mais antigas entram enquanto couberem e o resto vira um aviso. */
+function montarMotivoFalhaDaTerceiraReprovacao(motivosDaMaisRecenteParaAMaisAntiga: string[]): string {
+  let palavrasRestantes =
+    LIMITE_PALAVRAS_DO_MOTIVO_FALHA - palavras(PREFIXO_TERCEIRA_REPROVACAO) - PALAVRAS_DO_AVISO_DE_OMITIDAS;
+  const linhasMantidas: string[] = [];
+  for (const motivo of motivosDaMaisRecenteParaAMaisAntiga) {
+    const linha = `- ${motivo}`;
+    const palavrasDaLinha = palavras(linha);
+    if (linhasMantidas.length > 0 && palavrasDaLinha > palavrasRestantes) break;
+    const linhaCortada = linha.replace(new RegExp(`^((?:\\s*\\S+){0,${String(palavrasRestantes)}}).*$`, "s"), "$1");
+    linhasMantidas.push(linhaCortada);
+    palavrasRestantes -= palavrasDaLinha;
+  }
+  const omitidas = motivosDaMaisRecenteParaAMaisAntiga.length - linhasMantidas.length;
+  const aviso = omitidas > 0 ? [`- (${String(omitidas)} reprovações anteriores omitidas)`] : [];
+  return [PREFIXO_TERCEIRA_REPROVACAO, ...aviso, ...linhasMantidas.reverse()].join("\n");
+}
+
 /**
  * CA-2 e CA-3: só o agente do ticket `revisar_rodada` atual. Reprovada, as exigências vão inteiras em `motivo` e as
  * correções nascem na mesma operação (volta a `desenvolvimento`); aprovada, abre `encerrar_rodada` e vai a `encerramento`.
+ * Na terceira reprovação da rodada (as já gravadas mais esta) não há corretivos: o ticket falha e a fase segue em `revisao`.
  */
 export function registrarRevisaoRodada(
   ag: AgregadoDemanda,
@@ -151,15 +177,33 @@ export function registrarRevisaoRodada(
   if (ator.tipo !== "agente" || ator.ticket !== ticket.ticket_id) {
     throw new ErroDeEscopo("só o agente do ticket revisar_rodada atual decide a revisão", "peça à sessão de revisão");
   }
+  const decisoesDoTicket = ag.decisoes.filter((d) => d.ticket_id === ticket.ticket_id);
   const decisao: DecisaoDemanda = {
     demanda_id: ag.demanda.id,
     ticket_id: ticket.ticket_id,
-    decisao_id: 1, // o ticket revisor decide uma vez só: a decisão o conclui
+    decisao_id: maximo(decisoesDoTicket.map((d) => d.decisao_id)) + 1, // o Auditor reabre o mesmo ticket, que decide de novo
     resultado: e.aprovado ? "aprovado" : "recusado",
     ...(!e.aprovado && { motivo: e.exigencias }),
     por: "agente",
     em: ctx.agora,
   };
+  const idsDeRevisaoDaRodada = new Set(
+    ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "revisar_rodada").map((t) => t.ticket_id),
+  );
+  const motivosDasReprovacoes = [
+    ...ag.decisoes.filter((d) => idsDeRevisaoDaRodada.has(d.ticket_id) && d.resultado === "recusado"),
+    decisao,
+  ].map((d) => String(d.motivo)); // recusado sempre tem motivo (invariante do agregado)
+  if (!e.aprovado && motivosDasReprovacoes.length >= REPROVACOES_ATE_O_AUDITOR) {
+    const motivo_falha = montarMotivoFalhaDaTerceiraReprovacao(motivosDasReprovacoes.reverse());
+    return {
+      ...ag,
+      tickets: ag.tickets.map((t) =>
+        t.ticket_id === ticket.ticket_id ? { ...t, status: "falhou", motivo_falha, status_alterado_em: ctx.agora } : t,
+      ),
+      decisoes: [...ag.decisoes, decisao],
+    };
+  }
   // Os mesmos erros de correção vazia ou inválida recusam antes de qualquer retorno.
   const base = e.aprovado ? ag : materializarCorrecoesRodada(ag, e, e.correcoes, ctx.agora);
   const fechado: AgregadoDemanda = {

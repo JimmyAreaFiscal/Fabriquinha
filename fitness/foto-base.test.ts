@@ -24,6 +24,14 @@ interface DiferencaIntencional {
 }
 
 const MOTIVO_NOME_NOVO = "o fluxo de issues foi desligado (cutover de 2026-10-28), e o texto passa a falar de demanda";
+const MOTIVO_REVISOES_ANTERIORES =
+  "I-294: a revisar_rodada recebe as revisões anteriores da rodada e confere primeiro os motivos, sem reabrir o decidido";
+const PASSOS_DO_REVISAR_RODADA_DA_BASE =
+  "2. Confira o código da worktree contra o plano e contra cada critério citado.\n3. Explique o resultado de cada fitness function, inclusive as que falharam.\n4. Comprove cada critério da rodada com o que você viu no código e nos testes.\n5. Depois";
+const PASSOS_DO_REVISAR_RODADA_COM_REVISOES_ANTERIORES =
+  '2. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos (`git log --grep` do endereço de cada um) regrediu algo. O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre: não pergunte de novo nem reprove por isso. Isso não impede reprovar de novo um motivo anterior que continua sem correção: se o corretivo não o resolveu, reprove e registre o motivo.\n3. Confira o código da worktree contra o plano e contra cada critério citado.\n4. Explique o resultado de cada fitness function, inclusive as que falharam.\n5. Comprove cada critério da rodada com o que você viu no código e nos testes.\n6. Depois';
+const MOTIVO_CORRECAO_MUDA_ARQUIVO =
+  "I-295: cada correção do --correcoes pede mudança em arquivos da worktree, pois o implementar sem alteração é devolvido";
 const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
   {
     arquivo: "cli/aula-e-demanda.txt",
@@ -67,6 +75,24 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     para: "A página da demanda mostra",
     motivo: MOTIVO_NOME_NOVO,
   },
+  {
+    arquivo: "prompts/revisar_rodada.txt",
+    de: "\n## Arquivos alterados\n",
+    para: "\n## Revisões anteriores da rodada\n\nDecisões recusadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:\n\n(nenhuma)\n\n## Arquivos alterados\n",
+    motivo: MOTIVO_REVISOES_ANTERIORES,
+  },
+  ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
+    arquivo,
+    de: PASSOS_DO_REVISAR_RODADA_DA_BASE,
+    para: PASSOS_DO_REVISAR_RODADA_COM_REVISOES_ANTERIORES,
+    motivo: MOTIVO_REVISOES_ANTERIORES,
+  })),
+  ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
+    arquivo,
+    de: "o defeito material que a justifica.",
+    para: "o defeito material que a justifica. Cada correção do `--correcoes` pede mudança em arquivos da worktree; corpo do PR, Sonar, deploy e cópia do banco não são correção.",
+    motivo: MOTIVO_CORRECAO_MUDA_ARQUIVO,
+  })),
 ];
 
 function listarArquivos(pasta: string): string[] {

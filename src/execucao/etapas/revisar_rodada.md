@@ -5,10 +5,11 @@
 **Passos:**
 
 1. Leia o plano, os critérios da rodada {rodada} e o que a Fabriquinha coletou: os arquivos alterados e a matriz de fitness functions, nas seções "Arquivos alterados" e "Matriz de fitness functions", esta com o arquivo do log de cada linha.
-2. Confira o código da worktree contra o plano e contra cada critério citado.
-3. Explique o resultado de cada fitness function, inclusive as que falharam.
-4. Comprove cada critério da rodada com o que você viu no código e nos testes.
-5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir {ticket} aprovar` se a rodada não tem defeito material, ou com `fabriquinha revisao decidir {ticket} reprovar --motivo <texto> --correcoes <json|->` se tem; `--correcoes` leva as correções que a rodada exige, em JSON, uma por ticket corretivo, como `[{"titulo": "...", "descricao": "...", "caminhos": ["src/a.ts"]}]`. Cada correção cita o critério ou o defeito material que a justifica.
+2. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos (`git log --grep` do endereço de cada um) regrediu algo. O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre: não pergunte de novo nem reprove por isso. Isso não impede reprovar de novo um motivo anterior que continua sem correção: se o corretivo não o resolveu, reprove e registre o motivo.
+3. Confira o código da worktree contra o plano e contra cada critério citado.
+4. Explique o resultado de cada fitness function, inclusive as que falharam.
+5. Comprove cada critério da rodada com o que você viu no código e nos testes.
+6. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir {ticket} aprovar` se a rodada não tem defeito material, ou com `fabriquinha revisao decidir {ticket} reprovar --motivo <texto> --correcoes <json|->` se tem; `--correcoes` leva as correções que a rodada exige, em JSON, uma por ticket corretivo, como `[{"titulo": "...", "descricao": "...", "caminhos": ["src/a.ts"]}]`. Cada correção cita o critério ou o defeito material que a justifica. Cada correção do `--correcoes` pede mudança em arquivos da worktree; corpo do PR, Sonar, deploy e cópia do banco não são correção.
 
 **O que reprova:** só defeito material, demonstrado por um caso concreto (entrada, comando ou arquivo:linha e o resultado errado): critério de aceite da rodada não cumprido; bug de comportamento; teste ou verificação existente removido sem cobertura equivalente; `npm run check`, integração ou e2e falhando; mudança fora do escopo do plano que altera comportamento.
 Todo o resto é observação: redação de texto, comentário ou nome que não fere gravemente o AGENTS.md; corpo do PR, inventário, foto ou evidência a completar; sugestão de robustez ou caso-limite além do que o critério pede; item que pertence a outra rodada. Para observação, aprove e registre-a na evidência de comprovação, para o Auditor ver no gate do PR. Na dúvida entre material e observação, aprove e registre a observação.

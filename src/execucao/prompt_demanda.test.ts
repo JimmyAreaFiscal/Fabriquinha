@@ -75,6 +75,14 @@ test("revisar_rodada mostra o formato do --correcoes e pede espera num único co
   assert.match(rodada, /espere num único comando/);
 });
 
+test("o passo do --correcoes exige mudança em arquivos da worktree e exclui PR, Sonar, deploy e cópia do banco (I-295 CA-5)", () => {
+  const passo = montar("revisar_rodada")
+    .split("\n")
+    .find((linha) => linha.includes("`--correcoes` leva"));
+  assert.match(passo ?? "", /Cada correção do `--correcoes` pede mudança em arquivos da worktree/);
+  assert.match(passo ?? "", /corpo do PR, Sonar, deploy e cópia do banco não são correção/);
+});
+
 test("as revisões só reprovam por defeito material; o resto vira observação e, na dúvida, aprova (CA-1, CA-2, CA-3)", () => {
   for (const etapa of ["revisar_rodada", "revisar_demanda"]) {
     const prompt = montar(etapa);
@@ -159,6 +167,15 @@ test("devolução e reabertura trazem o motivo (CA-7)", () => {
     /## Reabertura[\s\S]*Motivo: faltou X/,
   );
   assert.ok(!montar("implementar").includes("Motivo:"));
+});
+
+test("o ticket devolvido por falta de alteração traz o motivo no prompt (I-295 CA-3)", () => {
+  const motivo =
+    "o ticket I-1.T5 terminou sem alteração na worktree e não gera commit vazio: faça nos arquivos da worktree a correção que o ticket pede";
+  assert.match(
+    montar("implementar", {}, { tipo: "devolucao", motivo }),
+    /## Devolução[\s\S]*Motivo: .*terminou sem alteração na worktree/,
+  );
 });
 
 test("seção de evidências e skills vêm do catálogo", () => {
@@ -340,4 +357,71 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a mat
   );
   assert.match(montarCom(comImpacto("baixo"), "encerrar_rodada"), /baixo: `reversao` é opcional/);
   assert.match(montar("encerrar_rodada"), /a demanda não tem relatório de impactos: `reversao` é opcional/);
+});
+
+test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivos e perguntas respondidas (I-294 CA-1 a CA-5)", () => {
+  const t = (ticket_id: number, etapa: string, rodada_id = 2) => ({ ticket_id, rodada_id, etapa, status: "concluido" });
+  const recusa = (ticket_id: number, motivo: string) => ({ ticket_id, resultado: "recusado", motivo });
+  const comHistorico = {
+    ...ag,
+    tickets: [
+      t(4, "revisar_rodada"),
+      t(5, "implementar"),
+      t(6, "revisar_rodada"),
+      t(7, "encerrar_rodada"),
+      t(3, "revisar_rodada", 9),
+    ],
+    decisoes: [
+      recusa(6, "o teste de X quebrou Y"),
+      recusa(4, "falta teste de X"),
+      recusa(7, "reverter docs/x.md"),
+      { ticket_id: 4, resultado: "aprovado" },
+      recusa(3, "de outra rodada"),
+    ],
+  } as unknown as AgregadoDemanda;
+  const perguntas = new Map([
+    [4, [{ pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor no gate do PR" }]],
+  ]);
+  const revisaoSeguinte = (campos: Partial<TicketDemanda>) =>
+    montarPromptDemanda({
+      ...base,
+      ag: comHistorico,
+      perguntasDasRevisoesAnteriores: perguntas,
+      ticket: ticket("revisar_rodada", { ticket_id: 8, ...campos }),
+    });
+  const prompt = revisaoSeguinte({});
+  const secao = prompt.split("## Revisões anteriores da rodada")[1]?.split("## Arquivos alterados")[0] ?? "";
+  assert.match(secao, /I-206\.T4 \(revisar_rodada\), recusado: falta teste de X\n {2}- Corretivos: I-206\.T5\n/);
+  assert.ok(secao.indexOf("I-206.T4") < secao.indexOf("I-206.T6"));
+  assert.match(secao, /I-206\.T6 \(revisar_rodada\), recusado: o teste de X quebrou Y\n- I-206\.T7/);
+  assert.match(secao, /I-206\.T7 \(encerrar_rodada\), recusado: reverter docs\/x\.md/);
+  assert.match(secao, /Pergunta: Como confiro o Sonar\?\n {4}Resposta: fica com o Auditor no gate do PR/);
+  assert.ok(!secao.includes("de outra rodada"));
+  assert.ok(!secao.includes("T6 (revisar_rodada), recusado: o teste de X quebrou Y\n  - Corretivos"));
+
+  assert.match(montar("revisar_rodada"), /## Revisões anteriores da rodada\n\n.*\n\n\(nenhuma\)/s);
+  const semPerguntas = montarPromptDemanda({
+    ...base,
+    ag: comHistorico,
+    ticket: ticket("revisar_rodada", { ticket_id: 8 }),
+  });
+  assert.ok(semPerguntas.includes("recusado: falta teste de X") && !semPerguntas.includes("Pergunta:"));
+});
+
+test("só o revisar_rodada traz as revisões anteriores (I-294 CA-7)", () => {
+  for (const etapa of NOVAS.filter((e) => e !== "revisar_rodada"))
+    assert.ok(!montar(etapa).includes("Revisões anteriores da rodada"), etapa);
+});
+
+test("o modo do revisar_rodada manda conferir os motivos anteriores e proíbe reabrir o decidido (I-294 CA-8)", () => {
+  const modo = montar("revisar_rodada");
+  assert.match(
+    modo,
+    /2\. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos \(`git log --grep`/,
+  );
+  assert.match(
+    modo,
+    /O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre/,
+  );
+  assert.match(modo, /Isso não impede reprovar de novo um motivo anterior que continua sem correção/);
 });

@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { AUDITOR } from "../dominio/ator.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
+import { reabrirTicket } from "../dominio/transicoes_demanda.ts";
+import { PREFIXO_TERCEIRA_REPROVACAO } from "../dominio/transicoes_rodada.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
@@ -183,6 +186,51 @@ test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corr
   assert.equal(rodadaFase(banco), "desenvolvimento");
   assert.equal(ag.tickets.filter((t) => t.etapa === "implementar" && t.status === "aberto").length, 1);
   assert.equal(ag.decisoes[0]?.motivo, "corrigir o lint");
+});
+
+test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Auditor reabre e a revisão decide de novo", async () => {
+  const { banco } = await cenarioRevisao();
+  const recusado = (decisao_id: number, motivo: string) => ({
+    demanda_id: "I-1",
+    ticket_id: 2,
+    decisao_id,
+    resultado: "recusado" as const,
+    motivo,
+    por: "agente" as const,
+    em: "2026-01-02T00:00:00.000Z",
+  });
+  comDemanda(banco, "I-1", (ag) => ({ ...ag, decisoes: [recusado(1, "um"), recusado(2, "dois")] }));
+  const reprovar = () =>
+    decidir(banco, {
+      aprovado: false,
+      exigencias: "três",
+      correcoes: [{ demanda_id: "I-1", ticket_id: 1, rodada_id: 1 }],
+    });
+  const ticketRevisor = () => carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === 2);
+
+  const ticketsAntes = carregarDemanda(banco, "I-1").tickets.length;
+  reprovar();
+  assert.equal(ticketRevisor()?.status, "falhou");
+  assert.ok(ticketRevisor()?.motivo_falha?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
+  assert.match(ticketRevisor()?.motivo_falha ?? "", /um[\s\S]*dois[\s\S]*três/);
+  assert.equal(carregarDemanda(banco, "I-1").tickets.length, ticketsAntes);
+  assert.equal(rodadaFase(banco), "revisao");
+
+  const reabrir = () =>
+    comDemanda(banco, "I-1", (a) =>
+      reabrirTicket(a, { ticket_id: 2, instrucao: "aceite como observação" }, AUDITOR, {
+        agora: "2026-01-03T00:00:00.000Z",
+      }),
+    );
+  reabrir();
+  reprovar();
+  assert.equal(ticketRevisor()?.status, "falhou");
+  assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 4);
+
+  reabrir();
+  evidenciar(banco, 0, true);
+  decidir(banco, { aprovado: true });
+  assert.equal(rodadaFase(banco), "encerramento");
 });
 
 test("CA-1: conduzirRevisaoRodada reserva o revisar_rodada, prepara e roda o pi na worktree da rodada", async () => {

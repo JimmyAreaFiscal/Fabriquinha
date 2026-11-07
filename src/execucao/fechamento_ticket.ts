@@ -199,6 +199,7 @@ export async function fecharTicketDemanda(
         worktree,
         tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
         titulo: ticket.titulo ?? ag.demanda.titulo,
+        etapa: ticket.etapa,
       },
       deps.limiteCommitMs,
     );
