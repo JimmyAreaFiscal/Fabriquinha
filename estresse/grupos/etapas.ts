@@ -464,7 +464,7 @@ const ETAPAS: Record<string, Preparar> = {
     await ciclo(c);
     const pr = carregarDemanda(c.banco, id).encerramento?.pr;
     if (!pr) throw new Error("o encerramento não publicou o PR final");
-    await integrarPR({ repo: c.repo, hospedagem: "github" }, String(pr.numero));
+    await integrarPR({ raiz_git: c.repo, hospedagem: "github" }, String(pr.numero));
     await ciclo(c);
   }),
   ajustar_resultado: async (c) => {

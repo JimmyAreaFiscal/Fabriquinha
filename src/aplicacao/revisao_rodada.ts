@@ -50,12 +50,7 @@ export async function prepararRevisaoRodada(
 
   const worktree = await garantirWorktreeRodada(
     raizDo(banco),
-    {
-      nome: projeto.nome,
-      repo: projeto.raiz_git,
-      branchBase: projeto.branch_base,
-      preparacao: projeto.preparacao.map((c) => c.comando),
-    },
+    projeto,
     { demanda_id, rodada_id },
     `${raizDo(banco)}/log`,
   );

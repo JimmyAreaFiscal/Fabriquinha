@@ -1,10 +1,13 @@
 // O Markdown dos PRs (F3 §4.6) e o limite da hospedagem (F3 §4.7): texto do agente e do Auditor neutralizado, listas,
 // tabelas e números no formato pt-BR, montados só pela Fabriquinha.
-import type { Hospedagem } from "../../nucleo/projeto.ts";
+import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
 import markdownit from "markdown-it";
 
 /** F3 §4.7: tamanho máximo do corpo em cada hospedagem, em caracteres. */
-export const LIMITE_DO_CORPO: Readonly<Record<Hospedagem, number>> = { github: 65_536, "azure-devops": 4_000 };
+export const LIMITE_DO_CORPO: Readonly<Record<Projeto["hospedagem"], number>> = {
+  github: 65_536,
+  "azure-devops": 4_000,
+};
 
 const INTEIRO = new Intl.NumberFormat("pt-BR");
 const DOLARES = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });

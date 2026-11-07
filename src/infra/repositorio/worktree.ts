@@ -4,7 +4,7 @@ import { appendFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
-import type { Projeto } from "../../nucleo/projeto.ts";
+import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
 import { anotar } from "../registro.ts";
 import { executarNoShell, git, LIMITE_COMANDO_MS } from "../processo.ts";
 
@@ -50,8 +50,8 @@ export async function exigirGit(dir: string, ...args: string[]): Promise<string>
 }
 
 /** F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git. */
-export async function preparar(caminho: string, comandos: readonly string[], log: string): Promise<void> {
-  for (const comando of comandos) {
+export async function preparar(caminho: string, preparacao: Projeto["preparacao"], log: string): Promise<void> {
+  for (const { comando } of preparacao) {
     anotar(log, `preparação: ${comando}`);
     const r = await executarNoShell(comando, caminho, { limiteLog: LIMITE_LOG_PREPARACAO });
     appendFileSync(log, r.log);
@@ -91,7 +91,7 @@ export async function descartarAlteracoes(worktree: string, log: string): Promis
  * recebe o prune (arquivos, commits, branches `fabriquinha/I-n` e remoto ficam). Devolve um aviso por falha e nunca
  * lança por causa do disco ou do git.
  */
-export function removerWorktrees(raiz: string, projeto: Pick<Projeto, "nome" | "repo">): Promise<string[]> {
+export function removerWorktrees(raiz: string, projeto: Pick<Projeto, "nome" | "raiz_git">): Promise<string[]> {
   return naFilaDoProjeto(raiz, projeto.nome, async () => {
     const avisos: string[] = [];
     const pasta = pastaDasWorktrees(raiz, projeto.nome);
@@ -100,8 +100,8 @@ export function removerWorktrees(raiz: string, projeto: Pick<Projeto, "nome" | "
     } catch (error_) {
       avisos.push(`não foi possível apagar ${pasta}: ${mensagem(error_)}`);
     }
-    const r = await git(projeto.repo, "worktree", "prune");
-    if (r.codigo !== 0) avisos.push(`git -C ${projeto.repo} worktree prune falhou: ${r.erro.trim()}`);
+    const r = await git(projeto.raiz_git, "worktree", "prune");
+    if (r.codigo !== 0) avisos.push(`git -C ${projeto.raiz_git} worktree prune falhou: ${r.erro.trim()}`);
     return avisos;
   });
 }
