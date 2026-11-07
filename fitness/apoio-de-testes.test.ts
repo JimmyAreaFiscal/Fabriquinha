@@ -2,6 +2,7 @@
 // para elas dispara a Fabriquinha de verdade (porta ocupada, banco real migrado). Vale para os `*.test.ts` e `*.spec.ts`
 // de src/ e pacote-pi/ e para todo arquivo de integracao/, e2e/, estresse/ e apoio-testes/, inclusive comentário e nome de teste.
 // Teste também não monta o próprio banco (`mkdtemp` junto com `abrir(`): usa `abrirBancoTemporario()` de apoio-testes/.
+// Nenhum `*.test.ts` é importado por outro arquivo (import estático ou `import()`): o que é compartilhado vive em apoio-testes/.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,6 +21,11 @@ const ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO = [
   "src/persistencia/banco.test.ts",
   "src/persistencia/migracao_linha_de_base.test.ts",
 ];
+
+const PASTAS_QUE_NAO_IMPORTAM_TESTE = ["src", "pacote-pi", "integracao", "e2e", "apoio-testes", "fitness", "estresse"];
+// Mesmo critério do grep do CA-1; este arquivo fica de fora porque o autoteste dele traz esses textos entre aspas.
+const IMPORTACAO_DE_ARQUIVO_DE_TESTE = /(from |import\()["'][^"']*\.test\.ts["']/;
+const ARQUIVO_DESTA_FITNESS = "fitness/apoio-de-testes.test.ts";
 
 function listarArquivos(raiz: string, pasta: string): string[] {
   return readdirSync(join(raiz, pasta), { recursive: true, withFileTypes: true })
@@ -50,6 +56,13 @@ function acharArquivosQueMontamBancoProprio(raiz: string): string[] {
       const conteudo = readFileSync(join(raiz, caminho), "utf8");
       return conteudo.includes("mkdtemp") && /\babrir\(/.test(conteudo);
     })
+    .sort();
+}
+
+function acharArquivosQueImportamArquivoDeTeste(raiz: string): string[] {
+  return PASTAS_QUE_NAO_IMPORTAM_TESTE.flatMap((pasta) => listarArquivos(raiz, pasta))
+    .filter((caminho) => caminho.endsWith(".ts") && caminho !== ARQUIVO_DESTA_FITNESS)
+    .filter((caminho) => IMPORTACAO_DE_ARQUIVO_DE_TESTE.test(readFileSync(join(raiz, caminho), "utf8")))
     .sort();
 }
 
@@ -118,6 +131,37 @@ test("autoteste: acusa pelo caminho o arquivo com mkdtemp e abrir(, e poupa as e
       "e2e/sub/proprio.ts",
       "estresse/hospedagem.ts",
       "src/a/proprio.test.ts",
+    ]);
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test("nenhum arquivo importa um *.test.ts", () => {
+  const raiz = resolve(import.meta.dirname, "..");
+  assert.deepEqual(acharArquivosQueImportamArquivoDeTeste(raiz), []);
+});
+
+test("autoteste: acusa pelo caminho o arquivo que importa um *.test.ts, estático ou por import()", () => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-importa-teste-"));
+  try {
+    const escrever = (caminho: string, conteudo: string) => {
+      mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+      writeFileSync(join(raiz, caminho), conteudo);
+    };
+    for (const pasta of PASTAS_QUE_NAO_IMPORTAM_TESTE) mkdirSync(join(raiz, pasta));
+    escrever("src/a/estatico.test.ts", 'import { cenario } from "./cenario.test.ts";\n');
+    escrever("e2e/sub/dinamico.ts", 'const modulo = await import("../src/x.test.ts");\n');
+    escrever("fitness/outra.test.ts", "import { x } from '../src/y.test.ts';\n");
+    // Fora do alcance da regra: import de módulo comum, `.test.ts` só em texto e node_modules.
+    escrever("src/a/limpo.test.ts", 'import { cenario } from "./cenario.ts";\n');
+    escrever("src/a/texto.ts", 'const nome = "cenario.test.ts";\n');
+    escrever("e2e/node_modules/x/index.ts", 'import "./y.test.ts";\n');
+
+    assert.deepEqual(acharArquivosQueImportamArquivoDeTeste(raiz), [
+      "e2e/sub/dinamico.ts",
+      "fitness/outra.test.ts",
+      "src/a/estatico.test.ts",
     ]);
   } finally {
     rmSync(raiz, { recursive: true, force: true });
