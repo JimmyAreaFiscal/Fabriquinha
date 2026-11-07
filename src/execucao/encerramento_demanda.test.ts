@@ -233,7 +233,7 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
       limpeza_pendente: [],
     },
   });
-  hospedagem.abrir({ head: BRANCH_DEMANDA, base: "develop", titulo: "velho", corpo: "sem marca", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH_DEMANDA, base: "develop", titulo: "velho", corpo: "sem marca", estado: "aberto" });
   // Evidência de uma tentativa que caiu antes de concluir: a nova a substitui.
   comDemanda(c.banco, D, (a) => ({
     ...a,
@@ -259,7 +259,7 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
 
 test("CA-3: PR aberto fora da Fabriquinha: nenhum push, o erro aponta o PR e o ticket falha sem laço", async () => {
   const c = await cenario();
-  hospedagem.abrir({ head: BRANCH_DEMANDA, base: "develop", titulo: "meu", corpo: "de fora", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH_DEMANDA, base: "develop", titulo: "meu", corpo: "de fora", estado: "aberto" });
 
   await assert.rejects(
     conduzirEncerramentoDemanda(c.banco, D),
@@ -286,7 +286,7 @@ test("commit de agente fora do desenvolvimento não sobe: o ticket falha antes d
 
 test("CA-4: check final falho falha o ticket em check_final, sem integração, limpeza nem agente", async () => {
   const c = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_DEMANDA,
     base: "develop",
     titulo: "x",
@@ -310,7 +310,7 @@ test("CA-4: check final falho falha o ticket em check_final, sem integração, l
 
 test("CA-4: PR que a plataforma não decide no limite falha o ticket em check_final", async () => {
   const c = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_DEMANDA,
     base: "develop",
     titulo: "x",
@@ -328,7 +328,7 @@ test("CA-4: PR que a plataforma não decide no limite falha o ticket em check_fi
 
 test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvido, tenta de novo e reaproveita o PR", async () => {
   const c = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_DEMANDA,
     base: "develop",
     titulo: "x",

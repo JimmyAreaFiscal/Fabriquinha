@@ -135,7 +135,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
     const head = commitarCenario(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
     gitCenario(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
-    hospedagem.abrir({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
+    hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
     resto.demanda = { ...demanda(DEMANDA, "").demanda, fase: "execucao" };
     resto.rodadas = [
       { ...REF, titulo: "r2", fase: "aprovacao_pull_request", e2e: false, branch: BRANCH_RODADA },

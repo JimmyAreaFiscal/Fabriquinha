@@ -101,7 +101,7 @@ const integrarComoHumano = (c: Cenario, pr: number) => integrarPR({ repo: c.repo
 
 /** O PR final já aberto na hospedagem, com a marca que o encerramento adota. */
 function abrirPRFinal(c: Cenario, id: string, extra: Partial<Omit<PRFalso, "id">>): number {
-  gh.abrir({
+  gh.abrirPr({
     head: pontaDe(c, id),
     base: "main",
     titulo: "velho",

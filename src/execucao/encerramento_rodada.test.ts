@@ -300,7 +300,7 @@ test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvi
 
 test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: volta a desenvolvimento e conclui o ticket", async () => {
   const { banco, ag, ticket, evidencia, fase } = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",
@@ -325,7 +325,7 @@ test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: vo
 
 test("CA-6: check de CI falho volta a desenvolvimento com uma correção por check, sem chegar ao gate", async () => {
   const { banco, ag, fase } = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",
@@ -355,7 +355,7 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
 
 test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a marca do ticket atual", async () => {
   const { banco, fase } = await cenario({ anterior: true });
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",

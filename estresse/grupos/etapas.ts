@@ -433,7 +433,7 @@ const ETAPAS: Record<string, Preparar> = {
     async (c) => {
       const id = await emEncerramentoDemanda(c);
       // Um PR final em conflito: o primeiro ciclo abre o `resolver_conflito`, que o ciclo medido executa.
-      c.gh.abrir({
+      c.gh.abrirPr({
         head: carregarDemanda(c.banco, id).demanda.branch,
         base: "main",
         titulo: "velho",

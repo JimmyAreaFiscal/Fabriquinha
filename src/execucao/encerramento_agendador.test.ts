@@ -170,7 +170,7 @@ test("CA-15: a revisão integral aprovada vai a concluida pelo ciclo depois do m
 
 test("CA-16: conflito com a base cria o resolver_conflito; concluído, o ciclo tenta o encerramento de novo e conclui", async () => {
   const c = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH,
     base: "develop",
     titulo: "x",

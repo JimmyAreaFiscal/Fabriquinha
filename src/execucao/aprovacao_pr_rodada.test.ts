@@ -105,7 +105,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const commitDaRodada = commitarCenario(rodada, "a.txt", "a\n");
   gitCenario(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
-  hospedagem.abrir({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
   return {
     c,
     banco,

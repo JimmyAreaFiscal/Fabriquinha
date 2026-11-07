@@ -47,7 +47,7 @@ const correcao = (id: string, titulo: string) => ({
 function prComProblema(c: Cenario, id: string, problema: "check" | "conflito"): void {
   const { branch } = rodadaDe(c, id, 1) ?? { branch: "" };
   gh.zerar();
-  gh.abrir({
+  gh.abrirPr({
     head: branch,
     base: demanda(c, id).demanda.branch,
     titulo: "velho",

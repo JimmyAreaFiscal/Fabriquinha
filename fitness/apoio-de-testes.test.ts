@@ -1,6 +1,7 @@
 // Fitness function: teste nenhum conhece a porta 4317 nem a raiz ~/fabriquinha do serviço real. Teste que sobe ou aponta
 // para elas dispara a Fabriquinha de verdade (porta ocupada, banco real migrado). Vale para os `*.test.ts` e `*.spec.ts`
 // de src/ e pacote-pi/ e para todo arquivo de integracao/, e2e/, estresse/ e apoio-testes/, inclusive comentário e nome de teste.
+// Teste também não monta o próprio banco (`mkdtemp` junto com `abrir(`): usa `abrirBancoTemporario()` de apoio-testes/.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +13,13 @@ const PASTAS_DE_APOIO_A_TESTE = ["integracao", "e2e", "estresse", "apoio-testes"
 const REFERENCIA_AO_SERVICO_REAL = /4317|~\/fabriquinha|homedir\(\)[^;]*["'/]fabriquinha/;
 // Estes dois testes fixam os padrões de produção (porta do serviço, raiz de `abrir()`) sem subir o serviço nem tocar o banco real.
 const ARQUIVOS_QUE_FIXAM_O_PADRAO_DE_PRODUCAO = ["src/execucao/servico.test.ts", "src/persistencia/banco.test.ts"];
+
+const PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO = ["src", "pacote-pi", "integracao", "e2e", "estresse"];
+// Estes dois testam o próprio `banco.ts` e a linha de base de migração: precisam abrir o banco numa raiz que eles controlam.
+const ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO = [
+  "src/persistencia/banco.test.ts",
+  "src/persistencia/migracao_linha_de_base.test.ts",
+];
 
 function listarArquivos(raiz: string, pasta: string): string[] {
   return readdirSync(join(raiz, pasta), { recursive: true, withFileTypes: true })
@@ -30,6 +38,18 @@ function acharArquivosDeTesteQueReferenciamOServicoReal(raiz: string): string[] 
   return candidatos
     .filter((caminho) => !ARQUIVOS_QUE_FIXAM_O_PADRAO_DE_PRODUCAO.includes(caminho))
     .filter((caminho) => REFERENCIA_AO_SERVICO_REAL.test(readFileSync(join(raiz, caminho), "utf8")))
+    .sort();
+}
+
+// Mesmo critério do grep do CA-3: `mkdtemp` e `\babrir(` (palavra inteira, qualquer chamada) no mesmo arquivo.
+function acharArquivosQueMontamBancoProprio(raiz: string): string[] {
+  return PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO.flatMap((pasta) => listarArquivos(raiz, pasta))
+    .filter((caminho) => caminho.endsWith(".ts"))
+    .filter((caminho) => !ARQUIVOS_QUE_PODEM_MONTAR_BANCO_PROPRIO.includes(caminho))
+    .filter((caminho) => {
+      const conteudo = readFileSync(join(raiz, caminho), "utf8");
+      return conteudo.includes("mkdtemp") && /\babrir\(/.test(conteudo);
+    })
     .sort();
 }
 
@@ -64,6 +84,40 @@ test("autoteste: acusa pelo caminho a porta 4317, o texto ~/fabriquinha e homedi
       "integracao/casa.ts",
       "pacote-pi/raiz.spec.ts",
       "src/a/porta.test.ts",
+    ]);
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test("nenhum teste monta o próprio banco com mkdtemp mais abrir(", () => {
+  const raiz = resolve(import.meta.dirname, "..");
+  assert.deepEqual(acharArquivosQueMontamBancoProprio(raiz), []);
+});
+
+test("autoteste: acusa pelo caminho o arquivo com mkdtemp e abrir(, e poupa as exceções listadas", () => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-banco-"));
+  try {
+    const escrever = (caminho: string, conteudo: string) => {
+      mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+      writeFileSync(join(raiz, caminho), conteudo);
+    };
+    for (const pasta of PASTAS_QUE_NAO_MONTAM_BANCO_PROPRIO) mkdirSync(join(raiz, pasta));
+    escrever("src/a/proprio.test.ts", "const pasta = mkdtempSync(tmp);\nconst banco = abrir(pasta);\n");
+    escrever("e2e/sub/proprio.ts", "mkdtempSync(tmp);\nawait abrir(pasta);\n");
+    escrever("estresse/hospedagem.ts", "mkdtempSync(tmp);\ngh.abrir({});\n");
+    // Fora do alcance da regra: só um dos dois, o método `abrirPr`, as exceções listadas e node_modules.
+    escrever("src/a/so_mkdtemp.test.ts", "mkdtempSync(tmp);\n");
+    escrever("src/a/so_abrir.test.ts", "abrir(raiz);\n");
+    escrever("src/a/pr.test.ts", "mkdtempSync(tmp);\nhospedagem.abrirPr({});\n");
+    escrever("src/persistencia/banco.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
+    escrever("src/persistencia/migracao_linha_de_base.test.ts", "mkdtempSync(tmp);\nabrir(raiz);\n");
+    escrever("e2e/node_modules/x/index.ts", "mkdtemp abrir(\n");
+
+    assert.deepEqual(acharArquivosQueMontamBancoProprio(raiz), [
+      "e2e/sub/proprio.ts",
+      "estresse/hospedagem.ts",
+      "src/a/proprio.test.ts",
     ]);
   } finally {
     rmSync(raiz, { recursive: true, force: true });
