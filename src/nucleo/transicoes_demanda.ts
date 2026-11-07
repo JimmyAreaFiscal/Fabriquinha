@@ -40,7 +40,7 @@ function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): voi
   }
 }
 
-/** CA-1: cria a demanda em `registro` com a origem do autor e o ticket 1 da etapa `demanda`. */
+/** CA-1: cria a demanda em `registro` com o autor externo em `criada_por` e o ticket 1 da etapa `demanda`. */
 export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   const e = EntradaRegistro.parse(entrada);
   return AgregadoDemanda.parse({
@@ -67,7 +67,7 @@ export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDem
   });
 }
 
-/** CA-6 e CA-7: edita título, tipo ou descrição só antes do envio e só pela ferramenta e sessão autoras. */
+/** CA-6 e CA-7: edita título, tipo ou descrição só antes do envio e só pelo Ator externo que a criou (`criada_por`). */
 export function editarDemanda(ag: AgregadoDemanda, entrada: unknown, autor: Ator): AgregadoDemanda {
   const e = EntradaEdicao.parse(entrada);
   const { demanda } = ag;
