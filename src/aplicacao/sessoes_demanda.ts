@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR, type Ator } from "../nucleo/ator.ts";
+import { AUDITOR, Ator } from "../nucleo/ator.ts";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
@@ -288,6 +288,8 @@ function promptsDaFabriquinha(raiz: string, { sessao, execucoes }: Carregada): S
   return new Set(arquivos.filter((a) => existsSync(a)).map((a) => readFileSync(a, "utf8")));
 }
 
+const registroDaRespostaAutomatica = new RegExp(`^\\S+ ${PREFIXO_DA_RESPOSTA_AUTOMATICA}(\\{.*\\})$`);
+
 /** Os Agentes que o Auditor automático fez responder, por chamada de `perguntar`: o gerente os anota no log da execução. */
 function atoresDasRespostasAutomaticas(
   raiz: string,
@@ -297,13 +299,11 @@ function atoresDasRespostasAutomaticas(
     .map((e) => join(raiz, "execucoes", `E-${e.id}`, "log"))
     .filter((log) => existsSync(log))
     .flatMap((log) => readFileSync(log, "utf8").split("\n"))
-    .filter((linha) => linha.includes(PREFIXO_DA_RESPOSTA_AUTOMATICA))
-    .map(
-      (linha) =>
-        JSON.parse(
-          linha.slice(linha.indexOf(PREFIXO_DA_RESPOSTA_AUTOMATICA) + PREFIXO_DA_RESPOSTA_AUTOMATICA.length),
-        ) as RespostaAutomatica,
-    );
+    // Só a linha cujo texto começa com o prefixo é o registro; as livres do gerente citam a pergunta crua do agente.
+    .map((linha) => registroDaRespostaAutomatica.exec(linha)?.[1])
+    .filter((json) => json !== undefined)
+    .map((json) => JSON.parse(json) as RespostaAutomatica)
+    .filter((registro) => Ator.safeParse(registro.ator).success);
   return new Map(registros.map((r) => [r.chamada, r.ator]));
 }
 
