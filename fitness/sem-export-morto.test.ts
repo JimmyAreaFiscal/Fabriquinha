@@ -63,7 +63,10 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
 
     for (const simbolo of verificadorDeTipos.getExportsOfModule(simboloDoModulo)) {
       // Valor e tipo de mesmo nome são um export só: um importador de qualquer um dos dois basta.
-      const declaracoes = simbolo.declarations ?? [];
+      // Reexport (`export { x } from`, `export *`) não conta: o export final, no arquivo que o declara, é quem responde.
+      const declaracoes = (simbolo.declarations ?? []).filter(
+        (declaracao) => declaracao.getSourceFile() === arquivoFonte && !ts.isExportSpecifier(declaracao),
+      );
       const nomes = declaracoes.map((declaracao) => ts.getNameOfDeclaration(declaracao) ?? declaracao);
       const arquivosQueReferenciam = new Set(
         nomes
@@ -71,7 +74,7 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
             (nome) =>
               servicoDeLinguagem.getReferencesAtPosition(arquivoFonte.fileName, nome.getStart(arquivoFonte)) ?? [],
           )
-          .filter((referencia) => referencia.fileName !== arquivoFonte.fileName)
+          .filter((referencia) => referencia.fileName !== arquivoFonte.fileName && !ehReexport(programa, referencia))
           .map((referencia) => relative(raiz, referencia.fileName)),
       );
       if ([...arquivosQueReferenciam].some((arquivo) => !ehArquivoDeTeste(arquivo))) continue;
@@ -88,6 +91,23 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
     }
   }
   return achados.sort();
+}
+
+function ehReexport(programa: ts.Program, referencia: ts.ReferenceEntry): boolean {
+  const arquivoFonte = programa.getSourceFile(referencia.fileName);
+  if (!arquivoFonte) return false;
+  let no: ts.Node = arquivoFonte;
+  for (
+    let filho = acharFilhoQueContem(no, referencia.textSpan.start);
+    filho;
+    filho = acharFilhoQueContem(no, referencia.textSpan.start)
+  )
+    no = filho;
+  return ts.isExportSpecifier(no.parent);
+}
+
+function acharFilhoQueContem(no: ts.Node, posicao: number): ts.Node | undefined {
+  return no.getChildren().find((filho) => filho.getStart() <= posicao && posicao < filho.getEnd());
 }
 
 function ehPastaExistente(raiz: string, pasta: string): boolean {
@@ -149,6 +169,50 @@ test("a fitness acusa export sem importador e export só de teste sem a marca @t
       "src/usado.ts:5 soNoTesteMarcaSemJustificativa: só de teste, falta /** @testes justificativa */",
       "src/usado.ts:6 soNoTesteSemMarca: só de teste, falta /** @testes justificativa */",
       "src/usado.ts:7 semImportador: sem importador",
+    ],
+  );
+});
+
+test("a fitness acusa o export final de um reexport sem consumidor e reconhece importador por namespace", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  for (const pasta of ["src", "pacote-pi"]) mkdirSync(join(raiz, pasta), { recursive: true });
+  const escrever = (arquivo: string, linhas: string[]): void => {
+    writeFileSync(join(raiz, arquivo), linhas.join("\n"));
+  };
+  escrever("src/a.ts", [
+    "export const morto = 1;",
+    "export const reexportadoEUsado = 2;",
+    "export const viaNamespaceDeProducao = 3;",
+    "/** @testes atalho do teste de namespace */",
+    "export const viaNamespaceSoDeTeste = 4;",
+    "export const viaNamespaceSoDeTesteSemMarca = 5;",
+  ]);
+  escrever("src/b.ts", ['export { morto, reexportadoEUsado } from "./a.ts";', 'export * from "./a.ts";']);
+  escrever("src/consumidor.ts", [
+    'import { reexportadoEUsado } from "./b.ts";',
+    'import * as a from "./a.ts";',
+    "export const consumidor = [reexportadoEUsado, a.viaNamespaceDeProducao];",
+  ]);
+  escrever("src/consumidor.test.ts", [
+    'import * as a from "./a.ts";',
+    'import { consumidor } from "./consumidor.ts";',
+    "console.log(consumidor, a.viaNamespaceSoDeTeste, a.viaNamespaceSoDeTesteSemMarca);",
+  ]);
+
+  assert.deepEqual(
+    acharExportsMortos(raiz, {
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      allowImportingTsExtensions: true,
+      noEmit: true,
+    }),
+    [
+      "src/a.ts:1 morto: sem importador",
+      "src/a.ts:6 viaNamespaceSoDeTesteSemMarca: só de teste, falta /** @testes justificativa */",
+      "src/consumidor.ts:3 consumidor: só de teste, falta /** @testes justificativa */",
     ],
   );
 });
