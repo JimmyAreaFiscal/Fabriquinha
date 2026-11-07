@@ -341,3 +341,70 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a mat
   assert.match(montarCom(comImpacto("baixo"), "encerrar_rodada"), /baixo: `reversao` é opcional/);
   assert.match(montar("encerrar_rodada"), /a demanda não tem relatório de impactos: `reversao` é opcional/);
 });
+
+test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivos e perguntas respondidas (I-294 CA-1 a CA-5)", () => {
+  const t = (ticket_id: number, etapa: string, rodada_id = 2) => ({ ticket_id, rodada_id, etapa, status: "concluido" });
+  const recusa = (ticket_id: number, motivo: string) => ({ ticket_id, resultado: "recusado", motivo });
+  const comHistorico = {
+    ...ag,
+    tickets: [
+      t(4, "revisar_rodada"),
+      t(5, "implementar"),
+      t(6, "revisar_rodada"),
+      t(7, "encerrar_rodada"),
+      t(3, "revisar_rodada", 9),
+    ],
+    decisoes: [
+      recusa(6, "o teste de X quebrou Y"),
+      recusa(4, "falta teste de X"),
+      recusa(7, "reverter docs/x.md"),
+      { ticket_id: 4, resultado: "aprovado" },
+      recusa(3, "de outra rodada"),
+    ],
+  } as unknown as AgregadoDemanda;
+  const perguntas = new Map([
+    [4, [{ pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor no gate do PR" }]],
+  ]);
+  const revisaoSeguinte = (campos: Partial<TicketDemanda>) =>
+    montarPromptDemanda({
+      ...base,
+      ag: comHistorico,
+      perguntasDasRevisoesAnteriores: perguntas,
+      ticket: ticket("revisar_rodada", { ticket_id: 8, ...campos }),
+    });
+  const prompt = revisaoSeguinte({});
+  const secao = prompt.split("## Revisões anteriores da rodada")[1]?.split("## Arquivos alterados")[0] ?? "";
+  assert.match(secao, /I-206\.T4 \(revisar_rodada\), recusado: falta teste de X\n {2}- Corretivos: I-206\.T5\n/);
+  assert.ok(secao.indexOf("I-206.T4") < secao.indexOf("I-206.T6"));
+  assert.match(secao, /I-206\.T6 \(revisar_rodada\), recusado: o teste de X quebrou Y\n- I-206\.T7/);
+  assert.match(secao, /I-206\.T7 \(encerrar_rodada\), recusado: reverter docs\/x\.md/);
+  assert.match(secao, /Pergunta: Como confiro o Sonar\?\n {4}Resposta: fica com o Auditor no gate do PR/);
+  assert.ok(!secao.includes("de outra rodada"));
+  assert.ok(!secao.includes("T6 (revisar_rodada), recusado: o teste de X quebrou Y\n  - Corretivos"));
+
+  assert.match(montar("revisar_rodada"), /## Revisões anteriores da rodada\n\n.*\n\n\(nenhuma\)/s);
+  const semPerguntas = montarPromptDemanda({
+    ...base,
+    ag: comHistorico,
+    ticket: ticket("revisar_rodada", { ticket_id: 8 }),
+  });
+  assert.ok(semPerguntas.includes("recusado: falta teste de X") && !semPerguntas.includes("Pergunta:"));
+});
+
+test("só o revisar_rodada traz as revisões anteriores (I-294 CA-7)", () => {
+  for (const etapa of NOVAS.filter((e) => e !== "revisar_rodada"))
+    assert.ok(!montar(etapa).includes("Revisões anteriores da rodada"), etapa);
+});
+
+test("o modo do revisar_rodada manda conferir os motivos anteriores e proíbe reabrir o decidido (I-294 CA-8)", () => {
+  const modo = montar("revisar_rodada");
+  assert.match(
+    modo,
+    /2\. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos \(`git log --grep`/,
+  );
+  assert.match(
+    modo,
+    /O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre/,
+  );
+  assert.match(modo, /Isso não impede reprovar de novo um motivo anterior que continua sem correção/);
+});

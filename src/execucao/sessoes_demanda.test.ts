@@ -26,6 +26,7 @@ import {
   emMarkdown,
   enviarDemanda,
   exportarHistoricoDemanda,
+  perguntasRespondidasNaSessao,
   responderDialogoDemanda,
 } from "./sessoes_demanda.ts";
 
@@ -488,4 +489,102 @@ test("emMarkdown: Fabriquinha, Auditor e agente na íntegra; a chamada com os ar
     "**Chamada de `ls`**\n\n```json\n{}\n```",
   ]);
   assert.deepEqual(emMarkdown({ role: "bashExecution", content: "x" }, nada), []);
+});
+
+const chamada = (id: string, name: string, args?: object) => ({ type: "toolCall", id, name, arguments: args });
+const resultado = (toolCallId: string, texto: string) => mensagem("toolResult", texto, { toolCallId });
+
+test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelamento, vazio nem outras ferramentas", () => {
+  const { c } = cenario();
+  mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
+  const linhas = [
+    { type: "session", id: "s2" },
+    mensagem("assistant", "", {
+      content: [
+        chamada("a", "perguntar", { question: "Como confiro o Sonar?" }),
+        chamada("b", "perguntar", { question: "Qual o escopo?" }),
+        chamada("c", "perguntar", { question: "Cancelada?" }),
+        chamada("d", "perguntar", { question: "Vazia?" }),
+        chamada("e", "perguntar"),
+        chamada("m", "perguntar", { question: "Quais critérios?" }),
+        chamada("v", "perguntar", { question: "Seleção vazia?" }),
+        chamada("f", "bash", { question: "outra ferramenta" }),
+        { type: "toolCall", name: "perguntar", arguments: { question: "sem id" } },
+      ],
+    }),
+    resultado("a", "User answered: fica com o Auditor no gate do PR"),
+    resultado("b", "User selected: só o servidor"),
+    resultado("c", "User cancelled the question"),
+    resultado(
+      "m",
+      "User selected:\n- 1. Maior desconto primeiro\n- 2. Validade mais próxima\n- Other: e desempate pelo código",
+    ),
+    resultado("v", "User selected:\n"),
+    resultado("d", "User answered:  "),
+    resultado("e", "User answered: sem pergunta"),
+    resultado("f", "User answered: não é perguntar"),
+    resultado("zzz", "User answered: sem chamada"),
+    mensagem("user", "User answered: mensagem comum"),
+    { type: "session_info" },
+  ];
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s2.jsonl"),
+    linhas.map((l) => JSON.stringify(l)).join("\n") + "\n",
+  );
+  assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s2"), [
+    { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor no gate do PR" },
+    { pergunta: "Qual o escopo?", resposta: "só o servidor" },
+    {
+      pergunta: "Quais critérios?",
+      resposta: "- 1. Maior desconto primeiro\n- 2. Validade mais próxima\n- Other: e desempate pelo código",
+    },
+  ]);
+});
+
+test("perguntasRespondidasNaSessao: ignora linha null e mensagem sem content, mantendo os pares válidos", () => {
+  const { c } = cenario();
+  mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
+  const linhas = [
+    "null",
+    { type: "message", message: { role: "assistant" } },
+    mensagem("assistant", "", { content: [chamada("a", "perguntar", { question: "Como confiro o Sonar?" })] }),
+    { type: "message", message: { role: "toolResult", toolCallId: "a" } },
+    resultado("a", "User answered: fica com o Auditor"),
+  ];
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s3.jsonl"),
+    linhas.map((l) => (typeof l === "string" ? l : JSON.stringify(l))).join("\n") + "\n",
+  );
+  assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s3"), [
+    { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor" },
+  ]);
+});
+
+test("perguntasRespondidasNaSessao: ignora bloco que não é objeto, mantendo os pares válidos", () => {
+  const { c } = cenario();
+  mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
+  const linhas = [
+    mensagem("assistant", "", {
+      content: [null, 7, "solto", chamada("a", "perguntar", { question: "Como confiro o Sonar?" })],
+    }),
+    mensagem("assistant", "", { content: [null] }),
+    { type: "message", message: { role: "toolResult", toolCallId: "x", content: [null] } },
+    { type: "message", message: { role: "user", content: "texto simples" } },
+    mensagem("toolResult", "", {
+      toolCallId: "a",
+      content: [null, { type: "text", text: "User answered: fica com o Auditor" }],
+    }),
+  ];
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s4.jsonl"),
+    linhas.map((l) => JSON.stringify(l)).join("\n") + "\n",
+  );
+  assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s4"), [
+    { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor" },
+  ]);
+});
+
+test("perguntasRespondidasNaSessao: sessão sem arquivo não tem perguntas", () => {
+  const { c } = cenario();
+  assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s-sem-arquivo"), []);
 });
