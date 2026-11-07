@@ -8,9 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { criarSessao, encerrarExecucao, iniciarExecucao } from "../dominio/sessoes.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
@@ -43,7 +43,7 @@ const BRANCH = "fabriquinha/I-206";
 /** Demanda em encerramento (revisão integral aprovada), com a rodada concluída e o `encerrar_demanda` aberto. */
 async function cenario() {
   const c = cenarioDemanda([], "develop");
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -170,7 +170,7 @@ test("CA-15: a revisão integral aprovada vai a concluida pelo ciclo depois do m
 
 test("CA-16: conflito com a base cria o resolver_conflito; concluído, o ciclo tenta o encerramento de novo e conclui", async () => {
   const c = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH,
     base: "develop",
     titulo: "x",

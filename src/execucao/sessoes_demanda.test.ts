@@ -6,11 +6,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import type { ExecucaoSessao, Sessao } from "../dominio/sessoes.ts";
 import { encontrado } from "../dominio/erros.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
@@ -96,7 +96,7 @@ const mensagem = (role: string, texto: string, extra: object = {}) => ({
  */
 function cenario() {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(

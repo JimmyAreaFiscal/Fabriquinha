@@ -1,25 +1,24 @@
 // Cenário compartilhado dos testes das rotas das demandas: banco real, projeto `loja`, as demandas I-206 e I-207 e o
 // servidor web de verdade numa porta livre, com um agendador falso que só anota o que lhe pedem.
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createServer, request } from "node:http";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
 import { guardarBytes } from "../../persistencia/arquivos.ts";
-import { abrir, raizDo } from "../../persistencia/banco.ts";
+import { raizDo } from "../../persistencia/banco.ts";
 import { criarDemanda } from "../../persistencia/demandas.ts";
 import { gravarAnexos } from "../../persistencia/evidencia_demanda.ts";
 import { servirWeb } from "../servidor.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-demandas-web-"));
 const fechamentos: (() => Promise<void>)[] = [];
 after(async () => {
   for (const fechar of fechamentos) await fechar();
-  rmSync(base, { recursive: true, force: true });
 });
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const em = "2026-01-01T00:00:00.000Z";
 
@@ -75,7 +74,7 @@ export const demanda = (id: string, fase: string, resto: object = {}): AgregadoD
  * planejamento, dependente da I-206.
  */
 export async function cenarioDemandas() {
-  const banco: DatabaseSync = abrir(mkdtempSync(join(base, "raiz-")));
+  const banco: DatabaseSync = abrirBancoTemporario().banco;
   banco
     .prepare(
       `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)

@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { submeterPlano } from "../dominio/transicoes_demanda.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
@@ -99,7 +99,7 @@ function demanda(id: string, fase: string, extra: object = {}) {
 /** Projeto `loja`, demanda I-1 na fase dada com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-0. */
 function cenario({ fase = "planejamento", status = "aberto", comPlano = false, predecessora = "concluida" } = {}) {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(

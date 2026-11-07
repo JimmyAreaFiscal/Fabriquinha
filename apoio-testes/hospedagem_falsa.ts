@@ -224,7 +224,7 @@ export function hospedagemFalsa(dir: string) {
     prs: () => ler().prs,
     chamadas: () => ler().chamadas,
     /** Acrescenta um PR, como se alguém o tivesse aberto na plataforma. */
-    abrir(pr: Omit<PRFalso, "id">) {
+    abrirPr(pr: Omit<PRFalso, "id">) {
       const estado = ler();
       estado.prs.push({ ...pr, id: estado.prs.length + 1 });
       gravar(estado);

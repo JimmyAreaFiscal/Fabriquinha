@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ZodError } from "zod";
 import { AUDITOR } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeEscopo } from "../dominio/erros.ts";
 import { registrarCorrecoesSessao } from "../dominio/transicoes_rodada.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
@@ -72,7 +72,7 @@ const URL_PR = "https://github.com/org/loja/pull/1";
 /** Demanda I-206 com a rodada 2 no gate do PR (ticket 8) e as duas worktrees prontas. */
 async function cenario(shell = "") {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(

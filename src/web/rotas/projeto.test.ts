@@ -2,13 +2,12 @@
 // chama, contra um banco de verdade.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import type { ServerResponse } from "node:http";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { after, beforeEach, test } from "node:test";
-import { abrir } from "../../persistencia/banco.ts";
+import { beforeEach, test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { criarDemanda } from "../../persistencia/demandas.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
@@ -18,14 +17,12 @@ import { ROTAS } from "../servidor.ts";
 import type { ListaDoProjeto } from "./projeto.ts";
 import { demanda } from "./demandas_cenario.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-projeto-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 let banco: DatabaseSync;
+let raiz: string;
 beforeEach(() => {
-  banco = abrir(mkdtempSync(join(base, "raiz-")));
+  ({ banco, raiz } = abrirBancoTemporario());
   for (const nome of ["loja", "site"]) {
     registrarProjeto(banco, {
       nome,
@@ -70,7 +67,7 @@ test("heatmap: projeto inexistente dá 404, repositório inexistente dá 409 com
 });
 
 test("heatmap: projeto com repositório git devolve branch, janela, árvore e commits", async () => {
-  const repo = mkdtempSync(join(base, "repo-"));
+  const repo = mkdtempSync(join(raiz, "repo-"));
   const git = (...args: string[]) =>
     execFileSync("git", ["-c", "user.name=A", "-c", "user.email=a@x", ...args], { cwd: repo, stdio: "pipe" });
   git("init", "-q", "-b", "main");

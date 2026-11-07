@@ -1,21 +1,18 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { after, test } from "node:test";
+import { test } from "node:test";
 import { ZodError } from "zod";
 import type { DatabaseSync } from "node:sqlite";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "./arquivos.ts";
-import { abrir, raizDo } from "./banco.ts";
+import { raizDo } from "./banco.ts";
 import { dirDaExecucaoSimulada } from "./execucoes.ts";
 import { editarProjeto, projeto, projetos, registrarProjeto, removerProjeto } from "./projetos.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-projetos-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
-const novoBanco = () => abrir(mkdtempSync(join(base, "raiz-")));
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
+const novoBanco = () => abrirBancoTemporario().banco;
 
 const exemplo = {
   nome: "fabriquinha",

@@ -9,7 +9,7 @@ test("gh e az falsos: o mesmo PR no formato de cada CLI, e PR fechado não é ed
   try {
     const h = hospedagemFalsa(banco.raiz);
     h.zerar();
-    h.abrir({ head: "b", base: "main", titulo: "t", corpo: "", estado: "fechado", fork: true });
+    h.abrirPr({ head: "b", base: "main", titulo: "t", corpo: "", estado: "fechado", fork: true });
     const rodar = (cli: string, ...args: string[]) => execFileSync(cli, args, { stdio: "pipe" }).toString();
     assert.deepEqual(JSON.parse(rodar("gh", "pr", "list", "--head", "b")), [
       {

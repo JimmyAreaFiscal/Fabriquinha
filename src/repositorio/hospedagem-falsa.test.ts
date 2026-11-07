@@ -229,7 +229,7 @@ export function hospedagemFalsa(dir: string) {
     prs: () => ler().prs,
     chamadas: () => ler().chamadas,
     /** Acrescenta um PR, como se alguém o tivesse aberto na plataforma. */
-    abrir(pr: Omit<PRFalso, "id">) {
+    abrirPr(pr: Omit<PRFalso, "id">) {
       const estado = ler();
       estado.prs.push({ ...pr, id: estado.prs.length + 1 });
       gravar(estado);
@@ -259,7 +259,7 @@ if (import.meta.main) {
     try {
       const h = hospedagemFalsa(dir);
       h.zerar();
-      h.abrir({ head: "b", base: "main", titulo: "t", corpo: "", estado: "fechado", fork: true });
+      h.abrirPr({ head: "b", base: "main", titulo: "t", corpo: "", estado: "fechado", fork: true });
       const rodar = (cli: string, ...args: string[]) => execFileSync(cli, args, { stdio: "pipe" }).toString();
       assert.deepEqual(JSON.parse(rodar("gh", "pr", "list", "--head", "b")), [
         {

@@ -6,10 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { assinar } from "./gerente.ts";
 import {
   gravarConfiguracaoProjeto,
@@ -110,7 +110,7 @@ interface Opcoes {
 /** Projeto `loja` configurado, demanda I-1 em execução (rodadas 1 e 2) e a worktree da demanda criada. */
 async function cenario({ etapas = [], variante, semWorktree, preparacao = "true" }: Opcoes = {}) {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(

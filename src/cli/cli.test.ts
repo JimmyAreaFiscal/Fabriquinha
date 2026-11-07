@@ -11,9 +11,10 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { abrir } from "../persistencia/banco.ts";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { comandoDoNavegador, principal } from "./cli.ts";
 
+const novoBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-cli-"));
 after(() => {
   rmSync(base, { recursive: true, force: true });
@@ -123,8 +124,8 @@ test("CA-1: sem FABRIQUINHA_EXECUCAO, o grupo do fluxo antigo, ticket e necessid
 });
 
 test("CA-2: com FABRIQUINHA_EXECUCAO de uma execução que não existe, nenhum comando legado é alcançável", async () => {
-  const raiz = mkdtempSync(join(base, "execucao-inexistente-"));
-  abrir(raiz).close();
+  const { raiz, banco } = novoBancoTemporario();
+  banco.close();
   const env = { FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: "1" };
   for (const args of [...LEGADOS, ["servidor"], ["abrir"]]) {
     desconhecido(await cli(env, args), args);

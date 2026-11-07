@@ -1,26 +1,20 @@
 // Rotas das métricas (F7 §4.2) chamadas como o servidor as chama, contra um banco de verdade.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
 import type { ServerResponse } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { after, beforeEach, test } from "node:test";
+import { beforeEach, test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { MetricasDemandaPeriodo, MetricasMesDemanda } from "../../metricas/periodo_demanda.ts";
-import { abrir } from "../../persistencia/banco.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-metricas-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 let banco: DatabaseSync;
 beforeEach(() => {
-  banco = abrir(mkdtempSync(join(base, "raiz-")));
+  banco = abrirBancoTemporario().banco;
   for (const nome of ["loja", "site"]) {
     registrarProjeto(banco, {
       nome,

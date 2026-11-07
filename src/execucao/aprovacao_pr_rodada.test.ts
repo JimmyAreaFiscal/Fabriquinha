@@ -6,10 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { AUDITOR } from "../dominio/ator.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../dominio/erros.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
@@ -37,7 +37,7 @@ const BRANCH_RODADA = "fabriquinha/I-206-2";
 /** Demanda I-206 com a rodada 2 no gate do PR: commit na rodada, ambas as branches no origin, PR 1 aberto. */
 async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao_pull_request", semPR = false) {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -105,7 +105,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const commitDaRodada = commitarCenario(rodada, "a.txt", "a\n");
   gitCenario(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
-  hospedagem.abrir({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
+  hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
   return {
     c,
     banco,

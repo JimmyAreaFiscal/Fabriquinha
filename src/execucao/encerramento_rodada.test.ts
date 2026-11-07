@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import { marcaDoPRRodada } from "../evidencias/pr_rodada.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarCommitDemanda } from "../persistencia/commits_demanda.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
@@ -107,7 +107,7 @@ async function cenario({
   descricao = "d",
 }: Opcoes = {}) {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(
@@ -300,7 +300,7 @@ test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvi
 
 test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: volta a desenvolvimento e conclui o ticket", async () => {
   const { banco, ag, ticket, evidencia, fase } = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",
@@ -325,7 +325,7 @@ test("CA-5 e CA-8: PR da queda adotado pela marca, sem PR novo, com conflito: vo
 
 test("CA-6: check de CI falho volta a desenvolvimento com uma correção por check, sem chegar ao gate", async () => {
   const { banco, ag, fase } = await cenario();
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",
@@ -355,7 +355,7 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
 
 test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a marca do ticket atual", async () => {
   const { banco, fase } = await cenario({ anterior: true });
-  hospedagem.abrir({
+  hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
     titulo: "velho",

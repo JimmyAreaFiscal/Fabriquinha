@@ -1,25 +1,18 @@
 // Rotas da Simulação (F7 §4.2) chamadas como o servidor as chama, contra um banco de verdade. A leitura do corpo e a
 // guarda são do servidor (servidor.test.ts); aqui o corpo já chega como o servidor o entrega (JSON ou `Buffer`).
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
 import type { ServerResponse } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { after, test } from "node:test";
+import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
 import { createServer } from "node:net";
 import { setTimeout as dormir } from "node:timers/promises";
-import { abrir } from "../../persistencia/banco.ts";
 import { editarProjeto, projeto, registrarProjeto } from "../../persistencia/projetos.ts";
 import { casar } from "../cliente/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-rotas-simulacao-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
-
-const banco = abrir(base);
+const { banco, fechar } = abrirBancoTemporario();
+after(fechar);
 registrarProjeto(banco, {
   nome: "fabriquinha",
   repo: "/repos/fabriquinha",

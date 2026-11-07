@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { criarDemanda } from "../persistencia/demandas.ts";
 import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
@@ -68,7 +68,7 @@ export const REF_GLOBAL = { demanda_id: "I-1", ticket_id: 3 };
  */
 export async function cenarioRevisao({ integral = false, falha = false, reprova = false } = {}) {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
     .prepare(

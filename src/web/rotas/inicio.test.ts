@@ -1,20 +1,14 @@
 // Rota do Início: o mês, o que aguarda o Auditor, o que roda e o board das demandas em andamento, sobre um banco real.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { after, test } from "node:test";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { SessaoDeDemanda } from "../../execucao/historico_demanda.ts";
-import { abrir } from "../../persistencia/banco.ts";
 import { criarDemanda } from "../../persistencia/demandas.ts";
 import { demanda, servir } from "./demandas_cenario.ts";
 import { type DadosDoInicio, esperaDaSessao, inicio } from "./inicio.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-inicio-web-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const em = (minuto: number) => `2026-01-01T00:${String(minuto).padStart(2, "0")}:00.000Z`;
 
@@ -44,7 +38,7 @@ const rodada = (demanda_id: string, rodada_id: number, fase: string) => ({
  * fora.
  */
 function cenario(): DatabaseSync {
-  const banco = abrir(mkdtempSync(join(base, "raiz-")));
+  const { banco } = abrirBancoTemporario();
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`);
   criarDemanda(banco, demanda("I-300", "registro", { tickets: [ticket("I-300", 1, "demanda", "aberto")] }));

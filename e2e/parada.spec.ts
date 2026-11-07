@@ -1,6 +1,6 @@
 // Parar o serviço com um ticket de demanda em execução (I-246, CA-1 a CA-3): o systemd manda o SIGTERM ao cgroup
 // inteiro, então o serviço e o pi recebem o sinal juntos. A parada sai limpa e o ticket falha com "serviço reiniciado".
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync, spawn } from "node:child_process";
@@ -16,13 +16,14 @@ import { expect, projeto, test } from "./apoio.ts";
 import { semearTicketAberto } from "./demandas-apoio.ts";
 
 // Um pi que não termina sozinho: só o sinal o encerra.
-const piParado = join(mkdtempSync(join(tmpdir(), "pi-parado-")), "pi");
+// O pid no nome separa os workers do Playwright, que carregam este módulo ao mesmo tempo.
+const piParado = join(tmpdir(), `pi-parado-${String(process.pid)}`);
 writeFileSync(piParado, '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso && exit 0\nexec sleep 60\n', {
   mode: 0o755,
 });
 
 // Um pi que ignora o SIGTERM: só o SIGKILL do `parar`, passado o limite, o encerra.
-const piTeimoso = join(mkdtempSync(join(tmpdir(), "pi-teimoso-")), "pi");
+const piTeimoso = join(tmpdir(), `pi-teimoso-${String(process.pid)}`);
 writeFileSync(
   piTeimoso,
   '#!/bin/sh\n[ "$1" = "--version" ] && echo 0.0.0-falso && exit 0\ntrap \'\' TERM\nexec sleep 40\n',
@@ -195,7 +196,7 @@ test.describe("I-246.T15 parada durante a coleta das verificações", () => {
     projeto(fabriquinha.raiz);
     semearTicketAberto(fabriquinha.raiz);
     const banco = abrir(fabriquinha.raiz);
-    const arquivoComPidDaColeta = join(mkdtempSync(join(tmpdir(), "coleta-")), "coleta.pid");
+    const arquivoComPidDaColeta = join(fabriquinha.raiz, "coleta.pid");
     banco
       .prepare("UPDATE linguagem_projeto SET comando_teste = ? WHERE projeto = 'loja'")
       .run(`sh -c 'echo $$ > ${arquivoComPidDaColeta}; exec sleep 31'`);
