@@ -12,7 +12,6 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, migrar, novoId } from "../armazenamento/banco.ts";
-import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
 import { MIGRACOES } from "../armazenamento/migracoes.ts";
 import { registrarProjeto } from "../aplicacao/projeto/cadastro.ts";
 import { salvarConfiguracao } from "../armazenamento/servico.ts";
@@ -33,10 +32,14 @@ const AGORA = "2026-10-11T12:00:00.000Z";
 function projeto(banco: DatabaseSync, nome: string, repo: string): void {
   registrarProjeto(banco, {
     nome,
-    repo,
-    branchBase: "main",
+    raiz_git: repo,
+    branch_base: "main",
     hospedagem: "github",
-    sonar: { projectKey: nome },
+    chave_sonarqube: nome,
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
 }
 
@@ -359,19 +362,6 @@ function demandaEmExecucao(banco: DatabaseSync, n: number): void {
   if (!banco.prepare("SELECT 1 FROM projeto WHERE nome = 'p'").get()) {
     projeto(banco, "p", "/nao/existe");
     banco.prepare("INSERT INTO varredura_base (projeto, ultimo_sha, em) VALUES ('p', ?, ?)").run("a".repeat(40), AGORA);
-  }
-  if (!configuracaoProjeto(banco, "p")) {
-    gravarConfiguracaoProjeto(banco, {
-      nome: "p",
-      branch_base: "main",
-      chave_sonarqube: "p",
-      raiz_git: "/nao/existe",
-      hospedagem: "github",
-      etapas: [],
-      preparacao: [],
-      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-    });
   }
   const id = `I-${String(n)}`;
   banco.exec(`INSERT INTO demanda VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');

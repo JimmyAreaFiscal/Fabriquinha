@@ -14,7 +14,7 @@ import { avisar, situacao } from "../../../aplicacao/gerente.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import type { DadosDoChatDemanda } from "./chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
-import { gravarConfiguracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
+import { gravarConfiguracaoSdlc } from "../../../aplicacao/projeto/cadastro.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../../aplicacao/execucao_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../../armazenamento/sessoes.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
@@ -53,11 +53,10 @@ before(async () => {
   servico = await iniciarServico(raiz);
   registrarProjeto(servico.banco, {
     nome: "loja",
-    repo,
-    branchBase: "main",
+    raiz_git: repo,
+    branch_base: "main",
     hospedagem: "github",
-    preparacao: [],
-    sonar: { projectKey: "loja" },
+    chave_sonarqube: "loja",
   });
 });
 after(async () => {
@@ -216,15 +215,20 @@ test("CA-3: a sessão que não é de uma demanda não existe em nenhuma rota do 
 });
 
 test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a mensagem e abortar", async () => {
-  gravarConfiguracaoProjeto(servico.banco, {
+  gravarConfiguracaoSdlc(servico.banco, {
     nome: "loja",
     branch_base: "main",
     chave_sonarqube: "loja",
     raiz_git: join(base, "repo"),
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      preparacao: [],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      e2e: [],
+      globs: [],
+    },
   });
   const ref = { demanda_id: "I-311", ticket_id: 1 };
   gravarAgregadoPronto(

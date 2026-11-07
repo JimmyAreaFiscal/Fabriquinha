@@ -195,10 +195,10 @@ test("corpo de mutação: JSON até 64 KiB; inválido ou grande demais dá 422",
 test("corpo binário (anexo): application/octet-stream chega como Buffer, até 20 MiB; acima, 422; o JSON segue em 64 KiB", async () => {
   registrarProjeto(servico.banco, {
     nome: "loja",
-    repo: "/repos/loja",
-    branchBase: "main",
+    raiz_git: "/repos/loja",
+    branch_base: "main",
     hospedagem: "github",
-    sonar: { projectKey: "loja" },
+    chave_sonarqube: "loja",
   });
   const { id } = criarUsuarioSimulado(servico.banco, "loja", { nome: "Dona Maria", descricao: "Contadora" });
   const binario = (corpo: Buffer, tipo = "application/octet-stream") =>

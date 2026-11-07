@@ -26,7 +26,7 @@ O artefato é uma **prova**: alguém que nunca viu a conversa segue os passos e 
 
 `descricao`:
 
-- Uma frase com o comportamento atual, como um fato observado: "Ao salvar um projeto sem branch base, a tela mostra erro 500."
+- Uma frase com o comportamento atual, como um fato observado: "Ao salvar um projeto sem `branch_base`, a tela mostra erro 500."
 - Numa demanda de problema, o que se esperava no lugar; numa funcionalidade, o que falta hoje.
 - Onde acontece: tela, comando ou arquivo e função.
 - Condições que mudam o resultado: dados, configuração, frequência ("sempre", "só com dois projetos").

@@ -23,6 +23,7 @@ interface DiferencaIntencional {
   motivo: string;
 }
 
+const MOTIVO_BRANCH_BASE_COM_NOME_DO_CAMPO = "I-269.R4: o texto cita o campo do projeto pelo nome novo, branch_base";
 const MOTIVO_NOME_NOVO = "o fluxo de issues foi desligado (cutover de 2026-10-28), e o texto passa a falar de demanda";
 const MOTIVO_REVISOES_ANTERIORES =
   "I-294: a revisar_rodada recebe as revisões anteriores da rodada e confere primeiro os motivos, sem reabrir o decidido";
@@ -219,6 +220,24 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     para: `${SECAO_VERIFICACOES_JA_FEITAS}## Modo de trabalhar: ${etapa.replace("_", " ")}\n`,
     motivo: MOTIVO_VERIFICACOES_JA_FEITAS,
   })),
+  ...(
+    [
+      [
+        "textos/pacote-pi/skills/artefato-comportamento/SKILL.md.txt",
+        "sem branch base, a tela",
+        "sem `branch_base`, a tela",
+      ],
+      [
+        "textos/pacote-pi/skills/artefato-criterios-aceite/SKILL.md.txt",
+        "com branch base `main`",
+        "com `branch_base` `main`",
+      ],
+      ...["prompts/resolver_conflito.txt", "textos/src/execucao/etapas/resolver_conflito.md.txt"].flatMap((arquivo) => [
+        [arquivo, "incorporando a branch base configurada", "incorporando a `branch_base` configurada"],
+        [arquivo, "2. Incorpore a branch base configurada", "2. Incorpore a `branch_base` configurada"],
+      ]),
+    ] as const
+  ).map(([arquivo, de, para]) => ({ arquivo, de, para, motivo: MOTIVO_BRANCH_BASE_COM_NOME_DO_CAMPO })),
 ];
 
 function listarArquivos(pasta: string): string[] {

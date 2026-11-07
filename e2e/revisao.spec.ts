@@ -5,7 +5,8 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
-import { gravarConfiguracaoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { gravarProjeto } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { expect, projeto, test } from "./apoio.ts";
@@ -23,16 +24,21 @@ function semear(raiz: string, descricao: string, integral = false): void {
   execFileSync("git", ["worktree", "add", "-q", "-b", "fabriquinha/I-250", caminho, "main"], { cwd: repo });
   execFileSync("git", ["config", "branch.fabriquinha/I-250.fabriquinha", `demanda:${caminho}`], { cwd: repo });
   const banco = abrir(raiz);
-  gravarConfiguracaoProjeto(banco, {
-    nome: "loja",
-    branch_base: "main",
-    chave_sonarqube: "loja",
-    raiz_git: repo,
-    hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
+  gravarProjeto(
+    banco,
+    Projeto.parse({
+      nome: "loja",
+      branch_base: "main",
+      chave_sonarqube: "loja",
+      raiz_git: repo,
+      hospedagem: "github",
+      etapas: [],
+      verificacoes: {
+        fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+        linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      },
+    }),
+  );
   const ticket = (ticket_id: number, etapa: string, status: string) => ({
     demanda_id: "I-250",
     ticket_id,

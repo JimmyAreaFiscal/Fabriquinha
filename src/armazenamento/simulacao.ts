@@ -217,7 +217,7 @@ export function enfileirar(banco: DatabaseSync, tarefa: Id): { execucoes: Id[]; 
       `a Tarefa ${String(tarefa)} não existe`,
       "confira a Tarefa na página Simulação",
     );
-    const link = projetoExistente(banco, t.projeto).linkProduto;
+    const link = projetoExistente(banco, t.projeto).link_produto;
     if (!link) throw new ErroDeRegra(SEM_LINK);
     if (banco.prepare(`SELECT 1 FROM execucao_simulada WHERE tarefa = ? AND ${PENDENTES}`).get(tarefa)) {
       throw new ErroDeRegra("a Tarefa já está em execução", "espere ela terminar para executar de novo");

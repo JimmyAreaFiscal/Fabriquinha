@@ -62,7 +62,7 @@ export function criarRepositorioDeTeste(comandosDePreparacao: string[] = [], bra
       raiz_git: repo,
       branch_base: branchBase,
       hospedagem: "github" as const,
-      preparacao: comandosDePreparacao.map((comando, i) => ({ ordem: i + 1, comando })),
+      verificacoes: { preparacao: comandosDePreparacao, fitness: [], linguagens: [], e2e: [], globs: [] },
     },
     /** Apaga tudo o que o repositório criou, worktrees incluídas. */
     fechar: () => {

@@ -53,11 +53,10 @@ before(async () => {
   for (const nome of ["loja", "site"]) {
     registrarProjeto(servico.banco, {
       nome,
-      repo: join(base, nome),
-      branchBase: "main",
+      raiz_git: join(base, nome),
+      branch_base: "main",
       hospedagem: "github",
-      preparacao: [],
-      sonar: { projectKey: nome },
+      chave_sonarqube: nome,
     });
   }
   const T = "'2026-10-10T10:00:00.000Z'";

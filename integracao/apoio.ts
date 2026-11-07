@@ -12,7 +12,8 @@ import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
 import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
-import { gravarConfiguracaoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { gravarProjeto } from "../src/armazenamento/projetos.ts";
+import { Projeto } from "../src/nucleo/projeto.ts";
 import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
 import { type Configuracao, configuracao } from "../src/armazenamento/servico.ts";
 
@@ -46,21 +47,19 @@ export const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, pl
 export const AUTOR: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
 export const OUTRA_SESSAO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S2" };
 
-export interface Cenario {
+export interface Cenario extends ReturnType<typeof adicionarProjeto> {
   /** Raiz do serviço (banco e execuções), dentro do diretório do cenário. */
   raiz: string;
   banco: DatabaseSync;
   /** Projeto principal, `loja`, com o clone em `repo` e o remoto local em `bare`. */
   projeto: string;
-  repo: string;
-  bare: string;
   /** Configuração do agendador; o `timeoutMin` do cenário cabe no teste (pode ser fracionário). */
   config: Configuracao;
   dir: string;
 }
 
 /** Repositório de origem real (remoto bare local) com a branch base, clonado, e o projeto configurado no banco. */
-export function adicionarProjeto(c: Pick<Cenario, "banco" | "dir">, nome: string, branchBase = "main") {
+export function adicionarProjeto(c: { banco: DatabaseSync; dir: string }, nome: string, branchBase = "main") {
   const bare = join(c.dir, `${nome}.git`);
   const repo = join(c.dir, nome);
   git(c.dir, "init", "-q", "--bare", bare);
@@ -76,16 +75,21 @@ export function adicionarProjeto(c: Pick<Cenario, "banco" | "dir">, nome: string
        VALUES (?, ?, ?, 'github', ?)`,
     )
     .run(nome, repo, branchBase, `chave-${nome}`);
-  gravarConfiguracaoProjeto(c.banco, {
-    nome,
-    branch_base: branchBase,
-    chave_sonarqube: `chave-${nome}`,
-    raiz_git: repo,
-    hospedagem: "github",
-    etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
-  });
+  gravarProjeto(
+    c.banco,
+    Projeto.parse({
+      nome,
+      branch_base: branchBase,
+      chave_sonarqube: `chave-${nome}`,
+      raiz_git: repo,
+      hospedagem: "github",
+      etapas: [],
+      verificacoes: {
+        fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+        linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      },
+    }),
+  );
   return { repo, bare };
 }
 

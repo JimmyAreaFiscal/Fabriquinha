@@ -9,8 +9,7 @@ import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
-import { projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
-import { configuracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
+import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
 import { ticketsComPiAtivo } from "../../../armazenamento/sessoes.ts";
@@ -94,7 +93,7 @@ export function estadoNaLinhaDoTempo({ demanda, tickets }: AgregadoDemanda): Est
 
 function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
   const ag = carregarDemanda(banco, id);
-  const etapas = configuracaoProjeto(banco, ag.demanda.projeto)?.etapas ?? [];
+  const etapas = buscarProjeto(banco, ag.demanda.projeto)?.etapas ?? [];
   // Com mais de uma sessão no ticket, vale a mais recente, como na página da demanda.
   const sessoes = new Map(
     (

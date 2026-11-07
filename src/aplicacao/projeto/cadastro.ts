@@ -8,12 +8,11 @@ import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { Projeto } from "../../nucleo/projeto.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { escrever, raizDo } from "../../armazenamento/banco.ts";
-import { substituirPreparacaoDoProjeto } from "../../armazenamento/configuracao_projeto.ts";
 import {
   apagarProjeto,
-  atualizarProjeto,
+  buscarProjeto,
   donoDoRepositorio,
-  inserirProjeto,
+  gravarProjeto,
   projetoExistente,
   tarefaComExecucaoSimuladaPendente,
   ticketEmAndamentoDoProjeto,
@@ -21,14 +20,14 @@ import {
 import { dirDaExecucaoSimulada } from "../../infra/registro.ts";
 import { removerWorktrees } from "../../infra/repositorio/worktree.ts";
 
-export { projetoExistente, projetos } from "../../armazenamento/projetos.ts";
+export { buscarProjeto, listarProjetos, projetoExistente } from "../../armazenamento/projetos.ts";
 
 /** O repositório só pode ser de um projeto. */
 function recusarRepositorioDeOutroProjeto(banco: DatabaseSync, p: Projeto): void {
-  const dono = donoDoRepositorio(banco, p.repo, p.nome);
+  const dono = donoDoRepositorio(banco, p.raiz_git, p.nome);
   if (dono !== undefined) {
     throw new ErroDeRegra(
-      `o repositório ${p.repo} já é do projeto ${dono}`,
+      `o repositório ${p.raiz_git} já é do projeto ${dono}`,
       `edite o projeto ${dono} em vez de cadastrar outro para o mesmo repositório`,
     );
   }
@@ -39,25 +38,52 @@ export function registrarProjeto(banco: DatabaseSync, entrada: unknown): Projeto
   const p = Projeto.parse(entrada);
   escrever(banco, () => {
     recusarRepositorioDeOutroProjeto(banco, p);
-    if (!inserirProjeto(banco, p)) throw new ErroDeRegra(`já existe o projeto ${p.nome}`, "edite-o na Configuração");
-    substituirPreparacaoDoProjeto(banco, p.nome, p.preparacao);
+    if (buscarProjeto(banco, p.nome) !== undefined)
+      throw new ErroDeRegra(`já existe o projeto ${p.nome}`, "edite-o na Configuração");
+    gravarProjeto(banco, p);
   });
   return p;
 }
 
 /**
- * C19: substitui o cadastro de um projeto que já existe; o nome é a chave e não muda. A chave do SonarQube (da
- * configuração SDLC) fica como está.
+ * C19: substitui o cadastro de um projeto que já existe, com as etapas e a preparação da worktree; o nome é a chave e não
+ * muda. A chave do SonarQube e o resto das Verificações (da configuração SDLC) ficam como estão.
  */
 export function editarProjeto(banco: DatabaseSync, entrada: unknown): Projeto {
   const p = Projeto.parse(entrada);
-  escrever(banco, () => {
+  return escrever(banco, () => {
     recusarRepositorioDeOutroProjeto(banco, p);
-    projetoExistente(banco, p.nome, "cadastre-o na Configuração");
-    atualizarProjeto(banco, p);
-    substituirPreparacaoDoProjeto(banco, p.nome, p.preparacao);
+    const { chave_sonarqube, verificacoes } = projetoExistente(banco, p.nome, "cadastre-o na Configuração");
+    const editado = {
+      ...p,
+      chave_sonarqube,
+      verificacoes: { ...verificacoes, preparacao: p.verificacoes.preparacao },
+    };
+    gravarProjeto(banco, editado);
+    return editado;
   });
-  return p;
+}
+
+/**
+ * Grava a configuração SDLC do projeto que existe (a chave do SonarQube e as Verificações, menos a preparação); as
+ * etapas, a preparação e o link do produto ficam como o cadastro os deixou.
+ */
+export function gravarConfiguracaoSdlc(banco: DatabaseSync, configurado: Projeto): Projeto {
+  return escrever(banco, () => {
+    const { etapas, link_produto, verificacoes } = projetoExistente(
+      banco,
+      configurado.nome,
+      "cadastre o projeto antes",
+    );
+    const gravado = {
+      ...configurado,
+      etapas,
+      link_produto,
+      verificacoes: { ...configurado.verificacoes, preparacao: verificacoes.preparacao },
+    };
+    gravarProjeto(banco, gravado);
+    return gravado;
+  });
 }
 
 /** Recusa a remoção enquanto o projeto tem execução, de ticket ou simulada, em andamento. */
@@ -117,6 +143,6 @@ export async function removerProjeto(
     ...arquivosDeSessao.map((arquivo) => apagar(join(dirSessoes, arquivo))),
     ...orfaos.map((sha) => apagar(caminhoArquivo(banco, sha))),
   ]);
-  avisos.push(...(await removerWorktrees(raiz, { nome: removido.nome, raiz_git: removido.repo })));
+  avisos.push(...(await removerWorktrees(raiz, removido)));
   return { projeto: removido, avisos };
 }

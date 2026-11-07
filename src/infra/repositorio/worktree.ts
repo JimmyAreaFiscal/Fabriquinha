@@ -4,7 +4,7 @@ import { appendFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
-import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../nucleo/projeto.ts";
 import { anotar } from "../registro.ts";
 import { executarNoShell, git, LIMITE_COMANDO_MS } from "../processo.ts";
 
@@ -50,8 +50,12 @@ export async function exigirGit(dir: string, ...args: string[]): Promise<string>
 }
 
 /** F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git. */
-export async function preparar(caminho: string, preparacao: Projeto["preparacao"], log: string): Promise<void> {
-  for (const { comando } of preparacao) {
+export async function preparar(
+  caminho: string,
+  preparacao: Projeto["verificacoes"]["preparacao"],
+  log: string,
+): Promise<void> {
+  for (const comando of preparacao) {
     anotar(log, `preparação: ${comando}`);
     const r = await executarNoShell(comando, caminho, { limiteLog: LIMITE_LOG_PREPARACAO });
     appendFileSync(log, r.log);

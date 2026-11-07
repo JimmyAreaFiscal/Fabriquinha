@@ -11,7 +11,7 @@ import type { AgregadoDemanda, EvidenciaDemanda } from "../nucleo/agregado_deman
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import { motivo } from "../nucleo/primitivos.ts";
-import type { Projeto } from "../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../nucleo/projeto.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import {
   concluirEncerramento,

@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
 import { ErroDeRegra, ErroExterno, mensagem } from "../../nucleo/erros.ts";
-import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../nucleo/projeto.ts";
 import { anotar } from "../registro.ts";
 import { executar, LIMITE_COMANDO_MS } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";

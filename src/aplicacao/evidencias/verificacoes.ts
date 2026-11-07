@@ -1,6 +1,6 @@
 // Coleta das verificações de um ticket da demanda (execucao_testes, matriz_fitness, relatorio_sonar), sem banco: devolve
 // o resultado para quem chama gravar as evidências e decidir. Não grava, não conclui, não devolve, não falha, não commita.
-import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../nucleo/projeto.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { analisarSonar, arquivosAlterados, type OpcoesSonar } from "./sonar.ts";
 import { aprovacao, type Falha, type Verificacao, verificarFitness, verificarTestes } from "./verificacoes_comandos.ts";
@@ -39,7 +39,7 @@ async function verificarSonar({ projeto, worktree, opcoes }: EntradaVerificacoes
           },
         ]
       : [];
-    const dados = { projectKey: projeto.chave_sonarqube, ceTaskId, arquivosAnalisados: analisados, issues };
+    const dados = { chave_sonarqube: projeto.chave_sonarqube, ceTaskId, arquivosAnalisados: analisados, issues };
     return { tipo, aprovada: aprovacao(falhas), falhas, dados, logs: [] } satisfies Verificacao;
   } catch (erro) {
     if (!(erro instanceof ErroDeRegra)) throw erro;

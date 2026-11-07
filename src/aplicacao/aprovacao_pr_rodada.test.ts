@@ -11,7 +11,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { AUDITOR } from "../nucleo/ator.ts";
 import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../nucleo/transicoes_rodada.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../nucleo/erros.ts";
-import { gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
@@ -41,21 +41,17 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
-       VALUES ('loja', ?, 'integracao', 'github', 'k')`,
-    )
-    .run(c.repo);
-  gravarConfiguracaoProjeto(banco, {
+  registrarProjeto(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    },
   });
   const ticket = (ticket_id: number, etapa: string, status: string) => ({
     demanda_id: DEMANDA,

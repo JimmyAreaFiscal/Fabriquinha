@@ -101,7 +101,7 @@ function historico() {
 
 test("12 meses: o arquivo só com commit de 13 meses fica com 0; o de 13 e de 11 conta só o de 11", async () => {
   const h = historico();
-  const mapa = porCaminho((await heatmapDo({ repo: h.repo, branchBase: "main" }, AGORA)).raiz);
+  const mapa = porCaminho((await heatmapDo({ raiz_git: h.repo, branch_base: "main" }, AGORA)).raiz);
   assert.equal(mapa.get("velho.txt")?.alteracoes, 0);
   assert.deepEqual(mapa.get("velho.txt")?.commits, []);
   assert.equal(mapa.get("dois.txt")?.alteracoes, 1);
@@ -111,7 +111,7 @@ test("12 meses: o arquivo só com commit de 13 meses fica com 0; o de 13 e de 11
 
 test("o cabeçalho traz a branch e a janela de 12 meses até agora", async () => {
   const h = historico();
-  const heatmap = await heatmapDo({ repo: h.repo, branchBase: "main" }, AGORA);
+  const heatmap = await heatmapDo({ raiz_git: h.repo, branch_base: "main" }, AGORA);
   assert.equal(heatmap.branch, "main");
   assert.equal(heatmap.desde, "2025-10-13T12:00:00.000Z");
   assert.equal(heatmap.ate, "2026-10-13T12:00:00.000Z");
@@ -119,7 +119,7 @@ test("o cabeçalho traz a branch e a janela de 12 meses até agora", async () =>
 
 test("5 alterações pioram para 6 com mais um commit, e passam o arquivo de 1", async () => {
   const h = historico();
-  const projeto = { repo: h.repo, branchBase: "main" };
+  const projeto = { raiz_git: h.repo, branch_base: "main" };
   const antes = porCaminho((await heatmapDo(projeto, AGORA)).raiz);
   assert.equal(antes.get("src/a.ts")?.alteracoes, 5);
   assert.equal(antes.get("src/b.ts")?.alteracoes, 1);
@@ -131,7 +131,7 @@ test("5 alterações pioram para 6 com mais um commit, e passam o arquivo de 1",
 
 test("PR: merge do GitHub e do Azure dão o número aos commits trazidos; squash tem o seu; direto é null", async () => {
   const h = historico();
-  const { commits } = await heatmapDo({ repo: h.repo, branchBase: "main" }, AGORA);
+  const { commits } = await heatmapDo({ raiz_git: h.repo, branch_base: "main" }, AGORA);
   assert.equal(commits[h.g1]?.pr, "7");
   assert.equal(commits[h.g2]?.pr, "7");
   assert.equal(commits[h.z1]?.pr, "12");
@@ -148,7 +148,7 @@ test("PR: merge do GitHub e do Azure dão o número aos commits trazidos; squash
 
 test("o total da raiz é a soma das linhas; pasta soma o que há abaixo; a ordem é por total e depois nome", async () => {
   const h = historico();
-  const { raiz } = await heatmapDo({ repo: h.repo, branchBase: "main" }, AGORA);
+  const { raiz } = await heatmapDo({ raiz_git: h.repo, branch_base: "main" }, AGORA);
   const soma = (raiz.filhos ?? []).reduce((total, f) => total + f.alteracoes, 0);
   assert.equal(raiz.alteracoes, soma);
   const mapa = porCaminho(raiz);
@@ -169,7 +169,7 @@ test("o total da raiz é a soma das linhas; pasta soma o que há abaixo; a ordem
 
 test("arquivo apagado da base não aparece", async () => {
   const h = historico();
-  const { raiz } = await heatmapDo({ repo: h.repo, branchBase: "main" }, AGORA);
+  const { raiz } = await heatmapDo({ raiz_git: h.repo, branch_base: "main" }, AGORA);
   assert.equal(porCaminho(raiz).has("apagado.txt"), false);
 });
 
@@ -177,7 +177,7 @@ test("base sem commits na janela: todos os totais em 0", async () => {
   const r = repositorio();
   r.commitar(atras(13), "inicial", { "a.txt": "a", "pasta/b.txt": "b" });
   r.publicar();
-  const heatmap = await heatmapDo({ repo: r.repo, branchBase: "main" }, AGORA);
+  const heatmap = await heatmapDo({ raiz_git: r.repo, branch_base: "main" }, AGORA);
   assert.equal(heatmap.raiz.alteracoes, 0);
   assert.equal(porCaminho(heatmap.raiz).get("pasta")?.alteracoes, 0);
   assert.deepEqual(heatmap.commits, {});
@@ -188,7 +188,7 @@ test("repositório novo, com todo o histórico na janela, inclusive o commit rai
   r.commitar(atras(2), "inicial", { "a.txt": "a" });
   r.commitar(atras(1), "muda", { "a.txt": "b" });
   r.publicar();
-  const { raiz, commits } = await heatmapDo({ repo: r.repo, branchBase: "main" }, AGORA);
+  const { raiz, commits } = await heatmapDo({ raiz_git: r.repo, branch_base: "main" }, AGORA);
   assert.equal(raiz.alteracoes, 2);
   assert.equal(Object.keys(commits).length, 2);
 });
@@ -196,7 +196,7 @@ test("repositório novo, com todo o histórico na janela, inclusive o commit rai
 test("repositório inexistente: erro com o motivo e a correção", async () => {
   const repo = join(base, "nao-existe");
   await assert.rejects(
-    heatmapDo({ repo, branchBase: "main" }, AGORA),
+    heatmapDo({ raiz_git: repo, branch_base: "main" }, AGORA),
     new ErroDeRegra(
       `o repositório ${repo} não existe mais no disco`,
       "corrija o caminho do repositório do projeto na Configuração",
@@ -209,7 +209,7 @@ test("branch base ausente: erro com o motivo e a correção", async () => {
   r.commitar(atras(1), "inicial", { "a.txt": "a" });
   r.publicar();
   await assert.rejects(
-    heatmapDo({ repo: r.repo, branchBase: "develop" }, AGORA),
+    heatmapDo({ raiz_git: r.repo, branch_base: "develop" }, AGORA),
     new ErroDeRegra(
       `a branch base develop não existe em ${r.repo}`,
       "busque-a com git fetch origin develop ou corrija a branch base na Configuração",

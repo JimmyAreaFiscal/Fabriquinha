@@ -61,10 +61,7 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
   const sinal = join(base, "pode-preparar");
   const segundo = join(base, "segundo-rodou");
   const c = cenario();
-  const comandos = [`echo tentando; test -f ${sinal}`, `touch ${segundo}`].map((comando, i) => ({
-    ordem: i + 1,
-    comando,
-  }));
+  const comandos = [`echo tentando; test -f ${sinal}`, `touch ${segundo}`];
   const falha = (erro: unknown) =>
     erro instanceof ErroDeRegra &&
     erro.message ===
@@ -83,7 +80,7 @@ test("preparação que falha para no primeiro erro, vai para o log e roda de nov
 
 test("erro de sintaxe na preparação vai para o log", async () => {
   const c = cenario();
-  await assert.rejects(preparar(c.worktree, [{ ordem: 1, comando: "npm test (" }], c.log), /saiu com código 2/);
+  await assert.rejects(preparar(c.worktree, ["npm test ("], c.log), /saiu com código 2/);
   assert.match(c.lerLog(), /preparação: npm test \(\n.*syntax error.*preparação falhou: saiu com código 2\n$/is);
 });
 
@@ -91,9 +88,7 @@ test("comando de preparação que passa de 30 minutos é morto e a preparação 
   const c = cenario();
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let resultado: unknown;
-  const pedido = preparar(c.worktree, [{ ordem: 1, comando: "sleep 600" }], c.log).catch(
-    (erro: unknown) => (resultado = erro),
-  );
+  const pedido = preparar(c.worktree, ["sleep 600"], c.log).catch((erro: unknown) => (resultado = erro));
   // O relógio falso anda um minuto por volta do laço de eventos real, depois que o comando começou.
   let minutos = 0;
   while (resultado === undefined) {

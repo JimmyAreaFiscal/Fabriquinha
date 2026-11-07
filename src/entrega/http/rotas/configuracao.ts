@@ -5,16 +5,16 @@ import { z } from "zod";
 import { mensagem } from "../../../nucleo/erros.ts";
 import { ConfiguracaoAgente, type Modelo } from "../../../nucleo/configuracao_agente.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
-import { Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
+import { ComandosDePreparacao, Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
 import { conferirModelo, listarModelos } from "../../../infra/agente/modelos.ts";
 import { varrerBase } from "../../../aplicacao/retrabalho.ts";
 import { escrever } from "../../../armazenamento/banco.ts";
-import { etapasDoProjeto, substituirEtapasDoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { noLog } from "../../../infra/registro.ts";
 import {
+  buscarProjeto,
   editarProjeto,
+  listarProjetos,
   projetoExistente,
-  projetos,
   registrarProjeto,
   removerProjeto,
 } from "../../../aplicacao/projeto/cadastro.ts";
@@ -30,8 +30,9 @@ function estado(banco: DatabaseSync, agendador: Agendador) {
 }
 
 /** O projeto como o formulário manda: a hospedagem, que ele só mostra, é ignorada; o F5 a deduz do remoto. */
-const DoFormulario = Projeto.omit({ sonar: true }).extend({
+const DoFormulario = Projeto.pick({ nome: true, raiz_git: true, branch_base: true, link_produto: true }).extend({
   hospedagem: Hospedagem.optional(),
+  preparacao: ComandosDePreparacao,
   /** O modelo e o effort de cada etapa; a etapa ausente usa o padrão do pi. */
   configuracoes: z.partialRecord(EtapaTicket, ConfiguracaoAgente),
 });
@@ -40,19 +41,14 @@ const DaEdicao = DoFormulario.extend({ nome: z.unknown() });
 
 type Configuracoes = z.infer<typeof DoFormulario>["configuracoes"];
 
-/** As etapas gravadas do projeto no formato do formulário: a configuração do agente de cada etapa que tem uma. */
-const configuracoesDoProjeto = (banco: DatabaseSync, nome: string): Configuracoes =>
+/** As etapas do projeto no formato do formulário: a configuração do agente de cada etapa que tem uma. */
+const configuracoesDasEtapas = (etapas: Projeto["etapas"]): Configuracoes =>
   Object.fromEntries(
-    etapasDoProjeto(banco, nome).flatMap(({ etapa, configuracao_agente }) =>
-      configuracao_agente ? [[etapa, configuracao_agente]] : [],
-    ),
+    etapas.flatMap(({ etapa, configuracao_agente }) => (configuracao_agente ? [[etapa, configuracao_agente]] : [])),
   );
 
 /** O projeto como o formulário o lê: o cadastro com a configuração do agente de cada etapa. */
-const comConfiguracoes = (banco: DatabaseSync, p: Projeto) => ({
-  ...p,
-  configuracoes: configuracoesDoProjeto(banco, p.nome),
-});
+const comConfiguracoes = (p: Projeto) => ({ ...p, configuracoes: configuracoesDasEtapas(p.etapas) });
 
 /** As linhas de `configuracao_etapa_projeto` do formulário: só as etapas com modelo ou effort escolhido. */
 const etapasDoFormulario = (configuracoes: Configuracoes) =>
@@ -68,7 +64,7 @@ const par = (m: Modelo | undefined): string | undefined => m && `${m.provedor}/$
  * chama o pi: o que ele deixou de listar continua salvando sem mexer.
  */
 async function conferirModelosAlterados(banco: DatabaseSync, nome: string, configuracoes: Configuracoes) {
-  const gravadas = configuracoesDoProjeto(banco, nome);
+  const gravadas = configuracoesDasEtapas(buscarProjeto(banco, nome)?.etapas ?? []);
   const alterados = EtapaTicket.options.flatMap((etapa) => {
     const modelo = configuracoes[etapa]?.modelo;
     return modelo && par(modelo) !== par(gravadas[etapa]?.modelo) ? [{ etapa, modelo }] : [];
@@ -98,16 +94,21 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, confi
  * cadastro e as etapas numa transação só.
  */
 async function conferirEGravar(banco: DatabaseSync, p: z.infer<typeof DoFormulario>, gravar: typeof registrarProjeto) {
-  const { configuracoes, ...cadastro } = p;
+  const { configuracoes, preparacao, ...cadastro } = p;
   const { hospedagem } = await conferirProjeto(cadastro).catch((error_: unknown) => {
     throw new ErroHttp(502, mensagem(error_));
   });
   await conferirModelosAlterados(banco, p.nome, configuracoes);
   return escrever(banco, () => {
     // A chave do SonarQube é da configuração SDLC, que a edita; o cadastro começa com o nome do projeto.
-    const salvo = gravar(banco, { ...cadastro, hospedagem, sonar: { projectKey: p.nome } });
-    substituirEtapasDoProjeto(banco, salvo.nome, etapasDoFormulario(configuracoes));
-    return comConfiguracoes(banco, salvo);
+    const salvo = gravar(banco, {
+      ...cadastro,
+      hospedagem,
+      chave_sonarqube: p.nome,
+      etapas: etapasDoFormulario(configuracoes),
+      verificacoes: { preparacao },
+    });
+    return comConfiguracoes(salvo);
   });
 }
 
@@ -144,14 +145,14 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
   {
     metodo: "GET",
     caminho: "/api/projetos",
-    tratar: ({ banco }) => projetos(banco).map((p) => comConfiguracoes(banco, p)),
+    tratar: ({ banco }) => listarProjetos(banco).map(comConfiguracoes),
   },
   {
     metodo: "GET",
     caminho: "/api/projetos/:nome",
     tratar: ({ banco, params }) => {
       const nome = String(params.nome);
-      return comConfiguracoes(banco, projetoExistente(banco, nome));
+      return comConfiguracoes(projetoExistente(banco, nome));
     },
   },
   { metodo: "GET", caminho: "/api/modelos", tratar: () => listarModelos() },

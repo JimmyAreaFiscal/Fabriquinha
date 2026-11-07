@@ -1,9 +1,8 @@
-// Rotas da configuração SDLC do projeto (comparacao-sdlc §7.1): lê e grava o `Projeto` do domínio novo, ao lado do
-// cadastro do projeto (`/api/projetos/:nome`).
+// Rotas da configuração SDLC do projeto (comparacao-sdlc §7.1): lê e grava o `Projeto`, ao lado do cadastro do projeto
+// (`/api/projetos/:nome`).
 import { z } from "zod";
-import { Projeto } from "../../../nucleo/configuracao_projeto.ts";
-import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
-import { projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
+import { ProjetoConfigurado } from "../../../nucleo/projeto.ts";
+import { gravarConfiguracaoSdlc, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
 import { cursorDaBase } from "../../../armazenamento/retrabalho.ts";
 import type { Rota } from "../rotas.ts";
 
@@ -28,28 +27,10 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
     caminho: "/api/projetos/:nome/configuracao-sdlc",
     tratar: ({ banco, params }) => {
       const nome = String(params.nome);
-      const configuracao = configuracaoProjeto(banco, nome);
+      const configuracao = projetoExistente(banco, nome);
       const cursor = cursorDaBase(banco, nome);
       const comCursor = cursor === undefined ? {} : { cursor_commit_humano: cursor };
-      if (configuracao) return { configurada: true, configuracao, ...comCursor };
-      const legado = projetoExistente(banco, nome);
-      return {
-        configurada: false,
-        ...comCursor,
-        configuracao: {
-          nome,
-          branch_base: legado.branchBase,
-          chave_sonarqube: legado.sonar.projectKey,
-          raiz_git: legado.repo,
-          hospedagem: legado.hospedagem,
-          etapas: [],
-          preparacao: [],
-          fitness: [],
-          linguagens: [],
-          e2e: [],
-          globs: [],
-        },
-      };
+      return { configurada: configuracao.verificacoes.linguagens.length > 0, configuracao, ...comCursor };
     },
   },
   {
@@ -58,10 +39,9 @@ export const ROTAS_DA_CONFIGURACAO_SDLC: Rota[] = [
     tratar: ({ banco, params, corpo }) => {
       const nome = String(params.nome);
       projetoExistente(banco, nome);
-      const entrada = { ...(corpo as object), nome };
-      const lida = Projeto.safeParse(entrada);
+      const lida = ProjetoConfigurado.safeParse({ ...(corpo as object), nome });
       if (!lida.success) throw new z.ZodError(lida.error.issues.map(orientar));
-      return { configurada: true, configuracao: gravarConfiguracaoProjeto(banco, entrada) };
+      return { configurada: true, configuracao: gravarConfiguracaoSdlc(banco, lida.data) };
     },
   },
 ];

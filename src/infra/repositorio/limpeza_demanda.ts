@@ -3,7 +3,7 @@
 import { existsSync } from "node:fs";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { branchDemanda, branchRodada } from "../../nucleo/demanda.ts";
-import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
+import type { Projeto } from "../../nucleo/projeto.ts";
 import { git } from "../processo.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "./worktree-demanda.ts";
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";

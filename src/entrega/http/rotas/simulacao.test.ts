@@ -7,7 +7,7 @@ import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.
 import { createServer } from "node:net";
 import { setTimeout as dormir } from "node:timers/promises";
 import { editarProjeto, registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
-import { projeto } from "../../../armazenamento/projetos.ts";
+import { buscarProjeto } from "../../../armazenamento/projetos.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -16,10 +16,10 @@ const { banco, fechar } = abrirBancoTemporario();
 after(fechar);
 registrarProjeto(banco, {
   nome: "fabriquinha",
-  repo: "/repos/fabriquinha",
-  branchBase: "main",
+  raiz_git: "/repos/fabriquinha",
+  branch_base: "main",
   hospedagem: "github",
-  sonar: { projectKey: "Fabriquinha" },
+  chave_sonarqube: "Fabriquinha",
 });
 
 /** Chama a rota como o servidor: o valor devolvido, ou `[status, mensagem]` do erro traduzido. */
@@ -192,9 +192,9 @@ test("Executar sem link do produto dá 409 com a mensagem do CA-10, e Tarefa ine
 });
 
 test("Executar responde 204 com as execuções na fila, recusa uma segunda com 409 e termina falhou com o link fora do ar (CA-14)", async () => {
-  const atual = projeto(banco, "fabriquinha");
+  const atual = buscarProjeto(banco, "fabriquinha");
   assert.ok(atual);
-  editarProjeto(banco, { ...atual, linkProduto: `http://127.0.0.1:${String(await portaFechada())}` });
+  editarProjeto(banco, { ...atual, link_produto: `http://127.0.0.1:${String(await portaFechada())}` });
   const [{ id }] = (await chamar("GET", TAREFAS)) as [{ id: number }];
 
   assert.equal(await chamar("POST", `/api/tarefas/${String(id)}/executar`), undefined);

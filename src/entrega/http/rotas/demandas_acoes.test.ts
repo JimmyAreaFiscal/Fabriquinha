@@ -9,7 +9,7 @@ import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { encerrar, situacao } from "../../../aplicacao/gerente.ts";
 import { registrarCorrecoesSessao } from "../../../nucleo/transicoes_rodada.ts";
-import { gravarConfiguracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
+import { gravarConfiguracaoSdlc } from "../../../aplicacao/projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../../armazenamento/demandas.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../../../apoio-testes/hospedagem_falsa.ts";
@@ -78,15 +78,20 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
        VALUES ('loja', ?, 'integracao', 'github', 'k')`,
     )
     .run(c.repo);
-  gravarConfiguracaoProjeto(banco, {
+  gravarConfiguracaoSdlc(banco, {
     nome: "loja",
     branch_base: "integracao",
     chave_sonarqube: "k",
     raiz_git: c.repo,
     hospedagem: "github",
     etapas: [],
-    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
-    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+    verificacoes: {
+      preparacao: [],
+      fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+      linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+      e2e: [],
+      globs: [],
+    },
   });
   const resto: Record<string, unknown> = {
     demanda: { ...montarAgregadoDemanda(DEMANDA, "").demanda, estado: "gate_demanda" },
