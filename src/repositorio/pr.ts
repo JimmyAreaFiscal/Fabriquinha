@@ -56,7 +56,7 @@ interface SituacaoDoPR {
 }
 
 /** O estado do PR lido na plataforma (F5 §5.2). */
-export interface LeituraDoPR {
+interface LeituraDoPR {
   estado: PRNaHospedagem["estado"];
   url: string;
   /** Só no PR mergeado, quando a plataforma informa. */
@@ -360,7 +360,7 @@ const PoliticasAz = z.array(
 const CLIS: Readonly<Record<Hospedagem, CliDePR>> = { github, "azure-devops": azure };
 
 /** A origem e o destino do PR; `publicarBase` empurra também a base, que pode nunca ter ido ao remoto (branch da demanda). */
-export interface AlvoDoPR {
+interface AlvoDoPR {
   branch: string;
   base: string;
   publicarBase: boolean;

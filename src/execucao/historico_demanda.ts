@@ -31,7 +31,7 @@ export interface SessaoDeDemanda {
   resultado: Resultado;
 }
 
-export interface FiltroSessoesDemanda {
+interface FiltroSessoesDemanda {
   escopo: "ativas" | "historico";
   projeto?: string;
   demanda?: string;

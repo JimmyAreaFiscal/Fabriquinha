@@ -382,6 +382,7 @@ const EntradaDevolucao = z.strictObject({
   ticket_id: Id,
   instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
 });
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const MAX_DEVOLUCOES = 2;
 
 export function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDemanda["status"], acao: string) {

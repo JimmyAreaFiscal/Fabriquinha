@@ -73,15 +73,15 @@ export interface UsoDaExecucao extends DonoDaLinha {
   custo: number | null;
 }
 
-export interface ExecucaoDoTicket extends DonoDaLinha {
+interface ExecucaoDoTicket extends DonoDaLinha {
   falha: boolean;
 }
 
-export interface TicketDaDemanda extends DonoDaLinha {
+interface TicketDaDemanda extends DonoDaLinha {
   devolucoes: number;
 }
 
-export interface DecisaoDoTicket extends DonoDaLinha {
+interface DecisaoDoTicket extends DonoDaLinha {
   recusada: boolean;
   nota: number | null;
 }
@@ -151,7 +151,7 @@ export const rodadasDaDemanda = (banco: DatabaseSync, demandaId: string): number
     .all(demandaId)
     .map((l) => Number(l.rodada_id));
 
-export interface LinhaExterna {
+interface LinhaExterna {
   ferramenta: string;
   sessao: string;
   /** Rodada dona da evidência; `null` = a própria demanda. */
@@ -183,7 +183,7 @@ export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string):
 // ——— Métricas por mês e projeto (a página Métricas): linhas cruas do período, agrupadas em src/metricas/periodo_demanda.ts ———
 
 /** O período `[inicio, fim)` de instantes UTC e o projeto (`null` = todos). */
-export interface Recorte {
+interface Recorte {
   inicio: string;
   fim: string;
   projeto: string | null;
@@ -260,7 +260,7 @@ export const usoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): UsoNoPeriod
       custo: l.custo === null ? null : Number(l.custo),
     }));
 
-export type Fato = "demandasRegistradas" | "demandasConcluidas" | "ticketsCriados" | "ticketsConcluidos";
+type Fato = "demandasRegistradas" | "demandasConcluidas" | "ticketsCriados" | "ticketsConcluidos";
 
 /**
  * Quando cada fato aconteceu. A demanda e o ticket novos não gravam `criado_em` nem `concluido_em` (só o backfill grava),
@@ -285,7 +285,7 @@ export const fatosNoPeriodo = (banco: DatabaseSync, recorte: Recorte): { fato: F
     .all(parametros(recorte))
     .map((l) => ({ fato: l.fato as Fato, em: l.em as string }));
 
-export interface PrNoPeriodo {
+interface PrNoPeriodo {
   em: string;
   mergeado: boolean;
 }
@@ -310,7 +310,7 @@ export const prsNoPeriodo = (banco: DatabaseSync, recorte: Recorte): PrNoPeriodo
     .all(parametros(recorte))
     .map((l) => ({ em: l.em as string, mergeado: l.mergeado === 1 }));
 
-export interface DecisaoNoPeriodo extends DonoDaLinha {
+interface DecisaoNoPeriodo extends DonoDaLinha {
   demanda: string;
   em: string;
   recusada: boolean;
@@ -335,7 +335,7 @@ export const decisoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Decisa
       nota: l.nota === null ? null : Number(l.nota),
     }));
 
-export interface RetrabalhoNoPeriodo {
+interface RetrabalhoNoPeriodo {
   em: string;
   adicionadas: number;
   alteradas: number;

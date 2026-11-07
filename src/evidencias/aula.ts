@@ -28,6 +28,7 @@ interface TrechoLido extends Trecho {
 }
 
 /** As linhas do lado novo que o diff `-U0` adicionou ou mudou, pelos cabeçalhos `@@ -a,b +c,d @@`. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function linhasMudadas(diff: string): Set<number> {
   const mudadas = new Set<number>();
   for (const [, inicio, quantas] of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
@@ -38,6 +39,7 @@ export function linhasMudadas(diff: string): Set<number> {
 }
 
 /** `1-3, 7, 9-12`: as faixas de linhas, para o agente achar um trecho válido. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function faixas(linhas: ReadonlySet<number>): string {
   const ordenadas = [...linhas].toSorted((a, b) => a - b);
   const partes: string[] = [];

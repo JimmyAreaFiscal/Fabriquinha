@@ -54,7 +54,7 @@ const PAGINAS: readonly (readonly [string, Pagina])[] = [
   ["/config", "configuracao"],
 ];
 
-export interface Rota {
+interface Rota {
   pagina: Pagina;
   params: Parametros;
 }

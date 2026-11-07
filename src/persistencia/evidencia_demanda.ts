@@ -6,7 +6,7 @@ import { ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "./arquivos.ts";
 
 /** Quem é dono da evidência da demanda: rodada e ticket ausentes valem para a própria demanda. */
-export interface ChaveEvidencia {
+interface ChaveEvidencia {
   demanda_id: string;
   rodada_id?: number;
   ticket_id?: number;

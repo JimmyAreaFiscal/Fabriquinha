@@ -27,7 +27,7 @@ export type MotivoDaEspera =
   "gate_demanda" | "gate_planejamento" | "gate_pr" | "ajustes" | "falha" | "dialogo" | "conversa" | "revisao_parada";
 
 /** Um ticket como o Início o mostra; `modo` é o da sessão ativa dele, quando tem. */
-export interface TicketDoInicio {
+interface TicketDoInicio {
   ref: string;
   etapa: EtapaTicket;
   status: StatusTicket;
@@ -37,7 +37,7 @@ export interface TicketDoInicio {
 }
 
 /** O ticket de uma espera: sem o status, que a espera já diz pelo motivo. */
-export type TicketDaEspera = Omit<TicketDoInicio, "status">;
+type TicketDaEspera = Omit<TicketDoInicio, "status">;
 
 /** O que aguarda o Auditor; `rodada` quando é de uma rodada, e o PR, o erro ou a pergunta conforme o motivo. */
 export interface EsperaDoAuditor {
@@ -260,6 +260,7 @@ type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
  * A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa. A falha, o gate do
  * planejamento e a conversa da sessão de ajustes já vêm da demanda, sem repetir; o diálogo dela, não.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): EsperaDoAuditor[] {
   if (s.motivo !== "dialogo" && (s.motivo !== "conversa" || s.etapa === "sessao_em_aberto")) return [];
   const pergunta = s.motivo === "dialogo" ? situacaoDa(s.sessao)?.dialogos[0]?.title : undefined;
@@ -279,6 +280,7 @@ export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao)
 }
 
 /** `GET /api/inicio`. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situacao): DadosDoInicio {
   const agora = new Date();
   const mes = mesDe(agora);

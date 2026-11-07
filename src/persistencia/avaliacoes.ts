@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { escrever } from "./banco.ts";
 
-export interface NovaAvaliacao {
+interface NovaAvaliacao {
   id: string;
   projeto: string;
   de: string;
@@ -21,7 +21,7 @@ export interface Achado {
   demanda_id: string | null;
 }
 
-export interface UsoAvaliacao {
+interface UsoAvaliacao {
   modelo_provedor: string;
   modelo_nome: string;
   chamadas: number;

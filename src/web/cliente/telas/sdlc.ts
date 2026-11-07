@@ -81,6 +81,7 @@ export const GRUPOS: readonly {
 ];
 
 /** A linha com todos os campos do grupo vazios. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const linhaEmBranco = (chave: GrupoDeLista): Linha =>
   Object.fromEntries(GRUPOS.filter((g) => g.chave === chave).flatMap((g) => g.campos.map(([campo]) => [campo, ""])));
 
@@ -176,7 +177,7 @@ export const vazio = (nome: string): string =>
 /** A configuração de partida do vazio: uma fitness function e uma linguagem em branco, que o domínio exige. */
 export const estadoInicial = (rascunho: Estado): Estado => adicionar(adicionar(rascunho, "fitness"), "linguagens");
 
-export interface OpcoesDoFormulario {
+interface OpcoesDoFormulario {
   erros: Erros;
   /** O 409 ou o 502 do servidor, que não é de um campo. */
   falha?: string;

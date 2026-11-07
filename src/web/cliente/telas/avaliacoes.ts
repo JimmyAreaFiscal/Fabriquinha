@@ -17,6 +17,7 @@ const ESTADOS: Record<EstadoDaAvaliacao, [rotulo: string, pilula: string]> = {
 };
 
 /** `2026-10-05` como `05/10/2026`. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const dataBr = (dia: string): string => dia.split("-").toReversed().join("/");
 
 /** O formulário de disparo, com as caixinhas de demandas ainda vazias e a lista no fim. */
@@ -91,7 +92,7 @@ export function escopoDaAvaliacao(d: DadosDaAvaliacao): string {
 }
 
 /** Um achado: título, descrição, evidência e, no rodapé, o link da demanda criada ou o botão Encaminhar. */
-export function cartaoDoAchado(a: Achado): string {
+function cartaoDoAchado(a: Achado): string {
   const rodape = a.demanda_id
     ? `<a class="link" href="${caminhoDaDemanda(a.demanda_id)}">Demanda <span class="id">${escapar(a.demanda_id)}</span></a>`
     : `<button type="button" class="btn" data-encaminhar="${String(a.achado_id)}">Encaminhar como demanda</button>`;

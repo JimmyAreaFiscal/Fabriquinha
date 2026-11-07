@@ -6,7 +6,7 @@ import type { ModoExecucao } from "../../dominio/sessoes.ts";
 import type { Pagina } from "./caminhos.ts";
 
 /** O status do ticket (F1 §3.5) como as telas o mostram. */
-export const STATUS_DO_TICKET: Record<StatusTicket, string> = {
+const STATUS_DO_TICKET: Record<StatusTicket, string> = {
   aberto: "aberto",
   em_execucao: "em execução",
   concluido: "concluído",

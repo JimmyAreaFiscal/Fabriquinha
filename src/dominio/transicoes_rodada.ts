@@ -33,10 +33,10 @@ const EntradaAprovacaoPR = z.strictObject({ ...TicketRef, nota: z.number().int()
 const Integracao = z.strictObject({ ...TicketRef, confirmada: z.boolean(), branch_destino: z.string() });
 
 /** Contexto da confirmação: `integracao` vem da aplicação (a integração em git acontece fora do domínio). */
-export interface ContextoConfirmacao extends ContextoDemanda {
+interface ContextoConfirmacao extends ContextoDemanda {
   readonly integracao?: unknown;
 }
-export type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR>;
+type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR>;
 
 const maximo = (ns: number[]): number => ns.reduce((m, n) => Math.max(m, n), 0);
 

@@ -63,7 +63,7 @@ const Arquivos = ({ classes = Classe.options, min = 0, max, temClasse }: Partial
 });
 
 /** O que as regras cruzadas consultam: o agregado antes da submissão, o ticket e os nomes dos anexos. */
-export interface Cruzamento {
+interface Cruzamento {
   readonly ag: AgregadoDemanda;
   readonly ticket: Id;
   readonly anexos: readonly string[];
@@ -146,6 +146,7 @@ const INTEIRO = /^\d+$/;
  *   produto = fator { ["*"] fator }
  *   fator   = "1" | var ["^" inteiro] | "log" ["^" inteiro] var | inteiro "^" var | var "!"
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function simbolosDe(expressao: string): ReadonlySet<string> | undefined {
   // Qualquer outro caractere (maiúscula, sobrescrito) vira um token sozinho, que nenhuma regra aceita.
   const tokens = expressao.match(/[a-z][a-z0-9_]*|\d+|\S/g) ?? [];

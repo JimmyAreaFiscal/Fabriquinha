@@ -178,7 +178,7 @@ interface RefRodada {
   demanda_id: string;
   rodada_id: number;
 }
-export type ResultadoAtualizacao =
+type ResultadoAtualizacao =
   { status: "atualizada" } | { status: "sem_alteracao" } | { status: "conflito"; arquivos: string[] };
 
 // Falhas de disco também precisam orientar o operador, sem mascarar erros de regra/Git.
@@ -241,7 +241,7 @@ async function caminhoGit(caminho: string, nome: string): Promise<string> {
   return (await exigirGit(caminho, "rev-parse", "--path-format=absolute", "--git-path", nome)).trim();
 }
 
-export async function verificarLimpa(caminho: string): Promise<void> {
+async function verificarLimpa(caminho: string): Promise<void> {
   if (
     (await exigirGit(caminho, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all")) !== ""
   ) {

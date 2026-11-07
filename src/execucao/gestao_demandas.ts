@@ -44,9 +44,10 @@ const EntradaEvidencia = z.object({
   rodada_id: z.number().int().positive().optional(),
   arquivos: z.array(Anexo).default([]),
 });
+/** @testes tipo que o teste usa para montar a entrada */
 export type EntradaEvidencia = z.input<typeof EntradaEvidencia>;
 
-export type EntradaRegistro = { dependencias?: string[] } & Record<string, unknown>;
+type EntradaRegistro = { dependencias?: string[] } & Record<string, unknown>;
 
 const campos = (issues: readonly z.core.$ZodIssue[], prefixo: string[] = []): string =>
   issues.map((i) => `${[...prefixo, ...i.path.map(String)].join(".")}: ${i.message}`).join("; ");

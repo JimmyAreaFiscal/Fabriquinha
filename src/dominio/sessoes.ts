@@ -124,6 +124,7 @@ export const registrarUso = (usos: readonly UsoModeloExecucao[], uso: UsoModeloE
 };
 
 /** Soma os usos das execuções das sessões dadas; cada chave conta uma vez, mesmo em sessões retomadas. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const totalDeSessoes = (
   sessoes: readonly Sessao[],
   execucoes: readonly ExecucaoSessao[],

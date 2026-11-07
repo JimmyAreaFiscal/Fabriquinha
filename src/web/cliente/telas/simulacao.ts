@@ -21,6 +21,7 @@ export interface Rascunho {
 
 export const RASCUNHO_VAZIO: Rascunho = { texto: "", n: "1", usuarios: [] };
 
+/** @testes tipo que o teste usa para montar a entrada */
 export interface DadosDaSimulacao {
   projetos: readonly ProjetoListado[];
   projeto: ProjetoListado;

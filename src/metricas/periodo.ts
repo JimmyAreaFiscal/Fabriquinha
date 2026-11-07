@@ -13,7 +13,7 @@ export const Periodo = z
 export type Periodo = z.input<typeof Periodo>;
 
 /** Um mês do fuso do serviço como o intervalo `[inicio, fim)` de instantes UTC, no formato gravado no banco. */
-export interface Intervalo {
+interface Intervalo {
   mes: string;
   inicio: string;
   fim: string;

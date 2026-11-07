@@ -23,6 +23,7 @@ import { retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import { conduzirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 import { conduzirRevisaoRodada } from "./revisao_rodada.ts";
 
+/** @testes tipo que o teste usa para montar a entrada */
 export interface DepsDespacho {
   /** Início da execução do `implementar`; injetável nos testes para não subir o pi (padrão: `iniciarExecucaoDemanda`). */
   iniciarExecucao?: typeof iniciarExecucaoDemanda;

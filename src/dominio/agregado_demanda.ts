@@ -48,10 +48,10 @@ export const RodadaDemanda = z.object({
   e2e: z.boolean(),
   branch: z.string(),
 });
-export const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
-export const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
-export const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
-export const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
+const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
+const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
+const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
+const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
 
 export const DecisaoDemanda = z.object({
   demanda_id: DemandaId,
@@ -136,8 +136,7 @@ export const Demanda = z
     path: ["branch"],
   });
 
-export const DonoEvidencia = z.enum(["demanda", "rodada", "ticket"]);
-export type DonoEvidencia = z.infer<typeof DonoEvidencia>;
+type DonoEvidencia = "demanda" | "rodada" | "ticket";
 
 /** Quem é dono da evidência: a rodada, o ticket ou, com ambos nulos, a própria demanda (CA-11). */
 export const donoDe = (e: Pick<EvidenciaDemanda, "rodada_id" | "ticket_id">): DonoEvidencia =>
