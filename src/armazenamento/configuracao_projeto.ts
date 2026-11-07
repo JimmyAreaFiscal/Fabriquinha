@@ -1,72 +1,18 @@
-// Repositório da configuração SDLC do projeto (comparacao-sdlc §7.1). Convive com `projetos.ts`, que segue dono do
-// formato legado; aqui só se tocam as colunas comuns e as tabelas novas. Sem coluna de posição: a ordem vem das chaves.
+// Gravação da configuração SDLC do projeto (comparacao-sdlc §7.1); a leitura é de `projetos.ts`. Convive com ele, que
+// segue dono do formato legado; aqui só se tocam as colunas comuns e as tabelas novas. Sem coluna de posição: a ordem vem das chaves.
 import { isAbsolute } from "node:path";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { z } from "zod";
 import { ConfiguracaoEtapaProjeto, Projeto } from "../nucleo/configuracao_projeto.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever } from "./banco.ts";
-import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
+import { colunasDaConfiguracaoAgente } from "./configuracao_agente.ts";
+import { configuracaoProjeto } from "./projetos.ts";
+
+// A leitura é de `projetos.ts`; as telas da Configuração ainda importam daqui (fronteiras.test.ts).
+export { configuracaoProjeto, etapasDoProjeto } from "./projetos.ts";
 
 type Linha = Record<string, unknown>;
-
-const listar = (banco: DatabaseSync, sql: string, nome: string): Linha[] => banco.prepare(sql).all(nome);
-
-/** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
-const semNulos = (l: Linha): Linha => Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
-
-const SELECIONAR_PREPARACAO = "SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem";
-
-const SELECIONAR_ETAPAS =
-  "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa";
-
-const etapasGravadas = (banco: DatabaseSync, nome: string): Linha[] =>
-  listar(banco, SELECIONAR_ETAPAS, nome).map(linhaComConfiguracaoAgente);
-
-/** Lê o projeto sem abrir transação; quem chama garante o snapshot. Sem linguagens, não há configuração nova. */
-function ler(banco: DatabaseSync, nome: string): Projeto | undefined {
-  const base = banco
-    .prepare("SELECT nome, branch_base, chave_sonarqube, raiz_git, hospedagem FROM projeto WHERE nome = ?")
-    .get(nome);
-  const linguagens = listar(
-    banco,
-    "SELECT caminho, linguagem, comando_teste FROM linguagem_projeto WHERE projeto = ? ORDER BY caminho",
-    nome,
-  );
-  if (!base || linguagens.length === 0) return undefined;
-  return Projeto.parse({
-    ...semNulos(base),
-    etapas: etapasGravadas(banco, nome),
-    preparacao: listar(banco, SELECIONAR_PREPARACAO, nome),
-    fitness: listar(
-      banco,
-      "SELECT nome, comando, descricao FROM fitness_function_projeto WHERE projeto = ? ORDER BY nome",
-      nome,
-    ),
-    linguagens,
-    e2e: listar(
-      banco,
-      "SELECT caminho_linguagem, comando_build, comando_execucao, codigo_falha FROM configuracao_e2e WHERE projeto = ? ORDER BY caminho_linguagem",
-      nome,
-    ),
-    globs: listar(
-      banco,
-      "SELECT caminho_linguagem, glob FROM glob_e2e WHERE projeto = ? ORDER BY caminho_linguagem, glob",
-      nome,
-    ),
-  });
-}
-
-/** Configuração SDLC do projeto, lida num snapshot só; `undefined` se o projeto não existe ou não tem configuração nova. */
-export function configuracaoProjeto(banco: DatabaseSync, nome: string): Projeto | undefined {
-  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
-  if (propria) banco.exec("BEGIN");
-  try {
-    return ler(banco, nome);
-  } finally {
-    if (propria) banco.exec("COMMIT");
-  }
-}
 
 /** Insere cada item de `itens` na `tabela`, com as colunas de `colunas` (nomes iguais às chaves do item). */
 function inserir(banco: DatabaseSync, tabela: string, nome: string, colunas: string[], itens: Linha[]): void {
@@ -104,13 +50,9 @@ export function gravarConfiguracaoProjeto(banco: DatabaseSync, entrada: unknown)
       p.e2e,
     );
     inserir(banco, "glob_e2e", p.nome, ["caminho_linguagem", "glob"], p.globs);
-    return Projeto.parse(ler(banco, p.nome)); // revalida a releitura; nunca é `undefined` aqui (há ao menos uma linguagem)
+    return Projeto.parse(configuracaoProjeto(banco, p.nome)); // revalida a releitura; nunca é `undefined` aqui (há ao menos uma linguagem)
   });
 }
-
-/** O modelo e o effort de cada etapa do projeto, mesmo sem a configuração SDLC (sem linguagens) gravada. */
-export const etapasDoProjeto = (banco: DatabaseSync, nome: string): Projeto["etapas"] =>
-  z.array(ConfiguracaoEtapaProjeto).parse(etapasGravadas(banco, nome));
 
 /** Valida e substitui só as etapas do projeto, numa transação; o resto da configuração SDLC fica como está. */
 export function substituirEtapasDoProjeto(banco: DatabaseSync, nome: string, etapas: unknown): void {
@@ -124,10 +66,6 @@ export function substituirEtapasDoProjeto(banco: DatabaseSync, nome: string, eta
     inserir(banco, "configuracao_etapa_projeto", nome, ["etapa", "modelo_provedor", "modelo_nome", "effort"], linhas);
   });
 }
-
-/** Os comandos de preparação da worktree do projeto, na ordem, mesmo sem a configuração SDLC (sem linguagens) gravada. */
-export const preparacaoDoProjeto = (banco: DatabaseSync, nome: string): string[] =>
-  listar(banco, SELECIONAR_PREPARACAO, nome).map((l) => String(l.comando));
 
 /** Substitui só a preparação do projeto, numa transação, com a ordem 1..n dos `comandos`. */
 export function substituirPreparacaoDoProjeto(banco: DatabaseSync, nome: string, comandos: string[]): void {

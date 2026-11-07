@@ -20,7 +20,7 @@ import { produtividadeDaRodada } from "./evidencias/produtividade_rodada.ts";
 import { varrerBase } from "./retrabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { anotar } from "../infra/registro.ts";
@@ -196,11 +196,7 @@ async function publicarEConferir(
 ): Promise<AgregadoDemanda> {
   const { demanda } = ag;
   const refRodada = formatarRodadaRef(ref);
-  const projeto = existe(
-    configuracaoProjeto(banco, demanda.projeto),
-    `o projeto ${demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, demanda.projeto);
   const raiz = raizDo(banco);
   mkdirSync(join(raiz, "execucoes"), { recursive: true });
   const log = join(raiz, "execucoes", `encerramento-${refRodada}.log`);

@@ -23,7 +23,7 @@ import {
 import { varrerBase } from "./retrabalho.ts";
 import { somar } from "../nucleo/uso.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
+import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
@@ -279,11 +279,7 @@ export function iniciarExecucaoDemanda(
     `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não existe`,
     "confira o endereço do ticket",
   );
-  const projeto = existe(
-    configuracaoProjeto(banco, ag.demanda.projeto),
-    `o projeto ${ag.demanda.projeto} não tem configuração do SDLC`,
-    "configure o projeto",
-  );
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const configuracaoAgente = resolverConfiguracaoAgente({
     ticket: ticket.configuracao_agente,
     etapaDoProjeto: projeto.etapas.find((e) => e.etapa === ticket.etapa)?.configuracao_agente,

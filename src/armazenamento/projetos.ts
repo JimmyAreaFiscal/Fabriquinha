@@ -1,9 +1,11 @@
 // Gravação e leitura das linhas de projeto (F2 §4 e §6). As recusas de negócio e o disco são do cadastro
 // (aplicacao/projeto/cadastro.ts); as conferências externas (F5 §2, F4 §9) rodam antes.
 import type { DatabaseSync } from "node:sqlite";
-import { encontrado } from "../nucleo/erros.ts";
+import { z } from "zod";
+import { ConfiguracaoEtapaProjeto, Projeto as ProjetoComConfiguracao } from "../nucleo/configuracao_projeto.ts";
+import { ErroDeRegra, encontrado } from "../nucleo/erros.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { preparacaoDoProjeto } from "./configuracao_projeto.ts";
+import { linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 interface Linha {
   nome: string;
@@ -12,6 +14,83 @@ interface Linha {
   hospedagem: string;
   chave_sonarqube: string;
   link_produto: string | null;
+}
+
+type LinhaGenerica = Record<string, unknown>;
+
+const listar = (banco: DatabaseSync, sql: string, nome: string): LinhaGenerica[] => banco.prepare(sql).all(nome);
+
+/** Remove os `null` das linhas: opcional ausente no schema é chave ausente, não `null`. */
+const semNulos = (l: LinhaGenerica): LinhaGenerica =>
+  Object.fromEntries(Object.entries(l).filter(([, v]) => v !== null));
+
+const SELECIONAR_PREPARACAO = "SELECT ordem, comando FROM comando_preparacao_projeto WHERE projeto = ? ORDER BY ordem";
+
+const SELECIONAR_ETAPAS =
+  "SELECT etapa, modelo_provedor, modelo_nome, effort FROM configuracao_etapa_projeto WHERE projeto = ? ORDER BY etapa";
+
+const etapasGravadas = (banco: DatabaseSync, nome: string): LinhaGenerica[] =>
+  listar(banco, SELECIONAR_ETAPAS, nome).map(linhaComConfiguracaoAgente);
+
+/** Os comandos de preparação da worktree do projeto, na ordem, mesmo sem a configuração SDLC (sem linguagens) gravada. */
+const preparacaoDoProjeto = (banco: DatabaseSync, nome: string): string[] =>
+  listar(banco, SELECIONAR_PREPARACAO, nome).map((l) => String(l.comando));
+
+/** O modelo e o effort de cada etapa do projeto, mesmo sem a configuração SDLC (sem linguagens) gravada. */
+export const etapasDoProjeto = (banco: DatabaseSync, nome: string): ProjetoComConfiguracao["etapas"] =>
+  z.array(ConfiguracaoEtapaProjeto).parse(etapasGravadas(banco, nome));
+
+/** Lê o projeto sem abrir transação; quem chama garante o snapshot. Sem linguagens, não há configuração nova. */
+function lerProjetoComConfiguracao(banco: DatabaseSync, nome: string): ProjetoComConfiguracao | undefined {
+  const base = banco
+    .prepare("SELECT nome, branch_base, chave_sonarqube, raiz_git, hospedagem FROM projeto WHERE nome = ?")
+    .get(nome);
+  const linguagens = listar(
+    banco,
+    "SELECT caminho, linguagem, comando_teste FROM linguagem_projeto WHERE projeto = ? ORDER BY caminho",
+    nome,
+  );
+  if (!base || linguagens.length === 0) return undefined;
+  return ProjetoComConfiguracao.parse({
+    ...semNulos(base),
+    etapas: etapasGravadas(banco, nome),
+    preparacao: listar(banco, SELECIONAR_PREPARACAO, nome),
+    fitness: listar(
+      banco,
+      "SELECT nome, comando, descricao FROM fitness_function_projeto WHERE projeto = ? ORDER BY nome",
+      nome,
+    ),
+    linguagens,
+    e2e: listar(
+      banco,
+      "SELECT caminho_linguagem, comando_build, comando_execucao, codigo_falha FROM configuracao_e2e WHERE projeto = ? ORDER BY caminho_linguagem",
+      nome,
+    ),
+    globs: listar(
+      banco,
+      "SELECT caminho_linguagem, glob FROM glob_e2e WHERE projeto = ? ORDER BY caminho_linguagem, glob",
+      nome,
+    ),
+  });
+}
+
+/** Configuração SDLC do projeto, lida num snapshot só; `undefined` se o projeto não existe ou não tem configuração nova. */
+export function configuracaoProjeto(banco: DatabaseSync, nome: string): ProjetoComConfiguracao | undefined {
+  const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
+  if (propria) banco.exec("BEGIN");
+  try {
+    return lerProjetoComConfiguracao(banco, nome);
+  } finally {
+    if (propria) banco.exec("COMMIT");
+  }
+}
+
+/** A configuração SDLC do projeto, ou a recusa com a orientação: a única leitura dos casos de uso. */
+export function carregarProjeto(banco: DatabaseSync, nome: string): ProjetoComConfiguracao {
+  const projetoCarregado = configuracaoProjeto(banco, nome);
+  if (projetoCarregado === undefined)
+    throw new ErroDeRegra(`o projeto ${nome} não tem configuração do SDLC`, "configure o projeto");
+  return projetoCarregado;
 }
 
 /** A preparação vem de `comando_preparacao_projeto`, a mesma tabela que o fluxo da demanda lê. */

@@ -12,7 +12,6 @@ import {
   configuracaoProjeto,
   etapasDoProjeto,
   gravarConfiguracaoProjeto,
-  preparacaoDoProjeto,
   substituirEtapasDoProjeto,
   substituirPreparacaoDoProjeto,
 } from "./configuracao_projeto.ts";
@@ -140,10 +139,10 @@ test("a gravação da configuração ignora as etapas e a preparação da entrad
 
 test("preparação: lida sem a configuração SDLC, substituída sozinha na ordem 1..n; a inválida não altera nada", () => {
   comBanco((banco) => {
-    assert.deepEqual(preparacaoDoProjeto(banco, "b"), []);
+    assert.deepEqual(projeto(banco, "b")?.preparacao, []);
     substituirPreparacaoDoProjeto(banco, "b", ["uv venv .venv", "uv sync"]);
     assert.equal(configuracaoProjeto(banco, "b"), undefined);
-    assert.deepEqual(preparacaoDoProjeto(banco, "b"), ["uv venv .venv", "uv sync"]);
+    assert.deepEqual(projeto(banco, "b")?.preparacao, ["uv venv .venv", "uv sync"]);
 
     gravarCompleta(banco);
     substituirPreparacaoDoProjeto(banco, "a", ["npm ci"]);
@@ -154,7 +153,7 @@ test("preparação: lida sem a configuração SDLC, substituída sozinha na orde
     }, /CHECK/);
     assert.deepEqual(dump(banco), antes);
     assert.equal(banco.isTransaction, false);
-    assert.deepEqual(preparacaoDoProjeto(banco, "b"), ["uv venv .venv", "uv sync"]);
+    assert.deepEqual(projeto(banco, "b")?.preparacao, ["uv venv .venv", "uv sync"]);
   });
 });
 

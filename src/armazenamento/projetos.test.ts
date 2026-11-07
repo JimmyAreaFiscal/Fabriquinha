@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
-import { ErroDeInexistente } from "../nucleo/erros.ts";
+import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { Projeto } from "../nucleo/projeto.ts";
-import { donoDoRepositorio, inserirProjeto, projetoExistente } from "./projetos.ts";
+import { carregarProjeto, donoDoRepositorio, inserirProjeto, projetoExistente } from "./projetos.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -32,6 +32,17 @@ test("projetoExistente recusa o projeto inexistente, com a orientação padrão 
   };
   recusa(undefined, "o projeto fantasma não existe (confira o nome do projeto)");
   recusa("confira a execução", "o projeto fantasma não existe (confira a execução)");
+  banco.close();
+});
+
+test("carregarProjeto recusa o projeto inexistente com a orientação de configurar", () => {
+  const { banco } = abrirBancoTemporario();
+  assert.throws(
+    () => carregarProjeto(banco, "fantasma"),
+    (erro) =>
+      erro instanceof ErroDeRegra &&
+      erro.message === "o projeto fantasma não tem configuração do SDLC (configure o projeto)",
+  );
   banco.close();
 });
 
