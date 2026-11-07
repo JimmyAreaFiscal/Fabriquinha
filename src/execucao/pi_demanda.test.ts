@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
+import { catalogoDaEtapa } from "../dominio/evidencia_etapa.ts";
 import { EtapaTicket } from "../dominio/primitivos.ts";
-import { PACOTE } from "./pi.ts";
-import { argumentosPiDemanda, skillsDaEtapaDemanda, skillsPendentes } from "./pi_demanda.ts";
+import { PACOTE, skillDoTipo } from "./pi.ts";
+import { argumentosPiDemanda, skillsDaEtapaDemanda } from "./pi_demanda.ts";
 
 const base = { raiz: "/r", sessaoPi: "s", confianca: undefined, modo: "autonomo" as const };
 const ticket = (campos: Partial<TicketDemanda> = {}) =>
@@ -32,8 +33,7 @@ test("modelo e effort: ticket, senão etapa do projeto, senão nenhum flag (CA-4
   for (const f of ["--provider", "--model", "--thinking"]) assert.deepEqual(flags(c, f), []);
 });
 
-test("pacote real: nada pendente e skills na ordem do catálogo (CA-12)", () => {
-  assert.deepEqual(skillsPendentes(), []);
+test("pacote real: skills na ordem do catálogo (CA-12)", () => {
   assert.deepEqual(skillsDaEtapaDemanda("planejar"), ["artefato-plano"]);
   assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda"), [
     "artefato-comprovacao-criterios",
@@ -49,17 +49,22 @@ test("pacote real: nada pendente e skills na ordem do catálogo (CA-12)", () => 
   }
 });
 
-test("pacote com skills faltando: as ausentes ficam pendentes, sem repetição (CA-12)", () => {
+test("pacote real: toda skill de agente do catálogo existe, em todas as etapas (CA-12)", () => {
+  for (const etapa of EtapaTicket.options) {
+    const doCatalogo = catalogoDaEtapa(etapa)
+      .filter((item) => item.produtor === "agente")
+      .map((item) => skillDoTipo(item.tipo));
+    assert.deepEqual(skillsDaEtapaDemanda(etapa), doCatalogo, `skills ausentes no pacote para ${etapa}`);
+  }
+  assert.ok(EtapaTicket.options.includes("encerrar_rodada"));
+});
+
+test("pacote com skills faltando: só as presentes entram (CA-12)", () => {
   const pacote = mkdtempSync(join(tmpdir(), "pacote-"));
   try {
     mkdirSync(join(pacote, "skills", "artefato-comprovacao-criterios"), { recursive: true });
-    const pendentes = skillsPendentes(pacote);
-    assert.ok(pendentes.includes("artefato-plano"));
-    assert.ok(!pendentes.includes("artefato-comprovacao-criterios"));
-    assert.equal(new Set(pendentes).size, pendentes.length);
+    assert.deepEqual(skillsDaEtapaDemanda("planejar", pacote), []);
     assert.deepEqual(skillsDaEtapaDemanda("revisar_demanda", pacote), ["artefato-comprovacao-criterios"]);
-    for (const etapa of EtapaTicket.options)
-      for (const s of skillsDaEtapaDemanda(etapa, pacote)) assert.ok(!pendentes.includes(s));
   } finally {
     rmSync(pacote, { recursive: true, force: true });
   }

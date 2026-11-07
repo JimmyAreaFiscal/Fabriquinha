@@ -13,13 +13,14 @@ import { comDemanda } from "../persistencia/demandas.ts";
 import { demandasParaDespacho } from "../persistencia/despacho_demanda.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 
-export type CausaDeInfraestrutura = "reinicio" | "cota" | "transitoria";
+type CausaDeInfraestrutura = "reinicio" | "cota" | "transitoria";
 
 const COTA = /quota exceeded|usage limit|rate limit|session limit|insufficient_quota|\b429\b/i;
 const TRANSITORIA =
   /HTTP 5\d\d|\b50[234]\b|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|fetch failed|Connection error|TimeoutError|overloaded|tempo limite|inacessível/i;
 
 /** A causa da falha quando ela é de infraestrutura; `undefined` quando é do ticket ou pede o Auditor (ex.: disco cheio). */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function causaDeInfraestrutura(motivo: string): CausaDeInfraestrutura | undefined {
   if (motivo === "serviço reiniciado") return "reinicio";
   if (COTA.test(motivo)) return "cota";
@@ -40,6 +41,7 @@ const MODELO_RESERVA: Record<string, (nome: string) => Modelo> = {
 };
 
 /** O modelo do outro provedor para o ticket cuja cota estourou; `undefined` sem modelo resolvido ou sem reserva. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function modeloReserva(modeloAtual: { provedor: string; nome: string } | undefined): Modelo | undefined {
   return modeloAtual && MODELO_RESERVA[modeloAtual.provedor]?.(modeloAtual.nome);
 }

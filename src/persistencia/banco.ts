@@ -47,6 +47,7 @@ export const raizDo = (banco: DatabaseSync): string =>
  * recusado, e as `migracoes` (a primeira é a 37) ainda não aplicadas rodam em ordem, cada uma na sua transação.
  * A versão fica em `user_version`.
  */
+/** @testes os testes aplicam migrações próprias para provar o mecanismo */
 export function migrar(banco: DatabaseSync, migracoes: readonly Migracao[]): void {
   const inicial = versao(banco);
   const versaoAtual = VERSAO_LINHA_DE_BASE + migracoes.length;

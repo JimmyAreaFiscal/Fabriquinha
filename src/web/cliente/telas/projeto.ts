@@ -39,6 +39,7 @@ export const projetoNaoEncontrado = (nome: string): string =>
   `<div class="cabeca-pagina"><h1>Projeto não encontrado</h1></div><p class="muted">O projeto ${escapar(nome)} não está cadastrado. <a class="link" href="/projects">Ver os projetos</a></p>`;
 
 /** A confirmação do **Arquivar concluídas**: quantas e que nada é apagado. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const confirmacaoDeArquivar = (n: number, projeto: string): string =>
   `<dialog class="dialogo" data-dialogo aria-labelledby="titulo-arquivar"><h2 id="titulo-arquivar">Arquivar concluídas</h2><p>${
     n === 1
@@ -114,6 +115,7 @@ const FASE_DA_ETAPA: Record<EtapaTicket, FaseDemanda> = {
  * que não guarda onde parou; e `concluida` (tudo feito) na concluída e na arquivada.
  * ponytail: a cancelada num gate aparece na fase do ticket, a de antes; um histórico de fases a acertaria.
  */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function faseNaLinhaDoTempo(d: Pick<DemandaDoProjeto, "fase" | "tickets">): FaseDemanda {
   if (d.fase === "arquivada") return "concluida";
   if (d.fase !== "cancelada") return d.fase;
@@ -127,11 +129,12 @@ export function faseNaLinhaDoTempo(d: Pick<DemandaDoProjeto, "fase" | "tickets">
 }
 
 /** A cor do marco atual e da borda da linha: a falha antes de quem aguarda, e quem aguarda antes do que roda. */
-export type EstadoDaLinha = "falha" | "aguarda" | "rodando" | "cancelada";
+type EstadoDaLinha = "falha" | "aguarda" | "rodando" | "cancelada";
 
 const GATES_DA_RODADA: ReadonlySet<FaseRodada> = new Set(["aprovacao_pull_request", "sessao"]);
 
 /** O estado da demanda: ticket falho, gate da demanda, do planejamento ou do PR, ou ticket em execução. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function estadoDaDemanda(d: DemandaDoProjeto): EstadoDaLinha | undefined {
   if (d.fase === "cancelada") return "cancelada";
   if (d.fase === "concluida" || d.fase === "arquivada") return undefined;
@@ -158,7 +161,7 @@ function estadoDaRodada(d: DemandaDoProjeto, rodada: DemandaDoProjeto["rodadas"]
  * que não houve (a linha passa contínua por ela), `rodadas` o trecho da execução na linha da demanda (as rodadas,
  * abaixo, levam os marcos) e `fora` a coluna da demanda na linha da rodada.
  */
-export type Situacao = "feito" | "atual" | "" | "pulada" | "rodadas" | "fora";
+type Situacao = "feito" | "atual" | "" | "pulada" | "rodadas" | "fora";
 
 /** A situação de cada coluna pela posição da coluna e da fase atual numa ordem; `concluida` passa de todas. */
 function situacaoNaOrdem<F extends string>(ordem: readonly F[], fase: F | "concluida", coluna: Coluna): Situacao {
@@ -172,6 +175,7 @@ function situacaoNaOrdem<F extends string>(ordem: readonly F[], fase: F | "concl
 type ColunasDaLinha = (readonly [Coluna, Situacao])[];
 
 /** As colunas na linha da demanda; `comAjustes` diz se alguma rodada passou pela sessão de ajustes do PR. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function situacaoNaDemanda(fase: FaseDemanda, comAjustes: boolean): ColunasDaLinha {
   const trecho = situacaoNaOrdem(ORDEM_DA_DEMANDA, fase, { fase: "execucao", de: "demanda", rotulo: "" });
   const situacao = (coluna: Coluna): Situacao => {
@@ -184,6 +188,7 @@ export function situacaoNaDemanda(fase: FaseDemanda, comAjustes: boolean): Colun
 }
 
 /** As colunas na linha da rodada; `comAjustes` diz se ela passou pela sessão de ajustes do PR. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function situacaoNaRodada(fase: FaseRodada, comAjustes: boolean): ColunasDaLinha {
   const situacao = (coluna: Coluna): Situacao => {
     if (coluna.de === "demanda") return "fora";
@@ -204,6 +209,7 @@ function linhaDoTempo(colunas: ColunasDaLinha, estado: EstadoDaLinha | undefined
 }
 
 /** Há quanto tempo, em minutos ou horas e minutos, com espaços não separáveis: "1 min" nunca se separa. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function ha(desde: string, agora: Date): string {
   const minutos = Math.floor((agora.getTime() - Date.parse(desde)) / 60_000);
   let duracao = `${String(Math.floor(minutos / 60))} h ${String(minutos % 60)} min`;

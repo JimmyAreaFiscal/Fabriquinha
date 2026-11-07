@@ -12,7 +12,7 @@ export interface PerguntaDoAgente {
   opcoes: string[];
 }
 
-export interface ContextoDaPergunta {
+interface ContextoDaPergunta {
   /** Endereço público do ticket (`I-12.T3`), a etapa e o título da demanda. */
   ticket: string;
   etapa: string;
@@ -48,6 +48,7 @@ ou
 {"decisao":"escalar","justificativa":"<por que é decisão do Auditor humano>"}`;
 
 /** O prompt da triagem: as regras, o ticket e a pergunta com as opções. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function promptDaTriagem(contexto: ContextoDaPergunta, p: PerguntaDoAgente): string {
   const opcoes =
     p.opcoes.length > 0 ? p.opcoes.map((o) => `- ${o}`).join("\n") : "(sem opções: resposta em texto livre)";
@@ -69,6 +70,7 @@ const Decisao = z.discriminatedUnion("decisao", [
  * A resposta na saída do pi, ou `undefined` para escalar. A saída pode trazer texto além do JSON; vale a última linha
  * que é uma decisão. Com opções, a resposta precisa ser um dos rótulos.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function lerDecisao(saida: string, p: PerguntaDoAgente): RespostaDoAuditorAutomatico | undefined {
   const decisao = saida
     .split("\n")

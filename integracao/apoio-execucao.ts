@@ -8,15 +8,11 @@ import type { Verificacao } from "../src/evidencias/verificacoes.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/execucao/despacho_demanda.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/execucao/execucao_demanda.ts";
 import { fecharTicketDemanda } from "../src/execucao/fechamento_ticket.ts";
-import {
-  aprovarPlanejamentoDemanda,
-  iniciarOuRetomarPlanejamento,
-  submeterPlanejamento,
-} from "../src/execucao/planejamento.ts";
+import { aprovarPlanejamentoDemanda, iniciarOuRetomarPlanejamento } from "../src/execucao/planejamento.ts";
 import { decidirRevisaoRodada } from "../src/execucao/revisao_rodada.ts";
 import { comDemanda } from "../src/persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
-import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar } from "./apoio.ts";
+import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
 import { piFalso } from "./falsos.ts";
 
 export const pi = piFalso(base);
@@ -96,7 +92,7 @@ export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Pro
       descricao: "d",
     })),
   );
-  submeterPlanejamento(
+  submeterPlanoDoAgente(
     c.banco,
     id,
     {

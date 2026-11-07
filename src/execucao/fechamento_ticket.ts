@@ -24,7 +24,7 @@ import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket
 
 type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
 
-export interface DepsFechamento {
+interface DepsFechamento {
   coletarVerificacoes?: typeof coletarVerificacoes;
   opcoes?: OpcoesSonar;
   /** Limite do `git commit`; o padrão é o dos comandos do projeto. */

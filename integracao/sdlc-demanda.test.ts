@@ -8,6 +8,7 @@ import { ErroDeEscopo } from "../src/dominio/erros.ts";
 import { interromperExecucaoDemanda } from "../src/execucao/execucao_demanda.ts";
 import { despacharDemandas } from "../src/execucao/despacho_demanda.ts";
 import * as gestao from "../src/execucao/gestao_demandas.ts";
+import { registrarDependenciaDemanda } from "../src/persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import {
   adicionarProjeto,
@@ -132,10 +133,10 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   const arestas = () => c.banco.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n;
   const antes = arestas();
   assert.throws(() => {
-    gestao.registrarDependencia(c.banco, x, x, AUTOR);
+    registrarDependenciaDemanda(c.banco, x, x);
   }, /não pode depender de si mesma/);
   assert.throws(() => {
-    gestao.registrarDependencia(c.banco, x, y, AUTOR);
+    registrarDependenciaDemanda(c.banco, x, y);
   }, /ciclo de dependência/);
   assert.equal(arestas(), antes);
 });

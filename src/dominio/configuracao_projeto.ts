@@ -13,7 +13,7 @@ const CaminhoRelativo = z
   .refine((c) => !/^([/\\]|[A-Za-z]:)/.test(c), "use caminho relativo à raiz git")
   .refine((c) => !c.split(/[/\\]/).includes(".."), "travessia com .. não é permitida");
 
-export const Hospedagem = z.enum(["github", "azure-devops"]);
+const Hospedagem = z.enum(["github", "azure-devops"]);
 
 export const ConfiguracaoEtapaProjeto = z
   .strictObject({
@@ -27,28 +27,28 @@ export const ConfiguracaoEtapaProjeto = z
     path: ["modelo_nome"],
   });
 
-export const ComandoPreparacaoProjeto = z.strictObject({ ordem: z.number().int().positive(), comando: Comando });
+const ComandoPreparacaoProjeto = z.strictObject({ ordem: z.number().int().positive(), comando: Comando });
 
-export const FitnessFunctionProjeto = z.strictObject({
+const FitnessFunctionProjeto = z.strictObject({
   nome: Slug,
   comando: Comando,
   descricao: z.string().trim().min(1).max(300),
 });
 
-export const LinguagemProjeto = z.strictObject({
+const LinguagemProjeto = z.strictObject({
   caminho: CaminhoRelativo,
   linguagem: Texto,
   comando_teste: Comando,
 });
 
-export const ConfiguracaoE2E = z.strictObject({
+const ConfiguracaoE2E = z.strictObject({
   caminho_linguagem: CaminhoRelativo,
   comando_build: Comando,
   comando_execucao: Comando,
   codigo_falha: z.number().int().min(1).max(255),
 });
 
-export const GlobE2E = z.strictObject({ caminho_linguagem: CaminhoRelativo, glob: CaminhoRelativo });
+const GlobE2E = z.strictObject({ caminho_linguagem: CaminhoRelativo, glob: CaminhoRelativo });
 
 const repetido = (chaves: string[]): boolean => new Set(chaves).size !== chaves.length;
 

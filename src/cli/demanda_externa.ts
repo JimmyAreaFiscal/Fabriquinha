@@ -19,7 +19,7 @@ import { predecessorasDaDemanda } from "../persistencia/dependencias_demanda.ts"
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
 export class ErroDeUso extends Error {}
 
-export interface ChamadaExterna {
+interface ChamadaExterna {
   readonly banco: DatabaseSync;
   readonly env: NodeJS.ProcessEnv;
   readonly stdin: NodeJS.ReadableStream;

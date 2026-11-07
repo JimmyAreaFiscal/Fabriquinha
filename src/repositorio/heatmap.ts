@@ -45,6 +45,7 @@ type Pasta = NoDoHeatmap & { filhos: NoDoHeatmap[] };
 const MESES_DA_JANELA = 12;
 
 /** Registros do `git log -z --format=%x1e%H%x1f%P%x1f%cI%x1f%s --name-only`: do mais novo ao mais antigo. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function lerLog(saida: string): Registro[] {
   return saida
     .split("\x1e")
@@ -82,6 +83,7 @@ function* trazidos(fila: string[], porHash: Map<string, Registro>, vistos: Set<s
  * aos commits que trouxe (pelo 2º pai) e que nenhum merge anterior trouxe; o commit com `(#N)` no fim do assunto é
  * squash. Quem não aparece no resultado foi direto na base.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function prsDos(registros: Registro[], ponta: string): Map<string, string> {
   const porHash = new Map(registros.map((r) => [r.hash, r]));
   const linha: Registro[] = [];
@@ -125,7 +127,7 @@ function arvoreDe(nomeDaRaiz: string, arquivos: string[]): { raiz: Pasta; nos: M
 }
 
 /** A árvore dos `arquivos` de hoje, com os commits não-merge do `log` que tocam cada um e os totais de baixo para cima. */
-export function montar(
+function montar(
   nomeDaRaiz: string,
   arquivos: string[],
   log: Registro[],

@@ -243,6 +243,7 @@ export function listarDemandas(
 }
 
 /** Grava a demanda nova com tudo o que o agregado traz, numa transação só. */
+/** @testes atalho dos testes de persistência para gravar um agregado pronto */
 export const criarDemanda = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
   escrever(banco, () => {
     gravarDiferenca(banco, undefined, agregado);

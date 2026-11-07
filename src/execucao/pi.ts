@@ -21,6 +21,7 @@ const GRACA_MS = 10_000;
 export const PACOTE = fileURLToPath(new URL("../../pacote-pi", import.meta.url));
 
 /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
+/** @testes o teste confere a resolução do binário do pi */
 export const binarioPi = (): string => process.env.FABRIQUINHA_PI || "pi";
 
 /**
@@ -80,11 +81,6 @@ export interface Lancamento {
   effort?: Effort;
   confianca: boolean | undefined;
   modo: ModoExecucao;
-  /**
-   * O arquivo da sessão principal que a consulta copia (F4 §6.5): na primeira execução dela, ou na retomada se a
-   * cópia ainda não existe.
-   */
-  fork?: string;
 }
 
 /**
@@ -108,7 +104,6 @@ export const argumentosPi = (l: Lancamento): string[] => [
   "-e",
   join(PACOTE, "extensions", "pergunta.ts"),
   ...(l.confianca === undefined ? [] : [l.confianca ? "--approve" : "--no-approve"]),
-  ...(l.fork ? ["--fork", l.fork] : []),
   "--exclude-tools",
   l.modo === "consulta" ? "ask_user_question,edit,write,bash,powershell" : "ask_user_question",
 ];
@@ -152,6 +147,7 @@ export const ambientePi = (raiz: string, execucao: number | string, dir: string)
  * Divide o stdout em registros JSONL só em `\n`, tirando um `\r` final (F4 §6.1.2). O `readline` do Node não serve:
  * ele também quebra em U+2028 e U+2029, que são válidos dentro de strings JSON.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function divisorJsonl(): (parte: string) => string[] {
   let resto = "";
   return (parte) => {
@@ -179,7 +175,7 @@ function objetoJson(linha: string): EventoPi | undefined {
   }
 }
 
-export interface ProcessoPi {
+interface ProcessoPi {
   /** O grupo de processos do pi (F4 §7). */
   readonly pgid: number;
   /** Um comando RPC, como uma linha JSON no stdin. */

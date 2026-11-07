@@ -64,6 +64,7 @@ const MOTIVOS: Record<MotivoDemanda, string> = {
 };
 
 /** O estado da sessão (F4 §5.2) como etiqueta: azul rodando, âmbar aguardando, vermelho na falha. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function etiquetaDoEstado({ estado, motivo }: Pick<Cabecalho["sessao"], "estado" | "motivo">): string {
   if (estado === "rodando") return '<span class="pill pill-rodando">rodando</span>';
   if (estado === "terminada") return '<span class="pill pill-neutro">terminada</span>';

@@ -26,6 +26,7 @@ import { ROTAS_DA_CONFIGURACAO_SDLC } from "./rotas/sdlc.ts";
 import { ROTAS_DA_SIMULACAO } from "./rotas/simulacao.ts";
 
 /** A tabela das rotas da API (F7 §4.2), uma lista por tela. */
+/** @testes o teste do servidor confere a tabela de rotas */
 export const ROTAS: Rota[] = [
   ...ROTAS_DO_INICIO,
   ...ROTAS_DO_HISTORICO,
@@ -144,7 +145,7 @@ const cookie = (pedido: IncomingMessage): string | undefined =>
     .find((par) => par.startsWith(`${COOKIE}=`))
     ?.slice(COOKIE.length + 1);
 
-export interface Web {
+interface Web {
   banco: DatabaseSync;
   porta: number;
   agendador: Agendador;

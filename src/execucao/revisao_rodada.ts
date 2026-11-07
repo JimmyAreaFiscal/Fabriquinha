@@ -23,6 +23,7 @@ import { conferirAprovacao } from "./revisao_pendencias.ts";
 type Dados = EntradaEvidenciaDemanda["dados"];
 
 /** `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui). */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export async function prepararRevisaoRodada(
   banco: DatabaseSync,
   ref: { demanda_id: string; ticket_id: number },

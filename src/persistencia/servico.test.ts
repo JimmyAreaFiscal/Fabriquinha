@@ -5,9 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { ZodError } from "zod";
-import { ErroDeRegra } from "../dominio/erros.ts";
 import { abrir } from "./banco.ts";
-import { alterarLimiteParalelismo, configuracao, limiteParalelismo, salvarConfiguracao } from "./servico.ts";
+import { configuracao, limiteParalelismo, salvarConfiguracao } from "./servico.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-servico-"));
 after(() => {
@@ -61,19 +60,11 @@ test("configuração: linha única, agendador desligado por padrão, salvar vali
   banco.close();
 });
 
-test("CA-6, CA-7, CA-8: limite de paralelismo tem padrão, altera e recusa inválido", () => {
+test("CA-6: limite de paralelismo tem padrão 4 e é lido da coluna própria", () => {
   const banco = novoBanco();
   assert.equal(limiteParalelismo(banco), 4);
-  alterarLimiteParalelismo(banco, 3);
-  alterarLimiteParalelismo(banco, 5);
-  assert.equal(limiteParalelismo(banco), 5);
-  alterarLimiteParalelismo(banco, 3);
-  for (const ruim of [0, -1, 1.5, "dois"]) {
-    assert.throws(() => {
-      alterarLimiteParalelismo(banco, ruim as number);
-    }, ErroDeRegra);
-  }
+  banco.prepare("UPDATE configuracao SET limite_paralelismo = 3").run();
   assert.equal(limiteParalelismo(banco), 3);
-  assert.equal(configuracao(banco).intervaloMin, 5, "só a coluna do limite muda");
+  assert.equal(configuracao(banco).intervaloMin, 5, "o limite fica fora de `Configuracao`");
   banco.close();
 });

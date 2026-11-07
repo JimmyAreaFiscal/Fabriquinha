@@ -37,7 +37,7 @@ import * as gestao from "./gestao_demandas.ts";
 import type { EventoPi } from "./pi.ts";
 import { emMarkdown, lerConversa, type Mensagem, texto } from "./sessoes_demanda.ts";
 
-export interface EscopoDaAvaliacao {
+interface EscopoDaAvaliacao {
   projeto: string;
   /** AAAA-MM-DD, inclusivas. */
   de: string;
