@@ -112,8 +112,9 @@ test("depois da migração 37 o banco recusa autoria incoerente", () => {
   };
   recusa("UPDATE ticket_demanda SET criado_por_tipo = 'agente'");
   recusa("UPDATE ticket_demanda SET criado_por_trabalho_id = 'exec-nova'");
-  recusa("UPDATE decisao_ticket SET por_tipo = 'fabriquinha'");
+  recusa("UPDATE decisao_ticket SET por_tipo = 'externo'");
   recusa("UPDATE evidencia_demanda SET autor_ferramenta = 'claude'");
+  banco.exec("UPDATE decisao_ticket SET por_tipo = 'fabriquinha', por_trabalho_id = NULL");
   banco.exec("UPDATE evidencia_demanda SET autor_tipo = 'externo', autor_ferramenta = 'claude', autor_sessao = 's1'");
   banco.close();
 });

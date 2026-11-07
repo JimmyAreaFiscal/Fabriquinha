@@ -27,8 +27,10 @@ test("Ator recusa o que falta ou sobra do tipo", () => {
 });
 
 test("exigirAtor deixa passar o tipo permitido", () => {
-  exigirAtor(AUDITOR, "decidir", "auditor");
-  exigirAtor(FABRIQUINHA, "decidir", "auditor", "fabriquinha");
+  assert.doesNotThrow(() => {
+    exigirAtor(AUDITOR, "decidir", "auditor");
+    exigirAtor(FABRIQUINHA, "decidir", "auditor", "fabriquinha");
+  });
 });
 
 test("exigirAtor recusa os outros tipos com a mensagem e a orientação de quem pode", () => {

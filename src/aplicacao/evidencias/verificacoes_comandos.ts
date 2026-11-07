@@ -30,6 +30,8 @@ export interface EntradaComandos {
   /** Arquivos alterados da worktree, relativos à raiz; decidem se o E2E roda. */
   arquivos: readonly string[];
   limiteMs?: number;
+  /** Chamada depois dos testes das linguagens e antes do E2E: o lcov que o Sonar lê já está gravado. */
+  aoTerminarAsLinguagens?: () => void;
 }
 
 export const aprovacao = (falhas: readonly Falha[]): boolean | undefined =>
@@ -75,6 +77,7 @@ export function verificarTestes({
   worktree,
   arquivos,
   limiteMs = LIMITE_COMANDO_MS,
+  aoTerminarAsLinguagens,
 }: EntradaComandos): Promise<Verificacao> {
   return comAmbiente(limiteMs, async (rodar) => {
     const comandos = [];
@@ -87,6 +90,7 @@ export function verificarTestes({
       const falha = classificar(comando, r);
       if (falha) falhas.push(falha);
     }
+    aoTerminarAsLinguagens?.();
     for (const config of e2e ? projeto.e2e : []) {
       const globs = projeto.globs.filter((g) => g.caminho_linguagem === config.caminho_linguagem);
       if (!arquivos.some((a) => globs.some((g) => matchesGlob(a, g.glob)))) continue;

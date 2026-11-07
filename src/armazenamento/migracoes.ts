@@ -439,7 +439,7 @@ CREATE TABLE decisao_ticket_nova (
     resultado       TEXT NOT NULL CHECK (resultado IN ('aprovado','recusado')),
     nota            INTEGER CHECK (nota BETWEEN 1 AND 5),
     motivo          TEXT,
-    por_tipo        TEXT NOT NULL CHECK (por_tipo IN ('auditor','agente')),
+    por_tipo        TEXT NOT NULL CHECK (por_tipo IN ('auditor','agente','fabriquinha')),
     por_trabalho_id TEXT CHECK (por_trabalho_id IS NULL OR por_tipo = 'agente'),
     em              TEXT NOT NULL,
     PRIMARY KEY (demanda_id, ticket_id, decisao_id),

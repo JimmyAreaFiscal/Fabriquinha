@@ -9,6 +9,7 @@ import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { AUDITOR } from "../nucleo/ator.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../nucleo/transicoes_rodada.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../nucleo/erros.ts";
 import { gravarConfiguracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
@@ -16,7 +17,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
-import { aprovarPRRodada } from "./aprovacao_pr_rodada.ts";
+import { aprovarPRRodada, aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-aprovacao-")));
@@ -214,4 +215,41 @@ test("CA-24: a mesma função serve a web e ao agendador (Auditor como ator) e c
   const { banco, fase } = await cenario();
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
   assert.equal(fase(), "concluida");
+});
+
+const LIGADA = { FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA: "outro, loja" };
+
+test("aprovação automática ligada para o projeto: integra o PR que chegou ao gate e conclui a rodada sem nota", async () => {
+  const { c, banco, ag, fase, commitDaRodada, demandaLocal, demandaRemota } = await cenario();
+
+  await aprovarPRRodadaSeAutomatico(banco, ag(), REF, LIGADA);
+
+  rodarGit(c.repo, "merge-base", "--is-ancestor", commitDaRodada, BRANCH_DEMANDA);
+  assert.equal(demandaLocal(), demandaRemota());
+  assert.equal(fase(), "concluida");
+  assert.deepEqual(
+    ag().decisoes.map((d) => [d.resultado, d.nota, d.motivo]),
+    [["aprovado", undefined, MOTIVO_APROVACAO_AUTOMATICA_PR]],
+  );
+});
+
+test("sem a opção, com outro projeto nela ou fora do gate, a aprovação automática não faz nada", async () => {
+  const { banco, ag, fase } = await cenario();
+  for (const env of [{}, { FABRIQUINHA_APROVACAO_AUTOMATICA_PR_RODADA: "lojas,outro" }]) {
+    await aprovarPRRodadaSeAutomatico(banco, ag(), REF, env);
+  }
+  await aprovarPRRodadaSeAutomatico(banco, { ...ag(), rodadas: [] }, REF, LIGADA);
+
+  assert.equal(fase(), "aprovacao_pull_request");
+  assert.deepEqual(hospedagem.chamadas(), []);
+});
+
+test("a hospedagem recusa a integração automática: o gate fica aberto para o Auditor, sem lançar", async () => {
+  const { banco, ag, fase } = await cenario();
+  hospedagem.mudar(1, { estado: "fechado" });
+
+  await aprovarPRRodadaSeAutomatico(banco, ag(), REF, LIGADA);
+
+  assert.equal(fase(), "aprovacao_pull_request");
+  assert.deepEqual(ag().decisoes, []);
 });

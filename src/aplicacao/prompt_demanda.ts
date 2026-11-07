@@ -22,6 +22,8 @@ export interface ContextoDemanda {
   anexos: readonly AnexoNoDisco[];
   /** As perguntas respondidas na sessão de cada ticket (por `ticket_id`); a seção de revisões anteriores as lista. */
   perguntasDasRevisoesAnteriores?: ReadonlyMap<number, readonly { pergunta: string; resposta: string }[]>;
+  /** O SHA do commit de cada ticket que a Fabriquinha commitou (por `ticket_id`); as revisões leem o que já foi verificado nele. */
+  commitsDosTickets?: ReadonlyMap<number, string>;
 }
 
 const secao = (titulo: string, texto: string): string => `## ${titulo}\n\n${texto.trim() || "(vazio)"}\n`;
@@ -183,6 +185,48 @@ function secaoRevisoesAnteriores({ ag, ticket, perguntasDasRevisoesAnteriores }:
   );
 }
 
+const VERIFICACOES_DO_COMMIT = ["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const;
+
+/**
+ * Revisões: o que a Fabriquinha já verificou no último commit de cada rodada (testes, fitness e Sonar, antes de
+ * commitar o ticket), com os comandos e os logs. Código igual ao verificado não precisa rodar de novo.
+ */
+function secaoVerificacoesJaFeitas({ ag, ticket, anexos, commitsDosTickets }: ContextoDemanda): string {
+  const rodadas = ticket.etapa === "revisar_rodada" ? [ticket.rodada_id] : ag.rodadas.map((r) => r.rodada_id);
+  const linhas = rodadas.flatMap((rodada_id) => {
+    const ultimo = ag.tickets.findLast(
+      (t) => t.rodada_id === rodada_id && t.etapa === "implementar" && commitsDosTickets?.has(t.ticket_id),
+    );
+    if (!ultimo) return [];
+    const doTicket = (e: { tipo: string; ticket_id?: number }) => e.ticket_id === ultimo.ticket_id;
+    const verificacoes = VERIFICACOES_DO_COMMIT.map((tipo) => {
+      const dados = ag.evidencias.findLast((e) => doTicket(e) && e.tipo === tipo)?.dados as
+        { aprovada?: boolean; comandos?: { comando: string; codigoSaida: number | null }[] } | undefined;
+      const comandos = (dados?.comandos ?? []).map((c) => `\`${c.comando}\` saiu com ${String(c.codigoSaida)}`);
+      // O mesmo log pode vir de mais de uma tentativa do ticket: vale o da última, gravada por último.
+      const logs = [...new Map(anexos.filter((a) => doTicket(a) && a.tipo === tipo).map((a) => [a.nome, a])).values()];
+      return (
+        `  - \`${tipo}\`: ${dados?.aprovada === true ? "aprovada" : "não aprovada"}` +
+        (comandos.length > 0 ? ` (${comandos.join("; ")})` : "") +
+        `; logs: ${logs.map((a) => `\`${a.caminho}\``).join(", ") || "(nenhum)"}`
+      );
+    });
+    const endereco = `${ag.demanda.id}.T${String(ultimo.ticket_id)}`;
+    return [
+      `- ${ag.demanda.id}.R${String(rodada_id)}: último commit ${endereco}, \`${String(commitsDosTickets?.get(ultimo.ticket_id))}\``,
+      ...verificacoes,
+    ];
+  });
+  return secao(
+    "Verificações já feitas",
+    "A Fabriquinha rodou estas verificações no commit de cada ticket abaixo, antes de commitá-lo. Se " +
+      "`git rev-parse HEAD^{tree}` na worktree é igual a `git rev-parse <sha>^{tree}` de um deles e " +
+      "`git status --porcelain` está vazio, o código é o verificado: use estes resultados e logs, sem rodar de novo " +
+      "os comandos listados.\n\n" +
+      (linhas.join("\n") || "(nenhuma)"),
+  );
+}
+
 /** As seções que só a etapa precisa, com dados que já existem quando o pi dela é lançado. */
 /**
  * Tudo o que entra na conversa é reenviado a cada turno; arquivo inteiro despejado cedo é o maior custo das sessões
@@ -202,7 +246,11 @@ const SECAO_LEITURA_ECONOMICA = secao(
 
 const SECAO_DA_ETAPA: Partial<Record<EtapaTicket, (c: ContextoDemanda) => string>> = {
   planejar: secaoDesenhoAprovado,
-  revisar_rodada: (c) => secaoRevisoesAnteriores(c) + "\n" + secaoArquivosAlterados(c) + "\n" + secaoMatrizFitness(c),
+  revisar_rodada: (c) =>
+    [secaoRevisoesAnteriores(c), secaoArquivosAlterados(c), secaoMatrizFitness(c), secaoVerificacoesJaFeitas(c)].join(
+      "\n",
+    ),
+  revisar_demanda: secaoVerificacoesJaFeitas,
   encerrar_rodada: (c) => secaoArquivosNaoPrevistos(c) + "\n" + secaoImpactoArquitetura(c),
 };
 
