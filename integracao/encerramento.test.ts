@@ -29,7 +29,7 @@ import {
   rodadaEmEncerramento,
 } from "./apoio-execucao.ts";
 import { base, type Cenario, ciclo, criarCenario, demanda, git } from "./apoio.ts";
-import type { PRFalso } from "../src/repositorio/hospedagem-falsa.test.ts";
+import type { PRFalso } from "../apoio-testes/hospedagem_falsa.ts";
 import { ghFalso } from "./falsos.ts";
 
 const gh = ghFalso(base);

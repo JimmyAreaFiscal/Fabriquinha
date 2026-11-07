@@ -12,7 +12,7 @@ import { registrarCorrecoesSessao } from "../../dominio/transicoes_rodada.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda } from "../../persistencia/demandas.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { hospedagemFalsa } from "../../repositorio/hospedagem-falsa.test.ts";
+import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../repositorio/worktree-demanda.ts";
 import { servir } from "../../../apoio-testes/servidor_web_de_teste.ts";

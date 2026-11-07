@@ -17,7 +17,7 @@ import { carregarDemanda } from "../persistencia/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { configuracao } from "../persistencia/servico.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
+import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import type { Verificacao } from "../evidencias/verificacoes.ts";

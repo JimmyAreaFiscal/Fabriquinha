@@ -7,7 +7,7 @@ import { after, beforeEach, test } from "node:test";
 import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import type { Hospedagem } from "../dominio/projeto.ts";
-import { hospedagemFalsa } from "./hospedagem-falsa.test.ts";
+import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { integrarPR, lerPR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
