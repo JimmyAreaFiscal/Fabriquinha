@@ -73,6 +73,11 @@ test("Endereco.ler: o número sozinho é a demanda", () => {
   assert.equal(Endereco.ler("I-12").toString(), "I-12");
 });
 
+test("Endereco.ler: a demanda aceita o prefixo i ou I com hífen opcional, sem relaxar rodada e ticket", () => {
+  for (const texto of ["i-29", "i29", "I29"]) assert.equal(Endereco.ler(texto).toString(), "I-29", texto);
+  for (const ruim of ["i-29.R1", "i29.T1", "I29.R1"]) assert.throws(() => Endereco.ler(ruim), ErroDeRegra, ruim);
+});
+
 test("Endereco.ler: recusa o que não é endereço dizendo o formato", () => {
   for (const ruim of [
     "I-x",

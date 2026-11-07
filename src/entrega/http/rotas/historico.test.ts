@@ -113,6 +113,8 @@ test("histórico: filtra por projeto, demanda e etapa", async () => {
   const ids = async (query: string) => resumo(await sessoes(query)).map(([s]) => s);
   assert.deepEqual(await ids("escopo=historico&projeto=site"), ["s3", "s4"]);
   assert.deepEqual(await ids("escopo=historico&demanda=I-1"), ["s1"]);
+  for (const forma of ["i-1", "i1", "I1"])
+    assert.deepEqual(await ids(`escopo=historico&demanda=${forma}`), ["s1"], forma);
   assert.deepEqual(await ids("escopo=historico&etapa=planejar"), ["s3", "s4"]);
   assert.deepEqual(await ids("escopo=historico&projeto=loja&etapa=planejar"), []);
 });
