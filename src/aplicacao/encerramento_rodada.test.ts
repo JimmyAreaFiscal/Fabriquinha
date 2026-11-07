@@ -360,6 +360,18 @@ test("CA-9: commit que nenhum ticket registrou falha antes do push, diz como des
   assert.equal(evidencia("pr_aberto"), undefined);
 });
 
+test("commit da base publicada trazido por merge para a rodada não é órfão", async () => {
+  const { banco, rodada, c, fase } = await cenario();
+  commitarArquivo(c.repo, "da-base.txt", "base nova\n");
+  rodarGit(c.repo, "push", "-q", "origin", "integracao");
+  rodarGit(rodada, "fetch", "-q", "origin", "integracao");
+  rodarGit(rodada, "merge", "-q", "--no-ff", "--no-edit", "FETCH_HEAD");
+
+  await concluirEncerramentoRodada(banco, REF);
+
+  assert.equal(fase(), "aprovacao_pull_request");
+});
+
 test("CA-10: a hospedagem recusa o PR, o ticket falha com a saída do comando e o pr_aberto não é gravado", async () => {
   const { banco, ticket, evidencia, fase } = await cenario();
   hospedagem.falhar("pr create", "GraphQL: sem permissão");
