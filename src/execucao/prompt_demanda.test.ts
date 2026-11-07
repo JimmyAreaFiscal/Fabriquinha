@@ -90,6 +90,22 @@ test("a falha de outro ticket ou do ambiente não trava: o implementar corrige e
   assert.match(montar("revisar_rodada"), /Pergunte ao Auditor com a ferramenta `perguntar`/);
 });
 
+test("CA-1: planejar manda deixar fora da rodada o critério provado só no PR final, no deploy ou nos critérios gerais", () => {
+  assert.match(
+    montar("planejar"),
+    /Critério cujo ponto de prova é o PR final da demanda, o deploy ou critérios gerais do projeto \(ex\.: "PR pronto", CG-1 a CG-9\) não é citado em rodada: fica só para a revisão da demanda/,
+  );
+});
+
+test("CA-3, CA-4: critério que nenhuma rodada cita aparece na revisão da demanda e não na da rodada", () => {
+  const soCA1 = { ...ag, criterios_citados: [{ demanda_id: "I-206", rodada_id: 2, criterio_id: "CA-1" }] };
+  const prompt = (etapa: string) => montarPromptDemanda({ ...base, ag: soCA1, ticket: ticket(etapa) });
+  const demanda = prompt("revisar_demanda");
+  assert.match(demanda, /## Critérios de aceite da demanda\n[\s\S]*\*\*CA-2\*\*/);
+  const citados = prompt("revisar_rodada").split("Critérios citados:")[1] ?? "";
+  assert.ok(citados.includes("**CA-1**") && !citados.includes("**CA-2**"));
+});
+
 test("planejar é interativa e permite perguntar ao Auditor (CA-11)", () => {
   assert.match(montar("planejar"), /interativa.*perguntar a ele antes de tomá-las/s);
   assert.match(
