@@ -139,8 +139,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     repo,
     branchBase: "main",
     preparacao: [],
-    modelos: {},
-    efforts: {},
+    configuracoes: {},
   });
   /**
    * O cadastro e a edição conferem o `origin` (só GitHub ou Azure DevOps): aponta-o para um endereço do GitHub que o
