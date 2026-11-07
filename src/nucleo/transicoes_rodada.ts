@@ -32,6 +32,7 @@ const EntradaAprovacaoPR = z.strictObject({ ...TicketRef, nota: z.number().int()
 // A aprovação automática, no projeto que a ligou: a nota é do Auditor, então a Fabriquinha aprova sem ela.
 const EntradaAprovacaoAutomaticaPR = z.strictObject(TicketRef);
 /** O motivo gravado na aprovação automática do PR da rodada, para a decisão não passar por uma do Auditor. */
+/** @testes os testes conferem a decisão gravada; a produção a usa só dentro do módulo */
 export const MOTIVO_APROVACAO_AUTOMATICA_PR =
   "aprovado automaticamente pela Fabriquinha: a revisão da rodada aprovou e o PR não tem conflito nem check falho";
 // Atestado da aplicação confiável de que o PR da rodada foi integrado; sem defaults, ausência recusa.

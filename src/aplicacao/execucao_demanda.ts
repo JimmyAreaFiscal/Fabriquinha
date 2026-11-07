@@ -26,6 +26,7 @@ import { raizDo } from "../armazenamento/banco.ts";
 import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
+import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
 import { anotar, arquivoDaSessao } from "../infra/registro.ts";
 import {
@@ -166,6 +167,16 @@ function perguntasDosTicketsRecusadosDaRodada({
   );
 }
 
+/** O SHA do commit de cada ticket da demanda que tem um (as revisões leem o que a Fabriquinha já verificou nele). */
+function commitsDosTickets({ banco, ag }: Conducao): ContextoDemanda["commitsDosTickets"] {
+  return new Map(
+    ag.tickets.flatMap((t) => {
+      const commit = commitDoTicketDemanda(banco, ag.demanda.id, t.ticket_id);
+      return commit ? [[t.ticket_id, commit.sha] as const] : [];
+    }),
+  );
+}
+
 async function conduzir(c: Conducao): Promise<void> {
   const raiz = raizDo(c.banco);
   const { execucao, sessao, projeto, opcoes } = c;
@@ -188,6 +199,9 @@ async function conduzir(c: Conducao): Promise<void> {
         retomada: opcoes.retomada,
         ...(c.ticket.etapa === "revisar_rodada" && {
           perguntasDasRevisoesAnteriores: perguntasDosTicketsRecusadosDaRodada(c),
+        }),
+        ...((c.ticket.etapa === "revisar_rodada" || c.ticket.etapa === "revisar_demanda") && {
+          commitsDosTickets: commitsDosTickets(c),
         }),
         anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({
           ...a,
