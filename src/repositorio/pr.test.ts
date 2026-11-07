@@ -520,12 +520,18 @@ test("verificarPR: check em andamento e conflito ainda calculado esperam, anotam
   }
 });
 
-test("verificarPR: a lista vazia só vale depois da carência, e então é um PR sem CI", async () => {
+test("verificarPR: a lista vazia só vale depois da carência, e então é um PR sem CI", async (t) => {
+  // O relógio é congelado: o gh/az falso é um processo de verdade e, com a máquina carregada, a primeira consulta
+  // podia passar dos 300 ms sozinha e a carência acabar antes de qualquer espera.
+  t.mock.timers.enable({ apis: ["Date"] });
   for (const tipo of HOSPEDAGENS) {
-    const inicio = Date.now();
+    let decidido = false;
     const { c, resultado } = verificar(tipo, { checks: [] }, { intervaloMs: 10, carenciaMs: 300 });
+    void resultado.then(() => (decidido = true));
+    while (!existsSync(c.log)) await esperar(5);
+    assert.equal(decidido, false, "a lista vazia ainda está na carência");
+    t.mock.timers.tick(300);
     assert.deepEqual(await resultado, { conflito: false, checksFalhos: [] });
-    assert.ok(Date.now() - inicio >= 300, "esperou a carência");
     assert.match(readFileSync(c.log, "utf8"), /PR 1: espera a plataforma ainda calcula o PR/);
     hospedagem.zerar();
   }
