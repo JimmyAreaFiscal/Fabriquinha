@@ -51,6 +51,7 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
   const programa = servicoDeLinguagem.getProgram();
   assert.ok(programa);
   const verificadorDeTipos = programa.getTypeChecker();
+  const consumidoresDoNamespaceInteiro = acharConsumidoresDoNamespaceInteiro(raiz, programa);
   const achados: string[] = [];
 
   for (const arquivoFonte of programa.getSourceFiles()) {
@@ -64,9 +65,20 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
     for (const simbolo of verificadorDeTipos.getExportsOfModule(simboloDoModulo)) {
       // Valor e tipo de mesmo nome são um export só: um importador de qualquer um dos dois basta.
       // Reexport (`export { x } from`, `export *`) não conta: o export final, no arquivo que o declara, é quem responde.
-      const declaracoes = (simbolo.declarations ?? []).filter(
-        (declaracao) => declaracao.getSourceFile() === arquivoFonte && !ts.isExportSpecifier(declaracao),
+      // `export { x }` sem `from` aponta para a declaração local de x, que é onde o export se responde.
+      const especificadoresLocais = (simbolo.declarations ?? []).filter(
+        (declaracao): declaracao is ts.ExportSpecifier =>
+          ts.isExportSpecifier(declaracao) && !declaracao.parent.parent.moduleSpecifier,
       );
+      const declaracoes = [
+        ...(simbolo.declarations ?? []).filter(
+          (declaracao) => declaracao.getSourceFile() === arquivoFonte && !ts.isExportSpecifier(declaracao),
+        ),
+        ...especificadoresLocais
+          .map((especificador) => verificadorDeTipos.getExportSpecifierLocalTargetSymbol(especificador))
+          .filter((simboloLocal) => simboloLocal && !(simboloLocal.flags & ts.SymbolFlags.Alias))
+          .flatMap((simboloLocal) => simboloLocal?.declarations ?? []),
+      ];
       const nomes = declaracoes.map((declaracao) => ts.getNameOfDeclaration(declaracao) ?? declaracao);
       const arquivosQueReferenciam = new Set(
         nomes
@@ -75,10 +87,14 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
               servicoDeLinguagem.getReferencesAtPosition(arquivoFonte.fileName, nome.getStart(arquivoFonte)) ?? [],
           )
           .filter((referencia) => referencia.fileName !== arquivoFonte.fileName && !ehReexport(programa, referencia))
-          .map((referencia) => relative(raiz, referencia.fileName)),
+          .map((referencia) => relative(raiz, referencia.fileName))
+          .concat(consumidoresDoNamespaceInteiro.get(arquivoFonte.fileName) ?? []),
       );
       if ([...arquivosQueReferenciam].some((arquivo) => !ehArquivoDeTeste(arquivo))) continue;
-      const justificativas = declaracoes
+      const justificativas = [
+        ...declaracoes,
+        ...especificadoresLocais.map((especificador) => especificador.parent.parent),
+      ]
         .flatMap((declaracao) => ts.getJSDocTags(declaracao))
         .filter((marca) => marca.tagName.text === "testes");
       const temJustificativa = justificativas.some((marca) => ts.getTextOfJSDocComment(marca.comment)?.trim());
@@ -91,6 +107,36 @@ function acharExportsMortos(raiz: string, opcoesDoCompilador: ts.CompilerOptions
     }
   }
   return achados.sort();
+}
+
+// `import * as m` usado além de `m.x` (ex.: `Object.values(m)`) consome todos os exports do módulo importado.
+function acharConsumidoresDoNamespaceInteiro(raiz: string, programa: ts.Program): Map<string, string[]> {
+  const verificadorDeTipos = programa.getTypeChecker();
+  const consumidores = new Map<string, string[]>();
+  for (const arquivoFonte of programa.getSourceFiles()) {
+    for (const importacao of arquivoFonte.statements.filter(ts.isImportDeclaration)) {
+      const vinculo = importacao.importClause?.namedBindings;
+      if (!vinculo || !ts.isNamespaceImport(vinculo)) continue;
+      const arquivoImportado = verificadorDeTipos
+        .getSymbolAtLocation(importacao.moduleSpecifier)
+        ?.declarations?.[0]?.getSourceFile().fileName;
+      if (!arquivoImportado) continue;
+      const simboloDoNamespace = verificadorDeTipos.getSymbolAtLocation(vinculo.name);
+      const usadoComoObjeto = (no: ts.Node): boolean =>
+        (ts.isIdentifier(no) &&
+          no !== vinculo.name &&
+          verificadorDeTipos.getSymbolAtLocation(no) === simboloDoNamespace &&
+          !(ts.isPropertyAccessExpression(no.parent) && no.parent.expression === no) &&
+          !(ts.isQualifiedName(no.parent) && no.parent.left === no)) ||
+        ts.forEachChild(no, usadoComoObjeto) === true;
+      if (usadoComoObjeto(arquivoFonte))
+        consumidores.set(arquivoImportado, [
+          ...(consumidores.get(arquivoImportado) ?? []),
+          relative(raiz, arquivoFonte.fileName),
+        ]);
+    }
+  }
+  return consumidores;
 }
 
 function ehReexport(programa: ts.Program, referencia: ts.ReferenceEntry): boolean {
@@ -213,6 +259,59 @@ test("a fitness acusa o export final de um reexport sem consumidor e reconhece i
       "src/a.ts:1 morto: sem importador",
       "src/a.ts:6 viaNamespaceSoDeTesteSemMarca: só de teste, falta /** @testes justificativa */",
       "src/consumidor.ts:3 consumidor: só de teste, falta /** @testes justificativa */",
+    ],
+  );
+});
+
+test("a fitness acusa export local via `export { x }` e reconhece namespace consumido como objeto", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  for (const pasta of ["src", "pacote-pi"]) mkdirSync(join(raiz, pasta), { recursive: true });
+  const escrever = (arquivo: string, linhas: string[]): void => {
+    writeFileSync(join(raiz, arquivo), linhas.join("\n"));
+  };
+  escrever("src/local.ts", [
+    "const semImportador = 1;",
+    "const soNoTesteSemMarca = 2;",
+    "/** @testes atalho do teste */",
+    "const soNoTesteMarcado = 3;",
+    "const usadoEmProducao = 4;",
+    "const usadoComOutroNome = 5;",
+    "export { semImportador, soNoTesteSemMarca, soNoTesteMarcado, usadoEmProducao, usadoComOutroNome as nomePublico };",
+  ]);
+  escrever("src/consumidor.ts", [
+    'import { usadoEmProducao, nomePublico } from "./local.ts";',
+    'import * as todos from "./todos.ts";',
+    "export const consumidor = [usadoEmProducao, nomePublico, Object.values(todos)];",
+  ]);
+  escrever("src/todos.ts", ["export const a = 1;", "const b = 2;", "export { b };"]);
+  escrever("src/parcial.ts", ["export const usado = 1;", "export const naoUsado = 2;"]);
+  escrever("src/consumidor-parcial.ts", [
+    'import * as parcial from "./parcial.ts";',
+    "export const consumidorParcial = parcial.usado;",
+  ]);
+  escrever("src/consumidor.test.ts", [
+    'import { soNoTesteSemMarca, soNoTesteMarcado } from "./local.ts";',
+    'import { consumidor } from "./consumidor.ts";',
+    'import { consumidorParcial } from "./consumidor-parcial.ts";',
+    "console.log(consumidor, consumidorParcial, soNoTesteSemMarca, soNoTesteMarcado);",
+  ]);
+
+  assert.deepEqual(
+    acharExportsMortos(raiz, {
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      allowImportingTsExtensions: true,
+      noEmit: true,
+    }),
+    [
+      "src/consumidor-parcial.ts:2 consumidorParcial: só de teste, falta /** @testes justificativa */",
+      "src/consumidor.ts:3 consumidor: só de teste, falta /** @testes justificativa */",
+      "src/local.ts:1 semImportador: sem importador",
+      "src/local.ts:2 soNoTesteSemMarca: só de teste, falta /** @testes justificativa */",
+      "src/parcial.ts:2 naoUsado: sem importador",
     ],
   );
 });
