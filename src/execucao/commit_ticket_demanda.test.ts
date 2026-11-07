@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
+import { ErroDeReprovacao } from "../dominio/erros.ts";
 import { migrar } from "../persistencia/banco.ts";
 import { commitDoTicketDemanda } from "../persistencia/commits_demanda.ts";
 import { MIGRACOES } from "../persistencia/migracoes.ts";
@@ -51,7 +52,12 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
   assert.equal(await acharCommitTicketDemanda(worktree, ref(1)), undefined);
   escreve(worktree, "a.txt", "a\nb\nc\n");
   escreve(worktree, "novo.txt", "x\ny\n");
-  const feito = await commitarTicketDemanda(banco, ref(1), { worktree, tipo: "feat", titulo: "Cache" });
+  const feito = await commitarTicketDemanda(banco, ref(1), {
+    worktree,
+    tipo: "feat",
+    titulo: "Cache",
+    etapa: "implementar",
+  });
   assert.equal(feito.mensagem, "feat: Cache [I-1.T1]");
   assert.deepEqual(
     feito.arquivos.map((a) => [a.caminho, a.status, a.adicionadas, a.removidas]),
@@ -67,17 +73,42 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
 
   // queda antes da gravação: o commit existe, o registro não
   banco.exec("DELETE FROM arquivo_commit_demanda; DELETE FROM commit_ticket_demanda");
-  const de_novo = await commitarTicketDemanda(banco, ref(1), { worktree, tipo: "feat", titulo: "Cache" });
+  const de_novo = await commitarTicketDemanda(banco, ref(1), {
+    worktree,
+    tipo: "feat",
+    titulo: "Cache",
+    etapa: "implementar",
+  });
   assert.equal(de_novo.sha, feito.sha);
   assert.equal(git(worktree, "rev-list", "--count", "HEAD").trim(), "2");
   assert.deepEqual(commitDoTicketDemanda(banco, "I-1", 1), feito);
 });
 
-test("sem alteração o commit sai vazio", async () => {
+test("implementar sem alteração é recusado, sem commit", async () => {
   const { worktree, banco } = cenario();
-  const c = await commitarTicketDemanda(banco, ref(1), { worktree, tipo: "fix", titulo: "Nada" });
+  await assert.rejects(
+    commitarTicketDemanda(banco, ref(1), { worktree, tipo: "fix", titulo: "Nada", etapa: "implementar" }),
+    (erro) =>
+      erro instanceof ErroDeReprovacao && erro.message.startsWith("o ticket I-1.T1 terminou sem alteração na worktree"),
+  );
+  assert.equal(git(worktree, "rev-list", "--count", "HEAD").trim(), "1");
+});
+
+test("resolver_conflito sem alteração commita o merge vazio com dois pais", async () => {
+  const { worktree, banco } = cenario();
+  git(worktree, "checkout", "-qb", "outra");
+  git(worktree, "commit", "-q", "--allow-empty", "-m", "outra");
+  git(worktree, "checkout", "-q", "main");
+  git(worktree, "merge", "--no-ff", "--no-commit", "outra");
+  const c = await commitarTicketDemanda(banco, ref(2), {
+    worktree,
+    tipo: "fix",
+    titulo: "Nada",
+    etapa: "resolver_conflito",
+  });
   assert.deepEqual(c.arquivos, []);
-  assert.equal(c.mensagem, "fix: Nada [I-1.T1]");
+  assert.equal(c.mensagem, "fix: Nada [I-1.T2]");
+  assert.equal(git(worktree, "log", "-1", "--format=%P").trim().split(" ").length, 2);
 });
 
 test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
@@ -91,7 +122,12 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
   git(worktree, "add", "-A");
   git(worktree, "commit", "-qm", "main");
   git(worktree, "merge", "--no-commit", "--no-ff", "outra");
-  const c = await commitarTicketDemanda(banco, ref(2), { worktree, tipo: "fix", titulo: "Conflito" });
+  const c = await commitarTicketDemanda(banco, ref(2), {
+    worktree,
+    tipo: "fix",
+    titulo: "Conflito",
+    etapa: "resolver_conflito",
+  });
   assert.equal(git(worktree, "rev-list", "--parents", "-n1", "HEAD").trim().split(" ").length, 3);
   assert.deepEqual(
     c.arquivos.map((a) => a.caminho),
@@ -102,9 +138,9 @@ test("merge do resolver_conflito: arquivos contra o primeiro pai", async () => {
 test("o commit do ticket grava o retrabalho sobre as linhas do ticket anterior", async () => {
   const { worktree, banco } = cenario();
   escreve(worktree, "a.txt", "a\nb\nc\nd\ne\n");
-  await commitarTicketDemanda(banco, ref(1), { worktree, tipo: "feat", titulo: "Um" });
+  await commitarTicketDemanda(banco, ref(1), { worktree, tipo: "feat", titulo: "Um", etapa: "implementar" });
   escreve(worktree, "a.txt", "a\nb\nX\nY\nZ\n");
-  await commitarTicketDemanda(banco, ref(2), { worktree, tipo: "feat", titulo: "Dois" });
+  await commitarTicketDemanda(banco, ref(2), { worktree, tipo: "feat", titulo: "Dois", etapa: "implementar" });
   assert.deepEqual(
     banco
       .prepare(
