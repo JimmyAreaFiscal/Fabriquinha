@@ -3,7 +3,6 @@ import { test } from "node:test";
 import {
   type DependenciaDemanda,
   dependentesNaoConcluidas,
-  exigirRemovivel,
   predecessorasPendentes,
   registrarDependencia,
 } from "./dependencia_demanda.ts";
@@ -43,21 +42,6 @@ test("CA-5: recusa ciclo indireto", () => {
 test("CA-6: aceita diamante sem ciclo", () => {
   const existentes = [aresta("I-2", "I-1"), aresta("I-3", "I-1"), aresta("I-4", "I-2")];
   assert.deepEqual(registrarDependencia(existentes, livre("I-4"), "I-3"), aresta("I-4", "I-3"));
-});
-
-test("CA-7: remove aresta existente de demanda não enviada", () => {
-  assert.doesNotThrow(() => {
-    exigirRemovivel([aresta("I-2", "I-1")], livre("I-2"), "I-1");
-  });
-});
-
-test("CA-8: recusa remover de demanda enviada e aresta inexistente", () => {
-  assert.throws(() => {
-    exigirRemovivel([aresta("I-2", "I-1")], { id: "I-2", enviada: true }, "I-1");
-  }, /já foi enviada/);
-  assert.throws(() => {
-    exigirRemovivel([], livre("I-2"), "I-1");
-  }, /não depende/);
 });
 
 test("CA-9 e CA-10: concluída e arquivada satisfazem; o resto fica pendente", () => {

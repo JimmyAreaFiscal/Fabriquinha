@@ -1,8 +1,8 @@
 // Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar e decidir.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { type Ator, exigirAuditor, exigirFabriquinha, TipoIssue } from "./agregado.ts";
-import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
+import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
+import { type Ator, exigirAuditor, exigirFabriquinha } from "./ator.ts";
 import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
@@ -17,11 +17,11 @@ const EntradaRegistro = z.strictObject({
   id: DemandaId,
   projeto: Slug,
   titulo: Titulo,
-  tipo: TipoIssue,
+  tipo: TipoDemanda,
   descricao: Markdown,
 });
 const EntradaEdicao = z
-  .strictObject({ titulo: Titulo.optional(), tipo: TipoIssue.optional(), descricao: Markdown.optional() })
+  .strictObject({ titulo: Titulo.optional(), tipo: TipoDemanda.optional(), descricao: Markdown.optional() })
   .refine((e) => (e.titulo ?? e.tipo ?? e.descricao) !== undefined, "informe ao menos um campo para editar");
 const EntradaDecisao = z.discriminatedUnion("aprovado", [
   z.strictObject({ aprovado: z.literal(true), nota: z.number().int().min(1).max(5).optional() }),
@@ -382,6 +382,7 @@ const EntradaDevolucao = z.strictObject({
   ticket_id: Id,
   instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
 });
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const MAX_DEVOLUCOES = 2;
 
 export function ticketEmStatus(ag: AgregadoDemanda, ticket_id: number, status: TicketDemanda["status"], acao: string) {

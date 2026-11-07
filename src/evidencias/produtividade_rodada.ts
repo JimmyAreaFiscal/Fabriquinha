@@ -10,7 +10,7 @@ import {
 } from "../dominio/sessoes.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";
 
-export interface ConsumoRodada {
+interface ConsumoRodada {
   execucoes: number;
   tokensEntrada: number;
   tokensSaida: number;
@@ -20,7 +20,7 @@ export interface ConsumoRodada {
   custo: number;
   custoIncompleto: boolean;
 }
-export interface TicketProduzido extends ConsumoRodada {
+interface TicketProduzido extends ConsumoRodada {
   ticket: string;
   etapa: string;
 }

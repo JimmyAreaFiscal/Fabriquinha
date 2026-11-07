@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
-import { AUDITOR } from "../dominio/agregado.ts";
+import { AUDITOR } from "../dominio/ator.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../dominio/erros.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";

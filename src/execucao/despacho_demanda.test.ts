@@ -14,7 +14,7 @@ import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
-import { alterarLimiteParalelismo, configuracao } from "../persistencia/servico.ts";
+import { configuracao } from "../persistencia/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
 import { garantirWorktreeDemanda } from "../repositorio/worktree-demanda.ts";
@@ -96,7 +96,7 @@ async function cenario(limite: number, real = false) {
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
-  alterarLimiteParalelismo(banco, limite);
+  banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
   if (real) {
     process.env.FABRIQUINHA_PI = pi;
     await garantirWorktreeDemanda(c.raiz, c.projeto, "I-2", c.log, () => Promise.resolve());

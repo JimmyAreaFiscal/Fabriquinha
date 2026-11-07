@@ -1,4 +1,4 @@
-/* Cliente da Fabriquinha (F7 §4.4): tokens e fontes do issues-local (variante C · Plex quente), vindos de
+/* Cliente da Fabriquinha (F7 §4.4): tokens e fontes da variante C · Plex quente, vindos de
    prototipos/base.css, e as peças comuns às páginas. Os estilos de cada página entram numa seção própria. */
 @font-face {
   font-family: "IBM Plex Sans";
@@ -1495,10 +1495,10 @@ input.erro {
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
-.estado-sessao .issue {
+.estado-sessao .demanda {
   font-weight: var(--w-strong);
 }
-.estado-sessao .issue .id {
+.estado-sessao .demanda .id {
   margin-right: 2px;
 }
 .estado-sessao .sep {
@@ -2988,7 +2988,7 @@ svg.barras :not(.hit) {
   display: none;
 }
 
-/* Demandas: o que o Auditor lê na aprovação da demanda, como no antigo gate do registro e do desenho da issue. */
+/* Demandas: o que o Auditor lê na aprovação da demanda. */
 .dm-aprovacao,
 .dm-desenho {
   display: flex;
@@ -3643,24 +3643,24 @@ svg.barras :not(.hit) {
   background: var(--surface-2);
   border-radius: var(--r-lg);
 }
-.pista-issue {
+.pista-demanda {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   min-width: 0;
   padding: 0 var(--s-3) 0 var(--s-2);
 }
-.pista-issue .texto {
+.pista-demanda .texto {
   min-width: 0;
 }
-.pista-issue .titulo {
+.pista-demanda .titulo {
   display: block;
   font-weight: var(--w-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pista-issue .sub {
+.pista-demanda .sub {
   display: flex;
   flex-wrap: wrap;
   gap: 2px var(--s-2);
@@ -3722,7 +3722,7 @@ svg.barras :not(.hit) {
 .pista-rodada {
   min-height: 32px;
 }
-.pista-rodada .pista-issue {
+.pista-rodada .pista-demanda {
   padding-left: 34px;
 }
 .pista-rodada .sub {

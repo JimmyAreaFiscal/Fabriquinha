@@ -20,12 +20,14 @@ const indice = (mes: string): number => {
 export const mesDe = (d: Date): string => `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
 /** O mês `n` meses depois (ou antes, com `n` negativo). */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function somarMeses(mes: string, n: number): string {
   const i = indice(mes) + n;
   return `${String(Math.floor(i / 12))}-${String((i % 12) + 1).padStart(2, "0")}`;
 }
 
 /** Quantos meses há de `de` a `ate`, inclusive. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const contarMeses = (de: string, ate: string): number => indice(ate) - indice(de) + 1;
 
 /** Os meses de `de` a `ate`, inclusive. */
@@ -37,6 +39,7 @@ const extenso = (mes: string): string =>
   new Date(Math.floor(indice(mes) / 12), indice(mes) % 12, 1).toLocaleString("pt-BR", { month: "long" });
 
 /** `out/26`. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const rotuloMes = (mes: string): string => `${extenso(mes).slice(0, 3)}/${mes.slice(2, 4)}`;
 
 // ——— números ———
@@ -54,12 +57,14 @@ const somaDosTokens = ({ tokens: t }: Pick<Soma, "tokens">): number =>
 const dinheiro = (c: Custo): string => `${custo(c.conhecido)}${c.incompleto ? " *" : ""}`;
 
 /** A média simples, sem os `null` (mês sem nota fica fora); `null` quando não sobra nada. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function media(valores: readonly (number | null)[]): number | null {
   const v = valores.filter((x) => x !== null);
   return v.length > 0 ? v.reduce((a, b) => a + b, 0) / v.length : null;
 }
 
 /** A variação do valor contra a média, em %; vazia quando um dos dois falta ou a média é zero. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function variacao(atual: number | null, med: number | null): string {
   if (atual === null || med === null || med === 0) return "";
   const p = Math.round(((atual - med) / med) * 100);
@@ -221,6 +226,7 @@ function opcoesDeMes(atual: string, escolhido: string, desabilitado: (mes: strin
 }
 
 /** A frase da comparação (F7 §4.4). */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function resumo({ de, foco }: Pick<EstadoDasMetricas, "de" | "foco">): string {
   const n = contarMeses(de, foco) - 1;
   if (n === 0) return `<b>${rotuloMes(foco)}</b> é o primeiro mês do período: sem média para comparar`;
@@ -347,7 +353,7 @@ export function evolucao(meses: readonly MetricasMes[], e: EstadoDasMetricas, la
 }
 
 /** Uma linha da dica: a cor da marca, o valor e o nome. */
-export type LinhaDaDica = readonly [cor: string, valor: string, nome: string];
+type LinhaDaDica = readonly [cor: string, valor: string, nome: string];
 
 /** A dica de um mês do gráfico: o valor, o par e, no mês em foco, a média dos anteriores. */
 export function dica(
@@ -367,6 +373,7 @@ export function dica(
 }
 
 /** O **ver tabela** do gráfico: os mesmos números, mês a mês. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function tabelaDaEvolucao(meses: readonly MetricasMes[], e: EstadoDasMetricas): string {
   const def = METRICAS[e.metrica];
   const linhas = meses.map((m) => {

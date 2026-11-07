@@ -14,6 +14,7 @@ const REMOTOS: [RegExp, Hospedagem][] = [
 ];
 
 /** Hospedagem pelos formatos de URL do `origin` aceitos (F5 §2.1); qualquer outro host dá `undefined`. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const hospedagemDoRemoto = (url: string): Hospedagem | undefined =>
   REMOTOS.find(([padrao]) => padrao.test(url))?.[1];
 

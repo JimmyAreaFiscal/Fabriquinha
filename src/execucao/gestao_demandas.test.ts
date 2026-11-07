@@ -5,11 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { AUDITOR } from "../dominio/agregado.ts";
+import { AUDITOR } from "../dominio/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
+import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import * as gestao from "./gestao_demandas.ts";
 
@@ -125,14 +126,11 @@ test("CA-3: dependência que fecha ciclo é recusada e nenhuma aresta nova é gr
   const idB = registrar(b);
   const idA = registrar(b, [idB]);
   assert.throws(() => {
-    gestao.registrarDependencia(b, idB, idA, autor);
+    registrarDependenciaDemanda(b, idB, idA);
   }, /ciclo de dependência/);
   assert.equal(b.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n, 1);
-  assert.throws(() => {
-    gestao.registrarDependencia(b, idB, idA, outra);
-  }, ErroDeEscopo);
   const idC = registrar(b);
-  gestao.registrarDependencia(b, idC, idB, autor);
+  registrarDependenciaDemanda(b, idC, idB);
   assert.equal(b.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n, 2);
 });
 
@@ -325,17 +323,8 @@ test("CA-28: arquivar fora de concluida é recusado", () => {
   assert.equal(carregarDemanda(b, id).demanda.fase, "aprovacao_demanda");
 });
 
-test("CA-29: o módulo exporta as operações de registro, edição, dependência, evidência, envio, decisão, cancelamento e arquivamento", () => {
-  const nomes = [
-    "registrar",
-    "editar",
-    "registrarDependencia",
-    "submeterEvidencia",
-    "enviar",
-    "decidir",
-    "cancelar",
-    "arquivar",
-  ];
+test("CA-29: o módulo exporta as operações de registro, edição, evidência, envio, decisão, cancelamento e arquivamento", () => {
+  const nomes = ["registrar", "editar", "submeterEvidencia", "enviar", "decidir", "cancelar", "arquivar"];
   for (const nome of nomes) {
     assert.equal(typeof (gestao as Record<string, unknown>)[nome], "function", nome);
   }

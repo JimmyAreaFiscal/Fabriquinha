@@ -1,10 +1,12 @@
 // Sessão, execução da sessão e uso por modelo (comparacao-sdlc-implementacao.md §7.3). Funções puras sobre arrays:
-// quem chama persiste o resultado. `ExecucaoSessao` não substitui a `Execucao` legada de agregado.ts.
+// quem chama persiste o resultado. `ExecucaoSessao` registra uma execução do pi dentro da sessão.
 import { z } from "zod";
-import { ModoExecucao } from "./agregado.ts";
 import { TicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { Effort, Id, Instante } from "./primitivos.ts";
+
+export const ModoExecucao = z.enum(["autonomo", "interativo", "consulta"]);
+export type ModoExecucao = z.infer<typeof ModoExecucao>;
 
 const IdTexto = z.string().trim().min(1);
 const Tokens = z.number().int().nonnegative();
@@ -51,7 +53,6 @@ export const UsoModeloExecucao = z.object({
 export type Sessao = z.infer<typeof Sessao>;
 export type ExecucaoSessao = z.infer<typeof ExecucaoSessao>;
 export type UsoModeloExecucao = z.infer<typeof UsoModeloExecucao>;
-export type EstadoExecucaoSessao = "em_andamento" | "sucesso" | "falha";
 
 export interface TotalUso {
   tokens_entrada: number;
@@ -72,10 +73,6 @@ export const criarSessao = (sessoes: readonly Sessao[], nova: Sessao): Sessao[] 
 
 /** Fim null ou omitido é execução não encerrada. */
 const aberta = (e: ExecucaoSessao): boolean => e.fim == null;
-
-/** `falha` sozinha não indica sucesso enquanto não houver fim. */
-export const estadoExecucao = (e: ExecucaoSessao): EstadoExecucaoSessao =>
-  aberta(e) ? "em_andamento" : e.falha ? "falha" : "sucesso";
 
 const abrir = (
   sessoes: readonly Sessao[],
@@ -127,6 +124,7 @@ export const registrarUso = (usos: readonly UsoModeloExecucao[], uso: UsoModeloE
 };
 
 /** Soma os usos das execuções das sessões dadas; cada chave conta uma vez, mesmo em sessões retomadas. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const totalDeSessoes = (
   sessoes: readonly Sessao[],
   execucoes: readonly ExecucaoSessao[],
@@ -154,18 +152,6 @@ export const totalDeSessoes = (
   return total;
 };
 
-export const totalDaSessao = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
-  usos: readonly UsoModeloExecucao[],
-  id: string,
-) =>
-  totalDeSessoes(
-    sessoes.filter((s) => s.id === id),
-    execucoes,
-    usos,
-  );
-
 export const totalDoTicket = (
   sessoes: readonly Sessao[],
   execucoes: readonly ExecucaoSessao[],
@@ -174,18 +160,6 @@ export const totalDoTicket = (
 ) =>
   totalDeSessoes(
     sessoes.filter((s) => s.demanda_id === ticket.demanda_id && s.ticket_id === ticket.ticket_id),
-    execucoes,
-    usos,
-  );
-
-export const totalDaDemanda = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
-  usos: readonly UsoModeloExecucao[],
-  demandaId: string,
-) =>
-  totalDeSessoes(
-    sessoes.filter((s) => s.demanda_id === demandaId),
     execucoes,
     usos,
   );

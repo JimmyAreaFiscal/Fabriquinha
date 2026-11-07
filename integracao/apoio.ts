@@ -7,13 +7,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
-import { AUDITOR } from "../src/dominio/agregado.ts";
+import { AUDITOR, type Ator } from "../src/dominio/ator.ts";
 import { type AutorDemanda } from "../src/dominio/evidencia_demanda.ts";
+import { submeterPlano } from "../src/dominio/transicoes_demanda.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/execucao/despacho_demanda.ts";
 import * as gestao from "../src/execucao/gestao_demandas.ts";
 import { abrir } from "../src/persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { carregarDemanda } from "../src/persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../src/persistencia/demandas.ts";
 import { type Configuracao, configuracao } from "../src/persistencia/servico.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
@@ -33,6 +34,15 @@ export const git = (cwd: string, ...args: string[]): string =>
   execFileSync("/usr/bin/git", args, { cwd, stdio: "pipe" }).toString().trim();
 
 export const CTX = { agora: "2026-01-01T00:00:00.000Z" };
+
+/** O limite global de paralelismo (D04) não tem rota de escrita: o teste o grava direto na configuração. */
+export const gravarLimiteParalelismo = (banco: DatabaseSync, limite: number): void => {
+  banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
+};
+
+/** O envio do plano pelo agente do `planejar`, como o CLI do agente o grava: `submeterPlano` na transação da demanda. */
+export const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, plano: unknown, agente: Ator) =>
+  comDemanda(banco, demandaId, (ag) => submeterPlano(ag, plano, agente, { agora: new Date().toISOString() }));
 /** A IA externa que registra e envia a demanda, e outra sessão, que não é a autora. */
 export const AUTOR: AutorDemanda = { ferramenta: "claude", sessao: "S1" };
 export const OUTRA_SESSAO: AutorDemanda = { ferramenta: "claude", sessao: "S2" };

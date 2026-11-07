@@ -6,7 +6,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import type { AgregadoDemanda, EvidenciaDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import { validarEvidenciaDaEtapa } from "../dominio/evidencia_etapa.ts";

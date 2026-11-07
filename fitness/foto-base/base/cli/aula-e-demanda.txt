@@ -1,0 +1,35 @@
+$ fabriquinha evidencia schema aula_codigo
+código: 0
+--- stdout
+{"dados":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"trechos":{"minItems":1,"type":"array","items":{"type":"object","properties":{"arquivo":{"type":"string","minLength":1,"description":"caminho como aparece no arquivos_alterados"},"inicio":{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991,"description":"primeira linha do trecho no arquivo atual"},"fim":{"type":"integer","exclusiveMinimum":0,"maximum":9007199254740991,"description":"última linha do trecho, inclusive"},"oQueFaz":{"type":"string","minLength":1,"maxLength":1000},"porQue":{"type":"string","minLength":1,"maxLength":2000,"description":"a lógica por trás do trecho: por que ele é escrito assim"},"decisaoDoDesenho":{"type":"string","minLength":1,"maxLength":1000,"description":"a decisão do desenho aprovado que o trecho cumpre"},"alternativaDescartada":{"type":"string","minLength":1,"maxLength":1000}},"required":["arquivo","inicio","fim","oQueFaz","porQue","decisaoDoDesenho"]},"description":"na ordem de leitura"}},"required":["trechos"]},"arquivos":{"classes":["html"],"min":1,"max":1}}
+--- stderr
+
+$ fabriquinha evidencia add I-206.T7 aula_codigo --dados <dados.json>
+código: 1
+--- stdout
+--- stderr
+a.ts:1-1 não toca nenhuma linha alterada pela issue (as linhas alteradas de a.ts são 2-3)
+
+$ fabriquinha evidencia add I-206.T7 aula_codigo --dados <dados.json>
+código: 1
+--- stdout
+--- stderr
+c.ts não é um arquivo criado ou alterado pela issue (escolha um da lista: a.ts, b.ts)
+
+$ fabriquinha evidencia add I-206.T7 aula_codigo --dados <dados.json>
+código: 1
+--- stdout
+--- stderr
+a issue não tem revisão concluída com arquivos_alterados (a aula vem depois da revisão)
+
+$ fabriquinha evidencia add I-206.T7 aula_codigo --dados <dados.json>
+código: 0
+--- stdout
+{"ticket":"I-206.T7","tipo":"aula_codigo"}
+--- stderr
+
+$ fabriquinha demanda ver I-206
+código: 0
+--- stdout
+{"demanda":{"id":"I-206","projeto":"loja","titulo":"Busca <rápida>","tipo":"funcionalidade","descricao":"d","fase":"planejamento","fase_alterada_em":"<DATA>","origem_ferramenta":"claude","origem_sessao":"s1","enviada":true,"branch":"fabriquinha/I-206"},"rodadas":[{"rodada":"I-206.R1","titulo":"r1","fase":"revisao","e2e":false,"branch":"fabriquinha/I-206-1"}],"decisoes":[],"tickets":[{"ticket":"I-206.T7","rodada":"I-206.R1","etapa":"encerrar_rodada","status":"em_execucao","status_alterado_em":"<DATA>","devolucoes":0,"evidencias":[{"tipo":"aula_codigo","em":"<DATA>"}]},{"ticket":"I-206.T8","rodada":"I-206.R1","etapa":"revisar_rodada","status":"concluido","status_alterado_em":"<DATA>","devolucoes":0}]}
+--- stderr

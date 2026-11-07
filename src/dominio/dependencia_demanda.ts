@@ -41,23 +41,6 @@ export function registrarDependencia(
   return nova;
 }
 
-/** CA-7 e CA-8: só remove aresta que existe, de demanda ainda não enviada. */
-export function exigirRemovivel(
-  existentes: readonly DependenciaDemanda[],
-  demanda: { id: string; enviada: boolean },
-  dependeId: string,
-): void {
-  if (demanda.enviada) {
-    throw new ErroDeRegra(
-      `a demanda ${demanda.id} já foi enviada`,
-      "a dependência só se remove antes do envio da demanda",
-    );
-  }
-  if (!existentes.some((e) => mesma(e, { demanda_id: demanda.id, depende_demanda_id: dependeId }))) {
-    throw new ErroDeRegra(`a demanda ${demanda.id} não depende da ${dependeId}`);
-  }
-}
-
 /** CA-9 e CA-10: os ids das predecessoras que ainda não satisfazem a dependência (D08: arquivada satisfaz). */
 export const predecessorasPendentes = (predecessoras: readonly { demanda_id: string; fase: FaseDemanda }[]): string[] =>
   predecessoras.filter((p) => !satisfazDependencia(p.fase)).map((p) => p.demanda_id);

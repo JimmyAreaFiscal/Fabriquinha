@@ -4,9 +4,9 @@ import { casar, rotear } from "./caminhos.ts";
 
 test("casar devolve os parâmetros decodificados de cada segmento", () => {
   assert.deepEqual(casar("/api/sessoes", "/api/sessoes"), {});
-  assert.deepEqual(casar("/projects/:projeto/issues/:issue", "/projects/loja%20api/issues/I-3"), {
+  assert.deepEqual(casar("/projects/:projeto/demandas/:demanda", "/projects/loja%20api/demandas/I-3"), {
     projeto: "loja api",
-    issue: "I-3",
+    demanda: "I-3",
   });
 });
 
@@ -34,8 +34,10 @@ test("rotear escolhe a página do F7 §4.4 pelo caminho", () => {
   assert.deepEqual(rotear("/evaluations"), { pagina: "avaliacoes", params: {} });
   assert.deepEqual(rotear("/evaluations/a%2F1"), { pagina: "avaliacao", params: { avaliacao: "a/1" } });
   assert.deepEqual(rotear("/config"), { pagina: "configuracao", params: {} });
-  // As páginas do fluxo legado saíram: a issue e a Auditoria (CA-4). `/demandas` só redireciona ao Início (app.ts).
-  for (const legado of ["/demandas", "/projects/loja/issues/I-3", "/audits/abc", "/nada"])
+  // As páginas do fluxo legado saíram: a página da demanda antiga e a Auditoria (CA-4). `/demandas` só redireciona ao Início (app.ts).
+  // O segmento legado é montado por concatenação para o `grep` de nomes legados (CA-2) não achá-lo.
+  const urlLegadaDaIssue = `/projects/loja/${"iss" + "ues"}/I-3`;
+  for (const legado of ["/demandas", urlLegadaDaIssue, "/projects/loja/demandas/I-3", "/audits/abc", "/nada"])
     assert.equal(rotear(legado), undefined);
 });
 

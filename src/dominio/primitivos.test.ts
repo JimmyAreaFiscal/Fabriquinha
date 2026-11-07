@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { z } from "zod";
 import {
-  Etapa,
   EtapaTicket,
-  Fase,
   FaseDemanda,
   FaseRodada,
   StatusTicket,
@@ -71,23 +69,6 @@ test("Modelo é o par provedor + modelo", () => {
     { provedor: "openai", modelo: "x".repeat(201) },
     { provedor: "openai" },
   );
-});
-
-test("Etapa e Fase têm exatamente os valores do F1", () => {
-  assert.deepEqual(Etapa.options, ["registro", "desenho", "desenvolvimento", "revisao", "encerramento", "sessao"]);
-  assert.deepEqual(Fase.options, [
-    "registro",
-    "desenho",
-    "aprovacao_desenho",
-    "desenvolvimento",
-    "revisao",
-    "encerramento",
-    "aprovacao_pr",
-    "ajuste_pr",
-    "concluida",
-  ]);
-  recusa(Etapa, "implementacao");
-  recusa(Fase, "arquivada");
 });
 
 test("estados SDLC têm exatamente os valores da seção 2.1", () => {

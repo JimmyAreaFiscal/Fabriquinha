@@ -1,6 +1,6 @@
 // Revisão integral da demanda (comparacao-sdlc-implementacao.md §§3, 4, 8): inicia, conduz na worktree da demanda e decide.
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, FABRIQUINHA } from "../dominio/agregado.ts";
+import { type Ator, FABRIQUINHA } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { encontrado } from "../dominio/erros.ts";
 import { iniciarRevisaoDemanda, registrarRevisaoDemanda } from "../dominio/transicoes_demanda.ts";

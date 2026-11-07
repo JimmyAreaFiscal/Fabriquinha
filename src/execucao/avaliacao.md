@@ -17,4 +17,4 @@
 
 **Depois:** o Auditor pode perguntar sobre os achados. Responda na mesma conversa, abrindo os arquivos em vez de lembrar de memória.
 
-**O que não fazer:** só leia. Não altere arquivo nem a worktree, não use `bash`, `write` nem `edit`, não crie issue, demanda, ticket, PR, commit nem push. O único registro permitido é `registrar_achado`; quem encaminha um achado como demanda é o Auditor.
+**O que não fazer:** só leia. Não altere arquivo nem a worktree, não use `bash`, `write` nem `edit`, não crie demanda, ticket, PR, commit nem push. O único registro permitido é `registrar_achado`; quem encaminha um achado como demanda é o Auditor.

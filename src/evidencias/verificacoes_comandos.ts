@@ -22,6 +22,7 @@ export interface Verificacao {
   logs: { nome: string; texto: string }[];
 }
 
+/** @testes tipo que o teste usa para montar a entrada */
 export interface EntradaComandos {
   projeto: Projeto;
   e2e: boolean;

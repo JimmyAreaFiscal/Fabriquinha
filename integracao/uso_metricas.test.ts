@@ -6,7 +6,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { retomarSessao, registrarUso, totalDoTicket } from "../src/dominio/sessoes.ts";
 import { submeterEvidencia } from "../src/execucao/gestao_demandas.ts";
-import { alterarLimiteParalelismo } from "../src/persistencia/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/persistencia/sessoes.ts";
 import { metricasDaDemanda } from "../src/metricas/demanda.ts";
 import { mesDe } from "../src/metricas/periodo.ts";
@@ -23,7 +22,7 @@ import {
   despacharComAgente,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { AUTOR, ciclo, criarCenario, CTX, demanda } from "./apoio.ts";
+import { AUTOR, ciclo, criarCenario, CTX, demanda, gravarLimiteParalelismo } from "./apoio.ts";
 
 interface Ref {
   demanda_id: string;
@@ -120,7 +119,7 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
 
 test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo externo fica no escopo dela e não aciona gate", async (t) => {
   const c = criarCenario(t);
-  alterarLimiteParalelismo(c.banco, 4);
+  gravarLimiteParalelismo(c.banco, 4);
   const id = await demandaEmExecucao(c, [{ tickets: 1 }, { tickets: 1 }]);
   const [r1, r2] = [ticketDe(c, id, 1), ticketDe(c, id, 2)];
   abrirPortao();

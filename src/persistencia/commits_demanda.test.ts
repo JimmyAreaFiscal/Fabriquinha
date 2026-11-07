@@ -9,7 +9,6 @@ import {
   gravarCommitDemanda,
   gravarRetrabalhoDoTicket,
   gravarRetrabalhoExterno,
-  retrabalhoDoTicket,
 } from "./commits_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
@@ -40,6 +39,22 @@ const banco = () => {
   }
   return b;
 };
+/** Lê o que a gravação deixou em `retrabalho_demanda` para o ticket de origem; a produção só lê isso por agregação. */
+const retrabalhoDoTicket = (b: DatabaseSync, demandaId: string, origem: number) =>
+  b
+    .prepare(
+      `SELECT commit_alterador, ticket_id, alterador_demanda_id, autor, linhas FROM retrabalho_demanda
+       WHERE demanda_id = ? AND ticket_origem_id = ? ORDER BY rowid`,
+    )
+    .all(demandaId, origem)
+    .map((l) => ({
+      commitAlterador: l.commit_alterador as string,
+      ...(l.ticket_id === null ? { autor: l.autor as string } : { ticketAlterador: l.ticket_id as number }),
+      ...(l.alterador_demanda_id === null || l.alterador_demanda_id === demandaId
+        ? {}
+        : { demandaAlteradora: l.alterador_demanda_id as string }),
+      linhas: l.linhas as number,
+    }));
 const commit = (c: string, arquivos: ArquivoCommit[] = []): Commit => ({
   sha: sha(c),
   mensagem: "m",

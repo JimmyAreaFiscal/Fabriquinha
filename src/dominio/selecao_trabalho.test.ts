@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "./agregado.ts";
+import { AUDITOR } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { selecionarTrabalho, selecionarTrabalhoGlobal } from "./selecao_trabalho.ts";
 import { concluirSessaoRodada, registrarCorrecoesSessao, reprovarPullRequestRodada } from "./transicoes_rodada.ts";

@@ -91,7 +91,7 @@ export async function montarDemanda(main: HTMLElement, params: Parametros, signa
   );
 }
 
-/** O HTML da evidência (o desenho, os impactos) na caixa, num iframe sandbox, como o Auditor o lia na issue. */
+/** O HTML da evidência (o desenho, os impactos) na caixa, num iframe sandbox, como o Auditor o lê na demanda. */
 function abrirHtmlNaCaixa(botao: HTMLButtonElement): void {
   const link = botao.dataset.html ?? "";
   const nome = botao.dataset.nome ?? "";

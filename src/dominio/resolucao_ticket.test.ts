@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { classificarSaidaE2E, resolverModeloEffort } from "./resolucao_ticket.ts";
+import { resolverModeloEffort } from "./resolucao_ticket.ts";
 
 const sonnet = { modelo_provedor: "claude-bridge", modelo_nome: "claude-sonnet-5-5" };
 const haiku = { modelo_provedor: "claude-bridge", modelo_nome: "claude-haiku-5-5" };
@@ -46,10 +46,4 @@ test("CA-15: origens de modelo e effort são separadas", () => {
   const r = resolverModeloEffort(sonnet, etapa({ effort: "high" }));
   assert.equal(r.modelo.origem, "ticket");
   assert.equal(r.effort.origem, "etapa");
-});
-
-test("CA-9 a CA-11: classificação da saída do E2E", () => {
-  assert.equal(classificarSaidaE2E(3, 0), "passou");
-  assert.equal(classificarSaidaE2E(3, 3), "reprovado");
-  assert.equal(classificarSaidaE2E(3, 1), "falha_infraestrutura");
 });

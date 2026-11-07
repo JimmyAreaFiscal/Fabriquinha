@@ -7,9 +7,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
+import { submeterPlano } from "../dominio/transicoes_demanda.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { cenarioDemanda, gitCenario } from "../repositorio/worktree-cenarios.ts";
@@ -18,7 +19,6 @@ import {
   aprovarPlanejamentoDemanda,
   iniciarOuRetomarPlanejamento,
   reprovarPlanejamentoDemanda,
-  submeterPlanejamento,
 } from "./planejamento.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -165,6 +165,8 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
 }
 
 const agente = { tipo: "agente", execucao: 1, ticket: 1 } as const;
+const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, planoEntrada: unknown) =>
+  comDemanda(banco, demandaId, (ag) => submeterPlano(ag, planoEntrada, agente, { agora: new Date().toISOString() }));
 
 test("CA-1: planejamento com predecessoras satisfeitas reserva o planejar e cria a sessão", async () => {
   for (const predecessora of ["concluida", "arquivada"]) {
@@ -209,7 +211,7 @@ test("CA-3: com o planejar em execução, a mesma sessão é retomada", async ()
 
 test("CA-4: plano válido leva ao gate e fica como evidência do planejar", () => {
   const { banco } = cenario({ status: "em_execucao" });
-  const depois = submeterPlanejamento(banco, "I-1", plano(), agente);
+  const depois = submeterPlanoDoAgente(banco, "I-1", plano());
   assert.equal(depois.demanda.fase, "aprovacao_planejamento");
   const gravado = carregarDemanda(banco, "I-1").evidencias.find((e) => e.tipo === "plano");
   assert.equal(gravado?.ticket_id, 1);
@@ -220,13 +222,13 @@ test("CA-2: plano com critério que nenhuma rodada cita é aceito e vai ao gate"
   const { banco } = cenario({ status: "em_execucao" });
   const umPlano = plano();
   assert.ok(umPlano.rodadas.every((r) => !r.criterios.includes("CA-2")));
-  assert.equal(submeterPlanejamento(banco, "I-1", umPlano, agente).demanda.fase, "aprovacao_planejamento");
+  assert.equal(submeterPlanoDoAgente(banco, "I-1", umPlano).demanda.fase, "aprovacao_planejamento");
 });
 
 test("CA-5: plano que cita CA inexistente é recusado e nada é gravado", () => {
   const { banco } = cenario({ status: "em_execucao" });
   assert.throws(
-    () => submeterPlanejamento(banco, "I-1", plano(["CA-1", "CA-99"]), agente),
+    () => submeterPlanoDoAgente(banco, "I-1", plano(["CA-1", "CA-99"])),
     /o plano cita CA-99, que a definição da demanda I-1 não tem/,
   );
   const ag = carregarDemanda(banco, "I-1");
@@ -241,7 +243,7 @@ test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão co
   const { banco, sessoes, prompts, status } = cenario({ status: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
-  submeterPlanejamento(banco, "I-1", plano(), agente);
+  submeterPlanoDoAgente(banco, "I-1", plano());
   reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
   const ag = carregarDemanda(banco, "I-1");
   assert.equal(ag.demanda.fase, "planejamento");
@@ -260,7 +262,7 @@ test("CA-1: com o pi vivo e ocioso, a reprovação manda o motivo à mesma sess�
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100)); // o pi assenta: ocioso, à espera do gate
-  submeterPlanejamento(banco, "I-1", plano(), agente);
+  submeterPlanoDoAgente(banco, "I-1", plano());
   reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
   while (prompts().length < 2) await new Promise((r) => setTimeout(r, 20));
   assert.match(prompts()[1] ?? "", /Motivo: faltam critérios na rodada 2/);
@@ -277,7 +279,7 @@ test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho re
   const { banco, sessoes, prompts } = cenario({ status: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
-  submeterPlanejamento(banco, "I-1", plano(), agente);
+  submeterPlanoDoAgente(banco, "I-1", plano());
   banco.exec("UPDATE ticket_demanda SET status = 'falhou', motivo_falha = 'serviço reiniciado'");
   reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
   const ticket = carregarDemanda(banco, "I-1").tickets[0] as { status: string; instrucao?: string };
@@ -294,7 +296,7 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   const { banco, sessoes, prompts } = cenario({ status: "em_execucao" });
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
-  submeterPlanejamento(banco, "I-1", plano(), agente);
+  submeterPlanoDoAgente(banco, "I-1", plano());
   await aprovarPlanejamentoDemanda(banco, "I-1", {});
   await fim;
   const [descartada] = sessoes().sessoes;
@@ -341,7 +343,7 @@ test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejament
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100));
-  submeterPlanejamento(banco, "I-1", plano(), agente);
+  submeterPlanoDoAgente(banco, "I-1", plano());
   await aprovarPlanejamentoDemanda(banco, "I-1", {});
   await fim;
   const { n } = banco.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
@@ -398,12 +400,11 @@ test("CA-12: falha de gravação depois da primeira rodada desfaz tudo", async (
   assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
 });
 
-test("CA-13: as quatro operações estão exportadas", () => {
+test("CA-13: as três operações estão exportadas", () => {
   assert.deepEqual(Object.keys(servico).sort(), [
     "aprovarPlanejamentoDemanda",
     "iniciarOuRetomarPlanejamento",
     "reprovarPlanejamentoDemanda",
-    "submeterPlanejamento",
   ]);
 });
 

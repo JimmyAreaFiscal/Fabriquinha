@@ -2,10 +2,17 @@
 import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync } from "node:fs";
 import { basename, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { ArquivoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { guardarArquivos } from "../persistencia/arquivos.ts";
 import { type Classe, LIMITE, MIME_HTML, MIME_TEXTO, type RegraArquivos } from "./schemas.ts";
+
+/** Um anexo guardado por conteúdo (F2 §5.1); `nome` é o nome original, que o `dados` referencia. */
+interface ArquivoEvidencia {
+  nome: string;
+  sha256: string;
+  mime: string;
+  bytes: number;
+}
 
 const MiB = 1024 * 1024;
 const mib = (bytes: number) => `${(bytes / MiB).toFixed(1)} MiB`;

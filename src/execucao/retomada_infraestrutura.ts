@@ -2,7 +2,7 @@
 // rede, tempo, SonarQube fora do ar) e a cota estourada do provedor não são culpa do ticket nem decisão do Auditor. A
 // cada ciclo do agendador, a Fabriquinha devolve esses tickets a `aberto`; a seleção global os escolhe como os demais.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";
 import type { Modelo } from "../dominio/primitivos.ts";
@@ -14,13 +14,14 @@ import { comDemanda } from "../persistencia/demandas.ts";
 import { demandasParaDespacho } from "../persistencia/despacho_demanda.ts";
 import { noLog } from "../persistencia/execucoes.ts";
 
-export type CausaDeInfraestrutura = "reinicio" | "cota" | "transitoria";
+type CausaDeInfraestrutura = "reinicio" | "cota" | "transitoria";
 
 const COTA = /quota exceeded|usage limit|rate limit|session limit|insufficient_quota|\b429\b/i;
 const TRANSITORIA =
   /HTTP 5\d\d|\b50[234]\b|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|fetch failed|Connection error|TimeoutError|overloaded|tempo limite|inacessível/i;
 
 /** A causa da falha quando ela é de infraestrutura; `undefined` quando é do ticket ou pede o Auditor (ex.: disco cheio). */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function causaDeInfraestrutura(motivo: string): CausaDeInfraestrutura | undefined {
   // Decisão do Auditor, não falha de ambiente: os motivos anexados podem conter texto que casaria as regras abaixo.
   if (motivo.startsWith(PREFIXO_TERCEIRA_REPROVACAO)) return undefined;
@@ -43,6 +44,7 @@ const MODELO_RESERVA: Record<string, (nome: string) => Modelo> = {
 };
 
 /** O modelo do outro provedor para o ticket cuja cota estourou; `undefined` sem modelo resolvido ou sem reserva. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function modeloReserva(modeloAtual: { provedor: string; nome: string } | undefined): Modelo | undefined {
   return modeloAtual && MODELO_RESERVA[modeloAtual.provedor]?.(modeloAtual.nome);
 }

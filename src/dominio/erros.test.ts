@@ -35,16 +35,16 @@ test("ErroExterno é um ErroDeRegra que o web distingue (502)", () => {
 });
 
 test("ErroDeInexistente é um ErroDeRegra que o web distingue (404)", () => {
-  assert.equal(encontrado(0, "a issue I-9 não existe", "confira o número"), 0);
+  assert.equal(encontrado(0, "a demanda I-9 não existe", "confira o número"), 0);
   assert.throws(
     () => {
-      encontrado(undefined, "a issue I-9 não existe", "confira o número");
+      encontrado(undefined, "a demanda I-9 não existe", "confira o número");
     },
     (erro) =>
       erro instanceof ErroDeInexistente &&
       erro instanceof ErroDeRegra &&
       erro.name === "ErroDeInexistente" &&
-      erro.message === "a issue I-9 não existe (confira o número)",
+      erro.message === "a demanda I-9 não existe (confira o número)",
   );
 });
 

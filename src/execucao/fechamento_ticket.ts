@@ -2,7 +2,7 @@
 // §6, D05, D06): verifica, grava as evidências, commita e conclui, ou devolve, ou falha. A devolução da D05 (até 2
 // vezes, falha na 3ª) vale para as duas etapas; só a infraestrutura falha direto. O agente não submete nada.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../dominio/conclusao_ticket.ts";
 import { ErroDeReprovacao, ErroExterno, existe } from "../dominio/erros.ts";
@@ -24,7 +24,7 @@ import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket
 
 type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
 
-export interface DepsFechamento {
+interface DepsFechamento {
   coletarVerificacoes?: typeof coletarVerificacoes;
   opcoes?: OpcoesSonar;
   /** Limite do `git commit`; o padrão é o dos comandos do projeto. */

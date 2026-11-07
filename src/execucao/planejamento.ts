@@ -3,7 +3,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../dominio/agregado.ts";
+import { AUDITOR, FABRIQUINHA } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { Plano } from "../dominio/demanda.ts";
 import { predecessorasPendentes } from "../dominio/dependencia_demanda.ts";
@@ -13,7 +13,6 @@ import {
   exigirFase,
   reabrirTicket,
   reprovarPlanejamento,
-  submeterPlano,
 } from "../dominio/transicoes_demanda.ts";
 import { reservarTicket } from "../dominio/reserva_ticket.ts";
 import { varrerBase } from "../metricas/retrabalho.ts";
@@ -82,14 +81,6 @@ export function iniciarOuRetomarPlanejamento(
     !carregarSessoesDoTicket(banco, ref).execucoes.some((e) => e.inicio >= ultima.em);
   return iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", retomada, iniciarEmSessaoNova });
 }
-
-/** A submissão do agente, já validada pelo CLI: o domínio revalida e leva a demanda ao gate de aprovação. */
-export const submeterPlanejamento = (
-  banco: DatabaseSync,
-  demandaId: string,
-  plano: unknown,
-  ator: Ator,
-): AgregadoDemanda => comDemanda(banco, demandaId, (ag) => submeterPlano(ag, plano, ator, contexto()));
 
 /**
  * O Auditor reprova com motivo; a demanda volta a `planejamento`. Com o pi da sessão vivo e ocioso, o motivo vai a ele

@@ -23,7 +23,7 @@ import { COMANDOS_EVIDENCIA_DEMANDA } from "./evidencia_agente_demanda.ts";
 const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [...LEITURAS_DEMANDA, ...COMANDOS_EVIDENCIA_DEMANDA];
 
 /** O processo visto pelo CLI; o ponto de entrada passa o real, os testes passam o seu. */
-export interface Io {
+interface Io {
   readonly env: NodeJS.ProcessEnv;
   readonly stdin: NodeJS.ReadableStream;
   readonly stdout: { write(texto: string): unknown };
@@ -95,6 +95,7 @@ const COMANDOS_DO_SERVICO: readonly ComandoDoServico[] = [
 ];
 
 /** O programa que abre uma URL no navegador padrão. */
+/** @testes o teste confere o comando de cada plataforma */
 export const comandoDoNavegador = (plataforma: NodeJS.Platform): string =>
   plataforma === "darwin" ? "open" : "xdg-open";
 

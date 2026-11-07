@@ -9,7 +9,7 @@ import {
   TicketDemanda,
   TipoEvidenciaAgregado,
 } from "./agregado_demanda.ts";
-import { TipoEvidencia } from "./agregado.ts";
+import { TipoEvidencia } from "../evidencias/schemas.ts";
 import { TipoEvidenciaEtapa } from "./evidencia_etapa.ts";
 
 const em = "2026-01-01T00:00:00Z";
