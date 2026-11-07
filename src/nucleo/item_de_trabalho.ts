@@ -8,7 +8,7 @@ import type { EtapaTicket, Instante } from "./primitivos.ts";
 const FORMAS_DO_ENDERECO =
   "use I-n para a demanda (ou só o número), I-n.Rm para a rodada ou I-n.Tm para o ticket, como I-206, I-206.R2 ou I-206.T3";
 // Até 10 algarismos, como o `DemandaId`: nenhum número passa do inteiro seguro.
-const ENDERECO = /^(?:(?:I-)?([1-9][0-9]{0,9})|I-([1-9][0-9]{0,9})\.([RT])([1-9][0-9]{0,9}))$/;
+const ENDERECO = /^(?:(?:[iI]-?)?([1-9][0-9]{0,9})|I-([1-9][0-9]{0,9})\.([RT])([1-9][0-9]{0,9}))$/;
 
 /** O endereço público de um Item de Trabalho: `I-n` (demanda), `I-n.Rm` (rodada) ou `I-n.Tm` (ticket). */
 export class Endereco {
@@ -34,7 +34,7 @@ export class Endereco {
     return new Endereco(demanda_id, undefined, ticket_id);
   }
 
-  /** Lê `I-12`, `12`, `I-12.R2` ou `I-12.T3`; qualquer outra forma é recusada dizendo o formato esperado. */
+  /** Lê `I-12` (também `i-12`, `i12`, `I12` e `12`), `I-12.R2` ou `I-12.T3`; qualquer outra forma é recusada dizendo o formato esperado. */
   static ler(texto: string): Endereco {
     const achado = ENDERECO.exec(texto);
     if (!achado) throw new ErroDeRegra(`endereço ${JSON.stringify(texto)} inválido`, FORMAS_DO_ENDERECO);

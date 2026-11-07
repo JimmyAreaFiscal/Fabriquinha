@@ -116,7 +116,13 @@ export interface DadosDaPagina {
     terminal: boolean;
     arquivavel: boolean;
   };
-  rodadas: { ref: string; titulo: string; estado: EstadoRodada }[];
+  rodadas: {
+    ref: string;
+    titulo: string;
+    estado: EstadoRodada;
+    /** O endereço do ticket atual de cada etapa que a rodada já teve. */
+    ticket_atual_por_etapa: Partial<Record<EtapaTicket, string>>;
+  }[];
   tickets: {
     ref: string;
     etapa: EtapaTicket;
@@ -370,7 +376,8 @@ function sessaoDeAjustes(ref: string, sessao: string | undefined): string {
 
 function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
   const meus = p.tickets.filter((t) => t.rodada === r.ref);
-  const encerra = meus.findLast((t) => t.etapa === "encerrar_rodada");
+  const ticketAtual = (etapa: EtapaTicket) => meus.find((t) => t.ref === r.ticket_atual_por_etapa[etapa]);
+  const encerra = ticketAtual("encerrar_rodada");
   const nota = p.decisoes.findLast((d) => d.ticket === encerra?.ref && d.resultado === "aprovado")?.nota;
   const pr = p.evidencias.findLast((e) => e.tipo === "pr_aberto" && e.ticket === encerra?.ref)?.dados as
     { id: string; url: string } | undefined;
@@ -379,7 +386,7 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
     <div class="dm-linha">${pilula(APARENCIA_DO_ESTADO_DA_RODADA[r.estado])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
     ${chipsDasEvidencias(p.evidencias.filter((e) => e.rodada === r.ref && e.ticket === undefined))}
     ${meus.length > 0 ? listaDeTickets(meus, p) : '<p class="muted vazio">Sem tickets.</p>'}
-    ${r.estado === "ajustar_resultado" ? sessaoDeAjustes(r.ref, meus.findLast((t) => t.etapa === "ajustar_resultado")?.sessao) : ""}
+    ${r.estado === "ajustar_resultado" ? sessaoDeAjustes(r.ref, ticketAtual("ajustar_resultado")?.sessao) : ""}
     ${r.estado === "gate_pr" ? gatePR(r.ref, pr, artefatosDoGate(p.evidencias.filter((e) => e.rodada === r.ref || meus.some((t) => t.ref === e.ticket)))) : ""}
   </section>`;
 }

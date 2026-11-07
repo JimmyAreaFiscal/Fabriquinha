@@ -18,7 +18,7 @@ interface Evidencia {
 }
 interface Pagina {
   demanda: { tipo: string; descricao: string };
-  rodadas: unknown[];
+  rodadas: { ref: string; ticket_atual_por_etapa: Record<string, string> }[];
   tickets: {
     ref: string;
     etapa: string;
@@ -149,6 +149,18 @@ test("CA-6: a página traz cada ticket com o endereço público e a etapa", asyn
     ],
   );
   assert.equal(tickets[2]?.titulo, "implementa");
+});
+
+test("a página entrega, em cada rodada, o endereço do ticket atual de cada etapa: o de maior id", async () => {
+  const { pedir, banco } = await cenarioDemandas();
+  const atuais = async () =>
+    (await pedir("/api/demandas/I-206")).json<Pagina>().rodadas.map((r) => r.ticket_atual_por_etapa.implementar);
+  assert.deepEqual(await atuais(), ["I-206.T1", "I-206.T3"]);
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    tickets: ag.tickets.flatMap((t) => (t.ticket_id === 3 ? [t, { ...t, ticket_id: 6 }] : [t])),
+  }));
+  assert.deepEqual(await atuais(), ["I-206.T1", "I-206.T6"]);
 });
 
 test("o ticket é elegível só se a seleção o escolheria agora", async () => {

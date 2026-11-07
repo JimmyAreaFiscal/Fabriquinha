@@ -5,6 +5,8 @@ import type { ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
+import { mensagem } from "../../../nucleo/erros.ts";
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
@@ -47,6 +49,16 @@ beforeEach(() => {
       ('x5', 's4', '2026-10-11T15:00:00.000Z', '2026-10-11T15:01:00.000Z', 0, NULL, NULL);
   `);
 });
+
+/** A mensagem com que `Endereco.ler` recusa `texto`. */
+function recusaDoEndereco(texto: string): string {
+  try {
+    Endereco.ler(texto);
+  } catch (erro) {
+    return mensagem(erro);
+  }
+  throw new Error(`${texto} deveria ser recusado`);
+}
 
 /** Chama `GET /api/sessoes` como o servidor: o valor devolvido, ou `[status, mensagem]` do erro traduzido. */
 async function sessoes(query: string): Promise<unknown> {
@@ -101,6 +113,8 @@ test("histórico: filtra por projeto, demanda e etapa", async () => {
   const ids = async (query: string) => resumo(await sessoes(query)).map(([s]) => s);
   assert.deepEqual(await ids("escopo=historico&projeto=site"), ["s3", "s4"]);
   assert.deepEqual(await ids("escopo=historico&demanda=I-1"), ["s1"]);
+  for (const forma of ["i-1", "i1", "I1"])
+    assert.deepEqual(await ids(`escopo=historico&demanda=${forma}`), ["s1"], forma);
   assert.deepEqual(await ids("escopo=historico&etapa=planejar"), ["s3", "s4"]);
   assert.deepEqual(await ids("escopo=historico&projeto=loja&etapa=planejar"), []);
 });
@@ -123,7 +137,19 @@ test("ativas: o ticket que falhou aguarda o Auditor, com o motivo", async () => 
 });
 
 test("filtro inválido dá 422", async () => {
-  for (const query of ["escopo=todas", "escopo=historico&demanda=1", "escopo=historico&etapa=desenho"]) {
+  for (const query of ["escopo=todas", "escopo=historico&etapa=desenho"]) {
     assert.equal(((await sessoes(query)) as [number])[0], 422, query);
   }
+});
+
+test("CA-2: a demanda que não é endereço de demanda dá 409 com a mensagem de Endereco.ler; `1` vale como I-1", async () => {
+  assert.deepEqual(await sessoes("escopo=historico&demanda=I-x"), [409, recusaDoEndereco("I-x")]);
+  assert.deepEqual(await sessoes("escopo=historico&demanda=I-1.R1"), [
+    409,
+    "I-1.R1 não é o endereço de uma demanda (use I-n, como I-206)",
+  ]);
+  assert.deepEqual(
+    resumo(await sessoes("escopo=historico&demanda=1")),
+    resumo(await sessoes("escopo=historico&demanda=I-1")),
+  );
 });

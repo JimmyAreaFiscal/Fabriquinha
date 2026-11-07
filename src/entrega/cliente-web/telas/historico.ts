@@ -45,16 +45,11 @@ export function paginaDoHistorico(projetos: readonly string[], f: Filtros): stri
   );
 }
 
-/**
- * A query de `GET /api/sessoes` com os filtros; a demanda vale como `I-29` ou `29`. Demanda que não é número não casa
- * com nenhuma sessão: `undefined`, sem pedir nada.
- */
-export function consulta(f: Filtros): string | undefined {
-  const numero = /^(?:i-?)?(\d+)$/i.exec(f.demanda)?.[1];
-  if (f.demanda !== "" && numero === undefined) return undefined;
+/** A query de `GET /api/sessoes` com os filtros; quem lê a demanda digitada (`I-29` ou `29`) é a API. */
+export function consulta(f: Filtros): string {
   const q = new URLSearchParams({ escopo: "historico" });
   if (f.projeto) q.set("projeto", f.projeto);
-  if (numero) q.set("demanda", `I-${numero}`);
+  if (f.demanda) q.set("demanda", f.demanda);
   if (f.etapa) q.set("etapa", f.etapa);
   return q.toString();
 }
