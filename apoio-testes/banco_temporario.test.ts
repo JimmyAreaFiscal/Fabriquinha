@@ -20,3 +20,13 @@ test("cada chamada tem a sua raiz e o seu banco", () => {
   um.fechar();
   outro.fechar();
 });
+
+test("com uma raiz existente, abre o banco nela e o fechar a apaga", () => {
+  const dono = abrirBancoTemporario();
+  const { raiz, banco, fechar } = abrirBancoTemporario(join(dono.raiz, "outra"));
+  assert.equal(raiz, join(dono.raiz, "outra"));
+  assert.ok(banco.prepare("SELECT 1 FROM sqlite_master WHERE name = 'demanda'").get());
+  fechar();
+  assert.equal(existsSync(raiz), false);
+  dono.fechar();
+});

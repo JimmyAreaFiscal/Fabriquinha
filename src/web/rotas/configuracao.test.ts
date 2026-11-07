@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { abrir } from "../../persistencia/banco.ts";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { configuracaoProjeto, gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { projeto } from "../../persistencia/projetos.ts";
 import { cursorDaBase } from "../../persistencia/retrabalho.ts";
@@ -63,9 +63,10 @@ function clone(): string {
   return repo;
 }
 
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 let banco: DatabaseSync;
 beforeEach(() => {
-  banco = abrir(mkdtempSync(join(base, "raiz-")));
+  banco = abrirBancoTemporario().banco;
 });
 
 const PROXIMA = new Date("2026-10-12T14:35:00.000Z");

@@ -4,20 +4,18 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../dominio/erros.ts";
 import { metricasDaDemanda } from "../metricas/demanda.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { recuperarAuditorias } from "./auditoria.ts";
 import {
   abortarAvaliacao,
@@ -29,12 +27,9 @@ import {
 } from "./avaliacao.ts";
 import { encerrar, situacao } from "./gerente.ts";
 
-const raiz = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacao-")));
-after(() => {
-  rmSync(raiz, { recursive: true, force: true });
-});
-
-const banco = abrir(raiz);
+const { raiz: raizTemporaria, banco, fechar } = abrirBancoTemporario();
+after(fechar);
+const raiz = realpathSync(raizTemporaria);
 const T = "'2026-10-10T10:00:00.000Z'";
 banco.exec(`
   INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key) VALUES

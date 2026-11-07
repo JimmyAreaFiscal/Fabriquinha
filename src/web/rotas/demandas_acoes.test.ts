@@ -4,10 +4,10 @@ import { chmodSync, existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, beforeEach, test } from "node:test";
+import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { encerrar, situacao } from "../../execucao/gerente.ts";
 import { registrarCorrecoesSessao } from "../../dominio/transicoes_rodada.ts";
-import { abrir } from "../../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../../persistencia/demandas.ts";
 import { hospedagemFalsa } from "../../repositorio/hospedagem-falsa.test.ts";
@@ -97,7 +97,7 @@ const plano = {
  */
 async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDemanda = true) {
   const c = cenarioDemanda();
-  const banco = abrir(c.raiz);
+  const { banco } = abrirBancoTemporario(c.raiz);
   banco
     .prepare(
       `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)

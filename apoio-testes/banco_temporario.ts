@@ -13,9 +13,12 @@ export interface BancoTemporario {
   fechar: () => void;
 }
 
-/** A raiz temporária (`$FABRIQUINHA_ROOT` de mentira) com o banco aberto e migrado dentro dela. */
-export function abrirBancoTemporario(): BancoTemporario {
-  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-teste-"));
+/**
+ * A raiz temporária (`$FABRIQUINHA_ROOT` de mentira) com o banco aberto e migrado dentro dela. `raizExistente` é para o
+ * teste cuja raiz já nasce em outro lugar (a de um repositório de teste): o banco é aberto nela, e `fechar` a apaga.
+ */
+export function abrirBancoTemporario(raizExistente?: string): BancoTemporario {
+  const raiz = raizExistente ?? mkdtempSync(join(tmpdir(), "fabriquinha-teste-"));
   const banco = abrir(raiz);
   let fechado = false;
   return {
@@ -31,13 +34,13 @@ export function abrirBancoTemporario(): BancoTemporario {
 }
 
 /** Para o arquivo de teste que abre vários bancos: devolve a função que abre cada um e fecha todos quando o arquivo termina. */
-export function fabricaDeBancosTemporarios(): () => BancoTemporario {
+export function fabricaDeBancosTemporarios(): (raizExistente?: string) => BancoTemporario {
   const abertos: BancoTemporario[] = [];
   after(() => {
     for (const aberto of abertos) aberto.fechar();
   });
-  return () => {
-    const novo = abrirBancoTemporario();
+  return (raizExistente) => {
+    const novo = abrirBancoTemporario(raizExistente);
     abertos.push(novo);
     return novo;
   };

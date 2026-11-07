@@ -1,30 +1,25 @@
 // Gestão de Demandas em banco temporário real (CA-1 a CA-29).
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
-import { after, test } from "node:test";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { AUDITOR } from "../dominio/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
-import { abrir } from "../persistencia/banco.ts";
 import { carregarDemanda } from "../persistencia/demandas.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import * as gestao from "./gestao_demandas.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-gestao-demandas-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const ctx = { agora: "2026-01-01T00:00:00.000Z" };
 const autor = { ferramenta: "claude", sessao: "S1" };
 const outra = { ferramenta: "claude", sessao: "S2" };
 
 const novoBanco = () => {
-  const b = abrir(mkdtempSync(join(base, "raiz-")));
+  const b = abrirBancoTemporario().banco;
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('fabriquinha', '/repo/f', 'main', 'github', 'k')`);
   return b;
