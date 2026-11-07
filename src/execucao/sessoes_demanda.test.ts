@@ -15,7 +15,7 @@ import { encontrado } from "../dominio/erros.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { cenarioDemanda } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { avisar, situacao } from "./gerente.ts";
 import {
@@ -96,7 +96,7 @@ const mensagem = (role: string, texto: string, extra: object = {}) => ({
  * falhou), T4 concluído e T5 autônomo parado; a I-301 está no gate do plano. Cada sessão é `s<ticket>`.
  */
 function cenario() {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco

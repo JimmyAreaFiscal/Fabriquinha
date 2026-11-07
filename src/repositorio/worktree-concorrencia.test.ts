@@ -6,7 +6,11 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { executar } from "../processo.ts";
-import { cenarioDemanda, commitarCenario as commit, gitCenario as git } from "./worktree-cenarios.ts";
+import {
+  criarRepositorioDeTeste,
+  commitarArquivo as commit,
+  rodarGit as git,
+} from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   atualizarWorktreeRodada,
   caminhoDaWorktreeDemanda,
@@ -17,7 +21,7 @@ import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
 
 const ref = { demanda_id: "D-1", rodada_id: 1 };
 const semBase = () => Promise.resolve();
-type Cenario = ReturnType<typeof cenarioDemanda>;
+type Cenario = ReturnType<typeof criarRepositorioDeTeste>;
 
 /** Segura a fila do projeto até `liberar()`; só devolve depois que a mutação bloqueante começou. */
 async function bloquear(raiz: string, nome: string) {
@@ -54,7 +58,7 @@ const garantirDemanda = (c: Cenario, preparacao = c.projeto, varrer = semBase) =
   garantirWorktreeDemanda(c.raiz, preparacao, "D-1", c.log, varrer);
 
 test("duas garantias novas do mesmo projeto rodam em ordem, só depois de liberar a mutação retida", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const antes = estado(c);
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
   const demanda = garantirDemanda(c);
@@ -73,7 +77,7 @@ test("duas garantias novas do mesmo projeto rodam em ordem, só depois de libera
 });
 
 test("atualização nova espera a mutação retida e a fila segue depois de uma falha", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
   commit(demanda, "novo.txt", "demanda\n");
@@ -93,7 +97,7 @@ test("atualização nova espera a mutação retida e a fila segue depois de uma 
 });
 
 test("mutação retida que falha não trava a fila", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const falha = naFilaDoProjeto(c.raiz, c.projeto.nome, () => Promise.reject(new Error("boom")));
   const seguinte = garantirDemanda(c);
   await assert.rejects(falha, /boom/);
@@ -101,8 +105,8 @@ test("mutação retida que falha não trava a fila", async () => {
 });
 
 test("outro projeto completa mutação enquanto o primeiro segue bloqueado", async () => {
-  const c = cenarioDemanda();
-  const outro = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
+  const outro = criarRepositorioDeTeste();
   const projetoOutro = { ...outro.projeto, nome: "outra" };
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
   const pasta = await garantirWorktreeDemanda(c.raiz, projetoOutro, "D-1", c.log, semBase);
@@ -116,7 +120,7 @@ test("outro projeto completa mutação enquanto o primeiro segue bloqueado", asy
 });
 
 test("raiz equivalente usa a mesma fila do projeto", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   for (const raiz of [`${c.raiz}/`, `${c.raiz}/./`, `${c.raiz}/x/..`]) {
     const bloqueio = await bloquear(c.raiz, c.projeto.nome);
     let rodou = false;
@@ -129,7 +133,7 @@ test("raiz equivalente usa a mesma fila do projeto", async () => {
 });
 
 test("processo de agente na worktree provisionada começa e termina com a fila retida", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
   const retido = garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
@@ -157,7 +161,7 @@ const mutacaoLivre = (c: Cenario) =>
   naFilaDoProjeto(c.raiz, c.projeto.nome, () => exigirGit(c.repo, "config", "teste.livre", "sim"));
 
 test("preparação da demanda não ocupa a fila", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const barreira = preparacaoComBarreira(c);
   const garantia = garantirDemanda(c, barreira.projeto);
   await barreira.comecou();
@@ -168,7 +172,7 @@ test("preparação da demanda não ocupa a fila", async () => {
 });
 
 test("preparação da rodada não ocupa a fila", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   await garantirDemanda(c);
   const barreira = preparacaoComBarreira(c);
   const garantia = garantirWorktreeRodada(c.raiz, barreira.projeto, ref, c.log);
@@ -180,7 +184,7 @@ test("preparação da rodada não ocupa a fila", async () => {
 });
 
 test("preparação após atualização por merge não ocupa a fila", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
   await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
   commit(demanda, "novo.txt", "demanda\n");
@@ -193,7 +197,7 @@ test("preparação após atualização por merge não ocupa a fila", async () =>
 });
 
 test("varrerBase da demanda roda fora da fila e não impede outra mutação", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   let iniciou!: () => void;
   let liberar!: () => void;
   const comecou = new Promise<void>((r) => (iniciou = r));
@@ -213,7 +217,7 @@ test("varrerBase da demanda roda fora da fila e não impede outra mutação", as
 });
 
 test("merge e abort do conflito ficam na mesma seção serializada", async () => {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const demanda = await garantirDemanda(c);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
   commit(demanda, "base.txt", "demanda\n");

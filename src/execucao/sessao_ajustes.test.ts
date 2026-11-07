@@ -15,7 +15,7 @@ import { ErroDeEscopo } from "../dominio/erros.ts";
 import { registrarCorrecoesSessao } from "../dominio/transicoes_rodada.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { situacao } from "./gerente.ts";
 import { concluirSessaoAjustes, reprovarPRRodada } from "./sessao_ajustes.ts";
@@ -41,7 +41,7 @@ const URL_PR = "https://github.com/org/loja/pull/1";
 
 /** Demanda I-206 com a rodada 2 no gate do PR (ticket 8) e as duas worktrees prontas. */
 async function cenario(shell = "") {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
@@ -71,7 +71,7 @@ async function cenario(shell = "") {
   });
   await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
-  const head = commitarCenario(rodada, "a.txt", "a\n");
+  const head = commitarArquivo(rodada, "a.txt", "a\n");
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   criarDemanda(banco, {
     demanda: {
@@ -116,7 +116,7 @@ async function cenario(shell = "") {
     c,
     banco,
     head,
-    sha: (branch: string) => gitCenario(c.repo, "rev-parse", branch),
+    sha: (branch: string) => rodarGit(c.repo, "rev-parse", branch),
     sujo: () => existsSync(join(rodada, "sujo.txt")),
     ag: () => carregarDemanda(banco, DEMANDA),
     prompts: () => piFalso.prompts(),

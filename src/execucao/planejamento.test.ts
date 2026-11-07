@@ -14,7 +14,7 @@ import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../per
 import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { registrarDependenciaDemanda } from "../persistencia/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
-import { cenarioDemanda, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import * as servico from "./planejamento.ts";
 import {
   aprovarPlanejamentoDemanda,
@@ -77,7 +77,7 @@ function demanda(id: string, fase: string, extra: object = {}) {
 
 /** Projeto `loja`, demanda I-1 na fase dada com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-0. */
 function cenario({ fase = "planejamento", status = "aberto", comPlano = false, predecessora = "concluida" } = {}) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
@@ -304,12 +304,12 @@ test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara ca
   const { c, banco } = aprovacao();
   await aprovarPlanejamentoDemanda(banco, "I-1", {});
   const dir = join(c.raiz, "worktrees", "loja", "I-1");
-  const demandaTopo = gitCenario(c.repo, "rev-parse", "fabriquinha/I-1");
+  const demandaTopo = rodarGit(c.repo, "rev-parse", "fabriquinha/I-1");
   for (const w of ["demanda", "rodadas/1"]) assert.ok(existsSync(join(dir, w, "preparado")), w);
-  assert.equal(gitCenario(c.repo, "merge-base", "fabriquinha/I-1", "fabriquinha/I-1-1"), demandaTopo);
+  assert.equal(rodarGit(c.repo, "merge-base", "fabriquinha/I-1", "fabriquinha/I-1-1"), demandaTopo);
   // D04: a rodada 2 depende da 1 e nasce da ponta da demanda só quando começar.
   assert.equal(existsSync(join(dir, "rodadas/2")), false);
-  assert.equal(gitCenario(c.repo, "branch", "--list", "fabriquinha/I-1-2"), "");
+  assert.equal(rodarGit(c.repo, "branch", "--list", "fabriquinha/I-1-2"), "");
 });
 
 test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejamento", async () => {

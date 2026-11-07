@@ -15,7 +15,7 @@ import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../per
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
 import { carregarSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
-import { cenarioDemanda, commitarCenario, gitCenario } from "../repositorio/worktree-cenarios.ts";
+import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
   caminhoDaWorktreeRodada,
   garantirWorktreeDemanda,
@@ -69,7 +69,7 @@ async function cenario({
   anterior = false,
   descricao = "d",
 }: Opcoes = {}) {
-  const c = cenarioDemanda();
+  const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
   banco
@@ -155,7 +155,7 @@ async function cenario({
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   /** Commita na rodada e, com `ticket`, registra o commit como desse ticket de implementação. */
   const commitarNaRodada = (arquivo: string, ticket?: number) => {
-    const sha = commitarCenario(rodada, arquivo, `${arquivo}\n`);
+    const sha = commitarArquivo(rodada, arquivo, `${arquivo}\n`);
     if (ticket !== undefined) {
       const mensagem = `feat: ${arquivo} [I-206/T-${String(ticket)}]`;
       gravarCommitDemanda(banco, DEMANDA, ticket, { sha, mensagem, em, arquivos: [] });
@@ -181,7 +181,7 @@ async function cenario({
         .prompts()
         .map((entrada) => entrada.prompt)
         .join("\n"),
-    noRemoto: (branch: string) => gitCenario(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`),
+    noRemoto: (branch: string) => rodarGit(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`),
     fase: () => carregarDemanda(banco, DEMANDA).rodadas[0]?.fase,
   };
 }
@@ -196,8 +196,8 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     prs.map((p) => [p.head, p.base]),
     [[BRANCH_RODADA, BRANCH_DEMANDA]],
   );
-  assert.equal(noRemoto(BRANCH_RODADA), gitCenario(rodada, "rev-parse", "HEAD"));
-  assert.equal(noRemoto(BRANCH_DEMANDA), gitCenario(c.repo, "rev-parse", BRANCH_DEMANDA));
+  assert.equal(noRemoto(BRANCH_RODADA), rodarGit(rodada, "rev-parse", "HEAD"));
+  assert.equal(noRemoto(BRANCH_DEMANDA), rodarGit(c.repo, "rev-parse", BRANCH_DEMANDA));
   assert.equal(ag().rodadas[0]?.fase, "aprovacao_pull_request");
   assert.equal(ticket()?.status, "em_execucao");
   const pr = prs[0];
@@ -212,7 +212,7 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     url: "https://github.com/org/loja/pull/1",
     branch: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
-    head: gitCenario(rodada, "rev-parse", "HEAD"),
+    head: rodarGit(rodada, "rev-parse", "HEAD"),
     corpoCompleto: pr.corpo,
     condensado: false,
   });
@@ -235,18 +235,18 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
 
 test("CA-3: a ponta nova da demanda entra na rodada antes do PR, e o merge da D04 não barra a publicação", async () => {
   const { banco, demanda, rodada, noRemoto } = await cenario();
-  const nova = commitarCenario(demanda, "da-demanda.txt", "nova\n");
+  const nova = commitarArquivo(demanda, "da-demanda.txt", "nova\n");
 
   await concluirEncerramentoRodada(banco, REF);
 
-  gitCenario(rodada, "merge-base", "--is-ancestor", nova, "HEAD");
-  assert.equal(noRemoto(BRANCH_RODADA), gitCenario(rodada, "rev-parse", "HEAD"));
+  rodarGit(rodada, "merge-base", "--is-ancestor", nova, "HEAD");
+  assert.equal(noRemoto(BRANCH_RODADA), rodarGit(rodada, "rev-parse", "HEAD"));
   assert.equal(hospedagem.prs().length, 1);
 });
 
 test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvimento com o arquivo em conflito", async () => {
   const { banco, demanda, ag, fase, noRemoto } = await cenario();
-  commitarCenario(demanda, "a.txt", "da demanda\n");
+  commitarArquivo(demanda, "a.txt", "da demanda\n");
 
   await concluirEncerramentoRodada(banco, REF);
 
@@ -338,7 +338,7 @@ test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a ma
 
 test("CA-9: commit que nenhum ticket registrou falha antes do push, diz como desfazer e não cria PR", async () => {
   const { banco, rodada, ticket, evidencia, noRemoto, c } = await cenario();
-  const orfao = commitarCenario(rodada, "fora.txt", "fora\n");
+  const orfao = commitarArquivo(rodada, "fora.txt", "fora\n");
 
   await assert.rejects(
     concluirEncerramentoRodada(banco, REF),
