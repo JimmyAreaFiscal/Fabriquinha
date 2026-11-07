@@ -44,8 +44,7 @@ export async function montarHistorico(main: HTMLElement, _params: Parametros, si
 
   async function carregar(): Promise<void> {
     const n = ++pedido;
-    const query = consulta(filtros);
-    const lidas = query === undefined ? [] : await api<SessaoDeDemanda[]>(`/api/sessoes?${query}`, { signal });
+    const lidas = await api<SessaoDeDemanda[]>(`/api/sessoes?${consulta(filtros)}`, { signal });
     if (n !== pedido) return;
     // A API devolve da mais antiga para a mais recente (F4 §5.3).
     sessoes = lidas.toReversed();

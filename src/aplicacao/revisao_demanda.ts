@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Ator, FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { encontrado } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { iniciarRevisaoDemanda, registrarRevisaoDemanda } from "../nucleo/transicoes_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
@@ -23,7 +24,7 @@ export async function conduzirRevisaoIntegral(
   opcoes: Omit<OpcoesRevisao, "preparar">,
 ): Promise<ResultadoRevisao> {
   const { ticket_id } = encontrado(
-    carregarDemanda(banco, demanda_id).tickets.findLast((t) => t.etapa === "revisar_demanda"), // o atual é o de maior ticket_id
+    ticketAtualDaEtapa(carregarDemanda(banco, demanda_id), "revisar_demanda"),
     `a demanda ${demanda_id} não tem ticket revisar_demanda`,
     "inicie a revisão integral da demanda antes de conduzi-la",
   );

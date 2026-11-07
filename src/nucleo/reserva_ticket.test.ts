@@ -123,6 +123,14 @@ test("etapa fora do estado da rodada cai no motivo geral", () => {
   );
 });
 
+test("ticket da demanda fora da etapa do estado cai no motivo geral, sem dependência de rodada", () => {
+  recusa(
+    montar({ tickets: [tk(2, undefined, "aberto", "revisar_demanda")] }),
+    2,
+    /etapa revisar_demanda não é a do trabalho/,
+  );
+});
+
 test("demanda encerrada e ticket inexistente são recusados", () => {
   assert.throws(() => reservar(montar({ tickets: [tk(1, undefined)] }, "concluida"), 1), /I-1 está em concluida/);
   assert.throws(() => reservar(montar({}), 9), /I-1\.T9 não existe/);

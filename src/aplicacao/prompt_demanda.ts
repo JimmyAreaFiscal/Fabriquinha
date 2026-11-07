@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import type { EtapaTicket } from "../nucleo/primitivos.ts";
 import { impactoExigeReversao } from "../nucleo/schemas.ts";
 import type { AnexoDaDemanda } from "../armazenamento/evidencia_demanda.ts";
@@ -121,8 +122,11 @@ function secaoArquivosAlterados({ ag, ticket }: ContextoDemanda): string {
  * mesma revisão que a submissão confere: a última concluída da rodada.
  */
 function secaoArquivosNaoPrevistos({ ag, ticket }: ContextoDemanda): string {
-  const ultimaRevisaoConcluida = ag.tickets.findLast(
-    (t) => t.rodada_id === ticket.rodada_id && t.etapa === "revisar_rodada" && t.estado === "concluido",
+  const ultimaRevisaoConcluida = ticketAtualDaEtapa(
+    ag,
+    "revisar_rodada",
+    ticket.rodada_id,
+    (t) => t.estado === "concluido",
   );
   const arquivosAlterados = ultimaRevisaoConcluida
     ? (arquivosAlteradosDoRevisor(ag, ultimaRevisaoConcluida.ticket_id)?.arquivos ?? [])
@@ -194,8 +198,11 @@ const VERIFICACOES_DO_COMMIT = ["execucao_testes", "matriz_fitness", "relatorio_
 function secaoVerificacoesJaFeitas({ ag, ticket, anexos, commitsDosTickets }: ContextoDemanda): string {
   const rodadas = ticket.etapa === "revisar_rodada" ? [ticket.rodada_id] : ag.rodadas.map((r) => r.rodada_id);
   const linhas = rodadas.flatMap((rodada_id) => {
-    const ultimo = ag.tickets.findLast(
-      (t) => t.rodada_id === rodada_id && t.etapa === "implementar" && commitsDosTickets?.has(t.ticket_id),
+    const ultimo = ticketAtualDaEtapa(
+      ag,
+      "implementar",
+      rodada_id,
+      (t) => commitsDosTickets?.has(t.ticket_id) === true,
     );
     if (!ultimo) return [];
     const doTicket = (e: { tipo: string; ticket_id?: number }) => e.ticket_id === ultimo.ticket_id;

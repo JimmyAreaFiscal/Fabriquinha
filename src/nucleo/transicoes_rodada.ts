@@ -7,6 +7,7 @@ import { CICLO_DA_DEMANDA, CICLO_DA_RODADA, CICLO_DO_TICKET } from "./ciclos.ts"
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
+import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { type EtapaTicket, type EstadoRodada, Id, type Instante, Motivo, palavras } from "./primitivos.ts";
 import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
@@ -67,8 +68,7 @@ function rodadaNoEstado(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_i
 
 /** O ticket atual da etapa na rodada (o de maior ID), que precisa ser o citado e estar aberto ou em execução. */
 function ticketAtual(ag: AgregadoDemanda, rodada: RodadaDemanda, etapa: EtapaTicket, ticket_id: number): TicketDemanda {
-  const da_etapa = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === etapa);
-  const atual = da_etapa.find((t) => t.ticket_id === maximo(da_etapa.map((x) => x.ticket_id)));
+  const atual = ticketAtualDaEtapa(ag, etapa, rodada.rodada_id);
   if (atual?.ticket_id !== ticket_id) {
     throw new ErroDeRegra(
       `o ticket ${String(ticket_id)} não é o ${etapa} atual da rodada ${String(rodada.rodada_id)}`,
@@ -80,22 +80,6 @@ function ticketAtual(ag: AgregadoDemanda, rodada: RodadaDemanda, etapa: EtapaTic
   }
   return atual;
 }
-
-const novoTicket = (
-  ag: AgregadoDemanda,
-  rodada: RodadaDemanda,
-  etapa: EtapaTicket,
-  agora: Instante,
-): TicketDemanda => ({
-  demanda_id: ag.demanda.id,
-  ticket_id: maximo(ag.tickets.map((t) => t.ticket_id)) + 1,
-  rodada_id: rodada.rodada_id,
-  etapa,
-  estado: "aberto",
-  devolucoes: 0,
-  estado_alterado_em: agora,
-  criado_por: FABRIQUINHA,
-});
 
 const rodadasComEstadoMudado = (
   ag: AgregadoDemanda,
@@ -134,7 +118,10 @@ export function concluirImplementacoesRodada(
   }
   return {
     ...ag,
-    tickets: [...ag.tickets, novoTicket(ag, rodada, "revisar_rodada", ctx.agora)],
+    tickets: [
+      ...ag.tickets,
+      criarTicket(ag, { etapa: "revisar_rodada", rodada: rodada.rodada_id, criado_por: FABRIQUINHA, agora: ctx.agora }),
+    ],
     rodadas: rodadasComEstadoMudado(ag, rodada, "revisar_rodada", ctx.agora),
   };
 }
@@ -216,7 +203,15 @@ export function registrarRevisaoRodada(
   return {
     ...comRevisaoDecidida,
     ...(e.aprovado && {
-      tickets: [...comRevisaoDecidida.tickets, novoTicket(ag, rodada, "encerrar_rodada", ctx.agora)],
+      tickets: [
+        ...comRevisaoDecidida.tickets,
+        criarTicket(ag, {
+          etapa: "encerrar_rodada",
+          rodada: rodada.rodada_id,
+          criado_por: FABRIQUINHA,
+          agora: ctx.agora,
+        }),
+      ],
     }),
     rodadas: rodadasComEstadoMudado(
       comRevisaoDecidida,
@@ -292,7 +287,15 @@ export function reprovarPullRequestRodada(
   const { rodada, ticket } = gatePullRequest(ag, e);
   return {
     ...ag,
-    tickets: [...ticketsConcluidos(ag, ticket, ctx.agora), novoTicket(ag, rodada, "ajustar_resultado", ctx.agora)],
+    tickets: [
+      ...ticketsConcluidos(ag, ticket, ctx.agora),
+      criarTicket(ag, {
+        etapa: "ajustar_resultado",
+        rodada: rodada.rodada_id,
+        criado_por: FABRIQUINHA,
+        agora: ctx.agora,
+      }),
+    ],
     decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "recusado", motivo: e.motivo }, ator, ctx)],
     rodadas: rodadasComEstadoMudado(ag, rodada, "ajustar_resultado", ctx.agora),
   };

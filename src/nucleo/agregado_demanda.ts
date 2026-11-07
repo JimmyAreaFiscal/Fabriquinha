@@ -5,6 +5,7 @@ import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
+import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import {
   EstadoDemanda,
   EstadoRodada,
@@ -195,6 +196,8 @@ export const AgregadoDemanda = z
       if (!rodadas.has(d.rodada_id) || !rodadas.has(d.depende_rodada_id))
         erro(`a dependência da rodada ${String(d.rodada_id)} cita rodada que não existe`);
     }
+    const cicloDeRodadas = GrafoDeDependencias.dasRodadas(ag).descreverCiclo();
+    if (cicloDeRodadas) erro(cicloDeRodadas);
     for (const c of ag.criterios_citados) {
       if (!rodadas.has(c.rodada_id)) erro(`o ${c.criterio_id} cita a rodada ${String(c.rodada_id)}, que não existe`);
     }
@@ -211,6 +214,8 @@ export const AgregadoDemanda = z
       else if (rodada === undefined || rodada !== rodadaDe.get(d.depende_ticket_id))
         erro(`${nome} exige a mesma rodada`);
     }
+    const cicloDeTickets = GrafoDeDependencias.dosTickets(ag).descreverCiclo();
+    if (cicloDeTickets) erro(cicloDeTickets);
     const enc = ag.encerramento;
     if (enc !== undefined) {
       if (ag.demanda.estado !== "encerrar_demanda" && !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado))
