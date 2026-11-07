@@ -427,7 +427,7 @@ const GATES: Partial<Record<FaseDemanda, { titulo: string; rota: string; aprovar
   },
 };
 
-// ——— o que o Auditor lê na aprovação da demanda (como o antigo gate do registro e do desenho da issue) ———
+// ——— o que o Auditor lê na aprovação da demanda ———
 
 interface CriterioDeAceite {
   id: string;

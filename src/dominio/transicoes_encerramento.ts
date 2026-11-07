@@ -1,7 +1,7 @@
 // Transições do encerramento final da demanda (comparacao-sdlc-implementacao.md §5): tentativa, retomada, conflito, falhas, integração e conclusão.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; cada uma recebe o que a aplicação observou fora do domínio.
 import { z } from "zod";
-import { type Ator, exigirFabriquinha } from "./agregado.ts";
+import { type Ator, exigirFabriquinha } from "./ator.ts";
 import { AgregadoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
 import { branchDemanda, DemandaId } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";

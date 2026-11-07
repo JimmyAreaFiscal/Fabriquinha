@@ -1,0 +1,82 @@
+# Contexto
+
+- Projeto: loja (branch base main)
+- Worktree (diretório de trabalho): /w
+- Diretório de saída (`$FABRIQUINHA_SAIDA`): /s
+
+## Demanda
+
+I-206, Busca (problema)
+
+A busca demora.
+
+## Critérios de aceite da demanda
+
+- **CA-2**: dado d, quando e, então f.
+
+## Rodada
+
+I-206.R2, Índice (fase desenvolvimento)
+
+Critérios citados:
+
+- **CA-2**: dado d, quando e, então f.
+
+## Ticket
+
+I-206.T3, Fazer (etapa revisar_demanda)
+
+Detalhe.
+
+Dependências:
+
+- I-206.T1
+
+Caminhos:
+
+- `src/a.ts`
+
+## Modo de trabalhar: revisar demanda
+
+**Objetivo:** revisar a demanda I-206 inteira, no ticket I-206.T3: comprovar os critérios de aceite da demanda, submeter o código a testes de estresse e analisar a segurança.
+
+**Passos:**
+
+1. Leia os critérios de aceite da demanda I-206, o plano e o resultado de cada rodada.
+2. Confira o código integrado da worktree contra cada critério da demanda.
+3. Exercite o que a demanda entrega sob carga e entradas extremas e registre o que quebrou ou aguentou.
+4. Analise a segurança do que mudou: entradas externas, permissões, dados sensíveis e dependências.
+5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir I-206.T3 aprovar` se a demanda cumpre o que foi pedido, ou com `fabriquinha revisao decidir I-206.T3 reprovar --motivo <texto> --plano <json|->` se não cumpre; `--plano` leva o plano de correção da demanda, em JSON.
+
+**Entregas:** as evidências de comprovação dos critérios da demanda, de testes de estresse e de análise de segurança, do ticket I-206.T3.
+
+**Quando parar:** depois de registrar a decisão com `revisao decidir`; termine a sua resposta.
+
+**O que não fazer:** não mude o código (as alterações da worktree são descartadas), não faça commit nem push, não crie PR e não mexa em nada fora do ticket I-206.T3. Refira-se a tickets e rodadas só pelos endereços públicos.
+
+## Leitura e edição
+
+Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
+
+- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.
+- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.
+- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
+- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
+
+## Evidências
+
+Você submete (`fabriquinha evidencia schema <tipo>` mostra o formato; `fabriquinha evidencia add <tipo> --dados <arquivo.json> --arquivo <caminho>...` submete):
+
+- `comprovacao_criterios`
+- `testes_estresse`
+- `analise_seguranca`
+
+A Fabriquinha não produz evidência nesta etapa.
+
+## Skills de artefato
+
+Leia a skill de cada evidência antes de produzi-la:
+
+- `artefato-comprovacao-criterios`
+- `artefato-testes-estresse`
+- `artefato-analise-seguranca`

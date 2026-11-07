@@ -3,7 +3,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, AUDITOR, FABRIQUINHA } from "../dominio/agregado.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { Plano } from "../dominio/demanda.ts";
 import { predecessorasPendentes } from "../dominio/dependencia_demanda.ts";

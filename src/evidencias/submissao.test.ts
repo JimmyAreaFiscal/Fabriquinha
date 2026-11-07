@@ -18,11 +18,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import type { TipoEvidencia } from "../dominio/agregado.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";
-import { schemaDe } from "./schemas.ts";
+import { schemaDe, type TipoEvidencia } from "./schemas.ts";
 import { guardarAnexos } from "./submissao.ts";
 
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-submissao-"));
@@ -81,7 +80,7 @@ const submeter = (c: Cenario, tipo: TipoEvidencia, caminhos: readonly string[], 
       {
         worktree: c.worktree,
         saida: c.saida,
-        fora: "da worktree da issue e do diretório de saída",
+        fora: "da worktree da demanda e do diretório de saída",
         copie: `$FABRIQUINHA_SAIDA (${c.saida})`,
       },
       cruzar,
@@ -140,7 +139,7 @@ test("criterios_aceite não aceita arquivo; comportamento exige pelo menos um", 
 test("origem: só da worktree ou da saída, pelo caminho real do descritor; link simbólico para fora é recusado", async () => {
   const c = cenario();
   const fora = c.arquivo(c.raiz, "segredo.txt", "senha");
-  const foraDaSaida = "fora da worktree da issue e do diretório de saída";
+  const foraDaSaida = "fora da worktree da demanda e do diretório de saída";
   const solucao = `(copie-o para $FABRIQUINHA_SAIDA (${c.saida}))`;
 
   // Link no último componente nunca é seguido, aponte para fora ou para dentro.

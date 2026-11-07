@@ -2,7 +2,7 @@
 // evidência, enviar e arquivar, uma transação por operação. A web e o CLI chamam estas funções; as regras são do domínio.
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
-import type { Ator } from "../dominio/agregado.ts";
+import type { Ator } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../dominio/cancelamento_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";

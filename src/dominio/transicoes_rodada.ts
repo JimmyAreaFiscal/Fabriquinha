@@ -1,7 +1,7 @@
 // Ciclo da rodada (comparacao-sdlc-implementacao.md §4): implementações concluídas, revisão e conferência técnica do PR.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { type Ator, exigirAuditor, exigirFabriquinha } from "./agregado.ts";
+import { type Ator, exigirAuditor, exigirFabriquinha } from "./ator.ts";
 import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";

@@ -2,7 +2,7 @@
 // Fabriquinha, roda o pi e, se a execução falhou ou terminou sem a decisão, registra a falha no ticket. Nunca grava a
 // decisão (CA-2, CA-12): quem a grava é o agente, por `revisao decidir`.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";
 import { encontrado, mensagem } from "../dominio/erros.ts";
 import { reservarTicket } from "../dominio/reserva_ticket.ts";

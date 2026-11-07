@@ -1,0 +1,108 @@
+# Contexto
+
+- Projeto: loja (branch base main)
+- Worktree (diretório de trabalho): /w
+- Diretório de saída (`$FABRIQUINHA_SAIDA`): /s
+
+## Demanda
+
+I-206, Busca (problema)
+
+A busca demora.
+
+## Critérios de aceite da demanda
+
+- **CA-2**: dado d, quando e, então f.
+
+## Rodada
+
+I-206.R2, Índice (fase desenvolvimento)
+
+Critérios citados:
+
+- **CA-2**: dado d, quando e, então f.
+
+## Ticket
+
+I-206.T3, Fazer (etapa revisar_rodada)
+
+Detalhe.
+
+Dependências:
+
+- I-206.T1
+
+Caminhos:
+
+- `src/a.ts`
+
+## Arquivos alterados
+
+O diff da rodada contra a branch da demanda, apurado pela Fabriquinha antes desta execução, com o caminho dos tickets do plano que cada arquivo casou:
+
+(nenhum)
+
+Caminhos do plano que a rodada não tocou:
+
+(nenhum)
+
+## Matriz de fitness functions
+
+A Fabriquinha rodou cada fitness function na worktree antes desta execução:
+
+(nenhuma)
+
+Os logs, em arquivos que você lê:
+
+(nenhum)
+
+## Modo de trabalhar: revisar rodada
+
+**Objetivo:** revisar a rodada I-206.R2 da demanda I-206 como um todo, no ticket I-206.T3: explicar as fitness functions e comprovar que os critérios que a rodada atende foram cumpridos.
+
+**Passos:**
+
+1. Leia o plano, os critérios da rodada I-206.R2 e o que a Fabriquinha coletou: os arquivos alterados e a matriz de fitness functions, nas seções "Arquivos alterados" e "Matriz de fitness functions", esta com o arquivo do log de cada linha.
+2. Confira o código da worktree contra o plano e contra cada critério citado.
+3. Explique o resultado de cada fitness function, inclusive as que falharam.
+4. Comprove cada critério da rodada com o que você viu no código e nos testes.
+5. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir I-206.T3 aprovar` se a rodada cumpre o que foi pedido, ou com `fabriquinha revisao decidir I-206.T3 reprovar --motivo <texto> --correcoes <json|->` se não cumpre; `--correcoes` leva as correções que a rodada exige, em JSON, uma por ticket corretivo, como `[{"titulo": "...", "descricao": "...", "caminhos": ["src/a.ts"]}]`.
+
+Se o ambiente impedir uma verificação (serviço fora do ar, contêiner, credencial ausente), não reprove por isso: o ticket corretivo não conserta o ambiente e a rodada volta à revisão em laço.
+Pergunte ao Auditor com a ferramenta `perguntar`, dizendo o que falta e o que você já tentou, e siga com a resposta dele.
+
+Para esperar um processo (teste ao vivo, container, fila), espere num único comando até a condição ou um tempo limite, com a saída filtrada; não relance a espera turno após turno.
+
+**Entregas:** as evidências de explicação das fitness functions e de comprovação dos critérios, do ticket I-206.T3.
+
+**Quando parar:** depois de registrar a decisão com `revisao decidir`; termine a sua resposta.
+
+**O que não fazer:** não mude o código (as alterações da worktree são descartadas), não faça commit nem push, não crie PR e não mexa em nada fora do ticket I-206.T3. Refira-se a tickets e rodadas só pelos endereços públicos.
+
+## Leitura e edição
+
+Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
+
+- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.
+- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.
+- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
+- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
+
+## Evidências
+
+Você submete (`fabriquinha evidencia schema <tipo>` mostra o formato; `fabriquinha evidencia add <tipo> --dados <arquivo.json> --arquivo <caminho>...` submete):
+
+- `explicacao_fitness`
+- `comprovacao_criterios`
+
+A Fabriquinha produz:
+
+- `arquivos_alterados`
+- `matriz_fitness`
+
+## Skills de artefato
+
+Leia a skill de cada evidência antes de produzi-la:
+
+- `artefato-explicacao-fitness`
+- `artefato-comprovacao-criterios`

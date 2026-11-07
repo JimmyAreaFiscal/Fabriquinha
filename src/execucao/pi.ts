@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { ModoExecucao } from "../dominio/sessoes.ts";
 import type { Effort, Modelo } from "../dominio/primitivos.ts";
 import { ambienteSemCredenciais, executar, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../persistencia/execucoes.ts";

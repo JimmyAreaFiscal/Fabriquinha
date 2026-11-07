@@ -6,9 +6,9 @@ import { ErroHttp, traduzir } from "./erros.ts";
 
 test("mapa de erros do F7 §4.2", () => {
   assert.deepEqual(traduzir(new ErroDeEscopo("não é seu", "peça ao Auditor")), [403, "não é seu (peça ao Auditor)"]);
-  assert.deepEqual(traduzir(new ErroDeInexistente("a issue I-9 não existe", "confira")), [
+  assert.deepEqual(traduzir(new ErroDeInexistente("a demanda I-9 não existe", "confira")), [
     404,
-    "a issue I-9 não existe (confira)",
+    "a demanda I-9 não existe (confira)",
   ]);
   assert.deepEqual(traduzir(new ErroDeRegra("já há execução autônoma em andamento: E-3", "espere")), [
     409,

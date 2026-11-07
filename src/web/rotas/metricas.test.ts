@@ -56,9 +56,9 @@ async function chamar(endereco: string): Promise<unknown> {
 }
 
 /** Uma demanda do projeto, registrada agora, com um ticket, uma sessão e uma execução de US$ 2 que acabou de começar. */
-function demandaComExecucao(id: string, projeto: string): void {
+function demandaComExecucao(id: string, projeto: string, tipo = "problema"): void {
   const agoraIso = new Date().toISOString();
-  banco.exec(`INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título', 'problema', 'd', 'execucao', '${agoraIso}', 'f', 's', 1, 'b-${id}');
+  banco.exec(`INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título', '${tipo}', 'd', 'execucao', '${agoraIso}', 'f', 's', 1, 'b-${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'planejar', 'concluido', '${agoraIso}');
     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${agoraIso}', '${agoraIso}', 0);
@@ -101,24 +101,57 @@ test("GET /api/metricas: 422 para mês inválido, `de` depois de `ate` ou mais d
   const [, mensagem] = (await chamar("/api/metricas?de=2024-03&ate=2026-03")) as [number, string];
   assert.match(mensagem, /no máximo 24 meses/);
   assert.equal(((await chamar("/api/metricas?de=2024-04&ate=2026-03")) as unknown[]).length, 24);
-  const [status] = (await chamar("/api/metricas/issues?ate=2026-13")) as [number, string];
+  const [status] = (await chamar("/api/metricas/demandas?ate=2026-13")) as [number, string];
   assert.equal(status, 422);
 });
 
-test("GET /api/metricas/issues: as demandas com execução no período", async () => {
-  assert.deepEqual(await chamar("/api/metricas/issues"), []);
+test("GET /api/metricas/demandas: as demandas com execução no período", async () => {
+  assert.deepEqual(await chamar("/api/metricas/demandas"), []);
   demandaComExecucao("I-1", "loja");
   demandaComExecucao("I-2", "site");
-  const todas = (await chamar("/api/metricas/issues")) as MetricasDemandaPeriodo[];
+  const todas = (await chamar("/api/metricas/demandas")) as MetricasDemandaPeriodo[];
   assert.deepEqual(
     todas.map((d) => d.demanda),
     ["I-1", "I-2"],
   );
   const site = (await chamar(
-    `/api/metricas/issues?projeto=site&de=${mes(0)}&ate=${mes(0)}`,
+    `/api/metricas/demandas?projeto=site&de=${mes(0)}&ate=${mes(0)}`,
   )) as MetricasDemandaPeriodo[];
   assert.deepEqual(
     site.map((d) => [d.demanda, d.custo.conhecido]),
     [["I-2", 2]],
   );
+});
+
+test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos", async () => {
+  demandaComExecucao("I-1", "loja", "problema");
+  demandaComExecucao("I-2", "site", "funcionalidade");
+  const corpo = await chamar("/api/metricas/demandas");
+  const execucaoDeUmaDemanda = {
+    execucoes: 1,
+    falhas: 0,
+    duracaoMs: 0,
+    tokens: { entrada: 10, saida: 1, cacheLeitura: 0, cacheEscrita: 0 },
+    custo: { conhecido: 2, incompleto: false },
+  };
+  assert.deepEqual(corpo, [
+    {
+      demanda: "I-1",
+      projeto: "loja",
+      titulo: "Título",
+      fase: "execucao",
+      reprovacoes: 0,
+      nota: null,
+      ...execucaoDeUmaDemanda,
+    },
+    {
+      demanda: "I-2",
+      projeto: "site",
+      titulo: "Título",
+      fase: "execucao",
+      reprovacoes: 0,
+      nota: null,
+      ...execucaoDeUmaDemanda,
+    },
+  ]);
 });

@@ -103,7 +103,7 @@ test("barra de estado: demanda, rodada, ticket, etapa, modo, estado, modelo, exe
     cabecalho({ estado: "aguardando_humano", motivo: "conversa" }, { rodada: "I-239.R1" }),
     "anthropic / <opus>",
   );
-  assert.match(html, /<a class="issue" href="\/demandas\/I-239"><span class="id">I-239<\/span><\/a>/);
+  assert.match(html, /<a class="demanda" href="\/demandas\/I-239"><span class="id">I-239<\/span><\/a>/);
   assert.match(html, /<span class="id">I-239.R1<\/span><span class="sep">│<\/span><span class="id">I-239.T1<\/span>/);
   assert.match(html, /Planejamento · interativa<\/span><span class="pill pill-aguarda">aguarda você · conversa/);
   assert.match(html, /<span class="modelo" title="anthropic \/ &#60;opus&#62;">anthropic \/ &#60;opus&#62;<\/span>/);

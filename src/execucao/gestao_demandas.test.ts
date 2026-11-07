@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { AUDITOR } from "../dominio/agregado.ts";
+import { AUDITOR } from "../dominio/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo } from "../persistencia/arquivos.ts";
 import { abrir } from "../persistencia/banco.ts";

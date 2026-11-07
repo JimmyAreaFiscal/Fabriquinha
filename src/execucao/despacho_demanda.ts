@@ -2,7 +2,7 @@
 // escolhe o trabalho pela seleção global (o agente não escolhe), reserva e cria a execução na mesma transação e entrega
 // ao serviço da etapa. pi, git e testes ficam fora da transação: rodam em segundo plano, depois dela.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import type { TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";
 import { ErroDeRegra, existe } from "../dominio/erros.ts";

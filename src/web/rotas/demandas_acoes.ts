@@ -1,7 +1,7 @@
 // Ações do Auditor sobre as demandas (comparacao-sdlc §9.1): os gates (demanda, planejamento, PR da rodada) e a sessão
 // de ajustes. Cada rota valida o corpo, chama o serviço da aplicação como AUDITOR e devolve o erro dele como está.
 import { z } from "zod";
-import { AUDITOR } from "../../dominio/agregado.ts";
+import { AUDITOR } from "../../dominio/ator.ts";
 import { interpretarRef } from "../../dominio/demanda.ts";
 import { reabrirTicket } from "../../dominio/transicoes_demanda.ts";
 import { ErroDeRegra, existe } from "../../dominio/erros.ts";

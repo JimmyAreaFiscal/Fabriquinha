@@ -68,7 +68,7 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   await expect(encerramento).not.toContainText(/nada foi integrado/i);
 
   // Fora os chips das evidências e o "ler tudo", só os dois do gate do PR (R1), o Concluir da sessão de ajustes (R2; a
-  // conversa é no chat), o Reabrir do T5 falho e os três do cancelamento; a tela da issue não usa `.dm-` (CA-33).
+  // conversa é no chat), o Reabrir do T5 falho e os três do cancelamento; a tela da demanda não usa `.dm-` (CA-33).
   await expect(pagina.locator("main button:not(.dm-chip, [data-expandir])")).toHaveCount(7);
 
   // Aguarda você leva ao ticket falho na mesma página, sem redesenhá-la.

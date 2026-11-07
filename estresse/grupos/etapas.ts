@@ -15,7 +15,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
-import { AUDITOR } from "../../src/dominio/agregado.ts";
+import { AUDITOR } from "../../src/dominio/ator.ts";
 import { registrarCorrecoesSessao } from "../../src/dominio/transicoes_rodada.ts";
 import {
   type AutorDemanda,

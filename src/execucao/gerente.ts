@@ -1,7 +1,7 @@
 // Gerente de sessões (F4 §2, §6): o único que lança o pi. Roda o pi com o mesmo código de processo e protocolo nos
 // modos autônomo e interativo, guarda as execuções vivas com os diálogos de extensão pendentes (F4 §5.4) e repassa os
 // eventos a quem assina a sessão.
-import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { ModoExecucao } from "../dominio/sessoes.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { anotar } from "../persistencia/execucoes.ts";

@@ -1,4 +1,4 @@
-// Início (comparacao-sdlc §9.1, "Board com issue"): a frase do mês, o que aguarda o Auditor, o que roda e o board só com
+// Início (comparacao-sdlc §9.1, "Board com demanda"): a frase do mês, o que aguarda o Auditor, o que roda e o board só com
 // as demandas em andamento, com as colunas por fase da demanda e, na execução, por fase da rodada; prints a 1440 e
 // 375 px, sem rolagem horizontal da página (abaixo de 1320 px o board rola dentro dele).
 import type { Locator, Page } from "@playwright/test";

@@ -1,11 +1,33 @@
 // Conteúdo de cada tipo de evidência (F3 §3.1, §4): o schema de `dados` e as regras dos arquivos.
 import { z } from "zod";
-import type { Agregado, Evidencia, TipoEvidencia } from "../dominio/agregado.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../dominio/agregado_demanda.ts";
 import { Plano } from "../dominio/demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import type { TipoEvidenciaEtapa } from "../dominio/evidencia_etapa.ts";
-import { type Etapa, type Id, Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
+import { type EtapaTicket, type Id, Motivo, Slug, Titulo, unicoPor } from "../dominio/primitivos.ts";
 import { Hospedagem } from "../dominio/projeto.ts";
+
+/** Os 17 tipos do F3 §2. */
+export const TipoEvidencia = z.enum([
+  "comportamento",
+  "criterios_aceite",
+  "desenho_solucao",
+  "prototipo",
+  "relatorio_complexidade",
+  "relatorio_impactos_arquitetura",
+  "execucao_testes",
+  "matriz_fitness",
+  "relatorio_sonar",
+  "arquivos_alterados",
+  "explicacao_fitness",
+  "comprovacao_criterios",
+  "mensagem_pr",
+  "aula_codigo",
+  "video_demonstracao",
+  "relatorio_produtividade",
+  "pr_aberto",
+]);
+export type TipoEvidencia = z.infer<typeof TipoEvidencia>;
 
 /** F3 §3.1: a classe vem dos bytes iniciais, nunca da extensão. */
 export const Classe = z.enum(["video", "imagem", "html", "texto"]);
@@ -42,7 +64,7 @@ const Arquivos = ({ classes = Classe.options, min = 0, max, temClasse }: Partial
 
 /** O que as regras cruzadas consultam: o agregado antes da submissão, o ticket e os nomes dos anexos. */
 export interface Cruzamento {
-  readonly ag: Agregado;
+  readonly ag: AgregadoDemanda;
   readonly ticket: Id;
   readonly anexos: readonly string[];
 }
@@ -63,18 +85,22 @@ const tipado = <Dados extends Record<string, unknown>>(schema: SchemaEvidencia<D
 const ordenados = (de: readonly string[]): string => `[${de.toSorted((a, b) => a.localeCompare(b)).join(", ")}]`;
 
 /** Os valores de `campo` de cada item de `lista` nos `dados` das evidências `tipo` que passam no filtro. */
-const daEvidencia = (ag: Agregado, tipo: TipoEvidencia, lista: string, campo: string, ticket?: Id): string[] =>
+const daEvidencia = (ag: AgregadoDemanda, tipo: TipoEvidencia, lista: string, campo: string, ticket?: Id): string[] =>
   ag.evidencias
-    .filter((e) => e.tipo === tipo && (ticket === undefined || e.ticket === ticket))
+    .filter((e) => e.tipo === tipo && (ticket === undefined || e.ticket_id === ticket))
     .flatMap((e) => (e.dados[lista] as Record<string, string>[]).map((item) => String(item[campo])));
 
 /**
  * A evidência `tipo` do último ticket concluído da `etapa`: a da revisão que levou ao encerramento, a do último
  * ticket de desenvolvimento.
  */
-export function daUltimaConcluida(ag: Agregado, etapa: Etapa, tipo: TipoEvidencia): Evidencia | undefined {
+export function daUltimaConcluida(
+  ag: AgregadoDemanda,
+  etapa: EtapaTicket,
+  tipo: TipoEvidencia,
+): EvidenciaDemanda | undefined {
   const ticket = ag.tickets.findLast((t) => t.etapa === etapa && t.status === "concluido");
-  return ticket && ag.evidencias.find((e) => e.ticket === ticket.id && e.tipo === tipo);
+  return ticket && ag.evidencias.find((e) => e.ticket_id === ticket.ticket_id && e.tipo === tipo);
 }
 
 /** O impacto na arquitetura que exige `reversao` na `mensagem_pr`: qualquer um declarado que não seja baixo. */
@@ -356,7 +382,7 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
     }),
     arquivos: HTML_UNICO,
   },
-  // Obrigatório só quando a issue é funcionalidade (catálogo do F1).
+  // Obrigatório só quando a demanda é funcionalidade (catálogo do F1).
   prototipo: {
     dados: z.object({
       descricao: Texto,
@@ -388,7 +414,7 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
     }),
     arquivos: LOGS,
   },
-  // Produzida pela Fabriquinha (F3 §4.3, §6): aprovada = nenhuma issue aberta nos arquivos alterados.
+  // Produzida pela Fabriquinha (F3 §4.3, §6): aprovada = nenhuma issue do Sonar aberta nos arquivos alterados.
   relatorio_sonar: {
     dados: z.object({
       projectKey: z.string(),
@@ -406,7 +432,7 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
     }),
     arquivos: Arquivos({ max: 0 }),
   },
-  // Produzida pela Fabriquinha antes do pi da revisão (F3 §4.4, §7): o diff da issue × o desenho aprovado.
+  // Produzida pela Fabriquinha antes do pi da revisão (F3 §4.4, §7): o diff da rodada × o desenho aprovado.
   arquivos_alterados: {
     dados: z.object({
       base: Sha,
@@ -464,7 +490,7 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
     dados: MensagemPR,
     arquivos: Arquivos({ max: 0 }),
     cruzar({ naoPrevistos, reversao }, { ag }) {
-      const alterados = (daUltimaConcluida(ag, "revisao", "arquivos_alterados")?.dados.arquivos ?? []) as {
+      const alterados = (daUltimaConcluida(ag, "revisar_rodada", "arquivos_alterados")?.dados.arquivos ?? []) as {
         caminho: string;
         previsto: string | null;
       }[];

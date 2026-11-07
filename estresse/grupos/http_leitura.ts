@@ -223,7 +223,7 @@ export async function acoesHttpLeitura(amb: Ambiente): Promise<AcaoHttp[]> {
     acao("/api/projetos/:nome/demandas", "/api/projetos/loja/demandas", 41),
     acao("/api/projetos/:nome/heatmap", "/api/projetos/loja/heatmap", 614),
     acao("/api/metricas", "/api/metricas", 77),
-    acao("/api/metricas/issues", "/api/metricas/issues", 20),
+    acao("/api/metricas/demandas", "/api/metricas/demandas", 20),
     acao("/api/projetos/:nome/usuarios-simulados", "/api/projetos/loja/usuarios-simulados", 17),
     acao("/api/projetos/:nome/tarefas", "/api/projetos/loja/tarefas", 20),
   ];

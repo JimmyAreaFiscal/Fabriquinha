@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../src/dominio/agregado.ts";
+import { AUDITOR } from "../src/dominio/ator.ts";
 import { registrarCorrecoesSessao } from "../src/dominio/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/evidencias/pr_rodada.ts";
 import { aprovarPRRodada } from "../src/execucao/aprovacao_pr_rodada.ts";
