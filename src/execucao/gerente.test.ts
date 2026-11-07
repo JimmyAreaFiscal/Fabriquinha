@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { ErroDeRegra } from "../dominio/erros.ts";
+import type { executar } from "../processo.ts";
+import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
 import { causaDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import {
   abortar,
@@ -53,6 +55,15 @@ function aoPrompt() {
     const args = { question: "Corrijo o Sonar?", details: "S1", options: [{ label: " Sim " }, { label: "Não" }], multiSelect: true };
     emitir({ type: "tool_execution_start", toolCallId: "p2", toolName: "perguntar", args });
     emitir({ type: "extension_ui_request", id: "s2", method: "select", title: "Corrijo o Sonar?", options: ["Sim", "Não"] });
+  }
+  if (variante === "pergunta_sonar") {
+    const args = { question: "Como confiro o SonarQube?", options: [{ label: "Usar a verificação anterior" }, { label: "Executar deploy de teste" }] };
+    emitir({ type: "tool_execution_start", toolCallId: "p4", toolName: "perguntar", args });
+    emitir({ type: "extension_ui_request", id: "s4", method: "select", title: "Como confiro o SonarQube?", options: ["Usar a verificação anterior", "Executar deploy de teste"] });
+  }
+  if (variante === "pergunta_banco") {
+    emitir({ type: "tool_execution_start", toolCallId: "p5", toolName: "perguntar", args: { question: "Posso usar uma cópia do banco real?" } });
+    emitir({ type: "extension_ui_request", id: "e5", method: "editor", title: "Posso usar uma cópia do banco real?" });
   }
   if (variante === "pergunta_livre") {
     emitir({ type: "tool_execution_start", toolCallId: "p3", toolName: "perguntar", args: { question: "Qual handle?", details: "do dev" } });
@@ -197,6 +208,48 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
   );
   assert.equal(await simples.fim, undefined);
   assert.equal(readFileSync(join(simples.dir, "respostas"), "utf8"), "a\n");
+});
+
+/** A triagem de verdade (`triarPergunta`) com o pi da triagem trocado por uma saída fixa do modelo. */
+function triagemComSaida(etapa: string, saidaDoModelo: string): NonNullable<Processo["triarPergunta"]> {
+  const piDaTriagem: typeof executar = () =>
+    Promise.resolve({ codigo: 0, saida: saidaDoModelo, erro: "", limiteEstourado: false });
+  return (p) => triarPergunta(undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p, piDaTriagem);
+}
+const foraDaRevisao = '{"decisao":"fora_da_revisao","justificativa":"pede o Sonar"}';
+
+test("autônoma: a pergunta fora da revisão recebe o texto fixo, com ou sem opções, e o log registra a resposta", async () => {
+  const sonar = rodar("pergunta_sonar", "autonomo", 1, triagemComSaida("revisar_rodada", foraDaRevisao));
+  assert.equal(await sonar.fim, undefined);
+  assert.equal(readFileSync(join(sonar.dir, "respostas"), "utf8"), `${RESPOSTA_FORA_DA_REVISAO}\n`);
+  assert.match(
+    readFileSync(join(sonar.dir, "log"), "utf8"),
+    /Auditor automático respondeu "Fica fora da revisão; registre como verificado fora da revisão e decida pelo resto\." a "Como confiro o SonarQube\?": pede o Sonar/,
+  );
+
+  const banco = rodar("pergunta_banco", "autonomo", 1, triagemComSaida("revisar_demanda", foraDaRevisao));
+  assert.equal(await banco.fim, undefined);
+  assert.equal(readFileSync(join(banco.dir, "respostas"), "utf8"), `${RESPOSTA_FORA_DA_REVISAO}\n`);
+});
+
+test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy escalam, sem resposta ao agente", async () => {
+  const oferta = '{"decisao":"responder","resposta":"Executar deploy de teste","justificativa":"autorizado"}';
+  for (const [variante, etapa, saida] of [
+    ["pergunta_banco", "implementar", foraDaRevisao],
+    ["pergunta_sonar", "revisar_rodada", oferta],
+  ] as const) {
+    const escalada = rodar(variante, "autonomo", 1, triagemComSaida(etapa, saida));
+    await ate(
+      () =>
+        existsSync(join(escalada.dir, "log")) && readFileSync(join(escalada.dir, "log"), "utf8").includes("escalou"),
+      "a escalada",
+    );
+    assert.match(readFileSync(join(escalada.dir, "log"), "utf8"), /Auditor automático escalou ao Auditor: .+\?/);
+    assert.equal(existsSync(join(escalada.dir, "respostas")), false);
+    assert.equal(situacao(escalada.sessao)?.dialogos.length, 1);
+    abortar(escalada.sessao);
+    assert.equal(await escalada.fim, "abortada pelo Auditor");
+  }
 });
 
 test("autônoma: a pergunta estratégica fica com o Auditor; a resposta dele antes da triagem vale e a triagem não repete", async () => {

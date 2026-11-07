@@ -31,6 +31,10 @@ export const RESPOSTA_FORA_DA_REVISAO =
 
 const ETAPAS_DE_REVISAO = ["revisar_rodada", "revisar_demanda"];
 
+// Rede de segurança do código: o modelo pode errar e mandar "responder" com uma oferta de acesso; aqui isso escala.
+// shortcut: palavras-chave, com falso positivo que só escala; trocar por classificação do modelo se escalar demais.
+const OFERTA_DE_ACESSO = /credencia|acesso|deploy|autentic|autentiqu/i;
+
 const REGRAS = `Você é o Auditor automático da Fabriquinha. Um agente que executa um ticket sozinho fez uma pergunta ao Auditor humano.
 Responda você só o que for banal; escale o que for estratégico.
 
@@ -81,7 +85,8 @@ const Decisao = z.discriminatedUnion("decisao", [
 /**
  * A resposta na saída do pi, ou `undefined` para escalar. A saída pode trazer texto além do JSON; vale a última linha
  * que é uma decisão. Com opções, a resposta precisa ser um dos rótulos. "Fora da revisão" vale só nas etapas de
- * revisão, com a resposta fixa (mesmo com opções); em outra etapa, escala.
+ * revisão, com a resposta fixa (mesmo com opções); em outra etapa, escala. Resposta que ofereça credencial, acesso ou
+ * deploy de teste também escala.
  */
 export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: string): RespostaDoAuditorAutomatico | undefined {
   const decisao = saida
@@ -101,6 +106,7 @@ export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: string): R
   }
   if (decisao?.decisao !== "responder") return undefined;
   if (p.opcoes.length > 0 && !p.opcoes.includes(decisao.resposta)) return undefined;
+  if (OFERTA_DE_ACESSO.test(decisao.resposta)) return undefined;
   return { resposta: decisao.resposta, justificativa: decisao.justificativa };
 }
 

@@ -60,6 +60,16 @@ test("lê a última decisão válida da saída; escalar, rótulo fora das opçõ
     justificativa: "regra",
   });
   assert.equal(lerDecisao(responder("Talvez"), comOpcoes, "implementar"), undefined);
+  // Oferta de credencial, acesso ou deploy de teste escala, mesmo com a decisão "responder" e o rótulo válido.
+  const ofertas = { pergunta: "Como confiro?", opcoes: ["Executar deploy de teste", "Usar a verificação anterior"] };
+  assert.equal(lerDecisao(responder("Executar deploy de teste"), ofertas, "revisar_rodada"), undefined);
+  assert.deepEqual(lerDecisao(responder("Usar a verificação anterior"), ofertas, "revisar_rodada"), {
+    resposta: "Usar a verificação anterior",
+    justificativa: "regra",
+  });
+  for (const oferta of ["Use a credencial do bot", "Peça acesso ao Sonar", "Faça o deploy", "Autentique o gh"]) {
+    assert.equal(lerDecisao(responder(oferta), livre, "implementar"), undefined, oferta);
+  }
   assert.equal(
     lerDecisao('{"decisao":"escalar","justificativa":"muda o critério"}', comOpcoes, "implementar"),
     undefined,
