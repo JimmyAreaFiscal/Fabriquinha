@@ -541,6 +541,25 @@ test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelam
   ]);
 });
 
+test("perguntasRespondidasNaSessao: ignora linha null e mensagem sem content, mantendo os pares válidos", () => {
+  const { c } = cenario();
+  mkdirSync(join(c.raiz, "sessoes"), { recursive: true });
+  const linhas = [
+    "null",
+    { type: "message", message: { role: "assistant" } },
+    mensagem("assistant", "", { content: [chamada("a", "perguntar", { question: "Como confiro o Sonar?" })] }),
+    { type: "message", message: { role: "toolResult", toolCallId: "a" } },
+    resultado("a", "User answered: fica com o Auditor"),
+  ];
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s3.jsonl"),
+    linhas.map((l) => (typeof l === "string" ? l : JSON.stringify(l))).join("\n") + "\n",
+  );
+  assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s3"), [
+    { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor" },
+  ]);
+});
+
 test("perguntasRespondidasNaSessao: sessão sem arquivo não tem perguntas", () => {
   const { c } = cenario();
   assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s-sem-arquivo"), []);
