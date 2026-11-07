@@ -214,6 +214,26 @@ test("CA-3: reaberto pelo Auditor, o mesmo ticket decide de novo: aprova ou falh
   assert.equal(outra.decisoes.at(-1)?.decisao_id, 4);
 });
 
+test("CA-3: a quarta reprovação com motivos longos mantém o prefixo e a demanda carregável", () => {
+  const longo = (letra: string) => `${letra} `.repeat(999).trim(); // 999 palavras: o Motivo aceita até 2.000 caracteres
+  const falhou = comRecusas(emRevisao(), recusado(3, 1, longo("a")), recusado(3, 2, longo("b")));
+  const terceira = registrarRevisaoRodada(falhou, reprovada({ exigencias: longo("c") }), agente(3), ctx);
+  const reaberto = reabrirTicket(terceira, { ticket_id: 3, instrucao: "decida" }, AUDITOR, ctx);
+  const quarta = registrarRevisaoRodada(reaberto, reprovada({ exigencias: longo("d") }), agente(3), ctx);
+  const motivoFalha = quarta.tickets.find((t) => t.ticket_id === 3)?.motivo_falha ?? "";
+  assert.ok(motivoFalha.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
+  assert.ok(motivoFalha.endsWith(" d d d"));
+  assert.match(motivoFalha, /\(3 reprovações anteriores omitidas\)/);
+  assert.doesNotThrow(() => AgregadoDemanda.parse(quarta));
+});
+
+test("CA-3: motivos curtos de mais de três reprovações cabem inteiros, sem aviso de omissão", () => {
+  const falhou = comRecusas(emRevisao(), recusado(3, 1, "a"), recusado(3, 2, "b"), recusado(3, 3, "c"));
+  const quarta = registrarRevisaoRodada(falhou, reprovada({ exigencias: "d" }), agente(3), ctx);
+  const motivoFalha = quarta.tickets.find((t) => t.ticket_id === 3)?.motivo_falha ?? "";
+  assert.equal(motivoFalha, `${PREFIXO_TERCEIRA_REPROVACAO}\n- a\n- b\n- c\n- d`);
+});
+
 test("CA-2: com uma recusa anterior na rodada, a reprovação ainda cria a correção", () => {
   const ag = comRecusas(emRevisao(), recusado(3, 1, "a"));
   const novo = registrarRevisaoRodada(ag, reprovada(), agente(3), ctx);
