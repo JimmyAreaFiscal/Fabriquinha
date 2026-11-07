@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
+import { PREFIXO_TERCEIRA_REPROVACAO } from "../dominio/transicoes_rodada.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
@@ -21,6 +22,8 @@ test("classifica a falha: reinício, cota e transitória são infraestrutura; o 
     ["tempo limite de 60 min", "transitoria"],
     ["o agente parou com stopReason error: ENOSPC: no space left on device, write", undefined],
     ["npm test saiu com código 1", undefined],
+    // Os motivos anexados podem casar COTA/TRANSITORIA, mas a decisão é do Auditor.
+    [`${PREFIXO_TERCEIRA_REPROVACAO}\n- tempo limite no teste\n- HTTP 429 simulado`, undefined],
   ];
   for (const [motivo, causa] of casos) assert.equal(causaDeInfraestrutura(motivo), causa, motivo);
 });
