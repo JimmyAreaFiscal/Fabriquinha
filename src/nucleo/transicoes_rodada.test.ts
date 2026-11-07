@@ -594,7 +594,7 @@ test("a aprovação automática conclui a rodada com o motivo dela no lugar da n
       decisao_id: 1,
       resultado: "aprovado",
       motivo: MOTIVO_APROVACAO_AUTOMATICA_PR,
-      por: { tipo: "auditor" },
+      por: { tipo: "fabriquinha" },
       em: t1,
     },
   ]);

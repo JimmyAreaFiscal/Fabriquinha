@@ -1,7 +1,7 @@
 // Ciclo da rodada (comparacao-sdlc-implementacao.md §4): implementações concluídas, revisão e conferência técnica do PR.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { AUDITOR, type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
+import { type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
@@ -263,12 +263,13 @@ const decisaoDoGate = (
   ag: AgregadoDemanda,
   ticket: TicketDemanda,
   extra: Pick<DecisaoDemanda, "resultado"> & Partial<Pick<DecisaoDemanda, "nota" | "motivo">>,
+  ator: Ator,
   ctx: ContextoDemanda,
 ): DecisaoDemanda => ({
   demanda_id: ag.demanda.id,
   ticket_id: ticket.ticket_id,
   decisao_id: 1, // o gate decide uma vez só: a decisão conclui o ticket
-  por: AUDITOR,
+  por: ator,
   em: ctx.agora,
   ...extra,
 });
@@ -286,7 +287,7 @@ export function reprovarPullRequestRodada(
   return {
     ...ag,
     tickets: [...concluir(ag, ticket, ctx.agora), novoTicket(ag, rodada, "sessao_em_aberto", ctx.agora)],
-    decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "recusado", motivo: e.motivo }, ctx)],
+    decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "recusado", motivo: e.motivo }, ator, ctx)],
     rodadas: comFase(ag, rodada, "sessao"),
   };
 }
@@ -381,6 +382,7 @@ export function confirmarAprovacaoPullRequest(
         "nota" in e
           ? { resultado: "aprovado", nota: e.nota }
           : { resultado: "aprovado", motivo: MOTIVO_APROVACAO_AUTOMATICA_PR },
+        ator,
         ctx,
       ),
     ],
