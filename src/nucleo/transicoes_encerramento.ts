@@ -1,13 +1,14 @@
 // Transições do encerramento final da demanda (comparacao-sdlc-implementacao.md §5): tentativa, retomada, conflito, falhas, integração e conclusão.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; cada uma recebe o que a aplicação observou fora do domínio.
 import { z } from "zod";
-import { type Ator, exigirAtor } from "./ator.ts";
+import { type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { branchDemanda, DemandaId } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
+import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { Motivo } from "./primitivos.ts";
-import { type ContextoDemanda, exigirDemandaDaEntrada, mudarTicket, novoTicketGlobal } from "./transicoes_demanda.ts";
+import { type ContextoDemanda, exigirDemandaDaEntrada, mudarTicket } from "./transicoes_demanda.ts";
 
 const Texto = z.string().trim().min(1);
 const EntradaTentativa = z.strictObject({
@@ -40,13 +41,9 @@ const EntradaIntegracao = z.strictObject({
 const EntradaSolicitacao = z.strictObject({ demanda_id: DemandaId });
 const EntradaConclusao = z.strictObject({ demanda_id: DemandaId, limpeza_pendente: z.array(Texto) });
 
-/** O ticket mais recente da etapa (os tickets são anexados em ordem de id). */
-const ticketAtual = (ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): TicketDemanda | undefined =>
-  ag.tickets.findLast((t) => t.etapa === etapa);
-
 function exigirEncerramento(ag: AgregadoDemanda) {
   CICLO_DA_DEMANDA.exigir(ag.demanda, "encerrar_demanda");
-  const atual = ticketAtual(ag, "encerrar_demanda");
+  const atual = ticketAtualDaEtapa(ag, "encerrar_demanda");
   if (atual === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem ticket encerrar_demanda`, "volte à revisão integral");
   }
@@ -61,7 +58,7 @@ const conflitoLiberado = (ag: AgregadoDemanda): boolean =>
 
 /** Elegibilidade para a aplicação: `encerrar_demanda` aberto e, havendo conflito, o `resolver_conflito` concluído. */
 export function podeTentarEncerramento(ag: AgregadoDemanda): boolean {
-  if (ag.demanda.estado !== "encerrar_demanda" || ticketAtual(ag, "encerrar_demanda")?.estado !== "aberto")
+  if (ag.demanda.estado !== "encerrar_demanda" || ticketAtualDaEtapa(ag, "encerrar_demanda")?.estado !== "aberto")
     return false;
   return conflitoLiberado(ag);
 }
@@ -128,7 +125,7 @@ export function registrarConflitoEncerramento(
       "registre o conflito em tentativa ativa",
     );
   }
-  const resolver = novoTicketGlobal(ag, "resolver_conflito", ctx.agora);
+  const resolver = criarTicket(ag, { etapa: "resolver_conflito", criado_por: FABRIQUINHA, agora: ctx.agora });
   const reaberto = mudarTicket(ag, atual, "aberto", ctx.agora);
   return AgregadoDemanda.parse({
     ...reaberto,

@@ -5,13 +5,12 @@ import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "./demanda.ts";
 import { CICLO_DO_TICKET } from "./ciclos.ts";
 import { ErroDeRegra } from "./erros.ts";
+import { Endereco, estaOcupado, GrafoDeDependencias } from "./item_de_trabalho.ts";
 import { Id } from "./primitivos.ts";
 import { selecionarTrabalho } from "./selecao_trabalho.ts";
 import { type ContextoDemanda, exigirDemandaEmAndamento, mudarTicket, ticketDaDemanda } from "./transicoes_demanda.ts";
 
 const EntradaReserva = z.strictObject({ ticket_id: Id });
-
-const ocupado = (t: TicketDemanda) => t.estado === "falhou" || t.estado === "em_execucao";
 
 /** Por que a seleção não escolheu o ticket, na ordem de `selecionarTrabalho`. */
 function impedimento(ag: AgregadoDemanda, t: TicketDemanda, predecessorasSatisfeitas: boolean): [string, string] {
@@ -19,25 +18,27 @@ function impedimento(ag: AgregadoDemanda, t: TicketDemanda, predecessorasSatisfe
   const ref = (ticket_id: number) => formatarTicketRef({ demanda_id, ticket_id });
   const concluido = (ticket_id: number) =>
     ag.tickets.some((x) => x.ticket_id === ticket_id && x.estado === "concluido");
+  const ticketOcupado = (x: TicketDemanda) => estaOcupado(ag, Endereco.doTicket(demanda_id, x.ticket_id));
   if (estado === "planejar" && t.etapa === "planejar" && !predecessorasSatisfeitas) {
     return ["as predecessoras da demanda ainda não foram satisfeitas", "espere as predecessoras serem satisfeitas"];
   }
-  const global = ag.tickets.find((x) => x.rodada_id === undefined && ocupado(x));
+  const global = ag.tickets.find((x) => x.rodada_id === undefined && ticketOcupado(x));
   if (estado === "em_execucao" && global) {
     return [`o ticket ${ref(global.ticket_id)} da demanda está ${global.estado}`, "espere ele ser resolvido"];
   }
-  const dep = ag.dependencias_ticket.find((d) => d.ticket_id === t.ticket_id && !concluido(d.depende_ticket_id));
-  if (dep) return [`depende do ticket ${ref(dep.depende_ticket_id)}, ainda não concluído`, "espere a conclusão dele"];
-  const depRodada = ag.dependencias_rodada.find(
-    (d) =>
-      d.rodada_id === t.rodada_id &&
-      !ag.rodadas.some((r) => r.rodada_id === d.depende_rodada_id && r.estado === "concluida"),
-  );
-  if (depRodada) {
-    const rodada = formatarRodadaRef({ demanda_id, rodada_id: depRodada.depende_rodada_id });
+  const [dep] = GrafoDeDependencias.dosTickets(ag).pendentes(t.ticket_id, concluido);
+  if (dep !== undefined) return [`depende do ticket ${ref(dep)}, ainda não concluído`, "espere a conclusão dele"];
+  const [depRodada] =
+    t.rodada_id === undefined
+      ? []
+      : GrafoDeDependencias.dasRodadas(ag).pendentes(t.rodada_id, (rodada_id) =>
+          ag.rodadas.some((r) => r.rodada_id === rodada_id && r.estado === "concluida"),
+        );
+  if (depRodada !== undefined) {
+    const rodada = formatarRodadaRef({ demanda_id, rodada_id: depRodada });
     return [`a rodada ${rodada} da qual a sua depende não foi concluída`, "espere a conclusão dela"];
   }
-  const outro = ag.tickets.find((x) => x.rodada_id === t.rodada_id && ocupado(x));
+  const outro = ag.tickets.find((x) => x.rodada_id === t.rodada_id && ticketOcupado(x));
   if (outro) return [`o ticket ${ref(outro.ticket_id)} da rodada está ${outro.estado}`, "espere ele ser resolvido"];
   const escolhido = selecionarTrabalho(ag, predecessorasSatisfeitas).find(
     (x) => x.etapa === t.etapa && x.rodada_id === t.rodada_id,

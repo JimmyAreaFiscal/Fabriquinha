@@ -6,7 +6,6 @@ import {
   DemandaId,
   formatarRodadaRef,
   formatarTicketRef,
-  interpretarRef,
   Plano,
   RodadaRef,
   TicketIdentidade,
@@ -180,37 +179,4 @@ test("CA-1 a CA-3: formata o endereço público e recusa referência inválida",
     () => formatarRodadaRef({ demanda_id: "I-206", rodada_id: 0 }),
   ])
     assert.throws(f, (e) => e instanceof ErroDeRegra && e.message.includes("I-206.T3"));
-});
-
-test("CA-4 a CA-8: interpreta e formata são inversos", () => {
-  assert.deepEqual(interpretarRef("I-206.T3"), { demanda_id: "I-206", ticket_id: 3 });
-  assert.deepEqual(interpretarRef("I-206.R2"), { demanda_id: "I-206", rodada_id: 2 });
-  for (const t of ["I-206.T3", "I-206.R2", "I-1.T10"]) {
-    const ref = interpretarRef(t);
-    assert.equal("ticket_id" in ref ? formatarTicketRef(ref) : formatarRodadaRef(ref), t);
-  }
-});
-
-test("CA-9 a CA-13: interpretar recusa entrada inválida com a forma certa", () => {
-  for (const ruim of [
-    "T3",
-    "R2",
-    "T-3",
-    "I-206.T0",
-    "I-206.T03",
-    "I-206.R02",
-    "I-206.X3",
-    "I-206.t3",
-    "I-206. T3",
-    "I-206.T 3",
-    " I-206.T3",
-    "I-206.T3\n",
-    "I-206.T99999999999999999999",
-    "",
-  ])
-    assert.throws(
-      () => interpretarRef(ruim),
-      (e) => e instanceof ErroDeRegra && e.message.includes("I-206.T3"),
-      ruim,
-    );
 });

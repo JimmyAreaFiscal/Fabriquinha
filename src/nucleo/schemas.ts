@@ -4,6 +4,7 @@ import type { AgregadoDemanda, EvidenciaDemanda } from "./agregado_demanda.ts";
 import { Plano } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import type { TipoEvidenciaEtapa } from "./evidencia_etapa.ts";
+import { ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { type EtapaTicket, type Id, Motivo, Slug, Titulo, unicoPor } from "./primitivos.ts";
 import { Hospedagem } from "./projeto.ts";
 
@@ -99,7 +100,7 @@ export function daUltimaConcluida(
   etapa: EtapaTicket,
   tipo: TipoEvidencia,
 ): EvidenciaDemanda | undefined {
-  const ticket = ag.tickets.findLast((t) => t.etapa === etapa && t.estado === "concluido");
+  const ticket = ticketAtualDaEtapa(ag, etapa, undefined, (t) => t.estado === "concluido");
   return ticket && ag.evidencias.find((e) => e.ticket_id === ticket.ticket_id && e.tipo === tipo);
 }
 

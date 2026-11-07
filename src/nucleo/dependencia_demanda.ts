@@ -2,8 +2,8 @@
 // Funções puras sobre as arestas; ler e gravar é da persistência.
 import { satisfazDependencia } from "./cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA } from "./ciclos.ts";
-import { acharCiclo } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
+import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import type { EstadoDemanda } from "./primitivos.ts";
 
 /** `demanda_id` só pode começar o planejamento depois de `depende_demanda_id` satisfeita. */
@@ -34,11 +34,10 @@ export function registrarDependencia(
   if (existentes.some((e) => mesma(e, nova))) {
     throw new ErroDeRegra(`a demanda ${demanda.id} já depende da ${dependeId}`);
   }
-  const grafo = new Map<string, string[]>();
-  for (const e of [...existentes, nova])
-    grafo.set(e.demanda_id, [...(grafo.get(e.demanda_id) ?? []), e.depende_demanda_id]);
-  const ciclo = acharCiclo(grafo);
-  if (ciclo) throw new ErroDeRegra(`as demandas ${ciclo.join(" → ")} formam um ciclo de dependência`);
+  new GrafoDeDependencias(
+    [...existentes, nova].map((e): [string, string] => [e.demanda_id, e.depende_demanda_id]),
+    "as demandas",
+  ).exigirSemCiclo();
   return nova;
 }
 
