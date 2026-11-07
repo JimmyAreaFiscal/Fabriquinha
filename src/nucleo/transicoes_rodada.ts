@@ -1,7 +1,7 @@
 // Ciclo da rodada (comparacao-sdlc-implementacao.md §4): implementações concluídas, revisão e conferência técnica do PR.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { type Ator, exigirAuditor, exigirFabriquinha } from "./ator.ts";
+import { AUDITOR, type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
@@ -94,6 +94,7 @@ const novoTicket = (
   status: "aberto",
   devolucoes: 0,
   status_alterado_em: agora,
+  criado_por: FABRIQUINHA,
 });
 
 const concluir = (ag: AgregadoDemanda, alvo: TicketDemanda, agora: Instante): TicketDemanda[] =>
@@ -111,7 +112,7 @@ export function concluirImplementacoesRodada(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "concluir as implementações da rodada");
+  exigirAtor(ator, "concluir as implementações da rodada", "fabriquinha");
   const e = EntradaConclusao.parse(entrada);
   const rodada = rodadaEmFase(ag, e, "desenvolvimento");
   const impl = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "implementar");
@@ -174,7 +175,7 @@ export function registrarRevisaoRodada(
   const e = EntradaRevisao.parse(entrada);
   const rodada = rodadaEmFase(ag, e, "revisao");
   const ticket = ticketAtual(ag, rodada, "revisar_rodada", e.ticket_id);
-  if (ator.tipo !== "agente" || ator.ticket !== ticket.ticket_id) {
+  if (ator.tipo !== "agente") {
     throw new ErroDeEscopo("só o agente do ticket revisar_rodada atual decide a revisão", "peça à sessão de revisão");
   }
   const decisoesDoTicket = ag.decisoes.filter((d) => d.ticket_id === ticket.ticket_id);
@@ -184,7 +185,7 @@ export function registrarRevisaoRodada(
     decisao_id: maximo(decisoesDoTicket.map((d) => d.decisao_id)) + 1, // o Auditor reabre o mesmo ticket, que decide de novo
     resultado: e.aprovado ? "aprovado" : "recusado",
     ...(!e.aprovado && { motivo: e.exigencias }),
-    por: "agente",
+    por: ator,
     em: ctx.agora,
   };
   const idsDeRevisaoDaRodada = new Set(
@@ -229,7 +230,7 @@ export function conferirPullRequestRodada(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "conferir o PR da rodada");
+  exigirAtor(ator, "conferir o PR da rodada", "fabriquinha");
   const e = EntradaConferencia.parse(entrada);
   const rodada = rodadaEmFase(ag, e, "encerramento");
   const ticket = ticketAtual(ag, rodada, "encerrar_rodada", e.ticket_id);
@@ -261,7 +262,7 @@ const decisaoDoGate = (
   demanda_id: ag.demanda.id,
   ticket_id: ticket.ticket_id,
   decisao_id: 1, // o gate decide uma vez só: a decisão conclui o ticket
-  por: "auditor",
+  por: AUDITOR,
   em: ctx.agora,
   ...extra,
 });
@@ -273,7 +274,7 @@ export function reprovarPullRequestRodada(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirAuditor(ator, "reprovar o PR da rodada");
+  exigirAtor(ator, "reprovar o PR da rodada", "auditor");
   const e = EntradaReprovacaoPR.parse(entrada);
   const { rodada, ticket } = gatePullRequest(ag, e);
   return {
@@ -293,8 +294,8 @@ export function registrarCorrecoesSessao(
 ): AgregadoDemanda {
   const e = EntradaCorrecoesSessao.parse(entrada);
   const rodada = rodadaEmFase(ag, e, "sessao");
-  const ticket = ticketAtual(ag, rodada, "sessao_em_aberto", e.ticket_id);
-  if (ator.tipo === "agente" ? ator.ticket !== ticket.ticket_id : ator.tipo !== "auditor") {
+  ticketAtual(ag, rodada, "sessao_em_aberto", e.ticket_id); // recusa se não for o ticket da sessão
+  if (ator.tipo !== "agente" && ator.tipo !== "auditor") {
     throw new ErroDeEscopo("só o Auditor ou o agente da sessão registram correções", "peça ao Auditor pelo web");
   }
   return materializarCorrecoesRodada(ag, e, e.correcoes, ctx.agora);
@@ -307,7 +308,7 @@ export function concluirSessaoRodada(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirAuditor(ator, "concluir a sessão da rodada");
+  exigirAtor(ator, "concluir a sessão da rodada", "auditor");
   const e = z.strictObject(TicketRef).parse(entrada);
   const rodada = rodadaEmFase(ag, e, "sessao");
   const sessao = ticketAtual(ag, rodada, "sessao_em_aberto", e.ticket_id);
@@ -326,7 +327,7 @@ export function concluirSessaoRodada(
 
 /** Primeiro tempo da aprovação (CA-6): valida a intenção do Auditor sem efeito algum, antes de qualquer integração. */
 export function validarAprovacaoPullRequest(ag: AgregadoDemanda, entrada: unknown, ator: Ator): IntencaoAprovacaoPR {
-  exigirAuditor(ator, "aprovar o PR da rodada");
+  exigirAtor(ator, "aprovar o PR da rodada", "auditor");
   const e = EntradaAprovacaoPR.parse(entrada);
   gatePullRequest(ag, e);
   return e;

@@ -148,9 +148,11 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       ...(t.instrucao !== undefined && { instrucao: t.instrucao }),
       ...(t.motivo_falha !== undefined && { motivo_falha: t.motivo_falha }),
     })),
-    decisoes: ag.decisoes.map(({ ticket_id, decisao_id: _, demanda_id: __, ...d }) => ({
+    // A tela mostra `por` em texto: o tipo do Ator, como era antes do Ator único.
+    decisoes: ag.decisoes.map(({ ticket_id, decisao_id: _, demanda_id: __, por, ...d }) => ({
       ticket: ticket(ticket_id),
       ...d,
+      por: por.tipo,
     })),
     evidencias: ag.evidencias.map((e) => ({
       tipo: e.tipo,

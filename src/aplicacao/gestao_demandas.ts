@@ -7,7 +7,6 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/cancelamento_demanda.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import {
-  type AutorDemanda,
   type EntradaEvidenciaDemanda,
   submeterEvidenciaDemanda,
   TipoEvidenciaDemanda,
@@ -66,7 +65,7 @@ function traduzir<T>(trabalho: () => T): T {
 export const registrar = (
   banco: DatabaseSync,
   entrada: EntradaRegistro,
-  autor: AutorDemanda,
+  autor: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda =>
   traduzir(() =>
@@ -81,10 +80,10 @@ export const registrar = (
     }),
   );
 
-export const editar = (banco: DatabaseSync, id: string, entrada: unknown, autor: AutorDemanda): AgregadoDemanda =>
+export const editar = (banco: DatabaseSync, id: string, entrada: unknown, autor: Ator): AgregadoDemanda =>
   traduzir(() => comDemanda(banco, id, (ag) => editarDemanda(ag, entrada, autor)));
 
-export const enviar = (banco: DatabaseSync, id: string, autor: AutorDemanda, ctx: ContextoDemanda): AgregadoDemanda =>
+export const enviar = (banco: DatabaseSync, id: string, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda =>
   traduzir(() => comDemanda(banco, id, (ag) => enviarDemanda(ag, autor, ctx)));
 
 export const arquivar = (banco: DatabaseSync, id: string, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda =>
@@ -198,7 +197,7 @@ export const submeterEvidencia = (
   banco: DatabaseSync,
   id: string,
   entrada: EntradaEvidencia,
-  autor: AutorDemanda,
+  autor: Ator,
   ctx: ContextoDemanda,
 ): { demanda: AgregadoDemanda; avisos: string[] } =>
   traduzir(() => {

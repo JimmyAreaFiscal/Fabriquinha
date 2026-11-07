@@ -50,6 +50,7 @@ test("CA-3: base na ponta da demanda (mesmo avançada), head na rodada, A/M/D e 
     { caminho: "outro.md", status: "A", adicionadas: 1, removidas: 0, previsto: null },
   ]);
   assert.deepEqual((e?.dados as { previstosNaoTocados: string[] }).previstosNaoTocados, ["nunca/*.ts"]);
+  assert.deepEqual(e?.autor, carregarDemanda(banco, "I-1").demanda.criada_por);
 });
 
 test("CA-3: arquivo modificado aparece como M", async () => {
@@ -93,6 +94,7 @@ test("CA-4: uma linha por fitness, com a saída 0 e 1 e o log como anexo; regrav
   );
   assert.match(readFileSync(caminhoArquivo(banco, String(anexos[1]?.sha256)), "utf8"), /falhou/);
   assert.equal(evidencia(banco, "arquivos_alterados").length, 1);
+  assert.deepEqual(evidencias[0]?.autor, carregarDemanda(banco, "I-1").demanda.criada_por);
 });
 
 test("recusa ticket inexistente, global e projeto sem configuração", async () => {
@@ -118,7 +120,7 @@ test("CA-3: renomeação casa o previsto pelo caminho antigo", async () => {
   assert.deepEqual(dados.previstosNaoTocados, []);
 });
 
-const AGENTE = { tipo: "agente", execucao: 1, ticket: 2 } as const;
+const AGENTE = { tipo: "agente", trabalho_id: "1" } as const;
 const comprov = (atendido: boolean) => ({ criterios: [{ id: "CA-1", atendido, arquivos: [] }] });
 
 /** Submete as evidências do revisor: matriz da Fabriquinha e, se informadas, as do agente. */
@@ -135,7 +137,7 @@ function evidenciar(banco: Parameters<typeof carregarDemanda>[0], saida: number,
         submeterEvidenciaDemanda(
           a,
           { tipo, dados, ticket_id: 2 } as never,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          a.demanda.criada_por,
           "2026-01-02T00:00:00.000Z",
         ),
       ag,
@@ -170,6 +172,7 @@ test("CA-7: aprovada vai a encerramento com encerrar_rodada aberto", async () =>
   const ag = carregarDemanda(banco, "I-1");
   assert.equal(rodadaFase(banco), "encerramento");
   assert.equal(ag.tickets.find((t) => t.etapa === "encerrar_rodada")?.status, "aberto");
+  assert.deepEqual(ag.decisoes[0]?.por, AGENTE);
 });
 
 test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corretivos e exigências no motivo", async () => {
@@ -196,7 +199,7 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
     decisao_id,
     resultado: "recusado" as const,
     motivo,
-    por: "agente" as const,
+    por: AGENTE,
     em: "2026-01-02T00:00:00.000Z",
   });
   comDemanda(banco, "I-1", (ag) => ({ ...ag, decisoes: [recusado(1, "um"), recusado(2, "dois")] }));

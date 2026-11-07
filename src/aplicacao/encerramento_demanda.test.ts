@@ -83,6 +83,7 @@ async function cenario({
     etapa,
     status: st,
     status_alterado_em: em,
+    criado_por: FABRIQUINHA,
     devolucoes: 0,
     ...extra,
   });
@@ -95,8 +96,7 @@ async function cenario({
       descricao: "d",
       fase,
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
@@ -206,6 +206,10 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
   assert.equal(existsSync(c.demanda) || existsSync(c.rodada), false);
   const tipos = ag.evidencias.filter((e) => e.ticket_id === 8).map((e) => e.tipo);
   assert.deepEqual(tipos.toSorted(), ["arvore_prs_criterios_custos", "demonstracao_limpeza"]);
+  assert.deepEqual(
+    ag.evidencias.filter((evidencia) => evidencia.ticket_id === 8).map((evidencia) => evidencia.autor),
+    [FABRIQUINHA, FABRIQUINHA],
+  );
   const limpeza = ag.evidencias.find((e) => e.tipo === "demonstracao_limpeza")?.dados as {
     removidas: { tipo: string }[];
     sobras: unknown[];
@@ -238,8 +242,15 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
   comDemanda(c.banco, D, (a) => ({
     ...a,
     evidencias: [
-      { demanda_id: D, ticket_id: 8, tipo: "demonstracao_limpeza", dados: { velha: true }, em },
-      { demanda_id: D, ticket_id: 3, tipo: "arvore_prs_criterios_custos", dados: { de: "outro ticket" }, em },
+      { demanda_id: D, ticket_id: 8, tipo: "demonstracao_limpeza", autor: FABRIQUINHA, dados: { velha: true }, em },
+      {
+        demanda_id: D,
+        ticket_id: 3,
+        tipo: "arvore_prs_criterios_custos",
+        autor: FABRIQUINHA,
+        dados: { de: "outro ticket" },
+        em,
+      },
     ] as never,
   }));
 

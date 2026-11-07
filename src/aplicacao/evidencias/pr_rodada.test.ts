@@ -12,6 +12,7 @@ const ticket = (ticket_id: number, etapa: string, status = "concluido", titulo?:
   etapa,
   status,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   rodada_id: 2,
   ...(titulo === undefined ? {} : { titulo }),
 });
@@ -34,8 +35,7 @@ const agregado = (comMensagem = true, tipo = "funcionalidade") =>
       descricao: "Descrição.",
       fase: "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "x",
-      origem_sessao: "y",
+      criada_por: { tipo: "externo", ferramenta: "x", sessao: "y" },
       enviada: true,
       branch: "fabriquinha/I-206",
     },
@@ -55,7 +55,18 @@ const agregado = (comMensagem = true, tipo = "funcionalidade") =>
       },
     ],
     decisoes: [],
-    evidencias: comMensagem ? [{ demanda_id: "I-206", ticket_id: 7, tipo: "mensagem_pr", dados: mensagem, em }] : [],
+    evidencias: comMensagem
+      ? [
+          {
+            demanda_id: "I-206",
+            ticket_id: 7,
+            tipo: "mensagem_pr",
+            autor: { tipo: "agente", trabalho_id: "1" },
+            dados: mensagem,
+            em,
+          },
+        ]
+      : [],
   });
 const zero = { execucoes: 1, tokensEntrada: 1, tokensSaida: 1, tokensCacheLeitura: 0, tokensCacheEscrita: 0 };
 /** O resumo que nunca deveria ser pedido: o corpo coube. */

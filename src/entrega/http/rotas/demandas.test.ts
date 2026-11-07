@@ -29,7 +29,7 @@ interface Pagina {
     instrucao?: string;
     elegivel: boolean;
   }[];
-  decisoes: { ticket: string; resultado: string; motivo?: string; nota?: number }[];
+  decisoes: { ticket: string; resultado: string; motivo?: string; nota?: number; por: string }[];
   evidencias: Evidencia[];
   encerramento: { passos: { feito: boolean }[]; aguardando_merge?: { url: string } };
   dependencias: unknown[];
@@ -187,6 +187,7 @@ test("o ticket é elegível só se a seleção o escolheria agora", async () => 
         demanda_id: "I-207",
         ticket_id: 1,
         etapa: "planejar",
+        criado_por: { tipo: "fabriquinha" },
         status: "aberto",
         status_alterado_em: "2026-01-01T00:00:00.000Z",
         devolucoes: 0,
@@ -228,10 +229,10 @@ test("CA-7: as decisões na ordem em que foram tomadas", async () => {
   const { pedir } = await cenarioDemandas();
   const { decisoes } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(
-    decisoes.map((d) => [d.ticket, d.resultado, d.motivo ?? d.nota]),
+    decisoes.map((d) => [d.ticket, d.resultado, d.motivo ?? d.nota, d.por]),
     [
-      ["I-206.T5", "recusado", "refaça"],
-      ["I-206.T5", "aprovado", 4],
+      ["I-206.T5", "recusado", "refaça", "auditor"],
+      ["I-206.T5", "aprovado", 4, "auditor"],
     ],
   );
 });
@@ -313,6 +314,7 @@ test("o PR final à espera do merge humano vem no encerramento e marca a demanda
         demanda_id: "I-206",
         ticket_id: 99,
         etapa: "encerrar_demanda",
+        criado_por: { tipo: "fabriquinha" },
         status: "aberto",
         status_alterado_em: "2026-01-01T00:00:00.000Z",
         devolucoes: 0,
@@ -405,6 +407,7 @@ test("o anexo de evidência da rodada leva a rodada no link e na evidência", as
           rodada_id: 2,
           ticket_id: undefined,
           tipo: "comportamento",
+          autor: { tipo: "fabriquinha" },
           dados: {},
           em: "2026-01-02T00:00:00.000Z",
         },

@@ -64,7 +64,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   const enviada = gestao.enviar(c.banco, id, AUTOR, CTX).demanda;
   assert.equal(enviada.fase, "aprovacao_demanda");
   assert.equal(enviada.enviada, true);
-  assert.deepEqual([enviada.origem_ferramenta, enviada.origem_sessao], ["claude", "S1"]);
+  assert.deepEqual(enviada.criada_por, { tipo: "externo", ferramenta: "claude", sessao: "S1" });
   assert.throws(() => gestao.editar(c.banco, id, { descricao: "Outra" }, AUTOR), /congelado/);
   assert.throws(
     () => submeter("criterios_aceite", { criterios: [{ id: "CA-9", dado: "d", quando: "q", entao: "e" }] }),

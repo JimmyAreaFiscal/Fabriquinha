@@ -7,14 +7,10 @@ import { chmodSync, mkdirSync, readdirSync, readlinkSync, rmSync, writeFileSync 
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
-import { AUDITOR } from "../../src/nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../../src/nucleo/ator.ts";
 import { submeterPlano } from "../../src/nucleo/transicoes_demanda.ts";
 import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
-import {
-  type AutorDemanda,
-  type EntradaEvidenciaDemanda,
-  submeterEvidenciaDemanda,
-} from "../../src/nucleo/evidencia_demanda.ts";
+import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../src/nucleo/evidencia_demanda.ts";
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
 import type { Verificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
 import { aprovarPRRodada } from "../../src/aplicacao/aprovacao_pr_rodada.ts";
@@ -52,7 +48,7 @@ export interface AcaoEtapa {
 }
 
 const PASTA_ETAPAS = join(import.meta.dirname, "../../src/aplicacao/etapas");
-const AUTOR: AutorDemanda = { ferramenta: "claude", sessao: "S1" };
+const AUTOR: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
 const agora = () => new Date().toISOString();
 
 /** Um cenário: banco e repositórios próprios, para as execuções simultâneas não dividirem estado. */
@@ -232,7 +228,7 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
     tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Ticket 1.1", descricao: "d" }],
   };
   comDemanda(c.banco, id, (ag) =>
-    submeterPlano(ag, plano, { tipo: "agente", execucao: 1, ticket: 2 }, { agora: agora() }),
+    submeterPlano(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, { agora: agora() }),
   );
   await aprovarPlanejamentoDemanda(c.banco, id, {});
 }
@@ -282,7 +278,7 @@ function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [stri
         submeterEvidenciaDemanda(
           a,
           { tipo, dados, ticket_id } as EntradaEvidenciaDemanda,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          a.demanda.criada_por,
           agora(),
         ),
       ag,
@@ -302,7 +298,7 @@ const revisarRodada = (c: Cenario, id: string) =>
     decidirRevisaoRodada(
       c.banco,
       { aprovado: true, demanda_id: id, rodada_id: 1, ticket_id },
-      { tipo: "agente", execucao: 1, ticket: ticket_id },
+      { tipo: "agente", trabalho_id: "execucao-1" },
     );
   });
 
@@ -336,7 +332,7 @@ const revisarDemanda = (c: Cenario, id: string) =>
     decidirRevisaoIntegral(
       c.banco,
       { demanda_id: id, ticket_id, aprovado: true },
-      { tipo: "agente", execucao: 1, ticket: ticket_id },
+      { tipo: "agente", trabalho_id: "execucao-1" },
     );
   });
 

@@ -25,6 +25,7 @@ const tk = (ticket_id: number, etapa: string, status: string) => ({
   etapa,
   status,
   status_alterado_em: t0,
+  criado_por: FABRIQUINHA,
 });
 const montar = (m: Record<string, unknown> = {}, status = "aberto", fase = "encerramento") =>
   AgregadoDemanda.parse({
@@ -36,8 +37,7 @@ const montar = (m: Record<string, unknown> = {}, status = "aberto", fase = "ence
       descricao: "d",
       fase,
       fase_alterada_em: t0,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },

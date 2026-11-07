@@ -9,6 +9,7 @@ import {
   TicketDemanda,
   TipoEvidenciaAgregado,
 } from "./agregado_demanda.ts";
+import { AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { TipoEvidencia } from "./schemas.ts";
 import { TipoEvidenciaEtapa } from "./evidencia_etapa.ts";
 
@@ -21,8 +22,7 @@ const demanda = (m: Record<string, unknown> = {}) => ({
   descricao: "d",
   fase: "registro",
   fase_alterada_em: em,
-  origem_ferramenta: "claude",
-  origem_sessao: "s1",
+  criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
   enviada: false,
   branch: "fabriquinha/I-1",
   ...m,
@@ -33,6 +33,7 @@ const ticket = (ticket_id = 1, m: Record<string, unknown> = {}) => ({
   etapa: "demanda",
   status: "aberto",
   status_alterado_em: em,
+  criado_por: FABRIQUINHA,
   ...m,
 });
 const decisao = (m: Record<string, unknown> = {}) => ({
@@ -40,7 +41,7 @@ const decisao = (m: Record<string, unknown> = {}) => ({
   ticket_id: 1,
   decisao_id: 1,
   resultado: "aprovado",
-  por: "auditor",
+  por: AUDITOR,
   em,
   ...m,
 });
@@ -48,6 +49,7 @@ const evidencia = (m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
   tipo: "criterios_aceite",
   dados: {},
+  autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
   em,
   ...m,
 });
@@ -77,6 +79,54 @@ test("campos da demanda, ticket e decisão", () => {
   assert.ok(!DecisaoDemanda.safeParse(decisao({ nota: 0 })).success);
   assert.ok(!DecisaoDemanda.safeParse(decisao({ nota: 6 })).success);
   assert.ok(!DecisaoDemanda.safeParse({ ...decisao(), demanda_id: undefined }).success);
+});
+
+test("criado_por, autor e por são obrigatórios e validam a identidade do ator", () => {
+  const identidadesInvalidas: unknown[] = [
+    undefined,
+    null,
+    "auditor",
+    {},
+    { tipo: "desconhecido" },
+    { tipo: "agente" },
+    { tipo: "agente", trabalho_id: "" },
+    { tipo: "externo", ferramenta: "Claude Code", sessao: "s1" },
+    { tipo: "externo", ferramenta: "claude", sessao: "" },
+  ];
+  for (const identidade of identidadesInvalidas) {
+    assert.equal(TicketDemanda.safeParse(ticket(1, { criado_por: identidade })).success, false);
+    assert.equal(EvidenciaDemanda.safeParse(evidencia({ autor: identidade })).success, false);
+    assert.equal(DecisaoDemanda.safeParse(decisao({ por: identidade })).success, false);
+  }
+  for (const identidade of [AUDITOR, FABRIQUINHA, { tipo: "agente", trabalho_id: "E-1" }]) {
+    assert.deepEqual(TicketDemanda.parse(ticket(1, { criado_por: identidade })).criado_por, identidade);
+    assert.deepEqual(EvidenciaDemanda.parse(evidencia({ autor: identidade })).autor, identidade);
+    assert.deepEqual(DecisaoDemanda.parse(decisao({ por: identidade })).por, identidade);
+  }
+});
+
+test("criado_por do ticket recusa o externo, que o banco não consegue reler", () => {
+  const externo = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
+  assert.equal(TicketDemanda.safeParse(ticket(1, { criado_por: externo })).success, false);
+  assert.ok(EvidenciaDemanda.safeParse(evidencia({ autor: externo })).success);
+});
+
+test("criada_por exige um externo com ferramenta Slug e sessão não vazia", () => {
+  for (const identidade of [
+    undefined,
+    null,
+    {},
+    AUDITOR,
+    FABRIQUINHA,
+    { tipo: "agente", trabalho_id: "E-1" },
+    { tipo: "externo", sessao: "s1" },
+    { tipo: "externo", ferramenta: "Claude Code", sessao: "s1" },
+    { tipo: "externo", ferramenta: "claude" },
+    { tipo: "externo", ferramenta: "claude", sessao: "" },
+  ]) {
+    assert.equal(Demanda.safeParse(demanda({ criada_por: identidade })).success, false);
+  }
+  assert.deepEqual(Demanda.parse(demanda()).criada_por, { tipo: "externo", ferramenta: "claude", sessao: "s1" });
 });
 
 test("devolucoes (0..2, padrão 0) e motivo_falha só em falhou, sem exigi-lo (CA-8, 10, 11)", () => {
@@ -138,6 +188,7 @@ test("CA-11: schema aceita dono null/null e normaliza para a demanda", () => {
     ticket_id: null,
     tipo: "criterios_aceite",
     dados: { v: 1 },
+    autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
     em: "2026-01-01T00:00:00Z",
   });
   assert.equal(donoDe(e), "demanda");

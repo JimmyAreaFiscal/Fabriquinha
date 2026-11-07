@@ -32,6 +32,7 @@ function cenario() {
     etapa,
     status: "aberto",
     status_alterado_em: em,
+    criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
   });
@@ -44,8 +45,7 @@ function cenario() {
       descricao: "d",
       fase: "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-206",
     },
@@ -74,6 +74,7 @@ function cenario() {
         demanda_id: "I-206",
         ticket_id: 3,
         tipo: "comprovacao_criterios",
+        autor: { tipo: "agente", trabalho_id: "exec-3" },
         em,
         dados: { criterios: [{ atendido: false }] },
       },
@@ -270,13 +271,7 @@ const EVIDENCIAS_INTEGRAL: [string, object][] = [
 function evidenciar(banco: DatabaseSync, ticket_id: number, lista: [string, object][]) {
   comDemanda(banco, "I-206", (ag) =>
     lista.reduce(
-      (a, [tipo, dados]) =>
-        submeterEvidenciaDemanda(
-          a,
-          { tipo, dados, ticket_id } as never,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
-          em,
-        ),
+      (a, [tipo, dados]) => submeterEvidenciaDemanda(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, em),
       ag,
     ),
   );
@@ -286,7 +281,14 @@ const lerDemanda = async (env: NodeJS.ProcessEnv) =>
   JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {
     rodadas: { rodada: string; fase: string }[];
     tickets: { ticket: string; status: string; etapa: string }[];
-    decisoes: { ticket: string; rodada?: string; resultado: string; motivo?: string; por: string; em: string }[];
+    decisoes: {
+      ticket: string;
+      rodada?: string;
+      resultado: string;
+      motivo?: string;
+      por: string;
+      em: string;
+    }[];
   };
 
 test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leitura mostra", async () => {

@@ -18,15 +18,23 @@ const montar = (status: string, fase = "execucao", etapa = "implementar", devolu
       descricao: "d",
       fase,
       fase_alterada_em: t0,
-      origem_ferramenta: "f",
-      origem_sessao: "s",
+      criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },
     decisoes: [],
     evidencias: [],
     tickets: [
-      { demanda_id: "I-1", ticket_id: 2, rodada_id: undefined, etapa, status, status_alterado_em: t0, devolucoes },
+      {
+        demanda_id: "I-1",
+        ticket_id: 2,
+        rodada_id: undefined,
+        etapa,
+        status,
+        status_alterado_em: t0,
+        devolucoes,
+        criado_por: FABRIQUINHA,
+      },
     ],
   });
 const ev = (tipo: string, aprovada?: boolean) =>

@@ -420,5 +420,46 @@ CREATE TABLE proposta_demanda (
 INSERT INTO configuracao (id) VALUES (1);
 `;
 
+/**
+ * A 37 grava a autoria (o `Ator`) nas colunas. `criado_por_tipo` e `autor_tipo` nascem 'fabriquinha' por DEFAULT: os
+ * tickets e as evidências já gravados e os novos, até quem grava passar a informar o ator. Em `decisao_ticket` o
+ * `por_trabalho_id` só é NULL nas linhas de antes da migração em que o ticket não tinha execução, e em decisão nova
+ * enquanto o domínio não informar o trabalho. `trabalho_id` é o `execucao_sessao.id`, sem FK: o Trabalho Agêntico vem depois.
+ */
+const MIGRACAO_37_AUTORIA = `
+ALTER TABLE ticket_demanda ADD COLUMN criado_por_tipo TEXT NOT NULL DEFAULT 'fabriquinha' CHECK (criado_por_tipo IN ('auditor','agente','fabriquinha','externo'));
+ALTER TABLE ticket_demanda ADD COLUMN criado_por_trabalho_id TEXT CHECK ((criado_por_tipo = 'agente') = (criado_por_trabalho_id IS NOT NULL));
+ALTER TABLE ticket_demanda DROP COLUMN origem;
+ALTER TABLE demanda RENAME COLUMN origem_ferramenta TO criada_por_ferramenta;
+ALTER TABLE demanda RENAME COLUMN origem_sessao TO criada_por_sessao;
+CREATE TABLE decisao_ticket_nova (
+    demanda_id      TEXT NOT NULL,
+    ticket_id       INTEGER NOT NULL,
+    decisao_id      INTEGER NOT NULL,
+    resultado       TEXT NOT NULL CHECK (resultado IN ('aprovado','recusado')),
+    nota            INTEGER CHECK (nota BETWEEN 1 AND 5),
+    motivo          TEXT,
+    por_tipo        TEXT NOT NULL CHECK (por_tipo IN ('auditor','agente')),
+    por_trabalho_id TEXT CHECK (por_trabalho_id IS NULL OR por_tipo = 'agente'),
+    em              TEXT NOT NULL,
+    PRIMARY KEY (demanda_id, ticket_id, decisao_id),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+INSERT INTO decisao_ticket_nova
+  SELECT d.demanda_id, d.ticket_id, d.decisao_id, d.resultado, d.nota, d.motivo, d.por,
+         CASE d.por WHEN 'agente' THEN (
+           SELECT e.id FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
+           WHERE s.demanda_id = d.demanda_id AND s.ticket_id = d.ticket_id
+           ORDER BY e.inicio DESC, e.rowid DESC LIMIT 1) END,
+         d.em
+  FROM decisao_ticket d ORDER BY d.rowid;
+DROP TABLE decisao_ticket;
+ALTER TABLE decisao_ticket_nova RENAME TO decisao_ticket;
+ALTER TABLE evidencia_demanda ADD COLUMN autor_tipo TEXT NOT NULL DEFAULT 'fabriquinha' CHECK (autor_tipo IN ('auditor','agente','fabriquinha','externo'));
+ALTER TABLE evidencia_demanda ADD COLUMN autor_trabalho_id TEXT CHECK ((autor_tipo = 'agente') = (autor_trabalho_id IS NOT NULL));
+ALTER TABLE evidencia_demanda ADD COLUMN autor_ferramenta TEXT CHECK ((autor_tipo = 'externo') = (autor_ferramenta IS NOT NULL));
+ALTER TABLE evidencia_demanda ADD COLUMN autor_sessao TEXT CHECK ((autor_tipo = 'externo') = (autor_sessao IS NOT NULL));
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
-export const MIGRACOES: readonly Migracao[] = [];
+export const MIGRACOES: readonly Migracao[] = [MIGRACAO_37_AUTORIA];

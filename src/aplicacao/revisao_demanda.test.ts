@@ -9,7 +9,7 @@ import { cenarioRevisao } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { conduzirRevisaoIntegral, decidirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
-const AGENTE: Ator = { tipo: "agente", execucao: 1, ticket: 3 };
+const AGENTE: Ator = { tipo: "agente", trabalho_id: "1" };
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
   return { fase: ag.demanda.fase, rodadas: ag.rodadas.map((r) => r.fase), tickets: ag.tickets };
@@ -39,7 +39,7 @@ function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = tru
         submeterEvidenciaDemanda(
           a,
           { tipo, dados, ticket_id: 3 } as never,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          a.demanda.criada_por,
           "2026-01-02T00:00:00.000Z",
         ),
       ag,
@@ -132,6 +132,7 @@ test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída
       {
         demanda_id: "I-1",
         tipo: "criterios_aceite",
+        autor: ag.demanda.criada_por,
         dados: { criterios: [{ id: "CA-2" }] },
         em: "2026-01-01T00:00:00.000Z",
       },

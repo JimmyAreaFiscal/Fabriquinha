@@ -3,10 +3,11 @@ import { existsSync } from "node:fs";
 import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
+import { Ator } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { caminhoArquivo, guardarBytes } from "./arquivos.ts";
-import { comDemanda } from "./demandas.ts";
+import { carregarDemanda, comDemanda } from "./demandas.ts";
 import { anexosDaDemanda, gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
 import { removerProjeto } from "./projetos.ts";
 
@@ -37,7 +38,7 @@ const submeter = (b: DatabaseSync, anexos: ReturnType<typeof anexoDe>[], dados =
   comDemanda(
     b,
     "I-1",
-    (ag) => submeterEvidenciaDemanda(ag, { tipo: "custos_realizados", dados }, quem, em),
+    (ag) => submeterEvidenciaDemanda(ag, { tipo: "custos_realizados", dados }, { tipo: "externo", ...quem }, em),
     () => {
       gravarAnexos(b, chave, anexos);
     },
@@ -48,6 +49,27 @@ const linhas = (b: DatabaseSync, sql: string) =>
     .prepare(sql)
     .all()
     .map((l) => ({ ...l }));
+
+test("autoria da evidência: cada tipo de ator é gravado e relido, inclusive na atualização da mesma chave", () => {
+  const bancoDeAutoria = novoBanco();
+  const autores: Ator[] = [
+    { tipo: "auditor" },
+    { tipo: "agente", trabalho_id: "exec-evidencia" },
+    { tipo: "externo", ferramenta: "claude", sessao: "s1" },
+    { tipo: "fabriquinha" },
+  ];
+  for (const autor of autores) {
+    comDemanda(bancoDeAutoria, "I-1", (agregado) =>
+      submeterEvidenciaDemanda(agregado, { tipo: "custos_realizados", dados: { total: 42 } }, autor, em),
+    );
+    const relida = carregarDemanda(bancoDeAutoria, "I-1");
+    assert.equal(relida.evidencias.length, 1);
+    assert.deepEqual(Ator.parse(relida.evidencias[0]?.autor), autor);
+    assert.deepEqual(relida.evidencias[0]?.dados, { total: 42 });
+    assert.deepEqual(Ator.parse(relida.demanda.criada_por), { tipo: "externo", ferramenta: "f", sessao: "s" });
+    assert.equal(bancoDeAutoria.prepare("SELECT count(*) AS quantidade FROM evidencia_demanda").get()?.quantidade, 1);
+  }
+});
 
 test("CA-3: dois anexos viram ordem 1 e 2, cada um com arquivo do mesmo tamanho no armazenamento", () => {
   const b = novoBanco();
@@ -100,7 +122,7 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('q', '/repo/q', 'main', 'github', 'k');
     INSERT INTO demanda VALUES ('I-9', 'q', 't', 'problema', 'd', 'execucao', 't', 'f', 's', 1, 'fabriquinha/I-9');
-    INSERT INTO evidencia_demanda VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
     INSERT INTO arquivo_evidencia VALUES ('e9', 1, 'a.txt', '${a.sha256}', 'text/plain', 2);`);
   await removerProjeto(b, "q");
   assert.equal(existsSync(caminhoArquivo(b, a.sha256)), true);
@@ -108,7 +130,9 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
 
 const custosEm = (b: DatabaseSync, id: string, demanda: string, rodada: number | null, sessoes: unknown[]) =>
   b
-    .prepare("INSERT OR REPLACE INTO evidencia_demanda VALUES (?, ?, ?, NULL, 'custos_realizados', ?, ?)")
+    .prepare(
+      "INSERT OR REPLACE INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES (?, ?, ?, NULL, 'custos_realizados', ?, ?)",
+    )
     .run(id, demanda, rodada, JSON.stringify({ sessoes }), em);
 
 test("CA-11 a CA-13: sessão de outra demanda vira aviso; regrava de todas as custos da demanda, rodada inclusa; nada vai para a execução interna", () => {
@@ -140,8 +164,8 @@ test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => 
   b.exec(`INSERT INTO rodada VALUES ('I-1', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
       VALUES ('I-1', 1, 'implementar', 'aberto', ${T}, 1);
-    INSERT INTO evidencia_demanda VALUES ('e-r', 'I-1', 1, NULL, 'comportamento', '{}', ${T});
-    INSERT INTO evidencia_demanda VALUES ('e-t', 'I-1', NULL, 1, 'comportamento', '{}', ${T});`);
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e-r', 'I-1', 1, NULL, 'comportamento', '{}', ${T});
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e-t', 'I-1', NULL, 1, 'comportamento', '{}', ${T});`);
   for (const dono of ["e-r", "e-t"]) {
     b.prepare("INSERT INTO arquivo_evidencia VALUES (?, 1, 'x.txt', ?, 'text/plain', 2)").run(dono, a.sha256);
   }

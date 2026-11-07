@@ -18,7 +18,7 @@ const pi = instalarPiFalso(base);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
-const agente = (execucao: number): Ator => ({ tipo: "agente", execucao, ticket: PLANEJAR });
+const agente = (execucao: number): Ator => ({ tipo: "agente", trabalho_id: `execucao-${String(execucao)}` });
 
 /** Plano de `rodadas` rodadas independentes, cada uma com um ticket; o `titulo` distingue as demandas. */
 const plano = (id: string, titulo: string, rodadas = 1) => ({
@@ -236,7 +236,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     agora,
   );
   recusa(
-    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, por, em) VALUES (?, 99, 1, 'aprovado', 'auditor', ?)",
+    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, por_tipo, em) VALUES (?, 99, 1, 'aprovado', 'auditor', ?)",
     b,
     agora,
   );

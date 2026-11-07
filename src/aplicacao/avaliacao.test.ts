@@ -160,8 +160,7 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   assert.equal(demanda.demanda.titulo, "Achado 1");
   assert.equal(demanda.demanda.projeto, "loja");
   assert.match(demanda.demanda.descricao, /desc 1[\s\S]*ev 1[\s\S]*achado 1/);
-  assert.equal(demanda.demanda.origem_ferramenta, "avaliacao");
-  assert.equal(demanda.demanda.origem_sessao, `${id}#1`);
+  assert.deepEqual(demanda.demanda.criada_por, { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` });
   assert.equal(abrirAv(banco, id).achados[0]?.demanda_id, demanda.demanda.id);
   assert.throws(() => encaminharAchado(banco, id, 1), recusa(/já foi encaminhado/));
   assert.throws(() => encaminharAchado(banco, id, 9), recusa(/não existe/));

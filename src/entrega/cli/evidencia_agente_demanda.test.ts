@@ -11,6 +11,7 @@ import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporar
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../../nucleo/sessoes.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { comSessoesDoTicket } from "../../armazenamento/sessoes.ts";
 import { principal } from "./cli.ts";
 
@@ -79,6 +80,7 @@ function cenario() {
     etapa,
     status: "em_execucao",
     status_alterado_em: em,
+    criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
   });
@@ -91,8 +93,7 @@ function cenario() {
       descricao: "d",
       fase: "planejamento",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-206",
     },
@@ -113,11 +114,37 @@ function cenario() {
     caminhos_ticket: [],
     decisoes: [],
     evidencias: [
-      { demanda_id: "I-206", tipo: "criterios_aceite", em, dados: { criterios: [{ id: "CA-1" }, { id: "CA-2" }] } },
+      {
+        demanda_id: "I-206",
+        tipo: "criterios_aceite",
+        autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
+        em,
+        dados: { criterios: [{ id: "CA-1" }, { id: "CA-2" }] },
+      },
       // Opcional da demanda, registrada pela ferramenta externa: impacto alto exige reversão na mensagem_pr.
-      { demanda_id: "I-206", tipo: "relatorio_impactos_arquitetura", em, dados: { impacto: "alto" } },
-      { demanda_id: "I-206", ticket_id: 6, tipo: "matriz_fitness", em, dados: { linhas: [{ nome: "f" }] } },
-      { demanda_id: "I-206", ticket_id: 8, tipo: "arquivos_alterados", em, dados: ALTERADOS },
+      {
+        demanda_id: "I-206",
+        tipo: "relatorio_impactos_arquitetura",
+        autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
+        em,
+        dados: { impacto: "alto" },
+      },
+      {
+        demanda_id: "I-206",
+        ticket_id: 6,
+        tipo: "matriz_fitness",
+        autor: { tipo: "agente", trabalho_id: "exec-6" },
+        em,
+        dados: { linhas: [{ nome: "f" }] },
+      },
+      {
+        demanda_id: "I-206",
+        ticket_id: 8,
+        tipo: "arquivos_alterados",
+        autor: { tipo: "agente", trabalho_id: "exec-8" },
+        em,
+        dados: ALTERADOS,
+      },
     ],
   } as unknown as AgregadoDemanda);
   for (const t of [1, 4, 5, 6, 7]) abrirExecucao(banco, `exec-${String(t)}`, t);
@@ -172,6 +199,10 @@ test("CA-6: o plano válido fica registrado e a leitura da demanda o mostra", as
   assert.deepEqual([s.codigo, s.err], [0, ""]);
   assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T1", tipo: "plano" });
   assert.deepEqual(gravadas(banco), [{ ticket_id: 1, tipo: "plano" }]);
+  assert.deepEqual(carregarDemanda(banco, "I-206").evidencias.find((evidencia) => evidencia.tipo === "plano")?.autor, {
+    tipo: "agente",
+    trabalho_id: "exec-1",
+  });
   const lida = JSON.parse((await cli(env(1), ["demanda", "ver", "I-206"])).out) as {
     demanda: { fase: string };
     tickets: { evidencias?: { tipo: string }[] }[];
@@ -223,6 +254,10 @@ test("CA-8: testes_estresse válido, com --dados do stdin e com anexo da saída,
   ]);
   assert.deepEqual([com.codigo, com.err], [0, ""]);
   assert.deepEqual(gravadas(banco), [{ ticket_id: 5, tipo: "testes_estresse" }]);
+  assert.deepEqual(
+    carregarDemanda(banco, "I-206").evidencias.find((evidencia) => evidencia.tipo === "testes_estresse")?.autor,
+    { tipo: "agente", trabalho_id: "exec-5" },
+  );
   assert.deepEqual(
     banco
       .prepare("SELECT caminho, mime FROM arquivo_evidencia")

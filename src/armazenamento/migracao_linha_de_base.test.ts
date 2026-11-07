@@ -24,7 +24,7 @@ const esquema = (banco: DatabaseSync) =>
 
 test("CA-4: o banco vazio nasce da linha de base com o mesmo sqlite_master da cadeia 1-36, vazio de dados e com FKs íntegras", () => {
   const banco = new DatabaseSync(":memory:");
-  migrar(banco, MIGRACOES);
+  migrar(banco, []);
   assert.equal(versao(banco), VERSAO_LINHA_DE_BASE);
   assert.deepEqual(esquema(banco), ESQUEMA_DA_CADEIA_1_A_36);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);

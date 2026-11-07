@@ -17,6 +17,7 @@ const ticket = (ticket_id: number, etapa: string, rodada_id?: number) => ({
   etapa,
   status: "concluido",
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   ...(rodada_id === undefined ? {} : { rodada_id }),
 });
 const linhas = (...custos: (number | null)[]) =>
@@ -39,8 +40,7 @@ const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
       descricao: "Descrição.",
       fase: "encerramento",
       fase_alterada_em: em,
-      origem_ferramenta: "x",
-      origem_sessao: "y",
+      criada_por: { tipo: "externo", ferramenta: "x", sessao: "y" },
       enviada: true,
       branch: "fabriquinha/I-206",
     },
@@ -61,10 +61,18 @@ const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
     criterios_citados: [{ demanda_id: "I-206", rodada_id: 2, criterio_id: "CA-1" }],
     decisoes: [],
     evidencias: [
-      { demanda_id: "I-206", ticket_id: 7, tipo: "pr_aberto", dados: { id: "41", url: "http://pr/41" }, em },
+      {
+        demanda_id: "I-206",
+        ticket_id: 7,
+        tipo: "pr_aberto",
+        autor: { tipo: "fabriquinha" },
+        dados: { id: "41", url: "http://pr/41" },
+        em,
+      },
       {
         demanda_id: "I-206",
         tipo: "custos_realizados",
+        autor: { tipo: "externo", ferramenta: "x", sessao: "y" },
         dados: {
           sessoes: [
             { ferramenta: "claude", sessao: "a", linhas: linhas(1, 2) },

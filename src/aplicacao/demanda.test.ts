@@ -64,7 +64,9 @@ const execucao = (
 };
 const decisao = (b: DatabaseSync, ticket: number, id: number, resultado: string, nota: number | null) =>
   b
-    .prepare("INSERT INTO decisao_ticket VALUES ('I-1', ?, ?, ?, ?, NULL, 'auditor', ?)")
+    .prepare(
+      "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', ?, ?, ?, ?, NULL, 'auditor', ?)",
+    )
     .run(ticket, id, resultado, nota, "2026-01-01T00:00:00.000Z");
 
 test("CA-1 e CA-18: tokens por modelo na demanda e por etapa, com o custo das execuções", () => {

@@ -96,6 +96,7 @@ async function cenario({
     etapa,
     status,
     status_alterado_em: em,
+    criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     rodada_id: 2,
     ...extra,
@@ -104,6 +105,7 @@ async function cenario({
     demanda_id: DEMANDA,
     ticket_id,
     tipo,
+    autor: { tipo: "agente", trabalho_id: "1" },
     dados,
     em,
   });
@@ -124,8 +126,7 @@ async function cenario({
       descricao,
       fase: "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
@@ -217,6 +218,8 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     corpoCompleto: pr.corpo,
     condensado: false,
   });
+  assert.deepEqual(evidencia("pr_aberto")?.autor, { tipo: "fabriquinha" });
+  assert.deepEqual(evidencia("relatorio_produtividade")?.autor, { tipo: "fabriquinha" });
   // Sem custo medido em nenhum ticket: incompleto, nunca somado como zero (CA-12).
   const relatorio = evidencia("relatorio_produtividade")?.dados as {
     tickets: { ticket: string; custoIncompleto: boolean }[];
