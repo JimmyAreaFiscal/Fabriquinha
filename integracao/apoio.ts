@@ -9,7 +9,6 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
-import { type AutorDemanda } from "../src/nucleo/evidencia_demanda.ts";
 import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
@@ -44,8 +43,8 @@ export const gravarLimiteParalelismo = (banco: DatabaseSync, limite: number): vo
 export const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, plano: unknown, agente: Ator) =>
   comDemanda(banco, demandaId, (ag) => submeterPlano(ag, plano, agente, { agora: new Date().toISOString() }));
 /** A IA externa que registra e envia a demanda, e outra sessão, que não é a autora. */
-export const AUTOR: AutorDemanda = { ferramenta: "claude", sessao: "S1" };
-export const OUTRA_SESSAO: AutorDemanda = { ferramenta: "claude", sessao: "S2" };
+export const AUTOR: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
+export const OUTRA_SESSAO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S2" };
 
 export interface Cenario {
   /** Raiz do serviço (banco e execuções), dentro do diretório do cenário. */

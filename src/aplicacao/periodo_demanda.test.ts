@@ -64,7 +64,9 @@ function banco(): DatabaseSync {
   uso("x4", "a", 1000, 8);
   const decisao = (n: number, id: number, resultado: string, nota: number | null, mes: string) =>
     b
-      .prepare("INSERT INTO decisao_ticket VALUES ('I-1', ?, ?, ?, ?, NULL, 'auditor', ?)")
+      .prepare(
+        "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', ?, ?, ?, ?, NULL, 'auditor', ?)",
+      )
       .run(n, id, resultado, nota, em(mes));
   decisao(1, 1, "recusado", null, "2026-02");
   decisao(2, 1, "aprovado", 4, "2026-02");
@@ -163,7 +165,9 @@ test("PRs por coorte do mês de abertura: o pr_aberto da rodada migrada conta, e
   b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
     VALUES ('I-1', 4, 'encerrar_rodada', 'concluido', '${em("2026-03")}', 3)`);
   // aprovado em março, PR aberto em fevereiro na própria rodada (backfill): entra na coorte de fevereiro
-  b.prepare("INSERT INTO decisao_ticket VALUES ('I-1', 4, 1, 'aprovado', NULL, NULL, 'auditor', ?)").run(em("2026-03"));
+  b.prepare(
+    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', 4, 1, 'aprovado', NULL, NULL, 'auditor', ?)",
+  ).run(em("2026-03"));
   for (const r of [3, 4])
     b.prepare(
       "INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, tipo, dados, em) VALUES (?, 'I-1', ?, 'pr_aberto', '{}', ?)",
@@ -205,7 +209,9 @@ test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovad
   b.prepare("INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x9', 's3', ?, NULL, 0)").run(
     em("2026-04"),
   );
-  b.prepare("INSERT INTO decisao_ticket VALUES ('I-1', 2, 3, 'aprovado', NULL, NULL, 'auditor', ?)").run(em("2026-04"));
+  b.prepare(
+    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', 2, 3, 'aprovado', NULL, NULL, 'auditor', ?)",
+  ).run(em("2026-04"));
   const abr = ver(metricasDemandaPorMes(b, { de: "2026-04", ate: "2026-04" })[0]);
   assert.equal(abr.total.execucoes, 1);
   assert.deepEqual(abr.total.custo, { conhecido: 0, incompleto: false });

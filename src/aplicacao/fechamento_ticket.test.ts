@@ -26,6 +26,7 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   etapa,
   status,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -84,8 +85,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
       descricao: "d",
       fase: conflito ? "encerramento" : "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },
@@ -133,7 +133,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
 }
 
 const fechar = (c: Awaited<ReturnType<typeof cenario>>, n: number, deps: object, falha?: string) =>
-  fecharTicketDemanda(c.banco, ref(n), { falha, execucao: "E-9" }, deps);
+  fecharTicketDemanda(c.banco, ref(n), { falha }, deps);
 
 test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com anexos e leva a rodada à revisão", async () => {
   const c = await cenario();
@@ -153,6 +153,10 @@ test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com a
     TIPOS.map((t) => `${t}.log`).sort(),
   );
   const ag = c.ag();
+  assert.deepEqual(
+    ag.evidencias.map((evidencia) => evidencia.autor),
+    TIPOS.map(() => ({ tipo: "fabriquinha" })),
+  );
   assert.equal(ag.rodadas[0]?.fase, "revisao");
   assert.equal(ag.tickets.filter((t) => t.etapa === "revisar_rodada").length, 1);
 });
@@ -430,7 +434,7 @@ test("problema commita como fix; sem deps o coletor real roda e o Sonar sem ambi
   assert.deepEqual(c.commits(), ["fix: Cachear [I-1.T1]"]);
   const d = await cenario({ tipo: "problema" });
   delete process.env.SONAR_HOST_URL;
-  await fecharTicketDemanda(d.banco, ref(1), { execucao: "E-9" });
+  await fecharTicketDemanda(d.banco, ref(1), {});
   assert.match(d.status(1)?.motivo_falha ?? "", /^falha de infraestrutura:\n- SONAR_HOST_URL/);
 });
 

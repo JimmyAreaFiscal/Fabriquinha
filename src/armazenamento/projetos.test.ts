@@ -258,14 +258,14 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       INSERT INTO sessao VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
       INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
       INSERT INTO uso_modelo_execucao VALUES ('${execucao}', 'p', 'm', 1, 1, 0, 0, ${n}.5);
-      INSERT INTO evidencia_demanda VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
+      INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
       INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a.txt', '${i === 0 ? SHA_COMPARTILHADO : shaProprio}', 'text/plain', 1);
       INSERT INTO iteracao_demanda (demanda_id, ticket_id, tipo, em) VALUES ('${d}', 1, 'mensagem', 't');
       INSERT INTO proposta_demanda (demanda_id, ticket_id, titulo, mensagem, arquivos, status, em)
         VALUES ('${d}', 1, 't', 'm', 31, 'pendente', 't');
       INSERT INTO proposta_demanda (demanda_id, ticket_id, titulo, mensagem, arquivos, status, demanda_criada_id, em, decidida_em)
         VALUES ('${d}', 1, 't', 'm', 31, 'aceita', '${d}', 't', 't');
-      INSERT INTO decisao_ticket VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
+      INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
       INSERT INTO commit_ticket_demanda VALUES ('${n.padStart(40, "b")}', '${d}', 1, 'm', 't');
       INSERT INTO arquivo_commit_demanda (sha, caminho, status) VALUES ('${n.padStart(40, "b")}', 'f', 'A');
       INSERT INTO retrabalho_demanda VALUES ('${n.padStart(40, "d")}', '${d}', NULL, 'x', 1, 1, NULL);
@@ -489,9 +489,9 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
       VALUES ('${d}', 1, 'implementar', 'concluido', 't', 1), ('${d}', 2, 'implementar', 'concluido', 't', 1);
     INSERT INTO dependencia_ticket VALUES ('${d}', 2, 1, 1);
     INSERT INTO caminho_ticket VALUES ('${d}', 1, 'src');
-    INSERT INTO decisao_ticket VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
+    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
     INSERT INTO decisao_ticket_historico VALUES ('${d}', 1, 1, 'registro');
-    INSERT INTO evidencia_demanda VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
+    INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
     INSERT INTO evidencia_historico VALUES ('${d}e', 1, 'agente');
     INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a', '${sha3}', 'text/plain', 1);
     INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('${d}', 'b', 'main');

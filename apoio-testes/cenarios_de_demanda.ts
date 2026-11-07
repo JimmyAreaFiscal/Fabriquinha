@@ -2,6 +2,7 @@
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
+import type { Ator } from "../src/nucleo/ator.ts";
 import type { FaseDemanda } from "../src/nucleo/primitivos.ts";
 import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
 import { criarDemandaNova } from "../src/armazenamento/demandas.ts";
@@ -19,6 +20,7 @@ export const montarTicket = (demanda_id: string, ticket_id: number, etapa: strin
   etapa,
   status: "aberto",
   status_alterado_em: INSTANTE_DO_CENARIO,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -43,8 +45,7 @@ export const montarAgregadoDemanda = (id: string, fase: string, resto: object = 
       descricao: "d",
       fase,
       fase_alterada_em: INSTANTE_DO_CENARIO,
-      origem_ferramenta: "claude",
-      origem_sessao: id,
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
       enviada: fase !== "registro",
       branch: `fabriquinha/${id}`,
     },
@@ -136,7 +137,7 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
     demanda_id: id,
     ticket_id: 5,
     decisao_id,
-    por: "auditor",
+    por: { tipo: "auditor" },
     em: INSTANTE_DO_CENARIO,
     ...resto,
   });
@@ -156,9 +157,17 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
         ticket_id: 4,
         tipo: "pr_aberto",
         dados: { id: "7", url: "https://pr/7" },
+        autor: { tipo: "fabriquinha" },
         em: INSTANTE_DO_CENARIO,
       },
-      { demanda_id: id, ticket_id: 3, tipo: "comportamento", dados: { resumo: "ok" }, em: INSTANTE_DO_CENARIO },
+      {
+        demanda_id: id,
+        ticket_id: 3,
+        tipo: "comportamento",
+        dados: { resumo: "ok" },
+        autor: { tipo: "fabriquinha" },
+        em: INSTANTE_DO_CENARIO,
+      },
     ],
   });
 }
@@ -171,6 +180,20 @@ export function cadastrarProjetoLoja(banco: DatabaseSync, repo = "/repos/loja", 
        VALUES ('loja', ?, ?, 'github', 'k')`,
     )
     .run(repo, branchBase);
+}
+
+/** Abre (uma vez só) a execução do ticket e devolve o Agente dela: o `trabalho_id` é o `execucao_sessao.id`. */
+export function abrirTrabalhoDoAgente(banco: DatabaseSync, ref: { demanda_id: string; ticket_id: number }): Ator {
+  const trabalho_id = `e-${ref.demanda_id}-T${String(ref.ticket_id)}`;
+  banco
+    .prepare(
+      "INSERT OR IGNORE INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, ?, 'autonomo', 'c')",
+    )
+    .run(`s-${trabalho_id}`, ref.demanda_id, ref.ticket_id);
+  banco
+    .prepare("INSERT OR IGNORE INTO execucao_sessao (id, sessao_id, inicio, falha) VALUES (?, ?, ?, 0)")
+    .run(trabalho_id, `s-${trabalho_id}`, INSTANTE_DO_CENARIO);
+  return { tipo: "agente", trabalho_id };
 }
 
 /**

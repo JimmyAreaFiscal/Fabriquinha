@@ -139,6 +139,7 @@ function gravarEvidencia(
         ticket_id,
         tipo,
         dados: e.dados as EvidenciaDemanda["dados"],
+        autor: FABRIQUINHA,
         em: new Date().toISOString(),
       },
     ],

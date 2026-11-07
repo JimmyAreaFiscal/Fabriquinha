@@ -147,6 +147,7 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     etapa,
     status: "em_execucao",
     status_alterado_em: em,
+    criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
   });
@@ -159,8 +160,7 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       descricao: "d",
       fase: "planejamento",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-206",
     },
@@ -177,9 +177,24 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     caminhos_ticket: [],
     decisoes: [],
     evidencias: [
-      { demanda_id: "I-206", tipo: "criterios_aceite", em, dados: { criterios: [{ id: "CA-1" }, { id: "CA-2" }] } },
+      {
+        demanda_id: "I-206",
+        tipo: "criterios_aceite",
+        autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
+        em,
+        dados: { criterios: [{ id: "CA-1" }, { id: "CA-2" }] },
+      },
       ...(comRevisaoConcluida
-        ? [{ demanda_id: "I-206", ticket_id: 8, tipo: "arquivos_alterados", em, dados: arquivosAlterados }]
+        ? [
+            {
+              demanda_id: "I-206",
+              ticket_id: 8,
+              tipo: "arquivos_alterados",
+              autor: { tipo: "fabriquinha" },
+              em,
+              dados: arquivosAlterados,
+            },
+          ]
         : []),
     ],
   } as unknown as AgregadoDemanda);

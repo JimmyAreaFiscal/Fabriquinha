@@ -21,7 +21,7 @@ const pi = instalarPiFalso(base);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
-const agente: Ator = { tipo: "agente", execucao: 1, ticket: PLANEJAR };
+const agente: Ator = { tipo: "agente", trabalho_id: "execucao-1" };
 
 test("CA-SDLC-18: evidência com dois donos é recusada; a nova do mesmo tipo e dono substitui só a anterior", (t) => {
   const c = criarCenario(t);
@@ -128,13 +128,13 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
 
   gravarConfiguracaoProjeto(c.banco, valida);
   substituirEtapasDoProjeto(c.banco, c.projeto, [
-    { etapa: "implementar", modelo_provedor: "anthropic", modelo_nome: "m-1", effort: "high" },
+    { etapa: "implementar", configuracao_agente: { modelo: { provedor: "anthropic", nome: "m-1" }, effort: "high" } },
   ]);
   const antes = tabelas();
   // As etapas são do cadastro do projeto, que as grava sozinhas.
   for (const [nome, etapa] of [
-    ["modelo incompleto", { modelo_provedor: "anthropic" }],
-    ["effort inválido", { effort: "altissimo" }],
+    ["modelo incompleto", { configuracao_agente: { modelo: { provedor: "anthropic" } } }],
+    ["effort inválido", { configuracao_agente: { effort: "altissimo" } }],
   ] as const) {
     assert.throws(
       () => {
@@ -165,8 +165,8 @@ test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, 
     raiz: c.raiz,
     sessaoPi: "s-1",
     skills: [],
-    modelo: { provedor: etapaGravada?.modelo_provedor ?? "", modelo: etapaGravada?.modelo_nome ?? "" },
-    effort: etapaGravada?.effort,
+    modelo: etapaGravada?.configuracao_agente?.modelo,
+    effort: etapaGravada?.configuracao_agente?.effort,
     confianca: true,
     modo: "autonomo",
   });

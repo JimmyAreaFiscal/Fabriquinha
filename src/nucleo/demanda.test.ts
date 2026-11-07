@@ -146,15 +146,20 @@ test("ticket do plano: caminhos relativos, par de modelo e effort válidos", () 
   recusa(plano({ tickets: [{ ...tk(1), caminhos: ["c:/fora/segredo.ts"] }] }), "caminho relativo");
   recusa(plano({ tickets: [{ ...tk(1), caminhos: ["C:\\fora\\segredo.ts"] }] }), "caminho relativo");
   recusa(plano({ tickets: [{ ...tk(1), caminhos: ["a", "a"] }] }), "repete caminho");
-  recusa(plano({ tickets: [{ ...tk(1), modelo_provedor: "openai" }] }), "juntos");
-  recusa(plano({ tickets: [{ ...tk(1), modelo_nome: "gpt" }] }), "juntos");
-  recusa(plano({ tickets: [{ ...tk(1), effort: "enorme" }] }), "");
+  recusa(
+    plano({ tickets: [{ ...tk(1), configuracao_agente: { modelo: { provedor: "openai" } } }] }),
+    "esperava um texto",
+  );
+  recusa(plano({ tickets: [{ ...tk(1), configuracao_agente: { modelo: { nome: "gpt" } } }] }), "esperava um texto");
+  recusa(plano({ tickets: [{ ...tk(1), configuracao_agente: { effort: "enorme" } }] }), "");
   recusa(plano({ tickets: [{ ...tk(1), titulo: "" }] }), "");
   assert.ok(
     Plano.safeParse(
       plano({
         rodadas: [rd(1)],
-        tickets: [{ ...tk(1, 1), modelo_provedor: "openai", modelo_nome: "gpt", effort: "high" }],
+        tickets: [
+          { ...tk(1, 1), configuracao_agente: { modelo: { provedor: "openai", nome: "gpt" }, effort: "high" } },
+        ],
       }),
     ).success,
   );

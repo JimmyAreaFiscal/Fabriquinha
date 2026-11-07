@@ -98,8 +98,7 @@ const formulario = (repo: string) => ({
   repo,
   branchBase: "main",
   preparacao: [],
-  modelos: {},
-  efforts: {},
+  configuracoes: {},
 });
 
 /** O projeto gravado do `formulario`, como a rota o devolve: a hospedagem deduzida e a chave do SonarQube com o nome. */
@@ -111,7 +110,7 @@ const gravado = (repo: string) => ({
 
 /** O `gravado` como `projeto()` o lê do banco: sem as etapas, que ficam em `configuracao_etapa_projeto`. */
 function noBanco(repo: string) {
-  const { modelos: _modelos, efforts: _efforts, ...cadastro } = gravado(repo);
+  const { configuracoes: _configuracoes, ...cadastro } = gravado(repo);
   return cadastro;
 }
 
@@ -135,7 +134,7 @@ test("configuração: o F4 §3 com a próxima busca só ligado, sem as execuçõ
 });
 
 test("modelo das avaliações: o par listado pelo pi grava; o que o pi não lista dá 422 e mantém o anterior; o igual ao gravado não chama o pi", async () => {
-  const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
+  const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
   const lido = async () => ((await chamar("GET", "/api/configuracao")) as { modeloAuditoria: unknown }).modeloAuditoria;
   assert.deepEqual(
     ((await chamar("POST", "/api/configuracao", { modeloAuditoria: opus })) as { modeloAuditoria: unknown })
@@ -145,7 +144,7 @@ test("modelo das avaliações: o par listado pelo pi grava; o que o pi não list
   assert.deepEqual(await lido(), opus);
 
   assert.deepEqual(
-    await chamar("POST", "/api/configuracao", { modeloAuditoria: { provedor: "inexistente", modelo: "xyz" } }),
+    await chamar("POST", "/api/configuracao", { modeloAuditoria: { provedor: "inexistente", nome: "xyz" } }),
     [
       422,
       "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at modeloAuditoria",
@@ -190,8 +189,8 @@ test("configuração inválida dá 422 com o caminho de cada campo, em portuguê
 
 test("modelos: os pares de pi --list-models, para o seletor", async () => {
   assert.deepEqual(await chamar("GET", "/api/modelos"), [
-    { provedor: "anthropic", modelo: "claude-opus-5-5" },
-    { provedor: "llamacpp", modelo: "qwen3-coder-30b" },
+    { provedor: "anthropic", nome: "claude-opus-5-5" },
+    { provedor: "llamacpp", nome: "qwen3-coder-30b" },
   ]);
 });
 
@@ -222,8 +221,8 @@ test("CA-13: o cadastro não aceita testes, SonarQube, fitness nem as etapas do 
     { testes: ["npm test"] },
     { sonar: { projectKey: "loja" } },
     { fitness: [{ nome: "f", comando: "true", descricao: "d" }] },
-    { modelos: { desenho: { provedor: "anthropic", modelo: "claude-opus-5-5" } } },
-    { efforts: { desenho: "high" } },
+    { configuracoes: { desenho: { modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } } } },
+    { configuracoes: { desenho: { effort: "high" } } },
   ]) {
     const [status, erro] = (await chamar("POST", "/api/projetos", { ...formulario(repo), ...legado })) as [
       number,
@@ -237,11 +236,14 @@ test("CA-13: o cadastro não aceita testes, SonarQube, fitness nem as etapas do 
 
 test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no GET; o modelo novo ou trocado é conferido no pi", async () => {
   const repo = clone();
-  const opus = { provedor: "anthropic", modelo: "claude-opus-5-5" };
-  const qwen = { provedor: "llamacpp", modelo: "qwen3-coder-30b" };
+  const opus = { provedor: "anthropic", nome: "claude-opus-5-5" };
+  const qwen = { provedor: "llamacpp", nome: "qwen3-coder-30b" };
   const escolhidos = {
-    modelos: { planejar: opus, implementar: qwen },
-    efforts: { planejar: "high", revisar_rodada: "low" },
+    configuracoes: {
+      planejar: { modelo: opus, effort: "high" },
+      implementar: { modelo: qwen },
+      revisar_rodada: { effort: "low" },
+    },
   };
   assert.deepEqual(await chamar("POST", "/api/projetos", { ...formulario(repo), ...escolhidos }), {
     ...gravado(repo),
@@ -273,11 +275,11 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
     await chamar("POST", "/api/projetos/loja", {
       ...formulario(repo),
       preparacao: ["npm ci"],
-      modelos: { ...escolhidos.modelos, demanda: { provedor: "inexistente", modelo: "xyz" } },
+      configuracoes: { ...escolhidos.configuracoes, demanda: { modelo: { provedor: "inexistente", nome: "xyz" } } },
     }),
     [
       422,
-      "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at modelos.demanda",
+      "✖ o modelo inexistente/xyz não existe no pi (escolha um par listado por pi --list-models)\n  → at configuracoes.demanda.modelo",
     ],
   );
   assert.deepEqual(projeto(banco, "loja")?.preparacao, []);
@@ -286,10 +288,16 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
   // Com o pi quebrado: o modelo igual ao gravado salva sem chamá-lo, e o trocado é recusado.
   piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
   try {
-    assert.deepEqual(await chamar("POST", "/api/projetos/loja", { ...formulario(repo), modelos: { planejar: opus } }), {
-      ...gravado(repo),
-      modelos: { planejar: opus },
-    });
+    assert.deepEqual(
+      await chamar("POST", "/api/projetos/loja", {
+        ...formulario(repo),
+        configuracoes: { planejar: { modelo: opus } },
+      }),
+      {
+        ...gravado(repo),
+        configuracoes: { planejar: { modelo: opus } },
+      },
+    );
     assert.deepEqual(etapasGravadas(), [
       {
         projeto: "loja",
@@ -301,16 +309,22 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
     ]);
     const [status, erro] = (await chamar("POST", "/api/projetos/loja", {
       ...formulario(repo),
-      modelos: { planejar: qwen },
+      configuracoes: { planejar: { modelo: qwen } },
     })) as [number, string];
     assert.equal(status, 422);
-    assert.match(erro, /o pi falhou ao listar os modelos[^]*→ at modelos\.planejar$/);
+    assert.match(erro, /o pi falhou ao listar os modelos[^]*→ at configuracoes\.planejar\.modelo$/);
   } finally {
     piFalso.roteirizar([modelos]);
   }
   // Tudo no padrão do pi: nenhuma linha de etapa fica.
   await chamar("POST", "/api/projetos/loja", formulario(repo));
   assert.deepEqual(etapasGravadas(), []);
+  // A etapa sem modelo nem effort escolhido também não deixa linha.
+  await chamar("POST", "/api/projetos/loja", { ...formulario(repo), configuracoes: { planejar: {} } });
+  assert.deepEqual(etapasGravadas(), []);
+  // Linha de etapa sem coluna preenchida (gravada fora do cadastro) não vira configuração no formulário.
+  banco.prepare("INSERT INTO configuracao_etapa_projeto (projeto, etapa) VALUES ('loja', 'planejar')").run();
+  assert.deepEqual(await chamar("GET", "/api/projetos/loja"), { ...gravado(repo), configuracoes: {} });
 });
 
 test("as etapas do cadastro e a configuração SDLC não se apagam: cada gravação substitui só o que é dela", async () => {
@@ -325,9 +339,12 @@ test("as etapas do cadastro e a configuração SDLC não se apagam: cada gravaç
     fitness: [{ nome: "cobertura", comando: "npm run cobertura", descricao: "Cobertura mínima." }],
     linguagens: [{ caminho: ".", linguagem: "typescript", comando_teste: "npm test" }],
   });
-  await chamar("POST", "/api/projetos/loja", { ...formulario(repo), efforts: { implementar: "max" } });
+  await chamar("POST", "/api/projetos/loja", {
+    ...formulario(repo),
+    configuracoes: { implementar: { effort: "max" } },
+  });
   const lida = configuracaoProjeto(banco, "loja");
-  assert.deepEqual(lida?.etapas, [{ etapa: "implementar", effort: "max" }]);
+  assert.deepEqual(lida?.etapas, [{ etapa: "implementar", configuracao_agente: { effort: "max" } }]);
   assert.equal(lida.linguagens.length, 1);
 
   const { etapas: _etapas, ...semEtapas } = lida;
@@ -337,7 +354,7 @@ test("as etapas do cadastro e a configuração SDLC não se apagam: cada gravaç
   })) as {
     configuracao: { etapas: unknown };
   };
-  assert.deepEqual(salva.configuracao.etapas, [{ etapa: "implementar", effort: "max" }]);
+  assert.deepEqual(salva.configuracao.etapas, [{ etapa: "implementar", configuracao_agente: { effort: "max" } }]);
   assert.deepEqual(etapasGravadas(), [
     { projeto: "loja", etapa: "implementar", modelo_provedor: null, modelo_nome: null, effort: "max" },
   ]);

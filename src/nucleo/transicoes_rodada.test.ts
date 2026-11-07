@@ -22,7 +22,8 @@ const t1 = "2026-01-02T00:00:00Z";
 const ctx = { agora: t1 };
 const D = "I-1";
 const ref = { demanda_id: D, rodada_id: 1 };
-const agente = (ticket: number): Ator => ({ tipo: "agente", execucao: 1, ticket });
+const agente = (numeroTrabalho: number): Ator => ({ tipo: "agente", trabalho_id: `E-${String(numeroTrabalho)}` });
+const EXTERNO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
 const tk = (ticket_id: number, etapa: string, status: string, rodada_id: number | undefined = 1) => ({
   demanda_id: D,
   ticket_id,
@@ -30,6 +31,7 @@ const tk = (ticket_id: number, etapa: string, status: string, rodada_id: number 
   etapa,
   status,
   status_alterado_em: t0,
+  criado_por: FABRIQUINHA,
 });
 const rd = (rodada_id: number, fase: string) => ({
   demanda_id: D,
@@ -49,15 +51,21 @@ const montar = (fase: string, tickets: object[], demanda = "execucao"): Agregado
       descricao: "d",
       fase: demanda,
       fase_alterada_em: t0,
-      origem_ferramenta: "f",
-      origem_sessao: "s",
+      criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: `fabriquinha/${D}`,
     },
     decisoes: [],
     evidencias: [],
     tickets: [
-      { demanda_id: D, ticket_id: 1, etapa: "demanda", status: "concluido", status_alterado_em: t0 },
+      {
+        demanda_id: D,
+        ticket_id: 1,
+        etapa: "demanda",
+        status: "concluido",
+        status_alterado_em: t0,
+        criado_por: FABRIQUINHA,
+      },
       ...tickets,
     ],
     rodadas: [rd(1, fase), rd(2, "desenvolvimento")],
@@ -132,8 +140,11 @@ const reprovada = (extra = {}) => ({
 test("CA-2: reprovação grava as exigências, cria a correção e volta a desenvolvimento", () => {
   const ag = emRevisao();
   const antes = structuredClone(ag);
-  const novo = registrarRevisaoRodada(ag, reprovada(), agente(3), ctx);
+  const agenteRevisor = agente(3);
+  const novo = registrarRevisaoRodada(ag, reprovada(), agenteRevisor, ctx);
+  assert.strictEqual(novo.decisoes[0]?.por, agenteRevisor);
   assert.deepEqual(ag, antes);
+  assert.deepEqual(novo.tickets.at(-1)?.criado_por, agenteRevisor);
   assert.deepEqual(
     novo.rodadas.map((r) => r.fase),
     ["desenvolvimento", "desenvolvimento"],
@@ -154,7 +165,7 @@ test("CA-2: reprovação grava as exigências, cria a correção e volta a desen
       decisao_id: 1,
       resultado: "recusado",
       motivo: "refazer o teste",
-      por: "agente",
+      por: agente(3),
       em: t1,
     },
   ]);
@@ -166,7 +177,7 @@ const recusado = (ticket_id: number, decisao_id: number, motivo: string) => ({
   decisao_id,
   resultado: "recusado",
   motivo,
-  por: "agente",
+  por: agente(ticket_id),
   em: t0,
 });
 const comRecusas = (ag: AgregadoDemanda, ...decisoes: object[]) => AgregadoDemanda.parse({ ...ag, decisoes });
@@ -259,7 +270,9 @@ test("CA-2: reprovação sem exigências, sem correções ou inválida não muda
 
 test("CA-3: aprovação conclui a revisão, abre encerrar_rodada e vai a encerramento", () => {
   const ag = emRevisao();
-  const novo = registrarRevisaoRodada(ag, { ...ref, ticket_id: 3, aprovado: true }, agente(3), ctx);
+  const agenteRevisor = agente(3);
+  const novo = registrarRevisaoRodada(ag, { ...ref, ticket_id: 3, aprovado: true }, agenteRevisor, ctx);
+  assert.strictEqual(novo.decisoes[0]?.por, agenteRevisor);
   assert.deepEqual(
     novo.rodadas.map((r) => r.fase),
     ["encerramento", "desenvolvimento"],
@@ -273,7 +286,7 @@ test("CA-3: aprovação conclui a revisão, abre encerrar_rodada e vai a encerra
   );
   assert.deepEqual(
     novo.decisoes.map((d) => [d.ticket_id, d.decisao_id, d.resultado, d.motivo, d.nota, d.por]),
-    [[3, 1, "aprovado", undefined, undefined, "agente"]],
+    [[3, 1, "aprovado", undefined, undefined, agente(3)]],
   );
   recusa(ag, () => registrarRevisaoRodada(ag, { ...ref, ticket_id: 3, aprovado: true, nota: 5 }, agente(3), ctx));
 });
@@ -281,8 +294,11 @@ test("CA-3: aprovação conclui a revisão, abre encerrar_rodada e vai a encerra
 test("revisão: ator, ticket, status e fase errados são recusados", () => {
   const ag = emRevisao();
   const ok = { ...ref, ticket_id: 3, aprovado: true };
-  for (const ator of [AUDITOR, FABRIQUINHA, agente(2)]) {
+  for (const ator of [AUDITOR, FABRIQUINHA, EXTERNO]) {
     recusa(ag, () => registrarRevisaoRodada(ag, ok, ator, ctx), ErroDeEscopo);
+    assert.throws(() => registrarRevisaoRodada(ag, ok, ator, ctx), {
+      message: "só o agente do ticket revisar_rodada atual decide a revisão (peça à sessão de revisão)",
+    });
   }
   recusa(ag, () => registrarRevisaoRodada(ag, { ...ok, ticket_id: 2 }, agente(2), ctx));
   recusa(ag, () => registrarRevisaoRodada(ag, { ...ok, ticket_id: 9 }, agente(9), ctx));
@@ -337,6 +353,7 @@ test("CA-4: conflito, check falho ou ambos exigem correções e voltam a desenvo
         [5, "implementar", "aberto"],
       ],
     );
+    assert.deepEqual(novo.tickets.at(-1)?.criado_por, FABRIQUINHA);
     assert.deepEqual(novo.decisoes, []);
   }
 });
@@ -421,7 +438,7 @@ test("CA-7: reprovar o PR registra recusa sem nota, conclui o gate e abre a sess
     ],
   );
   assert.deepEqual(novo.decisoes, [
-    { demanda_id: D, ticket_id: 4, decisao_id: 1, resultado: "recusado", motivo: "ajustar", por: "auditor", em: t1 },
+    { demanda_id: D, ticket_id: 4, decisao_id: 1, resultado: "recusado", motivo: "ajustar", por: AUDITOR, em: t1 },
   ]);
   // repetição após a mudança de fase não duplica decisão
   recusa(novo, () => reprovarPullRequestRodada(novo, { ...ref, ticket_id: 4, motivo: "x" }, AUDITOR, ctx));
@@ -453,13 +470,17 @@ test("sessão: Auditor e agente da sessão registram correções sem executar ne
   for (const ator of [AUDITOR, agente(5)]) {
     const novo = registrarCorrecoesSessao(ag, entrada, ator, ctx);
     assert.deepEqual(fase(novo), ["sessao", "desenvolvimento"]);
+    assert.deepEqual(novo.tickets.at(-1)?.criado_por, ator);
     assert.deepEqual(
       novo.tickets.slice(5).map((t) => [t.ticket_id, t.etapa, t.status]),
       [[6, "implementar", "aberto"]],
     );
   }
-  for (const ator of [FABRIQUINHA, agente(2)]) {
+  for (const ator of [FABRIQUINHA, EXTERNO]) {
     recusa(ag, () => registrarCorrecoesSessao(ag, entrada, ator, ctx), ErroDeEscopo);
+    assert.throws(() => registrarCorrecoesSessao(ag, entrada, ator, ctx), {
+      message: "só o Auditor ou o agente da sessão registram correções (peça ao Auditor pelo web)",
+    });
   }
   recusa(ag, () => registrarCorrecoesSessao(ag, { ...entrada, correcoes: [] }, AUDITOR, ctx));
   recusa(ag, () => registrarCorrecoesSessao(ag, { ...entrada, ticket_id: 4 }, AUDITOR, ctx));
@@ -550,7 +571,7 @@ test("CA-11: confirmada a integração, grava a aprovação com a nota e conclui
     assert.deepEqual(fase(novo), ["concluida", "desenvolvimento"]);
     assert.equal(novo.tickets.find((t) => t.ticket_id === 4)?.status, "concluido");
     assert.deepEqual(novo.decisoes, [
-      { demanda_id: D, ticket_id: 4, decisao_id: 1, resultado: "aprovado", nota, por: "auditor", em: t1 },
+      { demanda_id: D, ticket_id: 4, decisao_id: 1, resultado: "aprovado", nota, por: AUDITOR, em: t1 },
     ]);
     // repetição após a conclusão não duplica a decisão
     recusa(novo, () =>
@@ -573,7 +594,7 @@ test("a aprovação automática conclui a rodada com o motivo dela no lugar da n
       decisao_id: 1,
       resultado: "aprovado",
       motivo: MOTIVO_APROVACAO_AUTOMATICA_PR,
-      por: "auditor",
+      por: { tipo: "fabriquinha" },
       em: t1,
     },
   ]);

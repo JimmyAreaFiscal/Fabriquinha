@@ -73,8 +73,7 @@ function concluirRodada(ag: AgregadoDemanda, { demanda_id, rodada_id }: TicketDe
 }
 
 /** Grava as três evidências do ticket com os logs de cada uma como anexos, numa transação só. */
-function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificacao[], execucao: string): void {
-  const autor = { ferramenta: "fabriquinha", sessao: execucao };
+function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificacao[]): void {
   const guardadas = verificacoes.map((v) => ({
     v,
     // O Sonar devolve `logs: []`; o relatório (`dados`) vira o anexo, para a evidência nunca ficar sem log.
@@ -96,7 +95,7 @@ function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificac
               // ponytail: a evidência da demanda não tem coluna `aprovada`; ela vai nos `dados`.
               dados: { ...v.dados, aprovada: v.aprovada } as EntradaEvidenciaDemanda["dados"],
             },
-            autor,
+            FABRIQUINHA,
             contexto().agora,
           ),
         ag,
@@ -124,7 +123,7 @@ function relatorioDeReprovacao(reprovadas: Verificacao[]): string {
 export async function fecharTicketDemanda(
   banco: DatabaseSync,
   ref: Ref,
-  { falha, execucao }: { falha?: string; execucao: string },
+  { falha }: { falha?: string },
   deps: DepsFechamento = {},
 ): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
@@ -169,7 +168,7 @@ export async function fecharTicketDemanda(
       falhar(`falha de infraestrutura:\n${motivos.map((f) => `- ${f.motivo}`).join("\n")}`);
       return;
     }
-    gravarEvidencias(banco, ref, verificacoes, execucao);
+    gravarEvidencias(banco, ref, verificacoes);
     const reprovadas = verificacoes.filter((v) => !v.aprovada);
     if (reprovadas.length > 0) {
       const relatorio = relatorioDeReprovacao(reprovadas);

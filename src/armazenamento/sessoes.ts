@@ -6,6 +6,7 @@ import { formatarTicketRef, type TicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../nucleo/sessoes.ts";
 import { escrever } from "./banco.ts";
+import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
 interface EstadoSessoes {
   sessoes: Sessao[];
@@ -37,7 +38,7 @@ function carregar(banco: DatabaseSync, demandaId: string, ticketId: number | nul
         ),
       execucoes: z.array(ExecucaoSessao).parse(
         ler(`SELECT * FROM execucao_sessao WHERE ${dasSessoes} ORDER BY rowid`).map((e) => ({
-          ...semNulos(e),
+          ...semNulos(linhaComConfiguracaoAgente(e)),
           fim: e.fim, // fim NULL segue como null: é execução aberta
           falha: e.falha === 1,
         })),
@@ -115,15 +116,13 @@ export const comSessoesDoTicket = (
       banco,
       "execucao_sessao",
       ["id"],
-      depois.execucoes.map((e) => ({
+      depois.execucoes.map(({ configuracao_agente, ...e }) => ({
         ...e,
         fim: e.fim ?? null,
         falha: Number(e.falha),
         grupo_processo: e.grupo_processo ?? null,
         erro: e.erro ?? null,
-        modelo_provedor: e.modelo_provedor ?? null,
-        modelo_nome: e.modelo_nome ?? null,
-        effort: e.effort ?? null,
+        ...colunasDaConfiguracaoAgente(configuracao_agente),
       })),
       chaves(["id"], antes.execucoes),
     );
@@ -166,3 +165,11 @@ export const ticketsComPiAtivo = (banco: DatabaseSync): Set<string> =>
       .filter((e) => e.grupo_processo !== null)
       .map(({ demanda_id, ticket_id }) => formatarTicketRef({ demanda_id, ticket_id })),
   );
+
+/** O ticket da sessão da execução, ou `undefined` se a execução não existe. */
+export const ticketDaExecucao = (banco: DatabaseSync, execucao: string): z.infer<typeof TicketRef> | undefined =>
+  banco
+    .prepare(
+      "SELECT s.demanda_id, s.ticket_id FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id WHERE e.id = ?",
+    )
+    .get(execucao) as z.infer<typeof TicketRef> | undefined;

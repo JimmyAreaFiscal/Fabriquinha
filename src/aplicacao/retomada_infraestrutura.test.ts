@@ -29,15 +29,15 @@ test("classifica a falha: reinício, cota e transitória são infraestrutura; o 
 test("o modelo reserva é o do outro provedor, no mesmo nível; sem modelo ou provedor conhecido, nenhum", () => {
   assert.deepEqual(modeloReserva({ provedor: "claude-bridge", nome: "claude-opus-5-5" }), {
     provedor: "openai-codex",
-    modelo: "gpt-6.1-sol",
+    nome: "gpt-6.1-sol",
   });
   assert.deepEqual(modeloReserva({ provedor: "anthropic", nome: "claude-sonnet-5-5" }), {
     provedor: "openai-codex",
-    modelo: "gpt-6-luna",
+    nome: "gpt-6-luna",
   });
   assert.deepEqual(modeloReserva({ provedor: "openai-codex", nome: "gpt-6-luna" }), {
     provedor: "claude-bridge",
-    modelo: "claude-opus-5-5",
+    nome: "claude-opus-5-5",
   });
   assert.equal(modeloReserva({ provedor: "local", nome: "x" }), undefined);
   assert.equal(modeloReserva(undefined), undefined);
@@ -67,7 +67,7 @@ function cenario() {
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   substituirEtapasDoProjeto(banco, "loja", [
-    { etapa: "implementar", modelo_provedor: "claude-bridge", modelo_nome: "claude-sonnet-5-5" },
+    { etapa: "implementar", configuracao_agente: { modelo: { provedor: "claude-bridge", nome: "claude-sonnet-5-5" } } },
   ]);
   const tickets: [string, string, string | undefined, number?][] = [
     ["implementar", "falhou", "serviço reiniciado", 3],
@@ -88,8 +88,7 @@ function cenario() {
       descricao: "d",
       fase: "execucao",
       fase_alterada_em: falhouEm,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },
@@ -112,6 +111,7 @@ function cenario() {
       etapa,
       status,
       status_alterado_em: falhouEm,
+      criado_por: { tipo: "fabriquinha" },
       devolucoes: 1,
       instrucao: "corrija",
       ...(motivo !== undefined && { motivo_falha: motivo }),
@@ -139,8 +139,8 @@ test("retoma o reinício na hora e sem contar; a transitória depois da espera; 
     ["aberto", 3, "corrija", 1],
   );
   assert.deepEqual(
-    [ticket(3)?.status, ticket(3)?.retomadas_automaticas, ticket(3)?.modelo_provedor, ticket(3)?.modelo_nome],
-    ["aberto", 1, "openai-codex", "gpt-6-luna"],
+    [ticket(3)?.status, ticket(3)?.retomadas_automaticas, ticket(3)?.configuracao_agente?.modelo],
+    ["aberto", 1, { provedor: "openai-codex", nome: "gpt-6-luna" }],
   );
   // Sem modelo configurado na etapa não há reserva; no limite, disco cheio e aberto ficam como estão.
   assert.deepEqual(

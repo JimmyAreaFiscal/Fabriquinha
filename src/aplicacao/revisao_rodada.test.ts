@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../nucleo/ator.ts";
+import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
+import { ErroDeRegra } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
@@ -16,7 +17,12 @@ import {
   caminhoDaWorktreeRodada,
   garantirWorktreeRodada,
 } from "../infra/repositorio/worktree-demanda.ts";
-import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "../../apoio-testes/cenarios_de_demanda.ts";
+import {
+  abrirTrabalhoDoAgente,
+  cenarioRevisao,
+  REF_GLOBAL,
+  REF_RODADA,
+} from "../../apoio-testes/cenarios_de_demanda.ts";
 import { conduzirRevisaoRodada, decidirRevisaoRodada, prepararRevisaoRodada } from "./revisao_rodada.ts";
 
 const evidencia = (banco: Parameters<typeof carregarDemanda>[0], tipo: string) =>
@@ -50,6 +56,7 @@ test("CA-3: base na ponta da demanda (mesmo avançada), head na rodada, A/M/D e 
     { caminho: "outro.md", status: "A", adicionadas: 1, removidas: 0, previsto: null },
   ]);
   assert.deepEqual((e?.dados as { previstosNaoTocados: string[] }).previstosNaoTocados, ["nunca/*.ts"]);
+  assert.deepEqual(e?.autor, FABRIQUINHA);
 });
 
 test("CA-3: arquivo modificado aparece como M", async () => {
@@ -93,6 +100,7 @@ test("CA-4: uma linha por fitness, com a saída 0 e 1 e o log como anexo; regrav
   );
   assert.match(readFileSync(caminhoArquivo(banco, String(anexos[1]?.sha256)), "utf8"), /falhou/);
   assert.equal(evidencia(banco, "arquivos_alterados").length, 1);
+  assert.deepEqual(evidencias[0]?.autor, FABRIQUINHA);
 });
 
 test("recusa ticket inexistente, global e projeto sem configuração", async () => {
@@ -118,7 +126,7 @@ test("CA-3: renomeação casa o previsto pelo caminho antigo", async () => {
   assert.deepEqual(dados.previstosNaoTocados, []);
 });
 
-const AGENTE = { tipo: "agente", execucao: 1, ticket: 2 } as const;
+const revisorDaRodada = (banco: Parameters<typeof carregarDemanda>[0]) => abrirTrabalhoDoAgente(banco, REF_RODADA);
 const comprov = (atendido: boolean) => ({ criterios: [{ id: "CA-1", atendido, arquivos: [] }] });
 
 /** Submete as evidências do revisor: matriz da Fabriquinha e, se informadas, as do agente. */
@@ -135,7 +143,7 @@ function evidenciar(banco: Parameters<typeof carregarDemanda>[0], saida: number,
         submeterEvidenciaDemanda(
           a,
           { tipo, dados, ticket_id: 2 } as never,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          a.demanda.criada_por,
           "2026-01-02T00:00:00.000Z",
         ),
       ag,
@@ -143,7 +151,11 @@ function evidenciar(banco: Parameters<typeof carregarDemanda>[0], saida: number,
   );
 }
 const decidir = (banco: Parameters<typeof carregarDemanda>[0], extra: object) =>
-  decidirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 1, ticket_id: 2, ...extra } as never, AGENTE);
+  decidirRevisaoRodada(
+    banco,
+    { demanda_id: "I-1", rodada_id: 1, ticket_id: 2, ...extra } as never,
+    revisorDaRodada(banco),
+  );
 const rodadaFase = (banco: Parameters<typeof carregarDemanda>[0]) => carregarDemanda(banco, "I-1").rodadas[0]?.fase;
 
 test("CA-5: aprovação recusada por fitness que falha; a rodada continua em revisao", async () => {
@@ -170,6 +182,7 @@ test("CA-7: aprovada vai a encerramento com encerrar_rodada aberto", async () =>
   const ag = carregarDemanda(banco, "I-1");
   assert.equal(rodadaFase(banco), "encerramento");
   assert.equal(ag.tickets.find((t) => t.etapa === "encerrar_rodada")?.status, "aberto");
+  assert.deepEqual(ag.decisoes[0]?.por, revisorDaRodada(banco));
 });
 
 test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corretivos e exigências no motivo", async () => {
@@ -196,7 +209,7 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
     decisao_id,
     resultado: "recusado" as const,
     motivo,
-    por: "agente" as const,
+    por: revisorDaRodada(banco),
     em: "2026-01-02T00:00:00.000Z",
   });
   comDemanda(banco, "I-1", (ag) => ({ ...ag, decisoes: [recusado(1, "um"), recusado(2, "dois")] }));
@@ -248,4 +261,15 @@ test("conduzirRevisaoRodada recusa rodada sem revisar_rodada", async () => {
     conduzirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 9 }, { limiteMin: 1 }),
     /I-1.R9 não tem ticket revisar_rodada/,
   );
+});
+
+test("I-266: a decisão do agente com o trabalho de outro ticket é recusada e nada é gravado", async () => {
+  const { banco } = await cenarioRevisao();
+  evidenciar(banco, 0, true);
+  const deOutroTicket = abrirTrabalhoDoAgente(banco, REF_GLOBAL);
+  assert.throws(
+    () => decidirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 1, ticket_id: 2, aprovado: true }, deOutroTicket),
+    ErroDeRegra,
+  );
+  assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });

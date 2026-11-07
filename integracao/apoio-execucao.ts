@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Ator } from "../src/nucleo/ator.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
 import type { Verificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
@@ -108,7 +109,7 @@ export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Pro
       })),
       tickets,
     },
-    { tipo: "agente", execucao: 1, ticket: 2 },
+    { tipo: "agente", trabalho_id: "execucao-1" },
   );
   await aprovarPlanejamentoDemanda(c.banco, id, {});
   assert.equal(demanda(c, id).demanda.fase, "execucao");
@@ -147,7 +148,7 @@ export function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias
         submeterEvidenciaDemanda(
           a,
           { tipo, dados, ticket_id } as EntradaEvidenciaDemanda,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          a.demanda.criada_por,
           agora(),
         ),
       ag,
@@ -180,6 +181,13 @@ export async function despacharComAgente(c: Cenario, deps: DepsDespacho, agir: (
   await Promise.all(fins);
 }
 
+/** O Agente da execução aberta do ticket: o `trabalho_id` é o `execucao_sessao.id` dela. */
+export function agenteDaExecucaoAberta(c: Cenario, ref: { demanda_id: string; ticket_id: number }): Ator {
+  const aberta = execucoesDe(c, ref).find((e) => !e.fim);
+  assert.ok(aberta, "o agente age com a execução do ticket aberta");
+  return { tipo: "agente", trabalho_id: aberta.id };
+}
+
 type DecisaoDaRevisao = { aprovado: true } | { aprovado: false; exigencias: string; correcoes: object[] };
 
 /** O agente da revisão da `rodada`, com a execução aberta: as evidências (se aprova) e a decisão. */
@@ -195,7 +203,7 @@ export function decidirComoRevisor(c: Cenario, id: string, decisao: DecisaoDaRev
   decidirRevisaoRodada(
     c.banco,
     { ...decisao, demanda_id: id, rodada_id: rodada, ticket_id },
-    { tipo: "agente", execucao: 1, ticket: ticket_id },
+    agenteDaExecucaoAberta(c, { demanda_id: id, ticket_id }),
   );
   return ticket_id;
 }

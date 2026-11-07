@@ -81,8 +81,7 @@ function semearAgente(banco: DatabaseSync, faseRodada: string, etapa: string): A
           descricao: "d",
           fase: "execucao",
           fase_alterada_em: em,
-          origem_ferramenta: "estresse",
-          origem_sessao: "s-estresse",
+          criada_por: { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" },
           enviada: true,
           branch: `fabriquinha/${id}`,
         },
@@ -98,6 +97,7 @@ function semearAgente(banco: DatabaseSync, faseRodada: string, etapa: string): A
             etapa: "implementar",
             status: "concluido",
             status_alterado_em: em,
+            criado_por: { tipo: "fabriquinha" },
             rodada_id: 1,
             devolucoes: 0,
           },
@@ -107,6 +107,7 @@ function semearAgente(banco: DatabaseSync, faseRodada: string, etapa: string): A
             etapa,
             status: "aberto",
             status_alterado_em: em,
+            criado_por: { tipo: "fabriquinha" },
             rodada_id: 1,
             devolucoes: 0,
           },
@@ -168,7 +169,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
     });
     for (let i = 0; i < CHAMADAS * 3; i++) {
       const entrada = { projeto: "cli", titulo: "Demanda do estresse", tipo: "funcionalidade", descricao: "d" };
-      const autor = { ferramenta: "estresse", sessao: "s-estresse" };
+      const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
       rascunhos.push(registrar(banco, entrada, autor, { agora: em }).demanda.id);
     }
     // `enviar` exige as três evidências de quem registra; o rascunho de cada chamada nasce com elas.
@@ -181,7 +182,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
       tokens_cache_escrita: 0,
     };
     for (const [i, id] of rascunhos.slice(2 * CHAMADAS).entries()) {
-      const autor = { ferramenta: "estresse", sessao: "s-estresse" };
+      const autor = { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" } as const;
       const sessoes = [{ ferramenta: "estresse", sessao: `ext-${String(i)}`, linhas: [linha] }];
       const completa = [
         { tipo: "criterios_aceite", dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] } },

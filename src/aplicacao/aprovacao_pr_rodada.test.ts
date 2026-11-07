@@ -63,6 +63,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
     etapa,
     status,
     status_alterado_em: em,
+    criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     rodada_id: 2,
   });
@@ -75,8 +76,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
       descricao: "d",
       fase: "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
@@ -98,6 +98,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
             demanda_id: DEMANDA,
             ticket_id: 8,
             tipo: "pr_aberto",
+            autor: { tipo: "fabriquinha" },
             dados: { id: "1", url: "https://github.com/org/loja/pull/1" },
             em,
           },
@@ -131,7 +132,7 @@ test("CA-1 a CA-4: aprova com nota 4, integra, avança a demanda e conclui a rod
   assert.equal(ticket()?.status, "concluido");
   assert.deepEqual(
     ag().decisoes.map((d) => [d.resultado, d.nota, d.por]),
-    [["aprovado", 4, "auditor"]],
+    [["aprovado", 4, AUDITOR]],
   );
 });
 
@@ -186,7 +187,7 @@ test("CA-9 e CA-10: reaplicar a mesma aprovação é no-op; nota diferente é re
   assert.equal(ag().decisoes.length, 1);
   assert.equal(hospedagem.chamadas().length, chamadas);
   await assert.rejects(aprovarPRRodada(banco, REF, 5, AUDITOR), ErroDeRegra);
-  await assert.rejects(aprovarPRRodada(banco, REF, 4, { tipo: "agente", execucao: 1, ticket: 8 }), ErroDeEscopo);
+  await assert.rejects(aprovarPRRodada(banco, REF, 4, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
 });
 
 test("rodada concluída sem decisão aprovada recusa a aprovação", async () => {
@@ -204,7 +205,7 @@ test("rodada inexistente ou sem PR publicado é recusada", async () => {
 test("CA-11: o agente da rodada não aprova", async () => {
   const { banco, fase } = await cenario();
 
-  await assert.rejects(aprovarPRRodada(banco, REF, 4, { tipo: "agente", execucao: 1, ticket: 8 }), ErroDeEscopo);
+  await assert.rejects(aprovarPRRodada(banco, REF, 4, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
 
   assert.equal(fase(), "aprovacao_pull_request");
   assert.deepEqual(hospedagem.chamadas(), []);

@@ -15,7 +15,7 @@ import {
   type ChamadaDemanda,
   COMANDOS_DEMANDA as LEITURAS_DEMANDA,
   type ComandoDemanda,
-  resolverAgenteDemanda,
+  resolverEscopoDoAgente,
 } from "./agente_demanda.ts";
 import { COMANDOS_DEMANDA_EXTERNA, type ComandoExterno, ErroDeUso } from "./demanda_externa.ts";
 import { COMANDOS_EVIDENCIA_DEMANDA } from "./evidencia_agente_demanda.ts";
@@ -150,7 +150,7 @@ async function rodarDaDemanda(
       stdin: io.stdin,
       banco,
       agente: encontrado(
-        resolverAgenteDemanda(banco, execucao),
+        resolverEscopoDoAgente(banco, execucao),
         `a execução ${execucao} não existe`,
         "confira FABRIQUINHA_EXECUCAO",
       ),

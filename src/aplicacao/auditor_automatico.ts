@@ -2,6 +2,7 @@
 // chamada única do pi sem ferramentas. Ele responde o que é banal pelas regras do Auditor e escala o estratégico, que
 // segue esperando o Auditor no chat. Na dúvida, em erro ou sem resposta legível, escala: nunca decide no lugar dele.
 import { z } from "zod";
+import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import { executar } from "../infra/processo.ts";
 import { perguntarAoPiSemFerramentas } from "../infra/agente/pi.ts";
 
@@ -134,7 +135,7 @@ const LIMITE_TRIAGEM_MS = 3 * 60_000;
  * agente, ou `undefined` para deixar a pergunta com o Auditor humano.
  */
 export async function triarPergunta(
-  modelo: { provedor: string; nome: string } | undefined,
+  modelo: Modelo | undefined,
   contexto: ContextoDaPergunta,
   p: PerguntaDoAgente,
   rodar: typeof executar = executar,

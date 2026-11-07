@@ -18,7 +18,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { avisar, situacao } from "./gerente.ts";
+import { avisar, PREFIXO_DA_RESPOSTA_AUTOMATICA, situacao } from "./gerente.ts";
 import {
   abortarDemanda,
   abrirChatDemanda,
@@ -50,6 +50,7 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: st
   etapa,
   status,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -64,8 +65,7 @@ const demanda = (id: string, fase: string, descricao: string, tickets: object[])
       descricao,
       fase,
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: id,
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
       enviada: true,
       branch: `fabriquinha/${id}`,
     },
@@ -155,7 +155,10 @@ function cenario() {
     }));
   };
   semear("I-300", 1, "interativo", { fim: "2026-01-01T01:00:00.000Z" });
-  semear("I-300", 2, "autonomo", { fim: null, modelo_provedor: "anthropic", modelo_nome: "claude-teste" });
+  semear("I-300", 2, "autonomo", {
+    fim: null,
+    configuracao_agente: { modelo: { provedor: "anthropic", nome: "claude-teste" } },
+  });
   semear("I-300", 3, "autonomo", { fim: "2026-01-01T02:00:00.000Z", falha: true });
   semear("I-300", 4, "autonomo", { fim: "2026-01-01T03:00:00.000Z" });
   semear("I-300", 5, "autonomo", { fim: "2026-01-01T04:00:00.000Z" });
@@ -188,7 +191,7 @@ test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços p�
   assert.deepEqual([rodando.demanda, rodando.rodada, rodando.ticket], ["I-300", "I-300.R1", "I-300.T2"]);
   assert.deepEqual(
     [rodando.sessao.estado, rodando.sessao.motivo, rodando.sessao.desde, rodando.sessao.modelo],
-    ["rodando", undefined, em, { provedor: "anthropic", modelo: "claude-teste" }],
+    ["rodando", undefined, em, { provedor: "anthropic", nome: "claude-teste" }],
   );
   assert.deepEqual(
     rodando.execucoes.map((e) => e.id),
@@ -309,6 +312,58 @@ test("CA-1: a conversa do JSONL vem na ordem, com o prompt da Fabriquinha marcad
   assert.deepEqual(
     [recebidos[0]?.type, recebidos[0]?.ticket, (recebidos[0]?.sessao as { estado: string }).estado],
     ["estado", "I-300.T1", "aguardando_humano"],
+  );
+});
+
+test("I-266.T7: a resposta de `perguntar` que o Auditor automático deu é do Agente da execução; a do humano, do Auditor", () => {
+  const { banco, c } = cenario();
+  conversaDoPlanejamento(c.raiz);
+  const agente = { tipo: "agente", trabalho_id: "e-s1-I-300" };
+  const registro = { ator: agente, chamada: "auto", pergunta: "Corrijo o Sonar?", resposta: "Sim", justificativa: "j" };
+  writeFileSync(
+    join(c.raiz, "execucoes", "E-e-s1-I-300", "log"),
+    `2026-01-01T00:00:00.000Z pi\n2026-01-01T00:00:01.000Z ${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(registro)}\n`,
+  );
+  const resposta = (toolCallId: string) =>
+    mensagem("toolResult", "User answered: Sim", { toolCallId, toolName: "perguntar" });
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s1.jsonl"),
+    [resposta("auto"), resposta("humana"), mensagem("toolResult", "ok", { toolName: "bash" })]
+      .map((l) => JSON.stringify(l))
+      .join("\n") + "\n",
+  );
+  assert.deepEqual(
+    abrirChatDemanda(banco, "s1")?.conversa.map((e) => e.ator),
+    [agente, { tipo: "auditor" }, undefined],
+  );
+});
+
+test("I-266.T29: as linhas livres do gerente que citam o prefixo da resposta automática não quebram o chat", () => {
+  const { banco, c } = cenario();
+  conversaDoPlanejamento(c.raiz);
+  const agente = { tipo: "agente", trabalho_id: "e-s1-I-300" };
+  const pergunta = `Mudo a ${PREFIXO_DA_RESPOSTA_AUTOMATICA}do gerente?`;
+  const registro = { ator: agente, chamada: "auto", pergunta, resposta: "Sim", justificativa: "j" };
+  const semAtor = { ator: { tipo: "invalido" }, chamada: "humana", pergunta, resposta: "Não", justificativa: "j" };
+  const em = "2026-01-01T00:00:00.000Z";
+  writeFileSync(
+    join(c.raiz, "execucoes", "E-e-s1-I-300", "log"),
+    [
+      `${em} Auditor automático escalou ao Auditor: ${pergunta}`,
+      `${em} Auditor automático respondeu "Sim" a "${pergunta}": j`,
+      `${em} ${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(registro)}`,
+      `${em} ${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(semAtor)}`,
+    ].join("\n") + "\n",
+  );
+  const resposta = (toolCallId: string) =>
+    mensagem("toolResult", "User answered: Sim", { toolCallId, toolName: "perguntar" });
+  writeFileSync(
+    join(c.raiz, "sessoes", "2026-01-01T00-00-00-000Z_s1.jsonl"),
+    [resposta("auto"), resposta("humana")].map((l) => JSON.stringify(l)).join("\n") + "\n",
+  );
+  assert.deepEqual(
+    abrirChatDemanda(banco, "s1")?.conversa.map((e) => e.ator),
+    [agente, { tipo: "auditor" }],
   );
 });
 

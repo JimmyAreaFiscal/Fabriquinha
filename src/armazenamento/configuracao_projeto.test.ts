@@ -60,8 +60,8 @@ const completa = {
   ...minima(),
   cursor_commit_humano: "abc",
   etapas: [
-    { etapa: "planejar", modelo_provedor: "p", modelo_nome: "m", effort: "high" },
-    { etapa: "implementar", effort: "low" },
+    { etapa: "planejar", configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" } },
+    { etapa: "implementar", configuracao_agente: { effort: "low" } },
     { etapa: "demanda" },
   ],
   preparacao: [
@@ -91,8 +91,8 @@ const canonica = {
   ...completa,
   etapas: [
     { etapa: "demanda" },
-    { etapa: "implementar", effort: "low" },
-    { etapa: "planejar", modelo_provedor: "p", modelo_nome: "m", effort: "high" },
+    { etapa: "implementar", configuracao_agente: { effort: "low" } },
+    { etapa: "planejar", configuracao_agente: { modelo: { provedor: "p", nome: "m" }, effort: "high" } },
   ],
   preparacao: [
     { ordem: 2, comando: "primeiro" },
@@ -161,23 +161,31 @@ test("preparação: lida sem a configuração SDLC, substituída sozinha na orde
 test("etapas: lidas sem a configuração SDLC, substituídas sozinhas; a inválida não altera nada", () => {
   comBanco((banco) => {
     assert.deepEqual(etapasDoProjeto(banco, "b"), []);
-    substituirEtapasDoProjeto(banco, "b", [{ etapa: "sessao_em_aberto", effort: "max" }]);
+    substituirEtapasDoProjeto(banco, "b", [{ etapa: "sessao_em_aberto", configuracao_agente: { effort: "max" } }]);
     assert.equal(configuracaoProjeto(banco, "b"), undefined);
-    assert.deepEqual(etapasDoProjeto(banco, "b"), [{ etapa: "sessao_em_aberto", effort: "max" }]);
+    assert.deepEqual(etapasDoProjeto(banco, "b"), [
+      { etapa: "sessao_em_aberto", configuracao_agente: { effort: "max" } },
+    ]);
 
     gravarCompleta(banco);
-    substituirEtapasDoProjeto(banco, "a", [{ etapa: "demanda", modelo_provedor: "p", modelo_nome: "m" }]);
+    substituirEtapasDoProjeto(banco, "a", [
+      { etapa: "demanda", configuracao_agente: { modelo: { provedor: "p", nome: "m" } } },
+    ]);
     assert.deepEqual(configuracaoProjeto(banco, "a"), {
       ...canonica,
-      etapas: [{ etapa: "demanda", modelo_provedor: "p", modelo_nome: "m" }],
+      etapas: [{ etapa: "demanda", configuracao_agente: { modelo: { provedor: "p", nome: "m" } } }],
     });
     const antes = dump(banco);
     assert.throws(() => {
-      substituirEtapasDoProjeto(banco, "a", [{ etapa: "planejar", modelo_provedor: "p" }]);
-    }, /modelo_nome/);
+      substituirEtapasDoProjeto(banco, "a", [
+        { etapa: "planejar", configuracao_agente: { modelo: { provedor: "p" } } },
+      ]);
+    }, /nome/);
     assert.deepEqual(dump(banco), antes);
     assert.equal(banco.isTransaction, false);
-    assert.deepEqual(etapasDoProjeto(banco, "b"), [{ etapa: "sessao_em_aberto", effort: "max" }]);
+    assert.deepEqual(etapasDoProjeto(banco, "b"), [
+      { etapa: "sessao_em_aberto", configuracao_agente: { effort: "max" } },
+    ]);
   });
 });
 

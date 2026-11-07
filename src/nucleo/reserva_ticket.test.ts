@@ -14,6 +14,7 @@ const tk = (ticket_id: number, rodada_id: number | undefined, status = "aberto",
   etapa,
   status,
   status_alterado_em: t0,
+  criado_por: FABRIQUINHA,
 });
 const rd = (rodada_id: number, fase = "desenvolvimento") => ({
   demanda_id: "I-1",
@@ -33,8 +34,7 @@ const montar = (extra: Record<string, unknown>, fase = "execucao") =>
       descricao: "d",
       fase,
       fase_alterada_em: t0,
-      origem_ferramenta: "f",
-      origem_sessao: "s",
+      criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },
@@ -72,7 +72,7 @@ test("CA-2: reserva o ticket de planejar com as predecessoras satisfeitas", () =
 test("CA-3: o agente não reserva", () => {
   const ag = montar({ rodadas: [rd(1)], tickets: [tk(2, 1)] });
   assert.throws(
-    () => reservarTicket(ag, { ticket_id: 2 }, { tipo: "agente" } as never, { agora: t1 }, true),
+    () => reservarTicket(ag, { ticket_id: 2 }, { tipo: "agente", trabalho_id: "E-1" }, { agora: t1 }, true),
     (e) => e instanceof ErroDeEscopo && e.message.includes("só a Fabriquinha pode reservar o ticket"),
   );
   assert.throws(() => reservarTicket(ag, { ticket_id: 2 }, AUDITOR, { agora: t1 }, true), ErroDeEscopo);

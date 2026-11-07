@@ -15,8 +15,8 @@ import * as gestao from "./gestao_demandas.ts";
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const ctx = { agora: "2026-01-01T00:00:00.000Z" };
-const autor = { ferramenta: "claude", sessao: "S1" };
-const outra = { ferramenta: "claude", sessao: "S2" };
+const autor = { tipo: "externo" as const, ferramenta: "claude", sessao: "S1" };
+const outra = { tipo: "externo" as const, ferramenta: "claude", sessao: "S2" };
 
 const novoBanco = () => {
   const b = abrirBancoTemporario().banco;
@@ -89,8 +89,8 @@ test("CA-1: registra a demanda I-n em registro, com a origem do autor e sem evid
   );
   assert.match(ag.demanda.id, /^I-\d+$/);
   assert.equal(ag.demanda.fase, "registro");
-  assert.equal(ag.demanda.origem_ferramenta, "claude");
-  assert.equal(ag.demanda.origem_sessao, "S1");
+  assert.deepEqual(ag.demanda.criada_por, autor);
+  assert.deepEqual(ag.tickets[0]?.criado_por, { tipo: "fabriquinha" });
   assert.deepEqual(ag.evidencias, []);
   assert.equal(carregarDemanda(b, ag.demanda.id).demanda.titulo, "T");
 });
@@ -106,6 +106,22 @@ test("registrar recusa projeto inexistente e campo inválido com campo e correç
       gestao.registrar(b, { projeto: "fabriquinha", titulo: "", tipo: "funcionalidade", descricao: "D" }, autor, ctx),
     (e: Error) => e instanceof ErroDeRegra && e.message.startsWith("titulo:") && e.message.includes("corrija"),
   );
+});
+
+test("registrar recusa ator não externo sem gravar a demanda nem consumir o ID", () => {
+  const banco = novoBanco();
+  assert.throws(
+    () =>
+      gestao.registrar(
+        banco,
+        { projeto: "fabriquinha", titulo: "T", tipo: "funcionalidade", descricao: "D" },
+        AUDITOR,
+        ctx,
+      ),
+    ErroDeRegra,
+  );
+  assert.equal(banco.prepare("SELECT count(*) AS quantidade FROM demanda").get()?.quantidade, 0);
+  assert.equal(registrar(banco), "I-1");
 });
 
 test("CA-2: dependência em demanda inexistente recusa e não grava a demanda nem o ID", () => {
@@ -372,7 +388,7 @@ test("CA-18: recusar sem motivo pede o motivo; outros erros de entrada seguem o 
 test("CA-19: o autor não decide", () => {
   const b = novoBanco();
   const a = aguardando(b);
-  assert.throws(() => gestao.decidir(b, a, aprovar, { tipo: "agente", execucao: 1, ticket: 1 }, ctx), /Auditor/);
+  assert.throws(() => gestao.decidir(b, a, aprovar, { tipo: "agente", trabalho_id: "1" }, ctx), /Auditor/);
   assert.equal(fase(b, a), "aprovacao_demanda");
 });
 
@@ -434,7 +450,7 @@ test("CA-22: a execução órfã de uma dependente é interrompida e fica com o 
 test("CA-23: o autor não cancela", () => {
   const b = novoBanco();
   const a = registrar(b);
-  assert.throws(() => gestao.cancelar(b, a, { tipo: "agente", execucao: 1, ticket: 1 }, ctx), /Auditor/);
+  assert.throws(() => gestao.cancelar(b, a, { tipo: "agente", trabalho_id: "1" }, ctx), /Auditor/);
   assert.equal(fase(b, a), "registro");
 });
 

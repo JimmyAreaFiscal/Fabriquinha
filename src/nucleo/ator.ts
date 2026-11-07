@@ -1,16 +1,18 @@
-// Quem pede o comando: as transições da demanda recebem o ator e checam se ele pode agir.
+// Quem age: o Ator é o único tipo de autoria da Fabriquinha (CONCEITOS.md §15); as transições da demanda recebem o
+// ator e checam se ele pode agir. É também o autor das evidências, o criador de um ticket e quem decide.
 import { z } from "zod";
 import { ErroDeEscopo } from "./erros.ts";
-import { Id } from "./primitivos.ts";
+import { Slug } from "./primitivos.ts";
 
-/** Quem pede o comando; também é a origem de um ticket (quem o criou). `externo` é a IA de fora da Fabriquinha. */
-export const TipoAtor = z.enum(["auditor", "agente", "fabriquinha", "externo"]);
+/** A IA de fora da Fabriquinha: a ferramenta e a sessão que registraram a demanda. */
+export const AtorExterno = z.object({ tipo: z.literal("externo"), ferramenta: Slug, sessao: z.string().min(1) });
 
 export const Ator = z.discriminatedUnion("tipo", [
-  z.object({ tipo: z.literal(TipoAtor.enum.auditor) }),
-  z.object({ tipo: z.literal(TipoAtor.enum.agente), execucao: Id, ticket: Id }),
-  z.object({ tipo: z.literal(TipoAtor.enum.fabriquinha) }),
-  z.object({ tipo: z.literal(TipoAtor.enum.externo) }),
+  z.object({ tipo: z.literal("auditor") }),
+  // shortcut: o trabalho é o `execucao_sessao.id`; a 12 (TrabalhoAgentico) troca pelo Id inteiro.
+  z.object({ tipo: z.literal("agente"), trabalho_id: z.string().min(1) }),
+  AtorExterno,
+  z.object({ tipo: z.literal("fabriquinha") }),
 ]);
 
 export type Ator = z.infer<typeof Ator>;
@@ -19,12 +21,18 @@ export type Ator = z.infer<typeof Ator>;
 export const AUDITOR: Ator = { tipo: "auditor" };
 export const FABRIQUINHA: Ator = { tipo: "fabriquinha" };
 
-export function exigirAuditor(ator: Ator, acao: string): void {
-  if (ator.tipo !== "auditor") throw new ErroDeEscopo(`só o Auditor pode ${acao}`, "peça ao Auditor pelo web");
-}
+const QUEM_PODE: Readonly<Record<Ator["tipo"], { nome: string; orientacao: string }>> = {
+  auditor: { nome: "o Auditor", orientacao: "peça ao Auditor pelo web" },
+  agente: { nome: "o Agente", orientacao: "peça à sessão do agente" },
+  externo: { nome: "a IA externa", orientacao: "peça à ferramenta que registrou a demanda" },
+  fabriquinha: { nome: "a Fabriquinha", orientacao: "ela faz isso sozinha ao executar o ticket" },
+};
 
-export function exigirFabriquinha(ator: Ator, acao: string): void {
-  if (ator.tipo !== "fabriquinha") {
-    throw new ErroDeEscopo(`só a Fabriquinha pode ${acao}`, "ela faz isso sozinha ao executar o ticket");
-  }
+/** Recusa o ator que não é de um dos tipos `permitidos` para `acao`. */
+export function exigirAtor(ator: Ator, acao: string, ...permitidos: Ator["tipo"][]): void {
+  if (permitidos.includes(ator.tipo)) return;
+  throw new ErroDeEscopo(
+    `só ${permitidos.map((tipo) => QUEM_PODE[tipo].nome).join(" ou ")} pode ${acao}`,
+    permitidos.map((tipo) => QUEM_PODE[tipo].orientacao).join("; "),
+  );
 }

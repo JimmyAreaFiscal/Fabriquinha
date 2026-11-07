@@ -7,7 +7,7 @@ import { text } from "node:stream/consumers";
 import type { ParseArgsOptionsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
-import type { AutorDemanda } from "../../nucleo/evidencia_demanda.ts";
+import type { Ator } from "../../nucleo/ator.ts";
 import { TipoEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { type SchemaEvidencia, schemaDe, schemaDeEtapa } from "../../nucleo/schemas.ts";
 import { guardarAnexos } from "../../aplicacao/evidencias/submissao.ts";
@@ -15,6 +15,7 @@ import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/ge
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
+import { demandaParaCli } from "./demanda_para_cli.ts";
 
 /** Comando ou opção desconhecida, argumento faltando ou malformado: código 2 e a ajuda do grupo (F7 §3.3). */
 export class ErroDeUso extends Error {}
@@ -45,11 +46,11 @@ function idDe(texto: string): string {
   return `I-${String(achado[1])}`;
 }
 
-/** A ferramenta e a sessão de origem: a opção ou, sem ela, `FABRIQUINHA_FERRAMENTA` e `FABRIQUINHA_SESSAO`. */
-function autorDe({ op, env }: ChamadaExterna): AutorDemanda {
+/** O Ator externo: a ferramenta e a sessão de origem, da opção ou, sem ela, de `FABRIQUINHA_FERRAMENTA` e `FABRIQUINHA_SESSAO`. */
+function autorDe({ op, env }: ChamadaExterna): Ator {
   const ferramenta = (op.ferramenta as string | undefined) ?? env.FABRIQUINHA_FERRAMENTA;
   const sessao = (op.sessao as string | undefined) ?? env.FABRIQUINHA_SESSAO;
-  if (ferramenta && sessao) return { ferramenta, sessao };
+  if (ferramenta && sessao) return { tipo: "externo", ferramenta, sessao };
   const faltam = [
     ...(ferramenta ? [] : ["a ferramenta de origem (--ferramenta ou FABRIQUINHA_FERRAMENTA)"]),
     ...(sessao ? [] : ["a sessão de origem (--sessao ou FABRIQUINHA_SESSAO)"]),
@@ -71,7 +72,7 @@ function visao(banco: DatabaseSync, id: string) {
       WHERE e.demanda_id = ? AND e.tipo = ? ORDER BY a.ordem`,
   );
   return {
-    ...ag.demanda,
+    ...demandaParaCli(ag.demanda),
     dependencias: predecessorasDaDemanda(banco, id).map((p) => p.demanda_id),
     evidencias: ag.evidencias.map((e) => ({
       tipo: e.tipo,

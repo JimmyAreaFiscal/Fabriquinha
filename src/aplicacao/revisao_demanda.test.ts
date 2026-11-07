@@ -2,14 +2,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Ator } from "../nucleo/ator.ts";
+import { ErroDeRegra } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
-import { cenarioRevisao } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { abrirTrabalhoDoAgente, cenarioRevisao, REF_GLOBAL } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { conduzirRevisaoIntegral, decidirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
-const AGENTE: Ator = { tipo: "agente", execucao: 1, ticket: 3 };
+const revisorIntegral = (banco: Banco): Ator => abrirTrabalhoDoAgente(banco, REF_GLOBAL);
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
   return { fase: ag.demanda.fase, rodadas: ag.rodadas.map((r) => r.fase), tickets: ag.tickets };
@@ -39,7 +40,7 @@ function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = tru
         submeterEvidenciaDemanda(
           a,
           { tipo, dados, ticket_id: 3 } as never,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          a.demanda.criada_por,
           "2026-01-02T00:00:00.000Z",
         ),
       ag,
@@ -47,7 +48,7 @@ function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = tru
   );
 }
 const aprovar = (banco: Banco) =>
-  decidirRevisaoIntegral(banco, { demanda_id: "I-1", ticket_id: 3, aprovado: true }, AGENTE);
+  decidirRevisaoIntegral(banco, { demanda_id: "I-1", ticket_id: 3, aprovado: true }, revisorIntegral(banco));
 
 test("CA-9: rodada pendente recusa citando-a e a demanda continua em execucao", async () => {
   const { banco } = await cenarioRevisao();
@@ -132,6 +133,7 @@ test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída
       {
         demanda_id: "I-1",
         tipo: "criterios_aceite",
+        autor: ag.demanda.criada_por,
         dados: { criterios: [{ id: "CA-2" }] },
         em: "2026-01-01T00:00:00.000Z",
       },
@@ -151,9 +153,19 @@ test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída
         tickets: [{ demanda_id: "I-1", ticket_id: 1, titulo: "c", descricao: "d", rodada_id: 1 }],
       },
     },
-    AGENTE,
+    revisorIntegral(banco),
   );
   const e = estado(banco);
   assert.equal(e.fase, "execucao");
   assert.deepEqual(e.rodadas, ["concluida", "desenvolvimento"]);
+});
+
+test("I-266: a decisão do agente com o trabalho de outro ticket é recusada e nada é gravado", async () => {
+  const { banco } = await cenarioRevisao({ integral: true });
+  const deOutroTicket = abrirTrabalhoDoAgente(banco, { demanda_id: "I-1", ticket_id: 2 });
+  assert.throws(
+    () => decidirRevisaoIntegral(banco, { demanda_id: "I-1", ticket_id: 3, aprovado: true }, deOutroTicket),
+    ErroDeRegra,
+  );
+  assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });

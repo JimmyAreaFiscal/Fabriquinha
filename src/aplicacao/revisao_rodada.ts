@@ -1,7 +1,7 @@
 // Revisão de rodada (comparacao-sdlc-implementacao.md §§4, 6): as evidências que cabem à Fabriquinha antes do pi.
 import { matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Ator } from "../nucleo/ator.ts";
+import { type Ator, FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
@@ -19,6 +19,7 @@ import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { registrarRevisaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
+import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 
 type Dados = EntradaEvidenciaDemanda["dados"];
 
@@ -102,14 +103,18 @@ export async function prepararRevisaoRodada(
     banco,
     demanda_id,
     (a) => {
-      const autor = { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao };
       const com = submeterEvidenciaDemanda(
         a,
         { tipo: "arquivos_alterados", dados: alterados as Dados, ticket_id },
-        autor,
+        FABRIQUINHA,
         agora,
       );
-      return submeterEvidenciaDemanda(com, { tipo: "matriz_fitness", dados: matriz as Dados, ticket_id }, autor, agora);
+      return submeterEvidenciaDemanda(
+        com,
+        { tipo: "matriz_fitness", dados: matriz as Dados, ticket_id },
+        FABRIQUINHA,
+        agora,
+      );
     },
     () => {
       gravarAnexos(banco, { demanda_id, ticket_id, tipo: "matriz_fitness" }, anexos);
@@ -143,6 +148,7 @@ export function decidirRevisaoRodada(
   ator: Ator,
 ): AgregadoDemanda {
   return comDemanda(banco, entrada.demanda_id, (ag) => {
+    exigirTrabalhoDoTicket(banco, ator, entrada);
     const novo = registrarRevisaoRodada(ag, entrada, ator, { agora: new Date().toISOString() });
     if (entrada.aprovado) conferirAprovacao(ag, entrada.ticket_id);
     return novo;

@@ -1,17 +1,16 @@
 // Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4).
 import { z } from "zod";
-import { TipoAtor } from "./ator.ts";
+import { Ator, AtorExterno } from "./ator.ts";
+import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import {
-  Effort,
   EtapaTicket,
   FaseDemanda,
   FaseRodada,
   Id,
   Instante,
   Markdown,
-  Modelo,
   Motivo,
   Slug,
   StatusTicket,
@@ -24,13 +23,15 @@ export const TicketDemanda = z.object({
   etapa: EtapaTicket,
   status: StatusTicket,
   status_alterado_em: Instante,
+  // Quem criou o ticket; o `externo` não se grava (o banco guarda só o tipo e o trabalho).
+  criado_por: Ator.refine((ator): boolean => ator.tipo !== "externo", {
+    message: "o ticket não é criado por um ator externo",
+  }),
   // Só os tickets criados pelo plano os têm (§7.2); os de demanda e planejamento nascem sem eles.
   rodada_id: Id.optional(),
   titulo: Titulo.optional(),
   descricao: Markdown.optional(),
-  modelo_provedor: Modelo.shape.provedor.optional(),
-  modelo_nome: Modelo.shape.modelo.optional(),
-  effort: Effort.optional(),
+  configuracao_agente: ConfiguracaoAgente.optional(),
   // Instrução do Auditor ao reabrir um ticket falho; a sessão que o retomar a lê (§4.2).
   instrucao: Markdown.optional(),
   // Reprovações técnicas devolvidas ao agente (D05, no máximo 2) e o porquê de o ticket ter falhado.
@@ -60,7 +61,7 @@ export const DecisaoDemanda = z.object({
   resultado: z.enum(["aprovado", "recusado"]),
   nota: z.number().int().min(1).max(5).optional(),
   motivo: Motivo.optional(),
-  por: TipoAtor.extract(["auditor", "agente"]),
+  por: Ator,
   em: Instante,
 });
 
@@ -106,14 +107,12 @@ export const EvidenciaDemanda = z
     ticket_id: IdDono,
     tipo: TipoEvidenciaAgregado,
     dados: z.record(z.string(), z.json()),
+    autor: Ator,
     em: Instante,
   })
   .refine((e) => e.rodada_id === undefined || e.ticket_id === undefined, {
     message: "rodada_id e ticket_id não podem estar preenchidos juntos (use só um dono)",
   });
-
-/** Identidade da ferramenta ou sessão: a mesma regra no registro e em toda operação autorizada por autoria. */
-export const IdentidadeOrigem = z.string().trim().min(1).max(200);
 
 export const TipoDemanda = z.enum(["funcionalidade", "problema"]);
 
@@ -126,8 +125,7 @@ export const Demanda = z
     descricao: Markdown,
     fase: FaseDemanda,
     fase_alterada_em: Instante,
-    origem_ferramenta: IdentidadeOrigem,
-    origem_sessao: IdentidadeOrigem,
+    criada_por: AtorExterno,
     enviada: z.boolean(),
     branch: z.string(),
   })
@@ -177,8 +175,6 @@ export const AgregadoDemanda = z
       if (rodadaDe.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
       if (t.rodada_id !== undefined && !rodadas.has(t.rodada_id))
         erro(`o ticket ${String(t.ticket_id)} cita a rodada ${String(t.rodada_id)}, que não existe`);
-      if ((t.modelo_provedor === undefined) !== (t.modelo_nome === undefined))
-        erro(`o ticket ${String(t.ticket_id)} precisa de modelo_provedor e modelo_nome juntos`);
       if (t.motivo_falha !== undefined && t.status !== "falhou" && t.status !== "fechado")
         erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou ou fechado`);
       rodadaDe.set(t.ticket_id, t.rodada_id);

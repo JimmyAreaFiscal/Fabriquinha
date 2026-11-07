@@ -4,12 +4,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { AUDITOR, Ator } from "../nucleo/ator.ts";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
-import type { EtapaTicket, Instante, Modelo } from "../nucleo/primitivos.ts";
+import type { Modelo } from "../nucleo/configuracao_agente.ts";
+import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import type { ExecucaoSessao, Sessao } from "../nucleo/sessoes.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { arquivoDaSessao } from "../infra/registro.ts";
@@ -17,7 +19,17 @@ import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
 import { retomarSessaoAjustes } from "./sessao_ajustes.ts";
-import { abortar, type Dialogo, assinar, mandar, responderDialogo, type Situacao, situacao } from "./gerente.ts";
+import {
+  abortar,
+  type Dialogo,
+  assinar,
+  mandar,
+  PREFIXO_DA_RESPOSTA_AUTOMATICA,
+  type RespostaAutomatica,
+  responderDialogo,
+  type Situacao,
+  situacao,
+} from "./gerente.ts";
 import type { EventoPi } from "../infra/agente/pi.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
@@ -248,7 +260,7 @@ function montarCabecalho(c: Carregada): CabecalhoDemanda {
       projeto: ag.demanda.projeto,
       modo: sessao.modo,
       execucao: ultima.id,
-      ...(ultima.modelo_nome && { modelo: { provedor: String(ultima.modelo_provedor), modelo: ultima.modelo_nome } }),
+      ...(ultima.configuracao_agente?.modelo && { modelo: ultima.configuracao_agente.modelo }),
       estado,
       ...(motivo && { motivo }),
       desde,
@@ -276,11 +288,40 @@ function promptsDaFabriquinha(raiz: string, { sessao, execucoes }: Carregada): S
   return new Set(arquivos.filter((a) => existsSync(a)).map((a) => readFileSync(a, "utf8")));
 }
 
-/** A marca da mensagem do usuário que é o prompt montado pela Fabriquinha: o chat a mostra como linha do sistema. */
-function marcador(raiz: string, c: Carregada): (mensagem: unknown) => { fabriquinha: true } | undefined {
+const registroDaRespostaAutomatica = new RegExp(`^\\S+ ${PREFIXO_DA_RESPOSTA_AUTOMATICA}(\\{.*\\})$`);
+
+/** Os Agentes que o Auditor automático fez responder, por chamada de `perguntar`: o gerente os anota no log da execução. */
+function atoresDasRespostasAutomaticas(
+  raiz: string,
+  { execucoes }: Carregada,
+): Map<string, RespostaAutomatica["ator"]> {
+  const registros = execucoes
+    .map((e) => join(raiz, "execucoes", `E-${e.id}`, "log"))
+    .filter((log) => existsSync(log))
+    .flatMap((log) => readFileSync(log, "utf8").split("\n"))
+    // Só a linha cujo texto começa com o prefixo é o registro; as livres do gerente citam a pergunta crua do agente.
+    .map((linha) => registroDaRespostaAutomatica.exec(linha)?.[1])
+    .filter((json) => json !== undefined)
+    .map((json) => JSON.parse(json) as RespostaAutomatica)
+    .filter((registro) => Ator.safeParse(registro.ator).success);
+  return new Map(registros.map((r) => [r.chamada, r.ator]));
+}
+
+/**
+ * A marca da mensagem: o prompt montado pela Fabriquinha vira linha do sistema no chat; a resposta de `perguntar` leva o
+ * `ator` de quem respondeu, o Agente (Auditor automático) ou o Auditor.
+ */
+function marcador(
+  raiz: string,
+  c: Carregada,
+): (mensagem: unknown) => { fabriquinha: true } | { ator: Ator } | undefined {
   const prompts = promptsDaFabriquinha(raiz, c);
+  const automaticas = atoresDasRespostasAutomaticas(raiz, c);
   return (mensagem) => {
-    const m = mensagem as Partial<Mensagem> | undefined;
+    const m = mensagem as (Partial<Mensagem> & { toolCallId?: string }) | undefined;
+    if (m?.role === "toolResult" && m.toolName === "perguntar") {
+      return { ator: automaticas.get(String(m.toolCallId)) ?? AUDITOR };
+    }
     return m?.role === "user" && prompts.has(texto(m as Mensagem)) ? { fabriquinha: true } : undefined;
   };
 }

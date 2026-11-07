@@ -13,9 +13,11 @@ import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts
 import { causaDeInfraestrutura } from "./retomada_infraestrutura.ts";
 import {
   abortar,
+  assinar,
   atividadeDo,
   encerrar,
   mandar,
+  PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type Processo,
   responderDialogo,
   rodarPi,
@@ -194,11 +196,29 @@ test("autônoma: o select da perguntar vira a pergunta do chat; abortar dá a fa
 
 test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o rótulo; a resposta e a regra vão ao log", async () => {
   const perguntas: unknown[] = [];
-  const { fim, dir, respostas } = rodar([{ eventos: perguntaOpcoes }], "autonomo", 1, (p) => {
+  const { fim, dir, respostas, sessao } = rodar([{ eventos: perguntaOpcoes }], "autonomo", 1, (p) => {
     perguntas.push(p);
     return Promise.resolve({ resposta: "Sim", justificativa: "issue do Sonar se corrige" });
   });
+  const noChat: Record<string, unknown>[] = [];
+  const desassinar = assinar(sessao, (evento) => noChat.push(evento));
   assert.equal(await fim, undefined);
+  desassinar();
+  // I-266.T7: quem respondeu é o Agente da execução em curso, no log e no chat; a escalada não tem resposta
+  const registro = {
+    resposta: "Sim",
+    justificativa: "issue do Sonar se corrige",
+    ator: { tipo: "agente", trabalho_id: sessao },
+    chamada: "p-s2",
+    pergunta: "Corrijo o Sonar?",
+  };
+  assert.deepEqual(
+    noChat.filter((e) => e.type === "resposta_automatica"),
+    [{ type: "resposta_automatica", ...registro }],
+  );
+  assert.ok(
+    readFileSync(join(dir, "log"), "utf8").includes(`${PREFIXO_DA_RESPOSTA_AUTOMATICA}${JSON.stringify(registro)}\n`),
+  );
   assert.deepEqual(perguntas, [{ pergunta: "Corrijo o Sonar?", detalhes: "S1", opcoes: ["Sim", "Não"] }]);
 
   const descritas = rodar([{ eventos: perguntaAcesso }], "autonomo", 1, (p) => {

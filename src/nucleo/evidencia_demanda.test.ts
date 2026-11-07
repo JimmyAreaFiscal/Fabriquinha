@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
+import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
   exigirAutoria,
@@ -10,8 +11,8 @@ import {
 } from "./evidencia_demanda.ts";
 
 const em = "2026-01-01T00:00:00Z";
-const autora = { ferramenta: "claude", sessao: "s1" };
-const outra = { ferramenta: "claude", sessao: "s2" };
+const autora: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
+const outra: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s2" };
 const base = (enviada = false): AgregadoDemanda => ({
   demanda: {
     id: "I-1",
@@ -21,13 +22,20 @@ const base = (enviada = false): AgregadoDemanda => ({
     descricao: "d",
     fase: enviada ? "aprovacao_demanda" : "registro",
     fase_alterada_em: em,
-    origem_ferramenta: "claude",
-    origem_sessao: "s1",
+    criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
     enviada,
     branch: "fabriquinha/I-1",
   },
   tickets: [
-    { demanda_id: "I-1", ticket_id: 1, etapa: "demanda", status: "aberto", status_alterado_em: em, devolucoes: 0 },
+    {
+      demanda_id: "I-1",
+      ticket_id: 1,
+      etapa: "demanda",
+      status: "aberto",
+      status_alterado_em: em,
+      criado_por: FABRIQUINHA,
+      devolucoes: 0,
+    },
   ],
   decisoes: [],
   evidencias: [],
@@ -60,9 +68,46 @@ test("CA-6: outra ferramenta ou sessão é recusada antes do envio", () => {
   const ag = base();
   assert.throws(() => submeterEvidenciaDemanda(ag, entrada("criterios_aceite"), outra, em), ErroDeEscopo);
   assert.throws(() => {
-    exigirAutoria(ag.demanda, { ferramenta: "pi", sessao: "s1" }, "editar");
+    exigirAutoria(ag.demanda, { tipo: "externo", ferramenta: "pi", sessao: "s1" }, "editar");
   }, ErroDeEscopo);
   assert.deepEqual(ag, base());
+});
+
+test("CA-6: exigirAutoria recusa não-externos e externos de outra sessão ou ferramenta", () => {
+  const ag = base();
+  const recusados: Ator[] = [
+    AUDITOR,
+    FABRIQUINHA,
+    { tipo: "agente", trabalho_id: "E-1" },
+    outra,
+    { tipo: "externo", ferramenta: "pi", sessao: "s1" },
+  ];
+  for (const autor of recusados) {
+    assert.throws(
+      () => {
+        exigirAutoria(ag.demanda, autor, "editar");
+      },
+      {
+        name: "ErroDeEscopo",
+        message:
+          "só a ferramenta claude da sessão s1 pode editar a demanda I-1 (peça a quem registrou a demanda, na mesma sessão)",
+      },
+    );
+  }
+  assert.doesNotThrow(() => {
+    exigirAutoria(ag.demanda, autora, "editar");
+  });
+  assert.deepEqual(ag, base());
+});
+
+test("a evidência grava o autor externo, agente, Auditor ou Fabriquinha recebido", () => {
+  const autores: Ator[] = [autora, outra, { tipo: "agente", trabalho_id: "E-1" }, AUDITOR, FABRIQUINHA];
+  for (const autor of autores) {
+    const ag = submeterEvidenciaDemanda(base(true), entrada("mensagem_pr", { ticket_id: 1 }), autor, em);
+    assert.deepEqual(ag.evidencias[0]?.autor, autor);
+  }
+  const ag = submeterEvidenciaDemanda(base(), entrada("criterios_aceite"), autora, em);
+  assert.deepEqual(ag.evidencias[0]?.autor, autora);
 });
 
 test("CA-9: nova evidência do mesmo tipo e dono substitui a anterior", () => {

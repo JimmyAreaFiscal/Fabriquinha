@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 
-const EXTERNO: Ator = { tipo: "externo" };
+const EXTERNO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda, satisfazDependencia } from "./cancelamento_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
@@ -18,6 +18,7 @@ const tk = (ticket_id: number, etapa: string, status: string) => ({
   etapa,
   status,
   status_alterado_em: t0,
+  criado_por: FABRIQUINHA,
 });
 const montar = (fase: string, m: Record<string, unknown> = {}) =>
   AgregadoDemanda.parse({
@@ -29,8 +30,7 @@ const montar = (fase: string, m: Record<string, unknown> = {}) =>
       descricao: "d",
       fase,
       fase_alterada_em: t0,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: EXTERNO,
       enviada: true,
       branch: "fabriquinha/I-1",
     },
@@ -54,7 +54,7 @@ const decisao = {
   ticket_id: 1,
   decisao_id: 1,
   resultado: "aprovado",
-  por: "auditor",
+  por: AUDITOR,
   em: t0,
 };
 const FASES_ANDAMENTO = [
@@ -118,7 +118,7 @@ test("CA-3 e CA-7: histórico intacto, entrada não mutada e encerramento sem in
 });
 
 test("CA-4 e CA-10: só o Auditor cancela e arquiva", () => {
-  for (const ator of [{ tipo: "agente" as const, ticket: 1, execucao: 1 }, FABRIQUINHA, EXTERNO]) {
+  for (const ator of [{ tipo: "agente" as const, trabalho_id: "E-1" }, FABRIQUINHA, EXTERNO]) {
     assert.throws(() => cancelarDemanda(montar("execucao"), ator, c), ErroDeEscopo);
     assert.throws(() => arquivarDemanda(montar("concluida"), ator, c), ErroDeEscopo);
   }

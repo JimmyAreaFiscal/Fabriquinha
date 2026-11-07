@@ -1,6 +1,6 @@
 // Conclusão do ticket `implementar` da demanda SDLC (comparacao-sdlc-implementacao.md §4 e D05): em_execucao → concluido.
 import { z } from "zod";
-import { type Ator, exigirFabriquinha } from "./ator.ts";
+import { type Ator, exigirAtor } from "./ator.ts";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
 import { formatarTicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
@@ -18,7 +18,7 @@ export function concluirTicketImplementar(
   ctx: ContextoDemanda,
   evidencias: readonly EvidenciaEtapa[],
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "concluir o ticket");
+  exigirAtor(ator, "concluir o ticket", "fabriquinha");
   const { ticket_id } = EntradaConclusao.parse(entrada);
   exigirDemandaEmAndamento(ag, "concluir");
   const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "ser concluído");
