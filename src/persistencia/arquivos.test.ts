@@ -5,27 +5,22 @@ import {
   closeSync,
   fstatSync,
   mkdirSync,
-  mkdtempSync,
   openSync,
   readdirSync,
   readFileSync,
   readSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, test } from "node:test";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { caminhoArquivo, guardarArquivos, guardarBytes } from "./arquivos.ts";
-import { abrir, raizDo } from "./banco.ts";
+import { raizDo } from "./banco.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-arquivos-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const sha = (conteudo: string) => createHash("sha256").update(conteudo).digest("hex");
 const permissao = (caminho: string) => statSync(caminho).mode & 0o777;
@@ -51,8 +46,7 @@ const guardar = (banco: DatabaseSync, caminho: string) => {
 };
 
 function preparar() {
-  const raiz = mkdtempSync(join(base, "raiz-"));
-  const banco = abrir(raiz);
+  const { raiz, banco } = abrirBancoTemporario();
   const origem = (nome: string, conteudo: string) => {
     const caminho = join(raiz, nome);
     writeFileSync(caminho, conteudo);

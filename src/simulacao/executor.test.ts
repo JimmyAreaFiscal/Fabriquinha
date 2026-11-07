@@ -8,14 +8,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, before, test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { SEM_LINK } from "../dominio/simulacao.ts";
 import { PACOTE } from "../execucao/pi.ts";
-import { abrir, raizDo } from "../persistencia/banco.ts";
+import { raizDo } from "../persistencia/banco.ts";
 import { dirDaExecucaoSimulada } from "../persistencia/execucoes.ts";
 import { editarProjeto, projeto, registrarProjeto } from "../persistencia/projetos.ts";
 import { anexar, criarTarefa, criarUsuarioSimulado, tarefas } from "../persistencia/simulacao.ts";
 import { conferirLink, executarTarefa } from "./executor.ts";
 
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 const base = mkdtempSync(join(tmpdir(), "fabriquinha-executor-"));
 
 /**
@@ -81,7 +83,7 @@ const DESCRICAO = "Contadora de 60 anos, pouca familiaridade com sistemas web";
 
 /** Um banco com o projeto `p` (com `linkProduto`), os usuários `usuarios` e uma Tarefa de `n` execuções para todos. */
 function cenario(texto: string, n: number, usuarios = ["Dona Maria"], linkProduto = link) {
-  const banco = abrir(mkdtempSync(join(base, "raiz-")));
+  const { banco } = abrirBancoTemporario();
   registrarProjeto(banco, {
     nome: "p",
     repo: "/repos/p",

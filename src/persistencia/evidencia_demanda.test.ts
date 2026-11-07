@@ -1,21 +1,16 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { after, test } from "node:test";
+import { existsSync } from "node:fs";
+import { test } from "node:test";
 import type { DatabaseSync } from "node:sqlite";
+import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { caminhoArquivo, guardarBytes } from "./arquivos.ts";
-import { abrir } from "./banco.ts";
 import { comDemanda } from "./demandas.ts";
 import { anexosDaDemanda, gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
 import { removerProjeto } from "./projetos.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-evidencia-demanda-"));
-after(() => {
-  rmSync(base, { recursive: true, force: true });
-});
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
 const T = "'2026-01-01T00:00:00.000Z'";
 const em = "2026-01-01T00:00:00.000Z";
@@ -23,7 +18,7 @@ const chave = { demanda_id: "I-1", tipo: "custos_realizados" };
 const quem = { ferramenta: "claude", sessao: "s1" };
 
 const novoBanco = () => {
-  const b = abrir(mkdtempSync(join(base, "raiz-")));
+  const b = abrirBancoTemporario().banco;
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('p', '/repo/p', 'main', 'github', 'k');
     INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');

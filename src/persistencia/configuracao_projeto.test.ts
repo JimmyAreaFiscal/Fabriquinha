@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { Projeto } from "../dominio/configuracao_projeto.ts";
 import { ErroDeInexistente } from "../dominio/erros.ts";
 import { abrir, escrever } from "./banco.ts";
@@ -28,8 +27,7 @@ const TABELAS = [
 ];
 
 function comBanco(corpo: (banco: DatabaseSync, raiz: string) => void): void {
-  const raiz = mkdtempSync(join(tmpdir(), "cfg-projeto-"));
-  const banco = abrir(raiz);
+  const { raiz, banco, fechar } = abrirBancoTemporario();
   try {
     for (const nome of ["a", "b"]) {
       banco
@@ -41,8 +39,7 @@ function comBanco(corpo: (banco: DatabaseSync, raiz: string) => void): void {
     }
     corpo(banco, raiz);
   } finally {
-    banco.close();
-    rmSync(raiz, { recursive: true, force: true });
+    fechar();
   }
 }
 
