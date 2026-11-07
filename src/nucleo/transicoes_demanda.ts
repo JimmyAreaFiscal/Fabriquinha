@@ -2,11 +2,11 @@
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
 import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
-import { type Ator, exigirAuditor, exigirFabriquinha } from "./ator.ts";
+import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
-import { AutorDemanda, exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
+import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
 import { type FaseDemanda, Id, type Instante, Markdown, Modelo, Motivo, Slug, Titulo } from "./primitivos.ts";
 
 export interface ContextoDemanda {
@@ -40,21 +40,26 @@ function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): voi
 }
 
 /** CA-1: cria a demanda em `registro` com a origem do autor e o ticket 1 da etapa `demanda`. */
-export function registrarDemanda(entrada: unknown, autor: AutorDemanda, ctx: ContextoDemanda): AgregadoDemanda {
+export function registrarDemanda(entrada: unknown, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   const e = EntradaRegistro.parse(entrada);
-  const { ferramenta, sessao } = AutorDemanda.parse(autor);
   return AgregadoDemanda.parse({
     demanda: {
       ...e,
       fase: "registro",
       fase_alterada_em: ctx.agora,
-      origem_ferramenta: ferramenta,
-      origem_sessao: sessao,
+      criada_por: AtorExterno.parse(autor),
       enviada: false,
       branch: branchDemanda(e.id),
     },
     tickets: [
-      { demanda_id: e.id, ticket_id: 1, etapa: "demanda", status: "em_execucao", status_alterado_em: ctx.agora },
+      {
+        demanda_id: e.id,
+        ticket_id: 1,
+        etapa: "demanda",
+        status: "em_execucao",
+        status_alterado_em: ctx.agora,
+        criado_por: FABRIQUINHA,
+      },
     ],
     decisoes: [],
     evidencias: [],
@@ -62,7 +67,7 @@ export function registrarDemanda(entrada: unknown, autor: AutorDemanda, ctx: Con
 }
 
 /** CA-6 e CA-7: edita título, tipo ou descrição só antes do envio e só pela ferramenta e sessão autoras. */
-export function editarDemanda(ag: AgregadoDemanda, entrada: unknown, autor: AutorDemanda): AgregadoDemanda {
+export function editarDemanda(ag: AgregadoDemanda, entrada: unknown, autor: Ator): AgregadoDemanda {
   const e = EntradaEdicao.parse(entrada);
   const { demanda } = ag;
   if (demanda.enviada) {
@@ -84,7 +89,7 @@ export function editarDemanda(ag: AgregadoDemanda, entrada: unknown, autor: Auto
 }
 
 /** CA-2 e CA-3: sem as obrigatórias recusa listando todas; completa, congela e vai a `aprovacao_demanda`. */
-export function enviarDemanda(ag: AgregadoDemanda, autor: AutorDemanda, ctx: ContextoDemanda): AgregadoDemanda {
+export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDemanda): AgregadoDemanda {
   const { demanda } = ag;
   if (demanda.enviada) {
     throw new ErroDeRegra(`a demanda ${demanda.id} já foi enviada`, "aguarde a decisão do Auditor");
@@ -111,7 +116,7 @@ export function decidirDemanda(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirAuditor(ator, "decidir a demanda");
+  exigirAtor(ator, "decidir a demanda", "auditor");
   const e = EntradaDecisao.parse(entrada);
   const { demanda } = ag;
   if (demanda.fase !== "aprovacao_demanda") {
@@ -132,7 +137,7 @@ export function decidirDemanda(
     resultado: e.aprovado ? "aprovado" : "recusado",
     ...(!e.aprovado && { motivo: e.motivo }),
     ...(e.nota !== undefined && { nota: e.nota }),
-    por: "auditor",
+    por: AUDITOR,
     em: ctx.agora,
   };
   const status = e.aprovado ? ("concluido" as const) : ("cancelado" as const);
@@ -151,6 +156,7 @@ export function decidirDemanda(
             etapa: "planejar" as const,
             status: "aberto" as const,
             status_alterado_em: ctx.agora,
+            criado_por: FABRIQUINHA,
             devolucoes: 0,
           },
         ]
@@ -211,7 +217,7 @@ const decisaoDoAuditor = (
   decisao_id: proximaDecisaoId(ag, ticket),
   resultado,
   ...extra,
-  por: "auditor",
+  por: AUDITOR,
   em: ctx.agora,
 });
 
@@ -227,7 +233,7 @@ export function submeterPlano(
 ): AgregadoDemanda {
   const { demanda } = ag;
   const ticket = ticketPlanejamento(ag);
-  if (ator.tipo !== "agente" || ator.ticket !== ticket.ticket_id) {
+  if (ator.tipo !== "agente") {
     throw new ErroDeEscopo(
       "só o agente do ticket de planejamento pode submeter o plano",
       "peça à sessão de planejamento",
@@ -273,6 +279,7 @@ export function submeterPlano(
     ticket_id: ticket.ticket_id,
     tipo: "plano" as const,
     dados: plano.data,
+    autor: ator,
     em: ctx.agora,
   };
   return {
@@ -289,7 +296,7 @@ export function reprovarPlanejamento(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirAuditor(ator, "reprovar o planejamento");
+  exigirAtor(ator, "reprovar o planejamento", "auditor");
   const { motivo } = EntradaReprovacao.parse(entrada);
   exigirFase(ag, "aprovacao_planejamento", "reprovar o planejamento");
   const ticket = ticketPlanejamento(ag);
@@ -312,7 +319,7 @@ export function confirmarAprovacaoPlanejamento(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirAuditor(ator, "aprovar o planejamento");
+  exigirAtor(ator, "aprovar o planejamento", "auditor");
   const { nota } = EntradaAprovacao.parse(entrada);
   exigirFase(ag, "aprovacao_planejamento", "aprovar o planejamento");
   exigirSemFalha(ag, "planejar");
@@ -337,6 +344,7 @@ export function confirmarAprovacaoPlanejamento(
         etapa: "implementar",
         status: "aberto",
         status_alterado_em: ctx.agora,
+        criado_por: FABRIQUINHA,
         modelo_provedor,
         modelo_nome,
         effort,
@@ -436,7 +444,7 @@ export function devolverTicket(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "devolver um ticket por reprovação técnica");
+  exigirAtor(ator, "devolver um ticket por reprovação técnica", "fabriquinha");
   const { ticket_id, instrucao } = EntradaDevolucao.parse(entrada);
   exigirDemandaEmAndamento(ag, "devolver");
   const ticket = ticketEmStatus(ag, ticket_id, "em_execucao", "ser devolvido");
@@ -465,7 +473,7 @@ export function reabrirTicket(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirAuditor(ator, "reabrir um ticket");
+  exigirAtor(ator, "reabrir um ticket", "auditor");
   const { ticket_id, instrucao } = EntradaReabertura.parse(entrada);
   const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser reaberto");
   const { motivo_falha: _motivo, ...resto } = ticket;
@@ -505,7 +513,7 @@ export function retomarTicketFalhoPorInfraestrutura(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "retomar um ticket falho por infraestrutura");
+  exigirAtor(ator, "retomar um ticket falho por infraestrutura", "fabriquinha");
   const { ticket_id, conta, modelo } = EntradaRetomadaAutomatica.parse(entrada);
   exigirDemandaEmAndamento(ag, "retomar");
   const ticket = ticketEmStatus(ag, ticket_id, "falhou", "ser retomado");
@@ -577,6 +585,7 @@ export const novoTicketGlobal = (
   status: "aberto",
   devolucoes: 0,
   status_alterado_em: agora,
+  criado_por: FABRIQUINHA,
 });
 
 /** CA-12: só a Fabriquinha; com todas as rodadas concluídas e nada pendente, abre `revisar_demanda` e vai a `revisao_demanda`. */
@@ -586,7 +595,7 @@ export function iniciarRevisaoDemanda(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "iniciar a revisão integral da demanda");
+  exigirAtor(ator, "iniciar a revisão integral da demanda", "fabriquinha");
   exigirDemandaDaEntrada(ag, EntradaDemanda.parse(entrada).demanda_id);
   exigirFase(ag, "execucao", "iniciar a revisão integral");
   exigirSemPendencias(ag);
@@ -619,7 +628,7 @@ export function registrarRevisaoDemanda(
       "use o ticket atual da revisão",
     );
   }
-  if (ator.tipo !== "agente" || ator.ticket !== ticket.ticket_id) {
+  if (ator.tipo !== "agente") {
     throw new ErroDeEscopo("só o agente do ticket revisar_demanda atual decide a revisão", "peça à sessão de revisão");
   }
   exigirSemPendencias(ag, ticket.ticket_id);
@@ -629,7 +638,7 @@ export function registrarRevisaoDemanda(
     decisao_id: proximaDecisaoId(ag, ticket),
     resultado: e.aprovado ? "aprovado" : "recusado",
     ...(!e.aprovado && { motivo: e.exigencias }),
-    por: "agente",
+    por: ator,
     em: ctx.agora,
   };
   // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.

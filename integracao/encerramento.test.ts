@@ -53,7 +53,7 @@ async function revisaoIntegral(c: Cenario, id: string, decisao: "aprovada" | { e
     assert.equal(ticket?.status, "em_execucao", "a revisão integral espera a decisão do agente");
     const { ticket_id } = ticket;
     revisor = ticket_id;
-    const agenteDoTicket = { tipo: "agente", execucao: 1, ticket: ticket_id } as const;
+    const agenteDoTicket = { tipo: "agente", trabalho_id: "execucao-1" } as const;
     if (decisao === "aprovada") {
       comoAgente(c, id, ticket_id, [
         ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
@@ -129,7 +129,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   );
   assert.deepEqual(
     ag.decisoes.filter((d) => d.ticket_id === primeira).map((d) => [d.resultado, d.motivo, d.por]),
-    [["recusado", "falta tratar a integração entre as partes", "agente"]],
+    [["recusado", "falta tratar a integração entre as partes", { tipo: "agente", trabalho_id: "execucao-1" }]],
   );
 
   // A rodada corretiva percorre o ciclo completo: implementação, revisão, PR e aprovação do Auditor.

@@ -18,6 +18,7 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: st
   etapa,
   status,
   status_alterado_em: em(ticket_id),
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -70,7 +71,14 @@ function cenario(): DatabaseSync {
         ticket("I-303", 7, "implementar", "em_execucao", { rodada_id: 4 }),
       ],
       evidencias: [
-        { demanda_id: "I-303", ticket_id: 2, tipo: "pr_aberto", dados: { id: "7", url: "https://pr/7" }, em: em(2) },
+        {
+          demanda_id: "I-303",
+          ticket_id: 2,
+          tipo: "pr_aberto",
+          autor: { tipo: "fabriquinha" },
+          dados: { id: "7", url: "https://pr/7" },
+          em: em(2),
+        },
       ],
     }),
   );

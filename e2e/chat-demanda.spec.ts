@@ -14,7 +14,7 @@ import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto }
 /** O agente do `planejar` envia o plano como o CLI dele o grava: `submeterPlano` na transação da demanda. */
 const submeterPlanoDoAgente = (banco: ReturnType<typeof abrir>, plano: unknown) =>
   comDemanda(banco, "I-230", (ag) =>
-    submeterPlano(ag, plano, { tipo: "agente", execucao: 1, ticket: 1 }, { agora: new Date().toISOString() }),
+    submeterPlano(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, { agora: new Date().toISOString() }),
   );
 
 /** Mata o pi cujo diretório de trabalho está na raiz (a execução da demanda não grava o pgid). */

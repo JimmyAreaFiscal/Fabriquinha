@@ -26,6 +26,7 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   etapa,
   status,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -84,8 +85,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
       descricao: "d",
       fase: conflito ? "encerramento" : "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },
@@ -153,6 +153,10 @@ test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com a
     TIPOS.map((t) => `${t}.log`).sort(),
   );
   const ag = c.ag();
+  assert.deepEqual(
+    ag.evidencias.map((evidencia) => evidencia.autor),
+    TIPOS.map(() => ({ tipo: "externo", ferramenta: "fabriquinha", sessao: "E-9" })),
+  );
   assert.equal(ag.rodadas[0]?.fase, "revisao");
   assert.equal(ag.tickets.filter((t) => t.etapa === "revisar_rodada").length, 1);
 });

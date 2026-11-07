@@ -108,6 +108,7 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, extra: obj
   etapa,
   status: "concluido",
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -156,7 +157,14 @@ function semearDemandas(): void {
         }),
       ],
       evidencias: [
-        { demanda_id: "I-206", ticket_id: 3, tipo: "pr_aberto", dados: { id: "7", url: "https://pr/7" }, em },
+        {
+          demanda_id: "I-206",
+          ticket_id: 3,
+          tipo: "pr_aberto",
+          autor: { tipo: "fabriquinha" },
+          dados: { id: "7", url: "https://pr/7" },
+          em,
+        },
       ],
     }),
   );

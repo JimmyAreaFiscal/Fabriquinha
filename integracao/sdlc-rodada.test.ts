@@ -29,7 +29,7 @@ import {
   rodadaEmRevisao,
   statusDe,
 } from "./apoio-execucao.ts";
-import { base, type Cenario, ciclo, criarCenario, demanda, esperar, git } from "./apoio.ts";
+import { AUTOR, base, type Cenario, ciclo, criarCenario, demanda, esperar, git } from "./apoio.ts";
 import { ghFalso } from "./falsos.ts";
 
 const gh = ghFalso(base);
@@ -92,7 +92,7 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   assert.equal(statusDe(c, { demanda_id: id, ticket_id: reprovada }), "concluido");
   assert.deepEqual(
     ag.decisoes.filter((d) => d.ticket_id === reprovada).map((d) => [d.resultado, d.motivo, d.por]),
-    [["recusado", "falta tratar o caso X", "agente"]],
+    [["recusado", "falta tratar o caso X", { tipo: "agente", trabalho_id: "execucao-1" }]],
   );
   const corretivo = atual(c, id, "implementar");
   assert.ok(corretivo.ticket_id > reprovada);
@@ -147,6 +147,7 @@ test("os agentes da rodada recebem o que a Fabriquinha apurou: o diff e a matriz
         rodada_id: undefined,
         ticket_id: undefined,
         tipo: "relatorio_impactos_arquitetura",
+        autor: AUTOR,
         em: agora(),
         dados: { impacto: "alto" },
       },

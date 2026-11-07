@@ -44,6 +44,7 @@ const revisao: TicketDemanda = {
   etapa: "revisar_rodada",
   status: "concluido",
   status_alterado_em: AGORA,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
 };
 const alterados: EvidenciaDemanda = {
@@ -51,6 +52,7 @@ const alterados: EvidenciaDemanda = {
   rodada_id: undefined,
   ticket_id: 5,
   tipo: "arquivos_alterados",
+  autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
   dados: {
     base,
     head,
@@ -73,8 +75,7 @@ const ag = (troca: Partial<AgregadoDemanda> = {}): AgregadoDemanda =>
       descricao: "d",
       fase: "execucao",
       fase_alterada_em: AGORA,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },

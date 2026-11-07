@@ -1,7 +1,7 @@
 // Transições do encerramento final da demanda (comparacao-sdlc-implementacao.md §5): tentativa, retomada, conflito, falhas, integração e conclusão.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; cada uma recebe o que a aplicação observou fora do domínio.
 import { z } from "zod";
-import { type Ator, exigirFabriquinha } from "./ator.ts";
+import { type Ator, exigirAtor } from "./ator.ts";
 import { AgregadoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
 import { branchDemanda, DemandaId } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
@@ -75,7 +75,7 @@ export function podeTentarEncerramento(ag: AgregadoDemanda): boolean {
  * outro PR ou outra base. A tentativa aceita limpa o conflito pendente e a falha do check final.
  */
 export function registrarTentativaEncerramento(ag: AgregadoDemanda, entrada: unknown, ator: Ator): AgregadoDemanda {
-  exigirFabriquinha(ator, "registrar a tentativa de encerramento");
+  exigirAtor(ator, "registrar a tentativa de encerramento", "fabriquinha");
   const e = EntradaTentativa.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
   const atual = exigirEncerramento(ag, "registrar a tentativa de encerramento");
@@ -115,7 +115,7 @@ export function registrarConflitoEncerramento(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "registrar o conflito do encerramento");
+  exigirAtor(ator, "registrar o conflito do encerramento", "fabriquinha");
   exigirDemandaDaEntrada(ag, EntradaConflito.parse(entrada).demanda_id);
   const atual = exigirEncerramento(ag, "registrar o conflito do encerramento");
   const enc = ag.encerramento;
@@ -148,7 +148,7 @@ export function concluirResolucaoConflito(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "concluir a resolução do conflito");
+  exigirAtor(ator, "concluir a resolução do conflito", "fabriquinha");
   const e = EntradaResolucao.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
   exigirEncerramento(ag, "concluir a resolução do conflito");
@@ -195,7 +195,7 @@ export function registrarFalhaEncerramento(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "registrar a falha do encerramento");
+  exigirAtor(ator, "registrar a falha do encerramento", "fabriquinha");
   const e = EntradaFalha.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
   const falha = { etapa: e.etapa, motivo: e.motivo };
@@ -242,7 +242,7 @@ export function solicitarIntegracao(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "solicitar a integração");
+  exigirAtor(ator, "solicitar a integração", "fabriquinha");
   exigirDemandaDaEntrada(ag, EntradaSolicitacao.parse(entrada).demanda_id);
   const { atual, enc } = exigirTentativaAtiva(ag, "solicitar a integração");
   if (enc.integracao !== undefined) {
@@ -272,7 +272,7 @@ export function solicitarIntegracao(
  * limpa a falha de integração. Repetir a mesma confirmação devolve igual; outro SHA recusa.
  */
 export function registrarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator: Ator): AgregadoDemanda {
-  exigirFabriquinha(ator, "registrar a integração");
+  exigirAtor(ator, "registrar a integração", "fabriquinha");
   const e = EntradaIntegracao.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
   if (!e.confirmada) {
@@ -311,7 +311,7 @@ export function concluirEncerramento(
   ator: Ator,
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "concluir o encerramento");
+  exigirAtor(ator, "concluir o encerramento", "fabriquinha");
   const e = EntradaConclusao.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
   if (ag.demanda.fase === "concluida" && ag.encerramento?.integracao !== undefined) return ag;

@@ -41,6 +41,7 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   etapa,
   status,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -98,10 +99,18 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
       {
         demanda_id: DEMANDA,
         tipo: "criterios_aceite",
+        autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
         dados: { criterios: CRITERIOS.map((id) => ({ id, dado: "d", quando: "q", entao: "e" })) },
         em,
       },
-      { demanda_id: DEMANDA, ticket_id: 1, tipo: "plano", dados: plano, em },
+      {
+        demanda_id: DEMANDA,
+        ticket_id: 1,
+        tipo: "plano",
+        autor: { tipo: "agente", trabalho_id: "exec-1" },
+        dados: plano,
+        em,
+      },
     ];
   }
   if (gate === "pr") {
@@ -123,6 +132,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
         demanda_id: DEMANDA,
         ticket_id: 8,
         tipo: "pr_aberto",
+        autor: { tipo: "fabriquinha" },
         dados: { id: "1", url: "https://github.com/org/loja/pull/1", branch: BRANCH_RODADA, head },
         em,
       },
@@ -257,7 +267,7 @@ async function concluirSessao({ pedir, banco }: Cenario, ticket_id: number) {
         ticket_id,
         correcoes: [{ demanda_id: DEMANDA, rodada_id: 2, ticket_id: 1, titulo: "Corrigir", descricao: "Corrigir" }],
       },
-      { tipo: "agente", execucao: 1, ticket: ticket_id },
+      { tipo: "agente", trabalho_id: "exec-1" },
       { agora: em },
     ),
   );

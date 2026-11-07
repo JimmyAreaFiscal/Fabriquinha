@@ -22,10 +22,11 @@ import { decidirRevisaoRodada } from "../../aplicacao/revisao_rodada.ts";
 import { escrever } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { projeto } from "../../armazenamento/projetos.ts";
+import { demandaParaCli } from "./demanda_para_cli.ts";
 
-/** O agente de uma execução da demanda: a execução (id de `execucao_sessao`), a sessão e o ticket composto que ele roda. */
-export interface AgenteDemanda {
-  readonly execucao: string;
+/** Onde um agente age: o Ator que ele é (`trabalho_id` é o id de `execucao_sessao`), a sessão e o ticket composto que ele roda. */
+export interface EscopoDoAgente {
+  readonly ator: Extract<Ator, { tipo: "agente" }>;
   readonly sessao: string;
   readonly demanda_id: string;
   readonly ticket_id: number;
@@ -34,7 +35,7 @@ export interface AgenteDemanda {
 
 export interface ChamadaDemanda {
   readonly banco: DatabaseSync;
-  readonly agente: AgenteDemanda;
+  readonly agente: EscopoDoAgente;
   readonly stdin: NodeJS.ReadableStream;
   readonly pos: readonly string[];
   readonly op: Readonly<Record<string, string | string[] | undefined>>;
@@ -48,8 +49,8 @@ export interface ComandoDemanda {
   rodar(c: ChamadaDemanda): unknown;
 }
 
-/** O agente de `execucao`, ou `undefined` se ela não está em `execucao_sessao`; terminada é ErroDeEscopo. */
-export function resolverAgenteDemanda(banco: DatabaseSync, execucao: string): AgenteDemanda | undefined {
+/** O escopo do agente de `execucao`, ou `undefined` se ela não está em `execucao_sessao`; terminada é ErroDeEscopo. */
+export function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDoAgente | undefined {
   const linha = banco
     .prepare(
       `SELECT e.fim, s.id AS sessao, s.demanda_id, s.ticket_id, d.projeto
@@ -62,7 +63,7 @@ export function resolverAgenteDemanda(banco: DatabaseSync, execucao: string): Ag
     throw new ErroDeEscopo(`a execução ${execucao} já terminou`, "peça ao Auditor uma nova execução");
   }
   return {
-    execucao,
+    ator: { tipo: "agente", trabalho_id: execucao },
     sessao: String(linha.sessao),
     demanda_id: String(linha.demanda_id),
     ticket_id: Number(linha.ticket_id),
@@ -70,10 +71,10 @@ export function resolverAgenteDemanda(banco: DatabaseSync, execucao: string): Ag
   };
 }
 
-export const proprio = (a: AgenteDemanda): string => formatarTicketRef(a);
+export const proprio = (a: EscopoDoAgente): string => formatarTicketRef(a);
 
 /** O ticket de `texto`, que só pode ser o do agente; `T-3` e outras formas erram mostrando o endereço certo. */
-export function ticketProprio(a: AgenteDemanda, texto: string, agir = false): void {
+export function ticketProprio(a: EscopoDoAgente, texto: string, agir = false): void {
   const forma = `use o endereço do seu ticket, ${proprio(a)}`;
   let ref;
   try {
@@ -89,7 +90,7 @@ export function ticketProprio(a: AgenteDemanda, texto: string, agir = false): vo
   }
 }
 
-function demandaPropria(a: AgenteDemanda, texto: string): void {
+function demandaPropria(a: EscopoDoAgente, texto: string): void {
   if (texto !== a.demanda_id) {
     throw new ErroDeEscopo("o agente só lê a própria demanda", `leia ${a.demanda_id}, a do seu ticket ${proprio(a)}`);
   }
@@ -108,7 +109,8 @@ export function schemaDoTipo(tipo: string): SchemaEvidencia | undefined {
   return TIPOS_NOVOS.includes(tipo) ? schemaDeEtapa(tipo as TipoSchemaEtapa) : undefined;
 }
 
-const publico = ({ demanda_id, ticket_id, rodada_id, ...resto }: TicketDemanda) => ({
+// O CLI segue mostrando o ticket sem `criado_por` e a decisão com `por` em texto (o tipo do Ator), como antes do Ator único.
+const publico = ({ demanda_id, ticket_id, rodada_id, criado_por: _, ...resto }: TicketDemanda) => ({
   ticket: formatarTicketRef({ demanda_id, ticket_id }),
   ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id }) }),
   ...resto,
@@ -124,9 +126,9 @@ async function lerJson(opcao: string, valor: string, stdin: NodeJS.ReadableStrea
 }
 
 /** Grava `transicao` na demanda do agente, reconferindo dentro da transação que a execução segue aberta. */
-const gravar = (banco: DatabaseSync, a: AgenteDemanda, transicao: (ag: AgregadoDemanda) => AgregadoDemanda) =>
+const gravar = (banco: DatabaseSync, a: EscopoDoAgente, transicao: (ag: AgregadoDemanda) => AgregadoDemanda) =>
   comDemanda(banco, a.demanda_id, (ag) => {
-    resolverAgenteDemanda(banco, a.execucao);
+    resolverEscopoDoAgente(banco, a.ator.trabalho_id);
     return transicao(ag);
   });
 
@@ -152,18 +154,19 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
       demandaPropria(agente, String(pos[0]));
       const ag = carregarDemanda(banco, agente.demanda_id);
       return {
-        demanda: ag.demanda,
+        demanda: demandaParaCli(ag.demanda),
         rodadas: ag.rodadas.map(({ demanda_id, rodada_id, ...r }) => ({
           rodada: formatarRodadaRef({ demanda_id, rodada_id }),
           ...r,
         })),
         // A rodada vem do ticket decidido: a decisão não a guarda.
-        decisoes: ag.decisoes.map(({ demanda_id, ticket_id, decisao_id, ...d }) => {
+        decisoes: ag.decisoes.map(({ demanda_id, ticket_id, decisao_id, por, ...d }) => {
           const rodada_id = ag.tickets.find((t) => t.ticket_id === ticket_id)?.rodada_id;
           return {
             ticket: formatarTicketRef({ demanda_id, ticket_id }),
             ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id }) }),
             ...d,
+            por: por.tipo,
           };
         }),
         tickets: ag.tickets.map((t) => ({
@@ -228,7 +231,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
             // A descrição repete o título: o agente só dá o título; o Auditor detalha no web.
             correcoes: [{ demanda_id, rodada_id: ref.rodada_id, ticket_id: 1, titulo, descricao: titulo }],
           },
-          paraDominio(agente),
+          agente.ator,
           { agora: new Date().toISOString() },
         ),
       );
@@ -282,10 +285,10 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
       const entrada = { demanda_id, ticket_id, aprovado, ...extra };
       // o serviço de Revisão já grava a diferença: aqui só reconfere a execução na mesma transação
       escrever(banco, () => {
-        resolverAgenteDemanda(banco, agente.execucao);
+        resolverEscopoDoAgente(banco, agente.ator.trabalho_id);
         return ticket.etapa === "revisar_rodada"
-          ? decidirRevisaoRodada(banco, { ...entrada, rodada_id: rodada }, paraDominio(agente))
-          : decidirRevisaoIntegral(banco, entrada, paraDominio(agente));
+          ? decidirRevisaoRodada(banco, { ...entrada, rodada_id: rodada }, agente.ator)
+          : decidirRevisaoIntegral(banco, entrada, agente.ator);
       });
       return {
         ticket: proprio(agente),
@@ -295,10 +298,3 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
     },
   },
 ];
-
-/**
- * O ator que as transições da demanda pedem. Elas leem só `tipo` e `ticket`, mas o tipo `Ator` exige `execucao`
- * numérico, que a execução da demanda (id texto) não tem: o campo fica ausente, nunca 0.
- * shortcut: cast até o domínio aceitar `Ator` sem `execucao`; some quando quem mexe em src/nucleo trocar o tipo.
- */
-export const paraDominio = (a: AgenteDemanda): Ator => ({ tipo: "agente", ticket: a.ticket_id }) as unknown as Ator;

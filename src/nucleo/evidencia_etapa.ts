@@ -2,6 +2,7 @@
 // `dados` segue opaco e `aprovada` vem calculada do F3: o domínio só exige que ela exista onde há regra.
 import { z } from "zod";
 import { IdDono, TicketDemanda } from "./agregado_demanda.ts";
+import { type Ator } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { OBRIGATORIAS_DEMANDA, TipoEvidenciaDemanda } from "./evidencia_demanda.ts";
 import { EtapaTicket } from "./primitivos.ts";
@@ -27,8 +28,9 @@ export const TipoEvidenciaEtapa = z.enum([
 ]);
 export type TipoEvidenciaEtapa = z.infer<typeof TipoEvidenciaEtapa>;
 
-const ProdutorEvidenciaEtapa = z.enum(["externo", "agente", "fabriquinha"]);
-type ProdutorEvidenciaEtapa = z.infer<typeof ProdutorEvidenciaEtapa>;
+/** Quem produz a evidência da etapa: qualquer ator, menos o Auditor. */
+const Produtor = z.enum(["externo", "agente", "fabriquinha"]) satisfies z.ZodType<Ator["tipo"]>;
+type Produtor = z.infer<typeof Produtor>;
 
 /** Rótulos para o F3: o domínio não avalia nenhuma. */
 const RegraAprovacaoEtapa = z.enum([
@@ -45,14 +47,13 @@ type RegraAprovacaoEtapa = z.infer<typeof RegraAprovacaoEtapa>;
 export const ItemCatalogoEtapa = z.object({
   etapa: EtapaTicket,
   tipo: TipoEvidenciaEtapa,
-  produtor: ProdutorEvidenciaEtapa,
+  produtor: Produtor,
   obrigatoria: z.boolean(),
   regraAprovacao: RegraAprovacaoEtapa.nullable(),
   dono: z.enum(["demanda", "ticket"]),
 });
 export type ItemCatalogoEtapa = z.infer<typeof ItemCatalogoEtapa>;
 
-type Produtor = ProdutorEvidenciaEtapa;
 type Regra = RegraAprovacaoEtapa | null;
 const item = (
   etapa: EtapaTicket,
@@ -120,7 +121,7 @@ const EntradaEvidenciaEtapa = z.object({
   rodada_id: IdDono,
   ticket_id: IdDono,
   tipo: TipoEvidenciaEtapa,
-  produtor: ProdutorEvidenciaEtapa,
+  produtor: Produtor,
   aprovada: z.boolean().optional(),
   dados: z.unknown(),
 });

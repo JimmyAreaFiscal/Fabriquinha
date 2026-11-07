@@ -22,6 +22,7 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, rodada_id:
   etapa,
   status,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   rodada_id,
   devolucoes: 0,
 });
@@ -45,8 +46,7 @@ const demanda = (id: string, fase: string, resto: object = {}): AgregadoDemanda 
       descricao: "d",
       fase,
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: id,
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
       enviada: true,
       branch: `fabriquinha/${id}`,
     },
@@ -68,7 +68,13 @@ const comTicketDeDemanda = (id: string): AgregadoDemanda =>
   });
 
 /** Uma evidência da própria demanda I-214. */
-const daDemanda = (tipo: string, dados: object) => ({ demanda_id: "I-214", tipo, dados, em });
+const daDemanda = (tipo: string, dados: object) => ({
+  demanda_id: "I-214",
+  tipo,
+  dados,
+  autor: { tipo: "externo", ferramenta: "claude", sessao: "I-214" },
+  em,
+});
 
 /**
  * A I-214 aguardando a aprovação da demanda, com o ticket `demanda` em execução que a decisão conclui, e o que o
@@ -128,6 +134,7 @@ export function semearDemandas(raiz: string): void {
           ticket_id: 2,
           tipo: "pr_aberto",
           dados: { id: "7", url: "https://exemplo.com/pr/7" },
+          autor: { tipo: "fabriquinha" },
           em,
         },
       ],
@@ -169,7 +176,7 @@ export function semearPaginaDaDemanda(raiz: string): void {
     ticket_id,
     decisao_id: ticket_id,
     resultado,
-    por: "auditor",
+    por: { tipo: "auditor" },
     em,
     ...resto,
   });
@@ -195,6 +202,7 @@ export function semearPaginaDaDemanda(raiz: string): void {
           ticket_id: 3,
           tipo: "pr_aberto",
           dados: { id: "7", url: "https://exemplo.com/pr/7" },
+          autor: { tipo: "fabriquinha" },
           em,
         },
       ],
@@ -227,6 +235,7 @@ const comPlano = (id: string): AgregadoDemanda =>
         demanda_id: id,
         tipo: "criterios_aceite",
         dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] },
+        autor: { tipo: "externo", ferramenta: "claude", sessao: id },
         em,
       },
       {
@@ -239,6 +248,7 @@ const comPlano = (id: string): AgregadoDemanda =>
           rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
           tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
         },
+        autor: { tipo: "fabriquinha" },
         em,
       },
     ],
@@ -304,6 +314,7 @@ export function semearPrDaRodada(raiz: string): void {
           ticket_id: 1,
           tipo: "pr_aberto",
           dados: { id: "9", url: "https://exemplo.com/pr/9", branch: "fabriquinha/I-215-1", head },
+          autor: { tipo: "fabriquinha" },
           em,
         },
       ],
@@ -379,7 +390,7 @@ export function registrarCorrecaoDaSessao(raiz: string, demanda_id: string, roda
         ticket_id: sessao.ticket_id,
         correcoes: [{ demanda_id, rodada_id, ticket_id: 1, titulo: "Corrigir", descricao: "Corrigir" }],
       },
-      { tipo: "agente", execucao: 1, ticket: sessao.ticket_id },
+      { tipo: "agente", trabalho_id: "execucao-1" },
       { agora: em },
     ),
   );
@@ -413,13 +424,20 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
       descricao,
       fase: "planejamento",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "I-230",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "I-230" },
       enviada: true,
       branch: "fabriquinha/I-230",
     },
     tickets: [
-      { demanda_id: "I-230", ticket_id: 1, etapa: "planejar", status: "aberto", status_alterado_em: em, devolucoes: 0 },
+      {
+        demanda_id: "I-230",
+        ticket_id: 1,
+        etapa: "planejar",
+        status: "aberto",
+        status_alterado_em: em,
+        criado_por: { tipo: "fabriquinha" },
+        devolucoes: 0,
+      },
     ],
     decisoes: [],
     evidencias: [
@@ -427,6 +445,7 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
         demanda_id: "I-230",
         tipo: "criterios_aceite",
         dados: { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] },
+        autor: { tipo: "externo", ferramenta: "claude", sessao: "I-230" },
         em,
       },
     ],

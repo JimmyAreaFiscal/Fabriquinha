@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import type { Ator } from "../nucleo/ator.ts";
 import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, novoId } from "./banco.ts";
@@ -17,6 +18,26 @@ const semNulos = (linha: Record<string, unknown>) =>
 const grupo = (campos: Record<string, unknown>) => (Object.values(campos).includes(null) ? null : campos);
 
 const bit = (b: boolean) => Number(b);
+
+/** O Ator nas colunas `<prefixo>_tipo` e `<prefixo>_trabalho_id`; a ferramenta e a sessão do externo só a evidência guarda. */
+const colunasDoAtor = (prefixo: string, ator: Ator): Linha => ({
+  [`${prefixo}_tipo`]: ator.tipo,
+  [`${prefixo}_trabalho_id`]: ator.tipo === "agente" ? ator.trabalho_id : null,
+});
+
+/** Troca as colunas `<campo>_*` da linha pelo Ator `campo`; a coluna nula não entra nele. */
+function comAtor(linha: Record<string, unknown>, campo: string): Record<string, unknown> {
+  const ator: Record<string, unknown> = {};
+  const resto: Record<string, unknown> = {};
+  for (const [coluna, valor] of Object.entries(linha)) {
+    if (!coluna.startsWith(`${campo}_`)) resto[coluna] = valor;
+    else if (valor !== null) ator[coluna.slice(campo.length + 1)] = valor;
+  }
+  return { ...resto, [campo]: ator };
+}
+
+/** Decisão do Agente gravada antes da migração 37, sem execução: o `trabalho_id` não existe, mas o Ator exige um. */
+const TRABALHO_ANTERIOR_A_MIGRACAO = "anterior-a-migracao-37";
 
 interface Tabela {
   nome: string;
@@ -36,11 +57,11 @@ const TABELAS: readonly Tabela[] = [
   {
     nome: "demanda",
     chave: ["id"],
-    linhas: ({ demanda: { origem_ferramenta, origem_sessao, ...demanda } }) => [
+    linhas: ({ demanda: { criada_por, ...demanda } }) => [
       {
         ...demanda,
-        criada_por_ferramenta: origem_ferramenta,
-        criada_por_sessao: origem_sessao,
+        criada_por_ferramenta: criada_por.ferramenta,
+        criada_por_sessao: criada_por.sessao,
         enviada: bit(demanda.enviada),
       },
     ],
@@ -64,8 +85,9 @@ const TABELAS: readonly Tabela[] = [
     nome: "ticket_demanda",
     chave: ["demanda_id", "ticket_id"],
     linhas: (ag) =>
-      ag.tickets.map((t) => ({
+      ag.tickets.map(({ criado_por, ...t }) => ({
         ...t,
+        ...colunasDoAtor("criado_por", criado_por),
         rodada_id: t.rodada_id ?? null,
         titulo: t.titulo ?? null,
         descricao: t.descricao ?? null,
@@ -115,14 +137,22 @@ const TABELAS: readonly Tabela[] = [
     nome: "decisao_ticket",
     chave: ["demanda_id", "ticket_id", "decisao_id"],
     linhas: (ag) =>
-      ag.decisoes.map(({ por, ...d }) => ({ ...d, por_tipo: por, nota: d.nota ?? null, motivo: d.motivo ?? null })),
+      ag.decisoes.map(({ por, ...d }) => ({
+        ...d,
+        ...colunasDoAtor("por", por),
+        nota: d.nota ?? null,
+        motivo: d.motivo ?? null,
+      })),
   },
   {
     nome: "evidencia_demanda",
     chave: ["demanda_id", "rodada_id", "ticket_id", "tipo", "em"],
     linhas: (ag) =>
-      ag.evidencias.map((e) => ({
+      ag.evidencias.map(({ autor, ...e }) => ({
         ...e,
+        ...colunasDoAtor("autor", autor),
+        autor_ferramenta: autor.tipo === "externo" ? autor.ferramenta : null,
+        autor_sessao: autor.tipo === "externo" ? autor.sessao : null,
         rodada_id: e.rodada_id ?? null,
         ticket_id: e.ticket_id ?? null,
         dados: JSON.stringify(e.dados),
@@ -200,8 +230,7 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     }),
     demanda: {
       ...demanda,
-      origem_ferramenta: demanda.criada_por_ferramenta,
-      origem_sessao: demanda.criada_por_sessao,
+      criada_por: { tipo: "externo", ferramenta: demanda.criada_por_ferramenta, sessao: demanda.criada_por_sessao },
       enviada: demanda.enviada === 1,
     },
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
@@ -209,15 +238,23 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     criterios_citados: filhas("criterio_citado_rodada"),
     // Zero retomadas é o mesmo que nenhuma: o campo só aparece quando há o que contar.
     tickets: filhas("ticket_demanda").map((t) =>
-      semNulos({ ...t, retomadas_automaticas: t.retomadas_automaticas || null }),
+      semNulos({ ...comAtor(t, "criado_por"), retomadas_automaticas: t.retomadas_automaticas || null }),
     ),
     dependencias_ticket: filhas("dependencia_ticket"),
     caminhos_ticket: filhas("caminho_ticket"),
-    decisoes: filhas("decisao_ticket").map(({ por_tipo, por_trabalho_id: _, ...d }) =>
-      semNulos({ ...d, por: por_tipo }),
+    decisoes: filhas("decisao_ticket").map((d) =>
+      semNulos(
+        comAtor(
+          {
+            ...d,
+            por_trabalho_id: d.por_tipo === "agente" ? (d.por_trabalho_id ?? TRABALHO_ANTERIOR_A_MIGRACAO) : null,
+          },
+          "por",
+        ),
+      ),
     ),
     evidencias: filhas("evidencia_demanda").map(({ id: _, dados, ...e }) => ({
-      ...semNulos(e),
+      ...semNulos(comAtor(e, "autor")),
       dados: JSON.parse(dados as string) as unknown,
     })),
   });

@@ -68,8 +68,7 @@ function demanda(id: string, fase: string, extra: object = {}) {
     descricao: "d",
     fase,
     fase_alterada_em: em,
-    origem_ferramenta: "claude",
-    origem_sessao: "s1",
+    criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
     enviada: true,
     branch: `fabriquinha/${id}`,
     ...extra,
@@ -114,16 +113,38 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
   } as unknown as AgregadoDemanda);
   gravarAgregadoPronto(banco, {
     demanda: demanda("I-1", fase, { enviada: false }),
-    tickets: [{ demanda_id: "I-1", ticket_id: 1, etapa: "planejar", status, status_alterado_em: em, devolucoes: 0 }],
+    tickets: [
+      {
+        demanda_id: "I-1",
+        ticket_id: 1,
+        etapa: "planejar",
+        status,
+        status_alterado_em: em,
+        criado_por: { tipo: "fabriquinha" },
+        devolucoes: 0,
+      },
+    ],
     decisoes: [],
     evidencias: [
       {
         demanda_id: "I-1",
         tipo: "criterios_aceite",
+        autor: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
         dados: { criterios: CRITERIOS.map((id) => ({ id, dado: "d", quando: "q", entao: "e" })) },
         em,
       },
-      ...(comPlano ? [{ demanda_id: "I-1", ticket_id: 1, tipo: "plano", dados: plano(), em }] : []),
+      ...(comPlano
+        ? [
+            {
+              demanda_id: "I-1",
+              ticket_id: 1,
+              tipo: "plano",
+              autor: { tipo: "agente", trabalho_id: "1" },
+              dados: plano(),
+              em,
+            },
+          ]
+        : []),
     ],
     ...base,
   } as unknown as AgregadoDemanda);
@@ -139,7 +160,7 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
   };
 }
 
-const agente = { tipo: "agente", execucao: 1, ticket: 1 } as const;
+const agente = { tipo: "agente", trabalho_id: "1" } as const;
 const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, planoEntrada: unknown) =>
   comDemanda(banco, demandaId, (ag) => submeterPlano(ag, planoEntrada, agente, { agora: new Date().toISOString() }));
 

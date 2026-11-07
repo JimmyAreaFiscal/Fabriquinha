@@ -102,7 +102,8 @@ export async function prepararRevisaoRodada(
     banco,
     demanda_id,
     (a) => {
-      const autor = { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao };
+      // shortcut: autor externo da demanda, como era; a I-266.R3 troca por FABRIQUINHA.
+      const autor = a.demanda.criada_por;
       const com = submeterEvidenciaDemanda(
         a,
         { tipo: "arquivos_alterados", dados: alterados as Dados, ticket_id },

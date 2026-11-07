@@ -50,6 +50,7 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: st
   etapa,
   status,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -64,8 +65,7 @@ const demanda = (id: string, fase: string, descricao: string, tickets: object[])
       descricao,
       fase,
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: id,
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
       enviada: true,
       branch: `fabriquinha/${id}`,
     },

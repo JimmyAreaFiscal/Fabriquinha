@@ -108,7 +108,7 @@ export async function demandaEmExecucao(c: Cenario, rodadas: RodadaPlano[]): Pro
       })),
       tickets,
     },
-    { tipo: "agente", execucao: 1, ticket: 2 },
+    { tipo: "agente", trabalho_id: "execucao-1" },
   );
   await aprovarPlanejamentoDemanda(c.banco, id, {});
   assert.equal(demanda(c, id).demanda.fase, "execucao");
@@ -147,7 +147,7 @@ export function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias
         submeterEvidenciaDemanda(
           a,
           { tipo, dados, ticket_id } as EntradaEvidenciaDemanda,
-          { ferramenta: a.demanda.origem_ferramenta, sessao: a.demanda.origem_sessao },
+          a.demanda.criada_por,
           agora(),
         ),
       ag,
@@ -195,7 +195,7 @@ export function decidirComoRevisor(c: Cenario, id: string, decisao: DecisaoDaRev
   decidirRevisaoRodada(
     c.banco,
     { ...decisao, demanda_id: id, rodada_id: rodada, ticket_id },
-    { tipo: "agente", execucao: 1, ticket: ticket_id },
+    { tipo: "agente", trabalho_id: "execucao-1" },
   );
   return ticket_id;
 }

@@ -84,6 +84,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     etapa,
     status: "aberto",
     status_alterado_em: em,
+    criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
   });
@@ -104,8 +105,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
       descricao: "d",
       fase: "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },

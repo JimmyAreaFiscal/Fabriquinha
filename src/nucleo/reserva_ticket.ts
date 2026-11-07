@@ -1,6 +1,6 @@
 // Reserva do ticket da demanda SDLC (comparacao-sdlc-implementacao.md §4.1): aberto → em_execucao, só se a seleção o escolhe.
 import { z } from "zod";
-import { type Ator, exigirFabriquinha } from "./ator.ts";
+import { type Ator, exigirAtor } from "./ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
@@ -53,7 +53,7 @@ export function reservarTicket(
   ctx: ContextoDemanda,
   predecessorasSatisfeitas: boolean,
 ): AgregadoDemanda {
-  exigirFabriquinha(ator, "reservar o ticket");
+  exigirAtor(ator, "reservar o ticket", "fabriquinha");
   const { ticket_id } = EntradaReserva.parse(entrada);
   exigirDemandaEmAndamento(ag, "reservar");
   const ticket = ticketEmStatus(ag, ticket_id, "aberto", "ser reservado");

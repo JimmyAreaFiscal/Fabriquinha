@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { AgregadoDemanda, DecisaoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
+import { Ator } from "../nucleo/ator.ts";
 import type { ProgressoEncerramento } from "../nucleo/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
@@ -18,18 +19,19 @@ const ticket = (ticket_id: number, rodada_id?: number) => ({
   etapa: "implementar" as const,
   status: "aberto" as const,
   status_alterado_em: em,
+  criado_por: { tipo: "fabriquinha" as const },
   devolucoes: 0,
   ...(rodada_id === undefined ? {} : { rodada_id }),
 });
 // Sem as chaves de dono ausentes: é assim que o carregamento devolve a evidência (campo omitido).
 const evidencia = (dono: { rodada_id?: number; ticket_id?: number }, tipo: EvidenciaDemanda["tipo"], dados = {}) =>
-  ({ demanda_id: "I-1", ...dono, tipo, dados, em }) as EvidenciaDemanda;
+  ({ demanda_id: "I-1", ...dono, tipo, dados, autor: { tipo: "fabriquinha" }, em }) as EvidenciaDemanda;
 const decisao = (extra: Partial<DecisaoDemanda>): DecisaoDemanda => ({
   demanda_id: "I-1",
   ticket_id: 1,
   decisao_id: 1,
   resultado: "aprovado",
-  por: "agente",
+  por: { tipo: "agente", trabalho_id: "exec-1" },
   em,
   ...extra,
 });
@@ -52,8 +54,7 @@ const completo = (): AgregadoDemanda => ({
     descricao: "d",
     fase: "execucao",
     fase_alterada_em: em,
-    origem_ferramenta: "claude",
-    origem_sessao: "s1",
+    criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
     enviada: true,
     branch: "fabriquinha/I-1",
   },
@@ -76,7 +77,10 @@ const completo = (): AgregadoDemanda => ({
   ],
   dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
   caminhos_ticket: [{ demanda_id: "I-1", ticket_id: 1, caminho: "src/a.ts" }],
-  decisoes: [decisao({ resultado: "recusado", motivo: "m", por: "auditor" }), decisao({ decisao_id: 2, nota: 5 })],
+  decisoes: [
+    decisao({ resultado: "recusado", motivo: "m", por: { tipo: "auditor" } }),
+    decisao({ decisao_id: 2, nota: 5 }),
+  ],
   evidencias: [
     evidencia({}, "comportamento", { v: 1 }),
     evidencia({ rodada_id: 1 }, "comportamento", { v: 2 }),
@@ -114,6 +118,59 @@ test("CA-2: grava e carrega um agregado igual", () => {
   const ag = completo();
   gravarAgregadoPronto(b, ag);
   assert.deepEqual(carregarDemanda(b, "I-1"), ag);
+});
+
+test("autoria: tickets, decisões e demanda preservam os atores na gravação e na atualização", () => {
+  const bancoDeAutoria = banco();
+  const agregado = completo();
+  agregado.tickets = agregado.tickets.map((ticket) =>
+    ticket.ticket_id === 2 ? { ...ticket, criado_por: { tipo: "agente", trabalho_id: "exec-criadora" } } : ticket,
+  );
+  gravarAgregadoPronto(bancoDeAutoria, agregado);
+  const relido = carregarDemanda(bancoDeAutoria, "I-1");
+  assert.deepEqual(relido, agregado);
+  assert.deepEqual(
+    relido.tickets.map((ticket) => Ator.parse(ticket.criado_por)),
+    [
+      { tipo: "fabriquinha" },
+      { tipo: "agente", trabalho_id: "exec-criadora" },
+      { tipo: "fabriquinha" },
+      { tipo: "fabriquinha" },
+    ],
+  );
+  assert.deepEqual(
+    relido.decisoes.map((decisao) => Ator.parse(decisao.por)),
+    [{ tipo: "auditor" }, { tipo: "agente", trabalho_id: "exec-1" }],
+  );
+  assert.deepEqual(Ator.parse(relido.demanda.criada_por), { tipo: "externo", ferramenta: "claude", sessao: "s1" });
+
+  const atualizado = comDemanda(bancoDeAutoria, "I-1", (agregado) => ({
+    ...agregado,
+    tickets: agregado.tickets.map((ticket) => ({
+      ...ticket,
+      criado_por: { tipo: "agente", trabalho_id: "exec-nova" },
+    })),
+    decisoes: agregado.decisoes.map((decisao) => ({ ...decisao, por: { tipo: "auditor" } })),
+  }));
+  assert.deepEqual(carregarDemanda(bancoDeAutoria, "I-1"), atualizado);
+  assert.deepEqual(
+    atualizado.tickets.map((ticket) => Ator.parse(ticket.criado_por)),
+    Array.from({ length: 4 }, () => ({ tipo: "agente", trabalho_id: "exec-nova" })),
+  );
+  assert.deepEqual(
+    atualizado.decisoes.map((decisao) => Ator.parse(decisao.por)),
+    [{ tipo: "auditor" }, { tipo: "auditor" }],
+  );
+});
+
+test("decisão legada do agente sem trabalho recebe a identidade anterior à migração 37", () => {
+  const bancoLegado = comBase();
+  bancoLegado.exec("UPDATE decisao_ticket SET por_trabalho_id = NULL WHERE por_tipo = 'agente'");
+  const relido = carregarDemanda(bancoLegado, "I-1");
+  assert.deepEqual(
+    relido.decisoes.map((decisao) => Ator.parse(decisao.por)),
+    [{ tipo: "auditor" }, { tipo: "agente", trabalho_id: "anterior-a-migracao-37" }],
+  );
 });
 
 test("grava só a diferença: atualiza, apaga e insere", () => {
@@ -204,7 +261,7 @@ test("CA-11: nova evidência do mesmo tipo e dono substitui a anterior", () => {
     submeterEvidenciaDemanda(
       ag,
       { tipo: "comportamento", dados: { v: 42 } },
-      { ferramenta: "claude", sessao: "s1" },
+      { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       "2026-02-01T00:00:00.000Z",
     ),
   );
@@ -304,7 +361,7 @@ test("encerramento: o banco recusa progresso duplicado, de demanda inexistente, 
 });
 
 const entrada = { projeto: "p", titulo: "t", tipo: "funcionalidade", descricao: "d" };
-const autor = { ferramenta: "claude", sessao: "s1" };
+const autor = { tipo: "externo" as const, ferramenta: "claude", sessao: "s1" };
 const registrar = (id: string) => registrarDemanda({ ...entrada, id }, autor, { agora: em });
 
 test("CA-9: demanda nova recebe I-{n} da sequência issue", () => {
@@ -313,7 +370,7 @@ test("CA-9: demanda nova recebe I-{n} da sequência issue", () => {
   const criada = criarDemandaNova(b, registrar);
   assert.equal(criada.demanda.id, "I-217");
   assert.equal(criada.demanda.branch, "fabriquinha/I-217");
-  assert.equal(criada.demanda.origem_sessao, "s1");
+  assert.equal(criada.demanda.criada_por.sessao, "s1");
   assert.deepEqual(
     criada.tickets.map((t) => [t.ticket_id, t.etapa]),
     [[1, "demanda"]],

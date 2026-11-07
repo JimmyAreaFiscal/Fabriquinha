@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { materializarCorrecoesRodada, materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
@@ -14,6 +15,7 @@ const tk = (ticket_id: number, rodada_id: number | undefined, extra = {}) => ({
   etapa: "implementar",
   status: "concluido",
   status_alterado_em: t0,
+  criado_por: FABRIQUINHA,
   ...extra,
 });
 const rd = (rodada_id: number) => ({
@@ -35,8 +37,7 @@ const base = (): AgregadoDemanda =>
       descricao: "d",
       fase: "execucao",
       fase_alterada_em: t0,
-      origem_ferramenta: "f",
-      origem_sessao: "s",
+      criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: `fabriquinha/${D}`,
     },
@@ -45,12 +46,20 @@ const base = (): AgregadoDemanda =>
       {
         demanda_id: D,
         tipo: "criterios_aceite",
+        autor: { tipo: "externo", ferramenta: "f", sessao: "s" },
         dados: { criterios: [{ id: "CA-1" }, { id: "CA-2" }] },
         em: t0,
       },
     ],
     tickets: [
-      { demanda_id: D, ticket_id: 1, etapa: "demanda", status: "concluido", status_alterado_em: t0 },
+      {
+        demanda_id: D,
+        ticket_id: 1,
+        etapa: "demanda",
+        status: "concluido",
+        status_alterado_em: t0,
+        criado_por: FABRIQUINHA,
+      },
       tk(3, 1),
       tk(9, 5),
       tk(20, 5),
@@ -101,6 +110,10 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
       [21, 5, "t2", "implementar", "aberto", t1],
       [22, 5, "t7", "implementar", "aberto", t1],
     ],
+  );
+  assert.deepEqual(
+    novo.tickets.slice(4).map((ticket) => ticket.criado_por),
+    [{ tipo: "fabriquinha" }, { tipo: "fabriquinha" }],
   );
   const novo22 = novo.tickets[5];
   assert.deepEqual([novo22?.modelo_provedor, novo22?.modelo_nome, novo22?.effort], ["anthropic", "m", "high"]);
@@ -186,6 +199,10 @@ test("integral: acrescenta rodadas novas com IDs e vínculos remapeados, sem toc
   );
   assert.deepEqual(novo.dependencias_ticket.slice(1), [{ demanda_id: D, ticket_id: 22, depende_ticket_id: 21 }]);
   assert.deepEqual(novo.caminhos_ticket.slice(1), [{ demanda_id: D, ticket_id: 22, caminho: "n.ts" }]);
+  assert.deepEqual(
+    novo.tickets.slice(4).map((ticket) => ticket.criado_por),
+    [{ tipo: "fabriquinha" }, { tipo: "fabriquinha" }, { tipo: "fabriquinha" }],
+  );
   assert.deepEqual(novo.evidencias, ag.evidencias);
   assert.equal(novo.demanda.fase, "execucao");
 });

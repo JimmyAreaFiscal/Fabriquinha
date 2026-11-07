@@ -10,6 +10,7 @@ const ticket = (ticket_id: number, etapa: TicketDemanda["etapa"]): TicketDemanda
   etapa,
   status: "concluido",
   status_alterado_em: "2026-01-01T10:00:00Z",
+  criado_por: { tipo: "fabriquinha" },
   rodada_id: 2,
   devolucoes: 0,
 });

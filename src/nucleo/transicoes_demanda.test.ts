@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 
-const EXTERNO: Ator = { tipo: "externo" };
+const EXTERNO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { submeterEvidenciaDemanda } from "./evidencia_demanda.ts";
@@ -33,8 +33,8 @@ import {
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
-const autora = { ferramenta: "claude", sessao: "s1" };
-const outra = { ferramenta: "claude", sessao: "s2" };
+const autora: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
+const outra: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s2" };
 const reg = { id: "I-1", projeto: "p", titulo: "t", tipo: "funcionalidade", descricao: "d" };
 const ev = (tipo: string, extra = {}) => ({ tipo: tipo as never, dados: { v: 1 }, ...extra });
 
@@ -50,8 +50,9 @@ test("CA-1: registrar cria a demanda em registro com origem e ticket 1", () => {
   const ag = registrada();
   assert.equal(ag.demanda.fase, "registro");
   assert.equal(ag.demanda.enviada, false);
-  assert.equal(ag.demanda.origem_ferramenta, "claude");
-  assert.equal(ag.demanda.origem_sessao, "s1");
+  assert.equal(ag.demanda.criada_por.ferramenta, "claude");
+  assert.equal(ag.demanda.criada_por.sessao, "s1");
+  assert.deepEqual(ag.tickets[0]?.criado_por, FABRIQUINHA);
   assert.equal(ag.demanda.branch, "fabriquinha/I-1");
   assert.deepEqual(
     ag.tickets.map((t) => [t.ticket_id, t.etapa]),
@@ -124,7 +125,7 @@ test("CA-4: o Auditor aprova e a demanda vai a planejamento", () => {
     decisao_id: 1,
     resultado: "aprovado",
     nota: 5,
-    por: "auditor",
+    por: AUDITOR,
     em: t1,
   });
   assert.equal(ag.tickets[0]?.status, "concluido");
@@ -134,6 +135,7 @@ test("CA-4: o Auditor aprova e a demanda vai a planejamento", () => {
     etapa: "planejar",
     status: "aberto",
     status_alterado_em: t1,
+    criado_por: FABRIQUINHA,
     devolucoes: 0,
   });
   assert.equal(env.demanda.fase, "aprovacao_demanda");
@@ -160,6 +162,7 @@ test("decidir: só o Auditor, só em aprovacao_demanda, e precisa do ticket da d
     etapa: "planejar" as const,
     status: "aberto" as const,
     status_alterado_em: t0,
+    criado_por: FABRIQUINHA,
     devolucoes: 0,
   };
   const dois = decidirDemanda({ ...env, tickets: [...env.tickets, outro] }, { aprovado: true }, AUDITOR, { agora: t1 });
@@ -168,10 +171,12 @@ test("decidir: só o Auditor, só em aprovacao_demanda, e precisa do ticket da d
   assert.throws(() => decidirDemanda(sem, { aprovado: true }, AUDITOR, { agora: t1 }), ErroDeRegra);
 });
 
-test("CA-3: o mesmo autor com espaços nas pontas registra, edita, submete e envia", () => {
-  const autor = { ferramenta: " codex ", sessao: " sessao-demo-197 " };
+test("CA-3: ferramenta exige Slug e o mesmo autor registra, edita, submete e envia com sessão preservada", () => {
+  const autor: Ator = { tipo: "externo", ferramenta: "codex", sessao: " sessao-demo-197 " };
+  assert.throws(() => registrarDemanda(reg, { ...autor, ferramenta: " codex " }, { agora: t0 }));
   let ag = registrarDemanda(reg, autor, { agora: t0 });
-  assert.equal(ag.demanda.origem_ferramenta, "codex");
+  assert.equal(ag.demanda.criada_por.ferramenta, "codex");
+  assert.equal(ag.demanda.criada_por.sessao, " sessao-demo-197 ");
   ag = editarDemanda(ag, { titulo: "novo" }, autor);
   for (const tipo of ["criterios_aceite", "desenho_solucao", "custos_realizados"]) {
     ag = submeterEvidenciaDemanda(ag, ev(tipo), autor, t0);
@@ -181,7 +186,7 @@ test("CA-3: o mesmo autor com espaços nas pontas registra, edita, submete e env
 });
 
 const t2 = "2026-01-03T00:00:00Z";
-const agente: Ator = { tipo: "agente", execucao: 1, ticket: 2 };
+const agente: Ator = { tipo: "agente", trabalho_id: "1" };
 const criterios = { criterios: [{ id: "CA-1" }, { id: "CA-2" }] };
 const planoV = (m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
@@ -235,6 +240,7 @@ test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai 
   assert.deepEqual(ag, antes);
   assert.equal(novo.demanda.fase, "aprovacao_planejamento");
   assert.equal(novo.evidencias.filter((e) => e.tipo === "plano" && e.ticket_id === 2).length, 1);
+  assert.deepEqual(novo.evidencias.find((e) => e.tipo === "plano")?.autor, agente);
   assert.deepEqual(novo.rodadas, []);
   assert.equal(novo.tickets.length, 2);
 });
@@ -276,7 +282,10 @@ test("CA-2 e CA-3: submissão recusada sem mutação", () => {
   falha(planoV({ demanda_id: "I-2", rodadas: [], tickets: [] }));
   falha(planoV({ criterios: ["CA-9"] }));
   falha(planoV({ criterios: ["CA-1"] }), { tipo: "auditor" });
-  falha(planoV({ criterios: ["CA-1"] }), { tipo: "agente", execucao: 1, ticket: 1 });
+  assert.throws(() => submeterPlano(ag, planoV({ criterios: ["CA-1"] }), FABRIQUINHA, { agora: t2 }), {
+    name: "ErroDeEscopo",
+    message: "só o agente do ticket de planejamento pode submeter o plano (peça à sessão de planejamento)",
+  });
   falha(planoV(), agente, enviada());
   falha(planoV(), agente, submetido());
   falha(planoV(), agente, { ...ag, tickets: [ag.tickets[0] as never] });
@@ -305,7 +314,7 @@ test("CA-4 e CA-5: reprovar exige Auditor e motivo; registra, volta a planejamen
     decisao_id: 1,
     resultado: "recusado",
     motivo: "falta teste",
-    por: "auditor",
+    por: AUDITOR,
     em: t2,
   });
   assert.deepEqual(novo.tickets, ag.tickets);
@@ -413,7 +422,7 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
     decisao_id: 1,
     resultado: "aprovado",
     nota: 4,
-    por: "auditor",
+    por: AUDITOR,
     em: t2,
   });
   assert.equal(confirmarAprovacaoPlanejamento(ag, {}, AUDITOR, { agora: t2 }).decisoes.at(-1)?.nota, undefined);
@@ -536,6 +545,7 @@ const tkD = (ticket_id: number, etapa: string, status: string, rodada_id?: numbe
   etapa,
   status,
   status_alterado_em: t0,
+  criado_por: FABRIQUINHA,
 });
 const rodadaD = (rodada_id: number, fase: string) => ({
   demanda_id: D,
@@ -549,7 +559,7 @@ const montarD = (fase = "execucao", fases = ["concluida"], extra: object[] = [])
   AgregadoDemanda.parse({
     demanda: { ...registrada().demanda, enviada: true, fase },
     decisoes: [],
-    evidencias: [{ demanda_id: D, tipo: "criterios_aceite", dados: criterios, em: t0 }],
+    evidencias: [{ demanda_id: D, tipo: "criterios_aceite", dados: criterios, autor: autora, em: t0 }],
     tickets: [tkD(1, "demanda", "concluido"), tkD(2, "implementar", "concluido", 1), ...extra],
     rodadas: fases.map((f, i) => rodadaD(i + 1, f)),
   });
@@ -570,7 +580,7 @@ const revisao = (m: Record<string, unknown> = {}) => ({
   ...m,
 });
 const aprovacaoD = (ticket_id = 3) => ({ demanda_id: D, ticket_id, aprovado: true });
-const ag3: Ator = { tipo: "agente", execucao: 1, ticket: 3 };
+const ag3: Ator = { tipo: "agente", trabalho_id: "1" };
 const c2 = { agora: t2 };
 const recusar = (ag: AgregadoDemanda, fn: () => unknown, erro: new (...a: never[]) => Error = ErroDeRegra) => {
   const antes = structuredClone(ag);
@@ -593,6 +603,7 @@ test("CA-12: todas as rodadas concluídas abrem revisar_demanda e vão a revisao
     status: "aberto",
     devolucoes: 0,
     status_alterado_em: t2,
+    criado_por: FABRIQUINHA,
   });
 });
 
@@ -650,7 +661,7 @@ test("CA-13: reprovação cria só rodadas novas, preserva as integradas e o pla
       decisao_id: 1,
       resultado: "recusado",
       motivo: "falta tratar erro",
-      por: "agente",
+      por: ag3,
       em: t2,
     },
   ]);
@@ -673,7 +684,12 @@ test("CA-13: reprovação recusada sem mutação (exigências, plano, ticket, at
   tenta({ demanda_id: "I-2" });
   tenta({ ticket_id: 2 });
   tenta({ ticket_id: 9 });
-  tenta({}, agente, ErroDeEscopo);
+  const antesDaRecusa = structuredClone(ag);
+  assert.throws(() => registrarRevisaoDemanda(ag, revisao(), EXTERNO, c2), {
+    name: "ErroDeEscopo",
+    message: "só o agente do ticket revisar_demanda atual decide a revisão (peça à sessão de revisão)",
+  });
+  assert.deepEqual(ag, antesDaRecusa);
   tenta({}, AUDITOR, ErroDeEscopo);
   tenta({}, FABRIQUINHA, ErroDeEscopo);
   const exec = montarD("execucao", ["concluida"], [tkD(3, "revisar_demanda", "em_execucao")]);
@@ -713,7 +729,7 @@ test("CA-14: aprovação conclui a revisão, abre encerrar_demanda e vai a encer
     ],
   );
   assert.deepEqual(novo.decisoes, [
-    { demanda_id: D, ticket_id: 3, decisao_id: 1, resultado: "aprovado", por: "agente", em: t2 },
+    { demanda_id: D, ticket_id: 3, decisao_id: 1, resultado: "aprovado", por: ag3, em: t2 },
   ]);
   recusar(ag, () => registrarRevisaoDemanda(ag, { ...aprovacaoD(), exigencias: "x" }, ag3, c2), Error);
 });
@@ -731,7 +747,7 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
   const r = { demanda_id: D, rodada_id: 2 };
   const emRevisao = concluirImplementacoesRodada(impl, r, FABRIQUINHA, c2);
   recusar(emRevisao, () => iniciarRevisaoDemanda(emRevisao, { demanda_id: D }, FABRIQUINHA, c2));
-  const ag5: Ator = { tipo: "agente", execucao: 2, ticket: 5 };
+  const ag5: Ator = { tipo: "agente", trabalho_id: "2" };
   const encerrando = registrarRevisaoRodada(emRevisao, { ...r, ticket_id: 5, aprovado: true }, ag5, c2);
   const conferida = conferirPullRequestRodada(
     encerrando,
@@ -749,7 +765,7 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
   );
   const segunda = iniciarRevisaoDemanda(integrada, { demanda_id: D }, FABRIQUINHA, c2);
   assert.equal(segunda.demanda.fase, "revisao_demanda");
-  const ag7: Ator = { tipo: "agente", execucao: 3, ticket: 7 };
+  const ag7: Ator = { tipo: "agente", trabalho_id: "3" };
   const fim = registrarRevisaoDemanda(segunda, aprovacaoD(7), ag7, c2);
   assert.equal(fim.demanda.fase, "encerramento");
   assert.equal(fim.tickets.at(-1)?.etapa, "encerrar_demanda");
@@ -819,7 +835,7 @@ test("CA-5, CA-6, CA-12: devolução recusada em etapa, status ou ator errados",
   const aberto = emDevolucao("implementar", "aberto");
   intacto(() => devolver(aberto), aberto);
   const ag = emDevolucao("implementar", "em_execucao");
-  for (const ator of [AUDITOR, { tipo: "agente", execucao: 1, ticket: id() } as Ator]) {
+  for (const ator of [AUDITOR, { tipo: "agente", trabalho_id: "1" } as Ator]) {
     assert.throws(() => devolver(ag, ator), ErroDeEscopo);
   }
   assert.deepEqual([tk3(ag)?.status, tk3(ag)?.devolucoes], ["em_execucao", 0]);

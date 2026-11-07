@@ -19,6 +19,7 @@ export const montarTicket = (demanda_id: string, ticket_id: number, etapa: strin
   etapa,
   status: "aberto",
   status_alterado_em: INSTANTE_DO_CENARIO,
+  criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
@@ -43,8 +44,7 @@ export const montarAgregadoDemanda = (id: string, fase: string, resto: object = 
       descricao: "d",
       fase,
       fase_alterada_em: INSTANTE_DO_CENARIO,
-      origem_ferramenta: "claude",
-      origem_sessao: id,
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
       enviada: fase !== "registro",
       branch: `fabriquinha/${id}`,
     },
@@ -136,7 +136,7 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
     demanda_id: id,
     ticket_id: 5,
     decisao_id,
-    por: "auditor",
+    por: { tipo: "auditor" },
     em: INSTANTE_DO_CENARIO,
     ...resto,
   });
@@ -156,9 +156,17 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
         ticket_id: 4,
         tipo: "pr_aberto",
         dados: { id: "7", url: "https://pr/7" },
+        autor: { tipo: "fabriquinha" },
         em: INSTANTE_DO_CENARIO,
       },
-      { demanda_id: id, ticket_id: 3, tipo: "comportamento", dados: { resumo: "ok" }, em: INSTANTE_DO_CENARIO },
+      {
+        demanda_id: id,
+        ticket_id: 3,
+        tipo: "comportamento",
+        dados: { resumo: "ok" },
+        autor: { tipo: "fabriquinha" },
+        em: INSTANTE_DO_CENARIO,
+      },
     ],
   });
 }

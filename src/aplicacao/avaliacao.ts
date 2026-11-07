@@ -297,7 +297,7 @@ export function encaminharAchado(banco: DatabaseSync, id: string, achadoId: numb
         tipo: "funcionalidade",
         descricao: `${achado.descricao}\n\nEvidência: ${achado.evidencia}\n\nOrigem: avaliação ${id}, achado ${String(achadoId)}.`,
       },
-      { ferramenta: "avaliacao", sessao: `${id}#${String(achadoId)}` },
+      { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#${String(achadoId)}` },
       { agora: new Date().toISOString() },
     );
     vincularAchado(banco, id, achadoId, ag.demanda.id);

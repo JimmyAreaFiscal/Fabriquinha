@@ -67,6 +67,7 @@ async function cenario(shell = "") {
     etapa,
     status,
     status_alterado_em: em,
+    criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     rodada_id: 2,
   });
@@ -83,8 +84,7 @@ async function cenario(shell = "") {
       descricao: "d",
       fase: "execucao",
       fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: "s1",
+      criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
@@ -104,6 +104,7 @@ async function cenario(shell = "") {
         demanda_id: DEMANDA,
         ticket_id: 8,
         tipo: "pr_aberto",
+        autor: { tipo: "fabriquinha" },
         dados: { id: "1", url: URL_PR, branch: BRANCH_RODADA, head },
         em,
       },
@@ -165,7 +166,7 @@ async function concluirComCorrecao(banco: DatabaseSync, ag: () => AgregadoDemand
         ticket_id: 9,
         correcoes: [{ demanda_id: DEMANDA, rodada_id: 2, ticket_id: 1, titulo: "Corrigir", descricao: "Corrigir" }],
       },
-      { tipo: "agente", execucao: 1, ticket: 9 },
+      { tipo: "agente", trabalho_id: "1" },
       { agora: em },
     ),
   );
@@ -178,7 +179,7 @@ test("CA-13: reprovar sem motivo, ou como agente, é recusado sem abrir a sessã
 
   await assert.rejects(reprovarPRRodada(banco, REF, "", AUDITOR, LIMITE), ZodError);
   await assert.rejects(
-    reprovarPRRodada(banco, REF, MOTIVO, { tipo: "agente", execucao: 1, ticket: 8 }, LIMITE),
+    reprovarPRRodada(banco, REF, MOTIVO, { tipo: "agente", trabalho_id: "1" }, LIMITE),
     ErroDeEscopo,
   );
 
@@ -216,7 +217,7 @@ test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na
 
   // CA-20 e CA-22: sem correção, ou pelo agente, a conclusão é recusada e a sessão segue aberta.
   await assert.rejects(concluirSessaoAjustes(banco, REF, AUDITOR), /trabalho corretivo/);
-  await assert.rejects(concluirSessaoAjustes(banco, REF, { tipo: "agente", execucao: 1, ticket: 9 }), ErroDeEscopo);
+  await assert.rejects(concluirSessaoAjustes(banco, REF, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
   assert.equal(ag().rodadas[0]?.fase, "sessao");
 
   // CA-19 e CA-21: com a correção registrada, o Auditor conclui e a rodada volta ao desenvolvimento.

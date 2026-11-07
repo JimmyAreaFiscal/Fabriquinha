@@ -2,6 +2,7 @@
 // rodadas da revisão integral. Funções puras que só acrescentam ao agregado; fases, gates e decisões ficam nas transições.
 import { z } from "zod";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
+import { FABRIQUINHA } from "./ator.ts";
 import { branchRodada, Plano, RodadaRef } from "./demanda.ts";
 import { ErroDeRegra, existe } from "./erros.ts";
 import type { Instante } from "./primitivos.ts";
@@ -62,6 +63,7 @@ function acrescentar(ag: AgregadoDemanda, plano: Plano, agora: Instante, novasRo
         etapa: "implementar",
         status: "aberto",
         status_alterado_em: agora,
+        criado_por: FABRIQUINHA, // shortcut: a I-266.R3 grava o Agente revisor como autor do ticket corretivo
         modelo_provedor,
         modelo_nome,
         effort,

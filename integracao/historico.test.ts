@@ -149,7 +149,7 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
     [nova.fase, nova.enviada, nova.tipo, nova.projeto],
     ["registro", false, "funcionalidade", c.projeto],
   );
-  assert.deepEqual([nova.origem_ferramenta, nova.origem_sessao], ["avaliacao", `${id}#1`]);
+  assert.deepEqual(nova.criada_por, { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` });
   assert.match(nova.descricao, /desc 1[\s\S]*ev 1/);
   assert.equal(achadoDaDemanda(c.banco, nova.id)?.achado_id, 1);
   assert.deepEqual(
@@ -163,7 +163,7 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   assert.equal(demanda(c, origem).demanda.fase, "execucao");
 
   // A demanda resultante segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.
-  const autor = { ferramenta: "avaliacao", sessao: `${id}#1` };
+  const autor = { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` } as const;
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
     gestao.submeterEvidencia(c.banco, nova.id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, autor, CTX);
   submeter("criterios_aceite", { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] });

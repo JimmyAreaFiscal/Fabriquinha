@@ -20,11 +20,10 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../../infra/repositorio/worktree-demanda.ts";
 import {
-  type AgenteDemanda,
   type ComandoDemanda,
-  paraDominio,
+  type EscopoDoAgente,
   proprio,
-  resolverAgenteDemanda,
+  resolverEscopoDoAgente,
   schemaDoTipo,
   TIPOS_DA_ETAPA,
   ticketProprio,
@@ -40,7 +39,7 @@ function tipoDoAgente(texto: string): { tipo: string; schema: SchemaEvidencia } 
 }
 
 /** O ticket do agente, que só recebe evidência aberto ou em execução. */
-function ticketAberto(ag: ReturnType<typeof carregarDemanda>, a: AgenteDemanda): TicketDemanda {
+function ticketAberto(ag: ReturnType<typeof carregarDemanda>, a: EscopoDoAgente): TicketDemanda {
   const ticket = encontrado(
     ag.tickets.find((t) => t.ticket_id === a.ticket_id),
     `o ticket ${proprio(a)} não existe`,
@@ -66,9 +65,9 @@ async function lerDados(arquivo: string | undefined, stdin: NodeJS.ReadableStrea
 }
 
 /** De onde os anexos podem vir: a worktree da rodada do ticket (ou a da demanda) e a saída da execução, da raiz real. */
-function origensDe(banco: DatabaseSync, a: AgenteDemanda, ticket: TicketDemanda): Origens {
+function origensDe(banco: DatabaseSync, a: EscopoDoAgente, ticket: TicketDemanda): Origens {
   const raiz = realpathSync(raizDo(banco));
-  const saida = join(raiz, "execucoes", `E-${a.execucao}`, "saida");
+  const saida = join(raiz, "execucoes", `E-${a.ator.trabalho_id}`, "saida");
   return {
     worktree:
       ticket.rodada_id === undefined
@@ -150,14 +149,14 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
         banco,
         demanda_id,
         (ag) => {
-          resolverAgenteDemanda(banco, agente.execucao); // a execução ainda está aberta?
+          resolverEscopoDoAgente(banco, agente.ator.trabalho_id); // a execução ainda está aberta?
           ticketAberto(ag, agente);
           return tipo === "plano"
-            ? submeterPlano(ag, validos, paraDominio(agente), { agora })
+            ? submeterPlano(ag, validos, agente.ator, { agora })
             : submeterEvidenciaDemanda(
                 ag,
                 { tipo: tipo as "testes_estresse", dados: validos as EntradaEvidenciaDemanda["dados"], ticket_id },
-                { ferramenta: "agente", sessao: agente.execucao },
+                agente.ator,
                 agora,
               );
         },

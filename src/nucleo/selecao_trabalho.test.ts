@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { AUDITOR } from "./ator.ts";
+import { AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { selecionarTrabalho, selecionarTrabalhoGlobal } from "./selecao_trabalho.ts";
 import { concluirSessaoRodada, registrarCorrecoesSessao, reprovarPullRequestRodada } from "./transicoes_rodada.ts";
@@ -13,6 +13,7 @@ const tk = (ticket_id: number, rodada_id: number | undefined, status = "aberto",
   etapa,
   status,
   status_alterado_em: t0,
+  criado_por: FABRIQUINHA,
 });
 const rd = (rodada_id: number, fase = "desenvolvimento") => ({
   demanda_id: "I-1",
@@ -32,8 +33,7 @@ const montar = (extra: Record<string, unknown>, fase = "execucao") =>
       descricao: "d",
       fase,
       fase_alterada_em: t0,
-      origem_ferramenta: "f",
-      origem_sessao: "s",
+      criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },

@@ -21,7 +21,7 @@ const pi = instalarPiFalso(base);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
-const agente: Ator = { tipo: "agente", execucao: 1, ticket: PLANEJAR };
+const agente: Ator = { tipo: "agente", trabalho_id: "execucao-1" };
 
 test("CA-SDLC-18: evidência com dois donos é recusada; a nova do mesmo tipo e dono substitui só a anterior", (t) => {
   const c = criarCenario(t);
