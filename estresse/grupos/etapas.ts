@@ -3,7 +3,7 @@
 // demanda à fase da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
 // despacho do ticket até ele assentar concluído; `sessao_em_aberto` vai da abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
-import { chmodSync, mkdirSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
@@ -29,13 +29,14 @@ import { carregarDemanda, comDemanda } from "../../src/armazenamento/demandas.ts
 import { registrarProjeto } from "../../src/armazenamento/projetos.ts";
 import { configuracao } from "../../src/armazenamento/servico.ts";
 import { carregarSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { integrarPR } from "../../src/infra/repositorio/pr.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../ambiente.ts";
 
-/** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então menos que as 200/20 do HTTP. */
-export const EXECUCOES = 20;
+/** Execuções por etapa e quantas ao mesmo tempo: git e worktree são caros, então uma onda só, de 5 simultâneas. */
+export const EXECUCOES = 5;
 export const SIMULTANEAS = 5;
 
 /** Uma etapa medida: `chamar` faz uma execução e devolve o tempo em ms, ou lança quando o ticket não assenta concluído. */
@@ -89,6 +90,8 @@ async function esperar(condicao: () => boolean, descricao: string, limiteMs = 30
 }
 
 let piFalsoInstalado: PiFalso;
+/** Onde nascem os cenários: dentro da raiz do ambiente, que o `encerrar` apaga inteira mesmo se o estresse cair no meio. */
+let pastaDosCenarios: string;
 
 /** Quantos prompts o pi falso recebeu em worktrees deste cenário (o registro é compartilhado: outros pi escrevem nele). */
 const chamadas = (c: Cenario): number => piFalsoInstalado.prompts().filter(({ cwd }) => cwd.startsWith(c.dir)).length;
@@ -125,10 +128,12 @@ function prepararProcesso(amb: Ambiente): void {
   process.env.PATH = `${join(raiz, "gh")}:${process.env.PATH ?? ""}`;
   writeFileSync(join(raiz, "agente.mjs"), AGENTE);
   piFalsoInstalado = instalarPiFalso(raiz).roteirizar([{ agente: join(raiz, "agente.mjs") }]);
+  pastaDosCenarios = join(raiz, "cenarios");
+  mkdirSync(pastaDosCenarios);
 }
 
 async function criarCenario(): Promise<Cenario> {
-  const { raiz: dir, banco, fechar } = abrirBancoTemporario();
+  const { raiz: dir, banco, fechar } = abrirBancoTemporario(mkdtempSync(join(pastaDosCenarios, "cenario-")));
   writeFileSync(join(dir, ".cenario"), "");
   const bare = join(dir, "loja.git");
   const repo = join(dir, "loja");
@@ -454,7 +459,14 @@ const ETAPAS: Record<string, Preparar> = {
     },
   ),
   revisar_demanda: ticketDaEtapa("revisar_demanda", rodadaConcluida, revisarDemanda),
-  encerrar_demanda: ticketDaEtapa("encerrar_demanda", emEncerramentoDemanda, ciclo),
+  // O PR final espera o merge humano (o ciclo devolve o ticket a `aberto`): o humano integra e o ciclo seguinte conclui.
+  encerrar_demanda: ticketDaEtapa("encerrar_demanda", emEncerramentoDemanda, async (c, id) => {
+    await ciclo(c);
+    const pr = carregarDemanda(c.banco, id).encerramento?.pr;
+    if (!pr) throw new Error("o encerramento não publicou o PR final");
+    await integrarPR({ repo: c.repo, hospedagem: "github" }, String(pr.numero));
+    await ciclo(c);
+  }),
   sessao_em_aberto: async (c) => {
     const id = await comPR(c);
     portao(c, true);

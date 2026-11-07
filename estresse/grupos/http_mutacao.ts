@@ -1,5 +1,5 @@
 // Grupo do estresse das rotas POST e DELETE de `ROTAS`: uma ação por rota. Cada chamada age sobre um registro próprio do
-// `Preparo`, já na fase que a rota exige (CA-2); a primeira chamada de uma ação prepara os registros das 200 de uma vez,
+// `Preparo`, já na fase que a rota exige (CA-2); a primeira chamada de uma ação prepara os registros de todas de uma vez,
 // e o cronômetro só começa depois (a preparação fica fora do tempo medido). O tempo vai do envio do pedido ao fim do
 // corpo. Toda resposta é lida em busca de SQLITE_BUSY / "database is locked" (CA-3), e o status e o efeito gravado são
 // conferidos (CA-2, CA-4). O pi é o falso do ambiente ($FABRIQUINHA_PI): nenhuma rota aqui inicia o `pi` real (CA-6).
@@ -14,6 +14,7 @@ import { configuracao } from "../../src/armazenamento/servico.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { anexar } from "../../src/armazenamento/simulacao.ts";
 import type { Ambiente } from "../ambiente.ts";
+import { CHAMADAS } from "../medir.ts";
 import { criarPreparo } from "./preparo_demandas.ts";
 
 /** Uma rota POST ou DELETE medida: `chamar` faz uma chamada e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
@@ -29,8 +30,6 @@ export interface AcaoMutacao {
 /** Piso do orçamento em ms: rotas de poucas dezenas de ms variam além de 3× com a carga de fundo da máquina (pi falsos vivos, outros agentes). */
 const PISO_ORCAMENTO = 250;
 
-/** Os registros preparados por ação: tantos quantas as chamadas de `estresse.ts`. */
-const CHAMADAS = 200;
 const TRAVA = /SQLITE_BUSY|database is locked/i;
 const DE = "2026-01-01";
 const ATE = "2026-12-31";
@@ -101,7 +100,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
     return tempo;
   }
 
-  /** `preparar` roda 200 vezes na primeira chamada; `montar` descreve o pedido de cada registro. */
+  /** `preparar` roda uma vez por chamada, todas na primeira; `montar` descreve o pedido de cada registro. */
   function acao<T>(
     metodo: "POST" | "DELETE",
     caminho: string,
@@ -111,7 +110,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
   ): AcaoMutacao {
     let registros: Promise<T[]> | undefined;
     let proximo = 0;
-    const preparar200 = async () => {
+    const prepararTodos = async () => {
       const lista: T[] = [];
       while (lista.length < CHAMADAS) lista.push(await preparar());
       return lista;
@@ -121,7 +120,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
       caminho,
       orcamento: Math.max(orcamento, PISO_ORCAMENTO),
       async chamar() {
-        registros ??= preparar200();
+        registros ??= prepararTodos();
         const registro = (await registros)[proximo++];
         if (registro === undefined) throw new Error(`${metodo} ${caminho}: sem registro preparado`);
         return enviar(metodo, montar(registro));
@@ -411,7 +410,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
       "POST",
       "/api/sessoes/:sessao/dialogos/:id",
       130,
-      () => preparo.sessaoParada(),
+      () => preparo.sessaoParada(false),
       (sessao) => ({
         url: `/api/sessoes/${sessao}/dialogos/d1`,
         corpo: { confirmado: true },
@@ -425,7 +424,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
       "/api/avaliacoes",
       1000,
       async () => {
-        const sessao = await preparo.sessaoParada();
+        const sessao = await preparo.sessaoParada(false);
         return (banco.prepare("SELECT demanda_id FROM sessao WHERE id = ?").get(sessao) as { demanda_id: string })
           .demanda_id;
       },

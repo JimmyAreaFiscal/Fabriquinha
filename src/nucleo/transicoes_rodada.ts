@@ -29,6 +29,12 @@ const EntradaConferencia = z.strictObject({
 const EntradaReprovacaoPR = z.strictObject({ ...TicketRef, motivo: Motivo });
 const EntradaCorrecoesSessao = z.strictObject({ ...TicketRef, correcoes: z.array(z.unknown()) });
 const EntradaAprovacaoPR = z.strictObject({ ...TicketRef, nota: z.number().int().min(1).max(5) });
+// A aprovação automática, no projeto que a ligou: a nota é do Auditor, então a Fabriquinha aprova sem ela.
+const EntradaAprovacaoAutomaticaPR = z.strictObject(TicketRef);
+/** O motivo gravado na aprovação automática do PR da rodada, para a decisão não passar por uma do Auditor. */
+/** @testes os testes conferem a decisão gravada; a produção a usa só dentro do módulo */
+export const MOTIVO_APROVACAO_AUTOMATICA_PR =
+  "aprovado automaticamente pela Fabriquinha: a revisão da rodada aprovou e o PR não tem conflito nem check falho";
 // Atestado da aplicação confiável de que o PR da rodada foi integrado; sem defaults, ausência recusa.
 const Integracao = z.strictObject({ ...TicketRef, confirmada: z.boolean(), branch_destino: z.string() });
 
@@ -36,7 +42,7 @@ const Integracao = z.strictObject({ ...TicketRef, confirmada: z.boolean(), branc
 interface ContextoConfirmacao extends ContextoDemanda {
   readonly integracao?: unknown;
 }
-type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR>;
+type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR> | z.infer<typeof EntradaAprovacaoAutomaticaPR>;
 
 const maximo = (ns: number[]): number => ns.reduce((m, n) => Math.max(m, n), 0);
 
@@ -325,17 +331,22 @@ export function concluirSessaoRodada(
   return { ...ag, tickets: concluir(ag, sessao, ctx.agora), rodadas: comFase(ag, rodada, "desenvolvimento") };
 }
 
-/** Primeiro tempo da aprovação (CA-6): valida a intenção do Auditor sem efeito algum, antes de qualquer integração. */
+/**
+ * Primeiro tempo da aprovação (CA-6): valida a intenção do Auditor, com nota, ou a aprovação automática da Fabriquinha,
+ * sem nota, sem efeito algum, antes de qualquer integração. Chegar ao gate já exige a revisão aprovada e o PR sem
+ * conflito nem check falho; quem decide se o projeto aprova sozinho é a aplicação.
+ */
 export function validarAprovacaoPullRequest(ag: AgregadoDemanda, entrada: unknown, ator: Ator): IntencaoAprovacaoPR {
-  exigirAtor(ator, "aprovar o PR da rodada", "auditor");
-  const e = EntradaAprovacaoPR.parse(entrada);
+  exigirAtor(ator, "aprovar o PR da rodada", "auditor", "fabriquinha");
+  const e = (ator.tipo === "fabriquinha" ? EntradaAprovacaoAutomaticaPR : EntradaAprovacaoPR).parse(entrada);
   gatePullRequest(ag, e);
   return e;
 }
 
 /**
  * Segundo tempo (CA-10 e CA-11): repete as guardas e exige o atestado da aplicação, para este gate e com destino na
- * branch da demanda. Só então grava a aprovação com a nota e conclui o `encerrar_rodada` e a rodada.
+ * branch da demanda. Só então grava a aprovação, com a nota do Auditor ou o motivo da automática, e conclui o
+ * `encerrar_rodada` e a rodada.
  */
 export function confirmarAprovacaoPullRequest(
   ag: AgregadoDemanda,
@@ -362,7 +373,17 @@ export function confirmarAprovacaoPullRequest(
   return {
     ...ag,
     tickets: concluir(ag, ticket, ctx.agora),
-    decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "aprovado", nota: e.nota }, ctx)],
+    decisoes: [
+      ...ag.decisoes,
+      decisaoDoGate(
+        ag,
+        ticket,
+        "nota" in e
+          ? { resultado: "aprovado", nota: e.nota }
+          : { resultado: "aprovado", motivo: MOTIVO_APROVACAO_AUTOMATICA_PR },
+        ctx,
+      ),
+    ],
     rodadas: comFase(ag, rodada, "concluida"),
   };
 }

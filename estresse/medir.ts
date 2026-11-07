@@ -1,5 +1,12 @@
 // Medição do estresse: roda uma ação n vezes com concorrência fixa e resume os tempos (p50, p95, max), os erros e o orçamento.
 
+/**
+ * Chamadas por ação do HTTP e do CLI, 20 ao mesmo tempo: duas ondas cheias medem a disputa pelo banco e pelo git. Eram
+ * 200, e a preparação de cada chamada (serial, com worktrees num repositório só, que ficam mais lentas a cada uma) levava
+ * o estresse a mais de 20 minutos (I-264).
+ */
+export const CHAMADAS = 40;
+
 export interface Medicao {
   n: number;
   p50: number;

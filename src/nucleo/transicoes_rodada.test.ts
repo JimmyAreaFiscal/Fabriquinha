@@ -10,6 +10,7 @@ import {
   concluirImplementacoesRodada,
   concluirSessaoRodada,
   confirmarAprovacaoPullRequest,
+  MOTIVO_APROVACAO_AUTOMATICA_PR,
   registrarCorrecoesSessao,
   registrarRevisaoRodada,
   reprovarPullRequestRodada,
@@ -544,9 +545,11 @@ test("CA-6: validar a aprovação aceita notas 1 a 5 sem efeito e recusa o resto
     recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao({ nota }), AUDITOR));
   }
   recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao({ extra: 1 }), AUDITOR));
-  for (const ator of [FABRIQUINHA, agente(4)]) {
-    recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao(), ator), ErroDeEscopo);
-  }
+  recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao(), agente(4)), ErroDeEscopo);
+  // A aprovação automática é da Fabriquinha e vem sem nota: a nota é do Auditor.
+  recusa(ag, () => validarAprovacaoPullRequest(ag, aprovacao(), FABRIQUINHA));
+  const automatica = { ...ref, ticket_id: 4 };
+  assert.deepEqual(validarAprovacaoPullRequest(ag, automatica, FABRIQUINHA), automatica);
   const enc = emEncerramento();
   recusa(enc, () => validarAprovacaoPullRequest(enc, aprovacao(), AUDITOR));
   const obsoleto = montar("aprovacao_pull_request", [
@@ -577,6 +580,26 @@ test("CA-11: confirmada a integração, grava a aprovação com a nota e conclui
   }
 });
 
+test("a aprovação automática conclui a rodada com o motivo dela no lugar da nota", () => {
+  const ag = emGate();
+  const novo = confirmarAprovacaoPullRequest(ag, { ...ref, ticket_id: 4 }, FABRIQUINHA, {
+    agora: t1,
+    integracao: integracao(),
+  });
+  assert.deepEqual(fase(novo), ["concluida", "desenvolvimento"]);
+  assert.deepEqual(novo.decisoes, [
+    {
+      demanda_id: D,
+      ticket_id: 4,
+      decisao_id: 1,
+      resultado: "aprovado",
+      motivo: MOTIVO_APROVACAO_AUTOMATICA_PR,
+      por: { tipo: "auditor" },
+      em: t1,
+    },
+  ]);
+});
+
 test("CA-10: sem confirmação, falha, divergência ou entrada inválida nada é registrado", () => {
   const ag = emGate();
   const confirma =
@@ -597,6 +620,7 @@ test("CA-10: sem confirmação, falha, divergência ou entrada inválida nada é
     recusa(ag, confirma(aprovacao(), i));
   }
   recusa(ag, confirma(aprovacao({ nota: 6 }), integracao()));
-  recusa(ag, confirma(aprovacao(), integracao(), FABRIQUINHA), ErroDeEscopo);
+  recusa(ag, confirma(aprovacao(), integracao(), FABRIQUINHA));
+  recusa(ag, confirma(aprovacao(), integracao(), agente(4)), ErroDeEscopo);
   recusa(ag, () => confirmarAprovacaoPullRequest(ag, aprovacao(), AUDITOR, ctx));
 });

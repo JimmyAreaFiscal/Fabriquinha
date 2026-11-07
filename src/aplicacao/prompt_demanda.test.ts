@@ -425,3 +425,66 @@ test("o modo do revisar_rodada manda conferir os motivos anteriores e proíbe re
   );
   assert.match(modo, /Isso não impede reprovar de novo um motivo anterior que continua sem correção/);
 });
+
+test("as revisões recebem o que a Fabriquinha já verificou no último commit de cada rodada, com comandos e logs", () => {
+  const implementar = (ticket_id: number, rodada_id: number) => ({ ticket_id, rodada_id, etapa: "implementar" });
+  const verificacao = (tipo: string, ticket_id: number, dados: object) => ({
+    demanda_id: "I-206",
+    ticket_id,
+    tipo,
+    em: AGORA,
+    dados,
+  });
+  const comCommits = {
+    ...ag,
+    rodadas: [...ag.rodadas, { ...ag.rodadas[0], rodada_id: 5 }],
+    tickets: [implementar(1, 2), implementar(2, 2), implementar(4, 2), implementar(6, 5)],
+    evidencias: [
+      verificacao("execucao_testes", 2, { aprovada: false, comandos: [{ comando: "npm run check", codigoSaida: 1 }] }),
+      verificacao("execucao_testes", 2, { aprovada: true, comandos: [{ comando: "npm run check", codigoSaida: 0 }] }),
+      verificacao("matriz_fitness", 2, { aprovada: true, linhas: [] }),
+    ],
+  } as unknown as AgregadoDemanda;
+  const log = (nome: string, caminho: string) => ({
+    nome,
+    tipo: "execucao_testes",
+    ticket_id: 2,
+    caminho,
+    mime: "text/plain",
+    bytes: 1,
+    sha256: "0",
+  });
+  // O T4 da rodada 2 não tem commit: o último commitado é o T2. A rodada 5 tem o T6, sem evidência.
+  const commitsDosTickets = new Map([
+    [1, "a".repeat(40)],
+    [2, "b".repeat(40)],
+    [6, "c".repeat(40)],
+  ]);
+  const montarCom = (etapa: string) =>
+    montarPromptDemanda({
+      ...base,
+      ag: comCommits,
+      ticket: ticket(etapa),
+      commitsDosTickets,
+      anexos: [log("teste-..log", "/raiz/velho.log"), log("teste-..log", "/raiz/novo.log")],
+    });
+
+  const rodada = montarCom("revisar_rodada");
+  assert.match(
+    rodada,
+    new RegExp(
+      "## Verificações já feitas\n\n.*HEAD\\^\\{tree\\}.*\n\n" +
+        `- I-206\\.R2: último commit I-206\\.T2, \`${"b".repeat(40)}\`\n` +
+        "  - `execucao_testes`: aprovada \\(`npm run check` saiu com 0\\); logs: `/raiz/novo.log`\n" +
+        "  - `matriz_fitness`: aprovada; logs: \\(nenhum\\)\n" +
+        "  - `relatorio_sonar`: não aprovada; logs: \\(nenhum\\)\n\n",
+    ),
+  );
+  assert.doesNotMatch(rodada, /I-206\.R5/);
+  assert.match(
+    montarCom("revisar_demanda"),
+    new RegExp(`- I-206\\.R5: último commit I-206\\.T6, \`${"c".repeat(40)}\``),
+  );
+  assert.match(montar("revisar_demanda"), /## Verificações já feitas\n\n.*\n\n\(nenhuma\)/);
+  assert.doesNotMatch(montar("implementar"), /## Verificações já feitas/);
+});

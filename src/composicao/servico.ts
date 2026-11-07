@@ -61,8 +61,16 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   let minutos = 0;
   /** A última batida do relógio (ou a subida): a próxima busca conta a partir dela. */
   let batida = Date.now();
+  /**
+   * Uma etapa despachada terminou depois do último ciclo: o trabalho que ela liberou (a revisão depois da
+   * implementação, o encerramento depois da revisão...) é buscado na batida seguinte, sem esperar o intervalo inteiro.
+   * ponytail: no máximo um ciclo por batida, o mesmo ritmo do intervaloMin 1; disparar no próprio fim da etapa se o
+   * minuto de espera pesar.
+   */
+  let etapaTerminou = false;
   /** A batida em que `minutos` chega ao intervalo; desligado além dele, o ciclo roda na batida seguinte. */
-  const proximaBusca = (): Date => new Date(batida + Math.max(1, configuracao(banco).intervaloMin - minutos) * 60_000);
+  const proximaBusca = (): Date =>
+    new Date(batida + Math.max(1, etapaTerminou ? 1 : configuracao(banco).intervaloMin - minutos) * 60_000);
   // O tratador do web (F7 §4.1) entra depois do banco aberto; antes disso, ninguém tem o link de entrada.
   const web = createServer();
   await new Promise<void>((pronto, falhou) => {
@@ -118,14 +126,19 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     try {
       const c = configuracao(banco);
       // Desligado, o contador continua: ligado depois do intervalo, o primeiro ciclo vem na batida seguinte.
-      if (++minutos < c.intervaloMin || !c.agendadorAtivo) return;
+      if ((++minutos < c.intervaloMin && !etapaTerminou) || !c.agendadorAtivo) return;
       minutos = 0;
+      etapaTerminou = false;
       varredura ??= varrerVencidos()
         .catch(noLog)
         .finally(() => {
           varredura = undefined;
         });
-      void despacharDemandas(banco, c);
+      // As etapas nunca rejeitam (`despacharDemandas`).
+      for (const fim of despacharDemandas(banco, c))
+        void fim.then(() => {
+          etapaTerminou = true;
+        });
     } catch (error_) {
       noLog(error_);
     }

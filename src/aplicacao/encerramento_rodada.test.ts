@@ -248,22 +248,26 @@ test("CA-3: a ponta nova da demanda entra na rodada antes do PR, e o merge da D0
   assert.equal(hospedagem.prs().length, 1);
 });
 
-test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvimento com o arquivo em conflito", async () => {
+test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvimento com um corretivo para o merge", async () => {
   const { banco, demanda, ag, fase, noRemoto } = await cenario();
   commitarArquivo(demanda, "a.txt", "da demanda\n");
+  commitarArquivo(demanda, "b.txt", "da demanda\n");
 
   await concluirEncerramentoRodada(banco, REF);
 
   assert.deepEqual(hospedagem.prs(), []);
   assert.equal(noRemoto(BRANCH_RODADA), "");
   assert.equal(fase(), "desenvolvimento");
-  const corretivo = ag().tickets.find((t) => t.ticket_id > 8);
+  const corretivos = ag().tickets.filter((t) => t.ticket_id > 8);
+  assert.equal(corretivos.length, 1);
+  const [corretivo] = corretivos;
   assert.equal(corretivo?.etapa, "implementar");
   assert.deepEqual(
     ag()
       .caminhos_ticket.filter((x) => x.ticket_id === corretivo.ticket_id)
-      .map((x) => x.caminho),
-    ["a.txt"],
+      .map((x) => x.caminho)
+      .sort(),
+    ["a.txt", "b.txt"],
   );
   assert.equal(ag().tickets.find((t) => t.ticket_id === 8)?.status, "concluido");
 });

@@ -1,6 +1,6 @@
 // Preparo do estresse das rotas POST e DELETE: cada função cria, no banco da raiz temporária do ambiente, um registro só
 // para uma chamada, já na fase que a rota exige (CA-2). Roda antes de medir, então o custo fica fora do tempo medido; o
-// grupo prepara as 200 chamadas de uma ação de uma vez e só então dispara. O pi é o falso do ambiente ($FABRIQUINHA_PI)
+// grupo prepara as chamadas de uma ação de uma vez e só então dispara. O pi é o falso do ambiente ($FABRIQUINHA_PI)
 // e o `gh` é o de `integracao/falsos.ts`, com o estado de cada PR no arquivo dele.
 // Não usa `integracao/apoio.ts`: ele registra hooks do node:test e mexe no process.env ao ser importado.
 import { randomUUID } from "node:crypto";
@@ -46,13 +46,16 @@ export interface Preparo {
   rodadaComPR(): Promise<RodadaComPR>;
   /** Na sessão de ajustes (rodada em `sessao`, sem pi vivo): com `corrigida`, concluir. */
   rodadaEmAjustes(corrigida?: boolean): Promise<string>;
-  /** Ticket `implementar` em `falhou`, endereço `I-n.T1`: reabrir. */
+  /** Ticket `implementar` em `falhou`, endereço `I-n.T1`, sem worktree (reabrir só muda o ticket): reabrir. */
   ticketFalho(): Promise<string>;
   /** Ticket `implementar` `aberto` de uma demanda em execução, com as worktrees prontas, `I-n.T1`: executar. */
   ticketAberto(): Promise<string>;
-  /** Sessão interativa parada (conversa), com a rodada pronta para o pi falso: mensagem. */
-  sessaoParada(): Promise<string>;
-  /** Sessão com a execução aberta e sem pi vivo: abortar. */
+  /**
+   * Sessão interativa parada (conversa): mensagem, com a rodada pronta para o pi falso. Sem `comWorktree`, para as rotas
+   * que não chegam ao git (diálogo e avaliação): as worktrees de cada chamada eram o grosso do tempo do estresse.
+   */
+  sessaoParada(comWorktree?: boolean): Promise<string>;
+  /** Sessão com a execução aberta e sem pi vivo, sem worktree (abortar não chega ao git): abortar. */
   sessaoRodando(): Promise<string>;
   /** Um projeto próprio, para remover ou editar. */
   projetoProprio(): Promise<string>;
@@ -205,10 +208,10 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     return garantirWorktreeRodada(amb.raiz, principal, { demanda_id: id, rodada_id: 1 }, log);
   }
 
-  /** Demanda em `execucao` com a rodada 1 na `fase`, as worktrees prontas e os tickets dados (`demanda_id` se completa). */
-  async function emExecucao(fase: string, tickets: object[], resto: object = {}) {
+  /** Demanda em `execucao` com a rodada 1 na `fase`, as worktrees prontas (se `comWorktree`) e os tickets dados. */
+  async function emExecucao(fase: string, tickets: object[], resto: object = {}, comWorktree = true) {
     const id = novoId();
-    const dir = await worktrees(id);
+    const dir = comWorktree ? await worktrees(id) : "";
     criar(
       "execucao",
       { rodadas: [rodada(id, fase)], tickets: tickets.map((t) => ({ ...t, demanda_id: id })), ...resto },
@@ -218,8 +221,8 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
   }
 
   /** O ticket 1 `implementar` da rodada 1 com `status`, numa demanda em execução. */
-  const comTicket = async (status: string) =>
-    (await emExecucao("desenvolvimento", [ticket("", 1, "implementar", status, { rodada_id: 1 })])).id;
+  const comTicket = async (status: string, comWorktree = true) =>
+    (await emExecucao("desenvolvimento", [ticket("", 1, "implementar", status, { rodada_id: 1 })], {}, comWorktree)).id;
 
   /** Uma sessão interativa do ticket `ticket_id` com a execução dada. */
   function abrirSessao(demanda_id: string, ticket_id: number, aberta: boolean): string {
@@ -336,7 +339,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     },
 
     async ticketFalho() {
-      const id = await comTicket("falhou");
+      const id = await comTicket("falhou", false);
       return `${id}.T1`;
     },
 
@@ -344,13 +347,15 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
       return `${await comTicket("aberto")}.T1`;
     },
 
-    async sessaoParada() {
-      const { id } = await emExecucao("sessao", [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })]);
+    async sessaoParada(comWorktree = true) {
+      const tickets = [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })];
+      const { id } = await emExecucao("sessao", tickets, {}, comWorktree);
       return abrirSessao(id, 1, false);
     },
 
     async sessaoRodando() {
-      const { id } = await emExecucao("sessao", [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })]);
+      const tickets = [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })];
+      const { id } = await emExecucao("sessao", tickets, {}, false);
       return abrirSessao(id, 1, true);
     },
 

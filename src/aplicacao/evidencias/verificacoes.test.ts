@@ -24,13 +24,14 @@ writeFileSync(join(base, "gitconfig"), "[user]\n\tname = Auditor\n\temail = audi
 process.env.GIT_CONFIG_GLOBAL = join(base, "gitconfig");
 process.env.GIT_CONFIG_NOSYSTEM = "1";
 
-// sonar-scanner falso: só informa a tarefa do Compute Engine.
+// sonar-scanner falso: informa a tarefa do Compute Engine e, se achou o lcov na worktree, deixa a marca de que o leu.
 const bin = join(base, "bin");
 mkdirSync(bin);
 writeFileSync(
   join(bin, "sonar-scanner"),
   `#!/bin/sh
 for a; do case $a in -Dsonar.working.directory=*) w=\${a#*=};; esac; done
+[ -f lcov.info ] && touch sonar-leu-lcov
 printf 'ceTaskId=AX1\\n' > "$w/report-task.txt"
 `,
 );
@@ -107,6 +108,21 @@ test("devolve as três verificações do catálogo, aprovadas, sem issue nos arq
   );
   assert.deepEqual(aprovadas(v), [true, true, true]);
   assert.deepEqual(v[2]?.dados, { projectKey: "loja", ceTaskId: "AX1", arquivosAnalisados: ["a.ts"], issues: [] });
+});
+
+test("o Sonar começa quando os testes das linguagens gravaram o lcov e roda junto com o E2E", async () => {
+  const { worktree, projeto } = cenario("touch lcov.info");
+  // O E2E só passa se o Sonar já leu o lcov enquanto ele roda; em série, depois do E2E, ele sairia com o codigo_falha.
+  const esperaOSonar = "for i in $(seq 100); do [ -f sonar-leu-lcov ] && exit 0; sleep 0.05; done; exit 7";
+  const comE2E = Projeto.parse({
+    ...projeto,
+    e2e: [{ caminho_linguagem: ".", comando_build: "true", comando_execucao: esperaOSonar, codigo_falha: 7 }],
+    globs: [{ caminho_linguagem: ".", glob: "*.ts" }],
+  });
+
+  const v = await coletarVerificacoes({ projeto: comE2E, e2e: true, worktree });
+
+  assert.deepEqual(aprovadas(v), [true, true, true]);
 });
 
 test("issue aberta em arquivo alterado reprova o Sonar, tecnicamente (CA-14), e as três rodam mesmo com teste reprovado", async () => {
