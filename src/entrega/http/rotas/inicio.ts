@@ -6,6 +6,7 @@ import { FABRIQUINHA } from "../../../nucleo/ator.ts";
 import type { ModoExecucao } from "../../../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
+import { CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, Instante, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { iniciarRevisaoDemanda } from "../../../nucleo/transicoes_demanda.ts";
@@ -91,15 +92,13 @@ export interface DadosDoInicio {
   board: CartaoDoBoard[];
 }
 
-const TERMINADO: ReadonlySet<EstadoTicket> = new Set(["concluido", "cancelado"]);
-
 /** O ticket em curso de uma lista e quantos outros ainda não terminaram. */
 function ticketEmCurso(
   tickets: readonly TicketDemanda[],
   modoDe: (ref: string) => ModoExecucao | undefined,
   comPiAtivo: ReadonlySet<string>,
 ) {
-  const abertos = tickets.filter((t) => !TERMINADO.has(t.estado));
+  const abertos = tickets.filter((t) => !CICLO_DO_TICKET.ehTerminal(t.estado));
   const [ticket] = abertos.toSorted((a, b) => Number(a.estado === "aberto") - Number(b.estado === "aberto"));
   return {
     ...(ticket && { ticket: ticketDoInicio(ticket, modoDe, comPiAtivo) }),

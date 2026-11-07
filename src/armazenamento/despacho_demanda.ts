@@ -3,10 +3,22 @@
 import type { DatabaseSync } from "node:sqlite";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA, etapaDoEstado } from "../nucleo/ciclos.ts";
+import { EstadoDemanda } from "../nucleo/primitivos.ts";
 import { carregarDemanda } from "./demandas.ts";
 import { predecessorasDaDemanda } from "./dependencias_demanda.ts";
 
-const ESTADOS_LIDOS = "('planejar', 'em_execucao', 'revisar_demanda', 'encerrar_demanda')";
+// Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (`entender_e_desenhar`) e dos Gates,
+// cuja Etapa é a do ticket que eles esperam, não a do estado.
+const ESTADOS_LIDOS = `(${EstadoDemanda.options
+  .filter(
+    (estado) =>
+      CICLO_DA_DEMANDA.estaEmAndamento(estado) &&
+      estado !== "entender_e_desenhar" &&
+      (etapaDoEstado(estado) ?? estado) === estado,
+  )
+  .map((estado) => `'${estado}'`)
+  .join(", ")})`;
 
 interface DemandaParaDespacho {
   agregado: AgregadoDemanda;

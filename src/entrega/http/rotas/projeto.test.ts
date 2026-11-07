@@ -9,12 +9,16 @@ import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../../apoio-testes/banco_temporario.ts";
 import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
-import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
+import {
+  gravarAgregadoPronto,
+  montarAgregadoDemanda,
+  montarTicket,
+} from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarProjeto } from "../../../armazenamento/projetos.ts";
 import { casar } from "../../cliente-web/caminhos.ts";
 import { traduzir } from "../erros.ts";
 import { ROTAS } from "../servidor.ts";
-import type { ListaDoProjeto } from "./projeto.ts";
+import { estadoNaLinhaDoTempo, type ListaDoProjeto } from "./projeto.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -205,11 +209,20 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
     { ref: "I-206.R2", titulo: "rodada 2", estado: "implementar" },
   ]);
   assert.deepEqual(i206.tickets, [
-    { ref: "I-206.T1", etapa: "planejar", estado: "concluido", estadoAlteradoEm: em },
+    {
+      ref: "I-206.T1",
+      etapa: "planejar",
+      estado: "concluido",
+      terminal: true,
+      satisfazDependencia: true,
+      estadoAlteradoEm: em,
+    },
     {
       ref: "I-206.T2",
       etapa: "implementar",
       estado: "concluido",
+      terminal: true,
+      satisfazDependencia: true,
       estadoAlteradoEm: em,
       rodada: "I-206.R1",
       titulo: "Cache",
@@ -219,6 +232,8 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
       ref: "I-206.T3",
       etapa: "encerrar_rodada",
       estado: "concluido",
+      terminal: true,
+      satisfazDependencia: true,
       estadoAlteradoEm: em,
       rodada: "I-206.R1",
     },
@@ -226,6 +241,8 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
       ref: "I-206.T4",
       etapa: "implementar",
       estado: "em_execucao",
+      terminal: false,
+      satisfazDependencia: false,
       estadoAlteradoEm: em,
       rodada: "I-206.R2",
       modelo: "llamacpp / qwen3-coder-30b",
@@ -263,4 +280,15 @@ test("Arquivar concluídas: arquiva as concluídas do projeto e só elas", async
   assert.deepEqual(await chamar("POST", "/api/projetos/loja/arquivar"), { arquivadas: 0 });
   const [status] = (await chamar("POST", "/api/projetos/nao/arquivar")) as [number, string];
   assert.equal(status, 404);
+});
+
+test("a linha do tempo: o estado em andamento, tudo feito na concluída e na arquivada, e a etapa mais adiantada na cancelada", () => {
+  const tickets = [montarTicket("I-1", 1, "implementar", { rodada_id: 1 }), montarTicket("I-1", 2, "planejar")];
+  const noEstado = (estado: string, resto: object = {}) => montarAgregadoDemanda("I-1", estado, resto);
+  assert.equal(estadoNaLinhaDoTempo(noEstado("gate_planejamento", { tickets })), "gate_planejamento");
+  assert.equal(estadoNaLinhaDoTempo(noEstado("concluida", { tickets })), "concluida");
+  assert.equal(estadoNaLinhaDoTempo(noEstado("arquivada", { tickets })), "concluida");
+  assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada", { tickets })), "em_execucao");
+  assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada", { tickets: tickets.slice(1) })), "planejar");
+  assert.equal(estadoNaLinhaDoTempo(noEstado("cancelada")), "entender_e_desenhar");
 });

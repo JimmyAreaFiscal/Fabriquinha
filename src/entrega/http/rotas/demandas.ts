@@ -3,6 +3,7 @@
 import { z } from "zod";
 import type { AgregadoDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { selecionarTrabalho } from "../../../nucleo/selecao_trabalho.ts";
@@ -62,6 +63,7 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
         projeto,
         titulo,
         estado,
+        terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
         rodadas: ag.rodadas.map((r) => {
           const pr = prDaRodada(ag, r.rodada_id);
           return { ref: ref(id).rodada(r.rodada_id), estado: r.estado, ...(pr && { pr }) };
@@ -132,12 +134,15 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       tipo: demanda.tipo,
       descricao: demanda.descricao,
       estado: demanda.estado,
+      terminal: CICLO_DA_DEMANDA.ehTerminal(demanda.estado),
+      arquivavel: CICLO_DA_DEMANDA.transicoes[demanda.estado].includes("arquivada"),
     },
     rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, estado: r.estado })),
     tickets: ag.tickets.map((t) => ({
       ref: ticket(t.ticket_id),
       etapa: t.etapa,
       estado: t.estado,
+      satisfaz_dependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
       // O encerrar_demanda à espera do merge humano não pede execução ao Auditor: pede o merge na plataforma.
       elegivel:
         elegiveis.has(t.ticket_id) && !(t.etapa === "encerrar_demanda" && ag.encerramento?.aguardando_merge_humano),

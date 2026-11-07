@@ -76,10 +76,12 @@ export const temPendente = (tarefas: readonly Tarefa[]): boolean => tarefas.some
 
 /** A coluna do fim da linha: o relatório de quem concluiu, o erro de quem falhou. */
 function resultado(t: Tarefa, e: ExecucaoSimulada): string {
-  if (e.status === "concluida") {
-    return `<button type="button" class="link" data-relatorio="${String(t.id)}:${String(e.id)}">Ver relatório</button>`;
+  switch (e.status) {
+    case "concluida":
+      return `<button type="button" class="link" data-relatorio="${String(t.id)}:${String(e.id)}">Ver relatório</button>`;
+    default:
+      return e.erro ? `<span class="msg-erro">${escapar(e.erro)}</span>` : "";
   }
-  return e.erro ? `<span class="msg-erro">${escapar(e.erro)}</span>` : "";
 }
 
 function execucoes(t: Tarefa): string {

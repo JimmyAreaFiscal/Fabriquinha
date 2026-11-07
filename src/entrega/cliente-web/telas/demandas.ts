@@ -19,6 +19,7 @@ export interface DemandaDoQuadro {
   projeto: string;
   titulo: string;
   estado: EstadoDemanda;
+  terminal: boolean;
   rodadas: { ref: string; estado: EstadoRodada; pr?: { id: string; url: string } }[];
   bloqueios: { demanda_id: string; estado: EstadoDemanda }[];
   falhos: { ref: string; etapa: EtapaTicket }[];
@@ -60,7 +61,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
   const aguarda =
     d.estado === "gate_demanda" ||
     d.estado === "gate_planejamento" ||
-    (!["cancelada", "concluida", "arquivada"].includes(d.estado) && d.rodadas.some((r) => r.estado === "gate_pr"));
+    (!d.terminal && d.rodadas.some((r) => r.estado === "gate_pr"));
   const marcas = [
     ...(aguarda ? [`<span class="pill pill-aguarda">aguarda a decisão do Auditor</span>`] : []),
     ...(d.aguarda_merge ? [`<span class="pill pill-aguarda">aguarda o seu merge do PR final</span>`] : []),
@@ -105,12 +106,22 @@ export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
 
 type EstadoTicket = keyof typeof PILULA_DO_ESTADO_DO_TICKET;
 export interface DadosDaPagina {
-  demanda: { id: string; projeto: string; titulo: string; tipo: string; descricao: string; estado: EstadoDemanda };
+  demanda: {
+    id: string;
+    projeto: string;
+    titulo: string;
+    tipo: string;
+    descricao: string;
+    estado: EstadoDemanda;
+    terminal: boolean;
+    arquivavel: boolean;
+  };
   rodadas: { ref: string; titulo: string; estado: EstadoRodada }[];
   tickets: {
     ref: string;
     etapa: EtapaTicket;
     estado: EstadoTicket;
+    satisfaz_dependencia: boolean;
     elegivel: boolean;
     sessao?: string;
     pi_ativo?: true;
@@ -279,7 +290,7 @@ function acaoDoTicket({ ref, estado, elegivel }: Pagina["tickets"][number]): str
 function ticket(t: Pagina["tickets"][number], p: Pagina): string {
   const minhas = p.decisoes.filter((d) => d.ticket === t.ref);
   const ultima = minhas.at(-1);
-  const decidido = t.estado === "concluido" && ultima !== undefined ? ultima.resultado : undefined;
+  const decidido = t.satisfaz_dependencia && ultima !== undefined ? ultima.resultado : undefined;
   const estado = decidido
     ? pilula(DECISAO[decidido])
     : `<span class="pill ${pilulaDoEstadoDoTicket(t.estado, t.pi_ativo)}">${rotuloDoEstadoDoTicket(t.estado, t.pi_ativo)}</span>`;
@@ -570,17 +581,17 @@ const cartaoLateral = (id: string, titulo: string, corpo: string): string =>
  * Cancelar (CA-27) ou arquivar (CA-29). Cancelar só abre a confirmação, que lista as dependentes que vão junto; nada é
  * enviado antes de confirmar.
  */
-function acoesDaDemanda({ demanda: { id, estado }, dependentes }: Pagina): string {
+function acoesDaDemanda({ demanda: { id, terminal, arquivavel }, dependentes }: Pagina): string {
   const caminho = `/api/demandas/${escapar(id)}`;
   const botao = (acao: string, classe: string, rotulo: string, extra = "") =>
     `<button type="button" class="btn btn-grande ${classe}" data-demanda="${acao}"${extra}>${rotulo}</button>`;
-  if (estado === "concluida")
+  if (arquivavel)
     return cartaoLateral(
       "titulo-acoes",
       "Ações",
       `<div class="dm-botoes">${botao("arquivar", "btn-primario", "Arquivar", ` data-caminho="${caminho}/arquivar"`)}</div>`,
     );
-  if (estado === "arquivada" || estado === "cancelada") return "";
+  if (terminal) return "";
   const junto =
     dependentes.length > 0
       ? `<p class="dm-texto">Estas demandas dependem desta e serão canceladas junto:</p><ul class="dm-tickets">${dependentes.map((d) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(d.demanda_id)}">${escapar(d.demanda_id)}</a> ${escapar(d.titulo)} ${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado])}</li>`).join("")}</ul>`
@@ -650,29 +661,41 @@ function criteriosDaLateral(p: Pagina): string {
 }
 
 /** Os estados da demanda no trilho do cabeçalho; os losangos são os gates do Auditor. */
-const TRILHO: readonly [EstadoDemanda, boolean][] = [
-  ["entender_e_desenhar", false],
-  ["gate_demanda", true],
-  ["planejar", false],
-  ["gate_planejamento", true],
-  ["em_execucao", false],
-  ["revisar_demanda", false],
-  ["encerrar_demanda", false],
-  ["concluida", false],
+const TRILHO: readonly { estado: EstadoDemanda; gate?: true }[] = [
+  { estado: "entender_e_desenhar" },
+  { estado: "gate_demanda", gate: true },
+  { estado: "planejar" },
+  { estado: "gate_planejamento", gate: true },
+  { estado: "em_execucao" },
+  { estado: "revisar_demanda" },
+  { estado: "encerrar_demanda" },
+  { estado: "concluida" },
 ];
+
+/** Onde o estado fica no trilho: concluída e arquivada o completam, e a cancelada fica sem ele. */
+function posicaoNoTrilho(estado: EstadoDemanda): number | undefined {
+  switch (estado) {
+    case "cancelada":
+      return undefined;
+    case "concluida":
+    case "arquivada":
+      return TRILHO.length;
+    default:
+      return TRILHO.findIndex((passo) => passo.estado === estado);
+  }
+}
 
 /** Onde a demanda está no caminho; concluída e arquivada completam o trilho, e a cancelada fica sem ele. */
 function trilhoDeEstados(estado: EstadoDemanda): string {
-  if (estado === "cancelada") return "";
-  const atual =
-    estado === "concluida" || estado === "arquivada" ? TRILHO.length : TRILHO.findIndex(([f]) => f === estado);
-  const passos = TRILHO.map(([f, gate], i) => {
+  const atual = posicaoNoTrilho(estado);
+  if (atual === undefined) return "";
+  const passos = TRILHO.map(({ estado: passo, gate }, i) => {
     const classes = [
       "dm-passo-trilho",
       ...(gate ? ["gate"] : []),
       ...(i < atual ? ["feito"] : i === atual ? ["atual"] : []),
     ];
-    return `<li class="${classes.join(" ")}"${i === atual ? ' aria-current="step"' : ""}><span class="dm-marco-trilho"></span><span>${APARENCIA_DO_ESTADO_DA_DEMANDA[f][0]}</span></li>`;
+    return `<li class="${classes.join(" ")}"${i === atual ? ' aria-current="step"' : ""}><span class="dm-marco-trilho"></span><span>${APARENCIA_DO_ESTADO_DA_DEMANDA[passo][0]}</span></li>`;
   });
   return `<ol class="dm-trilho" aria-label="Fases da demanda">${passos.join("")}</ol>`;
 }
