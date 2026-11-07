@@ -41,7 +41,8 @@ export function lerConversa(raiz: string, sessao: string): unknown[] {
     });
 }
 
-const PREFIXOS_DE_RESPOSTA = ["User answered: ", "User selected: "];
+// Sem espaço no fim: a seleção múltipla vem como "User selected:\n- 1. ...\n- 2. ..." (pacote-pi/extensions/pergunta.ts).
+const PREFIXOS_DE_RESPOSTA = ["User answered:", "User selected:"];
 
 /**
  * As perguntas que o agente fez com `perguntar` e que o Auditor respondeu: casa a chamada com o resultado pelo

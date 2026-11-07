@@ -506,6 +506,8 @@ test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelam
         chamada("c", "perguntar", { question: "Cancelada?" }),
         chamada("d", "perguntar", { question: "Vazia?" }),
         chamada("e", "perguntar"),
+        chamada("m", "perguntar", { question: "Quais critérios?" }),
+        chamada("v", "perguntar", { question: "Seleção vazia?" }),
         chamada("f", "bash", { question: "outra ferramenta" }),
         { type: "toolCall", name: "perguntar", arguments: { question: "sem id" } },
       ],
@@ -513,6 +515,11 @@ test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelam
     resultado("a", "User answered: fica com o Auditor no gate do PR"),
     resultado("b", "User selected: só o servidor"),
     resultado("c", "User cancelled the question"),
+    resultado(
+      "m",
+      "User selected:\n- 1. Maior desconto primeiro\n- 2. Validade mais próxima\n- Other: e desempate pelo código",
+    ),
+    resultado("v", "User selected:\n"),
     resultado("d", "User answered:  "),
     resultado("e", "User answered: sem pergunta"),
     resultado("f", "User answered: não é perguntar"),
@@ -527,6 +534,10 @@ test("perguntasRespondidasNaSessao: casa a pergunta com a resposta, sem cancelam
   assert.deepEqual(perguntasRespondidasNaSessao(c.raiz, "s2"), [
     { pergunta: "Como confiro o Sonar?", resposta: "fica com o Auditor no gate do PR" },
     { pergunta: "Qual o escopo?", resposta: "só o servidor" },
+    {
+      pergunta: "Quais critérios?",
+      resposta: "- 1. Maior desconto primeiro\n- 2. Validade mais próxima\n- Other: e desempate pelo código",
+    },
   ]);
 });
 
