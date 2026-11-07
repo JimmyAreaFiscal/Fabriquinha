@@ -52,7 +52,15 @@ export function perguntasRespondidasNaSessao(raiz: string, sessao: string): { pe
   const mensagens = lerConversa(raiz, sessao).flatMap((entrada) => {
     const message = (entrada as { message?: Mensagem & { toolCallId?: string } } | null)?.message;
     // Linha fora da forma esperada (null, sem message, message sem content) não é conversa.
-    return typeof message?.content === "string" || Array.isArray(message?.content) ? [message] : [];
+    if (typeof message?.content === "string") return [message];
+    if (!Array.isArray(message?.content)) return [];
+    // Bloco que não é objeto (null, número, texto solto) também não é conversa.
+    return [
+      {
+        ...message,
+        content: (message.content as unknown[]).filter((b) => typeof b === "object" && b !== null),
+      },
+    ];
   });
   const perguntaPorChamada = new Map<string, string>();
   for (const m of mensagens.filter((m) => m.role === "assistant")) {
