@@ -14,8 +14,8 @@ const tk = (ticket_id: number, rodada_id: number | undefined, extra = {}) => ({
   ticket_id,
   rodada_id,
   etapa: "implementar",
-  status: "concluido",
-  status_alterado_em: t0,
+  estado: "concluido",
+  estado_alterado_em: t0,
   criado_por: FABRIQUINHA,
   ...extra,
 });
@@ -23,7 +23,8 @@ const rd = (rodada_id: number) => ({
   demanda_id: D,
   rodada_id,
   titulo: "r",
-  fase: "concluida",
+  estado: "concluida",
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/${D}-${String(rodada_id)}`,
 });
@@ -36,8 +37,8 @@ const base = (): AgregadoDemanda =>
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "execucao",
-      fase_alterada_em: t0,
+      estado: "em_execucao",
+      estado_alterado_em: t0,
       criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: `fabriquinha/${D}`,
@@ -56,9 +57,9 @@ const base = (): AgregadoDemanda =>
       {
         demanda_id: D,
         ticket_id: 1,
-        etapa: "demanda",
-        status: "concluido",
-        status_alterado_em: t0,
+        etapa: "entender_e_desenhar",
+        estado: "concluido",
+        estado_alterado_em: t0,
         criado_por: FABRIQUINHA,
       },
       tk(3, 1),
@@ -97,7 +98,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
         depende: [{ demanda_id: D, ticket_id: 2 }],
         configuracao_agente: { modelo: { provedor: "anthropic", nome: "m" }, effort: "high" },
       }),
-      t(2, 5, { status: "concluido", etapa: "revisar_rodada" }),
+      t(2, 5, { estado: "concluido", etapa: "revisar_rodada" }),
     ],
     REVISOR,
     t1,
@@ -105,7 +106,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
   assert.deepEqual(ag, antes);
   assert.deepEqual(novo.tickets.slice(0, 4), ag.tickets);
   assert.deepEqual(
-    novo.tickets.slice(4).map((x) => [x.ticket_id, x.rodada_id, x.titulo, x.etapa, x.status, x.status_alterado_em]),
+    novo.tickets.slice(4).map((x) => [x.ticket_id, x.rodada_id, x.titulo, x.etapa, x.estado, x.estado_alterado_em]),
     [
       [21, 5, "t2", "implementar", "aberto", t1],
       [22, 5, "t7", "implementar", "aberto", t1],
@@ -121,7 +122,7 @@ test("rodada: renumera depois do máximo, mapeia vínculos e preserva o resto", 
   assert.deepEqual(novo.caminhos_ticket.slice(1), [{ demanda_id: D, ticket_id: 22, caminho: "x.ts" }]);
   assert.deepEqual(novo.rodadas, ag.rodadas);
   assert.deepEqual(novo.decisoes, ag.decisoes);
-  assert.equal(novo.demanda.fase, "execucao");
+  assert.equal(novo.demanda.estado, "em_execucao");
 });
 
 test("rodada: recusa vazio, referência alheia, rodada inexistente e ticket de outra rodada ou global", () => {
@@ -191,10 +192,10 @@ test("integral: acrescenta rodadas novas com IDs e vínculos remapeados, sem toc
   assert.deepEqual(ag, antes);
   assert.deepEqual(novo.rodadas.slice(0, 2), ag.rodadas);
   assert.deepEqual(
-    novo.rodadas.slice(2).map((r) => [r.rodada_id, r.titulo, r.fase, r.e2e, r.branch]),
+    novo.rodadas.slice(2).map((r) => [r.rodada_id, r.titulo, r.estado, r.e2e, r.branch]),
     [
-      [6, "r1", "desenvolvimento", true, "fabriquinha/I-1-6"],
-      [7, "r2", "desenvolvimento", true, "fabriquinha/I-1-7"],
+      [6, "r1", "implementar", true, "fabriquinha/I-1-6"],
+      [7, "r2", "implementar", true, "fabriquinha/I-1-7"],
     ],
   );
   assert.deepEqual(novo.dependencias_rodada, [{ demanda_id: D, rodada_id: 7, depende_rodada_id: 6 }]);
@@ -211,7 +212,7 @@ test("integral: acrescenta rodadas novas com IDs e vínculos remapeados, sem toc
       .map((x) => [
         x.ticket_id,
         x.rodada_id,
-        x.status,
+        x.estado,
         x.configuracao_agente?.effort,
         x.configuracao_agente?.modelo?.nome,
       ]),
@@ -228,7 +229,7 @@ test("integral: acrescenta rodadas novas com IDs e vínculos remapeados, sem toc
     [REVISOR, REVISOR, REVISOR],
   );
   assert.deepEqual(novo.evidencias, ag.evidencias);
-  assert.equal(novo.demanda.fase, "execucao");
+  assert.equal(novo.demanda.estado, "em_execucao");
 });
 
 test("integral: recusa vazio, demanda alheia, global, rodada sem ticket, escopo e grafos inválidos", () => {

@@ -3,11 +3,12 @@
 import { z } from "zod";
 import { type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
+import { CICLO_DA_DEMANDA, CICLO_DA_RODADA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
-import { type EtapaTicket, type FaseRodada, Id, type Instante, Motivo, palavras } from "./primitivos.ts";
-import type { ContextoDemanda } from "./transicoes_demanda.ts";
+import { type EtapaTicket, type EstadoRodada, Id, type Instante, Motivo, palavras } from "./primitivos.ts";
+import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
 const RodadaRef = { demanda_id: DemandaId, rodada_id: Id };
 const TicketRef = { ...RodadaRef, ticket_id: Id };
@@ -46,7 +47,7 @@ type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR> | z.infer<typeof E
 
 const maximo = (ns: number[]): number => ns.reduce((m, n) => Math.max(m, n), 0);
 
-function rodadaEmFase(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_id: number }, fase: FaseRodada) {
+function rodadaNoEstado(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_id: number }, estado: EstadoRodada) {
   const { demanda } = ag;
   if (ref.demanda_id !== demanda.id) {
     throw new ErroDeRegra(
@@ -54,20 +55,13 @@ function rodadaEmFase(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_id:
       "use o demanda_id certo",
     );
   }
-  if (demanda.fase !== "execucao") {
-    throw new ErroDeRegra(
-      `a demanda ${demanda.id} está em ${demanda.fase}`,
-      "só a demanda em execucao tem ciclo de rodada",
-    );
-  }
+  CICLO_DA_DEMANDA.exigir(demanda, "em_execucao");
   const rodada = existe(
     ag.rodadas.find((r) => r.rodada_id === ref.rodada_id),
     `a rodada ${String(ref.rodada_id)} não existe na demanda ${demanda.id}`,
     "use uma rodada da demanda",
   );
-  if (rodada.fase !== fase) {
-    throw new ErroDeRegra(`a rodada ${String(rodada.rodada_id)} está em ${rodada.fase}`, `só na fase ${fase}`);
-  }
+  CICLO_DA_RODADA.exigir(rodada, estado);
   return rodada;
 }
 
@@ -81,8 +75,8 @@ function ticketAtual(ag: AgregadoDemanda, rodada: RodadaDemanda, etapa: EtapaTic
       "use o ticket atual da etapa",
     );
   }
-  if (atual.status !== "aberto" && atual.status !== "em_execucao") {
-    throw new ErroDeRegra(`o ticket ${String(ticket_id)} está ${atual.status}`, "só ticket aberto ou em execução age");
+  if (!CICLO_DO_TICKET.estaEmAndamento(atual.estado)) {
+    throw new ErroDeRegra(`o ticket ${String(ticket_id)} está ${atual.estado}`, "só ticket aberto ou em execução age");
   }
   return atual;
 }
@@ -97,21 +91,24 @@ const novoTicket = (
   ticket_id: maximo(ag.tickets.map((t) => t.ticket_id)) + 1,
   rodada_id: rodada.rodada_id,
   etapa,
-  status: "aberto",
+  estado: "aberto",
   devolucoes: 0,
-  status_alterado_em: agora,
+  estado_alterado_em: agora,
   criado_por: FABRIQUINHA,
 });
 
-const concluir = (ag: AgregadoDemanda, alvo: TicketDemanda, agora: Instante): TicketDemanda[] =>
-  ag.tickets.map((t) =>
-    t.ticket_id === alvo.ticket_id ? { ...t, status: "concluido", status_alterado_em: agora } : t,
-  );
+const rodadasComEstadoMudado = (
+  ag: AgregadoDemanda,
+  alvo: RodadaDemanda,
+  para: EstadoRodada,
+  agora: Instante,
+): RodadaDemanda[] =>
+  ag.rodadas.map((r) => (r.rodada_id === alvo.rodada_id ? CICLO_DA_RODADA.mudar(r, para, agora) : r));
 
-const comFase = (ag: AgregadoDemanda, rodada: RodadaDemanda, fase: FaseRodada): RodadaDemanda[] =>
-  ag.rodadas.map((r) => (r.rodada_id === rodada.rodada_id ? { ...r, fase } : r));
+const ticketsConcluidos = (ag: AgregadoDemanda, alvo: TicketDemanda, agora: Instante): TicketDemanda[] =>
+  mudarTicket(ag, alvo, "concluido", agora).tickets;
 
-/** CA-1: todas as implementações `concluido` (processo encerrado não conta) levam a rodada a `revisao`, com um `revisar_rodada` novo. */
+/** CA-1: todas as implementações `concluido` (processo encerrado não conta) levam a rodada a `revisar_rodada`, com um `revisar_rodada` novo. */
 export function concluirImplementacoesRodada(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -120,7 +117,7 @@ export function concluirImplementacoesRodada(
 ): AgregadoDemanda {
   exigirAtor(ator, "concluir as implementações da rodada", "fabriquinha");
   const e = EntradaConclusao.parse(entrada);
-  const rodada = rodadaEmFase(ag, e, "desenvolvimento");
+  const rodada = rodadaNoEstado(ag, e, "implementar");
   const impl = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "implementar");
   if (impl.length === 0) {
     throw new ErroDeRegra(
@@ -128,17 +125,17 @@ export function concluirImplementacoesRodada(
       "não há o que concluir",
     );
   }
-  const pendente = impl.find((t) => t.status !== "concluido");
+  const pendente = impl.find((t) => t.estado !== "concluido");
   if (pendente) {
     throw new ErroDeRegra(
-      `o ticket ${String(pendente.ticket_id)} está ${pendente.status}`,
+      `o ticket ${String(pendente.ticket_id)} está ${pendente.estado}`,
       "todas as implementações da rodada precisam estar concluído",
     );
   }
   return {
     ...ag,
     tickets: [...ag.tickets, novoTicket(ag, rodada, "revisar_rodada", ctx.agora)],
-    rodadas: comFase(ag, rodada, "revisao"),
+    rodadas: rodadasComEstadoMudado(ag, rodada, "revisar_rodada", ctx.agora),
   };
 }
 
@@ -169,8 +166,8 @@ function montarMotivoFalhaDaTerceiraReprovacao(motivosDaMaisRecenteParaAMaisAnti
 
 /**
  * CA-2 e CA-3: só o agente do ticket `revisar_rodada` atual. Reprovada, as exigências vão inteiras em `motivo` e as
- * correções nascem na mesma operação (volta a `desenvolvimento`); aprovada, abre `encerrar_rodada` e vai a `encerramento`.
- * Na terceira reprovação da rodada (as já gravadas mais esta) não há corretivos: o ticket falha e a fase segue em `revisao`.
+ * correções nascem na mesma operação (volta a `implementar`); aprovada, abre `encerrar_rodada` e vai a `encerrar_rodada`.
+ * Na terceira reprovação da rodada (as já gravadas mais esta) não há corretivos: o ticket falha e o estado segue em `revisar_rodada`.
  */
 export function registrarRevisaoRodada(
   ag: AgregadoDemanda,
@@ -179,7 +176,7 @@ export function registrarRevisaoRodada(
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
   const e = EntradaRevisao.parse(entrada);
-  const rodada = rodadaEmFase(ag, e, "revisao");
+  const rodada = rodadaNoEstado(ag, e, "revisar_rodada");
   const ticket = ticketAtual(ag, rodada, "revisar_rodada", e.ticket_id);
   if (ator.tipo !== "agente") {
     throw new ErroDeEscopo("só o agente do ticket revisar_rodada atual decide a revisão", "peça à sessão de revisão");
@@ -205,30 +202,35 @@ export function registrarRevisaoRodada(
     const motivo_falha = montarMotivoFalhaDaTerceiraReprovacao(motivosDasReprovacoes.reverse());
     return {
       ...ag,
-      tickets: ag.tickets.map((t) =>
-        t.ticket_id === ticket.ticket_id ? { ...t, status: "falhou", motivo_falha, status_alterado_em: ctx.agora } : t,
-      ),
+      tickets: mudarTicket(ag, ticket, "falhou", ctx.agora, { motivo_falha }).tickets,
       decisoes: [...ag.decisoes, decisao],
     };
   }
   // Os mesmos erros de correção vazia ou inválida recusam antes de qualquer retorno.
   const base = e.aprovado ? ag : materializarCorrecoesRodada(ag, e, e.correcoes, ator, ctx.agora);
-  const fechado: AgregadoDemanda = {
+  const comRevisaoDecidida: AgregadoDemanda = {
     ...base,
-    tickets: concluir(base, ticket, ctx.agora),
+    tickets: ticketsConcluidos(base, ticket, ctx.agora),
     decisoes: [...ag.decisoes, decisao],
   };
   return {
-    ...fechado,
-    ...(e.aprovado && { tickets: [...fechado.tickets, novoTicket(ag, rodada, "encerrar_rodada", ctx.agora)] }),
-    rodadas: comFase(fechado, rodada, e.aprovado ? "encerramento" : "desenvolvimento"),
+    ...comRevisaoDecidida,
+    ...(e.aprovado && {
+      tickets: [...comRevisaoDecidida.tickets, novoTicket(ag, rodada, "encerrar_rodada", ctx.agora)],
+    }),
+    rodadas: rodadasComEstadoMudado(
+      comRevisaoDecidida,
+      rodada,
+      e.aprovado ? "encerrar_rodada" : "implementar",
+      ctx.agora,
+    ),
   };
 }
 
 /**
  * CA-4 e CA-5: a Fabriquinha confere o PR depois da documentação, com fatos explícitos. Com conflito ou check falho exige
- * correções, conclui a etapa técnica e volta a `desenvolvimento` sem decisão humana; sem problema, vai a
- * `aprovacao_pull_request` e o `encerrar_rodada` segue como âncora do gate.
+ * correções, conclui a etapa técnica e volta a `implementar` sem decisão humana; sem problema, vai a
+ * `gate_pr` e o `encerrar_rodada` segue como âncora do gate.
  */
 export function conferirPullRequestRodada(
   ag: AgregadoDemanda,
@@ -238,7 +240,7 @@ export function conferirPullRequestRodada(
 ): AgregadoDemanda {
   exigirAtor(ator, "conferir o PR da rodada", "fabriquinha");
   const e = EntradaConferencia.parse(entrada);
-  const rodada = rodadaEmFase(ag, e, "encerramento");
+  const rodada = rodadaNoEstado(ag, e, "encerrar_rodada");
   const ticket = ticketAtual(ag, rodada, "encerrar_rodada", e.ticket_id);
   if (!e.documentacao_entregue) {
     throw new ErroDeRegra("a documentação ainda não foi entregue", "confira o PR só depois da entrega");
@@ -247,15 +249,19 @@ export function conferirPullRequestRodada(
     if (e.correcoes !== undefined) {
       throw new ErroDeRegra("o PR sem conflito nem check falho não leva correções", "omita as correções");
     }
-    return { ...ag, rodadas: comFase(ag, rodada, "aprovacao_pull_request") };
+    return { ...ag, rodadas: rodadasComEstadoMudado(ag, rodada, "gate_pr", ctx.agora) };
   }
   const base = materializarCorrecoesRodada(ag, e, e.correcoes ?? [], ator, ctx.agora);
-  return { ...base, tickets: concluir(base, ticket, ctx.agora), rodadas: comFase(base, rodada, "desenvolvimento") };
+  return {
+    ...base,
+    tickets: ticketsConcluidos(base, ticket, ctx.agora),
+    rodadas: rodadasComEstadoMudado(base, rodada, "implementar", ctx.agora),
+  };
 }
 
-/** O gate do PR: rodada em `aprovacao_pull_request` e o `encerrar_rodada` atual ainda ativo. */
+/** O gate do PR: rodada em `gate_pr` e o `encerrar_rodada` atual ainda ativo. */
 function gatePullRequest(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_id: number; ticket_id: number }) {
-  const rodada = rodadaEmFase(ag, ref, "aprovacao_pull_request");
+  const rodada = rodadaNoEstado(ag, ref, "gate_pr");
   return { rodada, ticket: ticketAtual(ag, rodada, "encerrar_rodada", ref.ticket_id) };
 }
 
@@ -286,13 +292,13 @@ export function reprovarPullRequestRodada(
   const { rodada, ticket } = gatePullRequest(ag, e);
   return {
     ...ag,
-    tickets: [...concluir(ag, ticket, ctx.agora), novoTicket(ag, rodada, "sessao_em_aberto", ctx.agora)],
+    tickets: [...ticketsConcluidos(ag, ticket, ctx.agora), novoTicket(ag, rodada, "ajustar_resultado", ctx.agora)],
     decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "recusado", motivo: e.motivo }, ator, ctx)],
-    rodadas: comFase(ag, rodada, "sessao"),
+    rodadas: rodadasComEstadoMudado(ag, rodada, "ajustar_resultado", ctx.agora),
   };
 }
 
-/** Correções novas da sessão (Auditor ou agente do ticket da sessão): ficam abertas, sem executar nem mudar de fase. */
+/** Correções novas da sessão (Auditor ou agente do ticket da sessão): ficam abertas, sem executar nem mudar de estado. */
 export function registrarCorrecoesSessao(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -300,8 +306,8 @@ export function registrarCorrecoesSessao(
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
   const e = EntradaCorrecoesSessao.parse(entrada);
-  const rodada = rodadaEmFase(ag, e, "sessao");
-  ticketAtual(ag, rodada, "sessao_em_aberto", e.ticket_id); // recusa se não for o ticket da sessão
+  const rodada = rodadaNoEstado(ag, e, "ajustar_resultado");
+  ticketAtual(ag, rodada, "ajustar_resultado", e.ticket_id); // recusa se não for o ticket da sessão
   if (ator.tipo !== "agente" && ator.tipo !== "auditor") {
     throw new ErroDeEscopo("só o Auditor ou o agente da sessão registram correções", "peça ao Auditor pelo web");
   }
@@ -317,19 +323,23 @@ export function concluirSessaoRodada(
 ): AgregadoDemanda {
   exigirAtor(ator, "concluir a sessão da rodada", "auditor");
   const e = z.strictObject(TicketRef).parse(entrada);
-  const rodada = rodadaEmFase(ag, e, "sessao");
-  const sessao = ticketAtual(ag, rodada, "sessao_em_aberto", e.ticket_id);
+  const rodada = rodadaNoEstado(ag, e, "ajustar_resultado");
+  const sessao = ticketAtual(ag, rodada, "ajustar_resultado", e.ticket_id);
   const impl = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "implementar");
-  if (impl.some((t) => t.status === "em_execucao")) {
+  if (impl.some((t) => t.estado === "em_execucao")) {
     throw new ErroDeRegra("há implementação em execução na rodada", "espere ou encerre a execução antes de concluir");
   }
-  if (!impl.some((t) => t.status === "aberto" && t.ticket_id > sessao.ticket_id)) {
+  if (!impl.some((t) => t.estado === "aberto" && t.ticket_id > sessao.ticket_id)) {
     throw new ErroDeRegra(
       "a sessão não registrou trabalho corretivo novo",
       "registre ao menos uma correção na sessão antes de concluí-la",
     );
   }
-  return { ...ag, tickets: concluir(ag, sessao, ctx.agora), rodadas: comFase(ag, rodada, "desenvolvimento") };
+  return {
+    ...ag,
+    tickets: ticketsConcluidos(ag, sessao, ctx.agora),
+    rodadas: rodadasComEstadoMudado(ag, rodada, "implementar", ctx.agora),
+  };
 }
 
 /**
@@ -373,7 +383,7 @@ export function confirmarAprovacaoPullRequest(
   }
   return {
     ...ag,
-    tickets: concluir(ag, ticket, ctx.agora),
+    tickets: ticketsConcluidos(ag, ticket, ctx.agora),
     decisoes: [
       ...ag.decisoes,
       decisaoDoGate(
@@ -386,6 +396,6 @@ export function confirmarAprovacaoPullRequest(
         ctx,
       ),
     ],
-    rodadas: comFase(ag, rodada, "concluida"),
+    rodadas: rodadasComEstadoMudado(ag, rodada, "concluida", ctx.agora),
   };
 }

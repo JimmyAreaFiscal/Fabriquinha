@@ -88,10 +88,10 @@ test("CA-SDLC-19: plano com CA-n inexistente ou com dependÃªncia entre rodadas Ã
     depois.evidencias.some((e) => e.tipo === "plano"),
     false,
   );
-  assert.equal(depois.demanda.fase, "planejamento");
+  assert.equal(depois.demanda.estado, "planejar");
   assert.deepEqual(depois.decisoes, antes.decisoes);
   assert.deepEqual(depois.rodadas, []);
-  assert.equal(depois.tickets.find((x) => x.ticket_id === PLANEJAR)?.status, "aberto");
+  assert.equal(depois.tickets.find((x) => x.ticket_id === PLANEJAR)?.estado, "aberto");
   assert.equal(pi.prompts().length, 0);
 });
 

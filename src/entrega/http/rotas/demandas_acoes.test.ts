@@ -39,8 +39,8 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   demanda_id: DEMANDA,
   ticket_id,
   etapa,
-  status,
-  status_alterado_em: em,
+  estado: status,
+  estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
@@ -89,11 +89,11 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   const resto: Record<string, unknown> = {
-    demanda: { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "aprovacao_demanda" },
-    tickets: [ticket(1, "demanda", "em_execucao")],
+    demanda: { ...montarAgregadoDemanda(DEMANDA, "").demanda, estado: "gate_demanda" },
+    tickets: [ticket(1, "entender_e_desenhar", "em_execucao")],
   };
   if (gate === "planejamento") {
-    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "aprovacao_planejamento" };
+    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, estado: "gate_planejamento" };
     resto.tickets = [ticket(1, "planejar", "em_execucao")];
     resto.evidencias = [
       {
@@ -118,10 +118,25 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
     rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
     hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
-    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, fase: "execucao" };
+    resto.demanda = { ...montarAgregadoDemanda(DEMANDA, "").demanda, estado: "em_execucao" };
     resto.rodadas = [
-      { ...REF, titulo: "r2", fase: "aprovacao_pull_request", e2e: false, branch: BRANCH_RODADA },
-      { demanda_id: DEMANDA, rodada_id: 1, titulo: "r1", fase: "concluida", e2e: false, branch: "fabriquinha/I-206-1" },
+      {
+        ...REF,
+        titulo: "r2",
+        estado: "gate_pr",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: BRANCH_RODADA,
+      },
+      {
+        demanda_id: DEMANDA,
+        rodada_id: 1,
+        titulo: "r1",
+        estado: "concluida",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: "fabriquinha/I-206-1",
+      },
     ];
     resto.tickets = [
       ticket(3, "implementar", "concluido", { rodada_id: 2 }),
@@ -141,7 +156,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
   const { demanda: cabecalho, ...outros } = resto;
   const ag = montarAgregadoDemanda(DEMANDA, "", outros);
   gravarAgregadoPronto(banco, { ...ag, demanda: cabecalho } as typeof ag);
-  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejamento"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejar"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
 
   instalarPiFalso(c.dir).roteirizar([
@@ -156,80 +171,80 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     banco,
     ...(await servir(banco, comExecutarDemanda)),
     ag: () => carregarDemanda(banco, DEMANDA),
-    fase: (id = DEMANDA) => carregarDemanda(banco, id).demanda.fase,
+    estado: (id = DEMANDA) => carregarDemanda(banco, id).demanda.estado,
   };
 }
 
 type Cenario = Awaited<ReturnType<typeof cenario>>;
 const erro = (r: { json: () => Record<string, string> }) => String(r.json().erro);
 
-test("CA-13: aprovar a demanda avança de fase e a resposta traz a demanda atualizada", async () => {
-  const { pedir, fase } = await cenario("demanda");
+test("CA-13: aprovar a demanda avança de estado e a resposta traz a demanda atualizada", async () => {
+  const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: true } });
   assert.equal(r.status, 200);
-  const { demanda, canceladas } = r.json<{ demanda: { demanda: { fase: string } }; canceladas: string[] }>();
-  assert.equal(demanda.demanda.fase, "planejamento");
+  const { demanda, canceladas } = r.json<{ demanda: { demanda: { estado: string } }; canceladas: string[] }>();
+  assert.equal(demanda.demanda.estado, "planejar");
   assert.deepEqual(canceladas, []);
-  assert.equal(fase(), "planejamento");
+  assert.equal(estado(), "planejar");
 });
 
 test("CA-14: recusar a demanda sem motivo pede o motivo e a demanda continua aguardando", async () => {
-  const { pedir, fase } = await cenario("demanda");
+  const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: false } });
   assert.equal(r.status, 409);
   assert.match(erro(r), /informe o motivo da recusa/);
-  assert.equal(fase(), "aprovacao_demanda");
+  assert.equal(estado(), "gate_demanda");
 });
 
 test("CA-15: recusar com motivo cancela a I-206 e a I-207 que depende dela", async () => {
-  const { pedir, fase } = await cenario("demanda");
+  const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", {
     metodo: "POST",
     corpo: { aprovado: false, motivo: "escopo grande demais" },
   });
   assert.equal(r.status, 200);
   assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
-  assert.deepEqual([fase("I-206"), fase("I-207")], ["cancelada", "cancelada"]);
+  assert.deepEqual([estado("I-206"), estado("I-207")], ["cancelada", "cancelada"]);
 });
 
 test("CA-16: aprovar de novo devolve a orientação do serviço e a demanda não muda", async () => {
-  const { pedir, fase } = await cenario("demanda");
+  const { pedir, estado } = await cenario("demanda");
   await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: true } });
   const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: true } });
   assert.equal(r.status, 409);
   assert.match(erro(r), /não espera decisão/);
-  assert.equal(fase(), "planejamento");
+  assert.equal(estado(), "planejar");
 });
 
-test("CA-17: aprovar o planejamento avança de fase e cria a worktree de cada rodada independente", async () => {
-  const { pedir, fase, c } = await cenario("planejamento");
+test("CA-17: aprovar o planejamento avança de estado e cria a worktree de cada rodada independente", async () => {
+  const { pedir, estado, c } = await cenario("planejamento");
   const r = await pedir("/api/demandas/I-206/planejamento/decisao", {
     metodo: "POST",
     corpo: { aprovado: true, nota: 4 },
   });
   assert.equal(r.status, 200);
-  assert.equal(fase(), "execucao");
+  assert.equal(estado(), "em_execucao");
   assert.ok(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "1")));
   // D04: a R2 depende da R1 e nasce quando começar, da ponta da demanda.
   assert.equal(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "2")), false);
 });
 
 test("CA-18: reprovar o planejamento sem motivo pede o motivo e o planejamento continua aguardando", async () => {
-  const { pedir, fase } = await cenario("planejamento");
+  const { pedir, estado } = await cenario("planejamento");
   const r = await pedir("/api/demandas/I-206/planejamento/decisao", { metodo: "POST", corpo: { aprovado: false } });
   assert.equal(r.status, 422);
   assert.match(erro(r), /informe o motivo da reprovação do planejamento/);
-  assert.equal(fase(), "aprovacao_planejamento");
+  assert.equal(estado(), "gate_planejamento");
 });
 
 test("CA-19: reprovar o planejamento com motivo volta a demanda ao planejamento com o motivo registrado", async () => {
-  const { pedir, fase, ag } = await cenario("planejamento");
+  const { pedir, estado, ag } = await cenario("planejamento");
   const r = await pedir("/api/demandas/I-206/planejamento/decisao", {
     metodo: "POST",
     corpo: { aprovado: false, motivo: "falta cobrir o erro de rede" },
   });
   assert.equal(r.status, 200);
-  assert.equal(fase(), "planejamento");
+  assert.equal(estado(), "planejar");
   assert.deepEqual(
     ag().decisoes.map((d) => [d.resultado, d.motivo]),
     [["recusado", "falta cobrir o erro de rede"]],
@@ -243,7 +258,7 @@ test("CA-20: aprovar o PR com nota 4 conclui a rodada e grava a nota", async () 
   const c = await cenario("pr");
   const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: true, nota: 4 } });
   assert.equal(r.status, 200);
-  assert.equal(rodada(c)?.fase, "concluida");
+  assert.equal(rodada(c)?.estado, "concluida");
   assert.equal(c.ag().decisoes.find((d) => d.resultado === "aprovado")?.nota, 4);
 });
 
@@ -254,7 +269,7 @@ test("CA-21: aprovar o PR com nota 6 diz que a nota vai de 1 a 5 e a rodada não
     assert.equal(r.status, 422);
     assert.match(erro(r), /a nota vai de 1 a 5/);
   }
-  assert.equal(rodada(c)?.fase, "aprovacao_pull_request");
+  assert.equal(rodada(c)?.estado, "gate_pr");
 });
 
 /** Registra a correção como o agente da sessão e conclui pela rota: encerra o pi do teste. */
@@ -300,7 +315,7 @@ async function ate(condicao: () => Promise<boolean>): Promise<void> {
 test("CA-22: reprovar o PR com motivo e sem nota abre a sessão de ajustes na hora, com o motivo", async () => {
   const c = await comSessao();
   assert.ok(c.sessao);
-  assert.equal(rodada(c)?.fase, "sessao");
+  assert.equal(rodada(c)?.estado, "ajustar_resultado");
   assert.deepEqual(
     c.ag().decisoes.map((d) => [d.resultado, d.motivo, d.nota]),
     [["recusado", "cobertura abaixo do combinado", undefined]],
@@ -313,7 +328,7 @@ test("CA-23: reprovar o PR sem motivo pede o motivo e a sessão não abre", asyn
   const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: false, motivo: "  " } });
   assert.equal(r.status, 422);
   assert.match(erro(r), /informe o motivo da reprovação do PR/);
-  assert.equal(rodada(c)?.fase, "aprovacao_pull_request");
+  assert.equal(rodada(c)?.estado, "gate_pr");
 });
 
 test("CA-24: reprovar o PR com motivo e nota diz que a reprovação não leva nota e a rodada não muda", async () => {
@@ -321,7 +336,7 @@ test("CA-24: reprovar o PR com motivo e nota diz que a reprovação não leva no
   const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: false, motivo: "m", nota: 3 } });
   assert.equal(r.status, 422);
   assert.match(erro(r), /a reprovação não leva nota/);
-  assert.equal(rodada(c)?.fase, "aprovacao_pull_request");
+  assert.equal(rodada(c)?.estado, "gate_pr");
 });
 
 const execucoesAbertas = ({ banco }: Cenario) =>
@@ -355,8 +370,8 @@ test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e
   await ate(() => Promise.resolve(situacao(c.sessao) !== undefined));
   encerrar(retomada.id);
   await ate(() => Promise.resolve(execucoesAbertas(c) === 0));
-  assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.status, "aberto");
-  assert.equal(rodada(c)?.fase, "sessao");
+  assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.estado, "aberto");
+  assert.equal(rodada(c)?.estado, "ajustar_resultado");
   const lista = (await chat(c, c.sessao)).conversa;
   assert.equal(lista.find((e) => e.message?.content === "com o pi parado")?.fabriquinha, undefined);
   assert.equal(lista.filter((e) => e.fabriquinha).length, 1);
@@ -367,8 +382,8 @@ test("CA-27: concluir a sessão a deixa concluída e ela não aceita mais mensag
   const c = await comSessao();
   const r = await concluirSessao(c, 9);
   assert.equal(r.status, 200);
-  assert.equal(rodada(c)?.fase, "desenvolvimento");
-  assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.status, "concluido");
+  assert.equal(rodada(c)?.estado, "implementar");
+  assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.estado, "concluido");
   const depois = await c.pedir(`/api/sessoes/${c.sessao}/mensagens`, {
     metodo: "POST",
     corpo: { texto: "mais uma", modo: "prompt" },
@@ -390,14 +405,14 @@ test("a rodada sem sessão de ajustes não conclui e o endereço precisa ser de 
 });
 
 test("CA-36: decisão de outra origem recebe 403 e a demanda não muda", async () => {
-  const { pedir, fase } = await cenario("demanda");
+  const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", {
     metodo: "POST",
     corpo: { aprovado: true },
     headers: { "sec-fetch-site": "cross-site" },
   });
   assert.equal(r.status, 403);
-  assert.equal(fase(), "aprovacao_demanda");
+  assert.equal(estado(), "gate_demanda");
 });
 
 const POST = { metodo: "POST" };
@@ -413,24 +428,24 @@ const encerramentoIntegrado = (demanda_id: string) => ({
 
 test("CA-28: reabrir o ticket falho grava a instrução e o ticket volta a aberto", async () => {
   const { pedir, banco, ag } = await cenario("demanda");
-  banco.exec("UPDATE ticket_demanda SET status = 'falhou' WHERE ticket_id = 1");
+  banco.exec("UPDATE ticket_demanda SET estado = 'falhou' WHERE ticket_id = 1");
   const r = await pedir("/api/demandas/tickets/I-206.T1/reabrir", {
     ...POST,
     corpo: { instrucao: "trate a lista vazia" },
   });
   assert.equal(r.status, 200);
   const t = ag().tickets[0];
-  assert.deepEqual([t?.status, t?.instrucao], ["aberto", "trate a lista vazia"]);
+  assert.deepEqual([t?.estado, t?.instrucao], ["aberto", "trate a lista vazia"]);
   assert.equal(r.json<{ ticket: { instrucao: string } }>().ticket.instrucao, "trate a lista vazia");
 });
 
 test("CA-29: reabrir sem instrução pede a instrução e o ticket continua falho", async () => {
   const { pedir, banco, ag } = await cenario("demanda");
-  banco.exec("UPDATE ticket_demanda SET status = 'falhou' WHERE ticket_id = 1");
+  banco.exec("UPDATE ticket_demanda SET estado = 'falhou' WHERE ticket_id = 1");
   const r = await pedir("/api/demandas/tickets/I-206.T1/reabrir", { ...POST, corpo: { instrucao: " " } });
   assert.equal(r.status, 422);
   assert.match(erro(r), /informe o motivo da reabertura/);
-  assert.equal(ag().tickets[0]?.status, "falhou");
+  assert.equal(ag().tickets[0]?.estado, "falhou");
   const rodada = await pedir("/api/demandas/tickets/I-206.R1/reabrir", { ...POST, corpo: { instrucao: "x" } });
   assert.match(erro(rodada), /I-206\.R1 não é um ticket/);
 });
@@ -450,36 +465,36 @@ test("Executar agora sem o agendador das demandas devolve erro claro", async () 
 });
 
 test("CA-32: cancelar leva a dependente e o histórico fica", async () => {
-  const { pedir, fase, ag } = await cenario("demanda");
+  const { pedir, estado, ag } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/cancelar", POST);
   assert.equal(r.status, 200);
   assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
-  assert.deepEqual([fase("I-206"), fase("I-207")], ["cancelada", "cancelada"]);
+  assert.deepEqual([estado("I-206"), estado("I-207")], ["cancelada", "cancelada"]);
   assert.equal(ag().tickets.length, 1);
 });
 
 test("CA-33: cancelar depois da integração confirmada é recusado e a demanda não muda", async () => {
-  const { pedir, banco, fase } = await cenario("demanda");
+  const { pedir, banco, estado } = await cenario("demanda");
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
-    demanda: { ...ag.demanda, fase: "encerramento" },
+    demanda: { ...ag.demanda, estado: "encerrar_demanda" },
     encerramento: encerramentoIntegrado("I-206"),
   }));
   const r = await pedir("/api/demandas/I-206/cancelar", POST);
   assert.equal(r.status, 409);
   assert.match(erro(r), /integração confirmada/);
-  assert.equal(fase(), "encerramento");
+  assert.equal(estado(), "encerrar_demanda");
 });
 
 test("CA-34 e CA-35: arquivar só a concluída", async () => {
-  const { pedir, banco, fase } = await cenario("demanda");
+  const { pedir, banco, estado } = await cenario("demanda");
   const recusa = await pedir("/api/demandas/I-206/arquivar", POST);
   assert.equal(recusa.status, 409);
-  assert.match(erro(recusa), /só demanda concluída pode ser arquivada/);
-  assert.equal(fase(), "aprovacao_demanda");
-  banco.exec("UPDATE demanda SET fase = 'concluida' WHERE id = 'I-206'");
+  assert.match(erro(recusa), /só no estado concluida/);
+  assert.equal(estado(), "gate_demanda");
+  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
   const r = await pedir("/api/demandas/I-206/arquivar", POST);
   assert.equal(r.status, 200);
-  assert.equal(r.json<{ demanda: { demanda: { fase: string } } }>().demanda.demanda.fase, "arquivada");
-  assert.equal(fase(), "arquivada");
+  assert.equal(r.json<{ demanda: { demanda: { estado: string } } }>().demanda.demanda.estado, "arquivada");
+  assert.equal(estado(), "arquivada");
 });

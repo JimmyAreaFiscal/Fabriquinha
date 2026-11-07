@@ -48,14 +48,14 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: st
   demanda_id,
   ticket_id,
   etapa,
-  status,
-  status_alterado_em: em,
+  estado: status,
+  estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
 });
 
-const demanda = (id: string, fase: string, descricao: string, tickets: object[]): AgregadoDemanda =>
+const demanda = (id: string, estado: string, descricao: string, tickets: object[]): AgregadoDemanda =>
   ({
     demanda: {
       id,
@@ -63,8 +63,8 @@ const demanda = (id: string, fase: string, descricao: string, tickets: object[])
       titulo: `demanda ${id}`,
       tipo: "funcionalidade",
       descricao,
-      fase,
-      fase_alterada_em: em,
+      estado,
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
       enviada: true,
       branch: `fabriquinha/${id}`,
@@ -75,7 +75,8 @@ const demanda = (id: string, fase: string, descricao: string, tickets: object[])
         demanda_id: id,
         rodada_id: 1,
         titulo: "r1",
-        fase: "desenvolvimento",
+        estado: "implementar",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
         e2e: false,
         branch: `fabriquinha/${id}-1`,
       },
@@ -119,7 +120,7 @@ function cenario() {
   });
   gravarAgregadoPronto(
     banco,
-    demanda("I-300", "planejamento", "d", [
+    demanda("I-300", "planejar", "d", [
       ticket("I-300", 1, "planejar", "em_execucao"),
       ticket("I-300", 2, "implementar", "em_execucao", { rodada_id: 1, titulo: "implementa" }),
       ticket("I-300", 3, "implementar", "falhou", { rodada_id: 1, motivo_falha: "testes reprovaram" }),
@@ -129,7 +130,7 @@ function cenario() {
   );
   gravarAgregadoPronto(
     banco,
-    demanda("I-301", "aprovacao_planejamento", "d", [ticket("I-301", 1, "planejar", "em_execucao")]),
+    demanda("I-301", "gate_planejamento", "d", [ticket("I-301", 1, "planejar", "em_execucao")]),
   );
   const semear = (
     demanda_id: string,
@@ -247,10 +248,10 @@ test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () =>
 test("CA-7: sessão parada de demanda concluída, cancelada ou arquivada vale terminada, qualquer que seja o ticket", () => {
   const { banco } = cenario();
   const estadoDe = (id: string) => cabecalhoDaDemanda(banco, id)?.sessao.estado;
-  for (const fase of ["concluida", "cancelada", "arquivada"]) {
-    banco.prepare("UPDATE demanda SET fase = ? WHERE id = 'I-300'").run(fase);
+  for (const estado of ["concluida", "cancelada", "arquivada"]) {
+    banco.prepare("UPDATE demanda SET estado = ? WHERE id = 'I-300'").run(estado);
     // Conversa de planejamento, ticket que falhou e autônoma parada: nenhuma espera mais o Auditor.
-    assert.deepEqual(["s1", "s3", "s5"].map(estadoDe), ["terminada", "terminada", "terminada"], fase);
+    assert.deepEqual(["s1", "s3", "s5"].map(estadoDe), ["terminada", "terminada", "terminada"], estado);
   }
   // A demanda aberta no gate do plano segue esperando o Auditor.
   assert.equal(estadoDe("s301"), "aguardando_humano");
@@ -414,7 +415,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   const { banco } = cenario();
   gravarAgregadoPronto(
     banco,
-    demanda("I-302", "planejamento", "pergunte perguntar", [ticket("I-302", 1, "planejar", "em_execucao")]),
+    demanda("I-302", "planejar", "pergunte perguntar", [ticket("I-302", 1, "planejar", "em_execucao")]),
   );
   const ref = { demanda_id: "I-302", ticket_id: 1 };
   const { id, fim } = iniciarExecucaoDemanda(banco, ref, {
@@ -458,7 +459,7 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   const { banco } = cenario();
   gravarAgregadoPronto(
     banco,
-    demanda("I-303", "planejamento", "pergunte perguntar", [ticket("I-303", 1, "planejar", "em_execucao")]),
+    demanda("I-303", "planejar", "pergunte perguntar", [ticket("I-303", 1, "planejar", "em_execucao")]),
   );
   const ref = { demanda_id: "I-303", ticket_id: 1 };
   const { fim } = iniciarExecucaoDemanda(banco, ref, {

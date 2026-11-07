@@ -16,7 +16,7 @@ import { MIGRACOES } from "./migracoes.ts";
 
 const T = "'2026-01-01T00:00:00.000Z'";
 
-const banco = (demandas: Record<string, { projeto?: string; fase?: string; enviada?: number }>) => {
+const banco = (demandas: Record<string, { projeto?: string; estado?: string; enviada?: number }>) => {
   const b = new DatabaseSync(":memory:");
   b.exec("PRAGMA foreign_keys = ON");
   migrar(b, MIGRACOES);
@@ -24,9 +24,9 @@ const banco = (demandas: Record<string, { projeto?: string; fase?: string; envia
     b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('${nome}', '/repo/${nome}', 'main', 'github', 'k')`);
   }
-  for (const [id, { projeto = "a", fase = "registro", enviada = 0 }] of Object.entries(demandas)) {
+  for (const [id, { projeto = "a", estado = "entender_e_desenhar", enviada = 0 }] of Object.entries(demandas)) {
     b.exec(
-      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 't', 'problema', 'd', '${fase}', ${T}, 'f', 's', ${String(enviada)}, 'fabriquinha/${id}')`,
+      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 't', 'problema', 'd', '${estado}', ${T}, 'f', 's', ${String(enviada)}, 'fabriquinha/${id}')`,
     );
   }
   return b;
@@ -36,7 +36,7 @@ const arestas = (b: DatabaseSync) => b.prepare("SELECT * FROM dependencia_demand
 test("CA-1 e CA-6: registra, entre projetos, e a consulta devolve a predecessora", () => {
   const b = banco({ "I-1": {}, "I-2": { projeto: "b" } });
   registrarDependenciaDemanda(b, "I-2", "I-1");
-  assert.deepEqual(predecessorasDaDemanda(b, "I-2"), [{ demanda_id: "I-1", fase: "registro" }]);
+  assert.deepEqual(predecessorasDaDemanda(b, "I-2"), [{ demanda_id: "I-1", estado: "entender_e_desenhar" }]);
 });
 
 test("CA-2 a CA-5: recusas não gravam nada", () => {
@@ -66,15 +66,15 @@ test("demanda inexistente, dona ou predecessora, dá ErroDeInexistente", () => {
 });
 
 test("CA-9 e CA-10: predecessora pendente até ser concluída ou arquivada", () => {
-  const b = banco({ "I-1": { fase: "execucao" }, "I-2": {} });
+  const b = banco({ "I-1": { estado: "em_execucao" }, "I-2": {} });
   registrarDependenciaDemanda(b, "I-2", "I-1");
   assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(b, "I-2")), ["I-1"]);
-  b.exec("UPDATE demanda SET fase = 'arquivada' WHERE id = 'I-1'");
+  b.exec("UPDATE demanda SET estado = 'arquivada' WHERE id = 'I-1'");
   assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(b, "I-2")), []);
 });
 
 test("CA-11: dependentes não concluídas, entre projetos", () => {
-  const b = banco({ "I-1": {}, "I-2": {}, "I-3": { projeto: "b" }, "I-4": { fase: "concluida" } });
+  const b = banco({ "I-1": {}, "I-2": {}, "I-3": { projeto: "b" }, "I-4": { estado: "concluida" } });
   registrarDependenciaDemanda(b, "I-2", "I-1");
   registrarDependenciaDemanda(b, "I-3", "I-2");
   registrarDependenciaDemanda(b, "I-4", "I-1");
@@ -100,7 +100,7 @@ test("dependentesNaoConcluidasDaDemanda dentro de escrever não fecha a transaç
       VALUES ('a', '/repo/a', 'main', 'github', 'k')`);
     for (const id of ["I-1", "I-2"]) {
       b.exec(
-        `INSERT INTO demanda VALUES ('${id}', 'a', 't', 'problema', 'd', 'registro', ${T}, 'f', 's', 0, 'fabriquinha/${id}')`,
+        `INSERT INTO demanda VALUES ('${id}', 'a', 't', 'problema', 'd', 'entender_e_desenhar', ${T}, 'f', 's', 0, 'fabriquinha/${id}')`,
       );
     }
     outra.exec("PRAGMA busy_timeout = 0; PRAGMA foreign_keys = ON");

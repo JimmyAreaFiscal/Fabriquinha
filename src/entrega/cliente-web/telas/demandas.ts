@@ -1,16 +1,16 @@
 // Quadro de demandas (comparacao-sdlc §9.1) como função pura que devolve HTML: o trabalho global ativo e um cartão por
 // demanda, com as rodadas, o que espera o Auditor e o que bloqueia. O texto que vem do servidor passa por `escapar`.
-import type { EtapaTicket, FaseDemanda, FaseRodada } from "../../../nucleo/primitivos.ts";
+import type { EtapaTicket, EstadoDemanda, EstadoRodada } from "../../../nucleo/primitivos.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import {
   caminhoDaDemanda,
   caminhoDaSessao,
   escapar,
-  FASE_DA_DEMANDA,
-  FASE_DA_RODADA,
-  PILULA_DO_STATUS,
-  pilulaDoStatus,
-  rotuloDoStatus,
+  APARENCIA_DO_ESTADO_DA_DEMANDA,
+  APARENCIA_DO_ESTADO_DA_RODADA,
+  PILULA_DO_ESTADO_DO_TICKET,
+  pilulaDoEstadoDoTicket,
+  rotuloDoEstadoDoTicket,
 } from "../render.ts";
 
 /** @testes tipo que o teste usa para montar a entrada */
@@ -18,9 +18,10 @@ export interface DemandaDoQuadro {
   id: string;
   projeto: string;
   titulo: string;
-  fase: FaseDemanda;
-  rodadas: { ref: string; fase: FaseRodada; pr?: { id: string; url: string } }[];
-  bloqueios: { demanda_id: string; fase: FaseDemanda }[];
+  estado: EstadoDemanda;
+  terminal: boolean;
+  rodadas: { ref: string; estado: EstadoRodada; pr?: { id: string; url: string } }[];
+  bloqueios: { demanda_id: string; estado: EstadoDemanda }[];
   falhos: { ref: string; etapa: EtapaTicket }[];
   /** O PR final verificado espera o humano integrá-lo na plataforma. */
   aguarda_merge: boolean;
@@ -32,12 +33,12 @@ export interface DadosDoQuadro {
 
 /** A etapa do ticket como o quadro a mostra. */
 export const ETAPA_DO_TICKET: Record<EtapaTicket, string> = {
-  demanda: "Demanda",
+  entender_e_desenhar: "Demanda",
   planejar: "Planejamento",
   implementar: "Implementação",
   revisar_rodada: "Revisão da rodada",
   encerrar_rodada: "Encerramento da rodada",
-  sessao_em_aberto: "Sessão em aberto",
+  ajustar_resultado: "Sessão em aberto",
   revisar_demanda: "Revisão da demanda",
   encerrar_demanda: "Encerramento da demanda",
   resolver_conflito: "Resolução de conflito",
@@ -53,29 +54,32 @@ const linkExterno = (url: string, texto: string): string =>
 
 const rodada = (r: DemandaDoQuadro["rodadas"][number]): string => {
   const pr = r.pr ? ` ${linkExterno(r.pr.url, `PR #${escapar(r.pr.id)}`)}` : "";
-  return `<li><span class="id">${escapar(r.ref)}</span> ${pilula(FASE_DA_RODADA[r.fase])}${pr}</li>`;
+  return `<li><span class="id">${escapar(r.ref)}</span> ${pilula(APARENCIA_DO_ESTADO_DA_RODADA[r.estado])}${pr}</li>`;
 };
 
 function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
   const aguarda =
-    d.fase === "aprovacao_demanda" ||
-    d.fase === "aprovacao_planejamento" ||
-    (!["cancelada", "concluida", "arquivada"].includes(d.fase) &&
-      d.rodadas.some((r) => r.fase === "aprovacao_pull_request"));
+    d.estado === "gate_demanda" ||
+    d.estado === "gate_planejamento" ||
+    (!d.terminal && d.rodadas.some((r) => r.estado === "gate_pr"));
   const marcas = [
     ...(aguarda ? [`<span class="pill pill-aguarda">aguarda a decisão do Auditor</span>`] : []),
     ...(d.aguarda_merge ? [`<span class="pill pill-aguarda">aguarda o seu merge do PR final</span>`] : []),
     ...d.falhos.map((f) => `<span class="pill pill-falha">ticket falho ${escapar(f.ref)}</span>`),
     ...d.bloqueios.map((b) => {
       const titulo = todas.find((o) => o.id === b.demanda_id)?.titulo;
-      const partes = [b.demanda_id, ...(titulo === undefined ? [] : [titulo]), FASE_DA_DEMANDA[b.fase][0]];
+      const partes = [
+        b.demanda_id,
+        ...(titulo === undefined ? [] : [titulo]),
+        APARENCIA_DO_ESTADO_DA_DEMANDA[b.estado][0],
+      ];
       return `<span class="pill pill-neutro">aguarda ${partes.map(escapar).join(" · ")}</span>`;
     }),
   ];
   return `<article class="cartao dm-cartao${aguarda || d.aguarda_merge ? " aguarda" : ""}">
     <div class="cartao-topo"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span></div>
     <h3 class="cartao-titulo">${escapar(d.titulo)}</h3>
-    <div>${pilula(FASE_DA_DEMANDA[d.fase])}</div>
+    <div>${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado])}</div>
     ${d.rodadas.length > 0 ? `<ul class="dm-rodadas">${d.rodadas.map(rodada).join("")}</ul>` : ""}
     ${marcas.length > 0 ? `<div class="cartao-marcas">${marcas.join("")}</div>` : ""}
     <a class="link dm-abrir" href="${caminhoDaDemanda(d.id)}">abrir a demanda →</a>
@@ -85,7 +89,7 @@ function cartao(d: DemandaDoQuadro, todas: readonly DemandaDoQuadro[]): string {
 export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
   const ativo = trabalho.map(
     (t) =>
-      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoStatus("em_execucao", t.pi_ativo)}">${rotuloDoStatus("em_execucao", t.pi_ativo)}</span></li>`,
+      `<li><span class="id">${escapar(t.ref)}</span> ${ETAPA_DO_TICKET[t.etapa]}${t.rodada === undefined ? "" : ` · rodada <span class="id">${escapar(t.rodada)}</span>`} <span class="pill ${pilulaDoEstadoDoTicket("em_execucao", t.pi_ativo)}">${rotuloDoEstadoDoTicket("em_execucao", t.pi_ativo)}</span></li>`,
   );
   return `<div class="cabeca-pagina"><h1>Demandas</h1></div>
   <section class="bloco bloco-aguarda" aria-labelledby="titulo-trabalho">
@@ -100,14 +104,24 @@ export function quadro({ demandas, trabalho }: DadosDoQuadro): string {
 
 // ——— página da demanda (só leitura) ———
 
-type StatusTicket = keyof typeof PILULA_DO_STATUS;
+type EstadoTicket = keyof typeof PILULA_DO_ESTADO_DO_TICKET;
 export interface DadosDaPagina {
-  demanda: { id: string; projeto: string; titulo: string; tipo: string; descricao: string; fase: FaseDemanda };
-  rodadas: { ref: string; titulo: string; fase: FaseRodada }[];
+  demanda: {
+    id: string;
+    projeto: string;
+    titulo: string;
+    tipo: string;
+    descricao: string;
+    estado: EstadoDemanda;
+    terminal: boolean;
+    arquivavel: boolean;
+  };
+  rodadas: { ref: string; titulo: string; estado: EstadoRodada }[];
   tickets: {
     ref: string;
     etapa: EtapaTicket;
-    status: StatusTicket;
+    estado: EstadoTicket;
+    satisfaz_dependencia: boolean;
     elegivel: boolean;
     sessao?: string;
     pi_ativo?: true;
@@ -130,8 +144,8 @@ export interface DadosDaPagina {
     falha?: { etapa: "check_final" | "integracao" | "limpeza"; motivo: string };
     aguardando_merge?: { url: string };
   };
-  dependencias: { demanda_id: string; fase: FaseDemanda }[];
-  dependentes: { demanda_id: string; titulo: string; fase: FaseDemanda }[];
+  dependencias: { demanda_id: string; estado: EstadoDemanda }[];
+  dependentes: { demanda_id: string; titulo: string; estado: EstadoDemanda }[];
 }
 
 /** O tipo da evidência como a página o mostra; o que não está aqui sai com a chave legível. */
@@ -255,12 +269,12 @@ function chipsDasEvidencias(evidencias: readonly Evidencia[]): string {
 const blocoDeAcao = (titulo: string, corpo: string, perigo = false, extra = ""): string =>
   `<div class="dm-gate${perigo ? " dm-gate-perigo" : ""}"${extra}><span class="dm-gate-titulo">${titulo}</span>${corpo}</div>`;
 
-/** A ação do status (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o aberto e elegível. */
-function acaoDoTicket({ ref, status, elegivel }: Pagina["tickets"][number]): string {
+/** A ação do estado (CA-24 a CA-26): reabrir o ticket em falha com instrução, ou executar agora o aberto e elegível. */
+function acaoDoTicket({ ref, estado, elegivel }: Pagina["tickets"][number]): string {
   const base = `/api/demandas/tickets/${escapar(ref)}`;
-  if (status === "aberto" && elegivel)
+  if (estado === "aberto" && elegivel)
     return `<div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-acao="executar" data-caminho="${base}/executar">Executar agora</button></div>`;
-  if (status !== "falhou") return "";
+  if (estado !== "falhou") return "";
   const campo = `instrucao-${escapar(ref)}`;
   return blocoDeAcao(
     `Reabrir ${escapar(ref)}`,
@@ -276,13 +290,13 @@ function acaoDoTicket({ ref, status, elegivel }: Pagina["tickets"][number]): str
 function ticket(t: Pagina["tickets"][number], p: Pagina): string {
   const minhas = p.decisoes.filter((d) => d.ticket === t.ref);
   const ultima = minhas.at(-1);
-  const decidido = t.status === "concluido" && ultima !== undefined ? ultima.resultado : undefined;
+  const decidido = t.satisfaz_dependencia && ultima !== undefined ? ultima.resultado : undefined;
   const estado = decidido
     ? pilula(DECISAO[decidido])
-    : `<span class="pill ${pilulaDoStatus(t.status, t.pi_ativo)}">${rotuloDoStatus(t.status, t.pi_ativo)}</span>`;
+    : `<span class="pill ${pilulaDoEstadoDoTicket(t.estado, t.pi_ativo)}">${rotuloDoEstadoDoTicket(t.estado, t.pi_ativo)}</span>`;
   const chat = t.sessao === undefined ? "" : ` <a class="link" href="${caminhoDaSessao(t.sessao)}">chat →</a>`;
   // Só o aberto elegível ganha o destaque de "é a vez do Auditor"; o aberto que espera outro ticket fica neutro.
-  const marco = decidido ?? (t.status === "aberto" && t.elegivel ? "elegivel" : t.status);
+  const marco = decidido ?? (t.estado === "aberto" && t.elegivel ? "elegivel" : t.estado);
   return `<li class="dm-ticket dm-marco-${marco}" id="${escapar(t.ref)}"><div class="dm-no">
     <div class="dm-no-cabeca"><span class="id">${escapar(t.ref)}</span> <strong>${ETAPA_DO_TICKET[t.etapa]}</strong>${t.titulo === undefined ? "" : ` <span>${escapar(t.titulo)}</span>`}<span class="dm-no-estado">${estado}${chat}</span></div>
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
@@ -362,11 +376,11 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
     { id: string; url: string } | undefined;
   return `<section class="bloco dm-rodada" id="${escapar(r.ref)}" aria-labelledby="titulo-${escapar(r.ref)}">
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
-    <div class="dm-linha">${pilula(FASE_DA_RODADA[r.fase])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
+    <div class="dm-linha">${pilula(APARENCIA_DO_ESTADO_DA_RODADA[r.estado])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>
     ${chipsDasEvidencias(p.evidencias.filter((e) => e.rodada === r.ref && e.ticket === undefined))}
     ${meus.length > 0 ? listaDeTickets(meus, p) : '<p class="muted vazio">Sem tickets.</p>'}
-    ${r.fase === "sessao" ? sessaoDeAjustes(r.ref, meus.findLast((t) => t.etapa === "sessao_em_aberto")?.sessao) : ""}
-    ${r.fase === "aprovacao_pull_request" ? gatePR(r.ref, pr, artefatosDoGate(p.evidencias.filter((e) => e.rodada === r.ref || meus.some((t) => t.ref === e.ticket)))) : ""}
+    ${r.estado === "ajustar_resultado" ? sessaoDeAjustes(r.ref, meus.findLast((t) => t.etapa === "ajustar_resultado")?.sessao) : ""}
+    ${r.estado === "gate_pr" ? gatePR(r.ref, pr, artefatosDoGate(p.evidencias.filter((e) => e.rodada === r.ref || meus.some((t) => t.ref === e.ticket)))) : ""}
   </section>`;
 }
 
@@ -417,10 +431,10 @@ function encerramento({
   return secao("titulo-encerramento", "Encerramento final", `${resumo}<ul class="dm-passos">${itens.join("")}</ul>`);
 }
 
-/** Os gates que a fase pede: a rota da decisão e os rótulos dos dois botões. */
-const GATES: Partial<Record<FaseDemanda, { titulo: string; rota: string; aprovar: string; recusar: string }>> = {
-  aprovacao_demanda: { titulo: "Aprovação da demanda", rota: "decisao", aprovar: "Aprovar", recusar: "Recusar" },
-  aprovacao_planejamento: {
+/** Os gates que o estado pede: a rota da decisão e os rótulos dos dois botões. */
+const GATES: Partial<Record<EstadoDemanda, { titulo: string; rota: string; aprovar: string; recusar: string }>> = {
+  gate_demanda: { titulo: "Aprovação da demanda", rota: "decisao", aprovar: "Aprovar", recusar: "Recusar" },
+  gate_planejamento: {
     titulo: "Aprovação do planejamento",
     rota: "planejamento/decisao",
     aprovar: "Aprovar planejamento",
@@ -536,17 +550,17 @@ function desenhoDaSolucao(p: Pagina): string {
 }
 
 /**
- * O formulário do gate da fase atual (CA-14 a CA-19); fora de um gate, nada. O motivo só vale para recusar. Na
+ * O formulário do gate do estado atual (CA-14 a CA-19); fora de um gate, nada. O motivo só vale para recusar. Na
  * aprovação da demanda, o que o Auditor lê para decidir vem antes do motivo.
  */
 function gate(p: Pagina): string {
-  const { id, fase } = p.demanda;
-  const g = GATES[fase];
+  const { id, estado } = p.demanda;
+  const g = GATES[estado];
   if (!g) return "";
   const campo = `motivo-${g.rota.replaceAll("/", "-")}`;
   const planejadores = p.tickets.filter((t) => t.etapa === "planejar").map((t) => t.ref);
   const leitura =
-    fase === "aprovacao_demanda"
+    estado === "gate_demanda"
       ? oQueAAprovacaoMostra(p)
       : artefatosDoGate(p.evidencias.filter((e) => e.ticket !== undefined && planejadores.includes(e.ticket)));
   const botao = (aprovado: boolean, rotulo: string) =>
@@ -567,20 +581,20 @@ const cartaoLateral = (id: string, titulo: string, corpo: string): string =>
  * Cancelar (CA-27) ou arquivar (CA-29). Cancelar só abre a confirmação, que lista as dependentes que vão junto; nada é
  * enviado antes de confirmar.
  */
-function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string {
+function acoesDaDemanda({ demanda: { id, terminal, arquivavel }, dependentes }: Pagina): string {
   const caminho = `/api/demandas/${escapar(id)}`;
   const botao = (acao: string, classe: string, rotulo: string, extra = "") =>
     `<button type="button" class="btn btn-grande ${classe}" data-demanda="${acao}"${extra}>${rotulo}</button>`;
-  if (fase === "concluida")
+  if (arquivavel)
     return cartaoLateral(
       "titulo-acoes",
       "Ações",
       `<div class="dm-botoes">${botao("arquivar", "btn-primario", "Arquivar", ` data-caminho="${caminho}/arquivar"`)}</div>`,
     );
-  if (fase === "arquivada" || fase === "cancelada") return "";
+  if (terminal) return "";
   const junto =
     dependentes.length > 0
-      ? `<p class="dm-texto">Estas demandas dependem desta e serão canceladas junto:</p><ul class="dm-tickets">${dependentes.map((d) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(d.demanda_id)}">${escapar(d.demanda_id)}</a> ${escapar(d.titulo)} ${pilula(FASE_DA_DEMANDA[d.fase])}</li>`).join("")}</ul>`
+      ? `<p class="dm-texto">Estas demandas dependem desta e serão canceladas junto:</p><ul class="dm-tickets">${dependentes.map((d) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(d.demanda_id)}">${escapar(d.demanda_id)}</a> ${escapar(d.titulo)} ${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado])}</li>`).join("")}</ul>`
       : '<p class="dm-texto">Nenhuma outra demanda depende desta.</p>';
   return cartaoLateral(
     "titulo-acoes",
@@ -590,20 +604,23 @@ function acoesDaDemanda({ demanda: { id, fase }, dependentes }: Pagina): string 
   );
 }
 
-/** O que espera o Auditor, com o link até onde ele age: o gate da fase, o PR ou a sessão da rodada, o ticket. */
+/** O que espera o Auditor, com o link até onde ele age: o gate do estado, o PR ou a sessão da rodada, o ticket. */
 function aguardaVoce({ demanda, rodadas, tickets, encerramento: { aguardando_merge } }: Pagina): string {
-  const gateDaFase = GATES[demanda.fase];
+  const gateDoEstado = GATES[demanda.estado];
   const itens = [
-    ...(gateDaFase ? [["gate", gateDaFase.titulo]] : []),
+    ...(gateDoEstado ? [["gate", gateDoEstado.titulo]] : []),
     ...(aguardando_merge ? [["titulo-encerramento", "Integrar o PR final"]] : []),
     ...rodadas
-      .filter((r) => r.fase === "aprovacao_pull_request" || r.fase === "sessao")
-      .map((r) => [`${r.fase === "sessao" ? "ajustes" : "pr"}-${r.ref}`, `${FASE_DA_RODADA[r.fase][0]} · ${r.ref}`]),
+      .filter((r) => r.estado === "gate_pr" || r.estado === "ajustar_resultado")
+      .map((r) => [
+        `${r.estado === "ajustar_resultado" ? "ajustes" : "pr"}-${r.ref}`,
+        `${APARENCIA_DO_ESTADO_DA_RODADA[r.estado][0]} · ${r.ref}`,
+      ]),
     ...tickets
-      .filter((t) => t.status === "falhou" || (t.status === "aberto" && t.elegivel))
+      .filter((t) => t.estado === "falhou" || (t.estado === "aberto" && t.elegivel))
       .map((t) => [
         t.ref,
-        `${t.status === "falhou" ? "Reabrir" : "Executar"} ${t.ref}${t.titulo === undefined ? "" : ` · ${t.titulo}`}`,
+        `${t.estado === "falhou" ? "Reabrir" : "Executar"} ${t.ref}${t.titulo === undefined ? "" : ` · ${t.titulo}`}`,
       ]),
   ];
   if (itens.length === 0) return "";
@@ -643,29 +660,42 @@ function criteriosDaLateral(p: Pagina): string {
   return cartaoLateral("titulo-criterios", "Critérios de aceite", `<ul class="dm-criterios">${itens.join("")}</ul>`);
 }
 
-/** As fases da demanda no trilho do cabeçalho; os losangos são os gates do Auditor. */
-const TRILHO: readonly [FaseDemanda, boolean][] = [
-  ["registro", false],
-  ["aprovacao_demanda", true],
-  ["planejamento", false],
-  ["aprovacao_planejamento", true],
-  ["execucao", false],
-  ["revisao_demanda", false],
-  ["encerramento", false],
-  ["concluida", false],
+/** Os estados da demanda no trilho do cabeçalho; os losangos são os gates do Auditor. */
+const TRILHO: readonly { estado: EstadoDemanda; gate?: true }[] = [
+  { estado: "entender_e_desenhar" },
+  { estado: "gate_demanda", gate: true },
+  { estado: "planejar" },
+  { estado: "gate_planejamento", gate: true },
+  { estado: "em_execucao" },
+  { estado: "revisar_demanda" },
+  { estado: "encerrar_demanda" },
+  { estado: "concluida" },
 ];
 
+/** Onde o estado fica no trilho: concluída e arquivada o completam, e a cancelada fica sem ele. */
+function posicaoNoTrilho(estado: EstadoDemanda): number | undefined {
+  switch (estado) {
+    case "cancelada":
+      return undefined;
+    case "concluida":
+    case "arquivada":
+      return TRILHO.length;
+    default:
+      return TRILHO.findIndex((passo) => passo.estado === estado);
+  }
+}
+
 /** Onde a demanda está no caminho; concluída e arquivada completam o trilho, e a cancelada fica sem ele. */
-function trilhoDeFases(fase: FaseDemanda): string {
-  if (fase === "cancelada") return "";
-  const atual = fase === "concluida" || fase === "arquivada" ? TRILHO.length : TRILHO.findIndex(([f]) => f === fase);
-  const passos = TRILHO.map(([f, gate], i) => {
+function trilhoDeEstados(estado: EstadoDemanda): string {
+  const atual = posicaoNoTrilho(estado);
+  if (atual === undefined) return "";
+  const passos = TRILHO.map(({ estado: passo, gate }, i) => {
     const classes = [
       "dm-passo-trilho",
       ...(gate ? ["gate"] : []),
       ...(i < atual ? ["feito"] : i === atual ? ["atual"] : []),
     ];
-    return `<li class="${classes.join(" ")}"${i === atual ? ' aria-current="step"' : ""}><span class="dm-marco-trilho"></span><span>${FASE_DA_DEMANDA[f][0]}</span></li>`;
+    return `<li class="${classes.join(" ")}"${i === atual ? ' aria-current="step"' : ""}><span class="dm-marco-trilho"></span><span>${APARENCIA_DO_ESTADO_DA_DEMANDA[passo][0]}</span></li>`;
   });
   return `<ol class="dm-trilho" aria-label="Fases da demanda">${passos.join("")}</ol>`;
 }
@@ -689,12 +719,12 @@ function linhaDoTempo(p: Pagina): string {
 }
 
 /**
- * A página em mesa: a lateral fixa com o que aguarda o Auditor e o contexto da demanda; ao centro, o gate da fase, a
+ * A página em mesa: a lateral fixa com o que aguarda o Auditor e o contexto da demanda; ao centro, o gate do estado, a
  * linha do tempo e o encerramento. Na aprovação da demanda, o próprio gate já mostra a descrição e os critérios.
  */
 export function pagina(p: DadosDaPagina): string {
   const { demanda: d } = p;
-  const naAprovacao = d.fase === "aprovacao_demanda";
+  const naAprovacao = d.estado === "gate_demanda";
   const evidenciasDaDemanda = chipsDasEvidencias(
     p.evidencias.filter((e) => e.rodada === undefined && e.ticket === undefined),
   );
@@ -712,7 +742,7 @@ export function pagina(p: DadosDaPagina): string {
       ? cartaoLateral(
           "titulo-dependencias",
           "Dependências",
-          `<ul class="dm-tickets">${p.dependencias.map((x) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(x.demanda_id)}">${escapar(x.demanda_id)}</a> ${pilula(FASE_DA_DEMANDA[x.fase])}</li>`).join("")}</ul>`,
+          `<ul class="dm-tickets">${p.dependencias.map((x) => `<li class="dm-linha"><a class="link id" href="${caminhoDaDemanda(x.demanda_id)}">${escapar(x.demanda_id)}</a> ${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[x.estado])}</li>`).join("")}</ul>`,
         )
       : "",
     evidenciasDaDemanda === "" ? "" : cartaoLateral("titulo-evidencias", "Evidências da demanda", evidenciasDaDemanda),
@@ -720,8 +750,8 @@ export function pagina(p: DadosDaPagina): string {
   ];
   return `<a class="link" href="/home">← Início</a>
   <div class="cabeca-pagina dm-cabeca"><h1>${escapar(d.titulo)}</h1>
-    <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span><span class="tag">${escapar(d.tipo)}</span>${pilula(FASE_DA_DEMANDA[d.fase])}</div></div>
-  ${trilhoDeFases(d.fase)}
+    <div class="dm-linha"><span class="id">${escapar(d.id)}</span><span class="tag">${escapar(d.projeto)}</span><span class="tag">${escapar(d.tipo)}</span>${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado])}</div></div>
+  ${trilhoDeEstados(d.estado)}
   <div class="dm-mesa">
     <aside class="dm-lateral" aria-label="Contexto da demanda">${lateral.join("")}</aside>
     <div class="dm-principal">${gate(p)}${linhaDoTempo(p)}${encerramento(p.encerramento)}</div>

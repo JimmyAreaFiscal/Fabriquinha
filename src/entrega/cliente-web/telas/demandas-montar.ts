@@ -105,7 +105,7 @@ function abrirHtmlNaCaixa(botao: HTMLButtonElement): void {
 
 /**
  * Envia a decisão do gate. Recusar sem motivo não vai ao servidor: a mensagem fica junto ao campo. Com ou sem erro do
- * servidor, a página se redesenha com a fase atual; o erro fica no aviso, com a orientação que ele devolveu.
+ * servidor, a página se redesenha com o estado atual; o erro fica no aviso, com a orientação que ele devolveu.
  */
 async function decidir(
   botao: HTMLButtonElement,
@@ -186,8 +186,8 @@ async function agirNoTicket(
 
 /**
  * Cancelar abre e fecha a confirmação sem pedido algum; confirmar ou arquivar envia e leva ao quadro, onde a demanda
- * (e as dependentes) aparece com a fase devolvida ou some. Com erro do servidor, o aviso traz a orientação dele e a
- * página se redesenha com a fase atual.
+ * (e as dependentes) aparece com o estado devolvido ou some. Com erro do servidor, o aviso traz a orientação dele e a
+ * página se redesenha com o estado atual.
  */
 async function agirNaDemanda(botao: HTMLButtonElement, main: HTMLElement): Promise<void> {
   const acao = botao.dataset.demanda;

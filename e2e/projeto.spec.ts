@@ -1,5 +1,5 @@
 // Projeto (F7 §4.4): /projects abre o primeiro projeto e depois o último visto; a aba Demandas tem os cards do mês e a
-// lista das demandas do projeto, com a linha do tempo das fases, as rodadas da execução, a gaveta de tickets, os
+// lista das demandas do projeto, com a linha do tempo dos estados, as rodadas da execução, a gaveta de tickets, os
 // filtros lembrados e o Arquivar concluídas; o heatmap, a Configuração SDLC e a simulação do projeto abrem; prints a 1440 e 375 px sem
 // rolagem horizontal.
 import type { TestInfo } from "@playwright/test";
@@ -28,7 +28,7 @@ test("a aba Demandas: a lista com as rodadas, a gaveta, os filtros lembrados e o
   const contagem = pagina.locator(".contagem");
   await expect(contagem).toHaveText("3 em andamento · 1 concluída · 0 arquivadas · 0 canceladas");
 
-  // As em andamento, das mais novas às mais antigas, cada uma com a fase atual na linha do tempo.
+  // As em andamento, das mais novas às mais antigas, cada uma com o estado atual na linha do tempo.
   const linhas = pagina.locator(".pista-item");
   await expect(linhas.locator(".titulo")).toHaveText(["Demanda I-208", "Demanda I-207", "Demanda I-206"]);
   const i208 = pagina.locator('[data-demanda="I-208"]');
@@ -40,7 +40,7 @@ test("a aba Demandas: a lista com as rodadas, a gaveta, os filtros lembrados e o
   await expect(i207).toHaveClass(/falha/);
   await expect(i207.locator(".bloqueia")).toHaveText("bloqueada por I-206");
 
-  // Na execução, uma sub-linha por rodada com a fase dela e o PR.
+  // Na execução, uma sub-linha por rodada com o estado dela e o PR.
   const i206 = pagina.locator('[data-demanda="I-206"]');
   const rodadas = i206.locator(".pista-rodada");
   await expect(rodadas).toHaveCount(2);
@@ -123,7 +123,7 @@ test("Mostrar canceladas traz a cancelada, apagada, com as rodadas onde pararam"
   projeto(fabriquinha.raiz);
   semearDemandas(fabriquinha.raiz);
   const banco = abrir(fabriquinha.raiz);
-  banco.exec("UPDATE demanda SET fase = 'cancelada' WHERE id = 'I-207'");
+  banco.exec("UPDATE demanda SET estado = 'cancelada' WHERE id = 'I-207'");
   banco.close();
   await pagina.goto(`${fabriquinha.base}/projects/loja`);
   await expect(pagina.locator(".contagem")).toHaveText("2 em andamento · 0 concluídas · 0 arquivadas · 1 cancelada");

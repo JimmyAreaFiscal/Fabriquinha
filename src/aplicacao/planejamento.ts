@@ -5,15 +5,11 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { Plano } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
-import {
-  confirmarAprovacaoPlanejamento,
-  exigirFase,
-  reabrirTicket,
-  reprovarPlanejamento,
-} from "../nucleo/transicoes_demanda.ts";
+import { confirmarAprovacaoPlanejamento, reabrirTicket, reprovarPlanejamento } from "../nucleo/transicoes_demanda.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { varrerBase } from "./retrabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -51,16 +47,16 @@ export function iniciarOuRetomarPlanejamento(
   limiteMin: number,
 ): { id: string; fim: Promise<void> } {
   const ag = carregarDemanda(banco, demandaId);
-  exigirFase(ag, "planejamento", "iniciar o planejamento");
+  CICLO_DA_DEMANDA.exigir(ag.demanda, "planejar");
   const ticket = ticketPlanejar(ag);
-  if (ticket.status === "aberto") {
+  if (ticket.estado === "aberto") {
     const satisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, demandaId)).length === 0;
     comDemanda(banco, demandaId, (a) =>
       reservarTicket(a, { ticket_id: ticket.ticket_id }, FABRIQUINHA, contexto(), satisfeitas),
     );
-  } else if (ticket.status !== "em_execucao") {
+  } else if (ticket.estado !== "em_execucao") {
     throw new ErroDeRegra(
-      `o ticket de planejamento da demanda ${demandaId} está ${ticket.status} e não pode ser iniciado`,
+      `o ticket de planejamento da demanda ${demandaId} está ${ticket.estado} e não pode ser iniciado`,
       "só se inicia ou retoma o planejamento com o ticket aberto ou em execução",
     );
   }
@@ -83,15 +79,15 @@ export function iniciarOuRetomarPlanejamento(
 }
 
 /**
- * O Auditor reprova com motivo; a demanda volta a `planejamento`. Com o pi da sessão vivo e ocioso, o motivo vai a ele
+ * O Auditor reprova com motivo; a demanda volta a `planejar`. Com o pi da sessão vivo e ocioso, o motivo vai a ele
  * como prompt; sem pi vivo, o despacho retoma a mesma sessão com o motivo.
  */
 export function reprovarPlanejamentoDemanda(banco: DatabaseSync, demandaId: string, motivo: string): AgregadoDemanda {
   // Planejar Falhou (serviço reiniciado com o gate aberto): a reprovação o reabre com o motivo, na mesma transação.
   const ag = comDemanda(banco, demandaId, (a) => {
     const reprovada = reprovarPlanejamento(a, { motivo }, AUDITOR, contexto());
-    const { ticket_id, status } = ticketPlanejar(reprovada);
-    return status === "falhou"
+    const { ticket_id, estado } = ticketPlanejar(reprovada);
+    return estado === "falhou"
       ? reabrirTicket(reprovada, { ticket_id, instrucao: motivo }, AUDITOR, contexto())
       : reprovada;
   });
@@ -118,7 +114,7 @@ export async function aprovarPlanejamentoDemanda(
   entrada: { nota?: number },
 ): Promise<AgregadoDemanda> {
   const ag = carregarDemanda(banco, demandaId);
-  // Ensaio: recusa antes de tocar o git (fase, falha, plano ausente).
+  // Ensaio: recusa antes de tocar o git (estado, falha, plano ausente).
   confirmarAprovacaoPlanejamento(ag, entrada, AUDITOR, contexto());
   const plano = Plano.parse(
     ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticketPlanejar(ag).ticket_id)?.dados,

@@ -30,12 +30,12 @@ const texto = (html: string) =>
     .trim();
 
 const ETAPAS = [
-  "demanda",
+  "entender_e_desenhar",
   "planejar",
   "implementar",
   "revisar_rodada",
   "encerrar_rodada",
-  "sessao_em_aberto",
+  "ajustar_resultado",
   "revisar_demanda",
   "encerrar_demanda",
   "resolver_conflito",
@@ -94,7 +94,7 @@ const demanda = (
 ): MetricasDemandaPeriodo => ({
   projeto: "loja",
   titulo: `Demanda ${d.demanda}`,
-  fase: "execucao",
+  estado: "em_execucao",
   ...consumo(1, 0, 0, 0, 0, 1),
   duracaoMs: 60_000,
   reprovacoes: 0,
@@ -403,7 +403,7 @@ test("por modelo: custo e tokens por tipo, do mais caro ao mais barato, custo de
   assert.match(zerado, /<div class="trilha" style="width:0.0%"><\/div>/);
 });
 
-test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, fase, nota e o total", () => {
+test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, estado, nota e o total", () => {
   const demandas = [
     demanda({
       demanda: "I-3",
@@ -414,13 +414,13 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, f
     demanda({
       demanda: "I-12",
       projeto: "site",
-      fase: "aprovacao_demanda",
+      estado: "gate_demanda",
       nota: 4,
       falhas: 1,
       reprovacoes: 2,
       custo: { conhecido: 1, incompleto: true },
     }),
-    demanda({ demanda: "I-7", titulo: "Cache", fase: "concluida" }),
+    demanda({ demanda: "I-7", titulo: "Cache", estado: "concluida" }),
   ];
   const ids = (e: Partial<EstadoDasMetricas>) =>
     [
@@ -430,7 +430,7 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, f
   assert.deepEqual(ids({ ordem: ["demanda", 1] }), ["I-3", "I-7", "I-12"]);
   assert.deepEqual(ids({ ordem: ["titulo", 1] }), ["I-3", "I-7", "I-12"]);
   assert.deepEqual(ids({ ordem: ["projeto", -1] }), ["I-12", "I-3", "I-7"]);
-  assert.deepEqual(ids({ ordem: ["fase", 1] }), ["I-12", "I-7", "I-3"]);
+  assert.deepEqual(ids({ ordem: ["estado", 1] }), ["I-12", "I-7", "I-3"]);
   assert.deepEqual(ids({ ordem: ["tokens", -1] }), ["I-3", "I-12", "I-7"]);
   assert.deepEqual(ids({ ordem: ["duracao", -1] }), ["I-3", "I-12", "I-7"]);
   assert.deepEqual(ids({ ordem: ["nota", 1] }), ["I-3", "I-7", "I-12"]);
@@ -464,12 +464,12 @@ test("por demanda: ordenável pelo cabeçalho, com link, projeto só em todos, f
   assert.match(paginaDeMetricas(DADOS, ESTADO), /Nenhuma demanda com execução no período./);
 });
 
-test("próxima ordem: a mesma coluna inverte; outra começa crescente no texto, na demanda e na fase", () => {
+test("próxima ordem: a mesma coluna inverte; outra começa crescente no texto, na demanda e no estado", () => {
   assert.deepEqual(proximaOrdem(["custo", -1], "custo"), ["custo", 1]);
   assert.deepEqual(proximaOrdem(["custo", 1], "custo"), ["custo", -1]);
   assert.deepEqual(proximaOrdem(["custo", -1], "titulo"), ["titulo", 1]);
   assert.deepEqual(proximaOrdem(["custo", -1], "demanda"), ["demanda", 1]);
-  assert.deepEqual(proximaOrdem(["custo", -1], "fase"), ["fase", 1]);
+  assert.deepEqual(proximaOrdem(["custo", -1], "estado"), ["estado", 1]);
   assert.deepEqual(proximaOrdem(["titulo", 1], "execucoes"), ["execucoes", -1]);
 });
 

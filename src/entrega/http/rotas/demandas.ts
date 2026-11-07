@@ -3,6 +3,7 @@
 import { z } from "zod";
 import type { AgregadoDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { selecionarTrabalho } from "../../../nucleo/selecao_trabalho.ts";
@@ -23,7 +24,7 @@ const ref = (demanda_id: string) => ({
 /** O PR da rodada que espera decisão ou ajustes: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela. */
 export function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
-  if (rodada?.fase !== "aprovacao_pull_request" && rodada?.fase !== "sessao") return undefined;
+  if (rodada?.estado !== "gate_pr" && rodada?.estado !== "ajustar_resultado") return undefined;
   const ticket = ag.tickets.findLast((t) => t.rodada_id === rodada_id && t.etapa === "encerrar_rodada");
   const pr = ag.evidencias.findLast((e) => e.ticket_id === ticket?.ticket_id && e.tipo === "pr_aberto")?.dados as
     { id: string; url: string } | undefined;
@@ -33,7 +34,7 @@ export function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string
 /** Os tickets `em_execucao` da demanda, com a rodada quando têm e `pi_ativo` quando é o pi que roda. */
 const emExecucao = (ag: AgregadoDemanda, comPiAtivo: ReadonlySet<string>) =>
   ag.tickets
-    .filter((t) => t.status === "em_execucao")
+    .filter((t) => t.estado === "em_execucao")
     .map((t) => {
       const ticketRef = ref(ag.demanda.id).ticket(t.ticket_id);
       return {
@@ -47,7 +48,7 @@ const emExecucao = (ag: AgregadoDemanda, comPiAtivo: ReadonlySet<string>) =>
 /** Os tickets `falhou` da demanda: o que bloqueia a rodada até o Auditor reabrir. */
 const falhos = (ag: AgregadoDemanda) =>
   ag.tickets
-    .filter((t) => t.status === "falhou")
+    .filter((t) => t.estado === "falhou")
     .map((t) => ({ ref: ref(ag.demanda.id).ticket(t.ticket_id), etapa: t.etapa }));
 
 /** `GET /api/demandas`: as demandas fora das arquivadas e, no total, o trabalho global ativo. */
@@ -56,17 +57,18 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
   const comPiAtivo = ticketsComPiAtivo(pedido.banco);
   return {
     demandas: todas.map((ag) => {
-      const { id, projeto, titulo, fase } = ag.demanda;
+      const { id, projeto, titulo, estado } = ag.demanda;
       return {
         id,
         projeto,
         titulo,
-        fase,
+        estado,
+        terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
         rodadas: ag.rodadas.map((r) => {
           const pr = prDaRodada(ag, r.rodada_id);
-          return { ref: ref(id).rodada(r.rodada_id), fase: r.fase, ...(pr && { pr }) };
+          return { ref: ref(id).rodada(r.rodada_id), estado: r.estado, ...(pr && { pr }) };
         }),
-        bloqueios: predecessorasDaDemanda(pedido.banco, id).filter((p) => !satisfazDependencia(p.fase)),
+        bloqueios: predecessorasDaDemanda(pedido.banco, id).filter((p) => !satisfazDependencia(p.estado)),
         falhos: falhos(ag),
         aguarda_merge: ag.encerramento?.aguardando_merge_humano === true,
       };
@@ -120,7 +122,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   const elegiveis = new Set(
     selecionarTrabalho(
       ag,
-      predecessoras.every((p) => satisfazDependencia(p.fase)),
+      predecessoras.every((p) => satisfazDependencia(p.estado)),
     ).map((t) => t.ticket_id),
   );
   return {
@@ -131,13 +133,16 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       titulo: demanda.titulo,
       tipo: demanda.tipo,
       descricao: demanda.descricao,
-      fase: demanda.fase,
+      estado: demanda.estado,
+      terminal: CICLO_DA_DEMANDA.ehTerminal(demanda.estado),
+      arquivavel: CICLO_DA_DEMANDA.transicoes[demanda.estado].includes("arquivada"),
     },
-    rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase })),
+    rodadas: ag.rodadas.map((r) => ({ ref: rodada(r.rodada_id), titulo: r.titulo, estado: r.estado })),
     tickets: ag.tickets.map((t) => ({
       ref: ticket(t.ticket_id),
       etapa: t.etapa,
-      status: t.status,
+      estado: t.estado,
+      satisfaz_dependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
       // O encerrar_demanda à espera do merge humano não pede execução ao Auditor: pede o merge na plataforma.
       elegivel:
         elegiveis.has(t.ticket_id) && !(t.etapa === "encerrar_demanda" && ag.encerramento?.aguardando_merge_humano),
@@ -179,8 +184,8 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
     dependencias: predecessoras,
     // As que o cancelamento leva junto (diretas e indiretas, ainda não terminadas).
     dependentes: dependentesNaoConcluidasDaDemanda(banco, id).map((d) => {
-      const { titulo, fase } = carregarDemanda(banco, d).demanda;
-      return { demanda_id: d, titulo, fase };
+      const { titulo, estado } = carregarDemanda(banco, d).demanda;
+      return { demanda_id: d, titulo, estado };
     }),
   };
 }

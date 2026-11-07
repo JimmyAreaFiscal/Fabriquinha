@@ -13,7 +13,7 @@ type Banco = Parameters<typeof carregarDemanda>[0];
 const revisorIntegral = (banco: Banco): Ator => abrirTrabalhoDoAgente(banco, REF_GLOBAL);
 const estado = (banco: Banco) => {
   const ag = carregarDemanda(banco, "I-1");
-  return { fase: ag.demanda.fase, rodadas: ag.rodadas.map((r) => r.fase), tickets: ag.tickets };
+  return { estado: ag.demanda.estado, rodadas: ag.rodadas.map((r) => r.estado), tickets: ag.tickets };
 };
 
 const estresse = (resultado: string) => ({
@@ -53,35 +53,35 @@ const aprovar = (banco: Banco) =>
 test("CA-9: rodada pendente recusa citando-a e a demanda continua em execucao", async () => {
   const { banco } = await cenarioRevisao();
   assert.throws(() => iniciarRevisaoIntegral(banco, "I-1"), /rodada 1/);
-  assert.equal(estado(banco).fase, "execucao");
+  assert.equal(estado(banco).estado, "em_execucao");
 });
 
-test("CA-10: com todas as rodadas concluídas a demanda vai a revisao_demanda com revisar_demanda aberto", async () => {
+test("CA-10: com todas as rodadas concluídas a demanda vai a revisar_demanda com revisar_demanda aberto", async () => {
   const { banco } = await cenarioRevisao();
   comDemanda(banco, "I-1", (ag) => ({
     ...ag,
-    rodadas: ag.rodadas.map((r) => ({ ...r, fase: "concluida" as const })),
+    rodadas: ag.rodadas.map((r) => ({ ...r, estado: "concluida" as const })),
     tickets: ag.tickets
       .filter((t) => t.etapa !== "revisar_demanda")
-      .map((t) => ({ ...t, status: "concluido" as const })),
+      .map((t) => ({ ...t, estado: "concluido" as const })),
   }));
-  assert.equal(iniciarRevisaoIntegral(banco, "I-1").demanda.fase, "revisao_demanda");
-  assert.equal(estado(banco).tickets.find((t) => t.etapa === "revisar_demanda")?.status, "aberto");
+  assert.equal(iniciarRevisaoIntegral(banco, "I-1").demanda.estado, "revisar_demanda");
+  assert.equal(estado(banco).tickets.find((t) => t.etapa === "revisar_demanda")?.estado, "aberto");
 });
 
 test("CA-11: o pi roda na worktree da demanda", async () => {
   const { c, banco, pastas } = await cenarioRevisao({ integral: true });
   assert.equal(await conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), "falhou");
-  assert.equal(estado(banco).tickets.find((t) => t.ticket_id === 3)?.status, "falhou");
+  assert.equal(estado(banco).tickets.find((t) => t.ticket_id === 3)?.estado, "falhou");
   assert.deepEqual(pastas(), [caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1")]);
 });
 
-test("CA-12: pi com falha deixa o ticket falhou e a demanda em revisao_demanda", async () => {
+test("CA-12: pi com falha deixa o ticket falhou e a demanda em revisar_demanda", async () => {
   const { banco, piFalso } = await cenarioRevisao({ integral: true });
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   assert.equal(await conduzirRevisaoIntegral(banco, "I-1", { limiteMin: 1 }), "falhou");
   const e = estado(banco);
-  assert.deepEqual([e.tickets.find((t) => t.ticket_id === 3)?.status, e.fase], ["falhou", "revisao_demanda"]);
+  assert.deepEqual([e.tickets.find((t) => t.ticket_id === 3)?.estado, e.estado], ["falhou", "revisar_demanda"]);
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });
 
@@ -97,14 +97,14 @@ test("CA-13: achado alto ou crítico recusa a aprovação", async () => {
     evidenciar(banco, estresse("passou"), seguranca(sev));
     assert.throws(() => aprovar(banco), /achado alto ou crítico: injeção/);
   }
-  assert.equal(estado(banco).fase, "revisao_demanda");
+  assert.equal(estado(banco).estado, "revisar_demanda");
 });
 
 test("CA-14: cenário que quebra recusa a aprovação", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
   evidenciar(banco, estresse("quebrou"), seguranca("baixa"));
   assert.throws(() => aprovar(banco), /cenário que quebrou: carga/);
-  assert.equal(estado(banco).fase, "revisao_demanda");
+  assert.equal(estado(banco).estado, "revisar_demanda");
 });
 
 test("CA-15: não se aplica sem justificativa recusa e pede a justificativa", async () => {
@@ -112,7 +112,7 @@ test("CA-15: não se aplica sem justificativa recusa e pede a justificativa", as
   evidenciar(banco, estresse("passou"), seguranca("baixa"));
   banco.exec(`UPDATE evidencia_demanda SET dados = '${JSON.stringify(naoSeAplica)}' WHERE tipo = 'testes_estresse'`);
   assert.throws(() => aprovar(banco), /justificativa/);
-  assert.equal(estado(banco).fase, "revisao_demanda");
+  assert.equal(estado(banco).estado, "revisar_demanda");
 });
 
 test("CA-16: aprovada vai a encerramento com encerrar_demanda aberto; não se aplica justificado passa", async () => {
@@ -120,8 +120,8 @@ test("CA-16: aprovada vai a encerramento com encerrar_demanda aberto; não se ap
   evidenciar(banco, { ...naoSeAplica, justificativa: "sem carga" }, seguranca("media"));
   aprovar(banco);
   const e = estado(banco);
-  assert.equal(e.fase, "encerramento");
-  assert.equal(e.tickets.find((t) => t.etapa === "encerrar_demanda")?.status, "aberto");
+  assert.equal(e.estado, "encerrar_demanda");
+  assert.equal(e.tickets.find((t) => t.etapa === "encerrar_demanda")?.estado, "aberto");
 });
 
 test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída continua concluída", async () => {
@@ -156,8 +156,8 @@ test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída
     revisorIntegral(banco),
   );
   const e = estado(banco);
-  assert.equal(e.fase, "execucao");
-  assert.deepEqual(e.rodadas, ["concluida", "desenvolvimento"]);
+  assert.equal(e.estado, "em_execucao");
+  assert.deepEqual(e.rodadas, ["concluida", "implementar"]);
 });
 
 test("I-266: a decisão do agente com o trabalho de outro ticket é recusada e nada é gravado", async () => {

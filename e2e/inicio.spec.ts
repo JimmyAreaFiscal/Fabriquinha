@@ -1,5 +1,5 @@
 // Início (comparacao-sdlc §9.1, "Board com demanda"): a frase do mês, o que aguarda o Auditor, o que roda e o board só com
-// as demandas em andamento, com as colunas por fase da demanda e, na execução, por fase da rodada; prints a 1440 e
+// as demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada; prints a 1440 e
 // 375 px, sem rolagem horizontal da página (abaixo de 1320 px o board rola dentro dele).
 import type { Locator, Page } from "@playwright/test";
 import { abrir } from "../src/armazenamento/banco.ts";
@@ -56,7 +56,7 @@ test("o Início mostra o que aguarda, o que roda e o board das demandas em andam
   await expect(rodando.locator(".rodando-linha")).toHaveCount(1);
   await expect(rodando.locator(".rodando-linha")).toContainText("I-206.T3");
 
-  // Board: as rodadas da execução nas colunas da fase delas; a concluída I-217 não aparece.
+  // Board: as rodadas da execução nas colunas do estado delas; a concluída I-217 não aparece.
   const regiaoDoBoard = pagina.getByRole("region", { name: "Board" });
   await expect(regiaoDoBoard).toContainText("3 demandas em andamento");
   await expect(regiaoDoBoard).not.toContainText("I-217");

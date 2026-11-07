@@ -58,7 +58,7 @@ async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: ()
     return await etapa();
   } catch (erro) {
     const atual = carregarDemanda(banco, t.demanda_id).tickets.find((x) => x.ticket_id === t.ticket_id);
-    if (atual?.status === "em_execucao") falharTicketDemanda(banco, t, (erro as Error).message);
+    if (atual?.estado === "em_execucao") falharTicketDemanda(banco, t, (erro as Error).message);
     throw erro;
   }
 }
@@ -116,7 +116,7 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
     noLog(`retomados depois de falha de infraestrutura: ${retomadosPorInfraestrutura.join(", ")}`);
   }
   for (const { agregado: ag } of demandasParaDespacho(banco)) {
-    if (ag.demanda.fase !== "execucao" || !ag.rodadas.every((r) => r.fase === "concluida")) continue;
+    if (ag.demanda.estado !== "em_execucao" || !ag.rodadas.every((r) => r.estado === "concluida")) continue;
     try {
       iniciarRevisaoIntegral(banco, ag.demanda.id);
     } catch (erro) {
@@ -131,7 +131,7 @@ export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: De
   );
   const escolhidos = selecionarTrabalhoGlobal(demandasParaDespacho(banco), {
     limite,
-    emAndamento: ocupacaoDoLimite(banco),
+    vagasOcupadas: ocupacaoDoLimite(banco),
   });
   return [...fins, ...escolhidos.flatMap((t) => disparar(banco, () => iniciarEtapa(banco, t, c, deps)))];
 }
@@ -151,16 +151,16 @@ export function executarAgoraDemanda(
     const { agregado, predecessoras_satisfeitas } = existe(
       demandasParaDespacho(banco).find((d) => d.agregado.demanda.id === ref.demanda_id),
       `a demanda ${ref.demanda_id} não está em planejamento, execução, revisão da demanda nem encerramento`,
-      "só se executa agora o ticket de uma demanda dessas fases",
+      "só se executa agora o ticket de uma demanda dessas estados",
     );
     const ticket = existe(
       agregado.tickets.find((t) => t.ticket_id === ref.ticket_id),
       `o ticket ${formatarTicketRef(ref)} não existe`,
       "confira o endereço do ticket",
     );
-    if (ticket.status !== "aberto") {
+    if (ticket.estado !== "aberto") {
       throw new ErroDeRegra(
-        `o ticket ${formatarTicketRef(ref)} está ${ticket.status}`,
+        `o ticket ${formatarTicketRef(ref)} está ${ticket.estado}`,
         "só se executa agora um ticket aberto",
       );
     }

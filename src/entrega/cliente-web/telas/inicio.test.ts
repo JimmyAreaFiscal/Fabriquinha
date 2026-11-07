@@ -25,7 +25,7 @@ const dados = (resto: Partial<DadosDoInicio> = {}): DadosDoInicio => ({
   mes,
   aguarda: [],
   rodando: [],
-  emAndamento: 0,
+  quantidadeEmAndamento: 0,
   board: [],
   ...resto,
 });
@@ -56,7 +56,7 @@ const sessao = (resto: Partial<SessaoRodando> = {}): SessaoRodando => ({
 });
 
 const cartao = (resto: Partial<CartaoDoBoard> = {}): CartaoDoBoard => ({
-  coluna: "desenvolvimento",
+  coluna: "implementar",
   ref: "I-206.R2",
   demanda: "I-206",
   projeto: "loja",
@@ -110,7 +110,7 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
   const html = inicio(
     dados({
       aguarda: [
-        espera("gate_demanda", { ticket: { ref: "I-206.T1", etapa: "demanda" } }),
+        espera("gate_demanda", { ticket: { ref: "I-206.T1", etapa: "entender_e_desenhar" } }),
         espera("gate_planejamento"),
         espera("gate_pr", { rodada: "I-206.R1", pr: { id: "41", url: "https://pr/41" } }),
         espera("gate_pr", { rodada: "I-206.R3" }),
@@ -125,7 +125,7 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
         espera("dialogo", { sessao: "s/1", pergunta: "Qual ordem?" }),
         espera("dialogo", { sessao: "s2" }),
         espera("conversa", { sessao: "s3", ticket: { ref: "I-206.T5", etapa: "planejar", modo: "interativo" } }),
-        espera("revisao_parada", { erro: "a revisão integral foi recusada: o ticket 3 está fechado" }),
+        espera("revisao_parada", { erro: "a revisão integral foi recusada: o ticket 3 está cancelado" }),
       ],
     }),
     agora,
@@ -161,7 +161,7 @@ test("aguarda você: o contador, o motivo, o botão, o que falta e o rodapé de 
       "O agente pergunta: Qual ordem?",
       "O agente abriu uma pergunta",
       "O agente respondeu e espera você",
-      "a revisão integral foi recusada: o ticket 3 está fechado",
+      "a revisão integral foi recusada: o ticket 3 está cancelado",
     ],
   );
   // Os gates, os ajustes e a falha se decidem na página da demanda; o diálogo e a conversa, no chat.
@@ -205,27 +205,27 @@ test("rodando: a linha da sessão com o modo, o que o agente faz, o ticket, o mo
   assert.match(String(segunda), /title="padrão do pi"/);
 });
 
-test("board: o cartão na coluna da fase, com o ticket em curso e as marcas de execução, espera e bloqueio", () => {
+test("board: o cartão na coluna do estado, com o ticket em curso e as marcas de execução, espera e bloqueio", () => {
   const html = inicio(
     dados({
-      emAndamento: 2,
+      quantidadeEmAndamento: 2,
       aguarda: [espera("falha", { rodada: "I-206.R2" }), espera("gate_pr", { rodada: "I-206.R1" })],
       rodando: [sessao()],
       board: [
         cartao({
-          ticket: { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", modo: "autonomo", piAtivo: true },
+          ticket: { ref: "I-206.T3", etapa: "implementar", estado: "em_execucao", modo: "autonomo", piAtivo: true },
           outros: 1,
         }),
-        cartao({ coluna: "aprovacao_pull_request", ref: "I-206.R1" }),
+        cartao({ coluna: "gate_pr", ref: "I-206.R1" }),
         cartao({
-          coluna: "aprovacao_demanda",
+          coluna: "gate_demanda",
           ref: "I-207",
           demanda: "I-207",
           titulo: "Cache",
-          ticket: { ref: "I-207.T1", etapa: "demanda", status: "aberto" },
+          ticket: { ref: "I-207.T1", etapa: "entender_e_desenhar", estado: "aberto" },
           bloqueios: ["I-206", "I-205"],
         }),
-        cartao({ coluna: "revisao_demanda", ref: "I-209", demanda: "I-209" }),
+        cartao({ coluna: "revisar_demanda", ref: "I-209", demanda: "I-209" }),
       ],
     }),
     agora,

@@ -55,7 +55,7 @@ async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> 
   return ids.map((id) => carregarSessoesDoTicket(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
 }
 
-const etapasEStatus = (c: Cenario, id: string) => demanda(c, id).tickets.map((t) => [t.etapa, t.status]);
+const etapasEStatus = (c: Cenario, id: string) => demanda(c, id).tickets.map((t) => [t.etapa, t.estado]);
 const semDesenvolvimento = (c: Cenario, id: string) => {
   const ag = demanda(c, id);
   assert.deepEqual(ag.rodadas, []);
@@ -76,13 +76,13 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
 
   // O plano vai ao gate: o agendador não despacha nada e nenhuma rodada nasce.
   submeterPlanoDoAgente(c.banco, id, plano(id, "v1"), agente(1));
-  assert.equal(demanda(c, id).demanda.fase, "aprovacao_planejamento");
+  assert.equal(demanda(c, id).demanda.estado, "gate_planejamento");
   assert.equal(despacharDemandas(c.banco, c.config).length, 0);
   semDesenvolvimento(c, id);
 
-  // Reprovado: volta a `planejamento` com o motivo, o `planejar` segue em execução e o agendador o retoma.
+  // Reprovado: volta a `planejar` com o motivo, o `planejar` segue em execução e o agendador o retoma.
   reprovarPlanejamentoDemanda(c.banco, id, "faltam critérios na rodada 1");
-  assert.equal(demanda(c, id).demanda.fase, "planejamento");
+  assert.equal(demanda(c, id).demanda.estado, "planejar");
   assert.deepEqual(
     demanda(c, id)
       .decisoes.filter((d) => d.ticket_id === PLANEJAR)
@@ -107,13 +107,13 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   submeterPlanoDoAgente(c.banco, id, plano(id, "v2"), agente(2));
   await aprovarPlanejamentoDemanda(c.banco, id, {});
   const ag = demanda(c, id);
-  assert.equal(ag.demanda.fase, "execucao");
+  assert.equal(ag.demanda.estado, "em_execucao");
   assert.deepEqual(
-    ag.rodadas.map((r) => [r.rodada_id, r.titulo, r.fase]),
-    [[1, "v2 1", "desenvolvimento"]],
+    ag.rodadas.map((r) => [r.rodada_id, r.titulo, r.estado]),
+    [[1, "v2 1", "implementar"]],
   );
   assert.deepEqual(etapasEStatus(c, id), [
-    ["demanda", "concluido"],
+    ["entender_e_desenhar", "concluido"],
     ["planejar", "concluido"],
     ["implementar", "aberto"],
   ]);
@@ -134,10 +134,10 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
 
   await assert.rejects(aprovarPlanejamentoDemanda(banco, id, { nota: 4 }), /a preparação da worktree falhou/);
   const ag = demanda(c, id);
-  assert.equal(ag.demanda.fase, "aprovacao_planejamento");
+  assert.equal(ag.demanda.estado, "gate_planejamento");
   assert.deepEqual(ag.rodadas, []);
   assert.deepEqual(etapasEStatus(c, id), [
-    ["demanda", "concluido"],
+    ["entender_e_desenhar", "concluido"],
     ["planejar", "em_execucao"],
   ]);
   assert.equal(
@@ -156,10 +156,10 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   rmSync(quebra);
   await aprovarPlanejamentoDemanda(banco, id, { nota: 4 });
   assert.deepEqual(
-    demanda(c, id).rodadas.map((r) => [r.rodada_id, r.fase]),
+    demanda(c, id).rodadas.map((r) => [r.rodada_id, r.estado]),
     [
-      [1, "desenvolvimento"],
-      [2, "desenvolvimento"],
+      [1, "implementar"],
+      [2, "implementar"],
     ],
   );
 });
@@ -217,9 +217,9 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
   const tA = dono(a).tickets.find((x) => x.etapa === "implementar");
   pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await executarAgoraDemanda(c.banco, { demanda_id: a, ticket_id: tA?.ticket_id ?? 0 }, c.config);
-  assert.equal(dono(a).tickets.find((x) => x.ticket_id === tA?.ticket_id)?.status, "falhou");
+  assert.equal(dono(a).tickets.find((x) => x.ticket_id === tA?.ticket_id)?.estado, "falhou");
   assert.deepEqual(demanda(c, b), antesB);
-  assert.equal(dono(b).tickets.find((x) => x.etapa === "implementar")?.status, "aberto");
+  assert.equal(dono(b).tickets.find((x) => x.etapa === "implementar")?.estado, "aberto");
 
   // FKs: referência a demanda, rodada ou ticket que a demanda não tem é recusada pelo banco.
   const agora = "2026-01-01T00:00:00.000Z";
@@ -227,11 +227,11 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     assert.throws(() => c.banco.prepare(sql).run(...args), /FOREIGN KEY/);
   };
   recusa(
-    "INSERT INTO rodada (demanda_id, rodada_id, titulo, fase, e2e, branch) VALUES (?, 1, 'x', 'desenvolvimento', 0, 'b')",
+    "INSERT INTO rodada (demanda_id, rodada_id, titulo, estado, estado_alterado_em, e2e, branch) VALUES (?, 1, 'x', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b')",
     "I-999",
   );
   recusa(
-    "INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id) VALUES (?, 99, 'implementar', 'aberto', ?, 7)",
+    "INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES (?, 99, 'implementar', 'aberto', ?, 7)",
     a,
     agora,
   );

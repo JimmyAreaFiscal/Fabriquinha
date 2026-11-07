@@ -20,8 +20,8 @@ const demanda = (m: Record<string, unknown> = {}) => ({
   titulo: "t",
   tipo: "funcionalidade",
   descricao: "d",
-  fase: "registro",
-  fase_alterada_em: em,
+  estado: "entender_e_desenhar",
+  estado_alterado_em: em,
   criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
   enviada: false,
   branch: "fabriquinha/I-1",
@@ -30,9 +30,9 @@ const demanda = (m: Record<string, unknown> = {}) => ({
 const ticket = (ticket_id = 1, m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
   ticket_id,
-  etapa: "demanda",
-  status: "aberto",
-  status_alterado_em: em,
+  etapa: "entender_e_desenhar",
+  estado: "aberto",
+  estado_alterado_em: em,
   criado_por: FABRIQUINHA,
   ...m,
 });
@@ -72,9 +72,9 @@ const recusa = (valor: unknown, trecho: string) => {
 test("campos da demanda, ticket e decisão", () => {
   assert.ok(Demanda.safeParse(demanda()).success);
   assert.ok(!Demanda.safeParse(demanda({ branch: "fabriquinha/I-2" })).success);
-  assert.ok(!Demanda.safeParse(demanda({ fase: "desenho" })).success);
+  assert.ok(!Demanda.safeParse(demanda({ estado: "desenho" })).success);
   assert.ok(TicketDemanda.safeParse(ticket()).success);
-  assert.ok(!TicketDemanda.safeParse(ticket(1, { status: "x" })).success);
+  assert.ok(!TicketDemanda.safeParse(ticket(1, { estado: "x" })).success);
   assert.ok(DecisaoDemanda.safeParse(decisao({ nota: 5, motivo: "ok" })).success);
   assert.ok(!DecisaoDemanda.safeParse(decisao({ nota: 0 })).success);
   assert.ok(!DecisaoDemanda.safeParse(decisao({ nota: 6 })).success);
@@ -133,16 +133,16 @@ test("devolucoes (0..2, padrão 0) e motivo_falha só em falhou, sem exigi-lo (C
   assert.equal(TicketDemanda.parse(ticket()).devolucoes, 0);
   assert.ok(!TicketDemanda.safeParse(ticket(1, { devolucoes: 3 })).success);
   assert.ok(!TicketDemanda.safeParse(ticket(1, { devolucoes: -1 })).success);
-  assert.ok(AgregadoDemanda.safeParse(agregado({ tickets: [ticket(1, { status: "falhou" })] })).success);
+  assert.ok(AgregadoDemanda.safeParse(agregado({ tickets: [ticket(1, { estado: "falhou" })] })).success);
   assert.ok(
     AgregadoDemanda.safeParse(
-      agregado({ tickets: [ticket(1, { status: "falhou", motivo_falha: "m", devolucoes: 2 })] }),
+      agregado({ tickets: [ticket(1, { estado: "falhou", motivo_falha: "m", devolucoes: 2 })] }),
     ).success,
   );
-  recusa(agregado({ tickets: [ticket(1, { motivo_falha: "m" })] }), "só tem motivo_falha quando falhou ou fechado");
-  // fechado preserva o motivo como histórico (cancelamento de ticket falho)
+  recusa(agregado({ tickets: [ticket(1, { motivo_falha: "m" })] }), "só tem motivo_falha quando falhou ou cancelado");
+  // cancelado preserva o motivo como histórico (cancelamento de ticket falho)
   assert.ok(
-    AgregadoDemanda.safeParse(agregado({ tickets: [ticket(1, { status: "fechado", motivo_falha: "m" })] })).success,
+    AgregadoDemanda.safeParse(agregado({ tickets: [ticket(1, { estado: "cancelado", motivo_falha: "m" })] })).success,
   );
 });
 
@@ -199,7 +199,8 @@ const rodada = (rodada_id = 1, m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
   rodada_id,
   titulo: "r",
-  fase: "desenvolvimento",
+  estado: "implementar",
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/I-1-${String(rodada_id)}`,
   ...m,
@@ -261,22 +262,22 @@ test("encerramento: ausente continua válido e cada invariante recusa", () => {
     ...m,
   });
   const emEncerramento = (encerramento: unknown, tickets = [ticket()]) =>
-    agregado({ demanda: demanda({ fase: "encerramento" }), tickets, encerramento });
+    agregado({ demanda: demanda({ estado: "encerrar_demanda" }), tickets, encerramento });
   assert.ok(AgregadoDemanda.safeParse(agregado()).success);
   assert.ok(AgregadoDemanda.safeParse(emEncerramento(enc())).success);
-  assert.ok(AgregadoDemanda.safeParse({ ...emEncerramento(enc()), demanda: demanda({ fase: "concluida" }) }).success);
-  for (const fase of ["cancelada", "arquivada"])
-    assert.ok(AgregadoDemanda.safeParse({ ...emEncerramento(enc()), demanda: demanda({ fase }) }).success);
-  for (const fase of [
-    "registro",
-    "aprovacao_demanda",
-    "planejamento",
-    "aprovacao_planejamento",
-    "execucao",
-    "revisao_demanda",
+  assert.ok(AgregadoDemanda.safeParse({ ...emEncerramento(enc()), demanda: demanda({ estado: "concluida" }) }).success);
+  for (const estado of ["cancelada", "arquivada"])
+    assert.ok(AgregadoDemanda.safeParse({ ...emEncerramento(enc()), demanda: demanda({ estado }) }).success);
+  for (const estado of [
+    "entender_e_desenhar",
+    "gate_demanda",
+    "planejar",
+    "gate_planejamento",
+    "em_execucao",
+    "revisar_demanda",
   ])
-    recusa({ ...emEncerramento(enc()), demanda: demanda({ fase }) }, "só existe nas fases");
-  recusa(agregado({ encerramento: enc() }), "só existe nas fases");
+    recusa({ ...emEncerramento(enc()), demanda: demanda({ estado }) }, "só existe nos estados");
+  recusa(agregado({ encerramento: enc() }), "só existe nos estados");
   recusa(emEncerramento(enc({ demanda_id: "I-2", branch: "fabriquinha/I-2" })), "outra demanda");
   recusa(emEncerramento(enc({ branch: "main" })), "branch do encerramento");
   recusa(emEncerramento(enc({ integracao: { sha: "d" } })), "exige o PR");

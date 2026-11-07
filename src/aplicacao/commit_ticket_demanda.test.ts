@@ -39,10 +39,10 @@ function cenario() {
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('p', '${worktree}', 'main', 'github', 'k')`);
   banco.exec(
-    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1')`,
+    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${t}, 'f', 's', 1, 'fabriquinha/I-1')`,
   );
   for (const id of [1, 2])
-    banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+    banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', ${String(id)}, 'implementar', 'aberto', ${t})`);
   return { worktree, banco };
 }

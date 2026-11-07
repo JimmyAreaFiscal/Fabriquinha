@@ -1,5 +1,5 @@
 // Materialização de correções (comparacao-sdlc-implementacao.md §3 e §4): tickets corretivos de uma rodada e novas
-// rodadas da revisão integral. Funções puras que só acrescentam ao agregado; fases, gates e decisões ficam nas transições.
+// rodadas da revisão integral. Funções puras que só acrescentam ao agregado; estados, gates e decisões ficam nas transições.
 import { z } from "zod";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import type { Ator } from "./ator.ts";
@@ -67,8 +67,8 @@ function acrescentar(
         titulo,
         descricao,
         etapa: "implementar",
-        status: "aberto",
-        status_alterado_em: agora,
+        estado: "aberto",
+        estado_alterado_em: agora,
         criado_por,
         configuracao_agente,
       })),
@@ -90,7 +90,8 @@ function acrescentar(
           demanda_id,
           rodada_id: r(x.rodada_id),
           titulo: x.titulo,
-          fase: "desenvolvimento",
+          estado: "implementar",
+          estado_alterado_em: agora,
           e2e: x.e2e,
           branch: branchRodada(demanda_id, r(x.rodada_id)),
         })),

@@ -4,11 +4,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import type { AgregadoDemanda, TipoDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { AUDITOR } from "../../../nucleo/ator.ts";
-import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../nucleo/ciclos.ts";
 import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { encontrado } from "../../../nucleo/erros.ts";
-import type { EtapaTicket, FaseDemanda, FaseRodada, StatusTicket } from "../../../nucleo/primitivos.ts";
+import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { configuracaoProjeto } from "../../../armazenamento/configuracao_projeto.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
@@ -23,16 +23,22 @@ export interface DemandaDoProjeto {
   id: string;
   titulo: string;
   tipo: TipoDemanda;
-  fase: FaseDemanda;
-  faseAlteradaEm: string;
+  estado: EstadoDemanda;
+  terminal: boolean;
+  satisfazDependencia: boolean;
+  /** O estado em que a linha do tempo marca a demanda; ver `estadoNaLinhaDoTempo`. */
+  estadoNaLinhaDoTempo: EstadoDemanda;
+  estadoAlteradoEm: string;
   /** As predecessoras ainda em andamento: a cancelada já cancelou esta junto, e não bloqueia mais nada. */
   bloqueadaPor: string[];
-  rodadas: { ref: string; titulo: string; fase: FaseRodada; pr?: { id: string; url: string } }[];
+  rodadas: { ref: string; titulo: string; estado: EstadoRodada; pr?: { id: string; url: string } }[];
   tickets: {
     ref: string;
     etapa: EtapaTicket;
-    status: StatusTicket;
-    statusAlteradoEm: string;
+    estado: EstadoTicket;
+    terminal: boolean;
+    satisfazDependencia: boolean;
+    estadoAlteradoEm: string;
     rodada?: string;
     titulo?: string;
     /** `provedor / modelo` do ticket, senão o da etapa no projeto; sem ele, vale o padrão do pi. */
@@ -58,12 +64,34 @@ const Filtro = z.object({
 const projetoExistente = (banco: DatabaseSync, nome: string) =>
   encontrado(projeto(banco, nome), `o projeto ${nome} não existe`, "escolha um projeto cadastrado na Configuração");
 
-/** O PR da rodada: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela, em qualquer fase. */
+/** O PR da rodada: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela, em qualquer estado. */
 function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const ticket = ag.tickets.findLast((t) => t.rodada_id === rodada_id && t.etapa === "encerrar_rodada");
   const pr = ag.evidencias.findLast((e) => e.ticket_id === ticket?.ticket_id && e.tipo === "pr_aberto")?.dados as
     { id: string; url: string } | undefined;
   return pr && { id: pr.id, url: pr.url };
+}
+
+/** O estado da demanda em que o trabalho da Etapa acontece; as Etapas das rodadas e do conflito acontecem em `em_execucao`. */
+const estadoDaEtapa = (etapa: EtapaTicket): EstadoDemanda =>
+  EstadoDemanda.options.find((estado) => etapaDoEstado(estado) === etapa) ?? "em_execucao";
+
+/**
+ * O estado que a linha do tempo marca: o da demanda em andamento; o da Etapa mais adiantada dos tickets na cancelada,
+ * que não guarda onde parou; e `concluida` (tudo feito) na concluída e na arquivada.
+ * ponytail: a cancelada num gate aparece no estado do ticket, o de antes; um histórico de estados a acertaria.
+ */
+/** @testes função pura da rota, testada sem banco */
+export function estadoNaLinhaDoTempo({ demanda, tickets }: AgregadoDemanda): EstadoDemanda {
+  if (CICLO_DA_DEMANDA.satisfazDependencia(demanda.estado)) return "concluida";
+  if (CICLO_DA_DEMANDA.estaEmAndamento(demanda.estado)) return demanda.estado;
+  return tickets
+    .map((t) => estadoDaEtapa(t.etapa))
+    .reduce<EstadoDemanda>(
+      (maisAdiantado, estado) =>
+        EstadoDemanda.options.indexOf(estado) > EstadoDemanda.options.indexOf(maisAdiantado) ? estado : maisAdiantado,
+      "entender_e_desenhar",
+    );
 }
 
 function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
@@ -84,14 +112,17 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
     id,
     titulo: ag.demanda.titulo,
     tipo: ag.demanda.tipo,
-    fase: ag.demanda.fase,
-    faseAlteradaEm: ag.demanda.fase_alterada_em,
+    estado: ag.demanda.estado,
+    terminal: CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado),
+    satisfazDependencia: CICLO_DA_DEMANDA.satisfazDependencia(ag.demanda.estado),
+    estadoNaLinhaDoTempo: estadoNaLinhaDoTempo(ag),
+    estadoAlteradoEm: ag.demanda.estado_alterado_em,
     bloqueadaPor: predecessorasDaDemanda(banco, id)
-      .filter((p) => !satisfazDependencia(p.fase) && p.fase !== "cancelada")
+      .filter((p) => CICLO_DA_DEMANDA.estaEmAndamento(p.estado))
       .map((p) => p.demanda_id),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDaRodada(ag, r.rodada_id);
-      return { ref: rodada(r.rodada_id), titulo: r.titulo, fase: r.fase, ...(pr && { pr }) };
+      return { ref: rodada(r.rodada_id), titulo: r.titulo, estado: r.estado, ...(pr && { pr }) };
     }),
     tickets: ag.tickets.map((t) => {
       const { modelo } = resolverConfiguracaoAgente({
@@ -104,8 +135,10 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
       return {
         ref: ticketRef,
         etapa: t.etapa,
-        status: t.status,
-        statusAlteradoEm: t.status_alterado_em,
+        estado: t.estado,
+        terminal: CICLO_DO_TICKET.ehTerminal(t.estado),
+        satisfazDependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
+        estadoAlteradoEm: t.estado_alterado_em,
         ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
         ...(t.titulo !== undefined && { titulo: t.titulo }),
         ...(modelo && { modelo: `${modelo.provedor} / ${modelo.nome}` }),
@@ -116,11 +149,11 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
   };
 }
 
-/** As demandas do projeto, das mais novas para as mais antigas, só com o id e a fase. */
+/** As demandas do projeto, das mais novas para as mais antigas, só com o id e o estado. */
 const situacaoDasDemandas = (banco: DatabaseSync, nome: string) =>
-  banco.prepare("SELECT id, fase FROM demanda WHERE projeto = ? ORDER BY rowid DESC").all(nome) as {
+  banco.prepare("SELECT id, estado FROM demanda WHERE projeto = ? ORDER BY rowid DESC").all(nome) as {
     id: string;
-    fase: FaseDemanda;
+    estado: EstadoDemanda;
   }[];
 
 /** As em andamento sempre; as concluídas, as arquivadas e as canceladas só quando pedidas. */
@@ -128,8 +161,8 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
   projetoExistente(banco, nome);
   const filtro = Filtro.parse(Object.fromEntries(query));
   const todas = situacaoDasDemandas(banco, nome);
-  const quantas = (fase: FaseDemanda) => todas.filter((d) => d.fase === fase).length;
-  const mostrarDaFase: Partial<Record<FaseDemanda, boolean>> = {
+  const quantas = (estado: EstadoDemanda) => todas.filter((d) => d.estado === estado).length;
+  const mostrarDoEstado: Partial<Record<EstadoDemanda, boolean>> = {
     concluida: filtro.concluidas,
     arquivada: filtro.arquivadas,
     cancelada: filtro.canceladas,
@@ -141,9 +174,9 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
   };
   return {
     // ponytail: um agregado por demanda mostrada, como o quadro das demandas; uma consulta só quando a página pesar.
-    demandas: todas.filter((d) => mostrarDaFase[d.fase] ?? true).map((d) => demandaDoProjeto(banco, d.id)),
+    demandas: todas.filter((d) => mostrarDoEstado[d.estado] ?? true).map((d) => demandaDoProjeto(banco, d.id)),
     contagem: {
-      andamento: todas.length - contagem.concluidas - contagem.arquivadas - contagem.canceladas,
+      andamento: todas.filter((d) => CICLO_DA_DEMANDA.estaEmAndamento(d.estado)).length,
       ...contagem,
     },
   };
@@ -152,7 +185,7 @@ function lista(banco: DatabaseSync, nome: string, query: URLSearchParams): Lista
 /** Arquivar concluídas: cada demanda concluída do projeto, uma transação por demanda, como o Arquivar da demanda. */
 function arquivarConcluidas(banco: DatabaseSync, nome: string): { arquivadas: number } {
   projetoExistente(banco, nome);
-  const concluidas = situacaoDasDemandas(banco, nome).filter((d) => d.fase === "concluida");
+  const concluidas = situacaoDasDemandas(banco, nome).filter((d) => d.estado === "concluida");
   for (const { id } of concluidas) arquivar(banco, id, AUDITOR, { agora: new Date().toISOString() });
   return { arquivadas: concluidas.length };
 }

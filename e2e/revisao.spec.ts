@@ -37,8 +37,8 @@ function semear(raiz: string, descricao: string, integral = false): void {
     demanda_id: "I-250",
     ticket_id,
     etapa,
-    status,
-    status_alterado_em: em,
+    estado: status,
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     rodada_id: etapa === "revisar_demanda" ? undefined : 1,
     devolucoes: 0,
@@ -50,8 +50,8 @@ function semear(raiz: string, descricao: string, integral = false): void {
       titulo: "Cupons com prioridade",
       tipo: "funcionalidade",
       descricao,
-      fase: integral ? "revisao_demanda" : "execucao",
-      fase_alterada_em: em,
+      estado: integral ? "revisar_demanda" : "em_execucao",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "I-250" },
       enviada: true,
       branch: "fabriquinha/I-250",
@@ -75,7 +75,8 @@ function semear(raiz: string, descricao: string, integral = false): void {
         demanda_id: "I-250",
         rodada_id: 1,
         titulo: "r1",
-        fase: integral ? "concluida" : "revisao",
+        estado: integral ? "concluida" : "revisar_rodada",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
         e2e: false,
         branch: "fabriquinha/I-250-1",
       },
@@ -94,7 +95,7 @@ function estado(raiz: string) {
   try {
     const ag = carregarDemanda(banco, "I-250");
     const t = ag.tickets.find((x) => x.ticket_id === 2);
-    return { status: t?.status, motivo: t?.motivo_falha, decisoes: ag.decisoes.length, rodada: ag.rodadas[0]?.fase };
+    return { estado: t?.estado, motivo: t?.motivo_falha, decisoes: ag.decisoes.length, rodada: ag.rodadas[0]?.estado };
   } finally {
     banco.close();
   }
@@ -120,7 +121,7 @@ test("CA-2: o revisor que decide aprovar conclui o ticket e a rodada segue para 
   // Concluído e decidido, o ticket mostra a decisão no lugar do status; o banco confirma o concluído.
   await executar(pagina, fabriquinha.base, "Aprovado");
   const e = estado(fabriquinha.raiz);
-  expect([e.status, e.decisoes, e.rodada]).toEqual(["concluido", 1, "encerramento"]);
+  expect([e.estado, e.decisoes, e.rodada]).toEqual(["concluido", 1, "encerrar_rodada"]);
 });
 
 for (const [ca, integral] of [
@@ -135,7 +136,7 @@ for (const [ca, integral] of [
     semear(fabriquinha.raiz, "[sem decidir]", integral);
     await executar(pagina, fabriquinha.base, "Falhou");
     await expect(pagina.locator(".dm-ticket", { hasText: "I-250.T2" })).toContainText(SEM_DECISAO);
-    expect(estado(fabriquinha.raiz)).toMatchObject({ status: "falhou", motivo: SEM_DECISAO, decisoes: 0 });
+    expect(estado(fabriquinha.raiz)).toMatchObject({ estado: "falhou", motivo: SEM_DECISAO, decisoes: 0 });
 
     await pagina.getByRole("button", { name: "Reabrir" }).click();
     await pagina.getByLabel(/Instrução/).fill("decida ao final");

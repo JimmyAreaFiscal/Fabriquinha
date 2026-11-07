@@ -1,10 +1,18 @@
 // Métricas (F7 §4.4) como funções puras: o período em meses, a página `/metrics` (mês em foco contra a média dos
 // meses anteriores do período), a frase do mês do Início e os cards do mês do Projeto. O DOM e a rede ficam em
 // metricas-montar.ts. A comparação com a média é feita aqui, sobre a lista de meses lida das tabelas da demanda.
-import type { EtapaTicket, FaseDemanda } from "../../../nucleo/primitivos.ts";
+import type { EtapaTicket, EstadoDemanda } from "../../../nucleo/primitivos.ts";
 import type { Custo } from "../../../aplicacao/demanda.ts";
 import type { MetricasDemandaPeriodo, MetricasMesDemanda, Nivel, Soma } from "../../../aplicacao/periodo_demanda.ts";
-import { caminhoDaDemanda, compacto, custo, duracao, escapar, FASE_DA_DEMANDA, plural as pluralDe } from "../render.ts";
+import {
+  caminhoDaDemanda,
+  compacto,
+  custo,
+  duracao,
+  escapar,
+  APARENCIA_DO_ESTADO_DA_DEMANDA,
+  plural as pluralDe,
+} from "../render.ts";
 import { pilula } from "./demandas.ts";
 
 type MetricasMes = MetricasMesDemanda;
@@ -81,7 +89,7 @@ export type Coluna =
   | "demanda"
   | "titulo"
   | "projeto"
-  | "fase"
+  | "estado"
   | "custo"
   | "tokens"
   | "execucoes"
@@ -397,12 +405,12 @@ function blocoDaEvolucao(meses: readonly MetricasMes[], e: EstadoDasMetricas): s
 // ——— por etapa ———
 
 const NOME_DA_ETAPA: Record<EtapaTicket, string> = {
-  demanda: "Demanda",
+  entender_e_desenhar: "Demanda",
   planejar: "Planejar",
   implementar: "Implementar",
   revisar_rodada: "Revisar rodada",
   encerrar_rodada: "Encerrar rodada",
-  sessao_em_aberto: "Sessão em aberto",
+  ajustar_resultado: "Sessão em aberto",
   revisar_demanda: "Revisar demanda",
   encerrar_demanda: "Encerrar demanda",
   resolver_conflito: "Resolver conflito",
@@ -535,7 +543,7 @@ function porModelo(m: MetricasMes): string {
 
 // ——— por demanda ———
 
-const TEXTO: ReadonlySet<Coluna> = new Set(["titulo", "projeto", "fase"]);
+const TEXTO: ReadonlySet<Coluna> = new Set(["titulo", "projeto", "estado"]);
 
 function valorDaColuna(d: MetricasDemandaPeriodo, c: Coluna): string | number | null {
   switch (c) {
@@ -545,8 +553,8 @@ function valorDaColuna(d: MetricasDemandaPeriodo, c: Coluna): string | number | 
       return d.titulo;
     case "projeto":
       return d.projeto;
-    case "fase":
-      return d.fase;
+    case "estado": // ordena pelo rótulo que a tela mostra, não pelo valor interno
+      return APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado as EstadoDemanda][0];
     case "custo":
       return d.custo.conhecido;
     case "tokens":
@@ -593,7 +601,7 @@ function tabelaDeDemandas(demandas: readonly MetricasDemandaPeriodo[], e: Estado
     (d) => `<tr><td><a class="id" href="${caminhoDaDemanda(d.demanda)}">${escapar(d.demanda)}</a></td>
       <td>${escapar(d.titulo)}</td>
       ${todos ? `<td class="muted">${escapar(d.projeto)}</td>` : ""}
-      <td>${pilula(FASE_DA_DEMANDA[d.fase as FaseDemanda])}</td>
+      <td>${pilula(APARENCIA_DO_ESTADO_DA_DEMANDA[d.estado as EstadoDemanda])}</td>
       <td class="num">${dinheiro(d.custo)}</td><td class="num">${compacto(somaDosTokens(d))}</td>
       <td class="num">${qtd(d.execucoes)}</td><td class="num">${qtd(d.falhas)}</td><td class="num">${qtd(d.reprovacoes)}</td>
       <td class="num">${duracao(d.duracaoMs)}</td><td class="num">${d.nota === null ? "—" : numero(d.nota, 1)}</td></tr>`,
@@ -603,7 +611,7 @@ function tabelaDeDemandas(demandas: readonly MetricasDemandaPeriodo[], e: Estado
     conhecido: soma((d) => d.custo.conhecido),
     incompleto: demandas.some((d) => d.custo.incompleto),
   };
-  return `<div class="rola"><table class="tabela tabela-demandas"><thead><tr>${th("demanda", "Demanda", false)}${th("titulo", "Título", false)}${todos ? th("projeto", "Projeto", false) : ""}${th("fase", "Fase", false)}${th("custo", "Custo")}${th("tokens", "Tokens")}${th("execucoes", "Execuções")}${th("falhas", "Falhas")}${th("reprovacoes", "Reprovações")}${th("duracao", "Duração")}${th("nota", "Nota do PR")}</tr></thead>
+  return `<div class="rola"><table class="tabela tabela-demandas"><thead><tr>${th("demanda", "Demanda", false)}${th("titulo", "Título", false)}${todos ? th("projeto", "Projeto", false) : ""}${th("estado", "Fase", false)}${th("custo", "Custo")}${th("tokens", "Tokens")}${th("execucoes", "Execuções")}${th("falhas", "Falhas")}${th("reprovacoes", "Reprovações")}${th("duracao", "Duração")}${th("nota", "Nota do PR")}</tr></thead>
     <tbody>${linhas.join("")}</tbody>
     <tfoot><tr><td colspan="${todos ? "4" : "3"}">${plural(demandas.length, "demanda", "demandas")}</td><td class="num">${dinheiro(custoTotal)}</td><td class="num">${compacto(soma((d) => somaDosTokens(d)))}</td><td class="num">${qtd(soma((d) => d.execucoes))}</td><td class="num">${qtd(soma((d) => d.falhas))}</td><td class="num">${qtd(soma((d) => d.reprovacoes))}</td><td class="num">${duracao(soma((d) => d.duracaoMs))}</td><td></td></tr></tfoot>
     </table></div>`;

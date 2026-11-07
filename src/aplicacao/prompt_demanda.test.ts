@@ -6,10 +6,10 @@ import { EtapaTicket } from "../nucleo/primitivos.ts";
 import { montarPromptDemanda } from "./prompt_demanda.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
-const NOVAS = EtapaTicket.options.filter((e) => e !== "demanda");
+const NOVAS = EtapaTicket.options.filter((e) => e !== "entender_e_desenhar");
 
 const ag = {
-  demanda: { id: "I-206", titulo: "Busca", tipo: "problema", descricao: "A busca demora.", fase: "execucao" },
+  demanda: { id: "I-206", titulo: "Busca", tipo: "problema", descricao: "A busca demora.", estado: "em_execucao" },
   tickets: [],
   decisoes: [],
   evidencias: [
@@ -25,7 +25,17 @@ const ag = {
       },
     },
   ],
-  rodadas: [{ demanda_id: "I-206", rodada_id: 2, titulo: "Índice", fase: "desenvolvimento", e2e: false, branch: "x" }],
+  rodadas: [
+    {
+      demanda_id: "I-206",
+      rodada_id: 2,
+      titulo: "Índice",
+      estado: "implementar",
+      estado_alterado_em: "2026-01-01T00:00:00.000Z",
+      e2e: false,
+      branch: "x",
+    },
+  ],
   dependencias_rodada: [],
   criterios_citados: [{ demanda_id: "I-206", rodada_id: 2, criterio_id: "CA-2" }],
   dependencias_ticket: [{ demanda_id: "I-206", ticket_id: 3, depende_ticket_id: 1 }],
@@ -186,7 +196,7 @@ test("seção de evidências e skills vêm do catálogo", () => {
       p.includes("artefato-comprovacao-criterios"),
   );
   assert.ok(montar("encerrar_rodada").includes("`video_demonstracao` (opcional)"));
-  const vazia = montar("sessao_em_aberto");
+  const vazia = montar("ajustar_resultado");
   assert.ok(vazia.includes("não tem evidência do agente") && vazia.includes("não produz evidência"));
   assert.match(vazia, /ticket corretivo da rodada I-206\.R2[^]*antes de concluir/);
   assert.ok(!vazia.includes("descartadas"));
@@ -254,9 +264,9 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a mat
   const comEvidencias = {
     ...ag,
     tickets: [
-      { ticket_id: 4, rodada_id: 2, etapa: "revisar_rodada", status: "concluido" },
-      { ticket_id: 5, rodada_id: 2, etapa: "revisar_rodada", status: "concluido" },
-      { ticket_id: 6, rodada_id: 9, etapa: "revisar_rodada", status: "concluido" },
+      { ticket_id: 4, rodada_id: 2, etapa: "revisar_rodada", estado: "concluido" },
+      { ticket_id: 5, rodada_id: 2, etapa: "revisar_rodada", estado: "concluido" },
+      { ticket_id: 6, rodada_id: 9, etapa: "revisar_rodada", estado: "concluido" },
     ],
     evidencias: [
       evidencia("desenho_solucao", { ...desenho, foraDeEscopo: ["o ranking"] }),
@@ -360,7 +370,7 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a mat
 });
 
 test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivos e perguntas respondidas (I-294 CA-1 a CA-5)", () => {
-  const t = (ticket_id: number, etapa: string, rodada_id = 2) => ({ ticket_id, rodada_id, etapa, status: "concluido" });
+  const t = (ticket_id: number, etapa: string, rodada_id = 2) => ({ ticket_id, rodada_id, etapa, estado: "concluido" });
   const recusa = (ticket_id: number, motivo: string) => ({ ticket_id, resultado: "recusado", motivo });
   const comHistorico = {
     ...ag,

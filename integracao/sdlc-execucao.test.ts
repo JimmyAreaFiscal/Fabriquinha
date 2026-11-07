@@ -34,7 +34,7 @@ import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParaleli
 
 const ativosPorRodada = (c: Cenario, id: string) => {
   const porRodada = new Map<number | undefined, number>();
-  for (const t of demanda(c, id).tickets.filter((x) => x.status === "em_execucao"))
+  for (const t of demanda(c, id).tickets.filter((x) => x.estado === "em_execucao"))
     porRodada.set(t.rodada_id, (porRodada.get(t.rodada_id) ?? 0) + 1);
   return porRodada;
 };
@@ -75,8 +75,8 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
 
   // Implementações concluídas levam R1 e R2 à revisão; R3 segue aberta até a conclusão de R1 (a revisão ainda não rodou).
   assert.deepEqual(
-    [rodadaDe(c, id, 1)?.fase, rodadaDe(c, id, 2)?.fase, rodadaDe(c, id, 3)?.fase],
-    ["revisao", "revisao", "desenvolvimento"],
+    [rodadaDe(c, id, 1)?.estado, rodadaDe(c, id, 2)?.estado, rodadaDe(c, id, 3)?.estado],
+    ["revisar_rodada", "revisar_rodada", "implementar"],
   );
   assert.equal(statusDe(c, r3t1), "aberto");
   assert.equal(pisAteAgora(), 3);
@@ -125,11 +125,11 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   await executarAgoraDemanda(c.banco, ref, c.config, deps);
   const devolvido = demanda(c, id).tickets.find((x) => x.ticket_id === ref.ticket_id);
   assert.ok(devolvido);
-  assert.equal(devolvido.status, "aberto", devolvido.motivo_falha);
+  assert.equal(devolvido.estado, "aberto", devolvido.motivo_falha);
   assert.equal(devolvido.devolucoes, 1);
   assert.match(devolvido.instrucao ?? "", /execucao_testes: reprovado no teste/);
   assert.equal(execucoesDe(c, ref)[0]?.erro, undefined);
-  assert.equal(rodadaDe(c, id, 1)?.fase, "desenvolvimento");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "implementar");
   assert.equal(
     git(worktree, "log", "--fixed-strings", "--grep", `[${id}.T${String(ref.ticket_id)}]`, "--format=%H"),
     "",
@@ -140,7 +140,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   await executarAgoraDemanda(c.banco, ref, c.config, deps);
   const ag = demanda(c, id);
   assert.equal(statusDe(c, ref), "concluido");
-  assert.equal(rodadaDe(c, id, 1)?.fase, "revisao");
+  assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
   assert.equal(execucoesDe(c, ref).length, 2);
   assert.equal(carregarSessoesDoTicket(c.banco, ref).sessoes.length, 1);
   const evidencias = ag.evidencias.filter((e) => e.ticket_id === ref.ticket_id);
@@ -168,9 +168,9 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   const id = await demandaEmExecucao(c, [{ tickets: 2 }]);
   const [t1, t2] = [ticketDe(c, id, 1), ticketDe(c, id, 1, 2)];
   const deps = despacho();
-  const fase = () => rodadaDe(c, id, 1)?.fase;
+  const estado = () => rodadaDe(c, id, 1)?.estado;
 
-  // Falha: o pi sai com erro; o ticket falha, a segunda tarefa da rodada não avança e a fase não muda.
+  // Falha: o pi sai com erro; o ticket falha, a segunda tarefa da rodada não avança e o estado não muda.
   pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await Promise.all(despacharDemandas(c.banco, c.config, deps));
   assert.equal(statusDe(c, t1), "falhou");
@@ -182,7 +182,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   const bloqueado = () => {
     assert.equal(despacharDemandas(c.banco, c.config, deps).length, 0);
     assert.equal(statusDe(c, t2), "aberto");
-    assert.equal(fase(), "desenvolvimento");
+    assert.equal(estado(), "implementar");
   };
   bloqueado();
   assert.throws(() => executarAgoraDemanda(c.banco, t2, c.config, deps), /está falhou/);
@@ -218,7 +218,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   const execucao = { id: randomUUID(), sessao_id: sessao.id, inicio: new Date().toISOString(), falha: false };
   comDemanda(c.banco, id, (ag) => ({
     ...ag,
-    tickets: ag.tickets.map((x) => (x.ticket_id === t1.ticket_id ? { ...x, status: "em_execucao" as const } : x)),
+    tickets: ag.tickets.map((x) => (x.ticket_id === t1.ticket_id ? { ...x, estado: "em_execucao" as const } : x)),
   }));
   comSessoesDoTicket(c.banco, t1, (estado) => ({
     ...estado,

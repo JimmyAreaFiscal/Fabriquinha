@@ -248,11 +248,11 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   assert.deepEqual(comRodada.custoExterno, { conhecido: 13.5, incompleto: true, sessoes: 3 });
   assert.equal(atual(c, id, "implementar", 1).titulo, "Corrigir");
 
-  // Métrica só lê: nenhuma fase, status ou decisão mudou, apesar do custo da vizinha.
+  // Métrica só lê: nenhuma estado, status ou decisão mudou, apesar do custo da vizinha.
   const depois = demanda(c, id);
   assert.deepEqual(
-    [depois.demanda.fase, depois.rodadas.map((r) => r.fase), depois.tickets.map((x) => x.status), depois.decisoes],
-    [antes.demanda.fase, antes.rodadas.map((r) => r.fase), antes.tickets.map((x) => x.status), antes.decisoes],
+    [depois.demanda.estado, depois.rodadas.map((r) => r.estado), depois.tickets.map((x) => x.estado), depois.decisoes],
+    [antes.demanda.estado, antes.rodadas.map((r) => r.estado), antes.tickets.map((x) => x.estado), antes.decisoes],
   );
   assert.equal(metricasDaDemanda(c.banco, vizinha).total.custo.conhecido, 1_000_000);
 });

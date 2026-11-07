@@ -3,10 +3,22 @@
 import type { DatabaseSync } from "node:sqlite";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import { CICLO_DA_DEMANDA, etapaDoEstado } from "../nucleo/ciclos.ts";
+import { EstadoDemanda } from "../nucleo/primitivos.ts";
 import { carregarDemanda } from "./demandas.ts";
 import { predecessorasDaDemanda } from "./dependencias_demanda.ts";
 
-const FASES_LIDAS = "('planejamento', 'execucao', 'revisao_demanda', 'encerramento')";
+// Os estados em andamento em que o agendador despacha: fora da conversa do Auditor (`entender_e_desenhar`) e dos Gates,
+// cuja Etapa é a do ticket que eles esperam, não a do estado.
+const ESTADOS_LIDOS = `(${EstadoDemanda.options
+  .filter(
+    (estado) =>
+      CICLO_DA_DEMANDA.estaEmAndamento(estado) &&
+      estado !== "entender_e_desenhar" &&
+      (etapaDoEstado(estado) ?? estado) === estado,
+  )
+  .map((estado) => `'${estado}'`)
+  .join(", ")})`;
 
 interface DemandaParaDespacho {
   agregado: AgregadoDemanda;
@@ -28,7 +40,7 @@ function noSnapshot<T>(banco: DatabaseSync, ler: () => T): T {
 export const demandasParaDespacho = (banco: DatabaseSync): DemandaParaDespacho[] =>
   noSnapshot(banco, () =>
     banco
-      .prepare(`SELECT id FROM demanda WHERE fase IN ${FASES_LIDAS} ORDER BY rowid`)
+      .prepare(`SELECT id FROM demanda WHERE estado IN ${ESTADOS_LIDOS} ORDER BY rowid`)
       .all()
       .map(({ id }) => ({
         agregado: carregarDemanda(banco, id as string),
@@ -49,7 +61,7 @@ export const retomadasDePlanejamento = (banco: DatabaseSync): string[] =>
   banco
     .prepare(
       `SELECT t.demanda_id FROM ticket_demanda t JOIN demanda dm ON dm.id = t.demanda_id
-       WHERE dm.fase = 'planejamento' AND t.status = 'em_execucao' AND ${PLANEJAR_REPROVADO}
+       WHERE dm.estado = 'planejar' AND t.estado = 'em_execucao' AND ${PLANEJAR_REPROVADO}
          AND NOT EXISTS (SELECT 1 ${EXECUCAO_DO_TICKET} AND e.fim IS NULL)
          AND NOT EXISTS (SELECT 1 ${EXECUCAO_DO_TICKET} AND e.inicio >= (
            SELECT d.em FROM decisao_ticket d WHERE d.demanda_id = t.demanda_id AND d.ticket_id = t.ticket_id
@@ -65,10 +77,10 @@ export const ocupacaoDoLimite = (banco: DatabaseSync): number =>
     banco
       .prepare(
         `SELECT COUNT(*) AS n FROM ticket_demanda t JOIN demanda dm ON dm.id = t.demanda_id
-         WHERE dm.fase IN ${FASES_LIDAS} AND t.status = 'em_execucao' AND t.etapa <> 'sessao_em_aberto'
+         WHERE dm.estado IN ${ESTADOS_LIDOS} AND t.estado = 'em_execucao' AND t.etapa <> 'ajustar_resultado'
            AND NOT (t.etapa = 'encerrar_rodada' AND EXISTS (
              SELECT 1 FROM rodada r WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id
-               AND r.fase = 'aprovacao_pull_request'))
+               AND r.estado = 'gate_pr'))
            AND NOT (${PLANEJAR_REPROVADO} AND NOT EXISTS (SELECT 1 ${EXECUCAO_DO_TICKET} AND e.fim IS NULL))`,
       )
       .get()?.n,

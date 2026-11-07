@@ -17,17 +17,21 @@ const banco = (planejado: string[] | null = ["a", "b", "c", "d"]) => {
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   b.exec(
-    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1')`,
+    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1')`,
   );
-  b.exec("INSERT INTO rodada VALUES ('I-1', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-1')");
-  b.exec("INSERT INTO rodada VALUES ('I-1', 2, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-2')");
+  b.exec(
+    "INSERT INTO rodada VALUES ('I-1', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1')",
+  );
+  b.exec(
+    "INSERT INTO rodada VALUES ('I-1', 2, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-2')",
+  );
   for (const [n, etapa, rodada] of [
     [1, "planejar", "NULL"],
     [2, "implementar", "1"],
     [3, "implementar", "1"],
     [4, "implementar", "2"],
   ] as const)
-    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('I-1', ${String(n)}, '${etapa}', 'concluido', ${T}, ${rodada})`);
   if (planejado) {
     const plano = {

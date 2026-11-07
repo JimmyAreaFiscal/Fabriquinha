@@ -59,15 +59,15 @@ function preparacao(raiz: string): string {
   return `[ -e ${raiz}/quebra ] && [ "$(basename "$PWD")" = 1 ] && exit 1; touch preparado; true`;
 }
 
-function demanda(id: string, fase: string, extra: object = {}) {
+function demanda(id: string, estado: string, extra: object = {}) {
   return {
     id,
     projeto: "loja",
     titulo: "t",
     tipo: "funcionalidade",
     descricao: "d",
-    fase,
-    fase_alterada_em: em,
+    estado,
+    estado_alterado_em: em,
     criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
     enviada: true,
     branch: `fabriquinha/${id}`,
@@ -75,8 +75,13 @@ function demanda(id: string, fase: string, extra: object = {}) {
   };
 }
 
-/** Projeto `loja`, demanda I-1 na fase dada com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-2. */
-function cenario({ fase = "planejamento", status = "aberto", comPlano = false, predecessora = "concluida" } = {}) {
+/** Projeto `loja`, demanda I-1 no estado dado com o ticket `planejar` (e o plano, se submetido) e uma predecessora I-2. */
+function cenario({
+  estado = "planejar",
+  estadoDoTicket = "aberto",
+  comPlano = false,
+  predecessora = "concluida",
+} = {}) {
   const c = criarRepositorioDeTeste();
   const { banco } = abrirBancoTemporario(c.raiz);
   abertos.push(banco);
@@ -112,14 +117,14 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
     ...base,
   } as unknown as AgregadoDemanda);
   gravarAgregadoPronto(banco, {
-    demanda: demanda("I-1", fase, { enviada: false }),
+    demanda: demanda("I-1", estado, { enviada: false }),
     tickets: [
       {
         demanda_id: "I-1",
         ticket_id: 1,
         etapa: "planejar",
-        status,
-        status_alterado_em: em,
+        estado: estadoDoTicket,
+        estado_alterado_em: em,
         criado_por: { tipo: "fabriquinha" },
         devolucoes: 0,
       },
@@ -156,7 +161,7 @@ function cenario({ fase = "planejamento", status = "aberto", comPlano = false, p
     banco,
     prompts: () => piFalso.prompts().map((entrada) => entrada.prompt),
     sessoes: () => carregarSessoesDoTicket(banco, { demanda_id: "I-1", ticket_id: 1 }),
-    status: () => carregarDemanda(banco, "I-1").tickets[0]?.status,
+    status: () => carregarDemanda(banco, "I-1").tickets[0]?.estado,
   };
 }
 
@@ -175,7 +180,7 @@ test("CA-1: planejamento com predecessoras satisfeitas reserva o planejar e cria
 });
 
 test("CA-2: predecessora em execução recusa, sem reservar nem criar sessão", () => {
-  const { banco, sessoes, status } = cenario({ predecessora: "execucao" });
+  const { banco, sessoes, status } = cenario({ predecessora: "em_execucao" });
   assert.throws(
     () => iniciarOuRetomarPlanejamento(banco, "I-1", 0.02),
     /predecessoras da demanda ainda não foram satisfeitas/,
@@ -184,13 +189,13 @@ test("CA-2: predecessora em execução recusa, sem reservar nem criar sessão", 
   assert.equal(sessoes().sessoes.length, 0);
 });
 
-test("CA-1, CA-3: fase errada e status inesperado recusam com orientação", () => {
+test("CA-1, CA-3: estado errado e ticket inesperado recusam com orientação", () => {
   assert.throws(
-    () => iniciarOuRetomarPlanejamento(cenario({ fase: "execucao" }).banco, "I-1", 0.02),
-    /só na fase planejamento/,
+    () => iniciarOuRetomarPlanejamento(cenario({ estado: "em_execucao" }).banco, "I-1", 0.02),
+    /só no estado planejar/,
   );
   assert.throws(
-    () => iniciarOuRetomarPlanejamento(cenario({ status: "concluido" }).banco, "I-1", 0.02),
+    () => iniciarOuRetomarPlanejamento(cenario({ estadoDoTicket: "concluido" }).banco, "I-1", 0.02),
     /está concluido e não pode ser iniciado \(só se inicia ou retoma/,
   );
 });
@@ -206,29 +211,29 @@ test("CA-3: com o planejar em execução, a mesma sessão é retomada", async ()
 });
 
 test("CA-4: plano válido leva ao gate e fica como evidência do planejar", () => {
-  const { banco } = cenario({ status: "em_execucao" });
+  const { banco } = cenario({ estadoDoTicket: "em_execucao" });
   const depois = submeterPlanoDoAgente(banco, "I-1", plano());
-  assert.equal(depois.demanda.fase, "aprovacao_planejamento");
+  assert.equal(depois.demanda.estado, "gate_planejamento");
   const gravado = carregarDemanda(banco, "I-1").evidencias.find((e) => e.tipo === "plano");
   assert.equal(gravado?.ticket_id, 1);
   assert.deepEqual((gravado.dados as { criterios: string[] }).criterios, CRITERIOS);
 });
 
 test("CA-2: plano com critério que nenhuma rodada cita é aceito e vai ao gate", () => {
-  const { banco } = cenario({ status: "em_execucao" });
+  const { banco } = cenario({ estadoDoTicket: "em_execucao" });
   const umPlano = plano();
   assert.ok(umPlano.rodadas.every((r) => !r.criterios.includes("CA-2")));
-  assert.equal(submeterPlanoDoAgente(banco, "I-1", umPlano).demanda.fase, "aprovacao_planejamento");
+  assert.equal(submeterPlanoDoAgente(banco, "I-1", umPlano).demanda.estado, "gate_planejamento");
 });
 
 test("CA-5: plano que cita CA inexistente é recusado e nada é gravado", () => {
-  const { banco } = cenario({ status: "em_execucao" });
+  const { banco } = cenario({ estadoDoTicket: "em_execucao" });
   assert.throws(
     () => submeterPlanoDoAgente(banco, "I-1", plano(["CA-1", "CA-99"])),
     /o plano cita CA-99, que a definição da demanda I-1 não tem/,
   );
   const ag = carregarDemanda(banco, "I-1");
-  assert.equal(ag.demanda.fase, "planejamento");
+  assert.equal(ag.demanda.estado, "planejar");
   assert.equal(
     ag.evidencias.some((e) => e.tipo === "plano"),
     false,
@@ -236,13 +241,13 @@ test("CA-5: plano que cita CA inexistente é recusado e nada é gravado", () => 
 });
 
 test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão com o motivo", async () => {
-  const { banco, sessoes, prompts, status } = cenario({ status: "em_execucao" });
+  const { banco, sessoes, prompts, status } = cenario({ estadoDoTicket: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
   submeterPlanoDoAgente(banco, "I-1", plano());
   reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
   const ag = carregarDemanda(banco, "I-1");
-  assert.equal(ag.demanda.fase, "planejamento");
+  assert.equal(ag.demanda.estado, "planejar");
   assert.deepEqual(
     ag.decisoes.map((d) => [d.resultado, d.motivo]),
     [["recusado", "faltam critérios na rodada 2"]],
@@ -254,7 +259,7 @@ test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão co
 });
 
 test("CA-1: com o pi vivo e ocioso, a reprovação manda o motivo à mesma sessão", async () => {
-  const { banco, prompts } = cenario({ status: "em_execucao" });
+  const { banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100)); // o pi assenta: ocioso, à espera do gate
@@ -266,20 +271,20 @@ test("CA-1: com o pi vivo e ocioso, a reprovação manda o motivo à mesma sess�
 });
 
 test("a reprovação sem sessão do planejar só grava a decisão", () => {
-  const { banco, prompts } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
+  const { banco, prompts } = cenario({ estado: "gate_planejamento", estadoDoTicket: "em_execucao", comPlano: true });
   reprovarPlanejamentoDemanda(banco, "I-1", "falta");
   assert.deepEqual(prompts(), []);
 });
 
 test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho retoma a mesma sessão", async () => {
-  const { banco, sessoes, prompts } = cenario({ status: "em_execucao" });
+  const { banco, sessoes, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
   submeterPlanoDoAgente(banco, "I-1", plano());
-  banco.exec("UPDATE ticket_demanda SET status = 'falhou', motivo_falha = 'serviço reiniciado'");
+  banco.exec("UPDATE ticket_demanda SET estado = 'falhou', motivo_falha = 'serviço reiniciado'");
   reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
-  const ticket = carregarDemanda(banco, "I-1").tickets[0] as { status: string; instrucao?: string };
-  assert.equal(ticket.status, "aberto");
+  const ticket = carregarDemanda(banco, "I-1").tickets[0] as { estado: string; instrucao?: string };
+  assert.equal(ticket.estado, "aberto");
   assert.equal(ticket.instrucao, "faltam critérios na rodada 2");
   const antes = sessoes().execucoes.length;
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
@@ -289,7 +294,7 @@ test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho re
 });
 
 test("plano aprovado e reaberto com instrução replaneja em sessão nova com a instrução; a retomada fica nela", async () => {
-  const { banco, sessoes, prompts } = cenario({ status: "em_execucao" });
+  const { banco, sessoes, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   submeterPlanoDoAgente(banco, "I-1", plano());
@@ -297,9 +302,9 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   await fim;
   const [descartada] = sessoes().sessoes;
   // O Auditor descarta o plano aprovado (incidente da I-259): volta ao planejamento com a instrução no ticket.
-  banco.exec("UPDATE demanda SET fase = 'planejamento' WHERE id = 'I-1'");
+  banco.exec("UPDATE demanda SET estado = 'planejar' WHERE id = 'I-1'");
   banco.exec(
-    "UPDATE ticket_demanda SET status = 'aberto', instrucao = 'Refaça o plano com até 30 arquivos por rodada' WHERE etapa = 'planejar'",
+    "UPDATE ticket_demanda SET estado = 'aberto', instrucao = 'Refaça o plano com até 30 arquivos por rodada' WHERE etapa = 'planejar'",
   );
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const replanejamento = sessoes().sessoes.at(-1);
@@ -313,14 +318,14 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
 });
 
 test("CA-8: motivo vazio recusa a reprovação e nada é registrado", () => {
-  const { banco } = cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
+  const { banco } = cenario({ estado: "gate_planejamento", estadoDoTicket: "em_execucao", comPlano: true });
   assert.throws(() => reprovarPlanejamentoDemanda(banco, "I-1", "   "));
   const ag = carregarDemanda(banco, "I-1");
-  assert.equal(ag.demanda.fase, "aprovacao_planejamento");
+  assert.equal(ag.demanda.estado, "gate_planejamento");
   assert.deepEqual(ag.decisoes, []);
 });
 
-const aprovacao = () => cenario({ fase: "aprovacao_planejamento", status: "em_execucao", comPlano: true });
+const aprovacao = () => cenario({ estado: "gate_planejamento", estadoDoTicket: "em_execucao", comPlano: true });
 
 test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara cada uma; a dependente fica para quando começar", async () => {
   const { c, banco } = aprovacao();
@@ -335,7 +340,7 @@ test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara ca
 });
 
 test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejamento", async () => {
-  const { banco, prompts } = cenario({ status: "em_execucao" });
+  const { banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100));
@@ -358,7 +363,7 @@ test("CA-10, CA-11: preparação que falha na rodada 1 deixa o gate aberto; corr
       e.message.endsWith(`(worktree ${caminho})`),
   );
   let ag = carregarDemanda(banco, "I-1");
-  assert.deepEqual([ag.demanda.fase, ag.rodadas.length, ag.tickets.length], ["aprovacao_planejamento", 0, 1]);
+  assert.deepEqual([ag.demanda.estado, ag.rodadas.length, ag.tickets.length], ["gate_planejamento", 0, 1]);
   assert.match(
     readFileSync(join(c.raiz, "execucoes", "planejamento-I-1.log"), "utf8"),
     /preparação falhou em .*rodadas\/1/,
@@ -367,16 +372,16 @@ test("CA-10, CA-11: preparação que falha na rodada 1 deixa o gate aberto; corr
   rmSync(join(c.raiz, "quebra"));
   await aprovarPlanejamentoDemanda(banco, "I-1", { nota: 4 });
   ag = carregarDemanda(banco, "I-1");
-  assert.equal(ag.demanda.fase, "execucao");
+  assert.equal(ag.demanda.estado, "em_execucao");
   assert.deepEqual(
-    ag.rodadas.map((r) => [r.rodada_id, r.fase]),
+    ag.rodadas.map((r) => [r.rodada_id, r.estado]),
     [
-      [1, "desenvolvimento"],
-      [2, "desenvolvimento"],
+      [1, "implementar"],
+      [2, "implementar"],
     ],
   );
   assert.deepEqual(
-    ag.tickets.map((t) => [t.etapa, t.status]),
+    ag.tickets.map((t) => [t.etapa, t.estado]),
     [
       ["planejar", "concluido"],
       ["implementar", "aberto"],
@@ -406,6 +411,6 @@ test("CA-13: as três operações estão exportadas", () => {
 
 test("aprovar fora do gate recusa antes de tocar o git", async () => {
   const { c, banco } = cenario();
-  await assert.rejects(aprovarPlanejamentoDemanda(banco, "I-1", {}), /só na fase aprovacao_planejamento/);
+  await assert.rejects(aprovarPlanejamentoDemanda(banco, "I-1", {}), /só no estado gate_planejamento/);
   assert.equal(existsSync(join(c.raiz, "worktrees")), false);
 });

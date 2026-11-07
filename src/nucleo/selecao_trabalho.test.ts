@@ -11,19 +11,20 @@ const tk = (ticket_id: number, rodada_id: number | undefined, status = "aberto",
   ticket_id,
   rodada_id,
   etapa,
-  status,
-  status_alterado_em: t0,
+  estado: status,
+  estado_alterado_em: t0,
   criado_por: FABRIQUINHA,
 });
-const rd = (rodada_id: number, fase = "desenvolvimento") => ({
+const rd = (rodada_id: number, estado = "implementar") => ({
   demanda_id: "I-1",
   rodada_id,
   titulo: "r",
-  fase,
+  estado,
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/I-1-${String(rodada_id)}`,
 });
-const montar = (extra: Record<string, unknown>, fase = "execucao") =>
+const montar = (extra: Record<string, unknown>, estado = "em_execucao") =>
   AgregadoDemanda.parse({
     demanda: {
       id: "I-1",
@@ -31,8 +32,8 @@ const montar = (extra: Record<string, unknown>, fase = "execucao") =>
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: t0,
+      estado,
+      estado_alterado_em: t0,
       criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: "fabriquinha/I-1",
@@ -42,12 +43,12 @@ const montar = (extra: Record<string, unknown>, fase = "execucao") =>
     tickets: [],
     ...extra,
   });
-const ids = (extra: Record<string, unknown>, fase?: string, pred = true) =>
-  selecionarTrabalho(montar(extra, fase), pred).map((t) => t.ticket_id);
+const ids = (extra: Record<string, unknown>, estado?: string, pred = true) =>
+  selecionarTrabalho(montar(extra, estado), pred).map((t) => t.ticket_id);
 const dep = (rodada_id: number, depende_rodada_id: number) => ({ demanda_id: "I-1", rodada_id, depende_rodada_id });
 
 test("fora de execucao nada é elegível", () => {
-  assert.deepEqual(ids({ rodadas: [rd(1)], tickets: [tk(2, 1)] }, "planejamento"), []);
+  assert.deepEqual(ids({ rodadas: [rd(1)], tickets: [tk(2, 1)] }, "planejar"), []);
 });
 
 test("CA-8: rodada com dependência não concluída não devolve ticket; concluída libera", () => {
@@ -82,29 +83,29 @@ test("CA-12: ticket global falhou bloqueia a demanda", () => {
   assert.deepEqual(ids({ rodadas: [rd(1)], tickets: [tk(2, undefined, "falhou"), tk(3, 1)] }), []);
 });
 
-test("CA-15: só rodadas em desenvolvimento devolvem ticket, qualquer que seja a outra fase", () => {
-  for (const fase of ["revisao", "encerramento", "aprovacao_pull_request", "sessao", "concluida"]) {
-    assert.deepEqual(ids({ rodadas: [rd(1, fase), rd(2)], tickets: [tk(2, 1), tk(3, 2)] }), [3], fase);
+test("CA-15: só rodadas em desenvolvimento devolvem ticket, qualquer que seja a outra estado", () => {
+  for (const estado of ["revisar_rodada", "encerrar_rodada", "gate_pr", "ajustar_resultado", "concluida"]) {
+    assert.deepEqual(ids({ rodadas: [rd(1, estado), rd(2)], tickets: [tk(2, 1), tk(3, 2)] }), [3], estado);
   }
 });
 
-test("CA-3: em desenvolvimento só o implementar é elegível; sessao_em_aberto nunca sai", () => {
+test("CA-3: em desenvolvimento só o implementar é elegível; ajustar_resultado nunca sai", () => {
   const rodadas = [rd(1)];
   assert.deepEqual(ids({ rodadas, tickets: [tk(2, 1, "aberto", "revisar_rodada")] }), []);
   assert.deepEqual(ids({ rodadas, tickets: [tk(2, 1, "aberto", "encerrar_rodada"), tk(3, 1)] }), [3]);
-  assert.deepEqual(ids({ rodadas, tickets: [tk(2, 1, "aberto", "sessao_em_aberto")] }), []);
+  assert.deepEqual(ids({ rodadas, tickets: [tk(2, 1, "aberto", "ajustar_resultado")] }), []);
 });
 
 test("CA-2, CA-4: rodada em revisao devolve revisar_rodada; em encerramento, encerrar_rodada", () => {
-  assert.deepEqual(ids({ rodadas: [rd(1, "revisao")], tickets: [tk(2, 1, "aberto", "revisar_rodada")] }), [2]);
-  assert.deepEqual(ids({ rodadas: [rd(1, "encerramento")], tickets: [tk(2, 1, "aberto", "encerrar_rodada")] }), [2]);
-  assert.deepEqual(ids({ rodadas: [rd(1, "revisao")], tickets: [tk(2, 1, "aberto", "encerrar_rodada")] }), []);
+  assert.deepEqual(ids({ rodadas: [rd(1, "revisar_rodada")], tickets: [tk(2, 1, "aberto", "revisar_rodada")] }), [2]);
+  assert.deepEqual(ids({ rodadas: [rd(1, "encerrar_rodada")], tickets: [tk(2, 1, "aberto", "encerrar_rodada")] }), [2]);
+  assert.deepEqual(ids({ rodadas: [rd(1, "revisar_rodada")], tickets: [tk(2, 1, "aberto", "encerrar_rodada")] }), []);
 });
 
 test("CA-1, CA-17: planejar aberto sai com predecessoras satisfeitas; pendentes não devolvem", () => {
   const extra = { tickets: [tk(5, undefined, "aberto", "planejar"), tk(4, undefined, "aberto", "planejar")] };
-  assert.deepEqual(ids(extra, "planejamento"), [4]);
-  assert.deepEqual(ids(extra, "planejamento", false), []);
+  assert.deepEqual(ids(extra, "planejar"), [4]);
+  assert.deepEqual(ids(extra, "planejar", false), []);
 });
 
 const encerrando = (resolver: string, conflito = true) => ({
@@ -120,16 +121,16 @@ const encerrando = (resolver: string, conflito = true) => ({
 });
 
 test("CA-5, CA-6, CA-7: encerrar_demanda só sem conflito pendente; resolver_conflito aberto sai", () => {
-  assert.deepEqual(ids(encerrando("concluido"), "encerramento"), [2]);
-  assert.deepEqual(ids(encerrando("concluido", false), "encerramento"), [2]);
-  assert.deepEqual(ids(encerrando("aberto"), "encerramento"), [3]);
-  assert.deepEqual(ids(encerrando("em_execucao"), "encerramento"), []);
+  assert.deepEqual(ids(encerrando("concluido"), "encerrar_demanda"), [2]);
+  assert.deepEqual(ids(encerrando("concluido", false), "encerrar_demanda"), [2]);
+  assert.deepEqual(ids(encerrando("aberto"), "encerrar_demanda"), [3]);
+  assert.deepEqual(ids(encerrando("em_execucao"), "encerrar_demanda"), []);
 });
 
 test("CA-8, CA-9: revisar_demanda só com todas as rodadas concluídas", () => {
   const tickets = [tk(2, undefined, "aberto", "revisar_demanda")];
-  assert.deepEqual(ids({ rodadas: [rd(1, "concluida"), rd(2)], tickets }, "revisao_demanda"), []);
-  assert.deepEqual(ids({ rodadas: [rd(1, "concluida"), rd(2, "concluida")], tickets }, "revisao_demanda"), [2]);
+  assert.deepEqual(ids({ rodadas: [rd(1, "concluida"), rd(2)], tickets }, "revisar_demanda"), []);
+  assert.deepEqual(ids({ rodadas: [rd(1, "concluida"), rd(2, "concluida")], tickets }, "revisar_demanda"), [2]);
 });
 
 test("na mesma demanda, tickets globais saem por id", () => {
@@ -137,19 +138,19 @@ test("na mesma demanda, tickets globais saem por id", () => {
     ...encerrando("aberto", false),
     tickets: [tk(5, undefined, "aberto", "resolver_conflito"), tk(2, undefined, "aberto", "encerrar_demanda")],
   };
-  const d = demandaNum("I-1", ag, "encerramento");
+  const d = demandaNum("I-1", ag, "encerrar_demanda");
   assert.deepEqual(
-    selecionarTrabalhoGlobal([d], { limite: 9, emAndamento: 0 }).map((t) => t.ticket_id),
+    selecionarTrabalhoGlobal([d], { limite: 9, vagasOcupadas: 0 }).map((t) => t.ticket_id),
     [2, 5],
   );
 });
 
-test("demanda não sai fora das fases com etapa automática", () => {
-  assert.deepEqual(ids({ tickets: [tk(2, undefined, "aberto", "demanda")] }, "registro"), []);
+test("demanda não sai fora dos estados com etapa automática", () => {
+  assert.deepEqual(ids({ tickets: [tk(2, undefined, "aberto", "entender_e_desenhar")] }, "entender_e_desenhar"), []);
 });
 
-const demandaNum = (id: string, extra: Record<string, unknown>, fase = "execucao") => {
-  const ag = montar(extra, fase);
+const demandaNum = (id: string, extra: Record<string, unknown>, estado = "em_execucao") => {
+  const ag = montar(extra, estado);
   return {
     agregado: {
       ...ag,
@@ -161,10 +162,10 @@ const demandaNum = (id: string, extra: Record<string, unknown>, fase = "execucao
   };
 };
 const umImplementar = { rodadas: [rd(1)], tickets: [tk(2, 1)] };
-const globais = (n: number, limite: number, emAndamento: number) =>
+const globais = (n: number, limite: number, vagasOcupadas: number) =>
   selecionarTrabalhoGlobal(
     Array.from({ length: n }, (_, i) => demandaNum(`I-${String(i + 1)}`, umImplementar)),
-    { limite, emAndamento },
+    { limite, vagasOcupadas },
   ).map((t) => t.demanda_id);
 
 test("CA-13, CA-14: o limite global descontado o que está em andamento; sem vagas, nada", () => {
@@ -177,7 +178,7 @@ test("CA-15: desempate por demanda (numérica), rodada e ticket", () => {
   const i1 = demandaNum("I-1", { rodadas: [rd(1), rd(2)], tickets: [tk(9, 2), tk(7, 1)] });
   const i2 = demandaNum("I-2", { rodadas: [rd(1)], tickets: [tk(3, 1)] });
   const i10 = demandaNum("I-10", umImplementar);
-  const sel = selecionarTrabalhoGlobal([i10, i2, i1], { limite: 3, emAndamento: 1 });
+  const sel = selecionarTrabalhoGlobal([i10, i2, i1], { limite: 3, vagasOcupadas: 1 });
   assert.deepEqual(
     sel.map((t) => [t.demanda_id, t.ticket_id]),
     [
@@ -187,31 +188,31 @@ test("CA-15: desempate por demanda (numérica), rodada e ticket", () => {
   );
   const mesmoNumero = selecionarTrabalhoGlobal([demandaNum("X-1", umImplementar), demandaNum("A-1", umImplementar)], {
     limite: 2,
-    emAndamento: 0,
+    vagasOcupadas: 0,
   });
   assert.deepEqual(
     mesmoNumero.map((t) => t.demanda_id),
     ["A-1", "X-1"],
   );
-  const global = demandaNum("I-3", { tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejamento");
+  const global = demandaNum("I-3", { tickets: [tk(1, undefined, "aberto", "planejar")] }, "planejar");
   assert.deepEqual(
-    selecionarTrabalhoGlobal([global, i1], { limite: 9, emAndamento: 0 }).map((t) => t.ticket_id),
+    selecionarTrabalhoGlobal([global, i1], { limite: 9, vagasOcupadas: 0 }).map((t) => t.ticket_id),
     [7, 9, 1],
   );
 });
 
 test("CA-15: trabalho global aberto não concorre; em execução ou falho bloqueia as rodadas", () => {
-  const rodadas = [rd(1), rd(2, "revisao")];
-  assert.deepEqual(ids({ rodadas, tickets: [tk(2, undefined, "aberto", "demanda"), tk(3, 1)] }), [3]);
-  assert.deepEqual(ids({ rodadas, tickets: [tk(2, undefined, "em_execucao", "demanda"), tk(3, 1)] }), []);
-  assert.deepEqual(ids({ rodadas, tickets: [tk(2, undefined, "falhou", "demanda"), tk(3, 1)] }), []);
+  const rodadas = [rd(1), rd(2, "revisar_rodada")];
+  assert.deepEqual(ids({ rodadas, tickets: [tk(2, undefined, "aberto", "entender_e_desenhar"), tk(3, 1)] }), [3]);
+  assert.deepEqual(ids({ rodadas, tickets: [tk(2, undefined, "em_execucao", "entender_e_desenhar"), tk(3, 1)] }), []);
+  assert.deepEqual(ids({ rodadas, tickets: [tk(2, undefined, "falhou", "entender_e_desenhar"), tk(3, 1)] }), []);
 });
 
 test("reprovação do PR → sessão sem implementação → correção nova → concluir sessão → seleciona a correção", () => {
   const ref = { demanda_id: "I-1", rodada_id: 1 };
   const ctx = { agora: "2026-01-02T00:00:00Z" };
   const gate = montar({
-    rodadas: [rd(1, "aprovacao_pull_request"), rd(2)],
+    rodadas: [rd(1, "gate_pr"), rd(2)],
     tickets: [tk(2, 1, "concluido"), tk(3, 1, "aberto", "encerrar_rodada"), tk(4, 2)],
   });
   const sessao = reprovarPullRequestRodada(gate, { ...ref, ticket_id: 3, motivo: "ajustar" }, AUDITOR, ctx);
@@ -219,7 +220,7 @@ test("reprovação do PR → sessão sem implementação → correção nova →
     selecionarTrabalho(sessao, true).map((t) => t.ticket_id),
     [4],
   );
-  const sessaoTicket = sessao.tickets.find((t) => t.etapa === "sessao_em_aberto")?.ticket_id ?? 0;
+  const sessaoTicket = sessao.tickets.find((t) => t.etapa === "ajustar_resultado")?.ticket_id ?? 0;
   const corrigida = registrarCorrecoesSessao(
     sessao,
     {

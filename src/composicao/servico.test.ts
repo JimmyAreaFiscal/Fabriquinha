@@ -20,7 +20,7 @@ import { criarUsuarioSimulado } from "../armazenamento/simulacao.ts";
 import { iniciarServico, portaDoServico } from "./servico.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
-/** Uma raiz com o banco já migrado e fechado, para o serviço abrir. */
+/** Uma raiz com o banco já migrado e desligado, para o serviço abrir. */
 const novaRaiz = () => {
   const { raiz, banco } = abrirBancoTemporario();
   banco.close();
@@ -132,14 +132,14 @@ test("reinício: o pi de uma avaliação da instância anterior é morto pelo pg
   assert.equal(existsSync(join(dir, "pgid")), false);
 });
 
-test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer na fase", async () => {
+test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer no estado", async () => {
   const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('d', '/nao/existe', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+    INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'em_execucao', '${AGORA}');
     INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');`);
   banco
@@ -156,10 +156,10 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
   assert.notEqual(s.banco.prepare("SELECT fim FROM execucao_sessao").get()?.fim, null);
   assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM ticket_demanda").get(), {
     etapa: "implementar",
-    status: "falhou",
+    estado: "falhou",
     motivo_falha: "serviço reiniciado",
   });
-  assert.equal(s.banco.prepare("SELECT fase FROM demanda").get()?.fase, "execucao");
+  assert.equal(s.banco.prepare("SELECT estado FROM demanda").get()?.estado, "em_execucao");
   await s.parar();
 });
 
@@ -201,7 +201,7 @@ function bancoComDemanda(raiz: string): DatabaseSync {
   migrar(banco, MIGRACOES);
   banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('p', '/nao/existe', 'main', 'github', 'p');
-    INSERT INTO sequencia (nome, valor) VALUES ('issue', 1);`);
+    INSERT INTO sequencia (nome, valor) VALUES ('demanda', 1);`);
   return banco;
 }
 
@@ -229,7 +229,7 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
   const legado = bancoComDemanda(raiz);
-  legado.exec(`INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
+  legado.exec(`INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('I-1', '${AGORA}');`);
   legado.close();
   for (const vez of [1, 2]) {
@@ -250,7 +250,7 @@ test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a d
   );
   const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
   assert.equal(
-    escrever(banco, () => novoId(banco, "issue")),
+    escrever(banco, () => novoId(banco, "demanda")),
     2,
   );
   banco.close();
@@ -374,14 +374,14 @@ function demandaEmExecucao(banco: DatabaseSync, n: number): void {
     });
   }
   const id = `I-${String(n)}`;
-  banco.exec(`INSERT INTO demanda VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');
-    INSERT INTO rodada VALUES ('${id}', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/${id}-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+  banco.exec(`INSERT INTO demanda VALUES ('${id}', 'p', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO rodada VALUES ('${id}', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/${id}-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('${id}', 1, 'implementar', 'aberto', '${AGORA}', 1)`);
 }
 
-const statusDemanda = (banco: DatabaseSync, id: string) =>
-  banco.prepare("SELECT status FROM ticket_demanda WHERE demanda_id = ? AND ticket_id = 1").get(id)?.status;
+const estadoDoTicketDaDemanda = (banco: DatabaseSync, id: string) =>
+  banco.prepare("SELECT estado FROM ticket_demanda WHERE demanda_id = ? AND ticket_id = 1").get(id)?.estado;
 
 test("o relógio bate e a demanda é despachada", async (t) => {
   const minuto = relogio(t);
@@ -389,8 +389,8 @@ test("o relógio bate e a demanda é despachada", async (t) => {
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 1 });
   demandaEmExecucao(s.banco, 1);
   minuto();
-  assert.equal(statusDemanda(s.banco, "I-1"), "em_execucao");
-  await ate(() => statusDemanda(s.banco, "I-1") === "falhou");
+  assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
+  await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
   await s.parar();
 });
 
@@ -400,29 +400,29 @@ test("a etapa que termina antecipa a busca seguinte para a próxima batida, sem 
   salvarConfiguracao(s.banco, { agendadorAtivo: true, intervaloMin: 5 });
   demandaEmExecucao(s.banco, 1);
   for (let i = 0; i < 5; i++) minuto();
-  assert.equal(statusDemanda(s.banco, "I-1"), "em_execucao");
-  await ate(() => statusDemanda(s.banco, "I-1") === "falhou");
+  assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
+  await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
   await dormir(10); // o fim da etapa chega ao agendador depois do status gravado
 
   demandaEmExecucao(s.banco, 2);
   assert.equal(s.proximaBusca().getTime() - Date.now() <= 60_000, true, "a próxima busca é a batida seguinte");
   minuto();
-  assert.equal(statusDemanda(s.banco, "I-2"), "em_execucao", "buscou um minuto depois, não cinco");
-  await ate(() => statusDemanda(s.banco, "I-2") === "falhou");
+  assert.equal(estadoDoTicketDaDemanda(s.banco, "I-2"), "em_execucao", "buscou um minuto depois, não cinco");
+  await ate(() => estadoDoTicketDaDemanda(s.banco, "I-2") === "falhou");
   await s.parar();
 });
 
 test("executarAgoraDemanda: inicia o ticket elegível já, sem o agendador, e recusa o que o ciclo não escolheria", async () => {
   const s = await subir();
   demandaEmExecucao(s.banco, 1);
-  s.banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+  s.banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
     VALUES ('I-1', 2, 'implementar', 'aberto', '${AGORA}', 1)`);
   await assert.rejects(
     s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 2 }),
     /o ticket T2 .*vem antes|vem antes/,
   );
   await s.executarAgoraDemanda({ demanda_id: "I-1", ticket_id: 1 });
-  assert.equal(statusDemanda(s.banco, "I-1"), "em_execucao");
-  await ate(() => statusDemanda(s.banco, "I-1") === "falhou");
+  assert.equal(estadoDoTicketDaDemanda(s.banco, "I-1"), "em_execucao");
+  await ate(() => estadoDoTicketDaDemanda(s.banco, "I-1") === "falhou");
   await s.parar();
 });

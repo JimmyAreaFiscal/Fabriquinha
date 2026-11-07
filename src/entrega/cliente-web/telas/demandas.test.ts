@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { type DadosDaPagina, type DemandaDoQuadro, pagina, quadro } from "./demandas.ts";
 
 const demanda = (id: string, resto: Partial<DemandaDoQuadro> = {}): DemandaDoQuadro => ({
   id,
   projeto: "loja",
   titulo: `Demanda ${id}`,
-  fase: "execucao",
+  estado: "em_execucao",
+  terminal: false,
   rodadas: [],
   bloqueios: [],
   falhos: [],
@@ -38,13 +40,13 @@ test("o trabalho ativo traz o ticket, a etapa, a rodada, quando há, e se é o p
   );
 });
 
-test("o cartão traz o título, a fase, as rodadas e o link do PR só na rodada que tem PR (CA-1, CA-2)", () => {
+test("o cartão traz o título, o estado, as rodadas e o link do PR só na rodada que tem PR (CA-1, CA-2)", () => {
   const html = quadro({
     demandas: [
       demanda("I-206", {
         rodadas: [
-          { ref: "I-206.R1", fase: "aprovacao_pull_request", pr: { id: "7", url: "https://pr/7?a=1&b=2" } },
-          { ref: "I-206.R2", fase: "desenvolvimento" },
+          { ref: "I-206.R1", estado: "gate_pr", pr: { id: "7", url: "https://pr/7?a=1&b=2" } },
+          { ref: "I-206.R2", estado: "implementar" },
         ],
       }),
     ],
@@ -62,19 +64,19 @@ test("o cartão traz o título, a fase, as rodadas e o link do PR só na rodada 
   assert.match(html, /href="\/demandas\/I-206">abrir a demanda →/);
 });
 
-test("as marcas: gate da demanda, ticket falho e bloqueio com título e fase (CA-3 a CA-5)", () => {
+test("as marcas: gate da demanda, ticket falho e bloqueio com título e estado (CA-3 a CA-5)", () => {
   const html = quadro({
     demandas: [
       demanda("I-206"),
       demanda("I-207", {
         falhos: [{ ref: "I-207.T1", etapa: "implementar" }],
         bloqueios: [
-          { demanda_id: "I-206", fase: "execucao" },
-          { demanda_id: "I-300", fase: "planejamento" },
+          { demanda_id: "I-206", estado: "em_execucao" },
+          { demanda_id: "I-300", estado: "planejar" },
         ],
       }),
-      demanda("I-208", { fase: "aprovacao_demanda" }),
-      demanda("I-209", { fase: "aprovacao_planejamento" }),
+      demanda("I-208", { estado: "gate_demanda" }),
+      demanda("I-209", { estado: "gate_planejamento" }),
     ],
     trabalho: [],
   });
@@ -98,7 +100,9 @@ const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
     titulo: "Demanda <I-206>",
     tipo: "funcionalidade",
     descricao: "Corrigir <b>",
-    fase: "execucao",
+    estado: "em_execucao",
+    terminal: false,
+    arquivavel: false,
   },
   rodadas: [],
   tickets: [],
@@ -108,6 +112,14 @@ const dadosDaPagina = (resto: Partial<DadosDaPagina> = {}): DadosDaPagina => ({
   dependencias: [],
   dependentes: [],
   ...resto,
+});
+
+/** A demanda da página no estado pedido, com a classificação que a API entrega. */
+const demandaNoEstado = (estado: DadosDaPagina["demanda"]["estado"]): DadosDaPagina["demanda"] => ({
+  ...dadosDaPagina().demanda,
+  estado,
+  terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
+  arquivavel: CICLO_DA_DEMANDA.transicoes[estado].includes("arquivada"),
 });
 
 /** O trecho do HTML que começa em `marca` e vai até a próxima seção. */
@@ -134,10 +146,10 @@ test("a página vazia traz o cabeçalho, o trilho e a descrição na lateral, se
   );
 });
 
-test("o trilho marca as fases feitas, a atual e os gates; concluída completa o trilho e cancelada fica sem ele", () => {
-  const com = (fase: DadosDaPagina["demanda"]["fase"]) =>
-    pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase } }));
-  const execucao = com("execucao");
+test("o trilho marca os estados feitas, a atual e os gates; concluída completa o trilho e cancelada fica sem ele", () => {
+  const com = (estado: DadosDaPagina["demanda"]["estado"]) =>
+    pagina(dadosDaPagina({ demanda: demandaNoEstado(estado) }));
+  const execucao = com("em_execucao");
   assert.match(
     execucao,
     /<li class="dm-passo-trilho gate feito"><span class="dm-marco-trilho"><\/span><span>Aprovação do planejamento<\/span>/,
@@ -147,9 +159,9 @@ test("o trilho marca as fases feitas, a atual e os gates; concluída completa o 
     /<li class="dm-passo-trilho atual" aria-current="step"><span class="dm-marco-trilho"><\/span><span>Execução</,
   );
   assert.match(execucao, /<li class="dm-passo-trilho"><span class="dm-marco-trilho"><\/span><span>Concluída</);
-  for (const fase of ["concluida", "arquivada"] as const) {
-    assert.equal(com(fase).match(/class="dm-passo-trilho (gate )?feito"/g)?.length, 8);
-    assert.doesNotMatch(com(fase), /aria-current/);
+  for (const estado of ["arquivada", "concluida"] as const) {
+    assert.equal(com(estado).match(/class="dm-passo-trilho (gate )?feito"/g)?.length, 8);
+    assert.doesNotMatch(com(estado), /aria-current/);
   }
   assert.doesNotMatch(com("cancelada"), /dm-trilho/);
 });
@@ -158,8 +170,15 @@ test("só o ticket com sessão leva ao chat dela, inclusive a sessão de ajustes
   const html = pagina(
     dadosDaPagina({
       tickets: [
-        { ref: "I-206.T1", etapa: "planejar", status: "em_execucao", elegivel: false, sessao: "s/1" },
-        { ref: "I-206.T2", etapa: "implementar", status: "aberto", elegivel: false },
+        {
+          ref: "I-206.T1",
+          etapa: "planejar",
+          estado: "em_execucao",
+          satisfaz_dependencia: false,
+          elegivel: false,
+          sessao: "s/1",
+        },
+        { ref: "I-206.T2", etapa: "implementar", estado: "aberto", satisfaz_dependencia: false, elegivel: false },
       ],
     }),
   );
@@ -168,7 +187,16 @@ test("só o ticket com sessão leva ao chat dela, inclusive a sessão de ajustes
   assert.doesNotMatch(String(t2), /chat →/);
   const aberta = pagina(
     dadosDaPagina({
-      tickets: [{ ref: "I-206.T3", etapa: "sessao_em_aberto", status: "em_execucao", elegivel: false, sessao: "s/3" }],
+      tickets: [
+        {
+          ref: "I-206.T3",
+          etapa: "ajustar_resultado",
+          estado: "em_execucao",
+          satisfaz_dependencia: false,
+          elegivel: false,
+          sessao: "s/3",
+        },
+      ],
     }),
   );
   assert.match(aberta, /href="\/sessions\/s%2F3">chat →/);
@@ -178,25 +206,53 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
   const html = pagina(
     dadosDaPagina({
       rodadas: [
-        { ref: "I-206.R1", titulo: "Primeira", fase: "aprovacao_pull_request" },
-        { ref: "I-206.R2", titulo: "Segunda", fase: "sessao" },
+        { ref: "I-206.R1", titulo: "Primeira", estado: "gate_pr" },
+        { ref: "I-206.R2", titulo: "Segunda", estado: "ajustar_resultado" },
       ],
       tickets: [
-        { ref: "I-206.T9", etapa: "demanda", status: "concluido", elegivel: false },
+        {
+          ref: "I-206.T9",
+          etapa: "entender_e_desenhar",
+          estado: "concluido",
+          satisfaz_dependencia: true,
+          elegivel: false,
+        },
         {
           ref: "I-206.T1",
           etapa: "implementar",
-          status: "falhou",
+          estado: "falhou",
+          satisfaz_dependencia: false,
           elegivel: false,
           rodada: "I-206.R1",
           titulo: "T",
           instrucao: "refaça",
           motivo_falha: "quebrou",
         },
-        { ref: "I-206.T2", etapa: "encerrar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R1" },
-        { ref: "I-206.T3", etapa: "implementar", status: "em_execucao", elegivel: false, rodada: "I-206.R2" },
-        { ref: "I-206.T5", etapa: "revisar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R2" },
-        { ref: "I-206.T4", etapa: "planejar", status: "aberto", elegivel: false },
+        {
+          ref: "I-206.T2",
+          etapa: "encerrar_rodada",
+          estado: "concluido",
+          satisfaz_dependencia: true,
+          elegivel: false,
+          rodada: "I-206.R1",
+        },
+        {
+          ref: "I-206.T3",
+          etapa: "implementar",
+          estado: "em_execucao",
+          satisfaz_dependencia: false,
+          elegivel: false,
+          rodada: "I-206.R2",
+        },
+        {
+          ref: "I-206.T5",
+          etapa: "revisar_rodada",
+          estado: "concluido",
+          satisfaz_dependencia: true,
+          elegivel: false,
+          rodada: "I-206.R2",
+        },
+        { ref: "I-206.T4", etapa: "planejar", estado: "aberto", satisfaz_dependencia: false, elegivel: false },
       ],
       decisoes: [
         { ticket: "I-206.T1", resultado: "recusado", motivo: "falta teste do caminho de erro", por: "agente" },
@@ -246,26 +302,41 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
   assert.ok(html.indexOf('id="I-206.R2"') < html.indexOf("titulo-depois"));
 });
 
-test("Aguarda você liga ao gate da fase, ao PR e à sessão da rodada e aos tickets que pedem o Auditor", () => {
+test("Aguarda você liga ao gate do estado, ao PR e à sessão da rodada e aos tickets que pedem o Auditor", () => {
   const html = pagina(
     dadosDaPagina({
-      demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" },
+      demanda: { ...dadosDaPagina().demanda, estado: "gate_planejamento" },
       rodadas: [
-        { ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" },
-        { ref: "I-206.R2", titulo: "r", fase: "sessao" },
-        { ref: "I-206.R3", titulo: "r", fase: "revisao" },
+        { ref: "I-206.R1", titulo: "r", estado: "gate_pr" },
+        { ref: "I-206.R2", titulo: "r", estado: "ajustar_resultado" },
+        { ref: "I-206.R3", titulo: "r", estado: "revisar_rodada" },
       ],
       tickets: [
         {
           ref: "I-206.T1",
           etapa: "implementar",
-          status: "falhou",
+          estado: "falhou",
+          satisfaz_dependencia: false,
           elegivel: false,
           rodada: "I-206.R3",
           titulo: "Refazer <x>",
         },
-        { ref: "I-206.T2", etapa: "implementar", status: "aberto", elegivel: true, rodada: "I-206.R3" },
-        { ref: "I-206.T3", etapa: "implementar", status: "aberto", elegivel: false, rodada: "I-206.R3" },
+        {
+          ref: "I-206.T2",
+          etapa: "implementar",
+          estado: "aberto",
+          satisfaz_dependencia: false,
+          elegivel: true,
+          rodada: "I-206.R3",
+        },
+        {
+          ref: "I-206.T3",
+          etapa: "implementar",
+          estado: "aberto",
+          satisfaz_dependencia: false,
+          elegivel: false,
+          rodada: "I-206.R3",
+        },
       ],
     }),
   );
@@ -287,9 +358,16 @@ test("Aguarda você liga ao gate da fase, ao PR e à sessão da rodada e aos tic
 test("rodada sem ticket e PR com endereço que não é http não viram link", () => {
   const html = pagina(
     dadosDaPagina({
-      rodadas: [{ ref: "I-206.R1", titulo: "R", fase: "revisao" }],
+      rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada" }],
       tickets: [
-        { ref: "I-206.T1", etapa: "encerrar_rodada", status: "concluido", elegivel: false, rodada: "I-206.R1" },
+        {
+          ref: "I-206.T1",
+          etapa: "encerrar_rodada",
+          estado: "concluido",
+          satisfaz_dependencia: true,
+          elegivel: false,
+          rodada: "I-206.R1",
+        },
       ],
       evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T1", dados: { id: "7", url: "javascript:x" }, anexos: [] }],
     }),
@@ -297,21 +375,30 @@ test("rodada sem ticket e PR com endereço que não é http não viram link", ()
   assert.doesNotMatch(html, /javascript:x" /);
   assert.match(html, /PR #7/);
   assert.match(
-    pagina(dadosDaPagina({ rodadas: [{ ref: "I-206.R1", titulo: "R", fase: "revisao" }] })),
+    pagina(dadosDaPagina({ rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada" }] })),
     /Sem tickets\./,
   );
 });
 
-test("as dependências trazem o link e a fase da predecessora (CA-13)", () => {
-  const html = pagina(dadosDaPagina({ dependencias: [{ demanda_id: "I-205", fase: "execucao" }] }));
+test("as dependências trazem o link e o estado da predecessora (CA-13)", () => {
+  const html = pagina(dadosDaPagina({ dependencias: [{ demanda_id: "I-205", estado: "em_execucao" }] }));
   assert.match(html, /Dependências[\s\S]*href="\/demandas\/I-205">I-205<\/a> <span class="pill pill-rodando">Execução/);
 });
 
 test("as evidências viram chips junto de quem as gerou; o chip guarda os anexos e os dados para a caixa (CA-10)", () => {
   const html = pagina(
     dadosDaPagina({
-      rodadas: [{ ref: "I-206.R1", titulo: "R", fase: "revisao" }],
-      tickets: [{ ref: "I-206.T1", etapa: "implementar", status: "concluido", elegivel: false, rodada: "I-206.R1" }],
+      rodadas: [{ ref: "I-206.R1", titulo: "R", estado: "revisar_rodada" }],
+      tickets: [
+        {
+          ref: "I-206.T1",
+          etapa: "implementar",
+          estado: "concluido",
+          satisfaz_dependencia: true,
+          elegivel: false,
+          rodada: "I-206.R1",
+        },
+      ],
       evidencias: [
         {
           tipo: "comportamento",
@@ -358,7 +445,9 @@ test("o chip resume o resultado dos tipos que a Fabriquinha gera, em verde ou ve
   const evidencia = (tipo: string, dados: unknown) => ({ tipo, ticket: "I-206.T1", dados, anexos: [] });
   const html = pagina(
     dadosDaPagina({
-      tickets: [{ ref: "I-206.T1", etapa: "implementar", status: "concluido", elegivel: false }],
+      tickets: [
+        { ref: "I-206.T1", etapa: "implementar", estado: "concluido", satisfaz_dependencia: true, elegivel: false },
+      ],
       evidencias: [
         evidencia("execucao_testes", { aprovada: true }),
         evidencia("execucao_testes", { aprovada: false }),
@@ -436,7 +525,7 @@ test("os critérios na lateral trazem a última comprovação e quantas vezes fa
   criterio("CA-3", "falha", "não comprovado em 1 comprovação");
   criterio("CA-4", "neutro", "sem comprovação");
   const naAprovacao = pagina(
-    dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_demanda" }, evidencias }),
+    dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, estado: "gate_demanda" }, evidencias }),
   );
   assert.doesNotMatch(naAprovacao, /titulo-criterios|titulo-descricao/);
 });
@@ -521,8 +610,10 @@ test("integração feita e limpeza falha: concluída e falhou, nunca nada integr
 test("a integração à espera do merge humano: o passo, o link do PR e o Aguarda você, sem pedir a execução", () => {
   const html = pagina(
     dadosDaPagina({
-      demanda: { ...dadosDaPagina().demanda, fase: "encerramento" },
-      tickets: [{ ref: "I-206.T8", etapa: "encerrar_demanda", status: "aberto", elegivel: false }],
+      demanda: { ...dadosDaPagina().demanda, estado: "encerrar_demanda" },
+      tickets: [
+        { ref: "I-206.T8", etapa: "encerrar_demanda", estado: "aberto", satisfaz_dependencia: false, elegivel: false },
+      ],
       encerramento: {
         passos: passos(true, true, false),
         limpeza_pendente: [],
@@ -538,13 +629,13 @@ test("a integração à espera do merge humano: o passo, o link do PR e o Aguard
   assert.match(aguarda, /href="#titulo-encerramento">Integrar o PR final ↓/);
   assert.doesNotMatch(aguarda, /Executar I-206\.T8/);
   assert.match(
-    quadro({ demandas: [demanda("I-206", { fase: "encerramento", aguarda_merge: true })], trabalho: [] }),
+    quadro({ demandas: [demanda("I-206", { estado: "encerrar_demanda", aguarda_merge: true })], trabalho: [] }),
     /class="cartao dm-cartao aguarda"[\s\S]*aguarda o seu merge do PR final/,
   );
 });
 
 test("o gate da demanda traz Aprovar e Recusar com o motivo, ligados à rota da decisão (CA-14 a CA-16)", () => {
-  const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_demanda" } }));
+  const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, estado: "gate_demanda" } }));
   assert.match(html, /<span class="dm-gate-titulo">Aprovação da demanda<\/span>/);
   assert.match(html, /<textarea id="motivo-decisao"/);
   assert.match(html, /data-gate="false" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Recusar</);
@@ -558,7 +649,7 @@ const daDemanda = (tipo: string, dados: unknown, anexos: DadosDaPagina["evidenci
   anexos,
 });
 const naAprovacao = (evidencias: DadosDaPagina["evidencias"]) =>
-  pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_demanda" }, evidencias }));
+  pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, estado: "gate_demanda" }, evidencias }));
 const DESENHO = {
   resumo: "Guardar o cupom na `sessao`.",
   arquivosPrevistos: [
@@ -620,7 +711,7 @@ test("a aprovação sem relatório de impactos mostra só os arquivos previstos;
 });
 
 test("o gate do planejamento usa a rota do planejamento (CA-17 a CA-19)", () => {
-  const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" } }));
+  const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, estado: "gate_planejamento" } }));
   assert.match(html, /data-caminho="\/api\/demandas\/[^"]*\/planejamento\/decisao"[^>]*>Reprovar planejamento</);
   assert.match(html, />Aprovar planejamento</);
   assert.match(html, /dm-gate-titulo">Aprovação do planejamento</);
@@ -628,15 +719,24 @@ test("o gate do planejamento usa a rota do planejamento (CA-17 a CA-19)", () => 
 
 test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados à rota do PR (CA-20 a CA-23)", () => {
   const base = dadosDaPagina();
-  const html = pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }] });
+  const html = pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }] });
   assert.match(html, /<select id="nota-I-206\.R1"/);
   const reprovacao = html.slice(html.indexOf("Reprovação do PR"));
   assert.doesNotMatch(reprovacao, /<select/);
   assert.match(reprovacao, /<textarea id="motivo-I-206\.R1"/);
   const comTicket = pagina({
     ...base,
-    rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
-    tickets: [{ ref: "I-206.T1", rodada: "I-206.R1", etapa: "implementar", status: "concluido", elegivel: false }],
+    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
+    tickets: [
+      {
+        ref: "I-206.T1",
+        rodada: "I-206.R1",
+        etapa: "implementar",
+        estado: "concluido",
+        satisfaz_dependencia: true,
+        elegivel: false,
+      },
+    ],
   });
   assert.match(
     comTicket,
@@ -652,7 +752,7 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
     /data-gate="true" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-nota="nota-I-206\.R1">Aprovar PR</,
   );
   assert.doesNotMatch(
-    pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "concluida" }] }),
+    pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "concluida" }] }),
     /Aprovar PR/,
   );
 });
@@ -661,9 +761,16 @@ test("o gate do PR traz o botão que abre o PR no GitHub ou no Azure DevOps, só
   const comPR = (url: string) =>
     pagina({
       ...dadosDaPagina(),
-      rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
+      rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
       tickets: [
-        { ref: "I-206.T2", rodada: "I-206.R1", etapa: "encerrar_rodada", status: "em_execucao", elegivel: false },
+        {
+          ref: "I-206.T2",
+          rodada: "I-206.R1",
+          etapa: "encerrar_rodada",
+          estado: "em_execucao",
+          satisfaz_dependencia: false,
+          elegivel: false,
+        },
       ],
       evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T2", dados: { id: "7", url }, anexos: [] }],
     });
@@ -679,12 +786,33 @@ test("o gate do PR traz o botão que abre o PR no GitHub ou no Azure DevOps, só
 test("o gate do PR traz os artefatos da rodada, a última evidência de cada tipo, com os prints e o HTML", () => {
   const html = pagina({
     ...dadosDaPagina(),
-    rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
+    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
     tickets: [
-      { ref: "I-206.T1", rodada: "I-206.R1", etapa: "revisar_rodada", status: "concluido", elegivel: false },
-      { ref: "I-206.T2", rodada: "I-206.R1", etapa: "revisar_rodada", status: "concluido", elegivel: false },
-      { ref: "I-206.T3", rodada: "I-206.R1", etapa: "encerrar_rodada", status: "em_execucao", elegivel: false },
-      { ref: "I-206.T4", etapa: "planejar", status: "concluido", elegivel: false },
+      {
+        ref: "I-206.T1",
+        rodada: "I-206.R1",
+        etapa: "revisar_rodada",
+        estado: "concluido",
+        satisfaz_dependencia: true,
+        elegivel: false,
+      },
+      {
+        ref: "I-206.T2",
+        rodada: "I-206.R1",
+        etapa: "revisar_rodada",
+        estado: "concluido",
+        satisfaz_dependencia: true,
+        elegivel: false,
+      },
+      {
+        ref: "I-206.T3",
+        rodada: "I-206.R1",
+        etapa: "encerrar_rodada",
+        estado: "em_execucao",
+        satisfaz_dependencia: false,
+        elegivel: false,
+      },
+      { ref: "I-206.T4", etapa: "planejar", estado: "concluido", satisfaz_dependencia: true, elegivel: false },
     ],
     evidencias: [
       { tipo: "plano", ticket: "I-206.T4", dados: {}, anexos: [] },
@@ -713,7 +841,7 @@ test("o gate do PR traz os artefatos da rodada, a última evidência de cada tip
   // Sem evidência na rodada, o gate não ganha um bloco vazio.
   const vazio = pagina({
     ...dadosDaPagina(),
-    rodadas: [{ ref: "I-206.R1", titulo: "r", fase: "aprovacao_pull_request" }],
+    rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "gate_pr" }],
   });
   assert.doesNotMatch(vazio, />Artefatos</);
 });
@@ -721,11 +849,17 @@ test("o gate do PR traz os artefatos da rodada, a última evidência de cada tip
 test("o gate do planejamento traz o último plano, e não as evidências de outros tickets", () => {
   const html = pagina({
     ...dadosDaPagina(),
-    demanda: { ...dadosDaPagina().demanda, fase: "aprovacao_planejamento" },
+    demanda: { ...dadosDaPagina().demanda, estado: "gate_planejamento" },
     tickets: [
-      { ref: "I-206.T1", etapa: "demanda", status: "concluido", elegivel: false },
-      { ref: "I-206.T2", etapa: "planejar", status: "concluido", elegivel: false },
-      { ref: "I-206.T3", etapa: "planejar", status: "concluido", elegivel: false },
+      {
+        ref: "I-206.T1",
+        etapa: "entender_e_desenhar",
+        estado: "concluido",
+        satisfaz_dependencia: true,
+        elegivel: false,
+      },
+      { ref: "I-206.T2", etapa: "planejar", estado: "concluido", satisfaz_dependencia: true, elegivel: false },
+      { ref: "I-206.T3", etapa: "planejar", estado: "concluido", satisfaz_dependencia: true, elegivel: false },
     ],
     evidencias: [
       { tipo: "plano", ticket: "I-206.T2", dados: { versao: "antiga" }, anexos: [] },
@@ -740,11 +874,12 @@ test("o gate do planejamento traz o último plano, e não as evidências de outr
 });
 
 test("a sessão de ajustes leva ao chat da sessão do ticket e conclui pela página (CA-10)", () => {
-  const rodadas = [{ ref: "I-206.R1", titulo: "r", fase: "sessao" as const }];
+  const rodadas = [{ ref: "I-206.R1", titulo: "r", estado: "ajustar_resultado" as const }];
   const ticket = {
     ref: "I-206.T3",
-    etapa: "sessao_em_aberto" as const,
-    status: "aberto" as const,
+    etapa: "ajustar_resultado" as const,
+    estado: "aberto" as const,
+    satisfaz_dependencia: false,
     elegivel: false,
     rodada: "I-206.R1",
   };
@@ -763,15 +898,26 @@ test("a sessão de ajustes leva ao chat da sessão do ticket e conclui pela pág
 test("o quadro só linka o PR da rodada quando a URL é http(s)", () => {
   const d = (url: string) => ({
     ...demanda("I-206"),
-    rodadas: [{ ref: "I-206.R1", fase: "aprovacao_pull_request" as const, pr: { id: "7", url } }],
+    rodadas: [{ ref: "I-206.R1", estado: "gate_pr" as const, pr: { id: "7", url } }],
   });
   assert.match(quadro({ demandas: [d("https://x/7")], trabalho: [] }), /href="https:\/\/x\/7"/);
   assert.doesNotMatch(quadro({ demandas: [d("javascript:x")], trabalho: [] }), /javascript/);
 });
 
 test("o ticket em falha traz a instrução e Reabrir; o aberto elegível traz Executar agora (CA-17, CA-24 a CA-26)", () => {
-  const com = (status: "falhou" | "aberto" | "concluido", elegivel = true) =>
-    pagina({ ...dadosDaPagina(), tickets: [{ ref: "I-206.T3", etapa: "implementar", status, elegivel }] });
+  const com = (estado: "falhou" | "aberto" | "concluido", elegivel = true) =>
+    pagina({
+      ...dadosDaPagina(),
+      tickets: [
+        {
+          ref: "I-206.T3",
+          etapa: "implementar",
+          estado,
+          satisfaz_dependencia: CICLO_DO_TICKET.satisfazDependencia(estado),
+          elegivel,
+        },
+      ],
+    });
   const falho = com("falhou");
   assert.match(falho, /<textarea id="instrucao-I-206\.T3"/);
   assert.match(falho, /dm-gate dm-gate-perigo"><span class="dm-gate-titulo">Reabrir I-206\.T3</);
@@ -788,7 +934,9 @@ test("o ticket em falha traz a instrução e Reabrir; o aberto elegível traz Ex
 });
 
 test("Cancelar só abre a confirmação, que lista as dependentes que vão junto (CA-27)", () => {
-  const html = pagina(dadosDaPagina({ dependentes: [{ demanda_id: "I-207", titulo: "Dep <b>", fase: "execucao" }] }));
+  const html = pagina(
+    dadosDaPagina({ dependentes: [{ demanda_id: "I-207", titulo: "Dep <b>", estado: "em_execucao" }] }),
+  );
   assert.match(html, /data-demanda="abrir-cancelar"[^>]*>Cancelar a demanda/);
   assert.match(html, /data-confirmar-cancelar hidden>[\s\S]*href="\/demandas\/I-207">I-207<\/a> Dep &#60;b&#62;/);
   assert.match(html, /dm-gate-perigo" data-confirmar-cancelar hidden><span class="dm-gate-titulo">Cancelar I-206</);
@@ -797,8 +945,8 @@ test("Cancelar só abre a confirmação, que lista as dependentes que vão junto
 });
 
 test("Arquivar só na demanda concluída; cancelada e arquivada não têm ação (CA-29)", () => {
-  const com = (fase: DadosDaPagina["demanda"]["fase"]) =>
-    pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, fase } }));
+  const com = (estado: DadosDaPagina["demanda"]["estado"]) =>
+    pagina(dadosDaPagina({ demanda: demandaNoEstado(estado) }));
   assert.match(com("concluida"), /data-demanda="arquivar" data-caminho="\/api\/demandas\/I-206\/arquivar"/);
   assert.doesNotMatch(com("concluida"), /Cancelar a demanda/);
   assert.doesNotMatch(com("cancelada"), /data-demanda/);
@@ -807,7 +955,9 @@ test("Arquivar só na demanda concluída; cancelada e arquivada não têm ação
 
 test("o cartão de demanda cancelada não diz que aguarda a decisão do Auditor", () => {
   const html = quadro({
-    demandas: [demanda("I-206", { fase: "cancelada", rodadas: [{ ref: "I-206.R1", fase: "aprovacao_pull_request" }] })],
+    demandas: [
+      demanda("I-206", { estado: "cancelada", terminal: true, rodadas: [{ ref: "I-206.R1", estado: "gate_pr" }] }),
+    ],
     trabalho: [],
   });
   assert.doesNotMatch(html, /aguarda a decisão/);

@@ -19,10 +19,12 @@ const banco = () => {
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('p', '/repo/p', 'main', 'github', 'k')`);
   b.exec(
-    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1')`,
+    `INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1')`,
   );
   for (const r of [1, 2])
-    b.exec(`INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'desenvolvimento', 0, 'b${String(r)}')`);
+    b.exec(
+      `INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b${String(r)}')`,
+    );
   for (const [n, etapa, rodada, devolucoes] of [
     [1, "planejar", "NULL", 0],
     [2, "implementar", "1", 1],
@@ -30,7 +32,7 @@ const banco = () => {
     [4, "implementar", "2", 0],
     [5, "encerrar_rodada", "2", 0],
   ] as const)
-    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id, devolucoes)
+    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id, devolucoes)
       VALUES ('I-1', ${String(n)}, '${etapa}', 'concluido', ${T}, ${rodada}, ${String(devolucoes)})`);
   return b;
 };
@@ -164,7 +166,7 @@ test("CA-5 e CA-6: custo incompleto com modelo desconhecido; completo soma os in
 
 test("CA-7: custo externo em campo próprio, só de sessão cuja dona é a demanda", () => {
   const b = banco();
-  b.exec(`INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'b')`);
+  b.exec(`INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'b')`);
   execucao(b, 2, "e1", 0, [["m1", 1, 1, 1, 1, 1]]);
   const linha = (custo: number | null) => ({
     provedor: "openai",

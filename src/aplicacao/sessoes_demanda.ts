@@ -7,7 +7,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, Ator } from "../nucleo/ator.ts";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
-import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
+import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
@@ -241,11 +241,11 @@ export function calcular(c: Carregada, viva: Situacao | undefined): Calculado {
   if (ultima.fim == null && viva?.ocupado !== false) return ["rodando", undefined, viva?.desde ?? ultima.inicio];
   // Sem fim, só o pi ocioso chega aqui, e ele tem `desde`.
   const parada = viva?.desde ?? String(ultima.fim);
-  if (FASES_TERMINADAS.includes(ag.demanda.fase)) return ["terminada", undefined, parada];
-  if (ticket.status === "falhou") return ["aguardando_humano", "falha", parada];
-  if (ticket.status === "concluido") return ["terminada", undefined, parada];
+  if (CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)) return ["terminada", undefined, parada];
+  if (ticket.estado === "falhou") return ["aguardando_humano", "falha", parada];
+  if (ticket.estado === "concluido") return ["terminada", undefined, parada];
   if (sessao.modo === "autonomo") return ["rodando", undefined, parada];
-  return ["aguardando_humano", ag.demanda.fase === "aprovacao_planejamento" ? "gate_demanda" : "conversa", parada];
+  return ["aguardando_humano", ag.demanda.estado === "gate_planejamento" ? "gate_demanda" : "conversa", parada];
 }
 
 function montarCabecalho(c: Carregada): CabecalhoDemanda {
@@ -417,7 +417,7 @@ export function enviarDemanda(
   }
   // Em conversa, o pi vivo está ocioso. A sessão de ajustes retoma pelo caminho dela, que restaura as branches no fim.
   if (estado === "rodando" || viva) mandar(ultimaDe(c).id, { type: modo, message: texto });
-  else if (c.ticket.etapa === "sessao_em_aberto") retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
+  else if (c.ticket.etapa === "ajustar_resultado") retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
   else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto });
   return true;
 }

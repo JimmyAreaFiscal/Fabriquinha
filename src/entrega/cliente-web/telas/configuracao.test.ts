@@ -180,7 +180,7 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
   );
   assert.match(
     html,
-    /<h3>Modelo e effort por etapa <span class="nota">· o effort é o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi; o ticket pode sobrescrever<\/span><\/h3><div class="modelos-grade"><span class="modelos-cab" aria-hidden="true">Etapa<\/span><span class="modelos-cab" aria-hidden="true">Modelo<\/span><span class="modelos-cab" aria-hidden="true">Effort<\/span><label for="campo-configuracoes.demanda.modelo">Demanda<\/label>/,
+    /<h3>Modelo e effort por etapa <span class="nota">· o effort é o raciocínio da IA \(pi --thinking\); vazio usa o padrão do pi; o ticket pode sobrescrever<\/span><\/h3><div class="modelos-grade"><span class="modelos-cab" aria-hidden="true">Etapa<\/span><span class="modelos-cab" aria-hidden="true">Modelo<\/span><span class="modelos-cab" aria-hidden="true">Effort<\/span><label for="campo-configuracoes.entender_e_desenhar.modelo">Demanda<\/label>/,
   );
   assert.deepEqual(
     [...html.matchAll(/<label for="campo-configuracoes\.[a-z_]+\.modelo">([^<]+)<\/label>/g)].map((m) => m[1]),
@@ -198,7 +198,7 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
   );
   assert.match(
     html,
-    /<select id="campo-configuracoes.demanda.modelo" name="configuracoes.demanda.modelo" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">anthropic \/ claude-opus-5-5<\/option>/,
+    /<select id="campo-configuracoes.entender_e_desenhar.modelo" name="configuracoes.entender_e_desenhar.modelo" class="padrao"><option value="">padrão do pi<\/option><option value="anthropic\/claude-opus-5-5">anthropic \/ claude-opus-5-5<\/option>/,
   );
   assert.match(
     html,
@@ -212,14 +212,14 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
   );
   assert.match(
     html,
-    /<select id="campo-configuracoes.demanda.effort" name="configuracoes.demanda.effort" aria-label="Effort de Demanda" class="padrao">/,
+    /<select id="campo-configuracoes.entender_e_desenhar.effort" name="configuracoes.entender_e_desenhar.effort" aria-label="Effort de Demanda" class="padrao">/,
   );
 
   const erro = formularioDeProjeto(LOJA, {
     novo: false,
     modelosDoPi: MODELOS,
     erros: errosDoZod(
-      "✖ o modelo x/y não existe no pi\n  → at configuracoes.revisar_rodada.modelo\n✖ inválido\n  → at configuracoes.demanda.effort",
+      "✖ o modelo x/y não existe no pi\n  → at configuracoes.revisar_rodada.modelo\n✖ inválido\n  → at configuracoes.entender_e_desenhar.effort",
     ),
   });
   assert.match(
@@ -228,7 +228,7 @@ test("modelo e effort por etapa: uma linha por etapa com o seletor do pi e o de 
   );
   assert.match(
     erro,
-    /<div class="celula celula-effort erro"><select id="campo-configuracoes.demanda.effort" [^>]*aria-invalid="true"[^>]*>.*?<\/select><span class="msg-erro" id="campo-configuracoes.demanda.effort-erro">inválido<\/span>/,
+    /<div class="celula celula-effort erro"><select id="campo-configuracoes.entender_e_desenhar.effort" [^>]*aria-invalid="true"[^>]*>.*?<\/select><span class="msg-erro" id="campo-configuracoes.entender_e_desenhar.effort-erro">inválido<\/span>/,
   );
   assert.match(erro, /2 campos com erro/);
 });
@@ -342,7 +342,7 @@ test("formularioDeProjeto liga à configuração SDLC fora do h2, só no projeto
 test("confirmacaoDeRemover: o nome escapado, o que sai junto, Cancelar e Remover projeto", () => {
   const html = confirmacaoDeRemover("<demo>");
   assert.match(html, /<h2 id="titulo-remover">Remover o projeto &#60;demo&#62;<\/h2>/);
-  assert.match(html, /O projeto <strong>&#60;demo&#62;<\/strong> será apagado com as demandas, em qualquer fase,/);
+  assert.match(html, /O projeto <strong>&#60;demo&#62;<\/strong> será apagado com as demandas, em qualquer estado,/);
   assert.match(html, /<button class="btn">Cancelar<\/button>/);
   assert.match(html, /data-confirmar-remover>Remover projeto<\/button>/);
 });

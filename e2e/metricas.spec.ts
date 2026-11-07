@@ -17,8 +17,8 @@ function semear(raiz: string): void {
     `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('${nome}', '/nao/existe/${nome}', 'main', 'github', '${nome}');`;
   const demanda = (id: string, nome: string, titulo: string, tipo: string, mes: string) =>
-    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
+    `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'em_execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
   const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
     `INSERT INTO sessao VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x${String(id)}', 's${String(id)}', '${em(mes)}', '${em(mes)}', 0);
@@ -125,8 +125,8 @@ function semearNumerosGrandes(raiz: string): void {
   banco.exec(`
     INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('loja', '/nao/existe/loja', 'main', 'github', 'loja');
-    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+    INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${em(M0)}'), ('I-1', 2, 'implementar', 'concluido', '${em(M0)}');
     INSERT INTO sessao VALUES ('s1', 'I-1', 1, 'autonomo', 'conv1');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ${execucoes.join(", ")},

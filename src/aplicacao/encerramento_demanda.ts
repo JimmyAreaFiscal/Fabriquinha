@@ -47,7 +47,7 @@ export interface DepsEncerramentoDemanda {
 const contexto = () => ({ agora: new Date().toISOString() });
 
 /**
- * Conduz o `encerrar_demanda` que o agendador reservou (`em_execucao`), de uma demanda em `encerramento`; fora disso
+ * Conduz o `encerrar_demanda` que o agendador reservou (`em_execucao`), de uma demanda em `encerrar_demanda`; fora disso
  * recusa sem efeito externo. Sai com o agregado no fim do que deu para fazer:
  * - com a integração gravada, só a limpeza pendente;
  * - senão publica (ou reaproveita) o PR final e registra a tentativa; erro até aqui falha o ticket e sobe;
@@ -65,9 +65,9 @@ export async function conduzirEncerramentoDemanda(
 ): Promise<AgregadoDemanda> {
   const ag = carregarDemanda(banco, demanda_id);
   const ticket = ag.tickets.findLast((t) => t.etapa === "encerrar_demanda");
-  if (ag.demanda.fase !== "encerramento" || ticket?.status !== "em_execucao") {
+  if (ag.demanda.estado !== "encerrar_demanda" || ticket?.estado !== "em_execucao") {
     throw new ErroDeRegra(
-      `a demanda ${demanda_id} está em ${ag.demanda.fase} e o encerrar_demanda está ${ticket?.status ?? "ausente"}`,
+      `a demanda ${demanda_id} está em ${ag.demanda.estado} e o encerrar_demanda está ${ticket?.estado ?? "ausente"}`,
       "só se encerra a demanda em encerramento, com o encerrar_demanda reservado pelo agendador",
     );
   }

@@ -33,14 +33,14 @@ interface Pagina {
   evidencias: Evidencia[];
   encerramento: { passos: { feito: boolean }[]; aguardando_merge?: { url: string } };
   dependencias: unknown[];
-  dependentes: { demanda_id: string; titulo: string; fase: string }[];
+  dependentes: { demanda_id: string; titulo: string; estado: string }[];
 }
 interface Board {
   demandas: {
     id: string;
     projeto: string;
     titulo: string;
-    fase: string;
+    estado: string;
     rodadas: unknown[];
     bloqueios: unknown[];
     falhos: unknown[];
@@ -53,12 +53,12 @@ const comportamento = (evidencias: Evidencia[]): Evidencia => {
   return e;
 };
 
-test("CA-1: o board traz a I-206 com a fase dela", async () => {
+test("CA-1: o board traz a I-206 com o estado dela", async () => {
   const { pedir } = await cenarioDemandas();
   const r = await pedir("/api/demandas");
   assert.equal(r.status, 200);
   const i206 = r.json<Board>().demandas.find((d) => d.id === "I-206");
-  assert.deepEqual([i206?.projeto, i206?.titulo, i206?.fase], ["loja", "demanda I-206", "execucao"]);
+  assert.deepEqual([i206?.projeto, i206?.titulo, i206?.estado], ["loja", "demanda I-206", "em_execucao"]);
 });
 
 test("CA-2: sem o cookie da sessão, 401 com a orientação de rodar fabriquinha abrir", async () => {
@@ -68,20 +68,20 @@ test("CA-2: sem o cookie da sessão, 401 com a orientação de rodar fabriquinha
   assert.match(String(r.json().erro), /fabriquinha abrir/);
 });
 
-test("CA-3: as duas rodadas da I-206 com a fase de cada uma e o PR aberto da R2", async () => {
+test("CA-3: as duas rodadas da I-206 com o estado de cada uma e o PR aberto da R2", async () => {
   const { pedir } = await cenarioDemandas();
   const i206 = (await pedir("/api/demandas")).json<Board>().demandas[0];
   assert.deepEqual(i206?.rodadas, [
-    { ref: "I-206.R1", fase: "concluida" },
-    { ref: "I-206.R2", fase: "aprovacao_pull_request", pr: { id: "7", url: "https://pr/7" } },
+    { ref: "I-206.R1", estado: "concluida" },
+    { ref: "I-206.R2", estado: "gate_pr", pr: { id: "7", url: "https://pr/7" } },
   ]);
 });
 
-test("CA-4: a I-207 aparece com o bloqueio da I-206 e a fase dela; integrada, deixa de bloquear", async () => {
+test("CA-4: a I-207 aparece com o bloqueio da I-206 e o estado dela; integrada, deixa de bloquear", async () => {
   const { pedir, banco } = await cenarioDemandas();
   const i207 = () => pedir("/api/demandas").then((r) => r.json<Board>().demandas[1]);
-  assert.deepEqual((await i207())?.bloqueios, [{ demanda_id: "I-206", fase: "execucao" }]);
-  banco.exec("UPDATE demanda SET fase = 'concluida' WHERE id = 'I-206'");
+  assert.deepEqual((await i207())?.bloqueios, [{ demanda_id: "I-206", estado: "em_execucao" }]);
+  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
   assert.deepEqual((await i207())?.bloqueios, []);
 });
 
@@ -113,7 +113,7 @@ test("o trabalho ativo e a página marcam `pi_ativo` só quando o pi subiu, não
 
 test("o board não mostra a demanda arquivada", async () => {
   const { pedir, banco } = await cenarioDemandas();
-  banco.exec("UPDATE demanda SET fase = 'arquivada' WHERE id = 'I-207'");
+  banco.exec("UPDATE demanda SET estado = 'arquivada' WHERE id = 'I-207'");
   const ids = (await pedir("/api/demandas")).json<Board>().demandas.map((d: { id: string }) => d.id);
   assert.deepEqual(ids, ["I-206"]);
 });
@@ -124,7 +124,7 @@ test("CA-3 (T-1289): o board traz os tickets falhos com o endereço público e a
   assert.deepEqual(await falhosDe(), []);
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
-    tickets: ag.tickets.map((t) => (t.ticket_id === 3 ? { ...t, status: "falhou" } : t)),
+    tickets: ag.tickets.map((t) => (t.ticket_id === 3 ? { ...t, estado: "falhou" } : t)),
   }));
   assert.deepEqual(await falhosDe(), [{ ref: "I-206.T3", etapa: "implementar" }]);
 });
@@ -155,17 +155,17 @@ test("o ticket é elegível só se a seleção o escolheria agora", async () => 
   const { pedir, banco } = await cenarioDemandas();
   const elegiveis = async (id: string) =>
     (await pedir(`/api/demandas/${id}`)).json<Pagina>().tickets.map((t) => [t.ref, t.elegivel]);
-  // Fase sem seleção: nenhum ticket da I-206 (R2 aguarda o PR).
+  // Estado sem seleção: nenhum ticket da I-206 (R2 aguarda o PR).
   assert.ok((await elegiveis("I-206")).every(([, e]) => e === false));
   // Dois abertos na mesma rodada: só o de menor id.
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
-    rodadas: ag.rodadas.map((r) => (r.rodada_id === 2 ? { ...r, fase: "desenvolvimento" } : r)),
+    rodadas: ag.rodadas.map((r) => (r.rodada_id === 2 ? { ...r, estado: "implementar" } : r)),
     tickets: ag.tickets.flatMap((t) =>
       t.ticket_id === 3
         ? [
-            { ...t, status: "aberto" as const },
-            { ...t, ticket_id: 6, status: "aberto" as const },
+            { ...t, estado: "aberto" as const },
+            { ...t, ticket_id: 6, estado: "aberto" as const },
           ]
         : [t],
     ),
@@ -188,14 +188,14 @@ test("o ticket é elegível só se a seleção o escolheria agora", async () => 
         ticket_id: 1,
         etapa: "planejar",
         criado_por: { tipo: "fabriquinha" },
-        status: "aberto",
-        status_alterado_em: "2026-01-01T00:00:00.000Z",
+        estado: "aberto",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
         devolucoes: 0,
       },
     ],
   }));
   assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", false]]);
-  banco.exec("UPDATE demanda SET fase = 'concluida' WHERE id = 'I-206'");
+  banco.exec("UPDATE demanda SET estado = 'concluida' WHERE id = 'I-206'");
   assert.deepEqual(await elegiveis("I-207"), [["I-207.T1", true]]);
 });
 
@@ -218,7 +218,7 @@ test("a página traz o motivo da falha e a instrução do ticket", async () => {
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
     tickets: ag.tickets.map((t) =>
-      t.ticket_id === 1 ? { ...t, status: "falhou", motivo_falha: "quebrou", instrucao: "tente de novo" } : t,
+      t.ticket_id === 1 ? { ...t, estado: "falhou", motivo_falha: "quebrou", instrucao: "tente de novo" } : t,
     ),
   }));
   const t1 = (await pedir("/api/demandas/I-206")).json<Pagina>().tickets[0];
@@ -279,7 +279,7 @@ test("CA-10: o progresso do encerramento com os passos feitos e o pendente", asy
   const { pedir, banco } = await cenarioDemandas();
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
-    demanda: { ...ag.demanda, fase: "encerramento" },
+    demanda: { ...ag.demanda, estado: "encerrar_demanda" },
     encerramento: {
       demanda_id: "I-206",
       branch: "fabriquinha/I-206",
@@ -306,17 +306,17 @@ test("o PR final à espera do merge humano vem no encerramento e marca a demanda
   const { pedir, banco } = await cenarioDemandas();
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
-    demanda: { ...ag.demanda, fase: "encerramento" },
-    rodadas: ag.rodadas.map((r) => ({ ...r, fase: "concluida" as const })),
+    demanda: { ...ag.demanda, estado: "encerrar_demanda" },
+    rodadas: ag.rodadas.map((r) => ({ ...r, estado: "concluida" as const })),
     tickets: [
-      ...ag.tickets.map((t) => ({ ...t, status: "concluido" as const })),
+      ...ag.tickets.map((t) => ({ ...t, estado: "concluido" as const })),
       {
         demanda_id: "I-206",
         ticket_id: 99,
         etapa: "encerrar_demanda",
         criado_por: { tipo: "fabriquinha" },
-        status: "aberto",
-        status_alterado_em: "2026-01-01T00:00:00.000Z",
+        estado: "aberto",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
         devolucoes: 0,
       },
     ],
@@ -356,7 +356,7 @@ test("sem encerramento, todos os passos estão pendentes", async () => {
 test("CA-11: a I-207 traz a I-206 como dependência, com a situação dela", async () => {
   const { pedir } = await cenarioDemandas();
   const r = (await pedir("/api/demandas/I-207")).json<Pagina>();
-  assert.deepEqual(r.dependencias, [{ demanda_id: "I-206", fase: "execucao" }]);
+  assert.deepEqual(r.dependencias, [{ demanda_id: "I-206", estado: "em_execucao" }]);
   assert.deepEqual(r.rodadas, []);
 });
 

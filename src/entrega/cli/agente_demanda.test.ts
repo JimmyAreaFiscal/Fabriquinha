@@ -30,8 +30,8 @@ function cenario() {
     demanda_id: "I-206",
     ticket_id,
     etapa,
-    status: "aberto",
-    status_alterado_em: em,
+    estado: "aberto",
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
@@ -43,8 +43,8 @@ function cenario() {
       titulo: "Busca",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "execucao",
-      fase_alterada_em: em,
+      estado: "em_execucao",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-206",
@@ -54,7 +54,8 @@ function cenario() {
         demanda_id: "I-206",
         rodada_id: 2,
         titulo: "r2",
-        fase: "desenvolvimento",
+        estado: "implementar",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
         e2e: false,
         branch: "fabriquinha/I-206-2",
       },
@@ -124,8 +125,8 @@ test("CA-1: ticket ver do próprio ticket é uma linha JSON com o endereço, a e
     ticket: "I-206.T3",
     rodada: "I-206.R2",
     etapa: "implementar",
-    status: "aberto",
-    status_alterado_em: em,
+    estado: "aberto",
+    estado_alterado_em: em,
     devolucoes: 0,
   });
 });
@@ -228,18 +229,18 @@ test("agente da demanda: comando fora da tabela da demanda é uso inválido; a a
   assert.doesNotMatch(grupo.out, /fabriquinha (ticket|[i]ssue|necessidade)/);
 });
 
-/** Demanda I-206 em `fase`, rodada 2 em `faseRodada`, e a execução `exec-9` aberta no ticket 9 (de `etapa`, da rodada 2 se `naRodada`). */
-function cenarioDeRevisao(fase: string, faseRodada: string, etapa: string, naRodada = true) {
+/** Demanda I-206 em `estado`, rodada 2 em `faseRodada`, e a execução `exec-9` aberta no ticket 9 (de `etapa`, da rodada 2 se `naRodada`). */
+function cenarioDeRevisao(estado: string, faseRodada: string, etapa: string, naRodada = true) {
   const { banco, env } = cenario();
-  banco.prepare("UPDATE demanda SET fase = ?").run(fase);
-  banco.prepare("UPDATE rodada SET fase = ?").run(faseRodada);
+  banco.prepare("UPDATE demanda SET estado = ?").run(estado);
+  banco.prepare("UPDATE rodada SET estado = ?").run(faseRodada);
   banco
     .prepare(
-      `INSERT INTO ticket_demanda (demanda_id, ticket_id, rodada_id, etapa, status, status_alterado_em, devolucoes)
+      `INSERT INTO ticket_demanda (demanda_id, ticket_id, rodada_id, etapa, estado, estado_alterado_em, devolucoes)
        VALUES ('I-206', 9, ?, ?, 'aberto', ?, 0)`,
     )
     .run(naRodada ? 2 : null, etapa, em);
-  banco.prepare("UPDATE ticket_demanda SET status = 'concluido' WHERE ticket_id IN (1, 3, 4)").run();
+  banco.prepare("UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id IN (1, 3, 4)").run();
   abrirExecucao(banco, "exec-9", 9);
   return { banco, env: { ...env, FABRIQUINHA_EXECUCAO: "exec-9" } };
 }
@@ -279,8 +280,8 @@ function evidenciar(banco: DatabaseSync, ticket_id: number, lista: [string, obje
 
 const lerDemanda = async (env: NodeJS.ProcessEnv) =>
   JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {
-    rodadas: { rodada: string; fase: string }[];
-    tickets: { ticket: string; status: string; etapa: string }[];
+    rodadas: { rodada: string; estado: string }[];
+    tickets: { ticket: string; estado: string; etapa: string }[];
     decisoes: {
       ticket: string;
       rodada?: string;
@@ -292,14 +293,14 @@ const lerDemanda = async (env: NodeJS.ProcessEnv) =>
   };
 
 test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leitura mostra", async () => {
-  const { banco, env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const { banco, env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   evidenciar(banco, 9, EVIDENCIAS_RODADA);
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.equal(s.err, "");
   assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", rodada: "I-206.R2", resultado: "aprovado" });
   const lida = await lerDemanda(env);
-  assert.equal(lida.rodadas[0]?.fase, "encerramento");
-  assert.equal(lida.tickets.find((t) => t.ticket === "I-206.T9")?.status, "concluido");
+  assert.equal(lida.rodadas[0]?.estado, "encerrar_rodada");
+  assert.equal(lida.tickets.find((t) => t.ticket === "I-206.T9")?.estado, "concluido");
   assert.equal(banco.prepare("SELECT resultado FROM decisao_ticket WHERE ticket_id = 9").get()?.resultado, "aprovado");
   const decisao = lida.decisoes[0];
   assert.deepEqual(
@@ -310,15 +311,15 @@ test("CA-10: aprovar a revisão de rodada registra a decisão na rodada e a leit
 });
 
 test("CA-10: aprovar a revisão de rodada sem evidências lista as quatro ausentes e a rodada segue em revisao", async () => {
-  const { env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const { env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.equal(s.codigo, 1);
   for (const t of EVIDENCIAS_RODADA) assert.match(s.err, new RegExp(`${t[0]} ausente`));
-  assert.equal((await lerDemanda(env)).rodadas[0]?.fase, "revisao");
+  assert.equal((await lerDemanda(env)).rodadas[0]?.estado, "revisar_rodada");
 });
 
 test("CA-9 e CA-11: a revisão integral exige as três evidências e, com elas, vai a encerramento", async () => {
-  const { banco, env } = cenarioDeRevisao("revisao_demanda", "concluida", "revisar_demanda", false);
+  const { banco, env } = cenarioDeRevisao("revisar_demanda", "concluida", "revisar_demanda", false);
   const sem = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.equal(sem.codigo, 1);
   for (const t of EVIDENCIAS_INTEGRAL) assert.match(sem.err, new RegExp(`${t[0]} ausente`));
@@ -326,11 +327,11 @@ test("CA-9 e CA-11: a revisão integral exige as três evidências e, com elas, 
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.equal(s.err, "");
   assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", resultado: "aprovado" });
-  assert.equal(banco.prepare("SELECT fase FROM demanda").get()?.fase, "encerramento");
+  assert.equal(banco.prepare("SELECT estado FROM demanda").get()?.estado, "encerrar_demanda");
 });
 
 test("revisão de rodada reprovada completa as correções com demanda, rodada e ticket local", async () => {
-  const { env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const { env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   const correcoes = JSON.stringify([{ titulo: "a", descricao: "b" }]);
   const s = await cli(env, [
     "revisao",
@@ -345,12 +346,12 @@ test("revisão de rodada reprovada completa as correções com demanda, rodada e
   assert.equal(s.err, "");
   assert.equal((JSON.parse(s.out) as { resultado: string }).resultado, "recusado");
   const lida = await lerDemanda(env);
-  assert.equal(lida.rodadas[0]?.fase, "desenvolvimento");
+  assert.equal(lida.rodadas[0]?.estado, "implementar");
   assert.equal(lida.tickets.filter((t) => t.etapa === "implementar").length, 3);
 });
 
 test("CA-11: reprovar a revisão integral registra a decisão com o motivo", async () => {
-  const { banco, env } = cenarioDeRevisao("revisao_demanda", "concluida", "revisar_demanda", false);
+  const { banco, env } = cenarioDeRevisao("revisar_demanda", "concluida", "revisar_demanda", false);
   const plano = {
     demanda_id: "I-206",
     criterios: [],
@@ -380,7 +381,7 @@ test("CA-11: reprovar a revisão integral registra a decisão com o motivo", asy
 });
 
 test("CA-12: veredito fora de aprovar|reprovar diz as duas formas e não grava", async () => {
-  const { banco, env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const { banco, env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "talvez"]);
   assert.deepEqual([s.codigo, s.out], [1, ""]);
   assert.match(s.err, /aprovar ou reprovar/);
@@ -388,7 +389,7 @@ test("CA-12: veredito fora de aprovar|reprovar diz as duas formas e não grava",
 });
 
 test("revisão: opções que faltam ou sobram, JSON inválido, ticket alheio e ticket que não é de revisão", async () => {
-  const { env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const { env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   const rodar = async (...a: string[]) => (await cli(env, ["revisao", "decidir", ...a])).err;
   assert.match(await rodar("I-206.T9", "reprovar"), /reprovar exige --motivo/);
   assert.match(await rodar("I-206.T9", "reprovar", "--motivo", "m"), /reprovar exige --correcoes/);
@@ -405,7 +406,7 @@ test("revisão: opções que faltam ou sobram, JSON inválido, ticket alheio e t
 });
 
 test("revisão: correções por stdin com -", async () => {
-  const { env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const { env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   let out = "";
   const codigo = await principal(["revisao", "decidir", "I-206.T9", "reprovar", "--motivo", "m", "--correcoes", "-"], {
     env,
@@ -418,14 +419,14 @@ test("revisão: correções por stdin com -", async () => {
 });
 
 test("revisão com a execução terminada não grava", async () => {
-  const { banco, env } = cenarioDeRevisao("execucao", "revisao", "revisar_rodada");
+  const { banco, env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
   banco.prepare("UPDATE execucao_sessao SET fim = ? WHERE id = 'exec-9'").run(em);
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.match(s.err, /já terminou/);
 });
 
 test("CA-13 e CA-14: ticket criar na sessão de ajustes cria o corretivo; sem título não cria", async () => {
-  const { env } = cenarioDeRevisao("execucao", "sessao", "sessao_em_aberto");
+  const { env } = cenarioDeRevisao("em_execucao", "ajustar_resultado", "ajustar_resultado");
   const sem = await cli(env, ["ticket", "criar", "I-206.R2"]);
   assert.deepEqual([sem.codigo, sem.out], [1, ""]);
   assert.match(sem.err, /falta o título/);
@@ -436,7 +437,7 @@ test("CA-13 e CA-14: ticket criar na sessão de ajustes cria o corretivo; sem t�
 });
 
 test("ticket criar recusa endereço que não é de rodada", async () => {
-  const { env } = cenarioDeRevisao("execucao", "sessao", "sessao_em_aberto");
+  const { env } = cenarioDeRevisao("em_execucao", "ajustar_resultado", "ajustar_resultado");
   for (const a of ["I-206.T9", "T-9"]) {
     const s = await cli(env, ["ticket", "criar", a, "--titulo", "x"]);
     assert.match(s.err, /I-206\.R2/);
@@ -444,7 +445,7 @@ test("ticket criar recusa endereço que não é de rodada", async () => {
 });
 
 test("ticket criar recusa rodada de outra demanda sem gravar e mostra a rodada do próprio ticket", async () => {
-  const { env } = cenarioDeRevisao("execucao", "sessao", "sessao_em_aberto");
+  const { env } = cenarioDeRevisao("em_execucao", "ajustar_resultado", "ajustar_resultado");
   const antes = (await lerDemanda(env)).tickets.length;
   const s = await cli(env, ["ticket", "criar", "I-999.R2", "--titulo", "Corretivo de outra demanda"]);
   assert.deepEqual([s.codigo, s.out], [1, ""]);

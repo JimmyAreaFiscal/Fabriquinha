@@ -90,7 +90,7 @@ function conferirFimGravado(raiz: string): void {
   expect(execucoes).toHaveLength(1);
   expect(execucoes[0]?.fim).not.toBeNull();
   expect(execucoes[0]?.erro).toBe("serviço reiniciado");
-  expect(ticket?.status).toBe("falhou");
+  expect(ticket?.estado).toBe("falhou");
   expect(ticket?.motivo_falha).toBe("serviço reiniciado");
 }
 

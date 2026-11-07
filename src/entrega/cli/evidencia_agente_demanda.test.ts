@@ -78,8 +78,8 @@ function cenario() {
     demanda_id: "I-206",
     ticket_id,
     etapa,
-    status: "em_execucao",
-    status_alterado_em: em,
+    estado: "em_execucao",
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
@@ -91,14 +91,22 @@ function cenario() {
       titulo: "Busca",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "planejamento",
-      fase_alterada_em: em,
+      estado: "planejar",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-206",
     },
     rodadas: [
-      { demanda_id: "I-206", rodada_id: 1, titulo: "r1", fase: "revisao", e2e: false, branch: "fabriquinha/I-206-1" },
+      {
+        demanda_id: "I-206",
+        rodada_id: 1,
+        titulo: "r1",
+        estado: "revisar_rodada",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: "fabriquinha/I-206-1",
+      },
     ],
     dependencias_rodada: [],
     criterios_citados: [{ demanda_id: "I-206", rodada_id: 1, criterio_id: "CA-1" }],
@@ -108,7 +116,7 @@ function cenario() {
       ticket(5, "revisar_demanda"),
       ticket(6, "revisar_rodada", { rodada_id: 1 }),
       ticket(7, "encerrar_rodada", { rodada_id: 1 }),
-      ticket(8, "revisar_rodada", { rodada_id: 1, status: "concluido" }),
+      ticket(8, "revisar_rodada", { rodada_id: 1, estado: "concluido" }),
     ],
     dependencias_ticket: [],
     caminhos_ticket: [],
@@ -204,10 +212,10 @@ test("CA-6: o plano válido fica registrado e a leitura da demanda o mostra", as
     trabalho_id: "exec-1",
   });
   const lida = JSON.parse((await cli(env(1), ["demanda", "ver", "I-206"])).out) as {
-    demanda: { fase: string };
+    demanda: { estado: string };
     tickets: { evidencias?: { tipo: string }[] }[];
   };
-  assert.equal(lida.demanda.fase, "aprovacao_planejamento");
+  assert.equal(lida.demanda.estado, "gate_planejamento");
   assert.deepEqual(
     lida.tickets[0]?.evidencias?.map((e) => e.tipo),
     ["plano"],
@@ -300,7 +308,7 @@ test("CA-5: execução terminada, ticket já concluído e execução inexistente
   const { raiz, banco, env } = cenario();
   const dados = json(raiz, ESTRESSE);
   const args = ["evidencia", "add", "I-206.T5", "testes_estresse", "--dados", dados];
-  banco.prepare("UPDATE ticket_demanda SET status = 'concluido' WHERE ticket_id = 5").run();
+  banco.prepare("UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id = 5").run();
   const concluido = await cli(env(5), args);
   assert.equal(concluido.err, "o ticket I-206.T5 está concluido e não recebe evidência (siga com o seu ticket)\n");
   banco.prepare("UPDATE execucao_sessao SET fim = ? WHERE id = 'exec-5'").run(em);

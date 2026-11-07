@@ -40,7 +40,7 @@ export async function aprovarPRRodada(
   );
   const entrada = { ...ref, ticket_id: ticket.ticket_id, ...(nota !== undefined && { nota }) };
 
-  if (rodada.fase === "concluida") {
+  if (rodada.estado === "concluida") {
     exigirAtor(ator, "aprovar o PR da rodada", "auditor");
     const decisao = ag.decisoes.find((d) => d.ticket_id === ticket.ticket_id && d.resultado === "aprovado");
     if (decisao?.nota === nota) return ag;
@@ -101,7 +101,7 @@ export async function aprovarPRRodadaSeAutomatico(
   ref: RefRodada,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<AgregadoDemanda> {
-  const noGate = ag.rodadas.some((r) => r.rodada_id === ref.rodada_id && r.fase === "aprovacao_pull_request");
+  const noGate = ag.rodadas.some((r) => r.rodada_id === ref.rodada_id && r.estado === "gate_pr");
   if (!noGate || !aprovaPRDaRodadaSozinho(ag.demanda.projeto, env)) return ag;
   return aprovarPRRodada(banco, ref, undefined, FABRIQUINHA).catch((erro: unknown) => {
     noLog(erro);

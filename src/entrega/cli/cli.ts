@@ -41,7 +41,7 @@ interface ComandoDoServico {
   rodar(io: Io): Promise<unknown>;
 }
 
-/** O banco da raiz para um comando, fechado no fim. */
+/** O banco da raiz para um comando, desligado no fim. */
 async function comBanco<T>(io: Io, rodar: (banco: DatabaseSync) => T | Promise<T>): Promise<T> {
   const banco = abrirBanco(raizPadrao(io.env));
   try {

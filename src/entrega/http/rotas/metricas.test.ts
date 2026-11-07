@@ -52,8 +52,8 @@ async function chamar(endereco: string): Promise<unknown> {
 /** Uma demanda do projeto, registrada agora, com um ticket, uma sessão e uma execução de US$ 2 que acabou de começar. */
 function demandaComExecucao(id: string, projeto: string, tipo = "problema"): void {
   const agoraIso = new Date().toISOString();
-  banco.exec(`INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título', '${tipo}', 'd', 'execucao', '${agoraIso}', 'f', 's', 1, 'b-${id}');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'planejar', 'concluido', '${agoraIso}');
+  banco.exec(`INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título', '${tipo}', 'd', 'em_execucao', '${agoraIso}', 'f', 's', 1, 'b-${id}');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'planejar', 'concluido', '${agoraIso}');
     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${agoraIso}', '${agoraIso}', 0);
     INSERT INTO uso_modelo_execucao VALUES ('x-${id}', 'p', 'm', 10, 1, 0, 0, 2);`);
@@ -133,7 +133,7 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
       demanda: "I-1",
       projeto: "loja",
       titulo: "Título",
-      fase: "execucao",
+      estado: "em_execucao",
       reprovacoes: 0,
       nota: null,
       ...execucaoDeUmaDemanda,
@@ -142,7 +142,7 @@ test("GET /api/metricas/demandas: o corpo inteiro de demandas de tipos distintos
       demanda: "I-2",
       projeto: "site",
       titulo: "Título",
-      fase: "execucao",
+      estado: "em_execucao",
       reprovacoes: 0,
       nota: null,
       ...execucaoDeUmaDemanda,

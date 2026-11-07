@@ -68,7 +68,7 @@ for (const caminho of [
 
 // 2. O prompt montado de cada etapa, com o contexto fixo.
 const agregadoDoPrompt = {
-  demanda: { id: "I-206", titulo: "Busca", tipo: "problema", descricao: "A busca demora.", fase: "execucao" },
+  demanda: { id: "I-206", titulo: "Busca", tipo: "problema", descricao: "A busca demora.", estado: "em_execucao" },
   tickets: [],
   decisoes: [],
   evidencias: [
@@ -79,14 +79,24 @@ const agregadoDoPrompt = {
       dados: { criterios: [{ id: "CA-2", dado: "d", quando: "e", entao: "f" }] },
     },
   ],
-  rodadas: [{ demanda_id: "I-206", rodada_id: 2, titulo: "Índice", fase: "desenvolvimento", e2e: false, branch: "x" }],
+  rodadas: [
+    {
+      demanda_id: "I-206",
+      rodada_id: 2,
+      titulo: "Índice",
+      estado: "implementar",
+      estado_alterado_em: "2026-10-11T12:00:00.000Z",
+      e2e: false,
+      branch: "x",
+    },
+  ],
   dependencias_rodada: [],
   criterios_citados: [{ demanda_id: "I-206", rodada_id: 2, criterio_id: "CA-2" }],
   dependencias_ticket: [{ demanda_id: "I-206", ticket_id: 3, depende_ticket_id: 1 }],
   caminhos_ticket: [{ demanda_id: "I-206", ticket_id: 3, caminho: "src/a.ts" }],
 } as unknown as AgregadoDemanda;
 
-for (const etapa of EtapaTicket.options.filter((e) => e !== "demanda")) {
+for (const etapa of EtapaTicket.options.filter((e) => e !== "entender_e_desenhar")) {
   const ticket = {
     demanda_id: "I-206",
     ticket_id: 3,
@@ -145,8 +155,8 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     demanda_id: "I-206",
     ticket_id,
     etapa,
-    status: "em_execucao",
-    status_alterado_em: em,
+    estado: "em_execucao",
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
@@ -158,20 +168,28 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
       titulo: "Busca <rápida>",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "planejamento",
-      fase_alterada_em: em,
+      estado: "planejar",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-206",
     },
     rodadas: [
-      { demanda_id: "I-206", rodada_id: 1, titulo: "r1", fase: "revisao", e2e: false, branch: "fabriquinha/I-206-1" },
+      {
+        demanda_id: "I-206",
+        rodada_id: 1,
+        titulo: "r1",
+        estado: "revisar_rodada",
+        estado_alterado_em: em,
+        e2e: false,
+        branch: "fabriquinha/I-206-1",
+      },
     ],
     dependencias_rodada: [],
     criterios_citados: [{ demanda_id: "I-206", rodada_id: 1, criterio_id: "CA-1" }],
     tickets: [
       ticket(7, "encerrar_rodada", { rodada_id: 1 }),
-      ...(comRevisaoConcluida ? [ticket(8, "revisar_rodada", { rodada_id: 1, status: "concluido" })] : []),
+      ...(comRevisaoConcluida ? [ticket(8, "revisar_rodada", { rodada_id: 1, estado: "concluido" })] : []),
     ],
     dependencias_ticket: [],
     caminhos_ticket: [],

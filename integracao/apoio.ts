@@ -152,7 +152,7 @@ export function submeterObrigatorias(c: Cenario, id: string, sessaoExterna = `ex
   submeter("custos_realizados", custos(sessaoExterna));
 }
 
-/** Demanda registrada, completa e enviada: espera a decisão do Auditor em `aprovacao_demanda`. */
+/** Demanda registrada, completa e enviada: espera a decisão do Auditor em `gate_demanda`. */
 export function demandaEnviada(c: Cenario, dependencias?: string[], projeto = c.projeto): string {
   const id = registrarExterna(c, dependencias, projeto);
   submeterObrigatorias(c, id);
@@ -160,7 +160,7 @@ export function demandaEnviada(c: Cenario, dependencias?: string[], projeto = c.
   return id;
 }
 
-/** Demanda aprovada pelo Auditor: em `planejamento`, com o ticket `planejar` aberto. */
+/** Demanda aprovada pelo Auditor: em `planejar`, com o ticket `planejar` aberto. */
 export function demandaAprovada(c: Cenario, dependencias?: string[], projeto = c.projeto): string {
   const id = demandaEnviada(c, dependencias, projeto);
   gestao.decidir(c.banco, id, { aprovado: true }, AUDITOR, CTX);

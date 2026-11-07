@@ -125,7 +125,7 @@ function prepararPasta(banco: DatabaseSync, dir: string, e: EscopoDaAvaliacao, d
     mkdirSync(join(dir, "demandas", id), { recursive: true });
     writeFileSync(
       join(dir, "demandas", id, "demanda.md"),
-      `# ${id} — ${demanda.titulo}\n\n- Tipo: ${demanda.tipo}\n- Fase: ${demanda.fase}\n\n${demanda.descricao}\n`,
+      `# ${id} — ${demanda.titulo}\n\n- Tipo: ${demanda.tipo}\n- Fase: ${demanda.estado}\n\n${demanda.descricao}\n`,
     );
     writeFileSync(
       join(dir, "demandas", id, "metricas.json"),

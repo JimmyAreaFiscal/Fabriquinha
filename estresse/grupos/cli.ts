@@ -67,8 +67,8 @@ interface Agente {
   rodada: string;
 }
 
-/** A demanda em execução com a rodada R1 em `faseRodada` e o ticket 2 de `etapa`, e uma execução aberta só dele. */
-function semearAgente(banco: DatabaseSync, faseRodada: string, etapa: string): Agente {
+/** A demanda em execução com a rodada R1 em `estadoDaRodada` e o ticket 2 de `etapa`, e uma execução aberta só dele. */
+function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string): Agente {
   const demanda = criarDemandaNova(
     banco,
     (id) =>
@@ -79,14 +79,22 @@ function semearAgente(banco: DatabaseSync, faseRodada: string, etapa: string): A
           titulo: "Demanda do estresse",
           tipo: "funcionalidade",
           descricao: "d",
-          fase: "execucao",
-          fase_alterada_em: em,
+          estado: "em_execucao",
+          estado_alterado_em: em,
           criada_por: { tipo: "externo", ferramenta: "estresse", sessao: "s-estresse" },
           enviada: true,
           branch: `fabriquinha/${id}`,
         },
         rodadas: [
-          { demanda_id: id, rodada_id: 1, titulo: "r1", fase: faseRodada, e2e: false, branch: `fabriquinha/${id}-1` },
+          {
+            demanda_id: id,
+            rodada_id: 1,
+            titulo: "r1",
+            estado: estadoDaRodada,
+            estado_alterado_em: "2026-01-01T00:00:00.000Z",
+            e2e: false,
+            branch: `fabriquinha/${id}-1`,
+          },
         ],
         dependencias_rodada: [],
         criterios_citados: [],
@@ -95,8 +103,8 @@ function semearAgente(banco: DatabaseSync, faseRodada: string, etapa: string): A
             demanda_id: id,
             ticket_id: 1,
             etapa: "implementar",
-            status: "concluido",
-            status_alterado_em: em,
+            estado: "concluido",
+            estado_alterado_em: em,
             criado_por: { tipo: "fabriquinha" },
             rodada_id: 1,
             devolucoes: 0,
@@ -105,8 +113,8 @@ function semearAgente(banco: DatabaseSync, faseRodada: string, etapa: string): A
             demanda_id: id,
             ticket_id: 2,
             etapa,
-            status: "aberto",
-            status_alterado_em: em,
+            estado: "aberto",
+            estado_alterado_em: em,
             criado_por: { tipo: "fabriquinha" },
             rodada_id: 1,
             devolucoes: 0,
@@ -165,7 +173,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
     // O grupo HTTP semeia demandas com id escolhido (I-1001 em diante), fora da sequência: avança-a além do maior número.
     const maiorNumero = Number(banco.prepare("SELECT MAX(CAST(SUBSTR(id, 3) AS INTEGER)) AS n FROM demanda").get()?.n);
     escrever(banco, () => {
-      while (novoId(banco, "issue") <= maiorNumero);
+      while (novoId(banco, "demanda") <= maiorNumero);
     });
     for (let i = 0; i < CHAMADAS * 3; i++) {
       const entrada = { projeto: "cli", titulo: "Demanda do estresse", tipo: "funcionalidade", descricao: "d" };
@@ -195,10 +203,10 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
       ];
       for (const e of completa) submeterEvidencia(banco, id, e as never, autor, { agora: em });
     }
-    leitura = semearAgente(banco, "sessao", "sessao_em_aberto");
+    leitura = semearAgente(banco, "ajustar_resultado", "ajustar_resultado");
     for (let i = 0; i < CHAMADAS; i++) {
-      criar.push(semearAgente(banco, "sessao", "sessao_em_aberto"));
-      decidir.push(semearAgente(banco, "revisao", "revisar_rodada"));
+      criar.push(semearAgente(banco, "ajustar_resultado", "ajustar_resultado"));
+      decidir.push(semearAgente(banco, "revisar_rodada", "revisar_rodada"));
     }
   } finally {
     banco.close();

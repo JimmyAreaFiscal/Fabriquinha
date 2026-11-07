@@ -56,10 +56,10 @@ function prDaRodada(ag: AgregadoDemanda, ref: RefRodada) {
   return { ticket, pr: pr.dados as { url: string; branch: string; head: string } };
 }
 
-/** O ticket `sessao_em_aberto` mais recente da rodada. */
+/** O ticket `ajustar_resultado` mais recente da rodada. */
 const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDemanda =>
   existe(
-    ag.tickets.findLast((t) => t.rodada_id === ref.rodada_id && t.etapa === "sessao_em_aberto"),
+    ag.tickets.findLast((t) => t.rodada_id === ref.rodada_id && t.etapa === "ajustar_resultado"),
     `a rodada ${formatarRodadaRef(ref)} não tem sessão de ajustes`,
     "só a rodada reprovada tem sessão de ajustes",
   );
@@ -112,7 +112,7 @@ function executar(
 
 /**
  * Reprova o PR da rodada com `motivo` e abre a sessão de ajustes na hora (interativa, sem esperar o agendador). A
- * recusa do domínio (motivo vazio, ator, fase) lança antes de gravar o marco ou mudar o banco.
+ * recusa do domínio (motivo vazio, ator, estado) lança antes de gravar o marco ou mudar o banco.
  */
 export async function reprovarPRRodada(
   banco: DatabaseSync,

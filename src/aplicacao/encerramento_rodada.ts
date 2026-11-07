@@ -53,17 +53,17 @@ async function resumirContextoDoPR(contexto: string, limite: number): Promise<st
   return (await perguntarAoPiSemFerramentas(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
 }
 
-/** A rodada em `encerramento` de uma demanda em `execucao` e o `encerrar_rodada` atual (o de maior id), num dos `status`. */
-function encerramentoAtual(ag: AgregadoDemanda, ref: RefRodada, status: readonly TicketDemanda["status"][]) {
+/** A rodada em `encerrar_rodada` de uma demanda em `em_execucao` e o `encerrar_rodada` atual (o de maior id), num dos `estados`. */
+function encerramentoAtual(ag: AgregadoDemanda, ref: RefRodada, estados: readonly TicketDemanda["estado"][]) {
   const rodada = existe(
     ag.rodadas.find((r) => r.rodada_id === ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não existe`,
     "use uma rodada da demanda",
   );
-  if (ag.demanda.fase !== "execucao" || rodada.fase !== "encerramento") {
+  if (ag.demanda.estado !== "em_execucao" || rodada.estado !== "encerrar_rodada") {
     throw new ErroDeRegra(
-      `a rodada ${formatarRodadaRef(ref)} está em ${rodada.fase} e a demanda em ${ag.demanda.fase}`,
-      "só se encerra a rodada em encerramento, numa demanda em execucao",
+      `a rodada ${formatarRodadaRef(ref)} está em ${rodada.estado} e a demanda em ${ag.demanda.estado}`,
+      "só se encerra a rodada em encerrar_rodada, numa demanda em em_execucao",
     );
   }
   const ticket = existe(
@@ -73,10 +73,10 @@ function encerramentoAtual(ag: AgregadoDemanda, ref: RefRodada, status: readonly
     `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
     "confira o estado da rodada",
   );
-  if (!status.includes(ticket.status)) {
+  if (!estados.includes(ticket.estado)) {
     throw new ErroDeRegra(
-      `o ticket ${formatarTicketRef(ticket)} está ${ticket.status}`,
-      `só o encerrar_rodada ${status.join(" ou ")} segue`,
+      `o ticket ${formatarTicketRef(ticket)} está ${ticket.estado}`,
+      `só o encerrar_rodada ${estados.join(" ou ")} segue`,
     );
   }
   return { rodada, ticket };
@@ -93,7 +93,7 @@ export function iniciarEncerramentoRodada(
 ): { id: string; fim: Promise<void> } {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const { ticket } = encerramentoAtual(ag, ref, ["aberto", "em_execucao"]);
-  if (ticket.status === "aberto") {
+  if (ticket.estado === "aberto") {
     const satisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, ref.demanda_id)).length === 0;
     comDemanda(banco, ref.demanda_id, (a) =>
       reservarTicket(a, { ticket_id: ticket.ticket_id }, FABRIQUINHA, contexto(), satisfeitas),
@@ -146,7 +146,7 @@ function gravarEvidencia(
   }));
 }
 
-/** Os fatos da conferência vão ao domínio, que volta a `desenvolvimento` com as correções ou leva ao gate. */
+/** Os fatos da conferência vão ao domínio, que volta a `implementar` com as correções ou leva ao gate. */
 function conferir(
   banco: DatabaseSync,
   ref: RefRodada,
@@ -162,9 +162,9 @@ function conferir(
  * Conclui o `encerrar_rodada` em execução até a conferência do PR. Repetível: o ticket não muda antes dela.
  * 1. Sem `mensagem_pr` e `aula_codigo` do ticket, o domínio recusa a conferência e o ticket segue em execução.
  * 2. Grava o `relatorio_produtividade`.
- * 3. Incorpora a ponta da demanda (D04); conflito volta a `desenvolvimento` com uma correção para o merge, sem PR.
+ * 3. Incorpora a ponta da demanda (D04); conflito volta a `implementar` com uma correção para o merge, sem PR.
  * 4. Publica (ou atualiza, pela marca do ticket) o PR da branch da rodada para a da demanda e grava o `pr_aberto`.
- * 5. Confere conflito e checks do PR: com problema volta a `desenvolvimento`, sem ele vai ao gate.
+ * 5. Confere conflito e checks do PR: com problema volta a `implementar`, sem ele vai ao gate.
  * 6. No projeto com a aprovação automática, o PR que chegou ao gate é aprovado ali mesmo.
  * Erro de 2 a 5 falha o ticket com a mensagem e sobe; o `pr_aberto` só existe com o PR publicado.
  */

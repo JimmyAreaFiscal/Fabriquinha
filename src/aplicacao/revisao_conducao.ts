@@ -53,5 +53,5 @@ export async function conduzirRevisao(
   const erro = carregarSessoesDoTicket(banco, ref).execucoes.find((e) => e.id === id)?.erro;
   if (erro !== undefined) return falhar(erro);
   // A decisão conclui o ticket; ainda em execução, o revisor saiu sem decidir e o ticket ficaria preso.
-  return doTicket().status === "em_execucao" ? falhar("a revisão terminou sem registrar a decisão") : "decidida";
+  return doTicket().estado === "em_execucao" ? falhar("a revisão terminou sem registrar a decisão") : "decidida";
 }

@@ -6,7 +6,7 @@ const EXTERNO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda, satisfazDependencia } from "./cancelamento_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import type { FaseDemanda } from "./primitivos.ts";
+import type { EstadoDemanda } from "./primitivos.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
@@ -16,11 +16,11 @@ const tk = (ticket_id: number, etapa: string, status: string) => ({
   demanda_id: D,
   ticket_id,
   etapa,
-  status,
-  status_alterado_em: t0,
+  estado: status,
+  estado_alterado_em: t0,
   criado_por: FABRIQUINHA,
 });
-const montar = (fase: string, m: Record<string, unknown> = {}) =>
+const montar = (estado: string, m: Record<string, unknown> = {}) =>
   AgregadoDemanda.parse({
     demanda: {
       id: D,
@@ -28,13 +28,13 @@ const montar = (fase: string, m: Record<string, unknown> = {}) =>
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: t0,
+      estado,
+      estado_alterado_em: t0,
       criada_por: EXTERNO,
       enviada: true,
       branch: "fabriquinha/I-1",
     },
-    tickets: [tk(1, "demanda", "concluido")],
+    tickets: [tk(1, "entender_e_desenhar", "concluido")],
     decisoes: [],
     evidencias: [],
     ...m,
@@ -57,28 +57,28 @@ const decisao = {
   por: AUDITOR,
   em: t0,
 };
-const FASES_ANDAMENTO = [
-  "registro",
-  "aprovacao_demanda",
-  "planejamento",
-  "aprovacao_planejamento",
-  "execucao",
-  "revisao_demanda",
-  "encerramento",
+const ESTADOS_EM_ANDAMENTO = [
+  "entender_e_desenhar",
+  "gate_demanda",
+  "planejar",
+  "gate_planejamento",
+  "em_execucao",
+  "revisar_demanda",
+  "encerrar_demanda",
 ];
 
-test("CA-1: cancela em qualquer fase de andamento", () => {
-  for (const fase of FASES_ANDAMENTO) {
-    const r = cancelarDemanda(montar(fase), AUDITOR, c);
-    assert.equal(r.demanda.fase, "cancelada");
-    assert.equal(r.demanda.fase_alterada_em, t1);
+test("CA-1: cancela em qualquer estado de andamento", () => {
+  for (const estado of ESTADOS_EM_ANDAMENTO) {
+    const r = cancelarDemanda(montar(estado), AUDITOR, c);
+    assert.equal(r.demanda.estado, "cancelada");
+    assert.equal(r.demanda.estado_alterado_em, t1);
   }
 });
 
 test("CA-2: tickets aberto/falhou fecham, em_execucao cancela e concluido fica", () => {
-  const ag = montar("execucao", {
+  const ag = montar("em_execucao", {
     tickets: [
-      tk(1, "demanda", "concluido"),
+      tk(1, "entender_e_desenhar", "concluido"),
       tk(2, "planejar", "aberto"),
       tk(3, "revisar_demanda", "falhou"),
       tk(4, "encerrar_demanda", "em_execucao"),
@@ -86,27 +86,27 @@ test("CA-2: tickets aberto/falhou fecham, em_execucao cancela e concluido fica",
   });
   const r = cancelarDemanda(ag, AUDITOR, c);
   assert.deepEqual(
-    r.tickets.map((t) => [t.status, t.status_alterado_em]),
+    r.tickets.map((t) => [t.estado, t.estado_alterado_em]),
     [
       ["concluido", t0],
-      ["fechado", t1],
-      ["fechado", t1],
+      ["cancelado", t1],
+      ["cancelado", t1],
       ["cancelado", t1],
     ],
   );
 });
 
-test("cancela com ticket falhou que tem motivo_falha: fecha e preserva o motivo", () => {
-  const ag = montar("execucao", {
+test("cancela com ticket falhou que tem motivo_falha: cancela e preserva o motivo", () => {
+  const ag = montar("em_execucao", {
     tickets: [{ ...tk(3, "implementar", "falhou"), motivo_falha: "timeout do modelo" }],
   });
   const r = cancelarDemanda(ag, AUDITOR, c);
-  assert.equal(r.demanda.fase, "cancelada");
-  assert.deepEqual([r.tickets[0]?.status, r.tickets[0]?.motivo_falha], ["fechado", "timeout do modelo"]);
+  assert.equal(r.demanda.estado, "cancelada");
+  assert.deepEqual([r.tickets[0]?.estado, r.tickets[0]?.motivo_falha], ["cancelado", "timeout do modelo"]);
 });
 
 test("CA-3 e CA-7: histórico intacto, entrada não mutada e encerramento sem integração relido", () => {
-  const ag = montar("encerramento", { decisoes: [decisao], encerramento: prog({ limpeza_pendente: [] }) });
+  const ag = montar("encerrar_demanda", { decisoes: [decisao], encerramento: prog({ limpeza_pendente: [] }) });
   const antes = structuredClone(ag);
   const r = cancelarDemanda(ag, AUDITOR, c);
   assert.deepEqual(ag, antes);
@@ -119,36 +119,37 @@ test("CA-3 e CA-7: histórico intacto, entrada não mutada e encerramento sem in
 
 test("CA-4 e CA-10: só o Auditor cancela e arquiva", () => {
   for (const ator of [{ tipo: "agente" as const, trabalho_id: "E-1" }, FABRIQUINHA, EXTERNO]) {
-    assert.throws(() => cancelarDemanda(montar("execucao"), ator, c), ErroDeEscopo);
+    assert.throws(() => cancelarDemanda(montar("em_execucao"), ator, c), ErroDeEscopo);
     assert.throws(() => arquivarDemanda(montar("concluida"), ator, c), ErroDeEscopo);
   }
 });
 
 test("CA-5: integração confirmada recusa o cancelamento", () => {
-  const ag = montar("encerramento", { encerramento: prog({ integracao: { sha: "s2" } }) });
+  const ag = montar("encerrar_demanda", { encerramento: prog({ integracao: { sha: "s2" } }) });
   assert.throws(() => cancelarDemanda(ag, AUDITOR, c), ErroDeRegra);
 });
 
 test("CA-6: concluida, arquivada ou cancelada recusa o cancelamento", () => {
-  for (const fase of ["concluida", "arquivada", "cancelada"]) {
-    assert.throws(() => cancelarDemanda(montar(fase), AUDITOR, c), /já terminou/);
+  for (const estado of ["concluida", "arquivada", "cancelada"]) {
+    assert.throws(() => cancelarDemanda(montar(estado), AUDITOR, c), /já terminou/);
   }
 });
 
-test("CA-8: arquivar muda só fase e fase_alterada_em", () => {
+test("CA-8: arquivar muda só estado e estado_alterado_em", () => {
   const ag = montar("concluida", { decisoes: [decisao] });
   const r = arquivarDemanda(ag, AUDITOR, c);
-  assert.deepEqual(r, { ...ag, demanda: { ...ag.demanda, fase: "arquivada", fase_alterada_em: t1 } });
+  assert.deepEqual(r, { ...ag, demanda: { ...ag.demanda, estado: "arquivada", estado_alterado_em: t1 } });
 });
 
 test("CA-9: só concluida pode ser arquivada", () => {
-  for (const fase of [...FASES_ANDAMENTO, "arquivada", "cancelada"]) {
-    assert.throws(() => arquivarDemanda(montar(fase), AUDITOR, c), /só demanda concluída pode ser arquivada/);
+  for (const estado of [...ESTADOS_EM_ANDAMENTO, "arquivada", "cancelada"]) {
+    assert.throws(() => arquivarDemanda(montar(estado), AUDITOR, c), /só no estado concluida/);
   }
 });
 
 test("CA-11 e CA-12: só concluida e arquivada satisfazem a dependência", () => {
   assert.equal(satisfazDependencia("concluida"), true);
   assert.equal(satisfazDependencia("arquivada"), true);
-  for (const fase of [...FASES_ANDAMENTO, "cancelada"] as FaseDemanda[]) assert.equal(satisfazDependencia(fase), false);
+  for (const estado of [...ESTADOS_EM_ANDAMENTO, "cancelada"] as EstadoDemanda[])
+    assert.equal(satisfazDependencia(estado), false);
 });
