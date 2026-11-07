@@ -62,6 +62,7 @@ export function consulta(f: Filtros): string | undefined {
 export const contagem = (n: number): string => plural(n, "sessão", "sessões");
 
 /** O dia da sessão, no fuso do navegador: `Hoje`, `Ontem` ou `09/10` (com o ano, se não é o de agora). */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function dia(instante: string, agora: Date): string {
   const d = new Date(instante);
   const meiaNoite = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();

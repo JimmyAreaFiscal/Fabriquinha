@@ -13,9 +13,11 @@ type Arquivo = NoDoHeatmap & { commits: string[] };
 export const caminhoDoHeatmap = (nome: string): string => `${caminhoDoProjeto(nome)}/heatmap`;
 
 /** De 0 (sem alterações) a 1 (o total do projeto), em escala logarítmica: poucos arquivos quentes não apagam os demais. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const calor = (n: number, total: number): number => (total === 0 ? 0 : Math.log1p(n) / Math.log1p(total));
 
 /** Do azul (frio) ao vermelho (quente), passando por verde e amarelo. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const cor = (c: number): string => `hsl(${String(220 * (1 - c))} 70% 50%)`;
 
 const dia = (instante: string): string => `${diaMes(new Date(instante))}/${String(new Date(instante).getFullYear())}`;
@@ -30,6 +32,7 @@ function achar(raiz: NoDoHeatmap, caminho: string): NoDoHeatmap {
 }
 
 /** Uma linha por filho, cada um um `<details>`: o conteúdo entra na primeira abertura (`conteudo`). */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function linhas(filhos: readonly NoDoHeatmap[], total: number, pai = ""): string {
   return filhos
     .map((no) => {

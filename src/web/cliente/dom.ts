@@ -54,7 +54,7 @@ export function mostrarErro(erro: unknown): void {
   avisar(erro instanceof Error ? erro.message : String(erro));
 }
 
-export interface ConteudoDaCaixa {
+interface ConteudoDaCaixa {
   titulo: string;
   /** Linha discreta ao lado do título (tipo, etapa, ticket). */
   meta?: string;

@@ -1,0 +1,2 @@
+MERGED: ErroDeRegra: PR criado fora da Fabriquinha e já mergeado: https://github.com/org/loja/pull/1 (a Fabriquinha não publica sobre ele; o Auditor resolve na plataforma, revertendo o merge se o código não devia ter entrado, e decide o destino da issue)
+OPEN: ErroDeRegra: PR criado fora da Fabriquinha: https://github.com/org/loja/pull/1 (feche-o e reabra o ticket)

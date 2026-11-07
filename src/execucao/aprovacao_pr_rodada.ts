@@ -1,7 +1,7 @@
 // Aprovação do PR da rodada pelo Auditor (comparacao-sdlc-implementacao.md §§4 e 6): validar, integrar na hospedagem,
 // avançar a demanda local, confirmar e registrar. A hospedagem é a fonte da verdade, então repetir a decisão é seguro.
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, exigirAuditor } from "../dominio/agregado.ts";
+import { type Ator, exigirAuditor } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { formatarRodadaRef } from "../dominio/demanda.ts";
 import { ErroDeRegra, existe } from "../dominio/erros.ts";

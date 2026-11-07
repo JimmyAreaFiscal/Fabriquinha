@@ -12,7 +12,7 @@ export interface EstadoDaConfiguracao extends Configuracao {
 }
 
 /** O modelo e o effort de cada etapa do ticket; a etapa ausente usa o padrão do pi. */
-export interface ModelosEEfforts {
+interface ModelosEEfforts {
   modelos: Partial<Record<EtapaTicket, Modelo>>;
   efforts: Partial<Record<EtapaTicket, Effort>>;
 }
@@ -31,8 +31,7 @@ export type Rascunho = Pick<Projeto, "nome" | "repo" | "branchBase" | "preparaca
   ModelosEEfforts & { hospedagem?: Hospedagem };
 
 /** O item do menu escolhido, pelo endereço: `/config`, `/config?avaliacoes`, `/config?projeto=<nome>` ou `/config?novo`. */
-export type Selecao =
-  { tipo: "agendador" } | { tipo: "avaliacoes" } | { tipo: "projeto"; nome: string } | { tipo: "novo" };
+type Selecao = { tipo: "agendador" } | { tipo: "avaliacoes" } | { tipo: "projeto"; nome: string } | { tipo: "novo" };
 
 export function selecao(busca: string): Selecao {
   const q = new URLSearchParams(busca);
@@ -85,7 +84,7 @@ export function marca(erros: Erros, caminho: string, prefixo?: string): { classe
 const HOSPEDAGEM: Record<Hospedagem, string> = { github: "GitHub", "azure-devops": "Azure DevOps" };
 
 // O cliente não importa valores de src/dominio (os .ts vão ao navegador só sem os tipos): os níveis saem das chaves.
-export const EFFORTS = Object.keys({
+const EFFORTS = Object.keys({
   off: 0,
   minimal: 0,
   low: 0,
@@ -96,7 +95,7 @@ export const EFFORTS = Object.keys({
 } satisfies Record<Effort, 0>);
 
 /** As etapas do ticket, na ordem do fluxo da demanda, com o rótulo do formulário. */
-export const ROTULOS_DA_ETAPA: Record<EtapaTicket, string> = {
+const ROTULOS_DA_ETAPA: Record<EtapaTicket, string> = {
   demanda: "Demanda",
   planejar: "Planejar",
   implementar: "Implementar",
@@ -144,7 +143,7 @@ export function agendador(estado: EstadoDaConfiguracao, erros: Erros): string {
   return `<h2>Agendador</h2><form class="agendador superficie" data-agendador novalidate><label class="chave"><input type="checkbox" name="agendadorAtivo"${estado.agendadorAtivo ? " checked" : ""}><span class="trilho-chave"></span><span><strong>Agendador</strong><small>procura tickets abertos das demandas e os executa</small></span></label>${numeros.join("")}<div class="status-ag"><span>${busca}</span></div><button type="submit" class="btn btn-primario">Salvar</button></form>`;
 }
 
-export interface OpcoesDoProjeto {
+interface OpcoesDoProjeto {
   novo: boolean;
   /** Os modelos que o pi lista (`GET /api/modelos`), para o seletor de cada etapa. */
   modelosDoPi: readonly Modelo[];

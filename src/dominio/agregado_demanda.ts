@@ -1,6 +1,6 @@
-// Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4): convive com o agregado legado de issue.
+// Agregado puro da demanda SDLC (comparacao-sdlc-implementacao.md §7.2 e §7.4).
 import { z } from "zod";
-import { Evidencia, TipoAtor, TipoEvidencia, TipoIssue } from "./agregado.ts";
+import { TipoAtor } from "./ator.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import {
@@ -48,10 +48,10 @@ export const RodadaDemanda = z.object({
   e2e: z.boolean(),
   branch: z.string(),
 });
-export const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
-export const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
-export const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
-export const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
+const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
+const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
+const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
+const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
 
 export const DecisaoDemanda = z.object({
   demanda_id: DemandaId,
@@ -65,11 +65,28 @@ export const DecisaoDemanda = z.object({
 });
 
 /**
- * Os tipos legados, `custos_realizados` e `plano` (§4.1) e os quatro tipos de etapa novos. A lista é literal:
- * importar `evidencia_etapa.ts` criaria ciclo; o teste garante que é a união com `TipoEvidenciaEtapa`.
+ * Os tipos do catálogo do agente, `custos_realizados` e `plano` (§4.1) e os quatro tipos de etapa novos. A lista é
+ * literal: importar `evidencia_etapa.ts` ou `evidencias/schemas.ts` violaria o domínio; o teste garante que é a união
+ * de `TipoEvidencia` com `TipoEvidenciaEtapa`.
  */
 export const TipoEvidenciaAgregado = z.enum([
-  ...TipoEvidencia.options,
+  "comportamento",
+  "criterios_aceite",
+  "desenho_solucao",
+  "prototipo",
+  "relatorio_complexidade",
+  "relatorio_impactos_arquitetura",
+  "execucao_testes",
+  "matriz_fitness",
+  "relatorio_sonar",
+  "arquivos_alterados",
+  "explicacao_fitness",
+  "comprovacao_criterios",
+  "mensagem_pr",
+  "aula_codigo",
+  "video_demonstracao",
+  "relatorio_produtividade",
+  "pr_aberto",
   "custos_realizados",
   "plano",
   "testes_estresse",
@@ -88,7 +105,7 @@ export const EvidenciaDemanda = z
     rodada_id: IdDono,
     ticket_id: IdDono,
     tipo: TipoEvidenciaAgregado,
-    dados: Evidencia.shape.dados,
+    dados: z.record(z.string(), z.json()),
     em: Instante,
   })
   .refine((e) => e.rodada_id === undefined || e.ticket_id === undefined, {
@@ -98,12 +115,14 @@ export const EvidenciaDemanda = z
 /** Identidade da ferramenta ou sessão: a mesma regra no registro e em toda operação autorizada por autoria. */
 export const IdentidadeOrigem = z.string().trim().min(1).max(200);
 
+export const TipoDemanda = z.enum(["funcionalidade", "problema"]);
+
 export const Demanda = z
   .object({
     id: DemandaId,
     projeto: Slug,
     titulo: Titulo,
-    tipo: TipoIssue,
+    tipo: TipoDemanda,
     descricao: Markdown,
     fase: FaseDemanda,
     fase_alterada_em: Instante,
@@ -117,8 +136,7 @@ export const Demanda = z
     path: ["branch"],
   });
 
-export const DonoEvidencia = z.enum(["demanda", "rodada", "ticket"]);
-export type DonoEvidencia = z.infer<typeof DonoEvidencia>;
+type DonoEvidencia = "demanda" | "rodada" | "ticket";
 
 /** Quem é dono da evidência: a rodada, o ticket ou, com ambos nulos, a própria demanda (CA-11). */
 export const donoDe = (e: Pick<EvidenciaDemanda, "rodada_id" | "ticket_id">): DonoEvidencia =>
@@ -232,4 +250,5 @@ export type TicketDemanda = z.infer<typeof TicketDemanda>;
 export type DecisaoDemanda = z.infer<typeof DecisaoDemanda>;
 export type EvidenciaDemanda = z.infer<typeof EvidenciaDemanda>;
 export type Demanda = z.infer<typeof Demanda>;
+export type TipoDemanda = z.infer<typeof TipoDemanda>;
 export type AgregadoDemanda = z.infer<typeof AgregadoDemanda>;

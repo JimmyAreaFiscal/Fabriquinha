@@ -20,7 +20,7 @@ export interface Custo {
   incompleto: boolean;
 }
 
-export type CustoExterno = Custo & { sessoes: number };
+type CustoExterno = Custo & { sessoes: number };
 
 export interface UsoDoModelo {
   provedor: string;
@@ -33,7 +33,7 @@ export interface UsoDoModelo {
   custo: number | null;
 }
 
-export interface Contagens {
+interface Contagens {
   execucoes: number;
   falhas: number;
   devolucoes: number;
@@ -43,18 +43,18 @@ export interface Contagens {
 }
 
 /** Nota dos PRs de rodada com `soma` e `quantidade`, para o projeto somar sem tirar média de médias. */
-export interface Nota {
+interface Nota {
   soma: number;
   quantidade: number;
   media: number | null;
 }
 
-export interface Escopo extends Contagens {
+interface Escopo extends Contagens {
   nota: Nota;
   etapas: Partial<Record<string, Contagens>>;
 }
 
-export interface MetricasDaDemanda {
+interface MetricasDaDemanda {
   total: Escopo;
   rodadas: (Escopo & { rodadaId: number; conformidade: Conformidade | null; custoExterno: CustoExterno })[];
   semRodada: Escopo;

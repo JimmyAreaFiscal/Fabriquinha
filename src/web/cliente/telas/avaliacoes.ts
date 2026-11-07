@@ -17,6 +17,7 @@ const ESTADOS: Record<EstadoDaAvaliacao, [rotulo: string, pilula: string]> = {
 };
 
 /** `2026-10-05` como `05/10/2026`. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export const dataBr = (dia: string): string => dia.split("-").toReversed().join("/");
 
 /** O formulário de disparo, com as caixinhas de demandas ainda vazias e a lista no fim. */
@@ -73,7 +74,7 @@ const etiquetaDoEstado = (estado: EstadoDaAvaliacao): string =>
 /** Barra de estado: **Avaliação** e o projeto, o período, o estado, o modelo e o link da lista. */
 export function barraDaAvaliacao(d: DadosDaAvaliacao, modelo: string): string {
   return (
-    `<div class="estado-sessao"><span class="issue"><span class="id">Avaliação</span> ${escapar(d.projeto)}</span>` +
+    `<div class="estado-sessao"><span class="demanda"><span class="id">Avaliação</span> ${escapar(d.projeto)}</span>` +
     `<span class="sep">│</span><span class="muted">${dataBr(d.de)} a ${dataBr(d.ate)}</span>` +
     `${etiquetaDoEstado(d.estado)}${rotuloDoModelo(modelo)}` +
     `<div class="direita"><a class="link" href="/evaluations">todas as avaliações</a></div></div>`
@@ -91,7 +92,7 @@ export function escopoDaAvaliacao(d: DadosDaAvaliacao): string {
 }
 
 /** Um achado: título, descrição, evidência e, no rodapé, o link da demanda criada ou o botão Encaminhar. */
-export function cartaoDoAchado(a: Achado): string {
+function cartaoDoAchado(a: Achado): string {
   const rodape = a.demanda_id
     ? `<a class="link" href="${caminhoDaDemanda(a.demanda_id)}">Demanda <span class="id">${escapar(a.demanda_id)}</span></a>`
     : `<button type="button" class="btn" data-encaminhar="${String(a.achado_id)}">Encaminhar como demanda</button>`;

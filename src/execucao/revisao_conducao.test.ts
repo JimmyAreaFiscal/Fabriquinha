@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../dominio/agregado.ts";
+import { AUDITOR } from "../dominio/ator.ts";
 import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
 import { reabrirTicket } from "../dominio/transicoes_demanda.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../repositorio/worktree-demanda.ts";

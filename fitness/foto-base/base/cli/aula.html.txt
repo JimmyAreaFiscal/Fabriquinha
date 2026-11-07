@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aula do código da I-206</title>
+<style>
+:root { --texto: #1f2328; --fraco: #59636e; --fundo: #fff; --caixa: #f6f8fa; --borda: #d0d7de; --mudou: #e6ffec; --marca: #1a7f37; }
+@media (prefers-color-scheme: dark) { :root { --texto: #e6edf3; --fraco: #9198a1; --fundo: #0d1117; --caixa: #151b23; --borda: #3d444d; --mudou: #12261e; --marca: #3fb950; } }
+body { font: 15px/1.55 system-ui, sans-serif; margin: 2rem auto; max-width: 64rem; padding: 0 1rem; color: var(--texto); background: var(--fundo); }
+h1 { font-size: 1.5rem; margin-bottom: .25rem; }
+.nota { color: var(--fraco); font-size: .9rem; margin-top: 0; }
+ol.sumario { padding-left: 1.25rem; } ol.sumario a { color: inherit; }
+section { margin-top: 2.5rem; }
+h2 { font-size: 1.05rem; display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.num { display: inline-grid; place-items: center; min-width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--texto); color: var(--fundo); font-size: .85rem; }
+.linhas { color: var(--fraco); font-weight: normal; font-size: .9rem; }
+code, .codigo { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.codigo { overflow-x: auto; border: 1px solid var(--borda); border-radius: 6px; background: var(--caixa); font-size: 13px; line-height: 1.45; }
+.codigo table { border-collapse: collapse; min-width: 100%; }
+.codigo td { padding: 0 .6rem; white-space: pre; vertical-align: top; }
+.codigo .n { color: var(--fraco); text-align: right; user-select: none; width: 1%; }
+.codigo .m { color: var(--marca); user-select: none; width: 1%; padding: 0 .2rem; }
+.codigo tr.mudou { background: var(--mudou); }
+dl { display: grid; grid-template-columns: 11.5rem 1fr; gap: .4rem 1rem; margin: 1rem 0 0; }
+dt { font-weight: 600; } dd { margin: 0; white-space: pre-wrap; }
+@media (max-width: 40rem) { dl { grid-template-columns: 1fr; } dd { margin-bottom: .5rem; } }
+</style>
+</head>
+<body>
+<h1>Aula do código da I-206: Busca &lt;rápida&gt;</h1>
+<p class="nota">Os trechos estão na ordem de leitura. O código vem do git; as linhas marcadas com + foram alteradas pela issue.</p>
+<ol class="sumario"><li><a href="#t1"><code>a.ts</code></a> — f</li></ol>
+<section id="t1">
+<h2><span class="num">1</span><code>a.ts</code><span class="linhas">linhas 2–3</span></h2>
+<div class="codigo"><table><tr class="mudou"><td class="n">2</td><td class="m">+</td><td class="c">Y</td></tr><tr class="mudou"><td class="n">3</td><td class="m">+</td><td class="c">Z</td></tr></table></div>
+<dl><dt>O que faz</dt><dd>f</dd><dt>Por que assim</dt><dd>p</dd><dt>Decisão do desenho</dt><dd>d</dd></dl>
+</section>
+</body>
+</html>

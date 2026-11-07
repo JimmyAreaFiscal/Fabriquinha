@@ -19,6 +19,7 @@ interface MensagemPR {
 }
 
 /** `<feat|fix>: <titulo> [I-206.R2]`. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const tituloDoPRRodada = (ag: AgregadoDemanda, rodada: Id, titulo: string): string =>
   `${ag.demanda.tipo === "funcionalidade" ? "feat" : "fix"}: ${titulo} [${formatarRodadaRef({ demanda_id: ag.demanda.id, rodada_id: rodada })}]`;
 
@@ -30,7 +31,7 @@ const custo = (c: { custo: number; custoIncompleto: boolean }): string =>
   c.custoIncompleto ? `${dolares(c.custo)} (incompleto)` : dolares(c.custo);
 
 /** Resume `texto` em até `limite` caracteres; `undefined` quando não conseguiu. */
-export type ResumirContexto = (texto: string, limite: number) => Promise<string | undefined>;
+type ResumirContexto = (texto: string, limite: number) => Promise<string | undefined>;
 
 const TITULO_DO_RESUMO = "Contexto (resumido)";
 

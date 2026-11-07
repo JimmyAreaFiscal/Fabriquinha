@@ -26,8 +26,6 @@ after(() => {
 const novaRaiz = () => mkdtempSync(join(base, "raiz-"));
 
 const AGORA = "2026-10-11T12:00:00.000Z";
-/** A versão do banco antes da migração que remove o fluxo legado. */
-const VERSAO_ANTES_DA_REMOCAO = 32;
 
 /** Cadastra o projeto `nome` no repositório `repo`. */
 function projeto(banco: DatabaseSync, nome: string, repo: string): void {
@@ -198,48 +196,49 @@ test("reinício: as execuções simuladas pendentes falham e o pi delas é morto
   await s.parar();
 });
 
-/** O banco da `raiz` com o esquema anterior à remoção do fluxo legado e a I-1 registrada como issue (versão 32). */
-function bancoComIssueLegada(raiz: string): DatabaseSync {
+/** O banco da `raiz` na versão 36 (a linha de base), com a I-1 registrada. */
+function bancoComDemanda(raiz: string): DatabaseSync {
   const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
-  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES_DA_REMOCAO));
-  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, testes, sonar_project_key, fitness)
-      VALUES ('p', '/nao/existe', 'main', 'github', '["true"]', 'p', '[{"nome":"f"}]');
-    INSERT INTO issue (id, projeto, titulo, tipo, fase, criada_em) VALUES (1, 'p', 't', 'problema', 'registro', '${AGORA}');
+  migrar(banco, MIGRACOES);
+  banco.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
+      VALUES ('p', '/nao/existe', 'main', 'github', 'p');
     INSERT INTO sequencia (nome, valor) VALUES ('issue', 1);`);
   return banco;
 }
 
-test("subida que falha ao abrir o banco ou ao migrar libera a porta; a issue sem demanda trava a subida (CA-9)", async () => {
+test("subida que falha ao abrir o banco ou ao migrar libera a porta; o banco anterior à v36 é recusado sem alteração", async () => {
   const arquivo = join(base, "raiz-que-e-arquivo");
   writeFileSync(arquivo, "");
   await assert.rejects(subir(arquivo), /EEXIST|ENOTDIR/);
   await portaLivre();
 
   const raiz = novaRaiz();
-  bancoComIssueLegada(raiz).close();
+  const antigo = new DatabaseSync(join(raiz, "fabriquinha.db"));
+  antigo.exec("PRAGMA user_version = 35");
+  antigo.close();
   await assert.rejects(
     subir(raiz),
-    (erro: unknown) => erro instanceof ErroDeRegra && erro.message.startsWith("I-1 sem demanda"),
+    (erro: unknown) => erro instanceof ErroDeRegra && erro.message.startsWith("o banco está na versão 35"),
   );
   await portaLivre();
   const banco = new DatabaseSync(join(raiz, "fabriquinha.db"));
-  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_ANTES_DA_REMOCAO);
-  assert.equal(banco.prepare("SELECT count(*) AS n FROM issue").get()?.n, 1, "nada foi apagado");
+  assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, 35);
   banco.close();
 });
 
 test("subida sobre o banco migrado: sem backfill nem linha cutover no log, e a demanda nova recebe o próximo I-<n> (CA-10)", async (t) => {
   const erros = t.mock.method(console, "error", () => undefined);
   const raiz = novaRaiz();
-  const legado = bancoComIssueLegada(raiz);
-  // A I-1 como o cutover (I-245) a deixou: a demanda e o histórico dela.
+  const legado = bancoComDemanda(raiz);
   legado.exec(`INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('I-1', '${AGORA}');`);
   legado.close();
   for (const vez of [1, 2]) {
     const s = await subir(raiz);
     const tabelas = s.banco
-      .prepare("SELECT name FROM sqlite_master WHERE name IN ('issue', 'demanda_historico', 'sequencia') ORDER BY name")
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE name LIKE 'iss%' OR name IN ('demanda_historico', 'sequencia') ORDER BY name",
+      )
       .all()
       .map((l) => l.name);
     assert.deepEqual(tabelas, ["demanda_historico", "sequencia"], `subida ${String(vez)}`);

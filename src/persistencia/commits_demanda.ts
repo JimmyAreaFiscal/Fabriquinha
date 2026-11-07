@@ -133,28 +133,3 @@ export function gravarRetrabalhoExterno(
     inserirRetrabalho(banco, sha, null, autor, linhas);
   });
 }
-
-export interface RetrabalhoDoTicket {
-  commitAlterador: string;
-  ticketAlterador?: number;
-  demandaAlteradora?: string;
-  autor?: string;
-  linhas: number;
-}
-
-/** Os commits que reescreveram linhas do ticket de origem. */
-export const retrabalhoDoTicket = (banco: DatabaseSync, demandaId: string, origem: number): RetrabalhoDoTicket[] =>
-  banco
-    .prepare(
-      `SELECT commit_alterador, ticket_id, alterador_demanda_id, autor, linhas FROM retrabalho_demanda
-       WHERE demanda_id = ? AND ticket_origem_id = ? ORDER BY rowid`,
-    )
-    .all(demandaId, origem)
-    .map((l) => ({
-      commitAlterador: l.commit_alterador as string,
-      ...(l.ticket_id === null ? { autor: l.autor as string } : { ticketAlterador: l.ticket_id as number }),
-      ...(l.alterador_demanda_id === null || l.alterador_demanda_id === demandaId
-        ? {}
-        : { demandaAlteradora: l.alterador_demanda_id as string }),
-      linhas: l.linhas as number,
-    }));

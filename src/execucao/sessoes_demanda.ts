@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { ModoExecucao } from "../dominio/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { FASES_TERMINADAS } from "../dominio/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../dominio/demanda.ts";
@@ -24,7 +24,7 @@ import type { EventoPi } from "./pi.ts";
 export type Estado = "rodando" | "aguardando_humano" | "terminada";
 
 /** Como a mensagem do Auditor chega ao pi: nova, redirecionando ou enfileirada. */
-export type ModoEnvio = "prompt" | "steer" | "follow_up";
+type ModoEnvio = "prompt" | "steer" | "follow_up";
 
 /** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
 export function lerConversa(raiz: string, sessao: string): unknown[] {
@@ -138,7 +138,7 @@ export function emMarkdown(m: Mensagem, daFabriquinha: Set<string>): string[] {
 export type MotivoDemanda = "conversa" | "dialogo" | "falha" | "gate_demanda";
 
 /** A sessão do ticket da demanda com o estado calculado; `execucao` é o id (uuid) da última execução. */
-export interface InfoSessaoDemanda {
+interface InfoSessaoDemanda {
   sessao: string;
   projeto: string;
   modo: ModoExecucao;
@@ -165,7 +165,7 @@ export interface CabecalhoDemanda {
 }
 
 /** Uma entrada do JSONL; o prompt montado pela Fabriquinha vem com `fabriquinha`. */
-export type EntradaDemanda = Record<string, unknown> & { fabriquinha?: true };
+type EntradaDemanda = Record<string, unknown> & { fabriquinha?: true };
 
 export interface ChatDemanda {
   cabecalho: CabecalhoDemanda;
@@ -174,6 +174,7 @@ export interface ChatDemanda {
   assinar(ouvinte: (evento: EventoPi) => void): () => void;
 }
 
+/** @testes tipo que o teste usa para montar a entrada */
 export interface Carregada {
   ag: AgregadoDemanda;
   ticket: TicketDemanda;
@@ -183,7 +184,7 @@ export interface Carregada {
 
 type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
 
-/** O ticket dono da sessão; `undefined` se o id não é de uma sessão da demanda (então vale o caminho das issues). */
+/** O ticket dono da sessão; `undefined` se o id não é de uma sessão da demanda. */
 const donoDaSessao = (banco: DatabaseSync, id: string): TicketRef | undefined =>
   banco.prepare("SELECT demanda_id, ticket_id FROM sessao WHERE id = ?").get(id) as TicketRef | undefined;
 
@@ -219,6 +220,7 @@ type Calculado = [Estado, MotivoDemanda | undefined, Instante];
  * encerrada (concluída, cancelada, arquivada) termina, o ticket decide (falha, terminada) e a autônoma ainda roda; a
  * interativa espera a conversa, ou o gate de aprovação do plano.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function calcular(c: Carregada, viva: Situacao | undefined): Calculado {
   const { ag, ticket, sessao } = c;
   const [dialogo] = viva?.dialogos ?? [];

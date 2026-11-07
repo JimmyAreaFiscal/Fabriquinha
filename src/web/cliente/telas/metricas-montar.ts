@@ -60,7 +60,7 @@ export function montarMetricas(main: HTMLElement, _params: Parametros, signal: A
     const [lista, meses, demandas] = await Promise.all([
       projetos,
       api<MetricasMesDemanda[]>(`/api/metricas?${q.toString()}`, { signal }),
-      api<MetricasDemandaPeriodo[]>(`/api/metricas/issues?${q.toString()}`, { signal }),
+      api<MetricasDemandaPeriodo[]>(`/api/metricas/demandas?${q.toString()}`, { signal }),
     ]);
     if (meu !== pedido) return;
     dados = { projetos: lista.map((p) => p.nome), meses, demandas, atual };

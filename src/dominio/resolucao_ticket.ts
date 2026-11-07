@@ -41,12 +41,3 @@ export function resolverModeloEffort(
         : { origem: "padrao" as const };
   return { modelo, effort };
 }
-
-/** 0 passou; `codigo_falha` é teste reprovado (reprovação técnica, D05); qualquer outro código é falha de infraestrutura e bloqueia. */
-export function classificarSaidaE2E(
-  codigo_falha: number,
-  saida: number,
-): "passou" | "reprovado" | "falha_infraestrutura" {
-  if (saida === 0) return "passou";
-  return saida === codigo_falha ? "reprovado" : "falha_infraestrutura";
-}

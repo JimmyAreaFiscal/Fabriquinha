@@ -17,7 +17,7 @@ export interface OpcoesDaAuditoria {
   modelo?: Modelo | null;
 }
 
-export type EstadoDaAuditoria = "rodando" | "conversa";
+type EstadoDaAuditoria = "rodando" | "conversa";
 
 /** O agente da auditoria vivo ou subindo/parando por sessão: no máximo um pi por sessão. */
 const tarefas = new Map<string, Promise<string | undefined>>();

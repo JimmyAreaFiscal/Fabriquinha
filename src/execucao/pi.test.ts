@@ -97,7 +97,7 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     "--exclude-tools",
     "ask_user_question",
   ]);
-  // F4 §6.5: a consulta abre copiando a sessão principal e retoma sem copiar; em ambas, sem as ferramentas de escrita.
+  // F4 §6.5: a consulta roda sem as ferramentas de escrita.
   const consulta = {
     ...comum,
     skills: [],
@@ -105,12 +105,6 @@ test("linha de comando do F4 §6.1: sessão, modelo, skills da etapa, guarda e c
     confianca: undefined,
     modo: "consulta" as const,
   };
-  assert.deepEqual(argumentosPi({ ...consulta, fork: "/r/sessoes/x_p.jsonl" }).slice(-4), [
-    "--fork",
-    "/r/sessoes/x_p.jsonl",
-    "--exclude-tools",
-    "ask_user_question,edit,write,bash,powershell",
-  ]);
   assert.deepEqual(argumentosPi(consulta).slice(-3), [
     `${PACOTE}/extensions/pergunta.ts`,
     "--exclude-tools",

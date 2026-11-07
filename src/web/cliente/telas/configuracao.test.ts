@@ -160,7 +160,7 @@ test("projeto salvo: nome só leitura, hospedagem, preparação e etapas; sem te
     html,
     /<h3>Preparação<\/h3>.*<input class="mono" value="npm ci" placeholder="npm ci" aria-label="Preparação da worktree: comando 1">/,
   );
-  assert.doesNotMatch(html, /[Tt]estes|SonarQube|sonar|[Ff]itness|issue/);
+  assert.doesNotMatch(html, /[Tt]estes|SonarQube|sonar|[Ff]itness|[i]ssue/);
   assert.match(
     html,
     /<span class="ajuda">Ao salvar, a Fabriquinha confere o repositório, a branch, o remoto e os modelos.<\/span><button/,

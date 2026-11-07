@@ -1,5 +1,5 @@
-// Repositório do agregado da demanda SDLC (comparacao-sdlc §7.2 e §7.4): carrega e grava só a diferença, no padrão de
-// issues.ts. Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira.
+// Repositório do agregado da demanda SDLC (comparacao-sdlc §7.2 e §7.4): carrega e grava só a diferença.
+// Não revalida ao gravar: o domínio valida a transição e o banco é a segunda barreira.
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
@@ -243,6 +243,7 @@ export function listarDemandas(
 }
 
 /** Grava a demanda nova com tudo o que o agregado traz, numa transação só. */
+/** @testes atalho dos testes de persistência para gravar um agregado pronto */
 export const criarDemanda = (banco: DatabaseSync, agregado: AgregadoDemanda): AgregadoDemanda =>
   escrever(banco, () => {
     gravarDiferenca(banco, undefined, agregado);

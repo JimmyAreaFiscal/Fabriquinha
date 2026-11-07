@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { ModoExecucao } from "../dominio/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../dominio/agregado_demanda.ts";
 import type { Projeto } from "../dominio/configuracao_projeto.ts";
 import { formatarTicketRef } from "../dominio/demanda.ts";

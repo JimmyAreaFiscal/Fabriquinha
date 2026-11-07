@@ -1,7 +1,7 @@
 // Gerente de sessões (F4 §2, §6): o único que lança o pi. Roda o pi com o mesmo código de processo e protocolo nos
 // modos autônomo e interativo, guarda as execuções vivas com os diálogos de extensão pendentes (F4 §5.4) e repassa os
 // eventos a quem assina a sessão.
-import type { ModoExecucao } from "../dominio/agregado.ts";
+import type { ModoExecucao } from "../dominio/sessoes.ts";
 import { ErroDeRegra, existe, mensagem } from "../dominio/erros.ts";
 import type { Id } from "../dominio/primitivos.ts";
 import { anotar } from "../persistencia/execucoes.ts";
@@ -20,7 +20,7 @@ const ABORTADA = "abortada pelo Auditor";
  * do pedido ao fim, com o stream no meio, então o silêncio de verdade foi menor; a travada da I-259.T16 ficou 53 min sem
  * evento. 15 min dá folga de 2,5 vezes sobre a mais longa sem segurar à toa a retomada automática.
  */
-export const SILENCIO_MAXIMO_DO_MODELO_MIN = 15;
+const SILENCIO_MAXIMO_DO_MODELO_MIN = 15;
 
 /** Um diálogo de extensão pendente: o pedido do pi, quando chegou e, se o pi o resolve sozinho, quando expira. */
 export type Dialogo = EventoPi & { em: string; expiraEm?: string };
@@ -121,6 +121,7 @@ const linha = (texto: string): string => (texto.length > 100 ? `${texto.slice(0,
  * O que o agente está fazendo, se o evento o diz (F7 §4.4, Início): a ferramenta que começou a rodar, com o comando
  * ou o caminho, ou a primeira linha do texto que ele acabou de escrever. Os demais eventos não mudam a atividade.
  */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function atividadeDo(evento: EventoPi): string | undefined {
   if (evento.type === "tool_execution_start") {
     const args = (evento.args ?? {}) as Record<string, unknown>;
@@ -189,6 +190,7 @@ export function encerrar(execucao: Id | string): void {
   viva(execucao, "nada a encerrar").encerrar();
 }
 
+/** @testes tipo que o teste usa para montar a entrada */
 export interface Processo {
   /** A execução de um ticket, ou a auditoria (`id` é a sessão), que roda como consulta e fica fora do agregado. */
   execucao: { id: Id | string; sessaoPi: string; modo: ModoExecucao };
@@ -319,10 +321,16 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       dialogo: string,
       args: Record<string, unknown>,
     ) => {
-      const opcoes = ((args.options ?? []) as { label: string }[]).map((o) => o.label.trim()).filter(Boolean);
+      const opcoesComRotulo = ((args.options ?? []) as { label: string; description?: string }[])
+        .map((o) => ({ rotulo: o.label.trim(), descricao: o.description?.trim() ?? "" }))
+        .filter((o) => o.rotulo);
+      const opcoes = opcoesComRotulo.map((o) => o.rotulo);
+      const descricoes = opcoesComRotulo.some((o) => o.descricao)
+        ? { descricoes: opcoesComRotulo.map((o) => o.descricao) }
+        : {};
       const pergunta = String(args.question);
       const detalhes = typeof args.details === "string" && args.details ? { detalhes: args.details } : {};
-      const decisao = await triagem({ pergunta, ...detalhes, opcoes });
+      const decisao = await triagem({ pergunta, ...detalhes, opcoes, ...descricoes });
       if (!decisao) {
         anotar(r.log, `Auditor automático escalou ao Auditor: ${pergunta}`);
         return;

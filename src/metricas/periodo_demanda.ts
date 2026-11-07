@@ -23,6 +23,7 @@ export interface Soma {
   custo: Custo;
 }
 
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export const NIVEIS = ["execucao", "sessao", "ticket", "rodada", "demanda", "projeto"] as const;
 export type Nivel = (typeof NIVEIS)[number];
 

@@ -64,6 +64,7 @@ const MOTIVOS: Record<MotivoDemanda, string> = {
 };
 
 /** O estado da sessão (F4 §5.2) como etiqueta: azul rodando, âmbar aguardando, vermelho na falha. */
+/** @testes função pura da tela, testada sem montar o DOM */
 export function etiquetaDoEstado({ estado, motivo }: Pick<Cabecalho["sessao"], "estado" | "motivo">): string {
   if (estado === "rodando") return '<span class="pill pill-rodando">rodando</span>';
   if (estado === "terminada") return '<span class="pill pill-neutro">terminada</span>';
@@ -94,7 +95,7 @@ export function barraDeEstado(c: Cabecalho, modelo: string): string {
   const { sessao, demanda, rodada, ticket, etapa: e } = c;
   return (
     `<div class="estado-sessao">` +
-    `<a class="issue" href="${caminhoDaPaginaDaDemanda(demanda)}"><span class="id">${escapar(demanda)}</span></a>` +
+    `<a class="demanda" href="${caminhoDaPaginaDaDemanda(demanda)}"><span class="id">${escapar(demanda)}</span></a>` +
     (rodada === undefined ? "" : `<span class="sep">│</span><span class="id">${escapar(rodada)}</span>`) +
     `<span class="sep">│</span><span class="id">${escapar(ticket)}</span>` +
     `<span class="muted">${ETAPA_DO_TICKET[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +

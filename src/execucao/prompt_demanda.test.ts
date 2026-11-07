@@ -75,6 +75,24 @@ test("revisar_rodada mostra o formato do --correcoes e pede espera num único co
   assert.match(rodada, /espere num único comando/);
 });
 
+test("as revisões só reprovam por defeito material; o resto vira observação e, na dúvida, aprova (CA-1, CA-2, CA-3)", () => {
+  for (const etapa of ["revisar_rodada", "revisar_demanda"]) {
+    const prompt = montar(etapa);
+    assert.match(
+      prompt,
+      /\*\*O que reprova:\*\* só defeito material, demonstrado por um caso concreto \(entrada, comando ou arquivo:linha e o resultado errado\): critério de aceite da (rodada|demanda) não cumprido; bug de comportamento; teste ou verificação existente removido sem cobertura equivalente; `npm run check`, integração ou e2e falhando; mudança fora do escopo do plano que altera comportamento\./,
+      etapa,
+    );
+    assert.match(
+      prompt,
+      /Todo o resto é observação: redação de texto, comentário ou nome que não fere gravemente o AGENTS\.md; corpo do PR, inventário, foto ou evidência a completar; sugestão de robustez ou caso-limite além do que o critério pede; item que pertence a outra rodada\. Para observação, aprove e registre-a na evidência de comprovação, para o Auditor ver no gate do PR\. Na dúvida entre material e observação, aprove e registre a observação\./,
+      etapa,
+    );
+    assert.match(prompt, /Cada correção (do plano )?cita o critério ou o defeito material que a justifica\./, etapa);
+    assert.ok(prompt.indexOf("**O que reprova:**") < prompt.indexOf("**Fica fora da revisão:**"), etapa);
+  }
+});
+
 test("implementar e resolver_conflito não fazem commit nem PR (CA-2)", () => {
   for (const etapa of ["implementar", "resolver_conflito"])
     assert.match(montar(etapa), /não faz commit nem PR por conta própria/);
@@ -105,6 +123,22 @@ test("a falha de outro ticket ou do ambiente não trava: o implementar corrige e
   }
   assert.match(montar("revisar_rodada"), /o PR \(nasce no encerramento da rodada, depois da revisão\)/);
   assert.match(montar("revisar_demanda"), /o PR \(o PR final ainda não existe nesta revisão\)/);
+});
+
+test("CA-1: planejar manda deixar fora da rodada o critério provado só no PR final, no deploy ou nos critérios gerais", () => {
+  assert.match(
+    montar("planejar"),
+    /Critério cujo ponto de prova é o PR final da demanda, o deploy ou critérios gerais do projeto \(ex\.: "PR pronto", CG-1 a CG-9\) não é citado em rodada: fica só para a revisão da demanda/,
+  );
+});
+
+test("CA-3, CA-4: critério que nenhuma rodada cita aparece na revisão da demanda e não na da rodada", () => {
+  const soCA1 = { ...ag, criterios_citados: [{ demanda_id: "I-206", rodada_id: 2, criterio_id: "CA-1" }] };
+  const prompt = (etapa: string) => montarPromptDemanda({ ...base, ag: soCA1, ticket: ticket(etapa) });
+  const demanda = prompt("revisar_demanda");
+  assert.match(demanda, /## Critérios de aceite da demanda\n[\s\S]*\*\*CA-2\*\*/);
+  const citados = prompt("revisar_rodada").split("Critérios citados:")[1] ?? "";
+  assert.ok(citados.includes("**CA-1**") && !citados.includes("**CA-2**"));
 });
 
 test("planejar é interativa e permite perguntar ao Auditor (CA-11)", () => {
@@ -146,7 +180,8 @@ test("ticket 3 da I-206 na rodada 2 só usa os endereços públicos (CA-10)", ()
     const md = readFileSync(new URL(`etapas/${etapa}.md`, import.meta.url), "utf8");
     for (const texto of [montar(etapa), md]) {
       assert.doesNotMatch(texto, /\bT-\d|(?<![.\w])R\d/);
-      assert.doesNotMatch(texto, /fabriquinha (ticket|issue|rodada)/);
+      // `[i]ssue` casa o comando legado sem que o `grep` de nomes legados (CA-2) ache a palavra aqui.
+      assert.doesNotMatch(texto, /fabriquinha (ticket|[i]ssue|necessidade|rodada)/);
     }
     assert.ok(montar(etapa).includes("I-206.T3"));
   }

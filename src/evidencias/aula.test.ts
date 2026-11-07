@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import type { Agregado, Evidencia, Ticket } from "../dominio/agregado.ts";
+import { AgregadoDemanda, type EvidenciaDemanda, type TicketDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { faixas, gerarAula, linhasMudadas, type Trecho } from "./aula.ts";
 
@@ -28,7 +28,7 @@ writeFileSync(join(repo, "busca.ts"), "const a = 1;\nconst b = <b>;\nconst c = 3
 writeFileSync(join(repo, "logo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1]));
 git("rm", "-q", "velho.ts");
 git("add", ".");
-git("commit", "-q", "-m", "issue");
+git("commit", "-q", "-m", "alteração");
 const head = git("rev-parse", "HEAD");
 // A branch da demanda avançou com a mesma mudança de busca.ts (o merge de outra rodada): o diff direto fica vazio.
 git("checkout", "-q", "-b", "demanda", base);
@@ -38,22 +38,19 @@ const baseAvancada = git("rev-parse", "HEAD");
 git("checkout", "-q", "-");
 
 const AGORA = "2026-10-15T12:00:00.000Z";
-const revisao: Ticket = {
-  id: 5,
-  issue: 1,
-  etapa: "revisao",
-  titulo: "Revisar",
-  descricao: "",
+const revisao: TicketDemanda = {
+  demanda_id: "I-1",
+  ticket_id: 5,
+  etapa: "revisar_rodada",
   status: "concluido",
-  origem: "fabriquinha",
-  criadoEm: AGORA,
-  concluidoEm: AGORA,
+  status_alterado_em: AGORA,
+  devolucoes: 0,
 };
-const alterados: Evidencia = {
-  id: 1,
-  ticket: 5,
+const alterados: EvidenciaDemanda = {
+  demanda_id: "I-1",
+  rodada_id: undefined,
+  ticket_id: 5,
   tipo: "arquivos_alterados",
-  produtor: "fabriquinha",
   dados: {
     base,
     head,
@@ -64,26 +61,28 @@ const alterados: Evidencia = {
     ],
     previstosNaoTocados: [],
   },
-  arquivos: [],
   em: AGORA,
 };
-const ag = (troca: Partial<Agregado> = {}): Agregado => ({
-  issue: {
-    id: 1,
-    projeto: "loja",
-    titulo: "Busca <rápida>",
-    tipo: "problema",
-    descricao: "",
-    fase: "encerramento",
-    deps: [],
-    criadaEm: AGORA,
-  },
-  tickets: [revisao],
-  execucoes: [],
-  decisoes: [],
-  evidencias: [alterados],
-  ...troca,
-});
+const ag = (troca: Partial<AgregadoDemanda> = {}): AgregadoDemanda =>
+  AgregadoDemanda.parse({
+    demanda: {
+      id: "I-1",
+      projeto: "loja",
+      titulo: "Busca <rápida>",
+      tipo: "problema",
+      descricao: "d",
+      fase: "execucao",
+      fase_alterada_em: AGORA,
+      origem_ferramenta: "claude",
+      origem_sessao: "s1",
+      enviada: true,
+      branch: "fabriquinha/I-1",
+    },
+    tickets: [revisao],
+    decisoes: [],
+    evidencias: [alterados],
+    ...troca,
+  });
 
 const trecho = (troca: Partial<Trecho> = {}): Trecho => ({
   arquivo: "busca.ts",
@@ -124,20 +123,18 @@ test("a aula: o código do git na ordem dos trechos, a linha alterada marcada e 
   assert.match(html, /<dt>Alternativa descartada<\/dt><dd>ler do \.env<\/dd>/);
   assert.equal(html.match(/Alternativa descartada/g)?.length, 1, "só no trecho que a traz");
   assert.match(html, /@media \(prefers-color-scheme: dark\)/);
-  const semTitulo = await gerarAula(ag({ issue: { ...ag().issue, titulo: null } }), repo, [trecho()]);
-  assert.match(semTitulo, /<h1>Aula do código da I-1<\/h1>/);
 });
 
-test("a aula recusa o que não é código alterado pela issue, dizendo onde procurar", async () => {
+test("a aula recusa o que não é código alterado pela demanda, dizendo onde procurar", async () => {
   await assert.rejects(
     gerarAula(ag({ evidencias: [] }), repo, [trecho()]),
-    recusa("a issue não tem revisão concluída com arquivos_alterados (a aula vem depois da revisão)"),
+    recusa("a demanda não tem revisão concluída com arquivos_alterados (a aula vem depois da revisão)"),
   );
   for (const arquivo of ["nada.ts", "velho.ts"]) {
     await assert.rejects(
       gerarAula(ag(), repo, [trecho({ arquivo })]),
       recusa(
-        `${arquivo} não é um arquivo criado ou alterado pela issue (escolha um da lista: busca.ts, logo.png, velho.ts)`,
+        `${arquivo} não é um arquivo criado ou alterado pela demanda (escolha um da lista: busca.ts, logo.png, velho.ts)`,
       ),
     );
   }
@@ -151,7 +148,7 @@ test("a aula recusa o que não é código alterado pela issue, dizendo onde proc
   );
   await assert.rejects(
     gerarAula(ag(), repo, [trecho(), trecho({ inicio: 1, fim: 1 })]),
-    recusa("busca.ts:1-1 não toca nenhuma linha alterada pela issue (as linhas alteradas de busca.ts são 2, 4)"),
+    recusa("busca.ts:1-1 não toca nenhuma linha alterada pela demanda (as linhas alteradas de busca.ts são 2, 4)"),
   );
 });
 

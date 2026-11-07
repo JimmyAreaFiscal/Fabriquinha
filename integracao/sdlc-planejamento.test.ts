@@ -5,17 +5,13 @@ import assert from "node:assert/strict";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { Ator } from "../src/dominio/agregado.ts";
+import type { Ator } from "../src/dominio/ator.ts";
 import { interromperExecucaoDemanda } from "../src/execucao/execucao_demanda.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/execucao/despacho_demanda.ts";
-import {
-  aprovarPlanejamentoDemanda,
-  reprovarPlanejamentoDemanda,
-  submeterPlanejamento,
-} from "../src/execucao/planejamento.ts";
+import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../src/execucao/planejamento.ts";
 import { substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
-import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar } from "./apoio.ts";
+import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
 import { piFalso } from "./falsos.ts";
 
 const pi = piFalso(base);
@@ -79,7 +75,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   assert.equal(carregarSessoesDoTicket(c.banco, ref).sessoes.length, 1);
 
   // O plano vai ao gate: o agendador não despacha nada e nenhuma rodada nasce.
-  submeterPlanejamento(c.banco, id, plano(id, "v1"), agente(1));
+  submeterPlanoDoAgente(c.banco, id, plano(id, "v1"), agente(1));
   assert.equal(demanda(c, id).demanda.fase, "aprovacao_planejamento");
   assert.equal(despacharDemandas(c.banco, c.config).length, 0);
   semDesenvolvimento(c, id);
@@ -108,7 +104,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   semDesenvolvimento(c, id);
 
   // Reenviado e aprovado: só agora o desenvolvimento existe.
-  submeterPlanejamento(c.banco, id, plano(id, "v2"), agente(2));
+  submeterPlanoDoAgente(c.banco, id, plano(id, "v2"), agente(2));
   await aprovarPlanejamentoDemanda(c.banco, id, {});
   const ag = demanda(c, id);
   assert.equal(ag.demanda.fase, "execucao");
@@ -132,7 +128,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   const { banco, projeto } = c;
   substituirPreparacaoDoProjeto(banco, projeto, [`[ -e ${quebra} ] && [ "$(basename "$PWD")" = 2 ] && exit 1; true`]);
   await ciclaPlanejamentos(c, [id]);
-  submeterPlanejamento(banco, id, plano(id, "r", 2), agente(1));
+  submeterPlanoDoAgente(banco, id, plano(id, "r", 2), agente(1));
   writeFileSync(quebra, "");
   const chamadas = pi.chamadas().length;
 
@@ -176,11 +172,11 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
   assert.deepEqual(await ciclaPlanejamentos(c, [a, b]), [1, 1]);
 
   // A é reprovada uma vez e reenviada (decisão só dela); B, no gate, não é tocada pelo ciclo que retoma A.
-  submeterPlanejamento(c.banco, a, plano(a, "A-v1"), agente(1));
-  submeterPlanejamento(c.banco, b, plano(b, "B"), agente(2));
+  submeterPlanoDoAgente(c.banco, a, plano(a, "A-v1"), agente(1));
+  submeterPlanoDoAgente(c.banco, b, plano(b, "B"), agente(2));
   reprovarPlanejamentoDemanda(c.banco, a, "refaça");
   assert.deepEqual(await ciclaPlanejamentos(c, [a]), [2]);
-  submeterPlanejamento(c.banco, a, plano(a, "A"), agente(3));
+  submeterPlanoDoAgente(c.banco, a, plano(a, "A"), agente(3));
   await aprovarPlanejamentoDemanda(c.banco, b, {});
   await aprovarPlanejamentoDemanda(c.banco, a, {});
 

@@ -27,11 +27,11 @@ export const TipoEvidenciaEtapa = z.enum([
 ]);
 export type TipoEvidenciaEtapa = z.infer<typeof TipoEvidenciaEtapa>;
 
-export const ProdutorEvidenciaEtapa = z.enum(["externo", "agente", "fabriquinha"]);
-export type ProdutorEvidenciaEtapa = z.infer<typeof ProdutorEvidenciaEtapa>;
+const ProdutorEvidenciaEtapa = z.enum(["externo", "agente", "fabriquinha"]);
+type ProdutorEvidenciaEtapa = z.infer<typeof ProdutorEvidenciaEtapa>;
 
 /** Rótulos para o F3: o domínio não avalia nenhuma. */
-export const RegraAprovacaoEtapa = z.enum([
+const RegraAprovacaoEtapa = z.enum([
   "todos_comandos_exit_zero",
   "todas_fitness_passam",
   "sem_issue_aberta_arquivos_alterados",
@@ -39,8 +39,9 @@ export const RegraAprovacaoEtapa = z.enum([
   "criterios_demanda_atendidos",
   "nada_sobrou",
 ]);
-export type RegraAprovacaoEtapa = z.infer<typeof RegraAprovacaoEtapa>;
+type RegraAprovacaoEtapa = z.infer<typeof RegraAprovacaoEtapa>;
 
+/** @testes tipo que o teste usa para montar a entrada */
 export const ItemCatalogoEtapa = z.object({
   etapa: EtapaTicket,
   tipo: TipoEvidenciaEtapa,
@@ -110,10 +111,11 @@ export const CATALOGO_ETAPAS: readonly ItemCatalogoEtapa[] = Object.values(POR_E
 
 export const catalogoDaEtapa = (etapa: EtapaTicket): readonly ItemCatalogoEtapa[] => POR_ETAPA[etapa];
 
+/** @testes tipo que o teste usa para montar a entrada */
 export const ContextoEvidenciaEtapa = TicketDemanda.pick({ demanda_id: true, ticket_id: true, etapa: true });
 export type ContextoEvidenciaEtapa = z.infer<typeof ContextoEvidenciaEtapa>;
 
-export const EntradaEvidenciaEtapa = z.object({
+const EntradaEvidenciaEtapa = z.object({
   demanda_id: ContextoEvidenciaEtapa.shape.demanda_id,
   rodada_id: IdDono,
   ticket_id: IdDono,
@@ -123,7 +125,7 @@ export const EntradaEvidenciaEtapa = z.object({
   dados: z.unknown(),
 });
 export type EvidenciaEtapa = z.output<typeof EntradaEvidenciaEtapa>;
-export type EntradaEvidenciaEtapa = EvidenciaEtapa;
+type EntradaEvidenciaEtapa = EvidenciaEtapa;
 
 const lerContexto = (contexto: ContextoEvidenciaEtapa): ContextoEvidenciaEtapa => {
   const lido = ContextoEvidenciaEtapa.safeParse(contexto);

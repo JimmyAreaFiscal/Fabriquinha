@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
-import { FABRIQUINHA } from "../dominio/agregado.ts";
+import { FABRIQUINHA } from "../dominio/ator.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { ErroDeRegra } from "../dominio/erros.ts";
 import { concluirResolucaoConflito, podeTentarEncerramento } from "../dominio/transicoes_encerramento.ts";

@@ -9,7 +9,7 @@ import type { AnexoDaDemanda } from "../persistencia/evidencia_demanda.ts";
 import { skillsDaEtapaDemanda } from "./pi_demanda.ts";
 
 /** Um anexo de evidência da demanda com o caminho do arquivo no disco, que o agente lê direto. */
-export type AnexoNoDisco = AnexoDaDemanda & { caminho: string };
+type AnexoNoDisco = AnexoDaDemanda & { caminho: string };
 
 export interface ContextoDemanda {
   ag: AgregadoDemanda;

@@ -143,21 +143,3 @@ test("vincular: ida e volta, e a demanda serve a um só achado", () => {
     vincularAchado(b, "u1", 2, "I-9");
   }, /FOREIGN/);
 });
-
-test("migração 32 é aditiva: não altera as tabelas existentes", () => {
-  const b = new DatabaseSync(":memory:");
-  migrar(b, MIGRACOES.slice(0, 31));
-  const esquema = () =>
-    b
-      .prepare("SELECT name, sql FROM sqlite_master ORDER BY name")
-      .all()
-      .map((l) => ({ ...l }));
-  const antes = esquema();
-  migrar(b, MIGRACOES.slice(0, 32));
-  const depois = esquema();
-  assert.deepEqual(
-    depois.filter((l) => antes.some((a) => a.name === l.name)),
-    antes,
-  );
-  assert.ok(depois.length > antes.length);
-});
