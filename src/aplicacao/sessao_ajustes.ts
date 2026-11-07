@@ -9,6 +9,7 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { concluirSessaoRodada, reprovarPullRequestRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -42,9 +43,7 @@ const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
 /** O `encerrar_rodada` atual (o de maior id) da rodada e o `pr_aberto` dele. */
 function prDaRodada(ag: AgregadoDemanda, ref: RefRodada) {
   const ticket = existe(
-    ag.tickets
-      .filter((t) => t.rodada_id === ref.rodada_id && t.etapa === "encerrar_rodada")
-      .sort((a, b) => b.ticket_id - a.ticket_id)[0],
+    ticketAtualDaEtapa(ag, "encerrar_rodada", ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
     "confira o estado da rodada",
   );
@@ -59,7 +58,7 @@ function prDaRodada(ag: AgregadoDemanda, ref: RefRodada) {
 /** O ticket `ajustar_resultado` mais recente da rodada. */
 const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDemanda =>
   existe(
-    ag.tickets.findLast((t) => t.rodada_id === ref.rodada_id && t.etapa === "ajustar_resultado"),
+    ticketAtualDaEtapa(ag, "ajustar_resultado", ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não tem sessão de ajustes`,
     "só a rodada reprovada tem sessão de ajustes",
   );

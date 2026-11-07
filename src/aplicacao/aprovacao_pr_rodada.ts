@@ -5,6 +5,7 @@ import { type Ator, exigirAtor, FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { confirmarAprovacaoPullRequest, validarAprovacaoPullRequest } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { configuracaoProjeto } from "../armazenamento/configuracao_projeto.ts";
@@ -32,9 +33,7 @@ export async function aprovarPRRodada(
     "use uma rodada da demanda",
   );
   const ticket = existe(
-    ag.tickets
-      .filter((t) => t.rodada_id === ref.rodada_id && t.etapa === "encerrar_rodada")
-      .sort((a, b) => b.ticket_id - a.ticket_id)[0],
+    ticketAtualDaEtapa(ag, "encerrar_rodada", ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
     "confira o estado da rodada",
   );

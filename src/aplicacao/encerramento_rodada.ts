@@ -9,6 +9,7 @@ import type { AgregadoDemanda, EvidenciaDemanda, TicketDemanda } from "../nucleo
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import { motivo } from "../nucleo/primitivos.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
@@ -53,8 +54,8 @@ async function resumirContextoDoPR(contexto: string, limite: number): Promise<st
   return (await perguntarAoPiSemFerramentas(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
 }
 
-/** A rodada em `encerrar_rodada` de uma demanda em `em_execucao` e o `encerrar_rodada` atual (o de maior id), num dos `estados`. */
-function encerramentoAtual(ag: AgregadoDemanda, ref: RefRodada, estados: readonly TicketDemanda["estado"][]) {
+/** A rodada em `encerrar_rodada`, numa demanda em `em_execucao`. */
+function rodadaEmEncerramento(ag: AgregadoDemanda, ref: RefRodada) {
   const rodada = existe(
     ag.rodadas.find((r) => r.rodada_id === ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não existe`,
@@ -66,10 +67,13 @@ function encerramentoAtual(ag: AgregadoDemanda, ref: RefRodada, estados: readonl
       "só se encerra a rodada em encerrar_rodada, numa demanda em em_execucao",
     );
   }
+  return rodada;
+}
+
+/** O `encerrar_rodada` atual da rodada em encerramento, num dos `estados`. */
+function encerramentoNoEstado(ag: AgregadoDemanda, ref: RefRodada, estados: readonly TicketDemanda["estado"][]) {
   const ticket = existe(
-    ag.tickets
-      .filter((t) => t.rodada_id === ref.rodada_id && t.etapa === "encerrar_rodada")
-      .sort((a, b) => b.ticket_id - a.ticket_id)[0],
+    ticketAtualDaEtapa(ag, "encerrar_rodada", ref.rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
     "confira o estado da rodada",
   );
@@ -79,7 +83,7 @@ function encerramentoAtual(ag: AgregadoDemanda, ref: RefRodada, estados: readonl
       `só o encerrar_rodada ${estados.join(" ou ")} segue`,
     );
   }
-  return { rodada, ticket };
+  return ticket;
 }
 
 /**
@@ -92,7 +96,8 @@ export function iniciarEncerramentoRodada(
   limiteMin: number,
 ): { id: string; fim: Promise<void> } {
   const ag = carregarDemanda(banco, ref.demanda_id);
-  const { ticket } = encerramentoAtual(ag, ref, ["aberto", "em_execucao"]);
+  rodadaEmEncerramento(ag, ref);
+  const ticket = encerramentoNoEstado(ag, ref, ["aberto", "em_execucao"]);
   if (ticket.estado === "aberto") {
     const satisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, ref.demanda_id)).length === 0;
     comDemanda(banco, ref.demanda_id, (a) =>
@@ -170,7 +175,8 @@ function conferir(
  */
 export async function concluirEncerramentoRodada(banco: DatabaseSync, ref: RefRodada): Promise<AgregadoDemanda> {
   const ag = carregarDemanda(banco, ref.demanda_id);
-  const { rodada, ticket } = encerramentoAtual(ag, ref, ["em_execucao"]);
+  const rodada = rodadaEmEncerramento(ag, ref);
+  const ticket = encerramentoNoEstado(ag, ref, ["em_execucao"]);
   const entregue = (tipo: string) => ag.evidencias.some((e) => e.ticket_id === ticket.ticket_id && e.tipo === tipo);
   if (!entregue("mensagem_pr") || !entregue("aula_codigo")) {
     return conferir(banco, ref, ticket, { documentacao_entregue: false, conflito: false, check_falho: false });
