@@ -1,5 +1,5 @@
 // Ambiente do estresse: uma Fabriquinha numa raiz temporária, na porta livre que ela mesma escolhe (FABRIQUINHA_PORTA=0,
-// nunca a porta padrão), com o pi falso do e2e ($FABRIQUINHA_PI) e o agendador desligado (o padrão de uma raiz nova). Nada toca
+// nunca a porta padrão), com o pi falso único ($FABRIQUINHA_PI) e o agendador desligado (o padrão de uma raiz nova). Nada toca
 // na raiz real da Fabriquinha. Subida como a de e2e/apoio.ts, git isolado como o de integracao/apoio.ts.
 import { type ChildProcess, spawn } from "node:child_process";
 import { once } from "node:events";
@@ -61,7 +61,8 @@ export async function subirAmbiente(): Promise<Ambiente> {
         SONAR_HOST_URL: "",
         FABRIQUINHA_ROOT: raiz,
         FABRIQUINHA_PORTA: "0",
-        FABRIQUINHA_PI: join(import.meta.dirname, "../e2e/pi-falso.ts"),
+        FABRIQUINHA_PI: join(import.meta.dirname, "../apoio-testes/pi_falso.ts"),
+        FALSO_PI_ROTEIRO: "",
         PI_CODING_AGENT_DIR: join(raiz, "pi-agent"),
         GIT_CONFIG_GLOBAL: gitconfig,
         GIT_CONFIG_NOSYSTEM: "1",

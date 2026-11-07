@@ -15,9 +15,9 @@ import {
   substituirEtapasDoProjeto,
 } from "../src/persistencia/configuracao_projeto.ts";
 import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada, submeterPlanoDoAgente } from "./apoio.ts";
-import { piFalso } from "./falsos.ts";
+import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
-const pi = piFalso(base);
+const pi = instalarPiFalso(base);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
@@ -92,7 +92,7 @@ test("CA-SDLC-19: plano com CA-n inexistente ou com dependência entre rodadas �
   assert.deepEqual(depois.decisoes, antes.decisoes);
   assert.deepEqual(depois.rodadas, []);
   assert.equal(depois.tickets.find((x) => x.ticket_id === PLANEJAR)?.status, "aberto");
-  assert.equal(pi.chamadas().length, 0);
+  assert.equal(pi.prompts().length, 0);
 });
 
 test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, sem gravar nem ler fora do escopo", (t) => {

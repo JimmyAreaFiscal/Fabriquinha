@@ -39,8 +39,8 @@ export interface PassoPi {
   eventos?: EventoDoRoteiro[];
   /** Abre uma mensagem do assistente (`message_start`) que nunca fecha, como o modelo que trava. */
   mensagemAberta?: boolean;
-  /** Assenta ao receber SIGTERM, 50 ms depois (padrão: o sinal mata o processo). */
-  sigterm?: "assenta";
+  /** Ao receber SIGTERM, assenta e sai 50 ms depois, ou o ignora (só o SIGKILL o encerra); padrão: o sinal mata o processo. */
+  sigterm?: "assenta" | "ignora";
   // --- A mensagem do assistente
   /** Texto da resposta; "" deixa o conteúdo vazio. Padrão: $FALSO_PI_RESPOSTA ou "pronto". */
   resposta?: string;
@@ -49,8 +49,8 @@ export interface PassoPi {
   erro?: string;
   /** O custo do `usage`; null o omite (padrão: 0,01). */
   custo?: number | null;
-  /** Sobrescreve os campos do `usage` (input 10, output 2, cacheRead 0, cacheWrite 0, totalTokens 12). */
-  uso?: Partial<Record<"input" | "output" | "cacheRead" | "cacheWrite" | "totalTokens", number>>;
+  /** Sobrescreve os campos do `usage` (input 10, output 2, cacheRead 0, cacheWrite 0, totalTokens 12); null omite o `usage`. */
+  uso?: Partial<Record<"input" | "output" | "cacheRead" | "cacheWrite" | "totalTokens", number>> | null;
   /** Padrão: o par de --provider/--model, ou anthropic/claude-opus-5-5. */
   modelo?: { provedor: string; modelo: string };
   /** Emite `agent_end` antes do `agent_settled`. */
@@ -308,6 +308,7 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
   if (passo.sai?.quando === "ao_iniciar") sair(passo.sai);
 
   process.on("SIGTERM", () => {
+    if (passo.sigterm === "ignora") return;
     if (passo.sigterm === "assenta") {
       emitir({ type: "agent_settled" });
       setTimeout(() => process.exit(0), 50);
@@ -338,15 +339,17 @@ function falarRpc(passoDoInicio: PassoPi, { argumentos, arg, emitir, registrar, 
     provider: passo.modelo?.provedor ?? (arg("--provider") || "anthropic"),
     model: passo.modelo?.modelo ?? (arg("--model") || "claude-opus-5-5"),
     stopReason,
-    usage: {
-      input: 10,
-      output: 2,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 12,
-      ...passo.uso,
-      ...(passo.custo !== null && { cost: { total: passo.custo ?? 0.01 } }),
-    },
+    ...(passo.uso !== null && {
+      usage: {
+        input: 10,
+        output: 2,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 12,
+        ...passo.uso,
+        ...(passo.custo !== null && { cost: { total: passo.custo ?? 0.01 } }),
+      },
+    }),
     ...(stopReason === "error" && { errorMessage: passo.erro ?? "limite de uso" }),
   });
 

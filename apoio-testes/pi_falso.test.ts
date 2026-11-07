@@ -211,6 +211,8 @@ test("RPC: resposta, parada com erro, custo e uso do passo; sem sessão nem usu�
   const message = pi.eventos[1]?.message as Record<string, unknown>;
   assert.deepEqual([message.content, message.stopReason, message.errorMessage], [[], "error", "limite de uso"]);
   assert.deepEqual(message.usage, { input: 10, output: 2, cacheRead: 100, cacheWrite: 0, totalTokens: 12 });
+  const semUso = await umPrompt([{ uso: null }]);
+  assert.equal("usage" in (semUso.eventos.at(-2)?.message as object), false);
 });
 
 test("RPC: a sessão reaproveita o arquivo do id, leva o cabeçalho pedido e copia o --fork", async () => {
@@ -331,6 +333,15 @@ test("RPC: SIGTERM mata o pi, ou assenta e sai com 0 quando o passo manda", asyn
   assenta.filho.kill("SIGTERM");
   assert.deepEqual(await assenta.saida, { codigo: 0, sinal: null });
   assert.equal(assenta.tipos().at(-1), "agent_settled");
+
+  const ignora = subir([{ termina: "trava", sigterm: "ignora" }]);
+  ignora.enviar({ type: "prompt", message: "x" });
+  await ignora.esperarEvento("agent_start");
+  ignora.filho.kill("SIGTERM");
+  await new Promise((p) => setTimeout(p, 300));
+  assert.equal(ignora.filho.exitCode, null);
+  ignora.filho.kill("SIGKILL");
+  assert.equal((await ignora.saida).sinal, "SIGKILL");
 });
 
 test("RPC: o agente escreve, apaga, acrescenta, roda shell, chama o CLI e um módulo, e o fim do agente", async () => {

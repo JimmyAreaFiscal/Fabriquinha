@@ -44,7 +44,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   const id = await demandaEmExecucao(c, [{ tickets: 2 }, { tickets: 1 }, { depende: [1], tickets: 1 }]);
   const [r1t1, r1t2, r2t1, r3t1] = [ticketDe(c, id, 1), ticketDe(c, id, 1, 2), ticketDe(c, id, 2), ticketDe(c, id, 3)];
   fecharPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   const deps = despacho();
 
   // D04: o limite global vale para todas as rodadas; com 1 vaga só a primeira (R1) executa e o "executar agora" é recusado.
@@ -88,7 +88,7 @@ test("CA-SDLC-08: agendador e executar agora disputam o mesmo ticket e só uma r
   const d = await demandaEmExecucao(c, [{ tickets: 1 }]);
   const [ta, td] = [ticketDe(c, a, 1), ticketDe(c, d, 1)];
   fecharPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   const deps = despacho();
   gravarLimiteParalelismo(c.banco, 4);
 
@@ -117,7 +117,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   const ref = ticketDe(c, id, 1);
   const worktree = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
   abrirPortao();
-  pi.roteirizar([{ modo: "ok", agente }]);
+  pi.roteirizar([{ agente }]);
   let aprovada = false;
   const deps = despacho(() => aprovada);
 
@@ -171,7 +171,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   const fase = () => rodadaDe(c, id, 1)?.fase;
 
   // Falha: o pi sai com erro; o ticket falha, a segunda tarefa da rodada não avança e a fase não muda.
-  pi.roteirizar([{ modo: "erro" }]);
+  pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await Promise.all(despacharDemandas(c.banco, c.config, deps));
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(
@@ -198,10 +198,10 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   assert.equal(pisAteAgora(), antes);
 
   // Timeout: o pi trava e o limite (fracionário, só no teste) estoura; histórico das duas execuções e a mesma sessão.
-  pi.roteirizar([{ modo: "trava" }]);
+  pi.roteirizar([{ termina: "trava" }]);
   const curto = { ...c.config, timeoutMin: 0.01 };
   await Promise.all(despacharDemandas(c.banco, curto, deps));
-  assert.match(pi.chamadas().at(-1)?.prompt ?? "", /Reabertura[\s\S]*tente de novo, com atenção ao cache/);
+  assert.match(pi.prompts().at(-1)?.prompt ?? "", /Reabertura[\s\S]*tente de novo, com atenção ao cache/);
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(demanda(c, id).tickets.find((x) => x.ticket_id === t1.ticket_id)?.motivo_falha ?? "", /tempo limite/);
   const historico = execucoesDe(c, t1);

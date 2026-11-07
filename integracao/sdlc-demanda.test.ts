@@ -25,15 +25,15 @@ import {
   registrarExterna,
   submeterObrigatorias,
 } from "./apoio.ts";
-import { piFalso } from "./falsos.ts";
+import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
-const pi = piFalso(base);
+const pi = instalarPiFalso(base);
 
 /** O planejamento é uma sessão interativa: dispara o ciclo, espera o pi receber o prompt e interrompe a execução. */
 async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<void> {
   const fins = despacharDemandas(c.banco, c.config);
   assert.equal(fins.length, 1, "o ciclo deveria iniciar só o planejamento");
-  await esperar(() => pi.chamadas().length === 1, `o pi receber o prompt do planejamento de ${id}`);
+  await esperar(() => pi.prompts().length === 1, `o pi receber o prompt do planejamento de ${id}`);
   const ref = { demanda_id: id, ticket_id: 2 };
   interromperExecucaoDemanda(c.banco, ref);
   await Promise.all(fins);
@@ -71,7 +71,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
     /congelada/,
   );
   assert.equal(c.banco.prepare("SELECT count(*) AS n FROM sessao_externa_demanda WHERE demanda_id = ?").get(id)?.n, 1);
-  assert.equal(pi.chamadas().length, 0);
+  assert.equal(pi.prompts().length, 0);
 });
 
 test("CA-SDLC-02: aprovar disponibiliza o planejamento; recusar cancela o percurso sem lançar desenho interno", async (t) => {
@@ -88,7 +88,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; recusar cancela o percur
     [["demanda", "cancelado"]],
   );
   assert.equal(despacharDemandas(c.banco, c.config).length, 0);
-  assert.equal(pi.chamadas().length, 0);
+  assert.equal(pi.prompts().length, 0);
 
   // Aprovação: planejamento com o `planejar` aberto, que o agendador inicia.
   const aprovada = demandaEnviada(c);
@@ -114,7 +114,7 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   const a = demandaEnviada(c, undefined, "outro");
   const b = demandaAprovada(c, [a]);
   assert.equal(despacharDemandas(c.banco, c.config).length, 0);
-  assert.equal(pi.chamadas().length, 0);
+  assert.equal(pi.prompts().length, 0);
   assert.deepEqual(
     demanda(c, b).tickets.map((x) => [x.etapa, x.status]),
     [
