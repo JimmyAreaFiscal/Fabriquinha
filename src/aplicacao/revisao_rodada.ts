@@ -5,6 +5,7 @@ import { type Ator, FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { verificarFitness } from "./evidencias/verificacoes_comandos.ts";
 import { schemaDe } from "../nucleo/schemas.ts";
@@ -129,11 +130,8 @@ export async function conduzirRevisaoRodada(
   opcoes: Omit<OpcoesRevisao, "preparar">,
 ): Promise<ResultadoRevisao> {
   const { demanda_id, rodada_id } = ref;
-  const doRodada = carregarDemanda(banco, demanda_id).tickets.filter(
-    (t) => t.rodada_id === rodada_id && t.etapa === "revisar_rodada",
-  );
   const { ticket_id } = encontrado(
-    doRodada.at(-1), // o atual é o de maior ticket_id
+    ticketAtualDaEtapa(carregarDemanda(banco, demanda_id), "revisar_rodada", rodada_id),
     `a rodada ${formatarRodadaRef(ref)} não tem ticket revisar_rodada`,
     "use uma rodada da demanda que esteja em revisão",
   );
