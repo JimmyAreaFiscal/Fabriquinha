@@ -4,7 +4,7 @@ import { z } from "zod";
 // As mensagens do zod em português, como o resto da Fabriquinha: o web as mostra ao lado de cada campo (F7 §4.4).
 z.config(z.locales.ptBR());
 
-const palavras = (texto: string): number => texto.match(/\S+/g)?.length ?? 0;
+export const palavras = (texto: string): number => texto.match(/\S+/g)?.length ?? 0;
 
 /** Para `.refine` de listas: o campo `campo` não se repete entre os itens. */
 export const unicoPor =
