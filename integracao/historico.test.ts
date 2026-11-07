@@ -7,21 +7,21 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { AUDITOR } from "../src/dominio/ator.ts";
-import { predecessorasPendentes } from "../src/dominio/dependencia_demanda.ts";
+import { AUDITOR } from "../src/nucleo/ator.ts";
+import { predecessorasPendentes } from "../src/nucleo/dependencia_demanda.ts";
 import {
   abrir as abrirAvaliacao,
   encaminharAchado,
   estadoDaAvaliacao,
   iniciarAvaliacao,
-} from "../src/execucao/avaliacao.ts";
-import { encerrar, situacao } from "../src/execucao/gerente.ts";
-import * as gestao from "../src/execucao/gestao_demandas.ts";
-import { metricasDaDemanda } from "../src/metricas/demanda.ts";
-import { achadoDaDemanda } from "../src/persistencia/avaliacoes.ts";
-import { predecessorasDaDemanda } from "../src/persistencia/dependencias_demanda.ts";
-import { configuracao } from "../src/persistencia/servico.ts";
-import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
+} from "../src/aplicacao/avaliacao.ts";
+import { encerrar, situacao } from "../src/aplicacao/gerente.ts";
+import * as gestao from "../src/aplicacao/gestao_demandas.ts";
+import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
+import { achadoDaDemanda } from "../src/armazenamento/avaliacoes.ts";
+import { predecessorasDaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
+import { configuracao } from "../src/armazenamento/servico.ts";
+import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
 import {
   abrirPortao,
   agente,
@@ -33,7 +33,7 @@ import {
   ticketDe,
 } from "./apoio-execucao.ts";
 import { criarCenario, CTX, demanda, esperar, gravarLimiteParalelismo, registrarExterna } from "./apoio.ts";
-import { despacharDemandas } from "../src/execucao/despacho_demanda.ts";
+import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
   b

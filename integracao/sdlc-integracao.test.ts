@@ -3,9 +3,9 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
-import { AUDITOR } from "../src/dominio/ator.ts";
-import { aprovarPRRodada } from "../src/execucao/aprovacao_pr_rodada.ts";
-import { caminhoDaWorktreeRodada } from "../src/repositorio/worktree-demanda.ts";
+import { AUDITOR } from "../src/nucleo/ator.ts";
+import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
+import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   abrirPortao,
   agente,

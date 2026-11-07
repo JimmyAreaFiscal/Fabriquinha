@@ -3,10 +3,10 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
-import { abrir } from "../src/persistencia/banco.ts";
-import { gravarConfiguracaoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { carregarDemanda } from "../src/persistencia/demandas.ts";
+import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
+import { gravarConfiguracaoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../apoio-testes/cenarios_de_demanda.ts";
 import { expect, projeto, test } from "./apoio.ts";
 

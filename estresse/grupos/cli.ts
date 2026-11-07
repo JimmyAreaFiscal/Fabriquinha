@@ -7,14 +7,14 @@ import { once } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { COMANDOS_DEMANDA } from "../../src/cli/agente_demanda.ts";
-import { COMANDOS_DEMANDA_EXTERNA } from "../../src/cli/demanda_externa.ts";
-import type { AgregadoDemanda } from "../../src/dominio/agregado_demanda.ts";
-import { criarSessao, iniciarExecucao } from "../../src/dominio/sessoes.ts";
-import { registrar, submeterEvidencia } from "../../src/execucao/gestao_demandas.ts";
-import { abrir, escrever, novoId } from "../../src/persistencia/banco.ts";
-import { criarDemandaNova } from "../../src/persistencia/demandas.ts";
-import { comSessoesDoTicket } from "../../src/persistencia/sessoes.ts";
+import { COMANDOS_DEMANDA } from "../../src/entrega/cli/agente_demanda.ts";
+import { COMANDOS_DEMANDA_EXTERNA } from "../../src/entrega/cli/demanda_externa.ts";
+import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
+import { criarSessao, iniciarExecucao } from "../../src/nucleo/sessoes.ts";
+import { registrar, submeterEvidencia } from "../../src/aplicacao/gestao_demandas.ts";
+import { abrir, escrever, novoId } from "../../src/armazenamento/banco.ts";
+import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
+import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
 import type { Ambiente } from "../ambiente.ts";
 
 /** Um comando do CLI medido: `chamar` roda um processo e devolve o tempo em ms, ou lança quando o resultado é inesperado. */
@@ -40,7 +40,11 @@ async function processo(raiz: string, execucao: string, args: string[], cwd: str
   const inicio = performance.now();
   const filho = spawn(
     process.execPath,
-    ["--disable-warning=ExperimentalWarning", join(import.meta.dirname, "../../src/cli/fabriquinha.ts"), ...args],
+    [
+      "--disable-warning=ExperimentalWarning",
+      join(import.meta.dirname, "../../src/composicao/fabriquinha.ts"),
+      ...args,
+    ],
     {
       cwd,
       env: { ...process.env, FABRIQUINHA_ROOT: raiz, FABRIQUINHA_EXECUCAO: execucao },

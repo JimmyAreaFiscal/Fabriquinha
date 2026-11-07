@@ -6,14 +6,14 @@ import assert from "node:assert/strict";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AUDITOR } from "../src/dominio/ator.ts";
-import { registrarCorrecoesSessao } from "../src/dominio/transicoes_rodada.ts";
-import { marcaDoPRRodada } from "../src/evidencias/pr_rodada.ts";
-import { aprovarPRRodada } from "../src/execucao/aprovacao_pr_rodada.ts";
-import { despacharDemandas } from "../src/execucao/despacho_demanda.ts";
-import { concluirSessaoAjustes, reprovarPRRodada } from "../src/execucao/sessao_ajustes.ts";
-import { comDemanda } from "../src/persistencia/demandas.ts";
-import { caminhoDaWorktreeRodada } from "../src/repositorio/worktree-demanda.ts";
+import { AUDITOR } from "../src/nucleo/ator.ts";
+import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
+import { marcaDoPRRodada } from "../src/aplicacao/evidencias/pr_rodada.ts";
+import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
+import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
+import { concluirSessaoAjustes, reprovarPRRodada } from "../src/aplicacao/sessao_ajustes.ts";
+import { comDemanda } from "../src/armazenamento/demandas.ts";
+import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   agente,
   agora,

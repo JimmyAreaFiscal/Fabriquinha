@@ -4,12 +4,12 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
-import { abrir } from "../src/persistencia/banco.ts";
+import { abrir } from "../src/armazenamento/banco.ts";
 import {
   configuracaoProjeto,
   gravarConfiguracaoProjeto,
   substituirEtapasDoProjeto,
-} from "../src/persistencia/configuracao_projeto.ts";
+} from "../src/armazenamento/configuracao_projeto.ts";
 import { expect, projeto, test } from "./apoio.ts";
 
 const PLANEJAR = { etapa: "planejar", modelo_provedor: "anthropic", modelo_nome: "claude-opus-5-5", effort: "high" };

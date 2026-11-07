@@ -6,9 +6,9 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { TipoEvidenciaDemanda } from "../src/dominio/evidencia_demanda.ts";
-import { CATALOGO_ETAPAS } from "../src/dominio/evidencia_etapa.ts";
-import { PACOTE, skillDoTipo } from "../src/execucao/pi.ts";
+import { TipoEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
+import { CATALOGO_ETAPAS } from "../src/nucleo/evidencia_etapa.ts";
+import { PACOTE, skillDoTipo } from "../src/infra/agente/pi.ts";
 
 const MAX_LINHAS = 100;
 /** As regras de nome e descrição do pi (`core/skills.js`), que só avisa e carrega assim mesmo. */

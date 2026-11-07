@@ -267,7 +267,7 @@ interface Apoio {
 
 /** O CLI `fabriquinha` como o agente o chama, com o escopo da execução no ambiente. */
 const cliFabriquinha = (...args: string[]) =>
-  execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "cli", "fabriquinha.ts"), ...args]);
+  execFileSync(process.execPath, [join(import.meta.dirname, "..", "src", "composicao", "fabriquinha.ts"), ...args]);
 
 const DIALOGOS: Record<string, object> = {
   select: { title: "Qual ordem os cupons devem ter?", options: ["Maior desconto primeiro", "Validade mais próxima"] },

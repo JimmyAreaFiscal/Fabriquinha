@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "fabriquinha": "src/cli/fabriquinha.ts"
+    "fabriquinha": "src/composicao/fabriquinha.ts"
   },
   "engines": {
     "node": ">=22.20"

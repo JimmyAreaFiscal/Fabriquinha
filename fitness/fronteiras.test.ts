@@ -1,0 +1,343 @@
+// Fitness function: os módulos de src/ dependem numa só direção (matriz abaixo), sem ciclo, e só `armazenamento` fala SQL.
+// Lista de permitidos em vez de proibidos: uma dependência nova precisa ser liberada aqui de propósito.
+// Violação que ainda existe vira exceção datada (demanda que a remove); a exceção que deixou de existir também falha.
+import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
+import { test } from "node:test";
+import ts from "typescript";
+
+const MODULO_CLIENTE_WEB = "entrega/cliente-web";
+
+// Pacote npm ou node:* de fora de src/ não é dependência entre módulos; só o núcleo e o cliente web restringem o externo.
+const QUALQUER_EXTERNO = () => true;
+const SO_ZOD_E_PATH = (alvo: string) => alvo === "zod" || alvo === "node:path";
+
+interface RegraDoModulo {
+  modulosPermitidos: string[];
+  externoPermitido: (alvo: string) => boolean;
+  somenteImportDeTipo?: boolean;
+}
+
+const MATRIZ: Record<string, RegraDoModulo> = {
+  nucleo: { modulosPermitidos: [], externoPermitido: SO_ZOD_E_PATH },
+  armazenamento: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  infra: { modulosPermitidos: ["nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  aplicacao: { modulosPermitidos: ["nucleo", "armazenamento", "infra"], externoPermitido: QUALQUER_EXTERNO },
+  "entrega/http": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  "entrega/cli": { modulosPermitidos: ["aplicacao", "nucleo"], externoPermitido: QUALQUER_EXTERNO },
+  // Roda no navegador: de fora de si, só tipos (apagados na execução).
+  [MODULO_CLIENTE_WEB]: { modulosPermitidos: [], externoPermitido: () => false, somenteImportDeTipo: true },
+  composicao: {
+    modulosPermitidos: [
+      "nucleo",
+      "armazenamento",
+      "infra",
+      "aplicacao",
+      "entrega/http",
+      "entrega/cli",
+      MODULO_CLIENTE_WEB,
+    ],
+    externoPermitido: QUALQUER_EXTERNO,
+  },
+};
+
+const MODULO_COM_SQL = "armazenamento";
+
+interface Achado {
+  arquivo: string;
+  import: string;
+}
+interface Excecao extends Achado {
+  demanda: string;
+}
+
+// Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http, 21 entrega/cli, 22 o resto.
+const EXCECOES: Excecao[] = [
+  { arquivo: "aplicacao/execucao_demanda.ts", import: "SQL .prepare(", demanda: "22" },
+  { arquivo: "aplicacao/historico_demanda.ts", import: "SQL .prepare(", demanda: "22" },
+  { arquivo: "aplicacao/retrabalho.ts", import: "SQL .prepare(", demanda: "19" },
+  { arquivo: "aplicacao/sessoes_demanda.ts", import: "SQL .prepare(", demanda: "22" },
+  { arquivo: "armazenamento/projetos.ts", import: "../infra/registro.ts", demanda: "22" },
+  { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
+  { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
+  { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/projetos.ts", demanda: "21" },
+  { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
+  { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
+  { arquivo: "entrega/cli/cli.ts", import: "../../composicao/servico.ts", demanda: "21" },
+  { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/arquivos.ts", demanda: "21" },
+  { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
+  { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/dependencias_demanda.ts", demanda: "21" },
+  { arquivo: "entrega/cli/demanda_externa.ts", import: "SQL .prepare(", demanda: "21" },
+  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
+  { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
+  {
+    arquivo: "entrega/cli/evidencia_agente_demanda.ts",
+    import: "../../armazenamento/evidencia_demanda.ts",
+    demanda: "21",
+  },
+  {
+    arquivo: "entrega/cli/evidencia_agente_demanda.ts",
+    import: "../../infra/repositorio/worktree-demanda.ts",
+    demanda: "21",
+  },
+  { arquivo: "entrega/cliente-web/markdown.ts", import: "markdown-it/browser", demanda: "22" },
+  { arquivo: "entrega/http/rotas.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/avaliacoes.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/chat.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/banco.ts", demanda: "20" },
+  {
+    arquivo: "entrega/http/rotas/configuracao.ts",
+    import: "../../../armazenamento/configuracao_projeto.ts",
+    demanda: "20",
+  },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/projetos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/modelos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/registro.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/repositorio/cadastro.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/repositorio/worktree.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
+  {
+    arquivo: "entrega/http/rotas/demandas.ts",
+    import: "../../../armazenamento/dependencias_demanda.ts",
+    demanda: "20",
+  },
+  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/evidencia_demanda.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/sessoes.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/demandas.ts", import: "SQL .prepare(", demanda: "20" },
+  { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/dependencias_demanda.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/inicio.ts", import: "../../../armazenamento/sessoes.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/configuracao_projeto.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/dependencias_demanda.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/projetos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../armazenamento/sessoes.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/projeto.ts", import: "../../../infra/repositorio/heatmap.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/projeto.ts", import: "SQL .prepare(", demanda: "20" },
+  { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/configuracao_projeto.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/sdlc.ts", import: "../../../armazenamento/projetos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../armazenamento/simulacao.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/simulacao.ts", import: "../../../infra/registro.ts", demanda: "20" },
+  { arquivo: "entrega/http/servidor.ts", import: "../../armazenamento/banco.ts", demanda: "20" },
+  { arquivo: "entrega/http/servidor.ts", import: "../../infra/registro.ts", demanda: "20" },
+  { arquivo: "entrega/http/servidor.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
+  { arquivo: "infra/repositorio/commit.ts", import: "../../armazenamento/commits.ts", demanda: "22" },
+];
+
+function moduloDoArquivo(caminhoRelativoASrc: string): string {
+  const [primeiro, segundo] = caminhoRelativoASrc.split("/");
+  return primeiro === "entrega" && segundo ? `entrega/${segundo}` : (primeiro ?? "");
+}
+
+function listarArquivosDeProducao(src: string): string[] {
+  return readdirSync(src, { recursive: true, encoding: "utf8" })
+    .filter((arquivo) => arquivo.endsWith(".ts") && !arquivo.endsWith(".test.ts"))
+    .sort();
+}
+
+// Especificadores que só aparecem em `import type` / `export type … from` (nunca num import de valor).
+function acharEspecificadoresSoDeTipo(fonte: ts.SourceFile): Set<string> {
+  const deTipo = new Set<string>();
+  const deValor = new Set<string>();
+  for (const declaracao of fonte.statements) {
+    let especificador: ts.Expression | undefined;
+    let ehSoDeTipo = false;
+    if (ts.isImportDeclaration(declaracao)) {
+      especificador = declaracao.moduleSpecifier;
+      ehSoDeTipo = declaracao.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword;
+    } else if (ts.isExportDeclaration(declaracao)) {
+      especificador = declaracao.moduleSpecifier;
+      ehSoDeTipo = declaracao.isTypeOnly;
+    }
+    if (especificador && ts.isStringLiteral(especificador)) (ehSoDeTipo ? deTipo : deValor).add(especificador.text);
+  }
+  return new Set([...deTipo].filter((alvo) => !deValor.has(alvo)));
+}
+
+// shortcut: sem checker de tipos, `.prepare(` é sempre SQL e `.exec(` só conta com literal de texto (SQL); RegExp.exec recebe variável.
+function acharChamadasDeSql(fonte: ts.SourceFile): string[] {
+  const chamadas = new Set<string>();
+  const visitar = (no: ts.Node): void => {
+    if (ts.isCallExpression(no) && ts.isPropertyAccessExpression(no.expression)) {
+      const metodo = no.expression.name.text;
+      const primeiroArgumento = no.arguments[0];
+      const ehTexto = primeiroArgumento && ts.isStringLiteralLike(primeiroArgumento);
+      const ehTemplate = primeiroArgumento && ts.isTemplateExpression(primeiroArgumento);
+      if (metodo === "prepare" || (metodo === "exec" && (ehTexto || ehTemplate))) chamadas.add(`.${metodo}(`);
+    }
+    ts.forEachChild(no, visitar);
+  };
+  visitar(fonte);
+  return [...chamadas];
+}
+
+interface Aresta {
+  de: string;
+  para: string;
+  arquivo: string;
+  achado: Achado;
+}
+
+function acharViolacoesEArestas(src: string): { violacoes: Achado[]; arestas: Aresta[] } {
+  const violacoes: Achado[] = [];
+  const arestas: Aresta[] = [];
+  for (const arquivo of listarArquivosDeProducao(src)) {
+    const modulo = moduloDoArquivo(arquivo);
+    const regra = MATRIZ[modulo];
+    if (!regra) {
+      violacoes.push({ arquivo, import: `módulo desconhecido: ${modulo}` });
+      continue;
+    }
+    const caminho = join(src, arquivo);
+    const texto = readFileSync(caminho, "utf8");
+    const fonte = ts.createSourceFile(caminho, texto, ts.ScriptTarget.Latest);
+    const soDeTipo = acharEspecificadoresSoDeTipo(fonte);
+    for (const { fileName: alvo } of ts.preProcessFile(texto, true, true).importedFiles) {
+      const moduloAlvo = alvo.startsWith(".")
+        ? moduloDoArquivo(relative(src, resolve(dirname(caminho), alvo)))
+        : undefined;
+      const permitido =
+        moduloAlvo === undefined
+          ? regra.externoPermitido(alvo)
+          : moduloAlvo === modulo || regra.modulosPermitidos.includes(moduloAlvo);
+      const tipoBasta = regra.somenteImportDeTipo === true && soDeTipo.has(alvo);
+      const achado = { arquivo, import: alvo };
+      if (!permitido && !tipoBasta) violacoes.push(achado);
+      if (moduloAlvo !== undefined && moduloAlvo !== modulo)
+        arestas.push({ de: modulo, para: moduloAlvo, arquivo, achado });
+    }
+    if (modulo !== MODULO_COM_SQL) {
+      for (const chamada of acharChamadasDeSql(fonte)) violacoes.push({ arquivo, import: `SQL ${chamada}` });
+    }
+  }
+  return { violacoes, arestas };
+}
+
+function acharCiclosEntreModulos(arestas: Aresta[]): Achado[] {
+  const vizinhos = new Map<string, Aresta[]>();
+  for (const aresta of arestas) vizinhos.set(aresta.de, [...(vizinhos.get(aresta.de) ?? []), aresta]);
+  const ciclos: Achado[] = [];
+  const emVisita: Aresta[] = [];
+  const concluidos = new Set<string>();
+  const visitar = (modulo: string): void => {
+    for (const aresta of vizinhos.get(modulo) ?? []) {
+      const inicioDoCiclo = emVisita.findIndex((passo) => passo.de === aresta.para);
+      if (inicioDoCiclo >= 0 || aresta.para === modulo) {
+        const volta = [...emVisita.slice(Math.max(inicioDoCiclo, 0)), aresta];
+        const caminho = [...volta.map((passo) => passo.de), aresta.para].join(" → ");
+        ciclos.push({ arquivo: volta[0]?.arquivo ?? aresta.arquivo, import: `ciclo entre módulos: ${caminho}` });
+      } else if (!concluidos.has(aresta.para)) {
+        emVisita.push(aresta);
+        visitar(aresta.para);
+        emVisita.pop();
+      }
+    }
+    concluidos.add(modulo);
+  };
+  for (const modulo of vizinhos.keys()) if (!concluidos.has(modulo)) visitar(modulo);
+  return ciclos;
+}
+
+// A aresta de uma exceção listada fica fora do grafo: a dívida já é cobrada pela lista, e o ciclo que sobrar é novo.
+function acharViolacoes(src: string, excecoes: Excecao[]): Achado[] {
+  const { violacoes, arestas } = acharViolacoesEArestas(src);
+  const listadas = new Set(excecoes.map(descrever));
+  const unicas = new Map(violacoes.map((achado) => [descrever(achado), achado]));
+  const ciclos = acharCiclosEntreModulos(arestas.filter(({ achado }) => !listadas.has(descrever(achado))));
+  return [...new Map([...unicas.values(), ...ciclos].map((achado) => [descrever(achado), achado])).values()];
+}
+
+function descrever({ arquivo, import: alvo }: Achado): string {
+  return `${arquivo} importa ${alvo}`;
+}
+
+const SRC = resolve(import.meta.dirname, "../src");
+
+test("src respeita a matriz de dependências, não tem ciclo e só armazenamento fala SQL (fora das exceções datadas)", () => {
+  const listadas = new Set(EXCECOES.map(descrever));
+  assert.deepEqual(
+    acharViolacoes(SRC, EXCECOES)
+      .map(descrever)
+      .filter((descricao) => !listadas.has(descricao)),
+    [],
+  );
+});
+
+test("toda exceção listada ainda existe no código", () => {
+  const existentes = new Set(acharViolacoes(SRC, []).map(descrever));
+  assert.deepEqual(
+    EXCECOES.map(descrever).filter((descricao) => !existentes.has(descricao)),
+    [],
+  );
+});
+
+test("toda exceção cita arquivo, import e uma demanda de 04 a 26", () => {
+  for (const excecao of EXCECOES) {
+    assert.ok(excecao.arquivo && excecao.import, `exceção sem arquivo ou import: ${JSON.stringify(excecao)}`);
+    assert.match(excecao.demanda, /^(0[4-9]|1\d|2[0-6])$/, `${descrever(excecao)}: demanda ${excecao.demanda}`);
+  }
+});
+
+test("nenhum importador de entrega/http fora de composicao e entrega/http", () => {
+  const importadores = listarArquivosDeProducao(SRC)
+    .filter((arquivo) => !arquivo.startsWith("composicao/") && !arquivo.startsWith("entrega/http/"))
+    .filter((arquivo) => /from ['"][^'"]*entrega\/http/.test(readFileSync(join(SRC, arquivo), "utf8")));
+  assert.deepEqual(importadores, []);
+});
+
+test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permite", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    // Permitidos
+    "nucleo/ok.ts":
+      'import { z } from "zod";\nimport { isAbsolute } from "node:path";\nexport { Y } from "./sub/y.ts";\n',
+    "nucleo/sub/y.ts": 'import { z } from "../ok.ts";\n',
+    "nucleo/ruim.test.ts": 'import { test } from "node:test";\nimport { x } from "node:fs";\n',
+    "armazenamento/ok.ts":
+      'import { z } from "../nucleo/ok.ts";\nimport { DatabaseSync } from "node:sqlite";\nbanco.exec("CREATE TABLE a (b)");\nbanco.prepare("SELECT 1");\n',
+    "aplicacao/ok.ts":
+      'import { a } from "../armazenamento/ok.ts";\nimport { b } from "../infra/ok.ts";\nconst achou = /a/.exec(texto);\n',
+    "infra/ok.ts": 'import { spawn } from "node:child_process";\nimport { z } from "../nucleo/ok.ts";\n',
+    "entrega/http/ok.ts": 'import { a } from "../../aplicacao/ok.ts";\n',
+    "entrega/cliente-web/ok.ts": 'import type { A } from "../../aplicacao/ok.ts";\nimport { b } from "./sub.ts";\n',
+    "entrega/cliente-web/sub.ts": 'export type { Z } from "../../nucleo/ok.ts";\n',
+    "composicao/ok.ts": 'import { a } from "../entrega/http/ok.ts";\nimport express from "express";\n',
+    // Proibidos
+    "nucleo/fs.ts": 'import { readFileSync } from "node:fs";\n',
+    "infra/armazenamento.ts": 'import { b } from "../armazenamento/ok.ts";\n',
+    "entrega/cliente-web/aplicacao.ts":
+      'import { a } from "../../aplicacao/ok.ts";\nimport type { B } from "../../aplicacao/ok.ts";\n',
+    "aplicacao/ciclo.ts": 'import { a } from "../entrega/http/ciclo.ts";\n',
+    "entrega/http/ciclo.ts": 'import { a } from "../../aplicacao/ciclo.ts";\n',
+    "aplicacao/sql.ts": 'banco.prepare("SELECT 1");\nbanco.exec(`DELETE FROM a`);\n',
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(
+    acharViolacoes(raiz, []).map(descrever).sort(),
+    [
+      "aplicacao/ciclo.ts importa ciclo entre módulos: aplicacao → entrega/http → aplicacao",
+      "aplicacao/ciclo.ts importa ../entrega/http/ciclo.ts",
+      "aplicacao/sql.ts importa SQL .exec(",
+      "aplicacao/sql.ts importa SQL .prepare(",
+      "entrega/cliente-web/aplicacao.ts importa ../../aplicacao/ok.ts",
+      "infra/armazenamento.ts importa ../armazenamento/ok.ts",
+      "nucleo/fs.ts importa node:fs",
+    ].sort(),
+  );
+});

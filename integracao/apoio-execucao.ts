@@ -3,15 +3,15 @@
 import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/dominio/evidencia_demanda.ts";
-import type { Verificacao } from "../src/evidencias/verificacoes.ts";
-import { despacharDemandas, type DepsDespacho } from "../src/execucao/despacho_demanda.ts";
-import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/execucao/execucao_demanda.ts";
-import { fecharTicketDemanda } from "../src/execucao/fechamento_ticket.ts";
-import { aprovarPlanejamentoDemanda, iniciarOuRetomarPlanejamento } from "../src/execucao/planejamento.ts";
-import { decidirRevisaoRodada } from "../src/execucao/revisao_rodada.ts";
-import { comDemanda } from "../src/persistencia/demandas.ts";
-import { carregarSessoesDoTicket } from "../src/persistencia/sessoes.ts";
+import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
+import type { Verificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
+import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
+import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
+import { fecharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
+import { aprovarPlanejamentoDemanda, iniciarOuRetomarPlanejamento } from "../src/aplicacao/planejamento.ts";
+import { decidirRevisaoRodada } from "../src/aplicacao/revisao_rodada.ts";
+import { comDemanda } from "../src/armazenamento/demandas.ts";
+import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 

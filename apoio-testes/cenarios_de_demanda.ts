@@ -1,11 +1,11 @@
 // Agregados de demanda prontos em cada estado do Ciclo de Vida, para os testes que partem de uma demanda já avançada.
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
-import type { FaseDemanda } from "../src/dominio/primitivos.ts";
-import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
-import { criarDemandaNova } from "../src/persistencia/demandas.ts";
-import { garantirWorktreeDemanda } from "../src/repositorio/worktree-demanda.ts";
+import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
+import type { FaseDemanda } from "../src/nucleo/primitivos.ts";
+import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../src/armazenamento/configuracao_projeto.ts";
+import { criarDemandaNova } from "../src/armazenamento/demandas.ts";
+import { garantirWorktreeDemanda } from "../src/infra/repositorio/worktree-demanda.ts";
 import { abrirBancoTemporario } from "./banco_temporario.ts";
 import { instalarPiFalso } from "./pi_falso.ts";
 import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
