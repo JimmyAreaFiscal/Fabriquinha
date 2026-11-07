@@ -13,6 +13,8 @@ test("o prompt traz as regras, o ticket, a pergunta, os detalhes e as opções",
   assert.match(prompt, /Banal \(responda\):[\s\S]*SonarQube[\s\S]*Estratégico \(escale\):[\s\S]*critério de aceite/);
   assert.match(prompt, /Ticket I-7\.T3, etapa implementar, da demanda "Cadastro"\./);
   assert.match(prompt, /Pergunta: Corrijo a issue S6328\?\n\nDetalhes: no a\.ts:7\n\nOpções:\n- Sim\n- Não$/);
+  const comDescricao = { ...comOpcoes, descricoes: ["corrige agora", ""] };
+  assert.match(promptDaTriagem(contexto, comDescricao), /Opções:\n- Sim: corrige agora\n- Não$/);
   assert.match(
     promptDaTriagem(contexto, livre),
     /Pergunta: Qual handle uso\?\n\nOpções:\n\(sem opções: resposta em texto livre\)$/,
@@ -83,6 +85,17 @@ test("lê a última decisão válida da saída; escalar, rótulo fora das opçõ
   ]) {
     assert.equal(lerDecisao(responder(oferta), livre, "implementar"), undefined, oferta);
   }
+  // "Sim" e a instrução de chave só escalam pelo contexto: pergunta, detalhes ou descrição da opção que ofereçam acesso.
+  const sim = (extra: object, resposta = "Sim") =>
+    lerDecisao(responder(resposta), { pergunta: "Posso seguir?", opcoes: ["Sim", "Não"], ...extra }, "implementar");
+  assert.equal(sim({ pergunta: "Posso usar o acesso ao Sonar?" }), undefined);
+  assert.equal(sim({ detalhes: "com a credencial do bot" }), undefined);
+  assert.equal(sim({ descricoes: ["Usar a chave fornecida", ""] }), undefined);
+  assert.equal(sim({ descricoes: ["", "Executar deploy de teste"] }), undefined);
+  assert.equal(sim({ pergunta: "Posso usar o acesso ao Sonar?", opcoes: [] }, "Pode, sim"), undefined);
+  assert.equal(lerDecisao(responder("Utilize a chave privada fornecida"), livre, "implementar"), undefined);
+  assert.equal(sim({ descricoes: ["Usar o token", ""] }, "Não")?.resposta, "Não");
+  assert.deepEqual(sim({ descricoes: ["corrige agora", ""] }), { resposta: "Sim", justificativa: "regra" });
   assert.equal(
     lerDecisao('{"decisao":"escalar","justificativa":"muda o critério"}', comOpcoes, "implementar"),
     undefined,

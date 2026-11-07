@@ -61,6 +61,11 @@ function aoPrompt() {
     emitir({ type: "tool_execution_start", toolCallId: "p4", toolName: "perguntar", args });
     emitir({ type: "extension_ui_request", id: "s4", method: "select", title: "Como confiro o SonarQube?", options: ["Usar a verificação anterior", "Executar deploy de teste"] });
   }
+  if (variante === "pergunta_sim_acesso") {
+    const args = { question: "Posso seguir?", options: [{ label: "Sim", description: "Usar a chave privada fornecida" }, { label: "Não" }] };
+    emitir({ type: "tool_execution_start", toolCallId: "p6", toolName: "perguntar", args });
+    emitir({ type: "extension_ui_request", id: "s6", method: "select", title: "Posso seguir?", options: ["Sim", "Não"] });
+  }
   if (variante === "pergunta_banco") {
     emitir({ type: "tool_execution_start", toolCallId: "p5", toolName: "perguntar", args: { question: "Posso usar uma cópia do banco real?" } });
     emitir({ type: "extension_ui_request", id: "e5", method: "editor", title: "Posso usar uma cópia do banco real?" });
@@ -197,6 +202,14 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
   });
   assert.equal(await fim, undefined);
   assert.deepEqual(perguntas, [{ pergunta: "Corrijo o Sonar?", detalhes: "S1", opcoes: ["Sim", "Não"] }]);
+
+  const descritas = rodar("pergunta_sim_acesso", "autonomo", 1, (p) => {
+    assert.deepEqual(p.descricoes, ["Usar a chave privada fornecida", ""]);
+    return Promise.resolve(undefined);
+  });
+  await ate(() => existsSync(join(descritas.dir, "log")), "a escalada");
+  abortar(descritas.sessao);
+  await descritas.fim;
   assert.equal(readFileSync(join(dir, "respostas"), "utf8"), '["Sim"]\n');
   assert.match(
     readFileSync(join(dir, "log"), "utf8"),
@@ -241,6 +254,13 @@ test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy
       "pergunta_banco",
       "revisar_demanda",
       '{"decisao":"responder","resposta":"Faça login na conta do Sonar e confira o projeto","justificativa":"banal"}',
+    ],
+    // "Sim" contextual: a descrição da opção é que oferece a chave, e a triagem a recebe.
+    ["pergunta_sim_acesso", "implementar", '{"decisao":"responder","resposta":"Sim","justificativa":"banal"}'],
+    [
+      "pergunta_banco",
+      "implementar",
+      '{"decisao":"responder","resposta":"Utilize a chave privada fornecida","justificativa":"banal"}',
     ],
     // Sem as palavras de credencial: ainda é orientação de acesso e não chega ao agente.
     [

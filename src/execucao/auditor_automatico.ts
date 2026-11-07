@@ -10,6 +10,8 @@ export interface PerguntaDoAgente {
   detalhes?: string;
   /** Os rótulos das opções; vazio na pergunta de texto livre. */
   opcoes: string[];
+  /** As descrições das opções, na ordem de `opcoes` ("" sem descrição); ausente quando nenhuma tem. */
+  descricoes?: string[];
 }
 
 export interface ContextoDaPergunta {
@@ -34,7 +36,10 @@ const ETAPAS_DE_REVISAO = ["revisar_rodada", "revisar_demanda"];
 // Rede de segurança do código: o modelo pode errar e mandar "responder" com uma oferta de acesso; aqui isso escala.
 // shortcut: palavras-chave, com falso positivo que só escala; trocar por classificação do modelo se escalar demais.
 const OFERTA_DE_ACESSO =
-  /credencia|acess|deploy|autentic|autentiqu|login|logue|logar|senha|token|conta d|\bentr(?:e|ar|a)\b|painel|dashboard|console|conect|\bssh\b|\bvpn\b|github|\bgh\b|ambiente de teste|c[óo]pia do banco|\bdump\b/i;
+  /credencia|acess|deploy|autentic|autentiqu|login|logue|logar|senha|token|conta d|\bentr(?:e|ar|a)\b|painel|dashboard|console|conect|\bssh\b|\bvpn\b|github|\bgh\b|ambiente de teste|c[óo]pia do banco|\bdump\b|chave|privad|segredo|secret|\bkey\b|fornecid/i;
+
+// "Sim" e afins só têm sentido junto da pergunta: se ela oferece acesso, a resposta afirmativa também oferece.
+const RESPOSTA_AFIRMATIVA = /^\s*(sim|ok|pode|claro|certo|autoriz|permit|confirm|isso|yes|positivo)/i;
 
 const REGRAS = `Você é o Auditor automático da Fabriquinha. Um agente que executa um ticket sozinho fez uma pergunta ao Auditor humano.
 Responda você só o que for banal; escale o que for estratégico.
@@ -67,7 +72,9 @@ ou
 /** O prompt da triagem: as regras, o ticket e a pergunta com as opções. */
 export function promptDaTriagem(contexto: ContextoDaPergunta, p: PerguntaDoAgente): string {
   const opcoes =
-    p.opcoes.length > 0 ? p.opcoes.map((o) => `- ${o}`).join("\n") : "(sem opções: resposta em texto livre)";
+    p.opcoes.length > 0
+      ? p.opcoes.map((o, i) => (p.descricoes?.[i] ? `- ${o}: ${p.descricoes[i]}` : `- ${o}`)).join("\n")
+      : "(sem opções: resposta em texto livre)";
   return [
     REGRAS,
     `Ticket ${contexto.ticket}, etapa ${contexto.etapa}, da demanda "${contexto.demanda}".`,
@@ -107,7 +114,10 @@ export function lerDecisao(saida: string, p: PerguntaDoAgente, etapa: string): R
   }
   if (decisao?.decisao !== "responder") return undefined;
   if (p.opcoes.length > 0 && !p.opcoes.includes(decisao.resposta)) return undefined;
-  if (OFERTA_DE_ACESSO.test(decisao.resposta)) return undefined;
+  const textosLidosParaOfertaDeAcesso = [decisao.resposta, p.descricoes?.[p.opcoes.indexOf(decisao.resposta)] ?? ""];
+  if (RESPOSTA_AFIRMATIVA.test(decisao.resposta))
+    textosLidosParaOfertaDeAcesso.push(p.pergunta, p.detalhes ?? "", ...(p.descricoes ?? []));
+  if (OFERTA_DE_ACESSO.test(textosLidosParaOfertaDeAcesso.join("\n"))) return undefined;
   return { resposta: decisao.resposta, justificativa: decisao.justificativa };
 }
 
