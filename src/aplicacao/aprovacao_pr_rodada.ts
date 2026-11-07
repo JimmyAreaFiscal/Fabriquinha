@@ -63,7 +63,7 @@ export async function aprovarPRRodada(
   );
   const raiz = raizDo(banco);
   const { branch } = ag.demanda;
-  await integrarPR({ repo: projeto.raiz_git, hospedagem: projeto.hospedagem }, pr.dados.id as string);
+  await integrarPR(projeto, pr.dados.id as string);
   // A ref local da demanda só avança em fast-forward: o merge da hospedagem é o único commit novo dela.
   const demanda = caminhoDaWorktreeDemanda(raiz, projeto.nome, ag.demanda.id);
   await naFilaDoProjeto(raiz, projeto.nome, async () => {

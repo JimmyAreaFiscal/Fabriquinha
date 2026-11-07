@@ -295,7 +295,7 @@ for (const estado of ["MERGED", "OPEN"]) {
   try {
     await publicarPRDe(
       join(temporaria, "raiz-pr"),
-      { nome: "loja", repo: temporaria, hospedagem: "github" },
+      { nome: "loja", raiz_git: temporaria, hospedagem: "github" },
       { branch: "fabriquinha/I-1", base: "main", publicarBase: false },
       { titulo: "feat: A [I-1]", corpo: "m\ncorpo", conhecidos: [], marca: "<!-- fabriquinha I-1/T-6 -->" },
       () => undefined,

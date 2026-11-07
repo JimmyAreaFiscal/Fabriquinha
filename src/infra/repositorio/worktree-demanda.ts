@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { branchDemanda, branchRodada, DemandaId, RodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { Slug } from "../../nucleo/primitivos.ts";
-import type { Projeto } from "../../nucleo/projeto.ts";
+import type { Projeto } from "../../nucleo/configuracao_projeto.ts";
 import { anotar } from "../registro.ts";
 import { git } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto, preparar } from "./worktree.ts";
@@ -117,10 +117,12 @@ async function verificarCheckout(
   return existe;
 }
 
+type ProjetoWorktree = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "preparacao">;
+
 /** Cria da base configurada; uma branch própria existente nunca é avançada implicitamente. */
 export async function garantirWorktreeDemanda(
   raiz: string,
-  projeto: Pick<Projeto, "nome" | "repo" | "branchBase" | "preparacao">,
+  projeto: ProjetoWorktree,
   demandaId: string,
   log: string,
   varrerBase: () => Promise<void>,
@@ -130,28 +132,28 @@ export async function garantirWorktreeDemanda(
   const chave = `branch.${branch}.fabriquinha`;
   const dono = `demanda:${caminho}`;
   const { buscouBase, marca } = await naFilaDoProjeto(raiz, projeto.nome, async () => {
-    const existe = await verificarCheckout(raiz, projeto.repo, caminho, branch, dono);
+    const existe = await verificarCheckout(raiz, projeto.raiz_git, caminho, branch, dono);
     if (existsSync(caminho)) {
       // Checkout já validado; conservar o histórico.
     } else if (existe) {
-      await exigirGit(projeto.repo, "worktree", "prune", "--expire", "now");
-      await exigirGit(projeto.repo, "worktree", "add", caminho, branch);
+      await exigirGit(projeto.raiz_git, "worktree", "prune", "--expire", "now");
+      await exigirGit(projeto.raiz_git, "worktree", "add", caminho, branch);
     } else {
       await exigirGit(
-        projeto.repo,
+        projeto.raiz_git,
         "fetch",
         "origin",
-        `+refs/heads/${projeto.branchBase}:refs/remotes/origin/${projeto.branchBase}`,
+        `+refs/heads/${projeto.branch_base}:refs/remotes/origin/${projeto.branch_base}`,
       );
-      await exigirGit(projeto.repo, "config", chave, dono);
+      await exigirGit(projeto.raiz_git, "config", chave, dono);
       await exigirGit(
-        projeto.repo,
+        projeto.raiz_git,
         "worktree",
         "add",
         "-b",
         branch,
         caminho,
-        `refs/remotes/origin/${projeto.branchBase}`,
+        `refs/remotes/origin/${projeto.branch_base}`,
       );
     }
     const marca = (
@@ -173,7 +175,6 @@ export async function garantirWorktreeDemanda(
   return caminho;
 }
 
-type ProjetoWorktree = Pick<Projeto, "nome" | "repo" | "branchBase" | "preparacao">;
 interface RefRodada {
   demanda_id: string;
   rodada_id: number;
@@ -205,8 +206,8 @@ async function prepararRodada(caminho: string, projeto: ProjetoWorktree, log: st
 async function validarDemanda(raiz: string, projeto: ProjetoWorktree, ref: RefRodada): Promise<string> {
   const demanda = caminhoDaWorktreeDemanda(raiz, projeto.nome, ref.demanda_id);
   const branch = branchDemanda(ref.demanda_id);
-  await verificarCheckout(raiz, projeto.repo, demanda, branch, `demanda:${demanda}`, true);
-  return (await exigirGit(projeto.repo, "rev-parse", `refs/heads/${branch}`)).trim();
+  await verificarCheckout(raiz, projeto.raiz_git, demanda, branch, `demanda:${demanda}`, true);
+  return (await exigirGit(projeto.raiz_git, "rev-parse", `refs/heads/${branch}`)).trim();
 }
 
 export async function garantirWorktreeRodada(
@@ -220,14 +221,14 @@ export async function garantirWorktreeRodada(
   return comOrientacao(async () => {
     const marca = await naFilaDoProjeto(raiz, projeto.nome, async () => {
       const sha = await validarDemanda(raiz, projeto, ref);
-      const existe = await verificarCheckout(raiz, projeto.repo, caminho, branch, `rodada:${caminho}`);
+      const existe = await verificarCheckout(raiz, projeto.raiz_git, caminho, branch, `rodada:${caminho}`);
       if (!existsSync(caminho)) {
         if (existe) {
-          await exigirGit(projeto.repo, "worktree", "prune", "--expire", "now");
-          await exigirGit(projeto.repo, "worktree", "add", caminho, branch);
+          await exigirGit(projeto.raiz_git, "worktree", "prune", "--expire", "now");
+          await exigirGit(projeto.raiz_git, "worktree", "add", caminho, branch);
         } else {
-          await exigirGit(projeto.repo, "config", `branch.${branch}.fabriquinha`, `rodada:${caminho}`);
-          await exigirGit(projeto.repo, "worktree", "add", "-b", branch, caminho, sha);
+          await exigirGit(projeto.raiz_git, "config", `branch.${branch}.fabriquinha`, `rodada:${caminho}`);
+          await exigirGit(projeto.raiz_git, "worktree", "add", "-b", branch, caminho, sha);
         }
       }
       return marcaPreparacao(caminho);
@@ -292,7 +293,7 @@ export async function atualizarWorktreeRodada(
   return comOrientacao(async () => {
     const resultado = await naFilaDoProjeto(raiz, projeto.nome, async (): Promise<ResultadoAtualizacao> => {
       const sha = await validarDemanda(raiz, projeto, ref);
-      await verificarCheckout(raiz, projeto.repo, caminho, branch, `rodada:${caminho}`, true);
+      await verificarCheckout(raiz, projeto.raiz_git, caminho, branch, `rodada:${caminho}`, true);
       await verificarLimpa(caminho);
       const antes = (await exigirGit(caminho, "rev-parse", "HEAD")).trim();
       const merge = await git(caminho, "merge", "--no-edit", sha);

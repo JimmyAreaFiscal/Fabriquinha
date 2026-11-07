@@ -38,7 +38,7 @@ export function commitarArquivo(repo: string, arquivo: string, conteudo: string)
  * apontando para o clone. O clone leva a identidade de teste no próprio config, que as suas worktrees herdam; assim o
  * código de produção, que roda o git com o ambiente do processo, também consegue commitar.
  */
-export function criarRepositorioDeTeste(preparacao: string[] = [], branchBase = "integracao") {
+export function criarRepositorioDeTeste(comandosDePreparacao: string[] = [], branchBase = "integracao") {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-repositorio-")));
   diretoriosAbertos.add(dir);
   const bare = join(dir, "origin.git");
@@ -57,7 +57,13 @@ export function criarRepositorioDeTeste(preparacao: string[] = [], branchBase = 
     repo,
     raiz,
     log: join(raiz, "log"),
-    projeto: { nome: "loja", repo, branchBase, preparacao },
+    projeto: {
+      nome: "loja",
+      raiz_git: repo,
+      branch_base: branchBase,
+      hospedagem: "github" as const,
+      preparacao: comandosDePreparacao.map((comando, i) => ({ ordem: i + 1, comando })),
+    },
     /** Apaga tudo o que o repositório criou, worktrees incluídas. */
     fechar: () => {
       rmSync(dir, { recursive: true, force: true });

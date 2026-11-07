@@ -63,7 +63,7 @@ function cenario(tipo: Hospedagem = "github") {
     publicar: (corpo: string, conhecidos: string[] = [], varrer = () => Promise.resolve()) =>
       publicarPRDe(
         join(dir, "raiz"),
-        { nome: "loja", repo, hospedagem: tipo },
+        { nome: "loja", raiz_git: repo, hospedagem: tipo },
         { branch: BRANCH, base: "main", publicarBase: false },
         { titulo: "feat: A [I-1]", corpo: `${MARCA}\n${corpo}`, conhecidos, marca: MARCA },
         (sha) => {
@@ -394,7 +394,7 @@ test("lerPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no Az
     ["azure-devops", URL_AZ, ["repos", "pr", "show", "--id", "1", "--output", "json"]],
   ] as const) {
     const c = cenario(tipo);
-    const projeto = { repo: c.repo, hospedagem: tipo };
+    const projeto = { raiz_git: c.repo, hospedagem: tipo };
     hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
     const ler = async () => {
       const { lidoEm, ...resto } = await lerPR(projeto, "1");
@@ -419,7 +419,7 @@ test("lerPR (F5 §5.2): aberto, mergeado com a data e fechado, no GitHub e no Az
 
 test("lerPR: falha e saída inesperada do CLI viram ErroExterno com a saída", async () => {
   const c = cenario();
-  const projeto = { repo: c.repo, hospedagem: "github" as const };
+  const projeto = { raiz_git: c.repo, hospedagem: "github" as const };
   hospedagem.falhar("pr view", "HTTP 401: Bad credentials");
   await recusa(
     lerPR(projeto, "1"),
@@ -441,7 +441,7 @@ test("estado de PR desconhecido do gh ou do az é erro, na leitura e na publica�
   const c = cenario();
   hospedagem.responder("pr view", JSON.stringify({ state: "DRAFT", url: `${URL_GH}1`, mergedAt: null }));
   await recusa(
-    lerPR({ repo: c.repo, hospedagem: "github" }, "1"),
+    lerPR({ raiz_git: c.repo, hospedagem: "github" }, "1"),
     "o gh devolveu um estado de PR que a Fabriquinha não conhece: DRAFT " +
       "(confira a versão do gh; os estados conhecidos são OPEN, CLOSED, MERGED)",
     ErroExterno,
@@ -466,7 +466,7 @@ const RAPIDO = { intervaloMs: 10, carenciaMs: 0 };
 function verificar(tipo: Hospedagem, pr: Partial<Parameters<typeof hospedagem.abrirPr>[0]>, opcoes = RAPIDO) {
   const c = cenario(tipo);
   hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto", ...pr });
-  return { c, resultado: verificarPR({ repo: c.repo, hospedagem: tipo }, "1", c.log, opcoes) };
+  return { c, resultado: verificarPR({ raiz_git: c.repo, hospedagem: tipo }, "1", c.log, opcoes) };
 }
 
 test("verificarPR (F5 §5.1, passo 4): com conflito devolve na hora, sem olhar os checks", async () => {
@@ -580,7 +580,7 @@ test("verificarPR: passado o limite, ErroExterno com o que ainda espera", async 
 
 test("verificarPR: a falha do CLI sai com a saída do comando; nada é devolvido", async () => {
   const c = cenario();
-  const projeto = { repo: c.repo, hospedagem: "github" as const };
+  const projeto = { raiz_git: c.repo, hospedagem: "github" as const };
   hospedagem.falhar("pr view", "HTTP 401: Bad credentials");
   await recusa(
     verificarPR(projeto, "1", c.log),
@@ -588,7 +588,7 @@ test("verificarPR: a falha do CLI sai com a saída do comando; nada é devolvido
     ErroExterno,
   );
   const az = cenario("azure-devops");
-  const projetoAz = { repo: az.repo, hospedagem: "azure-devops" as const };
+  const projetoAz = { raiz_git: az.repo, hospedagem: "azure-devops" as const };
   hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
   hospedagem.falhar("repos pr policy list", "Please run 'az login'");
   await recusa(
@@ -600,7 +600,7 @@ test("verificarPR: a falha do CLI sai com a saída do comando; nada é devolvido
 
 test("verificarPR: os estados do gh e do az viram aprovado, falho ou andamento; o desconhecido é erro", async () => {
   const c = cenario();
-  const projeto = { repo: c.repo, hospedagem: "github" as const };
+  const projeto = { raiz_git: c.repo, hospedagem: "github" as const };
   const rollup = (...checks: object[]) => JSON.stringify({ mergeable: "MERGEABLE", statusCheckRollup: checks });
   const run = (nome: string, status: string, conclusion: string) => ({
     __typename: "CheckRun",
@@ -649,7 +649,7 @@ test("verificarPR: os estados do gh e do az viram aprovado, falho ou andamento; 
   await assert.rejects(verificarPR(projeto, "1", c.log), /saída inesperada de gh pr view: não é json/);
 
   const az = cenario("azure-devops");
-  const projetoAz = { repo: az.repo, hospedagem: "azure-devops" as const };
+  const projetoAz = { raiz_git: az.repo, hospedagem: "azure-devops" as const };
   hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
   const politica = (status: string, tipo: string, settings?: object) => ({
     status,
@@ -699,7 +699,7 @@ function cenarioRodada() {
   const publicar = (conferir: (head: string) => void, publicarBase = true) =>
     publicarPRDe(
       join(dirname(c.repo), "raiz"),
-      { nome: "loja", repo: c.repo, hospedagem: "github" },
+      { nome: "loja", raiz_git: c.repo, hospedagem: "github" },
       { branch: RODADA, base: DEMANDA, publicarBase },
       { titulo: "feat: R [I-206.R2]", corpo: `${MARCA_RODADA}\ncorpo`, conhecidos: [], marca: MARCA_RODADA },
       conferir,
@@ -759,7 +759,7 @@ test("alvo da rodada: o gancho de commits recusa antes do push e de qualquer PR"
 test("lerPR: o estado do PR pelo id", async () => {
   hospedagem.abrirPr({ head: RODADA, base: DEMANDA, titulo: "x", corpo: "", estado: "aberto" });
 
-  const leitura = await lerPR({ repo: base, hospedagem: "github" }, "1");
+  const leitura = await lerPR({ raiz_git: base, hospedagem: "github" }, "1");
 
   assert.equal(leitura.estado, "aberto");
   assert.equal(leitura.url, `${URL_GH}1`);
@@ -771,7 +771,7 @@ test("integrarPR: merge commit pela hospedagem no GitHub e no Azure DevOps, e o 
     git(c.repo, "push", "-q", "origin", BRANCH);
     hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
 
-    const sha = await integrarPR({ repo: c.repo, hospedagem: tipo }, "1");
+    const sha = await integrarPR({ raiz_git: c.repo, hospedagem: tipo }, "1");
 
     assert.equal(git(c.bare, "rev-parse", "refs/heads/main"), sha);
     assert.deepEqual(git(c.bare, "rev-list", "--parents", "-n", "1", sha).split(" ").slice(1), [
@@ -790,7 +790,7 @@ test("integrarPR: merge commit pela hospedagem no GitHub e no Azure DevOps, e o 
     );
 
     // Já mergeado: devolve o SHA sem pedir outro merge.
-    assert.equal(await integrarPR({ repo: c.repo, hospedagem: tipo }, "1"), sha);
+    assert.equal(await integrarPR({ raiz_git: c.repo, hospedagem: tipo }, "1"), sha);
     assert.equal(pedidos().length, 1);
     hospedagem.zerar();
   }
@@ -798,7 +798,7 @@ test("integrarPR: merge commit pela hospedagem no GitHub e no Azure DevOps, e o 
 
 test("integrarPR: a recusa da hospedagem é ErroExterno e o merge não confirmado também", async () => {
   const c = cenario();
-  const projeto = { repo: c.repo, hospedagem: "github" as const };
+  const projeto = { raiz_git: c.repo, hospedagem: "github" as const };
   hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto" });
   hospedagem.falhar("pr merge", "not mergeable");
   await recusa(

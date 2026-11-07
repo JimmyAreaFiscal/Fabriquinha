@@ -169,7 +169,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
     caminho: "/api/projetos/:nome",
     tratar: async ({ banco, params }) => {
       const { projeto: p, avisos } = await removerProjeto(banco, String(params.nome));
-      return { avisos: [...avisos, ...(await removerWorktrees(raizDo(banco), p))] };
+      return { avisos: [...avisos, ...(await removerWorktrees(raizDo(banco), { nome: p.nome, raiz_git: p.repo }))] };
     },
   },
 ];
