@@ -1,6 +1,7 @@
 // Seleção determinística de trabalho da demanda SDLC (comparacao-sdlc-implementacao.md §4.1): o agente não escolhe.
 import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { etapaDoEstado } from "./ciclos.ts";
+import { Endereco, estaOcupado, GrafoDeDependencias } from "./item_de_trabalho.ts";
 import type { EstadoRodada } from "./primitivos.ts";
 import { podeTentarEncerramento } from "./transicoes_encerramento.ts";
 
@@ -35,25 +36,26 @@ export function selecionarTrabalho(ag: AgregadoDemanda, predecessorasSatisfeitas
 
 function selecionarExecucao(ag: AgregadoDemanda): TicketDemanda[] {
   const estadoPorTicket = new Map(ag.tickets.map((t) => [t.ticket_id, t.estado]));
-  const ocupado = (t: TicketDemanda) => t.estado === "falhou" || t.estado === "em_execucao";
-  if (ag.tickets.some((t) => t.rodada_id === undefined && ocupado(t))) return [];
+  const dependenciasDasRodadas = GrafoDeDependencias.dasRodadas(ag);
+  const dependenciasDosTickets = GrafoDeDependencias.dosTickets(ag);
+  if (estaOcupado(ag, Endereco.daDemanda(ag.demanda.id))) return [];
   const concluida = new Set(ag.rodadas.filter((r) => r.estado === "concluida").map((r) => r.rodada_id));
   const escolhidos: TicketDemanda[] = [];
   for (const rodada of ag.rodadas) {
     const etapa = ESTADOS_QUE_ESPERAM_GENTE.includes(rodada.estado) ? undefined : etapaDoEstado(rodada.estado);
     const daRodada = ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id);
     const livre =
-      ag.dependencias_rodada
-        .filter((d) => d.rodada_id === rodada.rodada_id)
-        .every((d) => concluida.has(d.depende_rodada_id)) && !daRodada.some(ocupado);
+      dependenciasDasRodadas.pendentes(rodada.rodada_id, (dependencia) => concluida.has(dependencia)).length === 0 &&
+      !estaOcupado(ag, Endereco.daRodada(ag.demanda.id, rodada.rodada_id));
     const pronto = daRodada
       .filter(
         (t) =>
           t.etapa === etapa &&
           t.estado === "aberto" &&
-          ag.dependencias_ticket
-            .filter((d) => d.ticket_id === t.ticket_id)
-            .every((d) => estadoPorTicket.get(d.depende_ticket_id) === "concluido"),
+          dependenciasDosTickets.pendentes(
+            t.ticket_id,
+            (dependencia) => estadoPorTicket.get(dependencia) === "concluido",
+          ).length === 0,
       )
       .sort((a, b) => a.ticket_id - b.ticket_id)[0];
     if (livre && pronto !== undefined) escolhidos.push(pronto);
