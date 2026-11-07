@@ -20,23 +20,24 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, rodada_id:
   demanda_id,
   ticket_id,
   etapa,
-  status,
-  status_alterado_em: em,
+  estado: status,
+  estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
   rodada_id,
   devolucoes: 0,
 });
 
-const rodada = (demanda_id: string, rodada_id: number, fase: string) => ({
+const rodada = (demanda_id: string, rodada_id: number, estado: string) => ({
   demanda_id,
   rodada_id,
   titulo: `rodada ${String(rodada_id)}`,
-  fase,
+  estado,
+  estado_alterado_em: "2026-01-01T00:00:00.000Z",
   e2e: false,
   branch: `fabriquinha/${demanda_id}-${String(rodada_id)}`,
 });
 
-const demanda = (id: string, fase: string, resto: object = {}): AgregadoDemanda =>
+const demanda = (id: string, estado: string, resto: object = {}): AgregadoDemanda =>
   ({
     demanda: {
       id,
@@ -44,8 +45,8 @@ const demanda = (id: string, fase: string, resto: object = {}): AgregadoDemanda 
       titulo: `Demanda ${id}`,
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: em,
+      estado,
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
       enviada: true,
       branch: `fabriquinha/${id}`,
@@ -63,8 +64,8 @@ const demanda = (id: string, fase: string, resto: object = {}): AgregadoDemanda 
 
 /** A demanda no gate de aprovação: o ticket `demanda` em execução, que a decisão conclui. */
 const comTicketDeDemanda = (id: string): AgregadoDemanda =>
-  demanda(id, "aprovacao_demanda", {
-    tickets: [{ ...ticket(id, 1, "demanda", 1, "em_execucao"), rodada_id: undefined }],
+  demanda(id, "gate_demanda", {
+    tickets: [{ ...ticket(id, 1, "entender_e_desenhar", 1, "em_execucao"), rodada_id: undefined }],
   });
 
 /** Uma evidência da própria demanda I-214. */
@@ -121,8 +122,8 @@ export function semearDemandas(raiz: string): void {
   const banco = abrir(raiz);
   gravarAgregadoPronto(
     banco,
-    demanda("I-206", "execucao", {
-      rodadas: [rodada("I-206", 1, "aprovacao_pull_request"), rodada("I-206", 2, "desenvolvimento")],
+    demanda("I-206", "em_execucao", {
+      rodadas: [rodada("I-206", 1, "gate_pr"), rodada("I-206", 2, "implementar")],
       tickets: [
         ticket("I-206", 1, "implementar", 1, "concluido"),
         ticket("I-206", 2, "encerrar_rodada", 1, "concluido"),
@@ -142,8 +143,8 @@ export function semearDemandas(raiz: string): void {
   );
   gravarAgregadoPronto(
     banco,
-    demanda("I-207", "execucao", {
-      rodadas: [rodada("I-207", 1, "desenvolvimento")],
+    demanda("I-207", "em_execucao", {
+      rodadas: [rodada("I-207", 1, "implementar")],
       tickets: [ticket("I-207", 1, "implementar", 1, "falhou")],
     }),
   );
@@ -155,7 +156,7 @@ export function semearDemandas(raiz: string): void {
 /** Uma demanda sem ticket algum: nada em execução. */
 export function semearDemandaOciosa(raiz: string): void {
   const banco = abrir(raiz);
-  gravarAgregadoPronto(banco, demanda("I-209", "aprovacao_demanda"));
+  gravarAgregadoPronto(banco, demanda("I-209", "gate_demanda"));
   banco.close();
 }
 
@@ -182,8 +183,8 @@ export function semearPaginaDaDemanda(raiz: string): void {
   });
   gravarAgregadoPronto(
     banco,
-    demanda("I-210", "encerramento", {
-      rodadas: [rodada("I-210", 1, "aprovacao_pull_request"), rodada("I-210", 2, "sessao")],
+    demanda("I-210", "encerrar_demanda", {
+      rodadas: [rodada("I-210", 1, "gate_pr"), rodada("I-210", 2, "ajustar_resultado")],
       tickets: [
         ticket("I-210", 1, "implementar", 1, "concluido"),
         ticket("I-210", 2, "revisar_rodada", 1, "concluido"),
@@ -221,14 +222,14 @@ export function semearPaginaDaDemanda(raiz: string): void {
   gravarAnexos(banco, { demanda_id: "I-210", ticket_id: 3, tipo: "pr_aberto" }, [
     { caminho: "print.png", sha256, mime: "image/png", bytes },
   ]);
-  gravarAgregadoPronto(banco, demanda("I-211", "execucao"));
+  gravarAgregadoPronto(banco, demanda("I-211", "em_execucao"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-210', 'I-211')");
   banco.close();
 }
 
 /** A demanda no gate do planejamento: o ticket `planejar` em execução e o plano submetido, com uma rodada. */
 const comPlano = (id: string): AgregadoDemanda =>
-  demanda(id, "aprovacao_planejamento", {
+  demanda(id, "gate_planejamento", {
     tickets: [{ ...ticket(id, 1, "planejar", 1, "em_execucao"), rodada_id: undefined }],
     evidencias: [
       {
@@ -305,8 +306,8 @@ export function semearPrDaRodada(raiz: string): void {
   configurarProjeto(banco, raiz);
   gravarAgregadoPronto(
     banco,
-    demanda("I-215", "execucao", {
-      rodadas: [rodada("I-215", 1, "aprovacao_pull_request")],
+    demanda("I-215", "em_execucao", {
+      rodadas: [rodada("I-215", 1, "gate_pr")],
       tickets: [ticket("I-215", 1, "encerrar_rodada", 1, "em_execucao")],
       evidencias: [
         {
@@ -334,8 +335,8 @@ export function semearTicketAberto(raiz: string): void {
   configurarProjeto(banco, raiz);
   gravarAgregadoPronto(
     banco,
-    demanda("I-216", "execucao", {
-      rodadas: [rodada("I-216", 1, "desenvolvimento")],
+    demanda("I-216", "em_execucao", {
+      rodadas: [rodada("I-216", 1, "implementar")],
       tickets: [ticket("I-216", 1, "implementar", 1, "aberto"), ticket("I-216", 2, "implementar", 1, "aberto")],
     }),
   );
@@ -354,7 +355,7 @@ export function semearDemandaAguardandoMerge(raiz: string): void {
   const banco = abrir(raiz);
   gravarAgregadoPronto(
     banco,
-    demanda("I-218", "encerramento", {
+    demanda("I-218", "encerrar_demanda", {
       rodadas: [rodada("I-218", 1, "concluida")],
       tickets: [
         ticket("I-218", 1, "implementar", 1, "concluido"),
@@ -378,7 +379,7 @@ export function semearDemandaAguardandoMerge(raiz: string): void {
 export function registrarCorrecaoDaSessao(raiz: string, demanda_id: string, rodada_id: number): void {
   const banco = abrir(raiz);
   const sessao = carregarDemanda(banco, demanda_id).tickets.find(
-    (t) => t.rodada_id === rodada_id && t.etapa === "sessao_em_aberto",
+    (t) => t.rodada_id === rodada_id && t.etapa === "ajustar_resultado",
   );
   if (!sessao) throw new Error("a rodada não tem ticket de sessão");
   comDemanda(banco, demanda_id, (a) =>
@@ -422,8 +423,8 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
       titulo: "Cupons com prioridade",
       tipo: "funcionalidade",
       descricao,
-      fase: "planejamento",
-      fase_alterada_em: em,
+      estado: "planejar",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "I-230" },
       enviada: true,
       branch: "fabriquinha/I-230",
@@ -433,8 +434,8 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
         demanda_id: "I-230",
         ticket_id: 1,
         etapa: "planejar",
-        status: "aberto",
-        status_alterado_em: em,
+        estado: "aberto",
+        estado_alterado_em: em,
         criado_por: { tipo: "fabriquinha" },
         devolucoes: 0,
       },

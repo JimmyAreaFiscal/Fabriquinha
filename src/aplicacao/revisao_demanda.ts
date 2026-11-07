@@ -9,7 +9,7 @@ import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./re
 import { conferirAprovacao } from "./revisao_pendencias.ts";
 import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 
-/** Todas as rodadas concluídas: a demanda vai a `revisao_demanda` com o `revisar_demanda` aberto. */
+/** Todas as rodadas concluídas: a demanda vai a `revisar_demanda` com o `revisar_demanda` aberto. */
 export function iniciarRevisaoIntegral(banco: DatabaseSync, demanda_id: string): AgregadoDemanda {
   return comDemanda(banco, demanda_id, (ag) =>
     iniciarRevisaoDemanda(ag, { demanda_id }, FABRIQUINHA, { agora: new Date().toISOString() }),

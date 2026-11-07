@@ -1,5 +1,5 @@
 // Grupo do estresse das rotas POST e DELETE de `ROTAS`: uma ação por rota. Cada chamada age sobre um registro próprio do
-// `Preparo`, já na fase que a rota exige (CA-2); a primeira chamada de uma ação prepara os registros de todas de uma vez,
+// `Preparo`, já no estado que a rota exige (CA-2); a primeira chamada de uma ação prepara os registros de todas de uma vez,
 // e o cronômetro só começa depois (a preparação fica fora do tempo medido). O tempo vai do envio do pedido ao fim do
 // corpo. Toda resposta é lida em busca de SQLITE_BUSY / "database is locked" (CA-3), e o status e o efeito gravado são
 // conferidos (CA-2, CA-4). O pi é o falso do ambiente ($FABRIQUINHA_PI): nenhuma rota aqui inicia o `pi` real (CA-6).
@@ -65,9 +65,13 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
   banco.prepare("UPDATE configuracao SET limite_paralelismo = 100000").run();
   const p = preparo.projeto;
 
-  const fases = (id: string) => {
+  const estados = (id: string) => {
     const ag = carregarDemanda(banco, id);
-    return { demanda: ag.demanda.fase, rodada: ag.rodadas[0]?.fase, ticket: ag.tickets.find((t) => t.ticket_id === 1) };
+    return {
+      demanda: ag.demanda.estado,
+      rodada: ag.rodadas[0]?.estado,
+      ticket: ag.tickets.find((t) => t.ticket_id === 1),
+    };
   };
 
   async function enviar(metodo: string, c: Chamada): Promise<number> {
@@ -164,7 +168,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         corpo: { aprovado: true },
         status: 200,
         efeito: () => {
-          conferir("planejamento", fases(id).demanda, `fase de ${id}`);
+          conferir("planejar", estados(id).demanda, `estado de ${id}`);
         },
       }),
     ),
@@ -178,7 +182,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         corpo: { aprovado: true },
         status: 200,
         efeito: () => {
-          conferir("execucao", fases(id).demanda, `fase de ${id}`);
+          conferir("em_execucao", estados(id).demanda, `estado de ${id}`);
         },
       }),
     ),
@@ -192,7 +196,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         corpo: { aprovado: true, nota: 4 },
         status: 200,
         efeito: () => {
-          conferir("concluida", fases(r.demanda).rodada, `fase da rodada ${r.rodada}`);
+          conferir("concluida", estados(r.demanda).rodada, `estado da rodada ${r.rodada}`);
         },
       }),
     ),
@@ -205,7 +209,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         url: `${rodada(ref)}/ajustes/concluir`,
         status: 200,
         efeito: () => {
-          conferir("desenvolvimento", fases(ref.split(".")[0] ?? "").rodada, `fase da rodada ${ref}`);
+          conferir("implementar", estados(ref.split(".")[0] ?? "").rodada, `estado da rodada ${ref}`);
         },
       }),
     ),
@@ -219,7 +223,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         corpo: { instrucao: "tente de novo" },
         status: 200,
         efeito: () => {
-          conferir("aberto", fases(ref.split(".")[0] ?? "").ticket?.status, `status de ${ref}`);
+          conferir("aberto", estados(ref.split(".")[0] ?? "").ticket?.estado, `status de ${ref}`);
         },
       }),
     ),
@@ -242,7 +246,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         url: `${demanda(id)}/cancelar`,
         status: 200,
         efeito: () => {
-          conferir("cancelada", fases(id).demanda, `fase de ${id}`);
+          conferir("cancelada", estados(id).demanda, `estado de ${id}`);
         },
       }),
     ),
@@ -255,7 +259,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
         url: `${demanda(id)}/arquivar`,
         status: 200,
         efeito: () => {
-          conferir("arquivada", fases(id).demanda, `fase de ${id}`);
+          conferir("arquivada", estados(id).demanda, `estado de ${id}`);
         },
       }),
     ),

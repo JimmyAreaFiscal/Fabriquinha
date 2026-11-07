@@ -461,5 +461,126 @@ ALTER TABLE evidencia_demanda ADD COLUMN autor_ferramenta TEXT CHECK ((autor_tip
 ALTER TABLE evidencia_demanda ADD COLUMN autor_sessao TEXT CHECK ((autor_tipo = 'externo') = (autor_sessao IS NOT NULL));
 `;
 
+/**
+ * A 38 dá a Demanda, a Rodada e o Ticket um só vocabulário, o de estado: `fase` e `status` viram `estado`, e os valores
+ * passam a ter o nome da Etapa. A Rodada ganha `estado_alterado_em` (o maior do ticket dela, ou o da demanda se não há
+ * ticket); o ticket perde `enviado_em` e `origem_ticket_id`, que ninguém escreve nem lê, e troca `fechado` por `cancelado`;
+ * a Etapa `demanda` vira `entender_e_desenhar` e `sessao_em_aberto`, `ajustar_resultado`; a sequência `issue`, `demanda`.
+ * Cada tabela é recriada com o CHECK novo, e as linhas voltam na mesma ordem.
+ */
+const MIGRACAO_38_ESTADO = `
+CREATE TABLE demanda_nova (
+    id                TEXT PRIMARY KEY,
+    projeto           TEXT NOT NULL REFERENCES projeto(nome),
+    titulo            TEXT NOT NULL,
+    tipo              TEXT NOT NULL CHECK (tipo IN ('funcionalidade','problema')),
+    descricao         TEXT NOT NULL,
+    estado            TEXT NOT NULL CHECK (estado IN ('entender_e_desenhar','gate_demanda','planejar','gate_planejamento','em_execucao','revisar_demanda','encerrar_demanda','concluida','arquivada','cancelada')),
+    estado_alterado_em TEXT NOT NULL,
+    criada_por_ferramenta TEXT NOT NULL,
+    criada_por_sessao     TEXT NOT NULL,
+    enviada           INTEGER NOT NULL CHECK (enviada IN (0,1)),
+    branch            TEXT NOT NULL
+  );
+INSERT INTO demanda_nova
+  SELECT id, projeto, titulo, tipo, descricao,
+         CASE fase
+           WHEN 'registro' THEN 'entender_e_desenhar'
+           WHEN 'aprovacao_demanda' THEN 'gate_demanda'
+           WHEN 'planejamento' THEN 'planejar'
+           WHEN 'aprovacao_planejamento' THEN 'gate_planejamento'
+           WHEN 'execucao' THEN 'em_execucao'
+           WHEN 'revisao_demanda' THEN 'revisar_demanda'
+           WHEN 'encerramento' THEN 'encerrar_demanda'
+           ELSE fase END,
+         fase_alterada_em, criada_por_ferramenta, criada_por_sessao, enviada, branch
+  FROM demanda ORDER BY rowid;
+CREATE TABLE rodada_nova (
+    demanda_id TEXT NOT NULL REFERENCES demanda(id),
+    rodada_id  INTEGER NOT NULL,
+    titulo     TEXT NOT NULL,
+    estado     TEXT NOT NULL CHECK (estado IN ('implementar','revisar_rodada','encerrar_rodada','gate_pr','ajustar_resultado','concluida')),
+    estado_alterado_em TEXT NOT NULL,
+    e2e        INTEGER NOT NULL CHECK (e2e IN (0,1)),
+    branch     TEXT NOT NULL,
+    PRIMARY KEY (demanda_id, rodada_id)
+  );
+INSERT INTO rodada_nova
+  SELECT r.demanda_id, r.rodada_id, r.titulo,
+         CASE r.fase
+           WHEN 'desenvolvimento' THEN 'implementar'
+           WHEN 'revisao' THEN 'revisar_rodada'
+           WHEN 'encerramento' THEN 'encerrar_rodada'
+           WHEN 'aprovacao_pull_request' THEN 'gate_pr'
+           WHEN 'sessao' THEN 'ajustar_resultado'
+           ELSE r.fase END,
+         COALESCE(
+           (SELECT MAX(t.status_alterado_em) FROM ticket_demanda t WHERE t.demanda_id = r.demanda_id AND t.rodada_id = r.rodada_id),
+           (SELECT d.fase_alterada_em FROM demanda d WHERE d.id = r.demanda_id)),
+         r.e2e, r.branch
+  FROM rodada r ORDER BY r.rowid;
+CREATE TABLE ticket_demanda_novo (
+    demanda_id         TEXT NOT NULL REFERENCES demanda(id),
+    ticket_id          INTEGER NOT NULL,
+    etapa              TEXT NOT NULL CHECK (etapa IN ('entender_e_desenhar','planejar','implementar','revisar_rodada','encerrar_rodada','ajustar_resultado','revisar_demanda','encerrar_demanda','resolver_conflito')),
+    estado             TEXT NOT NULL CHECK (estado IN ('aberto','em_execucao','concluido','falhou','cancelado')),
+    estado_alterado_em TEXT NOT NULL,
+    rodada_id          INTEGER,
+    titulo             TEXT,
+    descricao          TEXT,
+    modelo_provedor    TEXT,
+    modelo_nome        TEXT,
+    effort             TEXT CHECK (effort IS NULL OR effort IN ('off','minimal','low','medium','high','xhigh','max')),
+    instrucao          TEXT,
+    devolucoes         INTEGER NOT NULL DEFAULT 0 CHECK (devolucoes BETWEEN 0 AND 2),
+    motivo_falha       TEXT CHECK (motivo_falha IS NULL OR length(motivo_falha) > 0),
+    criado_em          TEXT,
+    concluido_em       TEXT,
+    retomadas_automaticas INTEGER NOT NULL DEFAULT 0 CHECK (retomadas_automaticas >= 0),
+    criado_por_tipo    TEXT NOT NULL DEFAULT 'fabriquinha' CHECK (criado_por_tipo IN ('auditor','agente','fabriquinha','externo')),
+    criado_por_trabalho_id TEXT CHECK ((criado_por_tipo = 'agente') = (criado_por_trabalho_id IS NOT NULL)),
+    PRIMARY KEY (demanda_id, ticket_id),
+    UNIQUE (demanda_id, ticket_id, rodada_id),
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id),
+    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))
+  );
+INSERT INTO ticket_demanda_novo
+  SELECT demanda_id, ticket_id,
+         CASE etapa WHEN 'demanda' THEN 'entender_e_desenhar' WHEN 'sessao_em_aberto' THEN 'ajustar_resultado' ELSE etapa END,
+         CASE status WHEN 'fechado' THEN 'cancelado' ELSE status END,
+         status_alterado_em, rodada_id, titulo, descricao, modelo_provedor, modelo_nome, effort, instrucao, devolucoes,
+         motivo_falha, criado_em, concluido_em, retomadas_automaticas, criado_por_tipo, criado_por_trabalho_id
+  FROM ticket_demanda ORDER BY rowid;
+CREATE TABLE configuracao_etapa_projeto_nova (
+    projeto         TEXT NOT NULL REFERENCES projeto(nome) ON DELETE CASCADE,
+    etapa           TEXT NOT NULL CHECK (etapa IN ('entender_e_desenhar','planejar','implementar','revisar_rodada','encerrar_rodada','ajustar_resultado','revisar_demanda','encerrar_demanda','resolver_conflito')),
+    modelo_provedor TEXT CHECK (modelo_provedor IS NULL OR length(modelo_provedor) > 0),
+    modelo_nome     TEXT CHECK (modelo_nome IS NULL OR length(modelo_nome) > 0),
+    effort          TEXT CHECK (effort IS NULL OR effort IN ('off','minimal','low','medium','high','xhigh','max')),
+    PRIMARY KEY (projeto, etapa),
+    CHECK ((modelo_provedor IS NULL) = (modelo_nome IS NULL))
+  );
+INSERT INTO configuracao_etapa_projeto_nova
+  SELECT projeto,
+         CASE etapa WHEN 'demanda' THEN 'entender_e_desenhar' WHEN 'sessao_em_aberto' THEN 'ajustar_resultado' ELSE etapa END,
+         modelo_provedor, modelo_nome, effort
+  FROM configuracao_etapa_projeto ORDER BY rowid;
+CREATE TABLE sequencia_nova (
+    nome  TEXT PRIMARY KEY CHECK (nome IN ('demanda','ticket','execucao','decisao','evidencia','proposta')),
+    valor INTEGER NOT NULL CHECK (valor >= 0)
+  );
+INSERT INTO sequencia_nova SELECT CASE nome WHEN 'issue' THEN 'demanda' ELSE nome END, valor FROM sequencia ORDER BY rowid;
+DROP TABLE ticket_demanda;
+DROP TABLE rodada;
+DROP TABLE demanda;
+DROP TABLE configuracao_etapa_projeto;
+DROP TABLE sequencia;
+ALTER TABLE demanda_nova RENAME TO demanda;
+ALTER TABLE rodada_nova RENAME TO rodada;
+ALTER TABLE ticket_demanda_novo RENAME TO ticket_demanda;
+ALTER TABLE configuracao_etapa_projeto_nova RENAME TO configuracao_etapa_projeto;
+ALTER TABLE sequencia_nova RENAME TO sequencia;
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
-export const MIGRACOES: readonly Migracao[] = [MIGRACAO_37_AUTORIA];
+export const MIGRACOES: readonly Migracao[] = [MIGRACAO_37_AUTORIA, MIGRACAO_38_ESTADO];

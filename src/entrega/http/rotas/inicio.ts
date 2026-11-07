@@ -7,7 +7,7 @@ import type { ModoExecucao } from "../../../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
-import type { EtapaTicket, FaseDemanda, FaseRodada, Instante, StatusTicket } from "../../../nucleo/primitivos.ts";
+import type { EtapaTicket, EstadoDemanda, EstadoRodada, Instante, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { iniciarRevisaoDemanda } from "../../../nucleo/transicoes_demanda.ts";
 import { type Situacao, situacao } from "../../../aplicacao/gerente.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
@@ -30,14 +30,14 @@ export type MotivoDaEspera =
 interface TicketDoInicio {
   ref: string;
   etapa: EtapaTicket;
-  status: StatusTicket;
+  estado: EstadoTicket;
   modo?: ModoExecucao;
   /** Com execução de pi aberta: o `em_execucao` é o pi, não o sistema. */
   piAtivo?: true;
 }
 
-/** O ticket de uma espera: sem o status, que a espera já diz pelo motivo. */
-type TicketDaEspera = Omit<TicketDoInicio, "status">;
+/** O ticket de uma espera: sem o estado, que a espera já diz pelo motivo. */
+type TicketDaEspera = Omit<TicketDoInicio, "estado">;
 
 /** O que aguarda o Auditor; `rodada` quando é de uma rodada, e o PR, o erro ou a pergunta conforme o motivo. */
 export interface EsperaDoAuditor {
@@ -59,13 +59,13 @@ export interface EsperaDoAuditor {
 export type SessaoRodando = SessaoDeDemanda & { fazendo?: string };
 
 /**
- * A coluna do board: a fase da demanda antes e depois da execução e, na execução, a fase de cada rodada (o encerramento
+ * A coluna do board: o estado da demanda antes e depois da execução e, na execução, o estado de cada rodada (o encerramento
  * da demanda tem nome próprio, para não se confundir com o da rodada).
  */
 export type ColunaDoBoard =
-  | Exclude<FaseDemanda, "execucao" | "encerramento" | "concluida" | "arquivada" | "cancelada">
+  | Exclude<EstadoDemanda, "em_execucao" | "encerrar_demanda" | "concluida" | "arquivada" | "cancelada">
   | "encerramento_demanda"
-  | Exclude<FaseRodada, "concluida">;
+  | Exclude<EstadoRodada, "concluida">;
 
 /** Um cartão do board: a demanda (`I-n`) ou, na execução, uma rodada dela (`I-n.Rm`). */
 export interface CartaoDoBoard {
@@ -91,7 +91,7 @@ export interface DadosDoInicio {
   board: CartaoDoBoard[];
 }
 
-const TERMINADO: ReadonlySet<StatusTicket> = new Set(["concluido", "fechado", "cancelado"]);
+const TERMINADO: ReadonlySet<EstadoTicket> = new Set(["concluido", "cancelado"]);
 
 /** O ticket em curso de uma lista e quantos outros ainda não terminaram. */
 function ticketEmCurso(
@@ -99,8 +99,8 @@ function ticketEmCurso(
   modoDe: (ref: string) => ModoExecucao | undefined,
   comPiAtivo: ReadonlySet<string>,
 ) {
-  const abertos = tickets.filter((t) => !TERMINADO.has(t.status));
-  const [ticket] = abertos.toSorted((a, b) => Number(a.status === "aberto") - Number(b.status === "aberto"));
+  const abertos = tickets.filter((t) => !TERMINADO.has(t.estado));
+  const [ticket] = abertos.toSorted((a, b) => Number(a.estado === "aberto") - Number(b.estado === "aberto"));
   return {
     ...(ticket && { ticket: ticketDoInicio(ticket, modoDe, comPiAtivo) }),
     outros: Math.max(abertos.length - 1, 0),
@@ -117,19 +117,19 @@ function ticketDoInicio(
   return {
     ref,
     etapa: t.etapa,
-    status: t.status,
+    estado: t.estado,
     ...(modo && { modo }),
     ...(comPiAtivo.has(ref) && { piAtivo: true }),
   };
 }
 
 /**
- * A coluna da demanda que tem nome diferente da fase: o encerramento dela e a execução sem rodada aberta (antes da
+ * A coluna da demanda que tem nome diferente do estado: o encerramento dela e a execução sem rodada aberta (antes da
  * primeira ou depois da última, até a revisão abrir), que fica no Desenvolvimento.
  */
-const COLUNA_DA_FASE: Partial<Record<FaseDemanda, ColunaDoBoard>> = {
-  execucao: "desenvolvimento",
-  encerramento: "encerramento_demanda",
+const COLUNA_DO_ESTADO: Partial<Record<EstadoDemanda, ColunaDoBoard>> = {
+  em_execucao: "implementar",
+  encerrar_demanda: "encerramento_demanda",
 };
 
 /** Os cartões da demanda: um por rodada que não concluiu, na execução; senão, um só, o da demanda. */
@@ -139,15 +139,15 @@ function cartoesDaDemanda(
   modoDe: (ref: string) => ModoExecucao | undefined,
   comPiAtivo: ReadonlySet<string>,
 ) {
-  const { id: demanda, projeto, titulo, fase } = ag.demanda;
+  const { id: demanda, projeto, titulo, estado } = ag.demanda;
   const bloqueios = predecessorasDaDemanda(banco, demanda)
-    .filter((p) => !satisfazDependencia(p.fase))
+    .filter((p) => !satisfazDependencia(p.estado))
     .map((p) => p.demanda_id);
   const identificacao = { demanda, projeto, titulo, bloqueios };
-  const abertas = ag.rodadas.filter((r) => r.fase !== "concluida");
-  if (fase === "execucao" && abertas.length > 0) {
+  const abertas = ag.rodadas.filter((r) => r.estado !== "concluida");
+  if (estado === "em_execucao" && abertas.length > 0) {
     return abertas.map((r): CartaoDoBoard => ({
-      coluna: r.fase as ColunaDoBoard,
+      coluna: r.estado as ColunaDoBoard,
       ref: formatarRodadaRef(r),
       ...identificacao,
       ...ticketEmCurso(
@@ -157,7 +157,7 @@ function cartoesDaDemanda(
       ),
     }));
   }
-  const coluna = COLUNA_DA_FASE[fase] ?? (fase as ColunaDoBoard);
+  const coluna = COLUNA_DO_ESTADO[estado] ?? (estado as ColunaDoBoard);
   const globais = ag.tickets.filter((t) => t.rodada_id === undefined);
   return [{ coluna, ref: demanda, ...identificacao, ...ticketEmCurso(globais, modoDe, comPiAtivo) }];
 }
@@ -170,17 +170,17 @@ const TOLERANCIA_REVISAO_PARADA_MS = 2 * 60_000;
  * que o agendador só deixa no log do serviço. O motivo é a própria regra aplicada ao agregado em memória.
  */
 function esperaDaRevisaoParada(ag: AgregadoDemanda, agora: Date): EsperaDoAuditor[] {
-  const { id: demanda, projeto, titulo, fase, fase_alterada_em } = ag.demanda;
+  const { id: demanda, projeto, titulo, estado, estado_alterado_em } = ag.demanda;
   const prontaParaRevisao =
-    fase === "execucao" &&
+    estado === "em_execucao" &&
     ag.rodadas.length > 0 &&
-    ag.rodadas.every((r) => r.fase === "concluida") &&
-    !ag.tickets.some((t) => ["aberto", "em_execucao", "falhou"].includes(t.status));
+    ag.rodadas.every((r) => r.estado === "concluida") &&
+    !ag.tickets.some((t) => ["aberto", "em_execucao", "falhou"].includes(t.estado));
   if (!prontaParaRevisao) return [];
-  // Parada desde o último movimento: a mudança de fase ou o ticket que mudou por último.
+  // Parada desde o último movimento: a mudança de estado ou o ticket que mudou por último.
   const desde = ag.tickets.reduce(
-    (ultimo, t) => (t.status_alterado_em > ultimo ? t.status_alterado_em : ultimo),
-    fase_alterada_em,
+    (ultimo, t) => (t.estado_alterado_em > ultimo ? t.estado_alterado_em : ultimo),
+    estado_alterado_em,
   );
   if (agora.getTime() - Date.parse(desde) < TOLERANCIA_REVISAO_PARADA_MS) return [];
   let erro = "a revisão integral não começou; veja o log do serviço (journalctl --user -u fabriquinha)";
@@ -199,56 +199,56 @@ function esperasDaDemanda(
   modoDe: (ref: string) => ModoExecucao | undefined,
   agora: Date,
 ): EsperaDoAuditor[] {
-  const { id: demanda, projeto, titulo, fase, fase_alterada_em } = ag.demanda;
+  const { id: demanda, projeto, titulo, estado, estado_alterado_em } = ag.demanda;
   const identificacao = { demanda, projeto, titulo };
   const ticketGlobal = (etapa: EtapaTicket) =>
     ag.tickets.findLast((t) => t.etapa === etapa && t.rodada_id === undefined);
   const ticketDaEspera = (t: TicketDemanda | undefined) => {
     if (!t) return undefined;
-    const { status: _, ...ticket } = ticketDoInicio(t, modoDe);
+    const { estado: _, ...ticket } = ticketDoInicio(t, modoDe);
     return { ticket };
   };
   const gates: EsperaDoAuditor[] = [];
-  if (fase === "aprovacao_demanda") {
+  if (estado === "gate_demanda") {
     gates.push({
       motivo: "gate_demanda",
       ...identificacao,
-      ...ticketDaEspera(ticketGlobal("demanda")),
-      desde: fase_alterada_em,
+      ...ticketDaEspera(ticketGlobal("entender_e_desenhar")),
+      desde: estado_alterado_em,
     });
   }
-  if (fase === "aprovacao_planejamento") {
+  if (estado === "gate_planejamento") {
     gates.push({
       motivo: "gate_planejamento",
       ...identificacao,
       ...ticketDaEspera(ticketGlobal("planejar")),
-      desde: fase_alterada_em,
+      desde: estado_alterado_em,
     });
   }
   for (const r of ag.rodadas) {
-    if (r.fase !== "aprovacao_pull_request" && r.fase !== "sessao") continue;
+    if (r.estado !== "gate_pr" && r.estado !== "ajustar_resultado") continue;
     // O gate do PR conta de quando o encerramento da rodada abriu o PR; a sessão de ajustes, de quando ela abriu.
-    const etapa = r.fase === "sessao" ? "sessao_em_aberto" : "encerrar_rodada";
+    const etapa = r.estado === "ajustar_resultado" ? "ajustar_resultado" : "encerrar_rodada";
     const ticket = ag.tickets.findLast((t) => t.rodada_id === r.rodada_id && t.etapa === etapa);
     const pr = prDaRodada(ag, r.rodada_id);
     gates.push({
-      motivo: r.fase === "sessao" ? "ajustes" : "gate_pr",
+      motivo: r.estado === "ajustar_resultado" ? "ajustes" : "gate_pr",
       ...identificacao,
       rodada: formatarRodadaRef(r),
       ...ticketDaEspera(ticket),
       ...(pr && { pr }),
-      desde: ticket?.status_alterado_em ?? fase_alterada_em,
+      desde: ticket?.estado_alterado_em ?? estado_alterado_em,
     });
   }
   const falhos = ag.tickets
-    .filter((t) => t.status === "falhou")
+    .filter((t) => t.estado === "falhou")
     .map((t): EsperaDoAuditor => ({
       motivo: "falha",
       ...identificacao,
       ...(t.rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id: t.rodada_id }) }),
       ...ticketDaEspera(t),
       ...(t.motivo_falha !== undefined && { erro: t.motivo_falha }),
-      desde: t.status_alterado_em,
+      desde: t.estado_alterado_em,
     }));
   return [...gates, ...falhos, ...esperaDaRevisaoParada(ag, agora)];
 }
@@ -262,7 +262,7 @@ type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
  */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): EsperaDoAuditor[] {
-  if (s.motivo !== "dialogo" && (s.motivo !== "conversa" || s.etapa === "sessao_em_aberto")) return [];
+  if (s.motivo !== "dialogo" && (s.motivo !== "conversa" || s.etapa === "ajustar_resultado")) return [];
   const pergunta = s.motivo === "dialogo" ? situacaoDa(s.sessao)?.dialogos[0]?.title : undefined;
   return [
     {

@@ -201,7 +201,7 @@ export interface ExecucaoNoPeriodo {
   demanda: string;
   projeto: string;
   titulo: string;
-  fase: string;
+  estado: string;
   etapa: string;
   inicio: string;
   falha: boolean;
@@ -213,7 +213,7 @@ export interface ExecucaoNoPeriodo {
 export const execucoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): ExecucaoNoPeriodo[] =>
   banco
     .prepare(
-      `SELECT e.id, e.sessao_id, s.ticket_id, t.rodada_id, d.id AS demanda, d.projeto, d.titulo, d.fase, t.etapa,
+      `SELECT e.id, e.sessao_id, s.ticket_id, t.rodada_id, d.id AS demanda, d.projeto, d.titulo, d.estado, t.etapa,
          e.inicio, e.falha,
          MAX(0, ROUND((julianday(COALESCE(e.fim, e.inicio)) - julianday(e.inicio)) * 86400000)) AS duracao_ms
        FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
@@ -230,7 +230,7 @@ export const execucoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Execu
       demanda: l.demanda as string,
       projeto: l.projeto as string,
       titulo: l.titulo as string,
-      fase: l.fase as string,
+      estado: l.estado as string,
       etapa: l.etapa as string,
       inicio: l.inicio as string,
       falha: l.falha === 1,
@@ -272,12 +272,12 @@ export const fatosNoPeriodo = (banco: DatabaseSync, recorte: Recorte): { fato: F
     .prepare(
       `WITH fatos (fato, em, demanda) AS (
          SELECT 'demandasRegistradas', COALESCE(h.criada_em, (SELECT MIN(em) FROM evidencia_demanda WHERE demanda_id = d.id),
-           d.fase_alterada_em), d.id FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id
-         UNION ALL SELECT 'demandasConcluidas', COALESCE(h.concluida_em, d.fase_alterada_em), d.id
-           FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id WHERE d.fase = 'concluida'
-         UNION ALL SELECT 'ticketsCriados', COALESCE(t.criado_em, t.status_alterado_em), t.demanda_id FROM ticket_demanda t
-         UNION ALL SELECT 'ticketsConcluidos', COALESCE(t.concluido_em, t.status_alterado_em), t.demanda_id
-           FROM ticket_demanda t WHERE t.status = 'concluido'
+           d.estado_alterado_em), d.id FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id
+         UNION ALL SELECT 'demandasConcluidas', COALESCE(h.concluida_em, d.estado_alterado_em), d.id
+           FROM demanda d LEFT JOIN demanda_historico h ON h.demanda_id = d.id WHERE d.estado = 'concluida'
+         UNION ALL SELECT 'ticketsCriados', COALESCE(t.criado_em, t.estado_alterado_em), t.demanda_id FROM ticket_demanda t
+         UNION ALL SELECT 'ticketsConcluidos', COALESCE(t.concluido_em, t.estado_alterado_em), t.demanda_id
+           FROM ticket_demanda t WHERE t.estado = 'concluido'
        )
        SELECT f.fato, f.em FROM fatos f JOIN demanda d ON d.id = f.demanda
        WHERE f.em >= $inicio AND f.em < $fim AND ${NO_RECORTE}`,

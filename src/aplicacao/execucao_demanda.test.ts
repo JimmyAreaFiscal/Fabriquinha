@@ -84,8 +84,8 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     demanda_id: "I-1",
     ticket_id,
     etapa,
-    status: "aberto",
-    status_alterado_em: em,
+    estado: "aberto",
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
@@ -94,7 +94,8 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     demanda_id: "I-1",
     rodada_id,
     titulo: `r${String(rodada_id)}`,
-    fase: "desenvolvimento",
+    estado: "implementar",
+    estado_alterado_em: "2026-01-01T00:00:00.000Z",
     e2e: false,
     branch: `fabriquinha/I-1-${String(rodada_id)}`,
   });
@@ -105,8 +106,8 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "execucao",
-      fase_alterada_em: em,
+      estado: "em_execucao",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
@@ -507,7 +508,7 @@ test("CA-10, CA-14: reinício mata o grupo gravado, falha as abertas (com ou sem
 const emExecucao = (banco: DatabaseSync, ticket_id: number) =>
   comDemanda(banco, "I-1", (ag) => ({
     ...ag,
-    tickets: ag.tickets.map((t) => (t.ticket_id === ticket_id ? { ...t, status: "em_execucao" as const } : t)),
+    tickets: ag.tickets.map((t) => (t.ticket_id === ticket_id ? { ...t, estado: "em_execucao" as const } : t)),
   }));
 const statusDe = (banco: DatabaseSync, ticket_id: number) =>
   carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === ticket_id);
@@ -519,7 +520,7 @@ test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem d
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
   const ag = carregarDemanda(banco, "I-1");
   const t = ag.tickets.find((x) => x.ticket_id === 1);
-  assert.equal(t?.status, "falhou");
+  assert.equal(t?.estado, "falhou");
   assert.match(t.motivo_falha ?? "", /limite de uso/);
   assert.equal(t.devolucoes, 0);
   assert.equal(ag.evidencias.length, 0);
@@ -549,7 +550,7 @@ test("erro do fechamento vai ao log e falha o ticket com o motivo", async () => 
   });
   await fim;
   assert.match(readFileSync(join(c.raiz, "execucoes", `E-${id}`, "log"), "utf8"), /fechamento falhou: boom/);
-  assert.equal(statusDe(banco, 1)?.status, "falhou");
+  assert.equal(statusDe(banco, 1)?.estado, "falhou");
   assert.match(statusDe(banco, 1)?.motivo_falha ?? "", /boom/);
 });
 
@@ -588,31 +589,31 @@ test("reinício falha o ticket em execução cuja execução já foi encerrada (
   const { banco } = await cenario();
   emExecucao(banco, 1);
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1, fechar: () => Promise.resolve() }).fim;
-  assert.equal(statusDe(banco, 1)?.status, "em_execucao");
+  assert.equal(statusDe(banco, 1)?.estado, "em_execucao");
   recuperarExecucoesDemanda(banco);
-  assert.equal(statusDe(banco, 1)?.status, "falhou");
+  assert.equal(statusDe(banco, 1)?.estado, "falhou");
   assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
 });
 
 test("CA-12: reinício falha as revisões e o encerrar_rodada em encerramento; o gate do PR e o planejar ficam", async () => {
   const { banco } = await cenario();
-  banco.exec(`UPDATE rodada SET fase = 'encerramento' WHERE rodada_id = 1;
-    UPDATE rodada SET fase = 'aprovacao_pull_request' WHERE rodada_id = 2;
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id) VALUES
+  banco.exec(`UPDATE rodada SET estado = 'encerrar_rodada' WHERE rodada_id = 1;
+    UPDATE rodada SET estado = 'gate_pr' WHERE rodada_id = 2;
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES
       ('I-1', 8, 'revisar_rodada', 'em_execucao', '${em}', 1),
       ('I-1', 9, 'encerrar_rodada', 'em_execucao', '${em}', 1),
       ('I-1', 10, 'encerrar_rodada', 'em_execucao', '${em}', 2)`);
   for (const t of [3, 4]) emExecucao(banco, t); // planejar e revisar_demanda
   recuperarExecucoesDemanda(banco);
   assert.deepEqual(
-    [3, 4, 8, 9, 10].map((t) => statusDe(banco, t)?.status),
+    [3, 4, 8, 9, 10].map((t) => statusDe(banco, t)?.estado),
     ["em_execucao", "falhou", "falhou", "falhou", "em_execucao"],
   );
 });
 
 test("CA-12: reinício falha o planejar com execução aberta, com a demanda em planejamento", async () => {
   const { banco } = await cenario();
-  banco.exec("UPDATE demanda SET fase = 'planejamento' WHERE id = 'I-1'");
+  banco.exec("UPDATE demanda SET estado = 'planejar' WHERE id = 'I-1'");
   emExecucao(banco, 3);
   comSessoesDoTicket(banco, ref(3), (estado) => {
     const sessao = { ...ref(3), id: "s-p", modo: "autonomo" as const, conversa_referencia: "p" };
@@ -621,7 +622,7 @@ test("CA-12: reinício falha o planejar com execução aberta, com a demanda em 
     return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
   });
   recuperarExecucoesDemanda(banco);
-  assert.equal(statusDe(banco, 3)?.status, "falhou");
+  assert.equal(statusDe(banco, 3)?.estado, "falhou");
 });
 
 test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {
@@ -634,16 +635,16 @@ test("CA-7: o motivo da falha de preparação vai ao log da execução", async (
 
 test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em execução; a demanda segue em encerramento", async () => {
   const { banco } = await cenario();
-  banco.exec(`UPDATE demanda SET fase = 'encerramento' WHERE id = 'I-1';
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES
+  banco.exec(`UPDATE demanda SET estado = 'encerrar_demanda' WHERE id = 'I-1';
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 11, 'encerrar_demanda', 'em_execucao', '${em}'),
       ('I-1', 12, 'resolver_conflito', 'em_execucao', '${em}')`);
   recuperarExecucoesDemanda(banco);
   assert.deepEqual(
-    [11, 12].map((t) => statusDe(banco, t)?.status),
+    [11, 12].map((t) => statusDe(banco, t)?.estado),
     ["falhou", "falhou"],
   );
-  assert.equal(banco.prepare("SELECT fase FROM demanda WHERE id = 'I-1'").get()?.fase, "encerramento");
+  assert.equal(banco.prepare("SELECT estado FROM demanda WHERE id = 'I-1'").get()?.estado, "encerrar_demanda");
 });
 
 /** Espera o pi da execução subir e devolve o grupo dele. */
@@ -669,7 +670,7 @@ test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket 
   assert.notEqual(execucao?.fim, null);
   assert.equal(execucao?.falha, true);
   assert.equal(execucao.erro, "serviço reiniciado");
-  assert.equal(statusDe(banco, 1)?.status, "falhou");
+  assert.equal(statusDe(banco, 1)?.estado, "falhou");
   assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
   await fim;
 });
@@ -736,7 +737,7 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
   process.kill(Number(readFileSync(arquivoComPidDaColeta, "utf8")), "SIGTERM"); // como o cgroup do systemd, só no comando deste teste
   await fim;
   const ticket = carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === 1);
-  assert.equal(ticket?.status, "falhou");
+  assert.equal(ticket?.estado, "falhou");
   assert.equal(ticket.motivo_falha, "serviço reiniciado");
   assert.equal(ticket.devolucoes, 0);
   assert.equal(carregarDemanda(banco, "I-1").evidencias.length, 0);
@@ -746,7 +747,7 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
 
 test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisões anteriores recusadas da rodada", async () => {
   const { banco, c } = await cenario();
-  banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id) VALUES
+  banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES
       ('I-1', 8, 'revisar_rodada', 'concluido', '${em}', 1),
       ('I-1', 9, 'revisar_rodada', 'concluido', '${em}', 1),
       ('I-1', 10, 'revisar_rodada', 'aberto', '${em}', 1);

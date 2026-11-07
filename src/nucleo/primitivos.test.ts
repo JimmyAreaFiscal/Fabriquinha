@@ -3,9 +3,9 @@ import { test } from "node:test";
 import type { z } from "zod";
 import {
   EtapaTicket,
-  FaseDemanda,
-  FaseRodada,
-  StatusTicket,
+  EstadoDemanda,
+  EstadoRodada,
+  EstadoTicket,
   Id,
   Instante,
   Markdown,
@@ -58,36 +58,36 @@ test("Slug é minúsculo, com dígitos e hífen, até 64 caracteres", () => {
 test("estados SDLC têm exatamente os valores da seção 2.1", () => {
   const casos: [z.ZodEnum, string[]][] = [
     [
-      FaseDemanda,
+      EstadoDemanda,
       [
-        "registro",
-        "aprovacao_demanda",
-        "planejamento",
-        "aprovacao_planejamento",
-        "execucao",
-        "revisao_demanda",
-        "encerramento",
+        "entender_e_desenhar",
+        "gate_demanda",
+        "planejar",
+        "gate_planejamento",
+        "em_execucao",
+        "revisar_demanda",
+        "encerrar_demanda",
         "concluida",
         "arquivada",
         "cancelada",
       ],
     ],
-    [FaseRodada, ["desenvolvimento", "revisao", "encerramento", "aprovacao_pull_request", "sessao", "concluida"]],
+    [EstadoRodada, ["implementar", "revisar_rodada", "encerrar_rodada", "gate_pr", "ajustar_resultado", "concluida"]],
     [
       EtapaTicket,
       [
-        "demanda",
+        "entender_e_desenhar",
         "planejar",
         "implementar",
         "revisar_rodada",
         "encerrar_rodada",
-        "sessao_em_aberto",
+        "ajustar_resultado",
         "revisar_demanda",
         "encerrar_demanda",
         "resolver_conflito",
       ],
     ],
-    [StatusTicket, ["aberto", "em_execucao", "concluido", "falhou", "fechado", "cancelado"]],
+    [EstadoTicket, ["aberto", "em_execucao", "concluido", "falhou", "cancelado"]],
   ];
   for (const [schema, valores] of casos) {
     assert.deepEqual(schema.options, valores);

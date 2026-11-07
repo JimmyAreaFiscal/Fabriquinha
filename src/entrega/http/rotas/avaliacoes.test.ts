@@ -67,8 +67,8 @@ before(async () => {
     ["I-13", "site"],
   ] as const) {
     servico.banco.exec(
-      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
-       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
+      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
+       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
        INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
        INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '2026-10-10T11:00:00.000Z', 0);`,
     );

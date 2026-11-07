@@ -13,7 +13,7 @@ const sessao = (s: Partial<SessaoDeDemanda> = {}): SessaoDeDemanda => ({
   sessao: "a1/b2",
   projeto: "loja <api>",
   demanda: "I-37",
-  titulo: "Board <por> fase",
+  titulo: "Board <por> estado",
   ticket: "I-37.T109",
   etapa: "planejar",
   modo: "autonomo",
@@ -64,7 +64,7 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
     [
       sessao(),
       sessao({ sessao: "x", desde: "2026-10-11T21:47:00.000Z", resultado: "falha", modo: "consulta" }),
-      sessao({ sessao: "y", desde: "2026-10-08T19:58:00.000Z", etapa: "sessao_em_aberto", modo: "interativo" }),
+      sessao({ sessao: "y", desde: "2026-10-08T19:58:00.000Z", etapa: "ajustar_resultado", modo: "interativo" }),
     ],
     "x",
     AGORA,
@@ -75,7 +75,7 @@ test("lista: por dia, da mais recente para a mais antiga como veio, com a seleci
   );
   assert.ok(
     html.includes(
-      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37.T109</span><span class="meio">Board &#60;por&#62; fase <span class="muted">· planejamento · autônoma</span></span><span class="esconde"><span class="pill pill-ok">concluída</span></span></button>',
+      '<button type="button" class="linha" data-sel="a1/b2" aria-selected="false"><span class="hora">10:34</span><span class="id">I-37.T109</span><span class="meio">Board &#60;por&#62; estado <span class="muted">· planejamento · autônoma</span></span><span class="esconde"><span class="pill pill-ok">concluída</span></span></button>',
     ),
   );
   assert.match(html, /data-sel="x" aria-selected="true"><span class="hora">18:47<\/span>/);
@@ -142,7 +142,7 @@ test("prévia: os fatos da sessão, o fim da conversa e as ações", () => {
     ]),
     AGORA,
   );
-  assert.ok(html.startsWith('<div><span class="id">I-37 · I-37.T109</span><h2>Board &#60;por&#62; fase</h2></div>'));
+  assert.ok(html.startsWith('<div><span class="id">I-37 · I-37.T109</span><h2>Board &#60;por&#62; estado</h2></div>'));
   assert.ok(
     html.includes(
       '<dt>Projeto</dt><dd>loja &#60;api&#62;</dd><dt>Etapa</dt><dd>planejamento · autônoma</dd><dt>Resultado</dt><dd><span class="pill pill-ok">concluída</span></dd><dt>Terminada</dt><dd>Hoje 10:34 · durou 22 min</dd><dt>Modelo</dt><dd><span class="modelo" title="anthropic / claude-opus-5-5">anthropic / claude-opus-5-5</span></dd><dt>Mensagens</dt><dd>4</dd>',

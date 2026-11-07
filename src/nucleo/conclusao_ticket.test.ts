@@ -8,7 +8,7 @@ import type { EvidenciaEtapa } from "./evidencia_etapa.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
-const montar = (status: string, fase = "execucao", etapa = "implementar", devolucoes = 0) =>
+const montar = (status: string, estado = "em_execucao", etapa = "implementar", devolucoes = 0) =>
   AgregadoDemanda.parse({
     demanda: {
       id: "I-1",
@@ -16,8 +16,8 @@ const montar = (status: string, fase = "execucao", etapa = "implementar", devolu
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: t0,
+      estado,
+      estado_alterado_em: t0,
       criada_por: { tipo: "externo", ferramenta: "f", sessao: "s" },
       enviada: true,
       branch: "fabriquinha/I-1",
@@ -30,8 +30,8 @@ const montar = (status: string, fase = "execucao", etapa = "implementar", devolu
         ticket_id: 2,
         rodada_id: undefined,
         etapa,
-        status,
-        status_alterado_em: t0,
+        estado: status,
+        estado_alterado_em: t0,
         devolucoes,
         criado_por: FABRIQUINHA,
       },
@@ -63,15 +63,15 @@ test("CA-8: pendências citadas pelo tipo; ticket segue em_execucao", () => {
       !/\bT-2\b/.test(e.message),
   );
   assert.deepEqual(
-    ag.tickets.map((t) => t.status),
+    ag.tickets.map((t) => t.estado),
     ["em_execucao"],
   );
 });
 
 test("CA-9: sem pendências conclui e zera as devoluções", () => {
-  const novo = concluir(montar("em_execucao", "execucao", "implementar", 1));
+  const novo = concluir(montar("em_execucao", "em_execucao", "implementar", 1));
   assert.deepEqual(
-    novo.tickets.map((t) => [t.status, t.devolucoes, t.status_alterado_em]),
+    novo.tickets.map((t) => [t.estado, t.devolucoes, t.estado_alterado_em]),
     [["concluido", 0, t1]],
   );
 });
@@ -80,7 +80,7 @@ test("CA-10: o agente não conclui", () => {
   const ag = montar("em_execucao");
   assert.throws(() => concluir(ag, AUDITOR), ErroDeEscopo);
   assert.deepEqual(
-    ag.tickets.map((t) => t.status),
+    ag.tickets.map((t) => t.estado),
     ["em_execucao"],
   );
 });
@@ -91,7 +91,7 @@ test("CA-11: ticket aberto é recusado citando o endereço público", () => {
 
 test("etapa diferente de implementar é recusada", () => {
   assert.throws(
-    () => concluir(montar("em_execucao", "planejamento", "planejar")),
+    () => concluir(montar("em_execucao", "planejar", "planejar")),
     (e) => e instanceof ErroDeRegra && e.message.includes("I-1.T2 é da etapa planejar"),
   );
 });

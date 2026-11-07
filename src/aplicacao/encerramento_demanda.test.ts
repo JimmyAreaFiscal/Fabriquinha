@@ -45,16 +45,16 @@ const REF = { demanda_id: D, rodada_id: 1 };
 const URL_PR = "https://github.com/org/loja/pull/1";
 
 interface Opcoes {
-  status?: "aberto" | "em_execucao";
-  fase?: "encerramento" | "execucao";
+  estadoDoTicket?: "aberto" | "em_execucao";
+  estado?: "encerrar_demanda" | "em_execucao";
   semTicket?: boolean;
   encerramento?: object;
 }
 
 /** Projeto `loja` com base `develop`; demanda I-206 em encerramento, com a rodada 1 e um commit de ticket na demanda. */
 async function cenario({
-  status = "em_execucao",
-  fase = "encerramento",
+  estadoDoTicket = "em_execucao",
+  estado = "encerrar_demanda",
   semTicket = false,
   encerramento,
 }: Opcoes = {}) {
@@ -81,8 +81,8 @@ async function cenario({
     demanda_id: D,
     ticket_id,
     etapa,
-    status: st,
-    status_alterado_em: em,
+    estado: st,
+    estado_alterado_em: em,
     criado_por: FABRIQUINHA,
     devolucoes: 0,
     ...extra,
@@ -94,18 +94,27 @@ async function cenario({
       titulo: "Demanda",
       tipo: "funcionalidade",
       descricao: "d",
-      fase,
-      fase_alterada_em: em,
+      estado,
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: BRANCH_DEMANDA,
     },
-    rodadas: [{ ...REF, titulo: "r1", fase: "concluida", e2e: false, branch: BRANCH_RODADA }],
+    rodadas: [
+      {
+        ...REF,
+        titulo: "r1",
+        estado: "concluida",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: BRANCH_RODADA,
+      },
+    ],
     dependencias_rodada: [],
     criterios_citados: [],
     tickets: [
       ticket(3, "implementar", "concluido", { titulo: "Primeiro", rodada_id: 1 }),
-      ...(semTicket ? [] : [ticket(8, "encerrar_demanda", status)]),
+      ...(semTicket ? [] : [ticket(8, "encerrar_demanda", estadoDoTicket)]),
     ],
     dependencias_ticket: [],
     caminhos_ticket: [],
@@ -145,7 +154,7 @@ async function cenario({
     reservar: () =>
       comDemanda(banco, D, (a) => ({
         ...a,
-        tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, status: "em_execucao" as const } : t)),
+        tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const } : t)),
       })),
   };
 }
@@ -167,8 +176,8 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
   // A Fabriquinha não integra: o ticket volta a aberto e a demanda espera o humano integrar o PR na plataforma.
   assert.deepEqual(merges(), []);
   assert.equal(aguardando.encerramento?.aguardando_merge_humano, true);
-  assert.equal(c.ticket()?.status, "aberto");
-  assert.equal(aguardando.demanda.fase, "encerramento");
+  assert.equal(c.ticket()?.estado, "aberto");
+  assert.equal(aguardando.demanda.estado, "encerrar_demanda");
   assert.equal(existsSync(c.demanda), true);
 
   // Cada ciclo, enquanto o humano não integra, só relê o PR: sem push, edição nem nova verificação.
@@ -182,7 +191,7 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
       .map((x) => x.args.slice(0, 2).join(" ")),
     ["pr view"],
   );
-  assert.equal(c.ticket()?.status, "aberto");
+  assert.equal(c.ticket()?.estado, "aberto");
 
   const ag = await integrarComoHumano(c);
 
@@ -195,8 +204,8 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
   assert.equal(ag.encerramento.base, "develop");
   assert.equal(ag.encerramento.integracao?.sha, pr.mergeSha);
   assert.deepEqual(ag.encerramento.limpeza_pendente, []);
-  assert.equal(ag.demanda.fase, "concluida");
-  assert.equal(c.ticket()?.status, "concluido");
+  assert.equal(ag.demanda.estado, "concluida");
+  assert.equal(c.ticket()?.estado, "concluido");
   // A base e a branch alheia ficam; tudo o que a Fabriquinha criou some, local e remotamente.
   assert.equal(c.noRemoto("develop"), "develop");
   assert.equal(c.noRemoto("alheia"), "alheia");
@@ -265,7 +274,7 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
 
   assert.equal(hospedagem.prs().length, 1);
   assert.deepEqual(ag.encerramento?.pr, { numero: 1, url: URL_PR });
-  assert.equal(ag.demanda.fase, "concluida");
+  assert.equal(ag.demanda.estado, "concluida");
 });
 
 test("CA-3: PR aberto fora da Fabriquinha: nenhum push, o erro aponta o PR e o ticket falha sem laço", async () => {
@@ -278,10 +287,10 @@ test("CA-3: PR aberto fora da Fabriquinha: nenhum push, o erro aponta o PR e o t
   );
 
   assert.equal(c.noRemoto(BRANCH_DEMANDA), "");
-  assert.equal(c.ticket()?.status, "falhou");
+  assert.equal(c.ticket()?.estado, "falhou");
   assert.match(c.ticket()?.motivo_falha ?? "", /fora da Fabriquinha/);
   assert.equal(c.ag().encerramento, undefined);
-  assert.equal(c.ag().demanda.fase, "encerramento");
+  assert.equal(c.ag().demanda.estado, "encerrar_demanda");
 });
 
 test("commit de agente fora do desenvolvimento não sobe: o ticket falha antes da tentativa", async () => {
@@ -292,7 +301,7 @@ test("commit de agente fora do desenvolvimento não sobe: o ticket falha antes d
 
   assert.equal(c.noRemoto(BRANCH_DEMANDA), "");
   assert.deepEqual(hospedagem.prs(), []);
-  assert.equal(c.ticket()?.status, "falhou");
+  assert.equal(c.ticket()?.estado, "falhou");
 });
 
 test("CA-4: check final falho falha o ticket em check_final, sem integração, limpeza nem agente", async () => {
@@ -308,11 +317,11 @@ test("CA-4: check final falho falha o ticket em check_final, sem integração, l
 
   const ag = await conduzirEncerramentoDemanda(c.banco, D);
 
-  assert.equal(c.ticket()?.status, "falhou");
+  assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(ag.encerramento?.falha?.etapa, "check_final");
   assert.match(ag.encerramento.falha.motivo, /ci/);
   assert.equal(ag.encerramento.integracao, undefined);
-  assert.equal(ag.demanda.fase, "encerramento");
+  assert.equal(ag.demanda.estado, "encerrar_demanda");
   assert.deepEqual(merges(), []);
   assert.equal(existsSync(c.demanda), true);
   assert.equal(c.noRemoto(BRANCH_RODADA), BRANCH_RODADA);
@@ -350,9 +359,9 @@ test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvi
 
   const conflito = await conduzirEncerramentoDemanda(c.banco, D);
 
-  assert.equal(c.ticket()?.status, "aberto");
+  assert.equal(c.ticket()?.estado, "aberto");
   const resolver = conflito.tickets.find((t) => t.etapa === "resolver_conflito");
-  assert.equal(resolver?.status, "aberto");
+  assert.equal(resolver?.estado, "aberto");
   assert.equal(conflito.encerramento?.conflito_pendente?.ticket_id, resolver.ticket_id);
   assert.equal(conflito.encerramento.integracao, undefined);
   assert.deepEqual(merges(), []);
@@ -376,7 +385,7 @@ test("CA-5 e CA-6: conflito cria o resolver_conflito e devolve o ticket; resolvi
 
   assert.equal(hospedagem.prs().length, 1);
   assert.equal(ag.encerramento?.conflito_pendente, undefined);
-  assert.equal(ag.demanda.fase, "concluida");
+  assert.equal(ag.demanda.estado, "concluida");
   assert.equal(
     ag.tickets.some((t) => t.etapa === "revisar_demanda" || t.etapa === "encerrar_rodada"),
     false,
@@ -391,7 +400,7 @@ test("PR final fechado sem merge falha o ticket em integracao; reaberto e integr
 
   const fechado = await conduzirEncerramentoDemanda(c.banco, D);
 
-  assert.equal(c.ticket()?.status, "falhou");
+  assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(fechado.encerramento?.falha?.etapa, "integracao");
   assert.match(fechado.encerramento.falha.motivo, /fechado sem merge/);
   assert.equal(fechado.encerramento.integracao, undefined);
@@ -402,8 +411,8 @@ test("PR final fechado sem merge falha o ticket em integracao; reaberto e integr
   c.reservar();
   const reaberto = await conduzirEncerramentoDemanda(c.banco, D);
   assert.equal(reaberto.encerramento?.falha, undefined);
-  assert.equal(c.ticket()?.status, "aberto");
-  assert.equal((await integrarComoHumano(c)).demanda.fase, "concluida");
+  assert.equal(c.ticket()?.estado, "aberto");
+  assert.equal((await integrarComoHumano(c)).demanda.estado, "concluida");
 });
 
 test("leitura do PR que falha na espera devolve o ticket a aberto e sobe o erro, sem integrar", async () => {
@@ -414,7 +423,7 @@ test("leitura do PR que falha na espera devolve o ticket a aberto e sobe o erro,
 
   await assert.rejects(conduzirEncerramentoDemanda(c.banco, D), /rede fora/);
 
-  assert.equal(c.ticket()?.status, "aberto");
+  assert.equal(c.ticket()?.estado, "aberto");
   assert.equal(c.ag().encerramento?.aguardando_merge_humano, true);
   assert.equal(c.ag().encerramento?.integracao, undefined);
 });
@@ -428,13 +437,13 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
 
   const sha = parcial.encerramento?.integracao?.sha;
   assert.ok(sha);
-  assert.equal(c.ticket()?.status, "falhou");
+  assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(parcial.encerramento?.falha?.etapa, "limpeza");
   assert.deepEqual(parcial.encerramento.limpeza_pendente.toSorted(), [
     `branch_local:${BRANCH_RODADA}`,
     `worktree:${c.rodada}`,
   ]);
-  assert.equal(parcial.demanda.fase, "encerramento");
+  assert.equal(parcial.demanda.estado, "encerrar_demanda");
   assert.equal(existsSync(c.demanda), false);
   assert.equal(merges().length, 1);
 
@@ -442,7 +451,7 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
   rodarGit(c.repo, "worktree", "unlock", c.rodada);
   comDemanda(c.banco, D, (a) => ({
     ...a,
-    tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, status: "em_execucao" as const } : t)),
+    tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const } : t)),
   }));
   const chamadas = hospedagem.chamadas().length;
 
@@ -450,8 +459,8 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
 
   assert.equal(hospedagem.chamadas().length, chamadas);
   assert.equal(ag.encerramento?.integracao?.sha, sha);
-  assert.equal(ag.demanda.fase, "concluida");
-  assert.equal(c.ticket()?.status, "concluido");
+  assert.equal(ag.demanda.estado, "concluida");
+  assert.equal(c.ticket()?.estado, "concluido");
   assert.equal(existsSync(c.rodada), false);
   assert.deepEqual(await pendenciasDeLimpeza(c.raiz, c.projeto, ag), []);
   assert.equal(c.noRemoto("develop"), "develop");
@@ -465,8 +474,8 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
 
 test("CA-16: fora de encerramento, ou sem o encerrar_demanda em execução, recusa sem efeito externo", async () => {
   const casos: [Opcoes, RegExp][] = [
-    [{ fase: "execucao" }, /está em execucao e o encerrar_demanda está em_execucao/],
-    [{ status: "aberto" }, /o encerrar_demanda está aberto/],
+    [{ estado: "em_execucao" }, /está em em_execucao e o encerrar_demanda está em_execucao/],
+    [{ estadoDoTicket: "aberto" }, /o encerrar_demanda está aberto/],
     [{ semTicket: true }, /o encerrar_demanda está ausente/],
   ];
   for (const [opcoes, mensagem] of casos) {

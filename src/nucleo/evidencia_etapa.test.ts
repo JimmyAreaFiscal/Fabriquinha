@@ -16,13 +16,13 @@ const [E, A, F] = ["externo", "agente", "fabriquinha"];
 const [TE, TF, TS] = ["todos_comandos_exit_zero", "todas_fitness_passam", "sem_issue_aberta_arquivos_alterados"];
 // [etapa, tipo, produtor, obrigatória, dono, regra]
 const TABELA = [
-  ["demanda", "criterios_aceite", E, true, "demanda", null],
-  ["demanda", "desenho_solucao", E, true, "demanda", null],
-  ["demanda", "custos_realizados", E, true, "demanda", null],
-  ["demanda", "comportamento", E, false, "demanda", null],
-  ["demanda", "prototipo", E, false, "demanda", null],
-  ["demanda", "relatorio_complexidade", E, false, "demanda", null],
-  ["demanda", "relatorio_impactos_arquitetura", E, false, "demanda", null],
+  ["entender_e_desenhar", "criterios_aceite", E, true, "demanda", null],
+  ["entender_e_desenhar", "desenho_solucao", E, true, "demanda", null],
+  ["entender_e_desenhar", "custos_realizados", E, true, "demanda", null],
+  ["entender_e_desenhar", "comportamento", E, false, "demanda", null],
+  ["entender_e_desenhar", "prototipo", E, false, "demanda", null],
+  ["entender_e_desenhar", "relatorio_complexidade", E, false, "demanda", null],
+  ["entender_e_desenhar", "relatorio_impactos_arquitetura", E, false, "demanda", null],
   ["planejar", "plano", A, true, "ticket", null],
   ["implementar", "execucao_testes", F, true, "ticket", TE],
   ["implementar", "matriz_fitness", F, true, "ticket", TF],
@@ -73,14 +73,14 @@ test("schema do item valida as etapas pelo enum EtapaTicket", () => {
   }
 });
 
-test("oito etapas têm itens e só sessao_em_aberto é vazia", () => {
+test("oito etapas têm itens e só ajustar_resultado é vazia", () => {
   for (const etapa of EtapaTicket.options) {
     assert.deepEqual(
       catalogoDaEtapa(etapa).map(linha),
       TABELA.filter((l) => l[0] === etapa).map((l) => [...l]),
     );
   }
-  assert.deepEqual(catalogoDaEtapa("sessao_em_aberto"), []);
+  assert.deepEqual(catalogoDaEtapa("ajustar_resultado"), []);
 });
 
 test("resolver_conflito repete implementar, exceto a etapa (D06)", () => {
@@ -107,7 +107,7 @@ test("valida e normaliza metadados, dados opaco", () => {
     produtor: "agente",
     dados: { x: 1 },
   });
-  const d = validarEvidenciaDaEtapa(ctx("demanda"), ent({ tipo: "prototipo", produtor: "externo" }));
+  const d = validarEvidenciaDaEtapa(ctx("entender_e_desenhar"), ent({ tipo: "prototipo", produtor: "externo" }));
   assert.equal(d.ticket_id, undefined);
 });
 
@@ -124,13 +124,14 @@ test("recusa metadados inválidos, outra demanda, tipo fora da etapa e dono erra
   assert.throws(() => validarEvidenciaDaEtapa(p, ent({ ticket_id: 7, aprovada: "sim" })), ErroDeRegra);
   assert.throws(() => validarEvidenciaDaEtapa(p, ent({ ticket_id: 7, demanda_id: "I-2" })), ErroDeRegra);
   assert.throws(() => validarEvidenciaDaEtapa(p, ent({ ticket_id: 7, tipo: "pr_aberto" })), ErroDeRegra);
-  assert.throws(() => validarEvidenciaDaEtapa(ctx("sessao_em_aberto"), ent({ ticket_id: 7 })), /nenhum tipo/);
+  assert.throws(() => validarEvidenciaDaEtapa(ctx("ajustar_resultado"), ent({ ticket_id: 7 })), /nenhum tipo/);
   for (const dono of [{}, { ticket_id: 8 }, { ticket_id: 7, rodada_id: 2 }, { rodada_id: 2 }]) {
     assert.throws(() => validarEvidenciaDaEtapa(p, ent(dono)), ErroDeRegra);
   }
   for (const dono of [{ ticket_id: 7 }, { rodada_id: 2 }]) {
     assert.throws(
-      () => validarEvidenciaDaEtapa(ctx("demanda"), ent({ ...dono, tipo: "prototipo", produtor: "externo" })),
+      () =>
+        validarEvidenciaDaEtapa(ctx("entender_e_desenhar"), ent({ ...dono, tipo: "prototipo", produtor: "externo" })),
       ErroDeRegra,
     );
   }
@@ -177,7 +178,7 @@ test("pendências: obrigatórias ausentes e reprovadas na ordem do catálogo, ou
     ]),
     { ausentes: ["relatorio_produtividade"], reprovadas: ["pr_aberto", "video_demonstracao"] },
   );
-  const d = ctx("demanda");
+  const d = ctx("entender_e_desenhar");
   assert.deepEqual(
     pendenciasDoTicket(d, [
       e({ tipo: "criterios_aceite", ticket_id: undefined, aprovada: false }),
@@ -278,7 +279,7 @@ test("donos null e omitidos normalizam; técnica exige ticket e demanda não ace
   for (const rodada of [{}, { rodada_id: null }]) {
     for (const ticket of [{}, { ticket_id: null }]) {
       const demanda = ent({ tipo: "prototipo", produtor: "externo", ...rodada, ...ticket });
-      const validada = validarEvidenciaDaEtapa(ctx("demanda"), demanda);
+      const validada = validarEvidenciaDaEtapa(ctx("entender_e_desenhar"), demanda);
       assert.equal(validada.rodada_id, undefined);
       assert.equal(validada.ticket_id, undefined);
       assert.throws(() => validarEvidenciaDaEtapa(ctx("planejar"), ent({ ...rodada, ...ticket })), ErroDeRegra);
@@ -287,7 +288,8 @@ test("donos null e omitidos normalizam; técnica exige ticket e demanda não ace
   }
   for (const dono of [{ ticket_id: 7 }, { rodada_id: 2 }, { ticket_id: 7, rodada_id: 2 }]) {
     assert.throws(
-      () => validarEvidenciaDaEtapa(ctx("demanda"), ent({ tipo: "prototipo", produtor: "externo", ...dono })),
+      () =>
+        validarEvidenciaDaEtapa(ctx("entender_e_desenhar"), ent({ tipo: "prototipo", produtor: "externo", ...dono })),
       ErroDeRegra,
     );
   }
@@ -321,7 +323,7 @@ for (const etapa of EtapaTicket.options) {
 }
 
 test("opcionais ausentes não geram pendência; false reprova obrigatórias e opcionais presentes", () => {
-  for (const etapa of ["demanda", "encerrar_rodada"] as const) {
+  for (const etapa of ["entender_e_desenhar", "encerrar_rodada"] as const) {
     const contexto = ctx(etapa);
     const itens = catalogoDaEtapa(etapa);
     const obrigatorias = itens
@@ -364,8 +366,8 @@ test("consulta isola revisões da mesma rodada pelo ticket e pela demanda, não 
 });
 
 test("consulta da demanda ignora donos ticket/rodada e tipos fora do catálogo, mesmo reprovados", () => {
-  const contexto = ctx("demanda");
-  const itens = catalogoDaEtapa("demanda");
+  const contexto = ctx("entender_e_desenhar");
+  const itens = catalogoDaEtapa("entender_e_desenhar");
   const daDemanda = itens.map((i) => validarEvidenciaDaEtapa(contexto, entradaDoItem(i)));
   const alheias: EvidenciaEtapa[] = [
     ...daDemanda.map((e) => ({ ...e, ticket_id: 7, aprovada: false })),

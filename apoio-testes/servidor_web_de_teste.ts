@@ -38,7 +38,7 @@ export async function cenarioDemandas() {
     { caminho: "dois.html", mime: "text/html" },
   ].map((a, i) => ({ ...a, ...guardarBytes(banco, Buffer.from(String(conteudos[i]))) }));
   gravarAnexos(banco, { demanda_id: "I-206", ticket_id: 3, tipo: "comportamento" }, anexos);
-  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejamento"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejar"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
 
   return { banco, ...(await servir(banco)), conteudos };

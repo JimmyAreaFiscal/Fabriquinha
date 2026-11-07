@@ -50,11 +50,11 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   // Dependentes de `a`: uma aberta (registro) e outra que já terminou (concluída), que o cancelamento poupa.
   const aberta = registrarExterna(c, [a]);
   const terminada = registrarExterna(c, [a]);
-  c.banco.prepare("UPDATE demanda SET fase = 'concluida' WHERE id = ?").run(terminada);
+  c.banco.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(terminada);
   // Dependência de uma demanda que será arquivada.
   const feita = registrarExterna(c);
   const dependeDaFeita = registrarExterna(c, [feita]);
-  c.banco.prepare("UPDATE demanda SET fase = 'concluida' WHERE id = ?").run(feita);
+  c.banco.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(feita);
 
   // As duas demandas em execução têm um agente aberto (o portão fechado o segura).
   pi.roteirizar([{ agente }]);
@@ -68,9 +68,9 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
 
   const { canceladas } = gestao.cancelar(c.banco, a, AUDITOR, CTX);
   assert.deepEqual([...canceladas].sort(), [a, aberta].sort());
-  assert.equal(demanda(c, a).demanda.fase, "cancelada");
-  assert.equal(demanda(c, aberta).demanda.fase, "cancelada");
-  assert.equal(demanda(c, terminada).demanda.fase, "concluida");
+  assert.equal(demanda(c, a).demanda.estado, "cancelada");
+  assert.equal(demanda(c, aberta).demanda.estado, "cancelada");
+  assert.equal(demanda(c, terminada).demanda.estado, "concluida");
   assert.equal(statusDe(c, refA), "cancelado");
 
   // Libera o agente que sobrou: só a execução da cancelada foi interrompida; a alheia termina normalmente.
@@ -79,8 +79,8 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.ok(carregarSessoesDoTicket(c.banco, refA).execucoes.every((e) => e.fim));
   assert.equal(carregarSessoesDoTicket(c.banco, refA).execucoes.length, execucoesAntes);
   assert.equal(statusDe(c, refA), "cancelado");
-  assert.equal(demanda(c, alheia).demanda.fase, "execucao");
-  assert.equal(rodadaDe(c, alheia, 1)?.fase, "revisao");
+  assert.equal(demanda(c, alheia).demanda.estado, "em_execucao");
+  assert.equal(rodadaDe(c, alheia, 1)?.estado, "revisar_rodada");
   assert.notEqual(statusDe(c, refAlheia), "cancelado");
   // O histórico continua no banco: decisões, evidências, rodadas e sessões da cancelada.
   const depois = demanda(c, a);
@@ -95,9 +95,9 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.throws(() => gestao.arquivar(c.banco, a, AUDITOR, CTX), /só demanda concluída/);
   assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(c.banco, dependeDaFeita)), []);
   gestao.arquivar(c.banco, feita, AUDITOR, CTX);
-  assert.equal(demanda(c, feita).demanda.fase, "arquivada");
+  assert.equal(demanda(c, feita).demanda.estado, "arquivada");
   assert.deepEqual(predecessorasPendentes(predecessorasDaDemanda(c.banco, dependeDaFeita)), []);
-  assert.equal(demanda(c, dependeDaFeita).demanda.fase, "registro");
+  assert.equal(demanda(c, dependeDaFeita).demanda.estado, "entender_e_desenhar");
   assert.throws(() => gestao.cancelar(c.banco, feita, AUDITOR, CTX), /já terminou/);
 });
 
@@ -146,8 +146,8 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   const { demanda: nova } = encaminharAchado(c.banco, id, 1);
   assert.equal(total(), antes + 1);
   assert.deepEqual(
-    [nova.fase, nova.enviada, nova.tipo, nova.projeto],
-    ["registro", false, "funcionalidade", c.projeto],
+    [nova.estado, nova.enviada, nova.tipo, nova.projeto],
+    ["entender_e_desenhar", false, "funcionalidade", c.projeto],
   );
   assert.deepEqual(nova.criada_por, { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` });
   assert.match(nova.descricao, /desc 1[\s\S]*ev 1/);
@@ -160,7 +160,7 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
     ],
   );
   assert.equal(demanda(c, nova.id).rodadas.length, 0);
-  assert.equal(demanda(c, origem).demanda.fase, "execucao");
+  assert.equal(demanda(c, origem).demanda.estado, "em_execucao");
 
   // A demanda resultante segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.
   const autor = { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` } as const;
@@ -191,9 +191,9 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
     ],
   });
   gestao.enviar(c.banco, nova.id, autor, CTX);
-  assert.equal(demanda(c, nova.id).demanda.fase, "aprovacao_demanda");
+  assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
   gestao.decidir(c.banco, nova.id, { aprovado: true }, AUDITOR, CTX);
-  assert.equal(demanda(c, nova.id).demanda.fase, "planejamento");
+  assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
 
   encerrar(id);
   await esperar(() => !situacao(id) && estadoDaAvaliacao(id) === "concluida", "o pi da avaliação parar");

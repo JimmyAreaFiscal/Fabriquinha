@@ -122,7 +122,7 @@ function secaoArquivosAlterados({ ag, ticket }: ContextoDemanda): string {
  */
 function secaoArquivosNaoPrevistos({ ag, ticket }: ContextoDemanda): string {
   const ultimaRevisaoConcluida = ag.tickets.findLast(
-    (t) => t.rodada_id === ticket.rodada_id && t.etapa === "revisar_rodada" && t.status === "concluido",
+    (t) => t.rodada_id === ticket.rodada_id && t.etapa === "revisar_rodada" && t.estado === "concluido",
   );
   const arquivosAlterados = ultimaRevisaoConcluida
     ? (arquivosAlteradosDoRevisor(ag, ultimaRevisaoConcluida.ticket_id)?.arquivos ?? [])
@@ -306,7 +306,7 @@ export function montarPromptDemanda(c: ContextoDemanda): string {
     secao(
       "Rodada",
       rodada
-        ? `${endRodada}, ${rodada.titulo} (fase ${rodada.fase})\n\nCritérios citados:\n\n` +
+        ? `${endRodada}, ${rodada.titulo} (estado ${rodada.estado})\n\nCritérios citados:\n\n` +
             (criterios
               .filter((x) => citados.has(x.id))
               .map(linhaCriterio)

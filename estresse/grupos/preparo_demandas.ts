@@ -1,5 +1,5 @@
 // Preparo do estresse das rotas POST e DELETE: cada função cria, no banco da raiz temporária do ambiente, um registro só
-// para uma chamada, já na fase que a rota exige (CA-2). Roda antes de medir, então o custo fica fora do tempo medido; o
+// para uma chamada, já no estado que a rota exige (CA-2). Roda antes de medir, então o custo fica fora do tempo medido; o
 // grupo prepara as chamadas de uma ação de uma vez e só então dispara. O pi é o falso do ambiente ($FABRIQUINHA_PI)
 // e o `gh` é o de `integracao/falsos.ts`, com o estado de cada PR no arquivo dele.
 // Não usa `integracao/apoio.ts`: ele registra hooks do node:test e mexe no process.env ao ser importado.
@@ -36,13 +36,13 @@ export interface RodadaComPR {
 export interface Preparo {
   /** O projeto onde os preparos nascem: git real, remoto bare local e configuração do SDLC. */
   projeto: string;
-  /** Em `aprovacao_demanda`: decisão da demanda e cancelar. */
+  /** Em `gate_demanda`: decisão da demanda e cancelar. */
   demandaEnviada(): string;
   /** Em `concluida`: arquivar. */
   demandaConcluida(): string;
-  /** Em `aprovacao_planejamento`, com o plano submetido: decisão do planejamento. */
+  /** Em `gate_planejamento`, com o plano submetido: decisão do planejamento. */
   planejamentoPronto(): string;
-  /** Em `aprovacao_pull_request`, com as branches no origin, as worktrees e o PR aberto: decisão do PR. */
+  /** Em `gate_pr`, com as branches no origin, as worktrees e o PR aberto: decisão do PR. */
   rodadaComPR(): Promise<RodadaComPR>;
   /** Na sessão de ajustes (rodada em `sessao`, sem pi vivo): com `corrigida`, concluir. */
   rodadaEmAjustes(corrigida?: boolean): Promise<string>;
@@ -157,25 +157,26 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     demanda_id,
     ticket_id,
     etapa,
-    status,
-    status_alterado_em: em,
+    estado: status,
+    estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     devolucoes: 0,
     ...extra,
   });
-  const rodada = (demanda_id: string, fase: string) => ({
+  const rodada = (demanda_id: string, estado: string) => ({
     demanda_id,
     rodada_id: 1,
     titulo: "rodada 1",
-    fase,
+    estado,
+    estado_alterado_em: "2026-01-01T00:00:00.000Z",
     e2e: false,
     branch: `fabriquinha/${demanda_id}-1`,
   });
 
   const novoId = () => `I-${String(proximo())}`;
 
-  /** Cria a demanda `fase` do projeto principal; `resto` traz tickets, rodadas, evidências... */
-  function criar(fase: string, resto: object = {}, id = novoId()): string {
+  /** Cria a demanda `estado` do projeto principal; `resto` traz tickets, rodadas, evidências... */
+  function criar(estado: string, resto: object = {}, id = novoId()): string {
     gravarAgregadoPronto(banco, {
       demanda: {
         id,
@@ -183,8 +184,8 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
         titulo: `Demanda ${id}`,
         tipo: "funcionalidade",
         descricao: "d",
-        fase,
-        fase_alterada_em: em,
+        estado,
+        estado_alterado_em: em,
         criada_por: { tipo: "externo", ferramenta: "claude", sessao: id },
         enviada: true,
         branch: `fabriquinha/${id}`,
@@ -208,13 +209,13 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     return garantirWorktreeRodada(amb.raiz, principal, { demanda_id: id, rodada_id: 1 }, log);
   }
 
-  /** Demanda em `execucao` com a rodada 1 na `fase`, as worktrees prontas (se `comWorktree`) e os tickets dados. */
-  async function emExecucao(fase: string, tickets: object[], resto: object = {}, comWorktree = true) {
+  /** Demanda em `em_execucao` com a rodada 1 no `estado`, as worktrees prontas (se `comWorktree`) e os tickets dados. */
+  async function emExecucao(estado: string, tickets: object[], resto: object = {}, comWorktree = true) {
     const id = novoId();
     const dir = comWorktree ? await worktrees(id) : "";
     criar(
-      "execucao",
-      { rodadas: [rodada(id, fase)], tickets: tickets.map((t) => ({ ...t, demanda_id: id })), ...resto },
+      "em_execucao",
+      { rodadas: [rodada(id, estado)], tickets: tickets.map((t) => ({ ...t, demanda_id: id })), ...resto },
       id,
     );
     return { id, dir };
@@ -222,7 +223,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
   /** O ticket 1 `implementar` da rodada 1 com `status`, numa demanda em execução. */
   const comTicket = async (status: string, comWorktree = true) =>
-    (await emExecucao("desenvolvimento", [ticket("", 1, "implementar", status, { rodada_id: 1 })], {}, comWorktree)).id;
+    (await emExecucao("implementar", [ticket("", 1, "implementar", status, { rodada_id: 1 })], {}, comWorktree)).id;
 
   /** Uma sessão interativa do ticket `ticket_id` com a execução dada. */
   function abrirSessao(demanda_id: string, ticket_id: number, aberta: boolean): string {
@@ -242,7 +243,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
     demandaEnviada() {
       const id = novoId();
-      return criar("aprovacao_demanda", { tickets: [ticket(id, 1, "demanda", "em_execucao")] }, id);
+      return criar("gate_demanda", { tickets: [ticket(id, 1, "entender_e_desenhar", "em_execucao")] }, id);
     },
 
     demandaConcluida: () => criar("concluida"),
@@ -256,7 +257,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
         tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
       };
       return criar(
-        "aprovacao_planejamento",
+        "gate_planejamento",
         {
           tickets: [ticket(id, 1, "planejar", "em_execucao")],
           evidencias: [
@@ -284,9 +285,9 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
       const pr = abrirPR(`fabriquinha/${id}-1`, `fabriquinha/${id}`);
       const url = `https://github.com/org/loja/pull/${String(pr)}`;
       criar(
-        "execucao",
+        "em_execucao",
         {
-          rodadas: [rodada(id, "aprovacao_pull_request")],
+          rodadas: [rodada(id, "gate_pr")],
           tickets: [
             ticket(id, 1, "implementar", "concluido", { rodada_id: 1 }),
             ticket(id, 2, "encerrar_rodada", "em_execucao", { rodada_id: 1 }),
@@ -308,10 +309,10 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     },
 
     async rodadaEmAjustes(corrigida = false) {
-      const { id, dir } = await emExecucao("sessao", [
+      const { id, dir } = await emExecucao("ajustar_resultado", [
         ticket("", 1, "implementar", "concluido", { rodada_id: 1 }),
         ticket("", 2, "encerrar_rodada", "concluido", { rodada_id: 1 }),
-        ticket("", 3, "sessao_em_aberto", "em_execucao", { rodada_id: 1 }),
+        ticket("", 3, "ajustar_resultado", "em_execucao", { rodada_id: 1 }),
       ]);
       abrirSessao(id, 3, false);
       // O marco que a reprovação do PR grava: as duas pontas que a conclusão restaura.
@@ -348,14 +349,14 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     },
 
     async sessaoParada(comWorktree = true) {
-      const tickets = [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })];
-      const { id } = await emExecucao("sessao", tickets, {}, comWorktree);
+      const tickets = [ticket("", 1, "ajustar_resultado", "em_execucao", { rodada_id: 1 })];
+      const { id } = await emExecucao("ajustar_resultado", tickets, {}, comWorktree);
       return abrirSessao(id, 1, false);
     },
 
     async sessaoRodando() {
-      const tickets = [ticket("", 1, "sessao_em_aberto", "em_execucao", { rodada_id: 1 })];
-      const { id } = await emExecucao("sessao", tickets, {}, false);
+      const tickets = [ticket("", 1, "ajustar_resultado", "em_execucao", { rodada_id: 1 })];
+      const { id } = await emExecucao("ajustar_resultado", tickets, {}, false);
       return abrirSessao(id, 1, true);
     },
 

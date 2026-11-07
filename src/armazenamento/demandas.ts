@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { Ator } from "../nucleo/ator.ts";
-import { FASES_TERMINADAS } from "../nucleo/cancelamento_demanda.ts";
+import { ESTADOS_TERMINADOS } from "../nucleo/cancelamento_demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { escrever, novoId } from "./banco.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
@@ -287,8 +287,12 @@ export function listarDemandas(
   const propria = !banco.isTransaction;
   if (propria) banco.exec("BEGIN");
   try {
-    const terminadas = FASES_TERMINADAS.map((f) => `'${f}'`).join(", ");
-    const filtro = emAndamento ? `WHERE fase NOT IN (${terminadas})` : arquivadas ? "" : "WHERE fase <> 'arquivada'";
+    const terminadas = ESTADOS_TERMINADOS.map((f) => `'${f}'`).join(", ");
+    const filtro = emAndamento
+      ? `WHERE estado NOT IN (${terminadas})`
+      : arquivadas
+        ? ""
+        : "WHERE estado <> 'arquivada'";
     const ids = banco.prepare(`SELECT id FROM demanda ${filtro} ORDER BY rowid`).all();
     return ids.map((l) => existente(banco, String(l.id)));
   } finally {
@@ -302,7 +306,7 @@ export function listarDemandas(
  */
 export const criarDemandaNova = (banco: DatabaseSync, montar: (id: string) => AgregadoDemanda): AgregadoDemanda =>
   escrever(banco, () => {
-    const id = `I-${String(novoId(banco, "issue"))}`;
+    const id = `I-${String(novoId(banco, "demanda"))}`;
     const agregado = montar(id);
     if (agregado.demanda.id !== id) {
       throw new ErroDeRegra(

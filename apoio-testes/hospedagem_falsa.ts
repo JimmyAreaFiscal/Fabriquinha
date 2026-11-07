@@ -234,6 +234,12 @@ export function hospedagemFalsa(dir: string) {
       Object.assign(estado.prs[id - 1] ?? {}, mudanca);
       gravar(estado);
     },
+    /** Fecha o PR sem merge, como se alguém o tivesse fechado na plataforma. */
+    fecharPr(id: number) {
+      const estado = ler();
+      Object.assign(estado.prs[id - 1] ?? {}, { estado: "fechado" });
+      gravar(estado);
+    },
     falhar(comando: string, stderr: string) {
       const estado = ler();
       estado.falha[comando] = stderr;

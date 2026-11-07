@@ -8,16 +8,16 @@ import {
   custo,
   duracao,
   escapar,
-  FASE_DA_DEMANDA,
-  FASE_DA_RODADA,
+  APARENCIA_DO_ESTADO_DA_DEMANDA,
+  APARENCIA_DO_ESTADO_DA_RODADA,
   ha,
   modeloDoSeletor,
   NAO_ENCONTRADA,
   navegacao,
   nomeDoModelo,
-  pilulaDoStatus,
+  pilulaDoEstadoDoTicket,
   plural,
-  rotuloDoStatus,
+  rotuloDoEstadoDoTicket,
   TITULOS,
 } from "./render.ts";
 
@@ -80,12 +80,12 @@ test("navegação fixa marca a página atual e mostra no Início o que aguarda s
   assert.equal(TITULOS.demanda, "Demanda");
   assert.equal(caminhoDaDemanda("I-206"), "/demandas/I-206");
   // O `em_execucao` separa o pi rodando do sistema (testes, CI, espera): só o pi pulsa.
-  assert.equal(rotuloDoStatus("em_execucao"), "Em execução (sistema)");
-  assert.equal(rotuloDoStatus("em_execucao", true), "Sessão pi ativa");
-  assert.equal(rotuloDoStatus("falhou", true), "Falhou");
-  assert.equal(pilulaDoStatus("em_execucao"), "pill-rodando sem-pulso");
-  assert.equal(pilulaDoStatus("em_execucao", true), "pill-rodando");
-  assert.equal(pilulaDoStatus("aberto", true), "pill-neutro");
+  assert.equal(rotuloDoEstadoDoTicket("em_execucao"), "Em execução (sistema)");
+  assert.equal(rotuloDoEstadoDoTicket("em_execucao", true), "Sessão pi ativa");
+  assert.equal(rotuloDoEstadoDoTicket("falhou", true), "Falhou");
+  assert.equal(pilulaDoEstadoDoTicket("em_execucao"), "pill-rodando sem-pulso");
+  assert.equal(pilulaDoEstadoDoTicket("em_execucao", true), "pill-rodando");
+  assert.equal(pilulaDoEstadoDoTicket("aberto", true), "pill-neutro");
   assert.match(navegacao("sdlc", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
   assert.equal(TITULOS.sdlc, "Configuração SDLC");
   assert.match(navegacao("heatmap", 0), /<a href="\/projects" aria-current="page">Projetos<\/a>/);
@@ -106,11 +106,14 @@ test("ha: menos de 1 min, minutos e horas, com espaços que não separam", () =>
   assert.equal(ha("2026-10-28T09:58:00.000Z", agora), "há 2\u00a0h\u00a02\u00a0min");
 });
 
-test("toda fase da demanda e da rodada tem rótulo e cor de pílula", () => {
-  for (const [rotulo, pilula] of [...Object.values(FASE_DA_DEMANDA), ...Object.values(FASE_DA_RODADA)]) {
+test("todo estado da demanda e da rodada tem rótulo e cor de pílula", () => {
+  for (const [rotulo, pilula] of [
+    ...Object.values(APARENCIA_DO_ESTADO_DA_DEMANDA),
+    ...Object.values(APARENCIA_DO_ESTADO_DA_RODADA),
+  ]) {
     assert.match(rotulo, /^\p{Lu}/u);
     assert.match(pilula, /^pill-/);
   }
-  assert.equal(FASE_DA_DEMANDA.aprovacao_demanda[0], "Aprovação da demanda");
-  assert.equal(FASE_DA_RODADA.aprovacao_pull_request[0], "Aprovação do PR");
+  assert.equal(APARENCIA_DO_ESTADO_DA_DEMANDA.gate_demanda[0], "Aprovação da demanda");
+  assert.equal(APARENCIA_DO_ESTADO_DA_RODADA.gate_pr[0], "Aprovação do PR");
 });

@@ -9,23 +9,19 @@ import { AUDITOR, FABRIQUINHA } from "../src/nucleo/ator.ts";
 import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
 import { registrarTentativaEncerramento } from "../src/nucleo/transicoes_encerramento.ts";
 import { marcaDoPRFinal } from "../src/aplicacao/evidencias/encerramento_demanda.ts";
-import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
-import type { DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
-import { decidirRevisaoIntegral } from "../src/aplicacao/revisao_demanda.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { integrarPR } from "../src/infra/repositorio/pr.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   agente,
-  agenteDaExecucaoAberta,
   agora,
+  aprovarRodada,
   atual,
-  comoAgente,
-  despacho,
-  despacharComAgente,
+  despachoComEsperaCurta as deps,
   encerrar,
   execucoesDe,
   pi,
+  revisaoIntegral,
   revisar,
   rodadaDe,
   rodadaEmEncerramento,
@@ -36,9 +32,6 @@ import { ghFalso } from "./falsos.ts";
 
 const gh = ghFalso(base);
 
-/** O despacho dos outros casos com a espera do PR encurtada: o `gh` falso responde na hora. */
-const deps = (): DepsDespacho => ({ ...despacho(), verificacao: { intervaloMs: 1, carenciaMs: 0, limiteMs: 5000 } });
-
 const tickets = (c: Cenario, id: string, etapa: string) => demanda(c, id).tickets.filter((t) => t.etapa === etapa);
 const ultimo = (c: Cenario, id: string, etapa: string) => tickets(c, id, etapa).at(-1);
 const pontaDe = (c: Cenario, id: string) => demanda(c, id).demanda.branch;
@@ -47,45 +40,6 @@ const mergesNaBase = (c: Cenario) =>
   git(c.bare, "log", "--first-parent", "--merges", "--format=%H", "main").split("\n").filter(Boolean);
 const mergesPedidos = () => gh.chamadas().filter((x) => x.args.slice(0, 2).join(" ") === "pr merge").length;
 
-/** Revisão integral: o agendador inicia e conduz a etapa; o agente (o teste) submete as evidências e decide durante a execução. */
-async function revisaoIntegral(c: Cenario, id: string, decisao: "aprovada" | { exigencias: string }): Promise<number> {
-  let revisor = 0;
-  await despacharComAgente(c, deps(), () => {
-    const ticket = ultimo(c, id, "revisar_demanda");
-    assert.equal(ticket?.status, "em_execucao", "a revisão integral espera a decisão do agente");
-    const { ticket_id } = ticket;
-    revisor = ticket_id;
-    const agenteDoTicket = agenteDaExecucaoAberta(c, { demanda_id: id, ticket_id });
-    if (decisao === "aprovada") {
-      comoAgente(c, id, ticket_id, [
-        ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendido: true, arquivos: [] }] }],
-        ["testes_estresse", { aplicavel: false, cenarios: [], justificativa: "sem carga" }],
-        ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
-      ]);
-      decidirRevisaoIntegral(c.banco, { demanda_id: id, ticket_id, aprovado: true }, agenteDoTicket);
-    } else {
-      const plano = {
-        demanda_id: id,
-        criterios: ["CA-1"],
-        rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Corrigir o agregado", e2e: false, criterios: ["CA-1"] }],
-        tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Corrigir a integração", descricao: "d" }],
-      };
-      decidirRevisaoIntegral(
-        c.banco,
-        { demanda_id: id, ticket_id, aprovado: false, exigencias: decisao.exigencias, plano },
-        agenteDoTicket,
-      );
-    }
-  });
-  return revisor;
-}
-
-/** Aprova o PR que o encerramento da rodada publicou, como o Auditor, e integra a rodada na demanda. */
-async function aprovarRodada(c: Cenario, id: string, rodada: number): Promise<void> {
-  await aprovarPRRodada(c.banco, { demanda_id: id, rodada_id: rodada }, 4, AUDITOR);
-  assert.equal(rodadaDe(c, id, rodada)?.fase, "concluida");
-}
-
 /** Demanda em `encerramento` pelo percurso real: rodada 1 integrada e revisão integral aprovada pelo agente. */
 async function demandaEmEncerramento(c: Cenario): Promise<string> {
   gh.zerar();
@@ -93,8 +47,8 @@ async function demandaEmEncerramento(c: Cenario): Promise<string> {
   await encerrar(c, id);
   await aprovarRodada(c, id, 1);
   await revisaoIntegral(c, id, "aprovada");
-  assert.equal(demanda(c, id).demanda.fase, "encerramento");
-  assert.equal(ultimo(c, id, "encerrar_demanda")?.status, "aberto");
+  assert.equal(demanda(c, id).demanda.estado, "encerrar_demanda");
+  assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "aberto");
   return id;
 }
 
@@ -124,10 +78,10 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   // Reprovada: as exigências ficam na decisão, a rodada concluída continua concluída e nasce a rodada corretiva.
   const primeira = await revisaoIntegral(c, id, { exigencias: "falta tratar a integração entre as partes" });
   let ag = demanda(c, id);
-  assert.equal(ag.demanda.fase, "execucao");
+  assert.equal(ag.demanda.estado, "em_execucao");
   assert.deepEqual(
-    ag.rodadas.map((r) => r.fase),
-    ["concluida", "desenvolvimento"],
+    ag.rodadas.map((r) => r.estado),
+    ["concluida", "implementar"],
   );
   assert.deepEqual(
     ag.decisoes.filter((d) => d.ticket_id === primeira).map((d) => [d.resultado, d.motivo, d.por]),
@@ -143,14 +97,14 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   // A rodada corretiva percorre o ciclo completo: implementação, revisão, PR e aprovação do Auditor.
   pi.roteirizar([{ agente }]);
   await ciclo(c, deps());
-  assert.equal(rodadaDe(c, id, 2)?.fase, "revisao");
+  assert.equal(rodadaDe(c, id, 2)?.estado, "revisar_rodada");
   await revisar(c, id, { aprovado: true }, 2);
-  assert.equal(rodadaDe(c, id, 2)?.fase, "encerramento");
+  assert.equal(rodadaDe(c, id, 2)?.estado, "encerrar_rodada");
   await encerrar(c, id, 2);
-  assert.equal(rodadaDe(c, id, 2)?.fase, "aprovacao_pull_request");
+  assert.equal(rodadaDe(c, id, 2)?.estado, "gate_pr");
   await aprovarRodada(c, id, 2);
   for (const etapa of ["implementar", "revisar_rodada", "encerrar_rodada"]) {
-    assert.equal(atual(c, id, etapa, 2).status, "concluido", etapa);
+    assert.equal(atual(c, id, etapa, 2).estado, "concluido", etapa);
   }
   assert.deepEqual(
     gh.prs().map((p) => [p.base, p.estado]),
@@ -173,7 +127,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   );
   assert.equal(implementacoes.split("\n").length, 2, "uma implementação por rodada no agregado");
   ag = demanda(c, id);
-  assert.equal(ag.demanda.fase, "encerramento");
+  assert.equal(ag.demanda.estado, "encerrar_demanda");
   assert.deepEqual(
     ag.decisoes
       .filter((d) => tickets(c, id, "revisar_demanda").some((t) => t.ticket_id === d.ticket_id))
@@ -188,30 +142,30 @@ test("CA-SDLC-15: revisão integral aprovada encerra com o merge humano; conflit
   const id = await demandaEmEncerramento(c);
   const pr = abrirPRFinal(c, id, { conflito: true });
   await ciclo(c, deps());
-  assert.equal(ultimo(c, id, "resolver_conflito")?.status, "aberto");
-  assert.equal(demanda(c, id).demanda.fase, "encerramento");
+  assert.equal(ultimo(c, id, "resolver_conflito")?.estado, "aberto");
+  assert.equal(demanda(c, id).demanda.estado, "encerrar_demanda");
   assert.equal(mergesNaBase(c).length, 0);
 
   pi.roteirizar([{ agente }]);
   await ciclo(c, deps());
-  assert.equal(ultimo(c, id, "resolver_conflito")?.status, "concluido");
+  assert.equal(ultimo(c, id, "resolver_conflito")?.estado, "concluido");
   assert.equal(pi.prompts().at(-1)?.cwd, caminhoDaWorktreeDemanda(c.raiz, c.projeto, id));
-  assert.equal(demanda(c, id).demanda.fase, "encerramento");
+  assert.equal(demanda(c, id).demanda.estado, "encerrar_demanda");
 
   gh.mudar(pr, { conflito: false });
   const pedidosAntes = mergesPedidos();
   await ciclo(c, deps());
   await ciclo(c, deps());
   assert.equal(demanda(c, id).encerramento?.aguardando_merge_humano, true);
-  assert.equal(ultimo(c, id, "encerrar_demanda")?.status, "aberto");
+  assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "aberto");
   assert.equal(mergesNaBase(c).length, 0, "a Fabriquinha não integra o PR final");
   assert.equal(mergesPedidos(), pedidosAntes);
 
   await integrarComoHumano(c, pr);
   await ciclo(c, deps());
   const concluida = demanda(c, id);
-  assert.equal(concluida.demanda.fase, "concluida");
-  assert.equal(ultimo(c, id, "encerrar_demanda")?.status, "concluido");
+  assert.equal(concluida.demanda.estado, "concluida");
+  assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "concluido");
   const encerramentos = tickets(c, id, "encerrar_demanda").map((t) => t.ticket_id);
   assert.deepEqual(
     concluida.decisoes.filter((d) => encerramentos.includes(d.ticket_id)),
@@ -228,8 +182,8 @@ test("CA-SDLC-15: revisão integral aprovada encerra com o merge humano; conflit
   abrirPRFinal(falho, idFalho, { checks: [{ nome: "ci", estado: "falho" }] });
   await ciclo(falho, deps());
   const bloqueada = demanda(falho, idFalho);
-  assert.equal(bloqueada.demanda.fase, "encerramento");
-  assert.equal(ultimo(falho, idFalho, "encerrar_demanda")?.status, "falhou");
+  assert.equal(bloqueada.demanda.estado, "encerrar_demanda");
+  assert.equal(ultimo(falho, idFalho, "encerrar_demanda")?.estado, "falhou");
   assert.equal(bloqueada.encerramento?.falha?.etapa, "check_final");
   assert.equal(bloqueada.encerramento.integracao, undefined);
   assert.deepEqual(bloqueada.encerramento.limpeza_pendente, []);
@@ -271,7 +225,7 @@ test("CA-SDLC-16: queda depois do merge e antes da gravação não duplica PR, i
   await ciclo(c, deps());
   await ciclo(c, deps());
   const ag = demanda(c, id);
-  assert.equal(ag.demanda.fase, "concluida");
+  assert.equal(ag.demanda.estado, "concluida");
   assert.equal(ag.encerramento?.integracao?.sha, mergeSha);
   assert.deepEqual(ag.decisoes, antes.decisoes, "nenhuma decisão nova");
   assert.equal(gh.prs().length, pr, "nenhum PR novo");
@@ -292,8 +246,8 @@ test("CA-SDLC-17: limpeza que falha mantém a demanda não concluída e a reaber
   const parcial = demanda(c, id);
   const sha = parcial.encerramento?.integracao?.sha;
   assert.ok(sha, "a integração está confirmada");
-  assert.equal(parcial.demanda.fase, "encerramento");
-  assert.equal(ultimo(c, id, "encerrar_demanda")?.status, "falhou");
+  assert.equal(parcial.demanda.estado, "encerrar_demanda");
+  assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "falhou");
   assert.equal(parcial.encerramento?.falha?.etapa, "limpeza");
   assert.ok(parcial.encerramento.limpeza_pendente.includes(`worktree:${rodada}`));
   assert.equal(mergesNaBase(c).length, 1);
@@ -307,7 +261,7 @@ test("CA-SDLC-17: limpeza que falha mantém a demanda não concluída e a reaber
   );
   await ciclo(c, deps());
   const ag = demanda(c, id);
-  assert.equal(ag.demanda.fase, "concluida");
+  assert.equal(ag.demanda.estado, "concluida");
   assert.equal(ag.encerramento?.integracao?.sha, sha);
   assert.deepEqual(ag.encerramento.limpeza_pendente, []);
   assert.equal(existsSync(rodada), false);

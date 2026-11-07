@@ -1,5 +1,5 @@
 // Início (F7 §4.4; comparacao-sdlc §9.1) como funções puras: a frase do mês, o que aguarda o Auditor, o que roda e o
-// board das demandas em andamento, com as colunas por fase da demanda e, na execução, por fase da rodada. O DOM e a
+// board das demandas em andamento, com as colunas por estado da demanda e, na execução, por estado da rodada. O DOM e a
 // rede ficam em inicio-montar.ts.
 import type {
   CartaoDoBoard,
@@ -18,7 +18,7 @@ import {
   nomeDoModelo,
   plural,
   rotuloDoModelo,
-  statusDoTicket,
+  nomeDoEstadoDoTicket,
 } from "../render.ts";
 import { ETAPA_DO_TICKET } from "./demandas.ts";
 import { fraseDoMes } from "./metricas.ts";
@@ -40,23 +40,19 @@ const EM_ALERTA: ReadonlySet<MotivoDaEspera> = new Set(["falha", "revisao_parada
 
 /** As colunas do board, na ordem do processo; as de gate ficam hachuradas e marcadas "gate". */
 const COLUNAS: readonly (readonly [ColunaDoBoard, string])[] = [
-  ["registro", "Registro"],
-  ["aprovacao_demanda", "Aprovação da demanda"],
-  ["planejamento", "Planejamento"],
-  ["aprovacao_planejamento", "Aprovação do planejamento"],
-  ["desenvolvimento", "Desenvolvimento"],
-  ["revisao", "Revisão da rodada"],
-  ["encerramento", "Encerramento da rodada"],
-  ["aprovacao_pull_request", "Aprovação do PR"],
-  ["sessao", "Ajustes do PR"],
-  ["revisao_demanda", "Revisão da demanda"],
+  ["entender_e_desenhar", "Registro"],
+  ["gate_demanda", "Aprovação da demanda"],
+  ["planejar", "Planejamento"],
+  ["gate_planejamento", "Aprovação do planejamento"],
+  ["implementar", "Desenvolvimento"],
+  ["revisar_rodada", "Revisão da rodada"],
+  ["encerrar_rodada", "Encerramento da rodada"],
+  ["gate_pr", "Aprovação do PR"],
+  ["ajustar_resultado", "Ajustes do PR"],
+  ["revisar_demanda", "Revisão da demanda"],
   ["encerramento_demanda", "Encerramento da demanda"],
 ];
-const GATES: ReadonlySet<ColunaDoBoard> = new Set([
-  "aprovacao_demanda",
-  "aprovacao_planejamento",
-  "aprovacao_pull_request",
-]);
+const GATES: ReadonlySet<ColunaDoBoard> = new Set(["gate_demanda", "gate_planejamento", "gate_pr"]);
 
 /** As 5 etapas do processo sobre as colunas do board, com quantas colunas cada uma agrupa. */
 const ETAPAS_DO_PROCESSO: readonly (readonly [string, number])[] = [
@@ -157,12 +153,12 @@ function cartaoDoBoard(c: CartaoDoBoard, dados: DadosDoInicio, agora: Date): str
   return `<a class="${classes}" href="${caminhoDaDemanda(c.demanda)}">
     <div class="cartao-topo"><span class="id">${escapar(c.ref)}</span><span class="tag">${escapar(c.projeto)}</span></div>
     <div class="cartao-titulo">${comEnderecosInteiros(c.titulo)}</div>
-    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${statusDoTicket(t.status, t.piAtivo)}${mais}</div>` : ""}
+    ${t ? `<div class="cartao-ticket"><span class="mono">${escapar(t.ref)}</span> ${nomeDaEtapa(t.etapa)}${t.modo ? ` · ${MODO_DA_SESSAO[t.modo]}` : ""} · ${nomeDoEstadoDoTicket(t.estado, t.piAtivo)}${mais}</div>` : ""}
     ${marcas.length > 0 ? `<div class="cartao-marcas">${pills}</div>` : ""}
   </a>`;
 }
 
-/** Board: uma coluna por fase, agrupadas sob as 5 etapas; as de gate hachuradas e marcadas "gate". */
+/** Board: uma coluna por estado, agrupadas sob as 5 etapas; as de gate hachuradas e marcadas "gate". */
 function colunasDoBoard(dados: DadosDoInicio, agora: Date): string {
   const coluna = ([chave, nome]: readonly [ColunaDoBoard, string]) => {
     const cartoes = dados.board.filter((c) => c.coluna === chave);

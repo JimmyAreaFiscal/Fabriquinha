@@ -12,7 +12,7 @@ import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
  * conteúdo do banco criado pela cadeia: 100 itens, 0 diferenças.
  */
 const ESQUEMA_DA_CADEIA_1_A_36 = JSON.parse(
-  readFileSync(new URL("linha_de_base_v36.snapshot.json", import.meta.url), "utf8"),
+  readFileSync(new URL("../../apoio-testes/linha_de_base_v36.snapshot.json", import.meta.url), "utf8"),
 ) as unknown[];
 
 const versao = (banco: DatabaseSync) => banco.prepare("PRAGMA user_version").get()?.user_version;

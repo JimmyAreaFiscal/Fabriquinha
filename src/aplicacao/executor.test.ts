@@ -93,10 +93,10 @@ const primeira = (banco: DatabaseSync) => execucoes(banco)[0]?.id ?? 0;
 
 test("conferirLink: qualquer resposta HTTP conta como no ar; conexão recusada, não", async () => {
   assert.equal(await conferirLink(link), true);
-  const fechado = createServer();
-  await new Promise<void>((pronto) => fechado.listen(0, "127.0.0.1", pronto));
-  const { port } = fechado.address() as { port: number };
-  await new Promise((pronto) => fechado.close(pronto));
+  const portaFechada = createServer();
+  await new Promise<void>((pronto) => portaFechada.listen(0, "127.0.0.1", pronto));
+  const { port } = portaFechada.address() as { port: number };
+  await new Promise((pronto) => portaFechada.close(pronto));
   assert.equal(await conferirLink(`http://127.0.0.1:${String(port)}`), false);
 });
 
@@ -266,10 +266,10 @@ test("passado timeoutMin o pi é parado e a execução falha", async () => {
 
 test("link fora do ar: a execução falha com a mensagem do CA-14, sem subir o pi, e as seguintes também", async () => {
   writeFileSync(ordem, "");
-  const fechado = createServer();
-  await new Promise<void>((pronto) => fechado.listen(0, "127.0.0.1", pronto));
-  const { port } = fechado.address() as { port: number };
-  await new Promise((pronto) => fechado.close(pronto));
+  const portaFechada = createServer();
+  await new Promise<void>((pronto) => portaFechada.listen(0, "127.0.0.1", pronto));
+  const { port } = portaFechada.address() as { port: number };
+  await new Promise((pronto) => portaFechada.close(pronto));
   const { banco, tarefa } = cenario("Registrar uma necessidade", 2, ["Dona Maria"], `http://127.0.0.1:${String(port)}`);
   await executarTarefa(banco, tarefa, { timeoutMin: 1 });
 

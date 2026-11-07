@@ -322,7 +322,7 @@ span.mono {
   white-space: nowrap;
 }
 
-/* Board por fase. */
+/* Board por estado. */
 
 .coluna {
   display: flex;
@@ -2342,7 +2342,7 @@ svg.barras :not(.hit) {
 .tabela th[aria-sort="ascending"] button::after {
   content: " ▴";
 }
-.pill.fase {
+.pill.estado {
   color: var(--ink);
   background: var(--surface-2);
 }
@@ -2700,7 +2700,7 @@ svg.barras :not(.hit) {
   display: none;
 }
 
-/* Demandas: o trilho de fases do cabeçalho; os losangos são os gates do Auditor. */
+/* Demandas: o trilho de estados do cabeçalho; os losangos são os gates do Auditor. */
 .dm-trilho {
   list-style: none;
   display: grid;
@@ -3526,7 +3526,7 @@ svg.barras :not(.hit) {
 }
 
 /* Projeto: a aba Demandas. A barra com a contagem e os filtros, e uma linha por demanda com a linha do tempo das 11
-   fases (as da demanda e, no trecho Implementar, as da rodada), uma sub-linha por rodada na execução e a gaveta. */
+   estados (as da demanda e, no trecho Implementar, as da rodada), uma sub-linha por rodada na execução e a gaveta. */
 .ferramentas {
   display: flex;
   flex-wrap: wrap;
@@ -3609,14 +3609,14 @@ svg.barras :not(.hit) {
   white-space: nowrap;
   overflow: hidden;
 }
-.pista-fase {
+.pista-coluna {
   padding: 6px 2px var(--s-2);
   font-size: var(--fs-xs);
   color: var(--muted);
   text-align: center;
   line-height: 1.25;
 }
-.pista-fase.gate {
+.pista-coluna.gate {
   color: var(--open);
 }
 .pista-item {
@@ -3806,11 +3806,11 @@ svg.barras :not(.hit) {
   text-align: right;
 }
 
-/* A linha do tempo: as 11 colunas da linha; a fase atual com a cor do estado, e o nome da fase para o leitor de tela. */
-.trilho-fases {
+/* A linha do tempo: as 11 colunas da linha; o estado atual com a cor do estado, e o nome do estado para o leitor de tela. */
+.trilho-estados {
   display: contents;
 }
-.trilho-fases .passo {
+.trilho-estados .passo {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3818,10 +3818,10 @@ svg.barras :not(.hit) {
   justify-content: center;
   height: 56px;
 }
-.pista-rodada .trilho-fases .passo {
+.pista-rodada .trilho-estados .passo {
   height: 32px;
 }
-.trilho-fases .passo > span:last-child {
+.trilho-estados .passo > span:last-child {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -3829,7 +3829,7 @@ svg.barras :not(.hit) {
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.trilho-fases .linha {
+.trilho-estados .linha {
   position: relative;
   width: 100%;
   height: 18px;
@@ -3837,7 +3837,7 @@ svg.barras :not(.hit) {
   align-items: center;
   justify-content: center;
 }
-.trilho-fases .linha::before {
+.trilho-estados .linha::before {
   content: "";
   position: absolute;
   left: 0;
@@ -3847,31 +3847,31 @@ svg.barras :not(.hit) {
   background: var(--line);
 }
 /* A linha começa no meio do primeiro marco e acaba no meio do último, também no trecho da rodada. */
-.trilho-fases .passo:first-child .linha::before,
-.trilho-fases .fora + .passo:not(.fora) .linha::before {
+.trilho-estados .passo:first-child .linha::before,
+.trilho-estados .fora + .passo:not(.fora) .linha::before {
   left: 50%;
 }
-.trilho-fases .passo:last-child .linha::before,
-.trilho-fases .passo:not(.fora):has(+ .fora) .linha::before {
+.trilho-estados .passo:last-child .linha::before,
+.trilho-estados .passo:not(.fora):has(+ .fora) .linha::before {
   right: 50%;
 }
-.trilho-fases .fora .linha::before,
-.trilho-fases .fora .marco,
-.trilho-fases .rodadas .marco {
+.trilho-estados .fora .linha::before,
+.trilho-estados .fora .marco,
+.trilho-estados .rodadas .marco {
   display: none;
 }
-.trilho-fases .feito .linha::before,
-.trilho-fases .pulada .linha::before {
+.trilho-estados .feito .linha::before,
+.trilho-estados .pulada .linha::before {
   background: var(--closed);
 }
-.trilho-fases .atual .linha::before {
+.trilho-estados .atual .linha::before {
   background: linear-gradient(to right, var(--closed) 50%, var(--line) 50%);
 }
 /* Na linha da demanda em execução, o trecho das rodadas é tracejado: os marcos estão nas rodadas, abaixo. */
-.trilho-fases .rodadas .linha::before {
+.trilho-estados .rodadas .linha::before {
   background: repeating-linear-gradient(to right, var(--closed) 0 4px, transparent 4px 8px);
 }
-.trilho-fases .marco {
+.trilho-estados .marco {
   position: relative;
   width: 12px;
   height: 12px;
@@ -3879,52 +3879,52 @@ svg.barras :not(.hit) {
   background: var(--bg);
   border: 2px solid var(--line);
 }
-.trilho-fases .gate .marco {
+.trilho-estados .gate .marco {
   border-radius: 2px;
   transform: rotate(45deg);
   width: 11px;
   height: 11px;
 }
-.trilho-fases .feito .marco {
+.trilho-estados .feito .marco {
   background: var(--closed);
   border-color: var(--closed);
 }
 /* A etapa opcional que não houve: um ponto discreto sobre a linha contínua, que não lê como passo pendente. */
-.trilho-fases .pulada .marco {
+.trilho-estados .pulada .marco {
   width: 6px;
   height: 6px;
   border: 0;
   background: var(--closed);
   opacity: 0.45;
 }
-.trilho-fases .atual .marco {
+.trilho-estados .atual .marco {
   width: 16px;
   height: 16px;
   background: var(--accent);
   border-color: var(--accent);
   box-shadow: 0 0 0 4px rgb(229 173 111 / 0.18);
 }
-.trilho-fases .atual.gate .marco {
+.trilho-estados .atual.gate .marco {
   width: 14px;
   height: 14px;
 }
-.trilho-fases.aguarda .atual .marco {
+.trilho-estados.aguarda .atual .marco {
   background: var(--open);
   border-color: var(--open);
   box-shadow: 0 0 0 4px rgb(234 178 76 / 0.22);
 }
-.trilho-fases.falha .atual .marco {
+.trilho-estados.falha .atual .marco {
   background: var(--danger);
   border-color: var(--danger);
   box-shadow: 0 0 0 4px rgb(243 146 116 / 0.22);
 }
-.trilho-fases.rodando .atual .marco {
+.trilho-estados.rodando .atual .marco {
   background: var(--claimed);
   border-color: var(--claimed);
   box-shadow: 0 0 0 4px rgb(142 188 233 / 0.22);
   animation: pulsar 1.4s ease-in-out infinite;
 }
-.trilho-fases.cancelada .atual .marco {
+.trilho-estados.cancelada .atual .marco {
   background: var(--muted);
   border-color: var(--muted);
   box-shadow: none;

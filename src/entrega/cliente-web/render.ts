@@ -2,67 +2,65 @@
 // os formatos que mais de uma tela usa (rótulos, caminhos, datas, números). O texto que vem do servidor passa sempre
 // por `escapar`.
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
-import type { FaseDemanda, FaseRodada, StatusTicket } from "../../nucleo/primitivos.ts";
+import type { EstadoDemanda, EstadoRodada, EstadoTicket } from "../../nucleo/primitivos.ts";
 import type { ModoExecucao } from "../../nucleo/sessoes.ts";
 import type { Pagina } from "./caminhos.ts";
 
 /** O status do ticket (F1 §3.5) como as telas o mostram. */
-const STATUS_DO_TICKET: Record<StatusTicket, string> = {
+const NOME_DO_ESTADO_DO_TICKET: Record<EstadoTicket, string> = {
   aberto: "aberto",
   em_execucao: "em execução",
   concluido: "concluído",
   falhou: "falhou",
-  fechado: "fechado",
   cancelado: "cancelado",
 };
 
 /** O status do ticket como as telas o mostram: o `em_execucao` separa o pi rodando do sistema (testes, CI, espera). */
-export const statusDoTicket = (status: StatusTicket, piAtivo = false): string => {
-  if (status !== "em_execucao") return STATUS_DO_TICKET[status];
+export const nomeDoEstadoDoTicket = (estado: EstadoTicket, piAtivo = false): string => {
+  if (estado !== "em_execucao") return NOME_DO_ESTADO_DO_TICKET[estado];
   return piAtivo ? "sessão pi ativa" : "em execução (sistema)";
 };
 
 /** O status do ticket com inicial maiúscula (Sessão pi ativa), para a página e o quadro das demandas. */
-export const rotuloDoStatus = (status: StatusTicket, piAtivo = false): string => {
-  const rotulo = statusDoTicket(status, piAtivo);
+export const rotuloDoEstadoDoTicket = (estado: EstadoTicket, piAtivo = false): string => {
+  const rotulo = nomeDoEstadoDoTicket(estado, piAtivo);
   return rotulo.charAt(0).toUpperCase() + rotulo.slice(1);
 };
 
-/** A fase da demanda e a da rodada (comparacao-sdlc §2.1) como as telas as mostram, com a cor da pílula. */
-export const FASE_DA_DEMANDA: Record<FaseDemanda, [rotulo: string, pilula: string]> = {
-  registro: ["Registro", "pill-neutro"],
-  aprovacao_demanda: ["Aprovação da demanda", "pill-aguarda"],
-  planejamento: ["Planejamento", "pill-rodando"],
-  aprovacao_planejamento: ["Aprovação do planejamento", "pill-aguarda"],
-  execucao: ["Execução", "pill-rodando"],
-  revisao_demanda: ["Revisão da demanda", "pill-rodando"],
-  encerramento: ["Encerramento", "pill-rodando"],
+/** O estado da demanda e o da rodada (comparacao-sdlc §2.1) como as telas os mostram, com a cor da pílula. */
+export const APARENCIA_DO_ESTADO_DA_DEMANDA: Record<EstadoDemanda, [rotulo: string, pilula: string]> = {
+  entender_e_desenhar: ["Registro", "pill-neutro"],
+  gate_demanda: ["Aprovação da demanda", "pill-aguarda"],
+  planejar: ["Planejamento", "pill-rodando"],
+  gate_planejamento: ["Aprovação do planejamento", "pill-aguarda"],
+  em_execucao: ["Execução", "pill-rodando"],
+  revisar_demanda: ["Revisão da demanda", "pill-rodando"],
+  encerrar_demanda: ["Encerramento", "pill-rodando"],
   concluida: ["Concluída", "pill-ok"],
   arquivada: ["Arquivada", "pill-neutro"],
   cancelada: ["Cancelada", "pill-cancelada"],
 };
-export const FASE_DA_RODADA: Record<FaseRodada, [rotulo: string, pilula: string]> = {
-  desenvolvimento: ["Desenvolvimento", "pill-rodando"],
-  revisao: ["Revisão", "pill-rodando"],
-  encerramento: ["Encerramento", "pill-rodando"],
-  aprovacao_pull_request: ["Aprovação do PR", "pill-aguarda"],
-  sessao: ["Sessão de ajustes", "pill-aguarda"],
+export const APARENCIA_DO_ESTADO_DA_RODADA: Record<EstadoRodada, [rotulo: string, pilula: string]> = {
+  implementar: ["Desenvolvimento", "pill-rodando"],
+  revisar_rodada: ["Revisão", "pill-rodando"],
+  encerrar_rodada: ["Encerramento", "pill-rodando"],
+  gate_pr: ["Aprovação do PR", "pill-aguarda"],
+  ajustar_resultado: ["Sessão de ajustes", "pill-aguarda"],
   concluida: ["Concluída", "pill-ok"],
 };
 
 /** A cor do status do ticket, nas pílulas comuns; em execução não pulsa, porque o ticket pode estar parado à espera. */
-export const PILULA_DO_STATUS: Record<StatusTicket, string> = {
+export const PILULA_DO_ESTADO_DO_TICKET: Record<EstadoTicket, string> = {
   aberto: "pill-neutro",
   em_execucao: "pill-rodando sem-pulso",
   concluido: "pill-ok",
   falhou: "pill-falha",
-  fechado: "pill-neutro",
   cancelado: "pill-neutro",
 };
 
 /** A pílula do status: só o pi rodando pulsa; o `em_execucao` sem pi pode estar parado à espera. */
-export const pilulaDoStatus = (status: StatusTicket, piAtivo = false): string =>
-  status === "em_execucao" && piAtivo ? "pill-rodando" : PILULA_DO_STATUS[status];
+export const pilulaDoEstadoDoTicket = (estado: EstadoTicket, piAtivo = false): string =>
+  estado === "em_execucao" && piAtivo ? "pill-rodando" : PILULA_DO_ESTADO_DO_TICKET[estado];
 
 /** O modo da sessão (F4 §5.1), no feminino de "sessão autônoma". */
 export const MODO_DA_SESSAO: Record<ModoExecucao, string> = {

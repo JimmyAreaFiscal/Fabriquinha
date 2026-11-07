@@ -6,7 +6,7 @@ import {
   registrarDependencia,
 } from "../nucleo/dependencia_demanda.ts";
 import { encontrado } from "../nucleo/erros.ts";
-import { FaseDemanda } from "../nucleo/primitivos.ts";
+import { EstadoDemanda } from "../nucleo/primitivos.ts";
 import { escrever } from "./banco.ts";
 
 const arestas = (banco: DatabaseSync) =>
@@ -31,15 +31,18 @@ export const registrarDependenciaDemanda = (banco: DatabaseSync, demandaId: stri
   });
 };
 
-/** As predecessoras diretas de `id` com a fase de cada uma, para `predecessorasPendentes`. */
-export function predecessorasDaDemanda(banco: DatabaseSync, id: string): { demanda_id: string; fase: FaseDemanda }[] {
+/** As predecessoras diretas de `id` com o estado de cada uma, para `predecessorasPendentes`. */
+export function predecessorasDaDemanda(
+  banco: DatabaseSync,
+  id: string,
+): { demanda_id: string; estado: EstadoDemanda }[] {
   const linhas = banco
     .prepare(
-      `SELECT d.id AS demanda_id, d.fase FROM dependencia_demanda dd JOIN demanda d ON d.id = dd.depende_demanda_id
+      `SELECT d.id AS demanda_id, d.estado FROM dependencia_demanda dd JOIN demanda d ON d.id = dd.depende_demanda_id
        WHERE dd.demanda_id = ? ORDER BY dd.rowid`,
     )
     .all(id);
-  return linhas.map((l) => ({ demanda_id: l.demanda_id as string, fase: FaseDemanda.parse(l.fase) }));
+  return linhas.map((l) => ({ demanda_id: l.demanda_id as string, estado: EstadoDemanda.parse(l.estado) }));
 }
 
 /** As dependentes de `id` (diretas e indiretas) que ainda não terminaram, lidas num snapshot só. */
@@ -47,13 +50,13 @@ export function dependentesNaoConcluidasDaDemanda(banco: DatabaseSync, id: strin
   const propria = !banco.isTransaction; // dentro de `escrever` a leitura já é parte da transação
   if (propria) banco.exec("BEGIN");
   try {
-    const fases = new Map(
+    const estados = new Map(
       banco
-        .prepare("SELECT id, fase FROM demanda")
+        .prepare("SELECT id, estado FROM demanda")
         .all()
-        .map((l) => [l.id as string, FaseDemanda.parse(l.fase)]),
+        .map((l) => [l.id as string, EstadoDemanda.parse(l.estado)]),
     );
-    return dependentesNaoConcluidas(arestas(banco), fases, id);
+    return dependentesNaoConcluidas(arestas(banco), estados, id);
   } finally {
     if (propria) banco.exec("COMMIT");
   }

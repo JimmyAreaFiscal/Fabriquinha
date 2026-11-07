@@ -81,7 +81,7 @@ interface Visao {
   id: string;
   titulo: string;
   descricao: string;
-  fase: string;
+  estado: string;
   enviada: boolean;
   dependencias: string[];
   avisos: string[];
@@ -274,7 +274,7 @@ test("CA-14 e CA-16: enviar com as três evidências e ver", async () => {
   await completar(env, id);
   const e = json(await cli(env, ["demanda", "enviar", id]));
   assert.equal(e.enviada, true);
-  assert.equal(e.fase, "aprovacao_demanda");
+  assert.equal(e.estado, "gate_demanda");
   const v = json(await cli({ FABRIQUINHA_ROOT: env.FABRIQUINHA_ROOT }, ["demanda", "ver", id]));
   assert.deepEqual(v.evidencias.map((x: { tipo: string }) => x.tipo).sort(), [
     "criterios_aceite",
@@ -297,7 +297,7 @@ test("CA-17: decidir, cancelar e arquivar não existem", async () => {
   for (const c of ["decidir", "cancelar", "arquivar"]) {
     falha(await cli(env, ["demanda", c, id]), 2, /^comando desconhecido: demanda /);
   }
-  assert.equal(json(await cli(env, ["demanda", "ver", id])).fase, "registro");
+  assert.equal(json(await cli(env, ["demanda", "ver", id])).estado, "entender_e_desenhar");
 });
 
 test("com FABRIQUINHA_EXECUCAO a tabela externa não vale", async () => {

@@ -67,7 +67,7 @@ const item = (
   produtor,
   obrigatoria,
   regraAprovacao,
-  dono: etapa === "demanda" ? "demanda" : "ticket",
+  dono: etapa === "entender_e_desenhar" ? "demanda" : "ticket",
 });
 
 const verificacoes = (etapa: EtapaTicket): ItemCatalogoEtapa[] => [
@@ -77,8 +77,8 @@ const verificacoes = (etapa: EtapaTicket): ItemCatalogoEtapa[] => [
 ];
 
 const POR_ETAPA: Readonly<Record<EtapaTicket, readonly ItemCatalogoEtapa[]>> = {
-  demanda: TipoEvidenciaDemanda.options.map((t) =>
-    item("demanda", t, "externo", (OBRIGATORIAS_DEMANDA as readonly string[]).includes(t)),
+  entender_e_desenhar: TipoEvidenciaDemanda.options.map((t) =>
+    item("entender_e_desenhar", t, "externo", (OBRIGATORIAS_DEMANDA as readonly string[]).includes(t)),
   ),
   planejar: [item("planejar", "plano", "agente")],
   implementar: verificacoes("implementar"),
@@ -95,7 +95,7 @@ const POR_ETAPA: Readonly<Record<EtapaTicket, readonly ItemCatalogoEtapa[]>> = {
     item("encerrar_rodada", "pr_aberto", "fabriquinha"),
     item("encerrar_rodada", "video_demonstracao", "agente", false),
   ],
-  sessao_em_aberto: [],
+  ajustar_resultado: [],
   revisar_demanda: [
     item("revisar_demanda", "comprovacao_criterios", "agente", true, "criterios_demanda_atendidos"),
     item("revisar_demanda", "testes_estresse", "agente"),
@@ -141,7 +141,7 @@ const lerContexto = (contexto: ContextoEvidenciaEtapa): ContextoEvidenciaEtapa =
 
 /** Ticket executor da etapa; as evidências da etapa `demanda` pertencem à demanda (§8.1). */
 const donoEsperado = (c: ContextoEvidenciaEtapa): number | undefined =>
-  c.etapa === "demanda" ? undefined : c.ticket_id;
+  c.etapa === "entender_e_desenhar" ? undefined : c.ticket_id;
 
 /** Metadados normalizados; produtor informado não autentica autoria e `aprovada` é calculada pelo F3. */
 export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrada: unknown): EvidenciaEtapa {
@@ -164,7 +164,7 @@ export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrad
   if (e.rodada_id !== undefined || e.ticket_id !== donoEsperado(ctx)) {
     throw new ErroDeRegra(
       `a evidência de ${onde} tem dono errado`,
-      ctx.etapa === "demanda"
+      ctx.etapa === "entender_e_desenhar"
         ? "evidência da etapa demanda pertence à demanda: sem rodada_id nem ticket_id"
         : `informe ticket_id ${String(ctx.ticket_id)} e nenhum rodada_id`,
     );

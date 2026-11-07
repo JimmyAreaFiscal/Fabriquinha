@@ -27,10 +27,10 @@ beforeEach(() => {
       ('loja', '/r/loja', 'main', 'github', 'loja'),
       ('site', '/r/site', 'main', 'github', 'site');
     INSERT INTO demanda VALUES
-      ('I-1', 'loja', 'Timeout no checkout', 'problema', 'd', 'execucao', '${T0}', 'f', 's', 1, 'fabriquinha/I-1'),
-      ('I-2', 'site', 'Modo escuro', 'funcionalidade', 'd', 'planejamento', '${T0}', 'f', 's', 1, 'fabriquinha/I-2');
-    INSERT INTO rodada VALUES ('I-1', 1, 'Leitura', 'desenvolvimento', 0, 'fabriquinha/I-1-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id) VALUES
+      ('I-1', 'loja', 'Timeout no checkout', 'problema', 'd', 'em_execucao', '${T0}', 'f', 's', 1, 'fabriquinha/I-1'),
+      ('I-2', 'site', 'Modo escuro', 'funcionalidade', 'd', 'planejar', '${T0}', 'f', 's', 1, 'fabriquinha/I-2');
+    INSERT INTO rodada VALUES ('I-1', 1, 'Leitura', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${T0}', 1),
       ('I-1', 2, 'planejar', 'em_execucao', '${T0}', NULL),
       ('I-2', 1, 'planejar', 'concluido', '${T0}', NULL);
@@ -115,7 +115,7 @@ test("ativas: as sessões de demanda em andamento, sem as terminadas", async () 
 
 test("ativas: o ticket que falhou aguarda o Auditor, com o motivo", async () => {
   banco.exec(
-    "UPDATE ticket_demanda SET status = 'falhou', motivo_falha = 'testes falharam' WHERE demanda_id = 'I-1' AND ticket_id = 2",
+    "UPDATE ticket_demanda SET estado = 'falhou', motivo_falha = 'testes falharam' WHERE demanda_id = 'I-1' AND ticket_id = 2",
   );
   banco.exec("UPDATE execucao_sessao SET fim = '2026-10-11T12:50:00.000Z', falha = 1 WHERE id = 'x3'");
   const [s2] = (await sessoes("escopo=ativas")) as SessaoDeDemanda[];

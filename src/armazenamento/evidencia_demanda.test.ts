@@ -22,8 +22,8 @@ const novoBanco = () => {
   const b = abrirBancoTemporario().banco;
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
     VALUES ('p', '/repo/p', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
-    INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');`);
+    INSERT INTO demanda VALUES ('I-1', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-1');
+    INSERT INTO demanda VALUES ('I-2', 'p', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/I-2');`);
   return b;
 };
 
@@ -121,7 +121,7 @@ test("CA-7: o arquivo compartilhado com um anexo de demanda fica quando o projet
   submeter(b, [a]);
   b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('q', '/repo/q', 'main', 'github', 'k');
-    INSERT INTO demanda VALUES ('I-9', 'q', 't', 'problema', 'd', 'execucao', 't', 'f', 's', 1, 'fabriquinha/I-9');
+    INSERT INTO demanda VALUES ('I-9', 'q', 't', 'problema', 'd', 'em_execucao', 't', 'f', 's', 1, 'fabriquinha/I-9');
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e9', 'I-9', NULL, NULL, 'comportamento', '{}', 't');
     INSERT INTO arquivo_evidencia VALUES ('e9', 1, 'a.txt', '${a.sha256}', 'text/plain', 2);`);
   await removerProjeto(b, "q");
@@ -137,7 +137,9 @@ const custosEm = (b: DatabaseSync, id: string, demanda: string, rodada: number |
 
 test("CA-11 a CA-13: sessão de outra demanda vira aviso; regrava de todas as custos da demanda, rodada inclusa; nada vai para a execução interna", () => {
   const b = novoBanco();
-  b.exec("INSERT INTO rodada VALUES ('I-1', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-1')");
+  b.exec(
+    "INSERT INTO rodada VALUES ('I-1', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1')",
+  );
   custosEm(b, "e1", "I-1", null, [quem, { ferramenta: "codex", sessao: "s2" }]);
   custosEm(b, "e1r", "I-1", 1, [{ ferramenta: "codex", sessao: "sr" }]);
   assert.deepEqual(registrarSessoesExternas(b, "I-1"), { avisos: [] });
@@ -161,8 +163,8 @@ test("anexosDaDemanda: nome, mime, bytes, sha256, dono e tipo, na ordem", () => 
   const a = anexoDe(b, "a.txt", "um");
   const c = anexoDe(b, "c.txt", "dois!");
   submeter(b, [a, c]);
-  b.exec(`INSERT INTO rodada VALUES ('I-1', 1, 'r', 'desenvolvimento', 0, 'fabriquinha/I-1-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+  b.exec(`INSERT INTO rodada VALUES ('I-1', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/I-1-1');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('I-1', 1, 'implementar', 'aberto', ${T}, 1);
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e-r', 'I-1', 1, NULL, 'comportamento', '{}', ${T});
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('e-t', 'I-1', NULL, 1, 'comportamento', '{}', ${T});`);

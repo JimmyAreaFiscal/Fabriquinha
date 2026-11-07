@@ -24,8 +24,8 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   demanda_id: D,
   ticket_id,
   etapa,
-  status,
-  status_alterado_em: em,
+  estado: status,
+  estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
   devolucoes: 0,
   ...extra,
@@ -83,20 +83,28 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
       titulo: "Cache",
       tipo,
       descricao: "d",
-      fase: conflito ? "encerramento" : "execucao",
-      fase_alterada_em: em,
+      estado: conflito ? "encerrar_demanda" : "em_execucao",
+      estado_alterado_em: em,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
     },
     rodadas: [
-      { demanda_id: D, rodada_id: 1, titulo: "r1", fase: "desenvolvimento", e2e: false, branch: "fabriquinha/I-1-1" },
+      {
+        demanda_id: D,
+        rodada_id: 1,
+        titulo: "r1",
+        estado: "implementar",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
+        e2e: false,
+        branch: "fabriquinha/I-1-1",
+      },
     ],
     dependencias_rodada: [],
     criterios_citados: [],
     tickets: conflito
       ? [
-          ticket(1, "demanda", "concluido"),
+          ticket(1, "entender_e_desenhar", "concluido"),
           ticket(2, "encerrar_demanda", "aberto"),
           ticket(3, "resolver_conflito", "em_execucao"),
         ]
@@ -138,7 +146,7 @@ const fechar = (c: Awaited<ReturnType<typeof cenario>>, n: number, deps: object,
 test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com anexos e leva a rodada à revisão", async () => {
   const c = await cenario();
   await fechar(c, 1, coletor(todas(true)));
-  assert.equal(c.status(1)?.status, "concluido");
+  assert.equal(c.status(1)?.estado, "concluido");
   assert.deepEqual(c.commits(), ["feat: Cachear [I-1.T1]"]);
   const registrado = commitDoTicketDemanda(c.banco, D, 1);
   assert.deepEqual(
@@ -157,14 +165,14 @@ test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com a
     ag.evidencias.map((evidencia) => evidencia.autor),
     TIPOS.map(() => ({ tipo: "fabriquinha" })),
   );
-  assert.equal(ag.rodadas[0]?.fase, "revisao");
+  assert.equal(ag.rodadas[0]?.estado, "revisar_rodada");
   assert.equal(ag.tickets.filter((t) => t.etapa === "revisar_rodada").length, 1);
 });
 
 test("CA-4: o Sonar no formato real (logs vazios) grava o relatório como anexo", async () => {
   const c = await cenario();
   await fechar(c, 1, coletor([...todas(true).slice(0, 2), { ...verif("relatorio_sonar", true), logs: [] }]));
-  assert.equal(c.status(1)?.status, "concluido");
+  assert.equal(c.status(1)?.estado, "concluido");
   const anexo = c.banco.prepare("SELECT caminho FROM arquivo_evidencia WHERE caminho LIKE 'relatorio_sonar%'").all();
   assert.deepEqual(
     anexo.map((a) => a.caminho),
@@ -180,25 +188,25 @@ test("a rodada só avança com a última implementação; ticket concluído só 
     ],
   });
   await fechar(c, 1, coletor(todas(true)));
-  assert.equal(c.status(1)?.status, "concluido");
-  assert.equal(c.ag().rodadas[0]?.fase, "desenvolvimento"); // o ticket 1 titulo ausente: usa o da demanda
+  assert.equal(c.status(1)?.estado, "concluido");
+  assert.equal(c.ag().rodadas[0]?.estado, "implementar"); // o ticket 1 titulo ausente: usa o da demanda
   assert.deepEqual(c.commits(), ["feat: Cache [I-1.T1]"]);
   await fechar(c, 1, naoColeta); // concluído: a rodada ainda espera o ticket 2
-  assert.equal(c.ag().rodadas[0]?.fase, "desenvolvimento");
-  c.banco.prepare("UPDATE ticket_demanda SET status = 'concluido' WHERE ticket_id = 2").run();
+  assert.equal(c.ag().rodadas[0]?.estado, "implementar");
+  c.banco.prepare("UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id = 2").run();
   await fechar(c, 1, naoColeta);
-  assert.equal(c.ag().rodadas[0]?.fase, "revisao");
+  assert.equal(c.ag().rodadas[0]?.estado, "revisar_rodada");
   await fechar(c, 1, naoColeta); // rodada já em revisão: nada
   assert.equal(c.ag().tickets.filter((t) => t.etapa === "revisar_rodada").length, 1);
 });
 
-test("só implementar e resolver_conflito em execução são fechados", async () => {
+test("só implementar e resolver_conflito em execução terminam pelo fechamento", async () => {
   const c = await cenario({
     tickets: [ticket(1, "planejar", "em_execucao"), ticket(2, "implementar", "aberto", { rodada_id: 1 })],
   });
   await fechar(c, 1, naoColeta, "x");
   await fechar(c, 2, naoColeta, "x");
-  assert.deepEqual([c.status(1)?.status, c.status(2)?.status], ["em_execucao", "aberto"]);
+  assert.deepEqual([c.status(1)?.estado, c.status(2)?.estado], ["em_execucao", "aberto"]);
 });
 
 test("falharTicketDemanda falha o ticket em execução de qualquer etapa e ignora o que não está em execução", async () => {
@@ -207,14 +215,14 @@ test("falharTicketDemanda falha o ticket em execução de qualquer etapa e ignor
   });
   falharTicketDemanda(c.banco, ref(1), "x");
   falharTicketDemanda(c.banco, ref(2), "x");
-  assert.deepEqual([c.status(1)?.status, c.status(1)?.motivo_falha, c.status(2)?.status], ["falhou", "x", "aberto"]);
+  assert.deepEqual([c.status(1)?.estado, c.status(1)?.motivo_falha, c.status(2)?.estado], ["falhou", "x", "aberto"]);
 });
 
 test("CA-6: a primeira reprovação técnica devolve ao agente com o relatório e o fim do log", async () => {
   const c = await cenario();
   await fechar(c, 1, coletor([verif("execucao_testes", false, "npm test saiu com código 1"), ...todas(true).slice(1)]));
   const t = c.status(1);
-  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
   assert.match(t?.instrucao ?? "", /^- execucao_testes: npm test saiu com código 1\n\na+FIM$/);
   assert.equal(t?.instrucao?.split("\n\n")[1]?.length, 2000);
   assert.deepEqual(c.commits(), []);
@@ -229,7 +237,7 @@ test("CA-7 e CA-8: na terceira reprovação o ticket falha e bloqueia a rodada a
   });
   await fechar(c, 1, coletor([verif("matriz_fitness", false, "f reprovou"), ...todas(true).slice(0, 1)]));
   const t = c.status(1);
-  assert.equal(t?.status, "falhou");
+  assert.equal(t?.estado, "falhou");
   assert.match(t.motivo_falha ?? "", /^- matriz_fitness: f reprovou/);
   assert.deepEqual(selecionarTrabalho(c.ag(), true), []);
 });
@@ -246,7 +254,7 @@ test("implementar sem alteração na worktree é devolvido, sem commit", async (
   semAlteracao(c);
   await fechar(c, 1, coletor(todas(true)));
   const t = c.status(1);
-  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
   assert.ok(t?.instrucao?.startsWith(MOTIVO_SEM_ALTERACAO));
   assert.equal(marcaDoTicket(c), "");
 });
@@ -257,11 +265,11 @@ test("implementar sem alteração já devolvido duas vezes falha, e a rodada seg
   semAlteracao(c);
   await fechar(c, 1, coletor(todas(true)));
   const t = c.status(1);
-  assert.equal(t?.status, "falhou");
+  assert.equal(t?.estado, "falhou");
   assert.ok(t.motivo_falha?.startsWith(MOTIVO_SEM_ALTERACAO));
   assert.equal(marcaDoTicket(c), "");
   const ag = c.ag();
-  assert.equal(ag.rodadas[0]?.fase, "desenvolvimento");
+  assert.equal(ag.rodadas[0]?.estado, "implementar");
   assert.equal(ag.tickets.filter((x) => x.etapa === "revisar_rodada").length, 0);
 });
 
@@ -273,7 +281,7 @@ test("resolver_conflito com merge sem alteração commita o merge e conclui", as
   rodarGit(c.worktree, "checkout", "-q", "fabriquinha/I-1");
   rodarGit(c.worktree, "merge", "--no-ff", "--no-commit", "outra");
   await fechar(c, 3, coletor(todas(true)));
-  assert.equal(c.status(3)?.status, "concluido");
+  assert.equal(c.status(3)?.estado, "concluido");
   assert.equal(rodarGit(c.worktree, "log", "-1", "--format=%P").trim().split(" ").length, 2);
   assert.match(rodarGit(c.worktree, "log", "-1", "--format=%B"), /\[I-1\.T3\]/);
 });
@@ -282,7 +290,7 @@ test("CA-9 e CA-10: falha da execução falha o ticket sem coletar nem gravar ev
   const c = await cenario();
   await fechar(c, 1, naoColeta, "timeout");
   const t = c.status(1);
-  assert.deepEqual([t?.status, t?.motivo_falha ?? "", t?.devolucoes], ["falhou", "timeout", 0]);
+  assert.deepEqual([t?.estado, t?.motivo_falha ?? "", t?.devolucoes], ["falhou", "timeout", 0]);
   assert.deepEqual(c.evidencias(1), []);
 });
 
@@ -294,7 +302,7 @@ test("CA-11: infraestrutura falha o ticket com o motivo, sem devolução nem evi
     coletor([...todas(true).slice(0, 2), verif("relatorio_sonar", undefined, "SonarQube fora do ar")]),
   );
   const t = c.status(1);
-  assert.deepEqual([t?.status, t?.devolucoes], ["falhou", 0]);
+  assert.deepEqual([t?.estado, t?.devolucoes], ["falhou", 0]);
   assert.match(t?.motivo_falha ?? "", /infraestrutura:\n- SonarQube fora do ar/);
   assert.deepEqual(c.evidencias(1), []);
 });
@@ -303,7 +311,7 @@ test("CA-12 e CA-13: resolver_conflito aprovado conclui e o encerramento volta a
   const c = await cenario({ conflito: true });
   assert.equal(podeTentarEncerramento(c.ag()), false);
   await fechar(c, 3, coletor(todas(true)));
-  assert.equal(c.status(3)?.status, "concluido");
+  assert.equal(c.status(3)?.estado, "concluido");
   assert.deepEqual(c.commits(), ["feat: Cache [I-1.T3]"]);
   assert.equal(c.ag().encerramento?.sha_verificado, commitDoTicketDemanda(c.banco, D, 3)?.sha);
   assert.equal(podeTentarEncerramento(c.ag()), true);
@@ -317,7 +325,7 @@ test("CA-14: resolver_conflito reprovado é devolvido ao agente, sem commit", as
   const c = await cenario({ conflito: true });
   await fechar(c, 3, coletor([verif("execucao_testes", false, "t reprovou"), ...todas(true).slice(1)]));
   const t = c.status(3);
-  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
   assert.match(t?.instrucao ?? "", /^- execucao_testes: t reprovou/);
   assert.deepEqual(c.commits(), []);
 });
@@ -327,7 +335,7 @@ test("CA-14: resolver_conflito já devolvido duas vezes falha com o relatório n
   c.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 3");
   await fechar(c, 3, coletor([verif("execucao_testes", false, "t reprovou"), ...todas(true).slice(1)]));
   const t = c.status(3);
-  assert.equal(t?.status, "falhou");
+  assert.equal(t?.estado, "falhou");
   assert.match(t.motivo_falha ?? "", /^- execucao_testes: t reprovou/);
 });
 
@@ -341,11 +349,11 @@ test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit
   await fechar(c, 1, coletor(todas(true)));
   // queda depois do commit: o ticket segue em execução e o registro do commit não foi gravado
   c.banco.exec("DELETE FROM arquivo_commit_demanda; DELETE FROM commit_ticket_demanda");
-  c.banco.exec("UPDATE ticket_demanda SET status = 'em_execucao' WHERE ticket_id = 1");
-  c.banco.exec("UPDATE ticket_demanda SET status = 'concluido' WHERE ticket_id = 2");
+  c.banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE ticket_id = 1");
+  c.banco.exec("UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id = 2");
   await fechar(c, 1, naoColeta);
-  assert.equal(c.status(1)?.status, "concluido");
-  assert.equal(c.ag().rodadas[0]?.fase, "revisao");
+  assert.equal(c.status(1)?.estado, "concluido");
+  assert.equal(c.ag().rodadas[0]?.estado, "revisar_rodada");
   assert.equal(commitDoTicketDemanda(c.banco, D, 1)?.arquivos.length, 1);
   assert.equal(c.commits().length, 1);
   assert.deepEqual(c.evidencias(1), ["execucao_testes", "matriz_fitness", "relatorio_sonar"]);
@@ -361,15 +369,15 @@ test("CA-16: commit sem evidências aprovadas falha por infraestrutura", async (
   });
   await fechar(c, 1, naoColeta);
   const t = c.status(1);
-  assert.equal(t?.status, "falhou");
+  assert.equal(t?.estado, "falhou");
   assert.match(t.motivo_falha ?? "", /infraestrutura: .*ausentes: execucao_testes, matriz_fitness, relatorio_sonar/);
 });
 
 test("commit com evidência reprovada gravada falha por infraestrutura", async () => {
   const c = await cenario();
   await fechar(c, 1, coletor(todas(false)));
-  assert.equal(c.status(1)?.status, "aberto"); // devolvido: as evidências reprovadas ficam gravadas
-  c.banco.exec("UPDATE ticket_demanda SET status = 'em_execucao' WHERE ticket_id = 1");
+  assert.equal(c.status(1)?.estado, "aberto"); // devolvido: as evidências reprovadas ficam gravadas
+  c.banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE ticket_id = 1");
   await commitarTicketDemanda(c.banco, ref(1), {
     worktree: c.worktree,
     tipo: "feat",
@@ -393,7 +401,7 @@ test("o hook que reprova o commit devolve o ticket com a saída, sem commit; na 
   hook(c, "echo lint quebrou\nexit 1");
   await fechar(c, 1, coletor(todas(true)));
   const t = c.status(1);
-  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
   assert.match(t?.instrucao ?? "", /lint quebrou/);
   assert.deepEqual(c.commits(), []);
 
@@ -401,7 +409,7 @@ test("o hook que reprova o commit devolve o ticket com a saída, sem commit; na 
   hook(e, "echo lint quebrou\nexit 1");
   e.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 1");
   await fechar(e, 1, coletor(todas(true)));
-  assert.equal(e.status(1)?.status, "falhou");
+  assert.equal(e.status(1)?.estado, "falhou");
   assert.match(e.status(1)?.motivo_falha ?? "", /lint quebrou/);
 
   const d = await cenario({ tickets: [ticket(1, "implementar", "em_execucao", { rodada_id: 1 })] });
@@ -415,7 +423,7 @@ test("resolver_conflito com o hook reprovado é devolvido, sem commit", async ()
   hook(c, "echo lint quebrou\nexit 1");
   await fechar(c, 3, coletor(todas(true)));
   const t = c.status(3);
-  assert.deepEqual([t?.status, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
   assert.deepEqual(c.commits(), []);
 });
 
@@ -424,7 +432,7 @@ test("o commit que passa do limite falha por infraestrutura, sem devolução", a
   hook(c, "exec sleep 5");
   await fechar(c, 1, { ...coletor(todas(true)), limiteCommitMs: 300 });
   const t = c.status(1);
-  assert.deepEqual([t?.status, t?.devolucoes], ["falhou", 0]);
+  assert.deepEqual([t?.estado, t?.devolucoes], ["falhou", 0]);
   assert.match(t?.motivo_falha ?? "", /^falha de infraestrutura/);
 });
 
@@ -450,7 +458,7 @@ test("I-246.T15: parada marcada depois da coleta, com o hook reprovando o commit
     let consultas = 0;
     await fechar(c, 1, { ...coletor(todas(true)), parada: () => ++consultas === chamada });
     const t = c.status(1);
-    assert.deepEqual([t?.status, t?.devolucoes, t?.motivo_falha], ["falhou", 0, "serviço reiniciado"]);
+    assert.deepEqual([t?.estado, t?.devolucoes, t?.motivo_falha], ["falhou", 0, "serviço reiniciado"]);
     if (chamada === 1) assert.deepEqual(c.evidencias(1), []);
   }
 });

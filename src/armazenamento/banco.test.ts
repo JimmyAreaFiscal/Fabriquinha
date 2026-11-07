@@ -36,7 +36,7 @@ function comAmbiente<T>(variaveis: Record<string, string | undefined>, trabalho:
 test("abrir() usa $FABRIQUINHA_ROOT, com diretório 0700 e banco, -wal e -shm 0600", () => {
   const raiz = join(raizTemp(), "aninhada", "fabriquinha");
   const banco = comAmbiente({ FABRIQUINHA_ROOT: raiz }, () => abrir());
-  escrever(banco, () => novoId(banco, "issue"));
+  escrever(banco, () => novoId(banco, "demanda"));
 
   assert.equal(permissao(raiz), 0o700);
   for (const arquivo of ["fabriquinha.db", "fabriquinha.db-wal", "fabriquinha.db-shm"]) {
@@ -283,14 +283,14 @@ test("escrever() faz ROLLBACK e propaga o erro original", () => {
   assert.throws(
     () =>
       escrever(banco, () => {
-        novoId(banco, "issue");
+        novoId(banco, "demanda");
         throw original;
       }),
     (erro) => erro === original,
   );
   assert.equal(banco.isTransaction, false);
   assert.equal(
-    escrever(banco, () => novoId(banco, "issue")),
+    escrever(banco, () => novoId(banco, "demanda")),
     1,
   );
   banco.close();
@@ -298,10 +298,10 @@ test("escrever() faz ROLLBACK e propaga o erro original", () => {
 
 test("escrever() aninhada: a interna confirma junto da externa, com novoId", () => {
   const banco = abrir(raizTemp());
-  const ids = escrever(banco, () => [novoId(banco, "issue"), escrever(banco, () => novoId(banco, "issue"))]);
+  const ids = escrever(banco, () => [novoId(banco, "demanda"), escrever(banco, () => novoId(banco, "demanda"))]);
   assert.deepEqual(ids, [1, 2]);
   assert.equal(banco.isTransaction, false);
-  assert.equal(valor(banco, "SELECT valor FROM sequencia WHERE nome = 'issue'"), 2);
+  assert.equal(valor(banco, "SELECT valor FROM sequencia WHERE nome = 'demanda'"), 2);
   banco.close();
 });
 
@@ -309,19 +309,19 @@ test("escrever() aninhada: erro na interna desfaz só a interna e a externa segu
   const banco = abrir(raizTemp());
   const original = new Error("interna");
   escrever(banco, () => {
-    novoId(banco, "issue");
+    novoId(banco, "demanda");
     assert.throws(
       () =>
         escrever(banco, () => {
-          novoId(banco, "issue");
-          escrever(banco, () => novoId(banco, "issue"));
+          novoId(banco, "demanda");
+          escrever(banco, () => novoId(banco, "demanda"));
           throw original;
         }),
       (erro) => erro === original,
     );
     assert.equal(banco.isTransaction, true);
   });
-  assert.equal(valor(banco, "SELECT valor FROM sequencia WHERE nome = 'issue'"), 1);
+  assert.equal(valor(banco, "SELECT valor FROM sequencia WHERE nome = 'demanda'"), 1);
   banco.close();
 });
 
@@ -329,7 +329,7 @@ test("escrever() aninhada: erro na externa desfaz as duas", () => {
   const banco = abrir(raizTemp());
   assert.throws(() => {
     escrever(banco, () => {
-      escrever(banco, () => novoId(banco, "issue"));
+      escrever(banco, () => novoId(banco, "demanda"));
       throw new Error("externa");
     });
   }, /externa/);
@@ -355,12 +355,12 @@ test("escrever() desfaz e propaga quando o próprio COMMIT falha", () => {
 
 test("novoId() segue a sequência do tipo e só roda dentro da transação", () => {
   const banco = abrir(raizTemp());
-  const ids = escrever(banco, () => [novoId(banco, "issue"), novoId(banco, "issue")]);
+  const ids = escrever(banco, () => [novoId(banco, "demanda"), novoId(banco, "demanda")]);
   assert.deepEqual(ids, [1, 2]);
   assert.equal(
-    escrever(banco, () => novoId(banco, "issue")),
+    escrever(banco, () => novoId(banco, "demanda")),
     3,
   );
-  assert.throws(() => novoId(banco, "issue"), /fora de transação/);
+  assert.throws(() => novoId(banco, "demanda"), /fora de transação/);
   banco.close();
 });

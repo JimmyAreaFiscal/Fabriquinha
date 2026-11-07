@@ -20,21 +20,23 @@ function banco(): DatabaseSync {
   for (const nome of ["loja", "site"])
     b.exec(`INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
       VALUES ('${nome}', '/repo/${nome}', 'main', 'github', '${nome}')`);
-  const demanda = (id: string, projeto: string, fase: string, alterada: string) => {
+  const demanda = (id: string, projeto: string, estado: string, alterada: string) => {
     b.exec(
-      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', '${fase}', '${alterada}', 'f', 's', 1, 'b-${id}')`,
+      `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', '${estado}', '${alterada}', 'f', 's', 1, 'b-${id}')`,
     );
   };
-  demanda("I-1", "loja", "execucao", em("2026-03"));
+  demanda("I-1", "loja", "em_execucao", em("2026-03"));
   demanda("I-2", "loja", "concluida", em("2026-03"));
-  demanda("I-3", "site", "execucao", em("2026-03"));
+  demanda("I-3", "site", "em_execucao", em("2026-03"));
   b.exec(
     `INSERT INTO evidencia_demanda (id, demanda_id, tipo, dados, em) VALUES ('e0', 'I-1', 'comportamento', '{}', '${em("2026-01")}')`,
   );
   for (const r of [1, 2])
-    b.exec(`INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'desenvolvimento', 0, 'b${String(r)}')`);
+    b.exec(
+      `INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b${String(r)}')`,
+    );
   const ticket = (d: string, n: number, etapa: string, rodada: string, status: string, quando: string) => {
-    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('${d}', ${String(n)}, '${etapa}', '${status}', '${quando}', ${rodada})`);
   };
   ticket("I-1", 1, "implementar", "1", "concluido", em("2026-02"));
@@ -161,8 +163,10 @@ test("fatos do mês: demandas, tickets, PRs, notas, reprovações por etapa e re
 test("PRs por coorte do mês de abertura: o pr_aberto da rodada migrada conta, e mergeado nunca passa de aberto", () => {
   const b = banco();
   for (const r of [3, 4, 5])
-    b.exec(`INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'desenvolvimento', 0, 'b${String(r)}')`);
-  b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+    b.exec(
+      `INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b${String(r)}')`,
+    );
+  b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
     VALUES ('I-1', 4, 'encerrar_rodada', 'concluido', '${em("2026-03")}', 3)`);
   // aprovado em março, PR aberto em fevereiro na própria rodada (backfill): entra na coorte de fevereiro
   b.prepare(
@@ -186,14 +190,14 @@ test("o projeto filtra tudo", () => {
   assert.equal(mar.etapas.length, 9);
 });
 
-test("por demanda: só quem teve execução no período, com a fase atual e a nota do período", () => {
+test("por demanda: só quem teve execução no período, com o estado atual e a nota do período", () => {
   const b = banco();
   const todas = metricasPorDemanda(b, { de: "2026-01", ate: "2026-03" });
   assert.deepEqual(
-    todas.map((d) => [d.demanda, d.projeto, d.titulo, d.fase, d.execucoes, d.reprovacoes, d.nota]),
+    todas.map((d) => [d.demanda, d.projeto, d.titulo, d.estado, d.execucoes, d.reprovacoes, d.nota]),
     [
-      ["I-1", "loja", "Título I-1", "execucao", 3, 1, 4.5],
-      ["I-3", "site", "Título I-3", "execucao", 1, 0, null],
+      ["I-1", "loja", "Título I-1", "em_execucao", 3, 1, 4.5],
+      ["I-3", "site", "Título I-3", "em_execucao", 1, 0, null],
     ],
   );
   assert.deepEqual(ver(todas[0]).custo, { conhecido: 7, incompleto: true });

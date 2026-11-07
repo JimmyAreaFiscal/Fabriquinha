@@ -86,8 +86,8 @@ function cenario() {
       titulo: "t",
       tipo: "funcionalidade",
       descricao: "d",
-      fase: "execucao",
-      fase_alterada_em: falhouEm,
+      estado: "em_execucao",
+      estado_alterado_em: falhouEm,
       criada_por: { tipo: "externo", ferramenta: "claude", sessao: "s1" },
       enviada: true,
       branch: "fabriquinha/I-1",
@@ -97,7 +97,8 @@ function cenario() {
         demanda_id: "I-1",
         rodada_id: 1,
         titulo: "r",
-        fase: "desenvolvimento",
+        estado: "implementar",
+        estado_alterado_em: "2026-01-01T00:00:00.000Z",
         e2e: false,
         branch: "fabriquinha/I-1-1",
       },
@@ -109,8 +110,8 @@ function cenario() {
       ticket_id: i + 1,
       rodada_id: 1,
       etapa,
-      status,
-      status_alterado_em: falhouEm,
+      estado: status,
+      estado_alterado_em: falhouEm,
       criado_por: { tipo: "fabriquinha" },
       devolucoes: 1,
       instrucao: "corrija",
@@ -135,21 +136,21 @@ test("retoma o reinício na hora e sem contar; a transitória depois da espera; 
 
   assert.deepEqual(retomarFalhasDeInfraestrutura(banco, minutosDepois(1)), ["I-1.T1", "I-1.T3"]);
   assert.deepEqual(
-    [ticket(1)?.status, ticket(1)?.retomadas_automaticas, ticket(1)?.instrucao, ticket(1)?.devolucoes],
+    [ticket(1)?.estado, ticket(1)?.retomadas_automaticas, ticket(1)?.instrucao, ticket(1)?.devolucoes],
     ["aberto", 3, "corrija", 1],
   );
   assert.deepEqual(
-    [ticket(3)?.status, ticket(3)?.retomadas_automaticas, ticket(3)?.configuracao_agente?.modelo],
+    [ticket(3)?.estado, ticket(3)?.retomadas_automaticas, ticket(3)?.configuracao_agente?.modelo],
     ["aberto", 1, { provedor: "openai-codex", nome: "gpt-6-luna" }],
   );
   // Sem modelo configurado na etapa não há reserva; no limite, disco cheio e aberto ficam como estão.
   assert.deepEqual(
-    [2, 4, 5, 6, 7].map((id) => ticket(id)?.status),
+    [2, 4, 5, 6, 7].map((id) => ticket(id)?.estado),
     ["falhou", "falhou", "falhou", "falhou", "aberto"],
   );
 
   assert.deepEqual(retomarFalhasDeInfraestrutura(banco, minutosDepois(2)), ["I-1.T2"]);
-  assert.deepEqual([ticket(2)?.status, ticket(2)?.retomadas_automaticas], ["aberto", 1]);
-  assert.equal(ticket(8)?.status, "falhou");
+  assert.deepEqual([ticket(2)?.estado, ticket(2)?.retomadas_automaticas], ["aberto", 1]);
+  assert.equal(ticket(8)?.estado, "falhou");
   assert.match(String(log.mock.calls.at(-1)?.arguments[1]), /recusado/);
 });

@@ -252,8 +252,8 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
     const d = `I-${n}`;
     const execucao = execucaoDe(id, i === 0);
     banco.exec(`
-      INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'execucao', 't', 'x', 's', 1, 'b');
-      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em)
+      INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 1, 'b');
+      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('${d}', 1, 'implementar', 'concluido', 't');
       INSERT INTO sessao VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
       INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
@@ -378,7 +378,7 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
   assert.equal(existsSync(pastaDe(raizDo(banco), execucaoDe(primeira, true))), true);
 
   banco.prepare("UPDATE execucao_sessao SET fim = 't' WHERE id = ?").run(execucaoDe(primeira, true));
-  banco.prepare("UPDATE ticket_demanda SET status = 'em_execucao' WHERE demanda_id = ?").run(`I-${String(segunda)}`);
+  banco.prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ?").run(`I-${String(segunda)}`);
   await recusaAsync(
     () => removerProjeto(banco, "demo"),
     ErroDeRegra,
@@ -477,15 +477,15 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
   const digitos = d.slice(2);
   const [sha1, sha2, sha3] = [digitos.padStart(40, "a"), digitos.padStart(40, "c"), digitos.padStart(64, "9")];
   banco.exec(`
-    INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'execucao', 't', 'x', 's', 0, 'b');
-    INSERT INTO demanda VALUES ('${d}2', '${nome}', 't', 'funcionalidade', 'd', 'execucao', 't', 'x', 's', 0, 'b');
+    INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
+    INSERT INTO demanda VALUES ('${d}2', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 0, 'b');
     INSERT INTO dependencia_demanda VALUES ('${d}2', '${d}');
     INSERT INTO demanda_historico (demanda_id, criada_em) VALUES ('${d}', 't');
-    INSERT INTO rodada VALUES ('${d}', 1, 't', 'desenvolvimento', 0, 'b');
-    INSERT INTO rodada VALUES ('${d}', 2, 't', 'desenvolvimento', 0, 'b');
+    INSERT INTO rodada VALUES ('${d}', 1, 't', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b');
+    INSERT INTO rodada VALUES ('${d}', 2, 't', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b');
     INSERT INTO dependencia_rodada VALUES ('${d}', 2, 1);
     INSERT INTO criterio_citado_rodada VALUES ('${d}', 1, 'CA-1');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, status, status_alterado_em, rodada_id)
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
       VALUES ('${d}', 1, 'implementar', 'concluido', 't', 1), ('${d}', 2, 'implementar', 'concluido', 't', 1);
     INSERT INTO dependencia_ticket VALUES ('${d}', 2, 1, 1);
     INSERT INTO caminho_ticket VALUES ('${d}', 1, 'src');

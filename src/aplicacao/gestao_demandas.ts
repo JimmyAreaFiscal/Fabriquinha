@@ -104,7 +104,7 @@ function cancelando(
   const { demanda, canceladas } = escrever(banco, () => {
     const dependentes = dependentesNaoConcluidasDaDemanda(banco, id);
     const principal = comDemanda(banco, id, transicao);
-    if (principal.demanda.fase !== "cancelada") return { demanda: principal, canceladas: [] };
+    if (principal.demanda.estado !== "cancelada") return { demanda: principal, canceladas: [] };
     for (const d of dependentes) comDemanda(banco, d, (ag) => cancelarDemanda(ag, ator, ctx));
     return { demanda: principal, canceladas: [id, ...dependentes] };
   });
