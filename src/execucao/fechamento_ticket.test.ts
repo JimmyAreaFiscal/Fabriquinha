@@ -10,7 +10,8 @@ import type { Verificacao } from "../evidencias/verificacoes.ts";
 import { abrir } from "../persistencia/banco.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
 import { commitDoTicketDemanda } from "../persistencia/commits_demanda.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
 import { commitarTicketDemanda } from "./commit_ticket_demanda.ts";
@@ -74,7 +75,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: D,
       projeto: "loja",

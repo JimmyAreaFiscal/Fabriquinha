@@ -13,7 +13,7 @@ import {
   caminhoDaWorktreeRodada,
   garantirWorktreeRodada,
 } from "../repositorio/worktree-demanda.ts";
-import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "./revisao_cenario.ts";
+import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { conduzirRevisaoRodada, decidirRevisaoRodada, prepararRevisaoRodada } from "./revisao_rodada.ts";
 
 const evidencia = (banco: Parameters<typeof carregarDemanda>[0], tipo: string) =>

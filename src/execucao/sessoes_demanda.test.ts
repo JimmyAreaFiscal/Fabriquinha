@@ -13,7 +13,8 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import type { ExecucaoSessao, Sessao } from "../dominio/sessoes.ts";
 import { encontrado } from "../dominio/erros.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
@@ -115,7 +116,7 @@ function cenario() {
     fitness: [{ nome: "f", comando: "true", descricao: "d" }],
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-300", "planejamento", "d", [
       ticket("I-300", 1, "planejar", "em_execucao"),
@@ -125,7 +126,10 @@ function cenario() {
       ticket("I-300", 5, "implementar", "em_execucao", { rodada_id: 1 }),
     ]),
   );
-  criarDemanda(banco, demanda("I-301", "aprovacao_planejamento", "d", [ticket("I-301", 1, "planejar", "em_execucao")]));
+  gravarAgregadoPronto(
+    banco,
+    demanda("I-301", "aprovacao_planejamento", "d", [ticket("I-301", 1, "planejar", "em_execucao")]),
+  );
   const semear = (
     demanda_id: string,
     ticket_id: number,
@@ -352,7 +356,7 @@ async function ate(condicao: () => boolean): Promise<void> {
 
 test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diálogo e as mensagens ao vivo", async () => {
   const { banco } = cenario();
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-302", "planejamento", "pergunte perguntar", [ticket("I-302", 1, "planejar", "em_execucao")]),
   );
@@ -396,7 +400,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
 
 test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abortar", async () => {
   const { banco } = cenario();
-  criarDemanda(
+  gravarAgregadoPronto(
     banco,
     demanda("I-303", "planejamento", "pergunte perguntar", [ticket("I-303", 1, "planejar", "em_execucao")]),
   );

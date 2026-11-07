@@ -1,8 +1,14 @@
 // Agregados de demanda prontos em cada estado do Ciclo de Vida, para os testes que partem de uma demanda já avançada.
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../src/dominio/agregado_demanda.ts";
 import type { FaseDemanda } from "../src/dominio/primitivos.ts";
+import { gravarConfiguracaoProjeto, substituirPreparacaoDoProjeto } from "../src/persistencia/configuracao_projeto.ts";
 import { criarDemandaNova } from "../src/persistencia/demandas.ts";
+import { garantirWorktreeDemanda } from "../src/repositorio/worktree-demanda.ts";
+import { abrirBancoTemporario } from "./banco_temporario.ts";
+import { instalarPiFalso } from "./pi_falso.ts";
+import { criarRepositorioDeTeste } from "./repositorio_de_teste.ts";
 
 export const INSTANTE_DO_CENARIO = "2026-01-01T00:00:00.000Z";
 
@@ -186,4 +192,51 @@ export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDema
     if (anterior) banco.prepare("UPDATE sequencia SET valor = ? WHERE nome = 'issue'").run(anterior.valor);
     else banco.exec("DELETE FROM sequencia WHERE nome = 'issue'");
   }
+}
+
+export const REF_RODADA = { demanda_id: "I-1", ticket_id: 2 };
+export const REF_GLOBAL = { demanda_id: "I-1", ticket_id: 3 };
+
+// Os testes não precisam fechar o banco: o que sobrar é fechado ao fim do processo de teste, como os repositórios.
+const bancosDeRevisaoAbertos = new Set<() => void>();
+process.on("exit", () => {
+  for (const fechar of bancosDeRevisaoAbertos) fechar();
+});
+
+/**
+ * Git real temporário, banco real e um pi falso que só registra onde rodou, com o projeto `loja` e a demanda I-1 de
+ * {@link agregadoEmRevisao} (`integral` como lá), a worktree da demanda já criada.
+ */
+export async function cenarioRevisao({ integral = false } = {}) {
+  const c = criarRepositorioDeTeste();
+  process.env.PI_CODING_AGENT_DIR = join(c.dir, "pi-agent");
+  delete process.env.FABRIQUINHA_PORTA;
+  const { banco, fechar } = abrirBancoTemporario(c.raiz);
+  bancosDeRevisaoAbertos.add(fechar);
+  cadastrarProjetoLoja(banco, c.repo, "integracao");
+  gravarConfiguracaoProjeto(banco, {
+    nome: "loja",
+    branch_base: "integracao",
+    chave_sonarqube: "k",
+    raiz_git: c.repo,
+    hospedagem: "github",
+    etapas: [],
+    fitness: [{ nome: "f", comando: "true", descricao: "d" }],
+    linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
+  });
+  substituirPreparacaoDoProjeto(banco, "loja", ["true"]);
+  gravarAgregadoPronto(banco, agregadoEmRevisao({ integral }));
+  await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log, () => Promise.resolve());
+  const piFalso = instalarPiFalso(c.dir);
+  return {
+    c,
+    banco,
+    piFalso,
+    /** As pastas em que o pi falso rodou. */
+    pastas: () =>
+      piFalso
+        .registro()
+        .filter((entrada) => entrada.evento === "inicio")
+        .map((entrada) => entrada.cwd),
+  };
 }

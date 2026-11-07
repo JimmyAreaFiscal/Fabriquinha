@@ -4,7 +4,8 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { gravarConfiguracaoProjeto, substituirEtapasDoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { causaDeInfraestrutura, modeloReserva, retomarFalhasDeInfraestrutura } from "./retomada_infraestrutura.ts";
 
 test("classifica a falha: reinício, cota e transitória são infraestrutura; o resto fica para o ticket ou o Auditor", () => {
@@ -75,7 +76,7 @@ function cenario() {
     ["implementar", "aberto", undefined],
     ["implementar", "falhou", "HTTP 502"],
   ];
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-1",
       projeto: "loja",

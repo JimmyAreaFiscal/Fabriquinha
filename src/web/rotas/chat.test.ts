@@ -13,12 +13,11 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { avisar, situacao } from "../../execucao/gerente.ts";
 import { iniciarServico, type Servico } from "../../execucao/servico.ts";
 import type { DadosDoChatDemanda } from "./chat.ts";
-import { criarDemanda } from "../../persistencia/demandas.ts";
+import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { gravarConfiguracaoProjeto } from "../../persistencia/configuracao_projeto.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../execucao/execucao_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../persistencia/sessoes.ts";
 import { registrarProjeto } from "../../persistencia/projetos.ts";
-import { demanda } from "./demandas_cenario.ts";
 import { instalarPiFalso } from "../../../apoio-testes/pi_falso.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-chat-")));
@@ -130,9 +129,9 @@ const textos = (conversa: Record<string, unknown>[]) =>
 
 test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviço da demanda", async () => {
   const em = "2026-01-01T00:00:00.000Z";
-  criarDemanda(
+  gravarAgregadoPronto(
     servico.banco,
-    demanda("I-310", "planejamento", {
+    montarAgregadoDemanda("I-310", "planejamento", {
       tickets: [
         {
           demanda_id: "I-310",
@@ -227,10 +226,10 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     linguagens: [{ caminho: ".", linguagem: "ts", comando_teste: "true" }],
   });
   const ref = { demanda_id: "I-311", ticket_id: 1 };
-  criarDemanda(
+  gravarAgregadoPronto(
     servico.banco,
-    demanda("I-311", "planejamento", {
-      demanda: { ...demanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
+    montarAgregadoDemanda("I-311", "planejamento", {
+      demanda: { ...montarAgregadoDemanda("I-311", "planejamento").demanda, descricao: "pergunte perguntar" },
       tickets: [
         {
           ...ref,

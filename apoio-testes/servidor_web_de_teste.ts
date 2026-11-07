@@ -1,18 +1,22 @@
-// Cenário compartilhado dos testes das rotas das demandas: banco real, projeto `loja`, as demandas I-206 e I-207 e o
-// servidor web de verdade numa porta livre, com um agendador falso que só anota o que lhe pedem.
+// Servidor web de verdade para os testes das rotas: banco real, projeto `loja` e um agendador falso que só anota o que
+// lhe pedem. Fica fora de cenarios_de_demanda.ts porque fecha o servidor num `after()` do arquivo de teste.
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer, request } from "node:http";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after } from "node:test";
-import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
-import type { AgregadoDemanda } from "../../dominio/agregado_demanda.ts";
-import { guardarBytes } from "../../persistencia/arquivos.ts";
-import { raizDo } from "../../persistencia/banco.ts";
-import { criarDemanda } from "../../persistencia/demandas.ts";
-import { gravarAnexos } from "../../persistencia/evidencia_demanda.ts";
-import { servirWeb } from "../servidor.ts";
+import { guardarBytes } from "../src/persistencia/arquivos.ts";
+import { raizDo } from "../src/persistencia/banco.ts";
+import { gravarAnexos } from "../src/persistencia/evidencia_demanda.ts";
+import { servirWeb } from "../src/web/servidor.ts";
+import { fabricaDeBancosTemporarios } from "./banco_temporario.ts";
+import {
+  agregadoComPullRequestAberto,
+  cadastrarProjetoLoja,
+  gravarAgregadoPronto,
+  montarAgregadoDemanda,
+} from "./cenarios_de_demanda.ts";
 
 const fechamentos: (() => Promise<void>)[] = [];
 after(async () => {
@@ -20,103 +24,21 @@ after(async () => {
 });
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
-const em = "2026-01-01T00:00:00.000Z";
-
-const ticket = (demanda_id: string, ticket_id: number, etapa: string, extra: object = {}) => ({
-  demanda_id,
-  ticket_id,
-  etapa,
-  status: "aberto",
-  status_alterado_em: em,
-  devolucoes: 0,
-  ...extra,
-});
-
-const rodada = (demanda_id: string, rodada_id: number, fase: string) => ({
-  demanda_id,
-  rodada_id,
-  titulo: `rodada ${String(rodada_id)}`,
-  fase,
-  e2e: false,
-  branch: `fabriquinha/${demanda_id}-${String(rodada_id)}`,
-});
-
-/** Uma demanda `fase` do projeto `loja`, sem rodadas nem tickets além dos de `resto`. */
-export const demanda = (id: string, fase: string, resto: object = {}): AgregadoDemanda =>
-  ({
-    demanda: {
-      id,
-      projeto: "loja",
-      titulo: `demanda ${id}`,
-      tipo: "funcionalidade",
-      descricao: "d",
-      fase,
-      fase_alterada_em: em,
-      origem_ferramenta: "claude",
-      origem_sessao: id,
-      enviada: true,
-      branch: `fabriquinha/${id}`,
-    },
-    tickets: [],
-    decisoes: [],
-    evidencias: [],
-    rodadas: [],
-    dependencias_rodada: [],
-    criterios_citados: [],
-    dependencias_ticket: [],
-    caminhos_ticket: [],
-    ...resto,
-  }) as unknown as AgregadoDemanda;
-
 /**
- * I-206 em execução: R1 concluída (T1, T2) e R2 com PR aberto (T3 em execução, T4 encerrar_rodada com o PR 7), uma
- * decisão do Auditor, a evidência `comportamento` do T3 com dois anexos e o T5 de planejamento. I-207 em
+ * I-206 em execução ({@link agregadoComPullRequestAberto}), com dois anexos na evidência `comportamento` do T3. I-207 em
  * planejamento, dependente da I-206.
  */
 export async function cenarioDemandas() {
   const banco: DatabaseSync = abrirBancoTemporario().banco;
-  banco
-    .prepare(
-      `INSERT INTO projeto (nome, repo, branch_base, hospedagem, sonar_project_key)
-       VALUES ('loja', '/repos/loja', 'main', 'github', 'k')`,
-    )
-    .run();
-  criarDemanda(
-    banco,
-    demanda("I-206", "execucao", {
-      rodadas: [rodada("I-206", 1, "concluida"), rodada("I-206", 2, "aprovacao_pull_request")],
-      tickets: [
-        ticket("I-206", 1, "implementar", { rodada_id: 1, status: "concluido" }),
-        ticket("I-206", 2, "encerrar_rodada", { rodada_id: 1, status: "concluido" }),
-        ticket("I-206", 3, "implementar", { rodada_id: 2, status: "em_execucao", titulo: "implementa" }),
-        ticket("I-206", 4, "encerrar_rodada", { rodada_id: 2, status: "concluido" }),
-        ticket("I-206", 5, "planejar", { status: "concluido" }),
-      ],
-      decisoes: [
-        {
-          demanda_id: "I-206",
-          ticket_id: 5,
-          decisao_id: 1,
-          resultado: "recusado",
-          motivo: "refaça",
-          por: "auditor",
-          em,
-        },
-        { demanda_id: "I-206", ticket_id: 5, decisao_id: 2, resultado: "aprovado", nota: 4, por: "auditor", em },
-      ],
-      evidencias: [
-        { demanda_id: "I-206", ticket_id: 4, tipo: "pr_aberto", dados: { id: "7", url: "https://pr/7" }, em },
-        { demanda_id: "I-206", ticket_id: 3, tipo: "comportamento", dados: { resumo: "ok" }, em },
-      ],
-    }),
-  );
+  cadastrarProjetoLoja(banco);
+  gravarAgregadoPronto(banco, agregadoComPullRequestAberto("I-206"));
   const conteudos = ["primeiro anexo", "<h1>segundo</h1>"];
   const anexos = [
     { caminho: "um.txt", mime: "text/plain" },
     { caminho: "dois.html", mime: "text/html" },
   ].map((a, i) => ({ ...a, ...guardarBytes(banco, Buffer.from(String(conteudos[i]))) }));
   gravarAnexos(banco, { demanda_id: "I-206", ticket_id: 3, tipo: "comportamento" }, anexos);
-  criarDemanda(banco, demanda("I-207", "planejamento"));
+  gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejamento"));
   banco.exec("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-207', 'I-206')");
 
   return { banco, ...(await servir(banco)), conteudos };

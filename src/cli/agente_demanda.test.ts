@@ -8,7 +8,8 @@ import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.
 import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { submeterEvidenciaDemanda } from "../dominio/evidencia_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
-import { comDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { principal } from "./cli.ts";
 
@@ -34,7 +35,7 @@ function cenario() {
     devolucoes: 0,
     ...extra,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-206",
       projeto: "loja",

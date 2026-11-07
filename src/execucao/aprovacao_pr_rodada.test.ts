@@ -11,7 +11,8 @@ import type { AgregadoDemanda } from "../dominio/agregado_demanda.ts";
 import { AUDITOR } from "../dominio/ator.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../dominio/erros.ts";
 import { gravarConfiguracaoProjeto } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../repositorio/hospedagem-falsa.test.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../repositorio/worktree-demanda.ts";
@@ -64,7 +65,7 @@ async function cenario(fase: "aprovacao_pull_request" | "concluida" = "aprovacao
     devolucoes: 0,
     rodada_id: 2,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: DEMANDA,
       projeto: "loja",

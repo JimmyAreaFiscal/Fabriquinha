@@ -17,7 +17,8 @@ import {
   substituirEtapasDoProjeto,
   substituirPreparacaoDoProjeto,
 } from "../persistencia/configuracao_projeto.ts";
-import { carregarDemanda, comDemanda, criarDemanda } from "../persistencia/demandas.ts";
+import { carregarDemanda, comDemanda } from "../persistencia/demandas.ts";
+import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../dominio/sessoes.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../persistencia/sessoes.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -94,7 +95,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     e2e: false,
     branch: `fabriquinha/I-1-${String(rodada_id)}`,
   });
-  criarDemanda(banco, {
+  gravarAgregadoPronto(banco, {
     demanda: {
       id: "I-1",
       projeto: "loja",
