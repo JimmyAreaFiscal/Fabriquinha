@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../nucleo/erros.ts";
 import { type ArquivoCommit, StatusArquivo } from "../../armazenamento/commits.ts";
-import { ambienteSemCredenciais } from "../ambiente/ambiente.ts";
-import { executar } from "../processo.ts";
+import { type Ambiente, ambienteSemCredenciais } from "../ambiente/ambiente.ts";
 
 /** Caracteres do fim da saída do commit que vão para a mensagem de falha do ticket. */
 const FIM_DA_SAIDA = 1500;
@@ -60,10 +59,11 @@ function numerosDe(c: readonly string[], j: number) {
 }
 
 /**
- * `git commit` com os hooks, sem credenciais e com limite; `emendar` refaz a HEAD (`--amend`), e `semAlteracao`
+ * `git commit` pelo Ambiente, com os hooks, sem credenciais e com limite; `emendar` refaz a HEAD (`--amend`), e `semAlteracao`
  * aceita o commit vazio.
  */
 export async function commitar(
+  ambiente: Ambiente,
   worktree: string,
   mensagem: string,
   { emendar, semAlteracao }: { emendar: boolean; semAlteracao: boolean },
@@ -71,11 +71,11 @@ export async function commitar(
 ): Promise<void> {
   const vazio = mkdtempSync(join(tmpdir(), "fabriquinha-commit-"));
   try {
-    const r = await executar(
-      "git",
-      [
+    const r = await ambiente.executar({
+      programa: "git",
+      argumentos: [
         "-C",
-        worktree,
+        ambiente.caminhoNoAmbiente(worktree),
         "commit",
         "-q",
         ...(emendar ? ["--amend"] : []),
@@ -84,12 +84,12 @@ export async function commitar(
         "-m",
         mensagem,
       ],
-      {
-        env: { ...ambienteSemCredenciais(process.env, vazio), GIT_TERMINAL_PROMPT: "0" },
-        limiteMs,
-        ultimos: FIM_DA_SAIDA,
-      },
-    );
+      // O `-C` leva o git à pasta; um cwd inexistente faria o spawn falhar sem o motivo do git.
+      cwd: "/",
+      env: { ...ambienteSemCredenciais(process.env, vazio), GIT_TERMINAL_PROMPT: "0" },
+      limiteMs,
+      ultimosBytes: FIM_DA_SAIDA,
+    });
     if (r.codigo !== 0) {
       const saida = (r.saida + r.erro).trim().slice(-FIM_DA_SAIDA);
       // Hook travado é infraestrutura, não reprovação do código do agente.
