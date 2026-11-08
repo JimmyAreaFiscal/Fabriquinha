@@ -22,6 +22,7 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
 import type { Commit } from "../armazenamento/commits.ts";
 import { HooksDoCommit } from "../infra/verificacao/hooks_do_commit.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 
 type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
@@ -195,6 +196,7 @@ export async function fecharTicketDemanda(
       banco,
       ref,
       {
+        ambiente: ambienteDoServico(),
         worktree: raiz,
         tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
         titulo: ticket.titulo ?? ag.demanda.titulo,

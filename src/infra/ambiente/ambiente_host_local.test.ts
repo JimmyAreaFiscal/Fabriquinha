@@ -3,7 +3,8 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ambienteSemCredenciais, git, gitComLimite } from "../processo.ts";
+import { git, gitComLimite } from "../processo.ts";
+import { ambienteSemCredenciais } from "./ambiente_sem_credenciais.ts";
 import type { ComandoNoAmbiente } from "./ambiente.ts";
 import { AmbienteHostLocal } from "./ambiente_host_local.ts";
 

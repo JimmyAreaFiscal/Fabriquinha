@@ -12,7 +12,8 @@ import {
   type ResultadoDaVerificacao,
   type TipoVerificacao,
 } from "../../nucleo/verificacao.ts";
-import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS, type Resultado } from "../processo.ts";
+import { executarNoShell, LIMITE_COMANDO_MS, type Resultado } from "../processo.ts";
+import { ambienteSemCredenciais } from "../ambiente/ambiente_sem_credenciais.ts";
 
 /** A reprovação técnica volta ao agente; a de infraestrutura leva a causa que a política da Tentativa lê. */
 export type Falha =

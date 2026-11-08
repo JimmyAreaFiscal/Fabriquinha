@@ -9,6 +9,7 @@ import type { Commit } from "../armazenamento/commits.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { arquivosDe, commitar } from "../infra/repositorio/commit.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
+import type { Ambiente } from "../infra/ambiente/ambiente.ts";
 import { git, LIMITE_COMANDO_MS } from "../infra/processo.ts";
 
 type Ref = Parameters<typeof formatarTicketRef>[0];
@@ -44,11 +45,12 @@ export async function commitarTicketDemanda(
   banco: DatabaseSync,
   ref: Ref,
   {
+    ambiente,
     worktree,
     tipo,
     titulo,
     etapa,
-  }: { worktree: string; tipo: "feat" | "fix"; titulo: string; etapa: TicketDemanda["etapa"] },
+  }: { ambiente: Ambiente; worktree: string; tipo: "feat" | "fix"; titulo: string; etapa: TicketDemanda["etapa"] },
   limiteMs = LIMITE_COMANDO_MS,
 ): Promise<Commit> {
   let commit = await acharCommitTicketDemanda(worktree, ref);
@@ -60,7 +62,13 @@ export async function commitarTicketDemanda(
         `o ticket ${formatarTicketRef(ref)} terminou sem alteração na worktree e não gera commit vazio: faça nos arquivos da worktree a correção que o ticket pede; o corpo do PR nasce da mensagem do PR no encerramento da rodada e não muda nesta etapa`,
       );
     }
-    await commitar(worktree, `${tipo}: ${titulo} ${marcaDe(ref)}`, { emendar: false, semAlteracao }, limiteMs);
+    await commitar(
+      ambiente,
+      worktree,
+      `${tipo}: ${titulo} ${marcaDe(ref)}`,
+      { emendar: false, semAlteracao },
+      limiteMs,
+    );
     commit = await lerCommit(worktree, (await exigirGit(worktree, "rev-parse", "HEAD")).trim());
   }
   gravarCommitDemanda(banco, ref.demanda_id, ref.ticket_id, commit);
