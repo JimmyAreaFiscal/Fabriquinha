@@ -155,7 +155,7 @@ type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
 /** A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa: o que `pendenciasDaDemanda` pede. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function trabalhoVivoDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): TrabalhoVivo {
-  const pergunta = s.motivo === "dialogo" ? situacaoDa(s.sessao)?.dialogos[0]?.title : undefined;
+  const pergunta = situacaoDa(s.sessao)?.dialogos[0]?.title;
   return {
     ticket: Endereco.ler(s.ticket),
     ...(typeof pergunta === "string" && { pergunta }),
@@ -212,7 +212,7 @@ export function inicio(
     demandas.flatMap((ag) => ag.tickets.map((t) => [formatarTicketRef(t), t.titulo] as const)),
   );
   const sessoesParadas = sessoes.filter(
-    (s) => s.estado === "aguardando_humano" && (s.motivo === "dialogo" || s.motivo === "conversa"),
+    (s) => s.estado === "aguardando_humano" && s.pendencia?.tipo === "dialogo_do_agente",
   );
   const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
   const sessaoDoTicket = new Map(sessoesParadas.map((s) => [s.ticket, s.sessao]));

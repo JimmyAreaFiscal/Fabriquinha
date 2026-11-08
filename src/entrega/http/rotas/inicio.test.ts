@@ -268,7 +268,13 @@ test("trabalhoVivoDaSessao: o diálogo traz a pergunta do processo vivo; a conve
     etapa: "implementar",
     modo: "interativo",
     estado: "aguardando_humano",
-    motivo: "dialogo",
+    pendencia: {
+      tipo: "dialogo_do_agente",
+      item: "I-303.T5",
+      motivo: "O agente pergunta: Qual ordem?",
+      acao_esperada: "responder",
+      desde: em(9),
+    },
     desde: em(9),
     inicio: em(1),
     resultado: "concluida",
@@ -283,7 +289,6 @@ test("trabalhoVivoDaSessao: o diálogo traz a pergunta do processo vivo; a conve
     desde: em(9),
   });
   assert.equal(trabalhoVivoDaSessao(sessao, () => undefined).pergunta, undefined);
-  assert.equal(trabalhoVivoDaSessao({ ...sessao, motivo: "conversa" }, comPergunta).pergunta, undefined);
 });
 
 test("aguarda: o merge final do PR da demanda e o despacho parado com o agendador desligado", () => {

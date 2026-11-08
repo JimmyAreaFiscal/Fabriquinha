@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Dialogo } from "../../../aplicacao/trabalho/condutor.ts";
+import type { TipoPendencia } from "../../../nucleo/pendencia.ts";
 import type { Entrada } from "../../http/rotas/chat.ts";
 import {
   barraDeEstado,
@@ -28,6 +29,14 @@ import {
 } from "./chat.ts";
 
 const T0 = "2026-10-11T10:00:00.000Z";
+
+const pendencia = (tipo: TipoPendencia, motivo = "motivo da Pendência"): Cabecalho["sessao"]["pendencia"] => ({
+  tipo,
+  item: "I-239",
+  motivo,
+  acao_esperada: "responder",
+  desde: T0,
+});
 
 const execucao = (e: Partial<Cabecalho["execucoes"][number]> = {}): Cabecalho["execucoes"][number] => ({
   id: "abcdef12-0000-4000-8000-000000000001",
@@ -56,23 +65,30 @@ const cabecalho = (sessao: Partial<TrabalhoGerenciado> = {}, extra: Partial<Cabe
   ticket: "I-239.T1",
   etapa: "planejar",
   execucoes: [execucao()],
+  pendencias: [],
   ...extra,
 });
 
 const dialogo = (d: Record<string, unknown>): Dialogo => ({ type: "extension_ui_request", id: "d1", em: T0, ...d });
 
-test("etiqueta do estado: rodando, aguardando com o motivo (falha em vermelho) e terminada", () => {
+test("etiqueta do estado: rodando, aguardando com o tipo da Pendência (bloqueio em vermelho) e terminada", () => {
   const s = cabecalho().sessao;
   assert.equal(etiquetaDoEstado(s), '<span class="pill pill-rodando">rodando</span>');
   assert.equal(etiquetaDoEstado({ ...s, estado: "terminada" }), '<span class="pill pill-neutro">terminada</span>');
   const aguarda = { ...s, estado: "aguardando_humano" as const };
   assert.equal(
-    etiquetaDoEstado({ ...aguarda, motivo: "gate_demanda" }),
-    '<span class="pill pill-aguarda">aguarda você · gate da demanda</span>',
+    etiquetaDoEstado({ ...aguarda, pendencia: pendencia("gate_humano") }),
+    '<span class="pill pill-aguarda">aguarda você · gate</span>',
   );
   assert.equal(
-    etiquetaDoEstado({ ...aguarda, motivo: "falha" }),
+    etiquetaDoEstado({ ...aguarda, pendencia: pendencia("item_bloqueado") }),
     '<span class="pill pill-falha">aguarda você · falha</span>',
+  );
+  const emDialogo = { ...aguarda, pendencia: pendencia("dialogo_do_agente") };
+  assert.equal(etiquetaDoEstado(emDialogo), '<span class="pill pill-aguarda">aguarda você · conversa</span>');
+  assert.equal(
+    etiquetaDoEstado({ ...emDialogo, dialogos: [dialogo({})] }),
+    '<span class="pill pill-aguarda">aguarda você · diálogo</span>',
   );
   assert.equal(etiquetaDoEstado(aguarda), '<span class="pill pill-aguarda">aguarda você · </span>');
 });
@@ -99,12 +115,12 @@ test("modelo: o fixado na sessão, senão o da última resposta do agente, senã
 
 test("barra de estado: demanda, rodada, ticket, etapa, modo, estado, modelo, execução e Exportar, sem log nem prompt", () => {
   const html = barraDeEstado(
-    cabecalho({ estado: "aguardando_humano", motivo: "conversa" }, { rodada: "I-239.R1" }),
+    cabecalho({ estado: "aguardando_humano", pendencia: pendencia("gate_humano") }, { rodada: "I-239.R1" }),
     "anthropic / <opus>",
   );
   assert.match(html, /<a class="demanda" href="\/demandas\/I-239"><span class="id">I-239<\/span><\/a>/);
   assert.match(html, /<span class="id">I-239.R1<\/span><span class="sep">│<\/span><span class="id">I-239.T1<\/span>/);
-  assert.match(html, /Planejamento · interativa<\/span><span class="pill pill-aguarda">aguarda você · conversa/);
+  assert.match(html, /Planejamento · interativa<\/span><span class="pill pill-aguarda">aguarda você · gate/);
   assert.match(html, /<span class="modelo" title="anthropic \/ &#60;opus&#62;">anthropic \/ &#60;opus&#62;<\/span>/);
   assert.match(html, /E-abcdef12<\/span><a class="link" href="\/api\/sessoes\/s%2F1\/historico.md" download>Exportar/);
   assert.doesNotMatch(html, /log|prompt|Conversar sobre/);
@@ -322,7 +338,9 @@ test("envio rodando: redirecionar ou enfileirar, abortar e enviar", () => {
 });
 
 test("envio em conversa: só enviar, sem anexar histórico nem concluir", () => {
-  const conversa = compositorDe(envio(cabecalho({ estado: "aguardando_humano", motivo: "conversa" }), "steer"));
+  const conversa = compositorDe(
+    envio(cabecalho({ estado: "aguardando_humano", pendencia: pendencia("dialogo_do_agente") }), "steer"),
+  );
   assert.equal(conversa.placeholder, "Responda ao agente");
   assert.match(
     conversa.linha,
@@ -332,7 +350,12 @@ test("envio em conversa: só enviar, sem anexar histórico nem concluir", () => 
 
 test("envio em diálogo: o formulário do método, com Cancelar e Responder", () => {
   const com = (d: Record<string, unknown>) =>
-    htmlDe(envio(cabecalho({ estado: "aguardando_humano", motivo: "dialogo", dialogos: [dialogo(d)] }), "steer"));
+    htmlDe(
+      envio(
+        cabecalho({ estado: "aguardando_humano", pendencia: pendencia("dialogo_do_agente"), dialogos: [dialogo(d)] }),
+        "steer",
+      ),
+    );
   const select = com({ method: "select", title: "Qual `<ordem>`?", options: ["A <1>", "B"] });
   assert.match(
     select,
@@ -421,12 +444,12 @@ test("envio na falha e no gate: o caminho para a página da demanda; terminada: 
   const aviso = (sessao: Partial<TrabalhoGerenciado>) =>
     htmlDe(envio(cabecalho({ estado: "aguardando_humano", ...sessao }), "steer"));
   assert.equal(
-    aviso({ motivo: "falha" }),
+    aviso({ pendencia: pendencia("item_bloqueado") }),
     '<div class="fim">O ticket falhou; reabra-o na página da demanda, com a instrução para a próxima tentativa.<div class="botoes"><a class="btn btn-primario" href="/demandas/I-239">Abrir a demanda</a></div></div>',
   );
   assert.match(
-    aviso({ motivo: "gate_demanda" }),
-    /O plano espera a sua aprovação; decida na página da demanda.*href="\/demandas\/I-239"/,
+    aviso({ pendencia: pendencia("gate_humano", "Aprovação do <planejamento> aguarda decisão") }),
+    /Aprovação do &#60;planejamento&#62; aguarda decisão; decida na página da demanda.*href="\/demandas\/I-239"/,
   );
   assert.equal(
     aviso({ estado: "terminada", sessao: "a b" }),
@@ -436,7 +459,7 @@ test("envio na falha e no gate: o caminho para a página da demanda; terminada: 
 
 test("erro da falha: a última execução, o motivo do ticket escapado e o que ficou; nada fora da falha", () => {
   const falha = cabecalho(
-    { estado: "aguardando_humano", motivo: "falha" },
+    { estado: "aguardando_humano", pendencia: pendencia("item_bloqueado") },
     { erro: "tempo limite de 30 min <atingido>." },
   );
   assert.deepEqual(erroDaFalha(falha), [
