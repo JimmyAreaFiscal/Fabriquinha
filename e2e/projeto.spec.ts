@@ -5,6 +5,7 @@
 import type { TestInfo } from "@playwright/test";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
+import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 
 test("a aba Demandas: a lista com as rodadas, a gaveta, os filtros lembrados e o Arquivar concluídas", async ({
@@ -181,4 +182,16 @@ test("/projects volta ao último visto; o heatmap, a Configuração SDLC e a sim
   await pagina.getByRole("navigation", { name: "Páginas" }).getByRole("link", { name: "Simulação" }).click();
   await expect(pagina).toHaveURL(`${fabriquinha.base}/simulation/loja`);
   await expect(pagina.getByRole("heading", { name: "Simulação" })).toBeVisible();
+});
+
+test("a página do Projeto mostra as seis Pendências do cenário, cada uma com o mesmo item e o mesmo tipo do Início", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semearPendencias(fabriquinha.raiz);
+  await pagina.goto(`${fabriquinha.base}/projects/loja`);
+  await expect(pagina.locator(".pendencias li")).toHaveCount(PENDENCIAS_ESPERADAS.length);
+  for (const { item, tipo } of PENDENCIAS_ESPERADAS) {
+    await expect(pagina.locator(`.pendencias li[data-pendencia="${tipo}"][data-item="${item}"]`)).toHaveCount(1);
+  }
 });

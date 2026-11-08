@@ -2,32 +2,24 @@
 // aguarda o Auditor, as sessões que rodam e o board, tudo das demandas em andamento. As concluídas, canceladas e
 // arquivadas ficam fora; a navegação conta o que aguarda pela mesma rota.
 import type { DatabaseSync } from "node:sqlite";
-import { FABRIQUINHA } from "../../../nucleo/ator.ts";
 import type { ModoTrabalho } from "../../../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
-import { CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
-import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
-import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
-import type { EtapaTicket, EstadoDemanda, EstadoRodada, Instante, EstadoTicket } from "../../../nucleo/primitivos.ts";
-import { iniciarRevisaoDemanda } from "../../../nucleo/transicoes_demanda.ts";
+import { predecessorasPendentes } from "../../../nucleo/dependencia_demanda.ts";
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
+import { type Pendencia, pendenciasDaDemanda, type TrabalhoVivo } from "../../../nucleo/pendencia.ts";
+import type { EtapaTicket, EstadoDemanda, EstadoRodada, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { condutor, type Situacao } from "../../../aplicacao/trabalho/condutor.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { mesDe } from "../../../nucleo/periodo.ts";
 import { type MetricasMesDemanda, metricasDemandaPorMes } from "../../../aplicacao/periodo_demanda.ts";
 import { listarDemandas } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
+import { configuracao } from "../../../armazenamento/servico.ts";
 import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import type { Rota } from "../rotas.ts";
-import { prDoGateDaRodada } from "./demandas.ts";
-
-/**
- * Por que o Auditor é esperado: os três gates, a sessão de ajustes do PR, o ticket falho, a sessão parada nele e a
- * revisão integral que não começou depois da última rodada.
- */
-export type MotivoDaEspera =
-  "gate_demanda" | "gate_planejamento" | "gate_pr" | "ajustes" | "falha" | "dialogo" | "conversa" | "revisao_parada";
 
 /** Um ticket como o Início o mostra; `modo` é o da sessão ativa dele, quando tem. */
 interface TicketDoInicio {
@@ -39,23 +31,17 @@ interface TicketDoInicio {
   piAtivo?: true;
 }
 
-/** O ticket de uma espera: sem o estado, que a espera já diz pelo motivo. */
-type TicketDaEspera = Omit<TicketDoInicio, "estado">;
-
-/** O que aguarda o Auditor; `rodada` quando é de uma rodada, e o PR, o erro ou a pergunta conforme o motivo. */
-export interface EsperaDoAuditor {
-  motivo: MotivoDaEspera;
+/**
+ * Uma Pendência como o Início a mostra: `item` pelo endereço público, a demanda e a rodada (quando o item é de uma) que o
+ * board e o cartão usam, e a `sessao` do chat quando é o diálogo do agente.
+ */
+export interface PendenciaDoInicio extends Omit<Pendencia, "item"> {
+  item: string;
   demanda: string;
   rodada?: string;
   projeto: string;
   titulo: string;
-  ticket?: TicketDaEspera;
-  /** A sessão do diálogo ou da conversa, que se responde no chat. */
   sessao?: string;
-  pr?: { id: string; url: string };
-  erro?: string;
-  pergunta?: string;
-  desde: Instante;
 }
 
 /** Uma sessão que roda, com o que o agente faz: o que o processo vivo diz ou, sem ele, o título do ticket. */
@@ -87,7 +73,7 @@ export interface CartaoDoBoard {
 
 export interface DadosDoInicio {
   mes: MetricasMesDemanda;
-  aguarda: EsperaDoAuditor[];
+  aguarda: PendenciaDoInicio[];
   rodando: SessaoRodando[];
   /** As demandas em andamento, que o board distribui nos cartões. */
   quantidadeEmAndamento: number;
@@ -163,133 +149,92 @@ function cartoesDaDemanda(
   return [{ coluna, ref: demanda, ...identificacao, ...ticketEmCurso(globais, modoDe, comPiAtivo) }];
 }
 
-/** O agendador abre a revisão integral a cada minuto; parada além disso, a demanda precisa do Auditor. */
-const TOLERANCIA_REVISAO_PARADA_MS = 2 * 60_000;
-
-/**
- * Todas as rodadas concluídas, nada aberto, rodando ou falho, e a revisão integral não abriu na tolerância: a recusa
- * que o agendador só deixa no log do serviço. O motivo é a própria regra aplicada ao agregado em memória.
- */
-function esperaDaRevisaoParada(ag: AgregadoDemanda, agora: Date): EsperaDoAuditor[] {
-  const { id: demanda, projeto, titulo, estado, estado_alterado_em } = ag.demanda;
-  const prontaParaRevisao =
-    estado === "em_execucao" &&
-    ag.rodadas.length > 0 &&
-    ag.rodadas.every((r) => r.estado === "concluida") &&
-    !ag.tickets.some((t) => ["aberto", "em_execucao", "falhou"].includes(t.estado));
-  if (!prontaParaRevisao) return [];
-  // Parada desde o último movimento: a mudança de estado ou o ticket que mudou por último.
-  const desde = ag.tickets.reduce(
-    (ultimo, t) => (t.estado_alterado_em > ultimo ? t.estado_alterado_em : ultimo),
-    estado_alterado_em,
-  );
-  if (agora.getTime() - Date.parse(desde) < TOLERANCIA_REVISAO_PARADA_MS) return [];
-  let erro = "a revisão integral não começou; veja o log do serviço (journalctl --user -u fabriquinha)";
-  try {
-    iniciarRevisaoDemanda(ag, { demanda_id: demanda }, FABRIQUINHA, { agora: agora.toISOString() });
-  } catch (recusa) {
-    // A regra só recusa com ErroDeRegra; a entrada aqui é sempre válida.
-    erro = `a revisão integral foi rejeitada: ${(recusa as Error).message}`;
-  }
-  return [{ motivo: "revisao_parada", demanda, projeto, titulo, erro, desde }];
-}
-
-/** Os gates, as sessões de ajustes, os tickets falhos e a revisão integral parada, que esperam o Auditor sem depender da sessão. */
-function esperasDaDemanda(
-  ag: AgregadoDemanda,
-  modoDe: (ref: string) => ModoTrabalho | undefined,
-  agora: Date,
-): EsperaDoAuditor[] {
-  const { id: demanda, projeto, titulo, estado, estado_alterado_em } = ag.demanda;
-  const identificacao = { demanda, projeto, titulo };
-  const ticketDaEspera = (t: TicketDemanda | undefined) => {
-    if (!t) return undefined;
-    const { estado: _, ...ticket } = ticketDoInicio(t, modoDe);
-    return { ticket };
-  };
-  const gates: EsperaDoAuditor[] = [];
-  if (estado === "gate_demanda") {
-    gates.push({
-      motivo: "gate_demanda",
-      ...identificacao,
-      ...ticketDaEspera(ticketAtualDaEtapa(ag, "entender_e_desenhar")),
-      desde: estado_alterado_em,
-    });
-  }
-  if (estado === "gate_planejamento") {
-    gates.push({
-      motivo: "gate_planejamento",
-      ...identificacao,
-      ...ticketDaEspera(ticketAtualDaEtapa(ag, "planejar")),
-      desde: estado_alterado_em,
-    });
-  }
-  for (const r of ag.rodadas) {
-    if (r.estado !== "gate_pr" && r.estado !== "ajustar_resultado") continue;
-    // O gate do PR conta de quando o encerramento da rodada abriu o PR; a sessão de ajustes, de quando ela abriu.
-    const etapa = r.estado === "ajustar_resultado" ? "ajustar_resultado" : "encerrar_rodada";
-    const ticket = ticketAtualDaEtapa(ag, etapa, r.rodada_id);
-    const pr = prDoGateDaRodada(ag, r.rodada_id);
-    gates.push({
-      motivo: r.estado === "ajustar_resultado" ? "ajustes" : "gate_pr",
-      ...identificacao,
-      rodada: formatarRodadaRef(r),
-      ...ticketDaEspera(ticket),
-      ...(pr && { pr }),
-      desde: ticket?.estado_alterado_em ?? estado_alterado_em,
-    });
-  }
-  const falhos = ag.tickets
-    .filter((t) => t.estado === "falhou")
-    .map((t): EsperaDoAuditor => {
-      const erro = motivoDaFalhaDoTicket(ag.tentativas, t);
-      return {
-        motivo: "falha",
-        ...identificacao,
-        ...(t.rodada_id !== undefined && {
-          rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id: t.rodada_id }),
-        }),
-        ...ticketDaEspera(t),
-        ...(erro !== undefined && { erro }),
-        desde: t.estado_alterado_em,
-      };
-    });
-  return [...gates, ...falhos, ...esperaDaRevisaoParada(ag, agora)];
-}
-
 /** O processo vivo da sessão, que só existe com o pi rodando; os testes o trocam. */
 type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
+const situacaoDoCondutor: SituacaoDaSessao = (sessao) => condutor.situacao(sessao);
+
+/** A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa: o que `pendenciasDaDemanda` pede. */
+/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
+export function trabalhoVivoDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): TrabalhoVivo {
+  const pergunta = situacaoDa(s.sessao)?.dialogos[0]?.title;
+  return {
+    ticket: Endereco.ler(s.ticket),
+    ...(typeof pergunta === "string" && { pergunta }),
+    desde: s.desde,
+  };
+}
+
+/** A sessão que espera o Auditor: parada no diálogo ou na conversa. */
+const esperaOAuditor = (s: SessaoDeDemanda): boolean =>
+  s.estado === "aguardando_humano" && s.pendencia?.tipo === "dialogo_do_agente";
+
+/** As Pendências da demanda com o que o Início precisa para desenhá-las e levá-las ao chat ou à página da demanda. */
+function pendenciasDoInicio(
+  banco: DatabaseSync,
+  ag: AgregadoDemanda,
+  vivos: readonly TrabalhoVivo[],
+  sessaoDoTicket: ReadonlyMap<string, string>,
+  agendadorLigado: boolean,
+  agora: Date,
+): PendenciaDoInicio[] {
+  const { id: demanda, projeto, titulo } = ag.demanda;
+  const predecessorasSatisfeitas = predecessorasPendentes(predecessorasDaDemanda(banco, demanda)).length === 0;
+  return pendenciasDaDemanda(ag, vivos, ag.pull_requests, agendadorLigado, { agora, predecessorasSatisfeitas }).map(
+    (p) => {
+      const item = p.item.toString();
+      const rodada_id = p.item.rodada_id ?? ag.tickets.find((t) => t.ticket_id === p.item.ticket_id)?.rodada_id;
+      const sessao = p.tipo === "dialogo_do_agente" ? sessaoDoTicket.get(item) : undefined;
+      return {
+        ...p,
+        item,
+        demanda,
+        ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id }) }),
+        projeto,
+        titulo,
+        ...(sessao !== undefined && { sessao }),
+      };
+    },
+  );
+}
 
 /**
- * A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa. A falha, o gate do
- * planejamento e a conversa da sessão de ajustes já vêm da demanda, sem repetir; o diálogo dela, não.
+ * As Pendências das demandas, da mais antiga para a mais nova; `sessoes` são as ativas delas, de onde vêm os diálogos e as
+ * conversas vivas.
  */
-/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): EsperaDoAuditor[] {
-  if (s.motivo !== "dialogo" && (s.motivo !== "conversa" || s.etapa === "ajustar_resultado")) return [];
-  const pergunta = s.motivo === "dialogo" ? situacaoDa(s.sessao)?.dialogos[0]?.title : undefined;
-  return [
-    {
-      motivo: s.motivo,
-      demanda: s.demanda,
-      ...(s.rodada && { rodada: s.rodada }),
-      projeto: s.projeto,
-      titulo: s.titulo,
-      ticket: { ref: s.ticket, etapa: s.etapa, modo: s.modo },
-      sessao: s.sessao,
-      ...(typeof pergunta === "string" && { pergunta }),
-      desde: s.desde,
-    },
-  ];
+export function pendenciasDasDemandas(
+  banco: DatabaseSync,
+  demandas: readonly AgregadoDemanda[],
+  sessoes: readonly SessaoDeDemanda[],
+  situacaoDa: SituacaoDaSessao,
+  agora: Date,
+): PendenciaDoInicio[] {
+  const sessoesParadas = sessoes.filter(esperaOAuditor);
+  const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
+  const sessaoDoTicket = new Map(sessoesParadas.map((s) => [s.ticket, s.sessao]));
+  const agendadorLigado = configuracao(banco).agendadorAtivo;
+  return demandas
+    .flatMap((ag) => pendenciasDoInicio(banco, ag, vivos, sessaoDoTicket, agendadorLigado, agora))
+    .toSorted((a, b) => a.desde.localeCompare(b.desde));
+}
+
+/**
+ * As Pendências de uma demanda em andamento, como o Início as desenha: o board e a página da demanda mostram as mesmas.
+ * A demanda terminada não espera ninguém.
+ */
+export function pendenciasDeUmaDemanda(
+  banco: DatabaseSync,
+  ag: AgregadoDemanda,
+  situacaoDa = situacaoDoCondutor,
+  agora = new Date(),
+): PendenciaDoInicio[] {
+  if (CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)) return [];
+  const sessoes = sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id });
+  return pendenciasDasDemandas(banco, [ag], sessoes, situacaoDa, agora);
 }
 
 /** `GET /api/inicio`. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function inicio(
-  banco: DatabaseSync,
-  situacaoDa: SituacaoDaSessao = (sessao) => condutor.situacao(sessao),
-): DadosDoInicio {
-  const agora = new Date();
+export function inicio(banco: DatabaseSync, situacaoDa = situacaoDoCondutor, agora = new Date()): DadosDoInicio {
   const mes = mesDe(agora);
   // Um mês pedido, um mês devolvido.
   const [doMes] = metricasDemandaPorMes(banco, { de: mes, ate: mes }) as [MetricasMesDemanda];
@@ -304,10 +249,7 @@ export function inicio(
   );
   return {
     mes: doMes,
-    aguarda: [
-      ...demandas.flatMap((ag) => esperasDaDemanda(ag, modoDe, agora)),
-      ...sessoes.filter((s) => s.estado === "aguardando_humano").flatMap((s) => esperaDaSessao(s, situacaoDa)),
-    ].toSorted((a, b) => a.desde.localeCompare(b.desde)),
+    aguarda: pendenciasDasDemandas(banco, demandas, sessoes, situacaoDa, agora),
     rodando: sessoes
       .filter((s) => s.estado === "rodando")
       .map((s) => {

@@ -6,8 +6,7 @@ import type { ProcessoDoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import { encontrado } from "../nucleo/erros.ts";
-import { cabecalhoDaDemanda, type MotivoDemanda } from "./sessoes_demanda.ts";
-import type { Estado } from "./sessoes_demanda.ts";
+import { cabecalhoDaSessao, type Estado, type PendenciaDoChat } from "./sessoes_demanda.ts";
 
 export type Resultado = "concluida" | "falha";
 
@@ -23,7 +22,8 @@ export interface SessaoDeDemanda {
   modo: ModoTrabalho;
   modelo?: Modelo;
   estado: Estado;
-  motivo?: MotivoDemanda;
+  /** A Pendência que segura a sessão enquanto ela espera o Auditor. */
+  pendencia?: PendenciaDoChat;
   /** Desde quando a sessão está neste estado. */
   desde: Instante;
   inicio: Instante;
@@ -62,7 +62,7 @@ export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDeman
   return linhas
     .map(({ id, titulo }): SessaoDeDemanda => {
       const { sessao, execucoes, ...resto } = encontrado(
-        cabecalhoDaDemanda(banco, id),
+        cabecalhoDaSessao(banco, id),
         "a sessão não existe",
         "confira o banco",
       );
@@ -79,7 +79,7 @@ export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDeman
         modo: sessao.modo,
         ...(sessao.modelo && { modelo: sessao.modelo }),
         estado: sessao.estado,
-        ...(sessao.motivo && { motivo: sessao.motivo }),
+        ...(sessao.pendencia && { pendencia: sessao.pendencia }),
         desde: sessao.desde,
         inicio: primeira.inicio,
         ...(ultima.fim && { fim: ultima.fim }),
