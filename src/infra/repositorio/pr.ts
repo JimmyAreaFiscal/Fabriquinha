@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
-import { ErroDeRegra, ErroExterno, mensagem } from "../../nucleo/erros.ts";
+import { ErroDeRegra, ErroExterno } from "../../nucleo/erros.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { anotar } from "../registro.ts";
 import { executar, LIMITE_COMANDO_MS } from "../processo.ts";
@@ -377,8 +377,7 @@ interface AlvoDoPR {
  *    fechado sem merge, não barra, que é o que a mensagem pede ao Auditor.
  * 2. Na fila git do projeto, `conferirCommits(head)` recusa com ErroDeRegra o commit que não deve subir; depois, o push
  *    (da base também, com `publicarBase`).
- * 3. `varrerBase` (F6 §4.4), que busca a base; a falha da varredura só vai para o `log`.
- * 4. Atualiza o PR conhecido mais recente ou, sem ele, o adotável, reabrindo-o antes se estiver fechado; sem nenhum,
+ * 3. Atualiza o PR conhecido mais recente ou, sem ele, o adotável, reabrindo-o antes se estiver fechado; sem nenhum,
  *    cria.
  *
  * Retomada: se o PR saiu, mas o registro de `pr_aberto` falhou, o PR fica fora dos conhecidos. A marca o identifica na
@@ -392,8 +391,6 @@ export async function publicarPRDe(
   alvo: AlvoDoPR,
   pr: { titulo: string; corpo: string; conhecidos: readonly string[]; marca: string },
   conferirCommits: (head: string) => void | Promise<void>,
-  varrerBase: () => Promise<void>,
-  log: string,
 ): Promise<{ id: string; url: string; branch: string; head: string }> {
   const repo = projeto.raiz_git;
   const { branch, base } = alvo;
@@ -421,10 +418,6 @@ export async function publicarPRDe(
     if (alvo.publicarBase) await exigirGit(repo, "push", "origin", `refs/heads/${base}:refs/heads/${base}`);
     await exigirGit(repo, "push", "-u", "origin", `refs/heads/${branch}:refs/heads/${branch}`);
     return sha;
-  });
-  // Fora da fila: a varredura entra nela por conta própria.
-  await varrerBase().catch((error_: unknown) => {
-    anotar(log, `varrerBase falhou: ${mensagem(error_)}`);
   });
 
   // O conhecido sempre vence: um adotável mais novo só conta quando a demanda ainda não registrou PR algum.

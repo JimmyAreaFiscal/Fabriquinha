@@ -5,7 +5,6 @@ import { branchDemanda, branchRodada, DemandaId, RodadaRef } from "../../nucleo/
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { Slug } from "../../nucleo/primitivos.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
-import { anotar } from "../registro.ts";
 import { git } from "../processo.ts";
 import { exigirGit, naFilaDoProjeto, preparar } from "./worktree.ts";
 
@@ -119,14 +118,16 @@ async function verificarCheckout(
 
 type ProjetoWorktree = Pick<Projeto, "nome" | "raiz_git" | "branch_base" | "verificacoes">;
 
-/** Cria da base configurada; uma branch própria existente nunca é avançada implicitamente. */
-export async function garantirWorktreeDemanda(
+/**
+ * Cria da base configurada; uma branch própria existente nunca é avançada implicitamente. Devolve a pasta e se buscou
+ * a base no origin (só na criação da branch), para quem chama varrer os commits humanos depois, fora da fila.
+ */
+export async function garantirWorktreeDemandaDizendoSeBuscouBase(
   raiz: string,
   projeto: ProjetoWorktree,
   demandaId: string,
   log: string,
-  varrerBase: () => Promise<void>,
-): Promise<string> {
+): Promise<{ caminho: string; buscouBase: boolean }> {
   const caminho = caminhoDaWorktreeDemanda(raiz, projeto.nome, demandaId);
   const branch = branchDemanda(demandaId);
   const chave = `branch.${branch}.fabriquinha`;
@@ -161,25 +162,28 @@ export async function garantirWorktreeDemanda(
     ).trim();
     return { buscouBase: !existe, marca };
   });
-  if (buscouBase) {
-    try {
-      await varrerBase();
-    } catch (erro) {
-      anotar(log, `varrerBase falhou: ${String(erro)}`);
-    }
-  }
   if (!existsSync(marca)) {
     await preparar(caminho, projeto.verificacoes.preparacao, log);
     writeFileSync(marca, "");
   }
-  return caminho;
+  return { caminho, buscouBase };
+}
+
+/** Só a pasta da worktree da demanda; quem precisa saber se buscou a base usa a variante que o diz. */
+export async function garantirWorktreeDemanda(
+  raiz: string,
+  projeto: ProjetoWorktree,
+  demandaId: string,
+  log: string,
+): Promise<string> {
+  return (await garantirWorktreeDemandaDizendoSeBuscouBase(raiz, projeto, demandaId, log)).caminho;
 }
 
 interface RefRodada {
   demanda_id: string;
   rodada_id: number;
 }
-type ResultadoAtualizacao =
+export type ResultadoAtualizacao =
   { status: "atualizada" } | { status: "sem_alteracao" } | { status: "conflito"; arquivos: string[] };
 
 // Falhas de disco também precisam orientar o operador, sem mascarar erros de regra/Git.

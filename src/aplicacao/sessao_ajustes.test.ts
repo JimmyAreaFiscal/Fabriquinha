@@ -69,7 +69,7 @@ async function cenario(shell = "") {
     criado_por: { tipo: "fabriquinha" },
     rodada_id: 2,
   });
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const head = commitarArquivo(rodada, "a.txt", "a\n");
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
@@ -117,6 +117,7 @@ async function cenario(shell = "") {
         em,
       },
     ],
+    pull_requests: [{ rodada_id: 2, numero: 1, url: URL_PR, head, estado: "aberto", atualizado_em: em }],
   } as unknown as AgregadoDemanda);
   const id = ["-c", "user.name=t", "-c", "user.email=t@t"];
   const piFalso = instalarPiFalso(c.dir).roteirizar([
@@ -284,11 +285,9 @@ test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesm
 
 test("rodada sem PR publicado não reprova", async () => {
   const { banco, ag } = await cenario();
-  banco.prepare("DELETE FROM evidencia_demanda").run();
+  banco.prepare("DELETE FROM pull_request").run();
   await assert.rejects(reprovarPRRodada(banco, MOTIVO), /não tem PR publicado/);
   assert.deepEqual(ag().decisoes, []);
-  banco.prepare("DELETE FROM ticket_demanda WHERE etapa = 'encerrar_rodada'").run();
-  await assert.rejects(reprovarPRRodada(banco, MOTIVO), /não tem ticket encerrar_rodada/);
 });
 
 test("o endereço da demanda não reprova o PR, que é da rodada", async () => {

@@ -9,14 +9,15 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
+import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
+import { projetoExistente } from "../armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { descartarAlteracoes, exigirGit } from "../infra/repositorio/worktree.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
@@ -38,19 +39,20 @@ const contexto = () => ({ agora: new Date().toISOString() });
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
 
-/** O `encerrar_rodada` atual (o de maior id) da rodada e o `pr_aberto` dele. */
-function prDaRodada(ag: AgregadoDemanda, ref: RefRodada) {
-  const ticket = existe(
-    ticketAtualDaEtapa(ag, "encerrar_rodada", ref.rodada_id),
-    `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
-    "confira o estado da rodada",
+/** O Espaço da rodada, com o PR que o encerramento publicou. */
+function espacoComPrPublicado(banco: DatabaseSync, ag: AgregadoDemanda, ref: RefRodada) {
+  const espaco = espacoDoTicket(
+    ag,
+    { rodada_id: ref.rodada_id },
+    projetoExistente(banco, ag.demanda.projeto),
+    raizDo(banco),
   );
   const pr = existe(
-    ag.evidencias.findLast((e) => e.ticket_id === ticket.ticket_id && e.tipo === "pr_aberto"),
+    espaco.pr,
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  return { ticket, pr: pr.dados as { url: string; branch: string; head: string } };
+  return { branch: espaco.branch, pr };
 }
 
 /** O ticket `ajustar_resultado` mais recente da rodada. */
@@ -65,11 +67,12 @@ const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDemanda =>
 async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const raiz = raizDo(banco);
+  const projeto = projetoExistente(banco, ag.demanda.projeto);
   const marco = JSON.parse(readFileSync(arquivoDoMarco(banco, ref), "utf8")) as Marco;
   const log = logDaOperacao(raiz, `ajustes-${formatarRodadaRef(ref)}`);
   const pontas: [Ponta, string][] = [
-    [marco.rodada, caminhoDaWorktreeRodada(raiz, ag.demanda.projeto, ref)],
-    [marco.demanda, caminhoDaWorktreeDemanda(raiz, ag.demanda.projeto, ref.demanda_id)],
+    [marco.rodada, espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz).pasta],
+    [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz).pasta],
   ];
   for (const [{ branch, sha }, worktree] of pontas) {
     await exigirGit(worktree, "update-ref", `refs/heads/${branch}`, sha);
@@ -114,14 +117,14 @@ function executar(
  * em disco, fora da transação, então vem antes da Decisão.
  */
 export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
-  const { pr } = prDaRodada(ag, ref);
+  const { branch, pr } = espacoComPrPublicado(banco, ag, ref);
   const demanda = await exigirGit(
-    caminhoDaWorktreeDemanda(raizDo(banco), ag.demanda.projeto, ref.demanda_id),
+    espacoDoTicket(ag, {}, projetoExistente(banco, ag.demanda.projeto), raizDo(banco)).pasta,
     "rev-parse",
     `refs/heads/${ag.demanda.branch}`,
   );
   const marco: Marco = {
-    rodada: { branch: pr.branch, sha: pr.head },
+    rodada: { branch, sha: pr.head },
     demanda: { branch: ag.demanda.branch, sha: demanda.trim() },
   };
   mkdirSync(dirname(arquivoDoMarco(banco, ref)), { recursive: true });
@@ -136,7 +139,7 @@ export function abrirSessaoDeAjustes(
   motivo: string,
   opcoes: Opcoes,
 ): ReturnType<typeof iniciarExecucaoDemanda> {
-  const { pr } = prDaRodada(reprovada, ref);
+  const { pr } = espacoComPrPublicado(banco, reprovada, ref);
   const sessao = sessaoDaRodada(reprovada, ref);
   return executar(banco, ref, sessao, {
     ...opcoes,

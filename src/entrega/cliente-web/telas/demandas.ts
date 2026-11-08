@@ -120,6 +120,7 @@ export interface DadosDaPagina {
     ref: string;
     titulo: string;
     estado: EstadoRodada;
+    pr?: { id: string; url: string };
     /** O endereço do ticket atual de cada etapa que a rodada já teve. */
     ticket_atual_por_etapa: Partial<Record<EtapaTicket, string>>;
   }[];
@@ -379,8 +380,7 @@ function rodadaDaPagina(r: Pagina["rodadas"][number], p: Pagina): string {
   const ticketAtual = (etapa: EtapaTicket) => meus.find((t) => t.ref === r.ticket_atual_por_etapa[etapa]);
   const encerra = ticketAtual("encerrar_rodada");
   const nota = p.decisoes.findLast((d) => d.ticket === encerra?.ref && d.resultado === "aprovado")?.nota;
-  const pr = p.evidencias.findLast((e) => e.tipo === "pr_aberto" && e.ticket === encerra?.ref)?.dados as
-    { id: string; url: string } | undefined;
+  const { pr } = r;
   return `<section class="bloco dm-rodada" id="${escapar(r.ref)}" aria-labelledby="titulo-${escapar(r.ref)}">
     <div class="secao-titulo"><h2 id="titulo-${escapar(r.ref)}"><span class="id">${escapar(r.ref)}</span> ${escapar(r.titulo)}</h2></div>
     <div class="dm-linha">${pilula(APARENCIA_DO_ESTADO_DA_RODADA[r.estado])}${nota === undefined ? "" : ` <span class="tag">nota ${String(nota)}</span>`}${pr === undefined ? "" : ` ${linkExterno(pr.url, `PR #${escapar(pr.id)}`)}`}</div>

@@ -59,6 +59,7 @@ export const montarAgregadoDemanda = (id: string, estado: string, resto: object 
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    pull_requests: [],
     ...resto,
   }) as unknown as AgregadoDemanda;
 
@@ -180,6 +181,24 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
         em: INSTANTE_DO_CENARIO,
       },
     ],
+    pull_requests: [
+      {
+        rodada_id: 1,
+        numero: 6,
+        url: "https://pr/6",
+        head: "abc",
+        estado: "integrado",
+        atualizado_em: INSTANTE_DO_CENARIO,
+      },
+      {
+        rodada_id: 2,
+        numero: 7,
+        url: "https://pr/7",
+        head: "abc",
+        estado: "aberto",
+        atualizado_em: INSTANTE_DO_CENARIO,
+      },
+    ],
   });
 }
 
@@ -221,7 +240,10 @@ export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDema
     )
     .run(numero - 1);
   try {
-    return criarDemandaNova(banco, () => agregado);
+    return criarDemandaNova(banco, () => ({
+      ...agregado,
+      pull_requests: (agregado as Partial<AgregadoDemanda>).pull_requests ?? [],
+    })); // os cenários prontos não trazem PR
   } finally {
     if (anterior) banco.prepare("UPDATE sequencia SET valor = ? WHERE nome = 'demanda'").run(anterior.valor);
     else banco.exec("DELETE FROM sequencia WHERE nome = 'demanda'");
@@ -265,7 +287,7 @@ export async function cenarioRevisao({ integral = false } = {}) {
     }),
   );
   gravarAgregadoPronto(banco, agregadoEmRevisao({ integral }));
-  await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log);
   const piFalso = instalarPiFalso(c.dir);
   return {
     c,

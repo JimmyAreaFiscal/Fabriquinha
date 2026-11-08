@@ -30,7 +30,7 @@ const metadado = (p: string, nome = "fabriquinha-preparada") =>
   git(p, "rev-parse", "--path-format=absolute", "--git-path", nome);
 async function cenario() {
   const c = criarRepositorioDeTeste();
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log, () => Promise.resolve());
+  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log);
   return { ...c, demanda };
 }
 async function divergente(arquivos = ["base.txt"]) {

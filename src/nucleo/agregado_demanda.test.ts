@@ -6,6 +6,7 @@ import {
   Demanda,
   donoDe,
   EvidenciaDemanda,
+  prDaDemanda,
   TicketDemanda,
   TipoEvidenciaAgregado,
 } from "./agregado_demanda.ts";
@@ -303,6 +304,42 @@ test("encerramento: ausente continua válido e cada invariante recusa", () => {
     AgregadoDemanda.safeParse(emEncerramento(enc({ conflito_pendente: { ticket_id: 2 } }), [ticket(), resolver]))
       .success,
   );
+});
+
+test("pull_requests: um PR por Espaço, de rodada que existe; o final é o sem rodada e a integração o exige", () => {
+  const pr = (m: Record<string, unknown> = {}) => ({
+    numero: 7,
+    url: "https://h/pr/7",
+    head: "abc",
+    estado: "aberto",
+    atualizado_em: em,
+    ...m,
+  });
+  const emEncerramento = (pull_requests: unknown[]) =>
+    agregado({
+      demanda: demanda({ estado: "encerrar_demanda" }),
+      encerramento: {
+        demanda_id: "I-1",
+        branch: "fabriquinha/I-1",
+        base: "develop",
+        integracao: { sha: "d" },
+        limpeza_pendente: [],
+      },
+      pull_requests,
+    });
+  assert.deepEqual(AgregadoDemanda.parse(agregado()).pull_requests, []);
+  assert.deepEqual(
+    prDaDemanda(AgregadoDemanda.parse(agregado({ rodadas: [rodada(1)], pull_requests: [pr({ rodada_id: 1 })] }))),
+    undefined,
+  );
+  const final = AgregadoDemanda.parse(emEncerramento([pr()]));
+  assert.equal(prDaDemanda(final)?.numero, 7);
+  recusa(emEncerramento([]), "a integração exige o PR final");
+  recusa(emEncerramento([pr({ rodada_id: 1 })]), "a integração exige o PR final");
+  recusa(agregado({ pull_requests: [pr({ rodada_id: 9 })] }), "rodada 9, que não existe");
+  recusa(agregado({ pull_requests: [pr(), pr({ numero: 8 })] }), "mais de um PR para o mesmo Espaço");
+  recusa(agregado({ pull_requests: [pr({ estado: "perdido" })] }), "Opção inválida");
+  recusa(agregado({ pull_requests: [pr({ url: "pull/7" })] }), "URL inválido");
 });
 
 test("TipoEvidenciaAgregado é a união, sem repetição, de TipoEvidencia e TipoEvidenciaEtapa", () => {

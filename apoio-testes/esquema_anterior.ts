@@ -64,7 +64,7 @@ function criacaoAnterior(esquemaAnterior: DatabaseSync, tabela: string, nome: st
 }
 
 /**
- * Devolve o banco migrado (e aberto) ao esquema da versão 37 (sem as Tentativas da 40, o gate da decisão da 41 nem os nomes do Trabalho Agêntico da 42): devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
+ * Devolve o banco migrado (e aberto) ao esquema da versão 37 (sem as Tentativas da 40, o gate da decisão da 41, os nomes do Trabalho Agêntico da 42 nem o `pull_request` da 43): devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
  * `configuracao_etapa_projeto` e `sequencia` com as colunas e os valores antigos e volta o `user_version`. O próximo
  * `abrir()` aplica a migração 38 sobre as linhas que o teste montou. O que a 38 perdeu (`enviado_em`, `origem_ticket_id`,
  * a hora da Rodada) volta vazio ou some, e `fechado` não volta: ficou `cancelado`.
@@ -125,6 +125,14 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
       DROP TABLE tentativa;
       ALTER TABLE execucao_sessao ADD COLUMN erro TEXT CHECK (erro IS NULL OR length(erro) > 0);
     `);
+    // A 43 tirou o PR do encerramento para `pull_request`: a volta devolve o PR final às colunas e apaga a tabela.
+    copiar("encerramento_demanda", {
+      pr_numero:
+        "(SELECT numero FROM pull_request p WHERE p.demanda_id = encerramento_demanda.demanda_id AND p.rodada_id IS NULL)",
+      pr_url:
+        "(SELECT url FROM pull_request p WHERE p.demanda_id = encerramento_demanda.demanda_id AND p.rodada_id IS NULL)",
+    });
+    banco.exec("DROP TABLE pull_request");
     copiar("sequencia", { nome: "CASE nome WHEN 'demanda' THEN 'issue' ELSE nome END" });
     for (const tabela of [
       "ticket_demanda",
@@ -133,6 +141,7 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
       "configuracao_etapa_projeto",
       "sequencia",
       "decisao_ticket",
+      "encerramento_demanda",
     ]) {
       banco.exec(`DROP TABLE ${tabela}`);
     }
@@ -143,6 +152,7 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
       "configuracao_etapa_projeto",
       "sequencia",
       "decisao_ticket",
+      "encerramento_demanda",
     ]) {
       banco.exec(`ALTER TABLE ${tabela}_antiga RENAME TO ${tabela}`);
     }

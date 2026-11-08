@@ -124,7 +124,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     decisoes: [],
     evidencias: [],
   } as unknown as AgregadoDemanda);
-  if (!semWorktree) await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log, () => Promise.resolve());
+  if (!semWorktree) await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log);
   const piFalso = instalarPiFalso(c.dir).roteirizar([PASSO_PI]);
   return {
     c,
@@ -680,6 +680,20 @@ test("CA-12: reinício falha o planejar com execução aberta, com a demanda em 
   });
   condutor.recuperarNaSubida(banco);
   assert.equal(statusDe(banco, 3)?.estado, "falhou");
+});
+
+test("a varredura da base roda só quando a worktree da demanda busca a base, e a falha dela só vai ao log", async () => {
+  const logDaExecucao = (raiz: string) =>
+    readFileSync(join(raiz, "execucoes", String(readdirSync(join(raiz, "execucoes"))[0]), "log"), "utf8");
+  const nova = await cenario({ semWorktree: true });
+  nova.banco.exec("DROP TABLE varredura_base"); // a varredura falha ao ler o cursor
+  await iniciarExecucaoDemanda(nova.banco, ref(3), { limiteMin: 1 }).fim;
+  assert.match(logDaExecucao(nova.c.raiz), /varrerBase falhou: .*varredura_base/);
+  assert.equal(nova.registro()[0]?.evento, "inicio");
+  const existente = await cenario();
+  existente.banco.exec("DROP TABLE varredura_base");
+  await iniciarExecucaoDemanda(existente.banco, ref(3), { limiteMin: 1 }).fim;
+  assert.doesNotMatch(logDaExecucao(existente.c.raiz), /varrerBase falhou/);
 });
 
 test("CA-7: o motivo da falha de preparação vai ao log da execução", async () => {

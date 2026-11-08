@@ -5,6 +5,7 @@ import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import type { Ator } from "../../nucleo/ator.ts";
 import { Plano } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
+import { type EspacoDeTrabalho, espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
 import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
@@ -12,12 +13,7 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { carregarTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar, logDaOperacao } from "../../infra/registro.ts";
-import {
-  caminhoDaWorktreeDemanda,
-  caminhoDaWorktreeRodada,
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../../infra/repositorio/worktree-demanda.ts";
+import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { condutor } from "../trabalho/condutor.ts";
 import { varrerBase } from "../retrabalho.ts";
 
@@ -75,20 +71,20 @@ export async function aprovarGateDoPlanejamento(
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
+  const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
+    const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log });
+    const { buscouBase } = await ciclo.criar();
+    if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+  };
+  const espacoDaDemanda = espacoDoTicket(ag, {}, projeto, raiz);
   const passos = [
-    {
-      caminho: caminhoDaWorktreeDemanda(raiz, projeto.nome, demanda_id),
-      garantir: () => garantirWorktreeDemanda(raiz, projeto, demanda_id, log, () => varrerBase(banco, projeto.nome)),
-    },
+    { caminho: espacoDaDemanda.pasta, garantir: () => garantirEspaco(espacoDaDemanda) },
     // D04: a rodada dependente nasce quando começa, da ponta da demanda já com as predecessoras integradas.
     ...plano.rodadas
       .filter((rodada) => rodada.depende.length === 0)
       .map(({ rodada_id }) => {
-        const ref = { demanda_id, rodada_id };
-        return {
-          caminho: caminhoDaWorktreeRodada(raiz, projeto.nome, ref),
-          garantir: () => garantirWorktreeRodada(raiz, projeto, ref, log),
-        };
+        const espaco = espacoDoTicket(ag, { rodada_id }, projeto, raiz);
+        return { caminho: espaco.pasta, garantir: () => garantirEspaco(espaco) };
       }),
   ];
   for (const { caminho, garantir } of passos) {

@@ -118,7 +118,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     ];
   }
   if (gate === "pr") {
-    await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+    await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
     const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
     rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
     hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });
@@ -155,6 +155,9 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
         dados: { id: "1", url: "https://github.com/org/loja/pull/1", branch: BRANCH_RODADA, head },
         em,
       },
+    ];
+    resto.pull_requests = [
+      { rodada_id: 2, numero: 1, url: "https://github.com/org/loja/pull/1", head, estado: "aberto", atualizado_em: em },
     ];
   }
   const { demanda: cabecalho, ...outros } = resto;
@@ -463,12 +466,18 @@ test("CA-36: decisão de outra origem recebe 403 e a demanda não muda", async (
 });
 
 const POST = { metodo: "POST" };
+const prFinal = {
+  numero: 9,
+  url: "https://pr/9",
+  head: "abc",
+  estado: "aberto" as const,
+  atualizado_em: "2026-01-01T00:00:00.000Z",
+};
 const encerramentoIntegrado = (demanda_id: string) => ({
   demanda_id,
   branch: `fabriquinha/${demanda_id}`,
   base: "main",
   sha_verificado: "abc",
-  pr: { numero: 9, url: "https://pr/9" },
   limpeza_pendente: [],
   integracao: { sha: "def" },
 });
@@ -526,6 +535,7 @@ test("CA-33: cancelar depois da integração confirmada é reprovado e a demanda
     ...ag,
     demanda: { ...ag.demanda, estado: "encerrar_demanda" },
     encerramento: encerramentoIntegrado("I-206"),
+    pull_requests: [prFinal],
   }));
   const r = await pedir("/api/demandas/I-206/cancelar", POST);
   assert.equal(r.status, 409);

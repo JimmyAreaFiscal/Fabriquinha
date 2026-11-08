@@ -118,12 +118,24 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
             ticket_id: 8,
             tipo: "pr_aberto",
             autor: { tipo: "fabriquinha" },
-            dados: { id: "1", url: "https://github.com/org/loja/pull/1" },
+            dados: { id: "1", url: "https://github.com/org/loja/pull/1", head: "a".repeat(40) },
             em,
           },
         ],
+    pull_requests: semPR
+      ? []
+      : [
+          {
+            rodada_id: 2,
+            numero: 1,
+            url: "https://github.com/org/loja/pull/1",
+            head: "a".repeat(40),
+            estado: "aberto",
+            atualizado_em: em,
+          },
+        ],
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const commitDaRodada = commitarArquivo(rodada, "a.txt", "a\n");
   rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
@@ -152,6 +164,10 @@ test("CA-1 a CA-4: aprova com nota 4, integra, avança a demanda e conclui a rod
   assert.deepEqual(
     ag().decisoes.map((d) => [d.resultado, d.nota, d.por]),
     [["aprovado", 4, AUDITOR]],
+  );
+  assert.deepEqual(
+    ag().pull_requests.map(({ rodada_id, numero, url, head, estado }) => ({ rodada_id, numero, url, head, estado })),
+    [{ rodada_id: 2, numero: 1, url: "https://github.com/org/loja/pull/1", head: "a".repeat(40), estado: "integrado" }],
   );
 });
 

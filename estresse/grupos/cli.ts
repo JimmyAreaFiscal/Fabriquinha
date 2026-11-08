@@ -120,6 +120,7 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
         ],
         dependencias_ticket: [],
         caminhos_ticket: [],
+        pull_requests: [],
         tentativas: [],
         decisoes: [],
         evidencias: [],

@@ -2,19 +2,19 @@
 // hospedagem, avançar a demanda local e abrir a sessão de ajustes do PR reprovado. A hospedagem é a fonte da verdade,
 // então repetir a aprovação é seguro.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, comPrDaRodada } from "../../nucleo/agregado_demanda.ts";
 import { type Ator, exigirAtor } from "../../nucleo/ator.ts";
 import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
+import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
 import { type Endereco, ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
-import { integrarPR } from "../../infra/repositorio/pr.ts";
-import { caminhoDaWorktreeDemanda } from "../../infra/repositorio/worktree-demanda.ts";
-import { exigirGit, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
+import { logDaOperacao } from "../../infra/registro.ts";
+import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { abrirSessaoDeAjustes, guardarMarcoDaSessao } from "../sessao_ajustes.ts";
 
 const gate = GATES.gate_pr;
@@ -63,23 +63,31 @@ export async function aprovarPR(
   }
 
   gate.ensaiar(ag, endereco, entrada, ator, contexto()); // recusa antes de integrar na hospedagem
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
+  const raiz = raizDo(banco);
+  const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
   const pr = existe(
-    ag.evidencias.findLast((e) => e.ticket_id === ticket.ticket_id && e.tipo === "pr_aberto"),
+    espaco.pr,
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
-  const raiz = raizDo(banco);
-  const { branch } = ag.demanda;
-  await integrarPR(projeto, pr.dados.id as string);
-  // A ref local da demanda só avança em fast-forward: o merge da hospedagem é o único commit novo dela.
-  const demanda = caminhoDaWorktreeDemanda(raiz, projeto.nome, ag.demanda.id);
-  await naFilaDoProjeto(raiz, projeto.nome, async () => {
-    await exigirGit(demanda, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
-    await exigirGit(demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
-  });
+  const log = logDaOperacao(raiz, `pr-${formatarRodadaRef(ref)}`);
+  await cicloDoEspaco(espaco, projeto, { raiz, log }).integrar();
 
-  return comDemanda(banco, ref.demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, contexto()));
+  return comDemanda(banco, ref.demanda_id, (a) => {
+    const { agora } = contexto();
+    const decidida = gate.decidir(a, endereco, entrada, ator, { agora });
+    return {
+      ...decidida,
+      pull_requests: comPrDaRodada(decidida, ref.rodada_id, {
+        numero: pr.numero,
+        url: pr.url,
+        head: pr.head,
+        estado: "integrado",
+        atualizado_em: agora,
+      }),
+    };
+  });
 }
 
 /**

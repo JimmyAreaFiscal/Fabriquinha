@@ -216,6 +216,7 @@ test("CA-SDLC-16: queda depois do merge e antes da gravação não duplica PR, i
         sha: git(c.repo, "rev-parse", branch),
       },
       FABRIQUINHA,
+      { agora: agora() },
     ),
   );
   const mergeSha = await integrarComoHumano(c, pr);
@@ -278,8 +279,8 @@ test("falha de infraestrutura no passo integracao é retomada sozinha e a nova T
   const id = await demandaEmEncerramento(c);
   await ciclo(c, deps());
   const pr = gh.prs().length;
-  const esperando = demanda(c, id).encerramento;
-  assert.equal(esperando?.aguardando_merge_humano, true);
+  const esperando = demanda(c, id);
+  assert.equal(esperando.encerramento?.aguardando_merge_humano, true);
 
   // O passo integracao falha por infraestrutura (a leitura do PR estourou o tempo), com tudo antes dele já feito.
   const ticket = ultimo(c, id, "encerrar_demanda");
@@ -298,14 +299,14 @@ test("falha de infraestrutura no passo integracao é retomada sozinha e a nova T
   const passadaAEspera = new Date(Date.now() + 3 * 60_000);
   assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco, passadaAEspera), [formatarTicketRef(ticket)]);
   assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "aberto");
-  assert.deepEqual(demanda(c, id).encerramento?.pr, esperando.pr);
+  assert.deepEqual(demanda(c, id).pull_requests, esperando.pull_requests);
 
   // A nova Tentativa continua na integracao: não publica outro PR nem refaz a tentativa; o merge humano conclui.
   await integrarComoHumano(c, pr);
   await ciclo(c, deps());
   const ag = demanda(c, id);
   assert.equal(ag.demanda.estado, "concluida");
-  assert.equal(ag.encerramento?.sha_verificado, esperando.sha_verificado);
+  assert.equal(ag.encerramento?.sha_verificado, esperando.encerramento.sha_verificado);
   assert.equal(gh.prs().length, pr, "nenhum PR novo");
   assert.equal(tickets(c, id, "encerrar_demanda").length, 1);
 });

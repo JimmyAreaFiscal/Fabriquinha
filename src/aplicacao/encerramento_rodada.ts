@@ -3,7 +3,12 @@
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import type { AgregadoDemanda, EvidenciaDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  comPrDaRodada,
+  type EvidenciaDemanda,
+  type TicketDemanda,
+} from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
@@ -27,8 +32,9 @@ import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.t
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
-import { atualizarWorktreeRodada, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
+import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
+import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
@@ -128,14 +134,27 @@ function gravarEvidencia(
   ticket: TicketDemanda,
   tipo: "relatorio_produtividade" | "pr_aberto",
   dados: unknown,
+  prPublicado?: { rodada_id: number; id: string; url: string; head: string },
 ): void {
   const { demanda_id, ticket_id } = ticket;
   const e = validarEvidenciaDaEtapa(
     { demanda_id, ticket_id, etapa: "encerrar_rodada" },
     { demanda_id, ticket_id, tipo, produtor: "fabriquinha", dados },
   );
+  const em = new Date().toISOString();
   comDemanda(banco, demanda_id, (ag) => ({
     ...ag,
+    // O PR do Espaço da rodada acompanha a evidência, na mesma gravação.
+    pull_requests:
+      prPublicado === undefined
+        ? ag.pull_requests
+        : comPrDaRodada(ag, prPublicado.rodada_id, {
+            numero: Number(prPublicado.id),
+            url: prPublicado.url,
+            head: prPublicado.head,
+            estado: "aberto",
+            atualizado_em: em,
+          }),
     evidencias: [
       ...ag.evidencias.filter((x) => x.ticket_id !== ticket_id || x.tipo !== tipo),
       {
@@ -145,7 +164,7 @@ function gravarEvidencia(
         tipo,
         dados: e.dados as EvidenciaDemanda["dados"],
         autor: FABRIQUINHA,
-        em: new Date().toISOString(),
+        em,
       },
     ],
   }));
@@ -211,7 +230,9 @@ async function publicarEConferir(
   const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, doRodada);
   gravarEvidencia(banco, ticket, "relatorio_produtividade", relatorio);
 
-  const atualizacao = await atualizarWorktreeRodada(raiz, projeto, ref, log);
+  const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
+  const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log });
+  const atualizacao = await ciclo.atualizarComBase();
   if (atualizacao.status === "conflito") {
     // Um merge, um corretivo: quem resolve um arquivo resolve o merge inteiro, e um por arquivo rodava os outros à toa.
     const arquivosEmConflito = atualizacao.arquivos.join(", ");
@@ -268,7 +289,7 @@ async function publicarEConferir(
     throw new ErroDeRegra(
       `a branch ${branchRodada} tem o commit ${orfao.slice(0, 12)}, que nenhum ticket de desenvolvimento da ${refRodada} registrou: ` +
         "um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
-      `desfaça com git -C ${caminhoDaWorktreeRodada(raiz, projeto.nome, ref)} reset --hard HEAD~1, repetindo até a HEAD ` +
+      `desfaça com git -C ${espaco.pasta} reset --hard HEAD~1, repetindo até a HEAD ` +
         "ser um commit de ticket da Fabriquinha, e reabra o ticket",
     );
   };
@@ -279,6 +300,7 @@ async function publicarEConferir(
   const conhecidos = ag.evidencias
     .filter((e) => e.tipo === "pr_aberto" && anteriores.has(e.ticket_id))
     .map((e) => (e.dados as { id: string }).id);
+  await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   const publicado = await publicarPRDe(
     raiz,
     projeto,
@@ -290,15 +312,19 @@ async function publicarEConferir(
       marca: marcaDoPRRodada(demanda.id, ticket.ticket_id),
     },
     conferirCommits,
-    () => varrerBase(banco, projeto.nome),
-    log,
   );
-  gravarEvidencia(banco, ticket, "pr_aberto", {
-    ...publicado,
-    base: demanda.branch,
-    corpoCompleto: pr.completo,
-    condensado: pr.completo !== pr.publicado,
-  });
+  gravarEvidencia(
+    banco,
+    ticket,
+    "pr_aberto",
+    {
+      ...publicado,
+      base: demanda.branch,
+      corpoCompleto: pr.completo,
+      condensado: pr.completo !== pr.publicado,
+    },
+    { ...publicado, rodada_id: ref.rodada_id },
+  );
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
 
   const problemas = await exigidaPelaEtapa(

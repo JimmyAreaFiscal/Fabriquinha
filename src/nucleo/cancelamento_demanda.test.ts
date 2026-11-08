@@ -41,12 +41,17 @@ const montar = (estado: string, m: Record<string, unknown> = {}) =>
     evidencias: [],
     ...m,
   });
-const pr = { numero: 7, url: "https://h/pr/7" };
+const prFinal = {
+  numero: 7,
+  url: "https://h/pr/7",
+  head: "s1",
+  estado: "aberto",
+  atualizado_em: t0,
+};
 const prog = (m: Record<string, unknown> = {}) => ({
   demanda_id: D,
   branch: "fabriquinha/I-1",
   base: "develop",
-  pr,
   sha_verificado: "s1",
   limpeza_pendente: [],
   ...m,
@@ -148,7 +153,10 @@ test("CA-4 e CA-10: só o Auditor cancela e arquiva", () => {
 });
 
 test("CA-5: integração confirmada recusa o cancelamento", () => {
-  const ag = montar("encerrar_demanda", { encerramento: prog({ integracao: { sha: "s2" } }) });
+  const ag = montar("encerrar_demanda", {
+    encerramento: prog({ integracao: { sha: "s2" } }),
+    pull_requests: [prFinal],
+  });
   assert.throws(() => cancelarDemanda(ag, AUDITOR, c), ErroDeRegra);
 });
 

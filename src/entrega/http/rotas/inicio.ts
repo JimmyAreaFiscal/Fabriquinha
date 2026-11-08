@@ -20,7 +20,7 @@ import { listarDemandas } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
 import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import type { Rota } from "../rotas.ts";
-import { prDaRodada } from "./demandas.ts";
+import { prDoGateDaRodada } from "./demandas.ts";
 
 /**
  * Por que o Auditor é esperado: os três gates, a sessão de ajustes do PR, o ticket falho, a sessão parada nele e a
@@ -229,7 +229,7 @@ function esperasDaDemanda(
     // O gate do PR conta de quando o encerramento da rodada abriu o PR; a sessão de ajustes, de quando ela abriu.
     const etapa = r.estado === "ajustar_resultado" ? "ajustar_resultado" : "encerrar_rodada";
     const ticket = ticketAtualDaEtapa(ag, etapa, r.rodada_id);
-    const pr = prDaRodada(ag, r.rodada_id);
+    const pr = prDoGateDaRodada(ag, r.rodada_id);
     gates.push({
       motivo: r.estado === "ajustar_resultado" ? "ajustes" : "gate_pr",
       ...identificacao,

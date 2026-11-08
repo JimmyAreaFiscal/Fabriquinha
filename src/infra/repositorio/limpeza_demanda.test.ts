@@ -14,7 +14,7 @@ const br = branchRodada("D-1", 1);
 
 async function cenario() {
   const c = criarRepositorioDeTeste();
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log, () => Promise.resolve());
+  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
   git(c.repo, "branch", "alheia", "integracao");
   git(c.repo, "config", "branch.fabriquinha/D-1-2.fabriquinha", "rodada:fantasma");

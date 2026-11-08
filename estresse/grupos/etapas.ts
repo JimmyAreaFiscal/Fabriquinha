@@ -7,6 +7,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readlinkSync, rmSync, w
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { prDaDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { AUDITOR, type Ator } from "../../src/nucleo/ator.ts";
 import { submeterPlano } from "../../src/nucleo/transicoes_demanda.ts";
 import { Endereco } from "../../src/nucleo/item_de_trabalho.ts";
@@ -447,7 +448,7 @@ const ETAPAS: Record<string, Preparar> = {
   // O PR final espera o merge humano (o ciclo devolve o ticket a `aberto`): o humano integra e o ciclo seguinte conclui.
   encerrar_demanda: ticketDaEtapa("encerrar_demanda", emEncerramentoDemanda, async (c, id) => {
     await ciclo(c);
-    const pr = carregarDemanda(c.banco, id).encerramento?.pr;
+    const pr = prDaDemanda(carregarDemanda(c.banco, id));
     if (!pr) throw new Error("o encerramento não publicou o PR final");
     await integrarPR({ raiz_git: c.repo, hospedagem: "github" }, String(pr.numero));
     await ciclo(c);

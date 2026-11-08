@@ -210,6 +210,7 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
           ref: "I-206.R1",
           titulo: "Primeira",
           estado: "gate_pr",
+          pr: { id: "7", url: "https://pr/7" },
           ticket_atual_por_etapa: { encerrar_rodada: "I-206.T2" },
         },
         { ref: "I-206.R2", titulo: "Segunda", estado: "ajustar_resultado", ticket_atual_por_etapa: {} },
@@ -265,7 +266,6 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
         { ticket: "I-206.T2", resultado: "aprovado", nota: 4, por: "auditor" },
         { ticket: "I-206.T5", resultado: "reprovado", motivo: "falta CA-2", por: "agente" },
       ],
-      evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T2", dados: { id: "7", url: "https://pr/7" }, anexos: [] }],
     }),
   );
   const antes = trecho(html, 'aria-labelledby="titulo-antes"');
@@ -368,6 +368,7 @@ test("rodada sem ticket e PR com endereço que não é http não viram link", ()
           ref: "I-206.R1",
           titulo: "R",
           estado: "revisar_rodada",
+          pr: { id: "7", url: "javascript:x" },
           ticket_atual_por_etapa: { encerrar_rodada: "I-206.T1" },
         },
       ],
@@ -381,7 +382,6 @@ test("rodada sem ticket e PR com endereço que não é http não viram link", ()
           rodada: "I-206.R1",
         },
       ],
-      evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T1", dados: { id: "7", url: "javascript:x" }, anexos: [] }],
     }),
   );
   assert.doesNotMatch(html, /javascript:x" /);
@@ -781,7 +781,13 @@ test("o gate do PR traz o botão que abre o PR no GitHub ou no Azure DevOps, só
     pagina({
       ...dadosDaPagina(),
       rodadas: [
-        { ref: "I-206.R1", titulo: "r", estado: "gate_pr", ticket_atual_por_etapa: { encerrar_rodada: "I-206.T2" } },
+        {
+          ref: "I-206.R1",
+          titulo: "r",
+          estado: "gate_pr",
+          pr: { id: "7", url },
+          ticket_atual_por_etapa: { encerrar_rodada: "I-206.T2" },
+        },
       ],
       tickets: [
         {
@@ -793,7 +799,6 @@ test("o gate do PR traz o botão que abre o PR no GitHub ou no Azure DevOps, só
           elegivel: false,
         },
       ],
-      evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T2", dados: { id: "7", url }, anexos: [] }],
     });
   const gate = (html: string) => html.slice(html.indexOf('id="pr-I-206.R1"'));
   assert.match(

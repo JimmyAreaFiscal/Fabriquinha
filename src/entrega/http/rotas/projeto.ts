@@ -7,7 +7,7 @@ import { AUDITOR } from "../../../nucleo/ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET, etapaDoEstado } from "../../../nucleo/ciclos.ts";
 import { resolverConfiguracaoAgente } from "../../../nucleo/configuracao_agente.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
-import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
+import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
@@ -62,14 +62,6 @@ const Filtro = z.object({
   canceladas: z.stringbool().default(false),
 });
 
-/** O PR da rodada: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela, em qualquer estado. */
-function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
-  const ticket = ticketAtualDaEtapa(ag, "encerrar_rodada", rodada_id);
-  const pr = ag.evidencias.findLast((e) => e.ticket_id === ticket?.ticket_id && e.tipo === "pr_aberto")?.dados as
-    { id: string; url: string } | undefined;
-  return pr && { id: pr.id, url: pr.url };
-}
-
 /** O estado da demanda em que o trabalho da Etapa acontece; as Etapas das rodadas e do conflito acontecem em `em_execucao`. */
 const estadoDaEtapa = (etapa: EtapaTicket): EstadoDemanda =>
   EstadoDemanda.options.find((estado) => etapaDoEstado(estado) === etapa) ?? "em_execucao";
@@ -119,8 +111,13 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
       .filter((p) => CICLO_DA_DEMANDA.estaEmAndamento(p.estado))
       .map((p) => p.demanda_id),
     rodadas: ag.rodadas.map((r) => {
-      const pr = prDaRodada(ag, r.rodada_id);
-      return { ref: rodada(r.rodada_id), titulo: r.titulo, estado: r.estado, ...(pr && { pr }) };
+      const pr = prDoEspaco(ag, r.rodada_id);
+      return {
+        ref: rodada(r.rodada_id),
+        titulo: r.titulo,
+        estado: r.estado,
+        ...(pr && { pr: { id: String(pr.numero), url: pr.url } }),
+      };
     }),
     tickets: ag.tickets.map((t) => {
       const { modelo } = resolverConfiguracaoAgente({

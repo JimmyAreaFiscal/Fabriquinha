@@ -5,7 +5,7 @@
 // transição do domínio, que decide se ele se repete (progresso recuperável).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, type EvidenciaDemanda, prDaDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
@@ -29,6 +29,8 @@ import {
   tituloDoPRFinal,
 } from "./evidencias/encerramento_demanda.ts";
 import { varrerBase } from "./retrabalho.ts";
+import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
+import { espacoDaDemanda } from "../nucleo/espaco_de_trabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
@@ -123,7 +125,7 @@ export async function conduzirEncerramentoDemanda(
   // A Fabriquinha não integra o PR final: a plataforma pode exigir a aprovação do humano (Azure Repos) e o merge é dele.
   const aguardarMergeHumano = async () => {
     const pr = existe(
-      carregarDemanda(banco, demanda_id).encerramento?.pr,
+      prDaDemanda(carregarDemanda(banco, demanda_id)),
       `a demanda ${demanda_id} não tem PR final`,
       "registre a tentativa antes",
     );
@@ -149,7 +151,12 @@ export async function conduzirEncerramentoDemanda(
     );
     const pendentes = await pendenciasDeLimpeza(raiz, projeto, ag);
     aplicar((a) =>
-      registrarIntegracao(a, { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes }, FABRIQUINHA),
+      registrarIntegracao(
+        a,
+        { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes },
+        FABRIQUINHA,
+        contexto(),
+      ),
     );
     return limpar();
   };
@@ -159,7 +166,9 @@ export async function conduzirEncerramentoDemanda(
 
   let publicado: Awaited<ReturnType<typeof publicarFinal>>;
   try {
-    publicado = await publicarFinal(banco, ag, projeto, projeto.branch_base, raiz, log);
+    const ciclo = cicloDoEspaco(espacoDaDemanda(projeto, demanda_id, raiz), projeto, { raiz, log });
+    await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+    publicado = await publicarFinal(banco, ag, projeto, projeto.branch_base, raiz);
     aplicar((a) =>
       registrarTentativaEncerramento(
         a,
@@ -170,6 +179,7 @@ export async function conduzirEncerramentoDemanda(
           sha: publicado.head,
         },
         FABRIQUINHA,
+        contexto(),
       ),
     );
   } catch (erro) {
@@ -207,9 +217,9 @@ function publicarFinal(
   projeto: Pick<Projeto, "nome" | "raiz_git" | "hospedagem">,
   base: string,
   raiz: string,
-  log: string,
 ) {
   const { demanda } = ag;
+  const prFinal = prDaDemanda(ag);
   const registrados = new Set(ag.tickets.map((t) => commitDoTicketDemanda(banco, demanda.id, t.ticket_id)?.sha));
   const conferirCommits = async (head: string) => {
     // Os commits da base já estão no remoto; a ponta dele vem fresca para a comparação.
@@ -230,12 +240,10 @@ function publicarFinal(
     {
       titulo: tituloDoPRFinal(ag),
       corpo: corpoDoPRFinal(ag),
-      conhecidos: ag.encerramento?.pr ? [String(ag.encerramento.pr.numero)] : [],
+      conhecidos: prFinal ? [String(prFinal.numero)] : [],
       marca: marcaDoPRFinal(demanda.id),
     },
     conferirCommits,
-    () => varrerBase(banco, projeto.nome),
-    log,
   );
 }
 

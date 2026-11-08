@@ -13,6 +13,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
 import { marcaDoPRRodada } from "./evidencias/pr_rodada.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
+import { cursorDaBase } from "../armazenamento/retrabalho.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
@@ -159,6 +160,18 @@ async function cenario({
           },
         ]
       : [],
+    pull_requests: anterior
+      ? [
+          {
+            rodada_id: 2,
+            numero: 1,
+            url: "https://github.com/org/loja/pull/1",
+            head: "a".repeat(40),
+            estado: "aberto",
+            atualizado_em: em,
+          },
+        ]
+      : [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -171,7 +184,7 @@ async function cenario({
       ...(anterior ? [evidencia(7, "pr_aberto", { id: "1", url: "https://github.com/org/loja/pull/1" })] : []),
     ],
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   /** Commita na rodada e, com `ticket`, registra o commit como desse ticket de implementação. */
@@ -238,6 +251,18 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     condensado: false,
   });
   assert.deepEqual(evidencia("pr_aberto")?.autor, { tipo: "fabriquinha" });
+  assert.deepEqual(
+    ag().pull_requests.map(({ rodada_id, numero, url, head, estado }) => ({ rodada_id, numero, url, head, estado })),
+    [
+      {
+        rodada_id: 2,
+        numero: 1,
+        url: "https://github.com/org/loja/pull/1",
+        head: rodarGit(rodada, "rev-parse", "HEAD"),
+        estado: "aberto",
+      },
+    ],
+  );
   assert.deepEqual(evidencia("relatorio_produtividade")?.autor, { tipo: "fabriquinha" });
   // Sem custo medido em nenhum ticket: incompleto, nunca somado como zero (CA-12).
   const relatorio = evidencia("relatorio_produtividade")?.dados as {
@@ -265,6 +290,24 @@ test("CA-3: a ponta nova da demanda entra na rodada antes do PR, e o merge da D0
   rodarGit(rodada, "merge-base", "--is-ancestor", nova, "HEAD");
   assert.equal(noRemoto(BRANCH_RODADA), rodarGit(rodada, "rev-parse", "HEAD"));
   assert.equal(hospedagem.prs().length, 1);
+});
+
+test("a base é varrida uma vez antes de publicar o PR, e a falha da varredura só vai ao log", async () => {
+  const varrida = await cenario();
+  await concluirEncerramentoRodada(varrida.banco, REF);
+  assert.equal(
+    cursorDaBase(varrida.banco, "loja"),
+    rodarGit(varrida.c.repo, "rev-parse", "refs/remotes/origin/integracao"),
+  );
+
+  const sem = await cenario();
+  sem.banco.exec("DROP TABLE varredura_base"); // a varredura falha ao ler o cursor
+  await concluirEncerramentoRodada(sem.banco, REF);
+  assert.equal(hospedagem.prs().length, 1);
+  assert.match(
+    readFileSync(join(sem.c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"),
+    /varrerBase falhou: .*varredura_base/,
+  );
 });
 
 test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvimento com um corretivo para o merge", async () => {
@@ -347,7 +390,7 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
 });
 
 test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a marca do ticket atual", async () => {
-  const { banco, estado } = await cenario({ anterior: true });
+  const { banco, estado, ag } = await cenario({ anterior: true });
   hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
@@ -361,6 +404,10 @@ test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a ma
   assert.equal(hospedagem.prs().length, 1);
   assert.equal(hospedagem.prs()[0]?.titulo, "feat: Encerrar a rodada [I-206.R2]");
   assert.equal(estado(), "gate_pr");
+  assert.deepEqual(
+    ag().pull_requests.map((pr) => [pr.rodada_id, pr.numero]),
+    [[2, 1]],
+  );
 });
 
 test("CA-9: commit que nenhum ticket registrou falha antes do push, diz como desfazer e não cria PR", async () => {

@@ -44,6 +44,7 @@ const base = (enviada = false): AgregadoDemanda => ({
   criterios_citados: [],
   dependencias_ticket: [],
   caminhos_ticket: [],
+  pull_requests: [],
 });
 const entrada = (tipo: string, extra: Record<string, unknown> = {}, v = 1) => ({
   tipo: tipo as never,

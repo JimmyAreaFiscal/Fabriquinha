@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "./ator.ts";
-import { AgregadoDemanda } from "./agregado_demanda.ts";
+import { AgregadoDemanda, prDaDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
   concluirEncerramento,
@@ -47,17 +47,19 @@ const montar = (m: Record<string, unknown> = {}, status = "aberto", estado = "en
     ...m,
   });
 const pr = { numero: 7, url: "https://h/pr/7" };
+// O PR do Espaço da demanda que a tentativa grava: head é o SHA verificado e a data é a do contexto `c`.
+const prDoEspaco = { ...pr, head: "s1", estado: "aberto" as const, atualizado_em: t1 };
 const tentativa = (m: Record<string, unknown> = {}) => ({ demanda_id: D, base: "develop", pr, sha: "s1", ...m });
 const prog = (m: Record<string, unknown> = {}) => ({
   demanda_id: D,
   branch: "fabriquinha/I-1",
   base: "develop",
-  pr,
   sha_verificado: "s1",
   limpeza_pendente: [],
   ...m,
 });
-const comProgresso = (m: Record<string, unknown> = {}, status = "aberto") => montar({ encerramento: prog(m) }, status);
+const comProgresso = (m: Record<string, unknown> = {}, status = "aberto", pull_requests: unknown[] = [prDoEspaco]) =>
+  montar({ encerramento: prog(m), pull_requests }, status);
 const emConflito = (statusResolver = "aberto") =>
   montar({
     tickets: [
@@ -66,6 +68,7 @@ const emConflito = (statusResolver = "aberto") =>
       tk(3, "resolver_conflito", statusResolver),
     ],
     encerramento: prog({ conflito_pendente: { ticket_id: 3 } }),
+    pull_requests: [prDoEspaco],
   });
 const resolucao = (m: Record<string, unknown> = {}) => ({
   demanda_id: D,
@@ -82,19 +85,20 @@ const regra = (fn: () => unknown) => {
 test("CA-1 e CA-3: primeira tentativa grava PR, branch, base da entrada e SHA, sem mutar a entrada", () => {
   const ag = montar();
   const antes = structuredClone(ag);
-  const novo = registrarTentativaEncerramento(ag, tentativa(), FABRIQUINHA);
+  const novo = registrarTentativaEncerramento(ag, tentativa(), FABRIQUINHA, c);
   assert.deepEqual(novo.encerramento, prog());
   assert.equal(novo.encerramento.base, "develop");
+  assert.deepEqual(novo.pull_requests, [prDoEspaco]);
   assert.deepEqual(ag, antes);
 });
 
 test("CA-2 e CA-13: retomada reaproveita o PR; repetição idêntica devolve agregado igual; PR ou base diferentes recusam", () => {
   const ag = comProgresso();
-  assert.deepEqual(registrarTentativaEncerramento(ag, tentativa(), FABRIQUINHA), ag);
-  regra(() => registrarTentativaEncerramento(ag, tentativa({ pr: { numero: 8, url: "u" } }), FABRIQUINHA));
-  regra(() => registrarTentativaEncerramento(ag, tentativa({ base: "main" }), FABRIQUINHA));
-  const semPr = montar({ encerramento: prog({ pr: undefined, sha_verificado: undefined }) });
-  assert.deepEqual(registrarTentativaEncerramento(semPr, tentativa(), FABRIQUINHA).encerramento?.pr, pr);
+  assert.deepEqual(registrarTentativaEncerramento(ag, tentativa(), FABRIQUINHA, c), ag);
+  regra(() => registrarTentativaEncerramento(ag, tentativa({ pr: { numero: 8, url: "u" } }), FABRIQUINHA, c));
+  regra(() => registrarTentativaEncerramento(ag, tentativa({ base: "main" }), FABRIQUINHA, c));
+  const semPr = montar({ encerramento: prog({ sha_verificado: undefined }) });
+  assert.deepEqual(prDaDemanda(registrarTentativaEncerramento(semPr, tentativa(), FABRIQUINHA, c)), prDoEspaco);
 });
 
 test("tentativa aceita limpa conflito_pendente e falha de check_final, mas mantém a de integração", () => {
@@ -106,31 +110,32 @@ test("tentativa aceita limpa conflito_pendente e falha de check_final, mas mant�
     }),
     tentativa({ sha: "s2" }),
     FABRIQUINHA,
+    c,
   );
   assert.equal(novo.encerramento?.conflito_pendente, undefined);
   assert.equal(novo.encerramento?.falha, undefined);
   assert.equal(novo.encerramento?.sha_verificado, "s2");
   const integ = comProgresso({ falha: { etapa: "integracao", motivo: "x" } });
   assert.equal(
-    registrarTentativaEncerramento(integ, tentativa(), FABRIQUINHA).encerramento?.falha?.etapa,
+    registrarTentativaEncerramento(integ, tentativa(), FABRIQUINHA, c).encerramento?.falha?.etapa,
     "integracao",
   );
 });
 
 test("tentativa recusa quando podeTentarEncerramento é falso, outro ator, outra demanda e estado errado", () => {
-  regra(() => registrarTentativaEncerramento(emConflito("aberto"), tentativa(), FABRIQUINHA));
-  regra(() => registrarTentativaEncerramento(montar({}, "falhou"), tentativa(), FABRIQUINHA));
-  regra(() => registrarTentativaEncerramento(montar({}, "aberto", "em_execucao"), tentativa(), FABRIQUINHA));
-  regra(() => registrarTentativaEncerramento(montar(), tentativa({ demanda_id: "I-2" }), FABRIQUINHA));
-  assert.throws(() => registrarTentativaEncerramento(montar(), tentativa(), AUDITOR), ErroDeEscopo);
-  assert.throws(() => registrarTentativaEncerramento(montar(), tentativa({ extra: 1 }), FABRIQUINHA));
+  regra(() => registrarTentativaEncerramento(emConflito("aberto"), tentativa(), FABRIQUINHA, c));
+  regra(() => registrarTentativaEncerramento(montar({}, "falhou"), tentativa(), FABRIQUINHA, c));
+  regra(() => registrarTentativaEncerramento(montar({}, "aberto", "em_execucao"), tentativa(), FABRIQUINHA, c));
+  regra(() => registrarTentativaEncerramento(montar(), tentativa({ demanda_id: "I-2" }), FABRIQUINHA, c));
+  assert.throws(() => registrarTentativaEncerramento(montar(), tentativa(), AUDITOR, c), ErroDeEscopo);
+  assert.throws(() => registrarTentativaEncerramento(montar(), tentativa({ extra: 1 }), FABRIQUINHA, c));
 });
 
 test("tentativa aceita o encerrar_demanda reservado (em_execucao) e mantém as demais regras", () => {
-  const novo = registrarTentativaEncerramento(montar({}, "em_execucao"), tentativa(), FABRIQUINHA);
-  assert.deepEqual(novo.encerramento?.pr, pr);
-  regra(() => registrarTentativaEncerramento(montar({}, "concluido"), tentativa(), FABRIQUINHA));
-  regra(() => registrarTentativaEncerramento(emConflito("aberto"), tentativa(), FABRIQUINHA));
+  const novo = registrarTentativaEncerramento(montar({}, "em_execucao"), tentativa(), FABRIQUINHA, c);
+  assert.deepEqual(prDaDemanda(novo), prDoEspaco);
+  regra(() => registrarTentativaEncerramento(montar({}, "concluido"), tentativa(), FABRIQUINHA, c));
+  regra(() => registrarTentativaEncerramento(emConflito("aberto"), tentativa(), FABRIQUINHA, c));
   const reservadoEmConflito = (r: string) => {
     const ag = emConflito(r);
     return {
@@ -138,9 +143,9 @@ test("tentativa aceita o encerrar_demanda reservado (em_execucao) e mantém as d
       tickets: ag.tickets.map((t) => (t.ticket_id === 2 ? { ...t, estado: "em_execucao" as const } : t)),
     };
   };
-  regra(() => registrarTentativaEncerramento(reservadoEmConflito("aberto"), tentativa(), FABRIQUINHA));
+  regra(() => registrarTentativaEncerramento(reservadoEmConflito("aberto"), tentativa(), FABRIQUINHA, c));
   assert.equal(
-    registrarTentativaEncerramento(reservadoEmConflito("concluido"), tentativa(), FABRIQUINHA).encerramento
+    registrarTentativaEncerramento(reservadoEmConflito("concluido"), tentativa(), FABRIQUINHA, c).encerramento
       ?.conflito_pendente,
     undefined,
   );
@@ -193,11 +198,28 @@ test("conflito: repetir não cria segundo ticket; recusa sem progresso, com inte
 });
 
 test("CA-5: resolução verificada conclui o resolver, grava o SHA e libera a tentativa sem decisão", () => {
-  const ag = emConflito("em_execucao");
+  const deRodada = { ...prDoEspaco, numero: 8, rodada_id: 1 };
+  const ag = AgregadoDemanda.parse({
+    ...emConflito("em_execucao"),
+    rodadas: [
+      {
+        demanda_id: D,
+        rodada_id: 1,
+        titulo: "r",
+        estado: "concluida",
+        estado_alterado_em: t0,
+        e2e: false,
+        branch: "fabriquinha/I-1-1",
+      },
+    ],
+    pull_requests: [prDoEspaco, deRodada],
+  });
   const novo = concluirResolucaoConflito(ag, resolucao(), FABRIQUINHA, c);
+  assert.deepEqual(novo.pull_requests, [{ ...prDoEspaco, head: "s2" }, deRodada]);
   assert.equal(novo.tickets.find((t) => t.ticket_id === 3)?.estado, "concluido");
   assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "aberto");
   assert.equal(novo.encerramento?.sha_verificado, "s2");
+  assert.deepEqual(prDaDemanda(novo), { ...prDoEspaco, head: "s2" });
   assert.deepEqual(novo.decisoes, []);
   assert.equal(novo.tickets.length, 3);
   assert.equal(podeTentarEncerramento(novo), true);
@@ -260,8 +282,8 @@ test("CA-6: falha do check final falha o ticket sem integrar, limpar nem abrir i
 test("CA-9: falha da integração preserva PR e SHA e não marca a integração", () => {
   const novo = registrarFalhaEncerramento(comProgresso(), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c);
   assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "falhou");
-  assert.deepEqual(novo.encerramento?.pr, pr);
-  assert.equal(novo.encerramento.sha_verificado, "s1");
+  assert.deepEqual(prDaDemanda(novo), prDoEspaco);
+  assert.equal(novo.encerramento?.sha_verificado, "s1");
   assert.equal(novo.encerramento.integracao, undefined);
   regra(() => registrarFalhaEncerramento(montar(), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c));
 });
@@ -293,7 +315,7 @@ test("falha recusa etapa incompatível com o progresso, sem progresso, outro ato
   regra(() => registrarFalhaEncerramento(montar(), falhaEnt(), FABRIQUINHA, c));
   regra(() => registrarFalhaEncerramento(montar({}, "aberto", "em_execucao"), falhaEnt(), FABRIQUINHA, c));
   regra(() =>
-    registrarFalhaEncerramento(comProgresso({ pr: undefined }), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c),
+    registrarFalhaEncerramento(comProgresso({}, "aberto", []), falhaEnt({ etapa: "integracao" }), FABRIQUINHA, c),
   );
   assert.throws(() => registrarFalhaEncerramento(comProgresso(), falhaEnt(), AUDITOR, c), ErroDeEscopo);
 });
@@ -301,29 +323,30 @@ test("falha recusa etapa incompatível com o progresso, sem progresso, outro ato
 test("CA-7: integração sem confirmação recusa e o progresso fica igual", () => {
   const ag = comProgresso();
   const antes = structuredClone(ag);
-  regra(() => registrarIntegracao(ag, integEnt({ confirmada: false }), FABRIQUINHA));
+  regra(() => registrarIntegracao(ag, integEnt({ confirmada: false }), FABRIQUINHA, c));
   assert.deepEqual(ag, antes);
 });
 
 test("CA-8 e CA-13: integração confirmada grava SHA e limpeza e limpa a falha de integração; repetida é igual", () => {
   const ag = comProgresso({ falha: { etapa: "integracao", motivo: "x" } });
-  const novo = registrarIntegracao(ag, integEnt(), FABRIQUINHA);
+  const novo = registrarIntegracao(ag, integEnt(), FABRIQUINHA, c);
   assert.deepEqual(novo.encerramento?.integracao, { sha: "i1" });
+  assert.equal(prDaDemanda(novo)?.estado, "integrado");
   assert.deepEqual(novo.encerramento.limpeza_pendente, ["branch", "worktree"]);
   assert.equal(novo.encerramento.falha, undefined);
-  assert.deepEqual(registrarIntegracao(novo, integEnt(), FABRIQUINHA), novo);
-  regra(() => registrarIntegracao(novo, integEnt({ sha: "i2" }), FABRIQUINHA));
+  assert.deepEqual(registrarIntegracao(novo, integEnt(), FABRIQUINHA, c), novo);
+  regra(() => registrarIntegracao(novo, integEnt({ sha: "i2" }), FABRIQUINHA, c));
 });
 
 test("integração mantém falha de outra etapa e recusa sem PR, sem progresso, ticket falho e outro ator", () => {
   const outra = comProgresso({ falha: { etapa: "limpeza", motivo: "x" } });
-  assert.equal(registrarIntegracao(outra, integEnt(), FABRIQUINHA).encerramento?.falha?.etapa, "limpeza");
-  regra(() => registrarIntegracao(comProgresso({ pr: undefined }), integEnt(), FABRIQUINHA));
-  regra(() => registrarIntegracao(montar(), integEnt(), FABRIQUINHA));
-  regra(() => registrarIntegracao(comProgresso({}, "falhou"), integEnt(), FABRIQUINHA));
-  regra(() => registrarIntegracao(montar({}, "aberto", "em_execucao"), integEnt(), FABRIQUINHA));
-  regra(() => registrarIntegracao(comProgresso(), integEnt({ demanda_id: "I-2" }), FABRIQUINHA));
-  assert.throws(() => registrarIntegracao(comProgresso(), integEnt(), AUDITOR), ErroDeEscopo);
+  assert.equal(registrarIntegracao(outra, integEnt(), FABRIQUINHA, c).encerramento?.falha?.etapa, "limpeza");
+  regra(() => registrarIntegracao(comProgresso({}, "aberto", []), integEnt(), FABRIQUINHA, c));
+  regra(() => registrarIntegracao(montar(), integEnt(), FABRIQUINHA, c));
+  regra(() => registrarIntegracao(comProgresso({}, "falhou"), integEnt(), FABRIQUINHA, c));
+  regra(() => registrarIntegracao(montar({}, "aberto", "em_execucao"), integEnt(), FABRIQUINHA, c));
+  regra(() => registrarIntegracao(comProgresso(), integEnt({ demanda_id: "I-2" }), FABRIQUINHA, c));
+  assert.throws(() => registrarIntegracao(comProgresso(), integEnt(), AUDITOR, c), ErroDeEscopo);
 });
 
 test("CA-10: solicitar integração marca a espera pelo merge humano e devolve o ticket; repetir é igual", () => {
@@ -333,7 +356,7 @@ test("CA-10: solicitar integração marca a espera pelo merge humano e devolve o
   assert.equal(novo.encerramento.falha, undefined);
   assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.estado, "aberto");
   assert.deepEqual(solicitarIntegracao(novo, { demanda_id: D }, FABRIQUINHA, c), novo);
-  const integrado = registrarIntegracao(novo, integEnt(), FABRIQUINHA);
+  const integrado = registrarIntegracao(novo, integEnt(), FABRIQUINHA, c);
   assert.equal(integrado.encerramento?.aguardando_merge_humano, undefined);
   const outra = comProgresso({ falha: { etapa: "limpeza", motivo: "x" } });
   assert.equal(solicitarIntegracao(outra, { demanda_id: D }, FABRIQUINHA, c).encerramento?.falha?.etapa, "limpeza");
@@ -342,7 +365,7 @@ test("CA-10: solicitar integração marca a espera pelo merge humano e devolve o
     (e: unknown) => e instanceof ErroDeRegra && e.message.includes("falta só a limpeza: branch"),
   );
   regra(() => solicitarIntegracao(integrada({ limpeza_pendente: [] }), { demanda_id: D }, FABRIQUINHA, c));
-  regra(() => solicitarIntegracao(comProgresso({ pr: undefined }), { demanda_id: D }, FABRIQUINHA, c));
+  regra(() => solicitarIntegracao(comProgresso({}, "aberto", []), { demanda_id: D }, FABRIQUINHA, c));
   regra(() => solicitarIntegracao(montar(), { demanda_id: D }, FABRIQUINHA, c));
   assert.throws(() => solicitarIntegracao(ag, { demanda_id: D }, AUDITOR, c), ErroDeEscopo);
 });
@@ -369,20 +392,21 @@ test("concluir encerramento recusa sem integração, com limpeza pendente, ticke
 
 test("ponta a ponta: tentativa, conflito, resolução, falha, reabertura, integração, limpeza parcial e conclusão", () => {
   const fim = { demanda_id: D };
-  let ag = registrarTentativaEncerramento(montar(), tentativa(), FABRIQUINHA);
+  let ag = registrarTentativaEncerramento(montar(), tentativa(), FABRIQUINHA, c);
   ag = registrarConflitoEncerramento(ag, fim, FABRIQUINHA, c);
   assert.equal(podeTentarEncerramento(ag), false);
   ag = concluirResolucaoConflito(ag, resolucao(), FABRIQUINHA, c);
   assert.equal(podeTentarEncerramento(ag), true);
-  ag = registrarTentativaEncerramento(ag, tentativa({ sha: "s2" }), FABRIQUINHA);
+  ag = registrarTentativaEncerramento(ag, tentativa({ sha: "s2" }), FABRIQUINHA, c);
   ag = registrarFalhaEncerramento(ag, { ...fim, etapa: "integracao", motivo: "x" }, FABRIQUINHA, c);
   ag = reabrirTicket(ag, { ticket_id: 2, instrucao: "tente de novo" }, AUDITOR, c);
   ag = registrarIntegracao(
     ag,
     { ...fim, confirmada: true, sha: "i1", limpeza_pendente: ["branch", "worktree"] },
     FABRIQUINHA,
+    c,
   );
-  ag = registrarTentativaEncerramento(ag, tentativa({ sha: "s2" }), FABRIQUINHA);
+  ag = registrarTentativaEncerramento(ag, tentativa({ sha: "s2" }), FABRIQUINHA, c);
   ag = registrarFalhaEncerramento(
     ag,
     { ...fim, etapa: "limpeza", motivo: "y", limpeza_pendente: ["worktree"] },
