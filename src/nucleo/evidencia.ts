@@ -1,8 +1,12 @@
 // A lista única dos tipos de evidência e o schema de cada um (F3 §2): `dados`, as regras dos anexos e as regras cruzadas.
+import { basename } from "node:path";
 import { z } from "zod";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
+import type { Ator } from "./ator.ts";
 import { Plano } from "./demanda.ts";
-import { ErroDeRegra } from "./erros.ts";
+import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
+import type { ItemCatalogoEtapa } from "./evidencia_etapa.ts";
+import type { Endereco } from "./item_de_trabalho.ts";
 import type { Id } from "./primitivos.ts";
 import { Motivo, Slug, unicoPor } from "./primitivos.ts";
 import { Hospedagem } from "./projeto.ts";
@@ -27,9 +31,11 @@ import {
   LOGS_OPCIONAIS,
   MensagemPR,
   RelatorioComplexidade,
+  type RegraArquivos,
   Sha,
   Texto,
   TestesEstresse,
+  type Veredito,
   vereditoDe,
 } from "./schemas.ts";
 
@@ -285,3 +291,133 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
 };
 
 export const schemaDoTipo = (tipo: TipoEvidencia): EsquemaDeEvidencia => SCHEMA_DA_EVIDENCIA[tipo];
+
+/** O que se submete à Etapa: `anexos` são os caminhos dos arquivos, que a Etapa ainda não abriu. */
+export interface SubmissaoDeEvidencia {
+  tipo: TipoEvidencia;
+  dono: Endereco;
+  produtor: Ator;
+  dados: unknown;
+  anexos: readonly string[];
+}
+
+/** Aceita, com os `dados` já validados pelo schema, ou recusada, com o motivo escrito para quem submeteu. */
+export type Avaliacao =
+  | { resultado: "aceita"; dados: Record<string, unknown>; veredito?: Veredito }
+  | { resultado: "recusada"; motivo: string };
+
+/** Quantidade e nomes dos anexos (F3 §5, passo 4); origem, classe e limite precisam dos bytes e são de `guardarAnexos`. */
+export function conferirQuantidadeENomes(tipo: string, caminhos: readonly string[], regra: RegraArquivos): void {
+  if (caminhos.length < regra.min) {
+    throw new ErroDeRegra(
+      `${tipo} precisa de pelo menos ${String(regra.min)} arquivo(s), e veio ${String(caminhos.length)}`,
+      "anexe com --arquivo <caminho>",
+    );
+  }
+  if (regra.max !== undefined && caminhos.length > regra.max) {
+    throw new ErroDeRegra(
+      `${tipo} aceita no máximo ${String(regra.max)} arquivo(s), e vieram ${String(caminhos.length)}`,
+      "submeta sem os excedentes",
+    );
+  }
+  const nomes = caminhos.map((caminho) => basename(caminho));
+  const longo = nomes.find((nome) => nome.length > 200);
+  if (longo) throw new ErroDeRegra(`o nome ${longo} passa de 200 caracteres`, "renomeie o arquivo");
+  const repetido = nomes.find((nome, i) => nomes.indexOf(nome) !== i);
+  if (repetido) throw new ErroDeRegra(`dois anexos se chamam ${repetido}`, "renomeie um deles");
+}
+
+/**
+ * O agregado da demanda como as regras cruzadas e a aula o leem: só os tickets da rodada (e os sem rodada) e, nos
+ * critérios de aceite, só os que ela cita. Sem rodada, o agregado inteiro.
+ */
+export function agregadoDaRodada(ag: AgregadoDemanda, rodada?: number): AgregadoDemanda {
+  if (rodada === undefined) return ag;
+  const citados = ag.criterios_citados.filter((c) => c.rodada_id === rodada).map((c) => c.criterio_id);
+  return {
+    ...ag,
+    tickets: ag.tickets.filter((t) => t.rodada_id === undefined || t.rodada_id === rodada),
+    evidencias: ag.evidencias.map((e) =>
+      e.tipo === "criterios_aceite"
+        ? { ...e, dados: { criterios: (e.dados.criterios as { id: string }[]).filter((c) => citados.includes(c.id)) } }
+        : e,
+    ),
+  };
+}
+
+/**
+ * Aceita ou recusa uma submissão por um caminho só: catálogo da Etapa (tipo, dono, produtor), schema, anexos e a
+ * regra do tipo. `validarPlano` entra pelo construtor porque as transições da demanda já dependem deste módulo.
+ */
+export class AvaliadorDeEvidencia {
+  private readonly catalogo: readonly ItemCatalogoEtapa[];
+  private readonly validarPlano: (ag: AgregadoDemanda, entrada: unknown, ator: Ator) => unknown;
+
+  constructor(
+    catalogo: readonly ItemCatalogoEtapa[],
+    validarPlano: (ag: AgregadoDemanda, entrada: unknown, ator: Ator) => unknown,
+  ) {
+    this.catalogo = catalogo;
+    this.validarPlano = validarPlano;
+  }
+
+  avaliar(ag: AgregadoDemanda, submissao: SubmissaoDeEvidencia): Avaliacao {
+    try {
+      return this.avaliarOuLancarRecusa(ag, submissao);
+    } catch (erro) {
+      if (erro instanceof ErroDeRegra || erro instanceof ErroDeEscopo) {
+        return { resultado: "recusada", motivo: erro.message };
+      }
+      throw erro;
+    }
+  }
+
+  private avaliarOuLancarRecusa(ag: AgregadoDemanda, { tipo, dono, produtor, dados, anexos }: SubmissaoDeEvidencia) {
+    if (dono.demanda_id !== ag.demanda.id || dono.rodada_id !== undefined) {
+      throw new ErroDeRegra(
+        `a evidência ${tipo} tem dono errado: ${dono.toString()}`,
+        `use a demanda ${ag.demanda.id} ou um ticket dela`,
+      );
+    }
+    const ticket = ag.tickets.find((t) => t.ticket_id === dono.ticket_id);
+    if (dono.ticket_id !== undefined && ticket === undefined) {
+      throw new ErroDeRegra(`o ticket ${dono.toString()} não existe`, "use um ticket da demanda");
+    }
+    const onde = ticket ? `T-${String(ticket.ticket_id)} (${ticket.etapa})` : `a demanda ${ag.demanda.id}`;
+    const daEtapa = this.catalogo.filter((i) => i.etapa === (ticket?.etapa ?? "entender_e_desenhar"));
+    const item = daEtapa.find((i) => i.tipo === tipo);
+    if (item === undefined) {
+      throw new ErroDeRegra(
+        `${onde} não aceita evidência ${tipo}`,
+        `use um de ${daEtapa.map((i) => i.tipo).join(", ") || "nenhum tipo"}`,
+      );
+    }
+    if (produtor.tipo !== item.produtor) {
+      throw new ErroDeEscopo(
+        `a evidência ${tipo} de ${onde} é produzida por ${item.produtor}`,
+        `não por ${produtor.tipo}`,
+      );
+    }
+    const schema = SCHEMA_DA_EVIDENCIA[tipo];
+    // O caminho do campo sai a partir de `dados`, que é como o agente o vê.
+    const lido = z.object({ dados: schema.dados }).safeParse({ dados });
+    if (!lido.success) throw new ErroDeRegra(z.prettifyError(lido.error));
+    const validos = lido.data.dados;
+    conferirQuantidadeENomes(tipo, anexos, schema.arquivos);
+    schema.cruzar?.(validos, {
+      ag: agregadoDaRodada(ag, ticket?.rodada_id),
+      ticket: ticket?.ticket_id,
+      anexos: anexos.map((caminho) => basename(caminho)),
+    });
+    if (tipo === "plano") this.validarPlano(ag, validos, produtor);
+    const veredito = schema.veredito?.(validos);
+    // Verificação da Fabriquinha que não atende não é evidência; o parecer que não atende é conteúdo e entra.
+    if (veredito === "nao_atende" && item.produtor === "fabriquinha" && item.regraAprovacao !== null) {
+      throw new ErroDeRegra(
+        `a evidência ${tipo} de ${onde} não atende a regra ${item.regraAprovacao}`,
+        "corrija o que a verificação apontou",
+      );
+    }
+    return { resultado: "aceita", dados: validos, veredito } satisfies Avaliacao;
+  }
+}

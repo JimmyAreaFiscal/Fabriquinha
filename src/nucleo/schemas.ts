@@ -43,14 +43,14 @@ export const Arquivos = ({
   ...(temClasse && { temClasse }),
 });
 
-/** O que as regras cruzadas consultam: o agregado antes da submissão, o ticket e os nomes dos anexos. */
+/** O que as regras cruzadas consultam: o agregado antes da submissão, o ticket (ausente na evidência da demanda) e os nomes dos anexos. */
 interface Cruzamento {
   readonly ag: AgregadoDemanda;
-  readonly ticket: Id;
+  readonly ticket?: Id;
   readonly anexos: readonly string[];
 }
 
-type Veredito = "atende" | "nao_atende";
+export type Veredito = "atende" | "nao_atende";
 
 export const vereditoDe = (atende: boolean): Veredito => (atende ? "atende" : "nao_atende");
 

@@ -460,6 +460,8 @@ test("aula_codigo: o agente envia só trechos e a Fabriquinha gera o HTML; anexo
   });
   const comAnexo = await rodar(env(7), 7, "aula_codigo", trecho(2, 3), arquivoNaSaida(raiz, 7, "x.html", "<html>"));
   assert.match(comAnexo.err, /aula_codigo não aceita anexo do agente/);
+  const invalido = await rodar(env(7), 7, "aula_codigo", { trechos: "a.ts" });
+  assert.match(invalido.err, /^[^\n]*dados\.trechos[^\n]*\n$/);
   const fora = await rodar(env(7), 7, "aula_codigo", trecho(1, 1));
   assert.match(fora.err, /não toca nenhuma linha alterada/);
   assert.deepEqual(gravadas(banco), []);

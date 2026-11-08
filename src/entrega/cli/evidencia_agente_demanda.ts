@@ -3,25 +3,24 @@
 // grava dentro de `comDemanda`, que reconfere execução aberta e estado. Implementar não tem comando: a Fabriquinha
 // coleta e conclui.
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import { z } from "zod";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
 import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
-import { schemaDoTipo, TipoEvidencia } from "../../nucleo/evidencia.ts";
-import { CATALOGO_ETAPAS, validarEvidenciaDaEtapa } from "../../nucleo/evidencia_etapa.ts";
-import { submeterPlano } from "../../nucleo/transicoes_demanda.ts";
+import { agregadoDaRodada, schemaDoTipo, TipoEvidencia } from "../../nucleo/evidencia.ts";
+import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import type { EsquemaDeEvidencia } from "../../nucleo/schemas.ts";
 import { gerarAula, type Trecho } from "../../aplicacao/evidencias/aula.ts";
-import { guardarAnexos, type Origens } from "../../aplicacao/evidencias/submissao.ts";
+import { submeterEvidencia } from "../../aplicacao/evidencia/submeter.ts";
+import type { Origens } from "../../aplicacao/evidencias/submissao.ts";
 import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
-import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
+import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { projetoExistente } from "../../armazenamento/projetos.ts";
-import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
 import {
   type ComandoDemanda,
   type EscopoDoAgente,
@@ -85,24 +84,6 @@ function origensDe(banco: DatabaseSync, a: EscopoDoAgente, ag: AgregadoDemanda, 
   };
 }
 
-/**
- * O agregado da demanda como as regras cruzadas e `gerarAula` o leem: só os tickets da rodada (e os sem rodada) e, nos
- * critérios de aceite, só os que ela cita. Sem rodada, o agregado inteiro.
- */
-function agregadoDaRodada(ag: AgregadoDemanda, rodada?: number): AgregadoDemanda {
-  if (rodada === undefined) return ag;
-  const citados = ag.criterios_citados.filter((c) => c.rodada_id === rodada).map((c) => c.criterio_id);
-  return {
-    ...ag,
-    tickets: ag.tickets.filter((t) => t.rodada_id === undefined || t.rodada_id === rodada),
-    evidencias: ag.evidencias.map((e) =>
-      e.tipo === "criterios_aceite"
-        ? { ...e, dados: { criterios: (e.dados.criterios as { id: string }[]).filter((c) => citados.includes(c.id)) } }
-        : e,
-    ),
-  };
-}
-
 export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
   {
     palavras: ["evidencia", "schema"],
@@ -124,23 +105,8 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
       const agregadoLido = carregarDemanda(banco, demanda_id);
       const ticket = ticketAberto(agregadoLido, agente);
       const dados = await lerDados(op.dados as string | undefined, stdin);
-      // O caminho do campo sai a partir de `dados`, e o CLI mostra o ZodError em uma linha com `z.prettifyError`.
-      const validos = z.object({ dados: schema.dados }).parse({ dados }).dados;
-      const veredito = schema.veredito?.(validos);
-      validarEvidenciaDaEtapa(
-        { demanda_id, ticket_id, etapa: ticket.etapa },
-        {
-          demanda_id,
-          ticket_id,
-          tipo,
-          produtor: "agente",
-          aprovada: veredito === undefined ? undefined : veredito === "atende",
-          dados: validos,
-        },
-      );
       let caminhos = (op.arquivo ?? []) as string[];
       const origens = origensDe(banco, agente, agregadoLido, ticket);
-      const agregado = agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id);
       if (tipo === "aula_codigo") {
         if (caminhos.length > 0) {
           throw new ErroDeRegra(
@@ -148,41 +114,33 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
             "a Fabriquinha gera o HTML; submeta só --dados",
           );
         }
-        const html = await gerarAula(agregado, origens.worktree, validos.trechos as Trecho[]);
+        // O HTML nasce dos trechos, antes de a submissão ser avaliada; o CLI mostra o ZodError em uma linha com `z.prettifyError`.
+        const { trechos } = z.object({ dados: schema.dados }).parse({ dados }).dados;
+        const html = await gerarAula(
+          agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id),
+          origens.worktree,
+          trechos as Trecho[],
+        );
         mkdirSync(origens.saida, { recursive: true });
         const aula = join(origens.saida, "aula.html");
         writeFileSync(aula, html);
         caminhos = [aula];
       }
-      // Fora da transação: se ela falhar, sobra só arquivo sem referência (F2 §5.2).
-      const anexos = guardarAnexos(banco, caminhos, tipo, schema.arquivos, origens, () =>
-        schema.cruzar?.(validos, { ag: agregado, ticket: ticket_id, anexos: caminhos.map((c) => basename(c)) }),
-      );
-      const agora = new Date().toISOString();
-      comDemanda(
+      const avaliacao = submeterEvidencia(
         banco,
-        demanda_id,
-        (ag) => {
-          resolverEscopoDoAgente(banco, agente.ator.trabalho_id); // a execução ainda está aberta?
-          exigirTrabalhoDoTicket(banco, agente.ator, agente);
-          ticketAberto(ag, agente);
-          return tipo === "plano"
-            ? submeterPlano(ag, validos, agente.ator, { agora })
-            : submeterEvidenciaDemanda(
-                ag,
-                { tipo, dados: validos as EntradaEvidenciaDemanda["dados"], ticket_id },
-                agente.ator,
-                agora,
-              );
-        },
-        () => {
-          gravarAnexos(
-            banco,
-            { demanda_id, ticket_id, tipo },
-            anexos.map((a) => ({ caminho: basename(a.nome), sha256: a.sha256, mime: a.mime, bytes: a.bytes })),
-          );
+        { tipo, dono: Endereco.doTicket(demanda_id, ticket_id), produtor: agente.ator, dados, anexos: caminhos },
+        {
+          origens,
+          conferirAntesDeGravar(ag) {
+            resolverEscopoDoAgente(banco, agente.ator.trabalho_id); // a execução ainda está aberta?
+            exigirTrabalhoDoTicket(banco, agente.ator, agente);
+            ticketAberto(ag, agente);
+          },
         },
       );
+      // Erro síncrono ao agente: sem Tentativa (D10-1).
+      if (avaliacao.resultado === "recusada") throw new ErroDeRegra(avaliacao.motivo);
+      const { veredito } = avaliacao;
       return { ticket: proprio(agente), tipo, veredito };
     },
   },

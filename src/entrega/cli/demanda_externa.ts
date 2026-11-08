@@ -8,7 +8,7 @@ import type { ParseArgsOptionsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { schemaDoTipo } from "../../nucleo/evidencia.ts";
+import { conferirQuantidadeENomes, schemaDoTipo } from "../../nucleo/evidencia.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { guardarAnexos } from "../../aplicacao/evidencias/submissao.ts";
@@ -164,14 +164,10 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
         fora: "da pasta do comando",
         copie: `a pasta do comando (${pasta})`,
       };
-      const guardados = guardarAnexos(
-        c.banco,
-        (c.op.arquivo ?? []) as string[],
-        tipo,
-        schemaDoTipo(tipo).arquivos,
-        origens,
-        () => undefined,
-      );
+      const caminhos = (c.op.arquivo ?? []) as string[];
+      // A demanda externa ainda não passa pelo Avaliador: quantidade e nomes seguem conferidos aqui.
+      conferirQuantidadeENomes(tipo, caminhos, schemaDoTipo(tipo).arquivos);
+      const guardados = guardarAnexos(c.banco, caminhos, tipo, schemaDoTipo(tipo).arquivos, origens);
       const arquivos = guardados.map((a) => ({
         nome: a.nome,
         mime: a.mime,
