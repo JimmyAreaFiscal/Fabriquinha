@@ -15,22 +15,20 @@ import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../nucleo/trabalho_agentico.ts";
 import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { arquivoDaSessao } from "../infra/registro.ts";
+import { pastasDoProcesso } from "../infra/registro.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
 import { retomarSessaoAjustes } from "./sessao_ajustes.ts";
 import {
-  abortar,
+  condutor,
+  type CondutorDeTrabalhos,
   type Dialogo,
-  assinar,
-  mandar,
   PREFIXO_DA_RESPOSTA_AUTOMATICA,
   type RespostaAutomatica,
-  responderDialogo,
   type Situacao,
-  situacao,
-} from "./gerente.ts";
+} from "./trabalho/condutor.ts";
 import type { EventoPi } from "../infra/agente/pi.ts";
 
 /** O estado de uma sessão (F4 §5.2). */
@@ -41,7 +39,7 @@ type ModoEnvio = "prompt" | "steer" | "follow_up";
 
 /** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
 export function lerConversa(raiz: string, sessao: string): unknown[] {
-  const arquivo = arquivoDaSessao(raiz, sessao);
+  const arquivo = new HarnessPi().arquivoDaSessao(raiz, sessao);
   if (!arquivo) return [];
   return readFileSync(arquivo, "utf8")
     .split("\n")
@@ -254,7 +252,7 @@ export function calcular(c: Carregada, viva: Situacao | undefined): Calculado {
 
 function montarCabecalho(c: Carregada): CabecalhoDemanda {
   const { ag, ticket, sessao, execucoes } = c;
-  const viva = situacao(sessao.id);
+  const viva = condutor.situacao(sessao.id);
   const [estado, motivo, desde] = calcular(c, viva);
   const ultima = ultimaDe(c);
   return {
@@ -293,22 +291,22 @@ function montarCabecalho(c: Carregada): CabecalhoDemanda {
 function promptsDaFabriquinha(raiz: string, { sessao, execucoes }: Carregada): Set<string> {
   const arquivos = execucoes
     .filter((e, i) => i === 0 || sessao.modo === "autonomo")
-    .map((e) => join(raiz, "execucoes", `E-${e.id}`, "prompt.md"));
+    .map((e) => join(pastasDoProcesso(raiz, e.id).dir, "prompt.md"));
   return new Set(arquivos.filter((a) => existsSync(a)).map((a) => readFileSync(a, "utf8")));
 }
 
 const registroDaRespostaAutomatica = new RegExp(`^\\S+ ${PREFIXO_DA_RESPOSTA_AUTOMATICA}(\\{.*\\})$`);
 
-/** Os Agentes que o Auditor automático fez responder, por chamada de `perguntar`: o gerente os anota no log da execução. */
+/** Os Agentes que o Auditor automático fez responder, por chamada de `perguntar`: o condutor os anota no log da execução. */
 function atoresDasRespostasAutomaticas(
   raiz: string,
   { execucoes }: Carregada,
 ): Map<string, RespostaAutomatica["ator"]> {
   const registros = execucoes
-    .map((e) => join(raiz, "execucoes", `E-${e.id}`, "log"))
+    .map((e) => pastasDoProcesso(raiz, e.id).log)
     .filter((log) => existsSync(log))
     .flatMap((log) => readFileSync(log, "utf8").split("\n"))
-    // Só a linha cujo texto começa com o prefixo é o registro; as livres do gerente citam a pergunta crua do agente.
+    // Só a linha cujo texto começa com o prefixo é o registro; as livres do condutor citam a pergunta crua do agente.
     .map((linha) => registroDaRespostaAutomatica.exec(linha)?.[1])
     .filter((json) => json !== undefined)
     .map((json) => JSON.parse(json) as RespostaAutomatica)
@@ -355,7 +353,7 @@ export function abrirChatDemanda(banco: DatabaseSync, id: string): ChatDemanda |
       ...marcar((e as EntradaDemanda).message),
     })),
     assinar: (ouvinte) =>
-      assinar(id, (evento) => {
+      condutor.assinar(id, (evento) => {
         if (evento.type === "estado") ouvinte({ type: "estado", ...montarCabecalho(carregar(banco, ref, id)) });
         else if (evento.type === "message_end") {
           ouvinte({ ...evento, ...marcador(raiz, carregar(banco, ref, id))(evento.message) });
@@ -414,7 +412,7 @@ export function enviarDemanda(
   const ref = donoDaSessao(banco, id);
   if (!ref) return false;
   const c = carregar(banco, ref, id);
-  const viva = situacao(id);
+  const viva = condutor.situacao(id);
   const [estado, motivo] = calcular(c, viva);
   const rotulo = motivo ? `${estado}: ${motivo}` : estado;
   const aceitos: ModoEnvio[] = estado === "rodando" ? ["steer", "follow_up"] : motivo === "conversa" ? ["prompt"] : [];
@@ -425,7 +423,7 @@ export function enviarDemanda(
     );
   }
   // Em conversa, o pi vivo está ocioso. A sessão de ajustes retoma pelo caminho dela, que restaura as branches no fim.
-  if (estado === "rodando" || viva) mandar(ultimaDe(c).id, { type: modo, message: texto });
+  if (estado === "rodando" || viva) condutor.mandar(ultimaDe(c).id, { type: modo, message: texto });
   else if (c.ticket.etapa === "ajustar_resultado") retomarSessaoAjustes(banco, c.ticket, texto, { limiteMin });
   else iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", mensagem: texto });
   return true;
@@ -443,11 +441,11 @@ export function responderDialogoDemanda(
   banco: DatabaseSync,
   id: string,
   dialogo: string,
-  resposta: Parameters<typeof responderDialogo>[2],
+  resposta: Parameters<CondutorDeTrabalhos["responder"]>[2],
 ): boolean {
   const ref = donoDaSessao(banco, id);
   if (!ref) return false;
-  responderDialogo(ultimaDe(carregar(banco, ref, id)).id, dialogo, resposta);
+  condutor.responder(ultimaDe(carregar(banco, ref, id)).id, dialogo, resposta);
   return true;
 }
 
@@ -456,7 +454,7 @@ export function abortarDemanda(banco: DatabaseSync, id: string): boolean {
   const ref = donoDaSessao(banco, id);
   if (!ref) return false;
   const ultima = ultimaDe(carregar(banco, ref, id));
-  if (situacao(id)) abortar(ultima.id);
+  if (condutor.situacao(id)) condutor.abortar(ultima.id);
   else if (ultima.fim == null) interromperExecucaoDemanda(banco, ref);
   else throw new ErroDeRegra("não há execução para abortar", "a sessão não está rodando");
   return true;

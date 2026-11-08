@@ -14,12 +14,12 @@ import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/ten
 import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { anotar } from "../infra/registro.ts";
+import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { descartarAlteracoes, exigirGit } from "../infra/repositorio/worktree.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { encerrar, situacao } from "./gerente.ts";
+import { condutor } from "./trabalho/condutor.ts";
 import type { RefRodada } from "./encerramento_rodada.ts";
 
 type Opcoes = Pick<OpcoesExecucaoDemanda, "limiteMin">;
@@ -34,9 +34,6 @@ interface Marco {
 }
 
 const contexto = () => ({ agora: new Date().toISOString() });
-
-/** Fim da execução em curso por rodada; a conclusão da sessão espera por ele para restaurar depois do pi. */
-const fins = new Map<string, Promise<unknown>>();
 
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
@@ -69,7 +66,7 @@ async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const raiz = raizDo(banco);
   const marco = JSON.parse(readFileSync(arquivoDoMarco(banco, ref), "utf8")) as Marco;
-  const log = join(raiz, "execucoes", `ajustes-${formatarRodadaRef(ref)}.log`);
+  const log = logDaOperacao(raiz, `ajustes-${formatarRodadaRef(ref)}`);
   const pontas: [Ponta, string][] = [
     [marco.rodada, caminhoDaWorktreeRodada(raiz, ag.demanda.projeto, ref)],
     [marco.demanda, caminhoDaWorktreeDemanda(raiz, ag.demanda.projeto, ref.demanda_id)],
@@ -81,14 +78,18 @@ async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
 }
 
-/** A execução com pi vivo neste serviço na sessão do ticket, se há. */
-function execucaoViva(banco: DatabaseSync, ticket: TicketDemanda): string | number | undefined {
+/** A execução com pi vivo neste serviço na sessão do ticket, se há, e a mais recente, que a conclusão espera terminar. */
+function execucoesDaSessao(
+  banco: DatabaseSync,
+  ticket: TicketDemanda,
+): { viva: string | number | undefined; maisRecente: string | undefined } {
+  const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ticket);
   const sessao = existe(
-    carregarTrabalhosDoTicket(banco, ticket).sessoes[0],
+    sessoes[0],
     `o ticket ${formatarTicketRef(ticket)} não tem sessão`,
     "a sessão nasce ao abrir os ajustes",
   );
-  return situacao(sessao.id)?.execucao;
+  return { viva: condutor.situacao(sessao.id)?.execucao, maisRecente: execucoes.at(-1)?.id };
 }
 
 /**
@@ -101,13 +102,11 @@ function executar(
   ticket: TicketDemanda,
   opcoes: Opcoes & Pick<OpcoesExecucaoDemanda, "retomada" | "mensagem">,
 ): ReturnType<typeof iniciarExecucaoDemanda> {
-  const { id, fim } = iniciarExecucaoDemanda(banco, ticket, {
+  return iniciarExecucaoDemanda(banco, ticket, {
     ...opcoes,
     modo: "interativo",
     fechar: () => restaurar(banco, ref),
   });
-  fins.set(`${ref.demanda_id}.${String(ref.rodada_id)}`, fim);
-  return { id, fim };
 }
 
 /**
@@ -181,11 +180,9 @@ export async function concluirSessaoAjustes(banco: DatabaseSync, ref: RefRodada,
     return a;
   });
 
-  const chave = `${ref.demanda_id}.${String(ref.rodada_id)}`;
-  const viva = execucaoViva(banco, ticket);
-  if (viva !== undefined) encerrar(viva);
-  await fins.get(chave);
-  fins.delete(chave);
+  const { viva, maisRecente } = execucoesDaSessao(banco, ticket);
+  if (viva !== undefined) condutor.encerrar(viva);
+  if (maisRecente !== undefined) await condutor.aguardarFim(maisRecente);
   await restaurar(banco, ref);
   return comDemanda(banco, ref.demanda_id, (a) => concluirSessaoRodada(a, entrada, ator, contexto()));
 }

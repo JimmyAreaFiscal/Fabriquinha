@@ -55,10 +55,10 @@ interface Excecao extends Achado {
 
 // Cada exceção cita a demanda (04 a 26) que a remove: 19 quebra retrabalho, 20 limpa entrega/http, 21 entrega/cli, 22 o resto.
 const EXCECOES: Excecao[] = [
-  { arquivo: "aplicacao/execucao_demanda.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "aplicacao/historico_demanda.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "aplicacao/retrabalho.ts", import: "SQL .prepare(", demanda: "19" },
   { arquivo: "aplicacao/sessoes_demanda.ts", import: "SQL .prepare(", demanda: "22" },
+  { arquivo: "aplicacao/trabalho/processo_do_ticket.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
   { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
@@ -87,7 +87,7 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/chat.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/banco.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/modelos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/harness_pi.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/registro.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/repositorio/cadastro.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
@@ -326,4 +326,57 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
       "nucleo/fs.ts importa node:fs",
     ].sort(),
   );
+});
+
+// Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`.
+const ARQUIVO_DO_CONDUTOR = "aplicacao/trabalho/condutor.ts";
+const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
+
+// shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não; nenhum outro objeto de src/ usa esses nomes.
+function acharChamadasAoHarnessForaDoCondutor(src: string): string[] {
+  return listarArquivosDeProducao(src)
+    .filter((arquivo) => arquivo !== ARQUIVO_DO_CONDUTOR)
+    .flatMap((arquivo) => {
+      const fonte = ts.createSourceFile(arquivo, readFileSync(join(src, arquivo), "utf8"), ts.ScriptTarget.Latest);
+      const chamadas: string[] = [];
+      const visitar = (no: ts.Node): void => {
+        if (
+          ts.isCallExpression(no) &&
+          ts.isPropertyAccessExpression(no.expression) &&
+          METODOS_DO_HARNESS.has(no.expression.name.text)
+        ) {
+          chamadas.push(`${arquivo} chama .${no.expression.name.text}(`);
+        }
+        ts.forEachChild(no, visitar);
+      };
+      visitar(fonte);
+      return chamadas;
+    });
+}
+
+test("só o condutor chama .lancar( e .perguntar( do HarnessPi", () => {
+  assert.deepEqual(acharChamadasAoHarnessForaDoCondutor(SRC), []);
+});
+
+test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita o condutor", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-condutor-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    [ARQUIVO_DO_CONDUTOR]: "this.harness.lancar(args);\nthis.harness.perguntar(prompt);\n",
+    "aplicacao/lancador.ts": "new HarnessPi().lancar(args, opcoes, aoEvento);\n",
+    "aplicacao/consultor.ts": "const resposta = await harness.perguntar(prompt);\n",
+    "aplicacao/inocente.ts": "const lancar = 1;\nlancar(2);\nperguntar();\nconst lancamento = x.lancamento(3);\n",
+    "aplicacao/teste_de_quem_lanca.test.ts": "harness.lancar(args);\n",
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(acharChamadasAoHarnessForaDoCondutor(raiz).sort(), [
+    "aplicacao/consultor.ts chama .perguntar(",
+    "aplicacao/lancador.ts chama .lancar(",
+  ]);
 });

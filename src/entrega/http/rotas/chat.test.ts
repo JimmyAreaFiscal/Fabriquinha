@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { avisar, situacao } from "../../../aplicacao/gerente.ts";
+import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import type { DadosDoChatDemanda } from "./chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
@@ -192,7 +192,7 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
   await ate(() => sse.eventos.length > 0, "o retrato");
   const [retrato] = sse.eventos as [Evento & DadosDoChatDemanda];
   assert.deepEqual([retrato.type, retrato.origem, retrato.conversa.length], ["chat", "demanda", 2]);
-  avisar("sd-310", join(raiz, "log"));
+  condutor.avisar("sd-310", join(raiz, "log"));
   await ate(() => sse.eventos.length > 1, "o estado novo");
   assert.deepEqual([sse.eventos[1]?.type, sse.eventos[1]?.origem], ["estado", "demanda"]);
   sse.fechar();
@@ -272,11 +272,11 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     fechar: () => Promise.resolve(),
   });
   const sessao = String(carregarTrabalhosDoTicket(servico.banco, ref).sessoes[0]?.id);
-  const dialogos = () => situacao(sessao)?.dialogos ?? [];
+  const dialogos = () => condutor.situacao(sessao)?.dialogos ?? [];
   await ate(() => dialogos().length === 1, "o diálogo");
   const resposta = await postar(`/api/sessoes/${sessao}/dialogos/${String(dialogos()[0]?.id)}`, { valor: "alta" });
   assert.equal(resposta.status, 204);
-  await ate(() => situacao(sessao)?.ocupado === false, "o pi ocioso");
+  await ate(() => condutor.situacao(sessao)?.ocupado === false, "o pi ocioso");
 
   // Quem assina no meio da mensagem recebe, logo depois do retrato, o começo dela e os pedaços já escritos (F4 §5.4).
   const sse = await assinar(sessao);
@@ -295,7 +295,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
   );
   tarde.fechar();
   assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
-  await ate(() => situacao(sessao)?.ocupado === false, "o pi ocioso depois do aborto");
+  await ate(() => condutor.situacao(sessao)?.ocupado === false, "o pi ocioso depois do aborto");
 
   assert.equal(
     (await postar(`/api/sessoes/${sessao}/mensagens`, { texto: "pergunte perguntar", modo: "prompt" })).status,
@@ -303,7 +303,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
   );
   await ate(() => dialogos().length === 1, "o diálogo da mensagem");
   assert.equal((await postar(`/api/sessoes/${sessao}/abortar`)).status, 204);
-  await ate(() => situacao(sessao)?.ocupado === false, "o aborto");
+  await ate(() => condutor.situacao(sessao)?.ocupado === false, "o aborto");
   interromperExecucaoDemanda(servico.banco, ref);
   await fim;
 });

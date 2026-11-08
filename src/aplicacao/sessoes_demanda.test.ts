@@ -14,13 +14,12 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../nucleo/trabalho_agentico.ts";
 import { encontrado } from "../nucleo/erros.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
-import { encerrar } from "./gerente.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { avisar, PREFIXO_DA_RESPOSTA_AUTOMATICA, situacao } from "./gerente.ts";
+import { condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA } from "./trabalho/condutor.ts";
 import {
   abortarDemanda,
   abrirChatDemanda,
@@ -316,9 +315,9 @@ test("CA-1: a conversa do JSONL vem na ordem, com o prompt da Fabriquinha marcad
   );
   const recebidos: Record<string, unknown>[] = [];
   const cancelar = chat.assinar((evento) => recebidos.push(evento));
-  avisar("s1", join(c.raiz, "log"));
+  condutor.avisar("s1", join(c.raiz, "log"));
   cancelar();
-  avisar("s1", join(c.raiz, "log"));
+  condutor.avisar("s1", join(c.raiz, "log"));
   assert.equal(recebidos.length, 1);
   assert.deepEqual(
     [recebidos[0]?.type, recebidos[0]?.ticket, (recebidos[0]?.sessao as { estado: string }).estado],
@@ -349,11 +348,11 @@ test("I-266.T7: a resposta de `perguntar` que o Auditor automático deu é do Ag
   );
 });
 
-test("I-266.T29: as linhas livres do gerente que citam o prefixo da resposta automática não quebram o chat", () => {
+test("I-266.T29: as linhas livres do condutor que citam o prefixo da resposta automática não quebram o chat", () => {
   const { banco, c } = cenario();
   conversaDoPlanejamento(c.raiz);
   const agente = { tipo: "agente", trabalho_id: "e-s1-I-300" };
-  const pergunta = `Mudo a ${PREFIXO_DA_RESPOSTA_AUTOMATICA}do gerente?`;
+  const pergunta = `Mudo a ${PREFIXO_DA_RESPOSTA_AUTOMATICA}do condutor?`;
   const registro = { ator: agente, chamada: "auto", pergunta, resposta: "Sim", justificativa: "j" };
   const semAtor = { ator: { tipo: "invalido" }, chamada: "humana", pergunta, resposta: "Não", justificativa: "j" };
   const em = "2026-01-01T00:00:00.000Z";
@@ -439,7 +438,7 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
   assert.equal(chat?.cabecalho.sessao.estado, "rodando");
   const cancelar = chat.assinar((e) => ao_vivo.push(e));
 
-  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   const cab = cabecalhoDaDemanda(banco, sessao);
   assert.deepEqual(
     [cab?.sessao.estado, cab?.sessao.motivo, cab?.sessao.dialogos[0]?.type],
@@ -479,23 +478,23 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   });
   const sessao = String(carregarTrabalhosDoTicket(banco, ref).sessoes[0]?.id);
 
-  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   assert.throws(
     () => enviarDemanda(banco, sessao, "oi", "prompt", 5),
     /aguardando_humano: dialogo e não recebe prompt/,
   );
-  const dialogo = String(situacao(sessao)?.dialogos[0]?.id);
+  const dialogo = String(condutor.situacao(sessao)?.dialogos[0]?.id);
   assert.equal(responderDialogoDemanda(banco, sessao, dialogo, { value: "alta" }), true);
-  await ate(() => situacao(sessao)?.dialogos.length === 0 && situacao(sessao)?.ocupado === false);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
 
   // Conversa com o pi vivo ocioso: a mensagem vai ao mesmo pi, sem nova execução.
   assert.throws(() => enviarDemanda(banco, sessao, "oi", "steer", 5), /não recebe steer.*envie com prompt/);
   // O pi vivo recebe a mensagem sem nova execução e volta a perguntar; o aborto vai a ele.
   assert.equal(enviarDemanda(banco, sessao, "pergunte perguntar de novo", "prompt", 5), true);
   assert.equal(carregarTrabalhosDoTicket(banco, ref).execucoes.length, 1);
-  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   assert.equal(abortarDemanda(banco, sessao), true);
-  await ate(() => situacao(sessao)?.dialogos.length === 0 && situacao(sessao)?.ocupado === false);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
   assert.notEqual(cabecalhoDaDemanda(banco, sessao)?.sessao.estado, "rodando");
   interromperExecucaoDemanda(banco, ref);
   await fim;
@@ -505,7 +504,7 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   const execucoes = carregarTrabalhosDoTicket(banco, ref).execucoes;
   assert.equal(execucoes.length, 2);
   assert.equal(execucoes.at(-1)?.trabalho_id, sessao);
-  await ate(() => situacao(sessao)?.ocupado === false);
+  await ate(() => condutor.situacao(sessao)?.ocupado === false);
   interromperExecucaoDemanda(banco, ref);
   await ate(() => carregarTrabalhosDoTicket(banco, ref).execucoes.at(-1)?.fim != null);
 });
@@ -521,10 +520,10 @@ test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra exe
   const sessaoDoTicket = carregarTrabalhosDoTicket(banco, { demanda_id: "I-304", ticket_id: 1 }).sessoes.at(-1);
   assert.ok(sessaoDoTicket);
   const sessao = sessaoDoTicket.id;
-  await ate(() => situacao(sessao)?.ocupado === true);
+  await ate(() => condutor.situacao(sessao)?.ocupado === true);
   assert.equal(enviarDemanda(banco, sessao, "ajuste o teste", "steer", 1), true);
   assert.equal(enviarDemanda(banco, sessao, "confira o lint", "follow_up", 1), true);
-  encerrar(execucao.id);
+  condutor.encerrar(execucao.id);
   await execucao.fim;
   instalarPiFalso(temporario).roteirizar([{ marcas: true }]);
 });

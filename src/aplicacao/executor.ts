@@ -8,12 +8,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, mensagem } from "../nucleo/erros.ts";
 import type { Id } from "../nucleo/primitivos.ts";
 import { LINK_FORA_DO_AR, RelatorioSimulacao } from "../nucleo/simulacao.ts";
-import { PACOTE, lancarPi } from "../infra/agente/pi.ts";
+import { PACOTE } from "../infra/agente/pi.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../infra/registro.ts";
 import { enfileirar, gravarPgid, marcar, paraRodar, type UsuarioSimulado } from "../armazenamento/simulacao.ts";
 import { ambienteSemCredenciais, executar } from "../infra/processo.ts";
+import { condutor } from "./trabalho/condutor.ts";
 
 interface OpcoesDaSimulacao {
   /** Tempo máximo de cada execução, em minutos (o mesmo da execução autônoma, F4 §3). */
@@ -91,8 +92,11 @@ async function executarUma(banco: DatabaseSync, id: Id, link: string, timeoutMin
   const saida = join(dir, "saida");
   await mkdir(saida, { recursive: true });
   const anexos = await prepararAnexos(banco, usuario, dir);
-  const pi = lancarPi(
-    [
+  const identificador = `simulacao-${String(id)}`;
+  // Sem falha, o pi saiu sozinho; a única falha possível é o limite de tempo do condutor.
+  const falhaPorTempoLimite = await condutor.iniciar({
+    execucao: { id: identificador, sessaoPi: identificador, modo: "autonomo" },
+    args: [
       "--mode",
       "json",
       "--session-dir",
@@ -104,27 +108,21 @@ async function executarUma(banco: DatabaseSync, id: Id, link: string, timeoutMin
       ...anexos.map((arquivo) => `@${arquivo}`),
       promptDaPersona(usuario, texto, link, anexos.length > 0),
     ],
-    {
-      cwd: dir,
-      env: {
-        ...ambienteSemCredenciais(process.env, join(dir, "vazio")),
-        FABRIQUINHA_LINK: link,
-        FABRIQUINHA_SAIDA: saida,
-      },
-      log: join(dir, "log"),
-      fecharStdin: true,
+    cwd: dir,
+    env: {
+      ...ambienteSemCredenciais(process.env, join(dir, "vazio")),
+      FABRIQUINHA_LINK: link,
+      FABRIQUINHA_SAIDA: saida,
     },
-    () => undefined,
-  );
-  gravarPgid(banco, id, pi.pgid);
-  const limite = { estourou: false };
-  const relogio = setTimeout(() => {
-    limite.estourou = true;
-    void pi.parar();
-  }, timeoutMin * 60_000);
-  await pi.saiu;
-  clearTimeout(relogio);
-  if (limite.estourou) {
+    log: join(dir, "log"),
+    prompt: undefined,
+    limiteMin: timeoutMin,
+    terminaSozinho: true,
+    aoLancar: (pgid) => {
+      gravarPgid(banco, id, pgid);
+    },
+  });
+  if (falhaPorTempoLimite) {
     marcar(banco, id, { status: "falhou", erro: `passou do limite de ${String(timeoutMin)} min e foi encerrado` });
     return;
   }

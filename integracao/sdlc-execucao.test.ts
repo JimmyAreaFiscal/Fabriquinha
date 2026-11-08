@@ -13,7 +13,7 @@ import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despacho_demanda.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
-import { recuperarExecucoesDemanda } from "../src/aplicacao/execucao_demanda.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { configuracao } from "../src/armazenamento/servico.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
@@ -244,7 +244,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
     ...estado,
     execucoes: iniciarProcesso(criarTrabalho([], sessao), estado.execucoes, execucao),
   }));
-  recuperarExecucoesDemanda(c.banco);
+  condutor.recuperarNaSubida(c.banco);
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);

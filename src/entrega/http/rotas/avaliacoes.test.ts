@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
 import { estadoDaAvaliacao } from "../../../aplicacao/avaliacao.ts";
-import { encerrar, situacao } from "../../../aplicacao/gerente.ts";
+import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { iniciarServico, type Servico } from "../../../composicao/servico.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { instalarPiFalso, type PassoPi } from "../../../../apoio-testes/pi_falso.ts";
@@ -74,8 +74,8 @@ before(async () => {
   }
 });
 after(async () => {
-  for (const id of ids) if (situacao(id)) encerrar(id);
-  await ate(() => ids.every((id) => !situacao(id)), "o fim dos pis");
+  for (const id of ids) if (condutor.situacao(id)) condutor.encerrar(id);
+  await ate(() => ids.every((id) => !condutor.situacao(id)), "o fim dos pis");
   await servico.parar();
   rmSync(base, { recursive: true, force: true });
 });
@@ -154,7 +154,7 @@ test("demandas do período: só as com sessão, e `demandas` não é lido como :
 test("dispara com pedido em branco, lista com estado e achados, abre o detalhe e o SSE (CA-1, 3, 4, 8, 16)", async () => {
   piFalso.roteirizar([{ ...resposta, escreve: { "achados.jsonl": achados } }, resposta]);
   const id = await disparar({ pedido: "  ", demandas: ["I-10"] });
-  await ate(() => situacao(id)?.ocupado === false, "a resposta do agente");
+  await ate(() => condutor.situacao(id)?.ocupado === false, "a resposta do agente");
   await ate(() => nAchados(id) === 2, "os achados");
 
   const lista = (await pedir(AV)).corpo as unknown as {
@@ -211,10 +211,10 @@ test("conversa, aborto, encaminhar, reencaminhar e a origem da demanda (CA-9, 10
   piFalso.roteirizar([resposta]);
   const id = ids[0] ?? "";
   assert.equal((await pedir(`${AV}/${id}/mensagens`, { texto: "  " })).status, 422);
-  encerrar(id);
-  await ate(() => !situacao(id) && estadoDaAvaliacao(id) === "concluida", "a parada do pi");
+  condutor.encerrar(id);
+  await ate(() => !condutor.situacao(id) && estadoDaAvaliacao(id) === "concluida", "a parada do pi");
   assert.equal((await pedir(`${AV}/${id}/mensagens`, { texto: "e a primeira melhoria?" })).status, 204);
-  await ate(() => situacao(id)?.ocupado === false, "a resposta da retomada");
+  await ate(() => condutor.situacao(id)?.ocupado === false, "a resposta da retomada");
   assert.ok(readFileSync(join(raiz, "avaliacoes", id, "achados.jsonl"), "utf8").length > 0);
   assert.ok(JSON.stringify((await pedir(`${AV}/${id}`)).corpo).includes("e a primeira melhoria?"));
   assert.equal((await pedir(`${AV}/${id}/abortar`, {})).status, 204);

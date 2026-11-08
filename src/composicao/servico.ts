@@ -6,18 +6,14 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { falhaPorServicoReiniciado } from "../nucleo/tentativa.ts";
 import { varrerBase } from "../aplicacao/retrabalho.ts";
 import { abrir } from "../armazenamento/banco.ts";
 import { noLog } from "../infra/registro.ts";
 import { projetosAVarrer } from "../armazenamento/retrabalho.ts";
 import { configuracao } from "../armazenamento/servico.ts";
-import { falharPendentes } from "../armazenamento/simulacao.ts";
-import { sinalNoGrupo } from "../infra/processo.ts";
 import { servirWeb } from "../entrega/http/servidor.ts";
-import { recuperarAuditorias } from "../aplicacao/auditoria.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../aplicacao/despacho_demanda.ts";
-import { aguardarCondutores, marcarParada, recuperarExecucoesDemanda } from "../aplicacao/execucao_demanda.ts";
+import { condutor } from "../aplicacao/trabalho/condutor.ts";
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -37,17 +33,6 @@ export interface Servico {
 /** A porta do serviço e trava de instância única: `$FABRIQUINHA_PORTA`, padrão 4317 (F4 §10). */
 /** @testes o teste confere a leitura da porta do ambiente */
 export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => Number(env.FABRIQUINHA_PORTA || 4317);
-
-/**
- * F4 §7: toda execução em andamento é de uma instância anterior. Mata o grupo do pi de cada avaliação, que não tem
- * execução; as execuções simuladas pendentes (F8 §4) falham com o pi delas morto; e as execuções das sessões das
- * demandas se encerram com falha (`recuperarExecucoesDemanda`).
- */
-function recuperar(banco: DatabaseSync): void {
-  recuperarAuditorias(banco);
-  for (const pgid of falharPendentes(banco, falhaPorServicoReiniciado.motivo)) sinalNoGrupo(pgid, "SIGKILL");
-  recuperarExecucoesDemanda(banco);
-}
 
 /**
  * Sobe o serviço: ocupa `127.0.0.1:<portaDoServico>` como trava de instância única antes de tocar no banco (uma
@@ -88,7 +73,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
   let aberto: DatabaseSync | undefined;
   try {
     aberto = abrir(raiz);
-    recuperar(aberto);
+    condutor.recuperarNaSubida(aberto);
     web.on(
       "request",
       servirWeb({
@@ -162,7 +147,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
     executarAgoraDemanda: executarAgoraDaDemanda,
     proximaBusca,
     async parar() {
-      marcarParada();
+      condutor.marcarParada();
       clearInterval(relogio);
       const fechou = new Promise((pronto) => web.close(pronto));
       // O close só espera: as conexões abertas (um SSE nunca termina) são cortadas aqui.
@@ -171,7 +156,7 @@ export async function iniciarServico(raiz: string): Promise<Servico> {
       // F7 §3.2: sem o link de entrada, o `abrir` diz que o serviço não está rodando em vez de abrir um link morto.
       rmSync(join(raiz, "web.url"), { force: true });
       await varredura;
-      await aguardarCondutores(LIMITE_PARADA_MS);
+      await condutor.aguardarTodos(LIMITE_PARADA_MS);
       banco.close();
     },
   };

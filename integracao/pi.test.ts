@@ -3,13 +3,16 @@
 // suíte padrão, porque depende do pi instalado e da configuração do Auditor: `npm run integracao`.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { PACOTE, ambientePi, argumentosPi, binarioPi } from "../src/infra/agente/pi.ts";
+import { HarnessPi } from "../src/infra/agente/harness_pi.ts";
+import { PACOTE } from "../src/infra/agente/pi.ts";
 import { skillsDaEtapaDemanda } from "../src/aplicacao/pi_demanda.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 
+const harness = new HarnessPi();
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));
 after(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -30,7 +33,7 @@ writeFileSync(sonda, SONDA);
 for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_demanda"] as const) {
   test(`o pi das execuções de ${etapa} carrega a guarda, a pergunta e as skills da etapa com a configuração do Auditor`, (t) => {
     const prompt = join(dir, `prompt-${etapa}.md`);
-    const args = argumentosPi({
+    const args = harness.argumentos({
       raiz: dir,
       sessaoPi: `fumaca-${etapa}`,
       skills: skillsDaEtapaDemanda(etapa),
@@ -40,9 +43,9 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
     });
     // A API de extensões não lista as extensões carregadas; com `PI_TIMING=1`, o pi imprime no stderr cada uma que
     // importou e inicializou (`<caminho> factory`), na ordem de carga.
-    const pi = spawnSync(binarioPi(), [...args, "-e", sonda], {
+    const pi = spawnSync(harness.binarioPi(), [...args, "-e", sonda], {
       cwd: dir,
-      env: { ...ambientePi(dir, 1, dir), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
+      env: { ...harness.ambiente(dir, dir, 1), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
       input: "",
       encoding: "utf8",
       timeout: 30_000,
@@ -69,3 +72,26 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
     }
   });
 }
+
+test("a consulta do condutor, sem ferramentas, roda sem as credenciais de hospedagem e do Sonar, e devolve o que o pi respondeu", async () => {
+  const credenciais = ["GH_TOKEN", "GITHUB_TOKEN", "AZURE_DEVOPS_EXT_PAT", "SYSTEM_ACCESSTOKEN", "SONAR_TOKEN"];
+  // Um pi falso que responde com os nomes das variáveis do próprio ambiente.
+  const piQueImprimeOAmbiente = join(dir, "pi-ambiente");
+  writeFileSync(
+    piQueImprimeOAmbiente,
+    '#!/usr/bin/env node\nprocess.stdout.write(Object.keys(process.env).join("\\n"));\n',
+  );
+  chmodSync(piQueImprimeOAmbiente, 0o755);
+  const antes = { ...process.env };
+  for (const nome of credenciais) process.env[nome] = "segredo";
+  process.env.FABRIQUINHA_PI = piQueImprimeOAmbiente;
+  try {
+    const nomes = (await condutor.consultar("oi", undefined, 30_000))?.split("\n") ?? [];
+    assert.ok(nomes.includes("PATH"), "a consulta devolve o texto do pi");
+    for (const nome of credenciais) assert.ok(!nomes.includes(nome), nome);
+  } finally {
+    for (const nome of credenciais) Reflect.deleteProperty(process.env, nome);
+    if (antes.FABRIQUINHA_PI === undefined) delete process.env.FABRIQUINHA_PI;
+    else process.env.FABRIQUINHA_PI = antes.FABRIQUINHA_PI;
+  }
+});

@@ -1,8 +1,6 @@
 // Serviço Encerramento da rodada (comparacao-sdlc-implementacao.md §§4 e 6): conduz o `encerrar_rodada` até o gate do PR.
 // Reserva e agente (documentação), relatório de produtividade, ponta da demanda (D04), PR da rodada, `pr_aberto` e
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, EvidenciaDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
@@ -24,7 +22,7 @@ import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import { anotar } from "../infra/registro.ts";
+import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
@@ -33,7 +31,7 @@ import { atualizarWorktreeRodada, caminhoDaWorktreeRodada } from "../infra/repos
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { perguntarAoPiSemFerramentas } from "../infra/agente/pi.ts";
+import { condutor } from "./trabalho/condutor.ts";
 
 export interface RefRodada {
   demanda_id: string;
@@ -53,7 +51,7 @@ async function resumirContextoDoPR(contexto: string, limite: number): Promise<st
     "Não use títulos (#). Responda só com o resumo.",
     contexto,
   ].join("\n\n");
-  return (await perguntarAoPiSemFerramentas(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
+  return (await condutor.consultar(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
 }
 
 /** A rodada em `encerrar_rodada`, numa demanda em `em_execucao`. */
@@ -206,8 +204,7 @@ async function publicarEConferir(
   const refRodada = formatarRodadaRef(ref);
   const projeto = carregarProjeto(banco, demanda.projeto);
   const raiz = raizDo(banco);
-  mkdirSync(join(raiz, "execucoes"), { recursive: true });
-  const log = join(raiz, "execucoes", `encerramento-${refRodada}.log`);
+  const log = logDaOperacao(raiz, `encerramento-${refRodada}`);
 
   const doRodada = ag.tickets.filter((t) => t.rodada_id === ref.rodada_id);
   const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(banco, demanda.id);

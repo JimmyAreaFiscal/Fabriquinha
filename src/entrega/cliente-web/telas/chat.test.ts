@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { Dialogo } from "../../../aplicacao/gerente.ts";
+import type { Dialogo } from "../../../aplicacao/trabalho/condutor.ts";
 import type { Entrada } from "../../http/rotas/chat.ts";
 import {
   barraDeEstado,
