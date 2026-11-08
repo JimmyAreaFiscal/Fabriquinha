@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
 import { analisarSonar, arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "./sonar.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sonar-")));
@@ -136,7 +137,7 @@ function cenario(): string {
 
 /** A análise da worktree como a revisão a pede: os arquivos alterados vêm do git dela. */
 const analisar = (worktree: string, opcoes: OpcoesSonar = {}) =>
-  analisarSonar("loja-key", worktree, () => arquivosAlterados(worktree), opcoes);
+  analisarSonar("loja-key", worktree, () => arquivosAlterados(new AmbienteHostLocal(), worktree), opcoes);
 
 const issue = (arquivo: string, line?: number) => ({
   component: `loja-key:${arquivo}`,

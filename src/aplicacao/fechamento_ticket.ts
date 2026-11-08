@@ -145,7 +145,7 @@ export async function fecharTicketDemanda(
   const { rodada_id } = ticket;
   const { pasta: worktree } = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
 
-  if (!(await acharCommitTicketDemanda(worktree, ref))) {
+  if (!(await acharCommitTicketDemanda(ambienteDoServico(), worktree, ref))) {
     const e2e = ag.rodadas.find((r) => r.rodada_id === rodada_id)?.e2e ?? false;
     const verificacoes = await (deps.coletarVerificacoes ?? coletarVerificacoes)({
       projeto,

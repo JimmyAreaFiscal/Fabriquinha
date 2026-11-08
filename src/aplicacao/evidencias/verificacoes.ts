@@ -1,5 +1,6 @@
 // Coleta das verificações de um ticket da demanda (execucao_testes, matriz_fitness, relatorio_sonar), sem banco: devolve
 // o resultado para quem chama gravar as evidências e decidir. Não grava, não conclui, não devolve, não falha, não commita.
+import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { VerificacaoDeFitness } from "../../infra/verificacao/fitness.ts";
 import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/verificacao/sonar.ts";
@@ -22,7 +23,7 @@ interface EntradaVerificacoes {
  */
 export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<RegistroDaVerificacao[]> {
   const { projeto, e2e, worktree, opcoes } = entrada;
-  const arquivos = await arquivosAlterados(worktree);
+  const arquivos = await arquivosAlterados(ambienteDoServico(), worktree);
   const contexto = { worktree, limiteMs: opcoes?.limiteMs };
   const sonar = new VerificacaoSonar(projeto.chave_sonarqube, arquivos, opcoes);
   let sonarEmAndamento: Promise<RegistroDaVerificacao> | undefined;

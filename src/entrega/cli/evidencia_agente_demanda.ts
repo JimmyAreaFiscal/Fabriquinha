@@ -14,6 +14,7 @@ import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../nu
 import { validarEvidenciaDaEtapa } from "../../nucleo/evidencia_etapa.ts";
 import { submeterPlano } from "../../nucleo/transicoes_demanda.ts";
 import type { SchemaEvidencia } from "../../nucleo/schemas.ts";
+import { ambienteDoServico } from "../../aplicacao/espaco/ambiente_do_servico.ts";
 import { gerarAula, type Trecho } from "../../aplicacao/evidencias/aula.ts";
 import { guardarAnexos, type Origens } from "../../aplicacao/evidencias/submissao.ts";
 import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
@@ -134,7 +135,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
             "a Fabriquinha gera o HTML; submeta só --dados",
           );
         }
-        const html = await gerarAula(agregado, origens.worktree, validos.trechos as Trecho[]);
+        const html = await gerarAula(ambienteDoServico(), agregado, origens.worktree, validos.trechos as Trecho[]);
         mkdirSync(origens.saida, { recursive: true });
         const aula = join(origens.saida, "aula.html");
         writeFileSync(aula, html);

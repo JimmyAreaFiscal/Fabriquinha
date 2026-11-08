@@ -9,6 +9,8 @@ import type { Ambiente } from "../ambiente/ambiente.ts";
 import { anotar } from "../registro.ts";
 import { git, LIMITE_COMANDO_MS } from "../processo.ts";
 
+export { LIMITE_COMANDO_MS };
+
 /**
  * Bytes do fim do log de cada comando de preparação.
  * ponytail: o corte só protege a memória do serviço; o log da execução não tem limite de tamanho (F5 §3.2).
