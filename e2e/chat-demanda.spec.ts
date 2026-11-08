@@ -6,15 +6,16 @@ import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { falharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
-import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
+import { comPlanoSubmetido } from "../apoio-testes/cenarios_de_demanda.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto } from "./demandas-apoio.ts";
+import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 
-/** O agente do `planejar` envia o plano como o CLI dele o grava: `submeterPlano` na transação da demanda. */
-const submeterPlanoDoAgente = (banco: ReturnType<typeof abrir>, plano: unknown) =>
+/** O agente do `planejar` envia o plano: o plano validado entra no agregado da demanda, na mesma transação. */
+const proporPlanoDoAgente = (banco: ReturnType<typeof abrir>, plano: unknown) =>
   comDemanda(banco, "I-230", (ag) =>
-    submeterPlano(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, { agora: new Date().toISOString() }),
+    comPlanoSubmetido(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, new Date().toISOString()),
   );
 
 /** Mata o pi cujo diretório de trabalho está na raiz (a execução da demanda não grava o pgid). */
@@ -149,7 +150,7 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
     rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
   };
-  submeterPlanoDoAgente(banco, plano);
+  proporPlanoDoAgente(banco, plano);
   banco.close();
 
   await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
@@ -183,7 +184,7 @@ test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", asy
     rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
   };
-  submeterPlanoDoAgente(banco, plano);
+  proporPlanoDoAgente(banco, plano);
   banco.close();
 
   await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
@@ -218,7 +219,7 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
     rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
   };
-  submeterPlanoDoAgente(banco, plano);
+  proporPlanoDoAgente(banco, plano);
   banco.close();
 
   // Sem pi vivo, como depois de um reinício: o pi morre e o planejar fica Falhou com o gate aberto.
@@ -258,4 +259,70 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
   };
   leitura.close();
   expect(n).toBe(1);
+});
+
+const demandaDoItem = (item: string): string => /^I-\d+/.exec(item)?.[0] ?? item;
+
+/**
+ * Uma sessão já encerrada para cada demanda do cenário das Pendências, que não traz sessão: a I-301 e a I-303 ganham o
+ * ticket de que a sessão precisa (o planejar aberto e o de ajustes concluído, que não geram Pendência) e só a I-301
+ * é interativa, para o chat dela mostrar o gate; as outras são autônomas e não somam diálogo ao cenário.
+ */
+function semearUmaSessaoPorDemanda(raiz: string): Map<string, string> {
+  const banco = abrir(raiz);
+  const instante = "2026-10-11T12:00:00.000Z";
+  const ticket = banco.prepare(
+    `INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
+     VALUES (?, 1, ?, ?, ?, ?)`,
+  );
+  ticket.run("I-301", "planejar", "aberto", instante, null);
+  ticket.run("I-303", "ajustar_resultado", "concluido", instante, 1);
+  const sessaoDe = new Map<string, string>();
+  for (const { item } of PENDENCIAS_ESPERADAS) {
+    const demanda = demandaDoItem(item);
+    const sessao = `sessao-${demanda}`;
+    sessaoDe.set(demanda, sessao);
+    banco
+      .prepare(
+        "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, 1, ?, 'c1')",
+      )
+      .run(sessao, demanda, demanda === "I-301" ? "interativo" : "autonomo");
+    banco
+      .prepare("INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES (?, ?, ?, ?, 0)")
+      .run(`execucao-${demanda}`, sessao, instante, instante);
+  }
+  banco.close();
+  return sessaoDe;
+}
+
+test("I-275: o chat de cada demanda do cenário mostra as Pendências dela, com o rótulo do gate do planejamento", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semearPendencias(fabriquinha.raiz);
+  const sessaoDe = semearUmaSessaoPorDemanda(fabriquinha.raiz);
+
+  for (const [demanda, sessao] of sessaoDe) {
+    const cabecalho = await pagina.request.get(`${fabriquinha.base}/api/sessoes/${sessao}`);
+    const { pendencias } = (await cabecalho.json()) as { pendencias: { item: string; tipo: string }[] };
+    const esperadas = PENDENCIAS_ESPERADAS.filter((p) => demandaDoItem(p.item) === demanda);
+    expect(pendencias.map(({ item, tipo }) => ({ item, tipo }))).toEqual(esperadas);
+
+    // A mesma lista, vista na página da sessão (o evento "estado" ao vivo redesenha a mesma barra).
+    await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
+    const naPagina = pagina.locator(".pendencia-do-chat");
+    await expect(naPagina).toHaveCount(esperadas.length);
+    expect(
+      await naPagina.evaluateAll((nos) =>
+        nos.map((no) => ({ item: no.getAttribute("data-item"), tipo: no.getAttribute("data-tipo") })),
+      ),
+    ).toEqual(esperadas);
+  }
+
+  // O gate do planejamento tem o rótulo do tipo gate_humano, não o "gate da demanda" de antes; o bloqueio, o da falha.
+  await pagina.goto(`${fabriquinha.base}/sessions/sessao-I-301`);
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · gate");
+  await expect(pagina.locator("body")).not.toContainText("gate da demanda");
+  await pagina.goto(`${fabriquinha.base}/sessions/sessao-I-302`);
+  await expect(pagina.locator(".estado-sessao .pill")).toHaveText("aguarda você · falha");
 });

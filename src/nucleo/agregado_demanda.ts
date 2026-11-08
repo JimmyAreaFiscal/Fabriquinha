@@ -6,6 +6,7 @@ import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
 import { PullRequest } from "./espaco_de_trabalho.ts";
+import { TipoEvidencia } from "./evidencia.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import {
   EstadoDemanda,
@@ -79,39 +80,8 @@ const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, cr
 const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
 const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
 
-/**
- * Os tipos do catálogo do agente, `custos_realizados` e `plano` (§4.1) e os quatro tipos de etapa novos. A lista é
- * literal: importar `evidencia_etapa.ts` ou `nucleo/schemas.ts` violaria o domínio; o teste garante que é a união
- * de `TipoEvidencia` com `TipoEvidenciaEtapa`.
- */
-export const TipoEvidenciaAgregado = z.enum([
-  "comportamento",
-  "criterios_aceite",
-  "desenho_solucao",
-  "prototipo",
-  "relatorio_complexidade",
-  "relatorio_impactos_arquitetura",
-  "execucao_testes",
-  "matriz_fitness",
-  "relatorio_sonar",
-  "arquivos_alterados",
-  "explicacao_fitness",
-  "comprovacao_criterios",
-  "mensagem_pr",
-  "aula_codigo",
-  "video_demonstracao",
-  "relatorio_produtividade",
-  "pr_aberto",
-  "custos_realizados",
-  "plano",
-  "testes_estresse",
-  "analise_seguranca",
-  "arvore_prs_criterios_custos",
-  "demonstracao_limpeza",
-]);
-
 /** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
-export const IdDono = Id.nullish().transform((v) => v ?? undefined);
+const IdDono = Id.nullish().transform((v) => v ?? undefined);
 
 /** Evidência de qualquer dono: `rodada_id` e `ticket_id` nulos indicam a própria demanda; `dados` segue opaco (F3 valida). */
 export const EvidenciaDemanda = z
@@ -119,7 +89,7 @@ export const EvidenciaDemanda = z
     demanda_id: DemandaId,
     rodada_id: IdDono,
     ticket_id: IdDono,
-    tipo: TipoEvidenciaAgregado,
+    tipo: TipoEvidencia,
     dados: z.record(z.string(), z.json()),
     autor: Ator,
     em: Instante,

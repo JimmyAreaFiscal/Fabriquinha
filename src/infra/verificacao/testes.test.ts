@@ -43,7 +43,7 @@ const rodada = { e2e: true, arquivos: ["back/a.ts"] };
 test("CA-1: teste com saída 0 aprova, com o código de saída e o caminho", async () => {
   const v = await verificarTestes(entrada());
   assert.equal(v.tipo, "execucao_testes");
-  assert.equal(v.aprovada, true);
+  assert.equal(v.passou, true);
   assert.deepEqual(v.falhas, []);
   const [c] = (v.dados as { comandos: Record<string, unknown>[] }).comandos;
   assert.equal(c?.codigoSaida, 0);
@@ -55,7 +55,7 @@ test("CA-2: saída diferente de 0 é reprovação técnica", async () => {
   const v = await verificarTestes(
     entrada({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: "exit 1" }] }),
   );
-  assert.equal(v.aprovada, false);
+  assert.equal(v.passou, false);
   assert.deepEqual(v.falhas, [{ classe: "tecnica", motivo: "exit 1 saiu com código 1", comando: "exit 1" }]);
 });
 
@@ -64,7 +64,7 @@ test("CA-3: comando inexistente é infraestrutura, com o comando e a mensagem do
   const v = await verificarTestes(
     entrada({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: comando }] }),
   );
-  assert.equal(v.aprovada, undefined);
+  assert.equal(v.passou, undefined);
   assert.equal(v.falhas[0]?.classe, "infraestrutura");
   assert.equal(v.falhas[0].causa, "comando_ausente");
   assert.match(v.falhas[0].motivo, /comando-que-nao-existe-na-fabriquinha: .*not found/);
@@ -74,7 +74,7 @@ test("CA-4: passar do tempo limite é infraestrutura; morte por sinal é técnic
   const lento = await verificarTestes(
     entrada({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: "sleep 5" }] }, { limiteMs: 100 }),
   );
-  assert.equal(lento.aprovada, undefined);
+  assert.equal(lento.passou, undefined);
   assert.deepEqual(lento.falhas, [
     { classe: "infraestrutura", causa: "tempo_limite", motivo: "sleep 5: tempo limite", comando: "sleep 5" },
   ]);
@@ -82,7 +82,7 @@ test("CA-4: passar do tempo limite é infraestrutura; morte por sinal é técnic
   const morto = await verificarTestes(
     entrada({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: "kill -9 $$" }] }),
   );
-  assert.equal(morto.aprovada, false);
+  assert.equal(morto.passou, false);
 });
 
 test("CA-5: todos os comandos rodam, cada um na pasta da sua linguagem", async () => {
@@ -103,37 +103,37 @@ test("CA-5: todos os comandos rodam, cada um na pasta da sua linguagem", async (
 
 test("CA-6: build do E2E com saída diferente de 0 reprova e a execução não roda", async () => {
   const v = await verificarTestes(entrada(comE2E("exit 2", "echo rodou"), rodada));
-  assert.equal(v.aprovada, false);
+  assert.equal(v.passou, false);
   assert.equal(v.falhas[0]?.classe, "tecnica");
   assert.equal(v.logs.length, 2);
 });
 
 test("CA-3: build do E2E inexistente é infraestrutura", async () => {
   const v = await verificarTestes(entrada(comE2E("inexistente-na-fabriquinha", "true"), rodada));
-  assert.equal(v.aprovada, undefined);
+  assert.equal(v.passou, undefined);
   assert.equal(v.falhas[0]?.classe, "infraestrutura");
 });
 
 test("CA-7 e CA-8: sem a marca e2e, ou sem arquivo que case com o glob, o E2E não roda", async () => {
   const config = comE2E("exit 2", "exit 2");
-  assert.equal((await verificarTestes(entrada(config, { arquivos: ["back/a.ts"] }))).aprovada, true);
+  assert.equal((await verificarTestes(entrada(config, { arquivos: ["back/a.ts"] }))).passou, true);
   assert.equal(
-    (await verificarTestes(entrada(config, { e2e: true, arquivos: ["front/a.ts", "back/a.md"] }))).aprovada,
+    (await verificarTestes(entrada(config, { e2e: true, arquivos: ["front/a.ts", "back/a.md"] }))).passou,
     true,
   );
 });
 
 test("CA-9, CA-10 e CA-11: a execução do E2E sai 0, codigo_falha ou outro código", async () => {
-  const passou = await verificarTestes(entrada(comE2E("true", "exit 0"), rodada));
-  assert.equal(passou.aprovada, true);
-  assert.equal(passou.logs.length, 3);
+  const limpo = await verificarTestes(entrada(comE2E("true", "exit 0"), rodada));
+  assert.equal(limpo.passou, true);
+  assert.equal(limpo.logs.length, 3);
 
   const reprovou = await verificarTestes(entrada(comE2E("true", "exit 7"), rodada));
-  assert.equal(reprovou.aprovada, false);
+  assert.equal(reprovou.passou, false);
   assert.equal(reprovou.falhas[0]?.classe, "tecnica");
 
   const inesperado = await verificarTestes(entrada(comE2E("true", "exit 9"), rodada));
-  assert.equal(inesperado.aprovada, undefined);
+  assert.equal(inesperado.passou, undefined);
   assert.deepEqual(inesperado.falhas, [
     {
       classe: "infraestrutura",
@@ -144,7 +144,7 @@ test("CA-9, CA-10 e CA-11: a execução do E2E sai 0, codigo_falha ou outro cód
   ]);
 
   const morto = await verificarTestes(entrada(comE2E("true", "kill -9 $$"), rodada));
-  assert.equal(morto.aprovada, undefined);
+  assert.equal(morto.passou, undefined);
 });
 
 test("a conclusão das linguagens é avisada mesmo sem linguagens configuradas", async () => {
@@ -160,7 +160,7 @@ test("a conclusão das linguagens é avisada mesmo sem linguagens configuradas",
     ),
   );
   assert.equal(avisos, 1);
-  assert.equal(resultado.aprovada, true);
+  assert.equal(resultado.passou, true);
   assert.deepEqual(resultado.logs, []);
 });
 

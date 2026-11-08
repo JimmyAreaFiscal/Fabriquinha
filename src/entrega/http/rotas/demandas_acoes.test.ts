@@ -347,7 +347,7 @@ async function comSessao() {
     id: string;
   };
   // A conversa é a do chat da sessão do ticket; o pi de pé e ocioso espera o Auditor.
-  await ate(async () => (await chat(c, sessao)).sessao.motivo === "conversa");
+  await ate(async () => (await chat(c, sessao)).sessao.pendencia?.tipo === "dialogo_do_agente");
   return { ...c, execucao: r.json<{ sessao: string }>().sessao, sessao };
 }
 
@@ -356,7 +356,7 @@ interface Entrada {
   fabriquinha?: true;
 }
 const chat = async ({ pedir }: Cenario, sessao: string) =>
-  (await pedir(`/api/sessoes/${sessao}`)).json<{ sessao: { motivo?: string }; conversa: Entrada[] }>();
+  (await pedir(`/api/sessoes/${sessao}`)).json<{ sessao: { pendencia?: { tipo: string } }; conversa: Entrada[] }>();
 const conversa = async (c: Cenario, sessao: string) => JSON.stringify((await chat(c, sessao)).conversa);
 async function ate(condicao: () => Promise<boolean>): Promise<void> {
   for (let i = 0; i < 500 && !(await condicao()); i++) await dormir(20);

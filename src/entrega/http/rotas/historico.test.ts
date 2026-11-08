@@ -135,7 +135,10 @@ test("ativas: o ticket que falhou aguarda o Auditor, com o motivo", async () => 
   );
   banco.exec("UPDATE processo_do_trabalho SET fim = '2026-10-11T12:50:00.000Z', falha = 1 WHERE id = 'x3'");
   const [s2] = (await sessoes("escopo=ativas")) as SessaoDeDemanda[];
-  assert.deepEqual([s2?.sessao, s2?.estado, s2?.motivo, s2?.resultado], ["s2", "aguardando_humano", "falha", "falha"]);
+  assert.deepEqual(
+    [s2?.sessao, s2?.estado, s2?.pendencia?.tipo, s2?.resultado],
+    ["s2", "aguardando_humano", "item_bloqueado", "falha"],
+  );
 });
 
 test("filtro inválido dá 422", async () => {

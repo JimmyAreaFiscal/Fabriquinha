@@ -24,7 +24,7 @@ type FalhaDeInfraestrutura = Extract<Falha, { classe: "infraestrutura" }>;
 export interface RegistroDaVerificacao {
   tipo: "execucao_testes" | "matriz_fitness" | "relatorio_sonar";
   /** `true` sem falhas; `false` se todas são técnicas; `undefined` se há infraestrutura. */
-  aprovada: boolean | undefined;
+  passou: boolean | undefined;
   falhas: Falha[];
   dados: Record<string, unknown>;
   logs: { nome: string; texto: string }[];
@@ -60,9 +60,9 @@ export const aprovacao = (falhas: readonly Falha[]): boolean | undefined =>
   falhas.length === 0 ? true : falhas.some((f) => f.classe === "infraestrutura") ? undefined : false;
 
 /** Qualquer infraestrutura vence a reprovação, como na aprovação: a causa é a da primeira e o motivo junta todas. */
-function resultadoDoRegistro({ aprovada, falhas, dados, logs }: RegistroDaVerificacao): ResultadoDaVerificacao {
-  if (aprovada) return { tipo: "passou", relatorio: { dados, logs } };
-  if (aprovada === false) {
+function resultadoDoRegistro({ passou, falhas, dados, logs }: RegistroDaVerificacao): ResultadoDaVerificacao {
+  if (passou) return { tipo: "passou", relatorio: { dados, logs } };
+  if (passou === false) {
     return {
       tipo: "reprovacao",
       motivo: falhas.map((f) => f.motivo).join("; "),

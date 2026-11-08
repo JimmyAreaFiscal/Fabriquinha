@@ -6,32 +6,24 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/cancelamento_demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import {
-  type EntradaEvidenciaDemanda,
-  submeterEvidenciaDemanda,
-  TipoEvidenciaDemanda,
-} from "../nucleo/evidencia_demanda.ts";
+import { TIPOS_DA_DEMANDA } from "../nucleo/evidencia_demanda.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { type ContextoDemanda, editarDemanda, enviarDemanda, registrarDemanda } from "../nucleo/transicoes_demanda.ts";
-import { type Classe, LIMITE, type RegraArquivos, schemaDe, schemaDeEtapa } from "../nucleo/schemas.ts";
-import { guardarBytes } from "../armazenamento/arquivos.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda, criarDemandaNova } from "../armazenamento/demandas.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import { gravarAnexos, registrarSessoesExternas } from "../armazenamento/evidencia_demanda.ts";
+import { registrarSessoesExternas } from "../armazenamento/evidencia_demanda.ts";
 import { projetoExistente } from "../armazenamento/projetos.ts";
+import { submeterEvidencia as submeterEvidenciaAvaliada } from "./evidencia/submeter.ts";
+import type { Origens } from "./evidencias/submissao.ts";
 import { cancelandoEmCascata } from "./gates/cancelamento_em_cascata.ts";
 
-/** Um anexo já em memória: abrir o arquivo do disco, com a defesa de origem, é de quem chama. */
-const Anexo = z.object({
-  nome: z.string().min(1).max(200),
-  mime: z.string().min(1),
-  conteudo: z.instanceof(Buffer),
-});
+/** `arquivos` são caminhos: abrir cada um, com a defesa de origem, é de `guardarAnexos`. */
 const EntradaEvidencia = z.object({
-  tipo: TipoEvidenciaDemanda,
+  tipo: z.enum(TIPOS_DA_DEMANDA),
   dados: z.unknown(),
   rodada_id: z.number().int().positive().optional(),
-  arquivos: z.array(Anexo).default([]),
+  arquivos: z.array(z.string()).default([]),
 });
 /** @testes tipo que o teste usa para montar a entrada */
 export type EntradaEvidencia = z.input<typeof EntradaEvidencia>;
@@ -86,81 +78,25 @@ export const cancelar = (
 ): { demanda: AgregadoDemanda; canceladas: string[] } =>
   traduzir(() => cancelandoEmCascata(banco, id, ator, ctx, (ag) => cancelarDemanda(ag, ator, ctx)));
 
-/** F3 §3.1 pelo mime informado; a classificação pelos bytes é de quem abre o arquivo. */
-const CLASSES_DO_MIME: readonly [prefixo: string, classe: Classe][] = [
-  ["video/", "video"],
-  ["image/", "imagem"],
-  ["text/html", "html"],
-  ["text/plain", "texto"],
-];
-
-/** Quantidade, nomes, classe pelo mime, tamanho e `temClasse` contra as regras de arquivos do schema do tipo. */
-function conferirAnexos(tipo: string, regra: RegraArquivos, anexos: readonly z.infer<typeof Anexo>[]): void {
-  if (anexos.length < regra.min) {
-    throw new ErroDeRegra(
-      `${tipo} precisa de pelo menos ${String(regra.min)} arquivo(s), e veio ${String(anexos.length)}`,
-      "anexe o que falta",
-    );
-  }
-  if (regra.max !== undefined && anexos.length > regra.max) {
-    throw new ErroDeRegra(
-      `${tipo} aceita no máximo ${String(regra.max)} arquivo(s), e vieram ${String(anexos.length)}`,
-      "submeta sem os excedentes",
-    );
-  }
-  const repetido = anexos.find((a, i) => anexos.findIndex((b) => b.nome === a.nome) !== i);
-  if (repetido) throw new ErroDeRegra(`dois anexos se chamam ${repetido.nome}`, "renomeie um deles");
-  const classes = anexos.map((a) => {
-    const classe = CLASSES_DO_MIME.find(([prefixo]) => a.mime.toLowerCase().startsWith(prefixo))?.[1];
-    if (!classe || !regra.classes.includes(classe)) {
-      throw new ErroDeRegra(
-        `o anexo ${a.nome} (${a.mime}) não é de uma classe aceita por ${tipo}`,
-        `${tipo} aceita só ${regra.classes.join(" ou ")}`,
-      );
-    }
-    if (a.conteudo.length > LIMITE[classe]) {
-      throw new ErroDeRegra(`o anexo ${a.nome} passa de ${String(LIMITE[classe])} bytes`, "anexe um arquivo menor");
-    }
-    return classe;
-  });
-  const exigida = regra.temClasse;
-  if (exigida && !classes.some((c) => exigida.classes.includes(c))) {
-    throw new ErroDeRegra(exigida.mensagem, `anexe também um arquivo ${exigida.classes.join(" ou ")}`);
-  }
-}
-
 /**
- * CA-8 a CA-12 e CA-15: valida `dados` e anexos pelo schema do tipo, roda a regra pura do domínio antes de guardar
- * qualquer byte, e grava evidência, anexos e sessões externas numa transação só. O aviso é de sessão já contada.
+ * CA-8 a CA-12 e CA-15: a submissão segue o caminho único de evidência (Avaliador, guarda dos anexos e gravação);
+ * as sessões externas entram na mesma transação. O aviso é de sessão já contada. A recusa vira ErroDeRegra.
  */
 export const submeterEvidencia = (
   banco: DatabaseSync,
   id: string,
   entrada: EntradaEvidencia,
   autor: Ator,
-  ctx: ContextoDemanda,
+  origens: Origens,
 ): { demanda: AgregadoDemanda; avisos: string[] } =>
   traduzir(() => {
     const { tipo, dados, arquivos, rodada_id } = EntradaEvidencia.parse(entrada);
-    const schema = tipo === "custos_realizados" ? schemaDeEtapa(tipo) : schemaDe(tipo);
-    const lidos = schema.dados.safeParse(dados);
-    if (!lidos.success) {
-      throw new ErroDeRegra(campos(lidos.error.issues, ["dados"]), "corrija o campo indicado e submeta de novo");
-    }
-    conferirAnexos(tipo, schema.arquivos, arquivos);
-    const submeter = (ag: AgregadoDemanda) =>
-      submeterEvidenciaDemanda(
-        ag,
-        { tipo, rodada_id, dados: lidos.data as EntradaEvidenciaDemanda["dados"] },
-        autor,
-        ctx.agora,
-      );
-    submeter(carregarDemanda(banco, id)); // recusa antes de guardar qualquer byte
-    const guardados = arquivos.map((a) => ({ caminho: a.nome, mime: a.mime, ...guardarBytes(banco, a.conteudo) }));
-    let avisos: string[] = [];
-    const demanda = comDemanda(banco, id, submeter, () => {
-      gravarAnexos(banco, { demanda_id: id, rodada_id, tipo }, guardados);
-      if (tipo === "custos_realizados") ({ avisos } = registrarSessoesExternas(banco, id));
+    const dono = rodada_id === undefined ? Endereco.daDemanda(id) : Endereco.daRodada(id, rodada_id);
+    const submissao = { tipo, dono, produtor: autor, dados, anexos: arquivos };
+    const avisos = escrever(banco, () => {
+      const avaliacao = submeterEvidenciaAvaliada(banco, submissao, { origens });
+      if (avaliacao.resultado === "recusada") throw new ErroDeRegra(avaliacao.motivo, "corrija e submeta de novo");
+      return tipo === "custos_realizados" ? registrarSessoesExternas(banco, id).avisos : [];
     });
-    return { demanda, avisos };
+    return { demanda: carregarDemanda(banco, id), avisos };
   });

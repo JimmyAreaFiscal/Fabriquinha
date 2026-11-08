@@ -18,6 +18,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { configuracao } from "../armazenamento/servico.ts";
 import { comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
+import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import type { RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
@@ -44,7 +45,7 @@ after(() => {
 const D = "I-206";
 const BRANCH = "fabriquinha/I-206";
 
-/** Demanda em encerramento (revisão integral aprovada), com a rodada concluída e o `encerrar_demanda` aberto. */
+/** Demanda em encerramento (revisão integral aceita), com a rodada concluída e o `encerrar_demanda` aberto. */
 async function cenario() {
   const c = criarRepositorioDeTeste([], "develop");
   const { banco } = abrirBancoTemporario(c.raiz);
@@ -112,14 +113,8 @@ async function cenario() {
   const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 
-  const aprovada = (tipo: RegistroDaVerificacao["tipo"]): RegistroDaVerificacao => ({
-    tipo,
-    aprovada: true,
-    falhas: [],
-    dados: {},
-    logs: [],
-  });
-  /** Agente falso: escreve na worktree da demanda, encerra a execução e fecha o ticket com verificações aprovadas. */
+  const verificacaoQuePassa = (tipo: RegistroDaVerificacao["tipo"]) => verificacaoDeTeste(tipo, true, undefined, []);
+  /** Agente falso: escreve na worktree da demanda, encerra a execução e fecha o ticket com verificações que passaram. */
   const iniciarExecucaoFalsa: NonNullable<DepsDespacho["iniciarProcesso"]> = (b, ref) => {
     const id = randomUUID();
     const sessao = { ...ref, id: randomUUID(), modo: "autonomo" as const, conversa_referencia: "c" };
@@ -143,7 +138,9 @@ async function cenario() {
         {},
         {
           coletarVerificacoes: () =>
-            Promise.resolve((["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(aprovada)),
+            Promise.resolve(
+              (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(verificacaoQuePassa),
+            ),
         },
       );
       return undefined;
@@ -165,7 +162,7 @@ async function cenario() {
   };
 }
 
-test("CA-15: a revisão integral aprovada vai a concluida pelo ciclo depois do merge humano, sem decisão no gate", async () => {
+test("CA-15: a revisão integral aceita vai a concluida pelo ciclo depois do merge humano, sem decisão no gate", async () => {
   const c = await cenario();
   await c.ciclo();
   assert.equal(c.ag().encerramento?.aguardando_merge_humano, true);

@@ -165,6 +165,15 @@ export function semearDemandas(raiz: string): void {
   banco.close();
 }
 
+/** Faz `demanda_id` depender de `depende_demanda_id`, que ainda não satisfaz a dependência. */
+export function semearDependenciaEntreDemandas(raiz: string, demanda_id: string, depende_demanda_id: string): void {
+  const banco = abrir(raiz);
+  banco
+    .prepare("INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES (?, ?)")
+    .run(demanda_id, depende_demanda_id);
+  banco.close();
+}
+
 /** Uma demanda sem ticket algum: nada em execução. */
 export function semearDemandaOciosa(raiz: string): void {
   const banco = abrir(raiz);

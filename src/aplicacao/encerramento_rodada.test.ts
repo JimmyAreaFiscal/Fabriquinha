@@ -26,6 +26,8 @@ import {
   garantirWorktreeRodada,
 } from "../infra/repositorio/worktree-demanda.ts";
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
+import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
+import { schemaDoTipo } from "../nucleo/evidencia.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
 
@@ -245,6 +247,7 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
   assert.match(pr.corpo, /I-206\.T4/);
   assert.doesNotMatch(`${pr.titulo}\n${pr.corpo}`, /T-\d/);
   assert.deepEqual(evidencia("pr_aberto")?.dados, {
+    hospedagem: "github",
     id: "1",
     url: "https://github.com/org/loja/pull/1",
     branch: BRANCH_RODADA,
@@ -282,6 +285,31 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     ],
   );
   assert.equal(relatorio.total.custoIncompleto, true);
+});
+
+test("o pr_aberto gravado pelo encerramento passa no schema, sem anexo", async () => {
+  const { banco, evidencia } = await cenario();
+
+  await concluirEncerramentoRodada(banco, REF);
+
+  const gravada = evidencia("pr_aberto");
+  assert.ok(gravada);
+  assert.equal(schemaDoTipo("pr_aberto").dados.safeParse(gravada.dados).success, true);
+  assert.deepEqual(
+    anexosDaDemanda(banco, DEMANDA).filter((a) => a.ticket_id === 8),
+    [],
+  );
+});
+
+test("pr_aberto inválido (a hospedagem devolve uma url sem endereço): a Tentativa falha e a evidência não é gravada", async () => {
+  const { banco, ticket, evidencia, estado } = await cenario();
+  hospedagem.responder("pr create", "/pull/7");
+
+  await assert.rejects(concluirEncerramentoRodada(banco, REF), (e: unknown) => e instanceof ErroDeRegra);
+
+  assert.equal(ticket()?.estado, "falhou");
+  assert.equal(evidencia("pr_aberto"), undefined);
+  assert.equal(estado(), "encerrar_rodada");
 });
 
 test("CA-3: a ponta nova da demanda entra na rodada antes do PR, e o merge da D04 não barra a publicação", async () => {

@@ -1,10 +1,10 @@
-// Confere a aprovação de uma revisão pela evidência (comparacao-sdlc-implementacao.md §§4, 8): `aprovada` é derivada dos
+// Confere a aprovação de uma revisão pela evidência (comparacao-sdlc-implementacao.md §§4, 8): o `veredito` é derivado dos
 // `dados` na hora, sem I/O. Recusa citando a evidência, a fitness, o achado ou o cenário que impede a aprovação.
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
-import { catalogoDaEtapa, type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_etapa.ts";
+import { CATALOGO_ETAPAS, catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { schemaDe, schemaDeEtapa, TipoEvidencia, type TipoSchemaEtapa } from "../nucleo/schemas.ts";
+import { evidenciasPendentes, schemaDoTipo } from "../nucleo/evidencia.ts";
 
 type Dados = Record<string, unknown>;
 interface Linha {
@@ -12,14 +12,6 @@ interface Linha {
   codigoSaida: number | null;
 }
 const ALTA = new Set(["alta", "critica"]);
-
-/** `aprovada` do schema do tipo; os tipos sem regra binária ficam `undefined`. */
-function aprovadaDosDados(tipo: string, dados: Dados): boolean | undefined {
-  const legado = TipoEvidencia.safeParse(tipo);
-  // Nas revisões, todo tipo do catálogo fora de `TipoEvidencia` tem schema de etapa (testes_estresse, analise_seguranca).
-  const schema = legado.success ? schemaDe(legado.data) : schemaDeEtapa(tipo as TipoSchemaEtapa);
-  return schema.aprovada?.(dados);
-}
 
 /** O que reprovou a evidência, para a recusa dizer o que corrigir. */
 function detalhe(tipo: string, dados: Dados): string {
@@ -52,34 +44,25 @@ export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void 
     );
   const { demanda_id, etapa } = ticket;
   const doTicket = ag.evidencias.filter((e) => e.ticket_id === ticket_id && e.rodada_id === undefined);
-  const evidencias: EvidenciaEtapa[] = [];
-  for (const e of doTicket) {
-    const produtor = catalogoDaEtapa(etapa).find((i) => i.tipo === e.tipo)?.produtor;
-    if (produtor === undefined) continue; // tipo fora do catálogo da etapa não entra na conferência
+  const reprovadas: { tipo: string; dados: Dados }[] = [];
+  for (const { tipo } of catalogoDaEtapa(etapa)) {
+    const e = doTicket.find((x) => x.tipo === tipo);
+    if (e === undefined) continue;
     const dados = e.dados as Dados;
-    if ((e.tipo === "testes_estresse" || e.tipo === "analise_seguranca") && dados.aplicavel === false) {
-      const resultado = schemaDeEtapa(e.tipo).dados.safeParse(dados);
+    if ((tipo === "testes_estresse" || tipo === "analise_seguranca") && dados.aplicavel === false) {
+      const resultado = schemaDoTipo(tipo).dados.safeParse(dados);
       if (!resultado.success) {
         throw new ErroDeRegra(
-          `a evidência ${e.tipo} está marcada como não se aplica sem justificativa`,
+          `a evidência ${tipo} está marcada como não se aplica sem justificativa`,
           "informe a justificativa de por que não se aplica",
         );
       }
     }
-    evidencias.push({
-      demanda_id,
-      rodada_id: undefined,
-      ticket_id,
-      tipo: e.tipo,
-      produtor,
-      aprovada: aprovadaDosDados(e.tipo, dados),
-      dados,
-    });
+    if (schemaDoTipo(tipo).veredito?.(dados) === "nao_atende") reprovadas.push({ tipo, dados });
   }
-  const { ausentes, reprovadas } = pendenciasDoTicket({ demanda_id, ticket_id, etapa }, evidencias);
   const motivos = [
-    ...ausentes.map((t) => `${t} ausente`),
-    ...reprovadas.map((t) => `${t} reprovada (${detalhe(t, evidencias.find((e) => e.tipo === t)?.dados as Dados)})`),
+    ...evidenciasPendentes(ag, ticket, CATALOGO_ETAPAS).map((t) => `${t} ausente`),
+    ...reprovadas.map(({ tipo, dados }) => `${tipo} reprovada (${detalhe(tipo, dados)})`),
   ];
   if (motivos.length > 0) {
     throw new ErroDeRegra(

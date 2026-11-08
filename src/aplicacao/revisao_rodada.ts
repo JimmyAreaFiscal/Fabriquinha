@@ -1,26 +1,24 @@
 // Revisão de rodada (comparacao-sdlc-implementacao.md §§4, 6): as evidências que cabem à Fabriquinha antes do pi.
-import { matchesGlob } from "node:path";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
-import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
-import { raizDo } from "../armazenamento/banco.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { escrever, raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
-import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { guardarBytes } from "../armazenamento/arquivos.ts";
-import { type Anexo, gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
+import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
 import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
+import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
-
-type Dados = EntradaEvidenciaDemanda["dados"];
 
 /** `arquivos_alterados` e `matriz_fitness` da rodada do ticket revisor, gravadas como evidência dele (regravar substitui). */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
@@ -64,7 +62,7 @@ export async function prepararRevisaoRodada(
   const previstos = [...new Set(ag.caminhos_ticket.filter((c) => delRodada.has(c.ticket_id)).map((c) => c.caminho))];
   const casa = (a: (typeof arquivos)[number], padrao: string) =>
     matchesGlob(a.caminho, padrao) || (a.caminhoAnterior !== undefined && matchesGlob(a.caminhoAnterior, padrao));
-  const alterados: Dados = {
+  const alterados = {
     base,
     head,
     arquivos: arquivos.map((a) => ({
@@ -85,35 +83,35 @@ export async function prepararRevisaoRodada(
     ...l,
     log: `${String(l.nome)}.log`,
   }));
-  const anexos: Anexo[] = fitness.logs.map(({ nome, texto }) => ({
-    caminho: nome,
-    mime: "text/plain",
-    ...guardarBytes(banco, Buffer.from(texto)),
-  }));
 
-  const agora = new Date().toISOString();
-  // Uma transação só: as duas evidências e os anexos entram juntos ou nenhuma entra.
-  comDemanda(
-    banco,
-    demanda_id,
-    (a) => {
-      const com = submeterEvidenciaDemanda(
-        a,
-        { tipo: "arquivos_alterados", dados: alterados, ticket_id },
-        FABRIQUINHA,
-        agora,
-      );
-      return submeterEvidenciaDemanda(
-        com,
-        { tipo: "matriz_fitness", dados: { linhas }, ticket_id },
-        FABRIQUINHA,
-        agora,
-      );
-    },
-    () => {
-      gravarAnexos(banco, { demanda_id, ticket_id, tipo: "matriz_fitness" }, anexos);
-    },
-  );
+  // Os logs só existem em memória; a pasta temporária é a única origem de onde `submeterEvidencia` os aceita.
+  const pastaDosLogs = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-logs-")));
+  try {
+    const caminhosDosLogs = fitness.logs.map(({ nome, texto }) => {
+      const caminho = join(pastaDosLogs, nome);
+      writeFileSync(caminho, texto);
+      return caminho;
+    });
+    const origens = {
+      worktree: pastaDosLogs,
+      saida: pastaDosLogs,
+      fora: "da pasta dos logs",
+      copie: "a pasta dos logs",
+    };
+    const dono = Endereco.doTicket(demanda_id, ticket_id);
+    // Uma transação só: as duas evidências entram juntas ou nenhuma entra.
+    escrever(banco, () => {
+      for (const [tipo, dados, anexos] of [
+        ["arquivos_alterados", alterados, []],
+        ["matriz_fitness", { linhas }, caminhosDosLogs],
+      ] as const) {
+        const avaliacao = submeterEvidencia(banco, { tipo, dono, produtor: FABRIQUINHA, dados, anexos }, { origens });
+        if (avaliacao.resultado === "recusada") throw new ErroDeRegra(avaliacao.motivo, "corrija a revisão da rodada");
+      }
+    });
+  } finally {
+    rmSync(pastaDosLogs, { recursive: true, force: true });
+  }
 }
 
 /** Reserva e executa o `revisar_rodada` atual da rodada, com as evidências da Fabriquinha preparadas antes do pi. */

@@ -1,8 +1,10 @@
 // Gestão de Demandas em banco temporário real (CA-1 a CA-29).
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { test } from "node:test";
+import { after, test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
@@ -42,8 +44,19 @@ const desenho = {
   resumo: "r",
   arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }],
 };
-const anexoHtml = { nome: "d.html", mime: "text/html; charset=utf-8", conteudo: Buffer.from("<p>x</p>") };
-const html = [anexoHtml];
+const raizDosAnexos = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-gestao-demandas-")));
+after(() => {
+  rmSync(raizDosAnexos, { recursive: true, force: true });
+});
+const origens = { worktree: raizDosAnexos, saida: raizDosAnexos, fora: "da pasta do teste", copie: "a pasta do teste" };
+const HTML = "<!doctype html><p>x</p>";
+/** Cada anexo vai para uma pasta própria, para dois anexos poderem ter o mesmo nome. */
+const anexo = (nome: string, conteudo: string | Buffer): string => {
+  const pasta = mkdtempSync(join(raizDosAnexos, "a-"));
+  writeFileSync(join(pasta, nome), conteudo);
+  return join(pasta, nome);
+};
+const html = () => [anexo("d.html", HTML)];
 const custos = (sessao = "ext1") => ({
   sessoes: [
     {
@@ -70,11 +83,11 @@ const submeter = (
   dados: unknown,
   arquivos?: gestao.EntradaEvidencia["arquivos"],
   quem = autor,
-) => gestao.submeterEvidencia(b, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, quem, ctx);
+) => gestao.submeterEvidencia(b, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, quem, origens);
 
 const completar = (b: DatabaseSync, id: string) => {
   submeter(b, id, "criterios_aceite", criterios);
-  submeter(b, id, "desenho_solucao", desenho, html);
+  submeter(b, id, "desenho_solucao", desenho, html());
   submeter(b, id, "custos_realizados", custos());
 };
 
@@ -187,7 +200,7 @@ test("CA-7: outra sessão não envia a demanda", () => {
 test("CA-8: outra sessão não submete evidência", () => {
   const b = novoBanco();
   const id = registrar(b);
-  assert.throws(() => submeter(b, id, "criterios_aceite", criterios, undefined, outra), ErroDeEscopo);
+  assert.throws(() => submeter(b, id, "criterios_aceite", criterios, undefined, outra), ErroDeRegra);
   assert.deepEqual(evidencias(b, id, "criterios_aceite"), []);
 });
 
@@ -196,7 +209,7 @@ test("CA-9: dados fora do schema recusam apontando o campo; tipo inválido tamb�
   const id = registrar(b);
   assert.throws(
     () => submeter(b, id, "criterios_aceite", { criterios: [{ id: "x" }] }),
-    (e: Error) => e instanceof ErroDeRegra && e.message.startsWith("dados.criterios.0.id:"),
+    (e: Error) => e instanceof ErroDeRegra && e.message.includes("dados.criterios[0].id"),
   );
   assert.throws(
     () => submeter(b, id, "plano", {}),
@@ -219,34 +232,34 @@ test("CA-10: submeter de novo substitui a evidência", () => {
 test("CA-11: o anexo fica no armazenamento pelo SHA-256 e a evidência o guarda", () => {
   const b = novoBanco();
   const id = registrar(b);
-  submeter(b, id, "desenho_solucao", desenho, html);
+  submeter(b, id, "desenho_solucao", desenho, html());
   const linha = b.prepare("SELECT caminho, sha256, mime, bytes FROM arquivo_evidencia").get() as {
     caminho: string;
     sha256: string;
     bytes: number;
   };
   assert.equal(linha.caminho, "d.html");
-  assert.equal(linha.bytes, 8);
-  assert.equal(readFileSync(caminhoArquivo(b, linha.sha256)).toString(), "<p>x</p>");
+  assert.equal(linha.bytes, HTML.length);
+  assert.equal(readFileSync(caminhoArquivo(b, linha.sha256)).toString(), HTML);
 });
 
 test("anexos: quantidade, repetido, classe, tamanho e temClasse seguem o schema do tipo", () => {
   const b = novoBanco();
   const id = registrar(b);
-  const texto = (nome: string, conteudo = Buffer.from("t")) => ({ nome, mime: "text/plain", conteudo });
-  const cada: [string, string, gestao.EntradaEvidencia["arquivos"], RegExp][] = [
+  const texto = (nome: string, conteudo: string | Buffer = "t") => anexo(nome, conteudo);
+  const cada: [string, string, string[], RegExp][] = [
     ["desenho_solucao", "desenho", [], /pelo menos 1/],
-    ["desenho_solucao", "desenho", [...html, ...html], /no máximo 1/],
-    ["custos_realizados", "custos", html, /no máximo 0/],
-    ["desenho_solucao", "desenho", [texto("a.txt")], /não é de uma classe aceita/],
-    ["desenho_solucao", "desenho", [{ ...anexoHtml, mime: "application/x" }], /não é de uma classe aceita/],
-    ["desenho_solucao", "desenho", [{ ...anexoHtml, conteudo: Buffer.alloc(5 * 1024 * 1024 + 1) }], /passa de/],
+    ["desenho_solucao", "desenho", [...html(), ...html()], /no máximo 1/],
+    ["custos_realizados", "custos", html(), /no máximo 0/],
+    ["desenho_solucao", "desenho", [texto("a.txt")], /é texto, e desenho_solucao aceita só html/],
+    ["desenho_solucao", "desenho", [texto("a.html", Buffer.alloc(5 * 1024 * 1024 + 1, "a"))], /aceitam até/],
     ["prototipo", "proto", [texto("a.txt")], /vídeo ou print/],
     ["prototipo", "proto", [texto("a.txt"), texto("a.txt")], /dois anexos se chamam a.txt/],
   ];
   const dados: Record<string, unknown> = { desenho, custos: custos(), proto: { descricao: "d" } };
   for (const [tipo, d, arquivos, erro] of cada) assert.throws(() => submeter(b, id, tipo, dados[d], arquivos), erro);
-  submeter(b, id, "prototipo", dados.proto, [{ nome: "p.png", mime: "image/png", conteudo: Buffer.from("x") }]);
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  submeter(b, id, "prototipo", dados.proto, [anexo("p.png", png)]);
   assert.equal(evidencias(b, id, "prototipo").length, 1);
   assert.equal(b.prepare("SELECT count(*) AS n FROM arquivo_evidencia").get()?.n, 1);
 });
@@ -270,7 +283,7 @@ test("CA-SDLC-24: custos_realizados com rodada_id vira evidência da rodada e n�
     `INSERT INTO rodada VALUES ('${id}', 1, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'fabriquinha/${id}-1')`,
   );
   const entrada = { tipo: "custos_realizados", dados: custos("ext-r1"), rodada_id: 1, arquivos: [] };
-  gestao.submeterEvidencia(b, id, entrada as gestao.EntradaEvidencia, autor, ctx);
+  gestao.submeterEvidencia(b, id, entrada as gestao.EntradaEvidencia, autor, origens);
   assert.deepEqual(
     evidencias(b, id, "custos_realizados").map((e) => e.rodada_id),
     [undefined, 1],

@@ -245,13 +245,13 @@ export class VerificacaoSonar extends Verificacao {
           ]
         : [];
       const dados = { chave_sonarqube: this.#chaveSonarqube, ceTaskId, arquivosAnalisados: analisados, issues };
-      return { tipo, aprovada: aprovacao(falhas), falhas, dados, logs: [] };
+      return { tipo, passou: aprovacao(falhas), falhas, dados, logs: [] };
     } catch (erro) {
       if (!(erro instanceof ErroDeRegra)) throw erro;
       const falhas: Falha[] = [
         { classe: "infraestrutura", causa: "servico_externo_inacessivel", motivo: erro.message },
       ];
-      return { tipo, aprovada: aprovacao(falhas), falhas, dados: {}, logs: [] };
+      return { tipo, passou: aprovacao(falhas), falhas, dados: {}, logs: [] };
     }
   }
 }

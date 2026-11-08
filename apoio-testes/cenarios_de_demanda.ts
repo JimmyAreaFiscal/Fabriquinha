@@ -1,8 +1,10 @@
 // Agregados de demanda prontos em cada estado do Ciclo de Vida, para os testes que partem de uma demanda já avançada.
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../src/nucleo/agregado_demanda.ts";
 import type { Ator } from "../src/nucleo/ator.ts";
+import { CICLO_DA_DEMANDA } from "../src/nucleo/ciclos.ts";
+import { validarPlano } from "../src/nucleo/transicoes_demanda.ts";
 import type { EstadoDemanda } from "../src/nucleo/primitivos.ts";
 import { gravarProjeto } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
@@ -16,6 +18,38 @@ import { AmbienteHostLocal } from "../src/infra/ambiente/ambiente_host_local.ts"
 const ambiente = new AmbienteHostLocal();
 
 export const INSTANTE_DO_CENARIO = "2026-01-01T00:00:00.000Z";
+
+/**
+ * O agregado com a evidência já aceita, para preparar estado sem passar pelo Avaliador (`dados` fica como vier); a do
+ * mesmo tipo e dono sai. Quem testa a regra de submissão usa `submeterEvidencia` ou o `AvaliadorDeEvidencia`.
+ */
+export function comEvidencia(
+  ag: AgregadoDemanda,
+  entrada: Pick<EvidenciaDemanda, "tipo" | "dados"> & Partial<Pick<EvidenciaDemanda, "rodada_id" | "ticket_id">>,
+  autor: Ator = ag.demanda.criada_por,
+  em: string = INSTANTE_DO_CENARIO,
+): AgregadoDemanda {
+  const { tipo, dados, rodada_id, ticket_id } = entrada;
+  // O agregado persistido não traz o dono ausente como `undefined`; sem as chaves, o relido e o devolvido se igualam.
+  const nova = {
+    demanda_id: ag.demanda.id,
+    tipo,
+    dados,
+    autor,
+    em,
+    ...(rodada_id !== undefined && { rodada_id }),
+    ...(ticket_id !== undefined && { ticket_id }),
+  } as EvidenciaDemanda;
+  const mesmoDono = (e: EvidenciaDemanda) => e.tipo === tipo && e.rodada_id === rodada_id && e.ticket_id === ticket_id;
+  return { ...ag, evidencias: [...ag.evidencias.filter((e) => !mesmoDono(e)), nova] };
+}
+
+/** O plano validado pelo `planejar` vira evidência do ticket de planejamento, e a demanda vai a `gate_planejamento`. */
+export function comPlanoSubmetido(ag: AgregadoDemanda, entrada: unknown, agente: Ator, em: string): AgregadoDemanda {
+  const { plano, ticket } = validarPlano(ag, entrada, agente);
+  const comPlano = comEvidencia(ag, { tipo: "plano", dados: plano, ticket_id: ticket.ticket_id }, agente, em);
+  return { ...comPlano, demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "gate_planejamento", em) };
+}
 
 /** O ticket aberto da `etapa`; `extra` sobrescreve qualquer campo. */
 export const montarTicket = (demanda_id: string, ticket_id: number, etapa: string, extra: object = {}) => ({

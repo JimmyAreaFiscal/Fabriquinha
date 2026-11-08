@@ -228,7 +228,7 @@ test("CA-9 e CA-10: reaplicar a mesma aprovação é no-op; nota diferente é re
   await assert.rejects(aprovarPRRodada(banco, REF, 4, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
 });
 
-test("rodada concluída sem decisão aprovada reprova a aprovação", async () => {
+test("rodada concluída sem decisão favorável reprova a aprovação", async () => {
   const { banco } = await cenario("concluida");
   await assert.rejects(aprovarPRRodada(banco, REF, 4, AUDITOR), /outra decisão/);
 });

@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
 import type { RegistroDaVerificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
+import { verificacaoDeTeste } from "../apoio-testes/verificacoes_de_teste.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
@@ -14,7 +14,8 @@ import { fecharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
 import { iniciarOuRetomarPlanejamento } from "../src/aplicacao/planejamento.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
-import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
+import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, proporPlanoDoAgente } from "./apoio.ts";
+import { comEvidencia } from "../apoio-testes/cenarios_de_demanda.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
 export const pi = instalarPiFalso(base);
@@ -50,23 +51,16 @@ export const abrirPortao = () => {
 };
 export const pisAteAgora = () => pi.prompts().length;
 
-const verif = (tipo: RegistroDaVerificacao["tipo"], aprovada: boolean): RegistroDaVerificacao => ({
-  tipo,
-  aprovada,
-  falhas: aprovada ? [] : [{ classe: "tecnica", motivo: "reprovado no teste", comando: "c" }],
-  dados: {},
-  logs: [{ nome: `${tipo}.log`, texto: `log de ${tipo}` }],
-});
-export const verificacoes = (aprovada: boolean): RegistroDaVerificacao[] =>
-  (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((t) => verif(t, aprovada));
+export const verificacoes = (passou: boolean): RegistroDaVerificacao[] =>
+  (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((t) => verificacaoDeTeste(t, passou));
 
-/** Despacho que roda o pi de verdade e fecha o ticket com as verificações dadas (o `aprovadas()` é lido a cada fechamento). */
-export const despacho = (aprovadas: () => boolean = () => true): DepsDespacho => ({
+/** Despacho que roda o pi de verdade e fecha o ticket com as verificações dadas (o `passaram()` é lido a cada fechamento). */
+export const despacho = (passaram: () => boolean = () => true): DepsDespacho => ({
   iniciarProcesso: (banco, t, opcoes) =>
     iniciarExecucaoDemanda(banco, t, {
       ...opcoes,
       fechar: (b, ref, r) =>
-        fecharTicketDemanda(b, ref, r, { coletarVerificacoes: () => Promise.resolve(verificacoes(aprovadas())) }),
+        fecharTicketDemanda(b, ref, r, { coletarVerificacoes: () => Promise.resolve(verificacoes(passaram())) }),
     }),
 });
 
@@ -93,7 +87,7 @@ export async function planejarDemanda(c: Cenario, id: string, rodadas: RodadaPla
       descricao: "d",
     })),
   );
-  submeterPlanoDoAgente(
+  proporPlanoDoAgente(
     c.banco,
     id,
     {
@@ -151,13 +145,7 @@ export const atual = (c: Cenario, id: string, etapa: string, rodada = 1) => {
 export function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [string, object][]): void {
   comDemanda(c.banco, id, (ag) =>
     evidencias.reduce(
-      (a, [tipo, dados]) =>
-        submeterEvidenciaDemanda(
-          a,
-          { tipo, dados, ticket_id } as EntradaEvidenciaDemanda,
-          a.demanda.criada_por,
-          agora(),
-        ),
+      (a, [tipo, dados]) => comEvidencia(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, agora()),
       ag,
     ),
   );

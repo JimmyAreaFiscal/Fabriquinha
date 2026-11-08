@@ -26,7 +26,7 @@ Você desenha e roda os cenários cabíveis à demanda; um cenário que quebra r
 - `justificativa`: obrigatória se `aplicavel` é false.
 - `cenarios`: pelo menos um se `aplicavel` é true; cada um com `nome`, `objetivo`, `comando`, `resultado` (`passou` ou `quebrou`) e `observado`.
 
-A Fabriquinha calcula a aprovação: nenhum cenário `quebrou`. Não a informe.
+A Fabriquinha deriva o `veredito` dos dados: `atende` se nenhum cenário `quebrou`, `nao_atende` se algum quebrou. Não o informe.
 Logs de texto podem ser anexados com `--arquivo`, sem obrigação.
 
 ```json

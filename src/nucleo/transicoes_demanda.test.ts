@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { clonarAgregadoDemanda as structuredClone } from "../../apoio-testes/clonar_agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
@@ -15,7 +16,6 @@ import {
   tentativasDoTicket,
 } from "./tentativa.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { submeterEvidenciaDemanda } from "./evidencia_demanda.ts";
 import { selecionarTrabalho } from "./selecao_trabalho.ts";
 import {
   editarDemanda,
@@ -27,7 +27,7 @@ import {
   retomarTicketFalhoPorInfraestrutura,
   registrarDemanda,
   registrarFalhaTicket,
-  submeterPlano,
+  validarPlano,
 } from "./transicoes_demanda.ts";
 import { conferirPullRequestRodada, concluirImplementacoesRodada } from "./transicoes_rodada.ts";
 
@@ -41,7 +41,7 @@ const ev = (tipo: string, extra = {}) => ({ tipo: tipo as never, dados: { v: 1 }
 const registrada = () => registrarDemanda(reg, autora, { agora: t0 });
 const completa = (): AgregadoDemanda =>
   ["criterios_aceite", "desenho_solucao", "custos_realizados"].reduce(
-    (ag, tipo) => submeterEvidenciaDemanda(ag, ev(tipo), autora, t0),
+    (ag, tipo) => comEvidencia(ag, ev(tipo), autora, t0),
     registrada(),
   );
 const enviada = () => enviarDemanda(completa(), autora, { agora: t1 });
@@ -76,15 +76,12 @@ test("editar: muda só o informado; rejeita vazio, outra sessão e demanda envia
   assert.deepEqual(env, antes);
 });
 
-test("CA-6: outra sessão não submete evidência nem envia", () => {
-  const ag = registrada();
-  assert.throws(() => submeterEvidenciaDemanda(ag, ev("criterios_aceite"), outra, t0), ErroDeEscopo);
+test("CA-6: outra sessão não envia", () => {
   assert.throws(() => enviarDemanda(completa(), outra, { agora: t1 }), ErroDeEscopo);
-  assert.deepEqual(ag.evidencias, []);
 });
 
 test("CA-2: envio incompleto lista todas as pendências e não muda nada", () => {
-  const ag = submeterEvidenciaDemanda(registrada(), ev("desenho_solucao"), autora, t0);
+  const ag = comEvidencia(registrada(), ev("desenho_solucao"), autora, t0);
   const antes = structuredClone(ag);
   assert.throws(
     () => enviarDemanda(ag, autora, { agora: t1 }),
@@ -99,19 +96,6 @@ test("CA-3: envio completo congela e vai a gate_demanda; reenvio é reprovado", 
   assert.equal(env.demanda.estado, "gate_demanda");
   assert.equal(env.demanda.estado_alterado_em, t1);
   assert.throws(() => enviarDemanda(env, autora, { agora: t1 }), ErroDeRegra);
-  assert.throws(() => submeterEvidenciaDemanda(env, ev("criterios_aceite"), autora, t1), ErroDeRegra);
-});
-
-test("CA-8: depois do envio entram custos e evidência de ticket sem mexer na definição", () => {
-  const env = enviada();
-  const definicao = env.evidencias.filter((e) => e.tipo !== "custos_realizados");
-  const ag = submeterEvidenciaDemanda(env, ev("custos_realizados"), outra, t1);
-  const ag2 = submeterEvidenciaDemanda(ag, ev("mensagem_pr", { ticket_id: 1 }), outra, t1);
-  assert.deepEqual(
-    ag2.evidencias.filter((e) => e.tipo !== "custos_realizados" && e.ticket_id === undefined),
-    definicao,
-  );
-  assert.equal(ag2.demanda.enviada, true);
 });
 
 test("CA-3: ferramenta exige Slug e o mesmo autor registra, edita, submete e envia com sessão preservada", () => {
@@ -122,7 +106,7 @@ test("CA-3: ferramenta exige Slug e o mesmo autor registra, edita, submete e env
   assert.equal(ag.demanda.criada_por.sessao, " sessao-demo-197 ");
   ag = editarDemanda(ag, { titulo: "novo" }, autor);
   for (const tipo of ["criterios_aceite", "desenho_solucao", "custos_realizados"]) {
-    ag = submeterEvidenciaDemanda(ag, ev(tipo), autor, t0);
+    ag = comEvidencia(ag, ev(tipo), autor, t0);
   }
   assert.equal(enviarDemanda(ag, autor, { agora: t1 }).demanda.enviada, true);
   assert.throws(() => editarDemanda(ag, { titulo: "x" }, { ...autor, sessao: " outra " }), ErroDeEscopo);
@@ -160,11 +144,10 @@ const planoV = (m: Record<string, unknown> = {}) => ({
 });
 const emPlanejamento = (): AgregadoDemanda => {
   const definida = ["criterios_aceite", "desenho_solucao", "custos_realizados"].reduce(
-    (ag, tipo) =>
-      submeterEvidenciaDemanda(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
+    (ag, tipo) => comEvidencia(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
     registrada(),
   );
-  const aprovada = GATES.gate_demanda.decidir(
+  const decisaoAprovando = GATES.gate_demanda.decidir(
     enviarDemanda(definida, autora, { agora: t1 }),
     Endereco.daDemanda("I-1"),
     { resultado: "aprovado" },
@@ -172,25 +155,15 @@ const emPlanejamento = (): AgregadoDemanda => {
     { agora: t1 },
   );
   return {
-    ...aprovada,
-    tickets: aprovada.tickets.map((t) => (t.etapa === "planejar" ? { ...t, estado: "em_execucao" as const } : t)),
+    ...decisaoAprovando,
+    tickets: decisaoAprovando.tickets.map((t) =>
+      t.etapa === "planejar" ? { ...t, estado: "em_execucao" as const } : t,
+    ),
   };
 };
-const submetido = () => submeterPlano(emPlanejamento(), planoV(), agente, { agora: t2 });
+const submetido = () => comPlanoSubmetido(emPlanejamento(), planoV(), agente, t2);
 const aprovarPlanejamento = (ag: AgregadoDemanda) =>
   GATES.gate_planejamento.decidir(ag, Endereco.daDemanda("I-1"), { resultado: "aprovado" }, AUDITOR, { agora: t2 });
-
-test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai a gate_planejamento", () => {
-  const ag = emPlanejamento();
-  const antes = structuredClone(ag);
-  const novo = submeterPlano(ag, planoV(), agente, { agora: t2 });
-  assert.deepEqual(ag, antes);
-  assert.equal(novo.demanda.estado, "gate_planejamento");
-  assert.equal(novo.evidencias.filter((e) => e.tipo === "plano" && e.ticket_id === 2).length, 1);
-  assert.deepEqual(novo.evidencias.find((e) => e.tipo === "plano")?.autor, agente);
-  assert.deepEqual(novo.rodadas, []);
-  assert.equal(novo.tickets.length, 2);
-});
 
 test("CA-2: ticket de implementação sem rodada é reprovado na submissão, sem mutação", () => {
   const ag = emPlanejamento();
@@ -200,9 +173,9 @@ test("CA-2: ticket de implementação sem rodada é reprovado na submissão, sem
   const e = planoV({
     tickets: [plano.tickets[0], plano.tickets[1], semRodada, { ...semRodada, ticket_id: 9, rodada_id: 2 }],
   });
-  assert.throws(() => submeterPlano(ag, e, agente, { agora: t2 }), /não têm rodada/);
+  assert.throws(() => validarPlano(ag, e, agente), /não têm rodada/);
   const vazia = planoV({ tickets: [plano.tickets[0], plano.tickets[1]] });
-  assert.throws(() => submeterPlano(ag, vazia, agente, { agora: t2 }), /rodada 2 não tem ticket/);
+  assert.throws(() => validarPlano(ag, vazia, agente), /rodada 2 não tem ticket/);
   assert.deepEqual(ag, antes);
 });
 
@@ -212,7 +185,7 @@ test("CA-2: caminho absoluto Windows com barras normais é reprovado na submiss�
   const plano = planoV();
   for (const caminho of ["C:/fora/segredo.ts", "c:/fora/segredo.ts"]) {
     const e = planoV({ tickets: [{ ...plano.tickets[0], caminhos: [caminho] }, ...plano.tickets.slice(1)] });
-    assert.throws(() => submeterPlano(ag, e, agente, { agora: t2 }), /caminho relativo/);
+    assert.throws(() => validarPlano(ag, e, agente), /caminho relativo/);
   }
   assert.deepEqual(ag, antes);
 });
@@ -221,7 +194,7 @@ test("CA-2 e CA-3: submissão reprovada sem mutação", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);
   const falha = (e: unknown, ator: Ator = agente, base = ag) => {
-    assert.throws(() => submeterPlano(base, e, ator, { agora: t2 }));
+    assert.throws(() => validarPlano(base, e, ator));
   };
   falha(
     planoV({ rodadas: [], tickets: [{ demanda_id: "I-1", ticket_id: 1, titulo: "a", descricao: "d", rodada_id: 5 }] }),
@@ -229,7 +202,7 @@ test("CA-2 e CA-3: submissão reprovada sem mutação", () => {
   falha(planoV({ demanda_id: "I-2", rodadas: [], tickets: [] }));
   falha(planoV({ criterios: ["CA-9"] }));
   falha(planoV({ criterios: ["CA-1"] }), { tipo: "auditor" });
-  assert.throws(() => submeterPlano(ag, planoV({ criterios: ["CA-1"] }), FABRIQUINHA, { agora: t2 }), {
+  assert.throws(() => validarPlano(ag, planoV({ criterios: ["CA-1"] }), FABRIQUINHA), {
     name: "ErroDeEscopo",
     message: "só o agente do ticket de planejamento pode submeter o plano (peça à sessão de planejamento)",
   });
@@ -238,9 +211,9 @@ test("CA-2 e CA-3: submissão reprovada sem mutação", () => {
   falha(planoV(), agente, { ...ag, tickets: [ag.tickets[0] as never] });
   assert.deepEqual(ag, antes);
   const semDefinicao = { ...ag, evidencias: [] };
-  assert.throws(() => submeterPlano(semDefinicao, planoV(), agente, { agora: t2 }), /CA-1/);
+  assert.throws(() => validarPlano(semDefinicao, planoV(), agente), /CA-1/);
   const malFormada = { ...ag, evidencias: ag.evidencias.map((e) => ({ ...e, dados: { x: 1 } })) };
-  assert.throws(() => submeterPlano(malFormada, planoV(), agente, { agora: t2 }), /CA-1/);
+  assert.throws(() => validarPlano(malFormada, planoV(), agente), /CA-1/);
 });
 
 const tk2 = (ag: AgregadoDemanda) => {
@@ -362,10 +335,10 @@ const intacto = (fn: () => unknown, ag: AgregadoDemanda) => {
 
 test("T-965: ticket de planejamento falho bloqueia a submissão até o Auditor reabrir", () => {
   const antes = falhar(emPlanejamento(), 2);
-  intacto(() => submeterPlano(antes, planoV(), agente, { agora: t2 }), antes);
+  intacto(() => validarPlano(antes, planoV(), agente), antes);
   const reaberto = reabrirTicket(antes, { ticket_id: 2, instrucao: "retome" }, AUDITOR, { agora: t2 });
   assert.equal(reaberto.demanda.estado, "planejar");
-  assert.equal(submeterPlano(reaberto, planoV(), agente, { agora: t2 }).demanda.estado, "gate_planejamento");
+  assert.doesNotThrow(() => validarPlano(reaberto, planoV(), agente));
 });
 
 test("T-965: ticket da demanda falho bloqueia o envio até o Auditor reabrir", () => {

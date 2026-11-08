@@ -1444,7 +1444,7 @@ input.erro {
   font-size: var(--fs-md);
 }
 
-/* A evidência na caixa: a marca de aprovada, a tabela, os anexos e o JSON. */
+/* A evidência na caixa: a marca de aceita, a tabela, os anexos e o JSON. */
 .evidencia {
   display: flex;
   flex-direction: column;
@@ -3763,6 +3763,15 @@ svg.barras :not(.hit) {
 }
 .pista-item.fechada .gaveta {
   display: none;
+}
+.gaveta .pendencias {
+  margin: 0 0 var(--s-2);
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+}
+.gaveta .pendencias li {
+  padding: var(--s-1) var(--s-2);
 }
 .gaveta table {
   width: 100%;

@@ -1,32 +1,10 @@
 // Catálogo de evidências por etapa do ticket, produtor e dono (comparacao-sdlc-implementacao.md §§7.4, 8.1 e 8.2).
-// `dados` segue opaco e `aprovada` vem calculada do F3: o domínio só exige que ela exista onde há regra.
+// A validação de dono, tipo, produtor e `dados` é do `AvaliadorDeEvidencia`.
 import { z } from "zod";
-import { IdDono, TicketDemanda } from "./agregado_demanda.ts";
 import { type Ator } from "./ator.ts";
-import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { OBRIGATORIAS_DEMANDA, TipoEvidenciaDemanda } from "./evidencia_demanda.ts";
+import { TipoEvidencia } from "./evidencia.ts";
+import { OBRIGATORIAS_DEMANDA, TIPOS_DA_DEMANDA } from "./evidencia_demanda.ts";
 import { EtapaTicket } from "./primitivos.ts";
-
-export const TipoEvidenciaEtapa = z.enum([
-  ...TipoEvidenciaDemanda.options,
-  "plano",
-  "execucao_testes",
-  "matriz_fitness",
-  "relatorio_sonar",
-  "arquivos_alterados",
-  "explicacao_fitness",
-  "comprovacao_criterios",
-  "mensagem_pr",
-  "aula_codigo",
-  "relatorio_produtividade",
-  "pr_aberto",
-  "video_demonstracao",
-  "testes_estresse",
-  "analise_seguranca",
-  "arvore_prs_criterios_custos",
-  "demonstracao_limpeza",
-]);
-export type TipoEvidenciaEtapa = z.infer<typeof TipoEvidenciaEtapa>;
 
 /** Quem produz a evidência da etapa: qualquer ator, menos o Auditor. */
 const Produtor = z.enum(["externo", "agente", "fabriquinha"]) satisfies z.ZodType<Ator["tipo"]>;
@@ -46,7 +24,7 @@ type RegraAprovacaoEtapa = z.infer<typeof RegraAprovacaoEtapa>;
 /** @testes tipo que o teste usa para montar a entrada */
 export const ItemCatalogoEtapa = z.object({
   etapa: EtapaTicket,
-  tipo: TipoEvidenciaEtapa,
+  tipo: TipoEvidencia,
   produtor: Produtor,
   obrigatoria: z.boolean(),
   regraAprovacao: RegraAprovacaoEtapa.nullable(),
@@ -57,7 +35,7 @@ export type ItemCatalogoEtapa = z.infer<typeof ItemCatalogoEtapa>;
 type Regra = RegraAprovacaoEtapa | null;
 const item = (
   etapa: EtapaTicket,
-  tipo: TipoEvidenciaEtapa,
+  tipo: TipoEvidencia,
   produtor: Produtor,
   obrigatoria = true,
   regraAprovacao: Regra = null,
@@ -77,7 +55,7 @@ const verificacoes = (etapa: EtapaTicket): ItemCatalogoEtapa[] => [
 ];
 
 const POR_ETAPA: Readonly<Record<EtapaTicket, readonly ItemCatalogoEtapa[]>> = {
-  entender_e_desenhar: TipoEvidenciaDemanda.options.map((t) =>
+  entender_e_desenhar: TIPOS_DA_DEMANDA.map((t) =>
     item("entender_e_desenhar", t, "externo", (OBRIGATORIAS_DEMANDA as readonly string[]).includes(t)),
   ),
   planejar: [item("planejar", "plano", "agente")],
@@ -111,117 +89,3 @@ const POR_ETAPA: Readonly<Record<EtapaTicket, readonly ItemCatalogoEtapa[]>> = {
 export const CATALOGO_ETAPAS: readonly ItemCatalogoEtapa[] = Object.values(POR_ETAPA).flat();
 
 export const catalogoDaEtapa = (etapa: EtapaTicket): readonly ItemCatalogoEtapa[] => POR_ETAPA[etapa];
-
-/** @testes tipo que o teste usa para montar a entrada */
-export const ContextoEvidenciaEtapa = TicketDemanda.pick({ demanda_id: true, ticket_id: true, etapa: true });
-export type ContextoEvidenciaEtapa = z.infer<typeof ContextoEvidenciaEtapa>;
-
-const EntradaEvidenciaEtapa = z.object({
-  demanda_id: ContextoEvidenciaEtapa.shape.demanda_id,
-  rodada_id: IdDono,
-  ticket_id: IdDono,
-  tipo: TipoEvidenciaEtapa,
-  produtor: Produtor,
-  aprovada: z.boolean().optional(),
-  dados: z.unknown(),
-});
-export type EvidenciaEtapa = z.output<typeof EntradaEvidenciaEtapa>;
-type EntradaEvidenciaEtapa = EvidenciaEtapa;
-
-const lerContexto = (contexto: ContextoEvidenciaEtapa): ContextoEvidenciaEtapa => {
-  const lido = ContextoEvidenciaEtapa.safeParse(contexto);
-  if (!lido.success) {
-    throw new ErroDeRegra(
-      `contexto de evidência inválido: ${lido.error.issues.map((i) => i.message).join("; ")}`,
-      "informe demanda_id, ticket_id e etapa válidos",
-    );
-  }
-  return lido.data;
-};
-
-/** Ticket executor da etapa; as evidências da etapa `demanda` pertencem à demanda (§8.1). */
-const donoEsperado = (c: ContextoEvidenciaEtapa): number | undefined =>
-  c.etapa === "entender_e_desenhar" ? undefined : c.ticket_id;
-
-/** Metadados normalizados; produtor informado não autentica autoria e `aprovada` é calculada pelo F3. */
-export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrada: unknown): EvidenciaEtapa {
-  const ctx = lerContexto(contexto);
-  const lida = EntradaEvidenciaEtapa.safeParse(entrada);
-  if (!lida.success) {
-    throw new ErroDeRegra(
-      `evidência inválida: ${lida.error.issues.map((i) => i.message).join("; ")}`,
-      "informe demanda_id, tipo, produtor e, se houver, aprovada booleano",
-    );
-  }
-  const e = lida.data;
-  const onde = `T-${String(ctx.ticket_id)} (${ctx.etapa})`;
-  if (e.demanda_id !== ctx.demanda_id) {
-    throw new ErroDeRegra(
-      `a evidência é da demanda ${e.demanda_id}, não da ${ctx.demanda_id}`,
-      "use a demanda do ticket",
-    );
-  }
-  if (e.rodada_id !== undefined || e.ticket_id !== donoEsperado(ctx)) {
-    throw new ErroDeRegra(
-      `a evidência de ${onde} tem dono errado`,
-      ctx.etapa === "entender_e_desenhar"
-        ? "evidência da etapa demanda pertence à demanda: sem rodada_id nem ticket_id"
-        : `informe ticket_id ${String(ctx.ticket_id)} e nenhum rodada_id`,
-    );
-  }
-  const alvo = catalogoDaEtapa(ctx.etapa).find((i) => i.tipo === e.tipo);
-  if (alvo === undefined) {
-    throw new ErroDeRegra(
-      `${onde} não aceita evidência ${e.tipo}`,
-      `use um de ${
-        catalogoDaEtapa(ctx.etapa)
-          .map((i) => i.tipo)
-          .join(", ") || "nenhum tipo"
-      }`,
-    );
-  }
-  if (e.produtor !== alvo.produtor) {
-    throw new ErroDeEscopo(
-      `a evidência ${e.tipo} de ${onde} é produzida por ${alvo.produtor}`,
-      `não por ${e.produtor}`,
-    );
-  }
-  if (alvo.regraAprovacao !== null && e.aprovada === undefined) {
-    throw new ErroDeRegra(
-      `a evidência ${e.tipo} de ${onde} exige aprovada`,
-      `calcule pela regra ${alvo.regraAprovacao} e informe true ou false`,
-    );
-  }
-  return e;
-}
-
-/**
- * Pré-condição: snapshot ativo válido, com uma evidência por tipo/dono; não valida nem escolhe versões.
- * Obrigatórias ausentes e presentes reprovadas, na ordem do catálogo. O(n), espaço O(1) pelo catálogo fixo.
- */
-export function pendenciasDoTicket(
-  contexto: ContextoEvidenciaEtapa,
-  evidencias: readonly EvidenciaEtapa[],
-): { ausentes: TipoEvidenciaEtapa[]; reprovadas: TipoEvidenciaEtapa[] } {
-  const ctx = lerContexto(contexto);
-  const dono = donoEsperado(ctx);
-  const itens = catalogoDaEtapa(ctx.etapa);
-  const catalogados = new Set(itens.map((i) => i.tipo));
-  const presentes = new Set<TipoEvidenciaEtapa>();
-  const reprovados = new Set<TipoEvidenciaEtapa>();
-  for (const e of evidencias) {
-    if (
-      e.demanda_id === ctx.demanda_id &&
-      e.rodada_id === undefined &&
-      e.ticket_id === dono &&
-      catalogados.has(e.tipo)
-    ) {
-      presentes.add(e.tipo);
-      if (e.aprovada === false) reprovados.add(e.tipo);
-    }
-  }
-  return {
-    ausentes: itens.filter((i) => i.obrigatoria && !presentes.has(i.tipo)).map((i) => i.tipo),
-    reprovadas: itens.filter((i) => reprovados.has(i.tipo)).map((i) => i.tipo),
-  };
-}

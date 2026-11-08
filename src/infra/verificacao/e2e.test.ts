@@ -48,6 +48,6 @@ test("build com saída diferente de 0 reprova e a execução não roda; o tipo �
 
   assert.equal(verificacao.tipo, "e2e");
   assert.equal(registro.tipo, "execucao_testes");
-  assert.equal(registro.aprovada, false);
+  assert.equal(registro.passou, false);
   assert.equal(registro.logs.length, 1);
 });

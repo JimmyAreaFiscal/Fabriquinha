@@ -1,6 +1,8 @@
 // CLI externo da demanda (CA-1 a CA-19) contra banco real numa raiz temporária.
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -231,6 +233,84 @@ test("anexo fora da pasta do comando é rejeitado", async () => {
     /fora da pasta do comando/,
   );
   assert.equal(existsSync(fora), true);
+});
+
+const EVIDENCIA = (id: string, tipo: string, dados: string, arquivo: string) => [
+  "demanda",
+  "evidencia",
+  id,
+  tipo,
+  "--dados",
+  dados,
+  "--arquivo",
+  arquivo,
+];
+const anexosGuardados = (env: NodeJS.ProcessEnv) =>
+  bancoDaRaiz.get(env.FABRIQUINHA_ROOT)?.prepare("SELECT caminho, mime, sha256 FROM arquivo_evidencia").all() ?? [];
+
+test("anexo que é link simbólico para fora da pasta é recusado e nada é guardado (O_NOFOLLOW)", async () => {
+  const env = novaRaiz();
+  const id = await registrar(env);
+  const segredo = join(base, "segredo.html");
+  writeFileSync(segredo, HTML);
+  symlinkSync(segredo, join(pasta, "link.html"));
+  falha(
+    await cli(env, EVIDENCIA(id, "desenho_solucao", "desenho.json", "link.html")),
+    1,
+    /link\.html é um link simbólico/,
+  );
+  assert.deepEqual(anexosGuardados(env), []);
+  assert.deepEqual(json(await cli(env, ["demanda", "ver", id])).evidencias, []);
+});
+
+test("anexo trocado por link durante a submissão nunca guarda o conteúdo de fora (/proc/self/fd)", async () => {
+  const env = novaRaiz();
+  const id = await registrar(env);
+  const b = bancoDaRaiz.get(env.FABRIQUINHA_ROOT);
+  assert.ok(b);
+  const segredo = join(base, "segredo-troca.html");
+  writeFileSync(segredo, "<!doctype html>SEGREDO");
+  arquivo("regular.html", HTML);
+  arquivo("troca.html", HTML);
+  // Troca troca.html, atomicamente, entre um arquivo regular e um link para fora.
+  const trocador = spawn(
+    "/bin/sh",
+    [
+      "-c",
+      `while :; do cp regular.html r.tmp; mv -f r.tmp troca.html; ln -sf '${segredo}' l.tmp; mv -fT l.tmp troca.html; done`,
+    ],
+    { cwd: pasta, stdio: "ignore" },
+  );
+  const fim = once(trocador, "close");
+  await once(trocador, "spawn");
+  const guardados = new Set<string>();
+  try {
+    for (let i = 0; i < 300; i++) {
+      const saida = await cli(env, EVIDENCIA(id, "desenho_solucao", "desenho.json", "troca.html"));
+      if (saida.codigo === 0) {
+        for (const { sha256 } of anexosGuardados(env))
+          guardados.add(readFileSync(caminhoArquivo(b, String(sha256)), "utf8"));
+      } else assert.match(saida.err, /troca\.html é um link simbólico/);
+    }
+  } finally {
+    trocador.kill();
+    await fim;
+  }
+  assert.deepEqual([...guardados], [HTML]);
+});
+
+test("anexo: a classe vem dos bytes iniciais, não da extensão, e o limite da classe vale", async () => {
+  const env = novaRaiz();
+  const id = await registrar(env);
+  const comportamento = arquivo("comportamento.json", { descricao: "lento", comoReproduzir: ["abrir"] });
+  arquivo("passos.png", "passo 1: abrir");
+  json(await cli(env, EVIDENCIA(id, "comportamento", comportamento, "passos.png")));
+  assert.deepEqual(
+    anexosGuardados(env).map((a) => [a.caminho, a.mime]),
+    [["passos.png", "text/plain; charset=utf-8"]],
+  );
+  arquivo("grande.png", "a".repeat(5 * 1024 * 1024 + 1));
+  falha(await cli(env, EVIDENCIA(id, "comportamento", comportamento, "grande.png")), 1, /grande\.png tem 5\.0 MiB/);
 });
 
 test("CA-11: custos depois do envio, sem custo informado", async () => {

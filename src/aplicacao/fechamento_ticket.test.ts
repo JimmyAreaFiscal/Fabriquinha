@@ -16,6 +16,7 @@ import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
+import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 import { falharTicketDemanda, fecharTicketDemanda } from "./fechamento_ticket.ts";
@@ -36,28 +37,15 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   ...extra,
 });
 
-const verif = (
-  tipo: RegistroDaVerificacao["tipo"],
-  aprovada: boolean | undefined,
-  motivo = "falhou",
-): RegistroDaVerificacao => ({
-  tipo,
-  aprovada,
-  falhas: aprovada
-    ? []
-    : [
-        aprovada === undefined
-          ? { classe: "infraestrutura", causa: "servico_externo_inacessivel", motivo, comando: "c" }
-          : { classe: "tecnica", motivo, comando: "c" },
-      ],
-  dados: { x: 1 },
-  logs:
-    aprovada === true
-      ? [{ nome: `${tipo}.log`, texto: `log de ${tipo}` }]
-      : [{ nome: `${tipo}.log`, texto: "a".repeat(3000) + "FIM" }],
-});
+const verif = (tipo: RegistroDaVerificacao["tipo"], passou: boolean | undefined, motivo = "falhou") =>
+  verificacaoDeTeste(
+    tipo,
+    passou,
+    motivo,
+    passou === true ? undefined : [{ nome: `${tipo}.log`, texto: "a".repeat(3000) + "FIM" }],
+  );
 const TIPOS = ["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const;
-const todas = (aprovada: boolean | undefined, motivo?: string) => TIPOS.map((t) => verif(t, aprovada, motivo));
+const todas = (passou: boolean | undefined, motivo?: string) => TIPOS.map((t) => verif(t, passou, motivo));
 const coletor = (resultado: RegistroDaVerificacao[]) => ({ coletarVerificacoes: () => Promise.resolve(resultado) });
 const naoColeta = {
   coletarVerificacoes: (): Promise<RegistroDaVerificacao[]> => {
@@ -275,6 +263,13 @@ test("CA-6: a primeira reprovação técnica devolve ao agente com o relatório 
   assert.match(t?.instrucao ?? "", /^- execucao_testes: npm test saiu com código 1\n\na+FIM$/);
   assert.equal(t?.instrucao?.split("\n\n")[1]?.length, 2000);
   assert.deepEqual(c.commits(), []);
+  // A recusada não vira evidência; a Tentativa de reprovação leva o relatório com o log.
+  assert.deepEqual(c.evidencias(1), ["matriz_fitness", "relatorio_sonar"]);
+  const [reprovacao] = c.ag().tentativas.filter((x) => x.resultado?.tipo === "reprovacao");
+  assert.match(
+    reprovacao?.resultado?.tipo === "reprovacao" ? reprovacao.resultado.motivo : "",
+    /^- execucao_testes: .*FIM$/s,
+  );
 });
 
 test("CA-7 e CA-8: na terceira reprovação o ticket falha e bloqueia a rodada até a reabertura", async () => {
@@ -409,7 +404,7 @@ test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit
   assert.deepEqual(c.evidencias(1), ["execucao_testes", "matriz_fitness", "relatorio_sonar"]);
 });
 
-test("CA-16: commit sem evidências aprovadas falha por infraestrutura", async () => {
+test("CA-16: commit sem as evidências devolve o ticket citando o que falta", async () => {
   const c = await cenario();
   await commitarTicketDemanda(c.banco, ref(1), {
     ambiente: new AmbienteHostLocal(),
@@ -420,24 +415,25 @@ test("CA-16: commit sem evidências aprovadas falha por infraestrutura", async (
   });
   await fechar(c, 1, naoColeta);
   const t = c.status(1);
-  assert.equal(t?.estado, "falhou");
-  assert.match(c.motivo(1) ?? "", /infraestrutura: .*ausentes: execucao_testes, matriz_fitness, relatorio_sonar/);
+  assert.deepEqual([t?.estado, c.reprovacoes(1)], ["aberto", 1]);
+  assert.match(t?.instrucao ?? "", /faltam as evidências: execucao_testes, matriz_fitness, relatorio_sonar/);
 });
 
-test("commit com evidência reprovada gravada falha por infraestrutura", async () => {
+test("verificações reprovadas não viram evidência: o ticket é devolvido só com a Tentativa de reprovação", async () => {
   const c = await cenario();
   await fechar(c, 1, coletor(todas(false)));
-  assert.equal(c.status(1)?.estado, "aberto"); // devolvido: as evidências reprovadas ficam gravadas
-  c.banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE ticket_id = 1");
-  await commitarTicketDemanda(c.banco, ref(1), {
-    ambiente: new AmbienteHostLocal(),
-    worktree: c.worktree,
-    tipo: "feat",
-    titulo: "Cachear",
-    etapa: "implementar",
-  });
-  await fechar(c, 1, naoColeta);
-  assert.match(c.motivo(1) ?? "", /reprovadas: execucao_testes, matriz_fitness, relatorio_sonar/);
+  assert.deepEqual([c.status(1)?.estado, c.reprovacoes(1)], ["aberto", 1]);
+  assert.deepEqual(c.evidencias(1), []);
+});
+
+test("verificação que passou com dados que o schema recusa é devolvida com o motivo do Avaliador, sem evidência", async () => {
+  const c = await cenario();
+  const semComandos = { ...verif("execucao_testes", true), dados: { comandos: [] } };
+  await fechar(c, 1, coletor([semComandos, ...todas(true).slice(1)]));
+  const t = c.status(1);
+  assert.deepEqual([t?.estado, c.reprovacoes(1)], ["aberto", 1]);
+  assert.match(t?.instrucao ?? "", /^- execucao_testes: .*comandos/s);
+  assert.deepEqual(c.evidencias(1), ["matriz_fitness", "relatorio_sonar"]);
 });
 
 function hook(c: Awaited<ReturnType<typeof cenario>>, corpo: string) {

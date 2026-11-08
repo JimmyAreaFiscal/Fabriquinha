@@ -157,6 +157,7 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
   const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "a.ts", acao: "alterar", motivo: "m" }] };
   writeFileSync(join(pasta, "dados.json"), JSON.stringify(desenho));
   writeFileSync(join(pasta, "desenho.html"), HTML);
+  const origens = { worktree: pasta, saida: pasta, fora: "da pasta do estresse", copie: "a pasta do estresse" };
 
   // Um rascunho por chamada nos comandos que gravam na demanda; uma execução própria por chamada nos do agente que gravam.
   const rascunhos: string[] = [];
@@ -197,11 +198,11 @@ export function acoesCli(amb: Ambiente): AcaoCli[] {
         {
           tipo: "desenho_solucao",
           dados: desenho,
-          arquivos: [{ nome: "desenho.html", mime: "text/html", conteudo: Buffer.from(HTML) }],
+          arquivos: [join(pasta, "desenho.html")],
         },
         { tipo: "custos_realizados", dados: { sessoes } },
       ];
-      for (const e of completa) submeterEvidencia(banco, id, e as never, autor, { agora: em });
+      for (const e of completa) submeterEvidencia(banco, id, e as never, autor, origens);
     }
     leitura = semearAgente(banco, "ajustar_resultado", "ajustar_resultado");
     for (let i = 0; i < CHAMADAS; i++) {

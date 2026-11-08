@@ -32,7 +32,7 @@ export class VerificacaoDeFitness extends Verificacao {
         const falha = classificarComando(f.comando, r);
         if (falha) falhas.push(falha);
       }
-      return { tipo: "matriz_fitness", aprovada: aprovacao(falhas), falhas, dados: { linhas }, logs };
+      return { tipo: "matriz_fitness", passou: aprovacao(falhas), falhas, dados: { linhas }, logs };
     });
   }
 }

@@ -176,8 +176,12 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
 
   const chat = (await pedir("/api/sessoes/sd-310")).corpo as DadosDoChatDemanda;
   assert.deepEqual(
-    [chat.origem, chat.demanda, chat.rodada, chat.ticket, chat.etapa, chat.sessao.estado, chat.sessao.motivo],
-    ["demanda", "I-310", undefined, "I-310.T1", "planejar", "aguardando_humano", "conversa"],
+    [chat.origem, chat.demanda, chat.rodada, chat.ticket, chat.etapa, chat.sessao.estado, chat.sessao.pendencia?.tipo],
+    ["demanda", "I-310", undefined, "I-310.T1", "planejar", "aguardando_humano", "dialogo_do_agente"],
+  );
+  assert.deepEqual(
+    chat.pendencias.map((p) => [p.tipo, p.item, p.acao_esperada]),
+    [["dialogo_do_agente", "I-310.T1", "responder"]],
   );
   assert.deepEqual(textos(chat.conversa), ["user: planeje", "assistant: Qual a prioridade?"]);
   assert.deepEqual(
