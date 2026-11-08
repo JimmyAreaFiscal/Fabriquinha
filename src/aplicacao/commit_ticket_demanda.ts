@@ -8,8 +8,8 @@ import { noLog } from "../infra/registro.ts";
 import type { Commit } from "../armazenamento/commits.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { arquivosDe, commitar } from "../infra/repositorio/commit.ts";
-import { exigirGitNoAmbiente, gitNoAmbiente, LIMITE_COMANDO_MS } from "../infra/repositorio/worktree.ts";
-import type { Ambiente } from "../infra/ambiente/ambiente.ts";
+import { exigirGitNoAmbiente, gitNoAmbiente } from "../infra/repositorio/worktree.ts";
+import { type Ambiente, LIMITE_COMANDO_MS } from "../infra/ambiente/ambiente.ts";
 
 type Ref = Parameters<typeof formatarTicketRef>[0];
 

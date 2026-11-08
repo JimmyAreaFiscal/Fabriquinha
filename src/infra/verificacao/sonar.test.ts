@@ -328,7 +328,10 @@ test("sem SONAR_HOST_URL ou SONAR_TOKEN no ambiente: falha antes de consultar", 
 });
 
 const verificacaoSonar = (worktree: string) =>
-  new VerificacaoSonar("loja-key", ["a.ts"], { intervaloMs: 1 }).executar({ worktree });
+  new VerificacaoSonar("loja-key", ["a.ts"], { intervaloMs: 1 }).executar({
+    ambiente: new AmbienteHostLocal(),
+    worktree,
+  });
 
 test("VerificacaoSonar: sem issue nos arquivos alterados passa, com o relatório da análise", async () => {
   const worktree = cenario();

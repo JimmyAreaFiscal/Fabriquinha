@@ -20,8 +20,8 @@ export class VerificacaoDeFitness extends Verificacao {
     this.#projeto = projeto;
   }
 
-  coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
-    return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
+  coletar({ ambiente, worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+    return comAmbienteSemCredenciais(ambiente, limiteMs, async (rodar) => {
       const linhas = [];
       const logs = [];
       const falhas: Falha[] = [];

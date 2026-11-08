@@ -148,6 +148,7 @@ export async function fecharTicketDemanda(
   if (!(await acharCommitTicketDemanda(ambienteDoServico(), worktree, ref))) {
     const e2e = ag.rodadas.find((r) => r.rodada_id === rodada_id)?.e2e ?? false;
     const verificacoes = await (deps.coletarVerificacoes ?? coletarVerificacoes)({
+      ambiente: ambienteDoServico(),
       projeto,
       e2e,
       worktree,
@@ -208,7 +209,11 @@ export async function fecharTicketDemanda(
   });
   let resultadoDosHooks;
   try {
-    resultadoDosHooks = await hooks.executar({ worktree, limiteMs: deps.limiteCommitMs });
+    resultadoDosHooks = await hooks.executar({
+      ambiente: ambienteDoServico(),
+      worktree,
+      limiteMs: deps.limiteCommitMs,
+    });
   } catch (erro) {
     if (!deps.parada?.()) throw erro;
     falhar(falhaPorServicoReiniciado);

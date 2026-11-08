@@ -1,6 +1,7 @@
 // Roda um comando externo com `spawn` e argumentos em lista, sem shell: nenhum argumento vira comando.
 import { spawn } from "node:child_process";
 import { ErroDeRegra } from "../nucleo/erros.ts";
+import { LIMITE_COMANDO_MS } from "./ambiente/ambiente.ts";
 
 /**
  * `sinal` para o grupo de processos `pgid` inteiro. Grupo que já acabou é ignorado: quem ainda segura o stdout saiu
@@ -91,10 +92,7 @@ export async function gitComLimite(limiteMs: number, dir: string, ...args: strin
 /** `gitComLimite` com o limite dos comandos configurados (F3 §6, F5 §3.2). */
 export const git = (dir: string, ...args: string[]): Promise<Saida> => gitComLimite(LIMITE_COMANDO_MS, dir, ...args);
 
-/** F3 §6 e F5 §3.2: limite de cada comando configurado pelo Auditor. */
-export const LIMITE_COMANDO_MS = 30 * 60_000;
-
-export interface Resultado {
+interface Resultado {
   /** `null` quando o comando morreu por sinal ou estourou o limite. */
   codigo: number | null;
   estourou: boolean;

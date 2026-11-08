@@ -1,6 +1,30 @@
 // O Ambiente (CONCEITOS.md §7): o lugar físico onde o Espaço de Trabalho roda. Todo processo do Espaço passa por aqui.
 import type { Readable, Writable } from "node:stream";
 
+/** F3 §6 e F5 §3.2: limite de cada comando configurado pelo Auditor. */
+export const LIMITE_COMANDO_MS = 30 * 60_000;
+/** Variáveis com credencial de hospedagem ou do SonarQube (F4 §6.1, F5 §5.0). */
+const CREDENCIAIS = new Set([
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+  "GH_ENTERPRISE_TOKEN",
+  "GITHUB_ENTERPRISE_TOKEN",
+  "AZURE_DEVOPS_EXT_PAT",
+  "SYSTEM_ACCESSTOKEN",
+  "SONAR_TOKEN",
+]);
+
+/**
+ * `base` sem as credenciais, com `gh` e `az` lendo a configuração de `dirVazio`, onde não há login salvo. Para o que
+ * roda código do agente: o pi e os coletores de testes e fitness.
+ */
+export function ambienteSemCredenciais(base: NodeJS.ProcessEnv, dirVazio: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [nome, valor] of Object.entries(base))
+    if (valor !== undefined && !CREDENCIAIS.has(nome)) env[nome] = valor;
+  return { ...env, GH_CONFIG_DIR: dirVazio, AZURE_CONFIG_DIR: dirVazio };
+}
+
 export interface ComandoNoAmbiente {
   /** O programa; com `noShell`, a linha de comando inteira. */
   programa: string;
