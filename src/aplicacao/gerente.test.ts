@@ -161,7 +161,7 @@ test("interativa: a recusa do prompt só fica no log, a sessão fica ociosa e te
   assert.equal(await fim, undefined);
 });
 
-test("interativa: o prompt recusado porque o agente já trabalha não deixa a sessão ociosa", async () => {
+test("interativa: o prompt rejeitado porque o agente já trabalha não deixa a sessão ociosa", async () => {
   const { sessao, fim, dir } = rodar([{}, { recusa: "Agent is already processing." }], "interativo");
   mandar(sessao, { type: "prompt", message: "mais uma" });
   await ate(
@@ -430,7 +430,7 @@ test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte qu
             ...eventos,
             ...(encerrada ? [{ type: "message_end", message: { role: "assistant", content: [] } }] : []),
             { pausaMs: 800 },
-            { type: "response", command: "steer", success: false, error: "recusado" },
+            { type: "response", command: "steer", success: false, error: "rejeitado" },
             { type: "extension_ui_request", method: "notify" },
           ],
         },

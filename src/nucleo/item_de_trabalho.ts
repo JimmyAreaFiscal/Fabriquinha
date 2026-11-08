@@ -34,7 +34,7 @@ export class Endereco {
     return new Endereco(demanda_id, undefined, ticket_id);
   }
 
-  /** Lê `I-12` (também `i-12`, `i12`, `I12` e `12`), `I-12.R2` ou `I-12.T3`; qualquer outra forma é recusada dizendo o formato esperado. */
+  /** Lê `I-12` (também `i-12`, `i12`, `I12` e `12`), `I-12.R2` ou `I-12.T3`; qualquer outra forma é rejeitada dizendo o formato esperado. */
   static ler(texto: string): Endereco {
     const achado = ENDERECO.exec(texto);
     if (!achado) throw new ErroDeRegra(`endereço ${JSON.stringify(texto)} inválido`, FORMAS_DO_ENDERECO);

@@ -21,12 +21,10 @@ import { registrarDependenciaDemanda } from "../armazenamento/dependencias_deman
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { decidirGate } from "./gates/decidir_gate.ts";
 import * as servico from "./planejamento.ts";
-import {
-  aprovarPlanejamentoDemanda,
-  iniciarOuRetomarPlanejamento,
-  reprovarPlanejamentoDemanda,
-} from "./planejamento.ts";
+import { iniciarOuRetomarPlanejamento } from "./planejamento.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = mkdtempSync(join(tmpdir(), "fabriquinha-planejamento-"));
@@ -167,6 +165,10 @@ function cenario({
 }
 
 const agente = { tipo: "agente", trabalho_id: "1" } as const;
+const aprovarGateDoPlanejamento = (banco: DatabaseSync, entrada: unknown = { resultado: "aprovado" }) =>
+  decidirGate(banco, "gate_planejamento", Endereco.daDemanda("I-1"), entrada, AUDITOR);
+const reprovarGateDoPlanejamento = (banco: DatabaseSync, motivo: string) =>
+  aprovarGateDoPlanejamento(banco, { resultado: "reprovado", motivo });
 const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, planoEntrada: unknown) =>
   comDemanda(banco, demandaId, (ag) => submeterPlano(ag, planoEntrada, agente, { agora: new Date().toISOString() }));
 
@@ -227,7 +229,7 @@ test("CA-2: plano com critério que nenhuma rodada cita é aceito e vai ao gate"
   assert.equal(submeterPlanoDoAgente(banco, "I-1", umPlano).demanda.estado, "gate_planejamento");
 });
 
-test("CA-5: plano que cita CA inexistente é recusado e nada é gravado", () => {
+test("CA-5: plano que cita CA inexistente é reprovado e nada é gravado", () => {
   const { banco } = cenario({ estadoDoTicket: "em_execucao" });
   assert.throws(
     () => submeterPlanoDoAgente(banco, "I-1", plano(["CA-1", "CA-99"])),
@@ -246,12 +248,12 @@ test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão co
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
   submeterPlanoDoAgente(banco, "I-1", plano());
-  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   const ag = carregarDemanda(banco, "I-1");
   assert.equal(ag.demanda.estado, "planejar");
   assert.deepEqual(
     ag.decisoes.map((d) => [d.resultado, d.motivo]),
-    [["recusado", "faltam critérios na rodada 2"]],
+    [["reprovado", "faltam critérios na rodada 2"]],
   );
   assert.equal(status(), "em_execucao");
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
@@ -265,15 +267,15 @@ test("CA-1: com o pi vivo e ocioso, a reprovação manda o motivo à mesma sess�
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100)); // o pi assenta: ocioso, à espera do gate
   submeterPlanoDoAgente(banco, "I-1", plano());
-  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   while (prompts().length < 2) await new Promise((r) => setTimeout(r, 20));
   assert.match(prompts()[1] ?? "", /Motivo: faltam critérios na rodada 2/);
   await fim;
 });
 
-test("a reprovação sem sessão do planejar só grava a decisão", () => {
+test("a reprovação sem sessão do planejar só grava a decisão", async () => {
   const { banco, prompts } = cenario({ estado: "gate_planejamento", estadoDoTicket: "em_execucao", comPlano: true });
-  reprovarPlanejamentoDemanda(banco, "I-1", "falta");
+  await reprovarGateDoPlanejamento(banco, "falta");
   assert.deepEqual(prompts(), []);
 });
 
@@ -283,7 +285,7 @@ test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho re
   const [sessao] = sessoes().sessoes;
   submeterPlanoDoAgente(banco, "I-1", plano());
   falharTicketDemanda(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
-  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   const ticket = carregarDemanda(banco, "I-1").tickets[0] as { estado: string; instrucao?: string };
   assert.equal(ticket.estado, "aberto");
   assert.equal(ticket.instrucao, "faltam critérios na rodada 2");
@@ -299,7 +301,7 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   submeterPlanoDoAgente(banco, "I-1", plano());
-  await aprovarPlanejamentoDemanda(banco, "I-1", {});
+  await aprovarGateDoPlanejamento(banco);
   await fim;
   const [descartada] = sessoes().sessoes;
   // O Auditor descarta o plano aprovado (incidente da I-259): volta ao planejamento com a instrução no ticket.
@@ -333,9 +335,9 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   assert.equal(sessoes().execucoes.at(-1)?.sessao_id, replanejamento?.id);
 });
 
-test("CA-8: motivo vazio recusa a reprovação e nada é registrado", () => {
+test("CA-8: motivo vazio recusa a reprovação e nada é registrado", async () => {
   const { banco } = cenario({ estado: "gate_planejamento", estadoDoTicket: "em_execucao", comPlano: true });
-  assert.throws(() => reprovarPlanejamentoDemanda(banco, "I-1", "   "));
+  await assert.rejects(reprovarGateDoPlanejamento(banco, "   "), /informe o motivo da reprovação/);
   const ag = carregarDemanda(banco, "I-1");
   assert.equal(ag.demanda.estado, "gate_planejamento");
   assert.deepEqual(ag.decisoes, []);
@@ -345,7 +347,7 @@ const aprovacao = () => cenario({ estado: "gate_planejamento", estadoDoTicket: "
 
 test("CA-9: aprovar cria as worktrees a partir da branch da demanda e prepara cada uma; a dependente fica para quando começar", async () => {
   const { c, banco } = aprovacao();
-  await aprovarPlanejamentoDemanda(banco, "I-1", {});
+  await aprovarGateDoPlanejamento(banco);
   const dir = join(c.raiz, "worktrees", "loja", "I-1");
   const demandaTopo = rodarGit(c.repo, "rev-parse", "fabriquinha/I-1");
   for (const w of ["demanda", "rodadas/1"]) assert.ok(existsSync(join(dir, w, "preparado")), w);
@@ -361,7 +363,7 @@ test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejament
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100));
   submeterPlanoDoAgente(banco, "I-1", plano());
-  await aprovarPlanejamentoDemanda(banco, "I-1", {});
+  await aprovarGateDoPlanejamento(banco);
   await fim;
   const { n } = banco.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
   assert.equal(n, 0);
@@ -372,7 +374,7 @@ test("CA-10, CA-11: preparação que falha na rodada 1 deixa o gate aberto; corr
   writeFileSync(join(c.raiz, "quebra"), "");
   const caminho = join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "1");
   await assert.rejects(
-    aprovarPlanejamentoDemanda(banco, "I-1", {}),
+    aprovarGateDoPlanejamento(banco),
     (e: Error) =>
       e instanceof ErroDeRegra &&
       e.message.includes("a preparação da worktree falhou") &&
@@ -386,7 +388,7 @@ test("CA-10, CA-11: preparação que falha na rodada 1 deixa o gate aberto; corr
   );
 
   rmSync(join(c.raiz, "quebra"));
-  await aprovarPlanejamentoDemanda(banco, "I-1", { nota: 4 });
+  await aprovarGateDoPlanejamento(banco, { resultado: "aprovado", nota: 4 });
   ag = carregarDemanda(banco, "I-1");
   assert.equal(ag.demanda.estado, "em_execucao");
   assert.deepEqual(
@@ -413,21 +415,17 @@ test("CA-12: falha de gravação depois da primeira rodada desfaz tudo", async (
     "CREATE TRIGGER falha BEFORE INSERT ON rodada WHEN NEW.rodada_id = 2 BEGIN SELECT RAISE(ABORT, 'falha de gravação'); END",
   );
   const antes = carregarDemanda(banco, "I-1");
-  await assert.rejects(aprovarPlanejamentoDemanda(banco, "I-1", {}), /falha de gravação/);
+  await assert.rejects(aprovarGateDoPlanejamento(banco), /falha de gravação/);
   assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
 });
 
-test("CA-13: as três operações estão exportadas", () => {
-  assert.deepEqual(Object.keys(servico).sort(), [
-    "aprovarPlanejamentoDemanda",
-    "iniciarOuRetomarPlanejamento",
-    "reprovarPlanejamentoDemanda",
-  ]);
+test("CA-13: o serviço exporta só o início ou retomada; a decisão do gate é de decidirGate", () => {
+  assert.deepEqual(Object.keys(servico).sort(), ["iniciarOuRetomarPlanejamento"]);
 });
 
 test("aprovar fora do gate recusa antes de tocar o git", async () => {
   const { c, banco } = cenario();
-  await assert.rejects(aprovarPlanejamentoDemanda(banco, "I-1", {}), /só no estado gate_planejamento/);
+  await assert.rejects(aprovarGateDoPlanejamento(banco), /só no estado gate_planejamento/);
   assert.equal(existsSync(join(c.raiz, "worktrees")), false);
 });
 
@@ -435,7 +433,7 @@ test("foto do retorno ao agente no planejamento: devolução pela reprovação",
   const { c, banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   submeterPlanoDoAgente(banco, "I-1", plano());
-  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   conferirPromptComFoto(prompts().at(-1) ?? "", c.raiz, "planejamento_devolucao");
 });

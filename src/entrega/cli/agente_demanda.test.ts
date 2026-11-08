@@ -200,7 +200,7 @@ test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai 
   );
 });
 
-test("CA-3: ler o ticket de outro, ou outra demanda, é recusado sem saída", async () => {
+test("CA-3: ler o ticket de outro, ou outra demanda, é reprovado sem saída", async () => {
   const { env } = cenario();
   for (const args of [
     ["ticket", "ver", "I-206.T4"],
@@ -373,7 +373,7 @@ test("revisão de rodada reprovada completa as correções com demanda, rodada e
     correcoes,
   ]);
   assert.equal(s.err, "");
-  assert.equal((JSON.parse(s.out) as { resultado: string }).resultado, "recusado");
+  assert.equal((JSON.parse(s.out) as { resultado: string }).resultado, "reprovado");
   const lida = await lerDemanda(env);
   assert.equal(lida.rodadas[0]?.estado, "implementar");
   assert.equal(lida.tickets.filter((t) => t.etapa === "implementar").length, 3);
@@ -398,14 +398,14 @@ test("CA-11: reprovar a revisão integral registra a decisão com o motivo", asy
     JSON.stringify(plano),
   ]);
   assert.equal(s.err, "");
-  assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", resultado: "recusado" });
+  assert.deepEqual(JSON.parse(s.out), { ticket: "I-206.T9", resultado: "reprovado" });
   assert.equal(banco.prepare("SELECT motivo FROM decisao_ticket WHERE ticket_id = 9").get()?.motivo, "falta");
   const lida = await lerDemanda(env);
   assert.equal(lida.rodadas.length, 2);
   const decisao = lida.decisoes[0];
   assert.deepEqual(
     [decisao?.ticket, decisao?.rodada, decisao?.resultado, decisao?.motivo],
-    ["I-206.T9", undefined, "recusado", "falta"],
+    ["I-206.T9", undefined, "reprovado", "falta"],
   );
 });
 
@@ -424,7 +424,9 @@ test("revisão: opções que faltam ou sobram, JSON inválido, ticket alheio e t
   assert.match(await rodar("I-206.T9", "reprovar", "--motivo", "m"), /reprovar exige --correcoes/);
   assert.match(await rodar("I-206.T9", "reprovar", "--motivo", "m", "--correcoes", "{"), /--correcoes não é um JSON/);
   assert.match(await rodar("I-206.T9", "reprovar", "--motivo", "m", "--correcoes", "{}"), /vetor/);
-  assert.match(await rodar("I-206.T9", "aprovar", "--motivo", "m"), /aprovar não leva/);
+  for (const opcao of ["--motivo", "--correcoes", "--plano"]) {
+    assert.match(await rodar("I-206.T9", "aprovar", opcao, "m"), /aprovar não leva/);
+  }
   assert.match(await rodar("I-206.T4", "aprovar"), /só age no próprio ticket/);
   assert.match(await rodar("T-9", "aprovar"), /I-206\.T9/);
   const outro = cenario();

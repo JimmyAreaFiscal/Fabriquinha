@@ -44,7 +44,7 @@ test("CA-5: o banco em v36 sobe sem aplicar migração e sem alteração", () =>
   banco.close();
 });
 
-test("CA-5: o banco em v35 é recusado, com orientação, sem alteração", () => {
+test("CA-5: o banco em v35 é rejeitado, com orientação, sem alteração", () => {
   const banco = new DatabaseSync(":memory:");
   banco.exec("CREATE TABLE antigo (x INTEGER); PRAGMA user_version = 35");
   assert.throws(

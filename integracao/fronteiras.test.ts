@@ -1,5 +1,5 @@
 // Seção 12 de comparacao-sdlc-implementacao.md, CA-SDLC-18, 19 e 21 (fronteiras de validação): evidência com dois
-// donos e substituição, plano inválido recusado antes de executar e configuração de projeto inválida. O cenário é
+// donos e substituição, plano inválido rejeitado antes de executar e configuração de projeto inválida. O cenário é
 // montado pelos serviços, com banco e git reais numa raiz temporária; nenhum pi chega a ser iniciado.
 import assert from "node:assert/strict";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
@@ -21,9 +21,9 @@ const pi = instalarPiFalso(base);
 const PLANEJAR = 2;
 const agente: Ator = { tipo: "agente", trabalho_id: "execucao-1" };
 
-test("CA-SDLC-18: evidência com dois donos é recusada; a nova do mesmo tipo e dono substitui só a anterior", (t) => {
+test("CA-SDLC-18: evidência com dois donos é rejeitada; a nova do mesmo tipo e dono substitui só a anterior", async (t) => {
   const c = criarCenario(t);
-  const id = demandaAprovada(c);
+  const id = await demandaAprovada(c);
   const submeter = (entrada: Record<string, unknown>) =>
     comDemanda(c.banco, id, (ag) =>
       submeterEvidenciaDemanda(
@@ -53,10 +53,10 @@ test("CA-SDLC-18: evidência com dois donos é recusada; a nova do mesmo tipo e 
   ]);
 });
 
-test("CA-SDLC-19: plano com CA-n inexistente ou com dependência entre rodadas é recusado antes de executar", (t) => {
+test("CA-SDLC-19: plano com CA-n inexistente ou com dependência entre rodadas é rejeitado antes de executar", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
-  const id = demandaAprovada(c);
+  const id = await demandaAprovada(c);
   const plano = (criterio: string, dependeDoTicket1 = false) => ({
     demanda_id: id,
     criterios: [criterio],
@@ -93,7 +93,7 @@ test("CA-SDLC-19: plano com CA-n inexistente ou com dependência entre rodadas �
   assert.equal(pi.prompts().length, 0);
 });
 
-test("CA-SDLC-21: configuração de projeto inválida é recusada na fronteira, sem gravar nem ler fora do escopo", (t) => {
+test("CA-SDLC-21: configuração de projeto inválida é rejeitada na fronteira, sem gravar nem ler fora do escopo", (t) => {
   const c = criarCenario(t);
   const tabelas = () =>
     [

@@ -189,7 +189,7 @@ function esperaDaRevisaoParada(ag: AgregadoDemanda, agora: Date): EsperaDoAudito
     iniciarRevisaoDemanda(ag, { demanda_id: demanda }, FABRIQUINHA, { agora: agora.toISOString() });
   } catch (recusa) {
     // A regra só recusa com ErroDeRegra; a entrada aqui é sempre válida.
-    erro = `a revisão integral foi recusada: ${(recusa as Error).message}`;
+    erro = `a revisão integral foi rejeitada: ${(recusa as Error).message}`;
   }
   return [{ motivo: "revisao_parada", demanda, projeto, titulo, erro, desde }];
 }

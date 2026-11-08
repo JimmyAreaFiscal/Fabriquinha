@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import type { AgregadoDemanda, DecisaoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, Decisao, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
 import { Ator } from "../nucleo/ator.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
@@ -27,10 +27,11 @@ const ticket = (ticket_id: number, rodada_id?: number) => ({
 // Sem as chaves de dono ausentes: é assim que o carregamento devolve a evidência (campo omitido).
 const evidencia = (dono: { rodada_id?: number; ticket_id?: number }, tipo: EvidenciaDemanda["tipo"], dados = {}) =>
   ({ demanda_id: "I-1", ...dono, tipo, dados, autor: { tipo: "fabriquinha" }, em }) as EvidenciaDemanda;
-const decisao = (extra: Partial<DecisaoDemanda>): DecisaoDemanda => ({
+const decisao = (extra: Partial<Decisao>): Decisao => ({
   demanda_id: "I-1",
   ticket_id: 1,
   decisao_id: 1,
+  gate: "gate_demanda",
   resultado: "aprovado",
   por: { tipo: "agente", trabalho_id: "exec-1" },
   em,
@@ -85,7 +86,7 @@ const completo = (): AgregadoDemanda => ({
   dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
   caminhos_ticket: [{ demanda_id: "I-1", ticket_id: 1, caminho: "src/a.ts" }],
   decisoes: [
-    decisao({ resultado: "recusado", motivo: "m", por: { tipo: "auditor" } }),
+    decisao({ resultado: "reprovado", motivo: "m", por: { tipo: "auditor" } }),
     decisao({ decisao_id: 2, nota: 5 }),
   ],
   evidencias: [
@@ -488,7 +489,7 @@ test("CA-10: erro na criação desfaz a demanda e a sequência", () => {
   assert.equal(criarDemandaNova(b, registrar).demanda.id, "I-1");
 });
 
-test("agregado com ID diferente do alocado é recusado e desfaz a sequência", () => {
+test("agregado com ID diferente do alocado é reprovado e desfaz a sequência", () => {
   const b = banco();
   assert.throws(() => criarDemandaNova(b, () => registrar("I-9")), /monte a demanda com o id recebido \(I-1\)/);
   assert.equal(b.prepare("SELECT count(*) AS n FROM demanda").get()?.n, 0);

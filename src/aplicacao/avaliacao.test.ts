@@ -192,7 +192,7 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   parar_();
 });
 
-test("o pedido do Auditor vai ao prompt; enviar com o agente trabalhando é recusado e abortar o para", async () => {
+test("o pedido do Auditor vai ao prompt; enviar com o agente trabalhando é rejeitado e abortar o para", async () => {
   piFalso.roteirizar([{ ...resposta, termina: "nunca" }]);
   const id = await iniciarAvaliacao(
     banco,

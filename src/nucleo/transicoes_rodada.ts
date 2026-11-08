@@ -2,24 +2,19 @@
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
 import { type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
-import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
+import type { AgregadoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DA_RODADA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
-import { type EtapaTicket, type EstadoRodada, Id, type Instante, Motivo, palavras } from "./primitivos.ts";
-import { falhaQueExigeOAuditor } from "./tentativa.ts";
+import { type EtapaTicket, type EstadoRodada, Id, type Instante, palavras } from "./primitivos.ts";
 import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
 const RodadaRef = { demanda_id: DemandaId, rodada_id: Id };
 const TicketRef = { ...RodadaRef, ticket_id: Id };
 
 const EntradaConclusao = z.strictObject(RodadaRef);
-const EntradaRevisao = z.discriminatedUnion("aprovado", [
-  z.strictObject({ ...TicketRef, aprovado: z.literal(true) }),
-  z.strictObject({ ...TicketRef, aprovado: z.literal(false), exigencias: Motivo, correcoes: z.array(z.unknown()) }),
-]);
 // Sem defaults: fato ausente nunca vira "sem problema".
 const EntradaConferencia = z.strictObject({
   ...TicketRef,
@@ -29,27 +24,14 @@ const EntradaConferencia = z.strictObject({
   correcoes: z.array(z.unknown()).optional(),
 });
 
-const EntradaReprovacaoPR = z.strictObject({ ...TicketRef, motivo: Motivo });
 const EntradaCorrecoesSessao = z.strictObject({ ...TicketRef, correcoes: z.array(z.unknown()) });
-const EntradaAprovacaoPR = z.strictObject({ ...TicketRef, nota: z.number().int().min(1).max(5) });
-// A aprovação automática, no projeto que a ligou: a nota é do Auditor, então a Fabriquinha aprova sem ela.
-const EntradaAprovacaoAutomaticaPR = z.strictObject(TicketRef);
-/** O motivo gravado na aprovação automática do PR da rodada, para a decisão não passar por uma do Auditor. */
-/** @testes os testes conferem a decisão gravada; a produção a usa só dentro do módulo */
-export const MOTIVO_APROVACAO_AUTOMATICA_PR =
-  "aprovado automaticamente pela Fabriquinha: a revisão da rodada aprovou e o PR não tem conflito nem check falho";
-// Atestado da aplicação confiável de que o PR da rodada foi integrado; sem defaults, ausência recusa.
-const Integracao = z.strictObject({ ...TicketRef, confirmada: z.boolean(), branch_destino: z.string() });
 
-/** Contexto da confirmação: `integracao` vem da aplicação (a integração em git acontece fora do domínio). */
-interface ContextoConfirmacao extends ContextoDemanda {
-  readonly integracao?: unknown;
-}
-type IntencaoAprovacaoPR = z.infer<typeof EntradaAprovacaoPR> | z.infer<typeof EntradaAprovacaoAutomaticaPR>;
-
-const maximo = (ns: number[]): number => ns.reduce((m, n) => Math.max(m, n), 0);
-
-function rodadaNoEstado(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_id: number }, estado: EstadoRodada) {
+/** A rodada citada no estado `estado`, o que exige a demanda em `em_execucao`. */
+export function rodadaNoEstado(
+  ag: AgregadoDemanda,
+  ref: { demanda_id: string; rodada_id: number },
+  estado: EstadoRodada,
+) {
   const { demanda } = ag;
   if (ref.demanda_id !== demanda.id) {
     throw new ErroDeRegra(
@@ -82,9 +64,19 @@ function ticketAtual(ag: AgregadoDemanda, rodada: RodadaDemanda, etapa: EtapaTic
   return atual;
 }
 
-const rodadasComEstadoMudado = (
+/** O ticket atual da etapa na rodada, aberto ou em execução, sem que se cite o ID dele. */
+export function ticketAtivoDaEtapa(ag: AgregadoDemanda, rodada: RodadaDemanda, etapa: EtapaTicket): TicketDemanda {
+  const atual = existe(
+    ticketAtualDaEtapa(ag, etapa, rodada.rodada_id),
+    `a rodada ${String(rodada.rodada_id)} não tem ticket ${etapa}`,
+    "confira o estado da rodada",
+  );
+  return ticketAtual(ag, rodada, etapa, atual.ticket_id);
+}
+
+export const rodadasComEstadoMudado = (
   ag: AgregadoDemanda,
-  alvo: RodadaDemanda,
+  alvo: Pick<TicketDemanda, "rodada_id">, // a rodada ou o ticket dela
   para: EstadoRodada,
   agora: Instante,
 ): RodadaDemanda[] =>
@@ -135,7 +127,7 @@ export function concluirImplementacoesRodada(
 }
 
 /** A partir desta reprovação na rodada, o Auditor decide: os corretivos não nascem e o ticket de revisão falha. */
-const REPROVACOES_ATE_O_AUDITOR = 3;
+export const REPROVACOES_ATE_O_AUDITOR = 3;
 /** @testes o teste confere que o motivo da falha começa pelo prefixo; a produção o usa só dentro do módulo */
 export const PREFIXO_TERCEIRA_REPROVACAO = "terceira reprovação da rodada: exige o Auditor";
 
@@ -143,7 +135,7 @@ const LIMITE_PALAVRAS_DO_MOTIVO_FALHA = 1000; // o mesmo teto de `Markdown`, que
 const PALAVRAS_DO_AVISO_DE_OMITIDAS = 6;
 
 /** Prefixo e reprovação mais recente sempre ficam; as mais antigas entram enquanto couberem e o resto vira um aviso. */
-function montarMotivoFalhaDaTerceiraReprovacao(motivosDaMaisRecenteParaAMaisAntiga: string[]): string {
+export function montarMotivoFalhaDaTerceiraReprovacao(motivosDaMaisRecenteParaAMaisAntiga: string[]): string {
   let palavrasRestantes =
     LIMITE_PALAVRAS_DO_MOTIVO_FALHA - palavras(PREFIXO_TERCEIRA_REPROVACAO) - PALAVRAS_DO_AVISO_DE_OMITIDAS;
   const linhasMantidas: string[] = [];
@@ -158,76 +150,6 @@ function montarMotivoFalhaDaTerceiraReprovacao(motivosDaMaisRecenteParaAMaisAnti
   const omitidas = motivosDaMaisRecenteParaAMaisAntiga.length - linhasMantidas.length;
   const aviso = omitidas > 0 ? [`- (${String(omitidas)} reprovações anteriores omitidas)`] : [];
   return [PREFIXO_TERCEIRA_REPROVACAO, ...aviso, ...linhasMantidas.reverse()].join("\n");
-}
-
-/**
- * CA-2 e CA-3: só o agente do ticket `revisar_rodada` atual. Reprovada, as exigências vão inteiras em `motivo` e as
- * correções nascem na mesma operação (volta a `implementar`); aprovada, abre `encerrar_rodada` e vai a `encerrar_rodada`.
- * Na terceira reprovação da rodada (as já gravadas mais esta) não há corretivos: o ticket falha e o estado segue em `revisar_rodada`.
- */
-export function registrarRevisaoRodada(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
-  const e = EntradaRevisao.parse(entrada);
-  const rodada = rodadaNoEstado(ag, e, "revisar_rodada");
-  const ticket = ticketAtual(ag, rodada, "revisar_rodada", e.ticket_id);
-  if (ator.tipo !== "agente") {
-    throw new ErroDeEscopo("só o agente do ticket revisar_rodada atual decide a revisão", "peça à sessão de revisão");
-  }
-  const decisoesDoTicket = ag.decisoes.filter((d) => d.ticket_id === ticket.ticket_id);
-  const decisao: DecisaoDemanda = {
-    demanda_id: ag.demanda.id,
-    ticket_id: ticket.ticket_id,
-    decisao_id: maximo(decisoesDoTicket.map((d) => d.decisao_id)) + 1, // o Auditor reabre o mesmo ticket, que decide de novo
-    resultado: e.aprovado ? "aprovado" : "recusado",
-    ...(!e.aprovado && { motivo: e.exigencias }),
-    por: ator,
-    em: ctx.agora,
-  };
-  const idsDeRevisaoDaRodada = new Set(
-    ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "revisar_rodada").map((t) => t.ticket_id),
-  );
-  const motivosDasReprovacoes = [
-    ...ag.decisoes.filter((d) => idsDeRevisaoDaRodada.has(d.ticket_id) && d.resultado === "recusado"),
-    decisao,
-  ].map((d) => String(d.motivo)); // recusado sempre tem motivo (invariante do agregado)
-  if (!e.aprovado && motivosDasReprovacoes.length >= REPROVACOES_ATE_O_AUDITOR) {
-    const motivo = montarMotivoFalhaDaTerceiraReprovacao(motivosDasReprovacoes.reverse());
-    return {
-      ...mudarTicket(ag, ticket, "falhou", ctx.agora, {}, falhaQueExigeOAuditor(motivo)),
-      decisoes: [...ag.decisoes, decisao],
-    };
-  }
-  // Os mesmos erros de correção vazia ou inválida recusam antes de qualquer retorno.
-  const base = e.aprovado ? ag : materializarCorrecoesRodada(ag, e, e.correcoes, ator, ctx.agora);
-  const comRevisaoDecidida: AgregadoDemanda = {
-    ...base,
-    ...comTicketConcluido(base, ticket, ctx.agora),
-    decisoes: [...ag.decisoes, decisao],
-  };
-  return {
-    ...comRevisaoDecidida,
-    ...(e.aprovado && {
-      tickets: [
-        ...comRevisaoDecidida.tickets,
-        criarTicket(ag, {
-          etapa: "encerrar_rodada",
-          rodada: rodada.rodada_id,
-          criado_por: FABRIQUINHA,
-          agora: ctx.agora,
-        }),
-      ],
-    }),
-    rodadas: rodadasComEstadoMudado(
-      comRevisaoDecidida,
-      rodada,
-      e.aprovado ? "encerrar_rodada" : "implementar",
-      ctx.agora,
-    ),
-  };
 }
 
 /**
@@ -259,55 +181,6 @@ export function conferirPullRequestRodada(
     ...base,
     ...comTicketConcluido(base, ticket, ctx.agora),
     rodadas: rodadasComEstadoMudado(base, rodada, "implementar", ctx.agora),
-  };
-}
-
-/** O gate do PR: rodada em `gate_pr` e o `encerrar_rodada` atual ainda ativo. */
-function gatePullRequest(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_id: number; ticket_id: number }) {
-  const rodada = rodadaNoEstado(ag, ref, "gate_pr");
-  return { rodada, ticket: ticketAtual(ag, rodada, "encerrar_rodada", ref.ticket_id) };
-}
-
-const decisaoDoGate = (
-  ag: AgregadoDemanda,
-  ticket: TicketDemanda,
-  extra: Pick<DecisaoDemanda, "resultado"> & Partial<Pick<DecisaoDemanda, "nota" | "motivo">>,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): DecisaoDemanda => ({
-  demanda_id: ag.demanda.id,
-  ticket_id: ticket.ticket_id,
-  decisao_id: 1, // o gate decide uma vez só: a decisão conclui o ticket
-  por: ator,
-  em: ctx.agora,
-  ...extra,
-});
-
-/** CA-6 e CA-7: só o Auditor, com motivo e sem nota. Registra a recusa, conclui o gate e abre a sessão na mesma operação. */
-export function reprovarPullRequestRodada(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
-  exigirAtor(ator, "reprovar o PR da rodada", "auditor");
-  const e = EntradaReprovacaoPR.parse(entrada);
-  const { rodada, ticket } = gatePullRequest(ag, e);
-  const concluido = comTicketConcluido(ag, ticket, ctx.agora);
-  return {
-    ...ag,
-    tentativas: concluido.tentativas,
-    tickets: [
-      ...concluido.tickets,
-      criarTicket(ag, {
-        etapa: "ajustar_resultado",
-        rodada: rodada.rodada_id,
-        criado_por: FABRIQUINHA,
-        agora: ctx.agora,
-      }),
-    ],
-    decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "recusado", motivo: e.motivo }, ator, ctx)],
-    rodadas: rodadasComEstadoMudado(ag, rodada, "ajustar_resultado", ctx.agora),
   };
 }
 
@@ -352,63 +225,5 @@ export function concluirSessaoRodada(
     ...ag,
     ...comTicketConcluido(ag, sessao, ctx.agora),
     rodadas: rodadasComEstadoMudado(ag, rodada, "implementar", ctx.agora),
-  };
-}
-
-/**
- * Primeiro tempo da aprovação (CA-6): valida a intenção do Auditor, com nota, ou a aprovação automática da Fabriquinha,
- * sem nota, sem efeito algum, antes de qualquer integração. Chegar ao gate já exige a revisão aprovada e o PR sem
- * conflito nem check falho; quem decide se o projeto aprova sozinho é a aplicação.
- */
-export function validarAprovacaoPullRequest(ag: AgregadoDemanda, entrada: unknown, ator: Ator): IntencaoAprovacaoPR {
-  exigirAtor(ator, "aprovar o PR da rodada", "auditor", "fabriquinha");
-  const e = (ator.tipo === "fabriquinha" ? EntradaAprovacaoAutomaticaPR : EntradaAprovacaoPR).parse(entrada);
-  gatePullRequest(ag, e);
-  return e;
-}
-
-/**
- * Segundo tempo (CA-10 e CA-11): repete as guardas e exige o atestado da aplicação, para este gate e com destino na
- * branch da demanda. Só então grava a aprovação, com a nota do Auditor ou o motivo da automática, e conclui o
- * `encerrar_rodada` e a rodada.
- */
-export function confirmarAprovacaoPullRequest(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoConfirmacao,
-): AgregadoDemanda {
-  const e = validarAprovacaoPullRequest(ag, entrada, ator);
-  const { rodada, ticket } = gatePullRequest(ag, e);
-  const integracao = Integracao.safeParse(ctx.integracao);
-  const { data } = integracao;
-  if (
-    data?.confirmada !== true ||
-    data.demanda_id !== e.demanda_id ||
-    data.rodada_id !== e.rodada_id ||
-    data.ticket_id !== e.ticket_id ||
-    data.branch_destino !== ag.demanda.branch
-  ) {
-    throw new ErroDeRegra(
-      "a aplicação não confirmou a integração do PR na branch da demanda",
-      "o gate segue aberto; tente de novo depois de integrar",
-    );
-  }
-  return {
-    ...ag,
-    ...comTicketConcluido(ag, ticket, ctx.agora),
-    decisoes: [
-      ...ag.decisoes,
-      decisaoDoGate(
-        ag,
-        ticket,
-        "nota" in e
-          ? { resultado: "aprovado", nota: e.nota }
-          : { resultado: "aprovado", motivo: MOTIVO_APROVACAO_AUTOMATICA_PR },
-        ator,
-        ctx,
-      ),
-    ],
-    rodadas: rodadasComEstadoMudado(ag, rodada, "concluida", ctx.agora),
   };
 }

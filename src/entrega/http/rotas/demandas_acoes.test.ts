@@ -181,10 +181,12 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
 
 type Cenario = Awaited<ReturnType<typeof cenario>>;
 const erro = (r: { json: () => Record<string, string> }) => String(r.json().erro);
+/** O gate recusa a entrada inválida (D03) como qualquer erro de regra. */
+const STATUS_DA_ENTRADA_INVALIDA = 409;
 
 test("CA-13: aprovar a demanda avança de estado e a resposta traz a demanda atualizada", async () => {
   const { pedir, estado } = await cenario("demanda");
-  const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: true } });
+  const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { resultado: "aprovado" } });
   assert.equal(r.status, 200);
   const { demanda, canceladas } = r.json<{ demanda: { demanda: { estado: string } }; canceladas: string[] }>();
   assert.equal(demanda.demanda.estado, "planejar");
@@ -192,19 +194,43 @@ test("CA-13: aprovar a demanda avança de estado e a resposta traz a demanda atu
   assert.equal(estado(), "planejar");
 });
 
-test("CA-14: recusar a demanda sem motivo pede o motivo e a demanda continua aguardando", async () => {
+test("CA-14: reprovar a demanda sem motivo ou com motivo em branco pede o motivo e a demanda continua aguardando", async () => {
   const { pedir, estado } = await cenario("demanda");
-  const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: false } });
-  assert.equal(r.status, 409);
-  assert.match(erro(r), /informe o motivo da recusa/);
+  for (const corpo of [{ resultado: "reprovado" }, { resultado: "reprovado", motivo: "  " }]) {
+    const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo });
+    assert.equal(r.status, STATUS_DA_ENTRADA_INVALIDA);
+    assert.match(erro(r), /informe o motivo da reprovação/);
+  }
   assert.equal(estado(), "gate_demanda");
 });
 
-test("CA-15: recusar com motivo cancela a I-206 e a I-207 que depende dela", async () => {
+test("a nota fora de 1 a 5 é rejeitada pelas três rotas de decisão e nada muda", async () => {
+  const demanda = await cenario("demanda");
+  const planejamento = await cenario("planejamento");
+  const pr = await cenario("pr");
+  const rotas = [
+    [demanda, "/api/demandas/I-206/decisao"],
+    [planejamento, "/api/demandas/I-206/planejamento/decisao"],
+    [pr, PR],
+  ] as const;
+  for (const [c, rota] of rotas) {
+    for (const nota of [0, 6, 2.5]) {
+      const r = await c.pedir(rota, { metodo: "POST", corpo: { resultado: "aprovado", nota } });
+      assert.equal(r.status, STATUS_DA_ENTRADA_INVALIDA);
+      assert.match(erro(r), /a nota vai de 1 a 5/);
+    }
+  }
+  assert.deepEqual(
+    [demanda.estado(), planejamento.estado(), rodada(pr)?.estado],
+    ["gate_demanda", "gate_planejamento", "gate_pr"],
+  );
+});
+
+test("CA-15: reprovar com motivo cancela a I-206 e a I-207 que depende dela", async () => {
   const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", {
     metodo: "POST",
-    corpo: { aprovado: false, motivo: "escopo grande demais" },
+    corpo: { resultado: "reprovado", motivo: "escopo grande demais" },
   });
   assert.equal(r.status, 200);
   assert.deepEqual(r.json<{ canceladas: string[] }>().canceladas, ["I-206", "I-207"]);
@@ -213,8 +239,8 @@ test("CA-15: recusar com motivo cancela a I-206 e a I-207 que depende dela", asy
 
 test("CA-16: aprovar de novo devolve a orientação do serviço e a demanda não muda", async () => {
   const { pedir, estado } = await cenario("demanda");
-  await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: true } });
-  const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { aprovado: true } });
+  await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { resultado: "aprovado" } });
+  const r = await pedir("/api/demandas/I-206/decisao", { metodo: "POST", corpo: { resultado: "aprovado" } });
   assert.equal(r.status, 409);
   assert.match(erro(r), /não espera decisão/);
   assert.equal(estado(), "planejar");
@@ -224,20 +250,23 @@ test("CA-17: aprovar o planejamento avança de estado e cria a worktree de cada 
   const { pedir, estado, c } = await cenario("planejamento");
   const r = await pedir("/api/demandas/I-206/planejamento/decisao", {
     metodo: "POST",
-    corpo: { aprovado: true, nota: 4 },
+    corpo: { resultado: "aprovado", nota: 4 },
   });
   assert.equal(r.status, 200);
+  assert.equal(r.json<{ demanda: { estado: string } }>().demanda.estado, "em_execucao");
   assert.equal(estado(), "em_execucao");
   assert.ok(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "1")));
   // D04: a R2 depende da R1 e nasce quando começar, da ponta da demanda.
   assert.equal(existsSync(join(c.raiz, "worktrees", "loja", DEMANDA, "rodadas", "2")), false);
 });
 
-test("CA-18: reprovar o planejamento sem motivo pede o motivo e o planejamento continua aguardando", async () => {
+test("CA-18: reprovar o planejamento sem motivo ou com motivo em branco pede o motivo e ele continua aguardando", async () => {
   const { pedir, estado } = await cenario("planejamento");
-  const r = await pedir("/api/demandas/I-206/planejamento/decisao", { metodo: "POST", corpo: { aprovado: false } });
-  assert.equal(r.status, 422);
-  assert.match(erro(r), /informe o motivo da reprovação do planejamento/);
+  for (const corpo of [{ resultado: "reprovado" }, { resultado: "reprovado", motivo: " " }]) {
+    const r = await pedir("/api/demandas/I-206/planejamento/decisao", { metodo: "POST", corpo });
+    assert.equal(r.status, STATUS_DA_ENTRADA_INVALIDA);
+    assert.match(erro(r), /informe o motivo da reprovação/);
+  }
   assert.equal(estado(), "gate_planejamento");
 });
 
@@ -245,13 +274,14 @@ test("CA-19: reprovar o planejamento com motivo volta a demanda ao planejamento 
   const { pedir, estado, ag } = await cenario("planejamento");
   const r = await pedir("/api/demandas/I-206/planejamento/decisao", {
     metodo: "POST",
-    corpo: { aprovado: false, motivo: "falta cobrir o erro de rede" },
+    corpo: { resultado: "reprovado", motivo: "falta cobrir o erro de rede" },
   });
   assert.equal(r.status, 200);
+  assert.equal(r.json<{ demanda: { estado: string } }>().demanda.estado, "planejar");
   assert.equal(estado(), "planejar");
   assert.deepEqual(
     ag().decisoes.map((d) => [d.resultado, d.motivo]),
-    [["recusado", "falta cobrir o erro de rede"]],
+    [["reprovado", "falta cobrir o erro de rede"]],
   );
 });
 
@@ -260,19 +290,24 @@ const rodada = (c: Cenario) => c.ag().rodadas.find((r) => r.rodada_id === 2);
 
 test("CA-20: aprovar o PR com nota 4 conclui a rodada e grava a nota", async () => {
   const c = await cenario("pr");
-  const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: true, nota: 4 } });
+  const r = await c.pedir(PR, { metodo: "POST", corpo: { resultado: "aprovado", nota: 4 } });
   assert.equal(r.status, 200);
+  assert.equal(
+    r.json<{ rodadas: { rodada_id: number; estado: string }[] }>().rodadas.find((x) => x.rodada_id === 2)?.estado,
+    "concluida",
+  );
   assert.equal(rodada(c)?.estado, "concluida");
   assert.equal(c.ag().decisoes.find((d) => d.resultado === "aprovado")?.nota, 4);
 });
 
-test("CA-21: aprovar o PR com nota 6 diz que a nota vai de 1 a 5 e a rodada não muda", async () => {
+test("CA-21: aprovar o PR com nota 6 diz que a nota vai de 1 a 5 e sem nota diz que ela é exigida, e a rodada não muda", async () => {
   const c = await cenario("pr");
-  for (const corpo of [{ aprovado: true, nota: 6 }, { aprovado: true }]) {
-    const r = await c.pedir(PR, { metodo: "POST", corpo });
-    assert.equal(r.status, 422);
-    assert.match(erro(r), /a nota vai de 1 a 5/);
-  }
+  const comNota6 = await c.pedir(PR, { metodo: "POST", corpo: { resultado: "aprovado", nota: 6 } });
+  assert.equal(comNota6.status, STATUS_DA_ENTRADA_INVALIDA);
+  assert.match(erro(comNota6), /a nota vai de 1 a 5/);
+  const semNota = await c.pedir(PR, { metodo: "POST", corpo: { resultado: "aprovado" } });
+  assert.equal(semNota.status, STATUS_DA_ENTRADA_INVALIDA);
+  assert.match(erro(semNota), /aprovar o PR exige a nota/);
   assert.equal(rodada(c)?.estado, "gate_pr");
 });
 
@@ -296,8 +331,12 @@ async function concluirSessao({ pedir, banco }: Cenario, ticket_id: number) {
 /** A sessão de ajustes aberta pela reprovação do PR; o ticket dela é o 9. `execucao` é a execução que a abriu. */
 async function comSessao() {
   const c = await cenario("pr");
-  const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: false, motivo: "cobertura abaixo do combinado" } });
+  const r = await c.pedir(PR, {
+    metodo: "POST",
+    corpo: { resultado: "reprovado", motivo: "cobertura abaixo do combinado" },
+  });
   assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.json()), ["sessao"]);
   const { id: sessao } = c.banco.prepare("SELECT id FROM sessao WHERE ticket_id = 9").get() as { id: string };
   // A conversa é a do chat da sessão do ticket; o pi de pé e ocioso espera o Auditor.
   await ate(async () => (await chat(c, sessao)).sessao.motivo === "conversa");
@@ -322,24 +361,26 @@ test("CA-22: reprovar o PR com motivo e sem nota abre a sessão de ajustes na ho
   assert.equal(rodada(c)?.estado, "ajustar_resultado");
   assert.deepEqual(
     c.ag().decisoes.map((d) => [d.resultado, d.motivo, d.nota]),
-    [["recusado", "cobertura abaixo do combinado", undefined]],
+    [["reprovado", "cobertura abaixo do combinado", undefined]],
   );
   await concluirSessao(c, 9);
 });
 
 test("CA-23: reprovar o PR sem motivo pede o motivo e a sessão não abre", async () => {
   const c = await cenario("pr");
-  const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: false, motivo: "  " } });
-  assert.equal(r.status, 422);
-  assert.match(erro(r), /informe o motivo da reprovação do PR/);
+  for (const corpo of [{ resultado: "reprovado" }, { resultado: "reprovado", motivo: "  " }]) {
+    const r = await c.pedir(PR, { metodo: "POST", corpo });
+    assert.equal(r.status, STATUS_DA_ENTRADA_INVALIDA);
+    assert.match(erro(r), /informe o motivo da reprovação/);
+  }
   assert.equal(rodada(c)?.estado, "gate_pr");
 });
 
 test("CA-24: reprovar o PR com motivo e nota diz que a reprovação não leva nota e a rodada não muda", async () => {
   const c = await cenario("pr");
-  const r = await c.pedir(PR, { metodo: "POST", corpo: { aprovado: false, motivo: "m", nota: 3 } });
-  assert.equal(r.status, 422);
-  assert.match(erro(r), /a reprovação não leva nota/);
+  const r = await c.pedir(PR, { metodo: "POST", corpo: { resultado: "reprovado", motivo: "m", nota: 3 } });
+  assert.equal(r.status, STATUS_DA_ENTRADA_INVALIDA);
+  assert.match(erro(r), /a reprovação do PR não leva nota/);
   assert.equal(rodada(c)?.estado, "gate_pr");
 });
 
@@ -402,7 +443,7 @@ test("a rodada sem sessão de ajustes não conclui e o endereço precisa ser de 
   assert.match(erro(sem), /I-206\.R2 não tem sessão de ajustes/);
   const ticket = await c.pedir("/api/demandas/rodadas/I-206.T3/pr", {
     metodo: "POST",
-    corpo: { aprovado: true, nota: 4 },
+    corpo: { resultado: "aprovado", nota: 4 },
   });
   assert.equal(ticket.status, 409);
   assert.match(erro(ticket), /I-206\.T3 não é uma rodada/);
@@ -412,7 +453,7 @@ test("CA-36: decisão de outra origem recebe 403 e a demanda não muda", async (
   const { pedir, estado } = await cenario("demanda");
   const r = await pedir("/api/demandas/I-206/decisao", {
     metodo: "POST",
-    corpo: { aprovado: true },
+    corpo: { resultado: "aprovado" },
     headers: { "sec-fetch-site": "cross-site" },
   });
   assert.equal(r.status, 403);
@@ -477,7 +518,7 @@ test("CA-32: cancelar leva a dependente e o histórico fica", async () => {
   assert.equal(ag().tickets.length, 1);
 });
 
-test("CA-33: cancelar depois da integração confirmada é recusado e a demanda não muda", async () => {
+test("CA-33: cancelar depois da integração confirmada é reprovado e a demanda não muda", async () => {
   const { pedir, banco, estado } = await cenario("demanda");
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,

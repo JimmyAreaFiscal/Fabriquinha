@@ -4,10 +4,12 @@ import { test } from "node:test";
 import type { Ator } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import { abrirTrabalhoDoAgente, cenarioRevisao, REF_GLOBAL } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { conduzirRevisaoIntegral, decidirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
+import { decidirGate } from "./gates/decidir_gate.ts";
+import { conduzirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 
 type Banco = Parameters<typeof carregarDemanda>[0];
 const revisorIntegral = (banco: Banco): Ator => abrirTrabalhoDoAgente(banco, REF_GLOBAL);
@@ -47,8 +49,9 @@ function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = tru
     ),
   );
 }
-const aprovar = (banco: Banco) =>
-  decidirRevisaoIntegral(banco, { demanda_id: "I-1", ticket_id: 3, aprovado: true }, revisorIntegral(banco));
+const decidir = (banco: Banco, entrada: object, ator: Ator = revisorIntegral(banco)) =>
+  decidirGate(banco, "gate_revisao_demanda", Endereco.daDemanda("I-1"), entrada, ator);
+const aprovar = (banco: Banco) => decidir(banco, { resultado: "aprovado" });
 
 test("CA-9: rodada pendente recusa citando-a e a demanda continua em execucao", async () => {
   const { banco } = await cenarioRevisao();
@@ -95,7 +98,7 @@ test("CA-13: achado alto ou crítico recusa a aprovação", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
   for (const sev of ["alta", "critica"]) {
     evidenciar(banco, estresse("passou"), seguranca(sev));
-    assert.throws(() => aprovar(banco), /achado alto ou crítico: injeção/);
+    await assert.rejects(aprovar(banco), /achado alto ou crítico: injeção/);
   }
   assert.equal(estado(banco).estado, "revisar_demanda");
 });
@@ -103,7 +106,7 @@ test("CA-13: achado alto ou crítico recusa a aprovação", async () => {
 test("CA-14: cenário que quebra recusa a aprovação", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
   evidenciar(banco, estresse("quebrou"), seguranca("baixa"));
-  assert.throws(() => aprovar(banco), /cenário que quebrou: carga/);
+  await assert.rejects(aprovar(banco), /cenário que quebrou: carga/);
   assert.equal(estado(banco).estado, "revisar_demanda");
 });
 
@@ -111,14 +114,14 @@ test("CA-15: não se aplica sem justificativa recusa e pede a justificativa", as
   const { banco } = await cenarioRevisao({ integral: true });
   evidenciar(banco, estresse("passou"), seguranca("baixa"));
   banco.exec(`UPDATE evidencia_demanda SET dados = '${JSON.stringify(naoSeAplica)}' WHERE tipo = 'testes_estresse'`);
-  assert.throws(() => aprovar(banco), /justificativa/);
+  await assert.rejects(aprovar(banco), /justificativa/);
   assert.equal(estado(banco).estado, "revisar_demanda");
 });
 
 test("CA-16: aprovada vai a encerramento com encerrar_demanda aberto; não se aplica justificado passa", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
   evidenciar(banco, { ...naoSeAplica, justificativa: "sem carga" }, seguranca("media"));
-  aprovar(banco);
+  await aprovar(banco);
   const e = estado(banco);
   assert.equal(e.estado, "encerrar_demanda");
   assert.equal(e.tickets.find((t) => t.etapa === "encerrar_demanda")?.estado, "aberto");
@@ -139,33 +142,24 @@ test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída
       },
     ] as never,
   }));
-  decidirRevisaoIntegral(
-    banco,
-    {
+  await decidir(banco, {
+    resultado: "reprovado",
+    motivo: "falta tratar erro",
+    correcoes: {
       demanda_id: "I-1",
-      ticket_id: 3,
-      aprovado: false,
-      exigencias: "falta tratar erro",
-      plano: {
-        demanda_id: "I-1",
-        criterios: ["CA-2"],
-        rodadas: [{ demanda_id: "I-1", rodada_id: 1, titulo: "corrige", e2e: false, criterios: ["CA-2"] }],
-        tickets: [{ demanda_id: "I-1", ticket_id: 1, titulo: "c", descricao: "d", rodada_id: 1 }],
-      },
+      criterios: ["CA-2"],
+      rodadas: [{ demanda_id: "I-1", rodada_id: 1, titulo: "corrige", e2e: false, criterios: ["CA-2"] }],
+      tickets: [{ demanda_id: "I-1", ticket_id: 1, titulo: "c", descricao: "d", rodada_id: 1 }],
     },
-    revisorIntegral(banco),
-  );
+  });
   const e = estado(banco);
   assert.equal(e.estado, "em_execucao");
   assert.deepEqual(e.rodadas, ["concluida", "implementar"]);
 });
 
-test("I-266: a decisão do agente com o trabalho de outro ticket é recusada e nada é gravado", async () => {
+test("I-266: a decisão do agente com o trabalho de outro ticket é reprovada e nada é gravado", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
   const deOutroTicket = abrirTrabalhoDoAgente(banco, { demanda_id: "I-1", ticket_id: 2 });
-  assert.throws(
-    () => decidirRevisaoIntegral(banco, { demanda_id: "I-1", ticket_id: 3, aprovado: true }, deOutroTicket),
-    ErroDeRegra,
-  );
+  await assert.rejects(decidir(banco, { resultado: "aprovado" }, deOutroTicket), ErroDeRegra);
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });

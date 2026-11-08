@@ -260,10 +260,10 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
         { ref: "I-206.T4", etapa: "planejar", estado: "aberto", satisfaz_dependencia: false, elegivel: false },
       ],
       decisoes: [
-        { ticket: "I-206.T1", resultado: "recusado", motivo: "falta teste do caminho de erro", por: "agente" },
-        { ticket: "I-206.T2", resultado: "recusado", motivo: "x", por: "auditor" },
+        { ticket: "I-206.T1", resultado: "reprovado", motivo: "falta teste do caminho de erro", por: "agente" },
+        { ticket: "I-206.T2", resultado: "reprovado", motivo: "x", por: "auditor" },
         { ticket: "I-206.T2", resultado: "aprovado", nota: 4, por: "auditor" },
-        { ticket: "I-206.T5", resultado: "recusado", motivo: "falta CA-2", por: "agente" },
+        { ticket: "I-206.T5", resultado: "reprovado", motivo: "falta CA-2", por: "agente" },
       ],
       evidencias: [{ tipo: "pr_aberto", ticket: "I-206.T2", dados: { id: "7", url: "https://pr/7" }, anexos: [] }],
     }),
@@ -282,14 +282,14 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
   assert.match(r1, /Instrução:<\/strong> refaça/);
   assert.match(
     r1,
-    /Recusado<\/strong> por Agente: falta teste do caminho de erro<\/div><button [^>]*data-expandir>ler tudo/,
+    /Reprovado<\/strong> por Agente: falta teste do caminho de erro<\/div><button [^>]*data-expandir>ler tudo/,
   );
   // Concluído e decidido: a última decisão toma o lugar do "Concluído", na pílula e no marco.
   assert.match(
     r1,
     /<li class="dm-ticket dm-marco-aprovado" id="I-206\.T2">[\s\S]*<span class="pill pill-ok">Aprovado<\/span>/,
   );
-  assert.match(r1, /Recusado<\/strong> por Auditor: x/);
+  assert.match(r1, /Reprovado<\/strong> por Auditor: x/);
   assert.match(r1, /Aprovado<\/strong> por Auditor · nota 4<\/div><\/li>/);
   assert.match(r1, /nota 4/);
   assert.match(r1, /Aprovação do PR/);
@@ -298,7 +298,7 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
   assert.match(r2, /<li class="dm-ticket dm-marco-em_execucao" id="I-206\.T3">[\s\S]*Em execução/);
   assert.match(
     r2,
-    /<li class="dm-ticket dm-marco-recusado" id="I-206\.T5">[\s\S]*<span class="pill pill-falha">Recusado<\/span>/,
+    /<li class="dm-ticket dm-marco-reprovado" id="I-206\.T5">[\s\S]*<span class="pill pill-falha">Reprovado<\/span>/,
   );
   assert.match(r2, /Sessão de ajustes/);
   assert.doesNotMatch(r2, /nota|PR #/);
@@ -650,12 +650,12 @@ test("a integração à espera do merge humano: o passo, o link do PR e o Aguard
   );
 });
 
-test("o gate da demanda traz Aprovar e Recusar com o motivo, ligados à rota da decisão (CA-14 a CA-16)", () => {
+test("o gate da demanda traz Aprovar e Reprovar com o motivo, ligados à rota da decisão (CA-14 a CA-16)", () => {
   const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, estado: "gate_demanda" } }));
   assert.match(html, /<span class="dm-gate-titulo">Aprovação da demanda<\/span>/);
   assert.match(html, /<textarea id="motivo-decisao"/);
-  assert.match(html, /data-gate="false" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Recusar</);
-  assert.match(html, /data-gate="true" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Aprovar</);
+  assert.match(html, /data-gate="reprovado" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Reprovar</);
+  assert.match(html, /data-gate="aprovado" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Aprovar</);
 });
 
 /** Uma evidência da própria demanda, sem anexos. */
@@ -764,11 +764,11 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   assert.match(html, /<option value="5">5<\/option>/);
   assert.match(
     html,
-    /data-gate="false" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-campo="motivo-I-206\.R1">Reprovar PR</,
+    /data-gate="reprovado" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-campo="motivo-I-206\.R1">Reprovar PR</,
   );
   assert.match(
     html,
-    /data-gate="true" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-nota="nota-I-206\.R1">Aprovar PR</,
+    /data-gate="aprovado" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-nota="nota-I-206\.R1">Aprovar PR</,
   );
   assert.doesNotMatch(
     pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "concluida", ticket_atual_por_etapa: {} }] }),

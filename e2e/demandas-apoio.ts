@@ -174,10 +174,11 @@ const PNG = Buffer.from(
 export function semearPaginaDaDemanda(raiz: string): void {
   const banco = abrir(raiz);
   const { sha256, bytes } = guardarBytes(banco, PNG);
-  const decisao = (ticket_id: number, resultado: string, resto: object) => ({
+  const decisao = (ticket_id: number, gate: string, resultado: string, resto: object) => ({
     demanda_id: "I-210",
     ticket_id,
     decisao_id: ticket_id,
+    gate,
     resultado,
     por: { tipo: "auditor" },
     em,
@@ -205,8 +206,8 @@ export function semearPaginaDaDemanda(raiz: string): void {
         },
       ],
       decisoes: [
-        decisao(2, "recusado", { motivo: "falta teste do caminho de erro" }),
-        decisao(3, "aprovado", { nota: 4 }),
+        decisao(2, "gate_revisao_rodada", "reprovado", { motivo: "falta teste do caminho de erro" }),
+        decisao(3, "gate_pr", "aprovado", { nota: 4 }),
       ],
       evidencias: [
         {

@@ -83,7 +83,7 @@ export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void 
   ];
   if (motivos.length > 0) {
     throw new ErroDeRegra(
-      `a aprovação do ticket ${formatarTicketRef({ demanda_id, ticket_id })} foi recusada: ${motivos.join("; ")}`,
+      `a aprovação do ticket ${formatarTicketRef({ demanda_id, ticket_id })} foi rejeitada: ${motivos.join("; ")}`,
       "corrija a evidência e decida de novo, ou reprove",
     );
   }

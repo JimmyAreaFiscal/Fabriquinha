@@ -38,7 +38,7 @@ export async function acharCommitTicketDemanda(worktree: string, ref: Ref): Prom
  * `git add -A` e commit `feat|fix: <título> [I-n.Tm]` com os hooks e sem credenciais; se o commit do ticket já
  * existe (queda antes da gravação), reaproveita. Grava o commit e os arquivos e o devolve.
  * No `resolver_conflito`, o commit conclui o merge em andamento na worktree, mesmo sem alteração; o `implementar`
- * sem alteração não gera commit vazio e é recusado com `ErroDeReprovacao`.
+ * sem alteração não gera commit vazio e é rejeitado com `ErroDeReprovacao`.
  */
 export async function commitarTicketDemanda(
   banco: DatabaseSync,

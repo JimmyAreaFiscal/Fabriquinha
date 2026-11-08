@@ -57,6 +57,7 @@ const MOTIVO_CORRECAO_MUDA_ARQUIVO =
 // `sessao_em_aberto` vira `ajustar_resultado`. A foto da base é a de antes da rodada; os nomes novos entram aqui.
 const MOTIVO_ESTADO_COM_NOME_DA_ETAPA =
   "I-267.R1: fase e status viram estado, com o nome da Etapa corrente (fase desenvolvimento vira estado implementar)";
+const MOTIVO_GATE_REPROVA = "I-272: o vocabulário do gate é aprovar ou reprovar";
 const MOTIVO_ETAPA_RENOMEADA = "I-267.R1: a etapa sessao_em_aberto passa a se chamar ajustar_resultado";
 /** O arquivo da foto da base que passa a ter outro nome na foto atual. */
 const ARQUIVOS_RENOMEADOS: Readonly<Record<string, string>> = {
@@ -122,6 +123,26 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
     para: "mostra o estado,",
     motivo: MOTIVO_ESTADO_COM_NOME_DA_ETAPA,
   },
+  ...(
+    [
+      ["textos/skills/registrar-necessidade/SKILL.md.txt", "Se o Auditor recusar,", "Se o Auditor reprovar,"],
+      [
+        "textos/pacote-pi/skills/artefato-desenho-solucao/SKILL.md.txt",
+        "aprová-la ou recusá-la",
+        "aprová-la ou reprová-la",
+      ],
+      [
+        "textos/pacote-pi/skills/artefato-mensagem-pr/SKILL.md.txt",
+        '"Recusar a aprovação da demanda',
+        '"Reprovar a aprovação da demanda',
+      ],
+      [
+        "textos/pacote-pi/skills/artefato-criterios-aceite/SKILL.md.txt",
+        "clica em Recusar sem motivo",
+        "clica em Reprovar sem motivo",
+      ],
+    ] as const
+  ).map(([arquivo, de, para]) => ({ arquivo, de, para, motivo: MOTIVO_GATE_REPROVA })),
   {
     arquivo: "cli/aula-e-demanda.txt",
     de: "não toca nenhuma linha alterada pela issue",
@@ -167,8 +188,8 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
   {
     arquivo: "prompts/revisar_rodada.txt",
     de: "\n## Arquivos alterados\n",
-    para: "\n## Revisões anteriores da rodada\n\nDecisões recusadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:\n\n(nenhuma)\n\n## Arquivos alterados\n",
-    motivo: MOTIVO_REVISOES_ANTERIORES,
+    para: "\n## Revisões anteriores da rodada\n\nDecisões reprovadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:\n\n(nenhuma)\n\n## Arquivos alterados\n",
+    motivo: `${MOTIVO_REVISOES_ANTERIORES}; I-272: o vocabulário do gate é aprovar ou reprovar`,
   },
   ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
     arquivo,

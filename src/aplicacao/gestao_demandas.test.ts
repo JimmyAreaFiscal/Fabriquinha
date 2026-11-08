@@ -4,12 +4,14 @@ import { readFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
-import { AUDITOR } from "../nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { decidirGate } from "./gates/decidir_gate.ts";
 import * as gestao from "./gestao_demandas.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -132,7 +134,7 @@ test("CA-2: dependência em demanda inexistente recusa e não grava a demanda ne
   assert.equal(registrar(b), "I-1");
 });
 
-test("CA-3: dependência que fecha ciclo é recusada e nenhuma aresta nova é gravada", () => {
+test("CA-3: dependência que fecha ciclo é reprovada e nenhuma aresta nova é gravada", () => {
   const b = novoBanco();
   const idB = registrar(b);
   const idA = registrar(b, [idB]);
@@ -330,7 +332,7 @@ test("CA-27: arquivar demanda concluída muda só o estado", () => {
   );
 });
 
-test("CA-28: arquivar fora de concluida é recusado", () => {
+test("CA-28: arquivar fora de concluida é reprovado", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);
@@ -339,8 +341,8 @@ test("CA-28: arquivar fora de concluida é recusado", () => {
   assert.equal(carregarDemanda(b, id).demanda.estado, "gate_demanda");
 });
 
-test("CA-29: o módulo exporta as operações de registro, edição, evidência, envio, decisão, cancelamento e arquivamento", () => {
-  const nomes = ["registrar", "editar", "submeterEvidencia", "enviar", "decidir", "cancelar", "arquivar"];
+test("CA-29: o módulo exporta as operações de registro, edição, evidência, envio, cancelamento e arquivamento", () => {
+  const nomes = ["registrar", "editar", "submeterEvidencia", "enviar", "cancelar", "arquivar"];
   for (const nome of nomes) {
     assert.equal(typeof (gestao as Record<string, unknown>)[nome], "function", nome);
   }
@@ -355,52 +357,71 @@ const aguardando = (b: DatabaseSync, dependencias?: string[]) => {
   gestao.enviar(b, id, autor, ctx);
   return id;
 };
-const aprovar = { aprovado: true };
-const recusar = { aprovado: false, motivo: "fora do escopo" };
+const aprovar = { resultado: "aprovado" };
+const reprovar = { resultado: "reprovado", motivo: "fora do escopo" };
+const decidirGateDaDemandaComoAuditor = (b: DatabaseSync, id: string, entrada: unknown, ator: Ator = AUDITOR) =>
+  decidirGate(b, "gate_demanda", Endereco.daDemanda(id), entrada, ator);
 
-test("CA-16: aprovar leva a planejamento, grava a decisão e não cascateia", () => {
+test("CA-16: aprovar leva a planejamento, grava a decisão e não cascateia", async () => {
   const b = novoBanco();
   const a = aguardando(b);
   const dep = registrar(b, [a]);
-  const { demanda, canceladas } = gestao.decidir(b, a, aprovar, AUDITOR, ctx);
+  const { demanda, canceladas } = await decidirGateDaDemandaComoAuditor(b, a, aprovar);
   assert.equal(demanda.demanda.estado, "planejar");
   assert.deepEqual(canceladas, []);
   assert.equal(demanda.decisoes[0]?.resultado, "aprovado");
   assert.equal(estado(b, dep), "entender_e_desenhar");
 });
 
-test("CA-17: recusar com motivo cancela a demanda e as dependentes elegíveis", () => {
+test("CA-17: reprovar com motivo cancela a demanda e as dependentes elegíveis", async () => {
   const b = novoBanco();
   const a = aguardando(b);
   const dep = registrar(b, [a]);
   const feita = registrar(b, [a]);
   poEstado(b, feita, "concluida");
-  const { demanda, canceladas } = gestao.decidir(b, a, recusar, AUDITOR, ctx);
+  const { demanda, canceladas } = await decidirGateDaDemandaComoAuditor(b, a, reprovar);
   assert.equal(demanda.demanda.estado, "cancelada");
   assert.deepEqual(canceladas, [a, dep]);
   assert.equal(estado(b, dep), "cancelada");
   assert.equal(estado(b, feita), "concluida");
 });
 
-test("CA-18: recusar sem motivo pede o motivo; outros erros de entrada seguem o padrão", () => {
+test("CA-17: reprovar a demanda interrompe a execução aberta da dependente cancelada", async () => {
   const b = novoBanco();
   const a = aguardando(b);
-  assert.throws(() => gestao.decidir(b, a, { aprovado: false }, AUDITOR, ctx), /informe o motivo da recusa/);
-  assert.throws(() => gestao.decidir(b, a, { aprovado: "x" }, AUDITOR, ctx), ErroDeRegra);
+  const dep = registrar(b, [a]);
+  const ref = { demanda_id: dep, ticket_id: 1 };
+  comSessoesDoTicket(b, ref, (x) => ({
+    ...x,
+    sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
+    execucoes: [{ id: "e1", sessao_id: "s1", inicio: ctx.agora, falha: false }],
+  }));
+  await decidirGateDaDemandaComoAuditor(b, a, reprovar);
+  assert.ok(carregarSessoesDoTicket(b, ref).execucoes[0]?.fim);
+});
+
+test("CA-18: reprovar sem motivo pede o motivo; outros erros de entrada seguem o padrão", async () => {
+  const b = novoBanco();
+  const a = aguardando(b);
+  await assert.rejects(
+    decidirGateDaDemandaComoAuditor(b, a, { resultado: "reprovado" }),
+    /informe o motivo da reprovação/,
+  );
+  await assert.rejects(decidirGateDaDemandaComoAuditor(b, a, { resultado: "x" }), ErroDeRegra);
   assert.equal(estado(b, a), "gate_demanda");
 });
 
-test("CA-19: o autor não decide", () => {
+test("CA-19: o autor não decide", async () => {
   const b = novoBanco();
   const a = aguardando(b);
-  assert.throws(() => gestao.decidir(b, a, aprovar, { tipo: "agente", trabalho_id: "1" }, ctx), /Auditor/);
+  await assert.rejects(decidirGateDaDemandaComoAuditor(b, a, aprovar, { tipo: "agente", trabalho_id: "1" }), /Auditor/);
   assert.equal(estado(b, a), "gate_demanda");
 });
 
-test("CA-20: demanda em registro não espera decisão", () => {
+test("CA-20: demanda em registro não espera decisão", async () => {
   const b = novoBanco();
   const a = registrar(b);
-  assert.throws(() => gestao.decidir(b, a, aprovar, AUDITOR, ctx), /não espera decisão/);
+  await assert.rejects(decidirGateDaDemandaComoAuditor(b, a, aprovar), /não espera decisão/);
   assert.equal(estado(b, a), "entender_e_desenhar");
 });
 
@@ -467,7 +488,7 @@ test("CA-24: demanda terminada não se cancela (a integração confirmada é reg
   assert.equal(estado(b, a), "concluida");
 });
 
-test("CA-25: cancelar mantém decisões, evidências e execuções", () => {
+test("CA-25: cancelar mantém decisões, evidências e execuções", async () => {
   const b = novoBanco();
   const a = aguardando(b);
   const ref = { demanda_id: a, ticket_id: 1 };
@@ -476,7 +497,7 @@ test("CA-25: cancelar mantém decisões, evidências e execuções", () => {
     sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
     execucoes: [{ id: "e1", sessao_id: "s1", inicio: ctx.agora, falha: false, fim: ctx.agora }],
   }));
-  gestao.decidir(b, a, aprovar, AUDITOR, ctx);
+  await decidirGateDaDemandaComoAuditor(b, a, aprovar);
   const antes = { ag: carregarDemanda(b, a), ex: carregarSessoesDoTicket(b, ref).execucoes };
   const { demanda } = gestao.cancelar(b, a, AUDITOR, ctx);
   assert.deepEqual(demanda.decisoes, antes.ag.decisoes);

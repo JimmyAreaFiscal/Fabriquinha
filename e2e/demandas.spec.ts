@@ -126,19 +126,19 @@ test("CA-14 a CA-16: o gate da demanda aprova, recusa sem motivo não envia e re
   await info.attach("gate-1440", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
   await pagina.setViewportSize({ width: 375, height: 900 });
   await expect(pagina.getByRole("button", { name: "Aprovar" })).toBeVisible();
-  await expect(pagina.getByRole("button", { name: "Recusar" })).toBeVisible();
+  await expect(pagina.getByRole("button", { name: "Reprovar" })).toBeVisible();
   expect(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await info.attach("gate-375", { body: await pagina.screenshot({ fullPage: true }), contentType: "image/png" });
 
   // CA-15: motivo vazio, a mensagem junto ao campo e o estado não muda.
-  await pagina.getByRole("button", { name: "Recusar" }).click();
-  await expect(pagina.locator("#motivo-decisao-erro")).toHaveText("O motivo é obrigatório para recusar.");
+  await pagina.getByRole("button", { name: "Reprovar" }).click();
+  await expect(pagina.locator("#motivo-decisao-erro")).toHaveText("O motivo é obrigatório para reprovar.");
   await expect(estado(pagina)).toHaveText("Aprovação da demanda");
 
   // CA-16: com o motivo, o estado devolvido e os botões somem.
   await pagina.getByLabel(/Motivo/).fill("escopo incompleto");
-  await pagina.getByRole("button", { name: "Recusar" }).click();
-  await expect(pagina.getByRole("button", { name: "Recusar" })).toHaveCount(0);
+  await pagina.getByRole("button", { name: "Reprovar" }).click();
+  await expect(pagina.getByRole("button", { name: "Reprovar" })).toHaveCount(0);
   await expect(estado(pagina)).not.toHaveText("Aprovação da demanda");
 });
 
@@ -188,7 +188,7 @@ test("CA-17 a CA-19: o gate do planejamento aprova e reprova, e a reprovação p
   semearPlanejamento(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/demandas/I-212`);
   await pagina.getByRole("button", { name: "Reprovar planejamento" }).click();
-  await expect(pagina.locator("#motivo-planejamento-decisao-erro")).toHaveText("O motivo é obrigatório para recusar.");
+  await expect(pagina.locator("#motivo-planejamento-decisao-erro")).toHaveText("O motivo é obrigatório para reprovar.");
   await expect(estado(pagina)).toHaveText("Aprovação do planejamento");
   await pagina.getByLabel(/Motivo/).fill("falta o caso de erro");
   await pagina.getByRole("button", { name: "Reprovar planejamento" }).click();
@@ -214,7 +214,7 @@ test("CA-30: a página desatualizada mostra a orientação do servidor e o estad
     fetch("/api/demandas/I-214/decisao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ aprovado: true }),
+      body: JSON.stringify({ resultado: "aprovado" }),
     }),
   );
   await pagina.getByRole("button", { name: "Aprovar" }).click();
@@ -273,7 +273,7 @@ test("CA-22 e CA-23: reprovar o PR pede o motivo e, com ele, abre a sessão de a
   semearPrDaRodada(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/demandas/I-215`);
   await pagina.getByRole("button", { name: "Reprovar PR" }).click();
-  await expect(pagina.locator("#motivo-I-215\\.R1-erro")).toHaveText("O motivo é obrigatório para recusar.");
+  await expect(pagina.locator("#motivo-I-215\\.R1-erro")).toHaveText("O motivo é obrigatório para reprovar.");
   await expect(pagina.getByRole("button", { name: "Reprovar PR" })).toBeVisible();
 
   await pagina.getByLabel(/Motivo/).fill("falta teste");

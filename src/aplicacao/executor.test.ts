@@ -92,7 +92,7 @@ const lido = (banco: DatabaseSync, id: number) =>
 /** O ID da primeira execução da Tarefa. */
 const primeira = (banco: DatabaseSync) => execucoes(banco)[0]?.id ?? 0;
 
-test("conferirLink: qualquer resposta HTTP conta como no ar; conexão recusada, não", async () => {
+test("conferirLink: qualquer resposta HTTP conta como no ar; conexão rejeitada, não", async () => {
   assert.equal(await conferirLink(link), true);
   const portaFechada = createServer();
   await new Promise<void>((pronto) => portaFechada.listen(0, "127.0.0.1", pronto));

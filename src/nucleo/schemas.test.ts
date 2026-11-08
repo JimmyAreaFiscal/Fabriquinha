@@ -23,8 +23,8 @@ const jsonSchemaDeEtapa = (tipo: TipoSchemaEtapa) => publicado(schemaDeEtapa(tip
 
 const caminhos = (erro: unknown) => (erro as ZodError).issues.map((i) => i.path.join("."));
 
-/** Os caminhos dos campos recusados, ou `[]` se `dados` é válido para o tipo. */
-const recusados = (tipo: TipoEvidencia, dados: unknown): string[] => {
+/** Os caminhos dos campos rejeitados, ou `[]` se `dados` é válido para o tipo. */
+const camposRejeitados = (tipo: TipoEvidencia, dados: unknown): string[] => {
   const r = schemaDe(tipo).dados.safeParse(dados);
   return r.success ? [] : caminhos(r.error);
 };
@@ -32,27 +32,29 @@ const recusados = (tipo: TipoEvidencia, dados: unknown): string[] => {
 const CRITERIO = { id: "CA-1", dado: "um usuário", quando: "entra", entao: "vê o painel" };
 
 test("comportamento: descrição e passos para reproduzir; um vídeo ou texto pelo menos", () => {
-  assert.deepEqual(recusados("comportamento", { descricao: "lento", comoReproduzir: ["abrir"] }), []);
-  assert.deepEqual(recusados("comportamento", { comoReproduzir: [] }), ["descricao", "comoReproduzir"]);
-  assert.deepEqual(recusados("comportamento", { descricao: " ", comoReproduzir: [" "] }), [
+  assert.deepEqual(camposRejeitados("comportamento", { descricao: "lento", comoReproduzir: ["abrir"] }), []);
+  assert.deepEqual(camposRejeitados("comportamento", { comoReproduzir: [] }), ["descricao", "comoReproduzir"]);
+  assert.deepEqual(camposRejeitados("comportamento", { descricao: " ", comoReproduzir: [" "] }), [
     "descricao",
     "comoReproduzir.0",
   ]);
-  assert.deepEqual(recusados("comportamento", { descricao: "a".repeat(2001), comoReproduzir: ["x"] }), ["descricao"]);
+  assert.deepEqual(camposRejeitados("comportamento", { descricao: "a".repeat(2001), comoReproduzir: ["x"] }), [
+    "descricao",
+  ]);
   assert.deepEqual(schemaDe("comportamento").arquivos, { classes: ["video", "texto"], min: 1 });
 });
 
 test("criterios_aceite: critérios CA-n com dado, quando e então, sem id repetido; nenhum arquivo", () => {
-  assert.deepEqual(recusados("criterios_aceite", { criterios: [CRITERIO, { ...CRITERIO, id: "CA-2" }] }), []);
-  assert.deepEqual(recusados("criterios_aceite", { criterios: [] }), ["criterios"]);
-  assert.deepEqual(recusados("criterios_aceite", { criterios: [{ ...CRITERIO, id: "ca-1", entao: "" }] }), [
+  assert.deepEqual(camposRejeitados("criterios_aceite", { criterios: [CRITERIO, { ...CRITERIO, id: "CA-2" }] }), []);
+  assert.deepEqual(camposRejeitados("criterios_aceite", { criterios: [] }), ["criterios"]);
+  assert.deepEqual(camposRejeitados("criterios_aceite", { criterios: [{ ...CRITERIO, id: "ca-1", entao: "" }] }), [
     "criterios.0.id",
     "criterios.0.entao",
   ]);
-  assert.deepEqual(recusados("criterios_aceite", { criterios: [{ ...CRITERIO, quando: undefined }] }), [
+  assert.deepEqual(camposRejeitados("criterios_aceite", { criterios: [{ ...CRITERIO, quando: undefined }] }), [
     "criterios.0.quando",
   ]);
-  assert.deepEqual(recusados("criterios_aceite", { criterios: [CRITERIO, CRITERIO] }), ["criterios"]);
+  assert.deepEqual(camposRejeitados("criterios_aceite", { criterios: [CRITERIO, CRITERIO] }), ["criterios"]);
   assert.deepEqual(schemaDe("criterios_aceite").arquivos, {
     classes: ["video", "imagem", "html", "texto"],
     min: 0,
@@ -76,19 +78,19 @@ test("todo tipo do F3 §2 tem schema", () => {
 const RODADO = { comando: "npm test", codigoSaida: 0, estourou: false, duracaoMs: 12, log: "teste-1.log" };
 
 test("execucao_testes e matriz_fitness: comandos rodados pelos coletores, com o log de cada um em texto", () => {
-  assert.deepEqual(recusados("execucao_testes", { comandos: [RODADO, { ...RODADO, codigoSaida: null }] }), []);
-  assert.deepEqual(recusados("execucao_testes", { comandos: [] }), ["comandos"]);
-  assert.deepEqual(recusados("execucao_testes", { comandos: [{ ...RODADO, codigoSaida: 1.5, duracaoMs: -1 }] }), [
-    "comandos.0.codigoSaida",
-    "comandos.0.duracaoMs",
-  ]);
+  assert.deepEqual(camposRejeitados("execucao_testes", { comandos: [RODADO, { ...RODADO, codigoSaida: null }] }), []);
+  assert.deepEqual(camposRejeitados("execucao_testes", { comandos: [] }), ["comandos"]);
+  assert.deepEqual(
+    camposRejeitados("execucao_testes", { comandos: [{ ...RODADO, codigoSaida: 1.5, duracaoMs: -1 }] }),
+    ["comandos.0.codigoSaida", "comandos.0.duracaoMs"],
+  );
   const linha = { nome: "camadas", descricao: "domínio sem I/O", ...RODADO };
   assert.deepEqual(schemaDe("matriz_fitness").dados.parse({ linhas: [linha] }), { linhas: [linha] });
-  assert.deepEqual(recusados("matriz_fitness", { linhas: [] }), ["linhas"]);
-  assert.deepEqual(recusados("matriz_fitness", { linhas: [{ ...linha, nome: "Camadas", estourou: undefined }] }), [
-    "linhas.0.nome",
-    "linhas.0.estourou",
-  ]);
+  assert.deepEqual(camposRejeitados("matriz_fitness", { linhas: [] }), ["linhas"]);
+  assert.deepEqual(
+    camposRejeitados("matriz_fitness", { linhas: [{ ...linha, nome: "Camadas", estourou: undefined }] }),
+    ["linhas.0.nome", "linhas.0.estourou"],
+  );
   for (const tipo of ["execucao_testes", "matriz_fitness"] as const) {
     assert.deepEqual(schemaDe(tipo).arquivos, { classes: ["texto"], min: 1 });
   }
@@ -109,7 +111,9 @@ test("relatorio_sonar usa chave_sonarqube e publica o novo campo", () => {
     ],
   };
   assert.deepEqual(schemaDe("relatorio_sonar").dados.parse(relatorio), relatorio);
-  assert.deepEqual(recusados("relatorio_sonar", { ...relatorio, chave_sonarqube: undefined }), ["chave_sonarqube"]);
+  assert.deepEqual(camposRejeitados("relatorio_sonar", { ...relatorio, chave_sonarqube: undefined }), [
+    "chave_sonarqube",
+  ]);
   assert.deepEqual(jsonSchemaDe("relatorio_sonar").dados.required, [
     "chave_sonarqube",
     "ceTaskId",
@@ -124,20 +128,23 @@ const SOLUCAO = { resumo: "cache na busca", arquivosPrevistos: [PREVISTO] };
 
 test("desenho_solucao: resumo, arquivos previstos com caminho relativo (glob) e fora de escopo; um HTML", () => {
   assert.deepEqual(schemaDe("desenho_solucao").dados.parse(SOLUCAO), { ...SOLUCAO, foraDeEscopo: [] });
-  assert.deepEqual(recusados("desenho_solucao", { ...SOLUCAO, foraDeEscopo: ["pagamento"] }), []);
-  assert.deepEqual(recusados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [] }), ["arquivosPrevistos"]);
-  assert.deepEqual(recusados("desenho_solucao", { arquivosPrevistos: [{ ...PREVISTO, acao: "editar", motivo: "" }] }), [
-    "resumo",
-    "arquivosPrevistos.0.acao",
-    "arquivosPrevistos.0.motivo",
-  ]);
+  assert.deepEqual(camposRejeitados("desenho_solucao", { ...SOLUCAO, foraDeEscopo: ["pagamento"] }), []);
+  assert.deepEqual(camposRejeitados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [] }), ["arquivosPrevistos"]);
+  assert.deepEqual(
+    camposRejeitados("desenho_solucao", { arquivosPrevistos: [{ ...PREVISTO, acao: "editar", motivo: "" }] }),
+    ["resumo", "arquivosPrevistos.0.acao", "arquivosPrevistos.0.motivo"],
+  );
   for (const caminho of ["/src/a.ts", "../fora.ts", "src/../../x", "a/..", "", "./src/a.ts", "src/./a.ts", "docs/"]) {
-    assert.deepEqual(recusados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [{ ...PREVISTO, caminho }] }), [
-      "arquivosPrevistos.0.caminho",
-    ]);
+    assert.deepEqual(
+      camposRejeitados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [{ ...PREVISTO, caminho }] }),
+      ["arquivosPrevistos.0.caminho"],
+    );
   }
   for (const caminho of ["src/a.ts", ".github/**", "src/**/x..y.ts", "docs/*.md", ".env"]) {
-    assert.deepEqual(recusados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [{ ...PREVISTO, caminho }] }), []);
+    assert.deepEqual(
+      camposRejeitados("desenho_solucao", { ...SOLUCAO, arquivosPrevistos: [{ ...PREVISTO, caminho }] }),
+      [],
+    );
   }
   assert.deepEqual(schemaDe("desenho_solucao").arquivos, HTML_UNICO);
   // A regra dos dotfiles do path.matchesGlob, que a descrição do campo ensina ao agente.
@@ -145,9 +152,9 @@ test("desenho_solucao: resumo, arquivos previstos com caminho relativo (glob) e 
 });
 
 test("prototipo: descrição e como executar opcional; qualquer classe, com pelo menos um vídeo ou print", () => {
-  assert.deepEqual(recusados("prototipo", { descricao: "tela nova" }), []);
-  assert.deepEqual(recusados("prototipo", { descricao: "tela nova", comoExecutar: "npm run demo" }), []);
-  assert.deepEqual(recusados("prototipo", { comoExecutar: "x".repeat(2001) }), ["descricao", "comoExecutar"]);
+  assert.deepEqual(camposRejeitados("prototipo", { descricao: "tela nova" }), []);
+  assert.deepEqual(camposRejeitados("prototipo", { descricao: "tela nova", comoExecutar: "npm run demo" }), []);
+  assert.deepEqual(camposRejeitados("prototipo", { comoExecutar: "x".repeat(2001) }), ["descricao", "comoExecutar"]);
   assert.deepEqual(schemaDe("prototipo").arquivos, {
     classes: ["video", "imagem", "html", "texto"],
     min: 1,
@@ -155,7 +162,7 @@ test("prototipo: descrição e como executar opcional; qualquer classe, com pelo
   });
 });
 
-test("Big-O: a gramática do F3 com os exemplos válidos e recusados da spec", () => {
+test("Big-O: a gramática do F3 com os exemplos válidos e rejeitados da spec", () => {
   const validos: Record<string, string[]> = {
     "O(1)": [],
     "O(log n)": ["n"],
@@ -174,9 +181,9 @@ test("Big-O: a gramática do F3 com os exemplos válidos e recusados da spec", (
     "O(a234567890123456)": ["a234567890123456"],
   };
   for (const [expressao, simbolos] of Object.entries(validos)) {
-    assert.deepEqual([...(simbolosDe(expressao) ?? ["recusado"])], simbolos, expressao);
+    assert.deepEqual([...(simbolosDe(expressao) ?? ["rejeitado"])], simbolos, expressao);
   }
-  const recusadas = [
+  const rejeitadas = [
     "O(N)",
     "O(n²)",
     "n log n",
@@ -191,7 +198,7 @@ test("Big-O: a gramática do F3 com os exemplos válidos e recusados da spec", (
     "",
     "O(a2345678901234567)",
   ];
-  for (const expressao of recusadas) assert.equal(simbolosDe(expressao), undefined, expressao);
+  for (const expressao of rejeitadas) assert.equal(simbolosDe(expressao), undefined, expressao);
 });
 
 const COMPLEXIDADE = { tempo: "O(n log n)", espaco: "O(n)" };
@@ -200,21 +207,23 @@ const VARIAVEIS = [{ simbolo: "n", significado: "itens no catálogo" }];
 
 test("relatorio_complexidade: fluxos de nome único com Big-O; antes só no alterado; um HTML", () => {
   const alterado = { ...FLUXO, nome: "Cadastro", situacao: "alterado", antes: { tempo: "O(n^2)", espaco: "O(1)" } };
-  assert.deepEqual(recusados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [FLUXO, alterado] }), []);
+  assert.deepEqual(camposRejeitados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [FLUXO, alterado] }), []);
   // O HTML explica cada fluxo pelo mesmo nome do JSON.
-  assert.deepEqual(recusados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [FLUXO, FLUXO] }), ["fluxos"]);
+  assert.deepEqual(camposRejeitados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [FLUXO, FLUXO] }), [
+    "fluxos",
+  ]);
   // Sem fluxo executável (só estilo ou documentação).
-  assert.deepEqual(recusados("relatorio_complexidade", { variaveis: [], fluxos: [] }), []);
+  assert.deepEqual(camposRejeitados("relatorio_complexidade", { variaveis: [], fluxos: [] }), []);
   assert.deepEqual(
-    recusados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [{ ...alterado, antes: undefined }] }),
+    camposRejeitados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [{ ...alterado, antes: undefined }] }),
     ["fluxos.0.antes"],
   );
   assert.deepEqual(
-    recusados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [{ ...FLUXO, antes: COMPLEXIDADE }] }),
+    camposRejeitados("relatorio_complexidade", { variaveis: VARIAVEIS, fluxos: [{ ...FLUXO, antes: COMPLEXIDADE }] }),
     ["fluxos.0.antes"],
   );
   assert.deepEqual(
-    recusados("relatorio_complexidade", {
+    camposRejeitados("relatorio_complexidade", {
       variaveis: VARIAVEIS,
       fluxos: [{ ...FLUXO, situacao: "removido", nome: "a\nb", depois: { tempo: "O(N)", espaco: "n" } }],
     }),
@@ -222,13 +231,13 @@ test("relatorio_complexidade: fluxos de nome único com Big-O; antes só no alte
   );
   // Big-O fora da gramática não conta como uso: o agente vê os dois erros de uma vez.
   assert.deepEqual(
-    recusados("relatorio_complexidade", {
+    camposRejeitados("relatorio_complexidade", {
       variaveis: VARIAVEIS,
       fluxos: [{ ...FLUXO, depois: { tempo: "O(N)", espaco: "n" } }],
     }),
     ["fluxos.0.depois.tempo", "fluxos.0.depois.espaco", "variaveis.0.simbolo"],
   );
-  assert.deepEqual(recusados("relatorio_complexidade", { fluxos: [{ ...FLUXO, depois: undefined }] }), [
+  assert.deepEqual(camposRejeitados("relatorio_complexidade", { fluxos: [{ ...FLUXO, depois: undefined }] }), [
     "variaveis",
     "fluxos.0.depois",
   ]);
@@ -238,13 +247,13 @@ test("relatorio_complexidade: fluxos de nome único com Big-O; antes só no alte
 test("relatorio_complexidade: todo símbolo usado está declarado e todo declarado é usado", () => {
   const k = { simbolo: "k", significado: "filtros" };
   assert.deepEqual(
-    recusados("relatorio_complexidade", {
+    camposRejeitados("relatorio_complexidade", {
       variaveis: VARIAVEIS,
       fluxos: [{ ...FLUXO, situacao: "alterado", antes: { tempo: "O(k)", espaco: "O(1)" } }],
     }),
     ["fluxos.0.antes.tempo"],
   );
-  assert.deepEqual(recusados("relatorio_complexidade", { variaveis: [...VARIAVEIS, k], fluxos: [FLUXO] }), [
+  assert.deepEqual(camposRejeitados("relatorio_complexidade", { variaveis: [...VARIAVEIS, k], fluxos: [FLUXO] }), [
     "variaveis.1.simbolo",
   ]);
   const r = schemaDe("relatorio_complexidade").dados.safeParse({
@@ -257,14 +266,15 @@ test("relatorio_complexidade: todo símbolo usado está declarado e todo declara
   );
   for (const simbolo of ["N", "log", "a".repeat(17), "1n"]) {
     assert.deepEqual(
-      recusados("relatorio_complexidade", { variaveis: [{ ...VARIAVEIS[0], simbolo }], fluxos: [] }).slice(0, 1),
+      camposRejeitados("relatorio_complexidade", { variaveis: [{ ...VARIAVEIS[0], simbolo }], fluxos: [] }).slice(0, 1),
       ["variaveis.0.simbolo"],
       simbolo,
     );
   }
-  assert.deepEqual(recusados("relatorio_complexidade", { variaveis: [...VARIAVEIS, ...VARIAVEIS], fluxos: [FLUXO] }), [
-    "variaveis",
-  ]);
+  assert.deepEqual(
+    camposRejeitados("relatorio_complexidade", { variaveis: [...VARIAVEIS, ...VARIAVEIS], fluxos: [FLUXO] }),
+    ["variaveis"],
+  );
 });
 
 const IMPACTOS = {
@@ -275,11 +285,11 @@ const IMPACTOS = {
 };
 
 test("relatorio_impactos_arquitetura: impacto, dependências, acoplamentos e riscos; um HTML", () => {
-  assert.deepEqual(recusados("relatorio_impactos_arquitetura", IMPACTOS), []);
+  assert.deepEqual(camposRejeitados("relatorio_impactos_arquitetura", IMPACTOS), []);
   const vazio = { impacto: "baixo", novasDependencias: [], novosAcoplamentos: [], riscos: [] };
-  assert.deepEqual(recusados("relatorio_impactos_arquitetura", vazio), []);
+  assert.deepEqual(camposRejeitados("relatorio_impactos_arquitetura", vazio), []);
   assert.deepEqual(
-    recusados("relatorio_impactos_arquitetura", {
+    camposRejeitados("relatorio_impactos_arquitetura", {
       impacto: "médio",
       novasDependencias: [{ nome: "x" }],
       novosAcoplamentos: [{ de: "a", para: " ", motivo: "m" }],
@@ -306,12 +316,12 @@ const ALTERADO = { caminho: "src/busca.ts", status: "M", adicionadas: 3, removid
 
 test("arquivos_alterados: base e head, cada arquivo com status, linhas e o padrão previsto que casou; nenhum anexo", () => {
   const dados = { base: SHA, head: "b".repeat(64), arquivos: [ALTERADO], previstosNaoTocados: ["docs/**"] };
-  assert.deepEqual(recusados("arquivos_alterados", dados), []);
+  assert.deepEqual(camposRejeitados("arquivos_alterados", dados), []);
   // Arquivo binário não tem contagem de linhas (F5 §7); arquivo fora do desenho tem previsto null.
   const binario = { ...ALTERADO, caminho: "logo.png", status: "A", adicionadas: null, removidas: null, previsto: null };
-  assert.deepEqual(recusados("arquivos_alterados", { ...dados, arquivos: [ALTERADO, binario] }), []);
+  assert.deepEqual(camposRejeitados("arquivos_alterados", { ...dados, arquivos: [ALTERADO, binario] }), []);
   assert.deepEqual(
-    recusados("arquivos_alterados", {
+    camposRejeitados("arquivos_alterados", {
       base: "abc",
       head: SHA,
       arquivos: [{ ...ALTERADO, status: "C", adicionadas: -1 }],
@@ -323,9 +333,9 @@ test("arquivos_alterados: base e head, cada arquivo com status, linhas e o padr�
 
 test("explicacao_fitness: uma explicação de até 1.000 caracteres por fitness function, pelo nome; nenhum anexo", () => {
   const explicacao = { nome: "complexidade", explicacao: "a busca ficou O(1)" };
-  assert.deepEqual(recusados("explicacao_fitness", { explicacoes: [explicacao] }), []);
+  assert.deepEqual(camposRejeitados("explicacao_fitness", { explicacoes: [explicacao] }), []);
   assert.deepEqual(
-    recusados("explicacao_fitness", {
+    camposRejeitados("explicacao_fitness", {
       explicacoes: [
         { nome: "Complexidade", explicacao: " " },
         { ...explicacao, explicacao: "a".repeat(1001) },
@@ -362,7 +372,7 @@ test("explicacao_fitness: regras cruzadas exigem exatamente os nomes da matriz d
 
 test("comprovacao_criterios: cada critério atendido ou não, como foi verificado e os anexos citados; vídeo ou print", () => {
   const criterio = { id: "CA-1", atendido: true, comoVerificado: "busquei mil itens", arquivos: ["busca.webm"] };
-  assert.deepEqual(recusados("comprovacao_criterios", { criterios: [criterio] }), []);
+  assert.deepEqual(camposRejeitados("comprovacao_criterios", { criterios: [criterio] }), []);
   const schema = schemaDe("comprovacao_criterios");
   assert.equal(schema.aprovada?.(schema.dados.parse({ criterios: [criterio] })), true);
   assert.equal(
@@ -370,7 +380,7 @@ test("comprovacao_criterios: cada critério atendido ou não, como foi verificad
     false,
   );
   assert.deepEqual(
-    recusados("comprovacao_criterios", {
+    camposRejeitados("comprovacao_criterios", {
       criterios: [{ id: "1", atendido: "sim", comoVerificado: "", arquivos: [] }],
     }),
     ["criterios.0.id", "criterios.0.atendido", "criterios.0.comoVerificado", "criterios.0.arquivos"],
@@ -414,10 +424,10 @@ const MENSAGEM = {
 };
 
 test("mensagem_pr: só as partes do PR que exigem julgamento, com os limites do F3 §4.5; nenhum anexo", () => {
-  assert.deepEqual(recusados("mensagem_pr", MENSAGEM), []);
-  assert.deepEqual(recusados("mensagem_pr", { ...MENSAGEM, reversao: "reverter o merge" }), []);
+  assert.deepEqual(camposRejeitados("mensagem_pr", MENSAGEM), []);
+  assert.deepEqual(camposRejeitados("mensagem_pr", { ...MENSAGEM, reversao: "reverter o merge" }), []);
   assert.deepEqual(
-    recusados("mensagem_pr", {
+    camposRejeitados("mensagem_pr", {
       titulo: "a".repeat(73),
       oQueMudou: "a".repeat(3001),
       decisoesNaoObvias: [" "],
@@ -438,8 +448,8 @@ test("mensagem_pr: só as partes do PR que exigem julgamento, com os limites do 
       "reversao",
     ],
   );
-  assert.deepEqual(recusados("mensagem_pr", { ...MENSAGEM, titulo: "duas\nlinhas" }), ["titulo"]);
-  assert.deepEqual(recusados("mensagem_pr", { ...MENSAGEM, titulo: "duas\rlinhas" }), ["titulo"]);
+  assert.deepEqual(camposRejeitados("mensagem_pr", { ...MENSAGEM, titulo: "duas\nlinhas" }), ["titulo"]);
+  assert.deepEqual(camposRejeitados("mensagem_pr", { ...MENSAGEM, titulo: "duas\rlinhas" }), ["titulo"]);
   assert.deepEqual(schemaDe("mensagem_pr").arquivos.max, 0);
 });
 
@@ -499,8 +509,8 @@ test("mensagem_pr, regras cruzadas: naoPrevistos são os da última revisão; re
 });
 
 test("video_demonstracao: o roteiro e exatamente um vídeo", () => {
-  assert.deepEqual(recusados("video_demonstracao", { roteiro: "mostro a busca" }), []);
-  assert.deepEqual(recusados("video_demonstracao", { roteiro: "a".repeat(2001) }), ["roteiro"]);
+  assert.deepEqual(camposRejeitados("video_demonstracao", { roteiro: "mostro a busca" }), []);
+  assert.deepEqual(camposRejeitados("video_demonstracao", { roteiro: "a".repeat(2001) }), ["roteiro"]);
   assert.deepEqual(schemaDe("video_demonstracao").arquivos, { classes: ["video"], min: 1, max: 1 });
 });
 
@@ -513,13 +523,13 @@ test("aula_codigo: trechos na ordem de leitura, de até 60 linhas, com o porquê
     porQue: "a busca repete",
     decisaoDoDesenho: "cache na busca",
   };
-  assert.deepEqual(recusados("aula_codigo", { trechos: [trecho] }), []);
-  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, alternativaDescartada: "índice" }] }), []);
-  assert.deepEqual(recusados("aula_codigo", { trechos: [] }), ["trechos"]);
-  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, fim: 9 }] }), ["trechos.0.fim"]);
-  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, fim: 69 }] }), []);
-  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, fim: 70 }] }), ["trechos.0.fim"]);
-  assert.deepEqual(recusados("aula_codigo", { trechos: [{ ...trecho, porQue: " " }] }), ["trechos.0.porQue"]);
+  assert.deepEqual(camposRejeitados("aula_codigo", { trechos: [trecho] }), []);
+  assert.deepEqual(camposRejeitados("aula_codigo", { trechos: [{ ...trecho, alternativaDescartada: "índice" }] }), []);
+  assert.deepEqual(camposRejeitados("aula_codigo", { trechos: [] }), ["trechos"]);
+  assert.deepEqual(camposRejeitados("aula_codigo", { trechos: [{ ...trecho, fim: 9 }] }), ["trechos.0.fim"]);
+  assert.deepEqual(camposRejeitados("aula_codigo", { trechos: [{ ...trecho, fim: 69 }] }), []);
+  assert.deepEqual(camposRejeitados("aula_codigo", { trechos: [{ ...trecho, fim: 70 }] }), ["trechos.0.fim"]);
+  assert.deepEqual(camposRejeitados("aula_codigo", { trechos: [{ ...trecho, porQue: " " }] }), ["trechos.0.porQue"]);
   assert.deepEqual(schemaDe("aula_codigo").arquivos, { classes: ["html"], min: 1, max: 1 });
 });
 
@@ -533,18 +543,18 @@ test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o co
     head: SHA,
     condensado: false,
   };
-  assert.deepEqual(recusados("pr_aberto", pr), []);
-  assert.deepEqual(recusados("pr_aberto", { ...pr, hospedagem: "gitlab", url: "pull/12", head: "abc" }), [
+  assert.deepEqual(camposRejeitados("pr_aberto", pr), []);
+  assert.deepEqual(camposRejeitados("pr_aberto", { ...pr, hospedagem: "gitlab", url: "pull/12", head: "abc" }), [
     "hospedagem",
     "url",
     "head",
   ]);
   assert.deepEqual(schemaDe("pr_aberto").arquivos, { classes: ["texto"], min: 1, max: 1 });
-  assert.deepEqual(recusados("relatorio_produtividade", {}), []);
+  assert.deepEqual(camposRejeitados("relatorio_produtividade", {}), []);
   assert.deepEqual(schemaDe("relatorio_produtividade").arquivos, HTML_UNICO);
 });
 
-const recusadosEtapa = (tipo: TipoSchemaEtapa, dados: unknown): string[] => {
+const camposRejeitadosEtapa = (tipo: TipoSchemaEtapa, dados: unknown): string[] => {
   const r = schemaDeEtapa(tipo).dados.safeParse(dados);
   return r.success ? [] : r.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
 };
@@ -568,11 +578,11 @@ test("plano: o Plano do domínio, sem anexos (CA-1 a CA-3)", () => {
   assert.equal("aprovada" in schemaDeEtapa("plano"), false);
 
   const rodadas = (i: number, mudanca: object) => PLANO.rodadas.map((r, n) => (n === i ? { ...r, ...mudanca } : r));
-  assert.deepEqual(recusadosEtapa("plano", { ...PLANO, rodadas: rodadas(0, { criterios: ["CA-9"] }) }), [
+  assert.deepEqual(camposRejeitadosEtapa("plano", { ...PLANO, rodadas: rodadas(0, { criterios: ["CA-9"] }) }), [
     ": a rodada 1 cita o CA-9, que a demanda não tem",
   ]);
   const ciclo = rodadas(0, { depende: [{ demanda_id: "I-1", rodada_id: 2 }] });
-  assert.deepEqual(recusadosEtapa("plano", { ...PLANO, rodadas: ciclo }), [
+  assert.deepEqual(camposRejeitadosEtapa("plano", { ...PLANO, rodadas: ciclo }), [
     ": as rodadas 1 → 2 formam um ciclo de dependência",
   ]);
 });
@@ -587,17 +597,21 @@ test("testes_estresse: aprovada = nenhum cenário quebrou; não se aplica exige 
   assert.equal(aprovada("testes_estresse", com("passou")), true);
   assert.equal(aprovada("testes_estresse", com("quebrou")), false);
   assert.deepEqual(
-    recusadosEtapa("testes_estresse", com("talvez")).map((m) => m.split(":")[0]),
+    camposRejeitadosEtapa("testes_estresse", com("talvez")).map((m) => m.split(":")[0]),
     ["cenarios.0.resultado"],
   );
-  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: false, cenarios: [] }), [
+  assert.deepEqual(camposRejeitadosEtapa("testes_estresse", { aplicavel: false, cenarios: [] }), [
     "justificativa: aplicavel é false: justifique por que não se aplica",
   ]);
-  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: false, justificativa: "x", cenarios: [] }), []);
-  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: false, justificativa: "x", cenarios: [CENARIO] }), [
-    "cenarios: aplicavel é false: cenarios deve ficar vazia",
-  ]);
-  assert.deepEqual(recusadosEtapa("testes_estresse", { aplicavel: true, cenarios: [] }), [
+  assert.deepEqual(
+    camposRejeitadosEtapa("testes_estresse", { aplicavel: false, justificativa: "x", cenarios: [] }),
+    [],
+  );
+  assert.deepEqual(
+    camposRejeitadosEtapa("testes_estresse", { aplicavel: false, justificativa: "x", cenarios: [CENARIO] }),
+    ["cenarios: aplicavel é false: cenarios deve ficar vazia"],
+  );
+  assert.deepEqual(camposRejeitadosEtapa("testes_estresse", { aplicavel: true, cenarios: [] }), [
     "cenarios: aplicavel é true: informe pelo menos um item em cenarios",
   ]);
 });
@@ -613,17 +627,22 @@ test("analise_seguranca: aprovada = nenhum achado alto ou crítico (CA-6 a CA-8)
   assert.equal(aprovada("analise_seguranca", com("baixa", "alta")), false);
   assert.equal(aprovada("analise_seguranca", com("critica")), false);
   assert.deepEqual(
-    recusadosEtapa("analise_seguranca", com("grave")).map((m) => m.split(":")[0]),
+    camposRejeitadosEtapa("analise_seguranca", com("grave")).map((m) => m.split(":")[0]),
     ["achados.0.severidade"],
   );
-  assert.deepEqual(recusadosEtapa("analise_seguranca", { aplicavel: false, ameacas: [], achados: [] }), [
+  assert.deepEqual(camposRejeitadosEtapa("analise_seguranca", { aplicavel: false, ameacas: [], achados: [] }), [
     "justificativa: aplicavel é false: justifique por que não se aplica",
   ]);
   assert.deepEqual(
-    recusadosEtapa("analise_seguranca", { aplicavel: false, justificativa: "x", ameacas: [], achados: [ACHADO] }),
+    camposRejeitadosEtapa("analise_seguranca", {
+      aplicavel: false,
+      justificativa: "x",
+      ameacas: [],
+      achados: [ACHADO],
+    }),
     ["achados: aplicavel é false: achados deve ficar vazia"],
   );
-  assert.deepEqual(recusadosEtapa("analise_seguranca", { ...com(), ameacas: [] }), [
+  assert.deepEqual(camposRejeitadosEtapa("analise_seguranca", { ...com(), ameacas: [] }), [
     "ameacas: aplicavel é true: informe pelo menos um item em ameacas",
   ]);
 });
@@ -648,7 +667,7 @@ test("os exemplos json de cada skill passam pelo schema do tipo (CA-9)", () => {
     const exemplos = [...texto.matchAll(/```json\n([\s\S]*?)\n```/g)];
     assert.ok(exemplos.length > 0, pasta);
     for (const [, json] of exemplos)
-      assert.deepEqual(recusadosEtapa(tipo as TipoSchemaEtapa, JSON.parse(json ?? "")), []);
+      assert.deepEqual(camposRejeitadosEtapa(tipo as TipoSchemaEtapa, JSON.parse(json ?? "")), []);
   }
 });
 
@@ -686,7 +705,7 @@ test("custos_realizados: CA-9, tokens negativos, ausentes ou fracionados nomeiam
   assert.match(com({ ...LINHA, custo: -1 })[0] ?? "", /custo não pode ser negativo/);
 });
 
-test("custos_realizados: CA-10, custo ausente fica null e nunca 0; sessão repetida é recusada", () => {
+test("custos_realizados: CA-10, custo ausente fica null e nunca 0; sessão repetida é rejeitada", () => {
   const { dados } = schemaDeEtapa("custos_realizados");
   const sessao = { ferramenta: "c", sessao: "s", linhas: [LINHA, { ...LINHA, custo: 0.5 }] };
   const ok = dados.parse({ sessoes: [sessao] }) as { sessoes: { linhas: { custo: number | null }[] }[] };

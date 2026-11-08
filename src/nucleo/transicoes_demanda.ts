@@ -1,16 +1,15 @@
-// Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar e decidir.
+// Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar, submeter o plano e os tickets.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
+import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
 import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { Modelo } from "./configuracao_agente.ts";
-import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
 import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
-import { Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import { Id, type Instante, Markdown, Slug, Titulo } from "./primitivos.ts";
 import {
   comReaberturaDoAuditor,
   comTentativaEncerrada,
@@ -35,13 +34,9 @@ const EntradaRegistro = z.strictObject({
 const EntradaEdicao = z
   .strictObject({ titulo: Titulo.optional(), tipo: TipoDemanda.optional(), descricao: Markdown.optional() })
   .refine((e) => (e.titulo ?? e.tipo ?? e.descricao) !== undefined, "informe ao menos um campo para editar");
-const EntradaDecisao = z.discriminatedUnion("aprovado", [
-  z.strictObject({ aprovado: z.literal(true), nota: z.number().int().min(1).max(5).optional() }),
-  z.strictObject({ aprovado: z.literal(false), motivo: Motivo, nota: z.number().int().min(1).max(5).optional() }),
-]);
 
 /** Ticket global falho bloqueia o seu percurso: só `reabrirTicket` (Auditor, com instrução) o libera. */
-function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): void {
+export function exigirSemFalha(ag: AgregadoDemanda, etapa: TicketDemanda["etapa"]): void {
   const falho = ag.tickets.find((t) => t.etapa === etapa && t.estado === "falhou");
   if (falho !== undefined) {
     throw new ErroDeRegra(
@@ -118,56 +113,6 @@ export function enviarDemanda(ag: AgregadoDemanda, autor: Ator, ctx: ContextoDem
   return { ...ag, demanda: { ...CICLO_DA_DEMANDA.mudar(demanda, "gate_demanda", ctx.agora), enviada: true } };
 }
 
-/**
- * CA-4 e CA-5: o Auditor aprova (vai a `planejar`) ou recusa com motivo (vai a `cancelada`, sem desenho interno).
- * A decisão e o fechamento do ticket da demanda andam juntos.
- */
-export function decidirDemanda(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
-  exigirAtor(ator, "decidir a demanda", "auditor");
-  const e = EntradaDecisao.parse(entrada);
-  const { demanda } = ag;
-  if (demanda.estado !== "gate_demanda") {
-    throw new ErroDeRegra(
-      `a demanda ${demanda.id} está em ${demanda.estado} e não espera decisão`,
-      "decida só no estado gate_demanda, depois do envio",
-    );
-  }
-  exigirSemFalha(ag, "entender_e_desenhar");
-  const ticket = ticketAtualDaEtapa(ag, "entender_e_desenhar");
-  if (ticket === undefined) {
-    throw new ErroDeRegra(`a demanda ${demanda.id} não tem ticket de etapa demanda`, "registre a demanda de novo");
-  }
-  const decisao: DecisaoDemanda = {
-    demanda_id: demanda.id,
-    ticket_id: ticket.ticket_id,
-    decisao_id: proximaDecisaoId(ag, ticket),
-    resultado: e.aprovado ? "aprovado" : "recusado",
-    ...(!e.aprovado && { motivo: e.motivo }),
-    ...(e.nota !== undefined && { nota: e.nota }),
-    por: AUDITOR,
-    em: ctx.agora,
-  };
-  const decidido = mudarTicket(ag, ticket, e.aprovado ? "concluido" : "cancelado", ctx.agora);
-  // Aprovar libera o planejamento: sem o ticket `planejar` aberto a seleção não tem o que despachar.
-  const abrirPlanejar = e.aprovado && !ag.tickets.some((t) => t.etapa === "planejar");
-  return {
-    ...ag,
-    demanda: CICLO_DA_DEMANDA.mudar(demanda, e.aprovado ? "planejar" : "cancelada", ctx.agora),
-    tickets: abrirPlanejar
-      ? [...decidido.tickets, criarTicket(ag, { etapa: "planejar", criado_por: FABRIQUINHA, agora: ctx.agora })]
-      : decidido.tickets,
-    tentativas: decidido.tentativas,
-    decisoes: [...ag.decisoes, decisao],
-  };
-}
-
-const EntradaReprovacao = z.strictObject({ motivo: Motivo });
-const EntradaAprovacao = z.strictObject({ nota: z.number().int().min(1).max(5).optional() });
 // A definição congelada guarda os `CA-n` em `dados.criterios[].id` (F3); o resto do payload não interessa aqui.
 const DadosCriterios = z.object({ criterios: z.array(z.object({ id: z.string() })) });
 
@@ -183,7 +128,7 @@ function ticketPlanejamento(ag: AgregadoDemanda): TicketDemanda {
 }
 
 /** O plano submetido, guardado como evidência do ticket de planejamento. */
-function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plano {
+export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plano {
   const evidencia = ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket.ticket_id);
   if (evidencia === undefined) {
     throw new ErroDeRegra(
@@ -193,27 +138,6 @@ function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plano {
   }
   return Plano.parse(evidencia.dados);
 }
-
-/** A sequência de `decisao_id` é local ao ticket: máximo das decisões dele + 1 (1 sem decisão anterior). */
-function proximaDecisaoId(ag: AgregadoDemanda, ticket: TicketDemanda): number {
-  return ag.decisoes.reduce((m, d) => (d.ticket_id === ticket.ticket_id ? Math.max(m, d.decisao_id) : m), 0) + 1;
-}
-
-const decisaoDoAuditor = (
-  ag: AgregadoDemanda,
-  ticket: TicketDemanda,
-  resultado: DecisaoDemanda["resultado"],
-  extra: Pick<DecisaoDemanda, "motivo" | "nota">,
-  ctx: ContextoDemanda,
-): DecisaoDemanda => ({
-  demanda_id: ag.demanda.id,
-  ticket_id: ticket.ticket_id,
-  decisao_id: proximaDecisaoId(ag, ticket),
-  resultado,
-  ...extra,
-  por: AUDITOR,
-  em: ctx.agora,
-});
 
 /**
  * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `Plano` e
@@ -283,52 +207,22 @@ export function submeterPlano(
   };
 }
 
-/** CA-4 e CA-5: o Auditor reprova com motivo; a decisão é registrada e a demanda volta a `planejar` com o mesmo ticket. */
-export function reprovarPlanejamento(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
-  exigirAtor(ator, "reprovar o planejamento", "auditor");
-  const { motivo } = EntradaReprovacao.parse(entrada);
-  CICLO_DA_DEMANDA.exigir(ag.demanda, "gate_planejamento");
-  const ticket = ticketPlanejamento(ag);
-  planoSubmetido(ag, ticket);
-  return {
-    ...ag,
-    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "planejar", ctx.agora),
-    tentativas: tentativasAposSair(ag, ticket, { tipo: "interrompida", por: AUDITOR, motivo }, ctx.agora),
-    decisoes: [...ag.decisoes, decisaoDoAuditor(ag, ticket, "recusado", { motivo }, ctx)],
-  };
-}
-
 /**
- * CA-6 e CA-7: chamada pela aplicação só depois de preparar os recursos externos; sem a chamada nada muda. Cria
- * rodadas, tickets de implementação e vínculos do plano, registra a aprovação e vai a `em_execucao`. Os `ticket_id` do
- * plano são renumerados depois dos já existentes (mesma ordem), pois o agente não vê os IDs da demanda.
+ * CA-6 e CA-7: o que a aprovação do planejamento cria. Rodadas, tickets de implementação e vínculos do plano; o
+ * `planejar` conclui e a demanda vai a `em_execucao`. Os `ticket_id` do plano são renumerados depois dos já existentes
+ * (mesma ordem), pois o agente não vê os IDs da demanda.
  */
-export function confirmarAprovacaoPlanejamento(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
-  exigirAtor(ator, "aprovar o planejamento", "auditor");
-  const { nota } = EntradaAprovacao.parse(entrada);
-  CICLO_DA_DEMANDA.exigir(ag.demanda, "gate_planejamento");
-  exigirSemFalha(ag, "planejar");
-  const planejamento = ticketPlanejamento(ag);
+export function materializarPlano(ag: AgregadoDemanda, planejamento: TicketDemanda, agora: Instante): AgregadoDemanda {
   const plano = planoSubmetido(ag, planejamento);
   const demanda_id = ag.demanda.id;
   const primeiroId = proximoIdDeTicket(ag);
   const planos = [...plano.tickets].sort((a, b) => a.ticket_id - b.ticket_id);
   const novoId = new Map(planos.map((t, i) => [t.ticket_id, primeiroId + i]));
   const id = (n: number): number => existe(novoId.get(n), `o ticket ${String(n)} não está no plano`, "valide o plano");
-  const planejado = mudarTicket(ag, planejamento, "concluido", ctx.agora);
+  const planejado = mudarTicket(ag, planejamento, "concluido", agora);
   return AgregadoDemanda.parse({
     ...ag,
-    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "em_execucao", ctx.agora),
+    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "em_execucao", agora),
     tentativas: planejado.tentativas,
     tickets: [
       ...planejado.tickets,
@@ -340,21 +234,17 @@ export function confirmarAprovacaoPlanejamento(
         descricao,
         etapa: "implementar",
         estado: "aberto",
-        estado_alterado_em: ctx.agora,
+        estado_alterado_em: agora,
         criado_por: FABRIQUINHA,
         configuracao_agente,
       })),
-    ],
-    decisoes: [
-      ...ag.decisoes,
-      decisaoDoAuditor(ag, planejamento, "aprovado", { ...(nota !== undefined && { nota }) }, ctx),
     ],
     rodadas: plano.rodadas.map((r) => ({
       demanda_id,
       rodada_id: r.rodada_id,
       titulo: r.titulo,
       estado: "implementar",
-      estado_alterado_em: ctx.agora,
+      estado_alterado_em: agora,
       e2e: r.e2e,
       branch: branchRodada(demanda_id, r.rodada_id),
     })),
@@ -397,7 +287,7 @@ export function ticketDaDemanda(ag: AgregadoDemanda, ticket_id: number): TicketD
  * A Tentativa da execução que `alvo` deixa: encerrada com o `resultado`. Ticket que não está em execução só a tem se
  * uma execução a abriu (o da sessão de ajustes, que fica `aberto`).
  */
-const tentativasAposSair = (
+export const tentativasAposSair = (
   ag: AgregadoDemanda,
   alvo: TicketDemanda,
   resultado: ResultadoDaTentativa | undefined,
@@ -545,12 +435,6 @@ export function retomarTicketFalhoPorInfraestrutura(
 }
 
 const EntradaDemanda = z.strictObject({ demanda_id: DemandaId });
-const RefRevisaoDemanda = { demanda_id: DemandaId, ticket_id: Id };
-const EntradaRevisaoDemanda = z.discriminatedUnion("aprovado", [
-  z.strictObject({ ...RefRevisaoDemanda, aprovado: z.literal(true) }),
-  z.strictObject({ ...RefRevisaoDemanda, aprovado: z.literal(false), exigencias: Motivo, plano: z.unknown() }),
-]);
-
 export function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string): void {
   if (demanda_id !== ag.demanda.id) {
     throw new ErroDeRegra(`a referência é da demanda ${demanda_id}, não da ${ag.demanda.id}`, "use o demanda_id certo");
@@ -560,7 +444,7 @@ export function exigirDemandaDaEntrada(ag: AgregadoDemanda, demanda_id: string):
 /**
  * Recusa se resta rodada fora de `concluida`, implementação não concluída ou ticket ativo/falho (menos o `ignorar`).
  */
-function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
+export function exigirSemPendencias(ag: AgregadoDemanda, ignorar?: number): void {
   const rodada = ag.rodadas.find((r) => r.estado !== "concluida");
   if (rodada !== undefined) {
     throw new ErroDeRegra(
@@ -598,56 +482,5 @@ export function iniciarRevisaoDemanda(
     ...ag,
     demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "revisar_demanda", ctx.agora),
     tickets: [...ag.tickets, criarTicket(ag, { etapa: "revisar_demanda", criado_por: FABRIQUINHA, agora: ctx.agora })],
-  };
-}
-
-/**
- * CA-13 e CA-14: só o agente do `revisar_demanda` atual. Reprovada, as exigências vão em `motivo` e o plano corretivo
- * cria só rodadas novas (as integradas ficam como estão) e a demanda volta a `em_execucao`; aprovada, abre
- * `encerrar_demanda` e vai a `encerrar_demanda`. Decisão, fechamento do revisor e efeitos andam juntos.
- */
-export function registrarRevisaoDemanda(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
-  const e = EntradaRevisaoDemanda.parse(entrada);
-  exigirDemandaDaEntrada(ag, e.demanda_id);
-  CICLO_DA_DEMANDA.exigir(ag.demanda, "revisar_demanda");
-  const ticket = ticketAtualDaEtapa(ag, "revisar_demanda");
-  if (ticket?.ticket_id !== e.ticket_id || !CICLO_DO_TICKET.estaEmAndamento(ticket.estado)) {
-    throw new ErroDeRegra(
-      `o ticket ${String(e.ticket_id)} não é o revisar_demanda ativo`,
-      "use o ticket atual da revisão",
-    );
-  }
-  if (ator.tipo !== "agente") {
-    throw new ErroDeEscopo("só o agente do ticket revisar_demanda atual decide a revisão", "peça à sessão de revisão");
-  }
-  exigirSemPendencias(ag, ticket.ticket_id);
-  const decisao: DecisaoDemanda = {
-    demanda_id: ag.demanda.id,
-    ticket_id: ticket.ticket_id,
-    decisao_id: proximaDecisaoId(ag, ticket),
-    resultado: e.aprovado ? "aprovado" : "recusado",
-    ...(!e.aprovado && { motivo: e.exigencias }),
-    por: ator,
-    em: ctx.agora,
-  };
-  // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.
-  const base = e.aprovado ? ag : materializarRodadasCorretivas(ag, e.plano, ator, ctx.agora);
-  const comRevisaoConcluida = mudarTicket(base, ticket, "concluido", ctx.agora);
-  return {
-    ...base,
-    tentativas: comRevisaoConcluida.tentativas,
-    demanda: CICLO_DA_DEMANDA.mudar(base.demanda, e.aprovado ? "encerrar_demanda" : "em_execucao", ctx.agora),
-    tickets: e.aprovado
-      ? [
-          ...comRevisaoConcluida.tickets,
-          criarTicket(base, { etapa: "encerrar_demanda", criado_por: FABRIQUINHA, agora: ctx.agora }),
-        ]
-      : comRevisaoConcluida.tickets,
-    decisoes: [...ag.decisoes, decisao],
   };
 }

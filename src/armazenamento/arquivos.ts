@@ -74,7 +74,7 @@ export function guardarArquivos<O extends { readonly fd: number }, T extends obj
         const hash = createHash("sha256");
         const bloco = Buffer.alloc(BLOCO);
         let bytes = 0;
-        // Lê no máximo `teto + 1` bytes: um arquivo que não para de crescer é recusado sem encher o disco.
+        // Lê no máximo `teto + 1` bytes: um arquivo que não para de crescer é rejeitado sem encher o disco.
         const ler = () => readSync(origem.fd, bloco, 0, Math.min(BLOCO, teto + 1 - bytes), bytes);
         for (let lidos = ler(); lidos > 0; lidos = ler()) {
           hash.update(bloco.subarray(0, lidos));

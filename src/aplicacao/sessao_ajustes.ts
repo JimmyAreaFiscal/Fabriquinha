@@ -1,5 +1,5 @@
-// Sessão de ajustes do PR reprovado (comparacao-sdlc-implementacao.md §§4 e 6): reprova o PR da rodada e abre na hora a
-// conversa do Auditor com o agente, que só registra tickets corretivos. A conversa acontece no chat da sessão do ticket.
+// Sessão de ajustes do PR reprovado (comparacao-sdlc-implementacao.md §§4 e 6): depois de reprovar o PR da rodada, abre
+// na hora a conversa do Auditor com o agente, que só registra tickets corretivos. A conversa acontece no chat da sessão.
 // Ela não implementa nem integra: os SHAs da rodada e da demanda são gravados ao abrir e restaurados quando a execução
 // termina e quando a sessão conclui.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -11,7 +11,7 @@ import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
-import { concluirSessaoRodada, reprovarPullRequestRodada } from "../nucleo/transicoes_rodada.ts";
+import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { anotar } from "../infra/registro.ts";
@@ -111,21 +111,11 @@ function executar(
 }
 
 /**
- * Reprova o PR da rodada com `motivo` e abre a sessão de ajustes na hora (interativa, sem esperar o agendador). A
- * recusa do domínio (motivo vazio, ator, estado) lança antes de gravar o marco ou mudar o banco.
+ * Grava o marco (os SHAs da rodada e da demanda) antes de reprovar o PR: é a ele que a sessão volta ao terminar. Fica
+ * em disco, fora da transação, então vem antes da Decisão.
  */
-export async function reprovarPRRodada(
-  banco: DatabaseSync,
-  ref: RefRodada,
-  motivo: string,
-  ator: Ator,
-  opcoes: Opcoes,
-): Promise<ReturnType<typeof iniciarExecucaoDemanda>> {
-  const ag = carregarDemanda(banco, ref.demanda_id);
-  const { ticket, pr } = prDaRodada(ag, ref);
-  const entrada = { demanda_id: ref.demanda_id, rodada_id: ref.rodada_id, ticket_id: ticket.ticket_id, motivo };
-  reprovarPullRequestRodada(ag, entrada, ator, contexto());
-
+export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
+  const { pr } = prDaRodada(ag, ref);
   const demanda = await exigirGit(
     caminhoDaWorktreeDemanda(raizDo(banco), ag.demanda.projeto, ref.demanda_id),
     "rev-parse",
@@ -137,9 +127,18 @@ export async function reprovarPRRodada(
   };
   mkdirSync(dirname(arquivoDoMarco(banco, ref)), { recursive: true });
   writeFileSync(arquivoDoMarco(banco, ref), JSON.stringify(marco));
+}
 
-  const depois = comDemanda(banco, ref.demanda_id, (a) => reprovarPullRequestRodada(a, entrada, ator, contexto()));
-  const sessao = sessaoDaRodada(depois, ref);
+/** Abre a sessão de ajustes da rodada com o PR já reprovado (interativa, sem esperar o agendador), levando o `motivo` ao agente. */
+export function abrirSessaoDeAjustes(
+  banco: DatabaseSync,
+  ref: RefRodada,
+  reprovada: AgregadoDemanda,
+  motivo: string,
+  opcoes: Opcoes,
+): ReturnType<typeof iniciarExecucaoDemanda> {
+  const { pr } = prDaRodada(reprovada, ref);
+  const sessao = sessaoDaRodada(reprovada, ref);
   return executar(banco, ref, sessao, {
     ...opcoes,
     retomada: montarRetornoAoAgente(
@@ -176,8 +175,11 @@ export async function concluirSessaoAjustes(banco: DatabaseSync, ref: RefRodada,
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = sessaoDaRodada(ag, ref);
   const entrada = { demanda_id: ref.demanda_id, ticket_id: ticket.ticket_id, rodada_id: ref.rodada_id };
-  // Valida antes de encerrar o pi: uma conclusão recusada não pode derrubar a conversa.
-  concluirSessaoRodada(ag, entrada, ator, contexto());
+  // Ensaio: uma conclusão rejeitada não pode derrubar a conversa; o agregado volta como veio, então nada é gravado.
+  comDemanda(banco, ref.demanda_id, (a) => {
+    concluirSessaoRodada(a, entrada, ator, contexto());
+    return a;
+  });
 
   const chave = `${ref.demanda_id}.${String(ref.rodada_id)}`;
   const viva = execucaoViva(banco, ticket);

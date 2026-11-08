@@ -163,7 +163,7 @@ const ARESTAS_COM_CICLO: Record<
 
 for (const [item, { itens, casos }] of Object.entries(ARESTAS_COM_CICLO)) {
   for (const [caso, arestas] of Object.entries(casos)) {
-    test(`GrafoDeDependencias: ${item} com ciclo ${caso} é recusado`, () => {
+    test(`GrafoDeDependencias: ${item} com ciclo ${caso} é rejeitado`, () => {
       const grafo = new GrafoDeDependencias(arestas, itens);
       assert.throws(
         () => {

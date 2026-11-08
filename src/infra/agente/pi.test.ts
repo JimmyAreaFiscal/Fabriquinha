@@ -183,7 +183,7 @@ test("auditoria: só leitura (sem edit, write, bash nem powershell), com a guard
 test("confiança herdada: a decisão mais próxima do repositório (ou de um pai) em trust.json, pelo caminho real", () => {
   const agente = join(base, "agente");
   const repos = join(base, "repos");
-  for (const nome of ["confiado", "recusado", "nulo", "solto"]) mkdirSync(join(repos, nome), { recursive: true });
+  for (const nome of ["confiado", "rejeitado", "nulo", "solto"]) mkdirSync(join(repos, nome), { recursive: true });
   const link = join(base, "link-confiado");
   symlinkSync(join(repos, "confiado"), link);
   process.env.PI_CODING_AGENT_DIR = agente;
@@ -195,7 +195,7 @@ test("confiança herdada: a decisão mais próxima do repositório (ou de um pai
       JSON.stringify({ [repos]: false, [join(repos, "confiado")]: true, [join(repos, "nulo")]: null }),
     );
     assert.equal(confianca(link), true);
-    assert.equal(confianca(join(repos, "recusado")), false, "herdada do pai");
+    assert.equal(confianca(join(repos, "rejeitado")), false, "herdada do pai");
     assert.equal(confianca(join(repos, "nulo")), false, "null não decide: sobe para o pai");
     assert.equal(confianca(base), undefined, "nenhuma decisão até a raiz");
   } finally {

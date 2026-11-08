@@ -19,10 +19,8 @@ import {
   type TipoSchemaEtapa,
 } from "../../nucleo/schemas.ts";
 import { registrarCorrecoesSessao } from "../../nucleo/transicoes_rodada.ts";
-import { decidirRevisaoIntegral } from "../../aplicacao/revisao_demanda.ts";
 import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
-import { decidirRevisaoRodada } from "../../aplicacao/revisao_rodada.ts";
-import { escrever } from "../../armazenamento/banco.ts";
+import { decidirGate } from "../../aplicacao/gates/decidir_gate.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { projetoExistente } from "../../aplicacao/projeto/cadastro.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
@@ -264,7 +262,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
         throw new ErroDeRegra(`veredito ${JSON.stringify(veredito)} inválido`, "use aprovar ou reprovar");
       }
       ticketProprio(agente, String(pos[0]), true);
-      const aprovado = veredito === "aprovar";
+      const resultado = veredito === "aprovar" ? "aprovado" : "reprovado";
       const { demanda_id, ticket_id } = agente;
       const ticket = encontrado(
         carregarDemanda(banco, demanda_id).tickets.find((t) => t.ticket_id === ticket_id),
@@ -280,7 +278,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
         );
       }
       let extra: object = {};
-      if (aprovado) {
+      if (resultado === "aprovado") {
         const sobra = [op.motivo, op.correcoes, op.plano].some((v) => v !== undefined);
         if (sobra) throw new ErroDeRegra("aprovar não leva --motivo, --correcoes nem --plano", "omita as opções");
       } else {
@@ -288,22 +286,30 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
         exigir(op[campo], `--${campo}`, "reprovar");
         const valor = await lerJson(`--${campo}`, op[campo] as string, stdin);
         extra = {
-          exigencias: op.motivo,
-          [campo]: campo === "correcoes" ? completar(valor, demanda_id, rodada) : valor,
+          motivo: op.motivo,
+          correcoes: campo === "correcoes" ? completar(valor, demanda_id, rodada) : valor,
         };
       }
-      const entrada = { demanda_id, ticket_id, aprovado, ...extra };
-      // o serviço de Revisão já grava a diferença: aqui só reconfere a execução na mesma transação
-      escrever(banco, () => {
-        resolverEscopoDoAgente(banco, agente.ator.trabalho_id);
-        return ticket.etapa === "revisar_rodada"
-          ? decidirRevisaoRodada(banco, { ...entrada, rodada_id: rodada }, agente.ator)
-          : decidirRevisaoIntegral(banco, entrada, agente.ator);
-      });
+      resolverEscopoDoAgente(banco, agente.ator.trabalho_id); // a execução ainda está aberta?
+      await (rodada === undefined
+        ? decidirGate(
+            banco,
+            "gate_revisao_demanda",
+            Endereco.daDemanda(demanda_id),
+            { resultado, ...extra },
+            agente.ator,
+          )
+        : decidirGate(
+            banco,
+            "gate_revisao_rodada",
+            Endereco.daRodada(demanda_id, rodada),
+            { resultado, ...extra },
+            agente.ator,
+          ));
       return {
         ticket: proprio(agente),
         ...(rodada !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id: rodada }) }),
-        resultado: aprovado ? "aprovado" : "recusado",
+        resultado,
       };
     },
   },

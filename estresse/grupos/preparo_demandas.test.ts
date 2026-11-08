@@ -50,7 +50,7 @@ test("a decisão, o cancelamento e o arquivamento agem sobre a demanda no estado
   const [a, b] = [p.demandaEnviada(), p.demandaEnviada()];
   assert.notEqual(a, b);
   assert.deepEqual(estados(a), ["gate_demanda"]);
-  await chamar("POST", `/api/demandas/${a}/decisao`, { aprovado: true });
+  await chamar("POST", `/api/demandas/${a}/decisao`, { resultado: "aprovado" });
   assert.deepEqual(estados(a), ["planejar"]);
   await chamar("POST", `/api/demandas/${b}/cancelar`);
   assert.deepEqual(estados(b), ["cancelada"]);
@@ -62,20 +62,20 @@ test("a decisão, o cancelamento e o arquivamento agem sobre a demanda no estado
 test("o planejamento pronto é aprovado e vira execução", async () => {
   const id = p.planejamentoPronto();
   assert.deepEqual(estados(id), ["gate_planejamento"]);
-  await chamar("POST", `/api/demandas/${id}/planejamento/decisao`, { aprovado: true });
+  await chamar("POST", `/api/demandas/${id}/planejamento/decisao`, { resultado: "aprovado" });
   assert.equal(estados(id)[0], "em_execucao");
 });
 
 test("a rodada com PR é aprovada pela hospedagem falsa e concluída", async () => {
   const { demanda, rodada } = await p.rodadaComPR();
   assert.deepEqual(estados(demanda), ["em_execucao", "gate_pr"]);
-  await chamar("POST", `/api/demandas/rodadas/${rodada}/pr`, { aprovado: true, nota: 4 });
+  await chamar("POST", `/api/demandas/rodadas/${rodada}/pr`, { resultado: "aprovado", nota: 4 });
   assert.equal(estados(demanda)[1], "concluida");
 });
 
 test("a rodada com PR reprovado abre a sessão de ajustes pelo próprio serviço", async () => {
   const { demanda, rodada } = await p.rodadaComPR();
-  await chamar("POST", `/api/demandas/rodadas/${rodada}/pr`, { aprovado: false, motivo: "falta teste" });
+  await chamar("POST", `/api/demandas/rodadas/${rodada}/pr`, { resultado: "reprovado", motivo: "falta teste" });
   assert.equal(estados(demanda)[1], "ajustar_resultado");
 });
 

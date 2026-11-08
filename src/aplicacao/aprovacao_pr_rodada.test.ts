@@ -8,16 +8,18 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
-import { AUDITOR } from "../nucleo/ator.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../nucleo/transicoes_rodada.ts";
+import { AUDITOR, type Ator } from "../nucleo/ator.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../nucleo/gate.ts";
 import { ErroDeRegra, ErroDeEscopo } from "../nucleo/erros.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
-import { aprovarPRRodada, aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
+import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
+import { decidirGate } from "./gates/decidir_gate.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-aprovacao-")));
@@ -33,6 +35,18 @@ after(() => {
 
 const DEMANDA = "I-206";
 const REF = { demanda_id: DEMANDA, rodada_id: 2 };
+
+/** O Auditor (ou o ator dado) aprova o PR da rodada pelo gate, com a nota quando vem. */
+const aprovarPRRodada = async (banco: DatabaseSync, ref: typeof REF, nota: number | undefined, ator: Ator) =>
+  (
+    await decidirGate(
+      banco,
+      "gate_pr",
+      Endereco.daRodada(ref.demanda_id, ref.rodada_id),
+      { resultado: "aprovado", ...(nota !== undefined && { nota }) },
+      ator,
+    )
+  ).demanda;
 const BRANCH_DEMANDA = "fabriquinha/I-206";
 const BRANCH_RODADA = "fabriquinha/I-206-2";
 
@@ -141,7 +155,7 @@ test("CA-1 a CA-4: aprova com nota 4, integra, avança a demanda e conclui a rod
   );
 });
 
-test("CA-5 e CA-6: nota fora de 1 a 5 ou ausente é recusada sem integrar", async () => {
+test("CA-5 e CA-6: nota fora de 1 a 5 ou ausente é reprovada sem integrar", async () => {
   const { banco, estado, demandaLocal } = await cenario();
   const antes = demandaLocal();
 
@@ -153,7 +167,7 @@ test("CA-5 e CA-6: nota fora de 1 a 5 ou ausente é recusada sem integrar", asyn
   assert.equal(hospedagem.prs()[0]?.estado, "aberto");
 });
 
-test("CA-7 e CA-8: a hospedagem recusa a integração, o gate fica, e a nova tentativa conclui", async () => {
+test("CA-7 e CA-8: a hospedagem rejeita a integração, o gate fica, e a nova tentativa conclui", async () => {
   const { banco, ag, estado, ticket } = await cenario();
   hospedagem.fecharPr(1);
 
@@ -180,7 +194,7 @@ test("CA-8: PR já mergeado pela hospedagem (queda após a integração) não in
   assert.equal(hospedagem.chamadas().filter((x) => x.args[1] === "merge").length, 1);
 });
 
-test("CA-9 e CA-10: reaplicar a mesma aprovação é no-op; nota diferente é recusada", async () => {
+test("CA-9 e CA-10: reaplicar a mesma aprovação é no-op; nota diferente é reprovada", async () => {
   const { banco, ag, demandaLocal } = await cenario();
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
   const depois = demandaLocal();
@@ -195,16 +209,29 @@ test("CA-9 e CA-10: reaplicar a mesma aprovação é no-op; nota diferente é re
   await assert.rejects(aprovarPRRodada(banco, REF, 4, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
 });
 
-test("rodada concluída sem decisão aprovada recusa a aprovação", async () => {
+test("rodada concluída sem decisão aprovada reprova a aprovação", async () => {
   const { banco } = await cenario("concluida");
   await assert.rejects(aprovarPRRodada(banco, REF, 4, AUDITOR), /outra decisão/);
 });
 
-test("rodada inexistente ou sem PR publicado é recusada", async () => {
+test("rodada inexistente ou sem PR publicado é reprovada", async () => {
   const { banco } = await cenario();
   await assert.rejects(aprovarPRRodada(banco, { ...REF, rodada_id: 9 }, 4, AUDITOR), /não existe/);
   const sem = await cenario("gate_pr", true);
   await assert.rejects(aprovarPRRodada(sem.banco, REF, 4, AUDITOR), /não tem PR publicado/);
+});
+
+test("o endereço da demanda ou a rodada sem ticket encerrar_rodada não aprovam o PR", async () => {
+  const { banco, estado } = await cenario();
+  await assert.rejects(
+    decidirGate(banco, "gate_pr", Endereco.daDemanda(DEMANDA), { resultado: "aprovado", nota: 4 }, AUDITOR),
+    /não é de uma rodada/,
+  );
+  banco.prepare("DELETE FROM evidencia_demanda").run();
+  banco.prepare("DELETE FROM ticket_demanda WHERE etapa = 'encerrar_rodada'").run();
+  await assert.rejects(aprovarPRRodada(banco, REF, 4, AUDITOR), /não tem ticket encerrar_rodada/);
+  assert.equal(estado(), "gate_pr");
+  assert.deepEqual(hospedagem.chamadas(), []);
 });
 
 test("CA-11: o agente da rodada não aprova", async () => {

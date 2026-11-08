@@ -7,12 +7,14 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Ator, AUDITOR } from "../src/nucleo/ator.ts";
-import { MOTIVO_APROVACAO_AUTOMATICA_PR, registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
+import { MOTIVO_APROVACAO_AUTOMATICA_PR } from "../src/nucleo/gate.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
+import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/aplicacao/evidencias/pr_rodada.ts";
-import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
+import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
 import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../src/aplicacao/gerente.ts";
-import { concluirSessaoAjustes, reprovarPRRodada } from "../src/aplicacao/sessao_ajustes.ts";
+import { concluirSessaoAjustes } from "../src/aplicacao/sessao_ajustes.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
@@ -119,10 +121,10 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   const id = await rodadaEmRevisao(c);
   const primeira = atual(c, id, "implementar");
 
-  // Reprovada: as exigências ficam na decisão, a correção nasce aberta na mesma rodada e a rodada volta ao desenvolvimento.
+  // Reprovada: o motivo fica na decisão, a correção nasce aberta na mesma rodada e a rodada volta ao desenvolvimento.
   const reprovada = await revisar(c, id, {
-    aprovado: false,
-    exigencias: "falta tratar o caso X",
+    resultado: "reprovado",
+    motivo: "falta tratar o caso X",
     correcoes: [correcao(id, "Tratar o caso X")],
   });
   const ag = demanda(c, id);
@@ -132,7 +134,7 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
     ag.decisoes.filter((d) => d.ticket_id === reprovada).map((d) => [d.resultado, d.motivo, d.por]),
     [
       [
-        "recusado",
+        "reprovado",
         "falta tratar o caso X",
         { tipo: "agente", trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: reprovada }).at(-1)?.id },
       ],
@@ -171,7 +173,7 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
   assert.equal(nova.estado, "aberto");
 
   // Nova revisão aprovada leva ao encerramento, que publica o PR da rodada com as duas implementações.
-  const aprovada = await revisar(c, id, { aprovado: true });
+  const aprovada = await revisar(c, id, { resultado: "aprovado" });
   assert.equal(aprovada, nova.ticket_id);
   assert.equal(rodadaDe(c, id, 1)?.estado, "encerrar_rodada");
   await encerrar(c, id);
@@ -306,12 +308,12 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
 
   // Revista e reencerrada, com o check já verde, a rodada chega ao gate; a nota do PR (D03) fecha a rodada.
-  await revisar(c, id, { aprovado: true });
+  await revisar(c, id, { resultado: "aprovado" });
   gh.mudar(1, { checks: [{ nome: "ci", estado: "aprovado" }] });
   await encerrar(c, id);
   assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
   assert.equal(gh.prs().length, 1);
-  await aprovarPRRodada(c.banco, { demanda_id: id, rodada_id: 1 }, 4, AUDITOR);
+  await decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 4 }, AUDITOR);
   assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   assert.equal(demanda(c, id).decisoes.find((d) => d.ticket_id === atual(c, id, "encerrar_rodada").ticket_id)?.nota, 4);
 
@@ -338,9 +340,13 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   fecharPortao();
   pi.roteirizar([{ agente: intruso }]);
   const chamadasAntes = pisAteAgora();
-  const sessao = await reprovarPRRodada(humana.banco, ref, "o PR mistura duas mudanças", AUDITOR, {
-    limiteMin: humana.config.timeoutMin,
-  });
+  await decidirGate(
+    humana.banco,
+    "gate_pr",
+    Endereco.daRodada(idHumana, 1),
+    { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
+    AUDITOR,
+  );
   await esperar(() => pisAteAgora() === chamadasAntes + 1, "o pi da conversa receber o prompt sem esperar o agendador");
   assert.match(pi.prompts().at(-1)?.prompt ?? "", /sessão de ajustes[\s\S]*o PR mistura duas mudanças/);
   assert.equal(rodadaDe(humana, idHumana, 1)?.estado, "ajustar_resultado");
@@ -348,7 +354,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   const reprovacao = demanda(humana, idHumana).decisoes.find((d) => d.ticket_id === gate);
   assert.deepEqual(
     [reprovacao?.resultado, reprovacao?.motivo, reprovacao?.nota],
-    ["recusado", "o PR mistura duas mudanças", undefined],
+    ["reprovado", "o PR mistura duas mudanças", undefined],
   );
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
   assert.equal(despacharDemandas(humana.banco, humana.config, despacho()).length, 0);
@@ -363,8 +369,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
       { agora: agora() },
     ),
   );
-  await concluirSessaoAjustes(humana.banco, ref, AUDITOR);
-  await sessao.fim;
+  await concluirSessaoAjustes(humana.banco, ref, AUDITOR); // aguarda o fim da conversa
   assert.equal(rodadaDe(humana, idHumana, 1)?.estado, "implementar");
   assert.equal(atual(humana, idHumana, "implementar").estado, "aberto");
   assert.equal(ponta(branchRodada), rodadaAntes);

@@ -263,8 +263,10 @@ test("CA-6 e CA-16: o planejar com predecessora pendente não é despachado nem 
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-6'");
   await Promise.all(despacharDemandas(banco, config, deps));
   assert.deepEqual([estadoDoTicket(banco, 6, 1), execucoes(banco, 6, 1)], ["aberto", 0]);
+  const antes = carregarDemanda(banco, "I-6");
   assert.throws(() => executarAgoraDemanda(banco, { demanda_id: "I-6", ticket_id: 1 }, config, deps), /predecessoras/);
   assert.deepEqual([estadoDoTicket(banco, 6, 1), execucoes(banco, 6, 1)], ["aberto", 0]);
+  assert.deepEqual(carregarDemanda(banco, "I-6"), antes); // o ensaio da reserva não grava
 });
 
 test("CA-7: repositório inexistente não deixa o ticket em execução e o motivo vai ao log", async () => {
@@ -292,7 +294,7 @@ test("CA-8: com as rodadas concluídas o ciclo inicia a revisão integral e o re
   await Promise.all(fins);
 });
 
-test("a revisão integral recusada pelo domínio vai ao log e a demanda segue em execucao", async (t) => {
+test("a revisão integral reprovada pelo domínio vai ao log e a demanda segue em execucao", async (t) => {
   const log = silenciar(t);
   const { banco, config } = await cenario(3);
   demanda(banco, 3, { rodadas: ["concluida"], tickets: [{ etapa: "implementar", rodada: 1, estado: "falhou" }] });
@@ -318,7 +320,7 @@ test("o revisar_rodada despachado reserva o ticket e a falha de preparação o l
   assert.equal(estadoDoTicket(banco, 4, 1), "falhou");
 });
 
-test("CA-15 e CA-17: executar agora cria uma só execução; a segunda tentativa é recusada", async () => {
+test("CA-15 e CA-17: executar agora cria uma só execução; a segunda tentativa é reprovada", async () => {
   const { banco, config } = await cenario(3);
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   const ref = { demanda_id: "I-2", ticket_id: 1 };
@@ -363,8 +365,8 @@ test("planejar reprovado é retomado antes da seleção, mesmo com o limite 1, e
   const { banco, config } = await cenario(1);
   demanda(banco, 1, { estado: "planejar", tickets: [{ etapa: "planejar", estado: "em_execucao" }] });
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em)
-    VALUES ('I-1', 1, 1, 'recusado', 'refaça o plano', 'auditor', '${em}')`);
+  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, motivo, por_tipo, em)
+    VALUES ('I-1', 1, 1, 'gate_planejamento', 'reprovado', 'refaça o plano', 'auditor', '${em}')`);
   const fins = despacharDemandas(banco, config, deps);
   assert.deepEqual([execucoes(banco, 1, 1), estadoDoTicket(banco, 2, 1)], [1, "aberto"]);
   await Promise.all(fins);
@@ -374,8 +376,8 @@ test("planejar reprovado é retomado antes da seleção, mesmo com o limite 1, e
 test("CA-2: planejar reprovado com execução aberta (pi vivo) não é retomado", async () => {
   const { banco, config } = await cenario(1);
   demanda(banco, 1, { estado: "planejar", tickets: [{ etapa: "planejar", estado: "em_execucao" }] });
-  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em)
-    VALUES ('I-1', 1, 1, 'recusado', 'refaça o plano', 'auditor', '${em}')`);
+  banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, motivo, por_tipo, em)
+    VALUES ('I-1', 1, 1, 'gate_planejamento', 'reprovado', 'refaça o plano', 'auditor', '${em}')`);
   banco.exec("INSERT INTO sessao VALUES ('S-1', 'I-1', 1, 'interativo', 'ref')");
   banco.exec(`INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('E-1', 'S-1', '${em}', NULL, 0)`);
   for (let i = 0; i < 2; i++) assert.equal(despacharDemandas(banco, config, deps).length, 0);
@@ -394,7 +396,7 @@ test("encerrar_rodada: a falha do agente falha o ticket; sem falha ele segue par
   demanda(outro.banco, 2, { rodadas: ["encerrar_rodada"], tickets: [{ etapa: "encerrar_rodada", rodada: 1 }] });
   piFalso.roteirizar([{}]);
   await Promise.all(despacharDemandas(outro.banco, outro.config));
-  assert.equal(estadoDoTicket(outro.banco, 2, 1), "falhou"); // conclusão recusada: não fica preso em execução
+  assert.equal(estadoDoTicket(outro.banco, 2, 1), "falhou"); // conclusão reprovada: não fica preso em execução
 });
 
 const encerrar = (estado = "aberto"): TicketSpec => ({ etapa: "encerrar_demanda", estado });

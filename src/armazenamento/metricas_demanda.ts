@@ -83,7 +83,7 @@ interface TicketDaDemanda extends DonoDaLinha {
 }
 
 interface DecisaoDoTicket extends DonoDaLinha {
-  recusada: boolean;
+  reprovada: boolean;
   nota: number | null;
 }
 
@@ -146,7 +146,7 @@ export const decisoesDaDemanda = (banco: DatabaseSync, demandaId: string): Decis
     .map((l) => ({
       etapa: l.etapa as string,
       rodadaId: rodadaDe(l),
-      recusada: l.resultado === "recusado",
+      reprovada: l.resultado === "reprovado",
       nota: l.nota === null ? null : Number(l.nota),
     }));
 
@@ -306,7 +306,7 @@ export const prsNoPeriodo = (banco: DatabaseSync, recorte: Recorte): PrNoPeriodo
          SELECT e.demanda_id, MIN(e.em) AS em, EXISTS (
            SELECT 1 FROM decisao_ticket x JOIN ticket_demanda te ON te.demanda_id = x.demanda_id AND te.ticket_id = x.ticket_id
            WHERE x.demanda_id = e.demanda_id AND te.rodada_id = COALESCE(e.rodada_id, t.rodada_id)
-             AND te.etapa = 'encerrar_rodada' AND x.resultado != 'recusado') AS mergeado
+             AND te.etapa = 'encerrar_rodada' AND x.resultado != 'reprovado') AS mergeado
          FROM evidencia_demanda e LEFT JOIN ticket_demanda t ON t.demanda_id = e.demanda_id AND t.ticket_id = e.ticket_id
          WHERE e.tipo = 'pr_aberto' GROUP BY e.demanda_id, COALESCE(e.rodada_id, t.rodada_id)
        ) p JOIN demanda d ON d.id = p.demanda_id
@@ -318,7 +318,7 @@ export const prsNoPeriodo = (banco: DatabaseSync, recorte: Recorte): PrNoPeriodo
 interface DecisaoNoPeriodo extends DonoDaLinha {
   demanda: string;
   em: string;
-  recusada: boolean;
+  reprovada: boolean;
   nota: number | null;
 }
 
@@ -336,7 +336,7 @@ export const decisoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Decisa
       rodadaId: rodadaDe(l),
       demanda: l.demanda_id as string,
       em: l.em as string,
-      recusada: l.resultado === "recusado",
+      reprovada: l.resultado === "reprovado",
       nota: l.nota === null ? null : Number(l.nota),
     }));
 

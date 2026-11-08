@@ -33,7 +33,7 @@ A Fabriquinha monta a frase "dado …, quando …, então …", então escreva c
 
 `quando`: uma única ação, de quem age.
 
-- Bom: "o Auditor clica em Recusar sem motivo".
+- Bom: "o Auditor clica em Reprovar sem motivo".
 - Fraco: "o usuário usa a tela".
 
 `entao`: o resultado observável e conferível: texto exato na tela, valor gravado, código de saída, arquivo criado.

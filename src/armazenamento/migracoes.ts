@@ -738,10 +738,92 @@ ALTER TABLE execucao_sessao DROP COLUMN erro;
 `);
 };
 
+const GATE_PELA_ETAPA_ANCORA = `CASE t.etapa
+    WHEN 'entender_e_desenhar' THEN 'gate_demanda'
+    WHEN 'planejar' THEN 'gate_planejamento'
+    WHEN 'encerrar_rodada' THEN 'gate_pr'
+    WHEN 'revisar_rodada' THEN 'gate_revisao_rodada'
+    WHEN 'revisar_demanda' THEN 'gate_revisao_demanda'
+  END`;
+
+/** Os quatro gates que `decisao_ticket_historico` conhecia, nos nomes de hoje (`revisao` era o da rodada). */
+const GATE_PELO_HISTORICO = `CASE h.gate
+    WHEN 'registro' THEN 'gate_demanda'
+    WHEN 'desenho' THEN 'gate_planejamento'
+    WHEN 'pr' THEN 'gate_pr'
+    WHEN 'revisao' THEN 'gate_revisao_rodada'
+  END`;
+
+const DECISOES_COM_ETAPA_ANCORA = `FROM decisao_ticket d
+  LEFT JOIN ticket_demanda t ON t.demanda_id = d.demanda_id AND t.ticket_id = d.ticket_id`;
+
+const ENDERECO_DA_DECISAO = `d.demanda_id || '.T' || d.ticket_id || '#' || d.decisao_id`;
+
+/**
+ * A 41 dá a cada Decisão o gate de que é, pela etapa do ticket âncora, e troca o valor antigo do resultado por
+ * `reprovado`. Havendo linha em `decisao_ticket_historico`, o gate dela precisa bater com o da etapa; essa tabela sai
+ * depois da conferência. Etapa que não é de um dos cinco gates, ou histórico divergente, recusa a migração (desfeita
+ * pelo `migrar`, com o banco na v40 intacto).
+ */
+const MIGRACAO_41_GATE_DA_DECISAO: Migracao = (banco) => {
+  const enderecosSemGate = banco
+    .prepare(
+      `SELECT ${ENDERECO_DA_DECISAO} AS endereco ${DECISOES_COM_ETAPA_ANCORA} WHERE ${GATE_PELA_ETAPA_ANCORA} IS NULL`,
+    )
+    .all()
+    .map((linha) => String(linha.endereco));
+  if (enderecosSemGate.length > 0) {
+    throw new ErroDeRegra(
+      `a migração 41 não achou o gate das decisões ${enderecosSemGate.join(", ")}: a etapa do ticket não é de um gate`,
+      "restaure o banco do backup e relate o problema",
+    );
+  }
+  const enderecosDivergentes = banco
+    .prepare(
+      `SELECT ${ENDERECO_DA_DECISAO} AS endereco ${DECISOES_COM_ETAPA_ANCORA}
+       JOIN decisao_ticket_historico h
+         ON h.demanda_id = d.demanda_id AND h.ticket_id = d.ticket_id AND h.decisao_id = d.decisao_id
+       WHERE ${GATE_PELO_HISTORICO} IS NOT ${GATE_PELA_ETAPA_ANCORA}`,
+    )
+    .all()
+    .map((linha) => String(linha.endereco));
+  if (enderecosDivergentes.length > 0) {
+    throw new ErroDeRegra(
+      `a migração 41 achou o gate do histórico diferente do da etapa nas decisões ${enderecosDivergentes.join(", ")}`,
+      "restaure o banco do backup e relate o problema",
+    );
+  }
+  banco.exec(`
+CREATE TABLE decisao_ticket_nova (
+    demanda_id      TEXT NOT NULL,
+    ticket_id       INTEGER NOT NULL,
+    decisao_id      INTEGER NOT NULL,
+    gate            TEXT NOT NULL CHECK (gate IN ('gate_demanda','gate_planejamento','gate_pr','gate_revisao_rodada','gate_revisao_demanda')),
+    resultado       TEXT NOT NULL CHECK (resultado IN ('aprovado','reprovado')),
+    nota            INTEGER CHECK (nota BETWEEN 1 AND 5),
+    motivo          TEXT,
+    por_tipo        TEXT NOT NULL CHECK (por_tipo IN ('auditor','agente','fabriquinha')),
+    por_trabalho_id TEXT CHECK (por_trabalho_id IS NULL OR por_tipo = 'agente'),
+    em              TEXT NOT NULL,
+    PRIMARY KEY (demanda_id, ticket_id, decisao_id),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+INSERT INTO decisao_ticket_nova
+  SELECT d.demanda_id, d.ticket_id, d.decisao_id, ${GATE_PELA_ETAPA_ANCORA},
+         CASE WHEN d.resultado = 'aprovado' THEN 'aprovado' ELSE 'reprovado' END,
+         d.nota, d.motivo, d.por_tipo, d.por_trabalho_id, d.em
+  ${DECISOES_COM_ETAPA_ANCORA} ORDER BY d.rowid;
+DROP TABLE decisao_ticket_historico;
+DROP TABLE decisao_ticket;
+ALTER TABLE decisao_ticket_nova RENAME TO decisao_ticket;
+`);
+};
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
   MIGRACAO_38_ESTADO,
   MIGRACAO_39_PROJETO_UNICO,
   MIGRACAO_40_TENTATIVA,
+  MIGRACAO_41_GATE_DA_DECISAO,
 ];

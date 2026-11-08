@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   AgregadoDemanda,
-  DecisaoDemanda,
+  Decisao,
   Demanda,
   donoDe,
   EvidenciaDemanda,
@@ -41,6 +41,7 @@ const decisao = (m: Record<string, unknown> = {}) => ({
   demanda_id: "I-1",
   ticket_id: 1,
   decisao_id: 1,
+  gate: "gate_demanda",
   resultado: "aprovado",
   por: AUDITOR,
   em,
@@ -76,10 +77,13 @@ test("campos da demanda, ticket e decisão", () => {
   assert.ok(!Demanda.safeParse(demanda({ estado: "desenho" })).success);
   assert.ok(TicketDemanda.safeParse(ticket()).success);
   assert.ok(!TicketDemanda.safeParse(ticket(1, { estado: "x" })).success);
-  assert.ok(DecisaoDemanda.safeParse(decisao({ nota: 5, motivo: "ok" })).success);
-  assert.ok(!DecisaoDemanda.safeParse(decisao({ nota: 0 })).success);
-  assert.ok(!DecisaoDemanda.safeParse(decisao({ nota: 6 })).success);
-  assert.ok(!DecisaoDemanda.safeParse({ ...decisao(), demanda_id: undefined }).success);
+  assert.ok(Decisao.safeParse(decisao({ nota: 5, motivo: "ok" })).success);
+  assert.ok(!Decisao.safeParse(decisao({ nota: 0 })).success);
+  assert.ok(!Decisao.safeParse(decisao({ nota: 6 })).success);
+  assert.ok(!Decisao.safeParse({ ...decisao(), demanda_id: undefined }).success);
+  assert.ok(!Decisao.safeParse({ ...decisao(), gate: undefined }).success);
+  assert.ok(!Decisao.safeParse(decisao({ gate: "registro" })).success);
+  assert.ok(!Decisao.safeParse(decisao({ resultado: "aprovada" })).success);
 });
 
 test("criado_por, autor e por são obrigatórios e validam a identidade do ator", () => {
@@ -97,12 +101,12 @@ test("criado_por, autor e por são obrigatórios e validam a identidade do ator"
   for (const identidade of identidadesInvalidas) {
     assert.equal(TicketDemanda.safeParse(ticket(1, { criado_por: identidade })).success, false);
     assert.equal(EvidenciaDemanda.safeParse(evidencia({ autor: identidade })).success, false);
-    assert.equal(DecisaoDemanda.safeParse(decisao({ por: identidade })).success, false);
+    assert.equal(Decisao.safeParse(decisao({ por: identidade })).success, false);
   }
   for (const identidade of [AUDITOR, FABRIQUINHA, { tipo: "agente", trabalho_id: "E-1" }]) {
     assert.deepEqual(TicketDemanda.parse(ticket(1, { criado_por: identidade })).criado_por, identidade);
     assert.deepEqual(EvidenciaDemanda.parse(evidencia({ autor: identidade })).autor, identidade);
-    assert.deepEqual(DecisaoDemanda.parse(decisao({ por: identidade })).por, identidade);
+    assert.deepEqual(Decisao.parse(decisao({ por: identidade })).por, identidade);
   }
 });
 
@@ -182,7 +186,7 @@ test("agregado válido e identidades compostas", () => {
   recusa(agregado({ decisoes: [decisao(), decisao()] }), "se repete");
   recusa(agregado({ decisoes: [decisao({ demanda_id: "I-2" })] }), "outra demanda");
   recusa(agregado({ decisoes: [decisao({ ticket_id: 9 })] }), "não existe");
-  recusa(agregado({ decisoes: [decisao({ resultado: "recusado" })] }), "exige motivo");
+  recusa(agregado({ decisoes: [decisao({ resultado: "reprovado" })] }), "exige motivo");
 });
 
 test("uma evidência ativa por tipo e dono (CA-9)", () => {
