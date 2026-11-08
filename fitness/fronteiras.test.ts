@@ -324,14 +324,15 @@ test("a fitness acusa cada violação pelo arquivo e aceita o que a matriz permi
   );
 });
 
-// Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`.
+// Só o condutor lança o pi e consulta o modelo: o resto do serviço pede ao `CondutorDeTrabalhos`. O harness lança pelo Ambiente.
 const ARQUIVO_DO_CONDUTOR = "aplicacao/trabalho/condutor.ts";
+const ARQUIVO_DO_HARNESS = "infra/agente/harness_pi.ts";
 const METODOS_DO_HARNESS = new Set(["lancar", "perguntar"]);
 
 // shortcut: sem checker de tipos, qualquer `.lancar(` ou `.perguntar(` conta, seja do HarnessPi ou não; nenhum outro objeto de src/ usa esses nomes.
 function acharChamadasAoHarnessForaDoCondutor(src: string): string[] {
   return listarArquivosDeProducao(src)
-    .filter((arquivo) => arquivo !== ARQUIVO_DO_CONDUTOR)
+    .filter((arquivo) => arquivo !== ARQUIVO_DO_CONDUTOR && arquivo !== ARQUIVO_DO_HARNESS)
     .flatMap((arquivo) => {
       const fonte = ts.createSourceFile(arquivo, readFileSync(join(src, arquivo), "utf8"), ts.ScriptTarget.Latest);
       const chamadas: string[] = [];
