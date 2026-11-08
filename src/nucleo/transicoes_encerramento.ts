@@ -219,7 +219,7 @@ export function registrarFalhaEncerramento(
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes");
   }
   return AgregadoDemanda.parse({
-    ...mudarTicket(ag, atual, "falhou", ctx.agora),
+    ...mudarTicket(ag, atual, "falhou", ctx.agora, { motivo_falha: e.motivo }),
     encerramento: { ...enc, falha, ...(e.etapa === "limpeza" && { limpeza_pendente: e.limpeza_pendente }) },
   });
 }
