@@ -1,5 +1,6 @@
 // Roda um comando externo com `spawn` e argumentos em lista, sem shell: nenhum argumento vira comando.
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { LIMITE_COMANDO_MS } from "./ambiente/ambiente.ts";
 
@@ -73,6 +74,16 @@ export function executar(
       resolve({ codigo, saida, erro, limiteEstourado });
     });
   });
+}
+
+/**
+ * Lança o comando solto, em grupo próprio e sem stdio, e volta assim que ele nasce: ele segue vivo depois que o
+ * chamador sai (o navegador do `abrir`). Só lança se o programa nem chega a rodar.
+ */
+export async function lancarSolto(comando: string, args: readonly string[], env: NodeJS.ProcessEnv): Promise<void> {
+  const filho = spawn(comando, args, { env, detached: true, stdio: "ignore" });
+  await once(filho, "spawn");
+  filho.unref();
 }
 
 /**
