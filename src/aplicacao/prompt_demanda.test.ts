@@ -450,9 +450,9 @@ test("as revisões recebem o que a Fabriquinha já verificou no último commit d
     rodadas: [...ag.rodadas, { ...ag.rodadas[0], rodada_id: 5 }],
     tickets: [implementar(1, 2), implementar(2, 2), implementar(4, 2), implementar(6, 5)],
     evidencias: [
-      verificacao("execucao_testes", 2, { aprovada: false, comandos: [{ comando: "npm run check", codigoSaida: 1 }] }),
-      verificacao("execucao_testes", 2, { aprovada: true, comandos: [{ comando: "npm run check", codigoSaida: 0 }] }),
-      verificacao("matriz_fitness", 2, { aprovada: true, linhas: [] }),
+      verificacao("execucao_testes", 2, { comandos: [{ comando: "npm run check", codigoSaida: 1 }] }),
+      verificacao("execucao_testes", 2, { comandos: [{ comando: "npm run check", codigoSaida: 0 }] }),
+      verificacao("matriz_fitness", 2, { linhas: [] }),
     ],
   } as unknown as AgregadoDemanda;
   const log = (nome: string, caminho: string) => ({
@@ -485,9 +485,9 @@ test("as revisões recebem o que a Fabriquinha já verificou no último commit d
     new RegExp(
       "## Verificações já feitas\n\n.*HEAD\\^\\{tree\\}.*\n\n" +
         `- I-206\\.R2: último commit I-206\\.T2, \`${"b".repeat(40)}\`\n` +
-        "  - `execucao_testes`: aprovada \\(`npm run check` saiu com 0\\); logs: `/raiz/novo.log`\n" +
-        "  - `matriz_fitness`: aprovada; logs: \\(nenhum\\)\n" +
-        "  - `relatorio_sonar`: não aprovada; logs: \\(nenhum\\)\n\n",
+        "  - `execucao_testes`: evidência aceita \\(`npm run check` saiu com 0\\); logs: `/raiz/novo.log`\n" +
+        "  - `matriz_fitness`: evidência aceita; logs: \\(nenhum\\)\n" +
+        "  - `relatorio_sonar`: sem evidência aceita; logs: \\(nenhum\\)\n\n",
     ),
   );
   assert.doesNotMatch(rodada, /I-206\.R5/);
