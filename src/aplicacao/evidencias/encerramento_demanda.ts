@@ -1,7 +1,7 @@
 // Evidências do encerramento final da demanda e texto do PR final (comparacao-sdlc-implementacao.md §5, CA-14 e CA-15).
 // Só endereços públicos (D09): `I-206`, `I-206.R2`, `I-206.T3`.
 import { z } from "zod";
-import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../../nucleo/trabalho_agentico.ts";
 import { lista, neutro } from "./pr.ts";
@@ -105,10 +105,11 @@ export function montarArvorePRs(
         situacao: situacao(linhas.some((l) => l.custo === null)),
       },
     }));
+  const prFinal = prDaDemanda(ag);
   return ArvorePRsCriteriosCustos.parse({
     demanda: ag.demanda.id,
     base: ag.encerramento?.base ?? null,
-    pr_final: ag.encerramento?.pr ?? null,
+    pr_final: prFinal === undefined ? null : { numero: prFinal.numero, url: prFinal.url },
     sha_integracao: ag.encerramento?.integracao?.sha ?? null,
     rodadas: ag.rodadas.map((r) => ({
       rodada: formatarRodadaRef(r),

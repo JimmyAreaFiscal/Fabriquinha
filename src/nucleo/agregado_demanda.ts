@@ -5,6 +5,7 @@ import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
+import { PullRequest } from "./espaco_de_trabalho.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import {
   EstadoDemanda,
@@ -71,6 +72,8 @@ export const RodadaDemanda = z.object({
   e2e: z.boolean(),
   branch: z.string(),
 });
+/** O PR do Espaço da rodada ou, sem `rodada_id`, o PR final do Espaço da demanda. */
+const PullRequestDoEspaco = PullRequest.extend({ rodada_id: Id.optional(), atualizado_em: Instante });
 const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depende_rodada_id: Id });
 const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
 const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
@@ -151,6 +154,10 @@ type DonoEvidencia = "demanda" | "rodada" | "ticket";
 export const donoDe = (e: Pick<EvidenciaDemanda, "rodada_id" | "ticket_id">): DonoEvidencia =>
   e.rodada_id !== undefined ? "rodada" : e.ticket_id !== undefined ? "ticket" : "demanda";
 
+/** O PR do Espaço da demanda: o PR final do encerramento. */
+export const prDaDemanda = (ag: Pick<AgregadoDemanda, "pull_requests">): PullRequestDoEspaco | undefined =>
+  ag.pull_requests.find((pr) => pr.rodada_id === undefined);
+
 const chave = (...partes: (string | number | undefined)[]): string => partes.map(String).join("/");
 
 export const AgregadoDemanda = z
@@ -168,6 +175,7 @@ export const AgregadoDemanda = z
     // As execuções das etapas, na ordem; os limites e a retomada derivam delas (D05).
     tentativas: z.array(Tentativa).default([]),
     encerramento: ProgressoEncerramento.optional(),
+    pull_requests: z.array(PullRequestDoEspaco).default([]),
   })
   .superRefine((ag, ctx) => {
     const erro = (message: string) => {
@@ -228,8 +236,16 @@ export const AgregadoDemanda = z
     }
     const cicloDeTickets = GrafoDeDependencias.dosTickets(ag).descreverCiclo();
     if (cicloDeTickets) erro(cicloDeTickets);
+    const rodadasComPr = new Set<number | undefined>();
+    for (const pr of ag.pull_requests) {
+      if (pr.rodada_id !== undefined && !rodadas.has(pr.rodada_id))
+        erro(`o PR ${String(pr.numero)} cita a rodada ${String(pr.rodada_id)}, que não existe`);
+      if (rodadasComPr.has(pr.rodada_id)) erro(`há mais de um PR para o mesmo Espaço (${String(pr.rodada_id ?? id)})`);
+      rodadasComPr.add(pr.rodada_id);
+    }
     const enc = ag.encerramento;
     if (enc !== undefined) {
+      if (enc.integracao !== undefined && prDaDemanda(ag) === undefined) erro("a integração exige o PR final");
       if (ag.demanda.estado !== "encerrar_demanda" && !CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado))
         erro("o progresso do encerramento só existe nos estados encerrar_demanda, concluida, cancelada e arquivada");
       if (enc.demanda_id !== id) erro(`o progresso do encerramento é de outra demanda (${enc.demanda_id})`);
@@ -260,6 +276,7 @@ export const AgregadoDemanda = z
     }
   });
 
+export type PullRequestDoEspaco = z.infer<typeof PullRequestDoEspaco>;
 export type RodadaDemanda = z.infer<typeof RodadaDemanda>;
 export type TicketDemanda = z.infer<typeof TicketDemanda>;
 export type EvidenciaDemanda = z.infer<typeof EvidenciaDemanda>;

@@ -89,10 +89,10 @@ const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
             demanda_id: "I-206",
             branch: "fabriquinha/I-206",
             base: "develop",
-            pr: { numero: 50, url: "http://pr/50" },
             integracao: { sha: "abc123" },
             limpeza_pendente: [],
           },
+          pull_requests: [{ numero: 50, url: "http://pr/50", head: "abc123", estado: "integrado", atualizado_em: em }],
         }
       : {}),
   });

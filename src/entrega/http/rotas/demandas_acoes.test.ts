@@ -463,12 +463,18 @@ test("CA-36: decisão de outra origem recebe 403 e a demanda não muda", async (
 });
 
 const POST = { metodo: "POST" };
+const prFinal = {
+  numero: 9,
+  url: "https://pr/9",
+  head: "abc",
+  estado: "aberto" as const,
+  atualizado_em: "2026-01-01T00:00:00.000Z",
+};
 const encerramentoIntegrado = (demanda_id: string) => ({
   demanda_id,
   branch: `fabriquinha/${demanda_id}`,
   base: "main",
   sha_verificado: "abc",
-  pr: { numero: 9, url: "https://pr/9" },
   limpeza_pendente: [],
   integracao: { sha: "def" },
 });
@@ -526,6 +532,7 @@ test("CA-33: cancelar depois da integração confirmada é reprovado e a demanda
     ...ag,
     demanda: { ...ag.demanda, estado: "encerrar_demanda" },
     encerramento: encerramentoIntegrado("I-206"),
+    pull_requests: [prFinal],
   }));
   const r = await pedir("/api/demandas/I-206/cancelar", POST);
   assert.equal(r.status, 409);

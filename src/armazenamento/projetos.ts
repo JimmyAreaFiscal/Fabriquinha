@@ -257,6 +257,7 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
   apagar("proposta_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR demanda_criada_id IN (${DAS_DEMANDAS})`);
   apagar("decisao_ticket", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("evidencia_demanda", `demanda_id IN (${DAS_DEMANDAS})`); // arquivo_evidencia e evidencia_historico saem por ON DELETE CASCADE
+  apagar("pull_request", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("limpeza_pendente_encerramento", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("encerramento_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("dependencia_ticket", `demanda_id IN (${DAS_DEMANDAS})`);

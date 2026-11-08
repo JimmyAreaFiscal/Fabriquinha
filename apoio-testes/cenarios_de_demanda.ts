@@ -59,6 +59,7 @@ export const montarAgregadoDemanda = (id: string, estado: string, resto: object 
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    pull_requests: [],
     ...resto,
   }) as unknown as AgregadoDemanda;
 
@@ -221,7 +222,10 @@ export function gravarAgregadoPronto(banco: DatabaseSync, agregado: AgregadoDema
     )
     .run(numero - 1);
   try {
-    return criarDemandaNova(banco, () => agregado);
+    return criarDemandaNova(banco, () => ({
+      ...agregado,
+      pull_requests: (agregado as Partial<AgregadoDemanda>).pull_requests ?? [],
+    })); // os cenários prontos não trazem PR
   } finally {
     if (anterior) banco.prepare("UPDATE sequencia SET valor = ? WHERE nome = 'demanda'").run(anterior.valor);
     else banco.exec("DELETE FROM sequencia WHERE nome = 'demanda'");

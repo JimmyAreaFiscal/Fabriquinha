@@ -125,6 +125,7 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
         criterios_citados: [],
         dependencias_ticket: [],
         caminhos_ticket: [],
+        pull_requests: [],
         tentativas: [],
       }) as unknown as AgregadoDemanda,
   );

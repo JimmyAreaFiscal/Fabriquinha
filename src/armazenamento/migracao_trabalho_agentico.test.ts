@@ -52,7 +52,7 @@ test("a migração 42 mantém as linhas das três tabelas, o uso por processo e 
   );
   const processosAntes = JSON.stringify(banco.prepare("SELECT * FROM execucao_sessao ORDER BY id").all());
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES - VERSAO_LINHA_DE_BASE + 1));
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_ANTES + 1);
   assert.deepEqual(

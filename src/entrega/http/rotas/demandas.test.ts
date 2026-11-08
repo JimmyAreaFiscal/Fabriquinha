@@ -48,6 +48,13 @@ interface Board {
   }[];
   trabalho: unknown[];
 }
+const prFinal = {
+  numero: 9,
+  url: "https://pr/9",
+  head: "abc",
+  estado: "aberto" as const,
+  atualizado_em: "2026-01-01T00:00:00.000Z",
+};
 const comportamento = (evidencias: Evidencia[]): Evidencia => {
   const e = evidencias.find((x) => x.tipo === "comportamento");
   assert.ok(e);
@@ -307,10 +314,10 @@ test("CA-10: o progresso do encerramento com os passos feitos e o pendente", asy
       branch: "fabriquinha/I-206",
       base: "main",
       sha_verificado: "abc",
-      pr: { numero: 9, url: "https://pr/9" },
       limpeza_pendente: [],
       falha: { etapa: "integracao", motivo: "conflito" },
     },
+    pull_requests: [prFinal],
   }));
   const { encerramento } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(encerramento, {
@@ -346,10 +353,10 @@ test("o PR final à espera do merge humano vem no encerramento e marca a demanda
       branch: "fabriquinha/I-206",
       base: "main",
       sha_verificado: "abc",
-      pr: { numero: 9, url: "https://pr/9" },
       aguardando_merge_humano: true,
       limpeza_pendente: [],
     },
+    pull_requests: [prFinal],
   }));
   const { encerramento, tickets } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(encerramento.aguardando_merge, { url: "https://pr/9" });

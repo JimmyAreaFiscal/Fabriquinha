@@ -1,7 +1,7 @@
 // Rotas de leitura das demandas (comparacao-sdlc §9.1): o board e a página de uma demanda, com o endereço público
 // (D09) dos tickets e das rodadas, e os anexos das evidências. As ações do Auditor ficam em demandas_acoes.ts.
 import { z } from "zod";
-import type { AgregadoDemanda } from "../../../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
@@ -91,15 +91,16 @@ const classeDoMime = (mime: string): "imagem" | "video" | "html" | "texto" | "ou
 /** Os passos do encerramento final: feito o que o progresso já registra. */
 const passosDoEncerramento = (ag: AgregadoDemanda) => {
   const e = ag.encerramento;
+  const pr = prDaDemanda(ag);
   return {
     passos: [
       { passo: "verificacao", feito: e?.sha_verificado !== undefined },
-      { passo: "pr", feito: e?.pr !== undefined },
+      { passo: "pr", feito: pr !== undefined },
       { passo: "integracao", feito: e?.integracao !== undefined },
     ],
     limpeza_pendente: e?.limpeza_pendente ?? [],
     ...(e?.falha && { falha: e.falha }),
-    ...(e?.aguardando_merge_humano && e.pr && { aguardando_merge: { url: e.pr.url } }),
+    ...(e?.aguardando_merge_humano && pr && { aguardando_merge: { url: pr.url } }),
   };
 };
 

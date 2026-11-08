@@ -221,7 +221,6 @@ export function semearPaginaDaDemanda(raiz: string): void {
       ],
       encerramento: {
         demanda_id: "I-210",
-        pr: { numero: 9, url: "https://exemplo.com/pr/9" },
         branch: "fabriquinha/I-210",
         base: "main",
         sha_verificado: "abc123",
@@ -229,6 +228,9 @@ export function semearPaginaDaDemanda(raiz: string): void {
         limpeza_pendente: ["worktree da rodada 1"],
         falha: { etapa: "limpeza", motivo: "não consegui apagar a worktree" },
       },
+      pull_requests: [
+        { numero: 9, url: "https://exemplo.com/pr/9", head: "abc123", estado: "integrado", atualizado_em: em },
+      ],
     }),
   );
   gravarAnexos(banco, { demanda_id: "I-210", ticket_id: 3, tipo: "pr_aberto" }, [
@@ -379,13 +381,15 @@ export function semearDemandaAguardandoMerge(raiz: string): void {
       ],
       encerramento: {
         demanda_id: "I-218",
-        pr: { numero: 12, url: "https://exemplo.com/pr/12" },
         branch: "fabriquinha/I-218",
         base: "main",
         sha_verificado: "abc123",
         aguardando_merge_humano: true,
         limpeza_pendente: [],
       },
+      pull_requests: [
+        { numero: 12, url: "https://exemplo.com/pr/12", head: "abc123", estado: "aberto", atualizado_em: em },
+      ],
     }),
   );
   banco.close();

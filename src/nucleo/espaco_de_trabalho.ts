@@ -8,8 +8,8 @@ import { Endereco } from "./item_de_trabalho.ts";
 import { Slug } from "./primitivos.ts";
 import type { Projeto } from "./projeto.ts";
 
-// Não exportado: o schema só sai na R2 (sem-export-morto).
-const PullRequest = z.object({
+/** O PR do Espaço: lido de um lugar só (`pull_request`), por rodada ou, sem rodada, o final da demanda. */
+export const PullRequest = z.object({
   numero: z.number().int().positive(),
   url: z.url(),
   head: z.string().min(1),
