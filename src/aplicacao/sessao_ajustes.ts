@@ -39,19 +39,20 @@ const contexto = () => ({ agora: new Date().toISOString() });
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
 
-/** O `encerrar_rodada` atual (o de maior id) da rodada e o `pr_aberto` dele. */
-function prDaRodada(ag: AgregadoDemanda, ref: RefRodada) {
-  const ticket = existe(
-    ticketAtualDaEtapa(ag, "encerrar_rodada", ref.rodada_id),
-    `a rodada ${formatarRodadaRef(ref)} não tem ticket encerrar_rodada`,
-    "confira o estado da rodada",
+/** O Espaço da rodada, com o PR que o encerramento publicou. */
+function espacoComPrPublicado(banco: DatabaseSync, ag: AgregadoDemanda, ref: RefRodada) {
+  const espaco = espacoDoTicket(
+    ag,
+    { rodada_id: ref.rodada_id },
+    projetoExistente(banco, ag.demanda.projeto),
+    raizDo(banco),
   );
   const pr = existe(
-    ag.evidencias.findLast((e) => e.ticket_id === ticket.ticket_id && e.tipo === "pr_aberto"),
+    espaco.pr,
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  return { ticket, pr: pr.dados as { url: string; branch: string; head: string } };
+  return { branch: espaco.branch, pr };
 }
 
 /** O ticket `ajustar_resultado` mais recente da rodada. */
@@ -116,14 +117,14 @@ function executar(
  * em disco, fora da transação, então vem antes da Decisão.
  */
 export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
-  const { pr } = prDaRodada(ag, ref);
+  const { branch, pr } = espacoComPrPublicado(banco, ag, ref);
   const demanda = await exigirGit(
     espacoDoTicket(ag, {}, projetoExistente(banco, ag.demanda.projeto), raizDo(banco)).pasta,
     "rev-parse",
     `refs/heads/${ag.demanda.branch}`,
   );
   const marco: Marco = {
-    rodada: { branch: pr.branch, sha: pr.head },
+    rodada: { branch, sha: pr.head },
     demanda: { branch: ag.demanda.branch, sha: demanda.trim() },
   };
   mkdirSync(dirname(arquivoDoMarco(banco, ref)), { recursive: true });
@@ -138,7 +139,7 @@ export function abrirSessaoDeAjustes(
   motivo: string,
   opcoes: Opcoes,
 ): ReturnType<typeof iniciarExecucaoDemanda> {
-  const { pr } = prDaRodada(reprovada, ref);
+  const { pr } = espacoComPrPublicado(banco, reprovada, ref);
   const sessao = sessaoDaRodada(reprovada, ref);
   return executar(banco, ref, sessao, {
     ...opcoes,

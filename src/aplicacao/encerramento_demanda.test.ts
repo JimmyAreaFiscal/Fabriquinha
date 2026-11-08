@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { prDaDemanda } from "../nucleo/agregado_demanda.ts";
 import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
@@ -50,6 +51,7 @@ interface Opcoes {
   estado?: "encerrar_demanda" | "em_execucao";
   semTicket?: boolean;
   encerramento?: object;
+  pullRequests?: object[];
 }
 
 /** Projeto `loja` com base `develop`; demanda I-206 em encerramento, com a rodada 1 e um commit de ticket na demanda. */
@@ -58,6 +60,7 @@ async function cenario({
   estado = "encerrar_demanda",
   semTicket = false,
   encerramento,
+  pullRequests = [],
 }: Opcoes = {}) {
   const c = criarRepositorioDeTeste([], "develop");
   const { banco } = abrirBancoTemporario(c.raiz);
@@ -117,6 +120,7 @@ async function cenario({
     caminhos_ticket: [],
     decisoes: [],
     evidencias: [],
+    pull_requests: pullRequests,
     ...(encerramento && { encerramento }),
   } as unknown as AgregadoDemanda);
   const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log, () => Promise.resolve());
@@ -204,8 +208,9 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
   assert.deepEqual([pr?.head, pr?.base], [BRANCH_DEMANDA, "develop"]);
   assert.equal(pr?.titulo, "feat: Demanda [I-206]");
   assert.ok(pr.corpo.startsWith("<!-- fabriquinha I-206 -->"));
-  assert.deepEqual(ag.encerramento?.pr, { numero: 1, url: URL_PR });
-  assert.equal(ag.encerramento.base, "develop");
+  const prFinal = prDaDemanda(ag);
+  assert.deepEqual([prFinal?.numero, prFinal?.url, prFinal?.estado], [1, URL_PR, "integrado"]);
+  assert.equal(ag.encerramento?.base, "develop");
   assert.equal(ag.encerramento.integracao?.sha, pr.mergeSha);
   assert.deepEqual(ag.encerramento.limpeza_pendente, []);
   assert.equal(ag.demanda.estado, "concluida");
@@ -245,10 +250,10 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
       demanda_id: D,
       branch: BRANCH_DEMANDA,
       base: "develop",
-      pr: { numero: 1, url: URL_PR },
       sha_verificado: "velho",
       limpeza_pendente: [],
     },
+    pullRequests: [{ numero: 1, url: URL_PR, head: "velho", estado: "aberto", atualizado_em: em }],
   });
   hospedagem.abrirPr({ head: BRANCH_DEMANDA, base: "develop", titulo: "velho", corpo: "sem marca", estado: "aberto" });
   // Evidência de uma tentativa que caiu antes de concluir: a nova a substitui.
@@ -277,7 +282,7 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
   ]);
 
   assert.equal(hospedagem.prs().length, 1);
-  assert.deepEqual(ag.encerramento?.pr, { numero: 1, url: URL_PR });
+  assert.equal(prDaDemanda(ag)?.url, URL_PR);
   assert.equal(ag.demanda.estado, "concluida");
 });
 

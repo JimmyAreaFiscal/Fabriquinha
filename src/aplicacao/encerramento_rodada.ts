@@ -3,7 +3,12 @@
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import type { AgregadoDemanda, EvidenciaDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import {
+  type AgregadoDemanda,
+  comPrDaRodada,
+  type EvidenciaDemanda,
+  type TicketDemanda,
+} from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
@@ -128,14 +133,27 @@ function gravarEvidencia(
   ticket: TicketDemanda,
   tipo: "relatorio_produtividade" | "pr_aberto",
   dados: unknown,
+  prPublicado?: { rodada_id: number; id: string; url: string; head: string },
 ): void {
   const { demanda_id, ticket_id } = ticket;
   const e = validarEvidenciaDaEtapa(
     { demanda_id, ticket_id, etapa: "encerrar_rodada" },
     { demanda_id, ticket_id, tipo, produtor: "fabriquinha", dados },
   );
+  const em = new Date().toISOString();
   comDemanda(banco, demanda_id, (ag) => ({
     ...ag,
+    // O PR do Espaço da rodada acompanha a evidência, na mesma gravação.
+    pull_requests:
+      prPublicado === undefined
+        ? ag.pull_requests
+        : comPrDaRodada(ag, prPublicado.rodada_id, {
+            numero: Number(prPublicado.id),
+            url: prPublicado.url,
+            head: prPublicado.head,
+            estado: "aberto",
+            atualizado_em: em,
+          }),
     evidencias: [
       ...ag.evidencias.filter((x) => x.ticket_id !== ticket_id || x.tipo !== tipo),
       {
@@ -145,7 +163,7 @@ function gravarEvidencia(
         tipo,
         dados: e.dados as EvidenciaDemanda["dados"],
         autor: FABRIQUINHA,
-        em: new Date().toISOString(),
+        em,
       },
     ],
   }));
@@ -293,12 +311,18 @@ async function publicarEConferir(
     () => varrerBase(banco, projeto.nome),
     log,
   );
-  gravarEvidencia(banco, ticket, "pr_aberto", {
-    ...publicado,
-    base: demanda.branch,
-    corpoCompleto: pr.completo,
-    condensado: pr.completo !== pr.publicado,
-  });
+  gravarEvidencia(
+    banco,
+    ticket,
+    "pr_aberto",
+    {
+      ...publicado,
+      base: demanda.branch,
+      corpoCompleto: pr.completo,
+      condensado: pr.completo !== pr.publicado,
+    },
+    { ...publicado, rodada_id: ref.rodada_id },
+  );
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
 
   const problemas = await exigidaPelaEtapa(

@@ -159,6 +159,18 @@ async function cenario({
           },
         ]
       : [],
+    pull_requests: anterior
+      ? [
+          {
+            rodada_id: 2,
+            numero: 1,
+            url: "https://github.com/org/loja/pull/1",
+            head: "a".repeat(40),
+            estado: "aberto",
+            atualizado_em: em,
+          },
+        ]
+      : [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -238,6 +250,18 @@ test("CA-2, CA-7, CA-12 e CA-13: o PR vai da branch da rodada para a da demanda,
     condensado: false,
   });
   assert.deepEqual(evidencia("pr_aberto")?.autor, { tipo: "fabriquinha" });
+  assert.deepEqual(
+    ag().pull_requests.map(({ rodada_id, numero, url, head, estado }) => ({ rodada_id, numero, url, head, estado })),
+    [
+      {
+        rodada_id: 2,
+        numero: 1,
+        url: "https://github.com/org/loja/pull/1",
+        head: rodarGit(rodada, "rev-parse", "HEAD"),
+        estado: "aberto",
+      },
+    ],
+  );
   assert.deepEqual(evidencia("relatorio_produtividade")?.autor, { tipo: "fabriquinha" });
   // Sem custo medido em nenhum ticket: incompleto, nunca somado como zero (CA-12).
   const relatorio = evidencia("relatorio_produtividade")?.dados as {
@@ -347,7 +371,7 @@ test("CA-6: check de CI falho volta a desenvolvimento com uma correção por che
 });
 
 test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a marca do ticket atual", async () => {
-  const { banco, estado } = await cenario({ anterior: true });
+  const { banco, estado, ag } = await cenario({ anterior: true });
   hospedagem.abrirPr({
     head: BRANCH_RODADA,
     base: BRANCH_DEMANDA,
@@ -361,6 +385,10 @@ test("o PR de um encerrar_rodada anterior da rodada é conhecido, mesmo sem a ma
   assert.equal(hospedagem.prs().length, 1);
   assert.equal(hospedagem.prs()[0]?.titulo, "feat: Encerrar a rodada [I-206.R2]");
   assert.equal(estado(), "gate_pr");
+  assert.deepEqual(
+    ag().pull_requests.map((pr) => [pr.rodada_id, pr.numero]),
+    [[2, 1]],
+  );
 });
 
 test("CA-9: commit que nenhum ticket registrou falha antes do push, diz como desfazer e não cria PR", async () => {

@@ -8,7 +8,6 @@ const Texto = z.string().trim().min(1);
 export const ProgressoEncerramento = z
   .strictObject({
     demanda_id: DemandaId,
-    pr: z.strictObject({ numero: z.number().int().positive(), url: Texto }).optional(),
     branch: z.string(),
     // Base configurada do projeto (D02): nunca fixada em `main`.
     base: Texto,
@@ -25,7 +24,6 @@ export const ProgressoEncerramento = z
       ctx.addIssue({ code: "custom", message });
     };
     if (p.branch !== branchDemanda(p.demanda_id)) erro(`a branch do encerramento é ${branchDemanda(p.demanda_id)}`);
-    if (p.integracao !== undefined && p.pr === undefined) erro("a integração exige o PR final");
     if (p.limpeza_pendente.length > 0 && p.integracao === undefined) erro("a limpeza pendente exige a integração");
     if (new Set(p.limpeza_pendente).size !== p.limpeza_pendente.length) erro("as pendências de limpeza se repetem");
   });

@@ -175,6 +175,10 @@ function semearDemandas(): void {
           em,
         },
       ],
+      pull_requests: [
+        { rodada_id: 1, numero: 7, url: "https://pr/7", head: "abc", estado: "integrado", atualizado_em: em },
+        { rodada_id: 2, numero: 8, url: "https://pr/8", head: "def", estado: "aberto", atualizado_em: em },
+      ],
     }),
   );
   banco.exec(
@@ -211,7 +215,7 @@ test("demandas: as rodadas com o PR e os tickets com o modelo efetivo, a sessão
   );
   assert.deepEqual(i206.rodadas, [
     { ref: "I-206.R1", titulo: "rodada 1", estado: "concluida", pr: { id: "7", url: "https://pr/7" } },
-    { ref: "I-206.R2", titulo: "rodada 2", estado: "implementar" },
+    { ref: "I-206.R2", titulo: "rodada 2", estado: "implementar", pr: { id: "8", url: "https://pr/8" } },
   ]);
   assert.deepEqual(i206.tickets, [
     {

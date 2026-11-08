@@ -2,7 +2,7 @@
 // hospedagem, avançar a demanda local e abrir a sessão de ajustes do PR reprovado. A hospedagem é a fonte da verdade,
 // então repetir a aprovação é seguro.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, comPrDaRodada } from "../../nucleo/agregado_demanda.ts";
 import { type Ator, exigirAtor } from "../../nucleo/ator.ts";
 import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
@@ -63,15 +63,15 @@ export async function aprovarPR(
   }
 
   gate.ensaiar(ag, endereco, entrada, ator, contexto()); // recusa antes de integrar na hospedagem
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
+  const raiz = raizDo(banco);
   const pr = existe(
-    ag.evidencias.findLast((e) => e.ticket_id === ticket.ticket_id && e.tipo === "pr_aberto"),
+    espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz).pr,
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
-  const raiz = raizDo(banco);
   const { branch } = ag.demanda;
-  await integrarPR(projeto, pr.dados.id as string);
+  await integrarPR(projeto, String(pr.numero));
   // A ref local da demanda só avança em fast-forward: o merge da hospedagem é o único commit novo dela.
   const { pasta: demanda } = espacoDoTicket(ag, {}, projeto, raiz);
   await naFilaDoProjeto(raiz, projeto.nome, async () => {
@@ -79,7 +79,20 @@ export async function aprovarPR(
     await exigirGit(demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
   });
 
-  return comDemanda(banco, ref.demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, contexto()));
+  return comDemanda(banco, ref.demanda_id, (a) => {
+    const { agora } = contexto();
+    const decidida = gate.decidir(a, endereco, entrada, ator, { agora });
+    return {
+      ...decidida,
+      pull_requests: comPrDaRodada(decidida, ref.rodada_id, {
+        numero: pr.numero,
+        url: pr.url,
+        head: pr.head,
+        estado: "integrado",
+        atualizado_em: agora,
+      }),
+    };
+  });
 }
 
 /**

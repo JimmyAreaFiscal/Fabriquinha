@@ -5,7 +5,7 @@
 // transição do domínio, que decide se ele se repete (progresso recuperável).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, type EvidenciaDemanda, prDaDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
@@ -123,7 +123,7 @@ export async function conduzirEncerramentoDemanda(
   // A Fabriquinha não integra o PR final: a plataforma pode exigir a aprovação do humano (Azure Repos) e o merge é dele.
   const aguardarMergeHumano = async () => {
     const pr = existe(
-      carregarDemanda(banco, demanda_id).encerramento?.pr,
+      prDaDemanda(carregarDemanda(banco, demanda_id)),
       `a demanda ${demanda_id} não tem PR final`,
       "registre a tentativa antes",
     );
@@ -149,7 +149,12 @@ export async function conduzirEncerramentoDemanda(
     );
     const pendentes = await pendenciasDeLimpeza(raiz, projeto, ag);
     aplicar((a) =>
-      registrarIntegracao(a, { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes }, FABRIQUINHA),
+      registrarIntegracao(
+        a,
+        { demanda_id, confirmada: true, sha, limpeza_pendente: pendentes },
+        FABRIQUINHA,
+        contexto(),
+      ),
     );
     return limpar();
   };
@@ -170,6 +175,7 @@ export async function conduzirEncerramentoDemanda(
           sha: publicado.head,
         },
         FABRIQUINHA,
+        contexto(),
       ),
     );
   } catch (erro) {
@@ -210,6 +216,7 @@ function publicarFinal(
   log: string,
 ) {
   const { demanda } = ag;
+  const prFinal = prDaDemanda(ag);
   const registrados = new Set(ag.tickets.map((t) => commitDoTicketDemanda(banco, demanda.id, t.ticket_id)?.sha));
   const conferirCommits = async (head: string) => {
     // Os commits da base já estão no remoto; a ponta dele vem fresca para a comparação.
@@ -230,7 +237,7 @@ function publicarFinal(
     {
       titulo: tituloDoPRFinal(ag),
       corpo: corpoDoPRFinal(ag),
-      conhecidos: ag.encerramento?.pr ? [String(ag.encerramento.pr.numero)] : [],
+      conhecidos: prFinal ? [String(prFinal.numero)] : [],
       marca: marcaDoPRFinal(demanda.id),
     },
     conferirCommits,

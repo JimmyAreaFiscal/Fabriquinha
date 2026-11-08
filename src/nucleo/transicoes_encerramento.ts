@@ -2,7 +2,7 @@
 // Funções puras (agregado, entrada, ator, contexto) → agregado; cada uma recebe o que a aplicação observou fora do domínio.
 import { z } from "zod";
 import { type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
-import { AgregadoDemanda, type TicketDemanda } from "./agregado_demanda.ts";
+import { AgregadoDemanda, prDaDemanda, type PullRequestDoEspaco, type TicketDemanda } from "./agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { branchDemanda, DemandaId } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
@@ -44,6 +44,12 @@ const EntradaIntegracao = z.strictObject({
 const EntradaSolicitacao = z.strictObject({ demanda_id: DemandaId });
 const EntradaConclusao = z.strictObject({ demanda_id: DemandaId, limpeza_pendente: z.array(Texto) });
 
+/** O PR final é o PR do Espaço da demanda: troca o anterior e mantém os das rodadas. */
+const comPrDaDemanda = (ag: AgregadoDemanda, pr: Omit<PullRequestDoEspaco, "rodada_id">): PullRequestDoEspaco[] => [
+  ...ag.pull_requests.filter((p) => p.rodada_id !== undefined),
+  pr,
+];
+
 function exigirEncerramento(ag: AgregadoDemanda) {
   CICLO_DA_DEMANDA.exigir(ag.demanda, "encerrar_demanda");
   const atual = ticketAtualDaEtapa(ag, "encerrar_demanda");
@@ -70,7 +76,12 @@ export function podeTentarEncerramento(ag: AgregadoDemanda): boolean {
  * CA-1 a CA-3 e CA-13: grava PR, branch, base (da entrada) e SHA; com progresso reaproveita o PR gravado e recusa
  * outro PR ou outra base. A tentativa aceita limpa o conflito pendente e a falha do check final.
  */
-export function registrarTentativaEncerramento(ag: AgregadoDemanda, entrada: unknown, ator: Ator): AgregadoDemanda {
+export function registrarTentativaEncerramento(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
   exigirAtor(ator, "registrar a tentativa de encerramento", "fabriquinha");
   const e = EntradaTentativa.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
@@ -83,9 +94,10 @@ export function registrarTentativaEncerramento(ag: AgregadoDemanda, entrada: unk
     );
   }
   const enc = ag.encerramento;
-  if (enc !== undefined && (enc.base !== e.base || (enc.pr !== undefined && enc.pr.numero !== e.pr.numero))) {
+  const prAtual = prDaDemanda(ag);
+  if (enc !== undefined && (enc.base !== e.base || (prAtual !== undefined && prAtual.numero !== e.pr.numero))) {
     throw new ErroDeRegra(
-      `o encerramento da demanda ${ag.demanda.id} já guarda o PR ${String(enc.pr?.numero)} e a base ${enc.base}`,
+      `o encerramento da demanda ${ag.demanda.id} já guarda o PR ${String(prAtual?.numero)} e a base ${enc.base}`,
       "reaproveite o PR e a base gravados",
     );
   }
@@ -97,10 +109,14 @@ export function registrarTentativaEncerramento(ag: AgregadoDemanda, entrada: unk
       branch: branchDemanda(ag.demanda.id),
       ...resto,
       base: e.base,
-      pr: enc?.pr ?? e.pr,
       sha_verificado: e.sha,
       ...(falha !== undefined && falha.etapa !== "check_final" && { falha }),
     },
+    pull_requests: comPrDaDemanda(ag, {
+      ...(prAtual ?? { ...e.pr, estado: "aberto" }),
+      head: e.sha,
+      atualizado_em: ctx.agora,
+    }),
   });
 }
 
@@ -166,6 +182,9 @@ export function concluirResolucaoConflito(
   return AgregadoDemanda.parse({
     ...mudarTicket(ag, resolver, "concluido", ctx.agora),
     encerramento: { ...ag.encerramento, sha_verificado: e.sha },
+    pull_requests: ag.pull_requests.map((p) =>
+      p.rodada_id === undefined ? { ...p, head: e.sha, atualizado_em: ctx.agora } : p,
+    ),
   });
 }
 
@@ -218,7 +237,7 @@ export function registrarFalhaEncerramento(
       "informe só pendências que ainda restam",
     );
   }
-  if (e.etapa === "integracao" && enc.pr === undefined) {
+  if (e.etapa === "integracao" && prDaDemanda(ag) === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes");
   }
   return AgregadoDemanda.parse({
@@ -256,7 +275,7 @@ export function solicitarIntegracao(
       `não integre de novo; falta só a limpeza: ${enc.limpeza_pendente.join(", ") || "nada"}`,
     );
   }
-  if (enc.pr === undefined) {
+  if (prDaDemanda(ag) === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes de integrar");
   }
   if (enc.aguardando_merge_humano && atual.estado === "aberto") return ag;
@@ -276,7 +295,12 @@ export function solicitarIntegracao(
  * CA-7, CA-8 e CA-13: só a confirmação externa com o SHA marca a integração como feita; grava as pendências de limpeza e
  * limpa a falha de integração. Repetir a mesma confirmação devolve igual; outro SHA recusa.
  */
-export function registrarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator: Ator): AgregadoDemanda {
+export function registrarIntegracao(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
   exigirAtor(ator, "registrar a integração", "fabriquinha");
   const e = EntradaIntegracao.parse(entrada);
   exigirDemandaDaEntrada(ag, e.demanda_id);
@@ -293,7 +317,8 @@ export function registrarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator:
     );
   }
   const { enc } = exigirTentativaAtiva(ag, "registrar a integração");
-  if (enc.pr === undefined) {
+  const prFinal = prDaDemanda(ag);
+  if (prFinal === undefined) {
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes de integrar");
   }
   const { falha, aguardando_merge_humano: _, ...resto } = enc;
@@ -306,6 +331,7 @@ export function registrarIntegracao(ag: AgregadoDemanda, entrada: unknown, ator:
       // O progresso não afirma falha superada: só a falha de integração some, a de check_final já não existe aqui.
       ...(falha !== undefined && falha.etapa !== "integracao" && { falha }),
     },
+    pull_requests: comPrDaDemanda(ag, { ...prFinal, estado: "integrado", atualizado_em: ctx.agora }),
   });
 }
 

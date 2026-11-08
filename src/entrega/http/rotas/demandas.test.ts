@@ -19,7 +19,7 @@ interface Evidencia {
 }
 interface Pagina {
   demanda: { tipo: string; descricao: string };
-  rodadas: { ref: string; ticket_atual_por_etapa: Record<string, string> }[];
+  rodadas: { ref: string; pr?: { id: string; url: string }; ticket_atual_por_etapa: Record<string, string> }[];
   tickets: {
     ref: string;
     etapa: string;
@@ -48,6 +48,13 @@ interface Board {
   }[];
   trabalho: unknown[];
 }
+const prFinal = {
+  numero: 9,
+  url: "https://pr/9",
+  head: "abc",
+  estado: "aberto" as const,
+  atualizado_em: "2026-01-01T00:00:00.000Z",
+};
 const comportamento = (evidencias: Evidencia[]): Evidencia => {
   const e = evidencias.find((x) => x.tipo === "comportamento");
   assert.ok(e);
@@ -76,6 +83,18 @@ test("CA-3: as duas rodadas da I-206 com o estado de cada uma e o PR aberto da R
     { ref: "I-206.R1", estado: "concluida" },
     { ref: "I-206.R2", estado: "gate_pr", pr: { id: "7", url: "https://pr/7" } },
   ]);
+});
+
+test("CA-3: a página traz o PR só da rodada em gate; a R1 concluída, com PR integrado, fica sem", async () => {
+  const { pedir } = await cenarioDemandas();
+  const { rodadas } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(
+    rodadas.map((r) => [r.ref, r.pr]),
+    [
+      ["I-206.R1", undefined],
+      ["I-206.R2", { id: "7", url: "https://pr/7" }],
+    ],
+  );
 });
 
 test("CA-4: a I-207 aparece com o bloqueio da I-206 e o estado dela; integrada, deixa de bloquear", async () => {
@@ -307,10 +326,10 @@ test("CA-10: o progresso do encerramento com os passos feitos e o pendente", asy
       branch: "fabriquinha/I-206",
       base: "main",
       sha_verificado: "abc",
-      pr: { numero: 9, url: "https://pr/9" },
       limpeza_pendente: [],
       falha: { etapa: "integracao", motivo: "conflito" },
     },
+    pull_requests: [prFinal],
   }));
   const { encerramento } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(encerramento, {
@@ -346,10 +365,10 @@ test("o PR final à espera do merge humano vem no encerramento e marca a demanda
       branch: "fabriquinha/I-206",
       base: "main",
       sha_verificado: "abc",
-      pr: { numero: 9, url: "https://pr/9" },
       aguardando_merge_humano: true,
       limpeza_pendente: [],
     },
+    pull_requests: [prFinal],
   }));
   const { encerramento, tickets } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   assert.deepEqual(encerramento.aguardando_merge, { url: "https://pr/9" });

@@ -33,3 +33,23 @@ test("os Espaços recusam projeto ou demanda inválidos", () => {
   assert.throws(() => espacoDaDemanda({ nome: "../x", branch_base: "main" }, "I-7", "/r"));
   assert.throws(() => espacoDaRodada(projeto, "I/7", 1, "/r"));
 });
+
+test("espaco.pr é o PR da rodada, ou o final da demanda sem rodada; sem linha, não há pr", () => {
+  const pr = (rodada_id?: number) => ({
+    rodada_id,
+    numero: rodada_id ?? 9,
+    url: "https://pr/1",
+    head: "abc",
+    estado: "aberto" as const,
+    atualizado_em: "2026-01-01T00:00:00.000Z",
+  });
+  const comPrs = { ...ag, pull_requests: [pr(3), pr()] };
+  assert.deepEqual(espacoDoTicket(comPrs, { rodada_id: 3 }, projeto, "/r").pr, {
+    numero: 3,
+    url: "https://pr/1",
+    head: "abc",
+    estado: "aberto",
+  });
+  assert.equal(espacoDoTicket(comPrs, {}, projeto, "/r").pr?.numero, 9);
+  assert.equal(espacoDoTicket(comPrs, { rodada_id: 4 }, projeto, "/r").pr, undefined);
+});

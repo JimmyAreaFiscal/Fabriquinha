@@ -838,6 +838,68 @@ CREATE INDEX ix_processo_do_trabalho_trabalho ON processo_do_trabalho(trabalho_i
 ALTER TABLE avaliacao ADD COLUMN grupo_processo INTEGER CHECK (grupo_processo IS NULL OR (typeof(grupo_processo) = 'integer' AND grupo_processo > 0));
 `;
 
+/**
+ * A 43 cria `pull_request`, o PR de cada Espaço de Trabalho (`rodada_id` nulo é o PR final da demanda), e tira o PR de
+ * `encerramento_demanda`. Preenche pela última `pr_aberto` de cada rodada (o `numero` é o `id` dela) e pelo `pr_numero`
+ * e `pr_url` do encerramento (o `head` é o `sha_verificado`, ou a branch quando ainda não houve verificação). O estado
+ * é `integrado` quando a rodada está concluída ou o encerramento tem `integracao_sha`, senão `aberto`. A garantia
+ * "integracao_sha só com PR" deixa de ser CHECK e passa a ser a trigger contra `pull_request`.
+ */
+const MIGRACAO_43_PULL_REQUEST = `
+CREATE TABLE pull_request (
+    demanda_id    TEXT NOT NULL REFERENCES demanda(id),
+    rodada_id     INTEGER,
+    numero        INTEGER NOT NULL CHECK (typeof(numero) = 'integer' AND numero > 0),
+    url           TEXT NOT NULL CHECK (length(url) > 0),
+    head          TEXT NOT NULL CHECK (length(head) > 0),
+    estado        TEXT NOT NULL CHECK (estado IN ('aberto','integrado','fechado')),
+    atualizado_em TEXT NOT NULL,
+    FOREIGN KEY (demanda_id, rodada_id) REFERENCES rodada(demanda_id, rodada_id)
+  );
+CREATE UNIQUE INDEX ux_pull_request_rodada ON pull_request(demanda_id, rodada_id) WHERE rodada_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_pull_request_demanda ON pull_request(demanda_id) WHERE rodada_id IS NULL;
+INSERT INTO pull_request (demanda_id, rodada_id, numero, url, head, estado, atualizado_em)
+  SELECT p.demanda_id, p.rodada_id, CAST(json_extract(p.dados, '$.id') AS INTEGER), json_extract(p.dados, '$.url'),
+         json_extract(p.dados, '$.head'), CASE WHEN r.estado = 'concluida' THEN 'integrado' ELSE 'aberto' END, p.em
+  FROM (
+    SELECT e.demanda_id, COALESCE(e.rodada_id, t.rodada_id) AS rodada_id, e.dados, e.em,
+           ROW_NUMBER() OVER (PARTITION BY e.demanda_id, COALESCE(e.rodada_id, t.rodada_id) ORDER BY e.em DESC, e.rowid DESC) AS posicao
+    FROM evidencia_demanda e LEFT JOIN ticket_demanda t ON t.demanda_id = e.demanda_id AND t.ticket_id = e.ticket_id
+    WHERE e.tipo = 'pr_aberto'
+  ) p JOIN rodada r ON r.demanda_id = p.demanda_id AND r.rodada_id = p.rodada_id
+  WHERE p.posicao = 1;
+INSERT INTO pull_request (demanda_id, rodada_id, numero, url, head, estado, atualizado_em)
+  SELECT e.demanda_id, NULL, e.pr_numero, e.pr_url, COALESCE(e.sha_verificado, e.branch),
+         CASE WHEN e.integracao_sha IS NULL THEN 'aberto' ELSE 'integrado' END, d.estado_alterado_em
+  FROM encerramento_demanda e JOIN demanda d ON d.id = e.demanda_id
+  WHERE e.pr_numero IS NOT NULL;
+CREATE TABLE encerramento_demanda_nova (
+    demanda_id        TEXT PRIMARY KEY REFERENCES demanda(id),
+    branch            TEXT NOT NULL,
+    base              TEXT NOT NULL CHECK (length(base) > 0),
+    sha_verificado    TEXT CHECK (sha_verificado IS NULL OR length(sha_verificado) > 0),
+    integracao_sha    TEXT CHECK (integracao_sha IS NULL OR length(integracao_sha) > 0),
+    conflito_ticket_id INTEGER,
+    falha_etapa       TEXT CHECK (falha_etapa IS NULL OR falha_etapa IN ('check_final','integracao','limpeza')),
+    falha_motivo      TEXT CHECK (falha_motivo IS NULL OR length(falha_motivo) > 0),
+    aguardando_merge_humano INTEGER NOT NULL DEFAULT 0 CHECK (aguardando_merge_humano IN (0, 1)),
+    FOREIGN KEY (demanda_id, conflito_ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id),
+    CHECK ((falha_etapa IS NULL) = (falha_motivo IS NULL))
+  );
+INSERT INTO encerramento_demanda_nova
+  SELECT demanda_id, branch, base, sha_verificado, integracao_sha, conflito_ticket_id, falha_etapa, falha_motivo,
+         aguardando_merge_humano
+  FROM encerramento_demanda ORDER BY rowid;
+DROP TABLE encerramento_demanda;
+ALTER TABLE encerramento_demanda_nova RENAME TO encerramento_demanda;
+CREATE TRIGGER encerramento_demanda_integracao_so_com_pr_na_insercao BEFORE INSERT ON encerramento_demanda
+  WHEN NEW.integracao_sha IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pull_request WHERE demanda_id = NEW.demanda_id AND rodada_id IS NULL)
+  BEGIN SELECT RAISE(ABORT, 'integracao_sha exige o PR final em pull_request'); END;
+CREATE TRIGGER encerramento_demanda_integracao_so_com_pr_na_atualizacao BEFORE UPDATE ON encerramento_demanda
+  WHEN NEW.integracao_sha IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pull_request WHERE demanda_id = NEW.demanda_id AND rodada_id IS NULL)
+  BEGIN SELECT RAISE(ABORT, 'integracao_sha exige o PR final em pull_request'); END;
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -846,4 +908,5 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_40_TENTATIVA,
   MIGRACAO_41_GATE_DA_DECISAO,
   MIGRACAO_42_TRABALHO_AGENTICO,
+  MIGRACAO_43_PULL_REQUEST,
 ];

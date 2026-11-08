@@ -47,6 +47,15 @@ const rodada = (rodada_id: number) => ({
   branch: `fabriquinha/I-1-${String(rodada_id)}`,
 });
 
+const pr = (rodada_id: number | undefined, estado: "aberto" | "integrado") => ({
+  ...(rodada_id !== undefined && { rodada_id }),
+  numero: rodada_id ?? 99,
+  url: `https://x/pr/${String(rodada_id ?? 99)}`,
+  head: "abc123",
+  estado,
+  atualizado_em: em,
+});
+
 // Rodada 1 com os tickets 1 e 2, rodada 2 com o 3, e o ticket 4 de demanda, sem rodada.
 const completo = (): AgregadoDemanda => ({
   demanda: {
@@ -62,6 +71,7 @@ const completo = (): AgregadoDemanda => ({
     branch: "fabriquinha/I-1",
   },
   rodadas: [rodada(1), rodada(2)],
+  pull_requests: [pr(1, "aberto"), pr(2, "integrado")],
   dependencias_rodada: [{ demanda_id: "I-1", rodada_id: 2, depende_rodada_id: 1 }],
   criterios_citados: [{ demanda_id: "I-1", rodada_id: 1, criterio_id: "CA-1" }],
   tickets: [
@@ -381,11 +391,11 @@ const emEncerramento = (b: DatabaseSync, encerramento?: ProgressoEncerramento) =
     ...ag,
     demanda: { ...ag.demanda, estado: "encerrar_demanda" },
     tickets: [...ag.tickets, { ...ticket(5), etapa: "resolver_conflito" }],
+    pull_requests: [...ag.pull_requests, pr(undefined, "aberto")],
     ...(encerramento && { encerramento }),
   }));
 const progresso = (extra: Partial<ProgressoEncerramento> = {}): ProgressoEncerramento => ({
   demanda_id: "I-1",
-  pr: { numero: 7, url: "https://x/pr/7" },
   branch: "fabriquinha/I-1",
   base: "main",
   sha_verificado: "abc123",
@@ -459,6 +469,46 @@ test("encerramento: o banco recusa progresso duplicado, de demanda inexistente, 
     /FOREIGN KEY/,
   );
   assert.deepEqual(carregarDemanda(b, "I-1"), antes);
+});
+
+test("pull_request: o PR de cada rodada e o final voltam iguais, mudam por UPDATE e saem com a rodada", () => {
+  const b = comBase();
+  const antes = carregarDemanda(b, "I-1");
+  assert.deepEqual(antes.pull_requests, [pr(1, "aberto"), pr(2, "integrado")]);
+  const comFinal = emEncerramento(b);
+  assert.deepEqual(comFinal.pull_requests.at(-1), pr(undefined, "aberto"));
+  assert.equal(linhas(b, "pull_request").length, 3);
+  const integrado = comDemanda(b, "I-1", (ag) => ({
+    ...ag,
+    pull_requests: ag.pull_requests.map((p) => (p.rodada_id === 1 ? { ...p, estado: "integrado" as const } : p)),
+  }));
+  assert.deepEqual(carregarDemanda(b, "I-1"), integrado);
+  comDemanda(b, "I-1", (ag) => ({ ...ag, pull_requests: ag.pull_requests.slice(0, 1) }));
+  assert.equal(linhas(b, "pull_request").length, 1);
+});
+
+test("pull_request: o banco recusa PR repetido no mesmo Espaço, de rodada inexistente e integração sem PR final", () => {
+  const b = comBase();
+  const inserir = (rodada: number | null) =>
+    `INSERT INTO pull_request VALUES ('I-1', ${String(rodada)}, 5, 'u', 'h', 'aberto', '${em}')`;
+  assert.throws(() => {
+    b.exec(inserir(1));
+  }, /constraint/i);
+  assert.throws(() => {
+    b.exec(inserir(9));
+  }, /FOREIGN KEY/);
+  const semPrFinal = /exige o PR final/;
+  const encerramento = (integracao: string) =>
+    `INSERT INTO encerramento_demanda (demanda_id, branch, base, integracao_sha) VALUES ('I-1', 'b', 'main', ${integracao})`;
+  assert.throws(() => {
+    b.exec(encerramento("'s'"));
+  }, semPrFinal);
+  b.exec(encerramento("NULL"));
+  assert.throws(() => {
+    b.exec("UPDATE encerramento_demanda SET integracao_sha = 's'");
+  }, semPrFinal);
+  b.exec(inserir(null));
+  b.exec("UPDATE encerramento_demanda SET integracao_sha = 's'");
 });
 
 const entrada = { projeto: "p", titulo: "t", tipo: "funcionalidade", descricao: "d" };

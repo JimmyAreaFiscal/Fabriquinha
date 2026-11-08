@@ -300,6 +300,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
               em,
             },
           ],
+          pull_requests: [{ rodada_id: 1, numero: pr, url, head, estado: "aberto", atualizado_em: em }],
         },
         id,
       );

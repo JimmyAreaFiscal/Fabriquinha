@@ -17,7 +17,7 @@ type Linha = Record<string, SQLInputValue>;
 const semNulos = (linha: Record<string, unknown>) =>
   Object.fromEntries(Object.entries(linha).filter(([, valor]) => valor !== null));
 
-/** Um grupo de colunas opcionais que existe por inteiro ou não existe (`pr`, `integracao`, ...). */
+/** Um grupo de colunas opcionais que existe por inteiro ou não existe (`integracao`, `falha`, ...). */
 const grupo = (campos: Record<string, unknown>) => (Object.values(campos).includes(null) ? null : campos);
 
 const bit = (b: boolean) => Number(b);
@@ -100,6 +100,12 @@ const TABELAS: readonly Tabela[] = [
     linhas: (ag) => ag.rodadas.map((r) => ({ ...r, e2e: bit(r.e2e) })),
   },
   {
+    nome: "pull_request",
+    chave: ["demanda_id", "rodada_id"],
+    linhas: (ag) =>
+      ag.pull_requests.map((pr) => ({ ...pr, demanda_id: ag.demanda.id, rodada_id: pr.rodada_id ?? null })),
+  },
+  {
     nome: "dependencia_rodada",
     chave: ["demanda_id", "rodada_id", "depende_rodada_id"],
     linhas: (ag) => ag.dependencias_rodada,
@@ -147,8 +153,6 @@ const TABELAS: readonly Tabela[] = [
         ? [
             {
               demanda_id: e.demanda_id,
-              pr_numero: e.pr?.numero ?? null,
-              pr_url: e.pr?.url ?? null,
               branch: e.branch,
               base: e.base,
               sha_verificado: e.sha_verificado ?? null,
@@ -257,7 +261,6 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     ...(enc && {
       encerramento: semNulos({
         demanda_id: id,
-        pr: grupo({ numero: enc.pr_numero, url: enc.pr_url }),
         branch: enc.branch,
         base: enc.base,
         sha_verificado: enc.sha_verificado,
@@ -274,6 +277,10 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
       enviada: demanda.enviada === 1,
     },
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
+    pull_requests: banco
+      .prepare("SELECT * FROM pull_request WHERE demanda_id = ? ORDER BY rowid")
+      .all(id)
+      .map(semNulos),
     dependencias_rodada: filhas("dependencia_rodada"),
     criterios_citados: filhas("criterio_citado_rodada"),
     tickets: filhas("ticket_demanda").map((t) => semNulos(linhaComConfiguracaoAgente(comAtor(t, "criado_por")))),
