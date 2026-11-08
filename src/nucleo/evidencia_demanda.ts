@@ -1,16 +1,10 @@
 // Evidência por dono da demanda SDLC (comparacao-sdlc-implementacao.md §7.4; fabriquinha/03-evidencias.md §4.1).
 // `dados` segue opaco: o schema de cada tipo é do F3.
 import { z } from "zod";
-import {
-  AgregadoDemanda,
-  donoDe,
-  EvidenciaDemanda,
-  IdDono,
-  TipoEvidenciaAgregado,
-  type Demanda,
-} from "./agregado_demanda.ts";
+import { AgregadoDemanda, donoDe, EvidenciaDemanda, IdDono, type Demanda } from "./agregado_demanda.ts";
 import { type Ator } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
+import { TipoEvidencia } from "./evidencia.ts";
 import { type Instante } from "./primitivos.ts";
 
 /** Obrigatórias da demanda no envio (CA-SDLC-01). */
@@ -21,14 +15,15 @@ const OPCIONAIS_DEMANDA = [
   "relatorio_complexidade",
   "relatorio_impactos_arquitetura",
 ] as const;
-export const TipoEvidenciaDemanda = z.enum([...OBRIGATORIAS_DEMANDA, ...OPCIONAIS_DEMANDA]);
-export type TipoEvidenciaDemanda = z.infer<typeof TipoEvidenciaDemanda>;
+/** Os tipos que a própria demanda recebe, as obrigatórias primeiro. */
+export const TIPOS_DA_DEMANDA = [...OBRIGATORIAS_DEMANDA, ...OPCIONAIS_DEMANDA] as const;
+export type TipoDaDemanda = (typeof TIPOS_DA_DEMANDA)[number];
 
 /** Custos seguem liberados depois do envio (§3): são o único tipo da demanda fora da definição congelada. */
 const livreDepoisDoEnvio = (tipo: string): boolean => tipo === "custos_realizados";
 
 export const EntradaEvidenciaDemanda = z.object({
-  tipo: TipoEvidenciaAgregado,
+  tipo: TipoEvidencia,
   dados: EvidenciaDemanda.shape.dados,
   rodada_id: IdDono,
   ticket_id: IdDono,
@@ -76,10 +71,10 @@ export function submeterEvidenciaDemanda(
     );
   }
   const daDemanda = donoDe(nova) === "demanda";
-  if (daDemanda && !TipoEvidenciaDemanda.safeParse(nova.tipo).success) {
+  if (daDemanda && !(TIPOS_DA_DEMANDA as readonly string[]).includes(nova.tipo)) {
     throw new ErroDeRegra(
       `a demanda ${demanda.id} não aceita evidência ${nova.tipo}`,
-      `use um de ${TipoEvidenciaDemanda.options.join(", ")}`,
+      `use um de ${TIPOS_DA_DEMANDA.join(", ")}`,
     );
   }
   if (nova.ticket_id !== undefined && !ag.tickets.some((t) => t.ticket_id === nova.ticket_id)) {

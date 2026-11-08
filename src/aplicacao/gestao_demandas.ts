@@ -6,13 +6,14 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda } from "../nucleo/cancelamento_demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
+import { schemaDoTipo } from "../nucleo/evidencia.ts";
 import {
   type EntradaEvidenciaDemanda,
   submeterEvidenciaDemanda,
-  TipoEvidenciaDemanda,
+  TIPOS_DA_DEMANDA,
 } from "../nucleo/evidencia_demanda.ts";
 import { type ContextoDemanda, editarDemanda, enviarDemanda, registrarDemanda } from "../nucleo/transicoes_demanda.ts";
-import { type Classe, LIMITE, type RegraArquivos, schemaDe, schemaDeEtapa } from "../nucleo/schemas.ts";
+import { type Classe, LIMITE, type RegraArquivos } from "../nucleo/schemas.ts";
 import { guardarBytes } from "../armazenamento/arquivos.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda, criarDemandaNova } from "../armazenamento/demandas.ts";
@@ -28,7 +29,7 @@ const Anexo = z.object({
   conteudo: z.instanceof(Buffer),
 });
 const EntradaEvidencia = z.object({
-  tipo: TipoEvidenciaDemanda,
+  tipo: z.enum(TIPOS_DA_DEMANDA),
   dados: z.unknown(),
   rodada_id: z.number().int().positive().optional(),
   arquivos: z.array(Anexo).default([]),
@@ -142,7 +143,7 @@ export const submeterEvidencia = (
 ): { demanda: AgregadoDemanda; avisos: string[] } =>
   traduzir(() => {
     const { tipo, dados, arquivos, rodada_id } = EntradaEvidencia.parse(entrada);
-    const schema = tipo === "custos_realizados" ? schemaDeEtapa(tipo) : schemaDe(tipo);
+    const schema = schemaDoTipo(tipo);
     const lidos = schema.dados.safeParse(dados);
     if (!lidos.success) {
       throw new ErroDeRegra(campos(lidos.error.issues, ["dados"]), "corrija o campo indicado e submeta de novo");

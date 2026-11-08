@@ -4,29 +4,9 @@ import { z } from "zod";
 import { IdDono, TicketDemanda } from "./agregado_demanda.ts";
 import { type Ator } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { OBRIGATORIAS_DEMANDA, TipoEvidenciaDemanda } from "./evidencia_demanda.ts";
+import { TipoEvidencia } from "./evidencia.ts";
+import { OBRIGATORIAS_DEMANDA, TIPOS_DA_DEMANDA } from "./evidencia_demanda.ts";
 import { EtapaTicket } from "./primitivos.ts";
-
-export const TipoEvidenciaEtapa = z.enum([
-  ...TipoEvidenciaDemanda.options,
-  "plano",
-  "execucao_testes",
-  "matriz_fitness",
-  "relatorio_sonar",
-  "arquivos_alterados",
-  "explicacao_fitness",
-  "comprovacao_criterios",
-  "mensagem_pr",
-  "aula_codigo",
-  "relatorio_produtividade",
-  "pr_aberto",
-  "video_demonstracao",
-  "testes_estresse",
-  "analise_seguranca",
-  "arvore_prs_criterios_custos",
-  "demonstracao_limpeza",
-]);
-export type TipoEvidenciaEtapa = z.infer<typeof TipoEvidenciaEtapa>;
 
 /** Quem produz a evidência da etapa: qualquer ator, menos o Auditor. */
 const Produtor = z.enum(["externo", "agente", "fabriquinha"]) satisfies z.ZodType<Ator["tipo"]>;
@@ -46,7 +26,7 @@ type RegraAprovacaoEtapa = z.infer<typeof RegraAprovacaoEtapa>;
 /** @testes tipo que o teste usa para montar a entrada */
 export const ItemCatalogoEtapa = z.object({
   etapa: EtapaTicket,
-  tipo: TipoEvidenciaEtapa,
+  tipo: TipoEvidencia,
   produtor: Produtor,
   obrigatoria: z.boolean(),
   regraAprovacao: RegraAprovacaoEtapa.nullable(),
@@ -57,7 +37,7 @@ export type ItemCatalogoEtapa = z.infer<typeof ItemCatalogoEtapa>;
 type Regra = RegraAprovacaoEtapa | null;
 const item = (
   etapa: EtapaTicket,
-  tipo: TipoEvidenciaEtapa,
+  tipo: TipoEvidencia,
   produtor: Produtor,
   obrigatoria = true,
   regraAprovacao: Regra = null,
@@ -77,7 +57,7 @@ const verificacoes = (etapa: EtapaTicket): ItemCatalogoEtapa[] => [
 ];
 
 const POR_ETAPA: Readonly<Record<EtapaTicket, readonly ItemCatalogoEtapa[]>> = {
-  entender_e_desenhar: TipoEvidenciaDemanda.options.map((t) =>
+  entender_e_desenhar: TIPOS_DA_DEMANDA.map((t) =>
     item("entender_e_desenhar", t, "externo", (OBRIGATORIAS_DEMANDA as readonly string[]).includes(t)),
   ),
   planejar: [item("planejar", "plano", "agente")],
@@ -120,7 +100,7 @@ const EntradaEvidenciaEtapa = z.object({
   demanda_id: ContextoEvidenciaEtapa.shape.demanda_id,
   rodada_id: IdDono,
   ticket_id: IdDono,
-  tipo: TipoEvidenciaEtapa,
+  tipo: TipoEvidencia,
   produtor: Produtor,
   aprovada: z.boolean().optional(),
   dados: z.unknown(),
@@ -202,13 +182,13 @@ export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrad
 export function pendenciasDoTicket(
   contexto: ContextoEvidenciaEtapa,
   evidencias: readonly EvidenciaEtapa[],
-): { ausentes: TipoEvidenciaEtapa[]; reprovadas: TipoEvidenciaEtapa[] } {
+): { ausentes: TipoEvidencia[]; reprovadas: TipoEvidencia[] } {
   const ctx = lerContexto(contexto);
   const dono = donoEsperado(ctx);
   const itens = catalogoDaEtapa(ctx.etapa);
   const catalogados = new Set(itens.map((i) => i.tipo));
-  const presentes = new Set<TipoEvidenciaEtapa>();
-  const reprovados = new Set<TipoEvidenciaEtapa>();
+  const presentes = new Set<TipoEvidencia>();
+  const reprovados = new Set<TipoEvidencia>();
   for (const e of evidencias) {
     if (
       e.demanda_id === ctx.demanda_id &&

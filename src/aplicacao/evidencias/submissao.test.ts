@@ -19,7 +19,7 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
-import { schemaDe, type TipoEvidencia } from "../../nucleo/schemas.ts";
+import { schemaDoTipo, type TipoEvidencia } from "../../nucleo/evidencia.ts";
 import { guardarAnexos } from "./submissao.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -70,7 +70,7 @@ const submeter = (c: Cenario, tipo: TipoEvidencia, caminhos: readonly string[], 
       c.banco,
       caminhos,
       tipo,
-      schemaDe(tipo).arquivos,
+      schemaDoTipo(tipo).arquivos,
       {
         worktree: c.worktree,
         saida: c.saida,

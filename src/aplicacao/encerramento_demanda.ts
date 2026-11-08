@@ -10,6 +10,7 @@ import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
+import type { DemonstracaoLimpeza } from "../nucleo/schemas.ts";
 import { type FalhaDaTentativa, falhaDoErro, falhaQueExigeOAuditor } from "../nucleo/tentativa.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import {
@@ -23,7 +24,6 @@ import {
 import {
   corpoDoPRFinal,
   marcaDoPRFinal,
-  type DemonstracaoLimpeza,
   montarArvorePRs,
   montarDemonstracaoLimpeza,
   tituloDoPRFinal,

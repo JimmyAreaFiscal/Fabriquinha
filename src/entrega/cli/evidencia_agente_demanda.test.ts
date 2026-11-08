@@ -237,7 +237,7 @@ test("CA-7: plano com campo inválido não grava e o erro aponta o caminho do ca
   assert.deepEqual(gravadas(banco), []);
 });
 
-test("CA-8: testes_estresse válido, com --dados do stdin e com anexo da saída, fica no ticket com aprovada", async () => {
+test("CA-8: testes_estresse válido, com --dados do stdin e com anexo da saída, fica no ticket com veredito", async () => {
   const { raiz, banco, env } = cenario();
   const sem = await cli(
     env(5),
@@ -245,7 +245,7 @@ test("CA-8: testes_estresse válido, com --dados do stdin e com anexo da saída,
     JSON.stringify(ESTRESSE),
   );
   assert.deepEqual([sem.codigo, sem.err], [0, ""]);
-  assert.deepEqual(JSON.parse(sem.out), { ticket: "I-206.T5", tipo: "testes_estresse", aprovada: true });
+  assert.deepEqual(JSON.parse(sem.out), { ticket: "I-206.T5", tipo: "testes_estresse", veredito: "atende" });
   const saida = join(raiz, "execucoes", "E-exec-5", "saida");
   mkdirSync(saida, { recursive: true });
   const log = join(saida, "estresse.log");
@@ -287,7 +287,7 @@ test("CA-9: analise_seguranca com campo inválido não grava e o erro aponta o c
   assert.match(s.err, /^[^\n]*dados\.achados\[0\]\.severidade[^\n]*\n$/);
   assert.deepEqual(gravadas(banco), []);
   const ok = await cli(env(5), ["evidencia", "add", "I-206.T5", "analise_seguranca", "--dados", json(raiz, SEGURANCA)]);
-  assert.equal((JSON.parse(ok.out) as { aprovada: boolean }).aprovada, true);
+  assert.equal((JSON.parse(ok.out) as { veredito: string }).veredito, "atende");
 });
 
 test("CA-4 e CA-15: ticket alheio, T-5 e rodada não gravam nada e mostram a forma certa", async () => {
@@ -405,7 +405,7 @@ test("explicacao_fitness sem anexo: cruza com a matriz do ticket, e linha faltan
   assert.deepEqual(gravadas(banco), [{ ticket_id: 6, tipo: "explicacao_fitness" }]);
 });
 
-test("comprovacao_criterios: anexo obrigatório, critérios só os da rodada, aprovada derivada, na revisão de rodada e na integral", async () => {
+test("comprovacao_criterios: anexo obrigatório, critérios só os da rodada, veredito derivado, na revisão de rodada e na integral", async () => {
   const { raiz, env, banco } = cenario();
   const comprovacao = (atendido: boolean, ids = ["CA-1"]) => ({
     criterios: ids.map((id) => ({ id, atendido, comoVerificado: "v", arquivos: ["cena.png"] })),
@@ -417,7 +417,7 @@ test("comprovacao_criterios: anexo obrigatório, critérios só os da rodada, ap
   assert.match(demais.err, /comprova \[CA-1, CA-2\], e os critérios de aceite do registro são \[CA-1\]/);
   const ok = await rodar(env(6), 6, "comprovacao_criterios", comprovacao(false), png);
   assert.deepEqual([ok.codigo, ok.err], [0, ""]);
-  assert.equal((JSON.parse(ok.out) as { aprovada: boolean }).aprovada, false);
+  assert.equal((JSON.parse(ok.out) as { veredito: string }).veredito, "nao_atende");
   assert.deepEqual(anexos(banco), ["cena.png"]);
   const integral = await rodar(
     env(5),
@@ -426,7 +426,7 @@ test("comprovacao_criterios: anexo obrigatório, critérios só os da rodada, ap
     comprovacao(true, ["CA-1", "CA-2"]),
     arquivoNaSaida(raiz, 5, "cena.png", PNG),
   );
-  assert.equal((JSON.parse(integral.out) as { aprovada: boolean }).aprovada, true);
+  assert.equal((JSON.parse(integral.out) as { veredito: string }).veredito, "atende");
 });
 
 test("mensagem_pr cruza com os não previstos da última revisão e pede reversão; sem anexo", async () => {

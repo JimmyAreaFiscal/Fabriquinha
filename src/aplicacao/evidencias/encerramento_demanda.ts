@@ -1,58 +1,12 @@
 // Evidências do encerramento final da demanda e texto do PR final (comparacao-sdlc-implementacao.md §5, CA-14 e CA-15).
 // Só endereços públicos (D09): `I-206`, `I-206.R2`, `I-206.T3`.
-import { z } from "zod";
 import { type AgregadoDemanda, prDaDemanda } from "../../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { prDoEspaco } from "../../nucleo/espaco_de_trabalho.ts";
+import { ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../nucleo/schemas.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../../nucleo/trabalho_agentico.ts";
 import { lista, neutro } from "./pr.ts";
 import { produtividadeDaRodada } from "./produtividade_rodada.ts";
-
-const Custo = z.strictObject({
-  valor: z.number().nonnegative(),
-  // `incompleto`: o valor é só um piso, há consumo sem custo medido.
-  situacao: z.enum(["conhecido", "incompleto"]),
-});
-const Texto = z.string().min(1);
-
-const ArvorePRsCriteriosCustos = z.strictObject({
-  demanda: Texto,
-  base: Texto.nullable(),
-  pr_final: z.strictObject({ numero: z.number().int().positive(), url: Texto }).nullable(),
-  sha_integracao: Texto.nullable(),
-  rodadas: z.array(
-    z.strictObject({
-      rodada: Texto,
-      titulo: Texto,
-      pr: z.strictObject({ id: Texto, url: Texto }).nullable(),
-      criterios: z.array(Texto),
-      tickets: z.array(z.strictObject({ ticket: Texto, etapa: Texto, custo: Custo })),
-    }),
-  ),
-  // Tickets que não são de rodada (demanda, planejamento, encerramento).
-  tickets_sem_rodada: z.array(z.strictObject({ ticket: Texto, etapa: Texto, custo: Custo })),
-  // Dois totais que nunca se somam: o interno vem das execuções da Fabriquinha, o externo de `custos_realizados`.
-  custos: z.strictObject({
-    internos: Custo,
-    externos: z.strictObject({
-      sessoes: z.array(z.strictObject({ ferramenta: Texto, sessao: Texto, custo: Custo })),
-      total: Custo,
-    }),
-  }),
-});
-type ArvorePRsCriteriosCustos = z.infer<typeof ArvorePRsCriteriosCustos>;
-
-const ItemLimpeza = z.strictObject({
-  tipo: z.enum(["worktree", "branch_local", "branch_remota"]),
-  alvo: Texto,
-});
-export const DemonstracaoLimpeza = z.strictObject({
-  removidas: z.array(ItemLimpeza),
-  sobras: z.array(ItemLimpeza),
-  // Regra `nada_sobrou`.
-  aprovada: z.boolean(),
-});
-export type DemonstracaoLimpeza = z.infer<typeof DemonstracaoLimpeza>;
 
 const situacao = (incompleto: boolean) => (incompleto ? ("incompleto" as const) : ("conhecido" as const));
 

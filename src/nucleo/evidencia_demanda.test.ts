@@ -3,12 +3,7 @@ import { test } from "node:test";
 import type { AgregadoDemanda } from "./agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import {
-  exigirAutoria,
-  pendentesDeEnvio,
-  submeterEvidenciaDemanda,
-  TipoEvidenciaDemanda,
-} from "./evidencia_demanda.ts";
+import { exigirAutoria, pendentesDeEnvio, submeterEvidenciaDemanda, TIPOS_DA_DEMANDA } from "./evidencia_demanda.ts";
 
 const em = "2026-01-01T00:00:00Z";
 const autora: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
@@ -53,7 +48,7 @@ const entrada = (tipo: string, extra: Record<string, unknown> = {}, v = 1) => ({
 });
 
 test("catálogo: obrigatórias e opcionais da demanda", () => {
-  assert.equal(TipoEvidenciaDemanda.options.length, 7);
+  assert.equal(TIPOS_DA_DEMANDA.length, 7);
   assert.deepEqual(pendentesDeEnvio(base()), ["criterios_aceite", "desenho_solucao", "custos_realizados"]);
   const ag = submeterEvidenciaDemanda(base(), entrada("desenho_solucao"), autora, em);
   assert.deepEqual(pendentesDeEnvio(ag), ["criterios_aceite", "custos_realizados"]);

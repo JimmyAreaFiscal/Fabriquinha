@@ -160,7 +160,7 @@ test("ticket ver mostra o motivo da última Tentativa do ticket falho", async ()
   assert.equal(resolverEscopoDoAgente(banco, "inexistente"), undefined);
 });
 
-test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, e a aprovada só do próprio ticket", async () => {
+test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, e o veredito só do próprio ticket", async () => {
   const { env } = cenario();
   const s = await cli(env, ["demanda", "ver", "I-206"]);
   assert.equal(s.codigo, 0);
@@ -180,11 +180,11 @@ test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, 
   );
   assert.deepEqual(
     lida.tickets.map((t) => t.evidencias),
-    [undefined, [{ tipo: "comprovacao_criterios", em, aprovada: false }], undefined],
+    [undefined, [{ tipo: "comprovacao_criterios", em, veredito: "nao_atende" }], undefined],
   );
 });
 
-test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai sem aprovada", async () => {
+test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai sem veredito", async () => {
   const { banco, env } = cenario();
   banco
     .prepare(
@@ -192,11 +192,11 @@ test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai 
     )
     .run(em, em);
   const lida = JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {
-    tickets: { evidencias?: { tipo: string; aprovada?: boolean }[] }[];
+    tickets: { evidencias?: { tipo: string; veredito?: string }[] }[];
   };
   assert.deepEqual(
-    lida.tickets[1]?.evidencias?.map((e) => e.aprovada),
-    [false, undefined, undefined],
+    lida.tickets[1]?.evidencias?.map((e) => e.veredito),
+    ["nao_atende", undefined, undefined],
   );
 });
 

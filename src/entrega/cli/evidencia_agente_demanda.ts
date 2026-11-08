@@ -11,9 +11,10 @@ import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_deman
 import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
-import { validarEvidenciaDaEtapa } from "../../nucleo/evidencia_etapa.ts";
+import { schemaDoTipo, TipoEvidencia } from "../../nucleo/evidencia.ts";
+import { CATALOGO_ETAPAS, validarEvidenciaDaEtapa } from "../../nucleo/evidencia_etapa.ts";
 import { submeterPlano } from "../../nucleo/transicoes_demanda.ts";
-import type { SchemaEvidencia } from "../../nucleo/schemas.ts";
+import type { EsquemaDeEvidencia } from "../../nucleo/schemas.ts";
 import { gerarAula, type Trecho } from "../../aplicacao/evidencias/aula.ts";
 import { guardarAnexos, type Origens } from "../../aplicacao/evidencias/submissao.ts";
 import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
@@ -26,18 +27,24 @@ import {
   type EscopoDoAgente,
   proprio,
   resolverEscopoDoAgente,
-  schemaDoTipo,
-  TIPOS_DA_ETAPA,
   ticketProprio,
 } from "./agente_demanda.ts";
 
+/** Os tipos de produtor agente do catálogo das etapas: os únicos que o agente submete. */
+const TIPOS_QUE_O_AGENTE_SUBMETE: readonly TipoEvidencia[] = [
+  ...new Set(CATALOGO_ETAPAS.filter((i) => i.produtor === "agente").map((i) => i.tipo)),
+];
+
 /** O tipo que o agente submete e o schema dele; os demais tipos não têm comando do agente. */
-function tipoDoAgente(texto: string): { tipo: string; schema: SchemaEvidencia } {
-  const schema = TIPOS_DA_ETAPA.includes(texto) ? schemaDoTipo(texto) : undefined;
-  if (!schema) {
-    throw new ErroDeRegra(`${texto} não é evidência que o agente submete`, `use um de ${TIPOS_DA_ETAPA.join(", ")}`);
+function tipoDoAgente(texto: string): { tipo: TipoEvidencia; schema: EsquemaDeEvidencia } {
+  const tipo = TipoEvidencia.safeParse(texto);
+  if (!tipo.success || !TIPOS_QUE_O_AGENTE_SUBMETE.includes(tipo.data)) {
+    throw new ErroDeRegra(
+      `${texto} não é evidência que o agente submete`,
+      `use um de ${TIPOS_QUE_O_AGENTE_SUBMETE.join(", ")}`,
+    );
   }
-  return { tipo: texto, schema };
+  return { tipo: tipo.data, schema: schemaDoTipo(tipo.data) };
 }
 
 /** O ticket do agente, que só recebe evidência aberto ou em execução. */
@@ -119,10 +126,17 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
       const dados = await lerDados(op.dados as string | undefined, stdin);
       // O caminho do campo sai a partir de `dados`, e o CLI mostra o ZodError em uma linha com `z.prettifyError`.
       const validos = z.object({ dados: schema.dados }).parse({ dados }).dados;
-      const aprovada = schema.aprovada?.(validos);
+      const veredito = schema.veredito?.(validos);
       validarEvidenciaDaEtapa(
         { demanda_id, ticket_id, etapa: ticket.etapa },
-        { demanda_id, ticket_id, tipo, produtor: "agente", aprovada, dados: validos },
+        {
+          demanda_id,
+          ticket_id,
+          tipo,
+          produtor: "agente",
+          aprovada: veredito === undefined ? undefined : veredito === "atende",
+          dados: validos,
+        },
       );
       let caminhos = (op.arquivo ?? []) as string[];
       const origens = origensDe(banco, agente, agregadoLido, ticket);
@@ -156,7 +170,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
             ? submeterPlano(ag, validos, agente.ator, { agora })
             : submeterEvidenciaDemanda(
                 ag,
-                { tipo: tipo as "testes_estresse", dados: validos as EntradaEvidenciaDemanda["dados"], ticket_id },
+                { tipo, dados: validos as EntradaEvidenciaDemanda["dados"], ticket_id },
                 agente.ator,
                 agora,
               );
@@ -169,7 +183,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
           );
         },
       );
-      return { ticket: proprio(agente), tipo, aprovada };
+      return { ticket: proprio(agente), tipo, veredito };
     },
   },
 ];
