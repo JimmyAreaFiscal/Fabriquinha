@@ -3,9 +3,11 @@
 // o lugar da lista das demandas, fica em inicio.spec.ts.
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { projeto } from "./apoio.ts";
+import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import {
   semearDemandaAguardandoMerge,
   semearDemandaConcluida,
+  semearDependenciaEntreDemandas,
   semearDemandas,
   semearGateDaDemanda,
   semearPaginaDaDemanda,
@@ -77,7 +79,7 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   });
   await pagina
     .getByRole("region", { name: "Aguarda você" })
-    .getByRole("link", { name: /Reabrir I-210\.T5/ })
+    .getByRole("link", { name: /Reabrir o ticket I-210\.T5/ })
     .click();
   await expect(falho).toBeInViewport();
   await expect(falho).toHaveAttribute("data-marca", "antes do clique");
@@ -463,7 +465,7 @@ test("a integração final espera o merge humano: o passo leva ao PR e o quadro 
   projeto(fabriquinha.raiz);
   semearDemandaAguardandoMerge(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/projects/loja/demandas`);
-  await expect(pagina.locator(".dm-cartao.aguarda")).toContainText("aguarda o seu merge do PR final");
+  await expect(pagina.locator(".dm-cartao.aguarda")).toContainText("aguarda você · ação externa · I-218");
 
   await pagina.goto(`${fabriquinha.base}/demandas/I-218`);
   await pagina.setViewportSize({ width: 1440, height: 900 });
@@ -476,10 +478,9 @@ test("a integração final espera o merge humano: o passo leva ao PR e o quadro 
     "https://exemplo.com/pr/12",
   );
   const aguarda = pagina.getByRole("region", { name: "Aguarda você" });
-  await expect(aguarda.getByRole("link", { name: "Integrar o PR final ↓" })).toHaveAttribute(
-    "href",
-    "#titulo-encerramento",
-  );
+  await expect(
+    aguarda.getByRole("link", { name: /Integrar o PR I-218: Integrar o PR final #12 na plataforma/ }),
+  ).toHaveAttribute("href", "#titulo-encerramento");
   await expect(aguarda).not.toContainText("Executar");
   await info.attach("merge-humano-1440", {
     body: await pagina.screenshot({ fullPage: true }),
@@ -491,4 +492,33 @@ test("a integração final espera o merge humano: o passo leva ao PR e o quadro 
     body: await pagina.screenshot({ fullPage: true }),
     contentType: "image/png",
   });
+});
+
+test("o quadro mostra as seis Pendências, a rodada em ajustes e a dependência como estado do item", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semearPendencias(fabriquinha.raiz);
+  semearDependenciaEntreDemandas(fabriquinha.raiz, "I-302", "I-301");
+  await pagina.goto(`${fabriquinha.base}/projects/loja/demandas`);
+  const marcas = {
+    gate_humano: "gate",
+    item_bloqueado: "bloqueado",
+    dialogo_do_agente: "diálogo",
+    revisao_parada: "revisão parada",
+    acao_externa: "ação externa",
+    despacho_parado: "despacho parado",
+  };
+  const pendencias = pagina.locator(".dm-cartao .pill", { hasText: "aguarda você" });
+  await expect(pendencias).toHaveCount(PENDENCIAS_ESPERADAS.length);
+  for (const { item, tipo } of PENDENCIAS_ESPERADAS) {
+    await expect(pendencias.filter({ hasText: `aguarda você · ${marcas[tipo]} · ${item}` })).toHaveCount(1);
+  }
+  await expect(pagina.locator(".dm-cartao", { hasText: "I-303" }).locator(".dm-rodadas")).toContainText(
+    "Sessão de ajustes",
+  );
+  // Esperar Dependência não é Pendência: aparece à parte, como estado do cartão.
+  const bloqueada = pagina.locator(".dm-cartao", { hasText: "Demanda I-302" });
+  await expect(bloqueada).toContainText("bloqueada por I-301");
+  await expect(pagina.locator(".dm-cartao .pill", { hasText: "bloqueada por" })).toHaveCount(1);
 });
