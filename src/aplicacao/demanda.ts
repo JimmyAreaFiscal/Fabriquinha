@@ -104,14 +104,14 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
       execucoes: execucoes.filter(dono).length,
       falhas: execucoes.filter((e) => dono(e) && e.falha).length,
       exigenciasDeAlteracao: tickets.filter(dono).reduce((s, t) => s + t.exigenciasDeAlteracao, 0),
-      reprovacoes: decisoes.filter((d) => dono(d) && d.recusada).length,
+      reprovacoes: decisoes.filter((d) => dono(d) && d.reprovada).length,
       modelos: agruparModelos(u),
       custo: somarCustos(u.map((x) => x.custo)),
     };
   };
   const escopo = (dono: (l: DonoDaLinha) => boolean): Escopo => {
     const notas = decisoes.flatMap((d) =>
-      dono(d) && d.etapa === "encerrar_rodada" && !d.recusada && d.nota !== null ? [d.nota] : [],
+      dono(d) && d.etapa === "encerrar_rodada" && !d.reprovada && d.nota !== null ? [d.nota] : [],
     );
     const soma = notas.reduce((s, n) => s + n, 0);
     return {

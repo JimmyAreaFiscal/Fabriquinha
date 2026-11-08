@@ -251,7 +251,7 @@ test("CA-19: reprovar o planejamento com motivo volta a demanda ao planejamento 
   assert.equal(estado(), "planejar");
   assert.deepEqual(
     ag().decisoes.map((d) => [d.resultado, d.motivo]),
-    [["recusado", "falta cobrir o erro de rede"]],
+    [["reprovado", "falta cobrir o erro de rede"]],
   );
 });
 
@@ -322,7 +322,7 @@ test("CA-22: reprovar o PR com motivo e sem nota abre a sessão de ajustes na ho
   assert.equal(rodada(c)?.estado, "ajustar_resultado");
   assert.deepEqual(
     c.ag().decisoes.map((d) => [d.resultado, d.motivo, d.nota]),
-    [["recusado", "cobertura abaixo do combinado", undefined]],
+    [["reprovado", "cobertura abaixo do combinado", undefined]],
   );
   await concluirSessao(c, 9);
 });
@@ -477,7 +477,7 @@ test("CA-32: cancelar leva a dependente e o histórico fica", async () => {
   assert.equal(ag().tickets.length, 1);
 });
 
-test("CA-33: cancelar depois da integração confirmada é recusado e a demanda não muda", async () => {
+test("CA-33: cancelar depois da integração confirmada é reprovado e a demanda não muda", async () => {
   const { pedir, banco, estado } = await cenario("demanda");
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,

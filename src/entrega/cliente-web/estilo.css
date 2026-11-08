@@ -2809,7 +2809,7 @@ svg.barras :not(.hit) {
   border-color: var(--closed);
   background: var(--closed);
 }
-.dm-marco-recusado::before,
+.dm-marco-reprovado::before,
 .dm-marco-falhou::before {
   border-color: var(--danger);
   background: var(--danger);
@@ -2861,7 +2861,7 @@ svg.barras :not(.hit) {
 .dm-decisao-aprovado strong {
   color: var(--closed);
 }
-.dm-decisao-recusado strong {
+.dm-decisao-reprovado strong {
   color: var(--danger);
 }
 .dm-no .dm-gate {

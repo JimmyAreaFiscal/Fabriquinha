@@ -132,7 +132,7 @@ test("CA-2: dependência em demanda inexistente recusa e não grava a demanda ne
   assert.equal(registrar(b), "I-1");
 });
 
-test("CA-3: dependência que fecha ciclo é recusada e nenhuma aresta nova é gravada", () => {
+test("CA-3: dependência que fecha ciclo é reprovada e nenhuma aresta nova é gravada", () => {
   const b = novoBanco();
   const idB = registrar(b);
   const idA = registrar(b, [idB]);
@@ -330,7 +330,7 @@ test("CA-27: arquivar demanda concluída muda só o estado", () => {
   );
 });
 
-test("CA-28: arquivar fora de concluida é recusado", () => {
+test("CA-28: arquivar fora de concluida é reprovado", () => {
   const b = novoBanco();
   const id = registrar(b);
   completar(b, id);

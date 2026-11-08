@@ -160,7 +160,7 @@ test("CA-17: reprovada volta a execucao com rodada corretiva nova e a concluída
   assert.deepEqual(e.rodadas, ["concluida", "implementar"]);
 });
 
-test("I-266: a decisão do agente com o trabalho de outro ticket é recusada e nada é gravado", async () => {
+test("I-266: a decisão do agente com o trabalho de outro ticket é reprovada e nada é gravado", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
   const deOutroTicket = abrirTrabalhoDoAgente(banco, { demanda_id: "I-1", ticket_id: 2 });
   assert.throws(

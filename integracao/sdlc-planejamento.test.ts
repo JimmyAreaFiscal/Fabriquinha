@@ -88,7 +88,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
     demanda(c, id)
       .decisoes.filter((d) => d.ticket_id === PLANEJAR)
       .map((d) => [d.resultado, d.motivo]),
-    [["recusado", "faltam critérios na rodada 1"]],
+    [["reprovado", "faltam critérios na rodada 1"]],
   );
   semDesenvolvimento(c, id);
   assert.deepEqual(await ciclaPlanejamentos(c, [id]), [2]);
@@ -210,7 +210,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     assert.equal(ag.tickets.find((x) => x.etapa === "implementar")?.titulo, `${titulo.slice(0, -2)} t1`);
   }
   // Decisão: a recusa do planejamento de A não aparece em B; cada uma numera as suas a partir de 1.
-  const recusas = (id: string) => dono(id).decisoes.filter((d) => d.resultado === "recusado").length;
+  const recusas = (id: string) => dono(id).decisoes.filter((d) => d.resultado === "reprovado").length;
   assert.deepEqual([recusas(a), recusas(b)], [1, 0]);
   assert.deepEqual(
     [a, b].map((id) => Math.min(...dono(id).decisoes.map((d) => d.decisao_id))),
@@ -247,7 +247,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     agora,
   );
   recusa(
-    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, por_tipo, em) VALUES (?, 99, 1, 'aprovado', 'auditor', ?)",
+    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, por_tipo, em) VALUES (?, 99, 1, 'gate_demanda', 'aprovado', 'auditor', ?)",
     b,
     agora,
   );

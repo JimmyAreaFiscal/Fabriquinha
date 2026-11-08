@@ -55,6 +55,7 @@ const decisao = {
   demanda_id: D,
   ticket_id: 1,
   decisao_id: 1,
+  gate: "gate_demanda",
   resultado: "aprovado",
   por: AUDITOR,
   em: t0,

@@ -124,7 +124,7 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
     const execs = execucoes.get(mes) ?? [];
     const n = (fato: string) => (fatos.get(mes) ?? []).filter((f) => f.fato === fato).length;
     const ds = decisoes.get(mes) ?? [];
-    const mergeados = ds.filter((d) => d.etapa === "encerrar_rodada" && !d.recusada);
+    const mergeados = ds.filter((d) => d.etapa === "encerrar_rodada" && !d.reprovada);
     const notas = mergeados.flatMap((d) => (d.nota === null ? [] : [d.nota]));
     const prsDoMes = prs.get(mes) ?? [];
     const r = retrabalho.get(mes) ?? [];
@@ -148,7 +148,7 @@ export function metricasDemandaPorMes(banco: DatabaseSync, filtro: Periodo): Met
           execs.filter((e) => e.etapa === etapa),
           uso,
         ),
-        reprovacoes: ds.filter((d) => d.etapa === etapa && d.recusada).length,
+        reprovacoes: ds.filter((d) => d.etapa === etapa && d.reprovada).length,
       })),
     };
   });
@@ -170,7 +170,7 @@ export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): Metric
       const [{ demanda, projeto: p, titulo, estado }] = execs as [ExecucaoNoPeriodo, ...ExecucaoNoPeriodo[]];
       const ds = decisoes.get(demanda) ?? [];
       const notas = ds.flatMap((d) =>
-        d.etapa === "encerrar_rodada" && !d.recusada && d.nota !== null ? [d.nota] : [],
+        d.etapa === "encerrar_rodada" && !d.reprovada && d.nota !== null ? [d.nota] : [],
       );
       return {
         demanda,
@@ -178,7 +178,7 @@ export function metricasPorDemanda(banco: DatabaseSync, filtro: Periodo): Metric
         titulo,
         estado,
         ...somar(execs, uso),
-        reprovacoes: ds.filter((d) => d.recusada).length,
+        reprovacoes: ds.filter((d) => d.reprovada).length,
         nota: notas.length === 0 ? null : soma(notas) / notas.length,
       };
     })

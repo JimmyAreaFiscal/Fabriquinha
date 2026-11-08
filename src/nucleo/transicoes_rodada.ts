@@ -2,11 +2,12 @@
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
 import { type Ator, exigirAtor, FABRIQUINHA } from "./ator.ts";
-import type { AgregadoDemanda, DecisaoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
+import type { AgregadoDemanda, RodadaDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DA_RODADA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { materializarCorrecoesRodada } from "./correcoes_demanda.ts";
 import { DemandaId } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
+import type { Decisao } from "./gate.ts";
 import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { type EtapaTicket, type EstadoRodada, Id, type Instante, Motivo, palavras } from "./primitivos.ts";
 import { falhaQueExigeOAuditor } from "./tentativa.ts";
@@ -178,11 +179,12 @@ export function registrarRevisaoRodada(
     throw new ErroDeEscopo("só o agente do ticket revisar_rodada atual decide a revisão", "peça à sessão de revisão");
   }
   const decisoesDoTicket = ag.decisoes.filter((d) => d.ticket_id === ticket.ticket_id);
-  const decisao: DecisaoDemanda = {
+  const decisao: Decisao = {
     demanda_id: ag.demanda.id,
     ticket_id: ticket.ticket_id,
     decisao_id: maximo(decisoesDoTicket.map((d) => d.decisao_id)) + 1, // o Auditor reabre o mesmo ticket, que decide de novo
-    resultado: e.aprovado ? "aprovado" : "recusado",
+    gate: "gate_revisao_rodada",
+    resultado: e.aprovado ? "aprovado" : "reprovado",
     ...(!e.aprovado && { motivo: e.exigencias }),
     por: ator,
     em: ctx.agora,
@@ -191,9 +193,9 @@ export function registrarRevisaoRodada(
     ag.tickets.filter((t) => t.rodada_id === rodada.rodada_id && t.etapa === "revisar_rodada").map((t) => t.ticket_id),
   );
   const motivosDasReprovacoes = [
-    ...ag.decisoes.filter((d) => idsDeRevisaoDaRodada.has(d.ticket_id) && d.resultado === "recusado"),
+    ...ag.decisoes.filter((d) => idsDeRevisaoDaRodada.has(d.ticket_id) && d.resultado === "reprovado"),
     decisao,
-  ].map((d) => String(d.motivo)); // recusado sempre tem motivo (invariante do agregado)
+  ].map((d) => String(d.motivo)); // reprovado sempre tem motivo (invariante do agregado)
   if (!e.aprovado && motivosDasReprovacoes.length >= REPROVACOES_ATE_O_AUDITOR) {
     const motivo = montarMotivoFalhaDaTerceiraReprovacao(motivosDasReprovacoes.reverse());
     return {
@@ -271,13 +273,14 @@ function gatePullRequest(ag: AgregadoDemanda, ref: { demanda_id: string; rodada_
 const decisaoDoGate = (
   ag: AgregadoDemanda,
   ticket: TicketDemanda,
-  extra: Pick<DecisaoDemanda, "resultado"> & Partial<Pick<DecisaoDemanda, "nota" | "motivo">>,
+  extra: Pick<Decisao, "resultado"> & Partial<Pick<Decisao, "nota" | "motivo">>,
   ator: Ator,
   ctx: ContextoDemanda,
-): DecisaoDemanda => ({
+): Decisao => ({
   demanda_id: ag.demanda.id,
   ticket_id: ticket.ticket_id,
-  decisao_id: 1, // o gate decide uma vez só: a decisão conclui o ticket
+  decisao_id: 1,
+  gate: "gate_pr", // o gate decide uma vez só: a decisão conclui o ticket
   por: ator,
   em: ctx.agora,
   ...extra,
@@ -306,7 +309,7 @@ export function reprovarPullRequestRodada(
         agora: ctx.agora,
       }),
     ],
-    decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "recusado", motivo: e.motivo }, ator, ctx)],
+    decisoes: [...ag.decisoes, decisaoDoGate(ag, ticket, { resultado: "reprovado", motivo: e.motivo }, ator, ctx)],
     rodadas: rodadasComEstadoMudado(ag, rodada, "ajustar_resultado", ctx.agora),
   };
 }

@@ -253,7 +253,7 @@ test("CA-7: as decisões na ordem em que foram tomadas", async () => {
   assert.deepEqual(
     decisoes.map((d) => [d.ticket, d.resultado, d.motivo ?? d.nota, d.por]),
     [
-      ["I-206.T5", "recusado", "refaça", "auditor"],
+      ["I-206.T5", "reprovado", "refaça", "auditor"],
       ["I-206.T5", "aprovado", 4, "auditor"],
     ],
   );
@@ -289,7 +289,7 @@ test("CA-9: o link do anexo devolve o mesmo conteúdo, com os cabeçalhos de seg
   assert.equal(baixado.headers["content-disposition"], "attachment; filename*=UTF-8''dois.html");
 });
 
-test("o anexo de dono errado ou sem o tipo é recusado", async () => {
+test("o anexo de dono errado ou sem o tipo é reprovado", async () => {
   const { pedir } = await cenarioDemandas();
   const { evidencias } = (await pedir("/api/demandas/I-206")).json<Pagina>();
   const link = comportamento(evidencias).anexos[0]?.link ?? "";

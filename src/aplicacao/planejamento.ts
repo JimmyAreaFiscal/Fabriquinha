@@ -68,7 +68,7 @@ export function iniciarOuRetomarPlanejamento(
   // anterior (ou a cópia do próprio motivo, quando a reprovação reabriu o ticket falho).
   const enderecoDoTicket = Endereco.doTicket(demandaId, ticket.ticket_id);
   const retomada =
-    ultima?.resultado === "recusado"
+    ultima?.resultado === "reprovado"
       ? montarRetornoAoAgente(
           tentativaAnteriorEmMemoria(enderecoDoTicket, {
             motivoDaReprovacao: existe(ultima.motivo, "a reprovação não tem motivo", "confira o banco"),

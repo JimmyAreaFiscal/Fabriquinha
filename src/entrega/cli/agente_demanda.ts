@@ -303,7 +303,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
       return {
         ticket: proprio(agente),
         ...(rodada !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id: rodada }) }),
-        resultado: aprovado ? "aprovado" : "recusado",
+        resultado: aprovado ? "aprovado" : "reprovado",
       };
     },
   },

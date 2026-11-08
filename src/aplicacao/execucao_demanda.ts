@@ -143,8 +143,8 @@ function encerrar(c: Encerravel, falhou: boolean, log: string): void {
   }));
 }
 
-/** As perguntas respondidas nas sessões de cada ticket anterior da rodada que foi recusado, por ticket (só a revisão da rodada as lê). */
-function perguntasDosTicketsRecusadosDaRodada({
+/** As perguntas respondidas nas sessões de cada ticket anterior da rodada que foi reprovado, por ticket (só a revisão da rodada as lê). */
+function perguntasDosTicketsReprovadosDaRodada({
   banco,
   ag,
   ticket,
@@ -154,7 +154,7 @@ function perguntasDosTicketsRecusadosDaRodada({
   const idsDaRodada = new Set(ag.tickets.filter((t) => t.rodada_id === ticket.rodada_id).map((t) => t.ticket_id));
   return new Map(
     ag.decisoes
-      .filter((d) => d.resultado === "recusado" && d.ticket_id < ticket.ticket_id && idsDaRodada.has(d.ticket_id))
+      .filter((d) => d.resultado === "reprovado" && d.ticket_id < ticket.ticket_id && idsDaRodada.has(d.ticket_id))
       .map((d) => [
         d.ticket_id,
         sessoes.filter((s) => s.ticket_id === d.ticket_id).flatMap((s) => perguntasRespondidasNaSessao(raiz, s.id)),
@@ -193,7 +193,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
         saida: join(dir, "saida"),
         retomada: opcoes.retomada,
         ...(c.ticket.etapa === "revisar_rodada" && {
-          perguntasDasRevisoesAnteriores: perguntasDosTicketsRecusadosDaRodada(c),
+          perguntasDasRevisoesAnteriores: perguntasDosTicketsReprovadosDaRodada(c),
         }),
         commitsDosTickets: commitsDosTickets(c), // só as revisões leem
         anexos: anexosDaDemanda(c.banco, c.ref.demanda_id).map((a) => ({

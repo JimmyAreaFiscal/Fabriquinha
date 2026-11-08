@@ -103,7 +103,7 @@ test("CA-2: envio incompleto lista todas as pendências e não muda nada", () =>
   assert.deepEqual(ag, antes);
 });
 
-test("CA-3: envio completo congela e vai a gate_demanda; reenvio é recusado", () => {
+test("CA-3: envio completo congela e vai a gate_demanda; reenvio é reprovado", () => {
   const env = enviada();
   assert.equal(env.demanda.enviada, true);
   assert.equal(env.demanda.estado, "gate_demanda");
@@ -133,6 +133,7 @@ test("CA-4: o Auditor aprova e a demanda vai a planejamento", () => {
     demanda_id: "I-1",
     ticket_id: 1,
     decisao_id: 1,
+    gate: "gate_demanda",
     resultado: "aprovado",
     nota: 5,
     por: AUDITOR,
@@ -155,7 +156,7 @@ test("CA-5: recusa exige motivo, registra e cancela sem novo ticket", () => {
   assert.throws(() => decidirDemanda(env, { aprovado: false }, AUDITOR, { agora: t1 }));
   const ag = decidirDemanda(env, { aprovado: false, motivo: "fora do escopo" }, AUDITOR, { agora: t1 });
   assert.equal(ag.demanda.estado, "cancelada");
-  assert.equal(ag.decisoes[0]?.resultado, "recusado");
+  assert.equal(ag.decisoes[0]?.resultado, "reprovado");
   assert.equal(ag.decisoes[0].motivo, "fora do escopo");
   assert.equal(ag.tickets.length, 1);
   assert.equal(ag.tickets[0]?.estado, "cancelado");
@@ -251,7 +252,7 @@ test("CA-1: o agente submete o plano; vira evidência do ticket e a demanda vai 
   assert.equal(novo.tickets.length, 2);
 });
 
-test("CA-2: ticket de implementação sem rodada é recusado na submissão, sem mutação", () => {
+test("CA-2: ticket de implementação sem rodada é reprovado na submissão, sem mutação", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);
   const plano = planoV();
@@ -265,7 +266,7 @@ test("CA-2: ticket de implementação sem rodada é recusado na submissão, sem 
   assert.deepEqual(ag, antes);
 });
 
-test("CA-2: caminho absoluto Windows com barras normais é recusado na submissão, sem mutação", () => {
+test("CA-2: caminho absoluto Windows com barras normais é reprovado na submissão, sem mutação", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);
   const plano = planoV();
@@ -276,7 +277,7 @@ test("CA-2: caminho absoluto Windows com barras normais é recusado na submissã
   assert.deepEqual(ag, antes);
 });
 
-test("CA-2 e CA-3: submissão recusada sem mutação", () => {
+test("CA-2 e CA-3: submissão reprovada sem mutação", () => {
   const ag = emPlanejamento();
   const antes = structuredClone(ag);
   const falha = (e: unknown, ator: Ator = agente, base = ag) => {
@@ -318,7 +319,8 @@ test("CA-4 e CA-5: reprovar exige Auditor e motivo; registra, volta a planejamen
     demanda_id: "I-1",
     ticket_id: 2,
     decisao_id: 1,
-    resultado: "recusado",
+    gate: "gate_planejamento",
+    resultado: "reprovado",
     motivo: "falta teste",
     por: AUDITOR,
     em: t2,
@@ -424,6 +426,7 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
     demanda_id: "I-1",
     ticket_id: 2,
     decisao_id: 1,
+    gate: "gate_planejamento",
     resultado: "aprovado",
     nota: 4,
     por: AUDITOR,
@@ -691,7 +694,8 @@ test("CA-13: reprovação cria só rodadas novas, preserva as integradas e o pla
       demanda_id: D,
       ticket_id: 3,
       decisao_id: 1,
-      resultado: "recusado",
+      gate: "gate_revisao_demanda",
+      resultado: "reprovado",
       motivo: "falta tratar erro",
       por: ag3,
       em: t2,
@@ -701,7 +705,7 @@ test("CA-13: reprovação cria só rodadas novas, preserva as integradas e o pla
   assert.deepEqual(tentativasDoTicket(novo.tentativas, 3).at(-1)?.resultado, { tipo: "sucesso" });
 });
 
-test("CA-13: reprovação recusada sem mutação (exigências, plano, ticket, ator, estado e pendência)", () => {
+test("CA-13: reprovação reprovada sem mutação (exigências, plano, ticket, ator, estado e pendência)", () => {
   const ag = emRevisaoD();
   const tenta = (m: Record<string, unknown>, ator: Ator = ag3, erro: new (...a: never[]) => Error = Error) => {
     recusar(ag, () => registrarRevisaoDemanda(ag, revisao(m), ator, c2), erro);
@@ -763,7 +767,15 @@ test("CA-14: aprovação conclui a revisão, abre encerrar_demanda e vai a encer
     ],
   );
   assert.deepEqual(novo.decisoes, [
-    { demanda_id: D, ticket_id: 3, decisao_id: 1, resultado: "aprovado", por: ag3, em: t2 },
+    {
+      demanda_id: D,
+      ticket_id: 3,
+      decisao_id: 1,
+      gate: "gate_revisao_demanda",
+      resultado: "aprovado",
+      por: ag3,
+      em: t2,
+    },
   ]);
   recusar(ag, () => registrarRevisaoDemanda(ag, { ...aprovacaoD(), exigencias: "x" }, ag3, c2), Error);
 });
@@ -806,7 +818,7 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
   assert.deepEqual(
     fim.decisoes.map((d) => [d.ticket_id, d.decisao_id, d.resultado]),
     [
-      [3, 1, "recusado"],
+      [3, 1, "reprovado"],
       [5, 1, "aprovado"],
       [6, 1, "aprovado"],
       [7, 1, "aprovado"],
@@ -878,7 +890,7 @@ test("CA-3, CA-13: na 3ª reprovação falha com o motivo e bloqueia a seleção
   assert.deepEqual(selecionarTrabalho(global, true), []);
 });
 
-test("CA-4, CA-7: falha de infraestrutura grava causa e motivo sem reprovação; sem motivo é recusada", () => {
+test("CA-4, CA-7: falha de infraestrutura grava causa e motivo sem reprovação; sem motivo é reprovada", () => {
   const ag = emDevolucao("implementar", "em_execucao");
   const falha = { tipo: "falha_infraestrutura", causa: "tempo_limite", motivo: "timeout" };
   const novo = registrarFalhaTicket(ag, { ticket_id: id(), falha }, { agora: t2 });
@@ -894,7 +906,7 @@ test("CA-4, CA-7: falha de infraestrutura grava causa e motivo sem reprovação;
   assert.equal(tk3(ag).estado, "em_execucao");
 });
 
-test("CA-5, CA-6, CA-12: devolução recusada em etapa, status ou ator errados", () => {
+test("CA-5, CA-6, CA-12: devolução reprovada em etapa, status ou ator errados", () => {
   intacto(() => devolver(emDevolucao("revisar_demanda", "em_execucao")), emDevolucao("revisar_demanda", "em_execucao"));
   const aberto = emDevolucao("implementar", "aberto");
   intacto(() => devolver(aberto), aberto);
@@ -982,8 +994,8 @@ test("mudarTicket conclui ticket aberto com Tentativa aberta e não inventa resu
 test("decisão e aprovação do planejamento registram sucesso; reprovar fecha a Tentativa do planejar", () => {
   const aprovada = decidirDemanda(enviada(), { aprovado: true }, AUDITOR, { agora: t1 });
   assert.deepEqual(aprovada.tentativas.at(-1)?.resultado, { tipo: "sucesso" });
-  const recusada = decidirDemanda(enviada(), { aprovado: false, motivo: "fora" }, AUDITOR, { agora: t1 });
-  assert.deepEqual(recusada.tentativas.at(-1)?.resultado, { tipo: "interrompida", por: AUDITOR });
+  const reprovada = decidirDemanda(enviada(), { aprovado: false, motivo: "fora" }, AUDITOR, { agora: t1 });
+  assert.deepEqual(reprovada.tentativas.at(-1)?.resultado, { tipo: "interrompida", por: AUDITOR });
   const base = submetido();
   const ag = { ...base, tentativas: comTentativaAberta(base.tentativas, tk2(base), "exec-planejar", t1) };
   const reprovado = reprovarPlanejamento(ag, { motivo: "falta teste" }, AUDITOR, { agora: t2 });

@@ -167,8 +167,8 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
   {
     arquivo: "prompts/revisar_rodada.txt",
     de: "\n## Arquivos alterados\n",
-    para: "\n## Revisões anteriores da rodada\n\nDecisões recusadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:\n\n(nenhuma)\n\n## Arquivos alterados\n",
-    motivo: MOTIVO_REVISOES_ANTERIORES,
+    para: "\n## Revisões anteriores da rodada\n\nDecisões reprovadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:\n\n(nenhuma)\n\n## Arquivos alterados\n",
+    motivo: `${MOTIVO_REVISOES_ANTERIORES}; I-272: o vocabulário do gate é aprovar ou reprovar`,
   },
   ...["prompts/revisar_rodada.txt", "textos/src/execucao/etapas/revisar_rodada.md.txt"].map((arquivo) => ({
     arquivo,

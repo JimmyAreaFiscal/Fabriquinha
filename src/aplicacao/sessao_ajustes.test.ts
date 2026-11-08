@@ -148,7 +148,7 @@ test("CA-12, CA-14, CA-15, CA-23 e CA-25: reprovar registra a recusa, abre a ses
   const depois = ag();
   assert.deepEqual(
     depois.decisoes.map((d) => [d.resultado, d.motivo, d.nota]),
-    [["recusado", MOTIVO, undefined]],
+    [["reprovado", MOTIVO, undefined]],
   );
   assert.equal(depois.rodadas[0]?.estado, "ajustar_resultado");
   assert.deepEqual(
@@ -188,7 +188,7 @@ async function concluirComCorrecao(banco: DatabaseSync, ag: () => AgregadoDemand
   return concluirSessaoAjustes(banco, REF, AUDITOR);
 }
 
-test("CA-13: reprovar sem motivo, ou como agente, é recusado sem abrir a sessão", async () => {
+test("CA-13: reprovar sem motivo, ou como agente, é reprovado sem abrir a sessão", async () => {
   const { ag, banco, marco } = await cenario();
 
   await assert.rejects(reprovarPRRodada(banco, REF, "", AUDITOR, LIMITE), ZodError);
@@ -229,7 +229,7 @@ test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na
   assert.equal(prompts()[1]?.prompt, "Cobre o erro de rede também");
   assert.equal(prompts()[1]?.sessao, sessao);
 
-  // CA-20 e CA-22: sem correção, ou pelo agente, a conclusão é recusada e a sessão segue aberta.
+  // CA-20 e CA-22: sem correção, ou pelo agente, a conclusão é reprovada e a sessão segue aberta.
   await assert.rejects(concluirSessaoAjustes(banco, REF, AUDITOR), /trabalho corretivo/);
   await assert.rejects(concluirSessaoAjustes(banco, REF, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
   assert.equal(ag().rodadas[0]?.estado, "ajustar_resultado");

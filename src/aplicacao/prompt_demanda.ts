@@ -162,10 +162,10 @@ function secaoRevisoesAnteriores({ ag, ticket, perguntasDasRevisoesAnteriores }:
   const daRodada = ag.tickets.filter((t) => t.rodada_id === ticket.rodada_id);
   const idsDasRevisoes = daRodada.filter((t) => t.etapa === "revisar_rodada").map((t) => t.ticket_id);
   const entradas = ag.decisoes
-    .filter((d) => d.resultado === "recusado" && d.ticket_id < ticket.ticket_id)
+    .filter((d) => d.resultado === "reprovado" && d.ticket_id < ticket.ticket_id)
     .flatMap((d) => {
-      const recusado = daRodada.find((t) => t.ticket_id === d.ticket_id);
-      return recusado ? [{ decisao: d, etapa: recusado.etapa }] : [];
+      const reprovado = daRodada.find((t) => t.ticket_id === d.ticket_id);
+      return reprovado ? [{ decisao: d, etapa: reprovado.etapa }] : [];
     })
     .sort((a, b) => a.decisao.ticket_id - b.decisao.ticket_id)
     .map(({ decisao, etapa }) => {
@@ -177,14 +177,14 @@ function secaoRevisoesAnteriores({ ag, ticket, perguntasDasRevisoesAnteriores }:
         (p) => `  - Pergunta: ${p.pergunta}\n    Resposta: ${p.resposta}`,
       );
       return [
-        `- ${endereco(decisao.ticket_id)} (${etapa}), recusado: ${String(decisao.motivo)}`,
+        `- ${endereco(decisao.ticket_id)} (${etapa}), reprovado: ${String(decisao.motivo)}`,
         ...(corretivos.length ? [`  - Corretivos: ${corretivos.join(", ")}`] : []),
         ...perguntas,
       ].join("\n");
     });
   return secao(
     "Revisões anteriores da rodada",
-    "Decisões recusadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não " +
+    "Decisões reprovadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não " +
       "reabra o que já foi decidido:\n\n" +
       (entradas.join("\n") || "(nenhuma)"),
   );

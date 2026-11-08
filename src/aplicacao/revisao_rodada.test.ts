@@ -163,14 +163,14 @@ const decidir = (banco: Parameters<typeof carregarDemanda>[0], extra: object) =>
 const estadoDaPrimeiraRodada = (banco: Parameters<typeof carregarDemanda>[0]) =>
   carregarDemanda(banco, "I-1").rodadas[0]?.estado;
 
-test("CA-5: aprovação recusada por fitness que falha; a rodada continua em revisao", async () => {
+test("CA-5: aprovação reprovada por fitness que falha; a rodada continua em revisao", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 1, true);
   assert.throws(() => decidir(banco, { aprovado: true }), /matriz_fitness.*fitness que falhou: f/);
   assert.equal(estadoDaPrimeiraRodada(banco), "revisar_rodada");
 });
 
-test("CA-6: aprovação recusada por comprovacao_criterios ausente ou reprovada", async () => {
+test("CA-6: aprovação reprovada por comprovacao_criterios ausente ou reprovada", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 0);
   assert.throws(() => decidir(banco, { aprovado: true }), /comprovacao_criterios ausente/);
@@ -208,11 +208,12 @@ test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corr
 
 test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Auditor reabre e a revisão decide de novo", async () => {
   const { banco } = await cenarioRevisao();
-  const recusado = (decisao_id: number, motivo: string) => ({
+  const reprovado = (decisao_id: number, motivo: string) => ({
     demanda_id: "I-1",
     ticket_id: 2,
     decisao_id,
-    resultado: "recusado" as const,
+    gate: "gate_revisao_rodada" as const,
+    resultado: "reprovado" as const,
     motivo,
     por: revisorDaRodada(banco),
     em: "2026-01-02T00:00:00.000Z",
@@ -222,7 +223,7 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
     tickets: ag.tickets.map((ticket) =>
       ticket.ticket_id === 2 ? { ...ticket, estado: "em_execucao" as const } : ticket,
     ),
-    decisoes: [recusado(1, "um"), recusado(2, "dois")],
+    decisoes: [reprovado(1, "um"), reprovado(2, "dois")],
   }));
   const reprovar = () =>
     decidir(banco, {
@@ -277,7 +278,7 @@ test("conduzirRevisaoRodada recusa rodada sem revisar_rodada", async () => {
   );
 });
 
-test("I-266: a decisão do agente com o trabalho de outro ticket é recusada e nada é gravado", async () => {
+test("I-266: a decisão do agente com o trabalho de outro ticket é reprovada e nada é gravado", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 0, true);
   const deOutroTicket = abrirTrabalhoDoAgente(banco, REF_GLOBAL);

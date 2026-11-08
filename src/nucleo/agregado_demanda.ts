@@ -5,6 +5,7 @@ import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
+import { Decisao } from "./gate.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import {
   EstadoDemanda,
@@ -14,7 +15,6 @@ import {
   Id,
   Instante,
   Markdown,
-  Motivo,
   Slug,
   Titulo,
 } from "./primitivos.ts";
@@ -52,17 +52,6 @@ const DependenciaRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, depen
 const CriterioCitadoRodada = z.object({ demanda_id: DemandaId, rodada_id: Id, criterio_id: CriterioId });
 const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depende_ticket_id: Id });
 const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
-
-export const DecisaoDemanda = z.object({
-  demanda_id: DemandaId,
-  ticket_id: Id,
-  decisao_id: Id,
-  resultado: z.enum(["aprovado", "recusado"]),
-  nota: z.number().int().min(1).max(5).optional(),
-  motivo: Motivo.optional(),
-  por: Ator,
-  em: Instante,
-});
 
 /**
  * Os tipos do catálogo do agente, `custos_realizados` e `plano` (§4.1) e os quatro tipos de etapa novos. A lista é
@@ -145,7 +134,7 @@ export const AgregadoDemanda = z
   .object({
     demanda: Demanda,
     tickets: z.array(TicketDemanda),
-    decisoes: z.array(DecisaoDemanda),
+    decisoes: z.array(Decisao),
     evidencias: z.array(EvidenciaDemanda),
     // Estado materializado pela aprovação do planejamento; o `Plano` em si só existe como evidência.
     rodadas: z.array(RodadaDemanda).default([]),
@@ -235,7 +224,7 @@ export const AgregadoDemanda = z
       if (!tickets.has(d.ticket_id)) erro(`a decisão ${k} cita o ticket ${String(d.ticket_id)}, que não existe`);
       if (decisoes.has(k)) erro(`a decisão ${k} se repete`);
       decisoes.add(k);
-      if (d.resultado === "recusado" && d.motivo === undefined) erro(`a decisão ${k} recusada exige motivo`);
+      if (d.resultado === "reprovado" && d.motivo === undefined) erro(`a decisão ${k} reprovada exige motivo`);
     }
     const evidencias = new Set<string>();
     for (const e of ag.evidencias) {
@@ -250,7 +239,6 @@ export const AgregadoDemanda = z
 
 export type RodadaDemanda = z.infer<typeof RodadaDemanda>;
 export type TicketDemanda = z.infer<typeof TicketDemanda>;
-export type DecisaoDemanda = z.infer<typeof DecisaoDemanda>;
 export type EvidenciaDemanda = z.infer<typeof EvidenciaDemanda>;
 export type Demanda = z.infer<typeof Demanda>;
 export type TipoDemanda = z.infer<typeof TipoDemanda>;
