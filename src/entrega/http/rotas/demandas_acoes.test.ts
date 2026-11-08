@@ -42,7 +42,6 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   estado: status,
   estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
-  devolucoes: 0,
   ...extra,
 });
 const plano = {

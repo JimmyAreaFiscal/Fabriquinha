@@ -95,6 +95,8 @@ test("retoma o planejar reprovado e só depois de uma recusa nova", () => {
   b.exec(`UPDATE execucao_sessao SET fim = ${T}`);
   assert.deepEqual(retomadasDePlanejamento(b), ["I-1"]); // CA-3: sem pi vivo, a retomada leva o motivo
   execucao(b, "I-1", 1, DEPOIS, null); // retomada: o agente saiu sem submeter, não retoma em laço
+  b.exec(`INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, processo_id)
+    VALUES ('I-1', 1, 1, ${DEPOIS}, 'E-${String(execucoes)}')`);
   assert.deepEqual(retomadasDePlanejamento(b), []);
   b.exec(`UPDATE execucao_sessao SET fim = ${DEPOIS}`);
   assert.deepEqual(retomadasDePlanejamento(b), []);

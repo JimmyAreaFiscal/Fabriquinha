@@ -10,7 +10,7 @@ import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import type { executar } from "../infra/processo.ts";
 import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
-import { causaDeInfraestrutura } from "./retomada_infraestrutura.ts";
+import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../nucleo/tentativa.ts";
 import {
   abortar,
   assinar,
@@ -122,6 +122,7 @@ function rodar(
       .filter((entrada) => entrada.comando?.type === "extension_ui_response" && entrada.comando.value !== undefined)
       .map((entrada) => `${String(entrada.comando?.value)}\n`)
       .join("");
+  let grupoDoPi = 0;
   const fim = rodarPi({
     execucao: { id: sessao, sessaoPi: sessao, modo },
     args: [],
@@ -130,11 +131,13 @@ function rodar(
     log: join(dir, "log"),
     prompt: "trabalhe",
     limiteMin,
-    aoLancar: () => undefined,
+    aoLancar: (grupo) => {
+      grupoDoPi = grupo;
+    },
     triarPergunta,
     silencioMaximoDoModeloMin,
   });
-  return { sessao, fim, dir, respostas };
+  return { sessao, fim, dir, respostas, grupoDoPi };
 }
 
 async function ate(condicao: () => boolean, oQue: string): Promise<void> {
@@ -145,9 +148,9 @@ async function ate(condicao: () => boolean, oQue: string): Promise<void> {
 }
 
 test("autônoma: o pi que recusa o prompt falha na hora, sem esperar o tempo limite", async () => {
-  assert.equal(
+  assert.deepEqual(
     await rodar([{ recusa: "modelo inexistente" }], "autonomo").fim,
-    "o pi recusou o comando prompt: modelo inexistente",
+    falhaQueExigeOAuditor("o pi recusou o comando prompt: modelo inexistente"),
   );
 });
 
@@ -191,7 +194,7 @@ test("autônoma: o select da perguntar vira a pergunta do chat; abortar dá a fa
   await ate(() => situacao(sessao)?.dialogos.length === 1, "a pergunta");
   assert.equal(situacao(sessao)?.dialogos[0]?.pergunta, true);
   abortar(sessao);
-  assert.equal(await fim, "abortada pelo Auditor");
+  assert.deepEqual(await fim, { tipo: "interrompida", por: { tipo: "auditor" }, motivo: "abortada pelo Auditor" });
 });
 
 test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o rótulo; a resposta e a regra vão ao log", async () => {
@@ -297,7 +300,11 @@ test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy
     assert.equal(escalada.respostas(), "");
     assert.equal(situacao(escalada.sessao)?.dialogos.length, 1);
     abortar(escalada.sessao);
-    assert.equal(await escalada.fim, "abortada pelo Auditor");
+    assert.deepEqual(await escalada.fim, {
+      tipo: "interrompida",
+      por: { tipo: "auditor" },
+      motivo: "abortada pelo Auditor",
+    });
   }
 });
 
@@ -346,8 +353,11 @@ test("o modelo que para de responder no meio da resposta encerra a execução co
   // 0,005 min = 300 ms de silêncio aceito; o limite da execução inteira (1 min) não chega a contar.
   const { fim, dir } = rodar([{ mensagemAberta: true }], "autonomo", 1, undefined, 0.005);
   const falha = await fim;
-  assert.equal(falha, "o modelo ficou 0.005 min sem responder (tempo limite sem eventos do pi)");
-  assert.equal(causaDeInfraestrutura(falha), "transitoria");
+  assert.deepEqual(falha, {
+    tipo: "falha_infraestrutura",
+    causa: "modelo_sem_resposta",
+    motivo: "o modelo ficou 0.005 min sem responder (tempo limite sem eventos do pi)",
+  });
   assert.match(readFileSync(join(dir, "log"), "utf8"), /o modelo ficou 0\.005 min sem responder/);
 });
 
@@ -363,6 +373,88 @@ test("ferramenta longa e sessão interativa ociosa não disparam o vigia do mode
   assert.ok(situacao(ociosa.sessao), "a sessão ociosa segue viva além do silêncio aceito");
   encerrar(ociosa.sessao);
   assert.equal(await ociosa.fim, undefined);
+});
+
+test("falhas do provedor conservam o motivo e resolvem a causa tipada; os demais erros pedem o Auditor", async () => {
+  for (const [erro, causa] of [
+    ["Claude quota exceeded — rate limit", "cota"],
+    ["Codex error: The usage limit has been reached", "cota"],
+    ["ETIMEDOUT", "tempo_limite"],
+    ["TimeoutError", "tempo_limite"],
+    ["HTTP 504", "servico_externo_inacessivel"],
+    ["ECONNRESET", "servico_externo_inacessivel"],
+    ["overloaded_error", "servico_externo_inacessivel"],
+    ["ENOSPC: no space left on device", undefined],
+  ] as const) {
+    const motivo = `o agente parou com stopReason error: ${erro}`;
+    assert.deepEqual(
+      await rodar([{ termina: "assenta", parada: "error", erro }], "autonomo").fim,
+      causa ? { tipo: "falha_infraestrutura", causa, motivo } : falhaQueExigeOAuditor(motivo),
+    );
+  }
+  assert.deepEqual(
+    await rodar([{ termina: "assenta", parada: "aborted" }], "autonomo").fim,
+    falhaQueExigeOAuditor("o agente parou com stopReason aborted"),
+  );
+});
+
+test("tempo ativo estourado, saída com código e morte por sinal resolvem falhas distintas", async () => {
+  assert.deepEqual(await rodar([{}], "autonomo", 0.005).fim, {
+    tipo: "falha_infraestrutura",
+    causa: "tempo_limite",
+    motivo: "tempo limite de 0.005 min",
+  });
+  const saida = rodar([{ sai: { codigo: 7 } }], "autonomo");
+  assert.deepEqual(
+    await saida.fim,
+    falhaQueExigeOAuditor(`o pi saiu antes de terminar a execução (código 7); veja o log em ${join(saida.dir, "log")}`),
+  );
+  const sinal = rodar([{ sigterm: "ignora" }], "autonomo");
+  process.kill(-sinal.grupoDoPi, "SIGKILL");
+  assert.deepEqual(await sinal.fim, falhaPorServicoReiniciado);
+  const ociosa = rodar([{ termina: "assenta" }], "interativo", 0.005);
+  assert.equal(await ociosa.fim, undefined);
+  assert.match(readFileSync(join(ociosa.dir, "log"), "utf8"), /sessão ociosa por 0.005 min/);
+});
+
+test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte que lança só vai ao log", async () => {
+  const eventos = [
+    { type: "message_start", message: { role: "assistant" } },
+    { type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "oi" } },
+  ];
+  for (const encerrada of [false, true]) {
+    const execucao = rodar(
+      [
+        {
+          eventos: [
+            ...eventos,
+            ...(encerrada ? [{ type: "message_end", message: { role: "assistant", content: [] } }] : []),
+            { pausaMs: 800 },
+            { type: "response", command: "steer", success: false, error: "recusado" },
+            { type: "extension_ui_request", method: "notify" },
+          ],
+        },
+      ],
+      "interativo",
+    );
+    await dormir(300);
+    const recebidos: string[] = [];
+    const pararRetrato = assinar(execucao.sessao, (evento) => recebidos.push(String(evento.type)));
+    assert.deepEqual(recebidos, encerrada ? ["message_end"] : ["message_start", "message_update"]);
+    const pararFalho = assinar(execucao.sessao, (evento) => {
+      if (evento.type === "response") throw new Error("ouvinte indisponível");
+    });
+    await ate(
+      () =>
+        existsSync(join(execucao.dir, "log")) &&
+        readFileSync(join(execucao.dir, "log"), "utf8").includes("ouvinte indisponível"),
+      "a falha do ouvinte no log",
+    );
+    encerrar(execucao.sessao);
+    assert.equal(await execucao.fim, undefined);
+    pararRetrato();
+    pararFalho();
+  }
 });
 
 test("atividade: a ferramenta com o comando ou o caminho, a primeira linha do texto, cortada em 100 caracteres", () => {

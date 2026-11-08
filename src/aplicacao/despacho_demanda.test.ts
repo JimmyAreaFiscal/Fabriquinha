@@ -16,7 +16,13 @@ import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import type { RetornoAoAgente } from "../nucleo/tentativa.ts";
+import {
+  falhaPorServicoReiniciado,
+  type RetornoAoAgente,
+  type ResultadoDaTentativa,
+  type Tentativa,
+} from "../nucleo/tentativa.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { configuracao } from "../armazenamento/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -42,8 +48,8 @@ interface TicketSpec {
   estado?: string;
   id?: number;
   instrucao?: string;
-  devolucoes?: number;
-  motivo_falha?: string;
+  reprovacoes?: number;
+  resultado?: ResultadoDaTentativa;
 }
 interface DemandaSpec {
   estado?: string;
@@ -116,11 +122,35 @@ function demanda(
       estado: t.estado ?? "aberto",
       estado_alterado_em: em,
       criado_por: { tipo: "fabriquinha" },
-      devolucoes: t.devolucoes ?? 0,
       ...(t.instrucao !== undefined && { instrucao: t.instrucao }),
-      ...(t.motivo_falha !== undefined && { motivo_falha: t.motivo_falha }),
       ...(t.rodada !== undefined && { rodada_id: t.rodada }),
     })),
+    tentativas: tickets.flatMap((t, indice): Tentativa[] => {
+      const ticket = Endereco.doTicket(id, t.id ?? indice + 1);
+      if (t.reprovacoes) {
+        assert.ok(t.instrucao);
+        const motivo = t.instrucao;
+        return Array.from({ length: t.reprovacoes }, (_, numero) => ({
+          ticket,
+          numero: numero + 1,
+          inicio: em,
+          fim: em,
+          resultado: { tipo: "reprovacao", motivo },
+        }));
+      }
+      if (t.resultado || t.instrucao)
+        return [
+          {
+            ticket,
+            numero: 1,
+            inicio: em,
+            fim: em,
+            resultado: t.resultado ?? { tipo: "interrompida", por: { tipo: "auditor" } },
+            instrucao: t.instrucao,
+          },
+        ];
+      return [];
+    }),
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -149,7 +179,7 @@ const iniciarFalso: NonNullable<DepsDespacho["iniciarExecucao"]> = (banco, ref) 
       execucoes: iniciarExecucao(sessoes, estado.execucoes, { id, sessao_id: sessao.id, inicio: em, falha: false }),
     };
   });
-  return { id, fim: Promise.resolve() };
+  return { id, fim: Promise.resolve(undefined) };
 };
 const deps: DepsDespacho = { iniciarExecucao: iniciarFalso };
 const silenciar = (t: TestContext) => t.mock.method(console, "error", () => undefined);
@@ -163,7 +193,7 @@ test("CA-1: o ciclo reserva o implementar elegível e cria a execução aberta",
 
 test("a instrução do ticket aberto vai à execução: devolução técnica (D05) ou reabertura do Auditor", async () => {
   const { banco, config } = await cenario(3);
-  demanda(banco, 2, { rodadas: ["implementar"], tickets: [{ ...implementar(1), instrucao: "x", devolucoes: 1 }] });
+  demanda(banco, 2, { rodadas: ["implementar"], tickets: [{ ...implementar(1), instrucao: "x", reprovacoes: 1 }] });
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [{ ...implementar(1), instrucao: "y" }] });
   demanda(banco, 4, { rodadas: ["implementar"], tickets: [implementar(1)] });
   const retomadas: (RetornoAoAgente | undefined)[] = [];
@@ -185,12 +215,12 @@ test("o ticket que caiu no reinício do serviço volta sozinho no ciclo seguinte
   const { banco, config } = await cenario(3);
   demanda(banco, 2, {
     rodadas: ["implementar"],
-    tickets: [{ ...implementar(1), estado: "falhou", motivo_falha: "serviço reiniciado" }],
+    tickets: [{ ...implementar(1), estado: "falhou", resultado: falhaPorServicoReiniciado }],
   });
   const log = t.mock.method(console, "error", () => undefined);
   await Promise.all(despacharDemandas(banco, config, deps));
   assert.deepEqual([estadoDoTicket(banco, 2, 1), aberta(banco, 2, 1)], ["em_execucao", 1]);
-  assert.match(String(log.mock.calls[0]?.arguments[1]), /retomados depois de falha de infraestrutura: I-2\.T1/);
+  assert.match(String(log.mock.calls[0]?.arguments[1]), /retomados depois de falha de ambiente: I-2\.T1/);
 });
 
 test("CA-2: com o limite global de 2, só dois de três tickets de demandas diferentes entram", async () => {
@@ -429,7 +459,7 @@ test("CA-7 e CA-10: o resolver_conflito aberto é reservado com execução abert
 });
 
 for (const [caso, ticket] of [
-  ["devolucao", { instrucao: "o teste falhou em x.ts", devolucoes: 1 }],
+  ["devolucao", { instrucao: "o teste falhou em x.ts", reprovacoes: 1 }],
   ["reabertura", { instrucao: "refaça com atenção a y.ts" }],
 ] as const) {
   test(`foto do retorno ao agente no despacho: ${caso} do implementar`, async (t) => {

@@ -287,7 +287,7 @@ test("falha de infraestrutura no passo integracao é retomada sozinha e a nova T
   comDemanda(c.banco, id, (ag) =>
     registrarFalhaEncerramento(
       ag,
-      { demanda_id: id, etapa: "integracao", motivo: "tempo limite ao ler o PR final" },
+      { demanda_id: id, etapa: "integracao", causa: "tempo_limite", motivo: "tempo limite ao ler o PR final" },
       FABRIQUINHA,
       { agora: agora() },
     ),

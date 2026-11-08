@@ -5,7 +5,7 @@
 **O que você recebe:** a pasta da avaliação é o seu diretório de trabalho, só para leitura.
 
 - `indice.md`: o escopo (projeto, período, demandas) e o pedido do Auditor.
-- `demandas/<id>/demanda.md`: a definição da demanda. `demandas/<id>/metricas.json`: custo, chamadas, etapas, devoluções e reprovações.
+- `demandas/<id>/demanda.md`: a definição da demanda. `demandas/<id>/metricas.json`: custo, chamadas, etapas, exigências de alteração (`exigenciasDeAlteracao`, as Tentativas reprovadas) e reprovações.
 - `sessoes/<demanda>-<sessao>.md`: a conversa de cada sessão da demanda no período.
 
 **Passos:**

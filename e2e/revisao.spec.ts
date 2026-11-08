@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
+import { motivoDaFalhaDoTicket } from "../src/nucleo/tentativa.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { gravarProjeto } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
@@ -47,7 +48,6 @@ function semear(raiz: string, descricao: string, integral = false): void {
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     rodada_id: etapa === "revisar_demanda" ? undefined : 1,
-    devolucoes: 0,
   });
   gravarAgregadoPronto(banco, {
     demanda: {
@@ -91,6 +91,7 @@ function semear(raiz: string, descricao: string, integral = false): void {
     criterios_citados: [{ demanda_id: "I-250", rodada_id: 1, criterio_id: "CA-1" }],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    tentativas: [],
   } as unknown as AgregadoDemanda);
   banco.close();
 }
@@ -101,7 +102,12 @@ function estado(raiz: string) {
   try {
     const ag = carregarDemanda(banco, "I-250");
     const t = ag.tickets.find((x) => x.ticket_id === 2);
-    return { estado: t?.estado, motivo: t?.motivo_falha, decisoes: ag.decisoes.length, rodada: ag.rodadas[0]?.estado };
+    return {
+      estado: t?.estado,
+      motivo: t && motivoDaFalhaDoTicket(ag.tentativas, t),
+      decisoes: ag.decisoes.length,
+      rodada: ag.rodadas[0]?.estado,
+    };
   } finally {
     banco.close();
   }

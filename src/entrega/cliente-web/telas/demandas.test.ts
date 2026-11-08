@@ -231,7 +231,7 @@ test("a linha do tempo põe os globais antes e depois das rodadas, pelo endereç
           rodada: "I-206.R1",
           titulo: "T",
           instrucao: "refaça",
-          motivo_falha: "quebrou",
+          motivo: "quebrou",
         },
         {
           ref: "I-206.T2",

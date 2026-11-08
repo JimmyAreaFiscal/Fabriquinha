@@ -6,16 +6,14 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
-import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
+import { falhaDoErro, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
 import { noLog } from "../infra/registro.ts";
 import { type Configuracao, limiteParalelismo } from "../armazenamento/servico.ts";
-import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
 import { conduzirEncerramentoDemanda, type DepsEncerramentoDemanda } from "./encerramento_demanda.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
@@ -44,11 +42,9 @@ const rodadaDe = (t: TicketDemanda) => ({
 /** Encerra a rodada: conduz o agente e, ao fim, confere e publica o PR; a falha do agente ou da publicação falha o ticket. */
 async function encerrarRodada(banco: DatabaseSync, t: TicketDemanda, limiteMin: number): Promise<unknown> {
   const rodada = rodadaDe(t);
-  const { id, fim } = iniciarEncerramentoRodada(banco, rodada, limiteMin);
-  await fim;
-  const erro = carregarSessoesDoTicket(banco, t).execucoes.find((e) => e.id === id)?.erro;
-  if (erro !== undefined) {
-    falharTicketDemanda(banco, t, erro);
+  const falha = await iniciarEncerramentoRodada(banco, rodada, limiteMin).fim;
+  if (falha !== undefined) {
+    falharTicketDemanda(banco, t, falha);
     return;
   }
   return falharSePreso(banco, t, () => concluirEncerramentoRodada(banco, rodada));
@@ -60,7 +56,7 @@ async function falharSePreso<T>(banco: DatabaseSync, t: TicketDemanda, etapa: ()
     return await etapa();
   } catch (erro) {
     const atual = carregarDemanda(banco, t.demanda_id).tickets.find((x) => x.ticket_id === t.ticket_id);
-    if (atual?.estado === "em_execucao") falharTicketDemanda(banco, t, (erro as Error).message);
+    if (atual?.estado === "em_execucao") falharTicketDemanda(banco, t, falhaDoErro(erro));
     throw erro;
   }
 }
@@ -81,15 +77,8 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
         conduzirEncerramentoDemanda(banco, demanda_id, { verificacao: deps.verificacao }),
       );
     }
-    // A instrução do ticket aberto vem da devolução técnica (D05) ou da reabertura do Auditor: vai ao prompt.
-    const retomada = t.instrucao
-      ? montarRetornoAoAgente(
-          tentativaAnteriorEmMemoria(Endereco.doTicket(demanda_id, ticket_id), {
-            motivoDaReprovacao: t.devolucoes > 0 ? t.instrucao : undefined,
-            instrucao: t.instrucao,
-          }),
-        )
-      : undefined;
+    // A devolução técnica (D05) ou a reabertura do Auditor que precede esta Tentativa vai ao prompt.
+    const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, demanda_id).tentativas, ticket_id);
     return (deps.iniciarExecucao ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
   }
   if (t.etapa === "revisar_rodada") {
@@ -120,7 +109,7 @@ function disparar(banco: DatabaseSync, inicio: () => Promise<unknown>): Promise<
 export function despacharDemandas(banco: DatabaseSync, c: Configuracao, deps: DepsDespacho = {}): Promise<void>[] {
   const retomadosPorInfraestrutura = retomarFalhasDeInfraestrutura(banco);
   if (retomadosPorInfraestrutura.length > 0) {
-    noLog(`retomados depois de falha de infraestrutura: ${retomadosPorInfraestrutura.join(", ")}`);
+    noLog(`retomados depois de falha de ambiente: ${retomadosPorInfraestrutura.join(", ")}`);
   }
   for (const { agregado: ag } of demandasParaDespacho(banco)) {
     if (ag.demanda.estado !== "em_execucao" || !ag.rodadas.every((r) => r.estado === "concluida")) continue;

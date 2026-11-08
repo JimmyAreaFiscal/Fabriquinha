@@ -13,9 +13,16 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { ConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
+import {
+  montarRetornoAoAgente,
+  tentativaAnteriorEmMemoria,
+  motivoDaFalhaDoTicket,
+  type FalhaDaTentativa,
+  falhaInterrompidaPeloAuditor,
+} from "../nucleo/tentativa.ts";
 import { assinar } from "./gerente.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
+import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../nucleo/sessoes.ts";
@@ -81,7 +88,6 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     estado: "aberto",
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     ...extra,
   });
   const rodada = (rodada_id: number) => ({
@@ -118,6 +124,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
       ticket(6, "resolver_conflito"),
       ticket(7, "implementar", { rodada_id: 1 }),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -138,6 +145,28 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
 const ref = (ticket_id: number) => ({ demanda_id: "I-1", ticket_id });
 const valorDe = (argv: string[], nome: string) => argv[argv.indexOf(nome) + 1];
 
+test("sessão nova explícita não retoma a anterior; commits e anexos gravados entram no contexto", async () => {
+  const { banco, sessoes, registro } = await cenario();
+  gravarCommitDemanda(banco, "I-1", 1, { sha: "a".repeat(40), mensagem: "feat: anterior", em, arquivos: [] });
+  banco
+    .prepare(
+      "INSERT INTO evidencia_demanda (id, demanda_id, tipo, dados, em) VALUES ('manual', 'I-1', 'desenho_solucao', '{}', ?)",
+    )
+    .run(em);
+  banco
+    .prepare("INSERT INTO arquivo_evidencia VALUES ('manual', 1, 'manual.txt', ?, 'text/plain', 3)")
+    .run("b".repeat(64));
+  await iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1 }).fim;
+  await iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1, iniciarEmSessaoNova: true }).fim;
+  assert.equal(sessoes(3).sessoes.length, 2);
+  assert.notEqual(sessoes(3).execucoes[0]?.sessao_id, sessoes(3).execucoes[1]?.sessao_id);
+  assert.ok(
+    registro()
+      .filter((entrada) => entrada.comando?.type === "prompt")
+      .every((entrada) => entrada.comando?.message?.includes("manual.txt")),
+  );
+});
+
 test("CA-1: sessão ligada ao ticket e execução aberta com o grupo de processo do pi", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
@@ -145,6 +174,14 @@ test("CA-1: sessão ligada ao ticket e execução aberta com o grupo de processo
   let e = sessoes(1).execucoes[0];
   assert.equal(e?.id, id);
   assert.equal(e.fim, null);
+  assert.deepEqual(carregarDemanda(banco, "I-1").tentativas, [
+    {
+      ticket: Endereco.doTicket("I-1", 1),
+      numero: 1,
+      processo_id: id,
+      inicio: e.inicio,
+    },
+  ]);
   while (e?.grupo_processo === undefined) {
     await dormir(20);
     e = sessoes(1).execucoes[0];
@@ -302,7 +339,7 @@ test("CA-11: sucesso grava fim, falha falsa e o uso por modelo com tokens e cust
   const { execucoes, usos } = sessoes(1);
   assert.equal(execucoes[0]?.falha, false);
   assert.equal(typeof execucoes[0].fim, "string");
-  assert.equal(execucoes[0].erro, undefined);
+  assert.equal("erro" in execucoes[0], false);
   assert.deepEqual(usos, [
     {
       execucao_id: id,
@@ -332,35 +369,43 @@ test("CA-13: o pi que não informa o custo grava custo nulo, não zero", async (
 test("CA-12, CA-14: pi que falha encerra com falha e erro, sem tocar a demanda", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, parada: "error", erro: "limite de uso" }]);
+  const execucao = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const antes = carregarDemanda(banco, "I-1");
-  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  const falha = await execucao.fim;
   const e = sessoes(1).execucoes[0];
   assert.equal(e?.falha, true);
   assert.equal(typeof e.fim, "string");
-  assert.match(e.erro ?? "", /stopReason error: limite de uso/);
+  assert.deepEqual(falha, {
+    tipo: "interrompida",
+    por: { tipo: "fabriquinha" },
+    motivo: "o agente parou com stopReason error: limite de uso",
+  });
+  assert.equal("erro" in e, false);
   assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
 });
 
 test("CA-12, CA-14: tempo limite estourado encerra com falha e erro, sem tocar a demanda", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
+  const execucao = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.01 });
   const antes = carregarDemanda(banco, "I-1");
-  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 0.01 }).fim;
+  const falha = await execucao.fim;
   const e = sessoes(1).execucoes[0];
   assert.equal(e?.falha, true);
-  assert.match(e.erro ?? "", /tempo limite/);
+  assert.deepEqual(falha, { tipo: "falha_infraestrutura", causa: "tempo_limite", motivo: "tempo limite de 0.01 min" });
   assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
 });
 
 test("CA-12, CA-14: pi que não sobe encerra com falha e erro, sem grupo de processo", async () => {
   const { banco, sessoes } = await cenario();
   process.env.FABRIQUINHA_PI = join(temporario, "nao-existe");
+  const execucao = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const antes = carregarDemanda(banco, "I-1");
-  await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
+  const falha = await execucao.fim;
   const e = sessoes(1).execucoes[0];
   assert.equal(e?.falha, true);
   assert.equal(e.grupo_processo, undefined);
-  assert.match(e.erro ?? "", /o pi saiu antes de terminar/);
+  assert.match(falha?.motivo ?? "", /o pi saiu antes de terminar/);
   assert.equal(sessoes(1).usos.length, 0);
   assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
 });
@@ -368,10 +413,10 @@ test("CA-12, CA-14: pi que não sobe encerra com falha e erro, sem grupo de proc
 test("falha antes do pi (worktree da rodada ocupada) encerra com o erro e sem lançar o pi", async () => {
   const { c, banco, sessoes, registro } = await cenario();
   mkdirSync(join(c.raiz, "worktrees", "loja", "I-1", "rodadas", "1"), { recursive: true });
-  await iniciarExecucaoDemanda(banco, ref(7), { limiteMin: 1 }).fim;
+  const falha = await iniciarExecucaoDemanda(banco, ref(7), { limiteMin: 1 }).fim;
   const e = sessoes(7).execucoes[0];
   assert.equal(e?.falha, true);
-  assert.match(e.erro ?? "", /destino ocupado/);
+  assert.match(falha?.motivo ?? "", /destino ocupado/);
   assert.equal(registro().length, 0);
 });
 
@@ -401,11 +446,11 @@ test("CA-8: interromper manda SIGTERM ao grupo do pi e a execução falha como i
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   while (sessoes(1).execucoes[0]?.grupo_processo === undefined) await dormir(20);
   interromperExecucaoDemanda(banco, ref(1));
-  await fim;
+  assert.deepEqual(await fim, falhaInterrompidaPeloAuditor);
   const [e] = sessoes(1).execucoes;
   assert.notEqual(e?.fim, null);
   assert.equal(e?.falha, true);
-  assert.equal(e.erro, "interrompida pelo Auditor");
+  assert.equal("erro" in e, false);
 });
 
 test("o ouvinte da sessão recebe `estado` depois do fim gravado, no fim normal e na interrupção órfã", async () => {
@@ -440,13 +485,14 @@ test("CA-8: interromper durante a preparação da worktree encerra interrompida 
   const { fim } = iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1 });
   await dormir(300);
   interromperExecucaoDemanda(banco, ref(3));
-  await fim;
+  assert.deepEqual(await fim, falhaInterrompidaPeloAuditor);
   const [e] = sessoes(3).execucoes;
-  assert.deepEqual([e?.falha, e?.erro, e?.fim !== null], [true, "interrompida pelo Auditor", true]);
+  assert.deepEqual([e?.falha, Object.hasOwn(e ?? {}, "erro"), e?.fim !== null], [true, false, true]);
 });
 
 test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrada direto", async () => {
   const { banco, sessoes } = await cenario();
+  emExecucao(banco, 1);
   const filho = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
   const pgid = filho.pid ?? 0;
   const morreu = new Promise((r) => filho.on("exit", r));
@@ -459,7 +505,7 @@ test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrad
   interromperExecucaoDemanda(banco, ref(1));
   await morreu;
   const [e] = sessoes(1).execucoes;
-  assert.deepEqual([e?.falha, e?.erro, e?.fim !== null], [true, "interrompida pelo Auditor", true]);
+  assert.deepEqual([e?.falha, motivoDe(banco, 1), e?.fim !== null], [true, "interrompida pelo Auditor", true]);
 });
 
 test("CA-9: sem execução aberta a interrupção é recusada e nada muda", async () => {
@@ -472,8 +518,10 @@ test("CA-9: sem execução aberta a interrupção é recusada e nada muda", asyn
   assert.deepEqual(sessoes(1), antes);
 });
 
-test("CA-10, CA-14: reinício mata o grupo gravado, falha as abertas (com ou sem grupo) e não toca o ticket", async () => {
+test("CA-10, CA-14: reinício mata o grupo gravado e falha as abertas (com ou sem grupo) com Tentativas", async () => {
   const { banco, sessoes } = await cenario();
+  emExecucao(banco, 1);
+  emExecucao(banco, 2);
   const filho = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
   const morreu = new Promise((r) => filho.on("exit", r));
   const abrirOrfa = (ticket: number, id: string, grupo_processo?: number) =>
@@ -496,9 +544,21 @@ test("CA-10, CA-14: reinício mata o grupo gravado, falha as abertas (com ou sem
   await morreu;
   for (const t of [1, 2]) {
     const [e] = sessoes(t).execucoes;
-    assert.deepEqual([e?.falha, e?.erro, e?.fim !== null], [true, "serviço reiniciado", true]);
+    assert.deepEqual([e?.falha, motivoDe(banco, t), e?.fim !== null], [true, "serviço reiniciado", true]);
   }
-  assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
+  const depois = carregarDemanda(banco, "I-1");
+  assert.deepEqual({ ...depois, tickets: antes.tickets, tentativas: antes.tentativas }, antes);
+  assert.deepEqual(
+    depois.tickets.slice(0, 2).map((ticket) => ticket.estado),
+    ["falhou", "falhou"],
+  );
+  assert.deepEqual(
+    depois.tentativas.map((tentativa) => tentativa.resultado),
+    [
+      { tipo: "falha_infraestrutura", causa: "servico_reiniciado", motivo: "serviço reiniciado" },
+      { tipo: "falha_infraestrutura", causa: "servico_reiniciado", motivo: "serviço reiniciado" },
+    ],
+  );
 });
 
 const emExecucao = (banco: DatabaseSync, ticket_id: number) =>
@@ -508,6 +568,13 @@ const emExecucao = (banco: DatabaseSync, ticket_id: number) =>
   }));
 const statusDe = (banco: DatabaseSync, ticket_id: number) =>
   carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === ticket_id);
+const motivoDe = (banco: DatabaseSync, ticket_id: number) =>
+  motivoDaFalhaDoTicket(carregarDemanda(banco, "I-1").tentativas, assertTicket(banco, ticket_id));
+const assertTicket = (banco: DatabaseSync, ticket_id: number) => {
+  const ticket = statusDe(banco, ticket_id);
+  assert.ok(ticket);
+  return ticket;
+};
 
 test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem devolução", async () => {
   const { banco, piFalso } = await cenario();
@@ -517,8 +584,8 @@ test("CA-9, CA-10: pi com falha falha o ticket implementar, sem evidência nem d
   const ag = carregarDemanda(banco, "I-1");
   const t = ag.tickets.find((x) => x.ticket_id === 1);
   assert.equal(t?.estado, "falhou");
-  assert.match(t.motivo_falha ?? "", /limite de uso/);
-  assert.equal(t.devolucoes, 0);
+  assert.match(motivoDaFalhaDoTicket(ag.tentativas, t) ?? "", /limite de uso/);
+  assert.equal(ag.tentativas.filter((tentativa) => tentativa.resultado?.tipo === "reprovacao").length, 0);
   assert.equal(ag.evidencias.length, 0);
 });
 
@@ -534,7 +601,7 @@ test("o fechamento recebe a falha e o fim só resolve depois dele", async () => 
     },
   }).fim;
   assert.equal(chamadas.length, 1);
-  assert.match((chamadas[0] as [unknown, string])[1], /limite de uso/);
+  assert.match((chamadas[0] as [unknown, FalhaDaTentativa])[1].motivo, /limite de uso/);
 });
 
 test("erro do fechamento vai ao log e falha o ticket com o motivo", async () => {
@@ -547,7 +614,7 @@ test("erro do fechamento vai ao log e falha o ticket com o motivo", async () => 
   await fim;
   assert.match(readFileSync(join(c.raiz, "execucoes", `E-${id}`, "log"), "utf8"), /fechamento falhou: boom/);
   assert.equal(statusDe(banco, 1)?.estado, "falhou");
-  assert.match(statusDe(banco, 1)?.motivo_falha ?? "", /boom/);
+  assert.match(motivoDe(banco, 1) ?? "", /boom/);
 });
 
 test("erro do fechamento com falhar também falhando só é anotado", async () => {
@@ -577,8 +644,8 @@ test("interrupção do Auditor e reinício falham o ticket em execução", async
   abrirOrfa(2, "e2");
   interromperExecucaoDemanda(banco, ref(1));
   recuperarExecucoesDemanda(banco);
-  assert.equal(statusDe(banco, 1)?.motivo_falha, "interrompida pelo Auditor");
-  assert.equal(statusDe(banco, 2)?.motivo_falha, "serviço reiniciado");
+  assert.equal(motivoDe(banco, 1), "interrompida pelo Auditor");
+  assert.equal(motivoDe(banco, 2), "serviço reiniciado");
 });
 
 test("reinício falha o ticket em execução cuja execução já foi encerrada (fechamento interrompido)", async () => {
@@ -588,7 +655,7 @@ test("reinício falha o ticket em execução cuja execução já foi encerrada (
   assert.equal(statusDe(banco, 1)?.estado, "em_execucao");
   recuperarExecucoesDemanda(banco);
   assert.equal(statusDe(banco, 1)?.estado, "falhou");
-  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+  assert.equal(motivoDe(banco, 1), "serviço reiniciado");
 });
 
 test("CA-12: reinício falha as revisões e o encerrar_rodada em encerramento; o gate do PR e o planejar ficam", async () => {
@@ -665,9 +732,9 @@ test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket 
   const [execucao] = sessoes(1).execucoes;
   assert.notEqual(execucao?.fim, null);
   assert.equal(execucao?.falha, true);
-  assert.equal(execucao.erro, "serviço reiniciado");
+  assert.equal("erro" in execucao, false);
   assert.equal(statusDe(banco, 1)?.estado, "falhou");
-  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+  assert.equal(motivoDe(banco, 1), "serviço reiniciado");
   await fim;
 });
 
@@ -678,8 +745,8 @@ test("I-246: pi morto por sinal antes do SIGTERM do serviço também grava 'serv
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   process.kill(-(await grupoDoPi(sessoes, 1)), "SIGTERM");
   await fim;
-  assert.equal(sessoes(1).execucoes[0]?.erro, "serviço reiniciado");
-  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+  assert.equal(Object.hasOwn(sessoes(1).execucoes[0] ?? {}, "erro"), false);
+  assert.equal(motivoDe(banco, 1), "serviço reiniciado");
 });
 
 test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço reiniciado' e nada fica vivo", async () => {
@@ -691,7 +758,7 @@ test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço 
   await aguardarCondutores(50);
   const [execucao] = sessoes(1).execucoes;
   assert.notEqual(execucao?.fim, null);
-  assert.equal(execucao?.erro, "serviço reiniciado");
+  assert.equal(motivoDe(banco, 1), "serviço reiniciado");
   assert.throws(() => process.kill(-grupo, 0), { code: "ESRCH" });
 });
 
@@ -713,8 +780,8 @@ test("I-246 CA-4: parada durante a preparação: o pi não é lançado e o ticke
   await new Promise((r) => setTimeout(r, 300));
   marcarParada();
   await fim;
-  assert.equal(sessoes(1).execucoes[0]?.erro, "serviço reiniciado");
-  assert.equal(statusDe(banco, 1)?.motivo_falha, "serviço reiniciado");
+  assert.equal(Object.hasOwn(sessoes(1).execucoes[0] ?? {}, "erro"), false);
+  assert.equal(motivoDe(banco, 1), "serviço reiniciado");
   assert.deepEqual(registro(), []);
   await aguardarCondutores(1000); // desfaz a parada para os testes seguintes
 });
@@ -734,8 +801,11 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
   await fim;
   const ticket = carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === 1);
   assert.equal(ticket?.estado, "falhou");
-  assert.equal(ticket.motivo_falha, "serviço reiniciado");
-  assert.equal(ticket.devolucoes, 0);
+  assert.equal(motivoDe(banco, 1), "serviço reiniciado");
+  assert.equal(
+    carregarDemanda(banco, "I-1").tentativas.filter((tentativa) => tentativa.resultado?.tipo === "reprovacao").length,
+    0,
+  );
   assert.equal(carregarDemanda(banco, "I-1").evidencias.length, 0);
   assert.equal(sessoes(1).execucoes[0]?.fim == null, false);
   await aguardarCondutores(1000); // desfaz a parada para os testes seguintes

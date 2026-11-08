@@ -5,10 +5,11 @@ import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { concluirTicketImplementar } from "./conclusao_ticket.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import type { EvidenciaEtapa } from "./evidencia_etapa.ts";
+import { Endereco } from "./item_de_trabalho.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
-const montar = (status: string, estado = "em_execucao", etapa = "implementar", devolucoes = 0) =>
+const montar = (status: string, estado = "em_execucao", etapa = "implementar", reprovacoes = 0) =>
   AgregadoDemanda.parse({
     demanda: {
       id: "I-1",
@@ -24,6 +25,13 @@ const montar = (status: string, estado = "em_execucao", etapa = "implementar", d
     },
     decisoes: [],
     evidencias: [],
+    tentativas: Array.from({ length: reprovacoes }, (_, indice) => ({
+      ticket: Endereco.doTicket("I-1", 2),
+      numero: indice + 1,
+      inicio: t0,
+      fim: t0,
+      resultado: { tipo: "reprovacao", motivo: "corrija" },
+    })),
     tickets: [
       {
         demanda_id: "I-1",
@@ -32,7 +40,6 @@ const montar = (status: string, estado = "em_execucao", etapa = "implementar", d
         etapa,
         estado: status,
         estado_alterado_em: t0,
-        devolucoes,
         criado_por: FABRIQUINHA,
       },
     ],
@@ -68,12 +75,17 @@ test("CA-8: pendências citadas pelo tipo; ticket segue em_execucao", () => {
   );
 });
 
-test("CA-9: sem pendências conclui e zera as devoluções", () => {
+test("CA-9: sem pendências conclui com sucesso e preserva as reprovações anteriores", () => {
   const novo = concluirImplementacao(montar("em_execucao", "em_execucao", "implementar", 1));
   assert.deepEqual(
-    novo.tickets.map((t) => [t.estado, t.devolucoes, t.estado_alterado_em]),
-    [["concluido", 0, t1]],
+    novo.tickets.map((t) => [t.estado, t.estado_alterado_em]),
+    [["concluido", t1]],
   );
+  assert.deepEqual(
+    novo.tentativas.map((tentativa) => tentativa.resultado),
+    [{ tipo: "reprovacao", motivo: "corrija" }, { tipo: "sucesso" }],
+  );
+  assert.equal(novo.tentativas.at(-1)?.fim, t1);
 });
 
 test("CA-10: o agente não conclui", () => {

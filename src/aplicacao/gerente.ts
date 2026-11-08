@@ -1,10 +1,16 @@
 // Gerente de sessões (F4 §2, §6): o único que lança o pi. Roda o pi com o mesmo código de processo e protocolo nos
 // modos autônomo e interativo, guarda as execuções vivas com os diálogos de extensão pendentes (F4 §5.4) e repassa os
 // eventos a quem assina a sessão.
-import type { Ator } from "../nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
 import type { Id } from "../nucleo/primitivos.ts";
+import {
+  type CausaDeInfraestrutura,
+  type FalhaDaTentativa,
+  falhaPorServicoReiniciado,
+  falhaQueExigeOAuditor,
+} from "../nucleo/tentativa.ts";
 import { anotar } from "../infra/registro.ts";
 import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "./auditor_automatico.ts";
 import { type EventoPi, lancarPi } from "../infra/agente/pi.ts";
@@ -12,8 +18,24 @@ import { type EventoPi, lancarPi } from "../infra/agente/pi.ts";
 /** Diálogos que esperam resposta; `notify` e afins não esperam, e `custom` nunca chega no modo RPC (P1 §2.1). */
 const DIALOGOS = new Set(["select", "confirm", "input", "editor"]);
 
-/** O `erro` do C6 da execução autônoma que o Auditor abortou: o Histórico a mostra como abortada (F7 §4.4). */
-const ABORTADA = "abortada pelo Auditor";
+/** A execução autônoma que o Auditor abortou. */
+const ABORTADA: FalhaDaTentativa = { tipo: "interrompida", por: AUDITOR, motivo: "abortada pelo Auditor" };
+
+/** O que o pi relata do provedor do modelo, e a causa de infraestrutura que cada relato revela; o primeiro que casa vale. */
+const CAUSAS_DO_ERRO_DO_PROVEDOR: readonly (readonly [RegExp, CausaDeInfraestrutura])[] = [
+  [/quota exceeded|usage limit|rate limit|session limit|insufficient_quota|\b429\b/i, "cota"],
+  [/ETIMEDOUT|TimeoutError/i, "tempo_limite"],
+  [
+    /HTTP 5\d\d|\b50[234]\b|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|fetch failed|Connection error|overloaded/i,
+    "servico_externo_inacessivel",
+  ],
+];
+
+/** A falha do agente que parou com erro: de infraestrutura quando o provedor relata cota, rede ou tempo; senão pede o Auditor. */
+function falhaDoErroDoModelo(motivo: string): FalhaDaTentativa {
+  const causa = CAUSAS_DO_ERRO_DO_PROVEDOR.find(([relato]) => relato.test(motivo))?.[1];
+  return causa === undefined ? falhaQueExigeOAuditor(motivo) : { tipo: "falha_infraestrutura", causa, motivo };
+}
 
 /**
  * O maior silêncio do pi aceito enquanto o agente espera o modelo (ocupado, sem ferramenta rodando nem diálogo
@@ -228,15 +250,15 @@ export interface Processo {
  * Lança o pi, envia o prompt e conduz o protocolo RPC até o fim, parando o grupo do pi em qualquer desfecho.
  * Autônoma: termina no `agent_settled`, com falha se a última mensagem do assistente parou com erro ou aborto.
  * Interativa: o `agent_settled` só a deixa ociosa; ela termina bem quando a ociosidade passa ou alguém a encerra.
- * Ambas falham como infraestrutura (o "tempo limite" que a retomada automática reconhece) se o modelo fica calado.
+ * Ambas falham como infraestrutura (`tempo_limite` e `modelo_sem_resposta`, que a política retoma) se o modelo fica calado.
  * A autônoma falha se o pi recusa um comando; a interativa só anota a recusa. Ambas falham se o pi sai sozinho.
- * Resolve com o motivo da falha, ou `undefined`.
+ * Resolve com a falha tipada, ou `undefined`.
  *
  * ponytail: um diálogo que o próprio pi resolve por `signal` não emite evento; ele fica pendente (e, na autônoma, o
  * relógio parado) até o Auditor respondê-lo ou cancelá-lo, ou até o pi terminar. Se a extensão que faz isso existir,
  * dar o diálogo por resolvido no `turn_start` seguinte.
  */
-export function rodarPi(r: Processo): Promise<string | undefined> {
+export function rodarPi(r: Processo): Promise<FalhaDaTentativa | undefined> {
   return new Promise((resolve) => {
     const { id, sessaoPi } = r.execucao;
     const autonoma = r.execucao.modo === "autonomo";
@@ -252,7 +274,7 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     const ferramentasRodando = new Set<string>();
     let vigiaDoModelo: NodeJS.Timeout | undefined;
     let feito = false;
-    const fim = (falha?: string) => {
+    const fim = (falha?: FalhaDaTentativa) => {
       if (feito) return;
       feito = true;
       clearTimeout(relogio);
@@ -276,7 +298,11 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
         } else if (pendentes.size === 0 && !relogio) {
           desde = Date.now();
           relogio = setTimeout(() => {
-            fim(`tempo limite de ${String(r.limiteMin)} min`);
+            fim({
+              tipo: "falha_infraestrutura",
+              causa: "tempo_limite",
+              motivo: `tempo limite de ${String(r.limiteMin)} min`,
+            });
           }, restante);
         }
         return;
@@ -299,8 +325,12 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       if (feito || !estaViva.ocupado || ferramentasRodando.size > 0 || pendentes.size > 0) return;
       const silencioMin = r.silencioMaximoDoModeloMin ?? SILENCIO_MAXIMO_DO_MODELO_MIN;
       vigiaDoModelo = setTimeout(() => {
-        const falha = `o modelo ficou ${String(silencioMin)} min sem responder (tempo limite sem eventos do pi)`;
-        anotar(r.log, falha);
+        const falha: FalhaDaTentativa = {
+          tipo: "falha_infraestrutura",
+          causa: "modelo_sem_resposta",
+          motivo: `o modelo ficou ${String(silencioMin)} min sem responder (tempo limite sem eventos do pi)`,
+        };
+        anotar(r.log, falha.motivo);
         fim(falha);
       }, silencioMin * 60_000);
     };
@@ -317,7 +347,7 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     const aoRecusar = (evento: EventoPi) => {
       const recusa = `o pi recusou o comando ${String(evento.command)}: ${String(evento.error)}`;
       if (autonoma) {
-        fim(recusa);
+        fim(falhaQueExigeOAuditor(recusa));
         return;
       }
       // Na interativa a recusa já chegou ao chat; um `steer` que cruzou o `agent_settled` não derruba a sessão. O prompt
@@ -404,9 +434,11 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
       const parou = ["error", "aborted"].includes(String(ultima.stopReason));
       fim(
         parou
-          ? [`o agente parou com stopReason ${String(ultima.stopReason)}`, ultima.errorMessage]
-              .filter(Boolean)
-              .join(": ")
+          ? falhaDoErroDoModelo(
+              [`o agente parou com stopReason ${String(ultima.stopReason)}`, ultima.errorMessage]
+                .filter(Boolean)
+                .join(": "),
+            )
           : undefined,
       );
     };
@@ -467,7 +499,14 @@ export function rodarPi(r: Processo): Promise<string | undefined> {
     });
     r.aoLancar(pi.pgid);
     void pi.saiu.then((codigo) => {
-      fim(`o pi saiu antes de terminar a execução (código ${String(codigo)}); veja o log em ${r.log}`);
+      // Sem código, o pi morreu por sinal: o cgroup do serviço ou um kill externo, que a Fabriquinha trata como reinício.
+      fim(
+        codigo === null
+          ? falhaPorServicoReiniciado
+          : falhaQueExigeOAuditor(
+              `o pi saiu antes de terminar a execução (código ${String(codigo)}); veja o log em ${r.log}`,
+            ),
+      );
     });
     const estaViva: Viva = {
       execucao: id,

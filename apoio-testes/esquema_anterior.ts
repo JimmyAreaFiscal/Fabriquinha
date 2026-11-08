@@ -64,7 +64,7 @@ function criacaoAnterior(esquemaAnterior: DatabaseSync, tabela: string, nome: st
 }
 
 /**
- * Devolve o banco migrado (e aberto) ao esquema da versão 37: devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
+ * Devolve o banco migrado (e aberto) ao esquema da versão 37 (sem as Tentativas da 40): devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
  * `configuracao_etapa_projeto` e `sequencia` com as colunas e os valores antigos e volta o `user_version`. O próximo
  * `abrir()` aplica a migração 38 sobre as linhas que o teste montou. O que a 38 perdeu (`enviado_em`, `origem_ticket_id`,
  * a hora da Rodada) volta vazio ou some, e `fechado` não volta: ficou `cancelado`.
@@ -101,8 +101,16 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
       status_alterado_em: "estado_alterado_em",
       enviado_em: "NULL",
       origem_ticket_id: "NULL",
+      devolucoes: "0",
+      motivo_falha: "NULL",
+      retomadas_automaticas: "0",
     });
     copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
+    // A 40 criou `tentativa` e tirou `erro` das execuções: a volta apaga as Tentativas e devolve a coluna vazia.
+    banco.exec(`
+      DROP TABLE tentativa;
+      ALTER TABLE execucao_sessao ADD COLUMN erro TEXT CHECK (erro IS NULL OR length(erro) > 0);
+    `);
     copiar("sequencia", { nome: "CASE nome WHEN 'demanda' THEN 'issue' ELSE nome END" });
     for (const tabela of ["ticket_demanda", "rodada", "demanda", "configuracao_etapa_projeto", "sequencia"]) {
       banco.exec(`DROP TABLE ${tabela}`);

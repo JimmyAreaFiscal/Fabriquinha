@@ -128,9 +128,12 @@ function sessaoDeDemandaAguardando(raiz: string): void {
     INSERT INTO demanda VALUES
       ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1'),
       ('I-2', 'loja', 'Cache', 'problema', 'd', 'concluida', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-2');
-    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, motivo_falha) VALUES
-      ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam'),
-      ('I-2', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z', 'testes falharam');
+    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
+      ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z'),
+      ('I-2', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z');
+    INSERT INTO tentativa (demanda_id, ticket_id, numero, processo_id, inicio, fim, resultado_tipo, causa, motivo) VALUES
+      ('I-1', 1, 1, 'x1', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 'interrompida', 'fabriquinha', 'testes falharam'),
+      ('I-2', 1, 1, 'x2', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 'interrompida', 'fabriquinha', 'testes falharam');
     INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1'), ('s-i2', 'I-2', 1, 'autonomo', 'c2');
     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES
       ('x1', '${SESSAO}', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1),

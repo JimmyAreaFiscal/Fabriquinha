@@ -12,7 +12,6 @@ const ticket = (ticket_id: number, etapa: TicketDemanda["etapa"]): TicketDemanda
   estado_alterado_em: "2026-01-01T10:00:00Z",
   criado_por: { tipo: "fabriquinha" },
   rodada_id: 2,
-  devolucoes: 0,
 });
 const sessao = (ticket_id: number): Sessao => ({
   id: `s${String(ticket_id)}`,

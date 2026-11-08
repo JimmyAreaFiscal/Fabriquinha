@@ -623,5 +623,125 @@ ALTER TABLE projeto DROP COLUMN cursor_commit_humano;
   }
 };
 
+const MOTIVO_ANTERIOR_A_MIGRACAO = "(motivo anterior à migração 40)";
+
+interface TentativaSintetica {
+  resultado_tipo: "reprovacao" | "falha_infraestrutura" | "interrompida";
+  /** A causa da falha de infraestrutura; em `interrompida`, o tipo do Ator que interrompeu. */
+  causa: string;
+  motivo?: string;
+  instrucao?: string;
+}
+
+const interrompidaPelaFabriquinha = (motivo: string): TentativaSintetica => ({
+  resultado_tipo: "interrompida",
+  causa: "fabriquinha",
+  motivo,
+});
+
+/**
+ * A 40 troca os contadores do ticket por Tentativas: cada ticket ganha as sintéticas (`migrada = 1`) que reproduzem o que
+ * as colunas diziam — `devolucoes` de reprovação e `retomadas_automaticas` de falha de infraestrutura, de causa
+ * `tempo_limite`, pois a causa de cada uma não foi guardada — e o `motivo_falha` vai para a última delas (ou para uma
+ * `interrompida`, se não há nenhuma). O `erro` das execuções ocupa as falhas de infraestrutura na ordem e, passando delas,
+ * vira `interrompida`; a instrução de uma reabertura sem devolução vira a Tentativa do Auditor. Depois saem
+ * `devolucoes`, `retomadas_automaticas` e `motivo_falha` de `ticket_demanda` e `erro` de `execucao_sessao`.
+ */
+const MIGRACAO_40_TENTATIVA: Migracao = (banco) => {
+  banco.exec(`
+CREATE TABLE tentativa (
+    demanda_id     TEXT NOT NULL,
+    ticket_id      INTEGER NOT NULL,
+    numero         INTEGER NOT NULL CHECK (numero > 0),
+    processo_id    TEXT CHECK (processo_id IS NULL OR length(processo_id) > 0),
+    inicio         TEXT NOT NULL,
+    fim            TEXT,
+    resultado_tipo TEXT CHECK (resultado_tipo IS NULL OR resultado_tipo IN ('sucesso','reprovacao','falha_infraestrutura','interrompida')),
+    causa          TEXT CHECK ((causa IS NOT NULL) = (resultado_tipo IN ('falha_infraestrutura','interrompida'))),
+    motivo         TEXT CHECK (motivo IS NULL OR length(motivo) > 0),
+    instrucao      TEXT CHECK (instrucao IS NULL OR length(instrucao) > 0),
+    migrada        INTEGER NOT NULL DEFAULT 0 CHECK (migrada IN (0,1)),
+    PRIMARY KEY (demanda_id, ticket_id, numero),
+    FOREIGN KEY (demanda_id, ticket_id) REFERENCES ticket_demanda(demanda_id, ticket_id)
+  );
+`);
+  const inserir = banco.prepare(
+    `INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, fim, resultado_tipo, causa, motivo, instrucao, migrada)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+  );
+  const errosDasExecucoes = banco.prepare(
+    `SELECT e.erro FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
+     WHERE s.demanda_id = ? AND s.ticket_id = ? AND e.erro IS NOT NULL ORDER BY e.inicio, e.rowid`,
+  );
+  const tickets = banco
+    .prepare(
+      `SELECT demanda_id, ticket_id, estado_alterado_em, instrucao, devolucoes, motivo_falha, retomadas_automaticas
+       FROM ticket_demanda ORDER BY rowid`,
+    )
+    .all();
+  for (const t of tickets) {
+    const demandaId = String(t.demanda_id);
+    const ticketId = Number(t.ticket_id);
+    const instante = String(t.estado_alterado_em);
+    const devolucoes = Number(t.devolucoes);
+    const retomadas = Number(t.retomadas_automaticas);
+    const motivoFalha = t.motivo_falha === null ? undefined : String(t.motivo_falha);
+    const instrucao = t.instrucao === null ? undefined : String(t.instrucao);
+    // O erro era texto livre e pode passar do teto do Markdown; o corte é o de `motivo()`.
+    const erros = errosDasExecucoes.all(demandaId, ticketId).map((linha) => String(linha.erro).slice(0, 2000));
+    const historico: TentativaSintetica[] = [
+      ...erros
+        .slice(retomadas)
+        .filter((erro) => erro !== motivoFalha)
+        .map(interrompidaPelaFabriquinha),
+      ...(instrucao !== undefined && devolucoes === 0
+        ? [{ resultado_tipo: "interrompida" as const, causa: "auditor", instrucao }]
+        : []),
+      ...Array.from({ length: devolucoes }, (_, i) => ({
+        resultado_tipo: "reprovacao" as const,
+        causa: "",
+        motivo: i === devolucoes - 1 && instrucao !== undefined ? instrucao : MOTIVO_ANTERIOR_A_MIGRACAO,
+      })),
+      ...Array.from({ length: retomadas }, (_, i) => ({
+        resultado_tipo: "falha_infraestrutura" as const,
+        causa: "tempo_limite",
+        motivo: erros[i] ?? MOTIVO_ANTERIOR_A_MIGRACAO,
+      })),
+    ];
+    const ultima = historico.at(-1);
+    if (motivoFalha !== undefined) {
+      if (ultima === undefined || ultima.resultado_tipo === "interrompida") {
+        historico.push(interrompidaPelaFabriquinha(motivoFalha));
+      } else {
+        ultima.motivo = motivoFalha;
+      }
+    }
+    historico.forEach((h, i) => {
+      inserir.run(
+        demandaId,
+        ticketId,
+        i + 1,
+        instante,
+        instante,
+        h.resultado_tipo,
+        h.resultado_tipo === "reprovacao" ? null : h.causa,
+        h.motivo ?? null,
+        h.instrucao ?? null,
+      );
+    });
+  }
+  banco.exec(`
+ALTER TABLE ticket_demanda DROP COLUMN devolucoes;
+ALTER TABLE ticket_demanda DROP COLUMN retomadas_automaticas;
+ALTER TABLE ticket_demanda DROP COLUMN motivo_falha;
+ALTER TABLE execucao_sessao DROP COLUMN erro;
+`);
+};
+
 /** As migrações depois da linha de base: a primeira é a 37. */
-export const MIGRACOES: readonly Migracao[] = [MIGRACAO_37_AUTORIA, MIGRACAO_38_ESTADO, MIGRACAO_39_PROJETO_UNICO];
+export const MIGRACOES: readonly Migracao[] = [
+  MIGRACAO_37_AUTORIA,
+  MIGRACAO_38_ESTADO,
+  MIGRACAO_39_PROJETO_UNICO,
+  MIGRACAO_40_TENTATIVA,
+];

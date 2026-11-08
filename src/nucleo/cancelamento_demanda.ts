@@ -5,7 +5,7 @@ import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import type { EstadoDemanda } from "./primitivos.ts";
-import type { ContextoDemanda } from "./transicoes_demanda.ts";
+import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
 /** CA-1 a CA-7: só o Auditor, antes da integração confirmada; aberto, falhou e em_execucao viram cancelado. */
 export function cancelarDemanda(ag: AgregadoDemanda, ator: Ator, ctx: ContextoDemanda): AgregadoDemanda {
@@ -23,12 +23,12 @@ export function cancelarDemanda(ag: AgregadoDemanda, ator: Ator, ctx: ContextoDe
       "o código já está na base; não há o que cancelar",
     );
   }
+  const ticketsCancelados = ag.tickets
+    .filter((t) => !CICLO_DO_TICKET.ehTerminal(t.estado))
+    .reduce((acumulado, t) => mudarTicket(acumulado, t, "cancelado", ctx.agora), ag);
   return AgregadoDemanda.parse({
-    ...ag,
+    ...ticketsCancelados,
     demanda: CICLO_DA_DEMANDA.mudar(demanda, "cancelada", ctx.agora),
-    tickets: ag.tickets.map((t) =>
-      CICLO_DO_TICKET.ehTerminal(t.estado) ? t : CICLO_DO_TICKET.mudar(t, "cancelado", ctx.agora),
-    ),
   });
 }
 

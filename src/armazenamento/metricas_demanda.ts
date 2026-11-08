@@ -78,7 +78,8 @@ interface ExecucaoDoTicket extends DonoDaLinha {
 }
 
 interface TicketDaDemanda extends DonoDaLinha {
-  devolucoes: number;
+  /** As Tentativas reprovadas do ticket: as vezes em que o agente teve de corrigir a entrega. */
+  exigenciasDeAlteracao: number;
 }
 
 interface DecisaoDoTicket extends DonoDaLinha {
@@ -126,9 +127,13 @@ export const execucoesDaDemanda = (banco: DatabaseSync, demandaId: string): Exec
 
 export const ticketsDaDemanda = (banco: DatabaseSync, demandaId: string): TicketDaDemanda[] =>
   banco
-    .prepare(`SELECT ${DONO}, t.devolucoes FROM ticket_demanda t WHERE t.demanda_id = ? ORDER BY t.ticket_id`)
+    .prepare(
+      `SELECT ${DONO}, (SELECT COUNT(*) FROM tentativa x WHERE x.demanda_id = t.demanda_id AND x.ticket_id = t.ticket_id
+                         AND x.resultado_tipo = 'reprovacao') AS exigencias
+       FROM ticket_demanda t WHERE t.demanda_id = ? ORDER BY t.ticket_id`,
+    )
     .all(demandaId)
-    .map((l) => ({ etapa: l.etapa as string, rodadaId: rodadaDe(l), devolucoes: Number(l.devolucoes) }));
+    .map((l) => ({ etapa: l.etapa as string, rodadaId: rodadaDe(l), exigenciasDeAlteracao: Number(l.exigencias) }));
 
 export const decisoesDaDemanda = (banco: DatabaseSync, demandaId: string): DecisaoDoTicket[] =>
   banco

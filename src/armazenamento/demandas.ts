@@ -6,6 +6,8 @@ import { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { Ator } from "../nucleo/ator.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import { escrever, novoId } from "./banco.ts";
 import { colunasDaConfiguracaoAgente, linhaComConfiguracaoAgente } from "./configuracao_agente.ts";
 
@@ -35,6 +37,31 @@ function comAtor(linha: Record<string, unknown>, campo: string): Record<string, 
     else if (valor !== null) ator[coluna.slice(campo.length + 1)] = valor;
   }
   return { ...resto, [campo]: ator };
+}
+
+/**
+ * O resultado da Tentativa nas colunas `resultado_tipo`, `causa` e `motivo`. A `causa` é a da falha de infraestrutura
+ * ou, em `interrompida`, o tipo do Ator que interrompeu.
+ */
+function colunasDoResultado(resultado: ResultadoDaTentativa | undefined): Linha {
+  return {
+    resultado_tipo: resultado?.tipo ?? null,
+    causa:
+      resultado?.tipo === "falha_infraestrutura"
+        ? resultado.causa
+        : resultado?.tipo === "interrompida"
+          ? resultado.por.tipo
+          : null,
+    motivo: resultado && "motivo" in resultado ? (resultado.motivo ?? null) : null,
+  };
+}
+
+/** O inverso de `colunasDoResultado`, para o domínio validar. */
+function resultadoDaLinha({ resultado_tipo, causa, motivo }: Record<string, unknown>): unknown {
+  if (resultado_tipo === null) return null;
+  const semCausa = semNulos({ tipo: resultado_tipo, motivo });
+  if (resultado_tipo === "interrompida") return { ...semCausa, por: { tipo: causa } };
+  return causa === null ? semCausa : { ...semCausa, causa };
 }
 
 /** Decisão do Agente gravada antes da migração 37, sem execução: o `trabalho_id` não existe, mas o Ator exige um. */
@@ -94,8 +121,22 @@ const TABELAS: readonly Tabela[] = [
         descricao: t.descricao ?? null,
         ...colunasDaConfiguracaoAgente(configuracao_agente),
         instrucao: t.instrucao ?? null,
-        motivo_falha: t.motivo_falha ?? null,
-        retomadas_automaticas: t.retomadas_automaticas ?? 0,
+      })),
+  },
+  {
+    nome: "tentativa",
+    chave: ["demanda_id", "ticket_id", "numero"],
+    linhas: (ag) =>
+      ag.tentativas.map(({ ticket, resultado, ...t }) => ({
+        demanda_id: ticket.demanda_id,
+        ticket_id: Number(ticket.ticket_id),
+        numero: t.numero,
+        processo_id: t.processo_id ?? null,
+        inicio: t.inicio,
+        fim: t.fim ?? null,
+        ...colunasDoResultado(resultado),
+        instrucao: t.instrucao ?? null,
+        migrada: bit(t.migrada === true),
       })),
   },
   {
@@ -235,13 +276,19 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
     dependencias_rodada: filhas("dependencia_rodada"),
     criterios_citados: filhas("criterio_citado_rodada"),
-    // Zero retomadas é o mesmo que nenhuma: o campo só aparece quando há o que contar.
-    tickets: filhas("ticket_demanda").map((t) =>
-      semNulos({
-        ...linhaComConfiguracaoAgente(comAtor(t, "criado_por")),
-        retomadas_automaticas: t.retomadas_automaticas || null,
+    tickets: filhas("ticket_demanda").map((t) => semNulos(linhaComConfiguracaoAgente(comAtor(t, "criado_por")))),
+    tentativas: filhas("tentativa").map((t) => ({
+      ...semNulos({
+        numero: t.numero,
+        processo_id: t.processo_id,
+        inicio: t.inicio,
+        fim: t.fim,
+        instrucao: t.instrucao,
+        migrada: t.migrada === 1 || null,
+        resultado: resultadoDaLinha(t),
       }),
-    ),
+      ticket: Endereco.doTicket(String(t.demanda_id), Number(t.ticket_id)),
+    })),
     dependencias_ticket: filhas("dependencia_ticket"),
     caminhos_ticket: filhas("caminho_ticket"),
     decisoes: filhas("decisao_ticket").map((d) =>

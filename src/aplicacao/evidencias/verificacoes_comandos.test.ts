@@ -64,6 +64,7 @@ test("CA-3: comando inexistente é infraestrutura, com o comando e a mensagem do
   );
   assert.equal(v.aprovada, undefined);
   assert.equal(v.falhas[0]?.classe, "infraestrutura");
+  assert.equal(v.falhas[0].causa, "comando_ausente");
   assert.match(v.falhas[0].motivo, /comando-que-nao-existe-na-fabriquinha: .*not found/);
 });
 
@@ -72,7 +73,9 @@ test("CA-4: passar do tempo limite é infraestrutura; morte por sinal é técnic
     entrada({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: "sleep 5" }] }, { limiteMs: 100 }),
   );
   assert.equal(lento.aprovada, undefined);
-  assert.deepEqual(lento.falhas, [{ classe: "infraestrutura", motivo: "sleep 5: tempo limite", comando: "sleep 5" }]);
+  assert.deepEqual(lento.falhas, [
+    { classe: "infraestrutura", causa: "tempo_limite", motivo: "sleep 5: tempo limite", comando: "sleep 5" },
+  ]);
 
   const morto = await verificarTestes(
     entrada({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: "kill -9 $$" }] }),
@@ -130,7 +133,12 @@ test("CA-9, CA-10 e CA-11: a execução do E2E sai 0, codigo_falha ou outro cód
   const inesperado = await verificarTestes(entrada(comE2E("true", "exit 9"), rodada));
   assert.equal(inesperado.aprovada, undefined);
   assert.deepEqual(inesperado.falhas, [
-    { classe: "infraestrutura", motivo: "exit 9 saiu com código inesperado 9", comando: "exit 9" },
+    {
+      classe: "infraestrutura",
+      causa: "comando_ausente",
+      motivo: "exit 9 saiu com código inesperado 9",
+      comando: "exit 9",
+    },
   ]);
 
   const morto = await verificarTestes(entrada(comE2E("true", "kill -9 $$"), rodada));
@@ -154,6 +162,23 @@ test("CA-12 e CA-13: fitness aprova com saída 0 e reprova tecnicamente com 1, n
   const ruim = await verificarFitness(entrada({ fitness: [{ nome: "a", comando: "exit 1", descricao: "d" }] }));
   assert.equal(ruim.aprovada, false);
   assert.equal(ruim.falhas[0]?.classe, "tecnica");
+});
+
+test("a conclusão das linguagens é avisada mesmo sem linguagens configuradas", async () => {
+  let avisos = 0;
+  const resultado = await verificarTestes(
+    entrada(
+      { linguagens: [] },
+      {
+        aoTerminarAsLinguagens: () => {
+          avisos++;
+        },
+      },
+    ),
+  );
+  assert.equal(avisos, 1);
+  assert.equal(resultado.aprovada, true);
+  assert.deepEqual(resultado.logs, []);
 });
 
 test("o ambiente dos comandos não leva credenciais", async () => {

@@ -42,5 +42,5 @@ export function concluirTicketImplementar(
       "complete as verificações da aplicação e tente de novo",
     );
   }
-  return mudarTicket(ag, ticket, "concluido", ctx.agora, { devolucoes: 0 });
+  return mudarTicket(ag, ticket, "concluido", ctx.agora);
 }

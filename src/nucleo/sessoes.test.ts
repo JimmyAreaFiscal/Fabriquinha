@@ -175,7 +175,6 @@ test("controle da execução: campos opcionais e par do modelo", () => {
   const completa = {
     ...exec("e1", "s1"),
     grupo_processo: 4321,
-    erro: "falhou no pi",
     configuracao_agente: { modelo: { provedor: "claude-bridge", nome: "claude-sonnet-5-5" }, effort: "high" },
   };
   assert.ok(ExecucaoSessao.safeParse(completa).success);
@@ -187,5 +186,5 @@ test("controle da execução: campos opcionais e par do modelo", () => {
   );
   assert.ok(!ExecucaoSessao.safeParse({ ...completa, configuracao_agente: { effort: "turbo" } }).success);
   assert.ok(!ExecucaoSessao.safeParse({ ...completa, grupo_processo: 0 }).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...completa, erro: " " }).success);
+  assert.equal("erro" in ExecucaoSessao.shape, false);
 });

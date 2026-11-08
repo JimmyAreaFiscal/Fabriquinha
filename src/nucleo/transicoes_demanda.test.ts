@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { clonarAgregadoDemanda as structuredClone } from "../../apoio-testes/clonar_agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 
 const EXTERNO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "s1" };
 import { AgregadoDemanda } from "./agregado_demanda.ts";
+import { Endereco } from "./item_de_trabalho.ts";
+import {
+  comTentativaAberta,
+  desdeAReabertura,
+  falhaQueExigeOAuditor,
+  falhaPorServicoReiniciado,
+  motivoDaFalhaDoTicket,
+  POLITICA_DE_TENTATIVAS,
+  tentativasDoTicket,
+} from "./tentativa.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import { submeterEvidenciaDemanda } from "./evidencia_demanda.ts";
 import { selecionarTrabalho } from "./selecao_trabalho.ts";
@@ -14,10 +25,9 @@ import {
   enviarDemanda,
   devolverTicket,
   iniciarRevisaoDemanda,
-  MAX_DEVOLUCOES,
+  mudarTicket,
   reabrirTicket,
   retomarTicketFalhoPorInfraestrutura,
-  MAX_RETOMADAS_AUTOMATICAS,
   registrarDemanda,
   registrarFalhaTicket,
   registrarRevisaoDemanda,
@@ -136,7 +146,6 @@ test("CA-4: o Auditor aprova e a demanda vai a planejamento", () => {
     estado: "aberto",
     estado_alterado_em: t1,
     criado_por: FABRIQUINHA,
-    devolucoes: 0,
   });
   assert.equal(env.demanda.estado, "gate_demanda");
 });
@@ -163,7 +172,6 @@ test("decidir: só o Auditor, só em gate_demanda, e precisa do ticket da demand
     estado: "aberto" as const,
     estado_alterado_em: t0,
     criado_por: FABRIQUINHA,
-    devolucoes: 0,
   };
   const dois = decidirDemanda({ ...env, tickets: [...env.tickets, outro] }, { aprovado: true }, AUDITOR, { agora: t1 });
   assert.deepEqual(dois.tickets[1], outro);
@@ -424,7 +432,11 @@ test("CA-7: a confirmação materializa rodadas, tickets, caminhos, dependência
   assert.equal(confirmarAprovacaoPlanejamento(ag, {}, AUDITOR, { agora: t2 }).decisoes.at(-1)?.nota, undefined);
 });
 
-const tk2 = (ag: AgregadoDemanda) => ag.tickets.find((t) => t.ticket_id === 2);
+const tk2 = (ag: AgregadoDemanda) => {
+  const ticket = ag.tickets.find((ticket) => ticket.ticket_id === 2);
+  assert.ok(ticket);
+  return ticket;
+};
 const emExecucao = (status: string): AgregadoDemanda => {
   const ag = emPlanejamento();
   return {
@@ -436,15 +448,24 @@ const emExecucao = (status: string): AgregadoDemanda => {
 
 test("CA-16: a falha põe o ticket em falhou sem mudar estado nem decisões; recusa outro status e demanda encerrada", () => {
   const ag = emExecucao("em_execucao");
-  const novo = registrarFalhaTicket(ag, { ticket_id: 2, motivo: "m" }, { agora: t2 });
-  assert.equal(tk2(novo)?.estado, "falhou");
-  assert.equal(tk2(novo)?.estado_alterado_em, t2);
+  const novo = registrarFalhaTicket(ag, { ticket_id: 2, falha: falhaQueExigeOAuditor("m") }, { agora: t2 });
+  assert.equal(tk2(novo).estado, "falhou");
+  assert.equal(tk2(novo).estado_alterado_em, t2);
   assert.equal(novo.demanda, ag.demanda);
   assert.equal(novo.decisoes, ag.decisoes);
-  assert.throws(() => registrarFalhaTicket(novo, { ticket_id: 2, motivo: "m" }, { agora: t2 }), ErroDeRegra);
-  assert.throws(() => registrarFalhaTicket(ag, { ticket_id: 9, motivo: "m" }, { agora: t2 }), ErroDeRegra);
+  assert.throws(
+    () => registrarFalhaTicket(novo, { ticket_id: 2, falha: falhaQueExigeOAuditor("m") }, { agora: t2 }),
+    ErroDeRegra,
+  );
+  assert.throws(
+    () => registrarFalhaTicket(ag, { ticket_id: 9, falha: falhaQueExigeOAuditor("m") }, { agora: t2 }),
+    ErroDeRegra,
+  );
   const fim = { ...ag, demanda: { ...ag.demanda, estado: "concluida" as const } };
-  assert.throws(() => registrarFalhaTicket(fim, { ticket_id: 2, motivo: "m" }, { agora: t2 }), ErroDeRegra);
+  assert.throws(
+    () => registrarFalhaTicket(fim, { ticket_id: 2, falha: falhaQueExigeOAuditor("m") }, { agora: t2 }),
+    ErroDeRegra,
+  );
 });
 
 test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a instrução", () => {
@@ -453,65 +474,75 @@ test("CA-13 a CA-15: só o Auditor reabre, com instrução; volta a aberto com a
   assert.throws(() => reabrirTicket(ag, { ticket_id: 2, instrucao: "x" }, agente, { agora: t2 }), ErroDeEscopo);
   assert.throws(() => reabrirTicket(emExecucao("aberto"), { ticket_id: 2, instrucao: "x" }, AUDITOR, { agora: t2 }));
   const novo = reabrirTicket(ag, { ticket_id: 2, instrucao: "tente de novo" }, AUDITOR, { agora: t2 });
-  assert.equal(tk2(novo)?.estado, "aberto");
-  assert.equal(tk2(novo)?.instrucao, "tente de novo");
+  assert.equal(tk2(novo).estado, "aberto");
+  assert.equal(tk2(novo).instrucao, "tente de novo");
   assert.equal(novo.decisoes, ag.decisoes);
-  assert.equal(tk2(ag)?.estado, "falhou");
+  assert.equal(tk2(ag).estado, "falhou");
 });
 
-test("retomada automática: só a Fabriquinha, só ticket falhou; mantém instrução e devoluções e conta até o limite", () => {
-  const retomar = (ag: AgregadoDemanda, entrada: object, ator: Ator = FABRIQUINHA) =>
+test("retomada automática: só a Fabriquinha, só ticket falho e dentro da política; mantém instrução e histórico", () => {
+  const retomar = (ag: AgregadoDemanda, entrada: object = {}, ator: Ator = FABRIQUINHA) =>
     retomarTicketFalhoPorInfraestrutura(ag, { ticket_id: 2, ...entrada }, ator, { agora: t2 });
-  const base = emExecucao("falhou");
-  const ag = {
-    ...base,
-    tickets: base.tickets.map((t) =>
-      t.ticket_id === 2
-        ? {
-            ...t,
-            instrucao: "corrija",
-            devolucoes: 1,
-            motivo_falha: "HTTP 504",
-            configuracao_agente: { effort: "high" as const },
-          }
-        : t,
-    ),
-  };
-  assert.throws(() => retomar(ag, { conta: true }, AUDITOR), ErroDeEscopo);
-  assert.throws(() => retomar(emExecucao("aberto"), { conta: true }), ErroDeRegra);
-  assert.throws(
-    () => retomar({ ...ag, demanda: { ...ag.demanda, estado: "concluida" } }, { conta: true }),
-    ErroDeRegra,
+  const base = emExecucao("em_execucao");
+  const falha = { tipo: "falha_infraestrutura" as const, causa: "tempo_limite" as const, motivo: "HTTP 504" };
+  const ag = registrarFalhaTicket(
+    {
+      ...base,
+      tickets: base.tickets.map((ticket) =>
+        ticket.ticket_id === 2
+          ? { ...ticket, instrucao: "corrija", configuracao_agente: { effort: "high" as const } }
+          : ticket,
+      ),
+    },
+    { ticket_id: 2, falha },
+    { agora: t2 },
   );
-
-  const novo = retomar(ag, { conta: true, modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } });
-  const { motivo_falha: _m, ...semFalha } = tk2(ag) ?? {};
+  assert.throws(() => retomar(ag, {}, AUDITOR), ErroDeEscopo);
+  assert.throws(() => retomar(emExecucao("aberto")), ErroDeRegra);
+  assert.throws(() => retomar({ ...ag, demanda: { ...ag.demanda, estado: "concluida" } }), ErroDeRegra);
+  const novo = retomar(ag, { modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } });
   assert.deepEqual(tk2(novo), {
-    ...semFalha,
+    ...tk2(ag),
     estado: "aberto",
-    retomadas_automaticas: 1,
     estado_alterado_em: t2,
     configuracao_agente: { effort: "high", modelo: { provedor: "anthropic", nome: "claude-opus-5-5" } },
   });
-
-  // O reinício do serviço não conta; no limite, a que conta é recusada; a reabertura do Auditor zera.
-  const reinicio = retomar(ag, { conta: false });
-  assert.equal(tk2(reinicio)?.retomadas_automaticas, 0);
-  assert.deepEqual(tk2(reinicio)?.configuracao_agente, tk2(ag)?.configuracao_agente);
+  assert.deepEqual(novo.tentativas, ag.tentativas);
+  assert.deepEqual(tk2(retomar(ag)).configuracao_agente, tk2(ag).configuracao_agente);
   const noLimite = {
     ...ag,
-    tickets: ag.tickets.map((t) =>
-      t.ticket_id === 2 ? { ...t, retomadas_automaticas: MAX_RETOMADAS_AUTOMATICAS } : t,
-    ),
+    tentativas: Array.from({ length: 4 }, (_, indice) => ({
+      ticket: Endereco.doTicket("I-1", 2),
+      numero: indice + 1,
+      inicio: t0,
+      fim: t2,
+      resultado: falha,
+    })),
   };
-  assert.throws(() => retomar(noLimite, { conta: true }), /retomado 3 vezes seguidas/);
-  assert.equal(tk2(retomar(noLimite, { conta: false }))?.retomadas_automaticas, MAX_RETOMADAS_AUTOMATICAS);
+  assert.throws(() => retomar(noLimite), /já passou de 3 falhas seguidas/);
+  assert.throws(() => retomar(emExecucao("falhou")), /não tem retomada automática/);
+  assert.throws(() => retomar(falhar(base, 2)), /falha pede o Auditor/);
+  const reinicio = {
+    ...noLimite,
+    tentativas: [
+      ...noLimite.tentativas,
+      {
+        ticket: Endereco.doTicket("I-1", 2),
+        numero: 5,
+        inicio: t2,
+        fim: t2,
+        resultado: falhaPorServicoReiniciado,
+      },
+    ],
+  };
+  assert.equal(tk2(retomar(reinicio)).estado, "aberto");
+  assert.deepEqual(retomar(reinicio).tentativas, reinicio.tentativas);
   const reaberto = reabrirTicket(noLimite, { ticket_id: 2, instrucao: "x" }, AUDITOR, { agora: t2 });
-  assert.equal(tk2(reaberto)?.retomadas_automaticas, 0);
+  assert.deepEqual(desdeAReabertura(tentativasDoTicket(reaberto.tentativas, 2)), []);
 });
 
 const falhar = (ag: AgregadoDemanda, ticket_id: number) =>
-  registrarFalhaTicket(ag, { ticket_id, motivo: "m" }, { agora: t2 });
+  registrarFalhaTicket(ag, { ticket_id, falha: falhaQueExigeOAuditor("m") }, { agora: t2 });
 const intacto = (fn: () => unknown, ag: AgregadoDemanda) => {
   const antes = structuredClone(ag);
   assert.throws(fn, ErroDeRegra);
@@ -608,7 +639,6 @@ test("CA-12: todas as rodadas concluídas abrem revisar_demanda e vão a revisar
     ticket_id: 3,
     etapa: "revisar_demanda",
     estado: "aberto",
-    devolucoes: 0,
     estado_alterado_em: t2,
     criado_por: FABRIQUINHA,
   });
@@ -668,6 +698,7 @@ test("CA-13: reprovação cria só rodadas novas, preserva as integradas e o pla
     },
   ]);
   assert.deepEqual(novo.evidencias, ag.evidencias);
+  assert.deepEqual(tentativasDoTicket(novo.tentativas, 3).at(-1)?.resultado, { tipo: "sucesso" });
 });
 
 test("CA-13: reprovação recusada sem mutação (exigências, plano, ticket, ator, estado e pendência)", () => {
@@ -720,6 +751,7 @@ test("CA-14: aprovação conclui a revisão, abre encerrar_demanda e vai a encer
   const ag = emRevisaoD();
   const novo = registrarRevisaoDemanda(ag, aprovacaoD(), ag3, c2);
   assert.equal(novo.demanda.estado, "encerrar_demanda");
+  assert.deepEqual(tentativasDoTicket(novo.tentativas, 3).at(-1)?.resultado, { tipo: "sucesso" });
   assert.deepEqual(novo.rodadas, ag.rodadas);
   assert.deepEqual(
     novo.tickets.map((t) => [t.ticket_id, t.etapa, t.estado]),
@@ -786,50 +818,80 @@ test("CA-13: percurso completo das rodadas corretivas e só então a revisão in
 const emDevolucao = (
   etapa: "implementar" | "resolver_conflito" | "revisar_demanda",
   status: string,
-  devolucoes = 0,
+  reprovacoes = 0,
 ) => {
   const base = confirmarAprovacaoPlanejamento(submetido(), {}, AUDITOR, { agora: t2 });
   const global = etapa !== "implementar";
   return {
     ...base,
+    tentativas: [
+      ...base.tentativas,
+      ...Array.from({ length: reprovacoes }, (_, indice) => ({
+        ticket: Endereco.doTicket("I-1", 3),
+        numero: indice + 1,
+        inicio: t0,
+        fim: t1,
+        resultado: { tipo: "reprovacao" as const, motivo: "corrija antes" },
+      })),
+    ],
     tickets: base.tickets.map((t) =>
-      t.ticket_id === 3
-        ? { ...t, etapa, estado: status as never, devolucoes, ...(global && { rodada_id: undefined }) }
-        : t,
+      t.ticket_id === 3 ? { ...t, etapa, estado: status as never, ...(global && { rodada_id: undefined }) } : t,
     ),
   };
 };
-const tk3 = (ag: AgregadoDemanda) => ag.tickets.find((t) => t.ticket_id === 3);
+const tk3 = (ag: AgregadoDemanda) => {
+  const ticket = ag.tickets.find((ticket) => ticket.ticket_id === 3);
+  assert.ok(ticket);
+  return ticket;
+};
 const id = () => 3;
 const devolver = (ag: AgregadoDemanda, ator: Ator = FABRIQUINHA) =>
   devolverTicket(ag, { ticket_id: id(), instrucao: "corrija os testes" }, ator, { agora: t2 });
 
-test("CA-1, CA-2: devolução abaixo do limite volta a aberto com a instrução e o contador + 1", () => {
-  assert.equal(MAX_DEVOLUCOES, 2);
+test("CA-1, CA-2: primeira e segunda reprovações voltam a aberto com instrução e Tentativa encerrada", () => {
+  assert.equal(POLITICA_DE_TENTATIVAS.limites.reprovacoes, 2);
   for (const etapa of ["implementar", "resolver_conflito"] as const) {
-    const um = devolver(emDevolucao(etapa, "em_execucao"));
-    assert.deepEqual([tk3(um)?.estado, tk3(um)?.instrucao, tk3(um)?.devolucoes], ["aberto", "corrija os testes", 1]);
-    assert.equal(tk3(devolver(emDevolucao(etapa, "em_execucao", 1)))?.devolucoes, 2);
+    for (const anteriores of [0, 1]) {
+      const novo = devolver(emDevolucao(etapa, "em_execucao", anteriores));
+      assert.deepEqual([tk3(novo).estado, tk3(novo).instrucao], ["aberto", "corrija os testes"]);
+      assert.equal(tentativasDoTicket(novo.tentativas, 3).length, anteriores + 1);
+      assert.deepEqual(novo.tentativas.at(-1), {
+        ticket: Endereco.doTicket("I-1", 3),
+        numero: anteriores + 1,
+        inicio: t2,
+        fim: t2,
+        resultado: { tipo: "reprovacao", motivo: "corrija os testes" },
+      });
+    }
   }
 });
 
 test("CA-3, CA-13: na 3ª reprovação falha com o motivo e bloqueia a seleção até a reabertura", () => {
   const ag = devolver(emDevolucao("implementar", "em_execucao", 2));
-  assert.deepEqual([tk3(ag)?.estado, tk3(ag)?.motivo_falha], ["falhou", "corrija os testes"]);
+  assert.deepEqual([tk3(ag).estado, motivoDaFalhaDoTicket(ag.tentativas, tk3(ag))], ["falhou", "corrija os testes"]);
   assert.deepEqual(selecionarTrabalho(ag, true), []);
   const global = devolver(emDevolucao("resolver_conflito", "em_execucao", 2));
-  assert.deepEqual([tk3(global)?.estado, tk3(global)?.motivo_falha], ["falhou", "corrija os testes"]);
+  assert.deepEqual(
+    [tk3(global).estado, motivoDaFalhaDoTicket(global.tentativas, tk3(global))],
+    ["falhou", "corrija os testes"],
+  );
   assert.deepEqual(selecionarTrabalho(global, true), []);
 });
 
-test("CA-4, CA-7: falha de infraestrutura grava o motivo sem mexer no contador; sem motivo é recusada", () => {
+test("CA-4, CA-7: falha de infraestrutura grava causa e motivo sem reprovação; sem motivo é recusada", () => {
   const ag = emDevolucao("implementar", "em_execucao");
-  const novo = registrarFalhaTicket(ag, { ticket_id: id(), motivo: "timeout" }, { agora: t2 });
-  assert.deepEqual([tk3(novo)?.estado, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes], ["falhou", "timeout", 0]);
-  for (const e of [{ ticket_id: id() }, { ticket_id: id(), motivo: " " }]) {
-    assert.throws(() => registrarFalhaTicket(ag, e, { agora: t2 }));
+  const falha = { tipo: "falha_infraestrutura", causa: "tempo_limite", motivo: "timeout" };
+  const novo = registrarFalhaTicket(ag, { ticket_id: id(), falha }, { agora: t2 });
+  assert.equal(tk3(novo).estado, "falhou");
+  assert.deepEqual(novo.tentativas.at(-1)?.resultado, falha);
+  assert.equal(
+    tentativasDoTicket(novo.tentativas, 3).filter((tentativa) => tentativa.resultado?.tipo === "reprovacao").length,
+    0,
+  );
+  for (const entrada of [{ ticket_id: id() }, { ticket_id: id(), falha: { ...falha, motivo: " " } }]) {
+    assert.throws(() => registrarFalhaTicket(ag, entrada, { agora: t2 }));
   }
-  assert.equal(tk3(ag)?.estado, "em_execucao");
+  assert.equal(tk3(ag).estado, "em_execucao");
 });
 
 test("CA-5, CA-6, CA-12: devolução recusada em etapa, status ou ator errados", () => {
@@ -840,18 +902,101 @@ test("CA-5, CA-6, CA-12: devolução recusada em etapa, status ou ator errados",
   for (const ator of [AUDITOR, { tipo: "agente", trabalho_id: "1" } as Ator]) {
     assert.throws(() => devolver(ag, ator), ErroDeEscopo);
   }
-  assert.deepEqual([tk3(ag)?.estado, tk3(ag)?.devolucoes], ["em_execucao", 0]);
+  assert.equal(tk3(ag).estado, "em_execucao");
+  assert.deepEqual(tentativasDoTicket(ag.tentativas, 3), []);
   const fim = { ...ag, demanda: { ...ag.demanda, estado: "concluida" as const } };
   intacto(() => devolver(fim), fim);
 });
 
-test("CA-8, CA-9: reabrir limpa motivo e contador sem tocar em decisões e evidências", () => {
+test("CA-8, CA-9: reabrir grava marco e reinicia política sem apagar histórico, decisões ou evidências", () => {
   const falho = devolver(emDevolucao("implementar", "em_execucao", 2));
   const novo = reabrirTicket(falho, { ticket_id: id(), instrucao: "tente" }, AUDITOR, { agora: t2 });
   assert.deepEqual(
-    [tk3(novo)?.estado, tk3(novo)?.instrucao, tk3(novo)?.motivo_falha, tk3(novo)?.devolucoes],
-    ["aberto", "tente", undefined, 0],
+    [tk3(novo).estado, tk3(novo).instrucao, motivoDaFalhaDoTicket(novo.tentativas, tk3(novo))],
+    ["aberto", "tente", undefined],
   );
+  assert.deepEqual(novo.tentativas.slice(0, -1), falho.tentativas);
+  assert.deepEqual(novo.tentativas.at(-1), {
+    ticket: Endereco.doTicket("I-1", 3),
+    numero: 4,
+    inicio: t2,
+    fim: t2,
+    instrucao: "tente",
+    resultado: { tipo: "interrompida", por: AUDITOR },
+  });
+  assert.deepEqual(desdeAReabertura(tentativasDoTicket(novo.tentativas, 3)), []);
   assert.equal(novo.decisoes, falho.decisoes);
   assert.equal(novo.evidencias, falho.evidencias);
+  const executandoDeNovo = mudarTicket(novo, tk3(novo), "em_execucao", t2);
+  const devolvidoDeNovo = devolver(executandoDeNovo);
+  assert.equal(tk3(devolvidoDeNovo).estado, "aberto");
+  assert.equal(tentativasDoTicket(devolvidoDeNovo.tentativas, 3).length, 5);
+});
+
+test("mudarTicket encerra a Tentativa aberta ou sintetiza o início; preserva as dos outros tickets", () => {
+  const base = emExecucao("em_execucao");
+  const alvo = tk2(base);
+  const outroTicket = base.tickets[0];
+  assert.ok(outroTicket);
+  const deOutroTicket = comTentativaAberta(base.tentativas, outroTicket, "exec-outro", t0);
+  for (const aberta of [false, true]) {
+    const ag = {
+      ...base,
+      tentativas: aberta ? comTentativaAberta(deOutroTicket, alvo, "exec-alvo", t1) : deOutroTicket,
+    };
+    const antes = structuredClone(ag);
+    const concluido = mudarTicket(ag, alvo, "concluido", t2);
+    assert.deepEqual(ag, antes);
+    assert.deepEqual(tentativasDoTicket(concluido.tentativas, 1), tentativasDoTicket(ag.tentativas, 1));
+    assert.deepEqual(tentativasDoTicket(concluido.tentativas, 2), [
+      {
+        ticket: Endereco.doTicket("I-1", 2),
+        numero: 1,
+        inicio: aberta ? t1 : alvo.estado_alterado_em,
+        fim: t2,
+        ...(aberta && { processo_id: "exec-alvo" }),
+        resultado: { tipo: "sucesso" },
+      },
+    ]);
+    assert.equal(tk2(concluido).estado, "concluido");
+  }
+});
+
+test("mudarTicket conclui ticket aberto com Tentativa aberta e não inventa resultado ao reservar", () => {
+  const base = emExecucao("aberto");
+  const alvo = tk2(base);
+  const ag = { ...base, tentativas: comTentativaAberta(base.tentativas, alvo, "exec-ajustes", t1) };
+  const concluido = mudarTicket(ag, alvo, "concluido", t2);
+  assert.deepEqual(concluido.tentativas.at(-1), {
+    ticket: Endereco.doTicket("I-1", 2),
+    numero: 1,
+    inicio: t1,
+    fim: t2,
+    processo_id: "exec-ajustes",
+    resultado: { tipo: "sucesso" },
+  });
+  assert.equal(ag.tentativas.at(-1)?.fim, undefined);
+  assert.equal(mudarTicket(ag, alvo, "em_execucao", t2).tentativas, ag.tentativas);
+});
+
+test("decisão e aprovação do planejamento registram sucesso; reprovar fecha a Tentativa do planejar", () => {
+  const aprovada = decidirDemanda(enviada(), { aprovado: true }, AUDITOR, { agora: t1 });
+  assert.deepEqual(aprovada.tentativas.at(-1)?.resultado, { tipo: "sucesso" });
+  const recusada = decidirDemanda(enviada(), { aprovado: false, motivo: "fora" }, AUDITOR, { agora: t1 });
+  assert.deepEqual(recusada.tentativas.at(-1)?.resultado, { tipo: "interrompida", por: AUDITOR });
+  const base = submetido();
+  const ag = { ...base, tentativas: comTentativaAberta(base.tentativas, tk2(base), "exec-planejar", t1) };
+  const reprovado = reprovarPlanejamento(ag, { motivo: "falta teste" }, AUDITOR, { agora: t2 });
+  assert.deepEqual(reprovado.tentativas.at(-1), {
+    ticket: Endereco.doTicket("I-1", 2),
+    numero: 1,
+    processo_id: "exec-planejar",
+    inicio: t1,
+    fim: t2,
+    resultado: { tipo: "interrompida", por: AUDITOR, motivo: "falta teste" },
+  });
+  const planejado = confirmarAprovacaoPlanejamento(ag, {}, AUDITOR, { agora: t2 });
+  assert.deepEqual(planejado.tentativas.at(-1)?.resultado, { tipo: "sucesso" });
+  assert.equal(planejado.tentativas.at(-1)?.processo_id, "exec-planejar");
+  assert.equal(ag.tentativas.at(-1)?.fim, undefined);
 });

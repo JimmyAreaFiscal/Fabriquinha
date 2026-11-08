@@ -66,7 +66,6 @@ async function cenario() {
     estado: status,
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     ...extra,
   });
   gravarAgregadoPronto(banco, {
@@ -99,6 +98,7 @@ async function cenario() {
       ticket(3, "implementar", "concluido", { titulo: "Primeiro", rodada_id: 1 }),
       ticket(8, "encerrar_demanda", "aberto"),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -143,6 +143,7 @@ async function cenario() {
             Promise.resolve((["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(aprovada)),
         },
       );
+      return undefined;
     })();
     return { id, fim };
   };

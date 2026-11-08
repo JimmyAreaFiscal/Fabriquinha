@@ -3,8 +3,7 @@
 // devolvem HTML. O texto de agente passa sempre pelo `markdown-it` com `html: false`; o resto, por `escapar`.
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Dialogo } from "../../../aplicacao/gerente.ts";
-import type { ExecucaoSessao } from "../../../nucleo/sessoes.ts";
-import type { CabecalhoDemanda, MotivoDemanda } from "../../../aplicacao/sessoes_demanda.ts";
+import type { CabecalhoDemanda, ExecucaoDoChat, MotivoDemanda } from "../../../aplicacao/sessoes_demanda.ts";
 import type { Entrada } from "../../http/rotas/chat.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import { escapar, MODO_DA_SESSAO, nomeDoModelo, plural, rotuloDoModelo } from "../render.ts";
@@ -108,11 +107,12 @@ export function barraDeEstado(c: Cabecalho, modelo: string): string {
 const sistema = (html: string): string => `<div class="sistema">${html}</div>`;
 
 /** As linhas do sistema de uma execução: quando começou e, se já terminou, como terminou. */
-export function linhasDaExecucao(e: ExecucaoSessao): (Item & { em: string })[] {
+export function linhasDaExecucao(e: ExecucaoDoChat): (Item & { em: string })[] {
   const n = rotuloDaExecucao(e.id);
   const inicio = { chave: `inicio-${n}`, em: e.inicio, html: sistema(`Execução ${n} iniciada`) };
   if (e.fim == null) return [inicio];
-  const fim = e.falha ? `Execução ${n} falhou: ${escapar(e.erro)}` : `Execução ${n} encerrada`;
+  const porque = e.motivo === undefined ? "" : `: ${escapar(e.motivo)}`;
+  const fim = e.falha ? `Execução ${n} falhou${porque}` : `Execução ${n} encerrada`;
   return [inicio, { chave: `fim-${n}`, em: e.fim, html: sistema(fim) }];
 }
 

@@ -11,6 +11,8 @@ import { criarSessao, iniciarExecucao } from "../../nucleo/sessoes.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { comSessoesDoTicket } from "../../armazenamento/sessoes.ts";
+import { resolverEscopoDoAgente } from "./agente_demanda.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { principal } from "./cli.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -33,7 +35,6 @@ function cenario() {
     estado: "aberto",
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     ...extra,
   });
   gravarAgregadoPronto(banco, {
@@ -67,6 +68,7 @@ function cenario() {
       ticket(3, "implementar", { rodada_id: 2 }),
       ticket(4, "implementar", { rodada_id: 2 }),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -127,8 +129,35 @@ test("CA-1: ticket ver do próprio ticket é uma linha JSON com o endereço, a e
     etapa: "implementar",
     estado: "aberto",
     estado_alterado_em: em,
-    devolucoes: 0,
   });
+});
+
+test("ticket ver mostra o motivo da última Tentativa do ticket falho", async () => {
+  const { banco, env } = cenario();
+  comDemanda(banco, "I-206", (agregado) => ({
+    ...agregado,
+    tickets: agregado.tickets.map((ticket) => (ticket.ticket_id === 3 ? { ...ticket, estado: "falhou" } : ticket)),
+    tentativas: [
+      {
+        ticket: Endereco.doTicket("I-206", 3),
+        numero: 1,
+        inicio: em,
+        fim: em,
+        resultado: { tipo: "interrompida", por: { tipo: "fabriquinha" }, motivo: "teste de erro falhou" },
+      },
+    ],
+  }));
+  const resposta = await cli(env, ["ticket", "ver", "I-206.T3"]);
+  assert.equal(resposta.codigo, 0);
+  assert.deepEqual(JSON.parse(resposta.out), {
+    ticket: "I-206.T3",
+    rodada: "I-206.R2",
+    etapa: "implementar",
+    estado: "falhou",
+    estado_alterado_em: em,
+    motivo: "teste de erro falhou",
+  });
+  assert.equal(resolverEscopoDoAgente(banco, "inexistente"), undefined);
 });
 
 test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, e a aprovada só do próprio ticket", async () => {
@@ -236,8 +265,8 @@ function cenarioDeRevisao(estado: string, faseRodada: string, etapa: string, naR
   banco.prepare("UPDATE rodada SET estado = ?").run(faseRodada);
   banco
     .prepare(
-      `INSERT INTO ticket_demanda (demanda_id, ticket_id, rodada_id, etapa, estado, estado_alterado_em, devolucoes)
-       VALUES ('I-206', 9, ?, ?, 'aberto', ?, 0)`,
+      `INSERT INTO ticket_demanda (demanda_id, ticket_id, rodada_id, etapa, estado, estado_alterado_em)
+       VALUES ('I-206', 9, ?, ?, 'aberto', ?)`,
     )
     .run(naRodada ? 2 : null, etapa, em);
   banco.prepare("UPDATE ticket_demanda SET estado = 'concluido' WHERE ticket_id IN (1, 3, 4)").run();

@@ -10,7 +10,7 @@ import { Plano } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
+import { montarRetornoAoAgente, retornoAoAgenteDoTicket, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { confirmarAprovacaoPlanejamento, reabrirTicket, reprovarPlanejamento } from "../nucleo/transicoes_demanda.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { varrerBase } from "./retrabalho.ts";
@@ -47,7 +47,7 @@ export function iniciarOuRetomarPlanejamento(
   banco: DatabaseSync,
   demandaId: string,
   limiteMin: number,
-): { id: string; fim: Promise<void> } {
+): ReturnType<typeof iniciarExecucaoDemanda> {
   const ag = carregarDemanda(banco, demandaId);
   CICLO_DA_DEMANDA.exigir(ag.demanda, "planejar");
   const ticket = ticketPlanejar(ag);
@@ -74,9 +74,7 @@ export function iniciarOuRetomarPlanejamento(
             motivoDaReprovacao: existe(ultima.motivo, "a reprovação não tem motivo", "confira o banco"),
           }),
         )
-      : ticket.instrucao
-        ? montarRetornoAoAgente(tentativaAnteriorEmMemoria(enderecoDoTicket, { instrucao: ticket.instrucao }))
-        : undefined;
+      : retornoAoAgenteDoTicket(ag.tentativas, ticket.ticket_id);
   // Plano aprovado e depois descartado: a conversa que o produziu não volta, senão o agente reenvia o mesmo plano. O
   // replanejamento começa em sessão nova; já começado (execução depois da aprovação), é ele que se retoma.
   const iniciarEmSessaoNova =
