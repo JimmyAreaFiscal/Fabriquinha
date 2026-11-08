@@ -475,8 +475,7 @@ const ItemLimpeza = z.strictObject({
 });
 export const DemonstracaoLimpeza = z.strictObject({
   removidas: z.array(ItemLimpeza),
+  // A regra `nada_sobrou` é do Avaliador: sobras vazias.
   sobras: z.array(ItemLimpeza),
-  // Regra `nada_sobrou`.
-  aprovada: z.boolean(),
 });
 export type DemonstracaoLimpeza = z.infer<typeof DemonstracaoLimpeza>;

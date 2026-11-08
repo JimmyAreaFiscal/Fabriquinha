@@ -232,10 +232,10 @@ test("CA-1, CA-9, CA-11, CA-13, CA-14 e CA-15: PR final para a base configurada,
   const limpeza = ag.evidencias.find((e) => e.tipo === "demonstracao_limpeza")?.dados as {
     removidas: { tipo: string }[];
     sobras: unknown[];
-    aprovada: boolean;
   };
   assert.equal(limpeza.removidas.length, 6);
-  assert.deepEqual([limpeza.sobras, limpeza.aprovada], [[], true]);
+  assert.deepEqual(Object.keys(limpeza).toSorted(), ["removidas", "sobras"]);
+  assert.deepEqual(limpeza.sobras, []);
   const arvore = ag.evidencias.find((e) => e.tipo === "arvore_prs_criterios_custos")?.dados as {
     sha_integracao: string;
     custos: { internos: { situacao: string }; externos: { total: { valor: number } } };
@@ -473,6 +473,9 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
   assert.equal(parcial.demanda.estado, "encerrar_demanda");
   assert.equal(existsSync(c.demanda), false);
   assert.equal(merges().length, 1);
+  // Com sobras o Avaliador recusa a demonstração: nada é gravado, e o motivo vai à Tentativa.
+  assert.deepEqual(parcial.evidencias, []);
+  assert.match(c.motivo() ?? "", /não atende a regra nada_sobrou.*: a limpeza deixou/);
 
   // O Auditor reabre; o agendador reserva.
   rodarGit(c.repo, "worktree", "unlock", c.rodada);
@@ -492,8 +495,36 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
     removidas: unknown[];
     sobras: unknown[];
   };
-  assert.equal(limpeza.removidas.length, 6);
+  assert.equal(limpeza.removidas.length, 2);
   assert.deepEqual(limpeza.sobras, []);
+});
+
+test("árvore de PRs inválida falha a Tentativa, sem gravar evidência nem concluir", async () => {
+  const c = await cenario();
+  // Custo externo negativo: o total da árvore sai negativo, que o schema recusa.
+  comDemanda(c.banco, D, (a) => ({
+    ...a,
+    evidencias: [
+      {
+        demanda_id: D,
+        tipo: "custos_realizados",
+        autor: FABRIQUINHA,
+        dados: { sessoes: [{ ferramenta: "claude", sessao: "s1", linhas: [{ custo: -5 }] }] },
+        em,
+      },
+    ] as never,
+  }));
+  await conduzirEncerramentoDemanda(c.banco, D);
+
+  const ag = await integrarComoHumano(c);
+
+  assert.equal(c.ticket()?.estado, "falhou");
+  assert.match(c.motivo() ?? "", /custo/);
+  assert.deepEqual(
+    ag.evidencias.map((e) => e.tipo),
+    ["custos_realizados"],
+  );
+  assert.equal(ag.demanda.estado, "encerrar_demanda");
 });
 
 test("CA-16: fora de encerramento, ou sem o encerrar_demanda em execução, recusa sem efeito externo", async () => {

@@ -254,9 +254,9 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
     dados: z.object({ roteiro: Texto }),
     arquivos: Arquivos({ classes: ["video"], min: 1, max: 1 }),
   },
-  // Produzidas pela Fabriquinha no encerramento da rodada: a produtividade (produtividade_rodada.ts), que nunca passa
-  // por aqui, e o PR com o corpo completo, antes de qualquer condensação (F3 §4.7).
-  relatorio_produtividade: { dados: z.record(z.string(), z.unknown()), arquivos: HTML_UNICO },
+  // Produzidas pela Fabriquinha no encerramento da rodada: a produtividade (produtividade_rodada.ts) e o PR, com o
+  // corpo completo, antes de qualquer condensação (F3 §4.7), em `corpoCompleto`; o estado do PR vai para o Espaço.
+  relatorio_produtividade: { dados: z.record(z.string(), z.unknown()), arquivos: Arquivos({ max: 0 }) },
   pr_aberto: {
     dados: z.object({
       hospedagem: Hospedagem,
@@ -265,9 +265,10 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
       branch: z.string(),
       base: z.string(),
       head: Sha,
+      corpoCompleto: z.string(),
       condensado: z.boolean().meta({ description: "true se o corpo publicado passou pela condensação do F3 §4.7" }),
     }),
-    arquivos: Arquivos({ classes: ["texto"], min: 1, max: 1 }),
+    arquivos: Arquivos({ max: 0 }),
   },
   custos_realizados: tipado({ dados: CustosRealizados, arquivos: Arquivos({ max: 0 }) }),
   // O cruzamento do plano com a demanda congelada é da camada que submete.
