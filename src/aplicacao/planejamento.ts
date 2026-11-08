@@ -11,7 +11,7 @@ import { montarRetornoAoAgente, retornoAoAgenteDoTicket, tentativaAnteriorEmMemo
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 
 const contexto = () => ({ agora: new Date().toISOString() });
@@ -64,6 +64,6 @@ export function iniciarOuRetomarPlanejamento(
   // replanejamento começa em sessão nova; já começado (execução depois da aprovação), é ele que se retoma.
   const iniciarEmSessaoNova =
     ultima?.resultado === "aprovado" &&
-    !carregarSessoesDoTicket(banco, ref).execucoes.some((e) => e.inicio >= ultima.em);
+    !carregarTrabalhosDoTicket(banco, ref).execucoes.some((e) => e.inicio >= ultima.em);
   return iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", retomada, iniciarEmSessaoNova });
 }

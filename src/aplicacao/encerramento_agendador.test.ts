@@ -10,13 +10,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
-import { criarSessao, encerrarExecucao, iniciarExecucao } from "../nucleo/sessoes.ts";
+import { criarTrabalho, encerrarProcesso, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { configuracao } from "../armazenamento/servico.ts";
-import { comSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
@@ -117,22 +117,22 @@ async function cenario() {
     logs: [],
   });
   /** Agente falso: escreve na worktree da demanda, encerra a execução e fecha o ticket com verificações aprovadas. */
-  const iniciarExecucaoFalsa: NonNullable<DepsDespacho["iniciarExecucao"]> = (b, ref) => {
+  const iniciarExecucaoFalsa: NonNullable<DepsDespacho["iniciarProcesso"]> = (b, ref) => {
     const id = randomUUID();
     const sessao = { ...ref, id: randomUUID(), modo: "autonomo" as const, conversa_referencia: "c" };
-    comSessoesDoTicket(b, ref, (estado) => {
-      const sessoes = criarSessao(estado.sessoes, sessao);
+    comTrabalhosDoTicket(b, ref, (estado) => {
+      const sessoes = criarTrabalho(estado.sessoes, sessao);
       return {
         ...estado,
         sessoes,
-        execucoes: iniciarExecucao(sessoes, estado.execucoes, { id, sessao_id: sessao.id, inicio: em, falha: false }),
+        execucoes: iniciarProcesso(sessoes, estado.execucoes, { id, trabalho_id: sessao.id, inicio: em, falha: false }),
       };
     });
     writeFileSync(join(demanda, "resolvido.txt"), "base incorporada\n");
     const fim = (async () => {
-      comSessoesDoTicket(b, ref, (estado) => ({
+      comTrabalhosDoTicket(b, ref, (estado) => ({
         ...estado,
-        execucoes: encerrarExecucao(estado.execucoes, id, em, false),
+        execucoes: encerrarProcesso(estado.execucoes, id, em, false),
       }));
       await fecharTicketDemanda(
         b,
@@ -148,7 +148,7 @@ async function cenario() {
     return { id, fim };
   };
   const deps: DepsDespacho = {
-    iniciarExecucao: iniciarExecucaoFalsa,
+    iniciarProcesso: iniciarExecucaoFalsa,
     verificacao: { intervaloMs: 1, carenciaMs: 0 },
   };
   const config = configuracao(banco);

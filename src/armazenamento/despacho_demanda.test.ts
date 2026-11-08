@@ -41,9 +41,9 @@ const decisao = (b: DatabaseSync, id: string, n: number, decisaoId: number, resu
 let execucoes = 0;
 const execucao = (b: DatabaseSync, id: string, n: number, inicio: string, fim: string | null) => {
   const sessao = `S-${id}-${String(n)}`;
-  b.exec(`INSERT OR IGNORE INTO sessao VALUES ('${sessao}', '${id}', ${String(n)}, 'autonomo', 'ref')`);
+  b.exec(`INSERT OR IGNORE INTO trabalho_agentico VALUES ('${sessao}', '${id}', ${String(n)}, 'autonomo', 'ref')`);
   b.exec(
-    `INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('E-${String(++execucoes)}', '${sessao}', ${inicio}, ${fim ?? "NULL"}, 0)`,
+    `INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('E-${String(++execucoes)}', '${sessao}', ${inicio}, ${fim ?? "NULL"}, 0)`,
   );
 };
 
@@ -92,13 +92,13 @@ test("retoma o planejar reprovado e só depois de uma recusa nova", () => {
   assert.deepEqual(retomadasDePlanejamento(b), []); // sem recusa
   decisao(b, "I-1", 1, 1, "reprovado");
   assert.deepEqual(retomadasDePlanejamento(b), []); // CA-2: execução aberta, o pi vivo recebe o motivo
-  b.exec(`UPDATE execucao_sessao SET fim = ${T}`);
+  b.exec(`UPDATE processo_do_trabalho SET fim = ${T}`);
   assert.deepEqual(retomadasDePlanejamento(b), ["I-1"]); // CA-3: sem pi vivo, a retomada leva o motivo
   execucao(b, "I-1", 1, DEPOIS, null); // retomada: o agente saiu sem submeter, não retoma em laço
   b.exec(`INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, processo_id)
     VALUES ('I-1', 1, 1, ${DEPOIS}, 'E-${String(execucoes)}')`);
   assert.deepEqual(retomadasDePlanejamento(b), []);
-  b.exec(`UPDATE execucao_sessao SET fim = ${DEPOIS}`);
+  b.exec(`UPDATE processo_do_trabalho SET fim = ${DEPOIS}`);
   assert.deepEqual(retomadasDePlanejamento(b), []);
   b.exec(`UPDATE decisao_ticket SET em = '2026-01-03T00:00:00.000Z'`); // recusa nova
   assert.deepEqual(retomadasDePlanejamento(b), ["I-1"]);

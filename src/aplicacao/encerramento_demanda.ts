@@ -35,7 +35,7 @@ import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { carregarSessoesDaDemanda } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
 import { lerPR, type OpcoesVerificacao, publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
@@ -250,7 +250,7 @@ function gravarEvidencias(
   completa = true,
 ): void {
   const ag = carregarDemanda(banco, demanda_id);
-  const { sessoes, execucoes, usos } = carregarSessoesDaDemanda(banco, demanda_id);
+  const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(banco, demanda_id);
   const dados = {
     ...(completa && { arvore_prs_criterios_custos: montarArvorePRs(ag, sessoes, execucoes, usos) }),
     demonstracao_limpeza: limpeza,

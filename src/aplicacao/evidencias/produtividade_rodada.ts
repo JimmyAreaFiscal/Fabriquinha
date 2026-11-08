@@ -3,11 +3,11 @@
 import type { TicketDemanda } from "../../nucleo/agregado_demanda.ts";
 import {
   totalDoTicket,
-  type ExecucaoSessao,
-  type Sessao,
+  type ProcessoDoTrabalho,
+  type TrabalhoGerenciado,
   type TotalUso,
   type UsoModeloExecucao,
-} from "../../nucleo/sessoes.ts";
+} from "../../nucleo/trabalho_agentico.ts";
 import { formatarTicketRef } from "../../nucleo/demanda.ts";
 
 interface ConsumoRodada {
@@ -40,8 +40,8 @@ const consumo = (t: TotalUso, execucoes: number): ConsumoRodada => ({
 });
 
 export function produtividadeDaRodada(
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
+  sessoes: readonly TrabalhoGerenciado[],
+  execucoes: readonly ProcessoDoTrabalho[],
   usos: readonly UsoModeloExecucao[],
   tickets: readonly TicketDemanda[],
 ): ProdutividadeRodada {
@@ -49,7 +49,7 @@ export function produtividadeDaRodada(
     const ids = new Set(
       sessoes.filter((s) => s.demanda_id === t.demanda_id && s.ticket_id === t.ticket_id).map((s) => s.id),
     );
-    const execs = new Set(execucoes.filter((e) => ids.has(e.sessao_id)).map((e) => e.id));
+    const execs = new Set(execucoes.filter((e) => ids.has(e.trabalho_id)).map((e) => e.id));
     const total = totalDoTicket(sessoes, execucoes, usos, t);
     // Sem nenhum uso registrado não há custo medido: nunca vale zero.
     const semMedida = !usos.some((u) => execs.has(u.execucao_id));

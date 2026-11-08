@@ -5,19 +5,19 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { AUDITOR, Ator } from "../nucleo/ator.ts";
-import type { ModoExecucao } from "../nucleo/sessoes.ts";
+import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
-import type { ExecucaoSessao, Sessao } from "../nucleo/sessoes.ts";
+import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../nucleo/trabalho_agentico.ts";
 import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { arquivoDaSessao } from "../infra/registro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
-import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
 import { retomarSessaoAjustes } from "./sessao_ajustes.ts";
 import {
@@ -154,7 +154,7 @@ export type MotivoDemanda = "conversa" | "dialogo" | "falha" | "gate_demanda";
 interface InfoSessaoDemanda {
   sessao: string;
   projeto: string;
-  modo: ModoExecucao;
+  modo: ModoTrabalho;
   execucao: string;
   modelo?: Modelo;
   estado: Estado;
@@ -164,7 +164,7 @@ interface InfoSessaoDemanda {
 }
 
 /** A execução como o chat a mostra: o motivo da falha é o da Tentativa que ela abriu. */
-export type ExecucaoDoChat = ExecucaoSessao & { motivo?: string };
+export type ExecucaoDoChat = ProcessoDoTrabalho & { motivo?: string };
 
 /** O que a barra de estado e as linhas do sistema do chat leem; demanda, rodada e ticket pelo endereço público (D09). */
 export interface CabecalhoDemanda {
@@ -194,17 +194,17 @@ export interface ChatDemanda {
 export interface Carregada {
   ag: AgregadoDemanda;
   ticket: TicketDemanda;
-  sessao: Sessao;
-  execucoes: ExecucaoSessao[];
+  sessao: TrabalhoGerenciado;
+  execucoes: ProcessoDoTrabalho[];
 }
 
-type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
+type TicketRef = Pick<TrabalhoGerenciado, "demanda_id" | "ticket_id">;
 
 /** O ticket dono da sessão; `undefined` se o id não é de uma sessão da demanda. */
 const donoDaSessao = (banco: DatabaseSync, id: string): TicketRef | undefined =>
-  banco.prepare("SELECT demanda_id, ticket_id FROM sessao WHERE id = ?").get(id) as TicketRef | undefined;
+  banco.prepare("SELECT demanda_id, ticket_id FROM trabalho_agentico WHERE id = ?").get(id) as TicketRef | undefined;
 
-const ultimaDe = ({ sessao, execucoes }: Carregada, quando: "primeira" | "ultima" = "ultima"): ExecucaoSessao =>
+const ultimaDe = ({ sessao, execucoes }: Carregada, quando: "primeira" | "ultima" = "ultima"): ProcessoDoTrabalho =>
   encontrado(
     quando === "ultima" ? execucoes.at(-1) : execucoes[0],
     `a sessão ${sessao.id} não tem execução`,
@@ -214,7 +214,7 @@ const ultimaDe = ({ sessao, execucoes }: Carregada, quando: "primeira" | "ultima
 function carregar(banco: DatabaseSync, ref: TicketRef, id: string): Carregada {
   const erro = [`a sessão ${id} não existe`, "confira o endereço do chat"] as const;
   const ag = carregarDemanda(banco, ref.demanda_id);
-  const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
+  const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
   return {
     ag,
     ticket: encontrado(
@@ -225,7 +225,7 @@ function carregar(banco: DatabaseSync, ref: TicketRef, id: string): Carregada {
       sessoes.find((s) => s.id === id),
       ...erro,
     ),
-    execucoes: execucoes.filter((e) => e.sessao_id === id),
+    execucoes: execucoes.filter((e) => e.trabalho_id === id),
   };
 }
 

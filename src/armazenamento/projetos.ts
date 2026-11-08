@@ -177,8 +177,8 @@ export function gravarProjeto(banco: DatabaseSync, projeto: Projeto): void {
 
 const DAS_TAREFAS = "SELECT id FROM tarefa WHERE projeto = $p";
 const DAS_DEMANDAS = "SELECT id FROM demanda WHERE projeto = $p";
-const DAS_SESSOES = `SELECT id FROM sessao WHERE demanda_id IN (${DAS_DEMANDAS})`;
-const DAS_EXECUCOES_SESSAO = `SELECT id FROM execucao_sessao WHERE sessao_id IN (${DAS_SESSOES})`;
+const DAS_TRABALHOS = `SELECT id FROM trabalho_agentico WHERE demanda_id IN (${DAS_DEMANDAS})`;
+const DAS_PROCESSOS = `SELECT id FROM processo_do_trabalho WHERE trabalho_id IN (${DAS_TRABALHOS})`;
 const DAS_EVIDENCIAS_DEMANDA = `SELECT id FROM evidencia_demanda WHERE demanda_id IN (${DAS_DEMANDAS})`;
 const DAS_AVALIACOES = "SELECT id FROM avaliacao WHERE projeto = $p";
 
@@ -191,7 +191,7 @@ export function ticketEmAndamentoDoProjeto(
     .prepare(
       `SELECT t.demanda_id, t.ticket_id FROM ticket_demanda t
        WHERE t.demanda_id IN (${DAS_DEMANDAS}) AND (t.estado = 'em_execucao' OR EXISTS (
-         SELECT 1 FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
+         SELECT 1 FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id
          WHERE s.demanda_id = t.demanda_id AND s.ticket_id = t.ticket_id AND e.fim IS NULL))
        ORDER BY t.rowid LIMIT 1`,
     )
@@ -219,10 +219,12 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
     banco.prepare(`SELECT id FROM execucao_simulada WHERE tarefa IN (${DAS_TAREFAS})`).all(p) as { id: number }[]
   ).map((e) => e.id);
   const execucoes = (
-    banco.prepare(`SELECT id FROM execucao_sessao WHERE id IN (${DAS_EXECUCOES_SESSAO})`).all(p) as { id: string }[]
+    banco.prepare(`SELECT id FROM processo_do_trabalho WHERE id IN (${DAS_PROCESSOS})`).all(p) as {
+      id: string;
+    }[]
   ).map((e) => e.id);
   const sessoes = (
-    banco.prepare(`SELECT conversa_referencia FROM sessao WHERE id IN (${DAS_SESSOES})`).all(p) as {
+    banco.prepare(`SELECT conversa_referencia FROM trabalho_agentico WHERE id IN (${DAS_TRABALHOS})`).all(p) as {
       conversa_referencia: string;
     }[]
   ).map((s) => s.conversa_referencia);
@@ -246,11 +248,11 @@ export function apagarProjeto(banco: DatabaseSync, nome: string) {
     `sha IN (SELECT sha FROM commit_ticket_demanda WHERE demanda_id IN (${DAS_DEMANDAS}))`,
   );
   apagar("commit_ticket_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("uso_modelo_historico", `execucao_id IN (${DAS_EXECUCOES_SESSAO})`);
-  apagar("uso_modelo_execucao", `execucao_id IN (${DAS_EXECUCOES_SESSAO})`);
-  apagar("execucao_sessao", `sessao_id IN (${DAS_SESSOES})`);
-  apagar("sessao", `demanda_id IN (${DAS_DEMANDAS})`);
-  apagar("sessao_externa_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("uso_modelo_historico", `execucao_id IN (${DAS_PROCESSOS})`);
+  apagar("uso_modelo_execucao", `execucao_id IN (${DAS_PROCESSOS})`);
+  apagar("processo_do_trabalho", `trabalho_id IN (${DAS_TRABALHOS})`);
+  apagar("trabalho_agentico", `demanda_id IN (${DAS_DEMANDAS})`);
+  apagar("trabalho_nao_gerenciado", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("iteracao_demanda", `demanda_id IN (${DAS_DEMANDAS})`);
   apagar("proposta_demanda", `demanda_id IN (${DAS_DEMANDAS}) OR demanda_criada_id IN (${DAS_DEMANDAS})`);
   apagar("decisao_ticket", `demanda_id IN (${DAS_DEMANDAS})`);

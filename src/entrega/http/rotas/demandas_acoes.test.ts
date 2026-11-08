@@ -337,7 +337,9 @@ async function comSessao() {
   });
   assert.equal(r.status, 200);
   assert.deepEqual(Object.keys(r.json()), ["sessao"]);
-  const { id: sessao } = c.banco.prepare("SELECT id FROM sessao WHERE ticket_id = 9").get() as { id: string };
+  const { id: sessao } = c.banco.prepare("SELECT id FROM trabalho_agentico WHERE ticket_id = 9").get() as {
+    id: string;
+  };
   // A conversa é a do chat da sessão do ticket; o pi de pé e ocioso espera o Auditor.
   await ate(async () => (await chat(c, sessao)).sessao.motivo === "conversa");
   return { ...c, execucao: r.json<{ sessao: string }>().sessao, sessao };
@@ -385,7 +387,7 @@ test("CA-24: reprovar o PR com motivo e nota diz que a reprovação não leva no
 });
 
 const execucoesAbertas = ({ banco }: Cenario) =>
-  (banco.prepare("SELECT count(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number }).n;
+  (banco.prepare("SELECT count(*) AS n FROM processo_do_trabalho WHERE fim IS NULL").get() as { n: number }).n;
 
 test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e com ele parado", async () => {
   const c = await comSessao();
@@ -410,7 +412,7 @@ test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e
   );
   await ate(async () => (await conversa(c, c.sessao)).includes("com o pi parado"));
   const retomada = c.banco
-    .prepare("SELECT id FROM execucao_sessao WHERE sessao_id = ? ORDER BY inicio DESC LIMIT 1")
+    .prepare("SELECT id FROM processo_do_trabalho WHERE trabalho_id = ? ORDER BY inicio DESC LIMIT 1")
     .get(c.sessao) as { id: string };
   await ate(() => Promise.resolve(situacao(c.sessao) !== undefined));
   encerrar(retomada.id);

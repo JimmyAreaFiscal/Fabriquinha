@@ -452,8 +452,8 @@ const demandaComExecucao = (andamento: boolean) => `
   INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca', 'problema', 'd', 'em_execucao', '2026-10-12T14:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
   INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
     VALUES ('I-1', 1, 'implementar', '${andamento ? "em_execucao" : "concluido"}', '2026-10-12T14:00:00.000Z');
-  INSERT INTO sessao VALUES ('s', 'I-1', 1, 'autonomo', 's');
-  INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)
+  INSERT INTO trabalho_agentico VALUES ('s', 'I-1', 1, 'autonomo', 's');
+  INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha)
     VALUES ('e', 's', '2026-10-12T14:20:00.000Z', ${andamento ? "NULL" : "'2026-10-12T15:00:00.000Z'"}, 0);`;
 
 test("remover: apaga o projeto e tudo dele, responde { avisos } e o projeto some do GET (404 no detalhe)", async () => {

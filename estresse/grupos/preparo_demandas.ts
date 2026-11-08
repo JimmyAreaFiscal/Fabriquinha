@@ -15,7 +15,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { importarAchados } from "../../src/armazenamento/avaliacoes.ts";
 import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { criarTarefa, criarUsuarioSimulado } from "../../src/armazenamento/simulacao.ts";
-import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
@@ -220,11 +220,17 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
   /** Uma sessão interativa do ticket `ticket_id` com a execução dada. */
   function abrirSessao(demanda_id: string, ticket_id: number, aberta: boolean): string {
     const sessao = `sd-${String(proximo())}`;
-    comSessoesDoTicket(banco, { demanda_id, ticket_id }, (e) => ({
+    comTrabalhosDoTicket(banco, { demanda_id, ticket_id }, (e) => ({
       ...e,
       sessoes: [{ demanda_id, ticket_id, id: sessao, modo: "interativo", conversa_referencia: sessao }],
       execucoes: [
-        { id: `ed-${String(proximo())}`, sessao_id: sessao, inicio: em, ...(aberta ? {} : { fim: em }), falha: false },
+        {
+          id: `ed-${String(proximo())}`,
+          trabalho_id: sessao,
+          inicio: em,
+          ...(aberta ? {} : { fim: em }),
+          falha: false,
+        },
       ],
     }));
     return sessao;

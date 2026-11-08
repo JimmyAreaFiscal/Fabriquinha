@@ -46,7 +46,7 @@ export const demandasComSessaoNoPeriodo = (banco: DatabaseSync, projeto: string,
   (
     banco
       .prepare(
-        `SELECT DISTINCT d.id FROM demanda d JOIN sessao s ON s.demanda_id = d.id JOIN execucao_sessao e ON e.sessao_id = s.id
+        `SELECT DISTINCT d.id FROM demanda d JOIN trabalho_agentico s ON s.demanda_id = d.id JOIN processo_do_trabalho e ON e.trabalho_id = s.id
          WHERE d.projeto = ? AND substr(e.fim, 1, 10) BETWEEN ? AND ? ORDER BY d.id`,
       )
       .all(projeto, de, ate) as { id: string }[]
@@ -72,16 +72,35 @@ export function apagarAvaliacao(banco: DatabaseSync, id: string): void {
   });
 }
 
+/** Grava o grupo de processos do pi da avaliação enquanto ele vive, e `null` quando para. */
+export function gravarGrupoDaAvaliacao(banco: DatabaseSync, id: string, grupo: number | null): void {
+  banco.prepare("UPDATE avaliacao SET grupo_processo = ? WHERE id = ?").run(grupo, id);
+}
+
+/** Reinício do serviço: devolve os grupos dos pi que a instância anterior deixou e os zera, para quem chama matar. */
+export function recolherGruposDasAvaliacoes(banco: DatabaseSync): number[] {
+  return escrever(banco, () => {
+    const grupos = banco
+      .prepare("SELECT grupo_processo FROM avaliacao WHERE grupo_processo IS NOT NULL")
+      .all()
+      .map(({ grupo_processo }) => Number(grupo_processo));
+    banco.exec("UPDATE avaliacao SET grupo_processo = NULL");
+    return grupos;
+  });
+}
+
 export const listarAvaliacoes = (banco: DatabaseSync): (ResumoAvaliacao & { achados: number })[] =>
   banco
     .prepare(
-      `SELECT a.*, (SELECT count(*) FROM achado_avaliacao WHERE avaliacao_id = a.id) AS achados
+      `SELECT a.id, a.projeto, a.de, a.ate, a.pedido, a.criada_em, (SELECT count(*) FROM achado_avaliacao WHERE avaliacao_id = a.id) AS achados
        FROM avaliacao a ORDER BY a.criada_em DESC, a.rowid DESC`,
     )
     .all() as unknown as (ResumoAvaliacao & { achados: number })[];
 
 export function abrirAvaliacao(banco: DatabaseSync, id: string) {
-  const avaliacao = banco.prepare("SELECT * FROM avaliacao WHERE id = ?").get(id) as ResumoAvaliacao | undefined;
+  const avaliacao = banco
+    .prepare("SELECT id, projeto, de, ate, pedido, criada_em FROM avaliacao WHERE id = ?")
+    .get(id) as ResumoAvaliacao | undefined;
   if (!avaliacao) throw new ErroDeInexistente(`a avaliação ${id} não existe`, "confira o id da avaliação");
   const todas = (sql: string) => banco.prepare(sql).all(id);
   return {
@@ -154,7 +173,7 @@ export const sessoesDaDemandaNoPeriodo = (banco: DatabaseSync, demanda: string, 
   (
     banco
       .prepare(
-        `SELECT DISTINCT s.id FROM sessao s JOIN execucao_sessao e ON e.sessao_id = s.id
+        `SELECT DISTINCT s.id FROM trabalho_agentico s JOIN processo_do_trabalho e ON e.trabalho_id = s.id
          WHERE s.demanda_id = ? AND substr(e.fim, 1, 10) BETWEEN ? AND ? ORDER BY s.id`,
       )
       .all(demanda, de, ate) as { id: string }[]

@@ -79,7 +79,7 @@ test("a migração 41 dá a cada decisão o gate da etapa do ticket âncora", ()
   for (const etapa of Object.keys(TICKET_DA_ETAPA).filter((e) => e !== "implementar"))
     gravarDecisao(banco, etapa, 1, "aprovado");
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, VERSAO_ANTES - VERSAO_LINHA_DE_BASE + 1));
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_ANTES + 1);
   assert.deepEqual(

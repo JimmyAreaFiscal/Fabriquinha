@@ -9,8 +9,8 @@ const SEMEAR_PROJETO = (nome: string) =>
 const SEMEAR_DEMANDA = (id: string, projeto_: string) =>
   `INSERT INTO demanda VALUES ('${id}', '${projeto_}', 'Demanda ${id}', 'problema', 'd', 'em_execucao', '${FIM}', 'f', 's', 1, 'fabriquinha/${id}');
    INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${FIM}');
-   INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
-   INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', '${FIM}', '${FIM}', 0);`;
+   INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
+   INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', '${FIM}', '${FIM}', 0);`;
 
 /** `loja` com I-10, I-11 e I-12; `site` e `api` com uma demanda cada, todas com sessão terminada em outubro de 2026. */
 function semear(raiz: string): void {

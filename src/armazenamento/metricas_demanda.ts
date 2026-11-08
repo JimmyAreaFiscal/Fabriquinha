@@ -98,8 +98,8 @@ export const usoDaDemanda = (banco: DatabaseSync, demandaId: string): UsoDaExecu
       `SELECT ${DONO}, u.modelo_provedor, u.modelo_nome, u.tokens_entrada, u.tokens_saida,
          u.tokens_cache_leitura, u.tokens_cache_escrita, u.custo
        FROM uso_modelo_execucao u
-       JOIN execucao_sessao e ON e.id = u.execucao_id
-       JOIN sessao s ON s.id = e.sessao_id ${NO_TICKET}
+       JOIN processo_do_trabalho e ON e.id = u.execucao_id
+       JOIN trabalho_agentico s ON s.id = e.trabalho_id ${NO_TICKET}
        WHERE s.demanda_id = ? ORDER BY u.rowid`,
     )
     .all(demandaId)
@@ -118,8 +118,8 @@ export const usoDaDemanda = (banco: DatabaseSync, demandaId: string): UsoDaExecu
 export const execucoesDaDemanda = (banco: DatabaseSync, demandaId: string): ExecucaoDoTicket[] =>
   banco
     .prepare(
-      `SELECT ${DONO}, e.falha FROM execucao_sessao e
-       JOIN sessao s ON s.id = e.sessao_id ${NO_TICKET}
+      `SELECT ${DONO}, e.falha FROM processo_do_trabalho e
+       JOIN trabalho_agentico s ON s.id = e.trabalho_id ${NO_TICKET}
        WHERE s.demanda_id = ?`,
     )
     .all(demandaId)
@@ -171,7 +171,7 @@ export const linhasExternasDaDemanda = (banco: DatabaseSync, demandaId: string):
     .prepare(
       `SELECT x.ferramenta, x.sessao, e.rodada_id, json_extract(l.value, '$.custo') AS custo
        FROM evidencia_demanda e, json_each(e.dados, '$.sessoes') s, json_each(s.value, '$.linhas') l
-       JOIN sessao_externa_demanda x ON x.demanda_id = e.demanda_id
+       JOIN trabalho_nao_gerenciado x ON x.demanda_id = e.demanda_id
          AND x.ferramenta = json_extract(s.value, '$.ferramenta') AND x.sessao = json_extract(s.value, '$.sessao')
        WHERE e.demanda_id = ? AND e.tipo = 'custos_realizados' AND e.ticket_id IS NULL
          AND json_type(e.dados, '$.sessoes') = 'array'
@@ -218,10 +218,10 @@ export interface ExecucaoNoPeriodo {
 export const execucoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): ExecucaoNoPeriodo[] =>
   banco
     .prepare(
-      `SELECT e.id, e.sessao_id, s.ticket_id, t.rodada_id, d.id AS demanda, d.projeto, d.titulo, d.estado, t.etapa,
+      `SELECT e.id, e.trabalho_id, s.ticket_id, t.rodada_id, d.id AS demanda, d.projeto, d.titulo, d.estado, t.etapa,
          e.inicio, e.falha,
          MAX(0, ROUND((julianday(COALESCE(e.fim, e.inicio)) - julianday(e.inicio)) * 86400000)) AS duracao_ms
-       FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id
+       FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id
          JOIN ticket_demanda t ON t.demanda_id = s.demanda_id AND t.ticket_id = s.ticket_id
          JOIN demanda d ON d.id = s.demanda_id
        WHERE e.inicio >= $inicio AND e.inicio < $fim AND ${NO_RECORTE} ORDER BY e.inicio, e.id`,
@@ -229,7 +229,7 @@ export const execucoesNoPeriodo = (banco: DatabaseSync, recorte: Recorte): Execu
     .all(parametros(recorte))
     .map((l) => ({
       execucao: l.id as string,
-      sessao: l.sessao_id as string,
+      sessao: l.trabalho_id as string,
       ticket: Number(l.ticket_id),
       rodada: rodadaDe(l),
       demanda: l.demanda as string,
@@ -249,8 +249,8 @@ export const usoNoPeriodo = (banco: DatabaseSync, recorte: Recorte): UsoNoPeriod
     .prepare(
       `SELECT u.execucao_id, u.modelo_provedor, u.modelo_nome, u.tokens_entrada, u.tokens_saida,
          u.tokens_cache_leitura, u.tokens_cache_escrita, u.custo
-       FROM uso_modelo_execucao u JOIN execucao_sessao e ON e.id = u.execucao_id
-         JOIN sessao s ON s.id = e.sessao_id JOIN demanda d ON d.id = s.demanda_id
+       FROM uso_modelo_execucao u JOIN processo_do_trabalho e ON e.id = u.execucao_id
+         JOIN trabalho_agentico s ON s.id = e.trabalho_id JOIN demanda d ON d.id = s.demanda_id
        WHERE e.inicio >= $inicio AND e.inicio < $fim AND ${NO_RECORTE} ORDER BY u.rowid`,
     )
     .all(parametros(recorte))

@@ -13,7 +13,7 @@ import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../src/aplic
 import { fecharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
 import { iniciarOuRetomarPlanejamento } from "../src/aplicacao/planejamento.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
-import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { base, type Cenario, ciclo, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
@@ -62,7 +62,7 @@ export const verificacoes = (aprovada: boolean): RegistroDaVerificacao[] =>
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações dadas (o `aprovadas()` é lido a cada fechamento). */
 export const despacho = (aprovadas: () => boolean = () => true): DepsDespacho => ({
-  iniciarExecucao: (banco, t, opcoes) =>
+  iniciarProcesso: (banco, t, opcoes) =>
     iniciarExecucaoDemanda(banco, t, {
       ...opcoes,
       fechar: (b, ref, r) =>
@@ -135,7 +135,7 @@ export const statusDe = (c: Cenario, ref: { demanda_id: string; ticket_id: numbe
   demanda(c, ref.demanda_id).tickets.find((t) => t.ticket_id === ref.ticket_id)?.estado;
 export const rodadaDe = (c: Cenario, id: string, n: number) => demanda(c, id).rodadas.find((r) => r.rodada_id === n);
 export const execucoesDe = (c: Cenario, ref: { demanda_id: string; ticket_id: number }) =>
-  carregarSessoesDoTicket(c.banco, ref).execucoes;
+  carregarTrabalhosDoTicket(c.banco, ref).execucoes;
 
 export const agora = () => new Date().toISOString();
 
@@ -192,7 +192,7 @@ export async function despacharComAgente(
   await Promise.all(fins);
 }
 
-/** O Agente da execução aberta do ticket: o `trabalho_id` é o `execucao_sessao.id` dela. */
+/** O Agente da execução aberta do ticket: o `trabalho_id` é o `processo_do_trabalho.id` dela. */
 export function agenteDaExecucaoAberta(c: Cenario, ref: { demanda_id: string; ticket_id: number }): Ator {
   const aberta = execucoesDe(c, ref).find((e) => !e.fim);
   assert.ok(aberta, "o agente age com a execução do ticket aberta");

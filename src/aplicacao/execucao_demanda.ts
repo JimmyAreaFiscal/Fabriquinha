@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import type { ModoExecucao } from "../nucleo/sessoes.ts";
+import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
@@ -20,15 +20,15 @@ import {
   falhaQueExigeOAuditor,
 } from "../nucleo/tentativa.ts";
 import {
-  criarSessao,
-  encerrarExecucao,
-  iniciarExecucao,
+  criarTrabalho,
+  encerrarProcesso,
+  iniciarProcesso,
   registrarUso,
-  retomarSessao,
-  type ExecucaoSessao,
-  type Sessao,
+  retomarTrabalho,
+  type ProcessoDoTrabalho,
+  type TrabalhoGerenciado,
   type UsoModeloExecucao,
-} from "../nucleo/sessoes.ts";
+} from "../nucleo/trabalho_agentico.ts";
 import { varrerBase } from "./retrabalho.ts";
 import { somar } from "../nucleo/uso.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -39,11 +39,11 @@ import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
 import { anotar, arquivoDaSessao } from "../infra/registro.ts";
 import {
-  carregarSessoesDaDemanda,
-  carregarSessoesDoTicket,
-  comSessoesDoTicket,
-  execucoesAbertasDaDemanda,
-} from "../armazenamento/sessoes.ts";
+  carregarTrabalhosDaDemanda,
+  carregarTrabalhosDoTicket,
+  comTrabalhosDoTicket,
+  processosAbertos,
+} from "../armazenamento/trabalho_agentico.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
@@ -54,11 +54,11 @@ import { argumentosPiDemanda } from "./pi_demanda.ts";
 import { type ContextoDemanda, montarPromptDemanda } from "./prompt_demanda.ts";
 import { perguntasRespondidasNaSessao } from "./sessoes_demanda.ts";
 
-type TicketRef = Pick<Sessao, "demanda_id" | "ticket_id">;
+type TicketRef = Pick<TrabalhoGerenciado, "demanda_id" | "ticket_id">;
 
 export interface OpcoesExecucaoDemanda {
   limiteMin: number;
-  modo?: Exclude<ModoExecucao, "consulta">;
+  modo?: Exclude<ModoTrabalho, "consulta">;
   /** Devolução ou reabertura do Auditor: o motivo vai ao prompt. */
   retomada?: ContextoDemanda["retomada"];
   /** Abre sessão nova mesmo com sessão no ticket: a conversa anterior foi descartada (plano aprovado e reaberto). */
@@ -83,8 +83,8 @@ interface Conducao {
   ag: AgregadoDemanda;
   ticket: TicketDemanda;
   projeto: Projeto;
-  sessao: Sessao;
-  execucao: ExecucaoSessao;
+  sessao: TrabalhoGerenciado;
+  execucao: ProcessoDoTrabalho;
   opcoes: OpcoesExecucaoDemanda;
 }
 
@@ -102,7 +102,7 @@ function gravarGrupo({ banco, ref, execucao }: Conducao, pgid: number): void {
   ativas.set(execucao.id, viva);
   // Interrompida durante a preparação: o pi que acaba de subir recebe o término já.
   if (viva.interrompida) sinalNoGrupo(pgid, "SIGTERM");
-  comSessoesDoTicket(banco, ref, (estado) => ({
+  comTrabalhosDoTicket(banco, ref, (estado) => ({
     ...estado,
     execucoes: estado.execucoes.map((e) => (e.id === execucao.id ? { ...e, grupo_processo: pgid } : e)),
   }));
@@ -136,9 +136,9 @@ function coletarUso(c: Encerravel, fim: string, log: string): UsoModeloExecucao[
 function encerrar(c: Encerravel, falhou: boolean, log: string): void {
   const fim = new Date().toISOString();
   const usos = coletarUso(c, fim, log);
-  comSessoesDoTicket(c.banco, c.ref, (estado) => ({
+  comTrabalhosDoTicket(c.banco, c.ref, (estado) => ({
     ...estado,
-    execucoes: encerrarExecucao(estado.execucoes, c.execucao.id, fim, falhou),
+    execucoes: encerrarProcesso(estado.execucoes, c.execucao.id, fim, falhou),
     usos: usos.reduce((acc, u) => registrarUso(acc, u), estado.usos),
   }));
 }
@@ -150,7 +150,7 @@ function perguntasDosTicketsReprovadosDaRodada({
   ticket,
 }: Conducao): ContextoDemanda["perguntasDasRevisoesAnteriores"] {
   const raiz = raizDo(banco);
-  const { sessoes } = carregarSessoesDaDemanda(banco, ag.demanda.id);
+  const { sessoes } = carregarTrabalhosDaDemanda(banco, ag.demanda.id);
   const idsDaRodada = new Set(ag.tickets.filter((t) => t.rodada_id === ticket.rodada_id).map((t) => t.ticket_id));
   return new Map(
     ag.decisoes
@@ -285,22 +285,22 @@ export function iniciarExecucaoDemanda(
     etapaDoProjeto: projeto.etapas.find((e) => e.etapa === ticket.etapa)?.configuracao_agente,
     padrao: {},
   });
-  const abrir = (sessao_id: string): ExecucaoSessao => ({
+  const abrir = (trabalho_id: string): ProcessoDoTrabalho => ({
     id: randomUUID(),
-    sessao_id,
+    trabalho_id,
     inicio: new Date().toISOString(),
     falha: false,
     configuracao_agente: configuracaoAgente,
   });
-  let sessao!: Sessao;
-  let execucao!: ExecucaoSessao;
-  comSessoesDoTicket(banco, ref, (estado) => {
+  let sessao!: TrabalhoGerenciado;
+  let execucao!: ProcessoDoTrabalho;
+  comTrabalhosDoTicket(banco, ref, (estado) => {
     // Com mais de uma sessão no ticket, retoma-se a mais recente.
     const existente = opcoes.iniciarEmSessaoNova ? undefined : estado.sessoes.at(-1);
     if (existente) {
       sessao = existente;
       execucao = abrir(sessao.id);
-      return { ...estado, execucoes: retomarSessao(estado.sessoes, estado.execucoes, execucao) };
+      return { ...estado, execucoes: retomarTrabalho(estado.sessoes, estado.execucoes, execucao) };
     }
     const id = randomUUID();
     sessao = {
@@ -311,8 +311,8 @@ export function iniciarExecucaoDemanda(
       conversa_referencia: id,
     };
     execucao = abrir(id);
-    const sessoes = criarSessao(estado.sessoes, sessao);
-    return { ...estado, sessoes, execucoes: iniciarExecucao(sessoes, estado.execucoes, execucao) };
+    const sessoes = criarTrabalho(estado.sessoes, sessao);
+    return { ...estado, sessoes, execucoes: iniciarProcesso(sessoes, estado.execucoes, execucao) };
   });
   comDemanda(banco, ref.demanda_id, (a) =>
     iniciarTentativaDoTicket(a, { ticket_id: ref.ticket_id, processo_id: execucao.id }, FABRIQUINHA, {
@@ -362,7 +362,7 @@ export async function aguardarCondutores(limiteMs: number, aposKillMs = 2000): P
  * (sem condutor, ex.: serviço reiniciado), SIGKILL e encerra direto. Sem execução aberta, recusa antes de escrever.
  */
 export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef): void {
-  const { execucoes } = carregarSessoesDoTicket(banco, ref);
+  const { execucoes } = carregarTrabalhosDoTicket(banco, ref);
   const execucao = existe(
     execucoes.find((e) => e.fim == null),
     `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não tem execução em andamento`,
@@ -379,7 +379,7 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
 
 /** Execução aberta sem condutor: SIGKILL no grupo gravado, encerra com falha e falha o ticket em execução, sem tocar etapa nem gate. */
 function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, falha: FalhaDaTentativa): void {
-  const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
+  const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
   const execucao = existe(
     execucoes.find((e) => e.id === id),
     `a execução ${id} não existe`,
@@ -387,7 +387,7 @@ function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, falha: Fa
   );
   if (execucao.grupo_processo != null) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
   const sessao = existe(
-    sessoes.find((s) => s.id === execucao.sessao_id),
+    sessoes.find((s) => s.id === execucao.trabalho_id),
     `a execução ${id} não tem sessão`,
     "confira o banco",
   );
@@ -399,7 +399,7 @@ function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, falha: Fa
 
 /** Reinício do serviço (§4.2): toda execução aberta é de uma instância anterior e falha, sem avançar etapa nem gate. */
 export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
-  for (const { id, demanda_id, ticket_id } of execucoesAbertasDaDemanda(banco)) {
+  for (const { id, demanda_id, ticket_id } of processosAbertos(banco)) {
     encerrarOrfa(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado);
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o

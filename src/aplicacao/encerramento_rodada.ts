@@ -25,7 +25,7 @@ import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { anotar } from "../infra/registro.ts";
-import { carregarSessoesDaDemanda } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
@@ -210,7 +210,7 @@ async function publicarEConferir(
   const log = join(raiz, "execucoes", `encerramento-${refRodada}.log`);
 
   const doRodada = ag.tickets.filter((t) => t.rodada_id === ref.rodada_id);
-  const { sessoes, execucoes, usos } = carregarSessoesDaDemanda(banco, demanda.id);
+  const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(banco, demanda.id);
   const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, doRodada);
   gravarEvidencia(banco, ticket, "relatorio_produtividade", relatorio);
 

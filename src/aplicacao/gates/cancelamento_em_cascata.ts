@@ -7,7 +7,7 @@ import type { ContextoDemanda } from "../../nucleo/transicoes_demanda.ts";
 import { escrever } from "../../armazenamento/banco.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
 import { dependentesNaoConcluidasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
-import { execucoesAbertasDaDemanda } from "../../armazenamento/sessoes.ts";
+import { processosAbertos } from "../../armazenamento/trabalho_agentico.ts";
 import { interromperExecucaoDemanda } from "../execucao_demanda.ts";
 
 /**
@@ -29,7 +29,7 @@ export function cancelandoEmCascata(
     for (const d of dependentes) comDemanda(banco, d, (ag) => cancelarDemanda(ag, ator, ctx));
     return { demanda: principal, canceladas: [id, ...dependentes] };
   });
-  const abertas = execucoesAbertasDaDemanda(banco).filter((e) => canceladas.includes(e.demanda_id));
+  const abertas = processosAbertos(banco).filter((e) => canceladas.includes(e.demanda_id));
   const tickets = new Map(
     abertas.map(({ demanda_id, ticket_id }) => [`${demanda_id}.${String(ticket_id)}`, { demanda_id, ticket_id }]),
   );

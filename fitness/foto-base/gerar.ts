@@ -18,11 +18,11 @@ import { Readable } from "node:stream";
 import { principal } from "../../src/entrega/cli/cli.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { EtapaTicket } from "../../src/nucleo/primitivos.ts";
-import { criarSessao, iniciarExecucao } from "../../src/nucleo/sessoes.ts";
+import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agentico.ts";
 import { montarPromptDemanda } from "../../src/aplicacao/prompt_demanda.ts";
 import { abrir } from "../../src/armazenamento/banco.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
 import { publicarPRDe } from "../../src/infra/repositorio/pr.ts";
 
 const raizDoCodigo = resolve(import.meta.dirname, "../..");
@@ -216,8 +216,8 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
         : []),
     ],
   } as unknown as AgregadoDemanda);
-  comSessoesDoTicket(banco, { demanda_id: "I-206", ticket_id: 7 }, (e) => {
-    const sessoes = criarSessao(e.sessoes, {
+  comTrabalhosDoTicket(banco, { demanda_id: "I-206", ticket_id: 7 }, (e) => {
+    const sessoes = criarTrabalho(e.sessoes, {
       id: "s-exec-7",
       demanda_id: "I-206",
       ticket_id: 7,
@@ -227,9 +227,9 @@ function montarCenarioDaAula(comRevisaoConcluida: boolean) {
     return {
       ...e,
       sessoes,
-      execucoes: iniciarExecucao(sessoes, e.execucoes, {
+      execucoes: iniciarProcesso(sessoes, e.execucoes, {
         id: "exec-7",
-        sessao_id: "s-exec-7",
+        trabalho_id: "s-exec-7",
         inicio: em,
         falha: false,
       }),

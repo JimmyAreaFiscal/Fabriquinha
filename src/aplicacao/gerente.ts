@@ -2,7 +2,7 @@
 // modos autônomo e interativo, guarda as execuções vivas com os diálogos de extensão pendentes (F4 §5.4) e repassa os
 // eventos a quem assina a sessão.
 import { AUDITOR, type Ator } from "../nucleo/ator.ts";
-import type { ModoExecucao } from "../nucleo/sessoes.ts";
+import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
 import type { Id } from "../nucleo/primitivos.ts";
 import {
@@ -228,7 +228,7 @@ export function encerrar(execucao: Id | string): void {
 /** @testes tipo que o teste usa para montar a entrada */
 export interface Processo {
   /** A execução de um ticket, ou a auditoria (`id` é a sessão), que roda como consulta e fica fora do agregado. */
-  execucao: { id: Id | string; sessaoPi: string; modo: ModoExecucao };
+  execucao: { id: Id | string; sessaoPi: string; modo: ModoTrabalho };
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;

@@ -132,13 +132,13 @@ function cenario(): DatabaseSync {
   }
   banco.exec(`
     INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id) VALUES ('I-305', 'I-303'), ('I-305', 'I-306');
-    INSERT INTO sessao VALUES
+    INSERT INTO trabalho_agentico VALUES
       ('s-conversa', 'I-300', 1, 'interativo', 'c1'),
       ('s-ajustes', 'I-303', 3, 'interativo', 'c3'),
       ('s-titulo', 'I-303', 5, 'autonomo', 'c5'),
       ('s-falha', 'I-303', 6, 'autonomo', 'c6'),
       ('s-viva', 'I-303', 7, 'autonomo', 'c7');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, grupo_processo) VALUES
       ('x1', 's-conversa', '${em(0)}', '${em(40)}', 0, NULL),
       ('x3', 's-ajustes', '${em(0)}', '${em(41)}', 0, NULL),
       ('x5', 's-titulo', '${em(30)}', NULL, 0, 4242),

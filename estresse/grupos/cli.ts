@@ -10,11 +10,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { COMANDOS_DEMANDA } from "../../src/entrega/cli/agente_demanda.ts";
 import { COMANDOS_DEMANDA_EXTERNA } from "../../src/entrega/cli/demanda_externa.ts";
 import type { AgregadoDemanda } from "../../src/nucleo/agregado_demanda.ts";
-import { criarSessao, iniciarExecucao } from "../../src/nucleo/sessoes.ts";
+import { criarTrabalho, iniciarProcesso } from "../../src/nucleo/trabalho_agentico.ts";
 import { registrar, submeterEvidencia } from "../../src/aplicacao/gestao_demandas.ts";
 import { abrir, escrever, novoId } from "../../src/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
-import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
 import type { Ambiente } from "../ambiente.ts";
 import { CHAMADAS } from "../medir.ts";
 
@@ -126,8 +126,8 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
       }) as unknown as AgregadoDemanda,
   ).demanda.id;
   const execucao = `ex-${demanda}`;
-  comSessoesDoTicket(banco, { demanda_id: demanda, ticket_id: 2 }, (e) => {
-    const sessoes = criarSessao(e.sessoes, {
+  comTrabalhosDoTicket(banco, { demanda_id: demanda, ticket_id: 2 }, (e) => {
+    const sessoes = criarTrabalho(e.sessoes, {
       id: `s-${execucao}`,
       demanda_id: demanda,
       ticket_id: 2,
@@ -137,9 +137,9 @@ function semearAgente(banco: DatabaseSync, estadoDaRodada: string, etapa: string
     return {
       ...e,
       sessoes,
-      execucoes: iniciarExecucao(sessoes, e.execucoes, {
+      execucoes: iniciarProcesso(sessoes, e.execucoes, {
         id: execucao,
-        sessao_id: `s-${execucao}`,
+        trabalho_id: `s-${execucao}`,
         inicio: em,
         falha: false,
       }),

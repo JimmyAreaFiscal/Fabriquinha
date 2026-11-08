@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
-import type { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../../nucleo/sessoes.ts";
+import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../../nucleo/trabalho_agentico.ts";
 import {
   corpoDoPRFinal,
   marcaDoPRFinal,
@@ -96,16 +96,16 @@ const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
         }
       : {}),
   });
-const sessao = (n: number): Sessao => ({
+const sessao = (n: number): TrabalhoGerenciado => ({
   id: `s${String(n)}`,
   demanda_id: "I-206",
   ticket_id: n,
   modo: "autonomo",
   conversa_referencia: "c",
 });
-const exec = (n: number): ExecucaoSessao => ({
+const exec = (n: number): ProcessoDoTrabalho => ({
   id: `e${String(n)}`,
-  sessao_id: `s${String(n)}`,
+  trabalho_id: `s${String(n)}`,
   inicio: em,
   falha: false,
 });

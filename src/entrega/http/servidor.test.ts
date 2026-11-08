@@ -303,8 +303,8 @@ test("GET /api/sessoes: as sessões do escopo com o estado calculado; filtro inv
       VALUES ('I-1', 1, 'implementar', 'falhou', '2026-10-11T12:05:00.000Z');
     INSERT INTO tentativa (demanda_id, ticket_id, numero, processo_id, inicio, fim, resultado_tipo, causa, motivo)
       VALUES ('I-1', 1, 1, 'x1', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 'interrompida', 'fabriquinha', 'testes falharam');
-    INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha)
+    INSERT INTO trabalho_agentico VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha)
       VALUES ('x1', '${SESSAO}', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1);
   `);
   const [sessao] = (

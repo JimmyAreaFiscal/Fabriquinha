@@ -148,12 +148,12 @@ test("CA-11 a CA-13: sessão de outra demanda vira aviso; regrava de todas as cu
   assert.deepEqual(avisos, ["a sessão s1 de claude já consta na demanda I-1 e não é contada de novo para I-2"]);
   custosEm(b, "e1", "I-1", null, [quem]);
   assert.deepEqual(registrarSessoesExternas(b, "I-1"), { avisos: [] });
-  assert.deepEqual(linhas(b, "SELECT ferramenta, sessao, demanda_id FROM sessao_externa_demanda ORDER BY sessao"), [
+  assert.deepEqual(linhas(b, "SELECT ferramenta, sessao, demanda_id FROM trabalho_nao_gerenciado ORDER BY sessao"), [
     { ferramenta: "claude", sessao: "s1", demanda_id: "I-1" },
     { ferramenta: "codex", sessao: "s3", demanda_id: "I-2" },
     { ferramenta: "codex", sessao: "sr", demanda_id: "I-1" },
   ]);
-  for (const tabela of ["execucao_sessao", "uso_modelo_execucao"]) {
+  for (const tabela of ["processo_do_trabalho", "uso_modelo_execucao"]) {
     assert.equal(b.prepare(`SELECT count(*) AS n FROM ${tabela}`).get()?.n, 0);
   }
 });

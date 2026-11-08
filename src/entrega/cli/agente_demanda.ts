@@ -1,5 +1,5 @@
 // CLI do agente de uma execução da demanda (comparacao-sdlc-implementacao.md §6): resolve `FABRIQUINHA_EXECUCAO` em
-// `execucao_sessao` e lê a própria demanda e o próprio ticket, sempre pelo endereço público (`I-206.T3`). Nenhuma regra
+// `processo_do_trabalho` e lê a própria demanda e o próprio ticket, sempre pelo endereço público (`I-206.T3`). Nenhuma regra
 // mora aqui: o escopo é conferido na fronteira e o resto é do domínio e da persistência.
 import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
@@ -25,7 +25,7 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { projetoExistente } from "../../aplicacao/projeto/cadastro.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
 
-/** Onde um agente age: o Ator que ele é (`trabalho_id` é o id de `execucao_sessao`), a sessão e o ticket composto que ele roda. */
+/** Onde um agente age: o Ator que ele é (`trabalho_id` é o id de `processo_do_trabalho`), a sessão e o ticket composto que ele roda. */
 export interface EscopoDoAgente {
   readonly ator: Extract<Ator, { tipo: "agente" }>;
   readonly sessao: string;
@@ -50,12 +50,12 @@ export interface ComandoDemanda {
   rodar(c: ChamadaDemanda): unknown;
 }
 
-/** O escopo do agente de `execucao`, ou `undefined` se ela não está em `execucao_sessao`; terminada é ErroDeEscopo. */
+/** O escopo do agente de `execucao`, ou `undefined` se ela não está em `processo_do_trabalho`; terminada é ErroDeEscopo. */
 export function resolverEscopoDoAgente(banco: DatabaseSync, execucao: string): EscopoDoAgente | undefined {
   const linha = banco
     .prepare(
       `SELECT e.fim, s.id AS sessao, s.demanda_id, s.ticket_id, d.projeto
-         FROM execucao_sessao e JOIN sessao s ON s.id = e.sessao_id JOIN demanda d ON d.id = s.demanda_id
+         FROM processo_do_trabalho e JOIN trabalho_agentico s ON s.id = e.trabalho_id JOIN demanda d ON d.id = s.demanda_id
         WHERE e.id = ?`,
     )
     .get(execucao);

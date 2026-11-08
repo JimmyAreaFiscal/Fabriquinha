@@ -3,11 +3,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
+import { gravarGrupoDaAvaliacao } from "../armazenamento/avaliacoes.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { encerrar, situacao } from "./gerente.ts";
 import { causaDaFalha, enviarNaConversa, estadoDaAuditoria, recuperarAuditorias, subir } from "./auditoria.ts";
@@ -25,6 +27,7 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
   mkdirSync(pasta, { recursive: true });
   const piFalso = instalarPiFalso(raiz).roteirizar([{ fimDoAgente: true }]);
   let sincronizacoes = 0;
+  const grupos: (number | null)[] = [];
   const conduzir = () =>
     subir(
       raiz,
@@ -34,6 +37,7 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
       {
         pasta: "avaliacoes",
         extensoes: [],
+        gravarGrupo: (grupo) => grupos.push(grupo),
         sincronizar: () => {
           sincronizacoes++;
         },
@@ -57,7 +61,8 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
     }, /ainda está parando/);
     assert.equal(await fim, undefined);
     assert.ok(sincronizacoes >= 3);
-    assert.equal(existsSync(join(pasta, "pgid")), false);
+    assert.equal(typeof grupos[0], "number");
+    assert.equal(grupos.at(-1), null);
     let retomada = "";
     enviarNaConversa("s-conducao", "retome", (prompt) => {
       retomada = prompt;
@@ -72,6 +77,7 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
       {
         pasta: "avaliacoes",
         extensoes: [],
+        gravarGrupo: () => undefined,
         sincronizar: () => {
           throw new Error("banco indisponível");
         },
@@ -91,21 +97,20 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
   }
 });
 
-test("recuperarAuditorias: mata o grupo de cada pgid, apaga o arquivo e ignora o que não tem pgid", async () => {
-  const outra = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacoes-")));
+test("recuperarAuditorias: mata o grupo de cada avaliação com pi, zera a coluna e ignora a que não tem", async () => {
+  const { banco, fechar } = abrirBancoTemporario();
   try {
-    recuperarAuditorias(outra); // nem pasta de avaliações
-    const sem = join(outra, "avaliacoes", "sem-pgid");
-    const com = join(outra, "avaliacoes", "com-pgid");
-    mkdirSync(sem, { recursive: true });
-    mkdirSync(com, { recursive: true });
+    recuperarAuditorias(banco); // nenhuma avaliação
+    banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
+      INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES
+        ('sem-pi', 'd', '2026-01-01', '2026-01-02', '', 't'), ('com-pi', 'd', '2026-01-01', '2026-01-02', '', 't')`);
     const sleep = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
     const saiu = once(sleep, "exit");
-    writeFileSync(join(com, "pgid"), String(sleep.pid));
-    recuperarAuditorias(outra);
+    gravarGrupoDaAvaliacao(banco, "com-pi", sleep.pid ?? 0);
+    recuperarAuditorias(banco);
     assert.deepEqual(await saiu, [null, "SIGKILL"]);
-    assert.deepEqual([existsSync(join(com, "pgid")), existsSync(sem)], [false, true]);
+    assert.equal(banco.prepare("SELECT count(*) AS n FROM avaliacao WHERE grupo_processo IS NOT NULL").get()?.n, 0);
   } finally {
-    rmSync(outra, { recursive: true, force: true });
+    fechar();
   }
 });

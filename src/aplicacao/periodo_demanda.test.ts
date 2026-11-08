@@ -44,14 +44,14 @@ function banco(): DatabaseSync {
   ticket("I-1", 3, "implementar", "2", "aberto", em("2026-03"));
   ticket("I-3", 1, "implementar", "NULL", "concluido", em("2026-03"));
   const sessao = (id: string, d: string, t: number) => {
-    b.exec(`INSERT INTO sessao VALUES ('${id}', '${d}', ${String(t)}, 'autonomo', 'conv')`);
+    b.exec(`INSERT INTO trabalho_agentico VALUES ('${id}', '${d}', ${String(t)}, 'autonomo', 'conv')`);
   };
   sessao("s1", "I-1", 1);
   sessao("s2", "I-1", 3);
   sessao("s3", "I-3", 1);
   const execucao = (id: string, s: string, mes: string, falha: number, fim: string | null) =>
     b
-      .prepare("INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES (?, ?, ?, ?, ?)")
+      .prepare("INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES (?, ?, ?, ?, ?)")
       .run(id, s, em(mes), fim, falha);
   execucao("x1", "s1", "2026-02", 1, `${em("2026-02").slice(0, 14)}01:00.000Z`);
   execucao("x2", "s1", "2026-02", 0, `${em("2026-02").slice(0, 14)}02:00.000Z`);
@@ -210,9 +210,9 @@ test("por demanda: só quem teve execução no período, com o estado atual e a 
 
 test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovado sem nota conta sem entrar na média", () => {
   const b = banco();
-  b.prepare("INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x9', 's3', ?, NULL, 0)").run(
-    em("2026-04"),
-  );
+  b.prepare(
+    "INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x9', 's3', ?, NULL, 0)",
+  ).run(em("2026-04"));
   b.prepare(
     "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', 2, 3, 'gate_pr', 'aprovado', NULL, NULL, 'auditor', ?)",
   ).run(em("2026-04"));

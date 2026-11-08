@@ -17,7 +17,7 @@ import type { DadosDoChatDemanda } from "./chat.ts";
 import { gravarAgregadoPronto, montarAgregadoDemanda } from "../../../../apoio-testes/cenarios_de_demanda.ts";
 import { gravarConfiguracaoSdlc } from "../../../aplicacao/projeto/cadastro.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../../aplicacao/execucao_demanda.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../../../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../../../armazenamento/trabalho_agentico.ts";
 import { registrarProjeto } from "../../../aplicacao/projeto/cadastro.ts";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 
@@ -154,12 +154,12 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
       ],
     }),
   );
-  comSessoesDoTicket(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
+  comTrabalhosDoTicket(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
     ...e,
     sessoes: [{ demanda_id: "I-310", ticket_id: 1, id: "sd-310", modo: "interativo", conversa_referencia: "sd-310" }],
     execucoes: [
-      { id: "ed-falhou", sessao_id: "sd-310", inicio: em, fim: em, falha: true },
-      { id: "ed-310", sessao_id: "sd-310", inicio: em, fim: em, falha: false },
+      { id: "ed-falhou", trabalho_id: "sd-310", inicio: em, fim: em, falha: true },
+      { id: "ed-310", trabalho_id: "sd-310", inicio: em, fim: em, falha: false },
     ],
   }));
   mkdirSync(join(raiz, "sessoes"), { recursive: true });
@@ -271,7 +271,7 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
     modo: "interativo",
     fechar: () => Promise.resolve(),
   });
-  const sessao = String(carregarSessoesDoTicket(servico.banco, ref).sessoes[0]?.id);
+  const sessao = String(carregarTrabalhosDoTicket(servico.banco, ref).sessoes[0]?.id);
   const dialogos = () => situacao(sessao)?.dialogos ?? [];
   await ate(() => dialogos().length === 1, "o diálogo");
   const resposta = await postar(`/api/sessoes/${sessao}/dialogos/${String(dialogos()[0]?.id)}`, { valor: "alta" });

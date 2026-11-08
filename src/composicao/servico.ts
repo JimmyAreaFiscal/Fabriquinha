@@ -8,7 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { falhaPorServicoReiniciado } from "../nucleo/tentativa.ts";
 import { varrerBase } from "../aplicacao/retrabalho.ts";
-import { abrir, raizDo } from "../armazenamento/banco.ts";
+import { abrir } from "../armazenamento/banco.ts";
 import { noLog } from "../infra/registro.ts";
 import { projetosAVarrer } from "../armazenamento/retrabalho.ts";
 import { configuracao } from "../armazenamento/servico.ts";
@@ -44,7 +44,7 @@ export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => 
  * demandas se encerram com falha (`recuperarExecucoesDemanda`).
  */
 function recuperar(banco: DatabaseSync): void {
-  recuperarAuditorias(raizDo(banco));
+  recuperarAuditorias(banco);
   for (const pgid of falharPendentes(banco, falhaPorServicoReiniciado.motivo)) sinalNoGrupo(pgid, "SIGKILL");
   recuperarExecucoesDemanda(banco);
 }

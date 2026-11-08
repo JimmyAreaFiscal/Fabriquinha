@@ -15,7 +15,7 @@ import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { anotar } from "../infra/registro.ts";
-import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { descartarAlteracoes, exigirGit } from "../infra/repositorio/worktree.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
@@ -84,7 +84,7 @@ async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
 /** A execução com pi vivo neste serviço na sessão do ticket, se há. */
 function execucaoViva(banco: DatabaseSync, ticket: TicketDemanda): string | number | undefined {
   const sessao = existe(
-    carregarSessoesDoTicket(banco, ticket).sessoes[0],
+    carregarTrabalhosDoTicket(banco, ticket).sessoes[0],
     `o ticket ${formatarTicketRef(ticket)} não tem sessão`,
     "a sessão nasce ao abrir os ajustes",
   );

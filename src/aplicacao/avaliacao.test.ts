@@ -39,8 +39,8 @@ for (const [id, projeto, fim] of [
   banco.exec(
     `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
-     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
-     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '${fim}', 0);`,
+     INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
+     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '${fim}', 0);`,
   );
 }
 mkdirSync(join(raiz, "sessoes"));
@@ -255,9 +255,8 @@ test("uso sem custo informado fica com custo desconhecido", async () => {
 });
 
 test("recuperarAuditorias também mata o pi das avaliações do reinício", () => {
-  const dir = join(raiz, "avaliacoes", "antiga");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "pgid"), "999999999");
-  recuperarAuditorias(raiz);
-  assert.ok(!existsSync(join(dir, "pgid")));
+  banco.exec(`INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
+    VALUES ('antiga', 'loja', '2026-10-01', '2026-10-02', '', ${T}, 999999999)`);
+  recuperarAuditorias(banco);
+  assert.equal(banco.prepare("SELECT grupo_processo FROM avaliacao WHERE id = 'antiga'").get()?.grupo_processo, null);
 });

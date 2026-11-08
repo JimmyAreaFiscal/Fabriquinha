@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
-import type { ModoExecucao } from "../../nucleo/sessoes.ts";
+import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
 import { ambienteSemCredenciais, executar, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../registro.ts";
@@ -81,7 +81,7 @@ export interface Lancamento {
   modelo: Modelo | undefined;
   effort?: Effort;
   confianca: boolean | undefined;
-  modo: ModoExecucao;
+  modo: ModoTrabalho;
 }
 
 /**

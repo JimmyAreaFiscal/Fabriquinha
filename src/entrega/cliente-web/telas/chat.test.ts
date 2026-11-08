@@ -31,16 +31,16 @@ const T0 = "2026-10-11T10:00:00.000Z";
 
 const execucao = (e: Partial<Cabecalho["execucoes"][number]> = {}): Cabecalho["execucoes"][number] => ({
   id: "abcdef12-0000-4000-8000-000000000001",
-  sessao_id: "s",
+  trabalho_id: "s",
   inicio: T0,
   falha: false,
   ...e,
 });
 
-type Sessao = Cabecalho["sessao"];
+type TrabalhoGerenciado = Cabecalho["sessao"];
 
 /** A sessão do ticket I-239.T1 (planejar), rodando, com uma execução aberta. */
-const cabecalho = (sessao: Partial<Sessao> = {}, extra: Partial<Cabecalho> = {}): Cabecalho => ({
+const cabecalho = (sessao: Partial<TrabalhoGerenciado> = {}, extra: Partial<Cabecalho> = {}): Cabecalho => ({
   origem: "demanda",
   sessao: {
     sessao: "s/1",
@@ -418,7 +418,7 @@ test("valorDoSelect: o texto de «Outros» na única, o JSON da lista na múltip
 });
 
 test("envio na falha e no gate: o caminho para a página da demanda; terminada: Exportar histórico", () => {
-  const aviso = (sessao: Partial<Sessao>) =>
+  const aviso = (sessao: Partial<TrabalhoGerenciado>) =>
     htmlDe(envio(cabecalho({ estado: "aguardando_humano", ...sessao }), "steer"));
   assert.equal(
     aviso({ motivo: "falha" }),

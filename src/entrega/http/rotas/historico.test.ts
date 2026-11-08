@@ -36,12 +36,12 @@ beforeEach(() => {
       ('I-1', 1, 'implementar', 'concluido', '${T0}', 1),
       ('I-1', 2, 'planejar', 'em_execucao', '${T0}', NULL),
       ('I-2', 1, 'planejar', 'concluido', '${T0}', NULL);
-    INSERT INTO sessao VALUES
+    INSERT INTO trabalho_agentico VALUES
       ('s1', 'I-1', 1, 'autonomo', 'c1'),
       ('s2', 'I-1', 2, 'interativo', 'c2'),
       ('s3', 'I-2', 1, 'autonomo', 'c3'),
       ('s4', 'I-2', 1, 'consulta', 'c4');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, modelo_provedor, modelo_nome) VALUES
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, modelo_provedor, modelo_nome) VALUES
       ('x1', 's1', '${T0}', '2026-10-11T12:10:00.000Z', 1, NULL, NULL),
       ('x2', 's1', '2026-10-11T12:20:00.000Z', '2026-10-11T12:30:00.000Z', 0, 'anthropic', 'claude-opus-5-5'),
       ('x3', 's2', '2026-10-11T12:40:00.000Z', NULL, 0, NULL, NULL),
@@ -133,7 +133,7 @@ test("ativas: o ticket que falhou aguarda o Auditor, com o motivo", async () => 
      INSERT INTO tentativa (demanda_id, ticket_id, numero, processo_id, inicio, fim, resultado_tipo, causa, motivo)
        VALUES ('I-1', 2, 1, 'x3', '2026-10-11T12:00:00.000Z', '2026-10-11T12:50:00.000Z', 'interrompida', 'fabriquinha', 'testes falharam');`,
   );
-  banco.exec("UPDATE execucao_sessao SET fim = '2026-10-11T12:50:00.000Z', falha = 1 WHERE id = 'x3'");
+  banco.exec("UPDATE processo_do_trabalho SET fim = '2026-10-11T12:50:00.000Z', falha = 1 WHERE id = 'x3'");
   const [s2] = (await sessoes("escopo=ativas")) as SessaoDeDemanda[];
   assert.deepEqual([s2?.sessao, s2?.estado, s2?.motivo, s2?.resultado], ["s2", "aguardando_humano", "falha", "falha"]);
 });

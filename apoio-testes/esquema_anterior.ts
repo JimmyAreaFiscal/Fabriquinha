@@ -64,7 +64,7 @@ function criacaoAnterior(esquemaAnterior: DatabaseSync, tabela: string, nome: st
 }
 
 /**
- * Devolve o banco migrado (e aberto) ao esquema da versão 37 (sem as Tentativas da 40 nem o gate da decisão da 41): devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
+ * Devolve o banco migrado (e aberto) ao esquema da versão 37 (sem as Tentativas da 40, o gate da decisão da 41 nem os nomes do Trabalho Agêntico da 42): devolve a `projeto` os nomes e a coluna do cursor de antes da 39, recria `demanda`, `rodada`, `ticket_demanda`,
  * `configuracao_etapa_projeto` e `sequencia` com as colunas e os valores antigos e volta o `user_version`. O próximo
  * `abrir()` aplica a migração 38 sobre as linhas que o teste montou. O que a 38 perdeu (`enviado_em`, `origem_ticket_id`,
  * a hora da Rodada) volta vazio ou some, e `fechado` não volta: ficou `cancelado`.
@@ -108,6 +108,18 @@ export function rebaixarParaEsquemaAnterior(banco: DatabaseSync): void {
     copiar("configuracao_etapa_projeto", { etapa: voltaDoMapeamento("etapa", ETAPA_NOVA) });
     // A 41 deu o gate à decisão, trocou 'recusado' por 'reprovado' e removeu o histórico dos gates antigos.
     copiar("decisao_ticket", { resultado: "CASE resultado WHEN 'reprovado' THEN 'recusado' ELSE resultado END" });
+    // A 42 renomeou as tabelas da sessão (e os índices delas) e deu `grupo_processo` à avaliação: a volta desfaz tudo.
+    banco.exec(`
+      ALTER TABLE trabalho_nao_gerenciado RENAME TO sessao_externa_demanda;
+      ALTER TABLE processo_do_trabalho RENAME COLUMN trabalho_id TO sessao_id;
+      ALTER TABLE processo_do_trabalho RENAME TO execucao_sessao;
+      ALTER TABLE trabalho_agentico RENAME TO sessao;
+      DROP INDEX ix_trabalho_agentico_ticket;
+      CREATE INDEX ix_sessao_ticket ON sessao(demanda_id, ticket_id);
+      DROP INDEX ix_processo_do_trabalho_trabalho;
+      CREATE INDEX ix_execucao_sessao_sessao ON execucao_sessao(sessao_id);
+      ALTER TABLE avaliacao DROP COLUMN grupo_processo;
+    `);
     // A 40 criou `tentativa` e tirou `erro` das execuções: a volta apaga as Tentativas e devolve a coluna vazia.
     banco.exec(`
       DROP TABLE tentativa;
