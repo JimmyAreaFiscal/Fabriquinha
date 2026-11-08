@@ -307,6 +307,16 @@ test("I-275: o chat de cada demanda do cenário mostra as Pendências dela, com 
     const { pendencias } = (await cabecalho.json()) as { pendencias: { item: string; tipo: string }[] };
     const esperadas = PENDENCIAS_ESPERADAS.filter((p) => demandaDoItem(p.item) === demanda);
     expect(pendencias.map(({ item, tipo }) => ({ item, tipo }))).toEqual(esperadas);
+
+    // A mesma lista, vista na página da sessão (o evento "estado" ao vivo redesenha a mesma barra).
+    await pagina.goto(`${fabriquinha.base}/sessions/${sessao}`);
+    const naPagina = pagina.locator(".pendencia-do-chat");
+    await expect(naPagina).toHaveCount(esperadas.length);
+    expect(
+      await naPagina.evaluateAll((nos) =>
+        nos.map((no) => ({ item: no.getAttribute("data-item"), tipo: no.getAttribute("data-tipo") })),
+      ),
+    ).toEqual(esperadas);
   }
 
   // O gate do planejamento tem o rótulo do tipo gate_humano, não o "gate da demanda" de antes; o bloqueio, o da falha.

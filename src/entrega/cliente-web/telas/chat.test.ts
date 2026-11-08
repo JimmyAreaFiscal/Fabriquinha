@@ -127,6 +127,23 @@ test("barra de estado: demanda, rodada, ticket, etapa, modo, estado, modelo, exe
   assert.doesNotMatch(barraDeEstado(cabecalho(), "m"), /I-239.R1/);
 });
 
+test("barra de estado: as Pendências do cabeçalho com rótulo do tipo, item e motivo escapado, sem lista vazia", () => {
+  assert.doesNotMatch(barraDeEstado(cabecalho(), "m"), /Aguarda você:/);
+  const pendencias = [
+    { ...pendencia("gate_humano"), item: "I-239" },
+    { ...pendencia("despacho_parado", "<sem> agendador"), item: "I-239.T2" },
+  ] as Cabecalho["pendencias"];
+  const html = barraDeEstado(cabecalho({}, { pendencias }), "m");
+  assert.match(
+    html,
+    /<span class="pendencia-do-chat" data-tipo="gate_humano" data-item="I-239"><span class="tag">Gate<\/span> <span class="id">I-239<\/span> <span class="muted">motivo da Pendência<\/span><\/span>/,
+  );
+  assert.match(
+    html,
+    /data-tipo="despacho_parado" data-item="I-239.T2"><span class="tag">Despacho parado<\/span> <span class="id">I-239.T2<\/span> <span class="muted">&#60;sem&#62; agendador/,
+  );
+});
+
 test("linhas da execução: o início e, terminada, o fim ou a falha, sem link de log nem de prompt", () => {
   const aberta = linhasDaExecucao(execucao());
   assert.deepEqual(aberta, [

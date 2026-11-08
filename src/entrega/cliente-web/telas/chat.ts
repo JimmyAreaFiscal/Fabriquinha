@@ -99,6 +99,18 @@ export const modeloDe = (c: Cabecalho, conversa: readonly Entrada[]): string =>
 const exportar = (sessao: string, classe: string, rotulo = "Exportar"): string =>
   `<a class="${classe}" href="/api/sessoes/${encodeURIComponent(sessao)}/historico.md" download>${rotulo}</a>`;
 
+/** As Pendências da demanda que o servidor mandou no cabeçalho: tipo pelo rótulo da tabela, item e motivo. */
+function pendenciasDaDemandaNaBarra({ pendencias }: Pick<Cabecalho, "pendencias">): string {
+  if (pendencias.length === 0) return "";
+  const itens = pendencias.map(
+    (p) =>
+      `<span class="pendencia-do-chat" data-tipo="${p.tipo}" data-item="${escapar(p.item)}">` +
+      `<span class="tag">${ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo].titulo}</span> <span class="id">${escapar(p.item)}</span> ` +
+      `<span class="muted">${escapar(p.motivo)}</span></span>`,
+  );
+  return `<span class="muted">Aguarda você:</span>${itens.join("")}`;
+}
+
 /** A barra de estado (D09): demanda, rodada se houver, ticket, etapa e modo, estado, modelo, execução e Exportar. */
 export function barraDeEstado(c: Cabecalho, modelo: string): string {
   const { sessao, demanda, rodada, ticket, etapa: e } = c;
@@ -109,6 +121,7 @@ export function barraDeEstado(c: Cabecalho, modelo: string): string {
     `<span class="sep">│</span><span class="id">${escapar(ticket)}</span>` +
     `<span class="muted">${ETAPA_DO_TICKET[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
     rotuloDoModelo(modelo) +
+    pendenciasDaDemandaNaBarra(c) +
     `<div class="direita"><span class="muted pequeno">${rotuloDaExecucao(sessao.execucao)}</span>` +
     `${exportar(sessao.sessao, "link")}</div></div>`
   );
