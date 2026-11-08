@@ -77,7 +77,7 @@ test("a página da demanda mostra rodadas, tickets, decisões, evidências e o e
   });
   await pagina
     .getByRole("region", { name: "Aguarda você" })
-    .getByRole("link", { name: /Reabrir I-210\.T5/ })
+    .getByRole("link", { name: /Reabrir o ticket I-210\.T5/ })
     .click();
   await expect(falho).toBeInViewport();
   await expect(falho).toHaveAttribute("data-marca", "antes do clique");
@@ -463,7 +463,7 @@ test("a integração final espera o merge humano: o passo leva ao PR e o quadro 
   projeto(fabriquinha.raiz);
   semearDemandaAguardandoMerge(fabriquinha.raiz);
   await pagina.goto(`${fabriquinha.base}/projects/loja/demandas`);
-  await expect(pagina.locator(".dm-cartao.aguarda")).toContainText("aguarda o seu merge do PR final");
+  await expect(pagina.locator(".dm-cartao.aguarda")).toContainText("aguarda você · ação externa · I-218");
 
   await pagina.goto(`${fabriquinha.base}/demandas/I-218`);
   await pagina.setViewportSize({ width: 1440, height: 900 });
@@ -476,10 +476,9 @@ test("a integração final espera o merge humano: o passo leva ao PR e o quadro 
     "https://exemplo.com/pr/12",
   );
   const aguarda = pagina.getByRole("region", { name: "Aguarda você" });
-  await expect(aguarda.getByRole("link", { name: "Integrar o PR final ↓" })).toHaveAttribute(
-    "href",
-    "#titulo-encerramento",
-  );
+  await expect(
+    aguarda.getByRole("link", { name: /Integrar o PR I-218: Integrar o PR final #12 na plataforma/ }),
+  ).toHaveAttribute("href", "#titulo-encerramento");
   await expect(aguarda).not.toContainText("Executar");
   await info.attach("merge-humano-1440", {
     body: await pagina.screenshot({ fullPage: true }),
