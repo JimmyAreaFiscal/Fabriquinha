@@ -1,30 +1,22 @@
-// Gerente (F4 §2, §5.4, §6.6, §6.7) com um pi falso de verdade: a recusa de um comando na autônoma e na interativa, o
+// Condutor (F4 §2, §5.4, §6.6, §6.7) com um pi falso de verdade: a recusa de um comando na autônoma e na interativa, o
 // relógio da autônoma parado enquanto um diálogo espera, o diálogo que expira, o aborto e a atividade do agente.
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { setTimeout as dormir } from "node:timers/promises";
-import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
-import { ErroDeRegra } from "../nucleo/erros.ts";
-import type { executar } from "../infra/processo.ts";
-import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "./auditor_automatico.ts";
-import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../nucleo/tentativa.ts";
-import {
-  abortar,
-  assinar,
-  atividadeDo,
-  encerrar,
-  mandar,
-  PREFIXO_DA_RESPOSTA_AUTOMATICA,
-  type Processo,
-  responderDialogo,
-  rodarPi,
-  situacao,
-} from "./gerente.ts";
+import { abrirBancoTemporario } from "../../../apoio-testes/banco_temporario.ts";
+import { instalarPiFalso, type PassoPi } from "../../../apoio-testes/pi_falso.ts";
+import { ErroDeRegra } from "../../nucleo/erros.ts";
+import type { executar } from "../../infra/processo.ts";
+import { RESPOSTA_FORA_DA_REVISAO, triarPergunta } from "../auditor_automatico.ts";
+import { falhaPorServicoReiniciado, falhaQueExigeOAuditor } from "../../nucleo/tentativa.ts";
+import { atividadeDo, condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA, type PedidoDeProcesso } from "./condutor.ts";
 
-const base = mkdtempSync(join(tmpdir(), "fabriquinha-gerente-"));
+const base = mkdtempSync(join(tmpdir(), "fabriquinha-condutor-"));
 after(() => {
   rmSync(base, { recursive: true, force: true });
 });
@@ -89,7 +81,7 @@ const ferramentaLonga: PassoPi = {
     { type: "tool_execution_start", toolCallId: "b1", toolName: "bash", args: { command: "docker build ." } },
     { pausaMs: 600 },
     { type: "tool_execution_end", toolCallId: "b1", toolName: "bash", result: {}, isError: false },
-    // O pi que fecha uma mensagem sem `message` não derruba o ouvinte do gerente.
+    // O pi que fecha uma mensagem sem `message` não derruba o ouvinte do condutor.
     { type: "message_end" },
   ],
 };
@@ -100,7 +92,7 @@ function rodar(
   passos: PassoPi[],
   modo: "autonomo" | "interativo",
   limiteMin = 1,
-  triarPergunta?: Processo["triarPergunta"],
+  triarPergunta?: PedidoDeProcesso["triarPergunta"],
   silencioMaximoDoModeloMin?: number,
 ) {
   const sessao = `s-${String(++n)}`;
@@ -123,7 +115,7 @@ function rodar(
       .map((entrada) => `${String(entrada.comando?.value)}\n`)
       .join("");
   let grupoDoPi = 0;
-  const fim = rodarPi({
+  const fim = condutor.iniciar({
     execucao: { id: sessao, sessaoPi: sessao, modo },
     args: [],
     cwd: dir,
@@ -156,44 +148,44 @@ test("autônoma: o pi que recusa o prompt falha na hora, sem esperar o tempo lim
 
 test("interativa: a recusa do prompt só fica no log, a sessão fica ociosa e termina bem quando encerrada", async () => {
   const { sessao, fim } = rodar([{ recusa: "modelo inexistente" }], "interativo");
-  await ate(() => situacao(sessao)?.ocupado === false, "a sessão ociosa");
-  encerrar(sessao);
+  await ate(() => condutor.situacao(sessao)?.ocupado === false, "a sessão ociosa");
+  condutor.encerrar(sessao);
   assert.equal(await fim, undefined);
 });
 
 test("interativa: o prompt rejeitado porque o agente já trabalha não deixa a sessão ociosa", async () => {
   const { sessao, fim, dir } = rodar([{}, { recusa: "Agent is already processing." }], "interativo");
-  mandar(sessao, { type: "prompt", message: "mais uma" });
+  condutor.mandar(sessao, { type: "prompt", message: "mais uma" });
   await ate(
     () =>
       existsSync(join(dir, "log")) && readFileSync(join(dir, "log"), "utf8").includes("Agent is already processing"),
     "a recusa no log",
   );
-  assert.equal(situacao(sessao)?.ocupado, true);
-  encerrar(sessao);
+  assert.equal(condutor.situacao(sessao)?.ocupado, true);
+  condutor.encerrar(sessao);
   assert.equal(await fim, undefined);
 });
 
 test("autônoma: o relógio para enquanto o diálogo espera; o diálogo com tempo limite expira e o respondido segue", async () => {
   // 0,005 min = 300 ms: o diálogo fica pendente por mais tempo que isso sem a execução estourar o limite.
   const { sessao, fim } = rodar([{ eventos: dialogos }], "autonomo", 0.005);
-  await ate(() => (situacao(sessao)?.dialogos.length ?? 0) === 2, "os dois diálogos");
-  assert.ok(situacao(sessao)?.dialogos.find((d) => d.id === "c1")?.expiraEm);
-  await ate(() => situacao(sessao)?.dialogos.length === 1, "a expiração do confirm");
+  await ate(() => (condutor.situacao(sessao)?.dialogos.length ?? 0) === 2, "os dois diálogos");
+  assert.ok(condutor.situacao(sessao)?.dialogos.find((d) => d.id === "c1")?.expiraEm);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1, "a expiração do confirm");
   await dormir(400);
-  assert.equal(situacao(sessao)?.dialogos[0]?.id, "s1", "sem estourar o limite com o diálogo pendente");
-  responderDialogo(sessao, "s1", { value: "a" });
+  assert.equal(condutor.situacao(sessao)?.dialogos[0]?.id, "s1", "sem estourar o limite com o diálogo pendente");
+  condutor.responder(sessao, "s1", { value: "a" });
   assert.throws(() => {
-    responderDialogo(sessao, "s1", { value: "a" });
+    condutor.responder(sessao, "s1", { value: "a" });
   }, ErroDeRegra);
   assert.equal(await fim, undefined);
 });
 
 test("autônoma: o select da perguntar vira a pergunta do chat; abortar dá a falha de abortada pelo Auditor", async () => {
   const { sessao, fim } = rodar([{ eventos: pergunta }], "autonomo");
-  await ate(() => situacao(sessao)?.dialogos.length === 1, "a pergunta");
-  assert.equal(situacao(sessao)?.dialogos[0]?.pergunta, true);
-  abortar(sessao);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1, "a pergunta");
+  assert.equal(condutor.situacao(sessao)?.dialogos[0]?.pergunta, true);
+  condutor.abortar(sessao);
   assert.deepEqual(await fim, { tipo: "interrompida", por: { tipo: "auditor" }, motivo: "abortada pelo Auditor" });
 });
 
@@ -204,7 +196,7 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
     return Promise.resolve({ resposta: "Sim", justificativa: "issue do Sonar se corrige" });
   });
   const noChat: Record<string, unknown>[] = [];
-  const desassinar = assinar(sessao, (evento) => noChat.push(evento));
+  const desassinar = condutor.assinar(sessao, (evento) => noChat.push(evento));
   assert.equal(await fim, undefined);
   desassinar();
   // I-266.T7: quem respondeu é o Agente da execução em curso, no log e no chat; a escalada não tem resposta
@@ -229,7 +221,7 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
     return Promise.resolve(undefined);
   });
   await ate(() => existsSync(join(descritas.dir, "log")), "a escalada");
-  abortar(descritas.sessao);
+  condutor.abortar(descritas.sessao);
   await descritas.fim;
   assert.equal(respostas(), '["Sim"]\n');
   assert.match(
@@ -245,7 +237,7 @@ test("autônoma: o Auditor automático responde a pergunta banal sozinho, com o 
 });
 
 /** A triagem de verdade (`triarPergunta`) com o pi da triagem trocado por uma saída fixa do modelo. */
-function triagemComSaida(etapa: string, saidaDoModelo: string): NonNullable<Processo["triarPergunta"]> {
+function triagemComSaida(etapa: string, saidaDoModelo: string): NonNullable<PedidoDeProcesso["triarPergunta"]> {
   const piDaTriagem: typeof executar = () =>
     Promise.resolve({ codigo: 0, saida: saidaDoModelo, erro: "", limiteEstourado: false });
   return (p) => triarPergunta(undefined, { ticket: "I-7.T3", etapa, demanda: "Cadastro" }, p, piDaTriagem);
@@ -298,8 +290,8 @@ test("autônoma: fora da revisão fora das etapas de revisão e oferta de deploy
     );
     assert.match(readFileSync(join(escalada.dir, "log"), "utf8"), /Auditor automático escalou ao Auditor: .+\?/);
     assert.equal(escalada.respostas(), "");
-    assert.equal(situacao(escalada.sessao)?.dialogos.length, 1);
-    abortar(escalada.sessao);
+    assert.equal(condutor.situacao(escalada.sessao)?.dialogos.length, 1);
+    condutor.abortar(escalada.sessao);
     assert.deepEqual(await escalada.fim, {
       tipo: "interrompida",
       por: { tipo: "auditor" },
@@ -317,36 +309,36 @@ test("autônoma: a pergunta estratégica fica com o Auditor; a resposta dele ant
     () => existsSync(join(escalada.dir, "log")) && readFileSync(join(escalada.dir, "log"), "utf8").includes("escalou"),
     "a escalada",
   );
-  assert.equal(situacao(escalada.sessao)?.dialogos.length, 1);
-  responderDialogo(escalada.sessao, "e3", { value: "jimmy" });
+  assert.equal(condutor.situacao(escalada.sessao)?.dialogos.length, 1);
+  condutor.responder(escalada.sessao, "e3", { value: "jimmy" });
   assert.equal(await escalada.fim, undefined);
 
   let liberar: (r: { resposta: string; justificativa: string }) => void = () => undefined;
   const atrasada = rodar([{ eventos: pergunta }], "autonomo", 1, () => new Promise((pronto) => (liberar = pronto)));
-  await ate(() => situacao(atrasada.sessao)?.dialogos.length === 1, "a pergunta");
-  responderDialogo(atrasada.sessao, "s1", { value: "a" });
+  await ate(() => condutor.situacao(atrasada.sessao)?.dialogos.length === 1, "a pergunta");
+  condutor.responder(atrasada.sessao, "s1", { value: "a" });
   liberar({ resposta: "a", justificativa: "j" });
   assert.equal(await atrasada.fim, undefined);
   assert.equal(atrasada.respostas(), "a\n");
 
   // Interativa: a triagem não entra.
   const interativa = rodar([{ eventos: pergunta }], "interativo", 1, () => assert.fail("a interativa não faz triagem"));
-  await ate(() => situacao(interativa.sessao)?.dialogos.length === 1, "a pergunta da interativa");
-  encerrar(interativa.sessao);
+  await ate(() => condutor.situacao(interativa.sessao)?.dialogos.length === 1, "a pergunta da interativa");
+  condutor.encerrar(interativa.sessao);
   assert.equal(await interativa.fim, undefined);
 });
 
 test("encerrar a autônoma com um diálogo de tempo limite pendente para o relógio dele; o assentar depois do fim não arma relógio", async () => {
   const comDialogo = rodar([{ eventos: dialogos }], "autonomo");
-  await ate(() => (situacao(comDialogo.sessao)?.dialogos.length ?? 0) === 2, "os diálogos");
-  encerrar(comDialogo.sessao);
+  await ate(() => (condutor.situacao(comDialogo.sessao)?.dialogos.length ?? 0) === 2, "os diálogos");
+  condutor.encerrar(comDialogo.sessao);
   assert.equal(await comDialogo.fim, undefined);
 
   const trabalhando = rodar([{}], "interativo");
-  await ate(() => situacao(trabalhando.sessao)?.ocupado === true, "o agente trabalhando");
-  encerrar(trabalhando.sessao);
+  await ate(() => condutor.situacao(trabalhando.sessao)?.ocupado === true, "o agente trabalhando");
+  condutor.encerrar(trabalhando.sessao);
   assert.equal(await trabalhando.fim, undefined);
-  assert.equal(situacao(trabalhando.sessao), undefined);
+  assert.equal(condutor.situacao(trabalhando.sessao), undefined);
 });
 
 test("o modelo que para de responder no meio da resposta encerra a execução como falha de infraestrutura retomável", async () => {
@@ -368,10 +360,10 @@ test("ferramenta longa e sessão interativa ociosa não disparam o vigia do mode
   );
 
   const ociosa = rodar([{ ...ferramentaLonga, termina: "assenta" }], "interativo", 1, undefined, 0.005);
-  await ate(() => situacao(ociosa.sessao)?.ocupado === false, "a sessão ociosa");
+  await ate(() => condutor.situacao(ociosa.sessao)?.ocupado === false, "a sessão ociosa");
   await dormir(400);
-  assert.ok(situacao(ociosa.sessao), "a sessão ociosa segue viva além do silêncio aceito");
-  encerrar(ociosa.sessao);
+  assert.ok(condutor.situacao(ociosa.sessao), "a sessão ociosa segue viva além do silêncio aceito");
+  condutor.encerrar(ociosa.sessao);
   assert.equal(await ociosa.fim, undefined);
 });
 
@@ -439,9 +431,9 @@ test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte qu
     );
     await dormir(300);
     const recebidos: string[] = [];
-    const pararRetrato = assinar(execucao.sessao, (evento) => recebidos.push(String(evento.type)));
+    const pararRetrato = condutor.assinar(execucao.sessao, (evento) => recebidos.push(String(evento.type)));
     assert.deepEqual(recebidos, encerrada ? ["message_end"] : ["message_start", "message_update"]);
-    const pararFalho = assinar(execucao.sessao, (evento) => {
+    const pararFalho = condutor.assinar(execucao.sessao, (evento) => {
       if (evento.type === "response") throw new Error("ouvinte indisponível");
     });
     await ate(
@@ -450,7 +442,7 @@ test("assinar no meio da mensagem ou após seu fim repassa o retrato; ouvinte qu
         readFileSync(join(execucao.dir, "log"), "utf8").includes("ouvinte indisponível"),
       "a falha do ouvinte no log",
     );
-    encerrar(execucao.sessao);
+    condutor.encerrar(execucao.sessao);
     assert.equal(await execucao.fim, undefined);
     pararRetrato();
     pararFalho();
@@ -470,4 +462,64 @@ test("atividade: a ferramenta com o comando ou o caminho, a primeira linha do te
   assert.equal(fala([{ type: "toolCall" }]), undefined);
   assert.equal(atividadeDo({ type: "message_end", message: null }), undefined);
   assert.equal(atividadeDo({ type: "agent_start" }), undefined);
+});
+
+/** Um processo de verdade em grupo próprio, que só termina quando alguém o mata; `morto` resolve com o sinal que o matou. */
+function processoEmGrupoProprio() {
+  const processo = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
+  return { pgid: processo.pid ?? 0, morto: once(processo, "exit") };
+}
+
+test("recuperarNaSubida mata numa chamada só os grupos órfãos do ticket, da avaliação e da simulação, e fecha o que dependia deles", async () => {
+  const { banco, fechar } = abrirBancoTemporario();
+  try {
+    const daTicket = processoEmGrupoProprio();
+    const daAvaliacao = processoEmGrupoProprio();
+    const daSimulacao = processoEmGrupoProprio();
+    banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+        VALUES ('d', '/nao/existe', 'main', 'github', 'k');
+      INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
+        VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
+      INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
+      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0, ${String(daTicket.pgid)});
+      INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
+        VALUES ('11111111-1111-4111-8111-111111111111', 'd', '2026-10-01', '2026-10-02', '', 't', ${String(daAvaliacao.pgid)});
+      INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'd', 'Dona Maria', 'd');
+      INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'd', 't', 1, 'x');
+      INSERT INTO tarefa_usuario VALUES (1, 1);
+      INSERT INTO execucao_simulada (id, tarefa, usuario, status, relatorio, pgid)
+        VALUES (1, 1, 1, 'em_andamento', NULL, ${String(daSimulacao.pgid)})`);
+
+    condutor.recuperarNaSubida(banco);
+
+    for (const grupo of [daTicket, daAvaliacao, daSimulacao]) assert.deepEqual(await grupo.morto, [null, "SIGKILL"]);
+    assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM processo_do_trabalho").get(), { falha: 1 });
+    assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
+    assert.equal(banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, null);
+    assert.partialDeepStrictEqual(banco.prepare("SELECT * FROM execucao_simulada").get(), {
+      status: "falhou",
+      pgid: null,
+    });
+  } finally {
+    fechar();
+  }
+});
+
+test("recuperarNaSubida ignora a avaliação sem pi e o processo que nunca chegou a lançar o pi", () => {
+  const { banco, fechar } = abrirBancoTemporario();
+  try {
+    condutor.recuperarNaSubida(banco);
+    banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
+      INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('sem-pi', 'd', '2026-01-01', '2026-01-02', '', 't');
+      INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '2026-10-11T12:00:00.000Z', 'f', 's', 1, 'fabriquinha/I-1');
+      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
+        VALUES ('I-1', 1, 'implementar', 'em_execucao', '2026-10-11T12:00:00.000Z');
+      INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');
+      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES ('e1', 's1', '2026-10-11T12:00:00.000Z', 0)`);
+    condutor.recuperarNaSubida(banco);
+    assert.equal(banco.prepare("SELECT estado FROM ticket_demanda").get()?.estado, "falhou");
+  } finally {
+    fechar();
+  }
 });

@@ -10,13 +10,13 @@ import { test } from "node:test";
 import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from "../src/nucleo/tentativa.ts";
 import { AUDITOR } from "../src/nucleo/ator.ts";
 import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
-import { criarSessao, iniciarExecucao } from "../src/nucleo/sessoes.ts";
+import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despacho_demanda.ts";
 import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
-import { recuperarExecucoesDemanda } from "../src/aplicacao/execucao_demanda.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { configuracao } from "../src/armazenamento/servico.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   abrirPortao,
@@ -159,7 +159,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   assert.equal(statusDe(c, ref), "concluido");
   assert.equal(rodadaDe(c, id, 1)?.estado, "revisar_rodada");
   assert.equal(execucoesDe(c, ref).length, 2);
-  assert.equal(carregarSessoesDoTicket(c.banco, ref).sessoes.length, 1);
+  assert.equal(carregarTrabalhosDoTicket(c.banco, ref).sessoes.length, 1);
   const evidencias = ag.evidencias.filter((e) => e.ticket_id === ref.ticket_id);
   assert.deepEqual(
     evidencias.map((e) => e.tipo).sort(),
@@ -222,14 +222,14 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   assert.equal(historico.length, 2);
   assert.match(motivoDaExecucao(c, id, historico[0]?.id) ?? "", /1|falha do pi falso/);
   assert.match(motivoDaExecucao(c, id, historico[1]?.id) ?? "", /tempo limite/);
-  assert.equal(carregarSessoesDoTicket(c.banco, t1).sessoes.length, 1);
+  assert.equal(carregarTrabalhosDoTicket(c.banco, t1).sessoes.length, 1);
   bloqueado();
 
   // Reinício do serviço: execução aberta de uma instância anterior falha, sem avançar; as anteriores seguem no histórico.
   reabrir(c, t1, "mais uma vez");
-  const sessao = carregarSessoesDoTicket(c.banco, t1).sessoes[0];
+  const sessao = carregarTrabalhosDoTicket(c.banco, t1).sessoes[0];
   assert.ok(sessao);
-  const execucao = { id: randomUUID(), sessao_id: sessao.id, inicio: new Date().toISOString(), falha: false };
+  const execucao = { id: randomUUID(), trabalho_id: sessao.id, inicio: new Date().toISOString(), falha: false };
   comDemanda(c.banco, id, (ag) => ({
     ...ag,
     tickets: ag.tickets.map((x) => (x.ticket_id === t1.ticket_id ? { ...x, estado: "em_execucao" as const } : x)),
@@ -240,11 +240,11 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
       execucao.inicio,
     ),
   }));
-  comSessoesDoTicket(c.banco, t1, (estado) => ({
+  comTrabalhosDoTicket(c.banco, t1, (estado) => ({
     ...estado,
-    execucoes: iniciarExecucao(criarSessao([], sessao), estado.execucoes, execucao),
+    execucoes: iniciarProcesso(criarTrabalho([], sessao), estado.execucoes, execucao),
   }));
-  recuperarExecucoesDemanda(c.banco);
+  condutor.recuperarNaSubida(c.banco);
   assert.equal(statusDe(c, t1), "falhou");
   assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);

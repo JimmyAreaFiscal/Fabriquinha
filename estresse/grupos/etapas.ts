@@ -20,11 +20,11 @@ import { fecharTicketDemanda } from "../../src/aplicacao/fechamento_ticket.ts";
 import { decidirGate } from "../../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../../src/aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
-import { situacao } from "../../src/aplicacao/gerente.ts";
+import { condutor } from "../../src/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../../src/armazenamento/demandas.ts";
 import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { configuracao } from "../../src/armazenamento/servico.ts";
-import { carregarSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
 import { integrarPR } from "../../src/infra/repositorio/pr.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { instalarPiFalso, type PiFalso } from "../../apoio-testes/pi_falso.ts";
@@ -230,7 +230,7 @@ const verificacoes = (): RegistroDaVerificacao[] =>
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações aprovadas (sem testes nem Sonar reais). */
 const deps: DepsDespacho = {
-  iniciarExecucao: (banco, t, opcoes) =>
+  iniciarProcesso: (banco, t, opcoes) =>
     iniciarExecucaoDemanda(banco, t, {
       ...opcoes,
       fechar: (b, ref, r) =>
@@ -272,9 +272,9 @@ function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [stri
   );
 }
 
-/** O Agente da execução aberta do ticket: o `trabalho_id` é o `execucao_sessao.id` dela. */
+/** O Agente da execução aberta do ticket: o `trabalho_id` é o `processo_do_trabalho.id` dela. */
 function agenteDaExecucaoAberta(c: Cenario, demanda_id: string, ticket_id: number): Ator {
-  const aberta = carregarSessoesDoTicket(c.banco, { demanda_id, ticket_id }).execucoes.find((e) => !e.fim);
+  const aberta = carregarTrabalhosDoTicket(c.banco, { demanda_id, ticket_id }).execucoes.find((e) => !e.fim);
   if (!aberta) throw new Error(`o ticket ${String(ticket_id)} não tem execução aberta`);
   return { tipo: "agente", trabalho_id: aberta.id };
 }
@@ -469,8 +469,8 @@ const ETAPAS: Record<string, Preparar> = {
         );
         await esperar(() => {
           const { ticket_id } = ticket(c, id, "ajustar_resultado");
-          const sessao = carregarSessoesDoTicket(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
-          return chamadas(c) > antes && sessao !== undefined && situacao(sessao.id)?.ocupado === false;
+          const sessao = carregarTrabalhosDoTicket(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
+          return chamadas(c) > antes && sessao !== undefined && condutor.situacao(sessao.id)?.ocupado === false;
         }, "a primeira resposta do pi");
         respondeu = true;
       },

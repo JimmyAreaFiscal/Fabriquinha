@@ -11,8 +11,8 @@ import { expect, test } from "./apoio.ts";
 function sessaoRodando(raiz: string): void {
   const banco = abrir(raiz);
   banco.exec(`
-    INSERT INTO sessao VALUES ('s-i206-t3', 'I-206', 3, 'autonomo', 'c1');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES ('x1', 's-i206-t3', '${new Date().toISOString()}', NULL, 0, 4242);
+    INSERT INTO trabalho_agentico VALUES ('s-i206-t3', 'I-206', 3, 'autonomo', 'c1');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, grupo_processo) VALUES ('x1', 's-i206-t3', '${new Date().toISOString()}', NULL, 0, 4242);
   `);
   banco.close();
 }

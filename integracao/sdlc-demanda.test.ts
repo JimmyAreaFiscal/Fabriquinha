@@ -11,7 +11,7 @@ import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
 import { registrarDependenciaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
-import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import {
   adicionarProjeto,
   AUTOR,
@@ -39,7 +39,7 @@ async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<vo
   const ref = { demanda_id: id, ticket_id: 2 };
   interromperExecucaoDemanda(c.banco, ref);
   await Promise.all(fins);
-  assert.equal(carregarSessoesDoTicket(c.banco, ref).execucoes.length, 1);
+  assert.equal(carregarTrabalhosDoTicket(c.banco, ref).execucoes.length, 1);
 }
 
 test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o completo congela a definição e registra a origem", async (t) => {
@@ -75,7 +75,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
     () => submeter("criterios_aceite", { criterios: [{ id: "CA-9", dado: "d", quando: "q", entao: "e" }] }),
     /congelada/,
   );
-  assert.equal(c.banco.prepare("SELECT count(*) AS n FROM sessao_externa_demanda WHERE demanda_id = ?").get(id)?.n, 1);
+  assert.equal(c.banco.prepare("SELECT count(*) AS n FROM trabalho_nao_gerenciado WHERE demanda_id = ?").get(id)?.n, 1);
   assert.equal(pi.prompts().length, 0);
 });
 

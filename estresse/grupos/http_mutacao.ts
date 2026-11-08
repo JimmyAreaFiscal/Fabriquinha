@@ -429,8 +429,9 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
       1000,
       async () => {
         const sessao = await preparo.sessaoParada(false);
-        return (banco.prepare("SELECT demanda_id FROM sessao WHERE id = ?").get(sessao) as { demanda_id: string })
-          .demanda_id;
+        return (
+          banco.prepare("SELECT demanda_id FROM trabalho_agentico WHERE id = ?").get(sessao) as { demanda_id: string }
+        ).demanda_id;
       },
       (demanda) => ({
         url: "/api/avaliacoes",

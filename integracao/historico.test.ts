@@ -17,13 +17,13 @@ import {
   estadoDaAvaliacao,
   iniciarAvaliacao,
 } from "../src/aplicacao/avaliacao.ts";
-import { encerrar, situacao } from "../src/aplicacao/gerente.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
 import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
 import { achadoDaDemanda } from "../src/armazenamento/avaliacoes.ts";
 import { predecessorasDaDemanda } from "../src/armazenamento/dependencias_demanda.ts";
 import { configuracao } from "../src/armazenamento/servico.ts";
-import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import {
   abrirPortao,
   agente,
@@ -66,7 +66,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   const refA = ticketDe(c, a, 1);
   const refAlheia = ticketDe(c, alheia, 1);
   const antes = demanda(c, a);
-  const execucoesAntes = carregarSessoesDoTicket(c.banco, refA).execucoes.length;
+  const execucoesAntes = carregarTrabalhosDoTicket(c.banco, refA).execucoes.length;
 
   const { canceladas } = gestao.cancelar(c.banco, a, AUDITOR, CTX);
   assert.deepEqual([...canceladas].sort(), [a, aberta].sort());
@@ -78,8 +78,8 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   // Libera o agente que sobrou: só a execução da cancelada foi interrompida; a alheia termina normalmente.
   abrirPortao();
   await Promise.all(fins);
-  assert.ok(carregarSessoesDoTicket(c.banco, refA).execucoes.every((e) => e.fim));
-  assert.equal(carregarSessoesDoTicket(c.banco, refA).execucoes.length, execucoesAntes);
+  assert.ok(carregarTrabalhosDoTicket(c.banco, refA).execucoes.every((e) => e.fim));
+  assert.equal(carregarTrabalhosDoTicket(c.banco, refA).execucoes.length, execucoesAntes);
   assert.equal(statusDe(c, refA), "cancelado");
   assert.equal(demanda(c, alheia).demanda.estado, "em_execucao");
   assert.equal(rodadaDe(c, alheia, 1)?.estado, "revisar_rodada");
@@ -89,7 +89,7 @@ test("CA-SDLC-23: cancelar interrompe só a demanda e as dependentes abertas, ar
   assert.deepEqual(depois.decisoes, antes.decisoes);
   assert.deepEqual(depois.evidencias, antes.evidencias);
   assert.deepEqual(depois.rodadas, antes.rodadas);
-  assert.equal(carregarSessoesDoTicket(c.banco, refA).sessoes.length > 0, true);
+  assert.equal(carregarTrabalhosDoTicket(c.banco, refA).sessoes.length > 0, true);
   // A terminada não se cancela de novo.
   assert.throws(() => gestao.cancelar(c.banco, terminada, AUDITOR, CTX), /já terminou/);
 
@@ -197,6 +197,6 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(nova.id), { resultado: "aprovado" }, AUDITOR);
   assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
 
-  encerrar(id);
-  await esperar(() => !situacao(id) && estadoDaAvaliacao(id) === "concluida", "o pi da avaliação parar");
+  condutor.encerrar(id);
+  await esperar(() => !condutor.situacao(id) && estadoDaAvaliacao(id) === "concluida", "o pi da avaliação parar");
 });

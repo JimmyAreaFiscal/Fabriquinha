@@ -16,7 +16,7 @@ import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import {
@@ -453,7 +453,7 @@ test("iniciar: reserva o encerrar_rodada aberto, roda o agente na worktree da ro
   await fim;
 
   assert.equal(ticket()?.estado, "em_execucao");
-  const { sessoes, execucoes } = carregarSessoesDoTicket(banco, { demanda_id: DEMANDA, ticket_id: 8 });
+  const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, { demanda_id: DEMANDA, ticket_id: 8 });
   assert.equal(sessoes.length, 1);
   assert.equal(execucoes[0]?.falha, false);
   assert.match(prompt(), /refaça a aula/);

@@ -9,7 +9,7 @@ import { ErroDeEscopo, ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import * as gestao from "./gestao_demandas.ts";
@@ -259,7 +259,7 @@ test("CA-12: sessão já contada em outra demanda vira aviso e não é contada d
   const { avisos } = submeter(b, c, "custos_realizados", custos());
   assert.equal(avisos.length, 1);
   assert.match(avisos[0] ?? "", new RegExp(`já consta na demanda ${a}`));
-  assert.deepEqual({ ...b.prepare("SELECT demanda_id FROM sessao_externa_demanda").get() }, { demanda_id: a });
+  assert.deepEqual({ ...b.prepare("SELECT demanda_id FROM trabalho_nao_gerenciado").get() }, { demanda_id: a });
 });
 
 test("CA-SDLC-24: custos_realizados com rodada_id vira evidência da rodada e não substitui o da demanda", () => {
@@ -277,7 +277,7 @@ test("CA-SDLC-24: custos_realizados com rodada_id vira evidência da rodada e n�
   );
   assert.deepEqual(
     b
-      .prepare("SELECT sessao FROM sessao_externa_demanda ORDER BY sessao")
+      .prepare("SELECT sessao FROM trabalho_nao_gerenciado ORDER BY sessao")
       .all()
       .map((l) => l.sessao),
     ["ext-r1", "ext1"],
@@ -391,13 +391,13 @@ test("CA-17: reprovar a demanda interrompe a execução aberta da dependente can
   const a = aguardando(b);
   const dep = registrar(b, [a]);
   const ref = { demanda_id: dep, ticket_id: 1 };
-  comSessoesDoTicket(b, ref, (x) => ({
+  comTrabalhosDoTicket(b, ref, (x) => ({
     ...x,
     sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
-    execucoes: [{ id: "e1", sessao_id: "s1", inicio: ctx.agora, falha: false }],
+    execucoes: [{ id: "e1", trabalho_id: "s1", inicio: ctx.agora, falha: false }],
   }));
   await decidirGateDaDemandaComoAuditor(b, a, reprovar);
-  assert.ok(carregarSessoesDoTicket(b, ref).execucoes[0]?.fim);
+  assert.ok(carregarTrabalhosDoTicket(b, ref).execucoes[0]?.fim);
 });
 
 test("CA-18: reprovar sem motivo pede o motivo; outros erros de entrada seguem o padrão", async () => {
@@ -455,21 +455,21 @@ test("CA-22: a execução órfã de uma dependente é interrompida e fica com o 
   const a = registrar(b);
   const dep = registrar(b, [a]);
   const ref = { demanda_id: dep, ticket_id: 1 };
-  comSessoesDoTicket(b, ref, (x) => ({
+  comTrabalhosDoTicket(b, ref, (x) => ({
     ...x,
     sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
-    execucoes: [{ id: "e1", sessao_id: "s1", inicio: ctx.agora, falha: false }],
+    execucoes: [{ id: "e1", trabalho_id: "s1", inicio: ctx.agora, falha: false }],
   }));
   const alheia = registrar(b);
   const refAlheia = { demanda_id: alheia, ticket_id: 1 };
-  comSessoesDoTicket(b, refAlheia, (x) => ({
+  comTrabalhosDoTicket(b, refAlheia, (x) => ({
     ...x,
     sessoes: [{ id: "s2", ...refAlheia, modo: "autonomo", conversa_referencia: "c" }],
-    execucoes: [{ id: "e2", sessao_id: "s2", inicio: ctx.agora, falha: false }],
+    execucoes: [{ id: "e2", trabalho_id: "s2", inicio: ctx.agora, falha: false }],
   }));
   gestao.cancelar(b, a, AUDITOR, ctx);
-  assert.equal(carregarSessoesDoTicket(b, refAlheia).execucoes[0]?.fim, null);
-  const [exec] = carregarSessoesDoTicket(b, ref).execucoes;
+  assert.equal(carregarTrabalhosDoTicket(b, refAlheia).execucoes[0]?.fim, null);
+  const [exec] = carregarTrabalhosDoTicket(b, ref).execucoes;
   assert.ok(exec?.fim);
 });
 
@@ -492,17 +492,17 @@ test("CA-25: cancelar mantém decisões, evidências e execuções", async () =>
   const b = novoBanco();
   const a = aguardando(b);
   const ref = { demanda_id: a, ticket_id: 1 };
-  comSessoesDoTicket(b, ref, (x) => ({
+  comTrabalhosDoTicket(b, ref, (x) => ({
     ...x,
     sessoes: [{ id: "s1", ...ref, modo: "autonomo", conversa_referencia: "c" }],
-    execucoes: [{ id: "e1", sessao_id: "s1", inicio: ctx.agora, falha: false, fim: ctx.agora }],
+    execucoes: [{ id: "e1", trabalho_id: "s1", inicio: ctx.agora, falha: false, fim: ctx.agora }],
   }));
   await decidirGateDaDemandaComoAuditor(b, a, aprovar);
-  const antes = { ag: carregarDemanda(b, a), ex: carregarSessoesDoTicket(b, ref).execucoes };
+  const antes = { ag: carregarDemanda(b, a), ex: carregarTrabalhosDoTicket(b, ref).execucoes };
   const { demanda } = gestao.cancelar(b, a, AUDITOR, ctx);
   assert.deepEqual(demanda.decisoes, antes.ag.decisoes);
   assert.deepEqual(demanda.evidencias, antes.ag.evidencias);
-  assert.deepEqual(carregarSessoesDoTicket(b, ref).execucoes, antes.ex);
+  assert.deepEqual(carregarTrabalhosDoTicket(b, ref).execucoes, antes.ex);
 });
 
 test("CA-26: falha na gravação de uma dependente desfaz a demanda e todas as dependentes", () => {

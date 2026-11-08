@@ -129,17 +129,24 @@ test("parar apaga o web.url: o abrir diz que o serviço não está rodando em ve
   assert.equal(existsSync(join(raiz, "web.url")), false);
 });
 
-test("reinício: o pi de uma avaliação da instância anterior é morto pelo pgid da pasta dela", async () => {
-  const raiz = novaRaiz();
+test("reinício: o pi de uma avaliação da instância anterior é morto pelo grupo_processo dela", async () => {
+  const { raiz, banco } = abrirBancoTemporario();
   const pi = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
   const saiu = once(pi, "exit");
-  const dir = join(raiz, "avaliacoes", "11111111-1111-4111-8111-111111111111");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "pgid"), String(pi.pid));
+  banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube)
+      VALUES ('d', '/nao/existe', 'main', 'github', 'k')`);
+  banco
+    .prepare(
+      `INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
+       VALUES ('11111111-1111-4111-8111-111111111111', 'd', '2026-10-01', '2026-10-02', '', ?, ?)`,
+    )
+    .run(AGORA, pi.pid ?? null);
+  banco.close();
 
-  await (await subir(raiz)).parar();
+  const s = await subir(raiz);
   assert.deepEqual(await saiu, [null, "SIGKILL"]);
-  assert.equal(existsSync(join(dir, "pgid")), false);
+  assert.equal(s.banco.prepare("SELECT grupo_processo FROM avaliacao").get()?.grupo_processo, null);
+  await s.parar();
 });
 
 test("CA-12: reinício encerra a execução aberta da demanda como falha e leva o ticket a falhou, sem mexer no estado", async () => {
@@ -151,18 +158,20 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
     INSERT INTO demanda VALUES ('I-1', 'd', 't', 'funcionalidade', 'd', 'em_execucao', '${AGORA}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
       VALUES ('I-1', 1, 'implementar', 'em_execucao', '${AGORA}');
-    INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');`);
+    INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 's1');`);
   banco
-    .prepare("INSERT INTO execucao_sessao (id, sessao_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', ?, 0, ?)")
+    .prepare(
+      "INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, falha, grupo_processo) VALUES ('e1', 's1', ?, 0, ?)",
+    )
     .run(AGORA, pi.pid ?? null);
   banco.close();
 
   const s = await subir(raiz);
   assert.deepEqual(await saiu, [null, "SIGKILL"]);
-  assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM execucao_sessao").get(), {
+  assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM processo_do_trabalho").get(), {
     falha: 1,
   });
-  assert.notEqual(s.banco.prepare("SELECT fim FROM execucao_sessao").get()?.fim, null);
+  assert.notEqual(s.banco.prepare("SELECT fim FROM processo_do_trabalho").get()?.fim, null);
   assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM ticket_demanda").get(), {
     etapa: "implementar",
     estado: "falhou",

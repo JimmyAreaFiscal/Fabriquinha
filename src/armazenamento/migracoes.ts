@@ -819,6 +819,25 @@ ALTER TABLE decisao_ticket_nova RENAME TO decisao_ticket;
 `);
 };
 
+/**
+ * A 42 dá os nomes do Trabalho Agêntico às tabelas da sessão: `sessao` vira `trabalho_agentico`, `execucao_sessao`
+ * `processo_do_trabalho` (com `sessao_id` virando `trabalho_id`) e `sessao_externa_demanda` `trabalho_nao_gerenciado`.
+ * O RENAME mantém as linhas, os ids e os CHECK, e leva junto as FKs de quem as referencia (`processo_do_trabalho`,
+ * `uso_modelo_execucao`); só os índices, que carregam o nome antigo, são refeitos. A avaliação ganha `grupo_processo`,
+ * que substitui o arquivo `avaliacoes/<id>/pgid`.
+ */
+const MIGRACAO_42_TRABALHO_AGENTICO = `
+ALTER TABLE sessao RENAME TO trabalho_agentico;
+ALTER TABLE execucao_sessao RENAME TO processo_do_trabalho;
+ALTER TABLE processo_do_trabalho RENAME COLUMN sessao_id TO trabalho_id;
+ALTER TABLE sessao_externa_demanda RENAME TO trabalho_nao_gerenciado;
+DROP INDEX ix_sessao_ticket;
+CREATE INDEX ix_trabalho_agentico_ticket ON trabalho_agentico(demanda_id, ticket_id);
+DROP INDEX ix_execucao_sessao_sessao;
+CREATE INDEX ix_processo_do_trabalho_trabalho ON processo_do_trabalho(trabalho_id);
+ALTER TABLE avaliacao ADD COLUMN grupo_processo INTEGER CHECK (grupo_processo IS NULL OR (typeof(grupo_processo) = 'integer' AND grupo_processo > 0));
+`;
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -826,4 +845,5 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_39_PROJETO_UNICO,
   MIGRACAO_40_TENTATIVA,
   MIGRACAO_41_GATE_DA_DECISAO,
+  MIGRACAO_42_TRABALHO_AGENTICO,
 ];

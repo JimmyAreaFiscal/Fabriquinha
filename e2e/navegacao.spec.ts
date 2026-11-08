@@ -134,8 +134,8 @@ function sessaoDeDemandaAguardando(raiz: string): void {
     INSERT INTO tentativa (demanda_id, ticket_id, numero, processo_id, inicio, fim, resultado_tipo, causa, motivo) VALUES
       ('I-1', 1, 1, 'x1', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 'interrompida', 'fabriquinha', 'testes falharam'),
       ('I-2', 1, 1, 'x2', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 'interrompida', 'fabriquinha', 'testes falharam');
-    INSERT INTO sessao VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1'), ('s-i2', 'I-2', 1, 'autonomo', 'c2');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES
+    INSERT INTO trabalho_agentico VALUES ('${SESSAO}', 'I-1', 1, 'autonomo', 'c1'), ('s-i2', 'I-2', 1, 'autonomo', 'c2');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
       ('x1', '${SESSAO}', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1),
       ('x2', 's-i2', '2026-10-11T12:00:00.000Z', '2026-10-11T12:05:00.000Z', 1);
   `);

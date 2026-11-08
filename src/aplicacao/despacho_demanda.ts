@@ -26,7 +26,7 @@ import { conduzirRevisaoRodada } from "./revisao_rodada.ts";
 /** @testes tipo que o teste usa para montar a entrada */
 export interface DepsDespacho {
   /** Início da execução do `implementar`; injetável nos testes para não subir o pi (padrão: `iniciarExecucaoDemanda`). */
-  iniciarExecucao?: typeof iniciarExecucaoDemanda;
+  iniciarProcesso?: typeof iniciarExecucaoDemanda;
   /** Espera da verificação do PR no `encerrar_demanda`; injetável nos testes. */
   verificacao?: DepsEncerramentoDemanda["verificacao"];
 }
@@ -79,7 +79,7 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
     }
     // A devolução técnica (D05) ou a reabertura do Auditor que precede esta Tentativa vai ao prompt.
     const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, demanda_id).tentativas, ticket_id);
-    return (deps.iniciarExecucao ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
+    return (deps.iniciarProcesso ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
   }
   if (t.etapa === "revisar_rodada") {
     return conduzirRevisaoRodada(banco, rodadaDe(t), { limiteMin });

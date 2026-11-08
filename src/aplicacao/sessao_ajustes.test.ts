@@ -20,7 +20,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
-import { situacao } from "./gerente.ts";
+import { condutor } from "./trabalho/condutor.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import { abrirSessaoDeAjustes, concluirSessaoAjustes, guardarMarcoDaSessao } from "./sessao_ajustes.ts";
 import { enviarDemanda } from "./sessoes_demanda.ts";
@@ -242,7 +242,7 @@ test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na
   await reprovarPRRodada(banco, MOTIVO);
   await ate(() => prompts().length === 1);
   const sessao = prompts()[0]?.sessao ?? "";
-  await ate(() => situacao(sessao)?.ocupado === false);
+  await ate(() => condutor.situacao(sessao)?.ocupado === false);
 
   enviarDemanda(banco, sessao, "Cobre o erro de rede também", "prompt", 5);
 
@@ -276,7 +276,7 @@ test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesm
   assert.equal(prompts()[1]?.sessao, sessao);
   assert.equal(prompts()[1]?.prompt, "Voltei");
   // A restauração volta a rodada, a demanda e a worktree depois que o pi para.
-  await ate(() => situacao(sessao) === undefined && sha(BRANCH_DEMANDA) === demanda && !sujo());
+  await ate(() => condutor.situacao(sessao) === undefined && sha(BRANCH_DEMANDA) === demanda && !sujo());
   assert.equal(sha(BRANCH_RODADA), head);
   assert.equal(ag().tickets.find((t) => t.ticket_id === 9)?.estado, "aberto");
   await concluirComCorrecao(banco, ag);

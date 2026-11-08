@@ -95,13 +95,13 @@ test("CA-5: o trabalho global ativo traz o ticket em execução com a etapa e a 
 
 test("o trabalho ativo e a página marcam `pi_ativo` só quando o pi subiu, não na preparação da worktree", async () => {
   const { pedir, banco } = await cenarioDemandas();
-  banco.exec(`INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s', 'I-206', 3, 'autonomo', 'c');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e', 's', '2026-01-01T00:00:00.000Z', NULL, 0)`);
+  banco.exec(`INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s', 'I-206', 3, 'autonomo', 'c');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('e', 's', '2026-01-01T00:00:00.000Z', NULL, 0)`);
   // Execução aberta sem o grupo do pi: a preparação da worktree, que é o sistema.
   assert.deepEqual((await pedir("/api/demandas")).json<Board>().trabalho, [
     { ref: "I-206.T3", etapa: "implementar", rodada: "I-206.R2" },
   ]);
-  banco.exec("UPDATE execucao_sessao SET grupo_processo = 4242 WHERE id = 'e'");
+  banco.exec("UPDATE processo_do_trabalho SET grupo_processo = 4242 WHERE id = 'e'");
   assert.deepEqual((await pedir("/api/demandas")).json<Board>().trabalho, [
     { ref: "I-206.T3", etapa: "implementar", rodada: "I-206.R2", pi_ativo: true },
   ]);
@@ -214,7 +214,7 @@ test("o ticket é elegível só se a seleção o escolheria agora", async () => 
 test("CA-16 e CA-17: a página traz a sessão mais recente só nos tickets que têm sessão", async () => {
   const { pedir, banco } = await cenarioDemandas();
   const nova = banco.prepare(
-    "INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-206', 3, 'autonomo', 'c')",
+    "INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, 'I-206', 3, 'autonomo', 'c')",
   );
   nova.run("s-antiga");
   nova.run("s-nova");

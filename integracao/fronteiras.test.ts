@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { ZodError } from "zod";
 import { type Ator } from "../src/nucleo/ator.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
-import { argumentosPi } from "../src/infra/agente/pi.ts";
+import { HarnessPi } from "../src/infra/agente/harness_pi.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { buscarProjeto, gravarProjeto } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
@@ -16,6 +16,7 @@ import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada, submeterPlano
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
 const pi = instalarPiFalso(base);
+const harness = new HarnessPi();
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
@@ -186,7 +187,7 @@ test("CA-SDLC-21: configuração de projeto inválida é rejeitada na fronteira,
 
   // O par de modelo gravado chega inteiro ao pi.
   const etapaGravada = buscarProjeto(c.banco, c.projeto)?.etapas[0];
-  const args = argumentosPi({
+  const args = harness.argumentos({
     raiz: c.raiz,
     sessaoPi: "s-1",
     skills: [],

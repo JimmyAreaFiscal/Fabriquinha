@@ -94,10 +94,10 @@ export function lerAnexo(banco: DatabaseSync, chave: ChaveEvidencia, sha256: str
 /**
  * Regrava as sessões externas da demanda a partir de todas as `custos_realizados` dela, de qualquer dono (demanda ou
  * rodada). A sessão que outra demanda já informou não muda de dona e vira aviso: não é contada de novo. Não escreve em
- * `execucao_sessao` nem em `uso_modelo_execucao`: custo externo não é execução interna.
+ * `processo_do_trabalho` nem em `uso_modelo_execucao`: custo externo não é execução interna.
  */
 export function registrarSessoesExternas(banco: DatabaseSync, demanda_id: string): { avisos: string[] } {
-  banco.prepare("DELETE FROM sessao_externa_demanda WHERE demanda_id = ?").run(demanda_id);
+  banco.prepare("DELETE FROM trabalho_nao_gerenciado WHERE demanda_id = ?").run(demanda_id);
   const sessoes = banco
     .prepare(
       `SELECT json_extract(s.value, '$.ferramenta') AS ferramenta, json_extract(s.value, '$.sessao') AS sessao
@@ -107,9 +107,9 @@ export function registrarSessoesExternas(banco: DatabaseSync, demanda_id: string
     )
     .all(demanda_id) as { ferramenta: string; sessao: string }[];
   const inserir = banco.prepare(
-    "INSERT INTO sessao_externa_demanda (ferramenta, sessao, demanda_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+    "INSERT INTO trabalho_nao_gerenciado (ferramenta, sessao, demanda_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
   );
-  const dona = banco.prepare("SELECT demanda_id FROM sessao_externa_demanda WHERE ferramenta = ? AND sessao = ?");
+  const dona = banco.prepare("SELECT demanda_id FROM trabalho_nao_gerenciado WHERE ferramenta = ? AND sessao = ?");
   const avisos: string[] = [];
   for (const { ferramenta, sessao } of sessoes) {
     if (

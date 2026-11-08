@@ -1,7 +1,5 @@
 // Efeitos do gate do planejamento fora do agregado (comparacao-sdlc-implementacao.md §§3 e 6): preparar as worktrees
 // antes de aprovar e falar com o pi vivo da sessão de planejamento. Git e pi ficam fora da transação.
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import type { Ator } from "../../nucleo/ator.ts";
@@ -12,15 +10,15 @@ import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
-import { carregarSessoesDoTicket } from "../../armazenamento/sessoes.ts";
-import { anotar } from "../../infra/registro.ts";
+import { carregarTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
+import { anotar, logDaOperacao } from "../../infra/registro.ts";
 import {
   caminhoDaWorktreeDemanda,
   caminhoDaWorktreeRodada,
   garantirWorktreeDemanda,
   garantirWorktreeRodada,
 } from "../../infra/repositorio/worktree-demanda.ts";
-import { encerrar, mandar, situacao } from "../gerente.ts";
+import { condutor } from "../trabalho/condutor.ts";
 import { varrerBase } from "../retrabalho.ts";
 
 const gate = GATES.gate_planejamento;
@@ -28,9 +26,9 @@ const contexto = () => ({ agora: new Date().toISOString() });
 
 /** O pi vivo da última sessão do ticket de planejamento, se há. */
 function piVivoDoPlanejamento(banco: DatabaseSync, demanda_id: string, ticket_id: number) {
-  const { sessoes } = carregarSessoesDoTicket(banco, { demanda_id, ticket_id });
+  const { sessoes } = carregarTrabalhosDoTicket(banco, { demanda_id, ticket_id });
   const atual = sessoes.at(-1);
-  return atual && situacao(atual.id);
+  return atual && condutor.situacao(atual.id);
 }
 
 /**
@@ -50,7 +48,10 @@ export function reprovarGateDoPlanejamento(
   );
   const viva = piVivoDoPlanejamento(banco, endereco.demanda_id, ticket_id);
   if (viva && !viva.ocupado) {
-    mandar(viva.execucao, { type: "prompt", message: `Planejamento reprovado pelo Auditor. Motivo: ${motivo}` });
+    condutor.mandar(viva.execucao, {
+      type: "prompt",
+      message: `Planejamento reprovado pelo Auditor. Motivo: ${motivo}`,
+    });
   }
   return reprovado;
 }
@@ -73,8 +74,7 @@ export async function aprovarGateDoPlanejamento(
   const plano = Plano.parse(ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticket_id)?.dados);
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
-  mkdirSync(join(raiz, "execucoes"), { recursive: true });
-  const log = join(raiz, "execucoes", `planejamento-${demanda_id}.log`);
+  const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
   const passos = [
     {
       caminho: caminhoDaWorktreeDemanda(raiz, projeto.nome, demanda_id),
@@ -102,6 +102,6 @@ export async function aprovarGateDoPlanejamento(
   const aprovado = comDemanda(banco, demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, contexto()));
   // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
   const viva = piVivoDoPlanejamento(banco, demanda_id, ticket_id);
-  if (viva) encerrar(viva.execucao);
+  if (viva) condutor.encerrar(viva.execucao);
   return aprovado;
 }

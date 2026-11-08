@@ -6,7 +6,8 @@ import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
 import { catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import type { EtapaTicket } from "../nucleo/primitivos.ts";
-import { argumentosPi, PACOTE, skillDoTipo, type Lancamento } from "../infra/agente/pi.ts";
+import { HarnessPi, type Lancamento } from "../infra/agente/harness_pi.ts";
+import { PACOTE, skillDoTipo } from "../infra/agente/pi.ts";
 
 const existe = (skill: string, pacote: string): boolean => existsSync(join(pacote, "skills", skill));
 
@@ -33,5 +34,5 @@ export function argumentosPiDemanda({
     etapaDoProjeto: etapasDoProjeto.find((e) => e.etapa === ticket.etapa)?.configuracao_agente,
     padrao: {},
   });
-  return argumentosPi({ ...resto, skills: skillsDaEtapaDemanda(ticket.etapa), modelo, effort });
+  return new HarnessPi().argumentos({ ...resto, skills: skillsDaEtapaDemanda(ticket.etapa), modelo, effort });
 }

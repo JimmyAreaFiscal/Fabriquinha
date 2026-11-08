@@ -54,8 +54,8 @@ function demandaComExecucao(id: string, projeto: string, tipo = "problema"): voi
   const agoraIso = new Date().toISOString();
   banco.exec(`INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título', '${tipo}', 'd', 'em_execucao', '${agoraIso}', 'f', 's', 1, 'b-${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'planejar', 'concluido', '${agoraIso}');
-    INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${agoraIso}', '${agoraIso}', 0);
+    INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'conv');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x-${id}', 's-${id}', '${agoraIso}', '${agoraIso}', 0);
     INSERT INTO uso_modelo_execucao VALUES ('x-${id}', 'p', 'm', 10, 1, 0, 0, 2);`);
 }
 

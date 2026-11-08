@@ -6,7 +6,7 @@ import { mensagem } from "../../../nucleo/erros.ts";
 import { ConfiguracaoAgente, type Modelo } from "../../../nucleo/configuracao_agente.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { ComandosDePreparacao, Hospedagem, Projeto } from "../../../nucleo/projeto.ts";
-import { conferirModelo, listarModelos } from "../../../infra/agente/modelos.ts";
+import { HarnessPi } from "../../../infra/agente/harness_pi.ts";
 import { varrerBase } from "../../../aplicacao/retrabalho.ts";
 import { escrever } from "../../../armazenamento/banco.ts";
 import { noLog } from "../../../infra/registro.ts";
@@ -72,7 +72,7 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, confi
   const rejeitados = (
     await Promise.all(
       alterados.map(({ etapa, modelo }) =>
-        conferirModelo(modelo).then(
+        new HarnessPi().conferirModelo(modelo).then(
           () => [],
           (error_: unknown) => [
             {
@@ -132,7 +132,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
       const modelo = nova.modeloAuditoria;
       const gravado = configuracao(banco).modeloAuditoria;
       if (modelo && (modelo.provedor !== gravado?.provedor || modelo.nome !== gravado.nome)) {
-        await conferirModelo(modelo).catch((error_: unknown) => {
+        await new HarnessPi().conferirModelo(modelo).catch((error_: unknown) => {
           throw new z.ZodError([
             { code: "custom", path: ["modeloAuditoria"], message: mensagem(error_), input: modelo },
           ]);
@@ -155,7 +155,7 @@ export const ROTAS_DA_CONFIGURACAO: Rota[] = [
       return comConfiguracoes(projetoExistente(banco, nome));
     },
   },
-  { metodo: "GET", caminho: "/api/modelos", tratar: () => listarModelos() },
+  { metodo: "GET", caminho: "/api/modelos", tratar: () => new HarnessPi().listarModelos() },
   {
     metodo: "POST",
     caminho: "/api/projetos",

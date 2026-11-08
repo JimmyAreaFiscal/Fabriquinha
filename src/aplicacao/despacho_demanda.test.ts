@@ -11,7 +11,7 @@ import { after, type TestContext, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
-import { criarSessao, iniciarExecucao } from "../nucleo/sessoes.ts";
+import { criarTrabalho, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
@@ -24,7 +24,7 @@ import {
 } from "../nucleo/tentativa.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { configuracao } from "../armazenamento/servico.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
@@ -162,26 +162,26 @@ const implementar = (rodada: number, id?: number): TicketSpec => ({ etapa: "impl
 const estadoDoTicket = (banco: DatabaseSync, n: number, ticket_id: number) =>
   carregarDemanda(banco, `I-${String(n)}`).tickets.find((t) => t.ticket_id === ticket_id)?.estado;
 const aberta = (banco: DatabaseSync, n: number, ticket_id: number) =>
-  carregarSessoesDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.filter((e) => e.fim == null)
+  carregarTrabalhosDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.filter((e) => e.fim == null)
     .length;
 const execucoes = (banco: DatabaseSync, n: number, ticket_id: number) =>
-  carregarSessoesDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.length;
+  carregarTrabalhosDoTicket(banco, { demanda_id: `I-${String(n)}`, ticket_id }).execucoes.length;
 
 /** Abre sessão e execução como o serviço da execução, sem subir o pi. */
-const iniciarFalso: NonNullable<DepsDespacho["iniciarExecucao"]> = (banco, ref) => {
+const iniciarFalso: NonNullable<DepsDespacho["iniciarProcesso"]> = (banco, ref) => {
   const id = randomUUID();
   const sessao = { ...ref, id: randomUUID(), modo: "autonomo" as const, conversa_referencia: "c" };
-  comSessoesDoTicket(banco, ref, (estado) => {
-    const sessoes = criarSessao(estado.sessoes, sessao);
+  comTrabalhosDoTicket(banco, ref, (estado) => {
+    const sessoes = criarTrabalho(estado.sessoes, sessao);
     return {
       ...estado,
       sessoes,
-      execucoes: iniciarExecucao(sessoes, estado.execucoes, { id, sessao_id: sessao.id, inicio: em, falha: false }),
+      execucoes: iniciarProcesso(sessoes, estado.execucoes, { id, trabalho_id: sessao.id, inicio: em, falha: false }),
     };
   });
   return { id, fim: Promise.resolve(undefined) };
 };
-const deps: DepsDespacho = { iniciarExecucao: iniciarFalso };
+const deps: DepsDespacho = { iniciarProcesso: iniciarFalso };
 const silenciar = (t: TestContext) => t.mock.method(console, "error", () => undefined);
 
 test("CA-1: o ciclo reserva o implementar elegível e cria a execução aberta", async () => {
@@ -199,7 +199,7 @@ test("a instrução do ticket aberto vai à execução: devolução técnica (D0
   const retomadas: (RetornoAoAgente | undefined)[] = [];
   await Promise.all(
     despacharDemandas(banco, config, {
-      iniciarExecucao: (b, ref, opcoes) => {
+      iniciarProcesso: (b, ref, opcoes) => {
         retomadas.push(opcoes.retomada);
         return iniciarFalso(b, ref, opcoes);
       },
@@ -350,7 +350,7 @@ test("falha síncrona ao iniciar desfaz a reserva e vai ao log; fim rejeitado ta
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [implementar(1)] });
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [implementar(1)] });
   const quebrado: DepsDespacho = {
-    iniciarExecucao: (b, ref, o) => {
+    iniciarProcesso: (b, ref, o) => {
       if (ref.demanda_id === "I-2") throw new Error("sem sessão");
       return { ...iniciarFalso(b, ref, o), fim: Promise.reject(new Error("pi caiu")) };
     },
@@ -378,8 +378,10 @@ test("CA-2: planejar reprovado com execução aberta (pi vivo) não é retomado"
   demanda(banco, 1, { estado: "planejar", tickets: [{ etapa: "planejar", estado: "em_execucao" }] });
   banco.exec(`INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, motivo, por_tipo, em)
     VALUES ('I-1', 1, 1, 'gate_planejamento', 'reprovado', 'refaça o plano', 'auditor', '${em}')`);
-  banco.exec("INSERT INTO sessao VALUES ('S-1', 'I-1', 1, 'interativo', 'ref')");
-  banco.exec(`INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('E-1', 'S-1', '${em}', NULL, 0)`);
+  banco.exec("INSERT INTO trabalho_agentico VALUES ('S-1', 'I-1', 1, 'interativo', 'ref')");
+  banco.exec(
+    `INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('E-1', 'S-1', '${em}', NULL, 0)`,
+  );
   for (let i = 0; i < 2; i++) assert.equal(despacharDemandas(banco, config, deps).length, 0);
   assert.equal(execucoes(banco, 1, 1), 1);
 });

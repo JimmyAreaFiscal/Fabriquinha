@@ -1,8 +1,8 @@
 // Sessões dos tickets da demanda para o Histórico e para o contador da navegação (comparacao-sdlc-implementacao.md
 // §9.1): lê `sessao` e o estado que o chat calcula; as sessões migradas pelo backfill entram como as novas.
 import type { DatabaseSync } from "node:sqlite";
-import type { ModoExecucao } from "../nucleo/sessoes.ts";
-import type { ExecucaoSessao } from "../nucleo/sessoes.ts";
+import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
+import type { ProcessoDoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import { encontrado } from "../nucleo/erros.ts";
@@ -20,7 +20,7 @@ export interface SessaoDeDemanda {
   rodada?: string;
   ticket: string;
   etapa: EtapaTicket;
-  modo: ModoExecucao;
+  modo: ModoTrabalho;
   modelo?: Modelo;
   estado: Estado;
   motivo?: MotivoDemanda;
@@ -47,7 +47,7 @@ interface FiltroSessoesDemanda {
 export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDemanda): SessaoDeDemanda[] {
   const linhas = banco
     .prepare(
-      `SELECT s.id, d.titulo FROM sessao s
+      `SELECT s.id, d.titulo FROM trabalho_agentico s
          JOIN demanda d ON d.id = s.demanda_id
          JOIN ticket_demanda t ON t.demanda_id = s.demanda_id AND t.ticket_id = s.ticket_id
         WHERE ($projeto IS NULL OR d.projeto = $projeto)
@@ -67,7 +67,7 @@ export function sessoesDeDemanda(banco: DatabaseSync, filtro: FiltroSessoesDeman
         "confira o banco",
       );
       // O cabeçalho já recusa a sessão sem execução.
-      const [primeira, ultima] = [execucoes[0], execucoes.at(-1)] as [ExecucaoSessao, ExecucaoSessao];
+      const [primeira, ultima] = [execucoes[0], execucoes.at(-1)] as [ProcessoDoTrabalho, ProcessoDoTrabalho];
       return {
         sessao: id,
         projeto: sessao.projeto,

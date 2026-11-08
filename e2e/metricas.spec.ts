@@ -20,8 +20,8 @@ function semear(raiz: string): void {
     `INSERT INTO demanda VALUES ('${id}', '${nome}', '${titulo}', '${tipo}', 'd', 'em_execucao', '${em(mes)}', 'f', 's', 1, 'fabriquinha/${id}');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', '${em(mes)}');`;
   const execucao = (id: number, demandaId: string, mes: string, custo: number) =>
-    `INSERT INTO sessao VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('x${String(id)}', 's${String(id)}', '${em(mes)}', '${em(mes)}', 0);
+    `INSERT INTO trabalho_agentico VALUES ('s${String(id)}', '${demandaId}', 1, 'autonomo', 'conv${String(id)}');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('x${String(id)}', 's${String(id)}', '${em(mes)}', '${em(mes)}', 0);
     INSERT INTO uso_modelo_execucao VALUES ('x${String(id)}', 'anthropic', 'claude-sonnet-5-5', ${String(custo * 1000)}, 500, 0, 0, ${String(custo)});`;
   banco.exec(`
     ${projeto("loja")}
@@ -128,8 +128,8 @@ function semearNumerosGrandes(raiz: string): void {
     INSERT INTO demanda VALUES ('I-1', 'loja', 'Busca por SKU', 'problema', 'd', 'em_execucao', '${em(M1)}', 'f', 's', 1, 'fabriquinha/I-1');
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 1, 'implementar', 'concluido', '${em(M0)}'), ('I-1', 2, 'implementar', 'concluido', '${em(M0)}');
-    INSERT INTO sessao VALUES ('s1', 'I-1', 1, 'autonomo', 'conv1');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ${execucoes.join(", ")},
+    INSERT INTO trabalho_agentico VALUES ('s1', 'I-1', 1, 'autonomo', 'conv1');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ${execucoes.join(", ")},
       ('anterior', 's1', '${em(M1)}', '${em(M1)}', 0);
     INSERT INTO uso_modelo_execucao VALUES
       ('x0', 'anthropic', 'claude-sonnet-5-5', 52000000, 900000, 0, 0, 1351.76),

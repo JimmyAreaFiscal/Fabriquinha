@@ -1,26 +1,29 @@
-// Sessão, execução da sessão e uso por modelo (comparacao-sdlc-implementacao.md §7.3). Funções puras sobre arrays:
-// quem chama persiste o resultado. `ExecucaoSessao` registra uma execução do pi dentro da sessão.
+// Trabalho Agêntico, processo do trabalho e uso por modelo (comparacao-sdlc-implementacao.md §7.3). Funções puras sobre
+// arrays: quem chama persiste o resultado. `ProcessoDoTrabalho` registra uma execução do pi dentro do trabalho.
 import { z } from "zod";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { TicketRef } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
-import { Id, Instante } from "./primitivos.ts";
+import { Id, Instante, Slug } from "./primitivos.ts";
 
-export const ModoExecucao = z.enum(["autonomo", "interativo", "consulta"]);
-export type ModoExecucao = z.infer<typeof ModoExecucao>;
+export const ModoTrabalho = z.enum(["autonomo", "interativo", "consulta"]);
+export type ModoTrabalho = z.infer<typeof ModoTrabalho>;
 
 const IdTexto = z.string().trim().min(1);
 const Tokens = z.number().int().nonnegative();
 
-export const Sessao = TicketRef.extend({
+/** O trabalho de uma ferramenta de fora da Fabriquinha: a ferramenta e a sessão dela. */
+export const TrabalhoNaoGerenciado = z.object({ ferramenta: Slug, sessao: z.string().min(1) });
+
+export const TrabalhoGerenciado = TicketRef.extend({
   id: IdTexto,
-  modo: ModoExecucao,
+  modo: ModoTrabalho,
   conversa_referencia: IdTexto,
 });
 
-export const ExecucaoSessao = z.object({
+export const ProcessoDoTrabalho = z.object({
   id: IdTexto,
-  sessao_id: IdTexto,
+  trabalho_id: IdTexto,
   inicio: Instante,
   fim: Instante.nullish(),
   /** Só vale com `fim`: false é sucesso, true é falha. */
@@ -31,7 +34,7 @@ export const ExecucaoSessao = z.object({
   configuracao_agente: ConfiguracaoAgente.optional(),
 });
 
-/** Tokens e custo pertencem ao uso da execução, nunca à sessão. `custo` ausente é desconhecido, não zero. */
+/** Tokens e custo pertencem ao uso do processo, nunca ao trabalho. `custo` ausente é desconhecido, não zero. */
 export const UsoModeloExecucao = z.object({
   execucao_id: IdTexto,
   modelo_provedor: IdTexto,
@@ -43,8 +46,8 @@ export const UsoModeloExecucao = z.object({
   custo: z.number().nonnegative().optional(),
 });
 
-export type Sessao = z.infer<typeof Sessao>;
-export type ExecucaoSessao = z.infer<typeof ExecucaoSessao>;
+export type TrabalhoGerenciado = z.infer<typeof TrabalhoGerenciado>;
+export type ProcessoDoTrabalho = z.infer<typeof ProcessoDoTrabalho>;
 export type UsoModeloExecucao = z.infer<typeof UsoModeloExecucao>;
 
 export interface TotalUso {
@@ -58,52 +61,58 @@ export interface TotalUso {
   custo_incompleto: boolean;
 }
 
-export const criarSessao = (sessoes: readonly Sessao[], nova: Sessao): Sessao[] => {
-  const sessao = Sessao.parse(nova);
+export const criarTrabalho = (
+  sessoes: readonly TrabalhoGerenciado[],
+  nova: TrabalhoGerenciado,
+): TrabalhoGerenciado[] => {
+  const sessao = TrabalhoGerenciado.parse(nova);
   if (sessoes.some((s) => s.id === sessao.id)) throw new ErroDeRegra(`sessão ${sessao.id} já existe`, "use outro id");
   return [...sessoes, sessao];
 };
 
 /** Fim null ou omitido é execução não encerrada. */
-const aberta = (e: ExecucaoSessao): boolean => e.fim == null;
+const aberta = (e: ProcessoDoTrabalho): boolean => e.fim == null;
 
 const abrir = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
-  nova: ExecucaoSessao,
+  sessoes: readonly TrabalhoGerenciado[],
+  execucoes: readonly ProcessoDoTrabalho[],
+  nova: ProcessoDoTrabalho,
   retomada: boolean,
 ) => {
-  const exec = ExecucaoSessao.parse(nova);
-  const daSessao = execucoes.filter((e) => e.sessao_id === exec.sessao_id);
-  if (!sessoes.some((s) => s.id === exec.sessao_id)) throw new ErroDeRegra(`sessão ${exec.sessao_id} não existe`);
+  const exec = ProcessoDoTrabalho.parse(nova);
+  const daSessao = execucoes.filter((e) => e.trabalho_id === exec.trabalho_id);
+  if (!sessoes.some((s) => s.id === exec.trabalho_id)) throw new ErroDeRegra(`sessão ${exec.trabalho_id} não existe`);
   if (retomada && daSessao.length === 0)
-    throw new ErroDeRegra(`sessão ${exec.sessao_id} não tem execução a retomar`, "inicie uma");
+    throw new ErroDeRegra(`sessão ${exec.trabalho_id} não tem execução a retomar`, "inicie uma");
   if (execucoes.some((e) => e.id === exec.id)) throw new ErroDeRegra(`execução ${exec.id} já existe`, "use outro id");
   if (daSessao.some(aberta))
-    throw new ErroDeRegra(`sessão ${exec.sessao_id} já tem execução sem fim`, "encerre-a antes");
+    throw new ErroDeRegra(`sessão ${exec.trabalho_id} já tem execução sem fim`, "encerre-a antes");
   return [...execucoes, exec];
 };
 
-export const iniciarExecucao = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
-  nova: ExecucaoSessao,
+export const iniciarProcesso = (
+  sessoes: readonly TrabalhoGerenciado[],
+  execucoes: readonly ProcessoDoTrabalho[],
+  nova: ProcessoDoTrabalho,
 ) => abrir(sessoes, execucoes, nova, false);
 
 /** Execução nova (id distinto) na mesma sessão; `conversa_referencia` fica na sessão, que não muda. */
-export const retomarSessao = (sessoes: readonly Sessao[], execucoes: readonly ExecucaoSessao[], nova: ExecucaoSessao) =>
-  abrir(sessoes, execucoes, nova, true);
+export const retomarTrabalho = (
+  sessoes: readonly TrabalhoGerenciado[],
+  execucoes: readonly ProcessoDoTrabalho[],
+  nova: ProcessoDoTrabalho,
+) => abrir(sessoes, execucoes, nova, true);
 
-export const encerrarExecucao = (
-  execucoes: readonly ExecucaoSessao[],
+export const encerrarProcesso = (
+  execucoes: readonly ProcessoDoTrabalho[],
   id: string,
   fim: string,
   falha: boolean,
-): ExecucaoSessao[] => {
+): ProcessoDoTrabalho[] => {
   const alvo = execucoes.find((e) => e.id === id);
   if (!alvo) throw new ErroDeRegra(`execução ${id} não existe`);
   if (!aberta(alvo)) throw new ErroDeRegra(`execução ${id} já foi encerrada`);
-  const encerrada = ExecucaoSessao.parse({ ...alvo, fim, falha });
+  const encerrada = ProcessoDoTrabalho.parse({ ...alvo, fim, falha });
   return execucoes.map((e) => (e.id === id ? encerrada : e));
 };
 
@@ -118,13 +127,13 @@ export const registrarUso = (usos: readonly UsoModeloExecucao[], uso: UsoModeloE
 
 /** Soma os usos das execuções das sessões dadas; cada chave conta uma vez, mesmo em sessões retomadas. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export const totalDeSessoes = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
+export const totalDeTrabalhos = (
+  sessoes: readonly TrabalhoGerenciado[],
+  execucoes: readonly ProcessoDoTrabalho[],
   usos: readonly UsoModeloExecucao[],
 ): TotalUso => {
   const ids = new Set(sessoes.map((s) => s.id));
-  const execs = new Set(execucoes.filter((e) => ids.has(e.sessao_id)).map((e) => e.id));
+  const execs = new Set(execucoes.filter((e) => ids.has(e.trabalho_id)).map((e) => e.id));
   const unicos = usos.reduce<UsoModeloExecucao[]>((acc, u) => registrarUso(acc, u), []);
   const total: TotalUso = {
     tokens_entrada: 0,
@@ -146,12 +155,12 @@ export const totalDeSessoes = (
 };
 
 export const totalDoTicket = (
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
+  sessoes: readonly TrabalhoGerenciado[],
+  execucoes: readonly ProcessoDoTrabalho[],
   usos: readonly UsoModeloExecucao[],
   ticket: z.infer<typeof TicketRef>,
 ) =>
-  totalDeSessoes(
+  totalDeTrabalhos(
     sessoes.filter((s) => s.demanda_id === ticket.demanda_id && s.ticket_id === ticket.ticket_id),
     execucoes,
     usos,

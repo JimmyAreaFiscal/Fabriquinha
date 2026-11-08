@@ -2,14 +2,14 @@
 // ator e checam se ele pode agir. É também o autor das evidências, o criador de um ticket e quem decide.
 import { z } from "zod";
 import { ErroDeEscopo } from "./erros.ts";
-import { Slug } from "./primitivos.ts";
+import { TrabalhoNaoGerenciado } from "./trabalho_agentico.ts";
 
 /** A IA de fora da Fabriquinha: a ferramenta e a sessão que registraram a demanda. */
-export const AtorExterno = z.object({ tipo: z.literal("externo"), ferramenta: Slug, sessao: z.string().min(1) });
+export const AtorExterno = z.object({ tipo: z.literal("externo"), ...TrabalhoNaoGerenciado.shape });
 
 export const Ator = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("auditor") }),
-  // shortcut: o trabalho é o `execucao_sessao.id`; a 12 (TrabalhoAgentico) troca pelo Id inteiro.
+  // shortcut: o trabalho é o `processo_do_trabalho.id`; a 12 troca pelo Id do trabalho inteiro.
   z.object({ tipo: z.literal("agente"), trabalho_id: z.string().min(1) }),
   AtorExterno,
   z.object({ tipo: z.literal("fabriquinha") }),

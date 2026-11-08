@@ -11,7 +11,7 @@ import { abrir } from "../../src/armazenamento/banco.ts";
 import { criarDemandaNova } from "../../src/armazenamento/demandas.ts";
 import { gravarAnexos } from "../../src/armazenamento/evidencia_demanda.ts";
 import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
-import { comSessoesDoTicket } from "../../src/armazenamento/sessoes.ts";
+import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ROTAS } from "../../src/entrega/http/servidor.ts";
 import type { Ambiente } from "../ambiente.ts";
@@ -132,10 +132,10 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
     { caminho: "desenho.html", mime: "text/html; charset=utf-8", sha256, bytes },
   ]);
 
-  comSessoesDoTicket(banco, { demanda_id: DEMANDA, ticket_id: 2 }, (e) => ({
+  comTrabalhosDoTicket(banco, { demanda_id: DEMANDA, ticket_id: 2 }, (e) => ({
     ...e,
     sessoes: [{ demanda_id: DEMANDA, ticket_id: 2, id: SESSAO, modo: "interativo", conversa_referencia: SESSAO }],
-    execucoes: [{ id: "ed-1", sessao_id: SESSAO, inicio: em, fim: em, falha: false }],
+    execucoes: [{ id: "ed-1", trabalho_id: SESSAO, inicio: em, fim: em, falha: false }],
   }));
   mkdirSync(join(raiz, "sessoes"), { recursive: true });
   const mensagem = (role: string, text: string) =>

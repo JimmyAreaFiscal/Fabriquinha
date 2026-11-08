@@ -165,7 +165,7 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
 
   // CA-2: uma única execução na sessão (o despacho não abre outra por cima do pi vivo).
   const leitura = abrir(fabriquinha.raiz);
-  const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM execucao_sessao").get() as { n: number };
+  const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho").get() as { n: number };
   leitura.close();
   expect(n).toBe(1);
 });
@@ -193,7 +193,9 @@ test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", asy
   // CA-4: a execução ganha o fim e nenhuma fica aberta.
   await expect(() => {
     const leitura = abrir(fabriquinha.raiz);
-    const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+    const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho WHERE fim IS NULL").get() as {
+      n: number;
+    };
     leitura.close();
     expect(n).toBe(0);
   }).toPass();
@@ -223,7 +225,9 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
   matarPiDaRaiz(fabriquinha.raiz);
   await expect(() => {
     const leitura = abrir(fabriquinha.raiz);
-    const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+    const { n } = leitura.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho WHERE fim IS NULL").get() as {
+      n: number;
+    };
     leitura.close();
     expect(n).toBe(0);
   }).toPass();
@@ -249,7 +253,9 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
   await pagina.goto(chat);
   await expect(pagina.locator("[data-conversa] .msg.voce").last()).toContainText("falta o caso de erro");
   const leitura = abrir(fabriquinha.raiz);
-  const { n } = leitura.prepare("SELECT COUNT(DISTINCT sessao_id) AS n FROM execucao_sessao").get() as { n: number };
+  const { n } = leitura.prepare("SELECT COUNT(DISTINCT trabalho_id) AS n FROM processo_do_trabalho").get() as {
+    n: number;
+  };
   leitura.close();
   expect(n).toBe(1);
 });

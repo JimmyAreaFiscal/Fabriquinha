@@ -53,7 +53,7 @@ const PLANEJAR_REPROVADO = `t.etapa = 'planejar' AND (
   SELECT d.resultado FROM decisao_ticket d WHERE d.demanda_id = t.demanda_id AND d.ticket_id = t.ticket_id
   ORDER BY d.decisao_id DESC LIMIT 1) IS 'reprovado'`;
 
-const EXECUCAO_DO_TICKET = `FROM sessao s JOIN execucao_sessao e ON e.sessao_id = s.id
+const EXECUCAO_DO_TICKET = `FROM trabalho_agentico s JOIN processo_do_trabalho e ON e.trabalho_id = s.id
   WHERE s.demanda_id = t.demanda_id AND s.ticket_id = t.ticket_id`;
 
 /**

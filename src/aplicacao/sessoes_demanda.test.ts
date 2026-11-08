@@ -11,16 +11,15 @@ import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
-import type { ExecucaoSessao, Sessao } from "../nucleo/sessoes.ts";
+import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../nucleo/trabalho_agentico.ts";
 import { encontrado } from "../nucleo/erros.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
-import { encerrar } from "./gerente.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { avisar, PREFIXO_DA_RESPOSTA_AUTOMATICA, situacao } from "./gerente.ts";
+import { condutor, PREFIXO_DA_RESPOSTA_AUTOMATICA } from "./trabalho/condutor.ts";
 import {
   abortarDemanda,
   abrirChatDemanda,
@@ -145,18 +144,18 @@ function cenario() {
   const semear = (
     demanda_id: string,
     ticket_id: number,
-    modo: Sessao["modo"],
-    execucao: Partial<ExecucaoSessao> | null,
+    modo: TrabalhoGerenciado["modo"],
+    execucao: Partial<ProcessoDoTrabalho> | null,
   ) => {
     const id = `s${String(ticket_id)}`;
-    comSessoesDoTicket(banco, { demanda_id, ticket_id }, (e) => ({
+    comTrabalhosDoTicket(banco, { demanda_id, ticket_id }, (e) => ({
       ...e,
       sessoes: [{ demanda_id, ticket_id, id: demanda_id === "I-301" ? "s301" : id, modo, conversa_referencia: id }],
       execucoes: execucao
         ? [
             {
               id: `e-${id}-${demanda_id}`,
-              sessao_id: demanda_id === "I-301" ? "s301" : id,
+              trabalho_id: demanda_id === "I-301" ? "s301" : id,
               inicio: em,
               falha: false,
               ...execucao,
@@ -223,12 +222,12 @@ test("CA-2 a CA-6: o estado e o cabeçalho de cada sessão, com os endereços p�
 test("o diálogo pendente e o pi ocioso decidem o estado antes do ticket", () => {
   const { banco } = cenario();
   const carregada = (id: string): Carregada => {
-    const ref = banco.prepare("SELECT demanda_id, ticket_id FROM sessao WHERE id = ?").get(id) as {
+    const ref = banco.prepare("SELECT demanda_id, ticket_id FROM trabalho_agentico WHERE id = ?").get(id) as {
       demanda_id: string;
       ticket_id: number;
     };
     const ag = carregarDemanda(banco, ref.demanda_id);
-    const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
+    const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
     return {
       ag,
       ticket: encontrado(
@@ -316,9 +315,9 @@ test("CA-1: a conversa do JSONL vem na ordem, com o prompt da Fabriquinha marcad
   );
   const recebidos: Record<string, unknown>[] = [];
   const cancelar = chat.assinar((evento) => recebidos.push(evento));
-  avisar("s1", join(c.raiz, "log"));
+  condutor.avisar("s1", join(c.raiz, "log"));
   cancelar();
-  avisar("s1", join(c.raiz, "log"));
+  condutor.avisar("s1", join(c.raiz, "log"));
   assert.equal(recebidos.length, 1);
   assert.deepEqual(
     [recebidos[0]?.type, recebidos[0]?.ticket, (recebidos[0]?.sessao as { estado: string }).estado],
@@ -349,11 +348,11 @@ test("I-266.T7: a resposta de `perguntar` que o Auditor automático deu é do Ag
   );
 });
 
-test("I-266.T29: as linhas livres do gerente que citam o prefixo da resposta automática não quebram o chat", () => {
+test("I-266.T29: as linhas livres do condutor que citam o prefixo da resposta automática não quebram o chat", () => {
   const { banco, c } = cenario();
   conversaDoPlanejamento(c.raiz);
   const agente = { tipo: "agente", trabalho_id: "e-s1-I-300" };
-  const pergunta = `Mudo a ${PREFIXO_DA_RESPOSTA_AUTOMATICA}do gerente?`;
+  const pergunta = `Mudo a ${PREFIXO_DA_RESPOSTA_AUTOMATICA}do condutor?`;
   const registro = { ator: agente, chamada: "auto", pergunta, resposta: "Sim", justificativa: "j" };
   const semAtor = { ator: { tipo: "invalido" }, chamada: "humana", pergunta, resposta: "Não", justificativa: "j" };
   const em = "2026-01-01T00:00:00.000Z";
@@ -382,11 +381,11 @@ test("CA-13: o histórico em Markdown segue a ordem da conversa, com o nome do t
   const { banco, c } = cenario();
   conversaDoPlanejamento(c.raiz);
   // A retomada pela mensagem do Auditor: o prompt dela é o texto dele, que segue "Auditor" no histórico.
-  comSessoesDoTicket(banco, { demanda_id: "I-300", ticket_id: 1 }, (e) => ({
+  comTrabalhosDoTicket(banco, { demanda_id: "I-300", ticket_id: 1 }, (e) => ({
     ...e,
     execucoes: [
       ...e.execucoes,
-      { id: "e-retomada", sessao_id: "s1", inicio: em, fim: "2026-01-01T06:00:00.000Z", falha: false },
+      { id: "e-retomada", trabalho_id: "s1", inicio: em, fim: "2026-01-01T06:00:00.000Z", falha: false },
     ],
   }));
   mkdirSync(join(c.raiz, "execucoes", "E-e-retomada"), { recursive: true });
@@ -433,13 +432,13 @@ test("CA-3 e CA-15: o planejamento com o pi falso pergunta, o chat mostra o diá
     modo: "interativo",
     fechar: () => Promise.resolve(),
   });
-  const sessao = String(carregarSessoesDoTicket(banco, ref).sessoes[0]?.id);
+  const sessao = String(carregarTrabalhosDoTicket(banco, ref).sessoes[0]?.id);
   const ao_vivo: Record<string, unknown>[] = [];
   const chat = abrirChatDemanda(banco, sessao);
   assert.equal(chat?.cabecalho.sessao.estado, "rodando");
   const cancelar = chat.assinar((e) => ao_vivo.push(e));
 
-  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   const cab = cabecalhoDaDemanda(banco, sessao);
   assert.deepEqual(
     [cab?.sessao.estado, cab?.sessao.motivo, cab?.sessao.dialogos[0]?.type],
@@ -477,37 +476,37 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
     modo: "interativo",
     fechar: () => Promise.resolve(),
   });
-  const sessao = String(carregarSessoesDoTicket(banco, ref).sessoes[0]?.id);
+  const sessao = String(carregarTrabalhosDoTicket(banco, ref).sessoes[0]?.id);
 
-  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   assert.throws(
     () => enviarDemanda(banco, sessao, "oi", "prompt", 5),
     /aguardando_humano: dialogo e não recebe prompt/,
   );
-  const dialogo = String(situacao(sessao)?.dialogos[0]?.id);
+  const dialogo = String(condutor.situacao(sessao)?.dialogos[0]?.id);
   assert.equal(responderDialogoDemanda(banco, sessao, dialogo, { value: "alta" }), true);
-  await ate(() => situacao(sessao)?.dialogos.length === 0 && situacao(sessao)?.ocupado === false);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
 
   // Conversa com o pi vivo ocioso: a mensagem vai ao mesmo pi, sem nova execução.
   assert.throws(() => enviarDemanda(banco, sessao, "oi", "steer", 5), /não recebe steer.*envie com prompt/);
   // O pi vivo recebe a mensagem sem nova execução e volta a perguntar; o aborto vai a ele.
   assert.equal(enviarDemanda(banco, sessao, "pergunte perguntar de novo", "prompt", 5), true);
-  assert.equal(carregarSessoesDoTicket(banco, ref).execucoes.length, 1);
-  await ate(() => situacao(sessao)?.dialogos.length === 1);
+  assert.equal(carregarTrabalhosDoTicket(banco, ref).execucoes.length, 1);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 1);
   assert.equal(abortarDemanda(banco, sessao), true);
-  await ate(() => situacao(sessao)?.dialogos.length === 0 && situacao(sessao)?.ocupado === false);
+  await ate(() => condutor.situacao(sessao)?.dialogos.length === 0 && condutor.situacao(sessao)?.ocupado === false);
   assert.notEqual(cabecalhoDaDemanda(banco, sessao)?.sessao.estado, "rodando");
   interromperExecucaoDemanda(banco, ref);
   await fim;
 
   // Sem pi e sem execução aberta: o prompt é a mensagem e a mesma sessão é retomada.
   assert.equal(enviarDemanda(banco, sessao, "retoma", "prompt", 5), true);
-  const execucoes = carregarSessoesDoTicket(banco, ref).execucoes;
+  const execucoes = carregarTrabalhosDoTicket(banco, ref).execucoes;
   assert.equal(execucoes.length, 2);
-  assert.equal(execucoes.at(-1)?.sessao_id, sessao);
-  await ate(() => situacao(sessao)?.ocupado === false);
+  assert.equal(execucoes.at(-1)?.trabalho_id, sessao);
+  await ate(() => condutor.situacao(sessao)?.ocupado === false);
   interromperExecucaoDemanda(banco, ref);
-  await ate(() => carregarSessoesDoTicket(banco, ref).execucoes.at(-1)?.fim != null);
+  await ate(() => carregarTrabalhosDoTicket(banco, ref).execucoes.at(-1)?.fim != null);
 });
 
 test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra execução", async () => {
@@ -518,13 +517,13 @@ test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra exe
     demanda("I-304", "planejar", "trabalhe", [ticket("I-304", 1, "planejar", "em_execucao")]),
   );
   const execucao = iniciarExecucaoDemanda(banco, { demanda_id: "I-304", ticket_id: 1 }, { limiteMin: 1 });
-  const sessaoDoTicket = carregarSessoesDoTicket(banco, { demanda_id: "I-304", ticket_id: 1 }).sessoes.at(-1);
+  const sessaoDoTicket = carregarTrabalhosDoTicket(banco, { demanda_id: "I-304", ticket_id: 1 }).sessoes.at(-1);
   assert.ok(sessaoDoTicket);
   const sessao = sessaoDoTicket.id;
-  await ate(() => situacao(sessao)?.ocupado === true);
+  await ate(() => condutor.situacao(sessao)?.ocupado === true);
   assert.equal(enviarDemanda(banco, sessao, "ajuste o teste", "steer", 1), true);
   assert.equal(enviarDemanda(banco, sessao, "confira o lint", "follow_up", 1), true);
-  encerrar(execucao.id);
+  condutor.encerrar(execucao.id);
   await execucao.fim;
   instalarPiFalso(temporario).roteirizar([{ marcas: true }]);
 });

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
-import type { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../../nucleo/sessoes.ts";
+import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../../nucleo/trabalho_agentico.ts";
 import { lista, neutro } from "./pr.ts";
 import { produtividadeDaRodada } from "./produtividade_rodada.ts";
 
@@ -68,8 +68,8 @@ function prDaRodada(ag: AgregadoDemanda, rodada: number): { id: string; url: str
 
 export function montarArvorePRs(
   ag: AgregadoDemanda,
-  sessoes: readonly Sessao[],
-  execucoes: readonly ExecucaoSessao[],
+  sessoes: readonly TrabalhoGerenciado[],
+  execucoes: readonly ProcessoDoTrabalho[],
   usos: readonly UsoModeloExecucao[],
 ): ArvorePRsCriteriosCustos {
   const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, ag.tickets);

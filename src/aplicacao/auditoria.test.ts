@@ -1,16 +1,14 @@
-// O pi de conversa fora do agregado (auditoria.ts): a subida do serviço mata o pi que a instância anterior deixou. A
+// O pi de conversa fora do agregado (auditoria.ts). A
 // condução (subir, retomar, recusar com o agente trabalhando) é exercitada pela avaliação (avaliacao.test.ts).
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { encerrar, situacao } from "./gerente.ts";
-import { causaDaFalha, enviarNaConversa, estadoDaAuditoria, recuperarAuditorias, subir } from "./auditoria.ts";
+import { condutor } from "./trabalho/condutor.ts";
+import { causaDaFalha, enviarNaConversa, estadoDaAuditoria, subir } from "./auditoria.ts";
 
 async function esperar(condicao: () => boolean) {
   for (let repeticao = 0; !condicao(); repeticao++) {
@@ -25,6 +23,7 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
   mkdirSync(pasta, { recursive: true });
   const piFalso = instalarPiFalso(raiz).roteirizar([{ fimDoAgente: true }]);
   let sincronizacoes = 0;
+  const grupos: (number | null)[] = [];
   const conduzir = () =>
     subir(
       raiz,
@@ -34,6 +33,7 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
       {
         pasta: "avaliacoes",
         extensoes: [],
+        gravarGrupo: (grupo) => grupos.push(grupo),
         sincronizar: () => {
           sincronizacoes++;
         },
@@ -46,18 +46,19 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
     assert.throws(() => {
       enviarNaConversa("s-conducao", "outra", () => assert.fail());
     }, /trabalhando/);
-    await esperar(() => situacao("s-conducao")?.ocupado === false);
+    await esperar(() => condutor.situacao("s-conducao")?.ocupado === false);
     assert.equal(estadoDaAuditoria("s-conducao"), "conversa");
     enviarNaConversa("s-conducao", "confira", () => assert.fail("o pi vivo deve receber a mensagem"));
-    await esperar(() => piFalso.prompts().length === 2 && situacao("s-conducao")?.ocupado === false);
-    encerrar("s-conducao");
+    await esperar(() => piFalso.prompts().length === 2 && condutor.situacao("s-conducao")?.ocupado === false);
+    condutor.encerrar("s-conducao");
     assert.equal(estadoDaAuditoria("s-conducao"), "rodando");
     assert.throws(() => {
       enviarNaConversa("s-conducao", "cedo", () => assert.fail());
     }, /ainda está parando/);
     assert.equal(await fim, undefined);
     assert.ok(sincronizacoes >= 3);
-    assert.equal(existsSync(join(pasta, "pgid")), false);
+    assert.equal(typeof grupos[0], "number");
+    assert.equal(grupos.at(-1), null);
     let retomada = "";
     enviarNaConversa("s-conducao", "retome", (prompt) => {
       retomada = prompt;
@@ -72,6 +73,7 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
       {
         pasta: "avaliacoes",
         extensoes: [],
+        gravarGrupo: () => undefined,
         sincronizar: () => {
           throw new Error("banco indisponível");
         },
@@ -88,24 +90,5 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
     assert.equal(causaDaFalha(pasta, "motivo; veja o log em /log"), "motivo: segunda: terceira: quarta: quinta: sexta");
   } finally {
     rmSync(raiz, { recursive: true, force: true });
-  }
-});
-
-test("recuperarAuditorias: mata o grupo de cada pgid, apaga o arquivo e ignora o que não tem pgid", async () => {
-  const outra = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-avaliacoes-")));
-  try {
-    recuperarAuditorias(outra); // nem pasta de avaliações
-    const sem = join(outra, "avaliacoes", "sem-pgid");
-    const com = join(outra, "avaliacoes", "com-pgid");
-    mkdirSync(sem, { recursive: true });
-    mkdirSync(com, { recursive: true });
-    const sleep = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
-    const saiu = once(sleep, "exit");
-    writeFileSync(join(com, "pgid"), String(sleep.pid));
-    recuperarAuditorias(outra);
-    assert.deepEqual(await saiu, [null, "SIGKILL"]);
-    assert.deepEqual([existsSync(join(com, "pgid")), existsSync(sem)], [false, true]);
-  } finally {
-    rmSync(outra, { recursive: true, force: true });
   }
 });

@@ -8,7 +8,6 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso, type PassoPi } from "../../apoio-testes/pi_falso.ts";
 import { ErroDeInexistente, ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
 import { metricasDaDemanda } from "./demanda.ts";
-import { recuperarAuditorias } from "./auditoria.ts";
 import {
   abortarAvaliacao,
   abrir as abrirAv,
@@ -17,7 +16,7 @@ import {
   estadoDaAvaliacao,
   iniciarAvaliacao,
 } from "./avaliacao.ts";
-import { encerrar, situacao } from "./gerente.ts";
+import { condutor } from "./trabalho/condutor.ts";
 
 const { raiz: raizTemporaria, banco, fechar } = abrirBancoTemporario();
 after(fechar);
@@ -39,8 +38,8 @@ for (const [id, projeto, fim] of [
   banco.exec(
     `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
-     INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
-     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '${fim}', 0);`,
+     INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
+     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '${fim}', 0);`,
   );
 }
 mkdirSync(join(raiz, "sessoes"));
@@ -84,8 +83,8 @@ async function ate(condicao: () => boolean, oQue: string): Promise<void> {
   }
 }
 async function parar(id: string): Promise<void> {
-  if (situacao(id)) encerrar(id);
-  await ate(() => estadoDaAvaliacao(id) === "concluida" && !situacao(id), "a parada do pi");
+  if (condutor.situacao(id)) condutor.encerrar(id);
+  await ate(() => estadoDaAvaliacao(id) === "concluida" && !condutor.situacao(id), "a parada do pi");
 }
 const recusa = (mensagem: RegExp) => (e: unknown) => e instanceof ErroDeRegra && mensagem.test(e.message);
 const escopo = { projeto: "loja", de: "2026-10-01", ate: "2026-10-31" };
@@ -166,11 +165,11 @@ test("avalia: prepara a pasta, importa achados e uso, não mexe nas métricas, c
   assert.throws(() => encaminharAchado(banco, id, 9), recusa(/não existe/));
   assert.throws(() => encaminharAchado(banco, "nada", 1), ErroDeInexistente);
   // Com o pi vivo e ocioso, a pergunta vai a ele; parando, a próxima espera ele sair.
-  await ate(() => estadoDaAvaliacao(id) === "concluida" && situacao(id) !== undefined, "o pi ocioso");
+  await ate(() => estadoDaAvaliacao(id) === "concluida" && condutor.situacao(id) !== undefined, "o pi ocioso");
   enviarNaAvaliacao(banco, id, "e o prazo?", opcoes);
   await ate(() => registro().some((r) => r.comando?.message === "e o prazo?"), "a pergunta ao pi vivo");
   await ate(() => estadoDaAvaliacao(id) === "concluida", "a resposta");
-  encerrar(id);
+  condutor.encerrar(id);
   assert.throws(
     () => {
       enviarNaAvaliacao(banco, id, "já?", opcoes);
@@ -254,10 +253,9 @@ test("uso sem custo informado fica com custo desconhecido", async () => {
   await parar(id);
 });
 
-test("recuperarAuditorias também mata o pi das avaliações do reinício", () => {
-  const dir = join(raiz, "avaliacoes", "antiga");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "pgid"), "999999999");
-  recuperarAuditorias(raiz);
-  assert.ok(!existsSync(join(dir, "pgid")));
+test("recuperarNaSubida também mata o pi das avaliações do reinício", () => {
+  banco.exec(`INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em, grupo_processo)
+    VALUES ('antiga', 'loja', '2026-10-01', '2026-10-02', '', ${T}, 999999999)`);
+  condutor.recuperarNaSubida(banco);
+  assert.equal(banco.prepare("SELECT grupo_processo FROM avaliacao WHERE id = 'antiga'").get()?.grupo_processo, null);
 });

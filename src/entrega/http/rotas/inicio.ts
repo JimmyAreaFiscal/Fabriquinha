@@ -3,7 +3,7 @@
 // arquivadas ficam fora; a navegação conta o que aguarda pela mesma rota.
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../../../nucleo/ator.ts";
-import type { ModoExecucao } from "../../../nucleo/sessoes.ts";
+import type { ModoTrabalho } from "../../../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
@@ -12,13 +12,13 @@ import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, Instante, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { iniciarRevisaoDemanda } from "../../../nucleo/transicoes_demanda.ts";
-import { type Situacao, situacao } from "../../../aplicacao/gerente.ts";
+import { condutor, type Situacao } from "../../../aplicacao/trabalho/condutor.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { mesDe } from "../../../nucleo/periodo.ts";
 import { type MetricasMesDemanda, metricasDemandaPorMes } from "../../../aplicacao/periodo_demanda.ts";
 import { listarDemandas } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
-import { ticketsComPiAtivo } from "../../../armazenamento/sessoes.ts";
+import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import type { Rota } from "../rotas.ts";
 import { prDaRodada } from "./demandas.ts";
 
@@ -34,7 +34,7 @@ interface TicketDoInicio {
   ref: string;
   etapa: EtapaTicket;
   estado: EstadoTicket;
-  modo?: ModoExecucao;
+  modo?: ModoTrabalho;
   /** Com execução de pi aberta: o `em_execucao` é o pi, não o sistema. */
   piAtivo?: true;
 }
@@ -97,7 +97,7 @@ export interface DadosDoInicio {
 /** O ticket em curso de uma lista e quantos outros ainda não terminaram. */
 function ticketEmCurso(
   tickets: readonly TicketDemanda[],
-  modoDe: (ref: string) => ModoExecucao | undefined,
+  modoDe: (ref: string) => ModoTrabalho | undefined,
   comPiAtivo: ReadonlySet<string>,
 ) {
   const abertos = tickets.filter((t) => !CICLO_DO_TICKET.ehTerminal(t.estado));
@@ -110,7 +110,7 @@ function ticketEmCurso(
 
 function ticketDoInicio(
   t: TicketDemanda,
-  modoDe: (ref: string) => ModoExecucao | undefined,
+  modoDe: (ref: string) => ModoTrabalho | undefined,
   comPiAtivo: ReadonlySet<string> = new Set(),
 ): TicketDoInicio {
   const ref = formatarTicketRef(t);
@@ -137,7 +137,7 @@ const COLUNA_DO_ESTADO: Partial<Record<EstadoDemanda, ColunaDoBoard>> = {
 function cartoesDaDemanda(
   banco: DatabaseSync,
   ag: AgregadoDemanda,
-  modoDe: (ref: string) => ModoExecucao | undefined,
+  modoDe: (ref: string) => ModoTrabalho | undefined,
   comPiAtivo: ReadonlySet<string>,
 ) {
   const { id: demanda, projeto, titulo, estado } = ag.demanda;
@@ -197,7 +197,7 @@ function esperaDaRevisaoParada(ag: AgregadoDemanda, agora: Date): EsperaDoAudito
 /** Os gates, as sessões de ajustes, os tickets falhos e a revisão integral parada, que esperam o Auditor sem depender da sessão. */
 function esperasDaDemanda(
   ag: AgregadoDemanda,
-  modoDe: (ref: string) => ModoExecucao | undefined,
+  modoDe: (ref: string) => ModoTrabalho | undefined,
   agora: Date,
 ): EsperaDoAuditor[] {
   const { id: demanda, projeto, titulo, estado, estado_alterado_em } = ag.demanda;
@@ -285,7 +285,10 @@ export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao)
 
 /** `GET /api/inicio`. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situacao): DadosDoInicio {
+export function inicio(
+  banco: DatabaseSync,
+  situacaoDa: SituacaoDaSessao = (sessao) => condutor.situacao(sessao),
+): DadosDoInicio {
   const agora = new Date();
   const mes = mesDe(agora);
   // Um mês pedido, um mês devolvido.

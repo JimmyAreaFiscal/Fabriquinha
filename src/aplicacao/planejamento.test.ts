@@ -18,7 +18,7 @@ import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
@@ -159,7 +159,7 @@ function cenario({
     c,
     banco,
     prompts: () => piFalso.prompts().map((entrada) => entrada.prompt),
-    sessoes: () => carregarSessoesDoTicket(banco, { demanda_id: "I-1", ticket_id: 1 }),
+    sessoes: () => carregarTrabalhosDoTicket(banco, { demanda_id: "I-1", ticket_id: 1 }),
     status: () => carregarDemanda(banco, "I-1").tickets[0]?.estado,
   };
 }
@@ -332,7 +332,7 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   // Serviço reiniciado no meio do replanejamento: retoma a sessão nova, não abre outra nem volta à descartada.
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   assert.equal(sessoes().sessoes.length, 2);
-  assert.equal(sessoes().execucoes.at(-1)?.sessao_id, replanejamento?.id);
+  assert.equal(sessoes().execucoes.at(-1)?.trabalho_id, replanejamento?.id);
 });
 
 test("CA-8: motivo vazio recusa a reprovação e nada é registrado", async () => {
@@ -365,7 +365,9 @@ test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejament
   submeterPlanoDoAgente(banco, "I-1", plano());
   await aprovarGateDoPlanejamento(banco);
   await fim;
-  const { n } = banco.prepare("SELECT COUNT(*) AS n FROM execucao_sessao WHERE fim IS NULL").get() as { n: number };
+  const { n } = banco.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho WHERE fim IS NULL").get() as {
+    n: number;
+  };
   assert.equal(n, 0);
 });
 

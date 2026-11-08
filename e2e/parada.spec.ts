@@ -12,7 +12,7 @@ import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { gravarProjeto, projetoExistente } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
-import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { sinalNoGrupo } from "../src/infra/processo.ts";
 import { expect, projeto, test } from "./apoio.ts";
 import { semearTicketAberto } from "./demandas-apoio.ts";
@@ -42,7 +42,8 @@ test.describe("I-246 CA-4", () => {
     while (pgid === null) {
       await dormir(50);
       const banco = abrir(fabriquinha.raiz);
-      pgid = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
+      pgid =
+        carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
       banco.close();
     }
 
@@ -77,7 +78,7 @@ async function executarEEsperarPi(pagina: Page, raiz: string, base: string): Pro
   while (pgid === null) {
     await dormir(50);
     const banco = abrir(raiz);
-    pgid = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
+    pgid = carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 }).execucoes[0]?.grupo_processo ?? null;
     banco.close();
   }
   return pgid;
@@ -86,7 +87,7 @@ async function executarEEsperarPi(pagina: Page, raiz: string, base: string): Pro
 /** Logo depois da saída do serviço, antes de subir de novo: o fim e o motivo já estão no banco (não é a subida que os preenche). */
 function conferirFimGravado(raiz: string): void {
   const banco = abrir(raiz);
-  const { execucoes } = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
+  const { execucoes } = carregarTrabalhosDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
   const agregado = carregarDemanda(banco, "I-216");
   const ticket = agregado.tickets.find((t) => t.ticket_id === 1);
   banco.close();

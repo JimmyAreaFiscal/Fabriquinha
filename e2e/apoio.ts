@@ -9,12 +9,9 @@ import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
-import { recuperarAuditorias } from "../src/aplicacao/auditoria.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { registrarProjeto } from "../src/aplicacao/projeto/cadastro.ts";
-import { execucoesAbertasDaDemanda } from "../src/armazenamento/sessoes.ts";
-import { falharPendentes } from "../src/armazenamento/simulacao.ts";
-import { sinalNoGrupo } from "../src/infra/processo.ts";
 
 export interface Fabriquinha {
   /** A raiz da instância: banco, `web.url`, sessões e execuções. */
@@ -47,12 +44,8 @@ async function parar(servico: ChildProcess): Promise<void> {
  */
 function matarPi(raiz: string): void {
   const banco = abrir(raiz);
-  for (const { grupo_processo } of execucoesAbertasDaDemanda(banco)) {
-    if (grupo_processo !== null) sinalNoGrupo(grupo_processo, "SIGKILL");
-  }
-  for (const pgid of falharPendentes(banco, "fim do teste")) sinalNoGrupo(pgid, "SIGKILL");
+  condutor.recuperarNaSubida(banco);
   banco.close();
-  recuperarAuditorias(raiz);
 }
 
 export const test = base.extend<{
