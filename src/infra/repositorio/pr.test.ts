@@ -8,7 +8,7 @@ import { setTimeout as esperar } from "node:timers/promises";
 import { ErroDeRegra, ErroExterno } from "../../nucleo/erros.ts";
 import type { Hospedagem } from "../../nucleo/projeto.ts";
 import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
-import { integrarPR, lerPR, publicarPRDe, verificarPR } from "./pr.ts";
+import { integrarPR, lerPR, PADROES_DA_ESPERA_DO_PR, publicarPRDe, verificarPR } from "./pr.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-pr-")));
 after(() => {
@@ -468,6 +468,10 @@ function verificar(tipo: Hospedagem, pr: Partial<Parameters<typeof hospedagem.ab
   hospedagem.abrirPr({ head: BRANCH, base: "main", titulo: "t", corpo: "", estado: "aberto", ...pr });
   return { c, resultado: verificarPR({ raiz_git: c.repo, hospedagem: tipo }, "1", c.log, opcoes) };
 }
+
+test("verificarPR: os padrões da espera são 60 min de limite, leitura a cada 10 s e 1 min de carência", () => {
+  assert.deepEqual(PADROES_DA_ESPERA_DO_PR, { limiteMs: 60 * 60_000, intervaloMs: 10_000, carenciaMs: 60_000 });
+});
 
 test("verificarPR (F5 §5.1, passo 4): com conflito devolve na hora, sem olhar os checks", async () => {
   for (const tipo of HOSPEDAGENS) {

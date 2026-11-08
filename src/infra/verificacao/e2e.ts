@@ -1,0 +1,52 @@
+// O E2E de uma linguagem do projeto: build e execução, na pasta dela. Só o `codigo_falha` reprova; outra saída é infraestrutura.
+import { join } from "node:path";
+import type { Projeto } from "../../nucleo/projeto.ts";
+import {
+  aprovacao,
+  classificarComando,
+  type ComandoRodar,
+  type ComandosRodados,
+  comAmbienteSemCredenciais,
+  type ContextoDaVerificacao,
+  linhaDoComando,
+  type RegistroDaVerificacao,
+  Verificacao,
+} from "./verificacao.ts";
+
+type ConfiguracaoE2E = Projeto["verificacoes"]["e2e"][number];
+
+export class VerificacaoE2E extends Verificacao {
+  readonly tipo = "e2e";
+  readonly #configuracao: ConfiguracaoE2E;
+
+  constructor(configuracao: ConfiguracaoE2E) {
+    super();
+    this.#configuracao = configuracao;
+  }
+
+  /** O build reprovado ou quebrado não deixa a execução rodar. */
+  async rodarComandos(rodar: ComandoRodar, worktree: string): Promise<ComandosRodados> {
+    const { caminho_linguagem: caminho, comando_build, comando_execucao, codigo_falha } = this.#configuracao;
+    const cwd = join(worktree, caminho);
+    const nome = `e2e-${caminho}`;
+    const comandos = [];
+    const logs = [];
+    const build = await rodar(comando_build, cwd);
+    comandos.push({ ...linhaDoComando(comando_build, build), caminho });
+    logs.push({ nome: `${nome}-build.log`, texto: build.log });
+    const falhaDoBuild = classificarComando(comando_build, build);
+    if (falhaDoBuild) return { comandos, logs, falhas: [falhaDoBuild] };
+    const execucao = await rodar(comando_execucao, cwd);
+    comandos.push({ ...linhaDoComando(comando_execucao, execucao), caminho });
+    logs.push({ nome: `${nome}.log`, texto: execucao.log });
+    const falhaDaExecucao = classificarComando(comando_execucao, execucao, codigo_falha);
+    return { comandos, logs, falhas: falhaDaExecucao ? [falhaDaExecucao] : [] };
+  }
+
+  coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+    return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
+      const { comandos, logs, falhas } = await this.rodarComandos(rodar, worktree);
+      return { tipo: "execucao_testes", aprovada: aprovacao(falhas), falhas, dados: { comandos }, logs };
+    });
+  }
+}
