@@ -12,7 +12,6 @@ import type {
 
 const ID_DO_HOST_LOCAL = "host_local";
 
-/** @testes o consumidor de produção é ligado pelo ticket seguinte */
 export class AmbienteHostLocal implements Ambiente {
   readonly id = ID_DO_HOST_LOCAL;
   readonly tipo = "host_local";

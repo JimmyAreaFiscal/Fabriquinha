@@ -19,6 +19,7 @@ import { projetoExistente } from "../armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { descartarAlteracoes, exigirGit } from "../infra/repositorio/worktree.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
 import type { RefRodada } from "./encerramento_rodada.ts";
@@ -76,7 +77,7 @@ async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   ];
   for (const [{ branch, sha }, worktree] of pontas) {
     await exigirGit(worktree, "update-ref", `refs/heads/${branch}`, sha);
-    await descartarAlteracoes(worktree, log);
+    await descartarAlteracoes(ambienteDoServico(), worktree, log);
   }
   anotar(log, `${formatarRodadaRef(ref)}: branches restauradas aos SHAs do início da sessão`);
 }

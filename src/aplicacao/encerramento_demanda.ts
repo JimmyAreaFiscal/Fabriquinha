@@ -29,6 +29,7 @@ import {
   tituloDoPRFinal,
 } from "./evidencias/encerramento_demanda.ts";
 import { varrerBase } from "./retrabalho.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { espacoDaDemanda } from "../nucleo/espaco_de_trabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -37,7 +38,7 @@ import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
 import { logDaOperacao } from "../infra/registro.ts";
-import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
+import { pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
 import { lerPR, type OpcoesVerificacao, publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
@@ -78,6 +79,7 @@ export async function conduzirEncerramentoDemanda(
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
+  const ciclo = cicloDoEspaco(espacoDaDemanda(projeto, demanda_id, raiz), projeto, { raiz, log }, ambienteDoServico());
   const aplicar = (transicao: (a: AgregadoDemanda) => AgregadoDemanda) => comDemanda(banco, demanda_id, transicao);
   const falhar = (
     etapa: "check_final" | "integracao" | "limpeza",
@@ -104,8 +106,8 @@ export async function conduzirEncerramentoDemanda(
       `a demanda ${demanda_id} não tem progresso de encerramento`,
       "registre a tentativa antes",
     ).limpeza_pendente;
-    const feito = await limparDemanda(raiz, projeto, pendentes);
-    const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(projeto, feito.removidos))];
+    const feito = await ciclo.limpar(pendentes);
+    const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(ciclo.ambiente, projeto, feito.removidos))];
     // A passada anterior (falha parcial) já gravou o que removeu; a demonstração final soma as duas.
     const anterior = carregarDemanda(banco, demanda_id).evidencias.findLast(
       (e) => e.ticket_id === ticket.ticket_id && e.tipo === "demonstracao_limpeza",
@@ -149,7 +151,7 @@ export async function conduzirEncerramentoDemanda(
       `a hospedagem não informou o merge do PR ${pr.url}`,
       "confira o PR na plataforma",
     );
-    const pendentes = await pendenciasDeLimpeza(raiz, projeto, ag);
+    const pendentes = await pendenciasDeLimpeza(ciclo.ambiente, raiz, projeto, ag);
     aplicar((a) =>
       registrarIntegracao(
         a,
@@ -166,7 +168,6 @@ export async function conduzirEncerramentoDemanda(
 
   let publicado: Awaited<ReturnType<typeof publicarFinal>>;
   try {
-    const ciclo = cicloDoEspaco(espacoDaDemanda(projeto, demanda_id, raiz), projeto, { raiz, log });
     await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
     publicado = await publicarFinal(banco, ag, projeto, projeto.branch_base, raiz);
     aplicar((a) =>

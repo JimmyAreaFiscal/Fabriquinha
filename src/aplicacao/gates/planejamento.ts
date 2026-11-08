@@ -13,6 +13,7 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { carregarTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar, logDaOperacao } from "../../infra/registro.ts";
+import { ambienteDoServico } from "../espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { condutor } from "../trabalho/condutor.ts";
 import { varrerBase } from "../retrabalho.ts";
@@ -72,7 +73,7 @@ export async function aprovarGateDoPlanejamento(
   const raiz = raizDo(banco);
   const log = logDaOperacao(raiz, `planejamento-${demanda_id}`);
   const garantirEspaco = async (espaco: EspacoDeTrabalho): Promise<void> => {
-    const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log });
+    const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoServico());
     const { buscouBase } = await ciclo.criar();
     if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   };

@@ -10,12 +10,15 @@ import {
   rodarGit as git,
 } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada, garantirWorktreeDemanda } from "./worktree-demanda.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const branch = branchDemanda("D-1");
 const chave = `branch.${branch}.fabriquinha`;
 type Cenario = ReturnType<typeof criarRepositorioDeTeste>;
 const caminho = (c: Cenario) => caminhoDaWorktreeDemanda(c.raiz, c.projeto.nome, "D-1");
-const garantir = (c: Cenario) => garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log);
+const garantir = (c: Cenario) => garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "D-1", c.log);
 const marca = (pasta: string) =>
   git(pasta, "rev-parse", "--path-format=absolute", "--git-path", "fabriquinha-preparada");
 
@@ -31,13 +34,13 @@ test("nomes, caminhos absolutos irmãos e identidades inválidas antes de I/O", 
     assert.throws(() => caminhoDaWorktreeDemanda("/inexistente", "loja", id), ErroDeRegra);
     assert.throws(() => caminhoDaWorktreeRodada("/r", "loja", { demanda_id: id, rodada_id: 1 }), ErroDeRegra);
     const c = criarRepositorioDeTeste();
-    await assert.rejects(garantirWorktreeDemanda(c.raiz, c.projeto, id, c.log), ErroDeRegra);
+    await assert.rejects(garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, id, c.log), ErroDeRegra);
     assert.equal(git(c.repo, "config", "--default", "", "--get", chave), "");
     assert.equal(existsSync(join(c.raiz, "worktrees")), false);
   }
   for (const nome of ["../loja", ".", "loja/x"]) {
     const c = criarRepositorioDeTeste();
-    await assert.rejects(garantirWorktreeDemanda(c.raiz, { ...c.projeto, nome }, "D-1", c.log), ErroDeRegra);
+    await assert.rejects(garantirWorktreeDemanda(ambiente, c.raiz, { ...c.projeto, nome }, "D-1", c.log), ErroDeRegra);
   }
   for (const rodada_id of [0, -1, 1.5, NaN]) {
     assert.throws(() => caminhoDaWorktreeRodada("/r", "loja", { demanda_id: "D-1", rodada_id }), ErroDeRegra);
@@ -53,7 +56,7 @@ test("base configurada atualizada no origin, preparação em ordem e idempotênc
   git(c.dir, "clone", "-q", "-b", "integracao", c.bare, outro);
   const sha = commitarArquivo(outro, "remoto.txt", "remoto");
   git(outro, "push", "-q", "origin", "integracao");
-  const p = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log);
+  const p = await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "D-1", c.log);
   assert.equal(git(p, "rev-parse", "HEAD"), sha);
   assert.equal(git(c.repo, "config", "--get", chave), `demanda:${p}`);
   assert.equal(readFileSync(join(p, "ordem"), "utf8"), "umdois");
@@ -61,7 +64,7 @@ test("base configurada atualizada no origin, preparação em ordem e idempotênc
   assert.equal(existsSync(marca(p)), true);
   assert.equal(existsSync(join(p, "fabriquinha-preparada")), false);
   git(c.repo, "remote", "remove", "origin");
-  assert.equal(await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log), p);
+  assert.equal(await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "D-1", c.log), p);
   assert.equal(readFileSync(join(p, "ordem"), "utf8"), "umdois");
 });
 

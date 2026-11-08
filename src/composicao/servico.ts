@@ -14,6 +14,8 @@ import { configuracao } from "../armazenamento/servico.ts";
 import { servirWeb } from "../entrega/http/servidor.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../aplicacao/despacho_demanda.ts";
 import { condutor } from "../aplicacao/trabalho/condutor.ts";
+import { montarAmbienteDoServico } from "../aplicacao/espaco/ambiente_do_servico.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
 
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
@@ -42,6 +44,8 @@ export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => 
  */
 export async function iniciarServico(raiz: string): Promise<Servico> {
   const pedida = portaDoServico();
+  // Um Ambiente só para todo o Espaço de Trabalho: trocá-lo é trocar esta linha.
+  montarAmbienteDoServico(new AmbienteHostLocal());
   // ponytail: o relógio bate de minuto em minuto e cada batida relê a configuração; uma mudança vale em até um minuto.
   let minutos = 0;
   /** A última batida do relógio (ou a subida): a próxima busca conta a partir dela. */

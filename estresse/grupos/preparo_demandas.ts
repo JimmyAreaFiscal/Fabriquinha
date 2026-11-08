@@ -20,6 +20,9 @@ import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/infra
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
 import type { Ambiente } from "../ambiente.ts";
+import { AmbienteHostLocal } from "../../src/infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-10-11T12:00:00.000Z";
 const CRITERIOS = ["CA-1", "CA-2"];
@@ -197,8 +200,8 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
   /** As worktrees da demanda e da rodada 1, como o planejamento aprovado as deixa; devolve a da rodada. */
   async function worktrees(id: string): Promise<string> {
-    await garantirWorktreeDemanda(amb.raiz, principal, id, log);
-    return garantirWorktreeRodada(amb.raiz, principal, { demanda_id: id, rodada_id: 1 }, log);
+    await garantirWorktreeDemanda(ambiente, amb.raiz, principal, id, log);
+    return garantirWorktreeRodada(ambiente, amb.raiz, principal, { demanda_id: id, rodada_id: 1 }, log);
   }
 
   /** Demanda em `em_execucao` com a rodada 1 no `estado`, as worktrees prontas (se `comWorktree`) e os tickets dados. */
