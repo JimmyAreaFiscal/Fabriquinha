@@ -5,11 +5,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { fabricaDeBancosTemporarios } from "../../apoio-testes/banco_temporario.ts";
 import { Ator } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { caminhoArquivo, guardarBytes } from "./arquivos.ts";
 import { carregarDemanda, comDemanda } from "./demandas.ts";
 import { anexosDaDemanda, gravarAnexos, lerAnexo, registrarSessoesExternas } from "./evidencia_demanda.ts";
 import { removerProjeto } from "../aplicacao/projeto/cadastro.ts";
+import { comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
 
@@ -38,7 +38,7 @@ const submeter = (b: DatabaseSync, anexos: ReturnType<typeof anexoDe>[], dados =
   comDemanda(
     b,
     "I-1",
-    (ag) => submeterEvidenciaDemanda(ag, { tipo: "custos_realizados", dados }, { tipo: "externo", ...quem }, em),
+    (ag) => comEvidencia(ag, { tipo: "custos_realizados", dados }, { tipo: "externo", ...quem }, em),
     () => {
       gravarAnexos(b, chave, anexos);
     },
@@ -60,7 +60,7 @@ test("autoria da evidência: cada tipo de ator é gravado e relido, inclusive na
   ];
   for (const autor of autores) {
     comDemanda(bancoDeAutoria, "I-1", (agregado) =>
-      submeterEvidenciaDemanda(agregado, { tipo: "custos_realizados", dados: { total: 42 } }, autor, em),
+      comEvidencia(agregado, { tipo: "custos_realizados", dados: { total: 42 } }, autor, em),
     );
     const relida = carregarDemanda(bancoDeAutoria, "I-1");
     assert.equal(relida.evidencias.length, 1);

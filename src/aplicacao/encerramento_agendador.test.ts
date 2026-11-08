@@ -42,7 +42,7 @@ after(() => {
 const D = "I-206";
 const BRANCH = "fabriquinha/I-206";
 
-/** Demanda em encerramento (revisão integral aprovada), com a rodada concluída e o `encerrar_demanda` aberto. */
+/** Demanda em encerramento (revisão integral aceita), com a rodada concluída e o `encerrar_demanda` aberto. */
 async function cenario() {
   const c = criarRepositorioDeTeste([], "develop");
   const { banco } = abrirBancoTemporario(c.raiz);
@@ -111,7 +111,7 @@ async function cenario() {
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 
   const verificacaoQuePassa = (tipo: RegistroDaVerificacao["tipo"]) => verificacaoDeTeste(tipo, true, undefined, []);
-  /** Agente falso: escreve na worktree da demanda, encerra a execução e fecha o ticket com verificações aprovadas. */
+  /** Agente falso: escreve na worktree da demanda, encerra a execução e fecha o ticket com verificações que passaram. */
   const iniciarExecucaoFalsa: NonNullable<DepsDespacho["iniciarProcesso"]> = (b, ref) => {
     const id = randomUUID();
     const sessao = { ...ref, id: randomUUID(), modo: "autonomo" as const, conversa_referencia: "c" };
@@ -159,7 +159,7 @@ async function cenario() {
   };
 }
 
-test("CA-15: a revisão integral aprovada vai a concluida pelo ciclo depois do merge humano, sem decisão no gate", async () => {
+test("CA-15: a revisão integral aceita vai a concluida pelo ciclo depois do merge humano, sem decisão no gate", async () => {
   const c = await cenario();
   await c.ciclo();
   assert.equal(c.ag().encerramento?.aguardando_merge_humano, true);

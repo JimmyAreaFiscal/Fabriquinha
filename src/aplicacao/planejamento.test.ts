@@ -13,10 +13,9 @@ import { AUDITOR } from "../nucleo/ator.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
 import { comReaberturaDoAuditor, falhaPorServicoReiniciado } from "../nucleo/tentativa.ts";
 import { falharTicketDemanda } from "./fechamento_ticket.ts";
-import { submeterPlano } from "../nucleo/transicoes_demanda.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { comPlanoSubmetido, gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -169,8 +168,8 @@ const aprovarGateDoPlanejamento = (banco: DatabaseSync, entrada: unknown = { res
   decidirGate(banco, "gate_planejamento", Endereco.daDemanda("I-1"), entrada, AUDITOR);
 const reprovarGateDoPlanejamento = (banco: DatabaseSync, motivo: string) =>
   aprovarGateDoPlanejamento(banco, { resultado: "reprovado", motivo });
-const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, planoEntrada: unknown) =>
-  comDemanda(banco, demandaId, (ag) => submeterPlano(ag, planoEntrada, agente, { agora: new Date().toISOString() }));
+const proporPlanoDoAgente = (banco: DatabaseSync, demandaId: string, planoEntrada: unknown) =>
+  comDemanda(banco, demandaId, (ag) => comPlanoSubmetido(ag, planoEntrada, agente, new Date().toISOString()));
 
 test("CA-1: planejamento com predecessoras satisfeitas reserva o planejar e cria a sessão", async () => {
   for (const predecessora of ["concluida", "arquivada"]) {
@@ -215,7 +214,7 @@ test("CA-3: com o planejar em execução, a mesma sessão é retomada", async ()
 
 test("CA-4: plano válido leva ao gate e fica como evidência do planejar", () => {
   const { banco } = cenario({ estadoDoTicket: "em_execucao" });
-  const depois = submeterPlanoDoAgente(banco, "I-1", plano());
+  const depois = proporPlanoDoAgente(banco, "I-1", plano());
   assert.equal(depois.demanda.estado, "gate_planejamento");
   const gravado = carregarDemanda(banco, "I-1").evidencias.find((e) => e.tipo === "plano");
   assert.equal(gravado?.ticket_id, 1);
@@ -226,13 +225,13 @@ test("CA-2: plano com critério que nenhuma rodada cita é aceito e vai ao gate"
   const { banco } = cenario({ estadoDoTicket: "em_execucao" });
   const umPlano = plano();
   assert.ok(umPlano.rodadas.every((r) => !r.criterios.includes("CA-2")));
-  assert.equal(submeterPlanoDoAgente(banco, "I-1", umPlano).demanda.estado, "gate_planejamento");
+  assert.equal(proporPlanoDoAgente(banco, "I-1", umPlano).demanda.estado, "gate_planejamento");
 });
 
 test("CA-5: plano que cita CA inexistente é reprovado e nada é gravado", () => {
   const { banco } = cenario({ estadoDoTicket: "em_execucao" });
   assert.throws(
-    () => submeterPlanoDoAgente(banco, "I-1", plano(["CA-1", "CA-99"])),
+    () => proporPlanoDoAgente(banco, "I-1", plano(["CA-1", "CA-99"])),
     /o plano cita CA-99, que a definição da demanda I-1 não tem/,
   );
   const ag = carregarDemanda(banco, "I-1");
@@ -247,7 +246,7 @@ test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão co
   const { banco, sessoes, prompts, status } = cenario({ estadoDoTicket: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
-  submeterPlanoDoAgente(banco, "I-1", plano());
+  proporPlanoDoAgente(banco, "I-1", plano());
   await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   const ag = carregarDemanda(banco, "I-1");
   assert.equal(ag.demanda.estado, "planejar");
@@ -266,7 +265,7 @@ test("CA-1: com o pi vivo e ocioso, a reprovação manda o motivo à mesma sess�
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100)); // o pi assenta: ocioso, à espera do gate
-  submeterPlanoDoAgente(banco, "I-1", plano());
+  proporPlanoDoAgente(banco, "I-1", plano());
   await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   while (prompts().length < 2) await new Promise((r) => setTimeout(r, 20));
   assert.match(prompts()[1] ?? "", /Motivo: faltam critérios na rodada 2/);
@@ -283,7 +282,7 @@ test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho re
   const { banco, sessoes, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
-  submeterPlanoDoAgente(banco, "I-1", plano());
+  proporPlanoDoAgente(banco, "I-1", plano());
   falharTicketDemanda(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
   await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   const ticket = carregarDemanda(banco, "I-1").tickets[0] as { estado: string; instrucao?: string };
@@ -300,7 +299,7 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   const { banco, sessoes, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
-  submeterPlanoDoAgente(banco, "I-1", plano());
+  proporPlanoDoAgente(banco, "I-1", plano());
   await aprovarGateDoPlanejamento(banco);
   await fim;
   const [descartada] = sessoes().sessoes;
@@ -362,7 +361,7 @@ test("CA-4: aprovar encerra o pi vivo e grava o fim da execução do planejament
   const { fim } = iniciarOuRetomarPlanejamento(banco, "I-1", 0.2);
   while (prompts().length === 0) await new Promise((r) => setTimeout(r, 20));
   await new Promise((r) => setTimeout(r, 100));
-  submeterPlanoDoAgente(banco, "I-1", plano());
+  proporPlanoDoAgente(banco, "I-1", plano());
   await aprovarGateDoPlanejamento(banco);
   await fim;
   const { n } = banco.prepare("SELECT COUNT(*) AS n FROM processo_do_trabalho WHERE fim IS NULL").get() as {
@@ -434,7 +433,7 @@ test("aprovar fora do gate recusa antes de tocar o git", async () => {
 test("foto do retorno ao agente no planejamento: devolução pela reprovação", async () => {
   const { c, banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
-  submeterPlanoDoAgente(banco, "I-1", plano());
+  proporPlanoDoAgente(banco, "I-1", plano());
   await reprovarGateDoPlanejamento(banco, "faltam critérios na rodada 2");
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   conferirPromptComFoto(prompts().at(-1) ?? "", c.raiz, "planejamento_devolucao");

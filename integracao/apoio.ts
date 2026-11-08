@@ -1,6 +1,7 @@
 // Apoio da suíte de integração do SDLC (CA-SDLC-01 a 13 e, na I-244, 14 a 25): cada cenário vive numa raiz temporária
 // (banco, repositórios git reais e execuções), removida ao fim do teste. Combinado com a I-244: quem precisa de mais,
 // acrescenta funções aqui. git e pi ficam isolados da máquina; o pi e o `gh` falsos estão em `falsos.ts`.
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,14 +10,15 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, type TestContext } from "node:test";
 import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
-import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
+import { ErroDeRegra } from "../src/nucleo/erros.ts";
+import { submeterEvidencia } from "../src/aplicacao/evidencia/submeter.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { gravarProjeto } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
-import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
+import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { type Configuracao, configuracao } from "../src/armazenamento/servico.ts";
 
 /** Diretório do arquivo de teste (git, pi e `gh` falsos); some ao fim dele. Os cenários têm a raiz própria. */
@@ -51,9 +53,23 @@ export const gravarLimiteParalelismo = (banco: DatabaseSync, limite: number): vo
   banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
 };
 
-/** O envio do plano pelo agente do `planejar`, como o CLI do agente o grava: `submeterPlano` na transação da demanda. */
-export const submeterPlanoDoAgente = (banco: DatabaseSync, demandaId: string, plano: unknown, agente: Ator) =>
-  comDemanda(banco, demandaId, (ag) => submeterPlano(ag, plano, agente, { agora: new Date().toISOString() }));
+/** O envio do plano pelo agente do `planejar`, como o CLI do agente o grava: `submeterEvidencia`; a recusa lança. */
+export function proporPlanoDoAgente(banco: DatabaseSync, demandaId: string, plano: unknown, agente: Ator): void {
+  const planejar = carregarDemanda(banco, demandaId).tickets.findLast((t) => t.etapa === "planejar");
+  assert.ok(planejar, "ticket planejar");
+  const avaliacao = submeterEvidencia(
+    banco,
+    {
+      tipo: "plano",
+      dono: Endereco.doTicket(demandaId, planejar.ticket_id),
+      produtor: agente,
+      dados: plano,
+      anexos: [],
+    },
+    { origens: ORIGENS_DOS_ANEXOS },
+  );
+  if (avaliacao.resultado === "recusada") throw new ErroDeRegra(avaliacao.motivo);
+}
 /** A IA externa que registra e envia a demanda, e outra sessão, que não é a autora. */
 export const AUTOR: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S1" };
 export const OUTRA_SESSAO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "S2" };
@@ -130,7 +146,7 @@ export async function ciclo(c: Cenario, deps?: DepsDespacho): Promise<void> {
 // Evidências de uma IA externa que registra a demanda (F3): critérios, desenho com o html e custos.
 const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-const custos = (sessao: string) => ({
+export const custos = (sessao: string) => ({
   sessoes: [
     {
       ferramenta: "claude",

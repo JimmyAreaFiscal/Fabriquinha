@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { INSTANTE_DO_CENARIO, montarAgregadoDemanda, montarTicket } from "../../apoio-testes/cenarios_de_demanda.ts";
-import type { Ator } from "./ator.ts";
+import { type Ator, AUDITOR } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import {
   type Avaliacao,
   AvaliadorDeEvidencia,
   conferirQuantidadeENomes,
   evidenciasPendentes,
+  exigirAutoria,
   SCHEMA_DA_EVIDENCIA,
   schemaDoTipo,
   type SubmissaoDeEvidencia,
@@ -15,6 +16,7 @@ import {
 } from "./evidencia.ts";
 import { CATALOGO_ETAPAS } from "./evidencia_etapa.ts";
 import { Endereco } from "./item_de_trabalho.ts";
+import { validarPlano } from "./transicoes_demanda.ts";
 
 test("todo tipo tem entrada em SCHEMA_DA_EVIDENCIA, inclusive os que n\u00e3o tinham schema", () => {
   for (const tipo of TipoEvidencia.options) {
@@ -145,7 +147,10 @@ test("schema: dados inválidos são recusados com o caminho do campo, e os váli
     ),
     /dados\.criterios/,
   );
-  const aceita = avaliador.avaliar(ag, submissao("criterios_aceite", Endereco.daDemanda("I-1"), CRITERIOS, EXTERNO));
+  const aceita = avaliador.avaliar(
+    naoEnviada(),
+    submissao("criterios_aceite", Endereco.daDemanda("I-1"), CRITERIOS, EXTERNO),
+  );
   assert.deepEqual(aceita, { resultado: "aceita", dados: CRITERIOS, veredito: undefined });
 });
 
@@ -284,4 +289,96 @@ test("regra do tipo plano: a validação do plano recusa; o erro que não é de 
     TypeError,
   );
   assert.equal(avaliador.avaliar(ag, entrada).resultado, "aceita");
+});
+
+const OUTRA_SESSAO: Ator = { tipo: "externo", ferramenta: "claude", sessao: "I-2" };
+const naoEnviada = () => {
+  const ag = agregado();
+  return { ...ag, demanda: { ...ag.demanda, enviada: false } };
+};
+const custos = {
+  sessoes: [
+    {
+      ferramenta: "claude",
+      sessao: "s1",
+      linhas: [
+        {
+          provedor: "a",
+          modelo: "m",
+          tokens_entrada: 1,
+          tokens_saida: 1,
+          tokens_cache_leitura: 0,
+          tokens_cache_escrita: 0,
+        },
+      ],
+    },
+  ],
+};
+
+test("exigirAutoria recusa não-externos e externos de outra sessão ou ferramenta", () => {
+  const { demanda } = agregado();
+  const rejeitados: Ator[] = [
+    AUDITOR,
+    FABRIQUINHA,
+    AGENTE,
+    OUTRA_SESSAO,
+    { tipo: "externo", ferramenta: "pi", sessao: "I-1" },
+  ];
+  for (const autor of rejeitados) {
+    assert.throws(
+      () => {
+        exigirAutoria(demanda, autor, "editar");
+      },
+      {
+        name: "ErroDeEscopo",
+        message:
+          "só a ferramenta claude da sessão I-1 pode editar a demanda I-1 (peça a quem registrou a demanda, na mesma sessão)",
+      },
+    );
+  }
+  assert.doesNotThrow(() => {
+    exigirAutoria(demanda, EXTERNO, "editar");
+  });
+});
+
+test("autoria: antes do envio só a ferramenta e a sessão autoras submetem evidência da demanda", () => {
+  const ag = naoEnviada();
+  const dono = Endereco.daDemanda("I-1");
+  assert.equal(
+    motivo(avaliador.avaliar(ag, submissao("criterios_aceite", dono, CRITERIOS, OUTRA_SESSAO))),
+    "só a ferramenta claude da sessão I-1 pode submeter evidência da a demanda I-1 (peça a quem registrou a demanda, na mesma sessão)",
+  );
+  assert.equal(avaliador.avaliar(ag, submissao("criterios_aceite", dono, CRITERIOS, EXTERNO)).resultado, "aceita");
+});
+
+test("definição congelada: depois do envio a autora também é recusada, e custos e evidências de ticket seguem livres", () => {
+  const ag = agregado();
+  const dono = Endereco.daDemanda("I-1");
+  assert.equal(
+    motivo(avaliador.avaliar(ag, submissao("criterios_aceite", dono, CRITERIOS, EXTERNO))),
+    "a demanda I-1 já foi enviada e a evidência criterios_aceite da definição está congelada (só custos_realizados e evidências de rodada ou ticket entram depois do envio)",
+  );
+  for (const livre of [dono, Endereco.daRodada("I-1", 1)]) {
+    assert.equal(
+      avaliador.avaliar(ag, submissao("custos_realizados", livre, custos, OUTRA_SESSAO)).resultado,
+      "aceita",
+    );
+  }
+  assert.equal(
+    avaliador.avaliar(ag, submissao("execucao_testes", ticket(2), { comandos: [] }, FABRIQUINHA)).resultado,
+    "recusada",
+  );
+});
+
+test("plano: só o agente submete, e a validação do plano real recusa fora de planejar", () => {
+  const ag = agregado();
+  const comValidacaoReal = new AvaliadorDeEvidencia(CATALOGO_ETAPAS, validarPlano);
+  const plano = { demanda_id: "I-1", criterios: ["CA-1"], rodadas: [], tickets: [] };
+  for (const produtor of [AUDITOR, EXTERNO, FABRIQUINHA]) {
+    assert.match(
+      motivo(comValidacaoReal.avaliar(ag, submissao("plano", ticket(6), plano, produtor))),
+      /é produzida por agente/,
+    );
+  }
+  assert.equal(comValidacaoReal.avaliar(ag, submissao("plano", ticket(6), plano, AGENTE)).resultado, "recusada");
 });

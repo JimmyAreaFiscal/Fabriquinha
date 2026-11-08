@@ -21,9 +21,9 @@ const aprovaPRDaRodadaSozinho = (projeto: string, env: NodeJS.ProcessEnv): boole
 
 /**
  * Logo depois do encerramento: no projeto que a ligou, a Fabriquinha aprova o PR da rodada que chegou ao gate, porque
- * chegar a ele já exige a revisão aprovada e o PR sem conflito nem check falho. O Auditor fica com o PR final da demanda.
+ * chegar a ele já exige a revisão aceita e o PR sem conflito nem check falho. O Auditor fica com o PR final da demanda.
  * A falha só vai ao log e deixa o gate aberto para o Auditor; fora do gate ou sem a opção, nada acontece. Devolve a
- * demanda aprovada, ou `ag` como veio.
+ * demanda com o PR aprovado, ou `ag` como veio.
  */
 export async function aprovarPRRodadaSeAutomatico(
   banco: DatabaseSync,

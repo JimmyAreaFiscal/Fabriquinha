@@ -7,7 +7,8 @@ import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { Modelo } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
-import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
+import { exigirAutoria } from "./evidencia.ts";
+import { pendentesDeEnvio } from "./evidencia_demanda.ts";
 import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { Id, type Instante, Markdown, Slug, Titulo } from "./primitivos.ts";
 import {
@@ -191,30 +192,6 @@ export function validarPlano(
     );
   }
   return { plano: plano.data, ticket };
-}
-
-/** O plano validado por `validarPlano` vira evidência do ticket de planejamento e a demanda vai a `gate_planejamento`. */
-export function submeterPlano(
-  ag: AgregadoDemanda,
-  entrada: unknown,
-  ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
-  const { plano, ticket } = validarPlano(ag, entrada, ator);
-  const evidencia = {
-    demanda_id: ag.demanda.id,
-    rodada_id: undefined,
-    ticket_id: ticket.ticket_id,
-    tipo: "plano" as const,
-    dados: plano,
-    autor: ator,
-    em: ctx.agora,
-  };
-  return {
-    ...ag,
-    demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "gate_planejamento", ctx.agora),
-    evidencias: [...ag.evidencias.filter((e) => !(e.tipo === "plano" && e.ticket_id === ticket.ticket_id)), evidencia],
-  };
 }
 
 /**

@@ -7,11 +7,10 @@ import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import type { ProgressoEncerramento } from "../nucleo/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
-import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { registrarDemanda } from "../nucleo/transicoes_demanda.ts";
 import { escrever, migrar } from "./banco.ts";
 import { carregarDemanda, comDemanda, criarDemandaNova, listarDemandas } from "./demandas.ts";
-import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto, comEvidencia } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { MIGRACOES } from "./migracoes.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -368,7 +367,7 @@ test("CA-10: evidência de rodada ou ticket inexistente", () => {
 test("CA-11: nova evidência do mesmo tipo e dono substitui a anterior", () => {
   const b = comBase(false);
   const depois = comDemanda(b, "I-1", (ag) =>
-    submeterEvidenciaDemanda(
+    comEvidencia(
       ag,
       { tipo: "comportamento", dados: { v: 42 } },
       { tipo: "externo", ferramenta: "claude", sessao: "s1" },

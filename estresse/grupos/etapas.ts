@@ -18,10 +18,9 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { prDaDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { AUDITOR, type Ator } from "../../src/nucleo/ator.ts";
-import { submeterPlano } from "../../src/nucleo/transicoes_demanda.ts";
 import { Endereco } from "../../src/nucleo/item_de_trabalho.ts";
 import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../src/nucleo/evidencia_demanda.ts";
+import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
 import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
@@ -226,9 +225,7 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
     rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Rodada 1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Ticket 1.1", descricao: "d" }],
   };
-  comDemanda(c.banco, id, (ag) =>
-    submeterPlano(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, { agora: agora() }),
-  );
+  comDemanda(c.banco, id, (ag) => comPlanoSubmetido(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, agora()));
   await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
 }
 
@@ -267,13 +264,7 @@ async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Pro
 function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [string, object][]): void {
   comDemanda(c.banco, id, (ag) =>
     evidencias.reduce(
-      (a, [tipo, dados]) =>
-        submeterEvidenciaDemanda(
-          a,
-          { tipo, dados, ticket_id } as EntradaEvidenciaDemanda,
-          a.demanda.criada_por,
-          agora(),
-        ),
+      (a, [tipo, dados]) => comEvidencia(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, agora()),
       ag,
     ),
   );

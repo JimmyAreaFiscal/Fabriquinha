@@ -1444,7 +1444,7 @@ input.erro {
   font-size: var(--fs-md);
 }
 
-/* A evidência na caixa: a marca de aprovada, a tabela, os anexos e o JSON. */
+/* A evidência na caixa: a marca de aceita, a tabela, os anexos e o JSON. */
 .evidencia {
   display: flex;
   flex-direction: column;
