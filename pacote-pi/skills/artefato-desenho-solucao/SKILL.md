@@ -7,7 +7,7 @@ description: Use ao produzir a evidência `desenho_solucao` da Fabriquinha.
 
 ## Para que serve
 
-O Auditor lê o HTML e os `dados` na página da demanda para aprová-la ou recusá-la, sem abrir o código: ele confere que a solução atende os critérios de aceite e cabe no que foi pedido.
+O Auditor lê o HTML e os `dados` na página da demanda para aprová-la ou reprová-la, sem abrir o código: ele confere que a solução atende os critérios de aceite e cabe no que foi pedido.
 O agente que planeja a demanda na Fabriquinha recebe o desenho aprovado: o `resumo`, os `arquivosPrevistos`, o `foraDeEscopo` e o caminho do HTML.
 Os agentes das rodadas não o recebem: enxergam a descrição e os critérios da demanda e o próprio ticket do plano.
 Por isso, toda decisão que o planejamento precisa seguir vai no `resumo`, que ele lê sem abrir o HTML.

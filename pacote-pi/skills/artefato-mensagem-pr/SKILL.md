@@ -35,7 +35,7 @@ Cada campo, a seção do PR em que entra e o que ele responde:
 | `naoVerificado` | 7, Não verificado | O que ninguém conferiu? |
 | `reversao` | 8, Reversão | Como desfaço se der errado? |
 
-`titulo`: uma frase no imperativo que se entende sozinha no histórico, sem o prefixo e sem o endereço da rodada, que a Fabriquinha acrescenta: "Recusar a aprovação da demanda sem motivo".
+`titulo`: uma frase no imperativo que se entende sozinha no histórico, sem o prefixo e sem o endereço da rodada, que a Fabriquinha acrescenta: "Reprovar a aprovação da demanda sem motivo".
 
 `oQueMudou`: um parágrafo curto para cada parte: o comportamento novo, visto de fora; a abordagem e por que ela venceu a alternativa óbvia; as limitações que ficam.
 

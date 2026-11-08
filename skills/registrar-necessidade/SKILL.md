@@ -85,7 +85,7 @@ O passo termina com `demanda enviar` impresso com a demanda enviada.
 Diga ao usuário a demanda criada (`I-<n>`) e que ela espera o gate do Auditor na página da demanda.
 Destaque só o que ele ainda não sabe: um achado do código, uma assunção registrada, um risco.
 
-Se o Auditor recusar, a demanda e as que dependem dela vão a `cancelada`: `fabriquinha demanda ver I-<n>` mostra o estado, e o motivo fica na página da demanda (`/demandas/I-<n>`).
+Se o Auditor reprovar, a demanda e as que dependem dela vão a `cancelada`: `fabriquinha demanda ver I-<n>` mostra o estado, e o motivo fica na página da demanda (`/demandas/I-<n>`).
 Depois do envio, só `custos_realizados` aceita nova submissão; o resto está congelado, e a correção vira uma demanda nova.
 
 ## Limites
