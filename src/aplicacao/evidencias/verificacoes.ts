@@ -25,7 +25,7 @@ interface EntradaVerificacoes {
  */
 export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<RegistroDaVerificacao[]> {
   const { ambiente, projeto, e2e, worktree, opcoes } = entrada;
-  const arquivos = await arquivosAlterados(worktree);
+  const arquivos = await arquivosAlterados(ambiente, worktree);
   const contexto = { ambiente, worktree, limiteMs: opcoes?.limiteMs };
   const sonar = new VerificacaoSonar(projeto.chave_sonarqube, arquivos, opcoes);
   let sonarEmAndamento: Promise<RegistroDaVerificacao> | undefined;

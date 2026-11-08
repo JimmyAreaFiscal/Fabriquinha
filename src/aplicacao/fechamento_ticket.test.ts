@@ -412,6 +412,7 @@ test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit
 test("CA-16: commit sem evidências aprovadas falha por infraestrutura", async () => {
   const c = await cenario();
   await commitarTicketDemanda(c.banco, ref(1), {
+    ambiente: new AmbienteHostLocal(),
     worktree: c.worktree,
     tipo: "feat",
     titulo: "Cachear",
@@ -429,6 +430,7 @@ test("commit com evidência reprovada gravada falha por infraestrutura", async (
   assert.equal(c.status(1)?.estado, "aberto"); // devolvido: as evidências reprovadas ficam gravadas
   c.banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE ticket_id = 1");
   await commitarTicketDemanda(c.banco, ref(1), {
+    ambiente: new AmbienteHostLocal(),
     worktree: c.worktree,
     tipo: "feat",
     titulo: "Cachear",

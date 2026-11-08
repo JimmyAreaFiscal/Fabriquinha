@@ -137,7 +137,7 @@ function cenario(): string {
 
 /** A análise da worktree como a revisão a pede: os arquivos alterados vêm do git dela. */
 const analisar = (worktree: string, opcoes: OpcoesSonar = {}) =>
-  analisarSonar("loja-key", worktree, () => arquivosAlterados(worktree), opcoes);
+  analisarSonar("loja-key", worktree, () => arquivosAlterados(new AmbienteHostLocal(), worktree), opcoes);
 
 const issue = (arquivo: string, line?: number) => ({
   component: `loja-key:${arquivo}`,
