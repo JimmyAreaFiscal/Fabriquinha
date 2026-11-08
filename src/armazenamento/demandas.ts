@@ -277,7 +277,10 @@ function carregar(banco: DatabaseSync, id: string): AgregadoDemanda | undefined 
       enviada: demanda.enviada === 1,
     },
     rodadas: filhas("rodada").map((r) => ({ ...r, e2e: r.e2e === 1 })),
-    pull_requests: filhas("pull_request").map(semNulos),
+    pull_requests: banco
+      .prepare("SELECT * FROM pull_request WHERE demanda_id = ? ORDER BY rowid")
+      .all(id)
+      .map(semNulos),
     dependencias_rodada: filhas("dependencia_rodada"),
     criterios_citados: filhas("criterio_citado_rodada"),
     tickets: filhas("ticket_demanda").map((t) => semNulos(linhaComConfiguracaoAgente(comAtor(t, "criado_por")))),

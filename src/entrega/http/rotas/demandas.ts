@@ -5,6 +5,7 @@ import { type AgregadoDemanda, prDaDemanda } from "../../../nucleo/agregado_dema
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
+import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
@@ -24,14 +25,12 @@ const ref = (demanda_id: string) => ({
   ticket: (ticket_id: number) => formatarTicketRef({ demanda_id, ticket_id }),
 });
 
-/** O PR da rodada que espera decisão ou ajustes: o da última evidência `pr_aberto` do ticket `encerrar_rodada` dela. */
-export function prDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
+/** O PR da rodada que espera decisão ou ajustes: o `espaco.pr` dela, só nos estados de gate. */
+export function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
   if (rodada?.estado !== "gate_pr" && rodada?.estado !== "ajustar_resultado") return undefined;
-  const ticket = ticketAtualDaEtapa(ag, "encerrar_rodada", rodada_id);
-  const pr = ag.evidencias.findLast((e) => e.ticket_id === ticket?.ticket_id && e.tipo === "pr_aberto")?.dados as
-    { id: string; url: string } | undefined;
-  return pr && { id: pr.id, url: pr.url };
+  const pr = prDoEspaco(ag, rodada_id);
+  return pr && { id: String(pr.numero), url: pr.url };
 }
 
 /** Os tickets `em_execucao` da demanda, com a rodada quando têm e `pi_ativo` quando é o pi que roda. */
@@ -68,7 +67,7 @@ function board(pedido: Parameters<Rota["tratar"]>[0]) {
         estado,
         terminal: CICLO_DA_DEMANDA.ehTerminal(estado),
         rodadas: ag.rodadas.map((r) => {
-          const pr = prDaRodada(ag, r.rodada_id);
+          const pr = prDoGateDaRodada(ag, r.rodada_id);
           return { ref: ref(id).rodada(r.rodada_id), estado: r.estado, ...(pr && { pr }) };
         }),
         bloqueios: predecessorasDaDemanda(pedido.banco, id).filter((p) => !satisfazDependencia(p.estado)),
@@ -141,17 +140,21 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
       terminal: CICLO_DA_DEMANDA.ehTerminal(demanda.estado),
       arquivavel: CICLO_DA_DEMANDA.transicoes[demanda.estado].includes("arquivada"),
     },
-    rodadas: ag.rodadas.map((r) => ({
-      ref: rodada(r.rodada_id),
-      titulo: r.titulo,
-      estado: r.estado,
-      ticket_atual_por_etapa: Object.fromEntries(
-        EtapaTicket.options.flatMap((etapa) => {
-          const atual = ticketAtualDaEtapa(ag, etapa, r.rodada_id);
-          return atual ? [[etapa, ticket(atual.ticket_id)]] : [];
-        }),
-      ),
-    })),
+    rodadas: ag.rodadas.map((r) => {
+      const pr = prDoGateDaRodada(ag, r.rodada_id);
+      return {
+        ref: rodada(r.rodada_id),
+        titulo: r.titulo,
+        estado: r.estado,
+        ...(pr && { pr }),
+        ticket_atual_por_etapa: Object.fromEntries(
+          EtapaTicket.options.flatMap((etapa) => {
+            const atual = ticketAtualDaEtapa(ag, etapa, r.rodada_id);
+            return atual ? [[etapa, ticket(atual.ticket_id)]] : [];
+          }),
+        ),
+      };
+    }),
     tickets: ag.tickets.map((t) => {
       const motivo = motivoDaFalhaDoTicket(ag.tentativas, t);
       return {

@@ -63,15 +63,15 @@ export async function aprovarPR(
   }
 
   gate.ensaiar(ag, endereco, entrada, ator, contexto()); // recusa antes de integrar na hospedagem
+  const projeto = carregarProjeto(banco, ag.demanda.projeto);
+  const raiz = raizDo(banco);
   const pr = existe(
-    ag.evidencias.findLast((e) => e.ticket_id === ticket.ticket_id && e.tipo === "pr_aberto"),
+    espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz).pr,
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
-  const raiz = raizDo(banco);
   const { branch } = ag.demanda;
-  await integrarPR(projeto, pr.dados.id as string);
+  await integrarPR(projeto, String(pr.numero));
   // A ref local da demanda só avança em fast-forward: o merge da hospedagem é o único commit novo dela.
   const { pasta: demanda } = espacoDoTicket(ag, {}, projeto, raiz);
   await naFilaDoProjeto(raiz, projeto.nome, async () => {
@@ -85,9 +85,9 @@ export async function aprovarPR(
     return {
       ...decidida,
       pull_requests: comPrDaRodada(decidida, ref.rodada_id, {
-        numero: Number(pr.dados.id),
-        url: pr.dados.url as string,
-        head: pr.dados.head as string,
+        numero: pr.numero,
+        url: pr.url,
+        head: pr.head,
         estado: "integrado",
         atualizado_em: agora,
       }),

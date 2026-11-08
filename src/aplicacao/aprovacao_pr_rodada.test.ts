@@ -122,6 +122,18 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
             em,
           },
         ],
+    pull_requests: semPR
+      ? []
+      : [
+          {
+            rodada_id: 2,
+            numero: 1,
+            url: "https://github.com/org/loja/pull/1",
+            head: "a".repeat(40),
+            estado: "aberto",
+            atualizado_em: em,
+          },
+        ],
   } as unknown as AgregadoDemanda);
   await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);

@@ -19,7 +19,7 @@ interface Evidencia {
 }
 interface Pagina {
   demanda: { tipo: string; descricao: string };
-  rodadas: { ref: string; ticket_atual_por_etapa: Record<string, string> }[];
+  rodadas: { ref: string; pr?: { id: string; url: string }; ticket_atual_por_etapa: Record<string, string> }[];
   tickets: {
     ref: string;
     etapa: string;
@@ -83,6 +83,18 @@ test("CA-3: as duas rodadas da I-206 com o estado de cada uma e o PR aberto da R
     { ref: "I-206.R1", estado: "concluida" },
     { ref: "I-206.R2", estado: "gate_pr", pr: { id: "7", url: "https://pr/7" } },
   ]);
+});
+
+test("CA-3: a página traz o PR só da rodada em gate; a R1 concluída, com PR integrado, fica sem", async () => {
+  const { pedir } = await cenarioDemandas();
+  const { rodadas } = (await pedir("/api/demandas/I-206")).json<Pagina>();
+  assert.deepEqual(
+    rodadas.map((r) => [r.ref, r.pr]),
+    [
+      ["I-206.R1", undefined],
+      ["I-206.R2", { id: "7", url: "https://pr/7" }],
+    ],
+  );
 });
 
 test("CA-4: a I-207 aparece com o bloqueio da I-206 e o estado dela; integrada, deixa de bloquear", async () => {

@@ -181,6 +181,24 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
         em: INSTANTE_DO_CENARIO,
       },
     ],
+    pull_requests: [
+      {
+        rodada_id: 1,
+        numero: 6,
+        url: "https://pr/6",
+        head: "abc",
+        estado: "integrado",
+        atualizado_em: INSTANTE_DO_CENARIO,
+      },
+      {
+        rodada_id: 2,
+        numero: 7,
+        url: "https://pr/7",
+        head: "abc",
+        estado: "aberto",
+        atualizado_em: INSTANTE_DO_CENARIO,
+      },
+    ],
   });
 }
 

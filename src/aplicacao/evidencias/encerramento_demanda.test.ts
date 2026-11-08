@@ -92,9 +92,14 @@ const agregado = (tipo = "funcionalidade", comEncerramento = true) =>
             integracao: { sha: "abc123" },
             limpeza_pendente: [],
           },
-          pull_requests: [{ numero: 50, url: "http://pr/50", head: "abc123", estado: "integrado", atualizado_em: em }],
         }
       : {}),
+    pull_requests: [
+      { rodada_id: 2, numero: 41, url: "http://pr/41", head: "def456", estado: "integrado", atualizado_em: em },
+      ...(comEncerramento
+        ? [{ numero: 50, url: "http://pr/50", head: "abc123", estado: "integrado" as const, atualizado_em: em }]
+        : []),
+    ],
   });
 const sessao = (n: number): TrabalhoGerenciado => ({
   id: `s${String(n)}`,

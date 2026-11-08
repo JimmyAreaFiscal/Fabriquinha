@@ -156,6 +156,9 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
         em,
       },
     ];
+    resto.pull_requests = [
+      { rodada_id: 2, numero: 1, url: "https://github.com/org/loja/pull/1", head, estado: "aberto", atualizado_em: em },
+    ];
   }
   const { demanda: cabecalho, ...outros } = resto;
   const ag = montarAgregadoDemanda(DEMANDA, "", outros);

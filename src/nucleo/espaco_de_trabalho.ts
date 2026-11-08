@@ -59,14 +59,28 @@ export function espacoDaRodada(
   };
 }
 
+/** A leitura única do PR do Espaço: o da rodada ou, sem rodada, o final da demanda. */
+export function prDoEspaco(
+  ag: Partial<Pick<AgregadoDemanda, "pull_requests">>,
+  rodada_id: number | undefined,
+): PullRequest | undefined {
+  const achado = ag.pull_requests?.find((pr) => pr.rodada_id === rodada_id);
+  return achado && { numero: achado.numero, url: achado.url, head: achado.head, estado: achado.estado };
+}
+
 /** A única regra da pasta do ticket; os casos de uso a chamam em vez de escolher entre a demanda e a rodada. */
 export function espacoDoTicket(
-  ag: Pick<AgregadoDemanda, "demanda">,
+  ag: Pick<AgregadoDemanda, "demanda"> & Partial<Pick<AgregadoDemanda, "pull_requests">>,
   ticket: Pick<TicketDemanda, "rodada_id">,
   projeto: Pick<Projeto, "nome" | "branch_base">,
   raiz: string,
 ): EspacoDeTrabalho {
-  return ticket.rodada_id === undefined
-    ? espacoDaDemanda(projeto, ag.demanda.id, raiz)
-    : espacoDaRodada(projeto, ag.demanda.id, ticket.rodada_id, raiz);
+  const espaco =
+    ticket.rodada_id === undefined
+      ? espacoDaDemanda(projeto, ag.demanda.id, raiz)
+      : espacoDaRodada(projeto, ag.demanda.id, ticket.rodada_id, raiz);
+  const pr = prDoEspaco(ag, ticket.rodada_id);
+  return pr ? { ...espaco, pr } : espaco;
 }
+
+type PullRequest = z.infer<typeof PullRequest>;

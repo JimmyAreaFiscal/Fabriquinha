@@ -141,6 +141,16 @@ export function semearDemandas(raiz: string): void {
           em,
         },
       ],
+      pull_requests: [
+        {
+          rodada_id: 1,
+          numero: 7,
+          url: "https://exemplo.com/pr/7",
+          head: "abc123",
+          estado: "aberto",
+          atualizado_em: em,
+        },
+      ],
     }),
   );
   gravarAgregadoPronto(
@@ -229,6 +239,14 @@ export function semearPaginaDaDemanda(raiz: string): void {
         falha: { etapa: "limpeza", motivo: "não consegui apagar a worktree" },
       },
       pull_requests: [
+        {
+          rodada_id: 1,
+          numero: 7,
+          url: "https://exemplo.com/pr/7",
+          head: "abc123",
+          estado: "aberto",
+          atualizado_em: em,
+        },
         { numero: 9, url: "https://exemplo.com/pr/9", head: "abc123", estado: "integrado", atualizado_em: em },
       ],
     }),
@@ -336,6 +354,9 @@ export function semearPrDaRodada(raiz: string): void {
           autor: { tipo: "fabriquinha" },
           em,
         },
+      ],
+      pull_requests: [
+        { rodada_id: 1, numero: 9, url: "https://exemplo.com/pr/9", head, estado: "aberto", atualizado_em: em },
       ],
     }),
   );
