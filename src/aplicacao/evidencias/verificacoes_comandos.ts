@@ -6,6 +6,7 @@ import { join, matchesGlob } from "node:path";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS, type Resultado } from "../../infra/processo.ts";
 import { LIMITE } from "../../nucleo/schemas.ts";
+import { classificarSaidaDeComando } from "../../nucleo/verificacao.ts";
 import type { CausaDeInfraestrutura } from "../../nucleo/tentativa.ts";
 
 /** A reprovação técnica volta ao agente; a de infraestrutura leva a causa que a política da Tentativa lê. */
@@ -37,18 +38,21 @@ export interface EntradaComandos {
 export const aprovacao = (falhas: readonly Falha[]): boolean | undefined =>
   falhas.length === 0 ? true : falhas.some((f) => f.classe === "infraestrutura") ? undefined : false;
 
-/** Estouro do tempo e saída 126/127 (comando que não roda) são infraestrutura; outra saída diferente de 0, técnica. */
-function classificar(comando: string, r: Resultado, tecnica = (c: number | null) => c !== 0): Falha | undefined {
+/** Traduz a classificação única para a Falha do ticket; o motivo e a causa de infraestrutura dependem de como o comando falhou. */
+function classificar(comando: string, r: Resultado, codigoDeReprovacao?: number): Falha | undefined {
+  const tipo = classificarSaidaDeComando(r, codigoDeReprovacao);
+  if (tipo === "passou") return undefined;
+  if (tipo === "reprovacao") {
+    return { classe: "tecnica", motivo: `${comando} saiu com código ${String(r.codigo)}`, comando };
+  }
   if (r.estourou) {
     return { classe: "infraestrutura", causa: "tempo_limite", motivo: `${comando}: tempo limite`, comando };
   }
-  if (r.codigo === 126 || r.codigo === 127) {
-    return { classe: "infraestrutura", causa: "comando_ausente", motivo: `${comando}: ${r.log.trim()}`, comando };
-  }
-  if (tecnica(r.codigo)) {
-    return { classe: "tecnica", motivo: `${comando} saiu com código ${String(r.codigo)}`, comando };
-  }
-  return undefined;
+  const motivo =
+    r.codigo === 126 || r.codigo === 127
+      ? `${comando}: ${r.log.trim()}`
+      : `${comando} saiu com código inesperado ${String(r.codigo)}`;
+  return { classe: "infraestrutura", causa: "comando_ausente", motivo, comando };
 }
 
 /** Roda os comandos de `corpo` com o ambiente sem credenciais (F5 §5.0). */
@@ -110,16 +114,8 @@ export function verificarTestes({
       comandos.push({ ...linha(config.comando_execucao, exec), caminho: config.caminho_linguagem });
       logs.push({ nome: `${nome}.log`, texto: exec.log });
       // Só o codigo_falha reprova; outra saída diferente de 0 é infraestrutura.
-      const falha = classificar(config.comando_execucao, exec, (c) => c === config.codigo_falha);
+      const falha = classificar(config.comando_execucao, exec, config.codigo_falha);
       if (falha) falhas.push(falha);
-      else if (exec.codigo !== 0) {
-        falhas.push({
-          classe: "infraestrutura",
-          causa: "comando_ausente",
-          motivo: `${config.comando_execucao} saiu com código inesperado ${String(exec.codigo)}`,
-          comando: config.comando_execucao,
-        });
-      }
     }
     return { tipo: "execucao_testes", aprovada: aprovacao(falhas), falhas, dados: { comandos }, logs };
   });
