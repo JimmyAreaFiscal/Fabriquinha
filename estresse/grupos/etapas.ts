@@ -12,7 +12,7 @@ import { submeterPlano } from "../../src/nucleo/transicoes_demanda.ts";
 import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../src/nucleo/evidencia_demanda.ts";
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
-import type { Verificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
+import type { RegistroDaVerificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
 import { aprovarPRRodada } from "../../src/aplicacao/aprovacao_pr_rodada.ts";
 import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
@@ -221,7 +221,7 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
   await aprovarPlanejamentoDemanda(c.banco, id, {});
 }
 
-const verificacoes = (): Verificacao[] =>
+const verificacoes = (): RegistroDaVerificacao[] =>
   (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((tipo) => ({
     tipo,
     aprovada: true,

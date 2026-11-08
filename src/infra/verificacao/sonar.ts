@@ -5,8 +5,15 @@ import { dirname, join } from "node:path";
 import { setTimeout as esperar } from "node:timers/promises";
 import { z } from "zod";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { executar } from "../../infra/processo.ts";
-import { exigirGit } from "../../infra/repositorio/worktree.ts";
+import { executar } from "../processo.ts";
+import { exigirGit } from "../repositorio/worktree.ts";
+import {
+  aprovacao,
+  type ContextoDaVerificacao,
+  type Falha,
+  type RegistroDaVerificacao,
+  Verificacao,
+} from "./verificacao.ts";
 
 // ponytail: o servidor local do Auditor, o mesmo comando do sonar_gate.py; vira configuração se a Fabriquinha
 // rodar noutra máquina.
@@ -141,6 +148,7 @@ export async function arquivosAlterados(worktree: string): Promise<string[]> {
 /**
  * Núcleo sem banco: checa o ambiente e o servidor, lista os arquivos alterados via `listarArquivos`, escaneia a
  * worktree, espera o Compute Engine e devolve as issues abertas nos arquivos alterados. Falhas viram ErroDeRegra.
+ * @testes o teste exercita direto; a produção a usa só dentro do módulo
  */
 export async function analisarSonar(
   chave: string,
@@ -190,4 +198,58 @@ export async function analisarSonar(
     if (p * PAGINA >= Math.min(pagina.paging.total, LIMITE_DA_API)) break;
   }
   return { ceTaskId, arquivos, issues };
+}
+
+/** Qualquer ErroDeRegra do Sonar (fora do ar, scanner, tempo) é infraestrutura; issue aberta em arquivo alterado, técnica. */
+export class VerificacaoSonar extends Verificacao {
+  readonly tipo = "sonar";
+  readonly #chaveSonarqube: string;
+  readonly #arquivosAlterados: string[];
+  readonly #opcoes: OpcoesSonar | undefined;
+
+  constructor(chaveSonarqube: string, arquivosAlterados: string[], opcoes?: OpcoesSonar) {
+    super();
+    this.#chaveSonarqube = chaveSonarqube;
+    this.#arquivosAlterados = arquivosAlterados;
+    this.#opcoes = opcoes;
+  }
+
+  async coletar({ worktree }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+    const tipo = "relatorio_sonar";
+    try {
+      const {
+        ceTaskId,
+        arquivos: analisados,
+        issues,
+      } = await analisarSonar(
+        this.#chaveSonarqube,
+        worktree,
+        () => Promise.resolve(this.#arquivosAlterados),
+        this.#opcoes,
+      );
+      // Cada issue vai no motivo: é ele que chega ao agente na devolução, e só a contagem o fazia perguntar o que corrigir.
+      const listaDeIssues = issues
+        .map(
+          (i) =>
+            `\n  - ${i.arquivo}${i.linha === undefined ? "" : `:${String(i.linha)}`} ${i.regra} (${i.severidade}): ${i.mensagem}`,
+        )
+        .join("");
+      const falhas: Falha[] = issues.length
+        ? [
+            {
+              classe: "tecnica",
+              motivo: `${String(issues.length)} issue(s) aberta(s) em arquivos alterados; corrija cada uma:${listaDeIssues}`,
+            },
+          ]
+        : [];
+      const dados = { chave_sonarqube: this.#chaveSonarqube, ceTaskId, arquivosAnalisados: analisados, issues };
+      return { tipo, aprovada: aprovacao(falhas), falhas, dados, logs: [] };
+    } catch (erro) {
+      if (!(erro instanceof ErroDeRegra)) throw erro;
+      const falhas: Falha[] = [
+        { classe: "infraestrutura", causa: "servico_externo_inacessivel", motivo: erro.message },
+      ];
+      return { tipo, aprovada: aprovacao(falhas), falhas, dados: {}, logs: [] };
+    }
+  }
 }

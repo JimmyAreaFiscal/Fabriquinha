@@ -37,7 +37,9 @@ import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { carregarSessoesDaDemanda } from "../armazenamento/sessoes.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
-import { lerPR, type OpcoesVerificacao, publicarPRDe, verificarPR } from "../infra/repositorio/pr.ts";
+import { lerPR, type OpcoesVerificacao, publicarPRDe } from "../infra/repositorio/pr.ts";
+import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
+import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 
 export interface DepsEncerramentoDemanda {
@@ -178,7 +180,10 @@ export async function conduzirEncerramentoDemanda(
   }
 
   try {
-    const problemas = await verificarPR(projeto, publicado.id, log, deps.verificacao);
+    const problemas = await exigidaPelaEtapa(
+      "encerrar_demanda",
+      new ConferenciaDoPR(projeto, publicado.id, log, deps.verificacao),
+    ).conferir();
     if (problemas.conflito) {
       return aplicar((a) => registrarConflitoEncerramento(a, { demanda_id }, FABRIQUINHA, contexto()));
     }

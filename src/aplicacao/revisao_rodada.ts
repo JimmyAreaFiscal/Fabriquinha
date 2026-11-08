@@ -7,8 +7,6 @@ import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } fro
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
-import { verificarFitness } from "./evidencias/verificacoes_comandos.ts";
-import { schemaDe } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -17,6 +15,8 @@ import { type Anexo, gravarAnexos } from "../armazenamento/evidencia_demanda.ts"
 import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
+import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
+import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
 import { registrarRevisaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
@@ -64,7 +64,7 @@ export async function prepararRevisaoRodada(
   const previstos = [...new Set(ag.caminhos_ticket.filter((c) => delRodada.has(c.ticket_id)).map((c) => c.caminho))];
   const casa = (a: (typeof arquivos)[number], padrao: string) =>
     matchesGlob(a.caminho, padrao) || (a.caminhoAnterior !== undefined && matchesGlob(a.caminhoAnterior, padrao));
-  const alterados = schemaDe("arquivos_alterados").dados.parse({
+  const alterados: Dados = {
     base,
     head,
     arquivos: arquivos.map((a) => ({
@@ -75,14 +75,13 @@ export async function prepararRevisaoRodada(
       previsto: previstos.find((p) => casa(a, p)) ?? null,
     })),
     previstosNaoTocados: previstos.filter((p) => !arquivos.some((a) => casa(a, p))),
-  });
+  };
 
-  const fitness = await verificarFitness({ projeto, e2e: false, worktree, arquivos: [] });
+  const fitness = await exigidaPelaEtapa("revisar_rodada", new VerificacaoDeFitness(projeto)).coletar({ worktree });
   const linhas = (fitness.dados.linhas as Record<string, unknown>[]).map((l) => ({
     ...l,
     log: `${String(l.nome)}.log`,
   }));
-  const matriz = schemaDe("matriz_fitness").dados.parse({ linhas });
   const anexos: Anexo[] = fitness.logs.map(({ nome, texto }) => ({
     caminho: nome,
     mime: "text/plain",
@@ -97,13 +96,13 @@ export async function prepararRevisaoRodada(
     (a) => {
       const com = submeterEvidenciaDemanda(
         a,
-        { tipo: "arquivos_alterados", dados: alterados as Dados, ticket_id },
+        { tipo: "arquivos_alterados", dados: alterados, ticket_id },
         FABRIQUINHA,
         agora,
       );
       return submeterEvidenciaDemanda(
         com,
-        { tipo: "matriz_fitness", dados: matriz as Dados, ticket_id },
+        { tipo: "matriz_fitness", dados: { linhas }, ticket_id },
         FABRIQUINHA,
         agora,
       );

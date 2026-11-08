@@ -180,7 +180,7 @@ test("não grava, não commita e não toca no banco (CA-17)", async () => {
   await coletarVerificacoes({ projeto, e2e: false, worktree });
 
   assert.equal(git(worktree, "rev-parse", "HEAD") + git(worktree, "status", "--porcelain"), antes);
-  for (const arquivo of ["verificacoes.ts", "verificacoes_comandos.ts"]) {
+  for (const arquivo of ["verificacoes.ts"]) {
     const fonte = readFileSync(join(import.meta.dirname, arquivo), "utf8");
     assert.doesNotMatch(fonte, /from "\.\.\/(persistencia|repositorio\/commit)/);
   }

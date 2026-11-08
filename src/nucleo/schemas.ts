@@ -410,12 +410,13 @@ const SCHEMAS: Record<TipoEvidencia, SchemaEvidencia> = {
   },
   // Produzidas pelos coletores (F3 §6); aprovada quando cada codigoSaida é 0.
   execucao_testes: { dados: z.object({ comandos: z.array(ComandoRodado).min(1) }), arquivos: LOGS },
-  matriz_fitness: {
+  matriz_fitness: tipado({
     dados: z.object({
       linhas: z.array(z.object({ nome: Slug, descricao: z.string(), ...ComandoRodado.shape })).min(1),
     }),
     arquivos: LOGS,
-  },
+    aprovada: ({ linhas }) => linhas.every((l) => l.codigoSaida === 0),
+  }),
   // Produzida pela Fabriquinha (F3 §4.3, §6): aprovada = nenhuma issue do Sonar aberta nos arquivos alterados.
   relatorio_sonar: {
     dados: z.object({

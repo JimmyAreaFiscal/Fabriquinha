@@ -5,20 +5,14 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../nucleo/conclusao_ticket.ts";
-import { ErroDeReprovacao, ErroExterno } from "../nucleo/erros.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_etapa.ts";
 import { concluirImplementacoesRodada } from "../nucleo/transicoes_rodada.ts";
 import { concluirResolucaoConflito } from "../nucleo/transicoes_encerramento.ts";
 import { devolverTicket, registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
-import {
-  type FalhaDaTentativa,
-  falhaPorServicoReiniciado,
-  resultadoDoErro,
-  rotuloDaCausa,
-} from "../nucleo/tentativa.ts";
-import { coletarVerificacoes, type Falha, type Verificacao } from "./evidencias/verificacoes.ts";
-import type { OpcoesSonar } from "./evidencias/sonar.ts";
+import { type FalhaDaTentativa, falhaPorServicoReiniciado, rotuloDaCausa } from "../nucleo/tentativa.ts";
+import { coletarVerificacoes, type Falha, type RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
+import type { OpcoesSonar } from "../infra/verificacao/sonar.ts";
 import { MIME_TEXTO } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { guardarBytes } from "../armazenamento/arquivos.ts";
@@ -26,6 +20,8 @@ import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
+import type { Commit } from "../armazenamento/commits.ts";
+import { HooksDoCommit } from "../infra/verificacao/hooks_do_commit.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 
 type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
@@ -77,7 +73,7 @@ function concluirRodada(ag: AgregadoDemanda, { demanda_id, rodada_id }: TicketDe
 }
 
 /** Grava as três evidências do ticket com os logs de cada uma como anexos, numa transação só. */
-function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificacao[]): void {
+function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: RegistroDaVerificacao[]): void {
   const guardadas = verificacoes.map((v) => ({
     v,
     // O Sonar devolve `logs: []`; o relatório (`dados`) vira o anexo, para a evidência nunca ficar sem log.
@@ -113,7 +109,7 @@ function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificac
 }
 
 /** `- <tipo>: <motivo>` de cada verificação reprovada e o fim dos logs dela. */
-function relatorioDeReprovacao(reprovadas: Verificacao[]): string {
+function relatorioDeReprovacao(reprovadas: RegistroDaVerificacao[]): string {
   const linhas = reprovadas.map((v) => `- ${v.tipo}: ${v.falhas.map((f) => f.motivo).join("; ")}`).join("\n");
   const log = reprovadas.flatMap((v) => v.logs.map((l) => l.texto)).join("\n");
   return `${linhas}\n\n${log.slice(-FIM_DO_LOG)}`.trimEnd();
@@ -196,39 +192,45 @@ export async function fecharTicketDemanda(
     });
     return;
   }
-  let commit;
-  try {
-    commit = await commitarTicketDemanda(
+  const commits: Commit[] = [];
+  const hooks = new HooksDoCommit(async ({ worktree: raiz, limiteMs }) => {
+    const commit = await commitarTicketDemanda(
       banco,
       ref,
       {
-        worktree,
+        worktree: raiz,
         tipo: ag.demanda.tipo === "funcionalidade" ? "feat" : "fix",
         titulo: ticket.titulo ?? ag.demanda.titulo,
         etapa: ticket.etapa,
       },
-      deps.limiteCommitMs,
+      limiteMs,
     );
+    commits.push(commit);
+  });
+  let resultadoDosHooks;
+  try {
+    resultadoDosHooks = await hooks.executar({ worktree, limiteMs: deps.limiteCommitMs });
   } catch (erro) {
-    if (deps.parada?.()) falhar(falhaPorServicoReiniciado);
-    else if (erro instanceof ErroDeReprovacao || erro instanceof ErroExterno) {
-      const resultado = resultadoDoErro(erro);
-      if (resultado.tipo === "reprovacao") {
-        comDemanda(banco, ref.demanda_id, (a) =>
-          devolverTicket(a, { ticket_id: ref.ticket_id, instrucao: resultado.motivo }, FABRIQUINHA, contexto()),
-        );
-      } else {
-        falhar(resultado);
-      }
-    } else {
-      throw erro;
-    }
+    if (!deps.parada?.()) throw erro;
+    falhar(falhaPorServicoReiniciado);
     return;
   }
   if (deps.parada?.()) {
     falhar(falhaPorServicoReiniciado);
     return;
   }
+  if (resultadoDosHooks.tipo === "reprovacao") {
+    const instrucao = resultadoDosHooks.motivo;
+    comDemanda(banco, ref.demanda_id, (a) =>
+      devolverTicket(a, { ticket_id: ref.ticket_id, instrucao }, FABRIQUINHA, contexto()),
+    );
+    return;
+  }
+  if (resultadoDosHooks.tipo === "falha_infraestrutura") {
+    falhar({ tipo: "falha_infraestrutura", causa: resultadoDosHooks.causa, motivo: resultadoDosHooks.motivo });
+    return;
+  }
+  const [{ sha }] = commits as [Commit];
   comDemanda(banco, ref.demanda_id, (a) =>
     ticket.etapa === "implementar"
       ? concluirRodada(
@@ -243,7 +245,7 @@ export async function fecharTicketDemanda(
         )
       : concluirResolucaoConflito(
           a,
-          { demanda_id: ref.demanda_id, testes: true, fitness: true, sonar: true, sha: commit.sha },
+          { demanda_id: ref.demanda_id, testes: true, fitness: true, sonar: true, sha },
           FABRIQUINHA,
           contexto(),
         ),
