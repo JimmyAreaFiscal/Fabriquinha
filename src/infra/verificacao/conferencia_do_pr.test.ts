@@ -30,7 +30,7 @@ function conferencia(tipo: Hospedagem, pr: Partial<Parameters<typeof hospedagem.
 }
 
 for (const tipo of ["github", "azure-devops"] as const) {
-  test(`${tipo}: o PR sem conflito e com a CI aprovada passa, sem Evidência`, async () => {
+  test(`${tipo}: o PR sem conflito e com a CI passando passa, sem Evidência`, async () => {
     const verificacao = conferencia(tipo, { checks: [{ nome: "ci", estado: "aprovado" }] });
 
     assert.equal(verificacao.tipo, "conferencia_do_pr");

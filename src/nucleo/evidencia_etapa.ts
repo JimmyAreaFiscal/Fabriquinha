@@ -1,5 +1,5 @@
 // Catálogo de evidências por etapa do ticket, produtor e dono (comparacao-sdlc-implementacao.md §§7.4, 8.1 e 8.2).
-// `dados` segue opaco e `aprovada` vem calculada do F3: o domínio só exige que ela exista onde há regra.
+// `dados` segue opaco: a validação de `dados` é do `AvaliadorDeEvidencia`.
 import { z } from "zod";
 import { IdDono, TicketDemanda } from "./agregado_demanda.ts";
 import { type Ator } from "./ator.ts";
@@ -102,10 +102,9 @@ const EntradaEvidenciaEtapa = z.object({
   ticket_id: IdDono,
   tipo: TipoEvidencia,
   produtor: Produtor,
-  aprovada: z.boolean().optional(),
   dados: z.unknown(),
 });
-export type EvidenciaEtapa = z.output<typeof EntradaEvidenciaEtapa>;
+type EvidenciaEtapa = z.output<typeof EntradaEvidenciaEtapa>;
 type EntradaEvidenciaEtapa = EvidenciaEtapa;
 
 const lerContexto = (contexto: ContextoEvidenciaEtapa): ContextoEvidenciaEtapa => {
@@ -123,14 +122,14 @@ const lerContexto = (contexto: ContextoEvidenciaEtapa): ContextoEvidenciaEtapa =
 const donoEsperado = (c: ContextoEvidenciaEtapa): number | undefined =>
   c.etapa === "entender_e_desenhar" ? undefined : c.ticket_id;
 
-/** Metadados normalizados; produtor informado não autentica autoria e `aprovada` é calculada pelo F3. */
+/** Metadados normalizados; produtor informado não autentica autoria. */
 export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrada: unknown): EvidenciaEtapa {
   const ctx = lerContexto(contexto);
   const lida = EntradaEvidenciaEtapa.safeParse(entrada);
   if (!lida.success) {
     throw new ErroDeRegra(
       `evidência inválida: ${lida.error.issues.map((i) => i.message).join("; ")}`,
-      "informe demanda_id, tipo, produtor e, se houver, aprovada booleano",
+      "informe demanda_id, tipo e produtor",
     );
   }
   const e = lida.data;
@@ -166,42 +165,5 @@ export function validarEvidenciaDaEtapa(contexto: ContextoEvidenciaEtapa, entrad
       `não por ${e.produtor}`,
     );
   }
-  if (alvo.regraAprovacao !== null && e.aprovada === undefined) {
-    throw new ErroDeRegra(
-      `a evidência ${e.tipo} de ${onde} exige aprovada`,
-      `calcule pela regra ${alvo.regraAprovacao} e informe true ou false`,
-    );
-  }
   return e;
-}
-
-/**
- * Pré-condição: snapshot ativo válido, com uma evidência por tipo/dono; não valida nem escolhe versões.
- * Obrigatórias ausentes e presentes reprovadas, na ordem do catálogo. O(n), espaço O(1) pelo catálogo fixo.
- */
-export function pendenciasDoTicket(
-  contexto: ContextoEvidenciaEtapa,
-  evidencias: readonly EvidenciaEtapa[],
-): { ausentes: TipoEvidencia[]; reprovadas: TipoEvidencia[] } {
-  const ctx = lerContexto(contexto);
-  const dono = donoEsperado(ctx);
-  const itens = catalogoDaEtapa(ctx.etapa);
-  const catalogados = new Set(itens.map((i) => i.tipo));
-  const presentes = new Set<TipoEvidencia>();
-  const reprovados = new Set<TipoEvidencia>();
-  for (const e of evidencias) {
-    if (
-      e.demanda_id === ctx.demanda_id &&
-      e.rodada_id === undefined &&
-      e.ticket_id === dono &&
-      catalogados.has(e.tipo)
-    ) {
-      presentes.add(e.tipo);
-      if (e.aprovada === false) reprovados.add(e.tipo);
-    }
-  }
-  return {
-    ausentes: itens.filter((i) => i.obrigatoria && !presentes.has(i.tipo)).map((i) => i.tipo),
-    reprovadas: itens.filter((i) => reprovados.has(i.tipo)).map((i) => i.tipo),
-  };
 }

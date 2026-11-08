@@ -56,7 +56,7 @@ export class VerificacaoDeTestes extends Verificacao {
         logs.push(...doE2E.logs);
         falhas.push(...doE2E.falhas);
       }
-      return { tipo: "execucao_testes", aprovada: aprovacao(falhas), falhas, dados: { comandos }, logs };
+      return { tipo: "execucao_testes", passou: aprovacao(falhas), falhas, dados: { comandos }, logs };
     });
   }
 }

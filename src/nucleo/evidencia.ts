@@ -1,7 +1,7 @@
 // A lista única dos tipos de evidência e o schema de cada um (F3 §2): `dados`, as regras dos anexos e as regras cruzadas.
 import { basename } from "node:path";
 import { z } from "zod";
-import type { AgregadoDemanda } from "./agregado_demanda.ts";
+import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
 import type { Ator } from "./ator.ts";
 import { Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
@@ -165,7 +165,7 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
         }),
       ),
     }),
-    arquivos: Arquivos({ max: 0 }),
+    arquivos: LOGS_OPCIONAIS, // o fechamento do ticket anexa o relatório, para a evidência nunca ficar sem log
     veredito: ({ issues }) => vereditoDe(issues.length === 0),
   }),
   // Produzida pela Fabriquinha antes do pi da revisão (F3 §4.4, §7): o diff da rodada × o desenho aprovado.
@@ -343,6 +343,22 @@ export function agregadoDaRodada(ag: AgregadoDemanda, rodada?: number): Agregado
         : e,
     ),
   };
+}
+
+/**
+ * Os tipos obrigatórios da Etapa do ticket que ainda não têm Evidência, na ordem do catálogo. O catálogo vem de quem
+ * chama porque `evidencia_etapa.ts` já importa este módulo.
+ */
+export function evidenciasPendentes(
+  ag: AgregadoDemanda,
+  ticket: Pick<TicketDemanda, "ticket_id" | "etapa">,
+  catalogo: readonly ItemCatalogoEtapa[],
+): TipoEvidencia[] {
+  const dono = ticket.etapa === "entender_e_desenhar" ? undefined : ticket.ticket_id;
+  const presentes = new Set(
+    ag.evidencias.filter((e) => e.rodada_id === undefined && e.ticket_id === dono).map((e) => e.tipo),
+  );
+  return catalogo.filter((i) => i.etapa === ticket.etapa && i.obrigatoria && !presentes.has(i.tipo)).map((i) => i.tipo);
 }
 
 /**

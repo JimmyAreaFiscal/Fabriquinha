@@ -7,6 +7,7 @@ import {
   type Avaliacao,
   AvaliadorDeEvidencia,
   conferirQuantidadeENomes,
+  evidenciasPendentes,
   SCHEMA_DA_EVIDENCIA,
   schemaDoTipo,
   type SubmissaoDeEvidencia,
@@ -223,6 +224,44 @@ test("regra do tipo: verificação da Fabriquinha que não atende é recusada; o
     submissao("comprovacao_criterios", ticket(3), comprovacao(["CA-1"], false), AGENTE, ["/saida/cena.png"]),
   );
   assert.equal(reprovada.resultado === "aceita" && reprovada.veredito, "nao_atende");
+});
+
+test("evidenciasPendentes lista só as obrigatórias ausentes da Etapa do ticket, na ordem do catálogo", () => {
+  const ag = agregado();
+  const doTicket = (tipo: TipoEvidencia, extra: object) => ({
+    demanda_id: "I-1",
+    tipo,
+    autor: FABRIQUINHA,
+    em: INSTANTE_DO_CENARIO,
+    dados: {},
+    ...extra,
+  });
+  const comEvidencias = {
+    ...ag,
+    evidencias: [
+      ...ag.evidencias,
+      doTicket("execucao_testes", { ticket_id: 2 }),
+      doTicket("matriz_fitness", { ticket_id: 3 }),
+      doTicket("relatorio_sonar", { rodada_id: 1 }),
+    ],
+  } as typeof ag;
+  const implementar = { ticket_id: 2, etapa: "implementar" } as const;
+  assert.deepEqual(evidenciasPendentes(ag, implementar, CATALOGO_ETAPAS), [
+    "execucao_testes",
+    "matriz_fitness",
+    "relatorio_sonar",
+  ]);
+  // A do ticket 3 e a da rodada não são do ticket 2.
+  assert.deepEqual(evidenciasPendentes(comEvidencias, implementar, CATALOGO_ETAPAS), [
+    "matriz_fitness",
+    "relatorio_sonar",
+  ]);
+  // Na Etapa da demanda o dono é a própria demanda: a evidência do ticket 2 não conta, a dos critérios sim.
+  assert.deepEqual(
+    evidenciasPendentes(comEvidencias, { ticket_id: 1, etapa: "entender_e_desenhar" }, CATALOGO_ETAPAS),
+    ["desenho_solucao", "custos_realizados"],
+  );
+  assert.deepEqual(evidenciasPendentes(ag, { ticket_id: 4, etapa: "ajustar_resultado" }, CATALOGO_ETAPAS), []);
 });
 
 test("regra do tipo plano: a validação do plano recusa; o erro que não é de regra sobe", () => {

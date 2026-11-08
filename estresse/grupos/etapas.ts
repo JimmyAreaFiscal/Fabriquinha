@@ -14,6 +14,7 @@ import { Endereco } from "../../src/nucleo/item_de_trabalho.ts";
 import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../src/nucleo/evidencia_demanda.ts";
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
+import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
 import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
@@ -221,13 +222,7 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
 }
 
 const verificacoes = (): RegistroDaVerificacao[] =>
-  (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((tipo) => ({
-    tipo,
-    aprovada: true,
-    falhas: [],
-    dados: {},
-    logs: [{ nome: `${tipo}.log`, texto: `log de ${tipo}` }],
-  }));
+  (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((tipo) => verificacaoDeTeste(tipo, true));
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações aprovadas (sem testes nem Sonar reais). */
 const deps: DepsDespacho = {
