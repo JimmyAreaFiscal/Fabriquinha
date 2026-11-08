@@ -299,8 +299,6 @@ for (const estado of ["MERGED", "OPEN"]) {
       { branch: "fabriquinha/I-1", base: "main", publicarBase: false },
       { titulo: "feat: A [I-1]", corpo: "m\ncorpo", conhecidos: [], marca: "<!-- fabriquinha I-1/T-6 -->" },
       () => undefined,
-      () => Promise.resolve(),
-      join(temporaria, "log"),
     );
     errosDoPR.push(`${estado}: publicou`);
   } catch (error) {

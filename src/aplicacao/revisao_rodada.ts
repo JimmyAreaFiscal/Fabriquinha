@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
+import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -12,10 +13,10 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { guardarBytes } from "../armazenamento/arquivos.ts";
 import { type Anexo, gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
 import { arquivosDe } from "../infra/repositorio/commit.ts";
-import { garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
+import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 
 type Dados = EntradaEvidenciaDemanda["dados"];
@@ -41,12 +42,11 @@ export async function prepararRevisaoRodada(
   }
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
 
-  const worktree = await garantirWorktreeRodada(
-    raizDo(banco),
-    projeto,
-    { demanda_id, rodada_id },
-    `${raizDo(banco)}/log`,
-  );
+  const raiz = raizDo(banco);
+  const { pasta: worktree } = await cicloDoEspaco(espacoDoTicket(ag, { rodada_id }, projeto, raiz), projeto, {
+    raiz,
+    log: `${raiz}/log`,
+  }).criar();
 
   // `base...head` é o diff desde o ancestral comum: o que a rodada fez, mesmo se a demanda avançou depois.
   const rev = async (branch: string) => (await exigirGit(projeto.raiz_git, "rev-parse", `refs/heads/${branch}`)).trim();

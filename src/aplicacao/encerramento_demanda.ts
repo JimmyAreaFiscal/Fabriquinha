@@ -29,6 +29,8 @@ import {
   tituloDoPRFinal,
 } from "./evidencias/encerramento_demanda.ts";
 import { varrerBase } from "./retrabalho.ts";
+import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
+import { espacoDaDemanda } from "../nucleo/espaco_de_trabalho.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
@@ -164,7 +166,9 @@ export async function conduzirEncerramentoDemanda(
 
   let publicado: Awaited<ReturnType<typeof publicarFinal>>;
   try {
-    publicado = await publicarFinal(banco, ag, projeto, projeto.branch_base, raiz, log);
+    const ciclo = cicloDoEspaco(espacoDaDemanda(projeto, demanda_id, raiz), projeto, { raiz, log });
+    await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+    publicado = await publicarFinal(banco, ag, projeto, projeto.branch_base, raiz);
     aplicar((a) =>
       registrarTentativaEncerramento(
         a,
@@ -213,7 +217,6 @@ function publicarFinal(
   projeto: Pick<Projeto, "nome" | "raiz_git" | "hospedagem">,
   base: string,
   raiz: string,
-  log: string,
 ) {
   const { demanda } = ag;
   const prFinal = prDaDemanda(ag);
@@ -241,8 +244,6 @@ function publicarFinal(
       marca: marcaDoPRFinal(demanda.id),
     },
     conferirCommits,
-    () => varrerBase(banco, projeto.nome),
-    log,
   );
 }
 

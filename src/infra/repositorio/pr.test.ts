@@ -50,7 +50,6 @@ function cenario(tipo: Hospedagem = "github") {
   git(repo, "commit", "-q", "-am", "feat: a [I-1/T-3]");
   const head = git(repo, "rev-parse", "HEAD");
   const log = join(dir, "log");
-  let varreduras = 0;
   /** Os commits que um ticket de desenvolvimento registrou. */
   const registrados = new Set([head]);
   return {
@@ -59,8 +58,7 @@ function cenario(tipo: Hospedagem = "github") {
     head,
     log,
     registrados,
-    varreduras: () => varreduras,
-    publicar: (corpo: string, conhecidos: string[] = [], varrer = () => Promise.resolve()) =>
+    publicar: (corpo: string, conhecidos: string[] = []) =>
       publicarPRDe(
         join(dir, "raiz"),
         { nome: "loja", raiz_git: repo, hospedagem: tipo },
@@ -69,11 +67,6 @@ function cenario(tipo: Hospedagem = "github") {
         (sha) => {
           if (!registrados.has(sha)) throw new ErroDeRegra(`o commit ${sha} não foi registrado`, "reabra o ticket");
         },
-        () => {
-          varreduras++;
-          return varrer();
-        },
-        log,
       ),
     /** O commit da branch da demanda no `origin`, ou "" se ela não foi publicada. */
     publicado: () => git(bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${BRANCH}`),
@@ -84,14 +77,13 @@ const recusa = async (promessa: Promise<unknown>, msg: string, tipo = ErroDeRegr
   await assert.rejects(promessa, (e) => e instanceof tipo && e.message === msg);
 };
 
-test("GitHub: sem PR, publica a branch, varre a base e cria o PR com o corpo por arquivo, no ambiente do serviço", async () => {
+test("GitHub: sem PR, publica a branch e cria o PR com o corpo por arquivo, no ambiente do serviço", async () => {
   const c = cenario();
   const pr = await c.publicar("## Por quê\n\n`$(rm -rf /)`");
 
   assert.deepEqual(pr, { id: "1", url: `${URL_GH}1`, branch: BRANCH, head: c.head });
   assert.equal(c.publicado(), c.head);
   assert.equal(git(c.repo, "rev-parse", "--abbrev-ref", `${BRANCH}@{upstream}`), `origin/${BRANCH}`);
-  assert.equal(c.varreduras(), 1);
   assert.deepEqual(hospedagem.prs(), [
     {
       id: 1,
@@ -162,7 +154,6 @@ test("conferência: PR da branch fora das evidências barra antes do push; fecha
 
   await recusa(c.publicar("x"), `PR criado fora da Fabriquinha: ${URL_GH}1 (feche-o e reabra o ticket)`);
   assert.equal(c.publicado(), "", "nada foi publicado");
-  assert.equal(c.varreduras(), 0);
 
   // Mergeado fora também barra, com o que o Auditor pode fazer: fechar não é mais possível.
   hospedagem.mudar(1, { estado: "mergeado" });
@@ -337,15 +328,14 @@ test("Azure DevOps: cria pelo az com --detect e a URL da página; depois reabre 
   );
 });
 
-test("falhas: do gh e do az com a saída do comando, do push com o stderr; a da varredura só vai para o log", async () => {
+test("falhas: do gh e do az com a saída do comando, do push com o stderr", async () => {
   const c = cenario();
   hospedagem.falhar("pr create", "HTTP 401: Bad credentials");
   await recusa(
-    c.publicar("x", [], () => Promise.reject(new Error("fetch caiu"))),
+    c.publicar("x"),
     "gh pr create saiu com código 1: HTTP 401: Bad credentials (confira o acesso do gh à hospedagem e execute o ticket de novo)",
   );
   assert.equal(c.publicado(), c.head, "o push veio antes");
-  assert.match(readFileSync(c.log, "utf8"), / varrerBase falhou: fetch caiu\n/);
 
   const az = cenario("azure-devops");
   hospedagem.falhar("repos pr list", "ERROR: TF401019");
@@ -707,8 +697,6 @@ function cenarioRodada() {
       { branch: RODADA, base: DEMANDA, publicarBase },
       { titulo: "feat: R [I-206.R2]", corpo: `${MARCA_RODADA}\ncorpo`, conhecidos: [], marca: MARCA_RODADA },
       conferir,
-      () => Promise.resolve(),
-      c.log,
     );
   const noRemoto = (ref: string) => git(c.bare, "for-each-ref", "--format=%(objectname)", `refs/heads/${ref}`);
   return { ...c, publicar, noRemoto };

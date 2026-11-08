@@ -141,7 +141,7 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade", reprovacoes
       },
     }),
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
   const worktree = conflito
     ? join(c.raiz, "worktrees", "loja", D, "demanda")
     : await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);

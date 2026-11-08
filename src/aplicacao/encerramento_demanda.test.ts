@@ -2,7 +2,7 @@
 // A integração final é do humano: o teste faz o merge do PR na plataforma falsa, como ele faria.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -15,6 +15,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { concluirResolucaoConflito, podeTentarEncerramento } from "../nucleo/transicoes_encerramento.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
+import { cursorDaBase } from "../armazenamento/retrabalho.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
@@ -123,7 +124,7 @@ async function cenario({
     pull_requests: pullRequests,
     ...(encerramento && { encerramento }),
   } as unknown as AgregadoDemanda);
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log, () => Promise.resolve());
+  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   /** Commita na demanda e, com `ticket`, registra o commit como desse ticket. */
   const commitar = (arquivo: string, ticketId?: number) => {
@@ -284,6 +285,21 @@ test("CA-2: com o PR final no progresso nenhum PR novo é criado e o progresso m
   assert.equal(hospedagem.prs().length, 1);
   assert.equal(prDaDemanda(ag)?.url, URL_PR);
   assert.equal(ag.demanda.estado, "concluida");
+});
+
+test("a base é varrida uma vez antes de publicar o PR final, e a falha da varredura só vai ao log", async () => {
+  const varrida = await cenario();
+  await conduzirEncerramentoDemanda(varrida.banco, D);
+  assert.equal(cursorDaBase(varrida.banco, "loja"), rodarGit(varrida.repo, "rev-parse", "refs/remotes/origin/develop"));
+
+  const sem = await cenario();
+  sem.banco.exec("DROP TABLE varredura_base"); // a varredura falha ao ler o cursor
+  await conduzirEncerramentoDemanda(sem.banco, D);
+  assert.equal(sem.ag().encerramento?.aguardando_merge_humano, true);
+  assert.match(
+    readFileSync(join(sem.raiz, "execucoes", "encerramento-I-206.log"), "utf8"),
+    /varrerBase falhou: .*varredura_base/,
+  );
 });
 
 test("CA-3: PR aberto fora da Fabriquinha: nenhum push, o erro aponta o PR e o ticket falha sem laço", async () => {

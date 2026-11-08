@@ -13,6 +13,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
 import { marcaDoPRRodada } from "./evidencias/pr_rodada.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
+import { cursorDaBase } from "../armazenamento/retrabalho.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
@@ -183,7 +184,7 @@ async function cenario({
       ...(anterior ? [evidencia(7, "pr_aberto", { id: "1", url: "https://github.com/org/loja/pull/1" })] : []),
     ],
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   /** Commita na rodada e, com `ticket`, registra o commit como desse ticket de implementação. */
@@ -289,6 +290,24 @@ test("CA-3: a ponta nova da demanda entra na rodada antes do PR, e o merge da D0
   rodarGit(rodada, "merge-base", "--is-ancestor", nova, "HEAD");
   assert.equal(noRemoto(BRANCH_RODADA), rodarGit(rodada, "rev-parse", "HEAD"));
   assert.equal(hospedagem.prs().length, 1);
+});
+
+test("a base é varrida uma vez antes de publicar o PR, e a falha da varredura só vai ao log", async () => {
+  const varrida = await cenario();
+  await concluirEncerramentoRodada(varrida.banco, REF);
+  assert.equal(
+    cursorDaBase(varrida.banco, "loja"),
+    rodarGit(varrida.c.repo, "rev-parse", "refs/remotes/origin/integracao"),
+  );
+
+  const sem = await cenario();
+  sem.banco.exec("DROP TABLE varredura_base"); // a varredura falha ao ler o cursor
+  await concluirEncerramentoRodada(sem.banco, REF);
+  assert.equal(hospedagem.prs().length, 1);
+  assert.match(
+    readFileSync(join(sem.c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"),
+    /varrerBase falhou: .*varredura_base/,
+  );
 });
 
 test("CA-4: conflito com a ponta da demanda não publica PR e volta a desenvolvimento com um corretivo para o merge", async () => {

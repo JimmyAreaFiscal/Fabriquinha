@@ -135,7 +135,7 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
           },
         ],
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const commitDaRodada = commitarArquivo(rodada, "a.txt", "a\n");
   rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);

@@ -118,7 +118,7 @@ async function cenario(gate: "demanda" | "planejamento" | "pr", comExecutarDeman
     ];
   }
   if (gate === "pr") {
-    await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+    await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
     const head = commitarArquivo(await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log), "a.txt", "a\n");
     rodarGit(c.repo, "push", "-q", "origin", BRANCH_DEMANDA, BRANCH_RODADA);
     hospedagem.abrirPr({ head: BRANCH_RODADA, base: BRANCH_DEMANDA, titulo: "t", corpo: "c", estado: "aberto" });

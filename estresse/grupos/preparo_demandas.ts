@@ -197,7 +197,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
 
   /** As worktrees da demanda e da rodada 1, como o planejamento aprovado as deixa; devolve a da rodada. */
   async function worktrees(id: string): Promise<string> {
-    await garantirWorktreeDemanda(amb.raiz, principal, id, log, () => Promise.resolve());
+    await garantirWorktreeDemanda(amb.raiz, principal, id, log);
     return garantirWorktreeRodada(amb.raiz, principal, { demanda_id: id, rodada_id: 1 }, log);
   }
 

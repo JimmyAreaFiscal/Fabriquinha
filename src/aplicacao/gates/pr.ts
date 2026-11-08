@@ -13,8 +13,8 @@ import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
-import { integrarPR } from "../../infra/repositorio/pr.ts";
-import { exigirGit, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
+import { logDaOperacao } from "../../infra/registro.ts";
+import { cicloDoEspaco } from "../espaco/ciclo_do_espaco.ts";
 import { abrirSessaoDeAjustes, guardarMarcoDaSessao } from "../sessao_ajustes.ts";
 
 const gate = GATES.gate_pr;
@@ -65,19 +65,14 @@ export async function aprovarPR(
   gate.ensaiar(ag, endereco, entrada, ator, contexto()); // recusa antes de integrar na hospedagem
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
+  const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
   const pr = existe(
-    espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz).pr,
+    espaco.pr,
     `a rodada ${formatarRodadaRef(ref)} não tem PR publicado`,
     "o encerramento publica o PR",
   );
-  const { branch } = ag.demanda;
-  await integrarPR(projeto, String(pr.numero));
-  // A ref local da demanda só avança em fast-forward: o merge da hospedagem é o único commit novo dela.
-  const { pasta: demanda } = espacoDoTicket(ag, {}, projeto, raiz);
-  await naFilaDoProjeto(raiz, projeto.nome, async () => {
-    await exigirGit(demanda, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
-    await exigirGit(demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
-  });
+  const log = logDaOperacao(raiz, `pr-${formatarRodadaRef(ref)}`);
+  await cicloDoEspaco(espaco, projeto, { raiz, log }).integrar();
 
   return comDemanda(banco, ref.demanda_id, (a) => {
     const { agora } = contexto();
