@@ -5,19 +5,19 @@ import type { AgregadoDemanda } from "./agregado_demanda.ts";
 import { formatarTicketRef } from "./demanda.ts";
 import { CICLO_DO_TICKET } from "./ciclos.ts";
 import { ErroDeRegra } from "./erros.ts";
-import { type EvidenciaEtapa, pendenciasDoTicket } from "./evidencia_etapa.ts";
+import { evidenciasPendentes } from "./evidencia.ts";
+import { CATALOGO_ETAPAS } from "./evidencia_etapa.ts";
 import { Id } from "./primitivos.ts";
 import { type ContextoDemanda, exigirDemandaEmAndamento, mudarTicket, ticketDaDemanda } from "./transicoes_demanda.ts";
 
 const EntradaConclusao = z.strictObject({ ticket_id: Id });
 
-/** Só a Fabriquinha conclui, só `implementar` em execução e sem pendências de evidência; zera as devoluções. */
+/** Só a Fabriquinha conclui, só `implementar` em execução e sem evidência pendente; zera as devoluções. */
 export function concluirTicketImplementar(
   ag: AgregadoDemanda,
   entrada: unknown,
   ator: Ator,
   ctx: ContextoDemanda,
-  evidencias: readonly EvidenciaEtapa[],
 ): AgregadoDemanda {
   exigirAtor(ator, "concluir o ticket", "fabriquinha");
   const { ticket_id } = EntradaConclusao.parse(entrada);
@@ -31,14 +31,10 @@ export function concluirTicketImplementar(
       "só implementar; as demais etapas têm conclusão própria",
     );
   }
-  const { ausentes, reprovadas } = pendenciasDoTicket(
-    { demanda_id: ticket.demanda_id, ticket_id, etapa: ticket.etapa },
-    evidencias,
-  );
-  const pendencias = [...ausentes.map((t) => `${t} (ausente)`), ...reprovadas.map((t) => `${t} (reprovado)`)];
+  const pendencias = evidenciasPendentes(ag, ticket, CATALOGO_ETAPAS);
   if (pendencias.length > 0) {
     throw new ErroDeRegra(
-      `o ticket ${ref} tem pendências de evidência: ${pendencias.join(", ")}`,
+      `o ticket ${ref} tem pendências de evidência: ${pendencias.map((t) => `${t} (ausente)`).join(", ")}`,
       "complete as verificações da aplicação e tente de novo",
     );
   }

@@ -1,27 +1,29 @@
 // Fechamento do ticket `implementar` e do `resolver_conflito` depois da resposta do agente (comparacao-sdlc-implementacao.md
-// §6, D05, D06): verifica, grava as evidências, commita e conclui, ou devolve, ou falha. A devolução da D05 (até 2
+// §6, D05, D06): verifica, submete as evidências, commita e conclui, ou devolve, ou falha. A devolução da D05 (até 2
 // vezes, falha na 3ª) vale para as duas etapas; só a infraestrutura falha direto. O agente não submete nada.
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../nucleo/conclusao_ticket.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
-import { type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_etapa.ts";
+import { evidenciasPendentes } from "../nucleo/evidencia.ts";
+import { CATALOGO_ETAPAS } from "../nucleo/evidencia_etapa.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { concluirImplementacoesRodada } from "../nucleo/transicoes_rodada.ts";
 import { concluirResolucaoConflito } from "../nucleo/transicoes_encerramento.ts";
 import { devolverTicket, registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import { type FalhaDaTentativa, falhaPorServicoReiniciado, rotuloDaCausa } from "../nucleo/tentativa.ts";
 import { coletarVerificacoes, type Falha, type RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
 import type { OpcoesSonar } from "../infra/verificacao/sonar.ts";
-import { MIME_TEXTO } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { guardarBytes } from "../armazenamento/arquivos.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
 import type { Commit } from "../armazenamento/commits.ts";
 import { HooksDoCommit } from "../infra/verificacao/hooks_do_commit.ts";
+import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 
 type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
@@ -55,12 +57,6 @@ export function falharTicketDemanda(banco: DatabaseSync, ref: Ref, falha: FalhaD
   );
 }
 
-/** As evidências do ticket como o domínio as lê; `aprovada` vem dos `dados`, onde o fechamento a grava. */
-const evidenciasDoTicket = (ag: AgregadoDemanda, ticket_id: number): EvidenciaEtapa[] =>
-  ag.evidencias
-    .filter((e) => e.ticket_id === ticket_id)
-    .map((e) => ({ ...e, produtor: "fabriquinha", aprovada: e.dados.aprovada === true }));
-
 /** Com a última implementação da rodada concluída, leva a rodada à revisão; de resto devolve o agregado como está. */
 function concluirRodada(ag: AgregadoDemanda, { demanda_id, rodada_id }: TicketDemanda): AgregadoDemanda {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
@@ -72,48 +68,58 @@ function concluirRodada(ag: AgregadoDemanda, { demanda_id, rodada_id }: TicketDe
     : ag;
 }
 
-/** Grava as três evidências do ticket com os logs de cada uma como anexos, numa transação só. */
-function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: RegistroDaVerificacao[]): void {
-  const guardadas = verificacoes.map((v) => ({
-    v,
-    // O Sonar devolve `logs: []`; o relatório (`dados`) vira o anexo, para a evidência nunca ficar sem log.
-    anexos: (v.logs.length ? v.logs : [{ nome: `${v.tipo}.log`, texto: JSON.stringify(v.dados, null, 2) }]).map(
-      (l) => ({ caminho: l.nome, mime: MIME_TEXTO, ...guardarBytes(banco, Buffer.from(l.texto)) }),
-    ),
-  }));
-  comDemanda(
-    banco,
-    ref.demanda_id,
-    (ag) =>
-      guardadas.reduce(
-        (a, { v }) =>
-          submeterEvidenciaDemanda(
-            a,
-            {
-              tipo: v.tipo,
-              ticket_id: ref.ticket_id,
-              // ponytail: a evidência da demanda não tem coluna `aprovada`; ela vai nos `dados`.
-              dados: { ...v.dados, aprovada: v.aprovada } as EntradaEvidenciaDemanda["dados"],
-            },
-            FABRIQUINHA,
-            contexto().agora,
-          ),
-        ag,
-      ),
-    () => {
-      for (const { v, anexos } of guardadas)
-        // Só demanda e ticket: o `ref` pode ser o ticket inteiro (com `rodada_id`), que não é a chave da evidência.
-        gravarAnexos(banco, { demanda_id: ref.demanda_id, ticket_id: ref.ticket_id, tipo: v.tipo }, anexos);
-    },
-  );
+/** Uma verificação que o Avaliador recusou, com o motivo dele. */
+interface Recusa {
+  verificacao: RegistroDaVerificacao;
+  motivo: string;
 }
 
-/** `- <tipo>: <motivo>` de cada verificação reprovada e o fim dos logs dela. */
-function relatorioDeReprovacao(reprovadas: RegistroDaVerificacao[]): string {
-  const linhas = reprovadas.map((v) => `- ${v.tipo}: ${v.falhas.map((f) => f.motivo).join("; ")}`).join("\n");
-  const log = reprovadas.flatMap((v) => v.logs.map((l) => l.texto)).join("\n");
+/**
+ * Submete a verificação como evidência da Fabriquinha, com os logs como anexos (copiados para uma pasta temporária,
+ * que é de onde `submeterEvidencia` lê). Devolve a recusa, que não grava nada.
+ */
+function submeterVerificacao(
+  banco: DatabaseSync,
+  ref: Ref,
+  worktree: string,
+  verificacao: RegistroDaVerificacao,
+): Recusa | undefined {
+  const { tipo, dados, logs } = verificacao;
+  const saida = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-verificacao-")));
+  try {
+    // O Sonar devolve `logs: []`; o relatório (`dados`) vira o anexo, para a evidência nunca ficar sem log.
+    const anexos = (logs.length ? logs : [{ nome: `${tipo}.log`, texto: JSON.stringify(dados, null, 2) }]).map(
+      ({ nome, texto }) => {
+        const caminho = join(saida, nome);
+        writeFileSync(caminho, texto);
+        return caminho;
+      },
+    );
+    const avaliacao = submeterEvidencia(
+      banco,
+      { tipo, dono: Endereco.doTicket(ref.demanda_id, ref.ticket_id), produtor: FABRIQUINHA, dados, anexos },
+      { origens: { worktree, saida, fora: "da pasta temporária das verificações", copie: saida } },
+    );
+    return avaliacao.resultado === "recusada" ? { verificacao, motivo: avaliacao.motivo } : undefined;
+  } finally {
+    rmSync(saida, { recursive: true, force: true });
+  }
+}
+
+/** `- <tipo>: <motivo>` de cada verificação recusada e o fim dos logs dela. */
+function relatorioDeReprovacao(recusas: Recusa[]): string {
+  const linhas = recusas
+    .map(({ verificacao: v, motivo }) => `- ${v.tipo}: ${v.falhas.map((f) => f.motivo).join("; ") || motivo}`)
+    .join("\n");
+  const log = recusas.flatMap(({ verificacao }) => verificacao.logs.map((l) => l.texto)).join("\n");
   return `${linhas}\n\n${log.slice(-FIM_DO_LOG)}`.trimEnd();
 }
+
+const devolverComRelatorio = (banco: DatabaseSync, ref: Ref, instrucao: string): void => {
+  comDemanda(banco, ref.demanda_id, (a) =>
+    devolverTicket(a, { ticket_id: ref.ticket_id, instrucao }, FABRIQUINHA, contexto()),
+  );
+};
 
 /**
  * Fecha o ticket depois do encerramento da execução. Com `falha`, falha o ticket. Sem falha, se o commit do ticket já
@@ -156,7 +162,7 @@ export async function fecharTicketDemanda(
       falhar(falhaPorServicoReiniciado);
       return;
     }
-    if (verificacoes.some((v) => v.aprovada === undefined)) {
+    if (verificacoes.some((v) => v.passou === undefined)) {
       const falhasDeInfraestrutura = verificacoes.flatMap((v) => v.falhas.filter((f) => f.classe === "infraestrutura"));
       const [{ causa }] = falhasDeInfraestrutura as [Extract<Falha, { classe: "infraestrutura" }>];
       falhar({
@@ -166,27 +172,16 @@ export async function fecharTicketDemanda(
       });
       return;
     }
-    gravarEvidencias(banco, ref, verificacoes);
-    const reprovadas = verificacoes.filter((v) => !v.aprovada);
-    if (reprovadas.length > 0) {
-      const relatorio = relatorioDeReprovacao(reprovadas);
-      comDemanda(banco, ref.demanda_id, (a) =>
-        devolverTicket(a, { ticket_id: ref.ticket_id, instrucao: relatorio }, FABRIQUINHA, contexto()),
-      );
+    const recusas = verificacoes.flatMap((v) => submeterVerificacao(banco, ref, worktree, v) ?? []);
+    if (recusas.length > 0) {
+      devolverComRelatorio(banco, ref, relatorioDeReprovacao(recusas));
       return;
     }
   }
 
-  const { ausentes, reprovadas } = pendenciasDoTicket(
-    { ...ref, etapa: ticket.etapa },
-    evidenciasDoTicket(carregarDemanda(banco, ref.demanda_id), ref.ticket_id),
-  );
-  if (ausentes.length > 0 || reprovadas.length > 0) {
-    falhar({
-      tipo: "falha_infraestrutura",
-      causa: "comando_ausente",
-      motivo: `${rotuloDaCausa("comando_ausente")}: o ticket já tem commit, mas as evidências de verificação não estão aprovadas (ausentes: ${ausentes.join(", ") || "nenhuma"}; reprovadas: ${reprovadas.join(", ") || "nenhuma"})`,
-    });
+  const pendentes = evidenciasPendentes(carregarDemanda(banco, ref.demanda_id), ticket, CATALOGO_ETAPAS);
+  if (pendentes.length > 0) {
+    devolverComRelatorio(banco, ref, `o ticket já tem commit, mas faltam as evidências: ${pendentes.join(", ")}`);
     return;
   }
   const commits: Commit[] = [];
@@ -217,10 +212,7 @@ export async function fecharTicketDemanda(
     return;
   }
   if (resultadoDosHooks.tipo === "reprovacao") {
-    const instrucao = resultadoDosHooks.motivo;
-    comDemanda(banco, ref.demanda_id, (a) =>
-      devolverTicket(a, { ticket_id: ref.ticket_id, instrucao }, FABRIQUINHA, contexto()),
-    );
+    devolverComRelatorio(banco, ref, resultadoDosHooks.motivo);
     return;
   }
   if (resultadoDosHooks.tipo === "falha_infraestrutura") {
@@ -230,16 +222,7 @@ export async function fecharTicketDemanda(
   const [{ sha }] = commits as [Commit];
   comDemanda(banco, ref.demanda_id, (a) =>
     ticket.etapa === "implementar"
-      ? concluirRodada(
-          concluirTicketImplementar(
-            a,
-            { ticket_id: ref.ticket_id },
-            FABRIQUINHA,
-            contexto(),
-            evidenciasDoTicket(a, ref.ticket_id),
-          ),
-          ticket,
-        )
+      ? concluirRodada(concluirTicketImplementar(a, { ticket_id: ref.ticket_id }, FABRIQUINHA, contexto()), ticket)
       : concluirResolucaoConflito(
           a,
           { demanda_id: ref.demanda_id, testes: true, fitness: true, sonar: true, sha },

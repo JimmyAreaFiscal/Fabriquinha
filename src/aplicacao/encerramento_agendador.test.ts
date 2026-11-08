@@ -18,6 +18,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { configuracao } from "../armazenamento/servico.ts";
 import { comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
+import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import type { RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
@@ -109,13 +110,7 @@ async function cenario() {
   const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 
-  const aprovada = (tipo: RegistroDaVerificacao["tipo"]): RegistroDaVerificacao => ({
-    tipo,
-    aprovada: true,
-    falhas: [],
-    dados: {},
-    logs: [],
-  });
+  const verificacaoQuePassa = (tipo: RegistroDaVerificacao["tipo"]) => verificacaoDeTeste(tipo, true, undefined, []);
   /** Agente falso: escreve na worktree da demanda, encerra a execução e fecha o ticket com verificações aprovadas. */
   const iniciarExecucaoFalsa: NonNullable<DepsDespacho["iniciarProcesso"]> = (b, ref) => {
     const id = randomUUID();
@@ -140,7 +135,9 @@ async function cenario() {
         {},
         {
           coletarVerificacoes: () =>
-            Promise.resolve((["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(aprovada)),
+            Promise.resolve(
+              (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map(verificacaoQuePassa),
+            ),
         },
       );
       return undefined;

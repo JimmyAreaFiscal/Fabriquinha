@@ -30,7 +30,7 @@ test("fitness aprova com saída 0 e roda cada comando na worktree", async () => 
   ]).coletar({ worktree });
 
   assert.equal(ok.tipo, "matriz_fitness");
-  assert.equal(ok.aprovada, true);
+  assert.equal(ok.passou, true);
   assert.equal(ok.logs[0]?.texto.trim(), worktree);
   assert.equal((ok.dados as { linhas: unknown[] }).linhas.length, 2);
 });
@@ -38,7 +38,7 @@ test("fitness aprova com saída 0 e roda cada comando na worktree", async () => 
 test("fitness com saída 1 reprova tecnicamente", async () => {
   const ruim = await verificacao([{ nome: "a", comando: "exit 1" }]).coletar({ worktree });
 
-  assert.equal(ruim.aprovada, false);
+  assert.equal(ruim.passou, false);
   assert.equal(ruim.falhas[0]?.classe, "tecnica");
 });
 

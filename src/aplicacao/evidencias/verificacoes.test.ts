@@ -96,9 +96,9 @@ function cenario(teste = "true") {
   });
   return { worktree, projeto };
 }
-const aprovadas = (v: { aprovada: boolean | undefined }[]) => v.map((x) => x.aprovada);
+const quemPassou = (v: { passou: boolean | undefined }[]) => v.map((x) => x.passou);
 
-test("devolve as três verificações do catálogo, aprovadas, sem issue nos arquivos alterados (CA-15)", async () => {
+test("devolve as três verificações do catálogo, passando, sem issue nos arquivos alterados (CA-15)", async () => {
   const { worktree, projeto } = cenario();
   issues = [issue("b.ts")];
 
@@ -108,7 +108,7 @@ test("devolve as três verificações do catálogo, aprovadas, sem issue nos arq
     v.map((x) => x.tipo),
     ["execucao_testes", "matriz_fitness", "relatorio_sonar"],
   );
-  assert.deepEqual(aprovadas(v), [true, true, true]);
+  assert.deepEqual(quemPassou(v), [true, true, true]);
   assert.deepEqual(v[2]?.dados, { chave_sonarqube: "loja", ceTaskId: "AX1", arquivosAnalisados: ["a.ts"], issues: [] });
 });
 
@@ -127,7 +127,7 @@ test("o Sonar começa quando os testes das linguagens gravaram o lcov e roda jun
 
   const v = await coletarVerificacoes({ projeto: comE2E, e2e: true, worktree });
 
-  assert.deepEqual(aprovadas(v), [true, true, true]);
+  assert.deepEqual(quemPassou(v), [true, true, true]);
 });
 
 test("issue aberta em arquivo alterado reprova o Sonar, tecnicamente (CA-14), e as três rodam mesmo com teste reprovado", async () => {
@@ -136,7 +136,7 @@ test("issue aberta em arquivo alterado reprova o Sonar, tecnicamente (CA-14), e 
 
   const v = await coletarVerificacoes({ projeto, e2e: false, worktree });
 
-  assert.deepEqual(aprovadas(v), [false, true, false]);
+  assert.deepEqual(quemPassou(v), [false, true, false]);
   assert.deepEqual(v[2]?.falhas, [
     {
       classe: "tecnica",
@@ -154,14 +154,14 @@ test("o motivo do Sonar traz arquivo, linha, regra, severidade e mensagem de cad
   assert.match(v[2]?.falhas[0]?.motivo ?? "", /\n {2}- a\.ts:7 typescript:S6328 \(CRITICAL\): troque o grupo$/);
 });
 
-test("SonarQube fora do ar é infraestrutura, sem aprovação nem reprovação (CA-16)", async () => {
+test("SonarQube fora do ar é infraestrutura, sem passar nem reprovar (CA-16)", async () => {
   const { worktree, projeto } = cenario();
   status = "DOWN";
 
   const [, , sonar] = await coletarVerificacoes({ projeto, e2e: false, worktree });
 
   assert.ok(sonar);
-  assert.equal(sonar.aprovada, undefined);
+  assert.equal(sonar.passou, undefined);
   assert.equal(sonar.falhas[0]?.classe, "infraestrutura");
   assert.equal(sonar.falhas[0].causa, "servico_externo_inacessivel");
   assert.match(sonar.falhas[0].motivo, /está DOWN/);

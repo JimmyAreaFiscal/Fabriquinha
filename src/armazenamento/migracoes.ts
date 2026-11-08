@@ -900,6 +900,76 @@ CREATE TRIGGER encerramento_demanda_integracao_so_com_pr_na_atualizacao BEFORE U
   BEGIN SELECT RAISE(ABORT, 'integracao_sha exige o PR final em pull_request'); END;
 `;
 
+const MOTIVO_DA_EVIDENCIA_RECUSADA = "(evidência recusada antes da migração 44)";
+
+/**
+ * A 44 acaba com `aprovada` nos `dados` da evidência: só a submissão aceita vira Evidência. Cada evidência com
+ * `aprovada = false` sai de `evidencia_demanda` (com os anexos e o histórico) e vira uma Tentativa sintética de
+ * reprovação do ticket dono — a da rodada ou da demanda, que não têm ticket, vai para o último ticket delas — com o
+ * `motivo` e a submissão em JSON (`tipo`, `dono`, `produtor`, `dados`, `anexos`). Com `aprovada = true` só a chave sai.
+ * Os pareceres (`comprovacao_criterios`, `testes_estresse` e `analise_seguranca`) nunca gravaram `aprovada`: o
+ * `veredito` deles é derivado, então nada é convertido.
+ */
+const MIGRACAO_44_EVIDENCIA_ACEITA: Migracao = (banco) => {
+  banco.exec("ALTER TABLE tentativa ADD COLUMN submissao TEXT CHECK (submissao IS NULL OR json_valid(submissao))");
+  const recusadas = banco
+    .prepare(
+      `SELECT e.id, e.demanda_id, e.rodada_id, e.ticket_id, e.tipo, e.dados, e.em,
+              COALESCE(e.ticket_id, (SELECT max(t.ticket_id) FROM ticket_demanda t
+                 WHERE t.demanda_id = e.demanda_id AND (e.rodada_id IS NULL OR t.rodada_id = e.rodada_id))) AS dono_ticket
+       FROM evidencia_demanda e WHERE json_extract(e.dados, '$.aprovada') = 0 ORDER BY e.rowid`,
+    )
+    .all();
+  const anexosDe = banco.prepare("SELECT caminho FROM arquivo_evidencia WHERE evidencia_id = ? ORDER BY ordem");
+  const proximoNumero = banco.prepare(
+    "SELECT COALESCE(max(numero), 0) + 1 AS numero FROM tentativa WHERE demanda_id = ? AND ticket_id = ?",
+  );
+  const inserirTentativa = banco.prepare(
+    `INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, fim, resultado_tipo, motivo, migrada, submissao)
+     VALUES (?, ?, ?, ?, ?, 'reprovacao', ?, 1, ?)`,
+  );
+  for (const e of recusadas) {
+    const demandaId = String(e.demanda_id);
+    if (e.dono_ticket === null) {
+      throw new ErroDeRegra(
+        `a migração 44 não achou ticket para a evidência recusada ${String(e.id)} de ${demandaId}`,
+        "restaure o banco do backup e relate o problema",
+      );
+    }
+    const dados = JSON.parse(String(e.dados)) as Record<string, unknown>;
+    delete dados.aprovada;
+    const dono = {
+      demanda_id: demandaId,
+      ...(e.rodada_id === null ? {} : { rodada_id: e.rodada_id }),
+      ...(e.ticket_id === null ? {} : { ticket_id: e.ticket_id }),
+    };
+    const submissao = {
+      tipo: e.tipo,
+      dono,
+      produtor: { tipo: "fabriquinha" },
+      dados,
+      anexos: anexosDe.all(String(e.id)).map((anexo) => anexo.caminho),
+    };
+    const ticketId = Number(e.dono_ticket);
+    const { numero } = proximoNumero.get(demandaId, ticketId) as { numero: number };
+    inserirTentativa.run(
+      demandaId,
+      ticketId,
+      numero,
+      String(e.em),
+      String(e.em),
+      MOTIVO_DA_EVIDENCIA_RECUSADA,
+      JSON.stringify(submissao),
+    );
+    banco.prepare("DELETE FROM arquivo_evidencia WHERE evidencia_id = ?").run(String(e.id));
+    banco.prepare("DELETE FROM evidencia_historico WHERE evidencia_id = ?").run(String(e.id));
+    banco.prepare("DELETE FROM evidencia_demanda WHERE id = ?").run(String(e.id));
+  }
+  banco.exec(
+    "UPDATE evidencia_demanda SET dados = json_remove(dados, '$.aprovada') WHERE json_extract(dados, '$.aprovada') IS NOT NULL",
+  );
+};
+
 /** As migrações depois da linha de base: a primeira é a 37. */
 export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_37_AUTORIA,
@@ -909,4 +979,5 @@ export const MIGRACOES: readonly Migracao[] = [
   MIGRACAO_41_GATE_DA_DECISAO,
   MIGRACAO_42_TRABALHO_AGENTICO,
   MIGRACAO_43_PULL_REQUEST,
+  MIGRACAO_44_EVIDENCIA_ACEITA,
 ];
