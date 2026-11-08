@@ -60,7 +60,6 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
     estado: status,
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     rodada_id: 2,
   });
   gravarAgregadoPronto(banco, {
@@ -93,6 +92,7 @@ async function cenario(estado: "gate_pr" | "concluida" = "gate_pr", semPR = fals
       ticket(7, "encerrar_rodada", "concluido"),
       ticket(8, "encerrar_rodada", "em_execucao"),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],

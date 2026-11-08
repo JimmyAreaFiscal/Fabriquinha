@@ -129,7 +129,9 @@ test("ativas: as sessões de demanda em andamento, sem as terminadas", async () 
 
 test("ativas: o ticket que falhou aguarda o Auditor, com o motivo", async () => {
   banco.exec(
-    "UPDATE ticket_demanda SET estado = 'falhou', motivo_falha = 'testes falharam' WHERE demanda_id = 'I-1' AND ticket_id = 2",
+    `UPDATE ticket_demanda SET estado = 'falhou' WHERE demanda_id = 'I-1' AND ticket_id = 2;
+     INSERT INTO tentativa (demanda_id, ticket_id, numero, processo_id, inicio, fim, resultado_tipo, causa, motivo)
+       VALUES ('I-1', 2, 1, 'x3', '2026-10-11T12:00:00.000Z', '2026-10-11T12:50:00.000Z', 'interrompida', 'fabriquinha', 'testes falharam');`,
   );
   banco.exec("UPDATE execucao_sessao SET fim = '2026-10-11T12:50:00.000Z', falha = 1 WHERE id = 'x3'");
   const [s2] = (await sessoes("escopo=ativas")) as SessaoDeDemanda[];

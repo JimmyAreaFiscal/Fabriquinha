@@ -27,7 +27,6 @@ export const ExecucaoSessao = z.object({
   falha: z.boolean(),
   /** Grupo de processo do pi, para o reinício do serviço interrompê-lo. */
   grupo_processo: Id.optional(),
-  erro: z.string().trim().min(1).optional(),
   /** Modelo e effort efetivos (resolverConfiguracaoAgente). */
   configuracao_agente: ConfiguracaoAgente.optional(),
 });

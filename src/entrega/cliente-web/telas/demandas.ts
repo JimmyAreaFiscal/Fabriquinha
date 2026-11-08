@@ -134,7 +134,7 @@ export interface DadosDaPagina {
     rodada?: string;
     titulo?: string;
     instrucao?: string;
-    motivo_falha?: string;
+    motivo?: string;
   }[];
   decisoes: { ticket: string; resultado: "aprovado" | "recusado"; nota?: number; motivo?: string; por: string }[];
   evidencias: {
@@ -306,7 +306,7 @@ function ticket(t: Pagina["tickets"][number], p: Pagina): string {
   return `<li class="dm-ticket dm-marco-${marco}" id="${escapar(t.ref)}"><div class="dm-no">
     <div class="dm-no-cabeca"><span class="id">${escapar(t.ref)}</span> <strong>${ETAPA_DO_TICKET[t.etapa]}</strong>${t.titulo === undefined ? "" : ` <span>${escapar(t.titulo)}</span>`}<span class="dm-no-estado">${estado}${chat}</span></div>
     ${t.instrucao === undefined ? "" : `<p class="dm-texto"><strong>Instrução:</strong> ${escapar(t.instrucao)}</p>`}
-    ${t.motivo_falha === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo_falha)}</p>`}
+    ${t.motivo === undefined ? "" : `<p class="dm-texto dm-falha"><strong>Motivo da falha:</strong> ${escapar(t.motivo)}</p>`}
     ${minhas.length > 0 ? `<ul class="dm-decisoes">${minhas.map(decisao).join("")}</ul>` : ""}
     ${chipsDasEvidencias(p.evidencias.filter((e) => e.ticket === t.ref))}
     ${acaoDoTicket(t)}

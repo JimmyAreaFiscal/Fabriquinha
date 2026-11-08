@@ -7,6 +7,7 @@ import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
+import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
 import { carregarProjeto, gravarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
@@ -216,7 +217,13 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
     por: revisorDaRodada(banco),
     em: "2026-01-02T00:00:00.000Z",
   });
-  comDemanda(banco, "I-1", (ag) => ({ ...ag, decisoes: [recusado(1, "um"), recusado(2, "dois")] }));
+  comDemanda(banco, "I-1", (ag) => ({
+    ...ag,
+    tickets: ag.tickets.map((ticket) =>
+      ticket.ticket_id === 2 ? { ...ticket, estado: "em_execucao" as const } : ticket,
+    ),
+    decisoes: [recusado(1, "um"), recusado(2, "dois")],
+  }));
   const reprovar = () =>
     decidir(banco, {
       aprovado: false,
@@ -228,8 +235,11 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
   const ticketsAntes = carregarDemanda(banco, "I-1").tickets.length;
   reprovar();
   assert.equal(ticketRevisor()?.estado, "falhou");
-  assert.ok(ticketRevisor()?.motivo_falha?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
-  assert.match(ticketRevisor()?.motivo_falha ?? "", /um[\s\S]*dois[\s\S]*três/);
+  const revisor = ticketRevisor();
+  assert.ok(revisor);
+  const motivoDaReprovacao = motivoDaFalhaDoTicket(carregarDemanda(banco, "I-1").tentativas, revisor);
+  assert.ok(motivoDaReprovacao?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
+  assert.match(motivoDaReprovacao ?? "", /um[\s\S]*dois[\s\S]*três/);
   assert.equal(carregarDemanda(banco, "I-1").tickets.length, ticketsAntes);
   assert.equal(estadoDaPrimeiraRodada(banco), "revisar_rodada");
 

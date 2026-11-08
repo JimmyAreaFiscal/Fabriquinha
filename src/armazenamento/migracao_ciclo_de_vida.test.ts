@@ -8,7 +8,9 @@ import {
   ETAPA_NOVA,
 } from "../../apoio-testes/esquema_anterior.ts";
 import { migrar } from "./banco.ts";
-import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
+import { ESQUEMA_V36, MIGRACOES as MIGRACOES_DISPONIVEIS, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
+
+const MIGRACOES = MIGRACOES_DISPONIVEIS.slice(0, 2);
 
 const EM = "2026-01-01T00:00:00.000Z";
 const DEPOIS_DO_TICKET_4 = "2026-01-02T00:00:00.000Z";

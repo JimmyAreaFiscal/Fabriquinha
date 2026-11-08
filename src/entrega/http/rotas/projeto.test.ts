@@ -114,7 +114,6 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, extra: obj
   estado: "concluido",
   estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
-  devolucoes: 0,
   ...extra,
 });
 const rodada = (demanda_id: string, rodada_id: number, estado: string) => ({

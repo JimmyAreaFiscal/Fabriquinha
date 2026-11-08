@@ -9,6 +9,7 @@ import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, Instante, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { iniciarRevisaoDemanda } from "../../../nucleo/transicoes_demanda.ts";
 import { type Situacao, situacao } from "../../../aplicacao/gerente.ts";
@@ -240,14 +241,19 @@ function esperasDaDemanda(
   }
   const falhos = ag.tickets
     .filter((t) => t.estado === "falhou")
-    .map((t): EsperaDoAuditor => ({
-      motivo: "falha",
-      ...identificacao,
-      ...(t.rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id: t.rodada_id }) }),
-      ...ticketDaEspera(t),
-      ...(t.motivo_falha !== undefined && { erro: t.motivo_falha }),
-      desde: t.estado_alterado_em,
-    }));
+    .map((t): EsperaDoAuditor => {
+      const erro = motivoDaFalhaDoTicket(ag.tentativas, t);
+      return {
+        motivo: "falha",
+        ...identificacao,
+        ...(t.rodada_id !== undefined && {
+          rodada: formatarRodadaRef({ demanda_id: demanda, rodada_id: t.rodada_id }),
+        }),
+        ...ticketDaEspera(t),
+        ...(erro !== undefined && { erro }),
+        desde: t.estado_alterado_em,
+      };
+    });
   return [...gates, ...falhos, ...esperaDaRevisaoParada(ag, agora)];
 }
 

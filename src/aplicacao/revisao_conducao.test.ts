@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
+import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { AUDITOR } from "../nucleo/ator.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
@@ -12,8 +13,11 @@ import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "../../apoio-testes/cenar
 
 const estado = (banco: Parameters<typeof carregarDemanda>[0], ticket_id: number) => {
   const ag = carregarDemanda(banco, "I-1");
+  const ticket = ag.tickets.find((t) => t.ticket_id === ticket_id);
+  assert.ok(ticket);
   return {
-    ticket: ag.tickets.find((t) => t.ticket_id === ticket_id),
+    ticket,
+    motivo: motivoDaFalhaDoTicket(ag.tentativas, ticket),
     estado: ag.demanda.estado,
     rodada: ag.rodadas[0]?.estado,
     decisoes: ag.decisoes.length,
@@ -27,11 +31,11 @@ test("CA-1: o pi roda na worktree da rodada e, sem decisão, o ticket falha com 
   const quando: string[] = [];
   const r = await conduzirRevisao(banco, REF_RODADA, {
     limiteMin: 1,
-    preparar: () => void quando.push(estado(banco, 2).ticket?.estado ?? ""),
+    preparar: () => void quando.push(estado(banco, 2).ticket.estado),
   });
   assert.equal(r, "falhou");
   assert.deepEqual(quando, ["em_execucao"]);
-  assert.deepEqual([estado(banco, 2).ticket?.estado, estado(banco, 2).ticket?.motivo_falha], ["falhou", SEM_DECISAO]);
+  assert.deepEqual([estado(banco, 2).ticket.estado, estado(banco, 2).motivo], ["falhou", SEM_DECISAO]);
   assert.deepEqual(pastas(), [caminhoDaWorktreeRodada(c.raiz, "loja", { demanda_id: "I-1", rodada_id: 1 })]);
 });
 
@@ -55,13 +59,13 @@ test("CA-3: o revisor que decide deixa o ticket concluído, sem falha", async ()
   ]);
   assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "decidida");
   const e = estado(banco, 2);
-  assert.deepEqual([e.ticket?.estado, e.decisoes], ["concluido", 1]);
+  assert.deepEqual([e.ticket.estado, e.decisoes], ["concluido", 1]);
 });
 
 test("CA-11: o ticket global roda na worktree da demanda e, sem decisão, falha", async () => {
   const { c, banco, pastas } = await cenarioRevisao({ integral: true });
   assert.equal(await conduzirRevisao(banco, REF_GLOBAL, { limiteMin: 1 }), "falhou");
-  assert.equal(estado(banco, 3).ticket?.motivo_falha, SEM_DECISAO);
+  assert.equal(estado(banco, 3).motivo, SEM_DECISAO);
   assert.deepEqual(pastas(), [caminhoDaWorktreeDemanda(c.raiz, "loja", "I-1")]);
 });
 
@@ -71,7 +75,7 @@ test("CA-2: pi com falha deixa o ticket falhou, sem decisão e com a rodada em r
   assert.equal(await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 }), "falhou");
   const e = estado(banco, 2);
   assert.deepEqual(
-    [e.ticket?.estado, e.ticket?.motivo_falha, e.rodada, e.estado, e.decisoes],
+    [e.ticket.estado, e.motivo, e.rodada, e.estado, e.decisoes],
     ["falhou", "o agente parou com stopReason error: limite de uso", "revisar_rodada", "em_execucao", 0],
   );
 });
@@ -81,7 +85,7 @@ test("CA-12: pi com falha na revisão integral deixa a demanda em revisar_demand
   piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
   assert.equal(await conduzirRevisao(banco, REF_GLOBAL, { limiteMin: 1 }), "falhou");
   const e = estado(banco, 3);
-  assert.deepEqual([e.ticket?.estado, e.estado, e.decisoes], ["falhou", "revisar_demanda", 0]);
+  assert.deepEqual([e.ticket.estado, e.estado, e.decisoes], ["falhou", "revisar_demanda", 0]);
 });
 
 test("preparação que lança falha o ticket sem rodar o pi", async () => {
@@ -91,7 +95,7 @@ test("preparação que lança falha o ticket sem rodar o pi", async () => {
     preparar: () => Promise.reject(new Error("git quebrou")),
   });
   assert.equal(r, "falhou");
-  assert.match(estado(banco, 2).ticket?.motivo_falha ?? "", /git quebrou/);
+  assert.match(estado(banco, 2).motivo ?? "", /git quebrou/);
   assert.deepEqual(pastas(), []);
 });
 

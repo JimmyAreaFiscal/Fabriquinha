@@ -6,6 +6,7 @@ import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
 import { achadoDaDemanda } from "../../../armazenamento/avaliacoes.ts";
 import { EtapaTicket } from "../../../nucleo/primitivos.ts";
 import { selecionarTrabalho } from "../../../nucleo/selecao_trabalho.ts";
@@ -150,21 +151,24 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
         }),
       ),
     })),
-    tickets: ag.tickets.map((t) => ({
-      ref: ticket(t.ticket_id),
-      etapa: t.etapa,
-      estado: t.estado,
-      satisfaz_dependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
-      // O encerrar_demanda à espera do merge humano não pede execução ao Auditor: pede o merge na plataforma.
-      elegivel:
-        elegiveis.has(t.ticket_id) && !(t.etapa === "encerrar_demanda" && ag.encerramento?.aguardando_merge_humano),
-      ...(sessoes.has(t.ticket_id) && { sessao: sessoes.get(t.ticket_id) }),
-      ...(comPiAtivo.has(ticket(t.ticket_id)) && { pi_ativo: true }),
-      ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
-      ...(t.titulo !== undefined && { titulo: t.titulo }),
-      ...(t.instrucao !== undefined && { instrucao: t.instrucao }),
-      ...(t.motivo_falha !== undefined && { motivo_falha: t.motivo_falha }),
-    })),
+    tickets: ag.tickets.map((t) => {
+      const motivo = motivoDaFalhaDoTicket(ag.tentativas, t);
+      return {
+        ref: ticket(t.ticket_id),
+        etapa: t.etapa,
+        estado: t.estado,
+        satisfaz_dependencia: CICLO_DO_TICKET.satisfazDependencia(t.estado),
+        // O encerrar_demanda à espera do merge humano não pede execução ao Auditor: pede o merge na plataforma.
+        elegivel:
+          elegiveis.has(t.ticket_id) && !(t.etapa === "encerrar_demanda" && ag.encerramento?.aguardando_merge_humano),
+        ...(sessoes.has(t.ticket_id) && { sessao: sessoes.get(t.ticket_id) }),
+        ...(comPiAtivo.has(ticket(t.ticket_id)) && { pi_ativo: true }),
+        ...(t.rodada_id !== undefined && { rodada: rodada(t.rodada_id) }),
+        ...(t.titulo !== undefined && { titulo: t.titulo }),
+        ...(t.instrucao !== undefined && { instrucao: t.instrucao }),
+        ...(motivo !== undefined && { motivo }),
+      };
+    }),
     // A tela mostra `por` em texto: o tipo do Ator, como era antes do Ator único.
     decisoes: ag.decisoes.map(({ ticket_id, decisao_id: _, demanda_id: __, por, ...d }) => ({
       ticket: ticket(ticket_id),

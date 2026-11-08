@@ -65,7 +65,6 @@ async function cenario(shell = "") {
     estado: status,
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     rodada_id: 2,
   });
   await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
@@ -102,6 +101,7 @@ async function cenario(shell = "") {
       ticket(7, "encerrar_rodada", "concluido"),
       ticket(8, "encerrar_rodada", "em_execucao"),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],

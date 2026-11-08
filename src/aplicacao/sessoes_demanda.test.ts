@@ -9,10 +9,12 @@ import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { ExecucaoSessao, Sessao } from "../nucleo/sessoes.ts";
 import { encontrado } from "../nucleo/erros.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
+import { encerrar } from "./gerente.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
@@ -51,7 +53,6 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: st
   estado: status,
   estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
-  devolucoes: 0,
   ...extra,
 });
 
@@ -70,6 +71,19 @@ const demanda = (id: string, estado: string, descricao: string, tickets: object[
       branch: `fabriquinha/${id}`,
     },
     tickets,
+    tentativas:
+      id === "I-300"
+        ? [
+            {
+              ticket: Endereco.doTicket(id, 3),
+              numero: 1,
+              processo_id: "e-s3-I-300",
+              inicio: em,
+              fim: "2026-01-01T02:00:00.000Z",
+              resultado: { tipo: "reprovacao", motivo: "testes reprovaram" },
+            },
+          ]
+        : [],
     rodadas: [
       {
         demanda_id: id,
@@ -119,7 +133,7 @@ function cenario() {
     demanda("I-300", "planejar", "d", [
       ticket("I-300", 1, "planejar", "em_execucao"),
       ticket("I-300", 2, "implementar", "em_execucao", { rodada_id: 1, titulo: "implementa" }),
-      ticket("I-300", 3, "implementar", "falhou", { rodada_id: 1, motivo_falha: "testes reprovaram" }),
+      ticket("I-300", 3, "implementar", "falhou", { rodada_id: 1 }),
       ticket("I-300", 4, "implementar", "concluido", { rodada_id: 1 }),
       ticket("I-300", 5, "implementar", "em_execucao", { rodada_id: 1 }),
     ]),
@@ -494,6 +508,25 @@ test("CA-8, CA-10, CA-11 e CA-12: responder o diálogo, enviar na conversa e abo
   await ate(() => situacao(sessao)?.ocupado === false);
   interromperExecucaoDemanda(banco, ref);
   await ate(() => carregarSessoesDoTicket(banco, ref).execucoes.at(-1)?.fim != null);
+});
+
+test("sessão autônoma trabalhando recebe steer e follow_up sem abrir outra execução", async () => {
+  const { banco } = cenario();
+  instalarPiFalso(temporario).roteirizar([{ termina: "nunca" }]);
+  gravarAgregadoPronto(
+    banco,
+    demanda("I-304", "planejar", "trabalhe", [ticket("I-304", 1, "planejar", "em_execucao")]),
+  );
+  const execucao = iniciarExecucaoDemanda(banco, { demanda_id: "I-304", ticket_id: 1 }, { limiteMin: 1 });
+  const sessaoDoTicket = carregarSessoesDoTicket(banco, { demanda_id: "I-304", ticket_id: 1 }).sessoes.at(-1);
+  assert.ok(sessaoDoTicket);
+  const sessao = sessaoDoTicket.id;
+  await ate(() => situacao(sessao)?.ocupado === true);
+  assert.equal(enviarDemanda(banco, sessao, "ajuste o teste", "steer", 1), true);
+  assert.equal(enviarDemanda(banco, sessao, "confira o lint", "follow_up", 1), true);
+  encerrar(execucao.id);
+  await execucao.fim;
+  instalarPiFalso(temporario).roteirizar([{ marcas: true }]);
 });
 
 test("CA-12: abortar sem execução em andamento avisa; órfã é interrompida; outros estados recusam o envio", () => {

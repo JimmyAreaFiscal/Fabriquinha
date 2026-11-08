@@ -8,6 +8,10 @@ import { editarProjeto, gravarConfiguracaoSdlc, registrarProjeto } from "../apli
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
 import { Projeto, ProjetoConfigurado } from "../nucleo/projeto.ts";
 import { abrir, escrever } from "./banco.ts";
+import { criarDemandaNova } from "./demandas.ts";
+import { registrarDemanda } from "../nucleo/transicoes_demanda.ts";
+import { iniciarTentativaDoTicket } from "../nucleo/reserva_ticket.ts";
+import { FABRIQUINHA } from "../nucleo/ator.ts";
 import {
   apagarProjeto,
   buscarProjeto,
@@ -509,6 +513,37 @@ test("execuções pendentes são isoladas por projeto; apagarProjeto devolve ref
         banco.prepare(`SELECT count(*) AS quantidade FROM ${tabela} WHERE projeto = 'a'`).get()?.quantidade,
         0,
       );
+    assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
+  });
+});
+
+test("apagarProjeto remove as Tentativas antes dos tickets sem deixar referências quebradas", () => {
+  comBanco((banco) => {
+    const agora = "2026-01-01T00:00:00.000Z";
+    criarDemandaNova(banco, (id) =>
+      iniciarTentativaDoTicket(
+        registrarDemanda(
+          {
+            id,
+            projeto: "a",
+            titulo: "com Tentativa",
+            descricao: "d",
+            tipo: "problema",
+          },
+          { tipo: "externo", ferramenta: "pi", sessao: "s1" },
+          { agora },
+        ),
+        { ticket_id: 1, processo_id: "exec-1" },
+        FABRIQUINHA,
+        { agora },
+      ),
+    );
+    assert.equal(banco.prepare("SELECT count(*) AS quantidade FROM tentativa").get()?.quantidade, 1);
+    escrever(banco, () => apagarProjeto(banco, "a"));
+    assert.equal(buscarProjeto(banco, "a"), undefined);
+    assert.ok(buscarProjeto(banco, "b"));
+    assert.deepEqual(banco.prepare("SELECT * FROM tentativa").all(), []);
+    assert.deepEqual(banco.prepare("SELECT * FROM ticket_demanda").all(), []);
     assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
   });
 });

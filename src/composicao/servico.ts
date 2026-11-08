@@ -6,6 +6,7 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra } from "../nucleo/erros.ts";
+import { falhaPorServicoReiniciado } from "../nucleo/tentativa.ts";
 import { varrerBase } from "../aplicacao/retrabalho.ts";
 import { abrir, raizDo } from "../armazenamento/banco.ts";
 import { noLog } from "../infra/registro.ts";
@@ -18,7 +19,6 @@ import { recuperarAuditorias } from "../aplicacao/auditoria.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../aplicacao/despacho_demanda.ts";
 import { aguardarCondutores, marcarParada, recuperarExecucoesDemanda } from "../aplicacao/execucao_demanda.ts";
 
-const REINICIADO = "serviço reiniciado";
 /** Quanto o `parar` espera os condutores em curso antes de fechar o banco. */
 const LIMITE_PARADA_MS = 10_000;
 
@@ -45,7 +45,7 @@ export const portaDoServico = (env: NodeJS.ProcessEnv = process.env): number => 
  */
 function recuperar(banco: DatabaseSync): void {
   recuperarAuditorias(raizDo(banco));
-  for (const pgid of falharPendentes(banco, REINICIADO)) sinalNoGrupo(pgid, "SIGKILL");
+  for (const pgid of falharPendentes(banco, falhaPorServicoReiniciado.motivo)) sinalNoGrupo(pgid, "SIGKILL");
   recuperarExecucoesDemanda(banco);
 }
 

@@ -3,6 +3,8 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { AgregadoDemanda, DecisaoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
 import { Ator } from "../nucleo/ator.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import type { ProgressoEncerramento } from "../nucleo/encerramento_demanda.ts";
 import { ErroDeInexistente } from "../nucleo/erros.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
@@ -20,7 +22,6 @@ const ticket = (ticket_id: number, rodada_id?: number) => ({
   estado: "aberto" as const,
   estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" as const },
-  devolucoes: 0,
   ...(rodada_id === undefined ? {} : { rodada_id }),
 });
 // Sem as chaves de dono ausentes: é assim que o carregamento devolve a evidência (campo omitido).
@@ -71,9 +72,16 @@ const completo = (): AgregadoDemanda => ({
       instrucao: "refaça",
     },
     ticket(2, 1),
-    { ...ticket(3, 2), estado: "falhou" as const, devolucoes: 2, motivo_falha: "testes reprovaram" },
+    { ...ticket(3, 2), estado: "falhou" as const },
     { ...ticket(4), etapa: "entender_e_desenhar" },
   ],
+  tentativas: [1, 2, 3].map((numero) => ({
+    ticket: Endereco.doTicket("I-1", 3),
+    numero,
+    inicio: em,
+    fim: em,
+    resultado: { tipo: "reprovacao", motivo: "testes reprovaram" },
+  })),
   dependencias_ticket: [{ demanda_id: "I-1", ticket_id: 2, depende_ticket_id: 1 }],
   caminhos_ticket: [{ demanda_id: "I-1", ticket_id: 1, caminho: "src/a.ts" }],
   decisoes: [
@@ -120,6 +128,95 @@ test("CA-2: grava e carrega um agregado igual", () => {
   const ag = completo();
   gravarAgregadoPronto(b, ag);
   assert.deepEqual(carregarDemanda(b, "I-1"), ag);
+});
+
+test("Tentativas: todos os resultados, opcionais e processo voltam iguais, inclusive após atualizar e apagar", () => {
+  const bancoDeTentativas = banco();
+  const resultados: (ResultadoDaTentativa | undefined)[] = [
+    { tipo: "sucesso" },
+    { tipo: "reprovacao", motivo: "refaça" },
+    { tipo: "falha_infraestrutura", causa: "cota", motivo: "cota esgotada" },
+    { tipo: "interrompida", por: { tipo: "auditor" }, motivo: "pare" },
+    { tipo: "interrompida", por: { tipo: "auditor" } },
+    { tipo: "interrompida", por: { tipo: "fabriquinha" }, motivo: "exige Auditor" },
+    undefined,
+  ];
+  const agregado = completo();
+  agregado.tentativas = resultados.map((resultado, indice) => ({
+    ticket: Endereco.doTicket("I-1", 1),
+    numero: indice + 1,
+    inicio: em,
+    ...(resultado && { resultado, fim: em }),
+    ...(indice === 0 && { migrada: true as const }),
+    ...(indice === 4 && { instrucao: "retome com cuidado" }),
+    ...(indice === 6 && { processo_id: "exec-aberta" }),
+  }));
+  gravarAgregadoPronto(bancoDeTentativas, agregado);
+  assert.deepEqual(carregarDemanda(bancoDeTentativas, "I-1"), agregado);
+  const colunas = bancoDeTentativas
+    .prepare("SELECT resultado_tipo, causa, motivo, migrada, processo_id FROM tentativa ORDER BY numero")
+    .all();
+  assert.deepEqual(
+    colunas.map((tentativa) => ({ ...tentativa })),
+    [
+      { resultado_tipo: "sucesso", causa: null, motivo: null, migrada: 1, processo_id: null },
+      { resultado_tipo: "reprovacao", causa: null, motivo: "refaça", migrada: 0, processo_id: null },
+      { resultado_tipo: "falha_infraestrutura", causa: "cota", motivo: "cota esgotada", migrada: 0, processo_id: null },
+      { resultado_tipo: "interrompida", causa: "auditor", motivo: "pare", migrada: 0, processo_id: null },
+      { resultado_tipo: "interrompida", causa: "auditor", motivo: null, migrada: 0, processo_id: null },
+      { resultado_tipo: "interrompida", causa: "fabriquinha", motivo: "exige Auditor", migrada: 0, processo_id: null },
+      { resultado_tipo: null, causa: null, motivo: null, migrada: 0, processo_id: "exec-aberta" },
+    ],
+  );
+  const encerrado = comDemanda(bancoDeTentativas, "I-1", (agregado) => ({
+    ...agregado,
+    tentativas: agregado.tentativas.map((tentativa) =>
+      tentativa.numero === 7 ? { ...tentativa, fim: em, resultado: { tipo: "sucesso" as const } } : tentativa,
+    ),
+  }));
+  assert.deepEqual(carregarDemanda(bancoDeTentativas, "I-1"), encerrado);
+  const apagado = comDemanda(bancoDeTentativas, "I-1", (agregado) => ({ ...agregado, tentativas: [] }));
+  assert.deepEqual(carregarDemanda(bancoDeTentativas, "I-1"), apagado);
+  assert.deepEqual(bancoDeTentativas.prepare("SELECT * FROM tentativa").all(), []);
+  assert.deepEqual(bancoDeTentativas.prepare("PRAGMA foreign_key_check").all(), []);
+});
+
+test("interrupção com motivo indefinido grava NULL e aposGravar recebe o agregado persistido", () => {
+  const bancoDeInterrupcao = comBase();
+  let agregadoObservado: AgregadoDemanda | undefined;
+  const atualizado = comDemanda(
+    bancoDeInterrupcao,
+    "I-1",
+    (agregado) => ({
+      ...agregado,
+      tentativas: [
+        {
+          ticket: Endereco.doTicket("I-1", 1),
+          numero: 1,
+          inicio: em,
+          fim: em,
+          resultado: { tipo: "interrompida", por: { tipo: "auditor" }, motivo: undefined },
+        },
+      ],
+    }),
+    (agregado) => {
+      agregadoObservado = agregado;
+    },
+  );
+  assert.equal(agregadoObservado, atualizado);
+  assert.equal(bancoDeInterrupcao.prepare("SELECT motivo FROM tentativa").get()?.motivo, null);
+  assert.deepEqual(carregarDemanda(bancoDeInterrupcao, "I-1").tentativas[0]?.resultado, {
+    tipo: "interrompida",
+    por: { tipo: "auditor" },
+  });
+});
+
+test("Tentativa aberta sem resultado permanece idêntica após recarregar", () => {
+  const bancoDeTentativaAberta = banco();
+  const agregado = completo();
+  agregado.tentativas = [{ ticket: Endereco.doTicket("I-1", 1), numero: 1, inicio: em, processo_id: "exec-aberta" }];
+  gravarAgregadoPronto(bancoDeTentativaAberta, agregado);
+  assert.deepEqual(carregarDemanda(bancoDeTentativaAberta, "I-1"), agregado);
 });
 
 test("autoria: tickets, decisões e demanda preservam os atores na gravação e na atualização", () => {
@@ -299,6 +396,7 @@ const linhas = (b: DatabaseSync, tabela: string) => b.prepare(`SELECT * FROM ${t
 test("encerramento: ida e volta campo a campo, com e sem os opcionais", () => {
   const b = comBase();
   const cheio = progresso({
+    aguardando_merge_humano: true,
     integracao: { sha: "def456" },
     limpeza_pendente: ["branch-a", "branch-b"],
     conflito_pendente: { ticket_id: 5 },
@@ -420,6 +518,10 @@ test("listarDemandas: em ordem de criação, sem arquivada por padrão, com ela 
       dependencias_rodada: ag.dependencias_rodada.map(t),
       criterios_citados: ag.criterios_citados.map(t),
       tickets: ag.tickets.map(t),
+      tentativas: ag.tentativas.map((tentativa) => ({
+        ...tentativa,
+        ticket: Endereco.doTicket(id, Number(tentativa.ticket.ticket_id)),
+      })),
       dependencias_ticket: ag.dependencias_ticket.map(t),
       caminhos_ticket: ag.caminhos_ticket.map(t),
       decisoes: ag.decisoes.map(t),

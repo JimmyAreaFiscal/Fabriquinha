@@ -228,7 +228,15 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
     expect(n).toBe(0);
   }).toPass();
   const reinicio = abrir(fabriquinha.raiz);
-  falharTicketDemanda(reinicio, { demanda_id: "I-230", ticket_id: 1 }, "serviço reiniciado");
+  falharTicketDemanda(
+    reinicio,
+    { demanda_id: "I-230", ticket_id: 1 },
+    {
+      tipo: "falha_infraestrutura",
+      causa: "servico_reiniciado",
+      motivo: "serviço reiniciado",
+    },
+  );
   reinicio.close();
 
   await pagina.goto(`${fabriquinha.base}/demandas/I-230`);

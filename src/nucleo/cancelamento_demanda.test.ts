@@ -7,6 +7,8 @@ import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { arquivarDemanda, cancelarDemanda, satisfazDependencia } from "./cancelamento_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
 import type { EstadoDemanda } from "./primitivos.ts";
+import { Endereco } from "./item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "./tentativa.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
@@ -94,15 +96,35 @@ test("CA-2: tickets aberto/falhou fecham, em_execucao cancela e concluido fica",
       ["cancelado", t1],
     ],
   );
+  assert.deepEqual(r.tentativas, [
+    {
+      ticket: Endereco.doTicket(D, 4),
+      numero: 1,
+      inicio: t0,
+      fim: t1,
+      resultado: { tipo: "interrompida", por: AUDITOR },
+    },
+  ]);
 });
 
-test("cancela com ticket falhou que tem motivo_falha: cancela e preserva o motivo", () => {
+test("cancela ticket falho preservando a Tentativa e o motivo", () => {
   const ag = montar("em_execucao", {
-    tickets: [{ ...tk(3, "implementar", "falhou"), motivo_falha: "timeout do modelo" }],
+    tickets: [tk(3, "implementar", "falhou")],
+    tentativas: [
+      {
+        ticket: Endereco.doTicket(D, 3),
+        numero: 1,
+        inicio: t0,
+        fim: t0,
+        resultado: { tipo: "falha_infraestrutura", causa: "tempo_limite", motivo: "timeout do modelo" },
+      },
+    ],
   });
   const r = cancelarDemanda(ag, AUDITOR, c);
   assert.equal(r.demanda.estado, "cancelada");
-  assert.deepEqual([r.tickets[0]?.estado, r.tickets[0]?.motivo_falha], ["cancelado", "timeout do modelo"]);
+  assert.equal(r.tickets[0]?.estado, "cancelado");
+  assert.deepEqual(r.tentativas, ag.tentativas);
+  assert.equal(motivoDaFalhaDoTicket(r.tentativas, r.tickets[0]), "timeout do modelo");
 });
 
 test("CA-3 e CA-7: histórico intacto, entrada não mutada e encerramento sem integração relido", () => {

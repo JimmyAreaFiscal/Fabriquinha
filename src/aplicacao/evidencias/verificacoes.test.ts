@@ -163,6 +163,7 @@ test("SonarQube fora do ar é infraestrutura, sem aprovação nem reprovação (
   assert.ok(sonar);
   assert.equal(sonar.aprovada, undefined);
   assert.equal(sonar.falhas[0]?.classe, "infraestrutura");
+  assert.equal(sonar.falhas[0].causa, "servico_externo_inacessivel");
   assert.match(sonar.falhas[0].motivo, /está DOWN/);
 });
 

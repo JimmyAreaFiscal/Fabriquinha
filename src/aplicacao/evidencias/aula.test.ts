@@ -45,7 +45,6 @@ const revisao: TicketDemanda = {
   estado: "concluido",
   estado_alterado_em: AGORA,
   criado_por: { tipo: "fabriquinha" },
-  devolucoes: 0,
 };
 const alterados: EvidenciaDemanda = {
   demanda_id: "I-1",

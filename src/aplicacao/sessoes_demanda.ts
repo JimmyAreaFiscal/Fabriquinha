@@ -13,6 +13,7 @@ import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import type { ExecucaoSessao, Sessao } from "../nucleo/sessoes.ts";
+import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { arquivoDaSessao } from "../infra/registro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
@@ -162,6 +163,9 @@ interface InfoSessaoDemanda {
   dialogos: Dialogo[];
 }
 
+/** A execução como o chat a mostra: o motivo da falha é o da Tentativa que ela abriu. */
+export type ExecucaoDoChat = ExecucaoSessao & { motivo?: string };
+
 /** O que a barra de estado e as linhas do sistema do chat leem; demanda, rodada e ticket pelo endereço público (D09). */
 export interface CabecalhoDemanda {
   origem: "demanda";
@@ -170,10 +174,10 @@ export interface CabecalhoDemanda {
   rodada?: string;
   ticket: string;
   etapa: EtapaTicket;
-  /** O `motivo_falha` do ticket, na falha. */
+  /** O motivo da última Tentativa do ticket, na falha. */
   erro?: string;
-  /** As execuções da sessão, em ordem. */
-  execucoes: ExecucaoSessao[];
+  /** As execuções da sessão, em ordem, cada uma com o motivo da Tentativa que ela abriu, se essa falhou. */
+  execucoes: ExecucaoDoChat[];
 }
 
 /** Uma entrada do JSONL; o prompt montado pela Fabriquinha vem com `fabriquinha`. */
@@ -272,8 +276,13 @@ function montarCabecalho(c: Carregada): CabecalhoDemanda {
     }),
     ticket: formatarTicketRef(ticket),
     etapa: ticket.etapa,
-    ...(motivo === "falha" && { erro: ticket.motivo_falha }),
-    execucoes,
+    ...(motivo === "falha" && { erro: motivoDaFalhaDoTicket(ag.tentativas, ticket) }),
+    execucoes: execucoes.map((e) => {
+      const resultado = ag.tentativas.find((t) => t.processo_id === e.id)?.resultado;
+      return resultado && "motivo" in resultado && resultado.motivo !== undefined
+        ? { ...e, motivo: resultado.motivo }
+        : e;
+    }),
   };
 }
 

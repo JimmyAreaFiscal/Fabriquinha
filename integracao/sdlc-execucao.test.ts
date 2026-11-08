@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { comTentativaAberta, motivoDaFalhaDoTicket, tentativasDoTicket } from "../src/nucleo/tentativa.ts";
 import { AUDITOR } from "../src/nucleo/ator.ts";
 import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
 import { criarSessao, iniciarExecucao } from "../src/nucleo/sessoes.ts";
@@ -31,6 +32,17 @@ import {
   ticketDe,
 } from "./apoio-execucao.ts";
 import { type Cenario, criarCenario, demanda, esperar, git, gravarLimiteParalelismo } from "./apoio.ts";
+
+const motivoDoTicket = (c: Cenario, id: string, ticket_id: number) => {
+  const agregado = demanda(c, id);
+  const ticket = agregado.tickets.find((candidato) => candidato.ticket_id === ticket_id);
+  assert.ok(ticket);
+  return motivoDaFalhaDoTicket(agregado.tentativas, ticket);
+};
+const motivoDaExecucao = (c: Cenario, id: string, processo_id: string | undefined) => {
+  const resultado = demanda(c, id).tentativas.find((tentativa) => tentativa.processo_id === processo_id)?.resultado;
+  return resultado && "motivo" in resultado ? resultado.motivo : undefined;
+};
 
 const ativosPorRodada = (c: Cenario, id: string) => {
   const porRodada = new Map<number | undefined, number>();
@@ -125,10 +137,15 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   await executarAgoraDemanda(c.banco, ref, c.config, deps);
   const devolvido = demanda(c, id).tickets.find((x) => x.ticket_id === ref.ticket_id);
   assert.ok(devolvido);
-  assert.equal(devolvido.estado, "aberto", devolvido.motivo_falha);
-  assert.equal(devolvido.devolucoes, 1);
+  assert.equal(devolvido.estado, "aberto", motivoDoTicket(c, id, ref.ticket_id));
+  assert.equal(
+    tentativasDoTicket(demanda(c, id).tentativas, ref.ticket_id).filter(
+      (tentativa) => tentativa.resultado?.tipo === "reprovacao",
+    ).length,
+    1,
+  );
   assert.match(devolvido.instrucao ?? "", /execucao_testes: reprovado no teste/);
-  assert.equal(execucoesDe(c, ref)[0]?.erro, undefined);
+  assert.equal(execucoesDe(c, ref)[0]?.falha, false);
   assert.equal(rodadaDe(c, id, 1)?.estado, "implementar");
   assert.equal(
     git(worktree, "log", "--fixed-strings", "--grep", `[${id}.T${String(ref.ticket_id)}]`, "--format=%H"),
@@ -174,10 +191,7 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   pi.roteirizar([{ sai: { codigo: 1, stderr: "falha do pi falso" } }]);
   await Promise.all(despacharDemandas(c.banco, c.config, deps));
   assert.equal(statusDe(c, t1), "falhou");
-  assert.match(
-    demanda(c, id).tickets.find((x) => x.ticket_id === t1.ticket_id)?.motivo_falha ?? "",
-    /código 1|falha do pi falso/,
-  );
+  assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /código 1|falha do pi falso/);
   assert.equal(execucoesDe(c, t1).length, 1);
   const bloqueado = () => {
     assert.equal(despacharDemandas(c.banco, c.config, deps).length, 0);
@@ -203,11 +217,11 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   await Promise.all(despacharDemandas(c.banco, curto, deps));
   assert.match(pi.prompts().at(-1)?.prompt ?? "", /Reabertura[\s\S]*tente de novo, com atenção ao cache/);
   assert.equal(statusDe(c, t1), "falhou");
-  assert.match(demanda(c, id).tickets.find((x) => x.ticket_id === t1.ticket_id)?.motivo_falha ?? "", /tempo limite/);
+  assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /tempo limite/);
   const historico = execucoesDe(c, t1);
   assert.equal(historico.length, 2);
-  assert.match(historico[0]?.erro ?? "", /1|falha do pi falso/);
-  assert.match(historico[1]?.erro ?? "", /tempo limite/);
+  assert.match(motivoDaExecucao(c, id, historico[0]?.id) ?? "", /1|falha do pi falso/);
+  assert.match(motivoDaExecucao(c, id, historico[1]?.id) ?? "", /tempo limite/);
   assert.equal(carregarSessoesDoTicket(c.banco, t1).sessoes.length, 1);
   bloqueado();
 
@@ -219,6 +233,12 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   comDemanda(c.banco, id, (ag) => ({
     ...ag,
     tickets: ag.tickets.map((x) => (x.ticket_id === t1.ticket_id ? { ...x, estado: "em_execucao" as const } : x)),
+    tentativas: comTentativaAberta(
+      ag.tentativas,
+      { ...t1, estado_alterado_em: execucao.inicio },
+      execucao.id,
+      execucao.inicio,
+    ),
   }));
   comSessoesDoTicket(c.banco, t1, (estado) => ({
     ...estado,
@@ -226,13 +246,10 @@ test("CA-SDLC-10: falha e timeout bloqueiam o escopo, o reinício volta sozinho,
   }));
   recuperarExecucoesDemanda(c.banco);
   assert.equal(statusDe(c, t1), "falhou");
-  assert.match(
-    demanda(c, id).tickets.find((x) => x.ticket_id === t1.ticket_id)?.motivo_falha ?? "",
-    /serviço reiniciado/,
-  );
+  assert.match(motivoDoTicket(c, id, t1.ticket_id) ?? "", /serviço reiniciado/);
   const final = execucoesDe(c, t1);
   assert.equal(final.length, 3);
-  assert.equal(final.at(-1)?.erro, "serviço reiniciado");
+  assert.equal(motivoDaExecucao(c, id, final.at(-1)?.id), "serviço reiniciado");
   assert.deepEqual(final.slice(0, 2), historico);
   assert.equal(existsSync(join(c.raiz, "execucoes")), true);
   // O reinício não é culpa do ticket: o ciclo seguinte o devolve a aberto sozinho, sem instrução do Auditor nem executar.

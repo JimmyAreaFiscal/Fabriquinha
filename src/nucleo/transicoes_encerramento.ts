@@ -8,6 +8,7 @@ import { branchDemanda, DemandaId } from "./demanda.ts";
 import { ErroDeRegra } from "./erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { Motivo } from "./primitivos.ts";
+import { CausaDeInfraestrutura, falhaQueExigeOAuditor } from "./tentativa.ts";
 import { type ContextoDemanda, exigirDemandaDaEntrada, mudarTicket } from "./transicoes_demanda.ts";
 
 const Texto = z.string().trim().min(1);
@@ -30,6 +31,8 @@ const EntradaFalha = z.strictObject({
   demanda_id: DemandaId,
   etapa: z.enum(["check_final", "integracao", "limpeza"]),
   motivo: Motivo,
+  /** Presente quando a falha é de infraestrutura: a política retoma sozinha; ausente, ela pede o Auditor. */
+  causa: CausaDeInfraestrutura.optional(),
   limpeza_pendente: z.array(Texto).default([]),
 });
 const EntradaIntegracao = z.strictObject({
@@ -219,7 +222,16 @@ export function registrarFalhaEncerramento(
     throw new ErroDeRegra(`a demanda ${ag.demanda.id} não tem PR final`, "registre a tentativa antes");
   }
   return AgregadoDemanda.parse({
-    ...mudarTicket(ag, atual, "falhou", ctx.agora, { motivo_falha: e.motivo }),
+    ...mudarTicket(
+      ag,
+      atual,
+      "falhou",
+      ctx.agora,
+      {},
+      e.causa === undefined
+        ? falhaQueExigeOAuditor(e.motivo)
+        : { tipo: "falha_infraestrutura", causa: e.causa, motivo: e.motivo },
+    ),
     encerramento: { ...enc, falha, ...(e.etapa === "limpeza" && { limpeza_pendente: e.limpeza_pendente }) },
   });
 }

@@ -1,6 +1,7 @@
 // Rotas do chat (F7 §4.2) contra o serviço de verdade, numa raiz temporária e numa porta livre, com git real e o pi
 // falso único: a sessão de ticket da demanda com o SSE, as mensagens, os diálogos, o aborto e o histórico; a sessão
 // que não é de uma demanda dá 404.
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
@@ -131,6 +132,16 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
   gravarAgregadoPronto(
     servico.banco,
     montarAgregadoDemanda("I-310", "planejar", {
+      tentativas: [
+        {
+          ticket: Endereco.doTicket("I-310", 1),
+          numero: 1,
+          processo_id: "ed-falhou",
+          inicio: em,
+          fim: em,
+          resultado: { tipo: "interrompida", por: { tipo: "fabriquinha" }, motivo: "a execução anterior falhou" },
+        },
+      ],
       tickets: [
         {
           demanda_id: "I-310",
@@ -139,7 +150,6 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
           estado: "em_execucao",
           estado_alterado_em: em,
           criado_por: { tipo: "fabriquinha" },
-          devolucoes: 0,
         },
       ],
     }),
@@ -147,7 +157,10 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
   comSessoesDoTicket(servico.banco, { demanda_id: "I-310", ticket_id: 1 }, (e) => ({
     ...e,
     sessoes: [{ demanda_id: "I-310", ticket_id: 1, id: "sd-310", modo: "interativo", conversa_referencia: "sd-310" }],
-    execucoes: [{ id: "ed-310", sessao_id: "sd-310", inicio: em, fim: em, falha: false }],
+    execucoes: [
+      { id: "ed-falhou", sessao_id: "sd-310", inicio: em, fim: em, falha: true },
+      { id: "ed-310", sessao_id: "sd-310", inicio: em, fim: em, falha: false },
+    ],
   }));
   mkdirSync(join(raiz, "sessoes"), { recursive: true });
   const mensagem = (role: string, text: string) => ({
@@ -167,6 +180,13 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
     ["demanda", "I-310", undefined, "I-310.T1", "planejar", "aguardando_humano", "conversa"],
   );
   assert.deepEqual(textos(chat.conversa), ["user: planeje", "assistant: Qual a prioridade?"]);
+  assert.deepEqual(
+    chat.execucoes.map((execucao) => [execucao.id, execucao.motivo]),
+    [
+      ["ed-falhou", "a execução anterior falhou"],
+      ["ed-310", undefined],
+    ],
+  );
 
   const sse = await assinar("sd-310");
   await ate(() => sse.eventos.length > 0, "o retrato");
@@ -242,7 +262,6 @@ test("sessão de ticket da demanda com o pi vivo: responder o diálogo, enviar a
           estado: "em_execucao",
           estado_alterado_em: "2026-01-01T00:00:00.000Z",
           criado_por: { tipo: "fabriquinha" },
-          devolucoes: 0,
         },
       ],
     }),

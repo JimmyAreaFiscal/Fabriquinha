@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Dialogo } from "../../../aplicacao/gerente.ts";
-import type { ExecucaoSessao } from "../../../nucleo/sessoes.ts";
 import type { Entrada } from "../../http/rotas/chat.ts";
 import {
   barraDeEstado,
@@ -30,7 +29,7 @@ import {
 
 const T0 = "2026-10-11T10:00:00.000Z";
 
-const execucao = (e: Partial<ExecucaoSessao> = {}): ExecucaoSessao => ({
+const execucao = (e: Partial<Cabecalho["execucoes"][number]> = {}): Cabecalho["execucoes"][number] => ({
   id: "abcdef12-0000-4000-8000-000000000001",
   sessao_id: "s",
   inicio: T0,
@@ -124,7 +123,7 @@ test("linhas da execução: o início e, terminada, o fim ou a falha, sem link d
     html: '<div class="sistema">Execução E-abcdef12 encerrada</div>',
   });
   assert.equal(
-    linhasDaExecucao(execucao({ fim, falha: true, erro: "<pi> caiu" }))[1]?.html,
+    linhasDaExecucao(execucao({ fim, falha: true, motivo: "<pi> caiu" }))[1]?.html,
     '<div class="sistema">Execução E-abcdef12 falhou: &#60;pi&#62; caiu</div>',
   );
 });

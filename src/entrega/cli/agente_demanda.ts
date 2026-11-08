@@ -10,6 +10,7 @@ import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
 import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
 import {
   type SchemaEvidencia,
   schemaDe,
@@ -112,11 +113,17 @@ export function schemaDoTipo(tipo: string): SchemaEvidencia | undefined {
 }
 
 // O CLI segue mostrando o ticket sem `criado_por` e a decisão com `por` em texto (o tipo do Ator), como antes do Ator único.
-const publico = ({ demanda_id, ticket_id, rodada_id, criado_por: _, ...resto }: TicketDemanda) => ({
-  ticket: formatarTicketRef({ demanda_id, ticket_id }),
-  ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id }) }),
-  ...resto,
-});
+// O motivo do ticket que falhou vem da última Tentativa dele.
+const publico = (ticket: TicketDemanda, ag: AgregadoDemanda) => {
+  const { demanda_id, ticket_id, rodada_id, criado_por: _, ...resto } = ticket;
+  const motivo = motivoDaFalhaDoTicket(ag.tentativas, ticket);
+  return {
+    ticket: formatarTicketRef({ demanda_id, ticket_id }),
+    ...(rodada_id !== undefined && { rodada: formatarRodadaRef({ demanda_id, rodada_id }) }),
+    ...resto,
+    ...(motivo !== undefined && { motivo }),
+  };
+};
 
 /** O JSON de uma opção, do argumento ou do stdin com `-`. */
 async function lerJson(opcao: string, valor: string, stdin: NodeJS.ReadableStream): Promise<unknown> {
@@ -172,7 +179,7 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
           };
         }),
         tickets: ag.tickets.map((t) => ({
-          ...publico(t),
+          ...publico(t, ag),
           // Só o próprio ticket mostra evidências: o nome, quando foi e a `aprovada` que o schema do tipo deriva.
           ...(t.ticket_id === agente.ticket_id && {
             evidencias: ag.evidencias
@@ -188,13 +195,14 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
     argumentos: ["I-<n>.T<m>"],
     rodar({ banco, agente, pos }) {
       ticketProprio(agente, String(pos[0]));
-      const { tickets } = carregarDemanda(banco, agente.demanda_id);
+      const ag = carregarDemanda(banco, agente.demanda_id);
       return publico(
         encontrado(
-          tickets.find((t) => t.ticket_id === agente.ticket_id),
+          ag.tickets.find((t) => t.ticket_id === agente.ticket_id),
           `o ticket ${proprio(agente)} não existe`,
           "confira a execução",
         ),
+        ag,
       );
     },
   },

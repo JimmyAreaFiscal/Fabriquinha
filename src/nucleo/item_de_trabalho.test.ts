@@ -287,7 +287,6 @@ test("criarTicket: abre o ticket com o próximo id, sem rodada_id quando não é
     ticket_id: 4,
     etapa: "revisar_demanda",
     estado: "aberto",
-    devolucoes: 0,
     estado_alterado_em: t1,
     criado_por: FABRIQUINHA,
   });
@@ -297,7 +296,6 @@ test("criarTicket: abre o ticket com o próximo id, sem rodada_id quando não é
     rodada_id: 1,
     etapa: "revisar_rodada",
     estado: "aberto",
-    devolucoes: 0,
     estado_alterado_em: t1,
     criado_por: AUDITOR,
   });

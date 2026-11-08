@@ -8,11 +8,11 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
-import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
+import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
-import { motivo } from "../nucleo/primitivos.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
+import { type FalhaDaTentativa, falhaDoErro, falhaQueExigeOAuditor } from "../nucleo/tentativa.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import {
   concluirEncerramento,
@@ -77,11 +77,21 @@ export async function conduzirEncerramentoDemanda(
   mkdirSync(join(raiz, "execucoes"), { recursive: true });
   const log = join(raiz, "execucoes", `encerramento-${demanda_id}.log`);
   const aplicar = (transicao: (a: AgregadoDemanda) => AgregadoDemanda) => comDemanda(banco, demanda_id, transicao);
-  const falhar = (etapa: "check_final" | "integracao" | "limpeza", porque: string, limpeza_pendente: string[] = []) =>
+  const falhar = (
+    etapa: "check_final" | "integracao" | "limpeza",
+    falha: FalhaDaTentativa,
+    limpeza_pendente: string[] = [],
+  ) =>
     aplicar((a) =>
       registrarFalhaEncerramento(
         a,
-        { demanda_id, etapa, motivo: motivo(porque), limpeza_pendente },
+        {
+          demanda_id,
+          etapa,
+          motivo: falha.motivo,
+          ...(falha.tipo === "falha_infraestrutura" && { causa: falha.causa }),
+          limpeza_pendente,
+        },
         FABRIQUINHA,
         contexto(),
       ),
@@ -104,7 +114,7 @@ export async function conduzirEncerramentoDemanda(
     const demonstracao = montarDemonstracaoLimpeza([...new Set([...antes, ...feito.removidos])], sobras);
     if (sobras.length > 0) {
       gravarEvidencias(banco, demanda_id, ticket.ticket_id, demonstracao, false);
-      return falhar("limpeza", `a limpeza deixou: ${sobras.join(", ")}`, sobras);
+      return falhar("limpeza", falhaQueExigeOAuditor(`a limpeza deixou: ${sobras.join(", ")}`), sobras);
     }
     gravarEvidencias(banco, demanda_id, ticket.ticket_id, demonstracao);
     return aplicar((a) => concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, contexto()));
@@ -126,7 +136,10 @@ export async function conduzirEncerramentoDemanda(
       throw erro;
     }
     if (leitura.estado === "fechado") {
-      return falhar("integracao", `o PR final ${pr.url} foi fechado sem merge: reabra-o e integre-o na plataforma`);
+      return falhar(
+        "integracao",
+        falhaQueExigeOAuditor(`o PR final ${pr.url} foi fechado sem merge: reabra-o e integre-o na plataforma`),
+      );
     }
     if (leitura.estado !== "mergeado") return devolverParaEspera();
     const sha = existe(
@@ -160,9 +173,7 @@ export async function conduzirEncerramentoDemanda(
       ),
     );
   } catch (erro) {
-    aplicar((a) =>
-      registrarFalhaTicket(a, { ticket_id: ticket.ticket_id, motivo: motivo(mensagem(erro)) }, contexto()),
-    );
+    aplicar((a) => registrarFalhaTicket(a, { ticket_id: ticket.ticket_id, falha: falhaDoErro(erro) }, contexto()));
     throw erro;
   }
 
@@ -173,10 +184,13 @@ export async function conduzirEncerramentoDemanda(
     }
     if (problemas.checksFalhos.length > 0) {
       const falhos = problemas.checksFalhos.map((c) => [c.nome, c.url].filter(Boolean).join(" "));
-      return falhar("check_final", `check final falho no PR ${publicado.url}: ${falhos.join(", ")}`);
+      return falhar(
+        "check_final",
+        falhaQueExigeOAuditor(`check final falho no PR ${publicado.url}: ${falhos.join(", ")}`),
+      );
     }
   } catch (erro) {
-    return falhar("check_final", mensagem(erro));
+    return falhar("check_final", falhaDoErro(erro));
   }
 
   aplicar((a) => solicitarIntegracao(a, { demanda_id }, FABRIQUINHA, contexto()));

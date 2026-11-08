@@ -1,6 +1,7 @@
 // Rotas de leitura das demandas (CA-1 a CA-12 e CA-37) contra o servidor web de verdade.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import { guardarBytes } from "../../../armazenamento/arquivos.ts";
 import { comDemanda } from "../../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../../armazenamento/evidencia_demanda.ts";
@@ -25,7 +26,7 @@ interface Pagina {
     sessao?: string;
     pi_ativo?: true;
     titulo?: string;
-    motivo_falha?: string;
+    motivo?: string;
     instrucao?: string;
     elegivel: boolean;
   }[];
@@ -202,7 +203,6 @@ test("o ticket é elegível só se a seleção o escolheria agora", async () => 
         criado_por: { tipo: "fabriquinha" },
         estado: "aberto",
         estado_alterado_em: "2026-01-01T00:00:00.000Z",
-        devolucoes: 0,
       },
     ],
   }));
@@ -229,12 +229,22 @@ test("a página traz o motivo da falha e a instrução do ticket", async () => {
   const { pedir, banco } = await cenarioDemandas();
   comDemanda(banco, "I-206", (ag) => ({
     ...ag,
-    tickets: ag.tickets.map((t) =>
-      t.ticket_id === 1 ? { ...t, estado: "falhou", motivo_falha: "quebrou", instrucao: "tente de novo" } : t,
-    ),
+    tickets: ag.tickets.map((t) => (t.ticket_id === 1 ? { ...t, estado: "falhou", instrucao: "tente de novo" } : t)),
+  }));
+  comDemanda(banco, "I-206", (ag) => ({
+    ...ag,
+    tentativas: [
+      {
+        ticket: Endereco.doTicket("I-206", 1),
+        numero: 1,
+        inicio: "2026-01-01T00:00:00.000Z",
+        fim: "2026-01-01T00:01:00.000Z",
+        resultado: { tipo: "interrompida", por: { tipo: "fabriquinha" }, motivo: "quebrou" },
+      },
+    ],
   }));
   const t1 = (await pedir("/api/demandas/I-206")).json<Pagina>().tickets[0];
-  assert.deepEqual([t1?.motivo_falha, t1?.instrucao], ["quebrou", "tente de novo"]);
+  assert.deepEqual([t1?.motivo, t1?.instrucao], ["quebrou", "tente de novo"]);
 });
 
 test("CA-7: as decisões na ordem em que foram tomadas", async () => {
@@ -329,7 +339,6 @@ test("o PR final à espera do merge humano vem no encerramento e marca a demanda
         criado_por: { tipo: "fabriquinha" },
         estado: "aberto",
         estado_alterado_em: "2026-01-01T00:00:00.000Z",
-        devolucoes: 0,
       },
     ],
     encerramento: {

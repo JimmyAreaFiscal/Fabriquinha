@@ -8,12 +8,11 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, EvidenciaDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
-import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
-import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { ErroDeRegra, existe } from "../nucleo/erros.ts";
+import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
-import { motivo } from "../nucleo/primitivos.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
-import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
+import { falhaDoErro, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
 import { conferirPullRequestRodada } from "../nucleo/transicoes_rodada.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import { LIMITE_DO_CORPO } from "./evidencias/pr.ts";
@@ -95,7 +94,7 @@ export function iniciarEncerramentoRodada(
   banco: DatabaseSync,
   ref: RefRodada,
   limiteMin: number,
-): { id: string; fim: Promise<void> } {
+): ReturnType<typeof iniciarExecucaoDemanda> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   rodadaEmEncerramento(ag, ref);
   const ticket = encerramentoNoEstado(ag, ref, ["aberto", "em_execucao"]);
@@ -105,13 +104,7 @@ export function iniciarEncerramentoRodada(
       reservarTicket(a, { ticket_id: ticket.ticket_id }, FABRIQUINHA, contexto(), satisfeitas),
     );
   }
-  const retomada = ticket.instrucao
-    ? montarRetornoAoAgente(
-        tentativaAnteriorEmMemoria(Endereco.doTicket(ref.demanda_id, ticket.ticket_id), {
-          instrucao: ticket.instrucao,
-        }),
-      )
-    : undefined;
+  const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, ref.demanda_id).tentativas, ticket.ticket_id);
   return iniciarExecucaoDemanda(
     banco,
     { demanda_id: ref.demanda_id, ticket_id: ticket.ticket_id },
@@ -193,7 +186,7 @@ export async function concluirEncerramentoRodada(banco: DatabaseSync, ref: RefRo
     conferido = await publicarEConferir(banco, ag, ref, rodada.branch, ticket);
   } catch (erro) {
     comDemanda(banco, ref.demanda_id, (a) =>
-      registrarFalhaTicket(a, { ticket_id: ticket.ticket_id, motivo: motivo(mensagem(erro)) }, contexto()),
+      registrarFalhaTicket(a, { ticket_id: ticket.ticket_id, falha: falhaDoErro(erro) }, contexto()),
     );
     throw erro;
   }

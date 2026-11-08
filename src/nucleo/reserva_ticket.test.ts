@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { reservarTicket } from "./reserva_ticket.ts";
+import { iniciarTentativaDoTicket, reservarTicket } from "./reserva_ticket.ts";
+import { Endereco } from "./item_de_trabalho.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const t1 = "2026-01-02T00:00:00Z";
@@ -134,4 +135,45 @@ test("ticket da demanda fora da etapa do estado cai no motivo geral, sem depend�
 test("demanda encerrada e ticket inexistente são recusados", () => {
   assert.throws(() => reservar(montar({ tickets: [tk(1, undefined)] }, "concluida"), 1), /I-1 está em concluida/);
   assert.throws(() => reservar(montar({}), 9), /I-1\.T9 não existe/);
+});
+
+test("iniciar Tentativa abre uma só por ticket aberto ou em execução, com processo e sem mutar o agregado", () => {
+  for (const estado of ["aberto", "em_execucao"]) {
+    const agregado = montar({ tickets: [tk(2, undefined, estado)] });
+    const iniciado = iniciarTentativaDoTicket(agregado, { ticket_id: 2, processo_id: "exec-1" }, FABRIQUINHA, {
+      agora: t1,
+    });
+    assert.deepEqual(iniciado.tentativas, [
+      { ticket: Endereco.doTicket("I-1", 2), numero: 1, processo_id: "exec-1", inicio: t1 },
+    ]);
+    assert.deepEqual(agregado.tentativas, []);
+    assert.deepEqual(iniciado.tickets, agregado.tickets);
+    const retomado = iniciarTentativaDoTicket(iniciado, { ticket_id: 2, processo_id: "exec-2" }, FABRIQUINHA, {
+      agora: t1,
+    });
+    assert.deepEqual(retomado, iniciado);
+  }
+});
+
+test("iniciar Tentativa recusa ticket falho, concluído ou cancelado, ator indevido, processo vazio e ticket inexistente", () => {
+  for (const estado of ["falhou", "concluido", "cancelado"]) {
+    const agregado = montar({ tickets: [tk(2, undefined, estado)] });
+    assert.throws(
+      () => iniciarTentativaDoTicket(agregado, { ticket_id: 2, processo_id: "exec-1" }, FABRIQUINHA, { agora: t1 }),
+      ErroDeRegra,
+    );
+    assert.deepEqual(agregado.tentativas, []);
+  }
+  const agregado = montar({ tickets: [tk(2, undefined)] });
+  assert.throws(
+    () => iniciarTentativaDoTicket(agregado, { ticket_id: 2, processo_id: "exec-1" }, AUDITOR, { agora: t1 }),
+    ErroDeEscopo,
+  );
+  assert.throws(() =>
+    iniciarTentativaDoTicket(agregado, { ticket_id: 2, processo_id: "" }, FABRIQUINHA, { agora: t1 }),
+  );
+  assert.throws(
+    () => iniciarTentativaDoTicket(agregado, { ticket_id: 9, processo_id: "exec-1" }, FABRIQUINHA, { agora: t1 }),
+    /I-1\.T9 não existe/,
+  );
 });

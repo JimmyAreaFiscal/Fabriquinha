@@ -8,6 +8,7 @@ import { ErroDeRegra } from "./erros.ts";
 import { Endereco, estaOcupado, GrafoDeDependencias } from "./item_de_trabalho.ts";
 import { Id } from "./primitivos.ts";
 import { selecionarTrabalho } from "./selecao_trabalho.ts";
+import { comTentativaAberta } from "./tentativa.ts";
 import { type ContextoDemanda, exigirDemandaEmAndamento, mudarTicket, ticketDaDemanda } from "./transicoes_demanda.ts";
 
 const EntradaReserva = z.strictObject({ ticket_id: Id });
@@ -65,4 +66,29 @@ export function reservarTicket(
     throw new ErroDeRegra(`o ticket ${formatarTicketRef(ticket)} não pode ser reservado: ${motivo}`, orientacao);
   }
   return mudarTicket(ag, ticket, "em_execucao", ctx.agora);
+}
+
+const EntradaInicioDaTentativa = z.strictObject({ ticket_id: Id, processo_id: z.string().min(1) });
+
+/**
+ * Só a Fabriquinha, só ticket em andamento (o da sessão de ajustes nunca sai de `aberto`): a execução que começa abre a
+ * Tentativa do ticket, guardando o processo dela. Execução retomada na Tentativa que já está aberta (a sessão
+ * interativa) não abre outra.
+ */
+export function iniciarTentativaDoTicket(
+  ag: AgregadoDemanda,
+  entrada: unknown,
+  ator: Ator,
+  ctx: ContextoDemanda,
+): AgregadoDemanda {
+  exigirAtor(ator, "iniciar a Tentativa do ticket", "fabriquinha");
+  const { ticket_id, processo_id } = EntradaInicioDaTentativa.parse(entrada);
+  const ticket = ticketDaDemanda(ag, ticket_id);
+  if (!CICLO_DO_TICKET.estaEmAndamento(ticket.estado)) {
+    throw new ErroDeRegra(
+      `o ticket ${formatarTicketRef(ticket)} está ${ticket.estado} e não executa`,
+      "só se executa ticket aberto ou em execução",
+    );
+  }
+  return { ...ag, tentativas: comTentativaAberta(ag.tentativas, ticket, processo_id, ctx.agora) };
 }

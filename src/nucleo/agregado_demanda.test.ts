@@ -11,6 +11,7 @@ import {
 } from "./agregado_demanda.ts";
 import { AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { TipoEvidencia } from "./schemas.ts";
+import { Endereco } from "./item_de_trabalho.ts";
 import { TipoEvidenciaEtapa } from "./evidencia_etapa.ts";
 
 const em = "2026-01-01T00:00:00Z";
@@ -129,21 +130,30 @@ test("criada_por exige um externo com ferramenta Slug e sessão não vazia", () 
   assert.deepEqual(Demanda.parse(demanda()).criada_por, { tipo: "externo", ferramenta: "claude", sessao: "s1" });
 });
 
-test("devolucoes (0..2, padrão 0) e motivo_falha só em falhou, sem exigi-lo (CA-8, 10, 11)", () => {
-  assert.equal(TicketDemanda.parse(ticket()).devolucoes, 0);
-  assert.ok(!TicketDemanda.safeParse(ticket(1, { devolucoes: 3 })).success);
-  assert.ok(!TicketDemanda.safeParse(ticket(1, { devolucoes: -1 })).success);
-  assert.ok(AgregadoDemanda.safeParse(agregado({ tickets: [ticket(1, { estado: "falhou" })] })).success);
-  assert.ok(
-    AgregadoDemanda.safeParse(
-      agregado({ tickets: [ticket(1, { estado: "falhou", motivo_falha: "m", devolucoes: 2 })] }),
-    ).success,
+test("Tentativas pertencem à demanda e a um ticket existente; histórico independe do estado atual", () => {
+  assert.deepEqual(AgregadoDemanda.parse(agregado()).tentativas, []);
+  const tentativa = {
+    ticket: Endereco.doTicket("I-1", 1),
+    numero: 1,
+    inicio: em,
+    fim: em,
+    resultado: { tipo: "reprovacao", motivo: "m" },
+  };
+  for (const estado of ["aberto", "falhou", "cancelado"]) {
+    assert.ok(
+      AgregadoDemanda.safeParse(
+        agregado({
+          tickets: [ticket(1, { estado })],
+          tentativas: [tentativa],
+        }),
+      ).success,
+    );
+  }
+  recusa(
+    agregado({ tentativas: [{ ...tentativa, ticket: Endereco.doTicket("I-2", 1) }] }),
+    "não existe na demanda I-1",
   );
-  recusa(agregado({ tickets: [ticket(1, { motivo_falha: "m" })] }), "só tem motivo_falha quando falhou ou cancelado");
-  // cancelado preserva o motivo como histórico (cancelamento de ticket falho)
-  assert.ok(
-    AgregadoDemanda.safeParse(agregado({ tickets: [ticket(1, { estado: "cancelado", motivo_falha: "m" })] })).success,
-  );
+  recusa(agregado({ tentativas: [{ ...tentativa, ticket: Endereco.doTicket("I-1", 9) }] }), "não existe");
 });
 
 test("dono da evidência: demanda, rodada ou ticket, nunca rodada e ticket juntos (CA-10, CA-11)", () => {

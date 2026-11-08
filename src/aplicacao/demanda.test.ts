@@ -25,15 +25,17 @@ const banco = () => {
     b.exec(
       `INSERT INTO rodada VALUES ('I-1', ${String(r)}, 'r', 'implementar', '2026-01-01T00:00:00.000Z', 0, 'b${String(r)}')`,
     );
-  for (const [n, etapa, rodada, devolucoes] of [
+  for (const [n, etapa, rodada] of [
     [1, "planejar", "NULL", 0],
     [2, "implementar", "1", 1],
     [3, "encerrar_rodada", "1", 0],
     [4, "implementar", "2", 0],
     [5, "encerrar_rodada", "2", 0],
   ] as const)
-    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id, devolucoes)
-      VALUES ('I-1', ${String(n)}, '${etapa}', 'concluido', ${T}, ${rodada}, ${String(devolucoes)})`);
+    b.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id)
+      VALUES ('I-1', ${String(n)}, '${etapa}', 'concluido', ${T}, ${rodada})`);
+  b.exec(`INSERT INTO tentativa (demanda_id, ticket_id, numero, inicio, fim, resultado_tipo, motivo)
+    VALUES ('I-1', 2, 1, ${T}, ${T}, 'reprovacao', 'corrija o teste')`);
   return b;
 };
 
@@ -105,16 +107,21 @@ test("CA-2: cada etapa mostra execuções, falhas, devoluções e reprovações"
   decisao(b, 2, 1, "recusado", null);
   decisao(b, 1, 1, "recusado", null);
   decisao(b, 1, 2, "aprovado", null);
-  const { etapas, execucoes, falhas, devolucoes, reprovacoes } = metricasDaDemanda(b, "I-1").total;
+  const { etapas, execucoes, falhas, exigenciasDeAlteracao, reprovacoes } = metricasDaDemanda(b, "I-1").total;
   assert.deepEqual(
-    [etapas.planejar, etapas.implementar].map((e) => [e?.execucoes, e?.falhas, e?.devolucoes, e?.reprovacoes]),
+    [etapas.planejar, etapas.implementar].map((e) => [
+      e?.execucoes,
+      e?.falhas,
+      e?.exigenciasDeAlteracao,
+      e?.reprovacoes,
+    ]),
     [
       [1, 1, 0, 1],
       [2, 1, 1, 1],
     ],
   );
   assert.deepEqual(etapas.encerrar_rodada?.execucoes, 0);
-  assert.deepEqual([execucoes, falhas, devolucoes, reprovacoes], [3, 2, 1, 2]);
+  assert.deepEqual([execucoes, falhas, exigenciasDeAlteracao, reprovacoes], [3, 2, 1, 2]);
 });
 
 test("CA-3: rodadas mais o ticket sem rodada somam o total", () => {
@@ -128,7 +135,7 @@ test("CA-3: rodadas mais o ticket sem rodada somam o total", () => {
     m.rodadas.map((r) => r.rodadaId),
     [1, 2],
   );
-  for (const campo of ["execucoes", "falhas", "devolucoes", "reprovacoes"] as const)
+  for (const campo of ["execucoes", "falhas", "exigenciasDeAlteracao", "reprovacoes"] as const)
     assert.equal(
       m.rodadas.reduce((s, r) => s + r[campo], m.semRodada[campo]),
       m.total[campo],

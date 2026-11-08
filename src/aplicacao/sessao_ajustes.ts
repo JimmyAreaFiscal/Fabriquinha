@@ -36,7 +36,7 @@ interface Marco {
 const contexto = () => ({ agora: new Date().toISOString() });
 
 /** Fim da execução em curso por rodada; a conclusão da sessão espera por ele para restaurar depois do pi. */
-const fins = new Map<string, Promise<void>>();
+const fins = new Map<string, Promise<unknown>>();
 
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
@@ -100,7 +100,7 @@ function executar(
   ref: RefRodada,
   ticket: TicketDemanda,
   opcoes: Opcoes & Pick<OpcoesExecucaoDemanda, "retomada" | "mensagem">,
-): { id: string; fim: Promise<void> } {
+): ReturnType<typeof iniciarExecucaoDemanda> {
   const { id, fim } = iniciarExecucaoDemanda(banco, ticket, {
     ...opcoes,
     modo: "interativo",
@@ -120,7 +120,7 @@ export async function reprovarPRRodada(
   motivo: string,
   ator: Ator,
   opcoes: Opcoes,
-): Promise<{ id: string; fim: Promise<void> }> {
+): Promise<ReturnType<typeof iniciarExecucaoDemanda>> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const { ticket, pr } = prDaRodada(ag, ref);
   const entrada = { demanda_id: ref.demanda_id, rodada_id: ref.rodada_id, ticket_id: ticket.ticket_id, motivo };
