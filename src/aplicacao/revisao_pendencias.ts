@@ -4,7 +4,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { catalogoDaEtapa, type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_etapa.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { schemaDe, schemaDeEtapa, TipoEvidencia, type TipoSchemaEtapa } from "../nucleo/schemas.ts";
+import { schemaDoTipo, type TipoEvidencia } from "../nucleo/evidencia.ts";
 
 type Dados = Record<string, unknown>;
 interface Linha {
@@ -13,12 +13,10 @@ interface Linha {
 }
 const ALTA = new Set(["alta", "critica"]);
 
-/** `aprovada` do schema do tipo; os tipos sem regra binária ficam `undefined`. */
-function aprovadaDosDados(tipo: string, dados: Dados): boolean | undefined {
-  const legado = TipoEvidencia.safeParse(tipo);
-  // Nas revisões, todo tipo do catálogo fora de `TipoEvidencia` tem schema de etapa (testes_estresse, analise_seguranca).
-  const schema = legado.success ? schemaDe(legado.data) : schemaDeEtapa(tipo as TipoSchemaEtapa);
-  return schema.aprovada?.(dados);
+/** `aprovada` que o `veredito` do schema do tipo deriva; os tipos sem regra binária ficam `undefined`. */
+function aprovadaDosDados(tipo: TipoEvidencia, dados: Dados): boolean | undefined {
+  const veredito = schemaDoTipo(tipo).veredito?.(dados);
+  return veredito === undefined ? undefined : veredito === "atende";
 }
 
 /** O que reprovou a evidência, para a recusa dizer o que corrigir. */
@@ -58,7 +56,7 @@ export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void 
     if (produtor === undefined) continue; // tipo fora do catálogo da etapa não entra na conferência
     const dados = e.dados as Dados;
     if ((e.tipo === "testes_estresse" || e.tipo === "analise_seguranca") && dados.aplicavel === false) {
-      const resultado = schemaDeEtapa(e.tipo).dados.safeParse(dados);
+      const resultado = schemaDoTipo(e.tipo).dados.safeParse(dados);
       if (!resultado.success) {
         throw new ErroDeRegra(
           `a evidência ${e.tipo} está marcada como não se aplica sem justificativa`,

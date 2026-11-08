@@ -27,7 +27,7 @@ Um achado de severidade alta ou crítica reprova a revisão integral.
 - `ameacas`: pelo menos uma se `aplicavel` é true; cada uma com `descricao` e `mitigacao`.
 - `achados`: cada um com `descricao`, `severidade`, `arquivo` (opcional) e `recomendacao`.
 
-A Fabriquinha calcula a aprovação: nenhum achado `alta` ou `critica`. Não a informe.
+A Fabriquinha deriva o `veredito` dos dados: `atende` se nenhum achado é `alta` ou `critica`, `nao_atende` se algum é. Não o informe.
 Logs de texto podem ser anexados com `--arquivo`, sem obrigação.
 
 ```json

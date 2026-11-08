@@ -8,16 +8,9 @@ import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_deman
 import type { Ator } from "../../nucleo/ator.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
-import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
+import { schemaDoTipo } from "../../nucleo/evidencia.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../nucleo/tentativa.ts";
-import {
-  type SchemaEvidencia,
-  schemaDe,
-  schemaDeEtapa,
-  TipoEvidencia,
-  type TipoSchemaEtapa,
-} from "../../nucleo/schemas.ts";
 import { registrarCorrecoesSessao } from "../../nucleo/transicoes_rodada.ts";
 import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
 import { decidirGate } from "../../aplicacao/gates/decidir_gate.ts";
@@ -97,19 +90,6 @@ function demandaPropria(a: EscopoDoAgente, texto: string): void {
   }
 }
 
-const TIPOS_NOVOS = ["plano", "testes_estresse", "analise_seguranca"];
-
-/** Os tipos de produtor agente do catálogo das etapas: os únicos que o agente submete. */
-export const TIPOS_DA_ETAPA: readonly string[] = [
-  ...new Set(CATALOGO_ETAPAS.filter((i) => i.produtor === "agente").map((i) => i.tipo)),
-];
-
-export function schemaDoTipo(tipo: string): SchemaEvidencia | undefined {
-  const legado = TipoEvidencia.safeParse(tipo);
-  if (legado.success) return schemaDe(legado.data);
-  return TIPOS_NOVOS.includes(tipo) ? schemaDeEtapa(tipo as TipoSchemaEtapa) : undefined;
-}
-
 // O CLI segue mostrando o ticket sem `criado_por` e a decisão com `por` em texto (o tipo do Ator), como antes do Ator único.
 // O motivo do ticket que falhou vem da última Tentativa dele.
 const publico = (ticket: TicketDemanda, ag: AgregadoDemanda) => {
@@ -178,11 +158,11 @@ export const COMANDOS_DEMANDA: readonly ComandoDemanda[] = [
         }),
         tickets: ag.tickets.map((t) => ({
           ...publico(t, ag),
-          // Só o próprio ticket mostra evidências: o nome, quando foi e a `aprovada` que o schema do tipo deriva.
+          // Só o próprio ticket mostra evidências: o nome, quando foi e o `veredito` que o schema do tipo deriva.
           ...(t.ticket_id === agente.ticket_id && {
             evidencias: ag.evidencias
               .filter((e) => e.ticket_id === t.ticket_id)
-              .map((e) => ({ tipo: e.tipo, em: e.em, aprovada: schemaDoTipo(e.tipo)?.aprovada?.(e.dados) })),
+              .map((e) => ({ tipo: e.tipo, em: e.em, veredito: schemaDoTipo(e.tipo).veredito?.(e.dados) })),
           }),
         })),
       };

@@ -8,9 +8,9 @@ import type { ParseArgsOptionsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { TipoEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
+import { conferirQuantidadeENomes, schemaDoTipo } from "../../nucleo/evidencia.ts";
+import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { type SchemaEvidencia, schemaDe, schemaDeEtapa } from "../../nucleo/schemas.ts";
 import { guardarAnexos } from "../../aplicacao/evidencias/submissao.ts";
 import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
@@ -85,18 +85,13 @@ function visao(banco: DatabaseSync, id: string) {
   };
 }
 
-function tipoDe(texto: string): TipoEvidenciaDemanda {
-  const tipo = TipoEvidenciaDemanda.safeParse(texto);
-  if (!tipo.success) {
-    throw new ErroDeUso(
-      `${texto} não é evidência da demanda; os tipos são: ${TipoEvidenciaDemanda.options.join(", ")}`,
-    );
+function tipoDe(texto: string): TipoDaDemanda {
+  const tipo = TIPOS_DA_DEMANDA.find((t) => t === texto);
+  if (tipo === undefined) {
+    throw new ErroDeUso(`${texto} não é evidência da demanda; os tipos são: ${TIPOS_DA_DEMANDA.join(", ")}`);
   }
-  return tipo.data;
+  return tipo;
 }
-
-const schemaDoTipo = (tipo: TipoEvidenciaDemanda): SchemaEvidencia =>
-  tipo === "custos_realizados" ? schemaDeEtapa(tipo) : schemaDe(tipo);
 
 export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
   {
@@ -169,14 +164,10 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
         fora: "da pasta do comando",
         copie: `a pasta do comando (${pasta})`,
       };
-      const guardados = guardarAnexos(
-        c.banco,
-        (c.op.arquivo ?? []) as string[],
-        tipo,
-        schemaDoTipo(tipo).arquivos,
-        origens,
-        () => undefined,
-      );
+      const caminhos = (c.op.arquivo ?? []) as string[];
+      // A demanda externa ainda não passa pelo Avaliador: quantidade e nomes seguem conferidos aqui.
+      conferirQuantidadeENomes(tipo, caminhos, schemaDoTipo(tipo).arquivos);
+      const guardados = guardarAnexos(c.banco, caminhos, tipo, schemaDoTipo(tipo).arquivos, origens);
       const arquivos = guardados.map((a) => ({
         nome: a.nome,
         mime: a.mime,

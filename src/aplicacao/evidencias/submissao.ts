@@ -1,4 +1,4 @@
-// Os anexos de uma evidência (F3 §5, passos 4 a 6): quantidade, nome, origem, classe e limite de cada arquivo, e a guarda.
+// A guarda dos anexos de uma evidência (F3 §5, passos 4 e 6): origem, classe e limite de cada arquivo, e a guarda.
 import { closeSync, constants, fstatSync, openSync, readlinkSync, readSync } from "node:fs";
 import { basename, relative, sep } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -131,9 +131,9 @@ function abrir(caminho: string, origens: Origens): number {
 }
 
 /**
- * F3 §5, passos 4 a 6: quantidade, nomes, origem, classe e limite de cada arquivo (4); `temClasse` e as regras
- * cruzadas do tipo, em `cruzar` (5); e só então a guarda (6). A classe é conferida na cópia privada que
- * `guardarArquivos` faz, e não no arquivo do agente: o que fica guardado é o que foi validado.
+ * Origem, classe e limite de cada arquivo, e a guarda; quantidade, nomes e regras cruzadas são do
+ * `AvaliadorDeEvidencia`, que roda antes. A classe é conferida na cópia privada que `guardarArquivos` faz, e não no arquivo do
+ * agente: o que fica guardado é o que foi validado.
  */
 export function guardarAnexos(
   banco: DatabaseSync,
@@ -141,26 +141,7 @@ export function guardarAnexos(
   tipo: string,
   regra: RegraArquivos,
   origens: Origens,
-  cruzar: () => void,
 ): ArquivoEvidencia[] {
-  if (caminhos.length < regra.min) {
-    throw new ErroDeRegra(
-      `${tipo} precisa de pelo menos ${String(regra.min)} arquivo(s), e veio ${String(caminhos.length)}`,
-      "anexe com --arquivo <caminho>",
-    );
-  }
-  if (regra.max !== undefined && caminhos.length > regra.max) {
-    throw new ErroDeRegra(
-      `${tipo} aceita no máximo ${String(regra.max)} arquivo(s), e vieram ${String(caminhos.length)}`,
-      "submeta sem os excedentes",
-    );
-  }
-  const nomes = caminhos.map((caminho) => basename(caminho));
-  const longo = nomes.find((nome) => nome.length > 200);
-  if (longo) throw new ErroDeRegra(`o nome ${longo} passa de 200 caracteres`, "renomeie o arquivo");
-  const repetido = nomes.find((nome, i) => nomes.indexOf(nome) !== i);
-  if (repetido) throw new ErroDeRegra(`dois anexos se chamam ${repetido}`, "renomeie um deles");
-
   const abertos: { fd: number; caminho: string; nome: string }[] = [];
   const classes: Classe[] = [];
   try {
@@ -186,13 +167,12 @@ export function guardarAnexos(
         return { nome, mime };
       },
       MAIOR,
-      // 5: as regras do conjunto, depois de classificar o último e antes de guardar qualquer um.
+      // A regra do conjunto, depois de classificar o último e antes de guardar qualquer um.
       () => {
         const exigida = regra.temClasse;
         if (exigida && !classes.some((c) => exigida.classes.includes(c))) {
           throw new ErroDeRegra(exigida.mensagem, `anexe também um arquivo ${exigida.classes.join(" ou ")}`);
         }
-        cruzar();
       },
     );
   } finally {

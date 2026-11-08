@@ -19,7 +19,7 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
-import { schemaDe, type TipoEvidencia } from "../../nucleo/schemas.ts";
+import { schemaDoTipo, type TipoEvidencia } from "../../nucleo/evidencia.ts";
 import { guardarAnexos } from "./submissao.ts";
 
 const abrirBancoTemporario = fabricaDeBancosTemporarios();
@@ -64,21 +64,14 @@ function cenario(): Cenario {
 }
 
 /** Os anexos de `tipo` guardados como a submissão da evidência os guarda, da worktree ou da saída. */
-const submeter = (c: Cenario, tipo: TipoEvidencia, caminhos: readonly string[], cruzar = () => undefined) =>
+const submeter = (c: Cenario, tipo: TipoEvidencia, caminhos: readonly string[]) =>
   Promise.resolve().then(() =>
-    guardarAnexos(
-      c.banco,
-      caminhos,
-      tipo,
-      schemaDe(tipo).arquivos,
-      {
-        worktree: c.worktree,
-        saida: c.saida,
-        fora: "da worktree da demanda e do diretório de saída",
-        copie: `$FABRIQUINHA_SAIDA (${c.saida})`,
-      },
-      cruzar,
-    ),
+    guardarAnexos(c.banco, caminhos, tipo, schemaDoTipo(tipo).arquivos, {
+      worktree: c.worktree,
+      saida: c.saida,
+      fora: "da worktree da demanda e do diretório de saída",
+      copie: `$FABRIQUINHA_SAIDA (${c.saida})`,
+    }),
   );
 
 const sha = (conteudo: string | Buffer) => createHash("sha256").update(conteudo).digest("hex");
@@ -90,7 +83,7 @@ async function recusa(c: Cenario, trabalho: () => Promise<unknown>, classe: type
   assert.deepEqual(existsSync(arquivos) ? readdirSync(arquivos) : [], []);
 }
 
-test("guarda os anexos por conteúdo, com nome, classe e tamanho, depois de cruzar", async () => {
+test("guarda os anexos por conteúdo, com nome, classe e tamanho", async () => {
   const c = cenario();
   const video = c.arquivo(c.saida, "tela.webm", WEBM);
   const log = c.arquivo(c.worktree, "erro.log", "Error: timeout\n");
@@ -99,34 +92,6 @@ test("guarda os anexos por conteúdo, com nome, classe e tamanho, depois de cruz
     { nome: "erro.log", mime: "text/plain; charset=utf-8", sha256: sha("Error: timeout\n"), bytes: 15 },
   ]);
   assert.deepEqual(readFileSync(caminhoArquivo(c.banco, sha(WEBM))), WEBM);
-  // A regra cruzada que recusa vem antes da guarda: nada fica guardado.
-  const outro = c.arquivo(c.saida, "outro.webm", MP4);
-  const cruzamento = new ErroDeRegra("o cruzamento recusou", "corrija");
-  await assert.rejects(
-    submeter(c, "comportamento", [outro], () => {
-      throw cruzamento;
-    }),
-    cruzamento,
-  );
-  assert.equal(existsSync(caminhoArquivo(c.banco, sha(MP4))), false);
-  c.banco.close();
-});
-
-test("criterios_aceite não aceita arquivo; comportamento exige pelo menos um", async () => {
-  const c = cenario();
-  await recusa(
-    c,
-    () => submeter(c, "criterios_aceite", [c.arquivo(c.worktree, "x.txt", "x")]),
-    ErroDeRegra,
-    "criterios_aceite aceita no máximo 0 arquivo(s), e vieram 1 (submeta sem os excedentes)",
-  );
-  await recusa(
-    c,
-    () => submeter(c, "comportamento", []),
-    ErroDeRegra,
-    "comportamento precisa de pelo menos 1 arquivo(s), e veio 0 (anexe com --arquivo <caminho>)",
-  );
-  assert.deepEqual(await submeter(c, "criterios_aceite", []), []);
   c.banco.close();
 });
 
@@ -349,26 +314,6 @@ test("classe pelos bytes iniciais, não pela extensão, e o limite de cada class
       ["no-limite.txt", "text/plain; charset=utf-8", 5 * MiB],
       ["vazio.txt", "text/plain; charset=utf-8", 0],
     ],
-  );
-  c.banco.close();
-});
-
-test("nomes de anexo: únicos na submissão e de até 200 caracteres", async () => {
-  const c = cenario();
-  const a = c.arquivo(c.worktree, "passos.txt", "1");
-  const b = c.arquivo(c.saida, "passos.txt", "2");
-  await recusa(
-    c,
-    () => submeter(c, "comportamento", [a, b]),
-    ErroDeRegra,
-    "dois anexos se chamam passos.txt (renomeie um deles)",
-  );
-  const longo = "a".repeat(201);
-  await recusa(
-    c,
-    () => submeter(c, "comportamento", [c.arquivo(c.saida, longo, "1")]),
-    ErroDeRegra,
-    `o nome ${longo} passa de 200 caracteres (renomeie o arquivo)`,
   );
   c.banco.close();
 });

@@ -58,6 +58,8 @@ const MOTIVO_CORRECAO_MUDA_ARQUIVO =
 const MOTIVO_ESTADO_COM_NOME_DA_ETAPA =
   "I-267.R1: fase e status viram estado, com o nome da Etapa corrente (fase desenvolvimento vira estado implementar)";
 const MOTIVO_GATE_REPROVA = "I-272: o vocabulário do gate é aprovar ou reprovar";
+const MOTIVO_VEREDITO_DO_PARECER =
+  "I-277: o parecer fala em veredito (atende ou nao_atende), derivado dos dados pela Fabriquinha";
 const MOTIVO_ETAPA_RENOMEADA = "I-267.R1: a etapa sessao_em_aberto passa a se chamar ajustar_resultado";
 /** O arquivo da foto da base que passa a ter outro nome na foto atual. */
 const ARQUIVOS_RENOMEADOS: Readonly<Record<string, string>> = {
@@ -276,6 +278,30 @@ const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
       ]),
     ] as const
   ).map(([arquivo, de, para]) => ({ arquivo, de, para, motivo: MOTIVO_BRANCH_BASE_COM_NOME_DO_CAMPO })),
+  ...(
+    [
+      [
+        "artefato-testes-estresse",
+        "A Fabriquinha calcula a aprovação: nenhum cenário `quebrou`. Não a informe.",
+        "A Fabriquinha deriva o `veredito` dos dados: `atende` se nenhum cenário `quebrou`, `nao_atende` se algum quebrou. Não o informe.",
+      ],
+      [
+        "artefato-analise-seguranca",
+        "A Fabriquinha calcula a aprovação: nenhum achado `alta` ou `critica`. Não a informe.",
+        "A Fabriquinha deriva o `veredito` dos dados: `atende` se nenhum achado é `alta` ou `critica`, `nao_atende` se algum é. Não o informe.",
+      ],
+      [
+        "artefato-comprovacao-criterios",
+        "um anexo pode provar mais de um critério.\n",
+        "um anexo pode provar mais de um critério.\n\nA Fabriquinha deriva o `veredito` dos dados: `atende` se todos os critérios estão atendidos, `nao_atende` se algum não está. Não o informe.\n",
+      ],
+    ] as const
+  ).map(([skill, de, para]) => ({
+    arquivo: `textos/pacote-pi/skills/${skill}/SKILL.md.txt`,
+    de,
+    para,
+    motivo: MOTIVO_VEREDITO_DO_PARECER,
+  })),
 ];
 
 function listarArquivos(pasta: string): string[] {

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { TipoEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
+import { TipoEvidencia } from "../src/nucleo/evidencia.ts";
 import { CATALOGO_ETAPAS } from "../src/nucleo/evidencia_etapa.ts";
 import { PACOTE, skillDoTipo } from "../src/infra/agente/pi.ts";
 
@@ -20,11 +20,15 @@ const SECOES = ["Para que serve", "Como produzir", "Estrutura", "Antes de submet
 const SEM_SKILL: readonly string[] = ["custos_realizados"];
 /** Skills do fluxo externo (CLI da ferramenta de fora): não são de evidência de agente e têm forma própria. */
 const EXTERNAS = ["demanda-externa"];
-/** As evidências de produtor agente das etapas e as da demanda, que a ferramenta de fora registra. */
-const DE_ARTEFATO = new Set([
-  ...CATALOGO_ETAPAS.filter((c) => c.produtor === "agente").map((c) => skillDoTipo(c.tipo)),
-  ...TipoEvidenciaDemanda.options.filter((tipo) => !SEM_SKILL.includes(tipo)).map(skillDoTipo),
-]);
+/** As evidências de produtor agente das etapas e as da demanda (produtor externo), que a ferramenta de fora registra. */
+const DE_ARTEFATO = new Set(
+  TipoEvidencia.options
+    .filter(
+      (tipo) =>
+        CATALOGO_ETAPAS.some((c) => c.tipo === tipo && c.produtor !== "fabriquinha") && !SEM_SKILL.includes(tipo),
+    )
+    .map(skillDoTipo),
+);
 
 /** O valor de `chave` no frontmatter, numa linha só, como as skills do pacote o escrevem. */
 const campo = (frontmatter: string, chave: string): string | undefined =>
