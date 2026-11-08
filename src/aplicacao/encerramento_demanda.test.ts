@@ -150,7 +150,10 @@ async function cenario({
     reservar: () =>
       comDemanda(banco, D, (a) => ({
         ...a,
-        tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const } : t)),
+        // o Auditor ou a retomada reabrem o ticket falho, e reabrir descarta o motivo da falha
+        tickets: a.tickets.map((t) =>
+          t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const, motivo_falha: undefined } : t,
+        ),
       })),
   };
 }
@@ -316,6 +319,7 @@ test("CA-4: check final falho falha o ticket em check_final, sem integração, l
   assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(ag.encerramento?.falha?.etapa, "check_final");
   assert.match(ag.encerramento.falha.motivo, /ci/);
+  assert.equal(c.ticket()?.motivo_falha, ag.encerramento.falha.motivo);
   assert.equal(ag.encerramento.integracao, undefined);
   assert.equal(ag.demanda.estado, "encerrar_demanda");
   assert.deepEqual(merges(), []);
@@ -399,6 +403,7 @@ test("PR final fechado sem merge falha o ticket em integracao; reaberto e integr
   assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(fechado.encerramento?.falha?.etapa, "integracao");
   assert.match(fechado.encerramento.falha.motivo, /fechado sem merge/);
+  assert.equal(c.ticket()?.motivo_falha, fechado.encerramento.falha.motivo);
   assert.equal(fechado.encerramento.integracao, undefined);
   assert.equal(existsSync(c.demanda), true);
 
@@ -445,10 +450,7 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
 
   // O Auditor reabre; o agendador reserva.
   rodarGit(c.repo, "worktree", "unlock", c.rodada);
-  comDemanda(c.banco, D, (a) => ({
-    ...a,
-    tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const } : t)),
-  }));
+  c.reservar();
   const chamadas = hospedagem.chamadas().length;
 
   const ag = await conduzirEncerramentoDemanda(c.banco, D);

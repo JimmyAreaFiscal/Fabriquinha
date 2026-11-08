@@ -236,6 +236,7 @@ test("CA-6: falha do check final falha o ticket sem integrar, limpar nem abrir i
   assert.equal(novo.encerramento?.integracao, undefined);
   assert.deepEqual(novo.encerramento?.limpeza_pendente, []);
   assert.deepEqual(novo.encerramento.falha, { etapa: "check_final", motivo: "x" });
+  assert.equal(novo.tickets.find((t) => t.ticket_id === 2)?.motivo_falha, "x", "a retomada automática lê o motivo");
   assert.deepEqual(registrarFalhaEncerramento(novo, falhaEnt(), FABRIQUINHA, c), novo);
   regra(() => registrarFalhaEncerramento(novo, falhaEnt({ motivo: "outro" }), FABRIQUINHA, c));
 });
