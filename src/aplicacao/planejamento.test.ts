@@ -16,6 +16,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
+import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import * as servico from "./planejamento.ts";
 import {
   aprovarPlanejamentoDemanda,
@@ -409,4 +410,21 @@ test("aprovar fora do gate recusa antes de tocar o git", async () => {
   const { c, banco } = cenario();
   await assert.rejects(aprovarPlanejamentoDemanda(banco, "I-1", {}), /só no estado gate_planejamento/);
   assert.equal(existsSync(join(c.raiz, "worktrees")), false);
+});
+
+test("foto do retorno ao agente no planejamento: devolução pela reprovação", async () => {
+  const { c, banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  submeterPlanoDoAgente(banco, "I-1", plano());
+  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  conferirPromptComFoto(prompts().at(-1) ?? "", c.raiz, "planejamento_devolucao");
+});
+
+test("foto do retorno ao agente no planejamento: reabertura pela instrução do Auditor", async () => {
+  const { c, banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  banco.exec("UPDATE ticket_demanda SET estado = 'aberto', instrucao = 'Refaça o plano com até 30 arquivos'");
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  conferirPromptComFoto(prompts().at(-1) ?? "", c.raiz, "planejamento_reabertura");
 });

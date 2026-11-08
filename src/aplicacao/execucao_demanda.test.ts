@@ -12,6 +12,8 @@ import { setTimeout as dormir } from "node:timers/promises";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import type { ConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import { ErroDeInexistente, ErroDeRegra } from "../nucleo/erros.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { assinar } from "./gerente.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -265,11 +267,13 @@ test("CA-7: devolução e reabertura levam o motivo ao prompt", async () => {
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
   await iniciarExecucaoDemanda(banco, ref(1), {
     limiteMin: 1,
-    retomada: { tipo: "devolucao", motivo: "testes falharam" },
+    retomada: montarRetornoAoAgente(
+      tentativaAnteriorEmMemoria(Endereco.doTicket("I-1", 1), { motivoDaReprovacao: "testes falharam" }),
+    ),
   }).fim;
   await iniciarExecucaoDemanda(banco, ref(1), {
     limiteMin: 1,
-    retomada: { tipo: "reabertura", motivo: "faltou X" },
+    retomada: montarRetornoAoAgente(tentativaAnteriorEmMemoria(Endereco.doTicket("I-1", 1), { instrucao: "faltou X" })),
   }).fim;
   const [primeiro, devolucao, reabertura] = registro()
     .filter((r) => r.comando?.type === "prompt")

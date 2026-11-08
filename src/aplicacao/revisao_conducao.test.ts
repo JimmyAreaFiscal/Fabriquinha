@@ -6,6 +6,7 @@ import { AUDITOR } from "../nucleo/ator.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
+import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { conduzirRevisao } from "./revisao_conducao.ts";
 import { cenarioRevisao, REF_GLOBAL, REF_RODADA } from "../../apoio-testes/cenarios_de_demanda.ts";
 
@@ -115,4 +116,16 @@ test("ticket inexistente é recusado", async () => {
     conduzirRevisao(banco, { demanda_id: "I-1", ticket_id: 99 }, { limiteMin: 1 }),
     /I-1.T99 não existe/,
   );
+});
+
+test("foto do retorno ao agente na revisão da conduzida: reabertura", async () => {
+  const { c, banco, piFalso } = await cenarioRevisao();
+  piFalso.roteirizar([{ parada: "error", erro: "limite de uso" }]);
+  await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 });
+  comDemanda(banco, "I-1", (ag) =>
+    reabrirTicket(ag, { ticket_id: 2, instrucao: "refaça com atenção" }, AUDITOR, { agora: new Date().toISOString() }),
+  );
+  piFalso.roteirizar([{}]);
+  await conduzirRevisao(banco, REF_RODADA, { limiteMin: 1 });
+  conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, "revisao_reabertura");
 });

@@ -6,6 +6,7 @@ import { catalogoDaEtapa } from "../nucleo/evidencia_etapa.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import type { EtapaTicket } from "../nucleo/primitivos.ts";
 import { impactoExigeReversao } from "../nucleo/schemas.ts";
+import type { RetornoAoAgente } from "../nucleo/tentativa.ts";
 import type { AnexoDaDemanda } from "../armazenamento/evidencia_demanda.ts";
 import { skillsDaEtapaDemanda } from "./pi_demanda.ts";
 
@@ -18,7 +19,7 @@ export interface ContextoDemanda {
   projeto: { nome: string; branch_base: string };
   worktree: string;
   saida: string;
-  retomada?: { tipo: "devolucao" | "reabertura"; motivo: string };
+  retomada?: RetornoAoAgente;
   /** Os anexos das evidências da demanda: a seção da etapa dá o caminho dos que o agente precisa ler. */
   anexos: readonly AnexoNoDisco[];
   /** As perguntas respondidas na sessão de cada ticket (por `ticket_id`); a seção de revisões anteriores as lista. */
@@ -330,17 +331,7 @@ export function montarPromptDemanda(c: ContextoDemanda): string {
       ].join("\n\n"),
     ),
     ...(secaoDaEtapa ? [secaoDaEtapa(c)] : []),
-    ...(retomada
-      ? [
-          secao(
-            retomada.tipo === "devolucao" ? "Devolução" : "Reabertura",
-            (retomada.tipo === "devolucao"
-              ? `O ticket ${endTicket} foi devolvido a você: a entrega anterior não passou. Corrija o que o motivo aponta e não refaça o resto.`
-              : `O Auditor reabriu o ticket ${endTicket}. Continue de onde a entrega anterior parou e atenda ao motivo.`) +
-              `\n\nMotivo: ${retomada.motivo}`,
-          ),
-        ]
-      : []),
+    ...(retomada ? [secao(retomada.titulo, retomada.texto)] : []),
     modo.trim() + "\n",
     SECAO_LEITURA_ECONOMICA,
     secao(

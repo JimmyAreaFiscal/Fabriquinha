@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { EtapaTicket } from "../nucleo/primitivos.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { montarPromptDemanda } from "./prompt_demanda.ts";
 
 const AGORA = "2026-10-11T12:00:00.000Z";
@@ -53,6 +55,10 @@ const ticket = (etapa: string, campos: Partial<TicketDemanda> = {}) =>
     ...campos,
   }) as TicketDemanda;
 const base = { ag, projeto: { nome: "loja", branch_base: "main" }, worktree: "/w", saida: "/s", anexos: [] };
+const devolvido = (motivoDaReprovacao: string) =>
+  montarRetornoAoAgente(tentativaAnteriorEmMemoria(Endereco.doTicket("I-1", 1), { motivoDaReprovacao }));
+const reaberto = (instrucao: string) =>
+  montarRetornoAoAgente(tentativaAnteriorEmMemoria(Endereco.doTicket("I-1", 1), { instrucao }));
 const montar = (
   etapa: string,
   campos: Partial<TicketDemanda> = {},
@@ -168,14 +174,8 @@ test("planejar é interativa e permite perguntar ao Auditor (CA-11)", () => {
 });
 
 test("devolução e reabertura trazem o motivo (CA-7)", () => {
-  assert.match(
-    montar("implementar", {}, { tipo: "devolucao", motivo: "testes falharam" }),
-    /## Devolução[\s\S]*Motivo: testes falharam/,
-  );
-  assert.match(
-    montar("implementar", {}, { tipo: "reabertura", motivo: "faltou X" }),
-    /## Reabertura[\s\S]*Motivo: faltou X/,
-  );
+  assert.match(montar("implementar", {}, devolvido("testes falharam")), /## Devolução[\s\S]*Motivo: testes falharam/);
+  assert.match(montar("implementar", {}, reaberto("faltou X")), /## Reabertura[\s\S]*Motivo: faltou X/);
   assert.ok(!montar("implementar").includes("Motivo:"));
 });
 
@@ -183,7 +183,7 @@ test("o ticket devolvido por falta de alteração traz o motivo no prompt (I-295
   const motivo =
     "o ticket I-1.T5 terminou sem alteração na worktree e não gera commit vazio: faça nos arquivos da worktree a correção que o ticket pede";
   assert.match(
-    montar("implementar", {}, { tipo: "devolucao", motivo }),
+    montar("implementar", {}, devolvido(motivo)),
     /## Devolução[\s\S]*Motivo: .*terminou sem alteração na worktree/,
   );
 });
