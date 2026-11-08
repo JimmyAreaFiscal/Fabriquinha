@@ -46,8 +46,8 @@ function semear(raiz: string): void {
      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
        ('I-1', 1, 'planejar', 'concluido', '${fim1}'),
        ('I-2', 1, 'planejar', 'concluido', '${fim2}');
-     INSERT INTO sessao VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-2', 1, 'autonomo', 'c2');
-     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, modelo_provedor, modelo_nome) VALUES
+     INSERT INTO trabalho_agentico VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-2', 1, 'autonomo', 'c2');
+     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, modelo_provedor, modelo_nome) VALUES
        ('x1', '${S1}', '${instante(27)}', '${fim1}', 0, 'anthropic', 'claude-opus-5-5'),
        ('x2', '${S2}', '${instante(26 * 60 + 30)}', '${fim2}', 1, NULL, NULL);`,
   );
@@ -136,8 +136,8 @@ test("o endereço do ticket fica inteiro, sem encostar no título, a 1440 e 375 
      INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
        ('I-1', 1, 'planejar', 'concluido', '${fim}'),
        ('I-247', 18, 'implementar', 'concluido', '${fim}');
-     INSERT INTO sessao VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-247', 18, 'autonomo', 'c2');
-     INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES
+     INSERT INTO trabalho_agentico VALUES ('${S1}', 'I-1', 1, 'autonomo', 'c1'), ('${S2}', 'I-247', 18, 'autonomo', 'c2');
+     INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES
        ('x1', '${S1}', '${instante(20)}', '${fim}', 0),
        ('x2', '${S2}', '${instante(10)}', '${fim}', 0);`,
   );

@@ -13,7 +13,7 @@ import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despac
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { gravarProjeto, projetoExistente } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
-import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, submeterPlanoDoAgente } from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
@@ -58,7 +58,7 @@ async function ciclaPlanejamentos(c: Cenario, ids: string[]): Promise<number[]> 
   await esperar(() => pi.prompts().length === antes + ids.length, "o pi receber o prompt de cada planejamento");
   for (const id of ids) interromperExecucaoDemanda(c.banco, { demanda_id: id, ticket_id: PLANEJAR });
   await Promise.all(fins);
-  return ids.map((id) => carregarSessoesDoTicket(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
+  return ids.map((id) => carregarTrabalhosDoTicket(c.banco, { demanda_id: id, ticket_id: PLANEJAR }).execucoes.length);
 }
 
 const etapasEStatus = (c: Cenario, id: string) => demanda(c, id).tickets.map((t) => [t.etapa, t.estado]);
@@ -77,8 +77,8 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   const id = await demandaAprovada(c);
   const ref = { demanda_id: id, ticket_id: PLANEJAR };
   await ciclaPlanejamentos(c, [id]);
-  const [sessao] = carregarSessoesDoTicket(c.banco, ref).sessoes;
-  assert.equal(carregarSessoesDoTicket(c.banco, ref).sessoes.length, 1);
+  const [sessao] = carregarTrabalhosDoTicket(c.banco, ref).sessoes;
+  assert.equal(carregarTrabalhosDoTicket(c.banco, ref).sessoes.length, 1);
 
   // O plano vai ao gate: o agendador não despacha nada e nenhuma rodada nasce.
   submeterPlanoDoAgente(c.banco, id, plano(id, "v1"), agente(1));
@@ -99,10 +99,10 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   assert.deepEqual(await ciclaPlanejamentos(c, [id]), [2]);
 
   // Mesma sessão (e conversa) retomada com o motivo; o ticket de planejamento é o mesmo, sem outro `planejar`.
-  const estado = carregarSessoesDoTicket(c.banco, ref);
+  const estado = carregarTrabalhosDoTicket(c.banco, ref);
   assert.deepEqual(estado.sessoes, [sessao]);
   assert.deepEqual(
-    estado.execucoes.map((e) => e.sessao_id),
+    estado.execucoes.map((e) => e.trabalho_id),
     [sessao?.id, sessao?.id],
   );
   assert.match(pi.prompts().at(-1)?.prompt ?? "", /Motivo: faltam critérios na rodada 1/);

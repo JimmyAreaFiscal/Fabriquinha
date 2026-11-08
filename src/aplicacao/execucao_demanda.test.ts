@@ -25,8 +25,8 @@ import { registrarProjeto } from "./projeto/cadastro.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { criarSessao, iniciarExecucao } from "../nucleo/sessoes.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
+import { criarTrabalho, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
 import {
@@ -138,7 +138,7 @@ async function cenario({ etapas = [], semWorktree, preparacao = "true" }: Opcoes
     piFalso,
     /** O que o pi falso anotou, de todas as execuções. */
     registro: () => piFalso.registro(),
-    sessoes: (ticket_id: number) => carregarSessoesDoTicket(banco, { demanda_id: "I-1", ticket_id }),
+    sessoes: (ticket_id: number) => carregarTrabalhosDoTicket(banco, { demanda_id: "I-1", ticket_id }),
   };
 }
 
@@ -159,7 +159,7 @@ test("sessão nova explícita não retoma a anterior; commits e anexos gravados 
   await iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1 }).fim;
   await iniciarExecucaoDemanda(banco, ref(3), { limiteMin: 1, iniciarEmSessaoNova: true }).fim;
   assert.equal(sessoes(3).sessoes.length, 2);
-  assert.notEqual(sessoes(3).execucoes[0]?.sessao_id, sessoes(3).execucoes[1]?.sessao_id);
+  assert.notEqual(sessoes(3).execucoes[0]?.trabalho_id, sessoes(3).execucoes[1]?.trabalho_id);
   assert.ok(
     registro()
       .filter((entrada) => entrada.comando?.type === "prompt")
@@ -205,7 +205,7 @@ test("CA-2: retomar o ticket usa a mesma sessão e passa o identificador ao pi",
   assert.equal(ss.length, 1);
   assert.equal(ss[0]?.modo, "autonomo"); // o modo é o da sessão
   assert.deepEqual(
-    execucoes.map((e) => [e.sessao_id, e.fim !== null]),
+    execucoes.map((e) => [e.trabalho_id, e.fim !== null]),
     [
       [ss[0].id, true],
       [ss[0].id, true],
@@ -466,11 +466,11 @@ test("o ouvinte da sessão recebe `estado` depois do fim gravado, no fim normal 
   parar();
   // Órfã: aberta sem condutor, a interrupção avisa depois de encerrar.
   const orfa = await cenario();
-  comSessoesDoTicket(orfa.banco, ref(2), (estado) => {
+  comTrabalhosDoTicket(orfa.banco, ref(2), (estado) => {
     const s = { ...ref(2), id: "s-aviso", modo: "autonomo" as const, conversa_referencia: "s-aviso" };
-    const sessoesNovas = criarSessao(estado.sessoes, s);
-    const execucao = { id: "e-aviso", sessao_id: "s-aviso", inicio: em, falha: false };
-    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+    const sessoesNovas = criarTrabalho(estado.sessoes, s);
+    const execucao = { id: "e-aviso", trabalho_id: "s-aviso", inicio: em, falha: false };
+    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
   });
   let aberta: boolean | undefined;
   assinar("s-aviso", (e) => {
@@ -496,11 +496,11 @@ test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrad
   const filho = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
   const pgid = filho.pid ?? 0;
   const morreu = new Promise((r) => filho.on("exit", r));
-  comSessoesDoTicket(banco, ref(1), (estado) => {
+  comTrabalhosDoTicket(banco, ref(1), (estado) => {
     const sessao = { ...ref(1), id: "s-orfa", modo: "autonomo" as const, conversa_referencia: "s-orfa" };
-    const sessoesNovas = criarSessao(estado.sessoes, sessao);
-    const execucao = { id: "e-orfa", sessao_id: "s-orfa", inicio: em, falha: false, grupo_processo: pgid };
-    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+    const sessoesNovas = criarTrabalho(estado.sessoes, sessao);
+    const execucao = { id: "e-orfa", trabalho_id: "s-orfa", inicio: em, falha: false, grupo_processo: pgid };
+    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
   });
   interromperExecucaoDemanda(banco, ref(1));
   await morreu;
@@ -525,17 +525,17 @@ test("CA-10, CA-14: reinício mata o grupo gravado e falha as abertas (com ou se
   const filho = spawn("sleep", ["30"], { detached: true, stdio: "ignore" });
   const morreu = new Promise((r) => filho.on("exit", r));
   const abrirOrfa = (ticket: number, id: string, grupo_processo?: number) =>
-    comSessoesDoTicket(banco, ref(ticket), (estado) => {
+    comTrabalhosDoTicket(banco, ref(ticket), (estado) => {
       const sessao = { ...ref(ticket), id: `s-${id}`, modo: "autonomo" as const, conversa_referencia: id };
-      const sessoesNovas = criarSessao(estado.sessoes, sessao);
+      const sessoesNovas = criarTrabalho(estado.sessoes, sessao);
       const execucao = {
         id,
-        sessao_id: sessao.id,
+        trabalho_id: sessao.id,
         inicio: em,
         falha: false,
         ...(grupo_processo && { grupo_processo }),
       };
-      return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+      return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
     });
   abrirOrfa(1, "e-com-grupo", filho.pid);
   abrirOrfa(2, "e-sem-grupo");
@@ -634,11 +634,11 @@ test("interrupção do Auditor e reinício falham o ticket em execução", async
   const { banco } = await cenario();
   for (const t of [1, 2]) emExecucao(banco, t);
   const abrirOrfa = (ticket: number, id: string) =>
-    comSessoesDoTicket(banco, ref(ticket), (estado) => {
+    comTrabalhosDoTicket(banco, ref(ticket), (estado) => {
       const sessao = { ...ref(ticket), id: `s-${id}`, modo: "autonomo" as const, conversa_referencia: id };
-      const sessoesNovas = criarSessao(estado.sessoes, sessao);
-      const execucao = { id, sessao_id: sessao.id, inicio: em, falha: false };
-      return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+      const sessoesNovas = criarTrabalho(estado.sessoes, sessao);
+      const execucao = { id, trabalho_id: sessao.id, inicio: em, falha: false };
+      return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
     });
   abrirOrfa(1, "e1");
   abrirOrfa(2, "e2");
@@ -678,11 +678,11 @@ test("CA-12: reinício falha o planejar com execução aberta, com a demanda em 
   const { banco } = await cenario();
   banco.exec("UPDATE demanda SET estado = 'planejar' WHERE id = 'I-1'");
   emExecucao(banco, 3);
-  comSessoesDoTicket(banco, ref(3), (estado) => {
+  comTrabalhosDoTicket(banco, ref(3), (estado) => {
     const sessao = { ...ref(3), id: "s-p", modo: "autonomo" as const, conversa_referencia: "p" };
-    const sessoesNovas = criarSessao(estado.sessoes, sessao);
-    const execucao = { id: "p", sessao_id: sessao.id, inicio: em, falha: false };
-    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarExecucao(sessoesNovas, estado.execucoes, execucao) };
+    const sessoesNovas = criarTrabalho(estado.sessoes, sessao);
+    const execucao = { id: "p", trabalho_id: sessao.id, inicio: em, falha: false };
+    return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
   });
   recuperarExecucoesDemanda(banco);
   assert.equal(statusDe(banco, 3)?.estado, "falhou");
@@ -711,7 +711,7 @@ test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em
 });
 
 /** Espera o pi da execução subir e devolve o grupo dele. */
-async function grupoDoPi(sessoes: (t: number) => ReturnType<typeof carregarSessoesDoTicket>, ticket: number) {
+async function grupoDoPi(sessoes: (t: number) => ReturnType<typeof carregarTrabalhosDoTicket>, ticket: number) {
   let grupo = sessoes(ticket).execucoes[0]?.grupo_processo;
   while (grupo == null) {
     await dormir(20);
@@ -820,7 +820,7 @@ test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisõ
     INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, motivo, por_tipo, em) VALUES
       ('I-1', 8, 1, 'gate_revisao_rodada', 'reprovado', 'falta teste de X', 'agente', '${em}'),
       ('I-1', 9, 1, 'gate_revisao_rodada', 'reprovado', 'o teste de X quebrou Y', 'agente', '${em}');
-    INSERT INTO sessao VALUES ('s-8', 'I-1', 8, 'autonomo', 'c8'), ('s-9', 'I-1', 9, 'autonomo', 'c9')`);
+    INSERT INTO trabalho_agentico VALUES ('s-8', 'I-1', 8, 'autonomo', 'c8'), ('s-9', 'I-1', 9, 'autonomo', 'c9')`);
   const chamada = (id: string, pergunta: string) => ({
     message: {
       role: "assistant",

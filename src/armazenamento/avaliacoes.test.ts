@@ -41,14 +41,14 @@ const banco = () => {
     b.exec(
       `INSERT INTO demanda VALUES ('${id}', '${projeto}', 't', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
        INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
-       INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');`,
+       INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');`,
     );
   }
   return b;
 };
 const execucao = (b: DatabaseSync, demanda: string, id: string, fim: string | null) => {
   b.exec(
-    `INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('${id}', 's-${demanda}', ${T}, ${fim ? `'${fim}'` : "NULL"}, 0)`,
+    `INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${id}', 's-${demanda}', ${T}, ${fim ? `'${fim}'` : "NULL"}, 0)`,
   );
 };
 const nova = (demandas = ["I-1"]) => ({

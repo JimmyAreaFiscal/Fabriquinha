@@ -13,7 +13,7 @@ import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
 import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
-import { ticketsComPiAtivo } from "../../../armazenamento/sessoes.ts";
+import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { heatmapDo } from "../../../infra/repositorio/heatmap.ts";
 import type { Rota } from "../rotas.ts";
 
@@ -98,7 +98,7 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
   // Com mais de uma sessão no ticket, vale a mais recente, como na página da demanda.
   const sessoes = new Map(
     (
-      banco.prepare("SELECT ticket_id, id FROM sessao WHERE demanda_id = ? ORDER BY rowid").all(id) as {
+      banco.prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid").all(id) as {
         ticket_id: number;
         id: string;
       }[]

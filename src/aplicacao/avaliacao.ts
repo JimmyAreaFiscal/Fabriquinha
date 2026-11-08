@@ -15,6 +15,7 @@ import {
   abrirAvaliacao,
   apagarAvaliacao,
   criarAvaliacao,
+  gravarGrupoDaAvaliacao,
   demandasComSessaoNoPeriodo,
   importarAchados,
   projetoDaDemanda,
@@ -84,6 +85,9 @@ function sincronizar(banco: DatabaseSync, raiz: string, id: string): void {
 const conducao = (banco: DatabaseSync, raiz: string, id: string): Conducao => ({
   pasta: "avaliacoes",
   extensoes: ["achado.ts"],
+  gravarGrupo: (grupo) => {
+    gravarGrupoDaAvaliacao(banco, id, grupo);
+  },
   sincronizar: () => {
     sincronizar(banco, raiz, id);
   },

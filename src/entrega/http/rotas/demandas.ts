@@ -16,7 +16,7 @@ import {
   predecessorasDaDemanda,
 } from "../../../armazenamento/dependencias_demanda.ts";
 import { anexosDaDemanda, lerAnexo } from "../../../armazenamento/evidencia_demanda.ts";
-import { ticketsComPiAtivo } from "../../../armazenamento/sessoes.ts";
+import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { IdDoCaminho, type Rota } from "../rotas.ts";
 
 const ref = (demanda_id: string) => ({
@@ -114,7 +114,7 @@ function pagina({ banco, params }: Parameters<Rota["tratar"]>[0]) {
   // Uma leitura por demanda; com mais de uma sessão no ticket, vale a mais recente.
   const sessoes = new Map(
     (
-      banco.prepare("SELECT ticket_id, id FROM sessao WHERE demanda_id = ? ORDER BY rowid").all(id) as {
+      banco.prepare("SELECT ticket_id, id FROM trabalho_agentico WHERE demanda_id = ? ORDER BY rowid").all(id) as {
         ticket_id: number;
         id: string;
       }[]

@@ -12,7 +12,7 @@ import type { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
-import { carregarSessoesDoTicket } from "../../armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { anotar } from "../../infra/registro.ts";
 import {
   caminhoDaWorktreeDemanda,
@@ -28,7 +28,7 @@ const contexto = () => ({ agora: new Date().toISOString() });
 
 /** O pi vivo da última sessão do ticket de planejamento, se há. */
 function piVivoDoPlanejamento(banco: DatabaseSync, demanda_id: string, ticket_id: number) {
-  const { sessoes } = carregarSessoesDoTicket(banco, { demanda_id, ticket_id });
+  const { sessoes } = carregarTrabalhosDoTicket(banco, { demanda_id, ticket_id });
   const atual = sessoes.at(-1);
   return atual && situacao(atual.id);
 }

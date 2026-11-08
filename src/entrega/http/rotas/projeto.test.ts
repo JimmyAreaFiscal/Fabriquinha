@@ -178,8 +178,8 @@ function semearDemandas(): void {
     }),
   );
   banco.exec(
-    `INSERT INTO sessao VALUES ('s-antiga', 'I-206', 4, 'autonomo', 'c1'), ('s-nova', 'I-206', 4, 'autonomo', 'c2');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha, grupo_processo) VALUES ('e-nova', 's-nova', '${em}', NULL, 0, 4242)`,
+    `INSERT INTO trabalho_agentico VALUES ('s-antiga', 'I-206', 4, 'autonomo', 'c1'), ('s-nova', 'I-206', 4, 'autonomo', 'c2');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha, grupo_processo) VALUES ('e-nova', 's-nova', '${em}', NULL, 0, 4242)`,
   );
   gravarAgregadoPronto(banco, montarAgregadoDemanda("I-207", "planejar"));
   banco.exec(`INSERT INTO dependencia_demanda (demanda_id, depende_demanda_id)

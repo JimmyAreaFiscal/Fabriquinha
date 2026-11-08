@@ -1,10 +1,12 @@
 // O pi de conversa fora do agregado, sem ticket nem execução, que a avaliação do SDLC (avaliacao.ts) conduz numa pasta
 // sob a raiz: sobe e retoma o pi na mesma sessão, recusa a mensagem com o agente trabalhando e, na subida do serviço,
 // mata o pi que a instância anterior deixou. Nasceu com a Auditoria do Histórico, que a avaliação substituiu.
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import type { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
+import { recolherGruposDasAvaliacoes } from "../armazenamento/avaliacoes.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
 import { assinar as assinarSessao, avisar, mandar, rodarPi, situacao } from "./gerente.ts";
@@ -26,6 +28,8 @@ const tarefas = new Map<string, Promise<string | undefined>>();
 export interface Conducao {
   pasta: string;
   extensoes: string[];
+  /** Guarda o grupo de processos do pi enquanto ele vive e `null` quando para, para o reinício do serviço matá-lo. */
+  gravarGrupo: (grupo: number | null) => void;
   /** Chamado a cada `agent_end` e quando o pi para; erro dele vai para o log. */
   sincronizar: () => void;
 }
@@ -36,19 +40,18 @@ export const estadoDaAuditoria = (sessao: string): EstadoDaAuditoria =>
 
 /**
  * Lança o pi da auditoria na pasta dela, em modo consulta (ociosidade), com `prompt` como mensagem. Resolve com o
- * motivo da falha, ou `undefined`, quando o pi para. O pgid fica em `<pasta>/pgid` enquanto o pi vive, para o
- * reinício do serviço matá-lo (`recuperarAuditorias`).
+ * motivo da falha, ou `undefined`, quando o pi para. O grupo do pi fica gravado (`gravarGrupo`) enquanto ele vive,
+ * para o reinício do serviço matá-lo (`recuperarAuditorias`).
  */
 export function subir(
   raiz: string,
   sessao: string,
   prompt: string,
   { ociosidadeMin, modelo }: OpcoesDaAuditoria,
-  { pasta, extensoes, sincronizar }: Conducao,
+  { pasta, extensoes, gravarGrupo, sincronizar }: Conducao,
 ): Promise<string | undefined> {
   const dir = join(raiz, pasta, sessao);
   const log = join(dir, "log");
-  const pgid = join(dir, "pgid");
   const args = argumentosDaAuditoria(raiz, sessao, modelo, extensoes);
   anotar(log, `pi ${args.join(" ")}`);
   const sincronizarNoLog = (): void => {
@@ -70,11 +73,11 @@ export function subir(
     prompt,
     limiteMin: ociosidadeMin,
     aoLancar: (grupo) => {
-      writeFileSync(pgid, String(grupo));
+      if (Number.isInteger(grupo)) gravarGrupo(grupo); // pi que não subiu não tem pid
     },
   })
     .then((falha) => {
-      rmSync(pgid, { force: true });
+      gravarGrupo(null);
       anotar(
         log,
         falha === undefined ? "o pi da auditoria parou" : `o pi da auditoria parou com falha: ${falha.motivo}`,
@@ -113,16 +116,7 @@ export function enviarNaConversa(sessao: string, mensagem: string, retomar: (pro
   } else retomar(mensagem);
 }
 
-/**
- * Na subida do serviço, mata o grupo de cada pi de avaliação que a instância anterior deixou (F4 §7): o `pgid` fica em
- * `avaliacoes/<sessão>/pgid` enquanto o pi vive.
- */
-export function recuperarAuditorias(raiz: string): void {
-  const dir = join(raiz, "avaliacoes");
-  for (const nome of existsSync(dir) ? readdirSync(dir) : []) {
-    const pgid = join(dir, nome, "pgid");
-    if (!existsSync(pgid)) continue;
-    sinalNoGrupo(Number(readFileSync(pgid, "utf8")), "SIGKILL");
-    rmSync(pgid);
-  }
+/** Na subida do serviço, mata o grupo de cada pi de avaliação que a instância anterior deixou (F4 §7). */
+export function recuperarAuditorias(banco: DatabaseSync): void {
+  for (const grupo of recolherGruposDasAvaliacoes(banco)) sinalNoGrupo(grupo, "SIGKILL");
 }

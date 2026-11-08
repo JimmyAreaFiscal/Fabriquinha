@@ -193,16 +193,16 @@ export function cadastrarProjetoLoja(banco: DatabaseSync, repo = "/repos/loja", 
     .run(repo, branchBase);
 }
 
-/** Abre (uma vez só) a execução do ticket e devolve o Agente dela: o `trabalho_id` é o `execucao_sessao.id`. */
+/** Abre (uma vez só) a execução do ticket e devolve o Agente dela: o `trabalho_id` é o `processo_do_trabalho.id`. */
 export function abrirTrabalhoDoAgente(banco: DatabaseSync, ref: { demanda_id: string; ticket_id: number }): Ator {
   const trabalho_id = `e-${ref.demanda_id}-T${String(ref.ticket_id)}`;
   banco
     .prepare(
-      "INSERT OR IGNORE INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, ?, 'autonomo', 'c')",
+      "INSERT OR IGNORE INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES (?, ?, ?, 'autonomo', 'c')",
     )
     .run(`s-${trabalho_id}`, ref.demanda_id, ref.ticket_id);
   banco
-    .prepare("INSERT OR IGNORE INTO execucao_sessao (id, sessao_id, inicio, falha) VALUES (?, ?, ?, 0)")
+    .prepare("INSERT OR IGNORE INTO processo_do_trabalho (id, trabalho_id, inicio, falha) VALUES (?, ?, ?, 0)")
     .run(trabalho_id, `s-${trabalho_id}`, INSTANTE_DO_CENARIO);
   return { tipo: "agente", trabalho_id };
 }

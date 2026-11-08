@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { TicketDemanda } from "../../nucleo/agregado_demanda.ts";
-import type { ExecucaoSessao, Sessao, UsoModeloExecucao } from "../../nucleo/sessoes.ts";
+import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../../nucleo/trabalho_agentico.ts";
 import { produtividadeDaRodada } from "./produtividade_rodada.ts";
 
 const ticket = (ticket_id: number, etapa: TicketDemanda["etapa"]): TicketDemanda => ({
@@ -13,16 +13,16 @@ const ticket = (ticket_id: number, etapa: TicketDemanda["etapa"]): TicketDemanda
   criado_por: { tipo: "fabriquinha" },
   rodada_id: 2,
 });
-const sessao = (ticket_id: number): Sessao => ({
+const sessao = (ticket_id: number): TrabalhoGerenciado => ({
   id: `s${String(ticket_id)}`,
   demanda_id: "I-206",
   ticket_id,
   modo: "autonomo",
   conversa_referencia: "c",
 });
-const exec = (ticket_id: number): ExecucaoSessao => ({
+const exec = (ticket_id: number): ProcessoDoTrabalho => ({
   id: `e${String(ticket_id)}`,
-  sessao_id: `s${String(ticket_id)}`,
+  trabalho_id: `s${String(ticket_id)}`,
   inicio: "2026-01-01T10:00:00Z",
   falha: false,
 });

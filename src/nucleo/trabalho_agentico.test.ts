@@ -2,28 +2,28 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ErroDeRegra } from "./erros.ts";
 import {
-  criarSessao,
-  encerrarExecucao,
-  ExecucaoSessao,
-  iniciarExecucao,
+  criarTrabalho,
+  encerrarProcesso,
+  ProcessoDoTrabalho,
+  iniciarProcesso,
   registrarUso,
-  retomarSessao,
-  Sessao,
-  totalDeSessoes,
+  retomarTrabalho,
+  TrabalhoGerenciado,
+  totalDeTrabalhos,
   totalDoTicket,
   UsoModeloExecucao,
-} from "./sessoes.ts";
+} from "./trabalho_agentico.ts";
 
-const sessao = (id: string, ticket_id = 1, demanda_id = "D-1"): Sessao => ({
+const sessao = (id: string, ticket_id = 1, demanda_id = "D-1"): TrabalhoGerenciado => ({
   id,
   demanda_id,
   ticket_id,
   modo: "autonomo",
   conversa_referencia: `conv-${id}`,
 });
-const exec = (id: string, sessao_id: string): ExecucaoSessao => ({
+const exec = (id: string, trabalho_id: string): ProcessoDoTrabalho => ({
   id,
-  sessao_id,
+  trabalho_id,
   inicio: "2026-01-01T10:00:00Z",
   falha: false,
 });
@@ -45,19 +45,19 @@ const primeiro = <T>(lista: readonly T[]): T => {
 const regra = { name: "ErroDeRegra" };
 
 test("CA-1: schema da sessão", () => {
-  assert.ok(Sessao.safeParse(sessao("s1")).success);
-  assert.ok(!Sessao.safeParse({ ...sessao("s1"), modo: "x" }).success);
-  assert.ok(!Sessao.safeParse({ ...sessao("s1"), conversa_referencia: undefined }).success);
-  assert.ok(!Sessao.safeParse({ ...sessao("s1"), id: "" }).success);
+  assert.ok(TrabalhoGerenciado.safeParse(sessao("s1")).success);
+  assert.ok(!TrabalhoGerenciado.safeParse({ ...sessao("s1"), modo: "x" }).success);
+  assert.ok(!TrabalhoGerenciado.safeParse({ ...sessao("s1"), conversa_referencia: undefined }).success);
+  assert.ok(!TrabalhoGerenciado.safeParse({ ...sessao("s1"), id: "" }).success);
 });
 
 test("CA-2: schemas de execução e uso", () => {
   const fim = "2026-01-01T11:00:00Z";
-  assert.ok(ExecucaoSessao.safeParse({ ...exec("e1", "s1"), fim, falha: true }).success);
-  assert.ok(ExecucaoSessao.safeParse({ ...exec("e1", "s1"), fim, falha: false }).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...exec("e1", "s1"), fim, falha: "quebrou" }).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...exec("e1", "s1"), falha: undefined }).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...exec("e1", "s1"), inicio: "ontem" }).success);
+  assert.ok(ProcessoDoTrabalho.safeParse({ ...exec("e1", "s1"), fim, falha: true }).success);
+  assert.ok(ProcessoDoTrabalho.safeParse({ ...exec("e1", "s1"), fim, falha: false }).success);
+  assert.ok(!ProcessoDoTrabalho.safeParse({ ...exec("e1", "s1"), fim, falha: "quebrou" }).success);
+  assert.ok(!ProcessoDoTrabalho.safeParse({ ...exec("e1", "s1"), falha: undefined }).success);
+  assert.ok(!ProcessoDoTrabalho.safeParse({ ...exec("e1", "s1"), inicio: "ontem" }).success);
   assert.ok(UsoModeloExecucao.safeParse(uso("e1", "m", 5)).success);
   assert.ok(UsoModeloExecucao.safeParse(uso("e1", "m", 5, 0.5)).success);
   assert.ok(!UsoModeloExecucao.safeParse(uso("e1", "m", -1)).success);
@@ -67,7 +67,10 @@ test("CA-2: schemas de execução e uso", () => {
 });
 
 test("CA-3: dois tickets e duas sessões no mesmo ticket", () => {
-  const todas = [sessao("s1"), sessao("s2"), sessao("s3", 2)].reduce<Sessao[]>((a, s) => criarSessao(a, s), []);
+  const todas = [sessao("s1"), sessao("s2"), sessao("s3", 2)].reduce<TrabalhoGerenciado[]>(
+    (a, s) => criarTrabalho(a, s),
+    [],
+  );
   assert.equal(todas.length, 3);
   assert.deepEqual(
     todas.slice(0, 2).map((s) => [s.demanda_id, s.ticket_id]),
@@ -76,51 +79,51 @@ test("CA-3: dois tickets e duas sessões no mesmo ticket", () => {
       ["D-1", 1],
     ],
   );
-  assert.throws(() => criarSessao(todas, sessao("s1")), regra);
+  assert.throws(() => criarTrabalho(todas, sessao("s1")), regra);
 });
 
 test("CA-4: retomar cria execução distinta e preserva a conversa", () => {
   const sessoes = [sessao("s1")];
-  const e1 = encerrarExecucao(iniciarExecucao(sessoes, [], exec("e1", "s1")), "e1", "2026-01-01T11:00:00Z", false);
-  const e2 = retomarSessao(sessoes, e1, exec("e2", "s1"));
+  const e1 = encerrarProcesso(iniciarProcesso(sessoes, [], exec("e1", "s1")), "e1", "2026-01-01T11:00:00Z", false);
+  const e2 = retomarTrabalho(sessoes, e1, exec("e2", "s1"));
   assert.deepEqual(
     e2.map((e) => e.id),
     ["e1", "e2"],
   );
   assert.equal(primeiro(sessoes).conversa_referencia, "conv-s1");
-  assert.throws(() => retomarSessao(sessoes, [], exec("e1", "s1")), regra);
+  assert.throws(() => retomarTrabalho(sessoes, [], exec("e1", "s1")), regra);
 });
 
 test("CA-5: recusa segunda execução sem fim, sessão ou id inválidos", () => {
   const sessoes = [sessao("s1"), sessao("s2")];
-  const aberta = iniciarExecucao(sessoes, [], exec("e1", "s1"));
-  assert.throws(() => iniciarExecucao(sessoes, aberta, exec("e2", "s1")), regra);
-  assert.throws(() => retomarSessao(sessoes, aberta, exec("e2", "s1")), regra);
+  const aberta = iniciarProcesso(sessoes, [], exec("e1", "s1"));
+  assert.throws(() => iniciarProcesso(sessoes, aberta, exec("e2", "s1")), regra);
+  assert.throws(() => retomarTrabalho(sessoes, aberta, exec("e2", "s1")), regra);
   assert.equal(aberta.length, 1);
-  assert.equal(iniciarExecucao(sessoes, aberta, exec("e2", "s2")).length, 2);
-  assert.throws(() => iniciarExecucao(sessoes, aberta, exec("e3", "nope")), regra);
-  assert.throws(() => iniciarExecucao(sessoes, aberta, exec("e1", "s2")), regra);
+  assert.equal(iniciarProcesso(sessoes, aberta, exec("e2", "s2")).length, 2);
+  assert.throws(() => iniciarProcesso(sessoes, aberta, exec("e3", "nope")), regra);
+  assert.throws(() => iniciarProcesso(sessoes, aberta, exec("e1", "s2")), regra);
 });
 
 test("CA-6: fim ausente é não encerrada; encerrar grava fim e falha", () => {
-  const ok = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false));
+  const ok = primeiro(encerrarProcesso([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false));
   assert.deepEqual([ok.fim, ok.falha], ["2026-01-01T11:00:00Z", false]);
-  const ruim = primeiro(encerrarExecucao([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", true));
+  const ruim = primeiro(encerrarProcesso([exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", true));
   assert.deepEqual([ruim.fim, ruim.falha], ["2026-01-01T11:00:00Z", true]);
-  const outras = encerrarExecucao([exec("e0", "s1"), exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false);
+  const outras = encerrarProcesso([exec("e0", "s1"), exec("e1", "s1")], "e1", "2026-01-01T11:00:00Z", false);
   assert.equal(primeiro(outras).fim, undefined);
-  assert.throws(() => encerrarExecucao([ok], "e1", "2026-01-01T12:00:00Z", false), regra);
-  assert.throws(() => encerrarExecucao([], "e1", "2026-01-01T12:00:00Z", false), regra);
+  assert.throws(() => encerrarProcesso([ok], "e1", "2026-01-01T12:00:00Z", false), regra);
+  assert.throws(() => encerrarProcesso([], "e1", "2026-01-01T12:00:00Z", false), regra);
   assert.ok(new ErroDeRegra("x") instanceof Error);
 });
 
 test("CA-2/5/6: fim null é execução não encerrada", () => {
   const sessoes = [sessao("s1")];
   const e1 = { ...exec("e1", "s1"), fim: null };
-  assert.ok(ExecucaoSessao.safeParse(e1).success);
-  assert.throws(() => iniciarExecucao(sessoes, [e1], exec("e2", "s1")), regra);
-  assert.throws(() => retomarSessao(sessoes, [e1], exec("e2", "s1")), regra);
-  const fechada = primeiro(encerrarExecucao([e1], "e1", "2026-01-01T11:00:00Z", false));
+  assert.ok(ProcessoDoTrabalho.safeParse(e1).success);
+  assert.throws(() => iniciarProcesso(sessoes, [e1], exec("e2", "s1")), regra);
+  assert.throws(() => retomarTrabalho(sessoes, [e1], exec("e2", "s1")), regra);
+  const fechada = primeiro(encerrarProcesso([e1], "e1", "2026-01-01T11:00:00Z", false));
   assert.deepEqual([fechada.fim, fechada.falha], ["2026-01-01T11:00:00Z", false]);
 });
 
@@ -155,7 +158,7 @@ test("CA-8: totais sem duplicar execuções e com custo ausente", () => {
     custo_conhecido: 3,
     custo_incompleto: true,
   });
-  const demanda = totalDeSessoes(
+  const demanda = totalDeTrabalhos(
     sessoes.filter((s) => s.demanda_id === "D-1"),
     execucoes,
     usos,
@@ -168,7 +171,13 @@ test("CA-8: totais sem duplicar execuções e com custo ausente", () => {
 });
 
 test("CA-9: tokens e custo não são campos da sessão", () => {
-  assert.deepEqual(Object.keys(Sessao.shape).sort(), ["conversa_referencia", "demanda_id", "id", "modo", "ticket_id"]);
+  assert.deepEqual(Object.keys(TrabalhoGerenciado.shape).sort(), [
+    "conversa_referencia",
+    "demanda_id",
+    "id",
+    "modo",
+    "ticket_id",
+  ]);
 });
 
 test("controle da execução: campos opcionais e par do modelo", () => {
@@ -177,14 +186,16 @@ test("controle da execução: campos opcionais e par do modelo", () => {
     grupo_processo: 4321,
     configuracao_agente: { modelo: { provedor: "claude-bridge", nome: "claude-sonnet-5-5" }, effort: "high" },
   };
-  assert.ok(ExecucaoSessao.safeParse(completa).success);
+  assert.ok(ProcessoDoTrabalho.safeParse(completa).success);
   assert.ok(
-    !ExecucaoSessao.safeParse({ ...completa, configuracao_agente: { modelo: { provedor: "claude-bridge" } } }).success,
+    !ProcessoDoTrabalho.safeParse({ ...completa, configuracao_agente: { modelo: { provedor: "claude-bridge" } } })
+      .success,
   );
   assert.ok(
-    !ExecucaoSessao.safeParse({ ...completa, configuracao_agente: { modelo: { nome: "claude-sonnet-5-5" } } }).success,
+    !ProcessoDoTrabalho.safeParse({ ...completa, configuracao_agente: { modelo: { nome: "claude-sonnet-5-5" } } })
+      .success,
   );
-  assert.ok(!ExecucaoSessao.safeParse({ ...completa, configuracao_agente: { effort: "turbo" } }).success);
-  assert.ok(!ExecucaoSessao.safeParse({ ...completa, grupo_processo: 0 }).success);
-  assert.equal("erro" in ExecucaoSessao.shape, false);
+  assert.ok(!ProcessoDoTrabalho.safeParse({ ...completa, configuracao_agente: { effort: "turbo" } }).success);
+  assert.ok(!ProcessoDoTrabalho.safeParse({ ...completa, grupo_processo: 0 }).success);
+  assert.equal("erro" in ProcessoDoTrabalho.shape, false);
 });

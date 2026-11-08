@@ -68,8 +68,8 @@ before(async () => {
     servico.banco.exec(
       `INSERT INTO demanda VALUES ('${id}', '${projeto}', 'Título ${id}', 'problema', 'd', 'em_execucao', ${T}, 'f', 's', 1, 'fabriquinha/${id}');
        INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES ('${id}', 1, 'implementar', 'aberto', ${T});
-       INSERT INTO sessao VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
-       INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '2026-10-10T11:00:00.000Z', 0);`,
+       INSERT INTO trabalho_agentico VALUES ('s-${id}', '${id}', 1, 'autonomo', 'c');
+       INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('e-${id}', 's-${id}', ${T}, '2026-10-10T11:00:00.000Z', 0);`,
     );
   }
 });

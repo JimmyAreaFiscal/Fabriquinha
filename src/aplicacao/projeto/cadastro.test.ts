@@ -285,8 +285,8 @@ const TABELAS = [
   "iteracao_demanda",
   "proposta_demanda",
   "decisao_ticket",
-  "execucao_sessao",
-  "sessao",
+  "processo_do_trabalho",
+  "trabalho_agentico",
   "dependencia_demanda",
   "ticket_demanda",
   "varredura_base",
@@ -332,8 +332,8 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
       INSERT INTO demanda VALUES ('${d}', '${nome}', 't', 'funcionalidade', 'd', 'em_execucao', 't', 'x', 's', 1, 'b');
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em)
         VALUES ('${d}', 1, 'implementar', 'concluido', 't');
-      INSERT INTO sessao VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
-      INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
+      INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 's${n}');
+      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${execucao}', '${d}s', 't', 't', 0);
       INSERT INTO uso_modelo_execucao VALUES ('${execucao}', 'p', 'm', 1, 1, 0, 0, ${n}.5);
       INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
       INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a.txt', '${i === 0 ? SHA_COMPARTILHADO : shaProprio}', 'text/plain', 1);
@@ -448,7 +448,7 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
   const [primeira, segunda] = popular(banco, "demo", "f".repeat(64));
   const antes = contagens(banco);
 
-  banco.prepare("UPDATE execucao_sessao SET fim = NULL WHERE id = ?").run(execucaoDe(primeira, true));
+  banco.prepare("UPDATE processo_do_trabalho SET fim = NULL WHERE id = ?").run(execucaoDe(primeira, true));
   await recusaAsync(
     () => removerProjeto(banco, "demo"),
     ErroDeRegra,
@@ -457,7 +457,7 @@ test("removerProjeto recusa execução em andamento e ticket em execução, sem 
   assert.deepEqual(contagens(banco), antes);
   assert.equal(existsSync(pastaDe(raizDo(banco), execucaoDe(primeira, true))), true);
 
-  banco.prepare("UPDATE execucao_sessao SET fim = 't' WHERE id = ?").run(execucaoDe(primeira, true));
+  banco.prepare("UPDATE processo_do_trabalho SET fim = 't' WHERE id = ?").run(execucaoDe(primeira, true));
   banco.prepare("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = ?").run(`I-${String(segunda)}`);
   await recusaAsync(
     () => removerProjeto(banco, "demo"),
@@ -540,9 +540,9 @@ const TABELAS_DEMANDA = [
   "commit_ticket_demanda",
   "uso_modelo_historico",
   "uso_modelo_execucao",
-  "execucao_sessao",
-  "sessao",
-  "sessao_externa_demanda",
+  "processo_do_trabalho",
+  "trabalho_agentico",
+  "trabalho_nao_gerenciado",
   "decisao_ticket",
   "arquivo_evidencia",
   "evidencia_historico",
@@ -586,15 +586,15 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
     INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a', '${sha3}', 'text/plain', 1);
     INSERT INTO encerramento_demanda (demanda_id, branch, base) VALUES ('${d}', 'b', 'main');
     INSERT INTO limpeza_pendente_encerramento VALUES ('${d}', 'x');
-    INSERT INTO sessao VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
-    INSERT INTO sessao_externa_demanda VALUES ('pi', '${d}x', '${d}');
-    INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
+    INSERT INTO trabalho_agentico VALUES ('${d}s', '${d}', 1, 'autonomo', 'c');
+    INSERT INTO trabalho_nao_gerenciado VALUES ('pi', '${d}x', '${d}');
+    INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('${d}x1', '${d}s', 't', 't', 0);
     INSERT INTO uso_modelo_execucao VALUES ('${d}x1', 'p', 'm', 1, 1, 0, 0, NULL);
     INSERT INTO uso_modelo_historico VALUES ('${d}x1', 'p', 'm', 1);
     INSERT INTO commit_ticket_demanda VALUES ('${sha1}', '${d}', 1, 'm', 't'), ('${sha2}', '${d}', 2, 'm', 't');
     INSERT INTO arquivo_commit_demanda VALUES ('${sha1}', 'f', NULL, 'A', 1, 0);
     INSERT INTO retrabalho_demanda VALUES ('${sha2}', '${d}', 2, NULL, 1, 1, '${d}');
-    INSERT INTO avaliacao VALUES ('${d}av', '${nome}', '2026-01-01', '2026-01-02', 'p', 't');
+    INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES ('${d}av', '${nome}', '2026-01-01', '2026-01-02', 'p', 't');
     INSERT INTO avaliacao_demanda VALUES ('${d}av', '${d}');
     INSERT INTO achado_avaliacao VALUES ('${d}av', 1, 't', 'd', 'e', '${d}');
     INSERT INTO uso_avaliacao VALUES ('${d}av', 'p', 'm', 1, 1, 1, 0, 0, NULL);

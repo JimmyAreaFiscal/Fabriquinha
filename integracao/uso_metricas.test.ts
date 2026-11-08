@@ -4,9 +4,9 @@
 // pelo repositório de sessões, o mesmo que o serviço grava.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { retomarSessao, registrarUso, totalDoTicket } from "../src/nucleo/sessoes.ts";
+import { retomarTrabalho, registrarUso, totalDoTicket } from "../src/nucleo/trabalho_agentico.ts";
 import { submeterEvidencia } from "../src/aplicacao/gestao_demandas.ts";
-import { carregarSessoesDoTicket, comSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
 import { mesDe } from "../src/nucleo/periodo.ts";
 import { metricasDemandaPorMes } from "../src/aplicacao/periodo_demanda.ts";
@@ -30,12 +30,12 @@ interface Ref {
 }
 /** Grava o uso de uma execução já existente do ticket: [modelo, entrada, custo (undefined = desconhecido)]. */
 const usar = (
-  c: Parameters<typeof comSessoesDoTicket>[0],
+  c: Parameters<typeof comTrabalhosDoTicket>[0],
   ref: Ref,
   execucao_id: string,
   usos: [string, number, number?][],
 ) =>
-  comSessoesDoTicket(c, ref, (estado) => ({
+  comTrabalhosDoTicket(c, ref, (estado) => ({
     ...estado,
     usos: usos.reduce(
       (acc, [modelo_nome, tokens_entrada, custo]) =>
@@ -62,16 +62,16 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
   await ciclo(c, despacho());
 
   // A primeira tentativa foi do agendador; a retomada é uma execução nova na mesma sessão.
-  const { sessoes, execucoes } = carregarSessoesDoTicket(c.banco, ref);
+  const { sessoes, execucoes } = carregarTrabalhosDoTicket(c.banco, ref);
   assert.equal(sessoes.length, 1);
   const [sessao] = sessoes;
   const [primeira] = execucoes;
   assert.ok(sessao && primeira);
-  comSessoesDoTicket(c.banco, ref, (estado) => ({
+  comTrabalhosDoTicket(c.banco, ref, (estado) => ({
     ...estado,
-    execucoes: retomarSessao(estado.sessoes, estado.execucoes, {
+    execucoes: retomarTrabalho(estado.sessoes, estado.execucoes, {
       id: "retomada",
-      sessao_id: sessao.id,
+      trabalho_id: sessao.id,
       inicio: agora(),
       fim: agora(),
       falha: false,
@@ -84,7 +84,7 @@ test("CA-SDLC-20: sessão retomada com dois modelos reutiliza a conversa, soma c
     ["a", 20, 2],
   ]); // o último repete o registro: não soma de novo
 
-  const depois = carregarSessoesDoTicket(c.banco, ref);
+  const depois = carregarTrabalhosDoTicket(c.banco, ref);
   assert.deepEqual(depois.sessoes, [sessao], "uma só sessão, com a mesma conversa");
   assert.deepEqual(
     depois.execucoes.map((e) => e.id),
@@ -133,7 +133,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
     await decidirComoRevisor(c, id, { resultado: "aprovado" }, 2);
   });
 
-  const execucaoDe = (ref: Ref) => carregarSessoesDoTicket(c.banco, ref).execucoes[0]?.id ?? "";
+  const execucaoDe = (ref: Ref) => carregarTrabalhosDoTicket(c.banco, ref).execucoes[0]?.id ?? "";
   usar(c.banco, r1, execucaoDe(r1), [["a", 10, 1]]);
   usar(c.banco, r2, execucaoDe(r2), [
     ["a", 20],
@@ -187,10 +187,10 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
   // Demanda vizinha de controle, com custo enorme: não pode aparecer no relatório da primeira.
   const vizinha = await demandaEmExecucao(c, [{ tickets: 1 }]);
   const refVizinha = ticketDe(c, vizinha, 1);
-  comSessoesDoTicket(c.banco, refVizinha, (estado) => ({
+  comTrabalhosDoTicket(c.banco, refVizinha, (estado) => ({
     ...estado,
     sessoes: [{ ...refVizinha, id: "s-vizinha", modo: "autonomo", conversa_referencia: "conv" }],
-    execucoes: [{ id: "e-vizinha", sessao_id: "s-vizinha", inicio: agora(), fim: agora(), falha: true }],
+    execucoes: [{ id: "e-vizinha", trabalho_id: "s-vizinha", inicio: agora(), fim: agora(), falha: true }],
   }));
   usar(c.banco, refVizinha, "e-vizinha", [["a", 999, 1_000_000]]);
 

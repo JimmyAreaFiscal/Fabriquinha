@@ -3,7 +3,7 @@
 // por `escapar`.
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { EstadoDemanda, EstadoRodada, EstadoTicket } from "../../nucleo/primitivos.ts";
-import type { ModoExecucao } from "../../nucleo/sessoes.ts";
+import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Pagina } from "./caminhos.ts";
 
 /** O status do ticket (F1 §3.5) como as telas o mostram. */
@@ -63,7 +63,7 @@ export const pilulaDoEstadoDoTicket = (estado: EstadoTicket, piAtivo = false): s
   estado === "em_execucao" && piAtivo ? "pill-rodando" : PILULA_DO_ESTADO_DO_TICKET[estado];
 
 /** O modo da sessão (F4 §5.1), no feminino de "sessão autônoma". */
-export const MODO_DA_SESSAO: Record<ModoExecucao, string> = {
+export const MODO_DA_SESSAO: Record<ModoTrabalho, string> = {
   autonomo: "autônoma",
   interativo: "interativa",
   consulta: "consulta",

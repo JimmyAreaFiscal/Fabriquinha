@@ -15,9 +15,9 @@ import {
 } from "../apoio-testes/cenarios_de_demanda.ts";
 import { servir } from "../apoio-testes/servidor_web_de_teste.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
-import { criarSessao, iniciarExecucao } from "../src/nucleo/sessoes.ts";
+import { criarTrabalho, iniciarProcesso } from "../src/nucleo/trabalho_agentico.ts";
 import type { Tentativa } from "../src/nucleo/tentativa.ts";
-import { comSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
+import { comTrabalhosDoTicket } from "../src/armazenamento/trabalho_agentico.ts";
 import { principal } from "../src/entrega/cli/cli.ts";
 import { pagina, type DadosDaPagina } from "../src/entrega/cliente-web/telas/demandas.ts";
 
@@ -50,18 +50,18 @@ test("CA-2: sem os contadores e o erro, o motivo B da última Tentativa aparece 
   for (const antiga of ["motivo_falha", "devolucoes", "retomadas_automaticas"]) {
     assert.ok(!colunas("ticket_demanda").includes(antiga), `ticket_demanda ainda tem ${antiga}`);
   }
-  assert.ok(!colunas("execucao_sessao").includes("erro"));
+  assert.ok(!colunas("processo_do_trabalho").includes("erro"));
 
-  comSessoesDoTicket(banco, { demanda_id: "I-206", ticket_id: 3 }, (estado) => {
-    const sessoes = criarSessao(estado.sessoes, {
+  comTrabalhosDoTicket(banco, { demanda_id: "I-206", ticket_id: 3 }, (estado) => {
+    const sessoes = criarTrabalho(estado.sessoes, {
       id: "s-exec-3",
       demanda_id: "I-206",
       ticket_id: 3,
       modo: "autonomo",
       conversa_referencia: "s-exec-3",
     });
-    const execucao = { id: "exec-3", sessao_id: "s-exec-3", inicio: INSTANTE_DO_CENARIO, falha: false };
-    return { ...estado, sessoes, execucoes: iniciarExecucao(sessoes, estado.execucoes, execucao) };
+    const execucao = { id: "exec-3", trabalho_id: "s-exec-3", inicio: INSTANTE_DO_CENARIO, falha: false };
+    return { ...estado, sessoes, execucoes: iniciarProcesso(sessoes, estado.execucoes, execucao) };
   });
   let saida = "";
   const codigo = await principal(["ticket", "ver", "I-206.T3"], {

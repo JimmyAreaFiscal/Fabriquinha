@@ -7,10 +7,10 @@ import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { submeterEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
-import { criarSessao, iniciarExecucao } from "../../nucleo/sessoes.ts";
+import { criarTrabalho, iniciarProcesso } from "../../nucleo/trabalho_agentico.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
-import { comSessoesDoTicket } from "../../armazenamento/sessoes.ts";
+import { comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { resolverEscopoDoAgente } from "./agente_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
 import { principal } from "./cli.ts";
@@ -88,8 +88,8 @@ function cenario() {
 }
 
 function abrirExecucao(banco: DatabaseSync, id: string, ticket_id: number): void {
-  comSessoesDoTicket(banco, { demanda_id: "I-206", ticket_id }, (e) => {
-    const sessoes = criarSessao(e.sessoes, {
+  comTrabalhosDoTicket(banco, { demanda_id: "I-206", ticket_id }, (e) => {
+    const sessoes = criarTrabalho(e.sessoes, {
       id: `s-${id}`,
       demanda_id: "I-206",
       ticket_id,
@@ -99,7 +99,7 @@ function abrirExecucao(banco: DatabaseSync, id: string, ticket_id: number): void
     return {
       ...e,
       sessoes,
-      execucoes: iniciarExecucao(sessoes, e.execucoes, { id, sessao_id: `s-${id}`, inicio: em, falha: false }),
+      execucoes: iniciarProcesso(sessoes, e.execucoes, { id, trabalho_id: `s-${id}`, inicio: em, falha: false }),
     };
   });
 }
@@ -239,7 +239,7 @@ test("projeto ver devolve o projeto da demanda do agente", async () => {
 
 test("execução terminada: ErroDeEscopo já terminou; comando legado da demanda é desconhecido", async () => {
   const { banco, env } = cenario();
-  banco.prepare("UPDATE execucao_sessao SET fim = ? WHERE id = 'exec-3'").run(em);
+  banco.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-3'").run(em);
   const s = await cli(env, ["ticket", "ver", "I-206.T3"]);
   assert.deepEqual([s.codigo, s.out], [1, ""]);
   assert.equal(s.err, "a execução exec-3 já terminou (peça ao Auditor uma nova execução)\n");
@@ -451,7 +451,7 @@ test("revisão: correções por stdin com -", async () => {
 
 test("revisão com a execução terminada não grava", async () => {
   const { banco, env } = cenarioDeRevisao("em_execucao", "revisar_rodada", "revisar_rodada");
-  banco.prepare("UPDATE execucao_sessao SET fim = ? WHERE id = 'exec-9'").run(em);
+  banco.prepare("UPDATE processo_do_trabalho SET fim = ? WHERE id = 'exec-9'").run(em);
   const s = await cli(env, ["revisao", "decidir", "I-206.T9", "aprovar"]);
   assert.match(s.err, /já terminou/);
 });

@@ -471,8 +471,8 @@ test("execuções pendentes são isoladas por projeto; apagarProjeto devolve ref
         ('I-2', 'b', 'B', 'problema', 'descrição', 'em_execucao', 'agora', 'pi', 's', 1, 'b');
       INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
         ('I-1', 1, 'implementar', 'aberto', 'agora'), ('I-2', 1, 'implementar', 'em_execucao', 'agora');
-      INSERT INTO sessao (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 'conversa');
-      INSERT INTO execucao_sessao (id, sessao_id, inicio, fim, falha) VALUES ('execucao', 's1', 'agora', NULL, 0);
+      INSERT INTO trabalho_agentico (id, demanda_id, ticket_id, modo, conversa_referencia) VALUES ('s1', 'I-1', 1, 'autonomo', 'conversa');
+      INSERT INTO processo_do_trabalho (id, trabalho_id, inicio, fim, falha) VALUES ('execucao', 's1', 'agora', NULL, 0);
       INSERT INTO usuario_simulado (id, projeto, nome, descricao) VALUES (1, 'a', 'Maria', 'd'), (2, 'b', 'João', 'd');
       INSERT INTO tarefa (id, projeto, texto, n, criada_em) VALUES (1, 'a', 't', 1, 'agora'), (2, 'b', 't', 1, 'agora');
       INSERT INTO tarefa_usuario VALUES (1, 1), (2, 2);
@@ -486,7 +486,7 @@ test("execuções pendentes são isoladas por projeto; apagarProjeto devolve ref
       INSERT INTO usuario_simulado_anexo VALUES (2, 'usuario.txt', '${"c".repeat(64)}', 1);
     `);
     assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "a") }, { demanda_id: "I-1", ticket_id: 1 });
-    banco.exec("UPDATE execucao_sessao SET fim = 'depois'");
+    banco.exec("UPDATE processo_do_trabalho SET fim = 'depois'");
     assert.equal(ticketEmAndamentoDoProjeto(banco, "a"), undefined);
     banco.exec("UPDATE ticket_demanda SET estado = 'em_execucao' WHERE demanda_id = 'I-1'");
     assert.deepEqual({ ...ticketEmAndamentoDoProjeto(banco, "a") }, { demanda_id: "I-1", ticket_id: 1 });
