@@ -80,7 +80,6 @@ export function motivoDaRevisaoParada(
  * rodadas), merge final, itens bloqueados, diálogos vivos, revisão parada e despachos parados. Quem junta as demandas
  * ordena por `desde`. `predecessorasSatisfeitas` falso é Dependência: o ticket não é elegível e nada é Pendência.
  */
-/** @testes a produção a liga nas telas e rotas das outras rodadas; hoje só o teste a exercita */
 export function pendenciasDaDemanda(
   ag: AgregadoDemanda,
   vivos: readonly TrabalhoVivo[],
