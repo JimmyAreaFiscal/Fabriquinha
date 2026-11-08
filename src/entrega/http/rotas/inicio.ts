@@ -156,7 +156,7 @@ const situacaoDoCondutor: SituacaoDaSessao = (sessao) => condutor.situacao(sessa
 /** A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa: o que `pendenciasDaDemanda` pede. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function trabalhoVivoDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao): TrabalhoVivo {
-  const pergunta = s.motivo === "dialogo" ? situacaoDa(s.sessao)?.dialogos[0]?.title : undefined;
+  const pergunta = situacaoDa(s.sessao)?.dialogos[0]?.title;
   return {
     ticket: Endereco.ler(s.ticket),
     ...(typeof pergunta === "string" && { pergunta }),
@@ -166,7 +166,7 @@ export function trabalhoVivoDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaS
 
 /** A sessão que espera o Auditor: parada no diálogo ou na conversa. */
 const esperaOAuditor = (s: SessaoDeDemanda): boolean =>
-  s.estado === "aguardando_humano" && (s.motivo === "dialogo" || s.motivo === "conversa");
+  s.estado === "aguardando_humano" && s.pendencia?.tipo === "dialogo_do_agente";
 
 /** As Pendências da demanda com o que o Início precisa para desenhá-las e levá-las ao chat ou à página da demanda. */
 function pendenciasDoInicio(

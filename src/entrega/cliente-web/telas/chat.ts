@@ -3,11 +3,12 @@
 // devolvem HTML. O texto de agente passa sempre pelo `markdown-it` com `html: false`; o resto, por `escapar`.
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import type { Dialogo } from "../../../aplicacao/trabalho/condutor.ts";
-import type { CabecalhoDemanda, ExecucaoDoChat, MotivoDemanda } from "../../../aplicacao/sessoes_demanda.ts";
+import type { CabecalhoDemanda, ExecucaoDoChat } from "../../../aplicacao/sessoes_demanda.ts";
 import type { Entrada } from "../../http/rotas/chat.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";
 import { escapar, MODO_DA_SESSAO, nomeDoModelo, plural, rotuloDoModelo } from "../render.ts";
 import { ETAPA_DO_TICKET } from "./demandas.ts";
+import { ROTULO_DO_TIPO_DE_PENDENCIA } from "./inicio.ts";
 
 export type Cabecalho = CabecalhoDemanda;
 export type Dados = Cabecalho & { conversa: Entrada[] };
@@ -55,20 +56,29 @@ export const textoDe = (m: MensagemPi): string =>
     .map((b) => String(b.text))
     .join("\n");
 
-const MOTIVOS: Record<MotivoDemanda, string> = {
-  conversa: "conversa",
-  dialogo: "diálogo",
-  falha: "falha",
-  gate_demanda: "gate da demanda",
-};
-
 /** O estado da sessão (F4 §5.2) como etiqueta: azul rodando, âmbar aguardando, vermelho na falha. */
 /** @testes função pura da tela, testada sem montar o DOM */
-export function etiquetaDoEstado({ estado, motivo }: Pick<Cabecalho["sessao"], "estado" | "motivo">): string {
+export function etiquetaDoEstado({
+  estado,
+  pendencia,
+  dialogos,
+}: Pick<Cabecalho["sessao"], "estado" | "pendencia" | "dialogos">): string {
   if (estado === "rodando") return '<span class="pill pill-rodando">rodando</span>';
   if (estado === "terminada") return '<span class="pill pill-neutro">terminada</span>';
-  const classe = motivo === "falha" ? "pill-falha" : "pill-aguarda";
-  return `<span class="pill ${classe}">aguarda você · ${motivo ? MOTIVOS[motivo] : ""}</span>`;
+  const tipo = pendencia?.tipo;
+  const classe = tipo === "item_bloqueado" ? "pill-falha" : "pill-aguarda";
+  // No chat, a conversa e o bloqueio têm o nome de sempre; o diálogo aberto, o do agente; o resto, o da tabela de tipos.
+  const marca =
+    tipo === "item_bloqueado"
+      ? "falha"
+      : tipo === "dialogo_do_agente"
+        ? dialogos.length > 0
+          ? "diálogo"
+          : "conversa"
+        : tipo
+          ? ROTULO_DO_TIPO_DE_PENDENCIA[tipo].marca
+          : "";
+  return `<span class="pill ${classe}">aguarda você · ${marca}</span>`;
 }
 
 /** O modelo da última resposta do agente na conversa, ou o padrão do pi enquanto ele não respondeu. */
@@ -89,6 +99,18 @@ export const modeloDe = (c: Cabecalho, conversa: readonly Entrada[]): string =>
 const exportar = (sessao: string, classe: string, rotulo = "Exportar"): string =>
   `<a class="${classe}" href="/api/sessoes/${encodeURIComponent(sessao)}/historico.md" download>${rotulo}</a>`;
 
+/** As Pendências da demanda que o servidor mandou no cabeçalho: tipo pelo rótulo da tabela, item e motivo. */
+function pendenciasDaDemandaNaBarra({ pendencias }: Pick<Cabecalho, "pendencias">): string {
+  if (pendencias.length === 0) return "";
+  const itens = pendencias.map(
+    (p) =>
+      `<span class="pendencia-do-chat" data-tipo="${p.tipo}" data-item="${escapar(p.item)}">` +
+      `<span class="tag">${ROTULO_DO_TIPO_DE_PENDENCIA[p.tipo].titulo}</span> <span class="id">${escapar(p.item)}</span> ` +
+      `<span class="muted">${escapar(p.motivo)}</span></span>`,
+  );
+  return `<span class="muted">Aguarda você:</span>${itens.join("")}`;
+}
+
 /** A barra de estado (D09): demanda, rodada se houver, ticket, etapa e modo, estado, modelo, execução e Exportar. */
 export function barraDeEstado(c: Cabecalho, modelo: string): string {
   const { sessao, demanda, rodada, ticket, etapa: e } = c;
@@ -99,6 +121,7 @@ export function barraDeEstado(c: Cabecalho, modelo: string): string {
     `<span class="sep">│</span><span class="id">${escapar(ticket)}</span>` +
     `<span class="muted">${ETAPA_DO_TICKET[e]} · ${MODO_DA_SESSAO[sessao.modo]}</span>${etiquetaDoEstado(sessao)}` +
     rotuloDoModelo(modelo) +
+    pendenciasDaDemandaNaBarra(c) +
     `<div class="direita"><span class="muted pequeno">${rotuloDaExecucao(sessao.execucao)}</span>` +
     `${exportar(sessao.sessao, "link")}</div></div>`
   );
@@ -122,7 +145,7 @@ export function linhasDaExecucao(e: ExecucaoDoChat): (Item & { em: string })[] {
  */
 export function erroDaFalha(c: Cabecalho): Item[] {
   const { sessao } = c;
-  if (sessao.motivo !== "falha") return [];
+  if (sessao.pendencia?.tipo !== "item_bloqueado") return [];
   const e = rotuloDaExecucao(sessao.execucao);
   const { erro, ticket } = c;
   return [
@@ -384,11 +407,11 @@ export function envio(c: Cabecalho, modo: ModoEnvio): Envio {
       ),
     };
   }
-  if (sessao.motivo === "falha") {
+  if (sessao.pendencia?.tipo === "item_bloqueado") {
     return paginaDaDemanda("O ticket falhou; reabra-o na página da demanda, com a instrução para a próxima tentativa.");
   }
-  if (sessao.motivo === "gate_demanda") {
-    return paginaDaDemanda("O plano espera a sua aprovação; decida na página da demanda.");
+  if (sessao.pendencia?.tipo === "gate_humano") {
+    return paginaDaDemanda(`${escapar(sessao.pendencia.motivo)}; decida na página da demanda.`);
   }
   const rodando = sessao.estado === "rodando";
   const segmento = rodando
