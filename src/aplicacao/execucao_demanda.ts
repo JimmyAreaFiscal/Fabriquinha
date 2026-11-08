@@ -1,7 +1,7 @@
 // Serviço Execução da demanda (comparacao-sdlc-implementacao.md §§4.1, 4.2, 6 e 7.3): junta sessão, execução, worktree,
 // prompt e pi para um ticket da demanda. Conduz a execução; o ticket só muda pelo fechamento (`fechamento_ticket.ts`).
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
@@ -21,16 +21,12 @@ import {
 } from "../nucleo/tentativa.ts";
 import {
   criarTrabalho,
-  encerrarProcesso,
   iniciarProcesso,
-  registrarUso,
   retomarTrabalho,
   type ProcessoDoTrabalho,
   type TrabalhoGerenciado,
-  type UsoModeloExecucao,
 } from "../nucleo/trabalho_agentico.ts";
 import { varrerBase } from "./retrabalho.ts";
-import { somar } from "../nucleo/uso.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
@@ -42,20 +38,18 @@ import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
   comTrabalhosDoTicket,
-  processosAbertos,
 } from "../armazenamento/trabalho_agentico.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
-import { avisar, rodarPi } from "./gerente.ts";
+import { condutor } from "./trabalho/condutor.ts";
+import { encerrarProcessoDoTicket, encerrarProcessoOrfao, type TicketRef } from "./trabalho/processo_do_ticket.ts";
 import { HarnessPi } from "../infra/agente/harness_pi.ts";
 import { confianca } from "../infra/agente/pi.ts";
 import { argumentosPiDemanda } from "./pi_demanda.ts";
 import { type ContextoDemanda, montarPromptDemanda } from "./prompt_demanda.ts";
 import { perguntasRespondidasNaSessao } from "./sessoes_demanda.ts";
-
-type TicketRef = Pick<TrabalhoGerenciado, "demanda_id" | "ticket_id">;
 
 export interface OpcoesExecucaoDemanda {
   limiteMin: number;
@@ -69,14 +63,6 @@ export interface OpcoesExecucaoDemanda {
   /** Fechamento do ticket depois do encerramento; injetável nos testes (padrão: `fecharTicketDemanda`). */
   fechar?: typeof fecharTicketDemanda;
 }
-
-/** Execuções com condutor vivo neste serviço, por id, com o grupo de processo do pi depois de lançado. */
-const ativas = new Map<string, { pgid?: number; interrompida?: boolean }>();
-
-/** Os condutores em curso: o `parar` do serviço os espera antes de fechar o banco. */
-const condutores = new Set<Promise<unknown>>();
-/** Desde o início do `parar`, o pi que sai é efeito da parada do serviço. */
-let parando = false;
 
 interface Conducao {
   banco: DatabaseSync;
@@ -99,48 +85,9 @@ function worktreeDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string)
 
 /** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */
 function gravarGrupo({ banco, ref, execucao }: Conducao, pgid: number): void {
-  const viva = { ...ativas.get(execucao.id), pgid };
-  ativas.set(execucao.id, viva);
-  // Interrompida durante a preparação: o pi que acaba de subir recebe o término já.
-  if (viva.interrompida) sinalNoGrupo(pgid, "SIGTERM");
   comTrabalhosDoTicket(banco, ref, (estado) => ({
     ...estado,
     execucoes: estado.execucoes.map((e) => (e.id === execucao.id ? { ...e, grupo_processo: pgid } : e)),
-  }));
-}
-
-type Encerravel = Pick<Conducao, "banco" | "ref" | "sessao" | "execucao">;
-
-/** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
-function coletarUso(c: Encerravel, fim: string, log: string): UsoModeloExecucao[] {
-  try {
-    const arquivo = new HarnessPi().arquivoDaSessao(raizDo(c.banco), c.sessao.id);
-    const somas = arquivo ? somar(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim)) : [];
-    return somas.map((s) => ({
-      execucao_id: c.execucao.id,
-      modelo_provedor: s.provedor,
-      modelo_nome: s.modelo,
-      tokens_entrada: s.input,
-      tokens_saida: s.output,
-      tokens_cache_leitura: s.cacheRead,
-      tokens_cache_escrita: s.cacheWrite,
-      ...(!s.semCusto && { custo: s.custo }),
-    }));
-  } catch (error_) {
-    // Métrica nunca impede o encerramento.
-    anotar(log, `coleta de uso falhou: ${mensagem(error_)}`);
-    return [];
-  }
-}
-
-/** O único escritor do encerramento: fim, falha e uso na mesma transação; não toca ticket, etapa nem gate. */
-function encerrar(c: Encerravel, falhou: boolean, log: string): void {
-  const fim = new Date().toISOString();
-  const usos = coletarUso(c, fim, log);
-  comTrabalhosDoTicket(c.banco, c.ref, (estado) => ({
-    ...estado,
-    execucoes: encerrarProcesso(estado.execucoes, c.execucao.id, fim, falhou),
-    usos: usos.reduce((acc, u) => registrarUso(acc, u), estado.usos),
   }));
 }
 
@@ -211,9 +158,9 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
       etapasDoProjeto: projeto.etapas,
     });
     // Parada em curso durante a preparação: não lança um pi novo; a falha vira reinício do serviço abaixo.
-    if (parando) throw new Error("o serviço está parando");
+    if (condutor.emParada()) throw new Error("o serviço está parando");
     anotar(log, `pi ${args.join(" ")}`);
-    falha = await rodarPi({
+    falha = await condutor.iniciar({
       execucao: { id: execucao.id, sessaoPi: sessao.id, modo: sessao.modo },
       args,
       cwd: worktree,
@@ -227,9 +174,8 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
           { ticket: formatarTicketRef(c.ref), etapa: c.ticket.etapa, demanda: c.ag.demanda.titulo },
           pergunta,
         ),
-      // Sem pid (o pi nem subiu) não há grupo a gravar; o `saiu` do pi relata o erro.
       aoLancar: (pgid) => {
-        if (Number.isInteger(pgid)) gravarGrupo(c, pgid);
+        gravarGrupo(c, pgid);
       },
     });
   } catch (error_) {
@@ -237,17 +183,17 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     anotar(log, `preparação falhou: ${falha.motivo}`);
   }
   // Interrompida pelo Auditor: o pi saiu pelo SIGTERM, mas a causa verdadeira é a interrupção.
-  if (ativas.get(execucao.id)?.interrompida) falha = falhaInterrompidaPeloAuditor;
-  else if (parando) falha = falhaPorServicoReiniciado;
-  ativas.delete(execucao.id);
-  encerrar(c, falha !== undefined, log);
+  if (condutor.foiInterrompido(execucao.id)) falha = falhaInterrompidaPeloAuditor;
+  else if (condutor.emParada()) falha = falhaPorServicoReiniciado;
+  condutor.deixarDeAcompanhar(execucao.id);
+  encerrarProcessoDoTicket(c, falha !== undefined, log);
   try {
     await (opcoes.fechar ?? fecharTicketDemanda)(
       c.banco,
       c.ref,
       { falha },
       {
-        parada: () => parando,
+        parada: () => condutor.emParada(),
       },
     );
   } catch (error_) {
@@ -259,7 +205,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     }
   }
   // O último `estado` do SSE sai com o pi, antes do fim gravado e do fechamento: o chat precisa do cabeçalho novo.
-  avisar(sessao.id, log);
+  condutor.avisar(sessao.id, log);
   return falha;
 }
 
@@ -319,42 +265,10 @@ export function iniciarExecucaoDemanda(
       agora: execucao.inicio,
     }),
   );
-  ativas.set(execucao.id, {});
-  const fim = conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes });
-  condutores.add(fim);
-  const sair = () => condutores.delete(fim);
-  fim.then(sair, sair);
+  const fim = condutor.acompanhar(execucao.id, () =>
+    conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes }),
+  );
   return { id: execucao.id, fim };
-}
-
-/** O `parar` do serviço chama antes de qualquer `await`: o condutor que acordar depois grava "serviço reiniciado". */
-export function marcarParada(): void {
-  parando = true;
-}
-
-/**
- * Parada do serviço: espera os condutores em curso por até `limiteMs`, para gravarem o fim da execução com o banco
- * ainda aberto. Passado o limite, mata o grupo dos pi que restaram (SIGKILL) e espera os condutores gravarem a falha:
- * quem falha por causa da parada termina como "serviço reiniciado". A espera depois do SIGKILL também tem limite
- * (`aposKillMs`): o condutor fora do pi (preparação, verificações) pode não acordar; então volta assim mesmo, e a
- * subida seguinte marca o ticket como "serviço reiniciado".
- */
-export async function aguardarCondutores(limiteMs: number, aposKillMs = 2000): Promise<void> {
-  marcarParada();
-  const esperar = async (ms: number) => {
-    let timer: NodeJS.Timeout | undefined;
-    const limite = new Promise<"limite">((pronto) => {
-      timer = setTimeout(pronto, ms, "limite");
-    });
-    const resultado = await Promise.race([Promise.allSettled(condutores), limite]);
-    clearTimeout(timer);
-    return resultado;
-  };
-  if ((await esperar(limiteMs)) === "limite") {
-    for (const { pgid } of ativas.values()) if (pgid !== undefined) sinalNoGrupo(pgid, "SIGKILL");
-    await esperar(aposKillMs);
-  }
-  parando = false;
 }
 
 /**
@@ -368,51 +282,7 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
     `o ticket ${ref.demanda_id}.T${String(ref.ticket_id)} não tem execução em andamento`,
     "só se interrompe uma execução aberta",
   );
-  const viva = ativas.get(execucao.id);
-  if (viva) {
-    viva.interrompida = true;
-    if (viva.pgid !== undefined) sinalNoGrupo(viva.pgid, "SIGTERM");
-    return;
-  }
-  encerrarOrfa(banco, ref, execucao.id, falhaInterrompidaPeloAuditor);
-}
-
-/** Execução aberta sem condutor: SIGKILL no grupo gravado, encerra com falha e falha o ticket em execução, sem tocar etapa nem gate. */
-function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, falha: FalhaDaTentativa): void {
-  const { sessoes, execucoes } = carregarTrabalhosDoTicket(banco, ref);
-  const execucao = existe(
-    execucoes.find((e) => e.id === id),
-    `a execução ${id} não existe`,
-    "confira o banco",
-  );
+  if (condutor.interromper(execucao.id)) return;
   if (execucao.grupo_processo != null) sinalNoGrupo(execucao.grupo_processo, "SIGKILL");
-  const sessao = existe(
-    sessoes.find((s) => s.id === execucao.trabalho_id),
-    `a execução ${id} não tem sessão`,
-    "confira o banco",
-  );
-  const { log } = pastasDoProcesso(raizDo(banco), id);
-  encerrar({ banco, ref, sessao, execucao }, true, log);
-  falharTicketDemanda(banco, ref, falha);
-  avisar(sessao.id, log);
-}
-
-/** Reinício do serviço (§4.2): toda execução aberta é de uma instância anterior e falha, sem avançar etapa nem gate. */
-export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
-  for (const { id, demanda_id, ticket_id } of processosAbertos(banco)) {
-    encerrarOrfa(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado);
-  }
-  // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
-  // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
-  const presos = banco
-    .prepare(
-      `SELECT demanda_id, ticket_id FROM ticket_demanda t WHERE estado = 'em_execucao' AND (
-         etapa IN ('implementar', 'resolver_conflito', 'encerrar_demanda', 'revisar_rodada', 'revisar_demanda')
-         OR (etapa = 'encerrar_rodada' AND EXISTS (SELECT 1 FROM rodada r
-           WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = 'encerrar_rodada')))`,
-    )
-    .all() as unknown as TicketRef[];
-  for (const { demanda_id, ticket_id } of presos) {
-    falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado);
-  }
+  encerrarProcessoOrfao(banco, ref, execucao.id, falhaInterrompidaPeloAuditor, condutor.avisar);
 }

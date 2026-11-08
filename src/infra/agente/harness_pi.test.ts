@@ -232,7 +232,7 @@ test("fecharStdin: o pi recebe o EOF do stdin; sem ele, o stdin segue aberto", a
 
 test("padrões do Auditor: o pi do PATH", () => {
   delete process.env.FABRIQUINHA_PI;
-  assert.equal(harness.binario(), "pi");
+  assert.equal(harness.binarioPi(), "pi");
 });
 
 test("perguntar: o modo consulta roda o pi uma vez, sem ferramentas e sem credenciais, e devolve o stdout", async () => {

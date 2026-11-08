@@ -20,7 +20,7 @@ import { fecharTicketDemanda } from "../../src/aplicacao/fechamento_ticket.ts";
 import { decidirGate } from "../../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../../src/aplicacao/gestao_demandas.ts";
 import { concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
-import { situacao } from "../../src/aplicacao/gerente.ts";
+import { condutor } from "../../src/aplicacao/trabalho/condutor.ts";
 import { carregarDemanda, comDemanda } from "../../src/armazenamento/demandas.ts";
 import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
 import { configuracao } from "../../src/armazenamento/servico.ts";
@@ -470,7 +470,7 @@ const ETAPAS: Record<string, Preparar> = {
         await esperar(() => {
           const { ticket_id } = ticket(c, id, "ajustar_resultado");
           const sessao = carregarTrabalhosDoTicket(c.banco, { demanda_id: id, ticket_id }).sessoes[0];
-          return chamadas(c) > antes && sessao !== undefined && situacao(sessao.id)?.ocupado === false;
+          return chamadas(c) > antes && sessao !== undefined && condutor.situacao(sessao.id)?.ocupado === false;
         }, "a primeira resposta do pi");
         respondeu = true;
       },

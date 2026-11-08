@@ -80,7 +80,7 @@ interface ProcessoPi {
 
 export class HarnessPi {
   /** O binário do pi: `$FABRIQUINHA_PI` ou `pi` do PATH (F4 §10). */
-  binario(): string {
+  binarioPi(): string {
     return process.env.FABRIQUINHA_PI || "pi";
   }
 
@@ -155,7 +155,7 @@ export class HarnessPi {
     { cwd, env, log, fecharStdin }: { cwd: string; env: NodeJS.ProcessEnv; log: string; fecharStdin?: boolean },
     aoEvento: (evento: EventoPi) => void,
   ): ProcessoPi {
-    const filho = spawn(this.binario(), args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+    const filho = spawn(this.binarioPi(), args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
     const pgid = Number(filho.pid);
     // Escrever no stdin de um pi que já saiu dá EPIPE; sem ouvinte, o erro derrubaria o serviço.
     const falhou = (erro: Error) => {
@@ -215,7 +215,7 @@ export class HarnessPi {
     ];
     try {
       const env = ambienteSemCredenciais(process.env, join(tmpdir(), "fabriquinha-vazio"));
-      const r = await rodar(this.binario(), args, { env, limiteMs });
+      const r = await rodar(this.binarioPi(), args, { env, limiteMs });
       return r.codigo === 0 ? r.saida : undefined;
     } catch {
       return undefined;
@@ -224,7 +224,7 @@ export class HarnessPi {
 
   /** Os pares da tabela de `pi --list-models [busca]`; a busca do pi é aproximada. */
   private async modelosDoPi(...busca: string[]): Promise<Modelo[]> {
-    const lista = await executar(this.binario(), ["--list-models", ...busca]);
+    const lista = await executar(this.binarioPi(), ["--list-models", ...busca]);
     if (lista.codigo !== 0) {
       throw new ErroDeRegra(
         `o pi falhou ao listar os modelos: ${lista.erro.trim()}`,

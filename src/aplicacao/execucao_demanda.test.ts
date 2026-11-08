@@ -20,7 +20,7 @@ import {
   type FalhaDaTentativa,
   falhaInterrompidaPeloAuditor,
 } from "../nucleo/tentativa.ts";
-import { assinar } from "./gerente.ts";
+import { condutor } from "./trabalho/condutor.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -29,13 +29,7 @@ import { criarTrabalho, iniciarProcesso } from "../nucleo/trabalho_agentico.ts";
 import { carregarTrabalhosDoTicket, comTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
-import {
-  aguardarCondutores,
-  marcarParada,
-  interromperExecucaoDemanda,
-  iniciarExecucaoDemanda,
-  recuperarExecucoesDemanda,
-} from "./execucao_demanda.ts";
+import { interromperExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const MODELO_DA_ETAPA = { provedor: "anthropic", nome: "claude-etapa" };
@@ -458,7 +452,7 @@ test("o ouvinte da sessão recebe `estado` depois do fim gravado, no fim normal 
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const sessao = sessoes(1).sessoes[0]?.id ?? "";
   let fimNoUltimoEstado: string | null | undefined = undefined;
-  const parar = assinar(sessao, (e) => {
+  const parar = condutor.assinar(sessao, (e) => {
     if (e.type === "estado") fimNoUltimoEstado = sessoes(1).execucoes[0]?.fim;
   });
   await fim;
@@ -473,7 +467,7 @@ test("o ouvinte da sessão recebe `estado` depois do fim gravado, no fim normal 
     return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
   });
   let aberta: boolean | undefined;
-  assinar("s-aviso", (e) => {
+  condutor.assinar("s-aviso", (e) => {
     if (e.type === "estado") aberta = orfa.sessoes(2).execucoes[0]?.fim == null;
   });
   interromperExecucaoDemanda(orfa.banco, ref(2));
@@ -540,7 +534,7 @@ test("CA-10, CA-14: reinício mata o grupo gravado e falha as abertas (com ou se
   abrirOrfa(1, "e-com-grupo", filho.pid);
   abrirOrfa(2, "e-sem-grupo");
   const antes = carregarDemanda(banco, "I-1");
-  recuperarExecucoesDemanda(banco);
+  condutor.recuperarNaSubida(banco);
   await morreu;
   for (const t of [1, 2]) {
     const [e] = sessoes(t).execucoes;
@@ -643,7 +637,7 @@ test("interrupção do Auditor e reinício falham o ticket em execução", async
   abrirOrfa(1, "e1");
   abrirOrfa(2, "e2");
   interromperExecucaoDemanda(banco, ref(1));
-  recuperarExecucoesDemanda(banco);
+  condutor.recuperarNaSubida(banco);
   assert.equal(motivoDe(banco, 1), "interrompida pelo Auditor");
   assert.equal(motivoDe(banco, 2), "serviço reiniciado");
 });
@@ -653,7 +647,7 @@ test("reinício falha o ticket em execução cuja execução já foi encerrada (
   emExecucao(banco, 1);
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1, fechar: () => Promise.resolve() }).fim;
   assert.equal(statusDe(banco, 1)?.estado, "em_execucao");
-  recuperarExecucoesDemanda(banco);
+  condutor.recuperarNaSubida(banco);
   assert.equal(statusDe(banco, 1)?.estado, "falhou");
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
 });
@@ -667,7 +661,7 @@ test("CA-12: reinício falha as revisões e o encerrar_rodada em encerramento; o
       ('I-1', 9, 'encerrar_rodada', 'em_execucao', '${em}', 1),
       ('I-1', 10, 'encerrar_rodada', 'em_execucao', '${em}', 2)`);
   for (const t of [3, 4]) emExecucao(banco, t); // planejar e revisar_demanda
-  recuperarExecucoesDemanda(banco);
+  condutor.recuperarNaSubida(banco);
   assert.deepEqual(
     [3, 4, 8, 9, 10].map((t) => statusDe(banco, t)?.estado),
     ["em_execucao", "falhou", "falhou", "falhou", "em_execucao"],
@@ -684,7 +678,7 @@ test("CA-12: reinício falha o planejar com execução aberta, com a demanda em 
     const execucao = { id: "p", trabalho_id: sessao.id, inicio: em, falha: false };
     return { ...estado, sessoes: sessoesNovas, execucoes: iniciarProcesso(sessoesNovas, estado.execucoes, execucao) };
   });
-  recuperarExecucoesDemanda(banco);
+  condutor.recuperarNaSubida(banco);
   assert.equal(statusDe(banco, 3)?.estado, "falhou");
 });
 
@@ -702,7 +696,7 @@ test("CA-13 e CA-14: reinício falha o encerrar_demanda e o resolver_conflito em
     INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em) VALUES
       ('I-1', 11, 'encerrar_demanda', 'em_execucao', '${em}'),
       ('I-1', 12, 'resolver_conflito', 'em_execucao', '${em}')`);
-  recuperarExecucoesDemanda(banco);
+  condutor.recuperarNaSubida(banco);
   assert.deepEqual(
     [11, 12].map((t) => statusDe(banco, t)?.estado),
     ["falhou", "falhou"],
@@ -720,13 +714,13 @@ async function grupoDoPi(sessoes: (t: number) => ReturnType<typeof carregarTraba
   return grupo;
 }
 
-test("I-246 CA-1: aguardarCondutores espera o condutor gravar o fim, e o ticket falha com 'serviço reiniciado'", async () => {
+test("I-246 CA-1: aguardarTodos espera o condutor gravar o fim, e o ticket falha com 'serviço reiniciado'", async () => {
   const { banco, sessoes, piFalso } = await cenario();
   piFalso.roteirizar([{ ...PASSO_PI, termina: "nunca" }]);
   emExecucao(banco, 1);
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const grupo = await grupoDoPi(sessoes, 1);
-  const espera = aguardarCondutores(10_000);
+  const espera = condutor.aguardarTodos(10_000);
   process.kill(-grupo, "SIGTERM"); // como o cgroup do systemd
   await espera;
   const [execucao] = sessoes(1).execucoes;
@@ -755,20 +749,20 @@ test("I-246 CA-4: condutor que não termina no limite é morto, grava 'serviço 
   emExecucao(banco, 1);
   iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   const grupo = await grupoDoPi(sessoes, 1);
-  await aguardarCondutores(50);
+  await condutor.aguardarTodos(50);
   const [execucao] = sessoes(1).execucoes;
   assert.notEqual(execucao?.fim, null);
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
   assert.throws(() => process.kill(-grupo, 0), { code: "ESRCH" });
 });
 
-test("I-246 CA-4: condutor fora do pi que não acorda nem depois do SIGKILL: aguardarCondutores volta no limite", async () => {
+test("I-246 CA-4: condutor fora do pi que não acorda nem depois do SIGKILL: aguardarTodos volta no limite", async () => {
   const { banco } = await cenario({ preparacao: "sleep 1" });
   emExecucao(banco, 1);
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   await new Promise((r) => setTimeout(r, 300)); // o condutor está na preparação
   const inicio = Date.now();
-  await aguardarCondutores(50, 100);
+  await condutor.aguardarTodos(50, 100);
   assert.ok(Date.now() - inicio < 600);
   await fim; // acorda com a parada já encerrada
 });
@@ -778,12 +772,12 @@ test("I-246 CA-4: parada durante a preparação: o pi não é lançado e o ticke
   emExecucao(banco, 1);
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   await new Promise((r) => setTimeout(r, 300));
-  marcarParada();
+  condutor.marcarParada();
   await fim;
   assert.equal(Object.hasOwn(sessoes(1).execucoes[0] ?? {}, "erro"), false);
   assert.equal(motivoDe(banco, 1), "serviço reiniciado");
   assert.deepEqual(registro(), []);
-  await aguardarCondutores(1000); // desfaz a parada para os testes seguintes
+  await condutor.aguardarTodos(1000); // desfaz a parada para os testes seguintes
 });
 
 test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha 'serviço reiniciado', sem devolução nem evidência", async () => {
@@ -796,7 +790,7 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
   const { fim } = iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 });
   while (!existsSync(arquivoComPidDaColeta) || readFileSync(arquivoComPidDaColeta, "utf8").trim() === "")
     await dormir(50); // a coleta está nos testes
-  marcarParada();
+  condutor.marcarParada();
   process.kill(Number(readFileSync(arquivoComPidDaColeta, "utf8")), "SIGTERM"); // como o cgroup do systemd, só no comando deste teste
   await fim;
   const ticket = carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === 1);
@@ -808,7 +802,7 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
   );
   assert.equal(carregarDemanda(banco, "I-1").evidencias.length, 0);
   assert.equal(sessoes(1).execucoes[0]?.fim == null, false);
-  await aguardarCondutores(1000); // desfaz a parada para os testes seguintes
+  await condutor.aguardarTodos(1000); // desfaz a parada para os testes seguintes
 });
 
 test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisões anteriores reprovadas da rodada", async () => {

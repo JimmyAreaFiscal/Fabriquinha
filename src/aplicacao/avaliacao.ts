@@ -25,7 +25,7 @@ import {
 } from "../armazenamento/avaliacoes.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { HarnessPi } from "../infra/agente/harness_pi.ts";
-import { abortar, assinar as assinarSessao } from "./gerente.ts";
+import { condutor } from "./trabalho/condutor.ts";
 import {
   causaDaFalha,
   type Conducao,
@@ -212,7 +212,7 @@ export async function iniciarAvaliacao(
     const prompt = promptDaAvaliacao(dir, { ...escopo, pedido });
     writeFileSync(join(dir, "prompt.md"), prompt);
     const comeco = Promise.withResolvers<true>();
-    const desassinar = assinarSessao(id, (evento) => {
+    const desassinar = condutor.assinar(id, (evento) => {
       if (evento.type === "agent_start") comeco.resolve(true);
     });
     const resultado = await Promise.race([
@@ -255,7 +255,7 @@ export function abrir(banco: DatabaseSync, id: string) {
     ) as unknown[],
     /** Os eventos ao vivo, com `{ type: "estado", estado }` quando o estado muda. Devolve a função que cancela. */
     assinar: (ouvinte: (evento: EventoPi) => void) =>
-      assinarSessao(id, (evento) => {
+      condutor.assinar(id, (evento) => {
         if (evento.type === "estado") ouvinte({ type: "estado", estado: estadoDaAvaliacao(id) });
         else
           ouvinte(
@@ -274,7 +274,7 @@ export function enviarNaAvaliacao(banco: DatabaseSync, id: string, mensagem: str
 
 /** Manda `abort` ao agente da avaliação que trabalha. */
 export const abortarAvaliacao = (id: string): void => {
-  abortar(id);
+  condutor.abortar(id);
 };
 
 /**

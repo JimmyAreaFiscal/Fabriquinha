@@ -31,7 +31,7 @@ import { atualizarWorktreeRodada, caminhoDaWorktreeRodada } from "../infra/repos
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { HarnessPi } from "../infra/agente/harness_pi.ts";
+import { condutor } from "./trabalho/condutor.ts";
 
 export interface RefRodada {
   demanda_id: string;
@@ -51,7 +51,7 @@ async function resumirContextoDoPR(contexto: string, limite: number): Promise<st
     "Não use títulos (#). Responda só com o resumo.",
     contexto,
   ].join("\n\n");
-  return (await new HarnessPi().perguntar(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
+  return (await condutor.consultar(prompt, undefined, LIMITE_RESUMO_MS))?.trim();
 }
 
 /** A rodada em `encerrar_rodada`, numa demanda em `em_execucao`. */

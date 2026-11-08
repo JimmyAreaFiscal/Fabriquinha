@@ -17,7 +17,7 @@ import {
   estadoDaAvaliacao,
   iniciarAvaliacao,
 } from "../src/aplicacao/avaliacao.ts";
-import { encerrar, situacao } from "../src/aplicacao/gerente.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
 import { metricasDaDemanda } from "../src/aplicacao/demanda.ts";
 import { achadoDaDemanda } from "../src/armazenamento/avaliacoes.ts";
@@ -197,6 +197,6 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(nova.id), { resultado: "aprovado" }, AUDITOR);
   assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
 
-  encerrar(id);
-  await esperar(() => !situacao(id) && estadoDaAvaliacao(id) === "concluida", "o pi da avaliação parar");
+  condutor.encerrar(id);
+  await esperar(() => !condutor.situacao(id) && estadoDaAvaliacao(id) === "concluida", "o pi da avaliação parar");
 });

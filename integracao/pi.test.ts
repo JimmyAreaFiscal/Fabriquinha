@@ -10,6 +10,7 @@ import { after, test } from "node:test";
 import { HarnessPi } from "../src/infra/agente/harness_pi.ts";
 import { PACOTE } from "../src/infra/agente/pi.ts";
 import { skillsDaEtapaDemanda } from "../src/aplicacao/pi_demanda.ts";
+import { condutor } from "../src/aplicacao/trabalho/condutor.ts";
 
 const harness = new HarnessPi();
 const dir = mkdtempSync(join(tmpdir(), "fabriquinha-fumaca-pi-"));
@@ -42,7 +43,7 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
     });
     // A API de extensões não lista as extensões carregadas; com `PI_TIMING=1`, o pi imprime no stderr cada uma que
     // importou e inicializou (`<caminho> factory`), na ordem de carga.
-    const pi = spawnSync(harness.binario(), [...args, "-e", sonda], {
+    const pi = spawnSync(harness.binarioPi(), [...args, "-e", sonda], {
       cwd: dir,
       env: { ...harness.ambiente(dir, dir, 1), PI_TIMING: "1", FABRIQUINHA_SONDA: prompt },
       input: "",
@@ -72,7 +73,7 @@ for (const etapa of ["planejar", "revisar_rodada", "encerrar_rodada", "revisar_d
   });
 }
 
-test("a consulta sem ferramentas roda sem as credenciais de hospedagem e do Sonar, e devolve o que o pi respondeu", async () => {
+test("a consulta do condutor, sem ferramentas, roda sem as credenciais de hospedagem e do Sonar, e devolve o que o pi respondeu", async () => {
   const credenciais = ["GH_TOKEN", "GITHUB_TOKEN", "AZURE_DEVOPS_EXT_PAT", "SYSTEM_ACCESSTOKEN", "SONAR_TOKEN"];
   // Um pi falso que responde com os nomes das variáveis do próprio ambiente.
   const piQueImprimeOAmbiente = join(dir, "pi-ambiente");
@@ -85,7 +86,7 @@ test("a consulta sem ferramentas roda sem as credenciais de hospedagem e do Sona
   for (const nome of credenciais) process.env[nome] = "segredo";
   process.env.FABRIQUINHA_PI = piQueImprimeOAmbiente;
   try {
-    const nomes = (await harness.perguntar("oi", undefined, 30_000))?.split("\n") ?? [];
+    const nomes = (await condutor.consultar("oi", undefined, 30_000))?.split("\n") ?? [];
     assert.ok(nomes.includes("PATH"), "a consulta devolve o texto do pi");
     for (const nome of credenciais) assert.ok(!nomes.includes(nome), nome);
   } finally {

@@ -1,18 +1,14 @@
-// O pi de conversa fora do agregado (auditoria.ts): a subida do serviço mata o pi que a instância anterior deixou. A
+// O pi de conversa fora do agregado (auditoria.ts). A
 // condução (subir, retomar, recusar com o agente trabalhando) é exercitada pela avaliação (avaliacao.test.ts).
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
-import { gravarGrupoDaAvaliacao } from "../armazenamento/avaliacoes.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { encerrar, situacao } from "./gerente.ts";
-import { causaDaFalha, enviarNaConversa, estadoDaAuditoria, recuperarAuditorias, subir } from "./auditoria.ts";
+import { condutor } from "./trabalho/condutor.ts";
+import { causaDaFalha, enviarNaConversa, estadoDaAuditoria, subir } from "./auditoria.ts";
 
 async function esperar(condicao: () => boolean) {
   for (let repeticao = 0; !condicao(); repeticao++) {
@@ -50,11 +46,11 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
     assert.throws(() => {
       enviarNaConversa("s-conducao", "outra", () => assert.fail());
     }, /trabalhando/);
-    await esperar(() => situacao("s-conducao")?.ocupado === false);
+    await esperar(() => condutor.situacao("s-conducao")?.ocupado === false);
     assert.equal(estadoDaAuditoria("s-conducao"), "conversa");
     enviarNaConversa("s-conducao", "confira", () => assert.fail("o pi vivo deve receber a mensagem"));
-    await esperar(() => piFalso.prompts().length === 2 && situacao("s-conducao")?.ocupado === false);
-    encerrar("s-conducao");
+    await esperar(() => piFalso.prompts().length === 2 && condutor.situacao("s-conducao")?.ocupado === false);
+    condutor.encerrar("s-conducao");
     assert.equal(estadoDaAuditoria("s-conducao"), "rodando");
     assert.throws(() => {
       enviarNaConversa("s-conducao", "cedo", () => assert.fail());
@@ -94,23 +90,5 @@ test("condução: sobe, envia, recusa ocupada e parando, sincroniza e retoma na 
     assert.equal(causaDaFalha(pasta, "motivo; veja o log em /log"), "motivo: segunda: terceira: quarta: quinta: sexta");
   } finally {
     rmSync(raiz, { recursive: true, force: true });
-  }
-});
-
-test("recuperarAuditorias: mata o grupo de cada avaliação com pi, zera a coluna e ignora a que não tem", async () => {
-  const { banco, fechar } = abrirBancoTemporario();
-  try {
-    recuperarAuditorias(banco); // nenhuma avaliação
-    banco.exec(`INSERT INTO projeto (nome, raiz_git, branch_base, hospedagem, chave_sonarqube) VALUES ('d', '/r', 'main', 'github', 'k');
-      INSERT INTO avaliacao (id, projeto, de, ate, pedido, criada_em) VALUES
-        ('sem-pi', 'd', '2026-01-01', '2026-01-02', '', 't'), ('com-pi', 'd', '2026-01-01', '2026-01-02', '', 't')`);
-    const sleep = spawn("sleep", ["300"], { detached: true, stdio: "ignore" });
-    const saiu = once(sleep, "exit");
-    gravarGrupoDaAvaliacao(banco, "com-pi", sleep.pid ?? 0);
-    recuperarAuditorias(banco);
-    assert.deepEqual(await saiu, [null, "SIGKILL"]);
-    assert.equal(banco.prepare("SELECT count(*) AS n FROM avaliacao WHERE grupo_processo IS NOT NULL").get()?.n, 0);
-  } finally {
-    fechar();
   }
 });

@@ -2,7 +2,7 @@
 // do sistema e o erro da falha, as peças que chegam ao vivo e o envio conforme o estado, como funções puras que
 // devolvem HTML. O texto de agente passa sempre pelo `markdown-it` com `html: false`; o resto, por `escapar`.
 import type { ThreadMessageLike } from "@assistant-ui/react";
-import type { Dialogo } from "../../../aplicacao/gerente.ts";
+import type { Dialogo } from "../../../aplicacao/trabalho/condutor.ts";
 import type { CabecalhoDemanda, ExecucaoDoChat, MotivoDemanda } from "../../../aplicacao/sessoes_demanda.ts";
 import type { Entrada } from "../../http/rotas/chat.ts";
 import { markdown, markdownEmLinha } from "../markdown.ts";

@@ -7,7 +7,7 @@ import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { encerrar, situacao } from "../../../aplicacao/gerente.ts";
+import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { registrarCorrecoesSessao } from "../../../nucleo/transicoes_rodada.ts";
 import { gravarConfiguracaoSdlc } from "../../../aplicacao/projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../../../armazenamento/demandas.ts";
@@ -404,7 +404,7 @@ test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e
   await ate(async () => (await conversa(c, c.sessao)).includes("com o pi vivo"));
 
   // Com o pi parado, a mensagem retoma a mesma sessão, e a sessão segue aberta depois que essa execução termina.
-  encerrar(c.execucao);
+  condutor.encerrar(c.execucao);
   await ate(() => Promise.resolve(execucoesAbertas(c) === 0));
   assert.equal(
     (await c.pedir(mensagens, { metodo: "POST", corpo: { texto: "com o pi parado", modo: "prompt" } })).status,
@@ -414,8 +414,8 @@ test("CA-25: a sessão de ajustes conversa pelo chat da sessão, com o pi vivo e
   const retomada = c.banco
     .prepare("SELECT id FROM processo_do_trabalho WHERE trabalho_id = ? ORDER BY inicio DESC LIMIT 1")
     .get(c.sessao) as { id: string };
-  await ate(() => Promise.resolve(situacao(c.sessao) !== undefined));
-  encerrar(retomada.id);
+  await ate(() => Promise.resolve(condutor.situacao(c.sessao) !== undefined));
+  condutor.encerrar(retomada.id);
   await ate(() => Promise.resolve(execucoesAbertas(c) === 0));
   assert.equal(c.ag().tickets.find((t) => t.ticket_id === 9)?.estado, "aberto");
   assert.equal(rodada(c)?.estado, "ajustar_resultado");

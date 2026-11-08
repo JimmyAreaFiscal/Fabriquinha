@@ -13,7 +13,7 @@ import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
 import { marcaDoPRRodada } from "../src/aplicacao/evidencias/pr_rodada.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
-import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../src/aplicacao/gerente.ts";
+import { PREFIXO_DA_RESPOSTA_AUTOMATICA, type RespostaAutomatica } from "../src/aplicacao/trabalho/condutor.ts";
 import { concluirSessaoAjustes } from "../src/aplicacao/sessao_ajustes.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";

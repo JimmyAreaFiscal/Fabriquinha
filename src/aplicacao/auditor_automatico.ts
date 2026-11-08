@@ -4,7 +4,7 @@
 import { z } from "zod";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import { executar } from "../infra/processo.ts";
-import { HarnessPi } from "../infra/agente/harness_pi.ts";
+import { condutor } from "./trabalho/condutor.ts";
 
 export interface PerguntaDoAgente {
   pergunta: string;
@@ -30,7 +30,7 @@ export interface RespostaDoAuditorAutomatico {
 
 /**
  * A resposta fixa à pergunta sobre verificação que fica fora da revisão; o modelo só classifica, o texto é do código.
- * @testes o teste do gerente confere que o agente recebe exatamente este texto (I-292 CA-1, CA-2)
+ * @testes o teste do condutor confere que o agente recebe exatamente este texto (I-292 CA-1, CA-2)
  */
 export const RESPOSTA_FORA_DA_REVISAO =
   "Fica fora da revisão; registre como verificado fora da revisão e decida pelo resto.";
@@ -140,6 +140,6 @@ export async function triarPergunta(
   p: PerguntaDoAgente,
   rodar: typeof executar = executar,
 ): Promise<RespostaDoAuditorAutomatico | undefined> {
-  const saida = await new HarnessPi().perguntar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
+  const saida = await condutor.consultar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
   return saida === undefined ? undefined : lerDecisao(saida, p, contexto.etapa);
 }

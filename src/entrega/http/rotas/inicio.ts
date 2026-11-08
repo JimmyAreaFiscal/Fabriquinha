@@ -12,7 +12,7 @@ import { ticketAtualDaEtapa } from "../../../nucleo/item_de_trabalho.ts";
 import { motivoDaFalhaDoTicket } from "../../../nucleo/tentativa.ts";
 import type { EtapaTicket, EstadoDemanda, EstadoRodada, Instante, EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { iniciarRevisaoDemanda } from "../../../nucleo/transicoes_demanda.ts";
-import { type Situacao, situacao } from "../../../aplicacao/gerente.ts";
+import { condutor, type Situacao } from "../../../aplicacao/trabalho/condutor.ts";
 import { type SessaoDeDemanda, sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { mesDe } from "../../../nucleo/periodo.ts";
 import { type MetricasMesDemanda, metricasDemandaPorMes } from "../../../aplicacao/periodo_demanda.ts";
@@ -285,7 +285,10 @@ export function esperaDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaSessao)
 
 /** `GET /api/inicio`. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function inicio(banco: DatabaseSync, situacaoDa: SituacaoDaSessao = situacao): DadosDoInicio {
+export function inicio(
+  banco: DatabaseSync,
+  situacaoDa: SituacaoDaSessao = (sessao) => condutor.situacao(sessao),
+): DadosDoInicio {
   const agora = new Date();
   const mes = mesDe(agora);
   // Um mês pedido, um mês devolvido.

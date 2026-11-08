@@ -1,15 +1,12 @@
-// O pi de conversa fora do agregado, sem ticket nem execução, que a avaliação do SDLC (avaliacao.ts) conduz numa pasta
-// sob a raiz: sobe e retoma o pi na mesma sessão, recusa a mensagem com o agente trabalhando e, na subida do serviço,
-// mata o pi que a instância anterior deixou. Nasceu com a Auditoria do Histórico, que a avaliação substituiu.
-import type { DatabaseSync } from "node:sqlite";
+// A conversa do pi fora do agregado, sem ticket nem execução, que a avaliação do SDLC (avaliacao.ts) monta numa pasta
+// sob a raiz: sobe e retoma o pi na mesma sessão pelo `CondutorDeTrabalhos` e recusa a mensagem com o agente
+// trabalhando. Nasceu com a Auditoria do Histórico, que a avaliação substituiu.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
-import { recolherGruposDasAvaliacoes } from "../armazenamento/avaliacoes.ts";
 import { anotar, noLog } from "../infra/registro.ts";
-import { sinalNoGrupo } from "../infra/processo.ts";
-import { assinar as assinarSessao, avisar, mandar, rodarPi, situacao } from "./gerente.ts";
+import { condutor } from "./trabalho/condutor.ts";
 import { HarnessPi } from "../infra/agente/harness_pi.ts";
 
 export interface OpcoesDaAuditoria {
@@ -20,9 +17,6 @@ export interface OpcoesDaAuditoria {
 }
 
 type EstadoDaAuditoria = "rodando" | "conversa";
-
-/** O agente da auditoria vivo ou subindo/parando por sessão: no máximo um pi por sessão. */
-const tarefas = new Map<string, Promise<string | undefined>>();
 
 /** O que muda na condução do pi: a pasta sob a raiz, as extensões a mais e o que sincronizar com o banco. */
 export interface Conducao {
@@ -36,12 +30,12 @@ export interface Conducao {
 
 /** O agente trabalha (ou o pi sobe ou para); parado, espera a próxima pergunta do Auditor. */
 export const estadoDaAuditoria = (sessao: string): EstadoDaAuditoria =>
-  (situacao(sessao)?.ocupado ?? tarefas.has(sessao)) ? "rodando" : "conversa";
+  (condutor.situacao(sessao)?.ocupado ?? condutor.emCurso(sessao)) ? "rodando" : "conversa";
 
 /**
  * Lança o pi da auditoria na pasta dela, em modo consulta (ociosidade), com `prompt` como mensagem. Resolve com o
  * motivo da falha, ou `undefined`, quando o pi para. O grupo do pi fica gravado (`gravarGrupo`) enquanto ele vive,
- * para o reinício do serviço matá-lo (`recuperarAuditorias`).
+ * para o condutor matá-lo na subida do serviço.
  */
 export function subir(
   raiz: string,
@@ -62,21 +56,20 @@ export function subir(
       anotar(log, `sincronização falhou: ${String(error_)}`);
     }
   };
-  const desassinar = assinarSessao(sessao, (evento) => {
+  const desassinar = condutor.assinar(sessao, (evento) => {
     if (evento.type === "agent_end") sincronizarNoLog();
   });
-  const tarefa = rodarPi({
-    execucao: { id: sessao, sessaoPi: sessao, modo: "consulta" },
-    args,
-    cwd: dir,
-    env: harness.ambiente(raiz, dir),
-    log,
-    prompt,
-    limiteMin: ociosidadeMin,
-    aoLancar: (grupo) => {
-      if (Number.isInteger(grupo)) gravarGrupo(grupo); // pi que não subiu não tem pid
-    },
-  })
+  const tarefa = condutor
+    .iniciar({
+      execucao: { id: sessao, sessaoPi: sessao, modo: "consulta" },
+      args,
+      cwd: dir,
+      env: harness.ambiente(raiz, dir),
+      log,
+      prompt,
+      limiteMin: ociosidadeMin,
+      aoLancar: gravarGrupo,
+    })
     .then((falha) => {
       gravarGrupo(null);
       anotar(
@@ -88,10 +81,8 @@ export function subir(
     .finally(() => {
       desassinar();
       sincronizarNoLog();
-      tarefas.delete(sessao);
-      avisar(sessao, log);
+      condutor.avisar(sessao, log);
     });
-  tarefas.set(sessao, tarefa);
   tarefa.catch(noLog);
   return tarefa;
 }
@@ -107,17 +98,12 @@ export function causaDaFalha(dir: string, motivo: string): string {
 
 /** O envio comum à auditoria e à avaliação; `retomar` sobe um pi novo, com o pi parado, na mesma sessão. */
 export function enviarNaConversa(sessao: string, mensagem: string, retomar: (prompt: string) => void): void {
-  const viva = situacao(sessao);
+  const viva = condutor.situacao(sessao);
   if (viva?.ocupado) {
     throw new ErroDeRegra("o agente da auditoria está trabalhando", "espere a resposta, ou use Abortar");
   }
-  if (viva) mandar(sessao, { type: "prompt", message: mensagem });
-  else if (tarefas.has(sessao)) {
+  if (viva) condutor.mandar(sessao, { type: "prompt", message: mensagem });
+  else if (condutor.emCurso(sessao)) {
     throw new ErroDeRegra("o agente da auditoria ainda está parando", "tente de novo em alguns segundos");
   } else retomar(mensagem);
-}
-
-/** Na subida do serviço, mata o grupo de cada pi de avaliação que a instância anterior deixou (F4 §7). */
-export function recuperarAuditorias(banco: DatabaseSync): void {
-  for (const grupo of recolherGruposDasAvaliacoes(banco)) sinalNoGrupo(grupo, "SIGKILL");
 }
