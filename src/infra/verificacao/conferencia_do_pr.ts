@@ -7,7 +7,7 @@ import type { ResultadoDaVerificacao } from "../../nucleo/verificacao.ts";
 import { type OpcoesVerificacao, type ProblemasDoPR, verificarPR } from "../repositorio/pr.ts";
 import { type RegistroDaVerificacao, Verificacao } from "./verificacao.ts";
 
-/** Os padrões da espera (limite de 60 min, leitura a cada 30 s e carência de 2 min) são os de `verificarPR`. */
+/** Os padrões da espera (limite de 60 min, leitura a cada 10 s e carência de 1 min) são os de `verificarPR`. */
 export class ConferenciaDoPR extends Verificacao {
   readonly tipo = "conferencia_do_pr";
   readonly #projeto: Pick<Projeto, "raiz_git" | "hospedagem">;
