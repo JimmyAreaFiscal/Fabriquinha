@@ -5,6 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { concluirTicketImplementar } from "../nucleo/conclusao_ticket.ts";
+import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_etapa.ts";
 import { concluirImplementacoesRodada } from "../nucleo/transicoes_rodada.ts";
@@ -19,7 +20,6 @@ import { guardarBytes } from "../armazenamento/arquivos.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import type { Commit } from "../armazenamento/commits.ts";
 import { HooksDoCommit } from "../infra/verificacao/hooks_do_commit.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket_demanda.ts";
@@ -142,10 +142,7 @@ export async function fecharTicketDemanda(
   };
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const { rodada_id } = ticket;
-  const worktree =
-    rodada_id === undefined
-      ? caminhoDaWorktreeDemanda(raizDo(banco), projeto.nome, ref.demanda_id)
-      : caminhoDaWorktreeRodada(raizDo(banco), projeto.nome, { demanda_id: ref.demanda_id, rodada_id });
+  const { pasta: worktree } = espacoDoTicket(ag, ticket, projeto, raizDo(banco));
 
   if (!(await acharCommitTicketDemanda(worktree, ref))) {
     const e2e = ag.rodadas.find((r) => r.rodada_id === rodada_id)?.e2e ?? false;

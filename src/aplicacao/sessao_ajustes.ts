@@ -9,14 +9,15 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
+import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
+import { projetoExistente } from "../armazenamento/projetos.ts";
 import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { descartarAlteracoes, exigirGit } from "../infra/repositorio/worktree.ts";
 import { type OpcoesExecucaoDemanda, iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
@@ -65,11 +66,12 @@ const sessaoDaRodada = (ag: AgregadoDemanda, ref: RefRodada): TicketDemanda =>
 async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const raiz = raizDo(banco);
+  const projeto = projetoExistente(banco, ag.demanda.projeto);
   const marco = JSON.parse(readFileSync(arquivoDoMarco(banco, ref), "utf8")) as Marco;
   const log = logDaOperacao(raiz, `ajustes-${formatarRodadaRef(ref)}`);
   const pontas: [Ponta, string][] = [
-    [marco.rodada, caminhoDaWorktreeRodada(raiz, ag.demanda.projeto, ref)],
-    [marco.demanda, caminhoDaWorktreeDemanda(raiz, ag.demanda.projeto, ref.demanda_id)],
+    [marco.rodada, espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz).pasta],
+    [marco.demanda, espacoDoTicket(ag, {}, projeto, raiz).pasta],
   ];
   for (const [{ branch, sha }, worktree] of pontas) {
     await exigirGit(worktree, "update-ref", `refs/heads/${branch}`, sha);
@@ -116,7 +118,7 @@ function executar(
 export async function guardarMarcoDaSessao(banco: DatabaseSync, ref: RefRodada, ag: AgregadoDemanda): Promise<void> {
   const { pr } = prDaRodada(ag, ref);
   const demanda = await exigirGit(
-    caminhoDaWorktreeDemanda(raizDo(banco), ag.demanda.projeto, ref.demanda_id),
+    espacoDoTicket(ag, {}, projetoExistente(banco, ag.demanda.projeto), raizDo(banco)).pasta,
     "rev-parse",
     `refs/heads/${ag.demanda.branch}`,
   );
