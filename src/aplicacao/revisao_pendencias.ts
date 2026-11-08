@@ -4,7 +4,7 @@ import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { catalogoDaEtapa, type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_etapa.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { type SchemaEvidencia, schemaDe, schemaDeEtapa } from "../nucleo/schemas.ts";
+import { schemaDe, schemaDeEtapa, TipoEvidencia, type TipoSchemaEtapa } from "../nucleo/schemas.ts";
 
 type Dados = Record<string, unknown>;
 interface Linha {
@@ -13,16 +13,13 @@ interface Linha {
 }
 const ALTA = new Set(["alta", "critica"]);
 
-/** Esses schemas sempre definem `aprovada`. */
-const daSchema = (s: SchemaEvidencia) => (dados: Dados) => (s.aprovada as (d: Dados) => boolean).call(s, dados);
-
-/** `aprovada` por tipo; os tipos fora da tabela não têm regra binária. */
-const APROVADA: Record<string, (dados: Dados) => boolean> = {
-  matriz_fitness: (d) => (d as { linhas: Linha[] }).linhas.every((l) => l.codigoSaida === 0),
-  comprovacao_criterios: (d) => daSchema(schemaDe("comprovacao_criterios"))(d),
-  testes_estresse: (d) => daSchema(schemaDeEtapa("testes_estresse"))(d),
-  analise_seguranca: (d) => daSchema(schemaDeEtapa("analise_seguranca"))(d),
-};
+/** `aprovada` do schema do tipo; os tipos sem regra binária ficam `undefined`. */
+function aprovadaDosDados(tipo: string, dados: Dados): boolean | undefined {
+  const legado = TipoEvidencia.safeParse(tipo);
+  // Nas revisões, todo tipo do catálogo fora de `TipoEvidencia` tem schema de etapa (testes_estresse, analise_seguranca).
+  const schema = legado.success ? schemaDe(legado.data) : schemaDeEtapa(tipo as TipoSchemaEtapa);
+  return schema.aprovada?.(dados);
+}
 
 /** O que reprovou a evidência, para a recusa dizer o que corrigir. */
 function detalhe(tipo: string, dados: Dados): string {
@@ -75,7 +72,7 @@ export function conferirAprovacao(ag: AgregadoDemanda, ticket_id: number): void 
       ticket_id,
       tipo: e.tipo,
       produtor,
-      aprovada: APROVADA[e.tipo]?.(dados),
+      aprovada: aprovadaDosDados(e.tipo, dados),
       dados,
     });
   }

@@ -26,7 +26,7 @@ interface PRNaHospedagem {
 }
 
 /** O que impede o PR de ir ao gate (F5 §5.1, passo 4): conflito com a base e checks de CI que terminaram falhos. */
-interface ProblemasDoPR {
+export interface ProblemasDoPR {
   conflito: boolean;
   checksFalhos: readonly { nome: string; url?: string }[];
 }
@@ -461,6 +461,14 @@ export async function integrarPR(projeto: Pick<Projeto, "raiz_git" | "hospedagem
   return leitura.mergeSha;
 }
 
+/**
+ * Os padrões da espera de `verificarPR`.
+ * ponytail: leitura a cada 10 s (um `gh` barato) e 1 min de carência: a CI do GitHub registra o primeiro check em
+ * segundos, e o repositório sem CI pagava 2 min por PR; voltar a 2 min se uma CI lenta passar como "sem CI".
+ * @testes o teste confere os valores; a produção os lê só no destructuring de `verificarPR`
+ */
+export const PADROES_DA_ESPERA_DO_PR = { limiteMs: 60 * 60_000, intervaloMs: 10_000, carenciaMs: 60_000 };
+
 export interface OpcoesVerificacao {
   /** Quanto esperar a plataforma decidir o PR (F5 §5.1: 60 minutos). */
   limiteMs?: number;
@@ -480,9 +488,11 @@ export async function verificarPR(
   projeto: Pick<Projeto, "raiz_git" | "hospedagem">,
   id: string,
   log: string,
-  // ponytail: leitura a cada 10 s (um `gh` barato) e 1 min de carência: a CI do GitHub registra o primeiro check em
-  // segundos, e o repositório sem CI pagava 2 min por PR; voltar a 2 min se uma CI lenta passar como "sem CI".
-  { limiteMs = 60 * 60_000, intervaloMs = 10_000, carenciaMs = 60_000 }: OpcoesVerificacao = {},
+  {
+    limiteMs = PADROES_DA_ESPERA_DO_PR.limiteMs,
+    intervaloMs = PADROES_DA_ESPERA_DO_PR.intervaloMs,
+    carenciaMs = PADROES_DA_ESPERA_DO_PR.carenciaMs,
+  }: OpcoesVerificacao = {},
 ): Promise<ProblemasDoPR> {
   const cli = CLIS[projeto.hospedagem];
   const inicio = Date.now();

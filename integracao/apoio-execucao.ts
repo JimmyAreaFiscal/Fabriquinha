@@ -5,7 +5,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
-import type { Verificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
+import type { RegistroDaVerificacao } from "../src/aplicacao/evidencias/verificacoes.ts";
 import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
@@ -50,14 +50,14 @@ export const abrirPortao = () => {
 };
 export const pisAteAgora = () => pi.prompts().length;
 
-const verif = (tipo: Verificacao["tipo"], aprovada: boolean): Verificacao => ({
+const verif = (tipo: RegistroDaVerificacao["tipo"], aprovada: boolean): RegistroDaVerificacao => ({
   tipo,
   aprovada,
   falhas: aprovada ? [] : [{ classe: "tecnica", motivo: "reprovado no teste", comando: "c" }],
   dados: {},
   logs: [{ nome: `${tipo}.log`, texto: `log de ${tipo}` }],
 });
-export const verificacoes = (aprovada: boolean): Verificacao[] =>
+export const verificacoes = (aprovada: boolean): RegistroDaVerificacao[] =>
   (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((t) => verif(t, aprovada));
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações dadas (o `aprovadas()` é lido a cada fechamento). */

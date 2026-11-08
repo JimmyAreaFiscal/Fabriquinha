@@ -20,7 +20,7 @@ import { comSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { hospedagemFalsa } from "../../apoio-testes/hospedagem_falsa.ts";
 import { criarRepositorioDeTeste, commitarArquivo } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
-import type { Verificacao } from "./evidencias/verificacoes.ts";
+import type { RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
 import { despacharDemandas, type DepsDespacho } from "./despacho_demanda.ts";
 import { fecharTicketDemanda } from "./fechamento_ticket.ts";
 
@@ -109,7 +109,7 @@ async function cenario() {
   const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });
 
-  const aprovada = (tipo: Verificacao["tipo"]): Verificacao => ({
+  const aprovada = (tipo: RegistroDaVerificacao["tipo"]): RegistroDaVerificacao => ({
     tipo,
     aprovada: true,
     falhas: [],

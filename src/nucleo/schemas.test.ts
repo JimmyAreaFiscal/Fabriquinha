@@ -94,6 +94,10 @@ test("execucao_testes e matriz_fitness: comandos rodados pelos coletores, com o 
   for (const tipo of ["execucao_testes", "matriz_fitness"] as const) {
     assert.deepEqual(schemaDe(tipo).arquivos, { classes: ["texto"], min: 1 });
   }
+  const matriz = schemaDe("matriz_fitness");
+  assert.equal(matriz.aprovada?.({ linhas: [linha] }), true);
+  assert.equal(matriz.aprovada({ linhas: [linha, { ...linha, codigoSaida: 1 }] }), false);
+  assert.equal(matriz.aprovada({ linhas: [{ ...linha, codigoSaida: null }] }), false);
 });
 
 test("relatorio_sonar usa chave_sonarqube e publica o novo campo", () => {
