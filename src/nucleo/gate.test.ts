@@ -492,7 +492,7 @@ for (const cenario of CENARIOS) {
 // gate_pr: nota e a aprovação automática ----------------------------------------------------------------------------
 
 const cenarioDoPr = CENARIOS.find((c) => c.gate.nome === "gate_pr");
-assert.ok(cenarioDoPr);
+if (cenarioDoPr === undefined) throw new Error("falta o cenário do gate_pr");
 
 for (const [rotulo, nota, aceita] of [
   ["sem nota", undefined, false],
