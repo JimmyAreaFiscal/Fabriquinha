@@ -141,7 +141,7 @@ test("CA-1 a CA-4: aprova com nota 4, integra, avança a demanda e conclui a rod
   );
 });
 
-test("CA-5 e CA-6: nota fora de 1 a 5 ou ausente é recusada sem integrar", async () => {
+test("CA-5 e CA-6: nota fora de 1 a 5 ou ausente é reprovada sem integrar", async () => {
   const { banco, estado, demandaLocal } = await cenario();
   const antes = demandaLocal();
 
@@ -180,7 +180,7 @@ test("CA-8: PR já mergeado pela hospedagem (queda após a integração) não in
   assert.equal(hospedagem.chamadas().filter((x) => x.args[1] === "merge").length, 1);
 });
 
-test("CA-9 e CA-10: reaplicar a mesma aprovação é no-op; nota diferente é recusada", async () => {
+test("CA-9 e CA-10: reaplicar a mesma aprovação é no-op; nota diferente é reprovada", async () => {
   const { banco, ag, demandaLocal } = await cenario();
   await aprovarPRRodada(banco, REF, 4, AUDITOR);
   const depois = demandaLocal();
@@ -200,7 +200,7 @@ test("rodada concluída sem decisão aprovada recusa a aprovação", async () =>
   await assert.rejects(aprovarPRRodada(banco, REF, 4, AUDITOR), /outra decisão/);
 });
 
-test("rodada inexistente ou sem PR publicado é recusada", async () => {
+test("rodada inexistente ou sem PR publicado é reprovada", async () => {
   const { banco } = await cenario();
   await assert.rejects(aprovarPRRodada(banco, { ...REF, rodada_id: 9 }, 4, AUDITOR), /não existe/);
   const sem = await cenario("gate_pr", true);

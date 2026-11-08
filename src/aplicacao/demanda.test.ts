@@ -69,7 +69,7 @@ const execucao = (
 const decisao = (b: DatabaseSync, ticket: number, id: number, resultado: string, nota: number | null) =>
   b
     .prepare(
-      "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', ?, ?, ?, ?, NULL, 'auditor', ?)",
+      "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', ?, ?, 'gate_pr', ?, ?, NULL, 'auditor', ?)",
     )
     .run(ticket, id, resultado, nota, "2026-01-01T00:00:00.000Z");
 
@@ -104,8 +104,8 @@ test("CA-2: cada etapa mostra execuções, falhas, devoluções e reprovações"
   execucao(b, 1, "e0", 1);
   execucao(b, 2, "e1", 0);
   execucao(b, 2, "e2", 1);
-  decisao(b, 2, 1, "recusado", null);
-  decisao(b, 1, 1, "recusado", null);
+  decisao(b, 2, 1, "reprovado", null);
+  decisao(b, 1, 1, "reprovado", null);
   decisao(b, 1, 2, "aprovado", null);
   const { etapas, execucoes, falhas, exigenciasDeAlteracao, reprovacoes } = metricasDaDemanda(b, "I-1").total;
   assert.deepEqual(
@@ -129,7 +129,7 @@ test("CA-3: rodadas mais o ticket sem rodada somam o total", () => {
   execucao(b, 1, "e0", 0, [["m1", 1, 1, 1, 1, 1]]);
   execucao(b, 2, "e1", 1, [["m1", 2, 2, 2, 2, 2]]);
   execucao(b, 4, "e2", 0, [["m1", 4, 4, 4, 4, 4]]);
-  decisao(b, 4, 1, "recusado", null);
+  decisao(b, 4, 1, "reprovado", null);
   const m = metricasDaDemanda(b, "I-1");
   assert.deepEqual(
     m.rodadas.map((r) => r.rodadaId),

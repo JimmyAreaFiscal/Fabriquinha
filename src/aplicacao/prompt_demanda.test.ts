@@ -371,7 +371,7 @@ test("cada etapa recebe o que só ela lê: o desenho no planejar, o diff e a mat
 
 test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivos e perguntas respondidas (I-294 CA-1 a CA-5)", () => {
   const t = (ticket_id: number, etapa: string, rodada_id = 2) => ({ ticket_id, rodada_id, etapa, estado: "concluido" });
-  const recusa = (ticket_id: number, motivo: string) => ({ ticket_id, resultado: "recusado", motivo });
+  const recusa = (ticket_id: number, motivo: string) => ({ ticket_id, resultado: "reprovado", motivo });
   const comHistorico = {
     ...ag,
     tickets: [
@@ -401,13 +401,13 @@ test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivo
     });
   const prompt = revisaoSeguinte({});
   const secao = prompt.split("## Revisões anteriores da rodada")[1]?.split("## Arquivos alterados")[0] ?? "";
-  assert.match(secao, /I-206\.T4 \(revisar_rodada\), recusado: falta teste de X\n {2}- Corretivos: I-206\.T5\n/);
+  assert.match(secao, /I-206\.T4 \(revisar_rodada\), reprovado: falta teste de X\n {2}- Corretivos: I-206\.T5\n/);
   assert.ok(secao.indexOf("I-206.T4") < secao.indexOf("I-206.T6"));
-  assert.match(secao, /I-206\.T6 \(revisar_rodada\), recusado: o teste de X quebrou Y\n- I-206\.T7/);
-  assert.match(secao, /I-206\.T7 \(encerrar_rodada\), recusado: reverter docs\/x\.md/);
+  assert.match(secao, /I-206\.T6 \(revisar_rodada\), reprovado: o teste de X quebrou Y\n- I-206\.T7/);
+  assert.match(secao, /I-206\.T7 \(encerrar_rodada\), reprovado: reverter docs\/x\.md/);
   assert.match(secao, /Pergunta: Como confiro o Sonar\?\n {4}Resposta: fica com o Auditor no gate do PR/);
   assert.ok(!secao.includes("de outra rodada"));
-  assert.ok(!secao.includes("T6 (revisar_rodada), recusado: o teste de X quebrou Y\n  - Corretivos"));
+  assert.ok(!secao.includes("T6 (revisar_rodada), reprovado: o teste de X quebrou Y\n  - Corretivos"));
 
   assert.match(montar("revisar_rodada"), /## Revisões anteriores da rodada\n\n.*\n\n\(nenhuma\)/s);
   const semPerguntas = montarPromptDemanda({
@@ -415,7 +415,7 @@ test("revisar_rodada lista as recusas anteriores da rodada com motivo, corretivo
     ag: comHistorico,
     ticket: ticket("revisar_rodada", { ticket_id: 8 }),
   });
-  assert.ok(semPerguntas.includes("recusado: falta teste de X") && !semPerguntas.includes("Pergunta:"));
+  assert.ok(semPerguntas.includes("reprovado: falta teste de X") && !semPerguntas.includes("Pergunta:"));
 });
 
 test("só o revisar_rodada traz as revisões anteriores (I-294 CA-7)", () => {

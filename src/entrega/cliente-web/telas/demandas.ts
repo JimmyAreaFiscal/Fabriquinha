@@ -136,7 +136,7 @@ export interface DadosDaPagina {
     instrucao?: string;
     motivo?: string;
   }[];
-  decisoes: { ticket: string; resultado: "aprovado" | "recusado"; nota?: number; motivo?: string; por: string }[];
+  decisoes: { ticket: string; resultado: "aprovado" | "reprovado"; nota?: number; motivo?: string; por: string }[];
   evidencias: {
     tipo: string;
     rodada?: string;
@@ -191,7 +191,7 @@ const ESTADO_DO_PASSO = {
 type Pagina = DadosDaPagina;
 type Evidencia = Pagina["evidencias"][number];
 
-const DECISAO = { aprovado: ["Aprovado", "pill-ok"], recusado: ["Recusado", "pill-falha"] } as const;
+const DECISAO = { aprovado: ["Aprovado", "pill-ok"], reprovado: ["Reprovado", "pill-falha"] } as const;
 
 /** O botão que solta o texto recolhido logo antes dele; o montar o esconde quando o texto já cabe. */
 const LER_TUDO = '<button type="button" class="link dm-ler-tudo" data-expandir>ler tudo</button>';
@@ -290,7 +290,7 @@ function acaoDoTicket({ ref, estado, elegivel }: Pagina["tickets"][number]): str
 }
 
 /**
- * O ticket na linha do tempo. No ticket concluído e decidido, a decisão toma o lugar do "Concluído": a revisão recusada
+ * O ticket na linha do tempo. No ticket concluído e decidido, a decisão toma o lugar do "Concluído": a revisão reprovada
  * não pode parecer sucesso. O marco da linha leva a mesma cor.
  */
 function ticket(t: Pagina["tickets"][number], p: Pagina): string {
@@ -325,7 +325,7 @@ function botaoAbrirPR(pr: { id: string; url: string } | undefined): string {
 
 /**
  * Os artefatos que embasam a decisão, dentro do próprio gate, para o Auditor não caçá-los na linha do tempo. De cada
- * tipo vale a última evidência: a revisão recusada antes não é o estado que está em julgamento.
+ * tipo vale a última evidência: a revisão reprovada antes não é o estado que está em julgamento.
  */
 function artefatosDoGate(evidencias: readonly Evidencia[]): string {
   const ultimaDeCadaTipo = [...new Map(evidencias.map((e) => [e.tipo, e])).values()];
@@ -439,13 +439,13 @@ function encerramento({
 }
 
 /** Os gates que o estado pede: a rota da decisão e os rótulos dos dois botões. */
-const GATES: Partial<Record<EstadoDemanda, { titulo: string; rota: string; aprovar: string; recusar: string }>> = {
-  gate_demanda: { titulo: "Aprovação da demanda", rota: "decisao", aprovar: "Aprovar", recusar: "Recusar" },
+const GATES: Partial<Record<EstadoDemanda, { titulo: string; rota: string; aprovar: string; reprovar: string }>> = {
+  gate_demanda: { titulo: "Aprovação da demanda", rota: "decisao", aprovar: "Aprovar", reprovar: "Reprovar" },
   gate_planejamento: {
     titulo: "Aprovação do planejamento",
     rota: "planejamento/decisao",
     aprovar: "Aprovar planejamento",
-    recusar: "Reprovar planejamento",
+    reprovar: "Reprovar planejamento",
   },
 };
 
@@ -557,7 +557,7 @@ function desenhoDaSolucao(p: Pagina): string {
 }
 
 /**
- * O formulário do gate do estado atual (CA-14 a CA-19); fora de um gate, nada. O motivo só vale para recusar. Na
+ * O formulário do gate do estado atual (CA-14 a CA-19); fora de um gate, nada. O motivo só vale para reprovar. Na
  * aprovação da demanda, o que o Auditor lê para decidir vem antes do motivo.
  */
 function gate(p: Pagina): string {
@@ -574,7 +574,7 @@ function gate(p: Pagina): string {
     `<button type="button" class="btn btn-grande ${aprovado ? "btn-primario" : "btn-reprovar"}" data-gate="${String(aprovado)}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
   return blocoDeAcao(
     g.titulo,
-    `${leitura}<label for="${campo}">Motivo (obrigatório para ${g.recusar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.recusar)}${botao(true, g.aprovar)}</div>`,
+    `${leitura}<label for="${campo}">Motivo (obrigatório para ${g.reprovar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.reprovar)}${botao(true, g.aprovar)}</div>`,
     false,
     ' id="gate"',
   );

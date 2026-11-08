@@ -132,7 +132,7 @@ test("CA-SDLC-11: revisão reprovada devolve as correções ao desenvolvimento, 
     ag.decisoes.filter((d) => d.ticket_id === reprovada).map((d) => [d.resultado, d.motivo, d.por]),
     [
       [
-        "recusado",
+        "reprovado",
         "falta tratar o caso X",
         { tipo: "agente", trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: reprovada }).at(-1)?.id },
       ],
@@ -348,7 +348,7 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
   const reprovacao = demanda(humana, idHumana).decisoes.find((d) => d.ticket_id === gate);
   assert.deepEqual(
     [reprovacao?.resultado, reprovacao?.motivo, reprovacao?.nota],
-    ["recusado", "o PR mistura duas mudanças", undefined],
+    ["reprovado", "o PR mistura duas mudanças", undefined],
   );
   await esperar(() => git(worktree, "log", "-1", "--format=%s") === "intruso", "o agente da conversa commitar");
   assert.equal(despacharDemandas(humana.banco, humana.config, despacho()).length, 0);

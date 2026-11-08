@@ -34,8 +34,8 @@ const ticket = (b: DatabaseSync, id: string, n: number, etapa: string, status: s
 };
 const decisao = (b: DatabaseSync, id: string, n: number, decisaoId: number, resultado: string) => {
   b.exec(
-    `INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em)
-     VALUES ('${id}', ${String(n)}, ${String(decisaoId)}, '${resultado}', ${resultado === "recusado" ? "'m'" : "NULL"}, 'auditor', ${T})`,
+    `INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, motivo, por_tipo, em)
+     VALUES ('${id}', ${String(n)}, ${String(decisaoId)}, 'gate_planejamento', '${resultado}', ${resultado === "reprovado" ? "'m'" : "NULL"}, 'auditor', ${T})`,
   );
 };
 let execucoes = 0;
@@ -90,7 +90,7 @@ test("retoma o planejar reprovado e só depois de uma recusa nova", () => {
   ticket(b, "I-1", 1, "planejar", "em_execucao");
   execucao(b, "I-1", 1, "'2025-12-31T00:00:00.000Z'", null);
   assert.deepEqual(retomadasDePlanejamento(b), []); // sem recusa
-  decisao(b, "I-1", 1, 1, "recusado");
+  decisao(b, "I-1", 1, 1, "reprovado");
   assert.deepEqual(retomadasDePlanejamento(b), []); // CA-2: execução aberta, o pi vivo recebe o motivo
   b.exec(`UPDATE execucao_sessao SET fim = ${T}`);
   assert.deepEqual(retomadasDePlanejamento(b), ["I-1"]); // CA-3: sem pi vivo, a retomada leva o motivo
@@ -113,8 +113,8 @@ test("ocupação ignora o planejar reprovado sem execução aberta, mas conta o 
   execucao(b, "I-1", 1, T, T);
   execucao(b, "I-2", 1, T, null);
   assert.equal(ocupacaoDoLimite(b), 2);
-  decisao(b, "I-1", 1, 1, "recusado");
-  decisao(b, "I-2", 1, 1, "recusado");
+  decisao(b, "I-1", 1, 1, "reprovado");
+  decisao(b, "I-2", 1, 1, "reprovado");
   assert.equal(ocupacaoDoLimite(b), 1); // o de I-2 tem execução aberta
   decisao(b, "I-1", 1, 2, "aprovado");
   assert.equal(ocupacaoDoLimite(b), 2);

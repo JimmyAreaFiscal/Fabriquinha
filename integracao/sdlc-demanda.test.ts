@@ -82,7 +82,7 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; recusar cancela o percur
   const recusada = demandaEnviada(c);
   const { demanda: r } = gestao.decidir(c.banco, recusada, { aprovado: false, motivo: "fora do escopo" }, AUDITOR, CTX);
   assert.equal(r.demanda.estado, "cancelada");
-  assert.deepEqual([r.decisoes[0]?.resultado, r.decisoes[0]?.motivo], ["recusado", "fora do escopo"]);
+  assert.deepEqual([r.decisoes[0]?.resultado, r.decisoes[0]?.motivo], ["reprovado", "fora do escopo"]);
   assert.deepEqual(
     demanda(c, recusada).tickets.map((x) => [x.etapa, x.estado]),
     [["entender_e_desenhar", "cancelado"]],

@@ -98,7 +98,7 @@ test("a migração 40 reproduz devolucoes e retomadas_automaticas como Tentativa
     banco,
     "SELECT ticket_id, devolucoes, retomadas_automaticas FROM ticket_demanda ORDER BY ticket_id",
   );
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, 4));
 
   assert.equal((banco.prepare("PRAGMA user_version").get() as { user_version: number }).user_version, VERSAO_ANTES + 1);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
@@ -115,7 +115,7 @@ test("a migração 40 reproduz devolucoes e retomadas_automaticas como Tentativa
 
 test("a migração 40 põe o motivo_falha na última Tentativa e guarda o que não tinha lugar", () => {
   const banco = bancoNaVersao39(TICKETS);
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, 4));
 
   const reprovacao = (numero: number, motivo: string) => ({
     numero,
@@ -173,7 +173,7 @@ test("a migração 40 põe o motivo_falha na última Tentativa e guarda o que n�
 
 test("a migração 40 tira as colunas antigas, e as Tentativas ficam ligadas ao ticket", () => {
   const banco = bancoNaVersao39(TICKETS);
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, 4));
   const doTicket = colunas(banco, "ticket_demanda");
   for (const antiga of ["devolucoes", "retomadas_automaticas", "motivo_falha"]) assert.ok(!doTicket.includes(antiga));
   assert.ok(doTicket.includes("instrucao"));
@@ -201,7 +201,7 @@ test("a migração 40 deixa a métrica de exigências de alteração igual", () 
   const antes = linhas(banco, "SELECT ticket_id, devolucoes FROM ticket_demanda ORDER BY ticket_id").map((l) =>
     Number(l.devolucoes),
   );
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, 4));
   assert.deepEqual(
     ticketsDaDemanda(banco, "I-1").map((t) => t.exigenciasDeAlteracao),
     antes,
@@ -210,6 +210,6 @@ test("a migração 40 deixa a métrica de exigências de alteração igual", () 
 
 test("a migração 40 num banco sem ticket só cria a tabela", () => {
   const banco = bancoNaVersao39([]);
-  migrar(banco, MIGRACOES);
+  migrar(banco, MIGRACOES.slice(0, 4));
   assert.deepEqual(linhas(banco, "SELECT * FROM tentativa"), []);
 });

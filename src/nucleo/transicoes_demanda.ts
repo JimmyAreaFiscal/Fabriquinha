@@ -1,7 +1,7 @@
 // Transições da demanda SDLC (comparacao-sdlc-implementacao.md §3): registrar, editar, enviar e decidir.
 // Funções puras (agregado, entrada, ator, contexto) → agregado; o agregado de entrada nunca é mutado.
 import { z } from "zod";
-import { AgregadoDemanda, type DecisaoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
+import { AgregadoDemanda, type TicketDemanda, TipoDemanda } from "./agregado_demanda.ts";
 import { AUDITOR, type Ator, AtorExterno, exigirAtor, FABRIQUINHA } from "./ator.ts";
 import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { Modelo } from "./configuracao_agente.ts";
@@ -9,6 +9,7 @@ import { materializarRodadasCorretivas } from "./correcoes_demanda.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
+import type { Decisao } from "./gate.ts";
 import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
 import {
@@ -142,11 +143,12 @@ export function decidirDemanda(
   if (ticket === undefined) {
     throw new ErroDeRegra(`a demanda ${demanda.id} não tem ticket de etapa demanda`, "registre a demanda de novo");
   }
-  const decisao: DecisaoDemanda = {
+  const decisao: Decisao = {
     demanda_id: demanda.id,
     ticket_id: ticket.ticket_id,
     decisao_id: proximaDecisaoId(ag, ticket),
-    resultado: e.aprovado ? "aprovado" : "recusado",
+    gate: "gate_demanda",
+    resultado: e.aprovado ? "aprovado" : "reprovado",
     ...(!e.aprovado && { motivo: e.motivo }),
     ...(e.nota !== undefined && { nota: e.nota }),
     por: AUDITOR,
@@ -202,13 +204,14 @@ function proximaDecisaoId(ag: AgregadoDemanda, ticket: TicketDemanda): number {
 const decisaoDoAuditor = (
   ag: AgregadoDemanda,
   ticket: TicketDemanda,
-  resultado: DecisaoDemanda["resultado"],
-  extra: Pick<DecisaoDemanda, "motivo" | "nota">,
+  resultado: Decisao["resultado"],
+  extra: Pick<Decisao, "motivo" | "nota">,
   ctx: ContextoDemanda,
-): DecisaoDemanda => ({
+): Decisao => ({
   demanda_id: ag.demanda.id,
   ticket_id: ticket.ticket_id,
   decisao_id: proximaDecisaoId(ag, ticket),
+  gate: "gate_planejamento",
   resultado,
   ...extra,
   por: AUDITOR,
@@ -299,7 +302,7 @@ export function reprovarPlanejamento(
     ...ag,
     demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "planejar", ctx.agora),
     tentativas: tentativasAposSair(ag, ticket, { tipo: "interrompida", por: AUDITOR, motivo }, ctx.agora),
-    decisoes: [...ag.decisoes, decisaoDoAuditor(ag, ticket, "recusado", { motivo }, ctx)],
+    decisoes: [...ag.decisoes, decisaoDoAuditor(ag, ticket, "reprovado", { motivo }, ctx)],
   };
 }
 
@@ -626,11 +629,12 @@ export function registrarRevisaoDemanda(
     throw new ErroDeEscopo("só o agente do ticket revisar_demanda atual decide a revisão", "peça à sessão de revisão");
   }
   exigirSemPendencias(ag, ticket.ticket_id);
-  const decisao: DecisaoDemanda = {
+  const decisao: Decisao = {
     demanda_id: ag.demanda.id,
     ticket_id: ticket.ticket_id,
     decisao_id: proximaDecisaoId(ag, ticket),
-    resultado: e.aprovado ? "aprovado" : "recusado",
+    gate: "gate_revisao_demanda",
+    resultado: e.aprovado ? "aprovado" : "reprovado",
     ...(!e.aprovado && { motivo: e.exigencias }),
     por: ator,
     em: ctx.agora,

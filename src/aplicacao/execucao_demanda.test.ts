@@ -508,7 +508,7 @@ test("CA-8: execução órfã (sem condutor) leva SIGKILL no grupo e é encerrad
   assert.deepEqual([e?.falha, motivoDe(banco, 1), e?.fim !== null], [true, "interrompida pelo Auditor", true]);
 });
 
-test("CA-9: sem execução aberta a interrupção é recusada e nada muda", async () => {
+test("CA-9: sem execução aberta a interrupção é reprovada e nada muda", async () => {
   const { banco, sessoes } = await cenario();
   await iniciarExecucaoDemanda(banco, ref(1), { limiteMin: 1 }).fim;
   const antes = sessoes(1);
@@ -811,15 +811,15 @@ test("I-246.T15: parada e SIGTERM no comando de testes durante a coleta: falha '
   await aguardarCondutores(1000); // desfaz a parada para os testes seguintes
 });
 
-test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisões anteriores recusadas da rodada", async () => {
+test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisões anteriores reprovadas da rodada", async () => {
   const { banco, c } = await cenario();
   banco.exec(`INSERT INTO ticket_demanda (demanda_id, ticket_id, etapa, estado, estado_alterado_em, rodada_id) VALUES
       ('I-1', 8, 'revisar_rodada', 'concluido', '${em}', 1),
       ('I-1', 9, 'revisar_rodada', 'concluido', '${em}', 1),
       ('I-1', 10, 'revisar_rodada', 'aberto', '${em}', 1);
-    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, motivo, por_tipo, em) VALUES
-      ('I-1', 8, 1, 'recusado', 'falta teste de X', 'agente', '${em}'),
-      ('I-1', 9, 1, 'recusado', 'o teste de X quebrou Y', 'agente', '${em}');
+    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, motivo, por_tipo, em) VALUES
+      ('I-1', 8, 1, 'gate_revisao_rodada', 'reprovado', 'falta teste de X', 'agente', '${em}'),
+      ('I-1', 9, 1, 'gate_revisao_rodada', 'reprovado', 'o teste de X quebrou Y', 'agente', '${em}');
     INSERT INTO sessao VALUES ('s-8', 'I-1', 8, 'autonomo', 'c8'), ('s-9', 'I-1', 9, 'autonomo', 'c9')`);
   const chamada = (id: string, pergunta: string) => ({
     message: {
@@ -845,8 +845,8 @@ test("CA-3, CA-6: o prompt da revisão traz as perguntas respondidas das revisõ
   const { id, fim } = iniciarExecucaoDemanda(banco, ref(10), { limiteMin: 1 });
   await fim;
   const prompt = readFileSync(join(c.raiz, "execucoes", `E-${id}`, "prompt.md"), "utf8");
-  assert.match(prompt, /I-1\.T8 \(revisar_rodada\), recusado: falta teste de X/);
-  assert.match(prompt, /I-1\.T9 \(revisar_rodada\), recusado: o teste de X quebrou Y/);
+  assert.match(prompt, /I-1\.T8 \(revisar_rodada\), reprovado: falta teste de X/);
+  assert.match(prompt, /I-1\.T9 \(revisar_rodada\), reprovado: o teste de X quebrou Y/);
   assert.match(prompt, /Pergunta: Como confiro o Sonar\?\n\s+Resposta: fica com o Auditor no gate do PR/);
   assert.equal(prompt.match(/Pergunta:/g)?.length, 1);
 });

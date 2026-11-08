@@ -137,13 +137,14 @@ export function agregadoEmRevisao({ integral = false } = {}): AgregadoDemanda {
 
 /**
  * Em execução com a R1 concluída (T1, T2) e a R2 com o PR 7 aberto (T3 em execução, T4 encerrar_rodada concluído), o
- * T5 de planejamento concluído com uma decisão recusada e outra aprovada do Auditor, e a evidência `comportamento` do T3.
+ * T5 de planejamento concluído com uma decisão reprovada e outra aprovada do Auditor, e a evidência `comportamento` do T3.
  */
 export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
   const decisao = (decisao_id: number, resto: object) => ({
     demanda_id: id,
     ticket_id: 5,
     decisao_id,
+    gate: "gate_planejamento",
     por: { tipo: "auditor" },
     em: INSTANTE_DO_CENARIO,
     ...resto,
@@ -157,7 +158,10 @@ export function agregadoComPullRequestAberto(id: string): AgregadoDemanda {
       montarTicket(id, 4, "encerrar_rodada", { rodada_id: 2, ...concluido }),
       montarTicket(id, 5, "planejar", concluido),
     ],
-    decisoes: [decisao(1, { resultado: "recusado", motivo: "refaça" }), decisao(2, { resultado: "aprovado", nota: 4 })],
+    decisoes: [
+      decisao(1, { resultado: "reprovado", motivo: "refaça" }),
+      decisao(2, { resultado: "aprovado", nota: 4 }),
+    ],
     evidencias: [
       {
         demanda_id: id,

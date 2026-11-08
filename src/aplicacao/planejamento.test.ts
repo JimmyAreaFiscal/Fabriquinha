@@ -227,7 +227,7 @@ test("CA-2: plano com critério que nenhuma rodada cita é aceito e vai ao gate"
   assert.equal(submeterPlanoDoAgente(banco, "I-1", umPlano).demanda.estado, "gate_planejamento");
 });
 
-test("CA-5: plano que cita CA inexistente é recusado e nada é gravado", () => {
+test("CA-5: plano que cita CA inexistente é reprovado e nada é gravado", () => {
   const { banco } = cenario({ estadoDoTicket: "em_execucao" });
   assert.throws(
     () => submeterPlanoDoAgente(banco, "I-1", plano(["CA-1", "CA-99"])),
@@ -251,7 +251,7 @@ test("CA-6, CA-7: reprovação registra o motivo e a retomada reusa a sessão co
   assert.equal(ag.demanda.estado, "planejar");
   assert.deepEqual(
     ag.decisoes.map((d) => [d.resultado, d.motivo]),
-    [["recusado", "faltam critérios na rodada 2"]],
+    [["reprovado", "faltam critérios na rodada 2"]],
   );
   assert.equal(status(), "em_execucao");
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;

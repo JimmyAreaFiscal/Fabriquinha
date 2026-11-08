@@ -38,7 +38,7 @@ Caminhos:
 
 ## Revisões anteriores da rodada
 
-Decisões recusadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:
+Decisões reprovadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:
 
 (nenhuma)
 

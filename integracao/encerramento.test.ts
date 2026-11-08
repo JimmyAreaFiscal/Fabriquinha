@@ -90,7 +90,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
     ag.decisoes.filter((d) => d.ticket_id === primeira).map((d) => [d.resultado, d.motivo, d.por]),
     [
       [
-        "recusado",
+        "reprovado",
         "falta tratar a integração entre as partes",
         { tipo: "agente", trabalho_id: execucoesDe(c, { demanda_id: id, ticket_id: primeira }).at(-1)?.id },
       ],
@@ -135,7 +135,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
     ag.decisoes
       .filter((d) => tickets(c, id, "revisar_demanda").some((t) => t.ticket_id === d.ticket_id))
       .map((d) => d.resultado),
-    ["recusado", "aprovado"],
+    ["reprovado", "aprovado"],
   );
 });
 

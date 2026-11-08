@@ -342,7 +342,7 @@ function popular(banco: DatabaseSync, nome: string, shaProprio: string): [number
         VALUES ('${d}', 1, 't', 'm', 31, 'pendente', 't');
       INSERT INTO proposta_demanda (demanda_id, ticket_id, titulo, mensagem, arquivos, status, demanda_criada_id, em, decidida_em)
         VALUES ('${d}', 1, 't', 'm', 31, 'aceita', '${d}', 't', 't');
-      INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
+      INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'gate_demanda', 'aprovado', NULL, NULL, 'auditor', 't');
       INSERT INTO commit_ticket_demanda VALUES ('${n.padStart(40, "b")}', '${d}', 1, 'm', 't');
       INSERT INTO arquivo_commit_demanda (sha, caminho, status) VALUES ('${n.padStart(40, "b")}', 'f', 'A');
       INSERT INTO retrabalho_demanda VALUES ('${n.padStart(40, "d")}', '${d}', NULL, 'x', 1, 1, NULL);
@@ -543,7 +543,6 @@ const TABELAS_DEMANDA = [
   "execucao_sessao",
   "sessao",
   "sessao_externa_demanda",
-  "decisao_ticket_historico",
   "decisao_ticket",
   "arquivo_evidencia",
   "evidencia_historico",
@@ -581,8 +580,7 @@ function popularDemanda(banco: DatabaseSync, nome: string, d: string): void {
       VALUES ('${d}', 1, 'implementar', 'concluido', 't', 1), ('${d}', 2, 'implementar', 'concluido', 't', 1);
     INSERT INTO dependencia_ticket VALUES ('${d}', 2, 1, 1);
     INSERT INTO caminho_ticket VALUES ('${d}', 1, 'src');
-    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'aprovado', NULL, NULL, 'auditor', 't');
-    INSERT INTO decisao_ticket_historico VALUES ('${d}', 1, 1, 'registro');
+    INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('${d}', 1, 1, 'gate_demanda', 'aprovado', NULL, NULL, 'auditor', 't');
     INSERT INTO evidencia_demanda (id, demanda_id, rodada_id, ticket_id, tipo, dados, em) VALUES ('${d}e', '${d}', NULL, 1, 'comportamento', '{}', 't');
     INSERT INTO evidencia_historico VALUES ('${d}e', 1, 'agente');
     INSERT INTO arquivo_evidencia VALUES ('${d}e', 1, 'a', '${sha3}', 'text/plain', 1);

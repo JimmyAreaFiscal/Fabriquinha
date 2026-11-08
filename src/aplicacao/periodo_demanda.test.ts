@@ -67,10 +67,10 @@ function banco(): DatabaseSync {
   const decisao = (n: number, id: number, resultado: string, nota: number | null, mes: string) =>
     b
       .prepare(
-        "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', ?, ?, ?, ?, NULL, 'auditor', ?)",
+        "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', ?, ?, 'gate_pr', ?, ?, NULL, 'auditor', ?)",
       )
       .run(n, id, resultado, nota, em(mes));
-  decisao(1, 1, "recusado", null, "2026-02");
+  decisao(1, 1, "reprovado", null, "2026-02");
   decisao(2, 1, "aprovado", 4, "2026-02");
   decisao(2, 2, "aprovado", 5, "2026-02");
   b.prepare(
@@ -170,7 +170,7 @@ test("PRs por coorte do mês de abertura: o pr_aberto da rodada migrada conta, e
     VALUES ('I-1', 4, 'encerrar_rodada', 'concluido', '${em("2026-03")}', 3)`);
   // aprovado em março, PR aberto em fevereiro na própria rodada (backfill): entra na coorte de fevereiro
   b.prepare(
-    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', 4, 1, 'aprovado', NULL, NULL, 'auditor', ?)",
+    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', 4, 1, 'gate_pr', 'aprovado', NULL, NULL, 'auditor', ?)",
   ).run(em("2026-03"));
   for (const r of [3, 4])
     b.prepare(
@@ -214,7 +214,7 @@ test("execução sem uso registrado soma zero sem custo incompleto, e PR aprovad
     em("2026-04"),
   );
   b.prepare(
-    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', 2, 3, 'aprovado', NULL, NULL, 'auditor', ?)",
+    "INSERT INTO decisao_ticket (demanda_id, ticket_id, decisao_id, gate, resultado, nota, motivo, por_tipo, em) VALUES ('I-1', 2, 3, 'gate_pr', 'aprovado', NULL, NULL, 'auditor', ?)",
   ).run(em("2026-04"));
   const abr = ver(metricasDemandaPorMes(b, { de: "2026-04", ate: "2026-04" })[0]);
   assert.equal(abr.total.execucoes, 1);
