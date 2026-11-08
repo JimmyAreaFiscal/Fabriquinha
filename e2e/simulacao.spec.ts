@@ -136,7 +136,7 @@ test("CA-5 e CA-6: o anexo aparece com o tamanho em bytes e some quando removido
   await expect(maria.getByText("manual.pdf")).toHaveCount(0);
 });
 
-test("um formato que a IA não lê é recusado no cartão, sem anexo", async ({ pagina, fabriquinha }) => {
+test("um formato que a IA não lê é rejeitado no cartão, sem anexo", async ({ pagina, fabriquinha }) => {
   semear(fabriquinha.raiz, "https://demo.exemplo.com");
   await pagina.goto(`${fabriquinha.base}/config?projeto=fabriquinha`);
   await criarDonaMaria(pagina);

@@ -104,7 +104,7 @@ test("guardarArquivos propaga a falha ao ligar o arquivo e não deixa temporári
 
 test("conferir valida a cópia privada antes de ligá-la; uma recusa não guarda nenhum dos arquivos", () => {
   const { raiz, banco, origem } = preparar();
-  const [a, b] = [origem("a.txt", "abc"), origem("b.txt", "recusado")];
+  const [a, b] = [origem("a.txt", "abc"), origem("b.txt", "rejeitado")];
   const vistos: [string, number, number, string][] = [];
   assert.throws(
     () =>
@@ -112,14 +112,14 @@ test("conferir valida a cópia privada antes de ligá-la; uma recusa não guarda
         const conteudo = Buffer.alloc(bytes);
         readSync(copia, conteudo, 0, bytes, 0);
         vistos.push([caminho, bytes, fstatSync(copia).mode & 0o777, conteudo.toString()]);
-        if (conteudo.toString() === "recusado") throw new ErroDeRegra("recusado", "teste");
+        if (conteudo.toString() === "rejeitado") throw new ErroDeRegra("rejeitado", "teste");
         return {};
       }),
     ErroDeRegra,
   );
   assert.deepEqual(vistos, [
     [a, 3, 0o600, "abc"],
-    [b, 8, 0o600, "recusado"],
+    [b, 9, 0o600, "rejeitado"],
   ]);
   assert.deepEqual(readdirSync(join(raiz, "arquivos")), []);
 

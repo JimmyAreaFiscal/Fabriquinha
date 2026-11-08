@@ -330,7 +330,7 @@ test("ausência: projeto inexistente lê undefined; cadastro sem SDLC é legíve
   });
 });
 
-test("entrada inválida é recusada pelo schema antes da gravação e não altera nada", () => {
+test("entrada inválida é rejeitada pelo schema antes da gravação e não altera nada", () => {
   comBanco((banco) => {
     gravarCompleta(banco);
     const antes = fotografarTabelas(banco);
@@ -432,7 +432,7 @@ test("leitura é um snapshot: substituição commitada entre os SELECTs só apar
   });
 });
 
-test("raiz_git relativa é recusada pelo schema sem mutação; cadastro e SDLC compartilham a raiz", () => {
+test("raiz_git relativa é rejeitada pelo schema sem mutação; cadastro e SDLC compartilham a raiz", () => {
   comBanco((banco) => {
     banco.exec("DELETE FROM projeto");
     registrarProjeto(banco, cadastro("loja"));

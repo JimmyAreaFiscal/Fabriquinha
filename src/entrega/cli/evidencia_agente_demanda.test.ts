@@ -318,7 +318,7 @@ test("CA-5: execução terminada, ticket já concluído e execução inexistente
   assert.deepEqual(gravadas(banco), []);
 });
 
-test("tipo que o agente não submete, ou de outra etapa, é recusado", async () => {
+test("tipo que o agente não submete, ou de outra etapa, é rejeitado", async () => {
   const { raiz, env } = cenario();
   const dados = json(raiz, ESTRESSE);
   const outro = await cli(env(5), ["evidencia", "add", "I-206.T5", "pr_aberto", "--dados", dados]);
@@ -330,7 +330,7 @@ test("tipo que o agente não submete, ou de outra etapa, é recusado", async () 
   assert.match(etapa.err, /T-4 \(implementar\) não aceita evidência plano/);
 });
 
-test("--dados ausente ou que não é JSON é recusado", async () => {
+test("--dados ausente ou que não é JSON é rejeitado", async () => {
   const { raiz, env } = cenario();
   const falta = await cli(env(5), ["evidencia", "add", "I-206.T5", "testes_estresse"]);
   assert.equal(falta.err, "falta --dados (passe --dados <arquivo.json|->)\n");
@@ -340,7 +340,7 @@ test("--dados ausente ou que não é JSON é recusado", async () => {
   assert.match(s.err, /ruim\.json não é um JSON válido/);
 });
 
-test("anexo fora da worktree e da saída é recusado sem gravar", async () => {
+test("anexo fora da worktree e da saída é rejeitado sem gravar", async () => {
   const { raiz, banco, env } = cenario();
   const fora = join(raiz, "fora.log");
   writeFileSync(fora, "x");
@@ -358,7 +358,7 @@ test("anexo fora da worktree e da saída é recusado sem gravar", async () => {
   assert.deepEqual(gravadas(banco), []);
 });
 
-test("evidencia schema devolve o JSON Schema e as regras de arquivo; tipo desconhecido é recusado", async () => {
+test("evidencia schema devolve o JSON Schema e as regras de arquivo; tipo desconhecido é rejeitado", async () => {
   const { env } = cenario();
   const s = await cli(env(5), ["evidencia", "schema", "testes_estresse"]);
   const lido = JSON.parse(s.out) as { dados: { properties: object }; arquivos: { classes: string[] } };
@@ -453,7 +453,7 @@ test("mensagem_pr cruza com os não previstos da última revisão e pede revers�
   assert.deepEqual(gravadas(banco), [{ ticket_id: 7, tipo: "mensagem_pr" }]);
 });
 
-test("aula_codigo: o agente envia só trechos e a Fabriquinha gera o HTML; anexo do agente e trecho fora do diff são recusados", async () => {
+test("aula_codigo: o agente envia só trechos e a Fabriquinha gera o HTML; anexo do agente e trecho fora do diff são rejeitados", async () => {
   const { raiz, env, banco } = cenario();
   const trecho = (inicio: number, fim: number) => ({
     trechos: [{ arquivo: "a.ts", inicio, fim, oQueFaz: "f", porQue: "p", decisaoDoDesenho: "d" }],
@@ -469,7 +469,7 @@ test("aula_codigo: o agente envia só trechos e a Fabriquinha gera o HTML; anexo
   assert.deepEqual(gravadas(banco), [{ ticket_id: 7, tipo: "aula_codigo" }]);
 });
 
-test("video_demonstracao exige um vídeo; anexo do worktree da rodada é aceito e fora dela é recusado", async () => {
+test("video_demonstracao exige um vídeo; anexo do worktree da rodada é aceito e fora dela é rejeitado", async () => {
   const { raiz, env, banco } = cenario();
   const sem = await rodar(env(7), 7, "video_demonstracao", { roteiro: "r" });
   assert.match(sem.err, /precisa de pelo menos 1 arquivo/);

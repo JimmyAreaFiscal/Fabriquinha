@@ -303,7 +303,7 @@ test("modelo e effort por etapa: grava só as etapas escolhidas e as devolve no 
   assert.deepEqual(buscarProjeto(banco, "loja")?.verificacoes.preparacao, []);
   assert.deepEqual(etapasGravadas(), linhas);
 
-  // Com o pi quebrado: o modelo igual ao gravado salva sem chamá-lo, e o trocado é recusado.
+  // Com o pi quebrado: o modelo igual ao gravado salva sem chamá-lo, e o trocado é rejeitado.
   piFalso.roteirizar([{ listaDeModelos: { codigo: 1 } }]);
   try {
     assert.deepEqual(

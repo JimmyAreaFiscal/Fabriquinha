@@ -57,7 +57,7 @@ function recusaDoEndereco(texto: string): string {
   } catch (erro) {
     return mensagem(erro);
   }
-  throw new Error(`${texto} deveria ser recusado`);
+  throw new Error(`${texto} deveria ser rejeitado`);
 }
 
 /** Chama `GET /api/sessoes` como o servidor: o valor devolvido, ou `[status, mensagem]` do erro traduzido. */

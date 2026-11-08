@@ -108,7 +108,7 @@ function recusaDoEndereco(texto: string): string {
   } catch (erro) {
     return mensagem(erro);
   }
-  throw new Error(`${texto} deveria ser recusado`);
+  throw new Error(`${texto} deveria ser rejeitado`);
 }
 
 const falha = (s: Saida, codigo: number, mensagem: RegExp) => {
@@ -139,13 +139,13 @@ test("CA-1 e CA-2: registra I-n não enviada e a seguinte com dependência", asy
   assert.deepEqual([d.id, d.descricao, d.dependencias], ["I-2", "do stdin", ["I-1"]]);
 });
 
-test("CA-3: dependência inexistente é recusada e nada é criado", async () => {
+test("CA-3: dependência inexistente é rejeitada e nada é criado", async () => {
   const env = novaRaiz();
   falha(await cli(env, [...REGISTRAR, "--descricao", "desc.md", "--dep", "I-9"]), 1, /I-9/);
   assert.equal(await registrar(env), "I-1");
 });
 
-test("CA-4: projeto inexistente é recusado e o número não é consumido", async () => {
+test("CA-4: projeto inexistente é rejeitado e o número não é consumido", async () => {
   const env = novaRaiz();
   const args = [...REGISTRAR, "--descricao", "desc.md"];
   args[3] = "nao-existe";
@@ -220,7 +220,7 @@ test("CA-10: evidência com anexo guarda o arquivo por SHA-256 e a demanda a lis
   assert.equal(readFileSync(caminhoArquivo(b, ev.arquivos[0]?.sha256 ?? ""), "utf8"), HTML);
 });
 
-test("anexo fora da pasta do comando é recusado", async () => {
+test("anexo fora da pasta do comando é rejeitado", async () => {
   const env = novaRaiz();
   const id = await registrar(env);
   const fora = join(base, "fora.html");

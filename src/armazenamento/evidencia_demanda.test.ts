@@ -108,7 +108,7 @@ test("CA-5 e CA-6: a leitura recusa hash não registrado e o que não é SHA-256
   );
 });
 
-test("gravar anexos de evidência que não existe é recusado", () => {
+test("gravar anexos de evidência que não existe é rejeitado", () => {
   const b = novoBanco();
   assert.throws(() => {
     gravarAnexos(b, { ...chave, ticket_id: 7 }, []);

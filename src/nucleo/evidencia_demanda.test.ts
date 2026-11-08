@@ -58,13 +58,13 @@ test("catálogo: obrigatórias e opcionais da demanda", () => {
   assert.deepEqual(pendentesDeEnvio(ag), ["criterios_aceite", "custos_realizados"]);
 });
 
-test("dono demanda: tipo fora do catálogo é recusado, e o agregado não muda", () => {
+test("dono demanda: tipo fora do catálogo é rejeitado, e o agregado não muda", () => {
   const ag = base();
   assert.throws(() => submeterEvidenciaDemanda(ag, entrada("mensagem_pr"), autora, em), ErroDeRegra);
   assert.deepEqual(ag, base());
 });
 
-test("CA-6: outra ferramenta ou sessão é recusada antes do envio", () => {
+test("CA-6: outra ferramenta ou sessão é rejeitada antes do envio", () => {
   const ag = base();
   assert.throws(() => submeterEvidenciaDemanda(ag, entrada("criterios_aceite"), outra, em), ErroDeEscopo);
   assert.throws(() => {
@@ -75,14 +75,14 @@ test("CA-6: outra ferramenta ou sessão é recusada antes do envio", () => {
 
 test("CA-6: exigirAutoria recusa não-externos e externos de outra sessão ou ferramenta", () => {
   const ag = base();
-  const recusados: Ator[] = [
+  const rejeitados: Ator[] = [
     AUDITOR,
     FABRIQUINHA,
     { tipo: "agente", trabalho_id: "E-1" },
     outra,
     { tipo: "externo", ferramenta: "pi", sessao: "s1" },
   ];
-  for (const autor of recusados) {
+  for (const autor of rejeitados) {
     assert.throws(
       () => {
         exigirAutoria(ag.demanda, autor, "editar");
@@ -118,7 +118,7 @@ test("CA-9: nova evidência do mesmo tipo e dono substitui a anterior", () => {
   assert.equal(um.evidencias[0]?.dados.v, 1);
 });
 
-test("CA-10: rodada_id e ticket_id juntos são recusados", () => {
+test("CA-10: rodada_id e ticket_id juntos são rejeitados", () => {
   assert.throws(
     () => submeterEvidenciaDemanda(base(), entrada("mensagem_pr", { rodada_id: 1, ticket_id: 1 }), autora, em),
     /rodada_id e ticket_id/,
@@ -133,7 +133,7 @@ test("CA-11: sem rodada e ticket o dono é a demanda; mesmo tipo em outro dono c
   assert.equal(ag.evidencias[0]?.rodada_id, undefined);
 });
 
-test("ticket inexistente é recusado", () => {
+test("ticket inexistente é rejeitado", () => {
   assert.throws(
     () => submeterEvidenciaDemanda(base(), entrada("mensagem_pr", { ticket_id: 9 }), autora, em),
     ErroDeRegra,

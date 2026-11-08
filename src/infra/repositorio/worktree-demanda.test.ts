@@ -196,7 +196,7 @@ test("checkout de outra branch ou outro repositório não é adotado", async () 
   }
 });
 
-test("branch própria em outro caminho é recusada, mesmo se a pasta registrada sumiu", async () => {
+test("branch própria em outro caminho é rejeitada, mesmo se a pasta registrada sumiu", async () => {
   for (const ausente of [false, true]) {
     const c = criarRepositorioDeTeste();
     const p = await garantir(c);
@@ -239,7 +239,7 @@ test("links internos da preparação são conservados e não seguidos na inspeç
   assert.equal(existsSync(join(p, "pasta", "link", "base.txt")), true);
 });
 
-test("registro de outra branch no destino ausente é recusado antes de fetch/config", async () => {
+test("registro de outra branch no destino ausente é rejeitado antes de fetch/config", async () => {
   const c = criarRepositorioDeTeste();
   const p = caminho(c);
   git(c.repo, "worktree", "add", "-b", "humana", p);

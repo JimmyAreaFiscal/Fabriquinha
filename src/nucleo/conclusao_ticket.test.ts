@@ -97,17 +97,17 @@ test("CA-10: o agente não conclui", () => {
   );
 });
 
-test("CA-11: ticket aberto é recusado citando o estado atual", () => {
+test("CA-11: ticket aberto é rejeitado citando o estado atual", () => {
   assert.throws(() => concluirImplementacao(montar("aberto")), /o estado atual é aberto/);
 });
 
-test("etapa diferente de implementar é recusada", () => {
+test("etapa diferente de implementar é rejeitada", () => {
   assert.throws(
     () => concluirImplementacao(montar("em_execucao", "planejar", "planejar")),
     (e) => e instanceof ErroDeRegra && e.message.includes("I-1.T2 é da etapa planejar"),
   );
 });
 
-test("demanda encerrada é recusada", () => {
+test("demanda encerrada é rejeitada", () => {
   assert.throws(() => concluirImplementacao(montar("em_execucao", "concluida")), ErroDeRegra);
 });
