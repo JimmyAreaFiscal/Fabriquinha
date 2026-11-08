@@ -26,7 +26,7 @@ const ref = (demanda_id: string) => ({
 });
 
 /** O PR da rodada que espera decisão ou ajustes: o `espaco.pr` dela, só nos estados de gate. */
-export function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
+function prDoGateDaRodada(ag: AgregadoDemanda, rodada_id: number): { id: string; url: string } | undefined {
   const rodada = ag.rodadas.find((r) => r.rodada_id === rodada_id);
   if (rodada?.estado !== "gate_pr" && rodada?.estado !== "ajustar_resultado") return undefined;
   const pr = prDoEspaco(ag, rodada_id);
