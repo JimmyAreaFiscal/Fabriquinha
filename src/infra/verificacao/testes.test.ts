@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { Projeto } from "../../nucleo/projeto.ts";
-import { type EntradaComandos, verificarFitness, verificarTestes } from "./verificacoes_comandos.ts";
+import { type EntradaDeTestes, VerificacaoDeTestes } from "./testes.ts";
 
 const worktree = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-comandos-")));
 after(() => {
@@ -25,13 +25,13 @@ const projeto = (parcial: Record<string, unknown> = {}) =>
       ...parcial,
     },
   });
-const entrada = (parcial: Record<string, unknown> = {}, resto: Partial<EntradaComandos> = {}): EntradaComandos => ({
-  projeto: projeto(parcial),
-  e2e: false,
-  worktree,
-  arquivos: [],
-  ...resto,
-});
+const entrada = (
+  parcial: Record<string, unknown> = {},
+  resto: Partial<EntradaDeTestes & { limiteMs: number }> = {},
+) => ({ projeto: projeto(parcial), e2e: false, arquivos: [], ...resto });
+/** Roda a verificação de testes na worktree de teste e devolve o registro completo. */
+const verificarTestes = ({ limiteMs, ...resto }: ReturnType<typeof entrada>) =>
+  new VerificacaoDeTestes(resto).coletar({ worktree, limiteMs });
 const comE2E = (build: string, execucao: string) => ({
   e2e: [{ caminho_linguagem: "back", comando_build: build, comando_execucao: execucao, codigo_falha: 7 }],
   globs: [{ caminho_linguagem: "back", glob: "back/**/*.ts" }],
@@ -145,25 +145,6 @@ test("CA-9, CA-10 e CA-11: a execução do E2E sai 0, codigo_falha ou outro cód
   assert.equal(morto.aprovada, undefined);
 });
 
-test("CA-12 e CA-13: fitness aprova com saída 0 e reprova tecnicamente com 1, na worktree", async () => {
-  const ok = await verificarFitness(
-    entrada({
-      fitness: [
-        { nome: "a", comando: "pwd", descricao: "d" },
-        { nome: "b", comando: "true", descricao: "d" },
-      ],
-    }),
-  );
-  assert.equal(ok.tipo, "matriz_fitness");
-  assert.equal(ok.aprovada, true);
-  assert.equal(ok.logs[0]?.texto.trim(), worktree);
-  assert.equal((ok.dados as { linhas: unknown[] }).linhas.length, 2);
-
-  const ruim = await verificarFitness(entrada({ fitness: [{ nome: "a", comando: "exit 1", descricao: "d" }] }));
-  assert.equal(ruim.aprovada, false);
-  assert.equal(ruim.falhas[0]?.classe, "tecnica");
-});
-
 test("a conclusão das linguagens é avisada mesmo sem linguagens configuradas", async () => {
   let avisos = 0;
   const resultado = await verificarTestes(
@@ -181,10 +162,29 @@ test("a conclusão das linguagens é avisada mesmo sem linguagens configuradas",
   assert.deepEqual(resultado.logs, []);
 });
 
-test("o ambiente dos comandos não leva credenciais", async () => {
-  process.env.SONAR_TOKEN = "segredo";
-  const v = await verificarFitness(
-    entrada({ fitness: [{ nome: "a", comando: 'echo "[$SONAR_TOKEN]"', descricao: "d" }] }),
-  );
-  assert.equal(v.logs[0]?.texto.trim(), "[]");
+test("executar reduz o registro a uma das três classes: passou, reprovacao ou falha_infraestrutura", async () => {
+  const executar = (comando: string, limiteMs?: number) =>
+    new VerificacaoDeTestes({
+      projeto: projeto({ linguagens: [{ caminho: "back", linguagem: "ts", comando_teste: comando }] }),
+      e2e: false,
+      arquivos: [],
+    }).executar({ worktree, limiteMs });
+
+  const passou = await executar("echo ok");
+  assert.equal(passou.tipo, "passou");
+  assert.deepEqual(passou.relatorio?.logs, [{ nome: "teste-back.log", texto: "ok\n" }]);
+  assert.deepEqual(await executar("echo falhou; exit 1"), {
+    tipo: "reprovacao",
+    motivo: "echo falhou; exit 1 saiu com código 1",
+    log: "falhou\n",
+  });
+  assert.deepEqual(await executar("sleep 5", 100), {
+    tipo: "falha_infraestrutura",
+    causa: "tempo_limite",
+    motivo: "sleep 5: tempo limite",
+  });
+});
+
+test("o tipo da verificação é testes", () => {
+  assert.equal(new VerificacaoDeTestes(entrada()).tipo, "testes");
 });

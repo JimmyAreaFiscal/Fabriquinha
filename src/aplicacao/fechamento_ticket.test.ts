@@ -9,7 +9,7 @@ import { falhaQueExigeOAuditor, motivoDaFalhaDoTicket } from "../nucleo/tentativ
 import { comDemanda } from "../armazenamento/demandas.ts";
 import { podeTentarEncerramento } from "../nucleo/transicoes_encerramento.ts";
 import { selecionarTrabalho } from "../nucleo/selecao_trabalho.ts";
-import type { Verificacao } from "./evidencias/verificacoes.ts";
+import type { RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
 import { abrir } from "../armazenamento/banco.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
@@ -33,7 +33,11 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   ...extra,
 });
 
-const verif = (tipo: Verificacao["tipo"], aprovada: boolean | undefined, motivo = "falhou"): Verificacao => ({
+const verif = (
+  tipo: RegistroDaVerificacao["tipo"],
+  aprovada: boolean | undefined,
+  motivo = "falhou",
+): RegistroDaVerificacao => ({
   tipo,
   aprovada,
   falhas: aprovada
@@ -51,9 +55,9 @@ const verif = (tipo: Verificacao["tipo"], aprovada: boolean | undefined, motivo 
 });
 const TIPOS = ["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const;
 const todas = (aprovada: boolean | undefined, motivo?: string) => TIPOS.map((t) => verif(t, aprovada, motivo));
-const coletor = (resultado: Verificacao[]) => ({ coletarVerificacoes: () => Promise.resolve(resultado) });
+const coletor = (resultado: RegistroDaVerificacao[]) => ({ coletarVerificacoes: () => Promise.resolve(resultado) });
 const naoColeta = {
-  coletarVerificacoes: (): Promise<Verificacao[]> => {
+  coletarVerificacoes: (): Promise<RegistroDaVerificacao[]> => {
     throw new Error("não devia coletar");
   },
 };

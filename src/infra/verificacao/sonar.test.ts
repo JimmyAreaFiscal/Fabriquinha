@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { analisarSonar, arquivosAlterados, type OpcoesSonar } from "./sonar.ts";
+import { analisarSonar, arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "./sonar.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-sonar-")));
 
@@ -324,4 +324,49 @@ test("sem SONAR_HOST_URL ou SONAR_TOKEN no ambiente: falha antes de consultar", 
   process.env.SONAR_HOST_URL = "";
   await falha(worktree, ambiente);
   assert.deepEqual(pedidos, []);
+});
+
+const verificacaoSonar = (worktree: string) =>
+  new VerificacaoSonar("loja-key", ["a.ts"], { intervaloMs: 1 }).executar({ worktree });
+
+test("VerificacaoSonar: sem issue nos arquivos alterados passa, com o relatório da análise", async () => {
+  const worktree = cenario();
+  sonar.issues = [{ component: "loja-key:b.ts", rule: "typescript:S1", severity: "MAJOR", message: "fora" }];
+
+  const resultado = await verificacaoSonar(worktree);
+
+  assert.deepEqual(resultado, {
+    tipo: "passou",
+    relatorio: {
+      dados: { chave_sonarqube: "loja-key", ceTaskId: "AX1", arquivosAnalisados: ["a.ts"], issues: [] },
+      logs: [],
+    },
+  });
+});
+
+test("VerificacaoSonar: issue aberta em arquivo alterado reprova, com a lista de issues no motivo", async () => {
+  const worktree = cenario();
+  sonar.issues = [
+    { component: "loja-key:a.ts", line: 3, rule: "typescript:S1", severity: "MAJOR", message: "problema" },
+    { component: "loja-key:a.ts", rule: "typescript:S2", severity: "MINOR", message: "outro" },
+  ];
+
+  assert.deepEqual(await verificacaoSonar(worktree), {
+    tipo: "reprovacao",
+    motivo:
+      "2 issue(s) aberta(s) em arquivos alterados; corrija cada uma:" +
+      "\n  - a.ts:3 typescript:S1 (MAJOR): problema\n  - a.ts typescript:S2 (MINOR): outro",
+    log: "",
+  });
+});
+
+test("VerificacaoSonar: SonarQube fora do ar é falha de infraestrutura, não reprovação", async () => {
+  const worktree = cenario();
+  sonar.status = "DOWN";
+
+  const resultado = await verificacaoSonar(worktree);
+
+  assert.equal(resultado.tipo, "falha_infraestrutura");
+  assert.equal(resultado.causa, "servico_externo_inacessivel");
+  assert.match(resultado.motivo, /está DOWN/);
 });

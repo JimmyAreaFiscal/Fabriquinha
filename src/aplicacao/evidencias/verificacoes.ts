@@ -1,11 +1,12 @@
 // Coleta das verificações de um ticket da demanda (execucao_testes, matriz_fitness, relatorio_sonar), sem banco: devolve
 // o resultado para quem chama gravar as evidências e decidir. Não grava, não conclui, não devolve, não falha, não commita.
 import type { Projeto } from "../../nucleo/projeto.ts";
-import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { analisarSonar, arquivosAlterados, type OpcoesSonar } from "./sonar.ts";
-import { aprovacao, type Falha, type Verificacao, verificarFitness, verificarTestes } from "./verificacoes_comandos.ts";
+import { VerificacaoDeFitness } from "../../infra/verificacao/fitness.ts";
+import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/verificacao/sonar.ts";
+import { VerificacaoDeTestes } from "../../infra/verificacao/testes.ts";
+import type { RegistroDaVerificacao } from "../../infra/verificacao/verificacao.ts";
 
-export type { Falha, Verificacao } from "./verificacoes_comandos.ts";
+export type { Falha, RegistroDaVerificacao } from "../../infra/verificacao/verificacao.ts";
 
 interface EntradaVerificacoes {
   projeto: Projeto;
@@ -15,55 +16,30 @@ interface EntradaVerificacoes {
   opcoes?: OpcoesSonar;
 }
 
-/** Qualquer ErroDeRegra do Sonar (fora do ar, scanner, tempo) é infraestrutura; issue aberta em arquivo alterado, técnica. */
-async function verificarSonar({ projeto, worktree, opcoes }: EntradaVerificacoes, arquivos: string[]) {
-  const tipo = "relatorio_sonar";
-  try {
-    const {
-      ceTaskId,
-      arquivos: analisados,
-      issues,
-    } = await analisarSonar(projeto.chave_sonarqube, worktree, () => Promise.resolve(arquivos), opcoes);
-    // Cada issue vai no motivo: é ele que chega ao agente na devolução, e só a contagem o fazia perguntar o que corrigir.
-    const listaDeIssues = issues
-      .map(
-        (i) =>
-          `\n  - ${i.arquivo}${i.linha === undefined ? "" : `:${String(i.linha)}`} ${i.regra} (${i.severidade}): ${i.mensagem}`,
-      )
-      .join("");
-    const falhas: Falha[] = issues.length
-      ? [
-          {
-            classe: "tecnica",
-            motivo: `${String(issues.length)} issue(s) aberta(s) em arquivos alterados; corrija cada uma:${listaDeIssues}`,
-          },
-        ]
-      : [];
-    const dados = { chave_sonarqube: projeto.chave_sonarqube, ceTaskId, arquivosAnalisados: analisados, issues };
-    return { tipo, aprovada: aprovacao(falhas), falhas, dados, logs: [] } satisfies Verificacao;
-  } catch (erro) {
-    if (!(erro instanceof ErroDeRegra)) throw erro;
-    const falhas: Falha[] = [{ classe: "infraestrutura", causa: "servico_externo_inacessivel", motivo: erro.message }];
-    return { tipo, aprovada: aprovacao(falhas), falhas, dados: {}, logs: [] } satisfies Verificacao;
-  }
-}
-
 /**
  * Roda as três verificações, sempre, e as devolve na ordem do catálogo. O Sonar lê o lcov dos testes das linguagens:
  * começa assim que eles terminam e roda junto com o E2E e as fitness functions, que seguem em série como antes.
  */
-export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<Verificacao[]> {
-  const arquivos = await arquivosAlterados(entrada.worktree);
-  let sonarEmAndamento: Promise<Verificacao> | undefined;
-  const iniciarSonar = () => (sonarEmAndamento ??= verificarSonar(entrada, arquivos));
-  const comandos = { ...entrada, arquivos, limiteMs: entrada.opcoes?.limiteMs };
-  const testes = await verificarTestes({
-    ...comandos,
+export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise<RegistroDaVerificacao[]> {
+  const { projeto, e2e, worktree, opcoes } = entrada;
+  const arquivos = await arquivosAlterados(worktree);
+  const contexto = { worktree, limiteMs: opcoes?.limiteMs };
+  const sonar = new VerificacaoSonar(projeto.chave_sonarqube, arquivos, opcoes);
+  let sonarEmAndamento: Promise<RegistroDaVerificacao> | undefined;
+  const iniciarSonar = () => (sonarEmAndamento ??= sonar.coletar(contexto));
+  const testes = new VerificacaoDeTestes({
+    projeto,
+    e2e,
+    arquivos,
     aoTerminarAsLinguagens: () => {
       // A falha sobe quando o Sonar é esperado, abaixo; o allSettled só a trata se o E2E lançar antes dessa espera.
       void Promise.allSettled([iniciarSonar()]);
     },
   });
-  const [fitness, sonar] = await Promise.all([verificarFitness(comandos), iniciarSonar()]);
-  return [testes, fitness, sonar];
+  const registroDosTestes = await testes.coletar(contexto);
+  const [fitness, registroDoSonar] = await Promise.all([
+    new VerificacaoDeFitness(projeto).coletar(contexto),
+    iniciarSonar(),
+  ]);
+  return [registroDosTestes, fitness, registroDoSonar];
 }

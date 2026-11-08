@@ -7,7 +7,6 @@ import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } fro
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
-import { verificarFitness } from "./evidencias/verificacoes_comandos.ts";
 import { schemaDe } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
@@ -17,6 +16,7 @@ import { type Anexo, gravarAnexos } from "../armazenamento/evidencia_demanda.ts"
 import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
+import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
 import { registrarRevisaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 import { conferirAprovacao } from "./revisao_pendencias.ts";
@@ -77,7 +77,7 @@ export async function prepararRevisaoRodada(
     previstosNaoTocados: previstos.filter((p) => !arquivos.some((a) => casa(a, p))),
   });
 
-  const fitness = await verificarFitness({ projeto, e2e: false, worktree, arquivos: [] });
+  const fitness = await new VerificacaoDeFitness(projeto).coletar({ worktree });
   const linhas = (fitness.dados.linhas as Record<string, unknown>[]).map((l) => ({
     ...l,
     log: `${String(l.nome)}.log`,

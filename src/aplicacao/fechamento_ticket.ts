@@ -17,8 +17,8 @@ import {
   resultadoDoErro,
   rotuloDaCausa,
 } from "../nucleo/tentativa.ts";
-import { coletarVerificacoes, type Falha, type Verificacao } from "./evidencias/verificacoes.ts";
-import type { OpcoesSonar } from "./evidencias/sonar.ts";
+import { coletarVerificacoes, type Falha, type RegistroDaVerificacao } from "./evidencias/verificacoes.ts";
+import type { OpcoesSonar } from "../infra/verificacao/sonar.ts";
 import { MIME_TEXTO } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { guardarBytes } from "../armazenamento/arquivos.ts";
@@ -77,7 +77,7 @@ function concluirRodada(ag: AgregadoDemanda, { demanda_id, rodada_id }: TicketDe
 }
 
 /** Grava as três evidências do ticket com os logs de cada uma como anexos, numa transação só. */
-function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificacao[]): void {
+function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: RegistroDaVerificacao[]): void {
   const guardadas = verificacoes.map((v) => ({
     v,
     // O Sonar devolve `logs: []`; o relatório (`dados`) vira o anexo, para a evidência nunca ficar sem log.
@@ -113,7 +113,7 @@ function gravarEvidencias(banco: DatabaseSync, ref: Ref, verificacoes: Verificac
 }
 
 /** `- <tipo>: <motivo>` de cada verificação reprovada e o fim dos logs dela. */
-function relatorioDeReprovacao(reprovadas: Verificacao[]): string {
+function relatorioDeReprovacao(reprovadas: RegistroDaVerificacao[]): string {
   const linhas = reprovadas.map((v) => `- ${v.tipo}: ${v.falhas.map((f) => f.motivo).join("; ")}`).join("\n");
   const log = reprovadas.flatMap((v) => v.logs.map((l) => l.texto)).join("\n");
   return `${linhas}\n\n${log.slice(-FIM_DO_LOG)}`.trimEnd();

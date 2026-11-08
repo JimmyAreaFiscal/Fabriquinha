@@ -1,4 +1,5 @@
 // A regra única que classifica a saída de um comando de Verificação, sem I/O.
+import type { CausaDeInfraestrutura } from "./tentativa.ts";
 
 /**
  * Saída 0 passa; estouro do tempo e saída 126/127 (comando que não roda) são infraestrutura. Sem `codigoDeReprovacao`,
@@ -13,3 +14,17 @@ export function classificarSaidaDeComando(
   if (codigoDeReprovacao === undefined || saida.codigo === codigoDeReprovacao) return "reprovacao";
   return "falha_infraestrutura";
 }
+
+export type TipoVerificacao = "testes" | "e2e" | "fitness" | "sonar" | "hooks_do_commit" | "conferencia_do_pr";
+
+/** O que a Verificação deixa para a Evidência: os dados e os logs dos comandos que ela rodou. */
+interface RelatorioDaVerificacao {
+  dados: Record<string, unknown>;
+  logs: { nome: string; texto: string }[];
+}
+
+/** Os três resultados possíveis de uma Verificação; a infraestrutura não volta ao agente, a reprovação sim. */
+export type ResultadoDaVerificacao =
+  | { tipo: "passou"; relatorio?: RelatorioDaVerificacao }
+  | { tipo: "reprovacao"; motivo: string; log: string }
+  | { tipo: "falha_infraestrutura"; causa: CausaDeInfraestrutura; motivo: string };
