@@ -3,8 +3,8 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { ambienteSemCredenciais, git, gitComLimite } from "../processo.ts";
-import type { ComandoNoAmbiente } from "./ambiente.ts";
+import { git, gitComLimite } from "../processo.ts";
+import { ambienteSemCredenciais, type ComandoNoAmbiente } from "./ambiente.ts";
 import { AmbienteHostLocal } from "./ambiente_host_local.ts";
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ambiente-")));
@@ -114,6 +114,7 @@ test("ambienteSemCredenciais tira os tokens e aponta gh e az para a pasta vazia;
     SYSTEM_ACCESSTOKEN: "6",
     SONAR_TOKEN: "7",
     GH_CONFIG_DIR: "/home/x/.config/gh",
+    SEM_VALOR: undefined,
   };
   const env = ambienteSemCredenciais(comTokens, "/vazio");
   assert.deepEqual(env, { PATH: "/bin", GH_CONFIG_DIR: "/vazio", AZURE_CONFIG_DIR: "/vazio" });

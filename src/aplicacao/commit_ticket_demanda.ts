@@ -9,7 +9,8 @@ import type { Commit } from "../armazenamento/commits.ts";
 import { gravarCommitDemanda } from "../armazenamento/commits_demanda.ts";
 import { arquivosDe, commitar } from "../infra/repositorio/commit.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
-import { git, LIMITE_COMANDO_MS } from "../infra/processo.ts";
+import { LIMITE_COMANDO_MS } from "../infra/ambiente/ambiente.ts";
+import { git } from "../infra/processo.ts";
 
 type Ref = Parameters<typeof formatarTicketRef>[0];
 

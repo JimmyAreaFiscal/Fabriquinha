@@ -22,6 +22,7 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAnexos } from "../armazenamento/evidencia_demanda.ts";
 import type { Commit } from "../armazenamento/commits.ts";
 import { HooksDoCommit } from "../infra/verificacao/hooks_do_commit.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { acharCommitTicketDemanda, commitarTicketDemanda } from "./commit_ticket_demanda.ts";
 
 type Ref = Pick<TicketDemanda, "demanda_id" | "ticket_id">;
@@ -147,6 +148,7 @@ export async function fecharTicketDemanda(
   if (!(await acharCommitTicketDemanda(worktree, ref))) {
     const e2e = ag.rodadas.find((r) => r.rodada_id === rodada_id)?.e2e ?? false;
     const verificacoes = await (deps.coletarVerificacoes ?? coletarVerificacoes)({
+      ambiente: ambienteDoServico(),
       projeto,
       e2e,
       worktree,
@@ -206,7 +208,11 @@ export async function fecharTicketDemanda(
   });
   let resultadoDosHooks;
   try {
-    resultadoDosHooks = await hooks.executar({ worktree, limiteMs: deps.limiteCommitMs });
+    resultadoDosHooks = await hooks.executar({
+      ambiente: ambienteDoServico(),
+      worktree,
+      limiteMs: deps.limiteCommitMs,
+    });
   } catch (erro) {
     if (!deps.parada?.()) throw erro;
     falhar(falhaPorServicoReiniciado);

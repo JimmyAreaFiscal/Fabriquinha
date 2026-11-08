@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ErroDeRegra, ErroDeReprovacao, ErroExterno } from "../../nucleo/erros.ts";
 import { type ArquivoCommit, StatusArquivo } from "../../armazenamento/commits.ts";
-import { ambienteSemCredenciais, executar } from "../processo.ts";
+import { ambienteSemCredenciais } from "../ambiente/ambiente.ts";
+import { executar } from "../processo.ts";
 
 /** Caracteres do fim da saída do commit que vão para a mensagem de falha do ticket. */
 const FIM_DA_SAIDA = 1500;

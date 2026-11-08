@@ -12,7 +12,7 @@ import {
   type ResultadoDaVerificacao,
   type TipoVerificacao,
 } from "../../nucleo/verificacao.ts";
-import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS, type Resultado } from "../processo.ts";
+import { type Ambiente, ambienteSemCredenciais, LIMITE_COMANDO_MS } from "../ambiente/ambiente.ts";
 
 /** A reprovação técnica volta ao agente; a de infraestrutura leva a causa que a política da Tentativa lê. */
 export type Falha =
@@ -31,9 +31,20 @@ export interface RegistroDaVerificacao {
 }
 
 export interface ContextoDaVerificacao {
+  /** O Ambiente do Espaço: os comandos configurados rodam nele. */
+  ambiente: Ambiente;
   worktree: string;
   /** Tempo máximo de cada comando; o Sonar tem o seu em `OpcoesSonar`. */
   limiteMs?: number;
+}
+
+interface Resultado {
+  /** `null` quando o comando morreu por sinal ou estourou o limite. */
+  codigo: number | null;
+  estourou: boolean;
+  duracaoMs: number;
+  /** Stdout e stderr intercalados, com no máximo `LIMITE.texto` bytes (os do fim). */
+  log: string;
 }
 
 export type ComandoRodar = (comando: string, cwd: string) => Promise<Resultado>;
@@ -118,13 +129,25 @@ export function classificarComando(comando: string, r: Resultado, codigoDeReprov
 
 /** Roda os comandos de `corpo` com o ambiente sem credenciais (F5 §5.0). */
 export async function comAmbienteSemCredenciais<T>(
+  ambiente: Ambiente,
   limiteMs: number = LIMITE_COMANDO_MS,
   corpo: (rodar: ComandoRodar) => Promise<T>,
 ) {
   const vazio = mkdtempSync(join(tmpdir(), "fabriquinha-verificacao-"));
   try {
     const env = ambienteSemCredenciais(process.env, vazio);
-    return await corpo((comando, cwd) => executarNoShell(comando, cwd, { env, limiteMs, limiteLog: LIMITE.texto }));
+    return await corpo(async (comando, cwd) => {
+      const r = await ambiente.executar({
+        programa: comando,
+        argumentos: [],
+        cwd: ambiente.caminhoNoAmbiente(cwd),
+        env,
+        limiteMs,
+        ultimosBytes: LIMITE.texto,
+        noShell: true,
+      });
+      return { codigo: r.codigo, estourou: r.limiteEstourado, duracaoMs: r.duracaoMs, log: r.saida };
+    });
   } finally {
     rmSync(vazio, { recursive: true, force: true });
   }
