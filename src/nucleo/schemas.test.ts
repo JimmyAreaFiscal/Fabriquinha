@@ -116,6 +116,7 @@ test("relatorio_sonar usa chave_sonarqube e publica o novo campo", () => {
 });
 
 const HTML_UNICO = { classes: ["html"], min: 1, max: 1 };
+const SEM_ANEXO = { classes: ["video", "imagem", "html", "texto"], min: 0, max: 0 };
 const PREVISTO = { caminho: "src/**/*.ts", acao: "alterar", motivo: "troca a consulta" };
 const SOLUCAO = { resumo: "cache na busca", arquivosPrevistos: [PREVISTO] };
 
@@ -526,7 +527,7 @@ test("aula_codigo: trechos na ordem de leitura, de até 60 linhas, com o porquê
   assert.deepEqual(schemaDoTipo("aula_codigo").arquivos, { classes: ["html"], min: 1, max: 1 });
 });
 
-test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o corpo em texto e o HTML anexados", () => {
+test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, sem anexo", () => {
   const pr = {
     hospedagem: "github",
     id: "12",
@@ -534,6 +535,7 @@ test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o co
     branch: "fabriquinha/I-1",
     base: "main",
     head: SHA,
+    corpoCompleto: "corpo",
     condensado: false,
   };
   assert.deepEqual(camposRejeitados("pr_aberto", pr), []);
@@ -542,9 +544,10 @@ test("pr_aberto e relatorio_produtividade: produzidos pela Fabriquinha, com o co
     "url",
     "head",
   ]);
-  assert.deepEqual(schemaDoTipo("pr_aberto").arquivos, { classes: ["texto"], min: 1, max: 1 });
+  assert.deepEqual(camposRejeitados("pr_aberto", { ...pr, corpoCompleto: undefined }), ["corpoCompleto"]);
+  assert.deepEqual(schemaDoTipo("pr_aberto").arquivos, SEM_ANEXO);
   assert.deepEqual(camposRejeitados("relatorio_produtividade", {}), []);
-  assert.deepEqual(schemaDoTipo("relatorio_produtividade").arquivos, HTML_UNICO);
+  assert.deepEqual(schemaDoTipo("relatorio_produtividade").arquivos, SEM_ANEXO);
 });
 
 const camposRejeitadosEtapa = (tipo: TipoEvidencia, dados: unknown): string[] => {
