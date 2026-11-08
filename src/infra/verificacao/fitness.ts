@@ -27,8 +27,9 @@ export class VerificacaoDeFitness extends Verificacao {
       const falhas: Falha[] = [];
       for (const f of this.#projeto.verificacoes.fitness) {
         const r = await rodar(f.comando, worktree);
-        linhas.push({ ...f, ...linhaDoComando(f.comando, r) });
-        logs.push({ nome: `${f.nome}.log`, texto: r.log });
+        const log = `${f.nome}.log`;
+        linhas.push({ ...f, ...linhaDoComando(f.comando, r, log) });
+        logs.push({ nome: log, texto: r.log });
         const falha = classificarComando(f.comando, r);
         if (falha) falhas.push(falha);
       }

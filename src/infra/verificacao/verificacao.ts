@@ -153,9 +153,11 @@ export async function comAmbienteSemCredenciais<T>(
   }
 }
 
-export const linhaDoComando = (comando: string, r: Resultado) => ({
+/** A linha do comando na evidência; `log` é o nome do anexo com a saída dele, que o schema exige. */
+export const linhaDoComando = (comando: string, r: Resultado, log: string) => ({
   comando,
   codigoSaida: r.codigo,
   estourou: r.estourou,
   duracaoMs: r.duracaoMs,
+  log,
 });
