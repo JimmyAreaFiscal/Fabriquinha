@@ -5,6 +5,7 @@ import type { Locator, Page } from "@playwright/test";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { fotografar, projeto } from "./apoio.ts";
 import { semearDemandaConcluida, semearDemandaOciosa, semearDemandas } from "./demandas-apoio.ts";
+import { PENDENCIAS_ESPERADAS, semearPendencias } from "./pendencias-apoio.ts";
 import { expect, test } from "./apoio.ts";
 
 /** A sessão autônoma do I-206.T3 com a execução aberta e o grupo do pi gravado: o pi roda. */
@@ -130,4 +131,32 @@ test("sem nada em andamento, o Início diz que nada aguarda nem roda e mostra as
   await expect(pagina.getByText("Nenhuma sessão rodando.")).toBeVisible();
   await expect(pagina.getByRole("region", { name: "Board" })).toContainText("0 demandas em andamento");
   await expect(pagina.locator(".coluna-vazia")).toHaveCount(11);
+});
+
+test("o Início lista uma Pendência de cada tipo, inclusive o merge final, e a navegação conta as seis", async ({
+  pagina,
+  fabriquinha,
+}) => {
+  semearPendencias(fabriquinha.raiz);
+  const nav = pagina.getByRole("navigation", { name: "Páginas" });
+  await nav.getByRole("link", { name: "Métricas" }).click();
+  await nav.getByRole("link", { name: /^Início/ }).click();
+  const titulos = {
+    gate_humano: "Gate",
+    item_bloqueado: "Bloqueado",
+    dialogo_do_agente: "Diálogo do agente",
+    revisao_parada: "Revisão parada",
+    acao_externa: "Ação externa",
+    despacho_parado: "Despacho parado",
+  };
+  const aguarda = pagina.getByRole("region", { name: "Aguarda você" });
+  await expect(aguarda.locator(".contador")).toHaveText("6");
+  await expect(nav.getByRole("link", { name: /^Início/ }).locator(".contador")).toHaveText("6");
+  await expect(aguarda.locator(".decisao-motivo")).toHaveText(PENDENCIAS_ESPERADAS.map((p) => titulos[p.tipo]));
+  for (const [i, { item }] of PENDENCIAS_ESPERADAS.entries()) {
+    await expect(aguarda.locator(".decisao").nth(i)).toContainText(item);
+  }
+  await expect(aguarda.locator(".decisao", { hasText: "Ação externa" })).toContainText(
+    "Integrar o PR final #12 na plataforma",
+  );
 });
