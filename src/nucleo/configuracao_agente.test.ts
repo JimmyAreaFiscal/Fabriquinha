@@ -12,14 +12,14 @@ test("Modelo é o par provedor + nome, sempre inteiro", () => {
     provedor: "llamacpp",
     nome: "qwen3-coder",
   });
-  for (const recusado of [
+  for (const rejeitado of [
     { provedor: "OpenAI", nome: "gpt" },
     { provedor: "openai", nome: " " },
     { provedor: "openai", nome: "x".repeat(201) },
     { provedor: "openai" },
     { nome: "gpt" },
   ]) {
-    assert.equal(Modelo.safeParse(recusado).success, false, JSON.stringify(recusado));
+    assert.equal(Modelo.safeParse(rejeitado).success, false, JSON.stringify(rejeitado));
   }
 });
 

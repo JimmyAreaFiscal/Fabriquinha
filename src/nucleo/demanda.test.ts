@@ -126,13 +126,13 @@ test("dependência de ticket recusa autorreferência, ciclo, outra demanda e ine
   );
 });
 
-test("CA-SDLC-19: dependência entre rodadas distintas ou com ticket sem rodada é recusada", () => {
+test("CA-SDLC-19: dependência entre rodadas distintas ou com ticket sem rodada é rejeitada", () => {
   recusa(plano({ tickets: [tk(1, 1), tk(2, 2, [1])] }), "outra rodada");
   recusa(plano({ tickets: [tk(1), tk(2, 1, [1])] }), "sem rodada");
   recusa(plano({ tickets: [tk(1, 1), tk(2, undefined, [1])] }), "sem rodada");
 });
 
-test("CA-SDLC-19: critério citado ausente entre os CA-n da demanda é recusado", () => {
+test("CA-SDLC-19: critério citado ausente entre os CA-n da demanda é rejeitado", () => {
   recusa(plano({ rodadas: [{ ...rd(1), criterios: ["CA-9"] }] }), "cita o CA-9");
   recusa(plano({ rodadas: [{ ...rd(1), criterios: ["criterio"] }] }), "CA-n");
 });
@@ -164,7 +164,7 @@ test("ticket do plano: caminhos relativos, par de modelo e effort válidos", () 
   );
 });
 
-test("CA-2: rodada declarada sem ticket é recusada, mas a demanda pode ter zero rodadas", () => {
+test("CA-2: rodada declarada sem ticket é rejeitada, mas a demanda pode ter zero rodadas", () => {
   recusa(plano({ rodadas: [rd(1), rd(2)], tickets: [tk(1, 1)] }), "rodada 2 não tem ticket");
   recusa(plano({ rodadas: [rd(1)], tickets: [tk(1)] }), "rodada 1 não tem ticket");
   assert.ok(Plano.safeParse(plano({ rodadas: [], tickets: [tk(1)] })).success);

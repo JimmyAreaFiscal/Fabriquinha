@@ -171,9 +171,9 @@ test("sem modelo resolvido, provedor sem reserva, interrupção, reprovação ou
 test("erro ao retomar um ticket não impede a retomada dos seguintes", (contexto) => {
   const { banco, ticket } = cenario([{ resultados: [tempoLimite] }, { resultados: [tempoLimite] }]);
   banco.exec(`CREATE TRIGGER recusa_primeiro BEFORE UPDATE ON ticket_demanda WHEN NEW.ticket_id = 1
-    BEGIN SELECT RAISE(ABORT, 'recusado'); END`);
+    BEGIN SELECT RAISE(ABORT, 'rejeitado'); END`);
   const log = contexto.mock.method(console, "error", () => undefined);
   assert.deepEqual(retomarFalhasDeInfraestrutura(banco, minutosDepois(2)), ["I-1.T2"]);
   assert.deepEqual([ticket(1)?.estado, ticket(2)?.estado], ["falhou", "aberto"]);
-  assert.match(String(log.mock.calls.at(-1)?.arguments[1]), /recusado/);
+  assert.match(String(log.mock.calls.at(-1)?.arguments[1]), /rejeitado/);
 });

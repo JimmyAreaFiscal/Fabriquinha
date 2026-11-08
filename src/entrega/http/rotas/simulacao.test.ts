@@ -166,7 +166,7 @@ test("Tarefa inválida dá 422 com o caminho do campo (CA-8 e CA-9); usuário al
   assert.equal(((await chamar("GET", TAREFAS)) as unknown[]).length, 1);
 });
 
-/** Uma porta onde ninguém escuta: a conexão é recusada. */
+/** Uma porta onde ninguém escuta: a conexão é rejeitada. */
 async function portaFechada(): Promise<number> {
   const servidor = createServer();
   await new Promise<void>((pronto) => servidor.listen(0, "127.0.0.1", pronto));

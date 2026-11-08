@@ -149,7 +149,7 @@ test("id de execução repetido em outro ticket falha e o fim da original fica",
   assert.deepEqual(carregarSessoesDoTicket(b, ref), antes);
 });
 
-test("uso de execução de outro ticket é recusado sem alterar o uso original", () => {
+test("uso de execução de outro ticket é rejeitado sem alterar o uso original", () => {
   const { b, antes } = comEncerrada();
   assert.throws(() =>
     comSessoesDoTicket(b, noTicket2, (x) => ({ ...x, usos: registrarUso(x.usos, uso({ tokens_entrada: 1 })) })),
@@ -157,7 +157,7 @@ test("uso de execução de outro ticket é recusado sem alterar o uso original",
   assert.deepEqual(carregarSessoesDoTicket(b, ref), antes);
 });
 
-test("sessão de outro ticket e execução de sessão fora do resultado são recusadas", () => {
+test("sessão de outro ticket e execução de sessão fora do resultado são rejeitadas", () => {
   const b = banco();
   assert.throws(() => comSessoesDoTicket(b, ref, (x) => ({ ...x, sessoes: [sessao("s2", 2)] })), /não é do ticket/);
   assert.throws(

@@ -21,7 +21,7 @@ test("mudar: transição declarada grava o destino e o instante e preserva o res
   assert.equal(original.estado, "a");
 });
 
-test("mudar: transição não declarada é recusada, e o terminal diz que é terminal", () => {
+test("mudar: transição não declarada é rejeitada, e o terminal diz que é terminal", () => {
   assert.throws(() => ciclo.mudar(item("a"), "c", agora), /não há transição de a para c \(de a só se vai a b\)/);
   assert.throws(() => ciclo.mudar(item("c"), "a", agora), /c é terminal/);
   assert.throws(() => ciclo.mudar(item("a"), "a", agora), ErroDeRegra);

@@ -206,7 +206,7 @@ test("sessão de ticket da demanda: o chat, o SSE e o histórico saem do serviç
     /^# Histórico da sessão I-310.T1 \(planejar\)[\s\S]*## Auditor\n\nplaneje[\s\S]*## Agente\n\nQual a prioridade\?/,
   );
 
-  // CA-9, CA-12: texto vazio recusado no schema; steer na conversa, diálogo e aborto sem pi são recusados.
+  // CA-9, CA-12: texto vazio rejeitado no schema; steer na conversa, diálogo e aborto sem pi são rejeitados.
   const vazio = await postar("/api/sessoes/sd-310/mensagens", { texto: "   ", modo: "prompt" });
   assert.equal(vazio.status, 422);
   assert.equal((await postar("/api/sessoes/sd-310/mensagens", { texto: "x", modo: "steer" })).status, 409);

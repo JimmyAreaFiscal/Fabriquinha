@@ -60,7 +60,7 @@ const etapasDoFormulario = (configuracoes: Configuracoes) =>
 const par = (m: Modelo | undefined): string | undefined => m && `${m.provedor}/${m.nome}`;
 
 /**
- * F4 §9: o modelo novo ou trocado precisa existir no pi; o recusado vira erro do campo (422). O igual ao gravado não
+ * F4 §9: o modelo novo ou trocado precisa existir no pi; o rejeitado vira erro do campo (422). O igual ao gravado não
  * chama o pi: o que ele deixou de listar continua salvando sem mexer.
  */
 async function conferirModelosAlterados(banco: DatabaseSync, nome: string, configuracoes: Configuracoes) {
@@ -69,7 +69,7 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, confi
     const modelo = configuracoes[etapa]?.modelo;
     return modelo && par(modelo) !== par(gravadas[etapa]?.modelo) ? [{ etapa, modelo }] : [];
   });
-  const recusados = (
+  const rejeitados = (
     await Promise.all(
       alterados.map(({ etapa, modelo }) =>
         conferirModelo(modelo).then(
@@ -86,7 +86,7 @@ async function conferirModelosAlterados(banco: DatabaseSync, nome: string, confi
       ),
     )
   ).flat();
-  if (recusados.length > 0) throw new z.ZodError(recusados);
+  if (rejeitados.length > 0) throw new z.ZodError(rejeitados);
 }
 
 /**

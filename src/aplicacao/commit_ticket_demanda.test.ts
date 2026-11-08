@@ -84,7 +84,7 @@ test("um commit com a marca, arquivos e linhas iguais ao git show --stat, e repe
   assert.deepEqual(commitDoTicketDemanda(banco, "I-1", 1), feito);
 });
 
-test("implementar sem alteração é recusado, sem commit", async () => {
+test("implementar sem alteração é rejeitado, sem commit", async () => {
   const { worktree, banco } = cenario();
   await assert.rejects(
     commitarTicketDemanda(banco, ref(1), { worktree, tipo: "fix", titulo: "Nada", etapa: "implementar" }),

@@ -164,7 +164,7 @@ test("o rótulo da causa: o reinício tem o seu; as demais falhas de ambiente, o
 });
 
 test("o erro vira resultado num ponto só: reprovação, infraestrutura ou falha que pede o Auditor", () => {
-  const reprovado = new ErroDeReprovacao("o commit foi recusado", "corrija");
+  const reprovado = new ErroDeReprovacao("o commit foi rejeitado", "corrija");
   assert.deepEqual(resultadoDoErro(reprovado), { tipo: "reprovacao", motivo: reprovado.message });
   const externo = new ErroExterno("o gh não respondeu", "confira o gh");
   assert.deepEqual(falhaDoErro(externo), {

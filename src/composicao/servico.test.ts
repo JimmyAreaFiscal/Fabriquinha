@@ -219,7 +219,7 @@ function bancoComDemanda(raiz: string): DatabaseSync {
   return banco;
 }
 
-test("subida que falha ao abrir o banco ou ao migrar libera a porta; o banco anterior à v36 é recusado sem alteração", async () => {
+test("subida que falha ao abrir o banco ou ao migrar libera a porta; o banco anterior à v36 é rejeitado sem alteração", async () => {
   const arquivo = join(novaRaiz(), "raiz-que-e-arquivo");
   writeFileSync(arquivo, "");
   await assert.rejects(subir(arquivo), /EEXIST|ENOTDIR/);

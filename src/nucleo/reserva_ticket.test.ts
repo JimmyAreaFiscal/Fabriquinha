@@ -81,7 +81,7 @@ test("CA-3: o agente não reserva", () => {
   assert.equal(status(ag, 2), "aberto");
 });
 
-test("CA-4: reservar de novo é recusado citando o estado atual", () => {
+test("CA-4: reservar de novo é rejeitado citando o estado atual", () => {
   recusa(montar({ rodadas: [rd(1)], tickets: [tk(2, 1, "em_execucao")] }), 2, /o estado atual é em_execucao/);
 });
 
@@ -132,7 +132,7 @@ test("ticket da demanda fora da etapa do estado cai no motivo geral, sem depend�
   );
 });
 
-test("demanda encerrada e ticket inexistente são recusados", () => {
+test("demanda encerrada e ticket inexistente são rejeitados", () => {
   assert.throws(() => reservar(montar({ tickets: [tk(1, undefined)] }, "concluida"), 1), /I-1 está em concluida/);
   assert.throws(() => reservar(montar({}), 9), /I-1\.T9 não existe/);
 });

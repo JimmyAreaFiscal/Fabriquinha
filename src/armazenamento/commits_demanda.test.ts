@@ -76,7 +76,7 @@ test("CA-1: grava e consulta o commit", () => {
   assert.deepEqual(commitDoTicketDemanda(b, "D", 1), commit("a"));
 });
 
-test("CA-2: outro sha para o mesmo ticket é recusado", () => {
+test("CA-2: outro sha para o mesmo ticket é rejeitado", () => {
   const b = banco();
   gravarCommitDemanda(b, "D", 1, commit("a"));
   assert.throws(() => {
@@ -93,7 +93,7 @@ test("CA-3: gravar o mesmo commit de novo não duplica", () => {
   assert.deepEqual(commitDoTicketDemanda(b, "D", 1), c);
 });
 
-test("CA-4: sha de outro ticket, da mesma demanda ou de outra, é recusado", () => {
+test("CA-4: sha de outro ticket, da mesma demanda ou de outra, é rejeitado", () => {
   const b = banco();
   gravarCommitDemanda(b, "D", 1, commit("a"));
   assert.throws(() => {
@@ -132,7 +132,7 @@ test("CA-7: arquivo inconsistente recusa o commit inteiro", () => {
   assert.equal(b.prepare("SELECT 1 FROM arquivo_commit_demanda").all().length, 0);
 });
 
-test("commit de ticket inexistente é recusado", () => {
+test("commit de ticket inexistente é rejeitado", () => {
   assert.throws(() => {
     gravarCommitDemanda(banco(), "D", 99, commit("a"));
   }, ErroDeRegra);
@@ -169,7 +169,7 @@ test("CA-10: o retrabalho externo traz o autor, e regravar não duplica", () => 
   assert.deepEqual(retrabalhoDoTicket(b, "D", 1), [{ commitAlterador: sha("a"), autor: "Ana", linhas: 3 }]);
 });
 
-test("CA-11: origem de outra demanda é recusada e nada fica gravado", () => {
+test("CA-11: origem de outra demanda é rejeitada e nada fica gravado", () => {
   const b = banco();
   assert.throws(() => {
     gravarRetrabalhoDoTicket(
