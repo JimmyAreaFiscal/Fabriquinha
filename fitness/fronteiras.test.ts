@@ -63,7 +63,6 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../composicao/servico.ts", demanda: "21" },
-  { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/arquivos.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/dependencias_demanda.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "SQL .prepare(", demanda: "21" },

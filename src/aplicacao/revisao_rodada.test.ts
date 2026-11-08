@@ -74,7 +74,7 @@ test("CA-3: arquivo modificado aparece como M", async () => {
   ]);
 });
 
-test("CA-4: uma linha por fitness, com a saída 0 e 1 e o log como anexo; regravar substitui", async () => {
+test("CA-4: uma linha por fitness, com o log como anexo e autor fabriquinha; regravar substitui", async () => {
   const { banco } = await cenarioRevisao();
   const projeto = carregarProjeto(banco, "loja");
   gravarProjeto(banco, {
@@ -83,7 +83,7 @@ test("CA-4: uma linha por fitness, com a saída 0 e 1 e o log como anexo; regrav
       ...projeto.verificacoes,
       fitness: [
         { nome: "boa", comando: "echo ok", descricao: "d" },
-        { nome: "ruim", comando: "echo falhou; exit 1", descricao: "d" },
+        { nome: "otima", comando: "echo certo", descricao: "d" },
       ],
     },
   });
@@ -96,17 +96,29 @@ test("CA-4: uma linha por fitness, com a saída 0 e 1 e o log como anexo; regrav
     linhas.map((l) => [l.nome, l.codigoSaida]),
     [
       ["boa", 0],
-      ["ruim", 1],
+      ["otima", 0],
     ],
   );
   const anexos = banco.prepare("SELECT caminho, sha256 FROM arquivo_evidencia ORDER BY ordem").all();
   assert.deepEqual(
     anexos.map((a) => a.caminho),
-    ["boa.log", "ruim.log"],
+    ["boa.log", "otima.log"],
   );
-  assert.match(readFileSync(caminhoArquivo(banco, String(anexos[1]?.sha256)), "utf8"), /falhou/);
+  assert.match(readFileSync(caminhoArquivo(banco, String(anexos[1]?.sha256)), "utf8"), /certo/);
   assert.equal(evidencia(banco, "arquivos_alterados").length, 1);
   assert.deepEqual(evidencias[0]?.autor, FABRIQUINHA);
+});
+
+test("fitness que falha: erro e nenhuma das duas evidências fica gravada", async () => {
+  const { banco } = await cenarioRevisao();
+  const projeto = carregarProjeto(banco, "loja");
+  gravarProjeto(banco, {
+    ...projeto,
+    verificacoes: { ...projeto.verificacoes, fitness: [{ nome: "ruim", comando: "exit 1", descricao: "d" }] },
+  });
+  await assert.rejects(prepararRevisaoRodada(banco, REF_RODADA), /matriz_fitness.*todas_fitness_passam/);
+  assert.equal(evidencia(banco, "arquivos_alterados").length, 0);
+  assert.equal(evidencia(banco, "matriz_fitness").length, 0);
 });
 
 test("recusa ticket inexistente, global e projeto sem configuração", async () => {
@@ -178,7 +190,7 @@ test("CA-6: aprovação reprovada por comprovacao_criterios ausente ou reprovada
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });
 
-test("CA-7: aprovada vai a encerramento com encerrar_rodada aberto", async () => {
+test("CA-7: a aprovação vai a encerramento com encerrar_rodada aberto", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 0, true);
   await decidir(banco, { resultado: "aprovado" });

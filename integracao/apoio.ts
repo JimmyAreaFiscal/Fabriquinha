@@ -37,6 +37,15 @@ export const git = (cwd: string, ...args: string[]): string =>
 
 export const CTX = { agora: "2026-01-01T00:00:00.000Z" };
 
+/** De onde os anexos das evidências externas vêm: a pasta do teste. */
+export const ORIGENS_DOS_ANEXOS = { worktree: base, saida: base, fora: "da pasta do teste", copie: "a pasta do teste" };
+/** O caminho de um HTML novo, como o desenho de uma IA externa o anexa. */
+export const anexoHtml = (): string => {
+  const pasta = mkdtempSync(join(base, "anexo-"));
+  writeFileSync(join(pasta, "d.html"), "<!doctype html><p>x</p>");
+  return join(pasta, "d.html");
+};
+
 /** O limite global de paralelismo (D04) não tem rota de escrita: o teste o grava direto na configuração. */
 export const gravarLimiteParalelismo = (banco: DatabaseSync, limite: number): void => {
   banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
@@ -121,7 +130,6 @@ export async function ciclo(c: Cenario, deps?: DepsDespacho): Promise<void> {
 // Evidências de uma IA externa que registra a demanda (F3): critérios, desenho com o html e custos.
 const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-const html = [{ nome: "d.html", mime: "text/html; charset=utf-8", conteudo: Buffer.from("<p>x</p>") }];
 const custos = (sessao: string) => ({
   sessoes: [
     {
@@ -152,9 +160,15 @@ export const registrarExterna = (c: Cenario, dependencias?: string[], projeto = 
 /** Submete as três evidências obrigatórias, como a IA externa as enviaria (`custos` com a sessão externa dada). */
 export function submeterObrigatorias(c: Cenario, id: string, sessaoExterna = `ext-${id}`): void {
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, CTX);
+    gestao.submeterEvidencia(
+      c.banco,
+      id,
+      { tipo, dados, arquivos } as gestao.EntradaEvidencia,
+      AUTOR,
+      ORIGENS_DOS_ANEXOS,
+    );
   submeter("criterios_aceite", criterios);
-  submeter("desenho_solucao", desenho, html);
+  submeter("desenho_solucao", desenho, [anexoHtml()]);
   submeter("custos_realizados", custos(sessaoExterna));
 }
 

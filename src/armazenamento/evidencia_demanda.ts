@@ -14,7 +14,7 @@ interface ChaveEvidencia {
 }
 
 /** Um anexo já guardado por `arquivos.ts`: `caminho` é o nome dele. */
-export interface Anexo {
+interface Anexo {
   caminho: string;
   sha256: string;
   mime: string;

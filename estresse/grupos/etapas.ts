@@ -3,7 +3,16 @@
 // demanda à estado da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
 // despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
@@ -165,7 +174,6 @@ const escreve = (c: Cenario, ligado: boolean) => {
 // Evidências de uma IA externa que registra a demanda, como em integracao/apoio.ts.
 const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-const html = [{ nome: "d.html", mime: "text/html; charset=utf-8", conteudo: Buffer.from("<p>x</p>") }];
 const custos = {
   sessoes: [
     {
@@ -194,10 +202,13 @@ async function demandaAprovada(c: Cenario): Promise<string> {
     AUTOR,
     ctx,
   ).demanda.id;
+  const pasta = realpathSync(c.dir);
+  const origens = { worktree: pasta, saida: pasta, fora: "da pasta do cenário", copie: "a pasta do cenário" };
+  writeFileSync(join(pasta, "d.html"), "<!doctype html><p>x</p>");
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, ctx);
+    gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, origens);
   submeter("criterios_aceite", criterios);
-  submeter("desenho_solucao", desenho, html);
+  submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
   submeter("custos_realizados", custos);
   gestao.enviar(c.banco, id, AUTOR, ctx);
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
