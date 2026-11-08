@@ -7,7 +7,8 @@ import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import type { Ambiente } from "../ambiente/ambiente.ts";
 import { anotar } from "../registro.ts";
-import { git, LIMITE_COMANDO_MS } from "../processo.ts";
+import { LIMITE_COMANDO_MS } from "../ambiente/ambiente.ts";
+import { git } from "../processo.ts";
 
 /**
  * Bytes do fim do log de cada comando de preparação.

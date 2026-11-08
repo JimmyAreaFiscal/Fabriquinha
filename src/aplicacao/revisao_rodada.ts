@@ -44,11 +44,12 @@ export async function prepararRevisaoRodada(
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
 
   const raiz = raizDo(banco);
+  const ambiente = ambienteDoServico();
   const { pasta: worktree } = await cicloDoEspaco(
     espacoDoTicket(ag, { rodada_id }, projeto, raiz),
     projeto,
     { raiz, log: `${raiz}/log` },
-    ambienteDoServico(),
+    ambiente,
   ).criar();
 
   // `base...head` é o diff desde o ancestral comum: o que a rodada fez, mesmo se a demanda avançou depois.
@@ -76,7 +77,10 @@ export async function prepararRevisaoRodada(
     previstosNaoTocados: previstos.filter((p) => !arquivos.some((a) => casa(a, p))),
   };
 
-  const fitness = await exigidaPelaEtapa("revisar_rodada", new VerificacaoDeFitness(projeto)).coletar({ worktree });
+  const fitness = await exigidaPelaEtapa("revisar_rodada", new VerificacaoDeFitness(projeto)).coletar({
+    ambiente,
+    worktree,
+  });
   const linhas = (fitness.dados.linhas as Record<string, unknown>[]).map((l) => ({
     ...l,
     log: `${String(l.nome)}.log`,

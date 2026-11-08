@@ -8,8 +8,8 @@ import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
-import type { Ambiente, IdentificadorDoProcesso } from "../ambiente/ambiente.ts";
-import { ambienteSemCredenciais, executar } from "../processo.ts";
+import { ambienteSemCredenciais, type Ambiente, type IdentificadorDoProcesso } from "../ambiente/ambiente.ts";
+import { executar } from "../processo.ts";
 import { anotar } from "../registro.ts";
 import { PACOTE, type EventoPi } from "./pi.ts";
 

@@ -13,7 +13,8 @@ import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../infra/registro.ts";
 import { enfileirar, gravarPgid, marcar, paraRodar, type UsuarioSimulado } from "../armazenamento/simulacao.ts";
-import { ambienteSemCredenciais, executar } from "../infra/processo.ts";
+import { ambienteSemCredenciais } from "../infra/ambiente/ambiente.ts";
+import { executar } from "../infra/processo.ts";
 import { condutor } from "./trabalho/condutor.ts";
 
 interface OpcoesDaSimulacao {
