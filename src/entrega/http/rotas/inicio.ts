@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ModoTrabalho } from "../../../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../../../nucleo/agregado_demanda.ts";
 import { satisfazDependencia } from "../../../nucleo/cancelamento_demanda.ts";
-import { CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
+import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "../../../nucleo/ciclos.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../../../nucleo/dependencia_demanda.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
@@ -151,6 +151,7 @@ function cartoesDaDemanda(
 
 /** O processo vivo da sessão, que só existe com o pi rodando; os testes o trocam. */
 type SituacaoDaSessao = (sessao: string) => Situacao | undefined;
+const situacaoDoCondutor: SituacaoDaSessao = (sessao) => condutor.situacao(sessao);
 
 /** A sessão parada no diálogo (com a pergunta, que só o processo vivo tem) ou na conversa: o que `pendenciasDaDemanda` pede. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
@@ -162,6 +163,10 @@ export function trabalhoVivoDaSessao(s: SessaoDeDemanda, situacaoDa: SituacaoDaS
     desde: s.desde,
   };
 }
+
+/** A sessão que espera o Auditor: parada no diálogo ou na conversa. */
+const esperaOAuditor = (s: SessaoDeDemanda): boolean =>
+  s.estado === "aguardando_humano" && (s.motivo === "dialogo" || s.motivo === "conversa");
 
 /** As Pendências da demanda com o que o Início precisa para desenhá-las e levá-las ao chat ou à página da demanda. */
 function pendenciasDoInicio(
@@ -203,9 +208,7 @@ export function pendenciasDasDemandas(
   situacaoDa: SituacaoDaSessao,
   agora: Date,
 ): PendenciaDoInicio[] {
-  const sessoesParadas = sessoes.filter(
-    (s) => s.estado === "aguardando_humano" && (s.motivo === "dialogo" || s.motivo === "conversa"),
-  );
+  const sessoesParadas = sessoes.filter(esperaOAuditor);
   const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
   const sessaoDoTicket = new Map(sessoesParadas.map((s) => [s.ticket, s.sessao]));
   const agendadorLigado = configuracao(banco).agendadorAtivo;
@@ -214,13 +217,24 @@ export function pendenciasDasDemandas(
     .toSorted((a, b) => a.desde.localeCompare(b.desde));
 }
 
+/**
+ * As Pendências de uma demanda em andamento, como o Início as desenha: o board e a página da demanda mostram as mesmas.
+ * A demanda terminada não espera ninguém.
+ */
+export function pendenciasDeUmaDemanda(
+  banco: DatabaseSync,
+  ag: AgregadoDemanda,
+  situacaoDa = situacaoDoCondutor,
+  agora = new Date(),
+): PendenciaDoInicio[] {
+  if (CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)) return [];
+  const sessoes = sessoesDeDemanda(banco, { escopo: "ativas", demanda: ag.demanda.id });
+  return pendenciasDasDemandas(banco, [ag], sessoes, situacaoDa, agora);
+}
+
 /** `GET /api/inicio`. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export function inicio(
-  banco: DatabaseSync,
-  situacaoDa: SituacaoDaSessao = (sessao) => condutor.situacao(sessao),
-  agora = new Date(),
-): DadosDoInicio {
+export function inicio(banco: DatabaseSync, situacaoDa = situacaoDoCondutor, agora = new Date()): DadosDoInicio {
   const mes = mesDe(agora);
   // Um mês pedido, um mês devolvido.
   const [doMes] = metricasDemandaPorMes(banco, { de: mes, ate: mes }) as [MetricasMesDemanda];

@@ -35,7 +35,7 @@ export const ROTULO_DO_TIPO_DE_PENDENCIA: Record<TipoPendencia, { titulo: string
 };
 
 /** O que aparece em vermelho: o item bloqueado e a revisão integral parada. */
-const EM_ALERTA: ReadonlySet<TipoPendencia> = new Set(["item_bloqueado", "revisao_parada"]);
+export const EM_ALERTA: ReadonlySet<TipoPendencia> = new Set(["item_bloqueado", "revisao_parada"]);
 
 /** As colunas do board, na ordem do processo; as de gate ficam hachuradas e marcadas "gate". */
 const COLUNAS: readonly (readonly [ColunaDoBoard, string])[] = [
