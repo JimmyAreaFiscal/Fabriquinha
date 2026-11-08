@@ -8,6 +8,7 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { ModoTrabalho } from "../nucleo/trabalho_agentico.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
+import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, existe, mensagem } from "../nucleo/erros.ts";
@@ -40,7 +41,7 @@ import {
   comTrabalhosDoTicket,
 } from "../armazenamento/trabalho_agentico.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
-import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
+import { garantirWorktreeDoEspaco } from "./espaco/garantir_worktree_do_espaco.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
@@ -75,12 +76,12 @@ interface Conducao {
   opcoes: OpcoesExecucaoDemanda;
 }
 
-/** O ticket de rodada roda na worktree da rodada; o global (sem rodada), na da demanda. */
-function worktreeDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
+/** O ticket roda na worktree do seu Espaço de Trabalho. */
+function worktreeDoEspacoDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
   const raiz = raizDo(banco);
-  return ticket.rodada_id === undefined
-    ? garantirWorktreeDemanda(raiz, projeto, ag.demanda.id, log, () => varrerBase(banco, projeto.nome))
-    : garantirWorktreeRodada(raiz, projeto, { demanda_id: ag.demanda.id, rodada_id: ticket.rodada_id }, log);
+  return garantirWorktreeDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), raiz, projeto, log, () =>
+    varrerBase(banco, projeto.nome),
+  );
 }
 
 /** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */
@@ -129,7 +130,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
     // `gh` e `az` olham diretórios vazios: o agente não acha credencial de hospedagem.
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
     anotar(log, `E-${execucao.id} iniciada: ${c.ref.demanda_id}.T${String(c.ref.ticket_id)}, sessão ${sessao.id}`);
-    const worktree = await worktreeDoTicket(c, log);
+    const worktree = await worktreeDoEspacoDoTicket(c, log);
     const prompt =
       opcoes.mensagem ??
       montarPromptDemanda({

@@ -59,7 +59,7 @@ export function espacoDaRodada(
   };
 }
 
-/** @testes o teste exercita direto; ainda sem chamador de produção neste ticket */
+/** A única regra da pasta do ticket; os casos de uso a chamam em vez de escolher entre a demanda e a rodada. */
 export function espacoDoTicket(
   ag: Pick<AgregadoDemanda, "demanda">,
   ticket: Pick<TicketDemanda, "rodada_id">,

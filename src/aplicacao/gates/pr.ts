@@ -6,6 +6,7 @@ import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { type Ator, exigirAtor } from "../../nucleo/ator.ts";
 import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
+import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { type EntradaDoGate, GATES } from "../../nucleo/gate.ts";
 import { type Endereco, ticketAtualDaEtapa } from "../../nucleo/item_de_trabalho.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
@@ -13,7 +14,6 @@ import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { carregarProjeto } from "../../armazenamento/projetos.ts";
 import { configuracao } from "../../armazenamento/servico.ts";
 import { integrarPR } from "../../infra/repositorio/pr.ts";
-import { caminhoDaWorktreeDemanda } from "../../infra/repositorio/worktree-demanda.ts";
 import { exigirGit, naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
 import { abrirSessaoDeAjustes, guardarMarcoDaSessao } from "../sessao_ajustes.ts";
 
@@ -73,7 +73,7 @@ export async function aprovarPR(
   const { branch } = ag.demanda;
   await integrarPR(projeto, pr.dados.id as string);
   // A ref local da demanda só avança em fast-forward: o merge da hospedagem é o único commit novo dela.
-  const demanda = caminhoDaWorktreeDemanda(raiz, projeto.nome, ag.demanda.id);
+  const { pasta: demanda } = espacoDoTicket(ag, {}, projeto, raiz);
   await naFilaDoProjeto(raiz, projeto.nome, async () => {
     await exigirGit(demanda, "fetch", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
     await exigirGit(demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);

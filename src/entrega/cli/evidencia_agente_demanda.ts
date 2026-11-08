@@ -8,6 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { text } from "node:stream/consumers";
 import { z } from "zod";
 import type { AgregadoDemanda, TicketDemanda } from "../../nucleo/agregado_demanda.ts";
+import { espacoDoTicket } from "../../nucleo/espaco_de_trabalho.ts";
 import { ErroDeRegra, encontrado, mensagem } from "../../nucleo/erros.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { validarEvidenciaDaEtapa } from "../../nucleo/evidencia_etapa.ts";
@@ -18,8 +19,8 @@ import { guardarAnexos, type Origens } from "../../aplicacao/evidencias/submissa
 import { exigirTrabalhoDoTicket } from "../../aplicacao/trabalho_do_ticket.ts";
 import { raizDo } from "../../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
+import { projetoExistente } from "../../armazenamento/projetos.ts";
 import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
-import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../../infra/repositorio/worktree-demanda.ts";
 import {
   type ComandoDemanda,
   type EscopoDoAgente,
@@ -66,14 +67,11 @@ async function lerDados(arquivo: string | undefined, stdin: NodeJS.ReadableStrea
 }
 
 /** De onde os anexos podem vir: a worktree da rodada do ticket (ou a da demanda) e a saída da execução, da raiz real. */
-function origensDe(banco: DatabaseSync, a: EscopoDoAgente, ticket: TicketDemanda): Origens {
+function origensDe(banco: DatabaseSync, a: EscopoDoAgente, ag: AgregadoDemanda, ticket: TicketDemanda): Origens {
   const raiz = realpathSync(raizDo(banco));
   const saida = join(raiz, "execucoes", `E-${a.ator.trabalho_id}`, "saida");
   return {
-    worktree:
-      ticket.rodada_id === undefined
-        ? caminhoDaWorktreeDemanda(raiz, a.projeto, a.demanda_id)
-        : caminhoDaWorktreeRodada(raiz, a.projeto, { demanda_id: a.demanda_id, rodada_id: ticket.rodada_id }),
+    worktree: espacoDoTicket(ag, ticket, projetoExistente(banco, a.projeto), raiz).pasta,
     saida,
     fora: "da worktree do ticket e do diretório de saída",
     copie: `$FABRIQUINHA_SAIDA (${saida})`,
@@ -116,7 +114,8 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
       ticketProprio(agente, String(pos[0]), true);
       const { tipo, schema } = tipoDoAgente(String(pos[1]));
       const { demanda_id, ticket_id } = agente;
-      const ticket = ticketAberto(carregarDemanda(banco, demanda_id), agente);
+      const agregadoLido = carregarDemanda(banco, demanda_id);
+      const ticket = ticketAberto(agregadoLido, agente);
       const dados = await lerDados(op.dados as string | undefined, stdin);
       // O caminho do campo sai a partir de `dados`, e o CLI mostra o ZodError em uma linha com `z.prettifyError`.
       const validos = z.object({ dados: schema.dados }).parse({ dados }).dados;
@@ -126,7 +125,7 @@ export const COMANDOS_EVIDENCIA_DEMANDA: readonly ComandoDemanda[] = [
         { demanda_id, ticket_id, tipo, produtor: "agente", aprovada, dados: validos },
       );
       let caminhos = (op.arquivo ?? []) as string[];
-      const origens = origensDe(banco, agente, ticket);
+      const origens = origensDe(banco, agente, agregadoLido, ticket);
       const agregado = agregadoDaRodada(carregarDemanda(banco, demanda_id), ticket.rodada_id);
       if (tipo === "aula_codigo") {
         if (caminhos.length > 0) {
