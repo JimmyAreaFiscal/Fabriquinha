@@ -32,8 +32,9 @@ import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.t
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
-import { atualizarWorktreeRodada, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
+import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
+import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
 import { condutor } from "./trabalho/condutor.ts";
@@ -229,7 +230,9 @@ async function publicarEConferir(
   const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, doRodada);
   gravarEvidencia(banco, ticket, "relatorio_produtividade", relatorio);
 
-  const atualizacao = await atualizarWorktreeRodada(raiz, projeto, ref, log);
+  const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
+  const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log });
+  const atualizacao = await ciclo.atualizarComBase();
   if (atualizacao.status === "conflito") {
     // Um merge, um corretivo: quem resolve um arquivo resolve o merge inteiro, e um por arquivo rodava os outros à toa.
     const arquivosEmConflito = atualizacao.arquivos.join(", ");
@@ -286,7 +289,7 @@ async function publicarEConferir(
     throw new ErroDeRegra(
       `a branch ${branchRodada} tem o commit ${orfao.slice(0, 12)}, que nenhum ticket de desenvolvimento da ${refRodada} registrou: ` +
         "um agente commitou fora do desenvolvimento, e esse commit não sobe no PR",
-      `desfaça com git -C ${caminhoDaWorktreeRodada(raiz, projeto.nome, ref)} reset --hard HEAD~1, repetindo até a HEAD ` +
+      `desfaça com git -C ${espaco.pasta} reset --hard HEAD~1, repetindo até a HEAD ` +
         "ser um commit de ticket da Fabriquinha, e reabra o ticket",
     );
   };
@@ -297,6 +300,7 @@ async function publicarEConferir(
   const conhecidos = ag.evidencias
     .filter((e) => e.tipo === "pr_aberto" && anteriores.has(e.ticket_id))
     .map((e) => (e.dados as { id: string }).id);
+  await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   const publicado = await publicarPRDe(
     raiz,
     projeto,
@@ -308,8 +312,6 @@ async function publicarEConferir(
       marca: marcaDoPRRodada(demanda.id, ticket.ticket_id),
     },
     conferirCommits,
-    () => varrerBase(banco, projeto.nome),
-    log,
   );
   gravarEvidencia(
     banco,
