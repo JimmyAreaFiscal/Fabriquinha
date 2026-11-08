@@ -1,0 +1,132 @@
+# Contexto
+
+- Projeto: loja (branch base integracao)
+- Worktree (diretório de trabalho): <raiz>/worktrees/loja/I-1/rodadas/1
+- Diretório de saída (`$FABRIQUINHA_SAIDA`): <raiz>/execucoes/E-<execucao>/saida
+
+## Demanda
+
+I-1, demanda I-1 (funcionalidade)
+
+d
+
+## Critérios de aceite da demanda
+
+(vazio)
+
+## Rodada
+
+I-1.R1, rodada 1 (estado revisar_rodada)
+
+Critérios citados:
+
+(nenhum)
+
+## Ticket
+
+I-1.T2, sem título (etapa revisar_rodada)
+
+
+
+Dependências:
+
+(nenhuma)
+
+Caminhos:
+
+(nenhum)
+
+## Revisões anteriores da rodada
+
+Decisões recusadas dos tickets anteriores da rodada, pelo revisor ou pelo Auditor; confira cada uma e não reabra o que já foi decidido:
+
+(nenhuma)
+
+## Arquivos alterados
+
+O diff da rodada contra a branch da demanda, apurado pela Fabriquinha antes desta execução, com o caminho dos tickets do plano que cada arquivo casou:
+
+(nenhum)
+
+Caminhos do plano que a rodada não tocou:
+
+(nenhum)
+
+## Matriz de fitness functions
+
+A Fabriquinha rodou cada fitness function na worktree antes desta execução:
+
+(nenhuma)
+
+Os logs, em arquivos que você lê:
+
+(nenhum)
+
+## Verificações já feitas
+
+A Fabriquinha rodou estas verificações no commit de cada ticket abaixo, antes de commitá-lo. Se `git rev-parse HEAD^{tree}` na worktree é igual a `git rev-parse <sha>^{tree}` de um deles e `git status --porcelain` está vazio, o código é o verificado: use estes resultados e logs, sem rodar de novo os comandos listados.
+
+(nenhuma)
+
+## Reabertura
+
+O Auditor reabriu o ticket I-1.T2. Continue de onde a entrega anterior parou e atenda ao motivo.
+
+Motivo: refaça com atenção
+
+## Modo de trabalhar: revisar rodada
+
+**Objetivo:** revisar a rodada I-1.R1 da demanda I-1 como um todo, no ticket I-1.T2: explicar as fitness functions e comprovar que os critérios que a rodada atende foram cumpridos.
+
+**Passos:**
+
+1. Leia o plano, os critérios da rodada I-1.R1 e o que a Fabriquinha coletou: os arquivos alterados e a matriz de fitness functions, nas seções "Arquivos alterados" e "Matriz de fitness functions", esta com o arquivo do log de cada linha.
+2. Confira primeiro, na seção "Revisões anteriores da rodada", se cada motivo anterior foi resolvido e se o diff dos tickets corretivos (`git log --grep` do endereço de cada um) regrediu algo. O que uma revisão anterior ou o Auditor já decidiu, inclusive nas respostas às perguntas listadas, não se reabre: não pergunte de novo nem reprove por isso. Isso não impede reprovar de novo um motivo anterior que continua sem correção: se o corretivo não o resolveu, reprove e registre o motivo.
+3. Confira o código da worktree contra o plano e contra cada critério citado. Na seção "Verificações já feitas", veja o que a Fabriquinha já rodou no commit da worktree: código igual ao verificado não roda de novo os mesmos comandos (`npm run check`, integração, e2e).
+4. Explique o resultado de cada fitness function, inclusive as que falharam.
+5. Comprove cada critério da rodada com o que você viu no código e nos testes.
+6. Depois das evidências aceitas, registre a decisão como último passo com `fabriquinha revisao decidir I-1.T2 aprovar` se a rodada não tem defeito material, ou com `fabriquinha revisao decidir I-1.T2 reprovar --motivo <texto> --correcoes <json|->` se tem; `--correcoes` leva as correções que a rodada exige, em JSON, uma por ticket corretivo, como `[{"titulo": "...", "descricao": "...", "caminhos": ["src/a.ts"]}]`. Cada correção cita o critério ou o defeito material que a justifica. Cada correção do `--correcoes` pede mudança em arquivos da worktree; corpo do PR, Sonar, deploy e cópia do banco não são correção.
+
+**O que reprova:** só defeito material, demonstrado por um caso concreto (entrada, comando ou arquivo:linha e o resultado errado): critério de aceite da rodada não cumprido; bug de comportamento; teste ou verificação existente removido sem cobertura equivalente; `npm run check`, integração ou e2e falhando; mudança fora do escopo do plano que altera comportamento.
+Todo o resto é observação: redação de texto, comentário ou nome que não fere gravemente o AGENTS.md; corpo do PR, inventário, foto ou evidência a completar; sugestão de robustez ou caso-limite além do que o critério pede; item que pertence a outra rodada. Para observação, aprove e registre-a na evidência de comprovação, para o Auditor ver no gate do PR. Na dúvida entre material e observação, aprove e registre a observação.
+
+**Fica fora da revisão:** o quality gate do SonarQube (a Fabriquinha o confere nos tickets e o Auditor, no gate do PR), o PR (nasce no encerramento da rodada, depois da revisão), o deploy e a cópia do banco real (do Auditor e do operador). Nada disso é motivo de pergunta nem de reprovação. Critério que só se comprova por eles vai na evidência como "verificado fora da revisão: <por quem>", e você decide pelo resto.
+
+Se o ambiente impedir outra verificação (serviço da rodada fora do ar, contêiner, dúvida de escopo), não reprove por isso: o ticket corretivo não conserta o ambiente e a rodada volta à revisão em laço.
+Pergunte ao Auditor com a ferramenta `perguntar`, dizendo o que falta e o que você já tentou, e siga com a resposta dele.
+
+Para esperar um processo (teste ao vivo, container, fila), espere num único comando até a condição ou um tempo limite, com a saída filtrada; não relance a espera turno após turno, nunca com `sleep` fixo nem esperando o check ou o e2e que a Fabriquinha já rodou.
+
+**Entregas:** as evidências de explicação das fitness functions e de comprovação dos critérios, do ticket I-1.T2.
+
+**Quando parar:** depois de registrar a decisão com `revisao decidir`; termine a sua resposta.
+
+**O que não fazer:** não mude o código (as alterações da worktree são descartadas), não faça commit nem push, não crie PR e não mexa em nada fora do ticket I-1.T2. Refira-se a tickets e rodadas só pelos endereços públicos.
+
+## Leitura e edição
+
+Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
+
+- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.
+- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.
+- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
+- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
+
+## Evidências
+
+Você submete (`fabriquinha evidencia schema <tipo>` mostra o formato; `fabriquinha evidencia add <tipo> --dados <arquivo.json> --arquivo <caminho>...` submete):
+
+- `explicacao_fitness`
+- `comprovacao_criterios`
+
+A Fabriquinha produz:
+
+- `arquivos_alterados`
+- `matriz_fitness`
+
+## Skills de artefato
+
+Leia a skill de cada evidência antes de produzi-la:
+
+- `artefato-explicacao-fitness`
+- `artefato-comprovacao-criterios`

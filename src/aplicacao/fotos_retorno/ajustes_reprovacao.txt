@@ -1,0 +1,75 @@
+# Contexto
+
+- Projeto: loja (branch base integracao)
+- Worktree (diretório de trabalho): <raiz>/worktrees/loja/I-206/rodadas/2
+- Diretório de saída (`$FABRIQUINHA_SAIDA`): <raiz>/execucoes/E-<execucao>/saida
+
+## Demanda
+
+I-206, Demanda (funcionalidade)
+
+d
+
+## Critérios de aceite da demanda
+
+(vazio)
+
+## Rodada
+
+I-206.R2, r2 (estado ajustar_resultado)
+
+Critérios citados:
+
+(nenhum)
+
+## Ticket
+
+I-206.T9, sem título (etapa ajustar_resultado)
+
+
+
+Dependências:
+
+(nenhuma)
+
+Caminhos:
+
+(nenhum)
+
+## Reabertura
+
+O Auditor reabriu o ticket I-206.T9. Continue de onde a entrega anterior parou e atenda ao motivo.
+
+Motivo: Esta é a sessão de ajustes da rodada I-206.R2 (ticket I-206.T9): converse e registre tickets corretivos, sem implementar nem integrar.
+O Auditor reprovou o PR https://github.com/org/loja/pull/1 da rodada. Motivo: Falta teste do fluxo de erro
+
+## Modo de trabalhar: sessão em aberto
+
+**Objetivo:** conversar com o Auditor sobre os ajustes que ele pede no PR da rodada I-206.R2 da demanda I-206, no ticket I-206.T9, e deixá-los claros para a Fabriquinha.
+
+**Passos:**
+
+1. Leia o PR e o que o Auditor pediu.
+2. Converse com o Auditor até entender cada ajuste.
+3. Registre cada ajuste combinado como um ticket corretivo da rodada I-206.R2, um por ajuste, na ordem em que devem ser feitos. Pelo menos um ticket corretivo registrado é obrigatório antes de concluir a conversa; resumo na conversa não basta.
+
+**Entregas:** os tickets corretivos da rodada I-206.R2, um por ajuste combinado. Esta etapa não tem evidência.
+
+**Quando parar:** só depois que os tickets corretivos estiverem registrados e o Auditor concluir a sessão.
+
+**O que não fazer:** não implemente os ajustes por conta própria, não integre, não crie nem altere PR, não faça commit nem push e não mexa em nada fora do ticket I-206.T9. Refira-se a tickets e rodadas só pelos endereços públicos.
+
+## Leitura e edição
+
+Tudo o que entra na conversa é reenviado a cada turno: leia só o que vai usar.
+
+- Localize com `grep -n` antes de abrir um arquivo e abra só a faixa que interessa, com `read` e `offset`/`limit`.
+- Não despeje arquivos inteiros, nem vários de uma vez, com `cat`, `sed -n` ou `head`.
+- Altere arquivos com `edit` e crie com `write`; não use heredoc, `python` ou `sed -i` para editar código.
+- Para explorar várias partes do código, delegue ao subagente `Explore` e traga só a conclusão.
+
+## Evidências
+
+Esta etapa não tem evidência do agente.
+
+A Fabriquinha não produz evidência nesta etapa.

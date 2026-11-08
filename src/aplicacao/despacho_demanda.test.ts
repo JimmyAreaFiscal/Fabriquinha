@@ -20,6 +20,7 @@ import { configuracao } from "../armazenamento/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
+import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { despacharDemandas, type DepsDespacho, executarAgoraDemanda } from "./despacho_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -422,3 +423,17 @@ test("CA-7 e CA-10: o resolver_conflito aberto é reservado com execução abert
   assert.deepEqual([estadoDoTicket(banco, 3, 2), execucoes(banco, 3, 2)], ["em_execucao", 0]);
   await Promise.all(fins);
 });
+
+for (const [caso, ticket] of [
+  ["devolucao", { instrucao: "o teste falhou em x.ts", devolucoes: 1 }],
+  ["reabertura", { instrucao: "refaça com atenção a y.ts" }],
+] as const) {
+  test(`foto do retorno ao agente no despacho: ${caso} do implementar`, async (t) => {
+    silenciar(t); // a conclusão recusa: o pi falso não entrega evidência
+    const { c, banco, config } = await cenario(3, true);
+    demanda(banco, 2, { rodadas: ["implementar"], tickets: [{ ...implementar(1), ...ticket }] });
+    piFalso.roteirizar([{}]);
+    await Promise.all(despacharDemandas(banco, config));
+    conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, `despacho_${caso}`);
+  });
+}

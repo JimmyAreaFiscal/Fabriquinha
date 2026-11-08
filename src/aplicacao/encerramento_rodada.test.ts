@@ -23,6 +23,7 @@ import {
   garantirWorktreeRodada,
 } from "../infra/repositorio/worktree-demanda.ts";
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
+import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-encerramento-")));
@@ -488,4 +489,10 @@ test("corpo além do limite e o pi sem resumo: o PR vai sem o contexto, e o log 
     readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"),
     /I-206\.R2: o pi não resumiu o contexto do PR em [\d]+ caracteres; vai sem ele/,
   );
+});
+
+test("foto do retorno ao agente no encerramento da rodada: reabertura", async () => {
+  const { c, banco, piFalso } = await cenario({ statusEncerrar: "aberto", instrucao: "refaça a aula" });
+  await iniciarEncerramentoRodada(banco, REF, 1).fim;
+  conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, "encerramento_rodada_reabertura");
 });
