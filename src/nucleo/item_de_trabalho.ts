@@ -155,7 +155,6 @@ export function criarTicket(
     ...(rodada !== undefined && { rodada_id: rodada }),
     etapa,
     estado: "aberto",
-    devolucoes: 0,
     estado_alterado_em: agora,
     criado_por,
   };

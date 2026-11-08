@@ -152,7 +152,6 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
     estado: status,
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     ...extra,
   });
   const rodada = (demanda_id: string, estado: string) => ({
@@ -190,6 +189,7 @@ export async function criarPreparo(amb: Ambiente): Promise<Preparo> {
       criterios_citados: [],
       dependencias_ticket: [],
       caminhos_ticket: [],
+      tentativas: [],
       ...resto,
     } as unknown as AgregadoDemanda);
     return id;

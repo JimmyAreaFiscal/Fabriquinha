@@ -9,7 +9,8 @@ import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
 import { Plano } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
-import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { montarRetornoAoAgente, retornoAoAgenteDoTicket, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { confirmarAprovacaoPlanejamento, reabrirTicket, reprovarPlanejamento } from "../nucleo/transicoes_demanda.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { varrerBase } from "./retrabalho.ts";
@@ -46,7 +47,7 @@ export function iniciarOuRetomarPlanejamento(
   banco: DatabaseSync,
   demandaId: string,
   limiteMin: number,
-): { id: string; fim: Promise<void> } {
+): ReturnType<typeof iniciarExecucaoDemanda> {
   const ag = carregarDemanda(banco, demandaId);
   CICLO_DA_DEMANDA.exigir(ag.demanda, "planejar");
   const ticket = ticketPlanejar(ag);
@@ -65,12 +66,15 @@ export function iniciarOuRetomarPlanejamento(
   const ultima = ag.decisoes.filter((d) => d.ticket_id === ticket.ticket_id).at(-1);
   // A reprovação é o último fato da conversa: o motivo dela vem antes da instrução, que pode ser de uma reabertura
   // anterior (ou a cópia do próprio motivo, quando a reprovação reabriu o ticket falho).
+  const enderecoDoTicket = Endereco.doTicket(demandaId, ticket.ticket_id);
   const retomada =
     ultima?.resultado === "recusado"
-      ? { tipo: "devolucao" as const, motivo: existe(ultima.motivo, "a reprovação não tem motivo", "confira o banco") }
-      : ticket.instrucao
-        ? { tipo: "reabertura" as const, motivo: ticket.instrucao }
-        : undefined;
+      ? montarRetornoAoAgente(
+          tentativaAnteriorEmMemoria(enderecoDoTicket, {
+            motivoDaReprovacao: existe(ultima.motivo, "a reprovação não tem motivo", "confira o banco"),
+          }),
+        )
+      : retornoAoAgenteDoTicket(ag.tentativas, ticket.ticket_id);
   // Plano aprovado e depois descartado: a conversa que o produziu não volta, senão o agente reenvia o mesmo plano. O
   // replanejamento começa em sessão nova; já começado (execução depois da aprovação), é ele que se retoma.
   const iniciarEmSessaoNova =

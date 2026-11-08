@@ -56,16 +56,20 @@ const PLANEJAR_REPROVADO = `t.etapa = 'planejar' AND (
 const EXECUCAO_DO_TICKET = `FROM sessao s JOIN execucao_sessao e ON e.sessao_id = s.id
   WHERE s.demanda_id = t.demanda_id AND s.ticket_id = t.ticket_id`;
 
-/** Ids das demandas em planejamento cujo `planejar` reprovado, sem execução aberta, não foi retomado desde a última recusa. */
+/**
+ * Ids das demandas em planejamento cujo `planejar` reprovado, sem execução aberta, não teve Tentativa nova desde a última
+ * recusa: a retomada abre a Tentativa seguinte, e é ela que tira a demanda daqui.
+ */
 export const retomadasDePlanejamento = (banco: DatabaseSync): string[] =>
   banco
     .prepare(
       `SELECT t.demanda_id FROM ticket_demanda t JOIN demanda dm ON dm.id = t.demanda_id
        WHERE dm.estado = 'planejar' AND t.estado = 'em_execucao' AND ${PLANEJAR_REPROVADO}
          AND NOT EXISTS (SELECT 1 ${EXECUCAO_DO_TICKET} AND e.fim IS NULL)
-         AND NOT EXISTS (SELECT 1 ${EXECUCAO_DO_TICKET} AND e.inicio >= (
-           SELECT d.em FROM decisao_ticket d WHERE d.demanda_id = t.demanda_id AND d.ticket_id = t.ticket_id
-           ORDER BY d.decisao_id DESC LIMIT 1))
+         AND NOT EXISTS (SELECT 1 FROM tentativa x WHERE x.demanda_id = t.demanda_id AND x.ticket_id = t.ticket_id
+           AND x.inicio >= (
+             SELECT d.em FROM decisao_ticket d WHERE d.demanda_id = t.demanda_id AND d.ticket_id = t.ticket_id
+             ORDER BY d.decisao_id DESC LIMIT 1))
        ORDER BY dm.rowid`,
     )
     .all()

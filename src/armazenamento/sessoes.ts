@@ -121,7 +121,6 @@ export const comSessoesDoTicket = (
         fim: e.fim ?? null,
         falha: Number(e.falha),
         grupo_processo: e.grupo_processo ?? null,
-        erro: e.erro ?? null,
         ...colunasDaConfiguracaoAgente(configuracao_agente),
       })),
       chaves(["id"], antes.execucoes),

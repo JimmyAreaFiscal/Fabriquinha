@@ -6,12 +6,12 @@ import { join, matchesGlob } from "node:path";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { ambienteSemCredenciais, executarNoShell, LIMITE_COMANDO_MS, type Resultado } from "../../infra/processo.ts";
 import { LIMITE } from "../../nucleo/schemas.ts";
+import type { CausaDeInfraestrutura } from "../../nucleo/tentativa.ts";
 
-export interface Falha {
-  classe: "tecnica" | "infraestrutura";
-  motivo: string;
-  comando?: string;
-}
+/** A reprovação técnica volta ao agente; a de infraestrutura leva a causa que a política da Tentativa lê. */
+export type Falha =
+  | { classe: "tecnica"; motivo: string; comando?: string }
+  | { classe: "infraestrutura"; causa: CausaDeInfraestrutura; motivo: string; comando?: string };
 
 export interface Verificacao {
   tipo: "execucao_testes" | "matriz_fitness" | "relatorio_sonar";
@@ -39,9 +39,11 @@ export const aprovacao = (falhas: readonly Falha[]): boolean | undefined =>
 
 /** Estouro do tempo e saída 126/127 (comando que não roda) são infraestrutura; outra saída diferente de 0, técnica. */
 function classificar(comando: string, r: Resultado, tecnica = (c: number | null) => c !== 0): Falha | undefined {
-  if (r.estourou) return { classe: "infraestrutura", motivo: `${comando}: tempo limite`, comando };
+  if (r.estourou) {
+    return { classe: "infraestrutura", causa: "tempo_limite", motivo: `${comando}: tempo limite`, comando };
+  }
   if (r.codigo === 126 || r.codigo === 127) {
-    return { classe: "infraestrutura", motivo: `${comando}: ${r.log.trim()}`, comando };
+    return { classe: "infraestrutura", causa: "comando_ausente", motivo: `${comando}: ${r.log.trim()}`, comando };
   }
   if (tecnica(r.codigo)) {
     return { classe: "tecnica", motivo: `${comando} saiu com código ${String(r.codigo)}`, comando };
@@ -113,6 +115,7 @@ export function verificarTestes({
       else if (exec.codigo !== 0) {
         falhas.push({
           classe: "infraestrutura",
+          causa: "comando_ausente",
           motivo: `${config.comando_execucao} saiu com código inesperado ${String(exec.codigo)}`,
           comando: config.comando_execucao,
         });

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { clonarAgregadoDemanda as structuredClone } from "../../apoio-testes/clonar_agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
 import { CICLO_DA_RODADA } from "./ciclos.ts";
 import { ErroDeEscopo } from "./erros.ts";
 import { reabrirTicket } from "./transicoes_demanda.ts";
+import { motivoDaFalhaDoTicket } from "./tentativa.ts";
 import {
   PREFIXO_TERCEIRA_REPROVACAO,
   conferirPullRequestRodada,
@@ -205,8 +207,9 @@ test("CA-1: a terceira reprovação da rodada falha o ticket, sem corretivos, co
   assert.equal(novo.tickets.length, ag.tickets.length);
   const falho = novo.tickets.find((t) => t.ticket_id === 7);
   assert.equal(falho?.estado, "falhou");
-  assert.ok(falho.motivo_falha?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
-  for (const motivo of ["primeiro", "segundo", "terceiro"]) assert.match(falho.motivo_falha ?? "", new RegExp(motivo));
+  assert.ok(motivoDaFalhaDoTicket(novo.tentativas, falho)?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
+  for (const motivo of ["primeiro", "segundo", "terceiro"])
+    assert.match(motivoDaFalhaDoTicket(novo.tentativas, falho) ?? "", new RegExp(motivo));
   assert.equal(novo.rodadas[0]?.estado, "revisar_rodada");
   assert.deepEqual(novo.decisoes.at(-1), { ...recusado(7, 1, "terceiro"), em: t1 });
 });
@@ -215,7 +218,13 @@ test("CA-3: reaberto pelo Auditor, o mesmo ticket decide de novo: aprova ou falh
   const falhou = comRecusas(emRevisao(), recusado(3, 1, "a"), recusado(3, 2, "b"));
   const terceira = registrarRevisaoRodada(falhou, reprovada({ exigencias: "c" }), agente(3), ctx);
   assert.equal(terceira.decisoes.at(-1)?.decisao_id, 3);
-  const reaberto = reabrirTicket(terceira, { ticket_id: 3, instrucao: "aceite o achado" }, AUDITOR, ctx);
+  const aberto = reabrirTicket(terceira, { ticket_id: 3, instrucao: "aceite o achado" }, AUDITOR, ctx);
+  const reaberto = {
+    ...aberto,
+    tickets: aberto.tickets.map((ticket) =>
+      ticket.ticket_id === 3 ? { ...ticket, estado: "em_execucao" as const } : ticket,
+    ),
+  };
 
   const aprovado = registrarRevisaoRodada(reaberto, { ...ref, ticket_id: 3, aprovado: true }, agente(3), ctx);
   assert.equal(aprovado.rodadas[0]?.estado, "encerrar_rodada");
@@ -224,7 +233,7 @@ test("CA-3: reaberto pelo Auditor, o mesmo ticket decide de novo: aprova ou falh
   const outra = registrarRevisaoRodada(reaberto, reprovada({ exigencias: "d" }), agente(3), ctx);
   const ticket = outra.tickets.find((t) => t.ticket_id === 3);
   assert.equal(ticket?.estado, "falhou");
-  assert.ok(ticket.motivo_falha?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
+  assert.ok(motivoDaFalhaDoTicket(outra.tentativas, ticket)?.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
   assert.equal(outra.tickets.length, reaberto.tickets.length);
   assert.equal(outra.decisoes.at(-1)?.decisao_id, 4);
 });
@@ -233,9 +242,17 @@ test("CA-3: a quarta reprovação com motivos longos mantém o prefixo e a deman
   const longo = (letra: string) => `${letra} `.repeat(999).trim(); // 999 palavras: o Motivo aceita até 2.000 caracteres
   const falhou = comRecusas(emRevisao(), recusado(3, 1, longo("a")), recusado(3, 2, longo("b")));
   const terceira = registrarRevisaoRodada(falhou, reprovada({ exigencias: longo("c") }), agente(3), ctx);
-  const reaberto = reabrirTicket(terceira, { ticket_id: 3, instrucao: "decida" }, AUDITOR, ctx);
+  const aberto = reabrirTicket(terceira, { ticket_id: 3, instrucao: "decida" }, AUDITOR, ctx);
+  const reaberto = {
+    ...aberto,
+    tickets: aberto.tickets.map((ticket) =>
+      ticket.ticket_id === 3 ? { ...ticket, estado: "em_execucao" as const } : ticket,
+    ),
+  };
   const quarta = registrarRevisaoRodada(reaberto, reprovada({ exigencias: longo("d") }), agente(3), ctx);
-  const motivoFalha = quarta.tickets.find((t) => t.ticket_id === 3)?.motivo_falha ?? "";
+  const ticketFalho = quarta.tickets.find((ticket) => ticket.ticket_id === 3);
+  assert.ok(ticketFalho);
+  const motivoFalha = motivoDaFalhaDoTicket(quarta.tentativas, ticketFalho) ?? "";
   assert.ok(motivoFalha.startsWith(PREFIXO_TERCEIRA_REPROVACAO));
   assert.ok(motivoFalha.endsWith(" d d d"));
   assert.match(motivoFalha, /\(3 reprovações anteriores omitidas\)/);
@@ -245,7 +262,9 @@ test("CA-3: a quarta reprovação com motivos longos mantém o prefixo e a deman
 test("CA-3: motivos curtos de mais de três reprovações cabem inteiros, sem aviso de omissão", () => {
   const falhou = comRecusas(emRevisao(), recusado(3, 1, "a"), recusado(3, 2, "b"), recusado(3, 3, "c"));
   const quarta = registrarRevisaoRodada(falhou, reprovada({ exigencias: "d" }), agente(3), ctx);
-  const motivoFalha = quarta.tickets.find((t) => t.ticket_id === 3)?.motivo_falha ?? "";
+  const ticketFalho = quarta.tickets.find((ticket) => ticket.ticket_id === 3);
+  assert.ok(ticketFalho);
+  const motivoFalha = motivoDaFalhaDoTicket(quarta.tentativas, ticketFalho) ?? "";
   assert.equal(motivoFalha, `${PREFIXO_TERCEIRA_REPROVACAO}\n- a\n- b\n- c\n- d`);
 });
 

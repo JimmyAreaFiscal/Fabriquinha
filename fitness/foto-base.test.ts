@@ -74,6 +74,23 @@ const PROMPTS_DA_BASE = [
   "revisar_demanda",
 ].map((etapa) => `prompts/${etapa}.txt`);
 const DIFERENCAS_INTENCIONAIS: readonly DiferencaIntencional[] = [
+  ...(
+    [
+      ['"devolucoes":0,"evidencias"', '"evidencias"'],
+      [',"devolucoes":0}', "}"],
+    ] as const
+  ).map(([de, para]) => ({
+    arquivo: "cli/aula-e-demanda.txt",
+    de,
+    para,
+    motivo: "I-270: Tentativas guardam os resultados; o ticket público deixa de imprimir o contador removido",
+  })),
+  {
+    arquivo: "textos/src/execucao/avaliacao.md.txt",
+    de: "etapas, devoluções e reprovações.",
+    para: "etapas, exigências de alteração (`exigenciasDeAlteracao`, as Tentativas reprovadas) e reprovações.",
+    motivo: "I-270: o metricas.json da avaliação conta Tentativas reprovadas, em vez do contador removido",
+  },
   ...PROMPTS_DA_BASE.map((arquivo) => ({
     arquivo,
     de: "(fase desenvolvimento)",

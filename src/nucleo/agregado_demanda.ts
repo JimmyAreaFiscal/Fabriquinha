@@ -18,6 +18,7 @@ import {
   Slug,
   Titulo,
 } from "./primitivos.ts";
+import { Tentativa } from "./tentativa.ts";
 
 export const TicketDemanda = z.object({
   demanda_id: DemandaId,
@@ -36,11 +37,6 @@ export const TicketDemanda = z.object({
   configuracao_agente: ConfiguracaoAgente.optional(),
   // Instrução do Auditor ao reabrir um ticket falho; a sessão que o retomar a lê (§4.2).
   instrucao: Markdown.optional(),
-  // Reprovações técnicas devolvidas ao agente (D05, no máximo 2) e o porquê de o ticket ter falhado.
-  devolucoes: z.number().int().min(0).max(2).default(0),
-  motivo_falha: Markdown.optional(),
-  // Retomadas seguidas da Fabriquinha depois de falha de infraestrutura; a devolução e a reabertura zeram. Ausente é 0.
-  retomadas_automaticas: z.number().int().min(0).optional(),
 });
 
 export const RodadaDemanda = z.object({
@@ -157,6 +153,8 @@ export const AgregadoDemanda = z
     criterios_citados: z.array(CriterioCitadoRodada).default([]),
     dependencias_ticket: z.array(DependenciaTicket).default([]),
     caminhos_ticket: z.array(CaminhoDoTicket).default([]),
+    // As execuções das etapas, na ordem; os limites e a retomada derivam delas (D05).
+    tentativas: z.array(Tentativa).default([]),
     encerramento: ProgressoEncerramento.optional(),
   })
   .superRefine((ag, ctx) => {
@@ -178,11 +176,13 @@ export const AgregadoDemanda = z
       if (rodadaDe.has(t.ticket_id)) erro(`o ticket ${String(t.ticket_id)} se repete`);
       if (t.rodada_id !== undefined && !rodadas.has(t.rodada_id))
         erro(`o ticket ${String(t.ticket_id)} cita a rodada ${String(t.rodada_id)}, que não existe`);
-      if (t.motivo_falha !== undefined && t.estado !== "falhou" && t.estado !== "cancelado")
-        erro(`o ticket ${String(t.ticket_id)} só tem motivo_falha quando falhou ou cancelado`);
       rodadaDe.set(t.ticket_id, t.rodada_id);
     }
     const tickets = new Set(rodadaDe.keys());
+    for (const t of ag.tentativas) {
+      if (t.ticket.demanda_id !== id || !tickets.has(Number(t.ticket.ticket_id)))
+        erro(`a Tentativa ${String(t.numero)} cita o ticket ${t.ticket.toString()}, que não existe na demanda ${id}`);
+    }
     for (const l of [
       ...ag.dependencias_rodada,
       ...ag.criterios_citados,

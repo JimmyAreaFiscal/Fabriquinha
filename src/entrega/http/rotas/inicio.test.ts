@@ -1,4 +1,5 @@
 // Rota do Início: o mês, o que aguarda o Auditor, o que roda e o board das demandas em andamento, sobre um banco real.
+import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
 import assert from "node:assert/strict";
 import type { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
@@ -19,7 +20,6 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, status: st
   estado: status,
   estado_alterado_em: em(ticket_id),
   criado_por: { tipo: "fabriquinha" },
-  devolucoes: 0,
   ...extra,
 });
 
@@ -72,8 +72,18 @@ function cenario(): DatabaseSync {
         ticket("I-303", 3, "ajustar_resultado", "em_execucao", { rodada_id: 3 }),
         ticket("I-303", 4, "implementar", "aberto", { rodada_id: 4 }),
         ticket("I-303", 5, "implementar", "em_execucao", { rodada_id: 4, titulo: "Busca por cupom" }),
-        ticket("I-303", 6, "implementar", "falhou", { rodada_id: 4, motivo_falha: "testes falharam" }),
+        ticket("I-303", 6, "implementar", "falhou", { rodada_id: 4 }),
         ticket("I-303", 7, "implementar", "em_execucao", { rodada_id: 4 }),
+      ],
+      tentativas: [
+        {
+          ticket: Endereco.doTicket("I-303", 6),
+          numero: 1,
+          inicio: em(0),
+          fim: em(6),
+          processo_id: "x6",
+          resultado: { tipo: "interrompida", por: { tipo: "fabriquinha" }, motivo: "testes falharam" },
+        },
       ],
       evidencias: [
         {

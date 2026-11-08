@@ -75,8 +75,11 @@ export function subir(
   })
     .then((falha) => {
       rmSync(pgid, { force: true });
-      anotar(log, falha === undefined ? "o pi da auditoria parou" : `o pi da auditoria parou com falha: ${falha}`);
-      return falha;
+      anotar(
+        log,
+        falha === undefined ? "o pi da auditoria parou" : `o pi da auditoria parou com falha: ${falha.motivo}`,
+      );
+      return falha?.motivo;
     })
     .finally(() => {
       desassinar();

@@ -3,7 +3,9 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { migrar } from "./banco.ts";
-import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
+import { ESQUEMA_V36, MIGRACOES as MIGRACOES_DISPONIVEIS, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
+
+const MIGRACOES = MIGRACOES_DISPONIVEIS.slice(0, 3);
 
 const TABELAS_DA_CONFIGURACAO_DO_PROJETO = [
   "configuracao_etapa_projeto",

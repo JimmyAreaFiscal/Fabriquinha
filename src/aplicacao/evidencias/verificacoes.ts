@@ -43,7 +43,7 @@ async function verificarSonar({ projeto, worktree, opcoes }: EntradaVerificacoes
     return { tipo, aprovada: aprovacao(falhas), falhas, dados, logs: [] } satisfies Verificacao;
   } catch (erro) {
     if (!(erro instanceof ErroDeRegra)) throw erro;
-    const falhas: Falha[] = [{ classe: "infraestrutura", motivo: erro.message }];
+    const falhas: Falha[] = [{ classe: "infraestrutura", causa: "servico_externo_inacessivel", motivo: erro.message }];
     return { tipo, aprovada: aprovacao(falhas), falhas, dados: {}, logs: [] } satisfies Verificacao;
   }
 }

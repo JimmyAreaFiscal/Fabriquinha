@@ -171,14 +171,13 @@ test("CA-1, CA-2: controle da execução volta igual; ausente volta sem a chave"
   const completa: ExecucaoSessao = {
     ...execucao(),
     grupo_processo: 4321,
-    erro: "falhou no pi",
     configuracao_agente: { modelo: { provedor: "claude-bridge", nome: "claude-sonnet-5-5" }, effort: "high" },
   };
   gravar(b, [sessao()], [completa, execucao("e2")], []);
   const { execucoes } = carregarSessoesDoTicket(b, ref);
   assert.deepEqual(execucoes[0], { ...completa, fim: null });
   const nua = execucoes[1] ?? {};
-  for (const c of ["grupo_processo", "erro", "configuracao_agente", "modelo_provedor", "modelo_nome", "effort"])
+  for (const c of ["grupo_processo", "configuracao_agente", "modelo_provedor", "modelo_nome", "effort"])
     assert.equal(c in nua, false);
 });
 

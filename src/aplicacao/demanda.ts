@@ -36,7 +36,7 @@ export interface UsoDoModelo {
 interface Contagens {
   execucoes: number;
   falhas: number;
-  devolucoes: number;
+  exigenciasDeAlteracao: number;
   reprovacoes: number;
   modelos: UsoDoModelo[];
   custo: Custo;
@@ -103,7 +103,7 @@ export function metricasDaDemanda(banco: DatabaseSync, demandaId: string): Metri
     return {
       execucoes: execucoes.filter(dono).length,
       falhas: execucoes.filter((e) => dono(e) && e.falha).length,
-      devolucoes: tickets.filter(dono).reduce((s, t) => s + t.devolucoes, 0),
+      exigenciasDeAlteracao: tickets.filter(dono).reduce((s, t) => s + t.exigenciasDeAlteracao, 0),
       reprovacoes: decisoes.filter((d) => dono(d) && d.recusada).length,
       modelos: agruparModelos(u),
       custo: somarCustos(u.map((x) => x.custo)),

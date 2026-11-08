@@ -1,5 +1,6 @@
 // Apoio dos testes do quadro de demandas: semeia as demandas no banco da instância, sobre o `projeto()` de apoio.ts, e
 // abre o chat do planejamento com o pi falso.
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import type { Page } from "@playwright/test";
 import type { AgregadoDemanda } from "../src/nucleo/agregado_demanda.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
@@ -25,7 +26,6 @@ const ticket = (demanda_id: string, ticket_id: number, etapa: string, rodada_id:
   estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
   rodada_id,
-  devolucoes: 0,
 });
 
 const rodada = (demanda_id: string, rodada_id: number, estado: string) => ({
@@ -60,6 +60,7 @@ const demanda = (id: string, estado: string, resto: object = {}): AgregadoDemand
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    tentativas: [],
     ...resto,
   }) as unknown as AgregadoDemanda;
 
@@ -191,8 +192,17 @@ export function semearPaginaDaDemanda(raiz: string): void {
         ticket("I-210", 2, "revisar_rodada", 1, "concluido"),
         ticket("I-210", 3, "encerrar_rodada", 1, "concluido"),
         ticket("I-210", 4, "implementar", 2, "concluido"),
-        { ...ticket("I-210", 5, "implementar", 2, "falhou"), motivo_falha: "o teste de erro não passou" },
+        ticket("I-210", 5, "implementar", 2, "falhou"),
         { ...ticket("I-210", 6, "planejar", 1, "concluido"), rodada_id: undefined },
+      ],
+      tentativas: [
+        {
+          ticket: Endereco.doTicket("I-210", 5),
+          numero: 1,
+          inicio: em,
+          fim: em,
+          resultado: { tipo: "interrompida", por: { tipo: "fabriquinha" }, motivo: "o teste de erro não passou" },
+        },
       ],
       decisoes: [
         decisao(2, "recusado", { motivo: "falta teste do caminho de erro" }),
@@ -446,7 +456,6 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
         estado: "aberto",
         estado_alterado_em: em,
         criado_por: { tipo: "fabriquinha" },
-        devolucoes: 0,
       },
     ],
     decisoes: [],
@@ -464,6 +473,7 @@ export function semearPlanejamentoComPi(raiz: string, descricao: string): void {
     criterios_citados: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
+    tentativas: [],
   } as unknown as AgregadoDemanda);
   banco.close();
 }

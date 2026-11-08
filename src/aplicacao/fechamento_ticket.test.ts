@@ -4,6 +4,9 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { falhaQueExigeOAuditor, motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
+import { comDemanda } from "../armazenamento/demandas.ts";
 import { podeTentarEncerramento } from "../nucleo/transicoes_encerramento.ts";
 import { selecionarTrabalho } from "../nucleo/selecao_trabalho.ts";
 import type { Verificacao } from "./evidencias/verificacoes.ts";
@@ -27,14 +30,19 @@ const ticket = (ticket_id: number, etapa: string, status: string, extra: object 
   estado: status,
   estado_alterado_em: em,
   criado_por: { tipo: "fabriquinha" },
-  devolucoes: 0,
   ...extra,
 });
 
 const verif = (tipo: Verificacao["tipo"], aprovada: boolean | undefined, motivo = "falhou"): Verificacao => ({
   tipo,
   aprovada,
-  falhas: aprovada ? [] : [{ classe: aprovada === undefined ? "infraestrutura" : "tecnica", motivo, comando: "c" }],
+  falhas: aprovada
+    ? []
+    : [
+        aprovada === undefined
+          ? { classe: "infraestrutura", causa: "servico_externo_inacessivel", motivo, comando: "c" }
+          : { classe: "tecnica", motivo, comando: "c" },
+      ],
   dados: { x: 1 },
   logs:
     aprovada === true
@@ -55,9 +63,10 @@ interface Opcoes {
   /** Cria a demanda em `encerramento`, com o conflito pendente no ticket 3. */
   conflito?: boolean;
   tipo?: string;
+  reprovacoesAnteriores?: number;
 }
 
-async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = {}) {
+async function cenario({ tickets, conflito, tipo = "funcionalidade", reprovacoesAnteriores = 0 }: Opcoes = {}) {
   const c = criarRepositorioDeTeste();
   const banco = abrir(c.raiz);
   registrarProjeto(banco, {
@@ -105,6 +114,13 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
           ticket(3, "resolver_conflito", "em_execucao"),
         ]
       : (tickets ?? [ticket(1, "implementar", "em_execucao", { rodada_id: 1, titulo: "Cachear" })]),
+    tentativas: Array.from({ length: reprovacoesAnteriores }, (_, indice) => ({
+      ticket: Endereco.doTicket(D, conflito ? 3 : 1),
+      numero: indice + 1,
+      inicio: em,
+      fim: em,
+      resultado: { tipo: "reprovacao", motivo: "corrija" },
+    })),
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -133,11 +149,41 @@ async function cenario({ tickets, conflito, tipo = "funcionalidade" }: Opcoes = 
       .map((l) => l.tipo);
   const status = (n: number) => carregarDemanda(banco, D).tickets.find((t) => t.ticket_id === n);
   const commits = () => rodarGit(worktree, "log", "--format=%s", "--grep", "\\[I-1\\.T").split("\n").filter(Boolean);
-  return { banco, worktree, evidencias, status, commits, ag: () => carregarDemanda(banco, D) };
+  const motivo = (n: number) => {
+    const ticket = status(n);
+    assert.ok(ticket);
+    return motivoDaFalhaDoTicket(carregarDemanda(banco, D).tentativas, ticket);
+  };
+  const reprovacoes = (n: number) =>
+    carregarDemanda(banco, D).tentativas.filter(
+      (tentativa) => tentativa.ticket.ticket_id === n && tentativa.resultado?.tipo === "reprovacao",
+    ).length;
+  const reprovarDuasVezes = (n: number) =>
+    comDemanda(banco, D, (ag) => ({
+      ...ag,
+      tentativas: [1, 2].map((numero) => ({
+        ticket: Endereco.doTicket(D, n),
+        numero,
+        inicio: em,
+        fim: em,
+        resultado: { tipo: "reprovacao" as const, motivo: "corrija" },
+      })),
+    }));
+  return {
+    banco,
+    worktree,
+    evidencias,
+    status,
+    commits,
+    motivo,
+    reprovacoes,
+    reprovarDuasVezes,
+    ag: () => carregarDemanda(banco, D),
+  };
 }
 
-const fechar = (c: Awaited<ReturnType<typeof cenario>>, n: number, deps: object, falha?: string) =>
-  fecharTicketDemanda(c.banco, ref(n), { falha }, deps);
+const fechar = (c: Awaited<ReturnType<typeof cenario>>, n: number, deps: object, motivo?: string) =>
+  fecharTicketDemanda(c.banco, ref(n), { falha: motivo ? falhaQueExigeOAuditor(motivo) : undefined }, deps);
 
 test("CA-1 a CA-5: aprovado conclui, commita uma vez, grava as evidências com anexos e leva a rodada à revisão", async () => {
   const c = await cenario();
@@ -209,16 +255,16 @@ test("falharTicketDemanda falha o ticket em execução de qualquer etapa e ignor
   const c = await cenario({
     tickets: [ticket(1, "planejar", "em_execucao"), ticket(2, "implementar", "aberto", { rodada_id: 1 })],
   });
-  falharTicketDemanda(c.banco, ref(1), "x");
-  falharTicketDemanda(c.banco, ref(2), "x");
-  assert.deepEqual([c.status(1)?.estado, c.status(1)?.motivo_falha, c.status(2)?.estado], ["falhou", "x", "aberto"]);
+  falharTicketDemanda(c.banco, ref(1), falhaQueExigeOAuditor("x"));
+  falharTicketDemanda(c.banco, ref(2), falhaQueExigeOAuditor("x"));
+  assert.deepEqual([c.status(1)?.estado, c.motivo(1), c.status(2)?.estado], ["falhou", "x", "aberto"]);
 });
 
 test("CA-6: a primeira reprovação técnica devolve ao agente com o relatório e o fim do log", async () => {
   const c = await cenario();
   await fechar(c, 1, coletor([verif("execucao_testes", false, "npm test saiu com código 1"), ...todas(true).slice(1)]));
   const t = c.status(1);
-  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, c.reprovacoes(1)], ["aberto", 1]);
   assert.match(t?.instrucao ?? "", /^- execucao_testes: npm test saiu com código 1\n\na+FIM$/);
   assert.equal(t?.instrucao?.split("\n\n")[1]?.length, 2000);
   assert.deepEqual(c.commits(), []);
@@ -226,15 +272,16 @@ test("CA-6: a primeira reprovação técnica devolve ao agente com o relatório 
 
 test("CA-7 e CA-8: na terceira reprovação o ticket falha e bloqueia a rodada até a reabertura", async () => {
   const c = await cenario({
+    reprovacoesAnteriores: 2,
     tickets: [
-      ticket(1, "implementar", "em_execucao", { rodada_id: 1, devolucoes: 2 }),
+      ticket(1, "implementar", "em_execucao", { rodada_id: 1 }),
       ticket(2, "implementar", "aberto", { rodada_id: 1 }),
     ],
   });
   await fechar(c, 1, coletor([verif("matriz_fitness", false, "f reprovou"), ...todas(true).slice(0, 1)]));
   const t = c.status(1);
   assert.equal(t?.estado, "falhou");
-  assert.match(t.motivo_falha ?? "", /^- matriz_fitness: f reprovou/);
+  assert.match(c.motivo(1) ?? "", /^- matriz_fitness: f reprovou/);
   assert.deepEqual(selecionarTrabalho(c.ag(), true), []);
 });
 
@@ -250,19 +297,19 @@ test("implementar sem alteração na worktree é devolvido, sem commit", async (
   semAlteracao(c);
   await fechar(c, 1, coletor(todas(true)));
   const t = c.status(1);
-  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, c.reprovacoes(1)], ["aberto", 1]);
   assert.ok(t?.instrucao?.startsWith(MOTIVO_SEM_ALTERACAO));
   assert.equal(marcaDoTicket(c), "");
 });
 
 test("implementar sem alteração já devolvido duas vezes falha, e a rodada segue em desenvolvimento", async () => {
   const c = await cenario();
-  c.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 1");
+  c.reprovarDuasVezes(1);
   semAlteracao(c);
   await fechar(c, 1, coletor(todas(true)));
   const t = c.status(1);
   assert.equal(t?.estado, "falhou");
-  assert.ok(t.motivo_falha?.startsWith(MOTIVO_SEM_ALTERACAO));
+  assert.ok(c.motivo(1)?.startsWith(MOTIVO_SEM_ALTERACAO));
   assert.equal(marcaDoTicket(c), "");
   const ag = c.ag();
   assert.equal(ag.rodadas[0]?.estado, "implementar");
@@ -286,7 +333,7 @@ test("CA-9 e CA-10: falha da execução falha o ticket sem coletar nem gravar ev
   const c = await cenario();
   await fechar(c, 1, naoColeta, "timeout");
   const t = c.status(1);
-  assert.deepEqual([t?.estado, t?.motivo_falha ?? "", t?.devolucoes], ["falhou", "timeout", 0]);
+  assert.deepEqual([t?.estado, c.motivo(1) ?? "", c.reprovacoes(1)], ["falhou", "timeout", 0]);
   assert.deepEqual(c.evidencias(1), []);
 });
 
@@ -298,8 +345,8 @@ test("CA-11: infraestrutura falha o ticket com o motivo, sem devolução nem evi
     coletor([...todas(true).slice(0, 2), verif("relatorio_sonar", undefined, "SonarQube fora do ar")]),
   );
   const t = c.status(1);
-  assert.deepEqual([t?.estado, t?.devolucoes], ["falhou", 0]);
-  assert.match(t?.motivo_falha ?? "", /infraestrutura:\n- SonarQube fora do ar/);
+  assert.deepEqual([t?.estado, c.reprovacoes(1)], ["falhou", 0]);
+  assert.match(c.motivo(1) ?? "", /infraestrutura:\n- SonarQube fora do ar/);
   assert.deepEqual(c.evidencias(1), []);
 });
 
@@ -321,18 +368,18 @@ test("CA-14: resolver_conflito reprovado é devolvido ao agente, sem commit", as
   const c = await cenario({ conflito: true });
   await fechar(c, 3, coletor([verif("execucao_testes", false, "t reprovou"), ...todas(true).slice(1)]));
   const t = c.status(3);
-  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, c.reprovacoes(3)], ["aberto", 1]);
   assert.match(t?.instrucao ?? "", /^- execucao_testes: t reprovou/);
   assert.deepEqual(c.commits(), []);
 });
 
 test("CA-14: resolver_conflito já devolvido duas vezes falha com o relatório no motivo", async () => {
   const c = await cenario({ conflito: true });
-  c.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 3");
+  c.reprovarDuasVezes(3);
   await fechar(c, 3, coletor([verif("execucao_testes", false, "t reprovou"), ...todas(true).slice(1)]));
   const t = c.status(3);
   assert.equal(t?.estado, "falhou");
-  assert.match(t.motivo_falha ?? "", /^- execucao_testes: t reprovou/);
+  assert.match(c.motivo(3) ?? "", /^- execucao_testes: t reprovou/);
 });
 
 test("CA-15 e CA-16: repetido depois do commit, não coleta, não duplica commit nem evidência", async () => {
@@ -366,7 +413,7 @@ test("CA-16: commit sem evidências aprovadas falha por infraestrutura", async (
   await fechar(c, 1, naoColeta);
   const t = c.status(1);
   assert.equal(t?.estado, "falhou");
-  assert.match(t.motivo_falha ?? "", /infraestrutura: .*ausentes: execucao_testes, matriz_fitness, relatorio_sonar/);
+  assert.match(c.motivo(1) ?? "", /infraestrutura: .*ausentes: execucao_testes, matriz_fitness, relatorio_sonar/);
 });
 
 test("commit com evidência reprovada gravada falha por infraestrutura", async () => {
@@ -381,7 +428,7 @@ test("commit com evidência reprovada gravada falha por infraestrutura", async (
     etapa: "implementar",
   });
   await fechar(c, 1, naoColeta);
-  assert.match(c.status(1)?.motivo_falha ?? "", /reprovadas: execucao_testes, matriz_fitness, relatorio_sonar/);
+  assert.match(c.motivo(1) ?? "", /reprovadas: execucao_testes, matriz_fitness, relatorio_sonar/);
 });
 
 function hook(c: Awaited<ReturnType<typeof cenario>>, corpo: string) {
@@ -397,16 +444,16 @@ test("o hook que reprova o commit devolve o ticket com a saída, sem commit; na 
   hook(c, "echo lint quebrou\nexit 1");
   await fechar(c, 1, coletor(todas(true)));
   const t = c.status(1);
-  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, c.reprovacoes(1)], ["aberto", 1]);
   assert.match(t?.instrucao ?? "", /lint quebrou/);
   assert.deepEqual(c.commits(), []);
 
   const e = await cenario();
   hook(e, "echo lint quebrou\nexit 1");
-  e.banco.exec("UPDATE ticket_demanda SET devolucoes = 2 WHERE ticket_id = 1");
+  e.reprovarDuasVezes(1);
   await fechar(e, 1, coletor(todas(true)));
   assert.equal(e.status(1)?.estado, "falhou");
-  assert.match(e.status(1)?.motivo_falha ?? "", /lint quebrou/);
+  assert.match(e.motivo(1) ?? "", /lint quebrou/);
 
   const d = await cenario({ tickets: [ticket(1, "implementar", "em_execucao", { rodada_id: 1 })] });
   d.banco.exec(`INSERT INTO commit_ticket_demanda (sha, demanda_id, ticket_id, mensagem, em)
@@ -419,7 +466,7 @@ test("resolver_conflito com o hook reprovado é devolvido, sem commit", async ()
   hook(c, "echo lint quebrou\nexit 1");
   await fechar(c, 3, coletor(todas(true)));
   const t = c.status(3);
-  assert.deepEqual([t?.estado, t?.devolucoes], ["aberto", 1]);
+  assert.deepEqual([t?.estado, c.reprovacoes(3)], ["aberto", 1]);
   assert.deepEqual(c.commits(), []);
 });
 
@@ -428,8 +475,8 @@ test("o commit que passa do limite falha por infraestrutura, sem devolução", a
   hook(c, "exec sleep 5");
   await fechar(c, 1, { ...coletor(todas(true)), limiteCommitMs: 300 });
   const t = c.status(1);
-  assert.deepEqual([t?.estado, t?.devolucoes], ["falhou", 0]);
-  assert.match(t?.motivo_falha ?? "", /^falha de infraestrutura/);
+  assert.deepEqual([t?.estado, c.reprovacoes(1)], ["falhou", 0]);
+  assert.match(c.motivo(1) ?? "", /^falha de infraestrutura/);
 });
 
 test("problema commita como fix; sem deps o coletor real roda e o Sonar sem ambiente é infraestrutura", async () => {
@@ -439,7 +486,7 @@ test("problema commita como fix; sem deps o coletor real roda e o Sonar sem ambi
   const d = await cenario({ tipo: "problema" });
   delete process.env.SONAR_HOST_URL;
   await fecharTicketDemanda(d.banco, ref(1), {});
-  assert.match(d.status(1)?.motivo_falha ?? "", /^falha de infraestrutura:\n- SONAR_HOST_URL/);
+  assert.match(d.motivo(1) ?? "", /^falha de infraestrutura:\n- SONAR_HOST_URL/);
 });
 
 test("I-246.T15: parada marcada depois da coleta, com o hook reprovando o commit ou depois do commit: falha 'serviço reiniciado', sem devolução", async () => {
@@ -454,7 +501,7 @@ test("I-246.T15: parada marcada depois da coleta, com o hook reprovando o commit
     let consultas = 0;
     await fechar(c, 1, { ...coletor(todas(true)), parada: () => ++consultas === chamada });
     const t = c.status(1);
-    assert.deepEqual([t?.estado, t?.devolucoes, t?.motivo_falha], ["falhou", 0, "serviço reiniciado"]);
+    assert.deepEqual([t?.estado, c.reprovacoes(1), c.motivo(1)], ["falhou", 0, "serviço reiniciado"]);
     if (chamada === 1) assert.deepEqual(c.evidencias(1), []);
   }
 });

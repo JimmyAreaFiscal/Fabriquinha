@@ -216,6 +216,22 @@ test("resolução recusa verificação incompleta, sem conflito, resolver conclu
   assert.throws(() => concluirResolucaoConflito(emConflito(), resolucao(), AUDITOR, c), ErroDeEscopo);
 });
 
+test("falha de encerramento com causa registra infraestrutura na Tentativa", () => {
+  const ag = comProgresso({}, "em_execucao");
+  const novo = registrarFalhaEncerramento(
+    ag,
+    { demanda_id: D, etapa: "check_final", motivo: "sem resposta", causa: "tempo_limite" },
+    FABRIQUINHA,
+    c,
+  );
+  assert.deepEqual(novo.tentativas.at(-1)?.resultado, {
+    tipo: "falha_infraestrutura",
+    causa: "tempo_limite",
+    motivo: "sem resposta",
+  });
+  assert.equal(novo.tickets.find((ticket) => ticket.ticket_id === 2)?.estado, "falhou");
+});
+
 const falhaEnt = (m: Record<string, unknown> = {}) => ({ demanda_id: D, etapa: "check_final", motivo: "x", ...m });
 const integEnt = (m: Record<string, unknown> = {}) => ({
   demanda_id: D,
@@ -236,6 +252,7 @@ test("CA-6: falha do check final falha o ticket sem integrar, limpar nem abrir i
   assert.equal(novo.encerramento?.integracao, undefined);
   assert.deepEqual(novo.encerramento?.limpeza_pendente, []);
   assert.deepEqual(novo.encerramento.falha, { etapa: "check_final", motivo: "x" });
+  assert.deepEqual(novo.tentativas.at(-1)?.resultado, { tipo: "interrompida", por: FABRIQUINHA, motivo: "x" });
   assert.deepEqual(registrarFalhaEncerramento(novo, falhaEnt(), FABRIQUINHA, c), novo);
   regra(() => registrarFalhaEncerramento(novo, falhaEnt({ motivo: "outro" }), FABRIQUINHA, c));
 });

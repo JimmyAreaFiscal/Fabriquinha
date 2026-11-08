@@ -22,7 +22,6 @@ export const montarTicket = (demanda_id: string, ticket_id: number, etapa: strin
   estado: "aberto",
   estado_alterado_em: INSTANTE_DO_CENARIO,
   criado_por: { tipo: "fabriquinha" },
-  devolucoes: 0,
   ...extra,
 });
 
@@ -52,6 +51,7 @@ export const montarAgregadoDemanda = (id: string, estado: string, resto: object 
       branch: `fabriquinha/${id}`,
     },
     tickets: [],
+    tentativas: [],
     decisoes: [],
     evidencias: [],
     rodadas: [],

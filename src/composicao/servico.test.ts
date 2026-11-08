@@ -114,6 +114,13 @@ test("instância única: a porta é a trava, e a segunda instância sai com erro
   await outra.parar();
 });
 
+test("subida que falha ao publicar web.url fecha o banco e libera a porta", async () => {
+  const raiz = novaRaiz();
+  mkdirSync(join(raiz, "web.url"));
+  await assert.rejects(subir(raiz), /EISDIR/);
+  await portaLivre();
+});
+
 test("parar apaga o web.url: o abrir diz que o serviço não está rodando em vez de abrir um link morto", async () => {
   const raiz = novaRaiz();
   const s = await subir(raiz);
@@ -154,13 +161,17 @@ test("CA-12: reinício encerra a execução aberta da demanda como falha e leva 
   assert.deepEqual(await saiu, [null, "SIGKILL"]);
   assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM execucao_sessao").get(), {
     falha: 1,
-    erro: "serviço reiniciado",
   });
   assert.notEqual(s.banco.prepare("SELECT fim FROM execucao_sessao").get()?.fim, null);
   assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM ticket_demanda").get(), {
     etapa: "implementar",
     estado: "falhou",
-    motivo_falha: "serviço reiniciado",
+  });
+  assert.partialDeepStrictEqual(s.banco.prepare("SELECT * FROM tentativa").get(), {
+    ticket_id: 1,
+    resultado_tipo: "falha_infraestrutura",
+    causa: "servico_reiniciado",
+    motivo: "serviço reiniciado",
   });
   assert.equal(s.banco.prepare("SELECT estado FROM demanda").get()?.estado, "em_execucao");
   await s.parar();

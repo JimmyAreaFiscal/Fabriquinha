@@ -287,7 +287,15 @@ test("CA-SDLC-12: conflito ou check falho do PR geram correção antes de novo g
     despacho(() => aprovada),
   );
   const devolvido = demanda(c, id).tickets.find((x) => x.ticket_id === corretivo.ticket_id);
-  assert.deepEqual([devolvido?.estado, devolvido?.devolucoes], ["aberto", 1]);
+  assert.deepEqual(
+    [
+      devolvido?.estado,
+      demanda(c, id).tentativas.filter(
+        (tentativa) => tentativa.ticket.ticket_id === corretivo.ticket_id && tentativa.resultado?.tipo === "reprovacao",
+      ).length,
+    ],
+    ["aberto", 1],
+  );
   aprovada = true;
   await ciclo(
     c,

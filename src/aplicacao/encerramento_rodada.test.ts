@@ -7,6 +7,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
+import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, ErroExterno } from "../nucleo/erros.ts";
 import { marcaDoPRRodada } from "./evidencias/pr_rodada.ts";
@@ -23,6 +25,7 @@ import {
   garantirWorktreeRodada,
 } from "../infra/repositorio/worktree-demanda.ts";
 import { concluirEncerramentoRodada, iniciarEncerramentoRodada } from "./encerramento_rodada.ts";
+import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-encerramento-")));
@@ -93,7 +96,6 @@ async function cenario({
     estado: status,
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     rodada_id: 2,
     ...extra,
   });
@@ -145,6 +147,18 @@ async function cenario({
       ...(anterior ? [ticket(7, "encerrar_rodada", "concluido")] : []),
       ...(semTicketEncerrar ? [] : [ticket(8, "encerrar_rodada", statusEncerrar, instrucao ? { instrucao } : {})]),
     ],
+    tentativas: instrucao
+      ? [
+          {
+            ticket: Endereco.doTicket(DEMANDA, 8),
+            numero: 1,
+            inicio: em,
+            fim: em,
+            instrucao,
+            resultado: { tipo: "interrompida", por: { tipo: "auditor" } },
+          },
+        ]
+      : [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -390,7 +404,12 @@ test("CA-10: a hospedagem recusa o PR, o ticket falha com a saída do comando e 
   );
 
   assert.equal(ticket()?.estado, "falhou");
-  assert.match(ticket()?.motivo_falha ?? "", /GraphQL: sem permissão/);
+  const ticketFalho = ticket();
+  assert.ok(ticketFalho);
+  assert.match(
+    motivoDaFalhaDoTicket(carregarDemanda(banco, DEMANDA).tentativas, ticketFalho) ?? "",
+    /GraphQL: sem permissão/,
+  );
   assert.equal(evidencia("pr_aberto"), undefined);
   assert.equal(estado(), "encerrar_rodada");
 });
@@ -488,4 +507,10 @@ test("corpo além do limite e o pi sem resumo: o PR vai sem o contexto, e o log 
     readFileSync(join(c.raiz, "execucoes", "encerramento-I-206.R2.log"), "utf8"),
     /I-206\.R2: o pi não resumiu o contexto do PR em [\d]+ caracteres; vai sem ele/,
   );
+});
+
+test("foto do retorno ao agente no encerramento da rodada: reabertura", async () => {
+  const { c, banco, piFalso } = await cenario({ statusEncerrar: "aberto", instrucao: "refaça a aula" });
+  await iniciarEncerramentoRodada(banco, REF, 1).fim;
+  conferirPromptComFoto(piFalso.prompts().at(-1)?.prompt ?? "", c.raiz, "encerramento_rodada_reabertura");
 });

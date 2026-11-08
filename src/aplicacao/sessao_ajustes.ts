@@ -9,7 +9,8 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
-import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { concluirSessaoRodada, reprovarPullRequestRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -35,7 +36,7 @@ interface Marco {
 const contexto = () => ({ agora: new Date().toISOString() });
 
 /** Fim da execução em curso por rodada; a conclusão da sessão espera por ele para restaurar depois do pi. */
-const fins = new Map<string, Promise<void>>();
+const fins = new Map<string, Promise<unknown>>();
 
 const arquivoDoMarco = (banco: DatabaseSync, ref: RefRodada): string =>
   join(raizDo(banco), "execucoes", `ajustes-${formatarRodadaRef(ref)}.json`);
@@ -99,7 +100,7 @@ function executar(
   ref: RefRodada,
   ticket: TicketDemanda,
   opcoes: Opcoes & Pick<OpcoesExecucaoDemanda, "retomada" | "mensagem">,
-): { id: string; fim: Promise<void> } {
+): ReturnType<typeof iniciarExecucaoDemanda> {
   const { id, fim } = iniciarExecucaoDemanda(banco, ticket, {
     ...opcoes,
     modo: "interativo",
@@ -119,7 +120,7 @@ export async function reprovarPRRodada(
   motivo: string,
   ator: Ator,
   opcoes: Opcoes,
-): Promise<{ id: string; fim: Promise<void> }> {
+): Promise<ReturnType<typeof iniciarExecucaoDemanda>> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const { ticket, pr } = prDaRodada(ag, ref);
   const entrada = { demanda_id: ref.demanda_id, rodada_id: ref.rodada_id, ticket_id: ticket.ticket_id, motivo };
@@ -141,13 +142,14 @@ export async function reprovarPRRodada(
   const sessao = sessaoDaRodada(depois, ref);
   return executar(banco, ref, sessao, {
     ...opcoes,
-    retomada: {
-      tipo: "reabertura",
-      motivo:
-        `Esta é a sessão de ajustes da rodada ${formatarRodadaRef(ref)} (ticket ${formatarTicketRef(sessao)}): ` +
-        `converse e registre tickets corretivos, sem implementar nem integrar.\n` +
-        `O Auditor reprovou o PR ${pr.url} da rodada. Motivo: ${motivo}`,
-    },
+    retomada: montarRetornoAoAgente(
+      tentativaAnteriorEmMemoria(Endereco.doTicket(ref.demanda_id, sessao.ticket_id), {
+        instrucao:
+          `Esta é a sessão de ajustes da rodada ${formatarRodadaRef(ref)} (ticket ${formatarTicketRef(sessao)}): ` +
+          `converse e registre tickets corretivos, sem implementar nem integrar.\n` +
+          `O Auditor reprovou o PR ${pr.url} da rodada. Motivo: ${motivo}`,
+      }),
+    ),
   });
 }
 

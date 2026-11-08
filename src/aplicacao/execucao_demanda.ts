@@ -4,12 +4,21 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { ModoExecucao } from "../nucleo/sessoes.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { resolverConfiguracaoAgente } from "../nucleo/configuracao_agente.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, existe, mensagem } from "../nucleo/erros.ts";
+import { iniciarTentativaDoTicket } from "../nucleo/reserva_ticket.ts";
+import {
+  type FalhaDaTentativa,
+  falhaDoErro,
+  falhaInterrompidaPeloAuditor,
+  falhaPorServicoReiniciado,
+  falhaQueExigeOAuditor,
+} from "../nucleo/tentativa.ts";
 import {
   criarSessao,
   encerrarExecucao,
@@ -25,7 +34,7 @@ import { somar } from "../nucleo/uso.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
-import { carregarDemanda } from "../armazenamento/demandas.ts";
+import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
 import { anotar, arquivoDaSessao } from "../infra/registro.ts";
@@ -64,12 +73,9 @@ export interface OpcoesExecucaoDemanda {
 const ativas = new Map<string, { pgid?: number; interrompida?: boolean }>();
 
 /** Os condutores em curso: o `parar` do serviço os espera antes de fechar o banco. */
-const condutores = new Set<Promise<void>>();
+const condutores = new Set<Promise<unknown>>();
 /** Desde o início do `parar`, o pi que sai é efeito da parada do serviço. */
 let parando = false;
-
-const INTERROMPIDA = "interrompida pelo Auditor";
-const REINICIADO = "serviço reiniciado";
 
 interface Conducao {
   banco: DatabaseSync;
@@ -126,18 +132,13 @@ function coletarUso(c: Encerravel, fim: string, log: string): UsoModeloExecucao[
   }
 }
 
-/** O único escritor do encerramento: fim, falha, erro e uso na mesma transação; não toca ticket, etapa nem gate. */
-function encerrar(c: Encerravel, falha: string | undefined, log: string): void {
+/** O único escritor do encerramento: fim, falha e uso na mesma transação; não toca ticket, etapa nem gate. */
+function encerrar(c: Encerravel, falhou: boolean, log: string): void {
   const fim = new Date().toISOString();
   const usos = coletarUso(c, fim, log);
   comSessoesDoTicket(c.banco, c.ref, (estado) => ({
     ...estado,
-    execucoes: encerrarExecucao(
-      estado.execucoes.map((e) => (e.id === c.execucao.id && falha !== undefined ? { ...e, erro: falha } : e)),
-      c.execucao.id,
-      fim,
-      falha !== undefined,
-    ),
+    execucoes: encerrarExecucao(estado.execucoes, c.execucao.id, fim, falhou),
     usos: usos.reduce((acc, u) => registrarUso(acc, u), estado.usos),
   }));
 }
@@ -171,12 +172,12 @@ function commitsDosTickets({ banco, ag }: Conducao): ContextoDemanda["commitsDos
   );
 }
 
-async function conduzir(c: Conducao): Promise<void> {
+async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
   const raiz = raizDo(c.banco);
   const { execucao, sessao, projeto, opcoes } = c;
   const dir = join(raiz, "execucoes", `E-${execucao.id}`);
   const log = join(dir, "log");
-  let falha: string | undefined;
+  let falha: FalhaDaTentativa | undefined;
   try {
     // `gh` e `az` olham diretórios vazios: o agente não acha credencial de hospedagem.
     for (const sub of ["saida", "vazio"]) mkdirSync(join(dir, sub), { recursive: true });
@@ -209,8 +210,8 @@ async function conduzir(c: Conducao): Promise<void> {
       ticket: c.ticket,
       etapasDoProjeto: projeto.etapas,
     });
-    // Parada em curso durante a preparação: não lança um pi novo; a falha vira "serviço reiniciado" abaixo.
-    if (parando) throw new Error(REINICIADO);
+    // Parada em curso durante a preparação: não lança um pi novo; a falha vira reinício do serviço abaixo.
+    if (parando) throw new Error("o serviço está parando");
     anotar(log, `pi ${args.join(" ")}`);
     falha = await rodarPi({
       execucao: { id: execucao.id, sessaoPi: sessao.id, modo: sessao.modo },
@@ -232,16 +233,14 @@ async function conduzir(c: Conducao): Promise<void> {
       },
     });
   } catch (error_) {
-    falha = mensagem(error_);
-    anotar(log, `preparação falhou: ${falha}`);
+    falha = falhaDoErro(error_);
+    anotar(log, `preparação falhou: ${falha.motivo}`);
   }
   // Interrompida pelo Auditor: o pi saiu pelo SIGTERM, mas a causa verdadeira é a interrupção.
-  if (ativas.get(execucao.id)?.interrompida) falha = INTERROMPIDA;
-  // ponytail: o pi morto por sinal (código null) sem ser o Auditor é o cgroup do systemd, que pode matá-lo antes do
-  // SIGTERM do serviço; um kill externo qualquer também vira "serviço reiniciado".
-  else if (parando || falha?.includes("(código null)")) falha = REINICIADO;
+  if (ativas.get(execucao.id)?.interrompida) falha = falhaInterrompidaPeloAuditor;
+  else if (parando) falha = falhaPorServicoReiniciado;
   ativas.delete(execucao.id);
-  encerrar(c, falha, log);
+  encerrar(c, falha !== undefined, log);
   try {
     await (opcoes.fechar ?? fecharTicketDemanda)(
       c.banco,
@@ -254,13 +253,14 @@ async function conduzir(c: Conducao): Promise<void> {
   } catch (error_) {
     anotar(log, `fechamento falhou: ${mensagem(error_)}`);
     try {
-      falharTicketDemanda(c.banco, c.ref, `fechamento falhou: ${mensagem(error_)}`);
+      falharTicketDemanda(c.banco, c.ref, falhaQueExigeOAuditor(`fechamento falhou: ${mensagem(error_)}`));
     } catch (erroFalha) {
       anotar(log, `falhar o ticket também falhou: ${mensagem(erroFalha)}`);
     }
   }
   // O último `estado` do SSE sai com o pi, antes do fim gravado e do fechamento: o chat precisa do cabeçalho novo.
   avisar(sessao.id, log);
+  return falha;
 }
 
 /**
@@ -272,7 +272,7 @@ export function iniciarExecucaoDemanda(
   banco: DatabaseSync,
   ref: TicketRef,
   opcoes: OpcoesExecucaoDemanda,
-): { id: string; fim: Promise<void> } {
+): { id: string; fim: Promise<FalhaDaTentativa | undefined> } {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const ticket = encontrado(
     ag.tickets.find((t) => t.ticket_id === ref.ticket_id),
@@ -314,6 +314,11 @@ export function iniciarExecucaoDemanda(
     const sessoes = criarSessao(estado.sessoes, sessao);
     return { ...estado, sessoes, execucoes: iniciarExecucao(sessoes, estado.execucoes, execucao) };
   });
+  comDemanda(banco, ref.demanda_id, (a) =>
+    iniciarTentativaDoTicket(a, { ticket_id: ref.ticket_id, processo_id: execucao.id }, FABRIQUINHA, {
+      agora: execucao.inicio,
+    }),
+  );
   ativas.set(execucao.id, {});
   const fim = conduzir({ banco, ref, ag, ticket, projeto, sessao, execucao, opcoes });
   condutores.add(fim);
@@ -369,11 +374,11 @@ export function interromperExecucaoDemanda(banco: DatabaseSync, ref: TicketRef):
     if (viva.pgid !== undefined) sinalNoGrupo(viva.pgid, "SIGTERM");
     return;
   }
-  encerrarOrfa(banco, ref, execucao.id, INTERROMPIDA);
+  encerrarOrfa(banco, ref, execucao.id, falhaInterrompidaPeloAuditor);
 }
 
 /** Execução aberta sem condutor: SIGKILL no grupo gravado, encerra com falha e falha o ticket em execução, sem tocar etapa nem gate. */
-function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, erro: string): void {
+function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, falha: FalhaDaTentativa): void {
   const { sessoes, execucoes } = carregarSessoesDoTicket(banco, ref);
   const execucao = existe(
     execucoes.find((e) => e.id === id),
@@ -387,15 +392,15 @@ function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, erro: str
     "confira o banco",
   );
   const log = join(raizDo(banco), "execucoes", `E-${id}`, "log");
-  encerrar({ banco, ref, sessao, execucao }, erro, log);
-  falharTicketDemanda(banco, ref, erro);
+  encerrar({ banco, ref, sessao, execucao }, true, log);
+  falharTicketDemanda(banco, ref, falha);
   avisar(sessao.id, log);
 }
 
 /** Reinício do serviço (§4.2): toda execução aberta é de uma instância anterior e falha, sem avançar etapa nem gate. */
 export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
   for (const { id, demanda_id, ticket_id } of execucoesAbertasDaDemanda(banco)) {
-    encerrarOrfa(banco, { demanda_id, ticket_id }, id, REINICIADO);
+    encerrarOrfa(banco, { demanda_id, ticket_id }, id, falhaPorServicoReiniciado);
   }
   // Execução já encerrada e fechamento interrompido (coleta, ou entre o commit e a conclusão): sem execução aberta, o
   // ticket `em_execucao` não sairia mais (o `planejar` fica de fora: a retomada do despacho o assume; o gate do PR também). ponytail: falha em vez de repetir o fechamento; repetir fica para quando pedirem.
@@ -407,5 +412,7 @@ export function recuperarExecucoesDemanda(banco: DatabaseSync): void {
            WHERE r.demanda_id = t.demanda_id AND r.rodada_id = t.rodada_id AND r.estado = 'encerrar_rodada')))`,
     )
     .all() as unknown as TicketRef[];
-  for (const { demanda_id, ticket_id } of presos) falharTicketDemanda(banco, { demanda_id, ticket_id }, REINICIADO);
+  for (const { demanda_id, ticket_id } of presos) {
+    falharTicketDemanda(banco, { demanda_id, ticket_id }, falhaPorServicoReiniciado);
+  }
 }

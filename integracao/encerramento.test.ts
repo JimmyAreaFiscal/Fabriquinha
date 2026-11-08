@@ -6,9 +6,11 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../src/nucleo/ator.ts";
+import { formatarTicketRef } from "../src/nucleo/demanda.ts";
 import { reabrirTicket } from "../src/nucleo/transicoes_demanda.ts";
-import { registrarTentativaEncerramento } from "../src/nucleo/transicoes_encerramento.ts";
+import { registrarFalhaEncerramento, registrarTentativaEncerramento } from "../src/nucleo/transicoes_encerramento.ts";
 import { marcaDoPRFinal } from "../src/aplicacao/evidencias/encerramento_demanda.ts";
+import { retomarFalhasDeInfraestrutura } from "../src/aplicacao/retomada_infraestrutura.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { integrarPR } from "../src/infra/repositorio/pr.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
@@ -269,4 +271,41 @@ test("CA-SDLC-17: limpeza que falha mantém a demanda não concluída e a reaber
   assert.equal(mergesNaBase(c).length, 1, "nenhum merge novo");
   assert.equal(mergesPedidos(), pedidos);
   assert.equal(gh.prs().length, 2, "o PR da rodada e o final");
+});
+
+test("falha de infraestrutura no passo integracao é retomada sozinha e a nova Tentativa só repete a integracao", async (t) => {
+  const c = criarCenario(t);
+  const id = await demandaEmEncerramento(c);
+  await ciclo(c, deps());
+  const pr = gh.prs().length;
+  const esperando = demanda(c, id).encerramento;
+  assert.equal(esperando?.aguardando_merge_humano, true);
+
+  // O passo integracao falha por infraestrutura (a leitura do PR estourou o tempo), com tudo antes dele já feito.
+  const ticket = ultimo(c, id, "encerrar_demanda");
+  assert.ok(ticket);
+  comDemanda(c.banco, id, (ag) =>
+    registrarFalhaEncerramento(
+      ag,
+      { demanda_id: id, etapa: "integracao", causa: "tempo_limite", motivo: "tempo limite ao ler o PR final" },
+      FABRIQUINHA,
+      { agora: agora() },
+    ),
+  );
+  assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "falhou");
+
+  // Sem ação do Auditor: depois da espera da falha transitória, a retomada automática reabre o encerramento.
+  const passadaAEspera = new Date(Date.now() + 3 * 60_000);
+  assert.deepEqual(retomarFalhasDeInfraestrutura(c.banco, passadaAEspera), [formatarTicketRef(ticket)]);
+  assert.equal(ultimo(c, id, "encerrar_demanda")?.estado, "aberto");
+  assert.deepEqual(demanda(c, id).encerramento?.pr, esperando.pr);
+
+  // A nova Tentativa continua na integracao: não publica outro PR nem refaz a tentativa; o merge humano conclui.
+  await integrarComoHumano(c, pr);
+  await ciclo(c, deps());
+  const ag = demanda(c, id);
+  assert.equal(ag.demanda.estado, "concluida");
+  assert.equal(ag.encerramento?.sha_verificado, esperando.sha_verificado);
+  assert.equal(gh.prs().length, pr, "nenhum PR novo");
+  assert.equal(tickets(c, id, "encerrar_demanda").length, 1);
 });

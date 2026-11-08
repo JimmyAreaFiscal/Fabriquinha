@@ -6,9 +6,9 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, mensagem } from "../nucleo/erros.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
+import { type FalhaDaTentativa, falhaQueExigeOAuditor, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { iniciarExecucaoDemanda, type OpcoesExecucaoDemanda } from "./execucao_demanda.ts";
 
 export interface OpcoesRevisao extends Pick<OpcoesExecucaoDemanda, "limiteMin" | "modo"> {
@@ -33,25 +33,21 @@ export async function conduzirRevisao(
       `o ticket ${formatarTicketRef(ref)} não existe`,
       "use um ticket da demanda",
     );
-  const { instrucao } = doTicket();
   comDemanda(banco, demanda_id, (ag) => reservarTicket(ag, { ticket_id }, FABRIQUINHA, agora(), true));
-  const falhar = (motivo: string): ResultadoRevisao => {
-    comDemanda(banco, demanda_id, (ag) => registrarFalhaTicket(ag, { ticket_id, motivo }, agora()));
+  const falhar = (falha: FalhaDaTentativa): ResultadoRevisao => {
+    comDemanda(banco, demanda_id, (ag) => registrarFalhaTicket(ag, { ticket_id, falha }, agora()));
     return "falhou";
   };
   try {
     await opcoes.preparar?.();
   } catch (error_) {
-    return falhar(`preparação da revisão falhou: ${mensagem(error_)}`);
+    return falhar(falhaQueExigeOAuditor(`preparação da revisão falhou: ${mensagem(error_)}`));
   }
-  const { id, fim } = iniciarExecucaoDemanda(banco, ref, {
-    ...opcoes,
-    ...(instrucao !== undefined && { retomada: { tipo: "reabertura", motivo: instrucao } }),
-  });
-  await fim;
-  // `erro` só é gravado na execução que falhou.
-  const erro = carregarSessoesDoTicket(banco, ref).execucoes.find((e) => e.id === id)?.erro;
-  if (erro !== undefined) return falhar(erro);
+  const retomada = retornoAoAgenteDoTicket(carregarDemanda(banco, demanda_id).tentativas, ticket_id);
+  const falha = await iniciarExecucaoDemanda(banco, ref, { ...opcoes, ...(retomada && { retomada }) }).fim;
+  if (falha !== undefined) return falhar(falha);
   // A decisão conclui o ticket; ainda em execução, o revisor saiu sem decidir e o ticket ficaria preso.
-  return doTicket().estado === "em_execucao" ? falhar("a revisão terminou sem registrar a decisão") : "decidida";
+  return doTicket().estado === "em_execucao"
+    ? falhar(falhaQueExigeOAuditor("a revisão terminou sem registrar a decisão"))
+    : "decidida";
 }

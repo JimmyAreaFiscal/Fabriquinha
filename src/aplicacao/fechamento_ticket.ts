@@ -11,7 +11,13 @@ import { type EvidenciaEtapa, pendenciasDoTicket } from "../nucleo/evidencia_eta
 import { concluirImplementacoesRodada } from "../nucleo/transicoes_rodada.ts";
 import { concluirResolucaoConflito } from "../nucleo/transicoes_encerramento.ts";
 import { devolverTicket, registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
-import { coletarVerificacoes, type Verificacao } from "./evidencias/verificacoes.ts";
+import {
+  type FalhaDaTentativa,
+  falhaPorServicoReiniciado,
+  resultadoDoErro,
+  rotuloDaCausa,
+} from "../nucleo/tentativa.ts";
+import { coletarVerificacoes, type Falha, type Verificacao } from "./evidencias/verificacoes.ts";
 import type { OpcoesSonar } from "./evidencias/sonar.ts";
 import { MIME_TEXTO } from "../nucleo/schemas.ts";
 import { raizDo } from "../armazenamento/banco.ts";
@@ -33,8 +39,6 @@ interface DepsFechamento {
   parada?: () => boolean;
 }
 
-const REINICIADO = "serviço reiniciado";
-
 /** Caracteres do fim dos logs que vão à instrução de devolução. */
 const FIM_DO_LOG = 2000;
 
@@ -46,11 +50,11 @@ function ticketFechavel(ag: AgregadoDemanda, ticket_id: number): TicketDemanda |
   return t?.etapa === "implementar" || t?.etapa === "resolver_conflito" ? t : undefined;
 }
 
-/** Falha o ticket em execução, de qualquer etapa, com o motivo, sem coletar, devolver nem gravar evidência; síncrona para os encerramentos órfãos. */
-export function falharTicketDemanda(banco: DatabaseSync, ref: Ref, motivo: string): void {
+/** Falha o ticket em execução, de qualquer etapa, com a falha tipada, sem coletar, devolver nem gravar evidência; síncrona para os encerramentos órfãos. */
+export function falharTicketDemanda(banco: DatabaseSync, ref: Ref, falha: FalhaDaTentativa): void {
   comDemanda(banco, ref.demanda_id, (ag) =>
     ag.tickets.find((t) => t.ticket_id === ref.ticket_id)?.estado === "em_execucao"
-      ? registrarFalhaTicket(ag, { ticket_id: ref.ticket_id, motivo }, contexto())
+      ? registrarFalhaTicket(ag, { ticket_id: ref.ticket_id, falha }, contexto())
       : ag,
   );
 }
@@ -123,7 +127,7 @@ function relatorioDeReprovacao(reprovadas: Verificacao[]): string {
 export async function fecharTicketDemanda(
   banco: DatabaseSync,
   ref: Ref,
-  { falha }: { falha?: string },
+  { falha }: { falha?: FalhaDaTentativa },
   deps: DepsFechamento = {},
 ): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
@@ -137,8 +141,8 @@ export async function fecharTicketDemanda(
     falharTicketDemanda(banco, ref, falha);
     return;
   }
-  const falhar = (motivo: string): void => {
-    falharTicketDemanda(banco, ref, motivo);
+  const falhar = (falhaDoFechamento: FalhaDaTentativa): void => {
+    falharTicketDemanda(banco, ref, falhaDoFechamento);
   };
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const { rodada_id } = ticket;
@@ -156,12 +160,17 @@ export async function fecharTicketDemanda(
       opcoes: deps.opcoes,
     });
     if (deps.parada?.()) {
-      falhar(REINICIADO);
+      falhar(falhaPorServicoReiniciado);
       return;
     }
     if (verificacoes.some((v) => v.aprovada === undefined)) {
-      const motivos = verificacoes.flatMap((v) => v.falhas.filter((f) => f.classe === "infraestrutura"));
-      falhar(`falha de infraestrutura:\n${motivos.map((f) => `- ${f.motivo}`).join("\n")}`);
+      const falhasDeInfraestrutura = verificacoes.flatMap((v) => v.falhas.filter((f) => f.classe === "infraestrutura"));
+      const [{ causa }] = falhasDeInfraestrutura as [Extract<Falha, { classe: "infraestrutura" }>];
+      falhar({
+        tipo: "falha_infraestrutura",
+        causa,
+        motivo: `${rotuloDaCausa(causa)}:\n${falhasDeInfraestrutura.map((f) => `- ${f.motivo}`).join("\n")}`,
+      });
       return;
     }
     gravarEvidencias(banco, ref, verificacoes);
@@ -180,9 +189,11 @@ export async function fecharTicketDemanda(
     evidenciasDoTicket(carregarDemanda(banco, ref.demanda_id), ref.ticket_id),
   );
   if (ausentes.length > 0 || reprovadas.length > 0) {
-    falhar(
-      `falha de infraestrutura: o ticket já tem commit, mas as evidências de verificação não estão aprovadas (ausentes: ${ausentes.join(", ") || "nenhuma"}; reprovadas: ${reprovadas.join(", ") || "nenhuma"})`,
-    );
+    falhar({
+      tipo: "falha_infraestrutura",
+      causa: "comando_ausente",
+      motivo: `${rotuloDaCausa("comando_ausente")}: o ticket já tem commit, mas as evidências de verificação não estão aprovadas (ausentes: ${ausentes.join(", ") || "nenhuma"}; reprovadas: ${reprovadas.join(", ") || "nenhuma"})`,
+    });
     return;
   }
   let commit;
@@ -199,20 +210,23 @@ export async function fecharTicketDemanda(
       deps.limiteCommitMs,
     );
   } catch (erro) {
-    if (deps.parada?.()) falhar(REINICIADO);
-    else if (erro instanceof ErroDeReprovacao) {
-      comDemanda(banco, ref.demanda_id, (a) =>
-        devolverTicket(a, { ticket_id: ref.ticket_id, instrucao: erro.message }, FABRIQUINHA, contexto()),
-      );
-    } else if (erro instanceof ErroExterno) {
-      falhar(`falha de infraestrutura: ${erro.message}`);
+    if (deps.parada?.()) falhar(falhaPorServicoReiniciado);
+    else if (erro instanceof ErroDeReprovacao || erro instanceof ErroExterno) {
+      const resultado = resultadoDoErro(erro);
+      if (resultado.tipo === "reprovacao") {
+        comDemanda(banco, ref.demanda_id, (a) =>
+          devolverTicket(a, { ticket_id: ref.ticket_id, instrucao: resultado.motivo }, FABRIQUINHA, contexto()),
+        );
+      } else {
+        falhar(resultado);
+      }
     } else {
       throw erro;
     }
     return;
   }
   if (deps.parada?.()) {
-    falhar(REINICIADO);
+    falhar(falhaPorServicoReiniciado);
     return;
   }
   comDemanda(banco, ref.demanda_id, (a) =>

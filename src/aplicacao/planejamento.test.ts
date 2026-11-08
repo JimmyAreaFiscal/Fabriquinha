@@ -9,6 +9,10 @@ import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
+import { AUDITOR } from "../nucleo/ator.ts";
+import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
+import { comReaberturaDoAuditor, falhaPorServicoReiniciado } from "../nucleo/tentativa.ts";
+import { falharTicketDemanda } from "./fechamento_ticket.ts";
 import { submeterPlano } from "../nucleo/transicoes_demanda.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -16,6 +20,7 @@ import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts"
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
+import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import * as servico from "./planejamento.ts";
 import {
   aprovarPlanejamentoDemanda,
@@ -99,6 +104,7 @@ function cenario({
     },
   });
   const base = {
+    tentativas: [],
     rodadas: [],
     dependencias_rodada: [],
     criterios_citados: [],
@@ -122,7 +128,6 @@ function cenario({
         estado: estadoDoTicket,
         estado_alterado_em: em,
         criado_por: { tipo: "fabriquinha" },
-        devolucoes: 0,
       },
     ],
     decisoes: [],
@@ -277,7 +282,7 @@ test("CA-3: reprovar com o planejar Falhou o reabre com o motivo e o despacho re
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const [sessao] = sessoes().sessoes;
   submeterPlanoDoAgente(banco, "I-1", plano());
-  banco.exec("UPDATE ticket_demanda SET estado = 'falhou', motivo_falha = 'serviço reiniciado'");
+  falharTicketDemanda(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
   reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
   const ticket = carregarDemanda(banco, "I-1").tickets[0] as { estado: string; instrucao?: string };
   assert.equal(ticket.estado, "aberto");
@@ -299,9 +304,24 @@ test("plano aprovado e reaberto com instrução replaneja em sessão nova com a 
   const [descartada] = sessoes().sessoes;
   // O Auditor descarta o plano aprovado (incidente da I-259): volta ao planejamento com a instrução no ticket.
   banco.exec("UPDATE demanda SET estado = 'planejar' WHERE id = 'I-1'");
-  banco.exec(
-    "UPDATE ticket_demanda SET estado = 'aberto', instrucao = 'Refaça o plano com até 30 arquivos por rodada' WHERE etapa = 'planejar'",
-  );
+  comDemanda(banco, "I-1", (ag) => {
+    const ticketPlanejar = ag.tickets[0];
+    assert.ok(ticketPlanejar);
+    return {
+      ...ag,
+      tickets: ag.tickets.map((ticket) => ({
+        ...ticket,
+        estado: "aberto" as const,
+        instrucao: "Refaça o plano com até 30 arquivos por rodada",
+      })),
+      tentativas: comReaberturaDoAuditor(
+        ag.tentativas,
+        ticketPlanejar,
+        "Refaça o plano com até 30 arquivos por rodada",
+        new Date().toISOString(),
+      ),
+    };
+  });
   await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
   const replanejamento = sessoes().sessoes.at(-1);
   assert.equal(sessoes().sessoes.length, 2);
@@ -409,4 +429,32 @@ test("aprovar fora do gate recusa antes de tocar o git", async () => {
   const { c, banco } = cenario();
   await assert.rejects(aprovarPlanejamentoDemanda(banco, "I-1", {}), /só no estado gate_planejamento/);
   assert.equal(existsSync(join(c.raiz, "worktrees")), false);
+});
+
+test("foto do retorno ao agente no planejamento: devolução pela reprovação", async () => {
+  const { c, banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  submeterPlanoDoAgente(banco, "I-1", plano());
+  reprovarPlanejamentoDemanda(banco, "I-1", "faltam critérios na rodada 2");
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  conferirPromptComFoto(prompts().at(-1) ?? "", c.raiz, "planejamento_devolucao");
+});
+
+test("foto do retorno ao agente no planejamento: reabertura pela instrução do Auditor", async () => {
+  const { c, banco, prompts } = cenario({ estadoDoTicket: "em_execucao" });
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  falharTicketDemanda(banco, { demanda_id: "I-1", ticket_id: 1 }, falhaPorServicoReiniciado);
+  comDemanda(banco, "I-1", (ag) =>
+    reabrirTicket(
+      ag,
+      {
+        ticket_id: 1,
+        instrucao: "Refaça o plano com até 30 arquivos",
+      },
+      AUDITOR,
+      { agora: new Date().toISOString() },
+    ),
+  );
+  await iniciarOuRetomarPlanejamento(banco, "I-1", 0.02).fim;
+  conferirPromptComFoto(prompts().at(-1) ?? "", c.raiz, "planejamento_reabertura");
 });

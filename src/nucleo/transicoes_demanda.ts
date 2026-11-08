@@ -11,6 +11,15 @@ import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
 import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { Id, type Instante, Markdown, Motivo, Slug, Titulo } from "./primitivos.ts";
+import {
+  comReaberturaDoAuditor,
+  comTentativaEncerrada,
+  desdeAReabertura,
+  FalhaDaTentativa,
+  POLITICA_DE_TENTATIVAS,
+  type ResultadoDaTentativa,
+  tentativasDoTicket,
+} from "./tentativa.ts";
 
 export interface ContextoDemanda {
   readonly agora: Instante;
@@ -143,17 +152,16 @@ export function decidirDemanda(
     por: AUDITOR,
     em: ctx.agora,
   };
-  const decidido = ag.tickets.map((t) =>
-    t === ticket ? CICLO_DO_TICKET.mudar(t, e.aprovado ? "concluido" : "cancelado", ctx.agora) : t,
-  );
+  const decidido = mudarTicket(ag, ticket, e.aprovado ? "concluido" : "cancelado", ctx.agora);
   // Aprovar libera o planejamento: sem o ticket `planejar` aberto a seleção não tem o que despachar.
   const abrirPlanejar = e.aprovado && !ag.tickets.some((t) => t.etapa === "planejar");
   return {
     ...ag,
     demanda: CICLO_DA_DEMANDA.mudar(demanda, e.aprovado ? "planejar" : "cancelada", ctx.agora),
     tickets: abrirPlanejar
-      ? [...decidido, criarTicket(ag, { etapa: "planejar", criado_por: FABRIQUINHA, agora: ctx.agora })]
-      : decidido,
+      ? [...decidido.tickets, criarTicket(ag, { etapa: "planejar", criado_por: FABRIQUINHA, agora: ctx.agora })]
+      : decidido.tickets,
+    tentativas: decidido.tentativas,
     decisoes: [...ag.decisoes, decisao],
   };
 }
@@ -290,6 +298,7 @@ export function reprovarPlanejamento(
   return {
     ...ag,
     demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "planejar", ctx.agora),
+    tentativas: tentativasAposSair(ag, ticket, { tipo: "interrompida", por: AUDITOR, motivo }, ctx.agora),
     decisoes: [...ag.decisoes, decisaoDoAuditor(ag, ticket, "recusado", { motivo }, ctx)],
   };
 }
@@ -316,11 +325,13 @@ export function confirmarAprovacaoPlanejamento(
   const planos = [...plano.tickets].sort((a, b) => a.ticket_id - b.ticket_id);
   const novoId = new Map(planos.map((t, i) => [t.ticket_id, primeiroId + i]));
   const id = (n: number): number => existe(novoId.get(n), `o ticket ${String(n)} não está no plano`, "valide o plano");
+  const planejado = mudarTicket(ag, planejamento, "concluido", ctx.agora);
   return AgregadoDemanda.parse({
     ...ag,
     demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "em_execucao", ctx.agora),
+    tentativas: planejado.tentativas,
     tickets: [
-      ...ag.tickets.map((t) => (t === planejamento ? CICLO_DO_TICKET.mudar(t, "concluido", ctx.agora) : t)),
+      ...planejado.tickets,
       ...planos.map(({ ticket_id, rodada_id, titulo, descricao, configuracao_agente }) => ({
         demanda_id,
         ticket_id: id(ticket_id),
@@ -368,15 +379,12 @@ const EntradaReabertura = z.strictObject({
 });
 const EntradaFalha = z.strictObject({
   ticket_id: Id,
-  motivo: Markdown.refine((t) => t.trim() !== "", "informe o motivo"),
+  falha: FalhaDaTentativa.refine((f) => f.motivo.trim() !== "", "informe o motivo"),
 });
 const EntradaDevolucao = z.strictObject({
   ticket_id: Id,
   instrucao: Markdown.refine((t) => t.trim() !== "", "informe a instrução"),
 });
-/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
-export const MAX_DEVOLUCOES = 2;
-
 export function ticketDaDemanda(ag: AgregadoDemanda, ticket_id: number): TicketDemanda {
   return existe(
     ag.tickets.find((t) => t.ticket_id === ticket_id),
@@ -386,8 +394,30 @@ export function ticketDaDemanda(ag: AgregadoDemanda, ticket_id: number): TicketD
 }
 
 /**
- * O agregado com o ticket `alvo` levado a `para` pelo ciclo; `extra` entra junto (motivo, instrução, contadores).
- * Voltar a `aberto` descarta o `motivo_falha`: a falha anterior já foi superada.
+ * A Tentativa da execução que `alvo` deixa: encerrada com o `resultado`. Ticket que não está em execução só a tem se
+ * uma execução a abriu (o da sessão de ajustes, que fica `aberto`).
+ */
+const tentativasAposSair = (
+  ag: AgregadoDemanda,
+  alvo: TicketDemanda,
+  resultado: ResultadoDaTentativa | undefined,
+  agora: Instante,
+): AgregadoDemanda["tentativas"] => {
+  const comExecucaoAberta = tentativasDoTicket(ag.tentativas, alvo.ticket_id).some((t) => t.fim === undefined);
+  return resultado && (alvo.estado === "em_execucao" || comExecucaoAberta)
+    ? comTentativaEncerrada(ag.tentativas, alvo, resultado, agora)
+    : ag.tentativas;
+};
+
+const RESULTADO_AO_SAIR_DA_EXECUCAO: Partial<Record<TicketDemanda["estado"], ResultadoDaTentativa>> = {
+  concluido: { tipo: "sucesso" },
+  cancelado: { tipo: "interrompida", por: AUDITOR },
+};
+
+/**
+ * O agregado com o ticket `alvo` levado a `para` pelo ciclo; `extra` entra junto (instrução, configuração). O
+ * `resultado` que quem chama informa encerra a Tentativa do ticket; sem ele, quem sai da execução concluindo deixa um
+ * sucesso, e cancelando, a interrupção do Auditor.
  */
 export function mudarTicket(
   ag: AgregadoDemanda,
@@ -395,15 +425,16 @@ export function mudarTicket(
   para: TicketDemanda["estado"],
   agora: Instante,
   extra: Partial<TicketDemanda> = {},
+  resultado?: ResultadoDaTentativa,
 ): AgregadoDemanda {
   return {
     ...ag,
-    tickets: ag.tickets.map((t) => {
-      if (t.ticket_id !== alvo.ticket_id) return t;
-      const mudado = { ...CICLO_DO_TICKET.mudar(t, para, agora), ...extra };
-      if (para === "aberto") delete mudado.motivo_falha;
-      return mudado;
-    }),
+    tickets: ag.tickets.map((t) =>
+      t.ticket_id === alvo.ticket_id ? { ...CICLO_DO_TICKET.mudar(t, para, agora), ...extra } : t,
+    ),
+    tentativas: resultado
+      ? comTentativaEncerrada(ag.tentativas, alvo, resultado, agora)
+      : tentativasAposSair(ag, alvo, RESULTADO_AO_SAIR_DA_EXECUCAO[para], agora),
   };
 }
 
@@ -416,18 +447,19 @@ export function exigirDemandaEmAndamento(ag: AgregadoDemanda, acao: string): voi
   }
 }
 
-/** CA-16, CA-4 e CA-7: o ticket em execução passa a `falhou` com o motivo; o estado e os gates da demanda não mudam. */
+/** CA-16, CA-4 e CA-7: o ticket em execução passa a `falhou` com a Tentativa da falha; o estado e os gates da demanda não mudam. */
 export function registrarFalhaTicket(ag: AgregadoDemanda, entrada: unknown, ctx: ContextoDemanda): AgregadoDemanda {
-  const { ticket_id, motivo } = EntradaFalha.parse(entrada);
+  const { ticket_id, falha } = EntradaFalha.parse(entrada);
   exigirDemandaEmAndamento(ag, "falhar");
   const ticket = ticketDaDemanda(ag, ticket_id);
   CICLO_DO_TICKET.exigir(ticket, "em_execucao");
-  return mudarTicket(ag, ticket, "falhou", ctx.agora, { motivo_falha: motivo });
+  return mudarTicket(ag, ticket, "falhou", ctx.agora, {}, falha);
 }
 
 /**
  * CA-1 a CA-3, CA-5, CA-6, CA-12 e CA-13 (D05): só a Fabriquinha devolve, só `implementar`/`resolver_conflito` em
- * execução. Abaixo do limite volta a `aberto` com a instrução; no limite falha com ela como motivo.
+ * execução. A Tentativa reprovada entra no histórico e a política decide: volta a `aberto` com a instrução ou, no
+ * limite, falha com ela como motivo.
  */
 export function devolverTicket(
   ag: AgregadoDemanda,
@@ -446,16 +478,19 @@ export function devolverTicket(
       "só implementar e resolver_conflito",
     );
   }
-  return ticket.devolucoes >= MAX_DEVOLUCOES
-    ? mudarTicket(ag, ticket, "falhou", ctx.agora, { motivo_falha: instrucao })
-    : mudarTicket(ag, ticket, "aberto", ctx.agora, {
-        instrucao,
-        devolucoes: ticket.devolucoes + 1,
-        retomadas_automaticas: 0,
-      });
+  const reprovacao: ResultadoDaTentativa = { tipo: "reprovacao", motivo: instrucao };
+  const historico = desdeAReabertura(
+    tentativasDoTicket(comTentativaEncerrada(ag.tentativas, ticket, reprovacao, ctx.agora), ticket_id),
+  );
+  return POLITICA_DE_TENTATIVAS.proximoPasso(ticket.etapa, historico).tipo === "devolver_ao_agente"
+    ? mudarTicket(ag, ticket, "aberto", ctx.agora, { instrucao }, reprovacao)
+    : mudarTicket(ag, ticket, "falhou", ctx.agora, {}, reprovacao);
 }
 
-/** CA-13 a CA-15: só o Auditor, com instrução; o ticket volta a `aberto` (elegível na próxima seleção), sem iniciar execução. */
+/**
+ * CA-13 a CA-15: só o Auditor, com instrução; o ticket volta a `aberto` (elegível na próxima seleção), sem iniciar execução. A
+ * reabertura é uma Tentativa com a instrução dele, e os limites contam de novo a partir dela.
+ */
 export function reabrirTicket(
   ag: AgregadoDemanda,
   entrada: unknown,
@@ -466,21 +501,22 @@ export function reabrirTicket(
   const { ticket_id, instrucao } = EntradaReabertura.parse(entrada);
   const ticket = ticketDaDemanda(ag, ticket_id);
   CICLO_DO_TICKET.exigir(ticket, "falhou");
-  return mudarTicket(ag, ticket, "aberto", ctx.agora, { instrucao, devolucoes: 0, retomadas_automaticas: 0 });
+  const reaberto = mudarTicket(ag, ticket, "aberto", ctx.agora, { instrucao });
+  return {
+    ...reaberto,
+    tentativas: comReaberturaDoAuditor(ag.tentativas, ticket, instrucao, ctx.agora),
+  };
 }
 
-export const MAX_RETOMADAS_AUTOMATICAS = 3;
 const EntradaRetomadaAutomatica = z.strictObject({
   ticket_id: Id,
-  /** A retomada soma no limite; a do reinício do serviço não soma: não é laço, é o operador. */
-  conta: z.boolean(),
   /** Cota estourada: o modelo reserva toma o lugar do do ticket. */
   modelo: Modelo.optional(),
 });
 
 /**
- * Só a Fabriquinha, só ticket `falhou`: volta a `aberto` sem o Auditor, mantendo a instrução e as devoluções da D05 (a
- * falha não foi do agente). Recusa a que `conta` depois de MAX_RETOMADAS_AUTOMATICAS seguidas.
+ * Só a Fabriquinha, só ticket `falhou`: volta a `aberto` sem o Auditor, mantendo a instrução e o histórico da D05 (a
+ * falha não foi do agente). A política recusa a que passou do limite de falhas seguidas ou a que pede o Auditor.
  */
 export function retomarTicketFalhoPorInfraestrutura(
   ag: AgregadoDemanda,
@@ -489,19 +525,21 @@ export function retomarTicketFalhoPorInfraestrutura(
   ctx: ContextoDemanda,
 ): AgregadoDemanda {
   exigirAtor(ator, "retomar um ticket falho por infraestrutura", "fabriquinha");
-  const { ticket_id, conta, modelo } = EntradaRetomadaAutomatica.parse(entrada);
+  const { ticket_id, modelo } = EntradaRetomadaAutomatica.parse(entrada);
   exigirDemandaEmAndamento(ag, "retomar");
   const ticket = ticketDaDemanda(ag, ticket_id);
   CICLO_DO_TICKET.exigir(ticket, "falhou");
-  const retomadas = ticket.retomadas_automaticas ?? 0;
-  if (conta && retomadas >= MAX_RETOMADAS_AUTOMATICAS) {
+  const passo = POLITICA_DE_TENTATIVAS.proximoPasso(
+    ticket.etapa,
+    desdeAReabertura(tentativasDoTicket(ag.tentativas, ticket_id)),
+  );
+  if (passo.tipo !== "retomar_automaticamente") {
     throw new ErroDeRegra(
-      `o ticket ${formatarTicketRef(ticket)} já foi retomado ${String(MAX_RETOMADAS_AUTOMATICAS)} vezes seguidas`,
+      `o ticket ${formatarTicketRef(ticket)} não tem retomada automática: já passou de ${String(POLITICA_DE_TENTATIVAS.limites.falhasDeInfraestrutura)} falhas seguidas ou a falha pede o Auditor`,
       "o Auditor decide: reabra com instrução ou cancele",
     );
   }
   return mudarTicket(ag, ticket, "aberto", ctx.agora, {
-    retomadas_automaticas: retomadas + (conta ? 1 : 0),
     ...(modelo && { configuracao_agente: { ...ticket.configuracao_agente, modelo } }),
   });
 }
@@ -599,18 +637,17 @@ export function registrarRevisaoDemanda(
   };
   // Plano corretivo vazio ou inválido recusa aqui, antes de qualquer retorno.
   const base = e.aprovado ? ag : materializarRodadasCorretivas(ag, e.plano, ator, ctx.agora);
-  const comRevisaoConcluida = base.tickets.map((t) =>
-    t.ticket_id === ticket.ticket_id ? CICLO_DO_TICKET.mudar(t, "concluido", ctx.agora) : t,
-  );
+  const comRevisaoConcluida = mudarTicket(base, ticket, "concluido", ctx.agora);
   return {
     ...base,
+    tentativas: comRevisaoConcluida.tentativas,
     demanda: CICLO_DA_DEMANDA.mudar(base.demanda, e.aprovado ? "encerrar_demanda" : "em_execucao", ctx.agora),
     tickets: e.aprovado
       ? [
-          ...comRevisaoConcluida,
+          ...comRevisaoConcluida.tickets,
           criarTicket(base, { etapa: "encerrar_demanda", criado_por: FABRIQUINHA, agora: ctx.agora }),
         ]
-      : comRevisaoConcluida,
+      : comRevisaoConcluida.tickets,
     decisoes: [...ag.decisoes, decisao],
   };
 }

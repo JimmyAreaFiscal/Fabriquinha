@@ -18,6 +18,7 @@ import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-testes/repositorio_de_teste.ts";
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
+import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { situacao } from "./gerente.ts";
 import { concluirSessaoAjustes, reprovarPRRodada } from "./sessao_ajustes.ts";
 import { enviarDemanda } from "./sessoes_demanda.ts";
@@ -64,7 +65,6 @@ async function cenario(shell = "") {
     estado: status,
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     rodada_id: 2,
   });
   await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
@@ -101,6 +101,7 @@ async function cenario(shell = "") {
       ticket(7, "encerrar_rodada", "concluido"),
       ticket(8, "encerrar_rodada", "em_execucao"),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -158,6 +159,14 @@ test("CA-12, CA-14, CA-15, CA-23 e CA-25: reprovar registra a recusa, abre a ses
   const mensagem = prompts()[0]?.prompt ?? "";
   for (const esperado of [MOTIVO, URL_PR, "I-206.R2", "I-206.T9"]) assert.match(mensagem, new RegExp(esperado));
   assert.doesNotMatch(mensagem, /\bT-\d/);
+  await concluirComCorrecao(banco, ag);
+});
+
+test("foto do retorno ao agente nos ajustes: reprovação do PR da rodada", async () => {
+  const { c, ag, prompts, banco } = await cenario();
+  await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, LIMITE);
+  await ate(() => prompts().length === 1);
+  conferirPromptComFoto(prompts()[0]?.prompt ?? "", c.raiz, "ajustes_reprovacao");
   await concluirComCorrecao(banco, ag);
 });
 

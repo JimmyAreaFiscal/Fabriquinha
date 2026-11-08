@@ -8,6 +8,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { after, beforeEach, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
+import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
@@ -80,7 +81,6 @@ async function cenario({
     estado: st,
     estado_alterado_em: em,
     criado_por: FABRIQUINHA,
-    devolucoes: 0,
     ...extra,
   });
   gravarAgregadoPronto(banco, {
@@ -112,6 +112,7 @@ async function cenario({
       ticket(3, "implementar", "concluido", { titulo: "Primeiro", rodada_id: 1 }),
       ...(semTicket ? [] : [ticket(8, "encerrar_demanda", estadoDoTicket)]),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],
@@ -145,11 +146,18 @@ async function cenario({
     commitar,
     ag: () => carregarDemanda(banco, D),
     ticket: () => carregarDemanda(banco, D).tickets.find((t) => t.ticket_id === 8),
+    motivo: () => {
+      const ag = carregarDemanda(banco, D);
+      const ticket = ag.tickets.find((t) => t.ticket_id === 8);
+      assert.ok(ticket);
+      return motivoDaFalhaDoTicket(ag.tentativas, ticket);
+    },
     noRemoto: (branch: string) => rodarGit(c.bare, "for-each-ref", "--format=%(refname:short)", `refs/heads/${branch}`),
     /** Como o agendador: reserva o `encerrar_demanda` aberto. */
     reservar: () =>
       comDemanda(banco, D, (a) => ({
         ...a,
+        // o Auditor ou a retomada reabrem o ticket falho, e reabrir descarta o motivo da falha
         tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const } : t)),
       })),
   };
@@ -284,7 +292,7 @@ test("CA-3: PR aberto fora da Fabriquinha: nenhum push, o erro aponta o PR e o t
 
   assert.equal(c.noRemoto(BRANCH_DEMANDA), "");
   assert.equal(c.ticket()?.estado, "falhou");
-  assert.match(c.ticket()?.motivo_falha ?? "", /fora da Fabriquinha/);
+  assert.match(c.motivo() ?? "", /fora da Fabriquinha/);
   assert.equal(c.ag().encerramento, undefined);
   assert.equal(c.ag().demanda.estado, "encerrar_demanda");
 });
@@ -316,6 +324,7 @@ test("CA-4: check final falho falha o ticket em check_final, sem integração, l
   assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(ag.encerramento?.falha?.etapa, "check_final");
   assert.match(ag.encerramento.falha.motivo, /ci/);
+  assert.equal(c.motivo(), ag.encerramento.falha.motivo);
   assert.equal(ag.encerramento.integracao, undefined);
   assert.equal(ag.demanda.estado, "encerrar_demanda");
   assert.deepEqual(merges(), []);
@@ -399,6 +408,7 @@ test("PR final fechado sem merge falha o ticket em integracao; reaberto e integr
   assert.equal(c.ticket()?.estado, "falhou");
   assert.equal(fechado.encerramento?.falha?.etapa, "integracao");
   assert.match(fechado.encerramento.falha.motivo, /fechado sem merge/);
+  assert.equal(c.motivo(), fechado.encerramento.falha.motivo);
   assert.equal(fechado.encerramento.integracao, undefined);
   assert.equal(existsSync(c.demanda), true);
 
@@ -445,10 +455,7 @@ test("CA-10, CA-12 e CA-13: a limpeza que falha mantém a integração; reaberto
 
   // O Auditor reabre; o agendador reserva.
   rodarGit(c.repo, "worktree", "unlock", c.rodada);
-  comDemanda(c.banco, D, (a) => ({
-    ...a,
-    tickets: a.tickets.map((t) => (t.ticket_id === 8 ? { ...t, estado: "em_execucao" as const } : t)),
-  }));
+  c.reservar();
   const chamadas = hospedagem.chamadas().length;
 
   const ag = await conduzirEncerramentoDemanda(c.banco, D);

@@ -7,6 +7,7 @@ import { once } from "node:events";
 import { setTimeout as dormir } from "node:timers/promises";
 import type { Page } from "@playwright/test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
+import { motivoDaFalhaDoTicket } from "../src/nucleo/tentativa.ts";
 import { carregarDemanda } from "../src/armazenamento/demandas.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { gravarProjeto, projetoExistente } from "../src/armazenamento/projetos.ts";
@@ -86,13 +87,18 @@ async function executarEEsperarPi(pagina: Page, raiz: string, base: string): Pro
 function conferirFimGravado(raiz: string): void {
   const banco = abrir(raiz);
   const { execucoes } = carregarSessoesDoTicket(banco, { demanda_id: "I-216", ticket_id: 1 });
-  const ticket = carregarDemanda(banco, "I-216").tickets.find((t) => t.ticket_id === 1);
+  const agregado = carregarDemanda(banco, "I-216");
+  const ticket = agregado.tickets.find((t) => t.ticket_id === 1);
   banco.close();
   expect(execucoes).toHaveLength(1);
   expect(execucoes[0]?.fim).not.toBeNull();
-  expect(execucoes[0]?.erro).toBe("serviço reiniciado");
+  expect(agregado.tentativas.find((tentativa) => tentativa.processo_id === execucoes[0]?.id)?.resultado).toEqual({
+    tipo: "falha_infraestrutura",
+    causa: "servico_reiniciado",
+    motivo: "serviço reiniciado",
+  });
   expect(ticket?.estado).toBe("falhou");
-  expect(ticket?.motivo_falha).toBe("serviço reiniciado");
+  expect(ticket && motivoDaFalhaDoTicket(agregado.tentativas, ticket)).toBe("serviço reiniciado");
 }
 
 test.describe("I-246", () => {

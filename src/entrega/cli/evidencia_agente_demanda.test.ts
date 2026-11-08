@@ -81,7 +81,6 @@ function cenario() {
     estado: "em_execucao",
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
-    devolucoes: 0,
     ...extra,
   });
   gravarAgregadoPronto(banco, {
@@ -118,6 +117,7 @@ function cenario() {
       ticket(7, "encerrar_rodada", { rodada_id: 1 }),
       ticket(8, "revisar_rodada", { rodada_id: 1, estado: "concluido" }),
     ],
+    tentativas: [],
     dependencias_ticket: [],
     caminhos_ticket: [],
     decisoes: [],

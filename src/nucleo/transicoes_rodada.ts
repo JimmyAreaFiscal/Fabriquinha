@@ -9,6 +9,7 @@ import { DemandaId } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
 import { criarTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { type EtapaTicket, type EstadoRodada, Id, type Instante, Motivo, palavras } from "./primitivos.ts";
+import { falhaQueExigeOAuditor } from "./tentativa.ts";
 import { type ContextoDemanda, mudarTicket } from "./transicoes_demanda.ts";
 
 const RodadaRef = { demanda_id: DemandaId, rodada_id: Id };
@@ -89,8 +90,15 @@ const rodadasComEstadoMudado = (
 ): RodadaDemanda[] =>
   ag.rodadas.map((r) => (r.rodada_id === alvo.rodada_id ? CICLO_DA_RODADA.mudar(r, para, agora) : r));
 
-const ticketsConcluidos = (ag: AgregadoDemanda, alvo: TicketDemanda, agora: Instante): TicketDemanda[] =>
-  mudarTicket(ag, alvo, "concluido", agora).tickets;
+/** Os tickets e as Tentativas do agregado com `alvo` concluído. */
+const comTicketConcluido = (
+  ag: AgregadoDemanda,
+  alvo: TicketDemanda,
+  agora: Instante,
+): Pick<AgregadoDemanda, "tickets" | "tentativas"> => {
+  const { tickets, tentativas } = mudarTicket(ag, alvo, "concluido", agora);
+  return { tickets, tentativas };
+};
 
 /** CA-1: todas as implementações `concluido` (processo encerrado não conta) levam a rodada a `revisar_rodada`, com um `revisar_rodada` novo. */
 export function concluirImplementacoesRodada(
@@ -128,9 +136,10 @@ export function concluirImplementacoesRodada(
 
 /** A partir desta reprovação na rodada, o Auditor decide: os corretivos não nascem e o ticket de revisão falha. */
 const REPROVACOES_ATE_O_AUDITOR = 3;
+/** @testes o teste confere que o motivo da falha começa pelo prefixo; a produção o usa só dentro do módulo */
 export const PREFIXO_TERCEIRA_REPROVACAO = "terceira reprovação da rodada: exige o Auditor";
 
-const LIMITE_PALAVRAS_DO_MOTIVO_FALHA = 1000; // o mesmo teto de `Markdown`, que valida `motivo_falha` na leitura
+const LIMITE_PALAVRAS_DO_MOTIVO_FALHA = 1000; // o mesmo teto de `Markdown`, que valida o motivo da Tentativa na leitura
 const PALAVRAS_DO_AVISO_DE_OMITIDAS = 6;
 
 /** Prefixo e reprovação mais recente sempre ficam; as mais antigas entram enquanto couberem e o resto vira um aviso. */
@@ -186,10 +195,9 @@ export function registrarRevisaoRodada(
     decisao,
   ].map((d) => String(d.motivo)); // recusado sempre tem motivo (invariante do agregado)
   if (!e.aprovado && motivosDasReprovacoes.length >= REPROVACOES_ATE_O_AUDITOR) {
-    const motivo_falha = montarMotivoFalhaDaTerceiraReprovacao(motivosDasReprovacoes.reverse());
+    const motivo = montarMotivoFalhaDaTerceiraReprovacao(motivosDasReprovacoes.reverse());
     return {
-      ...ag,
-      tickets: mudarTicket(ag, ticket, "falhou", ctx.agora, { motivo_falha }).tickets,
+      ...mudarTicket(ag, ticket, "falhou", ctx.agora, {}, falhaQueExigeOAuditor(motivo)),
       decisoes: [...ag.decisoes, decisao],
     };
   }
@@ -197,7 +205,7 @@ export function registrarRevisaoRodada(
   const base = e.aprovado ? ag : materializarCorrecoesRodada(ag, e, e.correcoes, ator, ctx.agora);
   const comRevisaoDecidida: AgregadoDemanda = {
     ...base,
-    tickets: ticketsConcluidos(base, ticket, ctx.agora),
+    ...comTicketConcluido(base, ticket, ctx.agora),
     decisoes: [...ag.decisoes, decisao],
   };
   return {
@@ -249,7 +257,7 @@ export function conferirPullRequestRodada(
   const base = materializarCorrecoesRodada(ag, e, e.correcoes ?? [], ator, ctx.agora);
   return {
     ...base,
-    tickets: ticketsConcluidos(base, ticket, ctx.agora),
+    ...comTicketConcluido(base, ticket, ctx.agora),
     rodadas: rodadasComEstadoMudado(base, rodada, "implementar", ctx.agora),
   };
 }
@@ -285,10 +293,12 @@ export function reprovarPullRequestRodada(
   exigirAtor(ator, "reprovar o PR da rodada", "auditor");
   const e = EntradaReprovacaoPR.parse(entrada);
   const { rodada, ticket } = gatePullRequest(ag, e);
+  const concluido = comTicketConcluido(ag, ticket, ctx.agora);
   return {
     ...ag,
+    tentativas: concluido.tentativas,
     tickets: [
-      ...ticketsConcluidos(ag, ticket, ctx.agora),
+      ...concluido.tickets,
       criarTicket(ag, {
         etapa: "ajustar_resultado",
         rodada: rodada.rodada_id,
@@ -340,7 +350,7 @@ export function concluirSessaoRodada(
   }
   return {
     ...ag,
-    tickets: ticketsConcluidos(ag, sessao, ctx.agora),
+    ...comTicketConcluido(ag, sessao, ctx.agora),
     rodadas: rodadasComEstadoMudado(ag, rodada, "implementar", ctx.agora),
   };
 }
@@ -386,7 +396,7 @@ export function confirmarAprovacaoPullRequest(
   }
   return {
     ...ag,
-    tickets: ticketsConcluidos(ag, ticket, ctx.agora),
+    ...comTicketConcluido(ag, ticket, ctx.agora),
     decisoes: [
       ...ag.decisoes,
       decisaoDoGate(

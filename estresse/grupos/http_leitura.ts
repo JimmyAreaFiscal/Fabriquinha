@@ -76,7 +76,6 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
     estado_alterado_em: em,
     criado_por: { tipo: "fabriquinha" },
     rodada_id: 1,
-    devolucoes: 0,
   });
   const { sha256, bytes } = guardarBytes(banco, Buffer.from("<h1>Desenho</h1>"));
   // Aloca pela sequência `issue` (como o produto): gravar a I-1 sem avançá-la faz a próxima demanda nova colidir com ela.
@@ -126,6 +125,7 @@ function semearDemanda(raiz: string, banco: ReturnType<typeof abrir>): Dados {
         criterios_citados: [],
         dependencias_ticket: [],
         caminhos_ticket: [],
+        tentativas: [],
       }) as unknown as AgregadoDemanda,
   );
   gravarAnexos(banco, { demanda_id: DEMANDA, tipo: "desenho_solucao" }, [
