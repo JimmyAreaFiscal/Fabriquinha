@@ -279,5 +279,5 @@ test("o planejador recebe o desenho aprovado da demanda, com o HTML anexo num ar
   const prompt = pi.prompts()[0]?.prompt ?? "";
   assert.match(prompt, /## Desenho aprovado[\s\S]*\nr\n[\s\S]*- `src\/a\.ts` \(criar\): porque/);
   const [, html] = /- `d\.html`: `([^`]+)`/.exec(prompt) ?? [];
-  assert.equal(readFileSync(html ?? "", "utf8"), "<p>x</p>");
+  assert.equal(readFileSync(html ?? "", "utf8"), "<!doctype html><p>x</p>");
 });

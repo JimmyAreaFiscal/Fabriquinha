@@ -22,7 +22,7 @@ import {
   despacharComAgente,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { AUTOR, ciclo, criarCenario, CTX, demanda, gravarLimiteParalelismo } from "./apoio.ts";
+import { AUTOR, ciclo, criarCenario, demanda, gravarLimiteParalelismo, ORIGENS_DOS_ANEXOS } from "./apoio.ts";
 
 interface Ref {
   demanda_id: string;
@@ -181,7 +181,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
       },
     },
     AUTOR,
-    CTX,
+    ORIGENS_DOS_ANEXOS,
   );
 
   // Demanda vizinha de controle, com custo enorme: não pode aparecer no relatório da primeira.
@@ -240,7 +240,7 @@ test("CA-SDLC-24: relatório da demanda com rodadas, revisão reprovada e custo 
       dados: { sessoes: [{ ferramenta: "claude", sessao: "ext-r2", linhas: [linhaR2] }] },
     },
     AUTOR,
-    CTX,
+    ORIGENS_DOS_ANEXOS,
   );
   const comRodada = metricasDaDemanda(c.banco, id);
   assert.deepEqual(comRodada.rodadas[1]?.custoExterno, { conhecido: 7, incompleto: false, sessoes: 1 });
