@@ -5,7 +5,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, mensagem } from "../nucleo/erros.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
@@ -46,7 +48,11 @@ export async function conduzirRevisao(
   }
   const { id, fim } = iniciarExecucaoDemanda(banco, ref, {
     ...opcoes,
-    ...(instrucao !== undefined && { retomada: { tipo: "reabertura", motivo: instrucao } }),
+    ...(instrucao !== undefined && {
+      retomada: montarRetornoAoAgente(
+        tentativaAnteriorEmMemoria(Endereco.doTicket(demanda_id, ticket_id), { instrucao }),
+      ),
+    }),
   });
   await fim;
   // `erro` só é gravado na execução que falhou.

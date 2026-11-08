@@ -16,6 +16,7 @@ import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { gravarAgregadoPronto } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { registrarDependenciaDemanda } from "../armazenamento/dependencias_demanda.ts";
+import type { RetornoAoAgente } from "../nucleo/tentativa.ts";
 import { configuracao } from "../armazenamento/servico.ts";
 import { carregarSessoesDoTicket, comSessoesDoTicket } from "../armazenamento/sessoes.ts";
 import { criarRepositorioDeTeste } from "../../apoio-testes/repositorio_de_teste.ts";
@@ -165,7 +166,7 @@ test("a instrução do ticket aberto vai à execução: devolução técnica (D0
   demanda(banco, 2, { rodadas: ["implementar"], tickets: [{ ...implementar(1), instrucao: "x", devolucoes: 1 }] });
   demanda(banco, 3, { rodadas: ["implementar"], tickets: [{ ...implementar(1), instrucao: "y" }] });
   demanda(banco, 4, { rodadas: ["implementar"], tickets: [implementar(1)] });
-  const retomadas: unknown[] = [];
+  const retomadas: (RetornoAoAgente | undefined)[] = [];
   await Promise.all(
     despacharDemandas(banco, config, {
       iniciarExecucao: (b, ref, opcoes) => {
@@ -174,7 +175,10 @@ test("a instrução do ticket aberto vai à execução: devolução técnica (D0
       },
     }),
   );
-  assert.deepEqual(retomadas, [{ tipo: "devolucao", motivo: "x" }, { tipo: "reabertura", motivo: "y" }, undefined]);
+  assert.deepEqual(
+    retomadas.map((r) => r && [r.titulo, r.texto.split("Motivo: ")[1]]),
+    [["Devolução", "x"], ["Reabertura", "y"], undefined],
+  );
 });
 
 test("o ticket que caiu no reinício do serviço volta sozinho no ciclo seguinte, já em execução", async (t: TestContext) => {

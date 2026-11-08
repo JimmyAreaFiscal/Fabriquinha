@@ -6,8 +6,10 @@ import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarTicketRef } from "../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { selecionarTrabalhoGlobal } from "../nucleo/selecao_trabalho.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { escrever } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { demandasParaDespacho, ocupacaoDoLimite, retomadasDePlanejamento } from "../armazenamento/despacho_demanda.ts";
@@ -81,7 +83,12 @@ function iniciarEtapa(banco: DatabaseSync, t: TicketDemanda, c: Configuracao, de
     }
     // A instrução do ticket aberto vem da devolução técnica (D05) ou da reabertura do Auditor: vai ao prompt.
     const retomada = t.instrucao
-      ? { tipo: t.devolucoes > 0 ? ("devolucao" as const) : ("reabertura" as const), motivo: t.instrucao }
+      ? montarRetornoAoAgente(
+          tentativaAnteriorEmMemoria(Endereco.doTicket(demanda_id, ticket_id), {
+            motivoDaReprovacao: t.devolucoes > 0 ? t.instrucao : undefined,
+            instrucao: t.instrucao,
+          }),
+        )
       : undefined;
     return (deps.iniciarExecucao ?? iniciarExecucaoDemanda)(banco, t, { limiteMin, retomada }).fim;
   }

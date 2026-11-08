@@ -9,7 +9,8 @@ import type { Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { existe } from "../nucleo/erros.ts";
-import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
+import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
 import { concluirSessaoRodada, reprovarPullRequestRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -141,13 +142,14 @@ export async function reprovarPRRodada(
   const sessao = sessaoDaRodada(depois, ref);
   return executar(banco, ref, sessao, {
     ...opcoes,
-    retomada: {
-      tipo: "reabertura",
-      motivo:
-        `Esta é a sessão de ajustes da rodada ${formatarRodadaRef(ref)} (ticket ${formatarTicketRef(sessao)}): ` +
-        `converse e registre tickets corretivos, sem implementar nem integrar.\n` +
-        `O Auditor reprovou o PR ${pr.url} da rodada. Motivo: ${motivo}`,
-    },
+    retomada: montarRetornoAoAgente(
+      tentativaAnteriorEmMemoria(Endereco.doTicket(ref.demanda_id, sessao.ticket_id), {
+        instrucao:
+          `Esta é a sessão de ajustes da rodada ${formatarRodadaRef(ref)} (ticket ${formatarTicketRef(sessao)}): ` +
+          `converse e registre tickets corretivos, sem implementar nem integrar.\n` +
+          `O Auditor reprovou o PR ${pr.url} da rodada. Motivo: ${motivo}`,
+      }),
+    ),
   });
 }
 
