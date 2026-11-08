@@ -117,7 +117,7 @@ test("CA-15: não se aplica sem justificativa recusa e pede a justificativa", as
   assert.equal(estado(banco).estado, "revisar_demanda");
 });
 
-test("CA-16: aprovada vai a encerramento com encerrar_demanda aberto; não se aplica justificado passa", async () => {
+test("CA-16: revisão aceita vai a encerramento com encerrar_demanda aberto; não se aplica justificado passa", async () => {
   const { banco } = await cenarioRevisao({ integral: true });
   evidenciar(banco, { ...naoSeAplica, justificativa: "sem carga" }, seguranca("media"));
   await aprovar(banco);

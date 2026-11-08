@@ -81,7 +81,7 @@ test("campos da demanda, ticket e decisão", () => {
   assert.ok(!Decisao.safeParse({ ...decisao(), demanda_id: undefined }).success);
   assert.ok(!Decisao.safeParse({ ...decisao(), gate: undefined }).success);
   assert.ok(!Decisao.safeParse(decisao({ gate: "registro" })).success);
-  assert.ok(!Decisao.safeParse(decisao({ resultado: "aprovada" })).success);
+  assert.ok(!Decisao.safeParse(decisao({ resultado: "inexistente" })).success);
 });
 
 test("criado_por, autor e por são obrigatórios e validam a identidade do ator", () => {

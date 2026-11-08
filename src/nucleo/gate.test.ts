@@ -47,12 +47,20 @@ const demandaEnviada = (): AgregadoDemanda => {
   return enviarDemanda(comDefinicao, autora, { agora: t1 });
 };
 const demandaEmPlanejamento = (): AgregadoDemanda => {
-  const aprovada = GATES.gate_demanda.decidir(demandaEnviada(), enderecoDaDemanda, { resultado: "aprovado" }, AUDITOR, {
-    agora: t1,
-  });
+  const decisaoAprovando = GATES.gate_demanda.decidir(
+    demandaEnviada(),
+    enderecoDaDemanda,
+    { resultado: "aprovado" },
+    AUDITOR,
+    {
+      agora: t1,
+    },
+  );
   return {
-    ...aprovada,
-    tickets: aprovada.tickets.map((t) => (t.etapa === "planejar" ? { ...t, estado: "em_execucao" as const } : t)),
+    ...decisaoAprovando,
+    tickets: decisaoAprovando.tickets.map((t) =>
+      t.etapa === "planejar" ? { ...t, estado: "em_execucao" as const } : t,
+    ),
   };
 };
 const planoDe = (sobrescrito: Record<string, unknown> = {}) => ({

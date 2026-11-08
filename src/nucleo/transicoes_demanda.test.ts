@@ -147,7 +147,7 @@ const emPlanejamento = (): AgregadoDemanda => {
     (ag, tipo) => comEvidencia(ag, ev(tipo, tipo === "criterios_aceite" ? { dados: criterios } : {}), autora, t0),
     registrada(),
   );
-  const aprovada = GATES.gate_demanda.decidir(
+  const decisaoAprovando = GATES.gate_demanda.decidir(
     enviarDemanda(definida, autora, { agora: t1 }),
     Endereco.daDemanda("I-1"),
     { resultado: "aprovado" },
@@ -155,8 +155,10 @@ const emPlanejamento = (): AgregadoDemanda => {
     { agora: t1 },
   );
   return {
-    ...aprovada,
-    tickets: aprovada.tickets.map((t) => (t.etapa === "planejar" ? { ...t, estado: "em_execucao" as const } : t)),
+    ...decisaoAprovando,
+    tickets: decisaoAprovando.tickets.map((t) =>
+      t.etapa === "planejar" ? { ...t, estado: "em_execucao" as const } : t,
+    ),
   };
 };
 const submetido = () => comPlanoSubmetido(emPlanejamento(), planoV(), agente, t2);

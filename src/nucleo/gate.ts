@@ -280,7 +280,7 @@ class GateDoPR extends Gate {
 
 /**
  * CA-2 e CA-3: só o agente do ticket `revisar_rodada` atual. Reprovada, as exigências vão inteiras em `motivo` e as
- * correções nascem na mesma operação (volta a `implementar`); aprovada, abre `encerrar_rodada` e vai a `encerrar_rodada`.
+ * correções nascem na mesma operação (volta a `implementar`); aceita, abre `encerrar_rodada` e vai a `encerrar_rodada`.
  * Na terceira reprovação da rodada (as já gravadas mais esta) não há corretivos: o ticket falha e o estado segue em `revisar_rodada`.
  */
 class GateDaRevisaoDaRodada extends Gate {
@@ -342,7 +342,7 @@ class GateDaRevisaoDaRodada extends Gate {
 
 /**
  * CA-13 e CA-14: só o agente do `revisar_demanda` atual. Reprovada, as exigências vão em `motivo` e o plano corretivo
- * cria só rodadas novas (as integradas ficam como estão) e a demanda volta a `em_execucao`; aprovada, abre
+ * cria só rodadas novas (as integradas ficam como estão) e a demanda volta a `em_execucao`; aceita, abre
  * `encerrar_demanda` e vai a `encerrar_demanda`.
  */
 class GateDaRevisaoDaDemanda extends Gate {
