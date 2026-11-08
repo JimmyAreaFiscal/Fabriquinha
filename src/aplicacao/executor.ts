@@ -8,7 +8,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { ErroDeRegra, mensagem } from "../nucleo/erros.ts";
 import type { Id } from "../nucleo/primitivos.ts";
 import { LINK_FORA_DO_AR, RelatorioSimulacao } from "../nucleo/simulacao.ts";
-import { PACOTE, lancarPi } from "../infra/agente/pi.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
+import { PACOTE } from "../infra/agente/pi.ts";
 import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { dirDaExecucaoSimulada } from "../infra/registro.ts";
@@ -91,7 +92,7 @@ async function executarUma(banco: DatabaseSync, id: Id, link: string, timeoutMin
   const saida = join(dir, "saida");
   await mkdir(saida, { recursive: true });
   const anexos = await prepararAnexos(banco, usuario, dir);
-  const pi = lancarPi(
+  const pi = new HarnessPi().lancar(
     [
       "--mode",
       "json",

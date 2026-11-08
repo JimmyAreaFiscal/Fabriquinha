@@ -3,8 +3,6 @@
 // check final, espera do merge humano na plataforma (a integração final depende do humano), integração confirmada com
 // SHA, limpeza por posse e evidências. Cada efeito externo é seguido da
 // transição do domínio, que decide se ele se repete (progresso recuperável).
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
@@ -36,6 +34,7 @@ import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { carregarTrabalhosDaDemanda } from "../armazenamento/trabalho_agentico.ts";
+import { logDaOperacao } from "../infra/registro.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "../infra/repositorio/limpeza_demanda.ts";
 import { lerPR, type OpcoesVerificacao, publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
@@ -76,8 +75,7 @@ export async function conduzirEncerramentoDemanda(
   }
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
   const raiz = raizDo(banco);
-  mkdirSync(join(raiz, "execucoes"), { recursive: true });
-  const log = join(raiz, "execucoes", `encerramento-${demanda_id}.log`);
+  const log = logDaOperacao(raiz, `encerramento-${demanda_id}`);
   const aplicar = (transicao: (a: AgregadoDemanda) => AgregadoDemanda) => comDemanda(banco, demanda_id, transicao);
   const falhar = (
     etapa: "check_final" | "integracao" | "limpeza",

@@ -4,7 +4,7 @@
 import { z } from "zod";
 import type { Modelo } from "../nucleo/configuracao_agente.ts";
 import { executar } from "../infra/processo.ts";
-import { perguntarAoPiSemFerramentas } from "../infra/agente/pi.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
 
 export interface PerguntaDoAgente {
   pergunta: string;
@@ -140,6 +140,6 @@ export async function triarPergunta(
   p: PerguntaDoAgente,
   rodar: typeof executar = executar,
 ): Promise<RespostaDoAuditorAutomatico | undefined> {
-  const saida = await perguntarAoPiSemFerramentas(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
+  const saida = await new HarnessPi().perguntar(promptDaTriagem(contexto, p), modelo, LIMITE_TRIAGEM_MS, rodar);
   return saida === undefined ? undefined : lerDecisao(saida, p, contexto.etapa);
 }

@@ -37,7 +37,7 @@ import { caminhoArquivo } from "../armazenamento/arquivos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { commitDoTicketDemanda } from "../armazenamento/commits_demanda.ts";
 import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";
-import { anotar, arquivoDaSessao } from "../infra/registro.ts";
+import { anotar, pastasDoProcesso } from "../infra/registro.ts";
 import {
   carregarTrabalhosDaDemanda,
   carregarTrabalhosDoTicket,
@@ -49,7 +49,8 @@ import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/reposi
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
 import { avisar, rodarPi } from "./gerente.ts";
-import { ambientePi, confianca } from "../infra/agente/pi.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
+import { confianca } from "../infra/agente/pi.ts";
 import { argumentosPiDemanda } from "./pi_demanda.ts";
 import { type ContextoDemanda, montarPromptDemanda } from "./prompt_demanda.ts";
 import { perguntasRespondidasNaSessao } from "./sessoes_demanda.ts";
@@ -113,7 +114,7 @@ type Encerravel = Pick<Conducao, "banco" | "ref" | "sessao" | "execucao">;
 /** O uso por modelo da janela da execução; custo ausente ou parcial fica nulo, nunca zero. */
 function coletarUso(c: Encerravel, fim: string, log: string): UsoModeloExecucao[] {
   try {
-    const arquivo = arquivoDaSessao(raizDo(c.banco), c.sessao.id);
+    const arquivo = new HarnessPi().arquivoDaSessao(raizDo(c.banco), c.sessao.id);
     const somas = arquivo ? somar(readFileSync(arquivo, "utf8"), Date.parse(c.execucao.inicio), Date.parse(fim)) : [];
     return somas.map((s) => ({
       execucao_id: c.execucao.id,
@@ -175,8 +176,7 @@ function commitsDosTickets({ banco, ag }: Conducao): ContextoDemanda["commitsDos
 async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
   const raiz = raizDo(c.banco);
   const { execucao, sessao, projeto, opcoes } = c;
-  const dir = join(raiz, "execucoes", `E-${execucao.id}`);
-  const log = join(dir, "log");
+  const { dir, log } = pastasDoProcesso(raiz, execucao.id);
   let falha: FalhaDaTentativa | undefined;
   try {
     // `gh` e `az` olham diretórios vazios: o agente não acha credencial de hospedagem.
@@ -217,7 +217,7 @@ async function conduzir(c: Conducao): Promise<FalhaDaTentativa | undefined> {
       execucao: { id: execucao.id, sessaoPi: sessao.id, modo: sessao.modo },
       args,
       cwd: worktree,
-      env: ambientePi(raiz, execucao.id, dir),
+      env: new HarnessPi().ambiente(raiz, dir, execucao.id),
       log,
       prompt,
       limiteMin: opcoes.limiteMin,
@@ -391,7 +391,7 @@ function encerrarOrfa(banco: DatabaseSync, ref: TicketRef, id: string, falha: Fa
     `a execução ${id} não tem sessão`,
     "confira o banco",
   );
-  const log = join(raizDo(banco), "execucoes", `E-${id}`, "log");
+  const { log } = pastasDoProcesso(raizDo(banco), id);
   encerrar({ banco, ref, sessao, execucao }, true, log);
   falharTicketDemanda(banco, ref, falha);
   avisar(sessao.id, log);

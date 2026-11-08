@@ -24,7 +24,7 @@ import {
   vincularAchado,
 } from "../armazenamento/avaliacoes.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
-import { arquivoDaSessao } from "../infra/registro.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
 import { abortar, assinar as assinarSessao } from "./gerente.ts";
 import {
   causaDaFalha,
@@ -64,7 +64,7 @@ function sincronizar(banco: DatabaseSync, raiz: string, id: string): void {
       ...(JSON.parse(l) as { titulo: string; descricao: string; evidencia: string }),
     })),
   );
-  const jsonl = arquivoDaSessao(raiz, id);
+  const jsonl = new HarnessPi().arquivoDaSessao(raiz, id);
   const somas = jsonl ? somar(readFileSync(jsonl, "utf8"), 0, Number.POSITIVE_INFINITY) : [];
   regravarUso(
     banco,
@@ -224,7 +224,7 @@ export async function iniciarAvaliacao(
     }
     return id;
   } catch (error_) {
-    const jsonl = arquivoDaSessao(raiz, id);
+    const jsonl = new HarnessPi().arquivoDaSessao(raiz, id);
     if (jsonl) rmSync(jsonl);
     apagarAvaliacao(banco, id);
     rmSync(dir, { recursive: true, force: true });

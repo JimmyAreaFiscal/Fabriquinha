@@ -10,7 +10,7 @@ import { recolherGruposDasAvaliacoes } from "../armazenamento/avaliacoes.ts";
 import { anotar, noLog } from "../infra/registro.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
 import { assinar as assinarSessao, avisar, mandar, rodarPi, situacao } from "./gerente.ts";
-import { ambienteDaAuditoria, argumentosDaAuditoria } from "../infra/agente/pi.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
 
 export interface OpcoesDaAuditoria {
   /** Minutos sem mensagem até o pi parar (F4 §3, §6.6); a próxima mensagem o retoma na mesma sessão. */
@@ -52,7 +52,8 @@ export function subir(
 ): Promise<string | undefined> {
   const dir = join(raiz, pasta, sessao);
   const log = join(dir, "log");
-  const args = argumentosDaAuditoria(raiz, sessao, modelo, extensoes);
+  const harness = new HarnessPi();
+  const args = harness.argumentos({ raiz, sessaoPi: sessao, modelo, extensoes });
   anotar(log, `pi ${args.join(" ")}`);
   const sincronizarNoLog = (): void => {
     try {
@@ -68,7 +69,7 @@ export function subir(
     execucao: { id: sessao, sessaoPi: sessao, modo: "consulta" },
     args,
     cwd: dir,
-    env: ambienteDaAuditoria(raiz, dir),
+    env: harness.ambiente(raiz, dir),
     log,
     prompt,
     limiteMin: ociosidadeMin,

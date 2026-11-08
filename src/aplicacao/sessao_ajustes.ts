@@ -14,7 +14,7 @@ import { montarRetornoAoAgente, tentativaAnteriorEmMemoria } from "../nucleo/ten
 import { concluirSessaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { raizDo } from "../armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
-import { anotar } from "../infra/registro.ts";
+import { anotar, logDaOperacao } from "../infra/registro.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { descartarAlteracoes, exigirGit } from "../infra/repositorio/worktree.ts";
@@ -69,7 +69,7 @@ async function restaurar(banco: DatabaseSync, ref: RefRodada): Promise<void> {
   const ag = carregarDemanda(banco, ref.demanda_id);
   const raiz = raizDo(banco);
   const marco = JSON.parse(readFileSync(arquivoDoMarco(banco, ref), "utf8")) as Marco;
-  const log = join(raiz, "execucoes", `ajustes-${formatarRodadaRef(ref)}.log`);
+  const log = logDaOperacao(raiz, `ajustes-${formatarRodadaRef(ref)}`);
   const pontas: [Ponta, string][] = [
     [marco.rodada, caminhoDaWorktreeRodada(raiz, ag.demanda.projeto, ref)],
     [marco.demanda, caminhoDaWorktreeDemanda(raiz, ag.demanda.projeto, ref.demanda_id)],

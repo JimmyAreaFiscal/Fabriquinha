@@ -13,7 +13,8 @@ import {
 } from "../nucleo/tentativa.ts";
 import { anotar } from "../infra/registro.ts";
 import type { PerguntaDoAgente, RespostaDoAuditorAutomatico } from "./auditor_automatico.ts";
-import { type EventoPi, lancarPi } from "../infra/agente/pi.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
+import type { EventoPi } from "../infra/agente/pi.ts";
 
 /** Diálogos que esperam resposta; `notify` e afins não esperam, e `custom` nunca chega no modo RPC (P1 §2.1). */
 const DIALOGOS = new Set(["select", "confirm", "input", "editor"]);
@@ -447,7 +448,7 @@ export function rodarPi(r: Processo): Promise<FalhaDaTentativa | undefined> {
     let agenteTerminou = false;
     /** Se o agente trabalhava quando o último `prompt` foi mandado: a recusa do pi volta a ele. */
     let ocupadoAntesDoPrompt = false;
-    const pi = lancarPi(r.args, r, (evento) => {
+    const pi = new HarnessPi().lancar(r.args, r, (evento) => {
       if (agenteTerminou) estaViva.naoGravadas = [];
       agenteTerminou = false;
       repassar(sessaoPi, evento, r.log);

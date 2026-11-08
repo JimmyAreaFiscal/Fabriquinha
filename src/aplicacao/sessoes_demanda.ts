@@ -15,7 +15,8 @@ import type { EtapaTicket, Instante } from "../nucleo/primitivos.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado } from "../nucleo/trabalho_agentico.ts";
 import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { raizDo } from "../armazenamento/banco.ts";
-import { arquivoDaSessao } from "../infra/registro.ts";
+import { pastasDoProcesso } from "../infra/registro.ts";
+import { HarnessPi } from "../infra/agente/harness_pi.ts";
 import { carregarDemanda } from "../armazenamento/demandas.ts";
 import { carregarTrabalhosDoTicket } from "../armazenamento/trabalho_agentico.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "./execucao_demanda.ts";
@@ -41,7 +42,7 @@ type ModoEnvio = "prompt" | "steer" | "follow_up";
 
 /** As entradas do JSONL da sessão, divididas só em `\n` (F4 §6.1.2); linha incompleta do fim fica de fora. */
 export function lerConversa(raiz: string, sessao: string): unknown[] {
-  const arquivo = arquivoDaSessao(raiz, sessao);
+  const arquivo = new HarnessPi().arquivoDaSessao(raiz, sessao);
   if (!arquivo) return [];
   return readFileSync(arquivo, "utf8")
     .split("\n")
@@ -293,7 +294,7 @@ function montarCabecalho(c: Carregada): CabecalhoDemanda {
 function promptsDaFabriquinha(raiz: string, { sessao, execucoes }: Carregada): Set<string> {
   const arquivos = execucoes
     .filter((e, i) => i === 0 || sessao.modo === "autonomo")
-    .map((e) => join(raiz, "execucoes", `E-${e.id}`, "prompt.md"));
+    .map((e) => join(pastasDoProcesso(raiz, e.id).dir, "prompt.md"));
   return new Set(arquivos.filter((a) => existsSync(a)).map((a) => readFileSync(a, "utf8")));
 }
 
@@ -305,7 +306,7 @@ function atoresDasRespostasAutomaticas(
   { execucoes }: Carregada,
 ): Map<string, RespostaAutomatica["ator"]> {
   const registros = execucoes
-    .map((e) => join(raiz, "execucoes", `E-${e.id}`, "log"))
+    .map((e) => pastasDoProcesso(raiz, e.id).log)
     .filter((log) => existsSync(log))
     .flatMap((log) => readFileSync(log, "utf8").split("\n"))
     // Só a linha cujo texto começa com o prefixo é o registro; as livres do gerente citam a pergunta crua do agente.

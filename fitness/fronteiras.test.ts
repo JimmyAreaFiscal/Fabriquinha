@@ -87,7 +87,7 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/chat.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/banco.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/modelos.ts", demanda: "20" },
+  { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/agente/harness_pi.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/registro.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/repositorio/cadastro.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
