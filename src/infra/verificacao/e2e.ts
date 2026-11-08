@@ -43,8 +43,8 @@ export class VerificacaoE2E extends Verificacao {
     return { comandos, logs, falhas: falhaDaExecucao ? [falhaDaExecucao] : [] };
   }
 
-  coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
-    return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
+  coletar({ ambiente, worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
+    return comAmbienteSemCredenciais(ambiente, limiteMs, async (rodar) => {
       const { comandos, logs, falhas } = await this.rodarComandos(rodar, worktree);
       return { tipo: "execucao_testes", aprovada: aprovacao(falhas), falhas, dados: { comandos }, logs };
     });

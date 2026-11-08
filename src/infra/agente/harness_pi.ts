@@ -9,7 +9,8 @@ import { ErroDeRegra } from "../../nucleo/erros.ts";
 import type { Modelo } from "../../nucleo/configuracao_agente.ts";
 import type { ModoTrabalho } from "../../nucleo/trabalho_agentico.ts";
 import type { Effort } from "../../nucleo/primitivos.ts";
-import { ambienteSemCredenciais, executar, sinalNoGrupo } from "../processo.ts";
+import { ambienteSemCredenciais } from "../ambiente/ambiente.ts";
+import { executar, sinalNoGrupo } from "../processo.ts";
 import { anotar } from "../registro.ts";
 import { PACOTE, type EventoPi } from "./pi.ts";
 
