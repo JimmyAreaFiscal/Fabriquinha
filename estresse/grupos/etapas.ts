@@ -3,17 +3,26 @@
 // demanda à estado da etapa fora do tempo medido, com o pi falso único e o `gh` falso de integracao/falsos.ts. O tempo vai do
 // despacho do ticket até ele assentar concluído; `ajustar_resultado` vai da abertura da sessão à primeira resposta do pi.
 // Ao fim de cada execução a pasta some, depois de conferir que não sobrou worktree, branch nem pi falso.
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { prDaDemanda } from "../../src/nucleo/agregado_demanda.ts";
 import { AUDITOR, type Ator } from "../../src/nucleo/ator.ts";
-import { submeterPlano } from "../../src/nucleo/transicoes_demanda.ts";
 import { Endereco } from "../../src/nucleo/item_de_trabalho.ts";
 import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../src/nucleo/evidencia_demanda.ts";
+import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
+import { verificacaoDeTeste } from "../../apoio-testes/verificacoes_de_teste.ts";
 import type { RegistroDaVerificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
 import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
@@ -164,7 +173,6 @@ const escreve = (c: Cenario, ligado: boolean) => {
 // Evidências de uma IA externa que registra a demanda, como em integracao/apoio.ts.
 const criterios = { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] };
 const desenho = { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] };
-const html = [{ nome: "d.html", mime: "text/html; charset=utf-8", conteudo: Buffer.from("<p>x</p>") }];
 const custos = {
   sessoes: [
     {
@@ -193,10 +201,13 @@ async function demandaAprovada(c: Cenario): Promise<string> {
     AUTOR,
     ctx,
   ).demanda.id;
+  const pasta = realpathSync(c.dir);
+  const origens = { worktree: pasta, saida: pasta, fora: "da pasta do cenário", copie: "a pasta do cenário" };
+  writeFileSync(join(pasta, "d.html"), "<!doctype html><p>x</p>");
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, ctx);
+    gestao.submeterEvidencia(c.banco, id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, AUTOR, origens);
   submeter("criterios_aceite", criterios);
-  submeter("desenho_solucao", desenho, html);
+  submeter("desenho_solucao", desenho, [join(pasta, "d.html")]);
   submeter("custos_realizados", custos);
   gestao.enviar(c.banco, id, AUTOR, ctx);
   await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
@@ -214,20 +225,12 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
     rodadas: [{ demanda_id: id, rodada_id: 1, titulo: "Rodada 1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: id, ticket_id: 1, rodada_id: 1, titulo: "Ticket 1.1", descricao: "d" }],
   };
-  comDemanda(c.banco, id, (ag) =>
-    submeterPlano(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, { agora: agora() }),
-  );
+  comDemanda(c.banco, id, (ag) => comPlanoSubmetido(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, agora()));
   await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
 }
 
 const verificacoes = (): RegistroDaVerificacao[] =>
-  (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((tipo) => ({
-    tipo,
-    aprovada: true,
-    falhas: [],
-    dados: {},
-    logs: [{ nome: `${tipo}.log`, texto: `log de ${tipo}` }],
-  }));
+  (["execucao_testes", "matriz_fitness", "relatorio_sonar"] as const).map((tipo) => verificacaoDeTeste(tipo, true));
 
 /** Despacho que roda o pi de verdade e fecha o ticket com as verificações aprovadas (sem testes nem Sonar reais). */
 const deps: DepsDespacho = {
@@ -261,13 +264,7 @@ async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Pro
 function comoAgente(c: Cenario, id: string, ticket_id: number, evidencias: [string, object][]): void {
   comDemanda(c.banco, id, (ag) =>
     evidencias.reduce(
-      (a, [tipo, dados]) =>
-        submeterEvidenciaDemanda(
-          a,
-          { tipo, dados, ticket_id } as EntradaEvidenciaDemanda,
-          a.demanda.criada_por,
-          agora(),
-        ),
+      (a, [tipo, dados]) => comEvidencia(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, agora()),
       ag,
     ),
   );

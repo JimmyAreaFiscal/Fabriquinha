@@ -44,7 +44,7 @@ const recusa = (a: AgregadoDemanda, ...trechos: string[]) => {
   );
 };
 
-test("rodada aprovada com tudo em ordem (CA-7)", () => {
+test("rodada com revisão aceita e tudo em ordem (CA-7)", () => {
   assert.doesNotThrow(() => {
     conferirAprovacao(rodada(ok, comprov(true)), 7);
   });
@@ -73,7 +73,7 @@ test("recusa não se aplica sem justificativa (CA-15)", () => {
   recusa(integral(estresse("passou"), { ...vazio }), "justificativa");
 });
 
-test("integral aprovada, inclusive com não se aplica justificado (CA-16)", () => {
+test("integral aceita, inclusive com não se aplica justificado (CA-16)", () => {
   assert.doesNotThrow(() => {
     conferirAprovacao(integral(estresse("passou"), seguranca("media")), 7);
   });

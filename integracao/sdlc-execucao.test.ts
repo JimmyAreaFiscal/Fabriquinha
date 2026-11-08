@@ -130,8 +130,8 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   const worktree = caminhoDaWorktreeRodada(c.raiz, c.projeto, { demanda_id: id, rodada_id: 1 });
   abrirPortao();
   pi.roteirizar([{ agente }]);
-  let aprovada = false;
-  const deps = despacho(() => aprovada);
+  let verificacoesPassam = false;
+  const deps = despacho(() => verificacoesPassam);
 
   // O pi termina bem, mas as verificações reprovam: devolvido com a instrução, sem commit nem conclusão.
   await executarAgoraDemanda(c.banco, ref, c.config, deps);
@@ -153,7 +153,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
   );
 
   // Reexecutado (mesma sessão) e aprovado: a aplicação grava as evidências, commita e conclui; o agente não submeteu nada.
-  aprovada = true;
+  verificacoesPassam = true;
   await executarAgoraDemanda(c.banco, ref, c.config, deps);
   const ag = demanda(c, id);
   assert.equal(statusDe(c, ref), "concluido");
@@ -165,7 +165,7 @@ test("CA-SDLC-09: o agente termina sem submeter; a aplicação verifica, coleta 
     evidencias.map((e) => e.tipo).sort(),
     ["execucao_testes", "matriz_fitness", "relatorio_sonar"].sort(),
   );
-  assert.ok(evidencias.every((e) => e.dados.aprovada === true));
+  assert.ok(evidencias.every((e) => e.autor.tipo === "fabriquinha"));
   assert.match(
     git(worktree, "log", "-1", "--format=%s"),
     new RegExp(`^feat: Ticket 1.1 \\[${id}\\.T${String(ref.ticket_id)}\\]$`),

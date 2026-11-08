@@ -8,12 +8,10 @@ import type { ParseArgsOptionsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { TipoEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
+import { schemaDoTipo } from "../../nucleo/evidencia.ts";
+import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { type SchemaEvidencia, schemaDe, schemaDeEtapa } from "../../nucleo/schemas.ts";
-import { guardarAnexos } from "../../aplicacao/evidencias/submissao.ts";
 import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
-import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
@@ -85,18 +83,13 @@ function visao(banco: DatabaseSync, id: string) {
   };
 }
 
-function tipoDe(texto: string): TipoEvidenciaDemanda {
-  const tipo = TipoEvidenciaDemanda.safeParse(texto);
-  if (!tipo.success) {
-    throw new ErroDeUso(
-      `${texto} não é evidência da demanda; os tipos são: ${TipoEvidenciaDemanda.options.join(", ")}`,
-    );
+function tipoDe(texto: string): TipoDaDemanda {
+  const tipo = TIPOS_DA_DEMANDA.find((t) => t === texto);
+  if (tipo === undefined) {
+    throw new ErroDeUso(`${texto} não é evidência da demanda; os tipos são: ${TIPOS_DA_DEMANDA.join(", ")}`);
   }
-  return tipo.data;
+  return tipo;
 }
-
-const schemaDoTipo = (tipo: TipoEvidenciaDemanda): SchemaEvidencia =>
-  tipo === "custos_realizados" ? schemaDeEtapa(tipo) : schemaDe(tipo);
 
 export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
   {
@@ -169,20 +162,8 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
         fora: "da pasta do comando",
         copie: `a pasta do comando (${pasta})`,
       };
-      const guardados = guardarAnexos(
-        c.banco,
-        (c.op.arquivo ?? []) as string[],
-        tipo,
-        schemaDoTipo(tipo).arquivos,
-        origens,
-        () => undefined,
-      );
-      const arquivos = guardados.map((a) => ({
-        nome: a.nome,
-        mime: a.mime,
-        conteudo: readFileSync(caminhoArquivo(c.banco, a.sha256)),
-      }));
-      const { avisos } = submeterEvidencia(c.banco, id, { tipo, dados, arquivos }, autor, agora());
+      const arquivos = (c.op.arquivo ?? []) as string[];
+      const { avisos } = submeterEvidencia(c.banco, id, { tipo, dados, arquivos }, autor, origens);
       return { ...visao(c.banco, id), avisos };
     },
   },

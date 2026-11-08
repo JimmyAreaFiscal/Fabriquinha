@@ -7,7 +7,8 @@ import { CICLO_DA_DEMANDA, CICLO_DO_TICKET } from "./ciclos.ts";
 import { Modelo } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, DemandaId, formatarTicketRef, Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra, existe } from "./erros.ts";
-import { exigirAutoria, pendentesDeEnvio } from "./evidencia_demanda.ts";
+import { exigirAutoria } from "./evidencia.ts";
+import { pendentesDeEnvio } from "./evidencia_demanda.ts";
 import { criarTicket, proximoIdDeTicket, ticketAtualDaEtapa } from "./item_de_trabalho.ts";
 import { Id, type Instante, Markdown, Slug, Titulo } from "./primitivos.ts";
 import {
@@ -141,14 +142,13 @@ export function planoSubmetido(ag: AgregadoDemanda, ticket: TicketDemanda): Plan
 
 /**
  * CA-1 a CA-3: só o agente do ticket de planejamento, só em `planejar`. O plano precisa passar pelo `Plano` e
- * citar só `CA-n` da definição congelada; aceito, vira evidência do ticket e a demanda vai a `gate_planejamento`.
+ * citar só `CA-n` da definição congelada. Devolve o plano e o ticket de planejamento, ou lança a recusa.
  */
-export function submeterPlano(
+export function validarPlano(
   ag: AgregadoDemanda,
   entrada: unknown,
   ator: Ator,
-  ctx: ContextoDemanda,
-): AgregadoDemanda {
+): { plano: Plano; ticket: TicketDemanda } {
   const { demanda } = ag;
   const ticket = ticketPlanejamento(ag);
   if (ator.tipo !== "agente") {
@@ -191,20 +191,7 @@ export function submeterPlano(
       "cite só os CA-n da definição congelada",
     );
   }
-  const evidencia = {
-    demanda_id: demanda.id,
-    rodada_id: undefined,
-    ticket_id: ticket.ticket_id,
-    tipo: "plano" as const,
-    dados: plano.data,
-    autor: ator,
-    em: ctx.agora,
-  };
-  return {
-    ...ag,
-    demanda: CICLO_DA_DEMANDA.mudar(demanda, "gate_planejamento", ctx.agora),
-    evidencias: [...ag.evidencias.filter((e) => !(e.tipo === "plano" && e.ticket_id === ticket.ticket_id)), evidencia],
-  };
+  return { plano: plano.data, ticket };
 }
 
 /**

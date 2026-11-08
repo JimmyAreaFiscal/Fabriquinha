@@ -34,7 +34,16 @@ import {
   statusDe,
   ticketDe,
 } from "./apoio-execucao.ts";
-import { criarCenario, CTX, demanda, esperar, gravarLimiteParalelismo, registrarExterna } from "./apoio.ts";
+import {
+  anexoHtml,
+  criarCenario,
+  CTX,
+  demanda,
+  esperar,
+  gravarLimiteParalelismo,
+  ORIGENS_DOS_ANEXOS,
+  registrarExterna,
+} from "./apoio.ts";
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
 
 const ler = (b: DatabaseSync, sql: string) =>
@@ -167,12 +176,18 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   // A demanda resultante segue o SDLC normal a partir do registro: a sessão do achado completa, envia e o Auditor decide.
   const autor = { tipo: "externo", ferramenta: "avaliacao", sessao: `${id}#1` } as const;
   const submeter = (tipo: string, dados: unknown, arquivos?: gestao.EntradaEvidencia["arquivos"]) =>
-    gestao.submeterEvidencia(c.banco, nova.id, { tipo, dados, arquivos } as gestao.EntradaEvidencia, autor, CTX);
+    gestao.submeterEvidencia(
+      c.banco,
+      nova.id,
+      { tipo, dados, arquivos } as gestao.EntradaEvidencia,
+      autor,
+      ORIGENS_DOS_ANEXOS,
+    );
   submeter("criterios_aceite", { criterios: [{ id: "CA-1", dado: "um dado", quando: "quando", entao: "então" }] });
   submeter(
     "desenho_solucao",
     { resumo: "r", arquivosPrevistos: [{ caminho: "src/a.ts", acao: "criar", motivo: "porque" }] },
-    [{ nome: "d.html", mime: "text/html; charset=utf-8", conteudo: Buffer.from("<p>x</p>") }],
+    [anexoHtml()],
   );
   submeter("custos_realizados", {
     sessoes: [

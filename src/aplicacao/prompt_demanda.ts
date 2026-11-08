@@ -208,13 +208,13 @@ function secaoVerificacoesJaFeitas({ ag, ticket, anexos, commitsDosTickets }: Co
     if (!ultimo) return [];
     const doTicket = (e: { tipo: string; ticket_id?: number }) => e.ticket_id === ultimo.ticket_id;
     const verificacoes = VERIFICACOES_DO_COMMIT.map((tipo) => {
-      const dados = ag.evidencias.findLast((e) => doTicket(e) && e.tipo === tipo)?.dados as
-        { aprovada?: boolean; comandos?: { comando: string; codigoSaida: number | null }[] } | undefined;
+      const evidencia = ag.evidencias.findLast((e) => doTicket(e) && e.tipo === tipo);
+      const dados = evidencia?.dados as { comandos?: { comando: string; codigoSaida: number | null }[] } | undefined;
       const comandos = (dados?.comandos ?? []).map((c) => `\`${c.comando}\` saiu com ${String(c.codigoSaida)}`);
       // O mesmo log pode vir de mais de uma tentativa do ticket: vale o da última, gravada por último.
       const logs = [...new Map(anexos.filter((a) => doTicket(a) && a.tipo === tipo).map((a) => [a.nome, a])).values()];
       return (
-        `  - \`${tipo}\`: ${dados?.aprovada === true ? "aprovada" : "não aprovada"}` +
+        `  - \`${tipo}\`: ${evidencia === undefined ? "sem evidência aceita" : "evidência aceita"}` +
         (comandos.length > 0 ? ` (${comandos.join("; ")})` : "") +
         `; logs: ${logs.map((a) => `\`${a.caminho}\``).join(", ") || "(nenhum)"}`
       );

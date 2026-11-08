@@ -45,6 +45,8 @@ Quando o critério não pode ser executado (serviço externo fora do ar, dado im
 
 `arquivos`: os nomes dos anexos que provam o critério, só o nome do arquivo, sem diretório; um anexo pode provar mais de um critério.
 
+A Fabriquinha deriva o `veredito` dos dados: `atende` se todos os critérios estão atendidos, `nao_atende` se algum não está. Não o informe.
+
 ## Antes de submeter
 
 - [ ] Cada critério a comprovar aparece uma vez, e cada um foi executado nesta execução.

@@ -465,8 +465,7 @@ test("o chip resume o resultado dos tipos que a Fabriquinha gera, em verde ou ve
         { ref: "I-206.T1", etapa: "implementar", estado: "concluido", satisfaz_dependencia: true, elegivel: false },
       ],
       evidencias: [
-        evidencia("execucao_testes", { aprovada: true }),
-        evidencia("execucao_testes", { aprovada: false }),
+        evidencia("execucao_testes", { comandos: [{ comando: "npm run check", codigoSaida: 0 }] }),
         evidencia("matriz_fitness", { linhas: [{ codigoSaida: 0 }, { codigoSaida: 0 }] }),
         evidencia("matriz_fitness", { linhas: [{ codigoSaida: 0 }, { codigoSaida: 1 }] }),
         evidencia("relatorio_sonar", {}),
@@ -492,7 +491,6 @@ test("o chip resume o resultado dos tipos que a Fabriquinha gera, em verde ou ve
     assert.match(html, new RegExp(`class="dm-chip${classe}" data-evidencia="[^"]*">${texto}</button>`));
   };
   chip(" dm-chip-ok", "Testes ✓");
-  chip(" dm-chip-falha", "Testes ✗");
   chip(" dm-chip-ok", "Fitness 2/2");
   chip(" dm-chip-falha", "Fitness 1/2");
   chip("", "SonarQube");

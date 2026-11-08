@@ -6,10 +6,9 @@ import { Readable } from "node:stream";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
-import { submeterEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../nucleo/trabalho_agentico.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
-import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto, comEvidencia } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { resolverEscopoDoAgente } from "./agente_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
@@ -160,7 +159,7 @@ test("ticket ver mostra o motivo da última Tentativa do ticket falho", async ()
   assert.equal(resolverEscopoDoAgente(banco, "inexistente"), undefined);
 });
 
-test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, e a aprovada só do próprio ticket", async () => {
+test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, e o veredito só do próprio ticket", async () => {
   const { env } = cenario();
   const s = await cli(env, ["demanda", "ver", "I-206"]);
   assert.equal(s.codigo, 0);
@@ -180,11 +179,11 @@ test("CA-2: demanda ver mostra a demanda, a rodada e os tickets pelo endereço, 
   );
   assert.deepEqual(
     lida.tickets.map((t) => t.evidencias),
-    [undefined, [{ tipo: "comprovacao_criterios", em, aprovada: false }], undefined],
+    [undefined, [{ tipo: "comprovacao_criterios", em, veredito: "nao_atende" }], undefined],
   );
 });
 
-test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai sem aprovada", async () => {
+test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai sem veredito", async () => {
   const { banco, env } = cenario();
   banco
     .prepare(
@@ -192,11 +191,11 @@ test("demanda ver: evidência sem schema no tipo (custos_realizados, plano) sai 
     )
     .run(em, em);
   const lida = JSON.parse((await cli(env, ["demanda", "ver", "I-206"])).out) as {
-    tickets: { evidencias?: { tipo: string; aprovada?: boolean }[] }[];
+    tickets: { evidencias?: { tipo: string; veredito?: string }[] }[];
   };
   assert.deepEqual(
-    lida.tickets[1]?.evidencias?.map((e) => e.aprovada),
-    [false, undefined, undefined],
+    lida.tickets[1]?.evidencias?.map((e) => e.veredito),
+    ["nao_atende", undefined, undefined],
   );
 });
 
@@ -301,7 +300,7 @@ const EVIDENCIAS_INTEGRAL: [string, object][] = [
 function evidenciar(banco: DatabaseSync, ticket_id: number, lista: [string, object][]) {
   comDemanda(banco, "I-206", (ag) =>
     lista.reduce(
-      (a, [tipo, dados]) => submeterEvidenciaDemanda(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, em),
+      (a, [tipo, dados]) => comEvidencia(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, em),
       ag,
     ),
   );

@@ -46,7 +46,7 @@ export class VerificacaoE2E extends Verificacao {
   coletar({ worktree, limiteMs }: ContextoDaVerificacao): Promise<RegistroDaVerificacao> {
     return comAmbienteSemCredenciais(limiteMs, async (rodar) => {
       const { comandos, logs, falhas } = await this.rodarComandos(rodar, worktree);
-      return { tipo: "execucao_testes", aprovada: aprovacao(falhas), falhas, dados: { comandos }, logs };
+      return { tipo: "execucao_testes", passou: aprovacao(falhas), falhas, dados: { comandos }, logs };
     });
   }
 }

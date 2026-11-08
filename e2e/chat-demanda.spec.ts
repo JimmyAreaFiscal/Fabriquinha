@@ -6,15 +6,15 @@ import { join } from "node:path";
 import type { Page, TestInfo } from "@playwright/test";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { falharTicketDemanda } from "../src/aplicacao/fechamento_ticket.ts";
-import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
+import { comPlanoSubmetido } from "../apoio-testes/cenarios_de_demanda.ts";
 import { comDemanda } from "../src/armazenamento/demandas.ts";
 import { expect, fotografar, projeto, test } from "./apoio.ts";
 import { abrirOChatDoPlanejamento, semearPlanejamentoComPi, semearTicketAberto } from "./demandas-apoio.ts";
 
-/** O agente do `planejar` envia o plano como o CLI dele o grava: `submeterPlano` na transação da demanda. */
-const submeterPlanoDoAgente = (banco: ReturnType<typeof abrir>, plano: unknown) =>
+/** O agente do `planejar` envia o plano: o plano validado entra no agregado da demanda, na mesma transação. */
+const proporPlanoDoAgente = (banco: ReturnType<typeof abrir>, plano: unknown) =>
   comDemanda(banco, "I-230", (ag) =>
-    submeterPlano(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, { agora: new Date().toISOString() }),
+    comPlanoSubmetido(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, new Date().toISOString()),
   );
 
 /** Mata o pi cujo diretório de trabalho está na raiz (a execução da demanda não grava o pgid). */
@@ -149,7 +149,7 @@ test("I-249: a reprovação do planejamento chega ao pi ocioso, na mesma sessão
     rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
   };
-  submeterPlanoDoAgente(banco, plano);
+  proporPlanoDoAgente(banco, plano);
   banco.close();
 
   await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
@@ -183,7 +183,7 @@ test("I-249: aprovar o planejamento encerra a execução e o pi da sessão", asy
     rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
   };
-  submeterPlanoDoAgente(banco, plano);
+  proporPlanoDoAgente(banco, plano);
   banco.close();
 
   await pagina.goto(`${fabriquinha.base}/demandas/I-230`);
@@ -218,7 +218,7 @@ test("I-249: reprovar com o planejar Falhou o reabre e retoma a mesma sessão co
     rodadas: [{ demanda_id: "I-230", rodada_id: 1, titulo: "r1", e2e: false, criterios: ["CA-1"], depende: [] }],
     tickets: [{ demanda_id: "I-230", ticket_id: 1, rodada_id: 1, titulo: "t1", descricao: "d" }],
   };
-  submeterPlanoDoAgente(banco, plano);
+  proporPlanoDoAgente(banco, plano);
   banco.close();
 
   // Sem pi vivo, como depois de um reinício: o pi morre e o planejar fica Falhou com o gate aberto.

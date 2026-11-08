@@ -63,17 +63,11 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../composicao/servico.ts", demanda: "21" },
-  { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/arquivos.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "../../armazenamento/dependencias_demanda.ts", demanda: "21" },
   { arquivo: "entrega/cli/demanda_externa.ts", import: "SQL .prepare(", demanda: "21" },
   { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
   { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
-  {
-    arquivo: "entrega/cli/evidencia_agente_demanda.ts",
-    import: "../../armazenamento/evidencia_demanda.ts",
-    demanda: "21",
-  },
   { arquivo: "entrega/cli/evidencia_agente_demanda.ts", import: "../../armazenamento/projetos.ts", demanda: "21" },
   { arquivo: "entrega/cliente-web/markdown.ts", import: "markdown-it/browser", demanda: "22" },
   { arquivo: "entrega/http/rotas.ts", import: "../cliente-web/caminhos.ts", demanda: "20" },
@@ -374,5 +368,72 @@ test("a fitness do condutor acusa o arquivo que lança ou consulta o pi e aceita
   assert.deepEqual(acharChamadasAoHarnessForaDoCondutor(raiz).sort(), [
     "aplicacao/consultor.ts chama .perguntar(",
     "aplicacao/lancador.ts chama .lancar(",
+  ]);
+});
+
+// Só `submeter.ts` (e o armazenamento) grava em `evidencia_demanda`: toda Evidência entra pela submissão avaliada.
+const ARQUIVO_QUE_SUBMETE_EVIDENCIA = "aplicacao/evidencia/submeter.ts";
+const ARMAZENAMENTO_DE_EVIDENCIA = "armazenamento/evidencia_demanda.ts";
+const MONTA_EVIDENCIAS_A_PARTIR_DA_ATUAL = /evidencias:\s*\[\s*\.\.\./;
+
+// shortcut: o padrão de lista é textual, então também acusa o literal dentro de comentário ou string; nenhum existe hoje em src/.
+function acharGravacoesDeEvidenciaForaDeSubmeter(src: string): string[] {
+  return listarArquivosDeProducao(src)
+    .filter(
+      (arquivo) =>
+        arquivo !== ARQUIVO_QUE_SUBMETE_EVIDENCIA &&
+        !arquivo.startsWith("armazenamento/") &&
+        !arquivo.endsWith("_cenario.ts"),
+    )
+    .flatMap((arquivo) => {
+      const texto = readFileSync(join(src, arquivo), "utf8");
+      const fonte = ts.createSourceFile(arquivo, texto, ts.ScriptTarget.Latest);
+      const achados: string[] = [];
+      if (MONTA_EVIDENCIAS_A_PARTIR_DA_ATUAL.test(texto))
+        achados.push(`${arquivo} monta evidencias a partir da lista atual`);
+      for (const declaracao of fonte.statements) {
+        if (!ts.isImportDeclaration(declaracao) || !ts.isStringLiteral(declaracao.moduleSpecifier)) continue;
+        if (!declaracao.moduleSpecifier.text.endsWith(ARMAZENAMENTO_DE_EVIDENCIA)) continue;
+        const ligacoes = declaracao.importClause?.namedBindings;
+        if (!ligacoes || !ts.isNamedImports(ligacoes)) continue;
+        for (const nome of ligacoes.elements.map((elemento) => (elemento.propertyName ?? elemento.name).text)) {
+          if (nome.startsWith("gravar"))
+            achados.push(`${arquivo} importa ${nome} de armazenamento/evidencia_demanda.ts`);
+        }
+      }
+      return achados;
+    });
+}
+
+test("só submeter.ts e o armazenamento gravam em evidencia_demanda", () => {
+  assert.deepEqual(acharGravacoesDeEvidenciaForaDeSubmeter(SRC), []);
+});
+
+test("a fitness de gravação de evidência acusa o arquivo que monta a lista ou importa gravar* e aceita o resto", (t) => {
+  const raiz = mkdtempSync(join(tmpdir(), "fabriquinha-fitness-evidencia-"));
+  t.after(() => {
+    rmSync(raiz, { recursive: true, force: true });
+  });
+  const arquivos: Record<string, string> = {
+    [ARQUIVO_QUE_SUBMETE_EVIDENCIA]: "const x = { ...ag, evidencias: [...ag.evidencias, nova] };\n",
+    "armazenamento/evidencia_demanda.ts": "export function gravarAnexos() {}\n",
+    "armazenamento/outro.ts":
+      'import { gravarAnexos } from "./evidencia_demanda.ts";\nconst x = { evidencias: [...a.evidencias] };\n',
+    "aplicacao/monta_lista.ts": "const x = { ...ag, evidencias: [...ag.evidencias, nova] };\n",
+    "aplicacao/importa_gravar.ts": 'import { gravarAnexos as gravar } from "../armazenamento/evidencia_demanda.ts";\n',
+    "aplicacao/le_anexos.ts":
+      'import { anexosDaDemanda } from "../armazenamento/evidencia_demanda.ts";\nconst x = { evidencias: [] };\n',
+    "aplicacao/gravar_de_outro.ts": 'import { gravarAnexos } from "../armazenamento/outro.ts";\n',
+    "aplicacao/teste_que_grava.test.ts": "const x = { evidencias: [...ag.evidencias] };\n",
+    "aplicacao/montagem_cenario.ts": "const x = { evidencias: [...ag.evidencias] };\n",
+  };
+  for (const [caminho, conteudo] of Object.entries(arquivos)) {
+    mkdirSync(dirname(join(raiz, caminho)), { recursive: true });
+    writeFileSync(join(raiz, caminho), conteudo);
+  }
+
+  assert.deepEqual(acharGravacoesDeEvidenciaForaDeSubmeter(raiz).sort(), [
+    "aplicacao/importa_gravar.ts importa gravarAnexos de armazenamento/evidencia_demanda.ts",
+    "aplicacao/monta_lista.ts monta evidencias a partir da lista atual",
   ]);
 });

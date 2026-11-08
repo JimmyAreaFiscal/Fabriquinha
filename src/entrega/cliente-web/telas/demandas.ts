@@ -208,10 +208,9 @@ const decisao = (d: Pagina["decisoes"][number]): string =>
 function resumoDaEvidencia({ tipo, dados }: Evidencia): { texto: string; classe: string } {
   const resultado = (ok: boolean, texto: string) => ({ texto, classe: ok ? " dm-chip-ok" : " dm-chip-falha" });
   switch (tipo) {
-    case "execucao_testes": {
-      const { aprovada } = dados as { aprovada: boolean };
-      return resultado(aprovada, `Testes ${aprovada ? "✓" : "✗"}`);
-    }
+    case "execucao_testes":
+      // Só a submissão aceita vira evidência: a existência dela já é o resultado.
+      return resultado(true, "Testes ✓");
     case "matriz_fitness": {
       const { linhas } = dados as { linhas: { codigoSaida: number }[] };
       const passaram = linhas.filter((l) => l.codigoSaida === 0).length;

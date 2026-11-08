@@ -7,12 +7,20 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { ZodError } from "zod";
 import { type Ator } from "../src/nucleo/ator.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../src/nucleo/evidencia_demanda.ts";
 import { HarnessPi } from "../src/infra/agente/harness_pi.ts";
-import { comDemanda } from "../src/armazenamento/demandas.ts";
+import * as gestao from "../src/aplicacao/gestao_demandas.ts";
 import { buscarProjeto, gravarProjeto } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
-import { AUTOR, base, criarCenario, CTX, demanda, demandaAprovada, submeterPlanoDoAgente } from "./apoio.ts";
+import {
+  AUTOR,
+  base,
+  criarCenario,
+  custos,
+  demanda,
+  demandaAprovada,
+  ORIGENS_DOS_ANEXOS,
+  proporPlanoDoAgente,
+} from "./apoio.ts";
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
 const pi = instalarPiFalso(base);
@@ -22,36 +30,29 @@ const harness = new HarnessPi();
 const PLANEJAR = 2;
 const agente: Ator = { tipo: "agente", trabalho_id: "execucao-1" };
 
-test("CA-SDLC-18: evidência com dois donos é rejeitada; a nova do mesmo tipo e dono substitui só a anterior", async (t) => {
+test("CA-SDLC-18: a nova evidência do mesmo tipo e dono substitui só a anterior", async (t) => {
   const c = criarCenario(t);
   const id = await demandaAprovada(c);
-  const submeter = (entrada: Record<string, unknown>) =>
-    comDemanda(c.banco, id, (ag) =>
-      submeterEvidenciaDemanda(
-        ag,
-        { tipo: "testes_estresse", ...entrada } as EntradaEvidenciaDemanda,
-        AUTOR,
-        CTX.agora,
-      ),
+  const submeterCustos = (sessao: string) =>
+    gestao.submeterEvidencia(
+      c.banco,
+      id,
+      { tipo: "custos_realizados", dados: custos(sessao) },
+      AUTOR,
+      ORIGENS_DOS_ANEXOS,
     );
-  const doTipo = () =>
+  const evidencias = () => demanda(c, id).evidencias.map((e) => [e.tipo, e.rodada_id, e.ticket_id]);
+  const antes = evidencias();
+
+  submeterCustos("a");
+  submeterCustos("b");
+  assert.deepEqual(evidencias().toSorted(), antes.toSorted());
+  assert.deepEqual(
     demanda(c, id)
-      .evidencias.filter((e) => e.tipo === "testes_estresse")
-      .map((e) => [e.rodada_id, e.ticket_id, e.dados]);
-
-  assert.throws(
-    () => submeter({ dados: { v: "x" }, rodada_id: 1, ticket_id: 1 }),
-    /não podem estar preenchidos juntos|inválida/,
+      .evidencias.filter((e) => e.tipo === "custos_realizados")
+      .map((e) => (e.dados.sessoes as { sessao: string }[]).map((s) => s.sessao)),
+    [["b"]],
   );
-  assert.deepEqual(doTipo(), []);
-
-  submeter({ dados: { v: "t1-a" }, ticket_id: 1 });
-  submeter({ dados: { v: "t2-a" }, ticket_id: 2 });
-  submeter({ dados: { v: "t1-b" }, ticket_id: 1 });
-  assert.deepEqual(doTipo(), [
-    [undefined, 1, { v: "t1-b" }],
-    [undefined, 2, { v: "t2-a" }],
-  ]);
 });
 
 test("CA-SDLC-19: plano com CA-n inexistente ou com dependência entre rodadas é rejeitado antes de executar", async (t) => {
@@ -79,8 +80,12 @@ test("CA-SDLC-19: plano com CA-n inexistente ou com dependência entre rodadas �
   });
   const antes = demanda(c, id);
 
-  assert.throws(() => submeterPlanoDoAgente(c.banco, id, plano("CA-9"), agente), /CA-9.*não tem/);
-  assert.throws(() => submeterPlanoDoAgente(c.banco, id, plano("CA-1", true), agente), /de outra rodada/);
+  assert.throws(() => {
+    proporPlanoDoAgente(c.banco, id, plano("CA-9"), agente);
+  }, /CA-9.*não tem/);
+  assert.throws(() => {
+    proporPlanoDoAgente(c.banco, id, plano("CA-1", true), agente);
+  }, /de outra rodada/);
 
   const depois = demanda(c, id);
   assert.equal(

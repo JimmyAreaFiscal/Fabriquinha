@@ -3,21 +3,16 @@
 // conferência. A decisão do Auditor sobre o PR fica fora. Tickets e rodadas só pelo endereço público (D09).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import {
-  type AgregadoDemanda,
-  comPrDaRodada,
-  type EvidenciaDemanda,
-  type TicketDemanda,
-} from "../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, comPrDaRodada, type TicketDemanda } from "../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
-import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
 import { falhaDoErro, retornoAoAgenteDoTicket } from "../nucleo/tentativa.ts";
 import { conferirPullRequestRodada } from "../nucleo/transicoes_rodada.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
+import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { LIMITE_DO_CORPO } from "./evidencias/pr.ts";
 import { montarPRRodada, marcaDoPRRodada } from "./evidencias/pr_rodada.ts";
 import { produtividadeDaRodada } from "./evidencias/produtividade_rodada.ts";
@@ -128,46 +123,30 @@ const correcao = (ref: RefRodada, n: number, titulo: string, descricao: string, 
   caminhos,
 });
 
-/** Grava a evidência da Fabriquinha no ticket, no lugar da anterior do mesmo tipo (o domínio não tem transição para isso). */
-function gravarEvidencia(
+/** As evidências do encerramento não têm anexo: nenhuma origem é lida. */
+const SEM_ORIGEM_DE_ANEXO = { worktree: "", saida: "", fora: "", copie: "" };
+
+/** Submete a evidência da Fabriquinha ao ticket; a recusa sobe como erro, que falha o ticket, e nada é gravado. */
+function submeterEvidenciaDoEncerramento(
   banco: DatabaseSync,
   ticket: TicketDemanda,
   tipo: "relatorio_produtividade" | "pr_aberto",
   dados: unknown,
-  prPublicado?: { rodada_id: number; id: string; url: string; head: string },
 ): void {
-  const { demanda_id, ticket_id } = ticket;
-  const e = validarEvidenciaDaEtapa(
-    { demanda_id, ticket_id, etapa: "encerrar_rodada" },
-    { demanda_id, ticket_id, tipo, produtor: "fabriquinha", dados },
+  const avaliacao = submeterEvidencia(
+    banco,
+    {
+      tipo,
+      dono: Endereco.doTicket(ticket.demanda_id, ticket.ticket_id),
+      produtor: FABRIQUINHA,
+      dados,
+      anexos: [],
+    },
+    { origens: SEM_ORIGEM_DE_ANEXO },
   );
-  const em = new Date().toISOString();
-  comDemanda(banco, demanda_id, (ag) => ({
-    ...ag,
-    // O PR do Espaço da rodada acompanha a evidência, na mesma gravação.
-    pull_requests:
-      prPublicado === undefined
-        ? ag.pull_requests
-        : comPrDaRodada(ag, prPublicado.rodada_id, {
-            numero: Number(prPublicado.id),
-            url: prPublicado.url,
-            head: prPublicado.head,
-            estado: "aberto",
-            atualizado_em: em,
-          }),
-    evidencias: [
-      ...ag.evidencias.filter((x) => x.ticket_id !== ticket_id || x.tipo !== tipo),
-      {
-        demanda_id,
-        rodada_id: undefined,
-        ticket_id,
-        tipo,
-        dados: e.dados as EvidenciaDemanda["dados"],
-        autor: FABRIQUINHA,
-        em,
-      },
-    ],
-  }));
+  if (avaliacao.resultado === "recusada") {
+    throw new ErroDeRegra(avaliacao.motivo, `corrija o ${tipo} do encerramento da rodada e reabra o ticket`);
+  }
 }
 
 /** Os fatos da conferência vão ao domínio, que volta a `implementar` com as correções ou leva ao gate. */
@@ -228,7 +207,7 @@ async function publicarEConferir(
   const doRodada = ag.tickets.filter((t) => t.rodada_id === ref.rodada_id);
   const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(banco, demanda.id);
   const relatorio = produtividadeDaRodada(sessoes, execucoes, usos, doRodada);
-  gravarEvidencia(banco, ticket, "relatorio_produtividade", relatorio);
+  submeterEvidenciaDoEncerramento(banco, ticket, "relatorio_produtividade", relatorio);
 
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
   const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log });
@@ -313,18 +292,24 @@ async function publicarEConferir(
     },
     conferirCommits,
   );
-  gravarEvidencia(
-    banco,
-    ticket,
-    "pr_aberto",
-    {
-      ...publicado,
-      base: demanda.branch,
-      corpoCompleto: pr.completo,
-      condensado: pr.completo !== pr.publicado,
-    },
-    { ...publicado, rodada_id: ref.rodada_id },
-  );
+  submeterEvidenciaDoEncerramento(banco, ticket, "pr_aberto", {
+    ...publicado,
+    hospedagem: projeto.hospedagem,
+    base: demanda.branch,
+    corpoCompleto: pr.completo,
+    condensado: pr.completo !== pr.publicado,
+  });
+  // O PR do Espaço da rodada acompanha a evidência; a queda entre os dois é refeita na repetição do ticket, que adota o PR.
+  comDemanda(banco, demanda.id, (a) => ({
+    ...a,
+    pull_requests: comPrDaRodada(a, ref.rodada_id, {
+      numero: Number(publicado.id),
+      url: publicado.url,
+      head: publicado.head,
+      estado: "aberto",
+      atualizado_em: new Date().toISOString(),
+    }),
+  }));
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
 
   const problemas = await exigidaPelaEtapa(

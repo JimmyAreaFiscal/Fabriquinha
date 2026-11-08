@@ -471,7 +471,7 @@ test("verificarPR (F5 §5.1, passo 4): com conflito devolve na hora, sem olhar o
   }
 });
 
-test("verificarPR: sem conflito e com a CI aprovada não há problema; o gh e o az são chamados com os comandos do F5", async () => {
+test("verificarPR: sem conflito e com a CI passando não há problema; o gh e o az são chamados com os comandos do F5", async () => {
   const gh = verificar("github", {});
   assert.deepEqual(await gh.resultado, { conflito: false, checksFalhos: [] });
   assert.deepEqual(hospedagem.chamadas().at(-1)?.args, ["pr", "view", "1", "--json", "mergeable,statusCheckRollup"]);

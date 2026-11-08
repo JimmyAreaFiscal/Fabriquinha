@@ -8,12 +8,9 @@ import {
   EvidenciaDemanda,
   prDaDemanda,
   TicketDemanda,
-  TipoEvidenciaAgregado,
 } from "./agregado_demanda.ts";
 import { AUDITOR, FABRIQUINHA } from "./ator.ts";
-import { TipoEvidencia } from "./schemas.ts";
 import { Endereco } from "./item_de_trabalho.ts";
-import { TipoEvidenciaEtapa } from "./evidencia_etapa.ts";
 
 const em = "2026-01-01T00:00:00Z";
 const demanda = (m: Record<string, unknown> = {}) => ({
@@ -84,7 +81,7 @@ test("campos da demanda, ticket e decisão", () => {
   assert.ok(!Decisao.safeParse({ ...decisao(), demanda_id: undefined }).success);
   assert.ok(!Decisao.safeParse({ ...decisao(), gate: undefined }).success);
   assert.ok(!Decisao.safeParse(decisao({ gate: "registro" })).success);
-  assert.ok(!Decisao.safeParse(decisao({ resultado: "aprovada" })).success);
+  assert.ok(!Decisao.safeParse(decisao({ resultado: "inexistente" })).success);
 });
 
 test("criado_por, autor e por são obrigatórios e validam a identidade do ator", () => {
@@ -340,10 +337,4 @@ test("pull_requests: um PR por Espaço, de rodada que existe; o final é o sem r
   recusa(agregado({ pull_requests: [pr(), pr({ numero: 8 })] }), "mais de um PR para o mesmo Espaço");
   recusa(agregado({ pull_requests: [pr({ estado: "perdido" })] }), "Opção inválida");
   recusa(agregado({ pull_requests: [pr({ url: "pull/7" })] }), "URL inválido");
-});
-
-test("TipoEvidenciaAgregado é a união, sem repetição, de TipoEvidencia e TipoEvidenciaEtapa", () => {
-  const uniao = [...new Set([...TipoEvidencia.options, ...TipoEvidenciaEtapa.options])];
-  assert.deepEqual([...TipoEvidenciaAgregado.options].sort(), uniao.sort());
-  assert.equal(new Set(TipoEvidenciaAgregado.options).size, TipoEvidenciaAgregado.options.length);
 });

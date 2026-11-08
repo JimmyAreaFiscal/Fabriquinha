@@ -5,10 +5,9 @@
 // transição do domínio, que decide se ele se repete (progresso recuperável).
 import type { DatabaseSync } from "node:sqlite";
 import { FABRIQUINHA } from "../nucleo/ator.ts";
-import { type AgregadoDemanda, type EvidenciaDemanda, prDaDemanda } from "../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, prDaDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeRegra, existe } from "../nucleo/erros.ts";
-import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import { validarEvidenciaDaEtapa } from "../nucleo/evidencia_etapa.ts";
+import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import type { Projeto } from "../nucleo/projeto.ts";
 import { type FalhaDaTentativa, falhaDoErro, falhaQueExigeOAuditor } from "../nucleo/tentativa.ts";
 import { registrarFalhaTicket } from "../nucleo/transicoes_demanda.ts";
@@ -23,11 +22,11 @@ import {
 import {
   corpoDoPRFinal,
   marcaDoPRFinal,
-  type DemonstracaoLimpeza,
   montarArvorePRs,
   montarDemonstracaoLimpeza,
   tituloDoPRFinal,
 } from "./evidencias/encerramento_demanda.ts";
+import { submeterEvidencia } from "./evidencia/submeter.ts";
 import { varrerBase } from "./retrabalho.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { espacoDaDemanda } from "../nucleo/espaco_de_trabalho.ts";
@@ -47,6 +46,9 @@ export interface DepsEncerramentoDemanda {
   /** Espera da verificação do PR (limite, intervalo e carência); o padrão é o de produção. */
   verificacao?: OpcoesVerificacao;
 }
+
+/** As evidências do encerramento não têm anexo: nenhuma origem é lida. */
+const SEM_ORIGEM_DE_ANEXO = { worktree: "", saida: "", fora: "", copie: "" };
 
 const contexto = () => ({ agora: new Date().toISOString() });
 
@@ -106,19 +108,44 @@ export async function conduzirEncerramentoDemanda(
     ).limpeza_pendente;
     const feito = await limparDemanda(raiz, projeto, pendentes);
     const sobras = [...feito.pendentes, ...(await sobrasDaDemanda(projeto, feito.removidos))];
-    // A passada anterior (falha parcial) já gravou o que removeu; a demonstração final soma as duas.
-    const anterior = carregarDemanda(banco, demanda_id).evidencias.findLast(
-      (e) => e.ticket_id === ticket.ticket_id && e.tipo === "demonstracao_limpeza",
-    );
-    const antes = ((anterior?.dados as DemonstracaoLimpeza | undefined)?.removidas ?? []).map(
-      (r) => `${r.tipo}:${r.alvo}`,
-    );
-    const demonstracao = montarDemonstracaoLimpeza([...new Set([...antes, ...feito.removidos])], sobras);
-    if (sobras.length > 0) {
-      gravarEvidencias(banco, demanda_id, ticket.ticket_id, demonstracao, false);
-      return falhar("limpeza", falhaQueExigeOAuditor(`a limpeza deixou: ${sobras.join(", ")}`), sobras);
+    const demonstracao = montarDemonstracaoLimpeza(feito.removidos, sobras);
+    const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(banco, demanda_id);
+    // Com sobras só a demonstração é submetida: o Avaliador a recusa e nada é gravado.
+    const submissoes = [
+      ...(sobras.length === 0
+        ? [
+            {
+              tipo: "arvore_prs_criterios_custos" as const,
+              dados: montarArvorePRs(carregarDemanda(banco, demanda_id), sessoes, execucoes, usos),
+            },
+          ]
+        : []),
+      { tipo: "demonstracao_limpeza" as const, dados: demonstracao },
+    ];
+    for (const { tipo, dados } of submissoes) {
+      const avaliacao = submeterEvidencia(
+        banco,
+        { tipo, dono: Endereco.doTicket(demanda_id, ticket.ticket_id), produtor: FABRIQUINHA, dados, anexos: [] },
+        { origens: SEM_ORIGEM_DE_ANEXO },
+      );
+      if (avaliacao.resultado === "recusada") {
+        if (sobras.length > 0) {
+          return falhar(
+            "limpeza",
+            falhaQueExigeOAuditor(`${avaliacao.motivo}: a limpeza deixou ${sobras.join(", ")}`),
+            sobras,
+          );
+        }
+        // A falha de limpeza exige pendências; a evidência inválida falha só o ticket, e reaberto ele submete de novo.
+        return aplicar((a) =>
+          registrarFalhaTicket(
+            a,
+            { ticket_id: ticket.ticket_id, falha: falhaQueExigeOAuditor(avaliacao.motivo) },
+            contexto(),
+          ),
+        );
+      }
     }
-    gravarEvidencias(banco, demanda_id, ticket.ticket_id, demonstracao);
     return aplicar((a) => concluirEncerramento(a, { demanda_id, limpeza_pendente: [] }, FABRIQUINHA, contexto()));
   };
 
@@ -245,39 +272,4 @@ function publicarFinal(
     },
     conferirCommits,
   );
-}
-
-/** Grava a árvore de PRs e a demonstração de limpeza no ticket, no lugar das anteriores do mesmo tipo. */
-function gravarEvidencias(
-  banco: DatabaseSync,
-  demanda_id: string,
-  ticket_id: number,
-  limpeza: DemonstracaoLimpeza,
-  completa = true,
-): void {
-  const ag = carregarDemanda(banco, demanda_id);
-  const { sessoes, execucoes, usos } = carregarTrabalhosDaDemanda(banco, demanda_id);
-  const dados = {
-    ...(completa && { arvore_prs_criterios_custos: montarArvorePRs(ag, sessoes, execucoes, usos) }),
-    demonstracao_limpeza: limpeza,
-  };
-  const evidencias = (Object.keys(dados) as (keyof typeof dados)[]).map((tipo) => {
-    const e = validarEvidenciaDaEtapa(
-      { demanda_id, ticket_id, etapa: "encerrar_demanda" },
-      { demanda_id, ticket_id, tipo, produtor: "fabriquinha", aprovada: limpeza.aprovada, dados: dados[tipo] },
-    );
-    return {
-      demanda_id,
-      rodada_id: undefined,
-      ticket_id,
-      tipo,
-      dados: e.dados as EvidenciaDemanda["dados"],
-      autor: FABRIQUINHA,
-      em: new Date().toISOString(),
-    };
-  });
-  comDemanda(banco, demanda_id, (a) => ({
-    ...a,
-    evidencias: [...a.evidencias.filter((x) => x.ticket_id !== ticket_id || !(x.tipo in dados)), ...evidencias],
-  }));
 }

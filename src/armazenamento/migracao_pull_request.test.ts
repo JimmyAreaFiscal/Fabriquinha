@@ -5,6 +5,7 @@ import { migrar } from "./banco.ts";
 import { ESQUEMA_V36, MIGRACOES, VERSAO_LINHA_DE_BASE } from "./migracoes.ts";
 
 const VERSAO_ANTES = VERSAO_LINHA_DE_BASE + 6;
+const ATE_A_MIGRACAO_43 = MIGRACOES.slice(0, VERSAO_ANTES - VERSAO_LINHA_DE_BASE + 1);
 const EM = "2026-01-01T00:00:00.000Z";
 const MAIS_TARDE = "2026-01-02T00:00:00.000Z";
 
@@ -60,7 +61,7 @@ test("a migração 43 cria pull_request pela última pr_aberto de cada rodada e 
   const banco = bancoNaVersao42();
   const encerramentosAntes = linhas(banco, "SELECT demanda_id FROM encerramento_demanda ORDER BY rowid");
 
-  migrar(banco, MIGRACOES);
+  migrar(banco, ATE_A_MIGRACAO_43);
 
   assert.equal(banco.prepare("PRAGMA user_version").get()?.user_version, VERSAO_ANTES + 1);
   assert.deepEqual(banco.prepare("PRAGMA foreign_key_check").all(), []);
@@ -150,7 +151,7 @@ test("a migração 43 cria pull_request pela última pr_aberto de cada rodada e 
 
 test("a migração 43 troca o CHECK da integração pela trigger contra pull_request", () => {
   const banco = bancoNaVersao42();
-  migrar(banco, MIGRACOES);
+  migrar(banco, ATE_A_MIGRACAO_43);
   banco.exec("PRAGMA foreign_keys = ON");
 
   assert.throws(() => {
