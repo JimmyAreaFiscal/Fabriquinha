@@ -19,7 +19,7 @@ import { comTrabalhosDoTicket } from "../../src/armazenamento/trabalho_agentico.
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../../src/infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { ghFalso } from "../../integracao/falsos.ts";
-import type { Ambiente } from "../ambiente.ts";
+import type { Ambiente } from "../instancia_descartavel.ts";
 import { AmbienteHostLocal } from "../../src/infra/ambiente/ambiente_host_local.ts";
 
 const ambiente = new AmbienteHostLocal();

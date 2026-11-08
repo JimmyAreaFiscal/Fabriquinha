@@ -13,7 +13,7 @@ import { buscarProjeto } from "../../src/armazenamento/projetos.ts";
 import { configuracao } from "../../src/armazenamento/servico.ts";
 import { exigirGit } from "../../src/infra/repositorio/worktree.ts";
 import { anexar } from "../../src/armazenamento/simulacao.ts";
-import type { Ambiente } from "../ambiente.ts";
+import type { Ambiente } from "../instancia_descartavel.ts";
 import { CHAMADAS } from "../medir.ts";
 import { criarPreparo } from "./preparo_demandas.ts";
 
