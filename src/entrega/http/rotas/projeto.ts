@@ -10,12 +10,15 @@ import { formatarRodadaRef, formatarTicketRef } from "../../../nucleo/demanda.ts
 import { prDoEspaco } from "../../../nucleo/espaco_de_trabalho.ts";
 import { EstadoDemanda, type EtapaTicket, type EstadoRodada, type EstadoTicket } from "../../../nucleo/primitivos.ts";
 import { arquivar } from "../../../aplicacao/gestao_demandas.ts";
+import { sessoesDeDemanda } from "../../../aplicacao/historico_demanda.ts";
 import { buscarProjeto, projetoExistente } from "../../../aplicacao/projeto/cadastro.ts";
+import { condutor } from "../../../aplicacao/trabalho/condutor.ts";
 import { carregarDemanda } from "../../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../../armazenamento/dependencias_demanda.ts";
 import { ticketsComPiAtivo } from "../../../armazenamento/trabalho_agentico.ts";
 import { heatmapDo } from "../../../infra/repositorio/heatmap.ts";
 import type { Rota } from "../rotas.ts";
+import { type PendenciaDoInicio, pendenciasDasDemandas } from "./inicio.ts";
 
 /** Uma linha da página do projeto: a demanda, as rodadas com o PR e os tickets com o modelo efetivo e a sessão. */
 export interface DemandaDoProjeto {
@@ -30,6 +33,8 @@ export interface DemandaDoProjeto {
   estadoAlteradoEm: string;
   /** As predecessoras ainda em andamento: a cancelada já cancelou esta junto, e não bloqueia mais nada. */
   bloqueadaPor: string[];
+  /** O que a demanda tem parado esperando o Auditor; a demanda encerrada não tem. */
+  pendencias: PendenciaDoInicio[];
   rodadas: { ref: string; titulo: string; estado: EstadoRodada; pr?: { id: string; url: string } }[];
   tickets: {
     ref: string;
@@ -110,6 +115,15 @@ function demandaDoProjeto(banco: DatabaseSync, id: string): DemandaDoProjeto {
     bloqueadaPor: predecessorasDaDemanda(banco, id)
       .filter((p) => CICLO_DA_DEMANDA.estaEmAndamento(p.estado))
       .map((p) => p.demanda_id),
+    pendencias: CICLO_DA_DEMANDA.ehTerminal(ag.demanda.estado)
+      ? []
+      : pendenciasDasDemandas(
+          banco,
+          [ag],
+          sessoesDeDemanda(banco, { escopo: "ativas", demanda: id }),
+          condutor.situacao.bind(condutor),
+          new Date(),
+        ),
     rodadas: ag.rodadas.map((r) => {
       const pr = prDoEspaco(ag, r.rodada_id);
       return {
