@@ -1,20 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { clonarAgregadoDemanda } from "../../apoio-testes/clonar_agregado_demanda.ts";
+import { comEvidencia, comPlanoSubmetido } from "../../apoio-testes/cenarios_de_demanda.ts";
 import { AgregadoDemanda, type Decisao, type NomeGate } from "./agregado_demanda.ts";
 import { type Ator, AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
-import { submeterEvidenciaDemanda } from "./evidencia_demanda.ts";
 import { GATES, MOTIVO_APROVACAO_AUTOMATICA_PR } from "./gate.ts";
 import { Endereco } from "./item_de_trabalho.ts";
 import { comTentativaAberta, falhaQueExigeOAuditor, motivoDaFalhaDoTicket } from "./tentativa.ts";
-import {
-  enviarDemanda,
-  reabrirTicket,
-  registrarDemanda,
-  registrarFalhaTicket,
-  submeterPlano,
-} from "./transicoes_demanda.ts";
+import { enviarDemanda, reabrirTicket, registrarDemanda, registrarFalhaTicket } from "./transicoes_demanda.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "./transicoes_rodada.ts";
 
 type Gate = (typeof GATES)[NomeGate];
@@ -42,7 +36,7 @@ const demandaRegistrada = (): AgregadoDemanda =>
 const demandaEnviada = (): AgregadoDemanda => {
   const comDefinicao = (["criterios_aceite", "desenho_solucao", "custos_realizados"] as const).reduce(
     (agregado, tipo) =>
-      submeterEvidenciaDemanda(
+      comEvidencia(
         agregado,
         { tipo, dados: tipo === "criterios_aceite" ? criteriosDaDefinicao : { v: 1 } },
         autora,
@@ -89,7 +83,7 @@ const planoDe = (sobrescrito: Record<string, unknown> = {}) => ({
   ...sobrescrito,
 });
 const demandaComPlanoSubmetido = (plano: object = planoDe()): AgregadoDemanda =>
-  submeterPlano(demandaEmPlanejamento(), plano, agenteDoTrabalho(1), contexto);
+  comPlanoSubmetido(demandaEmPlanejamento(), plano, agenteDoTrabalho(1), contexto.agora);
 const semEvidenciaDePlano = (agregado: AgregadoDemanda): AgregadoDemanda => ({
   ...agregado,
   evidencias: agregado.evidencias.filter((e) => e.tipo !== "plano"),
@@ -764,7 +758,7 @@ test("gate_planejamento: reprovar volta a planejar mantendo o ticket, o plano e 
   assert.deepEqual(decidido.tickets, agregado.tickets);
   assert.deepEqual(decidido.evidencias, agregado.evidencias);
   // a mesma sessão retoma e resubmete, substituindo o plano
-  const resubmetido = submeterPlano(decidido, planoDe(), agenteDoTrabalho(1), contexto);
+  const resubmetido = comPlanoSubmetido(decidido, planoDe(), agenteDoTrabalho(1), contexto.agora);
   assert.equal(resubmetido.evidencias.filter((e) => e.tipo === "plano").length, 1);
 });
 
@@ -938,11 +932,11 @@ test("gate_planejamento: o decisao_id é local ao ticket e avança a cada reprov
   const decidirNoPlanejamento = (agregado: AgregadoDemanda, entrada: object) =>
     GATES.gate_planejamento.decidir(agregado, enderecoDaDemanda, entrada, AUDITOR, contexto);
   const reprovarEResubmeter = (agregado: AgregadoDemanda, motivo: string) =>
-    submeterPlano(
+    comPlanoSubmetido(
       decidirNoPlanejamento(agregado, { resultado: "reprovado", motivo }),
       planoDe(),
       agenteDoTrabalho(1),
-      contexto,
+      contexto.agora,
     );
   const submetido = demandaComPlanoSubmetido();
   const aprovado = decidirNoPlanejamento(reprovarEResubmeter(reprovarEResubmeter(submetido, "a"), "b"), {

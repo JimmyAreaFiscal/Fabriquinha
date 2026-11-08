@@ -81,7 +81,7 @@ const DependenciaTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, depen
 const CaminhoDoTicket = z.object({ demanda_id: DemandaId, ticket_id: Id, caminho: CaminhoTicket });
 
 /** Dono opcional: nulo e omitido viram `undefined`, a única representação interna (CA-11). */
-export const IdDono = Id.nullish().transform((v) => v ?? undefined);
+const IdDono = Id.nullish().transform((v) => v ?? undefined);
 
 /** Evidência de qualquer dono: `rodada_id` e `ticket_id` nulos indicam a própria demanda; `dados` segue opaco (F3 valida). */
 export const EvidenciaDemanda = z

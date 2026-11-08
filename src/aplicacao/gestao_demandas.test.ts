@@ -200,7 +200,7 @@ test("CA-7: outra sessão não envia a demanda", () => {
 test("CA-8: outra sessão não submete evidência", () => {
   const b = novoBanco();
   const id = registrar(b);
-  assert.throws(() => submeter(b, id, "criterios_aceite", criterios, undefined, outra), ErroDeEscopo);
+  assert.throws(() => submeter(b, id, "criterios_aceite", criterios, undefined, outra), ErroDeRegra);
   assert.deepEqual(evidencias(b, id, "criterios_aceite"), []);
 });
 

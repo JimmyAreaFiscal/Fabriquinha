@@ -1,7 +1,7 @@
 // O caminho único de uma Evidência (F3 §5): o Avaliador aceita ou recusa, os anexos são guardados por SHA-256 e a
 // evidência entra com eles na transação de `comDemanda`. Quem fecha a Etapa decide o que fazer com a recusa.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, EvidenciaDemanda } from "../../nucleo/agregado_demanda.ts";
 import {
   type Avaliacao,
   AvaliadorDeEvidencia,
@@ -9,9 +9,9 @@ import {
   type SubmissaoDeEvidencia,
 } from "../../nucleo/evidencia.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
-import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { CATALOGO_ETAPAS } from "../../nucleo/evidencia_etapa.ts";
-import { submeterPlano, validarPlano } from "../../nucleo/transicoes_demanda.ts";
+import { CICLO_DA_DEMANDA } from "../../nucleo/ciclos.ts";
+import { validarPlano } from "../../nucleo/transicoes_demanda.ts";
 import { carregarDemanda, comDemanda } from "../../armazenamento/demandas.ts";
 import { gravarAnexos } from "../../armazenamento/evidencia_demanda.ts";
 import { guardarAnexos, type Origens } from "../evidencias/submissao.ts";
@@ -47,24 +47,27 @@ export function submeterEvidencia(
     throw erro;
   }
   const agora = new Date().toISOString();
+  // shortcut: a Avaliação lê a demanda antes da transação e só o ciclo barra a corrida do plano, reavaliar aqui se outra regra passar a depender de estado que muda em paralelo.
   comDemanda(
     banco,
     dono.demanda_id,
     (ag) => {
       contexto.conferirAntesDeGravar?.(ag);
+      const nova = {
+        demanda_id: dono.demanda_id,
+        rodada_id: dono.rodada_id,
+        ticket_id: dono.ticket_id,
+        tipo,
+        dados: avaliacao.dados as EvidenciaDemanda["dados"],
+        autor: produtor,
+        em: agora,
+      };
+      const substituindoAnterior = (e: EvidenciaDemanda) =>
+        e.tipo === tipo && e.rodada_id === dono.rodada_id && e.ticket_id === dono.ticket_id;
+      const comNova = { ...ag, evidencias: [...ag.evidencias.filter((e) => !substituindoAnterior(e)), nova] };
       return tipo === "plano"
-        ? submeterPlano(ag, avaliacao.dados, produtor, { agora })
-        : submeterEvidenciaDemanda(
-            ag,
-            {
-              tipo,
-              dados: avaliacao.dados as EntradaEvidenciaDemanda["dados"],
-              rodada_id: dono.rodada_id,
-              ticket_id: dono.ticket_id,
-            },
-            produtor,
-            agora,
-          );
+        ? { ...comNova, demanda: CICLO_DA_DEMANDA.mudar(ag.demanda, "gate_planejamento", agora) }
+        : comNova;
     },
     () => {
       gravarAnexos(

@@ -3,11 +3,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Ator } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
-import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { caminhoDaWorktreeDemanda } from "../infra/repositorio/worktree-demanda.ts";
-import { abrirTrabalhoDoAgente, cenarioRevisao, REF_GLOBAL } from "../../apoio-testes/cenarios_de_demanda.ts";
+import {
+  abrirTrabalhoDoAgente,
+  cenarioRevisao,
+  REF_GLOBAL,
+  comEvidencia,
+} from "../../apoio-testes/cenarios_de_demanda.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import { conduzirRevisaoIntegral, iniciarRevisaoIntegral } from "./revisao_demanda.ts";
 
@@ -39,12 +43,7 @@ function evidenciar(banco: Banco, estres: object, seg: object, comprovacao = tru
   comDemanda(banco, "I-1", (ag) =>
     lista.reduce(
       (a, [tipo, dados]) =>
-        submeterEvidenciaDemanda(
-          a,
-          { tipo, dados, ticket_id: 3 } as never,
-          a.demanda.criada_por,
-          "2026-01-02T00:00:00.000Z",
-        ),
+        comEvidencia(a, { tipo, dados, ticket_id: 3 } as never, a.demanda.criada_por, "2026-01-02T00:00:00.000Z"),
       ag,
     ),
   );

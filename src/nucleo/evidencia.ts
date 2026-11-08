@@ -1,7 +1,7 @@
 // A lista única dos tipos de evidência e o schema de cada um (F3 §2): `dados`, as regras dos anexos e as regras cruzadas.
 import { basename } from "node:path";
 import { z } from "zod";
-import type { AgregadoDemanda, TicketDemanda } from "./agregado_demanda.ts";
+import type { AgregadoDemanda, Demanda, TicketDemanda } from "./agregado_demanda.ts";
 import type { Ator } from "./ator.ts";
 import { Plano } from "./demanda.ts";
 import { ErroDeEscopo, ErroDeRegra } from "./erros.ts";
@@ -293,6 +293,17 @@ export const SCHEMA_DA_EVIDENCIA: Record<TipoEvidencia, EsquemaDeEvidencia> = {
 
 export const schemaDoTipo = (tipo: TipoEvidencia): EsquemaDeEvidencia => SCHEMA_DA_EVIDENCIA[tipo];
 
+/** Recusa quem não é a ferramenta e a sessão autoras da demanda (CA-6). */
+export function exigirAutoria(demanda: Demanda, autor: Ator, acao: string): void {
+  const { ferramenta, sessao } = demanda.criada_por;
+  if (autor.tipo !== "externo" || autor.ferramenta !== ferramenta || autor.sessao !== sessao) {
+    throw new ErroDeEscopo(
+      `só a ferramenta ${ferramenta} da sessão ${sessao} pode ${acao} a demanda ${demanda.id}`,
+      "peça a quem registrou a demanda, na mesma sessão",
+    );
+  }
+}
+
 /** O que se submete à Etapa: `anexos` são os caminhos dos arquivos, que a Etapa ainda não abriu. */
 export interface SubmissaoDeEvidencia {
   tipo: TipoEvidencia;
@@ -437,6 +448,14 @@ export class AvaliadorDeEvidencia {
       throw new ErroDeRegra(
         `a evidência ${tipo} de ${onde} não atende a regra ${item.regraAprovacao}`,
         "corrija o que a verificação apontou",
+      );
+    }
+    // Antes do envio só a autora submete; depois, a definição da demanda fica congelada, e só os custos seguem livres (§3).
+    if (!ag.demanda.enviada) exigirAutoria(ag.demanda, produtor, "submeter evidência da");
+    else if (dono.rodada_id === undefined && dono.ticket_id === undefined && tipo !== "custos_realizados") {
+      throw new ErroDeRegra(
+        `a demanda ${ag.demanda.id} já foi enviada e a evidência ${tipo} da definição está congelada`,
+        "só custos_realizados e evidências de rodada ou ticket entram depois do envio",
       );
     }
     return { resultado: "aceita", dados: validos, veredito } satisfies Avaliacao;

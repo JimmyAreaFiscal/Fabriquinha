@@ -6,10 +6,9 @@ import { Readable } from "node:stream";
 import { test } from "node:test";
 import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
-import { submeterEvidenciaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { criarTrabalho, iniciarProcesso } from "../../nucleo/trabalho_agentico.ts";
 import { comDemanda } from "../../armazenamento/demandas.ts";
-import { gravarAgregadoPronto } from "../../../apoio-testes/cenarios_de_demanda.ts";
+import { gravarAgregadoPronto, comEvidencia } from "../../../apoio-testes/cenarios_de_demanda.ts";
 import { comTrabalhosDoTicket } from "../../armazenamento/trabalho_agentico.ts";
 import { resolverEscopoDoAgente } from "./agente_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
@@ -301,7 +300,7 @@ const EVIDENCIAS_INTEGRAL: [string, object][] = [
 function evidenciar(banco: DatabaseSync, ticket_id: number, lista: [string, object][]) {
   comDemanda(banco, "I-206", (ag) =>
     lista.reduce(
-      (a, [tipo, dados]) => submeterEvidenciaDemanda(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, em),
+      (a, [tipo, dados]) => comEvidencia(a, { tipo, dados, ticket_id } as never, a.demanda.criada_por, em),
       ag,
     ),
   );

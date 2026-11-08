@@ -6,7 +6,6 @@ import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
-import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
 import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
 import { PREFIXO_TERCEIRA_REPROVACAO } from "../nucleo/transicoes_rodada.ts";
@@ -22,6 +21,7 @@ import {
 import {
   abrirTrabalhoDoAgente,
   cenarioRevisao,
+  comEvidencia,
   REF_GLOBAL,
   REF_RODADA,
 } from "../../apoio-testes/cenarios_de_demanda.ts";
@@ -158,12 +158,7 @@ function evidenciar(banco: Parameters<typeof carregarDemanda>[0], saida: number,
   comDemanda(banco, "I-1", (ag) =>
     lista.reduce(
       (a, [tipo, dados]) =>
-        submeterEvidenciaDemanda(
-          a,
-          { tipo, dados, ticket_id: 2 } as never,
-          a.demanda.criada_por,
-          "2026-01-02T00:00:00.000Z",
-        ),
+        comEvidencia(a, { tipo, dados, ticket_id: 2 } as never, a.demanda.criada_por, "2026-01-02T00:00:00.000Z"),
       ag,
     ),
   );
