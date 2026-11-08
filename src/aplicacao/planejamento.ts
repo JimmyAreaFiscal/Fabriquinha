@@ -1,33 +1,18 @@
-// Serviço Planejamento da demanda (comparacao-sdlc-implementacao.md §§3 e 6): junta reserva, sessão interativa, plano e
-// preparação das worktrees. Só orquestra as regras do domínio; git e preparação ficam fora da transação.
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+// Serviço Planejamento da demanda (comparacao-sdlc-implementacao.md §§3 e 6): junta reserva, sessão interativa e plano.
+// Só orquestra as regras do domínio; a decisão do gate e a preparação das worktrees são de `gates/planejamento.ts`.
 import type { DatabaseSync } from "node:sqlite";
-import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
+import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { CICLO_DA_DEMANDA } from "../nucleo/ciclos.ts";
-import { Plano } from "../nucleo/demanda.ts";
 import { predecessorasPendentes } from "../nucleo/dependencia_demanda.ts";
-import { ErroDeRegra, existe, mensagem } from "../nucleo/erros.ts";
+import { ErroDeRegra, existe } from "../nucleo/erros.ts";
 import { Endereco, ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
 import { montarRetornoAoAgente, retornoAoAgenteDoTicket, tentativaAnteriorEmMemoria } from "../nucleo/tentativa.ts";
-import { confirmarAprovacaoPlanejamento, reabrirTicket, reprovarPlanejamento } from "../nucleo/transicoes_demanda.ts";
 import { reservarTicket } from "../nucleo/reserva_ticket.ts";
-import { varrerBase } from "./retrabalho.ts";
-import { raizDo } from "../armazenamento/banco.ts";
-import { carregarProjeto } from "../armazenamento/projetos.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../armazenamento/dependencias_demanda.ts";
-import { anotar } from "../infra/registro.ts";
 import { carregarSessoesDoTicket } from "../armazenamento/sessoes.ts";
-import {
-  caminhoDaWorktreeDemanda,
-  caminhoDaWorktreeRodada,
-  garantirWorktreeDemanda,
-  garantirWorktreeRodada,
-} from "../infra/repositorio/worktree-demanda.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
-import { encerrar, mandar, situacao } from "./gerente.ts";
 
 const contexto = () => ({ agora: new Date().toISOString() });
 
@@ -81,85 +66,4 @@ export function iniciarOuRetomarPlanejamento(
     ultima?.resultado === "aprovado" &&
     !carregarSessoesDoTicket(banco, ref).execucoes.some((e) => e.inicio >= ultima.em);
   return iniciarExecucaoDemanda(banco, ref, { limiteMin, modo: "interativo", retomada, iniciarEmSessaoNova });
-}
-
-/**
- * O Auditor reprova com motivo; a demanda volta a `planejar`. Com o pi da sessão vivo e ocioso, o motivo vai a ele
- * como prompt; sem pi vivo, o despacho retoma a mesma sessão com o motivo.
- */
-export function reprovarPlanejamentoDemanda(banco: DatabaseSync, demandaId: string, motivo: string): AgregadoDemanda {
-  // Planejar Falhou (serviço reiniciado com o gate aberto): a reprovação o reabre com o motivo, na mesma transação.
-  const ag = comDemanda(banco, demandaId, (a) => {
-    const reprovada = reprovarPlanejamento(a, { motivo }, AUDITOR, contexto());
-    const { ticket_id, estado } = ticketPlanejar(reprovada);
-    return estado === "falhou"
-      ? reabrirTicket(reprovada, { ticket_id, instrucao: motivo }, AUDITOR, contexto())
-      : reprovada;
-  });
-  const { sessoes } = carregarSessoesDoTicket(banco, {
-    demanda_id: demandaId,
-    ticket_id: ticketPlanejar(ag).ticket_id,
-  });
-  const atual = sessoes.at(-1);
-  const viva = atual && situacao(atual.id);
-  if (viva && !viva.ocupado) {
-    mandar(viva.execucao, { type: "prompt", message: `Planejamento reprovado pelo Auditor. Motivo: ${motivo}` });
-  }
-  return ag;
-}
-
-/**
- * Prepara antes de confirmar (§6): garante a worktree da demanda e a de cada rodada independente e só então grava a
- * aprovação. Falha de preparação deixa o gate aberto, vai ao log e sobe com o caminho da worktree. Repetível: o que já
- * existe é reaproveitado.
- */
-export async function aprovarPlanejamentoDemanda(
-  banco: DatabaseSync,
-  demandaId: string,
-  entrada: { nota?: number },
-): Promise<AgregadoDemanda> {
-  const ag = carregarDemanda(banco, demandaId);
-  // Ensaio: recusa antes de tocar o git (estado, falha, plano ausente).
-  confirmarAprovacaoPlanejamento(ag, entrada, AUDITOR, contexto());
-  const plano = Plano.parse(
-    ag.evidencias.find((e) => e.tipo === "plano" && e.ticket_id === ticketPlanejar(ag).ticket_id)?.dados,
-  );
-  const projeto = carregarProjeto(banco, ag.demanda.projeto);
-  const raiz = raizDo(banco);
-  mkdirSync(join(raiz, "execucoes"), { recursive: true });
-  const log = join(raiz, "execucoes", `planejamento-${demandaId}.log`);
-  const passos = [
-    {
-      caminho: caminhoDaWorktreeDemanda(raiz, projeto.nome, demandaId),
-      garantir: () => garantirWorktreeDemanda(raiz, projeto, demandaId, log, () => varrerBase(banco, projeto.nome)),
-    },
-    // D04: a rodada dependente nasce quando começa, da ponta da demanda já com as predecessoras integradas.
-    ...plano.rodadas
-      .filter((rodada) => rodada.depende.length === 0)
-      .map(({ rodada_id }) => {
-        const ref = { demanda_id: demandaId, rodada_id };
-        return {
-          caminho: caminhoDaWorktreeRodada(raiz, projeto.nome, ref),
-          garantir: () => garantirWorktreeRodada(raiz, projeto, ref, log),
-        };
-      }),
-  ];
-  for (const { caminho, garantir } of passos) {
-    try {
-      await garantir();
-    } catch (erro) {
-      anotar(log, `preparação falhou em ${caminho}: ${mensagem(erro)}`);
-      throw new ErroDeRegra(`${mensagem(erro)} (worktree ${caminho})`);
-    }
-  }
-  const aprovada = comDemanda(banco, demandaId, (a) => confirmarAprovacaoPlanejamento(a, entrada, AUDITOR, contexto()));
-  // O planejamento acabou: o pi ocioso à espera do gate para e a execução ganha o fim.
-  const { sessoes } = carregarSessoesDoTicket(banco, {
-    demanda_id: demandaId,
-    ticket_id: ticketPlanejar(aprovada).ticket_id,
-  });
-  const atual = sessoes.at(-1);
-  const viva = atual && situacao(atual.id);
-  if (viva) encerrar(viva.execucao);
-  return aprovada;
 }

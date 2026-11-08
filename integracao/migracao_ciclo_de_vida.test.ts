@@ -4,10 +4,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR } from "../src/nucleo/ator.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { registrarCorrecoesSessao } from "../src/nucleo/transicoes_rodada.ts";
 import { iniciarRevisaoIntegral } from "../src/aplicacao/revisao_demanda.ts";
-import { aprovarPlanejamentoDemanda } from "../src/aplicacao/planejamento.ts";
-import { concluirSessaoAjustes, reprovarPRRodada } from "../src/aplicacao/sessao_ajustes.ts";
+import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
+import { concluirSessaoAjustes } from "../src/aplicacao/sessao_ajustes.ts";
 import type { EstadoDemanda } from "../src/nucleo/primitivos.ts";
 import { abrir } from "../src/armazenamento/banco.ts";
 import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
@@ -74,27 +75,21 @@ async function rodadaNoGateDoPR(c: Cenario): Promise<string> {
   return id;
 }
 
-/** As conversas da sessão de ajustes abertas, por demanda: o `fim` delas só chega quando o Auditor conclui a sessão. */
-const CONVERSAS_ABERTAS = new Map<string, { fim: Promise<unknown> }>();
-
 /** Rodada 1 na sessão de ajustes: o Auditor reprovou o PR e a conversa com o pi segue aberta. */
 async function rodadaNaSessaoDeAjustes(c: Cenario): Promise<string> {
   const id = await rodadaNoGateDoPR(c);
   fecharPortao();
   pi.roteirizar([{ agente: agenteMudo }]);
   const chamadasAntes = pisAteAgora();
-  const sessao = await reprovarPRRodada(
+  await decidirGate(
     c.banco,
-    { demanda_id: id, rodada_id: 1 },
-    "o PR mistura duas mudanças",
+    "gate_pr",
+    Endereco.daRodada(id, 1),
+    { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
     AUDITOR,
-    {
-      limiteMin: c.config.timeoutMin,
-    },
   );
   await esperar(() => pisAteAgora() === chamadasAntes + 1, "o pi da conversa receber o prompt");
   abrirPortao();
-  CONVERSAS_ABERTAS.set(id, sessao);
   return id;
 }
 
@@ -127,13 +122,13 @@ async function conduzirAteConcluir(c: Cenario, id: string): Promise<void> {
         gestao.enviar(c.banco, id, AUTOR, CTX);
         break;
       case "gate_demanda":
-        gestao.decidir(c.banco, id, { aprovado: true }, AUDITOR, CTX);
+        await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
         break;
       case "planejar":
         await planejarDemanda(c, id, UMA_RODADA_DE_UM_TICKET);
         break;
       case "gate_planejamento":
-        await aprovarPlanejamentoDemanda(c.banco, id, {});
+        await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
         break;
       case "em_execucao": {
         const rodada = rodadas.find((r) => r.estado !== "concluida");
@@ -162,7 +157,7 @@ async function conduzirRodada(c: Cenario, id: string, rodada: number, estado: st
       await ciclo(c, despacho());
       break;
     case "revisar_rodada":
-      await revisar(c, id, { aprovado: true }, rodada);
+      await revisar(c, id, { resultado: "aprovado" }, rodada);
       break;
     case "encerrar_rodada":
       await encerrar(c, id, rodada);
@@ -177,8 +172,7 @@ async function conduzirRodada(c: Cenario, id: string, rodada: number, estado: st
       comDemanda(c.banco, id, (ag) =>
         registrarCorrecoesSessao(ag, { ...ref, ticket_id, correcoes: [correcao] }, AUDITOR, { agora: agora() }),
       );
-      await concluirSessaoAjustes(c.banco, ref, AUDITOR);
-      await CONVERSAS_ABERTAS.get(id)?.fim;
+      await concluirSessaoAjustes(c.banco, ref, AUDITOR); // aguarda o fim da conversa
       break;
     }
     default:
@@ -218,9 +212,9 @@ function migrarDoEsquemaAnterior(
 const DEMANDAS_ANTES: Record<string, (c: Cenario) => Promise<string>> = {
   registro: (c) => Promise.resolve(registrarExterna(c)),
   aprovacao_demanda: (c) => Promise.resolve(demandaEnviada(c)),
-  planejamento: (c) => Promise.resolve(demandaAprovada(c)),
+  planejamento: (c) => demandaAprovada(c),
   aprovacao_planejamento: async (c) => {
-    const id = demandaAprovada(c);
+    const id = await demandaAprovada(c);
     await planejarDemanda(c, id, UMA_RODADA_DE_UM_TICKET);
     return id;
   },

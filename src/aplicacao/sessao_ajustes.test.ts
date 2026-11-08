@@ -8,10 +8,11 @@ import { after, test } from "node:test";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { instalarPiFalso } from "../../apoio-testes/pi_falso.ts";
 import { setTimeout as dormir } from "node:timers/promises";
-import { ZodError } from "zod";
-import { AUDITOR } from "../nucleo/ator.ts";
+import { AUDITOR, type Ator } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { ErroDeEscopo } from "../nucleo/erros.ts";
+import { GATES } from "../nucleo/gate.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { registrarCorrecoesSessao } from "../nucleo/transicoes_rodada.ts";
 import { registrarProjeto } from "./projeto/cadastro.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
@@ -20,7 +21,8 @@ import { criarRepositorioDeTeste, commitarArquivo, rodarGit } from "../../apoio-
 import { garantirWorktreeDemanda, garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { conferirPromptComFoto } from "./fotos_retorno/conferir_foto.ts";
 import { situacao } from "./gerente.ts";
-import { concluirSessaoAjustes, reprovarPRRodada } from "./sessao_ajustes.ts";
+import { decidirGate } from "./gates/decidir_gate.ts";
+import { abrirSessaoDeAjustes, concluirSessaoAjustes, guardarMarcoDaSessao } from "./sessao_ajustes.ts";
 import { enviarDemanda } from "./sessoes_demanda.ts";
 
 const em = "2026-01-01T00:00:00.000Z";
@@ -132,7 +134,20 @@ async function cenario(shell = "") {
   };
 }
 
-const LIMITE = { limiteMin: 5 };
+const ENDERECO = Endereco.daRodada(DEMANDA, 2);
+
+/** Reprova o PR da rodada pelo gate, que abre a sessão de ajustes com o limite de tempo da configuração. */
+const reprovarPRRodada = (banco: DatabaseSync, motivo: string, ator: Ator = AUDITOR) =>
+  decidirGate(banco, "gate_pr", ENDERECO, { resultado: "reprovado", motivo }, ator);
+
+/** O mesmo caminho de efeitos do gate, com um limite curto para o pi terminar logo e o `fim` poder ser esperado. */
+async function reprovarPRRodadaComLimiteCurto(banco: DatabaseSync, motivo: string) {
+  await guardarMarcoDaSessao(banco, REF, carregarDemanda(banco, DEMANDA));
+  const reprovada = comDemanda(banco, DEMANDA, (a) =>
+    GATES.gate_pr.decidir(a, ENDERECO, { resultado: "reprovado", motivo }, AUDITOR, { agora: em }),
+  );
+  return abrirSessaoDeAjustes(banco, REF, reprovada, motivo, { limiteMin: 0.02 });
+}
 
 async function ate(condicao: () => boolean): Promise<void> {
   for (let i = 0; i < 500 && !condicao(); i++) await dormir(20);
@@ -142,9 +157,9 @@ async function ate(condicao: () => boolean): Promise<void> {
 test("CA-12, CA-14, CA-15, CA-23 e CA-25: reprovar registra a recusa, abre a sessão e leva o motivo, a URL e os endereços públicos", async () => {
   const { ag, prompts, banco } = await cenario();
 
-  const { id } = await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, LIMITE);
+  const { sessao } = await reprovarPRRodada(banco, MOTIVO);
 
-  assert.ok(id);
+  assert.ok(sessao);
   const depois = ag();
   assert.deepEqual(
     depois.decisoes.map((d) => [d.resultado, d.motivo, d.nota]),
@@ -164,7 +179,7 @@ test("CA-12, CA-14, CA-15, CA-23 e CA-25: reprovar registra a recusa, abre a ses
 
 test("foto do retorno ao agente nos ajustes: reprovação do PR da rodada", async () => {
   const { c, ag, prompts, banco } = await cenario();
-  await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, LIMITE);
+  await reprovarPRRodada(banco, MOTIVO);
   await ate(() => prompts().length === 1);
   conferirPromptComFoto(prompts()[0]?.prompt ?? "", c.raiz, "ajustes_reprovacao");
   await concluirComCorrecao(banco, ag);
@@ -188,17 +203,23 @@ async function concluirComCorrecao(banco: DatabaseSync, ag: () => AgregadoDemand
   return concluirSessaoAjustes(banco, REF, AUDITOR);
 }
 
-test("CA-13: reprovar sem motivo, ou como agente, é reprovado sem abrir a sessão", async () => {
-  const { ag, banco, marco } = await cenario();
+test("CA-13: reprovar sem motivo, como agente ou fora do gate é reprovado sem gravar o marco nem abrir a sessão", async () => {
+  const { ag, banco, marco, prompts } = await cenario();
 
-  await assert.rejects(reprovarPRRodada(banco, REF, "", AUDITOR, LIMITE), ZodError);
-  await assert.rejects(
-    reprovarPRRodada(banco, REF, MOTIVO, { tipo: "agente", trabalho_id: "1" }, LIMITE),
-    ErroDeEscopo,
-  );
-
+  await assert.rejects(reprovarPRRodada(banco, ""), /informe o motivo da reprovação/);
+  await assert.rejects(reprovarPRRodada(banco, MOTIVO, { tipo: "agente", trabalho_id: "1" }), ErroDeEscopo);
   assert.equal(ag().rodadas[0]?.estado, "gate_pr");
   assert.equal(existsSync(marco()), false);
+
+  // A recusa do domínio (aqui, a rodada fora do gate) vem do ensaio, antes do marco.
+  comDemanda(banco, DEMANDA, (a) => ({
+    ...a,
+    rodadas: a.rodadas.map((r) => ({ ...r, estado: "implementar" as const })),
+  }));
+  await assert.rejects(reprovarPRRodada(banco, MOTIVO));
+  assert.equal(existsSync(marco()), false);
+  assert.deepEqual(ag().decisoes, []);
+  assert.deepEqual(prompts(), []);
 });
 
 test("CA-17 e CA-18: o que o agente commita ou integra na conversa é desfeito ao fim da execução", async () => {
@@ -207,7 +228,7 @@ test("CA-17 e CA-18: o que o agente commita ou integra na conversa é desfeito a
   );
   const demanda = sha(BRANCH_DEMANDA);
 
-  const { fim } = await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, { limiteMin: 0.02 });
+  const { fim } = await reprovarPRRodadaComLimiteCurto(banco, MOTIVO);
   await fim;
 
   assert.equal(sha(BRANCH_RODADA), head);
@@ -218,7 +239,7 @@ test("CA-17 e CA-18: o que o agente commita ou integra na conversa é desfeito a
 
 test("CA-16: a mensagem do Auditor pelo chat vai ao pi vivo e a resposta fica na mesma conversa", async () => {
   const { banco, prompts, ag } = await cenario();
-  await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, LIMITE);
+  await reprovarPRRodada(banco, MOTIVO);
   await ate(() => prompts().length === 1);
   const sessao = prompts()[0]?.sessao ?? "";
   await ate(() => situacao(sessao)?.ocupado === false);
@@ -245,7 +266,7 @@ test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesm
     `git {id} commit --allow-empty -qm indevido && echo x > sujo.txt && git -C {demanda} {id} commit --allow-empty -qm integrado`,
   );
   const demanda = sha(BRANCH_DEMANDA);
-  const { fim } = await reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, { limiteMin: 0.02 });
+  const { fim } = await reprovarPRRodadaComLimiteCurto(banco, MOTIVO);
   await fim;
   const sessao = prompts()[0]?.sessao ?? "";
 
@@ -262,9 +283,19 @@ test("CA-17 e CA-18 na retomada: sem pi vivo, a mensagem pelo chat retoma a mesm
 });
 
 test("rodada sem PR publicado não reprova", async () => {
-  const { banco } = await cenario();
+  const { banco, ag } = await cenario();
   banco.prepare("DELETE FROM evidencia_demanda").run();
-  await assert.rejects(reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, LIMITE), /não tem PR publicado/);
+  await assert.rejects(reprovarPRRodada(banco, MOTIVO), /não tem PR publicado/);
+  assert.deepEqual(ag().decisoes, []);
   banco.prepare("DELETE FROM ticket_demanda WHERE etapa = 'encerrar_rodada'").run();
-  await assert.rejects(reprovarPRRodada(banco, REF, MOTIVO, AUDITOR, LIMITE), /não tem ticket encerrar_rodada/);
+  await assert.rejects(reprovarPRRodada(banco, MOTIVO), /não tem ticket encerrar_rodada/);
+});
+
+test("o endereço da demanda não reprova o PR, que é da rodada", async () => {
+  const { banco, marco } = await cenario();
+  await assert.rejects(
+    decidirGate(banco, "gate_pr", Endereco.daDemanda(DEMANDA), { resultado: "reprovado", motivo: MOTIVO }, AUDITOR),
+    /não é de uma rodada/,
+  );
+  assert.equal(existsSync(marco()), false);
 });

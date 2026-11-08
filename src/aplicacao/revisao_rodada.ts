@@ -1,8 +1,7 @@
 // Revisão de rodada (comparacao-sdlc-implementacao.md §§4, 6): as evidências que cabem à Fabriquinha antes do pi.
 import { matchesGlob } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, FABRIQUINHA } from "../nucleo/ator.ts";
-import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
+import { FABRIQUINHA } from "../nucleo/ator.ts";
 import { branchDemanda, branchRodada, formatarRodadaRef, formatarTicketRef } from "../nucleo/demanda.ts";
 import { encontrado, ErroDeRegra } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
@@ -17,10 +16,7 @@ import { type Anexo, gravarAnexos } from "../armazenamento/evidencia_demanda.ts"
 import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { garantirWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
-import { registrarRevisaoRodada } from "../nucleo/transicoes_rodada.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
-import { conferirAprovacao } from "./revisao_pendencias.ts";
-import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 
 type Dados = EntradaEvidenciaDemanda["dados"];
 
@@ -128,18 +124,4 @@ export async function conduzirRevisaoRodada(
   );
   const alvo = { demanda_id, ticket_id };
   return conduzirRevisao(banco, alvo, { ...opcoes, preparar: () => prepararRevisaoRodada(banco, alvo) });
-}
-
-/** Aplica a decisão do agente; a aprovação só passa com as evidências em ordem (a recusa desfaz tudo). */
-export function decidirRevisaoRodada(
-  banco: DatabaseSync,
-  entrada: { aprovado: boolean; demanda_id: string; ticket_id: number; [campo: string]: unknown },
-  ator: Ator,
-): AgregadoDemanda {
-  return comDemanda(banco, entrada.demanda_id, (ag) => {
-    exigirTrabalhoDoTicket(banco, ator, entrada);
-    const novo = registrarRevisaoRodada(ag, entrada, ator, { agora: new Date().toISOString() });
-    if (entrada.aprovado) conferirAprovacao(ag, entrada.ticket_id);
-    return novo;
-  });
 }

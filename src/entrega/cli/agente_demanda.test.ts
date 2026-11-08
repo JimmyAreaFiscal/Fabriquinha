@@ -424,7 +424,9 @@ test("revisão: opções que faltam ou sobram, JSON inválido, ticket alheio e t
   assert.match(await rodar("I-206.T9", "reprovar", "--motivo", "m"), /reprovar exige --correcoes/);
   assert.match(await rodar("I-206.T9", "reprovar", "--motivo", "m", "--correcoes", "{"), /--correcoes não é um JSON/);
   assert.match(await rodar("I-206.T9", "reprovar", "--motivo", "m", "--correcoes", "{}"), /vetor/);
-  assert.match(await rodar("I-206.T9", "aprovar", "--motivo", "m"), /aprovar não leva/);
+  for (const opcao of ["--motivo", "--correcoes", "--plano"]) {
+    assert.match(await rodar("I-206.T9", "aprovar", opcao, "m"), /aprovar não leva/);
+  }
   assert.match(await rodar("I-206.T4", "aprovar"), /só age no próprio ticket/);
   assert.match(await rodar("T-9", "aprovar"), /I-206\.T9/);
   const outro = cenario();

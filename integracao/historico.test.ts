@@ -8,6 +8,8 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import type { PassoPi } from "../apoio-testes/pi_falso.ts";
 import { AUDITOR } from "../src/nucleo/ator.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
+import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { predecessorasPendentes } from "../src/nucleo/dependencia_demanda.ts";
 import {
   abrir as abrirAvaliacao,
@@ -192,7 +194,7 @@ test("CA-SDLC-25: avaliação de melhoria com achado encaminhado vira uma demand
   });
   gestao.enviar(c.banco, nova.id, autor, CTX);
   assert.equal(demanda(c, nova.id).demanda.estado, "gate_demanda");
-  gestao.decidir(c.banco, nova.id, { aprovado: true }, AUDITOR, CTX);
+  await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(nova.id), { resultado: "aprovado" }, AUDITOR);
   assert.equal(demanda(c, nova.id).demanda.estado, "planejar");
 
   encerrar(id);

@@ -79,7 +79,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   await aprovarRodada(c, id, 1);
 
   // Reprovada: as exigências ficam na decisão, a rodada concluída continua concluída e nasce a rodada corretiva.
-  const primeira = await revisaoIntegral(c, id, { exigencias: "falta tratar a integração entre as partes" });
+  const primeira = await revisaoIntegral(c, id, { motivo: "falta tratar a integração entre as partes" });
   let ag = demanda(c, id);
   assert.equal(ag.demanda.estado, "em_execucao");
   assert.deepEqual(
@@ -101,7 +101,7 @@ test("CA-SDLC-14: revisão integral reprovada abre rodada corretiva que percorre
   pi.roteirizar([{ agente }]);
   await ciclo(c, deps());
   assert.equal(rodadaDe(c, id, 2)?.estado, "revisar_rodada");
-  await revisar(c, id, { aprovado: true }, 2);
+  await revisar(c, id, { resultado: "aprovado" }, 2);
   assert.equal(rodadaDe(c, id, 2)?.estado, "encerrar_rodada");
   await encerrar(c, id, 2);
   assert.equal(rodadaDe(c, id, 2)?.estado, "gate_pr");

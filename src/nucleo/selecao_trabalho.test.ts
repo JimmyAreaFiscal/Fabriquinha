@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "./ator.ts";
 import { AgregadoDemanda } from "./agregado_demanda.ts";
+import { GATES } from "./gate.ts";
+import { Endereco } from "./item_de_trabalho.ts";
 import { selecionarTrabalho, selecionarTrabalhoGlobal } from "./selecao_trabalho.ts";
-import { concluirSessaoRodada, registrarCorrecoesSessao, reprovarPullRequestRodada } from "./transicoes_rodada.ts";
+import { concluirSessaoRodada, registrarCorrecoesSessao } from "./transicoes_rodada.ts";
 
 const t0 = "2026-01-01T00:00:00Z";
 const tk = (ticket_id: number, rodada_id: number | undefined, status = "aberto", etapa = "implementar") => ({
@@ -215,7 +217,13 @@ test("reprovação do PR → sessão sem implementação → correção nova →
     rodadas: [rd(1, "gate_pr"), rd(2)],
     tickets: [tk(2, 1, "concluido"), tk(3, 1, "aberto", "encerrar_rodada"), tk(4, 2)],
   });
-  const sessao = reprovarPullRequestRodada(gate, { ...ref, ticket_id: 3, motivo: "ajustar" }, AUDITOR, ctx);
+  const sessao = GATES.gate_pr.decidir(
+    gate,
+    Endereco.daRodada("I-1", 1),
+    { resultado: "reprovado", motivo: "ajustar" },
+    AUDITOR,
+    ctx,
+  );
   assert.deepEqual(
     selecionarTrabalho(sessao, true).map((t) => t.ticket_id),
     [4],

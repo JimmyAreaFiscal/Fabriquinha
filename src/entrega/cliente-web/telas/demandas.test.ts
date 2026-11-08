@@ -654,8 +654,8 @@ test("o gate da demanda traz Aprovar e Reprovar com o motivo, ligados à rota da
   const html = pagina(dadosDaPagina({ demanda: { ...dadosDaPagina().demanda, estado: "gate_demanda" } }));
   assert.match(html, /<span class="dm-gate-titulo">Aprovação da demanda<\/span>/);
   assert.match(html, /<textarea id="motivo-decisao"/);
-  assert.match(html, /data-gate="false" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Reprovar</);
-  assert.match(html, /data-gate="true" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Aprovar</);
+  assert.match(html, /data-gate="reprovado" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Reprovar</);
+  assert.match(html, /data-gate="aprovado" data-caminho="\/api\/demandas\/I-206\/decisao"[^>]*>Aprovar</);
 });
 
 /** Uma evidência da própria demanda, sem anexos. */
@@ -764,11 +764,11 @@ test("a rodada em Aprovação do PR traz a nota e Aprovar PR/Reprovar PR ligados
   assert.match(html, /<option value="5">5<\/option>/);
   assert.match(
     html,
-    /data-gate="false" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-campo="motivo-I-206\.R1">Reprovar PR</,
+    /data-gate="reprovado" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-campo="motivo-I-206\.R1">Reprovar PR</,
   );
   assert.match(
     html,
-    /data-gate="true" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-nota="nota-I-206\.R1">Aprovar PR</,
+    /data-gate="aprovado" data-caminho="\/api\/demandas\/rodadas\/I-206\.R1\/pr" data-nota="nota-I-206\.R1">Aprovar PR</,
   );
   assert.doesNotMatch(
     pagina({ ...base, rodadas: [{ ref: "I-206.R1", titulo: "r", estado: "concluida", ticket_atual_por_etapa: {} }] }),

@@ -113,7 +113,7 @@ async function decidir(
   params: Parametros,
   signal: AbortSignal,
 ): Promise<void> {
-  const aprovado = botao.dataset.gate === "true";
+  const aprovando = botao.dataset.gate === "aprovado";
   // Cada botão aponta o campo que lê: o motivo (reprovar) ou a nota (aprovar o PR da rodada).
   const doCampo = (id?: string) =>
     id === undefined ? null : main.querySelector<HTMLInputElement>(`#${CSS.escape(id)}`);
@@ -121,9 +121,9 @@ async function decidir(
   const motivo = campo?.value.trim() ?? "";
   const nota = doCampo(botao.dataset.nota)?.value;
   const pendencia =
-    !aprovado && motivo === ""
+    !aprovando && motivo === ""
       ? { onde: campo?.nextElementSibling, texto: "O motivo é obrigatório para reprovar." }
-      : aprovado && nota === ""
+      : aprovando && nota === ""
         ? { onde: doCampo(`${botao.dataset.nota ?? ""}-erro`), texto: "Escolha a nota de 1 a 5." }
         : undefined;
   if (pendencia) {
@@ -139,7 +139,9 @@ async function decidir(
     await api(botao.dataset.caminho ?? "", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(aprovado ? { aprovado, ...(nota && { nota: Number(nota) }) } : { aprovado, motivo }),
+      body: JSON.stringify(
+        aprovando ? { resultado: "aprovado", ...(nota && { nota: Number(nota) }) } : { resultado: "reprovado", motivo },
+      ),
       signal,
     });
   } catch (falha) {

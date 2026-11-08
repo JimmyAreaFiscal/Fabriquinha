@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { AUDITOR } from "../src/nucleo/ator.ts";
-import { aprovarPRRodada } from "../src/aplicacao/aprovacao_pr_rodada.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
+import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { caminhoDaWorktreeRodada } from "../src/infra/repositorio/worktree-demanda.ts";
 import {
   abrirPortao,
@@ -31,12 +32,14 @@ test("CA-SDLC-13: integração que falha não conclui a rodada, não grava a apr
   const id = await rodadaEmEncerramento(c);
   await encerrar(c, id);
   assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
-  const ref = { demanda_id: id, rodada_id: 1 };
   const gate = atual(c, id, "encerrar_rodada").ticket_id;
   const antes = demanda(c, id);
 
   gh.mergeFalha();
-  await assert.rejects(aprovarPRRodada(c.banco, ref, 5, AUDITOR), /merge recusado pela hospedagem/);
+  await assert.rejects(
+    decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 5 }, AUDITOR),
+    /merge rejeitado pela hospedagem/,
+  );
 
   const depois = demanda(c, id);
   assert.equal(rodadaDe(c, id, 1)?.estado, "gate_pr");
@@ -63,9 +66,9 @@ test("D04: a rodada dependente nasce da ponta da demanda quando começa, já com
   abrirPortao();
   pi.roteirizar([{ agente }]);
   await ciclo(c, despacho());
-  await revisar(c, id, { aprovado: true });
+  await revisar(c, id, { resultado: "aprovado" });
   await encerrar(c, id);
-  await aprovarPRRodada(c.banco, { demanda_id: id, rodada_id: 1 }, 5, AUDITOR);
+  await decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 5 }, AUDITOR);
   assert.equal(rodadaDe(c, id, 1)?.estado, "concluida");
   const pontaComR1 = git(c.repo, "rev-parse", `refs/heads/${demanda(c, id).demanda.branch}`);
 

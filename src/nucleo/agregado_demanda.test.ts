@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   AgregadoDemanda,
+  Decisao,
   Demanda,
   donoDe,
   EvidenciaDemanda,
@@ -9,7 +10,6 @@ import {
   TipoEvidenciaAgregado,
 } from "./agregado_demanda.ts";
 import { AUDITOR, FABRIQUINHA } from "./ator.ts";
-import { Decisao } from "./gate.ts";
 import { TipoEvidencia } from "./schemas.ts";
 import { Endereco } from "./item_de_trabalho.ts";
 import { TipoEvidenciaEtapa } from "./evidencia_etapa.ts";

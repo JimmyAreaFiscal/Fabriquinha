@@ -263,8 +263,10 @@ test("CA-6 e CA-16: o planejar com predecessora pendente não é despachado nem 
   banco.exec("UPDATE demanda SET enviada = 1 WHERE id = 'I-6'");
   await Promise.all(despacharDemandas(banco, config, deps));
   assert.deepEqual([estadoDoTicket(banco, 6, 1), execucoes(banco, 6, 1)], ["aberto", 0]);
+  const antes = carregarDemanda(banco, "I-6");
   assert.throws(() => executarAgoraDemanda(banco, { demanda_id: "I-6", ticket_id: 1 }, config, deps), /predecessoras/);
   assert.deepEqual([estadoDoTicket(banco, 6, 1), execucoes(banco, 6, 1)], ["aberto", 0]);
+  assert.deepEqual(carregarDemanda(banco, "I-6"), antes); // o ensaio da reserva não grava
 });
 
 test("CA-7: repositório inexistente não deixa o ticket em execução e o motivo vai ao log", async () => {

@@ -164,13 +164,17 @@ export function executarAgoraDemanda(
       throw new ErroDeRegra("o limite global de paralelismo está ocupado", "espere uma execução terminar");
     }
     // Ensaio da reserva: a recusa diz por que a seleção não escolheria o ticket (predecessora pendente, rodada ocupada...).
-    reservarTicket(
-      agregado,
-      { ticket_id: ref.ticket_id },
-      FABRIQUINHA,
-      { agora: new Date().toISOString() },
-      predecessoras_satisfeitas,
-    );
+    // O agregado volta como veio, então nada é gravado; a reserva de verdade é a da etapa.
+    comDemanda(banco, ref.demanda_id, (ag) => {
+      reservarTicket(
+        ag,
+        { ticket_id: ref.ticket_id },
+        FABRIQUINHA,
+        { agora: new Date().toISOString() },
+        predecessoras_satisfeitas,
+      );
+      return ag;
+    });
     return acompanhar(iniciarEtapa(banco, ticket, c, deps));
   });
 }
