@@ -344,6 +344,19 @@ test("RPC: SIGTERM mata o pi, ou assenta e sai com 0 quando o passo manda", asyn
   assert.equal((await ignora.saida).sinal, "SIGKILL");
 });
 
+// Com a regressão, o pi não sai: o limite reprova o teste e o SIGKILL do `after` impede que ele trave o `node --test`.
+test("RPC: o pi que trava sai sozinho quando a pasta do teste que o instalou some", { timeout: 5000 }, async (t) => {
+  const pastaDoTeste = pasta();
+  const trava = subir([{ termina: "trava", sigterm: "ignora" }], [], {
+    FALSO_PI_REGISTRO: join(pastaDoTeste, "pi-registro.jsonl"),
+  });
+  t.after(() => trava.filho.kill("SIGKILL"));
+  trava.enviar({ type: "prompt", message: "x" });
+  await trava.esperarEvento("agent_start");
+  rmSync(pastaDoTeste, { recursive: true, force: true });
+  assert.deepEqual(await trava.saida, { codigo: 1, sinal: null });
+});
+
 test("RPC: o agente escreve, apaga, acrescenta, roda shell, chama o CLI e um módulo, e o fim do agente", async () => {
   const agente = join(pasta(), "agente.mjs");
   writeFileSync(

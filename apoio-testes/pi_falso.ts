@@ -18,7 +18,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { setTimeout as dormir } from "node:timers/promises";
 
 /** Um evento a emitir no stdout, ou uma pausa antes do próximo. */
@@ -176,6 +176,15 @@ async function executarPiFalso(): Promise<void> {
     process.exit(0);
   }
   const caminhoDoRegistro = process.env.FALSO_PI_REGISTRO;
+  // O pi falso não sobrevive à pasta do teste que o instalou (o `after` do teste a remove, passe ele ou falhe). Sem isso,
+  // um teste que falha antes de encerrar a sessão deixa o pi esperando o stdin e o processo do teste esperando o pi, e o
+  // `node --test` nunca termina.
+  if (caminhoDoRegistro) {
+    const pastaDoTeste = dirname(caminhoDoRegistro);
+    setInterval(() => {
+      if (!existsSync(pastaDoTeste)) process.exit(1);
+    }, 200).unref();
+  }
   const registradasNoProcesso: EntradaDoRegistro[] = [];
   const registrar = (entrada: EntradaDoRegistro) => {
     registradasNoProcesso.push(entrada);
