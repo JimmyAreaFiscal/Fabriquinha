@@ -59,7 +59,7 @@ test("CA-SDLC-07: rodadas independentes executam em paralelo, a dependente aguar
   pi.roteirizar([{ agente }]);
   const deps = despacho();
 
-  // D04: o limite global vale para todas as rodadas; com 1 vaga só a primeira (R1) executa e o "executar agora" é recusado.
+  // D04: o limite global vale para todas as rodadas; com 1 vaga só a primeira (R1) executa e o "executar agora" é negado.
   gravarLimiteParalelismo(c.banco, 1);
   const primeiro = despacharDemandas(c.banco, configuracao(c.banco), deps);
   assert.equal(primeiro.length, 1);

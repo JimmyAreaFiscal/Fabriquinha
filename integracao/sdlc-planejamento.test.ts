@@ -217,9 +217,9 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     assert.equal(ag.tickets[0]?.ticket_id, 1);
     assert.equal(ag.tickets.find((x) => x.etapa === "implementar")?.titulo, `${titulo.slice(0, -2)} t1`);
   }
-  // Decisão: a recusa do planejamento de A não aparece em B; cada uma numera as suas a partir de 1.
-  const recusas = (id: string) => dono(id).decisoes.filter((d) => d.resultado === "reprovado").length;
-  assert.deepEqual([recusas(a), recusas(b)], [1, 0]);
+  // Decisão: a reprovação do planejamento de A não aparece em B; cada uma numera as suas a partir de 1.
+  const reprovacoes = (id: string) => dono(id).decisoes.filter((d) => d.resultado === "reprovado").length;
+  assert.deepEqual([reprovacoes(a), reprovacoes(b)], [1, 0]);
   assert.deepEqual(
     [a, b].map((id) => Math.min(...dono(id).decisoes.map((d) => d.decisao_id))),
     [1, 1],
