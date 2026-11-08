@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { AUDITOR, FABRIQUINHA } from "../nucleo/ator.ts";
 import { ErroDeRegra } from "../nucleo/erros.ts";
+import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import { submeterEvidenciaDemanda } from "../nucleo/evidencia_demanda.ts";
 import { reabrirTicket } from "../nucleo/transicoes_demanda.ts";
 import { motivoDaFalhaDoTicket } from "../nucleo/tentativa.ts";
@@ -24,7 +25,8 @@ import {
   REF_GLOBAL,
   REF_RODADA,
 } from "../../apoio-testes/cenarios_de_demanda.ts";
-import { conduzirRevisaoRodada, decidirRevisaoRodada, prepararRevisaoRodada } from "./revisao_rodada.ts";
+import { decidirGate } from "./gates/decidir_gate.ts";
+import { conduzirRevisaoRodada, prepararRevisaoRodada } from "./revisao_rodada.ts";
 
 const evidencia = (banco: Parameters<typeof carregarDemanda>[0], tipo: string) =>
   carregarDemanda(banco, "I-1").evidencias.filter((e) => e.ticket_id === 2 && e.tipo === tipo);
@@ -154,28 +156,24 @@ function evidenciar(banco: Parameters<typeof carregarDemanda>[0], saida: number,
     ),
   );
 }
-const decidir = (banco: Parameters<typeof carregarDemanda>[0], extra: object) =>
-  decidirRevisaoRodada(
-    banco,
-    { demanda_id: "I-1", rodada_id: 1, ticket_id: 2, ...extra } as never,
-    revisorDaRodada(banco),
-  );
+const decidir = (banco: Parameters<typeof carregarDemanda>[0], entrada: object, ator = revisorDaRodada(banco)) =>
+  decidirGate(banco, "gate_revisao_rodada", Endereco.daRodada("I-1", 1), entrada, ator);
 const estadoDaPrimeiraRodada = (banco: Parameters<typeof carregarDemanda>[0]) =>
   carregarDemanda(banco, "I-1").rodadas[0]?.estado;
 
 test("CA-5: aprovação reprovada por fitness que falha; a rodada continua em revisao", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 1, true);
-  assert.throws(() => decidir(banco, { aprovado: true }), /matriz_fitness.*fitness que falhou: f/);
+  await assert.rejects(decidir(banco, { resultado: "aprovado" }), /matriz_fitness.*fitness que falhou: f/);
   assert.equal(estadoDaPrimeiraRodada(banco), "revisar_rodada");
 });
 
 test("CA-6: aprovação reprovada por comprovacao_criterios ausente ou reprovada", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 0);
-  assert.throws(() => decidir(banco, { aprovado: true }), /comprovacao_criterios ausente/);
+  await assert.rejects(decidir(banco, { resultado: "aprovado" }), /comprovacao_criterios ausente/);
   evidenciar(banco, 0, false);
-  assert.throws(() => decidir(banco, { aprovado: true }), /comprovacao_criterios reprovada/);
+  await assert.rejects(decidir(banco, { resultado: "aprovado" }), /comprovacao_criterios reprovada/);
   assert.equal(estadoDaPrimeiraRodada(banco), "revisar_rodada");
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });
@@ -183,7 +181,7 @@ test("CA-6: aprovação reprovada por comprovacao_criterios ausente ou reprovada
 test("CA-7: aprovada vai a encerramento com encerrar_rodada aberto", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 0, true);
-  decidir(banco, { aprovado: true });
+  await decidir(banco, { resultado: "aprovado" });
   const ag = carregarDemanda(banco, "I-1");
   assert.equal(estadoDaPrimeiraRodada(banco), "encerrar_rodada");
   assert.equal(ag.tickets.find((t) => t.etapa === "encerrar_rodada")?.estado, "aberto");
@@ -193,9 +191,9 @@ test("CA-7: aprovada vai a encerramento com encerrar_rodada aberto", async () =>
 test("CA-8: reprovada não confere evidências, volta a desenvolvimento com corretivos e exigências no motivo", async () => {
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 1);
-  decidir(banco, {
-    aprovado: false,
-    exigencias: "corrigir o lint",
+  await decidir(banco, {
+    resultado: "reprovado",
+    motivo: "corrigir o lint",
     correcoes: [
       { demanda_id: "I-1", ticket_id: 1, rodada_id: 1, titulo: "corrige", descricao: "d", caminhos: [], depende: [] },
     ],
@@ -227,14 +225,14 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
   }));
   const reprovar = () =>
     decidir(banco, {
-      aprovado: false,
-      exigencias: "três",
+      resultado: "reprovado",
+      motivo: "três",
       correcoes: [{ demanda_id: "I-1", ticket_id: 1, rodada_id: 1 }],
     });
   const ticketRevisor = () => carregarDemanda(banco, "I-1").tickets.find((t) => t.ticket_id === 2);
 
   const ticketsAntes = carregarDemanda(banco, "I-1").tickets.length;
-  reprovar();
+  await reprovar();
   assert.equal(ticketRevisor()?.estado, "falhou");
   const revisor = ticketRevisor();
   assert.ok(revisor);
@@ -251,13 +249,13 @@ test("CA-1 e CA-3: terceira reprovação falha o ticket sem corretivos; o Audito
       }),
     );
   reabrir();
-  reprovar();
+  await reprovar();
   assert.equal(ticketRevisor()?.estado, "falhou");
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 4);
 
   reabrir();
   evidenciar(banco, 0, true);
-  decidir(banco, { aprovado: true });
+  await decidir(banco, { resultado: "aprovado" });
   assert.equal(estadoDaPrimeiraRodada(banco), "encerrar_rodada");
 });
 
@@ -282,9 +280,6 @@ test("I-266: a decisão do agente com o trabalho de outro ticket é reprovada e 
   const { banco } = await cenarioRevisao();
   evidenciar(banco, 0, true);
   const deOutroTicket = abrirTrabalhoDoAgente(banco, REF_GLOBAL);
-  assert.throws(
-    () => decidirRevisaoRodada(banco, { demanda_id: "I-1", rodada_id: 1, ticket_id: 2, aprovado: true }, deOutroTicket),
-    ErroDeRegra,
-  );
+  await assert.rejects(decidir(banco, { resultado: "aprovado" }, deOutroTicket), ErroDeRegra);
   assert.equal(carregarDemanda(banco, "I-1").decisoes.length, 0);
 });

@@ -9,19 +9,17 @@ import { setTimeout as dormir } from "node:timers/promises";
 import { abrirBancoTemporario } from "../../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../../src/nucleo/ator.ts";
 import { submeterPlano } from "../../src/nucleo/transicoes_demanda.ts";
+import { Endereco } from "../../src/nucleo/item_de_trabalho.ts";
 import { registrarCorrecoesSessao } from "../../src/nucleo/transicoes_rodada.ts";
 import { type EntradaEvidenciaDemanda, submeterEvidenciaDemanda } from "../../src/nucleo/evidencia_demanda.ts";
 import { marcaDoPRFinal } from "../../src/aplicacao/evidencias/encerramento_demanda.ts";
 import type { Verificacao } from "../../src/aplicacao/evidencias/verificacoes.ts";
-import { aprovarPRRodada } from "../../src/aplicacao/aprovacao_pr_rodada.ts";
 import { type DepsDespacho, despacharDemandas } from "../../src/aplicacao/despacho_demanda.ts";
 import { iniciarExecucaoDemanda, interromperExecucaoDemanda } from "../../src/aplicacao/execucao_demanda.ts";
 import { fecharTicketDemanda } from "../../src/aplicacao/fechamento_ticket.ts";
+import { decidirGate } from "../../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../../src/aplicacao/gestao_demandas.ts";
-import { aprovarPlanejamentoDemanda } from "../../src/aplicacao/planejamento.ts";
-import { decidirRevisaoIntegral } from "../../src/aplicacao/revisao_demanda.ts";
-import { decidirRevisaoRodada } from "../../src/aplicacao/revisao_rodada.ts";
-import { reprovarPRRodada, concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
+import { concluirSessaoAjustes } from "../../src/aplicacao/sessao_ajustes.ts";
 import { situacao } from "../../src/aplicacao/gerente.ts";
 import { carregarDemanda, comDemanda } from "../../src/armazenamento/demandas.ts";
 import { registrarProjeto } from "../../src/aplicacao/projeto/cadastro.ts";
@@ -186,7 +184,7 @@ const custos = {
 };
 
 /** Demanda registrada, enviada e aprovada pelo Auditor: em `planejar`, com o `planejar` (ticket 2) aberto. */
-function demandaAprovada(c: Cenario): string {
+async function demandaAprovada(c: Cenario): Promise<string> {
   const ctx = { agora: agora() };
   const id = gestao.registrar(
     c.banco,
@@ -200,7 +198,7 @@ function demandaAprovada(c: Cenario): string {
   submeter("desenho_solucao", desenho, html);
   submeter("custos_realizados", custos);
   gestao.enviar(c.banco, id, AUTOR, ctx);
-  gestao.decidir(c.banco, id, { aprovado: true }, AUDITOR, ctx);
+  await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
   return id;
 }
 
@@ -218,7 +216,7 @@ async function aprovarPlano(c: Cenario, id: string, fim: Promise<unknown>, antes
   comDemanda(c.banco, id, (ag) =>
     submeterPlano(ag, plano, { tipo: "agente", trabalho_id: "execucao-1" }, { agora: agora() }),
   );
-  await aprovarPlanejamentoDemanda(c.banco, id, {});
+  await decidirGate(c.banco, "gate_planejamento", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
 }
 
 const verificacoes = (): Verificacao[] =>
@@ -247,13 +245,13 @@ async function ciclo(c: Cenario): Promise<void> {
 }
 
 /** Um ciclo com o pi parado no portão: `agir` faz o papel do agente enquanto a execução segue aberta. */
-async function cicloComAgente(c: Cenario, agir: () => void): Promise<void> {
+async function cicloComAgente(c: Cenario, agir: () => Promise<void> | void): Promise<void> {
   portao(c, false);
   const antes = chamadas(c);
   const fins = despacharDemandas(c.banco, c.config, deps);
   if (fins.length === 0) throw new Error("o ciclo não despachou nada");
   await esperar(() => chamadas(c) >= antes + fins.length, "o pi receber o prompt");
-  agir();
+  await agir();
   portao(c, true);
   await Promise.all(fins);
 }
@@ -287,12 +285,14 @@ const comprovacao = ["comprovacao_criterios", { criterios: [{ id: "CA-1", atendi
 ];
 
 const revisarRodada = (c: Cenario, id: string) =>
-  cicloComAgente(c, () => {
+  cicloComAgente(c, async () => {
     const { ticket_id } = ticket(c, id, "revisar_rodada");
     comoAgente(c, id, ticket_id, [["explicacao_fitness", { explicacoes: [] }], comprovacao]);
-    decidirRevisaoRodada(
+    await decidirGate(
       c.banco,
-      { aprovado: true, demanda_id: id, rodada_id: 1, ticket_id },
+      "gate_revisao_rodada",
+      Endereco.daRodada(id, 1),
+      { resultado: "aprovado" },
       agenteDaExecucaoAberta(c, id, ticket_id),
     );
   });
@@ -314,19 +314,21 @@ const encerrarRodada = (c: Cenario, id: string) =>
   });
 
 const aprovarRodada = (c: Cenario, id: string) =>
-  aprovarPRRodada(c.banco, { demanda_id: id, rodada_id: 1 }, 4, AUDITOR);
+  decidirGate(c.banco, "gate_pr", Endereco.daRodada(id, 1), { resultado: "aprovado", nota: 4 }, AUDITOR);
 
 const revisarDemanda = (c: Cenario, id: string) =>
-  cicloComAgente(c, () => {
+  cicloComAgente(c, async () => {
     const { ticket_id } = ticket(c, id, "revisar_demanda");
     comoAgente(c, id, ticket_id, [
       comprovacao,
       ["testes_estresse", { aplicavel: false, cenarios: [], justificativa: "sem carga" }],
       ["analise_seguranca", { aplicavel: false, ameacas: [], achados: [], justificativa: "sem superfície" }],
     ]);
-    decidirRevisaoIntegral(
+    await decidirGate(
       c.banco,
-      { demanda_id: id, ticket_id, aprovado: true },
+      "gate_revisao_demanda",
+      Endereco.daDemanda(id),
+      { resultado: "aprovado" },
       agenteDaExecucaoAberta(c, id, ticket_id),
     );
   });
@@ -335,7 +337,7 @@ const revisarDemanda = (c: Cenario, id: string) =>
 
 /** Demanda em `execucao`, com o `implementar` da rodada 1 aberto. */
 async function emExecucao(c: Cenario): Promise<string> {
-  const id = demandaAprovada(c);
+  const id = await demandaAprovada(c);
   portao(c, true);
   const { fim } = despacharPlanejamento(c, id);
   await aprovarPlano(c, id, fim, 0);
@@ -399,16 +401,16 @@ const ticketDaEtapa =
   };
 
 const ETAPAS: Record<string, Preparar> = {
-  planejar: (c) => {
-    const id = demandaAprovada(c);
+  planejar: async (c) => {
+    const id = await demandaAprovada(c);
     portao(c, true);
-    return Promise.resolve({
+    return {
       executar: async () => {
         const { fim } = despacharPlanejamento(c, id);
         await aprovarPlano(c, id, fim, 0);
       },
       concluido: () => concluido(c, id, "planejar"),
-    });
+    };
   },
   implementar: ticketDaEtapa("implementar", emExecucao, async (c) => {
     escreve(c, true);
@@ -458,7 +460,13 @@ const ETAPAS: Record<string, Preparar> = {
     return {
       executar: async () => {
         const antes = chamadas(c);
-        await reprovarPRRodada(c.banco, ref, "o PR mistura duas mudanças", AUDITOR, { limiteMin: c.config.timeoutMin });
+        await decidirGate(
+          c.banco,
+          "gate_pr",
+          Endereco.daRodada(id, 1),
+          { resultado: "reprovado", motivo: "o PR mistura duas mudanças" },
+          AUDITOR,
+        );
         await esperar(() => {
           const { ticket_id } = ticket(c, id, "ajustar_resultado");
           const sessao = carregarSessoesDoTicket(c.banco, { demanda_id: id, ticket_id }).sessoes[0];

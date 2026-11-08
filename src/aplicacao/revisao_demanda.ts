@@ -1,14 +1,12 @@
 // Revisão integral da demanda (comparacao-sdlc-implementacao.md §§3, 4, 8): inicia, conduz na worktree da demanda e decide.
 import type { DatabaseSync } from "node:sqlite";
-import { type Ator, FABRIQUINHA } from "../nucleo/ator.ts";
+import { FABRIQUINHA } from "../nucleo/ator.ts";
 import type { AgregadoDemanda } from "../nucleo/agregado_demanda.ts";
 import { encontrado } from "../nucleo/erros.ts";
 import { ticketAtualDaEtapa } from "../nucleo/item_de_trabalho.ts";
-import { iniciarRevisaoDemanda, registrarRevisaoDemanda } from "../nucleo/transicoes_demanda.ts";
+import { iniciarRevisaoDemanda } from "../nucleo/transicoes_demanda.ts";
 import { carregarDemanda, comDemanda } from "../armazenamento/demandas.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
-import { conferirAprovacao } from "./revisao_pendencias.ts";
-import { exigirTrabalhoDoTicket } from "./trabalho_do_ticket.ts";
 
 /** Todas as rodadas concluídas: a demanda vai a `revisar_demanda` com o `revisar_demanda` aberto. */
 export function iniciarRevisaoIntegral(banco: DatabaseSync, demanda_id: string): AgregadoDemanda {
@@ -29,18 +27,4 @@ export async function conduzirRevisaoIntegral(
     "inicie a revisão integral da demanda antes de conduzi-la",
   );
   return conduzirRevisao(banco, { demanda_id, ticket_id }, opcoes);
-}
-
-/** Aplica a decisão do agente; a aprovação só passa com as evidências, o estresse e a segurança em ordem. */
-export function decidirRevisaoIntegral(
-  banco: DatabaseSync,
-  entrada: { aprovado: boolean; demanda_id: string; ticket_id: number; [campo: string]: unknown },
-  ator: Ator,
-): AgregadoDemanda {
-  return comDemanda(banco, entrada.demanda_id, (ag) => {
-    exigirTrabalhoDoTicket(banco, ator, entrada);
-    const novo = registrarRevisaoDemanda(ag, entrada, ator, { agora: new Date().toISOString() });
-    if (entrada.aprovado) conferirAprovacao(ag, entrada.ticket_id);
-    return novo;
-  });
 }

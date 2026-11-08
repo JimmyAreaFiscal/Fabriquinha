@@ -5,10 +5,12 @@ import assert from "node:assert/strict";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import type { Ator } from "../src/nucleo/ator.ts";
+import type { DatabaseSync } from "node:sqlite";
+import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { despacharDemandas, executarAgoraDemanda } from "../src/aplicacao/despacho_demanda.ts";
-import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../src/aplicacao/planejamento.ts";
+import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { gravarProjeto, projetoExistente } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
 import { carregarSessoesDoTicket } from "../src/armazenamento/sessoes.ts";
@@ -16,6 +18,9 @@ import { base, type Cenario, criarCenario, demanda, demandaAprovada, esperar, su
 import { instalarPiFalso } from "../apoio-testes/pi_falso.ts";
 
 const pi = instalarPiFalso(base);
+
+const decidirPlanejamento = (banco: DatabaseSync, id: string, entrada: object) =>
+  decidirGate(banco, "gate_planejamento", Endereco.daDemanda(id), entrada, AUDITOR);
 
 /** O `planejar` da demanda aprovada é o ticket 2 (o 1 é o `demanda`). */
 const PLANEJAR = 2;
@@ -69,7 +74,7 @@ const semDesenvolvimento = (c: Cenario, id: string) => {
 test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem desenvolvimento antes da aprovação", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
-  const id = demandaAprovada(c);
+  const id = await demandaAprovada(c);
   const ref = { demanda_id: id, ticket_id: PLANEJAR };
   await ciclaPlanejamentos(c, [id]);
   const [sessao] = carregarSessoesDoTicket(c.banco, ref).sessoes;
@@ -82,7 +87,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
   semDesenvolvimento(c, id);
 
   // Reprovado: volta a `planejar` com o motivo, o `planejar` segue em execução e o agendador o retoma.
-  reprovarPlanejamentoDemanda(c.banco, id, "faltam critérios na rodada 1");
+  await decidirPlanejamento(c.banco, id, { resultado: "reprovado", motivo: "faltam critérios na rodada 1" });
   assert.equal(demanda(c, id).demanda.estado, "planejar");
   assert.deepEqual(
     demanda(c, id)
@@ -106,7 +111,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
 
   // Reenviado e aprovado: só agora o desenvolvimento existe.
   submeterPlanoDoAgente(c.banco, id, plano(id, "v2"), agente(2));
-  await aprovarPlanejamentoDemanda(c.banco, id, {});
+  await decidirPlanejamento(c.banco, id, { resultado: "aprovado" });
   const ag = demanda(c, id);
   assert.equal(ag.demanda.estado, "em_execucao");
   assert.deepEqual(
@@ -123,7 +128,7 @@ test("CA-SDLC-04: planejamento reprovado e reenviado retoma a mesma sessão, sem
 test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate aberto, sem aprovação nem execução de rodada", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
-  const id = demandaAprovada(c);
+  const id = await demandaAprovada(c);
   // A preparação só falha na worktree da rodada 2, depois da demanda e da rodada 1.
   const quebra = join(c.raiz, "quebra");
   const { banco, projeto } = c;
@@ -143,7 +148,10 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   writeFileSync(quebra, "");
   const chamadas = pi.prompts().length;
 
-  await assert.rejects(aprovarPlanejamentoDemanda(banco, id, { nota: 4 }), /a preparação da worktree falhou/);
+  await assert.rejects(
+    decidirPlanejamento(banco, id, { resultado: "aprovado", nota: 4 }),
+    /a preparação da worktree falhou/,
+  );
   const ag = demanda(c, id);
   assert.equal(ag.demanda.estado, "gate_planejamento");
   assert.deepEqual(ag.rodadas, []);
@@ -165,7 +173,7 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
 
   // Corrigida a causa, a mesma aprovação conclui.
   rmSync(quebra);
-  await aprovarPlanejamentoDemanda(banco, id, { nota: 4 });
+  await decidirPlanejamento(banco, id, { resultado: "aprovado", nota: 4 });
   assert.deepEqual(
     demanda(c, id).rodadas.map((r) => [r.rodada_id, r.estado]),
     [
@@ -175,21 +183,21 @@ test("CA-SDLC-05: falha ao preparar a aprovação do planejamento deixa o gate a
   );
 });
 
-test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitura, escrita, decisão e evidência; FKs recusam referências inválidas", async (t) => {
+test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitura, escrita, decisão e evidência; FKs rejeitam referências inválidas", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
-  const a = demandaAprovada(c);
-  const b = demandaAprovada(c);
+  const a = await demandaAprovada(c);
+  const b = await demandaAprovada(c);
   assert.deepEqual(await ciclaPlanejamentos(c, [a, b]), [1, 1]);
 
   // A é reprovada uma vez e reenviada (decisão só dela); B, no gate, não é tocada pelo ciclo que retoma A.
   submeterPlanoDoAgente(c.banco, a, plano(a, "A-v1"), agente(1));
   submeterPlanoDoAgente(c.banco, b, plano(b, "B"), agente(2));
-  reprovarPlanejamentoDemanda(c.banco, a, "refaça");
+  await decidirPlanejamento(c.banco, a, { resultado: "reprovado", motivo: "refaça" });
   assert.deepEqual(await ciclaPlanejamentos(c, [a]), [2]);
   submeterPlanoDoAgente(c.banco, a, plano(a, "A"), agente(3));
-  await aprovarPlanejamentoDemanda(c.banco, b, {});
-  await aprovarPlanejamentoDemanda(c.banco, a, {});
+  await decidirPlanejamento(c.banco, b, { resultado: "aprovado" });
+  await decidirPlanejamento(c.banco, a, { resultado: "aprovado" });
 
   // Leitura: o mesmo (rodada 1, ticket 1) em cada demanda, com o conteúdo da própria.
   const dono = (id: string) => {
@@ -209,9 +217,9 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
     assert.equal(ag.tickets[0]?.ticket_id, 1);
     assert.equal(ag.tickets.find((x) => x.etapa === "implementar")?.titulo, `${titulo.slice(0, -2)} t1`);
   }
-  // Decisão: a recusa do planejamento de A não aparece em B; cada uma numera as suas a partir de 1.
-  const recusas = (id: string) => dono(id).decisoes.filter((d) => d.resultado === "reprovado").length;
-  assert.deepEqual([recusas(a), recusas(b)], [1, 0]);
+  // Decisão: a reprovação do planejamento de A não aparece em B; cada uma numera as suas a partir de 1.
+  const reprovacoes = (id: string) => dono(id).decisoes.filter((d) => d.resultado === "reprovado").length;
+  assert.deepEqual([reprovacoes(a), reprovacoes(b)], [1, 0]);
   assert.deepEqual(
     [a, b].map((id) => Math.min(...dono(id).decisoes.map((d) => d.decisao_id))),
     [1, 1],
@@ -232,7 +240,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
   assert.deepEqual(demanda(c, b), antesB);
   assert.equal(dono(b).tickets.find((x) => x.etapa === "implementar")?.estado, "aberto");
 
-  // FKs: referência a demanda, rodada ou ticket que a demanda não tem é recusada pelo banco.
+  // FKs: referência a demanda, rodada ou ticket que a demanda não tem é rejeitada pelo banco.
   const agora = "2026-01-01T00:00:00.000Z";
   const recusa = (sql: string, ...args: (string | number)[]) => {
     assert.throws(() => c.banco.prepare(sql).run(...args), /FOREIGN KEY/);
@@ -266,7 +274,7 @@ test("CA-SDLC-06: duas demandas com rodada_id 1 e ticket_id 1 não cruzam leitur
 test("o planejador recebe o desenho aprovado da demanda, com o HTML anexo num arquivo que ele consegue ler", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
-  const id = demandaAprovada(c);
+  const id = await demandaAprovada(c);
   await ciclaPlanejamentos(c, [id]);
   const prompt = pi.prompts()[0]?.prompt ?? "";
   assert.match(prompt, /## Desenho aprovado[\s\S]*\nr\n[\s\S]*- `src\/a\.ts` \(criar\): porque/);

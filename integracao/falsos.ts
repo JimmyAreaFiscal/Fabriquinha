@@ -14,7 +14,7 @@ export function ghFalso(dir: string) {
     checkFalho: (id: number) => {
       h.mudar(id, { checks: [{ nome: "ci", estado: "falho" }] });
     },
-    mergeFalha: (stderr = "merge recusado pela hospedagem") => {
+    mergeFalha: (stderr = "merge rejeitado pela hospedagem") => {
       h.falhar("pr merge", stderr);
     },
   };

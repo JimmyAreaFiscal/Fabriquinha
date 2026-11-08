@@ -5,37 +5,18 @@ import { AUDITOR } from "../../../nucleo/ator.ts";
 import { reabrirTicket } from "../../../nucleo/transicoes_demanda.ts";
 import { ErroDeRegra, existe } from "../../../nucleo/erros.ts";
 import { Endereco } from "../../../nucleo/item_de_trabalho.ts";
-import { aprovarPRRodada } from "../../../aplicacao/aprovacao_pr_rodada.ts";
 import type { RefRodada } from "../../../aplicacao/encerramento_rodada.ts";
-import { arquivar, cancelar, decidir } from "../../../aplicacao/gestao_demandas.ts";
-import { aprovarPlanejamentoDemanda, reprovarPlanejamentoDemanda } from "../../../aplicacao/planejamento.ts";
-import { concluirSessaoAjustes, reprovarPRRodada } from "../../../aplicacao/sessao_ajustes.ts";
+import { decidirGate } from "../../../aplicacao/gates/decidir_gate.ts";
+import { arquivar, cancelar } from "../../../aplicacao/gestao_demandas.ts";
+import { concluirSessaoAjustes } from "../../../aplicacao/sessao_ajustes.ts";
 import { comDemanda } from "../../../armazenamento/demandas.ts";
-import { configuracao } from "../../../armazenamento/servico.ts";
 import type { Pedido, Rota } from "../rotas.ts";
 
-const NOTA = "a nota vai de 1 a 5";
-const Nota = z.number({ error: NOTA }).int(NOTA).min(1, NOTA).max(5, NOTA);
 const Motivo = (de: string) =>
   z
     .string({ error: `informe o motivo ${de}` })
     .trim()
     .min(1, `informe o motivo ${de}`);
-
-/** Aprovar (com nota, quando o gate a aceita) ou reprovar (com motivo e, no PR, sem nota). */
-const Decisao = z.object({ aprovado: z.boolean(), nota: Nota.optional(), motivo: z.string().optional() });
-const DecisaoDoPlanejamento = z.discriminatedUnion("aprovado", [
-  z.object({ aprovado: z.literal(true), nota: Nota.optional() }),
-  z.object({ aprovado: z.literal(false), motivo: Motivo("da reprovação do planejamento") }),
-]);
-const DecisaoDoPR = z.discriminatedUnion("aprovado", [
-  z.object({ aprovado: z.literal(true), nota: Nota }),
-  z.object({
-    aprovado: z.literal(false),
-    motivo: Motivo("da reprovação do PR"),
-    nota: z.never({ error: "a reprovação não leva nota" }).optional(),
-  }),
-]);
 
 const agora = () => ({ agora: new Date().toISOString() });
 
@@ -47,26 +28,39 @@ function refDaRodada({ params }: Pedido): RefRodada {
   return { demanda_id, rodada_id };
 }
 
-const limite = (pedido: Pedido) => ({ limiteMin: configuracao(pedido.banco).timeoutMin });
-
-function decisaoDaDemanda({ banco, params, corpo }: Pedido) {
-  return decidir(banco, String(params.id), Decisao.parse(corpo), AUDITOR, agora());
+/** O corpo é a entrada do gate (`resultado`, `nota` e `motivo`): quem valida é o gate. */
+async function decisaoDaDemanda({ banco, params, corpo }: Pedido) {
+  const { demanda, canceladas } = await decidirGate(
+    banco,
+    "gate_demanda",
+    Endereco.daDemanda(String(params.id)),
+    corpo,
+    AUDITOR,
+  );
+  return { demanda, canceladas };
 }
 
 async function decisaoDoPlanejamento({ banco, params, corpo }: Pedido) {
-  const id = String(params.id);
-  const decisao = DecisaoDoPlanejamento.parse(corpo);
-  return decisao.aprovado
-    ? aprovarPlanejamentoDemanda(banco, id, { nota: decisao.nota })
-    : reprovarPlanejamentoDemanda(banco, id, decisao.motivo);
+  const { demanda } = await decidirGate(
+    banco,
+    "gate_planejamento",
+    Endereco.daDemanda(String(params.id)),
+    corpo,
+    AUDITOR,
+  );
+  return demanda;
 }
 
 async function decisaoDoPR(pedido: Pedido) {
-  const ref = refDaRodada(pedido);
-  const decisao = DecisaoDoPR.parse(pedido.corpo);
-  if (decisao.aprovado) return aprovarPRRodada(pedido.banco, ref, decisao.nota, AUDITOR);
-  const { id } = await reprovarPRRodada(pedido.banco, ref, decisao.motivo, AUDITOR, limite(pedido));
-  return { sessao: id };
+  const { demanda_id, rodada_id } = refDaRodada(pedido);
+  const { demanda, sessao } = await decidirGate(
+    pedido.banco,
+    "gate_pr",
+    Endereco.daRodada(demanda_id, rodada_id),
+    pedido.corpo,
+    AUDITOR,
+  );
+  return sessao === undefined ? demanda : { sessao };
 }
 
 const concluir = (pedido: Pedido) => concluirSessaoAjustes(pedido.banco, refDaRodada(pedido), AUDITOR);

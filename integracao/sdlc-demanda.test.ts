@@ -5,6 +5,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AUDITOR } from "../src/nucleo/ator.ts";
 import { ErroDeEscopo } from "../src/nucleo/erros.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
+import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import { interromperExecucaoDemanda } from "../src/aplicacao/execucao_demanda.ts";
 import { despacharDemandas } from "../src/aplicacao/despacho_demanda.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
@@ -40,7 +42,7 @@ async function planejamentoIniciaEInterrompe(c: Cenario, id: string): Promise<vo
   assert.equal(carregarSessoesDoTicket(c.banco, ref).execucoes.length, 1);
 }
 
-test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o completo congela a definição e registra a origem", (t) => {
+test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o completo congela a definição e registra a origem", async (t) => {
   const c = criarCenario(t);
   const id = registrarExterna(c);
   const submeter = (tipo: string, dados: unknown) =>
@@ -55,7 +57,10 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   assert.equal(demanda(c, id).demanda.enviada, false);
   assert.equal(demanda(c, id).demanda.estado, "entender_e_desenhar");
   assert.equal(demanda(c, id).tickets[0]?.estado, "em_execucao");
-  assert.throws(() => gestao.decidir(c.banco, id, { aprovado: true }, AUDITOR, CTX), /não espera decisão/);
+  await assert.rejects(
+    decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR),
+    /não espera decisão/,
+  );
   assert.equal(gestao.editar(c.banco, id, { titulo: "Corrigido" }, AUTOR).demanda.titulo, "Corrigido");
   assert.throws(() => gestao.enviar(c.banco, id, OUTRA_SESSAO, CTX), ErroDeEscopo);
 
@@ -74,17 +79,23 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   assert.equal(pi.prompts().length, 0);
 });
 
-test("CA-SDLC-02: aprovar disponibiliza o planejamento; recusar cancela o percurso sem lançar desenho interno", async (t) => {
+test("CA-SDLC-02: aprovar disponibiliza o planejamento; reprovar cancela o percurso sem lançar desenho interno", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
 
-  // Recusa: cancelada, motivo gravado, nenhum ticket novo e nada a despachar.
-  const recusada = demandaEnviada(c);
-  const { demanda: r } = gestao.decidir(c.banco, recusada, { aprovado: false, motivo: "fora do escopo" }, AUDITOR, CTX);
+  // Reprovação: cancelada, motivo gravado, nenhum ticket novo e nada a despachar.
+  const reprovada = demandaEnviada(c);
+  const { demanda: r } = await decidirGate(
+    c.banco,
+    "gate_demanda",
+    Endereco.daDemanda(reprovada),
+    { resultado: "reprovado", motivo: "fora do escopo" },
+    AUDITOR,
+  );
   assert.equal(r.demanda.estado, "cancelada");
   assert.deepEqual([r.decisoes[0]?.resultado, r.decisoes[0]?.motivo], ["reprovado", "fora do escopo"]);
   assert.deepEqual(
-    demanda(c, recusada).tickets.map((x) => [x.etapa, x.estado]),
+    demanda(c, reprovada).tickets.map((x) => [x.etapa, x.estado]),
     [["entender_e_desenhar", "cancelado"]],
   );
   assert.equal(despacharDemandas(c.banco, c.config).length, 0);
@@ -92,7 +103,13 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; recusar cancela o percur
 
   // Aprovação: planejamento com o `planejar` aberto, que o agendador inicia.
   const aprovada = demandaEnviada(c);
-  const { demanda: a } = gestao.decidir(c.banco, aprovada, { aprovado: true }, AUDITOR, CTX);
+  const { demanda: a } = await decidirGate(
+    c.banco,
+    "gate_demanda",
+    Endereco.daDemanda(aprovada),
+    { resultado: "aprovado" },
+    AUDITOR,
+  );
   assert.equal(a.demanda.estado, "planejar");
   assert.equal(a.decisoes[0]?.resultado, "aprovado");
   assert.deepEqual(
@@ -105,14 +122,14 @@ test("CA-SDLC-02: aprovar disponibiliza o planejamento; recusar cancela o percur
   await planejamentoIniciaEInterrompe(c, aprovada);
 });
 
-test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o planejamento; ciclo e autorreferência são recusados", async (t) => {
+test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o planejamento; ciclo e autorreferência são rejeitados", async (t) => {
   const c = criarCenario(t);
   pi.roteirizar();
   adicionarProjeto(c, "outro");
 
   // A, de outro projeto, ainda espera a decisão; B (deste projeto) já foi aprovada, mas depende de A.
   const a = demandaEnviada(c, undefined, "outro");
-  const b = demandaAprovada(c, [a]);
+  const b = await demandaAprovada(c, [a]);
   assert.equal(despacharDemandas(c.banco, c.config).length, 0);
   assert.equal(pi.prompts().length, 0);
   assert.deepEqual(
@@ -127,7 +144,7 @@ test("CA-SDLC-03: dependência pendente (inclusive de outro projeto) segura o pl
   c.banco.prepare("UPDATE demanda SET estado = 'concluida' WHERE id = ?").run(a);
   await planejamentoIniciaEInterrompe(c, b);
 
-  // Autorreferência e ciclo: recusados, sem aresta nova.
+  // Autorreferência e ciclo: rejeitados, sem aresta nova.
   const x = registrarExterna(c);
   const y = registrarExterna(c, [x]);
   const arestas = () => c.banco.prepare("SELECT count(*) AS n FROM dependencia_demanda").get()?.n;

@@ -5,7 +5,6 @@ import { CICLO_DA_DEMANDA } from "./ciclos.ts";
 import { ConfiguracaoAgente } from "./configuracao_agente.ts";
 import { branchDemanda, branchRodada, CaminhoTicket, CriterioId, DemandaId } from "./demanda.ts";
 import { ProgressoEncerramento } from "./encerramento_demanda.ts";
-import { Decisao } from "./gate.ts";
 import { GrafoDeDependencias } from "./item_de_trabalho.ts";
 import {
   EstadoDemanda,
@@ -15,6 +14,7 @@ import {
   Id,
   Instante,
   Markdown,
+  Motivo,
   Slug,
   Titulo,
 } from "./primitivos.ts";
@@ -38,6 +38,29 @@ export const TicketDemanda = z.object({
   // Instrução do Auditor ao reabrir um ticket falho; a sessão que o retomar a lê (§4.2).
   instrucao: Markdown.optional(),
 });
+
+export const NomeGate = z.enum([
+  "gate_demanda",
+  "gate_planejamento",
+  "gate_pr",
+  "gate_revisao_rodada",
+  "gate_revisao_demanda",
+]);
+export type NomeGate = z.infer<typeof NomeGate>;
+
+/** A Decisão sabe de qual gate é; mora aqui, e não em `gate.ts`, porque o agregado a contém e `gate.ts` o transforma. */
+export const Decisao = z.object({
+  demanda_id: DemandaId,
+  ticket_id: Id,
+  decisao_id: Id,
+  gate: NomeGate,
+  resultado: z.enum(["aprovado", "reprovado"]),
+  nota: z.number().int().min(1).max(5).optional(),
+  motivo: Motivo.optional(),
+  por: Ator,
+  em: Instante,
+});
+export type Decisao = z.infer<typeof Decisao>;
 
 export const RodadaDemanda = z.object({
   demanda_id: DemandaId,

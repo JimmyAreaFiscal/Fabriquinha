@@ -11,7 +11,9 @@ import { abrirBancoTemporario } from "../apoio-testes/banco_temporario.ts";
 import { AUDITOR, type Ator } from "../src/nucleo/ator.ts";
 import { submeterPlano } from "../src/nucleo/transicoes_demanda.ts";
 import { despacharDemandas, type DepsDespacho } from "../src/aplicacao/despacho_demanda.ts";
+import { decidirGate } from "../src/aplicacao/gates/decidir_gate.ts";
 import * as gestao from "../src/aplicacao/gestao_demandas.ts";
+import { Endereco } from "../src/nucleo/item_de_trabalho.ts";
 import { gravarProjeto } from "../src/armazenamento/projetos.ts";
 import { Projeto } from "../src/nucleo/projeto.ts";
 import { carregarDemanda, comDemanda } from "../src/armazenamento/demandas.ts";
@@ -165,9 +167,9 @@ export function demandaEnviada(c: Cenario, dependencias?: string[], projeto = c.
 }
 
 /** Demanda aprovada pelo Auditor: em `planejar`, com o ticket `planejar` aberto. */
-export function demandaAprovada(c: Cenario, dependencias?: string[], projeto = c.projeto): string {
+export async function demandaAprovada(c: Cenario, dependencias?: string[], projeto = c.projeto): Promise<string> {
   const id = demandaEnviada(c, dependencias, projeto);
-  gestao.decidir(c.banco, id, { aprovado: true }, AUDITOR, CTX);
+  await decidirGate(c.banco, "gate_demanda", Endereco.daDemanda(id), { resultado: "aprovado" }, AUDITOR);
   return id;
 }
 

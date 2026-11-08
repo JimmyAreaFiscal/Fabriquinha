@@ -1,0 +1,93 @@
+// decidirGate, o ponto de entrada único dos cinco gates: a entrada reprovada pela regra não muda o banco e o erro é o do ensaio do núcleo.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { fabricaDeBancosTemporarios } from "../../../apoio-testes/banco_temporario.ts";
+import {
+  abrirTrabalhoDoAgente,
+  agregadoComPullRequestAberto,
+  agregadoEmRevisao,
+  agregadoNoEstado,
+  cadastrarProjetoLoja,
+  gravarAgregadoPronto,
+  INSTANTE_DO_CENARIO,
+  REF_GLOBAL,
+  REF_RODADA,
+} from "../../../apoio-testes/cenarios_de_demanda.ts";
+import type { AgregadoDemanda, NomeGate } from "../../nucleo/agregado_demanda.ts";
+import { AUDITOR, type Ator } from "../../nucleo/ator.ts";
+import { GATES } from "../../nucleo/gate.ts";
+import { Endereco } from "../../nucleo/item_de_trabalho.ts";
+import { carregarDemanda } from "../../armazenamento/demandas.ts";
+import { decidirGate } from "./decidir_gate.ts";
+
+const abrirBancoTemporario = fabricaDeBancosTemporarios();
+
+interface CasoDeEntradaReprovada {
+  nome: NomeGate;
+  agregado: AgregadoDemanda;
+  endereco: Endereco;
+  entrada: unknown;
+  ator: (banco: ReturnType<typeof abrirBancoTemporario>["banco"]) => Ator;
+}
+
+const casos: CasoDeEntradaReprovada[] = [
+  {
+    nome: "gate_demanda",
+    agregado: agregadoNoEstado("I-1", "gate_demanda"),
+    endereco: Endereco.daDemanda("I-1"),
+    entrada: { resultado: "reprovado" },
+    ator: () => AUDITOR,
+  },
+  {
+    nome: "gate_planejamento",
+    agregado: agregadoNoEstado("I-1", "gate_planejamento"),
+    endereco: Endereco.daDemanda("I-1"),
+    entrada: { resultado: "aprovado" },
+    ator: () => AUDITOR,
+  },
+  {
+    nome: "gate_pr",
+    agregado: agregadoComPullRequestAberto("I-1"),
+    endereco: Endereco.daRodada("I-1", 2),
+    entrada: { resultado: "aprovado" },
+    ator: () => AUDITOR,
+  },
+  {
+    nome: "gate_revisao_rodada",
+    agregado: agregadoEmRevisao(),
+    endereco: Endereco.daRodada("I-1", 1),
+    entrada: { resultado: "reprovado", motivo: "corrigir", correcoes: [] },
+    ator: (banco) => abrirTrabalhoDoAgente(banco, REF_RODADA),
+  },
+  {
+    nome: "gate_revisao_demanda",
+    agregado: agregadoEmRevisao({ integral: true }),
+    endereco: Endereco.daDemanda("I-1"),
+    entrada: { resultado: "reprovado", motivo: "corrigir" },
+    ator: (banco) => abrirTrabalhoDoAgente(banco, REF_GLOBAL),
+  },
+];
+
+for (const { nome, agregado, endereco, entrada, ator } of casos) {
+  test(`${nome}: a entrada reprovada pela regra não muda o banco e o erro é o do ensaio do núcleo`, async () => {
+    const { banco } = abrirBancoTemporario();
+    cadastrarProjetoLoja(banco);
+    gravarAgregadoPronto(banco, agregado);
+    const decisor = ator(banco);
+    const antes = carregarDemanda(banco, "I-1");
+
+    let esperado: unknown;
+    try {
+      GATES[nome].ensaiar(antes, endereco, entrada, decisor, { agora: INSTANTE_DO_CENARIO });
+    } catch (erro) {
+      esperado = erro;
+    }
+    assert.ok(esperado, "o ensaio do núcleo devia reprovar a entrada");
+
+    await assert.rejects(decidirGate(banco, nome, endereco, entrada, decisor), (erro) => {
+      assert.deepEqual(erro, esperado);
+      return true;
+    });
+    assert.deepEqual(carregarDemanda(banco, "I-1"), antes);
+  });
+}

@@ -342,14 +342,14 @@ function gatePR(ref: string, pr: { id: string; url: string } | undefined, artefa
   const aprovar = blocoDeAcao(
     "Aprovação do PR",
     `${artefatos}${botaoAbrirPR(pr)}<label for="${nota}">Nota (obrigatória para aprovar o PR)</label><select id="${nota}" aria-describedby="${nota}-erro"><option value="">Escolha a nota</option>${notas}</select><span class="msg-erro" id="${nota}-erro" role="alert" hidden></span>
-    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-gate="true" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>`,
+    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-primario" data-gate="aprovado" data-caminho="${base}" data-nota="${nota}">Aprovar PR</button></div>`,
     false,
     ` id="pr-${escapar(ref)}"`,
   );
   const reprovar = blocoDeAcao(
     "Reprovação do PR",
     `<label for="${motivo}">Motivo (obrigatório para reprovar o PR)</label><textarea id="${motivo}" rows="3" aria-describedby="${motivo}-erro"></textarea><span class="msg-erro" id="${motivo}-erro" role="alert" hidden></span>
-    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="false" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button></div>`,
+    <div class="dm-botoes"><button type="button" class="btn btn-grande btn-reprovar" data-gate="reprovado" data-caminho="${base}" data-campo="${motivo}">Reprovar PR</button></div>`,
     true,
   );
   return aprovar + reprovar;
@@ -570,11 +570,11 @@ function gate(p: Pagina): string {
     estado === "gate_demanda"
       ? oQueAAprovacaoMostra(p)
       : artefatosDoGate(p.evidencias.filter((e) => e.ticket !== undefined && planejadores.includes(e.ticket)));
-  const botao = (aprovado: boolean, rotulo: string) =>
-    `<button type="button" class="btn btn-grande ${aprovado ? "btn-primario" : "btn-reprovar"}" data-gate="${String(aprovado)}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
+  const botao = (resultado: "aprovado" | "reprovado", rotulo: string) =>
+    `<button type="button" class="btn btn-grande ${resultado === "aprovado" ? "btn-primario" : "btn-reprovar"}" data-gate="${resultado}" data-caminho="/api/demandas/${escapar(id)}/${g.rota}" data-campo="${campo}">${rotulo}</button>`;
   return blocoDeAcao(
     g.titulo,
-    `${leitura}<label for="${campo}">Motivo (obrigatório para ${g.reprovar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao(false, g.reprovar)}${botao(true, g.aprovar)}</div>`,
+    `${leitura}<label for="${campo}">Motivo (obrigatório para ${g.reprovar.toLowerCase()})</label><textarea id="${campo}" rows="3" aria-describedby="${campo}-erro"></textarea><span class="msg-erro" id="${campo}-erro" role="alert" hidden></span><div class="dm-botoes">${botao("reprovado", g.reprovar)}${botao("aprovado", g.aprovar)}</div>`,
     false,
     ' id="gate"',
   );

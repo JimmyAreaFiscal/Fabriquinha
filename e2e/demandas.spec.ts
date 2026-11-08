@@ -214,7 +214,7 @@ test("CA-30: a página desatualizada mostra a orientação do servidor e o estad
     fetch("/api/demandas/I-214/decisao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ aprovado: true }),
+      body: JSON.stringify({ resultado: "aprovado" }),
     }),
   );
   await pagina.getByRole("button", { name: "Aprovar" }).click();

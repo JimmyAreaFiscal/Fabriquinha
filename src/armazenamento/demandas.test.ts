@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import type { AgregadoDemanda, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
+import type { AgregadoDemanda, Decisao, EvidenciaDemanda } from "../nucleo/agregado_demanda.ts";
 import { Ator } from "../nucleo/ator.ts";
-import type { Decisao } from "../nucleo/gate.ts";
 import { Endereco } from "../nucleo/item_de_trabalho.ts";
 import type { ResultadoDaTentativa } from "../nucleo/tentativa.ts";
 import type { ProgressoEncerramento } from "../nucleo/encerramento_demanda.ts";

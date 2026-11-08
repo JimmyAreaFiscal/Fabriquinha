@@ -59,7 +59,6 @@ const EXCECOES: Excecao[] = [
   { arquivo: "aplicacao/historico_demanda.ts", import: "SQL .prepare(", demanda: "22" },
   { arquivo: "aplicacao/retrabalho.ts", import: "SQL .prepare(", demanda: "19" },
   { arquivo: "aplicacao/sessoes_demanda.ts", import: "SQL .prepare(", demanda: "22" },
-  { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
   { arquivo: "entrega/cli/agente_demanda.ts", import: "../../armazenamento/demandas.ts", demanda: "21" },
   { arquivo: "entrega/cli/agente_demanda.ts", import: "SQL .prepare(", demanda: "21" },
   { arquivo: "entrega/cli/cli.ts", import: "../../armazenamento/banco.ts", demanda: "21" },
@@ -92,7 +91,6 @@ const EXCECOES: Excecao[] = [
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/registro.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/configuracao.ts", import: "../../../infra/repositorio/cadastro.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
-  { arquivo: "entrega/http/rotas/demandas_acoes.ts", import: "../../../armazenamento/servico.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/avaliacoes.ts", demanda: "20" },
   { arquivo: "entrega/http/rotas/demandas.ts", import: "../../../armazenamento/demandas.ts", demanda: "20" },
   {

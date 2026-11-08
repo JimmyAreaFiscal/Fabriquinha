@@ -165,7 +165,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
       () => preparo.demandaEnviada(),
       (id) => ({
         url: `${demanda(id)}/decisao`,
-        corpo: { aprovado: true },
+        corpo: { resultado: "aprovado" },
         status: 200,
         efeito: () => {
           conferir("planejar", estados(id).demanda, `estado de ${id}`);
@@ -179,7 +179,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
       () => preparo.planejamentoPronto(),
       (id) => ({
         url: `${demanda(id)}/planejamento/decisao`,
-        corpo: { aprovado: true },
+        corpo: { resultado: "aprovado" },
         status: 200,
         efeito: () => {
           conferir("em_execucao", estados(id).demanda, `estado de ${id}`);
@@ -193,7 +193,7 @@ export async function acoesHttpMutacao(amb: Ambiente): Promise<AcaoMutacao[]> {
       () => preparo.rodadaComPR(),
       (r) => ({
         url: `${rodada(r.rodada)}/pr`,
-        corpo: { aprovado: true, nota: 4 },
+        corpo: { resultado: "aprovado", nota: 4 },
         status: 200,
         efeito: () => {
           conferir("concluida", estados(r.demanda).rodada, `estado da rodada ${r.rodada}`);
