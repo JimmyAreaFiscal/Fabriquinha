@@ -252,6 +252,18 @@ const SECAO_LEITURA_ECONOMICA = secao(
   ].join("\n"),
 );
 
+/**
+ * Kill por padrão de nome (`pkill -f "node ..."`) já derrubou duas vezes o serviço da Fabriquinha, que também é node, e
+ * falhou os tickets de todas as demandas em andamento (o último em 2026-11-08).
+ */
+const SECAO_ENCERRAR_PROCESSOS = secao(
+  "Encerrar processos",
+  [
+    "Nunca use `pkill`, `killall`, `pgrep -f` nem qualquer kill por padrão de nome: o padrão pega o serviço real da Fabriquinha e derruba todas as demandas.",
+    "Para encerrar um processo que você iniciou, guarde o PID (`$!`) e use `kill <PID>`, ou rode o comando com `timeout`.",
+  ].join("\n"),
+);
+
 const SECAO_DA_ETAPA: Partial<Record<EtapaTicket, (c: ContextoDemanda) => string>> = {
   planejar: secaoDesenhoAprovado,
   revisar_rodada: (c) =>
@@ -334,6 +346,7 @@ export function montarPromptDemanda(c: ContextoDemanda): string {
     ...(retomada ? [secao(retomada.titulo, retomada.texto)] : []),
     modo.trim() + "\n",
     SECAO_LEITURA_ECONOMICA,
+    SECAO_ENCERRAR_PROCESSOS,
     secao(
       "Evidências",
       [

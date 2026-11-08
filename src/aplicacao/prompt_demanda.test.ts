@@ -85,6 +85,15 @@ test("toda etapa pede leitura por faixa, edit em vez de heredoc e exploração d
   for (const etapa of NOVAS) assert.match(montar(etapa), /## Leitura e edição.*offset.*`edit`.*`Explore`/s, etapa);
 });
 
+test("toda etapa proíbe kill por padrão de nome e ensina a encerrar pelo PID", () => {
+  for (const etapa of NOVAS)
+    assert.match(
+      montar(etapa),
+      /## Encerrar processos.*`pkill`, `killall`, `pgrep -f`.*`kill <PID>`.*`timeout`/s,
+      etapa,
+    );
+});
+
 test("revisar_rodada mostra o formato do --correcoes e pede espera num único comando", () => {
   const rodada = montar("revisar_rodada");
   assert.match(rodada, /\[\{"titulo": "\.\.\.", "descricao": "\.\.\.", "caminhos": \["src\/a\.ts"\]\}\]/);
