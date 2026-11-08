@@ -2,7 +2,7 @@
 // hospedagem, avançar a demanda local e abrir a sessão de ajustes do PR reprovado. A hospedagem é a fonte da verdade,
 // então repetir a aprovação é seguro.
 import type { DatabaseSync } from "node:sqlite";
-import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
+import { type AgregadoDemanda, comPrDaRodada } from "../../nucleo/agregado_demanda.ts";
 import { type Ator, exigirAtor } from "../../nucleo/ator.ts";
 import { formatarRodadaRef } from "../../nucleo/demanda.ts";
 import { ErroDeRegra, existe } from "../../nucleo/erros.ts";
@@ -79,7 +79,20 @@ export async function aprovarPR(
     await exigirGit(demanda, "merge", "--ff-only", `refs/remotes/origin/${branch}`);
   });
 
-  return comDemanda(banco, ref.demanda_id, (a) => gate.decidir(a, endereco, entrada, ator, contexto()));
+  return comDemanda(banco, ref.demanda_id, (a) => {
+    const { agora } = contexto();
+    const decidida = gate.decidir(a, endereco, entrada, ator, { agora });
+    return {
+      ...decidida,
+      pull_requests: comPrDaRodada(decidida, ref.rodada_id, {
+        numero: Number(pr.dados.id),
+        url: pr.dados.url as string,
+        head: pr.dados.head as string,
+        estado: "integrado",
+        atualizado_em: agora,
+      }),
+    };
+  });
 }
 
 /**

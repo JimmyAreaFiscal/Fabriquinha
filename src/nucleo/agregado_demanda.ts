@@ -158,6 +158,13 @@ export const donoDe = (e: Pick<EvidenciaDemanda, "rodada_id" | "ticket_id">): Do
 export const prDaDemanda = (ag: Pick<AgregadoDemanda, "pull_requests">): PullRequestDoEspaco | undefined =>
   ag.pull_requests.find((pr) => pr.rodada_id === undefined);
 
+/** O PR do Espaço da rodada troca o anterior da mesma rodada e mantém os demais. */
+export const comPrDaRodada = (
+  ag: Pick<AgregadoDemanda, "pull_requests">,
+  rodada_id: number,
+  pr: Omit<PullRequestDoEspaco, "rodada_id">,
+): PullRequestDoEspaco[] => [...ag.pull_requests.filter((p) => p.rodada_id !== rodada_id), { ...pr, rodada_id }];
+
 const chave = (...partes: (string | number | undefined)[]): string => partes.map(String).join("/");
 
 export const AgregadoDemanda = z
