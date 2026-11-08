@@ -5,8 +5,9 @@ import { rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
+import type { Ambiente } from "../ambiente/ambiente.ts";
 import { anotar } from "../registro.ts";
-import { executarNoShell, git, LIMITE_COMANDO_MS } from "../processo.ts";
+import { git, LIMITE_COMANDO_MS } from "../processo.ts";
 
 /**
  * Bytes do fim do log de cada comando de preparação.
@@ -49,18 +50,70 @@ export async function exigirGit(dir: string, ...args: string[]): Promise<string>
   return r.saida;
 }
 
+/** O env completo do serviço, no formato do Ambiente (sem as variáveis indefinidas). */
+const envCompletoDoServico = (): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(process.env).filter((variavel): variavel is [string, string] => variavel[1] !== undefined),
+  );
+
+/**
+ * `git` rodado pelo Ambiente, nas condições de `processo.git`: sem terminal para pedir senha, em LC_ALL=C e com o limite
+ * dos comandos configurados (passado o limite, o stderr diz por quê). Só para o que é do Espaço: a rede com credenciais
+ * fica em `git`/`exigirGit`, no core.
+ */
+export async function gitNoAmbiente(
+  ambiente: Ambiente,
+  dir: string,
+  ...args: string[]
+): Promise<{ codigo: number | null; saida: string; erro: string }> {
+  const pasta = ambiente.caminhoNoAmbiente(dir);
+  const r = await ambiente.executar({
+    programa: "git",
+    argumentos: ["-C", pasta, ...args],
+    // O `-C` leva o git à pasta; um cwd inexistente faria o spawn falhar sem o motivo do git.
+    cwd: "/",
+    env: { ...envCompletoDoServico(), GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" },
+    limiteMs: LIMITE_COMANDO_MS,
+  });
+  return r.limiteEstourado
+    ? { ...r, erro: `${r.erro}passou do limite de ${String(LIMITE_COMANDO_MS)} ms e foi morto` }
+    : r;
+}
+
+/** `gitNoAmbiente` que lança ErroDeRegra com o stderr quando o comando falha. */
+export async function exigirGitNoAmbiente(ambiente: Ambiente, dir: string, ...args: string[]): Promise<string> {
+  const r = await gitNoAmbiente(ambiente, dir, ...args);
+  if (r.codigo !== 0) {
+    throw new ErroDeRegra(
+      `git ${args.join(" ")} falhou em ${dir}: ${r.erro.trim()}`,
+      "corrija o repositório e execute o ticket de novo",
+    );
+  }
+  return r.saida;
+}
+
 /** F5 §3.2: cada comando com /bin/sh -c, na worktree, em ordem, parando no primeiro que falhar. Fora da fila git. */
 export async function preparar(
+  ambiente: Ambiente,
   caminho: string,
   preparacao: Projeto["verificacoes"]["preparacao"],
   log: string,
 ): Promise<void> {
   for (const comando of preparacao) {
     anotar(log, `preparação: ${comando}`);
-    const r = await executarNoShell(comando, caminho, { limiteLog: LIMITE_LOG_PREPARACAO });
-    appendFileSync(log, r.log);
+    // ponytail: o host local preserva o env completo da Preparação, credenciais inclusive; o container nasce sem elas.
+    const r = await ambiente.executar({
+      programa: comando,
+      argumentos: [],
+      cwd: ambiente.caminhoNoAmbiente(caminho),
+      env: envCompletoDoServico(),
+      limiteMs: LIMITE_COMANDO_MS,
+      ultimosBytes: LIMITE_LOG_PREPARACAO,
+      noShell: true,
+    });
+    appendFileSync(log, r.saida);
     if (r.codigo !== 0) {
-      const motivo = r.estourou
+      const motivo = r.limiteEstourado
         ? `passou de ${String(LIMITE_COMANDO_MS / 60_000)} minutos`
         : `saiu com código ${String(r.codigo)}`;
       anotar(log, `preparação falhou: ${motivo}`);
@@ -76,11 +129,11 @@ export async function preparar(
  * F5 §3.3: `reset --hard HEAD` e `clean -fd` (sem `-x`: o que o .gitignore ignora, como `node_modules`, fica).
  * Devolve o que o clean removeu (pasta inteira com `/` no fim) e, se removeu algo, anota a lista no log.
  */
-export async function descartarAlteracoes(worktree: string, log: string): Promise<string[]> {
+export async function descartarAlteracoes(ambiente: Ambiente, worktree: string, log: string): Promise<string[]> {
   const removidos = await naFila(dirname(resolve(worktree)), async () => {
-    await exigirGit(worktree, "reset", "-q", "--hard", "HEAD");
+    await exigirGitNoAmbiente(ambiente, worktree, "reset", "-q", "--hard", "HEAD");
     // ponytail: quotePath=false deixa acento legível; nome com aspas, barra invertida ou controle ainda vem entre aspas.
-    const saida = await exigirGit(worktree, "-c", "core.quotePath=false", "clean", "-fd");
+    const saida = await exigirGitNoAmbiente(ambiente, worktree, "-c", "core.quotePath=false", "clean", "-fd");
     return saida
       .split("\n")
       .filter((linha) => linha.startsWith("Removing "))

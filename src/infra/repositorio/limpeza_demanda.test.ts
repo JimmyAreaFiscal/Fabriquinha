@@ -6,6 +6,9 @@ import { branchDemanda, branchRodada } from "../../nucleo/demanda.ts";
 import { limparDemanda, pendenciasDeLimpeza, sobrasDaDemanda } from "./limpeza_demanda.ts";
 import { criarRepositorioDeTeste, rodarGit as git } from "../../../apoio-testes/repositorio_de_teste.ts";
 import { caminhoDaWorktreeRodada, garantirWorktreeDemanda, garantirWorktreeRodada } from "./worktree-demanda.ts";
+import { AmbienteHostLocal } from "../ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const ref = { demanda_id: "D-1", rodada_id: 1 };
 const ag = { demanda: { id: "D-1" }, rodadas: [{ rodada_id: 1 }, { rodada_id: 2 }] } as never;
@@ -14,8 +17,8 @@ const br = branchRodada("D-1", 1);
 
 async function cenario() {
   const c = criarRepositorioDeTeste();
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, "D-1", c.log);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, ref, c.log);
+  const demanda = await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, "D-1", c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, ref, c.log);
   git(c.repo, "branch", "alheia", "integracao");
   git(c.repo, "config", "branch.fabriquinha/D-1-2.fabriquinha", "rodada:fantasma");
   for (const b of [bd, br, "alheia", "integracao"]) git(c.repo, "push", "-q", "origin", `refs/heads/${b}`);
@@ -25,7 +28,7 @@ async function cenario() {
 
 test("pendências só da demanda e das rodadas, nunca a base nem branch alheia", async () => {
   const c = await cenario();
-  const pendentes = await pendenciasDeLimpeza(c.raiz, c.projeto, ag);
+  const pendentes = await pendenciasDeLimpeza(ambiente, c.raiz, c.projeto, ag);
   assert.deepEqual(pendentes.toSorted(), [
     `branch_local:${bd}`,
     `branch_local:${br}`,
@@ -38,12 +41,12 @@ test("pendências só da demanda e das rodadas, nunca a base nem branch alheia",
 
 test("limpa worktrees e branches locais e remotas, preservando base e branch alheia (CA-11)", async () => {
   const c = await cenario();
-  const pendentes = await pendenciasDeLimpeza(c.raiz, c.projeto, ag);
-  const r = await limparDemanda(c.raiz, c.projeto, pendentes);
+  const pendentes = await pendenciasDeLimpeza(ambiente, c.raiz, c.projeto, ag);
+  const r = await limparDemanda(ambiente, c.raiz, c.projeto, pendentes);
   assert.deepEqual(r.pendentes, []);
   assert.equal(r.removidos.length, 6);
-  assert.deepEqual(await sobrasDaDemanda(c.projeto, r.removidos), []);
-  assert.deepEqual((await pendenciasDeLimpeza(c.raiz, c.projeto, ag)).length, 0);
+  assert.deepEqual(await sobrasDaDemanda(ambiente, c.projeto, r.removidos), []);
+  assert.deepEqual((await pendenciasDeLimpeza(ambiente, c.raiz, c.projeto, ag)).length, 0);
   assert.deepEqual(c.remotas().toSorted(), ["alheia", "integracao"]);
   assert.match(
     git(c.repo, "branch", "--list", "alheia", "integracao"),
@@ -55,13 +58,19 @@ test("limpa worktrees e branches locais e remotas, preservando base e branch alh
 test("item que falha vira pendência e a reabertura repete só o que falta (CA-12)", async () => {
   const c = await cenario();
   git(c.repo, "worktree", "lock", c.rodada);
-  const pendentes = await pendenciasDeLimpeza(c.raiz, c.projeto, ag);
-  const r = await limparDemanda(c.raiz, c.projeto, pendentes);
+  const pendentes = await pendenciasDeLimpeza(ambiente, c.raiz, c.projeto, ag);
+  const r = await limparDemanda(ambiente, c.raiz, c.projeto, pendentes);
   assert.deepEqual(r.pendentes.toSorted(), [`branch_local:${br}`, `worktree:${c.rodada}`]);
-  assert.deepEqual(await sobrasDaDemanda(c.projeto, r.pendentes), [`worktree:${c.rodada}`, `branch_local:${br}`]);
+  assert.deepEqual(await sobrasDaDemanda(ambiente, c.projeto, r.pendentes), [
+    `worktree:${c.rodada}`,
+    `branch_local:${br}`,
+  ]);
   git(c.repo, "worktree", "unlock", c.rodada);
-  assert.deepEqual(await pendenciasDeLimpeza(c.raiz, c.projeto, ag), [`worktree:${c.rodada}`, `branch_local:${br}`]);
-  const de_novo = await limparDemanda(c.raiz, c.projeto, r.pendentes);
+  assert.deepEqual(await pendenciasDeLimpeza(ambiente, c.raiz, c.projeto, ag), [
+    `worktree:${c.rodada}`,
+    `branch_local:${br}`,
+  ]);
+  const de_novo = await limparDemanda(ambiente, c.raiz, c.projeto, r.pendentes);
   assert.deepEqual(de_novo.pendentes, []);
   assert.equal(existsSync(caminhoDaWorktreeRodada(c.raiz, c.projeto.nome, ref)), false);
 });
@@ -72,8 +81,8 @@ test("remota já ausente conta como feita; item desconhecido ou erro do git fica
   const sem = join(c.dir, "sem-origin");
   mkdirSync(sem);
   git(sem, "init", "-q");
-  const r = await limparDemanda(c.raiz, c.projeto, [`branch_remota:${bd}`, "outro:x"]);
+  const r = await limparDemanda(ambiente, c.raiz, c.projeto, [`branch_remota:${bd}`, "outro:x"]);
   assert.deepEqual(r, { removidos: [`branch_remota:${bd}`], pendentes: ["outro:x"] });
-  const erro = await limparDemanda(c.raiz, { ...c.projeto, raiz_git: sem }, ["branch_remota:x"]);
+  const erro = await limparDemanda(ambiente, c.raiz, { ...c.projeto, raiz_git: sem }, ["branch_remota:x"]);
   assert.deepEqual(erro.pendentes, ["branch_remota:x"]);
 });

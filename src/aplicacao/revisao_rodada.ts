@@ -16,6 +16,7 @@ import { arquivosDe } from "../infra/repositorio/commit.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { VerificacaoDeFitness } from "../infra/verificacao/fitness.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { conduzirRevisao, type OpcoesRevisao, type ResultadoRevisao } from "./revisao_conducao.ts";
 
@@ -43,10 +44,12 @@ export async function prepararRevisaoRodada(
   const projeto = carregarProjeto(banco, ag.demanda.projeto);
 
   const raiz = raizDo(banco);
-  const { pasta: worktree } = await cicloDoEspaco(espacoDoTicket(ag, { rodada_id }, projeto, raiz), projeto, {
-    raiz,
-    log: `${raiz}/log`,
-  }).criar();
+  const { pasta: worktree } = await cicloDoEspaco(
+    espacoDoTicket(ag, { rodada_id }, projeto, raiz),
+    projeto,
+    { raiz, log: `${raiz}/log` },
+    ambienteDoServico(),
+  ).criar();
 
   // `base...head` é o diff desde o ancestral comum: o que a rodada fez, mesmo se a demanda avançou depois.
   const rev = async (branch: string) => (await exigirGit(projeto.raiz_git, "rev-parse", `refs/heads/${branch}`)).trim();

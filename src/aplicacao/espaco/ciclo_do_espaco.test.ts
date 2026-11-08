@@ -8,6 +8,7 @@ import { commitarArquivo, criarRepositorioDeTeste, rodarGit } from "../../../apo
 import { hospedagemFalsa } from "../../../apoio-testes/hospedagem_falsa.ts";
 import { ErroDeRegra } from "../../nucleo/erros.ts";
 import { espacoDaDemanda, espacoDaRodada } from "../../nucleo/espaco_de_trabalho.ts";
+import { AmbienteHostLocal } from "../../infra/ambiente/ambiente_host_local.ts";
 import { naFilaDoProjeto } from "../../infra/repositorio/worktree.ts";
 import { CicloDoEspacoDaDemanda, CicloDoEspacoDaRodada, cicloDoEspaco } from "./ciclo_do_espaco.ts";
 
@@ -21,6 +22,7 @@ after(() => {
 });
 
 const DEMANDA = "I-1";
+const ambiente = new AmbienteHostLocal();
 
 function cenario(comandosDePreparacao: string[] = []) {
   const c = criarRepositorioDeTeste(comandosDePreparacao);
@@ -32,9 +34,9 @@ function cenario(comandosDePreparacao: string[] = []) {
     c,
     espacoDemanda,
     espacoRodada,
-    daDemanda: () => new CicloDoEspacoDaDemanda(espacoDemanda, c.projeto, registro),
-    daRodada: () => new CicloDoEspacoDaRodada(espacoRodada, c.projeto, registro),
-    daRodadaComPr: () => new CicloDoEspacoDaRodada({ ...espacoRodada, pr: prAberto }, c.projeto, registro),
+    daDemanda: () => new CicloDoEspacoDaDemanda(espacoDemanda, c.projeto, registro, ambiente),
+    daRodada: () => new CicloDoEspacoDaRodada(espacoRodada, c.projeto, registro, ambiente),
+    daRodadaComPr: () => new CicloDoEspacoDaRodada({ ...espacoRodada, pr: prAberto }, c.projeto, registro, ambiente),
   };
 }
 
@@ -104,7 +106,7 @@ test("integrar da rodada integra o PR pela hospedagem e avança a demanda local 
 test("o ciclo da rodada recusa o Espaço sem PR e o que não é de rodada", async () => {
   const { c, espacoDemanda, daRodada } = cenario();
   await assert.rejects(daRodada().integrar(), /não tem PR publicado/);
-  const semRodada = new CicloDoEspacoDaRodada(espacoDemanda, c.projeto, { raiz: c.raiz, log: c.log });
+  const semRodada = new CicloDoEspacoDaRodada(espacoDemanda, c.projeto, { raiz: c.raiz, log: c.log }, ambiente);
   await assert.rejects(semRodada.criar(), ErroDeRegra);
   await assert.rejects(semRodada.atualizarComBase(), ErroDeRegra);
 });
@@ -118,8 +120,8 @@ test("o ciclo da demanda não atualiza com a base nem integra: o PR final é do 
 test("cicloDoEspaco escolhe o ciclo pelo dono do Espaço", () => {
   const { c, espacoDemanda, espacoRodada } = cenario();
   const registro = { raiz: c.raiz, log: c.log };
-  assert.ok(cicloDoEspaco(espacoDemanda, c.projeto, registro) instanceof CicloDoEspacoDaDemanda);
-  assert.ok(cicloDoEspaco(espacoRodada, c.projeto, registro) instanceof CicloDoEspacoDaRodada);
+  assert.ok(cicloDoEspaco(espacoDemanda, c.projeto, registro, ambiente) instanceof CicloDoEspacoDaDemanda);
+  assert.ok(cicloDoEspaco(espacoRodada, c.projeto, registro, ambiente) instanceof CicloDoEspacoDaRodada);
 });
 
 test("limpar remove a worktree e as branches do Espaço, local e remota, e nada além dele", async () => {
@@ -137,4 +139,20 @@ test("limpar remove a worktree e as branches do Espaço, local e remota, e nada 
   assert.equal(existsSync(pasta), false);
   assert.equal(existsSync(espacoDemanda.pasta), true);
   assert.notEqual(rodarGit(c.repo, "for-each-ref", "--format=%(refname)", `refs/heads/${espacoDemanda.branch}`), "");
+});
+
+test("limpar com a lista de pendências de uma passada anterior repete só ela", async () => {
+  const { c, espacoDemanda, espacoRodada, daDemanda, daRodada } = cenario();
+  await daDemanda().criar();
+  const { pasta } = await daRodada().criar();
+  const resultado = await daRodada().limpar([`worktree:${pasta}`]);
+  assert.deepEqual(resultado, { removidos: [`worktree:${pasta}`], pendentes: [] });
+  assert.equal(existsSync(espacoDemanda.pasta), true);
+  assert.notEqual(rodarGit(c.repo, "for-each-ref", "--format=%(refname)", `refs/heads/${espacoRodada.branch}`), "");
+});
+
+test("o ciclo expõe o Ambiente com que foi criado", () => {
+  const { daDemanda, daRodada } = cenario();
+  assert.equal(daDemanda().ambiente, ambiente);
+  assert.equal(daRodada().ambiente, ambiente);
 });

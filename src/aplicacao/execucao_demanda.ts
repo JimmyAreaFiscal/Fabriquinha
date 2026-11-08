@@ -41,6 +41,7 @@ import {
   comTrabalhosDoTicket,
 } from "../armazenamento/trabalho_agentico.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
@@ -79,7 +80,7 @@ interface Conducao {
 /** O ticket roda na worktree do seu Espaço de Trabalho. */
 async function worktreeDoEspacoDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
   const raiz = raizDo(banco);
-  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log });
+  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log }, ambienteDoServico());
   const { pasta, buscouBase } = await ciclo.criar();
   if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
   return pasta;

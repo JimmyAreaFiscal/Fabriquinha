@@ -34,6 +34,7 @@ import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
 import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { espacoDoTicket } from "../nucleo/espaco_de_trabalho.ts";
+import { ambienteDoServico } from "./espaco/ambiente_do_servico.ts";
 import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
 import { iniciarExecucaoDemanda } from "./execucao_demanda.ts";
@@ -231,7 +232,7 @@ async function publicarEConferir(
   gravarEvidencia(banco, ticket, "relatorio_produtividade", relatorio);
 
   const espaco = espacoDoTicket(ag, { rodada_id: ref.rodada_id }, projeto, raiz);
-  const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log });
+  const ciclo = cicloDoEspaco(espaco, projeto, { raiz, log }, ambienteDoServico());
   const atualizacao = await ciclo.atualizarComBase();
   if (atualizacao.status === "conflito") {
     // Um merge, um corretivo: quem resolve um arquivo resolve o merge inteiro, e um por arquivo rodava os outros à toa.

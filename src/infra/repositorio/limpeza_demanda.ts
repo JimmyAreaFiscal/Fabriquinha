@@ -5,16 +5,18 @@ import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { branchDemanda, branchRodada } from "../../nucleo/demanda.ts";
 import type { EspacoDeTrabalho } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
+import type { Ambiente } from "../ambiente/ambiente.ts";
 import { git } from "../processo.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "./worktree-demanda.ts";
-import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
+import { exigirGit, exigirGitNoAmbiente, gitNoAmbiente, naFilaDoProjeto } from "./worktree.ts";
 
 type ProjetoLimpeza = Pick<Projeto, "nome" | "raiz_git">;
 
 const refRemota = async (repo: string, branch: string): Promise<boolean> =>
   (await exigirGit(repo, "ls-remote", "--heads", "origin", `refs/heads/${branch}`)).trim() !== "";
-const refLocal = async (repo: string, branch: string): Promise<boolean> =>
-  (await exigirGit(repo, "for-each-ref", "--format=%(refname)", `refs/heads/${branch}`)).trim() !== "";
+const refLocal = async (ambiente: Ambiente, repo: string, branch: string): Promise<boolean> =>
+  (await exigirGitNoAmbiente(ambiente, repo, "for-each-ref", "--format=%(refname)", `refs/heads/${branch}`)).trim() !==
+  "";
 const partir = (item: string): [string, string] => {
   const i = item.indexOf(":");
   return [item.slice(0, i), item.slice(i + 1)];
@@ -23,25 +25,38 @@ const partir = (item: string): [string, string] => {
 const pendenciaDaWorktree = (caminho: string): string[] => (existsSync(caminho) ? [`worktree:${caminho}`] : []);
 
 /** `branch_local:<nome>` e `branch_remota:<nome>` da branch que a Fabriquinha criou; a posse vive na config da branch local. */
-async function pendenciasDaBranch(raizGit: string, branch: string): Promise<string[]> {
-  const posse = await exigirGit(raizGit, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`);
+async function pendenciasDaBranch(ambiente: Ambiente, raizGit: string, branch: string): Promise<string[]> {
+  const posse = await exigirGitNoAmbiente(
+    ambiente,
+    raizGit,
+    "config",
+    "--default",
+    "",
+    "--get",
+    `branch.${branch}.fabriquinha`,
+  );
   if (posse.trim() === "") return [];
   const pendentes: string[] = [];
-  if (await refLocal(raizGit, branch)) pendentes.push(`branch_local:${branch}`);
+  if (await refLocal(ambiente, raizGit, branch)) pendentes.push(`branch_local:${branch}`);
   if (await refRemota(raizGit, branch)) pendentes.push(`branch_remota:${branch}`);
   return pendentes;
 }
 
 /** O que o Espaço de Trabalho ainda deixa: a worktree e as branches que a Fabriquinha criou para ele. */
 export async function pendenciasDoEspaco(
+  ambiente: Ambiente,
   projeto: ProjetoLimpeza,
   espaco: Pick<EspacoDeTrabalho, "pasta" | "branch">,
 ): Promise<string[]> {
-  return [...pendenciaDaWorktree(espaco.pasta), ...(await pendenciasDaBranch(projeto.raiz_git, espaco.branch))];
+  return [
+    ...pendenciaDaWorktree(espaco.pasta),
+    ...(await pendenciasDaBranch(ambiente, projeto.raiz_git, espaco.branch)),
+  ];
 }
 
 /** O que a demanda ainda deixa: `worktree:<caminho>`, `branch_local:<nome>` e `branch_remota:<nome>`. */
 export async function pendenciasDeLimpeza(
+  ambiente: Ambiente,
   raiz: string,
   projeto: ProjetoLimpeza,
   ag: Pick<AgregadoDemanda, "demanda" | "rodadas">,
@@ -52,20 +67,20 @@ export async function pendenciasDeLimpeza(
     caminhoDaWorktreeDemanda(raiz, projeto.nome, id),
   ].flatMap(pendenciaDaWorktree);
   for (const branch of [...ag.rodadas.map((r) => branchRodada(id, r.rodada_id)), branchDemanda(id)]) {
-    pendentes.push(...(await pendenciasDaBranch(projeto.raiz_git, branch)));
+    pendentes.push(...(await pendenciasDaBranch(ambiente, projeto.raiz_git, branch)));
   }
   return pendentes;
 }
 
-async function executar(repo: string, tipo: string, alvo: string): Promise<boolean> {
+async function executar(ambiente: Ambiente, repo: string, tipo: string, alvo: string): Promise<boolean> {
   if (tipo === "worktree") {
-    await git(repo, "worktree", "remove", "--force", alvo);
-    await git(repo, "worktree", "prune");
+    await gitNoAmbiente(ambiente, repo, "worktree", "remove", "--force", alvo);
+    await gitNoAmbiente(ambiente, repo, "worktree", "prune");
     return !existsSync(alvo);
   }
   if (tipo === "branch_local") {
-    await git(repo, "branch", "-D", alvo);
-    return !(await refLocal(repo, alvo));
+    await gitNoAmbiente(ambiente, repo, "branch", "-D", alvo);
+    return !(await refLocal(ambiente, repo, alvo));
   }
   if (tipo === "branch_remota") {
     // Já ausente conta como feito.
@@ -81,6 +96,7 @@ async function executar(repo: string, tipo: string, alvo: string): Promise<boole
  * posse que as identifica some junto com `branch -D`: uma remota que falhou ainda é reconhecida na reabertura.
  */
 export function limparDemanda(
+  ambiente: Ambiente,
   raiz: string,
   projeto: ProjetoLimpeza,
   pendentes: readonly string[],
@@ -94,7 +110,7 @@ export function limparDemanda(
   return naFilaDoProjeto(raiz, projeto.nome, async () => {
     const resultado = { removidos: [] as string[], pendentes: [] as string[] };
     for (const item of ordenados) {
-      const feito = await executar(projeto.raiz_git, ...partir(item)).catch(() => false);
+      const feito = await executar(ambiente, projeto.raiz_git, ...partir(item)).catch(() => false);
       (feito ? resultado.removidos : resultado.pendentes).push(item);
     }
     return resultado;
@@ -102,7 +118,11 @@ export function limparDemanda(
 }
 
 /** Confere no disco e no git que nada do que foi removido sobrou. */
-export async function sobrasDaDemanda(projeto: ProjetoLimpeza, removidos: readonly string[]): Promise<string[]> {
+export async function sobrasDaDemanda(
+  ambiente: Ambiente,
+  projeto: ProjetoLimpeza,
+  removidos: readonly string[],
+): Promise<string[]> {
   const sobras: string[] = [];
   for (const item of removidos) {
     const [tipo, alvo] = partir(item);
@@ -110,7 +130,7 @@ export async function sobrasDaDemanda(projeto: ProjetoLimpeza, removidos: readon
       tipo === "worktree"
         ? existsSync(alvo)
         : tipo === "branch_local"
-          ? await refLocal(projeto.raiz_git, alvo)
+          ? await refLocal(ambiente, projeto.raiz_git, alvo)
           : await refRemota(projeto.raiz_git, alvo);
     if (sobrou) sobras.push(item);
   }

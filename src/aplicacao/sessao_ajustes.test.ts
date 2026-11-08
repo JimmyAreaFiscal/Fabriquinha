@@ -24,6 +24,9 @@ import { condutor } from "./trabalho/condutor.ts";
 import { decidirGate } from "./gates/decidir_gate.ts";
 import { abrirSessaoDeAjustes, concluirSessaoAjustes, guardarMarcoDaSessao } from "./sessao_ajustes.ts";
 import { enviarDemanda } from "./sessoes_demanda.ts";
+import { AmbienteHostLocal } from "../infra/ambiente/ambiente_host_local.ts";
+
+const ambiente = new AmbienteHostLocal();
 
 const em = "2026-01-01T00:00:00.000Z";
 const temporario = realpathSync(mkdtempSync(join(tmpdir(), "fabriquinha-ajustes-")));
@@ -69,8 +72,8 @@ async function cenario(shell = "") {
     criado_por: { tipo: "fabriquinha" },
     rodada_id: 2,
   });
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
-  const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
+  await garantirWorktreeDemanda(ambiente, c.raiz, c.projeto, DEMANDA, c.log);
+  const rodada = await garantirWorktreeRodada(ambiente, c.raiz, c.projeto, REF, c.log);
   const head = commitarArquivo(rodada, "a.txt", "a\n");
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   gravarAgregadoPronto(banco, {
