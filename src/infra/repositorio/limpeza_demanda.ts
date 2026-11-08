@@ -3,6 +3,7 @@
 import { existsSync } from "node:fs";
 import type { AgregadoDemanda } from "../../nucleo/agregado_demanda.ts";
 import { branchDemanda, branchRodada } from "../../nucleo/demanda.ts";
+import type { EspacoDeTrabalho } from "../../nucleo/espaco_de_trabalho.ts";
 import type { Projeto } from "../../nucleo/projeto.ts";
 import { git } from "../processo.ts";
 import { caminhoDaWorktreeDemanda, caminhoDaWorktreeRodada } from "./worktree-demanda.ts";
@@ -19,6 +20,26 @@ const partir = (item: string): [string, string] => {
   return [item.slice(0, i), item.slice(i + 1)];
 };
 
+const pendenciaDaWorktree = (caminho: string): string[] => (existsSync(caminho) ? [`worktree:${caminho}`] : []);
+
+/** `branch_local:<nome>` e `branch_remota:<nome>` da branch que a Fabriquinha criou; a posse vive na config da branch local. */
+async function pendenciasDaBranch(raizGit: string, branch: string): Promise<string[]> {
+  const posse = await exigirGit(raizGit, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`);
+  if (posse.trim() === "") return [];
+  const pendentes: string[] = [];
+  if (await refLocal(raizGit, branch)) pendentes.push(`branch_local:${branch}`);
+  if (await refRemota(raizGit, branch)) pendentes.push(`branch_remota:${branch}`);
+  return pendentes;
+}
+
+/** O que o Espaço de Trabalho ainda deixa: a worktree e as branches que a Fabriquinha criou para ele. */
+export async function pendenciasDoEspaco(
+  projeto: ProjetoLimpeza,
+  espaco: Pick<EspacoDeTrabalho, "pasta" | "branch">,
+): Promise<string[]> {
+  return [...pendenciaDaWorktree(espaco.pasta), ...(await pendenciasDaBranch(projeto.raiz_git, espaco.branch))];
+}
+
 /** O que a demanda ainda deixa: `worktree:<caminho>`, `branch_local:<nome>` e `branch_remota:<nome>`. */
 export async function pendenciasDeLimpeza(
   raiz: string,
@@ -29,15 +50,9 @@ export async function pendenciasDeLimpeza(
   const pendentes = [
     ...ag.rodadas.map((r) => caminhoDaWorktreeRodada(raiz, projeto.nome, { demanda_id: id, rodada_id: r.rodada_id })),
     caminhoDaWorktreeDemanda(raiz, projeto.nome, id),
-  ]
-    .filter((caminho) => existsSync(caminho))
-    .map((caminho) => `worktree:${caminho}`);
+  ].flatMap(pendenciaDaWorktree);
   for (const branch of [...ag.rodadas.map((r) => branchRodada(id, r.rodada_id)), branchDemanda(id)]) {
-    // A posse vive na config da branch local; `branch -D` a apaga junto.
-    const posse = await exigirGit(projeto.raiz_git, "config", "--default", "", "--get", `branch.${branch}.fabriquinha`);
-    if (posse.trim() === "") continue;
-    if (await refLocal(projeto.raiz_git, branch)) pendentes.push(`branch_local:${branch}`);
-    if (await refRemota(projeto.raiz_git, branch)) pendentes.push(`branch_remota:${branch}`);
+    pendentes.push(...(await pendenciasDaBranch(projeto.raiz_git, branch)));
   }
   return pendentes;
 }

@@ -30,7 +30,7 @@ export type EspacoDeTrabalho = z.infer<typeof EspacoDeTrabalho>;
 const pastaDaDemanda = (raiz: string, projeto: string, demanda: string): string =>
   resolve(raiz, "worktrees", Slug.parse(projeto), DemandaId.parse(demanda));
 
-/** @testes o teste exercita direto; a produção a usa só dentro do módulo */
+/** O Espaço da demanda: parte da base do projeto. */
 export function espacoDaDemanda(
   projeto: Pick<Projeto, "nome" | "branch_base">,
   demanda: string,

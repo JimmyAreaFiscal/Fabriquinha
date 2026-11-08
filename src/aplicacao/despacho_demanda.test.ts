@@ -79,7 +79,7 @@ async function cenario(limite: number, real = false) {
   banco.prepare("UPDATE configuracao SET limite_paralelismo = ?").run(limite);
   if (real) {
     process.env.FABRIQUINHA_PI = piFalso.caminho;
-    await garantirWorktreeDemanda(c.raiz, c.projeto, "I-2", c.log, () => Promise.resolve());
+    await garantirWorktreeDemanda(c.raiz, c.projeto, "I-2", c.log);
   }
   return { c, banco, config: configuracao(banco) };
 }

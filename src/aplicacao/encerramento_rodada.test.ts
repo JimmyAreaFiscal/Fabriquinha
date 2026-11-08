@@ -183,7 +183,7 @@ async function cenario({
       ...(anterior ? [evidencia(7, "pr_aberto", { id: "1", url: "https://github.com/org/loja/pull/1" })] : []),
     ],
   } as unknown as AgregadoDemanda);
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
   /** Commita na rodada e, com `ticket`, registra o commit como desse ticket de implementação. */

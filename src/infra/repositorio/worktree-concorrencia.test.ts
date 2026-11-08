@@ -20,7 +20,6 @@ import {
 import { exigirGit, naFilaDoProjeto } from "./worktree.ts";
 
 const ref = { demanda_id: "D-1", rodada_id: 1 };
-const semBase = () => Promise.resolve();
 type Cenario = ReturnType<typeof criarRepositorioDeTeste>;
 
 /** Segura a fila do projeto até `liberar()`; só devolve depois que a mutação bloqueante começou. */
@@ -54,8 +53,8 @@ const pendente = <T>(p: Promise<T>) => {
   );
   return () => !resolvida;
 };
-const garantirDemanda = (c: Cenario, preparacao = c.projeto, varrer = semBase) =>
-  garantirWorktreeDemanda(c.raiz, preparacao, "D-1", c.log, varrer);
+const garantirDemanda = (c: Cenario, preparacao = c.projeto) =>
+  garantirWorktreeDemanda(c.raiz, preparacao, "D-1", c.log);
 
 test("duas garantias novas do mesmo projeto rodam em ordem, só depois de liberar a mutação retida", async () => {
   const c = criarRepositorioDeTeste();
@@ -109,7 +108,7 @@ test("outro projeto completa mutação enquanto o primeiro segue bloqueado", asy
   const outro = criarRepositorioDeTeste();
   const projetoOutro = { ...outro.projeto, nome: "outra" };
   const bloqueio = await bloquear(c.raiz, c.projeto.nome);
-  const pasta = await garantirWorktreeDemanda(c.raiz, projetoOutro, "D-1", c.log, semBase);
+  const pasta = await garantirWorktreeDemanda(c.raiz, projetoOutro, "D-1", c.log);
   assert.equal(existsSync(pasta), true);
   const retido = garantirDemanda(c);
   const emAndamento = pendente(retido);
@@ -197,26 +196,6 @@ test("preparação após atualização por merge não ocupa a fila", async () =>
   await mutacaoLivre(c);
   await barreira.liberar();
   assert.deepEqual(await atualizacao, { status: "atualizada" });
-});
-
-test("varrerBase da demanda roda fora da fila e não impede outra mutação", async () => {
-  const c = criarRepositorioDeTeste();
-  let iniciou!: () => void;
-  let liberar!: () => void;
-  const comecou = new Promise<void>((r) => (iniciou = r));
-  const espera = new Promise<void>((r) => (liberar = r));
-  const varrer = async () => {
-    // Entrar na fila por conta própria só é possível se ela não estiver retida pela garantia.
-    await naFilaDoProjeto(c.raiz, c.projeto.nome, () => Promise.resolve());
-    iniciou();
-    await espera;
-  };
-  const garantia = garantirDemanda(c, c.projeto, varrer);
-  await comecou;
-  await mutacaoLivre(c);
-  assert.equal(git(c.repo, "config", "teste.livre"), "sim");
-  liberar();
-  await garantia;
 });
 
 test("merge e abort do conflito ficam na mesma seção serializada", async () => {

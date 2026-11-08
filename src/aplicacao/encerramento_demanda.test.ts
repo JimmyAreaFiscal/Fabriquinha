@@ -123,7 +123,7 @@ async function cenario({
     pull_requests: pullRequests,
     ...(encerramento && { encerramento }),
   } as unknown as AgregadoDemanda);
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log, () => Promise.resolve());
+  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   /** Commita na demanda e, com `ticket`, registra o commit como desse ticket. */
   const commitar = (arquivo: string, ticketId?: number) => {

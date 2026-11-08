@@ -287,7 +287,7 @@ export async function cenarioRevisao({ integral = false } = {}) {
     }),
   );
   gravarAgregadoPronto(banco, agregadoEmRevisao({ integral }));
-  await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, "I-1", c.log);
   const piFalso = instalarPiFalso(c.dir);
   return {
     c,

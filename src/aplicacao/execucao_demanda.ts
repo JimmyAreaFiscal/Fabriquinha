@@ -41,7 +41,7 @@ import {
   comTrabalhosDoTicket,
 } from "../armazenamento/trabalho_agentico.ts";
 import { sinalNoGrupo } from "../infra/processo.ts";
-import { garantirWorktreeDoEspaco } from "./espaco/garantir_worktree_do_espaco.ts";
+import { cicloDoEspaco } from "./espaco/ciclo_do_espaco.ts";
 import { fecharTicketDemanda, falharTicketDemanda } from "./fechamento_ticket.ts";
 import { triarPergunta } from "./auditor_automatico.ts";
 import { condutor } from "./trabalho/condutor.ts";
@@ -77,11 +77,12 @@ interface Conducao {
 }
 
 /** O ticket roda na worktree do seu Espaço de Trabalho. */
-function worktreeDoEspacoDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
+async function worktreeDoEspacoDoTicket({ banco, ag, ticket, projeto }: Conducao, log: string): Promise<string> {
   const raiz = raizDo(banco);
-  return garantirWorktreeDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), raiz, projeto, log, () =>
-    varrerBase(banco, projeto.nome),
-  );
+  const ciclo = cicloDoEspaco(espacoDoTicket(ag, ticket, projeto, raiz), projeto, { raiz, log });
+  const { pasta, buscouBase } = await ciclo.criar();
+  if (buscouBase) await varrerBase(banco, projeto.nome).catch(ciclo.anotarFalhaDaVarredura);
+  return pasta;
 }
 
 /** Grava o grupo de processo do pi para o reinício do serviço poder interrompê-lo (§4.2). */

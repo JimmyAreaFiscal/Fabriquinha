@@ -104,7 +104,7 @@ async function cenario() {
     decisoes: [],
     evidencias: [],
   } as unknown as AgregadoDemanda);
-  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log, () => Promise.resolve());
+  const demanda = await garantirWorktreeDemanda(c.raiz, c.projeto, D, c.log);
   await garantirWorktreeRodada(c.raiz, c.projeto, { demanda_id: D, rodada_id: 1 }, c.log);
   const sha = commitarArquivo(demanda, "a.txt", "a\n");
   gravarCommitDemanda(banco, D, 3, { sha, mensagem: "feat: a [I-206/T-3]", em, arquivos: [] });

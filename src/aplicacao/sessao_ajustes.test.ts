@@ -69,7 +69,7 @@ async function cenario(shell = "") {
     criado_por: { tipo: "fabriquinha" },
     rodada_id: 2,
   });
-  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log, () => Promise.resolve());
+  await garantirWorktreeDemanda(c.raiz, c.projeto, DEMANDA, c.log);
   const rodada = await garantirWorktreeRodada(c.raiz, c.projeto, REF, c.log);
   const head = commitarArquivo(rodada, "a.txt", "a\n");
   const demanda = join(c.raiz, "worktrees", "loja", DEMANDA, "demanda");
