@@ -168,12 +168,11 @@ test("ticket sem sessão não torna o total interno incompleto (CA-14)", () => {
   assert.deepEqual(a.custos.internos, { valor: 1.25, situacao: "conhecido" });
 });
 
-test("limpeza: sobras reprovam e removidas aprovam", () => {
+test("limpeza: separa removidas e sobras", () => {
   const ok = montarDemonstracaoLimpeza(["worktree:/a/b", "branch_local:x", "branch_remota:x"], []);
-  assert.equal(ok.aprovada, true);
   assert.deepEqual(ok.removidas[0], { tipo: "worktree", alvo: "/a/b" });
+  assert.deepEqual(ok.sobras, []);
   const ruim = montarDemonstracaoLimpeza([], ["branch_remota:x"]);
-  assert.equal(ruim.aprovada, false);
   assert.deepEqual(ruim.sobras, [{ tipo: "branch_remota", alvo: "x" }]);
 });
 

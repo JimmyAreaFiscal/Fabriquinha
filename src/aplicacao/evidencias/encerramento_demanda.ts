@@ -3,7 +3,7 @@
 import { type AgregadoDemanda, prDaDemanda } from "../../nucleo/agregado_demanda.ts";
 import { formatarRodadaRef, formatarTicketRef } from "../../nucleo/demanda.ts";
 import { prDoEspaco } from "../../nucleo/espaco_de_trabalho.ts";
-import { ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../nucleo/schemas.ts";
+import { type ArvorePRsCriteriosCustos, DemonstracaoLimpeza } from "../../nucleo/schemas.ts";
 import type { ProcessoDoTrabalho, TrabalhoGerenciado, UsoModeloExecucao } from "../../nucleo/trabalho_agentico.ts";
 import { lista, neutro } from "./pr.ts";
 import { produtividadeDaRodada } from "./produtividade_rodada.ts";
@@ -59,7 +59,8 @@ export function montarArvorePRs(
       },
     }));
   const prFinal = prDaDemanda(ag);
-  return ArvorePRsCriteriosCustos.parse({
+  // Sem parse: quem submete a evidência a valida pelo schema, e a recusa falha a Tentativa.
+  return {
     demanda: ag.demanda.id,
     base: ag.encerramento?.base ?? null,
     pr_final: prFinal === undefined ? null : { numero: prFinal.numero, url: prFinal.url },
@@ -82,7 +83,7 @@ export function montarArvorePRs(
         },
       },
     },
-  });
+  };
 }
 
 /** As pendências `tipo:alvo` da limpeza, separadas em removidas e sobras. */
@@ -97,7 +98,6 @@ export function montarDemonstracaoLimpeza(
   return DemonstracaoLimpeza.parse({
     removidas: removidos.map(item),
     sobras: sobras.map(item),
-    aprovada: sobras.length === 0,
   });
 }
 
