@@ -8,12 +8,10 @@ import type { ParseArgsOptionsConfig } from "node:util";
 import { z } from "zod";
 import { ErroDeRegra, mensagem } from "../../nucleo/erros.ts";
 import type { Ator } from "../../nucleo/ator.ts";
-import { conferirQuantidadeENomes, schemaDoTipo } from "../../nucleo/evidencia.ts";
+import { schemaDoTipo } from "../../nucleo/evidencia.ts";
 import { TIPOS_DA_DEMANDA, type TipoDaDemanda } from "../../nucleo/evidencia_demanda.ts";
 import { Endereco } from "../../nucleo/item_de_trabalho.ts";
-import { guardarAnexos } from "../../aplicacao/evidencias/submissao.ts";
 import { editar, enviar, registrar, submeterEvidencia } from "../../aplicacao/gestao_demandas.ts";
-import { caminhoArquivo } from "../../armazenamento/arquivos.ts";
 import { carregarDemanda } from "../../armazenamento/demandas.ts";
 import { predecessorasDaDemanda } from "../../armazenamento/dependencias_demanda.ts";
 import { demandaParaCli } from "./demanda_para_cli.ts";
@@ -164,16 +162,8 @@ export const COMANDOS_DEMANDA_EXTERNA: readonly ComandoExterno[] = [
         fora: "da pasta do comando",
         copie: `a pasta do comando (${pasta})`,
       };
-      const caminhos = (c.op.arquivo ?? []) as string[];
-      // A demanda externa ainda não passa pelo Avaliador: quantidade e nomes seguem conferidos aqui.
-      conferirQuantidadeENomes(tipo, caminhos, schemaDoTipo(tipo).arquivos);
-      const guardados = guardarAnexos(c.banco, caminhos, tipo, schemaDoTipo(tipo).arquivos, origens);
-      const arquivos = guardados.map((a) => ({
-        nome: a.nome,
-        mime: a.mime,
-        conteudo: readFileSync(caminhoArquivo(c.banco, a.sha256)),
-      }));
-      const { avisos } = submeterEvidencia(c.banco, id, { tipo, dados, arquivos }, autor, agora());
+      const arquivos = (c.op.arquivo ?? []) as string[];
+      const { avisos } = submeterEvidencia(c.banco, id, { tipo, dados, arquivos }, autor, origens);
       return { ...visao(c.banco, id), avisos };
     },
   },

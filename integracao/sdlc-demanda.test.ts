@@ -19,6 +19,7 @@ import {
   type Cenario,
   criarCenario,
   CTX,
+  ORIGENS_DOS_ANEXOS,
   demanda,
   demandaAprovada,
   demandaEnviada,
@@ -46,7 +47,7 @@ test("CA-SDLC-01: envio externo incompleto não congela nem abre o gate; o compl
   const c = criarCenario(t);
   const id = registrarExterna(c);
   const submeter = (tipo: string, dados: unknown) =>
-    gestao.submeterEvidencia(c.banco, id, { tipo, dados } as gestao.EntradaEvidencia, AUTOR, CTX);
+    gestao.submeterEvidencia(c.banco, id, { tipo, dados } as gestao.EntradaEvidencia, AUTOR, ORIGENS_DOS_ANEXOS);
   submeter("criterios_aceite", { criterios: [{ id: "CA-1", dado: "d", quando: "q", entao: "e" }] });
 
   // Incompleto: lista as pendências, a definição segue editável e não há gate para o Auditor decidir.

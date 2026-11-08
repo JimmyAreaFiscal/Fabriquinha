@@ -56,7 +56,12 @@ export function submeterEvidencia(
         ? submeterPlano(ag, avaliacao.dados, produtor, { agora })
         : submeterEvidenciaDemanda(
             ag,
-            { tipo, dados: avaliacao.dados as EntradaEvidenciaDemanda["dados"], ticket_id: dono.ticket_id },
+            {
+              tipo,
+              dados: avaliacao.dados as EntradaEvidenciaDemanda["dados"],
+              rodada_id: dono.rodada_id,
+              ticket_id: dono.ticket_id,
+            },
             produtor,
             agora,
           );
@@ -64,7 +69,7 @@ export function submeterEvidencia(
     () => {
       gravarAnexos(
         banco,
-        { demanda_id: dono.demanda_id, ticket_id: dono.ticket_id, tipo },
+        { demanda_id: dono.demanda_id, rodada_id: dono.rodada_id, ticket_id: dono.ticket_id, tipo },
         guardados.map((a) => ({ caminho: a.nome, sha256: a.sha256, mime: a.mime, bytes: a.bytes })),
       );
     },

@@ -306,7 +306,10 @@ export type Avaliacao =
   | { resultado: "aceita"; dados: Record<string, unknown>; veredito?: Veredito }
   | { resultado: "recusada"; motivo: string };
 
-/** Quantidade e nomes dos anexos (F3 §5, passo 4); origem, classe e limite precisam dos bytes e são de `guardarAnexos`. */
+/**
+ * Quantidade e nomes dos anexos (F3 §5, passo 4); origem, classe e limite precisam dos bytes e são de `guardarAnexos`.
+ * @testes o teste da regra a chama direto; a produção a lê pelo Avaliador
+ */
 export function conferirQuantidadeENomes(tipo: string, caminhos: readonly string[], regra: RegraArquivos): void {
   if (caminhos.length < regra.min) {
     throw new ErroDeRegra(
@@ -373,7 +376,8 @@ export class AvaliadorDeEvidencia {
   }
 
   private avaliarOuLancarRecusa(ag: AgregadoDemanda, { tipo, dono, produtor, dados, anexos }: SubmissaoDeEvidencia) {
-    if (dono.demanda_id !== ag.demanda.id || dono.rodada_id !== undefined) {
+    // O custo externo da rodada é o único dono de rodada, até a demanda 13 tirar custos_realizados de Evidência.
+    if (dono.demanda_id !== ag.demanda.id || (dono.rodada_id !== undefined && tipo !== "custos_realizados")) {
       throw new ErroDeRegra(
         `a evidência ${tipo} tem dono errado: ${dono.toString()}`,
         `use a demanda ${ag.demanda.id} ou um ticket dela`,
