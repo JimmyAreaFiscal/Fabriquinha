@@ -3,6 +3,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ErroDeRegra } from "../../nucleo/erros.ts";
+import type { EtapaTicket } from "../../nucleo/primitivos.ts";
 import { LIMITE } from "../../nucleo/schemas.ts";
 import type { CausaDeInfraestrutura } from "../../nucleo/tentativa.ts";
 import {
@@ -72,6 +74,29 @@ export abstract class Verificacao {
   async executar(contexto: ContextoDaVerificacao): Promise<ResultadoDaVerificacao> {
     return resultadoDoRegistro(await this.coletar(contexto));
   }
+}
+
+// Até a demanda 15 as Verificações que cada Etapa exige são esta tabela fechada. O E2E não é item: entra em `testes`.
+const VERIFICACOES_DA_ETAPA: Record<EtapaTicket, readonly TipoVerificacao[]> = {
+  entender_e_desenhar: [],
+  planejar: [],
+  implementar: ["testes", "fitness", "sonar", "hooks_do_commit"],
+  revisar_rodada: ["fitness"],
+  encerrar_rodada: ["conferencia_do_pr"],
+  ajustar_resultado: [],
+  revisar_demanda: [],
+  encerrar_demanda: ["conferencia_do_pr"],
+  resolver_conflito: ["testes", "fitness", "sonar", "hooks_do_commit"],
+};
+
+export const verificacoesDaEtapa = (etapa: EtapaTicket): readonly TipoVerificacao[] => VERIFICACOES_DA_ETAPA[etapa];
+
+/** Devolve a Verificação que quem chama montou, depois de conferir que a tabela da Etapa a exige. */
+export function exigidaPelaEtapa<V extends Verificacao>(etapa: EtapaTicket, verificacao: V): V {
+  if (!verificacoesDaEtapa(etapa).includes(verificacao.tipo)) {
+    throw new ErroDeRegra(`a etapa ${etapa} não exige a verificação ${verificacao.tipo}`);
+  }
+  return verificacao;
 }
 
 /** Traduz a classificação única para a Falha do ticket; o motivo e a causa de infraestrutura dependem de como o comando falhou. */

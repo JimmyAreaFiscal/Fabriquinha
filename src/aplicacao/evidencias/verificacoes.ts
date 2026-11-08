@@ -4,7 +4,7 @@ import type { Projeto } from "../../nucleo/projeto.ts";
 import { VerificacaoDeFitness } from "../../infra/verificacao/fitness.ts";
 import { arquivosAlterados, type OpcoesSonar, VerificacaoSonar } from "../../infra/verificacao/sonar.ts";
 import { VerificacaoDeTestes } from "../../infra/verificacao/testes.ts";
-import type { RegistroDaVerificacao } from "../../infra/verificacao/verificacao.ts";
+import { type RegistroDaVerificacao, verificacoesDaEtapa } from "../../infra/verificacao/verificacao.ts";
 
 export type { Falha, RegistroDaVerificacao } from "../../infra/verificacao/verificacao.ts";
 
@@ -36,10 +36,15 @@ export async function coletarVerificacoes(entrada: EntradaVerificacoes): Promise
       void Promise.allSettled([iniciarSonar()]);
     },
   });
-  const registroDosTestes = await testes.coletar(contexto);
-  const [fitness, registroDoSonar] = await Promise.all([
-    new VerificacaoDeFitness(projeto).coletar(contexto),
-    iniciarSonar(),
-  ]);
-  return [registroDosTestes, fitness, registroDoSonar];
+  const coletas = {
+    testes: () => testes.coletar(contexto),
+    fitness: () => new VerificacaoDeFitness(projeto).coletar(contexto),
+    sonar: iniciarSonar,
+  };
+  // Os hooks ficam com o fechamento; resolver_conflito exige a mesma lista. Os testes vêm primeiro; o resto roda junto.
+  const depoisDosTestes = verificacoesDaEtapa("implementar").filter(
+    (tipo): tipo is "fitness" | "sonar" => tipo === "fitness" || tipo === "sonar",
+  );
+  const registroDosTestes = await coletas.testes();
+  return [registroDosTestes, ...(await Promise.all(depoisDosTestes.map((tipo) => coletas[tipo]())))];
 }

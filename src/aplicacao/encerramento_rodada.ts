@@ -28,6 +28,7 @@ import { anotar } from "../infra/registro.ts";
 import { carregarSessoesDaDemanda } from "../armazenamento/sessoes.ts";
 import { publicarPRDe } from "../infra/repositorio/pr.ts";
 import { ConferenciaDoPR } from "../infra/verificacao/conferencia_do_pr.ts";
+import { exigidaPelaEtapa } from "../infra/verificacao/verificacao.ts";
 import { atualizarWorktreeRodada, caminhoDaWorktreeRodada } from "../infra/repositorio/worktree-demanda.ts";
 import { exigirGit } from "../infra/repositorio/worktree.ts";
 import { aprovarPRRodadaSeAutomatico } from "./aprovacao_pr_rodada.ts";
@@ -303,7 +304,10 @@ async function publicarEConferir(
   });
   anotar(log, `${refRodada}: PR ${publicado.id} publicado, ${publicado.url}`);
 
-  const problemas = await new ConferenciaDoPR(projeto, publicado.id, log).conferir();
+  const problemas = await exigidaPelaEtapa(
+    "encerrar_rodada",
+    new ConferenciaDoPR(projeto, publicado.id, log),
+  ).conferir();
   const correcoes = [
     ...(problemas.conflito
       ? [
