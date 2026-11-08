@@ -192,6 +192,28 @@ function pendenciasDoInicio(
   );
 }
 
+/**
+ * As Pendências das demandas, da mais antiga para a mais nova; `sessoes` são as ativas delas, de onde vêm os diálogos e as
+ * conversas vivas.
+ */
+export function pendenciasDasDemandas(
+  banco: DatabaseSync,
+  demandas: readonly AgregadoDemanda[],
+  sessoes: readonly SessaoDeDemanda[],
+  situacaoDa: SituacaoDaSessao,
+  agora: Date,
+): PendenciaDoInicio[] {
+  const sessoesParadas = sessoes.filter(
+    (s) => s.estado === "aguardando_humano" && (s.motivo === "dialogo" || s.motivo === "conversa"),
+  );
+  const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
+  const sessaoDoTicket = new Map(sessoesParadas.map((s) => [s.ticket, s.sessao]));
+  const agendadorLigado = configuracao(banco).agendadorAtivo;
+  return demandas
+    .flatMap((ag) => pendenciasDoInicio(banco, ag, vivos, sessaoDoTicket, agendadorLigado, agora))
+    .toSorted((a, b) => a.desde.localeCompare(b.desde));
+}
+
 /** `GET /api/inicio`. */
 /** @testes o teste exercita direto; a produção a usa só dentro do módulo */
 export function inicio(
@@ -211,17 +233,9 @@ export function inicio(
   const tituloDoTicket = new Map(
     demandas.flatMap((ag) => ag.tickets.map((t) => [formatarTicketRef(t), t.titulo] as const)),
   );
-  const sessoesParadas = sessoes.filter(
-    (s) => s.estado === "aguardando_humano" && (s.motivo === "dialogo" || s.motivo === "conversa"),
-  );
-  const vivos = sessoesParadas.map((s) => trabalhoVivoDaSessao(s, situacaoDa));
-  const sessaoDoTicket = new Map(sessoesParadas.map((s) => [s.ticket, s.sessao]));
-  const agendadorLigado = configuracao(banco).agendadorAtivo;
   return {
     mes: doMes,
-    aguarda: demandas
-      .flatMap((ag) => pendenciasDoInicio(banco, ag, vivos, sessaoDoTicket, agendadorLigado, agora))
-      .toSorted((a, b) => a.desde.localeCompare(b.desde)),
+    aguarda: pendenciasDasDemandas(banco, demandas, sessoes, situacaoDa, agora),
     rodando: sessoes
       .filter((s) => s.estado === "rodando")
       .map((s) => {
